@@ -156,6 +156,7 @@ public:
     bool Compile();
 
     /// 执行编译后的渲染图（单线程，顺序执行）
+    /// 若 RhiDevice 已设置且支持 GPU Timer，自动为每个 Pass 插入时间戳查询
     /// @param cmd_buffer 命令缓冲区
     void Execute(CommandBuffer& cmd_buffer);
 
@@ -164,6 +165,10 @@ public:
     /// @param post_pass 每个 pass 执行后调用，参数为 pass 名称
     void ExecuteWithCallback(CommandBuffer& cmd_buffer,
                              const std::function<void(const std::string&)>& post_pass);
+
+    /// 启用/禁用自动 GPU 计时（默认启用，需 RhiDevice 支持）
+    void SetGpuTimingEnabled(bool enabled) { gpu_timing_enabled_ = enabled; }
+    bool IsGpuTimingEnabled() const { return gpu_timing_enabled_; }
 
     /// 重置渲染图（清空所有 Pass 和资源声明）
     void Reset();
@@ -258,6 +263,7 @@ private:
     RhiDevice* rhi_device_ = nullptr;
 
     bool is_compiled_ = false;
+    bool gpu_timing_enabled_ = true;  ///< 自动 GPU 计时开关
 };
 
 } // namespace render

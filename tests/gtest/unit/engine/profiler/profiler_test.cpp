@@ -452,10 +452,13 @@ TEST(RenderProfilerTest, ExportChromeTrace多帧记录) {
     EXPECT_EQ(count, 3u);
 }
 
-TEST(RenderProfilerTest, ExportChromeTrace空数据返回空数组) {
+TEST(RenderProfilerTest, ExportChromeTrace空数据包含GPU线程元数据) {
     RenderProfiler profiler;
     std::string trace = profiler.ExportChromeTrace();
-    EXPECT_EQ(trace, "[\n\n]");
+    EXPECT_NE(trace.find("\"name\":\"thread_name\""), std::string::npos);
+    EXPECT_NE(trace.find("CPU Render"), std::string::npos);
+    EXPECT_NE(trace.find("GPU"), std::string::npos);
+    EXPECT_EQ(trace.find("render_stats"), std::string::npos);
 }
 
 TEST(RenderProfilerTest, Reset清除ChromeTrace数据) {
@@ -467,6 +470,86 @@ TEST(RenderProfilerTest, Reset清除ChromeTrace数据) {
 
     std::string trace = profiler.ExportChromeTrace();
     EXPECT_EQ(trace.find("render_stats"), std::string::npos);
+}
+
+// ============================================================
+// GPU Timer 集成测试 — RenderProfiler
+// ============================================================
+
+TEST(RenderProfilerTest, UpdateGpuTimers写入GPU数据) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.RecordDrawCall(10, 5);
+
+    std::vector<GpuPassTiming> timings = {
+        {"ShadowMap", 1.5f},
+        {"GBuffer", 2.3f},
+        {"Lighting", 0.8f},
+    };
+    profiler.UpdateGpuTimers(timings);
+    profiler.EndFrame();
+
+    const auto& result = profiler.GetGpuPassTimings();
+    ASSERT_EQ(result.size(), 3u);
+    EXPECT_EQ(result[0].name, "ShadowMap");
+    EXPECT_FLOAT_EQ(result[0].duration_ms, 1.5f);
+    EXPECT_EQ(result[1].name, "GBuffer");
+    EXPECT_EQ(result[2].name, "Lighting");
+}
+
+TEST(RenderProfilerTest, GPU总耗时写入FrameStats) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.UpdateGpuTimers({{"A", 1.0f}, {"B", 2.0f}});
+    profiler.EndFrame();
+
+    EXPECT_FLOAT_EQ(profiler.GetCurrentFrameStats().total_gpu_time_ms, 3.0f);
+}
+
+TEST(RenderProfilerTest, GPU计时出现在ChromeTrace导出中) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.UpdateGpuTimers({{"ShadowPass", 1.23f}});
+    profiler.EndFrame();
+
+    std::string trace = profiler.ExportChromeTrace();
+    EXPECT_NE(trace.find("ShadowPass"), std::string::npos);
+    EXPECT_NE(trace.find("\"cat\":\"gpu\""), std::string::npos);
+    EXPECT_NE(trace.find("\"ph\":\"X\""), std::string::npos);
+    EXPECT_NE(trace.find("\"tid\":2"), std::string::npos);
+}
+
+TEST(RenderProfilerTest, GPU计时出现在CSV导出中) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.UpdateGpuTimers({{"ForwardPass", 0.75f}});
+    profiler.EndFrame();
+
+    std::string csv = profiler.ExportCSV();
+    EXPECT_NE(csv.find("GpuTimeMs"), std::string::npos);
+    EXPECT_NE(csv.find("GPU:ForwardPass"), std::string::npos);
+}
+
+TEST(RenderProfilerTest, Reset清除GPU计时数据) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.UpdateGpuTimers({{"TestPass", 1.0f}});
+    profiler.EndFrame();
+    profiler.Reset();
+
+    EXPECT_TRUE(profiler.GetGpuPassTimings().empty());
+    EXPECT_FLOAT_EQ(profiler.GetCurrentFrameStats().total_gpu_time_ms, 0.0f);
+}
+
+TEST(RenderProfilerTest, 无GPU数据时不影响ChromeTrace) {
+    RenderProfiler profiler;
+    profiler.BeginFrame();
+    profiler.RecordDrawCall(10, 5);
+    profiler.EndFrame();
+
+    std::string trace = profiler.ExportChromeTrace();
+    EXPECT_NE(trace.find("render_stats"), std::string::npos);
+    EXPECT_EQ(trace.find("\"cat\":\"gpu\""), std::string::npos);
 }
 
 // ============================================================

@@ -58,3 +58,15 @@ TEST_F(AudioSystemTest, StopAllSfx未初始化不崩溃) {
 TEST_F(AudioSystemTest, StopBgm未初始化不崩溃) {
     audio.StopBgm();
 }
+
+TEST_F(AudioSystemTest, FadeOutAllSfx未初始化不崩溃) {
+    audio.FadeOutAllSfx(0.5f);
+}
+
+TEST_F(AudioSystemTest, FadeOutAllSfx默认参数不崩溃) {
+    audio.FadeOutAllSfx();
+}
+
+TEST_F(AudioSystemTest, FadeOutAllSfx零时长不崩溃) {
+    audio.FadeOutAllSfx(0.0f);
+}

@@ -41,6 +41,8 @@ void RegisterCamera3DComponentGenBindings(lua_State* L);
 void RegisterDirectionalLight3DComponentGenBindings(lua_State* L);
 void RegisterPointLightComponentGenBindings(lua_State* L);
 void RegisterMeshRendererComponentGenBindings(lua_State* L);
+void RegisterSpotLightComponentGenBindings(lua_State* L);
+void RegisterSkyLightComponentGenBindings(lua_State* L);
 void RegisterEcsPhysics2DBindings(lua_State* L);
 void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);

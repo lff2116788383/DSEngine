@@ -272,6 +272,22 @@ void AudioSystem::Update(entt::registry& registry, float dt) {
         }
     }
 
+    // --- SFX 淡出插值 ---
+    if (sfx_fading_out_ && sfx_fade_duration_ > 0.0f) {
+        sfx_fade_elapsed_ += dt;
+        float t = std::clamp(sfx_fade_elapsed_ / sfx_fade_duration_, 0.0f, 1.0f);
+        float fade_volume = (1.0f - t) * sfx_volume_;
+        for (auto& sfx : active_sfx_) {
+            if (sfx && sfx->get()) {
+                ma_sound_set_volume(sfx->get(), fade_volume);
+            }
+        }
+        if (t >= 1.0f) {
+            sfx_fading_out_ = false;
+            StopAllSfx();
+        }
+    }
+
     for (auto it = entity_sounds_.begin(); it != entity_sounds_.end();) {
         Entity entity = static_cast<Entity>(it->first);
         if (!registry.valid(entity) || !registry.all_of<AudioSourceComponent>(entity)) {
@@ -663,9 +679,17 @@ bool AudioSystem::CrossfadeBgm(const std::string& filepath, float fade_sec, floa
 }
 
 void AudioSystem::StopAllSfx() {
+    sfx_fading_out_ = false;
     active_sfx_.clear();
     active_sfx_per_clip_.clear();
     sfx_clip_lookup_.clear();
+}
+
+void AudioSystem::FadeOutAllSfx(float duration_sec) {
+    if (active_sfx_.empty()) return;
+    sfx_fade_duration_ = (std::max)(duration_sec, 0.01f);
+    sfx_fade_elapsed_ = 0.0f;
+    sfx_fading_out_ = true;
 }
 
 void AudioSystem::SetMasterVolume(float volume) {

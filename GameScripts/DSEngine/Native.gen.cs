@@ -164,6 +164,82 @@ internal static class Native {
     internal static extern void dse_point_light_set_enabled(uint e, int v);
 
 
+    // ---- SpotLightComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_get_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_spot_light_get_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_spot_light_get_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_spot_light_get_inner_cone_angle(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_inner_cone_angle(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_spot_light_get_outer_cone_angle(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_outer_cone_angle(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_get_direction(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_direction(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_spot_light_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_spot_light_get_cast_shadow(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_spot_light_set_cast_shadow(uint e, int v);
+
+
+    // ---- SkyLightComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_get_up_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_set_up_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_get_down_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_set_down_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_sky_light_get_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_set_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_sky_light_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_sky_light_set_enabled(uint e, int v);
+
+
 } // class Native
 
 } // namespace DSEngine

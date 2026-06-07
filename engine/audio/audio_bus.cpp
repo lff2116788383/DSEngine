@@ -56,6 +56,18 @@ static void DestroyDspNode(DspNodeHandle& handle) {
             delete n;
             break;
         }
+        case DspEffectType::NotchFilter: {
+            auto* n = static_cast<ma_notch_node*>(handle.node_ptr);
+            ma_notch_node_uninit(n, nullptr);
+            delete n;
+            break;
+        }
+        case DspEffectType::PeakEQ: {
+            auto* n = static_cast<ma_peak_node*>(handle.node_ptr);
+            ma_peak_node_uninit(n, nullptr);
+            delete n;
+            break;
+        }
         case DspEffectType::Delay: {
             auto* n = static_cast<ma_delay_node*>(handle.node_ptr);
             ma_delay_node_uninit(n, nullptr);
@@ -311,6 +323,30 @@ void AudioBusManager::RebuildEffectChain(AudioBus& bus) {
                 auto* node = new ma_bpf_node();
                 auto config = ma_bpf_node_config_init(channels, sample_rate, effect.cutoff_hz, 2);
                 if (ma_bpf_node_init(node_graph, &config, nullptr, node) == MA_SUCCESS) {
+                    handle.node_ptr = node;
+                } else {
+                    delete node;
+                }
+                break;
+            }
+            case DspEffectType::NotchFilter: {
+                auto* node = new ma_notch_node();
+                auto config = ma_notch_node_config_init(channels, sample_rate,
+                    static_cast<double>(effect.q), static_cast<double>(effect.cutoff_hz));
+                if (ma_notch_node_init(node_graph, &config, nullptr, node) == MA_SUCCESS) {
+                    handle.node_ptr = node;
+                } else {
+                    delete node;
+                }
+                break;
+            }
+            case DspEffectType::PeakEQ: {
+                auto* node = new ma_peak_node();
+                auto config = ma_peak_node_config_init(channels, sample_rate,
+                    static_cast<double>(effect.gain_db),
+                    static_cast<double>(effect.q),
+                    static_cast<double>(effect.cutoff_hz));
+                if (ma_peak_node_init(node_graph, &config, nullptr, node) == MA_SUCCESS) {
                     handle.node_ptr = node;
                 } else {
                     delete node;

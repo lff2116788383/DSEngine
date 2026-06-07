@@ -216,3 +216,95 @@ extern "C" void dse_point_light_set_enabled(uint32_t e, int v) {
     if (auto* c = GC<dse::PointLightComponent>(e)) c->enabled = (v != 0);
 }
 
+/* ---- SpotLightComponent ---- */
+extern "C" void dse_spot_light_get_color(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::SpotLightComponent>(e)) { *x = c->color.x; *y = c->color.y; *z = c->color.z; }
+}
+extern "C" void dse_spot_light_set_color(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) {
+        c->color = glm::vec3(x, y, z);
+    }
+}
+extern "C" float dse_spot_light_get_intensity(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return c ? c->intensity : 1.0f;
+}
+extern "C" void dse_spot_light_set_intensity(uint32_t e, float v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->intensity = v;
+}
+extern "C" float dse_spot_light_get_radius(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return c ? c->radius : 20.0f;
+}
+extern "C" void dse_spot_light_set_radius(uint32_t e, float v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->radius = v;
+}
+extern "C" float dse_spot_light_get_inner_cone_angle(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return c ? c->inner_cone_angle : 12.5f;
+}
+extern "C" void dse_spot_light_set_inner_cone_angle(uint32_t e, float v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->inner_cone_angle = v;
+}
+extern "C" float dse_spot_light_get_outer_cone_angle(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return c ? c->outer_cone_angle : 17.5f;
+}
+extern "C" void dse_spot_light_set_outer_cone_angle(uint32_t e, float v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->outer_cone_angle = v;
+}
+extern "C" void dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::SpotLightComponent>(e)) { *x = c->direction.x; *y = c->direction.y; *z = c->direction.z; }
+}
+extern "C" void dse_spot_light_set_direction(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) {
+        c->direction = glm::vec3(x, y, z);
+    }
+}
+extern "C" int dse_spot_light_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_spot_light_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->enabled = (v != 0);
+}
+extern "C" int dse_spot_light_get_cast_shadow(uint32_t e) {
+    const auto* c = GCC<dse::SpotLightComponent>(e);
+    return (c && c->cast_shadow) ? 1 : 0;
+}
+extern "C" void dse_spot_light_set_cast_shadow(uint32_t e, int v) {
+    if (auto* c = GC<dse::SpotLightComponent>(e)) c->cast_shadow = (v != 0);
+}
+
+/* ---- SkyLightComponent ---- */
+extern "C" void dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::SkyLightComponent>(e)) { *x = c->up_color.x; *y = c->up_color.y; *z = c->up_color.z; }
+}
+extern "C" void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<dse::SkyLightComponent>(e)) {
+        c->up_color = glm::vec3(x, y, z);
+    }
+}
+extern "C" void dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::SkyLightComponent>(e)) { *x = c->down_color.x; *y = c->down_color.y; *z = c->down_color.z; }
+}
+extern "C" void dse_sky_light_set_down_color(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<dse::SkyLightComponent>(e)) {
+        c->down_color = glm::vec3(x, y, z);
+    }
+}
+extern "C" float dse_sky_light_get_intensity(uint32_t e) {
+    const auto* c = GCC<dse::SkyLightComponent>(e);
+    return c ? c->intensity : 1.0f;
+}
+extern "C" void dse_sky_light_set_intensity(uint32_t e, float v) {
+    if (auto* c = GC<dse::SkyLightComponent>(e)) c->intensity = v;
+}
+extern "C" int dse_sky_light_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::SkyLightComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_sky_light_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::SkyLightComponent>(e)) c->enabled = (v != 0);
+}
+

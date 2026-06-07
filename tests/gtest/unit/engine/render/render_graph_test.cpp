@@ -340,3 +340,16 @@ TEST(RenderGraphTest, PassWrite去重) {
     EXPECT_TRUE(graph.Compile());
     EXPECT_EQ(graph.compiled_pass_count(), 1u);
 }
+
+TEST(RenderGraphTest, GpuTiming默认启用) {
+    RenderGraph graph;
+    EXPECT_TRUE(graph.IsGpuTimingEnabled());
+}
+
+TEST(RenderGraphTest, GpuTiming可禁用) {
+    RenderGraph graph;
+    graph.SetGpuTimingEnabled(false);
+    EXPECT_FALSE(graph.IsGpuTimingEnabled());
+    graph.SetGpuTimingEnabled(true);
+    EXPECT_TRUE(graph.IsGpuTimingEnabled());
+}

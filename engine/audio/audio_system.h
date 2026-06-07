@@ -144,6 +144,12 @@ public:
     void StopAllSfx();
 
     /**
+     * @brief 渐出所有正在播放的 SFX
+     * @param duration_sec 淡出时长（秒），完成后自动清理
+     */
+    void FadeOutAllSfx(float duration_sec = 0.5f);
+
+    /**
      * @brief 设置主音量（影响所有声音）
      * @param volume 主音量大小 (0.0 - 1.0)
      */
@@ -230,6 +236,11 @@ private:
     float crossfade_duration_ = 0.0f;
     float crossfade_target_volume_ = 1.0f;
     bool crossfading_ = false;
+
+    // SFX 淡出状态
+    bool sfx_fading_out_ = false;
+    float sfx_fade_elapsed_ = 0.0f;
+    float sfx_fade_duration_ = 0.0f;
 
     // 音频随机化
     std::mt19937 rng_{std::random_device{}()};

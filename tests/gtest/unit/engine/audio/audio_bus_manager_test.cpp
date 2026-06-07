@@ -34,18 +34,21 @@ TEST(DspEffectParamsTest, 默认值) {
     EXPECT_FLOAT_EQ(p.delay_time_ms, 250.0f);
     EXPECT_FLOAT_EQ(p.feedback, 0.3f);
     EXPECT_FLOAT_EQ(p.wet_mix, 0.5f);
+    EXPECT_FLOAT_EQ(p.gain_db, 0.0f);
     EXPECT_FLOAT_EQ(p.room_size, 0.5f);
     EXPECT_FLOAT_EQ(p.damping, 0.5f);
     EXPECT_TRUE(p.enabled);
 }
 
 TEST(DspEffectParamsTest, 枚举值连续且Count正确) {
-    EXPECT_EQ(static_cast<int>(DspEffectType::LowPass),  0);
-    EXPECT_EQ(static_cast<int>(DspEffectType::HighPass), 1);
-    EXPECT_EQ(static_cast<int>(DspEffectType::BandPass), 2);
-    EXPECT_EQ(static_cast<int>(DspEffectType::Delay),    3);
-    EXPECT_EQ(static_cast<int>(DspEffectType::Reverb),   4);
-    EXPECT_EQ(static_cast<int>(DspEffectType::Count),    5);
+    EXPECT_EQ(static_cast<int>(DspEffectType::LowPass),     0);
+    EXPECT_EQ(static_cast<int>(DspEffectType::HighPass),    1);
+    EXPECT_EQ(static_cast<int>(DspEffectType::BandPass),    2);
+    EXPECT_EQ(static_cast<int>(DspEffectType::NotchFilter), 3);
+    EXPECT_EQ(static_cast<int>(DspEffectType::PeakEQ),      4);
+    EXPECT_EQ(static_cast<int>(DspEffectType::Delay),       5);
+    EXPECT_EQ(static_cast<int>(DspEffectType::Reverb),      6);
+    EXPECT_EQ(static_cast<int>(DspEffectType::Count),       7);
 }
 
 TEST(DspEffectParamsTest, 所有字段可修改) {
@@ -454,4 +457,87 @@ TEST_F(AudioBusManagerEngineTest, AddRemoveEffect效果数正确) {
     EXPECT_EQ(mgr_.GetEffectCount("master"), 1u);
     mgr_.RemoveEffect("master", 0);
     EXPECT_EQ(mgr_.GetEffectCount("master"), 0u);
+}
+
+// ============================================================
+// Part 4: NotchFilter / PeakEQ 新增效果
+// ============================================================
+
+TEST(DspEffectParamsTest, NotchFilter参数构造) {
+    DspEffectParams p;
+    p.type = DspEffectType::NotchFilter;
+    p.cutoff_hz = 1500.0f;
+    p.q = 2.0f;
+    EXPECT_EQ(p.type, DspEffectType::NotchFilter);
+    EXPECT_FLOAT_EQ(p.cutoff_hz, 1500.0f);
+    EXPECT_FLOAT_EQ(p.q, 2.0f);
+    EXPECT_FLOAT_EQ(p.gain_db, 0.0f);
+}
+
+TEST(DspEffectParamsTest, PeakEQ参数构造) {
+    DspEffectParams p;
+    p.type = DspEffectType::PeakEQ;
+    p.cutoff_hz = 3000.0f;
+    p.q = 1.5f;
+    p.gain_db = 6.0f;
+    EXPECT_EQ(p.type, DspEffectType::PeakEQ);
+    EXPECT_FLOAT_EQ(p.cutoff_hz, 3000.0f);
+    EXPECT_FLOAT_EQ(p.q, 1.5f);
+    EXPECT_FLOAT_EQ(p.gain_db, 6.0f);
+}
+
+TEST(DspEffectParamsTest, PeakEQ增益默认为零) {
+    DspEffectParams p;
+    p.type = DspEffectType::PeakEQ;
+    EXPECT_FLOAT_EQ(p.gain_db, 0.0f);
+}
+
+TEST_F(AudioBusManagerEngineTest, AddEffect_NotchFilter成功) {
+    if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
+    DspEffectParams p;
+    p.type = DspEffectType::NotchFilter;
+    p.cutoff_hz = 1000.0f;
+    p.q = 1.0f;
+    EXPECT_TRUE(mgr_.AddEffect("master", p));
+    EXPECT_EQ(mgr_.GetEffectCount("master"), 1u);
+}
+
+TEST_F(AudioBusManagerEngineTest, AddEffect_PeakEQ成功) {
+    if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
+    DspEffectParams p;
+    p.type = DspEffectType::PeakEQ;
+    p.cutoff_hz = 2000.0f;
+    p.q = 1.5f;
+    p.gain_db = 3.0f;
+    EXPECT_TRUE(mgr_.AddEffect("sfx", p));
+    EXPECT_EQ(mgr_.GetEffectCount("sfx"), 1u);
+}
+
+TEST_F(AudioBusManagerEngineTest, 链式包含NotchFilter和PeakEQ) {
+    if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
+    DspEffectParams notch;
+    notch.type = DspEffectType::NotchFilter;
+    notch.cutoff_hz = 500.0f;
+    notch.q = 2.0f;
+
+    DspEffectParams peak;
+    peak.type = DspEffectType::PeakEQ;
+    peak.cutoff_hz = 4000.0f;
+    peak.q = 1.0f;
+    peak.gain_db = -3.0f;
+
+    DspEffectParams lpf;
+    lpf.type = DspEffectType::LowPass;
+    lpf.cutoff_hz = 8000.0f;
+
+    EXPECT_TRUE(mgr_.AddEffect("music", notch));
+    EXPECT_TRUE(mgr_.AddEffect("music", peak));
+    EXPECT_TRUE(mgr_.AddEffect("music", lpf));
+    EXPECT_EQ(mgr_.GetEffectCount("music"), 3u);
+
+    auto* bus = mgr_.GetBus("music");
+    ASSERT_NE(bus, nullptr);
+    EXPECT_EQ(bus->effects[0].type, DspEffectType::NotchFilter);
+    EXPECT_EQ(bus->effects[1].type, DspEffectType::PeakEQ);
+    EXPECT_EQ(bus->effects[2].type, DspEffectType::LowPass);
 }

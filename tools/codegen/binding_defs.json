@@ -208,6 +208,104 @@
                     "lua_setter": "set_point_light_enabled"
                 }
             ]
+        },
+        {
+            "name": "SpotLightComponent",
+            "prefix": "spot_light",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "color",
+                    "type": "vec3",
+                    "lua_getter": "get_spot_light_color",
+                    "lua_setter": "set_spot_light_color"
+                },
+                {
+                    "name": "intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_spot_light_intensity",
+                    "lua_setter": "set_spot_light_intensity"
+                },
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "default": "20.0f",
+                    "lua_getter": "get_spot_light_radius",
+                    "lua_setter": "set_spot_light_radius"
+                },
+                {
+                    "name": "inner_cone_angle",
+                    "type": "float",
+                    "default": "12.5f",
+                    "lua_getter": "get_spot_light_inner_cone_angle",
+                    "lua_setter": "set_spot_light_inner_cone_angle"
+                },
+                {
+                    "name": "outer_cone_angle",
+                    "type": "float",
+                    "default": "17.5f",
+                    "lua_getter": "get_spot_light_outer_cone_angle",
+                    "lua_setter": "set_spot_light_outer_cone_angle"
+                },
+                {
+                    "name": "direction",
+                    "type": "vec3",
+                    "lua_getter": "get_spot_light_direction",
+                    "lua_setter": "set_spot_light_direction"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_spot_light_enabled",
+                    "lua_setter": "set_spot_light_enabled"
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_spot_light_cast_shadow",
+                    "lua_setter": "set_spot_light_cast_shadow"
+                }
+            ]
+        },
+        {
+            "name": "SkyLightComponent",
+            "prefix": "sky_light",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "up_color",
+                    "type": "vec3",
+                    "lua_getter": "get_sky_light_up_color",
+                    "lua_setter": "set_sky_light_up_color"
+                },
+                {
+                    "name": "down_color",
+                    "type": "vec3",
+                    "lua_getter": "get_sky_light_down_color",
+                    "lua_setter": "set_sky_light_down_color"
+                },
+                {
+                    "name": "intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_sky_light_intensity",
+                    "lua_setter": "set_sky_light_intensity"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_sky_light_enabled",
+                    "lua_setter": "set_sky_light_enabled"
+                }
+            ]
         }
     ]
 }

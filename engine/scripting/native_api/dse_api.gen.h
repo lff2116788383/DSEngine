@@ -83,6 +83,34 @@ DSE_CAPI_GEN void  dse_point_light_set_radius(uint32_t e, float v);
 DSE_CAPI_GEN int  dse_point_light_get_enabled(uint32_t e);
 DSE_CAPI_GEN void dse_point_light_set_enabled(uint32_t e, int v);
 
+/* ---- SpotLightComponent ---- */
+DSE_CAPI_GEN void dse_spot_light_get_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_spot_light_set_color(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_spot_light_get_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_spot_light_set_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spot_light_get_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_spot_light_set_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spot_light_get_inner_cone_angle(uint32_t e);
+DSE_CAPI_GEN void  dse_spot_light_set_inner_cone_angle(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spot_light_get_outer_cone_angle(uint32_t e);
+DSE_CAPI_GEN void  dse_spot_light_set_outer_cone_angle(uint32_t e, float v);
+DSE_CAPI_GEN void dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_spot_light_set_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_spot_light_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_spot_light_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_spot_light_get_cast_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_spot_light_set_cast_shadow(uint32_t e, int v);
+
+/* ---- SkyLightComponent ---- */
+DSE_CAPI_GEN void dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_sky_light_set_down_color(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_sky_light_get_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_sky_light_set_intensity(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_sky_light_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_sky_light_set_enabled(uint32_t e, int v);
+
 #ifdef __cplusplus
 }
 #endif

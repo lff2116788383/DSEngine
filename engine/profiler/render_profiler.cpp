@@ -32,12 +32,24 @@ void RenderProfiler::EndFrame() {
     accumulated_.peak_triangles = std::max(accumulated_.peak_triangles, current_frame_.triangle_count);
     accumulated_.peak_vertices = std::max(accumulated_.peak_vertices, current_frame_.vertex_count);
 
+    // 将暂存的 GPU 计时数据提升为本帧快照
+    gpu_pass_timings_ = std::move(pending_gpu_timings_);
+    pending_gpu_timings_.clear();
+
+    // 计算 GPU 总耗时
+    float total_gpu = 0.0f;
+    for (const auto& t : gpu_pass_timings_) {
+        if (t.duration_ms > 0.0f) total_gpu += t.duration_ms;
+    }
+    current_frame_.total_gpu_time_ms = total_gpu;
+
     RenderFrameEvent evt;
     evt.timestamp_us = std::chrono::duration<double, std::micro>(
         std::chrono::high_resolution_clock::now() - origin_time_
     ).count();
     evt.stats = current_frame_;
-    frame_events_.push_back(evt);
+    evt.gpu_timings = gpu_pass_timings_;
+    frame_events_.push_back(std::move(evt));
     while (frame_events_.size() > kMaxFrameEvents) {
         frame_events_.pop_front();
     }
@@ -85,12 +97,19 @@ void RenderProfiler::UpdateFromRhi(int draw_calls, int vertex_count, int triangl
     current_frame_.shader_switches += shader_switches;
 }
 
+void RenderProfiler::UpdateGpuTimers(const std::vector<GpuPassTiming>& timings) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    pending_gpu_timings_ = timings;
+}
+
 void RenderProfiler::Reset() {
     std::lock_guard<std::mutex> lock(mutex_);
     current_frame_ = RenderFrameStats{};
     last_frame_ = RenderFrameStats{};
     accumulated_ = RenderAccumulatedStats{};
     frame_events_.clear();
+    gpu_pass_timings_.clear();
+    pending_gpu_timings_.clear();
     origin_time_ = std::chrono::high_resolution_clock::now();
 }
 
@@ -109,6 +128,12 @@ std::string RenderProfiler::ExportCSV() const {
     oss << "TextureBinds," << last_frame_.texture_binds << ",0,0\n";
     oss << "ShaderSwitches," << last_frame_.shader_switches << ",0,0\n";
     oss << "TextureMemoryKB," << (last_frame_.texture_memory / 1024) << ",0,0\n";
+    oss << "GpuTimeMs," << std::fixed << std::setprecision(3) << last_frame_.total_gpu_time_ms << ",0,0\n";
+    for (const auto& gt : gpu_pass_timings_) {
+        if (gt.duration_ms > 0.0f) {
+            oss << "GPU:" << gt.name << "," << gt.duration_ms << ",0,0\n";
+        }
+    }
     return oss.str();
 }
 
@@ -116,11 +141,16 @@ std::string RenderProfiler::ExportChromeTrace() const {
     std::lock_guard<std::mutex> lock(mutex_);
     std::ostringstream oss;
     oss << "[\n";
-    bool first = true;
+
+    // 线程元数据：tid 1 = CPU Render, tid 2 = GPU
+    oss << "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":1,"
+        << "\"args\":{\"name\":\"CPU Render\"}},\n"
+        << "{\"name\":\"thread_name\",\"ph\":\"M\",\"pid\":1,\"tid\":2,"
+        << "\"args\":{\"name\":\"GPU\"}}";
+
     for (const auto& evt : frame_events_) {
-        if (!first) oss << ",\n";
-        first = false;
-        oss << "{\"name\":\"render_stats\""
+        // CPU 渲染统计（Counter 事件）
+        oss << ",\n{\"name\":\"render_stats\""
             << ",\"cat\":\"render\""
             << ",\"ph\":\"C\""
             << ",\"ts\":" << std::fixed << std::setprecision(1) << evt.timestamp_us
@@ -135,7 +165,23 @@ std::string RenderProfiler::ExportChromeTrace() const {
             << ",\"texture_binds\":" << evt.stats.texture_binds
             << ",\"shader_switches\":" << evt.stats.shader_switches
             << ",\"texture_memory\":" << evt.stats.texture_memory
+            << ",\"gpu_time_ms\":" << std::setprecision(3) << evt.stats.total_gpu_time_ms
             << "}}";
+
+        // GPU Pass 耗时（Complete 事件，在 GPU 轨道上按顺序排列）
+        double gpu_cursor_us = evt.timestamp_us;
+        for (const auto& gt : evt.gpu_timings) {
+            if (gt.duration_ms <= 0.0f) continue;
+            double dur_us = static_cast<double>(gt.duration_ms) * 1000.0;
+            oss << ",\n{\"name\":\"" << gt.name << "\""
+                << ",\"cat\":\"gpu\""
+                << ",\"ph\":\"X\""
+                << ",\"ts\":" << std::setprecision(1) << gpu_cursor_us
+                << ",\"dur\":" << std::setprecision(1) << dur_us
+                << ",\"pid\":1"
+                << ",\"tid\":2}";
+            gpu_cursor_us += dur_us;
+        }
     }
     oss << "\n]";
     return oss.str();

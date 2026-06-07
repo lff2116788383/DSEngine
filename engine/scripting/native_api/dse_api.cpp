@@ -450,24 +450,6 @@ extern "C" void dse_spot_light_set_radius(uint32_t e, float v) {
     if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->radius = v;
 }
 
-extern "C" float dse_spot_light_get_inner_angle(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->inner_cone_angle : 12.5f;
-}
-
-extern "C" void dse_spot_light_set_inner_angle(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->inner_cone_angle = v;
-}
-
-extern "C" float dse_spot_light_get_outer_angle(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->outer_cone_angle : 17.5f;
-}
-
-extern "C" void dse_spot_light_set_outer_angle(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->outer_cone_angle = v;
-}
-
 extern "C" void dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z) {
     if (const auto* l = GetCompConst<dse::SpotLightComponent>(e)) {
         *x = l->direction.x; *y = l->direction.y; *z = l->direction.z;
@@ -476,6 +458,90 @@ extern "C" void dse_spot_light_get_direction(uint32_t e, float* x, float* y, flo
 
 extern "C" void dse_spot_light_set_direction(uint32_t e, float x, float y, float z) {
     if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->direction = glm::vec3(x, y, z);
+}
+
+extern "C" float dse_spot_light_get_inner_cone_angle(uint32_t e) {
+    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
+    return l ? l->inner_cone_angle : 12.5f;
+}
+
+extern "C" void dse_spot_light_set_inner_cone_angle(uint32_t e, float v) {
+    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->inner_cone_angle = v;
+}
+
+extern "C" float dse_spot_light_get_outer_cone_angle(uint32_t e) {
+    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
+    return l ? l->outer_cone_angle : 17.5f;
+}
+
+extern "C" void dse_spot_light_set_outer_cone_angle(uint32_t e, float v) {
+    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->outer_cone_angle = v;
+}
+
+extern "C" int dse_spot_light_get_enabled(uint32_t e) {
+    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
+    return (l && l->enabled) ? 1 : 0;
+}
+
+extern "C" void dse_spot_light_set_enabled(uint32_t e, int v) {
+    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->enabled = (v != 0);
+}
+
+extern "C" int dse_spot_light_get_cast_shadow(uint32_t e) {
+    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
+    return (l && l->cast_shadow) ? 1 : 0;
+}
+
+extern "C" void dse_spot_light_set_cast_shadow(uint32_t e, int v) {
+    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->cast_shadow = (v != 0);
+}
+
+// ============================================================
+// SkyLightComponent
+// ============================================================
+
+extern "C" void dse_sky_light_add(uint32_t e) {
+    World* w = GetWorld();
+    if (!ValidEntity(w, e)) return;
+    w->registry().emplace_or_replace<dse::SkyLightComponent>(ToEntity(e));
+}
+
+extern "C" void dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* l = GetCompConst<dse::SkyLightComponent>(e)) {
+        *x = l->up_color.r; *y = l->up_color.g; *z = l->up_color.b;
+    }
+}
+
+extern "C" void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z) {
+    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->up_color = glm::vec3(x, y, z);
+}
+
+extern "C" void dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* l = GetCompConst<dse::SkyLightComponent>(e)) {
+        *x = l->down_color.r; *y = l->down_color.g; *z = l->down_color.b;
+    }
+}
+
+extern "C" void dse_sky_light_set_down_color(uint32_t e, float x, float y, float z) {
+    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->down_color = glm::vec3(x, y, z);
+}
+
+extern "C" float dse_sky_light_get_intensity(uint32_t e) {
+    const auto* l = GetCompConst<dse::SkyLightComponent>(e);
+    return l ? l->intensity : 1.0f;
+}
+
+extern "C" void dse_sky_light_set_intensity(uint32_t e, float v) {
+    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->intensity = v;
+}
+
+extern "C" int dse_sky_light_get_enabled(uint32_t e) {
+    const auto* l = GetCompConst<dse::SkyLightComponent>(e);
+    return (l && l->enabled) ? 1 : 0;
+}
+
+extern "C" void dse_sky_light_set_enabled(uint32_t e, int v) {
+    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->enabled = (v != 0);
 }
 
 // ============================================================

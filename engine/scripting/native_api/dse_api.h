@@ -143,12 +143,30 @@ DSE_CAPI float dse_spot_light_get_intensity(uint32_t e);
 DSE_CAPI void  dse_spot_light_set_intensity(uint32_t e, float v);
 DSE_CAPI float dse_spot_light_get_radius(uint32_t e);
 DSE_CAPI void  dse_spot_light_set_radius(uint32_t e, float v);
-DSE_CAPI float dse_spot_light_get_inner_angle(uint32_t e);
-DSE_CAPI void  dse_spot_light_set_inner_angle(uint32_t e, float v);
-DSE_CAPI float dse_spot_light_get_outer_angle(uint32_t e);
-DSE_CAPI void  dse_spot_light_set_outer_angle(uint32_t e, float v);
+DSE_CAPI float dse_spot_light_get_inner_cone_angle(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_inner_cone_angle(uint32_t e, float v);
+DSE_CAPI float dse_spot_light_get_outer_cone_angle(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_outer_cone_angle(uint32_t e, float v);
 DSE_CAPI void  dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z);
 DSE_CAPI void  dse_spot_light_set_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI int   dse_spot_light_get_enabled(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_spot_light_get_cast_shadow(uint32_t e);
+DSE_CAPI void  dse_spot_light_set_cast_shadow(uint32_t e, int v);
+
+// ============================================================
+// SkyLightComponent
+// ============================================================
+
+DSE_CAPI void  dse_sky_light_add(uint32_t e);
+DSE_CAPI void  dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void  dse_sky_light_set_up_color(uint32_t e, float x, float y, float z);
+DSE_CAPI void  dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void  dse_sky_light_set_down_color(uint32_t e, float x, float y, float z);
+DSE_CAPI float dse_sky_light_get_intensity(uint32_t e);
+DSE_CAPI void  dse_sky_light_set_intensity(uint32_t e, float v);
+DSE_CAPI int   dse_sky_light_get_enabled(uint32_t e);
+DSE_CAPI void  dse_sky_light_set_enabled(uint32_t e, int v);
 
 // ============================================================
 // Input

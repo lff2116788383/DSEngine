@@ -25,6 +25,8 @@ enum class DspEffectType : uint8_t {
     LowPass = 0,
     HighPass,
     BandPass,
+    NotchFilter,
+    PeakEQ,
     Delay,
     Reverb,
     Count
@@ -38,6 +40,7 @@ struct DspEffectParams {
     float delay_time_ms = 250.0f;    ///< 延迟时间（Delay / Reverb 前反射）
     float feedback = 0.3f;           ///< 延迟反馈量（Delay / Reverb 衰减）
     float wet_mix = 0.5f;            ///< 湿信号混合比
+    float gain_db = 0.0f;            ///< PeakEQ 增益 (dB)
     float room_size = 0.5f;          ///< Reverb 房间大小 [0,1]（映射到延迟长度）
     float damping = 0.5f;            ///< Reverb 高频衰减 [0,1]
     bool enabled = true;

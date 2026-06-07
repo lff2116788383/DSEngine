@@ -36,6 +36,8 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterDirectionalLight3DComponentGenBindings(L);
     RegisterPointLightComponentGenBindings(L);
     RegisterMeshRendererComponentGenBindings(L);
+    RegisterSpotLightComponentGenBindings(L);
+    RegisterSkyLightComponentGenBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding

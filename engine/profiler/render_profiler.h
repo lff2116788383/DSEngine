@@ -25,6 +25,13 @@ struct RenderFrameStats {
     int instanced_mesh_count = 0;
     int indirect_draw_calls = 0;
     int gpu_culled_count = 0;
+    float total_gpu_time_ms = 0.0f;
+};
+
+/// 单个渲染 Pass 的 GPU 耗时
+struct GpuPassTiming {
+    std::string name;
+    float duration_ms = -1.0f;
 };
 
 struct RenderAccumulatedStats {
@@ -43,6 +50,7 @@ struct RenderAccumulatedStats {
 struct RenderFrameEvent {
     double timestamp_us = 0.0;
     RenderFrameStats stats;
+    std::vector<GpuPassTiming> gpu_timings;
 };
 
 class RenderProfiler {
@@ -61,6 +69,13 @@ public:
     /// 从 RHI 帧统计批量写入，单次加锁 O(1)
     void UpdateFromRhi(int draw_calls, int vertex_count, int triangle_count,
                        int sprite_count, int texture_binds, int shader_switches);
+
+    /// 写入本帧 GPU Pass 耗时数据（应在 EndFrame 之前调用）
+    void UpdateGpuTimers(const std::vector<GpuPassTiming>& timings);
+
+    /// 获取最近一帧的 GPU Pass 耗时
+    const std::vector<GpuPassTiming>& GetGpuPassTimings() const { return gpu_pass_timings_; }
+
     const RenderFrameStats& GetCurrentFrameStats() const { return current_frame_; }
     const RenderAccumulatedStats& GetAccumulatedStats() const { return accumulated_; }
     void Reset();
@@ -74,6 +89,8 @@ private:
     RenderFrameStats last_frame_;
     RenderAccumulatedStats accumulated_;
     std::deque<RenderFrameEvent> frame_events_;
+    std::vector<GpuPassTiming> gpu_pass_timings_;        ///< 本帧 GPU 计时（EndFrame 前写入）
+    std::vector<GpuPassTiming> pending_gpu_timings_;     ///< UpdateGpuTimers 暂存区
     std::chrono::high_resolution_clock::time_point origin_time_ = std::chrono::high_resolution_clock::now();
     mutable std::mutex mutex_;
 };

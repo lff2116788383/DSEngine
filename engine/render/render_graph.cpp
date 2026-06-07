@@ -504,11 +504,20 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
         return;
     }
 
+    const bool use_gpu_timer = rhi_device_ && gpu_timing_enabled_
+                               && rhi_device_->SupportsGpuTimer();
+
     for (uint32_t pass_id : compiled_order_) {
         auto it = pass_id_to_idx_.find(pass_id);
         if (it == pass_id_to_idx_.end()) continue;
         auto& p = passes_[it->second];
         if (!p.execute) continue;
+
+        GpuTimerId timer_id = kInvalidGpuTimerId;
+        if (use_gpu_timer) {
+            timer_id = rhi_device_->GetOrCreateGpuTimer(p.name);
+            rhi_device_->BeginGpuTimer(timer_id);
+        }
 
         // 自动屏障插入
         if (rhi_device_) {
@@ -529,6 +538,10 @@ void RenderGraph::Execute(CommandBuffer& cmd_buffer) {
         // 自动 RT 解绑
         if (p.auto_bind_rt != 0) {
             cmd_buffer.EndRenderPass();
+        }
+
+        if (timer_id != kInvalidGpuTimerId) {
+            rhi_device_->EndGpuTimer(timer_id);
         }
     }
 }
@@ -544,11 +557,21 @@ void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
         }
         return;
     }
+
+    const bool use_gpu_timer = rhi_device_ && gpu_timing_enabled_
+                               && rhi_device_->SupportsGpuTimer();
+
     for (uint32_t pass_id : compiled_order_) {
         auto it = pass_id_to_idx_.find(pass_id);
         if (it == pass_id_to_idx_.end()) continue;
         auto& p = passes_[it->second];
         if (!p.execute) continue;
+
+        GpuTimerId timer_id = kInvalidGpuTimerId;
+        if (use_gpu_timer) {
+            timer_id = rhi_device_->GetOrCreateGpuTimer(p.name);
+            rhi_device_->BeginGpuTimer(timer_id);
+        }
 
         // 自动屏障插入
         if (rhi_device_) {
@@ -569,6 +592,10 @@ void RenderGraph::ExecuteWithCallback(CommandBuffer& cmd_buffer,
         // 自动 RT 解绑
         if (p.auto_bind_rt != 0) {
             cmd_buffer.EndRenderPass();
+        }
+
+        if (timer_id != kInvalidGpuTimerId) {
+            rhi_device_->EndGpuTimer(timer_id);
         }
 
         if (post_pass) post_pass(p.name);
