@@ -143,6 +143,7 @@ struct RenderPassContext {
         bool ui = true;
         bool gpu_cull = true;
         bool shadows = true;
+        bool ssr = true;
     } pipeline_features;
 
     struct PipelineOverrides {

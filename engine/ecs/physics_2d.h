@@ -45,6 +45,9 @@ struct RigidBody2DComponent {
     float gravity_scale = 1.0f;                          ///< 重力缩放倍数
     bool fixed_rotation = false;                         ///< 是否锁定旋转
     
+    /// 增量同步标记：仅当 dirty 时才同步 ECS → Box2D
+    bool sync_dirty_ = true;
+
     // Internal Box2D body handle
     b2Body* runtime_body = nullptr;                         ///< 运行时绑定的 Box2D 刚体实例
     

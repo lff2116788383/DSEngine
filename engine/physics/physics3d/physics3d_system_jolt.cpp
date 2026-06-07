@@ -283,24 +283,25 @@ bool Physics3DSystem::Init(World& world) {
     }
 
     impl_ = std::make_unique<Impl>();
-    impl_->temp_allocator = std::make_unique<TempAllocatorImpl>(10 * 1024 * 1024); // 10 MB
+    impl_->temp_allocator = std::make_unique<TempAllocatorImpl>(
+        static_cast<uint>(config_.temp_allocator_size_mb) * 1024 * 1024);
     impl_->job_system = std::make_unique<JobSystemThreadPool>(
-        cMaxPhysicsJobs, cMaxPhysicsBarriers, 2); // 2 worker threads
+        cMaxPhysicsJobs, cMaxPhysicsBarriers, std::max(config_.physics_threads, 1));
 
     impl_->bp_layer_interface = std::make_unique<BPLayerInterfaceImpl>();
     impl_->obj_vs_bp_filter = std::make_unique<ObjVsBPLayerFilterImpl>();
     impl_->obj_layer_pair_filter = std::make_unique<ObjLayerPairFilterImpl>();
 
-    const uint max_bodies = 4096;
+    const uint max_bodies = static_cast<uint>(config_.max_bodies);
     const uint num_body_mutexes = 0; // auto
-    const uint max_body_pairs = 4096;
-    const uint max_contact_constraints = 2048;
+    const uint max_body_pairs = static_cast<uint>(config_.max_body_pairs);
+    const uint max_contact_constraints = static_cast<uint>(config_.max_contact_constraints);
 
     impl_->physics_system = std::make_unique<PhysicsSystem>();
     impl_->physics_system->Init(
         max_bodies, num_body_mutexes, max_body_pairs, max_contact_constraints,
         *impl_->bp_layer_interface, *impl_->obj_vs_bp_filter, *impl_->obj_layer_pair_filter);
-    impl_->physics_system->SetGravity(Vec3(0.0f, -9.81f, 0.0f));
+    impl_->physics_system->SetGravity(Vec3(0.0f, config_.gravity_y, 0.0f));
 
     // 设置碰撞监听
     impl_->contact_listener = std::make_unique<DseContactListener>();
@@ -310,14 +311,23 @@ bool Physics3DSystem::Init(World& world) {
     impl_->contact_listener->body_layer_map = &impl_->body_layer_map;
     impl_->physics_system->SetContactListener(impl_->contact_listener.get());
 
-    DEBUG_LOG_INFO("Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0)");
+    destroy_connections_.push_back(
+        world.registry().on_destroy<RigidBody3DComponent>().connect<&Physics3DSystem::OnRigidBody3DDestroyed>(this));
+
+    DEBUG_LOG_INFO("Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies={}, threads={})",
+                   config_.max_bodies, config_.physics_threads);
     return true;
+}
+
+void Physics3DSystem::OnRigidBody3DDestroyed(entt::registry&, entt::entity entity) {
+    RemoveActor(entity);
 }
 
 // ---------------------------------------------------------------------------
 // 关闭
 // ---------------------------------------------------------------------------
 void Physics3DSystem::Shutdown() {
+    destroy_connections_.clear();
     if (!impl_) return;
 
     // 先移除所有 constraint（必须在移除 body 之前）
@@ -373,6 +383,20 @@ void Physics3DSystem::FixedUpdate(World& world, float fixed_delta_time) {
 void Physics3DSystem::SyncTransformsToPhysics(World& world) {
     auto& registry = world.registry();
     auto& bi = impl_->physics_system->GetBodyInterface();
+
+    // 清理已销毁实体残留的 Jolt body
+    std::vector<entt::entity> stale_entities;
+    stale_entities.reserve(impl_->entity_to_body.size());
+    for (const auto& [eid, body_id] : impl_->entity_to_body) {
+        const auto entity = static_cast<entt::entity>(eid);
+        if (!registry.valid(entity) || !registry.all_of<RigidBody3DComponent>(entity)) {
+            stale_entities.push_back(entity);
+        }
+        (void)body_id;
+    }
+    for (const auto entity : stale_entities) {
+        RemoveActor(entity);
+    }
 
     auto view = registry.view<TransformComponent, RigidBody3DComponent>();
     for (auto entity : view) {

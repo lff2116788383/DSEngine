@@ -21,6 +21,7 @@
 #include <memory>
 #include <any>
 #include <glm/glm.hpp>
+#include "engine/core/job_system.h"
 
 class AssetManager;
 
@@ -147,8 +148,9 @@ public:
     std::vector<StreamingZone> GetZoneSnapshot() const;
 
 private:
-    /// 对单个 zone 发起加载
-    void BeginLoadZone(StreamingZone& zone);
+    /// 对单个 zone 发起加载（指定 IO 优先级）
+    void BeginLoadZone(StreamingZone& zone,
+                       dse::core::JobPriority priority = dse::core::JobPriority::Normal);
 
     /// 对单个 zone 执行卸载
     void BeginUnloadZone(StreamingZone& zone);

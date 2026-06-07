@@ -5,10 +5,10 @@
 
 #include "engine/scene/scene_manager.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/base/debug.h"
 #include <fstream>
 #include <sstream>
-#include <filesystem>
 
 namespace scene {
 
@@ -32,9 +32,14 @@ void SceneManager::LoadSubSceneAsync(const std::string& path) {
         DEBUG_LOG_WARN("SceneManager::LoadSubSceneAsync: {} already loaded", path);
         return;
     }
+    if (loading_paths_.find(path) != loading_paths_.end()) {
+        DEBUG_LOG_WARN("SceneManager::LoadSubSceneAsync: {} already loading", path);
+        return;
+    }
 
     // 如果有 JobSystem，在工作线程读取文件
     if (job_system_) {
+        loading_paths_.insert(path);
         auto shared_path = std::make_shared<std::string>(path);
         auto shared_pending = std::make_shared<PendingLoad>();
         shared_pending->path = path;
@@ -71,7 +76,9 @@ bool SceneManager::LoadSubScene(const std::string& path) {
         return false;
     }
 
-    sub_scenes_[path] = std::move(sub);
+    auto& loaded_sub = *(sub_scenes_[path] = std::move(sub));
+    IndexSubSceneUuids(loaded_sub);
+    WarmMeshes(loaded_sub);
 
     if (event_bus_) {
         event_bus_->Publish<dse::core::SubSceneLoadedEvent>(path);
@@ -84,6 +91,7 @@ void SceneManager::UnloadSubScene(const std::string& path) {
     if (it == sub_scenes_.end()) {
         return;
     }
+    RemoveSubSceneUuids(*it->second);
     if (world_) {
         it->second->Unload(*world_);
     }
@@ -101,6 +109,7 @@ void SceneManager::UnloadAll() {
         }
     }
     sub_scenes_.clear();
+    uuid_index_.clear();
 }
 
 void SceneManager::Update(float dt) {
@@ -116,31 +125,33 @@ void SceneManager::Update(float dt) {
     }
 
     for (auto& pending : completed) {
+        loading_paths_.erase(pending.path);
+
         if (!pending.success || pending.json_data.empty()) {
             DEBUG_LOG_ERROR("SceneManager::Update: async load failed for {}", pending.path);
+            if (event_bus_) {
+                event_bus_->Publish<dse::core::SubSceneLoadFailedEvent>(pending.path);
+            }
             continue;
         }
         if (sub_scenes_.find(pending.path) != sub_scenes_.end()) {
             continue;
         }
 
-        // 写入临时文件供 SubScene::Load 使用（复用现有反序列化逻辑）
-        // 注意：SubScene::Load 本身从文件读取，此处将异步读取的 JSON 写入临时文件
-        auto temp_path = std::filesystem::temp_directory_path() / ("dse_async_sub_" + std::to_string(std::hash<std::string>{}(pending.path)) + ".dscene");
-        {
-            std::ofstream out(temp_path);
-            out << pending.json_data;
-        }
-
         auto sub = std::make_unique<SubScene>();
-        if (sub->Load(*world_, *asset_manager_, temp_path.string())) {
-            sub_scenes_[pending.path] = std::move(sub);
+        if (sub->LoadFromJson(*world_, *asset_manager_, pending.json_data, pending.path)) {
+            auto& loaded_sub = *(sub_scenes_[pending.path] = std::move(sub));
+            IndexSubSceneUuids(loaded_sub);
+            WarmMeshes(loaded_sub);
             if (event_bus_) {
                 event_bus_->Publish<dse::core::SubSceneLoadedEvent>(pending.path);
             }
+        } else {
+            DEBUG_LOG_ERROR("SceneManager::Update: deserialize failed for {}", pending.path);
+            if (event_bus_) {
+                event_bus_->Publish<dse::core::SubSceneLoadFailedEvent>(pending.path);
+            }
         }
-
-        std::filesystem::remove(temp_path);
     }
 }
 
@@ -171,20 +182,63 @@ const SubScene* SceneManager::GetSubScene(const std::string& path) const {
     return it != sub_scenes_.end() ? it->second.get() : nullptr;
 }
 
-// ========== Phase 4: 跨场景 Entity 引用 ==========
+// ========== Phase 4: 跨场景 Entity 引用（哈希索引） ==========
 
 Entity SceneManager::ResolveReference(uint64_t uuid) const {
-    if (!world_ || uuid == 0) {
+    if (uuid == 0) {
         return entt::null;
     }
-    auto& reg = world_->registry();
-    auto view = reg.view<UUIDComponent>();
-    for (auto entity : view) {
-        if (view.get<UUIDComponent>(entity).uuid == uuid) {
-            return entity;
+    auto it = uuid_index_.find(uuid);
+    if (it != uuid_index_.end()) {
+        if (world_ && world_->registry().valid(it->second)) {
+            return it->second;
         }
     }
     return entt::null;
+}
+
+// ========== UUID 索引管理 ==========
+
+void SceneManager::IndexSubSceneUuids(const SubScene& sub) {
+    if (!world_) return;
+    auto& reg = world_->registry();
+    for (auto entity : sub.GetEntities()) {
+        if (reg.valid(entity) && reg.all_of<UUIDComponent>(entity)) {
+            uint64_t uuid = reg.get<UUIDComponent>(entity).uuid;
+            if (uuid != 0) {
+                uuid_index_[uuid] = entity;
+            }
+        }
+    }
+}
+
+void SceneManager::RemoveSubSceneUuids(const SubScene& sub) {
+    if (!world_) return;
+    auto& reg = world_->registry();
+    for (auto entity : sub.GetEntities()) {
+        if (reg.valid(entity) && reg.all_of<UUIDComponent>(entity)) {
+            uint64_t uuid = reg.get<UUIDComponent>(entity).uuid;
+            if (uuid != 0) {
+                uuid_index_.erase(uuid);
+            }
+        }
+    }
+}
+
+// ========== Mesh 异步预热 ==========
+
+void SceneManager::WarmMeshes(const SubScene& sub) {
+    if (!world_ || !asset_manager_) return;
+    auto& reg = world_->registry();
+    for (auto entity : sub.GetEntities()) {
+        if (!reg.valid(entity)) continue;
+        if (!reg.all_of<dse::MeshRendererComponent>(entity)) continue;
+        const auto& mr = reg.get<dse::MeshRendererComponent>(entity);
+        if (mr.mesh_path.empty()) continue;
+        asset_manager_->LoadDmeshAsync(mr.mesh_path, [](std::shared_ptr<DmeshAsset>) {
+            // 预热完成，资源已进入 AssetManager 缓存
+        });
+    }
 }
 
 // ========== Phase 3: 场景切换 ==========

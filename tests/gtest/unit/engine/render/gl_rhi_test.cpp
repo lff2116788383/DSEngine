@@ -61,7 +61,9 @@ TEST(OpenGLRhiDeviceTest, 未初始化时BeginFrame安全) {
 }
 
 TEST(OpenGLRhiDeviceTest, 未初始化时EndFrame安全) {
-    GTEST_SKIP() << "Requires GL context";
+    OpenGLRhiDevice device;
+    device.EndFrame();
+    SUCCEED();
 }
 
 TEST(OpenGLRhiDeviceTest, 未初始化时Submit安全) {
@@ -75,7 +77,9 @@ TEST(OpenGLRhiDeviceTest, CreateVertexArray返回递增句柄) {
 }
 
 TEST(OpenGLRhiDeviceTest, DeleteVertexArray_NoOp不崩溃) {
-    GTEST_SKIP() << "Requires GL context";
+    OpenGLRhiDevice device;
+    device.DeleteVertexArray(dse::render::VertexArrayHandle{999});
+    SUCCEED();
 }
 
 TEST(OpenGLRhiDeviceTest, LastFrameStats默认值为零) {
@@ -312,7 +316,10 @@ TEST(GLDrawExecutorTest, 默认stats为零) {
 }
 
 TEST(GLDrawExecutorTest, BeginEndFrame不崩溃) {
-    GTEST_SKIP() << "Requires GL context";
+    DrawExecutorGlobalState state;
+    GLDrawExecutor executor(state);
+    executor.BeginFrame();
+    SUCCEED();
 }
 
 TEST(GLDrawExecutorTest, 默认句柄为零) {

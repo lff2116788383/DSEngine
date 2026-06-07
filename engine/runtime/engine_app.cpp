@@ -10,6 +10,7 @@
 #include "engine/scripting/lua/lua_runtime.h"
 #endif
 #include "engine/scene/scene.h"
+#include "engine/scene/scene_manager.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include "engine/render/rhi/ubo_types.h"
 #ifdef _WIN32
@@ -191,6 +192,13 @@ void EngineInstance::RegisterRuntimeServices() {
         service_locator().Register<core::JobSystem, core::JobSystem>(job_system_shared);
     }
 
+    scene_manager_ = std::make_shared<scene::SceneManager>();
+    scene_manager_->SetWorld(services_.world);
+    scene_manager_->SetAssetManager(services_.asset_manager);
+    scene_manager_->SetEventBus(event_bus_.get());
+    scene_manager_->SetJobSystem(services_.job_system);
+    service_locator().Register<scene::SceneManager, scene::SceneManager>(scene_manager_);
+
     localization_manager_ = std::make_shared<dse::assets::LocalizationManager>();
     service_locator().Register<dse::assets::LocalizationManager, dse::assets::LocalizationManager>(localization_manager_);
 
@@ -213,6 +221,7 @@ void EngineInstance::RegisterRuntimeServices() {
     service_locator().BridgeTo<World>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::EventBus>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<core::JobSystem>(core::ServiceLocator::Instance());
+    service_locator().BridgeTo<scene::SceneManager>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<dse::assets::LocalizationManager>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<dse::render::FontService>(core::ServiceLocator::Instance());
 }
@@ -222,17 +231,20 @@ void EngineInstance::ResetRuntimeServices() {
     service_locator().Reset<core::EventBus>();
     service_locator().Reset<FramePipeline>();
     service_locator().Reset<World>();
+    service_locator().Reset<scene::SceneManager>();
     service_locator().Reset<dse::assets::LocalizationManager>();
     service_locator().Reset<dse::render::FontService>();
     service_locator().Reset<dse::assets::FileSystem>();
     if (font_service_) { font_service_->Shutdown(); font_service_.reset(); }
     localization_manager_.reset();
+    if (scene_manager_) { scene_manager_.reset(); }
     event_bus_.reset();
 
     core::ServiceLocator::Instance().Reset<core::JobSystem>();
     core::ServiceLocator::Instance().Reset<FramePipeline>();
     core::ServiceLocator::Instance().Reset<World>();
     core::ServiceLocator::Instance().Reset<core::EventBus>();
+    core::ServiceLocator::Instance().Reset<scene::SceneManager>();
 }
 
 void EngineInstance::CleanupOnInitFailure() {

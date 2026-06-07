@@ -4,6 +4,7 @@
  */
 
 #include "engine/scene/scene.h"
+#include "engine/scene/scene_component_serialization.h"
 #include "engine/ecs/script.h"
 #include "engine/ecs/sprite.h"
 #include "engine/ecs/transform.h"
@@ -69,7 +70,6 @@ bool Scene::Serialize(const std::string& filepath) {
         material_json.AddMember("name", rapidjson::Value(m.name.c_str(), allocator), allocator);
         material_json.AddMember("shader_variant", rapidjson::Value(m.shader_variant.c_str(), allocator), allocator);
         material_json.AddMember("blend_mode", static_cast<int>(m.blend_mode), allocator);
-        material_json.AddMember("texture_handle", m.texture_handle, allocator);
         rapidjson::Value tint(rapidjson::kArrayType);
         tint.PushBack(m.tint.r, allocator).PushBack(m.tint.g, allocator).PushBack(m.tint.b, allocator).PushBack(m.tint.a, allocator);
         material_json.AddMember("tint", tint, allocator);
@@ -107,7 +107,6 @@ bool Scene::Serialize(const std::string& filepath) {
             auto& s = world.registry().get<SpriteRendererComponent>(entity);
 
             rapidjson::Value sprite_json(rapidjson::kObjectType);
-            sprite_json.AddMember("texture_handle", s.texture_handle, allocator);
             sprite_json.AddMember("material_instance_id", s.material_instance_id, allocator);
             sprite_json.AddMember("shader_variant", rapidjson::Value(s.shader_variant.c_str(), allocator), allocator);
             sprite_json.AddMember("blend_mode", static_cast<int>(s.blend_mode), allocator);
@@ -163,11 +162,6 @@ bool Scene::Serialize(const std::string& filepath) {
             mesh_json.AddMember("roughness", mesh.roughness, allocator);
             mesh_json.AddMember("ao", mesh.ao, allocator);
             mesh_json.AddMember("normal_strength", mesh.normal_strength, allocator);
-            mesh_json.AddMember("albedo_texture_handle", mesh.albedo_texture_handle, allocator);
-            mesh_json.AddMember("normal_texture_handle", mesh.normal_texture_handle, allocator);
-            mesh_json.AddMember("metallic_roughness_texture_handle", mesh.metallic_roughness_texture_handle, allocator);
-            mesh_json.AddMember("emissive_texture_handle", mesh.emissive_texture_handle, allocator);
-            mesh_json.AddMember("occlusion_texture_handle", mesh.occlusion_texture_handle, allocator);
             mesh_json.AddMember("receive_shadow", mesh.receive_shadow, allocator);
             mesh_json.AddMember("visible", mesh.visible, allocator);
             components.AddMember("MeshRendererComponent", mesh_json, allocator);
@@ -204,6 +198,7 @@ bool Scene::Serialize(const std::string& filepath) {
                 cascade_splits.PushBack(light.cascade_splits[i], allocator);
             }
             light_json.AddMember("cascade_splits", cascade_splits, allocator);
+            light_json.AddMember("cascade_split_lambda", light.cascade_split_lambda, allocator);
             components.AddMember("DirectionalLight3DComponent", light_json, allocator);
         }
 
@@ -292,7 +287,7 @@ bool Scene::Serialize(const std::string& filepath) {
             rapidjson::Value terrain_json(rapidjson::kObjectType);
             terrain_json.AddMember("enabled", terrain.enabled, allocator);
             terrain_json.AddMember("heightmap_path", rapidjson::Value(terrain.heightmap_path.c_str(), allocator), allocator);
-            terrain_json.AddMember("texture_handle", terrain.texture_handle, allocator);
+            terrain_json.AddMember("texture_path", rapidjson::Value(terrain.texture_path.c_str(), allocator), allocator);
             terrain_json.AddMember("width", terrain.width, allocator);
             terrain_json.AddMember("depth", terrain.depth, allocator);
             terrain_json.AddMember("max_height", terrain.max_height, allocator);
@@ -304,6 +299,8 @@ bool Scene::Serialize(const std::string& filepath) {
             terrain_json.AddMember("visible", terrain.visible, allocator);
             components.AddMember("TerrainComponent", terrain_json, allocator);
         }
+
+        component_io::SerializeExtendedComponents(world.registry(), entity, components, allocator);
 
         entity_json.AddMember("components", components, allocator);
         entities.PushBack(entity_json, allocator);
@@ -375,9 +372,6 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (material_json.HasMember("blend_mode") && material_json["blend_mode"].IsInt()) {
                 material.blend_mode = static_cast<SpriteBlendMode>(material_json["blend_mode"].GetInt());
             }
-            if (material_json.HasMember("texture_handle") && material_json["texture_handle"].IsUint()) {
-                material.texture_handle = material_json["texture_handle"].GetUint();
-            }
             if (material_json.HasMember("tint") && material_json["tint"].IsArray() && material_json["tint"].Size() == 4) {
                 const auto& tint = material_json["tint"].GetArray();
                 material.tint = glm::vec4(tint[0].GetFloat(), tint[1].GetFloat(), tint[2].GetFloat(), tint[3].GetFloat());
@@ -440,9 +434,6 @@ bool Scene::Deserialize(const std::string& filepath) {
             const auto& sprite_json = components["SpriteRendererComponent"];
             SpriteRendererComponent sprite;
 
-            if (sprite_json.HasMember("texture_handle") && sprite_json["texture_handle"].IsUint()) {
-                sprite.texture_handle = sprite_json["texture_handle"].GetUint();
-            }
             if (sprite_json.HasMember("material_instance_id") && sprite_json["material_instance_id"].IsUint()) {
                 sprite.material_instance_id = sprite_json["material_instance_id"].GetUint();
             }
@@ -538,21 +529,6 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (mesh_json.HasMember("material_double_sided") && mesh_json["material_double_sided"].IsBool()) {
                 mesh.material_double_sided = mesh_json["material_double_sided"].GetBool();
             }
-            if (mesh_json.HasMember("albedo_texture_handle") && mesh_json["albedo_texture_handle"].IsUint()) {
-                mesh.albedo_texture_handle = mesh_json["albedo_texture_handle"].GetUint();
-            }
-            if (mesh_json.HasMember("normal_texture_handle") && mesh_json["normal_texture_handle"].IsUint()) {
-                mesh.normal_texture_handle = mesh_json["normal_texture_handle"].GetUint();
-            }
-            if (mesh_json.HasMember("metallic_roughness_texture_handle") && mesh_json["metallic_roughness_texture_handle"].IsUint()) {
-                mesh.metallic_roughness_texture_handle = mesh_json["metallic_roughness_texture_handle"].GetUint();
-            }
-            if (mesh_json.HasMember("emissive_texture_handle") && mesh_json["emissive_texture_handle"].IsUint()) {
-                mesh.emissive_texture_handle = mesh_json["emissive_texture_handle"].GetUint();
-            }
-            if (mesh_json.HasMember("occlusion_texture_handle") && mesh_json["occlusion_texture_handle"].IsUint()) {
-                mesh.occlusion_texture_handle = mesh_json["occlusion_texture_handle"].GetUint();
-            }
             if (mesh_json.HasMember("receive_shadow") && mesh_json["receive_shadow"].IsBool()) {
                 mesh.receive_shadow = mesh_json["receive_shadow"].GetBool();
             }
@@ -628,6 +604,9 @@ bool Scene::Deserialize(const std::string& filepath) {
                 for (rapidjson::SizeType i = 0; i < splits.Size() && i < CSM_CASCADES; ++i) {
                     light.cascade_splits[i] = splits[i].GetFloat();
                 }
+            }
+            if (light_json.HasMember("cascade_split_lambda") && light_json["cascade_split_lambda"].IsNumber()) {
+                light.cascade_split_lambda = light_json["cascade_split_lambda"].GetFloat();
             }
             world.registry().emplace<dse::DirectionalLight3DComponent>(entity, light);
         }
@@ -787,8 +766,8 @@ bool Scene::Deserialize(const std::string& filepath) {
             if (terrain_json.HasMember("heightmap_path") && terrain_json["heightmap_path"].IsString()) {
                 terrain.heightmap_path = terrain_json["heightmap_path"].GetString();
             }
-            if (terrain_json.HasMember("texture_handle") && terrain_json["texture_handle"].IsUint()) {
-                terrain.texture_handle = terrain_json["texture_handle"].GetUint();
+            if (terrain_json.HasMember("texture_path") && terrain_json["texture_path"].IsString()) {
+                terrain.texture_path = terrain_json["texture_path"].GetString();
             }
             if (terrain_json.HasMember("width") && terrain_json["width"].IsNumber()) {
                 terrain.width = terrain_json["width"].GetFloat();
@@ -820,6 +799,8 @@ bool Scene::Deserialize(const std::string& filepath) {
             terrain.is_dirty = true;
             world.registry().emplace<dse::TerrainComponent>(entity, std::move(terrain));
         }
+
+        component_io::DeserializeExtendedComponents(world.registry(), entity, components);
     }
 
     for (const auto& pair : pending_parents) {
@@ -937,7 +918,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
                         near_equal(loaded_transform.scale.y, transform.scale.y) &&
                         near_equal(loaded_transform.scale.z, transform.scale.z);
 
-    bool sprite_ok = loaded_sprite.texture_handle == sprite.texture_handle &&
+    bool sprite_ok = loaded_sprite.texture_handle == 0u &&
                      near_equal(loaded_sprite.color.r, sprite.color.r) &&
                      near_equal(loaded_sprite.color.g, sprite.color.g) &&
                      near_equal(loaded_sprite.color.b, sprite.color.b) &&
@@ -967,7 +948,7 @@ bool RunSceneRoundTripRegressionSample(const std::string& filepath) {
                        loaded_material.name == material.name &&
                        loaded_material.shader_variant == material.shader_variant &&
                        loaded_material.blend_mode == material.blend_mode &&
-                       loaded_material.texture_handle == material.texture_handle &&
+                       loaded_material.texture_handle == 0u &&
                        near_equal(loaded_material.tint.r, material.tint.r) &&
                        near_equal(loaded_material.tint.g, material.tint.g) &&
                        near_equal(loaded_material.tint.b, material.tint.b) &&
@@ -1063,7 +1044,7 @@ bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) 
                         near_equal(transform.position.y, 2.0f) &&
                         near_equal(transform.scale.x, 1.2f) &&
                         near_equal(transform.scale.y, 1.3f);
-    bool sprite_ok = sprite.texture_handle == 999 &&
+    bool sprite_ok = sprite.texture_handle == 0u &&
                      near_equal(sprite.color.r, 0.4f) &&
                      near_equal(sprite.color.g, 0.5f) &&
                      near_equal(sprite.color.b, 0.6f) &&
@@ -1085,7 +1066,7 @@ bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath) 
         materials_ok = material.material_id == 12345 &&
                        material.shader_variant == "SPRITE_TINT" &&
                        material.blend_mode == SpriteBlendMode::Multiply &&
-                       material.texture_handle == 999 &&
+                       material.texture_handle == 0u &&
                        near_equal(material.tint.r, 0.4f) &&
                        near_equal(material.tint.g, 0.5f) &&
                        near_equal(material.tint.b, 0.6f) &&
@@ -1155,7 +1136,6 @@ bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath
         if (world.registry().all_of<SpriteRendererComponent>(current)) {
             const auto& sprite = world.registry().get<SpriteRendererComponent>(current);
             rapidjson::Value sprite_json(rapidjson::kObjectType);
-            sprite_json.AddMember("texture_handle", sprite.texture_handle, allocator);
             sprite_json.AddMember("material_instance_id", sprite.material_instance_id, allocator);
             sprite_json.AddMember("shader_variant", rapidjson::Value(sprite.shader_variant.c_str(), allocator), allocator);
             sprite_json.AddMember("blend_mode", static_cast<int>(sprite.blend_mode), allocator);
@@ -1243,9 +1223,6 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
             return false;
         }
         const auto& sprite_json = components["SpriteRendererComponent"];
-        if (sprite_json.HasMember("texture_handle") && sprite_json["texture_handle"].IsUint()) {
-            sprite.texture_handle = sprite_json["texture_handle"].GetUint();
-        }
         if (sprite_json.HasMember("material_instance_id") && sprite_json["material_instance_id"].IsUint()) {
             sprite.material_instance_id = sprite_json["material_instance_id"].GetUint();
         }

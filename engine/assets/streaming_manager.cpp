@@ -195,7 +195,16 @@ void StreamingManager::Tick(const glm::vec3& camera_position) {
         auto& zone = it->second;
         if (zone.state != ZoneState::Unloaded) continue;
 
-        BeginLoadZone(zone);
+        // 距离优先级：load_radius 内一半为 High，超过 load_radius 为 Low（预取）
+        const float half_load_r_sq = (zone.load_radius * 0.5f) * (zone.load_radius * 0.5f);
+        dse::core::JobPriority io_priority;
+        if (entry.distance <= half_load_r_sq) {
+            io_priority = dse::core::JobPriority::High;
+        } else {
+            io_priority = dse::core::JobPriority::Low;
+        }
+
+        BeginLoadZone(zone, io_priority);
         int assets_to_load = static_cast<int>(zone.assets.size());
         current_active += assets_to_load;
         --budget_remaining;
@@ -247,7 +256,7 @@ std::vector<StreamingZone> StreamingManager::GetZoneSnapshot() const {
 // 内部：加载/卸载
 // ============================================================
 
-void StreamingManager::BeginLoadZone(StreamingZone& zone) {
+void StreamingManager::BeginLoadZone(StreamingZone& zone, dse::core::JobPriority priority) {
     if (zone.assets.empty()) {
         zone.state = ZoneState::Loaded;
         return;
@@ -269,12 +278,59 @@ void StreamingManager::BeginLoadZone(StreamingZone& zone) {
     active_load_count_.fetch_add(zone.assets_pending, std::memory_order_relaxed);
 
     uint32_t zone_id = zone.id;
+    auto* job_system = asset_manager_->GetJobSystem();
+    const bool use_priority = (priority != dse::core::JobPriority::Normal && job_system);
+
     for (auto& asset : zone.assets) {
         if (asset.loaded) continue;
 
         const std::string path = asset.path;
         AssetType type = asset.type;
 
+        // 非 Normal 优先级且有 JobSystem 时，用指定优先级的 Submit 包装同步加载
+        if (use_priority && type != AssetType::Texture) {
+            job_system->Submit([this, path, type, zone_id]() {
+                std::any resource;
+                bool success = false;
+                switch (type) {
+                case AssetType::Mesh: {
+                    auto r = asset_manager_->LoadDmesh(path);
+                    success = (r != nullptr);
+                    if (success) resource = r;
+                    break;
+                }
+                case AssetType::Animation: {
+                    auto r = asset_manager_->LoadDanim(path);
+                    success = (r != nullptr);
+                    if (success) resource = r;
+                    break;
+                }
+                case AssetType::Skeleton: {
+                    auto r = asset_manager_->LoadDskel(path);
+                    success = (r != nullptr);
+                    if (success) resource = r;
+                    break;
+                }
+                case AssetType::Audio: {
+                    auto r = asset_manager_->LoadAudioClip(path);
+                    success = (r != nullptr);
+                    if (success) resource = r;
+                    break;
+                }
+                case AssetType::Material: {
+                    auto r = asset_manager_->LoadMaterialInstanceFromDmat(path, 0);
+                    success = (r != nullptr);
+                    if (success) resource = r;
+                    break;
+                }
+                default: break;
+                }
+                OnAssetLoadedWithResource(zone_id, path, success, std::move(resource));
+            }, priority);
+            continue;
+        }
+
+        // 默认路径：使用 AssetManager 的 async 方法（Normal 优先级）
         switch (type) {
         case AssetType::Texture:
             asset_manager_->LoadTextureAsync(path,
@@ -320,8 +376,10 @@ void StreamingManager::BeginLoadZone(StreamingZone& zone) {
         }
     }
 
-    DEBUG_LOG_INFO("[StreamingManager] Begin loading zone '{}' ({} assets)",
-                  zone.name, zone.assets_pending);
+    const char* prio_str = (priority == dse::core::JobPriority::High) ? "High" :
+                           (priority == dse::core::JobPriority::Low)  ? "Low"  : "Normal";
+    DEBUG_LOG_INFO("[StreamingManager] Begin loading zone '{}' ({} assets, priority={})",
+                  zone.name, zone.assets_pending, prio_str);
 }
 
 void StreamingManager::BeginUnloadZone(StreamingZone& zone) {

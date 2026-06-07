@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <memory>
 #include <functional>
@@ -153,11 +154,23 @@ public:
      * @brief 在所有已加载 SubScene 中查找拥有指定 UUID 的 Entity
      * @param uuid 目标 UUID
      * @return 找到返回对应 Entity，否则返回 entt::null
+     *
+     * 使用内部哈希索引 O(1) 查找，而非全表遍历
      */
     Entity ResolveReference(uint64_t uuid) const;
 
 private:
     void UpdateTransition(float dt);
+
+    /// SubScene 加载完成后，异步预热其 MeshRendererComponent 引用的 mesh
+    void WarmMeshes(const SubScene& sub);
+
+    /// 将 SubScene 中拥有 UUIDComponent 的 Entity 添加到哈希索引
+    void IndexSubSceneUuids(const SubScene& sub);
+
+    /// 从哈希索引中移除 SubScene 中的 Entity
+    void RemoveSubSceneUuids(const SubScene& sub);
+
     struct PendingLoad {
         std::string path;
         std::string json_data;   ///< 工作线程读取的文件内容
@@ -171,8 +184,12 @@ private:
 
     std::unordered_map<std::string, std::unique_ptr<SubScene>> sub_scenes_;
 
+    /// UUID → Entity 哈希索引，供 ResolveReference O(1) 查找
+    std::unordered_map<uint64_t, Entity> uuid_index_;
+
     mutable std::mutex pending_mutex_;
     std::vector<PendingLoad> pending_loads_;
+    std::unordered_set<std::string> loading_paths_;
 
     // Phase 3: 场景切换状态
     std::string active_scene_path_;

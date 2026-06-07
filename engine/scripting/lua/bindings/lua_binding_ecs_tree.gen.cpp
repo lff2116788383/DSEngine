@@ -135,6 +135,46 @@ int L_Set_tree_shadow_distance(lua_State* L) {
     dse_tree_set_shadow_distance(e, static_cast<float>(luaL_checknumber(L, 2)));
     return 0;
 }
+int L_Get_tree_seed(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushinteger(L, dse_tree_get_seed(e));
+    return 1;
+}
+int L_Set_tree_seed(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_seed(e, static_cast<int>(luaL_checkinteger(L, 2)));
+    return 0;
+}
+int L_Get_tree_height_variation(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushnumber(L, dse_tree_get_height_variation(e));
+    return 1;
+}
+int L_Set_tree_height_variation(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_height_variation(e, static_cast<float>(luaL_checknumber(L, 2)));
+    return 0;
+}
+int L_Get_tree_random_rotation(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, dse_tree_get_random_rotation(e));
+    return 1;
+}
+int L_Set_tree_random_rotation(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_random_rotation(e, lua_toboolean(L, 2));
+    return 0;
+}
+int L_Get_tree_billboard_distance(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushnumber(L, dse_tree_get_billboard_distance(e));
+    return 1;
+}
+int L_Set_tree_billboard_distance(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_billboard_distance(e, static_cast<float>(luaL_checknumber(L, 2)));
+    return 0;
+}
 
 } // namespace
 
@@ -165,6 +205,14 @@ void RegisterTreeComponentGenBindings(lua_State* L) {
         {"set_tree_cast_shadow", L_Set_tree_cast_shadow},
         {"get_tree_shadow_distance", L_Get_tree_shadow_distance},
         {"set_tree_shadow_distance", L_Set_tree_shadow_distance},
+        {"get_tree_seed", L_Get_tree_seed},
+        {"set_tree_seed", L_Set_tree_seed},
+        {"get_tree_height_variation", L_Get_tree_height_variation},
+        {"set_tree_height_variation", L_Set_tree_height_variation},
+        {"get_tree_random_rotation", L_Get_tree_random_rotation},
+        {"set_tree_random_rotation", L_Set_tree_random_rotation},
+        {"get_tree_billboard_distance", L_Get_tree_billboard_distance},
+        {"set_tree_billboard_distance", L_Set_tree_billboard_distance},
     });
 }
 

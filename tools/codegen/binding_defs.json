@@ -397,6 +397,34 @@
                     "default": "80.0f",
                     "lua_getter": "get_tree_shadow_distance",
                     "lua_setter": "set_tree_shadow_distance"
+                },
+                {
+                    "name": "seed",
+                    "type": "int",
+                    "default": "12345",
+                    "lua_getter": "get_tree_seed",
+                    "lua_setter": "set_tree_seed"
+                },
+                {
+                    "name": "height_variation",
+                    "type": "float",
+                    "default": "0.2f",
+                    "lua_getter": "get_tree_height_variation",
+                    "lua_setter": "set_tree_height_variation"
+                },
+                {
+                    "name": "random_rotation",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_tree_random_rotation",
+                    "lua_setter": "set_tree_random_rotation"
+                },
+                {
+                    "name": "billboard_distance",
+                    "type": "float",
+                    "default": "150.0f",
+                    "lua_getter": "get_tree_billboard_distance",
+                    "lua_setter": "set_tree_billboard_distance"
                 }
             ]
         },
@@ -462,6 +490,20 @@
                     "default": "0.0f",
                     "lua_getter": "get_terrain_tile_procedural_base_height",
                     "lua_setter": "set_terrain_tile_procedural_base_height"
+                },
+                {
+                    "name": "max_lod_levels",
+                    "type": "int",
+                    "default": "4",
+                    "lua_getter": "get_terrain_tile_max_lod_levels",
+                    "lua_setter": "set_terrain_tile_max_lod_levels"
+                },
+                {
+                    "name": "lod_distance_factor",
+                    "type": "float",
+                    "default": "50.0f",
+                    "lua_getter": "get_terrain_tile_lod_distance_factor",
+                    "lua_setter": "set_terrain_tile_lod_distance_factor"
                 }
             ]
         },

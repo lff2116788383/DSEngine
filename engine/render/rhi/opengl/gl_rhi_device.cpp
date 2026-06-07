@@ -337,6 +337,7 @@ void OpenGLRhiDevice::BeginFrame() {
 }
 
 void OpenGLRhiDevice::EndFrame() {
+    if (!initialized_) return;
     draw_executor_.EndFrame();
     gpu_timer_.ResolveGpuTimers();
 }
@@ -380,6 +381,7 @@ void OpenGLRhiDevice::DeleteBuffer(unsigned int handle) {
 // --- 顶点数组 ---
 
 VertexArrayHandle OpenGLRhiDevice::CreateVertexArray() {
+    if (!initialized_) return {};
     unsigned int handle = 0;
     glGenVertexArrays(1, &handle);
     resource_mgr_.ledger().vertex_arrays_created += 1;
@@ -387,6 +389,7 @@ VertexArrayHandle OpenGLRhiDevice::CreateVertexArray() {
 }
 
 void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
+    if (!initialized_) return;
     unsigned int raw = handle.raw();
     glDeleteVertexArrays(1, &raw);
     resource_mgr_.ledger().vertex_arrays_destroyed += 1;

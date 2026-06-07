@@ -95,6 +95,26 @@ int L_Set_terrain_tile_procedural_base_height(lua_State* L) {
     dse_terrain_tile_set_procedural_base_height(e, static_cast<float>(luaL_checknumber(L, 2)));
     return 0;
 }
+int L_Get_terrain_tile_max_lod_levels(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushinteger(L, dse_terrain_tile_get_max_lod_levels(e));
+    return 1;
+}
+int L_Set_terrain_tile_max_lod_levels(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_terrain_tile_set_max_lod_levels(e, static_cast<int>(luaL_checkinteger(L, 2)));
+    return 0;
+}
+int L_Get_terrain_tile_lod_distance_factor(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushnumber(L, dse_terrain_tile_get_lod_distance_factor(e));
+    return 1;
+}
+int L_Set_terrain_tile_lod_distance_factor(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_terrain_tile_set_lod_distance_factor(e, static_cast<float>(luaL_checknumber(L, 2)));
+    return 0;
+}
 
 } // namespace
 
@@ -117,6 +137,10 @@ void RegisterTerrainTileManagerComponentGenBindings(lua_State* L) {
         {"set_terrain_tile_use_procedural", L_Set_terrain_tile_use_procedural},
         {"get_terrain_tile_procedural_base_height", L_Get_terrain_tile_procedural_base_height},
         {"set_terrain_tile_procedural_base_height", L_Set_terrain_tile_procedural_base_height},
+        {"get_terrain_tile_max_lod_levels", L_Get_terrain_tile_max_lod_levels},
+        {"set_terrain_tile_max_lod_levels", L_Set_terrain_tile_max_lod_levels},
+        {"get_terrain_tile_lod_distance_factor", L_Get_terrain_tile_lod_distance_factor},
+        {"set_terrain_tile_lod_distance_factor", L_Set_terrain_tile_lod_distance_factor},
     });
 }
 

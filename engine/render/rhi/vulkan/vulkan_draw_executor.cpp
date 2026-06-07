@@ -2858,8 +2858,9 @@ void VulkanDrawExecutor::DrawPostProcess(
             ? shader_mgr.bloom_downsample_cs_handle()
             : shader_mgr.bloom_upsample_cs_handle();
         if (cs_handle != 0) {
+            const float blend_weight = is_bloom_us && params.size() > 1 ? params[1] : 1.0f;
             DispatchBloomCompute(cmd_buf, cs_handle, source_texture,
-                                  current_rt_handle_, shader_mgr);
+                                  current_rt_handle_, blend_weight, shader_mgr);
             return;
         }
     }
@@ -3004,7 +3005,9 @@ void VulkanDrawExecutor::DrawPostProcess(
     // 传递 push constants
     if (pp_program && pp_program->pipeline_layout != VK_NULL_HANDLE) {
         if (effect_name == "bloom_extract" && params.size() >= 1) {
-            float pc = params[0];
+            struct { float threshold; float knee; } pc{};
+            pc.threshold = params[0];
+            pc.knee      = params.size() > 1 ? params[1] : 0.1f;
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "fxaa" && params.size() >= 2) {
@@ -3012,9 +3015,14 @@ void VulkanDrawExecutor::DrawPostProcess(
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
         } else if (effect_name == "ssao" && params.size() >= 6) {
-            float pc[6] = {params[0], params[1], params[2], params[3], params[4], params[5]};
+            struct { float radius, bias, near_p, far_p; float sw, sh; float sample_count, power, intensity; } pc{};
+            pc.radius = params[0]; pc.bias = params[1]; pc.near_p = params[2]; pc.far_p = params[3];
+            pc.sw = params[4]; pc.sh = params[5];
+            pc.sample_count = params.size() > 6 ? params[6] : 32.0f;
+            pc.power        = params.size() > 7 ? params[7] : 2.0f;
+            pc.intensity    = params.size() > 8 ? params[8] : 1.0f;
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
-                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), pc);
+                               VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "ssao_apply" && params.size() >= 2) {
             struct { float exposure; int ae_enabled; int lut_enabled; float lut_intensity; } pc{};
             pc.exposure    = params[0];
@@ -3111,11 +3119,13 @@ void VulkanDrawExecutor::DrawPostProcess(
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "ssr" && params.size() >= 8) {
-            struct { float max_distance, thickness, step_size; int max_steps; float near_p, far_p, screen_w, screen_h; } pc{};
+            struct { float max_distance, thickness, step_size; int max_steps; float near_p, far_p, screen_w, screen_h; float fade_distance, max_roughness; } pc{};
             pc.max_distance = params[0]; pc.thickness = params[1]; pc.step_size = params[2];
             pc.max_steps = static_cast<int>(params[3]);
             pc.near_p = params[4]; pc.far_p = params[5];
             pc.screen_w = params[6]; pc.screen_h = params[7];
+            pc.fade_distance = params.size() > 8 ? params[8] : 0.2f;
+            pc.max_roughness = params.size() > 9 ? params[9] : 0.5f;
             vkCmdPushConstants(cmd_buf, pp_program->pipeline_layout,
                                VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
         } else if (effect_name == "deferred_lighting" && params.size() >= 8) {
@@ -3538,6 +3548,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
     unsigned int cs_handle,
     unsigned int src_texture_handle,
     unsigned int dst_rt_handle,
+    float blend_weight,
     VulkanShaderManager& shader_mgr) {
 
     const VulkanComputeProgram* cs = shader_mgr.GetComputeProgram(cs_handle);
@@ -3599,13 +3610,14 @@ void VulkanDrawExecutor::DispatchBloomCompute(
                                 cs->pipeline_layout, 0, 1, &desc_set, 0, nullptr);
     }
 
-    // 4. Push constants （texel 大小）
-    struct BloomParams { float src_w, src_h, dst_w, dst_h; };
+    // 4. Push constants （texel 大小 + upsample 混合权重）
+    struct BloomParams { float src_w, src_h, dst_w, dst_h, blend_weight; };
     const BloomParams bp {
         src_tex->width  > 0 ? 1.0f / static_cast<float>(src_tex->width)  : 1.0f,
         src_tex->height > 0 ? 1.0f / static_cast<float>(src_tex->height) : 1.0f,
         dst_rt->width   > 0 ? 1.0f / static_cast<float>(dst_rt->width)   : 1.0f,
         dst_rt->height  > 0 ? 1.0f / static_cast<float>(dst_rt->height)  : 1.0f,
+        blend_weight,
     };
     vkCmdPushConstants(cmd_buf, cs->pipeline_layout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(bp), &bp);

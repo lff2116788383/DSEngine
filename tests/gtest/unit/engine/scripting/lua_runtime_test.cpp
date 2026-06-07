@@ -6,21 +6,36 @@
 #include "gtest/gtest.h"
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/ecs/world.h"
+#include <filesystem>
+#include <fstream>
 
 using namespace dse::runtime;
 using namespace dse;
 
 // ============================================================
-// 辅助函数
+// 辅助类 / 辅助函数
 // ============================================================
+
+struct LuaTempScript {
+    std::string path;
+    LuaTempScript(const std::string& filename, const std::string& content) {
+        path = (std::filesystem::temp_directory_path() / filename).string();
+        std::ofstream ofs(path);
+        ofs << content;
+    }
+    ~LuaTempScript() { std::filesystem::remove(path); }
+    const std::string& Path() const { return path; }
+};
 
 /// 创建最小 World 并初始化 Lua 运行时
 static bool InitLuaWithWorld() {
     static World world;
+    static LuaTempScript stub("dse_unit_test_stub.lua", "-- stub\n");
+
     LuaApiContext ctx;
     ctx.world = &world;
     ConfigureLuaApiContext(ctx);
-    SetStartupLuaScriptPath("");  // 无入口脚本
+    SetStartupLuaScriptPath(stub.Path());
     return BootstrapLuaRuntime();
 }
 

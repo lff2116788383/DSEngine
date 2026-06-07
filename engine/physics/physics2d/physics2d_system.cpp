@@ -146,16 +146,61 @@ void Physics2DSystem::Init(World& world) {
     physics_world_ = new b2World(b2Vec2(0.0f, -9.81f));
     DEBUG_LOG_INFO("[Physics2D] Init world_valid={}", physics_world_ != nullptr);
 
+    destroy_connections_.clear();
+    destroy_connections_.push_back(
+        world.registry().on_destroy<RigidBody2DComponent>().connect<&Physics2DSystem::OnRigidBody2DDestroyed>(this));
+    destroy_connections_.push_back(
+        world.registry().on_destroy<Joint2DComponent>().connect<&Physics2DSystem::OnJoint2DDestroyed>(this));
+
     // 立即同步 ECS 物理组件到 Box2D。这样 Init 后即可进行 Raycast，
     // 也避免 Shutdown 后再次 Init 时复用已失效的 runtime 指针。
     FixedUpdate(world, 0.0f);
 }
 
 void Physics2DSystem::Shutdown() {
+    destroy_connections_.clear();
     active_contact_pairs_.clear();
     if (physics_world_ != nullptr) {
         delete physics_world_;
         physics_world_ = nullptr;
+    }
+}
+
+void Physics2DSystem::OnRigidBody2DDestroyed(entt::registry& reg, entt::entity entity) {
+    if (physics_world_ == nullptr || !reg.all_of<RigidBody2DComponent>(entity)) {
+        return;
+    }
+    auto& rb = reg.get<RigidBody2DComponent>(entity);
+    if (IsValidBody(rb.runtime_body)) {
+        physics_world_->DestroyBody(rb.runtime_body);
+    }
+    rb.runtime_body = nullptr;
+}
+
+void Physics2DSystem::OnJoint2DDestroyed(entt::registry& reg, entt::entity entity) {
+    if (physics_world_ == nullptr || !reg.all_of<Joint2DComponent>(entity)) {
+        return;
+    }
+    auto& jc = reg.get<Joint2DComponent>(entity);
+    if (jc.runtime_joint != nullptr) {
+        physics_world_->DestroyJoint(jc.runtime_joint);
+    }
+    jc.runtime_joint = nullptr;
+}
+
+void Physics2DSystem::DestroyPhysicsForEntity(World& world, Entity entity) {
+    if (physics_world_ == nullptr || !world.registry().valid(entity)) {
+        return;
+    }
+    if (world.registry().all_of<Joint2DComponent>(entity)) {
+        DestroyJoint(world, entity);
+    }
+    if (world.registry().all_of<RigidBody2DComponent>(entity)) {
+        auto& rb = world.registry().get<RigidBody2DComponent>(entity);
+        if (IsValidBody(rb.runtime_body)) {
+            physics_world_->DestroyBody(rb.runtime_body);
+            rb.runtime_body = nullptr;
+        }
     }
 }
 
@@ -219,13 +264,14 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         }
     }
 
-    // 1. Create Box2D bodies for new entities or update existing ones
+    // 1. Create Box2D bodies for new entities or update existing (dirty) ones
     auto view = world.registry().view<RigidBody2DComponent, TransformComponent>();
     for (auto entity : view) {
         auto& rb = view.get<RigidBody2DComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
 
         if (!IsValidBody(rb.runtime_body)) {
+            // 尚未创建 body — sync_dirty_ 一定为 true（初始值）
             b2BodyDef body_def;
             body_def.position = b2Vec2{transform.position.x, transform.position.y};
             body_def.angle = glm::roll(transform.rotation);
@@ -294,7 +340,14 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
             }
 
             rb.runtime_body->SetLinearVelocity(b2Vec2{rb.velocity.x, rb.velocity.y});
-        } else {
+            rb.sync_dirty_ = false;
+        } else if (rb.sync_dirty_ || transform.dirty) {
+            // 已有 body，仅当 dirty 时同步 ECS → Box2D
+            if (rb.sync_dirty_) {
+                rb.runtime_body->SetType(ToBox2DBodyType(rb.type));
+                rb.runtime_body->SetGravityScale(rb.gravity_scale);
+                rb.runtime_body->SetFixedRotation(rb.fixed_rotation);
+            }
             const b2Vec2 body_position = rb.runtime_body->GetPosition();
             const float body_angle = rb.runtime_body->GetAngle();
             const float ecs_angle = glm::roll(transform.rotation);
@@ -328,6 +381,7 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
                     rb.runtime_body->SetLinearVelocity(b2Vec2{rb.velocity.x, rb.velocity.y});
                 }
             }
+            rb.sync_dirty_ = false;
         }
     }
 
@@ -448,7 +502,10 @@ void Physics2DSystem::FixedUpdate(World& world, float fixed_delta_time) {
         auto& rb = view.get<RigidBody2DComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
 
-        if (IsValidBody(rb.runtime_body) && rb.type == RigidBody2DType::Dynamic) {
+        if (!IsValidBody(rb.runtime_body)) {
+            continue;
+        }
+        if (rb.type == RigidBody2DType::Dynamic || rb.type == RigidBody2DType::Kinematic) {
             b2Vec2 position = rb.runtime_body->GetPosition();
             float angle = rb.runtime_body->GetAngle();
 

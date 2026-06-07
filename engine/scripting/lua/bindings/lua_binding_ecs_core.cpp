@@ -1,6 +1,6 @@
 /**
  * @file lua_binding_ecs_core.cpp
- * @brief ECS Lua 绑定 — 实体创建、场景加载、实体查询
+ * @brief ECS Lua 绑定 — 实体创建、场景加载、实体查询、层级、脚本
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
@@ -8,6 +8,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
+#include "engine/ecs/script.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/sub_scene.h"
 #include "engine/assets/asset_manager.h"
@@ -127,6 +128,111 @@ int L_EcsAddTransform(lua_State* L) {
     return 0;
 }
 
+// ============================================================
+// ParentComponent（层级）
+// ============================================================
+
+int L_EcsAddParent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    Entity parent_e = helper::CheckEntity(L, 2);
+    auto& pc = world->registry().emplace_or_replace<ParentComponent>(e);
+    pc.parent = parent_e;
+    return 0;
+}
+
+int L_EcsSetParent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    Entity parent_e = helper::CheckEntity(L, 2);
+    auto* pc = helper::TryGetComponent<ParentComponent>(*world, e);
+    if (!pc) return 0;
+    pc->parent = parent_e;
+    return 0;
+}
+
+int L_EcsGetParent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* pc = helper::TryGetComponentConst<ParentComponent>(*world, e);
+    if (!pc || pc->parent == entt::null) {
+        lua_pushnil(L);
+        return 1;
+    }
+    helper::PushEntity(L, pc->parent);
+    return 1;
+}
+
+int L_EcsClearParent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    if (world->registry().valid(e) && world->registry().all_of<ParentComponent>(e)) {
+        world->registry().remove<ParentComponent>(e);
+    }
+    return 0;
+}
+
+// ============================================================
+// ScriptComponent
+// ============================================================
+
+int L_EcsAddScript(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const char* script_path = luaL_checkstring(L, 2);
+    auto& sc = world->registry().emplace_or_replace<ScriptComponent>(e);
+    sc.script_path = script_path;
+    sc.enabled = true;
+    return 0;
+}
+
+int L_EcsSetScriptPath(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    const char* path = luaL_checkstring(L, 2);
+    auto* sc = helper::TryGetComponent<ScriptComponent>(*world, e);
+    if (!sc) return 0;
+    sc->script_path = path;
+    return 0;
+}
+
+int L_EcsGetScriptPath(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* sc = helper::TryGetComponentConst<ScriptComponent>(*world, e);
+    if (!sc) { lua_pushnil(L); return 1; }
+    lua_pushstring(L, sc->script_path.c_str());
+    return 1;
+}
+
+int L_EcsSetScriptEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    bool enabled = helper::CheckBool(L, 2);
+    auto* sc = helper::TryGetComponent<ScriptComponent>(*world, e);
+    if (!sc) return 0;
+    sc->enabled = enabled;
+    return 0;
+}
+
+int L_EcsGetScriptEnabled(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* sc = helper::TryGetComponentConst<ScriptComponent>(*world, e);
+    if (!sc) { lua_pushboolean(L, 0); return 1; }
+    helper::PushBool(L, sc->enabled);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
@@ -138,6 +244,17 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"load_sub_scene",             L_EcsLoadSubScene},
         {"find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath},
         {"add_transform",              L_EcsAddTransform},
+        // ParentComponent
+        {"add_parent",                 L_EcsAddParent},
+        {"set_parent",                 L_EcsSetParent},
+        {"get_parent",                 L_EcsGetParent},
+        {"clear_parent",               L_EcsClearParent},
+        // ScriptComponent
+        {"add_script",                 L_EcsAddScript},
+        {"set_script_path",            L_EcsSetScriptPath},
+        {"get_script_path",            L_EcsGetScriptPath},
+        {"set_script_enabled",         L_EcsSetScriptEnabled},
+        {"get_script_enabled",         L_EcsGetScriptEnabled},
     });
 }
 

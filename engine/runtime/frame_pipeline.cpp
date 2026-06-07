@@ -28,6 +28,7 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
 #include "engine/scene/scene.h"
+#include "engine/scene/scene_manager.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glad/gl.h>
@@ -1080,9 +1081,13 @@ void FramePipeline::Render() {
 }
 
 void FramePipeline::RunUpdateInternal(float delta_time) {
+    dse::profiler::ScopedCPUProfile _profile_update(cpu_profiler_, "FramePipeline::Update");
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-    asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
+    {
+        dse::profiler::ScopedCPUProfile _p(cpu_profiler_, "AssetManager::PumpCallbacks");
+        asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
+    }
     asset_manager.PumpHotReloads();
 
     // 资源流式加载：获取摄像机位置并 tick
@@ -1096,7 +1101,39 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
                 break;
             }
         }
-        streaming_manager_.Tick(streaming_cam_pos);
+        {
+            dse::profiler::ScopedCPUProfile _p(cpu_profiler_, "StreamingManager::Tick");
+            streaming_manager_.Tick(streaming_cam_pos);
+        }
+    }
+
+    // SceneManager: pump 异步加载完成的子场景
+    if (auto* sm = dse::core::ServiceLocator::Instance().Get<scene::SceneManager>()) {
+        sm->Update(delta_time);
+
+        if (runtime_context_.world) {
+            auto sub_view = runtime_context_.world->registry().view<dse::SubSceneComponent>();
+            for (auto entity : sub_view) {
+                auto& sub = sub_view.get<dse::SubSceneComponent>(entity);
+                if (!sub.enabled || sub.scene_path.empty()) {
+                    continue;
+                }
+                if (!sm->IsSubSceneLoaded(sub.scene_path)) {
+                    sm->LoadSubSceneAsync(sub.scene_path);
+                }
+            }
+        }
+    }
+
+    // AssetManager 内存 → MemoryProfiler（每帧追踪 delta）
+    if (runtime_context_.asset_manager) {
+        std::size_t current = runtime_context_.asset_manager->EstimatedMemoryUsage();
+        if (current > last_reported_asset_memory_) {
+            memory_profiler_.RecordAlloc("AssetManager", current - last_reported_asset_memory_);
+        } else if (current < last_reported_asset_memory_) {
+            memory_profiler_.RecordFree("AssetManager", last_reported_asset_memory_ - current);
+        }
+        last_reported_asset_memory_ = current;
     }
 
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
@@ -1114,6 +1151,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 }
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
+    dse::profiler::ScopedCPUProfile _profile_fixed(cpu_profiler_, "FramePipeline::FixedUpdate");
     auto fixed_begin = std::chrono::high_resolution_clock::now();
     dse::runtime::RunRuntimeFixedUpdateGraph(*this, fixed_delta_time);
     
@@ -1123,6 +1161,8 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
 }
 
 void FramePipeline::RunRenderInternal() {
+    dse::profiler::ScopedCPUProfile _profile_render(cpu_profiler_, "FramePipeline::Render");
+    render_profiler_.BeginFrame();
     auto render_begin = std::chrono::high_resolution_clock::now();
 
     // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
@@ -1420,6 +1460,19 @@ void FramePipeline::RunRenderInternal() {
 
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
+    // GPU Timer → RenderProfiler 桥接
+    {
+        auto gpu_results = runtime_context_.rhi_device->GetAllGpuTimerResults();
+        if (!gpu_results.empty()) {
+            std::vector<dse::profiler::GpuPassTiming> timings;
+            timings.reserve(gpu_results.size());
+            for (const auto& entry : gpu_results) {
+                timings.push_back({entry.name, entry.ms});
+            }
+            render_profiler_.UpdateGpuTimers(timings);
+        }
+    }
+
     // Hi-Z / GPU Driven: 异步读回可见性供下一帧 MeshRenderSystem 使用
     // 使用 BeginGpuReadback（双缓冲 staging），数据延迟 1 帧但不阻塞 GPU pipeline
     if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
@@ -1474,6 +1527,17 @@ void FramePipeline::RunRenderInternal() {
     }
 
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
+    if (runtime_context_.rhi_device) {
+        const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
+        render_profiler_.UpdateFromRhi(
+            rhi_stats.draw_calls,
+            0,
+            rhi_stats.triangle_count,
+            rhi_stats.sprite_count,
+            rhi_stats.texture_binds,
+            rhi_stats.shader_switches);
+    }
+    render_profiler_.EndFrame();
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
         if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
             static int readback_diag_frame = 0;
@@ -2243,6 +2307,7 @@ void FramePipeline::CaptureThinSnapshot() {
             s.shadow_strength = dl.shadow_strength;
             for (int i = 0; i < CSM_CASCADES; ++i)
                 s.cascade_splits[i] = dl.cascade_splits[i];
+            s.cascade_split_lambda = dl.cascade_split_lambda;
             break;
         }
     }
@@ -2305,12 +2370,17 @@ void FramePipeline::CaptureThinSnapshot() {
             s.bloom_enabled = pp.bloom_enabled;
             s.bloom_threshold = pp.bloom_threshold;
             s.bloom_intensity = pp.bloom_intensity;
+            s.bloom_knee = pp.bloom_knee;
+            s.bloom_mip_weight = pp.bloom_mip_weight;
             s.color_grading_enabled = pp.color_grading_enabled;
             s.exposure = pp.exposure;
             s.gamma = pp.gamma;
             s.ssao_enabled = pp.ssao_enabled;
             s.ssao_radius = pp.ssao_radius;
             s.ssao_bias = pp.ssao_bias;
+            s.ssao_sample_count = pp.ssao_sample_count;
+            s.ssao_power = pp.ssao_power;
+            s.ssao_intensity = pp.ssao_intensity;
             s.auto_exposure_enabled = pp.auto_exposure_enabled;
             s.exposure_min = pp.exposure_min;
             s.exposure_max = pp.exposure_max;
@@ -2345,6 +2415,8 @@ void FramePipeline::CaptureThinSnapshot() {
             s.ssr_thickness = pp.ssr_thickness;
             s.ssr_step_size = pp.ssr_step_size;
             s.ssr_max_steps = pp.ssr_max_steps;
+            s.ssr_fade_distance = pp.ssr_fade_distance;
+            s.ssr_max_roughness = pp.ssr_max_roughness;
             s.outline_enabled = pp.outline_enabled;
             s.outline_color = pp.outline_color;
             s.outline_thickness = pp.outline_thickness;
@@ -2757,6 +2829,7 @@ void FramePipeline::PrepareRenderFrame() {
 }
 
 void FramePipeline::ExecuteRenderFrame() {
+    render_profiler_.BeginFrame();
     auto render_begin = std::chrono::high_resolution_clock::now();
 
     dse::runtime::BeginRuntimeRenderFrame(*this);
@@ -2868,6 +2941,19 @@ void FramePipeline::ExecuteRenderFrame() {
 
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
+    // GPU Timer → RenderProfiler 桥接（渲染线程路径）
+    {
+        auto gpu_results = runtime_context_.rhi_device->GetAllGpuTimerResults();
+        if (!gpu_results.empty()) {
+            std::vector<dse::profiler::GpuPassTiming> timings;
+            timings.reserve(gpu_results.size());
+            for (const auto& entry : gpu_results) {
+                timings.push_back({entry.name, entry.ms});
+            }
+            render_profiler_.UpdateGpuTimers(timings);
+        }
+    }
+
     // Hi-Z / GPU Driven: 异步读回（双缓冲 staging，延迟 1 帧）
     if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
@@ -2909,6 +2995,17 @@ void FramePipeline::ExecuteRenderFrame() {
     }
 
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
+    if (runtime_context_.rhi_device) {
+        const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
+        render_profiler_.UpdateFromRhi(
+            rhi_stats.draw_calls,
+            0,
+            rhi_stats.triangle_count,
+            rhi_stats.sprite_count,
+            rhi_stats.texture_binds,
+            rhi_stats.shader_switches);
+    }
+    render_profiler_.EndFrame();
 
     // Render diagnostics
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {

@@ -80,6 +80,7 @@ struct RenderThinSnapshot {
         float ambient_intensity = 0.1f;
         float shadow_strength = 1.0f;
         float cascade_splits[3] = {20.0f, 60.0f, 200.0f};
+        float cascade_split_lambda = 0.75f;
     } directional_light;
 
     // ── 聚光灯（SpotShadowPass，最多 4 盏投影阴影）──
@@ -112,6 +113,8 @@ struct RenderThinSnapshot {
         bool bloom_enabled = true;
         float bloom_threshold = 1.0f;
         float bloom_intensity = 0.5f;
+        float bloom_knee = 0.1f;
+        float bloom_mip_weight = 0.005f;
 
         // Color Grading
         bool color_grading_enabled = true;
@@ -122,6 +125,9 @@ struct RenderThinSnapshot {
         bool ssao_enabled = false;
         float ssao_radius = 0.5f;
         float ssao_bias = 0.025f;
+        int ssao_sample_count = 32;
+        float ssao_power = 2.0f;
+        float ssao_intensity = 1.0f;
 
         // Auto Exposure
         bool auto_exposure_enabled = false;
@@ -176,6 +182,8 @@ struct RenderThinSnapshot {
         float ssr_thickness = 0.5f;
         float ssr_step_size = 1.0f;
         int ssr_max_steps = 64;
+        float ssr_fade_distance = 0.2f;
+        float ssr_max_roughness = 0.5f;
 
         // Outline
         bool outline_enabled = false;

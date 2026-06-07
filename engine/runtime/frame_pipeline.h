@@ -51,6 +51,9 @@
 #include "engine/core/event_bus.h"
 #include "engine/runtime/i_builtin_modules.h"
 #include "engine/core/dse_export.h"
+#include "engine/profiler/cpu_profiler.h"
+#include "engine/profiler/render_profiler.h"
+#include "engine/profiler/memory_profiler.h"
 
 class AssetManager;
 
@@ -153,6 +156,11 @@ public:
      * @brief 获取上一帧的 RHI 帧统计概要（供编辑器 Profiler 使用）
      */
     dse::render::RhiDevice::RhiFrameStats GetRhiFrameStats() const;
+
+    /// 内置性能剖析器（供编辑器 / 外部工具读取）
+    dse::profiler::CPUProfiler& GetCPUProfiler() { return cpu_profiler_; }
+    dse::profiler::RenderProfiler& GetRenderProfiler() { return render_profiler_; }
+    dse::profiler::MemoryProfiler& GetMemoryProfiler() { return memory_profiler_; }
 
     /**
      * @brief 获取上一帧中的材质切换次数
@@ -427,6 +435,12 @@ private:
 
     /// 已注册的渲染 Pass（按注册顺序，DAG 排序由 RenderGraph 决定）
     std::vector<std::unique_ptr<dse::render::IRenderPass>> registered_passes_;
+
+    /// 内置性能剖析器
+    dse::profiler::CPUProfiler cpu_profiler_;
+    dse::profiler::RenderProfiler render_profiler_;
+    dse::profiler::MemoryProfiler memory_profiler_;
+    std::size_t last_reported_asset_memory_ = 0;
 };
 
 #endif

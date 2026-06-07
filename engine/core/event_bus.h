@@ -101,6 +101,16 @@ struct SubSceneUnloadedEvent : public Event {
 };
 
 /**
+ * @struct SubSceneLoadFailedEvent
+ * @brief 子场景异步加载失败事件
+ */
+struct SubSceneLoadFailedEvent : public Event {
+    explicit SubSceneLoadFailedEvent(const std::string& scene_path) : path(scene_path) {}
+    std::string path;
+    static constexpr EventId kEventId = events::kSubSceneLoadFailed;
+};
+
+/**
  * @struct OriginRebasedEvent
  * @brief Floating Origin 坐标重置事件
  *

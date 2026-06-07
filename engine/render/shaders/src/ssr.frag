@@ -14,6 +14,8 @@ layout(push_constant) uniform SsrParams {
     float far_plane;
     float screen_w;
     float screen_h;
+    float fade_distance;
+    float max_roughness;
 };
 
 float linearizeDepth(float d) {
@@ -29,6 +31,12 @@ vec3 reconstructNormal(vec2 uv) {
     float db = linearizeDepth(texture(screenTexture, uv - vec2(0.0, texel.y)).r);
     float dt = linearizeDepth(texture(screenTexture, uv + vec2(0.0, texel.y)).r);
     return normalize(vec3(dl - dr, db - dt, 2.0 * texel.x * dc));
+}
+
+float edgeFade(vec2 uv) {
+    vec2 edge = smoothstep(vec2(0.0), vec2(fade_distance), uv)
+              * (1.0 - smoothstep(vec2(1.0 - fade_distance), vec2(1.0), uv));
+    return edge.x * edge.y;
 }
 
 void main() {
@@ -49,7 +57,14 @@ void main() {
         ray_depth += reflect_dir.z * step_size;
         float depth_diff = ray_depth - sample_depth;
         if (depth_diff > 0.0 && depth_diff < thickness) {
-            float fade = 1.0 - float(i) / float(max_steps);
+            float step_fade = 1.0 - float(i) / float(max_steps);
+            float screen_fade = edgeFade(ray_uv);
+            float hit_dc = linearizeDepth(textureLod(screenTexture, ray_uv, 0.0).r);
+            float hit_dl = linearizeDepth(textureLod(screenTexture, ray_uv - vec2(texel.x, 0.0), 0.0).r);
+            float hit_dr = linearizeDepth(textureLod(screenTexture, ray_uv + vec2(texel.x, 0.0), 0.0).r);
+            float roughness_est = abs(hit_dl - hit_dr) / max(hit_dc, 0.01);
+            float roughness_fade = 1.0 - smoothstep(0.0, max_roughness, roughness_est);
+            float fade = step_fade * screen_fade * roughness_fade;
             vec3 hit_color = textureLod(u_color_texture, ray_uv, 0.0).rgb;
             FragColor = vec4(hit_color * fade, fade);
             return;

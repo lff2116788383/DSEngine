@@ -199,6 +199,7 @@ public:
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,
                           UINT threads_x, UINT threads_y,
+                          float blend_weight,
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 

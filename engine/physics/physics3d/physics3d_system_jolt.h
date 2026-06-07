@@ -5,8 +5,10 @@
 
 #include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/ecs/components_3d_physics.h"
+#include <entt/entt.hpp>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 #include <string>
 #include <glm/glm.hpp>
 
@@ -18,10 +20,23 @@ namespace JPH {
 namespace dse {
 namespace physics3d {
 
+/// Jolt 后端可配置初始化参数
+struct JoltPhysicsConfig {
+    uint32_t max_bodies = 4096;
+    uint32_t max_body_pairs = 4096;
+    uint32_t max_contact_constraints = 2048;
+    int physics_threads = 2;
+    float gravity_y = -9.81f;
+    uint32_t temp_allocator_size_mb = 10;
+};
+
 class Physics3DSystem : public IPhysics3DSystem {
 public:
     Physics3DSystem();
     ~Physics3DSystem() override;
+
+    /// 在 Init 前调用以覆盖默认 Jolt 参数
+    void SetConfig(const JoltPhysicsConfig& config) { config_ = config; }
 
     bool Init(World& world) override;
     void Shutdown() override;
@@ -68,7 +83,9 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 
+    JoltPhysicsConfig config_;
     World* world_cache_ = nullptr;
+    std::vector<entt::connection> destroy_connections_;
 
     std::vector<CollisionEvent> collision_events_;
     std::vector<TriggerEvent> trigger_events_;
@@ -79,6 +96,7 @@ private:
     void CreateCharacterActor(World& world, entt::entity entity, CharacterController3DComponent& cc, const ::TransformComponent& transform);
     void SyncJoints(World& world);
     void CheckBrokenJoints(World& world);
+    void OnRigidBody3DDestroyed(entt::registry& reg, entt::entity entity);
 
     // MeshCollider 辅助函数
     JPH::Shape* CreateConvexHullShape(const std::vector<glm::vec3>& vertices, const std::string& mesh_path);

@@ -6,6 +6,7 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 
 layout(std140, set = 2, binding = 2) uniform BloomParams {
     float filterRadius;
+    float blendWeight;
 };
 void main() {
     float x = filterRadius;
@@ -23,5 +24,5 @@ void main() {
     upsample += (b+d+f+h)*2.0;
     upsample += (a+c+g+i);
     upsample *= 1.0 / 16.0;
-    FragColor = vec4(upsample, 1.0);
+    FragColor = vec4(upsample * blendWeight, blendWeight);
 }

@@ -136,6 +136,14 @@ DSE_CAPI_GEN int  dse_tree_get_cast_shadow(uint32_t e);
 DSE_CAPI_GEN void dse_tree_set_cast_shadow(uint32_t e, int v);
 DSE_CAPI_GEN float dse_tree_get_shadow_distance(uint32_t e);
 DSE_CAPI_GEN void  dse_tree_set_shadow_distance(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_tree_get_seed(uint32_t e);
+DSE_CAPI_GEN void dse_tree_set_seed(uint32_t e, int v);
+DSE_CAPI_GEN float dse_tree_get_height_variation(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_height_variation(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_tree_get_random_rotation(uint32_t e);
+DSE_CAPI_GEN void dse_tree_set_random_rotation(uint32_t e, int v);
+DSE_CAPI_GEN float dse_tree_get_billboard_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_billboard_distance(uint32_t e, float v);
 
 /* ---- TerrainTileManagerComponent ---- */
 DSE_CAPI_GEN int  dse_terrain_tile_get_enabled(uint32_t e);
@@ -154,6 +162,10 @@ DSE_CAPI_GEN int  dse_terrain_tile_get_use_procedural(uint32_t e);
 DSE_CAPI_GEN void dse_terrain_tile_set_use_procedural(uint32_t e, int v);
 DSE_CAPI_GEN float dse_terrain_tile_get_procedural_base_height(uint32_t e);
 DSE_CAPI_GEN void  dse_terrain_tile_set_procedural_base_height(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_terrain_tile_get_max_lod_levels(uint32_t e);
+DSE_CAPI_GEN void dse_terrain_tile_set_max_lod_levels(uint32_t e, int v);
+DSE_CAPI_GEN float dse_terrain_tile_get_lod_distance_factor(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v);
 
 /* ---- DynamicObstacleComponent ---- */
 DSE_CAPI_GEN int  dse_dyn_obstacle_get_enabled(uint32_t e);

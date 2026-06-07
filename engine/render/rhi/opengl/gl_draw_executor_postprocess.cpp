@@ -81,11 +81,14 @@ static constexpr PPUniformEntry kEdgeDetectBindings[] = {
     {"_28.u_screen_h",          UType::Float, 9},
 };
 static constexpr PPUniformEntry kSsaoBindings[] = {
-    {"_27.u_radius",      UType::Float,  0},
-    {"_27.u_bias",        UType::Float,  1},
-    {"_27.u_near",        UType::Float,  2},
-    {"_27.u_far",         UType::Float,  3},
-    {"_27.u_screen_size", UType::Float2, 4},
+    {"_27.u_radius",       UType::Float,  0},
+    {"_27.u_bias",         UType::Float,  1},
+    {"_27.u_near",         UType::Float,  2},
+    {"_27.u_far",          UType::Float,  3},
+    {"_27.u_screen_size",  UType::Float2, 4},
+    {"_27.u_sample_count", UType::Float,  6},
+    {"_27.u_power",        UType::Float,  7},
+    {"_27.u_intensity",    UType::Float,  8},
 };
 static constexpr PPUniformEntry kContactShadowBindings[] = {
     {"_23.u_light_dir",   UType::Float3, 0},
@@ -117,14 +120,16 @@ static constexpr PPUniformEntry kMotionBlurBindings[] = {
     {"_23.screen_h",    UType::Float, 3},
 };
 static constexpr PPUniformEntry kSsrBindings[] = {
-    {"_28.max_distance", UType::Float, 0},
-    {"_28.thickness",    UType::Float, 1},
-    {"_28.step_size",    UType::Float, 2},
-    {"_28.max_steps",    UType::Int,   3},
-    {"_28.near_plane",   UType::Float, 4},
-    {"_28.far_plane",    UType::Float, 5},
-    {"_28.screen_w",     UType::Float, 6},
-    {"_28.screen_h",     UType::Float, 7},
+    {"_28.max_distance",    UType::Float, 0},
+    {"_28.thickness",       UType::Float, 1},
+    {"_28.step_size",       UType::Float, 2},
+    {"_28.max_steps",       UType::Int,   3},
+    {"_28.near_plane",      UType::Float, 4},
+    {"_28.far_plane",       UType::Float, 5},
+    {"_28.screen_w",        UType::Float, 6},
+    {"_28.screen_h",        UType::Float, 7},
+    {"_28.fade_distance",   UType::Float, 8},
+    {"_28.max_roughness",   UType::Float, 9},
 };
 static constexpr PPUniformEntry kTaaBindings[] = {
     {"_36.u_blend_factor", UType::Float, 0},
@@ -446,19 +451,19 @@ static const std::unordered_map<std::string, PPEffectEntry>& GetEffectTable() {
         // --- 简单表驱动效果 ---
         {"fxaa",              {kFxaaBindings,         (int)std::size(kFxaaBindings), 2, nullptr, false}},
         {"edge_detect",       {kEdgeDetectBindings,  (int)std::size(kEdgeDetectBindings), 10, nullptr, false}},
-        {"ssao",              {kSsaoBindings,         (int)std::size(kSsaoBindings), 6, nullptr, false}},
+        {"ssao",              {kSsaoBindings,         (int)std::size(kSsaoBindings), 9, nullptr, false}},
         {"contact_shadow",    {kContactShadowBindings, (int)std::size(kContactShadowBindings), 10, nullptr, false}},
         {"dof",              {kDofBindings,           (int)std::size(kDofBindings), 7, nullptr, false}},
         {"motion_vector",    {kMotionVectorBindings,  (int)std::size(kMotionVectorBindings), 18, nullptr, false}},
         {"motion_blur",      {kMotionBlurBindings,    (int)std::size(kMotionBlurBindings), 4, nullptr, false}},
-        {"ssr",              {kSsrBindings,           (int)std::size(kSsrBindings), 8, nullptr, false}},
+        {"ssr",              {kSsrBindings,           (int)std::size(kSsrBindings), 10, nullptr, false}},
         {"taa_resolve",      {kTaaBindings,           (int)std::size(kTaaBindings), 6, nullptr, false}},
         {"deferred_lighting", {kDeferredLightBindings, (int)std::size(kDeferredLightBindings), 8, nullptr, false}},
         {"lum_adapt",        {kLumAdaptBindings,      (int)std::size(kLumAdaptBindings), 6, nullptr, false}},
         // --- UBO 效果 ---
-        {"bloom_extract",    {nullptr, 0, 1, BindBloomUBO, false}},
+        {"bloom_extract",    {nullptr, 0, 2, BindBloomUBO, false}},
         {"bloom_downsample", {nullptr, 0, 2, BindBloomUBO, false}},
-        {"bloom_upsample",   {nullptr, 0, 1, BindBloomUBO, false}},
+        {"bloom_upsample",   {nullptr, 0, 2, BindBloomUBO, true}},
         // --- 特殊绑定效果 ---
         {"tonemapping",      {nullptr, 0, 1, BindTonemapping, false}},
         {"color_grading",    {nullptr, 0, 2, BindColorGrading, false}},

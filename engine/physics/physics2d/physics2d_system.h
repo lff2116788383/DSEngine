@@ -8,9 +8,11 @@
 
 #include "engine/ecs/world.h"
 #include <box2d/box2d.h>
+#include <entt/entt.hpp>
 #include <memory>
 #include <set>
 #include <tuple>
+#include <vector>
 
 
 /**
@@ -82,10 +84,17 @@ public:
      */
     void SetPrismaticMotorForce(World& world, Entity joint_entity, float max_force);
 
+    /// ECS 实体销毁前由 World 或系统调用，清理 Box2D body/joint
+    void DestroyPhysicsForEntity(World& world, Entity entity);
+
 private:
     using ContactPair = std::tuple<Entity, Entity, bool>;
 
+    void OnRigidBody2DDestroyed(entt::registry& reg, entt::entity entity);
+    void OnJoint2DDestroyed(entt::registry& reg, entt::entity entity);
+
     b2World* physics_world_ = nullptr;
+    std::vector<entt::connection> destroy_connections_;
 
     std::set<ContactPair> active_contact_pairs_;
     int velocity_iterations_ = 8;

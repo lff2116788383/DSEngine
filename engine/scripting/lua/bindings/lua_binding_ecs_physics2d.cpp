@@ -18,6 +18,12 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+void MarkRigidBodySyncDirty(World& world, Entity e) {
+    if (auto* rb = helper::TryGetComponent<RigidBody2DComponent>(world, e)) {
+        rb->sync_dirty_ = true;
+    }
+}
+
 int L_EcsAddRigidBody(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -35,6 +41,7 @@ int L_EcsAddRigidBody(lua_State* L) {
     }
     rb.gravity_scale = gravity_scale;
     rb.fixed_rotation = fixed_rotation != 0;
+    rb.sync_dirty_ = true;
     return 0;
 }
 
@@ -52,6 +59,7 @@ int L_EcsAddBoxCollider(lua_State* L) {
     collider.density = density;
     collider.friction = friction;
     collider.restitution = restitution;
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 
@@ -66,6 +74,7 @@ int L_EcsSetBoxColliderTrigger(lua_State* L) {
     if (collider->runtime_fixture != nullptr) {
         collider->runtime_fixture->SetSensor(is_trigger);
     }
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 
@@ -152,6 +161,7 @@ int L_EcsAddCircleCollider(lua_State* L) {
     collider.density = density;
     collider.friction = friction;
     collider.restitution = restitution;
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 
@@ -166,6 +176,7 @@ int L_EcsSetCircleColliderTrigger(lua_State* L) {
     if (collider->runtime_fixture != nullptr) {
         collider->runtime_fixture->SetSensor(is_trigger);
     }
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 
@@ -201,6 +212,7 @@ int L_EcsAddPolygonCollider(lua_State* L) {
     pc.density = density;
     pc.friction = friction;
     pc.restitution = restitution;
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 
@@ -215,6 +227,7 @@ int L_EcsSetPolygonColliderTrigger(lua_State* L) {
     if (collider->runtime_fixture != nullptr) {
         collider->runtime_fixture->SetSensor(is_trigger);
     }
+    MarkRigidBodySyncDirty(*world, e);
     return 0;
 }
 

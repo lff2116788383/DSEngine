@@ -313,6 +313,30 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_tree_set_shadow_distance(uint e, float v);
 
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_seed(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_seed(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_height_variation(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_height_variation(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_random_rotation(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_random_rotation(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_billboard_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_billboard_distance(uint e, float v);
+
 
     // ---- TerrainTileManagerComponent ----
     [MethodImpl(MethodImplOptions.InternalCall)]
@@ -362,6 +386,18 @@ internal static class Native {
 
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_terrain_tile_set_procedural_base_height(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_terrain_tile_get_max_lod_levels(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_max_lod_levels(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_lod_distance_factor(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_lod_distance_factor(uint e, float v);
 
 
     // ---- DynamicObstacleComponent ----

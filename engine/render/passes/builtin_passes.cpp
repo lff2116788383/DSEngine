@@ -71,6 +71,43 @@ struct DirectionalLightCamera {
     glm::mat4 projection;
 };
 
+/// 计算级联视锥切片在光源空间的正交半宽（用于 PSSM 阴影盒拟合）
+float ComputeCascadeOrthoSize(
+        const glm::mat4& inv_view,
+        const glm::vec3& light_direction,
+        float split_near,
+        float split_far,
+        float aspect,
+        float tan_half_fov) {
+    const glm::mat4 light_view = glm::lookAt(
+        glm::vec3(0.0f), -glm::normalize(light_direction), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    glm::vec3 min_ls(1e9f);
+    glm::vec3 max_ls(-1e9f);
+
+    const float near_planes[2] = {split_near, split_far};
+    for (float plane_dist : near_planes) {
+        const float half_h = plane_dist * tan_half_fov;
+        const float half_w = half_h * aspect;
+        const glm::vec3 view_corners[4] = {
+            {-half_w, -half_h, -plane_dist},
+            { half_w, -half_h, -plane_dist},
+            { half_w,  half_h, -plane_dist},
+            {-half_w,  half_h, -plane_dist},
+        };
+        for (const auto& vc : view_corners) {
+            const glm::vec3 world = glm::vec3(inv_view * glm::vec4(vc, 1.0f));
+            const glm::vec3 ls = glm::vec3(light_view * glm::vec4(world, 1.0f));
+            min_ls = glm::min(min_ls, ls);
+            max_ls = glm::max(max_ls, ls);
+        }
+    }
+
+    const float extent_x = (max_ls.x - min_ls.x) * 0.5f;
+    const float extent_y = (max_ls.y - min_ls.y) * 0.5f;
+    return std::max(extent_x, extent_y) * 1.05f;
+}
+
 DirectionalLightCamera ComputeDirectionalLightCamera(
         const glm::vec3& shadow_center,
         const glm::vec3& light_direction,
@@ -201,8 +238,21 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     constexpr float kAtlasWidth = 4096.0f;
     constexpr float kAtlasHeight = 2048.0f;
 
+    // 级联分裂距离：PSSM 与组件手动 cascade_splits 按 lambda 混合
+    const float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    const float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    const float lambda   = glm::clamp(dl.cascade_split_lambda, 0.0f, 1.0f);
+    const float ratio    = cam_far / std::max(cam_near, 0.001f);
+    const float aspect   = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
+    const float tan_half_fov = std::tan(glm::radians(snap.camera_3d.valid ? snap.camera_3d.fov * 0.5f : 30.0f));
+    const glm::mat4 inv_view = snap.camera_3d.valid ? glm::inverse(snap.camera_3d.view) : glm::mat4(1.0f);
+
     for (int i = 0; i < CSM_CASCADES; ++i) {
-        cascade_splits[i] = dl.cascade_splits[i];
+        const float p = static_cast<float>(i + 1) / static_cast<float>(CSM_CASCADES);
+        const float log_split     = cam_near * std::pow(ratio, p);
+        const float uniform_split = cam_near + (cam_far - cam_near) * p;
+        const float pssm_split    = lambda * log_split + (1.0f - lambda) * uniform_split;
+        cascade_splits[i] = lambda * pssm_split + (1.0f - lambda) * dl.cascade_splits[i];
     }
 
     // 单次 BeginRenderPass 绑定 atlas RT，全量清除深度
@@ -210,8 +260,12 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), true});
         cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
 
+        float prev_split = cam_near;
         for (int i = 0; i < CSM_CASCADES; ++i) {
-            float size = dl.cascade_splits[i];
+            const float split_far_plane = cascade_splits[i];
+            float size = ComputeCascadeOrthoSize(
+                inv_view, dl.direction, prev_split, split_far_plane, aspect, tan_half_fov);
+            prev_split = split_far_plane;
             auto cam = ComputeDirectionalLightCamera(
                 shadow_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
 
@@ -759,7 +813,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     const float bloom_threshold = ctx_.pipeline_overrides.bloom_threshold >= 0.0f
         ? ctx_.pipeline_overrides.bloom_threshold
         : pp_config.bloom_threshold;
-    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {bloom_threshold}});
+    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {bloom_threshold, pp_config.bloom_knee}});
     cmd_buffer.EndRenderPass();
 
     unsigned int current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
@@ -780,7 +834,8 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         unsigned int target_rt = ctx_.render_targets.bloom_mips[i - 1];
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess({"bloom_upsample", current_src, {0.005f}});
+        const float mip_texel = 1.0f / static_cast<float>(std::max(mip_w, 1));
+        cmd_buffer.DrawPostProcess({"bloom_upsample", current_src, {mip_texel, pp_config.bloom_mip_weight}});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1035,7 +1090,10 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height())
+        static_cast<float>(Screen::height()),
+        static_cast<float>(pp_config.ssao_sample_count),
+        pp_config.ssao_power,
+        pp_config.ssao_intensity
     }});
     cmd_buffer.EndRenderPass();
 
@@ -1449,7 +1507,7 @@ void SSRPass::Setup(RenderGraph& graph) {
 void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     const auto& pp_config = snap.post_process;
-    bool ssr_enabled = pp_config.valid && pp_config.ssr_enabled;
+    bool ssr_enabled = ctx_.pipeline_features.ssr && pp_config.valid && pp_config.ssr_enabled;
 
     if (!ssr_enabled || ctx_.render_targets.ssr == 0) return;
 
@@ -1471,7 +1529,9 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
         near_plane,
         far_plane,
         static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height())
+        static_cast<float>(Screen::height()),
+        pp_config.ssr_fade_distance,
+        pp_config.ssr_max_roughness
     }}.Tex(2, scene_color_tex));
     cmd_buffer.EndRenderPass();
 
@@ -2999,8 +3059,15 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     // Camera-Relative: shadow_center 转换到相机相对空间
     glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
+    const float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
+    const float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
+    const float tan_half_fov = std::tan(glm::radians(snap.camera_3d.valid ? snap.camera_3d.fov * 0.5f : 30.0f));
+    const glm::mat4 inv_view = snap.camera_3d.valid ? glm::inverse(snap.camera_3d.view) : glm::mat4(1.0f);
+    const float ortho_size = ComputeCascadeOrthoSize(
+        inv_view, snap.directional_light.direction, cam_near,
+        snap.directional_light.cascade_splits[0], aspect, tan_half_fov);
     auto cam = ComputeDirectionalLightCamera(
-        shadow_center, snap.directional_light.direction, snap.directional_light.cascade_splits[0], clip_correction);
+        shadow_center, snap.directional_light.direction, ortho_size, clip_correction);
 
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
     ctx_.rhi_device->SetGBufferRenderingMode(true);

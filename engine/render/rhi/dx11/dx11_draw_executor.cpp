@@ -1387,7 +1387,9 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
             UINT dst_h = static_cast<UINT>(rt->height);
             UINT tx = (dst_w + 7) / 8;
             UINT ty = (dst_h + 7) / 8;
-            DispatchCompute(cs_handle, source_texture, uav_rt, tx, ty, shader_mgr, resource_mgr);
+            const float blend_weight = (effect_name == "bloom_upsample" && params.size() > 1)
+                ? params[1] : 1.0f;
+            DispatchCompute(cs_handle, source_texture, uav_rt, tx, ty, blend_weight, shader_mgr, resource_mgr);
 
             // 重新绑定 RTV（EndRenderPass 会解绑并 resolve）
             ID3D11RenderTargetView* rtv = rt->color_rtv.Get();
@@ -1580,8 +1582,12 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
     if (effect_name == "ssao" && shader_mgr.ssao_shader_handle()) {
         ensure_pp_params_cb();
         if (pp_params_cb_ && params.size() >= 6) {
-            struct { float radius, bias, near_p, far_p, sw, sh, _p0, _p1; } sp{
-                params[0], params[1], params[2], params[3], params[4], params[5], 0, 0};
+            struct { float radius, bias, near_p, far_p, sw, sh, sample_count, power; float intensity, _p0, _p1, _p2; } sp{};
+            sp.radius = params[0]; sp.bias = params[1]; sp.near_p = params[2]; sp.far_p = params[3];
+            sp.sw = params[4]; sp.sh = params[5];
+            sp.sample_count = params.size() > 6 ? params[6] : 32.0f;
+            sp.power        = params.size() > 7 ? params[7] : 2.0f;
+            sp.intensity    = params.size() > 8 ? params[8] : 1.0f;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &sp, sizeof(sp));
@@ -1635,11 +1641,13 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
         return;
     }
 
-    // Bloom Extract 专用路径（亮度阈值过滤）
+    // Bloom Extract 专用路径（亮度阈值过滤 + soft knee）
     if (effect_name == "bloom_extract" && shader_mgr.bloom_extract_shader_handle()) {
         ensure_pp_params_cb();
         if (pp_params_cb_ && params.size() >= 1) {
-            struct { float threshold; float _p0, _p1, _p2; } ep{params[0], 0, 0, 0};
+            struct { float threshold; float knee; float _p0, _p1; } ep{};
+            ep.threshold = params[0];
+            ep.knee      = params.size() > 1 ? params[1] : 0.1f;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &ep, sizeof(ep));
@@ -1868,11 +1876,13 @@ void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
     if (effect_name == "ssr" && shader_mgr.ssr_shader_handle()) {
         ensure_pp_params_cb();
         if (pp_params_cb_ && params.size() >= 8) {
-            struct { float max_distance, thickness, step_size; int max_steps; float near_p, far_p, screen_w, screen_h; } sp{};
+            struct { float max_distance, thickness, step_size; int max_steps; float near_p, far_p, screen_w, screen_h; float fade_distance, max_roughness, _p0, _p1; } sp{};
             sp.max_distance = params[0]; sp.thickness = params[1]; sp.step_size = params[2];
             sp.max_steps = static_cast<int>(params[3]);
             sp.near_p = params[4]; sp.far_p = params[5];
             sp.screen_w = params[6]; sp.screen_h = params[7];
+            sp.fade_distance  = params.size() > 8 ? params[8] : 0.2f;
+            sp.max_roughness  = params.size() > 9 ? params[9] : 0.5f;
             D3D11_MAPPED_SUBRESOURCE mapped{};
             if (SUCCEEDED(dc->Map(pp_params_cb_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {
                 memcpy(mapped.pData, &sp, sizeof(sp));
@@ -2217,6 +2227,7 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
                                         unsigned int srv_texture_handle,
                                         unsigned int uav_rt_handle,
                                         UINT threads_x, UINT threads_y,
+                                        float blend_weight,
                                         DX11ShaderManager& shader_mgr,
                                         DX11ResourceManager& resource_mgr) {
     if (!context_) return;
@@ -2229,11 +2240,12 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
     const auto* src_tex = resource_mgr.GetTexture(srv_texture_handle);
     const auto* dst_rt  = resource_mgr.GetRenderTarget(uav_rt_handle);
     if (prog->params_cb && src_tex && dst_rt) {
-        struct BloomParams { float src_w, src_h, dst_w, dst_h; } bp;
+        struct BloomParams { float src_w, src_h, dst_w, dst_h, blend_w; } bp;
         bp.src_w = 1.0f / static_cast<float>(src_tex->width > 0 ? src_tex->width : 1);
         bp.src_h = 1.0f / static_cast<float>(src_tex->height > 0 ? src_tex->height : 1);
         bp.dst_w = 1.0f / static_cast<float>(dst_rt->width > 0 ? dst_rt->width : 1);
         bp.dst_h = 1.0f / static_cast<float>(dst_rt->height > 0 ? dst_rt->height : 1);
+        bp.blend_w = blend_weight;
 
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if (SUCCEEDED(dc->Map(prog->params_cb.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped))) {

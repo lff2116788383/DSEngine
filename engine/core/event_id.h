@@ -101,8 +101,9 @@ namespace events {
     constexpr EventId kModuleUnloaded  = MakeEventId("ModuleUnloaded");
 
     // --- 子场景事件 ---
-    constexpr EventId kSubSceneLoaded   = MakeEventId("SubSceneLoaded");
-    constexpr EventId kSubSceneUnloaded = MakeEventId("SubSceneUnloaded");
+    constexpr EventId kSubSceneLoaded      = MakeEventId("SubSceneLoaded");
+    constexpr EventId kSubSceneUnloaded    = MakeEventId("SubSceneUnloaded");
+    constexpr EventId kSubSceneLoadFailed  = MakeEventId("SubSceneLoadFailed");
 
     // --- 大世界坐标事件 ---
     constexpr EventId kOriginRebased    = MakeEventId("OriginRebased");

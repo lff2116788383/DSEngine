@@ -127,7 +127,9 @@ struct PostProcessComponent {
     // Bloom
     bool bloom_enabled = true;
     float bloom_threshold = 1.0f; 
-    float bloom_intensity = 0.5f; 
+    float bloom_intensity = 0.5f;
+    float bloom_knee = 0.1f;           ///< 阈值柔和过渡宽度
+    float bloom_mip_weight = 0.005f;   ///< mip upsample 混合权重
     
     // Color Grading
     bool color_grading_enabled = true;
@@ -138,6 +140,9 @@ struct PostProcessComponent {
     bool ssao_enabled = false;
     float ssao_radius = 0.5f;
     float ssao_bias = 0.025f;
+    int ssao_sample_count = 32;
+    float ssao_power = 2.0f;
+    float ssao_intensity = 1.0f;
 
     // Auto Exposure
     bool auto_exposure_enabled = false;
@@ -192,6 +197,8 @@ struct PostProcessComponent {
     float ssr_thickness = 0.5f;          // 表面厚度阈值
     float ssr_step_size = 1.0f;          // 步进大小
     int ssr_max_steps = 64;              // 最大步数
+    float ssr_fade_distance = 0.2f;      // 屏幕边缘淡出距离 (UV 空间)
+    float ssr_max_roughness = 0.5f;      // 粗糙度截止值
 
     // Outline / Edge Detection
     bool outline_enabled = false;
@@ -241,6 +248,7 @@ struct DirectionalLight3DComponent {
     
     // CSM (Cascaded Shadow Maps) Settings
     float cascade_splits[CSM_CASCADES] = { 20.0f, 60.0f, 200.0f };
+    float cascade_split_lambda = 0.75f;  ///< PSSM 混合因子 (0=均匀, 1=对数)
 };
 
 struct PointLightComponent {

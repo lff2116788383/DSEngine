@@ -55,6 +55,13 @@ public:
     bool Load(World& world, AssetManager& asset_manager, const std::string& path);
 
     /**
+     * @brief 从 JSON 字符串反序列化并将 Entity 创建到指定 World 中
+     * @param logical_path 逻辑路径（用于标识与日志，不必对应磁盘文件）
+     */
+    bool LoadFromJson(World& world, AssetManager& asset_manager,
+                      const std::string& json_data, const std::string& logical_path);
+
+    /**
      * @brief 销毁此 SubScene 拥有的所有 Entity
      * @param world 当初加载时使用的世界
      */

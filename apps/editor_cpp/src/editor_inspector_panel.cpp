@@ -528,6 +528,10 @@ void DrawDirectionalLightSection(EditorContext& context) {
     INSPECTOR_PROPERTY_U("Ambient", ImGui::DragFloat("##dirlight_amb", &light.ambient_intensity, 0.05f, 0.0f, 1.0f),
         "DirLight.Ambient", light.ambient_intensity, context.selected_entity,
         MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::ambient_intensity));
+    INSPECTOR_PROPERTY_U("Cascade Lambda", ImGui::DragFloat("##dirlight_csl", &light.cascade_split_lambda, 0.01f, 0.0f, 1.0f),
+        "DirLight.CascadeLambda", light.cascade_split_lambda, context.selected_entity,
+        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::cascade_split_lambda));
+    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##dirlight_shadow", &light.cast_shadow));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
 }
@@ -1857,12 +1861,23 @@ void DrawPostProcessSection(EditorContext& context) {
     INSPECTOR_PROPERTY("Bloom Enabled", ImGui::Checkbox("##pp_bloom_en", &pp.bloom_enabled));
     INSPECTOR_PROPERTY("Threshold", ImGui::DragFloat("##pp_bloom_thresh", &pp.bloom_threshold, 0.05f, 0.0f, 10.0f));
     INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##pp_bloom_int", &pp.bloom_intensity, 0.05f, 0.0f, 10.0f));
+    INSPECTOR_PROPERTY("Knee", ImGui::DragFloat("##pp_bloom_knee", &pp.bloom_knee, 0.01f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Mip Weight", ImGui::DragFloat("##pp_bloom_mipw", &pp.bloom_mip_weight, 0.001f, 0.0f, 0.1f));
     ImGui::Separator();
     ImGui::Text("SSAO");
     ImGui::NextColumn(); ImGui::NextColumn();
     INSPECTOR_PROPERTY("SSAO Enabled", ImGui::Checkbox("##pp_ssao_en", &pp.ssao_enabled));
     INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##pp_ssao_rad", &pp.ssao_radius, 0.01f, 0.01f, 5.0f));
     INSPECTOR_PROPERTY("Bias", ImGui::DragFloat("##pp_ssao_bias", &pp.ssao_bias, 0.001f, 0.0f, 0.5f));
+    { int sc = pp.ssao_sample_count; INSPECTOR_PROPERTY("Samples", ImGui::DragInt("##pp_ssao_sc", &sc, 1, 4, 32)); pp.ssao_sample_count = sc; }
+    INSPECTOR_PROPERTY("Power", ImGui::DragFloat("##pp_ssao_pow", &pp.ssao_power, 0.1f, 0.1f, 8.0f));
+    INSPECTOR_PROPERTY("AO Intensity", ImGui::DragFloat("##pp_ssao_int", &pp.ssao_intensity, 0.05f, 0.0f, 5.0f));
+    ImGui::Separator();
+    ImGui::Text("SSR");
+    ImGui::NextColumn(); ImGui::NextColumn();
+    INSPECTOR_PROPERTY("SSR Enabled", ImGui::Checkbox("##pp_ssr_en", &pp.ssr_enabled));
+    INSPECTOR_PROPERTY("Fade Distance", ImGui::DragFloat("##pp_ssr_fade", &pp.ssr_fade_distance, 0.01f, 0.0f, 1.0f));
+    INSPECTOR_PROPERTY("Max Roughness", ImGui::DragFloat("##pp_ssr_rough", &pp.ssr_max_roughness, 0.01f, 0.0f, 1.0f));
     ImGui::Separator();
     ImGui::Text("FXAA");
     ImGui::NextColumn(); ImGui::NextColumn();

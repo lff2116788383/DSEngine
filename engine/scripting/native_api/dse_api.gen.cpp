@@ -396,6 +396,34 @@ extern "C" float dse_tree_get_shadow_distance(uint32_t e) {
 extern "C" void dse_tree_set_shadow_distance(uint32_t e, float v) {
     if (auto* c = GC<dse::TreeComponent>(e)) c->shadow_distance = v;
 }
+extern "C" int dse_tree_get_seed(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->seed : 12345;
+}
+extern "C" void dse_tree_set_seed(uint32_t e, int v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->seed = v;
+}
+extern "C" float dse_tree_get_height_variation(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->height_variation : 0.2f;
+}
+extern "C" void dse_tree_set_height_variation(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->height_variation = v;
+}
+extern "C" int dse_tree_get_random_rotation(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return (c && c->random_rotation) ? 1 : 0;
+}
+extern "C" void dse_tree_set_random_rotation(uint32_t e, int v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->random_rotation = (v != 0);
+}
+extern "C" float dse_tree_get_billboard_distance(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->billboard_distance : 150.0f;
+}
+extern "C" void dse_tree_set_billboard_distance(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->billboard_distance = v;
+}
 
 /* ---- TerrainTileManagerComponent ---- */
 extern "C" int dse_terrain_tile_get_enabled(uint32_t e) {
@@ -453,6 +481,20 @@ extern "C" float dse_terrain_tile_get_procedural_base_height(uint32_t e) {
 }
 extern "C" void dse_terrain_tile_set_procedural_base_height(uint32_t e, float v) {
     if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->procedural_base_height = v;
+}
+extern "C" int dse_terrain_tile_get_max_lod_levels(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->max_lod_levels : 4;
+}
+extern "C" void dse_terrain_tile_set_max_lod_levels(uint32_t e, int v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->max_lod_levels = v;
+}
+extern "C" float dse_terrain_tile_get_lod_distance_factor(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->lod_distance_factor : 50.0f;
+}
+extern "C" void dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->lod_distance_factor = v;
 }
 
 /* ---- DynamicObstacleComponent ---- */

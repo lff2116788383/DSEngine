@@ -294,6 +294,7 @@ private:
                               unsigned int cs_handle,
                               unsigned int src_texture_handle,
                               unsigned int dst_rt_handle,
+                              float blend_weight,
                               VulkanShaderManager& shader_mgr);
 
     VulkanContext* context_ = nullptr;
