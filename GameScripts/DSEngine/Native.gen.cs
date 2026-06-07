@@ -240,6 +240,156 @@ internal static class Native {
     internal static extern void dse_sky_light_set_enabled(uint e, int v);
 
 
+    // ---- TreeComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_density(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_density(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_spawn_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_spawn_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_chunk_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_chunk_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_min_scale(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_min_scale(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_max_scale(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_max_scale(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_lod1_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_lod1_distance(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_cull_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_cull_distance(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_wind_strength(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_wind_strength(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_wind_speed(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_wind_speed(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_cast_shadow(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_cast_shadow(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_tree_get_shadow_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_shadow_distance(uint e, float v);
+
+
+    // ---- TerrainTileManagerComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_terrain_tile_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_tile_world_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_tile_world_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_terrain_tile_get_tile_resolution(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_tile_resolution(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_max_height(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_max_height(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_load_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_load_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_unload_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_unload_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_terrain_tile_get_use_procedural(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_use_procedural(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_terrain_tile_get_procedural_base_height(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_terrain_tile_set_procedural_base_height(uint e, float v);
+
+
+    // ---- DynamicObstacleComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_dyn_obstacle_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_get_box_extents(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_set_box_extents(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_dyn_obstacle_get_cylinder_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_set_cylinder_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_dyn_obstacle_get_cylinder_height(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_set_cylinder_height(uint e, float v);
+
+
 } // class Native
 
 } // namespace DSEngine

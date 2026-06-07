@@ -261,6 +261,9 @@ list(APPEND engine_cpp
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_mesh_renderer.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_spot_light.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_sky_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_tree.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_terrain_tile.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dyn_obstacle.gen.cpp"
 )
 
 # Vulkan RHI 后端源文件仅在启用时编译

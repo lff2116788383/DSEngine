@@ -12,6 +12,9 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_tree.h"
+#include "engine/ecs/components_3d_terrain_tile.h"
+#include "engine/ecs/components_3d_navmesh.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
@@ -306,5 +309,180 @@ extern "C" int dse_sky_light_get_enabled(uint32_t e) {
 }
 extern "C" void dse_sky_light_set_enabled(uint32_t e, int v) {
     if (auto* c = GC<dse::SkyLightComponent>(e)) c->enabled = (v != 0);
+}
+
+/* ---- TreeComponent ---- */
+extern "C" int dse_tree_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_tree_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->enabled = (v != 0);
+}
+extern "C" float dse_tree_get_density(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->density : 0.02f;
+}
+extern "C" void dse_tree_set_density(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->density = v;
+}
+extern "C" float dse_tree_get_spawn_radius(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->spawn_radius : 120.0f;
+}
+extern "C" void dse_tree_set_spawn_radius(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->spawn_radius = v;
+}
+extern "C" float dse_tree_get_chunk_size(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->chunk_size : 32.0f;
+}
+extern "C" void dse_tree_set_chunk_size(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->chunk_size = v;
+}
+extern "C" float dse_tree_get_min_scale(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->min_scale : 0.8f;
+}
+extern "C" void dse_tree_set_min_scale(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->min_scale = v;
+}
+extern "C" float dse_tree_get_max_scale(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->max_scale : 1.3f;
+}
+extern "C" void dse_tree_set_max_scale(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->max_scale = v;
+}
+extern "C" float dse_tree_get_lod1_distance(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->lod1_distance : 60.0f;
+}
+extern "C" void dse_tree_set_lod1_distance(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->lod1_distance = v;
+}
+extern "C" float dse_tree_get_cull_distance(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->cull_distance : 200.0f;
+}
+extern "C" void dse_tree_set_cull_distance(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->cull_distance = v;
+}
+extern "C" float dse_tree_get_wind_strength(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->wind_strength : 0.3f;
+}
+extern "C" void dse_tree_set_wind_strength(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->wind_strength = v;
+}
+extern "C" float dse_tree_get_wind_speed(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->wind_speed : 1.0f;
+}
+extern "C" void dse_tree_set_wind_speed(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->wind_speed = v;
+}
+extern "C" int dse_tree_get_cast_shadow(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return (c && c->cast_shadow) ? 1 : 0;
+}
+extern "C" void dse_tree_set_cast_shadow(uint32_t e, int v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->cast_shadow = (v != 0);
+}
+extern "C" float dse_tree_get_shadow_distance(uint32_t e) {
+    const auto* c = GCC<dse::TreeComponent>(e);
+    return c ? c->shadow_distance : 80.0f;
+}
+extern "C" void dse_tree_set_shadow_distance(uint32_t e, float v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) c->shadow_distance = v;
+}
+
+/* ---- TerrainTileManagerComponent ---- */
+extern "C" int dse_terrain_tile_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_terrain_tile_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->enabled = (v != 0);
+}
+extern "C" float dse_terrain_tile_get_tile_world_size(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->tile_world_size : 64.0f;
+}
+extern "C" void dse_terrain_tile_set_tile_world_size(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->tile_world_size = v;
+}
+extern "C" int dse_terrain_tile_get_tile_resolution(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->tile_resolution : 64;
+}
+extern "C" void dse_terrain_tile_set_tile_resolution(uint32_t e, int v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->tile_resolution = v;
+}
+extern "C" float dse_terrain_tile_get_max_height(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->max_height : 20.0f;
+}
+extern "C" void dse_terrain_tile_set_max_height(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->max_height = v;
+}
+extern "C" float dse_terrain_tile_get_load_radius(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->load_radius : 200.0f;
+}
+extern "C" void dse_terrain_tile_set_load_radius(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->load_radius = v;
+}
+extern "C" float dse_terrain_tile_get_unload_radius(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->unload_radius : 250.0f;
+}
+extern "C" void dse_terrain_tile_set_unload_radius(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->unload_radius = v;
+}
+extern "C" int dse_terrain_tile_get_use_procedural(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return (c && c->use_procedural) ? 1 : 0;
+}
+extern "C" void dse_terrain_tile_set_use_procedural(uint32_t e, int v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->use_procedural = (v != 0);
+}
+extern "C" float dse_terrain_tile_get_procedural_base_height(uint32_t e) {
+    const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
+    return c ? c->procedural_base_height : 0.0f;
+}
+extern "C" void dse_terrain_tile_set_procedural_base_height(uint32_t e, float v) {
+    if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) c->procedural_base_height = v;
+}
+
+/* ---- DynamicObstacleComponent ---- */
+extern "C" int dse_dyn_obstacle_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::DynamicObstacleComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_dyn_obstacle_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::DynamicObstacleComponent>(e)) c->enabled = (v != 0);
+}
+extern "C" void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::DynamicObstacleComponent>(e)) { *x = c->box_extents.x; *y = c->box_extents.y; *z = c->box_extents.z; }
+}
+extern "C" void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z) {
+    if (auto* c = GC<dse::DynamicObstacleComponent>(e)) {
+        c->box_extents = glm::vec3(x, y, z);
+    }
+}
+extern "C" float dse_dyn_obstacle_get_cylinder_radius(uint32_t e) {
+    const auto* c = GCC<dse::DynamicObstacleComponent>(e);
+    return c ? c->cylinder_radius : 1.0f;
+}
+extern "C" void dse_dyn_obstacle_set_cylinder_radius(uint32_t e, float v) {
+    if (auto* c = GC<dse::DynamicObstacleComponent>(e)) c->cylinder_radius = v;
+}
+extern "C" float dse_dyn_obstacle_get_cylinder_height(uint32_t e) {
+    const auto* c = GCC<dse::DynamicObstacleComponent>(e);
+    return c ? c->cylinder_height : 2.0f;
+}
+extern "C" void dse_dyn_obstacle_set_cylinder_height(uint32_t e, float v) {
+    if (auto* c = GC<dse::DynamicObstacleComponent>(e)) c->cylinder_height = v;
 }
 

@@ -111,6 +111,60 @@ DSE_CAPI_GEN void  dse_sky_light_set_intensity(uint32_t e, float v);
 DSE_CAPI_GEN int  dse_sky_light_get_enabled(uint32_t e);
 DSE_CAPI_GEN void dse_sky_light_set_enabled(uint32_t e, int v);
 
+/* ---- TreeComponent ---- */
+DSE_CAPI_GEN int  dse_tree_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_tree_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_tree_get_density(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_density(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_spawn_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_spawn_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_chunk_size(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_chunk_size(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_min_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_min_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_max_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_max_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_lod1_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_lod1_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_cull_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_cull_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_wind_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_wind_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_tree_get_wind_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_wind_speed(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_tree_get_cast_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_tree_set_cast_shadow(uint32_t e, int v);
+DSE_CAPI_GEN float dse_tree_get_shadow_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_tree_set_shadow_distance(uint32_t e, float v);
+
+/* ---- TerrainTileManagerComponent ---- */
+DSE_CAPI_GEN int  dse_terrain_tile_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_terrain_tile_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_terrain_tile_get_tile_world_size(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_tile_world_size(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_terrain_tile_get_tile_resolution(uint32_t e);
+DSE_CAPI_GEN void dse_terrain_tile_set_tile_resolution(uint32_t e, int v);
+DSE_CAPI_GEN float dse_terrain_tile_get_max_height(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_max_height(uint32_t e, float v);
+DSE_CAPI_GEN float dse_terrain_tile_get_load_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_load_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_terrain_tile_get_unload_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_unload_radius(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_terrain_tile_get_use_procedural(uint32_t e);
+DSE_CAPI_GEN void dse_terrain_tile_set_use_procedural(uint32_t e, int v);
+DSE_CAPI_GEN float dse_terrain_tile_get_procedural_base_height(uint32_t e);
+DSE_CAPI_GEN void  dse_terrain_tile_set_procedural_base_height(uint32_t e, float v);
+
+/* ---- DynamicObstacleComponent ---- */
+DSE_CAPI_GEN int  dse_dyn_obstacle_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_dyn_obstacle_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_dyn_obstacle_get_cylinder_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_dyn_obstacle_set_cylinder_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_dyn_obstacle_get_cylinder_height(uint32_t e);
+DSE_CAPI_GEN void  dse_dyn_obstacle_set_cylinder_height(uint32_t e, float v);
+
 #ifdef __cplusplus
 }
 #endif

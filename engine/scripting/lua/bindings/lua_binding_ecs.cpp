@@ -38,6 +38,9 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterMeshRendererComponentGenBindings(L);
     RegisterSpotLightComponentGenBindings(L);
     RegisterSkyLightComponentGenBindings(L);
+    RegisterTreeComponentGenBindings(L);
+    RegisterTerrainTileManagerComponentGenBindings(L);
+    RegisterDynamicObstacleComponentGenBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding
