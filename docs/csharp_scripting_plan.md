@@ -1,8 +1,8 @@
 # DSEngine C# 脚本系统集成方案
 
-> 状态：**S1 ✅ + S1.5 ✅（部分迁移中）— S2（Mono 嵌入）待启动**  
+> 状态：**S1 ✅ + S1.5 ✅ + S1.6 ✅ + S1.7a-b ✅ — S1.7c / S1.8 待启动 — S2（Mono）待启动**  
 > 最后核对：2026-06（与 `master` 代码现状对齐）  
-> 已完成：Lua 绑定层（~6700 行）、C ABI 层、Codegen 工具、`binding_defs.json` 中 10 个组件的 Lua gen 绑定已参与构建
+> 已完成：Lua 绑定层（~6700 行）、C ABI 层、Codegen 工具、**12 组件**字段 get/set 由 `dse_api.gen.cpp` 生成并参与构建
 
 ---
 
@@ -27,7 +27,7 @@
 │            Native API Layer  (C ABI)                     │
 │    engine/scripting/native_api/dse_api.h / dse_api.cpp   │
 │    纯 C 函数 — Lua 和 C# 共享同一套底层入口               │
-│    组件 get/set 由 Codegen 生成；Entity/Input/App 等手写  │
+│    L1/L2 字段 get/set 由 Codegen 生成；L3 add / L5 服务 API 手写 │
 └─────────────────────────┬───────────────────────────────┘
                           │
                           ▼
@@ -87,11 +87,12 @@ engine/scripting/native_api/
 - `lua_binding_context.cpp::ConfigureBindingContext()` 已调用 `dse_native_api_init()`，Lua 与 C# 将共享同一 World
 - 全函数空指针保护
 
-**权威实现说明：**
+**权威实现说明（S1.6 后）：**
 
-- 当前参与构建的是手写 `dse_api.h` / `dse_api.cpp`
-- `dse_api.gen.h` / `dse_api.gen.cpp` 由 Codegen 生成，**默认排除构建**（与手写版符号冲突），作为迁移对照
-- 组件字段的 get/set 在 `binding_defs.json` 变更后，需同步更新手写 `dse_api.cpp`（见 §八 已知技术债）
+- `dse_api.h` — 手写权威声明（含全部 `dse_*` 签名）
+- `dse_api.cpp` — 手写 **L3/L5**（Context、Entity、组件 `*_add`、Input/Assets/App）
+- `dse_api.gen.cpp` — Codegen **L1/L2** 组件字段 get/set（已 opt-in 构建）
+- `dse_api.gen.h` — 生成对照版，不参与构建
 
 ```c
 // dse_api.h — 纯 C ABI，Lua 和 C# P/Invoke / InternalCall 共用
@@ -120,7 +121,7 @@ DSE_CAPI void dse_transform_set_position(uint32_t e, float x, float y, float z);
 
 ```
 tools/codegen/
-├── binding_defs.json          组件字段定义（唯一数据源，10 个组件）
+├── binding_defs.json          组件字段定义（唯一数据源，12 个组件）
 ├── codegen.py                 生成器主程序（含 --dry-run）
 └── templates/
     ├── dse_api.h.j2           → engine/scripting/native_api/dse_api.gen.h
@@ -131,12 +132,12 @@ tools/codegen/
 
 **实际交付：**
 
-- `binding_defs.json` 覆盖 **10** 个组件：
+- `binding_defs.json` 覆盖 **12** 个组件：
   Transform / Camera3D / MeshRenderer / DirectionalLight / PointLight /
-  SpotLight / SkyLight / Tree / TerrainTile / DynamicObstacle
-- 支持字段类型：`float` / `int` / `bool` / `vec3` / `vec4` / `euler_quat`（带 `dirty_flag`）
-- **Lua gen 已参与构建**：CMakeLists.txt 显式加回 10 个 `lua_binding_ecs_*.gen.cpp`（手写版已删除）
-- **`dse_api.gen.cpp` 仍排除构建**；opt-in 后需删除或拆分手写 `dse_api.cpp` 中对应段落
+  SpotLight / SkyLight / Tree / TerrainTile / DynamicObstacle / NavMeshAutoRebake
+- 支持字段类型：`float` / `int` / `bool` / `vec3` / `vec4` / `euler_quat` / `enum_int`（带 `dirty_flag`）；**S1.7 起增加 `string`**
+- **Lua gen 已参与构建**：CMakeLists.txt 显式 opt-in 各 `lua_binding_ecs_*.gen.cpp`
+- **`dse_api.gen.cpp` 已 opt-in**（S1.6）；组件字段不再手写维护
 - CMake target `dse_codegen`（不依赖 `DSE_ENABLE_CSHARP`）：
   `cmake --build build_vs2022 --target dse_codegen`
 
@@ -158,6 +159,97 @@ cmake --build build_vs2022 --target dse_codegen
 
 - 仅含 `binding_defs.json` 中组件字段的 get/set `InternalCall` 声明
 - **不含** `dse_entity_*`、`dse_input_*`、`dse_app_*` 等 — 由 S3 手写 `Entity.cs` / `Input.cs`（P/Invoke）或扩展 Codegen 补充
+
+---
+
+### Phase S1.6：`dse_api.gen.cpp` opt-in ✅ 已完成
+
+将 12 个组件的字段 get/set 从手写 `dse_api.cpp` 迁出，由 Codegen 单一维护。
+
+**交付：**
+
+- `dse_api.cpp` 精简至 ~280 行（Context / Entity / `*_add` / Tree 字符串过渡 / Input / Assets / App）
+- `dse_api.gen.cpp` 参与构建；`enum_int` 类型支持 `DynamicObstacle.shape`
+- 回归测试：`tests/gtest/unit/engine/scripting/dse_api_bindings_test.cpp`（5 用例）
+
+---
+
+### Phase S1.7：Codegen `string` 类型 + Tree 收敛（进行中）
+
+**目标：** L2 字符串字段进 `binding_defs.json`，删除 `tree_ext.cpp` 过渡层。
+
+**C ABI 约定：**
+
+```c
+DSE_CAPI void dse_<prefix>_set_<field>(uint32_t e, const char* path);
+DSE_CAPI int  dse_<prefix>_get_<field>(uint32_t e, char* buf, int buf_size); // 返回写入字节数
+```
+
+**`binding_defs.json` 扩展：**
+
+```json
+{
+  "name": "mesh_path",
+  "type": "string",
+  "buffer_size": 512,
+  "lua_getter": "get_tree_mesh_path",
+  "lua_setter": "set_tree_mesh_path"
+}
+```
+
+**分批交付：**
+
+| 步骤 | 内容 | 验证 |
+|------|------|------|
+| S1.7a | `string` 模板（C ABI / Lua / C#） | 单测 round-trip |
+| S1.7b | Tree 三字段迁入 gen，删 `tree_ext.cpp` | 现有 Tree 测试 |
+| S1.7c | MeshRenderer `mesh_path` + `shader_variant` | `set_mesh_path` 委托 `dse_*` |
+
+**C# 互操作：** string getter 使用 `byte[]` 缓冲区 InternalCall；S3 可补充 `StringBuilder` 封装。远期可选 `dse_*_alloc` + `dse_string_free`（S2 前评估）。
+
+**估时：** S1.7a–c 约 2–3 天。
+
+---
+
+### Phase S1.8：Lua `rendering.cpp` 大模块迁移（待启动）
+
+**现状：** `lua_binding_ecs_rendering.cpp` ~2083 行、~100 API，**零 `dse_*` 委托**，直接访问 ECS + AssetManager + RHI。
+
+**API 五层模型（迁移判据）：**
+
+| 层级 | 特征 | 归属 |
+|------|------|------|
+| **L1** | 标量/vec/bool/enum 字段 | `binding_defs` → gen |
+| **L2** | `std::string` 字段 | `binding_defs` + `string` 类型 |
+| **L3** | 组件 `add` / 初始化 | 手写 `dse_api.cpp` |
+| **L4** | 复合 setter（一次写多字段） | **默认仅 Lua 薄包装**调多个 `dse_*`，**不**新建 C ABI |
+| **L5** | AssetManager / RHI / Physics 服务 | 保留 C++；S2 前规划 `dse_assets_*` / `dse_render_*` 最小集 |
+
+**执行原则：**
+
+1. 先**物理拆文件**（camera / mesh / light / post / terrain / fx），零行为变更
+2. `add_*` / 简单 setter 委托已有 `dse_*`
+3. PostProcess **分批**进 defs（先覆盖现有 15 个 Lua setter 涉及字段，非一次 50 字段）
+4. `dse_api.gen.cpp` 在 PostProcess 入 defs **前**按组件拆分为多 TU（对齐 Lua per-component 结构）
+5. **保留**全部现有 Lua API 名与参数顺序（脚本兼容）
+
+**子模块优先级：** Camera/Light/Mesh add → PostProcess 字段化 → Water/Decal/Grass → `world_to_screen`（L5）
+
+**估时：** 1–2 周。
+
+---
+
+### Phase S1.9：phys3d / gameplay3d / animation 收敛（待启动）
+
+| 模块 | 行数 | 策略 |
+|------|------|------|
+| `lua_binding_ecs_phys3d.cpp` | ~943 | 标量字段 → defs；力/射线/碰撞事件 → L5 `dse_physics3d_*` |
+| `lua_binding_ecs_gameplay3d.cpp` | ~978 | 模拟控制 → L5；简单组件字段 → defs |
+| `lua_binding_ecs_animation.cpp` | ~788 | `danim_path` → string；FSM 状态 → L4 Lua 包装 |
+
+**S2 前置：** 列出 L5 最小 API 清单（`set_mesh_material`、`world_to_screen`、`physics3d_raycast` 等），与 Mono 嵌入并行规划。
+
+**估时：** 2–4 周（可与 S2 部分并行）。
 
 ---
 
@@ -364,11 +456,9 @@ endif()
 # 默认排除所有 *.gen.cpp
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
 
-# dse_api.gen.cpp — 保持排除（与 dse_api.cpp 冲突）
+# dse_api.gen.cpp — 已 opt-in（S1.6）
 
-# 以下 10 个 Lua gen 已 opt-in（手写版已删）：
-#   lua_binding_ecs_{transform,camera3d,mesh_renderer,dir_light,point_light,
-#                    spot_light,sky_light,tree,terrain_tile,dyn_obstacle}.gen.cpp
+# Lua gen 已 opt-in（含 navmesh_rebake；S1.7 后 tree_ext 删除，string 并入 tree.gen）
 ```
 
 ---
@@ -378,13 +468,15 @@ list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
 ```
 engine/scripting/
 ├── native_api/
-│   ├── dse_api.h / dse_api.cpp       ✅ 手写权威版（参与构建）
-│   ├── dse_api.gen.h / dse_api.gen.cpp  ✅ 生成对照版（排除构建）
+│   ├── dse_api.h                     ✅ 手写权威声明
+│   ├── dse_api.cpp                   ✅ L3/L5 手写实现
+│   ├── dse_api.gen.cpp               ✅ L1/L2 字段（已 opt-in）
+│   └── dse_api.gen.h                 对照版（排除构建）
 ├── csharp/                           ⏳ S2 待建
 ├── lua/
 │   ├── bindings/
-│   │   ├── lua_binding_ecs_*.gen.cpp ✅ 10 个组件已 opt-in
-│   │   ├── lua_binding_ecs_rendering.cpp 等  ⏳ 仍手写，未走 dse_api
+│   │   ├── lua_binding_ecs_*.gen.cpp ✅ 12 组件已 opt-in
+│   │   ├── lua_binding_ecs_rendering*.cpp  ⏳ S1.8 拆分 + 迁移
 │   │   └── ...（physics / audio / nav 等）
 │   └── lua_runtime.cpp               ✅ PumpLuaScriptHotReloads()
 └── cpp/
@@ -400,9 +492,12 @@ GameScripts/DSEngine/Native.gen.cs    ✅（仅组件 InternalCall）
 | Phase | 内容 | 估时 | 前置 | 状态 |
 |-------|------|------|------|------|
 | **S1** | C ABI `dse_api.h/cpp` | — | 无 | ✅ |
-| **S1.5** | Codegen + Lua 10 组件 opt-in | — | S1 | ✅（`dse_api` 未 opt-in） |
-| **S1.6** | `dse_api.cpp` 组件段 opt-in gen / 消除双份维护 | 2–3 天 | S1.5 | ⏳ 建议 S2 前完成 |
-| **S2** | Mono 嵌入 + DSBehaviour + 异常隔离 | 1–2 周 | S1.5 | ⏳ |
+| **S1.5** | Codegen + Lua 12 组件 opt-in | — | S1 | ✅ |
+| **S1.6** | `dse_api.gen.cpp` opt-in / 消除字段双份维护 | 2–3 天 | S1.5 | ✅ |
+| **S1.7** | `string` 类型 + Tree/Mesh 路径收敛 | 2–3 天 | S1.6 | 🔄 a-b ✅，c 待做 |
+| **S1.8** | `rendering.cpp` 拆分 + L1–L4 迁移 | 1–2 周 | S1.7 | ⏳ |
+| **S1.9** | phys3d / gameplay3d / animation + L5 清单 | 2–4 周 | S1.8 | ⏳ |
+| **S2** | Mono 嵌入 + DSBehaviour + 异常隔离 | 1–2 周 | S1.7 + L5 清单 | ⏳ |
 | **S3** | C# API 封装（P/Invoke + Blittable） | 3–5 天 | S2 | ⏳ |
 | **S4** | Assembly 热重载 | 3–5 天 | S2 最小版 | ⏳ |
 | **S5** | 出货 AOT / CoreCLR 迁移 | 按平台 | 产品定稿 | 📋 远期 |
@@ -424,40 +519,53 @@ GameScripts/DSEngine/Native.gen.cs    ✅（仅组件 InternalCall）
 ## 七、Lua 绑定迁移路径
 
 ```
-已完成（10 组件）：
-  lua_binding_ecs_<prefix>.gen.cpp  →  内部调用 dse_*  →  已参与构建
+已完成：
+  dse_api.gen.cpp（L1/L2 字段）     →  12 组件  →  已参与构建
+  lua_binding_ecs_<prefix>.gen.cpp   →  委托 dse_*  →  已参与构建
 
-进行中 / 待迁移：
-  lua_binding_ecs_rendering.cpp     →  大量手写，直接访问 ECS（~2300+ 行）
-  lua_binding_ecs_physics*.cpp
-  lua_binding_audio.cpp / navigation.cpp / ...
+S1.7（进行中）：
+  string 类型                        →  Tree 路径并入 tree.gen，删 tree_ext
+
+S1.8–S1.9（待迁移）：
+  lua_binding_ecs_rendering.cpp      →  ~2083 行，~100 API，零 dse_ 委托
+  lua_binding_ecs_phys3d.cpp         →  ~943 行
+  lua_binding_ecs_gameplay3d.cpp     →  ~978 行
+  lua_binding_ecs_animation.cpp      →  ~788 行
+  lua_binding_audio.cpp / navigation.cpp / ui.cpp（ui 另立项）
 ```
 
-可按模块渐进迁移；每迁移一个模块，同步扩展 `binding_defs.json` 或手写 `dse_api` 中非字段 API。
+**迁移规则：** L1/L2 → `binding_defs`；L3 → `dse_api.cpp`；L4 → Lua 薄包装（默认不进 C ABI）；L5 → 服务 API 单列里程碑。
 
 ---
 
-## 八、技术债与文档修正记录（v3）
+## 八、技术债与残余债清单（v4）
 
-| 问题 | v2 文档表述 | v3 现状 / 修正 |
-|------|-------------|----------------|
-| 组件数量 | 5 个 | **10 个**（已更新 binding_defs） |
-| `dse_api` 行数 | ~196 / ~567 | **~290 / ~870** |
-| Codegen 输出 | 8 个文件 | **13 个文件** |
-| Lua gen 构建 | 全部排除 | **10 个已 opt-in**；`dse_api.gen.cpp` 仍排除 |
-| C ABI 来源 | 「全部由 Codegen 生成」 | **手写权威 + gen 对照**；组件段待 opt-in |
-| Mono 定位 | 未区分开发/出货 | **开发 JIT MVP**；出货见 S5 AOT |
-| `ScriptComponent` | 加 `csharp_class_name` | 改为独立 **`CSharpScriptComponent`** |
-| 工作量 | 3–5 天 | **S2 alone 约 1–2 周** |
-| 「v2 无遗留技术债」 | — | **删除**；见下表 |
+| 问题 | v3 表述 | v4 现状 / 修正 |
+|------|---------|----------------|
+| 组件数量 | 10 个 | **12 个**（含 NavMeshAutoRebake） |
+| `dse_api` 字段维护 | 双份手写 + gen | **S1.6 已收敛**（字段仅 gen） |
+| `dse_api.cpp` 行数 | ~870 | **~280**（仅 L3/L5） |
+| Lua gen | 10 个 opt-in | **12 个** opt-in，tree_ext 已删除 |
+| 支持类型 | 无 string/enum | **enum_int** ✅；**string** S1.7 |
 
-**当前已知技术债：**
+**残余债（有意识保留，须设退出条件）：**
 
-1. `dse_api.cpp` 与 `dse_api.gen.cpp` 双份维护 — S1.6 待收敛
-2. Lua 大模块（rendering / physics 等）未走 `dse_api`
-3. `Native.gen.cs` 仅覆盖组件字段，非完整 C# API
-4. `engine/scripting/csharp/`、`DSE_ENABLE_CSHARP` 未实现
-5. Mono 为开发/runtime MVP，全平台发行需 S5 规划
+| 类别 | 内容 | 严重度 | 退出条件 |
+|------|------|--------|----------|
+| SSOT 漂移 | `binding_defs` 与 C++ struct 手工同步 | 中 | CI 字段名检查（S1.8） |
+| Header 双轨 | `dse_api.h` 手写 vs `dse_api.gen.h` | 低–中 | 合并声明或 gen.h include |
+| API 双轨 | L4 复合 setter + 字段级 getter 并存 | 低 | 文档标明；C# 仅暴露字段级 |
+| L5 未进 C ABI | `set_mesh_material`、`world_to_screen`、物理 raycast | **高（卡 S2）** | S1.9 L5 清单 + `dse_*` 最小集 |
+| string 缓冲 API | C# getter 需 byte[] 缓冲 | 中 | S3 封装层 / 可选 alloc API |
+| gen 单 TU | `dse_api.gen.cpp` 随组件增大 | 低–中 | PostProcess 前按组件拆分 |
+| rendering 直连 ECS | ~2083 行未走 dse_api | 高 | S1.8 完成 |
+| C# 运行时 | Mono / `DSE_ENABLE_CSHARP` 未实现 | 中 | S2 |
+| 全平台 AOT | 出货策略未定 | 低 | S5 按产品需求 |
+
+**已清偿：**
+
+- ~~`dse_api.cpp` 与 `dse_api.gen.cpp` 字段双份维护~~（S1.6）
+- ~~`tree_ext.cpp` 过渡层~~（S1.7a-b ✅）
 
 ---
 

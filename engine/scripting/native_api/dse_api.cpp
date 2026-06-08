@@ -3,7 +3,7 @@
  * @brief DSEngine Native C ABI — 手写实现（非 Codegen 部分）
  *
  * 组件字段 get/set 由 dse_api.gen.cpp 生成。
- * 本文件保留：Context / Entity / 组件 add 辅助 / Tree 字符串路径 / Input / Assets / App / Metrics。
+ * 本文件保留：Context / Entity / 组件 add 辅助 / Input / Assets / App / Metrics。
  */
 
 #include "engine/scripting/native_api/dse_api.h"
@@ -11,13 +11,11 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_3d_tree.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/input/input.h"
 #include "engine/base/time.h"
 
 #include <glm/glm.hpp>
-#include <cstring>
 
 namespace {
 
@@ -163,53 +161,6 @@ extern "C" void dse_sky_light_add(uint32_t e) {
     World* w = GetWorld();
     if (!ValidEntity(w, e)) return;
     w->registry().emplace_or_replace<dse::SkyLightComponent>(ToEntity(e));
-}
-
-// ============================================================
-// TreeComponent — string paths (Codegen 尚无 string 类型)
-// ============================================================
-
-namespace {
-
-int CopyTreeString(uint32_t e, char* buf, int buf_size,
-                   std::string dse::TreeComponent::* member) {
-    if (!buf || buf_size <= 0) return 0;
-    buf[0] = '\0';
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    if (!c) return 0;
-    const std::string& value = c->*member;
-    if (value.empty()) return 0;
-    std::strncpy(buf, value.c_str(), static_cast<std::size_t>(buf_size - 1));
-    buf[buf_size - 1] = '\0';
-    return static_cast<int>(std::strlen(buf));
-}
-
-void SetTreeString(uint32_t e, const char* path,
-                   std::string dse::TreeComponent::* member) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) {
-        c->*member = path ? path : "";
-    }
-}
-
-} // namespace
-
-extern "C" void dse_tree_set_mesh_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::mesh_path);
-}
-extern "C" int dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::mesh_path);
-}
-extern "C" void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::lod1_mesh_path);
-}
-extern "C" int dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::lod1_mesh_path);
-}
-extern "C" void dse_tree_set_billboard_texture_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::billboard_texture_path);
-}
-extern "C" int dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::billboard_texture_path);
 }
 
 // ============================================================

@@ -175,6 +175,51 @@ int L_Set_tree_billboard_distance(lua_State* L) {
     dse_tree_set_billboard_distance(e, static_cast<float>(luaL_checknumber(L, 2)));
     return 0;
 }
+int L_Get_tree_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char buf[512];
+    if (dse_tree_get_mesh_path(e, buf, 512) <= 0) {
+        lua_pushstring(L, "");
+        return 1;
+    }
+    lua_pushstring(L, buf);
+    return 1;
+}
+int L_Set_tree_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_mesh_path(e, luaL_checkstring(L, 2));
+    return 0;
+}
+int L_Get_tree_lod1_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char buf[512];
+    if (dse_tree_get_lod1_mesh_path(e, buf, 512) <= 0) {
+        lua_pushstring(L, "");
+        return 1;
+    }
+    lua_pushstring(L, buf);
+    return 1;
+}
+int L_Set_tree_lod1_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_lod1_mesh_path(e, luaL_checkstring(L, 2));
+    return 0;
+}
+int L_Get_tree_billboard_texture_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char buf[512];
+    if (dse_tree_get_billboard_texture_path(e, buf, 512) <= 0) {
+        lua_pushstring(L, "");
+        return 1;
+    }
+    lua_pushstring(L, buf);
+    return 1;
+}
+int L_Set_tree_billboard_texture_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_tree_set_billboard_texture_path(e, luaL_checkstring(L, 2));
+    return 0;
+}
 
 } // namespace
 
@@ -213,6 +258,12 @@ void RegisterTreeComponentGenBindings(lua_State* L) {
         {"set_tree_random_rotation", L_Set_tree_random_rotation},
         {"get_tree_billboard_distance", L_Get_tree_billboard_distance},
         {"set_tree_billboard_distance", L_Set_tree_billboard_distance},
+        {"get_tree_mesh_path", L_Get_tree_mesh_path},
+        {"set_tree_mesh_path", L_Set_tree_mesh_path},
+        {"get_tree_lod1_mesh_path", L_Get_tree_lod1_mesh_path},
+        {"set_tree_lod1_mesh_path", L_Set_tree_lod1_mesh_path},
+        {"get_tree_billboard_texture_path", L_Get_tree_billboard_texture_path},
+        {"set_tree_billboard_texture_path", L_Set_tree_billboard_texture_path},
     });
 }
 

@@ -425,6 +425,27 @@
                     "default": "150.0f",
                     "lua_getter": "get_tree_billboard_distance",
                     "lua_setter": "set_tree_billboard_distance"
+                },
+                {
+                    "name": "mesh_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_tree_mesh_path",
+                    "lua_setter": "set_tree_mesh_path"
+                },
+                {
+                    "name": "lod1_mesh_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_tree_lod1_mesh_path",
+                    "lua_setter": "set_tree_lod1_mesh_path"
+                },
+                {
+                    "name": "billboard_texture_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_tree_billboard_texture_path",
+                    "lua_setter": "set_tree_billboard_texture_path"
                 }
             ]
         },

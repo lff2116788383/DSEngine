@@ -48,6 +48,14 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z, float w);
 
+{% elif field.type == "string" %}
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, byte[] buf, int buf_size);
+
 {% endif %}
 {% endfor %}
 

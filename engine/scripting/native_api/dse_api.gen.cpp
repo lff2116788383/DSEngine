@@ -17,6 +17,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
+#include <cstring>
 
 using Entity = entt::entity;
 
@@ -502,6 +503,48 @@ extern "C" void dse_tree_set_billboard_distance(uint32_t e, float v) {
     if (auto* c = GC<dse::TreeComponent>(e)) {
         c->billboard_distance = v;
     }
+}
+extern "C" void dse_tree_set_mesh_path(uint32_t e, const char* v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) {
+        c->mesh_path = v ? v : "";
+    }
+}
+extern "C" int dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GCC<dse::TreeComponent>(e);
+    if (!c || c->mesh_path.empty()) return 0;
+    std::strncpy(buf, c->mesh_path.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
+extern "C" void dse_tree_set_lod1_mesh_path(uint32_t e, const char* v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) {
+        c->lod1_mesh_path = v ? v : "";
+    }
+}
+extern "C" int dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GCC<dse::TreeComponent>(e);
+    if (!c || c->lod1_mesh_path.empty()) return 0;
+    std::strncpy(buf, c->lod1_mesh_path.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
+extern "C" void dse_tree_set_billboard_texture_path(uint32_t e, const char* v) {
+    if (auto* c = GC<dse::TreeComponent>(e)) {
+        c->billboard_texture_path = v ? v : "";
+    }
+}
+extern "C" int dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GCC<dse::TreeComponent>(e);
+    if (!c || c->billboard_texture_path.empty()) return 0;
+    std::strncpy(buf, c->billboard_texture_path.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
 }
 
 /* ---- TerrainTileManagerComponent ---- */

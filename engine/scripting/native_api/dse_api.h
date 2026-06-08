@@ -273,7 +273,7 @@ DSE_CAPI float dse_navmesh_rebake_get_cell_height(uint32_t e);
 DSE_CAPI void  dse_navmesh_rebake_set_cell_height(uint32_t e, float v);
 
 // ============================================================
-// TreeComponent — string paths (caller-owned buffer for getters)
+// TreeComponent — string paths（实现见 dse_api.gen.cpp）
 // ============================================================
 
 DSE_CAPI void dse_tree_set_mesh_path(uint32_t e, const char* path);

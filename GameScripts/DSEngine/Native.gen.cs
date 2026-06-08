@@ -337,6 +337,27 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_tree_set_billboard_distance(uint e, float v);
 
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_mesh_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_mesh_path(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_lod1_mesh_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_lod1_mesh_path(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_tree_set_billboard_texture_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_tree_get_billboard_texture_path(uint e, byte[] buf, int buf_size);
+
 
     // ---- TerrainTileManagerComponent ----
     [MethodImpl(MethodImplOptions.InternalCall)]
