@@ -1989,27 +1989,6 @@ int L_EcsAddTree(lua_State* L) {
     return 0;
 }
 
-int L_EcsGetTreeMeshPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* tree = helper::TryGetComponentConst<dse::TreeComponent>(*world, e);
-    if (!tree) { lua_pushnil(L); return 1; }
-    lua_pushstring(L, tree->mesh_path.c_str());
-    return 1;
-}
-
-int L_EcsSetTreeMeshPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    const char* path = luaL_checkstring(L, 2);
-    auto* tree = helper::TryGetComponent<dse::TreeComponent>(*world, e);
-    if (!tree) return 0;
-    tree->mesh_path = path;
-    return 0;
-}
-
 // ============================================================
 // TerrainTileManagerComponent — add
 // ============================================================
@@ -2126,86 +2105,6 @@ int L_EcsAddNavMeshAutoRebake(lua_State* L) {
     auto& nr = world->registry().emplace_or_replace<dse::NavMeshAutoRebakeComponent>(e);
     nr.enabled = true;
     return 0;
-}
-
-int L_EcsSetNavMeshAutoRebakeEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* nr = helper::TryGetComponent<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) return 0;
-    nr->enabled = helper::CheckBool(L, 2);
-    return 0;
-}
-
-int L_EcsGetNavMeshAutoRebakeEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushboolean(L, 0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* nr = helper::TryGetComponentConst<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) { lua_pushboolean(L, 0); return 1; }
-    helper::PushBool(L, nr->enabled);
-    return 1;
-}
-
-int L_EcsSetNavMeshAutoRebakeTileSize(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* nr = helper::TryGetComponent<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) return 0;
-    nr->tile_size = helper::CheckFloat(L, 2);
-    return 0;
-}
-
-int L_EcsGetNavMeshAutoRebakeTileSize(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* nr = helper::TryGetComponentConst<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) { lua_pushnumber(L, 0.0); return 1; }
-    helper::PushFloat(L, nr->tile_size);
-    return 1;
-}
-
-int L_EcsSetNavMeshAutoRebakeAgentHeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* nr = helper::TryGetComponent<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) return 0;
-    nr->agent_height = helper::CheckFloat(L, 2);
-    return 0;
-}
-
-int L_EcsGetNavMeshAutoRebakeAgentHeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* nr = helper::TryGetComponentConst<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) { lua_pushnumber(L, 0.0); return 1; }
-    helper::PushFloat(L, nr->agent_height);
-    return 1;
-}
-
-int L_EcsSetNavMeshAutoRebakeAgentRadius(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* nr = helper::TryGetComponent<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) return 0;
-    nr->agent_radius = helper::CheckFloat(L, 2);
-    return 0;
-}
-
-int L_EcsGetNavMeshAutoRebakeAgentRadius(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* nr = helper::TryGetComponentConst<dse::NavMeshAutoRebakeComponent>(*world, e);
-    if (!nr) { lua_pushnumber(L, 0.0); return 1; }
-    helper::PushFloat(L, nr->agent_radius);
-    return 1;
 }
 
 } // namespace
@@ -2326,8 +2225,6 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_reflection_probe_enabled", L_EcsSetReflectionProbeEnabled},
         // Tree
         {"add_tree",                  L_EcsAddTree},
-        {"get_tree_mesh_path",        L_EcsGetTreeMeshPath},
-        {"set_tree_mesh_path",        L_EcsSetTreeMeshPath},
         // TerrainTileManager
         {"add_terrain_tile_manager",  L_EcsAddTerrainTileManager},
         // DynamicObstacle
@@ -2340,16 +2237,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"get_foliage_stiffness",     L_EcsGetFoliageStiffness},
         {"set_foliage_enabled",       L_EcsSetFoliageEnabled},
         {"get_foliage_enabled",       L_EcsGetFoliageEnabled},
-        // NavMesh Auto Rebake
+        // NavMesh Auto Rebake（字段 get/set 见 codegen navmesh_rebake 绑定）
         {"add_navmesh_auto_rebake",   L_EcsAddNavMeshAutoRebake},
-        {"set_navmesh_auto_rebake_enabled",       L_EcsSetNavMeshAutoRebakeEnabled},
-        {"get_navmesh_auto_rebake_enabled",       L_EcsGetNavMeshAutoRebakeEnabled},
-        {"set_navmesh_auto_rebake_tile_size",     L_EcsSetNavMeshAutoRebakeTileSize},
-        {"get_navmesh_auto_rebake_tile_size",     L_EcsGetNavMeshAutoRebakeTileSize},
-        {"set_navmesh_auto_rebake_agent_height",  L_EcsSetNavMeshAutoRebakeAgentHeight},
-        {"get_navmesh_auto_rebake_agent_height",  L_EcsGetNavMeshAutoRebakeAgentHeight},
-        {"set_navmesh_auto_rebake_agent_radius",  L_EcsSetNavMeshAutoRebakeAgentRadius},
-        {"get_navmesh_auto_rebake_agent_radius",  L_EcsGetNavMeshAutoRebakeAgentRadius},
         // Utility
         {"world_to_screen",           L_EcsWorldToScreen},
     });

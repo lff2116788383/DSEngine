@@ -408,6 +408,12 @@ internal static class Native {
     internal static extern void dse_dyn_obstacle_set_enabled(uint e, int v);
 
     [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_dyn_obstacle_get_shape(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dyn_obstacle_set_shape(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_dyn_obstacle_get_box_extents(uint e, out float x, out float y, out float z);
 
     [MethodImpl(MethodImplOptions.InternalCall)]
@@ -424,6 +430,74 @@ internal static class Native {
 
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_dyn_obstacle_set_cylinder_height(uint e, float v);
+
+
+    // ---- NavMeshAutoRebakeComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_navmesh_rebake_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_tile_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_tile_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_rebake_cooldown(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_rebake_cooldown(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_navmesh_rebake_get_collect_terrain(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_collect_terrain(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_navmesh_rebake_get_collect_mesh_renderers(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_collect_mesh_renderers(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_agent_height(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_agent_height(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_agent_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_agent_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_agent_max_climb(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_agent_max_climb(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_agent_max_slope(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_agent_max_slope(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_cell_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_cell_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_navmesh_rebake_get_cell_height(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_navmesh_rebake_set_cell_height(uint e, float v);
 
 
 } // class Native

@@ -518,12 +518,22 @@
                     "name": "enabled",
                     "type": "bool",
                     "default": "true",
+                    "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_enabled",
                     "lua_setter": "set_dyn_obstacle_enabled"
                 },
                 {
+                    "name": "shape",
+                    "type": "int",
+                    "default": "0",
+                    "dirty_flag": "dirty_",
+                    "lua_getter": "get_dyn_obstacle_shape",
+                    "lua_setter": "set_dyn_obstacle_shape"
+                },
+                {
                     "name": "box_extents",
                     "type": "vec3",
+                    "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_box_extents",
                     "lua_setter": "set_dyn_obstacle_box_extents"
                 },
@@ -531,6 +541,7 @@
                     "name": "cylinder_radius",
                     "type": "float",
                     "default": "1.0f",
+                    "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_cylinder_radius",
                     "lua_setter": "set_dyn_obstacle_cylinder_radius"
                 },
@@ -538,8 +549,95 @@
                     "name": "cylinder_height",
                     "type": "float",
                     "default": "2.0f",
+                    "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_cylinder_height",
                     "lua_setter": "set_dyn_obstacle_cylinder_height"
+                }
+            ]
+        },
+        {
+            "name": "NavMeshAutoRebakeComponent",
+            "prefix": "navmesh_rebake",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_navmesh.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_navmesh_auto_rebake_enabled",
+                    "lua_setter": "set_navmesh_auto_rebake_enabled"
+                },
+                {
+                    "name": "tile_size",
+                    "type": "float",
+                    "default": "48.0f",
+                    "lua_getter": "get_navmesh_auto_rebake_tile_size",
+                    "lua_setter": "set_navmesh_auto_rebake_tile_size"
+                },
+                {
+                    "name": "rebake_cooldown",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_navmesh_auto_rebake_cooldown",
+                    "lua_setter": "set_navmesh_auto_rebake_cooldown"
+                },
+                {
+                    "name": "collect_terrain",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_navmesh_auto_rebake_collect_terrain",
+                    "lua_setter": "set_navmesh_auto_rebake_collect_terrain"
+                },
+                {
+                    "name": "collect_mesh_renderers",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_navmesh_auto_rebake_collect_mesh_renderers",
+                    "lua_setter": "set_navmesh_auto_rebake_collect_mesh_renderers"
+                },
+                {
+                    "name": "agent_height",
+                    "type": "float",
+                    "default": "2.0f",
+                    "lua_getter": "get_navmesh_auto_rebake_agent_height",
+                    "lua_setter": "set_navmesh_auto_rebake_agent_height"
+                },
+                {
+                    "name": "agent_radius",
+                    "type": "float",
+                    "default": "0.6f",
+                    "lua_getter": "get_navmesh_auto_rebake_agent_radius",
+                    "lua_setter": "set_navmesh_auto_rebake_agent_radius"
+                },
+                {
+                    "name": "agent_max_climb",
+                    "type": "float",
+                    "default": "0.9f",
+                    "lua_getter": "get_navmesh_auto_rebake_agent_max_climb",
+                    "lua_setter": "set_navmesh_auto_rebake_agent_max_climb"
+                },
+                {
+                    "name": "agent_max_slope",
+                    "type": "float",
+                    "default": "45.0f",
+                    "lua_getter": "get_navmesh_auto_rebake_agent_max_slope",
+                    "lua_setter": "set_navmesh_auto_rebake_agent_max_slope"
+                },
+                {
+                    "name": "cell_size",
+                    "type": "float",
+                    "default": "0.3f",
+                    "lua_getter": "get_navmesh_auto_rebake_cell_size",
+                    "lua_setter": "set_navmesh_auto_rebake_cell_size"
+                },
+                {
+                    "name": "cell_height",
+                    "type": "float",
+                    "default": "0.2f",
+                    "lua_getter": "get_navmesh_auto_rebake_cell_height",
+                    "lua_setter": "set_navmesh_auto_rebake_cell_height"
                 }
             ]
         }

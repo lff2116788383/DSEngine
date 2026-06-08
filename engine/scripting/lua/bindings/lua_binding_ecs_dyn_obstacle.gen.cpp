@@ -25,6 +25,16 @@ int L_Set_dyn_obstacle_enabled(lua_State* L) {
     dse_dyn_obstacle_set_enabled(e, lua_toboolean(L, 2));
     return 0;
 }
+int L_Get_dyn_obstacle_shape(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushinteger(L, dse_dyn_obstacle_get_shape(e));
+    return 1;
+}
+int L_Set_dyn_obstacle_shape(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_dyn_obstacle_set_shape(e, static_cast<int>(luaL_checkinteger(L, 2)));
+    return 0;
+}
 int L_Get_dyn_obstacle_box_extents(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float x = 0, y = 0, z = 0;
@@ -68,6 +78,8 @@ void RegisterDynamicObstacleComponentGenBindings(lua_State* L) {
     RegisterBindings(L, {
         {"get_dyn_obstacle_enabled", L_Get_dyn_obstacle_enabled},
         {"set_dyn_obstacle_enabled", L_Set_dyn_obstacle_enabled},
+        {"get_dyn_obstacle_shape", L_Get_dyn_obstacle_shape},
+        {"set_dyn_obstacle_shape", L_Set_dyn_obstacle_shape},
         {"get_dyn_obstacle_box_extents", L_Get_dyn_obstacle_box_extents},
         {"set_dyn_obstacle_box_extents", L_Set_dyn_obstacle_box_extents},
         {"get_dyn_obstacle_cylinder_radius", L_Get_dyn_obstacle_cylinder_radius},

@@ -835,12 +835,36 @@ extern "C" void dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v) {
 // DynamicObstacleComponent
 // ============================================================
 
+namespace {
+
+inline void MarkDynObstacleDirty(dse::DynamicObstacleComponent* c) {
+    if (c) c->dirty_ = true;
+}
+
+} // namespace
+
 extern "C" int dse_dyn_obstacle_get_enabled(uint32_t e) {
     const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
     return (c && c->enabled) ? 1 : 0;
 }
 extern "C" void dse_dyn_obstacle_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) c->enabled = (v != 0);
+    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
+        c->enabled = (v != 0);
+        MarkDynObstacleDirty(c);
+    }
+}
+extern "C" int dse_dyn_obstacle_get_shape(uint32_t e) {
+    const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
+    if (!c) return 0;
+    return (c->shape == dse::DynamicObstacleComponent::Shape::Cylinder) ? 1 : 0;
+}
+extern "C" void dse_dyn_obstacle_set_shape(uint32_t e, int v) {
+    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
+        c->shape = (v == 1)
+            ? dse::DynamicObstacleComponent::Shape::Cylinder
+            : dse::DynamicObstacleComponent::Shape::Box;
+        MarkDynObstacleDirty(c);
+    }
 }
 extern "C" void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z) {
     if (const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e)) {
@@ -848,20 +872,157 @@ extern "C" void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y,
     }
 }
 extern "C" void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e))
+    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
         c->box_extents = glm::vec3(x, y, z);
+        MarkDynObstacleDirty(c);
+    }
 }
 extern "C" float dse_dyn_obstacle_get_cylinder_radius(uint32_t e) {
     const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
     return c ? c->cylinder_radius : 1.0f;
 }
 extern "C" void dse_dyn_obstacle_set_cylinder_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) c->cylinder_radius = v;
+    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
+        c->cylinder_radius = v;
+        MarkDynObstacleDirty(c);
+    }
 }
 extern "C" float dse_dyn_obstacle_get_cylinder_height(uint32_t e) {
     const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
     return c ? c->cylinder_height : 2.0f;
 }
 extern "C" void dse_dyn_obstacle_set_cylinder_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) c->cylinder_height = v;
+    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
+        c->cylinder_height = v;
+        MarkDynObstacleDirty(c);
+    }
+}
+
+// ============================================================
+// NavMeshAutoRebakeComponent
+// ============================================================
+
+extern "C" int dse_navmesh_rebake_get_enabled(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_navmesh_rebake_set_enabled(uint32_t e, int v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->enabled = (v != 0);
+}
+extern "C" float dse_navmesh_rebake_get_tile_size(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->tile_size : 48.0f;
+}
+extern "C" void dse_navmesh_rebake_set_tile_size(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->tile_size = v;
+}
+extern "C" float dse_navmesh_rebake_get_rebake_cooldown(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->rebake_cooldown : 1.0f;
+}
+extern "C" void dse_navmesh_rebake_set_rebake_cooldown(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->rebake_cooldown = v;
+}
+extern "C" int dse_navmesh_rebake_get_collect_terrain(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return (c && c->collect_terrain) ? 1 : 0;
+}
+extern "C" void dse_navmesh_rebake_set_collect_terrain(uint32_t e, int v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->collect_terrain = (v != 0);
+}
+extern "C" int dse_navmesh_rebake_get_collect_mesh_renderers(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return (c && c->collect_mesh_renderers) ? 1 : 0;
+}
+extern "C" void dse_navmesh_rebake_set_collect_mesh_renderers(uint32_t e, int v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->collect_mesh_renderers = (v != 0);
+}
+extern "C" float dse_navmesh_rebake_get_agent_height(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->agent_height : 2.0f;
+}
+extern "C" void dse_navmesh_rebake_set_agent_height(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_height = v;
+}
+extern "C" float dse_navmesh_rebake_get_agent_radius(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->agent_radius : 0.6f;
+}
+extern "C" void dse_navmesh_rebake_set_agent_radius(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_radius = v;
+}
+extern "C" float dse_navmesh_rebake_get_agent_max_climb(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->agent_max_climb : 0.9f;
+}
+extern "C" void dse_navmesh_rebake_set_agent_max_climb(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_max_climb = v;
+}
+extern "C" float dse_navmesh_rebake_get_agent_max_slope(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->agent_max_slope : 45.0f;
+}
+extern "C" void dse_navmesh_rebake_set_agent_max_slope(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_max_slope = v;
+}
+extern "C" float dse_navmesh_rebake_get_cell_size(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->cell_size : 0.3f;
+}
+extern "C" void dse_navmesh_rebake_set_cell_size(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->cell_size = v;
+}
+extern "C" float dse_navmesh_rebake_get_cell_height(uint32_t e) {
+    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
+    return c ? c->cell_height : 0.2f;
+}
+extern "C" void dse_navmesh_rebake_set_cell_height(uint32_t e, float v) {
+    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->cell_height = v;
+}
+
+// ============================================================
+// TreeComponent — string paths
+// ============================================================
+
+namespace {
+
+int CopyTreeString(uint32_t e, char* buf, int buf_size,
+                   std::string dse::TreeComponent::* member) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GetCompConst<dse::TreeComponent>(e);
+    if (!c) return 0;
+    const std::string& value = c->*member;
+    if (value.empty()) return 0;
+    std::strncpy(buf, value.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
+
+void SetTreeString(uint32_t e, const char* path,
+                   std::string dse::TreeComponent::* member) {
+    if (auto* c = GetComp<dse::TreeComponent>(e)) {
+        c->*member = path ? path : "";
+    }
+}
+
+} // namespace
+
+extern "C" void dse_tree_set_mesh_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::mesh_path);
+}
+extern "C" int dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::mesh_path);
+}
+extern "C" void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::lod1_mesh_path);
+}
+extern "C" int dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::lod1_mesh_path);
+}
+extern "C" void dse_tree_set_billboard_texture_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::billboard_texture_path);
+}
+extern "C" int dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::billboard_texture_path);
 }

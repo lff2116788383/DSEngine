@@ -13,7 +13,10 @@
  *
  * ECS 相关:
  *   ecs.set_nav_agent(entity, config_table)
+ *   ecs.get_nav_agent(entity) → table | nil
  *   ecs.set_nav_destination(entity, x,y,z)
+ *   ecs.get_nav_destination(entity) → x,y,z
+ *   ecs.nav_agent_has_path(entity) → bool
  *   ecs.nav_agent_arrived(entity) → bool
  */
 
@@ -196,6 +199,62 @@ int L_EcsSetNavDestination(lua_State* L) {
     return 0;
 }
 
+// ecs.get_nav_agent(entity) → table | nil
+int L_EcsGetNavAgent(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<NavMeshAgentComponent>(e)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    const auto& agent = world->registry().get<NavMeshAgentComponent>(e);
+    lua_createtable(L, 0, 12);
+    lua_pushnumber(L, agent.speed);          lua_setfield(L, -2, "speed");
+    lua_pushnumber(L, agent.acceleration);   lua_setfield(L, -2, "acceleration");
+    lua_pushnumber(L, agent.stopping_dist);  lua_setfield(L, -2, "stopping_dist");
+    lua_pushnumber(L, agent.agent_radius);   lua_setfield(L, -2, "radius");
+    lua_pushnumber(L, agent.agent_height);   lua_setfield(L, -2, "height");
+    lua_pushnumber(L, agent.destination.x);  lua_setfield(L, -2, "dest_x");
+    lua_pushnumber(L, agent.destination.y);  lua_setfield(L, -2, "dest_y");
+    lua_pushnumber(L, agent.destination.z);  lua_setfield(L, -2, "dest_z");
+    lua_pushboolean(L, agent.has_path);     lua_setfield(L, -2, "has_path");
+    lua_pushboolean(L, agent.path_pending);  lua_setfield(L, -2, "path_pending");
+    lua_pushboolean(L, agent.arrived);       lua_setfield(L, -2, "arrived");
+    lua_pushinteger(L, agent.current_waypoint); lua_setfield(L, -2, "current_waypoint");
+    return 1;
+}
+
+// ecs.get_nav_destination(entity) → x, y, z
+int L_EcsGetNavDestination(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushnumber(L, 0); return 3; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<NavMeshAgentComponent>(e)) {
+        lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushnumber(L, 0);
+        return 3;
+    }
+    const auto& agent = world->registry().get<NavMeshAgentComponent>(e);
+    lua_pushnumber(L, agent.destination.x);
+    lua_pushnumber(L, agent.destination.y);
+    lua_pushnumber(L, agent.destination.z);
+    return 3;
+}
+
+// ecs.nav_agent_has_path(entity) → bool
+int L_EcsNavAgentHasPath(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, false); return 1; }
+    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    if (!world->registry().valid(e) || !world->registry().all_of<NavMeshAgentComponent>(e)) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+    const auto& agent = world->registry().get<NavMeshAgentComponent>(e);
+    lua_pushboolean(L, agent.has_path && !agent.path_points.empty());
+    return 1;
+}
+
 // ecs.nav_agent_arrived(entity) → bool
 int L_EcsNavAgentArrived(lua_State* L) {
     World* world = GetWorld();
@@ -229,9 +288,12 @@ void RegisterNavigationBindings(lua_State* L) {
     if (lua_istable(L, -1)) {
         lua_getfield(L, -1, "ecs");
         if (lua_istable(L, -1)) {
-            lua_pushcfunction(L, L_EcsSetNavAgent);       lua_setfield(L, -2, "set_nav_agent");
-            lua_pushcfunction(L, L_EcsSetNavDestination); lua_setfield(L, -2, "set_nav_destination");
-            lua_pushcfunction(L, L_EcsNavAgentArrived);   lua_setfield(L, -2, "nav_agent_arrived");
+            lua_pushcfunction(L, L_EcsSetNavAgent);         lua_setfield(L, -2, "set_nav_agent");
+            lua_pushcfunction(L, L_EcsGetNavAgent);         lua_setfield(L, -2, "get_nav_agent");
+            lua_pushcfunction(L, L_EcsSetNavDestination);   lua_setfield(L, -2, "set_nav_destination");
+            lua_pushcfunction(L, L_EcsGetNavDestination);   lua_setfield(L, -2, "get_nav_destination");
+            lua_pushcfunction(L, L_EcsNavAgentHasPath);     lua_setfield(L, -2, "nav_agent_has_path");
+            lua_pushcfunction(L, L_EcsNavAgentArrived);     lua_setfield(L, -2, "nav_agent_arrived");
         }
         lua_pop(L, 1); // pop ecs
     }

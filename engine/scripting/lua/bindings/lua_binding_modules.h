@@ -46,6 +46,8 @@ void RegisterSkyLightComponentGenBindings(lua_State* L);
 void RegisterTreeComponentGenBindings(lua_State* L);
 void RegisterTerrainTileManagerComponentGenBindings(lua_State* L);
 void RegisterDynamicObstacleComponentGenBindings(lua_State* L);
+void RegisterNavMeshAutoRebakeComponentGenBindings(lua_State* L);
+void RegisterTreeComponentExtBindings(lua_State* L);
 void RegisterEcsPhysics2DBindings(lua_State* L);
 void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);

@@ -236,12 +236,52 @@ DSE_CAPI void  dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v);
 
 DSE_CAPI int   dse_dyn_obstacle_get_enabled(uint32_t e);
 DSE_CAPI void  dse_dyn_obstacle_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_dyn_obstacle_get_shape(uint32_t e);   ///< 0=Box, 1=Cylinder
+DSE_CAPI void  dse_dyn_obstacle_set_shape(uint32_t e, int v);
 DSE_CAPI void  dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z);
 DSE_CAPI void  dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z);
 DSE_CAPI float dse_dyn_obstacle_get_cylinder_radius(uint32_t e);
 DSE_CAPI void  dse_dyn_obstacle_set_cylinder_radius(uint32_t e, float v);
 DSE_CAPI float dse_dyn_obstacle_get_cylinder_height(uint32_t e);
 DSE_CAPI void  dse_dyn_obstacle_set_cylinder_height(uint32_t e, float v);
+
+// ============================================================
+// NavMeshAutoRebakeComponent
+// ============================================================
+
+DSE_CAPI int   dse_navmesh_rebake_get_enabled(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_enabled(uint32_t e, int v);
+DSE_CAPI float dse_navmesh_rebake_get_tile_size(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_tile_size(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_rebake_cooldown(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_rebake_cooldown(uint32_t e, float v);
+DSE_CAPI int   dse_navmesh_rebake_get_collect_terrain(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_collect_terrain(uint32_t e, int v);
+DSE_CAPI int   dse_navmesh_rebake_get_collect_mesh_renderers(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_collect_mesh_renderers(uint32_t e, int v);
+DSE_CAPI float dse_navmesh_rebake_get_agent_height(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_agent_height(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_agent_radius(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_agent_radius(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_agent_max_climb(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_agent_max_climb(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_agent_max_slope(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_agent_max_slope(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_cell_size(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_cell_size(uint32_t e, float v);
+DSE_CAPI float dse_navmesh_rebake_get_cell_height(uint32_t e);
+DSE_CAPI void  dse_navmesh_rebake_set_cell_height(uint32_t e, float v);
+
+// ============================================================
+// TreeComponent — string paths (caller-owned buffer for getters)
+// ============================================================
+
+DSE_CAPI void dse_tree_set_mesh_path(uint32_t e, const char* path);
+DSE_CAPI int  dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path);
+DSE_CAPI int  dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void dse_tree_set_billboard_texture_path(uint32_t e, const char* path);
+DSE_CAPI int  dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size);
 
 // ============================================================
 // Input
