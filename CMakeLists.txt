@@ -252,8 +252,9 @@ list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 # 注意：dse_api.gen.cpp 与手写 dse_api.cpp 冲突，必须保持排除
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
 
-# 显式加回已完成迁移的 Lua 绑定 gen 文件（手写版本已删除，无符号冲突）
+# 显式加回已完成迁移的 gen 文件（手写版本已删除或已精简，无符号冲突）
 list(APPEND engine_cpp
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_transform.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_camera3d.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dir_light.gen.cpp"

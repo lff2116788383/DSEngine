@@ -170,8 +170,6 @@ DSE_CAPI_GEN void  dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v)
 /* ---- DynamicObstacleComponent ---- */
 DSE_CAPI_GEN int  dse_dyn_obstacle_get_enabled(uint32_t e);
 DSE_CAPI_GEN void dse_dyn_obstacle_set_enabled(uint32_t e, int v);
-DSE_CAPI_GEN int  dse_dyn_obstacle_get_shape(uint32_t e);
-DSE_CAPI_GEN void dse_dyn_obstacle_set_shape(uint32_t e, int v);
 DSE_CAPI_GEN void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z);
 DSE_CAPI_GEN void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z);
 DSE_CAPI_GEN float dse_dyn_obstacle_get_cylinder_radius(uint32_t e);

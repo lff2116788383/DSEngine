@@ -3,8 +3,7 @@
  * @brief 自动生成 — 勿手动修改
  *        来源：tools/codegen/binding_defs.json
  *
- * 注意：本文件当前被 CMakeLists.txt 过滤（*.gen.cpp 不参与构建）。
- * 仅当手写 dse_api.cpp 中对应函数被删除后，才将本文件 opt-in 进构建。
+ * 组件字段 get/set 由 Codegen 生成；手写 dse_api.cpp 仅保留 add/字符串/Input 等非字段 API。
  * 依赖 dse_api.h 提供的 dse_get_world_ptr() 访问已初始化的 World 指针。
  */
 
@@ -100,7 +99,7 @@ extern "C" void dse_camera3d_set_enabled(uint32_t e, int v) {
 }
 extern "C" int dse_camera3d_get_priority(uint32_t e) {
     const auto* c = GCC<dse::Camera3DComponent>(e);
-    return c ? c->priority : 0;
+    return c ? static_cast<int>(c->priority) : 0;
 }
 extern "C" void dse_camera3d_set_priority(uint32_t e, int v) {
     if (auto* c = GC<dse::Camera3DComponent>(e)) {
@@ -470,7 +469,7 @@ extern "C" void dse_tree_set_shadow_distance(uint32_t e, float v) {
 }
 extern "C" int dse_tree_get_seed(uint32_t e) {
     const auto* c = GCC<dse::TreeComponent>(e);
-    return c ? c->seed : 12345;
+    return c ? static_cast<int>(c->seed) : 12345;
 }
 extern "C" void dse_tree_set_seed(uint32_t e, int v) {
     if (auto* c = GC<dse::TreeComponent>(e)) {
@@ -526,7 +525,7 @@ extern "C" void dse_terrain_tile_set_tile_world_size(uint32_t e, float v) {
 }
 extern "C" int dse_terrain_tile_get_tile_resolution(uint32_t e) {
     const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
-    return c ? c->tile_resolution : 64;
+    return c ? static_cast<int>(c->tile_resolution) : 64;
 }
 extern "C" void dse_terrain_tile_set_tile_resolution(uint32_t e, int v) {
     if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) {
@@ -580,7 +579,7 @@ extern "C" void dse_terrain_tile_set_procedural_base_height(uint32_t e, float v)
 }
 extern "C" int dse_terrain_tile_get_max_lod_levels(uint32_t e) {
     const auto* c = GCC<dse::TerrainTileManagerComponent>(e);
-    return c ? c->max_lod_levels : 4;
+    return c ? static_cast<int>(c->max_lod_levels) : 4;
 }
 extern "C" void dse_terrain_tile_set_max_lod_levels(uint32_t e, int v) {
     if (auto* c = GC<dse::TerrainTileManagerComponent>(e)) {
@@ -610,11 +609,11 @@ extern "C" void dse_dyn_obstacle_set_enabled(uint32_t e, int v) {
 }
 extern "C" int dse_dyn_obstacle_get_shape(uint32_t e) {
     const auto* c = GCC<dse::DynamicObstacleComponent>(e);
-    return c ? c->shape : 0;
+    return c ? static_cast<int>(c->shape) : 0;
 }
 extern "C" void dse_dyn_obstacle_set_shape(uint32_t e, int v) {
     if (auto* c = GC<dse::DynamicObstacleComponent>(e)) {
-        c->shape = v;
+        c->shape = static_cast<dse::DynamicObstacleComponent::Shape>(v);
         c->dirty_ = true;
     }
 }

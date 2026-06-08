@@ -20,7 +20,7 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float v);
 
-{% elif field.type == "int" %}
+{% elif field.type in ("int", "enum_int") %}
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 

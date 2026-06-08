@@ -27,7 +27,7 @@ int L_Set_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
     dse_{{ comp.prefix }}_set_{{ field.name }}(e, static_cast<float>(luaL_checknumber(L, 2)));
     return 0;
 }
-{% elif field.type == "int" %}
+{% elif field.type in ("int", "enum_int") %}
 int L_Get_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     lua_pushinteger(L, dse_{{ comp.prefix }}_get_{{ field.name }}(e));

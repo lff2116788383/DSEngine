@@ -1,9 +1,9 @@
 /**
  * @file dse_api.cpp
- * @brief DSEngine Native C ABI — 实现
+ * @brief DSEngine Native C ABI — 手写实现（非 Codegen 部分）
  *
- * 通过 dse_native_api_init() 注入 World / AssetManager 等指针后，
- * 所有函数均可安全调用。各函数内置空指针保护，不会崩溃引擎。
+ * 组件字段 get/set 由 dse_api.gen.cpp 生成。
+ * 本文件保留：Context / Entity / 组件 add 辅助 / Tree 字符串路径 / Input / Assets / App / Metrics。
  */
 
 #include "engine/scripting/native_api/dse_api.h"
@@ -11,18 +11,13 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_tree.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/input/input.h"
 #include "engine/base/time.h"
-#include "engine/base/debug.h"
 
 #include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 #include <cstring>
-
-// ============================================================
-// 内部 Context
-// ============================================================
 
 namespace {
 
@@ -110,7 +105,7 @@ extern "C" int dse_entity_valid(uint32_t e) {
 }
 
 // ============================================================
-// TransformComponent
+// Component add helpers (not in binding_defs)
 // ============================================================
 
 extern "C" void dse_transform_add(uint32_t e,
@@ -125,50 +120,6 @@ extern "C" void dse_transform_add(uint32_t e,
     t.dirty    = true;
 }
 
-extern "C" void dse_transform_get_position(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* t = GetCompConst<TransformComponent>(e)) {
-        *x = t->position.x; *y = t->position.y; *z = t->position.z;
-    }
-}
-
-extern "C" void dse_transform_set_position(uint32_t e, float x, float y, float z) {
-    if (auto* t = GetComp<TransformComponent>(e)) {
-        t->position = glm::vec3(x, y, z);
-        t->dirty = true;
-    }
-}
-
-extern "C" void dse_transform_get_rotation(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* t = GetCompConst<TransformComponent>(e)) {
-        glm::vec3 euler = glm::degrees(glm::eulerAngles(t->rotation));
-        *x = euler.x; *y = euler.y; *z = euler.z;
-    }
-}
-
-extern "C" void dse_transform_set_rotation(uint32_t e, float x, float y, float z) {
-    if (auto* t = GetComp<TransformComponent>(e)) {
-        t->rotation = glm::quat(glm::vec3(glm::radians(x), glm::radians(y), glm::radians(z)));
-        t->dirty = true;
-    }
-}
-
-extern "C" void dse_transform_get_scale(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* t = GetCompConst<TransformComponent>(e)) {
-        *x = t->scale.x; *y = t->scale.y; *z = t->scale.z;
-    }
-}
-
-extern "C" void dse_transform_set_scale(uint32_t e, float x, float y, float z) {
-    if (auto* t = GetComp<TransformComponent>(e)) {
-        t->scale = glm::vec3(x, y, z);
-        t->dirty = true;
-    }
-}
-
-// ============================================================
-// Camera3DComponent
-// ============================================================
-
 extern "C" void dse_camera3d_add(uint32_t e, float fov, float near_clip, float far_clip) {
     World* w = GetWorld();
     if (!ValidEntity(w, e)) return;
@@ -177,55 +128,6 @@ extern "C" void dse_camera3d_add(uint32_t e, float fov, float near_clip, float f
     c.near_clip = near_clip;
     c.far_clip  = far_clip;
 }
-
-extern "C" float dse_camera3d_get_fov(uint32_t e) {
-    const auto* c = GetCompConst<dse::Camera3DComponent>(e);
-    return c ? c->fov : 60.0f;
-}
-
-extern "C" void dse_camera3d_set_fov(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::Camera3DComponent>(e)) c->fov = v;
-}
-
-extern "C" float dse_camera3d_get_near_clip(uint32_t e) {
-    const auto* c = GetCompConst<dse::Camera3DComponent>(e);
-    return c ? c->near_clip : 0.1f;
-}
-
-extern "C" void dse_camera3d_set_near_clip(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::Camera3DComponent>(e)) c->near_clip = v;
-}
-
-extern "C" float dse_camera3d_get_far_clip(uint32_t e) {
-    const auto* c = GetCompConst<dse::Camera3DComponent>(e);
-    return c ? c->far_clip : 1000.0f;
-}
-
-extern "C" void dse_camera3d_set_far_clip(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::Camera3DComponent>(e)) c->far_clip = v;
-}
-
-extern "C" int dse_camera3d_get_enabled(uint32_t e) {
-    const auto* c = GetCompConst<dse::Camera3DComponent>(e);
-    return (c && c->enabled) ? 1 : 0;
-}
-
-extern "C" void dse_camera3d_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::Camera3DComponent>(e)) c->enabled = (v != 0);
-}
-
-extern "C" int dse_camera3d_get_priority(uint32_t e) {
-    const auto* c = GetCompConst<dse::Camera3DComponent>(e);
-    return c ? c->priority : 0;
-}
-
-extern "C" void dse_camera3d_set_priority(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::Camera3DComponent>(e)) c->priority = v;
-}
-
-// ============================================================
-// MeshRendererComponent
-// ============================================================
 
 extern "C" void dse_mesh_renderer_add(uint32_t e, const char* mesh_path) {
     World* w = GetWorld();
@@ -239,135 +141,11 @@ extern "C" void dse_mesh_renderer_set_mesh(uint32_t e, const char* mesh_path) {
     if (auto* m = GetComp<dse::MeshRendererComponent>(e)) m->mesh_path = mesh_path;
 }
 
-extern "C" void dse_mesh_renderer_get_color(uint32_t e, float* r, float* g, float* b, float* a) {
-    if (const auto* m = GetCompConst<dse::MeshRendererComponent>(e)) {
-        *r = m->color.r; *g = m->color.g; *b = m->color.b; *a = m->color.a;
-    }
-}
-
-extern "C" void dse_mesh_renderer_set_color(uint32_t e, float r, float g, float b, float a) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e))
-        m->color = glm::vec4(r, g, b, a);
-}
-
-extern "C" int dse_mesh_renderer_get_visible(uint32_t e) {
-    const auto* m = GetCompConst<dse::MeshRendererComponent>(e);
-    return (m && m->visible) ? 1 : 0;
-}
-
-extern "C" void dse_mesh_renderer_set_visible(uint32_t e, int v) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e)) m->visible = (v != 0);
-}
-
-extern "C" float dse_mesh_renderer_get_metallic(uint32_t e) {
-    const auto* m = GetCompConst<dse::MeshRendererComponent>(e);
-    return m ? m->metallic : 0.0f;
-}
-
-extern "C" void dse_mesh_renderer_set_metallic(uint32_t e, float v) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e)) m->metallic = v;
-}
-
-extern "C" float dse_mesh_renderer_get_roughness(uint32_t e) {
-    const auto* m = GetCompConst<dse::MeshRendererComponent>(e);
-    return m ? m->roughness : 0.5f;
-}
-
-extern "C" void dse_mesh_renderer_set_roughness(uint32_t e, float v) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e)) m->roughness = v;
-}
-
-extern "C" void dse_mesh_renderer_get_emissive(uint32_t e, float* r, float* g, float* b) {
-    if (const auto* m = GetCompConst<dse::MeshRendererComponent>(e)) {
-        *r = m->emissive.r; *g = m->emissive.g; *b = m->emissive.b;
-    }
-}
-
-extern "C" void dse_mesh_renderer_set_emissive(uint32_t e, float r, float g, float b) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e))
-        m->emissive = glm::vec3(r, g, b);
-}
-
-extern "C" int dse_mesh_renderer_get_receive_shadow(uint32_t e) {
-    auto* m = GetComp<dse::MeshRendererComponent>(e);
-    return m ? (int)m->receive_shadow : 1;
-}
-extern "C" void dse_mesh_renderer_set_receive_shadow(uint32_t e, int v) {
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e))
-        m->receive_shadow = (v != 0);
-}
-
-// ============================================================
-// DirectionalLight3DComponent
-// ============================================================
-
 extern "C" void dse_dir_light_add(uint32_t e) {
     World* w = GetWorld();
     if (!ValidEntity(w, e)) return;
     w->registry().emplace_or_replace<dse::DirectionalLight3DComponent>(ToEntity(e));
 }
-
-extern "C" void dse_dir_light_get_direction(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e)) {
-        *x = l->direction.x; *y = l->direction.y; *z = l->direction.z;
-    }
-}
-
-extern "C" void dse_dir_light_set_direction(uint32_t e, float x, float y, float z) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e))
-        l->direction = glm::vec3(x, y, z);
-}
-
-extern "C" void dse_dir_light_get_color(uint32_t e, float* r, float* g, float* b) {
-    if (const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e)) {
-        *r = l->color.r; *g = l->color.g; *b = l->color.b;
-    }
-}
-
-extern "C" void dse_dir_light_set_color(uint32_t e, float r, float g, float b) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e))
-        l->color = glm::vec3(r, g, b);
-}
-
-extern "C" float dse_dir_light_get_intensity(uint32_t e) {
-    const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e);
-    return l ? l->intensity : 1.0f;
-}
-
-extern "C" void dse_dir_light_set_intensity(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e)) l->intensity = v;
-}
-
-extern "C" float dse_dir_light_get_ambient_intensity(uint32_t e) {
-    const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e);
-    return l ? l->ambient_intensity : 0.2f;
-}
-
-extern "C" void dse_dir_light_set_ambient_intensity(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e)) l->ambient_intensity = v;
-}
-
-extern "C" int dse_dir_light_get_cast_shadow(uint32_t e) {
-    const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e);
-    return (l && l->cast_shadow) ? 1 : 0;
-}
-
-extern "C" void dse_dir_light_set_cast_shadow(uint32_t e, int v) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e)) l->cast_shadow = (v != 0);
-}
-
-extern "C" float dse_dir_light_get_shadow_strength(uint32_t e) {
-    const auto* l = GetCompConst<dse::DirectionalLight3DComponent>(e);
-    return l ? l->shadow_strength : 0.35f;
-}
-
-extern "C" void dse_dir_light_set_shadow_strength(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::DirectionalLight3DComponent>(e)) l->shadow_strength = v;
-}
-
-// ============================================================
-// PointLightComponent
-// ============================================================
 
 extern "C" void dse_point_light_add(uint32_t e) {
     World* w = GetWorld();
@@ -375,130 +153,11 @@ extern "C" void dse_point_light_add(uint32_t e) {
     w->registry().emplace_or_replace<dse::PointLightComponent>(ToEntity(e));
 }
 
-extern "C" void dse_point_light_get_color(uint32_t e, float* r, float* g, float* b) {
-    if (const auto* l = GetCompConst<dse::PointLightComponent>(e)) {
-        *r = l->color.r; *g = l->color.g; *b = l->color.b;
-    }
-}
-
-extern "C" void dse_point_light_set_color(uint32_t e, float r, float g, float b) {
-    if (auto* l = GetComp<dse::PointLightComponent>(e)) l->color = glm::vec3(r, g, b);
-}
-
-extern "C" float dse_point_light_get_intensity(uint32_t e) {
-    const auto* l = GetCompConst<dse::PointLightComponent>(e);
-    return l ? l->intensity : 1.0f;
-}
-
-extern "C" void dse_point_light_set_intensity(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::PointLightComponent>(e)) l->intensity = v;
-}
-
-extern "C" float dse_point_light_get_radius(uint32_t e) {
-    const auto* l = GetCompConst<dse::PointLightComponent>(e);
-    return l ? l->radius : 10.0f;
-}
-
-extern "C" void dse_point_light_set_radius(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::PointLightComponent>(e)) l->radius = v;
-}
-
-extern "C" int dse_point_light_get_enabled(uint32_t e) {
-    const auto* l = GetCompConst<dse::PointLightComponent>(e);
-    return (l && l->enabled) ? 1 : 0;
-}
-
-extern "C" void dse_point_light_set_enabled(uint32_t e, int v) {
-    if (auto* l = GetComp<dse::PointLightComponent>(e)) l->enabled = (v != 0);
-}
-
-// ============================================================
-// SpotLightComponent
-// ============================================================
-
 extern "C" void dse_spot_light_add(uint32_t e) {
     World* w = GetWorld();
     if (!ValidEntity(w, e)) return;
     w->registry().emplace_or_replace<dse::SpotLightComponent>(ToEntity(e));
 }
-
-extern "C" void dse_spot_light_get_color(uint32_t e, float* r, float* g, float* b) {
-    if (const auto* l = GetCompConst<dse::SpotLightComponent>(e)) {
-        *r = l->color.r; *g = l->color.g; *b = l->color.b;
-    }
-}
-
-extern "C" void dse_spot_light_set_color(uint32_t e, float r, float g, float b) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->color = glm::vec3(r, g, b);
-}
-
-extern "C" float dse_spot_light_get_intensity(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->intensity : 1.0f;
-}
-
-extern "C" void dse_spot_light_set_intensity(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->intensity = v;
-}
-
-extern "C" float dse_spot_light_get_radius(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->radius : 20.0f;
-}
-
-extern "C" void dse_spot_light_set_radius(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->radius = v;
-}
-
-extern "C" void dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* l = GetCompConst<dse::SpotLightComponent>(e)) {
-        *x = l->direction.x; *y = l->direction.y; *z = l->direction.z;
-    }
-}
-
-extern "C" void dse_spot_light_set_direction(uint32_t e, float x, float y, float z) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->direction = glm::vec3(x, y, z);
-}
-
-extern "C" float dse_spot_light_get_inner_cone_angle(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->inner_cone_angle : 12.5f;
-}
-
-extern "C" void dse_spot_light_set_inner_cone_angle(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->inner_cone_angle = v;
-}
-
-extern "C" float dse_spot_light_get_outer_cone_angle(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return l ? l->outer_cone_angle : 17.5f;
-}
-
-extern "C" void dse_spot_light_set_outer_cone_angle(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->outer_cone_angle = v;
-}
-
-extern "C" int dse_spot_light_get_enabled(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return (l && l->enabled) ? 1 : 0;
-}
-
-extern "C" void dse_spot_light_set_enabled(uint32_t e, int v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->enabled = (v != 0);
-}
-
-extern "C" int dse_spot_light_get_cast_shadow(uint32_t e) {
-    const auto* l = GetCompConst<dse::SpotLightComponent>(e);
-    return (l && l->cast_shadow) ? 1 : 0;
-}
-
-extern "C" void dse_spot_light_set_cast_shadow(uint32_t e, int v) {
-    if (auto* l = GetComp<dse::SpotLightComponent>(e)) l->cast_shadow = (v != 0);
-}
-
-// ============================================================
-// SkyLightComponent
-// ============================================================
 
 extern "C" void dse_sky_light_add(uint32_t e) {
     World* w = GetWorld();
@@ -506,42 +165,51 @@ extern "C" void dse_sky_light_add(uint32_t e) {
     w->registry().emplace_or_replace<dse::SkyLightComponent>(ToEntity(e));
 }
 
-extern "C" void dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* l = GetCompConst<dse::SkyLightComponent>(e)) {
-        *x = l->up_color.r; *y = l->up_color.g; *z = l->up_color.b;
+// ============================================================
+// TreeComponent — string paths (Codegen 尚无 string 类型)
+// ============================================================
+
+namespace {
+
+int CopyTreeString(uint32_t e, char* buf, int buf_size,
+                   std::string dse::TreeComponent::* member) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GetCompConst<dse::TreeComponent>(e);
+    if (!c) return 0;
+    const std::string& value = c->*member;
+    if (value.empty()) return 0;
+    std::strncpy(buf, value.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
+
+void SetTreeString(uint32_t e, const char* path,
+                   std::string dse::TreeComponent::* member) {
+    if (auto* c = GetComp<dse::TreeComponent>(e)) {
+        c->*member = path ? path : "";
     }
 }
 
-extern "C" void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z) {
-    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->up_color = glm::vec3(x, y, z);
-}
+} // namespace
 
-extern "C" void dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* l = GetCompConst<dse::SkyLightComponent>(e)) {
-        *x = l->down_color.r; *y = l->down_color.g; *z = l->down_color.b;
-    }
+extern "C" void dse_tree_set_mesh_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::mesh_path);
 }
-
-extern "C" void dse_sky_light_set_down_color(uint32_t e, float x, float y, float z) {
-    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->down_color = glm::vec3(x, y, z);
+extern "C" int dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::mesh_path);
 }
-
-extern "C" float dse_sky_light_get_intensity(uint32_t e) {
-    const auto* l = GetCompConst<dse::SkyLightComponent>(e);
-    return l ? l->intensity : 1.0f;
+extern "C" void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::lod1_mesh_path);
 }
-
-extern "C" void dse_sky_light_set_intensity(uint32_t e, float v) {
-    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->intensity = v;
+extern "C" int dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::lod1_mesh_path);
 }
-
-extern "C" int dse_sky_light_get_enabled(uint32_t e) {
-    const auto* l = GetCompConst<dse::SkyLightComponent>(e);
-    return (l && l->enabled) ? 1 : 0;
+extern "C" void dse_tree_set_billboard_texture_path(uint32_t e, const char* path) {
+    SetTreeString(e, path, &dse::TreeComponent::billboard_texture_path);
 }
-
-extern "C" void dse_sky_light_set_enabled(uint32_t e, int v) {
-    if (auto* l = GetComp<dse::SkyLightComponent>(e)) l->enabled = (v != 0);
+extern "C" int dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size) {
+    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::billboard_texture_path);
 }
 
 // ============================================================
@@ -637,392 +305,4 @@ extern "C" float dse_app_get_target_fps(void) {
 
 extern "C" int dse_metrics_get_draw_calls(void) {
     return g_ctx.get_draw_calls_fn ? g_ctx.get_draw_calls_fn() : 0;
-}
-
-// ============================================================
-// TreeComponent
-// ============================================================
-
-extern "C" int dse_tree_get_enabled(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return (c && c->enabled) ? 1 : 0;
-}
-extern "C" void dse_tree_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->enabled = (v != 0);
-}
-extern "C" float dse_tree_get_density(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->density : 0.02f;
-}
-extern "C" void dse_tree_set_density(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->density = v;
-}
-extern "C" float dse_tree_get_spawn_radius(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->spawn_radius : 120.0f;
-}
-extern "C" void dse_tree_set_spawn_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->spawn_radius = v;
-}
-extern "C" float dse_tree_get_chunk_size(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->chunk_size : 32.0f;
-}
-extern "C" void dse_tree_set_chunk_size(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->chunk_size = v;
-}
-extern "C" float dse_tree_get_min_scale(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->min_scale : 0.8f;
-}
-extern "C" void dse_tree_set_min_scale(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->min_scale = v;
-}
-extern "C" float dse_tree_get_max_scale(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->max_scale : 1.3f;
-}
-extern "C" void dse_tree_set_max_scale(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->max_scale = v;
-}
-extern "C" float dse_tree_get_lod1_distance(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->lod1_distance : 60.0f;
-}
-extern "C" void dse_tree_set_lod1_distance(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->lod1_distance = v;
-}
-extern "C" float dse_tree_get_cull_distance(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->cull_distance : 200.0f;
-}
-extern "C" void dse_tree_set_cull_distance(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->cull_distance = v;
-}
-extern "C" float dse_tree_get_wind_strength(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->wind_strength : 0.3f;
-}
-extern "C" void dse_tree_set_wind_strength(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->wind_strength = v;
-}
-extern "C" float dse_tree_get_wind_speed(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->wind_speed : 1.0f;
-}
-extern "C" void dse_tree_set_wind_speed(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->wind_speed = v;
-}
-extern "C" int dse_tree_get_cast_shadow(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return (c && c->cast_shadow) ? 1 : 0;
-}
-extern "C" void dse_tree_set_cast_shadow(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->cast_shadow = (v != 0);
-}
-extern "C" float dse_tree_get_shadow_distance(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->shadow_distance : 80.0f;
-}
-extern "C" void dse_tree_set_shadow_distance(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->shadow_distance = v;
-}
-extern "C" int dse_tree_get_seed(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? static_cast<int>(c->seed) : 12345;
-}
-extern "C" void dse_tree_set_seed(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->seed = static_cast<unsigned int>(v);
-}
-extern "C" float dse_tree_get_height_variation(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->height_variation : 0.2f;
-}
-extern "C" void dse_tree_set_height_variation(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->height_variation = v;
-}
-extern "C" int dse_tree_get_random_rotation(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return (c && c->random_rotation) ? 1 : 0;
-}
-extern "C" void dse_tree_set_random_rotation(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->random_rotation = (v != 0);
-}
-extern "C" float dse_tree_get_billboard_distance(uint32_t e) {
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    return c ? c->billboard_distance : 150.0f;
-}
-extern "C" void dse_tree_set_billboard_distance(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) c->billboard_distance = v;
-}
-
-// ============================================================
-// TerrainTileManagerComponent
-// ============================================================
-
-extern "C" int dse_terrain_tile_get_enabled(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return (c && c->enabled) ? 1 : 0;
-}
-extern "C" void dse_terrain_tile_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->enabled = (v != 0);
-}
-extern "C" float dse_terrain_tile_get_tile_world_size(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->tile_world_size : 64.0f;
-}
-extern "C" void dse_terrain_tile_set_tile_world_size(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->tile_world_size = v;
-}
-extern "C" int dse_terrain_tile_get_tile_resolution(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->tile_resolution : 64;
-}
-extern "C" void dse_terrain_tile_set_tile_resolution(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->tile_resolution = v;
-}
-extern "C" float dse_terrain_tile_get_max_height(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->max_height : 20.0f;
-}
-extern "C" void dse_terrain_tile_set_max_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->max_height = v;
-}
-extern "C" float dse_terrain_tile_get_load_radius(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->load_radius : 200.0f;
-}
-extern "C" void dse_terrain_tile_set_load_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->load_radius = v;
-}
-extern "C" float dse_terrain_tile_get_unload_radius(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->unload_radius : 250.0f;
-}
-extern "C" void dse_terrain_tile_set_unload_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->unload_radius = v;
-}
-extern "C" int dse_terrain_tile_get_use_procedural(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return (c && c->use_procedural) ? 1 : 0;
-}
-extern "C" void dse_terrain_tile_set_use_procedural(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->use_procedural = (v != 0);
-}
-extern "C" float dse_terrain_tile_get_procedural_base_height(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->procedural_base_height : 0.0f;
-}
-extern "C" void dse_terrain_tile_set_procedural_base_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->procedural_base_height = v;
-}
-extern "C" int dse_terrain_tile_get_max_lod_levels(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->max_lod_levels : 4;
-}
-extern "C" void dse_terrain_tile_set_max_lod_levels(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->max_lod_levels = v;
-}
-extern "C" float dse_terrain_tile_get_lod_distance_factor(uint32_t e) {
-    const auto* c = GetCompConst<dse::TerrainTileManagerComponent>(e);
-    return c ? c->lod_distance_factor : 50.0f;
-}
-extern "C" void dse_terrain_tile_set_lod_distance_factor(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::TerrainTileManagerComponent>(e)) c->lod_distance_factor = v;
-}
-
-// ============================================================
-// DynamicObstacleComponent
-// ============================================================
-
-namespace {
-
-inline void MarkDynObstacleDirty(dse::DynamicObstacleComponent* c) {
-    if (c) c->dirty_ = true;
-}
-
-} // namespace
-
-extern "C" int dse_dyn_obstacle_get_enabled(uint32_t e) {
-    const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
-    return (c && c->enabled) ? 1 : 0;
-}
-extern "C" void dse_dyn_obstacle_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
-        c->enabled = (v != 0);
-        MarkDynObstacleDirty(c);
-    }
-}
-extern "C" int dse_dyn_obstacle_get_shape(uint32_t e) {
-    const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
-    if (!c) return 0;
-    return (c->shape == dse::DynamicObstacleComponent::Shape::Cylinder) ? 1 : 0;
-}
-extern "C" void dse_dyn_obstacle_set_shape(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
-        c->shape = (v == 1)
-            ? dse::DynamicObstacleComponent::Shape::Cylinder
-            : dse::DynamicObstacleComponent::Shape::Box;
-        MarkDynObstacleDirty(c);
-    }
-}
-extern "C" void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e)) {
-        *x = c->box_extents.x; *y = c->box_extents.y; *z = c->box_extents.z;
-    }
-}
-extern "C" void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
-        c->box_extents = glm::vec3(x, y, z);
-        MarkDynObstacleDirty(c);
-    }
-}
-extern "C" float dse_dyn_obstacle_get_cylinder_radius(uint32_t e) {
-    const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
-    return c ? c->cylinder_radius : 1.0f;
-}
-extern "C" void dse_dyn_obstacle_set_cylinder_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
-        c->cylinder_radius = v;
-        MarkDynObstacleDirty(c);
-    }
-}
-extern "C" float dse_dyn_obstacle_get_cylinder_height(uint32_t e) {
-    const auto* c = GetCompConst<dse::DynamicObstacleComponent>(e);
-    return c ? c->cylinder_height : 2.0f;
-}
-extern "C" void dse_dyn_obstacle_set_cylinder_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::DynamicObstacleComponent>(e)) {
-        c->cylinder_height = v;
-        MarkDynObstacleDirty(c);
-    }
-}
-
-// ============================================================
-// NavMeshAutoRebakeComponent
-// ============================================================
-
-extern "C" int dse_navmesh_rebake_get_enabled(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return (c && c->enabled) ? 1 : 0;
-}
-extern "C" void dse_navmesh_rebake_set_enabled(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->enabled = (v != 0);
-}
-extern "C" float dse_navmesh_rebake_get_tile_size(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->tile_size : 48.0f;
-}
-extern "C" void dse_navmesh_rebake_set_tile_size(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->tile_size = v;
-}
-extern "C" float dse_navmesh_rebake_get_rebake_cooldown(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->rebake_cooldown : 1.0f;
-}
-extern "C" void dse_navmesh_rebake_set_rebake_cooldown(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->rebake_cooldown = v;
-}
-extern "C" int dse_navmesh_rebake_get_collect_terrain(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return (c && c->collect_terrain) ? 1 : 0;
-}
-extern "C" void dse_navmesh_rebake_set_collect_terrain(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->collect_terrain = (v != 0);
-}
-extern "C" int dse_navmesh_rebake_get_collect_mesh_renderers(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return (c && c->collect_mesh_renderers) ? 1 : 0;
-}
-extern "C" void dse_navmesh_rebake_set_collect_mesh_renderers(uint32_t e, int v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->collect_mesh_renderers = (v != 0);
-}
-extern "C" float dse_navmesh_rebake_get_agent_height(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->agent_height : 2.0f;
-}
-extern "C" void dse_navmesh_rebake_set_agent_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_height = v;
-}
-extern "C" float dse_navmesh_rebake_get_agent_radius(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->agent_radius : 0.6f;
-}
-extern "C" void dse_navmesh_rebake_set_agent_radius(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_radius = v;
-}
-extern "C" float dse_navmesh_rebake_get_agent_max_climb(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->agent_max_climb : 0.9f;
-}
-extern "C" void dse_navmesh_rebake_set_agent_max_climb(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_max_climb = v;
-}
-extern "C" float dse_navmesh_rebake_get_agent_max_slope(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->agent_max_slope : 45.0f;
-}
-extern "C" void dse_navmesh_rebake_set_agent_max_slope(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->agent_max_slope = v;
-}
-extern "C" float dse_navmesh_rebake_get_cell_size(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->cell_size : 0.3f;
-}
-extern "C" void dse_navmesh_rebake_set_cell_size(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->cell_size = v;
-}
-extern "C" float dse_navmesh_rebake_get_cell_height(uint32_t e) {
-    const auto* c = GetCompConst<dse::NavMeshAutoRebakeComponent>(e);
-    return c ? c->cell_height : 0.2f;
-}
-extern "C" void dse_navmesh_rebake_set_cell_height(uint32_t e, float v) {
-    if (auto* c = GetComp<dse::NavMeshAutoRebakeComponent>(e)) c->cell_height = v;
-}
-
-// ============================================================
-// TreeComponent — string paths
-// ============================================================
-
-namespace {
-
-int CopyTreeString(uint32_t e, char* buf, int buf_size,
-                   std::string dse::TreeComponent::* member) {
-    if (!buf || buf_size <= 0) return 0;
-    buf[0] = '\0';
-    const auto* c = GetCompConst<dse::TreeComponent>(e);
-    if (!c) return 0;
-    const std::string& value = c->*member;
-    if (value.empty()) return 0;
-    std::strncpy(buf, value.c_str(), static_cast<std::size_t>(buf_size - 1));
-    buf[buf_size - 1] = '\0';
-    return static_cast<int>(std::strlen(buf));
-}
-
-void SetTreeString(uint32_t e, const char* path,
-                   std::string dse::TreeComponent::* member) {
-    if (auto* c = GetComp<dse::TreeComponent>(e)) {
-        c->*member = path ? path : "";
-    }
-}
-
-} // namespace
-
-extern "C" void dse_tree_set_mesh_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::mesh_path);
-}
-extern "C" int dse_tree_get_mesh_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::mesh_path);
-}
-extern "C" void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::lod1_mesh_path);
-}
-extern "C" int dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::lod1_mesh_path);
-}
-extern "C" void dse_tree_set_billboard_texture_path(uint32_t e, const char* path) {
-    SetTreeString(e, path, &dse::TreeComponent::billboard_texture_path);
-}
-extern "C" int dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size) {
-    return CopyTreeString(e, buf, buf_size, &dse::TreeComponent::billboard_texture_path);
 }

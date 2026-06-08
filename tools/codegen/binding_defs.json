@@ -524,7 +524,8 @@
                 },
                 {
                     "name": "shape",
-                    "type": "int",
+                    "type": "enum_int",
+                    "enum_type": "dse::DynamicObstacleComponent::Shape",
                     "default": "0",
                     "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_shape",

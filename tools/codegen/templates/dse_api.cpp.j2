@@ -3,8 +3,7 @@
  * @brief 自动生成 — 勿手动修改
  *        来源：tools/codegen/binding_defs.json
  *
- * 注意：本文件当前被 CMakeLists.txt 过滤（*.gen.cpp 不参与构建）。
- * 仅当手写 dse_api.cpp 中对应函数被删除后，才将本文件 opt-in 进构建。
+ * 组件字段 get/set 由 Codegen 生成；手写 dse_api.cpp 仅保留 add/字符串/Input 等非字段 API。
  * 依赖 dse_api.h 提供的 dse_get_world_ptr() 访问已初始化的 World 指针。
  */
 
@@ -42,10 +41,21 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v) 
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% elif field.type == "enum_int" %}
+extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
+    const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
+    return c ? static_cast<int>(c->{{ field.name }}) : {{ field.get("default", "0") }};
+}
+extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
+    if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
+        c->{{ field.name }} = static_cast<{{ field.enum_type }}>(v);
+{% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
+{% endif %}    }
+}
 {% elif field.type == "int" %}
 extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
     const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
-    return c ? c->{{ field.name }} : {{ field.get("default", "0") }};
+    return c ? static_cast<int>(c->{{ field.name }}) : {{ field.get("default", "0") }};
 }
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {

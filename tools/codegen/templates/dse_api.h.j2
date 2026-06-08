@@ -31,7 +31,7 @@ extern "C" {
 {% if field.type == "float" %}
 DSE_CAPI_GEN float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
 DSE_CAPI_GEN void  dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v);
-{% elif field.type == "int" %}
+{% elif field.type in ("int", "enum_int") %}
 DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
 {% elif field.type == "bool" %}
