@@ -14,6 +14,9 @@
 #include "engine/ecs/components_3d_fracture.h"
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_sky.h"
 #include "engine/ecs/transform.h"
 #include <cmath>
 #include <cstring>
@@ -650,6 +653,170 @@ TEST_F(DseApiBindingsTest, Buoyancy_AddSampleWaterRatioEcs) {
     EXPECT_FALSE(b.use_fluid_system);
 }
 #endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+
+// Batch 3 — Weather C ABI：add(type int)/set(type<0 + NaN 保持)/set_spawn(max<0 保持)。
+TEST_F(DseApiBindingsTest, Weather_AddSetSpawnEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_weather_add(id, /*type=*/1 /*Rain*/, /*intensity=*/0.7f);
+    auto& wc = world_.registry().get<dse::WeatherComponent>(e);
+    EXPECT_EQ(wc.type, dse::WeatherType::Rain);
+    EXPECT_FLOAT_EQ(wc.intensity, 0.7f);
+
+    // type<0 + 部分 NaN → 仅写非保持字段
+    dse_weather_set(id, /*type=*/-1, /*intensity=*/NAN, /*wind_x=*/3.0f, /*wind_z=*/NAN);
+    EXPECT_EQ(wc.type, dse::WeatherType::Rain);      // 保持
+    EXPECT_FLOAT_EQ(wc.intensity, 0.7f);             // 保持
+    EXPECT_FLOAT_EQ(wc.wind_x, 3.0f);
+    dse_weather_set(id, /*type=*/2 /*Snow*/, /*intensity=*/0.2f, NAN, NAN);
+    EXPECT_EQ(wc.type, dse::WeatherType::Snow);
+    EXPECT_FLOAT_EQ(wc.intensity, 0.2f);
+
+    const float keep_h = wc.spawn_height;
+    const int   keep_n = wc.max_particles;
+    dse_weather_set_spawn(id, /*radius=*/40.0f, /*height=*/NAN, /*max=*/-1);
+    EXPECT_FLOAT_EQ(wc.spawn_radius, 40.0f);
+    EXPECT_FLOAT_EQ(wc.spawn_height, keep_h);        // NaN 保持
+    EXPECT_EQ(wc.max_particles, keep_n);             // <0 保持
+    dse_weather_set_spawn(id, NAN, NAN, /*max=*/500);
+    EXPECT_EQ(wc.max_particles, 500);
+}
+
+// Batch 3 — SnowCover C ABI：add/set/appearance(NaN 保持)/get/enabled/texture/displacement/remove。
+TEST_F(DseApiBindingsTest, SnowCover_FullLifecycleEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_snow_cover_add(id);
+    auto& sc = world_.registry().get<dse::SnowCoverComponent>(e);
+
+    dse_snow_cover_set(id, /*target=*/0.8f, /*accum=*/NAN, /*melt=*/0.05f);
+    EXPECT_FLOAT_EQ(sc.target_coverage, 0.8f);
+    EXPECT_FLOAT_EQ(sc.melt_rate, 0.05f);
+
+    const float keep_metal = sc.snow_metallic;
+    dse_snow_set_appearance(id, 0.5f, NAN, NAN, NAN, NAN, NAN, 4.0f);
+    EXPECT_FLOAT_EQ(sc.snow_albedo.r, 0.5f);
+    EXPECT_FLOAT_EQ(sc.snow_metallic, keep_metal);   // NaN 保持
+    EXPECT_FLOAT_EQ(sc.edge_sharpness, 4.0f);
+
+    sc.coverage = 0.3f;
+    float cov = -1.0f, tgt = -1.0f;
+    int en = -1;
+    EXPECT_EQ(dse_snow_cover_get(id, &cov, &tgt, &en), 1);
+    EXPECT_FLOAT_EQ(cov, 0.3f);
+    EXPECT_FLOAT_EQ(tgt, 0.8f);
+    EXPECT_EQ(en, 1);
+
+    dse_snow_cover_set_enabled(id, 0);
+    EXPECT_FALSE(sc.enabled);
+
+    dse_snow_set_texture(id, "tex/snow.png", /*tiling=*/16.0f);
+    EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
+    EXPECT_EQ(sc.snow_texture_handle, 0u);
+    EXPECT_FLOAT_EQ(sc.snow_tiling, 16.0f);
+    dse_snow_set_texture(id, nullptr, NAN);          // path=null + NaN → 全保持
+    EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
+    EXPECT_FLOAT_EQ(sc.snow_tiling, 16.0f);
+
+    dse_snow_set_displacement(id, /*disp=*/0.1f, /*deform=*/NAN);
+    EXPECT_FLOAT_EQ(sc.displacement_height, 0.1f);
+
+    // get 缺失 → 返回 0
+    dse_snow_cover_remove(id);
+    EXPECT_FALSE(world_.registry().all_of<dse::SnowCoverComponent>(e));
+    EXPECT_EQ(dse_snow_cover_get(id, &cov, &tgt, &en), 0);
+    EXPECT_FLOAT_EQ(cov, 0.0f);
+    EXPECT_EQ(en, 0);
+}
+
+// Batch 3 — Atmosphere C ABI：add/params/rayleigh/mie/sun_intensity（NaN 保持）。
+TEST_F(DseApiBindingsTest, Atmosphere_ParamsEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_atmosphere_add(id);
+    auto& atm = world_.registry().get<dse::AtmosphereComponent>(e);
+
+    const float keep_h = atm.atmosphere_height;
+    dse_atmosphere_set_params(id, /*planet=*/1000.0f, /*height=*/NAN, /*sun_disk=*/0.6f);
+    EXPECT_FLOAT_EQ(atm.planet_radius, 1000.0f);
+    EXPECT_FLOAT_EQ(atm.atmosphere_height, keep_h);
+    EXPECT_FLOAT_EQ(atm.sun_disk_angle, 0.6f);
+
+    const float keep_gy = atm.rayleigh_coeff.y;
+    dse_atmosphere_set_rayleigh(id, 1.0e-5f, NAN, 3.0e-5f, 9000.0f);
+    EXPECT_FLOAT_EQ(atm.rayleigh_coeff.x, 1.0e-5f);
+    EXPECT_FLOAT_EQ(atm.rayleigh_coeff.y, keep_gy);
+    EXPECT_FLOAT_EQ(atm.rayleigh_scale_height, 9000.0f);
+
+    dse_atmosphere_set_mie(id, NAN, NAN, /*g=*/0.8f);
+    EXPECT_FLOAT_EQ(atm.mie_g, 0.8f);
+
+    dse_atmosphere_set_sun_intensity(id, 10.0f, NAN, 30.0f);
+    EXPECT_FLOAT_EQ(atm.sun_intensity.x, 10.0f);
+    EXPECT_FLOAT_EQ(atm.sun_intensity.z, 30.0f);
+}
+
+// Batch 3 — DayNightCycle C ABI：add/set_time/get_time/speed/auto/location/sun getters。
+TEST_F(DseApiBindingsTest, DayNightCycle_FieldsEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_day_night_add(id, /*time=*/8.0f, /*auto=*/1, /*speed=*/60.0f);
+    auto& dnc = world_.registry().get<dse::DayNightCycleComponent>(e);
+    EXPECT_FLOAT_EQ(dnc.time_of_day, 8.0f);
+    EXPECT_TRUE(dnc.auto_advance);
+    EXPECT_FLOAT_EQ(dnc.time_speed, 60.0f);
+
+    dse_day_night_set_time(id, 15.5f);
+    EXPECT_FLOAT_EQ(dse_day_night_get_time(id), 15.5f);
+    dse_day_night_set_speed(id, 120.0f);
+    EXPECT_FLOAT_EQ(dnc.time_speed, 120.0f);
+    dse_day_night_set_auto_advance(id, 0);
+    EXPECT_FALSE(dnc.auto_advance);
+
+    const int keep_doy = dnc.day_of_year;
+    dse_day_night_set_location(id, /*lat=*/45.0f, /*lon=*/NAN, /*doy=*/-1);
+    EXPECT_FLOAT_EQ(dnc.latitude, 45.0f);
+    EXPECT_EQ(dnc.day_of_year, keep_doy);            // <=0 保持
+    dse_day_night_set_location(id, NAN, NAN, /*doy=*/200);
+    EXPECT_EQ(dnc.day_of_year, 200);
+
+    dnc.sun_elevation_ = 33.0f;
+    dnc.sun_direction_ = glm::vec3(0.0f, 1.0f, 0.0f);
+    EXPECT_FLOAT_EQ(dse_day_night_get_sun_elevation(id), 33.0f);
+    float dir[3] = {0};
+    dse_day_night_get_sun_direction(id, dir);
+    EXPECT_FLOAT_EQ(dir[1], 1.0f);
+
+    // 缺失实体 → 默认 (0,-1,0)
+    float dir2[3] = {9, 9, 9};
+    dse_day_night_get_sun_direction(0xFFFFFFFEu, dir2);
+    EXPECT_FLOAT_EQ(dir2[1], -1.0f);
+}
+
+// Batch 3 — VolumetricCloud C ABI：add/set_layer/set_wind（NaN 保持）。
+TEST_F(DseApiBindingsTest, VolumetricCloud_LayerWindEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_volumetric_cloud_add(id);
+    auto& vc = world_.registry().get<dse::VolumetricCloudComponent>(e);
+
+    const float keep_top = vc.cloud_top;
+    dse_cloud_set_layer(id, /*bottom=*/2000.0f, /*top=*/NAN, /*coverage=*/0.7f, /*density=*/NAN);
+    EXPECT_FLOAT_EQ(vc.cloud_bottom, 2000.0f);
+    EXPECT_FLOAT_EQ(vc.cloud_top, keep_top);
+    EXPECT_FLOAT_EQ(vc.coverage, 0.7f);
+
+    const float keep_dy = vc.wind_direction.y;
+    dse_cloud_set_wind(id, /*dir_x=*/0.5f, /*dir_y=*/NAN, /*speed=*/35.0f);
+    EXPECT_FLOAT_EQ(vc.wind_direction.x, 0.5f);
+    EXPECT_FLOAT_EQ(vc.wind_direction.y, keep_dy);
+    EXPECT_FLOAT_EQ(vc.wind_speed, 35.0f);
+}
 
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;

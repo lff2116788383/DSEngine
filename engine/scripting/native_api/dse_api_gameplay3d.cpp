@@ -18,11 +18,15 @@
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_sky.h"
 #include "engine/physics/physics3d/i_physics3d_system.h"  // DSE_HAS_PHYSICS3D
 
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 using Entity = entt::entity;
 using namespace dse;
@@ -465,3 +469,274 @@ extern "C" void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid) {
     if (b) b->use_fluid_system = (use_fluid != 0);
 }
 #endif // DSE_HAS_PHYSICS3D
+
+// ============================================================
+// Batch 3 — 环境子系统（无物理依赖）
+// Weather / SnowCover / Atmosphere / DayNightCycle / VolumetricCloud
+// ============================================================
+
+// ---- Weather（type: 0=None,1=Rain,2=Snow；-1=保持） ----
+extern "C" void dse_weather_add(uint32_t e, int type, float intensity) {
+    World* world = GW();
+    if (!world) return;
+    auto& wc = world->registry().emplace_or_replace<WeatherComponent>(TE(e));
+    wc.type = static_cast<WeatherType>(type);
+    wc.intensity = intensity;
+}
+
+extern "C" void dse_weather_set(uint32_t e, int type, float intensity,
+                                float wind_x, float wind_z) {
+    World* world = GW();
+    if (!world) return;
+    auto* wc = world->registry().try_get<WeatherComponent>(TE(e));
+    if (!wc) return;
+    if (type >= 0) wc->type = static_cast<WeatherType>(type);
+    if (!Keep(intensity)) wc->intensity = intensity;
+    if (!Keep(wind_x))    wc->wind_x = wind_x;
+    if (!Keep(wind_z))    wc->wind_z = wind_z;
+}
+
+extern "C" void dse_weather_set_spawn(uint32_t e, float radius, float height,
+                                      int max_particles) {
+    World* world = GW();
+    if (!world) return;
+    auto* wc = world->registry().try_get<WeatherComponent>(TE(e));
+    if (!wc) return;
+    if (!Keep(radius)) wc->spawn_radius = radius;
+    if (!Keep(height)) wc->spawn_height = height;
+    if (max_particles >= 0) wc->max_particles = max_particles;
+}
+
+// ---- SnowCover ----
+extern "C" void dse_snow_cover_add(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<SnowCoverComponent>(TE(e));
+}
+
+extern "C" void dse_snow_cover_set(uint32_t e, float target_coverage,
+                                   float accumulation_rate, float melt_rate) {
+    World* world = GW();
+    if (!world) return;
+    auto* sc = world->registry().try_get<SnowCoverComponent>(TE(e));
+    if (!sc) return;
+    if (!Keep(target_coverage))   sc->target_coverage = target_coverage;
+    if (!Keep(accumulation_rate)) sc->accumulation_rate = accumulation_rate;
+    if (!Keep(melt_rate))         sc->melt_rate = melt_rate;
+}
+
+extern "C" void dse_snow_set_appearance(uint32_t e, float albedo_r, float albedo_g,
+                                        float albedo_b, float roughness, float metallic,
+                                        float threshold, float sharpness) {
+    World* world = GW();
+    if (!world) return;
+    auto* sc = world->registry().try_get<SnowCoverComponent>(TE(e));
+    if (!sc) return;
+    if (!Keep(albedo_r))  sc->snow_albedo.r = albedo_r;
+    if (!Keep(albedo_g))  sc->snow_albedo.g = albedo_g;
+    if (!Keep(albedo_b))  sc->snow_albedo.b = albedo_b;
+    if (!Keep(roughness)) sc->snow_roughness = roughness;
+    if (!Keep(metallic))  sc->snow_metallic = metallic;
+    if (!Keep(threshold)) sc->normal_threshold = threshold;
+    if (!Keep(sharpness)) sc->edge_sharpness = sharpness;
+}
+
+// out_* 可为 null；返回 1=存在组件，0=缺失（输出置默认 0）。
+extern "C" int dse_snow_cover_get(uint32_t e, float* out_coverage,
+                                  float* out_target, int* out_enabled) {
+    World* world = GW();
+    const SnowCoverComponent* sc = world ?
+        world->registry().try_get<SnowCoverComponent>(TE(e)) : nullptr;
+    if (out_coverage) *out_coverage = sc ? sc->coverage : 0.0f;
+    if (out_target)   *out_target   = sc ? sc->target_coverage : 0.0f;
+    if (out_enabled)  *out_enabled  = (sc && sc->enabled) ? 1 : 0;
+    return sc ? 1 : 0;
+}
+
+extern "C" void dse_snow_cover_set_enabled(uint32_t e, int enabled) {
+    World* world = GW();
+    if (!world) return;
+    auto* sc = world->registry().try_get<SnowCoverComponent>(TE(e));
+    if (sc) sc->enabled = (enabled != 0);
+}
+
+// path=null 时仅更新 tiling（NaN=保持）。
+extern "C" void dse_snow_set_texture(uint32_t e, const char* path, float tiling) {
+    World* world = GW();
+    if (!world) return;
+    auto* sc = world->registry().try_get<SnowCoverComponent>(TE(e));
+    if (!sc) return;
+    if (path) {
+        sc->snow_texture_path = path;
+        sc->snow_texture_handle = 0;  // 触发重新加载
+    }
+    if (!Keep(tiling)) sc->snow_tiling = tiling;
+}
+
+extern "C" void dse_snow_set_displacement(uint32_t e, float displacement_height,
+                                          float deformation_strength) {
+    World* world = GW();
+    if (!world) return;
+    auto* sc = world->registry().try_get<SnowCoverComponent>(TE(e));
+    if (!sc) return;
+    if (!Keep(displacement_height))  sc->displacement_height = displacement_height;
+    if (!Keep(deformation_strength)) sc->deformation_strength = deformation_strength;
+}
+
+extern "C" void dse_snow_cover_remove(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    auto& reg = world->registry();
+    if (reg.all_of<SnowCoverComponent>(TE(e))) reg.remove<SnowCoverComponent>(TE(e));
+}
+
+// ---- Atmosphere ----
+extern "C" void dse_atmosphere_add(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<AtmosphereComponent>(TE(e));
+}
+
+extern "C" void dse_atmosphere_set_params(uint32_t e, float planet_radius,
+                                          float atmosphere_height, float sun_disk_angle) {
+    World* world = GW();
+    if (!world) return;
+    auto* atm = world->registry().try_get<AtmosphereComponent>(TE(e));
+    if (!atm) return;
+    if (!Keep(planet_radius))     atm->planet_radius = planet_radius;
+    if (!Keep(atmosphere_height)) atm->atmosphere_height = atmosphere_height;
+    if (!Keep(sun_disk_angle))    atm->sun_disk_angle = sun_disk_angle;
+}
+
+extern "C" void dse_atmosphere_set_rayleigh(uint32_t e, float coeff_r, float coeff_g,
+                                            float coeff_b, float scale_height) {
+    World* world = GW();
+    if (!world) return;
+    auto* atm = world->registry().try_get<AtmosphereComponent>(TE(e));
+    if (!atm) return;
+    if (!Keep(coeff_r))      atm->rayleigh_coeff.x = coeff_r;
+    if (!Keep(coeff_g))      atm->rayleigh_coeff.y = coeff_g;
+    if (!Keep(coeff_b))      atm->rayleigh_coeff.z = coeff_b;
+    if (!Keep(scale_height)) atm->rayleigh_scale_height = scale_height;
+}
+
+extern "C" void dse_atmosphere_set_mie(uint32_t e, float coeff, float scale_height, float g) {
+    World* world = GW();
+    if (!world) return;
+    auto* atm = world->registry().try_get<AtmosphereComponent>(TE(e));
+    if (!atm) return;
+    if (!Keep(coeff))        atm->mie_coeff = coeff;
+    if (!Keep(scale_height)) atm->mie_scale_height = scale_height;
+    if (!Keep(g))            atm->mie_g = g;
+}
+
+extern "C" void dse_atmosphere_set_sun_intensity(uint32_t e, float r, float g, float b) {
+    World* world = GW();
+    if (!world) return;
+    auto* atm = world->registry().try_get<AtmosphereComponent>(TE(e));
+    if (!atm) return;
+    if (!Keep(r)) atm->sun_intensity.x = r;
+    if (!Keep(g)) atm->sun_intensity.y = g;
+    if (!Keep(b)) atm->sun_intensity.z = b;
+}
+
+// ---- DayNightCycle ----
+extern "C" void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
+                                  float time_speed) {
+    World* world = GW();
+    if (!world) return;
+    auto& dnc = world->registry().emplace_or_replace<DayNightCycleComponent>(TE(e));
+    dnc.time_of_day = time_of_day;
+    dnc.auto_advance = (auto_advance != 0);
+    dnc.time_speed = time_speed;
+}
+
+extern "C" void dse_day_night_set_time(uint32_t e, float time_of_day) {
+    World* world = GW();
+    if (!world) return;
+    auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    if (dnc) dnc->time_of_day = time_of_day;
+}
+
+extern "C" float dse_day_night_get_time(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0.0f;
+    const auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    return dnc ? dnc->time_of_day : 0.0f;
+}
+
+extern "C" void dse_day_night_set_speed(uint32_t e, float speed) {
+    World* world = GW();
+    if (!world) return;
+    auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    if (dnc) dnc->time_speed = speed;
+}
+
+extern "C" void dse_day_night_set_auto_advance(uint32_t e, int enabled) {
+    World* world = GW();
+    if (!world) return;
+    auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    if (dnc) dnc->auto_advance = (enabled != 0);
+}
+
+extern "C" void dse_day_night_set_location(uint32_t e, float latitude, float longitude,
+                                           int day_of_year) {
+    World* world = GW();
+    if (!world) return;
+    auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    if (!dnc) return;
+    if (!Keep(latitude))   dnc->latitude = latitude;
+    if (!Keep(longitude))  dnc->longitude = longitude;
+    if (day_of_year > 0)   dnc->day_of_year = day_of_year;
+}
+
+extern "C" float dse_day_night_get_sun_elevation(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0.0f;
+    const auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
+    return dnc ? dnc->sun_elevation_ : 0.0f;
+}
+
+// out_xyz 填充归一化太阳方向（3 float）；缺失时填默认 (0,-1,0)。
+extern "C" void dse_day_night_get_sun_direction(uint32_t e, float* out_xyz) {
+    if (!out_xyz) return;
+    World* world = GW();
+    const DayNightCycleComponent* dnc = world ?
+        world->registry().try_get<DayNightCycleComponent>(TE(e)) : nullptr;
+    if (dnc) {
+        out_xyz[0] = dnc->sun_direction_.x;
+        out_xyz[1] = dnc->sun_direction_.y;
+        out_xyz[2] = dnc->sun_direction_.z;
+    } else {
+        out_xyz[0] = 0.0f; out_xyz[1] = -1.0f; out_xyz[2] = 0.0f;
+    }
+}
+
+// ---- VolumetricCloud ----
+extern "C" void dse_volumetric_cloud_add(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<VolumetricCloudComponent>(TE(e));
+}
+
+extern "C" void dse_cloud_set_layer(uint32_t e, float bottom, float top,
+                                    float coverage, float density) {
+    World* world = GW();
+    if (!world) return;
+    auto* vc = world->registry().try_get<VolumetricCloudComponent>(TE(e));
+    if (!vc) return;
+    if (!Keep(bottom))   vc->cloud_bottom = bottom;
+    if (!Keep(top))      vc->cloud_top = top;
+    if (!Keep(coverage)) vc->coverage = coverage;
+    if (!Keep(density))  vc->density = density;
+}
+
+extern "C" void dse_cloud_set_wind(uint32_t e, float dir_x, float dir_y, float speed) {
+    World* world = GW();
+    if (!world) return;
+    auto* vc = world->registry().try_get<VolumetricCloudComponent>(TE(e));
+    if (!vc) return;
+    if (!Keep(dir_x)) vc->wind_direction.x = dir_x;
+    if (!Keep(dir_y)) vc->wind_direction.y = dir_y;
+    if (!Keep(speed)) vc->wind_speed = speed;
+}

@@ -27,6 +27,9 @@
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_fracture.h"
+#include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_sky.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -604,6 +607,99 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSoftBodyRopeDelegatedRoundTrip) {
         rope_found = true;
     }
     EXPECT_TRUE(rope_found);
+
+    ShutdownLuaRuntime();
+}
+
+// Batch 3：Lua → C ABI → 组件状态 的环境子系统回环（Weather/SnowCover/DayNight/Cloud）。
+TEST_F(LuaBinding3DIntegrationTest, LuaEnvironmentDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_environment.lua", R"(
+        function Awake()
+            local w = dse.ecs.create_entity()
+            dse.ecs.add_transform(w, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_weather(w, "rain", 0.8)
+            dse.ecs.set_weather(w, nil, nil, 4.0, nil)   -- type/intensity 保持，仅写 wind_x
+            dse.ecs.set_weather_spawn(w, 50.0, nil, 1234)
+
+            local s = dse.ecs.create_entity()
+            dse.ecs.add_transform(s, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_snow_cover(s)
+            dse.ecs.set_snow_cover(s, 0.9, nil, 0.07)
+            dse.ecs.set_snow_texture(s, "tex/snow.png", 12.0)
+            dse.ecs.set_snow_cover_enabled(s, false)
+
+            local d = dse.ecs.create_entity()
+            dse.ecs.add_transform(d, 2.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_day_night_cycle(d, 9.0, true, 30.0)
+            dse.ecs.set_day_night_time(d, 18.25)
+            dse.ecs.set_day_night_location(d, 51.0, nil, 100)
+
+            local c = dse.ecs.create_entity()
+            dse.ecs.add_transform(c, 3.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_volumetric_cloud(c)
+            dse.ecs.set_cloud_layer(c, 2500.0, nil, 0.66, nil)
+            dse.ecs.set_cloud_wind(c, 0.5, nil, 33.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool w_found = false;
+    for (auto entity : world.registry().view<WeatherComponent>()) {
+        const auto& wc = world.registry().get<WeatherComponent>(entity);
+        EXPECT_EQ(wc.type, WeatherType::Rain);          // set_weather type=nil 保持
+        EXPECT_NEAR(wc.intensity, 0.8f, 1e-3f);         // intensity=nil 保持
+        EXPECT_NEAR(wc.wind_x, 4.0f, 1e-3f);
+        EXPECT_NEAR(wc.spawn_radius, 50.0f, 1e-3f);
+        EXPECT_EQ(wc.max_particles, 1234);
+        w_found = true;
+    }
+    EXPECT_TRUE(w_found);
+
+    bool s_found = false;
+    for (auto entity : world.registry().view<SnowCoverComponent>()) {
+        const auto& sc = world.registry().get<SnowCoverComponent>(entity);
+        EXPECT_NEAR(sc.target_coverage, 0.9f, 1e-3f);
+        EXPECT_NEAR(sc.melt_rate, 0.07f, 1e-3f);
+        EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
+        EXPECT_NEAR(sc.snow_tiling, 12.0f, 1e-3f);
+        EXPECT_FALSE(sc.enabled);
+        s_found = true;
+    }
+    EXPECT_TRUE(s_found);
+
+    bool d_found = false;
+    for (auto entity : world.registry().view<DayNightCycleComponent>()) {
+        const auto& dnc = world.registry().get<DayNightCycleComponent>(entity);
+        EXPECT_NEAR(dnc.time_of_day, 18.25f, 1e-3f);
+        EXPECT_TRUE(dnc.auto_advance);
+        EXPECT_NEAR(dnc.time_speed, 30.0f, 1e-3f);
+        EXPECT_NEAR(dnc.latitude, 51.0f, 1e-3f);
+        EXPECT_EQ(dnc.day_of_year, 100);
+        d_found = true;
+    }
+    EXPECT_TRUE(d_found);
+
+    bool c_found = false;
+    for (auto entity : world.registry().view<VolumetricCloudComponent>()) {
+        const auto& vc = world.registry().get<VolumetricCloudComponent>(entity);
+        EXPECT_NEAR(vc.cloud_bottom, 2500.0f, 1e-3f);
+        EXPECT_NEAR(vc.coverage, 0.66f, 1e-3f);
+        EXPECT_NEAR(vc.wind_direction.x, 0.5f, 1e-3f);
+        EXPECT_NEAR(vc.wind_speed, 33.0f, 1e-3f);
+        c_found = true;
+    }
+    EXPECT_TRUE(c_found);
 
     ShutdownLuaRuntime();
 }

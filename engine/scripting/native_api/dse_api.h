@@ -596,6 +596,57 @@ DSE_CAPI void dse_buoyancy_set_water_level(uint32_t e, float water_level);
 DSE_CAPI float dse_buoyancy_get_submerge_ratio(uint32_t e);
 DSE_CAPI void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid);
 
+// ---- Batch 3 环境子系统（无物理依赖）。浮点 NaN=保持当前值。 ----
+// Weather。type: 0=None,1=Rain,2=Snow；set 中 type<0=保持。spawn 中 max_particles<0=保持。
+DSE_CAPI void dse_weather_add(uint32_t e, int type, float intensity);
+DSE_CAPI void dse_weather_set(uint32_t e, int type, float intensity,
+                              float wind_x, float wind_z);
+DSE_CAPI void dse_weather_set_spawn(uint32_t e, float radius, float height,
+                                    int max_particles);
+
+// SnowCover。snow_cover_get 填充 out_*（可为 null），返回 1=存在/0=缺失。
+// set_texture：path=null 仅改 tiling。
+DSE_CAPI void dse_snow_cover_add(uint32_t e);
+DSE_CAPI void dse_snow_cover_set(uint32_t e, float target_coverage,
+                                 float accumulation_rate, float melt_rate);
+DSE_CAPI void dse_snow_set_appearance(uint32_t e, float albedo_r, float albedo_g,
+                                      float albedo_b, float roughness, float metallic,
+                                      float threshold, float sharpness);
+DSE_CAPI int  dse_snow_cover_get(uint32_t e, float* out_coverage,
+                                 float* out_target, int* out_enabled);
+DSE_CAPI void dse_snow_cover_set_enabled(uint32_t e, int enabled);
+DSE_CAPI void dse_snow_set_texture(uint32_t e, const char* path, float tiling);
+DSE_CAPI void dse_snow_set_displacement(uint32_t e, float displacement_height,
+                                        float deformation_strength);
+DSE_CAPI void dse_snow_cover_remove(uint32_t e);
+
+// Atmosphere（物理天空参数）。
+DSE_CAPI void dse_atmosphere_add(uint32_t e);
+DSE_CAPI void dse_atmosphere_set_params(uint32_t e, float planet_radius,
+                                        float atmosphere_height, float sun_disk_angle);
+DSE_CAPI void dse_atmosphere_set_rayleigh(uint32_t e, float coeff_r, float coeff_g,
+                                          float coeff_b, float scale_height);
+DSE_CAPI void dse_atmosphere_set_mie(uint32_t e, float coeff, float scale_height, float g);
+DSE_CAPI void dse_atmosphere_set_sun_intensity(uint32_t e, float r, float g, float b);
+
+// DayNightCycle。set_location 中 day_of_year<=0=保持。get_sun_direction 填充 out_xyz(3)。
+DSE_CAPI void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
+                                float time_speed);
+DSE_CAPI void dse_day_night_set_time(uint32_t e, float time_of_day);
+DSE_CAPI float dse_day_night_get_time(uint32_t e);
+DSE_CAPI void dse_day_night_set_speed(uint32_t e, float speed);
+DSE_CAPI void dse_day_night_set_auto_advance(uint32_t e, int enabled);
+DSE_CAPI void dse_day_night_set_location(uint32_t e, float latitude, float longitude,
+                                         int day_of_year);
+DSE_CAPI float dse_day_night_get_sun_elevation(uint32_t e);
+DSE_CAPI void dse_day_night_get_sun_direction(uint32_t e, float* out_xyz);
+
+// VolumetricCloud。
+DSE_CAPI void dse_volumetric_cloud_add(uint32_t e);
+DSE_CAPI void dse_cloud_set_layer(uint32_t e, float bottom, float top,
+                                  float coverage, float density);
+DSE_CAPI void dse_cloud_set_wind(uint32_t e, float dir_x, float dir_y, float speed);
+
 // ============================================================
 // Input
 // ============================================================

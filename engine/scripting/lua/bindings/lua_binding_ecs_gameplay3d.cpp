@@ -27,6 +27,14 @@ namespace {
 
 inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
 
+/// 天气类型字符串 → int 枚举（0=None,1=Rain,2=Snow）。
+inline int WeatherTypeFromStr(const char* s) {
+    if (!s) return -1;  // 保持
+    if (std::strcmp(s, "rain") == 0) return 1;
+    if (std::strcmp(s, "snow") == 0) return 2;
+    return 0;
+}
+
 #ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // FractureComponent 绑定
@@ -473,47 +481,30 @@ int L_EcsBuoyancySetUseFluid(lua_State* L) {
 /// add_weather(entity, type_str, intensity)
 /// type_str: "none" | "rain" | "snow"
 int L_EcsAddWeather(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& wc = world->registry().emplace_or_replace<WeatherComponent>(e);
-    const char* type_str = luaL_optstring(L, 2, "snow");
-    if (std::strcmp(type_str, "rain") == 0)       wc.type = WeatherType::Rain;
-    else if (std::strcmp(type_str, "snow") == 0)  wc.type = WeatherType::Snow;
-    else                                           wc.type = WeatherType::None;
-    wc.intensity = helper::OptFloat(L, 3, 0.5f);
+    int type = WeatherTypeFromStr(luaL_optstring(L, 2, "snow"));
+    dse_weather_add(EID(e), type, helper::OptFloat(L, 3, 0.5f));
     return 0;
 }
 
 /// set_weather(entity, type_str, intensity, wind_x, wind_z)
 int L_EcsSetWeather(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* wc = helper::TryGetComponent<WeatherComponent>(*world, e);
-    if (!wc) return 0;
-    const char* type_str = luaL_optstring(L, 2, nullptr);
-    if (type_str) {
-        if (std::strcmp(type_str, "rain") == 0)       wc->type = WeatherType::Rain;
-        else if (std::strcmp(type_str, "snow") == 0)  wc->type = WeatherType::Snow;
-        else                                           wc->type = WeatherType::None;
-    }
-    wc->intensity   = helper::OptFloat(L, 3, wc->intensity);
-    wc->wind_x      = helper::OptFloat(L, 4, wc->wind_x);
-    wc->wind_z      = helper::OptFloat(L, 5, wc->wind_z);
+    int type = WeatherTypeFromStr(luaL_optstring(L, 2, nullptr));  // -1=保持
+    dse_weather_set(EID(e), type,
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN),
+        helper::OptFloat(L, 5, NAN));
     return 0;
 }
 
 /// set_weather_spawn(entity, radius, height, max_particles)
 int L_EcsSetWeatherSpawn(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* wc = helper::TryGetComponent<WeatherComponent>(*world, e);
-    if (!wc) return 0;
-    wc->spawn_radius   = helper::OptFloat(L, 2, wc->spawn_radius);
-    wc->spawn_height   = helper::OptFloat(L, 3, wc->spawn_height);
-    wc->max_particles  = helper::OptInt(L,   4, wc->max_particles);
+    dse_weather_set_spawn(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptInt(L, 4, -1));  // <0=保持
     return 0;
 }
 
@@ -523,104 +514,76 @@ int L_EcsSetWeatherSpawn(lua_State* L) {
 
 /// add_snow_cover(entity)
 int L_EcsAddSnowCover(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<SnowCoverComponent>(e);
+    dse_snow_cover_add(EID(e));
     return 0;
 }
 
 /// set_snow_cover(entity, target_coverage, accumulation_rate, melt_rate)
 int L_EcsSetSnowCover(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
-    if (!sc) return 0;
-    sc->target_coverage   = helper::OptFloat(L, 2, sc->target_coverage);
-    sc->accumulation_rate = helper::OptFloat(L, 3, sc->accumulation_rate);
-    sc->melt_rate         = helper::OptFloat(L, 4, sc->melt_rate);
+    dse_snow_cover_set(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN));
     return 0;
 }
 
 /// set_snow_appearance(entity, albedo_r, albedo_g, albedo_b, roughness, metallic, threshold, sharpness)
 int L_EcsSetSnowAppearance(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
-    if (!sc) return 0;
-    sc->snow_albedo.r    = helper::OptFloat(L, 2, sc->snow_albedo.r);
-    sc->snow_albedo.g    = helper::OptFloat(L, 3, sc->snow_albedo.g);
-    sc->snow_albedo.b    = helper::OptFloat(L, 4, sc->snow_albedo.b);
-    sc->snow_roughness   = helper::OptFloat(L, 5, sc->snow_roughness);
-    sc->snow_metallic    = helper::OptFloat(L, 6, sc->snow_metallic);
-    sc->normal_threshold = helper::OptFloat(L, 7, sc->normal_threshold);
-    sc->edge_sharpness   = helper::OptFloat(L, 8, sc->edge_sharpness);
+    dse_snow_set_appearance(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN),
+        helper::OptFloat(L, 5, NAN),
+        helper::OptFloat(L, 6, NAN),
+        helper::OptFloat(L, 7, NAN),
+        helper::OptFloat(L, 8, NAN));
     return 0;
 }
 
 /// get_snow_cover(entity) -> coverage, target_coverage, enabled
 int L_EcsGetSnowCover(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushboolean(L, 0); return 3; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* sc = helper::TryGetComponentConst<SnowCoverComponent>(*world, e);
-    if (!sc) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushboolean(L, 0); return 3; }
-    lua_pushnumber(L, static_cast<lua_Number>(sc->coverage));
-    lua_pushnumber(L, static_cast<lua_Number>(sc->target_coverage));
-    lua_pushboolean(L, sc->enabled ? 1 : 0);
+    float coverage = 0.0f, target = 0.0f;
+    int enabled = 0;
+    dse_snow_cover_get(EID(e), &coverage, &target, &enabled);
+    lua_pushnumber(L, static_cast<lua_Number>(coverage));
+    lua_pushnumber(L, static_cast<lua_Number>(target));
+    lua_pushboolean(L, enabled);
     return 3;
 }
 
 /// set_snow_cover_enabled(entity, enabled)
 int L_EcsSetSnowCoverEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
-    if (!sc) return 0;
-    sc->enabled = helper::CheckBool(L, 2);
+    dse_snow_cover_set_enabled(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
 /// set_snow_texture(entity, texture_path, [tiling])
 int L_EcsSetSnowTexture(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
-    if (!sc) return 0;
-    const char* path = helper::OptString(L, 2, nullptr);
-    if (path) {
-        sc->snow_texture_path = path;
-        sc->snow_texture_handle = 0; // 触发重新加载
-    }
-    sc->snow_tiling = helper::OptFloat(L, 3, sc->snow_tiling);
+    dse_snow_set_texture(EID(e),
+        helper::OptString(L, 2, nullptr),
+        helper::OptFloat(L, 3, NAN));
     return 0;
 }
 
 /// set_snow_displacement(entity, displacement_height, [deformation_strength])
 int L_EcsSetSnowDisplacement(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sc = helper::TryGetComponent<SnowCoverComponent>(*world, e);
-    if (!sc) return 0;
-    sc->displacement_height  = helper::OptFloat(L, 2, sc->displacement_height);
-    sc->deformation_strength = helper::OptFloat(L, 3, sc->deformation_strength);
+    dse_snow_set_displacement(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN));
     return 0;
 }
 
 /// remove_snow_cover(entity)
 int L_EcsRemoveSnowCover(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& reg = world->registry();
-    if (reg.all_of<SnowCoverComponent>(e)) {
-        reg.remove<SnowCoverComponent>(e);
-    }
+    dse_snow_cover_remove(EID(e));
     return 0;
 }
 
@@ -630,65 +593,49 @@ int L_EcsRemoveSnowCover(lua_State* L) {
 
 /// add_atmosphere(entity)
 int L_EcsAddAtmosphere(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<AtmosphereComponent>(e);
+    dse_atmosphere_add(EID(e));
     return 0;
 }
 
 /// set_atmosphere_params(entity, planet_radius, atmosphere_height, sun_disk_angle)
 int L_EcsSetAtmosphereParams(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
-    if (!atm) return 0;
-    atm->planet_radius     = helper::OptFloat(L, 2, atm->planet_radius);
-    atm->atmosphere_height = helper::OptFloat(L, 3, atm->atmosphere_height);
-    atm->sun_disk_angle    = helper::OptFloat(L, 4, atm->sun_disk_angle);
+    dse_atmosphere_set_params(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN));
     return 0;
 }
 
 /// set_atmosphere_rayleigh(entity, coeff_r, coeff_g, coeff_b, scale_height)
 int L_EcsSetAtmosphereRayleigh(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
-    if (!atm) return 0;
-    atm->rayleigh_coeff = glm::vec3(
-        helper::OptFloat(L, 2, atm->rayleigh_coeff.x),
-        helper::OptFloat(L, 3, atm->rayleigh_coeff.y),
-        helper::OptFloat(L, 4, atm->rayleigh_coeff.z));
-    atm->rayleigh_scale_height = helper::OptFloat(L, 5, atm->rayleigh_scale_height);
+    dse_atmosphere_set_rayleigh(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN),
+        helper::OptFloat(L, 5, NAN));
     return 0;
 }
 
 /// set_atmosphere_mie(entity, coeff, scale_height, g)
 int L_EcsSetAtmosphereMie(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
-    if (!atm) return 0;
-    atm->mie_coeff        = helper::OptFloat(L, 2, atm->mie_coeff);
-    atm->mie_scale_height = helper::OptFloat(L, 3, atm->mie_scale_height);
-    atm->mie_g            = helper::OptFloat(L, 4, atm->mie_g);
+    dse_atmosphere_set_mie(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN));
     return 0;
 }
 
 /// set_atmosphere_sun_intensity(entity, r, g, b)
 int L_EcsSetAtmosphereSunIntensity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* atm = helper::TryGetComponent<AtmosphereComponent>(*world, e);
-    if (!atm) return 0;
-    atm->sun_intensity = glm::vec3(
-        helper::OptFloat(L, 2, atm->sun_intensity.x),
-        helper::OptFloat(L, 3, atm->sun_intensity.y),
-        helper::OptFloat(L, 4, atm->sun_intensity.z));
+    dse_atmosphere_set_sun_intensity(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN));
     return 0;
 }
 
@@ -698,94 +645,67 @@ int L_EcsSetAtmosphereSunIntensity(lua_State* L) {
 
 /// add_day_night_cycle(entity, [time_of_day, auto_advance, time_speed])
 int L_EcsAddDayNightCycle(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& dnc = world->registry().emplace_or_replace<DayNightCycleComponent>(e);
-    dnc.time_of_day  = helper::OptFloat(L, 2, 12.0f);
-    dnc.auto_advance = helper::OptBool(L, 3, false);
-    dnc.time_speed   = helper::OptFloat(L, 4, 1.0f);
+    dse_day_night_add(EID(e),
+        helper::OptFloat(L, 2, 12.0f),
+        helper::OptBool(L, 3, false) ? 1 : 0,
+        helper::OptFloat(L, 4, 1.0f));
     return 0;
 }
 
 /// set_day_night_time(entity, time_of_day)
 int L_EcsSetDayNightTime(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
-    if (!dnc) return 0;
-    dnc->time_of_day = helper::CheckFloat(L, 2);
+    dse_day_night_set_time(EID(e), helper::CheckFloat(L, 2));
     return 0;
 }
 
 /// get_day_night_time(entity) -> time_of_day
 int L_EcsGetDayNightTime(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
-    if (!dnc) { lua_pushnumber(L, 0); return 1; }
-    lua_pushnumber(L, dnc->time_of_day);
+    lua_pushnumber(L, static_cast<lua_Number>(dse_day_night_get_time(EID(e))));
     return 1;
 }
 
 /// set_day_night_speed(entity, speed)
 int L_EcsSetDayNightSpeed(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
-    if (!dnc) return 0;
-    dnc->time_speed = helper::CheckFloat(L, 2);
+    dse_day_night_set_speed(EID(e), helper::CheckFloat(L, 2));
     return 0;
 }
 
 /// set_day_night_auto_advance(entity, enabled)
 int L_EcsSetDayNightAutoAdvance(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
-    if (!dnc) return 0;
-    dnc->auto_advance = helper::CheckBool(L, 2);
+    dse_day_night_set_auto_advance(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
 /// set_day_night_location(entity, latitude, longitude, day_of_year)
 int L_EcsSetDayNightLocation(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* dnc = helper::TryGetComponent<DayNightCycleComponent>(*world, e);
-    if (!dnc) return 0;
-    dnc->latitude    = helper::OptFloat(L, 2, dnc->latitude);
-    dnc->longitude   = helper::OptFloat(L, 3, dnc->longitude);
-    dnc->day_of_year = helper::OptInt(L, 4, dnc->day_of_year);
+    dse_day_night_set_location(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptInt(L, 4, -1));  // <=0=保持
     return 0;
 }
 
 /// get_sun_elevation(entity) -> degrees
 int L_EcsGetSunElevation(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
-    if (!dnc) { lua_pushnumber(L, 0); return 1; }
-    lua_pushnumber(L, dnc->sun_elevation_);
+    lua_pushnumber(L, static_cast<lua_Number>(dse_day_night_get_sun_elevation(EID(e))));
     return 1;
 }
 
 /// get_sun_direction(entity) -> x, y, z
 int L_EcsGetSunDirection(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    const auto* dnc = helper::TryGetComponentConst<DayNightCycleComponent>(*world, e);
-    if (!dnc) { lua_pushnumber(L, 0); lua_pushnumber(L, -1); lua_pushnumber(L, 0); return 3; }
-    lua_pushnumber(L, dnc->sun_direction_.x);
-    lua_pushnumber(L, dnc->sun_direction_.y);
-    lua_pushnumber(L, dnc->sun_direction_.z);
+    float dir[3] = {0.0f, -1.0f, 0.0f};
+    dse_day_night_get_sun_direction(EID(e), dir);
+    lua_pushnumber(L, static_cast<lua_Number>(dir[0]));
+    lua_pushnumber(L, static_cast<lua_Number>(dir[1]));
+    lua_pushnumber(L, static_cast<lua_Number>(dir[2]));
     return 3;
 }
 
@@ -795,38 +715,29 @@ int L_EcsGetSunDirection(lua_State* L) {
 
 /// add_volumetric_cloud(entity)
 int L_EcsAddVolumetricCloud(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<VolumetricCloudComponent>(e);
+    dse_volumetric_cloud_add(EID(e));
     return 0;
 }
 
 /// set_cloud_layer(entity, bottom, top, coverage, density)
 int L_EcsSetCloudLayer(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* vc = helper::TryGetComponent<VolumetricCloudComponent>(*world, e);
-    if (!vc) return 0;
-    vc->cloud_bottom = helper::OptFloat(L, 2, vc->cloud_bottom);
-    vc->cloud_top    = helper::OptFloat(L, 3, vc->cloud_top);
-    vc->coverage     = helper::OptFloat(L, 4, vc->coverage);
-    vc->density      = helper::OptFloat(L, 5, vc->density);
+    dse_cloud_set_layer(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN),
+        helper::OptFloat(L, 5, NAN));
     return 0;
 }
 
 /// set_cloud_wind(entity, dir_x, dir_y, speed)
 int L_EcsSetCloudWind(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* vc = helper::TryGetComponent<VolumetricCloudComponent>(*world, e);
-    if (!vc) return 0;
-    vc->wind_direction = glm::vec2(
-        helper::OptFloat(L, 2, vc->wind_direction.x),
-        helper::OptFloat(L, 3, vc->wind_direction.y));
-    vc->wind_speed = helper::OptFloat(L, 4, vc->wind_speed);
+    dse_cloud_set_wind(EID(e),
+        helper::OptFloat(L, 2, NAN),
+        helper::OptFloat(L, 3, NAN),
+        helper::OptFloat(L, 4, NAN));
     return 0;
 }
 
