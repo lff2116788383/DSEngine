@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/camera.h"
 #include "engine/ecs/sprite.h"
@@ -49,19 +50,17 @@ int L_EcsAddCamera(lua_State* L) {
 }
 
 int L_EcsAddCamera3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float fov = helper::OptFloat(L, 2, 60.0f);
-    int priority = helper::OptInt(L, 3, 0);
-    auto& camera = world->registry().emplace_or_replace<Camera3DComponent>(e);
-    camera.enabled = true;
-    camera.priority = priority;
-    camera.fov = fov;
-    camera.near_clip = helper::OptFloat(L, 4, 0.1f);
-    camera.far_clip = helper::OptFloat(L, 5, 1000.0f);
-    if (camera.near_clip <= 0.0f) camera.near_clip = 0.1f;
-    if (camera.far_clip <= camera.near_clip) camera.far_clip = camera.near_clip + 1000.0f;
+    const uint32_t e = static_cast<uint32_t>(helper::CheckEntity(L, 1));
+    const float fov = helper::OptFloat(L, 2, 60.0f);
+    const int priority = helper::OptInt(L, 3, 0);
+    float near_clip = helper::OptFloat(L, 4, 0.1f);
+    float far_clip = helper::OptFloat(L, 5, 1000.0f);
+    if (near_clip <= 0.0f) near_clip = 0.1f;
+    if (far_clip <= near_clip) far_clip = near_clip + 1000.0f;
+    // S1.8-2：委托 C ABI（dse_camera3d_add 内部 emplace_or_replace 重置组件，enabled 默认 true）
+    dse_camera3d_add(e, fov, near_clip, far_clip);
+    dse_camera3d_set_enabled(e, 1);
+    dse_camera3d_set_priority(e, priority);
     return 0;
 }
 

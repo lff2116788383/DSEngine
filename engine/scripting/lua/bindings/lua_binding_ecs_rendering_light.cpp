@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/camera.h"
 #include "engine/ecs/sprite.h"
@@ -35,25 +36,24 @@ namespace {
 // ============================================================
 
 int L_EcsAddDirectionalLight3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float dir_x = helper::OptFloat(L, 2, -0.4f);
-    float dir_y = helper::OptFloat(L, 3, -1.0f);
-    float dir_z = helper::OptFloat(L, 4, -0.3f);
-    float r = helper::OptFloat(L, 5, 1.0f);
-    float g = helper::OptFloat(L, 6, 1.0f);
-    float b = helper::OptFloat(L, 7, 1.0f);
-    float intensity = helper::OptFloat(L, 8, 1.0f);
-    float ambient_intensity = helper::OptFloat(L, 9, 0.2f);
-    float shadow_strength = helper::OptFloat(L, 10, 0.35f);
-    auto& light = world->registry().emplace_or_replace<DirectionalLight3DComponent>(e);
-    light.enabled = true;
-    light.direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
-    light.color = glm::vec3(r, g, b);
-    light.intensity = intensity;
-    light.ambient_intensity = ambient_intensity;
-    light.shadow_strength = shadow_strength;
+    const uint32_t e = static_cast<uint32_t>(helper::CheckEntity(L, 1));
+    const float dir_x = helper::OptFloat(L, 2, -0.4f);
+    const float dir_y = helper::OptFloat(L, 3, -1.0f);
+    const float dir_z = helper::OptFloat(L, 4, -0.3f);
+    const float r = helper::OptFloat(L, 5, 1.0f);
+    const float g = helper::OptFloat(L, 6, 1.0f);
+    const float b = helper::OptFloat(L, 7, 1.0f);
+    const float intensity = helper::OptFloat(L, 8, 1.0f);
+    const float ambient_intensity = helper::OptFloat(L, 9, 0.2f);
+    const float shadow_strength = helper::OptFloat(L, 10, 0.35f);
+    const glm::vec3 dir = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+    // S1.8-2：委托 C ABI（dse_dir_light_add 内 emplace_or_replace，enabled 默认 true；dir_light 无 set_enabled）
+    dse_dir_light_add(e);
+    dse_dir_light_set_direction(e, dir.x, dir.y, dir.z);
+    dse_dir_light_set_color(e, r, g, b);
+    dse_dir_light_set_intensity(e, intensity);
+    dse_dir_light_set_ambient_intensity(e, ambient_intensity);
+    dse_dir_light_set_shadow_strength(e, shadow_strength);
     return 0;
 }
 
@@ -115,19 +115,18 @@ int L_EcsSetDirectionalLightShadow(lua_State* L) {
 }
 
 int L_EcsAddPointLight3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float r = helper::OptFloat(L, 2, 1.0f);
-    float g = helper::OptFloat(L, 3, 1.0f);
-    float b = helper::OptFloat(L, 4, 1.0f);
-    float intensity = helper::OptFloat(L, 5, 1.0f);
-    float radius = helper::OptFloat(L, 6, 10.0f);
-    auto& light = world->registry().emplace_or_replace<PointLightComponent>(e);
-    light.enabled = true;
-    light.color = glm::vec3(r, g, b);
-    light.intensity = intensity;
-    light.radius = radius;
+    const uint32_t e = static_cast<uint32_t>(helper::CheckEntity(L, 1));
+    const float r = helper::OptFloat(L, 2, 1.0f);
+    const float g = helper::OptFloat(L, 3, 1.0f);
+    const float b = helper::OptFloat(L, 4, 1.0f);
+    const float intensity = helper::OptFloat(L, 5, 1.0f);
+    const float radius = helper::OptFloat(L, 6, 10.0f);
+    // S1.8-2：委托 C ABI（enabled 默认 true，与原显式赋值一致）
+    dse_point_light_add(e);
+    dse_point_light_set_enabled(e, 1);
+    dse_point_light_set_color(e, r, g, b);
+    dse_point_light_set_intensity(e, intensity);
+    dse_point_light_set_radius(e, radius);
     return 0;
 }
 
@@ -157,27 +156,27 @@ int L_EcsSetPointLightShadow(lua_State* L) {
 }
 
 int L_EcsAddSpotLight3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float dir_x = helper::OptFloat(L, 2, 0.0f);
-    float dir_y = helper::OptFloat(L, 3, -1.0f);
-    float dir_z = helper::OptFloat(L, 4, 0.0f);
-    float r = helper::OptFloat(L, 5, 1.0f);
-    float g = helper::OptFloat(L, 6, 1.0f);
-    float b = helper::OptFloat(L, 7, 1.0f);
-    float intensity = helper::OptFloat(L, 8, 1.0f);
-    float radius = helper::OptFloat(L, 9, 20.0f);
-    float inner_angle = helper::OptFloat(L, 10, 12.5f);
-    float outer_angle = helper::OptFloat(L, 11, 17.5f);
-    auto& light = world->registry().emplace_or_replace<SpotLightComponent>(e);
-    light.enabled = true;
-    light.direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
-    light.color = glm::vec3(r, g, b);
-    light.intensity = intensity;
-    light.radius = radius;
-    light.inner_cone_angle = inner_angle;
-    light.outer_cone_angle = outer_angle;
+    const uint32_t e = static_cast<uint32_t>(helper::CheckEntity(L, 1));
+    const float dir_x = helper::OptFloat(L, 2, 0.0f);
+    const float dir_y = helper::OptFloat(L, 3, -1.0f);
+    const float dir_z = helper::OptFloat(L, 4, 0.0f);
+    const float r = helper::OptFloat(L, 5, 1.0f);
+    const float g = helper::OptFloat(L, 6, 1.0f);
+    const float b = helper::OptFloat(L, 7, 1.0f);
+    const float intensity = helper::OptFloat(L, 8, 1.0f);
+    const float radius = helper::OptFloat(L, 9, 20.0f);
+    const float inner_angle = helper::OptFloat(L, 10, 12.5f);
+    const float outer_angle = helper::OptFloat(L, 11, 17.5f);
+    const glm::vec3 dir = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+    // S1.8-2：委托 C ABI（enabled 默认 true）
+    dse_spot_light_add(e);
+    dse_spot_light_set_enabled(e, 1);
+    dse_spot_light_set_direction(e, dir.x, dir.y, dir.z);
+    dse_spot_light_set_color(e, r, g, b);
+    dse_spot_light_set_intensity(e, intensity);
+    dse_spot_light_set_radius(e, radius);
+    dse_spot_light_set_inner_cone_angle(e, inner_angle);
+    dse_spot_light_set_outer_cone_angle(e, outer_angle);
     return 0;
 }
 
@@ -234,20 +233,20 @@ int L_EcsSetSpotLightShadow(lua_State* L) {
 }
 
 int L_EcsAddSkyLight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto& light = world->registry().emplace_or_replace<SkyLightComponent>(e);
-    light.enabled = true;
-    light.up_color = glm::vec3(
-        helper::OptFloat(L, 2, 0.22f),
-        helper::OptFloat(L, 3, 0.28f),
-        helper::OptFloat(L, 4, 0.38f));
-    light.down_color = glm::vec3(
-        helper::OptFloat(L, 5, 0.04f),
-        helper::OptFloat(L, 6, 0.05f),
-        helper::OptFloat(L, 7, 0.08f));
-    light.intensity = helper::OptFloat(L, 8, 1.0f);
+    const uint32_t e = static_cast<uint32_t>(helper::CheckEntity(L, 1));
+    const float up_r = helper::OptFloat(L, 2, 0.22f);
+    const float up_g = helper::OptFloat(L, 3, 0.28f);
+    const float up_b = helper::OptFloat(L, 4, 0.38f);
+    const float down_r = helper::OptFloat(L, 5, 0.04f);
+    const float down_g = helper::OptFloat(L, 6, 0.05f);
+    const float down_b = helper::OptFloat(L, 7, 0.08f);
+    const float intensity = helper::OptFloat(L, 8, 1.0f);
+    // S1.8-2：委托 C ABI（enabled 默认 true）
+    dse_sky_light_add(e);
+    dse_sky_light_set_enabled(e, 1);
+    dse_sky_light_set_up_color(e, up_r, up_g, up_b);
+    dse_sky_light_set_down_color(e, down_r, down_g, down_b);
+    dse_sky_light_set_intensity(e, intensity);
     return 0;
 }
 
