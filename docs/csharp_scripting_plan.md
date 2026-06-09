@@ -1,7 +1,7 @@
 # DSEngine C# 脚本系统集成方案
 
-> 状态：**S1 ✅ + S1.5 ✅ + S1.6 ✅ + S1.7 ✅（a-b-c）— S1.8 待启动 — S2（Mono）待启动**  
-> 最后核对：2026-06（与 `master` 代码现状对齐）  
+> 状态：**S1 ✅ + S1.5 ✅ + S1.6 ✅ + S1.7 ✅（a-b-c）+ S1.8 ✅ + S1.9 ✅ — S2（Mono）待启动**  
+> 最后核对：2026-06（S1.8 已随 PR #9 进 master；S1.9 在 `feature/engine-lib`，待收尾 PR 回 master）  
 > 已完成：Lua 绑定层（~6700 行）、C ABI 层、Codegen 工具、**12 组件**字段 get/set 由 `dse_api.gen.cpp` 生成并参与构建
 
 ---
@@ -211,9 +211,11 @@ DSE_CAPI int  dse_<prefix>_get_<field>(uint32_t e, char* buf, int buf_size); // 
 
 ---
 
-### Phase S1.8：Lua `rendering.cpp` 大模块迁移（待启动）
+### Phase S1.8：Lua `rendering.cpp` 大模块迁移 ✅ 已完成
 
-**现状：** `lua_binding_ecs_rendering.cpp` ~2083 行、~100 API，**零 `dse_*` 委托**，直接访问 ECS + AssetManager + RHI。
+**结果：** `lua_binding_ecs_rendering.cpp`(~2083 行) 已按子模块物理拆分（camera/mesh/light/post/terrain/fx），L1–L4 字段/setter 迁入 `binding_defs` 或委托 `dse_*`；`world_to_screen` / 材质·贴图加载等 L5 上移为手写 `dse_render_*` C ABI。现已零内联 ECS/AssetManager/RHI 直连。
+
+**原始现状（迁移前）：** `lua_binding_ecs_rendering.cpp` ~2083 行、~100 API，**零 `dse_*` 委托**，直接访问 ECS + AssetManager + RHI。
 
 **API 五层模型（迁移判据）：**
 
@@ -239,7 +241,9 @@ DSE_CAPI int  dse_<prefix>_get_<field>(uint32_t e, char* buf, int buf_size); // 
 
 ---
 
-### Phase S1.9：phys3d / gameplay3d / animation 收敛（待启动）
+### Phase S1.9：phys3d / gameplay3d / animation 收敛 ✅ 已完成
+
+**结果：** 三模块 Lua 绑定（phys3d / gameplay3d 13 子系统 / animation 6 子系统）全部从内联 `registry()/GetWorld()` 上移为薄包装委托手写 `dse_*` C ABI，**三文件零内联 registry 调用**。L5 最小 API 清单（raycast / overlap_sphere·box / collision·trigger events / rigidbody 力·速度 / CCT move·jump·is_grounded·get_position / set_mesh_material·texture / world_to_screen / 三模块模拟控制）全部落成，**S2 前置依赖已就绪**。零行为变更，所有 Lua API 名与签名保持兼容。
 
 | 模块 | 行数 | 策略 |
 |------|------|------|
@@ -495,8 +499,8 @@ GameScripts/DSEngine/Native.gen.cs    ✅（仅组件 InternalCall）
 | **S1.5** | Codegen + Lua 12 组件 opt-in | — | S1 | ✅ |
 | **S1.6** | `dse_api.gen.cpp` opt-in / 消除字段双份维护 | 2–3 天 | S1.5 | ✅ |
 | **S1.7** | `string` 类型 + Tree/Mesh 路径收敛 | 2–3 天 | S1.6 | ✅ |
-| **S1.8** | `rendering.cpp` 拆分 + L1–L4 迁移 | 1–2 周 | S1.7 | ⏳ |
-| **S1.9** | phys3d / gameplay3d / animation + L5 清单 | 2–4 周 | S1.8 | ⏳ |
+| **S1.8** | `rendering.cpp` 拆分 + L1–L4 迁移 | 1–2 周 | S1.7 | ✅ |
+| **S1.9** | phys3d / gameplay3d / animation + L5 清单 | 2–4 周 | S1.8 | ✅ |
 | **S2** | Mono 嵌入 + DSBehaviour + 异常隔离 | 1–2 周 | S1.7 + L5 清单 | ⏳ |
 | **S3** | C# API 封装（P/Invoke + Blittable） | 3–5 天 | S2 | ⏳ |
 | **S4** | Assembly 热重载 | 3–5 天 | S2 最小版 | ⏳ |
