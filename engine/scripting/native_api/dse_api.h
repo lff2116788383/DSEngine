@@ -519,6 +519,40 @@ DSE_CAPI int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const c
 DSE_CAPI void* dse_get_asset_manager_ptr(void);
 
 // ============================================================
+// Gameplay3D（破碎 / 布料 / 流体，手写 dse_api_gameplay3d.cpp）
+// ============================================================
+// 纯 ECS 组件控制，操作全局 World。可选「保持当前值」字段以 NaN 哨兵表示；
+// 固定默认值由调用方（Lua 薄包装）解析后传入。
+
+// Fracture：source 0=Prefractured 1=RuntimeVoronoi。
+DSE_CAPI void dse_fracture_add(uint32_t e, int source, uint32_t fragment_count,
+                               float break_force, float health);
+DSE_CAPI void dse_fracture_set_params(uint32_t e, float explosion_force, float fragment_lifetime,
+                                      float fade_duration, float mass_scale);  // NaN=保持
+DSE_CAPI void dse_fracture_apply_damage(uint32_t e, float damage, float ix, float iy, float iz);
+DSE_CAPI void dse_fracture_trigger(uint32_t e, float ix, float iy, float iz);
+DSE_CAPI int  dse_fracture_is_fractured(uint32_t e);
+
+// Cloth。
+DSE_CAPI void dse_cloth_add(uint32_t e, uint32_t solver_iterations, float stiffness,
+                            float damping, float bend_stiffness);
+DSE_CAPI void dse_cloth_set_wind(uint32_t e, float wx, float wy, float wz, float turbulence);  // turbulence NaN=保持
+DSE_CAPI void dse_cloth_set_gravity(uint32_t e, float gx, float gy, float gz);
+DSE_CAPI void dse_cloth_pin_vertices(uint32_t e, const uint32_t* vertices, int count);
+DSE_CAPI void dse_cloth_add_sphere_collider(uint32_t e, uint32_t collider_entity, float radius);
+
+// Fluid：shape 0=Point 1=Sphere 2=Box。
+DSE_CAPI void dse_fluid_add_emitter(uint32_t e, int shape, float emission_rate,
+                                    float particle_lifetime, float emit_speed);
+DSE_CAPI void dse_fluid_set_physics(uint32_t e, float viscosity, float surface_tension,
+                                    float rest_density, float gas_stiffness);  // NaN=保持
+DSE_CAPI void dse_fluid_set_rendering(uint32_t e, float r, float g, float b, float a,
+                                      float refraction, float fresnel, float specular);  // refraction/fresnel/specular NaN=保持
+DSE_CAPI void dse_fluid_set_emit_direction(uint32_t e, float dx, float dy, float dz, float spread);  // spread NaN=保持
+DSE_CAPI void dse_fluid_set_floor(uint32_t e, float floor_y, float restitution);  // NaN=保持
+DSE_CAPI uint32_t dse_fluid_get_particle_count(uint32_t e);
+
+// ============================================================
 // Input
 // ============================================================
 

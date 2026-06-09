@@ -483,6 +483,74 @@ TEST_F(LuaBinding3DIntegrationTest, LuaWorldToScreenDelegatedVisibility) {
     ShutdownLuaRuntime();
 }
 
+// S1.9：Cloth/Fluid 经 C ABI 委托 — Lua→dse_*→组件状态 完整链路。
+// 脚本配置布料(钉点/风)与流体发射器，并把粒子数写回 marker，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaClothFluidDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_cloth_fluid.lua", R"(
+        function Awake()
+            local cloth = dse.ecs.create_entity()
+            dse.ecs.add_transform(cloth, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_cloth(cloth, 12, 0.8, 0.02, 0.4)
+            dse.ecs.cloth_pin_vertices(cloth, {3, 7, 11})
+            dse.ecs.set_cloth_wind(cloth, 1.0, 0.0, -2.0)   -- turbulence 省略 → 保持
+
+            local fluid = dse.ecs.create_entity()
+            dse.ecs.add_transform(fluid, 10.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_fluid_emitter(fluid, 1, 250.0, 4.0, 3.0)
+            local count = dse.ecs.get_fluid_particle_count(fluid)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, count, 0.0, 0.0, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool cloth_found = false;
+    for (auto entity : world.registry().view<ClothComponent>()) {
+        const auto& c = world.registry().get<ClothComponent>(entity);
+        EXPECT_EQ(c.solver_iterations, 12u);
+        ASSERT_EQ(c.pinned_vertices.size(), 3u);
+        EXPECT_EQ(c.pinned_vertices[0], 3u);
+        EXPECT_EQ(c.pinned_vertices[2], 11u);
+        EXPECT_NEAR(c.wind.x, 1.0f, 1e-3f);
+        EXPECT_NEAR(c.wind.z, -2.0f, 1e-3f);
+        cloth_found = true;
+    }
+    EXPECT_TRUE(cloth_found);
+
+    bool fluid_found = false;
+    for (auto entity : world.registry().view<FluidEmitterComponent>()) {
+        const auto& f = world.registry().get<FluidEmitterComponent>(entity);
+        EXPECT_EQ(f.shape, FluidEmitterShape::Sphere);
+        EXPECT_NEAR(f.emission_rate, 250.0f, 1e-3f);
+        fluid_found = true;
+    }
+    EXPECT_TRUE(fluid_found);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<ClothComponent>(entity) ||
+            world.registry().all_of<FluidEmitterComponent>(entity)) continue;
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 0.0f, 1e-3f);   // get_fluid_particle_count 初始 0
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()

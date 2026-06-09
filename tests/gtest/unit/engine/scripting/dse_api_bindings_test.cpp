@@ -11,7 +11,11 @@
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_3d_navmesh.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/components_3d_fracture.h"
+#include "engine/ecs/components_3d_cloth.h"
+#include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/transform.h"
+#include <cmath>
 #include <cstring>
 
 namespace {
@@ -392,6 +396,115 @@ TEST_F(DseApiBindingsTest, MeshRenderer_MaterialTextureNoAssetManager) {
     EXPECT_EQ(dse_mesh_renderer_set_material_from_dmat(id, "x.dmat", 0), 0);
     uint32_t h = 7; int w = 7, ht = 7;
     EXPECT_EQ(dse_mesh_renderer_set_texture(id, "albedo", "x.png", &h, &w, &ht), 0);
+}
+
+// Gameplay3D：Fracture C ABI — add/set_params(NaN 保持)/apply_damage/trigger/is_fractured。
+TEST_F(DseApiBindingsTest, Fracture_AddDamageTriggerEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_fracture_add(id, /*source=*/1, /*fragments=*/12, /*break_force=*/500.0f, /*health=*/30.0f);
+    const auto& fc = world_.registry().get<dse::FractureComponent>(e);
+    EXPECT_EQ(fc.source, dse::FractureSource::RuntimeVoronoi);
+    EXPECT_EQ(fc.runtime_fragment_count, 12u);
+    EXPECT_FLOAT_EQ(fc.break_force, 500.0f);
+    EXPECT_FLOAT_EQ(fc.health, 30.0f);
+    EXPECT_FLOAT_EQ(fc.max_health, 30.0f);
+
+    // set_params：仅覆盖非 NaN 字段，其余保持
+    const float keep = fc.fragment_lifetime;
+    dse_fracture_set_params(id, /*explosion=*/77.0f, /*lifetime=*/NAN, /*fade=*/NAN, /*mass=*/2.5f);
+    EXPECT_FLOAT_EQ(fc.explosion_force, 77.0f);
+    EXPECT_FLOAT_EQ(fc.fragment_lifetime, keep);
+    EXPECT_FLOAT_EQ(fc.fragment_mass_scale, 2.5f);
+
+    // apply_damage 未致死 → 不请求碎裂
+    dse_fracture_apply_damage(id, 10.0f, 0.0f, 0.0f, 0.0f);
+    EXPECT_FLOAT_EQ(fc.health, 20.0f);
+    EXPECT_FALSE(fc.fracture_requested);
+    EXPECT_EQ(dse_fracture_is_fractured(id), 0);
+
+    // 致死 → 请求碎裂 + 记录冲击点
+    dse_fracture_apply_damage(id, 50.0f, 1.0f, 2.0f, 3.0f);
+    EXPECT_TRUE(fc.fracture_requested);
+    EXPECT_FLOAT_EQ(fc.impact_point.x, 1.0f);
+    EXPECT_FLOAT_EQ(fc.impact_point.z, 3.0f);
+}
+
+// Gameplay3D：Cloth C ABI — add/set_wind(turbulence NaN 保持)/pin_vertices/add_sphere_collider。
+TEST_F(DseApiBindingsTest, Cloth_AddWindPinColliderEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_cloth_add(id, /*iters=*/16, /*stiffness=*/0.7f, /*damping=*/0.02f, /*bend=*/0.4f);
+    const auto& cloth = world_.registry().get<dse::ClothComponent>(e);
+    EXPECT_TRUE(cloth.enabled);
+    EXPECT_EQ(cloth.solver_iterations, 16u);
+    EXPECT_FLOAT_EQ(cloth.stiffness, 0.7f);
+
+    const float keep_turb = cloth.wind_turbulence;
+    dse_cloth_set_wind(id, 1.0f, 0.0f, -2.0f, NAN);   // turbulence 保持
+    EXPECT_FLOAT_EQ(cloth.wind.x, 1.0f);
+    EXPECT_FLOAT_EQ(cloth.wind.z, -2.0f);
+    EXPECT_FLOAT_EQ(cloth.wind_turbulence, keep_turb);
+    dse_cloth_set_wind(id, 0.0f, 0.0f, 0.0f, 0.5f);
+    EXPECT_FLOAT_EQ(cloth.wind_turbulence, 0.5f);
+
+    const uint32_t verts[3] = {2u, 5u, 9u};
+    dse_cloth_pin_vertices(id, verts, 3);
+    ASSERT_EQ(cloth.pinned_vertices.size(), 3u);
+    EXPECT_EQ(cloth.pinned_vertices[1], 5u);
+    dse_cloth_pin_vertices(id, nullptr, 0);           // 清空
+    EXPECT_TRUE(cloth.pinned_vertices.empty());
+
+    dse_cloth_add_sphere_collider(id, 42u, 1.25f);
+    ASSERT_EQ(cloth.sphere_colliders.size(), 1u);
+    EXPECT_EQ(cloth.sphere_colliders[0].entity_id, 42u);
+    EXPECT_FLOAT_EQ(cloth.sphere_colliders[0].radius, 1.25f);
+}
+
+// Gameplay3D：Fluid C ABI — add/set_physics(NaN 保持)/set_rendering/emit_direction(归一化)/floor/count。
+TEST_F(DseApiBindingsTest, Fluid_AddPhysicsRenderEmitEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_fluid_add_emitter(id, /*shape=*/2, /*rate=*/300.0f, /*lifetime=*/4.0f, /*speed=*/5.0f);
+    const auto& fluid = world_.registry().get<dse::FluidEmitterComponent>(e);
+    EXPECT_EQ(fluid.shape, dse::FluidEmitterShape::Box);
+    EXPECT_FLOAT_EQ(fluid.emission_rate, 300.0f);
+    EXPECT_FLOAT_EQ(fluid.emit_speed, 5.0f);
+
+    const float keep_st = fluid.surface_tension;
+    dse_fluid_set_physics(id, /*visc=*/0.05f, /*st=*/NAN, /*rest=*/900.0f, /*gas=*/NAN);
+    EXPECT_FLOAT_EQ(fluid.viscosity, 0.05f);
+    EXPECT_FLOAT_EQ(fluid.surface_tension, keep_st);
+    EXPECT_FLOAT_EQ(fluid.rest_density, 900.0f);
+
+    dse_fluid_set_rendering(id, 0.1f, 0.2f, 0.3f, 0.6f, NAN, 3.0f, NAN);
+    EXPECT_FLOAT_EQ(fluid.color.a, 0.6f);
+    EXPECT_FLOAT_EQ(fluid.fresnel_power, 3.0f);
+
+    dse_fluid_set_emit_direction(id, 0.0f, 0.0f, -4.0f, 0.9f);   // 应归一化
+    EXPECT_NEAR(fluid.emit_direction.z, -1.0f, 1e-4f);
+    EXPECT_FLOAT_EQ(fluid.emit_spread, 0.9f);
+
+    dse_fluid_set_floor(id, -3.0f, NAN);
+    EXPECT_FLOAT_EQ(fluid.floor_y, -3.0f);
+
+    EXPECT_EQ(dse_fluid_get_particle_count(id), 0u);   // active_count 初始 0
+}
+
+// Gameplay3D：缺组件/无效实体时安全 no-op（不崩溃，getter 返回默认）。
+TEST_F(DseApiBindingsTest, Gameplay3D_MissingComponentSafe) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+    // 无组件：set/get 不应崩溃
+    dse_fracture_set_params(id, 1.0f, 1.0f, 1.0f, 1.0f);
+    dse_fracture_apply_damage(id, 5.0f, 0.0f, 0.0f, 0.0f);
+    dse_cloth_set_wind(id, 1.0f, 1.0f, 1.0f, 1.0f);
+    dse_fluid_set_physics(id, 1.0f, 1.0f, 1.0f, 1.0f);
+    EXPECT_EQ(dse_fracture_is_fractured(id), 0);
+    EXPECT_EQ(dse_fluid_get_particle_count(0xFFFFFFFEu), 0u);
 }
 
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
