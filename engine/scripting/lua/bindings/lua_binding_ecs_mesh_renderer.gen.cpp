@@ -86,6 +86,36 @@ int L_Set_mesh_renderer_receive_shadow(lua_State* L) {
     dse_mesh_renderer_set_receive_shadow(e, lua_toboolean(L, 2));
     return 0;
 }
+int L_Get_mesh_renderer_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char buf[512];
+    if (dse_mesh_renderer_get_mesh_path(e, buf, 512) <= 0) {
+        lua_pushstring(L, "");
+        return 1;
+    }
+    lua_pushstring(L, buf);
+    return 1;
+}
+int L_Set_mesh_renderer_mesh_path(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_mesh_renderer_set_mesh_path(e, luaL_checkstring(L, 2));
+    return 0;
+}
+int L_Get_mesh_renderer_shader_variant(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char buf[128];
+    if (dse_mesh_renderer_get_shader_variant(e, buf, 128) <= 0) {
+        lua_pushstring(L, "");
+        return 1;
+    }
+    lua_pushstring(L, buf);
+    return 1;
+}
+int L_Set_mesh_renderer_shader_variant(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_mesh_renderer_set_shader_variant(e, luaL_checkstring(L, 2));
+    return 0;
+}
 
 } // namespace
 
@@ -104,6 +134,10 @@ void RegisterMeshRendererComponentGenBindings(lua_State* L) {
         {"set_mesh_emissive", L_Set_mesh_renderer_emissive},
         {"get_mesh_receive_shadow", L_Get_mesh_renderer_receive_shadow},
         {"set_mesh_receive_shadow", L_Set_mesh_renderer_receive_shadow},
+        {"get_mesh_path", L_Get_mesh_renderer_mesh_path},
+        {"set_mesh_path", L_Set_mesh_renderer_mesh_path},
+        {"get_mesh_shader_variant", L_Get_mesh_renderer_shader_variant},
+        {"set_mesh_shader_variant", L_Set_mesh_renderer_shader_variant},
     });
 }
 

@@ -128,6 +128,225 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DDirectionalLightCppCanReadParams)
     ShutdownLuaRuntime();
 }
 
+// S1.8：set_point_light_3d / set_spot_light_3d / set_spot_light_shadow 写入委托 C ABI 后，
+// 部分更新（nil 通道沿用当前值）+ 方向归一化 经 Lua→C ABI→registry 实链路验证
+TEST_F(LuaBinding3DIntegrationTest, LuaSetPointAndSpotLightDelegatedWritesCppCanRead) {
+    LuaTempScript startup("test_3d_light_setters.lua", R"(
+        function Awake()
+            local p = dse.ecs.create_entity()
+            dse.ecs.add_point_light_3d(p, 1.0, 1.0, 1.0, 1.0, 10.0)
+            -- 只改 r/b 与 intensity，g 与 radius 传 nil 应保持 add 时的值
+            dse.ecs.set_point_light_3d(p, 0.2, nil, 0.8, 5.0)
+
+            local s = dse.ecs.create_entity()
+            dse.ecs.add_spot_light_3d(s, 0.0, -1.0, 0.0, 1.0, 1.0, 1.0, 1.0, 20.0, 12.5, 17.5)
+            dse.ecs.set_spot_light_3d(s, 2.0, 0.0, 0.0, nil, nil, nil, 3.0, nil, nil, 30.0)
+            dse.ecs.set_spot_light_shadow(s, true)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool found_point = false;
+    for (auto entity : world.registry().view<PointLightComponent>()) {
+        auto& pl = world.registry().get<PointLightComponent>(entity);
+        EXPECT_NEAR(pl.color.r, 0.2f, 0.001f);
+        EXPECT_NEAR(pl.color.g, 1.0f, 0.001f);  // nil → 保持 add 值
+        EXPECT_NEAR(pl.color.b, 0.8f, 0.001f);
+        EXPECT_NEAR(pl.intensity, 5.0f, 0.001f);
+        EXPECT_NEAR(pl.radius, 10.0f, 0.001f);  // nil → 保持 add 值
+        found_point = true;
+    }
+    EXPECT_TRUE(found_point);
+
+    bool found_spot = false;
+    for (auto entity : world.registry().view<SpotLightComponent>()) {
+        auto& sl = world.registry().get<SpotLightComponent>(entity);
+        EXPECT_NEAR(sl.direction.x, 1.0f, 0.001f);  // (2,0,0) 归一化 → (1,0,0)
+        EXPECT_NEAR(sl.direction.y, 0.0f, 0.001f);
+        EXPECT_NEAR(sl.direction.z, 0.0f, 0.001f);
+        EXPECT_NEAR(sl.color.r, 1.0f, 0.001f);      // nil → 保持 add 值
+        EXPECT_NEAR(sl.intensity, 3.0f, 0.001f);
+        EXPECT_NEAR(sl.radius, 20.0f, 0.001f);      // nil → 保持 add 值
+        EXPECT_NEAR(sl.outer_cone_angle, 30.0f, 0.001f);
+        EXPECT_TRUE(sl.cast_shadow);
+        found_spot = true;
+    }
+    EXPECT_TRUE(found_spot);
+
+    ShutdownLuaRuntime();
+}
+
+// S1.8 Tier B/C：set_directional_light_3d / set_point_light_shadow 写入委托 per-field C ABI，
+// set_directional_light_shadow 委托手写复合 dse_dir_light_set_shadow_params；经 Lua→C ABI→registry
+// 验证部分更新（nil 沿用现值）、方向归一化、enabled，以及 cascade 级联钳制 + clamp。
+TEST_F(LuaBinding3DIntegrationTest, LuaSetDirAndPointLightDelegatedWritesCppCanRead) {
+    LuaTempScript startup("test_3d_light_tierbc.lua", R"(
+        function Awake()
+            local d = dse.ecs.create_entity()
+            dse.ecs.add_directional_light_3d(d, -0.5, -1.0, -0.3, 1.0, 0.9, 0.8, 1.2, 0.15, 0.4)
+            -- enabled=false；方向 (2,0,0) 归一化→(1,0,0)；color/ambient/shadow_strength 传 nil 保持；intensity=2.0
+            dse.ecs.set_directional_light_3d(d, false, 2.0, 0.0, 0.0, nil, nil, nil, 2.0, nil, nil)
+            -- cascade 钳制：strength 1.5→1.0；c0 0.05→0.1；c1 0.05→0.2；c2 0.05→0.3；lambda 2.0→1.0
+            dse.ecs.set_directional_light_shadow(d, true, 1.5, 0.05, 0.05, 0.05, 2.0)
+
+            local p = dse.ecs.create_entity()
+            dse.ecs.add_point_light_3d(p, 1.0, 1.0, 1.0, 1.0, 10.0)
+            dse.ecs.set_point_light_shadow(p, true)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool found_dir = false;
+    for (auto entity : world.registry().view<DirectionalLight3DComponent>()) {
+        auto& dl = world.registry().get<DirectionalLight3DComponent>(entity);
+        EXPECT_FALSE(dl.enabled);                          // set_directional_light_3d(false, ...)
+        EXPECT_NEAR(dl.direction.x, 1.0f, 0.001f);         // (2,0,0) 归一化
+        EXPECT_NEAR(dl.direction.y, 0.0f, 0.001f);
+        EXPECT_NEAR(dl.direction.z, 0.0f, 0.001f);
+        EXPECT_NEAR(dl.color.r, 1.0f, 0.001f);             // nil → 保持 add 值
+        EXPECT_NEAR(dl.color.g, 0.9f, 0.001f);
+        EXPECT_NEAR(dl.color.b, 0.8f, 0.001f);
+        EXPECT_NEAR(dl.intensity, 2.0f, 0.001f);
+        EXPECT_NEAR(dl.ambient_intensity, 0.15f, 0.001f);  // nil → 保持 add 值
+        EXPECT_TRUE(dl.cast_shadow);
+        EXPECT_NEAR(dl.shadow_strength, 1.0f, 0.001f);     // 1.5 → clamp 1.0
+        EXPECT_NEAR(dl.cascade_splits[0], 0.1f, 0.001f);   // max(0.1, 0.05)
+        EXPECT_NEAR(dl.cascade_splits[1], 0.2f, 0.001f);   // max(0.1+0.1, 0.05)
+        EXPECT_NEAR(dl.cascade_splits[2], 0.3f, 0.001f);   // max(0.2+0.1, 0.05)
+        EXPECT_NEAR(dl.cascade_split_lambda, 1.0f, 0.001f);// 2.0 → clamp 1.0
+        found_dir = true;
+    }
+    EXPECT_TRUE(found_dir);
+
+    bool found_point = false;
+    for (auto entity : world.registry().view<PointLightComponent>()) {
+        auto& pl = world.registry().get<PointLightComponent>(entity);
+        EXPECT_TRUE(pl.cast_shadow);                       // set_point_light_shadow(true)
+        found_point = true;
+    }
+    EXPECT_TRUE(found_point);
+
+    ShutdownLuaRuntime();
+}
+
+// S1.9：Animator3DComponent 纯字段经 codegen 入 defs，验证 Lua→C ABI→registry 实链路。
+// 含 danim_path 纯字符串写入（set 后系统按值比较自动重载，无副作用）。
+TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
+    LuaTempScript startup("test_3d_animator.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_animator_3d(e, "anims/idle.danim", "skeletons/hero.dskel")
+            dse.ecs.set_animator3d_danim_path(e, "anims/run.danim")
+            dse.ecs.set_animator3d_speed(e, 2.0)
+            dse.ecs.set_animator3d_loop(e, false)
+            dse.ecs.set_animator3d_use_anim_tree(e, true)
+            dse.ecs.set_animator3d_blend_parameter(e, "velocity")
+            dse.ecs.set_animator3d_blend_parameter_value(e, 0.5)
+            dse.ecs.set_animator3d_enabled(e, false)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool found = false;
+    for (auto entity : world.registry().view<Animator3DComponent>()) {
+        auto& a = world.registry().get<Animator3DComponent>(entity);
+        EXPECT_FALSE(a.enabled);
+        EXPECT_EQ(a.danim_path, "anims/run.danim");        // 被 set 覆盖 add 初值
+        EXPECT_EQ(a.dskel_path, "skeletons/hero.dskel");
+        EXPECT_NEAR(a.speed, 2.0f, 0.001f);
+        EXPECT_FALSE(a.loop);
+        EXPECT_TRUE(a.use_anim_tree);
+        EXPECT_EQ(a.blend_parameter, "velocity");
+        EXPECT_NEAR(a.blend_parameter_value, 0.5f, 0.001f);
+        found = true;
+    }
+    EXPECT_TRUE(found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：physics_3d_raycast 经 C ABI 委托后，验证 Lua→C ABI→Lua 完整返回链路。
+// 脚本把 raycast 命中点/法线/距离写回 marker 实体的 transform，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
+    LuaTempScript startup("test_3d_raycast.lua", R"(
+        function Awake()
+            local box = dse.ecs.create_entity()
+            dse.ecs.add_transform(box, 5.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_box_collider_3d(box, 2.0, 2.0, 2.0)  -- half-size 1 → AABB x∈[4,6]
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, -100.0, -100.0, -100.0, 1.0, 1.0, 1.0)
+
+            local hit, ent, hx, hy, hz, nx, ny, nz, dist =
+                dse.ecs.physics_3d_raycast(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 100.0)
+            if hit then
+                dse.ecs.set_transform_position(marker, hx, hy, hz)
+                dse.ecs.set_transform_scale(marker, dist, nx, 1.0)  -- 编码 dist + normal.x
+            end
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<BoxCollider3DComponent>(entity)) continue;  // 跳过盒子
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 4.0f, 1e-3f);   // 命中进入面 x=4
+        EXPECT_NEAR(tf.position.y, 0.0f, 1e-3f);
+        EXPECT_NEAR(tf.position.z, 0.0f, 1e-3f);
+        EXPECT_NEAR(tf.scale.x, 4.0f, 1e-3f);      // distance
+        EXPECT_NEAR(tf.scale.y, -1.0f, 1e-3f);     // normal.x
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()

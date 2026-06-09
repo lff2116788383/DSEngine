@@ -249,12 +249,24 @@ file(GLOB_RECURSE engine_cpp CONFIGURE_DEPENDS
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 
 # 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
-# 注意：dse_api.gen.cpp 与手写 dse_api.cpp 冲突，必须保持排除
+# 注意：dse_api_<prefix>.gen.cpp 与手写 dse_api.cpp 同 TU 域，须显式加回（见下）
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
 
 # 显式加回已完成迁移的 gen 文件（手写版本已删除或已精简，无符号冲突）
 list(APPEND engine_cpp
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_transform.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_camera3d.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_mesh_renderer.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_dir_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_point_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_spot_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_sky_light.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_tree.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_terrain_tile.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_dyn_obstacle.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_navmesh_rebake.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_post_process.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_animator3d.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_transform.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_camera3d.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dir_light.gen.cpp"
@@ -266,6 +278,8 @@ list(APPEND engine_cpp
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_terrain_tile.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dyn_obstacle.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_navmesh_rebake.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_post_process.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_animator3d.gen.cpp"
 )
 
 # Vulkan RHI 后端源文件仅在启用时编译

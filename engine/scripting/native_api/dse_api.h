@@ -86,7 +86,11 @@ DSE_CAPI void  dse_camera3d_set_priority(uint32_t e, int v);
 // ============================================================
 
 DSE_CAPI void  dse_mesh_renderer_add(uint32_t e, const char* mesh_path);
-DSE_CAPI void  dse_mesh_renderer_set_mesh(uint32_t e, const char* mesh_path);
+// 手写 setter（capi_setter:manual）：设 mesh_path 并清空过程网格缓存；getter 由 codegen 生成
+DSE_CAPI void  dse_mesh_renderer_set_mesh_path(uint32_t e, const char* mesh_path);
+DSE_CAPI int   dse_mesh_renderer_get_mesh_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void  dse_mesh_renderer_set_shader_variant(uint32_t e, const char* v);
+DSE_CAPI int   dse_mesh_renderer_get_shader_variant(uint32_t e, char* buf, int buf_size);
 DSE_CAPI void  dse_mesh_renderer_get_color(uint32_t e, float* r, float* g, float* b, float* a);
 DSE_CAPI void  dse_mesh_renderer_set_color(uint32_t e, float r, float g, float b, float a);
 DSE_CAPI int   dse_mesh_renderer_get_visible(uint32_t e);
@@ -117,6 +121,12 @@ DSE_CAPI int   dse_dir_light_get_cast_shadow(uint32_t e);
 DSE_CAPI void  dse_dir_light_set_cast_shadow(uint32_t e, int v);
 DSE_CAPI float dse_dir_light_get_shadow_strength(uint32_t e);
 DSE_CAPI void  dse_dir_light_set_shadow_strength(uint32_t e, float v);
+DSE_CAPI int   dse_dir_light_get_enabled(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_enabled(uint32_t e, int v);
+// S1.8 Tier C：复合阴影参数 setter，封装 cascade 级联约束（split[i] ≥ split[i-1]+0.1）+ clamp；
+//             手写实现见 dse_api.cpp（非 codegen）。传入值由调用方合并好现值。
+DSE_CAPI void  dse_dir_light_set_shadow_params(uint32_t e, int cast_shadow, float shadow_strength,
+                                               float c0, float c1, float c2, float lambda);
 
 // ============================================================
 // PointLightComponent
@@ -131,6 +141,8 @@ DSE_CAPI float dse_point_light_get_radius(uint32_t e);
 DSE_CAPI void  dse_point_light_set_radius(uint32_t e, float v);
 DSE_CAPI int   dse_point_light_get_enabled(uint32_t e);
 DSE_CAPI void  dse_point_light_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_point_light_get_cast_shadow(uint32_t e);
+DSE_CAPI void  dse_point_light_set_cast_shadow(uint32_t e, int v);
 
 // ============================================================
 // SpotLightComponent
@@ -282,6 +294,190 @@ DSE_CAPI void dse_tree_set_lod1_mesh_path(uint32_t e, const char* path);
 DSE_CAPI int  dse_tree_get_lod1_mesh_path(uint32_t e, char* buf, int buf_size);
 DSE_CAPI void dse_tree_set_billboard_texture_path(uint32_t e, const char* path);
 DSE_CAPI int  dse_tree_get_billboard_texture_path(uint32_t e, char* buf, int buf_size);
+
+// ============================================================
+// PostProcessComponent — 每字段访问器（实现见 dse_api_post_process.gen.cpp）
+// ============================================================
+
+DSE_CAPI int  dse_post_process_get_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_enabled(uint32_t e, int v);
+DSE_CAPI int  dse_post_process_get_bloom_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_bloom_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_bloom_threshold(uint32_t e);
+DSE_CAPI void  dse_post_process_set_bloom_threshold(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_bloom_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_bloom_intensity(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_bloom_knee(uint32_t e);
+DSE_CAPI void  dse_post_process_set_bloom_knee(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_bloom_mip_weight(uint32_t e);
+DSE_CAPI void  dse_post_process_set_bloom_mip_weight(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_color_grading_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_color_grading_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_exposure(uint32_t e);
+DSE_CAPI void  dse_post_process_set_exposure(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_gamma(uint32_t e);
+DSE_CAPI void  dse_post_process_set_gamma(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_ssao_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_ssao_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_ssao_radius(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssao_radius(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_ssao_bias(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssao_bias(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_ssao_sample_count(uint32_t e);
+DSE_CAPI void dse_post_process_set_ssao_sample_count(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_ssao_power(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssao_power(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_ssao_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssao_intensity(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_auto_exposure_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_auto_exposure_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_exposure_min(uint32_t e);
+DSE_CAPI void  dse_post_process_set_exposure_min(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_exposure_max(uint32_t e);
+DSE_CAPI void  dse_post_process_set_exposure_max(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_adaptation_speed_up(uint32_t e);
+DSE_CAPI void  dse_post_process_set_adaptation_speed_up(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_adaptation_speed_down(uint32_t e);
+DSE_CAPI void  dse_post_process_set_adaptation_speed_down(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_exposure_compensation(uint32_t e);
+DSE_CAPI void  dse_post_process_set_exposure_compensation(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_color_lut_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_color_lut_intensity(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_vignette_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_vignette_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_vignette_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_vignette_intensity(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_vignette_radius(uint32_t e);
+DSE_CAPI void  dse_post_process_set_vignette_radius(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_vignette_softness(uint32_t e);
+DSE_CAPI void  dse_post_process_set_vignette_softness(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_film_grain_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_film_grain_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_film_grain_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_film_grain_intensity(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_film_grain_time_scale(uint32_t e);
+DSE_CAPI void  dse_post_process_set_film_grain_time_scale(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_fxaa_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_fxaa_enabled(uint32_t e, int v);
+DSE_CAPI int  dse_post_process_get_taa_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_taa_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_taa_blend_factor(uint32_t e);
+DSE_CAPI void  dse_post_process_set_taa_blend_factor(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_contact_shadow_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_contact_shadow_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_contact_shadow_strength(uint32_t e);
+DSE_CAPI void  dse_post_process_set_contact_shadow_strength(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_contact_shadow_steps(uint32_t e);
+DSE_CAPI void dse_post_process_set_contact_shadow_steps(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_contact_shadow_step_size(uint32_t e);
+DSE_CAPI void  dse_post_process_set_contact_shadow_step_size(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_dof_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_dof_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_dof_focus_distance(uint32_t e);
+DSE_CAPI void  dse_post_process_set_dof_focus_distance(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_dof_focus_range(uint32_t e);
+DSE_CAPI void  dse_post_process_set_dof_focus_range(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_dof_bokeh_radius(uint32_t e);
+DSE_CAPI void  dse_post_process_set_dof_bokeh_radius(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_motion_blur_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_motion_blur_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_motion_blur_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_motion_blur_intensity(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_motion_blur_samples(uint32_t e);
+DSE_CAPI void dse_post_process_set_motion_blur_samples(uint32_t e, int v);
+DSE_CAPI int  dse_post_process_get_ssr_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_ssr_enabled(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_ssr_max_distance(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssr_max_distance(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_ssr_thickness(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssr_thickness(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_ssr_step_size(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssr_step_size(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_ssr_max_steps(uint32_t e);
+DSE_CAPI void dse_post_process_set_ssr_max_steps(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_ssr_fade_distance(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssr_fade_distance(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_ssr_max_roughness(uint32_t e);
+DSE_CAPI void  dse_post_process_set_ssr_max_roughness(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_outline_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_outline_enabled(uint32_t e, int v);
+DSE_CAPI void dse_post_process_get_outline_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_post_process_set_outline_color(uint32_t e, float x, float y, float z);
+DSE_CAPI float dse_post_process_get_outline_thickness(uint32_t e);
+DSE_CAPI void  dse_post_process_set_outline_thickness(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_outline_depth_threshold(uint32_t e);
+DSE_CAPI void  dse_post_process_set_outline_depth_threshold(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_outline_normal_threshold(uint32_t e);
+DSE_CAPI void  dse_post_process_set_outline_normal_threshold(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_light_shaft_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_light_shaft_enabled(uint32_t e, int v);
+DSE_CAPI void dse_post_process_get_light_shaft_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_post_process_set_light_shaft_color(uint32_t e, float x, float y, float z);
+DSE_CAPI float dse_post_process_get_light_shaft_density(uint32_t e);
+DSE_CAPI void  dse_post_process_set_light_shaft_density(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_light_shaft_weight(uint32_t e);
+DSE_CAPI void  dse_post_process_set_light_shaft_weight(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_light_shaft_decay(uint32_t e);
+DSE_CAPI void  dse_post_process_set_light_shaft_decay(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_light_shaft_exposure(uint32_t e);
+DSE_CAPI void  dse_post_process_set_light_shaft_exposure(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_light_shaft_intensity(uint32_t e);
+DSE_CAPI void  dse_post_process_set_light_shaft_intensity(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_light_shaft_samples(uint32_t e);
+DSE_CAPI void dse_post_process_set_light_shaft_samples(uint32_t e, int v);
+DSE_CAPI int  dse_post_process_get_fog_enabled(uint32_t e);
+DSE_CAPI void dse_post_process_set_fog_enabled(uint32_t e, int v);
+DSE_CAPI void dse_post_process_get_fog_color(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_post_process_set_fog_color(uint32_t e, float x, float y, float z);
+DSE_CAPI float dse_post_process_get_fog_density(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_density(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_fog_height_falloff(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_height_falloff(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_fog_height_offset(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_height_offset(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_fog_start(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_start(uint32_t e, float v);
+DSE_CAPI float dse_post_process_get_fog_end(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_end(uint32_t e, float v);
+DSE_CAPI int  dse_post_process_get_fog_steps(uint32_t e);
+DSE_CAPI void dse_post_process_set_fog_steps(uint32_t e, int v);
+DSE_CAPI float dse_post_process_get_fog_sun_scatter(uint32_t e);
+DSE_CAPI void  dse_post_process_set_fog_sun_scatter(uint32_t e, float v);
+
+// ============================================================
+// Animator3DComponent — S1.9 每字段访问器（实现见 dse_api_animator3d.gen.cpp）
+// danim_path/dskel_path 为纯字符串字段：动画系统按路径值比较自动重载，setter 纯赋值无副作用。
+// 复合/FSM/blend tree 仍手写于 lua_binding_ecs_animation.cpp，不在此。
+// ============================================================
+DSE_CAPI int   dse_animator3d_get_enabled(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_enabled(uint32_t e, int v);
+DSE_CAPI void  dse_animator3d_set_danim_path(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_danim_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void  dse_animator3d_set_dskel_path(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_dskel_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI float dse_animator3d_get_speed(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_speed(uint32_t e, float v);
+DSE_CAPI int   dse_animator3d_get_loop(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_loop(uint32_t e, int v);
+DSE_CAPI int   dse_animator3d_get_use_anim_tree(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_use_anim_tree(uint32_t e, int v);
+DSE_CAPI void  dse_animator3d_set_blend_parameter(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_blend_parameter(uint32_t e, char* buf, int buf_size);
+DSE_CAPI float dse_animator3d_get_blend_parameter_value(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_blend_parameter_value(uint32_t e, float v);
+
+// ============================================================
+// Physics3D 服务（L5，手写 dse_api_physics3d.cpp）
+// 依赖 Physics3D 服务 + ECS 碰撞体回退，非纯组件字段，codegen 无法表达。
+// raycast：direction 内部归一化；命中返回 1 并填充非空 out_*（point/normal 为 float[3]）。
+// ============================================================
+DSE_CAPI int dse_physics3d_raycast(float ox, float oy, float oz,
+                                   float dx, float dy, float dz,
+                                   float max_dist,
+                                   uint32_t* out_entity,
+                                   float* out_point,
+                                   float* out_normal,
+                                   float* out_distance);
 
 // ============================================================
 // Input

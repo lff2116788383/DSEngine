@@ -85,6 +85,16 @@ int L_Set_dir_light_shadow_strength(lua_State* L) {
     dse_dir_light_set_shadow_strength(e, static_cast<float>(luaL_checknumber(L, 2)));
     return 0;
 }
+int L_Get_dir_light_enabled(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, dse_dir_light_get_enabled(e));
+    return 1;
+}
+int L_Set_dir_light_enabled(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_dir_light_set_enabled(e, lua_toboolean(L, 2));
+    return 0;
+}
 
 } // namespace
 
@@ -103,6 +113,8 @@ void RegisterDirectionalLight3DComponentGenBindings(lua_State* L) {
         {"set_dir_light_cast_shadow", L_Set_dir_light_cast_shadow},
         {"get_dir_light_shadow_strength", L_Get_dir_light_shadow_strength},
         {"set_dir_light_shadow_strength", L_Set_dir_light_shadow_strength},
+        {"get_dir_light_enabled", L_Get_dir_light_enabled},
+        {"set_dir_light_enabled", L_Set_dir_light_enabled},
     });
 }
 

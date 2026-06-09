@@ -12,7 +12,7 @@ DSEngine Binding Codegen
 
 输出（均写入 <repo_root>/generated/）:
     engine/scripting/native_api/dse_api.gen.h
-    engine/scripting/native_api/dse_api.gen.cpp
+    engine/scripting/native_api/dse_api_<prefix>.gen.cpp           (每组件一个)
     engine/scripting/lua/bindings/lua_binding_ecs_<prefix>.gen.cpp  (每组件一个)
     GameScripts/DSEngine/Native.gen.cs
 """
@@ -31,17 +31,6 @@ except ImportError:
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
-def collect_includes(components: list) -> list:
-    """收集所有组件头文件路径（去重）。"""
-    seen = set()
-    result = []
-    for comp in components:
-        inc = comp.get("include", "")
-        if inc and inc not in seen:
-            seen.add(inc)
-            result.append(inc)
-    return result
 
 
 def write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
@@ -76,7 +65,6 @@ def main():
         defs = json.load(f)
 
     components = defs["components"]
-    includes   = collect_includes(components)
 
     env = Environment(
         loader=FileSystemLoader(str(template_dir)),
@@ -103,13 +91,13 @@ def main():
         components=components,
     )
 
-    # ── dse_api.gen.cpp ──────────────────────────────────────────────────────
-    render(
-        "dse_api.cpp.j2",
-        "engine/scripting/native_api/dse_api.gen.cpp",
-        components=components,
-        includes=includes,
-    )
+    # ── dse_api_<prefix>.gen.cpp (每组件，与 Lua 拆分边界对齐) ────────────────
+    for comp in components:
+        render(
+            "dse_api.cpp.j2",
+            f"engine/scripting/native_api/dse_api_{comp['prefix']}.gen.cpp",
+            comp=comp,
+        )
 
     # ── lua_binding_ecs_<prefix>.gen.cpp (每组件) ────────────────────────────
     for comp in components:
