@@ -187,11 +187,16 @@ int L_EcsSetPointLight3D(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     auto* light = helper::TryGetComponent<PointLightComponent>(*world, e);
     if (!light) return 0;
-    if (!lua_isnoneornil(L, 2)) light->color.r = helper::CheckFloat(L, 2);
-    if (!lua_isnoneornil(L, 3)) light->color.g = helper::CheckFloat(L, 3);
-    if (!lua_isnoneornil(L, 4)) light->color.b = helper::CheckFloat(L, 4);
-    if (!lua_isnoneornil(L, 5)) light->intensity = helper::CheckFloat(L, 5);
-    if (!lua_isnoneornil(L, 6)) light->radius = helper::CheckFloat(L, 6);
+    const uint32_t id = static_cast<uint32_t>(e);
+    // S1.8 收尾：写入委托 C ABI（color 为整 vec3 setter，未提供通道沿用当前值）
+    if (!lua_isnoneornil(L, 2) || !lua_isnoneornil(L, 3) || !lua_isnoneornil(L, 4)) {
+        const float cr = lua_isnoneornil(L, 2) ? light->color.r : helper::CheckFloat(L, 2);
+        const float cg = lua_isnoneornil(L, 3) ? light->color.g : helper::CheckFloat(L, 3);
+        const float cb = lua_isnoneornil(L, 4) ? light->color.b : helper::CheckFloat(L, 4);
+        dse_point_light_set_color(id, cr, cg, cb);
+    }
+    if (!lua_isnoneornil(L, 5)) dse_point_light_set_intensity(id, helper::CheckFloat(L, 5));
+    if (!lua_isnoneornil(L, 6)) dse_point_light_set_radius(id, helper::CheckFloat(L, 6));
     return 0;
 }
 
@@ -202,19 +207,25 @@ int L_EcsSetSpotLight3D(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     auto* light = helper::TryGetComponent<SpotLightComponent>(*world, e);
     if (!light) return 0;
+    const uint32_t id = static_cast<uint32_t>(e);
+    // S1.8 收尾：归一化在 Lua 算好，写入委托 C ABI
     if (!lua_isnoneornil(L, 2) && !lua_isnoneornil(L, 3) && !lua_isnoneornil(L, 4)) {
-        light->direction = glm::normalize(glm::vec3(
+        const glm::vec3 dir = glm::normalize(glm::vec3(
             helper::CheckFloat(L, 2),
             helper::CheckFloat(L, 3),
             helper::CheckFloat(L, 4)));
+        dse_spot_light_set_direction(id, dir.x, dir.y, dir.z);
     }
-    if (!lua_isnoneornil(L, 5)) light->color.r = helper::CheckFloat(L, 5);
-    if (!lua_isnoneornil(L, 6)) light->color.g = helper::CheckFloat(L, 6);
-    if (!lua_isnoneornil(L, 7)) light->color.b = helper::CheckFloat(L, 7);
-    if (!lua_isnoneornil(L, 8)) light->intensity = helper::CheckFloat(L, 8);
-    if (!lua_isnoneornil(L, 9)) light->radius = helper::CheckFloat(L, 9);
-    if (!lua_isnoneornil(L, 10)) light->inner_cone_angle = helper::CheckFloat(L, 10);
-    if (!lua_isnoneornil(L, 11)) light->outer_cone_angle = helper::CheckFloat(L, 11);
+    if (!lua_isnoneornil(L, 5) || !lua_isnoneornil(L, 6) || !lua_isnoneornil(L, 7)) {
+        const float cr = lua_isnoneornil(L, 5) ? light->color.r : helper::CheckFloat(L, 5);
+        const float cg = lua_isnoneornil(L, 6) ? light->color.g : helper::CheckFloat(L, 6);
+        const float cb = lua_isnoneornil(L, 7) ? light->color.b : helper::CheckFloat(L, 7);
+        dse_spot_light_set_color(id, cr, cg, cb);
+    }
+    if (!lua_isnoneornil(L, 8)) dse_spot_light_set_intensity(id, helper::CheckFloat(L, 8));
+    if (!lua_isnoneornil(L, 9)) dse_spot_light_set_radius(id, helper::CheckFloat(L, 9));
+    if (!lua_isnoneornil(L, 10)) dse_spot_light_set_inner_cone_angle(id, helper::CheckFloat(L, 10));
+    if (!lua_isnoneornil(L, 11)) dse_spot_light_set_outer_cone_angle(id, helper::CheckFloat(L, 11));
     return 0;
 }
 
@@ -226,7 +237,7 @@ int L_EcsSetSpotLightShadow(lua_State* L) {
     auto* light = helper::TryGetComponent<SpotLightComponent>(*world, e);
     if (!light) { lua_pushboolean(L, 0); return 1; }
     if (!lua_isnoneornil(L, 2)) {
-        light->cast_shadow = helper::CheckBool(L, 2);
+        dse_spot_light_set_cast_shadow(static_cast<uint32_t>(e), helper::CheckBool(L, 2) ? 1 : 0);
     }
     lua_pushboolean(L, 1);
     return 1;
