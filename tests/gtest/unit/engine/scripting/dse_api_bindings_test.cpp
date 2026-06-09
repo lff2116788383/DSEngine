@@ -140,6 +140,43 @@ TEST_F(DseApiBindingsTest, MeshRenderer_SetMeshPathClearsProceduralBuffers) {
     EXPECT_TRUE(after.temp_tangents.empty());
 }
 
+// S1.8-3b：PostProcess 字段进 defs 后，每字段 dse_post_process_* 访问器覆盖 float/int/bool/vec3
+TEST_F(DseApiBindingsTest, PostProcess_FieldRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+
+    dse_post_process_set_bloom_threshold(id, 2.5f);       // float
+    dse_post_process_set_ssao_sample_count(id, 48);       // int
+    dse_post_process_set_fxaa_enabled(id, 0);             // bool
+    dse_post_process_set_fog_color(id, 0.2f, 0.4f, 0.6f); // vec3
+
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_threshold(id), 2.5f);
+    EXPECT_EQ(dse_post_process_get_ssao_sample_count(id), 48);
+    EXPECT_EQ(dse_post_process_get_fxaa_enabled(id), 0);
+
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    dse_post_process_get_fog_color(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.2f);
+    EXPECT_FLOAT_EQ(y, 0.4f);
+    EXPECT_FLOAT_EQ(z, 0.6f);
+
+    const auto& pp = world_.registry().get<dse::PostProcessComponent>(e);
+    EXPECT_FLOAT_EQ(pp.bloom_threshold, 2.5f);
+    EXPECT_EQ(pp.ssao_sample_count, 48);
+    EXPECT_FALSE(pp.fxaa_enabled);
+    EXPECT_FLOAT_EQ(pp.fog_color.x, 0.2f);
+    EXPECT_FLOAT_EQ(pp.fog_color.z, 0.6f);
+}
+
+// 组件缺失时 getter 应返回 defs 中声明的默认值（与 header 一致）
+TEST_F(DseApiBindingsTest, PostProcess_MissingComponentReturnsDefault) {
+    Entity e = world_.CreateEntity();  // 不添加 PostProcessComponent
+    const uint32_t id = EntityId(e);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_threshold(id), 1.0f);
+    EXPECT_EQ(dse_post_process_get_ssao_sample_count(id), 32);
+}
+
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;
     EXPECT_EQ(dse_dyn_obstacle_get_shape(invalid), 0);

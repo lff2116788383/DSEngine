@@ -677,6 +677,516 @@
                     "lua_setter": "set_navmesh_auto_rebake_cell_height"
                 }
             ]
+        },
+        {
+            "name": "PostProcessComponent",
+            "prefix": "post_process",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_post_process_enabled",
+                    "lua_setter": "set_post_process_enabled"
+                },
+                {
+                    "name": "bloom_enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_post_process_bloom_enabled",
+                    "lua_setter": "set_post_process_bloom_enabled"
+                },
+                {
+                    "name": "bloom_threshold",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_bloom_threshold",
+                    "lua_setter": "set_post_process_bloom_threshold"
+                },
+                {
+                    "name": "bloom_intensity",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_bloom_intensity",
+                    "lua_setter": "set_post_process_bloom_intensity"
+                },
+                {
+                    "name": "bloom_knee",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_post_process_bloom_knee",
+                    "lua_setter": "set_post_process_bloom_knee"
+                },
+                {
+                    "name": "bloom_mip_weight",
+                    "type": "float",
+                    "default": "0.005f",
+                    "lua_getter": "get_post_process_bloom_mip_weight",
+                    "lua_setter": "set_post_process_bloom_mip_weight"
+                },
+                {
+                    "name": "color_grading_enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_post_process_color_grading_enabled",
+                    "lua_setter": "set_post_process_color_grading_enabled"
+                },
+                {
+                    "name": "exposure",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_exposure",
+                    "lua_setter": "set_post_process_exposure"
+                },
+                {
+                    "name": "gamma",
+                    "type": "float",
+                    "default": "2.2f",
+                    "lua_getter": "get_post_process_gamma",
+                    "lua_setter": "set_post_process_gamma"
+                },
+                {
+                    "name": "ssao_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_ssao_enabled",
+                    "lua_setter": "set_post_process_ssao_enabled"
+                },
+                {
+                    "name": "ssao_radius",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_ssao_radius",
+                    "lua_setter": "set_post_process_ssao_radius"
+                },
+                {
+                    "name": "ssao_bias",
+                    "type": "float",
+                    "default": "0.025f",
+                    "lua_getter": "get_post_process_ssao_bias",
+                    "lua_setter": "set_post_process_ssao_bias"
+                },
+                {
+                    "name": "ssao_sample_count",
+                    "type": "int",
+                    "default": "32",
+                    "lua_getter": "get_post_process_ssao_sample_count",
+                    "lua_setter": "set_post_process_ssao_sample_count"
+                },
+                {
+                    "name": "ssao_power",
+                    "type": "float",
+                    "default": "2.0f",
+                    "lua_getter": "get_post_process_ssao_power",
+                    "lua_setter": "set_post_process_ssao_power"
+                },
+                {
+                    "name": "ssao_intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_ssao_intensity",
+                    "lua_setter": "set_post_process_ssao_intensity"
+                },
+                {
+                    "name": "auto_exposure_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_auto_exposure_enabled",
+                    "lua_setter": "set_post_process_auto_exposure_enabled"
+                },
+                {
+                    "name": "exposure_min",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_post_process_exposure_min",
+                    "lua_setter": "set_post_process_exposure_min"
+                },
+                {
+                    "name": "exposure_max",
+                    "type": "float",
+                    "default": "10.0f",
+                    "lua_getter": "get_post_process_exposure_max",
+                    "lua_setter": "set_post_process_exposure_max"
+                },
+                {
+                    "name": "adaptation_speed_up",
+                    "type": "float",
+                    "default": "2.0f",
+                    "lua_getter": "get_post_process_adaptation_speed_up",
+                    "lua_setter": "set_post_process_adaptation_speed_up"
+                },
+                {
+                    "name": "adaptation_speed_down",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_adaptation_speed_down",
+                    "lua_setter": "set_post_process_adaptation_speed_down"
+                },
+                {
+                    "name": "exposure_compensation",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_post_process_exposure_compensation",
+                    "lua_setter": "set_post_process_exposure_compensation"
+                },
+                {
+                    "name": "color_lut_intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_color_lut_intensity",
+                    "lua_setter": "set_post_process_color_lut_intensity"
+                },
+                {
+                    "name": "vignette_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_vignette_enabled",
+                    "lua_setter": "set_post_process_vignette_enabled"
+                },
+                {
+                    "name": "vignette_intensity",
+                    "type": "float",
+                    "default": "0.35f",
+                    "lua_getter": "get_post_process_vignette_intensity",
+                    "lua_setter": "set_post_process_vignette_intensity"
+                },
+                {
+                    "name": "vignette_radius",
+                    "type": "float",
+                    "default": "0.75f",
+                    "lua_getter": "get_post_process_vignette_radius",
+                    "lua_setter": "set_post_process_vignette_radius"
+                },
+                {
+                    "name": "vignette_softness",
+                    "type": "float",
+                    "default": "0.35f",
+                    "lua_getter": "get_post_process_vignette_softness",
+                    "lua_setter": "set_post_process_vignette_softness"
+                },
+                {
+                    "name": "film_grain_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_film_grain_enabled",
+                    "lua_setter": "set_post_process_film_grain_enabled"
+                },
+                {
+                    "name": "film_grain_intensity",
+                    "type": "float",
+                    "default": "0.08f",
+                    "lua_getter": "get_post_process_film_grain_intensity",
+                    "lua_setter": "set_post_process_film_grain_intensity"
+                },
+                {
+                    "name": "film_grain_time_scale",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_film_grain_time_scale",
+                    "lua_setter": "set_post_process_film_grain_time_scale"
+                },
+                {
+                    "name": "fxaa_enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_post_process_fxaa_enabled",
+                    "lua_setter": "set_post_process_fxaa_enabled"
+                },
+                {
+                    "name": "taa_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_taa_enabled",
+                    "lua_setter": "set_post_process_taa_enabled"
+                },
+                {
+                    "name": "taa_blend_factor",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_post_process_taa_blend_factor",
+                    "lua_setter": "set_post_process_taa_blend_factor"
+                },
+                {
+                    "name": "contact_shadow_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_contact_shadow_enabled",
+                    "lua_setter": "set_post_process_contact_shadow_enabled"
+                },
+                {
+                    "name": "contact_shadow_strength",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_contact_shadow_strength",
+                    "lua_setter": "set_post_process_contact_shadow_strength"
+                },
+                {
+                    "name": "contact_shadow_steps",
+                    "type": "int",
+                    "default": "16",
+                    "lua_getter": "get_post_process_contact_shadow_steps",
+                    "lua_setter": "set_post_process_contact_shadow_steps"
+                },
+                {
+                    "name": "contact_shadow_step_size",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_contact_shadow_step_size",
+                    "lua_setter": "set_post_process_contact_shadow_step_size"
+                },
+                {
+                    "name": "dof_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_dof_enabled",
+                    "lua_setter": "set_post_process_dof_enabled"
+                },
+                {
+                    "name": "dof_focus_distance",
+                    "type": "float",
+                    "default": "100.0f",
+                    "lua_getter": "get_post_process_dof_focus_distance",
+                    "lua_setter": "set_post_process_dof_focus_distance"
+                },
+                {
+                    "name": "dof_focus_range",
+                    "type": "float",
+                    "default": "50.0f",
+                    "lua_getter": "get_post_process_dof_focus_range",
+                    "lua_setter": "set_post_process_dof_focus_range"
+                },
+                {
+                    "name": "dof_bokeh_radius",
+                    "type": "float",
+                    "default": "4.0f",
+                    "lua_getter": "get_post_process_dof_bokeh_radius",
+                    "lua_setter": "set_post_process_dof_bokeh_radius"
+                },
+                {
+                    "name": "motion_blur_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_motion_blur_enabled",
+                    "lua_setter": "set_post_process_motion_blur_enabled"
+                },
+                {
+                    "name": "motion_blur_intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_motion_blur_intensity",
+                    "lua_setter": "set_post_process_motion_blur_intensity"
+                },
+                {
+                    "name": "motion_blur_samples",
+                    "type": "int",
+                    "default": "8",
+                    "lua_getter": "get_post_process_motion_blur_samples",
+                    "lua_setter": "set_post_process_motion_blur_samples"
+                },
+                {
+                    "name": "ssr_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_ssr_enabled",
+                    "lua_setter": "set_post_process_ssr_enabled"
+                },
+                {
+                    "name": "ssr_max_distance",
+                    "type": "float",
+                    "default": "100.0f",
+                    "lua_getter": "get_post_process_ssr_max_distance",
+                    "lua_setter": "set_post_process_ssr_max_distance"
+                },
+                {
+                    "name": "ssr_thickness",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_ssr_thickness",
+                    "lua_setter": "set_post_process_ssr_thickness"
+                },
+                {
+                    "name": "ssr_step_size",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_ssr_step_size",
+                    "lua_setter": "set_post_process_ssr_step_size"
+                },
+                {
+                    "name": "ssr_max_steps",
+                    "type": "int",
+                    "default": "64",
+                    "lua_getter": "get_post_process_ssr_max_steps",
+                    "lua_setter": "set_post_process_ssr_max_steps"
+                },
+                {
+                    "name": "ssr_fade_distance",
+                    "type": "float",
+                    "default": "0.2f",
+                    "lua_getter": "get_post_process_ssr_fade_distance",
+                    "lua_setter": "set_post_process_ssr_fade_distance"
+                },
+                {
+                    "name": "ssr_max_roughness",
+                    "type": "float",
+                    "default": "0.5f",
+                    "lua_getter": "get_post_process_ssr_max_roughness",
+                    "lua_setter": "set_post_process_ssr_max_roughness"
+                },
+                {
+                    "name": "outline_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_outline_enabled",
+                    "lua_setter": "set_post_process_outline_enabled"
+                },
+                {
+                    "name": "outline_color",
+                    "type": "vec3",
+                    "lua_getter": "get_post_process_outline_color",
+                    "lua_setter": "set_post_process_outline_color"
+                },
+                {
+                    "name": "outline_thickness",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_outline_thickness",
+                    "lua_setter": "set_post_process_outline_thickness"
+                },
+                {
+                    "name": "outline_depth_threshold",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_post_process_outline_depth_threshold",
+                    "lua_setter": "set_post_process_outline_depth_threshold"
+                },
+                {
+                    "name": "outline_normal_threshold",
+                    "type": "float",
+                    "default": "0.4f",
+                    "lua_getter": "get_post_process_outline_normal_threshold",
+                    "lua_setter": "set_post_process_outline_normal_threshold"
+                },
+                {
+                    "name": "light_shaft_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_light_shaft_enabled",
+                    "lua_setter": "set_post_process_light_shaft_enabled"
+                },
+                {
+                    "name": "light_shaft_color",
+                    "type": "vec3",
+                    "lua_getter": "get_post_process_light_shaft_color",
+                    "lua_setter": "set_post_process_light_shaft_color"
+                },
+                {
+                    "name": "light_shaft_density",
+                    "type": "float",
+                    "default": "0.84f",
+                    "lua_getter": "get_post_process_light_shaft_density",
+                    "lua_setter": "set_post_process_light_shaft_density"
+                },
+                {
+                    "name": "light_shaft_weight",
+                    "type": "float",
+                    "default": "0.04f",
+                    "lua_getter": "get_post_process_light_shaft_weight",
+                    "lua_setter": "set_post_process_light_shaft_weight"
+                },
+                {
+                    "name": "light_shaft_decay",
+                    "type": "float",
+                    "default": "0.97f",
+                    "lua_getter": "get_post_process_light_shaft_decay",
+                    "lua_setter": "set_post_process_light_shaft_decay"
+                },
+                {
+                    "name": "light_shaft_exposure",
+                    "type": "float",
+                    "default": "0.4f",
+                    "lua_getter": "get_post_process_light_shaft_exposure",
+                    "lua_setter": "set_post_process_light_shaft_exposure"
+                },
+                {
+                    "name": "light_shaft_intensity",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_post_process_light_shaft_intensity",
+                    "lua_setter": "set_post_process_light_shaft_intensity"
+                },
+                {
+                    "name": "light_shaft_samples",
+                    "type": "int",
+                    "default": "64",
+                    "lua_getter": "get_post_process_light_shaft_samples",
+                    "lua_setter": "set_post_process_light_shaft_samples"
+                },
+                {
+                    "name": "fog_enabled",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_post_process_fog_enabled",
+                    "lua_setter": "set_post_process_fog_enabled"
+                },
+                {
+                    "name": "fog_color",
+                    "type": "vec3",
+                    "lua_getter": "get_post_process_fog_color",
+                    "lua_setter": "set_post_process_fog_color"
+                },
+                {
+                    "name": "fog_density",
+                    "type": "float",
+                    "default": "0.02f",
+                    "lua_getter": "get_post_process_fog_density",
+                    "lua_setter": "set_post_process_fog_density"
+                },
+                {
+                    "name": "fog_height_falloff",
+                    "type": "float",
+                    "default": "0.3f",
+                    "lua_getter": "get_post_process_fog_height_falloff",
+                    "lua_setter": "set_post_process_fog_height_falloff"
+                },
+                {
+                    "name": "fog_height_offset",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_post_process_fog_height_offset",
+                    "lua_setter": "set_post_process_fog_height_offset"
+                },
+                {
+                    "name": "fog_start",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_post_process_fog_start",
+                    "lua_setter": "set_post_process_fog_start"
+                },
+                {
+                    "name": "fog_end",
+                    "type": "float",
+                    "default": "1000.0f",
+                    "lua_getter": "get_post_process_fog_end",
+                    "lua_setter": "set_post_process_fog_end"
+                },
+                {
+                    "name": "fog_steps",
+                    "type": "int",
+                    "default": "16",
+                    "lua_getter": "get_post_process_fog_steps",
+                    "lua_setter": "set_post_process_fog_steps"
+                },
+                {
+                    "name": "fog_sun_scatter",
+                    "type": "float",
+                    "default": "0.6f",
+                    "lua_getter": "get_post_process_fog_sun_scatter",
+                    "lua_setter": "set_post_process_fog_sun_scatter"
+                }
+            ]
         }
     ]
 }

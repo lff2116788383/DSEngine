@@ -265,6 +265,7 @@ list(APPEND engine_cpp
     "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_terrain_tile.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_dyn_obstacle.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_navmesh_rebake.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_post_process.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_transform.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_camera3d.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dir_light.gen.cpp"
@@ -276,6 +277,7 @@ list(APPEND engine_cpp
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_terrain_tile.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dyn_obstacle.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_navmesh_rebake.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_post_process.gen.cpp"
 )
 
 # Vulkan RHI 后端源文件仅在启用时编译

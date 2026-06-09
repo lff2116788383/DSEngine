@@ -535,6 +535,440 @@ internal static class Native {
     internal static extern void dse_navmesh_rebake_set_cell_height(uint e, float v);
 
 
+    // ---- PostProcessComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_bloom_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_bloom_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_bloom_threshold(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_bloom_threshold(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_bloom_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_bloom_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_bloom_knee(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_bloom_knee(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_bloom_mip_weight(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_bloom_mip_weight(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_color_grading_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_color_grading_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_exposure(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_exposure(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_gamma(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_gamma(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_ssao_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssao_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssao_bias(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_bias(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_ssao_sample_count(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_sample_count(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssao_power(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_power(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssao_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssao_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_auto_exposure_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_auto_exposure_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_exposure_min(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_exposure_min(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_exposure_max(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_exposure_max(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_adaptation_speed_up(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_adaptation_speed_up(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_adaptation_speed_down(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_adaptation_speed_down(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_exposure_compensation(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_exposure_compensation(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_color_lut_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_color_lut_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_vignette_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_vignette_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_vignette_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_vignette_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_vignette_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_vignette_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_vignette_softness(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_vignette_softness(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_film_grain_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_film_grain_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_film_grain_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_film_grain_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_film_grain_time_scale(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_film_grain_time_scale(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_fxaa_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fxaa_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_taa_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_taa_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_taa_blend_factor(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_taa_blend_factor(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_contact_shadow_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_contact_shadow_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_contact_shadow_strength(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_contact_shadow_strength(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_contact_shadow_steps(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_contact_shadow_steps(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_contact_shadow_step_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_contact_shadow_step_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_dof_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_dof_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_dof_focus_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_dof_focus_distance(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_dof_focus_range(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_dof_focus_range(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_dof_bokeh_radius(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_dof_bokeh_radius(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_motion_blur_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_motion_blur_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_motion_blur_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_motion_blur_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_motion_blur_samples(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_motion_blur_samples(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_ssr_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssr_max_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_max_distance(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssr_thickness(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_thickness(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssr_step_size(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_step_size(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_ssr_max_steps(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_max_steps(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssr_fade_distance(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_fade_distance(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_ssr_max_roughness(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_ssr_max_roughness(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_outline_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_outline_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_get_outline_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_outline_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_outline_thickness(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_outline_thickness(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_outline_depth_threshold(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_outline_depth_threshold(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_outline_normal_threshold(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_outline_normal_threshold(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_light_shaft_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_get_light_shaft_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_light_shaft_density(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_density(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_light_shaft_weight(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_weight(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_light_shaft_decay(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_decay(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_light_shaft_exposure(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_exposure(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_light_shaft_intensity(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_intensity(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_light_shaft_samples(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_light_shaft_samples(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_fog_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_get_fog_color(uint e, out float x, out float y, out float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_color(uint e, float x, float y, float z);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_density(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_density(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_height_falloff(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_height_falloff(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_height_offset(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_height_offset(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_start(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_start(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_end(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_end(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_post_process_get_fog_steps(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_steps(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_post_process_get_fog_sun_scatter(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_post_process_set_fog_sun_scatter(uint e, float v);
+
+
 } // class Native
 
 } // namespace DSEngine
