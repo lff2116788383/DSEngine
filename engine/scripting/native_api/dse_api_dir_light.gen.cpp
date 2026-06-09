@@ -79,3 +79,12 @@ extern "C" void dse_dir_light_set_shadow_strength(uint32_t e, float v) {
         c->shadow_strength = v;
     }
 }
+extern "C" int dse_dir_light_get_enabled(uint32_t e) {
+    const auto* c = GCC<dse::DirectionalLight3DComponent>(e);
+    return (c && c->enabled) ? 1 : 0;
+}
+extern "C" void dse_dir_light_set_enabled(uint32_t e, int v) {
+    if (auto* c = GC<dse::DirectionalLight3DComponent>(e)) {
+        c->enabled = (v != 0);
+    }
+}

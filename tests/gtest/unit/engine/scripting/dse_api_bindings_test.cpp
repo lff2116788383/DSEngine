@@ -177,6 +177,41 @@ TEST_F(DseApiBindingsTest, PostProcess_MissingComponentReturnsDefault) {
     EXPECT_EQ(dse_post_process_get_ssao_sample_count(id), 32);
 }
 
+// S1.8 Tier B：新增 dir_light.enabled / point_light.cast_shadow 每字段访问器 round-trip
+TEST_F(DseApiBindingsTest, Light_TierBFieldRoundTrip) {
+    Entity d = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(d);
+    const uint32_t did = EntityId(d);
+    dse_dir_light_set_enabled(did, 0);
+    EXPECT_EQ(dse_dir_light_get_enabled(did), 0);
+    EXPECT_FALSE(world_.registry().get<dse::DirectionalLight3DComponent>(d).enabled);
+
+    Entity p = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(p);
+    const uint32_t pid = EntityId(p);
+    dse_point_light_set_cast_shadow(pid, 1);
+    EXPECT_EQ(dse_point_light_get_cast_shadow(pid), 1);
+    EXPECT_TRUE(world_.registry().get<dse::PointLightComponent>(p).cast_shadow);
+}
+
+// S1.8 Tier C：手写复合 dse_dir_light_set_shadow_params 的 cascade 级联约束 + clamp
+TEST_F(DseApiBindingsTest, DirLight_ShadowParamsClampAndCascade) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+
+    // strength 1.5→1.0；c0 0.05→0.1；c1 0.05→max(0.1+0.1)=0.2；c2 0.05→0.3；lambda -1→0
+    dse_dir_light_set_shadow_params(id, 1, 1.5f, 0.05f, 0.05f, 0.05f, -1.0f);
+
+    const auto& dl = world_.registry().get<dse::DirectionalLight3DComponent>(e);
+    EXPECT_TRUE(dl.cast_shadow);
+    EXPECT_FLOAT_EQ(dl.shadow_strength, 1.0f);
+    EXPECT_FLOAT_EQ(dl.cascade_splits[0], 0.1f);
+    EXPECT_FLOAT_EQ(dl.cascade_splits[1], 0.2f);
+    EXPECT_FLOAT_EQ(dl.cascade_splits[2], 0.3f);
+    EXPECT_FLOAT_EQ(dl.cascade_split_lambda, 0.0f);
+}
+
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;
     EXPECT_EQ(dse_dyn_obstacle_get_shape(invalid), 0);

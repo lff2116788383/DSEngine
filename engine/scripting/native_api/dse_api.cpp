@@ -16,6 +16,7 @@
 #include "engine/base/time.h"
 
 #include <glm/glm.hpp>
+#include <algorithm>
 
 namespace {
 
@@ -169,6 +170,24 @@ extern "C" void dse_sky_light_add(uint32_t e) {
     World* w = GetWorld();
     if (!ValidEntity(w, e)) return;
     w->registry().emplace_or_replace<dse::SkyLightComponent>(ToEntity(e));
+}
+
+// ============================================================
+// S1.8 Tier C：DirectionalLight 复合阴影参数
+// 封装 cascade 级联约束（split[i] ≥ split[i-1]+0.1）+ shadow_strength/lambda 的 clamp。
+// 供 Lua set_directional_light_shadow 薄包装委托；调用方传入已与现值合并的参数。
+// 该钳制逻辑与原手写 Lua setter 完全一致。
+// ============================================================
+extern "C" void dse_dir_light_set_shadow_params(uint32_t e, int cast_shadow, float shadow_strength,
+                                                float c0, float c1, float c2, float lambda) {
+    auto* light = GetComp<dse::DirectionalLight3DComponent>(e);
+    if (!light) return;
+    light->cast_shadow = (cast_shadow != 0);
+    light->shadow_strength = std::clamp(shadow_strength, 0.0f, 1.0f);
+    light->cascade_splits[0] = std::max(0.1f, c0);
+    light->cascade_splits[1] = std::max(light->cascade_splits[0] + 0.1f, c1);
+    light->cascade_splits[2] = std::max(light->cascade_splits[1] + 0.1f, c2);
+    light->cascade_split_lambda = std::clamp(lambda, 0.0f, 1.0f);
 }
 
 // ============================================================

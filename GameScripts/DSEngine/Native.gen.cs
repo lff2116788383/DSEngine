@@ -151,6 +151,12 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_dir_light_set_shadow_strength(uint e, float v);
 
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_dir_light_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_dir_light_set_enabled(uint e, int v);
+
 
     // ---- PointLightComponent ----
     [MethodImpl(MethodImplOptions.InternalCall)]
@@ -176,6 +182,12 @@ internal static class Native {
 
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_point_light_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_point_light_get_cast_shadow(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_point_light_set_cast_shadow(uint e, int v);
 
 
     // ---- SpotLightComponent ----

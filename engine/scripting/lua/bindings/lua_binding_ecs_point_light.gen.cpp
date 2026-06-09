@@ -60,6 +60,16 @@ int L_Set_point_light_enabled(lua_State* L) {
     dse_point_light_set_enabled(e, lua_toboolean(L, 2));
     return 0;
 }
+int L_Get_point_light_cast_shadow(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, dse_point_light_get_cast_shadow(e));
+    return 1;
+}
+int L_Set_point_light_cast_shadow(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_point_light_set_cast_shadow(e, lua_toboolean(L, 2));
+    return 0;
+}
 
 } // namespace
 
@@ -74,6 +84,8 @@ void RegisterPointLightComponentGenBindings(lua_State* L) {
         {"set_point_light_radius", L_Set_point_light_radius},
         {"get_point_light_enabled", L_Get_point_light_enabled},
         {"set_point_light_enabled", L_Set_point_light_enabled},
+        {"get_point_light_cast_shadow", L_Get_point_light_cast_shadow},
+        {"set_point_light_cast_shadow", L_Set_point_light_cast_shadow},
     });
 }
 

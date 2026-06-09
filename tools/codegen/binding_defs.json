@@ -185,6 +185,13 @@
                     "default": "0.35f",
                     "lua_getter": "get_dir_light_shadow_strength",
                     "lua_setter": "set_dir_light_shadow_strength"
+                },
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_dir_light_enabled",
+                    "lua_setter": "set_dir_light_enabled"
                 }
             ]
         },
@@ -221,6 +228,13 @@
                     "default": "true",
                     "lua_getter": "get_point_light_enabled",
                     "lua_setter": "set_point_light_enabled"
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_point_light_cast_shadow",
+                    "lua_setter": "set_point_light_cast_shadow"
                 }
             ]
         },

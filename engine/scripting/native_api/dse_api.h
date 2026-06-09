@@ -121,6 +121,12 @@ DSE_CAPI int   dse_dir_light_get_cast_shadow(uint32_t e);
 DSE_CAPI void  dse_dir_light_set_cast_shadow(uint32_t e, int v);
 DSE_CAPI float dse_dir_light_get_shadow_strength(uint32_t e);
 DSE_CAPI void  dse_dir_light_set_shadow_strength(uint32_t e, float v);
+DSE_CAPI int   dse_dir_light_get_enabled(uint32_t e);
+DSE_CAPI void  dse_dir_light_set_enabled(uint32_t e, int v);
+// S1.8 Tier C：复合阴影参数 setter，封装 cascade 级联约束（split[i] ≥ split[i-1]+0.1）+ clamp；
+//             手写实现见 dse_api.cpp（非 codegen）。传入值由调用方合并好现值。
+DSE_CAPI void  dse_dir_light_set_shadow_params(uint32_t e, int cast_shadow, float shadow_strength,
+                                               float c0, float c1, float c2, float lambda);
 
 // ============================================================
 // PointLightComponent
@@ -135,6 +141,8 @@ DSE_CAPI float dse_point_light_get_radius(uint32_t e);
 DSE_CAPI void  dse_point_light_set_radius(uint32_t e, float v);
 DSE_CAPI int   dse_point_light_get_enabled(uint32_t e);
 DSE_CAPI void  dse_point_light_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_point_light_get_cast_shadow(uint32_t e);
+DSE_CAPI void  dse_point_light_set_cast_shadow(uint32_t e, int v);
 
 // ============================================================
 // SpotLightComponent

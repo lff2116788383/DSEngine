@@ -63,19 +63,23 @@ int L_EcsSetDirectionalLight3D(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     auto* light = helper::TryGetComponent<DirectionalLight3DComponent>(*world, e);
     if (!light) return 0;
+    const uint32_t id = static_cast<uint32_t>(e);
+    // S1.8 Tier B：写入委托 C ABI（归一化/部分更新在 Lua 算好）
     if (lua_gettop(L) >= 2) {
-        light->enabled = helper::CheckBool(L, 2);
+        dse_dir_light_set_enabled(id, helper::CheckBool(L, 2) ? 1 : 0);
     }
-    float dir_x = helper::OptFloat(L, 3, light->direction.x);
-    float dir_y = helper::OptFloat(L, 4, light->direction.y);
-    float dir_z = helper::OptFloat(L, 5, light->direction.z);
-    light->direction = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
-    light->color.r = helper::OptFloat(L, 6, light->color.r);
-    light->color.g = helper::OptFloat(L, 7, light->color.g);
-    light->color.b = helper::OptFloat(L, 8, light->color.b);
-    light->intensity = helper::OptFloat(L, 9, light->intensity);
-    light->ambient_intensity = helper::OptFloat(L, 10, light->ambient_intensity);
-    light->shadow_strength = helper::OptFloat(L, 11, light->shadow_strength);
+    const float dir_x = helper::OptFloat(L, 3, light->direction.x);
+    const float dir_y = helper::OptFloat(L, 4, light->direction.y);
+    const float dir_z = helper::OptFloat(L, 5, light->direction.z);
+    const glm::vec3 dir = glm::normalize(glm::vec3(dir_x, dir_y, dir_z));
+    dse_dir_light_set_direction(id, dir.x, dir.y, dir.z);
+    const float cr = helper::OptFloat(L, 6, light->color.r);
+    const float cg = helper::OptFloat(L, 7, light->color.g);
+    const float cb = helper::OptFloat(L, 8, light->color.b);
+    dse_dir_light_set_color(id, cr, cg, cb);
+    dse_dir_light_set_intensity(id, helper::OptFloat(L, 9, light->intensity));
+    dse_dir_light_set_ambient_intensity(id, helper::OptFloat(L, 10, light->ambient_intensity));
+    dse_dir_light_set_shadow_strength(id, helper::OptFloat(L, 11, light->shadow_strength));
     return 0;
 }
 
@@ -92,18 +96,18 @@ int L_EcsSetDirectionalLightShadow(lua_State* L) {
         return 1;
     }
 
-    if (!lua_isnoneornil(L, 2)) {
-        light->cast_shadow = helper::CheckBool(L, 2);
-    }
-    light->shadow_strength = std::clamp(helper::OptFloat(L, 3, light->shadow_strength), 0.0f, 1.0f);
-    const float c0 = helper::OptFloat(L, 4, light->cascade_splits[0]);
-    const float c1 = helper::OptFloat(L, 5, light->cascade_splits[1]);
-    const float c2 = helper::OptFloat(L, 6, light->cascade_splits[2]);
-    light->cascade_splits[0] = std::max(0.1f, c0);
-    light->cascade_splits[1] = std::max(light->cascade_splits[0] + 0.1f, c1);
-    light->cascade_splits[2] = std::max(light->cascade_splits[1] + 0.1f, c2);
-    light->cascade_split_lambda = std::clamp(helper::OptFloat(L, 7, light->cascade_split_lambda), 0.0f, 1.0f);
+    const uint32_t id = static_cast<uint32_t>(e);
+    // S1.8 Tier C：部分更新（nil 沿用现值）在 Lua 合并；cascade 级联约束 + clamp 封装在 C ABI
+    const int cast_shadow = lua_isnoneornil(L, 2) ? (light->cast_shadow ? 1 : 0)
+                                                  : (helper::CheckBool(L, 2) ? 1 : 0);
+    const float ss     = helper::OptFloat(L, 3, light->shadow_strength);
+    const float c0     = helper::OptFloat(L, 4, light->cascade_splits[0]);
+    const float c1     = helper::OptFloat(L, 5, light->cascade_splits[1]);
+    const float c2     = helper::OptFloat(L, 6, light->cascade_splits[2]);
+    const float lambda = helper::OptFloat(L, 7, light->cascade_split_lambda);
+    dse_dir_light_set_shadow_params(id, cast_shadow, ss, c0, c1, c2, lambda);
 
+    // 读回（钳制后）现值，保持原 7 值返回契约
     lua_pushboolean(L, 1);
     helper::PushBool(L, light->cast_shadow);
     helper::PushFloat(L, light->shadow_strength);
@@ -149,7 +153,7 @@ int L_EcsSetPointLightShadow(lua_State* L) {
     }
 
     if (!lua_isnoneornil(L, 2)) {
-        light->cast_shadow = helper::CheckBool(L, 2);
+        dse_point_light_set_cast_shadow(static_cast<uint32_t>(e), helper::CheckBool(L, 2) ? 1 : 0);
     }
     lua_pushboolean(L, 1);
     return 1;

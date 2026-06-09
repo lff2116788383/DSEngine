@@ -62,3 +62,12 @@ extern "C" void dse_point_light_set_enabled(uint32_t e, int v) {
         c->enabled = (v != 0);
     }
 }
+extern "C" int dse_point_light_get_cast_shadow(uint32_t e) {
+    const auto* c = GCC<dse::PointLightComponent>(e);
+    return (c && c->cast_shadow) ? 1 : 0;
+}
+extern "C" void dse_point_light_set_cast_shadow(uint32_t e, int v) {
+    if (auto* c = GC<dse::PointLightComponent>(e)) {
+        c->cast_shadow = (v != 0);
+    }
+}

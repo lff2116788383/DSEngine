@@ -75,6 +75,8 @@ DSE_CAPI_GEN int  dse_dir_light_get_cast_shadow(uint32_t e);
 DSE_CAPI_GEN void dse_dir_light_set_cast_shadow(uint32_t e, int v);
 DSE_CAPI_GEN float dse_dir_light_get_shadow_strength(uint32_t e);
 DSE_CAPI_GEN void  dse_dir_light_set_shadow_strength(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_dir_light_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_dir_light_set_enabled(uint32_t e, int v);
 
 /* ---- PointLightComponent ---- */
 DSE_CAPI_GEN void dse_point_light_get_color(uint32_t e, float* x, float* y, float* z);
@@ -85,6 +87,8 @@ DSE_CAPI_GEN float dse_point_light_get_radius(uint32_t e);
 DSE_CAPI_GEN void  dse_point_light_set_radius(uint32_t e, float v);
 DSE_CAPI_GEN int  dse_point_light_get_enabled(uint32_t e);
 DSE_CAPI_GEN void dse_point_light_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_point_light_get_cast_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_point_light_set_cast_shadow(uint32_t e, int v);
 
 /* ---- SpotLightComponent ---- */
 DSE_CAPI_GEN void dse_spot_light_get_color(uint32_t e, float* x, float* y, float* z);
