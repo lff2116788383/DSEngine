@@ -1201,6 +1201,71 @@
                     "lua_setter": "set_post_process_fog_sun_scatter"
                 }
             ]
+        },
+        {
+            "name": "Animator3DComponent",
+            "prefix": "animator3d",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_animator3d_enabled",
+                    "lua_setter": "set_animator3d_enabled"
+                },
+                {
+                    "name": "danim_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_animator3d_danim_path",
+                    "lua_setter": "set_animator3d_danim_path"
+                },
+                {
+                    "name": "dskel_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_animator3d_dskel_path",
+                    "lua_setter": "set_animator3d_dskel_path"
+                },
+                {
+                    "name": "speed",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_animator3d_speed",
+                    "lua_setter": "set_animator3d_speed"
+                },
+                {
+                    "name": "loop",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_animator3d_loop",
+                    "lua_setter": "set_animator3d_loop"
+                },
+                {
+                    "name": "use_anim_tree",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_animator3d_use_anim_tree",
+                    "lua_setter": "set_animator3d_use_anim_tree"
+                },
+                {
+                    "name": "blend_parameter",
+                    "type": "string",
+                    "buffer_size": 128,
+                    "lua_getter": "get_animator3d_blend_parameter",
+                    "lua_setter": "set_animator3d_blend_parameter"
+                },
+                {
+                    "name": "blend_parameter_value",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_animator3d_blend_parameter_value",
+                    "lua_setter": "set_animator3d_blend_parameter_value"
+                }
+            ]
         }
     ]
 }

@@ -55,6 +55,7 @@ void RegisterTerrainTileManagerComponentGenBindings(lua_State* L);
 void RegisterDynamicObstacleComponentGenBindings(lua_State* L);
 void RegisterNavMeshAutoRebakeComponentGenBindings(lua_State* L);
 void RegisterPostProcessComponentGenBindings(lua_State* L);
+void RegisterAnimator3DComponentGenBindings(lua_State* L);
 void RegisterEcsPhysics2DBindings(lua_State* L);
 void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);

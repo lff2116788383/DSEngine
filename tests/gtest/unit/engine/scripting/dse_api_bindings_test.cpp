@@ -212,6 +212,43 @@ TEST_F(DseApiBindingsTest, DirLight_ShadowParamsClampAndCascade) {
     EXPECT_FLOAT_EQ(dl.cascade_split_lambda, 0.0f);
 }
 
+// S1.9：Animator3DComponent 纯字段进 defs 后的每字段访问器 round-trip。
+// danim_path/dskel_path 为纯字符串 setter（无清缓存副作用，动画系统按路径值比较重载）。
+TEST_F(DseApiBindingsTest, Animator3D_FieldRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Animator3DComponent>(e);
+    const uint32_t id = EntityId(e);
+
+    dse_animator3d_set_enabled(id, 0);
+    dse_animator3d_set_danim_path(id, "anims/run.danim");
+    dse_animator3d_set_dskel_path(id, "skeletons/hero.dskel");
+    dse_animator3d_set_speed(id, 2.5f);
+    dse_animator3d_set_loop(id, 0);
+    dse_animator3d_set_use_anim_tree(id, 1);
+    dse_animator3d_set_blend_parameter(id, "velocity");
+    dse_animator3d_set_blend_parameter_value(id, 0.75f);
+
+    EXPECT_EQ(dse_animator3d_get_enabled(id), 0);
+    EXPECT_FLOAT_EQ(dse_animator3d_get_speed(id), 2.5f);
+    EXPECT_EQ(dse_animator3d_get_loop(id), 0);
+    EXPECT_EQ(dse_animator3d_get_use_anim_tree(id), 1);
+    EXPECT_FLOAT_EQ(dse_animator3d_get_blend_parameter_value(id), 0.75f);
+
+    char buf[64] = {0};
+    dse_animator3d_get_danim_path(id, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "anims/run.danim");
+    dse_animator3d_get_dskel_path(id, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "skeletons/hero.dskel");
+    dse_animator3d_get_blend_parameter(id, buf, sizeof(buf));
+    EXPECT_STREQ(buf, "velocity");
+
+    const auto& a = world_.registry().get<dse::Animator3DComponent>(e);
+    EXPECT_FALSE(a.enabled);
+    EXPECT_EQ(a.danim_path, "anims/run.danim");
+    EXPECT_EQ(a.dskel_path, "skeletons/hero.dskel");
+    EXPECT_TRUE(a.use_anim_tree);
+}
+
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;
     EXPECT_EQ(dse_dyn_obstacle_get_shape(invalid), 0);

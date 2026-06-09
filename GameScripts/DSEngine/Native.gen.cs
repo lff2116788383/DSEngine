@@ -981,6 +981,59 @@ internal static class Native {
     internal static extern void dse_post_process_set_fog_sun_scatter(uint e, float v);
 
 
+    // ---- Animator3DComponent ----
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_enabled(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_enabled(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_danim_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_danim_path(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_dskel_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_dskel_path(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_animator3d_get_speed(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_speed(uint e, float v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_loop(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_loop(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_use_anim_tree(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_use_anim_tree(uint e, int v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_blend_parameter(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_animator3d_get_blend_parameter(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern float dse_animator3d_get_blend_parameter_value(uint e);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_animator3d_set_blend_parameter_value(uint e, float v);
+
+
 } // class Native
 
 } // namespace DSEngine

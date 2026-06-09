@@ -445,6 +445,28 @@ DSE_CAPI float dse_post_process_get_fog_sun_scatter(uint32_t e);
 DSE_CAPI void  dse_post_process_set_fog_sun_scatter(uint32_t e, float v);
 
 // ============================================================
+// Animator3DComponent — S1.9 每字段访问器（实现见 dse_api_animator3d.gen.cpp）
+// danim_path/dskel_path 为纯字符串字段：动画系统按路径值比较自动重载，setter 纯赋值无副作用。
+// 复合/FSM/blend tree 仍手写于 lua_binding_ecs_animation.cpp，不在此。
+// ============================================================
+DSE_CAPI int   dse_animator3d_get_enabled(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_enabled(uint32_t e, int v);
+DSE_CAPI void  dse_animator3d_set_danim_path(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_danim_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void  dse_animator3d_set_dskel_path(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_dskel_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI float dse_animator3d_get_speed(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_speed(uint32_t e, float v);
+DSE_CAPI int   dse_animator3d_get_loop(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_loop(uint32_t e, int v);
+DSE_CAPI int   dse_animator3d_get_use_anim_tree(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_use_anim_tree(uint32_t e, int v);
+DSE_CAPI void  dse_animator3d_set_blend_parameter(uint32_t e, const char* v);
+DSE_CAPI int   dse_animator3d_get_blend_parameter(uint32_t e, char* buf, int buf_size);
+DSE_CAPI float dse_animator3d_get_blend_parameter_value(uint32_t e);
+DSE_CAPI void  dse_animator3d_set_blend_parameter_value(uint32_t e, float v);
+
+// ============================================================
 // Input
 // ============================================================
 

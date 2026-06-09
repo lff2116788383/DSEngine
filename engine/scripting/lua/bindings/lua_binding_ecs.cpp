@@ -43,6 +43,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterDynamicObstacleComponentGenBindings(L);
     RegisterNavMeshAutoRebakeComponentGenBindings(L);
     RegisterPostProcessComponentGenBindings(L);
+    RegisterAnimator3DComponentGenBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding

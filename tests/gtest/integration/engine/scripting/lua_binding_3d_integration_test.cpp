@@ -251,6 +251,53 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetDirAndPointLightDelegatedWritesCppCanR
     ShutdownLuaRuntime();
 }
 
+// S1.9：Animator3DComponent 纯字段经 codegen 入 defs，验证 Lua→C ABI→registry 实链路。
+// 含 danim_path 纯字符串写入（set 后系统按值比较自动重载，无副作用）。
+TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
+    LuaTempScript startup("test_3d_animator.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_animator_3d(e, "anims/idle.danim", "skeletons/hero.dskel")
+            dse.ecs.set_animator3d_danim_path(e, "anims/run.danim")
+            dse.ecs.set_animator3d_speed(e, 2.0)
+            dse.ecs.set_animator3d_loop(e, false)
+            dse.ecs.set_animator3d_use_anim_tree(e, true)
+            dse.ecs.set_animator3d_blend_parameter(e, "velocity")
+            dse.ecs.set_animator3d_blend_parameter_value(e, 0.5)
+            dse.ecs.set_animator3d_enabled(e, false)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool found = false;
+    for (auto entity : world.registry().view<Animator3DComponent>()) {
+        auto& a = world.registry().get<Animator3DComponent>(entity);
+        EXPECT_FALSE(a.enabled);
+        EXPECT_EQ(a.danim_path, "anims/run.danim");        // 被 set 覆盖 add 初值
+        EXPECT_EQ(a.dskel_path, "skeletons/hero.dskel");
+        EXPECT_NEAR(a.speed, 2.0f, 0.001f);
+        EXPECT_FALSE(a.loop);
+        EXPECT_TRUE(a.use_anim_tree);
+        EXPECT_EQ(a.blend_parameter, "velocity");
+        EXPECT_NEAR(a.blend_parameter_value, 0.5f, 0.001f);
+        found = true;
+    }
+    EXPECT_TRUE(found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()

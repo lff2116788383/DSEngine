@@ -362,6 +362,24 @@ DSE_CAPI_GEN void dse_post_process_set_fog_steps(uint32_t e, int v);
 DSE_CAPI_GEN float dse_post_process_get_fog_sun_scatter(uint32_t e);
 DSE_CAPI_GEN void  dse_post_process_set_fog_sun_scatter(uint32_t e, float v);
 
+/* ---- Animator3DComponent ---- */
+DSE_CAPI_GEN int  dse_animator3d_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_animator3d_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_animator3d_set_danim_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_animator3d_get_danim_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN void dse_animator3d_set_dskel_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_animator3d_get_dskel_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN float dse_animator3d_get_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_animator3d_set_speed(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_animator3d_get_loop(uint32_t e);
+DSE_CAPI_GEN void dse_animator3d_set_loop(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_animator3d_get_use_anim_tree(uint32_t e);
+DSE_CAPI_GEN void dse_animator3d_set_use_anim_tree(uint32_t e, int v);
+DSE_CAPI_GEN void dse_animator3d_set_blend_parameter(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_animator3d_get_blend_parameter(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN float dse_animator3d_get_blend_parameter_value(uint32_t e);
+DSE_CAPI_GEN void  dse_animator3d_set_blend_parameter_value(uint32_t e, float v);
+
 #ifdef __cplusplus
 }
 #endif
