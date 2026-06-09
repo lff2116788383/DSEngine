@@ -507,6 +507,150 @@ TEST_F(DseApiBindingsTest, Gameplay3D_MissingComponentSafe) {
     EXPECT_EQ(dse_fluid_get_particle_count(0xFFFFFFFEu), 0u);
 }
 
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+// Gameplay3D：Ragdoll C ABI — add/activate/deactivate/is_active/collision_layer。
+TEST_F(DseApiBindingsTest, Ragdoll_AddActivateLayerEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_ragdoll_add(id, /*total_mass=*/20.0f, /*auto_setup=*/0, /*stiffness=*/5.0f, /*damping=*/30.0f);
+    auto& rd = world_.registry().get<dse::RagdollComponent>(e);
+    EXPECT_FLOAT_EQ(rd.total_mass, 20.0f);
+    EXPECT_FALSE(rd.auto_setup);
+    EXPECT_FLOAT_EQ(rd.joint_stiffness, 5.0f);
+    EXPECT_EQ(dse_ragdoll_is_active(id), 0);
+
+    dse_ragdoll_activate(id);
+    EXPECT_TRUE(rd.active);
+    EXPECT_EQ(dse_ragdoll_is_active(id), 1);
+    dse_ragdoll_deactivate(id);
+    EXPECT_FALSE(rd.active);
+
+    dse_ragdoll_set_collision_layer(id, 0x0004u, 0x00FFu);
+    EXPECT_EQ(rd.collision_layer, 0x0004u);
+    EXPECT_EQ(rd.collision_mask, 0x00FFu);
+}
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+
+// Gameplay3D：SoftBody C ABI — add/set_gravity(NaN 保持)/pin_vertex/get_particle_count。
+TEST_F(DseApiBindingsTest, SoftBody_AddGravityPinCountEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_softbody_add(id, /*stiffness=*/0.6f, /*iters=*/6, /*damping=*/0.95f, /*vol=*/0.7f);
+    auto& sb = world_.registry().get<dse::SoftBodyComponent>(e);
+    EXPECT_FLOAT_EQ(sb.stiffness, 0.6f);
+    EXPECT_EQ(sb.solver_iterations, 6);
+    EXPECT_FLOAT_EQ(sb.volume_stiffness, 0.7f);
+
+    const float keep = sb.gravity_scale;
+    dse_softbody_set_gravity(id, /*use=*/0, /*scale=*/NAN);   // scale 保持
+    EXPECT_FALSE(sb.use_gravity);
+    EXPECT_FLOAT_EQ(sb.gravity_scale, keep);
+    dse_softbody_set_gravity(id, /*use=*/1, /*scale=*/2.0f);
+    EXPECT_TRUE(sb.use_gravity);
+    EXPECT_FLOAT_EQ(sb.gravity_scale, 2.0f);
+
+    // 粒子数据由 solver 初始化，这里手动填充以验证 pin / count
+    sb.inv_masses = {1.0f, 1.0f, 1.0f};
+    sb.positions.resize(3);
+    dse_softbody_pin_vertex(id, 1);
+    EXPECT_FLOAT_EQ(sb.inv_masses[1], 0.0f);
+    dse_softbody_pin_vertex(id, 99);   // 越界 → no-op
+    EXPECT_EQ(dse_softbody_get_particle_count(id), 3u);
+}
+
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+// Gameplay3D：Vehicle C ABI — add/add_wheel/set_input(clamp)/get_speed/get_wheel_count。
+TEST_F(DseApiBindingsTest, Vehicle_AddWheelInputSpeedEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_vehicle_add(id, /*engine=*/6000.0f, /*brake=*/4000.0f, /*steer=*/40.0f);
+    auto& v = world_.registry().get<dse::VehicleComponent>(e);
+    EXPECT_FLOAT_EQ(v.max_engine_force, 6000.0f);
+    EXPECT_FLOAT_EQ(v.max_steer_angle, 40.0f);
+
+    dse_vehicle_add_wheel(id, 1.0f, 0.0f, 1.0f, /*radius=*/0.4f,
+                          /*drive=*/1, /*steer=*/0, /*stiff=*/25000.0f, /*damp=*/4200.0f);
+    ASSERT_EQ(dse_vehicle_get_wheel_count(id), 1u);
+    EXPECT_FLOAT_EQ(v.wheels[0].radius, 0.4f);
+    EXPECT_TRUE(v.wheels[0].is_drive_wheel);
+    EXPECT_FALSE(v.wheels[0].is_steer_wheel);
+    EXPECT_FALSE(v.initialized);
+
+    dse_vehicle_set_input(id, /*throttle=*/2.0f, /*brake=*/-1.0f, /*steering=*/5.0f);  // 应 clamp
+    EXPECT_FLOAT_EQ(v.throttle, 1.0f);
+    EXPECT_FLOAT_EQ(v.brake, 0.0f);
+    EXPECT_FLOAT_EQ(v.steering, 1.0f);
+
+    v.current_speed = 12.5f;
+    EXPECT_FLOAT_EQ(dse_vehicle_get_speed(id), 12.5f);
+}
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+
+// Gameplay3D：Rope C ABI — add/set_anchors/set_gravity(NaN 保持)/get_positions(两段式)。
+TEST_F(DseApiBindingsTest, Rope_AddAnchorsGravityPositionsEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_rope_add(id, /*segments=*/16, /*seg_len=*/0.3f, /*damping=*/0.98f, /*iters=*/12);
+    auto& rope = world_.registry().get<dse::RopeComponent>(e);
+    EXPECT_EQ(rope.segment_count, 16);
+    EXPECT_FLOAT_EQ(rope.segment_length, 0.3f);
+    EXPECT_EQ(rope.solver_iterations, 12);
+
+    dse_rope_set_anchors(id, /*a=*/7u, /*b=*/8u, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f);
+    EXPECT_EQ(rope.anchor_entity_a, 7u);
+    EXPECT_EQ(rope.anchor_entity_b, 8u);
+    EXPECT_FLOAT_EQ(rope.anchor_offset_a.y, 0.2f);
+    EXPECT_FLOAT_EQ(rope.anchor_offset_b.z, 0.6f);
+    EXPECT_FALSE(rope.initialized);
+
+    const float keep = rope.gravity_scale;
+    dse_rope_set_gravity(id, /*use=*/0, /*scale=*/NAN);
+    EXPECT_FALSE(rope.use_gravity);
+    EXPECT_FLOAT_EQ(rope.gravity_scale, keep);
+    dse_rope_set_gravity(id, /*use=*/1, /*scale=*/1.5f);
+    EXPECT_FLOAT_EQ(rope.gravity_scale, 1.5f);
+
+    // 位置数据由 solver 初始化，这里手动填充以验证两段式读取
+    rope.positions = {glm::vec3(1.0f, 2.0f, 3.0f), glm::vec3(4.0f, 5.0f, 6.0f)};
+    EXPECT_EQ(dse_rope_get_positions(id, nullptr, 0), 2);   // 仅查询数量
+    float buf[6] = {0};
+    EXPECT_EQ(dse_rope_get_positions(id, buf, 2), 2);
+    EXPECT_FLOAT_EQ(buf[0], 1.0f);
+    EXPECT_FLOAT_EQ(buf[5], 6.0f);
+}
+
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+// Gameplay3D：Buoyancy C ABI — add/add_sample_point/set_water_level/get_submerge_ratio/set_use_fluid。
+TEST_F(DseApiBindingsTest, Buoyancy_AddSampleWaterRatioEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_buoyancy_add(id, /*level=*/2.0f, /*force=*/15.0f, /*drag=*/4.0f, /*adrag=*/2.0f, /*depth=*/1.5f);
+    auto& b = world_.registry().get<dse::BuoyancyComponent>(e);
+    EXPECT_FLOAT_EQ(b.water_level, 2.0f);
+    EXPECT_FLOAT_EQ(b.buoyancy_force, 15.0f);
+    EXPECT_FLOAT_EQ(b.water_angular_drag, 2.0f);
+
+    dse_buoyancy_add_sample_point(id, 0.5f, -0.5f, 0.25f, 0.8f);
+    ASSERT_EQ(b.sample_points.size(), 1u);
+    EXPECT_FLOAT_EQ(b.sample_points[0].offset.x, 0.5f);
+    EXPECT_FLOAT_EQ(b.sample_points[0].force_scale, 0.8f);
+
+    dse_buoyancy_set_water_level(id, 9.0f);
+    EXPECT_FLOAT_EQ(b.water_level, 9.0f);
+
+    b.submerge_ratio = 0.42f;
+    EXPECT_FLOAT_EQ(dse_buoyancy_get_submerge_ratio(id), 0.42f);
+
+    dse_buoyancy_set_use_fluid(id, 0);
+    EXPECT_FALSE(b.use_fluid_system);
+}
+#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
+
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;
     EXPECT_EQ(dse_dyn_obstacle_get_shape(invalid), 0);

@@ -17,8 +17,11 @@
 #include "engine/ecs/components_3d_fracture.h"
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_physics.h"
+#include "engine/physics/physics3d/i_physics3d_system.h"  // DSE_HAS_PHYSICS3D
 
 #include <glm/glm.hpp>
+#include <algorithm>
 #include <cmath>
 
 using Entity = entt::entity;
@@ -208,3 +211,257 @@ extern "C" uint32_t dse_fluid_get_particle_count(uint32_t e) {
     const auto* fluid = world->registry().try_get<FluidEmitterComponent>(TE(e));
     return fluid ? fluid->active_count : 0u;
 }
+
+#ifdef DSE_HAS_PHYSICS3D
+// ============================================================
+// Ragdoll — 布娃娃（仅设置组件标志，实际激活由 RagdollSystem 处理）
+// ============================================================
+
+extern "C" void dse_ragdoll_add(uint32_t e, float total_mass, int auto_setup,
+                                float joint_stiffness, float joint_damping) {
+    World* world = GW();
+    if (!world) return;
+    auto& rd = world->registry().emplace_or_replace<RagdollComponent>(TE(e));
+    rd.total_mass = total_mass;
+    rd.auto_setup = (auto_setup != 0);
+    rd.joint_stiffness = joint_stiffness;
+    rd.joint_damping = joint_damping;
+}
+
+extern "C" void dse_ragdoll_activate(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    auto* rd = world->registry().try_get<RagdollComponent>(TE(e));
+    if (rd) rd->active = true;
+}
+
+extern "C" void dse_ragdoll_deactivate(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    auto* rd = world->registry().try_get<RagdollComponent>(TE(e));
+    if (rd) rd->active = false;
+}
+
+extern "C" int dse_ragdoll_is_active(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* rd = world->registry().try_get<RagdollComponent>(TE(e));
+    return (rd && rd->active) ? 1 : 0;
+}
+
+extern "C" void dse_ragdoll_set_collision_layer(uint32_t e, uint32_t layer, uint32_t mask) {
+    World* world = GW();
+    if (!world) return;
+    auto* rd = world->registry().try_get<RagdollComponent>(TE(e));
+    if (!rd) return;
+    rd->collision_layer = static_cast<uint16_t>(layer);
+    rd->collision_mask = static_cast<uint16_t>(mask);
+}
+#endif // DSE_HAS_PHYSICS3D
+
+// ============================================================
+// SoftBody — 软体（无条件编译）
+// ============================================================
+
+extern "C" void dse_softbody_add(uint32_t e, float stiffness, int iterations,
+                                 float damping, float volume_stiffness) {
+    World* world = GW();
+    if (!world) return;
+    auto& sb = world->registry().emplace_or_replace<SoftBodyComponent>(TE(e));
+    sb.stiffness = stiffness;
+    sb.solver_iterations = iterations;
+    sb.damping = damping;
+    sb.volume_stiffness = volume_stiffness;
+}
+
+extern "C" void dse_softbody_set_gravity(uint32_t e, int use_gravity, float gravity_scale) {
+    World* world = GW();
+    if (!world) return;
+    auto* sb = world->registry().try_get<SoftBodyComponent>(TE(e));
+    if (!sb) return;
+    sb->use_gravity = (use_gravity != 0);
+    if (!Keep(gravity_scale)) sb->gravity_scale = gravity_scale;
+}
+
+extern "C" void dse_softbody_pin_vertex(uint32_t e, int vertex_index) {
+    World* world = GW();
+    if (!world) return;
+    auto* sb = world->registry().try_get<SoftBodyComponent>(TE(e));
+    if (!sb) return;
+    if (vertex_index >= 0 && vertex_index < static_cast<int>(sb->inv_masses.size())) {
+        sb->inv_masses[vertex_index] = 0.0f;  // 固定点
+    }
+}
+
+extern "C" uint32_t dse_softbody_get_particle_count(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* sb = world->registry().try_get<SoftBodyComponent>(TE(e));
+    return sb ? static_cast<uint32_t>(sb->positions.size()) : 0u;
+}
+
+#ifdef DSE_HAS_PHYSICS3D
+// ============================================================
+// Vehicle — 车辆（raycast 车辆）
+// ============================================================
+
+extern "C" void dse_vehicle_add(uint32_t e, float max_engine_force, float max_brake_force,
+                                float max_steer_angle) {
+    World* world = GW();
+    if (!world) return;
+    auto& v = world->registry().emplace_or_replace<VehicleComponent>(TE(e));
+    v.max_engine_force = max_engine_force;
+    v.max_brake_force = max_brake_force;
+    v.max_steer_angle = max_steer_angle;
+}
+
+extern "C" void dse_vehicle_add_wheel(uint32_t e, float px, float py, float pz, float radius,
+                                      int is_drive, int is_steer, float susp_stiffness,
+                                      float susp_damping) {
+    World* world = GW();
+    if (!world) return;
+    auto* v = world->registry().try_get<VehicleComponent>(TE(e));
+    if (!v) return;
+    VehicleWheelConfig wheel;
+    wheel.position = glm::vec3(px, py, pz);
+    wheel.radius = radius;
+    wheel.is_drive_wheel = (is_drive != 0);
+    wheel.is_steer_wheel = (is_steer != 0);
+    wheel.suspension_stiffness = susp_stiffness;
+    wheel.suspension_damping = susp_damping;
+    v->wheels.push_back(wheel);
+    v->initialized = false;  // 重新初始化
+}
+
+extern "C" void dse_vehicle_set_input(uint32_t e, float throttle, float brake, float steering) {
+    World* world = GW();
+    if (!world) return;
+    auto* v = world->registry().try_get<VehicleComponent>(TE(e));
+    if (!v) return;
+    v->throttle = std::clamp(throttle, -1.0f, 1.0f);
+    v->brake = std::clamp(brake, 0.0f, 1.0f);
+    v->steering = std::clamp(steering, -1.0f, 1.0f);
+}
+
+extern "C" float dse_vehicle_get_speed(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0.0f;
+    const auto* v = world->registry().try_get<VehicleComponent>(TE(e));
+    return v ? v->current_speed : 0.0f;
+}
+
+extern "C" uint32_t dse_vehicle_get_wheel_count(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* v = world->registry().try_get<VehicleComponent>(TE(e));
+    return v ? static_cast<uint32_t>(v->wheels.size()) : 0u;
+}
+#endif // DSE_HAS_PHYSICS3D
+
+// ============================================================
+// Rope — 绳索/链条（无条件编译）
+// ============================================================
+
+extern "C" void dse_rope_add(uint32_t e, int segment_count, float segment_length,
+                             float damping, int iterations) {
+    World* world = GW();
+    if (!world) return;
+    auto& rope = world->registry().emplace_or_replace<RopeComponent>(TE(e));
+    rope.segment_count = segment_count;
+    rope.segment_length = segment_length;
+    rope.damping = damping;
+    rope.solver_iterations = iterations;
+}
+
+extern "C" void dse_rope_set_anchors(uint32_t e, uint32_t anchor_a, uint32_t anchor_b,
+                                     float oax, float oay, float oaz,
+                                     float obx, float oby, float obz) {
+    World* world = GW();
+    if (!world) return;
+    auto* rope = world->registry().try_get<RopeComponent>(TE(e));
+    if (!rope) return;
+    rope->anchor_entity_a = anchor_a;
+    rope->anchor_entity_b = anchor_b;
+    rope->anchor_offset_a = glm::vec3(oax, oay, oaz);
+    rope->anchor_offset_b = glm::vec3(obx, oby, obz);
+    rope->initialized = false;  // 重新初始化
+}
+
+// 填充 out_xyz（最多 max_points 个点，每点 3 float），返回点总数（与 max_points 无关）。
+// out_xyz 为 null 或 max_points<=0 时仅返回总数，供调用方预分配缓冲。
+extern "C" int dse_rope_get_positions(uint32_t e, float* out_xyz, int max_points) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* rope = world->registry().try_get<RopeComponent>(TE(e));
+    if (!rope) return 0;
+    const int count = static_cast<int>(rope->positions.size());
+    if (out_xyz && max_points > 0) {
+        const int n = (count < max_points) ? count : max_points;
+        for (int i = 0; i < n; ++i) {
+            out_xyz[i * 3 + 0] = rope->positions[i].x;
+            out_xyz[i * 3 + 1] = rope->positions[i].y;
+            out_xyz[i * 3 + 2] = rope->positions[i].z;
+        }
+    }
+    return count;
+}
+
+extern "C" void dse_rope_set_gravity(uint32_t e, int use_gravity, float gravity_scale) {
+    World* world = GW();
+    if (!world) return;
+    auto* rope = world->registry().try_get<RopeComponent>(TE(e));
+    if (!rope) return;
+    rope->use_gravity = (use_gravity != 0);
+    if (!Keep(gravity_scale)) rope->gravity_scale = gravity_scale;
+}
+
+#ifdef DSE_HAS_PHYSICS3D
+// ============================================================
+// Buoyancy — 浮力
+// ============================================================
+
+extern "C" void dse_buoyancy_add(uint32_t e, float water_level, float buoyancy_force,
+                                 float water_drag, float angular_drag, float submerge_depth) {
+    World* world = GW();
+    if (!world) return;
+    auto& b = world->registry().emplace_or_replace<BuoyancyComponent>(TE(e));
+    b.water_level = water_level;
+    b.buoyancy_force = buoyancy_force;
+    b.water_drag = water_drag;
+    b.water_angular_drag = angular_drag;
+    b.submerge_depth = submerge_depth;
+}
+
+extern "C" void dse_buoyancy_add_sample_point(uint32_t e, float ox, float oy, float oz,
+                                              float force_scale) {
+    World* world = GW();
+    if (!world) return;
+    auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
+    if (!b) return;
+    BuoyancySamplePoint sp;
+    sp.offset = glm::vec3(ox, oy, oz);
+    sp.force_scale = force_scale;
+    b->sample_points.push_back(sp);
+}
+
+extern "C" void dse_buoyancy_set_water_level(uint32_t e, float water_level) {
+    World* world = GW();
+    if (!world) return;
+    auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
+    if (b) b->water_level = water_level;
+}
+
+extern "C" float dse_buoyancy_get_submerge_ratio(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0.0f;
+    const auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
+    return b ? b->submerge_ratio : 0.0f;
+}
+
+extern "C" void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid) {
+    World* world = GW();
+    if (!world) return;
+    auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
+    if (b) b->use_fluid_system = (use_fluid != 0);
+}
+#endif // DSE_HAS_PHYSICS3D

@@ -551,6 +551,63 @@ TEST_F(LuaBinding3DIntegrationTest, LuaClothFluidDelegatedRoundTrip) {
     ShutdownLuaRuntime();
 }
 
+// SoftBody + Rope 委托回环：Lua → dse_* C ABI → 组件状态（无条件编译子系统）。
+TEST_F(LuaBinding3DIntegrationTest, LuaSoftBodyRopeDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_softbody_rope.lua", R"(
+        function Awake()
+            local sb = dse.ecs.create_entity()
+            dse.ecs.add_transform(sb, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_softbody(sb, 0.7, 8, 0.97, 0.6)
+            dse.ecs.softbody_set_gravity(sb, false)   -- gravity_scale 省略 → 保持
+
+            local rope = dse.ecs.create_entity()
+            dse.ecs.add_transform(rope, 5.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_rope(rope, 20, 0.25, 0.98, 10)
+            dse.ecs.rope_set_anchors(rope, 3, 4, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+            dse.ecs.rope_set_gravity(rope, true, 1.5)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool sb_found = false;
+    for (auto entity : world.registry().view<SoftBodyComponent>()) {
+        const auto& sb = world.registry().get<SoftBodyComponent>(entity);
+        EXPECT_EQ(sb.solver_iterations, 8);
+        EXPECT_NEAR(sb.stiffness, 0.7f, 1e-3f);
+        EXPECT_FALSE(sb.use_gravity);
+        EXPECT_NEAR(sb.gravity_scale, 1.0f, 1e-3f);   // 省略 → 默认保持
+        sb_found = true;
+    }
+    EXPECT_TRUE(sb_found);
+
+    bool rope_found = false;
+    for (auto entity : world.registry().view<RopeComponent>()) {
+        const auto& r = world.registry().get<RopeComponent>(entity);
+        EXPECT_EQ(r.segment_count, 20);
+        EXPECT_EQ(r.anchor_entity_a, 3u);
+        EXPECT_EQ(r.anchor_entity_b, 4u);
+        EXPECT_NEAR(r.anchor_offset_a.y, 0.2f, 1e-3f);
+        EXPECT_NEAR(r.anchor_offset_b.z, 0.6f, 1e-3f);
+        EXPECT_TRUE(r.use_gravity);
+        EXPECT_NEAR(r.gravity_scale, 1.5f, 1e-3f);
+        rope_found = true;
+    }
+    EXPECT_TRUE(rope_found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()

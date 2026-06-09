@@ -552,6 +552,50 @@ DSE_CAPI void dse_fluid_set_emit_direction(uint32_t e, float dx, float dy, float
 DSE_CAPI void dse_fluid_set_floor(uint32_t e, float floor_y, float restitution);  // NaN=保持
 DSE_CAPI uint32_t dse_fluid_get_particle_count(uint32_t e);
 
+// Ragdoll（仅设标志，激活由 RagdollSystem 处理）。auto_setup/active 用 int(0/1)。
+DSE_CAPI void dse_ragdoll_add(uint32_t e, float total_mass, int auto_setup,
+                              float joint_stiffness, float joint_damping);
+DSE_CAPI void dse_ragdoll_activate(uint32_t e);
+DSE_CAPI void dse_ragdoll_deactivate(uint32_t e);
+DSE_CAPI int  dse_ragdoll_is_active(uint32_t e);
+DSE_CAPI void dse_ragdoll_set_collision_layer(uint32_t e, uint32_t layer, uint32_t mask);
+
+// SoftBody。gravity_scale NaN=保持。
+DSE_CAPI void dse_softbody_add(uint32_t e, float stiffness, int iterations,
+                               float damping, float volume_stiffness);
+DSE_CAPI void dse_softbody_set_gravity(uint32_t e, int use_gravity, float gravity_scale);
+DSE_CAPI void dse_softbody_pin_vertex(uint32_t e, int vertex_index);
+DSE_CAPI uint32_t dse_softbody_get_particle_count(uint32_t e);
+
+// Vehicle（raycast 车辆）。set_input 内部 clamp 到合法范围。
+DSE_CAPI void dse_vehicle_add(uint32_t e, float max_engine_force, float max_brake_force,
+                              float max_steer_angle);
+DSE_CAPI void dse_vehicle_add_wheel(uint32_t e, float px, float py, float pz, float radius,
+                                    int is_drive, int is_steer, float susp_stiffness,
+                                    float susp_damping);
+DSE_CAPI void dse_vehicle_set_input(uint32_t e, float throttle, float brake, float steering);
+DSE_CAPI float dse_vehicle_get_speed(uint32_t e);
+DSE_CAPI uint32_t dse_vehicle_get_wheel_count(uint32_t e);
+
+// Rope。get_positions：填充 out_xyz（最多 max_points 点×3 float），返回点总数；
+// out_xyz=null 时仅返回总数供预分配。gravity_scale NaN=保持。
+DSE_CAPI void dse_rope_add(uint32_t e, int segment_count, float segment_length,
+                           float damping, int iterations);
+DSE_CAPI void dse_rope_set_anchors(uint32_t e, uint32_t anchor_a, uint32_t anchor_b,
+                                   float oax, float oay, float oaz,
+                                   float obx, float oby, float obz);
+DSE_CAPI int  dse_rope_get_positions(uint32_t e, float* out_xyz, int max_points);
+DSE_CAPI void dse_rope_set_gravity(uint32_t e, int use_gravity, float gravity_scale);
+
+// Buoyancy。
+DSE_CAPI void dse_buoyancy_add(uint32_t e, float water_level, float buoyancy_force,
+                               float water_drag, float angular_drag, float submerge_depth);
+DSE_CAPI void dse_buoyancy_add_sample_point(uint32_t e, float ox, float oy, float oz,
+                                            float force_scale);
+DSE_CAPI void dse_buoyancy_set_water_level(uint32_t e, float water_level);
+DSE_CAPI float dse_buoyancy_get_submerge_ratio(uint32_t e);
+DSE_CAPI void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid);
+
 // ============================================================
 // Input
 // ============================================================

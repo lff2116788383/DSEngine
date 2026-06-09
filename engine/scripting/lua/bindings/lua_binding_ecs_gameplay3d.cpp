@@ -17,6 +17,7 @@
 #include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/scripting/native_api/dse_api.h"
 #include <cmath>
+#include <vector>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -219,60 +220,42 @@ int L_EcsGetFluidParticleCount(lua_State* L) {
 
 /// add_ragdoll(entity, [total_mass, auto_setup, joint_stiffness, joint_damping])
 int L_EcsAddRagdoll(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& rd = world->registry().emplace_or_replace<RagdollComponent>(e);
-    rd.total_mass = helper::OptFloat(L, 2, 10.0f);
-    rd.auto_setup = helper::OptBool(L, 3, true);
-    rd.joint_stiffness = helper::OptFloat(L, 4, 0.0f);
-    rd.joint_damping = helper::OptFloat(L, 5, 50.0f);
+    dse_ragdoll_add(EID(e),
+        helper::OptFloat(L, 2, 10.0f),
+        helper::OptBool(L, 3, true) ? 1 : 0,
+        helper::OptFloat(L, 4, 0.0f),
+        helper::OptFloat(L, 5, 50.0f));
     return 0;
 }
 
 /// ragdoll_activate(entity, [impulse_x, impulse_y, impulse_z, point_x, point_y, point_z])
 int L_EcsRagdollActivate(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* rd = helper::TryGetComponent<RagdollComponent>(*world, e);
-    if (!rd) return 0;
-    rd->active = true;
-    // 冲量参数记录到组件上，由 RagdollSystem 在下一帧处理
-    // （实际激活由 RagdollSystem::Activate 完成，这里只设标志）
+    dse_ragdoll_activate(EID(e));
     return 0;
 }
 
 /// ragdoll_deactivate(entity)
 int L_EcsRagdollDeactivate(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* rd = helper::TryGetComponent<RagdollComponent>(*world, e);
-    if (!rd) return 0;
-    rd->active = false;
+    dse_ragdoll_deactivate(EID(e));
     return 0;
 }
 
 /// ragdoll_is_active(entity) -> bool
 int L_EcsRagdollIsActive(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushboolean(L, 0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* rd = helper::TryGetComponentConst<RagdollComponent>(*world, e);
-    lua_pushboolean(L, (rd && rd->active) ? 1 : 0);
+    lua_pushboolean(L, dse_ragdoll_is_active(EID(e)));
     return 1;
 }
 
 /// set_ragdoll_collision_layer(entity, layer, mask)
 int L_EcsSetRagdollCollisionLayer(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* rd = helper::TryGetComponent<RagdollComponent>(*world, e);
-    if (!rd) return 0;
-    rd->collision_layer = static_cast<uint16_t>(helper::CheckInt(L, 2));
-    rd->collision_mask = static_cast<uint16_t>(helper::CheckInt(L, 3));
+    dse_ragdoll_set_collision_layer(EID(e),
+        static_cast<uint32_t>(helper::CheckInt(L, 2)),
+        static_cast<uint32_t>(helper::CheckInt(L, 3)));
     return 0;
 }
 
@@ -284,50 +267,35 @@ int L_EcsSetRagdollCollisionLayer(lua_State* L) {
 
 /// add_softbody(entity, [stiffness, iterations, damping, volume_stiffness])
 int L_EcsAddSoftBody(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& sb = world->registry().emplace_or_replace<SoftBodyComponent>(e);
-    sb.stiffness = helper::OptFloat(L, 2, 0.5f);
-    sb.solver_iterations = helper::OptInt(L, 3, 4);
-    sb.damping = helper::OptFloat(L, 4, 0.99f);
-    sb.volume_stiffness = helper::OptFloat(L, 5, 0.5f);
+    dse_softbody_add(EID(e),
+        helper::OptFloat(L, 2, 0.5f),
+        helper::OptInt(L, 3, 4),
+        helper::OptFloat(L, 4, 0.99f),
+        helper::OptFloat(L, 5, 0.5f));
     return 0;
 }
 
 /// softbody_set_gravity(entity, use_gravity, [gravity_scale])
 int L_EcsSoftBodySetGravity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sb = helper::TryGetComponent<SoftBodyComponent>(*world, e);
-    if (!sb) return 0;
-    sb->use_gravity = helper::CheckBool(L, 2);
-    sb->gravity_scale = helper::OptFloat(L, 3, sb->gravity_scale);
+    dse_softbody_set_gravity(EID(e),
+        helper::CheckBool(L, 2) ? 1 : 0,
+        helper::OptFloat(L, 3, NAN));  // NaN=保持当前
     return 0;
 }
 
 /// softbody_pin_vertex(entity, vertex_index)
 int L_EcsSoftBodyPinVertex(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* sb = helper::TryGetComponent<SoftBodyComponent>(*world, e);
-    if (!sb) return 0;
-    int idx = helper::CheckInt(L, 2);
-    if (idx >= 0 && idx < static_cast<int>(sb->inv_masses.size())) {
-        sb->inv_masses[idx] = 0.0f; // 固定点
-    }
+    dse_softbody_pin_vertex(EID(e), helper::CheckInt(L, 2));
     return 0;
 }
 
 /// softbody_get_particle_count(entity) -> count
 int L_EcsSoftBodyGetParticleCount(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushinteger(L, 0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* sb = helper::TryGetComponentConst<SoftBodyComponent>(*world, e);
-    lua_pushinteger(L, sb ? static_cast<lua_Integer>(sb->positions.size()) : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(dse_softbody_get_particle_count(EID(e))));
     return 1;
 }
 
@@ -338,68 +306,50 @@ int L_EcsSoftBodyGetParticleCount(lua_State* L) {
 
 /// add_vehicle(entity, [max_engine_force, max_brake_force, max_steer_angle])
 int L_EcsAddVehicle(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& v = world->registry().emplace_or_replace<VehicleComponent>(e);
-    v.max_engine_force = helper::OptFloat(L, 2, 5000.0f);
-    v.max_brake_force = helper::OptFloat(L, 3, 3000.0f);
-    v.max_steer_angle = helper::OptFloat(L, 4, 35.0f);
+    dse_vehicle_add(EID(e),
+        helper::OptFloat(L, 2, 5000.0f),
+        helper::OptFloat(L, 3, 3000.0f),
+        helper::OptFloat(L, 4, 35.0f));
     return 0;
 }
 
 /// vehicle_add_wheel(entity, pos_x, pos_y, pos_z, [radius, is_drive, is_steer, susp_stiffness, susp_damping])
 int L_EcsVehicleAddWheel(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* v = helper::TryGetComponent<VehicleComponent>(*world, e);
-    if (!v) return 0;
-    VehicleWheelConfig wheel;
-    wheel.position = glm::vec3(
+    dse_vehicle_add_wheel(EID(e),
         helper::CheckFloat(L, 2),
         helper::CheckFloat(L, 3),
-        helper::CheckFloat(L, 4));
-    wheel.radius = helper::OptFloat(L, 5, 0.3f);
-    wheel.is_drive_wheel = helper::OptBool(L, 6, true);
-    wheel.is_steer_wheel = helper::OptBool(L, 7, false);
-    wheel.suspension_stiffness = helper::OptFloat(L, 8, 30000.0f);
-    wheel.suspension_damping = helper::OptFloat(L, 9, 4500.0f);
-    v->wheels.push_back(wheel);
-    v->initialized = false; // 重新初始化
+        helper::CheckFloat(L, 4),
+        helper::OptFloat(L, 5, 0.3f),
+        helper::OptBool(L, 6, true) ? 1 : 0,
+        helper::OptBool(L, 7, false) ? 1 : 0,
+        helper::OptFloat(L, 8, 30000.0f),
+        helper::OptFloat(L, 9, 4500.0f));
     return 0;
 }
 
 /// vehicle_set_input(entity, throttle, brake, steering)
 int L_EcsVehicleSetInput(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* v = helper::TryGetComponent<VehicleComponent>(*world, e);
-    if (!v) return 0;
-    v->throttle = std::clamp(helper::CheckFloat(L, 2), -1.0f, 1.0f);
-    v->brake = std::clamp(helper::CheckFloat(L, 3), 0.0f, 1.0f);
-    v->steering = std::clamp(helper::CheckFloat(L, 4), -1.0f, 1.0f);
+    dse_vehicle_set_input(EID(e),
+        helper::CheckFloat(L, 2),
+        helper::CheckFloat(L, 3),
+        helper::CheckFloat(L, 4));
     return 0;
 }
 
 /// vehicle_get_speed(entity) -> speed (m/s)
 int L_EcsVehicleGetSpeed(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* v = helper::TryGetComponentConst<VehicleComponent>(*world, e);
-    lua_pushnumber(L, v ? static_cast<lua_Number>(v->current_speed) : 0.0);
+    lua_pushnumber(L, static_cast<lua_Number>(dse_vehicle_get_speed(EID(e))));
     return 1;
 }
 
 /// vehicle_get_wheel_count(entity) -> count
 int L_EcsVehicleGetWheelCount(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushinteger(L, 0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* v = helper::TryGetComponentConst<VehicleComponent>(*world, e);
-    lua_pushinteger(L, v ? static_cast<lua_Integer>(v->wheels.size()) : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(dse_vehicle_get_wheel_count(EID(e))));
     return 1;
 }
 
@@ -411,68 +361,57 @@ int L_EcsVehicleGetWheelCount(lua_State* L) {
 
 /// add_rope(entity, [segment_count, segment_length, damping, iterations])
 int L_EcsAddRope(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& rope = world->registry().emplace_or_replace<RopeComponent>(e);
-    rope.segment_count = helper::OptInt(L, 2, 10);
-    rope.segment_length = helper::OptFloat(L, 3, 0.2f);
-    rope.damping = helper::OptFloat(L, 4, 0.99f);
-    rope.solver_iterations = helper::OptInt(L, 5, 8);
+    dse_rope_add(EID(e),
+        helper::OptInt(L, 2, 10),
+        helper::OptFloat(L, 3, 0.2f),
+        helper::OptFloat(L, 4, 0.99f),
+        helper::OptInt(L, 5, 8));
     return 0;
 }
 
 /// rope_set_anchors(entity, anchor_a_entity, anchor_b_entity, [off_ax, off_ay, off_az, off_bx, off_by, off_bz])
 int L_EcsRopeSetAnchors(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* rope = helper::TryGetComponent<RopeComponent>(*world, e);
-    if (!rope) return 0;
-    rope->anchor_entity_a = static_cast<uint32_t>(helper::OptInt(L, 2, 0));
-    rope->anchor_entity_b = static_cast<uint32_t>(helper::OptInt(L, 3, 0));
-    rope->anchor_offset_a = glm::vec3(
+    dse_rope_set_anchors(EID(e),
+        static_cast<uint32_t>(helper::OptInt(L, 2, 0)),
+        static_cast<uint32_t>(helper::OptInt(L, 3, 0)),
         helper::OptFloat(L, 4, 0.0f),
         helper::OptFloat(L, 5, 0.0f),
-        helper::OptFloat(L, 6, 0.0f));
-    rope->anchor_offset_b = glm::vec3(
+        helper::OptFloat(L, 6, 0.0f),
         helper::OptFloat(L, 7, 0.0f),
         helper::OptFloat(L, 8, 0.0f),
         helper::OptFloat(L, 9, 0.0f));
-    rope->initialized = false; // 重新初始化
     return 0;
 }
 
 /// rope_get_positions(entity) -> { {x1,y1,z1}, {x2,y2,z2}, ... }
 int L_EcsRopeGetPositions(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_newtable(L); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* rope = helper::TryGetComponentConst<RopeComponent>(*world, e);
+    const int count = dse_rope_get_positions(EID(e), nullptr, 0);
     lua_newtable(L);
-    if (!rope) return 1;
-    for (size_t i = 0; i < rope->positions.size(); ++i) {
+    if (count <= 0) return 1;
+    std::vector<float> buf(static_cast<size_t>(count) * 3);
+    dse_rope_get_positions(EID(e), buf.data(), count);
+    for (int i = 0; i < count; ++i) {
         lua_newtable(L);
-        lua_pushnumber(L, static_cast<lua_Number>(rope->positions[i].x));
+        lua_pushnumber(L, static_cast<lua_Number>(buf[i * 3 + 0]));
         lua_rawseti(L, -2, 1);
-        lua_pushnumber(L, static_cast<lua_Number>(rope->positions[i].y));
+        lua_pushnumber(L, static_cast<lua_Number>(buf[i * 3 + 1]));
         lua_rawseti(L, -2, 2);
-        lua_pushnumber(L, static_cast<lua_Number>(rope->positions[i].z));
+        lua_pushnumber(L, static_cast<lua_Number>(buf[i * 3 + 2]));
         lua_rawseti(L, -2, 3);
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
+        lua_rawseti(L, -2, i + 1);
     }
     return 1;
 }
 
 /// rope_set_gravity(entity, use_gravity, [gravity_scale])
 int L_EcsRopeSetGravity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* rope = helper::TryGetComponent<RopeComponent>(*world, e);
-    if (!rope) return 0;
-    rope->use_gravity = helper::CheckBool(L, 2);
-    rope->gravity_scale = helper::OptFloat(L, 3, rope->gravity_scale);
+    dse_rope_set_gravity(EID(e),
+        helper::CheckBool(L, 2) ? 1 : 0,
+        helper::OptFloat(L, 3, NAN));  // NaN=保持当前
     return 0;
 }
 
@@ -483,64 +422,45 @@ int L_EcsRopeSetGravity(lua_State* L) {
 
 /// add_buoyancy(entity, [water_level, buoyancy_force, water_drag, angular_drag, submerge_depth])
 int L_EcsAddBuoyancy(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& b = world->registry().emplace_or_replace<BuoyancyComponent>(e);
-    b.water_level = helper::OptFloat(L, 2, 0.0f);
-    b.buoyancy_force = helper::OptFloat(L, 3, 10.0f);
-    b.water_drag = helper::OptFloat(L, 4, 3.0f);
-    b.water_angular_drag = helper::OptFloat(L, 5, 1.0f);
-    b.submerge_depth = helper::OptFloat(L, 6, 1.0f);
+    dse_buoyancy_add(EID(e),
+        helper::OptFloat(L, 2, 0.0f),
+        helper::OptFloat(L, 3, 10.0f),
+        helper::OptFloat(L, 4, 3.0f),
+        helper::OptFloat(L, 5, 1.0f),
+        helper::OptFloat(L, 6, 1.0f));
     return 0;
 }
 
 /// buoyancy_add_sample_point(entity, offset_x, offset_y, offset_z, [force_scale])
 int L_EcsBuoyancyAddSamplePoint(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* b = helper::TryGetComponent<BuoyancyComponent>(*world, e);
-    if (!b) return 0;
-    BuoyancySamplePoint sp;
-    sp.offset = glm::vec3(
+    dse_buoyancy_add_sample_point(EID(e),
         helper::CheckFloat(L, 2),
         helper::CheckFloat(L, 3),
-        helper::CheckFloat(L, 4));
-    sp.force_scale = helper::OptFloat(L, 5, 1.0f);
-    b->sample_points.push_back(sp);
+        helper::CheckFloat(L, 4),
+        helper::OptFloat(L, 5, 1.0f));
     return 0;
 }
 
 /// buoyancy_set_water_level(entity, water_level)
 int L_EcsBuoyancySetWaterLevel(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* b = helper::TryGetComponent<BuoyancyComponent>(*world, e);
-    if (!b) return 0;
-    b->water_level = helper::CheckFloat(L, 2);
+    dse_buoyancy_set_water_level(EID(e), helper::CheckFloat(L, 2));
     return 0;
 }
 
 /// buoyancy_get_submerge_ratio(entity) -> ratio [0,1]
 int L_EcsBuoyancyGetSubmergeRatio(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* b = helper::TryGetComponentConst<BuoyancyComponent>(*world, e);
-    lua_pushnumber(L, b ? static_cast<lua_Number>(b->submerge_ratio) : 0.0);
+    lua_pushnumber(L, static_cast<lua_Number>(dse_buoyancy_get_submerge_ratio(EID(e))));
     return 1;
 }
 
 /// buoyancy_set_use_fluid(entity, use_fluid_system)
 int L_EcsBuoyancySetUseFluid(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* b = helper::TryGetComponent<BuoyancyComponent>(*world, e);
-    if (!b) return 0;
-    b->use_fluid_system = helper::CheckBool(L, 2);
+    dse_buoyancy_set_use_fluid(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
