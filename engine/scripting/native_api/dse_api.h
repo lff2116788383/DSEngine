@@ -648,6 +648,100 @@ DSE_CAPI void dse_cloud_set_layer(uint32_t e, float bottom, float top,
 DSE_CAPI void dse_cloud_set_wind(uint32_t e, float dir_x, float dir_y, float speed);
 
 // ============================================================
+// 动画子系统（L4/L5，纯 ECS）。浮点 NaN=保持当前值。
+// ============================================================
+
+// ---- 2D 帧动画（AnimatorComponent）。add_state: loop 为 0/1；frame_handles 可为 null。
+// pop_event 将事件名写入 out（null 结尾，按 cap 截断），返回 1=弹出/0=无。 ----
+DSE_CAPI void dse_anim2d_add(uint32_t e);
+DSE_CAPI void dse_anim2d_add_state(uint32_t e, const char* name, float fps, int loop,
+                                   const uint32_t* frame_handles, int handle_count);
+DSE_CAPI void dse_anim2d_add_event(uint32_t e, const char* state_name,
+                                   float normalized_time, const char* event_name);
+DSE_CAPI void dse_anim2d_play(uint32_t e, const char* state_name);
+DSE_CAPI void dse_anim2d_play_segment(uint32_t e, int start_frame, int end_frame, int loop);
+DSE_CAPI int  dse_anim2d_pop_event(uint32_t e, char* out, int cap);
+
+// ---- 3D 骨骼动画 / 状态机（Animator3DComponent）。
+// set_state: state_name=null 不改状态，speed=NaN 保持，loop<0 保持。
+// get_state: 填充 out_*（均可为 null），返回 1=存在/0=缺失。
+// add_transition: 条件以并行扁平数组传入（names/modes/thresholds/ints，长度 cond_count）。 ----
+DSE_CAPI void dse_anim3d_add(uint32_t e, const char* danim_path, const char* dskel_path);
+DSE_CAPI void dse_anim3d_set_state(uint32_t e, const char* state_name, float speed, int loop);
+DSE_CAPI int  dse_anim3d_get_state(uint32_t e, char* out_state, int state_cap,
+                                   float* out_norm, float* out_time, float* out_speed,
+                                   int* out_loop, int* out_transitioning,
+                                   int* out_bone_count, int* out_has_skel);
+DSE_CAPI void dse_anim3d_init_fsm(uint32_t e);
+DSE_CAPI void dse_anim3d_add_fsm_state(uint32_t e, const char* state_name,
+                                       const char* danim_path, int loop, float speed);
+DSE_CAPI void dse_anim3d_add_transition(uint32_t e, const char* from_state,
+                                        const char* to_state, float transition_duration,
+                                        int has_exit_time, float exit_time,
+                                        int cond_count,
+                                        const char* const* cond_names,
+                                        const int* cond_modes,
+                                        const float* cond_thresholds,
+                                        const int* cond_ints);
+DSE_CAPI void dse_anim3d_set_param_float(uint32_t e, const char* param_name, float value);
+DSE_CAPI void dse_anim3d_set_param_trigger(uint32_t e, const char* param_name);
+DSE_CAPI void dse_anim3d_set_lock_root_motion(uint32_t e, int lock);
+DSE_CAPI void dse_anim3d_add_event(uint32_t e, const char* event_name, float trigger_time);
+DSE_CAPI int  dse_anim3d_pop_event(uint32_t e, char* out, int cap);
+DSE_CAPI void dse_anim3d_set_extract_root_motion(uint32_t e, int enabled);
+DSE_CAPI int  dse_anim3d_get_root_motion_delta(uint32_t e, float* out_xyz);
+
+// ---- 动画层 / 混合树（AnimLayerComponent）。add 返回层索引（-1=无组件）。
+// blend_tree_1d: paths/thresholds/speeds 并行数组，长度 count。 ----
+DSE_CAPI void dse_animlayer_add_component(uint32_t e);
+DSE_CAPI int  dse_animlayer_add(uint32_t e, const char* name, float weight, int blend_mode);
+DSE_CAPI void dse_animlayer_set_clip(uint32_t e, int idx, const char* danim_path,
+                                     float speed, int loop);
+DSE_CAPI void dse_animlayer_set_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_animlayer_set_bone_mask(uint32_t e, int idx,
+                                          const char* const* bones, int count);
+DSE_CAPI void dse_animlayer_set_blend_tree_1d(uint32_t e, int idx,
+                                              const char* const* paths,
+                                              const float* thresholds,
+                                              const float* speeds, int count);
+DSE_CAPI void dse_animlayer_set_blend_param(uint32_t e, int idx, float val);
+DSE_CAPI void dse_animlayer_set_enabled(uint32_t e, int enabled);
+
+// ---- IK（IKChain3DComponent）。add_chain 返回链索引（-1=无组件）。
+// set_target_entity: target=UINT32_MAX 清除目标实体。 ----
+DSE_CAPI void dse_ik_add_component(uint32_t e);
+DSE_CAPI int  dse_ik_add_chain(uint32_t e, const char* name, int type,
+                               const char* root_bone, const char* tip_bone, float weight);
+DSE_CAPI void dse_ik_set_target(uint32_t e, int idx, float x, float y, float z);
+DSE_CAPI void dse_ik_set_target_entity(uint32_t e, int idx, uint32_t target);
+DSE_CAPI void dse_ik_set_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_ik_set_pole_vector(uint32_t e, int idx, float x, float y, float z);
+DSE_CAPI void dse_ik_set_iterations(uint32_t e, int idx, int iters);
+DSE_CAPI void dse_ik_set_enabled(uint32_t e, int enabled);
+
+// ---- 骨骼挂点（BoneAttachmentComponent）。set_offset: 缩放 sx/sy/sz 为 NaN 时取 1。
+// get_world_pos: 由目标实体动画姿态计算，out_xyz(3) 始终写入，返回 1=成功/0=失败。 ----
+DSE_CAPI void dse_bone_attach_add(uint32_t e, uint32_t target, const char* bone_name);
+DSE_CAPI void dse_bone_attach_set_offset(uint32_t e, float px, float py, float pz,
+                                         float qx, float qy, float qz, float qw,
+                                         float sx, float sy, float sz);
+DSE_CAPI void dse_bone_attach_set_bone(uint32_t e, const char* bone_name);
+DSE_CAPI void dse_bone_attach_set_target(uint32_t e, uint32_t target);
+DSE_CAPI int  dse_bone_attach_get_world_pos(uint32_t target, const char* bone_name,
+                                            float* out_xyz);
+DSE_CAPI void dse_bone_attach_remove(uint32_t e);
+
+// ---- Morph Target / Blend Shape（MorphTargetComponent）。
+// add_target: deltas 扁平布局，每顶点 6 float（dpx,dpy,dpz,dnx,dny,dnz）。 ----
+DSE_CAPI void  dse_morph_add_component(uint32_t e);
+DSE_CAPI void  dse_morph_add_target(uint32_t e, const char* name,
+                                    const float* deltas, int float_count);
+DSE_CAPI void  dse_morph_set_weight(uint32_t e, const char* name, float w);
+DSE_CAPI void  dse_morph_set_weight_index(uint32_t e, int idx, float w);
+DSE_CAPI float dse_morph_get_weight(uint32_t e, const char* name);
+DSE_CAPI int   dse_morph_get_target_count(uint32_t e);
+
+// ============================================================
 // Input
 // ============================================================
 

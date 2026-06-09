@@ -17,6 +17,9 @@
 #include "engine/ecs/components_3d_weather.h"
 #include "engine/ecs/components_3d_snow.h"
 #include "engine/ecs/components_3d_sky.h"
+#include "engine/ecs/components_3d_animation.h"
+#include "engine/ecs/animation.h"
+#include "engine/ecs/animation_state_machine.h"
 #include "engine/ecs/transform.h"
 #include <cmath>
 #include <cstring>
@@ -816,6 +819,232 @@ TEST_F(DseApiBindingsTest, VolumetricCloud_LayerWindEcs) {
     EXPECT_FLOAT_EQ(vc.wind_direction.x, 0.5f);
     EXPECT_FLOAT_EQ(vc.wind_direction.y, keep_dy);
     EXPECT_FLOAT_EQ(vc.wind_speed, 35.0f);
+}
+
+// ---- 动画子系统 L4/L5 C ABI ----
+
+TEST_F(DseApiBindingsTest, Anim2D_StatePlayEventEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_anim2d_add(id);
+    const uint32_t frames[3] = {10u, 11u, 12u};
+    dse_anim2d_add_state(id, "walk", 12.0f, /*loop=*/1, frames, 3);
+    dse_anim2d_add_event(id, "walk", 0.5f, "footstep");
+    dse_anim2d_play(id, "walk");
+
+    auto& anim = world_.registry().get<AnimatorComponent>(e);
+    ASSERT_TRUE(anim.states.count("walk"));
+    const auto& st = anim.states.at("walk");
+    EXPECT_FLOAT_EQ(st.frame_rate, 12.0f);
+    EXPECT_TRUE(st.loop);
+    ASSERT_EQ(st.frame_handles.size(), 3u);
+    EXPECT_EQ(st.frame_handles[2], 12u);
+    ASSERT_EQ(st.events.size(), 1u);
+    EXPECT_EQ(st.events[0].second, "footstep");
+    EXPECT_EQ(anim.current_state, "walk");
+    EXPECT_TRUE(anim.playing);
+
+    // pop_event: 无触发事件时返回空串。
+    char buf[64] = {'x', 0};
+    EXPECT_EQ(dse_anim2d_pop_event(id, buf, sizeof(buf)), 0);
+    EXPECT_STREQ(buf, "");
+    anim.fired_events.push_back("footstep");
+    EXPECT_EQ(dse_anim2d_pop_event(id, buf, sizeof(buf)), 1);
+    EXPECT_STREQ(buf, "footstep");
+}
+
+TEST_F(DseApiBindingsTest, Anim3D_FsmTransitionParamsEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_anim3d_add(id, "anims/idle.danim", "skel/hero.dskel");
+    dse_anim3d_init_fsm(id);
+    dse_anim3d_add_fsm_state(id, "idle", "anims/idle.danim", /*loop=*/1, 1.0f);
+    dse_anim3d_add_fsm_state(id, "run", "anims/run.danim", /*loop=*/1, 1.5f);
+
+    const char* names[1] = {"speed"};
+    const int modes[1] = {static_cast<int>(dse::gameplay3d::AnimConditionMode::Greater)};
+    const float thr[1] = {0.5f};
+    const int ivals[1] = {0};
+    dse_anim3d_add_transition(id, "idle", "run", /*dur=*/0.2f,
+                              /*has_exit=*/0, /*exit=*/1.0f,
+                              1, names, modes, thr, ivals);
+
+    dse_anim3d_set_param_float(id, "speed", 0.8f);
+    dse_anim3d_set_param_trigger(id, "jump");
+    dse_anim3d_set_state(id, "run", /*speed=*/2.0f, /*loop=*/0);
+    dse_anim3d_set_lock_root_motion(id, 1);
+
+    auto& a = world_.registry().get<dse::Animator3DComponent>(e);
+    ASSERT_TRUE(static_cast<bool>(a.state_machine));
+    auto& sm = *a.state_machine;
+    EXPECT_EQ(sm.GetStatesMutable().size(), 2u);
+    auto& states = sm.GetStatesMutable();
+    ASSERT_TRUE(states.count("idle"));
+    ASSERT_EQ(states.at("idle").transitions.size(), 1u);
+    EXPECT_EQ(states.at("idle").transitions[0].target_state, "run");
+    EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 0.8f);
+    EXPECT_TRUE(sm.GetParameters().count("jump"));
+    EXPECT_EQ(a.current_state_name, "run");
+    EXPECT_FLOAT_EQ(a.speed, 2.0f);
+    EXPECT_FALSE(a.loop);
+    EXPECT_TRUE(a.lock_root_motion);
+
+    // get_state 回读。
+    char state[64] = {0};
+    float norm = 0, time = 0, speed = 0;
+    int loop = 1, trans = 1, bones = -1, has_skel = 0;
+    EXPECT_EQ(dse_anim3d_get_state(id, state, sizeof(state), &norm, &time, &speed,
+                                   &loop, &trans, &bones, &has_skel), 1);
+    EXPECT_STREQ(state, "run");
+    EXPECT_FLOAT_EQ(speed, 2.0f);
+    EXPECT_EQ(loop, 0);
+    EXPECT_EQ(has_skel, 1);
+}
+
+TEST_F(DseApiBindingsTest, Anim3D_EventRootMotionEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_anim3d_add(id, "a.danim", "");
+    dse_anim3d_add_event(id, "hit", 0.3f);
+    dse_anim3d_set_extract_root_motion(id, 1);
+
+    auto& a = world_.registry().get<dse::Animator3DComponent>(e);
+    ASSERT_EQ(a.events.size(), 1u);
+    EXPECT_EQ(a.events[0].name, "hit");
+    EXPECT_TRUE(a.extract_root_motion);
+
+    a.root_motion_delta = glm::vec3(1.0f, 2.0f, 3.0f);
+    float xyz[3] = {0, 0, 0};
+    EXPECT_EQ(dse_anim3d_get_root_motion_delta(id, xyz), 1);
+    EXPECT_FLOAT_EQ(xyz[1], 2.0f);
+
+    a.fired_events.push_back("hit");
+    char buf[32] = {0};
+    EXPECT_EQ(dse_anim3d_pop_event(id, buf, sizeof(buf)), 1);
+    EXPECT_STREQ(buf, "hit");
+}
+
+TEST_F(DseApiBindingsTest, AnimLayer_ClipBlendTreeMaskEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_animlayer_add_component(id);
+    int idx = dse_animlayer_add(id, "upper", 0.5f, 0);
+    ASSERT_EQ(idx, 0);
+    dse_animlayer_set_clip(id, idx, "anims/aim.danim", 1.2f, /*loop=*/1);
+    dse_animlayer_set_weight(id, idx, 0.8f);
+
+    const char* bones[2] = {"spine", "head"};
+    dse_animlayer_set_bone_mask(id, idx, bones, 2);
+
+    const char* paths[2] = {"a.danim", "b.danim"};
+    const float thr[2] = {0.0f, 1.0f};
+    const float spd[2] = {1.0f, 1.0f};
+    dse_animlayer_set_blend_tree_1d(id, idx, paths, thr, spd, 2);
+    dse_animlayer_set_blend_param(id, idx, 0.4f);
+    dse_animlayer_set_enabled(id, 0);
+
+    auto& comp = world_.registry().get<dse::AnimLayerComponent>(e);
+    ASSERT_EQ(comp.layers.size(), 1u);
+    const auto& layer = comp.layers[0];
+    EXPECT_EQ(layer.name, "upper");
+    EXPECT_FLOAT_EQ(layer.weight, 0.8f);
+    EXPECT_EQ(layer.source_type, dse::AnimSourceType::BlendTree1D);
+    ASSERT_EQ(layer.bone_mask_include.size(), 2u);
+    EXPECT_EQ(layer.bone_mask_include[1], "head");
+    ASSERT_EQ(layer.blend_nodes.size(), 2u);
+    EXPECT_EQ(layer.blend_nodes[1].danim_path, "b.danim");
+    EXPECT_FLOAT_EQ(layer.blend_parameter_value, 0.4f);
+    EXPECT_FALSE(comp.enabled);
+}
+
+TEST_F(DseApiBindingsTest, IK_ChainTargetEcs) {
+    Entity e = world_.CreateEntity();
+    Entity tgt = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_ik_add_component(id);
+    int idx = dse_ik_add_chain(id, "leg_l", 1, "hip", "foot", 0.9f);
+    ASSERT_EQ(idx, 0);
+    dse_ik_set_target(id, idx, 1.0f, 2.0f, 3.0f);
+    dse_ik_set_target_entity(id, idx, EntityId(tgt));
+    dse_ik_set_weight(id, idx, 0.7f);
+    dse_ik_set_pole_vector(id, idx, 0.0f, 0.0f, 1.0f);
+    dse_ik_set_iterations(id, idx, 12);
+    dse_ik_set_enabled(id, 0);
+
+    auto& comp = world_.registry().get<dse::IKChain3DComponent>(e);
+    ASSERT_EQ(comp.chains.size(), 1u);
+    const auto& c = comp.chains[0];
+    EXPECT_EQ(c.name, "leg_l");
+    EXPECT_EQ(c.root_bone, "hip");
+    EXPECT_EQ(c.tip_bone, "foot");
+    EXPECT_FLOAT_EQ(c.target_position.x, 1.0f);
+    EXPECT_FLOAT_EQ(c.target_position.z, 3.0f);
+    EXPECT_EQ(c.target_entity, EntityId(tgt));
+    EXPECT_FLOAT_EQ(c.weight, 0.7f);
+    EXPECT_FLOAT_EQ(c.pole_vector.z, 1.0f);
+    EXPECT_EQ(c.iterations, 12);
+    EXPECT_FALSE(comp.enabled);
+
+    // 清除目标实体。
+    dse_ik_set_target_entity(id, idx, UINT32_MAX);
+    EXPECT_EQ(comp.chains[0].target_entity, UINT32_MAX);
+}
+
+TEST_F(DseApiBindingsTest, BoneAttach_AddOffsetRemoveEcs) {
+    Entity e = world_.CreateEntity();
+    Entity tgt = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_bone_attach_add(id, EntityId(tgt), "hand_r");
+    dse_bone_attach_set_offset(id, 1.0f, 2.0f, 3.0f,
+                               0.0f, 0.0f, 0.0f, 1.0f,
+                               2.0f, 2.0f, 2.0f);
+
+    auto& comp = world_.registry().get<dse::BoneAttachmentComponent>(e);
+    EXPECT_EQ(comp.target_entity, tgt);
+    EXPECT_EQ(comp.bone_name, "hand_r");
+    EXPECT_FLOAT_EQ(comp.offset_position.y, 2.0f);
+    EXPECT_FLOAT_EQ(comp.offset_scale.x, 2.0f);
+
+    dse_bone_attach_set_bone(id, "hand_l");
+    EXPECT_EQ(world_.registry().get<dse::BoneAttachmentComponent>(e).bone_name, "hand_l");
+
+    // get_world_pos: 无 skel 缓存时安全返回 0。
+    float xyz[3] = {9, 9, 9};
+    EXPECT_EQ(dse_bone_attach_get_world_pos(EntityId(tgt), "hand_l", xyz), 0);
+    EXPECT_FLOAT_EQ(xyz[0], 0.0f);
+
+    dse_bone_attach_remove(id);
+    EXPECT_FALSE(world_.registry().all_of<dse::BoneAttachmentComponent>(e));
+}
+
+TEST_F(DseApiBindingsTest, Morph_AddTargetWeightEcs) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_morph_add_component(id);
+    // 2 个顶点，每顶点 6 float（dp.xyz, dn.xyz）。
+    const float deltas[12] = {1, 0, 0, 0, 1, 0,
+                              2, 0, 0, 0, 1, 0};
+    dse_morph_add_target(id, "smile", deltas, 12);
+    EXPECT_EQ(dse_morph_get_target_count(id), 1);
+
+    dse_morph_set_weight(id, "smile", 0.6f);
+    EXPECT_FLOAT_EQ(dse_morph_get_weight(id, "smile"), 0.6f);
+    dse_morph_set_weight_index(id, 0, 0.3f);
+    EXPECT_FLOAT_EQ(dse_morph_get_weight(id, "smile"), 0.3f);
+
+    auto& comp = world_.registry().get<dse::MorphTargetComponent>(e);
+    ASSERT_EQ(comp.targets.size(), 1u);
+    EXPECT_EQ(comp.targets[0].name, "smile");
+    ASSERT_EQ(comp.targets[0].deltas.size(), 2u);
+    EXPECT_FLOAT_EQ(comp.targets[0].deltas[1].delta_position.x, 2.0f);
+    EXPECT_EQ(comp.vertex_count, 2);
 }
 
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {

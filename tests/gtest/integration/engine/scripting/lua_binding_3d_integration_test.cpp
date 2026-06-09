@@ -30,6 +30,10 @@
 #include "engine/ecs/components_3d_weather.h"
 #include "engine/ecs/components_3d_snow.h"
 #include "engine/ecs/components_3d_sky.h"
+#include "engine/ecs/components_3d_animation.h"
+#include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/animation.h"
+#include "engine/ecs/animation_state_machine.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -297,6 +301,125 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
         found = true;
     }
     EXPECT_TRUE(found);
+
+    ShutdownLuaRuntime();
+}
+
+// 动画 L4/L5：FSM / 动画层 / IK / Morph 经 C ABI 委托后，Lua→C ABI→组件 完整链路。
+TEST_F(LuaBinding3DIntegrationTest, LuaAnimationDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_animation_deleg.lua", R"(
+        function Awake()
+            -- FSM
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_animator_3d(e, "anims/idle.danim", "skeletons/hero.dskel")
+            dse.ecs.init_animator_3d_fsm(e)
+            dse.ecs.add_animator_3d_state(e, "idle", "anims/idle.danim", true, 1.0)
+            dse.ecs.add_animator_3d_state(e, "run", "anims/run.danim", true, 1.5)
+            dse.ecs.add_animator_3d_transition(e, "idle", "run", 0.2, false, 1.0,
+                { {"speed", 0, 0.5} })
+            dse.ecs.set_animator_3d_param_float(e, "speed", 0.9)
+            dse.ecs.set_animator_3d_param_trigger(e, "jump")
+            dse.ecs.set_animator_3d_state(e, "run", 2.0, false)
+            dse.ecs.add_animator_3d_event(e, "hit", 0.4)
+
+            -- 动画层
+            local la = dse.ecs.create_entity()
+            dse.ecs.add_anim_layer_component(la)
+            local idx = dse.ecs.add_anim_layer(la, "upper", 0.5, 0)
+            dse.ecs.set_anim_layer_clip(la, idx, "anims/aim.danim", 1.0, true)
+            dse.ecs.set_anim_layer_weight(la, idx, 0.8)
+            dse.ecs.set_anim_layer_bone_mask(la, idx, {"spine", "head"})
+
+            -- IK
+            local ik = dse.ecs.create_entity()
+            dse.ecs.add_ik_component(ik)
+            local cidx = dse.ecs.add_ik_chain(ik, "leg", 1, "hip", "foot", 0.9)
+            dse.ecs.set_ik_target(ik, cidx, 1.0, 2.0, 3.0)
+            dse.ecs.set_ik_iterations(ik, cidx, 15)
+
+            -- Morph
+            local mo = dse.ecs.create_entity()
+            dse.ecs.add_morph_target_component(mo)
+            dse.ecs.morph_add_target(mo, "smile", {1,0,0, 0,1,0,  2,0,0, 0,1,0})
+            dse.ecs.morph_set_weight(mo, "smile", 0.6)
+
+            _G.fsm_e = e
+            _G.layer_e = la
+            _G.ik_e = ik
+            _G.morph_e = mo
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    // FSM 校验
+    bool fsm_found = false;
+    for (auto entity : world.registry().view<Animator3DComponent>()) {
+        auto& a = world.registry().get<Animator3DComponent>(entity);
+        ASSERT_TRUE(static_cast<bool>(a.state_machine));
+        auto& sm = *a.state_machine;
+        EXPECT_EQ(sm.GetStatesMutable().size(), 2u);
+        ASSERT_TRUE(sm.GetStatesMutable().count("idle"));
+        ASSERT_EQ(sm.GetStatesMutable().at("idle").transitions.size(), 1u);
+        EXPECT_EQ(sm.GetStatesMutable().at("idle").transitions[0].target_state, "run");
+        EXPECT_NEAR(sm.GetFloat("speed"), 0.9f, 0.001f);
+        EXPECT_TRUE(sm.GetParameters().count("jump"));
+        EXPECT_EQ(a.current_state_name, "run");
+        EXPECT_NEAR(a.speed, 2.0f, 0.001f);
+        EXPECT_FALSE(a.loop);
+        ASSERT_EQ(a.events.size(), 1u);
+        EXPECT_EQ(a.events[0].name, "hit");
+        fsm_found = true;
+    }
+    EXPECT_TRUE(fsm_found);
+
+    // 动画层校验
+    bool layer_found = false;
+    for (auto entity : world.registry().view<AnimLayerComponent>()) {
+        auto& comp = world.registry().get<AnimLayerComponent>(entity);
+        ASSERT_EQ(comp.layers.size(), 1u);
+        EXPECT_EQ(comp.layers[0].name, "upper");
+        EXPECT_NEAR(comp.layers[0].weight, 0.8f, 0.001f);
+        EXPECT_EQ(comp.layers[0].danim_path, "anims/aim.danim");
+        ASSERT_EQ(comp.layers[0].bone_mask_include.size(), 2u);
+        EXPECT_EQ(comp.layers[0].bone_mask_include[0], "spine");
+        layer_found = true;
+    }
+    EXPECT_TRUE(layer_found);
+
+    // IK 校验
+    bool ik_found = false;
+    for (auto entity : world.registry().view<IKChain3DComponent>()) {
+        auto& comp = world.registry().get<IKChain3DComponent>(entity);
+        ASSERT_EQ(comp.chains.size(), 1u);
+        EXPECT_EQ(comp.chains[0].name, "leg");
+        EXPECT_NEAR(comp.chains[0].target_position.y, 2.0f, 0.001f);
+        EXPECT_EQ(comp.chains[0].iterations, 15);
+        ik_found = true;
+    }
+    EXPECT_TRUE(ik_found);
+
+    // Morph 校验
+    bool morph_found = false;
+    for (auto entity : world.registry().view<MorphTargetComponent>()) {
+        auto& comp = world.registry().get<MorphTargetComponent>(entity);
+        ASSERT_EQ(comp.targets.size(), 1u);
+        EXPECT_EQ(comp.targets[0].name, "smile");
+        EXPECT_NEAR(comp.GetWeight("smile"), 0.6f, 0.001f);
+        EXPECT_EQ(comp.vertex_count, 2);
+        morph_found = true;
+    }
+    EXPECT_TRUE(morph_found);
 
     ShutdownLuaRuntime();
 }

@@ -1,15 +1,19 @@
 /**
  * @file lua_binding_ecs_animation.cpp
- * @brief ECS Lua 绑定 — 2D 动画（AnimatorComponent）+ 3D 骨骼动画（Animator3DComponent / FSM）
+ * @brief ECS Lua 绑定 — 2D 动画 + 3D 骨骼动画 / FSM。薄包装委托至手写 C ABI（dse_anim*）。
+ *
+ * 本文件仅负责 Lua 参数读取与默认值解析，所有组件操作下沉到 dse_api_animation.cpp 的
+ * C ABI。浮点可选项以 NaN 传入表示「保持当前值」；数组以扁平指针 + count 传入。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
-#include "engine/ecs/animation.h"
-#include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_3d_render.h"
-#include "engine/ecs/animation_state_machine.h"
+#include <cmath>
+#include <cstdint>
+#include <string>
+#include <vector>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -17,104 +21,72 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+/// Entity → C ABI uint32_t（entt id）。
+inline uint32_t EID(Entity e) {
+    return static_cast<uint32_t>(static_cast<entt::id_type>(e));
+}
+
 // ============================================================
 // 2D 动画
 // ============================================================
 
 int L_EcsAddAnimator(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<AnimatorComponent>(e);
+    dse_anim2d_add(EID(e));
     return 0;
 }
 
 int L_EcsAddAnimationState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* state_name = luaL_checkstring(L, 2);
     float fps = helper::CheckFloat(L, 3);
     bool loop = helper::CheckBool(L, 4);
-    auto* animator = helper::TryGetComponent<AnimatorComponent>(*world, e);
-    if (!animator) return 0;
-    AnimationState state;
-    state.name = state_name;
-    state.frame_rate = fps;
-    state.loop = loop;
+    std::vector<uint32_t> handles;
     if (lua_istable(L, 5)) {
-        int len = lua_rawlen(L, 5);
+        int len = static_cast<int>(lua_rawlen(L, 5));
+        handles.reserve(static_cast<size_t>(len));
         for (int i = 1; i <= len; ++i) {
             lua_rawgeti(L, 5, i);
-            unsigned int handle = static_cast<unsigned int>(lua_tointeger(L, -1));
-            state.frame_handles.push_back(handle);
+            handles.push_back(static_cast<uint32_t>(lua_tointeger(L, -1)));
             lua_pop(L, 1);
         }
     }
-    animator->states[state_name] = state;
+    dse_anim2d_add_state(EID(e), state_name, fps, loop ? 1 : 0,
+                         handles.empty() ? nullptr : handles.data(),
+                         static_cast<int>(handles.size()));
     return 0;
 }
 
 int L_EcsAddAnimationEvent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* state_name = luaL_checkstring(L, 2);
     float normalized_time = helper::CheckFloat(L, 3);
     const char* event_name = luaL_checkstring(L, 4);
-    if (normalized_time < 0.0f) normalized_time = 0.0f;
-    if (normalized_time > 1.0f) normalized_time = 1.0f;
-    auto* animator = helper::TryGetComponent<AnimatorComponent>(*world, e);
-    if (!animator) return 0;
-    auto it = animator->states.find(state_name);
-    if (it != animator->states.end()) {
-        it->second.events.emplace_back(normalized_time, std::string(event_name));
-    }
+    dse_anim2d_add_event(EID(e), state_name, normalized_time, event_name);
     return 0;
 }
 
 int L_EcsPlayAnimation(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* state_name = luaL_checkstring(L, 2);
-    auto* animator = helper::TryGetComponent<AnimatorComponent>(*world, e);
-    if (!animator) return 0;
-    animator->current_state = state_name;
-    animator->current_time = 0.0f;
-    animator->current_frame = 0;
-    animator->playing = true;
+    dse_anim2d_play(EID(e), state_name);
     return 0;
 }
 
 int L_EcsPlayAnimationSegment(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int start_frame = helper::CheckInt(L, 2);
     int end_frame = helper::CheckInt(L, 3);
     bool loop = helper::CheckBool(L, 4);
-    auto* animator = helper::TryGetComponent<AnimatorComponent>(*world, e);
-    if (!animator) return 0;
-    animator->PlaySegment(start_frame, end_frame, loop);
+    dse_anim2d_play_segment(EID(e), start_frame, end_frame, loop ? 1 : 0);
     return 0;
 }
 
 int L_EcsPopAnimationEvent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushstring(L, "");
-        return 1;
-    }
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<AnimatorComponent>(*world, e);
-    if (animator && !animator->fired_events.empty()) {
-        std::string event_name = animator->fired_events.front();
-        animator->fired_events.erase(animator->fired_events.begin());
-        lua_pushstring(L, event_name.c_str());
-        return 1;
-    }
-    lua_pushstring(L, "");
+    char buf[256];
+    dse_anim2d_pop_event(EID(e), buf, static_cast<int>(sizeof(buf)));
+    lua_pushstring(L, buf);
     return 1;
 }
 
@@ -123,104 +95,64 @@ int L_EcsPopAnimationEvent(lua_State* L) {
 // ============================================================
 
 int L_EcsAddAnimator3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* danim_path = luaL_optstring(L, 2, "");
     const char* dskel_path = luaL_optstring(L, 3, "");
-    auto& animator = world->registry().emplace_or_replace<Animator3DComponent>(e);
-    animator.danim_path = danim_path;
-    animator.dskel_path = dskel_path;
-    animator.enabled = true;
-    animator.current_time = 0.0f;
-    animator.speed = 1.0f;
-    animator.loop = true;
+    dse_anim3d_add(EID(e), danim_path, dskel_path);
     return 0;
 }
 
 int L_EcsSetAnimator3DState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    if (lua_gettop(L) >= 2 && lua_isstring(L, 2)) {
-        const char* state_name = lua_tostring(L, 2);
-        if (animator->state_machine) {
-            animator->current_state_name = state_name;
-            animator->state_time = 0.0f;
-            animator->is_transitioning = false;
-        } else {
-            animator->danim_path = state_name;
-        }
-    }
-    if (lua_gettop(L) >= 3) {
-        animator->speed = helper::CheckFloat(L, 3);
-    }
-    if (lua_gettop(L) >= 4) {
-        animator->loop = helper::CheckBool(L, 4);
-    }
+    const char* state_name = (lua_gettop(L) >= 2 && lua_isstring(L, 2))
+                                 ? lua_tostring(L, 2) : nullptr;
+    float speed = (lua_gettop(L) >= 3) ? helper::CheckFloat(L, 3) : NAN;
+    int loop = (lua_gettop(L) >= 4) ? (helper::CheckBool(L, 4) ? 1 : 0) : -1;
+    dse_anim3d_set_state(EID(e), state_name, speed, loop);
     return 0;
 }
 
 int L_EcsGetAnimator3DState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* animator = helper::TryGetComponentConst<Animator3DComponent>(*world, e);
-    if (!animator) {
+    char state[256];
+    float norm = 0.0f, time = 0.0f, speed = 0.0f;
+    int loop = 0, transitioning = 0, bone_count = 0, has_skel = 0;
+    int found = dse_anim3d_get_state(EID(e), state, static_cast<int>(sizeof(state)),
+                                     &norm, &time, &speed, &loop, &transitioning,
+                                     &bone_count, &has_skel);
+    if (!found) {
         lua_pushboolean(L, 0);
         return 1;
     }
     lua_pushboolean(L, 1);
-    lua_pushstring(L, animator->current_state_name.empty() ? animator->danim_path.c_str() : animator->current_state_name.c_str());
-    helper::PushFloat(L, animator->normalized_time);
-    helper::PushFloat(L, animator->state_machine ? animator->state_time : animator->current_time);
-    helper::PushFloat(L, animator->speed);
-    helper::PushBool(L, animator->loop);
-    helper::PushBool(L, animator->is_transitioning);
-    helper::PushInt(L, static_cast<int>(animator->final_bone_matrices.size()));
-    helper::PushBool(L, !animator->dskel_path.empty());
+    lua_pushstring(L, state);
+    helper::PushFloat(L, norm);
+    helper::PushFloat(L, time);
+    helper::PushFloat(L, speed);
+    helper::PushBool(L, loop != 0);
+    helper::PushBool(L, transitioning != 0);
+    helper::PushInt(L, bone_count);
+    helper::PushBool(L, has_skel != 0);
     return 9;
 }
 
 int L_EcsInitAnimator3DStateMachine(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    animator->state_machine = std::make_shared<gameplay3d::AnimationStateMachine>();
+    dse_anim3d_init_fsm(EID(e));
     return 0;
 }
 
 int L_EcsAddAnimator3DState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* state_name = luaL_checkstring(L, 2);
     const char* danim_path = luaL_checkstring(L, 3);
     bool loop = helper::CheckBool(L, 4);
     float speed = helper::OptFloat(L, 5, 1.0f);
-
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator || !animator->state_machine) return 0;
-    gameplay3d::AnimState state;
-    state.name = state_name;
-    state.danim_path = danim_path;
-    state.loop = loop;
-    state.speed = speed;
-    state.is_blend_tree = false;
-    animator->state_machine->AddState(state);
+    dse_anim3d_add_fsm_state(EID(e), state_name, danim_path, loop ? 1 : 0, speed);
     return 0;
 }
 
 int L_EcsAddAnimator3DTransition(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* from_state = luaL_checkstring(L, 2);
     const char* to_state = luaL_checkstring(L, 3);
@@ -228,86 +160,61 @@ int L_EcsAddAnimator3DTransition(lua_State* L) {
     bool has_exit_time = helper::CheckBool(L, 5);
     float exit_time = helper::OptFloat(L, 6, 1.0f);
 
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator || !animator->state_machine) return 0;
-
-    auto& fsm = *animator->state_machine;
-    auto& states = fsm.GetStatesMutable();
-    auto it = states.find(from_state);
-    if (it == states.end()) return 0;
-
-    gameplay3d::AnimTransition trans;
-    trans.target_state = to_state;
-    trans.transition_duration = transition_duration;
-    trans.has_exit_time = has_exit_time;
-    trans.exit_time = exit_time;
-
-    // 读取条件表（Arg 7）
+    // 读取条件表（Arg 7）→ 并行扁平数组。
+    std::vector<std::string> name_store;
+    std::vector<int> modes;
+    std::vector<float> thresholds;
+    std::vector<int> int_vals;
     if (lua_istable(L, 7)) {
         lua_pushnil(L);
         while (lua_next(L, 7) != 0) {
             if (lua_istable(L, -1)) {
-                gameplay3d::AnimTransitionCondition cond;
-                lua_rawgeti(L, -1, 1); cond.parameter_name = lua_tostring(L, -1); lua_pop(L, 1);
-                lua_rawgeti(L, -1, 2); int mode = lua_tointeger(L, -1); lua_pop(L, 1);
-                cond.mode = static_cast<gameplay3d::AnimConditionMode>(mode);
-
-                lua_rawgeti(L, -1, 3);
-                if (lua_isnumber(L, -1)) {
-                    cond.threshold = static_cast<float>(lua_tonumber(L, -1));
-                    cond.int_value = static_cast<int>(lua_tointeger(L, -1));
-                }
+                lua_rawgeti(L, -1, 1);
+                name_store.emplace_back(lua_isstring(L, -1) ? lua_tostring(L, -1) : "");
                 lua_pop(L, 1);
-
-                trans.conditions.push_back(cond);
+                lua_rawgeti(L, -1, 2);
+                modes.push_back(static_cast<int>(lua_tointeger(L, -1)));
+                lua_pop(L, 1);
+                lua_rawgeti(L, -1, 3);
+                thresholds.push_back(lua_isnumber(L, -1) ? static_cast<float>(lua_tonumber(L, -1)) : 0.0f);
+                int_vals.push_back(lua_isnumber(L, -1) ? static_cast<int>(lua_tointeger(L, -1)) : 0);
+                lua_pop(L, 1);
             }
             lua_pop(L, 1);
         }
     }
+    std::vector<const char*> names;
+    names.reserve(name_store.size());
+    for (const auto& s : name_store) names.push_back(s.c_str());
 
-    it->second.transitions.push_back(trans);
+    dse_anim3d_add_transition(EID(e), from_state, to_state, transition_duration,
+                              has_exit_time ? 1 : 0, exit_time,
+                              static_cast<int>(names.size()),
+                              names.empty() ? nullptr : names.data(),
+                              modes.empty() ? nullptr : modes.data(),
+                              thresholds.empty() ? nullptr : thresholds.data(),
+                              int_vals.empty() ? nullptr : int_vals.data());
     return 0;
 }
 
 int L_EcsSetAnimator3DParamFloat(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* param_name = luaL_checkstring(L, 2);
     float value = helper::CheckFloat(L, 3);
-
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator || !animator->state_machine) return 0;
-    // 自动添加不存在的参数
-    if (animator->state_machine->GetParameters().find(param_name) == animator->state_machine->GetParameters().end()) {
-        animator->state_machine->AddParameter(param_name, gameplay3d::AnimParamType::Float, 0.0f);
-    }
-    animator->state_machine->SetFloat(param_name, value);
+    dse_anim3d_set_param_float(EID(e), param_name, value);
     return 0;
 }
 
 int L_EcsSetAnimator3DParamTrigger(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* param_name = luaL_checkstring(L, 2);
-
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator || !animator->state_machine) return 0;
-    if (animator->state_machine->GetParameters().find(param_name) == animator->state_machine->GetParameters().end()) {
-        animator->state_machine->AddTrigger(param_name);
-    }
-    animator->state_machine->SetTrigger(param_name);
+    dse_anim3d_set_param_trigger(EID(e), param_name);
     return 0;
 }
 
 int L_EcsSetAnimator3DLockRootMotion(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    animator->lock_root_motion = lua_toboolean(L, 2) != 0;
+    dse_anim3d_set_lock_root_motion(EID(e), lua_toboolean(L, 2) != 0 ? 1 : 0);
     return 0;
 }
 
@@ -316,127 +223,104 @@ int L_EcsSetAnimator3DLockRootMotion(lua_State* L) {
 // ============================================================
 
 int L_EcsAddAnimLayerComponent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<AnimLayerComponent>(e);
+    dse_animlayer_add_component(EID(e));
     return 0;
 }
 
 int L_EcsAddAnimLayer(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp) { helper::PushInt(L, -1); return 1; }
-
-    AnimLayerConfig layer;
-    layer.name = luaL_optstring(L, 2, "");
-    layer.weight = helper::OptFloat(L, 3, 1.0f);
+    const char* name = luaL_optstring(L, 2, "");
+    float weight = helper::OptFloat(L, 3, 1.0f);
     int mode = helper::OptInt(L, 4, 0);
-    layer.blend_mode = static_cast<AnimLayerBlendMode>(mode);
-    comp->layers.push_back(std::move(layer));
-    helper::PushInt(L, static_cast<int>(comp->layers.size()) - 1);
+    helper::PushInt(L, dse_animlayer_add(EID(e), name, weight, mode));
     return 1;
 }
 
 int L_EcsSetAnimLayerClip(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
     const char* danim_path = luaL_checkstring(L, 3);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
-    auto& layer = comp->layers[idx];
-    layer.source_type = AnimSourceType::SingleClip;
-    layer.danim_path = danim_path;
-    layer.speed = helper::OptFloat(L, 4, 1.0f);
-    layer.loop = helper::OptBool(L, 5, true);
+    float speed = helper::OptFloat(L, 4, 1.0f);
+    bool loop = helper::OptBool(L, 5, true);
+    dse_animlayer_set_clip(EID(e), idx, danim_path, speed, loop ? 1 : 0);
     return 0;
 }
 
 int L_EcsSetAnimLayerWeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
     float w = helper::CheckFloat(L, 3);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
-    comp->layers[idx].weight = w;
+    dse_animlayer_set_weight(EID(e), idx, w);
     return 0;
 }
 
 int L_EcsSetAnimLayerBoneMask(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
-    auto& layer = comp->layers[idx];
-    layer.bone_mask_include.clear();
+    std::vector<std::string> store;
     if (lua_istable(L, 3)) {
         int len = static_cast<int>(lua_rawlen(L, 3));
         for (int i = 1; i <= len; ++i) {
             lua_rawgeti(L, 3, i);
-            if (lua_isstring(L, -1)) {
-                layer.bone_mask_include.emplace_back(lua_tostring(L, -1));
-            }
+            if (lua_isstring(L, -1)) store.emplace_back(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
     }
-    layer.bone_mask_dirty = true;
+    std::vector<const char*> bones;
+    bones.reserve(store.size());
+    for (const auto& s : store) bones.push_back(s.c_str());
+    dse_animlayer_set_bone_mask(EID(e), idx,
+                                bones.empty() ? nullptr : bones.data(),
+                                static_cast<int>(bones.size()));
     return 0;
 }
 
 int L_EcsSetAnimLayerBlendTree1D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
-    auto& layer = comp->layers[idx];
-    layer.source_type = AnimSourceType::BlendTree1D;
-    layer.blend_nodes.clear();
+    std::vector<std::string> path_store;
+    std::vector<float> thresholds;
+    std::vector<float> speeds;
     if (lua_istable(L, 3)) {
         lua_pushnil(L);
         while (lua_next(L, 3) != 0) {
             if (lua_istable(L, -1)) {
-                AnimBlendNode node;
-                lua_rawgeti(L, -1, 1); node.danim_path = luaL_optstring(L, -1, ""); lua_pop(L, 1);
-                lua_rawgeti(L, -1, 2); node.threshold = static_cast<float>(luaL_optnumber(L, -1, 0.0)); lua_pop(L, 1);
-                lua_rawgeti(L, -1, 3); node.speed = static_cast<float>(luaL_optnumber(L, -1, 1.0)); lua_pop(L, 1);
-                node.loop = true;
-                layer.blend_nodes.push_back(std::move(node));
+                lua_rawgeti(L, -1, 1);
+                path_store.emplace_back(luaL_optstring(L, -1, ""));
+                lua_pop(L, 1);
+                lua_rawgeti(L, -1, 2);
+                thresholds.push_back(static_cast<float>(luaL_optnumber(L, -1, 0.0)));
+                lua_pop(L, 1);
+                lua_rawgeti(L, -1, 3);
+                speeds.push_back(static_cast<float>(luaL_optnumber(L, -1, 1.0)));
+                lua_pop(L, 1);
             }
             lua_pop(L, 1);
         }
     }
+    std::vector<const char*> paths;
+    paths.reserve(path_store.size());
+    for (const auto& s : path_store) paths.push_back(s.c_str());
+    dse_animlayer_set_blend_tree_1d(EID(e), idx,
+                                    paths.empty() ? nullptr : paths.data(),
+                                    thresholds.empty() ? nullptr : thresholds.data(),
+                                    speeds.empty() ? nullptr : speeds.data(),
+                                    static_cast<int>(paths.size()));
     return 0;
 }
 
 int L_EcsSetAnimLayerBlendParam(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
     float val = helper::CheckFloat(L, 3);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->layers.size())) return 0;
-    comp->layers[idx].blend_parameter_value = val;
+    dse_animlayer_set_blend_param(EID(e), idx, val);
     return 0;
 }
 
 int L_EcsSetAnimLayerEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<AnimLayerComponent>(*world, e);
-    if (!comp) return 0;
-    comp->enabled = helper::CheckBool(L, 2);
+    dse_animlayer_set_enabled(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
@@ -445,101 +329,68 @@ int L_EcsSetAnimLayerEnabled(lua_State* L) {
 // ============================================================
 
 int L_EcsAddIKComponent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<IKChain3DComponent>(e);
+    dse_ik_add_component(EID(e));
     return 0;
 }
 
 int L_EcsAddIKChain(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp) { helper::PushInt(L, -1); return 1; }
-
-    IKChainConfig chain;
-    chain.name = luaL_optstring(L, 2, "");
+    const char* name = luaL_optstring(L, 2, "");
     int type = helper::OptInt(L, 3, 0);
-    chain.type = static_cast<IKChainType>(type);
-    chain.root_bone = luaL_optstring(L, 4, "");
-    chain.tip_bone = luaL_optstring(L, 5, "");
-    chain.weight = helper::OptFloat(L, 6, 1.0f);
-    comp->chains.push_back(std::move(chain));
-    helper::PushInt(L, static_cast<int>(comp->chains.size()) - 1);
+    const char* root_bone = luaL_optstring(L, 4, "");
+    const char* tip_bone = luaL_optstring(L, 5, "");
+    float weight = helper::OptFloat(L, 6, 1.0f);
+    helper::PushInt(L, dse_ik_add_chain(EID(e), name, type, root_bone, tip_bone, weight));
     return 1;
 }
 
 int L_EcsSetIKTarget(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
-    comp->chains[idx].target_position = helper::CheckVec3(L, 3);
+    glm::vec3 t = helper::CheckVec3(L, 3);
+    dse_ik_set_target(EID(e), idx, t.x, t.y, t.z);
     return 0;
 }
 
 int L_EcsSetIKTargetEntity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
-    if (lua_isnil(L, 3)) {
-        comp->chains[idx].target_entity = UINT32_MAX;
-    } else {
-        Entity target = helper::CheckEntity(L, 3);
-        comp->chains[idx].target_entity = static_cast<uint32_t>(target);
+    uint32_t target = UINT32_MAX;
+    if (!lua_isnil(L, 3)) {
+        target = static_cast<uint32_t>(helper::CheckEntity(L, 3));
     }
+    dse_ik_set_target_entity(EID(e), idx, target);
     return 0;
 }
 
 int L_EcsSetIKWeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
     float w = helper::CheckFloat(L, 3);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
-    comp->chains[idx].weight = w;
+    dse_ik_set_weight(EID(e), idx, w);
     return 0;
 }
 
 int L_EcsSetIKPoleVector(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
-    comp->chains[idx].pole_vector = helper::CheckVec3(L, 3);
+    glm::vec3 p = helper::CheckVec3(L, 3);
+    dse_ik_set_pole_vector(EID(e), idx, p.x, p.y, p.z);
     return 0;
 }
 
 int L_EcsSetIKIterations(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int idx = helper::CheckInt(L, 2);
     int iters = helper::CheckInt(L, 3);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp || idx < 0 || idx >= static_cast<int>(comp->chains.size())) return 0;
-    comp->chains[idx].iterations = iters;
+    dse_ik_set_iterations(EID(e), idx, iters);
     return 0;
 }
 
 int L_EcsSetIKEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<IKChain3DComponent>(*world, e);
-    if (!comp) return 0;
-    comp->enabled = helper::CheckBool(L, 2);
+    dse_ik_set_enabled(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
@@ -548,53 +399,32 @@ int L_EcsSetIKEnabled(lua_State* L) {
 // ============================================================
 
 int L_EcsAddAnimator3DEvent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* event_name = luaL_checkstring(L, 2);
     float trigger_time = helper::CheckFloat(L, 3);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    AnimEventConfig evt;
-    evt.name = event_name;
-    evt.trigger_time = trigger_time;
-    evt.fired = false;
-    animator->events.push_back(std::move(evt));
+    dse_anim3d_add_event(EID(e), event_name, trigger_time);
     return 0;
 }
 
 int L_EcsPopAnimator3DEvent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushstring(L, ""); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (animator && !animator->fired_events.empty()) {
-        std::string name = animator->fired_events.front();
-        animator->fired_events.erase(animator->fired_events.begin());
-        lua_pushstring(L, name.c_str());
-        return 1;
-    }
-    lua_pushstring(L, "");
+    char buf[256];
+    dse_anim3d_pop_event(EID(e), buf, static_cast<int>(sizeof(buf)));
+    lua_pushstring(L, buf);
     return 1;
 }
 
 int L_EcsSetAnimator3DExtractRootMotion(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* animator = helper::TryGetComponent<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    animator->extract_root_motion = helper::CheckBool(L, 2);
+    dse_anim3d_set_extract_root_motion(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
 int L_EcsGetAnimator3DRootMotionDelta(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    const auto* animator = helper::TryGetComponentConst<Animator3DComponent>(*world, e);
-    if (!animator) return 0;
-    helper::PushVec3(L, animator->root_motion_delta);
+    float xyz[3];
+    if (!dse_anim3d_get_root_motion_delta(EID(e), xyz)) return 0;
+    helper::PushVec3(L, glm::vec3(xyz[0], xyz[1], xyz[2]));
     return 3;
 }
 
@@ -604,98 +434,59 @@ int L_EcsGetAnimator3DRootMotionDelta(lua_State* L) {
 
 // ecs.add_bone_attachment(entity, target_entity, bone_name)
 int L_EcsAddBoneAttachment(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     Entity target = helper::CheckEntity(L, 2);
     const char* bone = luaL_checkstring(L, 3);
-    auto& comp = world->registry().emplace_or_replace<dse::BoneAttachmentComponent>(e);
-    comp.target_entity = target;
-    comp.bone_name = bone;
-    comp.index_dirty = true;
-    comp.cached_bone_index = -1;
+    dse_bone_attach_add(EID(e), EID(target), bone);
     return 0;
 }
 
 // ecs.set_bone_attachment_offset(entity, px,py,pz, rx,ry,rz,rw, [sx,sy,sz])
 int L_EcsSetBoneAttachmentOffset(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
-    if (!comp) return 0;
-    comp->offset_position = glm::vec3(
-        helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
-    comp->offset_rotation = glm::quat(
-        helper::CheckFloat(L, 8), // w
-        helper::CheckFloat(L, 5), // x
-        helper::CheckFloat(L, 6), // y
-        helper::CheckFloat(L, 7));// z
-    comp->offset_scale = glm::vec3(
-        helper::OptFloat(L, 9, 1.0f), helper::OptFloat(L, 10, 1.0f), helper::OptFloat(L, 11, 1.0f));
+    float px = helper::CheckFloat(L, 2);
+    float py = helper::CheckFloat(L, 3);
+    float pz = helper::CheckFloat(L, 4);
+    float qx = helper::CheckFloat(L, 5);
+    float qy = helper::CheckFloat(L, 6);
+    float qz = helper::CheckFloat(L, 7);
+    float qw = helper::CheckFloat(L, 8);
+    float sx = helper::OptFloat(L, 9, 1.0f);
+    float sy = helper::OptFloat(L, 10, 1.0f);
+    float sz = helper::OptFloat(L, 11, 1.0f);
+    dse_bone_attach_set_offset(EID(e), px, py, pz, qx, qy, qz, qw, sx, sy, sz);
     return 0;
 }
 
 // ecs.set_bone_attachment_bone(entity, bone_name)
 int L_EcsSetBoneAttachmentBone(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
-    if (!comp) return 0;
-    comp->bone_name = luaL_checkstring(L, 2);
-    comp->index_dirty = true;
-    comp->cached_bone_index = -1;
+    dse_bone_attach_set_bone(EID(e), luaL_checkstring(L, 2));
     return 0;
 }
 
 // ecs.set_bone_attachment_target(entity, target_entity)
 int L_EcsSetBoneAttachmentTarget(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::BoneAttachmentComponent>(*world, e);
-    if (!comp) return 0;
-    comp->target_entity = helper::CheckEntity(L, 2);
-    comp->index_dirty = true;
-    comp->cached_bone_index = -1;
+    Entity target = helper::CheckEntity(L, 2);
+    dse_bone_attach_set_target(EID(e), EID(target));
     return 0;
 }
 
 // ecs.get_bone_world_position(target_entity, bone_name) -> x, y, z
 int L_EcsGetBoneWorldPosition(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity target = helper::CheckEntity(L, 1);
     const char* bone_name = luaL_checkstring(L, 2);
-    auto* anim = world->registry().try_get<Animator3DComponent>(target);
-    auto* xform = world->registry().try_get<TransformComponent>(target);
-    if (!anim || !xform || !anim->skel_cache.valid) {
-        helper::PushVec3(L, glm::vec3(0.0f));
-        return 3;
-    }
-    auto it = anim->skel_cache.bone_name_to_index.find(bone_name);
-    if (it == anim->skel_cache.bone_name_to_index.end() ||
-        it->second >= static_cast<int>(anim->final_bone_matrices.size()) ||
-        it->second >= static_cast<int>(anim->skel_cache.bind_globals.size())) {
-        helper::PushVec3(L, glm::vec3(0.0f));
-        return 3;
-    }
-    int bi = it->second;
-    glm::mat4 bone_model = anim->final_bone_matrices[bi] * anim->skel_cache.bind_globals[bi];
-    glm::vec4 world_pos = xform->local_to_world * bone_model * glm::vec4(0, 0, 0, 1);
-    helper::PushVec3(L, glm::vec3(world_pos));
+    float xyz[3];
+    dse_bone_attach_get_world_pos(EID(target), bone_name, xyz);
+    helper::PushVec3(L, glm::vec3(xyz[0], xyz[1], xyz[2]));
     return 3;
 }
 
 // ecs.remove_bone_attachment(entity)
 int L_EcsRemoveBoneAttachment(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    if (world->registry().all_of<dse::BoneAttachmentComponent>(e)) {
-        world->registry().remove<dse::BoneAttachmentComponent>(e);
-    }
+    dse_bone_attach_remove(EID(e));
     return 0;
 }
 
@@ -705,93 +496,61 @@ int L_EcsRemoveBoneAttachment(lua_State* L) {
 
 // ecs.add_morph_target_component(entity)
 int L_EcsAddMorphTargetComponent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<dse::MorphTargetComponent>(e);
+    dse_morph_add_component(EID(e));
     return 0;
 }
 
 // ecs.morph_add_target(entity, name, {deltas})
-// deltas = flat array: {dx,dy,dz, dnx,dny,dnz, dx,dy,dz, dnx,dny,dnz, ...}
+// deltas = flat array: {dx,dy,dz, dnx,dny,dnz, ...}
 int L_EcsMorphAddTarget(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
-    if (!comp) return 0;
     const char* name = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TTABLE);
     int len = static_cast<int>(lua_rawlen(L, 3));
-    int vert_count = len / 6;
-
-    dse::MorphTargetData target;
-    target.name = name;
-    target.deltas.resize(vert_count);
-    for (int i = 0; i < vert_count; ++i) {
-        int base = i * 6;
-        lua_rawgeti(L, 3, base + 1); target.deltas[i].delta_position.x = static_cast<float>(lua_tonumber(L, -1));
-        lua_rawgeti(L, 3, base + 2); target.deltas[i].delta_position.y = static_cast<float>(lua_tonumber(L, -1));
-        lua_rawgeti(L, 3, base + 3); target.deltas[i].delta_position.z = static_cast<float>(lua_tonumber(L, -1));
-        lua_rawgeti(L, 3, base + 4); target.deltas[i].delta_normal.x = static_cast<float>(lua_tonumber(L, -1));
-        lua_rawgeti(L, 3, base + 5); target.deltas[i].delta_normal.y = static_cast<float>(lua_tonumber(L, -1));
-        lua_rawgeti(L, 3, base + 6); target.deltas[i].delta_normal.z = static_cast<float>(lua_tonumber(L, -1));
-        lua_pop(L, 6);
-        target.deltas[i]._pad0 = 0.0f;
-        target.deltas[i]._pad1 = 0.0f;
+    std::vector<float> deltas;
+    deltas.reserve(static_cast<size_t>(len));
+    for (int i = 1; i <= len; ++i) {
+        lua_rawgeti(L, 3, i);
+        deltas.push_back(static_cast<float>(lua_tonumber(L, -1)));
+        lua_pop(L, 1);
     }
-    comp->targets.push_back(std::move(target));
-    comp->weights.push_back(0.0f);
-    if (comp->vertex_count == 0) comp->vertex_count = vert_count;
-    comp->gpu_dirty = true;
+    dse_morph_add_target(EID(e), name,
+                         deltas.empty() ? nullptr : deltas.data(),
+                         static_cast<int>(deltas.size()));
     return 0;
 }
 
 // ecs.morph_set_weight(entity, name, weight)
 int L_EcsMorphSetWeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
-    if (!comp) return 0;
     const char* name = luaL_checkstring(L, 2);
     float w = helper::CheckFloat(L, 3);
-    comp->SetWeight(name, w);
+    dse_morph_set_weight(EID(e), name, w);
     return 0;
 }
 
 // ecs.morph_set_weight_index(entity, index, weight)  (0-based)
 int L_EcsMorphSetWeightIndex(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
-    if (!comp) return 0;
     int idx = static_cast<int>(luaL_checkinteger(L, 2));
     float w = helper::CheckFloat(L, 3);
-    comp->SetWeightByIndex(idx, w);
+    dse_morph_set_weight_index(EID(e), idx, w);
     return 0;
 }
 
 // ecs.morph_get_weight(entity, name) -> number
 int L_EcsMorphGetWeight(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 0.0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
-    if (!comp) { lua_pushnumber(L, 0.0); return 1; }
     const char* name = luaL_checkstring(L, 2);
-    lua_pushnumber(L, comp->GetWeight(name));
+    lua_pushnumber(L, dse_morph_get_weight(EID(e), name));
     return 1;
 }
 
 // ecs.morph_get_target_count(entity) -> int
 int L_EcsMorphGetTargetCount(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushinteger(L, 0); return 1; }
     Entity e = helper::CheckEntity(L, 1);
-    auto* comp = helper::TryGetComponent<dse::MorphTargetComponent>(*world, e);
-    lua_pushinteger(L, comp ? static_cast<int>(comp->targets.size()) : 0);
+    lua_pushinteger(L, dse_morph_get_target_count(EID(e)));
     return 1;
 }
 
