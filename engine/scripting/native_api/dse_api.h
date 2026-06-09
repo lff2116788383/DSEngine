@@ -467,6 +467,19 @@ DSE_CAPI float dse_animator3d_get_blend_parameter_value(uint32_t e);
 DSE_CAPI void  dse_animator3d_set_blend_parameter_value(uint32_t e, float v);
 
 // ============================================================
+// Physics3D 服务（L5，手写 dse_api_physics3d.cpp）
+// 依赖 Physics3D 服务 + ECS 碰撞体回退，非纯组件字段，codegen 无法表达。
+// raycast：direction 内部归一化；命中返回 1 并填充非空 out_*（point/normal 为 float[3]）。
+// ============================================================
+DSE_CAPI int dse_physics3d_raycast(float ox, float oy, float oz,
+                                   float dx, float dy, float dz,
+                                   float max_dist,
+                                   uint32_t* out_entity,
+                                   float* out_point,
+                                   float* out_normal,
+                                   float* out_distance);
+
+// ============================================================
 // Input
 // ============================================================
 

@@ -10,6 +10,8 @@
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_3d_navmesh.h"
+#include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/transform.h"
 #include <cstring>
 
 namespace {
@@ -247,6 +249,39 @@ TEST_F(DseApiBindingsTest, Animator3D_FieldRoundTrip) {
     EXPECT_EQ(a.danim_path, "anims/run.danim");
     EXPECT_EQ(a.dskel_path, "skeletons/hero.dskel");
     EXPECT_TRUE(a.use_anim_tree);
+}
+
+// L5：dse_physics3d_raycast — 无物理服务时走 ECS 碰撞体回退（Box AABB）。
+TEST_F(DseApiBindingsTest, Physics3DRaycast_EcsBoxHitAndMiss) {
+    Entity e = world_.CreateEntity();
+    auto& tf = world_.registry().emplace<TransformComponent>(e);
+    tf.position = glm::vec3(5.0f, 0.0f, 0.0f);
+    tf.scale = glm::vec3(1.0f);
+    auto& box = world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    box.size = glm::vec3(2.0f);   // half-size 1.0 → AABB [4..6] on x
+    box.center = glm::vec3(0.0f);
+
+    // 命中：从原点沿 +x 射线
+    uint32_t hit_entity = 0;
+    float point[3] = {0, 0, 0};
+    float normal[3] = {0, 0, 0};
+    float distance = -1.0f;
+    int hit = dse_physics3d_raycast(0, 0, 0, 1, 0, 0, 100.0f,
+                                    &hit_entity, point, normal, &distance);
+    EXPECT_EQ(hit, 1);
+    EXPECT_EQ(hit_entity, EntityId(e));
+    EXPECT_NEAR(point[0], 4.0f, 1e-3f);   // 进入面 x=4
+    EXPECT_NEAR(normal[0], -1.0f, 1e-3f); // 朝向 -x
+    EXPECT_NEAR(distance, 4.0f, 1e-3f);
+
+    // 未命中：射线背离盒子（-x 方向）
+    int miss = dse_physics3d_raycast(0, 0, 0, -1, 0, 0, 100.0f,
+                                     nullptr, nullptr, nullptr, nullptr);
+    EXPECT_EQ(miss, 0);
+
+    // 退化输入：零长方向 / max_dist<=0 → 未命中
+    EXPECT_EQ(dse_physics3d_raycast(0, 0, 0, 0, 0, 0, 100.0f, nullptr, nullptr, nullptr, nullptr), 0);
+    EXPECT_EQ(dse_physics3d_raycast(0, 0, 0, 1, 0, 0, 0.0f, nullptr, nullptr, nullptr, nullptr), 0);
 }
 
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {

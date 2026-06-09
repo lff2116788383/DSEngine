@@ -298,6 +298,55 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
     ShutdownLuaRuntime();
 }
 
+// L5：physics_3d_raycast 经 C ABI 委托后，验证 Lua→C ABI→Lua 完整返回链路。
+// 脚本把 raycast 命中点/法线/距离写回 marker 实体的 transform，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
+    LuaTempScript startup("test_3d_raycast.lua", R"(
+        function Awake()
+            local box = dse.ecs.create_entity()
+            dse.ecs.add_transform(box, 5.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_box_collider_3d(box, 2.0, 2.0, 2.0)  -- half-size 1 → AABB x∈[4,6]
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, -100.0, -100.0, -100.0, 1.0, 1.0, 1.0)
+
+            local hit, ent, hx, hy, hz, nx, ny, nz, dist =
+                dse.ecs.physics_3d_raycast(0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 100.0)
+            if hit then
+                dse.ecs.set_transform_position(marker, hx, hy, hz)
+                dse.ecs.set_transform_scale(marker, dist, nx, 1.0)  -- 编码 dist + normal.x
+            end
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<BoxCollider3DComponent>(entity)) continue;  // 跳过盒子
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 4.0f, 1e-3f);   // 命中进入面 x=4
+        EXPECT_NEAR(tf.position.y, 0.0f, 1e-3f);
+        EXPECT_NEAR(tf.position.z, 0.0f, 1e-3f);
+        EXPECT_NEAR(tf.scale.x, 4.0f, 1e-3f);      // distance
+        EXPECT_NEAR(tf.scale.y, -1.0f, 1e-3f);     // normal.x
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()
