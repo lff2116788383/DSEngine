@@ -479,6 +479,311 @@ DSE_CAPI int dse_physics3d_raycast(float ox, float oy, float oz,
                                    float* out_normal,
                                    float* out_distance);
 
+// RigidBody3D 动力学（服务委托 + 组件缓存回退）。
+// add_force/add_impulse/add_torque/set_angular_velocity：仅在物理服务存在时生效，否则 no-op。
+// set_velocity/set_gravity：委托服务（若有）并同步组件缓存。
+// get_velocity：服务优先，否则回退组件缓存；get_angular_velocity：服务优先，否则 0。
+DSE_CAPI void dse_rigidbody3d_add_force(uint32_t e, float fx, float fy, float fz);
+DSE_CAPI void dse_rigidbody3d_add_impulse(uint32_t e, float ix, float iy, float iz);
+DSE_CAPI void dse_rigidbody3d_add_torque(uint32_t e, float tx, float ty, float tz);
+DSE_CAPI void dse_rigidbody3d_set_velocity(uint32_t e, float vx, float vy, float vz);
+DSE_CAPI void dse_rigidbody3d_get_velocity(uint32_t e, float* out_vel);          // float[3]
+DSE_CAPI void dse_rigidbody3d_set_angular_velocity(uint32_t e, float ax, float ay, float az);
+DSE_CAPI void dse_rigidbody3d_get_angular_velocity(uint32_t e, float* out_vel);  // float[3]
+DSE_CAPI void dse_rigidbody3d_set_gravity(uint32_t e, int enabled);
+
+// CharacterController3D。move：服务优先（含 ECS 地形贴地补正），否则 ECS 回退
+// （碰撞体推开 + 地形贴地 + 着地检测）。返回 is_grounded(0/1)，填充非空 out_velocity[3] 与 out_flags。
+// jump：仅在物理服务存在时生效，返回 success(0/1)。
+DSE_CAPI int dse_character_controller3d_move(uint32_t e, float dx, float dy, float dz,
+                                             float min_dist, float dt,
+                                             float* out_velocity, uint32_t* out_flags);
+DSE_CAPI int dse_character_controller3d_jump(uint32_t e, float jump_speed);
+// is_grounded/get_position：服务优先，否则 ECS 回退（组件缓存 / Transform）。
+DSE_CAPI int dse_character_controller3d_is_grounded(uint32_t e);
+DSE_CAPI int dse_character_controller3d_get_position(uint32_t e, float* out_xyz); // float[3]，返回 found(0/1)
+
+// 组件创建（L3，ECS emplace_or_replace）。type/direction 为对应枚举的整型值。
+DSE_CAPI void dse_rigidbody3d_add(uint32_t e, int type, float mass);
+DSE_CAPI void dse_box_collider3d_add(uint32_t e, float x, float y, float z);
+DSE_CAPI void dse_sphere_collider3d_add(uint32_t e, float radius);
+DSE_CAPI void dse_capsule_collider3d_add(uint32_t e, float radius, float height,
+                                         int direction, int is_trigger);
+DSE_CAPI void dse_mesh_collider3d_add(uint32_t e, int convex, int is_trigger);
+DSE_CAPI void dse_character_controller3d_add(uint32_t e, float radius, float height,
+                                             float slope_limit, float step_offset);
+DSE_CAPI void dse_joint3d_add(uint32_t e, uint32_t connected_id, int type,
+                              float ax, float ay, float az,
+                              float bx, float by, float bz,
+                              float break_force, float break_torque);
+DSE_CAPI void dse_terrain_heightmap_add(uint32_t e, float origin_x, float origin_z,
+                                        float block_size, int cols, int rows,
+                                        float scale, int flip_z);
+
+// TerrainHeightmap 数据写入 / 查询。
+DSE_CAPI void dse_terrain_heightmap_set_data(uint32_t e, const float* heights, int count);
+DSE_CAPI int dse_terrain_get_height(float world_x, float world_z, float* out_y); // 返回 found(0/1)
+
+// Joint3D 附加参数 setter / 查询。
+DSE_CAPI void dse_joint3d_set_hinge_limits(uint32_t e, float lower_deg, float upper_deg);
+DSE_CAPI void dse_joint3d_set_spring(uint32_t e, float stiffness, float damping);
+DSE_CAPI void dse_joint3d_set_distance(uint32_t e, float min_dist, float max_dist);
+DSE_CAPI int dse_joint3d_is_broken(uint32_t e);
+
+// 碰撞层 / trigger / 材质。set_layer 写 RigidBody 并委托物理服务（若有）。
+// set_trigger/set_material 写入实体上存在的任意碰撞体类型（Box/Sphere/Capsule/Mesh）。
+DSE_CAPI void dse_collision_set_layer(uint32_t e, int layer, int mask);
+DSE_CAPI void dse_collider_set_trigger(uint32_t e, int is_trigger);
+DSE_CAPI void dse_collider_set_material(uint32_t e, float friction, float bounciness);
+
+// 重叠查询：写入命中实体 id 到 out（容量 cap），返回命中总数（可能 > cap）。
+DSE_CAPI int dse_physics3d_overlap_sphere(float cx, float cy, float cz, float radius,
+                                          uint32_t* out, int cap);
+DSE_CAPI int dse_physics3d_overlap_box(float min_x, float min_y, float min_z,
+                                       float max_x, float max_y, float max_z,
+                                       uint32_t* out, int cap);
+
+// ============================================================
+// Render 服务（L5，手写 dse_api_render.cpp）
+// ============================================================
+// world_to_screen：把 3D 世界坐标投影到屏幕像素，填充非空 out_sx/out_sy，返回 is_visible(0/1)。
+DSE_CAPI int dse_render_world_to_screen(float wx, float wy, float wz,
+                                        float* out_sx, float* out_sy);
+
+// MeshRenderer 材质/贴图加载（依赖 AssetManager）。
+// set_material_from_dmat：从 .dmat 载入 MaterialInstance 并拷入 MeshRenderer，成功返回 1。
+// set_texture：按 slot 名载入贴图并绑定到对应 handle，成功返回 1 并填充非空 out_*；slot 非法/加载失败返回 0。
+DSE_CAPI int dse_mesh_renderer_set_material_from_dmat(uint32_t e, const char* dmat_path,
+                                                      uint32_t material_index);
+DSE_CAPI int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const char* path,
+                                           uint32_t* out_handle, int* out_width, int* out_height);
+
+// 供 L5 手写实现（dse_api_render.cpp）访问内部 AssetManager 指针
+DSE_CAPI void* dse_get_asset_manager_ptr(void);
+
+// ============================================================
+// Gameplay3D（破碎 / 布料 / 流体，手写 dse_api_gameplay3d.cpp）
+// ============================================================
+// 纯 ECS 组件控制，操作全局 World。可选「保持当前值」字段以 NaN 哨兵表示；
+// 固定默认值由调用方（Lua 薄包装）解析后传入。
+
+// Fracture：source 0=Prefractured 1=RuntimeVoronoi。
+DSE_CAPI void dse_fracture_add(uint32_t e, int source, uint32_t fragment_count,
+                               float break_force, float health);
+DSE_CAPI void dse_fracture_set_params(uint32_t e, float explosion_force, float fragment_lifetime,
+                                      float fade_duration, float mass_scale);  // NaN=保持
+DSE_CAPI void dse_fracture_apply_damage(uint32_t e, float damage, float ix, float iy, float iz);
+DSE_CAPI void dse_fracture_trigger(uint32_t e, float ix, float iy, float iz);
+DSE_CAPI int  dse_fracture_is_fractured(uint32_t e);
+
+// Cloth。
+DSE_CAPI void dse_cloth_add(uint32_t e, uint32_t solver_iterations, float stiffness,
+                            float damping, float bend_stiffness);
+DSE_CAPI void dse_cloth_set_wind(uint32_t e, float wx, float wy, float wz, float turbulence);  // turbulence NaN=保持
+DSE_CAPI void dse_cloth_set_gravity(uint32_t e, float gx, float gy, float gz);
+DSE_CAPI void dse_cloth_pin_vertices(uint32_t e, const uint32_t* vertices, int count);
+DSE_CAPI void dse_cloth_add_sphere_collider(uint32_t e, uint32_t collider_entity, float radius);
+
+// Fluid：shape 0=Point 1=Sphere 2=Box。
+DSE_CAPI void dse_fluid_add_emitter(uint32_t e, int shape, float emission_rate,
+                                    float particle_lifetime, float emit_speed);
+DSE_CAPI void dse_fluid_set_physics(uint32_t e, float viscosity, float surface_tension,
+                                    float rest_density, float gas_stiffness);  // NaN=保持
+DSE_CAPI void dse_fluid_set_rendering(uint32_t e, float r, float g, float b, float a,
+                                      float refraction, float fresnel, float specular);  // refraction/fresnel/specular NaN=保持
+DSE_CAPI void dse_fluid_set_emit_direction(uint32_t e, float dx, float dy, float dz, float spread);  // spread NaN=保持
+DSE_CAPI void dse_fluid_set_floor(uint32_t e, float floor_y, float restitution);  // NaN=保持
+DSE_CAPI uint32_t dse_fluid_get_particle_count(uint32_t e);
+
+// Ragdoll（仅设标志，激活由 RagdollSystem 处理）。auto_setup/active 用 int(0/1)。
+DSE_CAPI void dse_ragdoll_add(uint32_t e, float total_mass, int auto_setup,
+                              float joint_stiffness, float joint_damping);
+DSE_CAPI void dse_ragdoll_activate(uint32_t e);
+DSE_CAPI void dse_ragdoll_deactivate(uint32_t e);
+DSE_CAPI int  dse_ragdoll_is_active(uint32_t e);
+DSE_CAPI void dse_ragdoll_set_collision_layer(uint32_t e, uint32_t layer, uint32_t mask);
+
+// SoftBody。gravity_scale NaN=保持。
+DSE_CAPI void dse_softbody_add(uint32_t e, float stiffness, int iterations,
+                               float damping, float volume_stiffness);
+DSE_CAPI void dse_softbody_set_gravity(uint32_t e, int use_gravity, float gravity_scale);
+DSE_CAPI void dse_softbody_pin_vertex(uint32_t e, int vertex_index);
+DSE_CAPI uint32_t dse_softbody_get_particle_count(uint32_t e);
+
+// Vehicle（raycast 车辆）。set_input 内部 clamp 到合法范围。
+DSE_CAPI void dse_vehicle_add(uint32_t e, float max_engine_force, float max_brake_force,
+                              float max_steer_angle);
+DSE_CAPI void dse_vehicle_add_wheel(uint32_t e, float px, float py, float pz, float radius,
+                                    int is_drive, int is_steer, float susp_stiffness,
+                                    float susp_damping);
+DSE_CAPI void dse_vehicle_set_input(uint32_t e, float throttle, float brake, float steering);
+DSE_CAPI float dse_vehicle_get_speed(uint32_t e);
+DSE_CAPI uint32_t dse_vehicle_get_wheel_count(uint32_t e);
+
+// Rope。get_positions：填充 out_xyz（最多 max_points 点×3 float），返回点总数；
+// out_xyz=null 时仅返回总数供预分配。gravity_scale NaN=保持。
+DSE_CAPI void dse_rope_add(uint32_t e, int segment_count, float segment_length,
+                           float damping, int iterations);
+DSE_CAPI void dse_rope_set_anchors(uint32_t e, uint32_t anchor_a, uint32_t anchor_b,
+                                   float oax, float oay, float oaz,
+                                   float obx, float oby, float obz);
+DSE_CAPI int  dse_rope_get_positions(uint32_t e, float* out_xyz, int max_points);
+DSE_CAPI void dse_rope_set_gravity(uint32_t e, int use_gravity, float gravity_scale);
+
+// Buoyancy。
+DSE_CAPI void dse_buoyancy_add(uint32_t e, float water_level, float buoyancy_force,
+                               float water_drag, float angular_drag, float submerge_depth);
+DSE_CAPI void dse_buoyancy_add_sample_point(uint32_t e, float ox, float oy, float oz,
+                                            float force_scale);
+DSE_CAPI void dse_buoyancy_set_water_level(uint32_t e, float water_level);
+DSE_CAPI float dse_buoyancy_get_submerge_ratio(uint32_t e);
+DSE_CAPI void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid);
+
+// ---- Batch 3 环境子系统（无物理依赖）。浮点 NaN=保持当前值。 ----
+// Weather。type: 0=None,1=Rain,2=Snow；set 中 type<0=保持。spawn 中 max_particles<0=保持。
+DSE_CAPI void dse_weather_add(uint32_t e, int type, float intensity);
+DSE_CAPI void dse_weather_set(uint32_t e, int type, float intensity,
+                              float wind_x, float wind_z);
+DSE_CAPI void dse_weather_set_spawn(uint32_t e, float radius, float height,
+                                    int max_particles);
+
+// SnowCover。snow_cover_get 填充 out_*（可为 null），返回 1=存在/0=缺失。
+// set_texture：path=null 仅改 tiling。
+DSE_CAPI void dse_snow_cover_add(uint32_t e);
+DSE_CAPI void dse_snow_cover_set(uint32_t e, float target_coverage,
+                                 float accumulation_rate, float melt_rate);
+DSE_CAPI void dse_snow_set_appearance(uint32_t e, float albedo_r, float albedo_g,
+                                      float albedo_b, float roughness, float metallic,
+                                      float threshold, float sharpness);
+DSE_CAPI int  dse_snow_cover_get(uint32_t e, float* out_coverage,
+                                 float* out_target, int* out_enabled);
+DSE_CAPI void dse_snow_cover_set_enabled(uint32_t e, int enabled);
+DSE_CAPI void dse_snow_set_texture(uint32_t e, const char* path, float tiling);
+DSE_CAPI void dse_snow_set_displacement(uint32_t e, float displacement_height,
+                                        float deformation_strength);
+DSE_CAPI void dse_snow_cover_remove(uint32_t e);
+
+// Atmosphere（物理天空参数）。
+DSE_CAPI void dse_atmosphere_add(uint32_t e);
+DSE_CAPI void dse_atmosphere_set_params(uint32_t e, float planet_radius,
+                                        float atmosphere_height, float sun_disk_angle);
+DSE_CAPI void dse_atmosphere_set_rayleigh(uint32_t e, float coeff_r, float coeff_g,
+                                          float coeff_b, float scale_height);
+DSE_CAPI void dse_atmosphere_set_mie(uint32_t e, float coeff, float scale_height, float g);
+DSE_CAPI void dse_atmosphere_set_sun_intensity(uint32_t e, float r, float g, float b);
+
+// DayNightCycle。set_location 中 day_of_year<=0=保持。get_sun_direction 填充 out_xyz(3)。
+DSE_CAPI void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
+                                float time_speed);
+DSE_CAPI void dse_day_night_set_time(uint32_t e, float time_of_day);
+DSE_CAPI float dse_day_night_get_time(uint32_t e);
+DSE_CAPI void dse_day_night_set_speed(uint32_t e, float speed);
+DSE_CAPI void dse_day_night_set_auto_advance(uint32_t e, int enabled);
+DSE_CAPI void dse_day_night_set_location(uint32_t e, float latitude, float longitude,
+                                         int day_of_year);
+DSE_CAPI float dse_day_night_get_sun_elevation(uint32_t e);
+DSE_CAPI void dse_day_night_get_sun_direction(uint32_t e, float* out_xyz);
+
+// VolumetricCloud。
+DSE_CAPI void dse_volumetric_cloud_add(uint32_t e);
+DSE_CAPI void dse_cloud_set_layer(uint32_t e, float bottom, float top,
+                                  float coverage, float density);
+DSE_CAPI void dse_cloud_set_wind(uint32_t e, float dir_x, float dir_y, float speed);
+
+// ============================================================
+// 动画子系统（L4/L5，纯 ECS）。浮点 NaN=保持当前值。
+// ============================================================
+
+// ---- 2D 帧动画（AnimatorComponent）。add_state: loop 为 0/1；frame_handles 可为 null。
+// pop_event 将事件名写入 out（null 结尾，按 cap 截断），返回 1=弹出/0=无。 ----
+DSE_CAPI void dse_anim2d_add(uint32_t e);
+DSE_CAPI void dse_anim2d_add_state(uint32_t e, const char* name, float fps, int loop,
+                                   const uint32_t* frame_handles, int handle_count);
+DSE_CAPI void dse_anim2d_add_event(uint32_t e, const char* state_name,
+                                   float normalized_time, const char* event_name);
+DSE_CAPI void dse_anim2d_play(uint32_t e, const char* state_name);
+DSE_CAPI void dse_anim2d_play_segment(uint32_t e, int start_frame, int end_frame, int loop);
+DSE_CAPI int  dse_anim2d_pop_event(uint32_t e, char* out, int cap);
+
+// ---- 3D 骨骼动画 / 状态机（Animator3DComponent）。
+// set_state: state_name=null 不改状态，speed=NaN 保持，loop<0 保持。
+// get_state: 填充 out_*（均可为 null），返回 1=存在/0=缺失。
+// add_transition: 条件以并行扁平数组传入（names/modes/thresholds/ints，长度 cond_count）。 ----
+DSE_CAPI void dse_anim3d_add(uint32_t e, const char* danim_path, const char* dskel_path);
+DSE_CAPI void dse_anim3d_set_state(uint32_t e, const char* state_name, float speed, int loop);
+DSE_CAPI int  dse_anim3d_get_state(uint32_t e, char* out_state, int state_cap,
+                                   float* out_norm, float* out_time, float* out_speed,
+                                   int* out_loop, int* out_transitioning,
+                                   int* out_bone_count, int* out_has_skel);
+DSE_CAPI void dse_anim3d_init_fsm(uint32_t e);
+DSE_CAPI void dse_anim3d_add_fsm_state(uint32_t e, const char* state_name,
+                                       const char* danim_path, int loop, float speed);
+DSE_CAPI void dse_anim3d_add_transition(uint32_t e, const char* from_state,
+                                        const char* to_state, float transition_duration,
+                                        int has_exit_time, float exit_time,
+                                        int cond_count,
+                                        const char* const* cond_names,
+                                        const int* cond_modes,
+                                        const float* cond_thresholds,
+                                        const int* cond_ints);
+DSE_CAPI void dse_anim3d_set_param_float(uint32_t e, const char* param_name, float value);
+DSE_CAPI void dse_anim3d_set_param_trigger(uint32_t e, const char* param_name);
+DSE_CAPI void dse_anim3d_set_lock_root_motion(uint32_t e, int lock);
+DSE_CAPI void dse_anim3d_add_event(uint32_t e, const char* event_name, float trigger_time);
+DSE_CAPI int  dse_anim3d_pop_event(uint32_t e, char* out, int cap);
+DSE_CAPI void dse_anim3d_set_extract_root_motion(uint32_t e, int enabled);
+DSE_CAPI int  dse_anim3d_get_root_motion_delta(uint32_t e, float* out_xyz);
+
+// ---- 动画层 / 混合树（AnimLayerComponent）。add 返回层索引（-1=无组件）。
+// blend_tree_1d: paths/thresholds/speeds 并行数组，长度 count。 ----
+DSE_CAPI void dse_animlayer_add_component(uint32_t e);
+DSE_CAPI int  dse_animlayer_add(uint32_t e, const char* name, float weight, int blend_mode);
+DSE_CAPI void dse_animlayer_set_clip(uint32_t e, int idx, const char* danim_path,
+                                     float speed, int loop);
+DSE_CAPI void dse_animlayer_set_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_animlayer_set_bone_mask(uint32_t e, int idx,
+                                          const char* const* bones, int count);
+DSE_CAPI void dse_animlayer_set_blend_tree_1d(uint32_t e, int idx,
+                                              const char* const* paths,
+                                              const float* thresholds,
+                                              const float* speeds, int count);
+DSE_CAPI void dse_animlayer_set_blend_param(uint32_t e, int idx, float val);
+DSE_CAPI void dse_animlayer_set_enabled(uint32_t e, int enabled);
+
+// ---- IK（IKChain3DComponent）。add_chain 返回链索引（-1=无组件）。
+// set_target_entity: target=UINT32_MAX 清除目标实体。 ----
+DSE_CAPI void dse_ik_add_component(uint32_t e);
+DSE_CAPI int  dse_ik_add_chain(uint32_t e, const char* name, int type,
+                               const char* root_bone, const char* tip_bone, float weight);
+DSE_CAPI void dse_ik_set_target(uint32_t e, int idx, float x, float y, float z);
+DSE_CAPI void dse_ik_set_target_entity(uint32_t e, int idx, uint32_t target);
+DSE_CAPI void dse_ik_set_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_ik_set_pole_vector(uint32_t e, int idx, float x, float y, float z);
+DSE_CAPI void dse_ik_set_iterations(uint32_t e, int idx, int iters);
+DSE_CAPI void dse_ik_set_enabled(uint32_t e, int enabled);
+
+// ---- 骨骼挂点（BoneAttachmentComponent）。set_offset: 缩放 sx/sy/sz 为 NaN 时取 1。
+// get_world_pos: 由目标实体动画姿态计算，out_xyz(3) 始终写入，返回 1=成功/0=失败。 ----
+DSE_CAPI void dse_bone_attach_add(uint32_t e, uint32_t target, const char* bone_name);
+DSE_CAPI void dse_bone_attach_set_offset(uint32_t e, float px, float py, float pz,
+                                         float qx, float qy, float qz, float qw,
+                                         float sx, float sy, float sz);
+DSE_CAPI void dse_bone_attach_set_bone(uint32_t e, const char* bone_name);
+DSE_CAPI void dse_bone_attach_set_target(uint32_t e, uint32_t target);
+DSE_CAPI int  dse_bone_attach_get_world_pos(uint32_t target, const char* bone_name,
+                                            float* out_xyz);
+DSE_CAPI void dse_bone_attach_remove(uint32_t e);
+
+// ---- Morph Target / Blend Shape（MorphTargetComponent）。
+// add_target: deltas 扁平布局，每顶点 6 float（dpx,dpy,dpz,dnx,dny,dnz）。 ----
+DSE_CAPI void  dse_morph_add_component(uint32_t e);
+DSE_CAPI void  dse_morph_add_target(uint32_t e, const char* name,
+                                    const float* deltas, int float_count);
+DSE_CAPI void  dse_morph_set_weight(uint32_t e, const char* name, float w);
+DSE_CAPI void  dse_morph_set_weight_index(uint32_t e, int idx, float w);
+DSE_CAPI float dse_morph_get_weight(uint32_t e, const char* name);
+DSE_CAPI int   dse_morph_get_target_count(uint32_t e);
+
 // ============================================================
 // Input
 // ============================================================

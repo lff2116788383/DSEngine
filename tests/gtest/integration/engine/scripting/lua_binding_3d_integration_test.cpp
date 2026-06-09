@@ -17,6 +17,7 @@
 #endif
 #include <gtest/gtest.h>
 #include "engine/scripting/lua/lua_runtime.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/camera.h"
@@ -27,6 +28,13 @@
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_fracture.h"
+#include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_sky.h"
+#include "engine/ecs/components_3d_animation.h"
+#include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/animation.h"
+#include "engine/ecs/animation_state_machine.h"
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -298,6 +306,125 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
     ShutdownLuaRuntime();
 }
 
+// 动画 L4/L5：FSM / 动画层 / IK / Morph 经 C ABI 委托后，Lua→C ABI→组件 完整链路。
+TEST_F(LuaBinding3DIntegrationTest, LuaAnimationDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_animation_deleg.lua", R"(
+        function Awake()
+            -- FSM
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_animator_3d(e, "anims/idle.danim", "skeletons/hero.dskel")
+            dse.ecs.init_animator_3d_fsm(e)
+            dse.ecs.add_animator_3d_state(e, "idle", "anims/idle.danim", true, 1.0)
+            dse.ecs.add_animator_3d_state(e, "run", "anims/run.danim", true, 1.5)
+            dse.ecs.add_animator_3d_transition(e, "idle", "run", 0.2, false, 1.0,
+                { {"speed", 0, 0.5} })
+            dse.ecs.set_animator_3d_param_float(e, "speed", 0.9)
+            dse.ecs.set_animator_3d_param_trigger(e, "jump")
+            dse.ecs.set_animator_3d_state(e, "run", 2.0, false)
+            dse.ecs.add_animator_3d_event(e, "hit", 0.4)
+
+            -- 动画层
+            local la = dse.ecs.create_entity()
+            dse.ecs.add_anim_layer_component(la)
+            local idx = dse.ecs.add_anim_layer(la, "upper", 0.5, 0)
+            dse.ecs.set_anim_layer_clip(la, idx, "anims/aim.danim", 1.0, true)
+            dse.ecs.set_anim_layer_weight(la, idx, 0.8)
+            dse.ecs.set_anim_layer_bone_mask(la, idx, {"spine", "head"})
+
+            -- IK
+            local ik = dse.ecs.create_entity()
+            dse.ecs.add_ik_component(ik)
+            local cidx = dse.ecs.add_ik_chain(ik, "leg", 1, "hip", "foot", 0.9)
+            dse.ecs.set_ik_target(ik, cidx, 1.0, 2.0, 3.0)
+            dse.ecs.set_ik_iterations(ik, cidx, 15)
+
+            -- Morph
+            local mo = dse.ecs.create_entity()
+            dse.ecs.add_morph_target_component(mo)
+            dse.ecs.morph_add_target(mo, "smile", {1,0,0, 0,1,0,  2,0,0, 0,1,0})
+            dse.ecs.morph_set_weight(mo, "smile", 0.6)
+
+            _G.fsm_e = e
+            _G.layer_e = la
+            _G.ik_e = ik
+            _G.morph_e = mo
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    // FSM 校验
+    bool fsm_found = false;
+    for (auto entity : world.registry().view<Animator3DComponent>()) {
+        auto& a = world.registry().get<Animator3DComponent>(entity);
+        ASSERT_TRUE(static_cast<bool>(a.state_machine));
+        auto& sm = *a.state_machine;
+        EXPECT_EQ(sm.GetStatesMutable().size(), 2u);
+        ASSERT_TRUE(sm.GetStatesMutable().count("idle"));
+        ASSERT_EQ(sm.GetStatesMutable().at("idle").transitions.size(), 1u);
+        EXPECT_EQ(sm.GetStatesMutable().at("idle").transitions[0].target_state, "run");
+        EXPECT_NEAR(sm.GetFloat("speed"), 0.9f, 0.001f);
+        EXPECT_TRUE(sm.GetParameters().count("jump"));
+        EXPECT_EQ(a.current_state_name, "run");
+        EXPECT_NEAR(a.speed, 2.0f, 0.001f);
+        EXPECT_FALSE(a.loop);
+        ASSERT_EQ(a.events.size(), 1u);
+        EXPECT_EQ(a.events[0].name, "hit");
+        fsm_found = true;
+    }
+    EXPECT_TRUE(fsm_found);
+
+    // 动画层校验
+    bool layer_found = false;
+    for (auto entity : world.registry().view<AnimLayerComponent>()) {
+        auto& comp = world.registry().get<AnimLayerComponent>(entity);
+        ASSERT_EQ(comp.layers.size(), 1u);
+        EXPECT_EQ(comp.layers[0].name, "upper");
+        EXPECT_NEAR(comp.layers[0].weight, 0.8f, 0.001f);
+        EXPECT_EQ(comp.layers[0].danim_path, "anims/aim.danim");
+        ASSERT_EQ(comp.layers[0].bone_mask_include.size(), 2u);
+        EXPECT_EQ(comp.layers[0].bone_mask_include[0], "spine");
+        layer_found = true;
+    }
+    EXPECT_TRUE(layer_found);
+
+    // IK 校验
+    bool ik_found = false;
+    for (auto entity : world.registry().view<IKChain3DComponent>()) {
+        auto& comp = world.registry().get<IKChain3DComponent>(entity);
+        ASSERT_EQ(comp.chains.size(), 1u);
+        EXPECT_EQ(comp.chains[0].name, "leg");
+        EXPECT_NEAR(comp.chains[0].target_position.y, 2.0f, 0.001f);
+        EXPECT_EQ(comp.chains[0].iterations, 15);
+        ik_found = true;
+    }
+    EXPECT_TRUE(ik_found);
+
+    // Morph 校验
+    bool morph_found = false;
+    for (auto entity : world.registry().view<MorphTargetComponent>()) {
+        auto& comp = world.registry().get<MorphTargetComponent>(entity);
+        ASSERT_EQ(comp.targets.size(), 1u);
+        EXPECT_EQ(comp.targets[0].name, "smile");
+        EXPECT_NEAR(comp.GetWeight("smile"), 0.6f, 0.001f);
+        EXPECT_EQ(comp.vertex_count, 2);
+        morph_found = true;
+    }
+    EXPECT_TRUE(morph_found);
+
+    ShutdownLuaRuntime();
+}
+
 // L5：physics_3d_raycast 经 C ABI 委托后，验证 Lua→C ABI→Lua 完整返回链路。
 // 脚本把 raycast 命中点/法线/距离写回 marker 实体的 transform，C++ 读回断言。
 TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
@@ -343,6 +470,360 @@ TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
         marker_found = true;
     }
     EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：rigidbody_3d_set/get_velocity 经 C ABI 委托 — 无物理服务时走组件缓存。
+// 脚本 set→get→写回 marker，C++ 同时校验组件缓存与 Lua 返回链路。
+TEST_F(LuaBinding3DIntegrationTest, LuaRigidBody3DVelocityDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_rb_velocity.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_rigidbody_3d(e, 2, 1.0)
+            dse.ecs.rigidbody_3d_set_velocity(e, 1.5, 2.5, 3.5)
+            local vx, vy, vz = dse.ecs.rigidbody_3d_get_velocity(e)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, vx, vy, vz, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool rb_found = false;
+    for (auto entity : world.registry().view<RigidBody3DComponent>()) {
+        const auto& rb = world.registry().get<RigidBody3DComponent>(entity);
+        EXPECT_NEAR(rb.velocity.x, 1.5f, 1e-3f);
+        EXPECT_NEAR(rb.velocity.y, 2.5f, 1e-3f);
+        EXPECT_NEAR(rb.velocity.z, 3.5f, 1e-3f);
+        rb_found = true;
+    }
+    EXPECT_TRUE(rb_found);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<RigidBody3DComponent>(entity)) continue;
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 1.5f, 1e-3f);   // get_velocity 返回链路
+        EXPECT_NEAR(tf.position.y, 2.5f, 1e-3f);
+        EXPECT_NEAR(tf.position.z, 3.5f, 1e-3f);
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：character_controller_3d_move 经 C ABI 委托 — 无物理服务时走 ECS 回退。
+// 空场景下按位移更新 transform 且不着地，move 把状态写入 CCT 组件，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaCharacterController3DMoveDelegatedEcsFallback) {
+    LuaTempScript startup("test_3d_cct_move.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, 0.0, 5.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_character_controller_3d(e, 0.3, 1.0)
+            dse.ecs.character_controller_3d_move(e, 2.0, 0.0, 0.0, 0.0, 0.5)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool cct_found = false;
+    for (auto entity : world.registry().view<CharacterController3DComponent>()) {
+        const auto& cc = world.registry().get<CharacterController3DComponent>(entity);
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_FALSE(cc.is_grounded);                 // 空场景不着地
+        EXPECT_NEAR(cc.velocity.x, 4.0f, 1e-3f);      // dx/dt = 2/0.5
+        EXPECT_NEAR(tf.position.x, 2.0f, 1e-3f);
+        EXPECT_NEAR(tf.position.y, 5.0f, 1e-3f);
+        cct_found = true;
+    }
+    EXPECT_TRUE(cct_found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：world_to_screen 经 C ABI 委托 — 主相机投影可见性（前方可见 / 背后不可见）。
+// 脚本把两次可见性编码进 marker.position.x / .y，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaWorldToScreenDelegatedVisibility) {
+    LuaTempScript startup("test_3d_w2s.lua", R"(
+        function Awake()
+            local cam = dse.ecs.create_entity()
+            dse.ecs.add_transform(cam, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_camera_3d(cam, 60.0, 0)
+
+            local _, _, vis_front = dse.ecs.world_to_screen(0.0, 0.0, -5.0)
+            local _, _, vis_behind = dse.ecs.world_to_screen(0.0, 0.0, 5.0)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker,
+                (vis_front and 1.0 or 0.0),
+                (vis_behind and 1.0 or 0.0),
+                0.0, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<Camera3DComponent>(entity)) continue;  // 跳过相机
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 1.0f, 1e-3f);   // 前方可见
+        EXPECT_NEAR(tf.position.y, 0.0f, 1e-3f);   // 背后不可见
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
+// S1.9：Cloth/Fluid 经 C ABI 委托 — Lua→dse_*→组件状态 完整链路。
+// 脚本配置布料(钉点/风)与流体发射器，并把粒子数写回 marker，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaClothFluidDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_cloth_fluid.lua", R"(
+        function Awake()
+            local cloth = dse.ecs.create_entity()
+            dse.ecs.add_transform(cloth, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_cloth(cloth, 12, 0.8, 0.02, 0.4)
+            dse.ecs.cloth_pin_vertices(cloth, {3, 7, 11})
+            dse.ecs.set_cloth_wind(cloth, 1.0, 0.0, -2.0)   -- turbulence 省略 → 保持
+
+            local fluid = dse.ecs.create_entity()
+            dse.ecs.add_transform(fluid, 10.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_fluid_emitter(fluid, 1, 250.0, 4.0, 3.0)
+            local count = dse.ecs.get_fluid_particle_count(fluid)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, count, 0.0, 0.0, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool cloth_found = false;
+    for (auto entity : world.registry().view<ClothComponent>()) {
+        const auto& c = world.registry().get<ClothComponent>(entity);
+        EXPECT_EQ(c.solver_iterations, 12u);
+        ASSERT_EQ(c.pinned_vertices.size(), 3u);
+        EXPECT_EQ(c.pinned_vertices[0], 3u);
+        EXPECT_EQ(c.pinned_vertices[2], 11u);
+        EXPECT_NEAR(c.wind.x, 1.0f, 1e-3f);
+        EXPECT_NEAR(c.wind.z, -2.0f, 1e-3f);
+        cloth_found = true;
+    }
+    EXPECT_TRUE(cloth_found);
+
+    bool fluid_found = false;
+    for (auto entity : world.registry().view<FluidEmitterComponent>()) {
+        const auto& f = world.registry().get<FluidEmitterComponent>(entity);
+        EXPECT_EQ(f.shape, FluidEmitterShape::Sphere);
+        EXPECT_NEAR(f.emission_rate, 250.0f, 1e-3f);
+        fluid_found = true;
+    }
+    EXPECT_TRUE(fluid_found);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<ClothComponent>(entity) ||
+            world.registry().all_of<FluidEmitterComponent>(entity)) continue;
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 0.0f, 1e-3f);   // get_fluid_particle_count 初始 0
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
+// SoftBody + Rope 委托回环：Lua → dse_* C ABI → 组件状态（无条件编译子系统）。
+TEST_F(LuaBinding3DIntegrationTest, LuaSoftBodyRopeDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_softbody_rope.lua", R"(
+        function Awake()
+            local sb = dse.ecs.create_entity()
+            dse.ecs.add_transform(sb, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_softbody(sb, 0.7, 8, 0.97, 0.6)
+            dse.ecs.softbody_set_gravity(sb, false)   -- gravity_scale 省略 → 保持
+
+            local rope = dse.ecs.create_entity()
+            dse.ecs.add_transform(rope, 5.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_rope(rope, 20, 0.25, 0.98, 10)
+            dse.ecs.rope_set_anchors(rope, 3, 4, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6)
+            dse.ecs.rope_set_gravity(rope, true, 1.5)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool sb_found = false;
+    for (auto entity : world.registry().view<SoftBodyComponent>()) {
+        const auto& sb = world.registry().get<SoftBodyComponent>(entity);
+        EXPECT_EQ(sb.solver_iterations, 8);
+        EXPECT_NEAR(sb.stiffness, 0.7f, 1e-3f);
+        EXPECT_FALSE(sb.use_gravity);
+        EXPECT_NEAR(sb.gravity_scale, 1.0f, 1e-3f);   // 省略 → 默认保持
+        sb_found = true;
+    }
+    EXPECT_TRUE(sb_found);
+
+    bool rope_found = false;
+    for (auto entity : world.registry().view<RopeComponent>()) {
+        const auto& r = world.registry().get<RopeComponent>(entity);
+        EXPECT_EQ(r.segment_count, 20);
+        EXPECT_EQ(r.anchor_entity_a, 3u);
+        EXPECT_EQ(r.anchor_entity_b, 4u);
+        EXPECT_NEAR(r.anchor_offset_a.y, 0.2f, 1e-3f);
+        EXPECT_NEAR(r.anchor_offset_b.z, 0.6f, 1e-3f);
+        EXPECT_TRUE(r.use_gravity);
+        EXPECT_NEAR(r.gravity_scale, 1.5f, 1e-3f);
+        rope_found = true;
+    }
+    EXPECT_TRUE(rope_found);
+
+    ShutdownLuaRuntime();
+}
+
+// Batch 3：Lua → C ABI → 组件状态 的环境子系统回环（Weather/SnowCover/DayNight/Cloud）。
+TEST_F(LuaBinding3DIntegrationTest, LuaEnvironmentDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_environment.lua", R"(
+        function Awake()
+            local w = dse.ecs.create_entity()
+            dse.ecs.add_transform(w, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_weather(w, "rain", 0.8)
+            dse.ecs.set_weather(w, nil, nil, 4.0, nil)   -- type/intensity 保持，仅写 wind_x
+            dse.ecs.set_weather_spawn(w, 50.0, nil, 1234)
+
+            local s = dse.ecs.create_entity()
+            dse.ecs.add_transform(s, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_snow_cover(s)
+            dse.ecs.set_snow_cover(s, 0.9, nil, 0.07)
+            dse.ecs.set_snow_texture(s, "tex/snow.png", 12.0)
+            dse.ecs.set_snow_cover_enabled(s, false)
+
+            local d = dse.ecs.create_entity()
+            dse.ecs.add_transform(d, 2.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_day_night_cycle(d, 9.0, true, 30.0)
+            dse.ecs.set_day_night_time(d, 18.25)
+            dse.ecs.set_day_night_location(d, 51.0, nil, 100)
+
+            local c = dse.ecs.create_entity()
+            dse.ecs.add_transform(c, 3.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_volumetric_cloud(c)
+            dse.ecs.set_cloud_layer(c, 2500.0, nil, 0.66, nil)
+            dse.ecs.set_cloud_wind(c, 0.5, nil, 33.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool w_found = false;
+    for (auto entity : world.registry().view<WeatherComponent>()) {
+        const auto& wc = world.registry().get<WeatherComponent>(entity);
+        EXPECT_EQ(wc.type, WeatherType::Rain);          // set_weather type=nil 保持
+        EXPECT_NEAR(wc.intensity, 0.8f, 1e-3f);         // intensity=nil 保持
+        EXPECT_NEAR(wc.wind_x, 4.0f, 1e-3f);
+        EXPECT_NEAR(wc.spawn_radius, 50.0f, 1e-3f);
+        EXPECT_EQ(wc.max_particles, 1234);
+        w_found = true;
+    }
+    EXPECT_TRUE(w_found);
+
+    bool s_found = false;
+    for (auto entity : world.registry().view<SnowCoverComponent>()) {
+        const auto& sc = world.registry().get<SnowCoverComponent>(entity);
+        EXPECT_NEAR(sc.target_coverage, 0.9f, 1e-3f);
+        EXPECT_NEAR(sc.melt_rate, 0.07f, 1e-3f);
+        EXPECT_EQ(sc.snow_texture_path, "tex/snow.png");
+        EXPECT_NEAR(sc.snow_tiling, 12.0f, 1e-3f);
+        EXPECT_FALSE(sc.enabled);
+        s_found = true;
+    }
+    EXPECT_TRUE(s_found);
+
+    bool d_found = false;
+    for (auto entity : world.registry().view<DayNightCycleComponent>()) {
+        const auto& dnc = world.registry().get<DayNightCycleComponent>(entity);
+        EXPECT_NEAR(dnc.time_of_day, 18.25f, 1e-3f);
+        EXPECT_TRUE(dnc.auto_advance);
+        EXPECT_NEAR(dnc.time_speed, 30.0f, 1e-3f);
+        EXPECT_NEAR(dnc.latitude, 51.0f, 1e-3f);
+        EXPECT_EQ(dnc.day_of_year, 100);
+        d_found = true;
+    }
+    EXPECT_TRUE(d_found);
+
+    bool c_found = false;
+    for (auto entity : world.registry().view<VolumetricCloudComponent>()) {
+        const auto& vc = world.registry().get<VolumetricCloudComponent>(entity);
+        EXPECT_NEAR(vc.cloud_bottom, 2500.0f, 1e-3f);
+        EXPECT_NEAR(vc.coverage, 0.66f, 1e-3f);
+        EXPECT_NEAR(vc.wind_direction.x, 0.5f, 1e-3f);
+        EXPECT_NEAR(vc.wind_speed, 33.0f, 1e-3f);
+        c_found = true;
+    }
+    EXPECT_TRUE(c_found);
 
     ShutdownLuaRuntime();
 }
@@ -682,6 +1163,47 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigure3DPhysicsExtendedComponentsCppCa
         EXPECT_NEAR(joint.min_distance, 0.5f, 0.001f);
         EXPECT_NEAR(joint.max_distance, 3.5f, 0.001f);
     }
+
+    ShutdownLuaRuntime();
+}
+
+// Task 6: overlap_sphere 经委托后的 C ABI（Lua → dse_physics3d_overlap_sphere），
+// 验证返回的实体表与场景几何一致。
+TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DOverlapSphereDelegatedReturnsEntities) {
+    LuaTempScript startup("test_3d_overlap.lua", R"(
+        function Awake()
+            local near = dse.ecs.create_entity()
+            dse.ecs.add_transform(near, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_sphere_collider_3d(near, 0.5)
+
+            local far = dse.ecs.create_entity()
+            dse.ecs.add_transform(far, 50.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_sphere_collider_3d(far, 0.5)
+
+            local hits = dse.ecs.physics_3d_overlap_sphere(0.0, 0.0, 0.0, 1.0)
+            overlap_count = #hits
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto sphere_view = world.registry().view<SphereCollider3DComponent>();
+    EXPECT_EQ(sphere_view.size(), 2u);
+
+    // 直接复核 C ABI：仅近处 1 个实体命中半径 1.0 的球。
+    uint32_t hits[8];
+    int n = dse_physics3d_overlap_sphere(0.0f, 0.0f, 0.0f, 1.0f, hits, 8);
+    EXPECT_EQ(n, 1);
 
     ShutdownLuaRuntime();
 }

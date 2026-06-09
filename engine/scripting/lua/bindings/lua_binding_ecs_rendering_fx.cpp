@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/camera.h"
 #include "engine/ecs/sprite.h"
@@ -123,59 +124,16 @@ int L_EcsGetSteeringState(lua_State* L) {
 
 // world_to_screen: project a 3D world position to 2D screen coordinates
 // Returns: screen_x, screen_y, is_visible (boolean, false if behind camera)
+// 委托 dse_render_world_to_screen（主相机投影，逐值等价）
 int L_EcsWorldToScreen(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushnumber(L, 0);
-        lua_pushnumber(L, 0);
-        lua_pushboolean(L, 0);
-        return 3;
-    }
     float wx = helper::CheckFloat(L, 1);
     float wy = helper::CheckFloat(L, 2);
     float wz = helper::CheckFloat(L, 3);
-
-    // Find main camera (highest priority enabled Camera3DComponent)
-    auto cam_view = world->registry().view<Camera3DComponent, TransformComponent>();
-    entt::entity main_cam = entt::null;
-    int max_priority = -9999;
-    for (auto entity : cam_view) {
-        auto& cam = cam_view.get<Camera3DComponent>(entity);
-        if (cam.enabled && cam.priority > max_priority) {
-            max_priority = cam.priority;
-            main_cam = entity;
-        }
-    }
-    if (main_cam == entt::null) {
-        lua_pushnumber(L, 0);
-        lua_pushnumber(L, 0);
-        lua_pushboolean(L, 0);
-        return 3;
-    }
-
-    auto& cam = cam_view.get<Camera3DComponent>(main_cam);
-    auto& transform = cam_view.get<TransformComponent>(main_cam);
-
-    // Build view matrix from transform
-    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-    glm::mat4 view_mat = glm::lookAt(transform.position, transform.position + front, up);
-    glm::mat4 proj_mat = glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
-
-    glm::vec4 clip = proj_mat * view_mat * glm::vec4(wx, wy, wz, 1.0f);
-    bool visible = clip.w > 0.0f;
-    if (clip.w == 0.0f) clip.w = 0.0001f;
-
-    glm::vec3 ndc = glm::vec3(clip) / clip.w;
-    // NDC [-1,1] to screen [0, width/height]
-    float screen_w = static_cast<float>(Screen::width());
-    float screen_h = static_cast<float>(Screen::height());
-    float sx = (ndc.x * 0.5f + 0.5f) * screen_w;
-    float sy = (1.0f - (ndc.y * 0.5f + 0.5f)) * screen_h;  // flip Y
-
+    float sx = 0.0f, sy = 0.0f;
+    int visible = dse_render_world_to_screen(wx, wy, wz, &sx, &sy);
     lua_pushnumber(L, static_cast<lua_Number>(sx));
     lua_pushnumber(L, static_cast<lua_Number>(sy));
-    lua_pushboolean(L, visible && ndc.z >= -1.0f && ndc.z <= 1.0f ? 1 : 0);
+    lua_pushboolean(L, visible);
     return 3;
 }
 

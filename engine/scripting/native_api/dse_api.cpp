@@ -81,6 +81,8 @@ extern "C" void dse_native_api_init(
 
 extern "C" void* dse_get_world_ptr(void) { return g_ctx.world; }
 
+extern "C" void* dse_get_asset_manager_ptr(void) { return g_ctx.asset_manager; }
+
 // ============================================================
 // Entity
 // ============================================================
