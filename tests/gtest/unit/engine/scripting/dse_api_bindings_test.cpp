@@ -1057,3 +1057,129 @@ TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     EXPECT_EQ(dse_tree_get_mesh_path(invalid, buf, sizeof(buf)), 0);
     EXPECT_EQ(buf[0], '\0');
 }
+
+// ============================================================
+// Task 6: phys3d C ABI 上移（组件创建 / 标量 setter / 重叠查询）
+// ============================================================
+
+TEST_F(DseApiBindingsTest, Phys3D_AddComponents_MatchInlineValues) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+
+    dse_rigidbody3d_add(id, static_cast<int>(dse::RigidBody3DType::Static), 5.0f);
+    const auto& rb = world_.registry().get<dse::RigidBody3DComponent>(e);
+    EXPECT_EQ(rb.type, dse::RigidBody3DType::Static);
+    EXPECT_FLOAT_EQ(rb.mass, 5.0f);
+
+    dse_box_collider3d_add(id, 2.0f, 3.0f, 4.0f);
+    const auto& box = world_.registry().get<dse::BoxCollider3DComponent>(e);
+    EXPECT_FLOAT_EQ(box.size.x, 2.0f);
+    EXPECT_FLOAT_EQ(box.size.z, 4.0f);
+
+    dse_capsule_collider3d_add(id, 0.5f, 1.8f, 1, 1);
+    const auto& cap = world_.registry().get<dse::CapsuleCollider3DComponent>(e);
+    EXPECT_FLOAT_EQ(cap.radius, 0.5f);
+    EXPECT_TRUE(cap.is_trigger);
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_JointSettersAndQueries) {
+    Entity a = world_.CreateEntity();
+    const uint32_t id = EntityId(a);
+
+    dse_joint3d_add(id, 7u, static_cast<int>(dse::Joint3DType::Hinge),
+                    1.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 100.0f, 50.0f);
+    dse_joint3d_set_hinge_limits(id, -30.0f, 60.0f);
+    dse_joint3d_set_spring(id, 200.0f, 0.5f);
+    dse_joint3d_set_distance(id, 1.0f, 4.0f);
+
+    const auto& jc = world_.registry().get<dse::Joint3DComponent>(a);
+    EXPECT_EQ(jc.type, dse::Joint3DType::Hinge);
+    EXPECT_EQ(jc.connected_entity_id, 7u);
+    EXPECT_TRUE(jc.use_limits);
+    EXPECT_FLOAT_EQ(jc.lower_limit, -30.0f);
+    EXPECT_FLOAT_EQ(jc.upper_limit, 60.0f);
+    EXPECT_FLOAT_EQ(jc.spring_stiffness, 200.0f);
+    EXPECT_FLOAT_EQ(jc.max_distance, 4.0f);
+    EXPECT_EQ(dse_joint3d_is_broken(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_ColliderTriggerAndMaterial_AllTypes) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+    dse_box_collider3d_add(id, 1.0f, 1.0f, 1.0f);
+    dse_sphere_collider3d_add(id, 0.5f);
+
+    dse_collider_set_trigger(id, 1);
+    dse_collider_set_material(id, 0.8f, 0.2f);
+
+    const auto& box = world_.registry().get<dse::BoxCollider3DComponent>(e);
+    const auto& sph = world_.registry().get<dse::SphereCollider3DComponent>(e);
+    EXPECT_TRUE(box.is_trigger);
+    EXPECT_TRUE(sph.is_trigger);
+    EXPECT_FLOAT_EQ(box.friction, 0.8f);
+    EXPECT_FLOAT_EQ(sph.bounciness, 0.2f);
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_CollisionLayerRoundTrip) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_add(id, static_cast<int>(dse::RigidBody3DType::Dynamic), 1.0f);
+    dse_collision_set_layer(id, 3, 0x00FF);
+    const auto& rb = world_.registry().get<dse::RigidBody3DComponent>(e);
+    EXPECT_EQ(rb.collision_layer, 3u);
+    EXPECT_EQ(rb.collision_mask, 0x00FFu);
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_TerrainHeightmapDataAndQuery) {
+    Entity e = world_.CreateEntity();
+    const uint32_t id = EntityId(e);
+    // 2x2 grid, block_size 1, origin (0,0)
+    dse_terrain_heightmap_add(id, 0.0f, 0.0f, 1.0f, 2, 2, 1.0f, 0);
+    float heights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    dse_terrain_heightmap_set_data(id, heights, 4);
+    const auto& hm = world_.registry().get<dse::TerrainHeightmapComponent>(e);
+    ASSERT_EQ(hm.heights.size(), 4u);
+    EXPECT_EQ(hm.cols, 2);
+
+    float y = -123.0f;
+    EXPECT_EQ(dse_terrain_get_height(0.5f, 0.5f, &y), 1);
+    EXPECT_FLOAT_EQ(y, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_OverlapSphere_FindsEntitiesInRange) {
+    Entity inside = world_.CreateEntity();
+    auto& t1 = world_.registry().emplace<TransformComponent>(inside);
+    t1.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    t1.scale = glm::vec3(1.0f);
+    auto& s1 = world_.registry().emplace<dse::SphereCollider3DComponent>(inside);
+    s1.radius = 0.5f;
+
+    Entity outside = world_.CreateEntity();
+    auto& t2 = world_.registry().emplace<TransformComponent>(outside);
+    t2.position = glm::vec3(100.0f, 0.0f, 0.0f);
+    t2.scale = glm::vec3(1.0f);
+    auto& s2 = world_.registry().emplace<dse::SphereCollider3DComponent>(outside);
+    s2.radius = 0.5f;
+
+    uint32_t hits[16];
+    int n = dse_physics3d_overlap_sphere(0.0f, 0.0f, 0.0f, 1.0f, hits, 16);
+    ASSERT_EQ(n, 1);
+    EXPECT_EQ(hits[0], EntityId(inside));
+}
+
+TEST_F(DseApiBindingsTest, Phys3D_OverlapBox_FindsBoxOverlap) {
+    Entity e = world_.CreateEntity();
+    auto& t = world_.registry().emplace<TransformComponent>(e);
+    t.position = glm::vec3(0.0f, 0.0f, 0.0f);
+    t.scale = glm::vec3(1.0f);
+    auto& b = world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    b.size = glm::vec3(2.0f, 2.0f, 2.0f);
+
+    uint32_t hits[16];
+    int n = dse_physics3d_overlap_box(-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f, hits, 16);
+    ASSERT_EQ(n, 1);
+    EXPECT_EQ(hits[0], EntityId(e));
+
+    int none = dse_physics3d_overlap_box(50.0f, 50.0f, 50.0f, 51.0f, 51.0f, 51.0f, hits, 16);
+    EXPECT_EQ(none, 0);
+}

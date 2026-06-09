@@ -429,3 +429,326 @@ extern "C" int dse_character_controller3d_jump(uint32_t e, float jump_speed) {
 #endif
     return 0;
 }
+
+extern "C" int dse_character_controller3d_is_grounded(uint32_t e) {
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        return physics->IsCharacterGrounded(TE(e)) ? 1 : 0;
+    }
+#endif
+    World* world = GW();
+    if (world) {
+        const auto* cc = world->registry().try_get<CharacterController3DComponent>(TE(e));
+        if (cc) return cc->is_grounded ? 1 : 0;
+    }
+    return 0;
+}
+
+extern "C" int dse_character_controller3d_get_position(uint32_t e, float* out_xyz) {
+    if (!out_xyz) return 0;
+    out_xyz[0] = out_xyz[1] = out_xyz[2] = 0.0f;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        glm::vec3 pos = physics->GetCharacterPosition(TE(e));
+        out_xyz[0] = pos.x; out_xyz[1] = pos.y; out_xyz[2] = pos.z;
+        return 1;
+    }
+#endif
+    World* world = GW();
+    if (world) {
+        const auto* tf = world->registry().try_get<TransformComponent>(TE(e));
+        if (tf) {
+            out_xyz[0] = tf->position.x; out_xyz[1] = tf->position.y; out_xyz[2] = tf->position.z;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// ============================================================
+// dse_*_add — L3 组件创建（ECS emplace_or_replace，逐值等价于原 Lua 内联）
+// ============================================================
+
+extern "C" void dse_rigidbody3d_add(uint32_t e, int type, float mass) {
+    World* world = GW();
+    if (!world) return;
+    auto& rb = world->registry().emplace_or_replace<RigidBody3DComponent>(TE(e));
+    rb.type = static_cast<RigidBody3DType>(type);
+    rb.mass = mass;
+}
+
+extern "C" void dse_box_collider3d_add(uint32_t e, float x, float y, float z) {
+    World* world = GW();
+    if (!world) return;
+    auto& c = world->registry().emplace_or_replace<BoxCollider3DComponent>(TE(e));
+    c.size = glm::vec3(x, y, z);
+}
+
+extern "C" void dse_sphere_collider3d_add(uint32_t e, float radius) {
+    World* world = GW();
+    if (!world) return;
+    auto& c = world->registry().emplace_or_replace<SphereCollider3DComponent>(TE(e));
+    c.radius = radius;
+}
+
+extern "C" void dse_capsule_collider3d_add(uint32_t e, float radius, float height,
+                                           int direction, int is_trigger) {
+    World* world = GW();
+    if (!world) return;
+    auto& c = world->registry().emplace_or_replace<CapsuleCollider3DComponent>(TE(e));
+    c.radius = radius;
+    c.height = height;
+    c.direction = direction;
+    c.is_trigger = (is_trigger != 0);
+}
+
+extern "C" void dse_mesh_collider3d_add(uint32_t e, int convex, int is_trigger) {
+    World* world = GW();
+    if (!world) return;
+    auto& c = world->registry().emplace_or_replace<MeshCollider3DComponent>(TE(e));
+    c.convex = (convex != 0);
+    c.is_trigger = (is_trigger != 0);
+}
+
+extern "C" void dse_character_controller3d_add(uint32_t e, float radius, float height,
+                                               float slope_limit, float step_offset) {
+    World* world = GW();
+    if (!world) return;
+    auto& cc = world->registry().emplace_or_replace<CharacterController3DComponent>(TE(e));
+    cc.radius = radius;
+    cc.height = height;
+    cc.slope_limit = slope_limit;
+    cc.step_offset = step_offset;
+}
+
+extern "C" void dse_joint3d_add(uint32_t e, uint32_t connected_id, int type,
+                                float ax, float ay, float az,
+                                float bx, float by, float bz,
+                                float break_force, float break_torque) {
+    World* world = GW();
+    if (!world) return;
+    auto& jc = world->registry().emplace_or_replace<Joint3DComponent>(TE(e));
+    jc.type = static_cast<Joint3DType>(type);
+    jc.connected_entity_id = connected_id;
+    jc.anchor = glm::vec3(ax, ay, az);
+    jc.connected_anchor = glm::vec3(bx, by, bz);
+    jc.break_force = break_force;
+    jc.break_torque = break_torque;
+}
+
+extern "C" void dse_terrain_heightmap_add(uint32_t e, float origin_x, float origin_z,
+                                          float block_size, int cols, int rows,
+                                          float scale, int flip_z) {
+    World* world = GW();
+    if (!world) return;
+    auto& hm = world->registry().emplace_or_replace<TerrainHeightmapComponent>(TE(e));
+    hm.origin_x = origin_x;
+    hm.origin_z = origin_z;
+    hm.block_size = block_size;
+    hm.cols = cols;
+    hm.rows = rows;
+    hm.scale = scale;
+    hm.flip_z = (flip_z != 0);
+}
+
+// ============================================================
+// dse_terrain_* — 高度图数据写入 / 查询
+// ============================================================
+
+extern "C" void dse_terrain_heightmap_set_data(uint32_t e, const float* heights, int count) {
+    World* world = GW();
+    if (!world) return;
+    auto* hm = world->registry().try_get<TerrainHeightmapComponent>(TE(e));
+    if (!hm) return;
+    hm->heights.assign(count > 0 ? count : 0, 0.0f);
+    for (int i = 0; i < count && heights; ++i) hm->heights[i] = heights[i];
+}
+
+extern "C" int dse_terrain_get_height(float world_x, float world_z, float* out_y) {
+    if (out_y) *out_y = 0.0f;
+    World* world = GW();
+    if (!world) return 0;
+    float best_y = 0.0f;
+    bool found = false;
+    auto view = world->registry().view<TerrainHeightmapComponent>();
+    for (auto te : view) {
+        const auto& hm = view.get<TerrainHeightmapComponent>(te);
+        float h = hm.GetHeight(world_x, world_z);
+        if (!found || h > best_y) { best_y = h; found = true; }
+    }
+    if (out_y) *out_y = best_y;
+    return found ? 1 : 0;
+}
+
+// ============================================================
+// dse_joint3d_* — 关节附加参数 setter / 查询
+// ============================================================
+
+extern "C" void dse_joint3d_set_hinge_limits(uint32_t e, float lower_deg, float upper_deg) {
+    World* world = GW();
+    if (!world) return;
+    auto* jc = world->registry().try_get<Joint3DComponent>(TE(e));
+    if (!jc) return;
+    jc->use_limits = true;
+    jc->lower_limit = lower_deg;
+    jc->upper_limit = upper_deg;
+}
+
+extern "C" void dse_joint3d_set_spring(uint32_t e, float stiffness, float damping) {
+    World* world = GW();
+    if (!world) return;
+    auto* jc = world->registry().try_get<Joint3DComponent>(TE(e));
+    if (!jc) return;
+    jc->spring_stiffness = stiffness;
+    jc->spring_damping = damping;
+}
+
+extern "C" void dse_joint3d_set_distance(uint32_t e, float min_dist, float max_dist) {
+    World* world = GW();
+    if (!world) return;
+    auto* jc = world->registry().try_get<Joint3DComponent>(TE(e));
+    if (!jc) return;
+    jc->min_distance = min_dist;
+    jc->max_distance = max_dist;
+}
+
+extern "C" int dse_joint3d_is_broken(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* jc = world->registry().try_get<Joint3DComponent>(TE(e));
+    return (jc && jc->is_broken) ? 1 : 0;
+}
+
+// ============================================================
+// dse_collision_* / dse_collider_* — 碰撞层 / trigger / 材质
+// ============================================================
+
+extern "C" void dse_collision_set_layer(uint32_t e, int layer, int mask) {
+    World* world = GW();
+    if (!world) return;
+    auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
+    if (!rb) return;
+    rb->collision_layer = static_cast<uint16_t>(layer);
+    rb->collision_mask = static_cast<uint16_t>(mask);
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->SetCollisionLayer(TE(e), static_cast<uint16_t>(layer), static_cast<uint16_t>(mask));
+    }
+#endif
+}
+
+extern "C" void dse_collider_set_trigger(uint32_t e, int is_trigger) {
+    World* world = GW();
+    if (!world) return;
+    const bool trigger = (is_trigger != 0);
+    if (auto* box = world->registry().try_get<BoxCollider3DComponent>(TE(e))) box->is_trigger = trigger;
+    if (auto* sph = world->registry().try_get<SphereCollider3DComponent>(TE(e))) sph->is_trigger = trigger;
+    if (auto* cap = world->registry().try_get<CapsuleCollider3DComponent>(TE(e))) cap->is_trigger = trigger;
+    if (auto* mc = world->registry().try_get<MeshCollider3DComponent>(TE(e))) mc->is_trigger = trigger;
+}
+
+extern "C" void dse_collider_set_material(uint32_t e, float friction, float bounciness) {
+    World* world = GW();
+    if (!world) return;
+    if (auto* box = world->registry().try_get<BoxCollider3DComponent>(TE(e))) {
+        box->friction = friction; box->bounciness = bounciness;
+    }
+    if (auto* sph = world->registry().try_get<SphereCollider3DComponent>(TE(e))) {
+        sph->friction = friction; sph->bounciness = bounciness;
+    }
+    if (auto* cap = world->registry().try_get<CapsuleCollider3DComponent>(TE(e))) {
+        cap->friction = friction; cap->bounciness = bounciness;
+    }
+    if (auto* mc = world->registry().try_get<MeshCollider3DComponent>(TE(e))) {
+        mc->friction = friction; mc->bounciness = bounciness;
+    }
+}
+
+// ============================================================
+// dse_physics3d_overlap_* — 重叠查询（ECS 几何，写入 out 数组，返回命中数）
+// ============================================================
+
+extern "C" int dse_physics3d_overlap_sphere(float cx, float cy, float cz, float radius,
+                                            uint32_t* out, int cap) {
+    World* world = GW();
+    if (!world) return 0;
+    const glm::vec3 center(cx, cy, cz);
+    const float r2 = radius * radius;
+    int count = 0;
+    auto emit = [&](Entity entity) {
+        if (out && count < cap) out[count] = static_cast<uint32_t>(static_cast<entt::id_type>(entity));
+        ++count;
+    };
+
+    auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
+    for (auto entity : box_view) {
+        const auto& t = box_view.get<TransformComponent>(entity);
+        const auto& c = box_view.get<BoxCollider3DComponent>(entity);
+        glm::vec3 bc = t.position + c.center;
+        glm::vec3 half = glm::abs(t.scale * c.size) * 0.5f;
+        glm::vec3 bmin = bc - half, bmax = bc + half;
+        glm::vec3 closest;
+        closest.x = std::max(bmin.x, std::min(center.x, bmax.x));
+        closest.y = std::max(bmin.y, std::min(center.y, bmax.y));
+        closest.z = std::max(bmin.z, std::min(center.z, bmax.z));
+        glm::vec3 diff = center - closest;
+        if (glm::dot(diff, diff) <= r2) emit(entity);
+    }
+
+    auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
+    for (auto entity : sph_view) {
+        const auto& t = sph_view.get<TransformComponent>(entity);
+        const auto& c = sph_view.get<SphereCollider3DComponent>(entity);
+        glm::vec3 sc = t.position + c.center;
+        float max_s = std::max(std::fabs(t.scale.x),
+                      std::max(std::fabs(t.scale.y), std::fabs(t.scale.z)));
+        float sr = c.radius * max_s;
+        float combined = radius + sr;
+        glm::vec3 diff = center - sc;
+        if (glm::dot(diff, diff) <= combined * combined) emit(entity);
+    }
+    return count;
+}
+
+extern "C" int dse_physics3d_overlap_box(float min_x, float min_y, float min_z,
+                                         float max_x, float max_y, float max_z,
+                                         uint32_t* out, int cap) {
+    World* world = GW();
+    if (!world) return 0;
+    const glm::vec3 qmin(min_x, min_y, min_z);
+    const glm::vec3 qmax(max_x, max_y, max_z);
+    int count = 0;
+    auto emit = [&](Entity entity) {
+        if (out && count < cap) out[count] = static_cast<uint32_t>(static_cast<entt::id_type>(entity));
+        ++count;
+    };
+
+    auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
+    for (auto entity : box_view) {
+        const auto& t = box_view.get<TransformComponent>(entity);
+        const auto& c = box_view.get<BoxCollider3DComponent>(entity);
+        glm::vec3 bc = t.position + c.center;
+        glm::vec3 half = glm::abs(t.scale * c.size) * 0.5f;
+        glm::vec3 bmin = bc - half, bmax = bc + half;
+        if (qmin.x <= bmax.x && qmax.x >= bmin.x &&
+            qmin.y <= bmax.y && qmax.y >= bmin.y &&
+            qmin.z <= bmax.z && qmax.z >= bmin.z) emit(entity);
+    }
+
+    auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
+    for (auto entity : sph_view) {
+        const auto& t = sph_view.get<TransformComponent>(entity);
+        const auto& c = sph_view.get<SphereCollider3DComponent>(entity);
+        glm::vec3 sc = t.position + c.center;
+        float max_s = std::max(std::fabs(t.scale.x),
+                      std::max(std::fabs(t.scale.y), std::fabs(t.scale.z)));
+        float sr = c.radius * max_s;
+        glm::vec3 closest;
+        closest.x = std::max(qmin.x, std::min(sc.x, qmax.x));
+        closest.y = std::max(qmin.y, std::min(sc.y, qmax.y));
+        closest.z = std::max(qmin.z, std::min(sc.z, qmax.z));
+        glm::vec3 diff = sc - closest;
+        if (glm::dot(diff, diff) <= sr * sr) emit(entity);
+    }
+    return count;
+}

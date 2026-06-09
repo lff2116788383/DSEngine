@@ -17,6 +17,7 @@
 #endif
 #include <gtest/gtest.h>
 #include "engine/scripting/lua/lua_runtime.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/camera.h"
@@ -1162,6 +1163,47 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigure3DPhysicsExtendedComponentsCppCa
         EXPECT_NEAR(joint.min_distance, 0.5f, 0.001f);
         EXPECT_NEAR(joint.max_distance, 3.5f, 0.001f);
     }
+
+    ShutdownLuaRuntime();
+}
+
+// Task 6: overlap_sphere 经委托后的 C ABI（Lua → dse_physics3d_overlap_sphere），
+// 验证返回的实体表与场景几何一致。
+TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DOverlapSphereDelegatedReturnsEntities) {
+    LuaTempScript startup("test_3d_overlap.lua", R"(
+        function Awake()
+            local near = dse.ecs.create_entity()
+            dse.ecs.add_transform(near, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_sphere_collider_3d(near, 0.5)
+
+            local far = dse.ecs.create_entity()
+            dse.ecs.add_transform(far, 50.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_sphere_collider_3d(far, 0.5)
+
+            local hits = dse.ecs.physics_3d_overlap_sphere(0.0, 0.0, 0.0, 1.0)
+            overlap_count = #hits
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    auto sphere_view = world.registry().view<SphereCollider3DComponent>();
+    EXPECT_EQ(sphere_view.size(), 2u);
+
+    // 直接复核 C ABI：仅近处 1 个实体命中半径 1.0 的球。
+    uint32_t hits[8];
+    int n = dse_physics3d_overlap_sphere(0.0f, 0.0f, 0.0f, 1.0f, hits, 8);
+    EXPECT_EQ(n, 1);
 
     ShutdownLuaRuntime();
 }

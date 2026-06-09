@@ -499,6 +499,49 @@ DSE_CAPI int dse_character_controller3d_move(uint32_t e, float dx, float dy, flo
                                              float min_dist, float dt,
                                              float* out_velocity, uint32_t* out_flags);
 DSE_CAPI int dse_character_controller3d_jump(uint32_t e, float jump_speed);
+// is_grounded/get_position：服务优先，否则 ECS 回退（组件缓存 / Transform）。
+DSE_CAPI int dse_character_controller3d_is_grounded(uint32_t e);
+DSE_CAPI int dse_character_controller3d_get_position(uint32_t e, float* out_xyz); // float[3]，返回 found(0/1)
+
+// 组件创建（L3，ECS emplace_or_replace）。type/direction 为对应枚举的整型值。
+DSE_CAPI void dse_rigidbody3d_add(uint32_t e, int type, float mass);
+DSE_CAPI void dse_box_collider3d_add(uint32_t e, float x, float y, float z);
+DSE_CAPI void dse_sphere_collider3d_add(uint32_t e, float radius);
+DSE_CAPI void dse_capsule_collider3d_add(uint32_t e, float radius, float height,
+                                         int direction, int is_trigger);
+DSE_CAPI void dse_mesh_collider3d_add(uint32_t e, int convex, int is_trigger);
+DSE_CAPI void dse_character_controller3d_add(uint32_t e, float radius, float height,
+                                             float slope_limit, float step_offset);
+DSE_CAPI void dse_joint3d_add(uint32_t e, uint32_t connected_id, int type,
+                              float ax, float ay, float az,
+                              float bx, float by, float bz,
+                              float break_force, float break_torque);
+DSE_CAPI void dse_terrain_heightmap_add(uint32_t e, float origin_x, float origin_z,
+                                        float block_size, int cols, int rows,
+                                        float scale, int flip_z);
+
+// TerrainHeightmap 数据写入 / 查询。
+DSE_CAPI void dse_terrain_heightmap_set_data(uint32_t e, const float* heights, int count);
+DSE_CAPI int dse_terrain_get_height(float world_x, float world_z, float* out_y); // 返回 found(0/1)
+
+// Joint3D 附加参数 setter / 查询。
+DSE_CAPI void dse_joint3d_set_hinge_limits(uint32_t e, float lower_deg, float upper_deg);
+DSE_CAPI void dse_joint3d_set_spring(uint32_t e, float stiffness, float damping);
+DSE_CAPI void dse_joint3d_set_distance(uint32_t e, float min_dist, float max_dist);
+DSE_CAPI int dse_joint3d_is_broken(uint32_t e);
+
+// 碰撞层 / trigger / 材质。set_layer 写 RigidBody 并委托物理服务（若有）。
+// set_trigger/set_material 写入实体上存在的任意碰撞体类型（Box/Sphere/Capsule/Mesh）。
+DSE_CAPI void dse_collision_set_layer(uint32_t e, int layer, int mask);
+DSE_CAPI void dse_collider_set_trigger(uint32_t e, int is_trigger);
+DSE_CAPI void dse_collider_set_material(uint32_t e, float friction, float bounciness);
+
+// 重叠查询：写入命中实体 id 到 out（容量 cap），返回命中总数（可能 > cap）。
+DSE_CAPI int dse_physics3d_overlap_sphere(float cx, float cy, float cz, float radius,
+                                          uint32_t* out, int cap);
+DSE_CAPI int dse_physics3d_overlap_box(float min_x, float min_y, float min_z,
+                                       float max_x, float max_y, float max_z,
+                                       uint32_t* out, int cap);
 
 // ============================================================
 // Render 服务（L5，手写 dse_api_render.cpp）
