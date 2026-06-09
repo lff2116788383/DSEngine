@@ -7,6 +7,7 @@
 #include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_3d_navmesh.h"
 #include <cstring>
@@ -87,6 +88,56 @@ TEST_F(DseApiBindingsTest, Tree_MeshPathRoundTrip) {
 
     EXPECT_GT(dse_tree_get_lod1_mesh_path(id, buf, sizeof(buf)), 0);
     EXPECT_STREQ(buf, "models/tree_lod1.dmesh");
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_ShaderVariantRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+
+    char buf[128];
+    // 默认 "MESH_UNLIT"
+    EXPECT_GT(dse_mesh_renderer_get_shader_variant(id, buf, sizeof(buf)), 0);
+    EXPECT_STREQ(buf, "MESH_UNLIT");
+
+    dse_mesh_renderer_set_shader_variant(id, "MESH_PBR");
+    EXPECT_GT(dse_mesh_renderer_get_shader_variant(id, buf, sizeof(buf)), 0);
+    EXPECT_STREQ(buf, "MESH_PBR");
+    EXPECT_EQ(world_.registry().get<dse::MeshRendererComponent>(e).shader_variant, "MESH_PBR");
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_MeshPathRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+
+    dse_mesh_renderer_set_mesh_path(id, "models/rock.dmesh");
+
+    char buf[256];
+    EXPECT_GT(dse_mesh_renderer_get_mesh_path(id, buf, sizeof(buf)), 0);
+    EXPECT_STREQ(buf, "models/rock.dmesh");
+    EXPECT_EQ(world_.registry().get<dse::MeshRendererComponent>(e).mesh_path, "models/rock.dmesh");
+}
+
+// set_mesh_path 必须清空过程网格缓存，否则 MeshRenderSystem 见 temp_* 非空会跳过加载新 mesh_path
+TEST_F(DseApiBindingsTest, MeshRenderer_SetMeshPathClearsProceduralBuffers) {
+    Entity e = world_.CreateEntity();
+    auto& mr = world_.registry().emplace<dse::MeshRendererComponent>(e);
+    mr.temp_vertices = {1.0f, 2.0f, 3.0f};
+    mr.temp_indices = {0u, 1u, 2u};
+    mr.temp_uvs = {0.0f, 1.0f};
+    mr.temp_normals = {0.0f, 0.0f, 1.0f};
+    mr.temp_tangents = {1.0f, 0.0f, 0.0f};
+    const uint32_t id = EntityId(e);
+
+    dse_mesh_renderer_set_mesh_path(id, "models/rock.dmesh");
+
+    const auto& after = world_.registry().get<dse::MeshRendererComponent>(e);
+    EXPECT_TRUE(after.temp_vertices.empty());
+    EXPECT_TRUE(after.temp_indices.empty());
+    EXPECT_TRUE(after.temp_uvs.empty());
+    EXPECT_TRUE(after.temp_normals.empty());
+    EXPECT_TRUE(after.temp_tangents.empty());
 }
 
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {

@@ -134,9 +134,17 @@ extern "C" void dse_mesh_renderer_add(uint32_t e, const char* mesh_path) {
     m.mesh_path = mesh_path;
 }
 
-extern "C" void dse_mesh_renderer_set_mesh(uint32_t e, const char* mesh_path) {
+extern "C" void dse_mesh_renderer_set_mesh_path(uint32_t e, const char* mesh_path) {
     if (!mesh_path) return;
-    if (auto* m = GetComp<dse::MeshRendererComponent>(e)) m->mesh_path = mesh_path;
+    if (auto* m = GetComp<dse::MeshRendererComponent>(e)) {
+        m->mesh_path = mesh_path;
+        // 切换到文件网格时清空过程网格缓存，否则 MeshRenderSystem 见 temp_* 非空会跳过加载新 mesh_path
+        m->temp_vertices.clear();
+        m->temp_indices.clear();
+        m->temp_uvs.clear();
+        m->temp_normals.clear();
+        m->temp_tangents.clear();
+    }
 }
 
 extern "C" void dse_dir_light_add(uint32_t e) {

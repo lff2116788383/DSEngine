@@ -197,21 +197,8 @@ int L_EcsAddMeshRenderer(lua_State* L) {
     return 0;
 }
 
-int L_EcsSetMeshPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    const char* mesh_path = luaL_checkstring(L, 2);
-    auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
-    if (!mesh) return 0;
-    mesh->mesh_path = mesh_path;
-    mesh->temp_vertices.clear();
-    mesh->temp_indices.clear();
-    mesh->temp_uvs.clear();
-    mesh->temp_normals.clear();
-    mesh->temp_tangents.clear();
-    return 0;
-}
+// set_mesh_path / get_mesh_path 已迁至 codegen（binding_defs.json，capi_setter:manual）→
+// dse_mesh_renderer_set_mesh_path（含 temp_* 清理）
 
 int L_EcsSetMeshMaterial(lua_State* L) {
     World* world = GetWorld();
@@ -288,8 +275,7 @@ int L_EcsSetMeshDepthState(lua_State* L) {
     return 0;
 }
 
-// MeshRenderer shader variant setter
-DSE_LUA_COMPONENT_SETTER(MeshShaderVariant, MeshRendererComponent, shader_variant, std::string, std::string(helper::CheckString(L, 2)))
+// set_mesh_shader_variant / get_mesh_shader_variant 已迁至 codegen（binding_defs.json）
 
 int L_EcsSetMeshMaterialScalar(lua_State* L) {
     World* world = GetWorld();
@@ -2125,9 +2111,8 @@ void RegisterEcsRenderingBindings(lua_State* L) {
         {"set_sprite_uv_offset",      L_EcsSetSpriteUvOffset},
         // MeshRenderer
         {"add_mesh_renderer",         L_EcsAddMeshRenderer},
-        {"set_mesh_path",             L_EcsSetMeshPath},
+        // set_mesh_path / set_mesh_shader_variant 由 codegen 注册（RegisterMeshRendererComponentGenBindings）
         {"set_mesh_material",         L_EcsSetMeshMaterial},
-        {"set_mesh_shader_variant",   L_EcsSetMeshShaderVariant},
         {"set_mesh_depth_state",      L_EcsSetMeshDepthState},
         {"set_mesh_material_scalar",  L_EcsSetMeshMaterialScalar},
         {"set_mesh_texture",          L_EcsSetMeshTexture},

@@ -99,6 +99,20 @@ internal static class Native {
     [MethodImpl(MethodImplOptions.InternalCall)]
     internal static extern void dse_mesh_renderer_set_receive_shadow(uint e, int v);
 
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_mesh_renderer_set_mesh_path(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_mesh_renderer_get_mesh_path(uint e, byte[] buf, int buf_size);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern void dse_mesh_renderer_set_shader_variant(uint e,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+
+    [MethodImpl(MethodImplOptions.InternalCall)]
+    internal static extern int dse_mesh_renderer_get_shader_variant(uint e, byte[] buf, int buf_size);
+
 
     // ---- DirectionalLight3DComponent ----
     [MethodImpl(MethodImplOptions.InternalCall)]

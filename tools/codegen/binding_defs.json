@@ -121,6 +121,21 @@
                     "default": "true",
                     "lua_getter": "get_mesh_receive_shadow",
                     "lua_setter": "set_mesh_receive_shadow"
+                },
+                {
+                    "name": "mesh_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "capi_setter": "manual",
+                    "lua_getter": "get_mesh_path",
+                    "lua_setter": "set_mesh_path"
+                },
+                {
+                    "name": "shader_variant",
+                    "type": "string",
+                    "buffer_size": 128,
+                    "lua_getter": "get_mesh_shader_variant",
+                    "lua_setter": "set_mesh_shader_variant"
                 }
             ]
         },

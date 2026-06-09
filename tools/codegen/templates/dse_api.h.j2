@@ -44,7 +44,9 @@ DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w);
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w);
 {% elif field.type == "string" %}
+{% if field.get("capi_setter") != "manual" %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v);
+{% endif %}
 DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, char* buf, int buf_size);
 {% endif %}
 {% endfor %}

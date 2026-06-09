@@ -58,6 +58,9 @@ DSE_CAPI_GEN void dse_mesh_renderer_get_emissive(uint32_t e, float* x, float* y,
 DSE_CAPI_GEN void dse_mesh_renderer_set_emissive(uint32_t e, float x, float y, float z);
 DSE_CAPI_GEN int  dse_mesh_renderer_get_receive_shadow(uint32_t e);
 DSE_CAPI_GEN void dse_mesh_renderer_set_receive_shadow(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_mesh_renderer_get_mesh_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN void dse_mesh_renderer_set_shader_variant(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_mesh_renderer_get_shader_variant(uint32_t e, char* buf, int buf_size);
 
 /* ---- DirectionalLight3DComponent ---- */
 DSE_CAPI_GEN void dse_dir_light_get_direction(uint32_t e, float* x, float* y, float* z);

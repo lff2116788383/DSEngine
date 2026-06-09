@@ -159,6 +159,29 @@ extern "C" void dse_mesh_renderer_set_receive_shadow(uint32_t e, int v) {
         c->receive_shadow = (v != 0);
     }
 }
+extern "C" int dse_mesh_renderer_get_mesh_path(uint32_t e, char* buf, int buf_size) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GCC<dse::MeshRendererComponent>(e);
+    if (!c || c->mesh_path.empty()) return 0;
+    std::strncpy(buf, c->mesh_path.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
+extern "C" void dse_mesh_renderer_set_shader_variant(uint32_t e, const char* v) {
+    if (auto* c = GC<dse::MeshRendererComponent>(e)) {
+        c->shader_variant = v ? v : "";
+    }
+}
+extern "C" int dse_mesh_renderer_get_shader_variant(uint32_t e, char* buf, int buf_size) {
+    if (!buf || buf_size <= 0) return 0;
+    buf[0] = '\0';
+    const auto* c = GCC<dse::MeshRendererComponent>(e);
+    if (!c || c->shader_variant.empty()) return 0;
+    std::strncpy(buf, c->shader_variant.c_str(), static_cast<std::size_t>(buf_size - 1));
+    buf[buf_size - 1] = '\0';
+    return static_cast<int>(std::strlen(buf));
+}
 
 /* ---- DirectionalLight3DComponent ---- */
 extern "C" void dse_dir_light_get_direction(uint32_t e, float* x, float* y, float* z) {

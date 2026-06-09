@@ -86,7 +86,11 @@ DSE_CAPI void  dse_camera3d_set_priority(uint32_t e, int v);
 // ============================================================
 
 DSE_CAPI void  dse_mesh_renderer_add(uint32_t e, const char* mesh_path);
-DSE_CAPI void  dse_mesh_renderer_set_mesh(uint32_t e, const char* mesh_path);
+// 手写 setter（capi_setter:manual）：设 mesh_path 并清空过程网格缓存；getter 由 codegen 生成
+DSE_CAPI void  dse_mesh_renderer_set_mesh_path(uint32_t e, const char* mesh_path);
+DSE_CAPI int   dse_mesh_renderer_get_mesh_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI void  dse_mesh_renderer_set_shader_variant(uint32_t e, const char* v);
+DSE_CAPI int   dse_mesh_renderer_get_shader_variant(uint32_t e, char* buf, int buf_size);
 DSE_CAPI void  dse_mesh_renderer_get_color(uint32_t e, float* r, float* g, float* b, float* a);
 DSE_CAPI void  dse_mesh_renderer_set_color(uint32_t e, float r, float g, float b, float a);
 DSE_CAPI int   dse_mesh_renderer_get_visible(uint32_t e);

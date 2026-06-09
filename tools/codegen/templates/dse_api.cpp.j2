@@ -106,12 +106,14 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, 
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = glm::vec4(x, y, z, w);
 }
 {% elif field.type == "string" %}
+{% if field.get("capi_setter") != "manual" %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = v ? v : "";
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, char* buf, int buf_size) {
     if (!buf || buf_size <= 0) return 0;
     buf[0] = '\0';

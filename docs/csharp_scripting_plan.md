@@ -1,6 +1,6 @@
 # DSEngine C# 脚本系统集成方案
 
-> 状态：**S1 ✅ + S1.5 ✅ + S1.6 ✅ + S1.7a-b ✅ — S1.7c / S1.8 待启动 — S2（Mono）待启动**  
+> 状态：**S1 ✅ + S1.5 ✅ + S1.6 ✅ + S1.7 ✅（a-b-c）— S1.8 待启动 — S2（Mono）待启动**  
 > 最后核对：2026-06（与 `master` 代码现状对齐）  
 > 已完成：Lua 绑定层（~6700 行）、C ABI 层、Codegen 工具、**12 组件**字段 get/set 由 `dse_api.gen.cpp` 生成并参与构建
 
@@ -203,7 +203,7 @@ DSE_CAPI int  dse_<prefix>_get_<field>(uint32_t e, char* buf, int buf_size); // 
 |------|------|------|
 | S1.7a | `string` 模板（C ABI / Lua / C#） | 单测 round-trip |
 | S1.7b | Tree 三字段迁入 gen，删 `tree_ext.cpp` | 现有 Tree 测试 |
-| S1.7c | MeshRenderer `mesh_path` + `shader_variant` | `set_mesh_path` 委托 `dse_*` |
+| S1.7c ✅ | MeshRenderer `mesh_path` + `shader_variant` 进 `binding_defs.json`；`mesh_path` 用 `capi_setter:"manual"`，`set_mesh_path` 委托手写 `dse_mesh_renderer_set_mesh_path`（保留清空 `temp_*` 副作用）；`shader_variant` 走纯 gen | round-trip 单测 + `temp_*` 清理单测 |
 
 **C# 互操作：** string getter 使用 `byte[]` 缓冲区 InternalCall；S3 可补充 `StringBuilder` 封装。远期可选 `dse_*_alloc` + `dse_string_free`（S2 前评估）。
 
@@ -494,7 +494,7 @@ GameScripts/DSEngine/Native.gen.cs    ✅（仅组件 InternalCall）
 | **S1** | C ABI `dse_api.h/cpp` | — | 无 | ✅ |
 | **S1.5** | Codegen + Lua 12 组件 opt-in | — | S1 | ✅ |
 | **S1.6** | `dse_api.gen.cpp` opt-in / 消除字段双份维护 | 2–3 天 | S1.5 | ✅ |
-| **S1.7** | `string` 类型 + Tree/Mesh 路径收敛 | 2–3 天 | S1.6 | 🔄 a-b ✅，c 待做 |
+| **S1.7** | `string` 类型 + Tree/Mesh 路径收敛 | 2–3 天 | S1.6 | ✅ |
 | **S1.8** | `rendering.cpp` 拆分 + L1–L4 迁移 | 1–2 周 | S1.7 | ⏳ |
 | **S1.9** | phys3d / gameplay3d / animation + L5 清单 | 2–4 周 | S1.8 | ⏳ |
 | **S2** | Mono 嵌入 + DSBehaviour + 异常隔离 | 1–2 周 | S1.7 + L5 清单 | ⏳ |
