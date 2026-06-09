@@ -25,6 +25,8 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
+
 int L_EcsAddRigidBody3D(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -59,150 +61,79 @@ int L_EcsAddSphereCollider3D(lua_State* L) {
     return 0;
 }
 
-/// 对 3D 刚体施加持续的力（需 PhysX 后端）
+/// 对 3D 刚体施加持续的力（需 PhysX 后端）— 委托 dse_rigidbody3d_add_force
 int L_EcsRigidBody3DAddForce(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float fx = helper::CheckFloat(L, 2);
     float fy = helper::CheckFloat(L, 3);
     float fz = helper::CheckFloat(L, 4);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->AddForce(e, glm::vec3(fx, fy, fz));
-    }
-#endif
+    dse_rigidbody3d_add_force(EID(e), fx, fy, fz);
     return 0;
 }
 
-/// 对 3D 刚体施加瞬时冲量（需 PhysX 后端）
+/// 对 3D 刚体施加瞬时冲量（需 PhysX 后端）— 委托 dse_rigidbody3d_add_impulse
 int L_EcsRigidBody3DAddImpulse(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float ix = helper::CheckFloat(L, 2);
     float iy = helper::CheckFloat(L, 3);
     float iz = helper::CheckFloat(L, 4);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->AddImpulse(e, glm::vec3(ix, iy, iz));
-    }
-#endif
+    dse_rigidbody3d_add_impulse(EID(e), ix, iy, iz);
     return 0;
 }
 
-/// 对 3D 刚体施加扭矩
+/// 对 3D 刚体施加扭矩 — 委托 dse_rigidbody3d_add_torque
 int L_EcsRigidBody3DAddTorque(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float tx = helper::CheckFloat(L, 2);
     float ty = helper::CheckFloat(L, 3);
     float tz = helper::CheckFloat(L, 4);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->AddTorque(e, glm::vec3(tx, ty, tz));
-    }
-#endif
+    dse_rigidbody3d_add_torque(EID(e), tx, ty, tz);
     return 0;
 }
 
-/// 设置 3D 刚体角速度
+/// 设置 3D 刚体角速度 — 委托 dse_rigidbody3d_set_angular_velocity
 int L_EcsRigidBody3DSetAngularVelocity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float ax = helper::CheckFloat(L, 2);
     float ay = helper::CheckFloat(L, 3);
     float az = helper::CheckFloat(L, 4);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetAngularVelocity(e, glm::vec3(ax, ay, az));
-    }
-#endif
+    dse_rigidbody3d_set_angular_velocity(EID(e), ax, ay, az);
     return 0;
 }
 
-/// 获取 3D 刚体角速度，返回 ax,ay,az
+/// 获取 3D 刚体角速度，返回 ax,ay,az — 委托 dse_rigidbody3d_get_angular_velocity
 int L_EcsRigidBody3DGetAngularVelocity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
-        return 3;
-    }
     Entity e = helper::CheckEntity(L, 1);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        glm::vec3 vel = physics->GetAngularVelocity(e);
-        helper::PushVec3(L, vel);
-        return 3;
-    }
-#endif
-    lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
+    float v[3] = {0.0f, 0.0f, 0.0f};
+    dse_rigidbody3d_get_angular_velocity(EID(e), v);
+    helper::PushVec3(L, glm::vec3(v[0], v[1], v[2]));
     return 3;
 }
 
-/// 设置 3D 刚体线速度（需 PhysX 后端）
+/// 设置 3D 刚体线速度（需 PhysX 后端）— 委托 dse_rigidbody3d_set_velocity（含组件缓存同步）
 int L_EcsRigidBody3DSetVelocity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float vx = helper::CheckFloat(L, 2);
     float vy = helper::CheckFloat(L, 3);
     float vz = helper::CheckFloat(L, 4);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetVelocity(e, glm::vec3(vx, vy, vz));
-    }
-#endif
-    // 同步到组件缓存
-    auto* rb = helper::TryGetComponent<RigidBody3DComponent>(*world, e);
-    if (rb) {
-        rb->velocity = glm::vec3(vx, vy, vz);
-    }
+    dse_rigidbody3d_set_velocity(EID(e), vx, vy, vz);
     return 0;
 }
 
-/// 获取 3D 刚体线速度（需 PhysX 后端），返回 vx,vy,vz
+/// 获取 3D 刚体线速度（需 PhysX 后端），返回 vx,vy,vz — 委托 dse_rigidbody3d_get_velocity
 int L_EcsRigidBody3DGetVelocity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
-        return 3;
-    }
     Entity e = helper::CheckEntity(L, 1);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        glm::vec3 vel = physics->GetVelocity(e);
-        helper::PushVec3(L, vel);
-        return 3;
-    }
-#endif
-    // 无 PhysX 时回退到组件缓存
-    const auto* rb = helper::TryGetComponentConst<RigidBody3DComponent>(*world, e);
-    if (rb) {
-        helper::PushVec3(L, rb->velocity);
-    } else {
-        lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
-    }
+    float v[3] = {0.0f, 0.0f, 0.0f};
+    dse_rigidbody3d_get_velocity(EID(e), v);
+    helper::PushVec3(L, glm::vec3(v[0], v[1], v[2]));
     return 3;
 }
 
-/// 设置 3D 刚体是否受重力（需 PhysX 后端）
+/// 设置 3D 刚体是否受重力（需 PhysX 后端）— 委托 dse_rigidbody3d_set_gravity（含组件缓存同步）
 int L_EcsRigidBody3DSetGravity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     bool enabled = helper::CheckBool(L, 2);
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetGravityEnabled(e, enabled);
-    }
-#endif
-    auto* rb = helper::TryGetComponent<RigidBody3DComponent>(*world, e);
-    if (rb) {
-        rb->use_gravity = enabled;
-    }
+    dse_rigidbody3d_set_gravity(EID(e), enabled ? 1 : 0);
     return 0;
 }
 
@@ -257,6 +188,7 @@ int L_EcsAddCharacterController3D(lua_State* L) {
 }
 
 /// 移动角色控制器：character_controller_3d_move(entity, dx, dy, dz, [min_dist, dt]) → is_grounded, vel_x, vel_y, vel_z, collision_flags
+/// 委托 dse_character_controller3d_move（服务优先 + ECS 回退，逐值等价）
 int L_EcsCharacterController3DMove(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     float dx = helper::CheckFloat(L, 2);
@@ -265,149 +197,20 @@ int L_EcsCharacterController3DMove(lua_State* L) {
     float min_dist = helper::OptFloat(L, 5, 0.0f);
     float dt = helper::OptFloat(L, 6, 1.0f / 60.0f);
 
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        auto result = physics->MoveCharacter(e, glm::vec3(dx, dy, dz), min_dist, dt);
-        // Jolt CharacterVirtual 不知道 ECS 地形高度图，补上地形贴地检查
-        World* world_phys = GetWorld();
-        if (world_phys) {
-            auto* tf_phys = helper::TryGetComponent<TransformComponent>(*world_phys, e);
-            if (tf_phys) {
-                float terrain_y = -1e10f;
-                auto hm_view = world_phys->registry().view<TerrainHeightmapComponent>();
-                for (auto te : hm_view) {
-                    const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
-                    float h = hm.GetHeight(tf_phys->position.x, tf_phys->position.z);
-                    if (h > terrain_y) terrain_y = h;
-                }
-                if (terrain_y > -1e9f && tf_phys->position.y < terrain_y) {
-                    tf_phys->position.y = terrain_y;
-                    tf_phys->dirty = true;
-                    result.is_grounded = true;
-                    result.collision_flags = static_cast<uint8_t>(result.collision_flags)
-                        | static_cast<uint8_t>(CharacterCollisionFlag::Down);
-                }
-            }
-        }
-        lua_pushboolean(L, result.is_grounded ? 1 : 0);
-        helper::PushVec3(L, result.velocity);
-        lua_pushinteger(L, static_cast<lua_Integer>(result.collision_flags));
-        return 5;
-    }
-#endif
-    // 无 PhysX 时回退：地形贴地 + 碰撞体推开 + 着地检测
-    World* world = GetWorld();
-    if (world) {
-        auto* transform = helper::TryGetComponent<TransformComponent>(*world, e);
-        if (transform) {
-            auto* cc = helper::TryGetComponent<CharacterController3DComponent>(*world, e);
-            glm::vec3 original_pos = transform->position;
-            glm::vec3 new_pos = original_pos + glm::vec3(dx, dy, dz);
-            uint8_t cflags = 0;
-
-            // 碰撞体推开 — 将角色视为球体
-            float char_radius = cc ? cc->radius : 0.3f;
-            float char_half_h = cc ? cc->height * 0.5f : 0.5f;
-            glm::vec3 sphere_c = new_pos + glm::vec3(0, char_radius + char_half_h, 0);
-
-            // Box 碰撞体
-            auto box_view = world->registry().view<TransformComponent, BoxCollider3DComponent>();
-            for (auto other : box_view) {
-                if (other == e) continue;
-                const auto& bt = box_view.get<TransformComponent>(other);
-                const auto& bc = box_view.get<BoxCollider3DComponent>(other);
-                glm::vec3 bc_center = bt.position + bc.center;
-                glm::vec3 half = glm::abs(bt.scale * bc.size) * 0.5f;
-                glm::vec3 bmin = bc_center - half;
-                glm::vec3 bmax = bc_center + half;
-                glm::vec3 closest;
-                closest.x = std::max(bmin.x, std::min(sphere_c.x, bmax.x));
-                closest.y = std::max(bmin.y, std::min(sphere_c.y, bmax.y));
-                closest.z = std::max(bmin.z, std::min(sphere_c.z, bmax.z));
-                glm::vec3 diff = sphere_c - closest;
-                float dist_sq = glm::dot(diff, diff);
-                if (dist_sq < char_radius * char_radius && dist_sq > 1e-8f) {
-                    float d = std::sqrt(dist_sq);
-                    glm::vec3 n = diff / d;
-                    float overlap = char_radius - d;
-                    new_pos += n * overlap;
-                    sphere_c += n * overlap;
-                    cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
-                }
-            }
-
-            // Sphere 碰撞体
-            auto sph_view = world->registry().view<TransformComponent, SphereCollider3DComponent>();
-            for (auto other : sph_view) {
-                if (other == e) continue;
-                const auto& st = sph_view.get<TransformComponent>(other);
-                const auto& sc = sph_view.get<SphereCollider3DComponent>(other);
-                glm::vec3 oc = st.position + sc.center;
-                float max_s = std::max(std::fabs(st.scale.x),
-                              std::max(std::fabs(st.scale.y), std::fabs(st.scale.z)));
-                float or_ = sc.radius * max_s;
-                glm::vec3 diff = sphere_c - oc;
-                float d = glm::length(diff);
-                float md = char_radius + or_;
-                if (d < md && d > 1e-6f) {
-                    glm::vec3 n = diff / d;
-                    float overlap_val = md - d;
-                    new_pos += n * overlap_val;
-                    sphere_c += n * overlap_val;
-                    cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
-                }
-            }
-
-            // 地形高度贴地
-            bool grounded = false;
-            float terrain_y = -1e10f;
-            auto hm_view = world->registry().view<TerrainHeightmapComponent>();
-            for (auto te : hm_view) {
-                const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
-                float h = hm.GetHeight(new_pos.x, new_pos.z);
-                if (h > terrain_y) terrain_y = h;
-            }
-            if (terrain_y > -1e9f && new_pos.y <= terrain_y) {
-                new_pos.y = terrain_y;
-                grounded = true;
-                cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Down);
-            }
-
-            transform->position = new_pos;
-            transform->dirty = true;
-
-            glm::vec3 vel = (dt > 1e-6f) ? (new_pos - original_pos) / dt : glm::vec3(0);
-            if (cc) {
-                cc->is_grounded = grounded;
-                cc->collision_flags = static_cast<CharacterCollisionFlag>(cflags);
-                cc->velocity = vel;
-            }
-
-            lua_pushboolean(L, grounded ? 1 : 0);
-            helper::PushVec3(L, vel);
-            lua_pushinteger(L, static_cast<lua_Integer>(cflags));
-            return 5;
-        }
-    }
-    lua_pushboolean(L, 0);
-    lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0); lua_pushnumber(L, 0.0);
-    lua_pushinteger(L, 0);
+    float vel[3] = {0.0f, 0.0f, 0.0f};
+    uint32_t flags = 0;
+    int grounded = dse_character_controller3d_move(EID(e), dx, dy, dz, min_dist, dt, vel, &flags);
+    lua_pushboolean(L, grounded);
+    helper::PushVec3(L, glm::vec3(vel[0], vel[1], vel[2]));
+    lua_pushinteger(L, static_cast<lua_Integer>(flags));
     return 5;
 }
 
-/// 角色跳跃：character_controller_3d_jump(entity, jump_speed) → success
+/// 角色跳跃：character_controller_3d_jump(entity, jump_speed) → success — 委托 dse_character_controller3d_jump
 int L_EcsCharacterController3DJump(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
     float jump_speed = helper::OptFloat(L, 2, 5.0f);
-
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        bool success = physics->JumpCharacter(e, jump_speed);
-        lua_pushboolean(L, success ? 1 : 0);
-        return 1;
-    }
-#endif
-    lua_pushboolean(L, 0);
+    lua_pushboolean(L, dse_character_controller3d_jump(EID(e), jump_speed));
     return 1;
 }
 

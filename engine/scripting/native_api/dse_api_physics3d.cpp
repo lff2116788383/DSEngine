@@ -25,6 +25,7 @@
 #include <cmath>
 
 using Entity = entt::entity;
+using namespace dse;
 
 namespace {
 
@@ -179,4 +180,252 @@ extern "C" int dse_physics3d_raycast(float ox, float oy, float oz,
     if (out_normal) { out_normal[0] = best.normal.x; out_normal[1] = best.normal.y; out_normal[2] = best.normal.z; }
     if (out_distance) *out_distance = best.distance;
     return 1;
+}
+
+// ============================================================
+// dse_rigidbody3d_* — L5 RigidBody 动力学（服务委托 + 组件缓存）
+// ============================================================
+
+extern "C" void dse_rigidbody3d_add_force(uint32_t e, float fx, float fy, float fz) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->AddForce(TE(e), glm::vec3(fx, fy, fz));
+    }
+#endif
+}
+
+extern "C" void dse_rigidbody3d_add_impulse(uint32_t e, float ix, float iy, float iz) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->AddImpulse(TE(e), glm::vec3(ix, iy, iz));
+    }
+#endif
+}
+
+extern "C" void dse_rigidbody3d_add_torque(uint32_t e, float tx, float ty, float tz) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->AddTorque(TE(e), glm::vec3(tx, ty, tz));
+    }
+#endif
+}
+
+extern "C" void dse_rigidbody3d_set_velocity(uint32_t e, float vx, float vy, float vz) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->SetVelocity(TE(e), glm::vec3(vx, vy, vz));
+    }
+#endif
+    auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
+    if (rb) rb->velocity = glm::vec3(vx, vy, vz);
+}
+
+extern "C" void dse_rigidbody3d_get_velocity(uint32_t e, float* out_vel) {
+    if (!out_vel) return;
+    out_vel[0] = out_vel[1] = out_vel[2] = 0.0f;
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        glm::vec3 v = physics->GetVelocity(TE(e));
+        out_vel[0] = v.x; out_vel[1] = v.y; out_vel[2] = v.z;
+        return;
+    }
+#endif
+    const auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
+    if (rb) { out_vel[0] = rb->velocity.x; out_vel[1] = rb->velocity.y; out_vel[2] = rb->velocity.z; }
+}
+
+extern "C" void dse_rigidbody3d_set_angular_velocity(uint32_t e, float ax, float ay, float az) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->SetAngularVelocity(TE(e), glm::vec3(ax, ay, az));
+    }
+#endif
+}
+
+extern "C" void dse_rigidbody3d_get_angular_velocity(uint32_t e, float* out_vel) {
+    if (!out_vel) return;
+    out_vel[0] = out_vel[1] = out_vel[2] = 0.0f;
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        glm::vec3 v = physics->GetAngularVelocity(TE(e));
+        out_vel[0] = v.x; out_vel[1] = v.y; out_vel[2] = v.z;
+    }
+#endif
+}
+
+extern "C" void dse_rigidbody3d_set_gravity(uint32_t e, int enabled) {
+    World* world = GW();
+    if (!world) return;
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        physics->SetGravityEnabled(TE(e), enabled != 0);
+    }
+#endif
+    auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
+    if (rb) rb->use_gravity = (enabled != 0);
+}
+
+// ============================================================
+// dse_character_controller3d_* — L5 角色控制器（服务 + ECS 回退）
+// ============================================================
+
+extern "C" int dse_character_controller3d_move(uint32_t e, float dx, float dy, float dz,
+                                               float min_dist, float dt,
+                                               float* out_velocity, uint32_t* out_flags) {
+    World* world = GW();
+    if (!world) {
+        if (out_velocity) { out_velocity[0] = out_velocity[1] = out_velocity[2] = 0.0f; }
+        if (out_flags) *out_flags = 0;
+        return 0;
+    }
+
+    Entity entity = TE(e);
+
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        auto result = physics->MoveCharacter(entity, glm::vec3(dx, dy, dz), min_dist, dt);
+        // 地形贴地补正（Jolt CharacterVirtual 不感知 ECS 高度图）
+        auto* tf = world->registry().try_get<TransformComponent>(entity);
+        if (tf) {
+            float terrain_y = -1e10f;
+            auto hm_view = world->registry().view<TerrainHeightmapComponent>();
+            for (auto te : hm_view) {
+                const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
+                float h = hm.GetHeight(tf->position.x, tf->position.z);
+                if (h > terrain_y) terrain_y = h;
+            }
+            if (terrain_y > -1e9f && tf->position.y < terrain_y) {
+                tf->position.y = terrain_y;
+                tf->dirty = true;
+                result.is_grounded = true;
+                result.collision_flags = static_cast<uint8_t>(result.collision_flags)
+                    | static_cast<uint8_t>(CharacterCollisionFlag::Down);
+            }
+        }
+        if (out_velocity) {
+            out_velocity[0] = result.velocity.x;
+            out_velocity[1] = result.velocity.y;
+            out_velocity[2] = result.velocity.z;
+        }
+        if (out_flags) *out_flags = static_cast<uint32_t>(result.collision_flags);
+        return result.is_grounded ? 1 : 0;
+    }
+#endif
+
+    // ECS 回退（无物理服务）
+    auto* transform = world->registry().try_get<TransformComponent>(entity);
+    if (!transform) {
+        if (out_velocity) { out_velocity[0] = out_velocity[1] = out_velocity[2] = 0.0f; }
+        if (out_flags) *out_flags = 0;
+        return 0;
+    }
+
+    auto* cc = world->registry().try_get<CharacterController3DComponent>(entity);
+    glm::vec3 original_pos = transform->position;
+    glm::vec3 new_pos = original_pos + glm::vec3(dx, dy, dz);
+    uint8_t cflags = 0;
+
+    float char_radius = cc ? cc->radius : 0.3f;
+    float char_half_h = cc ? cc->height * 0.5f : 0.5f;
+    glm::vec3 sphere_c = new_pos + glm::vec3(0, char_radius + char_half_h, 0);
+
+    // Box 碰撞体推开
+    auto box_view = world->registry().view<TransformComponent, dse::BoxCollider3DComponent>();
+    for (auto other : box_view) {
+        if (other == entity) continue;
+        const auto& bt = box_view.get<TransformComponent>(other);
+        const auto& bc = box_view.get<dse::BoxCollider3DComponent>(other);
+        glm::vec3 bc_center = bt.position + bc.center;
+        glm::vec3 half = glm::abs(bt.scale * bc.size) * 0.5f;
+        glm::vec3 bmin = bc_center - half;
+        glm::vec3 bmax = bc_center + half;
+        glm::vec3 closest;
+        closest.x = std::max(bmin.x, std::min(sphere_c.x, bmax.x));
+        closest.y = std::max(bmin.y, std::min(sphere_c.y, bmax.y));
+        closest.z = std::max(bmin.z, std::min(sphere_c.z, bmax.z));
+        glm::vec3 diff = sphere_c - closest;
+        float dist_sq = glm::dot(diff, diff);
+        if (dist_sq < char_radius * char_radius && dist_sq > 1e-8f) {
+            float d = std::sqrt(dist_sq);
+            glm::vec3 n = diff / d;
+            float overlap = char_radius - d;
+            new_pos += n * overlap;
+            sphere_c += n * overlap;
+            cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
+        }
+    }
+
+    // Sphere 碰撞体推开
+    auto sph_view = world->registry().view<TransformComponent, dse::SphereCollider3DComponent>();
+    for (auto other : sph_view) {
+        if (other == entity) continue;
+        const auto& st = sph_view.get<TransformComponent>(other);
+        const auto& sc = sph_view.get<dse::SphereCollider3DComponent>(other);
+        glm::vec3 oc = st.position + sc.center;
+        float max_s = std::max(std::fabs(st.scale.x),
+                      std::max(std::fabs(st.scale.y), std::fabs(st.scale.z)));
+        float or_ = sc.radius * max_s;
+        glm::vec3 diff = sphere_c - oc;
+        float d = glm::length(diff);
+        float md = char_radius + or_;
+        if (d < md && d > 1e-6f) {
+            glm::vec3 n = diff / d;
+            float overlap_val = md - d;
+            new_pos += n * overlap_val;
+            sphere_c += n * overlap_val;
+            cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Sides);
+        }
+    }
+
+    // 地形高度贴地
+    bool grounded = false;
+    float terrain_y = -1e10f;
+    auto hm_view = world->registry().view<TerrainHeightmapComponent>();
+    for (auto te : hm_view) {
+        const auto& hm = hm_view.get<TerrainHeightmapComponent>(te);
+        float h = hm.GetHeight(new_pos.x, new_pos.z);
+        if (h > terrain_y) terrain_y = h;
+    }
+    if (terrain_y > -1e9f && new_pos.y <= terrain_y) {
+        new_pos.y = terrain_y;
+        grounded = true;
+        cflags |= static_cast<uint8_t>(CharacterCollisionFlag::Down);
+    }
+
+    transform->position = new_pos;
+    transform->dirty = true;
+
+    glm::vec3 vel = (dt > 1e-6f) ? (new_pos - original_pos) / dt : glm::vec3(0);
+    if (cc) {
+        cc->is_grounded = grounded;
+        cc->collision_flags = static_cast<CharacterCollisionFlag>(cflags);
+        cc->velocity = vel;
+    }
+
+    if (out_velocity) { out_velocity[0] = vel.x; out_velocity[1] = vel.y; out_velocity[2] = vel.z; }
+    if (out_flags) *out_flags = static_cast<uint32_t>(cflags);
+    return grounded ? 1 : 0;
+}
+
+extern "C" int dse_character_controller3d_jump(uint32_t e, float jump_speed) {
+#ifdef DSE_HAS_PHYSICS3D
+    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
+        return physics->JumpCharacter(TE(e), jump_speed) ? 1 : 0;
+    }
+#endif
+    return 0;
 }

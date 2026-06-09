@@ -479,6 +479,45 @@ DSE_CAPI int dse_physics3d_raycast(float ox, float oy, float oz,
                                    float* out_normal,
                                    float* out_distance);
 
+// RigidBody3D 动力学（服务委托 + 组件缓存回退）。
+// add_force/add_impulse/add_torque/set_angular_velocity：仅在物理服务存在时生效，否则 no-op。
+// set_velocity/set_gravity：委托服务（若有）并同步组件缓存。
+// get_velocity：服务优先，否则回退组件缓存；get_angular_velocity：服务优先，否则 0。
+DSE_CAPI void dse_rigidbody3d_add_force(uint32_t e, float fx, float fy, float fz);
+DSE_CAPI void dse_rigidbody3d_add_impulse(uint32_t e, float ix, float iy, float iz);
+DSE_CAPI void dse_rigidbody3d_add_torque(uint32_t e, float tx, float ty, float tz);
+DSE_CAPI void dse_rigidbody3d_set_velocity(uint32_t e, float vx, float vy, float vz);
+DSE_CAPI void dse_rigidbody3d_get_velocity(uint32_t e, float* out_vel);          // float[3]
+DSE_CAPI void dse_rigidbody3d_set_angular_velocity(uint32_t e, float ax, float ay, float az);
+DSE_CAPI void dse_rigidbody3d_get_angular_velocity(uint32_t e, float* out_vel);  // float[3]
+DSE_CAPI void dse_rigidbody3d_set_gravity(uint32_t e, int enabled);
+
+// CharacterController3D。move：服务优先（含 ECS 地形贴地补正），否则 ECS 回退
+// （碰撞体推开 + 地形贴地 + 着地检测）。返回 is_grounded(0/1)，填充非空 out_velocity[3] 与 out_flags。
+// jump：仅在物理服务存在时生效，返回 success(0/1)。
+DSE_CAPI int dse_character_controller3d_move(uint32_t e, float dx, float dy, float dz,
+                                             float min_dist, float dt,
+                                             float* out_velocity, uint32_t* out_flags);
+DSE_CAPI int dse_character_controller3d_jump(uint32_t e, float jump_speed);
+
+// ============================================================
+// Render 服务（L5，手写 dse_api_render.cpp）
+// ============================================================
+// world_to_screen：把 3D 世界坐标投影到屏幕像素，填充非空 out_sx/out_sy，返回 is_visible(0/1)。
+DSE_CAPI int dse_render_world_to_screen(float wx, float wy, float wz,
+                                        float* out_sx, float* out_sy);
+
+// MeshRenderer 材质/贴图加载（依赖 AssetManager）。
+// set_material_from_dmat：从 .dmat 载入 MaterialInstance 并拷入 MeshRenderer，成功返回 1。
+// set_texture：按 slot 名载入贴图并绑定到对应 handle，成功返回 1 并填充非空 out_*；slot 非法/加载失败返回 0。
+DSE_CAPI int dse_mesh_renderer_set_material_from_dmat(uint32_t e, const char* dmat_path,
+                                                      uint32_t material_index);
+DSE_CAPI int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const char* path,
+                                           uint32_t* out_handle, int* out_width, int* out_height);
+
+// 供 L5 手写实现（dse_api_render.cpp）访问内部 AssetManager 指针
+DSE_CAPI void* dse_get_asset_manager_ptr(void);
+
 // ============================================================
 // Input
 // ============================================================

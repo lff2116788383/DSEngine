@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/camera.h"
 #include "engine/ecs/sprite.h"
@@ -29,6 +30,8 @@ extern "C" {
 
 namespace dse::runtime::lua_binding {
 namespace {
+
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
 
 // ============================================================
 // MeshRenderer
@@ -86,32 +89,13 @@ int L_EcsSetMeshMaterial(lua_State* L) {
     auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
     if (!mesh) return 0;
 
-    // 检查第二个参数是否为字符串（dmat 路径）
+    // 检查第二个参数是否为字符串（dmat 路径）— 委托 dse_mesh_renderer_set_material_from_dmat
     if (lua_type(L, 2) == LUA_TSTRING) {
-        std::string dmat_path = lua_tostring(L, 2);
-        const std::size_t material_index = lua_gettop(L) >= 3 && lua_isinteger(L, 3)
-            ? static_cast<std::size_t>(lua_tointeger(L, 3))
+        const char* dmat_path = lua_tostring(L, 2);
+        const uint32_t material_index = lua_gettop(L) >= 3 && lua_isinteger(L, 3)
+            ? static_cast<uint32_t>(lua_tointeger(L, 3))
             : 0u;
-        auto material = GetAssetManager().LoadMaterialInstanceFromDmat(dmat_path, material_index);
-        if (material) {
-            mesh->material_instance_id = material->GetId();
-            mesh->material_data_source = MeshRendererComponent::MaterialDataSource::MaterialInstance;
-            mesh->shader_variant = material->GetShaderVariant();
-            mesh->color = material->GetBaseColor();
-            mesh->emissive = material->GetEmissiveColor();
-            mesh->albedo_texture_handle = material->GetTextureSlots().albedo;
-            mesh->normal_texture_handle = material->GetTextureSlots().normal;
-            mesh->metallic_roughness_texture_handle = material->GetTextureSlots().metallic_roughness;
-            mesh->emissive_texture_handle = material->GetTextureSlots().emissive;
-            mesh->occlusion_texture_handle = material->GetTextureSlots().occlusion;
-            mesh->metallic = material->GetScalarOverrides().metallic;
-            mesh->roughness = material->GetScalarOverrides().roughness;
-            mesh->ao = material->GetScalarOverrides().ao;
-            mesh->normal_strength = material->GetScalarOverrides().normal_strength;
-            mesh->material_alpha_cutoff = material->GetScalarOverrides().alpha_cutoff;
-            mesh->material_alpha_test = material->GetScalarOverrides().alpha_test;
-            mesh->material_double_sided = material->GetRasterOverrides().double_sided;
-        }
+        dse_mesh_renderer_set_material_from_dmat(EID(e), dmat_path, material_index);
         return 0;
     }
 
@@ -208,41 +192,20 @@ int L_EcsSetMeshTexture(lua_State* L) {
     }
 
     Entity e = helper::CheckEntity(L, 1);
-    const std::string slot = luaL_checkstring(L, 2);
+    const char* slot = luaL_checkstring(L, 2);
     const char* texture_path = luaL_checkstring(L, 3);
-    auto* mesh = helper::TryGetComponent<MeshRendererComponent>(*world, e);
-    if (!mesh) {
+
+    // 委托 dse_mesh_renderer_set_texture（slot 别名 / handle 绑定 / 贴图尺寸 逐值等价）
+    uint32_t handle = 0;
+    int width = 0, height = 0;
+    if (!dse_mesh_renderer_set_texture(EID(e), slot, texture_path, &handle, &width, &height)) {
         lua_pushboolean(L, 0);
         return 1;
     }
-
-    auto texture = GetAssetManager().LoadTexture(texture_path);
-    if (!texture) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    const unsigned int handle = texture->GetHandle();
-    if (slot == "albedo" || slot == "base_color" || slot == "diffuse") {
-        mesh->albedo_texture_handle = handle;
-    } else if (slot == "normal" || slot == "normal_map") {
-        mesh->normal_texture_handle = handle;
-    } else if (slot == "metallic_roughness" || slot == "roughness" || slot == "mr") {
-        mesh->metallic_roughness_texture_handle = handle;
-    } else if (slot == "emissive" || slot == "emission") {
-        mesh->emissive_texture_handle = handle;
-    } else if (slot == "occlusion" || slot == "ao") {
-        mesh->occlusion_texture_handle = handle;
-    } else {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    mesh->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
     lua_pushboolean(L, 1);
     helper::PushInt(L, static_cast<int>(handle));
-    helper::PushInt(L, texture->GetWidth());
-    helper::PushInt(L, texture->GetHeight());
+    helper::PushInt(L, width);
+    helper::PushInt(L, height);
     return 4;
 }
 

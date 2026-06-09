@@ -347,6 +347,142 @@ TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
     ShutdownLuaRuntime();
 }
 
+// L5：rigidbody_3d_set/get_velocity 经 C ABI 委托 — 无物理服务时走组件缓存。
+// 脚本 set→get→写回 marker，C++ 同时校验组件缓存与 Lua 返回链路。
+TEST_F(LuaBinding3DIntegrationTest, LuaRigidBody3DVelocityDelegatedRoundTrip) {
+    LuaTempScript startup("test_3d_rb_velocity.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_rigidbody_3d(e, 2, 1.0)
+            dse.ecs.rigidbody_3d_set_velocity(e, 1.5, 2.5, 3.5)
+            local vx, vy, vz = dse.ecs.rigidbody_3d_get_velocity(e)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker, vx, vy, vz, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool rb_found = false;
+    for (auto entity : world.registry().view<RigidBody3DComponent>()) {
+        const auto& rb = world.registry().get<RigidBody3DComponent>(entity);
+        EXPECT_NEAR(rb.velocity.x, 1.5f, 1e-3f);
+        EXPECT_NEAR(rb.velocity.y, 2.5f, 1e-3f);
+        EXPECT_NEAR(rb.velocity.z, 3.5f, 1e-3f);
+        rb_found = true;
+    }
+    EXPECT_TRUE(rb_found);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<RigidBody3DComponent>(entity)) continue;
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 1.5f, 1e-3f);   // get_velocity 返回链路
+        EXPECT_NEAR(tf.position.y, 2.5f, 1e-3f);
+        EXPECT_NEAR(tf.position.z, 3.5f, 1e-3f);
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：character_controller_3d_move 经 C ABI 委托 — 无物理服务时走 ECS 回退。
+// 空场景下按位移更新 transform 且不着地，move 把状态写入 CCT 组件，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaCharacterController3DMoveDelegatedEcsFallback) {
+    LuaTempScript startup("test_3d_cct_move.lua", R"(
+        function Awake()
+            local e = dse.ecs.create_entity()
+            dse.ecs.add_transform(e, 0.0, 5.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_character_controller_3d(e, 0.3, 1.0)
+            dse.ecs.character_controller_3d_move(e, 2.0, 0.0, 0.0, 0.0, 0.5)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool cct_found = false;
+    for (auto entity : world.registry().view<CharacterController3DComponent>()) {
+        const auto& cc = world.registry().get<CharacterController3DComponent>(entity);
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_FALSE(cc.is_grounded);                 // 空场景不着地
+        EXPECT_NEAR(cc.velocity.x, 4.0f, 1e-3f);      // dx/dt = 2/0.5
+        EXPECT_NEAR(tf.position.x, 2.0f, 1e-3f);
+        EXPECT_NEAR(tf.position.y, 5.0f, 1e-3f);
+        cct_found = true;
+    }
+    EXPECT_TRUE(cct_found);
+
+    ShutdownLuaRuntime();
+}
+
+// L5：world_to_screen 经 C ABI 委托 — 主相机投影可见性（前方可见 / 背后不可见）。
+// 脚本把两次可见性编码进 marker.position.x / .y，C++ 读回断言。
+TEST_F(LuaBinding3DIntegrationTest, LuaWorldToScreenDelegatedVisibility) {
+    LuaTempScript startup("test_3d_w2s.lua", R"(
+        function Awake()
+            local cam = dse.ecs.create_entity()
+            dse.ecs.add_transform(cam, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)
+            dse.ecs.add_camera_3d(cam, 60.0, 0)
+
+            local _, _, vis_front = dse.ecs.world_to_screen(0.0, 0.0, -5.0)
+            local _, _, vis_behind = dse.ecs.world_to_screen(0.0, 0.0, 5.0)
+
+            local marker = dse.ecs.create_entity()
+            dse.ecs.add_transform(marker,
+                (vis_front and 1.0 or 0.0),
+                (vis_behind and 1.0 or 0.0),
+                0.0, 1.0, 1.0, 1.0)
+        end
+        function Update(dt)
+        end
+    )");
+
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+
+    ASSERT_TRUE(BootstrapLuaRuntime());
+    TickLuaRuntime(0.016f);
+
+    bool marker_found = false;
+    for (auto entity : world.registry().view<TransformComponent>()) {
+        if (world.registry().all_of<Camera3DComponent>(entity)) continue;  // 跳过相机
+        const auto& tf = world.registry().get<TransformComponent>(entity);
+        EXPECT_NEAR(tf.position.x, 1.0f, 1e-3f);   // 前方可见
+        EXPECT_NEAR(tf.position.y, 0.0f, 1e-3f);   // 背后不可见
+        marker_found = true;
+    }
+    EXPECT_TRUE(marker_found);
+
+    ShutdownLuaRuntime();
+}
+
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()
