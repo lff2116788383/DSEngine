@@ -15,9 +15,9 @@
 | Phase 2a | WSL/Linux 独立构建 GNS 静态库 | ✅ | `libGameNetworkingSockets_s.a` 24.8MB |
 | Phase 2b | `engine/net` 抽象 + GNS 后端 + Linux 回环 smoke + `verify_linux_build.sh --with-net` | ✅ | commit `1c8e36c7`，smoke EXIT=0 |
 | **Phase 2c** | **Windows 桌面构建 GNS + smoke** | **✅** | 见 §3，`dse_net_smoke.exe` EXIT=0；`verify_windows_build.ps1 -WithNet` 已实测 |
-| Phase 3 | Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL) | ⏳ | 未开始 |
+| **Phase 3** | **Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL)** | **✅** | 见 §3.5，`bin/dse_net_smoke`=arm64 ELF（编译+链接通过）；`scripts/build_android_net.sh` 已实测 PASS |
 | Phase 4 | 固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI | ⏳ | 未开始 |
-| Phase 5 | 三端 verify `-WithNet` 回归全绿 | 🔄 | Linux ✅ / Windows ✅；Android 待 Phase 3 |
+| Phase 5 | 三端 verify `-WithNet` 回归全绿 | 🔄 | Linux ✅ / Windows ✅ / Android ✅（编译+链接口径） |
 
 子模块固定版本：GNS `v1.6.0`、protobuf `v3.21.12`(abseil 前最后一批)、libsodium `1.0.20-FINAL`。
 GNS 只初始化顶层，**不要** init 它的 webrtc/abseil/vjson 子模块。
@@ -44,7 +44,7 @@ cmake/CMakeLists.txt.gns # 按平台分流依赖；生成 dse_net 静态库 + ds
 `cmake/CMakeLists.txt.gns` 按平台分流（关键）：
 - **Linux/macOS 桌面**：直接用**系统** protobuf + libsodium（apt 装好后 GNS `find_package` 自动定位）。✅ 已实测。
 - **Windows 桌面**：libsodium + protobuf **均走「预构建 + find_package」**（`-DDSE_NET_SODIUM_DIR=` / `-DDSE_NET_PROTOBUF_DIR=`）。✅ 已实测。
-- **Android/iOS**：OpenSSL + 在树 protobuf(host protoc)。⏳ Phase 3。
+- **Android/iOS**：OpenSSL + **预构建 arm64 protobuf**(host protoc 生成 .proto)。✅ Android 已实测（见 §3.5）；iOS 同理但需 macOS+Xcode。
 
 ---
 
@@ -133,10 +133,65 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
 
 ---
 
+## 3.5 Android (Phase 3) — ✅ 已完成（可一键复现）
+
+> 一键（Git bash，Windows 主机 + NDK windows-x86_64 工具链）：
+> `bash scripts/build_android_net.sh`
+> 已实测产出 `bin/dse_net_smoke` = `ELF 64-bit ... ARM aarch64`（编译+链接通过；
+> 真机运行留作后续，与现有 Android 里程碑口径一致）。脚本自动完成 OpenSSL/protobuf
+> 预构建（已存在则跳过）+ 引擎配置 + 构建。
+
+### 3.5.1 依赖（仓库外，**不入库**；脚本会自动构建，已存在则跳过）
+- **NDK**：`r26d`（本环境 `C:\Android\android-ndk-r26d`，windows-x86_64 工具链）。
+  另需 `ninja`（`choco install ninja`）。
+- **arm64 OpenSSL `1.1.1w`（静态）** → `C:\Android\ossl-android-arm64`（`lib\libcrypto.a`/`libssl.a` + `include\`）。
+  - 走 OpenSSL 自带 `Configure android-arm64`（**Perl 流程**）。**坑**：Git 自带精简 perl 缺
+    `Pod::Usage`，`configdata.pm` 顶层 `use Pod::Usage` 编译期必触发 → 脚本在源码树
+    （`.` 在 `@INC`）放一个最小 `Pod/Usage.pm` 桩绕过（不影响产物）。
+  - NDK clang.exe 原生跑在 Windows；OpenSSL 的 unix Makefile 在 **Git bash** 下用
+    NDK 的 `aarch64-linux-android24-clang`（无扩展名 bash 包装脚本）即可编译/链接。
+  - 复现：`Configure android-arm64 -D__ANDROID_API__=24 no-shared no-tests no-engine no-asm`
+    → `make -j` → `make install_sw`。（注：WSL1 无法 exec NDK 的 linux clang ELF，故走 Windows 主机。）
+- **arm64 protobuf `v3.21.12`（静态 install + config）** → `C:\Android\protobuf-android-arm64`
+  （`lib\libprotobuf.a` + `lib\cmake\protobuf\protobuf-config.cmake`）。
+  - NDK 工具链 + `-Dprotobuf_BUILD_PROTOC_BINARIES=OFF -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_WITH_ZLIB=OFF`。
+    （runtime 的 well-known types `.pb.cc` 源码自带，构建不需要 protoc。）
+- **host protoc**：复用 Phase 2c 的 `…\dse_net_deps\protobuf\bin\protoc.exe`（须与在树
+  `depends/protobuf` 版本一致，仅用于生成 GNS 的 `.proto`）。
+
+### 3.5.2 接线改动（已提交、已实测）
+1. **`cmake/CMakeLists.txt.gns` 的 Android/iOS 分支**（与 Windows 一致走「预构建 + find_package(CONFIG)」）：
+   - OpenSSL：NDK 把 `find_*` 限制在 sysroot（`CMAKE_FIND_ROOT_PATH` ONLY），sysroot 外的预构建
+     OpenSSL 不会被 `find_package` 发现 → 把 `DSE_NET_OPENSSL_ROOT` 追加进 `CMAKE_FIND_ROOT_PATH`
+     并**显式**给出 `OPENSSL_INCLUDE_DIR`/`OPENSSL_CRYPTO_LIBRARY`/`OPENSSL_SSL_LIBRARY`。
+   - protobuf：**不再** `add_subdirectory(在树 protobuf)`（GNS `src/CMakeLists.txt` 优先
+     `find_package(Protobuf QUIET CONFIG)`，在树目标不被发现）→ 改为要求 `-DDSE_NET_PROTOBUF_DIR=<arm64 安装目录>`，
+     `list(PREPEND CMAKE_PREFIX_PATH)` + `list(APPEND CMAKE_FIND_ROOT_PATH)` 让 CONFIG 命中。
+   - protoc 目标：预构建 protobuf 关了 protoc（arm64 protoc 主机跑不了），但 GNS 的
+     `protobuf_generate_cpp` 在 CONFIG 模式会引用 `protobuf::protoc` 目标 → 先用 host protoc
+     造一个 GLOBAL 的 imported `protobuf::protoc`，`protobuf-config` 里的 `if(NOT TARGET …)` 守卫会复用它。
+2. **GNS `add_subdirectory` 前把 `CMAKE_SYSTEM_NAME` 临时映射为 `Linux`**：GNS v1.6.0 的 OS
+   判定链只认 Linux/Darwin/BSD/Windows，`Android` 会 `FATAL_ERROR "Could not identify your
+   target operating system"`；Android 本质是 Linux（posix/epoll），crypto 已强制 OpenSSL，与处理器无关。
+3. **GNS 源码两处 Android(Bionic) 兼容补丁**（`cmake/patches/gns-android.patch`，Android 配置时**幂等自动应用**到子模块工作树，
+   不改子模块指针）：
+   - `tier1/netadr.cpp`：Bionic 的 `INADDR_LOOPBACK/INADDR_BROADCAST` 是 `unsigned long`(8B)，
+     触发 `DWordSwap` 的 `sizeof==4` 静态断言 → 强转 `(uint32)`。
+   - `tier0/dbg.cpp`：`Plat_IsInDebugSession` 缺 Android 分支（`IsAndroid()!=IsLinux()`）→ `#error "HALP"`；
+     Android 有 `/proc`，复用 Linux 实现（`#elif IsLinux() || IsAndroid()`）。
+4. **NET=OFF Android 回归**：`DSE_ENABLE_NET=OFF` 的 Android 配置零影响（实测 configure EXIT=0，
+   无 GNS/dse_net 目标）；§3.5 全部接线仅在 `ANDROID/IOS` 且 NET=ON 时 include。
+
+### 3.5.3 关键命令（脚本已封装）
+```bash
+# Git bash；NDK + ninja 在 PATH
+bash scripts/build_android_net.sh
+# 末尾期望：PASS，bin/dse_net_smoke = ELF 64-bit ... ARM aarch64
+```
+
+---
+
 ## 4. 之后阶段（未开始）
-- **Phase 3 Android**：装 NDK（本机 WSL 已有 r26d）；交叉编译 arm64 OpenSSL；用 host protoc；
-  `-DDSE_ENABLE_NET=ON -DDSE_NET_OPENSSL_ROOT=<arm64 openssl> -DDSE_HOST_PROTOC=<host protoc>`。
-  iOS 同理走 OpenSSL，但需 macOS+Xcode，本环境无法出包，留作后续。
 - **Phase 4**：固化 `engine/net/` 抽象（lanes/优先级、质量指标事件、连接生命周期事件），
   可选给 Lua/C# 暴露 `dse_net_*` C ABI。
 - **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归，收尾（Linux ✅ / Windows ✅，缺 Android）。

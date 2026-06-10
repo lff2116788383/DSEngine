@@ -35,13 +35,69 @@ if(ANDROID OR IOS)
     endif()
     set(OPENSSL_ROOT_DIR "${DSE_NET_OPENSSL_ROOT}" CACHE PATH "" FORCE)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
+    # NDK 工具链把 find_* 限制在 sysroot（CMAKE_FIND_ROOT_PATH ONLY），sysroot 外的
+    # 预构建 OpenSSL 不会被 find_package 发现；故把它加入 find-root，并显式给出
+    # include/库路径，让 FindOpenSSL 直接命中（避免再去 sysroot 里找不到）。
+    list(APPEND CMAKE_FIND_ROOT_PATH "${DSE_NET_OPENSSL_ROOT}")
+    set(OPENSSL_INCLUDE_DIR   "${DSE_NET_OPENSSL_ROOT}/include"        CACHE PATH     "" FORCE)
+    set(OPENSSL_CRYPTO_LIBRARY "${DSE_NET_OPENSSL_ROOT}/lib/libcrypto.a" CACHE FILEPATH "" FORCE)
+    set(OPENSSL_SSL_LIBRARY    "${DSE_NET_OPENSSL_ROOT}/lib/libssl.a"    CACHE FILEPATH "" FORCE)
     if(NOT DSE_HOST_PROTOC)
         message(FATAL_ERROR "[net] Android/iOS 交叉编译需 -DDSE_HOST_PROTOC=<host protoc 路径>")
     endif()
     set(Protobuf_PROTOC_EXECUTABLE "${DSE_HOST_PROTOC}" CACHE FILEPATH "" FORCE)
-    set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(protobuf_BUILD_PROTOC_BINARIES OFF CACHE BOOL "" FORCE)
-    add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
+    # protobuf 运行时：与桌面一致走「预构建 arm64 install + find_package(CONFIG)」，
+    # 不用在树 add_subdirectory（GNS src/CMakeLists.txt 优先 find_package(Protobuf CONFIG)，
+    # 在树目标不被其发现）。host protoc 仅用于 .proto 代码生成。
+    if(NOT DSE_NET_PROTOBUF_DIR)
+        message(FATAL_ERROR "[net] Android/iOS 交叉编译需 -DDSE_NET_PROTOBUF_DIR=<arm64 protobuf 安装目录>")
+    endif()
+    set(Protobuf_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+    list(PREPEND CMAKE_PREFIX_PATH "${DSE_NET_PROTOBUF_DIR}")
+    list(APPEND  CMAKE_FIND_ROOT_PATH "${DSE_NET_PROTOBUF_DIR}")
+    # 预构建 arm64 protobuf 关掉了 protoc 二进制（arm64 protoc 在主机上跑不了），
+    # 但 GNS 的 protobuf_generate_cpp 走 CONFIG 模式时会引用 protobuf::protoc 目标。
+    # 这里先用 host protoc 造一个 GLOBAL 的 imported protoc 目标，protobuf-config 里
+    # 的 `if(NOT TARGET protobuf::protoc)` 守卫会复用它，从而用主机 protoc 生成 .pb.cc。
+    if(NOT TARGET protobuf::protoc)
+        add_executable(protobuf::protoc IMPORTED GLOBAL)
+        set_target_properties(protobuf::protoc PROPERTIES
+            IMPORTED_LOCATION "${DSE_HOST_PROTOC}")
+    endif()
+
+    # GNS v1.6.0 对 Android(Bionic) 有两处源码不兼容（不影响其它平台）：
+    #   1) tier1/netadr.cpp：Bionic 的 INADDR_LOOPBACK/INADDR_BROADCAST 是
+    #      unsigned long(8B)，触发 DWordSwap 的 sizeof==4 静态断言；需强转 uint32。
+    #   2) tier0/dbg.cpp：Plat_IsInDebugSession 缺 Android 分支（IsAndroid()!=IsLinux()），
+    #      触发 #error "HALP"；Android 有 /proc，复用 Linux 实现即可。
+    # 这些改动以 patch 形式随仓库提交（cmake/patches/gns-android.patch），在此对
+    # 子模块工作树幂等应用（已应用则跳过），避免改动 GNS 子模块指针。
+    if(ANDROID)
+        find_package(Git QUIET)
+        if(GIT_EXECUTABLE)
+            set(_GNS_PATCH "${CMAKE_CURRENT_LIST_DIR}/patches/gns-android.patch")
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" apply --reverse --check "${_GNS_PATCH}"
+                WORKING_DIRECTORY "${_GNS_DIR}"
+                RESULT_VARIABLE _gns_already_patched
+                OUTPUT_QUIET ERROR_QUIET)
+            if(NOT _gns_already_patched EQUAL 0)
+                execute_process(
+                    COMMAND "${GIT_EXECUTABLE}" apply "${_GNS_PATCH}"
+                    WORKING_DIRECTORY "${_GNS_DIR}"
+                    RESULT_VARIABLE _gns_patch_rc)
+                if(_gns_patch_rc EQUAL 0)
+                    message(STATUS "[net] 已对 GNS 应用 Android 兼容补丁 gns-android.patch")
+                else()
+                    message(FATAL_ERROR "[net] 应用 GNS Android 补丁失败（rc=${_gns_patch_rc}）：${_GNS_PATCH}")
+                endif()
+            else()
+                message(STATUS "[net] GNS Android 兼容补丁已应用，跳过")
+            endif()
+        else()
+            message(WARNING "[net] 未找到 git，无法自动应用 GNS Android 补丁；若编译报 netadr/dbg 错误请手动应用 ${_GNS_DIR} 上的 cmake/patches/gns-android.patch")
+        endif()
+    endif()
 
 elseif(WIN32)
     # Windows 桌面：libsodium + protobuf 均走「预构建 + find_package」路线。Phase 2c。
@@ -76,7 +132,18 @@ set(BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
 set(ENABLE_ICE       OFF CACHE BOOL "" FORCE)
 set(USE_STEAMWEBRTC  OFF CACHE BOOL "" FORCE)
 list(APPEND CMAKE_MODULE_PATH "${_GNS_DIR}/cmake")
+# GNS v1.6.0 的 OS 判定链只认 Linux/Darwin/BSD/Windows；Android 本质是 Linux
+# （posix sockets / epoll），否则会 FATAL_ERROR "Could not identify your target
+# operating system"。这里仅在 add_subdirectory 范围内把 CMAKE_SYSTEM_NAME 临时
+# 映射为 Linux，让 GNS 走 Linux 分支（不改子模块源码）；crypto 已强制 OpenSSL。
+if(ANDROID)
+    set(_DSE_SAVED_SYSTEM_NAME "${CMAKE_SYSTEM_NAME}")
+    set(CMAKE_SYSTEM_NAME "Linux")
+endif()
 add_subdirectory("${_GNS_DIR}" "${CMAKE_BINARY_DIR}/depends/GameNetworkingSockets" EXCLUDE_FROM_ALL)
+if(ANDROID)
+    set(CMAKE_SYSTEM_NAME "${_DSE_SAVED_SYSTEM_NAME}")
+endif()
 
 # ── 3) 引擎网络模块 dse_net（薄抽象层；唯一 include <steam/...> 之处）──
 file(GLOB_RECURSE _DSE_NET_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/engine/net/*.cpp")
