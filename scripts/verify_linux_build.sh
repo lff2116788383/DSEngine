@@ -135,6 +135,13 @@ if [ "$WITH_NET" = "1" ]; then
     [ -n "$NET_SMOKE" ] && [ -f "$NET_SMOKE" ] || die "未找到 dse_net_smoke 可执行文件。"
     "$NET_SMOKE" || die "网络层回环 smoke 失败（reliable/unreliable 回环未通过）。"
     ok "网络层回环 smoke 通过: $NET_SMOKE"
+
+    step "构建并运行 C ABI 回环 smoke (dse_net_capi_smoke)"
+    cmake --build "$BUILD_DIR" --target dse_net_capi_smoke -j "$JOBS" || die "构建 dse_net_capi_smoke 失败。"
+    CAPI_SMOKE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'dse_net_capi_smoke' 2>/dev/null | head -1)"
+    [ -n "$CAPI_SMOKE" ] && [ -f "$CAPI_SMOKE" ] || die "未找到 dse_net_capi_smoke 可执行文件。"
+    "$CAPI_SMOKE" || die "C ABI 回环 smoke 失败。"
+    ok "C ABI 回环 smoke 通过: $CAPI_SMOKE"
 fi
 
 echo -e "\n${c_cyan}==================== RESULT ====================${c_rst}"

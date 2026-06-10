@@ -17,7 +17,7 @@
 | **Phase 2c** | **Windows 桌面构建 GNS + smoke** | **✅** | 见 §3，`dse_net_smoke.exe` EXIT=0；`verify_windows_build.ps1 -WithNet` 已实测 |
 | **Phase 3** | **Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL)** | **✅** | 见 §3.5，`bin/dse_net_smoke`=arm64 ELF（编译+链接通过）；`scripts/build_android_net.sh` 已实测 PASS |
 | **Phase 4** | **固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI** | **✅** | 见 §3.6，`dse_net_smoke`(含 lane 回环) + `dse_net_capi_smoke` 两端 EXIT=0（Win 运行 / Android 编译+链接） |
-| Phase 5 | 三端 verify `-WithNet` 回归全绿 | 🔄 | Linux ✅ / Windows ✅ / Android ✅（编译+链接口径） |
+| **Phase 5** | **三端 verify `-WithNet`/`--with-net` 回归全绿** | **✅** | Linux ✅(全引擎+net+capi 运行) / Windows ✅(net+capi 运行) / Android ✅(net+capi 编译+链接)；三端脚本均含 `dse_net_capi_smoke` |
 
 子模块固定版本：GNS `v1.6.0`、protobuf `v3.21.12`(abseil 前最后一批)、libsodium `1.0.20-FINAL`。
 GNS 只初始化顶层，**不要** init 它的 webrtc/abseil/vjson 子模块。
@@ -222,6 +222,19 @@ bash scripts/build_android_net.sh
 
 ---
 
-## 4. 之后阶段（未开始）
-- **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归收尾（Linux ✅ / Windows ✅ / Android ✅ 编译+链接）。
-- **后续（可选）**：P2P/ICE（开 WebRTC 子模块）、复制层/快照-delta/客户端预测/AOI（玩法级网络）；iOS arm64（复用 Android 套路，需 macOS+Xcode）。
+## 3.7 三端回归收尾 (Phase 5) — ✅ 已完成
+
+三端 verify 脚本统一覆盖 `dse_net_smoke` + `dse_net_capi_smoke`，均已实测：
+- **Linux（Ubuntu 22.04 / WSL，运行）**：`WITH_NET=1 bash scripts/verify_linux_build.sh --with-net` EXIT=0 ——
+  全引擎(`libDSEngine_debug.a`) + Lua 运行时 ELF + `dse_net_smoke`(含 lane 1 回环) + `dse_net_capi_smoke` 全通过。
+  依赖（一次性）：`apt-get install -y build-essential cmake ninja-build libsodium-dev libprotobuf-dev protobuf-compiler libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev`。
+- **Windows（运行）**：`scripts/verify_windows_build.ps1 -NetOnly` EXIT=0 —— `dse_net_smoke.exe` + `dse_net_capi_smoke.exe` 全通过。
+- **Android（编译+链接）**：`scripts/build_android_net.sh` —— `bin/dse_net_smoke`、`bin/dse_net_capi_smoke` 均为 arm64 ELF。
+- **回归**：三端 `DSE_ENABLE_NET=OFF` 零影响。
+
+---
+
+## 4. 之后阶段（可选）
+- **P2P/ICE**：开 GNS 的 WebRTC 子模块（NAT 穿透/打洞）。
+- **玩法级网络**：复制层/快照-delta/客户端预测/AOI。
+- **iOS arm64**：复用 Android 套路（OpenSSL + 预构建 protobuf + host protoc），需 macOS+Xcode。
