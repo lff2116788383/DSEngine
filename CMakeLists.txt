@@ -836,11 +836,15 @@ install(TARGETS dse_engine
 )
 
 # 2. 引擎公共头文件
+#    排除 RHI 三个后端的具体实现头（dx11/ opengl/ vulkan/）——它们是内部实现，
+#    消费者只通过抽象层 rhi_factory.h / rhi_device.h 使用，且经核实无任何对外头文件
+#    引用这些后端头（grep: 0 引用），故安全地不纳入 SDK 公共头边界。
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/engine/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/engine
     COMPONENT sdk
     FILES_MATCHING PATTERN "*.h"
     PATTERN "*.h.in" EXCLUDE
+    REGEX "render/rhi/(dx11|opengl|vulkan)/" EXCLUDE
 )
 # 2b. CMake 生成的版本头文件
 install(FILES ${CMAKE_BINARY_DIR}/generated/engine/dse_version.h

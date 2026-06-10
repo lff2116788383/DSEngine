@@ -42,6 +42,14 @@ param(
 # Do not use "Stop": cmake's stderr warnings would be treated as terminating
 # errors by PowerShell. All error checks are handled manually via $LASTEXITCODE.
 $ErrorActionPreference = "Continue"
+
+# Normalize comma-joined values. When invoked via `powershell -File`, array
+# arguments like `-Configs Release,Debug` arrive as a single literal string
+# "Release,Debug" (PS array syntax is only parsed in -Command mode). Split them
+# so the same invocation works in both -File and -Command modes.
+$Configs  = @($Configs  | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' })
+$Profiles = @($Profiles | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' })
+
 $SourceDir = (Resolve-Path "$PSScriptRoot\..").Path
 $ConsumerDir = Join-Path $SourceDir "examples\sdk_consumer"
 $passed = 0
