@@ -231,6 +231,10 @@ if ($WithNet) {
     & $CMake --build $NetBuildDir --config $Config --target dse_net_capi_smoke -- /m
     if ($LASTEXITCODE -ne 0) { Die "构建 dse_net_capi_smoke 失败。" }
 
+    Write-Step "构建 dse_net_lua_smoke ($Config) — Lua 绑定 dse.net"
+    & $CMake --build $NetBuildDir --config $Config --target dse_net_lua_smoke -- /m
+    if ($LASTEXITCODE -ne 0) { Die "构建 dse_net_lua_smoke 失败。" }
+
     # 5.5 运行回环 smoke（reliable + unreliable + lane1），退出码 0 = 通过
     $smokeExe = Join-Path $SourceDir "bin/dse_net_smoke.exe"
     if (-not (Test-Path $smokeExe)) { Die "未找到 $smokeExe。" }
@@ -246,6 +250,14 @@ if ($WithNet) {
     & $capiExe
     if ($LASTEXITCODE -ne 0) { Die "C ABI smoke 失败 (exit=$LASTEXITCODE)。" }
     Write-OK "C ABI smoke: 通过"
+
+    # 5.7 运行 Lua 绑定回环 smoke（dse.net.* 全程，含 lane/事件回调），退出码 0 = 通过
+    $luaExe = Join-Path $SourceDir "bin/dse_net_lua_smoke.exe"
+    if (-not (Test-Path $luaExe)) { Die "未找到 $luaExe。" }
+    Write-Step "运行网络回环 smoke (Lua 绑定 dse.net)"
+    & $luaExe
+    if ($LASTEXITCODE -ne 0) { Die "Lua 绑定 smoke 失败 (exit=$LASTEXITCODE)。" }
+    Write-OK "Lua 绑定 smoke: 通过"
 }
 
 # ── 6. 异步 HTTP 客户端验证 ──────────────────────────────────────────────────

@@ -7,7 +7,7 @@
 #include "engine/scripting/lua/lua_debugger.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
-#ifdef DSE_ENABLE_HTTP
+#if defined(DSE_ENABLE_HTTP) || defined(DSE_NET_ENABLED)
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #endif
 #include "engine/ecs/script.h"
@@ -511,6 +511,10 @@ void TickLuaRuntime(float delta_time) {
 #ifdef DSE_ENABLE_HTTP
     // 触发本帧已完成的异步 HTTP 回调（在脚本 Update 之前，使脚本可立即消费结果）
     lua_binding::PumpHttp(state.state);
+#endif
+#ifdef DSE_NET_ENABLED
+    // 派发本帧网络事件（连接/断开/收消息）回调，在脚本 Update 之前。
+    lua_binding::PumpNet(state.state);
 #endif
     lua_getglobal(state.state, "Update");
     if (!lua_isfunction(state.state, -1)) {

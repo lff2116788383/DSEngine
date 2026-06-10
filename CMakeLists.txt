@@ -483,6 +483,26 @@ if(DSE_ENABLE_HTTP AND DSE_HAS_HTTP)
         endif()
     endif()
 endif()
+# --- 游戏网络传输 (GameNetworkingSockets) Lua 绑定 ---
+if(DSE_ENABLE_NET AND DSE_HAS_NET)
+    # dse.net 绑定(engine/scripting/.../lua_binding_net.cpp)随 dse_engine 编译，
+    # 调用 dse_net C ABI；故把 dse_net 链进 dse_engine（静态库依赖透传给可执行）。
+    target_link_libraries(dse_engine PRIVATE dse_net)
+    # 无头验证 Lua 绑定 dse.net（裸 lua_State + 本地 UDP 回环），不依赖窗口/RHI。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")
+        add_executable(dse_net_lua_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")
+        target_link_libraries(dse_net_lua_smoke PRIVATE dse_engine dse_net)
+        target_include_directories(dse_net_lua_smoke PRIVATE
+            "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/lua")
+        target_compile_features(dse_net_lua_smoke PRIVATE cxx_std_17)
+        if(MSVC)
+            set_property(TARGET dse_net_lua_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_net_lua_smoke PRIVATE /utf-8)
+        endif()
+    endif()
+endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)
     add_definitions(-D DSE_ENABLE_D3D11)

@@ -18,6 +18,7 @@
 | **Phase 3** | **Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL)** | **✅** | 见 §3.5，`bin/dse_net_smoke`=arm64 ELF（编译+链接通过）；`scripts/build_android_net.sh` 已实测 PASS |
 | **Phase 4** | **固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI** | **✅** | 见 §3.6，`dse_net_smoke`(含 lane 回环) + `dse_net_capi_smoke` 两端 EXIT=0（Win 运行 / Android 编译+链接） |
 | **Phase 5** | **三端 verify `-WithNet`/`--with-net` 回归全绿** | **✅** | Linux ✅(全引擎+net+capi 运行) / Windows ✅(net+capi 运行) / Android ✅(net+capi 编译+链接)；三端脚本均含 `dse_net_capi_smoke` |
+| **Phase 6** | **GNS 绑定 Lua (`dse.net`)：listen/connect/send(mode+lane)/flush/poll/configure_lanes/get_quality + 事件回调** | **✅** | 见 §3.8，`dse_net_lua_smoke.exe` EXIT=0（connected=2，lane1 可靠回环，message 回调拿到数据）；`verify_windows_build.ps1 -WithNet` 已含该 smoke |
 
 子模块固定版本：GNS `v1.6.0`、protobuf `v3.21.12`(abseil 前最后一批)、libsodium `1.0.20-FINAL`。
 GNS 只初始化顶层，**不要** init 它的 webrtc/abseil/vjson 子模块。
@@ -231,6 +232,40 @@ bash scripts/build_android_net.sh
 - **Windows（运行）**：`scripts/verify_windows_build.ps1 -NetOnly` EXIT=0 —— `dse_net_smoke.exe` + `dse_net_capi_smoke.exe` 全通过。
 - **Android（编译+链接）**：`scripts/build_android_net.sh` —— `bin/dse_net_smoke`、`bin/dse_net_capi_smoke` 均为 arm64 ELF。
 - **回归**：三端 `DSE_ENABLE_NET=OFF` 零影响。
+
+---
+
+## 3.8 GNS 绑定 Lua `dse.net` (Phase 6) — ✅ 已完成
+
+把 `dse_net_*` C ABI 暴露成 Lua 全局表 `dse.net`，脚本即可直接用 GNS 收发游戏流量。
+定位提醒：`dse.net` 是游戏 UDP 可靠/非可靠传输；跟 DeepSeek 等 HTTPS REST 通信请用 `dse.http`。
+
+### 3.8.1 Lua API（`engine/scripting/lua/bindings/lua_binding_net.cpp`）
+```lua
+dse.net.init([log_debug])              -- 创建并初始化后端（幂等）；-> bool
+dse.net.shutdown()                     -- 关闭并销毁
+dse.net.available()                    -- 是否编译进真实后端；-> bool
+dse.net.listen(port)                   -- 服务端监听；-> bool
+dse.net.connect(host, port)            -- 客户端连接；-> conn(0=失败)
+dse.net.close(conn [,reason])
+dse.net.configure_lanes(conn, priorities [,weights])  -- 多 lane 防队头阻塞；-> bool
+dse.net.send(conn, data [,mode] [,lane])              -- mode:"reliable"|"unreliable"|常量；-> bool
+dse.net.flush(conn)                    -- 立即发送（绕过 Nagle 合批）
+dse.net.poll()                         -- 每帧泵：派发事件（引擎 Tick 亦自动调用 PumpNet）
+dse.net.get_quality(conn)              -- -> { ping_ms, packet_loss, out_bytes_per_sec, in_bytes_per_sec, pending_reliable } | nil
+dse.net.on(event, fn)                  -- event: "connecting"(conn,host,port)/"connected"(conn)/"closed"(conn,reason)/"message"(conn,data,lane)
+-- 常量：dse.net.RELIABLE/UNRELIABLE，CLOSE_NORMAL/CLOSE_BY_PEER/CLOSE_PROBLEM/CLOSE_REJECTED
+```
+- 绑定随 `dse_engine` 编译，**仅 `DSE_NET_ENABLED` 下**为实体；否则空 TU（NET=OFF 零回归，已实测单 TU 空编译通过）。
+- 注册进 Phase1 API（`lua_binding_registry.cpp` → `dse.net`）；引擎 `TickLuaRuntime` 每帧 `PumpNet` 在脚本 `Update` 前派发回调（与 `PumpHttp` 同机制，主线程/脚本线程同步安全）。
+- 底层只调 `net_c_api.h` 扁平 C 接口，不直接 include GNS 头。
+
+### 3.8.2 验证（已实测，Windows 运行）
+- `bin/dse_net_lua_smoke.exe` EXIT=0 → `NET_LUA_SMOKE_PASS`：纯 `dse.net.*` 起 server+client 回环，
+  握手 `connected=2`，客户端 `configure_lanes({0,0},{1,1})` 后经 **lane 1** 发可靠消息，
+  服务端 `on("message")` 回调在 Lua 上下文拿到 `"NET_LUA_HELLO"` 且 `lane==1`。
+- 已并入 `verify_windows_build.ps1 -WithNet`（构建并运行 `dse_net_lua_smoke`）。
+- 示例：`docs/examples/lua/net_loopback.lua`。
 
 ---
 
