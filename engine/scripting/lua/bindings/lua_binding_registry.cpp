@@ -47,6 +47,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterFontBindings(L);
     lua_setfield(L, -2, "font");
 
+    RegisterSerializeBindings(L);
+    lua_setfield(L, -2, "serialize");
+
 #ifdef DSE_ENABLE_HTTP
     RegisterHttpBindings(L);
     lua_setfield(L, -2, "http");

@@ -503,6 +503,22 @@ if(DSE_ENABLE_NET AND DSE_HAS_NET)
         endif()
     endif()
 endif()
+# --- 自描述二进制序列化 (dse.serialize) Lua 绑定 ---
+# 绑定 engine/scripting/.../lua_binding_serialize.cpp 随 dse_engine 编译（无外部依赖、
+# 不受 NET/HTTP 开关影响）。此处仅在启用 Lua 时构建其无头往返 smoke。
+if(DSE_ENABLE_LUA AND EXISTS "${CMAKE_SOURCE_DIR}/tests/serialize/serialize_smoke.cpp")
+    add_executable(dse_serialize_smoke "${CMAKE_SOURCE_DIR}/tests/serialize/serialize_smoke.cpp")
+    target_link_libraries(dse_serialize_smoke PRIVATE dse_engine)
+    target_include_directories(dse_serialize_smoke PRIVATE
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/depends/lua")
+    target_compile_features(dse_serialize_smoke PRIVATE cxx_std_17)
+    if(MSVC)
+        set_property(TARGET dse_serialize_smoke PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        target_compile_options(dse_serialize_smoke PRIVATE /utf-8)
+    endif()
+endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)
     add_definitions(-D DSE_ENABLE_D3D11)

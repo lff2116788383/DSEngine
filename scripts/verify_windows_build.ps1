@@ -258,6 +258,17 @@ if ($WithNet) {
     & $luaExe
     if ($LASTEXITCODE -ne 0) { Die "Lua 绑定 smoke 失败 (exit=$LASTEXITCODE)。" }
     Write-OK "Lua 绑定 smoke: 通过"
+
+    # 5.8 构建并运行序列化 smoke（dse.serialize 往返；与 NET 无关，仅借此 LUA 构建目录验证）
+    Write-Step "构建 dse_serialize_smoke ($Config) — Lua 绑定 dse.serialize"
+    & $CMake --build $NetBuildDir --config $Config --target dse_serialize_smoke -- /m
+    if ($LASTEXITCODE -ne 0) { Die "构建 dse_serialize_smoke 失败。" }
+    $serExe = Join-Path $SourceDir "bin/dse_serialize_smoke.exe"
+    if (-not (Test-Path $serExe)) { Die "未找到 $serExe。" }
+    Write-Step "运行序列化 smoke (dse.serialize)"
+    & $serExe
+    if ($LASTEXITCODE -ne 0) { Die "序列化 smoke 失败 (exit=$LASTEXITCODE)。" }
+    Write-OK "序列化 smoke: 通过"
 }
 
 # ── 6. 异步 HTTP 客户端验证 ──────────────────────────────────────────────────

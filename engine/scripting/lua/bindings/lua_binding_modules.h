@@ -30,6 +30,7 @@ void RegisterStreamingBindings(lua_State* L);
 void RegisterLocalizationBindings(lua_State* L);
 void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
+void RegisterSerializeBindings(lua_State* L);  // dse.serialize 自描述二进制序列化（编解码 Lua 值/表）
 #ifdef DSE_ENABLE_HTTP
 void RegisterHttpBindings(lua_State* L);   // dse.http 异步 HTTP(S) 客户端
 void PumpHttp(lua_State* L);               // 触发已完成 HTTP 回调（引擎 Tick 调用）
