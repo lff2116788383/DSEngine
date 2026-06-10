@@ -282,7 +282,7 @@ cmake --build build_vs2022 --config Debug --target dse_gtest_unit_tests dse_gtes
 ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 ```
 
-2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke) covering ECS, physics, serialization, asset pipeline, rendering, and more.
+The default `build_fast_tests.bat` config (3D off) runs 2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke) covering ECS, physics, serialization, asset pipeline, rendering, and more. A full build with `-DDSE_ENABLE_3D=ON` compiles additional 3D-gated suites (~2,600 total).
 
 ---
 

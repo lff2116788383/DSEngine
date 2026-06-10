@@ -191,7 +191,7 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 python tools\verify_lua_3d_demos.py --entries all
 ```
 
-The suites total 2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke); binaries are `bin\dse_gtest_{unit,integration,smoke}_tests.exe`.
+The default config (3D off) totals 2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke); a full `-DDSE_ENABLE_3D=ON` build adds 3D-gated suites (~2,600 total). Binaries are `bin\dse_gtest_{unit,integration,smoke}_tests.exe`.
 
 ---
 
