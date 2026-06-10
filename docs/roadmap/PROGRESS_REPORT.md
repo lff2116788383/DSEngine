@@ -187,13 +187,13 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 - ✅ 公共头文件：`dse.h` / `dse_version.h` / `service_locator.h` 等
 - ✅ 第三方头文件分发：glm / EnTT
 
-**但当前 `scripts/verify_sdk.ps1` 的测试配置是：**
+**`scripts/verify_sdk.ps1` 现已覆盖完整的 profile × config 矩阵：**
 ```
--DDSE_ENABLE_PHYSX=OFF
--DDSE_ENABLE_3D=OFF
+Minimal (2D：3D/PhysX/Vulkan OFF)  ×  Debug / Release
+Full    (3D + Jolt：3D/Jolt ON)    ×  Debug / Release
 ```
 
-也就是说当前的 SDK 验证仅覆盖**最小化 2D 配置**，3D 路径未在 SDK 验证流程中覆盖。
+即 SDK 验证已覆盖**最小化 2D** 与 **完整 3D + Jolt** 两套配置，且 Debug/Release 均通过；关键修复：脚本现强制 `DSE_BUILD_SHARED=ON`（install 的 TARGETS/EXPORT/公共头规则都在该开关之下，静态构建产出的 SDK 不可用）。
 
 ### 4.2 发布 SDK 测试版必须完成的清单
 
@@ -203,11 +203,11 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 
 | 序号 | 任务 | 当前状态 | 预估工期 | 说明 |
 |:----:|------|:--------:|:--------:|------|
-| **1** | **SDK 支持完整配置（含 3D + Jolt）** | ⬜ 待办 | **1 天** | `verify_sdk.ps1` 当前关闭 3D。需验证 3D + Jolt 默认配置下打包/消费者编译/运行正常 |
+| **1** | **SDK 支持完整配置（含 3D + Jolt）** | ✅ 已完成 | — | `verify_sdk.ps1` 现测试 Minimal(2D) + Full(3D+Jolt) × Debug/Release 四组合，均打包/安装/消费者编译/运行通过 |
 | **2** | **~~SSBO → UBO fallback~~** | ✅ 已完成 | — | `gl_shader_manager.cpp` 有 `TransformSSBOToUBO` 动态降级，`light_buffer.cpp` 按 `SupportsSSBO()` 自动切换 |
-| **3** | **SDK 头文件边界清理** | ⬜ 待办 | **0.5 天** | 确保 `cmake --install` 只安装公共 API 头文件，不暴露内部实现 |
-| **4** | **SDK 版本号 + 更新日志** | ⬜ 待办 | **0.3 天** | `dse_version.h` 存在，首次 SDK 发布建议 v0.1.0-alpha |
-| **5** | **Release 构建脚本验证** | ⬜ 待办 | **0.3 天** | 确保 Release 配置下 SDK 构建通过 |
+| **3** | **SDK 头文件边界清理** | ✅ 已完成 | — | install 排除 RHI 三后端实现头（dx11/opengl/vulkan），仅留抽象层（rhi_factory/rhi_device/rhi_types）；经核实无公共头引用被排除头 |
+| **4** | **SDK 版本号 + 更新日志** | ✅ 已完成 | — | 新增 `DSEngine_VERSION_PRERELEASE="alpha"`，`DSE_VERSION_STRING` → `0.1.0-alpha`；新增 `CHANGELOG.md` |
+| **5** | **Release 构建脚本验证** | ✅ 已完成 | — | `verify_sdk.ps1` Release 配置下 Minimal/Full 两 profile 均通过 |
 
 #### 🟡 P1：应该修好的（否则用户体验差）
 
@@ -232,12 +232,12 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 
 | 优先级 | 待办任务数 | 总工期 |
 |:-----:|:-----:|:------:|
-| 🔴 P0 | 4 项 | ~2.1 天 |
+| 🔴 P0 | 0 项（全部完成） | — |
 | 🟡 P1 | 4 项 | ~1.8 天 |
 | 🟢 P2 | 2 项 | ~1.5 天 |
-| **合计** | **10 项** | **~5.4 天** |
+| **合计** | **6 项** | **~3.3 天** |
 
-> **如果全力投入，最快约 1 周可发布第一个 SDK alpha 版本；只做 P0 约 2-3 天即可。**
+> **P0 已全部完成：v0.1.0-alpha 的 SDK 现可在本机端到端打包→安装→消费者编译运行（Minimal/Full × Debug/Release 四组合全通过）。剩余 P1/P2 为体验优化项，不阻塞 alpha 交付。**
 
 ### 4.4 引擎路线图（按代码现状标注）
 
@@ -308,4 +308,4 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 >
 > **当前最大技术债务：① 跨平台覆盖（抽象层已就位、Win/Linux/Android 构建路径齐备但未纳入 CI，macOS/iOS 未支持）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
 >
-> **SDK 测试版已具备打包脚本与验证框架，但 `verify_sdk.ps1` 仅覆盖 2D 最小配置。SSBO→UBO fallback 已实现。补齐 P0（含 3D+Jolt 完整配置验证）约需 2-3 天，完整的 v0.1.0-alpha 可在 1 周内就绪。**
+> **SDK 测试版 P0 已全部完成：`verify_sdk.ps1` 覆盖 Minimal/Full × Debug/Release 四组合端到端验证、强制共享库构建、头文件边界清理（排除 RHI 后端实现头）、版本号 `0.1.0-alpha` + CHANGELOG。`package_sdk.ps1 -Enable3D` 可产出可被 `find_package(DSEngine)` 消费的发行包。v0.1.0-alpha 已就绪，剩余 P1/P2 为体验优化项。**
