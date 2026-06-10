@@ -74,7 +74,7 @@ DSEngine/
 ├── modules/           Optional engine modules (terrain, animation, etc.)
 ├── samples/lua/       Lua demo collection (15+ demos)
 ├── data/              Shaders, textures, models, fonts
-├── tests/             720+ unit tests
+├── tests/             2269 GoogleTest cases (unit/integration/smoke)
 └── docs/              Architecture & roadmap docs
 ```
 
@@ -136,10 +136,10 @@ cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
 cmake --build build_vs2022 --config Release --target dse_editor_cpp
 ```
 
-> 构建成功后，`bin/` 目录里应包含：
-> - `dsengine-editor.exe` — 编辑器
-> - `DSEngine_Game.exe` — 独立游戏运行时
-> - `AssetBuilder.exe` — 资产转换工具
+> 构建成功后，`bin/` 目录里应包含（上面是 Release 构建）：
+> - `dsengine-editor.exe` — 编辑器（无配置后缀）
+> - `DSEngine_Game_release.exe` — 独立游戏运行时（Debug 构建为 `DSEngine_Game_debug.exe`）
+> - `AssetBuilder.exe` — 资产转换工具（无配置后缀）
 
 ### 步骤 2：创建项目
 
@@ -273,11 +273,16 @@ CLI flags: `--scene=`, `--pak=`, `--script=`, `--width=`, `--height=`, `--title=
 ## Tests
 
 ```powershell
-cmake --build build_vs2022 --config Debug --target dse_tests
-bin\dse_tests_debug.exe
+# One-shot: configure (gtests on) + build the three suites + run via ctest
+build_fast_tests.bat
+
+# Or manually:
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_GTESTS=ON
+cmake --build build_vs2022 --config Debug --target dse_gtest_unit_tests dse_gtest_integration_tests dse_gtest_smoke_tests --parallel
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 ```
 
-720+ unit tests covering ECS, physics, serialization, asset pipeline, and more.
+2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke) covering ECS, physics, serialization, asset pipeline, rendering, and more.
 
 ---
 
@@ -302,4 +307,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 > For architecture details see [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
 > For the shader system see [`docs/architecture/SHADER_SYSTEM.md`](docs/architecture/SHADER_SYSTEM.md).
-> For the development roadmap see [`docs/NEXT_DIRECTION.md`](docs/NEXT_DIRECTION.md).
+> For the development roadmap see [`docs/roadmap/PROGRESS_REPORT.md`](docs/roadmap/PROGRESS_REPORT.md).
