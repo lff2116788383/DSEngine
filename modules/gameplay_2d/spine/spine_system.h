@@ -29,8 +29,6 @@ public:
      * @param dt 增量时间
      */
     void Update(entt::registry& registry, float dt);
-    void DebugInstanceNoopProbe(entt::registry& registry, float dt);
-    static void DebugNoopProbe(entt::registry& registry, float dt);
 
     void Render(World& world, CommandBuffer& cmd_buffer);
 

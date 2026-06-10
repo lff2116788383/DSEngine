@@ -247,18 +247,6 @@ void SpineSystem::SetAssetManager(AssetManager* asset_manager) {
     asset_manager_ = asset_manager;
 }
 
-void SpineSystem::DebugInstanceNoopProbe(entt::registry& registry, float dt) {
-    (void)registry;
-    DEBUG_LOG_TRACE("[spine-probe] instance begin this={} dt={}", static_cast<void*>(this), static_cast<double>(dt));
-    DEBUG_LOG_TRACE("[spine-probe] instance end this={}", static_cast<void*>(this));
-}
-
-void SpineSystem::DebugNoopProbe(entt::registry& registry, float dt) {
-    (void)registry;
-    DEBUG_LOG_TRACE("[spine-probe] static begin dt={}", static_cast<double>(dt));
-    DEBUG_LOG_TRACE("[spine-probe] static end");
-}
-
 void SpineSystem::Update(entt::registry& registry, float dt) {
     DEBUG_LOG_TRACE("[spine-update] begin this={} dt={}", static_cast<void*>(this), static_cast<double>(dt));
     auto view = registry.view<SpineRendererComponent>();
