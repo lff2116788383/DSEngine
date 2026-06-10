@@ -21,7 +21,7 @@
 | **第三方依赖** | ~30 个（depends/ 目录，其中 24 个为 git submodule） |
 | **渲染后端** | OpenGL 4.5 / Vulkan / D3D11（基础渲染 + 全部后处理 + Compute 功能三端统一） |
 | **测试体系** | ~2,600 个测试用例实跑（unit 2,048 + integration 510 + smoke 42；定义的 TEST 宏 2,780，含 disabled/参数化） |
-| **引擎库形态** | 默认**静态库** `DSEngine.lib`（Debug 后缀 `_debug`）；可选 `-DDSE_BUILD_SHARED=ON` 输出 `DSEngine.dll`。第三方库（glfw/freetype/lua/luasocket/spine/imgui 等）编译进引擎库 |
+| **引擎库形态** | 默认**静态库** `DSEngine.lib`（Debug 后缀 `_debug`）；可选 `-DDSE_BUILD_SHARED=ON` 输出 `DSEngine.dll`。第三方库（glfw/freetype/lua/spine/imgui 等）编译进引擎库；网络依赖（GNS/protobuf/libsodium/IXWebSocket/OpenSSL）与 luasocket 均为可选，默认 OFF |
 | **脚本绑定** | Lua（原生 Lua C API + 代码生成 `.gen.cpp`，**非 sol2**）+ C#（`GameScripts/DSEngine/Native.gen.cs` 代码生成）；底层 `dse_*` C ABI ~330 个函数 |
 
 ### 1.2 功能完整度评分
@@ -46,12 +46,34 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 风格化渲染            ██████░░░░░░ 55%  ✅ Toon/Cel+Banding+Outline+VolumetricFog+LightShaft
 音频系统              █████████░░░ 78%  ✅ BGM/SFX+3D空间+DSP混音总线+效果链(LPF/HPF/BPF/Delay)+Lua API
 跨平台                ██░░░░░░░░░░ 15%  ❌ 仅 Windows（engine/ 12 文件 33 处 Win32 硬编码）
-网络                  █░░░░░░░░░░░ 10%  ⚠️ 无多人 netcode；编辑器有 ControlServer(IXWebSocket JSON-RPC)
+网络                  ████░░░░░░░░ 40%  ✅ 传输层 GNS(可靠/非可靠UDP+lanes+加密,三端)+Lua dse.net/dse.http/dse.serialize；❌ 无玩法级复制/同步层
 ```
 
 ### 1.3 最近提交的增量（`feature/engine-lib` git log）
 
-> 本分支近期主线为「引擎静态库化 + `dse_*` C ABI 抽取 + Codegen 驱动的 Lua/C# 绑定 + 动画/Gameplay3D 模块上提」（S1.x 里程碑）。
+> 本分支**最新主线**为「网络层（GNS 集成 Phase 1–6）+ Lua 网络/REST/序列化绑定」；
+> 此前主线为「引擎静态库化 + `dse_*` C ABI 抽取 + Codegen 驱动的 Lua/C# 绑定 + 动画/Gameplay3D 模块上提」（S1.x 里程碑）。
+
+**网络层增量（最新，自顶向下为最近提交）：**
+
+| 提交 | 功能 | 复杂度 |
+|:----:|------|:------:|
+| `ec8dcdf3` | `dse.serialize`：自描述二进制序列化 Lua 绑定（编解码任意 Lua 值/嵌套表） | 🟡 中 |
+| `6ba5f2fe` | 将 GNS 绑到 Lua（`dse.net`）：游戏 UDP 传输 + 事件回调 + 回环 smoke | 🔴 高 |
+| `72494462` | 自动化 Windows OpenSSL 预构建（HTTP 一条命令，无需手动安装） | 🟡 中 |
+| `f91612d8` | `dse.http`：异步 HTTP(S) Lua 模块（IXWebSocket + OpenSSL TLS） | 🔴 高 |
+| `f90208fc` | net Phase 5：三端 verify `--with-net` 回归全绿 | 🟡 中 |
+| `f321f80e` | net Phase 4：固化 `engine/net` 抽象层（lanes/质量/事件）+ 可选 `dse_net_*` C ABI | 🔴 高 |
+| `407f1c24` | net Phase 3：Android arm64-v8a 交叉编译打通 GNS（编译+链接） | 🔴 高 |
+| `3a5bcdf4` | net Phase 2c：打通 Windows GNS 回环 smoke | 🔴 高 |
+| `1c8e36c7` | net Phase 2b：`engine/net` 薄抽象 + GNS 后端 + Linux 回环 smoke | 🔴 高 |
+| `b492a793` | net Phase 1：引入 protobuf/libsodium 子模块 + `DSE_ENABLE_NET` 开关（默认 OFF，三端零回归） | 🟡 中 |
+| `c2003127` | net 选型：GNS 网络层集成方案 + 引入 GameNetworkingSockets 子模块 (v1.6.0) | 🟢 低 |
+
+> 网络层默认 **OFF**（`DSE_ENABLE_NET` / `DSE_ENABLE_HTTP`），关闭时对现有构建零回归；`dse.serialize` 始终可用。
+> 详见 `docs/roadmap/NETWORK_GNS_PROGRESS.md`、`HTTP_LUA_MODULE.md`、`SERIALIZE_LUA_MODULE.md`，API 见 `docs/api/LUA_API.md` §14–17。
+
+**此前 S1.x 里程碑增量：**
 
 | 提交 | 功能 | 复杂度 |
 |:----:|------|:------:|
@@ -91,7 +113,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **实时全局光照** | ✅ DDGI Probe（GL/VK/DX11 三端 Compute 均可用） | ✅ HDRP GI | ✅ Lumen |
 | **跨平台** | ❌ 仅 Windows | ✅ 20+ 平台 | ✅ 20+ 平台 |
 | **资源流式加载** | ✅ StreamingManager（Zone 距离触发 + 异步 IO） | ✅ Addressables | ✅ World Partition |
-| **网络模块** | ⚠️ 仅编辑器 ControlServer，无多人 netcode | ✅ 完整 | ✅ 完整 |
+| **网络模块** | 🟡 传输层完备（GNS UDP + Lua dse.net/http/serialize），无玩法级复制/同步层 | ✅ 完整 | ✅ 完整 |
 | **编辑器** | ImGui（功能全但体验一般） | ✅ 可视化极成熟 | ✅ 可视化极成熟 |
 | **生态/社区** | ❌ 无 | ✅ Asset Store | ✅ Marketplace |
 | **包体大小** | ~10-20MB | ~100MB+ | ~1GB+ |
@@ -140,7 +162,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **仅 Windows** | 🔴 致命 | engine/ 仍有 12 文件 33 处 `_WIN32`/`<windows.h>` 硬编码（modules/ 基本为 0）；无法部署到移动端/主机，直接限制了 95% 的游戏分发渠道 |
 | **~~无 GPU Driven 渲染~~** | ✅ 已完成 | Hi-Z Occlusion Culling + Compute 视锥剔除 + Mega VBO/IBO + MultiDrawIndexedIndirect，CPU readback 双保险 |
 | **~~实时全局光照仅 GL~~** | ✅ 已完成 | DDGI Probe 的 Compute 着色器已提供 GLSL/SPIR-V/HLSL 三套源，GL/Vulkan/D3D11 三端均可运行 |
-| **无多人网络** | 🟡 严重 | 无游戏联机 netcode；仅编辑器侧有 ControlServer（IXWebSocket JSON-RPC，用于自动化/AI 桥接） |
+| **玩法级网络缺失** | 🟡 中 | 传输层已完备（GNS：可靠/非可靠 UDP + lanes + 加密，Win/Linux 运行、Android 编译；Lua 侧 `dse.net`/`dse.http`/`dse.serialize`），但缺玩法级复制/快照-delta/预测/AOI、大厅/匹配；同步逻辑需脚本层自行实现。编辑器侧另有 ControlServer（IXWebSocket JSON-RPC，自动化/AI 桥接） |
 | **~~无资源流式加载~~** | ✅ 已完成 | StreamingManager：Zone 距离触发 + 异步 IO 优先级队列 + 每帧预算 + 资源引用持有 + Lua API |
 | **音频系统** | 🟢 中等 | BGM/SFX + 3D 空间 + DSP 混音总线 + LPF/HPF/BPF/Delay 节点图已实现 |
 | **风格化渲染** | 🟢 中等 | Toon/Cel+Banding 已完成，待 Outline/Edge Detection 深化 |
@@ -252,6 +274,14 @@ Phase 5 — Shader 统一化 + 已知技术债务
   ├── ✅ DDGI / TressFX / Grass 三组 Compute → VK SPIR-V + DX11 HLSL 移植（已完成）
   ├── 🔄 引擎静态库化 + dse_* C ABI 抽取（feature/engine-lib 进行中：S1.x 里程碑）
   └── ⬜ 跨平台抽象层（engine/ 12 文件 33 处 Win32 硬编码，modules/ ~0）
+
+Phase 6 — 网络层（GNS 集成）✅ 传输层 / ⬜ 玩法级
+  ├── ✅ GNS 集成 Phase 1–5（Win/Linux 运行 + Android arm64 编译，engine/net 抽象层 + dse_net_* C ABI）
+  ├── ✅ Lua dse.net（游戏 UDP 可靠/非可靠 + lanes + 质量 + 事件回调，回环 smoke 全绿）
+  ├── ✅ Lua dse.http（异步 HTTP(S)，IXWebSocket + OpenSSL TLS，供 DeepSeek 等 AI NPC）
+  ├── ✅ Lua dse.serialize（自描述二进制序列化，配合 dse.net 收发结构化消息）
+  └── ⬜ 玩法级复制/同步层（状态复制/快照-delta/预测/插值/AOI）、P2P/ICE、iOS arm64（按需，暂未做）
+       注：网络默认 OFF（DSE_ENABLE_NET / DSE_ENABLE_HTTP），关闭零回归
 ```
 
 #### 依赖关系（均已落地）
@@ -273,8 +303,8 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 
 > **DSEngine 当前自研代码约 19.7 万行（C++ + Lua），功能覆盖 2D→3D→编辑器→物理→脚本→三端渲染→实时 GI→资源流式加载的完整管线，在"个人/小团队自研引擎"维度里完成度是顶级水准。**
 >
-> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——缺少跨平台与多人网络，这些需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台、编辑器体验和社区生态上落后。**
+> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——网络已具备完整传输层地基（GNS + Lua 绑定），但缺玩法级复制/同步层；跨平台仍以 Windows 为主。这些深度需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台、编辑器体验和社区生态上落后。**
 >
-> **当前最大技术债务：① 跨平台抽象层（engine/ 12 文件 33 处 Win32 硬编码）；② 多人网络 netcode 缺失（仅编辑器有 IXWebSocket ControlServer）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
+> **当前最大技术债务：① 跨平台抽象层（engine/ 12 文件 33 处 Win32 硬编码）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
 >
 > **SDK 测试版已具备打包脚本与验证框架，但 `verify_sdk.ps1` 仅覆盖 2D 最小配置。SSBO→UBO fallback 已实现。补齐 P0（含 3D+Jolt 完整配置验证）约需 2-3 天，完整的 v0.1.0-alpha 可在 1 周内就绪。**
