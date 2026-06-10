@@ -247,4 +247,87 @@ TEST_F(DX11RhiSmokeTest, 离屏清屏回读像素正确) {
     device_.resource_mgr().DeleteRenderTarget(rt);
 }
 
+// Draw-call 级回读校验：用全屏四边形 + passthrough 着色器把 source RT 拷到 dest RT，
+// 再回读 dest 断言像素正确。比清屏更进一步——覆盖顶点装配 + 光栅化 + 片元采样 +
+// passthrough 片元着色器（"copy" effect 走 DX11 的标准全屏路径，与引擎最终 present
+// 拷贝同一代码路）。source 为纯色，故采样/过滤不影响结果。
+TEST_F(DX11RhiSmokeTest, 全屏拷贝回读像素正确) {
+    if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No D3D11";
+    }
+    constexpr int kRtSize = 64;
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = false;
+    unsigned int src = device_.CreateRenderTarget(rt_desc);
+    unsigned int dst = device_.CreateRenderTarget(rt_desc);
+    ASSERT_NE(src, 0u);
+    ASSERT_NE(dst, 0u);
+
+    const glm::vec4 kSrcColor(0.75f, 0.25f, 0.50f, 1.0f); // ~ (191,64,128,255)
+
+    // 全屏拷贝需关深度测试 / 背面剔除 / 混合（与引擎 present 用的 composite 状态一致），
+    // 否则全屏四边形会被剔除或深度测试丢弃。
+    PipelineStateDesc ps_desc;
+    ps_desc.blend_enabled = false;
+    ps_desc.depth_test_enabled = false;
+    ps_desc.depth_write_enabled = false;
+    ps_desc.culling_enabled = false;
+    unsigned int ps = device_.CreatePipelineState(ps_desc);
+    ASSERT_NE(ps, 0u);
+
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(cmd, nullptr);
+
+    // pass 1：清 source 到已知颜色
+    {
+        RenderPassDesc rp;
+        rp.render_target = src;
+        rp.clear_color = kSrcColor;
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        cmd->EndRenderPass();
+    }
+    // pass 2：dest 先清黑，再用全屏 passthrough 把 source 拷过来（必须覆盖掉黑色）
+    {
+        RenderPassDesc rp;
+        rp.render_target = dst;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        cmd->SetPipelineState(ps);
+        cmd->DrawPostProcess(dse::render::PostProcessRequest("copy", device_.GetRenderTargetColorTexture(src)));
+        cmd->EndRenderPass();
+    }
+    device_.Submit(cmd);
+    device_.EndFrame();
+
+    RenderTargetReadback rb = device_.ReadRenderTargetColorRgba8WithSize(dst);
+    ASSERT_EQ(rb.width, kRtSize);
+    ASSERT_EQ(rb.height, kRtSize);
+    ASSERT_EQ(rb.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4);
+
+    const unsigned char exp_r = static_cast<unsigned char>(kSrcColor.r * 255.0f + 0.5f);
+    const unsigned char exp_g = static_cast<unsigned char>(kSrcColor.g * 255.0f + 0.5f);
+    const unsigned char exp_b = static_cast<unsigned char>(kSrcColor.b * 255.0f + 0.5f);
+    const unsigned char exp_a = 255;
+    auto within_tol = [](unsigned char a, unsigned char b) {
+        return (a > b ? a - b : b - a) <= 2;
+    };
+
+    for (int p = 0; p < kRtSize * kRtSize; ++p) {
+        const unsigned char* px = rb.pixels.data() + static_cast<size_t>(p) * 4;
+        ASSERT_TRUE(within_tol(px[0], exp_r)) << "pixel " << p << " R=" << int(px[0]) << " expected~" << int(exp_r);
+        ASSERT_TRUE(within_tol(px[1], exp_g)) << "pixel " << p << " G=" << int(px[1]) << " expected~" << int(exp_g);
+        ASSERT_TRUE(within_tol(px[2], exp_b)) << "pixel " << p << " B=" << int(px[2]) << " expected~" << int(exp_b);
+        ASSERT_TRUE(within_tol(px[3], exp_a)) << "pixel " << p << " A=" << int(px[3]) << " expected~" << int(exp_a);
+    }
+
+    device_.resource_mgr().DeleteRenderTarget(src);
+    device_.resource_mgr().DeleteRenderTarget(dst);
+}
+
 #endif // DSE_ENABLE_D3D11
