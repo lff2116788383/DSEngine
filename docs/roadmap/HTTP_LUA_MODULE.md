@@ -55,29 +55,37 @@ dse.http.available() -- 是否编进真实后端（DSE_ENABLE_HTTP=ON）→ bool
 
 回调在主线程/脚本线程触发，可安全操作 Lua 世界（创建对话气泡、改 ECS 组件等）。
 
-## 4. 构建（Windows，需 OpenSSL）
+## 4. 构建（Windows）——OpenSSL 自动预构建，无需手动安装
+
+**一条命令即可**：`DSE_ENABLE_HTTP=ON` 时若 Windows 上找不到 OpenSSL，CMake 会自动调用
+`scripts/build_windows_openssl.ps1` 预构建一次（幂等；之后 configure 秒过）：
 
 ```bat
-:: 1) 预构 Windows x64 OpenSSL 静态库（/MD，含 deprecated 兼容符号，供 IXWebSocket 用）
-::    输出 libssl.lib + libcrypto.lib + include/ 到 <OPENSSL_DIR>
-
-:: 2) 配置时打开开关，并指向 OpenSSL
 cmake -S . -B build_http -G "Visual Studio 17 2022" -A x64 ^
-  -DDSE_ENABLE_HTTP=ON -DDSE_ENABLE_3D=OFF ^
-  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-::（cmake/CMakeLists.txt.http 默认在 C:\ossl-win64\install 找 OpenSSL；
-::  也可用 -DDSE_HTTP_OPENSSL_DIR=<dir> 或环境变量覆盖。）
+  -DDSE_ENABLE_HTTP=ON -DDSE_ENABLE_3D=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
-:: 3) 构建并跑冒烟
 cmake --build build_http --config Debug --target dse_http_smoke --parallel
 cmake --build build_http --config Debug --target dse_http_lua_smoke --parallel
 bin\dse_http_smoke.exe       :: 期望 HTTP_SMOKE_PASS, EXIT=0
 bin\dse_http_lua_smoke.exe   :: 期望 HTTP_LUA_SMOKE_PASS, EXIT=0
 ```
 
-> ⚠️ OpenSSL 必须**不带** `no-deprecated` 构建：IXWebSocket 的 `IXSocketOpenSSL.cpp`
-> 用到 `OpenSSL_add_ssl_algorithms`/`SSL_load_error_strings`/`SSL_set_ecdh_auto` 等
-> 1.0/1.1 兼容初始化符号，`no-deprecated` 会把它们裁掉导致编译失败。
+或用一键脚本（预构 OpenSSL + 配 HTTP=ON + 构建 + 跑两个 smoke，和 `-WithNet` 对齐）：
+
+```powershell
+.\scripts\verify_windows_build.ps1 -WithHttp -HttpOnly
+```
+
+OpenSSL 相关开关 / 覆盖：
+- `scripts/build_windows_openssl.ps1`：幂等预构脚本（默认装到 `C:\ossl-win64\install`；
+  自动确保 Strawberry Perl、复用/下载 1.1.1w 源码、`VC-WIN64A no-asm no-shared` 构建）。
+- `-DDSE_HTTP_OPENSSL_DIR=<dir>`：手动指定已有 OpenSSL 安装根（跳过自动预构）。
+- `-DDSE_HTTP_AUTO_BUILD_OPENSSL=OFF`：关闭 CMake 自动预构（缺 OpenSSL 时直接报错）。
+- 环境变量 `DSE_HTTP_OPENSSL_DIR` 同样被识别。
+
+> ⚠️ OpenSSL 必须**不带** `no-deprecated` 构建（脚本已保证）：IXWebSocket 的
+> `IXSocketOpenSSL.cpp` 用到 `OpenSSL_add_ssl_algorithms`/`SSL_load_error_strings`/
+> `SSL_set_ecdh_auto` 等 1.0/1.1 兼容初始化符号，`no-deprecated` 会把它们裁掉导致编译失败。
 
 ## 5. 验证结果（本机实跑）
 

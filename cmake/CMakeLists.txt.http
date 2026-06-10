@@ -23,9 +23,28 @@ if(NOT EXISTS "${_IXWS_DIR}/CMakeLists.txt")
 endif()
 
 # ── 1) 定位 OpenSSL ──────────────────────────────────────────────────────────
+option(DSE_HTTP_AUTO_BUILD_OPENSSL "Windows 上找不到 OpenSSL 时自动调脚本预构建" ON)
+
 if(NOT DSE_HTTP_OPENSSL_DIR AND DEFINED ENV{DSE_HTTP_OPENSSL_DIR})
     set(DSE_HTTP_OPENSSL_DIR "$ENV{DSE_HTTP_OPENSSL_DIR}")
 endif()
+
+# Windows：未显式给 DIR 且默认安装位缺失时，自动调脚本预构建一次（幂等；之后秒过）。
+# 这样 `cmake -DDSE_ENABLE_HTTP=ON ...` 一条命令即可，无需手动安装 OpenSSL。
+if(WIN32 AND NOT DSE_HTTP_OPENSSL_DIR
+   AND NOT EXISTS "C:/ossl-win64/install/include/openssl/ssl.h"
+   AND DSE_HTTP_AUTO_BUILD_OPENSSL)
+    message(STATUS "[http] 未发现 OpenSSL，自动调 scripts/build_windows_openssl.ps1 预构建（首次较慢）...")
+    execute_process(
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                -File "${CMAKE_SOURCE_DIR}/scripts/build_windows_openssl.ps1"
+                -Prefix "C:/ossl-win64/install"
+        RESULT_VARIABLE _ossl_rc)
+    if(NOT _ossl_rc EQUAL 0)
+        message(FATAL_ERROR "[http] OpenSSL 自动预构建失败 (rc=${_ossl_rc})。可手动运行 scripts/build_windows_openssl.ps1，或用 -DDSE_HTTP_OPENSSL_DIR=<dir> 指定，或 -DDSE_HTTP_AUTO_BUILD_OPENSSL=OFF 关闭。")
+    endif()
+endif()
+
 if(WIN32 AND NOT DSE_HTTP_OPENSSL_DIR AND EXISTS "C:/ossl-win64/install/include/openssl/ssl.h")
     set(DSE_HTTP_OPENSSL_DIR "C:/ossl-win64/install")
 endif()

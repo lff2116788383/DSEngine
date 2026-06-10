@@ -23,11 +23,21 @@
     仅执行 -WithNet 的网络层验证，跳过引擎(dse_engine)构建与校验。
 .PARAMETER NetDepsDir
     网络层预构建依赖(libsodium/protobuf)的落地目录，默认 %USERPROFILE%\dse_net_deps。
+.PARAMETER WithHttp
+    额外验证异步 HTTP 客户端：预构建 Windows x64 OpenSSL（缺失时自动构建到 OpenSSLDir），
+    以 DSE_ENABLE_HTTP=ON 配置独立构建目录(build_vs2022_http)，构建并运行
+    dse_http_smoke.exe 与 dse_http_lua_smoke.exe。
+.PARAMETER HttpOnly
+    仅执行 -WithHttp 的 HTTP 层验证，跳过引擎(dse_engine)构建与校验。
+.PARAMETER OpenSSLDir
+    OpenSSL 预构建安装根目录，默认 C:\ossl-win64\install。
 .EXAMPLE
     .\scripts\verify_windows_build.ps1
     .\scripts\verify_windows_build.ps1 -Config Release -WithTests
     .\scripts\verify_windows_build.ps1 -WithNet
     .\scripts\verify_windows_build.ps1 -WithNet -NetOnly
+    .\scripts\verify_windows_build.ps1 -WithHttp
+    .\scripts\verify_windows_build.ps1 -WithHttp -HttpOnly
 #>
 
 [CmdletBinding()]
@@ -39,9 +49,15 @@ param(
     [switch]$WithTests,
     [switch]$WithNet,
     [switch]$NetOnly,
-    [string]$NetDepsDir = ""
+    [string]$NetDepsDir = "",
+    [switch]$WithHttp,
+    [switch]$HttpOnly,
+    [string]$OpenSSLDir = "C:\ossl-win64\install"
 )
-if ($NetOnly) { $WithNet = $true }
+if ($NetOnly)  { $WithNet  = $true }
+if ($HttpOnly) { $WithHttp = $true }
+# 引擎(dse_engine)构建仅在非 *Only 模式下执行
+$RunEngine = -not ($NetOnly -or $HttpOnly)
 
 # cmake 的 stderr 警告会被 PowerShell 当作终止错误，这里统一手动检查 $LASTEXITCODE
 $ErrorActionPreference = "Continue"
@@ -63,7 +79,7 @@ Write-OK "源码目录=$SourceDir"
 if (-not $BuildDir) { $BuildDir = Join-Path $SourceDir "build_vs2022" }
 $BuildDir = [System.IO.Path]::GetFullPath($BuildDir)
 
-if (-not $NetOnly) {
+if ($RunEngine) {
 # ── 2. 配置 ─────────────────────────────────────────────────────────────────
 Write-Step "配置 CMake ($Generator $Arch, $Config)"
 $testsFlag = if ($WithTests) { "ON" } else { "OFF" }
@@ -128,7 +144,7 @@ $lib = Get-ChildItem -Path $BuildDir -Recurse -Filter $libName -ErrorAction Sile
 if (-not $lib) { Die "未找到引擎静态库 $libName。" }
 $libMb = [math]::Round($lib.Length / 1MB, 1)
 Write-OK ("引擎静态库: {0} ({1} MB)" -f $lib.FullName, $libMb)
-} # end (-not $NetOnly)
+} # end if ($RunEngine)
 
 # ── 5. 网络层 (GNS) 验证 ────────────────────────────────────────────────────
 if ($WithNet) {
@@ -232,7 +248,44 @@ if ($WithNet) {
     Write-OK "C ABI smoke: 通过"
 }
 
+# ── 6. 异步 HTTP 客户端验证 ──────────────────────────────────────────────────
+if ($WithHttp) {
+    $HttpBuildDir = Join-Path $SourceDir "build_vs2022_http"
+
+    # 6.1 预构建 OpenSSL（幂等：已构则秒过）
+    Write-Step "预构建 Windows x64 OpenSSL → $OpenSSLDir"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $SourceDir "scripts/build_windows_openssl.ps1") -Prefix $OpenSSLDir
+    if ($LASTEXITCODE -ne 0) { Die "OpenSSL 预构建失败。" }
+
+    # 6.2 配置 + 构建（DSE_ENABLE_HTTP=ON）
+    if (-not (Test-Path (Join-Path $HttpBuildDir "CMakeCache.txt"))) {
+        Write-Step "配置 CMake (HTTP=ON, $Generator $Arch)"
+        & $CMake -S $SourceDir -B $HttpBuildDir -G $Generator -A $Arch `
+            "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
+            "-DDSE_ENABLE_HTTP=ON" "-DDSE_HTTP_OPENSSL_DIR=$OpenSSLDir" `
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+        if ($LASTEXITCODE -ne 0) { Die "HTTP 层 CMake 配置失败。" }
+    } else { Write-OK "复用已有 HTTP 构建目录：$HttpBuildDir" }
+
+    foreach ($t in @("dse_http_smoke","dse_http_lua_smoke")) {
+        Write-Step "构建 $t ($Config)"
+        & $CMake --build $HttpBuildDir --config $Config --target $t -- /m
+        if ($LASTEXITCODE -ne 0) { Die "构建 $t 失败。" }
+    }
+
+    # 6.3 运行 smoke（退出码 0 = 通过）
+    foreach ($e in @("dse_http_smoke.exe","dse_http_lua_smoke.exe")) {
+        $exe = Join-Path $SourceDir "bin/$e"
+        if (-not (Test-Path $exe)) { Die "未找到 $exe。" }
+        Write-Step "运行 $e"
+        & $exe
+        if ($LASTEXITCODE -ne 0) { Die "$e 失败 (exit=$LASTEXITCODE)。" }
+        Write-OK "${e}: 通过"
+    }
+}
+
 Write-Host "`n==================== RESULT ====================" -ForegroundColor Cyan
-if (-not $NetOnly) { Write-OK "Windows 引擎构建验证通过 ($Config)" }
-if ($WithNet)      { Write-OK "网络层 (GNS) 验证通过" }
+if ($RunEngine) { Write-OK "Windows 引擎构建验证通过 ($Config)" }
+if ($WithNet)   { Write-OK "网络层 (GNS) 验证通过" }
+if ($WithHttp)  { Write-OK "异步 HTTP 客户端验证通过" }
 exit 0
