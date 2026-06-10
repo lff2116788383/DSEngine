@@ -1320,7 +1320,8 @@ end)
 | registry (入口) | `lua_binding_registry.cpp` | — |
 | **合计** | **约 28 个手写文件 + 13 个 gen** | **~400 绑定函数** |
 
-> **关于 LuaSocket**：仓库含可选 `DSE_ENABLE_LUASOCKET` 开关（默认 **OFF**，Android 强制 OFF），
-> 启用时会把标准 `socket.core` / `mime.core` 预加载进 Lua。它**不属于 `dse.*` 绑定**，且已被
-> `dse.net`（游戏 UDP 传输）+ `dse.http`（HTTPS REST，含 TLS）取代——LuaSocket 自身不支持 HTTPS。
-> 当前任何构建/验证路径均未启用它。
+> **关于 LuaSocket（已移除）**：旧的可选 `socket.core` / `mime.core`（LuaSocket）已从引擎移除
+> （子模块 + `DSE_ENABLE_LUASOCKET` 开关 + 门控代码）。其能力已被 `dse.net`（游戏 UDP 传输）
+> + `dse.http`（HTTPS REST，含 TLS）取代——LuaSocket 自身不支持 HTTPS。
+> 注：第三方调试器脚本 `script/lua_panda.lua` 仍以 `pcall` 方式尝试 `require("socket.core")`，
+> 失败时自动降级，不影响引擎运行。

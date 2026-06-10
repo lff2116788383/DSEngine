@@ -52,7 +52,6 @@ option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
-option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
 option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" OFF)
 option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF)
@@ -64,7 +63,6 @@ if(ANDROID)
     set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
-    set(DSE_ENABLE_LUASOCKET OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
@@ -139,14 +137,8 @@ endif()
 if(DSE_ENABLE_LUA)
     include(cmake/CMakeLists.txt.lua_script)
     add_definitions(-D DSE_ENABLE_LUA)
-    if(DSE_ENABLE_LUASOCKET)
-        include(cmake/CMakeLists.txt.luasocket)
-    else()
-        set(luasocket_c "")
-    endif()
 else()
     set(lua_src "")
-    set(luasocket_c "")
 endif()
 if(DSE_ENABLE_PHYSX)
     include(cmake/CMakeLists.txt.Physx)
@@ -429,7 +421,6 @@ set(DSE_ENGINE_ALL_SOURCES
     ${freetype_src}
     ${easy_profiler_core_source}
     ${lua_src}
-    ${luasocket_c}
     ${spine_cpp}
     ${tiny_aes_c}
     ${bundle_cpp}
@@ -600,7 +591,6 @@ endif()
 if(DSE_ENABLE_LUA)
     target_include_directories(dse_engine PRIVATE
         ${CMAKE_SOURCE_DIR}/depends/lua
-        ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
     )
 endif()
 

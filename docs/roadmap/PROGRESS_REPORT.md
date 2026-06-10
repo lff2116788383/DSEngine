@@ -18,10 +18,10 @@
 | **测试代码** | ~45,067 行（tests/ · 204 文件，其中 gtest 203 个源文件） |
 | **Lua 脚本** | ~13,650 行（samples/ 10,387 · 68 文件 + examples/ 3,263 · 14 文件） |
 | **自有代码合计** | ~197,000 行（engine+modules+apps+tests+lua samples/examples = 197,327） |
-| **第三方依赖** | ~30 个（depends/ 目录，其中 24 个为 git submodule） |
+| **第三方依赖** | ~29 个（depends/ 目录，其中 23 个为 git submodule；旧 LuaSocket 子模块已移除） |
 | **渲染后端** | OpenGL 4.5 / Vulkan / D3D11（基础渲染 + 全部后处理 + Compute 功能三端统一） |
 | **测试体系** | ~2,600 个测试用例实跑（unit 2,048 + integration 510 + smoke 42；定义的 TEST 宏 2,780，含 disabled/参数化） |
-| **引擎库形态** | 默认**静态库** `DSEngine.lib`（Debug 后缀 `_debug`）；可选 `-DDSE_BUILD_SHARED=ON` 输出 `DSEngine.dll`。第三方库（glfw/freetype/lua/spine/imgui 等）编译进引擎库；网络依赖（GNS/protobuf/libsodium/IXWebSocket/OpenSSL）与 luasocket 均为可选，默认 OFF |
+| **引擎库形态** | 默认**静态库** `DSEngine.lib`（Debug 后缀 `_debug`）；可选 `-DDSE_BUILD_SHARED=ON` 输出 `DSEngine.dll`。第三方库（glfw/freetype/lua/spine/imgui 等）编译进引擎库；网络依赖（GNS/protobuf/libsodium/IXWebSocket/OpenSSL）为可选，默认 OFF（旧 LuaSocket 已移除） |
 | **脚本绑定** | Lua（原生 Lua C API + 代码生成 `.gen.cpp`，**非 sol2**）+ C#（`GameScripts/DSEngine/Native.gen.cs` 代码生成）；底层 `dse_*` C ABI ~330 个函数 |
 
 ### 1.2 功能完整度评分
