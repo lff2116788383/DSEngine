@@ -55,6 +55,7 @@ option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
 option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
 option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" OFF)
+option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
@@ -173,6 +174,16 @@ if(DSE_ENABLE_NET)
     endif()
 endif()
 
+# 通用异步 HTTP(S) 客户端 (IXWebSocket + OpenSSL)。默认 OFF：OFF 路径完全不引入
+# IXWebSocket/OpenSSL 依赖，现有构建零影响。ON 时由 cmake/CMakeLists.txt.http
+# 编出 dse_http 静态库并定义 DSE_ENABLE_HTTP（供 engine/http 与 Lua 绑定启用）。
+if(DSE_ENABLE_HTTP)
+    include(cmake/CMakeLists.txt.http)
+    if(DSE_HAS_HTTP)
+        add_definitions(-D DSE_ENABLE_HTTP=1)
+    endif()
+endif()
+
 #头文件目录（全局，合并为一处避免重复）
 include_directories(
     "${CMAKE_SOURCE_DIR}"
@@ -262,6 +273,10 @@ list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 # 网络层(engine/net/**)由 cmake/CMakeLists.txt.gns 编译为独立的 dse_net 目标
 # （依赖 GNS 头/库），不并入 dse_engine 主目标，且 OFF 时完全不编译。
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/net/.*\\.cpp$")
+
+# HTTP 客户端(engine/http/**)由 cmake/CMakeLists.txt.http 编译为独立的 dse_http
+# 目标（唯一 include IXWebSocket 之处），不并入 dse_engine 主目标。
+list(FILTER engine_cpp EXCLUDE REGEX ".*engine/http/.*\\.cpp$")
 
 # 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
 # 注意：dse_api_<prefix>.gen.cpp 与手写 dse_api.cpp 同 TU 域，须显式加回（见下）
@@ -448,6 +463,25 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
 endif()
 if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     target_link_libraries(dse_engine PRIVATE Jolt)
+endif()
+# --- 异步 HTTP 客户端 ---
+if(DSE_ENABLE_HTTP AND DSE_HAS_HTTP)
+    target_link_libraries(dse_engine PRIVATE dse_http)
+    # 无头验证 Lua 绑定 dse.http（裸 lua_State + 本地回环服务器），不依赖窗口/RHI。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/http/http_lua_smoke.cpp")
+        add_executable(dse_http_lua_smoke "${CMAKE_SOURCE_DIR}/tests/http/http_lua_smoke.cpp")
+        target_link_libraries(dse_http_lua_smoke PRIVATE dse_engine dse_http)
+        target_include_directories(dse_http_lua_smoke PRIVATE
+            "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/IXWebSocket"
+            "${CMAKE_SOURCE_DIR}/depends/lua")
+        target_compile_features(dse_http_lua_smoke PRIVATE cxx_std_17)
+        if(MSVC)
+            set_property(TARGET dse_http_lua_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_http_lua_smoke PRIVATE /utf-8)
+        endif()
+    endif()
 endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)

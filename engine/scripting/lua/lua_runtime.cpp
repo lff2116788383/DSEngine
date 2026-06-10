@@ -7,6 +7,9 @@
 #include "engine/scripting/lua/lua_debugger.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
+#ifdef DSE_ENABLE_HTTP
+#include "engine/scripting/lua/bindings/lua_binding_modules.h"
+#endif
 #include "engine/ecs/script.h"
 #include "engine/base/debug.h"
 #include <filesystem>
@@ -505,6 +508,10 @@ void TickLuaRuntime(float delta_time) {
     if (!state.state) {
         return;
     }
+#ifdef DSE_ENABLE_HTTP
+    // 触发本帧已完成的异步 HTTP 回调（在脚本 Update 之前，使脚本可立即消费结果）
+    lua_binding::PumpHttp(state.state);
+#endif
     lua_getglobal(state.state, "Update");
     if (!lua_isfunction(state.state, -1)) {
         lua_pop(state.state, 1);

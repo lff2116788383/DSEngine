@@ -30,6 +30,10 @@ void RegisterStreamingBindings(lua_State* L);
 void RegisterLocalizationBindings(lua_State* L);
 void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
+#ifdef DSE_ENABLE_HTTP
+void RegisterHttpBindings(lua_State* L);   // dse.http 异步 HTTP(S) 客户端
+void PumpHttp(lua_State* L);               // 触发已完成 HTTP 回调（引擎 Tick 调用）
+#endif
 
 // ECS 子域注册（由 RegisterEcsBindings 内部调用，栈顶需为 ecs 表）
 void RegisterEcsCoreBindings(lua_State* L);
