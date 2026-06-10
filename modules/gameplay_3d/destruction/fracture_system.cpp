@@ -139,7 +139,7 @@ std::shared_ptr<FractureAsset> FractureSystem::LoadFractureAsset(const std::stri
                 std::string val = trimmed.substr(colon + 1);
                 // Remove trailing comma
                 size_t comma = val.find_last_of(',');
-                if (comma != std::string::npos) val = val.substr(0, comma);
+                if (comma != std::string::npos) val.erase(comma);
                 asset->source_mesh = Trim(val);
             }
         }
@@ -183,7 +183,7 @@ std::shared_ptr<FractureAsset> FractureSystem::LoadFractureAsset(const std::stri
                     if (colon != std::string::npos) {
                         std::string val = trimmed.substr(colon + 1);
                         size_t comma = val.find_last_of(',');
-                        if (comma != std::string::npos) val = val.substr(0, comma);
+                        if (comma != std::string::npos) val.erase(comma);
                         current_frag.mesh_path = Trim(val);
                     }
                 }

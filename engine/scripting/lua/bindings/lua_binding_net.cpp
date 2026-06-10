@@ -208,6 +208,7 @@ int L_NetConfigureLanes(lua_State* L) {
 
     // priorities（必填）
     int* pri = static_cast<int*>(std::malloc(sizeof(int) * n));
+    if (!pri) return luaL_error(L, "configure_lanes: out of memory");
     for (int i = 0; i < n; ++i) {
         lua_rawgeti(L, 2, i + 1);
         pri[i] = static_cast<int>(luaL_optinteger(L, -1, 0));
@@ -217,6 +218,7 @@ int L_NetConfigureLanes(lua_State* L) {
     uint16_t* wts = nullptr;
     if (lua_istable(L, 3)) {
         wts = static_cast<uint16_t*>(std::malloc(sizeof(uint16_t) * n));
+        if (!wts) { std::free(pri); return luaL_error(L, "configure_lanes: out of memory"); }
         for (int i = 0; i < n; ++i) {
             lua_rawgeti(L, 3, i + 1);
             wts[i] = static_cast<uint16_t>(luaL_optinteger(L, -1, 1));

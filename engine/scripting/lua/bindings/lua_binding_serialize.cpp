@@ -61,7 +61,9 @@ struct Encoder {
         } while (v);
     }
     void PutSLEB(int64_t s) {
-        uint64_t zz = (static_cast<uint64_t>(s) << 1) ^ static_cast<uint64_t>(s >> 63);
+        // zigzag 编码：用无符号位运算提取符号位，避免有符号右移的实现定义行为
+        const uint64_t u = static_cast<uint64_t>(s);
+        uint64_t zz = (u << 1) ^ (0ULL - (u >> 63));
         PutULEB(zz);
     }
 
