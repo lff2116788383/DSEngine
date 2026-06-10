@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     DSEngine SDK 打包脚本：配置 → 编译 → install → 打包 ZIP
 .DESCRIPTION
@@ -73,6 +73,10 @@ if (-not $SkipBuild) {
         "-G", $Generator,
         "-A", $Arch,
         "-DCMAKE_INSTALL_PREFIX=$InstallDir",
+        # 必须开启共享库：install 的 TARGETS / EXPORT / 公共头规则都在
+        # if(DSE_BUILD_SHARED) 之下，静态构建只会装出 package-config 文件，
+        # 产出的 SDK 无法被 find_package 使用。
+        "-DDSE_BUILD_SHARED=ON",
         "-DDSE_BUILD_GTESTS=OFF",
         "-DDSE_BUILD_EDITOR=OFF",
         "-DDSE_BUILD_LAUNCHER=OFF"
@@ -101,8 +105,10 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw "CMake configure failed (exit $LASTEXITCODE)" }
 
     # ── 编译 ──────────────────────────────────────────────────────
+    # 只构建 dse_engine —— SDK 的 install 规则仅安装该目标 + 公共头 + 脚本，
+    # 其余 smoke/工具可执行目标不属于 SDK，且在共享库配置下有各自的链接前提。
     Write-Host "`n[2/4] CMake Build ($Config)..."
-    & cmake --build $BuildDir --config $Config --parallel
+    & cmake --build $BuildDir --config $Config --target dse_engine --parallel
     if ($LASTEXITCODE -ne 0) { throw "CMake build failed (exit $LASTEXITCODE)" }
 
     # ── Install ───────────────────────────────────────────────────
