@@ -427,25 +427,25 @@
 
 | 维度 | 现状 | 评估 |
 |------|------|------|
-| 窗口系统 | GLFW（跨平台） | ✅ Linux/macOS/Windows |
-| OpenGL 后端 | OpenGL 4.3（GLFW + GLAD） | ✅ 全平台可用 |
-| Vulkan 后端 | 可选，`DSE_ENABLE_VULKAN` | ✅ Windows/Linux |
-| D3D11 后端 | Windows 自动启用，`DSE_ENABLE_D3D11` | ⚠️ 仅 Windows |
-| 构建系统 | CMake + VS2022 | ✅ CMake 本身跨平台 |
-| 构建脚本 | 全部 `.bat`（`build_all.bat` / `verify_all.bat`） | ❌ 仅 Windows |
-| CI/CD | 无 | ❌ |
-| 文件系统 | `std::filesystem`，未做平台抽象 | 🟡 基本可跨平台 |
+| 应用/平台抽象 | `PlatformApp` 接口 + `glfw`(桌面)/`android` 后端 | ✅ engine 仅经接口与平台交互 |
+| 窗口系统 | GLFW（桌面）/ NativeActivity（Android） | ✅ Linux/Windows/Android |
+| OpenGL 后端 | OpenGL 4.3 桌面 + GL ES（Android） | ✅ 全平台可用 |
+| Vulkan 后端 | 可选，`DSE_ENABLE_VULKAN`（surface 分 WIN32/XLIB/ANDROID） | ✅ Windows/Linux/Android |
+| D3D11 后端 | Windows 自动启用，`DSE_ENABLE_D3D11` | ⚠️ 仅 Windows（设计如此） |
+| 构建系统 | CMake + VS2022 / Ninja / Android NDK toolchain | ✅ CMake 本身跨平台 |
+| 构建脚本 | `.bat` + `.sh`(`verify_linux_build.sh`) + `.ps1`(`verify_android_apk.ps1`) | ✅ Win/Linux/Android 三端 |
+| CI/CD | GitHub Actions（`ci.yml`，Windows 3 配置） | 🟡 仅 Windows，Linux/Android 未纳入 |
+| 文件系统 | `std::filesystem` | 🟡 基本可跨平台 |
 | Metal 后端 | 无 | ❌ macOS/iOS 需要 |
-| 移动端 | 无 Android/iOS 支持 | ❌ |
+| 移动端 | Android arm64-v8a（NativeActivity + APK 打包签名验证脚本） | ✅ Android；❌ iOS |
 
-**移植到 Linux 的成本**（预估 1-2 周）：
-1. 补 shell 构建脚本（替代 `.bat`）
-2. 处理 `__declspec(dllexport)` → `__attribute__((visibility("default")))` 等平台宏
-3. 验证 OpenGL/Vulkan 后端在 Linux 的正确性
-4. 路径分隔符和文件权限适配
+**Linux / Android 移植：已完成构建路径**（构建脚本 + 端到端验证脚本齐备；静态核实，未纳入 CI 持续看护）：
+- `scripts/verify_linux_build.sh`：GLFW X11+GL，构建 `dse_engine` 静态库 + Lua 运行时（校验 ELF），可选 `--with-net` 网络回环 smoke
+- `scripts/verify_android_apk.ps1`：arm64-v8a 交叉编译 → NativeActivity 宿主 → aapt2/zipalign/apksigner 打包签名 → 校验 APK 结构
+- engine/ 残留 `_WIN32`/`<windows.h>` 引用均为 `#ifdef` 守卫的跨平台代码（`dynamic_library` dlopen、Vulkan surface 等已有 Linux/Android/Apple 分支）
 
-**移植到 macOS 的成本**（预估 1-2 月）：
-- 需新增 Metal 后端（`RhiDevice` 子类 + 5 个子系统 + 着色器翻译）
+**移植到 macOS/iOS 的成本**（仍未支持）：
+- 需新增 `PlatformApp` 的 macOS/iOS 后端，以及 Metal 后端（`RhiDevice` 子类 + 子系统 + 着色器翻译）或验证 MoltenVK 路径
 
 ---
 

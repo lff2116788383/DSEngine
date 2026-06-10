@@ -45,7 +45,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 实时全局光照 (DDGI)    ███████████░ 85%  ✅ GL/Vulkan/D3D11 三端 Compute 均已移植（GLSL/SPIR-V/HLSL 三套源）
 风格化渲染            ██████░░░░░░ 55%  ✅ Toon/Cel+Banding+Outline+VolumetricFog+LightShaft
 音频系统              █████████░░░ 78%  ✅ BGM/SFX+3D空间+DSP混音总线+效果链(LPF/HPF/BPF/Delay)+Lua API
-跨平台                ██░░░░░░░░░░ 15%  ❌ 仅 Windows（engine/ 12 文件 33 处 Win32 硬编码）
+跨平台                ████████░░░░ 70%  ✅ 平台抽象层(PlatformApp: glfw桌面 + android后端)；Win(CI)+Linux+Android 三端均有完整构建路径与端到端验证脚本(engine静态库/Lua运行时/APK打包签名)，engine/ 残留 Win32 引用均 #ifdef 守卫；❌ Linux/Android 未纳入 CI、macOS/iOS 无平台后端
 网络                  ████░░░░░░░░ 40%  ✅ 传输层 GNS(可靠/非可靠UDP+lanes+加密,三端)+Lua dse.net/dse.http/dse.serialize；❌ 无玩法级复制/同步层
 ```
 
@@ -111,7 +111,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **后处理链** | ✅ Bloom/SSAO/TAA/FXAA/DOF/MotionBlur/SSR/ACES/LightShaft/VolumetricFog | ✅ | ✅ |
 | **GPU Driven 渲染** | ✅ Hi-Z Cull + Indirect Draw | ✅ GPU Resident Drawer | ✅ Nanite |
 | **实时全局光照** | ✅ DDGI Probe（GL/VK/DX11 三端 Compute 均可用） | ✅ HDRP GI | ✅ Lumen |
-| **跨平台** | ❌ 仅 Windows | ✅ 20+ 平台 | ✅ 20+ 平台 |
+| **跨平台** | 🟡 Win(CI)+Linux+Android 构建路径齐备（脚本验证，未纳入 CI）；macOS/iOS 未支持 | ✅ 20+ 平台 | ✅ 20+ 平台 |
 | **资源流式加载** | ✅ StreamingManager（Zone 距离触发 + 异步 IO） | ✅ Addressables | ✅ World Partition |
 | **网络模块** | 🟡 传输层完备（GNS UDP + Lua dse.net/http/serialize），无玩法级复制/同步层 | ✅ 完整 | ✅ 完整 |
 | **编辑器** | ImGui（功能全但体验一般） | ✅ 可视化极成熟 | ✅ 可视化极成熟 |
@@ -127,7 +127,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **3D 物理** | Jolt（默认）/ PhysX（可选） ✅ 行业标准 | GodotPhysics（自研） | **DSE** |
 | **3D 高级模块** | 布料/流体/破碎/布娃娃/载具 | 需第三方插件 | **DSE** |
 | **编辑器成熟度** | ImGui 实现，功能完整 | 原生 GUI，极其成熟 | **Godot** |
-| **跨平台** | ❌ 仅 Windows | ✅ 全平台 | **Godot** |
+| **跨平台** | 🟡 Win/Linux/Android（脚本验证，未入 CI）；macOS/iOS 未支持 | ✅ 全平台 | **Godot** |
 | **脚本易用性** | C++ + Lua + C# | GDScript（类 Python） | **Godot** |
 | **开源生态** | ❌ 闭源 | ✅ MIT 开源 | **Godot** |
 | **代码可读性** | ✅ ~19.7 万行可通读全部源码 | 150 万行难掌握全貌 | **DSE** |
@@ -159,7 +159,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 
 | 劣势 | 影响等级 | 说明 |
 |:----:|:--------:|------|
-| **仅 Windows** | 🔴 致命 | engine/ 仍有 12 文件 33 处 `_WIN32`/`<windows.h>` 硬编码（modules/ 基本为 0）；无法部署到移动端/主机，直接限制了 95% 的游戏分发渠道 |
+| **跨平台未 CI 看护 / 缺 Apple** | 🟡 中 | 平台抽象层(PlatformApp)已就位，Win(CI)+Linux+Android 三端均有完整构建路径与端到端验证脚本(`scripts/verify_linux_build.sh` 构建 engine 静态库+Lua 运行时 ELF；`scripts/verify_android_apk.ps1` arm64-v8a 交叉编译→NativeActivity→aapt2/zipalign/apksigner 打包签名)，engine/ 残留 Win32 引用均为 #ifdef 守卫的跨平台代码（dlopen/VK surface 等已有 Linux/Android/Apple 分支）；但 Linux/Android 未纳入 CI 持续看护，macOS/iOS 尚无平台后端 |
 | **~~无 GPU Driven 渲染~~** | ✅ 已完成 | Hi-Z Occlusion Culling + Compute 视锥剔除 + Mega VBO/IBO + MultiDrawIndexedIndirect，CPU readback 双保险 |
 | **~~实时全局光照仅 GL~~** | ✅ 已完成 | DDGI Probe 的 Compute 着色器已提供 GLSL/SPIR-V/HLSL 三套源，GL/Vulkan/D3D11 三端均可运行 |
 | **玩法级网络缺失** | 🟡 中 | 传输层已完备（GNS：可靠/非可靠 UDP + lanes + 加密，Win/Linux 运行、Android 编译；Lua 侧 `dse.net`/`dse.http`/`dse.serialize`），但缺玩法级复制/快照-delta/预测/AOI、大厅/匹配；同步逻辑需脚本层自行实现。编辑器侧另有 ControlServer（IXWebSocket JSON-RPC，自动化/AI 桥接） |
@@ -273,7 +273,8 @@ Phase 5 — Shader 统一化 + 已知技术债务
   ├── ✅ engine/ → modules/ 架构依赖违规修复（IBuiltinModules 接口 + AnimationStateMachine 搬迁）
   ├── ✅ DDGI / TressFX / Grass 三组 Compute → VK SPIR-V + DX11 HLSL 移植（已完成）
   ├── 🔄 引擎静态库化 + dse_* C ABI 抽取（feature/engine-lib 进行中：S1.x 里程碑）
-  └── ⬜ 跨平台抽象层（engine/ 12 文件 33 处 Win32 硬编码，modules/ ~0）
+  ├── ✅ 跨平台抽象层（PlatformApp 接口 + glfw 桌面 / android 后端；engine/ 残留 Win32 引用均 #ifdef 守卫，Win+Linux+Android 三端构建路径齐备）
+  └── ⬜ Linux/Android 纳入 CI 持续看护；macOS/iOS 平台后端
 
 Phase 6 — 网络层（GNS 集成）✅ 传输层 / ⬜ 玩法级
   ├── ✅ GNS 集成 Phase 1–5（Win/Linux 运行 + Android arm64 编译，engine/net 抽象层 + dse_net_* C ABI）
@@ -303,8 +304,8 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 
 > **DSEngine 当前自研代码约 19.7 万行（C++ + Lua），功能覆盖 2D→3D→编辑器→物理→脚本→三端渲染→实时 GI→资源流式加载的完整管线，在"个人/小团队自研引擎"维度里完成度是顶级水准。**
 >
-> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——网络已具备完整传输层地基（GNS + Lua 绑定），但缺玩法级复制/同步层；跨平台仍以 Windows 为主。这些深度需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台、编辑器体验和社区生态上落后。**
+> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——网络已具备完整传输层地基（GNS + Lua 绑定），但缺玩法级复制/同步层；跨平台已具备 Win/Linux/Android 三端构建路径（脚本验证，未入 CI），尚缺 macOS/iOS 与 CI 持续看护。这些深度需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台广度（Godot 全平台 vs DSE 三端且未入 CI、无 Apple）、编辑器体验和社区生态上落后。**
 >
-> **当前最大技术债务：① 跨平台抽象层（engine/ 12 文件 33 处 Win32 硬编码）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
+> **当前最大技术债务：① 跨平台覆盖（抽象层已就位、Win/Linux/Android 构建路径齐备但未纳入 CI，macOS/iOS 未支持）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
 >
 > **SDK 测试版已具备打包脚本与验证框架，但 `verify_sdk.ps1` 仅覆盖 2D 最小配置。SSBO→UBO fallback 已实现。补齐 P0（含 3D+Jolt 完整配置验证）约需 2-3 天，完整的 v0.1.0-alpha 可在 1 周内就绪。**
