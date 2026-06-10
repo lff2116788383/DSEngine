@@ -16,6 +16,18 @@
 namespace dse {
 namespace render {
 
+namespace {
+// 将宽字符（UTF-16）适配器名转为 UTF-8，避免逐字符截断丢失非 ASCII 字符
+std::string WideToUtf8(const wchar_t* w) {
+    if (!w || !*w) return {};
+    int len = ::WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 1) return {};
+    std::string out(static_cast<size_t>(len - 1), '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, w, -1, out.data(), len, nullptr, nullptr);
+    return out;
+}
+} // namespace
+
 bool DX11Context::Init(void* window_handle, int width, int height, bool enable_debug, bool force_sdr) {
     if (initialized_) return true;
 
@@ -121,17 +133,17 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
             // 跳过 software adapter (WARP / Basic Render)
             if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) {
                 DEBUG_LOG_INFO("[D3D11] Adapter {}: [SKIP software] {}", i,
-                    std::string(desc.Description, desc.Description + wcslen(desc.Description)));
+                    WideToUtf8(desc.Description));
                 continue;
             }
             // 跳过 dedicated VRAM = 0 的虚拟适配器（远程桌面虚拟显卡等）
             if (desc.DedicatedVideoMemory == 0) {
                 DEBUG_LOG_INFO("[D3D11] Adapter {}: [SKIP no VRAM] {}", i,
-                    std::string(desc.Description, desc.Description + wcslen(desc.Description)));
+                    WideToUtf8(desc.Description));
                 continue;
             }
             DEBUG_LOG_INFO("[D3D11] Adapter {}: {} (VRAM={} MB)", i,
-                std::string(desc.Description, desc.Description + wcslen(desc.Description)),
+                WideToUtf8(desc.Description),
                 desc.DedicatedVideoMemory / (1024 * 1024));
             if (desc.DedicatedVideoMemory > best_vram) {
                 best_vram = desc.DedicatedVideoMemory;
@@ -146,7 +158,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         DXGI_ADAPTER_DESC1 desc{};
         static_cast<IDXGIAdapter1*>(preferred_adapter)->GetDesc1(&desc);
         DEBUG_LOG_INFO("[D3D11] Selected adapter: {} (VRAM={} MB)",
-            std::string(desc.Description, desc.Description + wcslen(desc.Description)),
+            WideToUtf8(desc.Description),
             desc.DedicatedVideoMemory / (1024 * 1024));
     }
 
