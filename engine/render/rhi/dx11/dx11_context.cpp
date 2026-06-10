@@ -113,6 +113,10 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         create_flags |= D3D11_CREATE_DEVICE_DEBUG;
     }
 
+    // DSE_FORCE_WARP=1：强制使用 WARP 软件光栅器（无 GPU 环境/调试用）
+    const char* warp_env = std::getenv("DSE_FORCE_WARP");
+    const bool force_warp = warp_env && warp_env[0] && warp_env[0] != '0';
+
     D3D_FEATURE_LEVEL feature_levels[] = {
         D3D_FEATURE_LEVEL_11_1,
         D3D_FEATURE_LEVEL_11_0,
@@ -125,7 +129,7 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     ComPtr<IDXGIFactory1> dxgi_factory;
     IDXGIAdapter1* preferred_adapter = nullptr;
     SIZE_T best_vram = 0;
-    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(dxgi_factory.GetAddressOf())))) {
+    if (!force_warp && SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(dxgi_factory.GetAddressOf())))) {
         ComPtr<IDXGIAdapter1> adapter;
         for (UINT i = 0; dxgi_factory->EnumAdapters1(i, adapter.ReleaseAndGetAddressOf()) != DXGI_ERROR_NOT_FOUND; ++i) {
             DXGI_ADAPTER_DESC1 desc{};
@@ -151,9 +155,11 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
             }
         }
     }
-    // 使用显式适配器时 DriverType 必须为 D3D_DRIVER_TYPE_UNKNOWN
-    const D3D_DRIVER_TYPE driver_type = preferred_adapter
-        ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE;
+    // 使用显式适配器时 DriverType 必须为 D3D_DRIVER_TYPE_UNKNOWN；WARP 时必须 pAdapter=nullptr
+    const D3D_DRIVER_TYPE driver_type =
+        force_warp ? D3D_DRIVER_TYPE_WARP
+        : (preferred_adapter ? D3D_DRIVER_TYPE_UNKNOWN : D3D_DRIVER_TYPE_HARDWARE);
+    is_warp_ = (driver_type == D3D_DRIVER_TYPE_WARP);
     if (preferred_adapter) {
         DXGI_ADAPTER_DESC1 desc{};
         static_cast<IDXGIAdapter1*>(preferred_adapter)->GetDesc1(&desc);
@@ -193,20 +199,38 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     scd.Flags = tearing_supported_ ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
     DEBUG_LOG_INFO("[D3D11] Tearing support: {}", tearing_supported_ ? "YES" : "NO");
 
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        preferred_adapter, driver_type, nullptr,
-        create_flags, feature_levels, num_feature_levels,
-        D3D11_SDK_VERSION, &scd,
-        swapchain_.GetAddressOf(), device_.GetAddressOf(),
-        &feature_level_, context_.GetAddressOf()
-    );
+    // 设备创建辅助：若因调试层缺失（缺少 Graphics Tools）失败，去掉 DEBUG 标志重试一次。
+    // 用 ReleaseAndGetAddressOf 保证重试不泄漏上一次的 COM 引用。
+    auto create_device = [&](IDXGIAdapter1* adapter, D3D_DRIVER_TYPE dtype) -> HRESULT {
+        HRESULT h = D3D11CreateDeviceAndSwapChain(
+            adapter, dtype, nullptr,
+            create_flags, feature_levels, num_feature_levels,
+            D3D11_SDK_VERSION, &scd,
+            swapchain_.ReleaseAndGetAddressOf(), device_.ReleaseAndGetAddressOf(),
+            &feature_level_, context_.ReleaseAndGetAddressOf()
+        );
+        if (h == DXGI_ERROR_SDK_COMPONENT_MISSING && (create_flags & D3D11_CREATE_DEVICE_DEBUG)) {
+            DEBUG_LOG_WARN("[D3D11] D3D11 debug layer unavailable; retrying without DEBUG flag");
+            create_flags &= ~static_cast<UINT>(D3D11_CREATE_DEVICE_DEBUG);
+            h = D3D11CreateDeviceAndSwapChain(
+                adapter, dtype, nullptr,
+                create_flags, feature_levels, num_feature_levels,
+                D3D11_SDK_VERSION, &scd,
+                swapchain_.ReleaseAndGetAddressOf(), device_.ReleaseAndGetAddressOf(),
+                &feature_level_, context_.ReleaseAndGetAddressOf()
+            );
+        }
+        return h;
+    };
+
+    HRESULT hr = create_device(preferred_adapter, driver_type);
 
     if (SUCCEEDED(hr)) {
         hdr_enabled_ = !force_sdr;
         if (force_sdr) {
-            DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, forced via DSE_FORCE_SDR)");
+            DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, forced via DSE_FORCE_SDR){}", is_warp_ ? " [WARP]" : "");
         } else {
-            DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)");
+            DEBUG_LOG_INFO("[D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD){}", is_warp_ ? " [WARP]" : "");
         }
     } else {
         // SDR 回退：R8G8B8A8_UNORM + DISCARD（DISCARD 不支持 ALLOW_TEARING）
@@ -214,20 +238,22 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
         scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
         scd.Flags = 0;
         tearing_supported_ = false;
-        hr = D3D11CreateDeviceAndSwapChain(
-            preferred_adapter, driver_type, nullptr,
-            create_flags, feature_levels, num_feature_levels,
-            D3D11_SDK_VERSION, &scd,
-            swapchain_.GetAddressOf(), device_.GetAddressOf(),
-            &feature_level_, context_.GetAddressOf()
-        );
+        hr = create_device(preferred_adapter, driver_type);
+        if (FAILED(hr) && driver_type != D3D_DRIVER_TYPE_WARP) {
+            // 硬件设备创建失败（无独显 / 无 GPU / 远程桌面会话）→ 回退到 WARP 软件光栅器，
+            // 使无 GPU 环境（CI、服务器、远程桌面）也能初始化 D3D11
+            DEBUG_LOG_WARN("[D3D11] Hardware device creation failed (HRESULT=0x{}), falling back to WARP software rasterizer",
+                static_cast<unsigned>(hr));
+            hr = create_device(nullptr, D3D_DRIVER_TYPE_WARP);
+            if (SUCCEEDED(hr)) is_warp_ = true;
+        }
         if (FAILED(hr)) {
-            DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed: HRESULT=0x{}", static_cast<unsigned>(hr));
+            DEBUG_LOG_ERROR("[D3D11] D3D11CreateDeviceAndSwapChain failed (incl. WARP fallback): HRESULT=0x{}", static_cast<unsigned>(hr));
             if (preferred_adapter) preferred_adapter->Release();
             return false;
         }
         hdr_enabled_ = false;
-        DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, DISCARD)");
+        DEBUG_LOG_INFO("[D3D11] SDR SwapChain (R8G8B8A8_UNORM, DISCARD){}", is_warp_ ? " [WARP]" : "");
     }
     if (preferred_adapter) preferred_adapter->Release();
 
