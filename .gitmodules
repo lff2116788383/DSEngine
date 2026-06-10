@@ -75,3 +75,6 @@
 [submodule "depends/JoltPhysics"]
 	path = depends/JoltPhysics
 	url = https://github.com/jrouwe/JoltPhysics.git
+[submodule "depends/GameNetworkingSockets"]
+	path = depends/GameNetworkingSockets
+	url = https://github.com/ValveSoftware/GameNetworkingSockets.git
