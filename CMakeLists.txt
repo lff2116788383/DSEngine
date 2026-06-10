@@ -899,3 +899,27 @@ if(Python3_FOUND)
         VERBATIM
     )
 endif()
+
+# ── Android 原生宿主 (NativeActivity host) ──────────────────────────────────
+# 产物 libdse_android_host.so：通过 native_app_glue 提供的 ANativeActivity_onCreate
+# 作为入口，链接 dse_engine（静态库时自包含），供打包 APK 使用。
+# 构建: cmake --build <android_build_dir> --target dse_android_host
+if(ANDROID)
+    set(_DSE_GLUE_DIR "${CMAKE_ANDROID_NDK}/sources/android/native_app_glue")
+    if(NOT EXISTS "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+        set(_DSE_GLUE_DIR "${ANDROID_NDK}/sources/android/native_app_glue")
+    endif()
+    if(NOT EXISTS "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+        message(FATAL_ERROR "找不到 native_app_glue 源（${_DSE_GLUE_DIR}）")
+    endif()
+    add_library(dse_android_host SHARED
+        "${CMAKE_SOURCE_DIR}/apps/android_host/native_main.cpp"
+        "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+    target_include_directories(dse_android_host PRIVATE
+        "${CMAKE_SOURCE_DIR}" "${_DSE_GLUE_DIR}")
+    target_link_libraries(dse_android_host PRIVATE dse_engine EGL GLESv3 android log)
+    # NativeActivity 经 dlsym 取入口；强制保留 glue 提供的 ANativeActivity_onCreate
+    target_link_options(dse_android_host PRIVATE "-u" "ANativeActivity_onCreate")
+    # 固定输出名(去掉 Debug 后缀)，使 APK manifest 的 android.app.lib_name 稳定为 dse_android_host
+    set_target_properties(dse_android_host PROPERTIES OUTPUT_NAME "dse_android_host" DEBUG_POSTFIX "")
+endif()
