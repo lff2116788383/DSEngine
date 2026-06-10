@@ -45,12 +45,6 @@
 [submodule "depends/lua"]
 	path = depends/lua
 	url = https://github.com/lua/lua.git
-[submodule "reference/VSEngine2.1"]
-	path = reference/VSEngine2.1
-	url = https://github.com/79134054/VSEngine2.1.git
-[submodule "reference/cpp-game-engine-book"]
-	path = reference/cpp-game-engine-book
-	url = https://github.com/ThisisGame/cpp-game-engine-book.git
 [submodule "depends/Vulkan-Headers"]
 	path = depends/Vulkan-Headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers.git
