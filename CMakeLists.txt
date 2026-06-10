@@ -367,6 +367,20 @@ set(tiny_aes_c
 )
 file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
 
+# bundle 是第三方打包/压缩库（含 miniz/lzma 等），使用了 C++17 已移除的 register 存储类
+# 与窄化初始化；clang(Android NDK) 默认将其视为错误。仅对该第三方源关闭对应诊断，不改其源码。
+if(NOT MSVC)
+    set_source_files_properties(${bundle_cpp} PROPERTIES
+        COMPILE_OPTIONS "-Wno-register;-Wno-c++11-narrowing")
+endif()
+# Android(arm64 等非 x86)：bundle 的 MCM/TANGELO 高比率编解码器内联了 x86 SSE/MMX intrinsics
+# （emmintrin/mmintrin），无法在 ARM 上编译。DSEngine 仅用 ZIP(miniz/DEFLATE) 路径，这些编解码器
+# 从未被使用，按 bundle 自带的库配置开关排除即可（不改第三方源码、不影响打包/解包功能）。
+if(ANDROID)
+    set_source_files_properties(${bundle_cpp} PROPERTIES
+        COMPILE_DEFINITIONS "BUNDLE_NO_MCM;BUNDLE_NO_TANGELO")
+endif()
+
 
 set(imgui_src
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp"
@@ -612,7 +626,7 @@ endif()
 
 # 工具链：ShaderCompiler (GLSL 450 → SPIR-V / GLSL 330 / HLSL)
 if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
-    add_subdirectory(tools/shader_compiler)
+    # 工具链构建延后到下方：交叉编译时改用 host 预构建的 dse_shader_compiler。
 
     # --- Shader 离线编译：构建时自动执行 ---
     set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/engine/render/shaders/src")
@@ -649,16 +663,40 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
     # MSBuild 静默去重，Ninja 会因 dupbuild 报错——统一去重以跨生成器安全。
     list(REMOVE_DUPLICATES GENERATED_SHADER_HEADERS)
 
+    # dse_shader_compiler 是 host 工具：
+    #  - 原生构建：直接构建该 target 并使用；
+    #  - 交叉编译(Android/iOS)：clang 产物无法在 host 运行，改用 host 预构建可执行文件
+    #    （先在桌面平台构建一次生成 bin/dse_shader_compiler[.exe]，或 -DDSE_HOST_SHADER_COMPILER=<path>）。
+    if(CMAKE_CROSSCOMPILING)
+        if(NOT DSE_HOST_SHADER_COMPILER)
+            find_program(DSE_HOST_SHADER_COMPILER
+                NAMES dse_shader_compiler dse_shader_compiler.exe
+                PATHS "${CMAKE_SOURCE_DIR}/bin" NO_DEFAULT_PATH)
+        endif()
+        if(NOT DSE_HOST_SHADER_COMPILER)
+            message(FATAL_ERROR
+                "交叉编译需要 host 版 dse_shader_compiler。请先在桌面平台(Windows/Linux)"
+                "构建一次以生成 bin/dse_shader_compiler，或通过 -DDSE_HOST_SHADER_COMPILER=<path> 指定。")
+        endif()
+        set(_DSE_SHADER_COMPILER_CMD "${DSE_HOST_SHADER_COMPILER}")
+        set(_DSE_SHADER_COMPILER_DEP "")
+        message(STATUS "Cross-compiling: using host shader compiler ${DSE_HOST_SHADER_COMPILER}")
+    else()
+        add_subdirectory(tools/shader_compiler)
+        set(_DSE_SHADER_COMPILER_CMD dse_shader_compiler)
+        set(_DSE_SHADER_COMPILER_DEP dse_shader_compiler)
+    endif()
+
     add_custom_command(
         OUTPUT ${GENERATED_SHADER_HEADERS}
-        COMMAND dse_shader_compiler
+        COMMAND ${_DSE_SHADER_COMPILER_CMD}
             --input-dir "${SHADER_SRC_DIR}"
             --output-dir "${SHADER_GEN_DIR}"
             --target all --embed
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/bin/data/shader_cache"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/data/shader_cache"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/examples/KF_Framework/data/shader_cache"
-        DEPENDS dse_shader_compiler ${SHADER_SOURCE_FILES}
+        DEPENDS ${_DSE_SHADER_COMPILER_DEP} ${SHADER_SOURCE_FILES}
         COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 430 / HLSL) and clearing runtime shader cache"
         VERBATIM
     )

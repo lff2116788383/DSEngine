@@ -31,7 +31,7 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/scene/scene_manager.h"
 #include "engine/render/rhi/rhi_factory.h"
 #include <glm/gtc/matrix_transform.hpp>
-#include <glad/gl.h>
+#include "engine/render/rhi/opengl/gl_loader.h"
 #include <iostream>
 #include <filesystem>
 #include <cstdlib>

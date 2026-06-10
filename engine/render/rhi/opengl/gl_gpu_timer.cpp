@@ -6,7 +6,7 @@
 #include "engine/render/rhi/opengl/gl_gpu_timer.h"
 #include "engine/base/debug.h"
 
-#include <glad/glad.h>
+#include "engine/render/rhi/opengl/gl_loader.h"
 
 namespace dse {
 namespace render {
@@ -18,6 +18,11 @@ GLGpuTimer::~GLGpuTimer() {
 void GLGpuTimer::Init() {
     if (initialized_) return;
 
+#ifdef __ANDROID__
+    // GLES 核心无时间戳查询（需 GL_EXT_disjoint_timer_query 扩展）；移动端禁用 GPU 计时器。
+    DEBUG_LOG_WARN("[GLGpuTimer] timestamp queries unavailable on GLES; GPU timer disabled");
+    return;
+#else
     if (glQueryCounter == nullptr || glGetQueryObjectui64v == nullptr) {
         DEBUG_LOG_WARN("[GLGpuTimer] GL timer query not supported");
         return;
@@ -27,6 +32,7 @@ void GLGpuTimer::Init() {
     write_frame_ = 0;
     read_frame_ = 1;
     DEBUG_LOG_INFO("[GLGpuTimer] Initialized (double-buffered timestamp queries)");
+#endif
 }
 
 void GLGpuTimer::Shutdown() {
@@ -52,9 +58,11 @@ GpuTimerId GLGpuTimer::GetOrCreateGpuTimer(const std::string& name) {
     slot.name = name;
     for (int f = 0; f < kFrameCount; ++f) {
         glGenQueries(2, slot.queries[f]);
+#ifndef __ANDROID__
         // 初始化 query 避免首帧读取未发出的 query
         glQueryCounter(slot.queries[f][0], GL_TIMESTAMP);
         glQueryCounter(slot.queries[f][1], GL_TIMESTAMP);
+#endif
     }
     slots_.push_back(std::move(slot));
     name_to_id_[name] = id;
@@ -65,14 +73,18 @@ void GLGpuTimer::BeginGpuTimer(GpuTimerId id) {
     if (!initialized_ || id == kInvalidGpuTimerId) return;
     size_t idx = id - 1;
     if (idx >= slots_.size()) return;
+#ifndef __ANDROID__
     glQueryCounter(slots_[idx].queries[write_frame_][0], GL_TIMESTAMP);
+#endif
 }
 
 void GLGpuTimer::EndGpuTimer(GpuTimerId id) {
     if (!initialized_ || id == kInvalidGpuTimerId) return;
     size_t idx = id - 1;
     if (idx >= slots_.size()) return;
+#ifndef __ANDROID__
     glQueryCounter(slots_[idx].queries[write_frame_][1], GL_TIMESTAMP);
+#endif
 }
 
 float GLGpuTimer::GetGpuTimerResultMs(GpuTimerId id) const {
@@ -90,6 +102,7 @@ void GLGpuTimer::ResetGpuTimers() {
 
 void GLGpuTimer::ResolveGpuTimers() {
     if (!initialized_) return;
+#ifndef __ANDROID__
     for (auto& slot : slots_) {
         GLuint q_begin = slot.queries[read_frame_][0];
         GLuint q_end = slot.queries[read_frame_][1];
@@ -108,6 +121,7 @@ void GLGpuTimer::ResolveGpuTimers() {
         // 纳秒 → 毫秒
         slot.last_result_ms = static_cast<float>(ts_end - ts_begin) / 1'000'000.0f;
     }
+#endif
 }
 
 std::vector<IRhiGpuTimer::GpuTimerEntry> GLGpuTimer::GetAllGpuTimerResults() const {
