@@ -14,10 +14,10 @@
 | Phase 1 | protobuf/libsodium 子模块 + `DSE_ENABLE_NET`(默认 OFF) + 三端零回归 | ✅ | commit `b492a793` |
 | Phase 2a | WSL/Linux 独立构建 GNS 静态库 | ✅ | `libGameNetworkingSockets_s.a` 24.8MB |
 | Phase 2b | `engine/net` 抽象 + GNS 后端 + Linux 回环 smoke + `verify_linux_build.sh --with-net` | ✅ | commit `1c8e36c7`，smoke EXIT=0 |
-| **Phase 2c** | **Windows 桌面构建 GNS + smoke** | **🔄 进行中** | 见 §3，依赖已预构建，CMake 接线待验证 |
+| **Phase 2c** | **Windows 桌面构建 GNS + smoke** | **✅** | 见 §3，`dse_net_smoke.exe` EXIT=0；`verify_windows_build.ps1 -WithNet` 已实测 |
 | Phase 3 | Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL) | ⏳ | 未开始 |
 | Phase 4 | 固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI | ⏳ | 未开始 |
-| Phase 5 | 三端 verify `-WithNet` 回归全绿 | ⏳ | 未开始 |
+| Phase 5 | 三端 verify `-WithNet` 回归全绿 | 🔄 | Linux ✅ / Windows ✅；Android 待 Phase 3 |
 
 子模块固定版本：GNS `v1.6.0`、protobuf `v3.21.12`(abseil 前最后一批)、libsodium `1.0.20-FINAL`。
 GNS 只初始化顶层，**不要** init 它的 webrtc/abseil/vjson 子模块。
@@ -43,7 +43,7 @@ cmake/CMakeLists.txt.gns # 按平台分流依赖；生成 dse_net 静态库 + ds
 
 `cmake/CMakeLists.txt.gns` 按平台分流（关键）：
 - **Linux/macOS 桌面**：直接用**系统** protobuf + libsodium（apt 装好后 GNS `find_package` 自动定位）。✅ 已实测。
-- **Windows 桌面**：libsodium（预构建，`-DDSE_NET_SODIUM_DIR=`）+ protobuf。⚠️ 见 §3 待办。
+- **Windows 桌面**：libsodium + protobuf **均走「预构建 + find_package」**（`-DDSE_NET_SODIUM_DIR=` / `-DDSE_NET_PROTOBUF_DIR=`）。✅ 已实测。
 - **Android/iOS**：OpenSSL + 在树 protobuf(host protoc)。⏳ Phase 3。
 
 ---
@@ -61,9 +61,13 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
 
 ---
 
-## 3. Windows (Phase 2c) — 进行中，下一步恢复指引
+## 3. Windows (Phase 2c) — ✅ 已完成（可一键复现）
 
-### 3.1 已完成的依赖预构建（在仓库外，**不入库**）
+> 一键：`powershell -ExecutionPolicy Bypass -File scripts\verify_windows_build.ps1 -WithNet`
+> （仅验证网络层、跳过引擎构建：追加 `-NetOnly`）。缺依赖时脚本会自动预构建 libsodium + protobuf 到
+> `%USERPROFILE%\dse_net_deps`（可用 `-NetDepsDir` 改）。已实测 `dse_net_smoke.exe` EXIT=0。
+
+### 3.1 依赖预构建（在仓库外，**不入库**；脚本会自动完成）
 - **libsodium**：用自带 MSVC 解决方案构建（`StaticRelease|x64` + `StaticDebug|x64`），
   并整理成 GNS `Findsodium.cmake` 期望的布局，落地在：
   `C:\Users\Administrator\dse_net_deps\sodium\`
@@ -81,39 +85,51 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
   关 tests/zlib，Release+Debug 都 install 到：
   `C:\Users\Administrator\dse_net_deps\protobuf\`（含 `lib\libprotobuf.lib`/`libprotobufd.lib`、
   `bin\protoc.exe`、`cmake\protobuf-config.cmake`）。
+  - **关键**：必须带上与引擎一致的 CRT 宏，否则与在树编译的 `.pb.cc`/GNS 目标链接时报
+    `LNK2038: _CRT_STDIO_ISO_WIDE_SPECIFIERS 0 vs 1`（顶层 `CMakeLists.txt` 全局
+    `add_compile_definitions(_CRT_STDIO_ISO_WIDE_SPECIFIERS=1 ...)`）。
   - 复现命令：
     ```
+    set CRT=/D_CRT_STDIO_ISO_WIDE_SPECIFIERS=1 /D_CRT_NONSTDC_NO_WARNINGS=1 /D_CRT_DECLARE_NONSTDC_NAMES=1
     cmake -S depends/protobuf -B build_protobuf -G "Visual Studio 17 2022" -A x64 \
       -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_MSVC_STATIC_RUNTIME=OFF \
       -Dprotobuf_WITH_ZLIB=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF \
-      -DCMAKE_INSTALL_PREFIX=C:/Users/Administrator/dse_net_deps/protobuf
+      -DCMAKE_INSTALL_PREFIX=C:/Users/Administrator/dse_net_deps/protobuf \
+      -DCMAKE_CXX_FLAGS="%CRT%" -DCMAKE_C_FLAGS="%CRT%"
     cmake --build build_protobuf --config Release --target install
     cmake --build build_protobuf --config Debug   --target install
     ```
 
-### 3.2 待办（下一次会话从这里继续）
-1. **改 `cmake/CMakeLists.txt.gns` 的 Windows 分支**：当前是 `add_subdirectory(在树 protobuf)`，
-   但 GNS 内部用的是 `find_package(Protobuf CONFIG)` + `protobuf_generate_cpp`，
-   add_subdirectory 的目标**不会**被 find_package 发现。
-   → 改为**预构建+安装**路线：不 add_subdirectory protobuf，改为把
-   `C:/Users/Administrator/dse_net_deps/protobuf` 加入 `CMAKE_PREFIX_PATH`，让 GNS 自己 find_package 到。
-   （libsodium 已经走 `find_package`，只需 `sodium_DIR` 指向预构建目录即可。）
-2. **配置 + 构建 + 跑 smoke**（大致命令，待验证）：
+### 3.2 已做的接线改动（已提交、已实测）
+1. **`cmake/CMakeLists.txt.gns` 的 Windows 分支**：原先是 `add_subdirectory(在树 protobuf)`，
+   但 GNS 内部用的是 `find_package(Protobuf QUIET CONFIG)`，add_subdirectory 的目标（局部作用域）
+   **不会**被它发现。
+   → 已改为**预构建+安装**路线：不再 add_subdirectory protobuf，改为
+   `set(Protobuf_USE_STATIC_LIBS ON)` + 当传入 `DSE_NET_PROTOBUF_DIR` 时
+   `list(PREPEND CMAKE_PREFIX_PATH "${DSE_NET_PROTOBUF_DIR}")`，让随后的 GNS `add_subdirectory`
+   继承该前缀、自行 `find_package(Protobuf CONFIG)` 命中预构建安装目录。
+   （libsodium 仍走 `find_package`，`sodium_DIR` 指向预构建目录即可。）
+2. **配置 + 构建 + 跑 smoke**（已实测 EXIT=0）：
    ```
    cmake -S . -B build_vs2022_net -G "Visual Studio 17 2022" -A x64 ^
+     -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF -DDSE_ENABLE_3D=OFF ^
      -DDSE_ENABLE_NET=ON ^
      -DDSE_NET_SODIUM_DIR=C:/Users/Administrator/dse_net_deps/sodium ^
-     -DCMAKE_PREFIX_PATH=C:/Users/Administrator/dse_net_deps/protobuf
+     -DDSE_NET_PROTOBUF_DIR=C:/Users/Administrator/dse_net_deps/protobuf ^
+     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
    cmake --build build_vs2022_net --target dse_net_smoke --config Debug
-   bin\dse_net_smoke.exe   # 期望退出码 0
+   bin\dse_net_smoke.exe   # 实测退出码 0：reliable + unreliable 回环都收到
    ```
-   预期需要清理的点：MSVC 运行库一致性(/MD)、protobuf 的 `Protobuf_USE_STATIC_LIBS`、
-   GNS 的 `/wd` 警告、调试/发布配置下 protobuf lib 名(libprotobuf vs libprotobufd)。
-3. **给 `scripts/verify_windows_build.ps1` 加 `-WithNet`**：自动预构建 libsodium + 安装 protobuf
-   （或检测 `dse_net_deps` 是否已就绪）→ 配置 `DSE_ENABLE_NET=ON` → 构建并运行 `dse_net_smoke.exe`。
-   对齐 Linux 的 `--with-net`。
-4. 跑一遍 **OFF 路径回归**（默认 `DSE_ENABLE_NET=OFF`）确认 Windows 引擎构建零影响
-   （`engine/net/**` 已被 glob 排除，OFF 不会编译网络源）。
+   - 已清理：protobuf 的 CRT 宏一致性（见 §3.1，修掉 LNK2038）。
+   - 残留告警（不影响功能、smoke 通过）：`LNK4098 LIBCMTD 冲突` —— libsodium 自带 `.sln`
+     的 Static{Release,Debug} 用 `/MT(d)`，与引擎 `/MD` 混链。后续若要彻底干净，可让
+     libsodium 也按 `/MD` 出静态库。
+3. **`scripts/verify_windows_build.ps1` 已加 `-WithNet` / `-NetOnly` / `-NetDepsDir`**：
+   缺依赖时自动预构建 libsodium + 安装 protobuf（含上面 CRT 宏）→ 配置 `DSE_ENABLE_NET=ON`
+   → 构建并运行 `dse_net_smoke.exe`，对齐 Linux 的 `--with-net`。已实测「复用」与「从零预构建」两条路径都 EXIT=0。
+4. **OFF 路径回归**：默认 `DSE_ENABLE_NET=OFF` 时 `build_vs2022` 引擎构建零影响（实测
+   `DSEngine_debug.lib` 正常产出）；`engine/net/**` 被 glob 排除，OFF 不编译网络源，
+   §3 的接线全部在 `WIN32` 且仅 NET=ON 时 include，对 OFF 无作用。
 
 ---
 
@@ -123,4 +139,4 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
   iOS 同理走 OpenSSL，但需 macOS+Xcode，本环境无法出包，留作后续。
 - **Phase 4**：固化 `engine/net/` 抽象（lanes/优先级、质量指标事件、连接生命周期事件），
   可选给 Lua/C# 暴露 `dse_net_*` C ABI。
-- **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归，收尾。
+- **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归，收尾（Linux ✅ / Windows ✅，缺 Android）。

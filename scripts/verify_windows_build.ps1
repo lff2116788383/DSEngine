@@ -16,9 +16,18 @@
     构建目录，默认 <repo>/build_vs2022。已存在则增量构建。
 .PARAMETER WithTests
     一并构建 gtest 目标（unit/integration/smoke）。
+.PARAMETER WithNet
+    额外验证网络层(GNS)：预构建 libsodium + protobuf（缺失时自动构建到 NetDepsDir），
+    以 DSE_ENABLE_NET=ON 配置独立构建目录(build_vs2022_net)，构建并运行 dse_net_smoke.exe。
+.PARAMETER NetOnly
+    仅执行 -WithNet 的网络层验证，跳过引擎(dse_engine)构建与校验。
+.PARAMETER NetDepsDir
+    网络层预构建依赖(libsodium/protobuf)的落地目录，默认 %USERPROFILE%\dse_net_deps。
 .EXAMPLE
     .\scripts\verify_windows_build.ps1
     .\scripts\verify_windows_build.ps1 -Config Release -WithTests
+    .\scripts\verify_windows_build.ps1 -WithNet
+    .\scripts\verify_windows_build.ps1 -WithNet -NetOnly
 #>
 
 [CmdletBinding()]
@@ -27,8 +36,12 @@ param(
     [string]$Arch = "x64",
     [string]$Generator = "Visual Studio 17 2022",
     [string]$BuildDir = "",
-    [switch]$WithTests
+    [switch]$WithTests,
+    [switch]$WithNet,
+    [switch]$NetOnly,
+    [string]$NetDepsDir = ""
 )
+if ($NetOnly) { $WithNet = $true }
 
 # cmake 的 stderr 警告会被 PowerShell 当作终止错误，这里统一手动检查 $LASTEXITCODE
 $ErrorActionPreference = "Continue"
@@ -50,6 +63,7 @@ Write-OK "源码目录=$SourceDir"
 if (-not $BuildDir) { $BuildDir = Join-Path $SourceDir "build_vs2022" }
 $BuildDir = [System.IO.Path]::GetFullPath($BuildDir)
 
+if (-not $NetOnly) {
 # ── 2. 配置 ─────────────────────────────────────────────────────────────────
 Write-Step "配置 CMake ($Generator $Arch, $Config)"
 $testsFlag = if ($WithTests) { "ON" } else { "OFF" }
@@ -114,8 +128,99 @@ $lib = Get-ChildItem -Path $BuildDir -Recurse -Filter $libName -ErrorAction Sile
 if (-not $lib) { Die "未找到引擎静态库 $libName。" }
 $libMb = [math]::Round($lib.Length / 1MB, 1)
 Write-OK ("引擎静态库: {0} ({1} MB)" -f $lib.FullName, $libMb)
+} # end (-not $NetOnly)
+
+# ── 5. 网络层 (GNS) 验证 ────────────────────────────────────────────────────
+if ($WithNet) {
+    if (-not $NetDepsDir) { $NetDepsDir = Join-Path $env:USERPROFILE "dse_net_deps" }
+    $SodiumDir   = Join-Path $NetDepsDir "sodium"
+    $ProtobufDir = Join-Path $NetDepsDir "protobuf"
+    $NetBuildDir = Join-Path $SourceDir "build_vs2022_net"
+
+    Write-Step "网络层依赖目录：$NetDepsDir"
+
+    # 5.1 定位 MSBuild（构建 libsodium 自带 .sln 用）
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $vswhere)) { Die "找不到 vswhere，无法定位 MSBuild。请安装 VS2022 Build Tools。" }
+    # -products * 才能纳入 Build Tools 实例（默认只返回 VS IDE 产品）。
+    $MSBuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+    if (-not $MSBuild) {
+        $MSBuild = Get-ChildItem "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\*\MSBuild\Current\Bin\MSBuild.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $MSBuild) { Die "找不到 MSBuild.exe。" }
+    Write-OK "MSBuild=$MSBuild"
+
+    # 5.2 预构建 libsodium（静态 x64 Release+Debug），整理成 Findsodium 期望布局
+    $SodiumLibRel = Join-Path $SourceDir "depends/libsodium/bin/x64/Release/v143/static/libsodium.lib"
+    $SodiumLibDbg = Join-Path $SourceDir "depends/libsodium/bin/x64/Debug/v143/static/libsodium.lib"
+    if (-not (Test-Path (Join-Path $SodiumDir "x64/Release/v144/static/libsodium.lib"))) {
+        $sln = Join-Path $SourceDir "depends/libsodium/builds/msvc/vs2022/libsodium.sln"
+        if (-not (Test-Path $sln)) { Die "缺 libsodium 子模块：git submodule update --init depends/libsodium" }
+        Write-Step "构建 libsodium (StaticRelease|x64)"
+        & $MSBuild $sln /p:Configuration=StaticRelease /p:Platform=x64 /m /v:m
+        if ($LASTEXITCODE -ne 0) { Die "libsodium StaticRelease 构建失败。" }
+        Write-Step "构建 libsodium (StaticDebug|x64)"
+        & $MSBuild $sln /p:Configuration=StaticDebug /p:Platform=x64 /m /v:m
+        if ($LASTEXITCODE -ne 0) { Die "libsodium StaticDebug 构建失败。" }
+
+        New-Item -ItemType Directory -Force -Path (Join-Path $SodiumDir "include") | Out-Null
+        Copy-Item (Join-Path $SourceDir "depends/libsodium/src/libsodium/include/sodium.h") (Join-Path $SodiumDir "include") -Force
+        Copy-Item (Join-Path $SourceDir "depends/libsodium/src/libsodium/include/sodium") (Join-Path $SodiumDir "include") -Recurse -Force
+        Copy-Item (Join-Path $SourceDir "depends/libsodium/builds/msvc/version.h") (Join-Path $SodiumDir "include/sodium/version.h") -Force
+        # 本机 MSVC 工具集后缀(Findsodium 可能算成 v144)与 .sln 实际输出(v143)都放一份。
+        foreach ($tv in @("v143","v144")) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $SodiumDir "x64/Release/$tv/static") | Out-Null
+            New-Item -ItemType Directory -Force -Path (Join-Path $SodiumDir "x64/Debug/$tv/static") | Out-Null
+            Copy-Item $SodiumLibRel (Join-Path $SodiumDir "x64/Release/$tv/static/libsodium.lib") -Force
+            Copy-Item $SodiumLibDbg (Join-Path $SodiumDir "x64/Debug/$tv/static/libsodium.lib") -Force
+        }
+        Write-OK "libsodium 预构建完成：$SodiumDir"
+    } else { Write-OK "复用已预构建的 libsodium：$SodiumDir" }
+
+    # 5.3 预构建并安装 protobuf v3.21.12（静态 /MD；CRT 宏须与引擎一致以免 LNK2038）
+    if (-not (Test-Path (Join-Path $ProtobufDir "lib/libprotobuf.lib"))) {
+        if (-not (Test-Path (Join-Path $SourceDir "depends/protobuf/CMakeLists.txt"))) { Die "缺 protobuf 子模块：git submodule update --init depends/protobuf" }
+        $pbBuild = Join-Path $SourceDir "build_protobuf"
+        $crt = "/D_CRT_STDIO_ISO_WIDE_SPECIFIERS=1 /D_CRT_NONSTDC_NO_WARNINGS=1 /D_CRT_DECLARE_NONSTDC_NAMES=1"
+        Write-Step "配置 protobuf"
+        & $CMake -S (Join-Path $SourceDir "depends/protobuf") -B $pbBuild -G $Generator -A $Arch `
+            "-Dprotobuf_BUILD_TESTS=OFF" "-Dprotobuf_MSVC_STATIC_RUNTIME=OFF" `
+            "-Dprotobuf_WITH_ZLIB=OFF" "-Dprotobuf_BUILD_SHARED_LIBS=OFF" `
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" "-DCMAKE_INSTALL_PREFIX=$ProtobufDir" `
+            "-DCMAKE_CXX_FLAGS=$crt" "-DCMAKE_C_FLAGS=$crt"
+        if ($LASTEXITCODE -ne 0) { Die "protobuf 配置失败。" }
+        foreach ($c in @("Release","Debug")) {
+            Write-Step "构建并安装 protobuf ($c)"
+            & $CMake --build $pbBuild --config $c --target install -- /m
+            if ($LASTEXITCODE -ne 0) { Die "protobuf $c 安装失败。" }
+        }
+        Write-OK "protobuf 预构建完成：$ProtobufDir"
+    } else { Write-OK "复用已预构建的 protobuf：$ProtobufDir" }
+
+    # 5.4 配置 + 构建 dse_net_smoke（DSE_ENABLE_NET=ON）
+    if (-not (Test-Path (Join-Path $NetBuildDir "CMakeCache.txt"))) {
+        Write-Step "配置 CMake (NET=ON, $Generator $Arch)"
+        & $CMake -S $SourceDir -B $NetBuildDir -G $Generator -A $Arch `
+            "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
+            "-DDSE_ENABLE_NET=ON" "-DDSE_NET_SODIUM_DIR=$SodiumDir" "-DDSE_NET_PROTOBUF_DIR=$ProtobufDir" `
+            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+        if ($LASTEXITCODE -ne 0) { Die "网络层 CMake 配置失败。" }
+    } else { Write-OK "复用已有网络构建目录：$NetBuildDir" }
+
+    Write-Step "构建 dse_net_smoke ($Config)"
+    & $CMake --build $NetBuildDir --config $Config --target dse_net_smoke -- /m
+    if ($LASTEXITCODE -ne 0) { Die "构建 dse_net_smoke 失败。" }
+
+    # 5.5 运行回环 smoke（reliable + unreliable），退出码 0 = 通过
+    $smokeExe = Join-Path $SourceDir "bin/dse_net_smoke.exe"
+    if (-not (Test-Path $smokeExe)) { Die "未找到 $smokeExe。" }
+    Write-Step "运行网络回环 smoke"
+    & $smokeExe
+    if ($LASTEXITCODE -ne 0) { Die "网络 smoke 失败 (exit=$LASTEXITCODE)。" }
+    Write-OK "网络 smoke: 通过"
+}
 
 Write-Host "`n==================== RESULT ====================" -ForegroundColor Cyan
-Write-OK "Windows 构建验证全部通过 ($Config)"
-Write-Host ("   引擎库: {0}" -f $lib.FullName) -ForegroundColor Green
+if (-not $NetOnly) { Write-OK "Windows 引擎构建验证通过 ($Config)" }
+if ($WithNet)      { Write-OK "网络层 (GNS) 验证通过" }
 exit 0

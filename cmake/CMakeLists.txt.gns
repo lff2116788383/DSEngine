@@ -44,7 +44,9 @@ if(ANDROID OR IOS)
     add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
 
 elseif(WIN32)
-    # Windows 桌面：libsodium（预构建，sodium_DIR）+ 在树 protobuf。Phase 2c 接入。
+    # Windows 桌面：libsodium + protobuf 均走「预构建 + find_package」路线。Phase 2c。
+    # GNS 内部用 find_package(Protobuf QUIET CONFIG)，在树 add_subdirectory 的目标
+    # 不会被它发现；故 protobuf 改为预构建安装后，经 CMAKE_PREFIX_PATH 让 GNS 自行 find_package。
     set(USE_CRYPTO      "libsodium" CACHE STRING "" FORCE)
     set(USE_CRYPTO25519 "libsodium" CACHE STRING "" FORCE)
     set(sodium_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
@@ -52,9 +54,11 @@ elseif(WIN32)
         set(sodium_DIR "${DSE_NET_SODIUM_DIR}" CACHE PATH "" FORCE)
         set(ENV{sodium_DIR} "${DSE_NET_SODIUM_DIR}")
     endif()
-    set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
-    add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
+    set(Protobuf_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+    # 经 include() 引入，与顶层同作用域，list(PREPEND) 即可被随后的 GNS add_subdirectory 继承。
+    if(DSE_NET_PROTOBUF_DIR)
+        list(PREPEND CMAKE_PREFIX_PATH "${DSE_NET_PROTOBUF_DIR}")
+    endif()
 
 else()
     # Linux/macOS 桌面：直接用系统 protobuf + libsodium（GNS 经 find_package/pkg-config 定位）。
