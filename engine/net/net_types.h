@@ -4,12 +4,18 @@
 #include <cstdint>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace dse::net {
 
 // 连接句柄。0 表示无效连接。
 using ConnectionId = uint32_t;
 inline constexpr ConnectionId kInvalidConnection = 0;
+
+// 通道编号（lane）。同一连接内的多条独立有序流，用于优先级调度、避免队头阻塞。
+// 0 为默认通道（未配置 lanes 时所有消息都走 0）。
+using LaneId = uint16_t;
+inline constexpr LaneId kDefaultLane = 0;
 
 // 发送模式。可靠/非可靠走同一连接。
 enum class SendMode : uint32_t {
@@ -44,6 +50,15 @@ struct ConnQuality {
 struct MessageView {
     const void* data = nullptr;
     size_t      size = 0;
+};
+
+// 通道（lane）配置：为某连接划分 N 条有序流并设定优先级/权重，防队头阻塞。
+//   priorities[i] —— 第 i 条 lane 的优先级，数值越小越优先（高优先级 lane 先发）。
+//   weights[i]    —— 同优先级 lane 间按权重分配带宽；留空表示等权。
+// weights 要么为空、要么与 priorities 等长。lane 数 = priorities.size()。
+struct LaneConfig {
+    std::vector<int>      priorities;
+    std::vector<uint16_t> weights;
 };
 
 } // namespace dse::net

@@ -15,14 +15,19 @@ namespace {
 constexpr uint16_t kPort = 27300;
 const char* kReliable   = "RELIABLE_HELLO";
 const char* kUnreliable = "UNRELIABLE_PING";
+const char* kLaneMsg    = "LANE1_MSG";
+constexpr LaneId kTestLane = 1;
 
 class SmokeListener final : public INetListener {
 public:
     int  connected = 0;
     bool got_reliable = false;
     bool got_unreliable = false;
+    bool got_lane = false;        // 是否收到 lane 1 上的消息（且 lane 索引正确）
 
-    void OnConnecting(ConnectionId c) override { std::printf("[smoke] connecting conn=%u\n", c); }
+    void OnConnecting(ConnectionId c, const Address& peer) override {
+        std::printf("[smoke] connecting conn=%u peer=%s:%u\n", c, peer.host.c_str(), peer.port);
+    }
     void OnConnected(ConnectionId c) override {
         ++connected;
         std::printf("[smoke] connected conn=%u (total=%d)\n", c, connected);
@@ -30,11 +35,12 @@ public:
     void OnClosed(ConnectionId c, CloseReason r) override {
         std::printf("[smoke] closed conn=%u reason=%u\n", c, static_cast<unsigned>(r));
     }
-    void OnMessage(ConnectionId c, const MessageView& m) override {
+    void OnMessage(ConnectionId c, const MessageView& m, LaneId lane) override {
         std::string s(static_cast<const char*>(m.data), m.size);
-        std::printf("[smoke] recv conn=%u len=%zu '%s'\n", c, m.size, s.c_str());
+        std::printf("[smoke] recv conn=%u len=%zu lane=%u '%s'\n", c, m.size, lane, s.c_str());
         if (s == kReliable)   got_reliable = true;
         if (s == kUnreliable) got_unreliable = true;
+        if (s == kLaneMsg && lane == kTestLane) got_lane = true;
     }
 };
 
@@ -74,6 +80,18 @@ int main() {
         std::printf("[smoke] FAIL recv (reliable=%d unreliable=%d)\n",
                     l.got_reliable, l.got_unreliable);
         t->Shutdown(); return 5;
+    }
+
+    // ── lanes：给客户端连接配 2 条通道，在 lane 1 上发一条，验证接收侧 lane 索引正确 ──
+    LaneConfig lanes;
+    lanes.priorities = {0, 1};   // 2 条 lane，优先级 0/1
+    if (!t->ConfigureLanes(client, lanes)) {
+        std::printf("[smoke] FAIL ConfigureLanes\n"); t->Shutdown(); return 6;
+    }
+    t->Send(client, kLaneMsg, std::strlen(kLaneMsg), SendMode::Reliable, kTestLane);
+    if (!pump_until(t, l, [](SmokeListener& s){ return s.got_lane; }, 3000)) {
+        std::printf("[smoke] FAIL lane recv (got_lane=%d)\n", l.got_lane);
+        t->Shutdown(); return 7;
     }
 
     ConnQuality q;

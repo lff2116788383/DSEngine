@@ -19,6 +19,13 @@ CloseReason MapCloseState(int eState) {
     }
 }
 
+// GNS 的 SteamNetworkingIPAddr → 与后端无关的 Address。
+Address MapAddr(const SteamNetworkingIPAddr& a) {
+    char buf[64] = {0};
+    a.ToString(buf, sizeof(buf), false);  // 仅主机，不拼端口
+    return Address{std::string(buf), a.m_port};
+}
+
 } // namespace
 
 // 单实例后端：GNS 的连接状态回调是进程级的，这里用 s_active 路由到当前实例。
@@ -81,12 +88,39 @@ public:
         m_conns.erase(c);
     }
 
-    bool Send(ConnectionId conn, const void* data, size_t len, SendMode mode) override {
-        int flags = (mode == SendMode::Reliable) ? k_nSteamNetworkingSend_Reliable
-                                                  : k_nSteamNetworkingSend_Unreliable;
-        EResult r = m_iface->SendMessageToConnection(
-            static_cast<HSteamNetConnection>(conn), data, static_cast<uint32>(len), flags, nullptr);
-        return r == k_EResultOK;
+    bool ConfigureLanes(ConnectionId conn, const LaneConfig& cfg) override {
+        const int n = static_cast<int>(cfg.priorities.size());
+        if (n <= 0) return false;
+        if (!cfg.weights.empty() && cfg.weights.size() != cfg.priorities.size()) return false;
+        const int* pri = cfg.priorities.data();
+        const uint16* w = cfg.weights.empty() ? nullptr : cfg.weights.data();
+        return m_iface->ConfigureConnectionLanes(
+                   static_cast<HSteamNetConnection>(conn), n, pri, w) == k_EResultOK;
+    }
+
+    bool Send(ConnectionId conn, const void* data, size_t len,
+              SendMode mode, LaneId lane) override {
+        const int flags = (mode == SendMode::Reliable) ? k_nSteamNetworkingSend_Reliable
+                                                       : k_nSteamNetworkingSend_Unreliable;
+        if (lane == kDefaultLane) {
+            EResult r = m_iface->SendMessageToConnection(
+                static_cast<HSteamNetConnection>(conn), data, static_cast<uint32>(len), flags, nullptr);
+            return r == k_EResultOK;
+        }
+        // 非 0 通道：SendMessageToConnection 不接受 lane，需走 AllocateMessage + SendMessages。
+        SteamNetworkingMessage_t* msg = SteamNetworkingUtils()->AllocateMessage(static_cast<int>(len));
+        if (!msg) return false;
+        std::memcpy(msg->m_pData, data, len);
+        msg->m_conn    = static_cast<HSteamNetConnection>(conn);
+        msg->m_nFlags  = flags;
+        msg->m_idxLane = lane;
+        int64 result = 0;
+        m_iface->SendMessages(1, &msg, &result, /*bDeleteFailedMessages=*/true);
+        return result > 0;  // 正数=消息编号（成功）；负数=EResult 错误
+    }
+
+    void Flush(ConnectionId conn) override {
+        m_iface->FlushMessagesOnConnection(static_cast<HSteamNetConnection>(conn));
     }
 
     void Poll(INetListener& listener) override {
@@ -100,7 +134,8 @@ public:
             if (n <= 0) break;
             for (int i = 0; i < n; ++i) {
                 MessageView v{msgs[i]->m_pData, static_cast<size_t>(msgs[i]->m_cbSize)};
-                listener.OnMessage(static_cast<ConnectionId>(msgs[i]->m_conn), v);
+                listener.OnMessage(static_cast<ConnectionId>(msgs[i]->m_conn), v,
+                                   static_cast<LaneId>(msgs[i]->m_idxLane));
                 msgs[i]->Release();
             }
             if (n < 16) break;
@@ -134,7 +169,8 @@ private:
                     m_iface->SetConnectionPollGroup(c, m_pollGroup);
                     m_conns.insert(c);
                 }
-                if (m_listener) m_listener->OnConnecting(static_cast<ConnectionId>(c));
+                if (m_listener) m_listener->OnConnecting(static_cast<ConnectionId>(c),
+                                                         MapAddr(info->m_info.m_addrRemote));
                 break;
             case k_ESteamNetworkingConnectionState_Connected:
                 if (m_listener) m_listener->OnConnected(static_cast<ConnectionId>(c));

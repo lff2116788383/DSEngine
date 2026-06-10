@@ -158,10 +158,16 @@ target_include_directories(dse_net
 target_link_libraries(dse_net PUBLIC GameNetworkingSockets::static)
 target_compile_features(dse_net PUBLIC cxx_std_17)
 
-# ── 4) 回环冒烟测试 dse_net_smoke（验证 reliable+unreliable 真实 UDP 回环）──
+# ── 4) 回环冒烟测试 dse_net_smoke（验证 reliable+unreliable+lanes 真实 UDP 回环）──
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_smoke.cpp")
     add_executable(dse_net_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_smoke.cpp")
     target_link_libraries(dse_net_smoke PRIVATE dse_net)
+endif()
+
+# ── 4b) C ABI 回环冒烟 dse_net_capi_smoke（仅用 dse_net_* 扁平 C 接口，验证 Lua/C# 接入面）──
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_capi_smoke.cpp")
+    add_executable(dse_net_capi_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_capi_smoke.cpp")
+    target_link_libraries(dse_net_capi_smoke PRIVATE dse_net)
 endif()
 
 set(DSE_HAS_NET TRUE)

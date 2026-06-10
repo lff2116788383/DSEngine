@@ -11,13 +11,14 @@ class INetListener {
 public:
     virtual ~INetListener() = default;
     // 服务端：收到新连接（已自动 Accept）。客户端：本地发起连接进入握手。
-    virtual void OnConnecting(ConnectionId /*conn*/) {}
+    // peer 为对端地址（服务端用于识别来源；发起方为目标地址）。
+    virtual void OnConnecting(ConnectionId /*conn*/, const Address& /*peer*/) {}
     // 连接就绪，可收发。
     virtual void OnConnected(ConnectionId /*conn*/) {}
     // 连接关闭/异常。
     virtual void OnClosed(ConnectionId /*conn*/, CloseReason /*reason*/) {}
-    // 收到一条消息。
-    virtual void OnMessage(ConnectionId /*conn*/, const MessageView& /*msg*/) {}
+    // 收到一条消息（lane 为发送方所用通道，未用 lanes 时恒为 0）。
+    virtual void OnMessage(ConnectionId /*conn*/, const MessageView& /*msg*/, LaneId /*lane*/) {}
 };
 
 // 配置（预留；当前仅占位，后续可加密钥/超时/带宽上限等）。
@@ -41,9 +42,18 @@ public:
     // 关闭某连接。
     virtual void Close(ConnectionId conn, CloseReason reason = CloseReason::Normal) = 0;
 
+    // ── 通道（lanes）──
+    // 为连接划分多条有序流并设定优先级/权重（防队头阻塞）。
+    // 未调用时默认单通道（lane 0）。
+    virtual bool ConfigureLanes(ConnectionId conn, const LaneConfig& cfg) = 0;
+
     // ── 收发 ──
-    // 发送一条消息（消息级；reliable/unreliable 由 mode 决定）。
-    virtual bool Send(ConnectionId conn, const void* data, size_t len, SendMode mode) = 0;
+    // 发送一条消息（消息级；reliable/unreliable 由 mode 决定；lane 选择通道）。
+    virtual bool Send(ConnectionId conn, const void* data, size_t len,
+                      SendMode mode, LaneId lane = kDefaultLane) = 0;
+
+    // 立即刷出被 Nagle 缓冲的消息（低延迟场景；默认开启 Nagle 合包）。
+    virtual void Flush(ConnectionId conn) = 0;
 
     // ── 每帧泵：派发连接事件 + 收消息（回调到 listener）──
     virtual void Poll(INetListener& listener) = 0;

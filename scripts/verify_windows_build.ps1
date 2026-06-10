@@ -211,13 +211,25 @@ if ($WithNet) {
     & $CMake --build $NetBuildDir --config $Config --target dse_net_smoke -- /m
     if ($LASTEXITCODE -ne 0) { Die "构建 dse_net_smoke 失败。" }
 
-    # 5.5 运行回环 smoke（reliable + unreliable），退出码 0 = 通过
+    Write-Step "构建 dse_net_capi_smoke ($Config)"
+    & $CMake --build $NetBuildDir --config $Config --target dse_net_capi_smoke -- /m
+    if ($LASTEXITCODE -ne 0) { Die "构建 dse_net_capi_smoke 失败。" }
+
+    # 5.5 运行回环 smoke（reliable + unreliable + lane1），退出码 0 = 通过
     $smokeExe = Join-Path $SourceDir "bin/dse_net_smoke.exe"
     if (-not (Test-Path $smokeExe)) { Die "未找到 $smokeExe。" }
-    Write-Step "运行网络回环 smoke"
+    Write-Step "运行网络回环 smoke (INetTransport)"
     & $smokeExe
     if ($LASTEXITCODE -ne 0) { Die "网络 smoke 失败 (exit=$LASTEXITCODE)。" }
     Write-OK "网络 smoke: 通过"
+
+    # 5.6 运行 C ABI 回环 smoke（仅用 dse_net_* 接口），退出码 0 = 通过
+    $capiExe = Join-Path $SourceDir "bin/dse_net_capi_smoke.exe"
+    if (-not (Test-Path $capiExe)) { Die "未找到 $capiExe。" }
+    Write-Step "运行网络回环 smoke (C ABI)"
+    & $capiExe
+    if ($LASTEXITCODE -ne 0) { Die "C ABI smoke 失败 (exit=$LASTEXITCODE)。" }
+    Write-OK "C ABI smoke: 通过"
 }
 
 Write-Host "`n==================== RESULT ====================" -ForegroundColor Cyan

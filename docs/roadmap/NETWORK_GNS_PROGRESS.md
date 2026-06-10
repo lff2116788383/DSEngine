@@ -16,7 +16,7 @@
 | Phase 2b | `engine/net` 抽象 + GNS 后端 + Linux 回环 smoke + `verify_linux_build.sh --with-net` | ✅ | commit `1c8e36c7`，smoke EXIT=0 |
 | **Phase 2c** | **Windows 桌面构建 GNS + smoke** | **✅** | 见 §3，`dse_net_smoke.exe` EXIT=0；`verify_windows_build.ps1 -WithNet` 已实测 |
 | **Phase 3** | **Android(NDK arm64) 交叉编译 GNS (host protoc + arm64 OpenSSL)** | **✅** | 见 §3.5，`bin/dse_net_smoke`=arm64 ELF（编译+链接通过）；`scripts/build_android_net.sh` 已实测 PASS |
-| Phase 4 | 固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI | ⏳ | 未开始 |
+| **Phase 4** | **固化 `engine/net/` 抽象层 (lanes/质量/事件) + 可选 C ABI** | **✅** | 见 §3.6，`dse_net_smoke`(含 lane 回环) + `dse_net_capi_smoke` 两端 EXIT=0（Win 运行 / Android 编译+链接） |
 | Phase 5 | 三端 verify `-WithNet` 回归全绿 | 🔄 | Linux ✅ / Windows ✅ / Android ✅（编译+链接口径） |
 
 子模块固定版本：GNS `v1.6.0`、protobuf `v3.21.12`(abseil 前最后一批)、libsodium `1.0.20-FINAL`。
@@ -28,13 +28,16 @@ GNS 只初始化顶层，**不要** init 它的 webrtc/abseil/vjson 子模块。
 
 ```
 engine/net/
-  net_types.h            # 与后端无关的值类型 (ConnectionId/SendMode/Address/ConnQuality/MessageView)
-  net_transport.h        # 纯接口 INetTransport + INetListener + 工厂 CreateGnsTransport()；零 GNS 耦合
+  net_types.h            # 与后端无关的值类型 (ConnectionId/SendMode/LaneId/LaneConfig/Address/ConnQuality/MessageView)
+  net_transport.h        # 纯接口 INetTransport + INetListener + 工厂 CreateGnsTransport()；零 GNS 耦合（含 lanes/Flush）
+  net_c_api.h            # 扁平 C ABI 声明 (dse_net_*)，供 Lua/C#/FFI 宿主调用；不暴露任何 C++/GNS 类型
+  net_c_api.cpp          # C ABI 实现：包住 INetTransport，仅依赖 engine/net 抽象（不 include GNS 头）
   backends/gns/
     gns_transport.cpp    # 唯一 include <steam/...> 之处，封装 ISteamNetworkingSockets
 tests/net/
-  net_smoke.cpp          # 单进程 127.0.0.1 回环：握手→发 reliable+unreliable→校验收到；退出码 0=通过
-cmake/CMakeLists.txt.gns # 按平台分流依赖；生成 dse_net 静态库 + dse_net_smoke
+  net_smoke.cpp          # 单进程 127.0.0.1 回环：握手→发 reliable+unreliable+lane1→校验收到；退出码 0=通过
+  net_capi_smoke.cpp     # 同上但全程只用 dse_net_* C 接口（模拟 Lua/C# 宿主）；退出码 0=通过
+cmake/CMakeLists.txt.gns # 按平台分流依赖；生成 dse_net 静态库 + dse_net_smoke + dse_net_capi_smoke
 ```
 
 顶层 `CMakeLists.txt`：
@@ -191,7 +194,34 @@ bash scripts/build_android_net.sh
 
 ---
 
+## 3.6 抽象层固化 + C ABI (Phase 4) — ✅ 已完成
+
+固化 `engine/net/` 抽象，补齐 lanes/质量/事件，并新增可选的扁平 C ABI（供 Lua/C#）。
+上层（gameplay/脚本）始终只依赖 `engine/net` 头，**不 include 任何 GNS 头**。
+
+### 3.6.1 抽象层变更（已提交、已实测）
+- **lanes（防队头阻塞）**：`net_types.h` 增 `LaneId`/`kDefaultLane` + `LaneConfig{priorities, weights}`；
+  `INetTransport::ConfigureLanes(conn, cfg)` → GNS `ConfigureConnectionLanes`；
+  `Send(..., LaneId lane = 0)`：lane 0 走 `SendMessageToConnection`，非 0 走 `AllocateMessage`+`SendMessages`(设 `m_idxLane`)；
+  `INetListener::OnMessage(conn, msg, LaneId lane)` 回传发送方所用通道（取 `m_idxLane`）。
+- **Nagle 控制**：`INetTransport::Flush(conn)` → `FlushMessagesOnConnection`（低延迟场景）。
+- **连接生命周期事件**：`OnConnecting(conn, const Address& peer)` 现回传对端地址（取 `m_info.m_addrRemote`）。
+- **质量事件**：沿用 `GetQuality`（`GetConnectionRealTimeStatus`）。
+
+### 3.6.2 C ABI（`dse_net_*`，可选）
+- `net_c_api.h`：`extern "C"` 扁平接口，不透明句柄 `dse_net_transport*` + `dse_net_conn`；
+  事件经 `dse_net_callbacks` 回调结构体派发（`on_connecting/connected/closed/message`，带 `user` 透传）。
+- 覆盖：create/destroy/init/shutdown、listen/connect/close、configure_lanes、send(mode+lane)/flush、poll、get_quality。
+- `net_c_api.cpp` 只依赖 `engine/net` 抽象，编入 `dse_net` 静态库（与 `gns_transport.cpp` 一起，但本身不碰 GNS 头）。
+
+### 3.6.3 验证（已实测）
+- **Windows（运行）**：`dse_net_smoke.exe` EXIT=0 —— 收到 reliable/unreliable（lane 0）+ **lane 1** 消息（`OnMessage` 回传 lane=1）；
+  `OnConnecting` 打印 `peer=127.0.0.1:<port>`。`dse_net_capi_smoke.exe` EXIT=0 —— 全程仅用 `dse_net_*` C 接口完成回环。
+- **Android（编译+链接）**：`bin/dse_net_smoke`、`bin/dse_net_capi_smoke` 均为 `ELF 64-bit ... ARM aarch64`（NDK arm64-v8a 交叉编译通过）。
+- **回归**：`DSE_ENABLE_NET=OFF` 三端构建零影响（抽象层与 C ABI 均在 `dse_net` 目标内，OFF 时不参与）。
+
+---
+
 ## 4. 之后阶段（未开始）
-- **Phase 4**：固化 `engine/net/` 抽象（lanes/优先级、质量指标事件、连接生命周期事件），
-  可选给 Lua/C# 暴露 `dse_net_*` C ABI。
-- **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归，收尾（Linux ✅ / Windows ✅，缺 Android）。
+- **Phase 5**：三端 verify 脚本 `-WithNet`/`--with-net` 全绿回归收尾（Linux ✅ / Windows ✅ / Android ✅ 编译+链接）。
+- **后续（可选）**：P2P/ICE（开 WebRTC 子模块）、复制层/快照-delta/客户端预测/AOI（玩法级网络）；iOS arm64（复用 Android 套路，需 macOS+Xcode）。
