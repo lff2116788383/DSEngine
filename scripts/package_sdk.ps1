@@ -53,6 +53,12 @@ if ($versionLine) {
     $Version = "0.0.0"
 }
 
+# 读取预发布标签（与 dse_version.h 的 DSE_VERSION_STRING 保持一致），拼成完整 SemVer
+$prLine = Select-String -Path "$SourceDir\CMakeLists.txt" -Pattern 'set\(DSEngine_VERSION_PRERELEASE\s+"([^"]*)"' | Select-Object -First 1
+if ($prLine -and $prLine.Matches[0].Groups[1].Value -ne "") {
+    $Version = "$Version-$($prLine.Matches[0].Groups[1].Value)"
+}
+
 $Platform    = "win-$Arch"
 $SdkName     = "DSEngine-SDK-v${Version}-${Platform}-$($Config.ToLower())"
 $OutputZip   = Join-Path $SourceDir "$SdkName.zip"

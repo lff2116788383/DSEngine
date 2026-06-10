@@ -9,6 +9,16 @@ project(DSEngine VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# 预发布标签（SemVer pre-release）。首个 SDK 测试版为 v0.1.0-alpha。
+# 正式发布时置空字符串即可（DSE_VERSION_STRING 退化为纯 "x.y.z"）。
+# package_sdk.ps1 会解析此行用于命名发行包，保持格式为：set(DSEngine_VERSION_PRERELEASE "...")
+set(DSEngine_VERSION_PRERELEASE "alpha")
+if(DSEngine_VERSION_PRERELEASE STREQUAL "")
+    set(DSEngine_VERSION_STRING "${PROJECT_VERSION}")
+else()
+    set(DSEngine_VERSION_STRING "${PROJECT_VERSION}-${DSEngine_VERSION_PRERELEASE}")
+endif()
+
 # 生成版本头文件 dse_version.h（从 .in 模板）
 configure_file(
     ${CMAKE_SOURCE_DIR}/engine/dse_version.h.in
