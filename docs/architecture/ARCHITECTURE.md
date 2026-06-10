@@ -167,7 +167,7 @@
 |------|---------|------|
 | 后端数量 | 3（OpenGL / Vulkan / D3D11） | ✅ |
 | 抽象粒度 | 全后端统一 CommandBuffer | ✅ |
-| 着色器跨后端 | DSSL → GLSL/HLSL/SPIR-V 自动生成 | ✅ |
+| 着色器跨后端 | **单一 GLSL 源** → SPIR-V/GLSL/HLSL/DXBC 离线生成内嵌（详见 2.3.1） | ✅ |
 | NDC 修正 | GetProjectionCorrection() 抽象 | ✅ 细节到位 |
 | MSAA / UAV / Mipmap | RenderTargetDesc 统一支持 | ✅ |
 
@@ -181,6 +181,30 @@
 | **DSEngine** | **RhiDevice + CommandBuffer** | OpenGL / Vulkan / D3D11 |
 
 **结论：** RHI 架构设计思路与 Unreal 的 RHI 层 **异曲同工**。后端数少是短板，但架构质量不输 UE。
+
+#### 2.3.1 着色器编译管线（三端共享一份源）
+
+三个后端**不各自手写着色器**，而是共享同一份源、离线交叉编译成多目标后内嵌进二进制：
+
+```
+engine/render/shaders/src/*.{vert,frag,comp}   ← 唯一源（Vulkan 风格 GLSL，~57 个）
+        │  dse_shader_compiler（构建期工具）
+        │    GLSL → SPIR-V(glslang) → spirv-cross 反编 → fxc
+        ▼
+engine/render/shaders/generated/embed/<name>.gen.h   ← 每个着色器一个头，含多目标产物
+        ├─ k*_spv[]       SPIR-V 二进制      → Vulkan
+        ├─ k*_glsl430     桌面 GLSL 430      → OpenGL 桌面
+        ├─ k*_essl310     GL ES 310          → OpenGL ES / 移动
+        ├─ k*_hlsl        HLSL 源            → D3D11（D3DCompile 运行时编译）
+        ├─ k*_dxbc[]      预编译 DXBC 字节码 → D3D11 备选
+        └─ k*_reflection  反射元数据         → 三端共用（UBO/纹理绑定）
+```
+
+- **三端 shader manager**（`gl_shader_manager.cpp` / `dx11_shader_manager.cpp` / `vulkan_shader_manager.cpp`）`#include` **同一批** `embed/*.gen.h`，各取所需符号；没有任何手写内联着色器。
+- **变体机制**：源文件顶部用 `// @VARIANTS: <宏>` 注解 + `#ifdef`（如 `pbr.vert`/`shadow.vert` 的 `GPU_DRIVEN`），编译器据此从同一份源额外产出变体（如 `pbr_gpu_driven`），三端齐全、非独立文件。GPU-driven 渲染三端均支持。
+- **DSSL（材质着色语言）是另一套、正交的系统**：`engine/render/shaders/dssl/*.dssl` 面向用户自定义材质，由 DSSL 编译器生成 `.frag/.vert` 后汇入上面同一条编译链；它不是核心 RHI 着色器的来源。
+
+**结论：** 一份 GLSL 源 → 一个编译器 → 一组多目标内嵌头，三端零手写、零重复，跨后端一致性由工具链保证。
 
 ### 2.4 模块化与运行时架构
 
