@@ -341,7 +341,6 @@ std::string AssetManager::NormalizeAssetPath(const std::string& path) const {
     if (normalized.is_absolute()) {
         if (!data_root.empty()) {
             const std::filesystem::path normalized_data_root = std::filesystem::path(data_root).lexically_normal();
-            std::error_code ec;
             const std::filesystem::path relative = normalized.lexically_relative(normalized_data_root);
             // 用 generic_string()（跨平台 std::string，'/' 分隔）做 ".." 前缀判断，
             // 避免 path::native() 在 Windows 返回 wstring / POSIX 返回 string 的类型差异。

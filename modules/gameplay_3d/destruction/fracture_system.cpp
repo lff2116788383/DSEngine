@@ -366,7 +366,6 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
 
     for (uint32_t frag_id = 0; frag_id < fragment_count; ++frag_id) {
         // 找出属于该碎片的顶点
-        std::vector<uint32_t> frag_vert_indices;
         std::vector<bool> vert_mask(vcount, false);
         for (size_t i = 0; i < vcount; ++i) {
             if (vertex_labels[i] == frag_id) {
