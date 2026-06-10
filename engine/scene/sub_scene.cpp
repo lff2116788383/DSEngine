@@ -24,8 +24,14 @@ bool DeserializeEntitiesFromDoc(World& world, AssetManager& /*asset_manager*/,
                                 std::vector<Entity>& out_entities) {
     out_entities.clear();
 
-    if (!doc.HasMember("entities") || !doc["entities"].IsArray()) {
+    // 无 entities 字段：合法的空场景。
+    if (!doc.HasMember("entities")) {
         return true;
+    }
+    // entities 字段存在但类型不是数组：场景文件格式损坏，上报失败而非静默当空场景。
+    if (!doc["entities"].IsArray()) {
+        DEBUG_LOG_ERROR("DeserializeEntitiesFromDoc: 'entities' must be an array");
+        return false;
     }
 
     std::unordered_map<uint32_t, Entity> entity_id_map;

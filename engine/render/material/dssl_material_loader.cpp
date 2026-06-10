@@ -63,9 +63,12 @@ bool DSSLMaterialLoader::ParseDSSLForTemplate(const std::string& source,
     out.shader_type = DSSLShaderType::Surface;
     out.render_modes = {};
 
+    bool saw_content = false;  // 是否出现任何有效（非空、非注释）内容
+
     while (std::getline(stream, line)) {
         std::string trimmed = Trim(line);
         if (trimmed.empty() || StartsWith(trimmed, "//")) continue;
+        saw_content = true;
 
         // shader_type
         if (StartsWith(trimmed, "shader_type")) {
@@ -152,6 +155,9 @@ bool DSSLMaterialLoader::ParseDSSLForTemplate(const std::string& source,
         // 函数体开始 → 停止解析 header
         if (StartsWith(trimmed, "void ")) break;
     }
+
+    // 空文件或纯注释文件不是有效的 DSSL 材质，上报失败而非返回一个全默认的空模板。
+    if (!saw_content) return false;
 
     return true;
 }

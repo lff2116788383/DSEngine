@@ -172,6 +172,19 @@ TEST_F(SubSceneTest, 未加载时Unload无副作用) {
     EXPECT_EQ(sub.EntityCount(), 0u);
 }
 
+TEST_F(SubSceneTest, entities字段类型错误加载失败) {
+    // entities 存在但不是数组（格式损坏）→ 应失败，而非静默当成空场景。
+    const char* kBadEntities = R"({ "name": "bad", "entities": { "oops": 1 } })";
+    auto path = WriteTempScene("dse_sub_bad_entities.dscene", kBadEntities);
+    SubScene sub;
+    bool ok = sub.Load(world, asset_manager, path.string());
+    EXPECT_FALSE(ok);
+    EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
+    EXPECT_EQ(sub.EntityCount(), 0u);
+    EXPECT_EQ(world.EntityCount(), 0u);
+    std::filesystem::remove(path);
+}
+
 TEST_F(SubSceneTest, 移动语义转移所有权) {
     auto path = WriteTempScene("dse_sub_move.dscene", kTwoEntityScene);
     SubScene sub1;
