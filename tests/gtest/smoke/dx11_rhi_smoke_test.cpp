@@ -191,4 +191,60 @@ TEST_F(DX11RhiSmokeTest, Buffer创建销毁不崩溃) {
     SUCCEED();
 }
 
+// 离屏渲染 + 像素回读校验：清屏到已知颜色后回读，断言每个像素都正确。
+// WARP 是参考级（conformant）软件光栅器，结果可信，可在无 GPU 环境验证
+// D3D11 实际渲染输出的正确性（而不仅是"不崩溃"）。
+TEST_F(DX11RhiSmokeTest, 离屏清屏回读像素正确) {
+    if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No D3D11";
+    }
+    constexpr int kRtSize = 64;
+    RenderTargetDesc desc;
+    desc.width = kRtSize;
+    desc.height = kRtSize;
+    desc.has_color = true;
+    desc.has_depth = false;
+    unsigned int rt = device_.CreateRenderTarget(desc);
+    ASSERT_NE(rt, 0u);
+
+    // 清屏到已知颜色（SDR/WARP 下 RT 为 R8G8B8A8_UNORM，无 sRGB / tonemap 转换）
+    const glm::vec4 kClear(0.25f, 0.50f, 0.75f, 1.0f);
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(cmd, nullptr);
+    RenderPassDesc rp;
+    rp.render_target = rt;
+    rp.clear_color = kClear;
+    rp.clear_color_enabled = true;
+    cmd->BeginRenderPass(rp);
+    cmd->EndRenderPass();
+    device_.Submit(cmd);
+    device_.EndFrame();
+
+    RenderTargetReadback rb = device_.ReadRenderTargetColorRgba8WithSize(rt);
+    ASSERT_EQ(rb.width, kRtSize);
+    ASSERT_EQ(rb.height, kRtSize);
+    ASSERT_EQ(rb.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4);
+
+    // 期望 8-bit UNORM 值（四舍五入）：约 (64,128,191,255)。
+    // WARP/驱动舍入策略可能略有差异，留 ±2 容差。
+    const unsigned char exp_r = static_cast<unsigned char>(kClear.r * 255.0f + 0.5f);
+    const unsigned char exp_g = static_cast<unsigned char>(kClear.g * 255.0f + 0.5f);
+    const unsigned char exp_b = static_cast<unsigned char>(kClear.b * 255.0f + 0.5f);
+    const unsigned char exp_a = 255;
+    auto within_tol = [](unsigned char a, unsigned char b) {
+        return (a > b ? a - b : b - a) <= 2;
+    };
+
+    for (int p = 0; p < kRtSize * kRtSize; ++p) {
+        const unsigned char* px = rb.pixels.data() + static_cast<size_t>(p) * 4;
+        ASSERT_TRUE(within_tol(px[0], exp_r)) << "pixel " << p << " R=" << int(px[0]) << " expected~" << int(exp_r);
+        ASSERT_TRUE(within_tol(px[1], exp_g)) << "pixel " << p << " G=" << int(px[1]) << " expected~" << int(exp_g);
+        ASSERT_TRUE(within_tol(px[2], exp_b)) << "pixel " << p << " B=" << int(px[2]) << " expected~" << int(exp_b);
+        ASSERT_TRUE(within_tol(px[3], exp_a)) << "pixel " << p << " A=" << int(px[3]) << " expected~" << int(exp_a);
+    }
+
+    device_.resource_mgr().DeleteRenderTarget(rt);
+}
+
 #endif // DSE_ENABLE_D3D11
