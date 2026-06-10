@@ -10,8 +10,9 @@
 #
 # 用法：
 #   scripts/verify_linux_build.sh                 # 默认 Debug，构建目录 ~/dse_build_linux
+#   scripts/verify_linux_build.sh --with-net      # 额外构建网络层(GNS)并跑回环 smoke
 #   BUILD_DIR=/tmp/b BUILD_TYPE=Release scripts/verify_linux_build.sh
-# 环境变量：BUILD_DIR / BUILD_TYPE / JOBS
+# 环境变量：BUILD_DIR / BUILD_TYPE / JOBS / WITH_NET(=1 等同 --with-net)
 # =============================================================================
 set -uo pipefail
 
@@ -20,6 +21,13 @@ SRC_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-$HOME/dse_build_linux}"
 BUILD_TYPE="${BUILD_TYPE:-Debug}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
+WITH_NET="${WITH_NET:-0}"
+for arg in "$@"; do
+    case "$arg" in
+        --with-net) WITH_NET=1 ;;
+        *) ;;
+    esac
+done
 
 c_cyan="\033[36m"; c_green="\033[32m"; c_red="\033[31m"; c_rst="\033[0m"
 step() { echo -e "\n${c_cyan}>> $*${c_rst}"; }
@@ -51,6 +59,20 @@ fi
 ok "cmake=$(cmake --version | head -1 | awk '{print $3}')  generator=$GENERATOR  jobs=$JOBS"
 ok "源码目录=$SRC_DIR"
 
+# 网络层(GNS, libsodium 后端)需要系统 protobuf + libsodium 开发包
+NET_FLAG="-DDSE_ENABLE_NET=OFF"
+if [ "$WITH_NET" = "1" ]; then
+    net_missing=""
+    command -v protoc >/dev/null 2>&1 || net_missing="$net_missing protobuf-compiler"
+    pkg-config --exists libsodium 2>/dev/null || net_missing="$net_missing libsodium-dev"
+    [ -e /usr/include/google/protobuf/message.h ] || net_missing="$net_missing libprotobuf-dev"
+    if [ -n "$net_missing" ]; then
+        die "启用网络层缺少依赖($net_missing)。请安装：sudo apt-get install -y libsodium-dev libprotobuf-dev protobuf-compiler"
+    fi
+    NET_FLAG="-DDSE_ENABLE_NET=ON"
+    ok "网络层启用：protoc=$(protoc --version | awk '{print $2}')  libsodium=$(pkg-config --modversion libsodium)"
+fi
+
 # ── 2. 配置 ──────────────────────────────────────────────────────────────────
 step "配置 CMake ($BUILD_TYPE)"
 cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
@@ -63,6 +85,7 @@ cmake -S "$SRC_DIR" -B "$BUILD_DIR" -G "$GENERATOR" \
     -DDSE_ENABLE_PHYSX=OFF \
     -DDSE_ENABLE_D3D11=OFF \
     -DDSE_ENABLE_VULKAN=OFF \
+    $NET_FLAG \
     || die "CMake 配置失败。"
 ok "配置完成：$BUILD_DIR"
 
@@ -104,8 +127,19 @@ if command -v file >/dev/null 2>&1; then
 fi
 ok "Lua 运行时可执行文件: $LUA_EXE"
 
+# ── 5. (可选) 网络层回环 smoke ────────────────────────────────────────────────
+if [ "$WITH_NET" = "1" ]; then
+    step "构建并运行网络层回环 smoke (dse_net_smoke)"
+    cmake --build "$BUILD_DIR" --target dse_net_smoke -j "$JOBS" || die "构建 dse_net_smoke 失败。"
+    NET_SMOKE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'dse_net_smoke' 2>/dev/null | head -1)"
+    [ -n "$NET_SMOKE" ] && [ -f "$NET_SMOKE" ] || die "未找到 dse_net_smoke 可执行文件。"
+    "$NET_SMOKE" || die "网络层回环 smoke 失败（reliable/unreliable 回环未通过）。"
+    ok "网络层回环 smoke 通过: $NET_SMOKE"
+fi
+
 echo -e "\n${c_cyan}==================== RESULT ====================${c_rst}"
 ok "Linux 构建验证全部通过 ($BUILD_TYPE)"
 echo -e "   引擎库: $ENGINE_LIB"
 echo -e "   可执行: $LUA_EXE"
+[ "$WITH_NET" = "1" ] && echo -e "   网络 smoke: 通过"
 exit 0

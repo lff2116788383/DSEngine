@@ -259,6 +259,10 @@ file(GLOB_RECURSE engine_cpp CONFIGURE_DEPENDS
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
 
+# 网络层(engine/net/**)由 cmake/CMakeLists.txt.gns 编译为独立的 dse_net 目标
+# （依赖 GNS 头/库），不并入 dse_engine 主目标，且 OFF 时完全不编译。
+list(FILTER engine_cpp EXCLUDE REGEX ".*engine/net/.*\\.cpp$")
+
 # 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
 # 注意：dse_api_<prefix>.gen.cpp 与手写 dse_api.cpp 同 TU 域，须显式加回（见下）
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")

@@ -1,69 +1,69 @@
 # ──────────────────────────────────────────────────────────────────────────────
 # 网络层依赖：GameNetworkingSockets (GNS) + protobuf + 加密后端
 #
-# 仅当 DSE_ENABLE_NET=ON 时被 include。按平台分流加密后端：
-#   桌面 (Windows/Linux, x86_64) → libsodium
-#   移动 (Android/iOS, arm64)     → OpenSSL（GNS 的 libsodium AES 仅 x86）
+# 仅当 DSE_ENABLE_NET=ON 时被 include。按平台分流加密后端与依赖获取方式：
 #
-# 成功接入后置 DSE_HAS_NET=TRUE，由顶层 CMakeLists 定义 DSE_NET_ENABLED 宏。
+#   平台              加密后端     protobuf / libsodium 来源
+#   ───────────────   ─────────    ─────────────────────────────────────────────
+#   Linux/macOS 桌面   libsodium    系统包 (apt: libsodium-dev libprotobuf-dev …)
+#   Windows 桌面       libsodium    在树 protobuf 子模块 + 预构建 libsodium(sodium_DIR)
+#   Android / iOS      OpenSSL      在树 protobuf(host protoc) + arm64 OpenSSL
 #
-# 注意：本文件在 Phase 2（桌面打通）会被实测验证/迭代；P2P/ICE 本期关闭。
+# 成功接入后置 DSE_HAS_NET=TRUE；P2P/ICE 本期关闭。
+# Linux 路径已在 Phase 2 实测打通（standalone + engine/net loopback smoke）。
+# Windows/Android 路径分别在 Phase 2c / Phase 3 实测。
 # ──────────────────────────────────────────────────────────────────────────────
 
 set(DSE_HAS_NET FALSE)
 
 set(_GNS_DIR      "${CMAKE_SOURCE_DIR}/depends/GameNetworkingSockets")
 set(_PROTOBUF_DIR "${CMAKE_SOURCE_DIR}/depends/protobuf")
-set(_SODIUM_DIR   "${CMAKE_SOURCE_DIR}/depends/libsodium")
 
 if(NOT EXISTS "${_GNS_DIR}/CMakeLists.txt")
-    message(WARNING "[net] depends/GameNetworkingSockets 缺失，跳过网络层。请执行 git submodule update --init depends/GameNetworkingSockets")
+    message(WARNING "[net] depends/GameNetworkingSockets 缺失，跳过网络层。"
+                    "请执行 git submodule update --init depends/GameNetworkingSockets")
     return()
 endif()
 
-# ── 1) protobuf（提供 protoc 与 runtime；GNS 用 protobuf_generate_cpp 生成 *.pb.cc）──
-set(protobuf_BUILD_TESTS        OFF CACHE BOOL "" FORCE)
-set(protobuf_BUILD_CONFORMANCE  OFF CACHE BOOL "" FORCE)
-set(protobuf_BUILD_EXAMPLES     OFF CACHE BOOL "" FORCE)
-set(protobuf_INSTALL            OFF CACHE BOOL "" FORCE)
-set(protobuf_BUILD_SHARED_LIBS  OFF CACHE BOOL "" FORCE)
-set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "" FORCE)
-if(ANDROID)
-    # 交叉编译：protoc 必须用 host 预构建的可执行（由桌面流程或单独构建提供）
-    set(protobuf_BUILD_PROTOC_BINARIES OFF CACHE BOOL "" FORCE)
+# ── 1) 加密后端 + protobuf 获取方式（按平台）──
+if(ANDROID OR IOS)
+    # 移动端：OpenSSL + 在树 protobuf（host protoc）。Phase 3 接入。
+    set(USE_CRYPTO      "OpenSSL" CACHE STRING "" FORCE)
+    set(USE_CRYPTO25519 "OpenSSL" CACHE STRING "" FORCE)
+    if(NOT DSE_NET_OPENSSL_ROOT)
+        message(FATAL_ERROR "[net] 移动端需 -DDSE_NET_OPENSSL_ROOT=<arm64 OpenSSL 安装目录>")
+    endif()
+    set(OPENSSL_ROOT_DIR "${DSE_NET_OPENSSL_ROOT}" CACHE PATH "" FORCE)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
     if(NOT DSE_HOST_PROTOC)
-        message(FATAL_ERROR "[net] Android 交叉编译需提供 -DDSE_HOST_PROTOC=<host protoc 路径>")
+        message(FATAL_ERROR "[net] Android/iOS 交叉编译需 -DDSE_HOST_PROTOC=<host protoc 路径>")
     endif()
     set(Protobuf_PROTOC_EXECUTABLE "${DSE_HOST_PROTOC}" CACHE FILEPATH "" FORCE)
-else()
-    set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
-endif()
-add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
+    set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(protobuf_BUILD_PROTOC_BINARIES OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
 
-# ── 2) 加密后端按平台分流 ──
-if(ANDROID OR IOS)
-    set(USE_CRYPTO      "OpenSSL"   CACHE STRING "" FORCE)
-    set(USE_CRYPTO25519 "OpenSSL"   CACHE STRING "" FORCE)
-    if(DSE_NET_OPENSSL_ROOT)
-        set(OPENSSL_ROOT_DIR "${DSE_NET_OPENSSL_ROOT}" CACHE PATH "" FORCE)
-        set(OPENSSL_USE_STATIC_LIBS TRUE)
-    else()
-        message(FATAL_ERROR "[net] 移动端需提供 -DDSE_NET_OPENSSL_ROOT=<arm64 OpenSSL 安装目录>")
-    endif()
-else()
-    # 桌面：libsodium（仅 x86/x86_64 合法，符合本工程桌面目标）
+elseif(WIN32)
+    # Windows 桌面：libsodium（预构建，sodium_DIR）+ 在树 protobuf。Phase 2c 接入。
     set(USE_CRYPTO      "libsodium" CACHE STRING "" FORCE)
     set(USE_CRYPTO25519 "libsodium" CACHE STRING "" FORCE)
-    # GNS 的 Findsodium 通过 pkg-config(Linux) 或 sodium_DIR(Windows) 定位预构建 libsodium。
-    # 预构建路径由 verify 脚本/构建步骤提供（见 NETWORK_GNS_INTEGRATION_PLAN.md §4）。
-    if(DSE_NET_SODIUM_DIR)
-        set(ENV{sodium_DIR} "${DSE_NET_SODIUM_DIR}")
-        set(sodium_DIR "${DSE_NET_SODIUM_DIR}" CACHE PATH "" FORCE)
-    endif()
     set(sodium_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
+    if(DSE_NET_SODIUM_DIR)
+        set(sodium_DIR "${DSE_NET_SODIUM_DIR}" CACHE PATH "" FORCE)
+        set(ENV{sodium_DIR} "${DSE_NET_SODIUM_DIR}")
+    endif()
+    set(protobuf_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(protobuf_BUILD_PROTOC_BINARIES ON CACHE BOOL "" FORCE)
+    add_subdirectory("${_PROTOBUF_DIR}/cmake" "${CMAKE_BINARY_DIR}/depends/protobuf" EXCLUDE_FROM_ALL)
+
+else()
+    # Linux/macOS 桌面：直接用系统 protobuf + libsodium（GNS 经 find_package/pkg-config 定位）。
+    # 已实测：apt 安装 libsodium-dev libprotobuf-dev protobuf-compiler 后 GNS 直接构建通过。
+    set(USE_CRYPTO      "libsodium" CACHE STRING "" FORCE)
+    set(USE_CRYPTO25519 "libsodium" CACHE STRING "" FORCE)
 endif()
 
-# ── 3) GameNetworkingSockets（静态库，关闭 P2P/示例/测试）──
+# ── 2) GameNetworkingSockets（静态库，关闭 P2P/示例/测试/工具）──
 set(BUILD_SHARED_LIB ON  CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIB ON  CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES   OFF CACHE BOOL "" FORCE)
@@ -71,18 +71,26 @@ set(BUILD_TESTS      OFF CACHE BOOL "" FORCE)
 set(BUILD_TOOLS      OFF CACHE BOOL "" FORCE)
 set(ENABLE_ICE       OFF CACHE BOOL "" FORCE)
 set(USE_STEAMWEBRTC  OFF CACHE BOOL "" FORCE)
-# GNS 的 Findsodium 等模块在其 cmake/ 下
 list(APPEND CMAKE_MODULE_PATH "${_GNS_DIR}/cmake")
 add_subdirectory("${_GNS_DIR}" "${CMAKE_BINARY_DIR}/depends/GameNetworkingSockets" EXCLUDE_FROM_ALL)
 
-# ── 4) 引擎网络模块 dse_net（薄抽象层；上层不直接依赖 GNS 头）──
-file(GLOB_RECURSE _DSE_NET_SRC CONFIGURE_DEPENDS
-     "${CMAKE_SOURCE_DIR}/engine/net/*.cpp")
-if(_DSE_NET_SRC)
-    add_library(dse_net STATIC ${_DSE_NET_SRC})
-    target_include_directories(dse_net PUBLIC "${CMAKE_SOURCE_DIR}/engine")
-    target_link_libraries(dse_net PUBLIC GameNetworkingSockets::static)
-    target_compile_features(dse_net PUBLIC cxx_std_20)
+# ── 3) 引擎网络模块 dse_net（薄抽象层；唯一 include <steam/...> 之处）──
+file(GLOB_RECURSE _DSE_NET_SRC CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/engine/net/*.cpp")
+if(NOT _DSE_NET_SRC)
+    message(WARNING "[net] engine/net 下无源文件，dse_net 未创建")
+    return()
+endif()
+add_library(dse_net STATIC ${_DSE_NET_SRC})
+target_include_directories(dse_net
+    PUBLIC  "${CMAKE_SOURCE_DIR}"
+    PRIVATE "${_GNS_DIR}/include")
+target_link_libraries(dse_net PUBLIC GameNetworkingSockets::static)
+target_compile_features(dse_net PUBLIC cxx_std_17)
+
+# ── 4) 回环冒烟测试 dse_net_smoke（验证 reliable+unreliable 真实 UDP 回环）──
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_smoke.cpp")
+    add_executable(dse_net_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_smoke.cpp")
+    target_link_libraries(dse_net_smoke PRIVATE dse_net)
 endif()
 
 set(DSE_HAS_NET TRUE)
