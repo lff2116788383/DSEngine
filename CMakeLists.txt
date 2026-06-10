@@ -490,6 +490,14 @@ endif()
 if(ANDROID)
     target_link_libraries(dse_engine PRIVATE EGL GLESv3 android log)
 endif()
+
+# --- Linux 桌面链接库 (X11 窗口 + GL + dl + pthread) ---
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    find_package(Threads REQUIRED)
+    target_link_libraries(dse_engine PRIVATE
+        X11 Xrandr Xinerama Xcursor Xi
+        GL ${CMAKE_DL_LIBS} Threads::Threads rt m)
+endif()
 if(DSE_ENABLE_LUA)
     target_include_directories(dse_engine PRIVATE
         ${CMAKE_SOURCE_DIR}/depends/lua
@@ -637,6 +645,9 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         "${SHADER_GEN_DIR}/embed/skinning_comp.gen.h"
         "${SHADER_GEN_DIR}/embed/skinning_comp_reflect.gen.h"
     )
+    # skinning.comp 已被上面的 glob 收集（skinning_comp.gen.h），显式追加会重复；
+    # MSBuild 静默去重，Ninja 会因 dupbuild 报错——统一去重以跨生成器安全。
+    list(REMOVE_DUPLICATES GENERATED_SHADER_HEADERS)
 
     add_custom_command(
         OUTPUT ${GENERATED_SHADER_HEADERS}
