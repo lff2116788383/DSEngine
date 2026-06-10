@@ -54,6 +54,7 @@ option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
 option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
+option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" OFF)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
@@ -160,6 +161,16 @@ endif()
 include(cmake/CMakeLists.txt.Jolt)
 if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     add_definitions(-D DSE_ENABLE_JOLT)
+endif()
+
+# 网络层 (GameNetworkingSockets)。默认 OFF：OFF 路径完全不引入网络依赖，
+# 现有三端构建零影响。ON 时由 cmake/CMakeLists.txt.gns 负责按平台分流加密后端
+# (桌面 libsodium / 移动 OpenSSL) 并接入 protobuf + GNS 静态库。
+if(DSE_ENABLE_NET)
+    include(cmake/CMakeLists.txt.gns)
+    if(DSE_HAS_NET)
+        add_definitions(-D DSE_NET_ENABLED=1)
+    endif()
 endif()
 
 #头文件目录（全局，合并为一处避免重复）

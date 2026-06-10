@@ -78,3 +78,9 @@
 [submodule "depends/GameNetworkingSockets"]
 	path = depends/GameNetworkingSockets
 	url = https://github.com/ValveSoftware/GameNetworkingSockets.git
+[submodule "depends/protobuf"]
+	path = depends/protobuf
+	url = https://github.com/protocolbuffers/protobuf.git
+[submodule "depends/libsodium"]
+	path = depends/libsodium
+	url = https://github.com/jedisct1/libsodium.git
