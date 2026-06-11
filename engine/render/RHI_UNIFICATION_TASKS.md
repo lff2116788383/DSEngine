@@ -11,6 +11,7 @@ DSEngine 支持 OpenGL / Vulkan / DX11 三个渲染后端。已完成 `GetProjec
 - [x] #1 Vulkan 正面绕序修正 (CW)
 - [x] #2 2D/UI 正交投影 clip_correction
 - [x] #3 CameraSystem 2D fallback clip_correction
+- [x] #3 CameraSystem 内部投影已排查：所有消费点均在使用处补乘修正或与后端无关，无需修改（详见 docs/roadmap/rhi_unification_closeout_plan.md）
 - [x] #4 编辑器相机 clip_correction
 - [x] #5 RT-UV 方向已验证无需修改
 - [x] #6 Cubemap 面序已验证无需修改；天空盒 VP 平移 bug 已修复
@@ -43,7 +44,15 @@ DSEngine 支持 OpenGL / Vulkan / DX11 三个渲染后端。已完成 `GetProjec
 
 ---
 
-## 问题 3: CameraSystem 内部投影未修正
+## 问题 3: CameraSystem 内部投影未修正 ✅ 已排查无需修改
+
+### 排查结论
+`CameraComponent.projection` 的全部消费点：
+- `frame_pipeline.cpp` 快照 → `builtin_passes.cpp` UIPass：使用处已乘 `clip_correction_2d`；
+- 编辑器 `BuildActiveCameraMatrices` → ForwardScenePass 编辑器分支：任务 #4 已补乘修正；
+- `dse_render_world_to_screen`（Lua world_to_screen）：自行构造 GL 约定投影并以 GL 约定映射屏幕坐标，跨后端一致。
+
+组件内缓存值无需修正。以下为原始排查记录：
 
 ### 现状
 `modules/gameplay_2d/camera/camera_system.cpp`:
