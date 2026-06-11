@@ -163,6 +163,19 @@ struct VulkanRhiDevice::HiZImpl {
 VulkanRhiDevice::VulkanRhiDevice() = default;
 VulkanRhiDevice::~VulkanRhiDevice() = default;
 
+RenderDeviceInfo VulkanRhiDevice::GetDeviceInfo() const {
+    RenderDeviceInfo info;
+    VkPhysicalDevice physical_device = context_.physical_device();
+    if (physical_device != VK_NULL_HANDLE) {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(physical_device, &props);
+        info.adapter_name = props.deviceName;
+        // CPU 类型物理设备即软渲（如 lavapipe / SwiftShader）。
+        info.is_software = (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU);
+    }
+    return info;
+}
+
 bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
 #ifdef NDEBUG
     return InitVulkan(window_handle, width, height, false);

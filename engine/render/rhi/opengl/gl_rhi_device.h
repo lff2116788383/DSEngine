@@ -39,6 +39,8 @@ public:
     OpenGLRhiDevice();
     ~OpenGLRhiDevice() override;
 
+    RenderDeviceInfo GetDeviceInfo() const override;
+
     void Shutdown() override;
     void BeginFrame() override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;

@@ -116,6 +116,7 @@ static void InitComputeProcAddresses() {
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cstddef>
+#include <cctype>
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -140,6 +141,22 @@ struct OpenGLRhiDevice::HiZImpl {
 
 OpenGLRhiDevice::OpenGLRhiDevice() : hiz_impl_(std::make_unique<HiZImpl>()) {}
 OpenGLRhiDevice::~OpenGLRhiDevice() = default;
+
+RenderDeviceInfo OpenGLRhiDevice::GetDeviceInfo() const {
+    RenderDeviceInfo info;
+    const GLubyte* renderer = glGetString(GL_RENDERER);
+    if (renderer) {
+        info.adapter_name = reinterpret_cast<const char*>(renderer);
+    }
+    // 软件渲染识别：常见软光栅器/通用驱动名（GDI Generic / llvmpipe / softpipe /
+    // swrast / Mesa software / Microsoft）即视为软渲。
+    std::string lower = info.adapter_name;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char* needle : {"gdi generic", "llvmpipe", "softpipe", "swrast", "software", "microsoft"}) {
+        if (lower.find(needle) != std::string::npos) { info.is_software = true; break; }
+    }
+    return info;
+}
 
 // ============================================================
 // OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice

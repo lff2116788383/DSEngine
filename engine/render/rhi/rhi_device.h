@@ -74,11 +74,23 @@ public:
  * 阴影/光源全局状态接口：所有后端（OpenGL、Vulkan）均实现相同的阴影贴图与光源矩阵绑定，
  * 消除上层代码对具体后端的 dynamic_cast 依赖。
  */
+/**
+ * @brief 渲染设备运行时信息（实际所选 GPU/适配器名 + 是否软件渲染）。
+ *        供性能基准等场景标注后端实际跑在硬件还是软渲，避免误读软渲数据。
+ */
+struct RenderDeviceInfo {
+    std::string adapter_name = "unknown";
+    bool is_software = false;
+};
+
 class RhiDevice : public IRhiCompute, public IRhiStorageBuffer, public IRhiGpuDriven, public IRhiGpuTimer {
 public:
     virtual ~RhiDevice() = default;
 
     void SetInitKeepAlive(std::function<void()> cb) { init_keep_alive_ = std::move(cb); }
+
+    /// 返回实际所选适配器名 + 是否软件渲染。默认 unknown/false，各后端覆写。
+    virtual RenderDeviceInfo GetDeviceInfo() const { return {}; }
 
     /// 在窗口创建后初始化设备（D3D11/Vulkan 需要 HWND；OpenGL 默认已就绪）
     virtual bool InitDevice(void* window_handle, int width, int height) { (void)window_handle; (void)width; (void)height; return true; }

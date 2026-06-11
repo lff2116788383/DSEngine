@@ -298,6 +298,15 @@ bool FramePipeline::Init() {
 
     lap("RHI device init");
     KeepAlive();
+    // 输出实际渲染设备 + 软渲标志（机器可解析），供性能基准区分硬件/软渲，
+    // 避免把 WARP/Basic Render Driver/llvmpipe 等软渲数据误当硬件数据。
+    {
+        const auto device_info = runtime_context_.rhi_device->GetDeviceInfo();
+        DEBUG_LOG_INFO("DSE_RENDER_DEVICE backend={} adapter=\"{}\" software={}",
+            dse::render::RhiBackendToString(rhi_backend),
+            device_info.adapter_name,
+            device_info.is_software ? 1 : 0);
+    }
     asset_manager.SetRhiDevice(runtime_context_.rhi_device.get());
     std::string data_root = "data";
     if (const char* env_data_root = std::getenv("DSE_DATA_ROOT")) {
