@@ -63,23 +63,25 @@
 
 ## 四、距离第一个版本（v0.1.0-alpha SDK）还差什么
 
-按"能交付给第三方做出一个小游戏"的标准：
+按"能交付给第三方做出一个小游戏"的标准（2026-06-11 已按代码重新核实，下列状态为核实后）：
+
+**已完成 / 不再阻塞（核实纠偏）**
+- ~~**RHI 统一收尾**~~ **已完成**：`engine/render/RHI_UNIFICATION_TASKS.md` 7 项全部 `[x]`，`docs/roadmap/rhi_unification_closeout_plan.md` 阶段 A/B 均收口；UBO 填充逻辑统一到 `engine/render/rhi/draw_executor_common.h` 的 `Prepare*` 共用函数、跨端类型收敛到 `ubo_types.h`。per-backend draw_executor 文件仍大（体量问题），但当年「跨端重复逻辑」债已清，**不再是 P0**。
 
 **P0（发布阻塞）**
-1. **RHI 统一收尾**：消除三后端 DrawExecutor 重复逻辑（仓库内已有任务清单未清零），否则每加一个特性要写三遍，alpha 后迭代成本失控。
-2. **Vulkan 后端稳定性转正或明确降级**：勘误——Vulkan 在桌面默认 **ON**（非 Android），CI Windows 三个配置（Debug/Release/RelWithDebInfo）均开 Vulkan 构建；所以问题不是“默认关/未启用”，而是运行时稳定性与 GL/DX11 是否同级（需画面/回归验证）。发布前要么达到同级稳定，要么 v0.1 明确只发 GL+DX11。
-3. **端到端样例打磨**：examples/KF_Framework 目录里还躺着 ALIGNMENT_TASKS / NEXT_SESSION_TASKS / TROUBLESHOOTING 等未完结任务清单，示例项目本身未收尾 —— SDK 没有可跑通的标杆 demo 等于没法发布。
-4. **SDK 打包验证闭环**：package_sdk.ps1 / verify_sdk.ps1 / sdk_consumer 示例已具备，需把"打包→第三方消费→运行"跑成 CI 常态。
+1. **Vulkan 后端稳定性转正或明确降级**：勘误——Vulkan 在桌面默认 **ON**（非 Android），CI Windows 三个配置（Debug/Release/RelWithDebInfo）均开 Vulkan 构建；所以问题不是“默认关/未启用”，而是运行时稳定性与 GL/DX11 是否同级（需画面/回归验证）。发布前要么达到同级稳定，要么 v0.1 明确只发 GL+DX11。
+2. **端到端标杆 demo 收尾**：examples/KF_Framework 能跑（有 `script/main.lua` + `cooked/` + `screenshots/`），但 ALIGNMENT_TASKS / NEXT_SESSION_TASKS / TROUBLESHOOTING / TASK_UI_REPLICATION 仍在，骑乘攻击动作/移动手感/Mutant 贴图&血条等 1:1 复刻未完——SDK 需要一个「打磨完成、可展示」的标杆 demo。
+3. **SDK 打包验证闭环进 CI**：`scripts/package_sdk.ps1` / `scripts/verify_sdk.ps1` / `examples/sdk_consumer`（CMakeLists+main.cpp）均已具备，但 `.github/workflows/ci.yml` **未集成**「打包→第三方消费→运行」，需固化为 CI 常态防回归。
 
 **P1（alpha 可缺、beta 必须）**
-5. 网络层从 800 行原型补到可用（房间/同步/序列化策略），或 v0.1 明确声明"无联机"。
-6. 音频整改：miniaudio 与 FMOD 二选一收口，去掉全局宏。
-7. 编辑器稳定性专项：139 个面板源文件功能广但需要 crash/undo/资产损坏等鲁棒性扫雷（已有 crash handler 与 autosave 是好基础）。
-8. 性能基准：stress_test 示例已有，需固化成可对比的 benchmark 数据（万级物体、drawcall、加载时间）。
+4. 网络层从 800 行原型补到可用（房间/同步/序列化策略），或 v0.1 明确声明"无联机"。
+5. 音频收口：实际音频走 miniaudio；`CMakeLists.txt:37` 的 `add_definitions(-D USE_FMOD_STUDIO)` 是**全局定义但全仓零引用的死宏**（grep 无任何 .cpp/.h 使用）。整改 = 删死宏 + 确认 miniaudio 收口，工作量极小、低风险。
+6. 编辑器稳定性专项：139 个面板源文件功能广但需要 crash/undo/资产损坏等鲁棒性扫雷（已有 crash handler 与 autosave 是好基础）。
+7. 性能基准：`examples/stress_test`（`run_benchmark.py` + `benchmark_results.csv`）**已具备并有数据**。当前数据暴露异常——gpu-driven 5000 实体下 **DX11 ~6 fps（帧时 160ms）vs OpenGL ~34 fps**（需先复核是否 CI 软件渲染/无独显所致）。建议：查 DX11 gpu-driven 路径性能 + 把 benchmark 固化为 CI 回归门槛。
 
 **P2（1.0 之前）**
-9. 平台扩展（macOS/iOS 缺位，Android 已有但需真机验证闭环）。
-10. builtin_passes.cpp 按 pass 拆分到独立文件（可读性优化；管线已是 registry+profile+IRenderPass 数据驱动，非架构债）。
+8. 平台扩展（macOS/iOS 缺位，Android 已有但需真机验证闭环）。
+9. builtin_passes.cpp 按 pass 拆分到独立文件（可读性优化；管线已是 registry+profile+IRenderPass 数据驱动，非架构债）。
 
 ---
 
@@ -97,7 +99,7 @@
 | 生态/文档/资产商店 | 无 | 巨大 | 巨大 | 大 | 无 |
 | 网络 | 原型 | NGO/Fishnet 生态 | 内置复制 | 内置高层 API | 无 |
 
-**一句话定位**：DSEngine 已经越过了"玩具引擎"和"渲染 demo"两个阶段，处于"垂直自研引擎发布前夜"——技术栈现代、工程纪律好、宽度惊人；首发前的关键动作是**收口（RHI 统一、Vulkan 定位、示例收尾、打包闭环）而不是继续加 feature**。对标商业引擎缺的是生态与打磨深度，这正常且不应是 v0.1 的目标。
+**一句话定位**：DSEngine 已经越过了"玩具引擎"和"渲染 demo"两个阶段，处于"垂直自研引擎发布前夜"——技术栈现代、工程纪律好、宽度惊人；首发前的关键动作是**收口（RHI 统一已完成；剩 Vulkan 画面验证、标杆 demo 收尾、SDK 打包闭环进 CI）而不是继续加 feature**。对标商业引擎缺的是生态与打磨深度，这正常且不应是 v0.1 的目标。
 
 ## 六、2026-06-11 复核与本次改动（对齐代码现状）
 
