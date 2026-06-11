@@ -20,11 +20,13 @@ public:
                                const TransformComponent& transform,
                                float world_x, float world_z);
 
+    /// 脏时把逐顶点 splat_data 上传为 RGBA8 权重图纹理，供 splat 混合采样。
+    /// Render() 内部按需调用；亦公开供单测直接驱动其分支（脏标志/尺寸回退/钳制）。
+    void UploadSplatWeightMap(TerrainComponent& terrain);
+
 private:
     void RebuildTerrain(TerrainComponent& terrain);
     void DestroyTerrainGPU(TerrainComponent& terrain);
-    /// 脏时把逐顶点 splat_data 上传为 RGBA8 权重图纹理，供 splat 混合采样。
-    void UploadSplatWeightMap(TerrainComponent& terrain);
 
     // Tiled terrain
     void UpdateTiles(World& world);
