@@ -99,6 +99,12 @@ public:
     virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
     virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
+    /// 带采样描述(过滤 + 环绕)的 2D 纹理创建。默认实现退化为旧的 filter-only 行为
+    /// (环绕 = Repeat)，后端可覆盖以支持 ClampToEdge / 点采样等。
+    virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+                                         const TextureSamplerDesc& sampler) {
+        return CreateTexture2D(width, height, rgba8_data, sampler.filter == TextureFilter::Linear);
+    }
     virtual unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                                    const std::vector<CompressedMipLevel>& mips,
                                                    bool linear_filter) { (void)format; (void)mips; (void)linear_filter; return 0; }

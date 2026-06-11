@@ -51,6 +51,8 @@ TEST(CanvasScalerDataTest, DefaultValues) {
     EXPECT_FLOAT_EQ(cs.reference_resolution.y, 1080.0f);
     EXPECT_FLOAT_EQ(cs.scale_factor, 1.0f);
     EXPECT_TRUE(cs.match_width_or_height);
+    EXPECT_FLOAT_EQ(cs.match, 0.5f);   // 默认均衡，等价旧"宽高平均"
+    EXPECT_FALSE(cs.pixel_snap);
 }
 
 // ============================================================
@@ -95,6 +97,57 @@ TEST(UILayoutSystemTest, ScaleFactor_DoubleResolution) {
     cs.reference_resolution = glm::vec2(1920.0f, 1080.0f);
     float sf = layout.CalculateScaleFactor(glm::vec2(3840.0f, 2160.0f), cs);
     EXPECT_NEAR(sf, 2.0f, 0.01f);
+}
+
+// ---- match 0..1 权重（Unity 式宽高匹配） ----
+
+// 非等比分辨率下：match=0 应只跟宽度比，match=1 只跟高度比，match=0.5 取均值。
+TEST(UILayoutSystemTest, ScaleFactor_MatchWidthOnly) {
+    UILayoutSystem layout;
+    CanvasScalerData cs;
+    cs.reference_resolution = glm::vec2(1000.0f, 1000.0f);
+    cs.match = 0.0f;  // 完全跟宽
+    // 屏幕 2000x1000 → width_ratio=2, height_ratio=1
+    float sf = layout.CalculateScaleFactor(glm::vec2(2000.0f, 1000.0f), cs);
+    EXPECT_NEAR(sf, 2.0f, 0.001f);
+}
+
+TEST(UILayoutSystemTest, ScaleFactor_MatchHeightOnly) {
+    UILayoutSystem layout;
+    CanvasScalerData cs;
+    cs.reference_resolution = glm::vec2(1000.0f, 1000.0f);
+    cs.match = 1.0f;  // 完全跟高
+    float sf = layout.CalculateScaleFactor(glm::vec2(2000.0f, 1000.0f), cs);
+    EXPECT_NEAR(sf, 1.0f, 0.001f);
+}
+
+TEST(UILayoutSystemTest, ScaleFactor_MatchHalf_EqualsOldAverage) {
+    UILayoutSystem layout;
+    CanvasScalerData cs;
+    cs.reference_resolution = glm::vec2(1000.0f, 1000.0f);
+    cs.match = 0.5f;  // 均衡 = 旧行为 (width_ratio+height_ratio)/2
+    float sf = layout.CalculateScaleFactor(glm::vec2(2000.0f, 1000.0f), cs);
+    EXPECT_NEAR(sf, 1.5f, 0.001f);
+}
+
+TEST(UILayoutSystemTest, ScaleFactor_MatchClampedOutOfRange) {
+    UILayoutSystem layout;
+    CanvasScalerData cs;
+    cs.reference_resolution = glm::vec2(1000.0f, 1000.0f);
+    cs.match = 5.0f;  // 越界应钳到 1（跟高）
+    float sf = layout.CalculateScaleFactor(glm::vec2(2000.0f, 1000.0f), cs);
+    EXPECT_NEAR(sf, 1.0f, 0.001f);
+}
+
+// ---- 像素吸附 SnapToPixel ----
+
+TEST(UILayoutSystemTest, SnapToPixel_RoundsToNearestInteger) {
+    EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(10.4f, 20.6f)).x, 10.0f);
+    EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(10.4f, 20.6f)).y, 21.0f);
+    EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(-3.5f, 0.49f)).y, 0.0f);
+    // 已是整数则不变
+    EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(7.0f, -8.0f)).x, 7.0f);
+    EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(7.0f, -8.0f)).y, -8.0f);
 }
 
 // ============================================================

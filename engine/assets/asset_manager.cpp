@@ -628,9 +628,21 @@ bool HasDdsExtension(const std::string& path) {
 } // anonymous namespace
 
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
+    return LoadTexture(path, TextureSamplerDesc{});
+}
+
+std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
+                                                        const TextureSamplerDesc& sampler) {
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);
-    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
+    const std::string base_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
+    // 采样描述并入缓存键：同一图以不同 filter/wrap 加载应得到各自的 GPU 纹理。
+    // 默认 {Linear, Repeat} 不加后缀，保持旧缓存键不变（向后兼容）。
+    const bool default_sampler = (sampler.filter == TextureFilter::Linear && sampler.wrap == TextureWrap::Repeat);
+    const std::string cache_key = default_sampler
+        ? base_key
+        : base_key + "|s=" + std::to_string(static_cast<int>(sampler.filter))
+                   + std::to_string(static_cast<int>(sampler.wrap));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
@@ -658,7 +670,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         {
             std::lock_guard<std::mutex> lock(config_mutex_);
             if (rhi_device_) {
-                handle = rhi_device_->CreateCompressedTexture2D(fmt, mips, true);
+                handle = rhi_device_->CreateCompressedTexture2D(fmt, mips, sampler.filter == TextureFilter::Linear);
             }
         }
         if (handle == 0) {
@@ -694,7 +706,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
-            handle = rhi_device_->CreateTexture2D(width, height, data, true);
+            handle = rhi_device_->CreateTexture2D(width, height, data, sampler);
         }
     }
     if (handle == 0) {

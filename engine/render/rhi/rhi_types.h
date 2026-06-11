@@ -88,6 +88,30 @@ struct CompressedMipLevel {
     int height = 0;
 };
 
+/// 纹理采样过滤模式
+enum class TextureFilter : uint8_t {
+    Nearest = 0,   ///< 点采样：像素画/像素完美渲染，缩放时保持硬边
+    Linear  = 1,   ///< 线性插值：平滑缩放（默认）
+};
+
+/// 纹理环绕(wrap)模式
+enum class TextureWrap : uint8_t {
+    Repeat      = 0,   ///< 平铺重复（3D 可平铺贴图所需，默认以向后兼容）
+    ClampToEdge = 1,   ///< 边缘钳制：图集/精灵防出血(bleeding)的正确选择
+};
+
+/// 纹理采样描述：过滤 + 环绕。默认 {Linear, Repeat} 保持旧行为不变。
+struct TextureSamplerDesc {
+    TextureFilter filter = TextureFilter::Linear;
+    TextureWrap   wrap   = TextureWrap::Repeat;
+
+    /// 由旧的 bool linear_filter 构造（环绕仍为 Repeat）
+    static TextureSamplerDesc FromLinearFlag(bool linear_filter) {
+        return TextureSamplerDesc{ linear_filter ? TextureFilter::Linear : TextureFilter::Nearest,
+                                   TextureWrap::Repeat };
+    }
+};
+
 // ============================================================
 // 渲染目标与管线状态描述
 // ============================================================

@@ -123,6 +123,8 @@ void ParseCanvasScaler(entt::registry& reg, entt::entity e, const rapidjson::Val
     if (c.HasMember("reference_resolution")) scaler.reference_resolution = ReadVec2(c["reference_resolution"], glm::vec2(1920, 1080));
     scaler.scale_factor = ReadFloat(c, "scale_factor", 1.0f);
     scaler.match_width_or_height = ReadBool(c, "match_width_or_height", true);
+    scaler.match = ReadFloat(c, "match", 0.5f);
+    scaler.pixel_snap = ReadBool(c, "pixel_snap", false);
 }
 
 void ParseScrollView(entt::registry& reg, entt::entity e, const rapidjson::Value& c) {

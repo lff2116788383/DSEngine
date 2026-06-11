@@ -22,17 +22,22 @@ layout(push_constant) uniform PushConstants {
 void main() {
     float distance = texture(u_texture, vTexCoord).a;
 
+    // 屏幕空间自适应抗锯齿：用 SDF 距离场的屏幕导数 fwidth() 估计该像素覆盖宽度，
+    // 使 AA 过渡带宽随文本在屏幕上的实际缩放自适应——缩放/多分辨率下既不过糊也不锯齿。
+    // 仍保留 u_sdf_smoothing 作为下限，便于美术微调，并在导数退化(平坦)时兜底。
+    float aa = max(fwidth(distance), pc.u_sdf_smoothing);
+
     // SDF 文本抗锯齿
-    float alpha = smoothstep(pc.u_sdf_threshold - pc.u_sdf_smoothing,
-                             pc.u_sdf_threshold + pc.u_sdf_smoothing,
+    float alpha = smoothstep(pc.u_sdf_threshold - aa,
+                             pc.u_sdf_threshold + aa,
                              distance);
 
     // 描边 (outline)
     vec4 final_color = vColor;
     if (pc.u_outline_width > 0.0) {
         float outline_min = pc.u_sdf_threshold - pc.u_outline_width;
-        float outline_alpha = smoothstep(outline_min - pc.u_sdf_smoothing,
-                                         outline_min + pc.u_sdf_smoothing,
+        float outline_alpha = smoothstep(outline_min - aa,
+                                         outline_min + aa,
                                          distance);
         // 描边颜色固定为黑色，可后续扩展
         vec4 outline_color = vec4(0.0, 0.0, 0.0, 1.0);

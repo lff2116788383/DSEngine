@@ -580,7 +580,7 @@ int L_UiAddCanvasScaler(lua_State* L) {
     return 0;
 }
 
-// ui.set_canvas_scaler(entity, ref_w, ref_h, scale_factor, match_width_or_height)
+// ui.set_canvas_scaler(entity, ref_w, ref_h, scale_factor, match_width_or_height, [match], [pixel_snap])
 int L_UiSetCanvasScaler(lua_State* L) {
     World* world = GetWorld();
     if (!world) return 0;
@@ -591,6 +591,8 @@ int L_UiSetCanvasScaler(lua_State* L) {
     if (!lua_isnoneornil(L, 3)) scaler.reference_resolution.y = static_cast<float>(luaL_checknumber(L, 3));
     if (!lua_isnoneornil(L, 4)) scaler.scale_factor = static_cast<float>(luaL_checknumber(L, 4));
     if (!lua_isnoneornil(L, 5)) scaler.match_width_or_height = (lua_toboolean(L, 5) != 0);
+    if (!lua_isnoneornil(L, 6)) scaler.match = static_cast<float>(luaL_checknumber(L, 6));
+    if (!lua_isnoneornil(L, 7)) scaler.pixel_snap = (lua_toboolean(L, 7) != 0);
     return 0;
 }
 

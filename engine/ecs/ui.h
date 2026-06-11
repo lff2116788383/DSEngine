@@ -193,7 +193,9 @@ struct UIGridLayoutComponent {
 struct UICanvasScalerComponent {
     glm::vec2 reference_resolution = glm::vec2(1920.0f, 1080.0f);  ///< 参考分辨率
     float scale_factor = 1.0f;                                      ///< 缩放因子
-    bool match_width_or_height = true;                              ///< true=宽高平均, false=仅宽度
+    bool match_width_or_height = true;                              ///< true=按 match 在宽/高间插值, false=仅按宽度
+    float match = 0.5f;                                             ///< 宽高匹配权重 [0,1]：0=完全跟宽, 1=完全跟高, 0.5=均衡(默认, 等价旧"宽高平均")
+    bool pixel_snap = false;                                        ///< 像素吸附(pixel-perfect)：将 UI 元素位置取整到整数像素，避免亚像素发糊
 };
 
 // ============================================================

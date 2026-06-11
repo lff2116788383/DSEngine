@@ -20,6 +20,7 @@
 #include <thread>
 #include <glm/glm.hpp>
 #include "engine/core/dse_export.h"
+#include "engine/render/rhi/rhi_types.h"  // TextureSamplerDesc / CompressedTextureFormat
 namespace dse::render { class RhiDevice; }
 using dse::render::RhiDevice;
 namespace dse::core {
@@ -333,6 +334,12 @@ public:
      * // AssetManager::LoadTexture(...);
      */
     std::shared_ptr<TextureAsset> LoadTexture(const std::string& path);
+    /**
+     * @brief 以指定采样描述(过滤/环绕)加载纹理。
+     *        像素画用 {Nearest, ClampToEdge}；图集精灵用 {Linear, ClampToEdge} 防出血。
+     *        缓存键含采样参数，同图不同采样各自独立。默认 {Linear, Repeat} 等价旧 LoadTexture。
+     */
+    std::shared_ptr<TextureAsset> LoadTexture(const std::string& path, const TextureSamplerDesc& sampler);
     std::string FindTexturePathByHandle(unsigned int handle) const;
     bool LoadImageRgba(const std::string& path, std::vector<unsigned char>& out_pixels, int& out_width, int& out_height, int& out_channels);
     /**

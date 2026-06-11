@@ -128,3 +128,33 @@ TEST(RenderStatsTest, 默认值全为零) {
     EXPECT_EQ(stats.render_passes, 0);
     EXPECT_EQ(stats.shadow_passes, 0);
 }
+
+// ============================================================
+// 纹理采样描述 TextureSamplerDesc / TextureFilter / TextureWrap
+// ============================================================
+
+TEST(TextureSamplerDescTest, Defaults_LinearRepeat) {
+    TextureSamplerDesc d;
+    EXPECT_EQ(d.filter, TextureFilter::Linear);
+    EXPECT_EQ(d.wrap, TextureWrap::Repeat);
+}
+
+TEST(TextureSamplerDescTest, FromLinearFlag_True_IsLinearRepeat) {
+    TextureSamplerDesc d = TextureSamplerDesc::FromLinearFlag(true);
+    EXPECT_EQ(d.filter, TextureFilter::Linear);
+    EXPECT_EQ(d.wrap, TextureWrap::Repeat);
+}
+
+TEST(TextureSamplerDescTest, FromLinearFlag_False_IsNearestRepeat) {
+    TextureSamplerDesc d = TextureSamplerDesc::FromLinearFlag(false);
+    EXPECT_EQ(d.filter, TextureFilter::Nearest);
+    EXPECT_EQ(d.wrap, TextureWrap::Repeat);
+}
+
+TEST(TextureSamplerDescTest, PixelArtClampPreset) {
+    TextureSamplerDesc d;
+    d.filter = TextureFilter::Nearest;
+    d.wrap = TextureWrap::ClampToEdge;
+    EXPECT_EQ(d.filter, TextureFilter::Nearest);
+    EXPECT_EQ(d.wrap, TextureWrap::ClampToEdge);
+}

@@ -54,6 +54,8 @@ public:
     VertexArrayHandle CreateVertexArray() override;
     void DeleteVertexArray(VertexArrayHandle handle) override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
+    unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+                                 const TextureSamplerDesc& sampler) override;
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,
                                            bool linear_filter) override;

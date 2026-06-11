@@ -42,7 +42,9 @@ float UILayoutSystem::CalculateScaleFactor(
     const float height_ratio = screen_size.y / scaler.reference_resolution.y;
 
     if (scaler.match_width_or_height) {
-        return (width_ratio + height_ratio) * 0.5f * scaler.scale_factor;
+        // 在宽/高比之间按 match 权重线性插值（match=0.5 等价旧"宽高平均"，保持向后兼容）。
+        const float m = std::min(std::max(scaler.match, 0.0f), 1.0f);
+        return ((1.0f - m) * width_ratio + m * height_ratio) * scaler.scale_factor;
     }
 
     return width_ratio * scaler.scale_factor;
@@ -342,6 +344,7 @@ void UILayoutSystem::UpdateContentSizeFitter(
 
 void UILayoutSystem::Update(entt::registry& registry, const glm::vec2& screen_size) {
     float global_scale = 1.0f;
+    bool pixel_snap = false;
 
     auto scaler_view = registry.view<UICanvasScalerComponent>();
     for (auto entity : scaler_view) {
@@ -350,7 +353,10 @@ void UILayoutSystem::Update(entt::registry& registry, const glm::vec2& screen_si
         scaler_data.reference_resolution = scaler_comp.reference_resolution;
         scaler_data.scale_factor = scaler_comp.scale_factor;
         scaler_data.match_width_or_height = scaler_comp.match_width_or_height;
+        scaler_data.match = scaler_comp.match;
+        scaler_data.pixel_snap = scaler_comp.pixel_snap;
         global_scale = CalculateScaleFactor(screen_size, scaler_data);
+        pixel_snap = scaler_comp.pixel_snap;
         break;
     }
 
@@ -364,7 +370,8 @@ void UILayoutSystem::Update(entt::registry& registry, const glm::vec2& screen_si
         anchor_data.offset = anchor_comp.offset;
         anchor_data.size = renderer.size;
 
-        renderer.position = CalculateAnchorPosition(anchor_data, screen_size, global_scale);
+        glm::vec2 pos = CalculateAnchorPosition(anchor_data, screen_size, global_scale);
+        renderer.position = pixel_snap ? SnapToPixel(pos) : pos;
     }
 
     auto grid_view = registry.view<UIGridLayoutComponent>();

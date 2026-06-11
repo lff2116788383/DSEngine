@@ -209,7 +209,11 @@ void EngineInstance::RegisterRuntimeServices() {
         if (rhi) {
             font_service_->SetTextureCallbacks(
                 [rhi](int w, int h, const unsigned char* data, bool linear) {
-                    return rhi->CreateTexture2D(w, h, data, linear);
+                    // 字形图集用 ClampToEdge：避免相邻字形在 linear 采样下边缘出血(bleeding)。
+                    TextureSamplerDesc sampler;
+                    sampler.filter = linear ? TextureFilter::Linear : TextureFilter::Nearest;
+                    sampler.wrap = TextureWrap::ClampToEdge;
+                    return rhi->CreateTexture2D(w, h, data, sampler);
                 },
                 [rhi](unsigned int handle) {
                     rhi->DeleteTexture(handle);
