@@ -19,10 +19,10 @@
 | 场景 (engine/scene) | ~4,000 行 | **75%** | Scene/SubScene/八叉树/四叉树/Transform 系统/组件序列化 |
 | 音频 (engine/audio) | ~1,650 行 | **50%** | miniaudio + AudioBus；代码中有 USE_FMOD_STUDIO 全局宏，集成方式偏粗糙 |
 | 导航 (engine/navigation) | ~900 行 | **60%** | Recast/Detour 封装 + 动态障碍 + 运行时 rebake |
-| 网络 (engine/net + http) | ~830 行 | **25-30%，最薄弱** | 仅 GNS transport 单文件(207 行 .cpp) + C API；HTTP client 287 行；CMake 默认 OFF |
+| 网络 (engine/net + http) | ~830 行 | **25-30%，最薄弱** | 仅 GNS transport 单文件(207 行 .cpp) + C API；HTTP client 287 行；CMake 默认 OFF。Lua 绑定以 `#ifdef` 守护，关闭时为空 TU、`dse.{net,http}.available()` 返回 false（public API 已弱化）；回环 smoke（net/http 各 2-3 个）已注册进 ctest，开 `-DDSE_ENABLE_NET/HTTP=ON` 时随 ctest 自检 |
 | 输入/平台 | ~1,800 行 | **60%** | GLFW(桌面) + Android；无 macOS/iOS/主机原生层 |
 | 工具链 (tools) | ~3,100 行 | **60%** | 自研 DSSL 着色器语言编译器(parser+codegen) + shader_compiler；codegen/mcp_adapter 目录为空 |
-| 测试 (tests) | ~47,000 行，210 个测试文件 | **优秀** | unit/integration/smoke 三层；三个 RHI 后端各有 smoke 测试；CI 覆盖 Debug/Release GL + Vulkan 三种矩阵（Windows）+ Android |
+| 测试 (tests) | ~47,000 行，210 个测试文件 | **优秀** | unit/integration/smoke 三层；三个 RHI 后端各有 smoke 测试。已在 feature/engine-lib 本地实测：Debug 全量构建 0 错误、3 个 ctest 套件通过（2789 用例通过 / 19 GTEST_SKIP / 0 失败）。CI（Windows）覆盖 Debug/Release/RelWithDebInfo × Vulkan+D3D11+Jolt 三矩阵 + Linux GL + Android APK；新增 editor-build job 编译 editor，net/http opt-in smoke 进 ctest |
 
 **总体完成度：以"可发布 v0.1.0-alpha SDK"为目标约 65-70%。**（CMake 中版本号即 0.1.0-alpha，且有 package_sdk.ps1 / verify_sdk.ps1 等发布脚本，说明发布工程已在收尾阶段）
 
@@ -38,11 +38,12 @@
 5. **第三方选型务实**：entt/Jolt/Box2D/Recast/miniaudio/sol2/glm/assimp/spirv-cross —— 全是行业标准件，没有重复造低价值轮子；自研集中在渲染管线、DSSL、编辑器等差异化部分。
 6. **测试文化**：测试代码 4.7 万行 ≈ 引擎代码的 1/3，加 CI 多矩阵，远超典型个人/小团队自研引擎。
 7. **功能开关粒度好**：2D/3D/Spine/Vulkan/D3D11/Lua/NavMesh/Net/HTTP/PCH/Unity-build 全部 CMake option 化，物理后端互斥校验。
+8. **服务入口已收敛**：运行时服务统一走 `ServiceLocator` + `EngineInstance` 生命周期管理；`World::Instance()` 已是委托到 `ServiceLocator::Get<World>()` 的 `@deprecated` 兼容垫片（未注册时抛异常、不再 auto-create），生产代码零调用（仅测试/文档引用）——旧单例遗留已基本清退。
 
 ### 隐患与不合理处
 1. **per-backend DrawExecutor 巨型化**：vulkan_draw_executor.cpp 4,148 行、dx11 2,609 行、GL 拆 3 个文件 —— 大量高层绘制逻辑沉到各后端重复实现，说明 RHI 抽象层级偏低（render 目录里也确实存在 RHI 统一的未完成任务清单）。这是当前架构最大的债，后端越多重复越多。
-2. **builtin_passes.cpp 3,293 行 / frame_pipeline.cpp 3,031 行**：管线逻辑集中成准"上帝文件"；frame_pipeline.h 头文件 include 了几乎所有子系统，耦合面大、编译传染强（虽有 PCH 缓解）。
-3. **passes/ 目录名实不符**：仅 atmosphere_sky 一个独立 Pass，其余全部塞在 builtin_passes 里，RenderGraph 的模块化潜力没兑现。
+2. **builtin_passes.cpp 3,293 行 / frame_pipeline.cpp 3,031 行**：frame_pipeline.h 头文件 include 了几乎所有子系统，耦合面大、编译传染强（虽有 PCH 缓解）。但需澄清：frame_pipeline 偏厚的部分是**非-pass 职责**（子系统 Init/Shutdown、每帧全局状态准备如光源收集/cluster/probe SH/风场、渲染线程、编辑器集成、RT 管理、快照），**不是**渲染 pass 流程控制硬编码。
+3. **passes 已是数据驱动，但物理分文件偏粗**：实际有 `RenderPipelineRegistry` + `RenderPipelineProfile`（ForwardPlusDefault/Lite/DebugDepth），36 个 pass 均实现 `IRenderPass`，`BuildRenderGraphInternal` 从 profile 遍历 → `registry.Create` → 模块 `RegisterRenderPasses` → 统一 `Setup(graph)` → `Compile()`；新 pass/后处理已走 RenderGraph+IRenderPass，**模块化在管线层已兑现**。残留问题只是这 36 个 pass 物理上集中在 `builtin_passes.cpp` 一个文件（拆分是可读性优化，非架构债）。
 4. **gameplay_3d 子系统偏"演示级"**：cloth/fluid/vehicle 等都是单文件系统，作为 feature 列表很漂亮，但生产深度不足；建议首发收敛范围而非继续铺宽度。
 5. **全局宏污染**：顶层 CMake add_definitions(USE_FMOD_STUDIO、GLM_FORCE_SWIZZLE 等) 全局生效，应下沉到目标级 target_compile_definitions。
 6. **网络层与引擎其余部分不成比例**：800 行 vs 渲染 4.2 万行，若 v1 需要联机能力，这是硬缺口。
@@ -66,7 +67,7 @@
 
 **P0（发布阻塞）**
 1. **RHI 统一收尾**：消除三后端 DrawExecutor 重复逻辑（仓库内已有任务清单未清零），否则每加一个特性要写三遍，alpha 后迭代成本失控。
-2. **Vulkan 后端转正或明确降级**：CMake 默认 OFF、仅 CI RelWithDebInfo 矩阵验证，发布前要么达到与 GL/DX11 同级稳定，要么 v0.1 明确只发 GL+DX11。
+2. **Vulkan 后端稳定性转正或明确降级**：勘误——Vulkan 在桌面默认 **ON**（非 Android），CI Windows 三个配置（Debug/Release/RelWithDebInfo）均开 Vulkan 构建；所以问题不是“默认关/未启用”，而是运行时稳定性与 GL/DX11 是否同级（需画面/回归验证）。发布前要么达到同级稳定，要么 v0.1 明确只发 GL+DX11。
 3. **端到端样例打磨**：examples/KF_Framework 目录里还躺着 ALIGNMENT_TASKS / NEXT_SESSION_TASKS / TROUBLESHOOTING 等未完结任务清单，示例项目本身未收尾 —— SDK 没有可跑通的标杆 demo 等于没法发布。
 4. **SDK 打包验证闭环**：package_sdk.ps1 / verify_sdk.ps1 / sdk_consumer 示例已具备，需把"打包→第三方消费→运行"跑成 CI 常态。
 
@@ -78,7 +79,7 @@
 
 **P2（1.0 之前）**
 9. 平台扩展（macOS/iOS 缺位，Android 已有但需真机验证闭环）。
-10. builtin_passes/frame_pipeline 拆分模块化。
+10. builtin_passes.cpp 按 pass 拆分到独立文件（可读性优化；管线已是 registry+profile+IRenderPass 数据驱动，非架构债）。
 
 ---
 
@@ -98,6 +99,21 @@
 
 **一句话定位**：DSEngine 已经越过了"玩具引擎"和"渲染 demo"两个阶段，处于"垂直自研引擎发布前夜"——技术栈现代、工程纪律好、宽度惊人；首发前的关键动作是**收口（RHI 统一、Vulkan 定位、示例收尾、打包闭环）而不是继续加 feature**。对标商业引擎缺的是生态与打磨深度，这正常且不应是 v0.1 的目标。
 
+## 六、2026-06-11 复核与本次改动（对齐代码现状）
+
+针对“FramePipeline 变薄 / 服务入口统一 / 默认构建=默认验收 / net+http”四点做了代码核实，结论：
+
+- **FramePipeline 变薄**：基本已做到，不存在“新 pass 硬编进 frame 流程”。pass 由 `RenderPipelineRegistry` + profile 数据驱动，36 个 pass 均为 `IRenderPass`。无需为此项做架构改动。
+- **服务入口统一**：基本已完成。`World::Instance()` 仅为 `ServiceLocator` 委托垫片，生产零调用。无需改动（可选纯清理）。
+- **默认构建=默认验收**：默认 preset 已含 editor+Vulkan+D3D11+gtests（含 integration）；原缺口是 **CI 不编译 editor**（`DSE_BUILD_EDITOR=OFF`）。已修复。
+- **net/http**：public API 已通过 `#ifdef` 弱化；smoke 存在但未进默认验收/ctest。已将回环 smoke 注册进 ctest（opt-in）。
+
+**本次提交（直推 feature/engine-lib）**：
+1. `.github/workflows/ci.yml` 新增 `editor-build` job（`DSE_BUILD_EDITOR=ON` + D3D11、关 Vulkan，编译 `dse_editor_cpp`），使 CI 与默认 preset 对齐；本地同配置实测构建通过。
+2. 根 `CMakeLists.txt` 在 `enable_testing()` 后用 `if(TARGET ...)` 守护注册 5 个回环 smoke（`dse_http_smoke` / `dse_http_lua_smoke` / `dse_net_smoke` / `dse_net_capi_smoke` / `dse_net_lua_smoke`）进 ctest（labels `smoke;net_http`）；对默认构建/CI 零影响。
+
+未做（避免过度设计）：FramePipeline/builtin_passes 拆分、删 `World::Instance()` 垫片、net 默认开 smoke（会拉 GNS/webrtc 巨依赖）均为可选低优先项，维持现状。
+
 ---
 
-*备注：本机无 cmake/MSVC，未做本地构建验证；构建健康度以仓库 CI 矩阵配置与 801 次提交的合并记录为依据。分析全部来自源码本身，未参考 docs/。*
+*备注：分析全部来自源码本身。构建健康度已在 feature/engine-lib 本地实测验证（VS2022 + MSVC 14.44 + CMake 4.3.3 + Ninja）：Debug 全量构建 0 错误、`ctest -L gtest` 3 套件通过（2789 通过 / 19 跳过 / 0 失败）；editor（`dse_editor_cpp`，D3D11+OpenGL）本地构建通过。*
