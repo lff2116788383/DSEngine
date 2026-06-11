@@ -151,8 +151,8 @@ apps/  ->  modules/  ->  engine/  ->  depends/
 
 ```bat
 ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
-build_fast_tests.bat
-verify_all.bat
+scripts\win\build_fast_tests.bat
+scripts\win\verify_all.bat
 ```
 
 - 默认构建目录优先使用 `build_vs2022`。
@@ -219,9 +219,9 @@ EngineInstance (生命周期管理)
 ```bat
 cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
 cmake --build build_vs2022 --config Debug
-build_fast_tests.bat
-build_all.bat
-verify_all.bat
+scripts\win\build_fast_tests.bat
+scripts\win\build_all.bat
+scripts\win\verify_all.bat
 ```
 
 - 如果需要启用特定能力，如 Vulkan / Editor / Launcher，以根 [`CMakeLists.txt`](CMakeLists.txt) 当前选项为准追加开关。
@@ -231,14 +231,14 @@ verify_all.bat
 
 | 脚本 | 用途 |
 |------|------|
-| [`build_all.bat`](build_all.bat) | 完整构建与验证入口 |
-| [`build_fast_cpp.bat`](build_fast_cpp.bat) | 快速构建 C++ 目标 |
-| [`build_fast_tests.bat`](build_fast_tests.bat) | 编译并运行 GTest |
-| [`build_fast_editor.bat`](build_fast_editor.bat) | 快速构建编辑器 |
-| [`build_fast_lua.bat`](build_fast_lua.bat) | 快速构建 Lua runtime |
-| [`build_fast_sdk.bat`](build_fast_sdk.bat) | 打包 SDK |
-| [`build_fast_launcher.bat`](build_fast_launcher.bat) | 构建启动器 |
-| [`verify_all.bat`](verify_all.bat) | 全链路验证 |
+| [`scripts/win/build_all.bat`](scripts/win/build_all.bat) | 完整构建与验证入口 |
+| [`scripts/win/build_fast_cpp.bat`](scripts/win/build_fast_cpp.bat) | 快速构建 C++ 目标 |
+| [`scripts/win/build_fast_tests.bat`](scripts/win/build_fast_tests.bat) | 编译并运行 GTest |
+| [`scripts/win/build_fast_editor.bat`](scripts/win/build_fast_editor.bat) | 快速构建编辑器 |
+| [`scripts/win/build_fast_lua.bat`](scripts/win/build_fast_lua.bat) | 快速构建 Lua runtime |
+| [`scripts/win/build_fast_sdk.bat`](scripts/win/build_fast_sdk.bat) | 打包 SDK |
+| [`scripts/win/build_fast_launcher.bat`](scripts/win/build_fast_launcher.bat) | 构建启动器 |
+| [`scripts/win/verify_all.bat`](scripts/win/verify_all.bat) | 全链路验证 |
 
 ---
 

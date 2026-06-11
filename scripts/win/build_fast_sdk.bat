@@ -2,19 +2,19 @@
 setlocal enabledelayedexpansion
 
 :: Change working directory to the script's location
-pushd "%~dp0"
+pushd "%~dp0..\.."
 
 echo ========================================================
-echo         DSEngine Fast Build Script (Lua Runtime)
+echo         DSEngine Fast Build Script (SDK Install)
 echo ========================================================
 echo.
 
 set BUILD_DIR=build_vs2022
-set TARGET_NAME=dse_example_lua
+set INSTALL_DIR=.\bin\sdk
 
 set NEED_CONFIGURE=0
 if not exist "%BUILD_DIR%\CMakeCache.txt" set NEED_CONFIGURE=1
-if not exist "%BUILD_DIR%\apps\runtime\lua_host\%TARGET_NAME%.vcxproj" set NEED_CONFIGURE=1
+if not exist "%BUILD_DIR%\dse_engine.vcxproj" set NEED_CONFIGURE=1
 
 if "!NEED_CONFIGURE!"=="1" (
     echo [INFO] Target not found or CMakeCache.txt missing. Running configure...
@@ -26,16 +26,15 @@ if "!NEED_CONFIGURE!"=="1" (
     )
 )
 
-echo [INFO] Building %TARGET_NAME% (Debug)...
-cmake --build %BUILD_DIR% --config Debug --target %TARGET_NAME% --parallel
+echo [INFO] Installing SDK from %BUILD_DIR% (Debug) to %INSTALL_DIR%...
+cmake --install %BUILD_DIR% --config Debug --prefix "%INSTALL_DIR%"
 
 if %ERRORLEVEL% equ 0 (
     echo.
-    echo [OK] Build successful! You can find the executable in the bin\ directory.
-    echo Run bin\DSEngine_lua_debug.exe or bin\DSEngine_lua.exe to start.
+    echo [OK] SDK install successful! Output directory: %INSTALL_DIR%
 ) else (
     echo.
-    echo [ERROR] Build failed! Check the output above.
+    echo [ERROR] SDK install failed! Check the output above.
 )
 
 popd

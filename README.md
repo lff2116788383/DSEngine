@@ -72,11 +72,24 @@ DSEngine/
 │   ├── runtime/       Lua host & C++ host examples
 │   └── tools/         AssetBuilder CLI
 ├── modules/           Optional engine modules (terrain, animation, etc.)
-├── samples/lua/       Lua demo collection (15+ demos)
+├── plugins/           Optional runtime plugins
+├── samples/           Runtime-loaded demos (cpp / lua / plugins)
+├── examples/          Standalone example projects (KF_Framework, sdk_consumer, stress_test)
+├── script/            Runtime Lua libraries (loaded via Lua package.path; shipped with the engine)
+├── scripts/           Build / CI / packaging scripts (scripts/win/ holds the Windows .bat)
+├── tools/             Codegen, shader compiler, asset cooking, etc.
 ├── data/              Shaders, textures, models, fonts
 ├── tests/             2269 GoogleTest cases (unit/integration/smoke)
 └── docs/              Architecture & roadmap docs
 ```
+
+> **`script/` vs `scripts/`** — `script/` (singular) holds **runtime** Lua libraries that the
+> engine loads at run time (hard-wired into the Lua `package.path`) and are installed with the
+> engine; `scripts/` (plural) holds **build-time** developer/CI scripts.
+>
+> **`samples/` vs `examples/`** — `samples/` are small demos loaded by the engine runtime
+> (`samples/lua`, `samples/cpp`, `samples/plugins`); `examples/` are self-contained example
+> projects that consume the engine/SDK (`KF_Framework`, `sdk_consumer`, `stress_test`).
 
 ---
 
@@ -113,9 +126,9 @@ cmake --build build_vs2022 --config Release --target dse_example_lua   # Lua dem
 Or use the convenience scripts:
 
 ```powershell
-build_fast_editor.bat   # Editor only
-build_fast_lua.bat      # Lua host only
-build_all.bat           # Everything
+scripts\win\build_fast_editor.bat   # Editor only
+scripts\win\build_fast_lua.bat      # Lua host only
+scripts\win\build_all.bat           # Everything
 ```
 
 Output binaries go to `bin/`.

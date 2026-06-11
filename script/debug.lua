@@ -26,5 +26,5 @@ function Debug:ConnectDebugServer(host,port)
     if port==nil then
         port=8818
     end
-    require("lua_panda").start(host,port);
+    require("dev.lua_panda").start(host,port);
 end

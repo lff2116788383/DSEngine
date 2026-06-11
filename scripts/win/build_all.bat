@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 :: Change working directory to the script's location
-pushd "%~dp0"
+pushd "%~dp0..\.."
 
 echo ========================================================
 echo         DSEngine Full Build and Verification Script
