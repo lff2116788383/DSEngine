@@ -118,19 +118,32 @@ All third-party dependencies are vendored under `depends/` — no package manage
 
 ### 推荐：CMakePresets（VS 2022 打开文件夹即编译）
 
-仓库自带 `CMakePresets.json`。Visual Studio 2022 **打开此文件夹**后会自动识别预设：
-在顶部配置下拉选 **`Windows x64 (GL + Vulkan + D3D11)`**，VS 自动配置，随后 **生成 → 全部生成** 即可。
+仓库自带 `CMakePresets.json`（Ninja 生成器，按构建类型组织）。Visual Studio 2022
+**打开此文件夹**后自动识别预设：在目标系统选 **本地计算机**，配置下拉里即出现
+**`x64 Debug` / `x64 RelWithDebInfo` / `x64 Release`**；选 **WSL Ubuntu** 时则切换为
+**`WSL Debug` / `WSL RelWithDebInfo` / `WSL Release`**。选定后 **生成 → 全部生成** 即可。
 
-命令行等价流程：
+命令行等价流程（Windows，需在 VS 开发者环境 / 已 `vcvars64` 的终端中运行）：
 
 ```powershell
-cmake --preset windows-default          # 配置（三后端全开 + 编辑器 + GTest）
-cmake --build --preset windows-debug    # 构建 Debug（或 windows-release）
-ctest  --preset windows-debug           # 跑 gtest 用例
+cmake --preset windows-x64-debug          # 配置 Debug（GL+Vulkan+D3D11 + 编辑器 + GTest）
+cmake --build --preset windows-x64-debug  # 构建（另有 windows-x64-relwithdebinfo / -release）
+ctest  --preset windows-x64-debug         # 跑 gtest 用例
 ```
 
-可用预设：`windows-default`（GL+Vulkan+D3D11）、`windows-no-vulkan`（无 Vulkan 环境时）。
-预设已固定 `CMAKE_POLICY_VERSION_MINIMUM=3.5`（CMake 4 兼容旧依赖）、`DSE_BUILD_EDITOR=ON`、`DSE_BUILD_GTESTS=ON`，无需手动传参。
+WSL/Linux（在 WSL 内运行；与 CI `build-linux` 一致：GL + Jolt，静态库，关闭 D3D11/Vulkan/GTest）：
+
+```bash
+cmake --preset wsl-debug                  # 另有 wsl-relwithdebinfo / wsl-release
+cmake --build --preset wsl-debug
+```
+
+| 预设组 | 目标系统 | 后端 | 备注 |
+|--------|----------|------|------|
+| `windows-x64-{debug,relwithdebinfo,release}` | 本地计算机 | GL + Vulkan + D3D11 | 编辑器 + GTest，Ninja + MSVC |
+| `wsl-{debug,relwithdebinfo,release}` | WSL Ubuntu | GL (+ Jolt) | 静态库，关闭 D3D11/Vulkan，Ninja + gcc |
+
+所有预设已固定 `CMAKE_POLICY_VERSION_MINIMUM=3.5`（CMake 4 兼容旧依赖），无需手动传参。
 
 ### 手动配置（命令行）
 
