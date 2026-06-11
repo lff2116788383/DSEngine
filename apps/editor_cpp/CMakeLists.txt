@@ -57,6 +57,15 @@ target_include_directories(dse_editor_cpp PRIVATE
 
 target_link_libraries(dse_editor_cpp PRIVATE dse_engine ixwebsocket opengl32 comdlg32 crypt32)
 
+# Animation Retargeting 面板需要在编辑器内导入 gltf/fbx 骨架并烘焙 .danim，
+# 复用资源编译核心 importer.cpp（默认仅编进 AssetBuilder）。需要 assimp 与 tinygltf。
+if(DSE_HAS_ASSIMP)
+    target_sources(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/engine/assets/compiler/importer.cpp)
+    target_include_directories(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/depends/tinygltf)
+    target_link_libraries(dse_editor_cpp PRIVATE assimp)
+    target_compile_definitions(dse_editor_cpp PRIVATE DSE_HAS_ASSIMP=1 DSE_EDITOR_HAS_IMPORTER=1)
+endif()
+
 # 将编译产物放到 bin 目录下
 set_target_properties(dse_editor_cpp PROPERTIES 
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"

@@ -103,6 +103,7 @@
 #include "editor_streaming_panel.h"
 #include "editor_curve_editor.h"
 #include "editor_visual_script.h"
+#include "editor_anim_retarget.h"
 #include "editor_crash.h"
 
 
@@ -928,7 +929,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
         &show_anim_state_machine_,
         &show_lua_debugger_,
-        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_
+        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_,
+        &show_anim_retarget_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -1009,6 +1011,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Visual Script", &show_visual_script_)) {
             dse::editor::DrawVisualScriptEditor(ctx);
+        }
+        ImGui::End();
+    }
+
+    // Animation Retargeting panel
+    if (show_anim_retarget_) {
+        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Anim Retarget", &show_anim_retarget_)) {
+            dse::editor::DrawAnimRetargetPanel(ctx);
         }
         ImGui::End();
     }

@@ -446,6 +446,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, panels->curve_editor);
             if (panels->visual_script)
                 ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, panels->visual_script);
+            if (panels->anim_retarget)
+                ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim Retarget", nullptr, panels->anim_retarget);
         }
         ImGui::Separator();
         if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
