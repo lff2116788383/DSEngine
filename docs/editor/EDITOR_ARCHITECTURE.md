@@ -166,7 +166,7 @@
 | **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
 | **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
 | **Shader Graph** | 节点式着色器图 → 编译为 DSSL（7 例编译测试） | ✅ 完整 |
-| **Visual Script** | 节点式可视脚本 → Lua（数据流完整；控制流体略，见 §四） | 🟡 部分 |
+| **Visual Script** | 节点式可视脚本 → Lua：事件入口生成函数体、Branch→if/else、For Loop→数值 for、纯数据节点内联表达式、Flow 数据输出绑定局部变量（`editor_visual_script_compiler.{h,cpp}`，6 例测试） | ✅ 完整 |
 | **动画状态机** | 状态机图 + 过渡条件 + 状态 Inspector | ✅ 完整 |
 | **NavMesh 面板** | 烘焙参数 + Overlay 预览 | ✅ 完整 |
 | **AI Chat Panel** | 编辑器内建 AI 对话 + Python LLM bridge（原 Phase 3，已接入） | ✅ 完整 |
@@ -177,7 +177,6 @@
 
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
-| 🟡 P1 | Visual Script 控制流生成 | 数据流已可生成 Lua；事件/分支 `{body}` 仅占位注释（详 §四） |
 | 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具（状态机已有，重定向 UI 未有） |
 | 🟡 P1 | 物理碰撞体可视化编辑 | 已有 Physics Debug 可视化；Scene 中直接拖拽碰撞体形状未有 |
 | 🟢 P2 | Multi-viewport 默认开启 | 面板已有开关，默认关闭（CRT 稳定性顾虑） |
