@@ -252,7 +252,10 @@ engine/core/memory/
 
 ## 7. 落地阶段（每阶段：实现 → 补测试 → 更新文档 → 提交推送）
 
-1. **骨架**：`MemoryTag`(+运行期注册) + `IAllocator`(块头) + `SystemAllocator` + `Memory` 门面（转发，含 New/Delete）+ `Init/Shutdown` 接 `EngineInstance`。**行为零变化**。
+1. **骨架**：`MemoryTag`(+运行期注册) + `IAllocator`(块头) + `SystemAllocator` + `Memory` 门面（转发，含 New/Delete）+ `Init/Shutdown` 接 `EngineInstance`。**行为零变化**。 ✓ **已完成**
+   - 文件：`engine/core/memory/{allocator,system_allocator,memory}.{h,cpp}`；`EngineInstance` 构造最早期调用 `Memory::Init()`。
+   - `SystemAllocator` 用块头记录 size/对齐/标签 + magic 校验；`Reallocate` = alloc+copy+free（跨平台对齐安全）；总量统计用原子。
+   - 测试：`tests/gtest/unit/engine/core/memory_test.cpp`（11 例：标签注册、对齐、块头/统计、Realloc 保数据、门面 New/Delete 构析、空指针安全）。`ctest --preset windows-x64-debug` 三套全绿。
 2. **追踪**：`TrackingAllocator` + `MemoryTracker`(每线程缓冲) + `ReportLeaks` + CMake 开关（含全局 new 覆盖开关）。
 3. **帧/线性**：`LinearAllocator` + `FrameAllocator`(N缓冲, fence 对齐) + `ThreadScratch`，接 FramePipeline / JobSystem；修 job_system 裸 new。
 4. **池**：`PoolAllocator` + 重写 `ObjectPool`，删死代码 `memory_pool.h`，迁 1–2 个高频点示范。

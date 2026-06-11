@@ -23,6 +23,7 @@
 #include "engine/base/debug.h"
 #include "engine/diagnostics/crash_handler.h"
 #include "engine/core/job_system.h"
+#include "engine/core/memory/memory.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/event_bus.h"
 #include "engine/render/font/font_service.h"
@@ -142,6 +143,9 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
 EngineInstance::EngineInstance(const EngineRunConfig& config)
     : config_(config)
     , services_(config.services) {
+    // 最早期初始化内存子系统（幂等），早于任何子系统分配。
+    core::Memory::Init();
+
     if (services_.world == nullptr) {
         default_world_ = std::make_unique<World>();
         services_.world = default_world_.get();
