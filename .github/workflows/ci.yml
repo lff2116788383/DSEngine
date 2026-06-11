@@ -1,4 +1,4 @@
-# DSEngine CI - Windows build + unit/integration tests
+# DSEngine CI - Windows + Linux + Android build/test
 name: CI
 
 on:
@@ -6,6 +6,7 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_dispatch:        # 允许手动触发（CI 无额度时按需运行）
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -118,3 +119,83 @@ jobs:
           path: ${{ env.BUILD_DIR }}/Testing/**/*.xml
           retention-days: 14
           if-no-files-found: ignore
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Linux 桌面构建（GLFW X11 + GL）——复用 scripts/verify_linux_build.sh（本地已验证）。
+  # 构建 dse_engine 静态库 + Lua 运行时并校验产物为合法 ELF。
+  # 注：本 job 首次真实运行待 CI 额度恢复后验证；命令对齐本地已通过的脚本。
+  build-linux:
+    runs-on: ubuntu-latest
+    name: linux-gl-jolt
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build deps (toolchain + X11/GL dev libs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Verify Linux build (engine static lib + Lua runtime ELF)
+        run: bash scripts/verify_linux_build.sh
+        env:
+          BUILD_TYPE: Release
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Android arm64-v8a APK 打包验证——复用 scripts/verify_android_apk.ps1（本地已验证）。
+  # 流程：host(x86_64) 构建 dse_shader_compiler → NDK 交叉编译引擎/.so →
+  #       aapt2/zipalign/apksigner 打包签名 → 校验包名/签名/native 库。
+  # 注：本 job 首次真实运行待 CI 额度恢复后验证；NDK 固定 r26d 以对齐本地验证环境。
+  build-android:
+    runs-on: ubuntu-latest
+    name: android-arm64-apk
+    env:
+      ANDROID_NDK_VERSION: "26.3.11579264"   # r26d（与本地验证一致）
+      ANDROID_BUILD_TOOLS: "34.0.0"
+      ANDROID_TARGET_PLATFORM: "android-34"
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup JDK 17 (keytool / jar / apksigner)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host build deps (for dse_shader_compiler)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Install Android SDK packages (platform + build-tools + NDK r26d)
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;${ANDROID_TARGET_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+
+      - name: Build host shader compiler (x86_64 → bin/dse_shader_compiler)
+        run: |
+          cmake -S . -B build_host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+          cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
+
+      - name: Verify Android APK (arm64-v8a, NativeActivity, signed)
+        shell: pwsh
+        run: |
+          ./scripts/verify_android_apk.ps1 `
+            -Abi arm64-v8a -ApiLevel 24 `
+            -BuildTools $env:ANDROID_BUILD_TOOLS -Platform $env:ANDROID_TARGET_PLATFORM `
+            -HostShaderCompiler "$PWD/bin/dse_shader_compiler"

@@ -275,7 +275,8 @@ Phase 5 — Shader 统一化 + 已知技术债务
   ├── ✅ DDGI / TressFX / Grass 三组 Compute → VK SPIR-V + DX11 HLSL 移植（已完成）
   ├── 🔄 引擎静态库化 + dse_* C ABI 抽取（feature/engine-lib 进行中：S1.x 里程碑）
   ├── ✅ 跨平台抽象层（PlatformApp 接口 + glfw 桌面 / android 后端；engine/ 残留 Win32 引用均 #ifdef 守卫，Win+Linux+Android 三端构建路径齐备）
-  └── ⬜ Linux/Android 纳入 CI 持续看护；macOS/iOS 平台后端
+  ├── 🟡 Linux/Android 已纳入 CI 配置（`.github/workflows/ci.yml`: build-linux / build-android jobs，复用本地已验证脚本），待 CI 额度恢复后首次运行验证
+  └── ⬜ macOS/iOS 平台后端（需 Mac 硬件）
 
 Phase 6 — 网络层（GNS 集成）✅ 传输层 / ⬜ 玩法级
   ├── ✅ GNS 集成 Phase 1–5（Win/Linux 运行 + Android arm64 编译，engine/net 抽象层 + dse_net_* C ABI）
@@ -317,7 +318,7 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 
 ### 6.1 结论
 
-> **「引擎本体」已达生产级**：面向单平台（Windows）的 2D/3D 独立游戏可直接用于生产——功能广度与 Godot 4.x 相当，测试 ~2,600 例全绿，全引擎仅约 5 处 TODO/FIXME（非占位 stub）。
+> **「引擎本体」已达生产级**：面向单平台（Windows）的 2D/3D 独立游戏可直接用于生产——功能广度与 Godot 4.x 相当，测试 ~2,600 例全绿。代码债务极低：全仓库手写源码中仅约 **8 处** 遗留标记（`TODO`×6 / `HACK`×1 / `XXX`×1，`FIXME` 为 0；naïve grep 出的 ~200 个 "XXX" 几乎全是生成着色器头里的 HLSL `.xxx` swizzle，非真实标记）。低标记数表明工作由 roadmap/文档而非散落注释跟踪，是代码整洁度的正向信号，并不代表功能缺失（缺失体现为缺整块子系统，见 6.3）。
 > **「完整商业产品」尚未达生产级**：主要缺玩法级网络、Apple/console 平台 + CI 看护、崩溃遥测等运营工具，以及实战出货验证与生态。详见 6.3。
 
 ### 6.2 已具备的生产级能力（均经 grep 核实存在）
@@ -335,7 +336,7 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 | 优先级 | 缺口 | 说明 |
 |:------:|------|------|
 | 🔴 | **玩法级网络层** | 传输层 GNS 完备，缺复制/快照-delta/预测/插值/AOI、大厅/匹配；同步逻辑现需脚本层自实现 |
-| 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端；Linux/Android 有构建路径但未纳入 CI 持续看护（需 Mac 硬件 + CI 额度）|
+| 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端（需 Mac 硬件）；Linux/Android 已加入 CI 配置（`ci.yml` build-linux/build-android，复用本地已验证脚本），待 CI 额度恢复后首次运行验证 |
 | 🟡 | **运维可观测性** | **无崩溃报告/minidump/遥测**——商业出货后的运营短板 |
 | 🟡 | **跨平台热重载** | `FileWatcher` 仅 Windows 实现（`asset_manager.cpp:2050` 非 Windows 平台 not implemented）|
 | 🟡 | **终端分发** | 仅 SDK 包 + Android APK，缺面向终端用户的游戏打包/安装器/Redist 清单 |
