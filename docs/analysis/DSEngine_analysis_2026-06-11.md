@@ -77,7 +77,7 @@
 4. 网络层从 800 行原型补到可用（房间/同步/序列化策略），或 v0.1 明确声明"无联机"。
 5. 音频收口：实际音频走 miniaudio；`CMakeLists.txt:37` 的 `add_definitions(-D USE_FMOD_STUDIO)` 是**全局定义但全仓零引用的死宏**（grep 无任何 .cpp/.h 使用）。整改 = 删死宏 + 确认 miniaudio 收口，工作量极小、低风险。
 6. 编辑器稳定性专项：139 个面板源文件功能广但需要 crash/undo/资产损坏等鲁棒性扫雷（已有 crash handler 与 autosave 是好基础）。
-7. 性能基准：`examples/stress_test`（`run_benchmark.py` + `benchmark_results.csv`）**已具备并有数据**。当前数据暴露异常——gpu-driven 5000 实体下 **DX11 ~6 fps（帧时 160ms）vs OpenGL ~34 fps**（需先复核是否 CI 软件渲染/无独显所致）。建议：查 DX11 gpu-driven 路径性能 + 把 benchmark 固化为 CI 回归门槛。
+7. 性能基准：`examples/stress_test`（`run_benchmark.py` + `benchmark_results.csv`）**已具备并有数据**。`benchmark_results.csv` 里「DX11 ~6 fps vs OpenGL ~34 fps（gpu-driven, 5000 实体）」**经复核确认是软件渲染假象，非真实 DX11 性能回归**：`dx11_context.cpp` 在选适配器时会跳过 software adapter 与 `DedicatedVideoMemory==0` 的适配器（远桌虚拟显卡/共享显存的集显/vGPU 都属此类），无独显时回退到 Microsoft Basic Render Driver / WARP 软光栅。本机（仅 IddSampleDriver 虚拟显示器、无 GPU）实测：DX11 三个适配器全是「Microsoft Basic Render Driver」软渲，2000 实体仅 1.1 fps；OpenGL 在本机连 GL3.3 上下文都建不起来（产 CSV 的机器是另一台 GL 能跑出 34fps 的环境）。即两后端跑在不同有效设备上，数字不可比。复核遗留小问题：(a) `is_warp_` 只在显式 WARP/硬件创建失败回退时为真，「HARDWARE 驱动类型落到 Basic Render Driver」这种软渲不会被标记；(b) `DSE_PERF_RESULT` 未输出实际 adapter/软渲标志，易把软渲数当硬件数。建议（均小、非紧急）：benchmark 输出里带上 adapter 名+软渲标志；在真独显机重跑后再下 DX11/GL 对比结论；`DedicatedVideoMemory==0` 跳过策略是否过激（会误杀共享显存集显）可另议——属设备选择逻辑，改动有风险，不在本次范围。
 
 **P2（1.0 之前）**
 8. 平台扩展（macOS/iOS 缺位，Android 已有但需真机验证闭环）。
