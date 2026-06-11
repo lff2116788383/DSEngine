@@ -1,0 +1,78 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "description": "Visual Studio 2022 x64 公共配置；依赖全部内置于 depends/ 子模块",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5",
+        "DSE_BUILD_GTESTS": "ON",
+        "DSE_BUILD_EDITOR": "ON",
+        "DSE_ENABLE_D3D11": "ON"
+      }
+    },
+    {
+      "name": "windows-default",
+      "displayName": "Windows x64 (GL + Vulkan + D3D11)",
+      "description": "默认配置：三后端全开 + 编辑器 + GTest。VS 打开文件夹后选此预设直接生成。",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "DSE_ENABLE_VULKAN": "ON"
+      }
+    },
+    {
+      "name": "windows-no-vulkan",
+      "displayName": "Windows x64 (GL + D3D11, 无 Vulkan)",
+      "description": "无 Vulkan 环境时使用：仅 OpenGL + D3D11 后端。",
+      "inherits": "windows-base",
+      "binaryDir": "${sourceDir}/build-no-vulkan",
+      "cacheVariables": {
+        "DSE_ENABLE_VULKAN": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "displayName": "Debug",
+      "configurePreset": "windows-default",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Release",
+      "configurePreset": "windows-default",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "displayName": "Debug gtest",
+      "configurePreset": "windows-default",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "filter": {
+        "include": {
+          "label": "gtest"
+        }
+      }
+    }
+  ]
+}

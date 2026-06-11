@@ -108,13 +108,39 @@ All third-party dependencies are vendored under `depends/` — no package manage
 
 ## Build
 
+> **依赖是 in-tree git submodule**：克隆后必须先初始化，否则 CMake 配置会以明确错误中止。
+>
+> ```powershell
+> git clone <repo-url>
+> cd DSEngine
+> git submodule update --init --recursive   # 关键：拉取 depends/ 下全部依赖
+> ```
+
+### 推荐：CMakePresets（VS 2022 打开文件夹即编译）
+
+仓库自带 `CMakePresets.json`。Visual Studio 2022 **打开此文件夹**后会自动识别预设：
+在顶部配置下拉选 **`Windows x64 (GL + Vulkan + D3D11)`**，VS 自动配置，随后 **生成 → 全部生成** 即可。
+
+命令行等价流程：
+
+```powershell
+cmake --preset windows-default          # 配置（三后端全开 + 编辑器 + GTest）
+cmake --build --preset windows-debug    # 构建 Debug（或 windows-release）
+ctest  --preset windows-debug           # 跑 gtest 用例
+```
+
+可用预设：`windows-default`（GL+Vulkan+D3D11）、`windows-no-vulkan`（无 Vulkan 环境时）。
+预设已固定 `CMAKE_POLICY_VERSION_MINIMUM=3.5`（CMake 4 兼容旧依赖）、`DSE_BUILD_EDITOR=ON`、`DSE_BUILD_GTESTS=ON`，无需手动传参。
+
+### 手动配置（命令行）
+
 ```powershell
 # Clone with submodules
 git clone --recursive <repo-url>
 cd DSEngine
 
 # Generate
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 # Build targets
 cmake --build build_vs2022 --config Release --target dse_engine        # Engine DLL

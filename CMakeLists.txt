@@ -85,6 +85,44 @@ if(ANDROID)
 endif()
 
 
+# --- in-tree 依赖 submodule 完整性检查 ---
+# 本工程所有第三方依赖以 git submodule 形式内置于 depends/，克隆后必须先执行：
+#     git submodule update --init --recursive
+# 这里用代表性 sentinel 文件检测；缺失时给出明确指引，而非晦涩的下游编译/配置报错。
+set(_DSE_SUBMODULE_SENTINELS
+    "depends/glm/glm/glm.hpp"
+    "depends/imgui/imgui.h"
+    "depends/assimp/CMakeLists.txt"
+    "depends/glfw-3.3-3.4/CMakeLists.txt"
+    "depends/JoltPhysics/Build/CMakeLists.txt"
+    "depends/box2d-2.4.1/CMakeLists.txt"
+    "depends/spdlog/CMakeLists.txt"
+    "depends/entt-3.13.0/CMakeLists.txt"
+)
+if(DSE_ENABLE_VULKAN)
+    list(APPEND _DSE_SUBMODULE_SENTINELS
+        "depends/Vulkan-Headers/include/vulkan/vulkan.h"
+        "depends/glslang/CMakeLists.txt"
+        "depends/spirv-cross/CMakeLists.txt")
+endif()
+set(_DSE_MISSING_SUBMODULES "")
+foreach(_dse_s IN LISTS _DSE_SUBMODULE_SENTINELS)
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${_dse_s}")
+        list(APPEND _DSE_MISSING_SUBMODULES "${_dse_s}")
+    endif()
+endforeach()
+if(_DSE_MISSING_SUBMODULES)
+    string(REPLACE ";" "\n    - " _DSE_MISSING_PRETTY "${_DSE_MISSING_SUBMODULES}")
+    message(FATAL_ERROR
+        "检测到依赖 submodule 缺失（depends/ 下内置第三方库未初始化）：\n"
+        "    - ${_DSE_MISSING_PRETTY}\n"
+        "\n"
+        "本工程所有依赖以 git submodule 内置于 depends/。请在仓库根目录执行：\n"
+        "    git submodule update --init --recursive\n"
+        "\n"
+        "完成后重新配置（VS：删除 build/ 目录后重新生成；命令行：重跑 cmake --preset）。")
+endif()
+
 if(DSE_ENABLE_NAVMESH)
     add_definitions(-D DSE_ENABLE_NAVMESH)
 endif()
