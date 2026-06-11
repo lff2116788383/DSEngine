@@ -961,6 +961,25 @@ install(FILES
 
 enable_testing()
 
+# ── net/http 回环冒烟测试接入 ctest ───────────────────────────────────────────
+# 这些是独立可执行（127.0.0.1 回环，退出码 0=通过），仅在对应模块启用时存在
+# （-DDSE_ENABLE_HTTP=ON / -DDSE_ENABLE_NET=ON）。注册进 ctest 后，opt-in 构建
+# 可在默认 ctest 运行中自动自检；不影响未启用这两个模块的默认构建/CI。
+foreach(_smoke_target
+        dse_http_smoke
+        dse_http_lua_smoke
+        dse_net_smoke
+        dse_net_capi_smoke
+        dse_net_lua_smoke)
+    if(TARGET ${_smoke_target})
+        add_test(NAME ${_smoke_target} COMMAND ${_smoke_target})
+        set_tests_properties(${_smoke_target} PROPERTIES
+            LABELS "smoke;net_http"
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            TIMEOUT 60)
+    endif()
+endforeach()
+
 if(DSE_BUILD_GTESTS)
     set(DSE_LOCAL_GTEST_DIR "${CMAKE_SOURCE_DIR}/depends/googletest-1.17.0")
     if(NOT EXISTS "${DSE_LOCAL_GTEST_DIR}/CMakeLists.txt")
