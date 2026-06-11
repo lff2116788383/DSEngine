@@ -15,9 +15,11 @@
 ## 快速概览
 
 - **技术栈**：C++ / Dear ImGui (Docking) / GLFW / OpenGL / ImGuizmo / RapidJSON
-- **代码规模**：~65 文件，~14,000 行，25 个功能面板
+- **代码规模**：~110 文件（.cpp+.h），`src/` ~30,664 行，~60 个功能模块/面板（2026-06-10 核实）
 - **完成度**：Phase 1-7 全部交付，覆盖完整游戏编辑工作流
-- **AI Control Server**：✅ Phase 1+2 完成 — WebSocket JSON-RPC + MCP adapter + AI 资产生成，23 个 Tool（13 种组件 CRUD + DALL·E/Meshy/ElevenLabs）
+- **AI Control Server**：✅ WebSocket JSON-RPC + MCP adapter，**32 个内建 `dsengine_*` Tool**（实体/组件/场景/选中/预制体 CRUD + Lua/截图/资产导入）
+- **新增已落地面板**：Shader Graph、Visual Script（数据流）、动画状态机、NavMesh、AI Chat Panel、Lua Debugger、Curve Editor、Multi-Viewport（可选）、Streaming Debug
 - **架构改进**：✅ main.cpp → EditorApp 拆分，✅ Inspector 注册式重构 (29 组件)，✅ EditorContext 统一 + 全局变量消除
-- **插件系统**：✅ Phase 2 完成 — 模板插件 (Python/Node.js) + 开发者指南 (PLUGIN_DEVELOPMENT.md)
-- **下一步**：🔧 Phase 3 内建 AI Chat Panel (ImGui + Python LLM bridge) / 编辑器走 RHI
+- **插件系统**：✅ 模板插件 (Python/Node.js) + 开发者指南 (PLUGIN_DEVELOPMENT.md)
+- **测试**：编辑器专属 ~222 例（集成 ~206 + 单元 16）全绿
+- **待打磨**：编辑器走 RHI、Visual Script 控制流生成、碰撞体可视化拖撞、Multi-viewport 默认开启

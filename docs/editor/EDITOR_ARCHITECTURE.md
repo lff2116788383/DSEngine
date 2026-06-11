@@ -1,7 +1,7 @@
 # DSEngine 编辑器架构分析
 
-> 更新日期: 2026-05-18 (最近修订: EditorContext 统一 + 全局变量消除 + 表驱动 Tool 注册)
-> 基于 `apps/editor_cpp/` 源码审查
+> 更新日期: 2026-06-10 (最近修订: 全量代码现状核实 — 面板/工具/测试/已知边界对齐源码)
+> 基于 `apps/editor_cpp/` 源码审查（本次按真实文件逐项核实，修正过时计数与完成度）
 
 ---
 
@@ -21,9 +21,26 @@
 
 ## 二、代码规模与结构
 
-**总计：59 个源文件，约 48 万字节（~12,000 行有效代码）**
+**总计：约 110 个源文件（.cpp+.h），`src/` 下 ~30,664 行代码，约 60 个功能模块/面板。**
+（旧文档记 “59 文件 / 12,000 行 / 25 面板” 已严重过时，本次按 `find apps/editor_cpp/src` + `wc -l` 核实。）
 
-### 面板清单（按代码量排序）
+### 自上次文档以来新增/此前漏记的面板（均已落地，非占位）
+
+| 面板 | 文件 | 行数 | 功能 | 佐证 |
+|------|------|------|------|------|
+| Shader Graph | `editor_shader_graph.cpp` | 1248 | 节点式着色器图 + 贝塞尔连线 + 编译为 DSSL | `Compile`，7 例 `ShaderGraphCompileTest` |
+| Visual Script | `editor_visual_script.cpp` | 756 | 节点式可视脚本 → Lua 代码生成 | `Compile` / `DrawNode`（控制流见 §四） |
+| Anim State Machine | `editor_anim_state_machine.cpp` | 637 | 动画状态机图 + 过渡箭头 + 状态 Inspector | `DrawAnimStateMachinePanel` |
+| Tilemap | `editor_tilemap_panel.cpp` | 567 | 2D 瓦片笔刷/填充/橡皮 | — |
+| AI Chat Panel | `editor_chat_panel.cpp` | 892 | 编辑器内建 AI 对话 + @提及解析 + 历史持久化 | 接入 `editor_app.cpp:1022-1025` |
+| Curve Editor | `editor_curve_editor.cpp` | 327 | 通用曲线编辑控件 | `DrawCurveEditor` |
+| NavMesh Panel | `editor_navmesh_panel.cpp` | 316 | 导航网格烘焙参数 + Overlay 预览 | `DrawNavMeshPanel` / `DrawNavMeshOverlay` |
+| Lua Debugger | `editor_lua_debugger.cpp` | 303 | Lua 断点/单步调试面板 | `DrawLuaDebuggerPanel` |
+| Multi-Viewport | `editor_multi_viewport.cpp` | 173 | 多视口配置面板（默认关闭，可开启） | `DrawMultiViewportConfigPanel` |
+| Streaming Debug | `editor_streaming_panel.cpp` | 149 | 流式加载可视化 | `DrawStreamingDebugPanel` |
+| 其它 | Prefab Override / Lighting Gizmos / Physics Debug / Selection Outline / Scene View Mode / Autosave / Project Hub / Layout Manager / OS Drop / AI Config | — | 预制体覆盖、灯光/物理 Gizmo、选中描边、视图模式、自动保存、工程枢纽、布局管理、拖拽、AI 配置 | 均有独立 `.cpp` |
+
+### 面板清单（历史，按代码量排序）
 
 | 面板 | 文件 | 大小 | 功能 |
 |------|------|------|------|
@@ -145,21 +162,25 @@
 | **国际化** | 多语言切换 + 参数预览 | ✅ 完整 |
 | **探针** | Light Probe + Reflection Probe 可视化 | ✅ 完整 |
 | **自动化** | headless + 快照对比 | ✅ 完整 |
-| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，23 个 Tool + 插件模板文档 | ✅ 完整 |
+| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，**32 个内建 Tool**（表驱动注册，详 §六） | ✅ 完整 |
 | **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
 | **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
+| **Shader Graph** | 节点式着色器图 → 编译为 DSSL（7 例编译测试） | ✅ 完整 |
+| **Visual Script** | 节点式可视脚本 → Lua（数据流完整；控制流体略，见 §四） | 🟡 部分 |
+| **动画状态机** | 状态机图 + 过渡条件 + 状态 Inspector | ✅ 完整 |
+| **NavMesh 面板** | 烘焙参数 + Overlay 预览 | ✅ 完整 |
+| **AI Chat Panel** | 编辑器内建 AI 对话 + Python LLM bridge（原 Phase 3，已接入） | ✅ 完整 |
+| **Lua Debugger / Curve Editor / Streaming Debug** | Lua 调试、通用曲线、流式加载可视化 | ✅ 完整 |
 
 ### 缺失功能
 
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
-| � P2 | Visual Shader Graph / 节点编辑器 | DSSL 已覆盖 shader 自定义，Graph 仅面向非代码用户 |
-| 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具 |
-| 🟡 P1 | 物理碰撞体可视化编辑 | Scene 中直接调整碰撞体形状 |
-| 🟡 P1 | NavMesh 可视化烘焙 | 导航网格生成与预览 |
-| 🟢 P2 | Multi-viewport | ImGui 多视口（因 CRT 稳定性暂禁） |
-| 🟢 P2 | 蓝图/可视化脚本 | 节点式逻辑编辑 |
-| � P1 | AI Chat Panel | 编辑器内建 AI 对话面板，🔧 Phase 3 进行中 |
+| 🟡 P1 | Visual Script 控制流生成 | 数据流已可生成 Lua；事件/分支 `{body}` 仅占位注释（详 §四） |
+| 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具（状态机已有，重定向 UI 未有） |
+| 🟡 P1 | 物理碰撞体可视化编辑 | 已有 Physics Debug 可视化；Scene 中直接拖拽碰撞体形状未有 |
+| 🟢 P2 | Multi-viewport 默认开启 | 面板已有开关，默认关闭（CRT 稳定性顾虑） |
+| 🟢 P2 | 非 Windows 原生文件对话框 | 仅 Windows 实现，非 Windows 返回空（详 §四） |
 
 ---
 
@@ -183,7 +204,9 @@
 | ~~大量 static 全局状态~~ | ✅ 已修 | 全局变量已消除：profiler/gizmo/language 收入 EditorApp 成员，editor_state/backup_registry 改为 namespace-static，EditorContext 统一传递 |
 | ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
 | **仅 OpenGL** | 🟡 中 | 编辑器直接 `#include <glad/gl.h>`，未走 RHI |
-| **Multi-viewport 禁用** | 🟡 中 | CRT heap 断言，注释标注了原因 |
+| **Multi-viewport 默认关闭** | 🟡 中 | 已有配置面板与开关，默认关（CRT heap 稳定性顾虑） |
+| **Visual Script 控制流未接** | 🟡 中 | `editor_visual_script.cpp:374-381` 事件/分支 `{body}`/`{true_body}`/`{false_body}` 仅生成占位注释，数据流正常 |
+| **文件对话框仅 Windows** | 🟢 低 | `editor_file_dialog.cpp:101-106` 非 Windows 为空桩（与引擎 Windows-first 一致） |
 
 ### 改进建议
 
@@ -206,13 +229,20 @@
 
 | 文件 | 用例数 | 覆盖内容 |
 |------|--------|---------|
-| `editor_functional_test.cpp` | 41 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返、UIAnchor 往返、50 实体压力测试、Skybox 往返、UIGridLayout 往返、UICanvasScaler 往返、SceneTabManager CloseTab、UndoRedo+SaveScene 非破坏性集成 |
+| `editor_functional_test.cpp` | 75 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返、UIAnchor 往返、50 实体压力测试、Skybox 往返、UIGridLayout 往返、UICanvasScaler 往返、SceneTabManager CloseTab、UndoRedo+SaveScene 非破坏性集成 |
 | `editor_selection_integration_test.cpp` | 9 | SelectionManager 单选/多选/切换/防重复添加/移除/多选→单选/移除不存在不崩溃/主实体/GetPrimary 返回最后添加/null 清空 |
-| `editor_control_server_test.cpp` | 56 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight/SpotLight/RigidBody3D/SkyLight/Camera3D/BoxCollider3D）/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
+| `editor_control_server_test.cpp` | 101 | ControlServer 内建 Tool Handler（现共 **32 个** `dsengine_*` 工具）：ping/lua_execute/script_create/undo/redo/entity_create/delete/batch_delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight/SpotLight/RigidBody3D/SkyLight/Camera3D/BoxCollider3D）/remove_component/get_components/get_state/duplicate/reparent/find_by_name/scene_get_state/new/save/load/editor_get_state/play/stop/screenshot/asset_import/material_create/prefab_save/prefab_instantiate/undo_history/selection_get/set/clear |
 
 | `editor_plugin_manager_test.cpp` | 6 | PluginManager ScanPlugins（空目录/不存在目录/有效元数据/缺少字段/非法JSON）、StartPlugin error path（entry 文件不存在） |
 
-**总计：112 个集成测试用例，全部通过。**
+| `editor_plugin_api_test.cpp` | 8 | 插件 API：Tool 注册/调用/错误路径 |
+| `shader_graph_compile_test.cpp` | 7 | Shader Graph 节点图 → DSSL 编译正确性 |
+| `editor_unit_test.cpp`（unit 套） | 16 | UndoRedoManager / EditorSettings / EditorTestConfig / Lambda+Compound Command |
+
+**总计：编辑器专属测试 ~222 例（集成 ~206 + 单元 16），本次实跑全绿。**
+
+> 核实命令：`dse_gtest_integration_tests --gtest_filter='EditorFunctionalTest.*:ControlServerTest.*:SelectionManagerTest.*:EditorPluginApiTest.*:PluginManagerTest.*:ShaderGraphCompileTest.*'` → 206 例全过。
+> （旧文档 “112 例” 已过时。）
 
 ### 测试基础设施
 
@@ -246,4 +276,4 @@
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成，AI Control Server (18 个 Tool) 已全部实现。下一步：AI Chat Panel (Phase 3 进行中)、编辑器走 RHI、碰撞体可视化编辑。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已相当完整（7 个 Phase 全部交付）：main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成；AI Control Server 现有 **32 个内建 Tool**；Shader Graph / 动画状态机 / NavMesh / AI Chat Panel / Lua Debugger 均已落地（原文档列为“缺失/进行中”的项本次已核实为已实现）。余下的打磨项：编辑器走 RHI、Visual Script 控制流生成、碰撞体可视化拖撞、Multi-viewport 默认开启。
