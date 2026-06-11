@@ -21,6 +21,7 @@
 #include <iostream>
 #include <thread>
 #include "engine/base/debug.h"
+#include "engine/diagnostics/crash_handler.h"
 #include "engine/core/job_system.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/event_bus.h"
@@ -325,6 +326,24 @@ bool EngineInstance::Init() {
     }
 
     Debug::Init();
+
+    // 进程级崩溃报告器（默认启用；设环境变量 DSE_CRASH_HANDLER=0 可关闭）。
+    // 纯本地：崩溃时在 dump 目录落地可读 .txt 报告，Windows 另写 minidump .dmp。
+    // 上传保持关闭——由上层按需注册 UploadCallback（自建端点复用 dse.http，或接
+    // Sentry/BugSplat 等 SaaS），引擎不内置任何后端，保证“零服务器即可用”。
+    {
+        const char* disable = std::getenv("DSE_CRASH_HANDLER");
+        if (!(disable && std::string(disable) == "0")) {
+            dse::diagnostics::CrashHandlerConfig crash_cfg;
+            crash_cfg.app_name = "DSEngine";
+            if (const char* dir = std::getenv("DSE_CRASH_DIR")) {
+                if (dir[0] != '\0') crash_cfg.dump_dir = dir;
+            }
+            dse::diagnostics::CrashReporter::Instance().Install(crash_cfg);
+            dse::diagnostics::CrashReporter::Instance().AddBreadcrumb("engine init");
+        }
+    }
+
     if (services_.job_system) {
         services_.job_system->Init();
     }

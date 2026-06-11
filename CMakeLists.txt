@@ -443,6 +443,11 @@ else()
     add_library(dse_engine STATIC ${DSE_ENGINE_ALL_SOURCES})
 endif()
 target_link_libraries(dse_engine PRIVATE box2d)
+# 崩溃报告子系统（engine/diagnostics/crash_handler.cpp）：Windows 上需 DbgHelp
+# 提供 MiniDumpWriteDump / StackWalk64 / Sym* 符号化。
+if(WIN32)
+    target_link_libraries(dse_engine PRIVATE Dbghelp)
+endif()
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
 endif()

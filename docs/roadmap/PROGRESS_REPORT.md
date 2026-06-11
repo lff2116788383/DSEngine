@@ -337,11 +337,11 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 |:------:|------|------|
 | 🔴 | **玩法级网络层** | 传输层 GNS 完备，缺复制/快照-delta/预测/插值/AOI、大厅/匹配；同步逻辑现需脚本层自实现 |
 | 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端（需 Mac 硬件）；Linux/Android 已加入 CI 配置（`ci.yml` build-linux/build-android，复用本地已验证脚本），待 CI 额度恢复后首次运行验证 |
-| 🟡 | **运维可观测性** | **无崩溃报告/minidump/遥测**——商业出货后的运营短板 |
+| 🟢 | **运维可观测性（崩溃报告）** | ✅ 已实现 `engine/diagnostics` 进程级崩溃捕获：全局异常/信号处理器 + Windows minidump(.dmp) + 可读崩溃报告(.txt，含版本/异常/符号化调用栈/加载模块/面包屑/自定义元数据)，引擎启动默认安装（`DSE_CRASH_HANDLER=0` 可关）。上传做成服务器无关：可选注册 `UploadCallback`（自建端点复用 dse.http，或接 Sentry/BugSplat），引擎不内置后端，零服务器即可用。剩余可选项：聚合面板/趋势遥测（需后端） |
 | 🟡 | **跨平台热重载** | `FileWatcher` 仅 Windows 实现（`asset_manager.cpp:2050` 非 Windows 平台 not implemented）|
 | 🟡 | **终端分发** | 仅 SDK 包 + Android APK，缺面向终端用户的游戏打包/安装器/Redist 清单 |
 | 🟢 | **实战验证 / 生态** | 尚无用 DSE 出货的完整游戏(battle-testing)、无社区/插件市场；编辑器 UX 不及原生 GUI 引擎 |
 
 ### 6.4 一句话
 
-> **引擎本体已生产级（单平台、功能广度对标 Godot、测试充分）；商业产品尚未——缺网络玩法层、Apple/CI、崩溃遥测，以及实战出货与生态验证。**
+> **引擎本体已生产级（单平台、功能广度对标 Godot、测试充分）；商业产品尚未——主要缺网络玩法层、Apple/CI，以及实战出货与生态验证（崩溃报告已落地，剩余为可选的聚合遥测后端）。**
