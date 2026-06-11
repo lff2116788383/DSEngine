@@ -171,6 +171,7 @@
 | **NavMesh 面板** | 烘焙参数 + Overlay 预览 | ✅ 完整 |
 | **AI Chat Panel** | 编辑器内建 AI 对话 + Python LLM bridge（原 Phase 3，已接入） | ✅ 完整 |
 | **Lua Debugger / Curve Editor / Streaming Debug** | Lua 调试、通用曲线、流式加载可视化 | ✅ 完整 |
+| **崩溃捕获（编辑器侧）** | 复用引擎进程级 CrashReporter，编辑器薄封装：最早期安装覆盖 Init 前阶段、`app_name=DSEngine-Editor` 区分进程、面包屑/元数据记录场景/Play/命令上下文、与 AutoSave 联动提示上次崩溃（`editor_crash.{h,cpp}`，8 例测试） | ✅ 完整 |
 
 ### 缺失功能
 

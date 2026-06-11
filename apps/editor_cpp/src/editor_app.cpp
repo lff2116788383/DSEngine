@@ -103,6 +103,7 @@
 #include "editor_streaming_panel.h"
 #include "editor_curve_editor.h"
 #include "editor_visual_script.h"
+#include "editor_crash.h"
 
 
 
@@ -226,6 +227,11 @@ bool EditorApp::Init(int argc, char* argv[]) {
     test_config_ = dse::editor::test::ParseEditorTestArgs(argc, argv);
     const bool headless = test_config_.headless;
     frames_remaining_ = headless ? test_config_.max_frames : -1;
+
+    // 尽早安装崩溃处理器，覆盖 glfwInit/ImGui/字体加载等引擎 Init 之前的早期阶段。
+    dse::editor::InstallEditorCrashHandler();
+    dse::editor::SetEditorCrashMetadata("phase", "startup");
+    dse::editor::AddEditorBreadcrumb("editor: init start");
 
 #if defined(_WIN32)
     if (headless) {
@@ -371,6 +377,12 @@ bool EditorApp::Init(int argc, char* argv[]) {
         return false;
     }
 
+    // 引擎 Init 内部以 app_name "DSEngine" 重新安装并重置了面包屑；此处重申编辑器身份，
+    // 之后再补充编辑器专属面包屑/元数据，确保崩溃报告标记为编辑器进程且带编辑器上下文。
+    dse::editor::InstallEditorCrashHandler();
+    dse::editor::SetEditorCrashMetadata("phase", "running");
+    dse::editor::AddEditorBreadcrumb("editor: engine initialized");
+
     EnsureEditorLocalizationData();
     dse::editor::InstallEditorLogSink();
 
@@ -421,6 +433,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
             World& world = engine_instance_->pipeline()->world();
             LoadScene(world.registry(), editor_settings.last_scene_path);
             dse::editor::SetCurrentScenePath(editor_settings.last_scene_path);
+            dse::editor::SetEditorCrashMetadata("scene", editor_settings.last_scene_path);
+            dse::editor::AddEditorBreadcrumb("editor: loaded scene " + editor_settings.last_scene_path);
         }
     }
 
@@ -519,6 +533,14 @@ void EditorApp::Run() {
     bool screenshot_taken = false;
 
     dse::editor::AutoSaveManager::Get().CheckRecovery();
+
+    // 上次会话若异常退出（存在崩溃报告），与 AutoSave 恢复一并提示，并把路径写入控制台日志。
+    if (const std::string prev = dse::editor::GetPreviousSessionCrashReport(); !prev.empty()) {
+        dse::editor::EditorLog(dse::editor::LogLevel::Warning,
+            "上次会话异常退出，崩溃报告: " + prev);
+        dse::editor::AddEditorBreadcrumb("editor: previous session crash report found");
+    }
+    dse::editor::AddEditorBreadcrumb("editor: entering main loop");
 
     if (!test_config_.replay_path.empty()) {
         dse::editor::EditorLog(dse::editor::LogLevel::Warning,

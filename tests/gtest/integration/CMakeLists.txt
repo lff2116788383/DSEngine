@@ -25,6 +25,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_control_tools.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_plugin_manager.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_settings.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_crash.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
