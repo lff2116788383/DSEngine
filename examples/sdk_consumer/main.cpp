@@ -18,6 +18,11 @@
 #include "engine/core/service_locator.h"
 #include "engine/input/input.h"
 
+// Public rendering API (abstract RHI). Verifies the SDK header boundary: the
+// abstract factory/types are present while concrete backend impl headers
+// (render/rhi/dx11|opengl|vulkan/) are intentionally excluded from the SDK.
+#include "engine/render/rhi/rhi_factory.h"
+
 int main() {
     std::printf("=== DSEngine SDK Consumer Example ===\n");
     std::printf("Version: %s\n", DSE_VERSION_STRING);
@@ -37,6 +42,13 @@ int main() {
     auto entity = registry.create();
     std::printf("entt::registry create entity %u OK\n",
                 static_cast<unsigned>(entity));
+
+    // Abstract RHI public header. Uses the enum (header-only, no link) to prove
+    // the public rendering surface (rhi_factory.h + rhi_types.h + rhi_handle.h)
+    // is installed, while the concrete backend impl headers are excluded.
+    RhiBackend backend = RhiBackend::Default;
+    std::printf("RHI public header OK (default backend enum = %u)\n",
+                static_cast<unsigned>(backend));
 
     std::printf("\nAll SDK consumer checks passed!\n");
     return 0;

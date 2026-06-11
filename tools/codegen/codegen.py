@@ -23,6 +23,13 @@ import os
 import sys
 from pathlib import Path
 
+# 控制台可能为非 UTF-8 编码（如 Windows cp1252），统一输出编码避免摘要打印崩溃。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 try:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
 except ImportError:
@@ -108,6 +115,8 @@ def main():
         )
 
     # ── Native.gen.cs ────────────────────────────────────────────────────────
+    # C# 绑定为构建时生成产物，不纳入版本库（见 .gitignore: /GameScripts/）；
+    # 通过 `cmake --build <build> --target dse_codegen` 按需生成。
     render(
         "csharp_native.cs.j2",
         "GameScripts/DSEngine/Native.gen.cs",

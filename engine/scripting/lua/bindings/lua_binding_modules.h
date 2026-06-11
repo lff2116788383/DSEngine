@@ -30,6 +30,15 @@ void RegisterStreamingBindings(lua_State* L);
 void RegisterLocalizationBindings(lua_State* L);
 void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
+void RegisterSerializeBindings(lua_State* L);  // dse.serialize 自描述二进制序列化（编解码 Lua 值/表）
+#ifdef DSE_ENABLE_HTTP
+void RegisterHttpBindings(lua_State* L);   // dse.http 异步 HTTP(S) 客户端
+void PumpHttp(lua_State* L);               // 触发已完成 HTTP 回调（引擎 Tick 调用）
+#endif
+#ifdef DSE_NET_ENABLED
+void RegisterNetBindings(lua_State* L);    // dse.net 游戏网络传输 (GameNetworkingSockets)
+void PumpNet(lua_State* L);                // 每帧泵：派发网络事件回调（引擎 Tick 调用）
+#endif
 
 // ECS 子域注册（由 RegisterEcsBindings 内部调用，栈顶需为 ecs 表）
 void RegisterEcsCoreBindings(lua_State* L);

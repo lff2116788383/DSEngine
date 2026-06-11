@@ -977,13 +977,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                 // 构造基于内容的稳定 key（不依赖指针地址）
                 synthetic_key = static_cast<uint64_t>(vtx_count) * 2654435761ULL
                               ^ static_cast<uint64_t>(idx_count) * 40503ULL;
-                if (vtx_count > 0) {
-                    // 混入首顶点的位置作为区分（同 vtx/idx count 的不同 mesh）
-                    uint32_t pos_bits[3];
-                    std::memcpy(pos_bits, &vtx_data[0].pos, sizeof(pos_bits));
-                    synthetic_key ^= (static_cast<uint64_t>(pos_bits[0]) << 32) | pos_bits[1];
-                    synthetic_key ^= static_cast<uint64_t>(pos_bits[2]) * 11400714819323198485ULL;
-                }
+                // 混入首顶点的位置作为区分（同 vtx/idx count 的不同 mesh）；vtx_count>0 已由外层条件保证
+                uint32_t pos_bits[3];
+                std::memcpy(pos_bits, &vtx_data[0].pos, sizeof(pos_bits));
+                synthetic_key ^= (static_cast<uint64_t>(pos_bits[0]) << 32) | pos_bits[1];
+                synthetic_key ^= static_cast<uint64_t>(pos_bits[2]) * 11400714819323198485ULL;
                 cache_key = reinterpret_cast<const void*>(static_cast<uintptr_t>(synthetic_key));
                 // 避免 nullptr key
                 if (!cache_key) cache_key = reinterpret_cast<const void*>(static_cast<uintptr_t>(1));

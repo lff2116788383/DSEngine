@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DSEngine Android 原生宿主清单（NativeActivity，无 Java 代码）。
+  入口为 libdse_android_host.so 导出的 ANativeActivity_onCreate（native_app_glue 提供）；
+  android.app.lib_name 必须与 CMake 目标 dse_android_host 的输出名一致。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.dsengine.androidhost"
+          android:versionCode="1"
+          android:versionName="0.1.0">
+
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+
+    <uses-feature android:glEsVersion="0x00030001" android:required="true" />
+
+    <application
+        android:label="DSEngine"
+        android:hasCode="false"
+        android:allowBackup="false">
+
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="DSEngine"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="true">
+
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="dse_android_host" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

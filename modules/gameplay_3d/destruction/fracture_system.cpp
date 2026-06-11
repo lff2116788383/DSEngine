@@ -139,7 +139,7 @@ std::shared_ptr<FractureAsset> FractureSystem::LoadFractureAsset(const std::stri
                 std::string val = trimmed.substr(colon + 1);
                 // Remove trailing comma
                 size_t comma = val.find_last_of(',');
-                if (comma != std::string::npos) val = val.substr(0, comma);
+                if (comma != std::string::npos) val.erase(comma);
                 asset->source_mesh = Trim(val);
             }
         }
@@ -183,7 +183,7 @@ std::shared_ptr<FractureAsset> FractureSystem::LoadFractureAsset(const std::stri
                     if (colon != std::string::npos) {
                         std::string val = trimmed.substr(colon + 1);
                         size_t comma = val.find_last_of(',');
-                        if (comma != std::string::npos) val = val.substr(0, comma);
+                        if (comma != std::string::npos) val.erase(comma);
                         current_frag.mesh_path = Trim(val);
                     }
                 }
@@ -366,7 +366,6 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
 
     for (uint32_t frag_id = 0; frag_id < fragment_count; ++frag_id) {
         // 找出属于该碎片的顶点
-        std::vector<uint32_t> frag_vert_indices;
         std::vector<bool> vert_mask(vcount, false);
         for (size_t i = 0; i < vcount; ++i) {
             if (vertex_labels[i] == frag_id) {

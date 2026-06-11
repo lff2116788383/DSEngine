@@ -167,7 +167,7 @@
 |------|---------|------|
 | 后端数量 | 3（OpenGL / Vulkan / D3D11） | ✅ |
 | 抽象粒度 | 全后端统一 CommandBuffer | ✅ |
-| 着色器跨后端 | DSSL → GLSL/HLSL/SPIR-V 自动生成 | ✅ |
+| 着色器跨后端 | **单一 GLSL 源** → SPIR-V/GLSL/HLSL/DXBC 离线生成内嵌（详见 2.3.1） | ✅ |
 | NDC 修正 | GetProjectionCorrection() 抽象 | ✅ 细节到位 |
 | MSAA / UAV / Mipmap | RenderTargetDesc 统一支持 | ✅ |
 
@@ -181,6 +181,30 @@
 | **DSEngine** | **RhiDevice + CommandBuffer** | OpenGL / Vulkan / D3D11 |
 
 **结论：** RHI 架构设计思路与 Unreal 的 RHI 层 **异曲同工**。后端数少是短板，但架构质量不输 UE。
+
+#### 2.3.1 着色器编译管线（三端共享一份源）
+
+三个后端**不各自手写着色器**，而是共享同一份源、离线交叉编译成多目标后内嵌进二进制：
+
+```
+engine/render/shaders/src/*.{vert,frag,comp}   ← 唯一源（Vulkan 风格 GLSL，~57 个）
+        │  dse_shader_compiler（构建期工具）
+        │    GLSL → SPIR-V(glslang) → spirv-cross 反编 → fxc
+        ▼
+engine/render/shaders/generated/embed/<name>.gen.h   ← 每个着色器一个头，含多目标产物
+        ├─ k*_spv[]       SPIR-V 二进制      → Vulkan
+        ├─ k*_glsl430     桌面 GLSL 430      → OpenGL 桌面
+        ├─ k*_essl310     GL ES 310          → OpenGL ES / 移动
+        ├─ k*_hlsl        HLSL 源            → D3D11（D3DCompile 运行时编译）
+        ├─ k*_dxbc[]      预编译 DXBC 字节码 → D3D11 备选
+        └─ k*_reflection  反射元数据         → 三端共用（UBO/纹理绑定）
+```
+
+- **三端 shader manager**（`gl_shader_manager.cpp` / `dx11_shader_manager.cpp` / `vulkan_shader_manager.cpp`）`#include` **同一批** `embed/*.gen.h`，各取所需符号；没有任何手写内联着色器。
+- **变体机制**：源文件顶部用 `// @VARIANTS: <宏>` 注解 + `#ifdef`（如 `pbr.vert`/`shadow.vert` 的 `GPU_DRIVEN`），编译器据此从同一份源额外产出变体（如 `pbr_gpu_driven`），三端齐全、非独立文件。GPU-driven 渲染三端均支持。
+- **DSSL（材质着色语言）是另一套、正交的系统**：`engine/render/shaders/dssl/*.dssl` 面向用户自定义材质，由 DSSL 编译器生成 `.frag/.vert` 后汇入上面同一条编译链；它不是核心 RHI 着色器的来源。
+
+**结论：** 一份 GLSL 源 → 一个编译器 → 一组多目标内嵌头，三端零手写、零重复，跨后端一致性由工具链保证。
 
 ### 2.4 模块化与运行时架构
 
@@ -427,25 +451,25 @@
 
 | 维度 | 现状 | 评估 |
 |------|------|------|
-| 窗口系统 | GLFW（跨平台） | ✅ Linux/macOS/Windows |
-| OpenGL 后端 | OpenGL 4.3（GLFW + GLAD） | ✅ 全平台可用 |
-| Vulkan 后端 | 可选，`DSE_ENABLE_VULKAN` | ✅ Windows/Linux |
-| D3D11 后端 | Windows 自动启用，`DSE_ENABLE_D3D11` | ⚠️ 仅 Windows |
-| 构建系统 | CMake + VS2022 | ✅ CMake 本身跨平台 |
-| 构建脚本 | 全部 `.bat`（`build_all.bat` / `verify_all.bat`） | ❌ 仅 Windows |
-| CI/CD | 无 | ❌ |
-| 文件系统 | `std::filesystem`，未做平台抽象 | 🟡 基本可跨平台 |
+| 应用/平台抽象 | `PlatformApp` 接口 + `glfw`(桌面)/`android` 后端 | ✅ engine 仅经接口与平台交互 |
+| 窗口系统 | GLFW（桌面）/ NativeActivity（Android） | ✅ Linux/Windows/Android |
+| OpenGL 后端 | OpenGL 4.3 桌面 + GL ES（Android） | ✅ 全平台可用 |
+| Vulkan 后端 | 可选，`DSE_ENABLE_VULKAN`（surface 分 WIN32/XLIB/ANDROID） | ✅ Windows/Linux/Android |
+| D3D11 后端 | Windows 自动启用，`DSE_ENABLE_D3D11` | ⚠️ 仅 Windows（设计如此） |
+| 构建系统 | CMake + VS2022 / Ninja / Android NDK toolchain | ✅ CMake 本身跨平台 |
+| 构建脚本 | `.bat` + `.sh`(`verify_linux_build.sh`) + `.ps1`(`verify_android_apk.ps1`) | ✅ Win/Linux/Android 三端 |
+| CI/CD | GitHub Actions（`ci.yml`，Windows 3 配置） | 🟡 仅 Windows，Linux/Android 未纳入 |
+| 文件系统 | `std::filesystem` | 🟡 基本可跨平台 |
 | Metal 后端 | 无 | ❌ macOS/iOS 需要 |
-| 移动端 | 无 Android/iOS 支持 | ❌ |
+| 移动端 | Android arm64-v8a（NativeActivity + APK 打包签名验证脚本） | ✅ Android；❌ iOS |
 
-**移植到 Linux 的成本**（预估 1-2 周）：
-1. 补 shell 构建脚本（替代 `.bat`）
-2. 处理 `__declspec(dllexport)` → `__attribute__((visibility("default")))` 等平台宏
-3. 验证 OpenGL/Vulkan 后端在 Linux 的正确性
-4. 路径分隔符和文件权限适配
+**Linux / Android 移植：已完成构建路径**（构建脚本 + 端到端验证脚本齐备；静态核实，未纳入 CI 持续看护）：
+- `scripts/verify_linux_build.sh`：GLFW X11+GL，构建 `dse_engine` 静态库 + Lua 运行时（校验 ELF），可选 `--with-net` 网络回环 smoke
+- `scripts/verify_android_apk.ps1`：arm64-v8a 交叉编译 → NativeActivity 宿主 → aapt2/zipalign/apksigner 打包签名 → 校验 APK 结构
+- engine/ 残留 `_WIN32`/`<windows.h>` 引用均为 `#ifdef` 守卫的跨平台代码（`dynamic_library` dlopen、Vulkan surface 等已有 Linux/Android/Apple 分支）
 
-**移植到 macOS 的成本**（预估 1-2 月）：
-- 需新增 Metal 后端（`RhiDevice` 子类 + 5 个子系统 + 着色器翻译）
+**移植到 macOS/iOS 的成本**（仍未支持）：
+- 需新增 `PlatformApp` 的 macOS/iOS 后端，以及 Metal 后端（`RhiDevice` 子类 + 子系统 + 着色器翻译）或验证 MoltenVK 路径
 
 ---
 

@@ -1,6 +1,7 @@
 #ifndef DSE_RENDER_PROFILER_H
 #define DSE_RENDER_PROFILER_H
 
+#include "engine/core/dse_export.h"
 #include <chrono>
 #include <cstddef>
 #include <deque>
@@ -53,7 +54,7 @@ struct RenderFrameEvent {
     std::vector<GpuPassTiming> gpu_timings;
 };
 
-class RenderProfiler {
+class DSE_EXPORT RenderProfiler {
 public:
     RenderProfiler() = default;
     ~RenderProfiler() = default;

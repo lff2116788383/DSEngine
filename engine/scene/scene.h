@@ -6,6 +6,7 @@
 #ifndef DSE_SCENE_H
 #define DSE_SCENE_H
 
+#include "engine/core/dse_export.h"
 #include "engine/ecs/world.h"
 #include <string>
 #include <glm/glm.hpp>
@@ -28,7 +29,7 @@ struct PrefabInstantiateOptions {
  * @class Scene
  * @brief 场景类，负责组织和管理世界(World)中的实体，提供序列化和反序列化功能
  */
-class Scene {
+class DSE_EXPORT Scene {
 public:
     Scene(const std::string& name);
     ~Scene();
@@ -80,21 +81,21 @@ private:
  * @param filepath 测试文件路径
  * @return 测试通过返回 true
  */
-bool RunSceneRoundTripRegressionSample(const std::string& filepath);
+DSE_EXPORT bool RunSceneRoundTripRegressionSample(const std::string& filepath);
 
 /**
  * @brief 运行场景反向兼容性回归测试
  * @param filepath 测试文件路径
  * @return 测试通过返回 true
  */
-bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath);
+DSE_EXPORT bool RunSceneBackwardCompatibilityRegressionSample(const std::string& filepath);
 
 /**
  * @brief 运行仓库内置最小 3D MVP 场景回归样例
  * @param filepath 已签入的场景文件路径
  * @return 样例通过返回 true
  */
-bool RunMinimal3DMvpSceneRegressionSample(const std::string& filepath);
+DSE_EXPORT bool RunMinimal3DMvpSceneRegressionSample(const std::string& filepath);
 
 /**
  * @brief 将指定实体保存为预制体
@@ -103,7 +104,7 @@ bool RunMinimal3DMvpSceneRegressionSample(const std::string& filepath);
  * @param filepath 保存的文件路径
  * @return 成功返回 true
  */
-bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath);
+DSE_EXPORT bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath);
 
 /**
  * @brief 实例化一个预制体到世界中
@@ -111,7 +112,7 @@ bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath
  * @param filepath 预制体文件路径
  * @return 实例化出的新实体
  */
-Entity InstantiatePrefab(World& world, const std::string& filepath);
+DSE_EXPORT Entity InstantiatePrefab(World& world, const std::string& filepath);
 
 /**
  * @brief 带选项地实例化预制体（覆盖 Transform 等）
@@ -120,7 +121,7 @@ Entity InstantiatePrefab(World& world, const std::string& filepath);
  * @param options 实例化覆盖选项
  * @return 实例化出的新实体
  */
-Entity InstantiatePrefab(World& world, const std::string& filepath, const PrefabInstantiateOptions& options);
+DSE_EXPORT Entity InstantiatePrefab(World& world, const std::string& filepath, const PrefabInstantiateOptions& options);
 
 } // namespace scene
 

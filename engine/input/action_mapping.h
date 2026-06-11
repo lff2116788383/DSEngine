@@ -6,6 +6,7 @@
 #ifndef DSE_ACTION_MAPPING_H
 #define DSE_ACTION_MAPPING_H
 
+#include "engine/core/dse_export.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -13,7 +14,7 @@
 namespace dse {
 namespace input {
 
-class ActionMapping {
+class DSE_EXPORT ActionMapping {
 public:
     ActionMapping() = default;
     ~ActionMapping() = default;

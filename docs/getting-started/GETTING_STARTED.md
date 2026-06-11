@@ -179,13 +179,19 @@ At runtime, `AssetManager::MountPak()` maps the archive; file reads fall back to
 ## 6. Testing
 
 ```powershell
-# Build and run unit tests
-cmake --build build_vs2022 --config Debug --target dse_tests
-bin\dse_tests_debug.exe
+# One-shot: configure (gtests on) + build the three suites + run via ctest
+build_fast_tests.bat
+
+# Or manually:
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_GTESTS=ON
+cmake --build build_vs2022 --config Debug --target dse_gtest_unit_tests dse_gtest_integration_tests dse_gtest_smoke_tests --parallel
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 
 # Batch-verify Lua demos (screenshots + logs)
 python tools\verify_lua_3d_demos.py --entries all
 ```
+
+The default config (3D off) totals 2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke); a full `-DDSE_ENABLE_3D=ON` build adds 3D-gated suites (~2,600 total). Binaries are `bin\dse_gtest_{unit,integration,smoke}_tests.exe`.
 
 ---
 

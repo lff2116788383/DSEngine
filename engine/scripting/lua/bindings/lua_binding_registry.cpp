@@ -47,6 +47,19 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterFontBindings(L);
     lua_setfield(L, -2, "font");
 
+    RegisterSerializeBindings(L);
+    lua_setfield(L, -2, "serialize");
+
+#ifdef DSE_ENABLE_HTTP
+    RegisterHttpBindings(L);
+    lua_setfield(L, -2, "http");
+#endif
+
+#ifdef DSE_NET_ENABLED
+    RegisterNetBindings(L);
+    lua_setfield(L, -2, "net");
+#endif
+
     lua_setglobal(L, "dse");
 
     // DSSL 材质系统 — 独立全局表 "dssl"

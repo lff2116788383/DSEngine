@@ -72,11 +72,24 @@ DSEngine/
 │   ├── runtime/       Lua host & C++ host examples
 │   └── tools/         AssetBuilder CLI
 ├── modules/           Optional engine modules (terrain, animation, etc.)
-├── samples/lua/       Lua demo collection (15+ demos)
+├── plugins/           Optional runtime plugins
+├── samples/           Runtime-loaded demos (cpp / lua / plugins)
+├── examples/          Standalone example projects (KF_Framework, sdk_consumer, stress_test)
+├── script/            Runtime Lua libraries (loaded via Lua package.path; shipped with the engine)
+├── scripts/           Build / CI / packaging scripts (scripts/win/ holds the Windows .bat)
+├── tools/             Codegen, shader compiler, asset cooking, etc.
 ├── data/              Shaders, textures, models, fonts
-├── tests/             720+ unit tests
+├── tests/             2269 GoogleTest cases (unit/integration/smoke)
 └── docs/              Architecture & roadmap docs
 ```
+
+> **`script/` vs `scripts/`** — `script/` (singular) holds **runtime** Lua libraries that the
+> engine loads at run time (hard-wired into the Lua `package.path`) and are installed with the
+> engine; `scripts/` (plural) holds **build-time** developer/CI scripts.
+>
+> **`samples/` vs `examples/`** — `samples/` are small demos loaded by the engine runtime
+> (`samples/lua`, `samples/cpp`, `samples/plugins`); `examples/` are self-contained example
+> projects that consume the engine/SDK (`KF_Framework`, `sdk_consumer`, `stress_test`).
 
 ---
 
@@ -113,9 +126,9 @@ cmake --build build_vs2022 --config Release --target dse_example_lua   # Lua dem
 Or use the convenience scripts:
 
 ```powershell
-build_fast_editor.bat   # Editor only
-build_fast_lua.bat      # Lua host only
-build_all.bat           # Everything
+scripts\win\build_fast_editor.bat   # Editor only
+scripts\win\build_fast_lua.bat      # Lua host only
+scripts\win\build_all.bat           # Everything
 ```
 
 Output binaries go to `bin/`.
@@ -136,10 +149,10 @@ cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
 cmake --build build_vs2022 --config Release --target dse_editor_cpp
 ```
 
-> 构建成功后，`bin/` 目录里应包含：
-> - `dsengine-editor.exe` — 编辑器
-> - `DSEngine_Game.exe` — 独立游戏运行时
-> - `AssetBuilder.exe` — 资产转换工具
+> 构建成功后，`bin/` 目录里应包含（上面是 Release 构建）：
+> - `dsengine-editor.exe` — 编辑器（无配置后缀）
+> - `DSEngine_Game_release.exe` — 独立游戏运行时（Debug 构建为 `DSEngine_Game_debug.exe`）
+> - `AssetBuilder.exe` — 资产转换工具（无配置后缀）
 
 ### 步骤 2：创建项目
 
@@ -273,11 +286,16 @@ CLI flags: `--scene=`, `--pak=`, `--script=`, `--width=`, `--height=`, `--title=
 ## Tests
 
 ```powershell
-cmake --build build_vs2022 --config Debug --target dse_tests
-bin\dse_tests_debug.exe
+# One-shot: configure (gtests on) + build the three suites + run via ctest
+build_fast_tests.bat
+
+# Or manually:
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_GTESTS=ON
+cmake --build build_vs2022 --config Debug --target dse_gtest_unit_tests dse_gtest_integration_tests dse_gtest_smoke_tests --parallel
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 ```
 
-720+ unit tests covering ECS, physics, serialization, asset pipeline, and more.
+The default `build_fast_tests.bat` config (3D off) runs 2,269 GoogleTest cases (1787 unit / 440 integration / 42 smoke) covering ECS, physics, serialization, asset pipeline, rendering, and more. A full build with `-DDSE_ENABLE_3D=ON` compiles additional 3D-gated suites (~2,600 total).
 
 ---
 
@@ -302,4 +320,4 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 > For architecture details see [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
 > For the shader system see [`docs/architecture/SHADER_SYSTEM.md`](docs/architecture/SHADER_SYSTEM.md).
-> For the development roadmap see [`docs/NEXT_DIRECTION.md`](docs/NEXT_DIRECTION.md).
+> For the development roadmap see [`docs/roadmap/PROGRESS_REPORT.md`](docs/roadmap/PROGRESS_REPORT.md).

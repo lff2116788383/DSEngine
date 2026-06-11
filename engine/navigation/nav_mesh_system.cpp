@@ -401,7 +401,11 @@ bool NavMeshSystem::SaveNavMesh(const std::string& path) const {
     }
 
     FILE* fp = nullptr;
+#if defined(_WIN32)
     fopen_s(&fp, path.c_str(), "wb");
+#else
+    fp = fopen(path.c_str(), "wb");
+#endif
     if (!fp) {
         DEBUG_LOG_ERROR("[NavMesh] SaveNavMesh: cannot open {}", path);
         return false;
@@ -421,7 +425,11 @@ bool NavMeshSystem::LoadNavMesh(const std::string& path) {
         return false;
     }
     FILE* fp = nullptr;
+#if defined(_WIN32)
     fopen_s(&fp, path.c_str(), "rb");
+#else
+    fp = fopen(path.c_str(), "rb");
+#endif
     if (!fp) return false;
 
     NavMeshFileHeader hdr{};

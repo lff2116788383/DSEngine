@@ -7,6 +7,17 @@
 
 namespace dse::pak {
 
+// 跨平台 64 位文件定位：MSVC 用 _fseeki64，POSIX 用 fseeko（off_t 为 64 位）
+namespace {
+inline int PakSeek64(FILE* f, long long offset, int origin) {
+#if defined(_WIN32)
+    return _fseeki64(f, offset, origin);
+#else
+    return fseeko(f, static_cast<off_t>(offset), origin);
+#endif
+}
+} // namespace
+
 PakReader::~PakReader() {
     Close();
 }
@@ -47,7 +58,7 @@ bool PakReader::Open(const std::string& pak_path) {
     }
 
     // Read TOC
-    if (_fseeki64(file_, static_cast<long long>(header.toc_offset), SEEK_SET) != 0) {
+    if (PakSeek64(file_, static_cast<long long>(header.toc_offset), SEEK_SET) != 0) {
         DEBUG_LOG_ERROR("[PakReader] Failed to seek to TOC");
         Close();
         return false;
@@ -98,7 +109,7 @@ bool PakReader::ReadFile(const std::string& relative_path, std::vector<uint8_t>&
     const auto& entry = entries_[it->second];
     if (!file_) return false;
 
-    if (_fseeki64(file_, static_cast<long long>(entry.data_offset), SEEK_SET) != 0) {
+    if (PakSeek64(file_, static_cast<long long>(entry.data_offset), SEEK_SET) != 0) {
         DEBUG_LOG_ERROR("[PakReader] Failed to seek to data for: {}", relative_path);
         return false;
     }

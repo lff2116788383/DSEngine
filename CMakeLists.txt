@@ -9,6 +9,16 @@ project(DSEngine VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# 预发布标签（SemVer pre-release）。首个 SDK 测试版为 v0.1.0-alpha。
+# 正式发布时置空字符串即可（DSE_VERSION_STRING 退化为纯 "x.y.z"）。
+# package_sdk.ps1 会解析此行用于命名发行包，保持格式为：set(DSEngine_VERSION_PRERELEASE "...")
+set(DSEngine_VERSION_PRERELEASE "alpha")
+if(DSEngine_VERSION_PRERELEASE STREQUAL "")
+    set(DSEngine_VERSION_STRING "${PROJECT_VERSION}")
+else()
+    set(DSEngine_VERSION_STRING "${PROJECT_VERSION}-${DSEngine_VERSION_PRERELEASE}")
+endif()
+
 # 生成版本头文件 dse_version.h（从 .in 模板）
 configure_file(
     ${CMAKE_SOURCE_DIR}/engine/dse_version.h.in
@@ -52,8 +62,9 @@ option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
-option(DSE_ENABLE_LUASOCKET "Include LuaSocket networking" OFF)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
+option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" OFF)
+option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
@@ -62,7 +73,6 @@ if(ANDROID)
     set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
-    set(DSE_ENABLE_LUASOCKET OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
@@ -137,14 +147,8 @@ endif()
 if(DSE_ENABLE_LUA)
     include(cmake/CMakeLists.txt.lua_script)
     add_definitions(-D DSE_ENABLE_LUA)
-    if(DSE_ENABLE_LUASOCKET)
-        include(cmake/CMakeLists.txt.luasocket)
-    else()
-        set(luasocket_c "")
-    endif()
 else()
     set(lua_src "")
-    set(luasocket_c "")
 endif()
 if(DSE_ENABLE_PHYSX)
     include(cmake/CMakeLists.txt.Physx)
@@ -160,6 +164,26 @@ endif()
 include(cmake/CMakeLists.txt.Jolt)
 if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     add_definitions(-D DSE_ENABLE_JOLT)
+endif()
+
+# 网络层 (GameNetworkingSockets)。默认 OFF：OFF 路径完全不引入网络依赖，
+# 现有三端构建零影响。ON 时由 cmake/CMakeLists.txt.gns 负责按平台分流加密后端
+# (桌面 libsodium / 移动 OpenSSL) 并接入 protobuf + GNS 静态库。
+if(DSE_ENABLE_NET)
+    include(cmake/CMakeLists.txt.gns)
+    if(DSE_HAS_NET)
+        add_definitions(-D DSE_NET_ENABLED=1)
+    endif()
+endif()
+
+# 通用异步 HTTP(S) 客户端 (IXWebSocket + OpenSSL)。默认 OFF：OFF 路径完全不引入
+# IXWebSocket/OpenSSL 依赖，现有构建零影响。ON 时由 cmake/CMakeLists.txt.http
+# 编出 dse_http 静态库并定义 DSE_ENABLE_HTTP（供 engine/http 与 Lua 绑定启用）。
+if(DSE_ENABLE_HTTP)
+    include(cmake/CMakeLists.txt.http)
+    if(DSE_HAS_HTTP)
+        add_definitions(-D DSE_ENABLE_HTTP=1)
+    endif()
 endif()
 
 #头文件目录（全局，合并为一处避免重复）
@@ -247,6 +271,14 @@ file(GLOB_RECURSE engine_cpp CONFIGURE_DEPENDS
 )
 
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/compiler/.*\\.cpp$")
+
+# 网络层(engine/net/**)由 cmake/CMakeLists.txt.gns 编译为独立的 dse_net 目标
+# （依赖 GNS 头/库），不并入 dse_engine 主目标，且 OFF 时完全不编译。
+list(FILTER engine_cpp EXCLUDE REGEX ".*engine/net/.*\\.cpp$")
+
+# HTTP 客户端(engine/http/**)由 cmake/CMakeLists.txt.http 编译为独立的 dse_http
+# 目标（唯一 include IXWebSocket 之处），不并入 dse_engine 主目标。
+list(FILTER engine_cpp EXCLUDE REGEX ".*engine/http/.*\\.cpp$")
 
 # 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
 # 注意：dse_api_<prefix>.gen.cpp 与手写 dse_api.cpp 同 TU 域，须显式加回（见下）
@@ -367,6 +399,20 @@ set(tiny_aes_c
 )
 file(GLOB_RECURSE bundle_cpp "${CMAKE_SOURCE_DIR}/depends/bundle/*.cpp")
 
+# bundle 是第三方打包/压缩库（含 miniz/lzma 等），使用了 C++17 已移除的 register 存储类
+# 与窄化初始化；clang(Android NDK) 默认将其视为错误。仅对该第三方源关闭对应诊断，不改其源码。
+if(NOT MSVC)
+    set_source_files_properties(${bundle_cpp} PROPERTIES
+        COMPILE_OPTIONS "-Wno-register;-Wno-c++11-narrowing")
+endif()
+# Android(arm64 等非 x86)：bundle 的 MCM/TANGELO 高比率编解码器内联了 x86 SSE/MMX intrinsics
+# （emmintrin/mmintrin），无法在 ARM 上编译。DSEngine 仅用 ZIP(miniz/DEFLATE) 路径，这些编解码器
+# 从未被使用，按 bundle 自带的库配置开关排除即可（不改第三方源码、不影响打包/解包功能）。
+if(ANDROID)
+    set_source_files_properties(${bundle_cpp} PROPERTIES
+        COMPILE_DEFINITIONS "BUNDLE_NO_MCM;BUNDLE_NO_TANGELO")
+endif()
+
 
 set(imgui_src
     "${CMAKE_SOURCE_DIR}/depends/imgui/imgui.cpp"
@@ -385,7 +431,6 @@ set(DSE_ENGINE_ALL_SOURCES
     ${freetype_src}
     ${easy_profiler_core_source}
     ${lua_src}
-    ${luasocket_c}
     ${spine_cpp}
     ${tiny_aes_c}
     ${bundle_cpp}
@@ -419,6 +464,61 @@ if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
 endif()
 if(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     target_link_libraries(dse_engine PRIVATE Jolt)
+endif()
+# --- 异步 HTTP 客户端 ---
+if(DSE_ENABLE_HTTP AND DSE_HAS_HTTP)
+    target_link_libraries(dse_engine PRIVATE dse_http)
+    # 无头验证 Lua 绑定 dse.http（裸 lua_State + 本地回环服务器），不依赖窗口/RHI。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/http/http_lua_smoke.cpp")
+        add_executable(dse_http_lua_smoke "${CMAKE_SOURCE_DIR}/tests/http/http_lua_smoke.cpp")
+        target_link_libraries(dse_http_lua_smoke PRIVATE dse_engine dse_http)
+        target_include_directories(dse_http_lua_smoke PRIVATE
+            "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/IXWebSocket"
+            "${CMAKE_SOURCE_DIR}/depends/lua")
+        target_compile_features(dse_http_lua_smoke PRIVATE cxx_std_17)
+        if(MSVC)
+            set_property(TARGET dse_http_lua_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_http_lua_smoke PRIVATE /utf-8)
+        endif()
+    endif()
+endif()
+# --- 游戏网络传输 (GameNetworkingSockets) Lua 绑定 ---
+if(DSE_ENABLE_NET AND DSE_HAS_NET)
+    # dse.net 绑定(engine/scripting/.../lua_binding_net.cpp)随 dse_engine 编译，
+    # 调用 dse_net C ABI；故把 dse_net 链进 dse_engine（静态库依赖透传给可执行）。
+    target_link_libraries(dse_engine PRIVATE dse_net)
+    # 无头验证 Lua 绑定 dse.net（裸 lua_State + 本地 UDP 回环），不依赖窗口/RHI。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")
+        add_executable(dse_net_lua_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")
+        target_link_libraries(dse_net_lua_smoke PRIVATE dse_engine dse_net)
+        target_include_directories(dse_net_lua_smoke PRIVATE
+            "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/lua")
+        target_compile_features(dse_net_lua_smoke PRIVATE cxx_std_17)
+        if(MSVC)
+            set_property(TARGET dse_net_lua_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_net_lua_smoke PRIVATE /utf-8)
+        endif()
+    endif()
+endif()
+# --- 自描述二进制序列化 (dse.serialize) Lua 绑定 ---
+# 绑定 engine/scripting/.../lua_binding_serialize.cpp 随 dse_engine 编译（无外部依赖、
+# 不受 NET/HTTP 开关影响）。此处仅在启用 Lua 时构建其无头往返 smoke。
+if(DSE_ENABLE_LUA AND EXISTS "${CMAKE_SOURCE_DIR}/tests/serialize/serialize_smoke.cpp")
+    add_executable(dse_serialize_smoke "${CMAKE_SOURCE_DIR}/tests/serialize/serialize_smoke.cpp")
+    target_link_libraries(dse_serialize_smoke PRIVATE dse_engine)
+    target_include_directories(dse_serialize_smoke PRIVATE
+        "${CMAKE_SOURCE_DIR}"
+        "${CMAKE_SOURCE_DIR}/depends/lua")
+    target_compile_features(dse_serialize_smoke PRIVATE cxx_std_17)
+    if(MSVC)
+        set_property(TARGET dse_serialize_smoke PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        target_compile_options(dse_serialize_smoke PRIVATE /utf-8)
+    endif()
 endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)
@@ -490,10 +590,17 @@ endif()
 if(ANDROID)
     target_link_libraries(dse_engine PRIVATE EGL GLESv3 android log)
 endif()
+
+# --- Linux 桌面链接库 (X11 窗口 + GL + dl + pthread) ---
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    find_package(Threads REQUIRED)
+    target_link_libraries(dse_engine PRIVATE
+        X11 Xrandr Xinerama Xcursor Xi
+        GL ${CMAKE_DL_LIBS} Threads::Threads rt m)
+endif()
 if(DSE_ENABLE_LUA)
     target_include_directories(dse_engine PRIVATE
         ${CMAKE_SOURCE_DIR}/depends/lua
-        ${CMAKE_SOURCE_DIR}/depends/luasocket-3.0.0/src
     )
 endif()
 
@@ -604,7 +711,7 @@ endif()
 
 # 工具链：ShaderCompiler (GLSL 450 → SPIR-V / GLSL 330 / HLSL)
 if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
-    add_subdirectory(tools/shader_compiler)
+    # 工具链构建延后到下方：交叉编译时改用 host 预构建的 dse_shader_compiler。
 
     # --- Shader 离线编译：构建时自动执行 ---
     set(SHADER_SRC_DIR "${CMAKE_SOURCE_DIR}/engine/render/shaders/src")
@@ -637,17 +744,44 @@ if(DSE_HAS_GLSLANG AND DSE_HAS_SPIRV_CROSS)
         "${SHADER_GEN_DIR}/embed/skinning_comp.gen.h"
         "${SHADER_GEN_DIR}/embed/skinning_comp_reflect.gen.h"
     )
+    # skinning.comp 已被上面的 glob 收集（skinning_comp.gen.h），显式追加会重复；
+    # MSBuild 静默去重，Ninja 会因 dupbuild 报错——统一去重以跨生成器安全。
+    list(REMOVE_DUPLICATES GENERATED_SHADER_HEADERS)
+
+    # dse_shader_compiler 是 host 工具：
+    #  - 原生构建：直接构建该 target 并使用；
+    #  - 交叉编译(Android/iOS)：clang 产物无法在 host 运行，改用 host 预构建可执行文件
+    #    （先在桌面平台构建一次生成 bin/dse_shader_compiler[.exe]，或 -DDSE_HOST_SHADER_COMPILER=<path>）。
+    if(CMAKE_CROSSCOMPILING)
+        if(NOT DSE_HOST_SHADER_COMPILER)
+            find_program(DSE_HOST_SHADER_COMPILER
+                NAMES dse_shader_compiler dse_shader_compiler.exe
+                PATHS "${CMAKE_SOURCE_DIR}/bin" NO_DEFAULT_PATH)
+        endif()
+        if(NOT DSE_HOST_SHADER_COMPILER)
+            message(FATAL_ERROR
+                "交叉编译需要 host 版 dse_shader_compiler。请先在桌面平台(Windows/Linux)"
+                "构建一次以生成 bin/dse_shader_compiler，或通过 -DDSE_HOST_SHADER_COMPILER=<path> 指定。")
+        endif()
+        set(_DSE_SHADER_COMPILER_CMD "${DSE_HOST_SHADER_COMPILER}")
+        set(_DSE_SHADER_COMPILER_DEP "")
+        message(STATUS "Cross-compiling: using host shader compiler ${DSE_HOST_SHADER_COMPILER}")
+    else()
+        add_subdirectory(tools/shader_compiler)
+        set(_DSE_SHADER_COMPILER_CMD dse_shader_compiler)
+        set(_DSE_SHADER_COMPILER_DEP dse_shader_compiler)
+    endif()
 
     add_custom_command(
         OUTPUT ${GENERATED_SHADER_HEADERS}
-        COMMAND dse_shader_compiler
+        COMMAND ${_DSE_SHADER_COMPILER_CMD}
             --input-dir "${SHADER_SRC_DIR}"
             --output-dir "${SHADER_GEN_DIR}"
             --target all --embed
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/bin/data/shader_cache"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/data/shader_cache"
         COMMAND ${CMAKE_COMMAND} -E rm -rf "${CMAKE_SOURCE_DIR}/examples/KF_Framework/data/shader_cache"
-        DEPENDS dse_shader_compiler ${SHADER_SOURCE_FILES}
+        DEPENDS ${_DSE_SHADER_COMPILER_DEP} ${SHADER_SOURCE_FILES}
         COMMENT "Compiling shaders (GLSL 450 -> SPIR-V / GLSL 430 / HLSL) and clearing runtime shader cache"
         VERBATIM
     )
@@ -702,11 +836,15 @@ install(TARGETS dse_engine
 )
 
 # 2. 引擎公共头文件
+#    排除 RHI 三个后端的具体实现头（dx11/ opengl/ vulkan/）——它们是内部实现，
+#    消费者只通过抽象层 rhi_factory.h / rhi_device.h 使用，且经核实无任何对外头文件
+#    引用这些后端头（grep: 0 引用），故安全地不纳入 SDK 公共头边界。
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/engine/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSEngine/engine
     COMPONENT sdk
     FILES_MATCHING PATTERN "*.h"
     PATTERN "*.h.in" EXCLUDE
+    REGEX "render/rhi/(dx11|opengl|vulkan)/" EXCLUDE
 )
 # 2b. CMake 生成的版本头文件
 install(FILES ${CMAKE_BINARY_DIR}/generated/engine/dse_version.h
@@ -849,4 +987,28 @@ if(Python3_FOUND)
         COMMENT "Running DSEngine binding codegen..."
         VERBATIM
     )
+endif()
+
+# ── Android 原生宿主 (NativeActivity host) ──────────────────────────────────
+# 产物 libdse_android_host.so：通过 native_app_glue 提供的 ANativeActivity_onCreate
+# 作为入口，链接 dse_engine（静态库时自包含），供打包 APK 使用。
+# 构建: cmake --build <android_build_dir> --target dse_android_host
+if(ANDROID)
+    set(_DSE_GLUE_DIR "${CMAKE_ANDROID_NDK}/sources/android/native_app_glue")
+    if(NOT EXISTS "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+        set(_DSE_GLUE_DIR "${ANDROID_NDK}/sources/android/native_app_glue")
+    endif()
+    if(NOT EXISTS "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+        message(FATAL_ERROR "找不到 native_app_glue 源（${_DSE_GLUE_DIR}）")
+    endif()
+    add_library(dse_android_host SHARED
+        "${CMAKE_SOURCE_DIR}/apps/android_host/native_main.cpp"
+        "${_DSE_GLUE_DIR}/android_native_app_glue.c")
+    target_include_directories(dse_android_host PRIVATE
+        "${CMAKE_SOURCE_DIR}" "${_DSE_GLUE_DIR}")
+    target_link_libraries(dse_android_host PRIVATE dse_engine EGL GLESv3 android log)
+    # NativeActivity 经 dlsym 取入口；强制保留 glue 提供的 ANativeActivity_onCreate
+    target_link_options(dse_android_host PRIVATE "-u" "ANativeActivity_onCreate")
+    # 固定输出名(去掉 Debug 后缀)，使 APK manifest 的 android.app.lib_name 稳定为 dse_android_host
+    set_target_properties(dse_android_host PROPERTIES OUTPUT_NAME "dse_android_host" DEBUG_POSTFIX "")
 endif()

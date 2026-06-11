@@ -6,6 +6,7 @@
 #ifndef DSE_PHYSICS2D_SYSTEM_H
 #define DSE_PHYSICS2D_SYSTEM_H
 
+#include "engine/core/dse_export.h"
 #include "engine/ecs/world.h"
 #include <box2d/box2d.h>
 #include <entt/entt.hpp>
@@ -19,7 +20,7 @@
  * @class Physics2DSystem
  * @brief 2D 物理引擎系统，负责同步 ECS 组件和 Box2D 刚体状态，并执行固定步长的物理模拟
  */
-class Physics2DSystem {
+class DSE_EXPORT Physics2DSystem {
 public:
     Physics2DSystem();
     ~Physics2DSystem();

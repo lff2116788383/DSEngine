@@ -1,6 +1,7 @@
 #ifndef DSE_MEMORY_PROFILER_H
 #define DSE_MEMORY_PROFILER_H
 
+#include "engine/core/dse_export.h"
 #include <chrono>
 #include <cstddef>
 #include <mutex>
@@ -43,7 +44,7 @@ struct MemorySnapshot {
     int active_allocations = 0;
 };
 
-class MemoryProfiler {
+class DSE_EXPORT MemoryProfiler {
 public:
     MemoryProfiler() = default;
     ~MemoryProfiler() = default;

@@ -15,6 +15,10 @@
 #   ifndef GLAD_API_PTR
 #       define GLAD_API_PTR
 #   endif
+// 桌面 GL → GLES3 兼容垫片：GLES 仅提供 glClearDepthf，将 glClearDepth(double) 映射过去。
+#   ifndef glClearDepth
+#       define glClearDepth(d) glClearDepthf(static_cast<GLfloat>(d))
+#   endif
 #else
 #   include <glad/gl.h>
 #endif

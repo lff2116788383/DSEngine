@@ -21,6 +21,7 @@ elseif (APPLE)
     message(STATUS "Using Cocoa for window creation")
 elseif (UNIX)
     set(_GLFW_X11 1)
+    add_definitions(-D _GLFW_X11)
     message(STATUS "Using X11 for window creation")
 else()
     message(FATAL_ERROR "No supported platform was detected")
@@ -77,18 +78,20 @@ elseif (_GLFW_WIN32)
             ${GLFW_SOURCE_DIR}/src/win32_monitor.c ${GLFW_SOURCE_DIR}/src/win32_time.c ${GLFW_SOURCE_DIR}/src/win32_thread.c ${GLFW_SOURCE_DIR}/src/win32_window.c
             ${GLFW_SOURCE_DIR}/src/wgl_context.c ${GLFW_SOURCE_DIR}/src/egl_context.c ${GLFW_SOURCE_DIR}/src/osmesa_context.c)
 elseif (_GLFW_X11)
-    set(glfw_headers ${common_HEADERS} x11_platform.h xkb_unicode.h posix_time.h
-            posix_thread.h glx_context.h egl_context.h osmesa_context.h)
-    set(glfw_sources ${common_SOURCES} x11_init.c x11_monitor.c x11_window.c
-            xkb_unicode.c posix_time.c posix_thread.c glx_context.c
-            egl_context.c osmesa_context.c)
+    set(glfw_headers ${common_HEADERS}
+            ${GLFW_SOURCE_DIR}/src/x11_platform.h ${GLFW_SOURCE_DIR}/src/xkb_unicode.h ${GLFW_SOURCE_DIR}/src/posix_time.h
+            ${GLFW_SOURCE_DIR}/src/posix_thread.h ${GLFW_SOURCE_DIR}/src/glx_context.h ${GLFW_SOURCE_DIR}/src/egl_context.h ${GLFW_SOURCE_DIR}/src/osmesa_context.h)
+    set(glfw_sources ${common_SOURCES} ${GLAD_GL}
+            ${GLFW_SOURCE_DIR}/src/x11_init.c ${GLFW_SOURCE_DIR}/src/x11_monitor.c ${GLFW_SOURCE_DIR}/src/x11_window.c
+            ${GLFW_SOURCE_DIR}/src/xkb_unicode.c ${GLFW_SOURCE_DIR}/src/posix_time.c ${GLFW_SOURCE_DIR}/src/posix_thread.c ${GLFW_SOURCE_DIR}/src/glx_context.c
+            ${GLFW_SOURCE_DIR}/src/egl_context.c ${GLFW_SOURCE_DIR}/src/osmesa_context.c)
 elseif (_GLFW_WAYLAND)
-    set(glfw_headers ${common_HEADERS} wl_platform.h
-            posix_time.h posix_thread.h xkb_unicode.h egl_context.h
-            osmesa_context.h)
-    set(glfw_sources ${common_SOURCES} wl_init.c wl_monitor.c wl_window.c
-            posix_time.c posix_thread.c xkb_unicode.c
-            egl_context.c osmesa_context.c)
+    set(glfw_headers ${common_HEADERS} ${GLFW_SOURCE_DIR}/src/wl_platform.h
+            ${GLFW_SOURCE_DIR}/src/posix_time.h ${GLFW_SOURCE_DIR}/src/posix_thread.h ${GLFW_SOURCE_DIR}/src/xkb_unicode.h ${GLFW_SOURCE_DIR}/src/egl_context.h
+            ${GLFW_SOURCE_DIR}/src/osmesa_context.h)
+    set(glfw_sources ${common_SOURCES} ${GLAD_GL} ${GLFW_SOURCE_DIR}/src/wl_init.c ${GLFW_SOURCE_DIR}/src/wl_monitor.c ${GLFW_SOURCE_DIR}/src/wl_window.c
+            ${GLFW_SOURCE_DIR}/src/posix_time.c ${GLFW_SOURCE_DIR}/src/posix_thread.c ${GLFW_SOURCE_DIR}/src/xkb_unicode.c
+            ${GLFW_SOURCE_DIR}/src/egl_context.c ${GLFW_SOURCE_DIR}/src/osmesa_context.c)
 
     ecm_add_wayland_client_protocol(glfw_sources
             PROTOCOL
@@ -115,19 +118,19 @@ elseif (_GLFW_WAYLAND)
             "${WAYLAND_PROTOCOLS_PKGDATADIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml"
             BASENAME idle-inhibit-unstable-v1)
 elseif (_GLFW_OSMESA)
-    set(glfw_headers ${common_HEADERS} null_platform.h null_joystick.h
-            posix_time.h posix_thread.h osmesa_context.h)
-    set(glfw_sources ${common_SOURCES} null_init.c null_monitor.c null_window.c
-            null_joystick.c posix_time.c posix_thread.c osmesa_context.c)
+    set(glfw_headers ${common_HEADERS} ${GLFW_SOURCE_DIR}/src/null_platform.h ${GLFW_SOURCE_DIR}/src/null_joystick.h
+            ${GLFW_SOURCE_DIR}/src/posix_time.h ${GLFW_SOURCE_DIR}/src/posix_thread.h ${GLFW_SOURCE_DIR}/src/osmesa_context.h)
+    set(glfw_sources ${common_SOURCES} ${GLAD_GL} ${GLFW_SOURCE_DIR}/src/null_init.c ${GLFW_SOURCE_DIR}/src/null_monitor.c ${GLFW_SOURCE_DIR}/src/null_window.c
+            ${GLFW_SOURCE_DIR}/src/null_joystick.c ${GLFW_SOURCE_DIR}/src/posix_time.c ${GLFW_SOURCE_DIR}/src/posix_thread.c ${GLFW_SOURCE_DIR}/src/osmesa_context.c)
 endif()
 
 if (_GLFW_X11 OR _GLFW_WAYLAND)
     if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set(glfw_headers ${glfw_headers} linux_joystick.h)
-        set(glfw_sources ${glfw_sources} linux_joystick.c)
+        set(glfw_headers ${glfw_headers} ${GLFW_SOURCE_DIR}/src/linux_joystick.h)
+        set(glfw_sources ${glfw_sources} ${GLFW_SOURCE_DIR}/src/linux_joystick.c)
     else()
-        set(glfw_headers ${glfw_headers} null_joystick.h)
-        set(glfw_sources ${glfw_sources} null_joystick.c)
+        set(glfw_headers ${glfw_headers} ${GLFW_SOURCE_DIR}/src/null_joystick.h)
+        set(glfw_sources ${glfw_sources} ${GLFW_SOURCE_DIR}/src/null_joystick.c)
     endif()
 endif()
 

@@ -25,6 +25,13 @@
 #include "engine/core/service_locator.h"
 #include "engine/core/dse_export.h"
 
+// 跨平台函数签名宏：MSVC 用 __FUNCSIG__，GCC/Clang 用 __PRETTY_FUNCTION__
+#if defined(_MSC_VER)
+#define DSE_FUNCSIG __FUNCSIG__
+#else
+#define DSE_FUNCSIG __PRETTY_FUNCTION__
+#endif
+
 namespace dse {
 namespace core {
 
@@ -169,7 +176,7 @@ struct EventTraits {
             return TEvent::kEventId;
         } else {
             // 回退：基于类型名的编译期哈希（不应走到此路径，新事件应定义 kEventId）
-            return MakeEventId(__FUNCSIG__);
+            return MakeEventId(DSE_FUNCSIG);
         }
     }
 };

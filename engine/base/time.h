@@ -11,6 +11,7 @@
 #define UNTITLED_TIME_H
 
 
+#include "engine/core/dse_export.h"
 #include <string>
 #include <chrono>
 
@@ -18,7 +19,7 @@
  * @class Time
  * @brief 全局时间管理类，负责记录游戏运行时间、帧增量时间及固定更新时间。
  */
-class Time
+class DSE_EXPORT Time
 {
 public:
     Time();

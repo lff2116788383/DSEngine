@@ -7,7 +7,7 @@ setlocal enabledelayedexpansion
 ::  使用方式：verify_all.bat [--skip-gtest] [--skip-lua] [--skip-demos]
 :: ============================================================
 
-pushd "%~dp0"
+pushd "%~dp0..\.."
 
 :: 记录开始时间
 set "START_TIME=%TIME%"

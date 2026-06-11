@@ -8,10 +8,14 @@
 #include <algorithm>
 #include <cstring>
 #include <thread>
-#include <immintrin.h>
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+#   include <immintrin.h>
+#   define DSE_ANIM_USE_SSE 1
+#endif
 
-// SSE mat4×mat4: 纯 SIMD 矩阵乘法，用于骨骼计算热路径
+// mat4×mat4: x86 走 SSE 手写矩阵乘法（骨骼计算热路径）；其余架构(ARM/Android)回退到 glm（列主序，语义一致）。
 namespace {
+#ifdef DSE_ANIM_USE_SSE
 inline void Mat4MulSSE(const float* __restrict a, const float* __restrict b, float* __restrict out) {
     __m128 a0 = _mm_loadu_ps(a);
     __m128 a1 = _mm_loadu_ps(a + 4);
@@ -26,10 +30,15 @@ inline void Mat4MulSSE(const float* __restrict a, const float* __restrict b, flo
         _mm_storeu_ps(out + col * 4, r);
     }
 }
+#endif
 inline glm::mat4 Mat4Mul(const glm::mat4& a, const glm::mat4& b) {
+#ifdef DSE_ANIM_USE_SSE
     glm::mat4 result;
     Mat4MulSSE(&a[0][0], &b[0][0], &result[0][0]);
     return result;
+#else
+    return a * b;
+#endif
 }
 } // anonymous namespace
 

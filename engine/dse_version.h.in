@@ -9,6 +9,11 @@
 #define DSE_VERSION_MAJOR @DSEngine_VERSION_MAJOR@
 #define DSE_VERSION_MINOR @DSEngine_VERSION_MINOR@
 #define DSE_VERSION_PATCH @DSEngine_VERSION_PATCH@
-#define DSE_VERSION_STRING "@DSEngine_VERSION@"
+
+/* 预发布标签，正式版为空字符串 "" */
+#define DSE_VERSION_PRERELEASE "@DSEngine_VERSION_PRERELEASE@"
+
+/* 完整 SemVer 版本串，含预发布标签，例如 "0.1.0-alpha" */
+#define DSE_VERSION_STRING "@DSEngine_VERSION_STRING@"
 
 #endif // DSE_VERSION_H

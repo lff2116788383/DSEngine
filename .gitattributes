@@ -1,3 +1,9 @@
 # Shader compiler 自动生成物 —— 强制 CRLF（Windows 开发环境）
 engine/render/shaders/generated/embed/*.gen.h text eol=crlf
 engine/render/shaders/generated/spv/*.spv binary
+
+# Shell 脚本强制 LF —— 经 WSL 在 /mnt/c 下执行，CRLF 会导致解释器/换行错误
+*.sh text eol=lf
+
+# 子模块补丁强制 LF —— git apply 针对 LF 源码；若被转成 CRLF 会 "patch does not apply"
+*.patch text eol=lf

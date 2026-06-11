@@ -74,6 +74,7 @@ public:
     bool hdr_enabled() const { return hdr_enabled_; }
     bool tearing_supported() const { return tearing_supported_; }
     UINT msaa_4x_quality() const { return msaa_4x_quality_; }
+    bool is_warp() const { return is_warp_; }
 
     /// Feature Level 转可读字符串
     std::string FeatureLevelString() const;
@@ -98,6 +99,7 @@ private:
     bool hdr_enabled_ = false;     ///< SwapChain 是否使用 R16G16B16A16_FLOAT
     bool tearing_supported_ = false; ///< DXGI_PRESENT_ALLOW_TEARING 是否可用
     UINT msaa_4x_quality_ = 0;    ///< MSAA 4x 质量等级（0 = 不支持）
+    bool is_warp_ = false;        ///< 是否运行在 WARP 软件光栅器（无 GPU 回退）
 };
 
 } // namespace render

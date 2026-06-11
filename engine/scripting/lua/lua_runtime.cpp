@@ -7,6 +7,9 @@
 #include "engine/scripting/lua/lua_debugger.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
+#if defined(DSE_ENABLE_HTTP) || defined(DSE_NET_ENABLED)
+#include "engine/scripting/lua/bindings/lua_binding_modules.h"
+#endif
 #include "engine/ecs/script.h"
 #include "engine/base/debug.h"
 #include <filesystem>
@@ -19,12 +22,6 @@ extern "C" {
 #include "depends/lua/lauxlib.h"
 #include "depends/lua/lualib.h"
 }
-#ifdef DSE_ENABLE_LUASOCKET
-extern "C" {
-    int luaopen_socket_core(lua_State* L);
-    int luaopen_mime_core(lua_State* L);
-}
-#endif
 
 namespace dse::runtime {
 namespace {
@@ -122,12 +119,6 @@ void SetupLuaPackagePath(lua_State* L, const std::string& startup_script_path) {
     lua_getfield(L, -1, "path");
     std::string package_path = lua_tostring(L, -1);
     package_path.append(";./?.lua;./script/?.lua;./script/?/init.lua");
-#ifdef DSE_ENABLE_LUASOCKET
-    package_path.append(";./depends/luasocket-3.0.0/src/?.lua");
-    package_path.append(";../depends/luasocket-3.0.0/src/?.lua");
-    package_path.append(";../../depends/luasocket-3.0.0/src/?.lua");
-    package_path.append(";../../../depends/luasocket-3.0.0/src/?.lua");
-#endif
     package_path.append(";../?.lua;../script/?.lua;../script/?/init.lua");
     package_path.append(";../../?.lua;../../script/?.lua;../../script/?/init.lua");
     if (!startup_script_path.empty()) {
@@ -458,16 +449,6 @@ bool BootstrapLuaRuntime() {
     DEBUG_LOG_INFO("Lua bootstrap: package path setup begin");
     SetupLuaPackagePath(state.state, state.startup_script_path);
     DEBUG_LOG_INFO("Lua bootstrap: register API begin");
-#ifdef DSE_ENABLE_LUASOCKET
-    lua_getglobal(state.state, "package");
-    lua_getfield(state.state, -1, "preload");
-    lua_pushcfunction(state.state, luaopen_socket_core);
-    lua_setfield(state.state, -2, "socket.core");
-    lua_pushcfunction(state.state, luaopen_mime_core);
-    lua_setfield(state.state, -2, "mime.core");
-    lua_pop(state.state, 2);
-    DEBUG_LOG_INFO("Lua bootstrap: LuaSocket registered (socket.core, mime.core)");
-#endif
     lua_binding::RegisterPhase1LuaApi(state.state);
     DEBUG_LOG_INFO("Lua bootstrap: loading startup script begin");
     if (luaL_dofile(state.state, state.startup_script_path.c_str()) != LUA_OK) {
@@ -505,6 +486,14 @@ void TickLuaRuntime(float delta_time) {
     if (!state.state) {
         return;
     }
+#ifdef DSE_ENABLE_HTTP
+    // 触发本帧已完成的异步 HTTP 回调（在脚本 Update 之前，使脚本可立即消费结果）
+    lua_binding::PumpHttp(state.state);
+#endif
+#ifdef DSE_NET_ENABLED
+    // 派发本帧网络事件（连接/断开/收消息）回调，在脚本 Update 之前。
+    lua_binding::PumpNet(state.state);
+#endif
     lua_getglobal(state.state, "Update");
     if (!lua_isfunction(state.state, -1)) {
         lua_pop(state.state, 1);

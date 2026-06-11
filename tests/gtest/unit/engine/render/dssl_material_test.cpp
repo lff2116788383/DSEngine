@@ -17,6 +17,8 @@
 #include "engine/render/material/dssl_material_instance.h"
 #include "engine/render/material/dssl_material_loader.h"
 #include <glm/glm.hpp>
+#include <filesystem>
+#include <fstream>
 
 using namespace dse::render;
 
@@ -281,6 +283,51 @@ TEST(DSSLMaterialLoaderTest, CreateInstance_不存在文件返回nullptr) {
     auto& loader = DSSLMaterialLoader::Instance();
     auto inst = loader.CreateInstance("nonexistent_path_67890.dssl");
     EXPECT_EQ(inst, nullptr);
+}
+
+namespace {
+std::filesystem::path WriteTempDSSL(const std::string& name, const std::string& content) {
+    auto path = std::filesystem::temp_directory_path() / name;
+    std::ofstream out(path);
+    out << content;
+    out.close();
+    return path;
+}
+} // namespace
+
+TEST(DSSLMaterialLoaderTest, LoadFromFile_空文件返回nullptr) {
+    // 文件能打开但内容为空 → 不是有效 DSSL，应失败而非返回全默认空模板。
+    auto& loader = DSSLMaterialLoader::Instance();
+    loader.Clear();
+    auto path = WriteTempDSSL("dse_empty_material.dssl", "");
+    EXPECT_EQ(loader.LoadFromFile(path.string()), nullptr);
+    std::filesystem::remove(path);
+}
+
+TEST(DSSLMaterialLoaderTest, LoadFromFile_纯注释文件返回nullptr) {
+    // 只有注释/空行、无任何有效内容 → 同样视为无效 DSSL。
+    auto& loader = DSSLMaterialLoader::Instance();
+    loader.Clear();
+    auto path = WriteTempDSSL("dse_comment_only_material.dssl",
+                              "// just a comment\n\n   \n// another\n");
+    EXPECT_EQ(loader.LoadFromFile(path.string()), nullptr);
+    std::filesystem::remove(path);
+}
+
+TEST(DSSLMaterialLoaderTest, LoadFromFile_有效DSSL成功) {
+    // 回归保护：含 shader_type / uniform 的有效 DSSL 仍能正常加载并解析。
+    auto& loader = DSSLMaterialLoader::Instance();
+    loader.Clear();
+    const std::string src =
+        "shader_type unlit\n"
+        "uniform float roughness = 0.3;\n"
+        "void fragment() {}\n";
+    auto path = WriteTempDSSL("dse_valid_material.dssl", src);
+    auto inst = loader.LoadFromFile(path.string());
+    ASSERT_NE(inst, nullptr);
+    EXPECT_EQ(inst->GetShaderType(), DSSLShaderType::Unlit);
+    EXPECT_FLOAT_EQ(inst->GetFloat("roughness"), 0.3f);
+    std::filesystem::remove(path);
 }
 
 TEST(DSSLMaterialLoaderTest, Clear_清除后查询为空) {

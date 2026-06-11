@@ -3,10 +3,13 @@
 #include <string>
 
 // 强制使用独立显卡（NVIDIA GT 1030）而非集成显卡（Intel UHD 770）
+// __declspec(dllexport) 为 MSVC 专有，仅在 Windows 导出这两个 GPU 偏好符号。
+#if defined(_WIN32)
 extern "C" {
     __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
     __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+#endif
 
 int main(int argc, char** argv) {
     constexpr int window_width = 1280;
