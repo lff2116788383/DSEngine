@@ -27,6 +27,7 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_settings.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_crash.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_visual_script_compiler.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_collider_edit.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}

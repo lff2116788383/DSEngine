@@ -20,6 +20,7 @@
 #include "editor_preferences_panel.h"
 #include "editor_selection_outline.h"
 #include "editor_physics_debug.h"
+#include "editor_collider_edit.h"
 #include "editor_lighting_gizmos.h"
 #include "editor_navmesh_panel.h"
 #include "editor_scene_view_mode.h"
@@ -867,6 +868,13 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             if (phys_dbg) ImGui::PopStyleColor();
             ImGui::SameLine();
 
+            bool& col_edit = GetColliderEditEnabled();
+            if (col_edit) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.45f, 0.5f, 0.8f));
+            if (ImGui::SmallButton("ColEdit")) col_edit = !col_edit;
+            if (col_edit) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Drag-edit selected collider size/offset"));
+            ImGui::SameLine();
+
             bool& light_giz = GetLightingGizmosEnabled();
             if (light_giz) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.5f, 0.4f, 0.0f, 0.8f));
             if (ImGui::SmallButton("Light")) light_giz = !light_giz;
@@ -952,7 +960,23 @@ void DrawSceneViewportPanel(EditorContext& ctx,
         auto& selection = SelectionManager::Get();
         const bool is_multi = selection.IsMultiSelect();
 
-        if (is_multi) {
+        // Collider drag-edit gizmo takes priority when the ColEdit toggle is on
+        // and a single entity with a supported collider is selected.
+        bool collider_consumed = false;
+        if (!is_multi && GetColliderEditEnabled()) {
+            const float ce_aspect = scene_panel_size.y > 0.0f ? (scene_panel_size.x / scene_panel_size.y) : 1.7777f;
+            EditorCamera& ce_cam = GetEditorCamera();
+            collider_consumed = DrawColliderEditGizmo(
+                context,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ce_cam.GetViewMatrix(),
+                ce_cam.GetProjectionMatrix(ce_aspect));
+        }
+
+        if (collider_consumed) {
+            // Collider gizmo is driving; suppress the normal transform gizmo this frame.
+        } else if (is_multi) {
             // Multi-select gizmo: compute centroid, translate all selected entities
             ImGuizmo::SetOrthographic(false);
             ImGuizmo::SetDrawlist();

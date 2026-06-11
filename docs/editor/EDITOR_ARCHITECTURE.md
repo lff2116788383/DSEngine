@@ -168,6 +168,7 @@
 | **Shader Graph** | 节点式着色器图 → 编译为 DSSL（7 例编译测试） | ✅ 完整 |
 | **Visual Script** | 节点式可视脚本 → Lua：事件入口生成函数体、Branch→if/else、For Loop→数值 for、纯数据节点内联表达式、Flow 数据输出绑定局部变量（`editor_visual_script_compiler.{h,cpp}`，6 例测试） | ✅ 完整 |
 | **动画状态机** | 状态机图 + 过渡条件 + 状态 Inspector | ✅ 完整 |
+| **碰撞体可视化编辑** | Scene 视口 `ColEdit` 开关：对选中实体的 Box3D/Sphere3D/Box2D/Circle2D 用 ImGuizmo 直接拖拽 size/radius 与 center/offset（`editor_collider_edit.{h,cpp}` 纯核心 + `_gizmo.cpp` 视口交互，7 例测试） | ✅ 完整 |
 | **NavMesh 面板** | 烘焙参数 + Overlay 预览 | ✅ 完整 |
 | **AI Chat Panel** | 编辑器内建 AI 对话 + Python LLM bridge（原 Phase 3，已接入） | ✅ 完整 |
 | **Lua Debugger / Curve Editor / Streaming Debug** | Lua 调试、通用曲线、流式加载可视化 | ✅ 完整 |
@@ -178,7 +179,6 @@
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
 | 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具（状态机已有，重定向 UI 未有） |
-| 🟡 P1 | 物理碰撞体可视化编辑 | 已有 Physics Debug 可视化；Scene 中直接拖拽碰撞体形状未有 |
 | 🟢 P2 | Multi-viewport 默认开启 | 面板已有开关，默认关闭（CRT 稳定性顾虑） |
 | 🟢 P2 | 非 Windows 原生文件对话框 | 仅 Windows 实现，非 Windows 返回空（详 §四） |
 
