@@ -22,7 +22,7 @@ using namespace dse::render;
 // HairStrandVertex
 // ============================================================
 
-TEST(HairStrandVertexTest, 默认值全零) {
+TEST(HairStrandVertexTest, DefaultValuesAllZero) {
     HairStrandVertex v{};
     EXPECT_FLOAT_EQ(v.position.x, 0.0f);
     EXPECT_FLOAT_EQ(v.position.w, 0.0f);
@@ -34,7 +34,7 @@ TEST(HairStrandVertexTest, 默认值全零) {
 // HairStrand
 // ============================================================
 
-TEST(HairStrandTest, 默认值) {
+TEST(HairStrandTest, DefaultValues) {
     HairStrand s;
     EXPECT_EQ(s.vertex_offset, 0u);
     EXPECT_EQ(s.vertex_count, 0u);
@@ -44,26 +44,26 @@ TEST(HairStrandTest, 默认值) {
 // HairAsset::IsValid
 // ============================================================
 
-TEST(HairAssetTest, 空资产无效) {
+TEST(HairAssetTest, EmptyInvalid) {
     HairAsset asset;
     EXPECT_FALSE(asset.IsValid());
 }
 
-TEST(HairAssetTest, 顶点为空无效) {
+TEST(HairAssetTest, PointInvalidIfEmpty) {
     HairAsset asset;
     asset.strands.resize(2);
     asset.vertices_per_strand = 4;
     EXPECT_FALSE(asset.IsValid());
 }
 
-TEST(HairAssetTest, Strand为空无效) {
+TEST(HairAssetTest, StrandInvalidIfEmpty) {
     HairAsset asset;
     asset.vertices.resize(8);
     asset.vertices_per_strand = 4;
     EXPECT_FALSE(asset.IsValid());
 }
 
-TEST(HairAssetTest, 顶点数不匹配无效) {
+TEST(HairAssetTest, PointNotInvalid) {
     HairAsset asset;
     asset.strands.resize(2);
     asset.vertices.resize(7);  // 应该是 2*4=8
@@ -71,7 +71,7 @@ TEST(HairAssetTest, 顶点数不匹配无效) {
     EXPECT_FALSE(asset.IsValid());
 }
 
-TEST(HairAssetTest, VerticesPerStrand为零无效) {
+TEST(HairAssetTest, VerticesPerStrandInvalidIfZero) {
     HairAsset asset;
     asset.strands.resize(2);
     asset.vertices.resize(0);
@@ -79,7 +79,7 @@ TEST(HairAssetTest, VerticesPerStrand为零无效) {
     EXPECT_FALSE(asset.IsValid());
 }
 
-TEST(HairAssetTest, 有效资产) {
+TEST(HairAssetTest, Valid) {
     HairAsset asset;
     asset.strands.resize(3);
     asset.vertices.resize(48);
@@ -93,7 +93,7 @@ TEST(HairAssetTest, 有效资产) {
 // HairAsset 默认参数
 // ============================================================
 
-TEST(HairAssetTest, 默认参数) {
+TEST(HairAssetTest, DefaultParameters) {
     HairAsset asset;
     EXPECT_EQ(asset.vertices_per_strand, 16u);
     EXPECT_EQ(asset.num_follow_per_guide, 4u);
@@ -105,7 +105,7 @@ TEST(HairAssetTest, 默认参数) {
 // GenerateTestHairAsset
 // ============================================================
 
-TEST(HairAssetTest, 程序化生成_数据完整性) {
+TEST(HairAssetTest, ProceduralGeneration_DataIntegrity) {
     HairAsset asset;
     GenerateTestHairAsset(10, 8, 2.0f, 1.0f, asset);
 
@@ -116,7 +116,7 @@ TEST(HairAssetTest, 程序化生成_数据完整性) {
     EXPECT_EQ(asset.name, "procedural_sphere_hair");
 }
 
-TEST(HairAssetTest, 程序化生成_根部在球面上) {
+TEST(HairAssetTest, ProceduralGeneration_Exist) {
     HairAsset asset;
     GenerateTestHairAsset(20, 16, 3.0f, 2.0f, asset);
 
@@ -127,7 +127,7 @@ TEST(HairAssetTest, 程序化生成_根部在球面上) {
     }
 }
 
-TEST(HairAssetTest, 程序化生成_切线已归一化) {
+TEST(HairAssetTest, ProceduralGeneration_AlreadyOne) {
     HairAsset asset;
     GenerateTestHairAsset(5, 8, 2.0f, 1.0f, asset);
 
@@ -142,7 +142,7 @@ TEST(HairAssetTest, 程序化生成_切线已归一化) {
 // HairSimParams 默认值
 // ============================================================
 
-TEST(HairSimParamsTest, 默认值) {
+TEST(HairSimParamsTest, DefaultValues) {
     HairSimParams p;
     EXPECT_FLOAT_EQ(p.damping, 0.04f);
     EXPECT_FLOAT_EQ(p.stiffness_local, 0.8f);
@@ -158,7 +158,7 @@ TEST(HairSimParamsTest, 默认值) {
 // HairRenderParams 默认值
 // ============================================================
 
-TEST(HairRenderParamsTest, 默认值) {
+TEST(HairRenderParamsTest, DefaultValues) {
     HairRenderParams p;
     EXPECT_FLOAT_EQ(p.root_color.r, 0.1f);
     EXPECT_FLOAT_EQ(p.tip_color.a, 1.0f);
@@ -175,7 +175,7 @@ TEST(HairRenderParamsTest, 默认值) {
 // HairLODParams 默认值
 // ============================================================
 
-TEST(HairLODParamsTest, 默认值) {
+TEST(HairLODParamsTest, DefaultValues) {
     HairLODParams p;
     EXPECT_FLOAT_EQ(p.lod0_distance, 20.0f);
     EXPECT_FLOAT_EQ(p.lod1_distance, 40.0f);
@@ -204,38 +204,38 @@ protected:
     HairInstance instance_;
 };
 
-TEST_F(HairInstanceLODTest, 近距离_LOD0_全精度) {
+TEST_F(HairInstanceLODTest, NearDistance_LOD0_FullPrecision) {
     instance_.UpdateLOD(10.0f);
     EXPECT_EQ(instance_.current_lod, 0);
     EXPECT_EQ(instance_.active_strand_count, 100u);
 }
 
-TEST_F(HairInstanceLODTest, 中距离_LOD1_半精度) {
+TEST_F(HairInstanceLODTest, MidDistance_LOD1_HalfPrecision) {
     instance_.UpdateLOD(50.0f);
     EXPECT_EQ(instance_.current_lod, 1);
     EXPECT_EQ(instance_.active_strand_count, 50u);
 }
 
-TEST_F(HairInstanceLODTest, 远距离_LOD2_低精度) {
+TEST_F(HairInstanceLODTest, FarDistance_LOD2_LowPrecision) {
     instance_.UpdateLOD(90.0f);
     EXPECT_EQ(instance_.current_lod, 2);
     EXPECT_EQ(instance_.active_strand_count, 25u);
 }
 
-TEST_F(HairInstanceLODTest, 超远距离_剔除) {
+TEST_F(HairInstanceLODTest, FarDistance_Case) {
     instance_.UpdateLOD(150.0f);
     EXPECT_EQ(instance_.current_lod, 3);
     EXPECT_EQ(instance_.active_strand_count, 0u);
 }
 
-TEST_F(HairInstanceLODTest, 无资产_默认剔除) {
+TEST_F(HairInstanceLODTest, Without_Default) {
     HairInstance empty;
     empty.UpdateLOD(10.0f);
     EXPECT_EQ(empty.current_lod, 3);
     EXPECT_EQ(empty.active_strand_count, 0u);
 }
 
-TEST_F(HairInstanceLODTest, 边界距离_LOD0阈值) {
+TEST_F(HairInstanceLODTest, BoundaryDistance_LOD0) {
     instance_.UpdateLOD(20.0f);
     EXPECT_EQ(instance_.current_lod, 0);
     EXPECT_EQ(instance_.active_strand_count, 100u);
@@ -245,7 +245,7 @@ TEST_F(HairInstanceLODTest, 边界距离_LOD0阈值) {
 // HairInstance 默认状态
 // ============================================================
 
-TEST(HairInstanceTest, 默认状态) {
+TEST(HairInstanceTest, DefaultState) {
     HairInstance inst;
     EXPECT_EQ(inst.asset, nullptr);
     EXPECT_FALSE(inst.position_ssbo);

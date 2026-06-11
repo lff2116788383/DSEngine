@@ -23,7 +23,7 @@ using namespace dse::gameplay3d;
 
 #ifdef DSE_ENABLE_PHYSX
 
-TEST(VehicleWheelConfigTest, 默认值) {
+TEST(VehicleWheelConfigTest, DefaultValues) {
     VehicleWheelConfig cfg;
     EXPECT_FLOAT_EQ(cfg.position.x, 0.0f);
     EXPECT_FLOAT_EQ(cfg.position.y, 0.0f);
@@ -41,7 +41,7 @@ TEST(VehicleWheelConfigTest, 默认值) {
 // VehicleWheelState 默认值
 // ============================================================
 
-TEST(VehicleWheelStateTest, 默认值) {
+TEST(VehicleWheelStateTest, DefaultValues) {
     VehicleWheelState ws;
     EXPECT_FLOAT_EQ(ws.compression, 0.0f);
     EXPECT_FLOAT_EQ(ws.angular_velocity, 0.0f);
@@ -55,7 +55,7 @@ TEST(VehicleWheelStateTest, 默认值) {
 // VehicleComponent 默认值
 // ============================================================
 
-TEST(VehicleComponentTest, 默认值) {
+TEST(VehicleComponentTest, DefaultValues) {
     VehicleComponent vc;
     EXPECT_TRUE(vc.enabled);
     EXPECT_FLOAT_EQ(vc.max_engine_force, 5000.0f);
@@ -70,7 +70,7 @@ TEST(VehicleComponentTest, 默认值) {
     EXPECT_FALSE(vc.initialized);
 }
 
-TEST(VehicleComponentTest, 添加车轮) {
+TEST(VehicleComponentTest, AddTo) {
     VehicleComponent vc;
     VehicleWheelConfig w;
     w.position = glm::vec3(-0.8f, 0.0f, 1.2f);
@@ -86,13 +86,13 @@ TEST(VehicleComponentTest, 添加车轮) {
 // VehicleSystem 构造安全（无条件编译保护）
 // ============================================================
 
-TEST(VehicleSystemBasicTest, 默认构造) {
+TEST(VehicleSystemBasicTest, Default) {
     VehicleSystem sys;
     (void)sys;
     SUCCEED();
 }
 
-TEST(VehicleSystemBasicTest, SetPhysics3D_nullptr安全) {
+TEST(VehicleSystemBasicTest, SetPhysics3D_NullptrSafety) {
     VehicleSystem sys;
     sys.SetPhysics3D(nullptr);
     SUCCEED();

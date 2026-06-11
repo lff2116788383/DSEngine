@@ -21,35 +21,35 @@ using namespace dse::scene;
 // Rect 测试
 // ============================================================
 
-TEST(RectTest, 包含内部点) {
+TEST(RectTest, Insidepoint) {
     Rect r{0.0f, 0.0f, 10.0f, 10.0f};
     EXPECT_TRUE(r.Contains(glm::vec2(5.0f, 5.0f)));
     EXPECT_TRUE(r.Contains(glm::vec2(0.0f, 0.0f)));
     EXPECT_TRUE(r.Contains(glm::vec2(10.0f, 10.0f)));
 }
 
-TEST(RectTest, 不包含外部点) {
+TEST(RectTest, DoesNotContainExternalPoints) {
     Rect r{0.0f, 0.0f, 10.0f, 10.0f};
     EXPECT_FALSE(r.Contains(glm::vec2(15.0f, 5.0f)));
     EXPECT_FALSE(r.Contains(glm::vec2(5.0f, 15.0f)));
     EXPECT_FALSE(r.Contains(glm::vec2(-5.0f, 5.0f)));
 }
 
-TEST(RectTest, 重叠Rect相交) {
+TEST(RectTest, Rect) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{5.0f, 5.0f, 10.0f, 10.0f};
     EXPECT_TRUE(a.Intersects(b));
     EXPECT_TRUE(b.Intersects(a));
 }
 
-TEST(RectTest, 不重叠Rect不相交) {
+TEST(RectTest, NoOverlapRectdisjoint) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{20.0f, 20.0f, 10.0f, 10.0f};
     EXPECT_FALSE(a.Intersects(b));
     EXPECT_FALSE(b.Intersects(a));
 }
 
-TEST(RectTest, 边接触的Rect相交) {
+TEST(RectTest, Rect_2) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{10.0f, 0.0f, 10.0f, 10.0f};
     EXPECT_TRUE(a.Intersects(b));
@@ -59,7 +59,7 @@ TEST(RectTest, 边接触的Rect相交) {
 // QuadTree 基本功能
 // ============================================================
 
-TEST(QuadTreeTest, 插入并查询到数据) {
+TEST(QuadTreeTest, QueryTodata) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
 
@@ -75,7 +75,7 @@ TEST(QuadTreeTest, 插入并查询到数据) {
     EXPECT_EQ(found[0].entity, entity);
 }
 
-TEST(QuadTreeTest, 查询不相交范围返回空) {
+TEST(QuadTreeTest, QuerydisjointReturnsEmpty) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
 
@@ -89,7 +89,7 @@ TEST(QuadTreeTest, 查询不相交范围返回空) {
     EXPECT_TRUE(found.empty());
 }
 
-TEST(QuadTreeTest, 超过容量时细分) {
+TEST(QuadTreeTest, When) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     // capacity = 2，插入 5 个应触发细分
     QuadTree tree(bounds, /*capacity=*/2);
@@ -108,7 +108,7 @@ TEST(QuadTreeTest, 超过容量时细分) {
     EXPECT_EQ(found.size(), 5u);
 }
 
-TEST(QuadTreeTest, 清空后树为空) {
+TEST(QuadTreeTest, ClearAfterIsEmpty) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
 
@@ -123,7 +123,7 @@ TEST(QuadTreeTest, 清空后树为空) {
     EXPECT_TRUE(found.empty());
 }
 
-TEST(QuadTreeTest, 多个实体查询) {
+TEST(QuadTreeTest, MultiEntityQuery) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 8);
 
@@ -142,7 +142,7 @@ TEST(QuadTreeTest, 多个实体查询) {
     EXPECT_EQ(found.size(), 10u);
 }
 
-TEST(QuadTreeTest, 插入超出边界的数据被忽略) {
+TEST(QuadTreeTest, DataBy) {
     Rect bounds{0.0f, 0.0f, 10.0f, 10.0f};
     QuadTree tree(bounds, 4);
 

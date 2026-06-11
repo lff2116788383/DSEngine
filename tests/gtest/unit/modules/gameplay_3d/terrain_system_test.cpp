@@ -24,7 +24,7 @@ using namespace dse::gameplay3d;
 // TerrainComponent 默认值
 // ============================================================
 
-TEST(TerrainComponentTest, 默认值) {
+TEST(TerrainComponentTest, DefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.enabled);
     EXPECT_TRUE(tc.heightmap_path.empty());
@@ -37,7 +37,7 @@ TEST(TerrainComponentTest, 默认值) {
     EXPECT_EQ(tc.resolution_z, 64);
 }
 
-TEST(TerrainComponentTest, LOD参数默认值) {
+TEST(TerrainComponentTest, LODParameterDefaultValue) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.use_dynamic_lod);
     EXPECT_EQ(tc.max_lod_levels, 4);
@@ -46,7 +46,7 @@ TEST(TerrainComponentTest, LOD参数默认值) {
     EXPECT_TRUE(tc.visible);
 }
 
-TEST(TerrainComponentTest, SplatMap默认值) {
+TEST(TerrainComponentTest, SplatMapDefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.splat_data.empty());
     EXPECT_TRUE(tc.splat_dirty);
@@ -57,7 +57,7 @@ TEST(TerrainComponentTest, SplatMap默认值) {
     }
 }
 
-TEST(TerrainComponentTest, 内部状态默认值) {
+TEST(TerrainComponentTest, InsideStateDefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.is_dirty);
     EXPECT_TRUE(tc.height_data.empty());
@@ -69,7 +69,7 @@ TEST(TerrainComponentTest, 内部状态默认值) {
     EXPECT_EQ(tc.index_count, 0u);
 }
 
-TEST(TerrainComponentTest, 高度数据写入) {
+TEST(TerrainComponentTest, DataWrite) {
     TerrainComponent tc;
     tc.resolution_x = 4;
     tc.resolution_z = 4;
@@ -83,19 +83,19 @@ TEST(TerrainComponentTest, 高度数据写入) {
 // TerrainSystem
 // ============================================================
 
-TEST(TerrainSystemTest, 默认构造安全) {
+TEST(TerrainSystemTest, DefaultSafety) {
     TerrainSystem sys;
     (void)sys;
 }
 
-TEST(TerrainSystemTest, 空World不崩溃) {
+TEST(TerrainSystemTest, EmptyWorldDoesNotCrash) {
     TerrainSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
     sys.Render(world, cmd);
 }
 
-TEST(TerrainSystemTest, 禁用地形不渲染) {
+TEST(TerrainSystemTest, DisabledDoesNotRender) {
     TerrainSystem sys;
     World world;
     auto entity = world.registry().create();
@@ -193,7 +193,7 @@ TerrainComponent MakeSplatTerrain(int w, int h, float fill) {
 
 } // namespace
 
-TEST(TerrainSplatUploadTest, 无设备时静默早退) {
+TEST(TerrainSplatUploadTest, WithoutWhen) {
     TerrainSystem sys;  // 未 Init，rhi_ == nullptr
     TerrainComponent tc = MakeSplatTerrain(2, 2, 1.0f);
     sys.UploadSplatWeightMap(tc);
@@ -201,7 +201,7 @@ TEST(TerrainSplatUploadTest, 无设备时静默早退) {
     EXPECT_EQ(tc.splat_weight_texture, 0u);
 }
 
-TEST(TerrainSplatUploadTest, 非脏时不重复上传) {
+TEST(TerrainSplatUploadTest, NonWhenNot) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
     sys.Init(&fake);
@@ -212,7 +212,7 @@ TEST(TerrainSplatUploadTest, 非脏时不重复上传) {
     EXPECT_EQ(tc.splat_weight_texture, 0u);
 }
 
-TEST(TerrainSplatUploadTest, 有效数据上传并清脏) {
+TEST(TerrainSplatUploadTest, Validdata) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
     sys.Init(&fake);
@@ -233,7 +233,7 @@ TEST(TerrainSplatUploadTest, 有效数据上传并清脏) {
     EXPECT_FALSE(tc.splat_dirty);  // 脏标志已消费
 }
 
-TEST(TerrainSplatUploadTest, float权重钳制到0_255) {
+TEST(TerrainSplatUploadTest, FloatweightClampedTo0_255) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
     sys.Init(&fake);
@@ -253,7 +253,7 @@ TEST(TerrainSplatUploadTest, float权重钳制到0_255) {
     EXPECT_EQ(fake.created[0].rgba8[3], 255);          //  2.0 → 255
 }
 
-TEST(TerrainSplatUploadTest, 数据不足时回退并释放旧纹理) {
+TEST(TerrainSplatUploadTest, DataNotWhenrollbackrelease) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
     sys.Init(&fake);

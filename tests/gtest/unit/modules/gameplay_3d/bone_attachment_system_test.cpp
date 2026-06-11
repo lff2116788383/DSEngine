@@ -22,12 +22,12 @@ using namespace gameplay3d;
 
 class BoneAttachmentSystemTest : public ::testing::Test {};
 
-TEST_F(BoneAttachmentSystemTest, 空World不崩溃) {
+TEST_F(BoneAttachmentSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(BoneAttachmentSystem::Update(world));
 }
 
-TEST_F(BoneAttachmentSystemTest, Component默认值) {
+TEST_F(BoneAttachmentSystemTest, ComponentDefaultValues) {
     BoneAttachmentComponent comp;
     EXPECT_TRUE(comp.bone_name.empty());
     EXPECT_EQ(comp.offset_position, glm::vec3(0.0f));
@@ -37,7 +37,7 @@ TEST_F(BoneAttachmentSystemTest, Component默认值) {
     EXPECT_TRUE(comp.index_dirty);
 }
 
-TEST_F(BoneAttachmentSystemTest, 目标无效时不崩溃) {
+TEST_F(BoneAttachmentSystemTest, InvalidWhenDoesNotCrash) {
     World world;
     auto attachment = world.CreateEntity();
     world.registry().emplace<TransformComponent>(attachment);
@@ -47,7 +47,7 @@ TEST_F(BoneAttachmentSystemTest, 目标无效时不崩溃) {
     EXPECT_NO_THROW(BoneAttachmentSystem::Update(world));
 }
 
-TEST_F(BoneAttachmentSystemTest, 骨骼名不存在时不写入Transform) {
+TEST_F(BoneAttachmentSystemTest, DoesNotExistWhenNotWriteTransform) {
     World world;
     // 创建目标实体（有 Animator3D + Transform）
     auto character = world.CreateEntity();
@@ -75,7 +75,7 @@ TEST_F(BoneAttachmentSystemTest, 骨骼名不存在时不写入Transform) {
     EXPECT_EQ(sword_xform.local_to_world[0][0], 999.0f);
 }
 
-TEST_F(BoneAttachmentSystemTest, 正确跟随骨骼位置) {
+TEST_F(BoneAttachmentSystemTest, Correct) {
     World world;
     // 创建目标实体
     auto character = world.CreateEntity();
@@ -118,7 +118,7 @@ TEST_F(BoneAttachmentSystemTest, 正确跟随骨骼位置) {
     EXPECT_NEAR(result_pos.z, 0.0f, 1e-4f);
 }
 
-TEST_F(BoneAttachmentSystemTest, 偏移量正确应用) {
+TEST_F(BoneAttachmentSystemTest, OffsetCorrect) {
     World world;
     auto character = world.CreateEntity();
     auto& char_xform = world.registry().emplace<TransformComponent>(character);
@@ -148,7 +148,7 @@ TEST_F(BoneAttachmentSystemTest, 偏移量正确应用) {
     EXPECT_NEAR(result_pos.z, -0.5f, 1e-4f);
 }
 
-TEST_F(BoneAttachmentSystemTest, 切换骨骼名触发重新解析) {
+TEST_F(BoneAttachmentSystemTest, Triggers) {
     World world;
     auto character = world.CreateEntity();
     auto& char_xform = world.registry().emplace<TransformComponent>(character);

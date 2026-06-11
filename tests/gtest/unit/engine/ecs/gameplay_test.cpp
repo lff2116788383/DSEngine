@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/gameplay.h"
 
-TEST(GameplayTuningTest, 默认值合理性) {
+TEST(GameplayTuningTest, DefaultValues) {
     GameplayTuningComponent tuning;
     EXPECT_GT(tuning.leaf_min_distance, 0.0f);
     EXPECT_GT(tuning.leaf_move_right, tuning.leaf_move_left);
@@ -20,13 +20,13 @@ TEST(GameplayTuningTest, 默认值合理性) {
     EXPECT_LT(tuning.camera_follow_damping, 1.0f);
 }
 
-TEST(GameplayTuningTest, 默认leaf区间有效) {
+TEST(GameplayTuningTest, DefaultleafValid) {
     GameplayTuningComponent tuning;
     EXPECT_LT(tuning.leaf_move_left, tuning.leaf_move_right);
     EXPECT_GT(tuning.leaf_min_distance, 0.0f);
 }
 
-TEST(GameplayTuningTest, 参数可修改) {
+TEST(GameplayTuningTest, ParametersCanRevise) {
     GameplayTuningComponent tuning;
     tuning.jump_speed_scale = 20.0f;
     tuning.camera_follow_damping = 0.05f;
@@ -34,7 +34,7 @@ TEST(GameplayTuningTest, 参数可修改) {
     EXPECT_FLOAT_EQ(tuning.camera_follow_damping, 0.05f);
 }
 
-TEST(GameplayTuningTest, 各默认值具体数值) {
+TEST(GameplayTuningTest, DefaultValues_2) {
     GameplayTuningComponent tuning;
     EXPECT_FLOAT_EQ(tuning.leaf_min_distance, 80.0f);
     EXPECT_FLOAT_EQ(tuning.leaf_move_left, 140.0f);

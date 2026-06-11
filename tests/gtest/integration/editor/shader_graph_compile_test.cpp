@@ -152,7 +152,7 @@ std::string CompileTestGraph(const GraphState& s) {
 // Tests
 // ============================================================
 
-TEST(ShaderGraphCompileTest, 空图_生成最小GLSL) {
+TEST(ShaderGraphCompileTest, Empty_GenerateMinimalGLSL) {
     GraphState s;
     std::string glsl = CompileTestGraph(s);
     EXPECT_NE(glsl.find("#version 330 core"), std::string::npos);
@@ -160,7 +160,7 @@ TEST(ShaderGraphCompileTest, 空图_生成最小GLSL) {
     EXPECT_NE(glsl.find("}"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, 单Float常量节点_生成变量) {
+TEST(ShaderGraphCompileTest, SingleFloatconstantNode_Generate) {
     GraphState s;
     Node n;
     n.id = 1; n.name = "Float"; n.category = "Constant";
@@ -174,7 +174,7 @@ TEST(ShaderGraphCompileTest, 单Float常量节点_生成变量) {
     EXPECT_NE(glsl.find("0.75"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, Color常量节点_生成vec4) {
+TEST(ShaderGraphCompileTest, ColorconstantNode_Generatevec4) {
     GraphState s;
     Node n;
     n.id = 2; n.name = "Color"; n.category = "Constant";
@@ -189,7 +189,7 @@ TEST(ShaderGraphCompileTest, Color常量节点_生成vec4) {
     EXPECT_NE(glsl.find("n2_col"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, Add节点_链接两个Float) {
+TEST(ShaderGraphCompileTest, AddNode_LinkTwoFloat) {
     GraphState s;
     // Float A
     Node a; a.id = 1; a.name = "Float";
@@ -226,7 +226,7 @@ TEST(ShaderGraphCompileTest, Add节点_链接两个Float) {
     EXPECT_NE(glsl.find("n1_val + n2_val"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, PBROutput_无链接用默认颜色) {
+TEST(ShaderGraphCompileTest, PBROutput_DefaultColorForNoLinks) {
     GraphState s;
     Node pbr; pbr.id = 5; pbr.name = "PBR Output";
     Pin base_in; base_in.id = 50; base_in.name = "Base Color"; base_in.type = PinType::Color; base_in.kind = PinKind::Input;
@@ -238,7 +238,7 @@ TEST(ShaderGraphCompileTest, PBROutput_无链接用默认颜色) {
     EXPECT_NE(glsl.find("vec4(0.8, 0.8, 0.8, 1.0)"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, PBROutput_链接Color_传播颜色) {
+TEST(ShaderGraphCompileTest, PBROutput_LinkColor_SpreadColor) {
     GraphState s;
     // Color node
     Node col; col.id = 1; col.name = "Color";
@@ -261,7 +261,7 @@ TEST(ShaderGraphCompileTest, PBROutput_链接Color_传播颜色) {
     EXPECT_NE(glsl.find("FragColor = n1_col"), std::string::npos);
 }
 
-TEST(ShaderGraphCompileTest, 拓扑排序_依赖在前面生成) {
+TEST(ShaderGraphCompileTest, Case_ExistBeforegenerate) {
     // Color -> PBR Output
     GraphState s;
     // PBR Output 先加入 nodes（测试拓扑排序是否正确排在后面）

@@ -22,7 +22,7 @@ using namespace dse::editor;
 // UndoRedoManager + Commands
 // ============================================================
 
-TEST(UndoRedoManagerTest, 初始状态) {
+TEST(UndoRedoManagerTest, State) {
     UndoRedoManager mgr;
     EXPECT_FALSE(mgr.CanUndo());
     EXPECT_FALSE(mgr.CanRedo());
@@ -55,7 +55,7 @@ TEST(UndoRedoManagerTest, Execute_Undo_Redo) {
     EXPECT_FALSE(mgr.CanRedo());
 }
 
-TEST(UndoRedoManagerTest, Execute后清空Redo) {
+TEST(UndoRedoManagerTest, ExecuteclearAfterRedo) {
     UndoRedoManager mgr;
     int value = 0;
     mgr.Execute(std::make_unique<PropertyChangeCommand<int>>(
@@ -69,7 +69,7 @@ TEST(UndoRedoManagerTest, Execute后清空Redo) {
     EXPECT_EQ(value, 2);
 }
 
-TEST(UndoRedoManagerTest, 历史最大栈深) {
+TEST(UndoRedoManagerTest, Max) {
     UndoRedoManager mgr(3);
     int value = 0;
     for (int i = 1; i <= 5; ++i) {
@@ -79,7 +79,7 @@ TEST(UndoRedoManagerTest, 历史最大栈深) {
     EXPECT_EQ(mgr.GetUndoCount(), 3); // max_history=3, 只保留最近 3 个
 }
 
-TEST(UndoRedoManagerTest, Merge合并) {
+TEST(UndoRedoManagerTest, Mergemerge) {
     UndoRedoManager mgr;
     int value = 0;
     mgr.Execute(std::make_unique<PropertyChangeCommand<int>>(
@@ -112,7 +112,7 @@ TEST(UndoRedoManagerTest, GetHistory) {
     EXPECT_EQ(redo_hist[0], "B");
 }
 
-TEST(LambdaCommandTest, 基本Execute_Undo) {
+TEST(LambdaCommandTest, Execute_Undo) {
     int counter = 0;
     LambdaCommand cmd("inc", [&]() { counter++; }, [&]() { counter--; });
     cmd.Execute();
@@ -133,7 +133,7 @@ TEST(LambdaCommandTest, MergeId) {
     EXPECT_EQ(v, 0);  // undo 走最早
 }
 
-TEST(CompoundCommandTest, 原子操作) {
+TEST(CompoundCommandTest, TestCase9) {
     int a = 0, b = 0;
     auto compound = std::make_unique<CompoundCommand>("batch");
     compound->AddCommand(std::make_unique<LambdaCommand>(
@@ -166,7 +166,7 @@ TEST(UndoRedoManagerTest, Clear) {
 // EditorTestConfig CLI 解析
 // ============================================================
 
-TEST(EditorTestConfigTest, 默认值) {
+TEST(EditorTestConfigTest, DefaultValues) {
     test::EditorTestConfig config;
     EXPECT_FALSE(config.headless);
     EXPECT_TRUE(config.replay_path.empty());
@@ -175,7 +175,7 @@ TEST(EditorTestConfigTest, 默认值) {
     EXPECT_EQ(config.max_frames, 300);
 }
 
-TEST(EditorTestConfigTest, 解析headless) {
+TEST(EditorTestConfigTest, Headless) {
     char arg0[] = "editor";
     char arg1[] = "--headless";
     char* argv[] = {arg0, arg1};
@@ -184,7 +184,7 @@ TEST(EditorTestConfigTest, 解析headless) {
     EXPECT_TRUE(test::HasTestArgs(config));
 }
 
-TEST(EditorTestConfigTest, 解析replay_verify) {
+TEST(EditorTestConfigTest, Replay_verify) {
     char arg0[] = "editor";
     char arg1[] = "--replay=test.json";
     char arg2[] = "--verify=expected.json";
@@ -199,14 +199,14 @@ TEST(EditorTestConfigTest, 解析replay_verify) {
     EXPECT_TRUE(test::HasTestArgs(config));
 }
 
-TEST(EditorTestConfigTest, 无参数时HasTestArgs为false) {
+TEST(EditorTestConfigTest, WithoutParametersWhenHasTestArgsIsfalse) {
     char arg0[] = "editor";
     char* argv[] = {arg0};
     auto config = test::ParseEditorTestArgs(1, argv);
     EXPECT_FALSE(test::HasTestArgs(config));
 }
 
-TEST(EditorTestConfigTest, max_frames负数回退到300) {
+TEST(EditorTestConfigTest, max_FramesNegativeNumbersFallBackTo300) {
     char arg0[] = "editor";
     char arg1[] = "--max-frames=-5";
     char* argv[] = {arg0, arg1};
@@ -218,7 +218,7 @@ TEST(EditorTestConfigTest, max_frames负数回退到300) {
 // EditorSettings 默认值
 // ============================================================
 
-TEST(EditorSettingsTest, 默认值) {
+TEST(EditorSettingsTest, DefaultValues) {
     EditorSettings settings;
     EXPECT_TRUE(settings.recent_files.empty());
     EXPECT_TRUE(settings.last_scene_path.empty());

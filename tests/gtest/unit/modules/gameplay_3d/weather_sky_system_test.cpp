@@ -29,14 +29,14 @@ size_t CountView(entt::registry& reg) {
 //  WeatherSystem
 // ============================================================
 
-TEST(WeatherSystemTest, 无天气组件不创建发射器) {
+TEST(WeatherSystemTest, NoWeatherComponentDoesNotCreateEmitter) {
     WeatherSystem sys;
     World world;
     sys.Update(world, 0.016f);
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
-TEST(WeatherSystemTest, 类型None不创建发射器) {
+TEST(WeatherSystemTest, TypeNoneDoesNotCreateEmitter) {
     WeatherSystem sys;
     World world;
     auto e = world.registry().create();
@@ -49,7 +49,7 @@ TEST(WeatherSystemTest, 类型None不创建发射器) {
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
-TEST(WeatherSystemTest, 雪天气创建发射器并设置参数) {
+TEST(WeatherSystemTest, SnowWeatherCreatesEmitterAndSetsParameters) {
     WeatherSystem sys;
     World world;
 
@@ -84,7 +84,7 @@ TEST(WeatherSystemTest, 雪天气创建发射器并设置参数) {
     EXPECT_TRUE(found);
 }
 
-TEST(WeatherSystemTest, 雨天气参数与雪不同) {
+TEST(WeatherSystemTest, RainWeatherParametersDifferFromSnow) {
     WeatherSystem sys;
     World world;
 
@@ -117,7 +117,7 @@ TEST(WeatherSystemTest, 雨天气参数与雪不同) {
     EXPECT_TRUE(found);
 }
 
-TEST(WeatherSystemTest, 禁用天气后发射率衰减) {
+TEST(WeatherSystemTest, EmissionRateDecaysAfterWeatherDisabled) {
     WeatherSystem sys;
     World world;
 
@@ -147,7 +147,7 @@ TEST(WeatherSystemTest, 禁用天气后发射率衰减) {
     }
 }
 
-TEST(WeatherSystemTest, 过渡平滑多帧趋近) {
+TEST(WeatherSystemTest, MultiFrame) {
     WeatherSystem sys;
     World world;
 
@@ -194,7 +194,7 @@ TEST(WeatherSystemTest, 过渡平滑多帧趋近) {
     }
 }
 
-TEST(WeatherSystemTest, Shutdown销毁发射器) {
+TEST(WeatherSystemTest, ShutdownDestroyEmitter) {
     WeatherSystem sys;
     World world;
 
@@ -219,7 +219,7 @@ TEST(WeatherSystemTest, Shutdown销毁发射器) {
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
-TEST(WeatherSystemTest, 发射器跟随相机位置) {
+TEST(WeatherSystemTest, Emitter) {
     WeatherSystem sys;
     World world;
 
@@ -251,7 +251,7 @@ TEST(WeatherSystemTest, 发射器跟随相机位置) {
 //  SnowCoverSystem
 // ============================================================
 
-TEST(SnowCoverSystemTest, 无天气时雪覆盖融化趋零) {
+TEST(SnowCoverSystemTest, WithoutWeatherWhenSnowZero) {
     SnowCoverSystem sys;
     World world;
 
@@ -268,7 +268,7 @@ TEST(SnowCoverSystemTest, 无天气时雪覆盖融化趋零) {
     EXPECT_NEAR(sc.coverage, 0.0f, 0.001f);
 }
 
-TEST(SnowCoverSystemTest, 雪天气积雪累积) {
+TEST(SnowCoverSystemTest, SnowWeatherSnow) {
     SnowCoverSystem sys;
     World world;
 
@@ -292,7 +292,7 @@ TEST(SnowCoverSystemTest, 雪天气积雪累积) {
     EXPECT_FLOAT_EQ(sc.target_coverage, 0.8f);
 }
 
-TEST(SnowCoverSystemTest, 覆盖率钳制到零一区间) {
+TEST(SnowCoverSystemTest, ToZeroOne) {
     SnowCoverSystem sys;
     World world;
 
@@ -313,7 +313,7 @@ TEST(SnowCoverSystemTest, 覆盖率钳制到零一区间) {
     EXPECT_GE(sc.coverage, 0.0f);
 }
 
-TEST(SnowCoverSystemTest, 禁用组件被跳过) {
+TEST(SnowCoverSystemTest, DisabledComponentBy) {
     SnowCoverSystem sys;
     World world;
 
@@ -333,7 +333,7 @@ TEST(SnowCoverSystemTest, 禁用组件被跳过) {
     EXPECT_FLOAT_EQ(sc.coverage, 0.0f);
 }
 
-TEST(SnowCoverSystemTest, 停雪后融化速率正确) {
+TEST(SnowCoverSystemTest, SnowAfterCorrect) {
     SnowCoverSystem sys;
     World world;
 
@@ -365,7 +365,7 @@ TEST(SnowCoverSystemTest, 停雪后融化速率正确) {
     EXPECT_NEAR(before - after, 0.1f, 0.02f);
 }
 
-TEST(SnowCoverSystemTest, 雨天不积雪) {
+TEST(SnowCoverSystemTest, RainNotSnow) {
     SnowCoverSystem sys;
     World world;
 
@@ -391,7 +391,7 @@ TEST(SnowCoverSystemTest, 雨天不积雪) {
 //  DayNightCycleSystem
 // ============================================================
 
-TEST(DayNightCycleSystemTest, 正午太阳大致朝上) {
+TEST(DayNightCycleSystemTest, TestCase15) {
     DayNightCycleSystem sys;
     World world;
 
@@ -412,7 +412,7 @@ TEST(DayNightCycleSystemTest, 正午太阳大致朝上) {
     EXPECT_GT(cycle.sun_elevation_, 50.0f);
 }
 
-TEST(DayNightCycleSystemTest, 午夜太阳在地平线下) {
+TEST(DayNightCycleSystemTest, Exist) {
     DayNightCycleSystem sys;
     World world;
 
@@ -433,7 +433,7 @@ TEST(DayNightCycleSystemTest, 午夜太阳在地平线下) {
     EXPECT_LT(cycle.sun_direction_.y, 0.0f);
 }
 
-TEST(DayNightCycleSystemTest, 自动推进时间) {
+TEST(DayNightCycleSystemTest, AutoAdvanceTime) {
     DayNightCycleSystem sys;
     World world;
 
@@ -454,7 +454,7 @@ TEST(DayNightCycleSystemTest, 自动推进时间) {
     EXPECT_NEAR(after - before, 1.0f, 0.01f);
 }
 
-TEST(DayNightCycleSystemTest, 禁用组件被跳过) {
+TEST(DayNightCycleSystemTest, DisabledComponentBy) {
     DayNightCycleSystem sys;
     World world;
 
@@ -474,7 +474,7 @@ TEST(DayNightCycleSystemTest, 禁用组件被跳过) {
     EXPECT_FLOAT_EQ(cycle.time_of_day, 6.0f);
 }
 
-TEST(DayNightCycleSystemTest, 方向光接收太阳方向和颜色) {
+TEST(DayNightCycleSystemTest, TowardTowardAnd) {
     DayNightCycleSystem sys;
     World world;
 
@@ -502,7 +502,7 @@ TEST(DayNightCycleSystemTest, 方向光接收太阳方向和颜色) {
     EXPECT_GT(light.color.b, 0.7f);
 }
 
-TEST(DayNightCycleSystemTest, 时间自动回绕24小时) {
+TEST(DayNightCycleSystemTest, TimeAuto24When) {
     DayNightCycleSystem sys;
     World world;
 
@@ -523,7 +523,7 @@ TEST(DayNightCycleSystemTest, 时间自动回绕24小时) {
     EXPECT_NEAR(cycle.time_of_day, 1.5f, 0.01f);
 }
 
-TEST(DayNightCycleSystemTest, 夜间光照强度降低) {
+TEST(DayNightCycleSystemTest, TestCase21) {
     DayNightCycleSystem sys;
     World world;
 
@@ -542,7 +542,7 @@ TEST(DayNightCycleSystemTest, 夜间光照强度降低) {
     EXPECT_LT(light.intensity, 0.2f);
 }
 
-TEST(DayNightCycleSystemTest, 同实体上方向光优先使用) {
+TEST(DayNightCycleSystemTest, EntityTowardpriorityuse) {
     DayNightCycleSystem sys;
     World world;
 

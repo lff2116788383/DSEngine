@@ -20,13 +20,13 @@ using namespace dse::gameplay3d;
 // BlendTreeNode / AnimState 数据结构
 // ============================================================
 
-TEST(BlendTreeNodeTest, 默认值) {
+TEST(BlendTreeNodeTest, DefaultValues) {
     BlendTreeNode node;
     EXPECT_TRUE(node.danim_path.empty());
     EXPECT_FLOAT_EQ(node.threshold, 0.0f);
 }
 
-TEST(AnimStateTest, 默认值_单动画) {
+TEST(AnimStateTest, DefaultValues_Single) {
     AnimState state;
     EXPECT_TRUE(state.name.empty());
     EXPECT_TRUE(state.danim_path.empty());
@@ -38,7 +38,7 @@ TEST(AnimStateTest, 默认值_单动画) {
     EXPECT_TRUE(state.transitions.empty());
 }
 
-TEST(AnimStateTest, BlendTree配置) {
+TEST(AnimStateTest, BlendTreeConfiguration) {
     AnimState state;
     state.name = "Locomotion";
     state.is_blend_tree = true;
@@ -58,7 +58,7 @@ TEST(AnimStateTest, BlendTree配置) {
 // AnimTransition / Crossfade
 // ============================================================
 
-TEST(AnimTransitionTest, 默认值) {
+TEST(AnimTransitionTest, DefaultValues) {
     AnimTransition t;
     EXPECT_TRUE(t.target_state.empty());
     EXPECT_TRUE(t.has_exit_time);
@@ -67,7 +67,7 @@ TEST(AnimTransitionTest, 默认值) {
     EXPECT_TRUE(t.conditions.empty());
 }
 
-TEST(AnimTransitionTest, Crossfade参数) {
+TEST(AnimTransitionTest, CrossfadeParameters) {
     AnimTransition t;
     t.target_state = "Attack";
     t.has_exit_time = false;
@@ -88,7 +88,7 @@ TEST(AnimTransitionTest, Crossfade参数) {
 // AnimationStateMachine 参数系统
 // ============================================================
 
-TEST(AnimationStateMachineTest, Float参数) {
+TEST(AnimationStateMachineTest, FloatParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 0.0f);
@@ -96,7 +96,7 @@ TEST(AnimationStateMachineTest, Float参数) {
     EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 0.75f);
 }
 
-TEST(AnimationStateMachineTest, Int参数) {
+TEST(AnimationStateMachineTest, IntParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("combo", AnimParamType::Int, 0);
     EXPECT_EQ(sm.GetInt("combo"), 0);
@@ -104,7 +104,7 @@ TEST(AnimationStateMachineTest, Int参数) {
     EXPECT_EQ(sm.GetInt("combo"), 3);
 }
 
-TEST(AnimationStateMachineTest, Bool参数) {
+TEST(AnimationStateMachineTest, BoolParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("grounded", AnimParamType::Bool, true);
     EXPECT_TRUE(sm.GetBool("grounded"));
@@ -112,7 +112,7 @@ TEST(AnimationStateMachineTest, Bool参数) {
     EXPECT_FALSE(sm.GetBool("grounded"));
 }
 
-TEST(AnimationStateMachineTest, Trigger参数) {
+TEST(AnimationStateMachineTest, TriggerParameters) {
     AnimationStateMachine sm;
     sm.AddTrigger("jump");
     const auto& params = sm.GetParameters();
@@ -130,7 +130,7 @@ TEST(AnimationStateMachineTest, Trigger参数) {
 // 状态管理
 // ============================================================
 
-TEST(AnimationStateMachineTest, AddState和DefaultState) {
+TEST(AnimationStateMachineTest, AddStateAndDefaultState) {
     AnimationStateMachine sm;
     AnimState idle;
     idle.name = "Idle";
@@ -143,7 +143,7 @@ TEST(AnimationStateMachineTest, AddState和DefaultState) {
     EXPECT_NE(sm.GetStates().find("Idle"), sm.GetStates().end());
 }
 
-TEST(AnimationStateMachineTest, 多状态BlendTree) {
+TEST(AnimationStateMachineTest, MultiStateBlendTree) {
     AnimationStateMachine sm;
 
     AnimState locomotion;
@@ -225,7 +225,7 @@ TEST(AnimationStateMachineTest, EvaluateTransition_Trigger) {
     EXPECT_TRUE(sm.EvaluateTransition(t, 1.0f));
 }
 
-TEST(AnimationStateMachineTest, EvaluateTransition_多条件AND) {
+TEST(AnimationStateMachineTest, EvaluateTransition_MultipleConditionsAND) {
     AnimationStateMachine sm;
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     sm.AddParameter("grounded", AnimParamType::Bool, true);

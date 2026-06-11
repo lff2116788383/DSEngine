@@ -22,7 +22,7 @@
 // 单实体变换
 // ============================================================
 
-TEST(TransformSystemTest, 单实体位置正确计算) {
+TEST(TransformSystemTest, SingleEntityCorrect) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -42,7 +42,7 @@ TEST(TransformSystemTest, 单实体位置正确计算) {
     EXPECT_FALSE(result.dirty);
 }
 
-TEST(TransformSystemTest, 单实体缩放正确计算) {
+TEST(TransformSystemTest, SingleEntityCorrect_2) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -60,7 +60,7 @@ TEST(TransformSystemTest, 单实体缩放正确计算) {
     EXPECT_FLOAT_EQ(result.local_to_world[2][2], 4.0f);
 }
 
-TEST(TransformSystemTest, 默认Transform为单位矩阵) {
+TEST(TransformSystemTest, DefaultTransformIsSingle) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -78,7 +78,7 @@ TEST(TransformSystemTest, 默认Transform为单位矩阵) {
 // 父子层级变换
 // ============================================================
 
-TEST(TransformSystemTest, 子实体继承父级变换) {
+TEST(TransformSystemTest, Entitytransform) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -103,7 +103,7 @@ TEST(TransformSystemTest, 子实体继承父级变换) {
     EXPECT_FLOAT_EQ(child_result.local_to_world[3][0], 11.0f);
 }
 
-TEST(TransformSystemTest, 父级缩放影响子级) {
+TEST(TransformSystemTest, TestCase5) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -128,7 +128,7 @@ TEST(TransformSystemTest, 父级缩放影响子级) {
 // dirty 标志
 // ============================================================
 
-TEST(TransformSystemTest, 更新后dirty标志被清除) {
+TEST(TransformSystemTest, AfterUpdatedirtylogoByClear) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -145,7 +145,7 @@ TEST(TransformSystemTest, 更新后dirty标志被清除) {
 // 无变换组件的实体
 // ============================================================
 
-TEST(TransformSystemTest, 无TransformComponent的实体不影响系统) {
+TEST(TransformSystemTest, WithoutTransformComponentEntityNotSystem) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();
@@ -165,7 +165,7 @@ TEST(TransformSystemTest, 无TransformComponent的实体不影响系统) {
 // 多级层级
 // ============================================================
 
-TEST(TransformSystemTest, 三级层级变换正确) {
+TEST(TransformSystemTest, TheThirdLevelTransformationIsCorrect) {
     World world;
     TransformSystem sys;
     auto& reg = world.registry();

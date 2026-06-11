@@ -35,17 +35,17 @@ protected:
     }
 };
 
-TEST_F(AnimationSystem2DTest, 空World调用Update不崩溃) {
+TEST_F(AnimationSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, 1.0f / 60.0f));
 }
 
-TEST_F(AnimationSystem2DTest, 无状态时Update不崩溃) {
+TEST_F(AnimationSystem2DTest, WithoutStateWhenUpdateDoesNotCrash) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     // animator.states 为空，Update 应跳过
     EXPECT_NO_THROW(sys.Update(world, 1.0f / 60.0f));
 }
 
-TEST_F(AnimationSystem2DTest, 单状态自动初始化current_state) {
+TEST_F(AnimationSystem2DTest, SingleStateAutoInitializecurrent_state) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "idle";
@@ -59,7 +59,7 @@ TEST_F(AnimationSystem2DTest, 单状态自动初始化current_state) {
     EXPECT_EQ(anim->current_state, "idle");
 }
 
-TEST_F(AnimationSystem2DTest, 帧推进current_frame递增) {
+TEST_F(AnimationSystem2DTest, FrameAdvancecurrent_FrameIncrements) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "walk";
@@ -76,7 +76,7 @@ TEST_F(AnimationSystem2DTest, 帧推进current_frame递增) {
     EXPECT_GT(anim->current_frame, 0);
 }
 
-TEST_F(AnimationSystem2DTest, 循环播放到末帧后回到首帧) {
+TEST_F(AnimationSystem2DTest, LoopPlaybackWrapsToFirstFrameAtEnd) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "loop_anim";
@@ -93,7 +93,7 @@ TEST_F(AnimationSystem2DTest, 循环播放到末帧后回到首帧) {
     EXPECT_EQ(anim->current_frame, 0); // 回到首帧
 }
 
-TEST_F(AnimationSystem2DTest, 非循环播放到末帧后停止) {
+TEST_F(AnimationSystem2DTest, NonLoopPlaybackStopsAtLastFrame) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "once";
@@ -111,7 +111,7 @@ TEST_F(AnimationSystem2DTest, 非循环播放到末帧后停止) {
     EXPECT_EQ(anim->current_frame, 1); // 停在末帧
 }
 
-TEST_F(AnimationSystem2DTest, SetBool触发状态转换) {
+TEST_F(AnimationSystem2DTest, SetBooltriggerStateTransition) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
 
     AnimationState idle_state;
@@ -147,7 +147,7 @@ TEST_F(AnimationSystem2DTest, SetBool触发状态转换) {
     EXPECT_EQ(anim->current_frame, 0);
 }
 
-TEST_F(AnimationSystem2DTest, PlaySegment分段播放) {
+TEST_F(AnimationSystem2DTest, PlaySegmentSegmentPlayback) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "full";
@@ -163,7 +163,7 @@ TEST_F(AnimationSystem2DTest, PlaySegment分段播放) {
     EXPECT_TRUE(anim->playing);
 }
 
-TEST_F(AnimationSystem2DTest, 帧率控制帧推进速度) {
+TEST_F(AnimationSystem2DTest, FrameRateControlsAdvanceSpeed) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "slow";
@@ -184,7 +184,7 @@ TEST_F(AnimationSystem2DTest, 帧率控制帧推进速度) {
     EXPECT_EQ(anim->current_frame, 1); // 推进到第 1 帧
 }
 
-TEST_F(AnimationSystem2DTest, 停止播放后时间不推进) {
+TEST_F(AnimationSystem2DTest, TimeDoesNotAdvanceAfterStopPlayback) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
     state.name = "paused";

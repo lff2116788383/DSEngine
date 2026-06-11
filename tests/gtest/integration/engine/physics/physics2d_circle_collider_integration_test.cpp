@@ -61,7 +61,7 @@ protected:
     }
 };
 
-TEST_F(Physics2DCircleColliderTest, 圆形碰撞体受重力下落) {
+TEST_F(Physics2DCircleColliderTest, TestCase1) {
     Entity ball = MakeCircleBody(0.0f, 10.0f, 0.5f);
     sys.Init(world);
 
@@ -74,7 +74,7 @@ TEST_F(Physics2DCircleColliderTest, 圆形碰撞体受重力下落) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
-TEST_F(Physics2DCircleColliderTest, 圆形与矩形碰撞) {
+TEST_F(Physics2DCircleColliderTest, And) {
     // 地面
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
     // 球
@@ -93,7 +93,7 @@ TEST_F(Physics2DCircleColliderTest, 圆形与矩形碰撞) {
     EXPECT_LT(t.position.y, 5.0f);
 }
 
-TEST_F(Physics2DCircleColliderTest, 射线检测命中圆形碰撞体) {
+TEST_F(Physics2DCircleColliderTest, Hit) {
     MakeCircleBody(0.0f, 0.0f, 1.0f, RigidBody2DType::Static);
     sys.Init(world);
 
@@ -107,7 +107,7 @@ TEST_F(Physics2DCircleColliderTest, 射线检测命中圆形碰撞体) {
     EXPECT_TRUE(hit_entity != entt::null);
 }
 
-TEST_F(Physics2DCircleColliderTest, 圆形触发器不产生碰撞力) {
+TEST_F(Physics2DCircleColliderTest, TriggersNot) {
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
 
     Entity ball = MakeCircleBody(0.0f, 0.0f, 0.5f, RigidBody2DType::Dynamic);
@@ -125,7 +125,7 @@ TEST_F(Physics2DCircleColliderTest, 圆形触发器不产生碰撞力) {
     EXPECT_LT(t.position.y, -5.0f);
 }
 
-TEST_F(Physics2DCircleColliderTest, 同一实体同时有Box和Circle) {
+TEST_F(Physics2DCircleColliderTest, OneEntityWhenWithBoxAndCircle) {
     Entity e = world.CreateEntity();
     TransformComponent tc;
     tc.position = glm::vec3(0.0f, 10.0f, 0.0f);
@@ -154,7 +154,7 @@ TEST_F(Physics2DCircleColliderTest, 同一实体同时有Box和Circle) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
-TEST_F(Physics2DCircleColliderTest, 实体销毁后系统正常) {
+TEST_F(Physics2DCircleColliderTest, EntityDestroyAfterSystemNormal) {
     Entity ball = MakeCircleBody(0.0f, 5.0f, 0.5f);
     sys.Init(world);
     sys.FixedUpdate(world, 1.0f / 60.0f);
@@ -166,7 +166,7 @@ TEST_F(Physics2DCircleColliderTest, 实体销毁后系统正常) {
     SUCCEED();
 }
 
-TEST_F(Physics2DCircleColliderTest, Reinit后圆形碰撞体重建) {
+TEST_F(Physics2DCircleColliderTest, ReinitPostCircularCollisionBodyReconstruction) {
     Entity ball = MakeCircleBody(0.0f, 0.0f, 1.0f, RigidBody2DType::Static);
     sys.Init(world);
     EXPECT_NE(world.registry().get<CircleCollider2DComponent>(ball).runtime_fixture, nullptr);

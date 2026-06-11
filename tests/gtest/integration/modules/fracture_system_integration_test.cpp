@@ -66,7 +66,7 @@ protected:
     }
 };
 
-TEST_F(FractureSystemIntegrationTest, 预切分模式_无资产路径不崩溃) {
+TEST_F(FractureSystemIntegrationTest, Model_WithoutDoesNotCrash) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::Prefractured;
@@ -79,7 +79,7 @@ TEST_F(FractureSystemIntegrationTest, 预切分模式_无资产路径不崩溃) 
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
-TEST_F(FractureSystemIntegrationTest, 运行时Voronoi_生成碎片实体) {
+TEST_F(FractureSystemIntegrationTest, WhenVoronoi_GenerateEntity) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -112,7 +112,7 @@ TEST_F(FractureSystemIntegrationTest, 运行时Voronoi_生成碎片实体) {
     }
 }
 
-TEST_F(FractureSystemIntegrationTest, 运行时Voronoi碎片具备必要组件) {
+TEST_F(FractureSystemIntegrationTest, WhenVoronoiComponent) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -142,7 +142,7 @@ TEST_F(FractureSystemIntegrationTest, 运行时Voronoi碎片具备必要组件) 
     }
 }
 
-TEST_F(FractureSystemIntegrationTest, 碎裂后原始mesh隐藏) {
+TEST_F(FractureSystemIntegrationTest, Aftermesh) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -157,7 +157,7 @@ TEST_F(FractureSystemIntegrationTest, 碎裂后原始mesh隐藏) {
     EXPECT_FALSE(mr.visible) << "碎裂后原始 mesh 应隐藏";
 }
 
-TEST_F(FractureSystemIntegrationTest, 重复碎裂请求无效) {
+TEST_F(FractureSystemIntegrationTest, Invalid) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -186,7 +186,7 @@ TEST_F(FractureSystemIntegrationTest, 重复碎裂请求无效) {
     EXPECT_EQ(count_after_first, count_after_second) << "重复碎裂不应生成新碎片";
 }
 
-TEST_F(FractureSystemIntegrationTest, ApplyDamage伤害累积触发) {
+TEST_F(FractureSystemIntegrationTest, ApplyDamageDamageCumulativeTrigger) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -208,7 +208,7 @@ TEST_F(FractureSystemIntegrationTest, ApplyDamage伤害累积触发) {
     EXPECT_TRUE(world.registry().get<FractureComponent>(e).is_fractured);
 }
 
-TEST_F(FractureSystemIntegrationTest, 碎片生命周期_过期销毁) {
+TEST_F(FractureSystemIntegrationTest, Lifecycle_Destroy) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;

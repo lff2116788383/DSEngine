@@ -41,7 +41,7 @@ TEST(ProjectionCorrectionTest, GL_ShadowSampleCorrection_Identity) {
     ExpectMatNear(sc, glm::mat4(1.0f));
 }
 
-TEST(ProjectionCorrectionTest, GL_ZRange保持负一到一) {
+TEST(ProjectionCorrectionTest, GL_ZRangekeepMinusOneToOne) {
     OpenGLRhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
 
@@ -83,7 +83,7 @@ TEST(ProjectionCorrectionTest, VK_NeedsReadbackYFlip_False) {
     EXPECT_FALSE(dev.NeedsReadbackYFlip());
 }
 
-TEST(ProjectionCorrectionTest, VK_NDC变换) {
+TEST(ProjectionCorrectionTest, VK_NDCtransform) {
     VulkanRhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
 
@@ -124,7 +124,7 @@ TEST(ProjectionCorrectionTest, DX11_NeedsReadbackYFlip_False) {
     EXPECT_FALSE(dev.NeedsReadbackYFlip());
 }
 
-TEST(ProjectionCorrectionTest, DX11_NDC变换) {
+TEST(ProjectionCorrectionTest, DX11_NDCtransform) {
     DX11RhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
 
@@ -140,7 +140,7 @@ TEST(ProjectionCorrectionTest, DX11_NDC变换) {
 // RHI 类型补充：RenderTargetDesc 相等性、HairDrawItem
 // ============================================================
 
-TEST(RenderTargetDescExtTest, MSAA相等性) {
+TEST(RenderTargetDescExtTest, MSAAequality) {
     RenderTargetDesc a, b;
     a.width = 1920; a.height = 1080; a.has_depth = true;
     b = a;
@@ -149,7 +149,7 @@ TEST(RenderTargetDescExtTest, MSAA相等性) {
     EXPECT_FALSE(a == b);
 }
 
-TEST(HairDrawItemTest, 默认值) {
+TEST(HairDrawItemTest, DefaultValues) {
     HairDrawItem hdi;
     EXPECT_FALSE(hdi.position_ssbo);
     EXPECT_FALSE(hdi.tangent_ssbo);
@@ -159,7 +159,7 @@ TEST(HairDrawItemTest, 默认值) {
     EXPECT_FLOAT_EQ(hdi.opacity, 0.9f);
 }
 
-TEST(DrawElementsIndirectCommandExtTest, 字段填充) {
+TEST(DrawElementsIndirectCommandExtTest, TestCase13) {
     DrawElementsIndirectCommand cmd{};
     cmd.count = 36;
     cmd.instance_count = 10;

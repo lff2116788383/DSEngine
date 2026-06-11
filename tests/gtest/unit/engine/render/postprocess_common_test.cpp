@@ -18,11 +18,11 @@ using namespace dse::render;
 // BloomCompositeParams 结构体
 // ============================================================
 
-TEST(BloomCompositeParamsTest, 大小64字节) {
+TEST(BloomCompositeParamsTest, Size64) {
     EXPECT_EQ(sizeof(BloomCompositeParams), 64u);
 }
 
-TEST(BloomCompositeParamsTest, 默认值) {
+TEST(BloomCompositeParamsTest, DefaultValues) {
     BloomCompositeParams p;
     EXPECT_FLOAT_EQ(p.exposure, 1.0f);
     EXPECT_FLOAT_EQ(p.bloom_intensity, 0.5f);
@@ -46,21 +46,21 @@ TEST(BloomCompositeParamsTest, 默认值) {
 // CompositeParamsView
 // ============================================================
 
-TEST(CompositeParamsViewTest, 空参数_Has返回false) {
+TEST(CompositeParamsViewTest, EmptyParameters_HasReturnsfalse) {
     std::vector<float> empty;
     CompositeParamsView cv(empty);
     EXPECT_FALSE(cv.Has(CompositeParamsView::kBloomTex));
     EXPECT_FALSE(cv.Has(CompositeParamsView::kExposure));
 }
 
-TEST(CompositeParamsViewTest, 空参数_Float返回fallback) {
+TEST(CompositeParamsViewTest, EmptyParameters_FloatReturnsfallback) {
     std::vector<float> empty;
     CompositeParamsView cv(empty);
     EXPECT_FLOAT_EQ(cv.Float(CompositeParamsView::kExposure, 2.5f), 2.5f);
     EXPECT_FLOAT_EQ(cv.Float(CompositeParamsView::kBloomIntensity, 0.8f), 0.8f);
 }
 
-TEST(CompositeParamsViewTest, 完整参数_Has返回true) {
+TEST(CompositeParamsViewTest, Parameters_HasReturnstrue) {
     std::vector<float> params(static_cast<size_t>(CompositeParamsView::kCount), 0.0f);
     CompositeParamsView cv(params);
     EXPECT_TRUE(cv.Has(CompositeParamsView::kBloomTex));
@@ -68,7 +68,7 @@ TEST(CompositeParamsViewTest, 完整参数_Has返回true) {
     EXPECT_TRUE(cv.HasRange(CompositeParamsView::kFilmGrainTime));
 }
 
-TEST(CompositeParamsViewTest, Texture和Flag) {
+TEST(CompositeParamsViewTest, TextureAndFlag) {
     std::vector<float> params(static_cast<size_t>(CompositeParamsView::kCount), 0.0f);
     params[CompositeParamsView::kBloomTex] = 42.0f;
     params[CompositeParamsView::kBloomEnabled] = 1.0f;
@@ -82,7 +82,7 @@ TEST(CompositeParamsViewTest, Texture和Flag) {
 // PrepareBloomCompositeParams
 // ============================================================
 
-TEST(PrepareBloomCompositeTest, 空参数_使用默认值) {
+TEST(PrepareBloomCompositeTest, EmptyParameters_UseDefaultValues) {
     std::vector<float> empty;
     CompositeParamsView cv(empty);
     auto p = PrepareBloomCompositeParams(cv);
@@ -95,7 +95,7 @@ TEST(PrepareBloomCompositeTest, 空参数_使用默认值) {
     EXPECT_FLOAT_EQ(p.vignette_softness, 0.35f);
 }
 
-TEST(PrepareBloomCompositeTest, 完整参数_正确填充) {
+TEST(PrepareBloomCompositeTest, Parameters_Correct) {
     std::vector<float> params(static_cast<size_t>(CompositeParamsView::kCount), 0.0f);
     params[CompositeParamsView::kBloomTex] = 10.0f;
     params[CompositeParamsView::kExposure] = 2.0f;
@@ -136,7 +136,7 @@ TEST(PrepareBloomCompositeTest, 完整参数_正确填充) {
     EXPECT_FLOAT_EQ(p.film_grain_time, 1.5f);
 }
 
-TEST(PrepareBloomCompositeTest, BloomEnabled但无纹理_bloom_enabled为0) {
+TEST(PrepareBloomCompositeTest, BloomEnabledbutNoTexture_bloom_EnabledIs0) {
     std::vector<float> params(static_cast<size_t>(CompositeParamsView::kCount), 0.0f);
     params[CompositeParamsView::kBloomEnabled] = 1.0f;
     // kBloomTex = 0 → bloom_enabled 仍为 0
@@ -145,7 +145,7 @@ TEST(PrepareBloomCompositeTest, BloomEnabled但无纹理_bloom_enabled为0) {
     EXPECT_EQ(p.bloom_enabled, 0);
 }
 
-TEST(PrepareBloomCompositeTest, 部分参数_越界使用fallback) {
+TEST(PrepareBloomCompositeTest, Parameters_CrossTheLineusefallback) {
     std::vector<float> params = {10.0f, 3.0f, 0.9f}; // kBloomTex, kExposure, kBloomIntensity
     CompositeParamsView cv(params);
     auto p = PrepareBloomCompositeParams(cv);

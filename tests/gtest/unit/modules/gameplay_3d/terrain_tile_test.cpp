@@ -20,7 +20,7 @@ using namespace dse;
 // 2.1 TerrainTileManagerComponent 默认值
 // ============================================================
 
-TEST(TerrainTileManagerComponentTest, 默认值_瓦片配置) {
+TEST(TerrainTileManagerComponentTest, DefaultValues_Configuration) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.enabled);
     EXPECT_FLOAT_EQ(ttm.tile_world_size, 64.0f);
@@ -30,25 +30,25 @@ TEST(TerrainTileManagerComponentTest, 默认值_瓦片配置) {
     EXPECT_FLOAT_EQ(ttm.lod_distance_factor, 50.0f);
 }
 
-TEST(TerrainTileManagerComponentTest, 默认值_加载半径) {
+TEST(TerrainTileManagerComponentTest, DefaultValues_LoadHalf) {
     TerrainTileManagerComponent ttm;
     EXPECT_FLOAT_EQ(ttm.load_radius, 200.0f);
     EXPECT_FLOAT_EQ(ttm.unload_radius, 250.0f);
 }
 
-TEST(TerrainTileManagerComponentTest, 默认值_程序化生成) {
+TEST(TerrainTileManagerComponentTest, DefaultValues_ProceduralGeneration) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.use_procedural);
     EXPECT_FLOAT_EQ(ttm.procedural_base_height, 0.0f);
 }
 
-TEST(TerrainTileManagerComponentTest, 默认值_统计计数) {
+TEST(TerrainTileManagerComponentTest, DefaultValues_Case) {
     TerrainTileManagerComponent ttm;
     EXPECT_EQ(ttm.loaded_tile_count, 0);
     EXPECT_EQ(ttm.visible_tile_count, 0);
 }
 
-TEST(TerrainTileManagerComponentTest, 默认值_tiles为空) {
+TEST(TerrainTileManagerComponentTest, DefaultValues_TilesIsEmpty) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.tiles.empty());
 }
@@ -57,7 +57,7 @@ TEST(TerrainTileManagerComponentTest, 默认值_tiles为空) {
 // 2.2 TerrainTileData 默认值
 // ============================================================
 
-TEST(TerrainTileDataTest, 默认值) {
+TEST(TerrainTileDataTest, DefaultValues) {
     TerrainTileData td;
     EXPECT_TRUE(td.gpu_dirty);
     EXPECT_FALSE(td.loaded);
@@ -65,13 +65,13 @@ TEST(TerrainTileDataTest, 默认值) {
     EXPECT_EQ(td.index_count, 0u);
 }
 
-TEST(TerrainTileDataTest, 默认值_坐标) {
+TEST(TerrainTileDataTest, DefaultValues_Case) {
     TerrainTileData td;
     EXPECT_EQ(td.tile_x, 0);
     EXPECT_EQ(td.tile_z, 0);
 }
 
-TEST(TerrainTileDataTest, 默认值_高度数据为空) {
+TEST(TerrainTileDataTest, DefaultValues_DataIsEmpty) {
     TerrainTileData td;
     EXPECT_TRUE(td.height_data.empty());
     EXPECT_TRUE(td.splat_data.empty());
@@ -81,13 +81,13 @@ TEST(TerrainTileDataTest, 默认值_高度数据为空) {
 // 2.3 TerrainTileKey 正确性
 // ============================================================
 
-TEST(TerrainTileTest, TileKey不同坐标不同值) {
+TEST(TerrainTileTest, TileKeyDifferentCoordinatesAndDifferentValues) {
     EXPECT_NE(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(1, 0));
     EXPECT_NE(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(0, 1));
     EXPECT_NE(dse::TerrainTileKey(1, 2), dse::TerrainTileKey(2, 1));
 }
 
-TEST(TerrainTileTest, TileKey负坐标) {
+TEST(TerrainTileTest, TileKeyNegativeCoordinates) {
     int64_t k1 = dse::TerrainTileKey(-1, -1);
     int64_t k2 = dse::TerrainTileKey(1, 1);
     EXPECT_NE(k1, k2);
@@ -96,13 +96,13 @@ TEST(TerrainTileTest, TileKey负坐标) {
     EXPECT_NE(dse::TerrainTileKey(0, -1), dse::TerrainTileKey(0, 1));
 }
 
-TEST(TerrainTileTest, TileKey相同坐标相同值) {
+TEST(TerrainTileTest, TileKeySameCoordinatesSameValue) {
     EXPECT_EQ(dse::TerrainTileKey(5, 7), dse::TerrainTileKey(5, 7));
     EXPECT_EQ(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(0, 0));
     EXPECT_EQ(dse::TerrainTileKey(-3, -4), dse::TerrainTileKey(-3, -4));
 }
 
-TEST(TerrainTileTest, TileKey大范围无碰撞) {
+TEST(TerrainTileTest, TileKeyNoCollisionInAWideRange) {
     std::set<int64_t> keys;
     for (int tx = -10; tx <= 10; ++tx) {
         for (int tz = -10; tz <= 10; ++tz) {
@@ -118,7 +118,7 @@ TEST(TerrainTileTest, TileKey大范围无碰撞) {
 // 2.4 tiles map 增删
 // ============================================================
 
-TEST(TerrainTileMapTest, 插入与查找) {
+TEST(TerrainTileMapTest, AndFind) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
     int64_t key = dse::TerrainTileKey(3, 4);
@@ -132,7 +132,7 @@ TEST(TerrainTileMapTest, 插入与查找) {
     EXPECT_TRUE(tiles[key].loaded);
 }
 
-TEST(TerrainTileMapTest, 删除) {
+TEST(TerrainTileMapTest, Delete) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
     int64_t k1 = dse::TerrainTileKey(0, 0);
@@ -148,7 +148,7 @@ TEST(TerrainTileMapTest, 删除) {
     EXPECT_EQ(tiles.count(k2), 1u);
 }
 
-TEST(TerrainTileMapTest, 覆盖写入) {
+TEST(TerrainTileMapTest, Write) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
     int64_t key = dse::TerrainTileKey(2, 2);
@@ -163,12 +163,12 @@ TEST(TerrainTileMapTest, 覆盖写入) {
 // 2.5 load_radius < unload_radius 防抖
 // ============================================================
 
-TEST(TerrainTileHysteresisTest, 默认值满足防抖约束) {
+TEST(TerrainTileHysteresisTest, DefaultValues) {
     TerrainTileManagerComponent ttm;
     EXPECT_LT(ttm.load_radius, ttm.unload_radius);
 }
 
-TEST(TerrainTileHysteresisTest, 防抖间距合理) {
+TEST(TerrainTileHysteresisTest, TestCase17) {
     TerrainTileManagerComponent ttm;
     float gap = ttm.unload_radius - ttm.load_radius;
     EXPECT_GT(gap, 0.0f) << "unload_radius must be greater than load_radius";

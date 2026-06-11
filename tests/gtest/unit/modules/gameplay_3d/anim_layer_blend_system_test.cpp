@@ -17,21 +17,21 @@
 using namespace dse;
 using namespace dse::gameplay3d;
 
-TEST(AnimLayerBlendSystemTest, SetAssetManager_nullptr安全) {
+TEST(AnimLayerBlendSystemTest, SetAssetManager_NullptrSafety) {
     AnimLayerBlendSystem::SetAssetManager(nullptr);
 }
 
-TEST(AnimLayerBlendSystemTest, 空World不崩溃) {
+TEST(AnimLayerBlendSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::Update(world, 1.0f / 60.0f);
 }
 
-TEST(AnimLayerBlendSystemTest, 零dt不崩溃) {
+TEST(AnimLayerBlendSystemTest, ZerodtDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::Update(world, 0.0f);
 }
 
-TEST(AnimLayerBlendSystemTest, 有Animator3D无AnimLayer不崩溃) {
+TEST(AnimLayerBlendSystemTest, WithAnimator3DWithoutAnimLayerDoesNotCrash) {
     World world;
     auto entity = world.registry().create();
     world.registry().emplace<Animator3DComponent>(entity);

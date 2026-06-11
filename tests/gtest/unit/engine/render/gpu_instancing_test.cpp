@@ -60,7 +60,7 @@ struct TestInstancingKeyHash {
 // MaterialBlendMode 枚举
 // ============================================================
 
-TEST(MaterialBlendModeTest, 枚举值) {
+TEST(MaterialBlendModeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(MaterialBlendMode::Alpha), 0);
     EXPECT_EQ(static_cast<int>(MaterialBlendMode::Additive), 1);
     EXPECT_EQ(static_cast<int>(MaterialBlendMode::Multiply), 2);
@@ -71,7 +71,7 @@ TEST(MaterialBlendModeTest, 枚举值) {
 // MeshDrawItem 默认值和 instance_transforms
 // ============================================================
 
-TEST(MeshDrawItemInstancingTest, 默认值) {
+TEST(MeshDrawItemInstancingTest, DefaultValues) {
     MeshDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
     EXPECT_EQ(item.blend_mode, 0u);
@@ -86,7 +86,7 @@ TEST(MeshDrawItemInstancingTest, 默认值) {
     EXPECT_TRUE(item.depth_write_enabled);
 }
 
-TEST(MeshDrawItemInstancingTest, instance_transforms触发instanced_draw) {
+TEST(MeshDrawItemInstancingTest, instance_TransformsTriggersinstanced_draw) {
     MeshDrawItem item;
     EXPECT_TRUE(item.instance_transforms.empty());
 
@@ -95,7 +95,7 @@ TEST(MeshDrawItemInstancingTest, instance_transforms触发instanced_draw) {
     EXPECT_EQ(item.instance_transforms.size(), 2u);
 }
 
-TEST(MeshDrawItemInstancingTest, Opaque才能合批) {
+TEST(MeshDrawItemInstancingTest, OpaqueOnlyInBatches) {
     // can_instance 条件之一: blend_mode == Opaque
     MeshDrawItem opaque_item;
     opaque_item.blend_mode = static_cast<unsigned int>(MaterialBlendMode::Opaque);
@@ -106,7 +106,7 @@ TEST(MeshDrawItemInstancingTest, Opaque才能合批) {
     EXPECT_NE(alpha_item.blend_mode, static_cast<unsigned int>(MaterialBlendMode::Opaque));
 }
 
-TEST(MeshDrawItemInstancingTest, skinned和morph排除合批) {
+TEST(MeshDrawItemInstancingTest, SkinnedAndmorphExcludeBatching) {
     MeshDrawItem item;
     item.skinned = true;
     // can_instance 要求 !skinned && !morph_enabled
@@ -125,7 +125,7 @@ TEST(MeshDrawItemInstancingTest, skinned和morph排除合批) {
 // InstancingKey 相等性和 Hash
 // ============================================================
 
-TEST(InstancingKeyTest, 相同Key相等) {
+TEST(InstancingKeyTest, Key) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
     a.mesh_path = &mesh;
@@ -137,7 +137,7 @@ TEST(InstancingKeyTest, 相同Key相等) {
     EXPECT_TRUE(a == b);
 }
 
-TEST(InstancingKeyTest, 不同纹理不相等) {
+TEST(InstancingKeyTest, DifferentTexturesAreNotEqual) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
     a.mesh_path = &mesh;
@@ -149,7 +149,7 @@ TEST(InstancingKeyTest, 不同纹理不相等) {
     EXPECT_FALSE(a == b);
 }
 
-TEST(InstancingKeyTest, 不同mesh_path不相等) {
+TEST(InstancingKeyTest, Differentmesh_PathNotEqual) {
     std::string mesh_a = "model/box.obj";
     std::string mesh_b = "model/sphere.obj";
     TestInstancingKey a{}, b{};
@@ -160,7 +160,7 @@ TEST(InstancingKeyTest, 不同mesh_path不相等) {
     EXPECT_FALSE(a == b);
 }
 
-TEST(InstancingKeyTest, Hash一致性) {
+TEST(InstancingKeyTest, Hashconsistency) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
     a.mesh_path = &mesh;
@@ -174,7 +174,7 @@ TEST(InstancingKeyTest, Hash一致性) {
     EXPECT_EQ(hasher(a), hasher(b));
 }
 
-TEST(InstancingKeyTest, Hash差异性) {
+TEST(InstancingKeyTest, HashDifference) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
     a.mesh_path = &mesh;
@@ -188,7 +188,7 @@ TEST(InstancingKeyTest, Hash差异性) {
     EXPECT_NE(hasher(a), hasher(b));
 }
 
-TEST(InstancingKeyTest, HashMap合批模拟) {
+TEST(InstancingKeyTest, HashMapBatchSimulation) {
     std::string mesh = "model/box.obj";
     std::unordered_map<TestInstancingKey, size_t, TestInstancingKeyHash> map;
 
@@ -219,7 +219,7 @@ TEST(InstancingKeyTest, HashMap合批模拟) {
 // RenderStats instancing 统计
 // ============================================================
 
-TEST(RenderStatsInstancingTest, 默认值) {
+TEST(RenderStatsInstancingTest, DefaultValues) {
     RenderStats stats;
     EXPECT_EQ(stats.sprite_count, 0);
     EXPECT_EQ(stats.mesh_count, 0);
@@ -230,7 +230,7 @@ TEST(RenderStatsInstancingTest, 默认值) {
     EXPECT_EQ(stats.gpu_culled_count, 0);
 }
 
-TEST(RenderStatsInstancingTest, instancing统计累加) {
+TEST(RenderStatsInstancingTest, InstancingStatisticsAccumulation) {
     RenderStats stats;
     stats.instanced_draw_calls = 5;
     stats.instanced_mesh_count = 20;
@@ -242,7 +242,7 @@ TEST(RenderStatsInstancingTest, instancing统计累加) {
 // DrawElementsIndirectCommand 结构体
 // ============================================================
 
-TEST(DrawElementsIndirectCommandTest, 大小和对齐) {
+TEST(DrawElementsIndirectCommandTest, SizeAndAlignment) {
     EXPECT_EQ(sizeof(DrawElementsIndirectCommand), 20u);
     DrawElementsIndirectCommand cmd{};
     cmd.count = 36;

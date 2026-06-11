@@ -19,7 +19,7 @@ using namespace dse::render;
 // 渲染目标与管线状态描述
 // ============================================================
 
-TEST(RenderTargetDescTest, 默认值) {
+TEST(RenderTargetDescTest, DefaultValues) {
     RenderTargetDesc desc;
     EXPECT_EQ(desc.width, 0);
     EXPECT_EQ(desc.height, 0);
@@ -29,7 +29,7 @@ TEST(RenderTargetDescTest, 默认值) {
     EXPECT_FALSE(desc.cube_map);
 }
 
-TEST(PipelineStateDescTest, 默认值) {
+TEST(PipelineStateDescTest, DefaultValues) {
     PipelineStateDesc desc;
     EXPECT_TRUE(desc.blend_enabled);
     EXPECT_TRUE(desc.depth_test_enabled);
@@ -37,14 +37,14 @@ TEST(PipelineStateDescTest, 默认值) {
     EXPECT_TRUE(desc.culling_enabled);
 }
 
-TEST(RenderPassDescTest, 默认值) {
+TEST(RenderPassDescTest, DefaultValues) {
     RenderPassDesc desc;
     EXPECT_EQ(desc.render_target, 0u);
     EXPECT_EQ(desc.clear_color, glm::vec4(0.0f));
     EXPECT_FALSE(desc.clear_color_enabled);
 }
 
-TEST(RenderTargetReadbackTest, 默认值) {
+TEST(RenderTargetReadbackTest, DefaultValues) {
     RenderTargetReadback rb;
     EXPECT_EQ(rb.width, 0);
     EXPECT_EQ(rb.height, 0);
@@ -55,7 +55,7 @@ TEST(RenderTargetReadbackTest, 默认值) {
 // 绘制项
 // ============================================================
 
-TEST(SpriteDrawItemTest, 默认值) {
+TEST(SpriteDrawItemTest, DefaultValues) {
     SpriteDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
     EXPECT_EQ(item.material_instance_id, 0u);
@@ -66,7 +66,7 @@ TEST(SpriteDrawItemTest, 默认值) {
     EXPECT_EQ(item.uv, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 }
 
-TEST(BatchVertexTest, 默认值) {
+TEST(BatchVertexTest, DefaultValues) {
     BatchVertex v;
     EXPECT_EQ(v.normal, glm::vec3(0.0f, 0.0f, 1.0f));
     EXPECT_EQ(v.tangent, glm::vec3(1.0f, 0.0f, 0.0f));
@@ -74,7 +74,7 @@ TEST(BatchVertexTest, 默认值) {
     EXPECT_EQ(v.joints, glm::vec4(0.0f));
 }
 
-TEST(MeshDrawItemTest, 默认值) {
+TEST(MeshDrawItemTest, DefaultValues) {
     MeshDrawItem item;
     EXPECT_FALSE(static_cast<bool>(item.vao_override));
     EXPECT_EQ(item.index_count_override, 0u);
@@ -91,7 +91,7 @@ TEST(MeshDrawItemTest, 默认值) {
     EXPECT_TRUE(item.morph_weights.empty());
 }
 
-TEST(Particle3DDrawItemTest, 默认值) {
+TEST(Particle3DDrawItemTest, DefaultValues) {
     Particle3DDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
     EXPECT_EQ(item.material_instance_id, 0u);
@@ -107,7 +107,7 @@ TEST(Particle3DDrawItemTest, 默认值) {
 // RHI 统一回归测试 — OpenGL ProjectionCorrection
 // ============================================================
 
-TEST(OpenGLProjectionCorrectionTest, 返回Identity) {
+TEST(OpenGLProjectionCorrectionTest, ReturnsIdentity) {
     // OpenGL 不需要投影修正，应返回单位矩阵
     OpenGLRhiDevice device;
     glm::mat4 corr = device.GetProjectionCorrection();
@@ -118,7 +118,7 @@ TEST(OpenGLProjectionCorrectionTest, 返回Identity) {
 // 渲染统计
 // ============================================================
 
-TEST(RenderStatsTest, 默认值全为零) {
+TEST(RenderStatsTest, DefaultValuesAllisZero) {
     RenderStats stats;
     EXPECT_EQ(stats.sprite_count, 0);
     EXPECT_EQ(stats.mesh_count, 0);

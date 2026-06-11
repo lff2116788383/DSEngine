@@ -37,7 +37,7 @@ protected:
     World world;
 };
 
-TEST_F(LuaBindingRegistryIntegrationTest, 注册基础Lua表和关键函数) {
+TEST_F(LuaBindingRegistryIntegrationTest, RegisterBaseLuaAnd) {
     LuaRegistryTempScript startup("dse_lua_registry_startup.lua", R"(
         function Awake() end
     )");
@@ -76,7 +76,7 @@ TEST_F(LuaBindingRegistryIntegrationTest, 注册基础Lua表和关键函数) {
         "function,function,function,function,function,function");
 }
 
-TEST_F(LuaBindingRegistryIntegrationTest, 缺失可选Nav表不影响基础API) {
+TEST_F(LuaBindingRegistryIntegrationTest, MissingCanNavNotBaseAPI) {
     LuaRegistryTempScript startup("dse_lua_registry_nav_startup.lua", R"(
         function Awake() end
     )");

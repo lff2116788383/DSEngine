@@ -121,7 +121,7 @@ protected:
     }
 };
 
-TEST_F(GLRhiSmokeTest, InitOpenGL成功) {
+TEST_F(GLRhiSmokeTest, InitOpenGLSucceeds) {
     bool ok = device_.InitDevice(static_cast<void*>(ctx_guard_.hwnd), kWidth, kHeight);
     if (!ok) {
         GTEST_SKIP() << "OpenGL init failed (no GPU/driver?), skipping";
@@ -129,30 +129,30 @@ TEST_F(GLRhiSmokeTest, InitOpenGL成功) {
     GTEST_SKIP() << "OpenGL smoke tests require GLEW init via runtime; GL context created but modern GL functions not loaded";
 }
 
-TEST_F(GLRhiSmokeTest, 单帧空提交不崩溃) {
+TEST_F(GLRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, 多帧循环稳定) {
+TEST_F(GLRhiSmokeTest, MultiFramecycleStable) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, Shutdown后重新Init不崩溃) {
+TEST_F(GLRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, 纹理创建销毁不崩溃) {
+TEST_F(GLRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, 10帧连续提交稳定) {
+TEST_F(GLRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, RenderTarget创建销毁不崩溃) {
+TEST_F(GLRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }
 
-TEST_F(GLRhiSmokeTest, Buffer创建销毁不崩溃) {
+TEST_F(GLRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
 }

@@ -23,7 +23,7 @@ using namespace dse::gameplay3d;
 // GPUParticleData 默认值
 // ============================================================
 
-TEST(GPUParticleDataTest, 默认值) {
+TEST(GPUParticleDataTest, DefaultValues) {
     GPUParticleData p;
     EXPECT_FLOAT_EQ(p.position.x, 0.0f);
     EXPECT_FLOAT_EQ(p.position.y, 0.0f);
@@ -43,7 +43,7 @@ TEST(GPUParticleDataTest, 默认值) {
 // ParticleSystem3DComponent 默认值
 // ============================================================
 
-TEST(Particle3DSystemComponentTest, 默认值) {
+TEST(Particle3DSystemComponentTest, DefaultValues) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.enabled);
     EXPECT_EQ(ps.max_particles, 1000);
@@ -51,7 +51,7 @@ TEST(Particle3DSystemComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(ps.emission_accumulator, 0.0f);
 }
 
-TEST(Particle3DSystemComponentTest, 发射参数默认值) {
+TEST(Particle3DSystemComponentTest, ParameterDefaultValue) {
     ParticleSystem3DComponent ps;
     EXPECT_FLOAT_EQ(ps.start_life_min, 1.0f);
     EXPECT_FLOAT_EQ(ps.start_life_max, 2.0f);
@@ -63,14 +63,14 @@ TEST(Particle3DSystemComponentTest, 发射参数默认值) {
     EXPECT_FLOAT_EQ(ps.start_color.a, 1.0f);
 }
 
-TEST(Particle3DSystemComponentTest, 动力学参数默认值) {
+TEST(Particle3DSystemComponentTest, ParameterDefaultValue_2) {
     ParticleSystem3DComponent ps;
     EXPECT_FLOAT_EQ(ps.gravity.x, 0.0f);
     EXPECT_FLOAT_EQ(ps.gravity.y, -9.81f);
     EXPECT_FLOAT_EQ(ps.gravity.z, 0.0f);
 }
 
-TEST(Particle3DSystemComponentTest, GPU资源默认值) {
+TEST(Particle3DSystemComponentTest, GPUResourceDefaults) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.texture_path.empty());
     EXPECT_EQ(ps.texture_handle, 0u);
@@ -80,7 +80,7 @@ TEST(Particle3DSystemComponentTest, GPU资源默认值) {
     EXPECT_FALSE(ps.initialized);
 }
 
-TEST(Particle3DSystemComponentTest, 修改参数) {
+TEST(Particle3DSystemComponentTest, ModifyParameters) {
     ParticleSystem3DComponent ps;
     ps.max_particles = 500;
     ps.emission_rate = 50.0f;
@@ -96,25 +96,25 @@ TEST(Particle3DSystemComponentTest, 修改参数) {
 // Particle3DSystem 构造与生命周期
 // ============================================================
 
-TEST(Particle3DSystemTest, 默认构造安全) {
+TEST(Particle3DSystemTest, DefaultSafety) {
     Particle3DSystem sys;
     (void)sys;
 }
 
-TEST(Particle3DSystemTest, Init_nullptr安全) {
+TEST(Particle3DSystemTest, Init_NullptrSafety) {
     Particle3DSystem sys;
     World world;
     sys.Init(world, nullptr);
 }
 
-TEST(Particle3DSystemTest, Shutdown_nullptr_rhi安全) {
+TEST(Particle3DSystemTest, Shutdown_nullptr_RhiSafety) {
     Particle3DSystem sys;
     World world;
     sys.Init(world, nullptr);
     sys.Shutdown(world);
 }
 
-TEST(Particle3DSystemTest, SetAssetManager_nullptr安全) {
+TEST(Particle3DSystemTest, SetAssetManager_NullptrSafety) {
     Particle3DSystem sys;
     sys.SetAssetManager(nullptr);
 }
@@ -123,7 +123,7 @@ TEST(Particle3DSystemTest, SetAssetManager_nullptr安全) {
 // Particle3DSystem 空 World
 // ============================================================
 
-TEST(Particle3DSystemTest, 空World_Shutdown不崩溃) {
+TEST(Particle3DSystemTest, EmptyWorld_ShutdownDoesNotCrash) {
     Particle3DSystem sys;
     World world;
     sys.Init(world, nullptr);

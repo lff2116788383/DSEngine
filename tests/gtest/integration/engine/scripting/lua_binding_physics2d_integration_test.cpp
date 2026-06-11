@@ -71,7 +71,7 @@ protected:
     }
 };
 
-TEST_F(LuaBindingPhysics2DTest, Lua添加圆形碰撞体) {
+TEST_F(LuaBindingPhysics2DTest, LuaAddACircularCollider) {
     RunLuaScript("test_circle_collider.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -95,7 +95,7 @@ TEST_F(LuaBindingPhysics2DTest, Lua添加圆形碰撞体) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaBindingPhysics2DTest, Lua设置圆形碰撞体触发器) {
+TEST_F(LuaBindingPhysics2DTest, LuaSetUpCircularColliderTrigger) {
     RunLuaScript("test_circle_trigger.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -113,7 +113,7 @@ TEST_F(LuaBindingPhysics2DTest, Lua设置圆形碰撞体触发器) {
     }
 }
 
-TEST_F(LuaBindingPhysics2DTest, Lua添加焊接关节) {
+TEST_F(LuaBindingPhysics2DTest, LuaAddWeldedJoints) {
     RunLuaScript("test_add_weld_joint.lua", R"(
         function Awake()
             local a = dse.ecs.create_entity()
@@ -142,7 +142,7 @@ TEST_F(LuaBindingPhysics2DTest, Lua添加焊接关节) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaBindingPhysics2DTest, Lua添加铰链关节并设置参数) {
+TEST_F(LuaBindingPhysics2DTest, LuaAddHingeJointsAndSetParameters) {
     RunLuaScript("test_revolute_joint.lua", R"(
         function Awake()
             local a = dse.ecs.create_entity()
@@ -175,7 +175,7 @@ TEST_F(LuaBindingPhysics2DTest, Lua添加铰链关节并设置参数) {
     }
 }
 
-TEST_F(LuaBindingPhysics2DTest, Lua添加距离关节并设置参数) {
+TEST_F(LuaBindingPhysics2DTest, LuaAddDistanceJointsAndSetParameters) {
     RunLuaScript("test_distance_joint.lua", R"(
         function Awake()
             local a = dse.ecs.create_entity()
@@ -206,7 +206,7 @@ TEST_F(LuaBindingPhysics2DTest, Lua添加距离关节并设置参数) {
     }
 }
 
-TEST_F(LuaBindingPhysics2DTest, Lua添加棱柱关节并设置参数) {
+TEST_F(LuaBindingPhysics2DTest, LuaAddPrismaticJointsAndSetParameters) {
     RunLuaScript("test_prismatic_joint.lua", R"(
         function Awake()
             local a = dse.ecs.create_entity()

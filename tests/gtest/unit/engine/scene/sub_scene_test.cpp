@@ -52,20 +52,20 @@ protected:
     }
 };
 
-TEST_F(SubSceneTest, 默认状态为Unloaded) {
+TEST_F(SubSceneTest, DefaultStateIsUnloaded) {
     SubScene sub;
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
     EXPECT_FALSE(sub.IsLoaded());
     EXPECT_EQ(sub.EntityCount(), 0u);
 }
 
-TEST_F(SubSceneTest, 构造函数设置路径) {
+TEST_F(SubSceneTest, SetUp) {
     SubScene sub("test/path.dscene");
     EXPECT_EQ(sub.GetPath(), "test/path.dscene");
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
 }
 
-TEST_F(SubSceneTest, Load反序列化实体到World) {
+TEST_F(SubSceneTest, LoadDeserializeEntityToWorld) {
     auto path = WriteTempScene("dse_sub_scene_load.dscene", kTwoEntityScene);
     SubScene sub;
     bool ok = sub.Load(world, asset_manager, path.string());
@@ -85,7 +85,7 @@ TEST_F(SubSceneTest, Load反序列化实体到World) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, Unload销毁所有拥有的Entity) {
+TEST_F(SubSceneTest, UnloadDestroyAllOwnedEntity) {
     auto path = WriteTempScene("dse_sub_scene_unload.dscene", kTwoEntityScene);
     SubScene sub;
     sub.Load(world, asset_manager, path.string());
@@ -99,7 +99,7 @@ TEST_F(SubSceneTest, Unload销毁所有拥有的Entity) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, 空场景加载成功) {
+TEST_F(SubSceneTest, EmptySceneLoadSucceeds) {
     auto path = WriteTempScene("dse_sub_scene_empty.dscene", kEmptyScene);
     SubScene sub;
     bool ok = sub.Load(world, asset_manager, path.string());
@@ -109,14 +109,14 @@ TEST_F(SubSceneTest, 空场景加载成功) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, 不存在的文件加载失败) {
+TEST_F(SubSceneTest, FailedToLoadNonExistentFile) {
     SubScene sub;
     bool ok = sub.Load(world, asset_manager, "nonexistent_file_12345.dscene");
     EXPECT_FALSE(ok);
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
 }
 
-TEST_F(SubSceneTest, 重复Load返回false) {
+TEST_F(SubSceneTest, LoadReturnsfalse) {
     auto path = WriteTempScene("dse_sub_scene_double.dscene", kTwoEntityScene);
     SubScene sub;
     EXPECT_TRUE(sub.Load(world, asset_manager, path.string()));
@@ -125,7 +125,7 @@ TEST_F(SubSceneTest, 重复Load返回false) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, Unload后可重新Load) {
+TEST_F(SubSceneTest, UnloadcanBeRestartedLaterLoad) {
     auto path = WriteTempScene("dse_sub_scene_reload.dscene", kSingleEntityScene);
     SubScene sub;
     sub.Load(world, asset_manager, path.string());
@@ -139,7 +139,7 @@ TEST_F(SubSceneTest, Unload后可重新Load) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, 多SubScene共享World互不干扰) {
+TEST_F(SubSceneTest, MultiSubSceneWorldNot) {
     auto path1 = WriteTempScene("dse_sub1.dscene", kTwoEntityScene);
     auto path2 = WriteTempScene("dse_sub2.dscene", kSingleEntityScene);
 
@@ -165,14 +165,14 @@ TEST_F(SubSceneTest, 多SubScene共享World互不干扰) {
     std::filesystem::remove(path2);
 }
 
-TEST_F(SubSceneTest, 未加载时Unload无副作用) {
+TEST_F(SubSceneTest, NotLoadWhenUnloadWithout) {
     SubScene sub;
     sub.Unload(world);
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
     EXPECT_EQ(sub.EntityCount(), 0u);
 }
 
-TEST_F(SubSceneTest, entities字段类型错误加载失败) {
+TEST_F(SubSceneTest, EntitiesFieldTypeErrorLoadingFailed) {
     // entities 存在但不是数组（格式损坏）→ 应失败，而非静默当成空场景。
     const char* kBadEntities = R"({ "name": "bad", "entities": { "oops": 1 } })";
     auto path = WriteTempScene("dse_sub_bad_entities.dscene", kBadEntities);
@@ -185,7 +185,7 @@ TEST_F(SubSceneTest, entities字段类型错误加载失败) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SubSceneTest, 移动语义转移所有权) {
+TEST_F(SubSceneTest, With) {
     auto path = WriteTempScene("dse_sub_move.dscene", kTwoEntityScene);
     SubScene sub1;
     sub1.Load(world, asset_manager, path.string());

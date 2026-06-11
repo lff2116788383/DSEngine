@@ -41,11 +41,11 @@ protected:
     }
 };
 
-TEST_F(SteeringSystemTest, 空World调用Update不崩溃) {
+TEST_F(SteeringSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kDt));
 }
 
-TEST_F(SteeringSystemTest, DeltaTime为零时跳过更新) {
+TEST_F(SteeringSystemTest, DeltaTimeSkipUpdatesIfZero) {
     auto [e, steering, tf] = CreateSteeringEntity();
     steering->seek_enabled = true;
     steering->seek_target = glm::vec3(100.0f, 0.0f, 0.0f);
@@ -54,7 +54,7 @@ TEST_F(SteeringSystemTest, DeltaTime为零时跳过更新) {
     EXPECT_EQ(steering->velocity, glm::vec3(0.0f));
 }
 
-TEST_F(SteeringSystemTest, Seek行为朝目标移动) {
+TEST_F(SteeringSystemTest, SeekBehaviorMovesTowardGoal) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->seek_enabled = true;
@@ -70,7 +70,7 @@ TEST_F(SteeringSystemTest, Seek行为朝目标移动) {
     EXPECT_GT(tf->position.x, 0.0f);
 }
 
-TEST_F(SteeringSystemTest, Flee行为远离目标) {
+TEST_F(SteeringSystemTest, FleeBehaviorAwayFromGoals) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->flee_enabled = true;
@@ -86,7 +86,7 @@ TEST_F(SteeringSystemTest, Flee行为远离目标) {
     EXPECT_LT(tf->position.x, 0.0f);
 }
 
-TEST_F(SteeringSystemTest, Arrive行为接近目标时减速) {
+TEST_F(SteeringSystemTest, ArriveBehaviorSlowsDownAsItApproachesTarget) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->arrive_enabled = true;
@@ -111,7 +111,7 @@ TEST_F(SteeringSystemTest, Arrive行为接近目标时减速) {
     EXPECT_LT(near_speed, far_speed);
 }
 
-TEST_F(SteeringSystemTest, Arrive到达目标时速度归零) {
+TEST_F(SteeringSystemTest, ArriveSpeedReturnsToZeroWhenReachingTarget) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(5.0f, 0.0f, 0.0f);
     steering->arrive_enabled = true;
@@ -123,7 +123,7 @@ TEST_F(SteeringSystemTest, Arrive到达目标时速度归零) {
     EXPECT_EQ(steering->velocity, glm::vec3(0.0f));
 }
 
-TEST_F(SteeringSystemTest, MaxVelocity限制最大速度) {
+TEST_F(SteeringSystemTest, MaxVelocityLimitMaximumSpeed) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->seek_enabled = true;
@@ -139,7 +139,7 @@ TEST_F(SteeringSystemTest, MaxVelocity限制最大速度) {
     EXPECT_LE(glm::length(steering->velocity), steering->max_velocity + 0.01f);
 }
 
-TEST_F(SteeringSystemTest, 禁用的SteeringComponent不更新) {
+TEST_F(SteeringSystemTest, DisabledSteeringComponentDoesNotUpdate) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->enabled = false;
@@ -152,7 +152,7 @@ TEST_F(SteeringSystemTest, 禁用的SteeringComponent不更新) {
     EXPECT_EQ(tf->position, glm::vec3(0.0f));
 }
 
-TEST_F(SteeringSystemTest, 速度更新反映到Transform位置) {
+TEST_F(SteeringSystemTest, SpeedUpdateToTransform) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->seek_enabled = true;
@@ -166,7 +166,7 @@ TEST_F(SteeringSystemTest, 速度更新反映到Transform位置) {
     EXPECT_NE(tf->position, pos_before);
 }
 
-TEST_F(SteeringSystemTest, 移动方向更新旋转) {
+TEST_F(SteeringSystemTest, TowardUpdate) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
     steering->seek_enabled = true;

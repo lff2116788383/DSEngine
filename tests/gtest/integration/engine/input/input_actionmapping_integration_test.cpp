@@ -35,7 +35,7 @@ protected:
     }
 };
 
-TEST_F(InputIntegrationTest, ActionMapping多帧持续按下状态正确) {
+TEST_F(InputIntegrationTest, ActionMappingMultiFrameHoldStateIsCorrect) {
     ActionMapping mapping;
     mapping.BindKey("Fire", MOUSE_BUTTON_LEFT);
 
@@ -58,7 +58,7 @@ TEST_F(InputIntegrationTest, ActionMapping多帧持续按下状态正确) {
     EXPECT_FALSE(mapping.GetActionUp("Fire"));
 }
 
-TEST_F(InputIntegrationTest, Gamepad轴与按钮ActionMapping组合) {
+TEST_F(InputIntegrationTest, GamepadAxesAndButtonsActionMappingcombination) {
     ActionMapping mapping;
     mapping.BindKey("Jump", GAMEPAD_BUTTON_A);
     mapping.BindKey("Jump", KEY_CODE_SPACE);
@@ -78,7 +78,7 @@ TEST_F(InputIntegrationTest, Gamepad轴与按钮ActionMapping组合) {
     EXPECT_TRUE(mapping.GetAction("Jump"));
 }
 
-TEST_F(InputIntegrationTest, Recorder录制ExportImportPlayer回放驱动ActionMapping) {
+TEST_F(InputIntegrationTest, RecorderRecordExportImportPlayerplaybackDriverActionMapping) {
     ActionMapping mapping;
     mapping.BindKey("MoveRight", KEY_CODE_D);
     mapping.BindKey("MoveLeft", KEY_CODE_A);
@@ -116,7 +116,7 @@ TEST_F(InputIntegrationTest, Recorder录制ExportImportPlayer回放驱动ActionM
     EXPECT_TRUE(player.IsFinished());
 }
 
-TEST_F(InputIntegrationTest, Player回放驱动ECS实体移动) {
+TEST_F(InputIntegrationTest, PlayerplaybackDriverECSEntityMovement) {
     World world;
     auto entity = world.CreateEntity();
     world.registry().emplace<TransformComponent>(entity);
@@ -148,7 +148,7 @@ TEST_F(InputIntegrationTest, Player回放驱动ECS实体移动) {
     EXPECT_GT(transform.position.x, 0.0f);
 }
 
-TEST_F(InputIntegrationTest, 运行时Rebind后录制回放仍正常) {
+TEST_F(InputIntegrationTest, WhenRebindAfterRecordStillNormal) {
     ActionMapping mapping;
     mapping.BindKey("Shoot", KEY_CODE_F);
 
@@ -176,7 +176,7 @@ TEST_F(InputIntegrationTest, 运行时Rebind后录制回放仍正常) {
     EXPECT_FALSE(mapping.GetAction("Shoot") && !Input::GetKey(KEY_CODE_G));
 }
 
-TEST_F(InputIntegrationTest, 多手柄多动作并发) {
+TEST_F(InputIntegrationTest, MultiMulti) {
     ActionMapping p1_mapping;
     p1_mapping.BindKey("P1_Jump", GAMEPAD_BUTTON_A);
 
@@ -197,7 +197,7 @@ TEST_F(InputIntegrationTest, 多手柄多动作并发) {
     EXPECT_TRUE(p2_mapping.GetAction("P2_Jump"));
 }
 
-TEST_F(InputIntegrationTest, 全局Reset后ActionMapping和Gamepad状态干净) {
+TEST_F(InputIntegrationTest, AllResetAfterActionMappingAndGamepadState) {
     ActionMapping mapping;
     mapping.BindKey("Fire", KEY_CODE_F);
 

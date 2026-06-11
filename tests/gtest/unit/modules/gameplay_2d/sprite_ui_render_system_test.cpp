@@ -25,12 +25,12 @@ using namespace dse::render;
 // SpriteRenderSystem
 // ============================================================
 
-TEST(SpriteRenderSystemTest, 默认构造安全) {
+TEST(SpriteRenderSystemTest, DefaultSafety) {
     SpriteRenderSystem sys;
     (void)sys;
 }
 
-TEST(SpriteRenderSystemTest, 空World不崩溃) {
+TEST(SpriteRenderSystemTest, EmptyWorldDoesNotCrash) {
     SpriteRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
@@ -41,19 +41,19 @@ TEST(SpriteRenderSystemTest, 空World不崩溃) {
 // UIRenderSystem
 // ============================================================
 
-TEST(UIRenderSystemTest, 默认构造安全) {
+TEST(UIRenderSystemTest, DefaultSafety) {
     UIRenderSystem sys;
     (void)sys;
 }
 
-TEST(UIRenderSystemTest, 空World不崩溃) {
+TEST(UIRenderSystemTest, EmptyWorldDoesNotCrash) {
     UIRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
     sys.Render(world, cmd, 1920, 1080);
 }
 
-TEST(UIRenderSystemTest, 零尺寸屏幕不崩溃) {
+TEST(UIRenderSystemTest, ZeroDoesNotCrash) {
     UIRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
@@ -64,7 +64,7 @@ TEST(UIRenderSystemTest, 零尺寸屏幕不崩溃) {
 // UIRendererComponent 默认值
 // ============================================================
 
-TEST(SpriteUIRenderComponentTest, 默认值) {
+TEST(SpriteUIRenderComponentTest, DefaultValues) {
     UIRendererComponent ui;
     EXPECT_EQ(ui.texture_handle, 0u);
     EXPECT_FLOAT_EQ(ui.color.r, 1.0f);
@@ -76,7 +76,7 @@ TEST(SpriteUIRenderComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(ui.pressed_scale, 0.94f);
 }
 
-TEST(SpriteUIRenderComponentTest, 布局参数默认值) {
+TEST(SpriteUIRenderComponentTest, ParameterDefaultValue) {
     UIRendererComponent ui;
     EXPECT_FLOAT_EQ(ui.position.x, 0.0f);
     EXPECT_FLOAT_EQ(ui.position.y, 0.0f);
@@ -87,7 +87,7 @@ TEST(SpriteUIRenderComponentTest, 布局参数默认值) {
     EXPECT_FLOAT_EQ(ui.pivot.x, 0.5f);
 }
 
-TEST(SpriteUIRenderComponentTest, 交互状态默认值) {
+TEST(SpriteUIRenderComponentTest, StateDefaultValues) {
     UIRendererComponent ui;
     EXPECT_TRUE(ui.interactable);
     EXPECT_FALSE(ui.is_hovered);
@@ -99,7 +99,7 @@ TEST(SpriteUIRenderComponentTest, 交互状态默认值) {
 // Expand9SliceItems
 // ============================================================
 
-TEST(Expand9SliceTest, 零边框生成1个Item) {
+TEST(Expand9SliceTest, Zerogenerate1Item) {
     SpriteDrawItem base;
     base.texture_handle = 42;
     base.color = glm::vec4(1.0f);
@@ -115,7 +115,7 @@ TEST(Expand9SliceTest, 零边框生成1个Item) {
     EXPECT_GE(out.size(), 1u);
 }
 
-TEST(Expand9SliceTest, 有效边框生成最多9个Item) {
+TEST(Expand9SliceTest, ValidgenerateMulti9Item) {
     SpriteDrawItem base;
     base.texture_handle = 42;
     base.color = glm::vec4(1.0f);
@@ -131,7 +131,7 @@ TEST(Expand9SliceTest, 有效边框生成最多9个Item) {
     EXPECT_LE(out.size(), 9u);
 }
 
-TEST(Expand9SliceTest, 所有Item继承纹理句柄) {
+TEST(Expand9SliceTest, WithItem) {
     SpriteDrawItem base;
     base.texture_handle = 99;
     base.color = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);

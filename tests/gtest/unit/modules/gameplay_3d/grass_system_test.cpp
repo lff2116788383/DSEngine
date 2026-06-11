@@ -20,7 +20,7 @@ using namespace dse::gameplay3d;
 // GrassComponent 默认值
 // ============================================================
 
-TEST(GrassComponentTest, 默认值_分布参数) {
+TEST(GrassComponentTest, DefaultValues_Parameters) {
     GrassComponent gc;
     EXPECT_TRUE(gc.enabled);
     EXPECT_FLOAT_EQ(gc.density, 1.0f);
@@ -29,7 +29,7 @@ TEST(GrassComponentTest, 默认值_分布参数) {
     EXPECT_FLOAT_EQ(gc.chunk_size, 8.0f);
 }
 
-TEST(GrassComponentTest, 默认值_草叶外观) {
+TEST(GrassComponentTest, DefaultValues_Outside) {
     GrassComponent gc;
     EXPECT_FLOAT_EQ(gc.blade_width, 0.1f);
     EXPECT_FLOAT_EQ(gc.blade_height, 1.0f);
@@ -38,7 +38,7 @@ TEST(GrassComponentTest, 默认值_草叶外观) {
     EXPECT_EQ(gc.albedo_texture, 0u);
 }
 
-TEST(GrassComponentTest, 默认值_风场) {
+TEST(GrassComponentTest, DefaultValues_Case) {
     GrassComponent gc;
     EXPECT_FLOAT_EQ(gc.wind_direction.x, 1.0f);
     EXPECT_FLOAT_EQ(gc.wind_direction.y, 0.0f);
@@ -47,20 +47,20 @@ TEST(GrassComponentTest, 默认值_风场) {
     EXPECT_FLOAT_EQ(gc.wind_turbulence, 0.2f);
 }
 
-TEST(GrassComponentTest, 默认值_LOD) {
+TEST(GrassComponentTest, DefaultValues_LOD) {
     GrassComponent gc;
     EXPECT_FLOAT_EQ(gc.lod_near, 30.0f);
     EXPECT_FLOAT_EQ(gc.lod_far, 80.0f);
     EXPECT_FLOAT_EQ(gc.fade_range, 5.0f);
 }
 
-TEST(GrassComponentTest, 默认值_阴影) {
+TEST(GrassComponentTest, DefaultValues_Case_2) {
     GrassComponent gc;
     EXPECT_FALSE(gc.cast_shadow);
     EXPECT_FLOAT_EQ(gc.shadow_distance, 20.0f);
 }
 
-TEST(GrassComponentTest, 运行时计数默认值) {
+TEST(GrassComponentTest, WhenDefaultValues) {
     GrassComponent gc;
     EXPECT_EQ(gc.cached_instance_count_, 0);
 }
@@ -69,7 +69,7 @@ TEST(GrassComponentTest, 运行时计数默认值) {
 // GrassInstanceLayout 默认值
 // ============================================================
 
-TEST(GrassInstanceLayoutTest, 默认值全零) {
+TEST(GrassInstanceLayoutTest, DefaultValuesAllZero) {
     GrassInstanceLayout layout{};
     EXPECT_FLOAT_EQ(layout.position.x, 0.0f);
     EXPECT_FLOAT_EQ(layout.yaw, 0.0f);
@@ -82,11 +82,11 @@ TEST(GrassInstanceLayoutTest, 默认值全零) {
 // GrassGPUInstance 布局
 // ============================================================
 
-TEST(GrassGPUInstanceTest, 大小32字节) {
+TEST(GrassGPUInstanceTest, Size32) {
     EXPECT_EQ(sizeof(GrassGPUInstance), 32u);
 }
 
-TEST(GrassGPUInstanceTest, 默认值) {
+TEST(GrassGPUInstanceTest, DefaultValues) {
     GrassGPUInstance inst{};
     EXPECT_FLOAT_EQ(inst.pos_yaw.x, 0.0f);
     EXPECT_FLOAT_EQ(inst.pos_yaw.w, 0.0f);
@@ -97,7 +97,7 @@ TEST(GrassGPUInstanceTest, 默认值) {
 // GrassChunkData 默认值
 // ============================================================
 
-TEST(GrassChunkDataTest, 默认值) {
+TEST(GrassChunkDataTest, DefaultValues) {
     GrassChunkData chunk;
     EXPECT_TRUE(chunk.layouts.empty());
     EXPECT_FALSE(chunk.valid);
@@ -109,7 +109,7 @@ TEST(GrassChunkDataTest, 默认值) {
 // GrassSystem 默认状态
 // ============================================================
 
-TEST(GrassSystemTest, 默认构造不崩溃) {
+TEST(GrassSystemTest, DefaultDoesNotCrash) {
     GrassSystem sys;
     // 默认构造应无异常
     (void)sys;

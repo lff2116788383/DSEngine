@@ -26,7 +26,7 @@ static SpriteDrawItem MakeBase() {
 // 等比缩放模式（src_size = 0,0）
 // ============================================================
 
-TEST(Expand9SliceTest, 标准边框产生9个DrawItem) {
+TEST(Expand9SliceTest, Case9DrawItem) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(200.0f, 100.0f);
     glm::vec2 size(200.0f, 100.0f);
@@ -43,7 +43,7 @@ TEST(Expand9SliceTest, 标准边框产生9个DrawItem) {
 // 全零边框：左/右列和上/下行退化，只有中心格存活
 // ============================================================
 
-TEST(Expand9SliceTest, 零边框仅中心格有效) {
+TEST(Expand9SliceTest, ZeroInValid) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(100.0f, 100.0f);
     glm::vec2 size(100.0f, 100.0f);
@@ -62,7 +62,7 @@ TEST(Expand9SliceTest, 零边框仅中心格有效) {
 // 角块 UV 校验（左下角 col=0,row=0）
 // ============================================================
 
-TEST(Expand9SliceTest, 左下角UV正确) {
+TEST(Expand9SliceTest, UVCorrect) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(150.0f, 75.0f);
     glm::vec2 size(300.0f, 150.0f);
@@ -84,7 +84,7 @@ TEST(Expand9SliceTest, 左下角UV正确) {
 // 右上角 UV 校验（col=2, row=2）
 // ============================================================
 
-TEST(Expand9SliceTest, 右上角UV正确) {
+TEST(Expand9SliceTest, UVCorrect_2) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(0.0f, 0.0f);
     glm::vec2 size(100.0f, 100.0f);
@@ -106,7 +106,7 @@ TEST(Expand9SliceTest, 右上角UV正确) {
 // 屏幕尺寸校验：各格宽高之和应等于 widget 总尺寸（等比模式）
 // ============================================================
 
-TEST(Expand9SliceTest, 等比模式屏幕宽高之和等于控件尺寸) {
+TEST(Expand9SliceTest, ModelAnd) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(200.0f, 200.0f);
     glm::vec2 size(400.0f, 200.0f);
@@ -134,7 +134,7 @@ TEST(Expand9SliceTest, 等比模式屏幕宽高之和等于控件尺寸) {
 // base_item 属性传递（texture_handle / order_in_layer）
 // ============================================================
 
-TEST(Expand9SliceTest, 基础属性正确继承) {
+TEST(Expand9SliceTest, BaseCorrect) {
     SpriteDrawItem base = MakeBase();
     base.texture_handle = 77u;
     base.order_in_layer = 12;
@@ -158,7 +158,7 @@ TEST(Expand9SliceTest, 基础属性正确继承) {
 // 固定角块模式（src_size > 0）：角块屏幕尺寸 = border × src_size，不随 widget 变化
 // ============================================================
 
-TEST(Expand9SliceTest, 固定角块模式角块尺寸独立于控件宽度) {
+TEST(Expand9SliceTest, ModelIndependent) {
     SpriteDrawItem base = MakeBase();
     glm::vec4 uv(0.0f, 0.0f, 1.0f, 1.0f);
     glm::vec4 border(0.1f, 0.1f, 0.1f, 0.1f);
@@ -179,7 +179,7 @@ TEST(Expand9SliceTest, 固定角块模式角块尺寸独立于控件宽度) {
     EXPECT_NEAR(corner_w_large, 10.0f, 1e-3f);  // 固定，不随 widget 变化
 }
 
-TEST(Expand9SliceTest, 固定角块模式总宽度仍等于控件宽度) {
+TEST(Expand9SliceTest, ModelStill) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 size(500.0f, 80.0f);
     glm::vec4 uv(0.0f, 0.0f, 1.0f, 1.0f);
@@ -203,7 +203,7 @@ TEST(Expand9SliceTest, 固定角块模式总宽度仍等于控件宽度) {
     EXPECT_NEAR(total_h, size.y, 1e-3f);
 }
 
-TEST(Expand9SliceTest, 固定角块模式UV与等比模式相同) {
+TEST(Expand9SliceTest, ModelUVAndmodel) {
     // UV 分割点由 border UV 分量决定，与 src_size 无关
     SpriteDrawItem base = MakeBase();
     glm::vec2 size(300.0f, 100.0f);

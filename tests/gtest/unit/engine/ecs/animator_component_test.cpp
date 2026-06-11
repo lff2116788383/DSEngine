@@ -16,7 +16,7 @@
 // SetBool / SetFloat 参数
 // ============================================================
 
-TEST(AnimatorComponentTest, SetBool存储并读取) {
+TEST(AnimatorComponentTest, SetBoolstoreAndRead) {
     AnimatorComponent anim;
     anim.SetBool("is_walking", true);
     anim.SetBool("is_jumping", false);
@@ -26,7 +26,7 @@ TEST(AnimatorComponentTest, SetBool存储并读取) {
     EXPECT_EQ(anim.bool_params.count("nonexistent"), 0u);
 }
 
-TEST(AnimatorComponentTest, SetBool覆盖已有值) {
+TEST(AnimatorComponentTest, SetBoolOverwriteExistingValue) {
     AnimatorComponent anim;
     anim.SetBool("flag", true);
     EXPECT_TRUE(anim.bool_params["flag"]);
@@ -34,7 +34,7 @@ TEST(AnimatorComponentTest, SetBool覆盖已有值) {
     EXPECT_FALSE(anim.bool_params["flag"]);
 }
 
-TEST(AnimatorComponentTest, SetFloat存储并读取) {
+TEST(AnimatorComponentTest, SetFloatstoreAndRead) {
     AnimatorComponent anim;
     anim.SetFloat("speed", 5.5f);
     anim.SetFloat("health", -10.0f);
@@ -43,7 +43,7 @@ TEST(AnimatorComponentTest, SetFloat存储并读取) {
     EXPECT_FLOAT_EQ(anim.float_params["health"], -10.0f);
 }
 
-TEST(AnimatorComponentTest, SetFloat覆盖已有值) {
+TEST(AnimatorComponentTest, SetFloatOverwriteExistingValue) {
     AnimatorComponent anim;
     anim.SetFloat("speed", 1.0f);
     anim.SetFloat("speed", 99.0f);
@@ -54,7 +54,7 @@ TEST(AnimatorComponentTest, SetFloat覆盖已有值) {
 // PlaySegment 分段播放
 // ============================================================
 
-TEST(AnimatorComponentTest, PlaySegment设置帧范围) {
+TEST(AnimatorComponentTest, PlaySegmentSetFrameRange) {
     AnimatorComponent anim;
     anim.PlaySegment(3, 8, true);
 
@@ -63,13 +63,13 @@ TEST(AnimatorComponentTest, PlaySegment设置帧范围) {
     EXPECT_TRUE(anim.segment_loop);
 }
 
-TEST(AnimatorComponentTest, PlaySegment不循环) {
+TEST(AnimatorComponentTest, PlaySegmentNoLoop) {
     AnimatorComponent anim;
     anim.PlaySegment(0, 5, false);
     EXPECT_FALSE(anim.segment_loop);
 }
 
-TEST(AnimatorComponentTest, PlaySegment重置时间和帧) {
+TEST(AnimatorComponentTest, PlaySegmentResetTimeAndFrames) {
     AnimatorComponent anim;
     anim.current_time = 10.0f;
     anim.current_frame = 20;
@@ -81,13 +81,13 @@ TEST(AnimatorComponentTest, PlaySegment重置时间和帧) {
     EXPECT_TRUE(anim.playing);
 }
 
-TEST(AnimatorComponentTest, PlaySegment负start被clamp到0) {
+TEST(AnimatorComponentTest, PlaySegmentburdenstartByclampTo0) {
     AnimatorComponent anim;
     anim.PlaySegment(-5, 10, true);
     EXPECT_EQ(anim.segment_start_frame, 0);
 }
 
-TEST(AnimatorComponentTest, PlaySegment负end不被clamp) {
+TEST(AnimatorComponentTest, PlaySegmentburdenendnotBeclamp) {
     AnimatorComponent anim;
     anim.PlaySegment(0, -1, false);
     EXPECT_EQ(anim.segment_end_frame, -1);
@@ -97,7 +97,7 @@ TEST(AnimatorComponentTest, PlaySegment负end不被clamp) {
 // 状态与转换数据结构
 // ============================================================
 
-TEST(AnimatorComponentTest, 添加状态和转换) {
+TEST(AnimatorComponentTest, AddToStateAndTransition) {
     AnimatorComponent anim;
 
     AnimationState walk_state;
@@ -120,7 +120,7 @@ TEST(AnimatorComponentTest, 添加状态和转换) {
     EXPECT_EQ(anim.transitions["walk"][0].to_state, "run");
 }
 
-TEST(AnimatorComponentTest, 默认值合理性) {
+TEST(AnimatorComponentTest, DefaultValues) {
     AnimatorComponent anim;
     EXPECT_TRUE(anim.current_state.empty());
     EXPECT_FLOAT_EQ(anim.current_time, 0.0f);
@@ -136,7 +136,7 @@ TEST(AnimatorComponentTest, 默认值合理性) {
 // fired_events 管理
 // ============================================================
 
-TEST(AnimatorComponentTest, fired_events可添加清空) {
+TEST(AnimatorComponentTest, fired_EventsCanBeAddedToClear) {
     AnimatorComponent anim;
     anim.fired_events.push_back("step_left");
     anim.fired_events.push_back("step_right");

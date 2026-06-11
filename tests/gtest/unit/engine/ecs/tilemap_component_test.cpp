@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/tilemap.h"
 
-TEST(TilemapComponentTest, 默认值) {
+TEST(TilemapComponentTest, DefaultValues) {
     TilemapComponent tm;
     EXPECT_TRUE(tm.tiles.empty());
     EXPECT_EQ(tm.width, 0);
@@ -25,7 +25,7 @@ TEST(TilemapComponentTest, 默认值) {
     EXPECT_TRUE(tm.dirty);
 }
 
-TEST(TilemapComponentTest, tiles数据赋值与访问) {
+TEST(TilemapComponentTest, TilesDataAssignmentAndAccess) {
     TilemapComponent tm;
     tm.width = 3;
     tm.height = 2;
@@ -35,7 +35,7 @@ TEST(TilemapComponentTest, tiles数据赋值与访问) {
     EXPECT_EQ(tm.tiles[4], 0);
 }
 
-TEST(TilemapComponentTest, tileset参数修改) {
+TEST(TilemapComponentTest, TilesetParameterModification) {
     TilemapComponent tm;
     tm.tileset_cols = 4;
     tm.tileset_rows = 3;

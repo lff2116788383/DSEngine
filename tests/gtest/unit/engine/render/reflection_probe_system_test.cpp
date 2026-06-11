@@ -19,7 +19,7 @@ using namespace dse::render;
 // ReflectionProbeComponent ECS 默认值
 // ============================================================
 
-TEST(ReflectionProbeComponentTest, 默认值) {
+TEST(ReflectionProbeComponentTest, DefaultValues) {
     dse::ReflectionProbeComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_FLOAT_EQ(comp.influence_radius, 15.0f);
@@ -37,32 +37,32 @@ TEST(ReflectionProbeComponentTest, 默认值) {
 // ReflectionProbeSystem 生命周期
 // ============================================================
 
-TEST(ReflectionProbeSystemTest, 默认未初始化) {
+TEST(ReflectionProbeSystemTest, DefaultUninitialized) {
     ReflectionProbeSystem sys;
     EXPECT_EQ(sys.brdf_lut_handle(), 0u);
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
-TEST(ReflectionProbeSystemTest, Init_nullptr安全) {
+TEST(ReflectionProbeSystemTest, Init_NullptrSafety) {
     ReflectionProbeSystem sys;
     sys.Init(nullptr);
     EXPECT_EQ(sys.brdf_lut_handle(), 0u);
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
-TEST(ReflectionProbeSystemTest, Shutdown未初始化安全) {
+TEST(ReflectionProbeSystemTest, ShutdownUninitializedSecurity) {
     ReflectionProbeSystem sys;
     sys.Shutdown(nullptr);
     EXPECT_EQ(sys.brdf_lut_handle(), 0u);
 }
 
-TEST(ReflectionProbeSystemTest, 重复Shutdown安全) {
+TEST(ReflectionProbeSystemTest, ShutdownSafety) {
     ReflectionProbeSystem sys;
     sys.Shutdown(nullptr);
     sys.Shutdown(nullptr);
 }
 
-TEST(ReflectionProbeSystemTest, 未初始化时IBL不可用) {
+TEST(ReflectionProbeSystemTest, WhenNotInitializedIBLNotCan) {
     ReflectionProbeSystem sys;
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
@@ -71,13 +71,13 @@ TEST(ReflectionProbeSystemTest, 未初始化时IBL不可用) {
 // ReflectionProbeComponent 手动修改
 // ============================================================
 
-TEST(ReflectionProbeComponentTest, 修改resolution) {
+TEST(ReflectionProbeComponentTest, Reviseresolution) {
     dse::ReflectionProbeComponent comp;
     comp.resolution = 256;
     EXPECT_EQ(comp.resolution, 256);
 }
 
-TEST(ReflectionProbeComponentTest, 修改cubemap_handle) {
+TEST(ReflectionProbeComponentTest, Revisecubemap_handle) {
     dse::ReflectionProbeComponent comp;
     comp.cubemap_handle = 42;
     comp.needs_rebake = false;
@@ -85,7 +85,7 @@ TEST(ReflectionProbeComponentTest, 修改cubemap_handle) {
     EXPECT_FALSE(comp.needs_rebake);
 }
 
-TEST(ReflectionProbeComponentTest, BoxProjection参数) {
+TEST(ReflectionProbeComponentTest, BoxProjectionParameters) {
     dse::ReflectionProbeComponent comp;
     comp.use_box_projection = true;
     comp.box_size_x = 20.0f;

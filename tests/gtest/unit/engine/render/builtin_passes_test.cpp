@@ -28,7 +28,7 @@ using namespace dse::render;
 // RenderPassContext 默认值
 // ============================================================
 
-TEST(RenderPassContextTest, 默认值全空) {
+TEST(RenderPassContextTest, DefaultValuesAllEmpty) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
     EXPECT_EQ(ctx.asset_manager, nullptr);
@@ -42,7 +42,7 @@ TEST(RenderPassContextTest, 默认值全空) {
     EXPECT_FALSE(ctx.auto_exposure_active);
 }
 
-TEST(RenderPassContextTest, PipelineStates默认为零) {
+TEST(RenderPassContextTest, PipelineStatesDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.pipeline_states.sprite, 0u);
     EXPECT_EQ(ctx.pipeline_states.mesh, 0u);
@@ -54,7 +54,7 @@ TEST(RenderPassContextTest, PipelineStates默认为零) {
     EXPECT_EQ(ctx.pipeline_states.wboit_reveal, 0u);
 }
 
-TEST(RenderPassContextTest, RenderTargets默认为零) {
+TEST(RenderPassContextTest, RenderTargetsDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.render_targets.main, 0u);
     EXPECT_EQ(ctx.render_targets.scene, 0u);
@@ -79,7 +79,7 @@ TEST(RenderPassContextTest, RenderTargets默认为零) {
     }
 }
 
-TEST(RenderPassContextTest, TAAJitter默认为零) {
+TEST(RenderPassContextTest, TAAJitterDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_FLOAT_EQ(ctx.taa_jitter.x, 0.0f);
     EXPECT_FLOAT_EQ(ctx.taa_jitter.y, 0.0f);
@@ -127,7 +127,7 @@ PASS_NAME_TEST(PresentPass,         "present_pass")
 // TAAPass Jitter 测试
 // ============================================================
 
-TEST(TAAPassTest, 默认Jitter为零) {
+TEST(TAAPassTest, DefaultJitterisZero) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
     glm::vec2 j = pass.GetCurrentJitter();
@@ -135,7 +135,7 @@ TEST(TAAPassTest, 默认Jitter为零) {
     EXPECT_FLOAT_EQ(j.y, 0.0f);
 }
 
-TEST(TAAPassTest, UpdateJitter改变值) {
+TEST(TAAPassTest, UpdateJitterchangeValue) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
     pass.UpdateJitter(0);
@@ -149,7 +149,7 @@ TEST(TAAPassTest, UpdateJitter改变值) {
     }
 }
 
-TEST(TAAPassTest, Jitter在合理范围内) {
+TEST(TAAPassTest, JitterwithinReason) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
     for (int i = 0; i < 16; ++i) {
@@ -166,7 +166,7 @@ TEST(TAAPassTest, Jitter在合理范围内) {
 // IRenderPass 接口多态
 // ============================================================
 
-TEST(IRenderPassTest, 多态GetName) {
+TEST(IRenderPassTest, MultiGetName) {
     RenderPassContext ctx;
     PreZPass prez(ctx);
     ForwardScenePass scene(ctx);
@@ -182,24 +182,24 @@ TEST(IRenderPassTest, 多态GetName) {
 // RenderGraph 基本声明/编译/重置
 // ============================================================
 
-TEST(BuiltinPassesRenderGraphTest, 空图编译成功) {
+TEST(BuiltinPassesRenderGraphTest, EmptyCompileSucceeds) {
     RenderGraph graph;
     EXPECT_TRUE(graph.Compile());
 }
 
-TEST(BuiltinPassesRenderGraphTest, 声明资源返回有效句柄) {
+TEST(BuiltinPassesRenderGraphTest, AssetReturnValid) {
     RenderGraph graph;
     auto h = graph.DeclareResource("scene_color");
     EXPECT_NE(h.id, 0u);
 }
 
-TEST(BuiltinPassesRenderGraphTest, 添加Pass返回有效句柄) {
+TEST(BuiltinPassesRenderGraphTest, AddToPassReturnValid) {
     RenderGraph graph;
     auto h = graph.AddPass("test_pass");
     EXPECT_TRUE(h.is_valid());
 }
 
-TEST(BuiltinPassesRenderGraphTest, Reset后重新编译成功) {
+TEST(BuiltinPassesRenderGraphTest, ResetAfterRecompilingSuccessfully) {
     RenderGraph graph;
     graph.DeclareResource("res_a");
     graph.AddPass("pass_a");
@@ -208,13 +208,13 @@ TEST(BuiltinPassesRenderGraphTest, Reset后重新编译成功) {
     EXPECT_TRUE(graph.Compile());
 }
 
-TEST(BuiltinPassesRenderGraphTest, 导入外部资源) {
+TEST(BuiltinPassesRenderGraphTest, OutsideAsset) {
     RenderGraph graph;
     auto h = graph.ImportResource("backbuffer", 42);
     EXPECT_EQ(graph.GetResourceRT(h), 42u);
 }
 
-TEST(BuiltinPassesRenderGraphTest, 未绑定资源RT返回零) {
+TEST(BuiltinPassesRenderGraphTest, NotbindingAssetRTReturnsZero) {
     RenderGraph graph;
     auto h = graph.DeclareResource("unbound");
     EXPECT_EQ(graph.GetResourceRT(h), 0u);

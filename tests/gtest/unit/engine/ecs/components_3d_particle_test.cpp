@@ -8,7 +8,7 @@
 
 using namespace dse;
 
-TEST(ParticleSystem3DComponentTest, 默认值) {
+TEST(ParticleSystem3DComponentTest, DefaultValues) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.enabled);
     EXPECT_EQ(ps.max_particles, 1000);
@@ -26,7 +26,7 @@ TEST(ParticleSystem3DComponentTest, 默认值) {
     EXPECT_FALSE(ps.initialized);
 }
 
-TEST(ParticleSystem3DComponentTest, 字段修改) {
+TEST(ParticleSystem3DComponentTest, FieldModification) {
     ParticleSystem3DComponent ps;
     ps.enabled = false;
     ps.max_particles = 5000;
@@ -38,7 +38,7 @@ TEST(ParticleSystem3DComponentTest, 字段修改) {
     EXPECT_FLOAT_EQ(ps.gravity.y, -20.0f);
 }
 
-TEST(GPUParticleDataTest, 默认构造) {
+TEST(GPUParticleDataTest, Default) {
     GPUParticleData p;
     EXPECT_FLOAT_EQ(p.life, 0.0f);
     EXPECT_FLOAT_EQ(p.size, 0.0f);

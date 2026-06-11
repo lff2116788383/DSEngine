@@ -16,7 +16,7 @@
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 using namespace dse::render;
 
-TEST(DescriptorBindingInfoTest, 默认值) {
+TEST(DescriptorBindingInfoTest, DefaultValues) {
     DescriptorBindingInfo info;
     EXPECT_EQ(info.set, 0u);
     EXPECT_EQ(info.binding, 0u);
@@ -25,7 +25,7 @@ TEST(DescriptorBindingInfoTest, 默认值) {
     EXPECT_EQ(info.count, 1u);
 }
 
-TEST(DescriptorBindingInfoTest, 相等性) {
+TEST(DescriptorBindingInfoTest, Equality) {
     DescriptorBindingInfo a, b;
     a.set = 1; a.binding = 2; a.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     a.stage_flags = VK_SHADER_STAGE_VERTEX_BIT; a.count = 1;
@@ -35,13 +35,13 @@ TEST(DescriptorBindingInfoTest, 相等性) {
     EXPECT_FALSE(a == b);
 }
 
-TEST(ShaderReflectionTest, 默认值) {
+TEST(ShaderReflectionTest, DefaultValues) {
     ShaderReflection ref;
     EXPECT_TRUE(ref.bindings.empty());
     EXPECT_FALSE(ref.has_push_constant);
 }
 
-TEST(VulkanShaderProgramTest, 默认句柄) {
+TEST(VulkanShaderProgramTest, Default) {
     VulkanShaderProgram prog;
     EXPECT_EQ(prog.vert_module, VK_NULL_HANDLE);
     EXPECT_EQ(prog.frag_module, VK_NULL_HANDLE);
@@ -49,7 +49,7 @@ TEST(VulkanShaderProgramTest, 默认句柄) {
     EXPECT_TRUE(prog.descriptor_set_layouts.empty());
 }
 
-TEST(VulkanComputeProgramTest, 默认值) {
+TEST(VulkanComputeProgramTest, DefaultValues) {
     VulkanComputeProgram cp;
     EXPECT_EQ(cp.comp_module, VK_NULL_HANDLE);
     EXPECT_EQ(cp.pipeline, VK_NULL_HANDLE);
@@ -59,7 +59,7 @@ TEST(VulkanComputeProgramTest, 默认值) {
     EXPECT_FALSE(cp.uses_ssbo_bindings);
 }
 
-TEST(VulkanShaderManagerTest, 默认构造) {
+TEST(VulkanShaderManagerTest, Default) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
@@ -70,7 +70,7 @@ TEST(VulkanShaderManagerTest, 默认构造) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
-TEST(VulkanShaderManagerTest, GetProgram_未注册返回nullptr) {
+TEST(VulkanShaderManagerTest, GetProgram_ReturnWithoutRegistrationnullptr) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.GetProgram(999), nullptr);
     EXPECT_EQ(mgr.GetComputeProgram(999), nullptr);
@@ -86,20 +86,20 @@ TEST(VulkanShaderManagerTest, GetProgram_未注册返回nullptr) {
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 using namespace dse::render;
 
-TEST(DX11ShaderProgramTest, 默认值) {
+TEST(DX11ShaderProgramTest, DefaultValues) {
     DX11ShaderProgram prog;
     EXPECT_TRUE(prog.vertex_shader.Get() == nullptr);
     EXPECT_TRUE(prog.pixel_shader.Get() == nullptr);
     EXPECT_TRUE(prog.vs_blob.Get() == nullptr);
 }
 
-TEST(DX11ComputeProgramTest, 默认值) {
+TEST(DX11ComputeProgramTest, DefaultValues) {
     DX11ComputeProgram cp;
     EXPECT_TRUE(cp.cs.Get() == nullptr);
     EXPECT_TRUE(cp.params_cb.Get() == nullptr);
 }
 
-TEST(DX11ShaderManagerTest, 默认构造) {
+TEST(DX11ShaderManagerTest, Default) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
@@ -110,7 +110,7 @@ TEST(DX11ShaderManagerTest, 默认构造) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
-TEST(DX11ShaderManagerTest, GetProgram_未注册返回nullptr) {
+TEST(DX11ShaderManagerTest, GetProgram_ReturnWithoutRegistrationnullptr) {
     DX11ShaderManager mgr;
     EXPECT_TRUE(mgr.GetProgram(999) == nullptr);
     EXPECT_TRUE(mgr.GetComputeProgram(999) == nullptr);

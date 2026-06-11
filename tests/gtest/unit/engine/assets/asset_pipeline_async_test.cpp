@@ -52,24 +52,24 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
-TEST_F(AssetLruTest, 初始内存使用为零) {
+TEST_F(AssetLruTest, InsideuseisZero) {
     EXPECT_EQ(mgr_->EstimatedMemoryUsage(), 0u);
 }
 
-TEST_F(AssetLruTest, 加载资源后内存估算增加) {
+TEST_F(AssetLruTest, LoadAssetAfterInside) {
     WriteDmeshFile("test.dmesh", 1024);
     auto dmesh = mgr_->LoadDmesh("test.dmesh");
     ASSERT_NE(dmesh, nullptr);
     EXPECT_GT(mgr_->EstimatedMemoryUsage(), 0u);
 }
 
-TEST_F(AssetLruTest, SetMemoryBudget设置预算) {
+TEST_F(AssetLruTest, SetMemoryBudgetSetABudget) {
     mgr_->SetMemoryBudget(1024 * 1024);
     // 不应崩溃
     SUCCEED();
 }
 
-TEST_F(AssetLruTest, EvictLRU无预算时返回零) {
+TEST_F(AssetLruTest, EvictLRUReturnsZeroIfThereIsNoBudget) {
     WriteDmeshFile("a.dmesh", 512);
     auto a = mgr_->LoadDmesh("a.dmesh");
     ASSERT_NE(a, nullptr);
@@ -79,7 +79,7 @@ TEST_F(AssetLruTest, EvictLRU无预算时返回零) {
     EXPECT_EQ(evicted, 0u);
 }
 
-TEST_F(AssetLruTest, EvictLRU预算内不淘汰) {
+TEST_F(AssetLruTest, EvictLRUNoEliminationWithinBudget) {
     WriteDmeshFile("a.dmesh", 512);
     auto a = mgr_->LoadDmesh("a.dmesh");
     ASSERT_NE(a, nullptr);
@@ -89,7 +89,7 @@ TEST_F(AssetLruTest, EvictLRU预算内不淘汰) {
     EXPECT_EQ(evicted, 0u);
 }
 
-TEST_F(AssetLruTest, EvictLRU超预算淘汰过期资源) {
+TEST_F(AssetLruTest, EvictLRUEliminateExpiredResourcesBeyondBudget) {
     WriteDmeshFile("a.dmesh", 2048);
     WriteDmeshFile("b.dmesh", 2048);
 
@@ -115,7 +115,7 @@ TEST_F(AssetLruTest, EvictLRU超预算淘汰过期资源) {
     EXPECT_LT(mgr_->EstimatedMemoryUsage(), usage_before);
 }
 
-TEST_F(AssetLruTest, EvictLRU不淘汰仍被引用的资源) {
+TEST_F(AssetLruTest, EvictLRUDoNotRetireResourcesThatAreStillReferenced) {
     WriteDmeshFile("a.dmesh", 2048);
 
     auto a = mgr_->LoadDmesh("a.dmesh");
@@ -156,7 +156,7 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
-TEST_F(AssetAsyncExpandedTest, LoadDmeshAsync回调被调度) {
+TEST_F(AssetAsyncExpandedTest, LoadDmeshAsynccallbackIsDispatched) {
     WriteFile("test.dmesh", std::string(128, '\0'));
 
     std::atomic<bool> callback_fired{false};
@@ -169,7 +169,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDmeshAsync回调被调度) {
     EXPECT_TRUE(callback_fired.load());
 }
 
-TEST_F(AssetAsyncExpandedTest, LoadDanimAsync回调被调度) {
+TEST_F(AssetAsyncExpandedTest, LoadDanimAsynccallbackIsDispatched) {
     WriteFile("test.danim", std::string(64, '\0'));
 
     std::atomic<bool> callback_fired{false};
@@ -182,7 +182,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDanimAsync回调被调度) {
     EXPECT_TRUE(callback_fired.load());
 }
 
-TEST_F(AssetAsyncExpandedTest, LoadDskelAsync回调被调度) {
+TEST_F(AssetAsyncExpandedTest, LoadDskelAsynccallbackIsDispatched) {
     WriteFile("test.dskel", std::string(64, '\0'));
 
     std::atomic<bool> callback_fired{false};
@@ -195,7 +195,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDskelAsync回调被调度) {
     EXPECT_TRUE(callback_fired.load());
 }
 
-TEST_F(AssetAsyncExpandedTest, LoadAudioClipAsync回调被调度) {
+TEST_F(AssetAsyncExpandedTest, LoadAudioClipAsynccallbackIsDispatched) {
     WriteFile("test.wav", std::string(256, '\0'));
 
     std::atomic<bool> callback_fired{false};
@@ -208,7 +208,7 @@ TEST_F(AssetAsyncExpandedTest, LoadAudioClipAsync回调被调度) {
     EXPECT_TRUE(callback_fired.load());
 }
 
-TEST_F(AssetAsyncExpandedTest, 异步加载无效路径回调返回nullptr不崩溃) {
+TEST_F(AssetAsyncExpandedTest, LoadInvalidPathReturnsnullptrDoesNotCrash) {
     std::atomic<bool> callback_fired{false};
     mgr_->LoadDmeshAsync("///nonexistent.dmesh", [&callback_fired](std::shared_ptr<DmeshAsset> asset) {
         callback_fired.store(true);
@@ -220,7 +220,7 @@ TEST_F(AssetAsyncExpandedTest, 异步加载无效路径回调返回nullptr不崩
     EXPECT_TRUE(callback_fired.load());
 }
 
-TEST_F(AssetAsyncExpandedTest, 异步加载带JobSystem) {
+TEST_F(AssetAsyncExpandedTest, LoadbringJobSystem) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
     mgr_->SetJobSystem(job_system.get());
@@ -264,14 +264,14 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
-TEST_F(AssetHotReloadTest, StartStop不崩溃) {
+TEST_F(AssetHotReloadTest, StartStopDoesNotCrash) {
     mgr_->StartFileWatcher();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     mgr_->StopFileWatcher();
     SUCCEED();
 }
 
-TEST_F(AssetHotReloadTest, 多次StartStop不崩溃) {
+TEST_F(AssetHotReloadTest, MultiTimesStartStopDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         mgr_->StartFileWatcher();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -280,12 +280,12 @@ TEST_F(AssetHotReloadTest, 多次StartStop不崩溃) {
     SUCCEED();
 }
 
-TEST_F(AssetHotReloadTest, PumpHotReloads无待处理返回零) {
+TEST_F(AssetHotReloadTest, PumpHotReloadsReturnsZeroIfNothingIsPending) {
     std::size_t count = mgr_->PumpHotReloads();
     EXPECT_EQ(count, 0u);
 }
 
-TEST_F(AssetHotReloadTest, StopFileWatcher未启动不崩溃) {
+TEST_F(AssetHotReloadTest, StopFileWatcherDoesNotCrashWhenNotStarted) {
     mgr_->StopFileWatcher();
     SUCCEED();
 }

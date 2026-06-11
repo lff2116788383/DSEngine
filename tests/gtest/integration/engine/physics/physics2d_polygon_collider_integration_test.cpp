@@ -73,7 +73,7 @@ protected:
     }
 };
 
-TEST_F(Physics2DPolygonColliderTest, 三角形碰撞体受重力下落) {
+TEST_F(Physics2DPolygonColliderTest, TriangularCollisionBodyFallsDueToGravity) {
     Entity tri = MakePolygonBody(0.0f, 10.0f, Triangle());
     sys.Init(world);
 
@@ -86,7 +86,7 @@ TEST_F(Physics2DPolygonColliderTest, 三角形碰撞体受重力下落) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
-TEST_F(Physics2DPolygonColliderTest, 多边形与矩形碰撞) {
+TEST_F(Physics2DPolygonColliderTest, MultiAnd) {
     // 地面
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
     // 五边形
@@ -105,7 +105,7 @@ TEST_F(Physics2DPolygonColliderTest, 多边形与矩形碰撞) {
     EXPECT_LT(t.position.y, 5.0f);
 }
 
-TEST_F(Physics2DPolygonColliderTest, 射线检测命中多边形碰撞体) {
+TEST_F(Physics2DPolygonColliderTest, HitMulti) {
     MakePolygonBody(0.0f, 0.0f, Pentagon(), RigidBody2DType::Static);
     sys.Init(world);
 
@@ -119,7 +119,7 @@ TEST_F(Physics2DPolygonColliderTest, 射线检测命中多边形碰撞体) {
     EXPECT_TRUE(hit_entity != entt::null);
 }
 
-TEST_F(Physics2DPolygonColliderTest, 多边形触发器不产生碰撞力) {
+TEST_F(Physics2DPolygonColliderTest, MultiTriggersNot) {
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
 
     Entity tri = MakePolygonBody(0.0f, 0.0f, Triangle());
@@ -137,7 +137,7 @@ TEST_F(Physics2DPolygonColliderTest, 多边形触发器不产生碰撞力) {
     EXPECT_LT(t.position.y, -5.0f);
 }
 
-TEST_F(Physics2DPolygonColliderTest, 顶点数不足3时不创建fixture) {
+TEST_F(Physics2DPolygonColliderTest, PointNot3WhenDoesNotCreatefixture) {
     // 只有2个顶点
     std::vector<glm::vec2> bad_verts = {{0.0f, 0.0f}, {1.0f, 0.0f}};
     Entity e = MakePolygonBody(0.0f, 0.0f, bad_verts, RigidBody2DType::Static);
@@ -147,7 +147,7 @@ TEST_F(Physics2DPolygonColliderTest, 顶点数不足3时不创建fixture) {
     EXPECT_EQ(pc.runtime_fixture, nullptr);
 }
 
-TEST_F(Physics2DPolygonColliderTest, 实体销毁后系统正常) {
+TEST_F(Physics2DPolygonColliderTest, EntityDestroyAfterSystemNormal) {
     Entity tri = MakePolygonBody(0.0f, 5.0f, Triangle());
     sys.Init(world);
     sys.FixedUpdate(world, 1.0f / 60.0f);

@@ -38,7 +38,7 @@ using namespace dse::render;
 // 1. RHI Factory — OpenGL
 // ============================================================
 
-TEST(RhiFactoryGLTest, CreateRhiDevice_OpenGL返回非空) {
+TEST(RhiFactoryGLTest, CreateRhiDevice_OpenGLReturnNonEmpty) {
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
     EXPECT_NE(device, nullptr);
 }
@@ -47,42 +47,42 @@ TEST(RhiFactoryGLTest, CreateRhiDevice_OpenGL返回非空) {
 // 2. OpenGLRhiDevice 无 GPU 测试
 // ============================================================
 
-TEST(OpenGLRhiDeviceTest, 构造析构不崩溃) {
+TEST(OpenGLRhiDeviceTest, DoesNotCrash) {
     OpenGLRhiDevice device;
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时Shutdown安全) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedShutdownSafety) {
     OpenGLRhiDevice device;
     device.Shutdown();
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时BeginFrame安全) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedBeginFrameSafety) {
     GTEST_SKIP() << "Requires GL context";
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时EndFrame安全) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedEndFrameSafety) {
     OpenGLRhiDevice device;
     device.EndFrame();
     SUCCEED();
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时Submit安全) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedSubmitSafety) {
     OpenGLRhiDevice device;
     auto cmd = std::make_shared<OpenGLCommandBuffer>();
     device.Submit(cmd);
 }
 
-TEST(OpenGLRhiDeviceTest, CreateVertexArray返回递增句柄) {
+TEST(OpenGLRhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
     GTEST_SKIP() << "Requires GL context";
 }
 
-TEST(OpenGLRhiDeviceTest, DeleteVertexArray_NoOp不崩溃) {
+TEST(OpenGLRhiDeviceTest, DeleteVertexArray_NoOpDoesNotCrash) {
     OpenGLRhiDevice device;
     device.DeleteVertexArray(dse::render::VertexArrayHandle{999});
     SUCCEED();
 }
 
-TEST(OpenGLRhiDeviceTest, LastFrameStats默认值为零) {
+TEST(OpenGLRhiDeviceTest, LastFrameStatsDefaultValueIsZero) {
     OpenGLRhiDevice device;
     const auto& stats = device.LastFrameStats();
     EXPECT_EQ(stats.draw_calls, 0);
@@ -90,7 +90,7 @@ TEST(OpenGLRhiDeviceTest, LastFrameStats默认值为零) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
-TEST(OpenGLRhiDeviceTest, 子系统访问器可调用) {
+TEST(OpenGLRhiDeviceTest, SystemCanCalls) {
     OpenGLRhiDevice device;
     auto& res    = device.resource_mgr();
     auto& state  = device.state_mgr();
@@ -100,7 +100,7 @@ TEST(OpenGLRhiDeviceTest, 子系统访问器可调用) {
     (void)res; (void)state; (void)shader; (void)draw; (void)ubo;
 }
 
-TEST(OpenGLRhiDeviceTest, 未初始化时CreateBuffer返回零) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
     OpenGLRhiDevice device;
     unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
     EXPECT_EQ(handle, 0u);
@@ -110,13 +110,13 @@ TEST(OpenGLRhiDeviceTest, 未初始化时CreateBuffer返回零) {
 // 不能在无 GL 上下文的测试环境中调用（会触发真实 GL 调用）。
 // 这两个函数的正确行为是：首次调用时自动初始化设备，而不是静默返回 0。
 
-TEST(OpenGLRhiDeviceTest, 未初始化时UpdateBuffer安全) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     OpenGLRhiDevice device;
     float data[] = {0.5f};
     device.UpdateBuffer(999, 0, sizeof(data), data, false);
 }
 
-TEST(OpenGLRhiDeviceTest, SetGlobalShadowMap越界静默忽略) {
+TEST(OpenGLRhiDeviceTest, SetGlobalShadowMapCrossBorderSilentlyIgnore) {
     OpenGLRhiDevice device;
     device.SetGlobalShadowMap(0, 100);
     device.SetGlobalShadowMap(2, 200);
@@ -124,7 +124,7 @@ TEST(OpenGLRhiDeviceTest, SetGlobalShadowMap越界静默忽略) {
     device.SetGlobalShadowMap(100, 999);
 }
 
-TEST(OpenGLRhiDeviceTest, 全局阴影光源接口不崩溃) {
+TEST(OpenGLRhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     OpenGLRhiDevice device;
     device.SetGlobalShadowMap(0, 1);
     device.SetGlobalSpotShadowMap(0, 2);
@@ -136,14 +136,14 @@ TEST(OpenGLRhiDeviceTest, 全局阴影光源接口不崩溃) {
     device.SetGlobalSpotLightSpaceMatrix(0, glm::mat4(1.0f));
 }
 
-TEST(OpenGLRhiDeviceTest, LightProbeSH接口不崩溃) {
+TEST(OpenGLRhiDeviceTest, LightProbeSHTheInterfaceDoesNotCrash) {
     OpenGLRhiDevice device;
     glm::vec4 sh[9] = {};
     device.SetGlobalLightProbeSH(sh, true);
     device.SetGlobalLightProbeSH(sh, false);
 }
 
-TEST(OpenGLRhiDeviceTest, GBuffer接口不崩溃) {
+TEST(OpenGLRhiDeviceTest, GBufferTheInterfaceDoesNotCrash) {
     OpenGLRhiDevice device;
     device.SetGlobalGBufferTexture(0, 100);
     device.SetGlobalGBufferTexture(3, 200);
@@ -151,17 +151,17 @@ TEST(OpenGLRhiDeviceTest, GBuffer接口不崩溃) {
     device.SetGBufferRenderingMode(false);
 }
 
-TEST(OpenGLRhiDeviceTest, NeedsTextureYFlip返回true) {
+TEST(OpenGLRhiDeviceTest, NeedsTextureYFlipReturnstrue) {
     OpenGLRhiDevice device;
     EXPECT_TRUE(device.NeedsTextureYFlip());
 }
 
-TEST(OpenGLRhiDeviceTest, NeedsReadbackYFlip返回true) {
+TEST(OpenGLRhiDeviceTest, NeedsReadbackYFlipReturnstrue) {
     OpenGLRhiDevice device;
     EXPECT_TRUE(device.NeedsReadbackYFlip());
 }
 
-TEST(OpenGLRhiDeviceTest, GetProjectionCorrection为Identity) {
+TEST(OpenGLRhiDeviceTest, GetProjectionCorrectionIsIdentity) {
     OpenGLRhiDevice device;
     glm::mat4 corr = device.GetProjectionCorrection();
     EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
@@ -170,7 +170,7 @@ TEST(OpenGLRhiDeviceTest, GetProjectionCorrection为Identity) {
     EXPECT_FLOAT_EQ(corr[3][3], 1.0f);
 }
 
-TEST(OpenGLRhiDeviceTest, GetShadowSampleCorrection为Identity) {
+TEST(OpenGLRhiDeviceTest, GetShadowSampleCorrectionIsIdentity) {
     OpenGLRhiDevice device;
     glm::mat4 corr = device.GetShadowSampleCorrection();
     EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
@@ -183,83 +183,83 @@ TEST(OpenGLRhiDeviceTest, GetShadowSampleCorrection为Identity) {
 // 3. OpenGLCommandBuffer 无 device 测试
 // ============================================================
 
-TEST(OpenGLCommandBufferTest, 构造不崩溃) {
+TEST(OpenGLCommandBufferTest, DoesNotCrash) {
     OpenGLCommandBuffer cmd;
 }
 
-TEST(OpenGLCommandBufferTest, 无device时BeginEndRenderPass安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     OpenGLCommandBuffer cmd;
     RenderPassDesc desc{};
     cmd.BeginRenderPass(desc);
     cmd.EndRenderPass();
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawMeshBatch安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     OpenGLCommandBuffer cmd;
     std::vector<MeshDrawItem> items;
     items.emplace_back();
     cmd.DrawMeshBatch(items);
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawSpriteBatch安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
     OpenGLCommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
     items.emplace_back();
     cmd.DrawSpriteBatch(items);
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawSpriteBatch空列表安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
     OpenGLCommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
     cmd.DrawSpriteBatch(items);
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawSkybox安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSkyboxSafety) {
     OpenGLCommandBuffer cmd;
     cmd.DrawSkybox(100);
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawPostProcess安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     OpenGLCommandBuffer cmd;
     cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DrawParticles3D安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawParticles3DSafety) {
     OpenGLCommandBuffer cmd;
     std::vector<Particle3DDrawItem> items;
     cmd.DrawParticles3D(items, glm::mat4(1.0f), glm::mat4(1.0f));
 }
 
-TEST(OpenGLCommandBufferTest, 无device时ClearColor安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     OpenGLCommandBuffer cmd;
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
-TEST(OpenGLCommandBufferTest, 无device时SetPipelineState安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
     OpenGLCommandBuffer cmd;
     cmd.SetPipelineState(12345);
 }
 
-TEST(OpenGLCommandBufferTest, 无device时DeferShadowMap安全) {
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     OpenGLCommandBuffer cmd;
     cmd.BindGlobalShadowMap(0, 100);
     cmd.BindGlobalSpotShadowMap(0, 200);
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
-TEST(OpenGLCommandBufferTest, SetCamera存储矩阵不崩溃) {
+TEST(OpenGLCommandBufferTest, SetCameraStorageMatrixDoesNotCollapse) {
     OpenGLCommandBuffer cmd;
     cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
 }
 
-TEST(OpenGLCommandBufferTest, SetGlobalMat4录制命令) {
+TEST(OpenGLCommandBufferTest, SetGlobalMat4RecordingCommand) {
     OpenGLCommandBuffer cmd;
     cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
     cmd.SetGlobalMat4Array("u_bones", {glm::mat4(1.0f), glm::mat4(2.0f)});
     cmd.SetGlobalFloatArray("u_weights", {0.5f, 0.3f, 0.2f});
 }
 
-TEST(OpenGLCommandBufferTest, Reset重置状态) {
+TEST(OpenGLCommandBufferTest, ResetresetState) {
     OpenGLCommandBuffer cmd;
     cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
     cmd.DrawSkybox(100);
@@ -272,7 +272,7 @@ TEST(OpenGLCommandBufferTest, Reset重置状态) {
 // 4. GLDrawExecutor 全局状态边界检查
 // ============================================================
 
-TEST(GLDrawExecutorTest, 全局状态接口边界检查) {
+TEST(GLDrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
     state.SetShadowMap(0, 100);
     state.SetShadowMap(2, 200);
@@ -290,7 +290,7 @@ TEST(GLDrawExecutorTest, 全局状态接口边界检查) {
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
 }
 
-TEST(GLDrawExecutorTest, LightProbeSH接口不崩溃) {
+TEST(GLDrawExecutorTest, LightProbeSHTheInterfaceDoesNotCrash) {
     DrawExecutorGlobalState state;
     glm::vec4 sh[9] = {};
     for (int i = 0; i < 9; ++i) sh[i] = glm::vec4(static_cast<float>(i));
@@ -298,7 +298,7 @@ TEST(GLDrawExecutorTest, LightProbeSH接口不崩溃) {
     state.SetLightProbeSH(sh, false);
 }
 
-TEST(GLDrawExecutorTest, GBuffer接口不崩溃) {
+TEST(GLDrawExecutorTest, GBufferTheInterfaceDoesNotCrash) {
     DrawExecutorGlobalState state;
     state.SetGBufferTexture(0, 100);
     state.SetGBufferTexture(3, 200);
@@ -306,7 +306,7 @@ TEST(GLDrawExecutorTest, GBuffer接口不崩溃) {
     state.gbuffer_rendering_mode = false;
 }
 
-TEST(GLDrawExecutorTest, 默认stats为零) {
+TEST(GLDrawExecutorTest, DefaultstatsisZero) {
     DrawExecutorGlobalState state;
     GLDrawExecutor exec(state);
     const auto& stats = exec.current_frame_stats();
@@ -315,14 +315,14 @@ TEST(GLDrawExecutorTest, 默认stats为零) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
-TEST(GLDrawExecutorTest, BeginEndFrame不崩溃) {
+TEST(GLDrawExecutorTest, BeginEndFrameDoesNotCrash) {
     DrawExecutorGlobalState state;
     GLDrawExecutor executor(state);
     executor.BeginFrame();
     SUCCEED();
 }
 
-TEST(GLDrawExecutorTest, 默认句柄为零) {
+TEST(GLDrawExecutorTest, DefaultisZero) {
     DrawExecutorGlobalState state;
     GLDrawExecutor exec(state);
     EXPECT_EQ(exec.white_texture_handle(), 0u);
@@ -337,7 +337,7 @@ TEST(GLDrawExecutorTest, 默认句柄为零) {
     EXPECT_EQ(exec.active_render_target(), 0u);
 }
 
-TEST(GLDrawExecutorTest, ShutdownGeometryBuffers未初始化不崩溃) {
+TEST(GLDrawExecutorTest, ShutdownGeometryBuffersUninitializedDoesNotCrash) {
     DrawExecutorGlobalState state;
     GLDrawExecutor exec(state);
     exec.ShutdownGeometryBuffers();
@@ -347,7 +347,7 @@ TEST(GLDrawExecutorTest, ShutdownGeometryBuffers未初始化不崩溃) {
 // 5. GLShaderManager 未初始化默认值
 // ============================================================
 
-TEST(GLShaderManagerTest, 未初始化时句柄为零) {
+TEST(GLShaderManagerTest, WhenNotInitializedisZero) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
@@ -356,7 +356,7 @@ TEST(GLShaderManagerTest, 未初始化时句柄为零) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
-TEST(GLShaderManagerTest, 默认PBR_locations纹理为负一) {
+TEST(GLShaderManagerTest, DefaultPBR_LocationsIsburdenOne) {
     GLShaderManager mgr;
     const auto& loc = mgr.pbr_locations();
     EXPECT_EQ(loc.texture, -1);
@@ -366,18 +366,18 @@ TEST(GLShaderManagerTest, 默认PBR_locations纹理为负一) {
     EXPECT_EQ(loc.model, -1);
 }
 
-TEST(GLShaderManagerTest, GenPP未知效果返回零) {
+TEST(GLShaderManagerTest, GenPPUnknownEffectReturnsZero) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.GetOrCreateGenPPShader("nonexistent"), 0u);
     EXPECT_EQ(mgr.GetOrCreateGenPPShader(""), 0u);
 }
 
-TEST(GLShaderManagerTest, Shutdown未初始化不崩溃) {
+TEST(GLShaderManagerTest, ShutdownUninitializedDoesNotCrash) {
     GLShaderManager mgr;
     mgr.Shutdown();
 }
 
-TEST(GLShaderManagerTest, supports_ssbo默认为true) {
+TEST(GLShaderManagerTest, supports_SsboDefaultIstrue) {
     GLShaderManager mgr;
     EXPECT_TRUE(mgr.supports_ssbo());
     mgr.set_supports_ssbo(false);
@@ -388,28 +388,28 @@ TEST(GLShaderManagerTest, supports_ssbo默认为true) {
 // 6. GLResourceManager 句柄分配与渲染目标存储
 // ============================================================
 
-TEST(GLResourceManagerTest, 句柄分配递增) {
+TEST(GLResourceManagerTest, Increments) {
     GLResourceManager mgr;
     unsigned int h1 = mgr.AllocateRenderTargetHandle();
     unsigned int h2 = mgr.AllocateRenderTargetHandle();
     EXPECT_GT(h2, h1);
 }
 
-TEST(GLResourceManagerTest, 纹理句柄分配递增) {
+TEST(GLResourceManagerTest, Increments_2) {
     GLResourceManager mgr;
     unsigned int h1 = mgr.AllocateTextureHandle();
     unsigned int h2 = mgr.AllocateTextureHandle();
     EXPECT_GT(h2, h1);
 }
 
-TEST(GLResourceManagerTest, 管线状态句柄分配递增) {
+TEST(GLResourceManagerTest, StateIncrements) {
     GLResourceManager mgr;
     unsigned int h1 = mgr.AllocatePipelineStateHandle();
     unsigned int h2 = mgr.AllocatePipelineStateHandle();
     EXPECT_GT(h2, h1);
 }
 
-TEST(GLResourceManagerTest, 存储查询渲染目标) {
+TEST(GLResourceManagerTest, Query) {
     GLResourceManager mgr;
     unsigned int handle = mgr.AllocateRenderTargetHandle();
     RenderTargetResource rt;
@@ -427,12 +427,12 @@ TEST(GLResourceManagerTest, 存储查询渲染目标) {
     EXPECT_EQ(result->depth_texture_handle, 200u);
 }
 
-TEST(GLResourceManagerTest, 查询不存在的渲染目标返回nullptr) {
+TEST(GLResourceManagerTest, QuerydoesNotExistReturnsnullptr) {
     GLResourceManager mgr;
     EXPECT_EQ(mgr.GetRenderTarget(99999), nullptr);
 }
 
-TEST(GLResourceManagerTest, 移除渲染目标) {
+TEST(GLResourceManagerTest, Remove) {
     GLResourceManager mgr;
     unsigned int handle = mgr.AllocateRenderTargetHandle();
     RenderTargetResource rt;
@@ -442,7 +442,7 @@ TEST(GLResourceManagerTest, 移除渲染目标) {
     EXPECT_EQ(mgr.GetRenderTarget(handle), nullptr);
 }
 
-TEST(GLResourceManagerTest, 存储查询管线状态) {
+TEST(GLResourceManagerTest, QueryState) {
     GLResourceManager mgr;
     unsigned int handle = mgr.AllocatePipelineStateHandle();
     PipelineStateDesc desc{};
@@ -458,7 +458,7 @@ TEST(GLResourceManagerTest, 存储查询管线状态) {
     EXPECT_EQ(result->cull_face, CullFace::Back);
 }
 
-TEST(GLResourceManagerTest, 资源账本初始为零) {
+TEST(GLResourceManagerTest, AssetisZero) {
     GLResourceManager mgr;
     const auto& ledger = mgr.ledger();
     EXPECT_EQ(ledger.textures_created, 0u);
@@ -471,14 +471,14 @@ TEST(GLResourceManagerTest, 资源账本初始为零) {
 // 7. GLPipelineStateManager 管线状态 CRUD
 // ============================================================
 
-TEST(GLPipelineStateManagerTest, CreatePipelineState返回非零句柄) {
+TEST(GLPipelineStateManagerTest, CreatePipelineStateReturnsANonZeroHandle) {
     GLPipelineStateManager mgr;
     PipelineStateDesc desc{};
     unsigned int h = mgr.CreatePipelineState(desc);
     EXPECT_NE(h, 0u);
 }
 
-TEST(GLPipelineStateManagerTest, 句柄递增) {
+TEST(GLPipelineStateManagerTest, Increments) {
     GLPipelineStateManager mgr;
     PipelineStateDesc desc{};
     unsigned int h1 = mgr.CreatePipelineState(desc);
@@ -486,7 +486,7 @@ TEST(GLPipelineStateManagerTest, 句柄递增) {
     EXPECT_GT(h2, h1);
 }
 
-TEST(GLPipelineStateManagerTest, GetPipelineState查询) {
+TEST(GLPipelineStateManagerTest, GetPipelineStateQuery) {
     GLPipelineStateManager mgr;
     PipelineStateDesc desc{};
     desc.depth_test_enabled = true;
@@ -498,13 +498,13 @@ TEST(GLPipelineStateManagerTest, GetPipelineState查询) {
     EXPECT_FALSE(result->blend_enabled);
 }
 
-TEST(GLPipelineStateManagerTest, GetPipelineState不存在返回nullptr) {
+TEST(GLPipelineStateManagerTest, GetPipelineStatedoesNotExistReturnnullptr) {
     GLPipelineStateManager mgr;
     EXPECT_EQ(mgr.GetPipelineState(0), nullptr);
     EXPECT_EQ(mgr.GetPipelineState(99999), nullptr);
 }
 
-TEST(GLPipelineStateManagerTest, Shutdown清除所有状态) {
+TEST(GLPipelineStateManagerTest, ShutdownClearAllStatus) {
     GLPipelineStateManager mgr;
     PipelineStateDesc desc{};
     unsigned int h = mgr.CreatePipelineState(desc);
@@ -513,7 +513,7 @@ TEST(GLPipelineStateManagerTest, Shutdown清除所有状态) {
     EXPECT_EQ(mgr.pipeline_state_count(), 0u);
 }
 
-TEST(GLPipelineStateManagerTest, ClearActiveState重置) {
+TEST(GLPipelineStateManagerTest, ClearActiveStatereset) {
     GLPipelineStateManager mgr;
     mgr.set_active_pipeline_state(12345);
     EXPECT_EQ(mgr.active_pipeline_state(), 12345u);
@@ -525,7 +525,7 @@ TEST(GLPipelineStateManagerTest, ClearActiveState重置) {
 // 8. UBOManager 未初始化默认值
 // ============================================================
 
-TEST(UBOManagerTest, 未初始化时buffer句柄为零) {
+TEST(UBOManagerTest, WhenNotInitializedbufferisZero) {
     UBOManager mgr;
     EXPECT_EQ(mgr.per_frame_buffer(), 0u);
     EXPECT_EQ(mgr.per_scene_buffer(), 0u);
@@ -538,7 +538,7 @@ TEST(UBOManagerTest, 未初始化时buffer句柄为零) {
     EXPECT_FALSE(mgr.initialized());
 }
 
-TEST(UBOManagerTest, 未初始化时Shutdown安全) {
+TEST(UBOManagerTest, WhenNotInitializedShutdownSafety) {
     UBOManager mgr;
     mgr.Shutdown();
     EXPECT_FALSE(mgr.initialized());
@@ -548,7 +548,7 @@ TEST(UBOManagerTest, 未初始化时Shutdown安全) {
 // 9. gl_enum_convert 枚举映射完整性
 // ============================================================
 
-TEST(GLEnumConvertTest, BlendFactor全枚举有映射) {
+TEST(GLEnumConvertTest, BlendFactorFullEnumerationHasMapping) {
     EXPECT_EQ(ToGLBlendFactor(BlendFactor::Zero), GLConst::ZERO);
     EXPECT_EQ(ToGLBlendFactor(BlendFactor::One), GLConst::ONE);
     EXPECT_EQ(ToGLBlendFactor(BlendFactor::SrcAlpha), GLConst::SRC_ALPHA);
@@ -561,7 +561,7 @@ TEST(GLEnumConvertTest, BlendFactor全枚举有映射) {
     EXPECT_EQ(ToGLBlendFactor(BlendFactor::OneMinusDstColor), GLConst::ONE_MINUS_DST_COLOR);
 }
 
-TEST(GLEnumConvertTest, CompareFunc全枚举有映射) {
+TEST(GLEnumConvertTest, CompareFuncFullEnumerationHasMapping) {
     EXPECT_EQ(ToGLCompareFunc(CompareFunc::Never), GLConst::NEVER);
     EXPECT_EQ(ToGLCompareFunc(CompareFunc::Less), GLConst::LESS);
     EXPECT_EQ(ToGLCompareFunc(CompareFunc::Equal), GLConst::EQUAL);
@@ -572,7 +572,7 @@ TEST(GLEnumConvertTest, CompareFunc全枚举有映射) {
     EXPECT_EQ(ToGLCompareFunc(CompareFunc::Always), GLConst::ALWAYS);
 }
 
-TEST(GLEnumConvertTest, CullFace全枚举有映射) {
+TEST(GLEnumConvertTest, CullFaceFullEnumerationHasMapping) {
     EXPECT_EQ(ToGLCullFace(CullFace::None), 0u);
     EXPECT_EQ(ToGLCullFace(CullFace::Front), GLConst::FRONT);
     EXPECT_EQ(ToGLCullFace(CullFace::Back), GLConst::BACK);
@@ -583,7 +583,7 @@ TEST(GLEnumConvertTest, CullFace全枚举有映射) {
 // 10. DrawExecutorGlobalState 共享状态验证
 // ============================================================
 
-TEST(DrawExecutorGlobalStateTest, 默认值全零) {
+TEST(DrawExecutorGlobalStateTest, DefaultValuesAllZero) {
     DrawExecutorGlobalState state;
     for (int i = 0; i < 3; ++i) {
         EXPECT_EQ(state.shadow_map[i], 0u);
@@ -598,7 +598,7 @@ TEST(DrawExecutorGlobalStateTest, 默认值全零) {
     EXPECT_EQ(state.current_frame_stats.draw_calls, 0);
 }
 
-TEST(DrawExecutorGlobalStateTest, Setter越界静默忽略) {
+TEST(DrawExecutorGlobalStateTest, SetterCrossBorderSilentlyIgnore) {
     DrawExecutorGlobalState state;
     state.SetShadowMap(3, 999);
     state.SetSpotShadowMap(4, 999);
@@ -613,7 +613,7 @@ TEST(DrawExecutorGlobalStateTest, Setter越界静默忽略) {
     EXPECT_FLOAT_EQ(state.cascade_splits[2], 0.75f);
 }
 
-TEST(DrawExecutorGlobalStateTest, LightProbeSH设置读回) {
+TEST(DrawExecutorGlobalStateTest, LightProbeSHSetReadback) {
     DrawExecutorGlobalState state;
     glm::vec4 sh[9];
     for (int i = 0; i < 9; ++i) sh[i] = glm::vec4(static_cast<float>(i), 0.0f, 0.0f, 1.0f);
@@ -624,7 +624,7 @@ TEST(DrawExecutorGlobalStateTest, LightProbeSH设置读回) {
     EXPECT_FALSE(state.light_probe_enabled);
 }
 
-TEST(DrawExecutorGlobalStateTest, GBuffer纹理设置读回) {
+TEST(DrawExecutorGlobalStateTest, GBufferTextureSettingsReadBack) {
     DrawExecutorGlobalState state;
     state.SetGBufferTexture(0, 100);
     state.SetGBufferTexture(3, 200);
@@ -634,7 +634,7 @@ TEST(DrawExecutorGlobalStateTest, GBuffer纹理设置读回) {
     state.SetGBufferTexture(4, 999);
 }
 
-TEST(DrawExecutorGlobalStateTest, BeginEndFrame统计流转) {
+TEST(DrawExecutorGlobalStateTest, BeginEndFrameStatisticsFlow) {
     DrawExecutorGlobalState state;
     state.BeginFrame();
     state.current_frame_stats.draw_calls = 42;
@@ -650,12 +650,12 @@ TEST(DrawExecutorGlobalStateTest, BeginEndFrame统计流转) {
 // 11. RenderTargetDesc / PipelineStateDesc 默认值回归
 // ============================================================
 
-TEST(RenderTargetDescGLTest, msaa_samples默认值为1) {
+TEST(RenderTargetDescGLTest, msaa_SamplesTheDefaultValueIs1) {
     RenderTargetDesc desc{};
     EXPECT_EQ(desc.msaa_samples, 1);
 }
 
-TEST(PipelineStateDescGLTest, 默认值) {
+TEST(PipelineStateDescGLTest, DefaultValues) {
     PipelineStateDesc desc{};
     EXPECT_TRUE(desc.depth_test_enabled);
     EXPECT_TRUE(desc.depth_write_enabled);
@@ -667,7 +667,7 @@ TEST(PipelineStateDescGLTest, 默认值) {
 // 12. CreateShaderProgram 未初始化安全性
 // ============================================================
 
-TEST(OpenGLRhiDeviceTest, 未初始化时CreateShaderProgram返回零) {
+TEST(OpenGLRhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     OpenGLRhiDevice device;
     unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
     EXPECT_EQ(handle, 0u);
@@ -677,13 +677,13 @@ TEST(OpenGLRhiDeviceTest, 未初始化时CreateShaderProgram返回零) {
 // 13. 编辑器场景视图模式 (Scene View Mode)
 // ============================================================
 
-TEST(OpenGLRhiDeviceTest, SetWireframeMode不崩溃) {
+TEST(OpenGLRhiDeviceTest, SetWireframeModeDoesNotCrash) {
     OpenGLRhiDevice device;
     device.SetWireframeMode(true);
     device.SetWireframeMode(false);
 }
 
-TEST(OpenGLRhiDeviceTest, SetForceUnlit可读写) {
+TEST(OpenGLRhiDeviceTest, SetForceUnlitReadableAndWritable) {
     OpenGLRhiDevice device;
     device.SetForceUnlit(true);
     EXPECT_TRUE(device.GetGlobalRenderState().force_unlit);
@@ -691,7 +691,7 @@ TEST(OpenGLRhiDeviceTest, SetForceUnlit可读写) {
     EXPECT_FALSE(device.GetGlobalRenderState().force_unlit);
 }
 
-TEST(OpenGLRhiDeviceTest, SetOverdrawMode不崩溃) {
+TEST(OpenGLRhiDeviceTest, SetOverdrawModeDoesNotCrash) {
     OpenGLRhiDevice device;
     device.SetOverdrawMode(true);
     device.SetOverdrawMode(false);

@@ -29,7 +29,7 @@ using namespace dse::render;
 #ifdef DSE_ENABLE_VULKAN
 #include "engine/render/rhi/vulkan/vulkan_rhi_device.h"
 
-TEST(VulkanComputeStressTest, 大量Uniform设置不崩溃) {
+TEST(VulkanComputeStressTest, UniformsetUpDoesNotCrash) {
     VulkanRhiDevice device;
     for (int i = 0; i < 100; ++i) {
         std::string name = "u_param_" + std::to_string(i);
@@ -37,7 +37,7 @@ TEST(VulkanComputeStressTest, 大量Uniform设置不崩溃) {
     }
 }
 
-TEST(VulkanComputeStressTest, 同名Uniform重复设置覆盖) {
+TEST(VulkanComputeStressTest, UniformsetUp) {
     VulkanRhiDevice device;
     for (int i = 0; i < 50; ++i) {
         device.SetComputeUniformInt(1, "u_count", i);
@@ -45,7 +45,7 @@ TEST(VulkanComputeStressTest, 同名Uniform重复设置覆盖) {
     // 最后一次设置应覆盖前面的，不应累积内存
 }
 
-TEST(VulkanComputeStressTest, 多Shader交错设置) {
+TEST(VulkanComputeStressTest, MultiShadersetUp) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
     device.SetComputeUniformFloat(2, "u_alpha", 0.8f);
@@ -55,14 +55,14 @@ TEST(VulkanComputeStressTest, 多Shader交错设置) {
     device.SetComputeUniformVec3(2, "u_pos", 4.0f, 5.0f, 6.0f);
 }
 
-TEST(VulkanComputeStressTest, ClearParams后再设置) {
+TEST(VulkanComputeStressTest, ClearParamsSetItLater) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_value", 3.14f);
     float identity[16] = {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};
     device.SetComputeUniformMat4(1, "u_mvp", identity);
 }
 
-TEST(VulkanComputeStressTest, 极端浮点值) {
+TEST(VulkanComputeStressTest, Point) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
     device.SetComputeUniformFloat(1, "u_inf", std::numeric_limits<float>::infinity());
@@ -72,7 +72,7 @@ TEST(VulkanComputeStressTest, 极端浮点值) {
     device.SetComputeUniformFloat(1, "u_min", std::numeric_limits<float>::lowest());
 }
 
-TEST(VulkanComputeStressTest, 空字符串Name不崩溃) {
+TEST(VulkanComputeStressTest, EmptyNameDoesNotCrash) {
     VulkanRhiDevice device;
     device.SetComputeUniformInt(1, "", 42);
     device.SetComputeUniformFloat(1, "", 1.0f);
@@ -81,18 +81,18 @@ TEST(VulkanComputeStressTest, 空字符串Name不崩溃) {
     device.SetComputeUniformVec4(1, "", 1.0f, 2.0f, 3.0f, 4.0f);
 }
 
-TEST(VulkanComputeStressTest, 未初始化时DispatchCompute安全) {
+TEST(VulkanComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     VulkanRhiDevice device;
     device.DispatchCompute(999, 64, 64, 1);
 }
 
-TEST(VulkanComputeStressTest, 未初始化时BeginEndComputePass安全) {
+TEST(VulkanComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
     VulkanRhiDevice device;
     device.BeginComputePass();
     device.EndComputePass();
 }
 
-TEST(VulkanComputeStressTest, 未初始化时SetComputeTextureImage安全) {
+TEST(VulkanComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     VulkanRhiDevice device;
     device.SetComputeTextureImage(0, 100, true);
     device.SetComputeTextureImage(1, 200, false);
@@ -100,24 +100,24 @@ TEST(VulkanComputeStressTest, 未初始化时SetComputeTextureImage安全) {
     device.SetComputeTextureSampler(0, 100);
 }
 
-TEST(VulkanComputeStressTest, 未初始化时ComputeMemoryBarrier安全) {
+TEST(VulkanComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
     VulkanRhiDevice device;
     device.ComputeMemoryBarrier();
 }
 
-TEST(VulkanComputeStressTest, 未初始化时DeleteComputeShader安全) {
+TEST(VulkanComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     VulkanRhiDevice device;
     device.DeleteComputeShader(0);
     device.DeleteComputeShader(999);
 }
 
-TEST(VulkanComputeStressTest, 未初始化时CreateComputeShader返回零) {
+TEST(VulkanComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     VulkanRhiDevice device;
     unsigned int h = device.CreateComputeShader("void main() {}");
     EXPECT_EQ(h, 0u);
 }
 
-TEST(VulkanComputeStressTest, SSBO未初始化时ReadSSBO安全) {
+TEST(VulkanComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     VulkanRhiDevice device;
     int buf[4] = {};
     device.ReadSSBO(999, 0, sizeof(buf), buf);
@@ -132,7 +132,7 @@ TEST(VulkanComputeStressTest, SSBO未初始化时ReadSSBO安全) {
 #ifdef DSE_ENABLE_D3D11
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
 
-TEST(DX11ComputeStressTest, 大量Uniform设置不崩溃) {
+TEST(DX11ComputeStressTest, UniformsetUpDoesNotCrash) {
     DX11RhiDevice device;
     for (int i = 0; i < 100; ++i) {
         std::string name = "u_param_" + std::to_string(i);
@@ -141,7 +141,7 @@ TEST(DX11ComputeStressTest, 大量Uniform设置不崩溃) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, 同名Uniform重复设置覆盖) {
+TEST(DX11ComputeStressTest, UniformsetUp) {
     DX11RhiDevice device;
     for (int i = 0; i < 50; ++i) {
         device.SetComputeUniformInt(1, "u_count", i);
@@ -149,7 +149,7 @@ TEST(DX11ComputeStressTest, 同名Uniform重复设置覆盖) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, 多Shader交错设置) {
+TEST(DX11ComputeStressTest, MultiShadersetUp) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
     device.SetComputeUniformFloat(2, "u_alpha", 0.8f);
@@ -160,7 +160,7 @@ TEST(DX11ComputeStressTest, 多Shader交错设置) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, ClearParams后状态干净) {
+TEST(DX11ComputeStressTest, ClearParamsAfterTheConditionIsClean) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_value", 3.14f);
     device.SetComputeUniformVec4(1, "u_color", 1.0f, 0.0f, 0.0f, 1.0f);
@@ -170,7 +170,7 @@ TEST(DX11ComputeStressTest, ClearParams后状态干净) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, 极端浮点值) {
+TEST(DX11ComputeStressTest, Point) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
     device.SetComputeUniformFloat(1, "u_inf", std::numeric_limits<float>::infinity());
@@ -179,7 +179,7 @@ TEST(DX11ComputeStressTest, 极端浮点值) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, 空字符串Name不崩溃) {
+TEST(DX11ComputeStressTest, EmptyNameDoesNotCrash) {
     DX11RhiDevice device;
     device.SetComputeUniformInt(1, "", 42);
     device.SetComputeUniformFloat(1, "", 1.0f);
@@ -187,18 +187,18 @@ TEST(DX11ComputeStressTest, 空字符串Name不崩溃) {
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, 未初始化时DispatchCompute安全) {
+TEST(DX11ComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     DX11RhiDevice device;
     device.DispatchCompute(999, 64, 64, 1);
 }
 
-TEST(DX11ComputeStressTest, 未初始化时BeginEndComputePass安全) {
+TEST(DX11ComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
     DX11RhiDevice device;
     device.BeginComputePass();
     device.EndComputePass();
 }
 
-TEST(DX11ComputeStressTest, 未初始化时SetComputeTextureImage安全) {
+TEST(DX11ComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     DX11RhiDevice device;
     device.SetComputeTextureImage(0, 100, true);
     device.SetComputeTextureImage(1, 200, false);
@@ -206,31 +206,31 @@ TEST(DX11ComputeStressTest, 未初始化时SetComputeTextureImage安全) {
     device.SetComputeTextureSampler(0, 100);
 }
 
-TEST(DX11ComputeStressTest, 未初始化时ComputeMemoryBarrier安全) {
+TEST(DX11ComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
     DX11RhiDevice device;
     device.ComputeMemoryBarrier();
 }
 
-TEST(DX11ComputeStressTest, 未初始化时DeleteComputeShader安全) {
+TEST(DX11ComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     DX11RhiDevice device;
     device.DeleteComputeShader(0);
     device.DeleteComputeShader(999);
 }
 
-TEST(DX11ComputeStressTest, 未初始化时CreateComputeShader返回零) {
+TEST(DX11ComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     DX11RhiDevice device;
     unsigned int h = device.CreateComputeShader("void main() {}");
     EXPECT_EQ(h, 0u);
 }
 
-TEST(DX11ComputeStressTest, FlushComputeParamsCB未初始化安全) {
+TEST(DX11ComputeStressTest, FlushComputeParamsCBUninitializedSecurity) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_test", 1.0f);
     device.FlushComputeParamsCB();  // 无 device context 应安全返回
     device.ClearComputeParams();
 }
 
-TEST(DX11ComputeStressTest, SSBO未初始化时ReadSSBO安全) {
+TEST(DX11ComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     DX11RhiDevice device;
     int buf[4] = {};
     device.ReadSSBO(999, 0, sizeof(buf), buf);
@@ -242,7 +242,7 @@ TEST(DX11ComputeStressTest, SSBO未初始化时ReadSSBO安全) {
 // OpenGL Compute Stress Tests（无 GL context 下安全性）
 // ============================================================
 
-TEST(GLComputeStressTest, 未初始化时SupportsCompute) {
+TEST(GLComputeStressTest, WhenNotInitializedSupportsCompute) {
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
     ASSERT_NE(device, nullptr);
     // OpenGL compute 支持取决于 GL 上下文版本，此处仅验证调用不崩溃
@@ -254,7 +254,7 @@ TEST(GLComputeStressTest, 未初始化时SupportsCompute) {
 // GPU Timer 接口测试（无 GPU）
 // ============================================================
 
-TEST(GpuTimerInterfaceTest, RhiDevice默认不支持GpuTimer) {
+TEST(GpuTimerInterfaceTest, RhiDeviceNotSupportedByDefaultGpuTimer) {
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
     ASSERT_NE(device, nullptr);
     EXPECT_FALSE(device->SupportsGpuTimer());
@@ -270,7 +270,7 @@ TEST(GpuTimerInterfaceTest, RhiDevice默认不支持GpuTimer) {
 }
 
 #ifdef DSE_ENABLE_VULKAN
-TEST(GpuTimerInterfaceTest, VulkanDevice默认不支持未初始化) {
+TEST(GpuTimerInterfaceTest, VulkanDeviceUninitializedIsNotSupportedByDefault) {
     VulkanRhiDevice device;
     EXPECT_FALSE(device.SupportsGpuTimer());
     EXPECT_EQ(device.GetOrCreateGpuTimer("shadow"), kInvalidGpuTimerId);
@@ -282,7 +282,7 @@ TEST(GpuTimerInterfaceTest, VulkanDevice默认不支持未初始化) {
 #endif
 
 #ifdef DSE_ENABLE_D3D11
-TEST(GpuTimerInterfaceTest, DX11Device默认不支持未初始化) {
+TEST(GpuTimerInterfaceTest, DX11DeviceUninitializedIsNotSupportedByDefault) {
     DX11RhiDevice device;
     EXPECT_FALSE(device.SupportsGpuTimer());
     EXPECT_EQ(device.GetOrCreateGpuTimer("shadow"), kInvalidGpuTimerId);

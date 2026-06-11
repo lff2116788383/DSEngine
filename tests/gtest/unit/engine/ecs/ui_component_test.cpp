@@ -24,7 +24,7 @@
 // UIRendererComponent
 // ============================================================
 
-TEST(UIRendererComponentTest, 默认值) {
+TEST(UIRendererComponentTest, DefaultValues) {
     UIRendererComponent ui;
     EXPECT_EQ(ui.texture_handle, 0u);
     EXPECT_FLOAT_EQ(ui.color.r, 1.0f);
@@ -39,7 +39,7 @@ TEST(UIRendererComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(ui.pressed_scale, 0.94f);
 }
 
-TEST(UIRendererComponentTest, 九宫格默认禁用) {
+TEST(UIRendererComponentTest, JiugonggeIsDisabledByDefault) {
     UIRendererComponent ui;
     EXPECT_FALSE(ui.nine_slice_enabled);
     EXPECT_FLOAT_EQ(ui.nine_slice_border.x, 0.0f);
@@ -50,7 +50,7 @@ TEST(UIRendererComponentTest, 九宫格默认禁用) {
     EXPECT_FLOAT_EQ(ui.nine_slice_src_size.y, 0.0f);
 }
 
-TEST(UIRendererComponentTest, 九宫格边框赋值) {
+TEST(UIRendererComponentTest, NineSquareGridBorderAssignment) {
     UIRendererComponent ui;
     ui.nine_slice_enabled = true;
     ui.nine_slice_border = glm::vec4(0.1f, 0.2f, 0.1f, 0.2f);
@@ -65,7 +65,7 @@ TEST(UIRendererComponentTest, 九宫格边框赋值) {
 // UIPanelComponent
 // ============================================================
 
-TEST(UIPanelComponentTest, 默认不阻挡输入) {
+TEST(UIPanelComponentTest, DefaultNot) {
     UIPanelComponent panel;
     EXPECT_FALSE(panel.blocks_input);
 }
@@ -74,7 +74,7 @@ TEST(UIPanelComponentTest, 默认不阻挡输入) {
 // UIButtonComponent
 // ============================================================
 
-TEST(UIButtonComponentTest, 默认颜色) {
+TEST(UIButtonComponentTest, Default) {
     UIButtonComponent btn;
     EXPECT_FLOAT_EQ(btn.normal_color.r, 1.0f);
     EXPECT_FLOAT_EQ(btn.hover_color.r, 1.1f);
@@ -85,7 +85,7 @@ TEST(UIButtonComponentTest, 默认颜色) {
 // UILabelComponent
 // ============================================================
 
-TEST(UILabelComponentTest, 默认值) {
+TEST(UILabelComponentTest, DefaultValues) {
     UILabelComponent label;
     EXPECT_TRUE(label.text.empty());
     EXPECT_FALSE(label.use_localization);
@@ -97,7 +97,7 @@ TEST(UILabelComponentTest, 默认值) {
     EXPECT_TRUE(label.dirty);
 }
 
-TEST(UILabelComponentTest, 数字模式) {
+TEST(UILabelComponentTest, Model) {
     UILabelComponent label;
     label.numeric_mode = true;
     label.number_value = 12345;
@@ -109,7 +109,7 @@ TEST(UILabelComponentTest, 数字模式) {
 // UIMaskComponent
 // ============================================================
 
-TEST(UIMaskComponentTest, 默认值) {
+TEST(UIMaskComponentTest, DefaultValues) {
     UIMaskComponent mask;
     EXPECT_TRUE(mask.enabled);
     EXPECT_TRUE(mask.block_outside_input);
@@ -120,7 +120,7 @@ TEST(UIMaskComponentTest, 默认值) {
 // UIRichTextComponent
 // ============================================================
 
-TEST(UIRichTextComponentTest, 默认值) {
+TEST(UIRichTextComponentTest, DefaultValues) {
     UIRichTextComponent rich;
     EXPECT_TRUE(rich.text.empty());
     EXPECT_FLOAT_EQ(rich.default_color.r, 1.0f);
@@ -133,7 +133,7 @@ TEST(UIRichTextComponentTest, 默认值) {
 // UIJoystickComponent
 // ============================================================
 
-TEST(UIJoystickComponentTest, 默认值) {
+TEST(UIJoystickComponentTest, DefaultValues) {
     UIJoystickComponent joystick;
     EXPECT_FLOAT_EQ(joystick.direction.x, 0.0f);
     EXPECT_FLOAT_EQ(joystick.max_radius, 64.0f);
@@ -146,7 +146,7 @@ TEST(UIJoystickComponentTest, 默认值) {
 // UIAnchorComponent
 // ============================================================
 
-TEST(UIAnchorComponentTest, 默认值) {
+TEST(UIAnchorComponentTest, DefaultValues) {
     UIAnchorComponent anchor;
     EXPECT_EQ(anchor.anchor, 5);
     EXPECT_FLOAT_EQ(anchor.offset.x, 0.0f);
@@ -156,7 +156,7 @@ TEST(UIAnchorComponentTest, 默认值) {
 // UIGridLayoutComponent
 // ============================================================
 
-TEST(UIGridLayoutComponentTest, 默认值) {
+TEST(UIGridLayoutComponentTest, DefaultValues) {
     UIGridLayoutComponent grid;
     EXPECT_EQ(grid.columns, 1);
     EXPECT_EQ(grid.rows, 0);
@@ -168,7 +168,7 @@ TEST(UIGridLayoutComponentTest, 默认值) {
 // UICanvasScalerComponent
 // ============================================================
 
-TEST(UICanvasScalerComponentTest, 默认值) {
+TEST(UICanvasScalerComponentTest, DefaultValues) {
     UICanvasScalerComponent scaler;
     EXPECT_FLOAT_EQ(scaler.reference_resolution.x, 1920.0f);
     EXPECT_FLOAT_EQ(scaler.reference_resolution.y, 1080.0f);
@@ -180,7 +180,7 @@ TEST(UICanvasScalerComponentTest, 默认值) {
 // UIAnimationComponent
 // ============================================================
 
-TEST(UIAnimationComponentTest, 默认值) {
+TEST(UIAnimationComponentTest, DefaultValues) {
     UIAnimationComponent anim;
     EXPECT_FLOAT_EQ(anim.duration, 0.3f);
     EXPECT_FLOAT_EQ(anim.elapsed, 0.0f);

@@ -27,7 +27,7 @@ using namespace gameplay3d;
 // 组件默认值
 // ============================================================
 
-TEST(LODGroupComponentTest, 默认值) {
+TEST(LODGroupComponentTest, DefaultValues) {
     LODGroupComponent lod;
     EXPECT_TRUE(lod.enabled);
     EXPECT_TRUE(lod.levels.empty());
@@ -37,7 +37,7 @@ TEST(LODGroupComponentTest, 默认值) {
     EXPECT_TRUE(lod.original_mesh_path.empty());
 }
 
-TEST(LODLevelConfigTest, 默认值) {
+TEST(LODLevelConfigTest, DefaultValues) {
     LODLevelConfig level;
     EXPECT_TRUE(level.mesh_path.empty());
     EXPECT_FLOAT_EQ(level.screen_size_threshold, 0.0f);
@@ -45,7 +45,7 @@ TEST(LODLevelConfigTest, 默认值) {
     EXPECT_FALSE(level.loaded);
 }
 
-TEST(MeshRendererComponentTest, mesh_handle_override默认为零) {
+TEST(MeshRendererComponentTest, mesh_handle_OverrideDefaultIsZero) {
     MeshRendererComponent mesh;
     EXPECT_EQ(mesh.mesh_handle_override, 0u);
 }
@@ -54,7 +54,7 @@ TEST(MeshRendererComponentTest, mesh_handle_override默认为零) {
 // 屏幕空间公式正确性
 // ============================================================
 
-TEST(LODScreenSizeFormulaTest, 相机正前方物体) {
+TEST(LODScreenSizeFormulaTest, Before) {
     // proj_scale = 1/tan(fov/2), fov=60° -> tan(30°)=0.5774 -> proj_scale~1.732
     const float fov_deg    = 60.0f;
     const float half_fov   = glm::radians(fov_deg) * 0.5f;
@@ -72,7 +72,7 @@ TEST(LODScreenSizeFormulaTest, 相机正前方物体) {
     EXPECT_NEAR(screen_size, 3.0f * 100.0f / 10000.0f, 1e-3f);
 }
 
-TEST(LODScreenSizeFormulaTest, global_scale按比例缩放) {
+TEST(LODScreenSizeFormulaTest, global_ScalescaleToScale) {
     const float fov_deg    = 90.0f;
     const float half_fov   = glm::radians(fov_deg) * 0.5f;
     const float proj_scale = 1.0f / std::tan(half_fov);  // ~1.0
@@ -89,7 +89,7 @@ TEST(LODScreenSizeFormulaTest, global_scale按比例缩放) {
     EXPECT_GT(base_scale2, base_scale1);
 }
 
-TEST(LODScreenSizeFormulaTest, 距离为零时不除零) {
+TEST(LODScreenSizeFormulaTest, IsZeroWhenNotZero) {
     const float proj_scale = 1.0f;
     const float bbox_radius = 1.0f;
     // dist_sq 被 clamp 到 max(1, dist²)
@@ -115,11 +115,11 @@ protected:
     }
 };
 
-TEST_F(LODSystemTest, 空World不崩溃) {
+TEST_F(LODSystemTest, EmptyWorldDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
-TEST_F(LODSystemTest, 无AssetManager不崩溃) {
+TEST_F(LODSystemTest, WithoutAssetManagerDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     world.registry().emplace<MeshRendererComponent>(e);
@@ -134,7 +134,7 @@ TEST_F(LODSystemTest, 无AssetManager不崩溃) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
-TEST_F(LODSystemTest, 无摄像机不切换LOD) {
+TEST_F(LODSystemTest, WithoutNotLOD) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     auto& mesh = world.registry().emplace<MeshRendererComponent>(e);
@@ -152,7 +152,7 @@ TEST_F(LODSystemTest, 无摄像机不切换LOD) {
     EXPECT_EQ(world.registry().get<LODGroupComponent>(e).current_lod, -1);
 }
 
-TEST_F(LODSystemTest, disabled组件不处理) {
+TEST_F(LODSystemTest, DisabledComponentIsNotProcessed) {
     auto e = world.CreateEntity();
 
     auto& cam = world.registry().emplace<Camera3DComponent>(e);
@@ -178,13 +178,13 @@ TEST_F(LODSystemTest, disabled组件不处理) {
     EXPECT_EQ(world.registry().get<LODGroupComponent>(e2).current_lod, -1);
 }
 
-TEST_F(LODSystemTest, 多次Update不崩溃) {
+TEST_F(LODSystemTest, MultiTimesUpdateDoesNotCrash) {
     for (int i = 0; i < 10; ++i) {
         EXPECT_NO_THROW(sys.Update(world));
     }
 }
 
-TEST(LODHysteresisTest, 升级死区上边界计算) {
+TEST(LODHysteresisTest, TestCase12) {
     const float threshold = 0.5f;
     const float hyst = 0.05f;
     const float upper = threshold * (1.0f + hyst);
@@ -195,7 +195,7 @@ TEST(LODHysteresisTest, 升级死区上边界计算) {
     EXPECT_LT(lower, threshold);
 }
 
-TEST_F(LODSystemTest, disabled时恢复原始mesh_path并清空temp) {
+TEST_F(LODSystemTest, DisabledrestoreOriginalmesh_PathandCleartemp) {
     auto e = world.CreateEntity();
     world.registry().emplace<Camera3DComponent>(e).enabled = true;
     world.registry().emplace<TransformComponent>(e);

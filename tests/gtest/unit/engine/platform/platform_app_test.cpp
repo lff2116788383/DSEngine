@@ -12,7 +12,7 @@ using namespace dse::platform;
 // 生命周期测试
 // ============================================================
 
-TEST(PlatformAppTest, 无图形模式Init成功) {
+TEST(PlatformAppTest, WithoutmodelInitSucceeds) {
     auto app = CreateDefaultPlatformApp();
     ASSERT_NE(app, nullptr);
 
@@ -30,7 +30,7 @@ TEST(PlatformAppTest, 无图形模式Init成功) {
     }
 }
 
-TEST(PlatformAppTest, 重复Shutdown不崩溃) {
+TEST(PlatformAppTest, ShutdownDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -46,7 +46,7 @@ TEST(PlatformAppTest, 重复Shutdown不崩溃) {
     }
 }
 
-TEST(PlatformAppTest, Init后默认ShouldClose返回false) {
+TEST(PlatformAppTest, InitpostDefaultShouldCloseReturnsfalse) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -64,7 +64,7 @@ TEST(PlatformAppTest, Init后默认ShouldClose返回false) {
 // 窗口信息测试
 // ============================================================
 
-TEST(PlatformAppTest, GetFramebufferSize返回配置尺寸) {
+TEST(PlatformAppTest, GetFramebufferSizeReturnConfigurationSize) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.width = 640;
@@ -83,7 +83,7 @@ TEST(PlatformAppTest, GetFramebufferSize返回配置尺寸) {
     app->Shutdown();
 }
 
-TEST(PlatformAppTest, SetWindowTitle修改标题) {
+TEST(PlatformAppTest, SetWindowTitleModifyTitle) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -99,7 +99,7 @@ TEST(PlatformAppTest, SetWindowTitle修改标题) {
     app->Shutdown();
 }
 
-TEST(PlatformAppTest, RequestClose使ShouldClose返回true) {
+TEST(PlatformAppTest, RequestClosemakeShouldCloseReturnstrue) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -119,7 +119,7 @@ TEST(PlatformAppTest, RequestClose使ShouldClose返回true) {
 // 平台桥接测试
 // ============================================================
 
-TEST(PlatformAppTest, 无图形模式HasGLContext返回false) {
+TEST(PlatformAppTest, WithoutmodelHasGLContextReturnsfalse) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -133,7 +133,7 @@ TEST(PlatformAppTest, 无图形模式HasGLContext返回false) {
     app->Shutdown();
 }
 
-TEST(PlatformAppTest, GetNativeWindowHandle返回非空) {
+TEST(PlatformAppTest, GetNativeWindowHandleReturnNonEmpty) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -152,7 +152,7 @@ TEST(PlatformAppTest, GetNativeWindowHandle返回非空) {
 // 输入回调测试
 // ============================================================
 
-TEST(PlatformAppTest, 设置输入回调不崩溃) {
+TEST(PlatformAppTest, SetUpDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -181,7 +181,7 @@ TEST(PlatformAppTest, 设置输入回调不崩溃) {
 // 时间函数测试
 // ============================================================
 
-TEST(PlatformAppTest, GetTime返回非负值) {
+TEST(PlatformAppTest, GetTimeReturnANonNegativeValue) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -200,7 +200,7 @@ TEST(PlatformAppTest, GetTime返回非负值) {
 // 主循环驱动测试
 // ============================================================
 
-TEST(PlatformAppTest, PollEvents不崩溃) {
+TEST(PlatformAppTest, PollEventsDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;
@@ -215,7 +215,7 @@ TEST(PlatformAppTest, PollEvents不崩溃) {
     app->Shutdown();
 }
 
-TEST(PlatformAppTest, SwapBuffers无图形模式不崩溃) {
+TEST(PlatformAppTest, SwapBuffersNoGraphicsModeCrashes) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
     config.no_graphics_api = true;

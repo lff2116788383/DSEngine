@@ -54,12 +54,12 @@ protected:
     }
 };
 
-TEST_F(SceneTransitionTest, 初始状态为Idle) {
+TEST_F(SceneTransitionTest, TheInitialStateIsIdle) {
     EXPECT_EQ(mgr.GetTransitionState(), TransitionState::Idle);
     EXPECT_TRUE(mgr.GetActiveScenePath().empty());
 }
 
-TEST_F(SceneTransitionTest, Instant切换直接替换场景) {
+TEST_F(SceneTransitionTest, InstantSwitchToReplaceSceneDirectly) {
     auto pathA = WriteTempScene("dse_trans_inst_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_inst_b.dscene", kSceneB);
 
@@ -77,7 +77,7 @@ TEST_F(SceneTransitionTest, Instant切换直接替换场景) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneTransitionTest, Additive叠加不卸载旧场景) {
+TEST_F(SceneTransitionTest, AdditiveAdditiveDoesNotUnloadOldScene) {
     auto pathA = WriteTempScene("dse_trans_add_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_add_b.dscene", kSceneB);
 
@@ -93,7 +93,7 @@ TEST_F(SceneTransitionTest, Additive叠加不卸载旧场景) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneTransitionTest, Fade过渡经历FadingOut_Loading_FadingIn) {
+TEST_F(SceneTransitionTest, FadeTransitionExperienceFadingOut_Loading_FadingIn) {
     auto pathA = WriteTempScene("dse_trans_fade_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_fade_b.dscene", kSceneB);
 
@@ -136,7 +136,7 @@ TEST_F(SceneTransitionTest, Fade过渡经历FadingOut_Loading_FadingIn) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneTransitionTest, Fade零时长立即完成) {
+TEST_F(SceneTransitionTest, FadeCompleteImmediatelyWithZeroDuration) {
     auto pathA = WriteTempScene("dse_trans_fade0_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_fade0_b.dscene", kSceneB);
 
@@ -160,7 +160,7 @@ TEST_F(SceneTransitionTest, Fade零时长立即完成) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneTransitionTest, 过渡中不能开始新过渡) {
+TEST_F(SceneTransitionTest, InNot) {
     auto pathA = WriteTempScene("dse_trans_busy_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_busy_b.dscene", kSceneB);
 
@@ -176,7 +176,7 @@ TEST_F(SceneTransitionTest, 过渡中不能开始新过渡) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneTransitionTest, Instant切换无活跃场景时不卸载) {
+TEST_F(SceneTransitionTest, InstantDoNotUninstallWhenSwitchingInactiveScenes) {
     auto pathA = WriteTempScene("dse_trans_first.dscene", kSceneA);
     mgr.TransitionTo(pathA.string(), TransitionMode::Instant);
     EXPECT_EQ(mgr.LoadedCount(), 1u);
@@ -184,7 +184,7 @@ TEST_F(SceneTransitionTest, Instant切换无活跃场景时不卸载) {
     std::filesystem::remove(pathA);
 }
 
-TEST_F(SceneTransitionTest, Fade进度在FadingOut中单调递增) {
+TEST_F(SceneTransitionTest, FadeProgressIsAtFadingOutMonotonicallyIncreasingIn) {
     auto pathA = WriteTempScene("dse_trans_prog_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_trans_prog_b.dscene", kSceneB);
 

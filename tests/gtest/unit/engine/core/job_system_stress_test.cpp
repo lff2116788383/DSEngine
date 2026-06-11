@@ -25,7 +25,7 @@ protected:
     void TearDown() override { js_.Shutdown(); }
 };
 
-TEST_F(JobSystemStressTest, 100任务全部完成) {
+TEST_F(JobSystemStressTest, Case100AllTasksComplete) {
     constexpr int N = 100;
     std::atomic<int> counter{0};
     std::vector<JobHandle> handles;
@@ -39,7 +39,7 @@ TEST_F(JobSystemStressTest, 100任务全部完成) {
     EXPECT_EQ(counter.load(), N);
 }
 
-TEST_F(JobSystemStressTest, 1000任务全部完成) {
+TEST_F(JobSystemStressTest, Case1000AllTasksComplete) {
     constexpr int N = 1000;
     std::atomic<int> counter{0};
     std::vector<JobHandle> handles;
@@ -53,7 +53,7 @@ TEST_F(JobSystemStressTest, 1000任务全部完成) {
     EXPECT_EQ(counter.load(), N);
 }
 
-TEST_F(JobSystemStressTest, 混合优先级全部完成) {
+TEST_F(JobSystemStressTest, PriorityAllComplete) {
     constexpr int N = 300;
     std::atomic<int> counter{0};
     std::vector<JobHandle> handles;
@@ -70,7 +70,7 @@ TEST_F(JobSystemStressTest, 混合优先级全部完成) {
     EXPECT_EQ(counter.load(), N);
 }
 
-TEST_F(JobSystemStressTest, 扇出依赖_多任务依赖同一前驱) {
+TEST_F(JobSystemStressTest, Case_MultiTasksOneBefore) {
     std::atomic<int> counter{0};
     auto root = js_.Submit([&counter]() {
         counter.fetch_add(1);
@@ -88,7 +88,7 @@ TEST_F(JobSystemStressTest, 扇出依赖_多任务依赖同一前驱) {
     EXPECT_EQ(counter.load(), 1 + FANOUT);
 }
 
-TEST_F(JobSystemStressTest, 扇入依赖_一任务依赖多前驱) {
+TEST_F(JobSystemStressTest, Case_OneTasksMultiBefore) {
     constexpr int FANIN = 20;
     std::atomic<int> counter{0};
     std::vector<JobHandle> deps;
@@ -106,7 +106,7 @@ TEST_F(JobSystemStressTest, 扇入依赖_一任务依赖多前驱) {
     EXPECT_EQ(counter.load(), FANIN + 100);
 }
 
-TEST_F(JobSystemStressTest, 长链依赖) {
+TEST_F(JobSystemStressTest, Chain) {
     constexpr int CHAIN = 50;
     std::atomic<int> counter{0};
     JobHandle prev;
@@ -127,7 +127,7 @@ TEST_F(JobSystemStressTest, 长链依赖) {
 // 反复 Init/Shutdown
 // ============================================================
 
-TEST(JobSystemStabilityTest, 反复InitShutdown不泄漏) {
+TEST(JobSystemStabilityTest, InitShutdownNoLeak) {
     for (int i = 0; i < 10; ++i) {
         JobSystem js;
         js.Init();
@@ -139,7 +139,7 @@ TEST(JobSystemStabilityTest, 反复InitShutdown不泄漏) {
     }
 }
 
-TEST(JobSystemStabilityTest, Shutdown后Submit同步执行) {
+TEST(JobSystemStabilityTest, ShutdownAfterSubmitSynchronousExecution) {
     JobSystem js;
     js.Init();
     js.Shutdown();

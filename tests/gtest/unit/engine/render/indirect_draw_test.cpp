@@ -28,7 +28,7 @@ using namespace dse::render;
 // DrawElementsIndirectCommand 结构体验证
 // ============================================================
 
-TEST(IndirectDrawStructTest, DrawElementsIndirectCommand_布局正确) {
+TEST(IndirectDrawStructTest, DrawElementsIndirectCommand_LayoutCorrect) {
     DrawElementsIndirectCommand cmd{};
     cmd.count          = 36;
     cmd.instance_count = 1;
@@ -44,7 +44,7 @@ TEST(IndirectDrawStructTest, DrawElementsIndirectCommand_布局正确) {
 // OpenGL indirect draw — NULL device 鲁棒性
 // ============================================================
 
-TEST(GLIndirectDrawTest, CreateUpdate_空设备不崩溃) {
+TEST(GLIndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     OpenGLRhiDevice device;
     // 未初始化设备，supports_ssbo_ 默认 true 但 GL context 无效
     // CreateIndirectBuffer 应返回 0 (glGenBuffers 返回 0 或无 GL context)
@@ -57,7 +57,7 @@ TEST(GLIndirectDrawTest, CreateUpdate_空设备不崩溃) {
     SUCCEED();
 }
 
-TEST(GLIndirectDrawTest, SupportsIndirectDraw_返回值合法) {
+TEST(GLIndirectDrawTest, SupportsIndirectDraw_TheReturnValueIsLegal) {
     OpenGLRhiDevice device;
     // 未初始化时 supports_ssbo_ 默认 true；仅验证不崩溃
     bool supported = device.SupportsIndirectDraw();
@@ -70,12 +70,12 @@ TEST(GLIndirectDrawTest, SupportsIndirectDraw_返回值合法) {
 // ============================================================
 
 #ifdef DSE_ENABLE_D3D11
-TEST(DX11IndirectDrawTest, SupportsIndirectDraw_返回true) {
+TEST(DX11IndirectDrawTest, SupportsIndirectDraw_Returnstrue) {
     DX11RhiDevice device;
     EXPECT_TRUE(device.SupportsIndirectDraw());
 }
 
-TEST(DX11IndirectDrawTest, CreateUpdate_空设备不崩溃) {
+TEST(DX11IndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     DX11RhiDevice device;
     // D3D11 未初始化，device_ == nullptr，应返回 0
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
@@ -93,12 +93,12 @@ TEST(DX11IndirectDrawTest, CreateUpdate_空设备不崩溃) {
 // ============================================================
 
 #ifdef DSE_ENABLE_VULKAN
-TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_返回true) {
+TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_Returnstrue) {
     VulkanRhiDevice device;
     EXPECT_TRUE(device.SupportsIndirectDraw());
 }
 
-TEST(VulkanIndirectDrawTest, CreateDelete_未初始化返回零不崩溃) {
+TEST(VulkanIndirectDrawTest, CreateDelete_UninitializedReturnsZeroWithoutCrashing) {
     VulkanRhiDevice device;
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
     unsigned int handle = device.CreateIndirectBuffer(sizeof(cmd), &cmd);
@@ -112,14 +112,14 @@ TEST(VulkanIndirectDrawTest, CreateDelete_未初始化返回零不崩溃) {
 // MakeSortKey 单元测试（P0 验证）
 // ============================================================
 
-TEST(MakeSortKeyTest, 同材质生成相同键) {
+TEST(MakeSortKeyTest, Generate) {
     MeshDrawItem a, b;
     a.blend_mode = 0; a.shading_mode = 0; a.texture_handle = 42; a.normal_map_handle = 7;
     b.blend_mode = 0; b.shading_mode = 0; b.texture_handle = 42; b.normal_map_handle = 7;
     EXPECT_EQ(MakeSortKey(a), MakeSortKey(b));
 }
 
-TEST(MakeSortKeyTest, blend_mode优先级最高) {
+TEST(MakeSortKeyTest, blend_ModehighestPriority) {
     MeshDrawItem opaque, transparent;
     opaque.blend_mode      = 0;
     transparent.blend_mode = 1;
@@ -127,7 +127,7 @@ TEST(MakeSortKeyTest, blend_mode优先级最高) {
     EXPECT_LT(MakeSortKey(opaque), MakeSortKey(transparent));
 }
 
-TEST(MakeSortKeyTest, 不同texture产生不同键) {
+TEST(MakeSortKeyTest, DifferenttexturegenerateDifferentKeys) {
     MeshDrawItem a, b;
     a.texture_handle = 100;
     b.texture_handle = 200;

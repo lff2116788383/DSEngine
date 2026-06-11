@@ -49,7 +49,7 @@ protected:
     }
 };
 
-TEST_F(LuaEcsIntegrationTest, Lua创建实体CPlusPlus侧可查询) {
+TEST_F(LuaEcsIntegrationTest, LuaCreateEntityCPlusPlusCanBeQueriedOnTheSide) {
     LuaTempScript startup("test_ecs_create.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -74,7 +74,7 @@ TEST_F(LuaEcsIntegrationTest, Lua创建实体CPlusPlus侧可查询) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, Lua添加Transform后CPlusPlus侧可读取位置) {
+TEST_F(LuaEcsIntegrationTest, LuaAddToTransformAfterCPlusPlusSideReadablePosition) {
     LuaTempScript startup("test_ecs_transform.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -109,7 +109,7 @@ TEST_F(LuaEcsIntegrationTest, Lua添加Transform后CPlusPlus侧可读取位置) 
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, Lua读取CPlusPlus侧创建实体的位置) {
+TEST_F(LuaEcsIntegrationTest, LuaReadCPlusPlusTheLocationWhereTheEntityIsCreated) {
     LuaTempScript startup("test_ecs_read.lua", R"(
         entity_ids = {}
         function Awake()
@@ -149,7 +149,7 @@ TEST_F(LuaEcsIntegrationTest, Lua读取CPlusPlus侧创建实体的位置) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, Lua批量创建实体) {
+TEST_F(LuaEcsIntegrationTest, LuaCreateEntitiesInBatches) {
     LuaTempScript startup("test_ecs_batch.lua", R"(
         function Awake()
             for i = 1, 10 do
@@ -183,7 +183,7 @@ TEST_F(LuaEcsIntegrationTest, Lua批量创建实体) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, Lua错误脚本不崩溃引擎) {
+TEST_F(LuaEcsIntegrationTest, LuaErrorScriptDoesNotCrashEngine) {
     LuaTempScript startup("test_ecs_error.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -211,7 +211,7 @@ TEST_F(LuaEcsIntegrationTest, Lua错误脚本不崩溃引擎) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, Lua创建实体后销毁不崩溃) {
+TEST_F(LuaEcsIntegrationTest, LuaDestroyingTheEntityAfterCreationDoesNotCrash) {
     LuaTempScript startup("test_ecs_destroy.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -249,7 +249,7 @@ TEST_F(LuaEcsIntegrationTest, Lua创建实体后销毁不崩溃) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEcsIntegrationTest, ScriptComponent与LuaECS协同) {
+TEST_F(LuaEcsIntegrationTest, ScriptComponentAndLuaECSCollaboration) {
     LuaTempScript startup("test_ecs_script.lua", R"(
         function Awake()
         end

@@ -25,7 +25,7 @@ using namespace dse::gameplay3d;
 // SoftBodyDistConstraint 默认值
 // ============================================================
 
-TEST(SoftBodyDistConstraintTest, 默认值) {
+TEST(SoftBodyDistConstraintTest, DefaultValues) {
     SoftBodyDistConstraint c;
     EXPECT_EQ(c.i0, 0u);
     EXPECT_EQ(c.i1, 0u);
@@ -36,7 +36,7 @@ TEST(SoftBodyDistConstraintTest, 默认值) {
 // SoftBodyComponent 默认值
 // ============================================================
 
-TEST(SoftBodyComponentTest, 默认值) {
+TEST(SoftBodyComponentTest, DefaultValues) {
     SoftBodyComponent sb;
     EXPECT_TRUE(sb.enabled);
     EXPECT_FLOAT_EQ(sb.stiffness, 0.5f);
@@ -59,17 +59,17 @@ TEST(SoftBodyComponentTest, 默认值) {
 // SoftBodySystem 空 World
 // ============================================================
 
-TEST(SoftBodySystemTest, 默认构造安全) {
+TEST(SoftBodySystemTest, DefaultSafety) {
     SoftBodySystem sys;
     (void)sys;
 }
 
-TEST(SoftBodySystemTest, SetAssetManager_nullptr安全) {
+TEST(SoftBodySystemTest, SetAssetManager_NullptrSafety) {
     SoftBodySystem sys;
     sys.SetAssetManager(nullptr);
 }
 
-TEST(SoftBodySystemTest, 空World不崩溃) {
+TEST(SoftBodySystemTest, EmptyWorldDoesNotCrash) {
     SoftBodySystem sys;
     World world;
     sys.FixedUpdate(world, 1.0f / 60.0f);
@@ -109,7 +109,7 @@ SoftBodyComponent MakeSimpleSoftBody() {
 
 } // anonymous namespace
 
-TEST(SoftBodySimulateTest, 重力使粒子下落) {
+TEST(SoftBodySimulateTest, Make) {
     // 直接测试 SoftBodyComponent 的模拟效果
     // 创建 World + SoftBody 实体
     World world;
@@ -126,7 +126,7 @@ TEST(SoftBodySimulateTest, 重力使粒子下落) {
     EXPECT_LT(sb_after.positions[1].y, 10.0f);
 }
 
-TEST(SoftBodySimulateTest, 固定点不移动) {
+TEST(SoftBodySimulateTest, PointNot) {
     World world;
     auto entity = world.registry().create();
     auto sb = MakeSimpleSoftBody();
@@ -144,7 +144,7 @@ TEST(SoftBodySimulateTest, 固定点不移动) {
     EXPECT_LT(sb_after.positions[1].y, 10.0f);
 }
 
-TEST(SoftBodySimulateTest, 禁用不模拟) {
+TEST(SoftBodySimulateTest, DisabledNot) {
     World world;
     auto entity = world.registry().create();
     auto sb = MakeSimpleSoftBody();
@@ -159,7 +159,7 @@ TEST(SoftBodySimulateTest, 禁用不模拟) {
     EXPECT_FLOAT_EQ(sb_after.positions[1].y, 10.0f);
 }
 
-TEST(SoftBodySimulateTest, 零dt不移动) {
+TEST(SoftBodySimulateTest, ZerodtNot) {
     World world;
     auto entity = world.registry().create();
     world.registry().emplace<SoftBodyComponent>(entity, MakeSimpleSoftBody());
@@ -171,7 +171,7 @@ TEST(SoftBodySimulateTest, 零dt不移动) {
     EXPECT_FLOAT_EQ(sb_after.positions[0].y, 10.0f);
 }
 
-TEST(SoftBodySimulateTest, 距离约束保持间距) {
+TEST(SoftBodySimulateTest, TestCase10) {
     World world;
     auto entity = world.registry().create();
     auto sb = MakeSimpleSoftBody();
@@ -192,7 +192,7 @@ TEST(SoftBodySimulateTest, 距离约束保持间距) {
     EXPECT_NEAR(dist, 1.0f, 0.15f); // 允许一定误差
 }
 
-TEST(SoftBodySimulateTest, mesh_dirty标记) {
+TEST(SoftBodySimulateTest, mesh_Dirtymark) {
     World world;
     auto entity = world.registry().create();
     world.registry().emplace<SoftBodyComponent>(entity, MakeSimpleSoftBody());

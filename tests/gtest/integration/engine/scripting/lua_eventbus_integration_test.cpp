@@ -72,7 +72,7 @@ protected:
     }
 };
 
-TEST_F(LuaEventBusIntegrationTest, Lua脚本执行后CPlusPlus发布EventBus事件) {
+TEST_F(LuaEventBusIntegrationTest, LuaAfterTheScriptIsExecutedCPlusPlusPublishesEventBusevent) {
     // 设置 EventBus
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -109,7 +109,7 @@ TEST_F(LuaEventBusIntegrationTest, Lua脚本执行后CPlusPlus发布EventBus事�
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEventBusIntegrationTest, Lua创建实体后CPlusPlus通过EventBus广播) {
+TEST_F(LuaEventBusIntegrationTest, LuaAfterCreatingTheEntityCPlusPluspassEventBusBroadcasts) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -149,7 +149,7 @@ TEST_F(LuaEventBusIntegrationTest, Lua创建实体后CPlusPlus通过EventBus广�
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEventBusIntegrationTest, EventBus事件触发Lua脚本响应) {
+TEST_F(LuaEventBusIntegrationTest, EventBuseventTriggerLuascriptResponse) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -187,7 +187,7 @@ TEST_F(LuaEventBusIntegrationTest, EventBus事件触发Lua脚本响应) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEventBusIntegrationTest, Lua脚本操作实体后EventBus通知其他CPlusPlus模块) {
+TEST_F(LuaEventBusIntegrationTest, LuaAfterTheScriptOperatesOnTheEntityEventBusNotifyOthersCPlusPlusmodule) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -231,7 +231,7 @@ TEST_F(LuaEventBusIntegrationTest, Lua脚本操作实体后EventBus通知其他C
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaEventBusIntegrationTest, LuaRuntime关闭后EventBus仍可正常工作) {
+TEST_F(LuaEventBusIntegrationTest, LuaRuntimeAfterClosingEventBusstillWorksFine) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 

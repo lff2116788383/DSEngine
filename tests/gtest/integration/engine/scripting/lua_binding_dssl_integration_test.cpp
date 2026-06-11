@@ -41,7 +41,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
-TEST_F(LuaDSSLBindingTest, DSSL表存在) {
+TEST_F(LuaDSSLBindingTest, DSSLtableExists) {
     TempLuaFile script("test_dssl_exists.lua", R"(
         function Awake()
             assert(type(dssl) == "table", "dssl table must exist")
@@ -56,7 +56,7 @@ TEST_F(LuaDSSLBindingTest, DSSL表存在) {
     TickLuaRuntime(0.016f);
 }
 
-TEST_F(LuaDSSLBindingTest, LoadMaterial不存在文件返回Nil) {
+TEST_F(LuaDSSLBindingTest, LoadMaterialReturnIfFileDoesNotExistNil) {
     TempLuaFile script("test_dssl_nil.lua", R"(
         function Awake()
             local mid = dssl.load_material("not_exist.dssl")
@@ -73,7 +73,7 @@ TEST_F(LuaDSSLBindingTest, LoadMaterial不存在文件返回Nil) {
     TickLuaRuntime(0.016f);
 }
 
-TEST_F(LuaDSSLBindingTest, SetFloat错误ID不崩溃) {
+TEST_F(LuaDSSLBindingTest, SetFloatErrorIDDoesNotCrash) {
     TempLuaFile script("test_dssl_error.lua", R"(
         function Awake()
             -- 不存在的 material_id，应安全返回

@@ -103,7 +103,7 @@ protected:
 
 // ─── DispatchTool: 未知方法 ──────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, 未知方法返回MethodNotFound) {
+TEST_F(ControlServerTest, UnknownMethodReturnsMethodNotFound) {
     auto resp = Dispatch("dsengine_nonexistent_tool");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32601);
@@ -111,7 +111,7 @@ TEST_F(ControlServerTest, 未知方法返回MethodNotFound) {
 
 // ─── dsengine_ping ───────────────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, Ping_返回pong) {
+TEST_F(ControlServerTest, Ping_ReturnsPong) {
     auto resp = Dispatch("dsengine_ping");
     ASSERT_FALSE(resp.is_error);
     ASSERT_TRUE(resp.result.IsObject());
@@ -121,7 +121,7 @@ TEST_F(ControlServerTest, Ping_返回pong) {
 
 // ─── dsengine_lua_execute ────────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, LuaExecute_缺code参数返回error) {
+TEST_F(ControlServerTest, LuaExecute_MissingcodeParameterReturnerror) {
     auto resp = Dispatch("dsengine_lua_execute", R"({"other": 1})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
@@ -129,26 +129,26 @@ TEST_F(ControlServerTest, LuaExecute_缺code参数返回error) {
 
 // ─── dsengine_script_create ──────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, ScriptCreate_缺path参数返回error) {
+TEST_F(ControlServerTest, ScriptCreate_MissingpathParameterReturnerror) {
     auto resp = Dispatch("dsengine_script_create", R"({"content": "x = 1"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, ScriptCreate_缺content参数返回error) {
+TEST_F(ControlServerTest, ScriptCreate_MissingcontentParameterReturnerror) {
     auto resp = Dispatch("dsengine_script_create", R"({"path": "test.lua"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, ScriptCreate_路径含dotdot被拒绝) {
+TEST_F(ControlServerTest, ScriptCreate_ThePathContainsdotdotrejected) {
     auto resp = Dispatch("dsengine_script_create",
         R"({"path": "../escape.lua", "content": "x = 1"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, ScriptCreate_正常写入返回written) {
+TEST_F(ControlServerTest, ScriptCreate_NormalWriteReturnwritten) {
     fs::path tmp = fs::temp_directory_path() / "dse_test_script_create.lua";
     std::string params = R"({"path": ")" + tmp.string() + R"(", "content": "return 42"})";
     // 转义反斜杠（Windows 路径）
@@ -164,21 +164,21 @@ TEST_F(ControlServerTest, ScriptCreate_正常写入返回written) {
 
 // ─── dsengine_editor_undo / redo ─────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EditorUndo_空栈返回success_false) {
+TEST_F(ControlServerTest, EditorUndo_ReturnEmptyStacksuccess_false) {
     auto resp = Dispatch("dsengine_editor_undo");
     ASSERT_FALSE(resp.is_error);
     ASSERT_TRUE(resp.result.HasMember("success"));
     EXPECT_FALSE(resp.result["success"].GetBool());
 }
 
-TEST_F(ControlServerTest, EditorRedo_空栈返回success_false) {
+TEST_F(ControlServerTest, EditorRedo_ReturnEmptyStacksuccess_false) {
     auto resp = Dispatch("dsengine_editor_redo");
     ASSERT_FALSE(resp.is_error);
     ASSERT_TRUE(resp.result.HasMember("success"));
     EXPECT_FALSE(resp.result["success"].GetBool());
 }
 
-TEST_F(ControlServerTest, EditorUndoRedo_执行后可撤销再重做) {
+TEST_F(ControlServerTest, EditorUndoRedo_UndoThenRedoAfterExecute) {
     auto& mgr = dse::editor::GetUndoRedoManager();
     mgr.Clear();
 
@@ -205,13 +205,13 @@ TEST_F(ControlServerTest, EditorUndoRedo_执行后可撤销再重做) {
 
 // ─── dsengine_entity_create ──────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityCreate_缺name参数返回error) {
+TEST_F(ControlServerTest, EntityCreate_MissingnameParameterReturnerror) {
     auto resp = Dispatch("dsengine_entity_create", R"({"position": [0,0,0]})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, EntityCreate_最小参数创建实体) {
+TEST_F(ControlServerTest, EntityCreate_MinimalParametersCreateEntity) {
     auto resp = Dispatch("dsengine_entity_create", R"({"name": "TestEntity"})");
     ASSERT_FALSE(resp.is_error) << resp.error_message;
     ASSERT_TRUE(resp.result.HasMember("entity_id"));
@@ -222,7 +222,7 @@ TEST_F(ControlServerTest, EntityCreate_最小参数创建实体) {
     EXPECT_TRUE(world_.registry().valid(entity));
 }
 
-TEST_F(ControlServerTest, EntityCreate_带position生成正确Transform) {
+TEST_F(ControlServerTest, EntityCreate_BringpositiongeneratedCorrectlyTransform) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "PosEntity", "position": [1.0, 2.0, 3.0]})");
     ASSERT_FALSE(resp.is_error);
@@ -235,7 +235,7 @@ TEST_F(ControlServerTest, EntityCreate_带position生成正确Transform) {
     EXPECT_FLOAT_EQ(t.position.z, 3.0f);
 }
 
-TEST_F(ControlServerTest, EntityCreate_带mesh自动添加MeshRenderer) {
+TEST_F(ControlServerTest, EntityCreate_BringmeshAutomaticallyAddedMeshRenderer) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "MeshEntity", "mesh": "assets/cube.dmesh"})");
     ASSERT_FALSE(resp.is_error);
@@ -246,7 +246,7 @@ TEST_F(ControlServerTest, EntityCreate_带mesh自动添加MeshRenderer) {
     EXPECT_EQ(mr.mesh_path, "assets/cube.dmesh");
 }
 
-TEST_F(ControlServerTest, EntityCreate_带components数组批量添加) {
+TEST_F(ControlServerTest, EntityCreate_BringcomponentsArrayBatchAddition) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "LightEntity", "components": ["DirectionalLight", "SkyLight"]})");
     ASSERT_FALSE(resp.is_error);
@@ -258,18 +258,18 @@ TEST_F(ControlServerTest, EntityCreate_带components数组批量添加) {
 
 // ─── dsengine_entity_delete ──────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityDelete_无效id返回error) {
+TEST_F(ControlServerTest, EntityDelete_InvalididReturnserror) {
     auto resp = Dispatch("dsengine_entity_delete", R"({"entity_id": 9999999})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, EntityDelete_缺entity_id返回error) {
+TEST_F(ControlServerTest, EntityDelete_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_delete", "{}");
     EXPECT_TRUE(resp.is_error);
 }
 
-TEST_F(ControlServerTest, EntityDelete_正常删除实体) {
+TEST_F(ControlServerTest, EntityDelete_DeleteEntitiesNormally) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "ToDelete"})");
     ASSERT_FALSE(create.is_error);
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -285,13 +285,13 @@ TEST_F(ControlServerTest, EntityDelete_正常删除实体) {
 
 // ─── dsengine_entity_modify ──────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityModify_无效id返回error) {
+TEST_F(ControlServerTest, EntityModify_InvalididReturnserror) {
     auto resp = Dispatch("dsengine_entity_modify", R"({"entity_id": 9999999})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, EntityModify_修改name) {
+TEST_F(ControlServerTest, EntityModify_Revisename) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "OldName"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -305,7 +305,7 @@ TEST_F(ControlServerTest, EntityModify_修改name) {
     EXPECT_EQ(name_comp.name, "NewName");
 }
 
-TEST_F(ControlServerTest, EntityModify_修改position更新Transform) {
+TEST_F(ControlServerTest, EntityModify_RevisepositionUpdateTransform) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "MoveMe"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -323,12 +323,12 @@ TEST_F(ControlServerTest, EntityModify_修改position更新Transform) {
 
 // ─── dsengine_entity_add_component ──────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityAddComponent_缺entity_id返回error) {
+TEST_F(ControlServerTest, EntityAddComponent_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_add_component", R"({"type": "Camera3D"})");
     EXPECT_TRUE(resp.is_error);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_缺type返回error) {
+TEST_F(ControlServerTest, EntityAddComponent_MissingtypeReturnserror) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "E"})");
     uint32_t eid = create.result["entity_id"].GetUint();
     std::string params = R"({"entity_id": )" + std::to_string(eid) + "}";
@@ -336,7 +336,7 @@ TEST_F(ControlServerTest, EntityAddComponent_缺type返回error) {
     EXPECT_TRUE(resp.is_error);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_添加Camera3D成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToCamera3DSucceeds) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CamEntity"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -349,7 +349,7 @@ TEST_F(ControlServerTest, EntityAddComponent_添加Camera3D成功) {
     EXPECT_TRUE(world_.registry().all_of<Camera3DComponent>(entity));
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_Camera3D带properties) {
+TEST_F(ControlServerTest, EntityAddComponent_Camera3Dbringproperties) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CamFov"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -365,12 +365,12 @@ TEST_F(ControlServerTest, EntityAddComponent_Camera3D带properties) {
 
 // ─── dsengine_entity_remove_component ────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityRemoveComponent_缺entity_id返回error) {
+TEST_F(ControlServerTest, EntityRemoveComponent_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_remove_component", R"({"type": "Camera3D"})");
     EXPECT_TRUE(resp.is_error);
 }
 
-TEST_F(ControlServerTest, EntityRemoveComponent_移除已有组件) {
+TEST_F(ControlServerTest, EntityRemoveComponent_RemoveExistingComponents) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "RemoveTest"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -386,7 +386,7 @@ TEST_F(ControlServerTest, EntityRemoveComponent_移除已有组件) {
     EXPECT_FALSE(world_.registry().all_of<SkyLightComponent>(entity));
 }
 
-TEST_F(ControlServerTest, EntityRemoveComponent_不存在的组件返回removed_false) {
+TEST_F(ControlServerTest, EntityRemoveComponent_NonExistentComponentReturnsremoved_false) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "NoComp"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -398,12 +398,12 @@ TEST_F(ControlServerTest, EntityRemoveComponent_不存在的组件返回removed_
 
 // ─── dsengine_entity_get_components ─────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityGetComponents_缺entity_id返回error) {
+TEST_F(ControlServerTest, EntityGetComponents_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_get_components", "{}");
     EXPECT_TRUE(resp.is_error);
 }
 
-TEST_F(ControlServerTest, EntityGetComponents_新建实体含Transform) {
+TEST_F(ControlServerTest, EntityGetComponents_TheNewEntityContainsTransform) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CompTest"})");
     uint32_t eid = create.result["entity_id"].GetUint();
 
@@ -428,7 +428,7 @@ TEST_F(ControlServerTest, EntityGetComponents_新建实体含Transform) {
 
 // ─── dsengine_scene_get_state ────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, SceneGetState_空场景实体数为0) {
+TEST_F(ControlServerTest, SceneGetState_TheNumberOfEmptySceneEntitiesIs0) {
     auto resp = Dispatch("dsengine_scene_get_state");
     ASSERT_FALSE(resp.is_error);
     ASSERT_TRUE(resp.result.HasMember("entity_count"));
@@ -437,7 +437,7 @@ TEST_F(ControlServerTest, SceneGetState_空场景实体数为0) {
     EXPECT_STREQ(resp.result["editor_state"].GetString(), "edit");
 }
 
-TEST_F(ControlServerTest, SceneGetState_创建实体后数量增加) {
+TEST_F(ControlServerTest, SceneGetState_TheQuantityIncreasesAfterCreatingTheEntity) {
     Dispatch("dsengine_entity_create", R"({"name": "A"})");
     Dispatch("dsengine_entity_create", R"({"name": "B"})");
 
@@ -448,7 +448,7 @@ TEST_F(ControlServerTest, SceneGetState_创建实体后数量增加) {
 
 // ─── dsengine_editor_get_state ───────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EditorGetState_初始状态为edit) {
+TEST_F(ControlServerTest, EditorGetState_TheInitialStateIsedit) {
     auto resp = Dispatch("dsengine_editor_get_state");
     ASSERT_FALSE(resp.is_error);
     ASSERT_TRUE(resp.result.HasMember("editor_state"));
@@ -457,27 +457,27 @@ TEST_F(ControlServerTest, EditorGetState_初始状态为edit) {
 
 // ─── dsengine_editor_play / stop ─────────────────────────────────────────────
 
-TEST_F(ControlServerTest, EditorPlay_进入play模式) {
+TEST_F(ControlServerTest, EditorPlay_Enterplaymodel) {
     auto resp = Dispatch("dsengine_editor_play");
     ASSERT_FALSE(resp.is_error) << resp.error_message;
     EXPECT_STREQ(resp.result["editor_state"].GetString(), "play");
     EXPECT_EQ(dse::editor::GetEditorState(), dse::editor::EditorState::Play);
 }
 
-TEST_F(ControlServerTest, EditorPlay_已在play返回error) {
+TEST_F(ControlServerTest, EditorPlay_AlreadyInplayReturnserror) {
     Dispatch("dsengine_editor_play");
     auto resp = Dispatch("dsengine_editor_play");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32603);
 }
 
-TEST_F(ControlServerTest, EditorStop_未在play返回error) {
+TEST_F(ControlServerTest, EditorStop_NotHereplayReturnserror) {
     auto resp = Dispatch("dsengine_editor_stop");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32603);
 }
 
-TEST_F(ControlServerTest, EditorStop_从play退出返回edit) {
+TEST_F(ControlServerTest, EditorStop_FromplayExitReturnedit) {
     Dispatch("dsengine_editor_play");
     auto resp = Dispatch("dsengine_editor_stop");
     ASSERT_FALSE(resp.is_error) << resp.error_message;
@@ -487,13 +487,13 @@ TEST_F(ControlServerTest, EditorStop_从play退出返回edit) {
 
 // ─── dsengine_scene_save ─────────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, SceneSave_无path无当前场景返回error) {
+TEST_F(ControlServerTest, SceneSave_WithoutpathNoCurrentSceneReturnederror) {
     auto resp = Dispatch("dsengine_scene_save", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, SceneSave_指定路径保存成功) {
+TEST_F(ControlServerTest, SceneSave_TheSpecifiedPathIsSavedSuccessfully) {
     fs::path tmp = fs::temp_directory_path() / "dse_test_scene_save.dscene";
     std::string path_fwd = tmp.string();
     for (char& c : path_fwd) if (c == '\\') c = '/';
@@ -509,20 +509,20 @@ TEST_F(ControlServerTest, SceneSave_指定路径保存成功) {
 
 // ─── dsengine_scene_load ─────────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, SceneLoad_缺path返回error) {
+TEST_F(ControlServerTest, SceneLoad_MissingpathReturnserror) {
     auto resp = Dispatch("dsengine_scene_load", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, SceneLoad_文件不存在返回error) {
+TEST_F(ControlServerTest, SceneLoad_FileDoesNotExistReturnerror) {
     auto resp = Dispatch("dsengine_scene_load",
         R"({"path": "/nonexistent/scene.dscene"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, SceneLoad_先保存再加载往返) {
+TEST_F(ControlServerTest, SceneLoad_SaveThenLoadRoundTrip) {
     Dispatch("dsengine_entity_create", R"({"name": "RoundTripEntity"})");
 
     fs::path tmp = fs::temp_directory_path() / "dse_test_roundtrip.dscene";
@@ -546,7 +546,7 @@ TEST_F(ControlServerTest, SceneLoad_先保存再加载往返) {
 
 // ─── dsengine_editor_screenshot ──────────────────────────────────────────────
 
-TEST_F(ControlServerTest, Screenshot_无GPU返回error) {
+TEST_F(ControlServerTest, Screenshot_WithoutGPUReturnserror) {
     auto resp = Dispatch("dsengine_editor_screenshot");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32603);
@@ -554,13 +554,13 @@ TEST_F(ControlServerTest, Screenshot_无GPU返回error) {
 
 // ─── dsengine_asset_import ────────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, AssetImport_缺path返回error) {
+TEST_F(ControlServerTest, AssetImport_MissingpathReturnserror) {
     auto resp = Dispatch("dsengine_asset_import", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
-TEST_F(ControlServerTest, AssetImport_无AssetManager返回error) {
+TEST_F(ControlServerTest, AssetImport_WithoutAssetManagerReturnserror) {
     auto resp = Dispatch("dsengine_asset_import",
         R"({"path": "assets/tex.png", "type": "texture"})");
     EXPECT_TRUE(resp.is_error);
@@ -569,7 +569,7 @@ TEST_F(ControlServerTest, AssetImport_无AssetManager返回error) {
 
 // ─── dsengine_material_create ─────────────────────────────────────────────────
 
-TEST_F(ControlServerTest, MaterialCreate_指定路径写入成功) {
+TEST_F(ControlServerTest, MaterialCreate_TheSpecifiedPathIsWrittenSuccessfully) {
     auto tmp_path = fs::temp_directory_path() / "dse_test_mat.dmat";
     std::string tmp = tmp_path.generic_string();
     std::string params = R"({"name":"test_mat","save_path":")" + tmp + R"("})";
@@ -581,7 +581,7 @@ TEST_F(ControlServerTest, MaterialCreate_指定路径写入成功) {
     fs::remove(tmp);
 }
 
-TEST_F(ControlServerTest, MaterialCreate_非法路径返回error) {
+TEST_F(ControlServerTest, MaterialCreate_IllegalPathReturnerror) {
     auto resp = Dispatch("dsengine_material_create",
         R"({"name":"x","save_path":"Z:\\nonexistent_dir_xyz\\a\\b\\c.dmat"})");
     EXPECT_TRUE(resp.is_error);
@@ -590,7 +590,7 @@ TEST_F(ControlServerTest, MaterialCreate_非法路径返回error) {
 
 // ─── EntityModify rotation / scale ───────────────────────────────────────────
 
-TEST_F(ControlServerTest, EntityModify_修改rotation欧拉角) {
+TEST_F(ControlServerTest, EntityModify_ReviserotationEulerAngles) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RotTest"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -610,7 +610,7 @@ TEST_F(ControlServerTest, EntityModify_修改rotation欧拉角) {
     EXPECT_NEAR(std::abs(euler.x), 30.0f, 1.0f);
 }
 
-TEST_F(ControlServerTest, EntityModify_修改scale) {
+TEST_F(ControlServerTest, EntityModify_Revisescale) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"ScaleTest"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -632,7 +632,7 @@ TEST_F(ControlServerTest, EntityModify_修改scale) {
 
 // ─── EntityAddComponent DirectionalLight / PointLight ────────────────────────
 
-TEST_F(ControlServerTest, EntityAddComponent_添加DirectionalLight成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToDirectionalLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"DirLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -650,7 +650,7 @@ TEST_F(ControlServerTest, EntityAddComponent_添加DirectionalLight成功) {
     EXPECT_NEAR(registry.get<DirectionalLight3DComponent>(entity).intensity, 2.5f, 0.01f);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_添加PointLight成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToPointLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"PointLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -670,7 +670,7 @@ TEST_F(ControlServerTest, EntityAddComponent_添加PointLight成功) {
     EXPECT_NEAR(pl.radius, 15.0f, 0.01f);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_添加SpotLight成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToSpotLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SpotLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -691,7 +691,7 @@ TEST_F(ControlServerTest, EntityAddComponent_添加SpotLight成功) {
     EXPECT_NEAR(sl.outer_cone_angle, 35.0f, 0.01f);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_添加RigidBody3D成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToRigidBody3DSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RB3DEnt"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();
@@ -711,7 +711,7 @@ TEST_F(ControlServerTest, EntityAddComponent_添加RigidBody3D成功) {
     EXPECT_EQ(rb.type, dse::RigidBody3DType::Dynamic);
 }
 
-TEST_F(ControlServerTest, EntityAddComponent_添加SkyLight成功) {
+TEST_F(ControlServerTest, EntityAddComponent_AddToSkyLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SkyLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
     uint32_t eid = create_resp.result["entity_id"].GetUint();

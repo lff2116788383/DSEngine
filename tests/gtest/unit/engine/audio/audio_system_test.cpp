@@ -22,51 +22,51 @@ protected:
     AudioSystem audio;
 };
 
-TEST_F(AudioSystemTest, 默认构造不崩溃) {
+TEST_F(AudioSystemTest, DefaultDoesNotCrash) {
     // 验证构造/析构正常
 }
 
-TEST_F(AudioSystemTest, 未初始化时Shutdown不崩溃) {
+TEST_F(AudioSystemTest, WhenNotInitializedShutdownDoesNotCrash) {
     audio.Shutdown();
 }
 
-TEST_F(AudioSystemTest, 设置主音量) {
+TEST_F(AudioSystemTest, SetUp) {
     audio.SetMasterVolume(0.5f);
     // 无公开 getter，仅验证不崩溃
 }
 
-TEST_F(AudioSystemTest, 设置背景音乐音量) {
+TEST_F(AudioSystemTest, SetUp_2) {
     audio.SetBgmVolume(0.3f);
 }
 
-TEST_F(AudioSystemTest, 设置音效音量) {
+TEST_F(AudioSystemTest, SetUp_3) {
     audio.SetSfxVolume(0.7f);
 }
 
-TEST_F(AudioSystemTest, 设置每片段最大并发音效数) {
+TEST_F(AudioSystemTest, SetUpMax) {
     audio.SetMaxConcurrentSfxPerClip(8);
 }
 
-TEST_F(AudioSystemTest, 设置音效触发冷却时间) {
+TEST_F(AudioSystemTest, SetUpTriggersTime) {
     audio.SetSfxTriggerCooldownMs(50);
 }
 
-TEST_F(AudioSystemTest, StopAllSfx未初始化不崩溃) {
+TEST_F(AudioSystemTest, StopAllSfxUninitializedDoesNotCrash) {
     audio.StopAllSfx();
 }
 
-TEST_F(AudioSystemTest, StopBgm未初始化不崩溃) {
+TEST_F(AudioSystemTest, StopBgmUninitializedDoesNotCrash) {
     audio.StopBgm();
 }
 
-TEST_F(AudioSystemTest, FadeOutAllSfx未初始化不崩溃) {
+TEST_F(AudioSystemTest, FadeOutAllSfxUninitializedDoesNotCrash) {
     audio.FadeOutAllSfx(0.5f);
 }
 
-TEST_F(AudioSystemTest, FadeOutAllSfx默认参数不崩溃) {
+TEST_F(AudioSystemTest, FadeOutAllSfxDefaultParametersDoNotCrash) {
     audio.FadeOutAllSfx();
 }
 
-TEST_F(AudioSystemTest, FadeOutAllSfx零时长不崩溃) {
+TEST_F(AudioSystemTest, FadeOutAllSfxNoCrashForZeroTime) {
     audio.FadeOutAllSfx(0.0f);
 }

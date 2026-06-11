@@ -58,20 +58,20 @@ namespace {
 } // namespace
 
 // 核心 PBR：三端主渲染着色器
-TEST(ShaderEmbedTargetsTest, PBR三端目标齐备) {
+TEST(ShaderEmbedTargetsTest, PBRAllThreeGoalsAreReady) {
     EXPECT_ALL_BACKEND_TARGETS(pbr_vert);
     EXPECT_ALL_BACKEND_TARGETS(pbr_frag);
 }
 
 // gpu_driven 变体：验证 @VARIANTS 机制对三端都产出（曾被误以为是 Vulkan 独有）
-TEST(ShaderEmbedTargetsTest, GpuDriven变体三端目标齐备) {
+TEST(ShaderEmbedTargetsTest, GpuDrivenVariantWithAllThreeTargets) {
     EXPECT_ALL_BACKEND_TARGETS(pbr_gpu_driven_vert);
     EXPECT_ALL_BACKEND_TARGETS(pbr_gpu_driven_frag);
     EXPECT_ALL_BACKEND_TARGETS(shadow_gpu_driven_vert);
 }
 
 // 阴影 / 天空盒 / 精灵
-TEST(ShaderEmbedTargetsTest, 阴影天空盒精灵三端目标齐备) {
+TEST(ShaderEmbedTargetsTest, EmptyAllThreeGoalsAreReady) {
     EXPECT_ALL_BACKEND_TARGETS(shadow_vert);
     EXPECT_ALL_BACKEND_TARGETS(skybox_vert);
     EXPECT_ALL_BACKEND_TARGETS(skybox_frag);
@@ -80,13 +80,13 @@ TEST(ShaderEmbedTargetsTest, 阴影天空盒精灵三端目标齐备) {
 }
 
 // 后处理：全屏 passthrough（"copy"）+ FXAA
-TEST(ShaderEmbedTargetsTest, 后处理三端目标齐备) {
+TEST(ShaderEmbedTargetsTest, AfterAllThreeGoalsAreReady) {
     EXPECT_ALL_BACKEND_TARGETS(postprocess_vert);
     EXPECT_ALL_BACKEND_TARGETS(postprocess_passthrough_frag);
     EXPECT_ALL_BACKEND_TARGETS(fxaa_frag);
 }
 
 // 计算着色器：bloom 降采样（三端均有 compute 目标）
-TEST(ShaderEmbedTargetsTest, 计算着色器三端目标齐备) {
+TEST(ShaderEmbedTargetsTest, AllThreeGoalsAreReady) {
     EXPECT_ALL_BACKEND_TARGETS(bloom_downsample_comp);
 }

@@ -81,13 +81,13 @@ protected:
     void SetUp() override { sm_.Clear(); }
 };
 
-TEST_F(SelectionManagerTest, 初始状态为空) {
+TEST_F(SelectionManagerTest, TheInitialStateIsEmpty) {
     EXPECT_TRUE(sm_.IsEmpty());
     EXPECT_EQ(sm_.Count(), 0);
     EXPECT_EQ(sm_.GetPrimary(), kNullEntity);
 }
 
-TEST_F(SelectionManagerTest, SetSingle单选) {
+TEST_F(SelectionManagerTest, SetSingleSingleChoice) {
     Entity e = 1;
 
     sm_.SetSingle(e);
@@ -97,7 +97,7 @@ TEST_F(SelectionManagerTest, SetSingle单选) {
     EXPECT_TRUE(sm_.Contains(e));
 }
 
-TEST_F(SelectionManagerTest, Toggle反选) {
+TEST_F(SelectionManagerTest, ToggleCounterElection) {
     Entity e1 = 1;
     Entity e2 = 2;
 
@@ -112,7 +112,7 @@ TEST_F(SelectionManagerTest, Toggle反选) {
     EXPECT_TRUE(sm_.Contains(e2));
 }
 
-TEST_F(SelectionManagerTest, Add防重复) {
+TEST_F(SelectionManagerTest, AddPreventsDuplicate) {
     Entity e = 1;
 
     sm_.Add(e);
@@ -121,7 +121,7 @@ TEST_F(SelectionManagerTest, Add防重复) {
     EXPECT_EQ(sm_.Count(), 1);
 }
 
-TEST_F(SelectionManagerTest, Remove移除) {
+TEST_F(SelectionManagerTest, RemoveRemove) {
     Entity e1 = 10;
     Entity e2 = 20;
 
@@ -133,7 +133,7 @@ TEST_F(SelectionManagerTest, Remove移除) {
     EXPECT_TRUE(sm_.Contains(e2));
 }
 
-TEST_F(SelectionManagerTest, SetSingle_null清空) {
+TEST_F(SelectionManagerTest, SetSingle_NullClear) {
     Entity e = 5;
 
     sm_.SetSingle(e);
@@ -141,7 +141,7 @@ TEST_F(SelectionManagerTest, SetSingle_null清空) {
     EXPECT_TRUE(sm_.IsEmpty());
 }
 
-TEST_F(SelectionManagerTest, SetSingle_多选变单选) {
+TEST_F(SelectionManagerTest, SetSingle_MultipleSelectionToSingleSelection) {
     sm_.Add(1);
     sm_.Add(2);
     sm_.Add(3);
@@ -154,14 +154,14 @@ TEST_F(SelectionManagerTest, SetSingle_多选变单选) {
     EXPECT_FALSE(sm_.Contains(3));
 }
 
-TEST_F(SelectionManagerTest, Remove_不存在实体不崩溃) {
+TEST_F(SelectionManagerTest, Remove_IfTheEntityDoesNotExistItWillNotCrash) {
     sm_.Add(10);
     sm_.Remove(99);  // 不存在，不应崩溃
     EXPECT_EQ(sm_.Count(), 1);
     EXPECT_TRUE(sm_.Contains(10));
 }
 
-TEST_F(SelectionManagerTest, GetPrimary_返回最后添加的) {
+TEST_F(SelectionManagerTest, GetPrimary_ReturnsTheLastAdded) {
     sm_.Add(1);
     sm_.Add(2);
     sm_.Add(3);

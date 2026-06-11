@@ -35,21 +35,21 @@ namespace dll_b {
 // FNV-1a 哈希一致性测试
 // ============================================================
 
-TEST(EventIdCrossDllTest, 相同字符串产生相同哈希) {
+TEST(EventIdCrossDllTest, TestCase1) {
     // 不同作用域中相同字符串应产生相同 ID
     EXPECT_EQ(kDllA_MyEvent, dll_b::kMyEvent);
     EXPECT_EQ(kDllA_WindowResize, dll_b::kWindowResize);
     EXPECT_EQ(kDllA_ResourceLoaded, dll_b::kResourceLoaded);
 }
 
-TEST(EventIdCrossDllTest, 内置事件常量与直接计算一致) {
+TEST(EventIdCrossDllTest, InsideeventAndconsistent) {
     // 集中定义的常量应与直接计算一致
     EXPECT_EQ(dse::core::events::kUiClick, dse::core::MakeEventId("UiClick"));
     EXPECT_EQ(dse::core::events::kResourceLoaded, dse::core::MakeEventId("ResourceLoaded"));
     EXPECT_EQ(dse::core::events::kSceneLifecycle, dse::core::MakeEventId("SceneLifecycle"));
 }
 
-TEST(EventIdCrossDllTest, 不同字符串产生不同哈希) {
+TEST(EventIdCrossDllTest, DifferentStringsProduceDifferentHashes) {
     // 不同的事件名应产生不同的 ID
     EXPECT_NE(dse::core::events::kUiClick, dse::core::events::kResourceLoaded);
     EXPECT_NE(dse::core::events::kUiClick, dse::core::events::kSceneLifecycle);
@@ -60,7 +60,7 @@ TEST(EventIdCrossDllTest, 不同字符串产生不同哈希) {
     EXPECT_NE(kDllA_MyEvent, kDllA_ResourceLoaded);
 }
 
-TEST(EventIdCrossDllTest, 编译期和运行期计算一致) {
+TEST(EventIdCrossDllTest, Andconsistent) {
     // constexpr 编译期求值
     constexpr dse::core::EventId compile_time = dse::core::MakeEventId("RuntimeTestEvent");
     // 运行期通过函数调用
@@ -69,13 +69,13 @@ TEST(EventIdCrossDllTest, 编译期和运行期计算一致) {
     EXPECT_EQ(compile_time, runtime_time);
 }
 
-TEST(EventIdCrossDllTest, 空字符串哈希不等于零) {
+TEST(EventIdCrossDllTest, EmptyNotZero) {
     // FNV-1a 对空字符串返回偏移基础值，不是 0
     constexpr dse::core::EventId empty_hash = dse::core::MakeEventId("");
     EXPECT_NE(empty_hash, 0ull);
 }
 
-TEST(EventIdCrossDllTest, 大小写敏感) {
+TEST(EventIdCrossDllTest, Size) {
     constexpr dse::core::EventId lower = dse::core::MakeEventId("myevent");
     constexpr dse::core::EventId upper = dse::core::MakeEventId("MyEvent");
     constexpr dse::core::EventId mixed = dse::core::MakeEventId("MYEVENT");
@@ -84,14 +84,14 @@ TEST(EventIdCrossDllTest, 大小写敏感) {
     EXPECT_NE(upper, mixed);
 }
 
-TEST(EventIdCrossDllTest, FNV1a偏移基础值正确) {
+TEST(EventIdCrossDllTest, FNV1aOffsetBaseValueIsCorrect) {
     // 验证 FNV-1a 偏移基础值
     // 对空字符串，哈希应等于初始偏移值 0xcbf29ce484222325
     constexpr dse::core::EventId empty_hash = dse::core::MakeEventId("");
     EXPECT_EQ(empty_hash, 0xcbf29ce484222325ull);
 }
 
-TEST(EventIdCrossDllTest, 单字符哈希可复现) {
+TEST(EventIdCrossDllTest, SingleCan) {
     // 验证单字符 FNV-1a 计算过程可复现
     // 'a' 的 FNV-1a: offset_basis XOR 'a' (0x61) * FNV_prime
     constexpr dse::core::EventId hash_a = dse::core::MakeEventId("a");
@@ -101,7 +101,7 @@ TEST(EventIdCrossDllTest, 单字符哈希可复现) {
     EXPECT_EQ(hash_a, expected);
 }
 
-TEST(EventIdCrossDllTest, 常见游戏事件名无碰撞) {
+TEST(EventIdCrossDllTest, EventWithout) {
     // 验证 events 命名空间中所有集中定义的事件 ID 之间无哈希碰撞
     constexpr dse::core::EventId ids[] = {
         // UI
@@ -163,7 +163,7 @@ TEST(EventIdCrossDllTest, 常见游戏事件名无碰撞) {
     }
 }
 
-TEST(EventIdCrossDllTest, 集中定义常量与直接计算一致) {
+TEST(EventIdCrossDllTest, SetInAndconsistent) {
     // 验证 events 命名空间中的每个常量都等价于 MakeEventId 直接计算
     EXPECT_EQ(dse::core::events::kUiClick,         dse::core::MakeEventId("UiClick"));
     EXPECT_EQ(dse::core::events::kUiHover,         dse::core::MakeEventId("UiHover"));

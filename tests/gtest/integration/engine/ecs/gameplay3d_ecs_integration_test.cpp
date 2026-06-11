@@ -24,7 +24,7 @@ protected:
     World world;
 };
 
-TEST_F(Gameplay3dEcsIntegrationTest, 复合3D实体创建与查询) {
+TEST_F(Gameplay3dEcsIntegrationTest, Case3DEntityCreateAndQuery) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     world.registry().emplace<MeshRendererComponent>(e);
@@ -35,7 +35,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, 复合3D实体创建与查询) {
     EXPECT_TRUE(world.registry().all_of<Animator3DComponent>(e));
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, Animator3D状态转换) {
+TEST_F(Gameplay3dEcsIntegrationTest, Animator3DStateTransition) {
     auto e = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(e);
 
@@ -63,7 +63,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, Animator3D状态转换) {
     EXPECT_FALSE(anim.is_transitioning);
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponent默认值) {
+TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponentDefaultValues) {
     TerrainComponent terrain;
     EXPECT_TRUE(terrain.enabled);
     EXPECT_FLOAT_EQ(terrain.width, 100.0f);
@@ -76,20 +76,20 @@ TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponent默认值) {
     EXPECT_TRUE(terrain.is_dirty);
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, SkyboxComponent默认值) {
+TEST_F(Gameplay3dEcsIntegrationTest, SkyboxComponentDefaultValues) {
     SkyboxComponent skybox;
     EXPECT_TRUE(skybox.enabled);
     EXPECT_EQ(skybox.cubemap_handle, 0u);
     EXPECT_TRUE(skybox.cubemap_path.empty());
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, SkyLightComponent默认值) {
+TEST_F(Gameplay3dEcsIntegrationTest, SkyLightComponentDefaultValues) {
     SkyLightComponent sky;
     EXPECT_TRUE(sky.enabled);
     EXPECT_FLOAT_EQ(sky.intensity, 1.0f);
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, MorphComponent与实体关联) {
+TEST_F(Gameplay3dEcsIntegrationTest, MorphComponentassociatedWithEntity) {
     auto e = world.CreateEntity();
     auto& morph = world.registry().emplace<MorphComponent>(e);
     morph.targets.push_back({"blink", 0.5f});
@@ -102,7 +102,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, MorphComponent与实体关联) {
     EXPECT_FLOAT_EQ(morph.targets[1].weight, 0.0f);
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, 多个3D实体批量查询) {
+TEST_F(Gameplay3dEcsIntegrationTest, Multi3DEntityBatchQuery) {
     for (int i = 0; i < 5; ++i) {
         auto e = world.CreateEntity();
         auto& tf = world.registry().emplace<TransformComponent>(e);
@@ -120,7 +120,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, 多个3D实体批量查询) {
     EXPECT_EQ(count, 5);
 }
 
-TEST_F(Gameplay3dEcsIntegrationTest, AnimationStateMachine基础) {
+TEST_F(Gameplay3dEcsIntegrationTest, AnimationStateMachineBase) {
     dse::gameplay3d::AnimationStateMachine sm;
     dse::gameplay3d::AnimState idle_state;
     idle_state.name = "idle";

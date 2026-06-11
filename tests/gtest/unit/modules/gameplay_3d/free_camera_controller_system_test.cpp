@@ -30,18 +30,18 @@ protected:
     FreeCameraControllerSystem system;
 };
 
-TEST_F(FreeCameraControllerSystemTest, 空World调用Update不崩溃) {
+TEST_F(FreeCameraControllerSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
-TEST_F(FreeCameraControllerSystemTest, 无Controller组件时不崩溃) {
+TEST_F(FreeCameraControllerSystemTest, WithoutControllerComponentWhenDoesNotCrash) {
     auto entity = world.CreateEntity();
     world.registry().emplace<TransformComponent>(entity);
     world.registry().emplace<Camera3DComponent>(entity);
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
-TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponent默认值) {
+TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentDefaultValues) {
     FreeCameraControllerComponent ctrl;
     EXPECT_TRUE(ctrl.enabled);
     EXPECT_FLOAT_EQ(ctrl.move_speed, 5.0f);
@@ -50,7 +50,7 @@ TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponent默认值) {
     EXPECT_FLOAT_EQ(ctrl.yaw, -90.0f);
 }
 
-TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponent字段修改) {
+TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentFieldModification) {
     FreeCameraControllerComponent ctrl;
     ctrl.enabled = false;
     ctrl.move_speed = 10.0f;
@@ -65,7 +65,7 @@ TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponent字段修改
     EXPECT_FLOAT_EQ(ctrl.yaw, 0.0f);
 }
 
-TEST_F(FreeCameraControllerSystemTest, 禁用组件时位置不变) {
+TEST_F(FreeCameraControllerSystemTest, DisabledComponentWhenconstant) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     tf.position = glm::vec3(1.0f, 2.0f, 3.0f);
@@ -78,7 +78,7 @@ TEST_F(FreeCameraControllerSystemTest, 禁用组件时位置不变) {
     EXPECT_EQ(tf.position, pos_before);
 }
 
-TEST_F(FreeCameraControllerSystemTest, pitch范围约束验证) {
+TEST_F(FreeCameraControllerSystemTest, PitchRangeConstraintValidation) {
     // 验证默认 yaw=-90 使得相机朝 -Z 方向，pitch=0 无仰角
     FreeCameraControllerComponent ctrl;
     ctrl.pitch = 0.0f;

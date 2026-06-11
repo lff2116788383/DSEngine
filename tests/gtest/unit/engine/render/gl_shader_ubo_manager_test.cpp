@@ -18,7 +18,7 @@ using namespace dse::render;
 // PBRShaderLocations 默认值
 // ============================================================
 
-TEST(PBRShaderLocationsTest, 默认值) {
+TEST(PBRShaderLocationsTest, DefaultValues) {
     PBRShaderLocations loc;
     EXPECT_EQ(loc.per_frame_block_index, 0u);
     EXPECT_EQ(loc.per_scene_block_index, 0u);
@@ -32,13 +32,13 @@ TEST(PBRShaderLocationsTest, 默认值) {
     for (int i = 0; i < 4; ++i) EXPECT_EQ(loc.point_shadow_map[i], -1);
 }
 
-TEST(SkyboxShaderLocationsTest, 默认值) {
+TEST(SkyboxShaderLocationsTest, DefaultValues) {
     SkyboxShaderLocations loc;
     EXPECT_EQ(loc.vp, -1);
     EXPECT_EQ(loc.tex, -1);
 }
 
-TEST(ParticleShaderLocationsTest, 默认值) {
+TEST(ParticleShaderLocationsTest, DefaultValues) {
     ParticleShaderLocations loc;
     EXPECT_EQ(loc.per_frame_block_index, 0u);
     EXPECT_EQ(loc.texture, -1);
@@ -48,7 +48,7 @@ TEST(ParticleShaderLocationsTest, 默认值) {
 // GLShaderManager
 // ============================================================
 
-TEST(GLShaderManagerTest, 默认构造安全) {
+TEST(GLShaderManagerTest, DefaultSafety) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
@@ -57,7 +57,7 @@ TEST(GLShaderManagerTest, 默认构造安全) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
-TEST(GLShaderManagerTest, SSBO标志) {
+TEST(GLShaderManagerTest, SSBOlogo) {
     GLShaderManager mgr;
     EXPECT_TRUE(mgr.supports_ssbo()); // 默认 true
     mgr.set_supports_ssbo(false);
@@ -66,7 +66,7 @@ TEST(GLShaderManagerTest, SSBO标志) {
     EXPECT_TRUE(mgr.supports_ssbo());
 }
 
-TEST(GLShaderManagerTest, GenPPShader_未知效果返回零) {
+TEST(GLShaderManagerTest, GenPPShader_UnknownEffectReturnsZero) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.GetOrCreateGenPPShader("__nonexistent__"), 0u);
     EXPECT_EQ(mgr.GetOrCreateGenPPShader(""), 0u);
@@ -88,7 +88,7 @@ TEST(GLShaderManagerTest, SetParticleHandle) {
 // UBOManager
 // ============================================================
 
-TEST(UBOManagerTest, 默认构造安全) {
+TEST(UBOManagerTest, DefaultSafety) {
     UBOManager mgr;
     EXPECT_FALSE(mgr.initialized());
     EXPECT_EQ(mgr.per_frame_buffer(), 0u);

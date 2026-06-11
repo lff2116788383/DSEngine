@@ -24,7 +24,7 @@ using namespace dse::render::gi;
 // DDGIVolumeConfig 默认值
 // ============================================================
 
-TEST(DDGIVolumeConfigTest, 默认值) {
+TEST(DDGIVolumeConfigTest, DefaultValues) {
     DDGIVolumeConfig cfg;
     EXPECT_FLOAT_EQ(cfg.origin.x, 0.0f);
     EXPECT_FLOAT_EQ(cfg.extent.x, 100.0f);
@@ -64,7 +64,7 @@ TEST(DDGIVolumeConfigTest, ProbeSpacing) {
     EXPECT_FLOAT_EQ(spacing.z, 2.0f);
 }
 
-TEST(DDGIVolumeConfigTest, ProbeSpacing_单轴分辨率1) {
+TEST(DDGIVolumeConfigTest, ProbeSpacing_SingleAxisResolution1) {
     DDGIVolumeConfig cfg;
     cfg.extent = glm::vec3(10.0f);
     cfg.resolution = glm::ivec3(1, 4, 1);
@@ -80,7 +80,7 @@ TEST(DDGIVolumeConfigTest, ProbeSpacing_单轴分辨率1) {
 // ProbeIndex / ProbeCoord 往返
 // ============================================================
 
-TEST(DDGIVolumeConfigTest, ProbeIndex_ProbeCoord往返) {
+TEST(DDGIVolumeConfigTest, ProbeIndex_ProbeCoordroundTrip) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
 
@@ -101,7 +101,7 @@ TEST(DDGIVolumeConfigTest, ProbeIndex_ProbeCoord往返) {
 // ProbePosition
 // ============================================================
 
-TEST(DDGIVolumeConfigTest, ProbePosition_原点探针) {
+TEST(DDGIVolumeConfigTest, ProbePosition_OriginProbe) {
     DDGIVolumeConfig cfg;
     cfg.origin = glm::vec3(10.0f, 20.0f, 30.0f);
     cfg.extent = glm::vec3(70.0f);
@@ -113,7 +113,7 @@ TEST(DDGIVolumeConfigTest, ProbePosition_原点探针) {
     EXPECT_FLOAT_EQ(pos.z, 30.0f);
 }
 
-TEST(DDGIVolumeConfigTest, ProbePosition_末端探针) {
+TEST(DDGIVolumeConfigTest, ProbePosition_EndProbe) {
     DDGIVolumeConfig cfg;
     cfg.origin = glm::vec3(0.0f);
     cfg.extent = glm::vec3(70.0f);
@@ -155,7 +155,7 @@ TEST(DDGIVolumeConfigTest, VisibilityAtlasSize) {
 // ProbeIrradianceOffset / ProbeVisibilityOffset
 // ============================================================
 
-TEST(DDGIVolumeConfigTest, ProbeIrradianceOffset_第一个探针) {
+TEST(DDGIVolumeConfigTest, ProbeIrradianceOffset_FirstProbe) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
     cfg.irradiance_texels = 8;
@@ -169,7 +169,7 @@ TEST(DDGIVolumeConfigTest, ProbeIrradianceOffset_第一个探针) {
 // OctEncode / OctDecode 往返
 // ============================================================
 
-TEST(OctahedralMapTest, 往返精度_主轴方向) {
+TEST(OctahedralMapTest, RoundTrip_Toward) {
     glm::vec3 dirs[] = {
         { 1, 0, 0}, {-1, 0, 0},
         { 0, 1, 0}, { 0,-1, 0},
@@ -185,7 +185,7 @@ TEST(OctahedralMapTest, 往返精度_主轴方向) {
     }
 }
 
-TEST(OctahedralMapTest, 往返精度_对角方向) {
+TEST(OctahedralMapTest, RoundTrip_Toward_2) {
     glm::vec3 d = glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f));
     glm::vec2 uv = OctEncode(d);
     glm::vec3 decoded = OctDecode(uv);
@@ -194,7 +194,7 @@ TEST(OctahedralMapTest, 往返精度_对角方向) {
     EXPECT_NEAR(decoded.z, d.z, 0.01f);
 }
 
-TEST(OctahedralMapTest, UV在零到一范围) {
+TEST(OctahedralMapTest, UVinTheRangeZeroToOne) {
     glm::vec3 d = glm::normalize(glm::vec3(-0.3f, 0.7f, -0.5f));
     glm::vec2 uv = OctEncode(d);
     EXPECT_GE(uv.x, 0.0f);
@@ -207,7 +207,7 @@ TEST(OctahedralMapTest, UV在零到一范围) {
 // DDGIResources 默认值
 // ============================================================
 
-TEST(DDGIResourcesTest, 默认值) {
+TEST(DDGIResourcesTest, DefaultValues) {
     DDGIResources res;
     EXPECT_EQ(res.irradiance_atlas, 0u);
     EXPECT_EQ(res.visibility_atlas, 0u);
@@ -220,11 +220,11 @@ TEST(DDGIResourcesTest, 默认值) {
 // ProbeState / RSMSample 默认值
 // ============================================================
 
-TEST(ProbeStateTest, 对齐16字节) {
+TEST(ProbeStateTest, Alignment16) {
     EXPECT_EQ(sizeof(ProbeState) % 16, 0u);
 }
 
-TEST(RSMSampleTest, 对齐16字节) {
+TEST(RSMSampleTest, Alignment16) {
     EXPECT_EQ(sizeof(RSMSample) % 16, 0u);
 }
 
@@ -232,7 +232,7 @@ TEST(RSMSampleTest, 对齐16字节) {
 // DDGISystem 默认状态
 // ============================================================
 
-TEST(DDGISystemTest, 默认未初始化) {
+TEST(DDGISystemTest, DefaultUninitialized) {
     DDGISystem sys;
     EXPECT_FALSE(sys.IsInitialized());
     EXPECT_EQ(sys.GetCurrentUpdateOffset(), 0);

@@ -20,7 +20,7 @@ using namespace dse::gameplay3d;
 
 #ifdef DSE_ENABLE_PHYSX
 
-TEST(BuoyancySamplePointTest, 默认值) {
+TEST(BuoyancySamplePointTest, DefaultValues) {
     BuoyancySamplePoint sp;
     EXPECT_FLOAT_EQ(sp.offset.x, 0.0f);
     EXPECT_FLOAT_EQ(sp.offset.y, 0.0f);
@@ -28,7 +28,7 @@ TEST(BuoyancySamplePointTest, 默认值) {
     EXPECT_FLOAT_EQ(sp.force_scale, 1.0f);
 }
 
-TEST(BuoyancyComponentTest, 默认值) {
+TEST(BuoyancyComponentTest, DefaultValues) {
     BuoyancyComponent bc;
     EXPECT_TRUE(bc.enabled);
     EXPECT_FLOAT_EQ(bc.water_level, 0.0f);
@@ -41,28 +41,28 @@ TEST(BuoyancyComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(bc.submerge_ratio, 0.0f);
 }
 
-TEST(BuoyancySystemTest, 构造安全) {
+TEST(BuoyancySystemTest, Safety) {
     BuoyancySystem sys;
 }
 
-TEST(BuoyancySystemTest, SetPhysics3D_nullptr安全) {
+TEST(BuoyancySystemTest, SetPhysics3D_NullptrSafety) {
     BuoyancySystem sys;
     sys.SetPhysics3D(nullptr);
 }
 
-TEST(BuoyancySystemTest, 空World不崩溃) {
+TEST(BuoyancySystemTest, EmptyWorldDoesNotCrash) {
     BuoyancySystem sys;
     World world;
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST(BuoyancySystemTest, 零dt不崩溃) {
+TEST(BuoyancySystemTest, ZerodtDoesNotCrash) {
     BuoyancySystem sys;
     World world;
     sys.FixedUpdate(world, 0.0f);
 }
 
-TEST(BuoyancySystemTest, 有BuoyancyComponent无Physics3D不崩溃) {
+TEST(BuoyancySystemTest, WithBuoyancyComponentWithoutPhysics3DDoesNotCrash) {
     BuoyancySystem sys;
     // physics3d_ == nullptr → FixedUpdate 内应安全退出
     World world;
@@ -71,7 +71,7 @@ TEST(BuoyancySystemTest, 有BuoyancyComponent无Physics3D不崩溃) {
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST(BuoyancyComponentTest, 添加采样点) {
+TEST(BuoyancyComponentTest, AddTosamplingpoint) {
     BuoyancyComponent bc;
     bc.sample_points.push_back({glm::vec3(0, -0.5f, 0), 1.5f});
     bc.sample_points.push_back({glm::vec3(1, -0.5f, 0), 0.5f});

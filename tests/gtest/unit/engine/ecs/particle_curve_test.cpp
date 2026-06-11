@@ -20,18 +20,18 @@
 // Linear 曲线
 // ============================================================
 
-TEST(ParticleCurveTest, Linear端点值) {
+TEST(ParticleCurveTest, LinearendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
-TEST(ParticleCurveTest, Linear中点) {
+TEST(ParticleCurveTest, Linearmidpoint) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 0.0f, 100.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 50.0f);
 }
 
-TEST(ParticleCurveTest, Linear四分点) {
+TEST(ParticleCurveTest, LinearquarterPoint) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.25f), 0.25f);
     EXPECT_FLOAT_EQ(curve.Evaluate(0.75f), 0.75f);
@@ -41,19 +41,19 @@ TEST(ParticleCurveTest, Linear四分点) {
 // EaseIn 曲线（t^2）
 // ============================================================
 
-TEST(ParticleCurveTest, EaseIn端点值) {
+TEST(ParticleCurveTest, EaseInendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
-TEST(ParticleCurveTest, EaseIn中点慢启动) {
+TEST(ParticleCurveTest, EaseInMidpointSlowStart) {
     // EaseIn: shaped_t = 0.5^2 = 0.25, mix(0,1,0.25) = 0.25
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.25f);
 }
 
-TEST(ParticleCurveTest, EaseIn前期值小于Linear) {
+TEST(ParticleCurveTest, EaseInThePreviousValueIsLessThanLinear) {
     ParticleCurve ease_in{true, ParticleCurveType::EaseIn, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     EXPECT_LT(ease_in.Evaluate(0.3f), linear.Evaluate(0.3f));
@@ -63,19 +63,19 @@ TEST(ParticleCurveTest, EaseIn前期值小于Linear) {
 // EaseOut 曲线（1 - (1-t)^2）
 // ============================================================
 
-TEST(ParticleCurveTest, EaseOut端点值) {
+TEST(ParticleCurveTest, EaseOutendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseOut, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
-TEST(ParticleCurveTest, EaseOut中点快启动) {
+TEST(ParticleCurveTest, EaseOutMidpointQuickStart) {
     // EaseOut: shaped_t = 1-(1-0.5)^2 = 1-0.25 = 0.75, mix(0,1,0.75) = 0.75
     ParticleCurve curve{true, ParticleCurveType::EaseOut, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.75f);
 }
 
-TEST(ParticleCurveTest, EaseOut前期值大于Linear) {
+TEST(ParticleCurveTest, EaseOutThePreviousValueIsGreaterThanLinear) {
     ParticleCurve ease_out{true, ParticleCurveType::EaseOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     EXPECT_GT(ease_out.Evaluate(0.3f), linear.Evaluate(0.3f));
@@ -85,26 +85,26 @@ TEST(ParticleCurveTest, EaseOut前期值大于Linear) {
 // EaseInOut 曲线
 // ============================================================
 
-TEST(ParticleCurveTest, EaseInOut端点值) {
+TEST(ParticleCurveTest, EaseInOutendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseInOut, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
-TEST(ParticleCurveTest, EaseInOut中点) {
+TEST(ParticleCurveTest, EaseInOutmidpoint) {
     // t=0.5: shaped_t = 2*(0.5)^2 = 0.5, mix(0,1,0.5) = 0.5
     ParticleCurve curve{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.5f);
 }
 
-TEST(ParticleCurveTest, EaseInOut前半段类似EaseIn) {
+TEST(ParticleCurveTest, EaseInOutTheFirstHalfIsSimilarEaseIn) {
     ParticleCurve ease_in_out{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     // 前半段（t<0.5） EaseInOut 增长比 Linear 慢
     EXPECT_LT(ease_in_out.Evaluate(0.25f), linear.Evaluate(0.25f));
 }
 
-TEST(ParticleCurveTest, EaseInOut后半段类似EaseOut) {
+TEST(ParticleCurveTest, EaseInOutTheSecondHalfIsSimilarEaseOut) {
     ParticleCurve ease_in_out{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     // 后半段（t>0.5） EaseInOut 增长比 Linear 快
@@ -115,33 +115,33 @@ TEST(ParticleCurveTest, EaseInOut后半段类似EaseOut) {
 // 通用特性
 // ============================================================
 
-TEST(ParticleCurveTest, t越界时clamp到01) {
+TEST(ParticleCurveTest, TwhenCrossingTheLineclampTo01) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 10.0f, 20.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(-1.0f), 10.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(2.0f), 20.0f);
 }
 
-TEST(ParticleCurveTest, 起止值相同时恒值) {
+TEST(ParticleCurveTest, When) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 5.0f, 5.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 5.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 5.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 5.0f);
 }
 
-TEST(ParticleCurveTest, 反向曲线start大于end) {
+TEST(ParticleCurveTest, Towardstartend) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 10.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 10.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 5.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
-TEST(ParticleCurveTest, EaseIn越界clamp) {
+TEST(ParticleCurveTest, EaseInCrossTheLineclamp) {
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 0.0f, 100.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(-0.5f), 0.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.5f), 100.0f);
 }
 
-TEST(ParticleCurveTest, 默认值为单位衰减) {
+TEST(ParticleCurveTest, TheDefaultValueIsSingleDecays) {
     ParticleCurve curve;
     EXPECT_FALSE(curve.enabled);
     EXPECT_EQ(curve.type, ParticleCurveType::Linear);

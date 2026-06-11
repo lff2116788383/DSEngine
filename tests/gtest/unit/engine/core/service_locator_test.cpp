@@ -62,7 +62,7 @@ protected:
 // 注册与获取
 // ============================================================
 
-TEST_F(ServiceLocatorTest, 注册并获取服务) {
+TEST_F(ServiceLocatorTest, RegisterAcquire) {
     auto service = std::make_shared<ConcreteTestService>("TestService");
     ServiceLocator::Instance().Register<ITestService, ConcreteTestService>(service);
 
@@ -71,12 +71,12 @@ TEST_F(ServiceLocatorTest, 注册并获取服务) {
     EXPECT_EQ(retrieved->Name(), "TestService");
 }
 
-TEST_F(ServiceLocatorTest, 未注册服务返回空指针) {
+TEST_F(ServiceLocatorTest, NotregisterReturnsEmpty) {
     auto* retrieved = ServiceLocator::Instance().Get<ITestService>();
     EXPECT_EQ(retrieved, nullptr);
 }
 
-TEST_F(ServiceLocatorTest, 获取共享指针) {
+TEST_F(ServiceLocatorTest, Acquire) {
     auto service = std::make_shared<ConcreteTestService>("SharedTest");
     ServiceLocator::Instance().Register<ITestService, ConcreteTestService>(service);
 
@@ -85,7 +85,7 @@ TEST_F(ServiceLocatorTest, 获取共享指针) {
     EXPECT_EQ(shared->Name(), "SharedTest");
 }
 
-TEST_F(ServiceLocatorTest, 未注册服务共享指针返回空) {
+TEST_F(ServiceLocatorTest, NotregisterReturnsEmpty_2) {
     auto shared = ServiceLocator::Instance().GetShared<ITestService>();
     EXPECT_EQ(shared, nullptr);
 }
@@ -94,7 +94,7 @@ TEST_F(ServiceLocatorTest, 未注册服务共享指针返回空) {
 // Emplace 构造
 // ============================================================
 
-TEST_F(ServiceLocatorTest, Emplace直接构造服务) {
+TEST_F(ServiceLocatorTest, EmplaceConstructTheServiceDirectly) {
     ServiceLocator::Instance().Emplace<AnotherTestService, AnotherTestService>(42);
 
     auto* service = ServiceLocator::Instance().Get<AnotherTestService>();
@@ -102,7 +102,7 @@ TEST_F(ServiceLocatorTest, Emplace直接构造服务) {
     EXPECT_EQ(service->Value(), 42);
 }
 
-TEST_F(ServiceLocatorTest, Emplace接口与实现分离) {
+TEST_F(ServiceLocatorTest, EmplaceSeparationOfInterfaceAndImplementation) {
     ServiceLocator::Instance().Emplace<ITestService, ConcreteTestService>("EmplacedService");
 
     auto* service = ServiceLocator::Instance().Get<ITestService>();
@@ -114,7 +114,7 @@ TEST_F(ServiceLocatorTest, Emplace接口与实现分离) {
 // 服务替换
 // ============================================================
 
-TEST_F(ServiceLocatorTest, 重复注册替换服务) {
+TEST_F(ServiceLocatorTest, Register) {
     auto service1 = std::make_shared<ConcreteTestService>("V1");
     ServiceLocator::Instance().Register<ITestService, ConcreteTestService>(service1);
     EXPECT_EQ(ServiceLocator::Instance().Get<ITestService>()->Name(), "V1");
@@ -128,7 +128,7 @@ TEST_F(ServiceLocatorTest, 重复注册替换服务) {
 // 检查与重置
 // ============================================================
 
-TEST_F(ServiceLocatorTest, Has检查服务是否存在) {
+TEST_F(ServiceLocatorTest, HasCheckIfTheServiceExists) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<ITestService>());
 
     auto service = std::make_shared<ConcreteTestService>("CheckService");
@@ -137,7 +137,7 @@ TEST_F(ServiceLocatorTest, Has检查服务是否存在) {
     EXPECT_TRUE(ServiceLocator::Instance().Has<ITestService>());
 }
 
-TEST_F(ServiceLocatorTest, Reset移除单个服务) {
+TEST_F(ServiceLocatorTest, ResetRemoveASingleService) {
     auto service = std::make_shared<ConcreteTestService>("ToReset");
     ServiceLocator::Instance().Register<ITestService, ConcreteTestService>(service);
     EXPECT_TRUE(ServiceLocator::Instance().Has<ITestService>());
@@ -146,7 +146,7 @@ TEST_F(ServiceLocatorTest, Reset移除单个服务) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<ITestService>());
 }
 
-TEST_F(ServiceLocatorTest, ResetAll清除所有服务) {
+TEST_F(ServiceLocatorTest, ResetAllClearAllServices) {
     ServiceLocator::Instance().Emplace<ITestService, ConcreteTestService>("S1");
     ServiceLocator::Instance().Emplace<AnotherTestService, AnotherTestService>(99);
 
@@ -163,7 +163,7 @@ TEST_F(ServiceLocatorTest, ResetAll清除所有服务) {
 // 多类型共存
 // ============================================================
 
-TEST_F(ServiceLocatorTest, 多种服务类型共存) {
+TEST_F(ServiceLocatorTest, MultiType) {
     ServiceLocator::Instance().Emplace<ITestService, ConcreteTestService>("MultiService");
     ServiceLocator::Instance().Emplace<AnotherTestService, AnotherTestService>(77);
 
@@ -180,7 +180,7 @@ TEST_F(ServiceLocatorTest, 多种服务类型共存) {
 // 线程安全基本验证
 // ============================================================
 
-TEST_F(ServiceLocatorTest, 并发注册和获取不崩溃) {
+TEST_F(ServiceLocatorTest, RegisterAndAcquireDoesNotCrash) {
     constexpr int kThreadCount = 8;
     std::atomic<int> success_count{0};
 

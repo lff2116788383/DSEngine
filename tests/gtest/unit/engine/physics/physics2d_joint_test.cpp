@@ -17,7 +17,7 @@
 // Joint2DType 枚举
 // ============================================================
 
-TEST(Joint2DTypeTest, 枚举值可区分) {
+TEST(Joint2DTypeTest, EnumerationValueCan) {
     EXPECT_NE(Joint2DType::Revolute,  Joint2DType::Distance);
     EXPECT_NE(Joint2DType::Distance,  Joint2DType::Prismatic);
     EXPECT_NE(Joint2DType::Prismatic, Joint2DType::Weld);
@@ -27,17 +27,17 @@ TEST(Joint2DTypeTest, 枚举值可区分) {
 // Joint2DComponent 默认值
 // ============================================================
 
-TEST(Joint2DComponentTest, 默认类型为Revolute) {
+TEST(Joint2DComponentTest, DefaultTypeIsRevolute) {
     Joint2DComponent jc;
     EXPECT_EQ(jc.type, Joint2DType::Revolute);
 }
 
-TEST(Joint2DComponentTest, 默认运行时指针为nullptr) {
+TEST(Joint2DComponentTest, DefaultWhenIsnullptr) {
     Joint2DComponent jc;
     EXPECT_EQ(jc.runtime_joint, nullptr);
 }
 
-TEST(Joint2DComponentTest, 默认锚点为零向量) {
+TEST(Joint2DComponentTest, DefaultpointisZeroToward) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.anchor_a.x, 0.0f);
     EXPECT_FLOAT_EQ(jc.anchor_a.y, 0.0f);
@@ -45,7 +45,7 @@ TEST(Joint2DComponentTest, 默认锚点为零向量) {
     EXPECT_FLOAT_EQ(jc.anchor_b.y, 0.0f);
 }
 
-TEST(Joint2DComponentTest, 铰链默认禁用限制和马达) {
+TEST(Joint2DComponentTest, ChainDisabledByDefaultAnd) {
     Joint2DComponent jc;
     EXPECT_FALSE(jc.enable_limit);
     EXPECT_FALSE(jc.enable_motor);
@@ -55,7 +55,7 @@ TEST(Joint2DComponentTest, 铰链默认禁用限制和马达) {
     EXPECT_FLOAT_EQ(jc.max_motor_torque, 0.0f);
 }
 
-TEST(Joint2DComponentTest, 距离关节默认参数) {
+TEST(Joint2DComponentTest, DefaultParameters) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.min_length, 0.0f);
     EXPECT_FLOAT_EQ(jc.max_length, 1.0f);
@@ -63,7 +63,7 @@ TEST(Joint2DComponentTest, 距离关节默认参数) {
     EXPECT_FLOAT_EQ(jc.damping,    0.0f);
 }
 
-TEST(Joint2DComponentTest, 棱柱关节默认轴为X轴) {
+TEST(Joint2DComponentTest, DefaultIsX) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.prismatic_axis.x, 1.0f);
     EXPECT_FLOAT_EQ(jc.prismatic_axis.y, 0.0f);
@@ -73,7 +73,7 @@ TEST(Joint2DComponentTest, 棱柱关节默认轴为X轴) {
     EXPECT_FLOAT_EQ(jc.max_motor_force,       0.0f);
 }
 
-TEST(Joint2DComponentTest, 默认不碰撞已连接刚体) {
+TEST(Joint2DComponentTest, DefaultNotAlready) {
     Joint2DComponent jc;
     EXPECT_FALSE(jc.collide_connected);
 }
@@ -82,7 +82,7 @@ TEST(Joint2DComponentTest, 默认不碰撞已连接刚体) {
 // 马达参数运行时可修改（字段层面）
 // ============================================================
 
-TEST(Joint2DComponentTest, 铰链马达参数可赋值) {
+TEST(Joint2DComponentTest, ChainParametersCan) {
     Joint2DComponent jc;
     jc.enable_motor = true;
     jc.motor_speed = 180.0f;
@@ -92,7 +92,7 @@ TEST(Joint2DComponentTest, 铰链马达参数可赋值) {
     EXPECT_FLOAT_EQ(jc.max_motor_torque, 10.0f);
 }
 
-TEST(Joint2DComponentTest, 棱柱马达参数可赋值) {
+TEST(Joint2DComponentTest, ParametersCan) {
     Joint2DComponent jc;
     jc.enable_motor = true;
     jc.prismatic_motor_speed = 2.5f;

@@ -21,42 +21,42 @@ using namespace dse::scene;
 // AABB 测试
 // ============================================================
 
-TEST(AABBTest, 包含内部点) {
+TEST(AABBTest, Insidepoint) {
     AABB box{glm::vec3(-1.0f), glm::vec3(1.0f)};
     EXPECT_TRUE(box.Contains(glm::vec3(0.0f)));
     EXPECT_TRUE(box.Contains(glm::vec3(-1.0f)));
     EXPECT_TRUE(box.Contains(glm::vec3(1.0f)));
 }
 
-TEST(AABBTest, 不包含外部点) {
+TEST(AABBTest, DoesNotContainExternalPoints) {
     AABB box{glm::vec3(-1.0f), glm::vec3(1.0f)};
     EXPECT_FALSE(box.Contains(glm::vec3(2.0f, 0.0f, 0.0f)));
     EXPECT_FALSE(box.Contains(glm::vec3(0.0f, -2.0f, 0.0f)));
     EXPECT_FALSE(box.Contains(glm::vec3(0.0f, 0.0f, 2.0f)));
 }
 
-TEST(AABBTest, 重叠AABB相交) {
+TEST(AABBTest, AABB) {
     AABB a{glm::vec3(0.0f), glm::vec3(2.0f)};
     AABB b{glm::vec3(1.0f), glm::vec3(3.0f)};
     EXPECT_TRUE(a.Intersects(b));
     EXPECT_TRUE(b.Intersects(a));
 }
 
-TEST(AABBTest, 不重叠AABB不相交) {
+TEST(AABBTest, NoOverlapAABBdisjoint) {
     AABB a{glm::vec3(0.0f), glm::vec3(1.0f)};
     AABB b{glm::vec3(2.0f), glm::vec3(3.0f)};
     EXPECT_FALSE(a.Intersects(b));
     EXPECT_FALSE(b.Intersects(a));
 }
 
-TEST(AABBTest, 包含关系的AABB相交) {
+TEST(AABBTest, AABB_2) {
     AABB outer{glm::vec3(-5.0f), glm::vec3(5.0f)};
     AABB inner{glm::vec3(-1.0f), glm::vec3(1.0f)};
     EXPECT_TRUE(outer.Intersects(inner));
     EXPECT_TRUE(inner.Intersects(outer));
 }
 
-TEST(AABBTest, 仅边接触的AABB相交) {
+TEST(AABBTest, AABB_3) {
     AABB a{glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f, 1.0f, 1.0f)};
     AABB b{glm::vec3(1.0f, 0.0f, 0.0f), glm::vec3(2.0f, 1.0f, 1.0f)};
     EXPECT_TRUE(a.Intersects(b)); // 边接触视为相交
@@ -66,7 +66,7 @@ TEST(AABBTest, 仅边接触的AABB相交) {
 // Octree 基本功能
 // ============================================================
 
-TEST(OctreeTest, 插入并查询到数据) {
+TEST(OctreeTest, QueryTodata) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 4);
 
@@ -82,7 +82,7 @@ TEST(OctreeTest, 插入并查询到数据) {
     EXPECT_EQ(found[0].entity, entity);
 }
 
-TEST(OctreeTest, 查询不相交范围返回空) {
+TEST(OctreeTest, QuerydisjointReturnsEmpty) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 4);
 
@@ -97,7 +97,7 @@ TEST(OctreeTest, 查询不相交范围返回空) {
     EXPECT_TRUE(found.empty());
 }
 
-TEST(OctreeTest, 插入超出边界的数据被忽略) {
+TEST(OctreeTest, DataBy) {
     AABB bounds{glm::vec3(0.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 4);
 
@@ -112,7 +112,7 @@ TEST(OctreeTest, 插入超出边界的数据被忽略) {
     EXPECT_TRUE(found.empty());
 }
 
-TEST(OctreeTest, 超过容量时细分) {
+TEST(OctreeTest, When) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, /*capacity=*/2);
 
@@ -127,7 +127,7 @@ TEST(OctreeTest, 超过容量时细分) {
     EXPECT_TRUE(tree.IsDivided());
 }
 
-TEST(OctreeTest, 清空后树为空) {
+TEST(OctreeTest, ClearAfterIsEmpty) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 4);
 
@@ -143,7 +143,7 @@ TEST(OctreeTest, 清空后树为空) {
     EXPECT_FALSE(tree.IsDivided());
 }
 
-TEST(OctreeTest, 多个实体查询) {
+TEST(OctreeTest, MultiEntityQuery) {
     AABB bounds{glm::vec3(-10.0f), glm::vec3(10.0f)};
     Octree tree(bounds, 8);
 
