@@ -188,7 +188,7 @@ struct SpotLight {
 
     int shadow_index;
 
-    float _pad;  // NOTE: must be float (not vec2) to keep stride=64B matching C++ VulkanSpotLightsUBO::Entry
+    float _pad;  // NOTE: must be float (not vec2) to keep stride=64B matching C++ SpotLightEntry
 
 };
 

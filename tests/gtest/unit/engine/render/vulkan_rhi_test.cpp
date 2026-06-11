@@ -657,7 +657,7 @@ TEST(VulkanPointLightUBOTest, J1_结构体大小16B对齐) {
 }
 
 TEST(VulkanPointLightUBOTest, J1_Entry大小正确) {
-    EXPECT_EQ(sizeof(VulkanPointLightsUBO::Entry), 48u);
+    EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
 TEST(VulkanPointLightUBOTest, J1_默认count为零) {
@@ -670,7 +670,7 @@ TEST(VulkanSpotLightsUBOTest, J1_结构体大小16B对齐) {
 }
 
 TEST(VulkanSpotLightsUBOTest, J1_Entry大小正确) {
-    EXPECT_EQ(sizeof(VulkanSpotLightsUBO::Entry), 64u);
+    EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
 TEST(VulkanSpotLightsUBOTest, J1_默认count为零) {

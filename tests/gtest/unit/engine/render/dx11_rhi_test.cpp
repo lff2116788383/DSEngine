@@ -410,12 +410,12 @@ TEST(PointLightCBTest, J3_PointLightsCB大小16B对齐) {
 }
 
 TEST(PointLightCBTest, J3_PointLightEntry大小正确) {
-    EXPECT_EQ(sizeof(DX11PointLightEntry), 48u);
+    EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
 TEST(PointLightCBTest, J3_默认count为零) {
     DX11PointLightsCB cb{};
-    EXPECT_EQ(cb.count, 0);
+    EXPECT_EQ(cb.u_point_light_count, 0);
 }
 
 TEST(SpotLightCBTest, J3_SpotLightsCB大小16B对齐) {
@@ -423,12 +423,12 @@ TEST(SpotLightCBTest, J3_SpotLightsCB大小16B对齐) {
 }
 
 TEST(SpotLightCBTest, J3_SpotLightEntry大小正确) {
-    EXPECT_EQ(sizeof(DX11SpotLightEntry), 64u);
+    EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
 TEST(SpotLightCBTest, J3_默认count为零) {
     DX11SpotLightsCB cb{};
-    EXPECT_EQ(cb.count, 0);
+    EXPECT_EQ(cb.u_spot_light_count, 0);
 }
 
 // ============================================================

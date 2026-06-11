@@ -34,7 +34,7 @@ TEST(DX11CBAlignmentTest, PerMaterialCB_16B对齐) {
 }
 
 TEST(DX11CBAlignmentTest, PointLightEntry_16B对齐) {
-    EXPECT_EQ(sizeof(DX11PointLightEntry) % 16, 0u);
+    EXPECT_EQ(sizeof(PointLightEntry) % 16, 0u);
 }
 
 TEST(DX11CBAlignmentTest, PointLightsCB_16B对齐) {
@@ -42,7 +42,7 @@ TEST(DX11CBAlignmentTest, PointLightsCB_16B对齐) {
 }
 
 TEST(DX11CBAlignmentTest, SpotLightEntry_16B对齐) {
-    EXPECT_EQ(sizeof(DX11SpotLightEntry) % 16, 0u);
+    EXPECT_EQ(sizeof(SpotLightEntry) % 16, 0u);
 }
 
 TEST(DX11CBAlignmentTest, SpotLightsCB_16B对齐) {
