@@ -168,6 +168,30 @@ jobs:
         run: cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_editor_cpp --parallel
 
   # ───────────────────────────────────────────────────────────────────────────
+  # SDK 打包闭环校验——把「打包 → 第三方消费 → 运行」跑成 CI 常态。
+  # 复用 scripts/verify_sdk.ps1：配置 DSE_BUILD_SHARED=ON → 编译 dse_engine →
+  # install(component sdk) → 校验关键产物（DSEngineConfig/headers/glm/entt）→
+  # 用 find_package(DSEngine) 编译 examples/sdk_consumer → 运行可执行确认 DLL 可加载。
+  # 取 Full/Release 作为发布主配置门槛（Vulkan OFF，无需 Vulkan SDK）。
+  sdk-verify:
+    runs-on: windows-latest
+    name: sdk-verify-full-release
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Verify SDK end-to-end (package -> install -> consume -> run)
+        shell: pwsh
+        run: ./scripts/verify_sdk.ps1 -Profiles Full -Configs Release
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Linux 桌面构建（GLFW X11 + GL）——复用 scripts/verify_linux_build.sh（本地已验证）。
   # 构建 dse_engine 静态库 + Lua 运行时并校验产物为合法 ELF。
   # 注：本 job 首次真实运行待 CI 额度恢复后验证；命令对齐本地已通过的脚本。

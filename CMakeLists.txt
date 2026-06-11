@@ -34,8 +34,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions(-D GLM_FORCE_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
 add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
 
-add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
-
 # 注意：当前工程会把 vcpkg 的整个 lib 目录以通配方式拼进 MSVC 链接命令，
 # 其中如果存在 lua.lib，就会与源码内置 Lua 重复链接。
 # 这里显式忽略 Lua 默认库名，作为针对该项目链接命令的最小修复。
