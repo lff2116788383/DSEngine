@@ -238,15 +238,96 @@
 |--------|-----------|--------|
 | 资产缩略图（`editor_aux_panels.cpp`：球体预览 / 图片缩略图 / 缓存释放） | `glGenTextures`+`glTexImage2D`+`glDeleteTextures` | `EditorCreateTexture2D(linear,clamp)` / `EditorDeleteTexture` → `RhiDevice::CreateTexture2D(TextureSamplerDesc)` / `DeleteTexture`，行为一致（RGBA8 / Linear / ClampToEdge） |
 
-### 剩余（需扩展 RHI，风险较高）
+### 剩余（需扩展 RHI，风险较高）—— 概览
 
-| 子系统 | 位置 | 直接 GL 用法 | 阻塞点 |
-|--------|------|--------------|--------|
-| 视口拾取（颜色 ID） | `editor_viewport_panel.cpp` ~130-260 | 自建 shader + quad VAO/VBO + FBO，逐像素 `glReadPixels` 命中实体 | RHI 当前只暴露高层批绘制（`DrawMeshBatch/DrawSpriteBatch`），无「自定义 shader 任意几何即时绘制」入口；渲染目标与 readback（`CreateRenderTarget`/`ReadRenderTargetColorRgba8WithSize`）已具备，缺的是通用即时绘制原语 |
-| 多视口纹理 blit | `editor_viewport_panel.cpp` ~550-590 | `glBlitFramebuffer` 把源纹理拷到各视口纹理 | RHI 仅有 `BlitToScreen`，无通用 texture→texture/RT→RT blit |
-| ImGui 后缓冲清屏 | `editor_app.cpp` ~689-697 | 绑定默认 FBO + `glClear` 后由 imgui_impl_opengl3 直接绘制 | 与 ImGui GL3 后端强耦合；需 RHI 接管交换链/默认帧缓冲呈现，或改用 RHI 后端版 ImGui 渲染器 |
+| 子系统 | 位置 | 直接 GL 用法 | 阻塞点 | 依赖的新原语 |
+|--------|------|--------------|--------|--------------|
+| 视口拾取（颜色 ID） | `editor_viewport_panel.cpp` ~130-260 | 自建 shader + quad VAO/VBO + FBO，逐像素 `glReadPixels` 命中实体 | RHI 只暴露高层批绘制（`DrawMeshBatch/DrawSpriteBatch`），无「自定义 shader 任意几何即时绘制」入口 | A. 通用即时绘制 |
+| 多视口纹理 blit | `editor_viewport_panel.cpp` ~550-590 | `glBlitFramebuffer` 把源纹理拷到各视口纹理 | RHI 仅有 `BlitToScreen`，无通用 RT→RT / RT→texture blit | B. RT blit |
+| ImGui 后缓冲清屏 + 呈现 | `editor_app.cpp` ~689-697 | 绑定默认 FBO + `glClear`，再由 `imgui_impl_opengl3` 直接绘制 | 与 ImGui GL3 后端强耦合 | C. 默认帧缓冲清屏 + RHI 后端 ImGui 渲染器 |
 
-推进顺序建议：①先在 `RhiDevice` 增通用即时绘制原语（绑定自定义 program + 顶点缓冲 + 绘制到指定 RT）与 RT→texture blit，三后端各实现并补无头/离屏冒烟测试；②迁移视口拾取与多视口 blit；③最后处理 ImGui 呈现层（改用 RHI 后端 ImGui 渲染器）以彻底去除编辑器对 glad 的直接依赖。前两步无 GPU 即时绘制原语前不宜动，以免回归当前可用的拾取/多视口路径。
+> 推进顺序：先做 **§5.A 通用即时绘制原语 + §5.B RT blit**（视口拾取/多视口都依赖它，且可离屏验证），再迁移 **§5.1 视口拾取 / §5.2 多视口 blit**，最后做 **§5.3 ImGui 呈现层**（最深、与窗口/交换链耦合）。在 §5.A/§5.B 落地前不要动 §5.1/§5.2，以免回归当前可用路径。
+
+---
+
+### §5.A 新增 RHI 原语：通用即时绘制（Immediate Draw）
+
+**目标**：让上层用「自定义 shader program + 一段顶点数据 + 少量 uniform」直接绘制到指定 RT，不经高层 Mesh/Sprite 批。视口拾取（颜色 ID quad）即用此原语重写。
+
+**建议接口签名**（加到 `rhi_device.h`，类型放 `rhi_types.h` 全局命名空间）：
+
+```cpp
+enum class ImmediateTopology : uint8_t { Triangles, Lines, LineStrip };
+struct ImmediateVertexAttrib { int location; int components; int offset_bytes; };
+struct ImmediateDrawDesc {
+    unsigned int render_target = 0;        // 目标 RT 句柄（0 = 默认帧缓冲）
+    unsigned int shader_program = 0;       // CreateShaderProgram 返回值
+    const void*  vertices = nullptr;       // 交错顶点数据
+    size_t       vertex_bytes = 0;
+    int          vertex_count = 0;
+    int          stride_bytes = 0;
+    std::vector<ImmediateVertexAttrib> attribs;
+    ImmediateTopology topology = ImmediateTopology::Triangles;
+    glm::ivec4 viewport = {0,0,0,0};       // x,y,w,h（0,0,0,0 = 用 RT 全尺寸）
+    bool clear = false; glm::vec4 clear_color = {0,0,0,0};
+    bool blend = false; bool depth_test = false;
+    // 自定义 program 的 uniform（按需填，名字对应 GLSL/HLSL 常量）
+    std::vector<std::pair<std::string,float>>      uniforms_f;
+    std::vector<std::pair<std::string,glm::vec2>>  uniforms_vec2;
+    std::vector<std::pair<std::string,glm::vec4>>  uniforms_vec4;
+};
+// 默认实现可空（return），便于后端逐步落地；落地后编辑器拾取改调它。
+virtual void ImmediateDraw(const ImmediateDrawDesc& desc) { (void)desc; }
+```
+
+**各后端实现要点**
+- **OpenGL**（`gl_rhi_device.cpp` + `gl_resource_manager`）：取 `RenderTargetResource::fbo_handle`（0→默认 FBO）→ `glBindFramebuffer`；按 `viewport` 调 `glViewport`；`clear` 时 `glClearColor/glClear`；`glUseProgram(shader_program)`；用一个**复用的内部 VAO** + 临时（或 orphan 的）VBO 上传 `vertices`，按 `attribs` 设 `glVertexAttribPointer/glEnableVertexAttribArray`；按名 `glGetUniformLocation` 设 uniform；`blend/depth_test` 切 `GL_BLEND/GL_DEPTH_TEST`；`glDrawArrays(topology, 0, vertex_count)`；结束恢复先前 FBO/viewport/blend（编辑器现有拾取代码 130-260 即此逻辑，可直接搬入后端）。
+- **Vulkan**（`vulkan_rhi_device.cpp` + `vulkan_resource_manager`）：最重。需为「自定义 program + 顶点布局 + 目标 RT 的 `render_pass`」动态建一个 `VkPipeline`（建议按 `{shader_program, attribs, topology, blend, depth}` 做 key 缓存，避免每帧建）；录命令到一个一次性 `VkCommandBuffer`：`vkCmdBeginRenderPass`（用 RT 的 `render_pass`/`render_pass_load`，依 `clear`）→ `vkCmdBindPipeline` → `vkCmdSetViewport` → 绑定上传了顶点的 `VkBuffer` → uniform 走 push constant 或小 UBO → `vkCmdDraw` → `vkCmdEndRenderPass` → 提交并等完成（编辑器拾取需同帧 readback，简单起见同步提交）。
+- **D3D11**（`dx11_rhi_device.cpp` + `dx11_resource_manager`）：取 `DX11RenderTarget::color_rtv`（0→交换链 RTV）→ `OMSetRenderTargets`；`clear` 时 `ClearRenderTargetView`；`RSSetViewports`；由 `shader_program` 拿编译好的 VS/PS 与输入布局（`IASetInputLayout`，`attribs`→`D3D11_INPUT_ELEMENT_DESC`）；顶点传 `Map(WRITE_DISCARD)` 的动态 `ID3D11Buffer` + `IASetVertexBuffers`；uniform 打包进常量缓冲（`UpdateSubresource`/`Map`）；`OMSetBlendState/OMSetDepthStencilState`；`IASetPrimitiveTopology` + `Draw`。
+
+**需补测试**（`tests/gtest/integration/render/` 离屏，无窗口）
+- `ImmediateDrawFillsRenderTarget`：建 RT → 用纯色 shader `ImmediateDraw` 一个全屏三角形 → `ReadRenderTargetColorRgba8WithSize` 验中心像素=期望色。
+- `ImmediateDrawViewportSubregion`：带 `viewport` 子区域绘制 → 验区域内/外像素。
+- `ImmediateDrawColorIdRoundTrip`：模拟拾取——画多个不同颜色 quad → 读指定像素 → 颜色↔ID 反解正确（覆盖编辑器拾取的核心数值逻辑，与 GPU 后端无关的那部分也可单测）。
+
+### §5.B 新增 RHI 原语：RT blit（RT→RT / RT→texture）
+
+**目标**：等尺寸把一个 RT 的颜色 0 号附件拷到另一个 RT 或一张纹理，替代多视口的 `glBlitFramebuffer`。
+
+**建议接口签名**：
+```cpp
+// 颜色 0 号附件，等尺寸拷贝；dst 需已按相同尺寸创建。
+virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) { (void)src_rt; (void)dst_rt; }
+```
+
+**各后端实现要点**
+- **OpenGL**：`glBindFramebuffer(READ, src.fbo)` + `glBindFramebuffer(DRAW, dst.fbo)` → `glBlitFramebuffer(..., GL_COLOR_BUFFER_BIT, GL_NEAREST)`（即编辑器 550-590 现逻辑）。
+- **Vulkan**：`vkCmdBlitImage`（已有先例 `vulkan_draw_executor.cpp:2004`）；注意 blit 前后用 `vkCmdPipelineBarrier` 把 src 转 `TRANSFER_SRC`、dst 转 `TRANSFER_DST`，完后转回 `SHADER_READ_ONLY`。
+- **D3D11**：同格式同尺寸首选 `CopyResource(dst.color_texture, src.color_texture)`（已有先例 `dx11_resource_manager.cpp:797`）；若 src 为 MSAA，先 `ResolveSubresource`；格式不同则退化为采样 `color_srv` 的全屏 `ImmediateDraw`。
+
+**需补测试**：`BlitRenderTargetCopiesColor`：填充 src（用 §5.A 画纯色）→ `BlitRenderTarget` → 读 dst 验颜色一致。
+
+### §5.1 迁移视口拾取（依赖 §5.A）
+
+`editor_viewport_panel.cpp` ~130-260：
+- 用 `CreateShaderProgram` 建拾取 shader（现 GLSL 已在文件内，HLSL 需补一份；或抽到 `engine/shaders` 让 `shader_manager` 跨后端编译）。
+- 拾取 RT 用 `CreateRenderTarget({w,h,has_color,has_depth})`，每帧（或尺寸变化时）复用。
+- 把每个候选实体的颜色 quad 顶点填进 `ImmediateDrawDesc` 调一次/批次 `ImmediateDraw`（`clear=true`、`blend=false`、`depth_test=true`）。
+- 命中读取：现 `glReadPixels(px,py,1,1)` → 改 `ReadRenderTargetColorRgba8WithSize` 后按 `(px,py)` 取那一像素（或后续给 RHI 加 `ReadRenderTargetPixelRgba8(rt,x,y)` 单像素重载以省带宽，可选）。
+- 删除该文件中的所有 `gl*` 调用与 `#include <glad/gl.h>`。
+- 测试：颜色↔实体 ID 编解码已可无头单测；GPU 路径靠 §5.A 的离屏测试 + 手动可视化验证。
+
+### §5.2 迁移多视口 blit（依赖 §5.B）
+
+`editor_viewport_panel.cpp` ~550-590：`s_mvp_fbos`/`s_mvp_textures` 改为 `CreateRenderTarget`/`GetRenderTargetColorTexture`；`glBlitFramebuffer` 改 `BlitRenderTarget`；删除相关 `gl*`。注意各视口尺寸变化时重建目标 RT。
+
+### §5.3 迁移 ImGui 呈现层（最深）
+
+`editor_app.cpp` ~689-697 的默认 FBO 清屏 + `imgui_impl_opengl3` 直接出图与 GL 强耦合。两条路：
+1. **小步**：给 RHI 加 `ClearDefaultFramebuffer(color)`（GL=绑 0 号 FBO 清屏；DX11=清交换链 RTV；Vulkan=swapchain pass 的 loadOp=CLEAR），先把那几行 `gl*` 收进 RHI；ImGui 仍用 GL3 后端（编辑器暂仍随 GL 后端运行）。
+2. **彻底**：引入「RHI 后端版 ImGui 渲染器」（按当前 RHI 后端选择 `imgui_impl_opengl3`/`_vulkan`/`_dx11`，或自写一个走 `ImmediateDraw` 的 ImGui draw-data 渲染器），使编辑器可在任意后端启动并彻底去掉对 glad 的直接依赖。这步建议放在引擎 RHI 后端切换（编辑器可选 Vulkan/D3D11 启动）真正落地时一起做。
+
+**需补测试**：ImGui 呈现属窗口/交换链路径，无头不可测；以 §5.A/§5.B 离屏测试兜底数值正确性，呈现层靠手动跑编辑器三后端各截图验证。
 
 ---
 
