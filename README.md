@@ -145,6 +145,15 @@ cmake --build --preset wsl-debug
 
 所有预设已固定 `CMAKE_POLICY_VERSION_MINIMUM=3.5`（CMake 4 兼容旧依赖），无需手动传参。
 
+#### 启动项（Startup Item）
+
+仓库随附 `.vs/launch.vs.json`，已把默认启动/调试目标设为 **DSEngine 编辑器**（`dsengine-editor.exe`），
+另含"DSEngine 运行时 / 游戏"一项。打开文件夹后顶部 **启动项** 下拉默认即为编辑器，Ctrl+B / F5 直接作用于它。
+
+> 若 VS 仍显示 `glview` 等 `depends/` 下的**第三方示例目标**（如 tinygltf 的 `glview`），那是旧的
+> `.vs/` 缓存残留——这些示例**并不在 DSEngine 的构建里**。关闭 VS、删除项目根目录的 **`.vs/` 与 `out/`**
+> 后重新"打开文件夹"即可恢复为 DSEngine。需要编译整个工程时用 **生成 ▸ 全部生成（Build All）**。
+
 ### 手动配置（命令行）
 
 ```powershell

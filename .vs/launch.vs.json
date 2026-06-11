@@ -1,0 +1,18 @@
+{
+  "version": "0.2.1",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "dsengine-editor.exe (bin\\dsengine-editor.exe)",
+      "name": "DSEngine 编辑器 (dsengine-editor.exe)"
+    },
+    {
+      "type": "default",
+      "project": "CMakeLists.txt",
+      "projectTarget": "DSEngine_Game_debug.exe (bin\\DSEngine_Game_debug.exe)",
+      "name": "DSEngine 运行时 / 游戏 (DSEngine_Game)"
+    }
+  ]
+}
