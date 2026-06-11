@@ -5,20 +5,16 @@
  * 覆盖场景：
  * - BezierCurve2D：二次/三次贝塞尔曲线插值
  * - Tween：缓动函数评估、线性插值
- * - MemoryPool：分配/回收/扩容/线程安全
- * - ObjectPool：Acquire/Release/自定义工厂/预分配
+ *
+ * 注：内存池/对象池（PoolAllocator / ObjectPool）测试已迁至 memory_test.cpp，
+ * 随阶段4 重写为原地构造的池实现。
  */
 
 #include <gtest/gtest.h>
 #include "engine/base/bezier.h"
 #include "engine/base/tween.h"
-#include "engine/core/memory_pool.h"
-#include "engine/core/object_pool.h"
 #include <glm/glm.hpp>
 #include <cmath>
-#include <thread>
-#include <vector>
-#include <atomic>
 
 // ============================================================
 // BezierCurve2D 测试
@@ -126,140 +122,4 @@ TEST(TweenTest, LerpCorrectInterpolationWithEasing) {
     float result = dse::utils::Tween::Lerp(0.0f, 100.0f, 0.5f, dse::utils::EaseType::EaseInQuad);
     float eased_t = 0.5f * 0.5f; // EaseInQuad(0.5) = 0.25
     EXPECT_NEAR(result, 100.0f * eased_t, 1e-3f);
-}
-
-// ============================================================
-// MemoryPool 测试
-// ============================================================
-
-TEST(MemoryPoolTest, Initialize) {
-    dse::core::MemoryPool<int> pool(10);
-    int* ptr = pool.Allocate();
-    ASSERT_NE(ptr, nullptr);
-    EXPECT_EQ(*ptr, 0); // int 默认初始化为 0
-}
-
-TEST(MemoryPoolTest, AfterCanAgainTimes) {
-    dse::core::MemoryPool<int> pool(2);
-    int* ptr1 = pool.Allocate();
-    *ptr1 = 42;
-    pool.Free(ptr1);
-    int* ptr2 = pool.Allocate();
-    // 回收后的内存应可再次分配（值被 placement new 重置为默认值）
-    EXPECT_EQ(*ptr2, 0);
-}
-
-TEST(MemoryPoolTest, EmptyAutoExpansion) {
-    dse::core::MemoryPool<int> pool(1);
-    std::vector<int*> ptrs;
-    // 分配超过初始容量
-    for (int i = 0; i < 10; ++i) {
-        ptrs.push_back(pool.Allocate());
-    }
-    for (int i = 0; i < 10; ++i) {
-        ASSERT_NE(ptrs[i], nullptr);
-    }
-}
-
-TEST(MemoryPoolTest, FreeNullPointerDoesNotCrash) {
-    dse::core::MemoryPool<int> pool(1);
-    pool.Free(nullptr);
-    SUCCEED();
-}
-
-TEST(MemoryPoolTest, Multi) {
-    dse::core::MemoryPool<int> pool(100);
-    std::atomic<int> alloc_count{0};
-    std::atomic<int> free_count{0};
-
-    const int thread_count = 4;
-    const int ops_per_thread = 50;
-    std::vector<std::thread> threads;
-
-    for (int t = 0; t < thread_count; ++t) {
-        threads.emplace_back([&pool, &alloc_count, &free_count, ops_per_thread]() {
-            std::vector<int*> local_ptrs;
-            for (int i = 0; i < ops_per_thread; ++i) {
-                int* ptr = pool.Allocate();
-                *ptr = i;
-                local_ptrs.push_back(ptr);
-                alloc_count.fetch_add(1);
-            }
-            for (auto* ptr : local_ptrs) {
-                pool.Free(ptr);
-                free_count.fetch_add(1);
-            }
-        });
-    }
-
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    EXPECT_EQ(alloc_count.load(), thread_count * ops_per_thread);
-    EXPECT_EQ(free_count.load(), thread_count * ops_per_thread);
-}
-
-// ============================================================
-// ObjectPool 测试
-// ============================================================
-
-TEST(ObjectPoolTest, AcquireAcquireFromPreallocatedPool) {
-    dse::core::ObjectPool<int> pool(5);
-    EXPECT_EQ(pool.AvailableCount(), 5u);
-    int val = pool.Acquire();
-    EXPECT_EQ(pool.AvailableCount(), 4u);
-}
-
-TEST(ObjectPoolTest, ReleaseAvailableUponReturn) {
-    dse::core::ObjectPool<int> pool(1);
-    pool.Acquire();
-    EXPECT_EQ(pool.AvailableCount(), 0u);
-    pool.Release(0);
-    EXPECT_EQ(pool.AvailableCount(), 1u);
-}
-
-TEST(ObjectPoolTest, EmptyAcquireCreate) {
-    dse::core::ObjectPool<int> pool(0);
-    EXPECT_EQ(pool.AvailableCount(), 0u);
-    int val = pool.Acquire();
-    EXPECT_EQ(val, 0); // 默认构造的 int 值为 0
-}
-
-TEST(ObjectPoolTest, TestCase24) {
-    int counter = 100;
-    dse::core::ObjectPool<int> pool(3, [&counter]() { return counter++; });
-    EXPECT_EQ(pool.AvailableCount(), 3u);
-
-    int val1 = pool.Acquire();
-    int val2 = pool.Acquire();
-    // 工厂函数在 Reserve 时调用，返回值应从 100 开始
-    EXPECT_GE(val1, 100);
-    EXPECT_GE(val2, 100);
-}
-
-TEST(ObjectPoolTest, ReserveExpansion) {
-    dse::core::ObjectPool<int> pool(0);
-    pool.Reserve(10);
-    EXPECT_EQ(pool.AvailableCount(), 10u);
-}
-
-TEST(ObjectPoolTest, CycleAcquireReleaseNoLeak) {
-    dse::core::ObjectPool<int> pool(5);
-    for (int i = 0; i < 100; ++i) {
-        int val = pool.Acquire();
-        pool.Release(val);
-    }
-    EXPECT_EQ(pool.AvailableCount(), 5u);
-}
-
-TEST(ObjectPoolTest, Type) {
-    struct Vec3 {
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-    };
-    dse::core::ObjectPool<Vec3> pool(2);
-    Vec3 v = pool.Acquire();
-    EXPECT_FLOAT_EQ(v.x, 0.0f);
-    EXPECT_FLOAT_EQ(v.y, 0.0f);
-    EXPECT_FLOAT_EQ(v.z, 0.0f);
 }

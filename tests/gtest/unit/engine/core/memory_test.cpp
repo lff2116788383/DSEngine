@@ -22,6 +22,8 @@
 #include "engine/core/memory/tracking_allocator.h"
 #include "engine/core/memory/linear_allocator.h"
 #include "engine/core/memory/frame_allocator.h"
+#include "engine/core/memory/pool_allocator.h"
+#include "engine/core/object_pool.h"
 
 using namespace dse::core;
 
@@ -397,4 +399,109 @@ TEST(ThreadScratchTest, PerThreadDistinctBuffersNoRace) {
     EXPECT_EQ(failures.load(), 0);
     // 每个线程应得到独立 scratch 缓冲（基址互不相同）。
     EXPECT_EQ(bases.size(), static_cast<size_t>(kThreads));
+}
+
+// ============================================================
+// PoolAllocator（固定大小块池）
+// ============================================================
+
+TEST(PoolAllocatorTest, AllocateFreeReuseNoFragmentation) {
+    PoolAllocator pool;
+    pool.Init(sizeof(int), alignof(int), 4, MemoryTag::Default);
+    ASSERT_TRUE(pool.IsInitialized());
+    EXPECT_GE(pool.Capacity(), 4u);
+    EXPECT_EQ(pool.UsedCount(), 0u);
+
+    void* a = pool.Allocate();
+    void* b = pool.Allocate();
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_NE(a, b);
+    EXPECT_EQ(pool.UsedCount(), 2u);
+
+    // 归还后再取应复用同一块（无碎片）。
+    pool.Free(b);
+    void* c = pool.Allocate();
+    EXPECT_EQ(c, b);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(a) % alignof(int), 0u);
+}
+
+TEST(PoolAllocatorTest, AutoGrowsBeyondInitialCapacity) {
+    PoolAllocator pool;
+    pool.Init(64, 16, 2, MemoryTag::Default);
+    const size_t initial = pool.Capacity();
+    std::vector<void*> ptrs;
+    for (int i = 0; i < 10; ++i) {
+        void* p = pool.Allocate();
+        ASSERT_NE(p, nullptr);
+        EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % 16u, 0u); // 对齐保持
+        ptrs.push_back(p);
+    }
+    EXPECT_GT(pool.Capacity(), initial); // 触发了扩容
+    EXPECT_GT(pool.ChunkCount(), 1u);
+    for (void* p : ptrs) pool.Free(p);
+    EXPECT_EQ(pool.UsedCount(), 0u);
+}
+
+TEST(PoolAllocatorTest, BlockStrideHonorsMinAndAlignment) {
+    PoolAllocator pool;
+    pool.Init(1, 8, 4, MemoryTag::Default); // 1 字节请求 → 抬升到 >= sizeof(void*) 且 8 对齐
+    EXPECT_GE(pool.BlockSize(), sizeof(void*));
+    EXPECT_EQ(pool.BlockSize() % 8u, 0u);
+}
+
+// ============================================================
+// ObjectPool（原地构造 + 析构）
+// ============================================================
+
+TEST(ObjectPoolTest, AcquireConstructsReleaseDestructsInPlace) {
+    static int live = 0;
+    struct Tracked {
+        int v;
+        explicit Tracked(int x) : v(x) { ++live; }
+        ~Tracked() { --live; }
+    };
+    {
+        ObjectPool<Tracked> pool(4);
+        EXPECT_EQ(pool.AvailableCount(), 4u);
+        Tracked* a = pool.Acquire(7);
+        ASSERT_NE(a, nullptr);
+        EXPECT_EQ(a->v, 7);       // 构造参数透传
+        EXPECT_EQ(live, 1);       // 构造函数已执行
+        EXPECT_EQ(pool.UsedCount(), 1u);
+        pool.Release(a);
+        EXPECT_EQ(live, 0);       // 析构函数已执行
+        EXPECT_EQ(pool.UsedCount(), 0u);
+    }
+}
+
+TEST(ObjectPoolTest, CycleReuseNoLeak) {
+    ObjectPool<int> pool(8);
+    const size_t cap = pool.Capacity();
+    for (int i = 0; i < 1000; ++i) {
+        int* p = pool.Acquire(i);
+        ASSERT_NE(p, nullptr);
+        EXPECT_EQ(*p, i);
+        pool.Release(p);
+    }
+    EXPECT_EQ(pool.UsedCount(), 0u);
+    EXPECT_EQ(pool.Capacity(), cap); // 反复借还不增长容量
+}
+
+TEST(ObjectPoolTest, SupportsNonCopyableType) {
+    struct NonCopyable {
+        int id;
+        explicit NonCopyable(int i) : id(i) {}
+        NonCopyable(const NonCopyable&) = delete;
+        NonCopyable& operator=(const NonCopyable&) = delete;
+    };
+    ObjectPool<NonCopyable> pool(2);
+    NonCopyable* a = pool.Acquire(1);
+    NonCopyable* b = pool.Acquire(2);
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(a->id, 1);
+    EXPECT_EQ(b->id, 2);
+    pool.Release(a);
+    pool.Release(b);
 }

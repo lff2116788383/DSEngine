@@ -272,7 +272,13 @@ engine/core/memory/
    - `Memory::Frame()`（进程级主线程帧分配器，按 `MemoryConfig` 惰性初始化）+ `Memory::ThreadScratch()`（`thread_local`，每线程私有零争用）；`MemoryConfig` 增 `frame_buffer_bytes/frame_buffer_count/scratch_bytes`。
    - `JobSystem::WorkerThread` 每个任务执行后 `Memory::ThreadScratch().Reset()`（任务级瞬时内存复位）。
    - 测试：新增 8 例（线性 bump/对齐/溢出/Reset/Mark-Rewind、帧分配器轮转复位/缓冲数夹取、ThreadScratch 8 线程屏障并发无串扰且缓冲互异）。`ctest` 三套全绿（含 smoke 跑帧边界复位）。
-4. **池**：`PoolAllocator` + 重写 `ObjectPool`，删死代码 `memory_pool.h`，迁 1–2 个高频点示范。
+4. **池**：`PoolAllocator` + 重写 `ObjectPool`，删死代码 `memory_pool.h`，迁 1–2 个高频点示范。 ✓ **已完成**
+   - 文件：`engine/core/memory/pool_allocator.{h,cpp}`（具体类型、无虚函数）。
+   - `PoolAllocator`：固定大小块 + 侵入式空闲链表（空闲块复用为 next 指针），O(1) 分配/回收、**无碎片**；容量不足按 chunk 增长（底层经 Memory 门面申请），`Shutdown` 释放全部 chunk；块步长自动抬升至 `>= sizeof(void*)` 并按对齐取整。
+   - **重写 `ObjectPool<T>`**（`engine/core/object_pool.h`）：由旧的「按值拷贝存储 + 工厂」改为 **PoolAllocator 支撑 + 原地 placement-new**——`Acquire(args...)` 在池内存上构造并返回 `T*`，`Release(T*)` 显式析构后归还；支持**不可拷贝/重对象**，无拷贝开销。
+   - **删除死代码** `engine/core/memory_pool.h`（每次分配加锁、只增不减、无对齐），并从 `engine/dse.h` 移除其 include，改纳入 `memory/memory.h` + `memory/pool_allocator.h`。
+   - **示范接入**：`JobSystem` 完成信号 `std::promise<void>` 由每次 `new/delete` 改为 `ObjectPool<std::promise<void>> promise_pool_`（`Acquire/Release` 全在 `queue_mutex_` 保护下，线程安全）。
+   - 测试：原 `math_pool_test.cpp` 的 MemoryPool/ObjectPool 旧用例迁出，新增 6 例于 `memory_test.cpp`（池：分配/回收复用无碎片、超容量自动扩容保对齐、块步长下限与对齐；对象池：原地构造/析构 live 计数、借还千次不泄漏不增容、支持不可拷贝类型）。`ctest` 三套全绿。
 5. **预算 + 资产对接**：统一预算视图，`AssetManager` 上报；数据查询接口 + 日志（不做 UI 面板）。
 6. **STL 适配器 + 标签化**：仅提供 + 示范，按硬规矩约束使用边界。
 7. **（可选后续）** mimalloc 后端 + Handle 化热路径。

@@ -77,7 +77,7 @@ void JobSystem::Shutdown() {
         for (auto& [id, promise] : completion_signals_) {
             if (promise) {
                 try { promise->set_value(); } catch (...) {}
-                delete promise;
+                promise_pool_.Release(promise);
             }
         }
         completion_signals_.clear();
@@ -117,7 +117,7 @@ JobHandle JobSystem::Submit(const std::function<void()>& job,
             // 回退为同步执行
         } else {
             uint64_t id = next_job_id_.fetch_add(1);
-            auto* completion = new std::promise<void>();
+            auto* completion = promise_pool_.Acquire();
             completion_signals_[id] = completion;
 
             JobEntry entry;
@@ -157,7 +157,7 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
             // 回退为同步执行
         } else {
             uint64_t id = next_job_id_.fetch_add(1);
-            auto* completion = new std::promise<void>();
+            auto* completion = promise_pool_.Acquire();
             completion_signals_[id] = completion;
 
             // 计算未完成的依赖
@@ -370,7 +370,7 @@ void JobSystem::WorkerThread(int index) {
             auto sig_it = completion_signals_.find(job_id);
             if (sig_it != completion_signals_.end() && sig_it->second) {
                 try { sig_it->second->set_value(); } catch (...) {}
-                delete sig_it->second;
+                promise_pool_.Release(sig_it->second);
                 completion_signals_.erase(sig_it);
             }
 

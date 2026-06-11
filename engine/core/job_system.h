@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "engine/core/dse_export.h"
+#include "engine/core/object_pool.h"
 
 namespace dse {
 namespace core {
@@ -206,6 +207,9 @@ private:
     std::unordered_map<uint64_t, std::promise<void>*> completion_signals_;
     /// 已完成任务集合（简化依赖检查，定期清理）
     std::unordered_set<uint64_t> completed_jobs_;
+    /// 完成信号的固定大小对象池（示范用：替代每次 new/delete promise；
+    /// 所有 Acquire/Release 均在 queue_mutex_ 保护下进行）。
+    ObjectPool<std::promise<void>> promise_pool_;
 };
 
 } // namespace core
