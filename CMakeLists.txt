@@ -70,6 +70,10 @@ option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
+# --- 内存子系统 (engine/core/memory) ---
+option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
+option(DSE_MEM_TRACK_POINTERS "Register every allocation by pointer for precise leak location (slower)" OFF)
+
 # --- Android NDK 交叉编译默认值 ---
 if(ANDROID)
     set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
@@ -618,6 +622,14 @@ if(DSE_BUILD_SHARED)
     target_compile_definitions(dse_engine PRIVATE DSE_ENGINE_EXPORTS)
 else()
     target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
+endif()
+
+# 内存追踪：默认仅在 Debug 配置生效（Release 保持零开销）。PUBLIC 以便测试/消费端口径一致。
+if(DSE_ENABLE_MEM_TRACKING)
+    target_compile_definitions(dse_engine PUBLIC $<$<CONFIG:Debug>:DSE_ENABLE_MEM_TRACKING=1>)
+endif()
+if(DSE_MEM_TRACK_POINTERS)
+    target_compile_definitions(dse_engine PUBLIC DSE_MEM_TRACK_POINTERS=1)
 endif()
 
 if(MSVC)

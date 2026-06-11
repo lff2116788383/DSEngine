@@ -256,7 +256,14 @@ engine/core/memory/
    - 文件：`engine/core/memory/{allocator,system_allocator,memory}.{h,cpp}`；`EngineInstance` 构造最早期调用 `Memory::Init()`。
    - `SystemAllocator` 用块头记录 size/对齐/标签 + magic 校验；`Reallocate` = alloc+copy+free（跨平台对齐安全）；总量统计用原子。
    - 测试：`tests/gtest/unit/engine/core/memory_test.cpp`（11 例：标签注册、对齐、块头/统计、Realloc 保数据、门面 New/Delete 构析、空指针安全）。`ctest --preset windows-x64-debug` 三套全绿。
-2. **追踪**：`TrackingAllocator` + `MemoryTracker`(每线程缓冲) + `ReportLeaks` + CMake 开关（含全局 new 覆盖开关）。
+2. **追踪**：`TrackingAllocator` + `MemoryTracker`(每线程缓冲) + `ReportLeaks` + CMake 开关（含全局 new 覆盖开关）。 ✓ **已完成**
+   - 文件：`engine/core/memory/{memory_tracker,tracking_allocator}.{h,cpp}`；`Memory::Init` 在启用追踪时把默认堆包进 `TrackingAllocator`。
+   - `MemoryTracker`：按标签原子计数（current/peak/alloc/free，桶数 `kMaxTrackedTags=256`），`Report` 输出按标签占用/泄漏并**标注口径为「engine-facade-only」**（第三方/全局分配不计入）。
+   - `TrackingAllocator`：自带紧凑块头（inner 基址/size/tag），**后端无关**（可叠加在 SystemAllocator 或未来 mimalloc 上），保持用户对齐。
+   - 门面新增 `Stats(tag)` / `TrackingEnabled()`；`ReportLeaks` 启用追踪时走按标签报告。
+   - CMake：`DSE_ENABLE_MEM_TRACKING`（默认 ON，仅 `$<CONFIG:Debug>` 注入定义，Release 零开销）、`DSE_MEM_TRACK_POINTERS`（默认 OFF，逐指针登记定位泄漏）。
+   - 测试：新增 7 例（按标签计数/峰值、装饰器对齐与上报、Realloc 保数据、门面按标签统计）。`ctest` 三套全绿。
+   - **未做**：`DSE_MEM_GLOBAL_NEW_OVERRIDE`（全量口径/跨 DLL 自动安全）暂未实现——全局 `operator new/delete` 覆盖风险高且需独立验证，留待后续单独提交；当前口径为「门面视图」。
 3. **帧/线性**：`LinearAllocator` + `FrameAllocator`(N缓冲, fence 对齐) + `ThreadScratch`，接 FramePipeline / JobSystem；修 job_system 裸 new。
 4. **池**：`PoolAllocator` + 重写 `ObjectPool`，删死代码 `memory_pool.h`，迁 1–2 个高频点示范。
 5. **预算 + 资产对接**：统一预算视图，`AssetManager` 上报；数据查询接口 + 日志（不做 UI 面板）。

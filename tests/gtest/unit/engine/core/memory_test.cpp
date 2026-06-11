@@ -12,6 +12,8 @@
 #include "engine/core/memory/allocator.h"
 #include "engine/core/memory/system_allocator.h"
 #include "engine/core/memory/memory.h"
+#include "engine/core/memory/memory_tracker.h"
+#include "engine/core/memory/tracking_allocator.h"
 
 using namespace dse::core;
 
@@ -157,3 +159,99 @@ TEST(MemoryFacadeTest, TotalStatsIncreaseOnAlloc) {
     EXPECT_GE(mid.current, before.current + 4096u);
     Memory::Free(p);
 }
+
+// ============================================================
+// MemoryTracker（独立实例，避免与全局单例相互干扰）
+// ============================================================
+
+TEST(MemoryTrackerTest, PerTagCountsAndPeak) {
+    MemoryTracker tracker;
+    EXPECT_FALSE(tracker.HasLiveAllocations());
+
+    tracker.OnAlloc(TagId(MemoryTag::Texture), 1000, reinterpret_cast<void*>(0x1));
+    tracker.OnAlloc(TagId(MemoryTag::Texture), 500, reinterpret_cast<void*>(0x2));
+    tracker.OnAlloc(TagId(MemoryTag::Mesh), 200, reinterpret_cast<void*>(0x3));
+
+    MemoryStats tex = tracker.Stats(TagId(MemoryTag::Texture));
+    EXPECT_EQ(tex.current, 1500u);
+    EXPECT_EQ(tex.peak, 1500u);
+    EXPECT_EQ(tex.alloc_count, 2u);
+
+    tracker.OnFree(TagId(MemoryTag::Texture), 1000, reinterpret_cast<void*>(0x1));
+    tex = tracker.Stats(TagId(MemoryTag::Texture));
+    EXPECT_EQ(tex.current, 500u);
+    EXPECT_EQ(tex.peak, 1500u); // 峰值不回落
+    EXPECT_EQ(tex.free_count, 1u);
+
+    MemoryStats total = tracker.TotalStats();
+    EXPECT_EQ(total.current, 700u); // 500 (tex) + 200 (mesh)
+    EXPECT_TRUE(tracker.HasLiveAllocations());
+
+    // 全部释放后无泄漏
+    tracker.OnFree(TagId(MemoryTag::Texture), 500, reinterpret_cast<void*>(0x2));
+    tracker.OnFree(TagId(MemoryTag::Mesh), 200, reinterpret_cast<void*>(0x3));
+    EXPECT_FALSE(tracker.HasLiveAllocations());
+}
+
+// ============================================================
+// TrackingAllocator 装饰器（后端无关）
+// ============================================================
+
+TEST(TrackingAllocatorTest, WrapsBackendAndReportsToTracker) {
+    SystemAllocator backend;
+    MemoryTracker tracker;
+    TrackingAllocator tracking(&backend, &tracker);
+
+    void* p = tracking.Allocate(300, 32, TagId(MemoryTag::Physics));
+    ASSERT_NE(p, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % 32u, 0u); // 用户对齐保持
+
+    MemoryStats s = tracker.Stats(TagId(MemoryTag::Physics));
+    EXPECT_EQ(s.current, 300u);
+    EXPECT_EQ(s.alloc_count, 1u);
+
+    tracking.Deallocate(p);
+    s = tracker.Stats(TagId(MemoryTag::Physics));
+    EXPECT_EQ(s.current, 0u);
+    EXPECT_EQ(s.free_count, 1u);
+    EXPECT_FALSE(tracker.HasLiveAllocations());
+}
+
+TEST(TrackingAllocatorTest, ReallocPreservesDataAndStats) {
+    SystemAllocator backend;
+    MemoryTracker tracker;
+    TrackingAllocator tracking(&backend, &tracker);
+
+    auto* p = static_cast<uint8_t*>(tracking.Allocate(16, 16, TagId(MemoryTag::Scene)));
+    ASSERT_NE(p, nullptr);
+    for (int i = 0; i < 16; ++i) p[i] = static_cast<uint8_t>(i + 100);
+
+    auto* q = static_cast<uint8_t*>(tracking.Reallocate(p, 48, 16, TagId(MemoryTag::Scene)));
+    ASSERT_NE(q, nullptr);
+    for (int i = 0; i < 16; ++i) EXPECT_EQ(q[i], static_cast<uint8_t>(i + 100));
+
+    MemoryStats s = tracker.Stats(TagId(MemoryTag::Scene));
+    EXPECT_EQ(s.current, 48u);
+    tracking.Deallocate(q);
+    EXPECT_FALSE(tracker.HasLiveAllocations());
+}
+
+#if defined(DSE_ENABLE_MEM_TRACKING)
+TEST(MemoryFacadeTest, TrackingEnabledStatsPerTag) {
+    EXPECT_TRUE(Memory::TrackingEnabled());
+    Memory::Init();
+    const MemoryStats before = Memory::Stats(MemoryTag::Net);
+    void* p = Memory::Alloc(777, MemoryTag::Net);
+    ASSERT_NE(p, nullptr);
+    const MemoryStats mid = Memory::Stats(MemoryTag::Net);
+    EXPECT_EQ(mid.current - before.current, 777u);
+    Memory::Free(p);
+    const MemoryStats after = Memory::Stats(MemoryTag::Net);
+    EXPECT_EQ(after.current, before.current);
+}
+#else
+TEST(MemoryFacadeTest, TrackingDisabledReturnsZeroStats) {
+    EXPECT_FALSE(Memory::TrackingEnabled());
+    EXPECT_EQ(Memory::Stats(MemoryTag::Net).current, 0u);
+}
+#endif

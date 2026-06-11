@@ -58,7 +58,13 @@ public:
     /// 总量统计快照（聚合所有标签）。
     static MemoryStats TotalStats();
 
-    /// 输出泄漏/占用报告到日志（阶段1：仅打印总量）。
+    /// 某标签统计快照（需启用 DSE_ENABLE_MEM_TRACKING；否则返回零值）。
+    static MemoryStats Stats(MemoryTag tag);
+
+    /// 是否已启用按标签追踪（编译期开关 DSE_ENABLE_MEM_TRACKING）。
+    static bool TrackingEnabled();
+
+    /// 输出泄漏/占用报告到日志（启用追踪时按标签，否则仅总量）。
     static void ReportLeaks();
 
     /// 访问通用堆后端（高级用法）。
