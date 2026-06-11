@@ -330,6 +330,34 @@ TEST(DSSLMaterialLoaderTest, LoadFromFile_有效DSSL成功) {
     std::filesystem::remove(path);
 }
 
+TEST(DSSLMaterialLoaderTest, LoadFromFile_vec3默认值解析w补1) {
+    // 回归保护：vec3 默认值经解析后应得到 (x,y,z,1.0)，
+    // 校验 vec3 解析不再依赖 "vec4"+substr 字符串拼接 hack。
+    auto& loader = DSSLMaterialLoader::Instance();
+    loader.Clear();
+    const std::string src =
+        "shader_type unlit\n"
+        "uniform vec3 emission_color = vec3(0.2, 0.4, 0.6);\n"
+        "uniform vec4 albedo_color = vec4(0.1, 0.2, 0.3, 0.5);\n"
+        "void fragment() {}\n";
+    auto path = WriteTempDSSL("dse_vec3_default_material.dssl", src);
+    auto inst = loader.LoadFromFile(path.string());
+    ASSERT_NE(inst, nullptr);
+    // vec3 默认值：第 4 分量补 1.0。
+    const glm::vec4 emission = inst->GetVec4("emission_color");
+    EXPECT_FLOAT_EQ(emission.x, 0.2f);
+    EXPECT_FLOAT_EQ(emission.y, 0.4f);
+    EXPECT_FLOAT_EQ(emission.z, 0.6f);
+    EXPECT_FLOAT_EQ(emission.w, 1.0f);
+    // vec4 默认值：四分量原样保留（不受 vec3 路径影响）。
+    const glm::vec4 albedo = inst->GetVec4("albedo_color");
+    EXPECT_FLOAT_EQ(albedo.x, 0.1f);
+    EXPECT_FLOAT_EQ(albedo.y, 0.2f);
+    EXPECT_FLOAT_EQ(albedo.z, 0.3f);
+    EXPECT_FLOAT_EQ(albedo.w, 0.5f);
+    std::filesystem::remove(path);
+}
+
 TEST(DSSLMaterialLoaderTest, Clear_清除后查询为空) {
     auto& loader = DSSLMaterialLoader::Instance();
     loader.Clear();

@@ -50,6 +50,7 @@ TEST(TerrainComponentTest, SplatMap默认值) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.splat_data.empty());
     EXPECT_TRUE(tc.splat_dirty);
+    EXPECT_EQ(tc.splat_weight_texture, 0u);  // 未上传前权重图句柄为 0
     for (int i = 0; i < 4; ++i) {
         EXPECT_TRUE(tc.splat_texture_paths[i].empty());
         EXPECT_EQ(tc.splat_texture_handles[i], 0u);
