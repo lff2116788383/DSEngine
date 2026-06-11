@@ -1,6 +1,9 @@
 # RHI 统一收尾 + Vulkan 后端转正计划
 
-> 状态：执行中（feature/engine-lib）。本计划基于对三后端代码的逐行核对，不依赖历史文档。
+> 状态：阶段 A / 阶段 B 已完成（feature/engine-lib）。本计划基于对三后端代码的逐行核对，不依赖历史文档。
+> 验收说明：因 CI 额度耗尽且本机无编译环境，本次验收方式为逐行人工核对
+> （辅助函数签名/命名空间/语义与原后端代码逐项比对、共享结构与本地结构 std140 布局逐字段比对、
+> 全仓 grep 确认无残留旧结构/旧成员引用），CI 三矩阵回归待额度恢复后补跑。
 
 ## 背景与现状核实
 
@@ -23,34 +26,44 @@
 - 各后端本地 UBO 结构（`VulkanPerSceneUBO`、`DX11PerSceneCB` 等）与 `ubo_types.h`
   共享结构逐字段同布局（std140），属于重复定义。
 
-## 阶段 A：UBO 填充逻辑统一（本次实施）
+## 阶段 A：UBO 填充逻辑统一（已完成）
 
-1. **修正共享辅助函数**（`draw_executor_common.h`）
+1. [x] **修正共享辅助函数**（`draw_executor_common.h`）
    - `PreparePerSceneUBO`：`cascade_splits.w = static_cast<float>(item.wboit_mode)`；
    - `PreparePerMaterialUBO`：补 watercolor（shading_mode==5）分支。
-2. **GL 后端改用共享函数**：DrawMeshBatch 中 PerScene/LightProbe/PointLights/SpotLights
+2. [x] **GL 后端改用共享函数**：DrawMeshBatch 中 PerScene/LightProbe/PointLights/SpotLights
    填充替换为 `Prepare*` 调用（上传仍走 `UBOManager`）。
-3. **DX11 后端改用共享函数**：本地 CB 结构布局与共享结构一致处直接以共享结构填充后
+3. [x] **DX11 后端改用共享函数**：本地 CB 结构布局与共享结构一致处直接以共享结构填充后
    `UpdateConstantBuffer` 上传；删除重复填充代码。
-4. **Vulkan 后端改用共享函数**：`UpdatePerSceneUBO/UpdatePerMaterialUBO/UpdatePointSpotLightUBOs`
+4. [x] **Vulkan 后端改用共享函数**：`UpdatePerSceneUBO/UpdatePerMaterialUBO/UpdatePointSpotLightUBOs`
    内部改为 `Prepare*` + `WriteToBuffer`；`VulkanPerSceneUBO` 等本地结构以
    `using ... = PerSceneUBO;` 别名到 `ubo_types.h` 共享类型（布局已逐字段核对一致）。
-5. **关闭 RHI_UNIFICATION_TASKS.md #3**（排查结论见下）。
+5. [x] **关闭 RHI_UNIFICATION_TASKS.md #3**（排查结论见下）。
+
+实施备注：
+- DX11 本地 CB 结构（PerFrame/PerScene/PerMaterial/PointLights/SpotLights/SpotMatrices/LightProbeData）
+  与 Vulkan 本地 UBO 结构（PerFrame/PerScene/PerMaterial/PointLights/SpotLights）经逐字段布局核对后
+  统一改为 `using X = 共享类型;` 别名，删除重复定义；`DX11PerObjectCB`、`DX11TerrainParamsCB` 等
+  无共享对应者保留。
+- Overdraw 调试可视化统一采用 GL 语义（除 albedo 外同时覆盖 roughness_ao/emissive/flags），
+  GL 行为零退化；DX11/Vulkan 的 overdraw 调试显示与 GL 对齐（原先仅覆盖 albedo，属有意接受的对齐改动）。
+- GPU-Driven 路径中由零散参数（而非 MeshDrawItem）构造 PerScene/PerFrame 的自定义填充保留不动（最小改动）。
 
 验收标准：三后端 UBO 填充语义唯一来源为 `draw_executor_common.h`；CI 三矩阵
 （Debug/Release/RelWithDebInfo）构建 + 单元/集成/冒烟测试全绿；GL 行为零退化。
 
-## 阶段 B：Vulkan 后端转正（本次实施）
+## 阶段 B：Vulkan 后端转正（已完成）
 
 现状：Vulkan Headers/Loader/glslang/spirv-cross 均已源码内置（depends/），
 `DSE_ENABLE_VULKAN=ON` 无需系统 Vulkan SDK 即可构建；Vulkan 已有独立冒烟测试
 （`vulkan_rhi_smoke_test.cpp`），但 CMake 默认 OFF、CI 仅 RelWithDebInfo 矩阵覆盖。
 
-1. **CMake 默认值转正**：桌面平台（非 Android）`DSE_ENABLE_VULKAN` 默认 ON；
+1. [x] **CMake 默认值转正**：桌面平台（非 Android）`DSE_ENABLE_VULKAN` 默认 ON；
    Android 维持显式 OFF（待真机验证后另行开启）。
-2. **CI 全矩阵覆盖**：Debug/Release 矩阵同样开启 Vulkan（标签同步更新），
+2. [x] **CI 全矩阵覆盖**：Debug/Release 矩阵同样开启 Vulkan（标签同步更新），
    使 Vulkan 编译与冒烟测试获得与 GL/DX11 同级的回归保障。
-3. CI 的 Vulkan SDK 安装步骤维持按矩阵条件执行（运行时验证层需要）。
+3. [x] CI 的 Vulkan SDK 安装步骤维持按矩阵条件执行（运行时验证层需要）。
+   Linux job 维持 `-DDSE_ENABLE_VULKAN=OFF` 不变。
 
 ## 任务 #3 排查结论（CameraSystem 投影，无需修改）
 

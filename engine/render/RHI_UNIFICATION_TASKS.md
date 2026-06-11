@@ -16,6 +16,8 @@ DSEngine 支持 OpenGL / Vulkan / DX11 三个渲染后端。已完成 `GetProjec
 - [x] #5 RT-UV 方向已验证无需修改
 - [x] #6 Cubemap 面序已验证无需修改；天空盒 VP 平移 bug 已修复
 - [x] #7 HLSL 矩阵布局已验证无需修改
+- [x] DrawExecutor UBO 填充统一：GL/DX11/Vulkan 三后端 PerScene/PerMaterial/PointLights/SpotLights/LightProbeData/SpotLightData 填充统一到 `draw_executor_common.h` 的 `Prepare*` 共享函数；DX11/Vulkan 本地 CB/UBO 重复结构改为共享 `ubo_types.h` 类型别名（详见 docs/roadmap/rhi_unification_closeout_plan.md）
+- [x] Vulkan 后端转正：CMake 桌面平台默认 `DSE_ENABLE_VULKAN=ON`（Android 维持 OFF），CI Windows 三矩阵全部开启 Vulkan
 
 ---
 

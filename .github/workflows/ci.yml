@@ -23,11 +23,11 @@ jobs:
       matrix:
         include:
           - config: Debug
-            vulkan: OFF
-            label: debug-gl-jolt
+            vulkan: ON
+            label: debug-vulkan-jolt
           - config: Release
-            vulkan: OFF
-            label: release-gl-jolt
+            vulkan: ON
+            label: release-vulkan-jolt
           - config: RelWithDebInfo
             vulkan: ON
             label: relwithdebinfo-vulkan-jolt

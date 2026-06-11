@@ -511,20 +511,7 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
 }
 
 void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
-    VulkanPerSceneUBO ubo{};
-    const float light_enabled = (item.lighting_enabled && !global_state_.force_unlit) ? 1.0f : 0.0f;
-    ubo.light_dir_and_enabled = glm::vec4(item.light_direction, light_enabled);
-    ubo.light_color_and_ambient = glm::vec4(item.light_color, item.ambient_intensity);
-    ubo.light_params = glm::vec4(item.light_intensity, item.shadow_strength,
-                                  item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(item.shading_mode));
-    ubo.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1],
-                                    global_state_.cascade_splits[2], static_cast<float>(item.wboit_mode));
-    for (int i = 0; i < 3; ++i) {
-        ubo.light_space_matrices[i] = global_state_.light_space_matrix[i];
-    }
-    for (int i = 0; i < 3; ++i) {
-        ubo.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
-    }
+    VulkanPerSceneUBO ubo = PreparePerSceneUBO(item, global_state_);
 
     if (per_scene_ubo_offset_ + sizeof(VulkanPerSceneUBO) > per_scene_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] PER_SCENE_UBO OVERFLOW: offset={} capacity={}", per_scene_ubo_offset_, per_scene_ubo_capacity_);
@@ -535,42 +522,7 @@ void VulkanDrawExecutor::UpdatePerSceneUBO(const MeshDrawItem& item) {
 }
 
 void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
-    VulkanPerMaterialUBO ubo{};
-    if (global_state_.overdraw_mode) {
-        ubo.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
-    } else {
-        ubo.albedo = glm::vec4(item.material_albedo, item.material_metallic);
-    }
-    ubo.roughness_ao = glm::vec4(item.material_roughness, item.material_ao,
-                                  item.material_normal_strength, item.material_alpha_cutoff);
-    ubo.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
-    ubo.flags = glm::vec4(
-        item.normal_map_handle != 0 ? 1.0f : 0.0f,
-        item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
-        item.emissive_map_handle != 0 ? 1.0f : 0.0f,
-        item.occlusion_map_handle != 0 ? 1.0f : 0.0f
-    );
-    ubo.extra_params = glm::vec4(
-        item.material_sss_strength,
-        item.material_clear_coat,
-        item.material_clear_coat_roughness,
-        item.material_anisotropy
-    );
-    ubo.extra_params2 = glm::vec4(
-        item.material_pom_height_scale,
-        item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z
-    );
-    if (item.shading_mode == 5) {
-        ubo.toon_shadow_color = glm::vec4(
-            item.watercolor_paper_strength, item.watercolor_edge_darkening,
-            item.watercolor_color_bleed, item.watercolor_pigment_density);
-        ubo.toon_params = glm::vec4(0.0f);
-    } else {
-        ubo.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
-        ubo.toon_params = glm::vec4(
-            item.toon_shadow_softness, item.toon_specular_size,
-            item.toon_specular_strength, item.toon_rim_strength);
-    }
+    VulkanPerMaterialUBO ubo = PreparePerMaterialUBO(item, global_state_);
 
     if (per_material_ubo_offset_ + sizeof(VulkanPerMaterialUBO) > per_material_ubo_capacity_) {
         DEBUG_LOG_ERROR("[Vulkan] PER_MATERIAL_UBO OVERFLOW: offset={} capacity={}", per_material_ubo_offset_, per_material_ubo_capacity_);
@@ -583,38 +535,11 @@ void VulkanDrawExecutor::UpdatePerMaterialUBO(const MeshDrawItem& item) {
 void VulkanDrawExecutor::UpdatePointSpotLightUBOs(const MeshDrawItem& item) {
     uint32_t fi = current_frame_index_;
 
-    VulkanPointLightsUBO pl_ubo{};
-    pl_ubo.u_point_light_count = static_cast<int>(
-        (std::min)(item.point_lights.size(), (size_t)64));
-    for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
-        const auto& src = item.point_lights[i];
-        auto& dst = pl_ubo.lights[i];
-        dst.color        = src.color;
-        dst.intensity    = src.intensity;
-        dst.position     = src.position;
-        dst.radius       = src.radius;
-        dst.cast_shadow  = src.cast_shadow ? 1 : 0;
-        dst.shadow_index = src.shadow_index;
-    }
+    VulkanPointLightsUBO pl_ubo = PreparePointLightsUBO(item);
     WriteToBuffer(context_->device(), per_point_lights_ubo_mem_[fi],
                   per_point_lights_ubo_offset_, sizeof(pl_ubo), &pl_ubo);
 
-    VulkanSpotLightsUBO sl_ubo{};
-    sl_ubo.u_spot_light_count = static_cast<int>(
-        (std::min)(item.spot_lights.size(), (size_t)64));
-    for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
-        const auto& src = item.spot_lights[i];
-        auto& dst = sl_ubo.lights[i];
-        dst.color        = src.color;
-        dst.intensity    = src.intensity;
-        dst.position     = src.position;
-        dst.radius       = src.radius;
-        dst.direction    = src.direction;
-        dst.inner_cone   = src.inner_cone;
-        dst.outer_cone   = src.outer_cone;
-        dst.cast_shadow  = src.cast_shadow ? 1 : 0;
-        dst.shadow_index = src.shadow_index;
-    }
+    VulkanSpotLightsUBO sl_ubo = PrepareSpotLightsUBO(item);
     WriteToBuffer(context_->device(), per_spot_lights_ubo_mem_[fi],
                   per_spot_lights_ubo_offset_, sizeof(sl_ubo), &sl_ubo);
 }

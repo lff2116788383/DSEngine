@@ -233,29 +233,11 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     PerSceneUBO per_scene{};
     if (!gbuffer_mode) {
     // === PerScene UBO：使用第一个 item 的光照数据（同一批次光照通常一致） ===
-    const auto& first_item = items[0];
-    per_scene.light_dir_and_enabled = glm::vec4(first_item.light_direction, first_item.lighting_enabled ? 1.0f : 0.0f);
-    per_scene.light_color_and_ambient = glm::vec4(first_item.light_color, first_item.ambient_intensity);
-    per_scene.light_params = glm::vec4(first_item.light_intensity, first_item.shadow_strength, first_item.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first_item.shading_mode));
-    per_scene.cascade_splits = glm::vec4(global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first_item.wboit_mode));
-
-    // 编辑器 Unlit 模式: 禁用光照，仅显示 albedo
-    if (global_state_.force_unlit) {
-        per_scene.light_dir_and_enabled.w = 0.0f;
-    }
-    for (int i = 0; i < 3; ++i) {
-        per_scene.light_space_matrices[i] = global_state_.light_space_matrix[i];
-    }
-    for (int i = 0; i < 3; ++i) {
-        per_scene.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
-    }
+    per_scene = PreparePerSceneUBO(items[0], global_state_);
     ubo_mgr.UploadPerScene(per_scene);
 
     // === LightProbeData UBO：SH 球谐系数 ===
-    LightProbeDataUBO lp_data{};
-    for (int i = 0; i < 9; ++i) lp_data.sh_coefficients[i] = global_state_.light_probe_sh[i];
-    lp_data.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
-    ubo_mgr.UploadLightProbeData(lp_data);
+    ubo_mgr.UploadLightProbeData(PrepareLightProbeUBO(global_state_));
     } // !gbuffer_mode
 
     // 绑定所有 UBO
@@ -265,35 +247,8 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     // 绑定到 binding 3/4，覆盖 LightBuffer::Bind() 的透明映射。
     // 此处从 MeshDrawItem 的光源列表填充并上传，与 Vulkan 后端 UpdatePointSpotLightUBOs 对齐。
     if (!shader_mgr.supports_ssbo() && !items.empty()) {
-        const auto& ref = items[0];
-
-        PointLightsUBO pl_ubo{};
-        pl_ubo.u_point_light_count = static_cast<int>(
-            (std::min)(ref.point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
-        for (int i = 0; i < pl_ubo.u_point_light_count; ++i) {
-            const auto& s = ref.point_lights[i];
-            auto& d = pl_ubo.u_point_lights[i];
-            d.color = s.color;   d.intensity = s.intensity;
-            d.position = s.position; d.radius = s.radius;
-            d.cast_shadow = s.cast_shadow ? 1 : 0;
-            d.shadow_index = s.shadow_index;
-        }
-        ubo_mgr.UploadPointLights(pl_ubo);
-
-        SpotLightsUBO sl_ubo{};
-        sl_ubo.u_spot_light_count = static_cast<int>(
-            (std::min)(ref.spot_lights.size(), static_cast<size_t>(kMaxSpotLightsUBO)));
-        for (int i = 0; i < sl_ubo.u_spot_light_count; ++i) {
-            const auto& s = ref.spot_lights[i];
-            auto& d = sl_ubo.u_spot_lights[i];
-            d.color = s.color;   d.intensity = s.intensity;
-            d.position = s.position; d.radius = s.radius;
-            d.direction = s.direction; d.inner_cone = s.inner_cone;
-            d.outer_cone = s.outer_cone;
-            d.cast_shadow = s.cast_shadow ? 1 : 0;
-            d.shadow_index = s.shadow_index;
-        }
-        ubo_mgr.UploadSpotLights(sl_ubo);
+        ubo_mgr.UploadPointLights(PreparePointLightsUBO(items[0]));
+        ubo_mgr.UploadSpotLights(PrepareSpotLightsUBO(items[0]));
     }
 
     // 纹理采样器（全局设置，非逐对象变化）绑定
@@ -703,45 +658,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         if (!gbuffer_mode) {
         // === PerMaterial UBO：每材质切换上传 ===
-        PerMaterialUBO per_mat;
-        if (global_state_.overdraw_mode) {
-            // Overdraw 可视化：每个 fragment 输出固定低亮度颜色，
-            // 通过 additive blend 叠加后高亮区域表示过度绘制
-            per_mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
-            per_mat.roughness_ao = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
-            per_mat.emissive = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
-            per_mat.flags = glm::vec4(0.0f);
-        } else {
-        per_mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
-        per_mat.roughness_ao = glm::vec4(item.material_roughness, item.material_ao, item.material_normal_strength, item.material_alpha_cutoff);
-        per_mat.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
-        per_mat.flags = glm::vec4(
-            item.normal_map_handle != 0 ? 1.0f : 0.0f,
-            item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
-            item.emissive_map_handle != 0 ? 1.0f : 0.0f,
-            item.occlusion_map_handle != 0 ? 1.0f : 0.0f
-        );
-        }
-        per_mat.extra_params = glm::vec4(
-            item.material_sss_strength,
-            item.material_clear_coat,
-            item.material_clear_coat_roughness,
-            item.material_anisotropy);
-        per_mat.extra_params2 = glm::vec4(
-            item.material_pom_height_scale,
-            item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
-        if (item.shading_mode == 5) {
-            per_mat.toon_shadow_color = glm::vec4(
-                item.watercolor_paper_strength, item.watercolor_edge_darkening,
-                item.watercolor_color_bleed, item.watercolor_pigment_density);
-            per_mat.toon_params = glm::vec4(0.0f);
-        } else {
-            per_mat.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
-            per_mat.toon_params = glm::vec4(
-                item.toon_shadow_softness, item.toon_specular_size,
-                item.toon_specular_strength, item.toon_rim_strength);
-        }
-        ubo_mgr.UploadPerMaterial(per_mat);
+        ubo_mgr.UploadPerMaterial(PreparePerMaterialUBO(item, global_state_));
 
         // 点光源/聚光灯数据：GL 4.3+ 用 LightBuffer SSBO 提供；GL 3.3 已由上方 UBO fallback 上传
         // 仅绑定点光源阴影贴图
@@ -754,12 +671,7 @@ void GLDrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         }
 
         // 聚光灯空间矩阵 UBO 上传
-        {
-            SpotLightDataUBO sld_ubo{};
-            for (int i = 0; i < 4; ++i)
-                sld_ubo.u_spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
-            ubo_mgr.UploadSpotLightData(sld_ubo);
-        }
+        ubo_mgr.UploadSpotLightData(PrepareSpotLightDataUBO(global_state_));
 
         // CSM 阴影贴图绑定
         // Atlas 模式: 单个 shadow_atlas 纹理 (sampler2DShadow, 硬件比较)
