@@ -78,7 +78,7 @@ std::string Format(const char* format, Args&&... args) {
  * @class Debug
  * @brief 调试类，提供日志系统的初始化和资源释放管理
  */
-class Debug {
+class DSE_EXPORT Debug {
 public:
     /**
      * @brief 初始化日志系统，配置控制台和文件多路输出

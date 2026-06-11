@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "engine/core/dse_export.h"
 #include <string>
 
 namespace dse {
@@ -14,7 +15,7 @@ namespace core {
  * @class DynamicLibrary
  * @brief 封装了 LoadLibrary / dlopen 等底层系统调用
  */
-class DynamicLibrary {
+class DSE_EXPORT DynamicLibrary {
 public:
     DynamicLibrary();
     ~DynamicLibrary();

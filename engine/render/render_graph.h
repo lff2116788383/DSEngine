@@ -29,6 +29,7 @@
 #ifndef DSE_RENDER_RENDER_GRAPH_H
 #define DSE_RENDER_RENDER_GRAPH_H
 
+#include "engine/core/dse_export.h"
 #include <functional>
 #include <string>
 #include <vector>
@@ -81,7 +82,7 @@ struct RenderPassHandle {
 * - 自动化：Compile 时自动拓扑排序和剔除无用 Pass
 * - 兼容性：执行阶段使用 CommandBuffer，与现有 RHI 层无缝对接
 */
-class RenderGraph {
+class DSE_EXPORT RenderGraph {
 public:
     RenderGraph() = default;
     ~RenderGraph() = default;

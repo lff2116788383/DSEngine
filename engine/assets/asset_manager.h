@@ -37,7 +37,7 @@ class FileSystem;
  * @class TextureAsset
  * @brief 纹理资源封装，存储纹理在 RHI 层分配的句柄及尺寸信息
  */
-class TextureAsset {
+class DSE_EXPORT TextureAsset {
 public:
     TextureAsset(const std::string& path, unsigned int handle, int width, int height, int channels);
     ~TextureAsset();
@@ -76,7 +76,7 @@ private:
  * @class CubemapAsset
  * @brief 立方体贴图资源，当前用于 SkyboxComponent 的六面天空盒纹理。
  */
-class CubemapAsset {
+class DSE_EXPORT CubemapAsset {
 public:
     CubemapAsset(const std::string& path, unsigned int handle, int width, int height);
     ~CubemapAsset();
@@ -97,7 +97,7 @@ private:
  * @class ShaderAsset
  * @brief 着色器资源封装，存储着色器程序在 RHI 层的句柄
  */
-class ShaderAsset {
+class DSE_EXPORT ShaderAsset {
 public:
     ShaderAsset(const std::string& name, unsigned int handle);
     ~ShaderAsset();
@@ -175,7 +175,7 @@ enum class MaterialBlendMode {
  * @class MaterialAsset
  * @brief 材质资源，组合了着色器变体、纹理、颜色和混合模式
  */
-class MaterialAsset {
+class DSE_EXPORT MaterialAsset {
 public:
     struct TextureSlots {
         unsigned int albedo = 0;

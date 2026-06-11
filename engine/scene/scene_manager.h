@@ -6,6 +6,7 @@
 #ifndef DSE_SCENE_MANAGER_H
 #define DSE_SCENE_MANAGER_H
 
+#include "engine/core/dse_export.h"
 #include "engine/scene/sub_scene.h"
 #include "engine/ecs/uuid_component.h"
 #include "engine/core/event_bus.h"
@@ -53,7 +54,7 @@ enum class TransitionState {
  * - 通过 ServiceLocator 注册为引擎服务
  * - Update() 在 FramePipeline 每帧调用以 pump 异步完成的子场景
  */
-class SceneManager {
+class DSE_EXPORT SceneManager {
 public:
     SceneManager();
     ~SceneManager();

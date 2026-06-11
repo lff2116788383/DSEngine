@@ -6,6 +6,7 @@
 #ifndef DSE_INPUT_RECORDER_H
 #define DSE_INPUT_RECORDER_H
 
+#include "engine/core/dse_export.h"
 #include <string>
 #include <vector>
 
@@ -18,7 +19,7 @@ struct InputEvent {
     unsigned short key_action = 0;
 };
 
-class InputRecorder {
+class DSE_EXPORT InputRecorder {
 public:
     InputRecorder() = default;
     ~InputRecorder() = default;
@@ -41,7 +42,7 @@ private:
     bool recording_ = false;
 };
 
-class InputPlayer {
+class DSE_EXPORT InputPlayer {
 public:
     InputPlayer() = default;
     ~InputPlayer() = default;

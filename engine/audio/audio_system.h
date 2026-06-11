@@ -6,6 +6,7 @@
 #ifndef DSE_AUDIO_SYSTEM_H
 #define DSE_AUDIO_SYSTEM_H
 
+#include "engine/core/dse_export.h"
 #include <entt/entt.hpp>
 #include <string>
 #include <vector>
@@ -41,7 +42,7 @@ using AudioRaycastFunc = std::function<AudioRaycastResult(const glm::vec3&, cons
  * 
  * @warning 该类的初始化和销毁必须在引擎生命周期内正确调用。
  */
-class AudioSystem {
+class DSE_EXPORT AudioSystem {
 public:
     AudioSystem();
     ~AudioSystem();

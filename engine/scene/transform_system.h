@@ -6,13 +6,14 @@
 #ifndef DSE_TRANSFORM_SYSTEM_H
 #define DSE_TRANSFORM_SYSTEM_H
 
+#include "engine/core/dse_export.h"
 #include "engine/ecs/world.h"
 
 /**
  * @class TransformSystem
  * @brief 变换系统，遍历世界中的所有变换组件，计算并更新模型矩阵
  */
-class TransformSystem {
+class DSE_EXPORT TransformSystem {
 public:
     /**
      * @brief 执行每帧变换组件的更新操作

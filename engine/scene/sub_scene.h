@@ -6,6 +6,7 @@
 #ifndef DSE_SUB_SCENE_H
 #define DSE_SUB_SCENE_H
 
+#include "engine/core/dse_export.h"
 #include "engine/ecs/world.h"
 #include <string>
 #include <vector>
@@ -33,7 +34,7 @@ enum class SubSceneState {
  * - Unload() 销毁此 SubScene 拥有的所有 Entity
  * - 同一 World 可同时持有多个 SubScene
  */
-class SubScene {
+class DSE_EXPORT SubScene {
 public:
     SubScene() = default;
     explicit SubScene(const std::string& path);

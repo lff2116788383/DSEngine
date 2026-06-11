@@ -1,6 +1,7 @@
 #ifndef DSE_CPU_PROFILER_H
 #define DSE_CPU_PROFILER_H
 
+#include "engine/core/dse_export.h"
 #include <chrono>
 #include <mutex>
 #include <string>
@@ -36,7 +37,7 @@ struct FrameStats {
     int frame_count = 0;
 };
 
-class CPUProfiler {
+class DSE_EXPORT CPUProfiler {
 public:
     CPUProfiler() = default;
     ~CPUProfiler() = default;
