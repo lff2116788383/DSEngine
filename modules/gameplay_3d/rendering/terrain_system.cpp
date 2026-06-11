@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <vector>
+#include <cstdint>
 
 namespace dse {
 namespace gameplay3d {
@@ -43,6 +45,49 @@ void TerrainSystem::DestroyTerrainGPU(TerrainComponent& terrain) {
         terrain.ebo = {};
         terrain.index_count = 0;
     }
+    if (terrain.splat_weight_texture != 0 && rhi_) {
+        rhi_->DeleteTexture(terrain.splat_weight_texture);
+        terrain.splat_weight_texture = 0;
+        terrain.splat_dirty = true;  // 几何重建后需重新上传权重图
+    }
+}
+
+void TerrainSystem::UploadSplatWeightMap(TerrainComponent& terrain) {
+    if (!rhi_) return;
+    if (!terrain.splat_dirty) return;
+
+    const int w = terrain.resolution_x;
+    const int h = terrain.resolution_z;
+    const size_t expected = static_cast<size_t>(w) * static_cast<size_t>(h) * 4u;
+
+    // 无数据或尺寸不匹配：释放旧纹理并退出（渲染时回退到预烘焙权重图路径）。
+    if (w < 1 || h < 1 || terrain.splat_data.size() < expected) {
+        if (terrain.splat_weight_texture != 0) {
+            rhi_->DeleteTexture(terrain.splat_weight_texture);
+            terrain.splat_weight_texture = 0;
+        }
+        terrain.splat_dirty = false;
+        return;
+    }
+
+    // 逐顶点 float 权重(0..1) → RGBA8 权重图。
+    std::vector<unsigned char> rgba8(expected);
+    for (size_t i = 0; i < expected; ++i) {
+        float v = terrain.splat_data[i];
+        v = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+        rgba8[i] = static_cast<unsigned char>(v * 255.0f + 0.5f);
+    }
+
+    if (terrain.splat_weight_texture != 0) {
+        rhi_->DeleteTexture(terrain.splat_weight_texture);
+        terrain.splat_weight_texture = 0;
+    }
+    // 权重图：线性采样 + ClampToEdge（避免边缘 wrap 串色）。
+    TextureSamplerDesc sampler;
+    sampler.filter = TextureFilter::Linear;
+    sampler.wrap = TextureWrap::ClampToEdge;
+    terrain.splat_weight_texture = rhi_->CreateTexture2D(w, h, rgba8.data(), sampler);
+    terrain.splat_dirty = false;
 }
 
 // ============================================================
@@ -295,13 +340,17 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::v
         }
 
         // Splatmap
+        UploadSplatWeightMap(terrain);  // 脏时把 splat_data 上传为权重图（内部按 dirty 早退）
         bool has_any_splat = false;
         for (int si = 0; si < 4; ++si) {
             if (terrain.splat_texture_handles[si] != 0) { has_any_splat = true; break; }
         }
         if (has_any_splat) {
             item.splat_enabled = true;
-            item.splat_weight_map_handle = terrain.texture_handle;
+            // 优先使用 splat_data 上传的权重图；无则回退到预烘焙的 terrain.texture_handle。
+            item.splat_weight_map_handle = terrain.splat_weight_texture != 0
+                ? terrain.splat_weight_texture
+                : terrain.texture_handle;
             for (int si = 0; si < 4; ++si) {
                 item.splat_layer_handles[si] = terrain.splat_texture_handles[si];
             }

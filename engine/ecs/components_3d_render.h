@@ -332,10 +332,11 @@ struct TerrainComponent {
     std::string splat_texture_paths[4];      // texture path per layer
     unsigned int splat_texture_handles[4] = {0, 0, 0, 0};
     glm::vec4 splat_tiling = glm::vec4(10.0f); // per-layer UV tiling factor
-    bool splat_dirty = true; // TODO: consumed when splat weight map GPU upload is implemented
+    bool splat_dirty = true; // 置位时 TerrainSystem 会把 splat_data 上传为权重图纹理
 
     // Internal state
     bool is_dirty = true;
+    unsigned int splat_weight_texture = 0; // splat_data 上传得到的 RGBA8 权重图 GPU 句柄（0=未上传）
     std::vector<float> height_data;
     dse::render::VertexArrayHandle vao;
     dse::render::BufferHandle vbo;
@@ -437,7 +438,7 @@ struct GrassComponent {
     float blade_height = 1.0f;
     float blade_height_variation = 0.3f;  ///< ±高度随机比例
     glm::vec3 base_color = glm::vec3(0.15f, 0.45f, 0.1f);
-    glm::vec3 tip_color  = glm::vec3(0.3f, 0.65f, 0.15f);  ///< TODO: shader 顶点色渐变（尚未使用）
+    glm::vec3 tip_color  = glm::vec3(0.3f, 0.65f, 0.15f);  ///< 叶尖颜色（GrassSystem 按高度 base_color→tip_color 顶点色渐变）
     unsigned int albedo_texture = 0;
 
     // 风场
@@ -449,7 +450,7 @@ struct GrassComponent {
     // LOD
     float lod_near = 30.0f;           ///< < near: 全精度草叶
     float lod_far  = 80.0f;           ///< > far: 完全剔除
-    float fade_range = 5.0f;          ///< LOD 过渡距离 TODO: 实现平滑 LOD 过渡
+    float fade_range = 5.0f;          ///< LOD 过渡距离：在边界区间内按 fade 缩放草叶高度平滑淡入/淡出
 
     // 阴影
     bool  cast_shadow = false;

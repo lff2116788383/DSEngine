@@ -23,6 +23,8 @@ public:
 private:
     void RebuildTerrain(TerrainComponent& terrain);
     void DestroyTerrainGPU(TerrainComponent& terrain);
+    /// 脏时把逐顶点 splat_data 上传为 RGBA8 权重图纹理，供 splat 混合采样。
+    void UploadSplatWeightMap(TerrainComponent& terrain);
 
     // Tiled terrain
     void UpdateTiles(World& world);
