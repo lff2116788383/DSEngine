@@ -36,6 +36,7 @@ local frame_idx      = 0
 local warmup_frames  = 30     -- 跳过前 30 帧的初始化开销
 local stats_printed  = false
 local last_clock     = nil
+local load_time_ms   = 0      -- 场景构建 + 资产装载耗时（Awake 区间）
 
 --------------------------------------------------------------------------------
 -- 辅助: NxN 网格排列
@@ -57,6 +58,7 @@ end
 -- Awake
 --------------------------------------------------------------------------------
 function Awake()
+    local awake_start = app.time_since_startup() * 1000.0  -- ms
     app.set_window_title("Stress Test — " .. ENTITY_COUNT .. " entities")
     app.set_data_root("examples/KF_Framework")
 
@@ -149,6 +151,9 @@ function Awake()
 
     print(string.format("[StressTest] Spawned %d knights in %dx%d grid (spacing=%d)",
         ENTITY_COUNT, cols, math.ceil(ENTITY_COUNT / cols), spacing))
+
+    load_time_ms = app.time_since_startup() * 1000.0 - awake_start
+    print(string.format("[StressTest] Scene build + asset load: %.1f ms", load_time_ms))
 end
 
 --------------------------------------------------------------------------------
@@ -228,7 +233,10 @@ function print_perf_report()
     local gpu_active = metrics.get_gpu_driven_active and metrics.get_gpu_driven_active() or false
     local gpu_draws = metrics.get_gpu_indirect_draw_count and metrics.get_gpu_indirect_draw_count() or 0
     local gpu_instances = metrics.get_gpu_total_instances and metrics.get_gpu_total_instances() or 0
+    local draw_calls = metrics.get_draw_calls and metrics.get_draw_calls() or 0
     print(string.format("  GPU-Driven:  %s (draws=%d, instances=%d)", gpu_active and "ACTIVE" or "INACTIVE", gpu_draws, gpu_instances))
+    print(string.format("  Draw Calls:  %d", draw_calls))
+    print(string.format("  Load Time:   %.1f ms (scene build + asset load)", load_time_ms))
     print(string.format("  LOD:         %s (min_screen_size=%.6f, scale=%.2f)",
         tostring(LOD_ENABLED), LOD_MIN_SCREEN_SIZE, LOD_SCALE))
     print("----------------------------------------------------------------------")
@@ -243,6 +251,6 @@ function print_perf_report()
     print(string.format("  Frame Time p95:  %.2f ms", p95))
     print(string.format("  Frame Time p99:  %.2f ms", p99))
     print("======================================================================")
-    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f gpu_driven_active=%s gpu_indirect_draws=%d gpu_instances=%d",
-        ENTITY_COUNT, fps_avg, fps_min, avg, p99, tostring(gpu_active), gpu_draws, gpu_instances))
+    print(string.format("DSE_PERF_RESULT entities=%d fps_avg=%.1f fps_min=%.1f ft_avg=%.2f ft_p99=%.2f gpu_driven_active=%s gpu_indirect_draws=%d gpu_instances=%d draw_calls=%d load_ms=%.1f",
+        ENTITY_COUNT, fps_avg, fps_min, avg, p99, tostring(gpu_active), gpu_draws, gpu_instances, draw_calls, load_time_ms))
 end

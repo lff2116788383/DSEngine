@@ -1,4 +1,9 @@
 #pragma once
+// [实验性 — v0.1 不含联机] DSEngine 网络层为实验性原型，默认不编译
+// （需显式 -DDSE_ENABLE_NET=ON，会拉取 GameNetworkingSockets/webrtc 巨型依赖）。
+// v0.1 不提供联机能力、不在 public/SDK API 暴露；房间/同步/序列化等成体系
+// 联机功能为 v0.1 之后的独立规划项。
+//
 // DSEngine 网络层 — 传输抽象接口（纯虚，无后端依赖）。
 // 后端实现（当前为 GameNetworkingSockets）在 engine/net/backends/ 下，
 // 通过 CreateGnsTransport() 工厂创建；上层可在不改动调用方的情况下替换后端。

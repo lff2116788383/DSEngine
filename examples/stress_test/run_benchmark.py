@@ -61,6 +61,11 @@ def run_single(exe, backend, gpu_driven, entity_count, perf_frames=600, timeout=
             r"ft_avg=([\d.]+) ft_p99=([\d.]+)",
             output
         )
+        # draw_calls / load_ms 为后加字段，单独可选解析（兼容旧输出）。
+        dc_m = re.search(r"draw_calls=(\d+)", output)
+        load_m = re.search(r"load_ms=([\d.]+)", output)
+        draw_calls = int(dc_m.group(1)) if dc_m else 0
+        load_ms = float(load_m.group(1)) if load_m else 0.0
         # 解析 DSE_RENDER_DEVICE 行（实际渲染设备 + 软渲标志），用于区分硬件/软渲。
         dev = re.search(r'DSE_RENDER_DEVICE backend=\S+ adapter="([^"]*)" software=(\d)', output)
         adapter = dev.group(1) if dev else "unknown"
@@ -74,11 +79,14 @@ def run_single(exe, backend, gpu_driven, entity_count, perf_frames=600, timeout=
                 "fps_min": float(m.group(3)),
                 "ft_avg": float(m.group(4)),
                 "ft_p99": float(m.group(5)),
+                "draw_calls": draw_calls,
+                "load_ms": load_ms,
                 "adapter": adapter,
                 "software": software,
             }
             sw_tag = "  [SOFTWARE]" if software else ""
-            print(f"fps_avg={result['fps_avg']:.1f} fps_min={result['fps_min']:.1f} dev={adapter}{sw_tag}")
+            print(f"fps_avg={result['fps_avg']:.1f} fps_min={result['fps_min']:.1f} "
+                  f"dc={draw_calls} load={load_ms:.0f}ms dev={adapter}{sw_tag}")
             return result
         else:
             print("FAILED (no perf result)")
@@ -103,7 +111,8 @@ def print_report(results):
     print("\n" + "=" * 80)
     print("  BENCHMARK RESULTS")
     print("=" * 80)
-    header = f"{'Backend':<10} {'Mode':<6} {'Entities':>8} {'FPS avg':>8} {'FPS min':>8} {'FT avg':>8} {'FT p99':>8} {'SW':>3} {'Device':<24}"
+    header = (f"{'Backend':<10} {'Mode':<6} {'Entities':>8} {'FPS avg':>8} {'FPS min':>8} "
+              f"{'FT avg':>8} {'FT p99':>8} {'Draws':>7} {'Load ms':>8} {'SW':>3} {'Device':<24}")
     print(header)
     print("-" * len(header))
     for r in results:
@@ -111,7 +120,9 @@ def print_report(results):
         sw = "Y" if r.get("software") else ""
         print(f"{r['backend']:<10} {mode:<6} {r['entities']:>8} "
               f"{r['fps_avg']:>8.1f} {r['fps_min']:>8.1f} "
-              f"{r['ft_avg']:>8.2f} {r['ft_p99']:>8.2f} {sw:>3} {r.get('adapter', 'unknown'):<24}")
+              f"{r['ft_avg']:>8.2f} {r['ft_p99']:>8.2f} "
+              f"{r.get('draw_calls', 0):>7} {r.get('load_ms', 0.0):>8.1f} "
+              f"{sw:>3} {r.get('adapter', 'unknown'):<24}")
 
     if any(r.get("software") for r in results):
         print("\n  [!] Rows marked SW=Y ran on a software rasterizer "
@@ -176,12 +187,14 @@ def main():
     # 保存 CSV
     csv_path = SCRIPT_DIR / "benchmark_results.csv"
     with open(str(csv_path), "w") as f:
-        f.write("backend,gpu_driven,entities,fps_avg,fps_min,ft_avg_ms,ft_p99_ms,adapter,software\n")
+        f.write("backend,gpu_driven,entities,fps_avg,fps_min,ft_avg_ms,ft_p99_ms,"
+                "draw_calls,load_ms,adapter,software\n")
         for r in results:
             adapter = r.get("adapter", "unknown").replace(",", " ")
             f.write(f"{r['backend']},{r['gpu_driven']},{r['entities']},"
                     f"{r['fps_avg']:.1f},{r['fps_min']:.1f},"
                     f"{r['ft_avg']:.2f},{r['ft_p99']:.2f},"
+                    f"{r.get('draw_calls', 0)},{r.get('load_ms', 0.0):.1f},"
                     f"{adapter},{r.get('software', False)}\n")
     print(f"\nCSV saved: {csv_path}")
     return 0

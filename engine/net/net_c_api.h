@@ -1,5 +1,7 @@
 #ifndef DSE_NET_C_API_H
 #define DSE_NET_C_API_H
+// [实验性 — v0.1 不含联机] 仅在 -DDSE_ENABLE_NET=ON 时编译；v0.1 不提供联机、
+// 不属于稳定 public/SDK API，接口可能变动。
 // DSEngine 网络层 — 扁平 C ABI（供 Lua / C# / FFI 等宿主语言调用）。
 // 不暴露任何 C++/GNS 类型；句柄为不透明指针，事件经回调结构体派发。
 // 实现见 net_c_api.cpp（仅依赖 engine/net 抽象，不直接 include GNS 头）。

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <sstream>
+#include <system_error>
 
 #include "imgui.h"
 
@@ -64,9 +65,14 @@ bool AutoSaveManager::CheckRecovery() {
     recovery_path_.clear();
 
     std::string autosave_dir = GetAutoSaveDir();
-    if (!std::filesystem::exists(autosave_dir)) return false;
+    // 用 error_code 变体：自动保存目录不可访问/迭代中被删除时降级为「无可恢复」，
+    // 不让文件系统异常在编辑器启动期抛出导致崩溃。
+    std::error_code ec;
+    if (!std::filesystem::exists(autosave_dir, ec) || ec) return false;
 
-    for (auto& entry : std::filesystem::directory_iterator(autosave_dir)) {
+    for (std::filesystem::directory_iterator it(autosave_dir, ec), end; it != end; it.increment(ec)) {
+        if (ec) break;
+        const auto& entry = *it;
         if (entry.path().extension() == ".dscene" &&
             entry.path().stem().string().find(".autosave") != std::string::npos) {
             recovery_path_ = entry.path().string();
@@ -93,9 +99,10 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
             "This may indicate the editor exited unexpectedly.");
         ImGui::Spacing();
 
-        // Show file info
-        if (std::filesystem::exists(recovery_path_)) {
-            auto ftime = std::filesystem::last_write_time(recovery_path_);
+        // Show file info（best-effort：取文件时间失败不应让对话框抛异常）
+        std::error_code info_ec;
+        if (std::filesystem::exists(recovery_path_, info_ec) && !info_ec) {
+            auto ftime = std::filesystem::last_write_time(recovery_path_, info_ec);
             auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
                 ftime - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now());
             std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
@@ -115,16 +122,24 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
         ImGui::Spacing();
 
         if (ImGui::Button("Recover", ImVec2(120, 0))) {
-            LoadScene(registry, recovery_path_);
-            auto& tab_mgr = SceneTabManager::Get();
-            tab_mgr.MarkDirty();
-            EditorLog(LogLevel::Info, "Recovered scene from auto-save: " + recovery_path_);
+            // 恢复文件可能因上次崩溃写到一半而损坏：加载失败时记录日志并保持
+            // 编辑器存活，不让损坏场景把编辑器一起带崩。
+            try {
+                LoadScene(registry, recovery_path_);
+                auto& tab_mgr = SceneTabManager::Get();
+                tab_mgr.MarkDirty();
+                EditorLog(LogLevel::Info, "Recovered scene from auto-save: " + recovery_path_);
+            } catch (const std::exception& e) {
+                EditorLog(LogLevel::Error,
+                    std::string("Auto-save recovery failed (corrupt file?): ") + e.what());
+            }
             recovery_pending_ = false;
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
-            std::filesystem::remove(recovery_path_);
+            std::error_code ec;
+            std::filesystem::remove(recovery_path_, ec);
             EditorLog(LogLevel::Info, "Discarded auto-save file");
             recovery_pending_ = false;
             ImGui::CloseCurrentPopup();
@@ -156,9 +171,22 @@ void AutoSaveManager::Tick(entt::registry& registry) {
 
     // Perform auto-save
     std::string path = GetAutoSavePath();
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
-
-    SaveScene(registry, path);
+    // 自动保存失败（磁盘满/只读/路径无效）不应让正常编辑崩溃：失败则记录日志
+    // 并推迟到下个间隔再试。
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    if (ec) {
+        EditorLog(LogLevel::Error, "Auto-save failed to create dir: " + ec.message());
+        last_save_time_ = now;
+        return;
+    }
+    try {
+        SaveScene(registry, path);
+    } catch (const std::exception& e) {
+        EditorLog(LogLevel::Error, std::string("Auto-save failed: ") + e.what());
+        last_save_time_ = now;
+        return;
+    }
     last_save_time_ = now;
     has_auto_saved_ = true;
 
@@ -180,18 +208,16 @@ void AutoSaveManager::Tick(entt::registry& registry) {
 
 void AutoSaveManager::OnManualSave() {
     std::string path = GetAutoSavePath();
-    if (std::filesystem::exists(path)) {
-        std::filesystem::remove(path);
-    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
     last_save_time_ = ImGui::GetTime();
     has_auto_saved_ = false;
 }
 
 void AutoSaveManager::OnExit() {
     std::string path = GetAutoSavePath();
-    if (std::filesystem::exists(path)) {
-        std::filesystem::remove(path);
-    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 } // namespace dse::editor

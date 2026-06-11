@@ -17,9 +17,9 @@
 | 资产 (engine/assets) | ~5,900 行 | **70%** | AssetManager、pak 读写、流式加载 StreamingManager、资产编译器、Android asset FS、本地化 |
 | 物理 (engine/physics) | ~3,600 行 | **70%** | Box2D(2D) + Jolt(默认)/PhysX(可选互斥) 双后端抽象 i_physics3d_system |
 | 场景 (engine/scene) | ~4,000 行 | **75%** | Scene/SubScene/八叉树/四叉树/Transform 系统/组件序列化 |
-| 音频 (engine/audio) | ~1,650 行 | **50%** | miniaudio + AudioBus；代码中有 USE_FMOD_STUDIO 全局宏，集成方式偏粗糙 |
+| 音频 (engine/audio) | ~1,650 行 | **55%** | miniaudio + AudioBus 单一音频后端（`ma_engine`/`ma_sound`）；FMOD 从未实装（仓库内 "fmod" 均为 `std::fmod` 数学函数），`USE_FMOD_STUDIO` 死宏已删（提交 9967947b），音频已收口到 miniaudio |
 | 导航 (engine/navigation) | ~900 行 | **60%** | Recast/Detour 封装 + 动态障碍 + 运行时 rebake |
-| 网络 (engine/net + http) | ~830 行 | **25-30%，最薄弱** | 仅 GNS transport 单文件(207 行 .cpp) + C API；HTTP client 287 行；CMake 默认 OFF。Lua 绑定以 `#ifdef` 守护，关闭时为空 TU、`dse.{net,http}.available()` 返回 false（public API 已弱化）；回环 smoke（net/http 各 2-3 个）已注册进 ctest，开 `-DDSE_ENABLE_NET/HTTP=ON` 时随 ctest 自检 |
+| 网络 (engine/net + http) | ~830 行 | **25-30%，最薄弱（v0.1 明确声明无联机）** | 仅 GNS transport 单文件(207 行 .cpp) + C API；HTTP client 287 行；CMake 默认 OFF。Lua 绑定以 `#ifdef` 守护，关闭时为空 TU、`dse.{net,http}.available()` 返回 false（public API 已弱化）；回环 smoke（net/http 各 2-3 个）已注册进 ctest，开 `-DDSE_ENABLE_NET/HTTP=ON` 时随 ctest 自检。**v0.1 不提供联机**：网络层为实验性原型（`net_transport.h`/`net_c_api.h` 顶部已标注），房间/同步/序列化为 v0.1 之后独立规划项 |
 | 输入/平台 | ~1,800 行 | **60%** | GLFW(桌面) + Android；无 macOS/iOS/主机原生层 |
 | 工具链 (tools) | ~3,100 行 | **60%** | 自研 DSSL 着色器语言编译器(parser+codegen) + shader_compiler；codegen/mcp_adapter 目录为空 |
 | 测试 (tests) | ~47,000 行，210 个测试文件 | **优秀** | unit/integration/smoke 三层；三个 RHI 后端各有 smoke 测试。已在 feature/engine-lib 本地实测：Debug 全量构建 0 错误、3 个 ctest 套件通过（2789 用例通过 / 19 GTEST_SKIP / 0 失败）。CI（Windows）覆盖 Debug/Release/RelWithDebInfo × Vulkan+D3D11+Jolt 三矩阵 + Linux GL + Android APK；新增 editor-build job 编译 editor，net/http opt-in smoke 进 ctest |
@@ -45,7 +45,7 @@
 2. **builtin_passes.cpp 3,293 行 / frame_pipeline.cpp 3,031 行**：frame_pipeline.h 头文件 include 了几乎所有子系统，耦合面大、编译传染强（虽有 PCH 缓解）。但需澄清：frame_pipeline 偏厚的部分是**非-pass 职责**（子系统 Init/Shutdown、每帧全局状态准备如光源收集/cluster/probe SH/风场、渲染线程、编辑器集成、RT 管理、快照），**不是**渲染 pass 流程控制硬编码。
 3. **passes 已是数据驱动，但物理分文件偏粗**：实际有 `RenderPipelineRegistry` + `RenderPipelineProfile`（ForwardPlusDefault/Lite/DebugDepth），36 个 pass 均实现 `IRenderPass`，`BuildRenderGraphInternal` 从 profile 遍历 → `registry.Create` → 模块 `RegisterRenderPasses` → 统一 `Setup(graph)` → `Compile()`；新 pass/后处理已走 RenderGraph+IRenderPass，**模块化在管线层已兑现**。残留问题只是这 36 个 pass 物理上集中在 `builtin_passes.cpp` 一个文件（拆分是可读性优化，非架构债）。
 4. **gameplay_3d 子系统偏"演示级"**：cloth/fluid/vehicle 等都是单文件系统，作为 feature 列表很漂亮，但生产深度不足；建议首发收敛范围而非继续铺宽度。
-5. **全局宏污染**：顶层 CMake add_definitions(USE_FMOD_STUDIO、GLM_FORCE_SWIZZLE 等) 全局生效，应下沉到目标级 target_compile_definitions。
+5. **全局宏污染**：`USE_FMOD_STUDIO` 死宏已删（提交 9967947b）；仅剩 `GLM_FORCE_SWIZZLE` 全局生效——它影响 glm 在所有 TU 的内存布局，下沉到目标级需全引用方一致，否则有跨模块 ABI 隐患，故谨慎保留、暂不动。
 6. **网络层与引擎其余部分不成比例**：800 行 vs 渲染 4.2 万行，若 v1 需要联机能力，这是硬缺口。
 
 **结论：架构骨架是对的、现代的（ECS + RHI + RenderGraph + 模块化 + 代码生成），主要问题是渲染高层逻辑的"收口"未完成，属于可演进的债务而非推倒重来的错误。**
@@ -115,6 +115,28 @@
 2. 根 `CMakeLists.txt` 在 `enable_testing()` 后用 `if(TARGET ...)` 守护注册 5 个回环 smoke（`dse_http_smoke` / `dse_http_lua_smoke` / `dse_net_smoke` / `dse_net_capi_smoke` / `dse_net_lua_smoke`）进 ctest（labels `smoke;net_http`）；对默认构建/CI 零影响。
 
 未做（避免过度设计）：FramePipeline/builtin_passes 拆分、删 `World::Instance()` 垫片、net 默认开 smoke（会拉 GNS/webrtc 巨依赖）均为可选低优先项，维持现状。
+
+---
+
+## 七、2026-06-11 v0.1 收尾（#5–#8，对齐代码现状）
+
+针对"网络层 / 音频整改 / 编辑器稳定性 / 性能基准固化"四点收尾。核实后多数"待办"已具备，按"不过度设计"做最小、低风险收口：
+
+- **#5 网络层 → v0.1 明确声明"无联机"**：网络层已是 opt-in（`DSE_ENABLE_NET` 默认 OFF、全程 `#ifdef` 守护，默认构建/CI 不含）。本次在 `engine/net/net_transport.h` / `net_c_api.h` 顶部加"实验性、v0.1 不含联机"声明，文档明确 v0.1 不提供联机、网络层不属稳定 public/SDK API。**不**新增房间/同步/序列化系统（v0.1 over-design），如需真正联机单独立项。
+
+- **#6 音频 → 收口单一 miniaudio（基本已完成）**：实际音频全走 miniaudio（`audio_bus.cpp` 直接 `ma_engine`/`ma_sound`）；仓库内 "fmod" 命中全是 `std::fmod` 数学函数，**FMOD 音频从未实装**；`USE_FMOD_STUDIO` 全局死宏已于提交 9967947b 删除，CMake 无任何 FMOD 残留。本次仅文档写明 miniaudio 为唯一音频后端，代码无需再改。
+
+- **#7 编辑器稳定性 → 校验既有基础 + 定点加固**：核实三大鲁棒性基础均已存在且较成熟——崩溃处理（`editor_crash.cpp` + `engine/diagnostics/crash_handler.h`，全程 `std::error_code` 守护、可经 `DSE_CRASH_HANDLER=0` 关闭）、自动保存与恢复（`AutoSaveManager`，带恢复对话框）、撤销/重做（`UndoRedoManager`，有 `max_history_` 上限 + 命令合并）。本次定点加固**自动保存子系统自身**（它本是崩溃韧性机制，却存在会反噬的未守护文件系统调用）：`CheckRecovery` 目录迭代改 `error_code` 变体（目录不可访问不再启动期抛异常崩溃）；`Tick` 的 `create_directories`/`SaveScene` 加 `error_code`/`try-catch`（磁盘满/只读时降级为日志，不中断编辑）；恢复对话框 `LoadScene` 加 `try-catch`（**损坏的恢复文件**不再把编辑器一起带崩）；`remove`/`last_write_time` 等均改 `error_code`。其余 139 个面板的成体系"扫雷"为高回归风险项，列为 alpha 后持续项，不做无边界重构。
+
+- **#8 性能基准固化 → 补 drawcall + 加载时间，支持万级**：`run_benchmark.py` + `main.lua` 已支持任意实体数、已带 adapter/软渲标志。本次 `main.lua` 在 `Awake` 测量场景构建+资产装载耗时（`load_ms`）、报告与 `DSE_PERF_RESULT` 行追加 `draw_calls`+`load_ms`；`run_benchmark.py` 解析新字段，CSV/报表增 `draw_calls`/`load_ms` 列。新增 `examples/stress_test/README.md` 固化跑法（含**万级** `--counts 10000`）、指标定义、硬件 vs 软渲对比口径。保留历史 `benchmark_results.csv`（硬件数据）不被本机软渲覆盖；硬件基线须在有独显机器采集。
+
+**本次提交（直推 feature/engine-lib）**：
+1. `engine/render/rhi/*`：`RhiDevice::GetDeviceInfo()`（adapter 名 + 软渲标志）DX11/GL/Vulkan 三后端实现；`frame_pipeline` 设备初始化后输出 `DSE_RENDER_DEVICE` 可解析行（提交 7640b6cd）。
+2. `examples/stress_test/`：`main.lua` + `run_benchmark.py` 补 drawcall/加载时间/设备列；新增 `README.md`。
+3. `engine/net/net_transport.h`、`net_c_api.h`：v0.1 无联机 + 实验性声明。
+4. `apps/editor_cpp/src/editor_autosave.cpp`：自动保存/恢复路径文件系统鲁棒性加固。
+
+未做（避免过度设计）：网络层成体系联机、编辑器 139 面板无边界稳定性重构、`GLM_FORCE_SWIZZLE` 下沉（ABI 风险）、`DedicatedVideoMemory==0` 适配器跳过策略调整（设备选择逻辑，改动有风险）——均维持现状或留待单独立项。
 
 ---
 
