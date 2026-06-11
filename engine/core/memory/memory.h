@@ -19,12 +19,20 @@
 namespace dse {
 namespace core {
 
+class FrameAllocator;
+class LinearAllocator;
+
 /**
  * @struct MemoryConfig
- * @brief 内存子系统初始化配置（后续阶段扩展：后端选择、帧缓冲大小等）。
+ * @brief 内存子系统初始化配置。
  */
 struct MemoryConfig {
-    // 阶段1暂无可配项；预留以稳定 Init 接口。
+    /// 每帧线性分配器单缓冲容量（字节）。
+    size_t frame_buffer_bytes = 16ull * 1024 * 1024;  // 16 MB
+    /// 帧分配器缓冲数（>=2；并行渲染建议 = 帧延迟 + 1）。
+    uint32_t frame_buffer_count = 2;
+    /// 每线程 scratch 线性分配器容量（字节）。
+    size_t scratch_bytes = 256ull * 1024;  // 256 KB
 };
 
 /**
@@ -70,8 +78,18 @@ public:
     /// 访问通用堆后端（高级用法）。
     static IAllocator& Heap();
 
+    /// 主线程每帧线性分配器（瞬时数据；帧边界由 FramePipeline 调 Frame().BeginFrame() 复位）。
+    static FrameAllocator& Frame();
+
+    /// 从当前帧缓冲分配（容量不足返回 nullptr，调用方需退回 Alloc）。
+    static void* FrameAlloc(size_t size, size_t alignment = kDefaultAlignment);
+
+    /// 每线程 scratch 线性分配器（线程私有；零争用；按需 Reset）。
+    static LinearAllocator& ThreadScratch();
+
 private:
     static IAllocator* heap_;
+    static MemoryConfig config_;
 };
 
 /**

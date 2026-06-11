@@ -9,11 +9,19 @@
 #include <cstring>
 #include <string>
 
+#include <atomic>
+#include <mutex>
+#include <set>
+#include <thread>
+#include <vector>
+
 #include "engine/core/memory/allocator.h"
 #include "engine/core/memory/system_allocator.h"
 #include "engine/core/memory/memory.h"
 #include "engine/core/memory/memory_tracker.h"
 #include "engine/core/memory/tracking_allocator.h"
+#include "engine/core/memory/linear_allocator.h"
+#include "engine/core/memory/frame_allocator.h"
 
 using namespace dse::core;
 
@@ -255,3 +263,138 @@ TEST(MemoryFacadeTest, TrackingDisabledReturnsZeroStats) {
     EXPECT_EQ(Memory::Stats(MemoryTag::Net).current, 0u);
 }
 #endif
+
+// ============================================================
+// LinearAllocator（bump-pointer）
+// ============================================================
+
+TEST(LinearAllocatorTest, BumpAllocAlignmentAndUsage) {
+    LinearAllocator la;
+    la.Init(1024, MemoryTag::FrameTemp);
+    ASSERT_TRUE(la.IsInitialized());
+    EXPECT_EQ(la.Capacity(), 1024u);
+    EXPECT_EQ(la.Used(), 0u);
+
+    void* a = la.Allocate(10, 16);
+    ASSERT_NE(a, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(a) % 16u, 0u);
+
+    void* b = la.Allocate(1, 64);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(b) % 64u, 0u);
+    EXPECT_GT(reinterpret_cast<uintptr_t>(b), reinterpret_cast<uintptr_t>(a));
+    EXPECT_GT(la.Used(), 0u);
+}
+
+TEST(LinearAllocatorTest, OverflowReturnsNullNoCrash) {
+    LinearAllocator la;
+    la.Init(64, MemoryTag::FrameTemp);
+    void* a = la.Allocate(32, 8);
+    ASSERT_NE(a, nullptr);
+    void* big = la.Allocate(1000, 8); // 超容量
+    EXPECT_EQ(big, nullptr);
+    EXPECT_EQ(la.OverflowCount(), 1u);
+    // 溢出后仍可继续小额分配
+    void* c = la.Allocate(8, 8);
+    EXPECT_NE(c, nullptr);
+}
+
+TEST(LinearAllocatorTest, ResetAndMarkRewind) {
+    LinearAllocator la;
+    la.Init(256, MemoryTag::FrameTemp);
+    void* first = la.Allocate(32, 16);
+    const size_t mark = la.Mark();
+    la.Allocate(64, 16);
+    EXPECT_GT(la.Used(), mark);
+    la.Rewind(mark);
+    EXPECT_EQ(la.Used(), mark);
+
+    const size_t hw_before = la.HighWater();
+    la.Reset();
+    EXPECT_EQ(la.Used(), 0u);
+    EXPECT_GE(la.HighWater(), hw_before); // 峰值不回落
+    void* again = la.Allocate(32, 16);
+    EXPECT_EQ(again, first); // Reset 后复用起始区
+}
+
+// ============================================================
+// FrameAllocator（多缓冲轮转 + fence 复位）
+// ============================================================
+
+TEST(FrameAllocatorTest, RotatesBuffersAndResets) {
+    FrameAllocator fa;
+    fa.Init(512, 2, MemoryTag::FrameTemp);
+    ASSERT_TRUE(fa.IsInitialized());
+    EXPECT_EQ(fa.BufferCount(), 2u);
+
+    void* p0 = fa.Alloc(64, 16); // buffer 0
+    ASSERT_NE(p0, nullptr);
+
+    fa.BeginFrame();             // -> buffer 1
+    void* p1 = fa.Alloc(64, 16);
+    ASSERT_NE(p1, nullptr);
+    EXPECT_NE(p0, p1);           // 不同缓冲，地址不同（上一帧仍可被消费）
+
+    fa.BeginFrame();             // -> buffer 0（复位）
+    void* p2 = fa.Alloc(64, 16);
+    ASSERT_NE(p2, nullptr);
+    EXPECT_EQ(p2, p0);           // 回到 buffer 0 起始
+    EXPECT_EQ(fa.FrameNumber(), 2u);
+}
+
+TEST(FrameAllocatorTest, ClampsBufferCount) {
+    FrameAllocator fa;
+    fa.Init(128, 1, MemoryTag::FrameTemp); // <2 应被夹到 2
+    EXPECT_EQ(fa.BufferCount(), 2u);
+    fa.Shutdown();
+    fa.Init(128, 99, MemoryTag::FrameTemp); // >max 应被夹到上限
+    EXPECT_LE(fa.BufferCount(), kMaxFrameBuffers);
+}
+
+// ============================================================
+// ThreadScratch（每线程私有、零争用）
+// ============================================================
+
+TEST(ThreadScratchTest, PerThreadDistinctBuffersNoRace) {
+    constexpr int kThreads = 8;
+    std::vector<std::thread> threads;
+    std::mutex mtx;
+    std::set<void*> bases;
+    std::atomic<int> failures{0};
+    // 屏障：确保捕获基址时所有线程都还存活（否则退出线程的缓冲会被复用，地址冲突）。
+    std::atomic<int> arrived{0};
+
+    for (int t = 0; t < kThreads; ++t) {
+        threads.emplace_back([&, t] {
+            LinearAllocator& scratch = Memory::ThreadScratch();
+            void* base = scratch.Allocate(16, 16);
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                bases.insert(base);
+            }
+            arrived.fetch_add(1, std::memory_order_acq_rel);
+            while (arrived.load(std::memory_order_acquire) < kThreads) {
+                std::this_thread::yield();
+            }
+            // 反复在私有 scratch 上分配并写入，验证无串扰
+            for (int iter = 0; iter < 1000; ++iter) {
+                auto* buf = static_cast<uint8_t*>(scratch.Allocate(64, 16));
+                if (buf == nullptr) {
+                    scratch.Reset();
+                    buf = static_cast<uint8_t*>(scratch.Allocate(64, 16));
+                }
+                if (buf == nullptr) { ++failures; break; }
+                const uint8_t marker = static_cast<uint8_t>(t * 7 + iter);
+                std::memset(buf, marker, 64);
+                for (int k = 0; k < 64; ++k) {
+                    if (buf[k] != marker) { ++failures; break; }
+                }
+            }
+        });
+    }
+    for (auto& th : threads) th.join();
+
+    EXPECT_EQ(failures.load(), 0);
+    // 每个线程应得到独立 scratch 缓冲（基址互不相同）。
+    EXPECT_EQ(bases.size(), static_cast<size_t>(kThreads));
+}

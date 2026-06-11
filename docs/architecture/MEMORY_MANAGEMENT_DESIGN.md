@@ -264,7 +264,14 @@ engine/core/memory/
    - CMake：`DSE_ENABLE_MEM_TRACKING`（默认 ON，仅 `$<CONFIG:Debug>` 注入定义，Release 零开销）、`DSE_MEM_TRACK_POINTERS`（默认 OFF，逐指针登记定位泄漏）。
    - 测试：新增 7 例（按标签计数/峰值、装饰器对齐与上报、Realloc 保数据、门面按标签统计）。`ctest` 三套全绿。
    - **未做**：`DSE_MEM_GLOBAL_NEW_OVERRIDE`（全量口径/跨 DLL 自动安全）暂未实现——全局 `operator new/delete` 覆盖风险高且需独立验证，留待后续单独提交；当前口径为「门面视图」。
-3. **帧/线性**：`LinearAllocator` + `FrameAllocator`(N缓冲, fence 对齐) + `ThreadScratch`，接 FramePipeline / JobSystem；修 job_system 裸 new。
+3. **帧/线性**：`LinearAllocator` + `FrameAllocator`(N缓冲, fence 对齐) + `ThreadScratch`，接 FramePipeline / JobSystem；修 job_system 裸 new。 ✓ **已完成**（裸 new 留阶段4）
+   - 文件：`engine/core/memory/{linear_allocator,frame_allocator}.{h,cpp}`。
+   - `LinearAllocator`：bump-pointer，具体类型**无虚函数**；溢出**不崩溃**（返回 nullptr + 计数 + 告警，调用方退回堆）；支持 `Mark/Rewind/Reset/HighWater`。
+   - `FrameAllocator`：N 缓冲轮转（默认 N=2，`kMaxFrameBuffers=4`），`BeginFrame()` 推进+复位。
+   - **fence 对齐**：`FramePipeline::Render` 在 `WaitForRenderComplete()` 之后才 `Memory::Frame().BeginFrame()`——保证渲染线程已消费完上一帧快照对应缓冲，杜绝 use-after-reset；单线程路径帧首复位。当前为行为中性接入点（尚无消费者），由 smoke 测试每帧实际跑到。
+   - `Memory::Frame()`（进程级主线程帧分配器，按 `MemoryConfig` 惰性初始化）+ `Memory::ThreadScratch()`（`thread_local`，每线程私有零争用）；`MemoryConfig` 增 `frame_buffer_bytes/frame_buffer_count/scratch_bytes`。
+   - `JobSystem::WorkerThread` 每个任务执行后 `Memory::ThreadScratch().Reset()`（任务级瞬时内存复位）。
+   - 测试：新增 8 例（线性 bump/对齐/溢出/Reset/Mark-Rewind、帧分配器轮转复位/缓冲数夹取、ThreadScratch 8 线程屏障并发无串扰且缓冲互异）。`ctest` 三套全绿（含 smoke 跑帧边界复位）。
 4. **池**：`PoolAllocator` + 重写 `ObjectPool`，删死代码 `memory_pool.h`，迁 1–2 个高频点示范。
 5. **预算 + 资产对接**：统一预算视图，`AssetManager` 上报；数据查询接口 + 日志（不做 UI 面板）。
 6. **STL 适配器 + 标签化**：仅提供 + 示范，按硬规矩约束使用边界。

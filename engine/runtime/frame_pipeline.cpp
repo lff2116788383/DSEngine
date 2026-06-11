@@ -27,6 +27,8 @@ FramePipeline::~FramePipeline() = default;
 #include "engine/core/event_bus.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/job_system.h"
+#include "engine/core/memory/memory.h"
+#include "engine/core/memory/frame_allocator.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_manager.h"
 #include "engine/render/rhi/rhi_factory.h"
@@ -1082,9 +1084,13 @@ void FramePipeline::Render() {
     }
     if (render_thread_active_.load()) {
         WaitForRenderComplete();
+        // 渲染线程已消费完上一帧快照（含其帧分配器缓冲），此处推进+复位才安全（见设计文档 §3.5）。
+        dse::core::Memory::Frame().BeginFrame();
         PrepareRenderFrame();
         SignalRenderThread();
     } else {
+        // 单线程：本帧同步消费，帧首复位即可。
+        dse::core::Memory::Frame().BeginFrame();
         dse::runtime::RunFrameRender(*this);
     }
 }

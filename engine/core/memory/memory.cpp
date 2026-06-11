@@ -5,6 +5,8 @@
 
 #include "engine/core/memory/memory.h"
 #include "engine/core/memory/system_allocator.h"
+#include "engine/core/memory/frame_allocator.h"
+#include "engine/core/memory/linear_allocator.h"
 #include "engine/base/debug.h"
 
 #if defined(DSE_ENABLE_MEM_TRACKING)
@@ -34,9 +36,11 @@ TrackingAllocator& TrackingHeap() {
 } // namespace
 
 IAllocator* Memory::heap_ = nullptr;
+MemoryConfig Memory::config_;
 
-void Memory::Init(const MemoryConfig& /*config*/) {
+void Memory::Init(const MemoryConfig& config) {
     if (heap_ == nullptr) {
+        config_ = config;
 #if defined(DSE_ENABLE_MEM_TRACKING)
         heap_ = &TrackingHeap();
 #else
@@ -110,6 +114,34 @@ void Memory::ReportLeaks() {
                        s.current, s.alloc_count - s.free_count);
     }
 #endif
+}
+
+FrameAllocator& Memory::Frame() {
+    // 进程级单一主线程帧分配器；首次访问惰性按 config_ 初始化。
+    static FrameAllocator instance;
+    if (!instance.IsInitialized()) {
+        if (heap_ == nullptr) {
+            Init();
+        }
+        instance.Init(config_.frame_buffer_bytes, config_.frame_buffer_count, MemoryTag::FrameTemp);
+    }
+    return instance;
+}
+
+void* Memory::FrameAlloc(size_t size, size_t alignment) {
+    return Frame().Alloc(size, alignment);
+}
+
+LinearAllocator& Memory::ThreadScratch() {
+    // 线程私有：每线程一份，零争用。
+    thread_local LinearAllocator scratch;
+    if (!scratch.IsInitialized()) {
+        if (heap_ == nullptr) {
+            Init();
+        }
+        scratch.Init(config_.scratch_bytes, MemoryTag::FrameTemp);
+    }
+    return scratch;
 }
 
 } // namespace core

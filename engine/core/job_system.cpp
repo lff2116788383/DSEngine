@@ -5,6 +5,8 @@
 
 #include "engine/core/job_system.h"
 #include "engine/core/service_locator.h"
+#include "engine/core/memory/memory.h"
+#include "engine/core/memory/linear_allocator.h"
 #include <algorithm>
 
 namespace dse {
@@ -349,6 +351,8 @@ void JobSystem::WorkerThread(int index) {
         // 执行任务
         if (entry.task) {
             entry.task();
+            // 任务可使用每线程 scratch 做瞬时分配；任务结束统一复位（零争用）。
+            Memory::ThreadScratch().Reset();
         }
 
         // 通知完成
