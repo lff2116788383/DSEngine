@@ -203,7 +203,7 @@
 | ~~main.cpp 过重~~ | ✅ 已修 | 拆分为 EditorApp 类，main.cpp 仅 10 行 |
 | ~~大量 static 全局状态~~ | ✅ 已修 | 全局变量已消除：profiler/gizmo/language 收入 EditorApp 成员，editor_state/backup_registry 改为 namespace-static，EditorContext 统一传递 |
 | ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
-| **仅 OpenGL** | 🟡 中 | 编辑器直接 `#include <glad/gl.h>`，未走 RHI |
+| **部分走 RHI** | 🟡 中 | 主场景渲染早已经由引擎 RHI（`pipeline()->GetSceneTextureId()`）；编辑器自建 GPU 资源中**资产缩略图已迁移到 RHI**（`editor_gpu.{h,cpp}` 接入层 → `RhiDevice::CreateTexture2D/DeleteTexture`）。剩余直接 GL：视口拾取（自定义 shader+FBO+readback）、多视口 blit、ImGui 后缓冲清屏（详 §五·编辑器走 RHI） |
 | **Multi-viewport 默认关闭** | 🟡 中 | 已有配置面板与开关，默认关（CRT heap 稳定性顾虑） |
 | **Visual Script 控制流未接** | 🟡 中 | `editor_visual_script.cpp:374-381` 事件/分支 `{body}`/`{true_body}`/`{false_body}` 仅生成占位注释，数据流正常 |
 | **文件对话框仅 Windows** | 🟢 低 | `editor_file_dialog.cpp:101-106` 非 Windows 为空桩（与引擎 Windows-first 一致） |
@@ -215,8 +215,38 @@
 | ~~🔴 高~~ | ~~拆分 main.cpp → EditorApp 类~~ | ~~1-2 天~~ | ✅ 完成 |
 | ~~🔴 高~~ | ~~Inspector 注册式 (Component → DrawFunc)~~ | ~~1 周~~ | ✅ 完成 |
 | ~~🟡 中~~ | ~~统一 EditorContext 替代残余 static 变量~~ | ~~2-3 天~~ | ✅ 完成 |
-| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 待开始 |
+| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 🔄 进行中（缩略图已迁移，详 §五） |
 | 🟢 低 | 修复 Multi-viewport CRT 问题 | 未知 | 待开始 |
+
+---
+
+## 五、编辑器走 RHI（迁移评估与进度）
+
+> 目标：编辑器不再直接 `#include <glad/gl.h>` 调 OpenGL，所有 GPU 资源/绘制经引擎 `render::RhiDevice` 抽象，从而与引擎一致地支持 OpenGL / Vulkan / D3D11 三后端。
+
+### 现状
+
+编辑器的**主场景渲染本就走 RHI**：引擎管线把场景渲染进 RHI 渲染目标，编辑器仅通过 `pipeline()->GetSceneTextureId()` 取颜色纹理喂给 `ImGui::Image`。编辑器自身直接调 GL 的只剩少量自建 GPU 资源/绘制。
+
+### 接入层
+
+新增 `editor_gpu.{h,cpp}`：引擎 Init 后由 `editor_app` 调 `SetEditorRhiDevice(pipeline()->GetRhiDevice())` 注入设备；编辑器代码经 `EditorCreateTexture2D / EditorDeleteTexture` 等收敛到 RHI。后端无关：OpenGL 后端返回的句柄即 GL 纹理 id，可直接喂 ImGui。
+
+### 已迁移
+
+| 子系统 | 原直接 GL | 迁移后 |
+|--------|-----------|--------|
+| 资产缩略图（`editor_aux_panels.cpp`：球体预览 / 图片缩略图 / 缓存释放） | `glGenTextures`+`glTexImage2D`+`glDeleteTextures` | `EditorCreateTexture2D(linear,clamp)` / `EditorDeleteTexture` → `RhiDevice::CreateTexture2D(TextureSamplerDesc)` / `DeleteTexture`，行为一致（RGBA8 / Linear / ClampToEdge） |
+
+### 剩余（需扩展 RHI，风险较高）
+
+| 子系统 | 位置 | 直接 GL 用法 | 阻塞点 |
+|--------|------|--------------|--------|
+| 视口拾取（颜色 ID） | `editor_viewport_panel.cpp` ~130-260 | 自建 shader + quad VAO/VBO + FBO，逐像素 `glReadPixels` 命中实体 | RHI 当前只暴露高层批绘制（`DrawMeshBatch/DrawSpriteBatch`），无「自定义 shader 任意几何即时绘制」入口；渲染目标与 readback（`CreateRenderTarget`/`ReadRenderTargetColorRgba8WithSize`）已具备，缺的是通用即时绘制原语 |
+| 多视口纹理 blit | `editor_viewport_panel.cpp` ~550-590 | `glBlitFramebuffer` 把源纹理拷到各视口纹理 | RHI 仅有 `BlitToScreen`，无通用 texture→texture/RT→RT blit |
+| ImGui 后缓冲清屏 | `editor_app.cpp` ~689-697 | 绑定默认 FBO + `glClear` 后由 imgui_impl_opengl3 直接绘制 | 与 ImGui GL3 后端强耦合；需 RHI 接管交换链/默认帧缓冲呈现，或改用 RHI 后端版 ImGui 渲染器 |
+
+推进顺序建议：①先在 `RhiDevice` 增通用即时绘制原语（绑定自定义 program + 顶点缓冲 + 绘制到指定 RT）与 RT→texture blit，三后端各实现并补无头/离屏冒烟测试；②迁移视口拾取与多视口 blit；③最后处理 ImGui 呈现层（改用 RHI 后端 ImGui 渲染器）以彻底去除编辑器对 glad 的直接依赖。前两步无 GPU 即时绘制原语前不宜动，以免回归当前可用的拾取/多视口路径。
 
 ---
 
@@ -263,7 +293,7 @@
 
 ---
 
-## 五、方案评估
+## 七、方案评估
 
 ### 与其他方案对比
 

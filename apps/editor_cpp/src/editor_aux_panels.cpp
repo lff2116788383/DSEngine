@@ -11,7 +11,7 @@
 #include "editor_project.h"
 #include "editor_asset_db.h"
 
-#include <glad/gl.h>
+#include "editor_gpu.h"
 #include "stb/stb_image.h"
 
 #include <fstream>
@@ -103,7 +103,7 @@ void ClearThumbnailCache() {
     auto& cache = GetThumbnailCache();
     for (auto& [path, entry] : cache) {
         if (entry.texture_id != 0) {
-            glDeleteTextures(1, &entry.texture_id);
+            dse::editor::EditorDeleteTexture(entry.texture_id);
         }
     }
     cache.clear();
@@ -193,29 +193,12 @@ static unsigned int GenerateSpherePreviewTexture(float r, float g, float b,
             }
         }
     }
-    unsigned int tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sz, sz, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-    glBindTexture(GL_TEXTURE_2D, 0);
-    return tex;
+    return dse::editor::EditorCreateTexture2D(sz, sz, pixels.data(), /*linear=*/true, /*clamp=*/true);
 }
 
 static unsigned int UploadThumbTexture(const uint8_t* rgba, int w, int h,
                                        const std::filesystem::path& path_key) {
-    unsigned int tex = 0;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    unsigned int tex = dse::editor::EditorCreateTexture2D(w, h, rgba, /*linear=*/true, /*clamp=*/true);
     GetThumbnailCache()[path_key.string()] = {tex, w, h};
     return tex;
 }
