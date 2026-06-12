@@ -24,6 +24,12 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#elif defined(__linux__) && !defined(__ANDROID__)
+#include <sys/inotify.h>
+#include <poll.h>
+#include <unistd.h>
+#include <unordered_map>
+#include <vector>
 #endif
 extern "C" {
 #include "aes.h"
@@ -2037,6 +2043,87 @@ void AssetManager::FileWatcherLoop() {
 
     CloseHandle(overlapped.hEvent);
     CloseHandle(dir_handle);
+#elif defined(__linux__) && !defined(__ANDROID__)
+    const std::string data_root = GetDataRoot();
+    if (data_root.empty()) {
+        DEBUG_LOG_WARN("FileWatcher: data root is empty, watcher exiting");
+        file_watcher_running_.store(false);
+        return;
+    }
+
+    const int inotify_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (inotify_fd < 0) {
+        DEBUG_LOG_ERROR("FileWatcher: inotify_init1 failed for {}", data_root);
+        file_watcher_running_.store(false);
+        return;
+    }
+
+    // inotify 非递归：需为根目录及全部子目录各注册一个 watch。
+    // wd → 目录绝对路径，用于把事件名拼回完整路径并计算相对 data_root 的相对路径。
+    std::unordered_map<int, std::filesystem::path> wd_to_dir;
+    const uint32_t watch_mask = IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE;
+
+    auto add_watch = [&](const std::filesystem::path& dir) {
+        const int wd = inotify_add_watch(inotify_fd, dir.c_str(), watch_mask);
+        if (wd >= 0) wd_to_dir[wd] = dir;
+    };
+    auto add_tree = [&](const std::filesystem::path& root) {
+        add_watch(root);
+        std::error_code ec;
+        std::filesystem::recursive_directory_iterator it(
+            root, std::filesystem::directory_options::skip_permission_denied, ec), end;
+        for (; !ec && it != end; it.increment(ec)) {
+            if (it->is_directory(ec)) add_watch(it->path());
+        }
+    };
+
+    const std::filesystem::path root_path(data_root);
+    add_tree(root_path);
+    DEBUG_LOG_INFO("FileWatcher: started monitoring {}", data_root);
+
+    std::vector<char> buffer(64 * 1024);
+    while (file_watcher_running_.load()) {
+        pollfd pfd{};
+        pfd.fd = inotify_fd;
+        pfd.events = POLLIN;
+        const int pr = ::poll(&pfd, 1, 200);   // 200ms 超时，便于检查退出标志
+        if (pr <= 0 || !(pfd.revents & POLLIN)) continue;
+
+        const ssize_t len = ::read(inotify_fd, buffer.data(), buffer.size());
+        if (len <= 0) continue;
+
+        ssize_t offset = 0;
+        while (offset + static_cast<ssize_t>(sizeof(inotify_event)) <= len) {
+            auto* ev = reinterpret_cast<inotify_event*>(buffer.data() + offset);
+            if (ev->len > 0) {
+                auto dir_it = wd_to_dir.find(ev->wd);
+                if (dir_it != wd_to_dir.end()) {
+                    const std::filesystem::path full = dir_it->second / std::string(ev->name);
+                    if ((ev->mask & IN_ISDIR) && (ev->mask & (IN_CREATE | IN_MOVED_TO))) {
+                        // 新建/移入目录：递归补挂 watch，使其内文件后续改动可被捕获。
+                        add_tree(full);
+                    } else if (ev->mask & (IN_CLOSE_WRITE | IN_MOVED_TO)) {
+                        std::error_code ec;
+                        const std::filesystem::path rel =
+                            std::filesystem::relative(full, root_path, ec);
+                        const std::string relative =
+                            (ec ? full : rel).generic_string();
+                        std::lock_guard<std::mutex> lock(hot_reload_mutex_);
+                        if (std::find(pending_hot_reloads_.begin(),
+                                      pending_hot_reloads_.end(),
+                                      relative) == pending_hot_reloads_.end()) {
+                            pending_hot_reloads_.push_back(relative);
+                            DEBUG_LOG_INFO("FileWatcher: queued hot-reload for {}", relative);
+                        }
+                    }
+                }
+            }
+            offset += static_cast<ssize_t>(sizeof(inotify_event) + ev->len);
+        }
+    }
+
+    for (const auto& [wd, dir] : wd_to_dir) inotify_rm_watch(inotify_fd, wd);
+    ::close(inotify_fd);
 #else
     DEBUG_LOG_WARN("FileWatcher: not implemented on this platform");
     while (file_watcher_running_.load()) {
