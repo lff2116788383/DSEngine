@@ -20,8 +20,30 @@
 #include <thread>
 #include <filesystem>
 #include <fstream>
+#include <system_error>
+#include <string>
 
 using namespace dse::core;
+
+namespace {
+// 为每个用例生成唯一临时目录，避免并行执行时多个用例共享同一固定路径而互相干扰
+// （一个用例的 TearDown 删目录会破坏另一个用例正在用的文件）。
+std::filesystem::path MakeUniqueTempDir(const char* prefix) {
+    static std::atomic<uint64_t> counter{0};
+    std::string name = prefix;
+    if (const auto* info = ::testing::UnitTest::GetInstance()->current_test_info()) {
+        name += "_";
+        name += info->test_suite_name();
+        name += "_";
+        name += info->name();
+    }
+    name += "_";
+    name += std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    name += "_";
+    name += std::to_string(counter.fetch_add(1));
+    return std::filesystem::temp_directory_path() / name;
+}
+}  // namespace
 
 // ============================================================
 // LRU 淘汰测试
@@ -30,7 +52,7 @@ using namespace dse::core;
 class AssetLruTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        temp_dir_ = std::filesystem::temp_directory_path() / "dse_asset_lru_test";
+        temp_dir_ = MakeUniqueTempDir("dse_asset_lru_test");
         std::filesystem::create_directories(temp_dir_);
 
         mgr_ = std::make_unique<AssetManager>();
@@ -39,7 +61,8 @@ protected:
 
     void TearDown() override {
         mgr_.reset();
-        std::filesystem::remove_all(temp_dir_);
+        std::error_code ec;
+        std::filesystem::remove_all(temp_dir_, ec);
     }
 
     void WriteDmeshFile(const std::string& name, std::size_t size) {
@@ -135,7 +158,7 @@ TEST_F(AssetLruTest, EvictLRUDoNotRetireResourcesThatAreStillReferenced) {
 class AssetAsyncExpandedTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        temp_dir_ = std::filesystem::temp_directory_path() / "dse_asset_async_expanded_test";
+        temp_dir_ = MakeUniqueTempDir("dse_asset_async_expanded_test");
         std::filesystem::create_directories(temp_dir_);
 
         mgr_ = std::make_unique<AssetManager>();
@@ -144,7 +167,8 @@ protected:
 
     void TearDown() override {
         mgr_.reset();
-        std::filesystem::remove_all(temp_dir_);
+        std::error_code ec;
+        std::filesystem::remove_all(temp_dir_, ec);
     }
 
     void WriteFile(const std::string& name, const std::string& content) {
@@ -247,7 +271,7 @@ TEST_F(AssetAsyncExpandedTest, LoadbringJobSystem) {
 class AssetHotReloadTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        temp_dir_ = std::filesystem::temp_directory_path() / "dse_asset_hotreload_test";
+        temp_dir_ = MakeUniqueTempDir("dse_asset_hotreload_test");
         std::filesystem::create_directories(temp_dir_);
 
         mgr_ = std::make_unique<AssetManager>();
@@ -257,7 +281,8 @@ protected:
     void TearDown() override {
         mgr_->StopFileWatcher();
         mgr_.reset();
-        std::filesystem::remove_all(temp_dir_);
+        std::error_code ec;
+        std::filesystem::remove_all(temp_dir_, ec);
     }
 
     std::filesystem::path temp_dir_;

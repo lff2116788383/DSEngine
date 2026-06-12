@@ -24,6 +24,26 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
+#include <string>
+#include <system_error>
+
+namespace {
+// 为每个用例生成唯一名字，避免并行执行时多个用例共享同一固定文件名而互相干扰
+// （一个用例挂载着 bundle 文件时，另一个用例的 TearDown 删它会触发“拒绝访问/被占用”）。
+std::string UniqueSuffix() {
+    static std::atomic<uint64_t> counter{0};
+    std::string s;
+    if (const auto* info = ::testing::UnitTest::GetInstance()->current_test_info()) {
+        s += info->name();
+    }
+    s += "_";
+    s += std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    s += "_";
+    s += std::to_string(counter.fetch_add(1));
+    return s;
+}
+}  // namespace
 
 // ============================================================
 // AssetManager 路径解析集成
@@ -83,9 +103,10 @@ protected:
     std::string bundle_path_;
 
     void SetUp() override {
-        // 创建临时目录和文件用于 Bundle 测试
-        temp_dir_ = "test_bundle_input";
-        bundle_path_ = "test_output.bun";
+        // 创建唯一临时目录和文件用于 Bundle 测试（并行安全）
+        const std::string suffix = UniqueSuffix();
+        temp_dir_ = (std::filesystem::temp_directory_path() / ("dse_bundle_input_" + suffix)).string();
+        bundle_path_ = (std::filesystem::temp_directory_path() / ("dse_bundle_output_" + suffix + ".bun")).string();
 
         std::filesystem::create_directories(temp_dir_);
         std::ofstream(temp_dir_ + "/test.txt") << "hello bundle";
@@ -94,9 +115,10 @@ protected:
     }
 
     void TearDown() override {
-        // 清理临时文件
-        std::filesystem::remove_all(temp_dir_);
-        std::filesystem::remove(bundle_path_);
+        // 清理临时文件（不抛异常）
+        std::error_code ec;
+        std::filesystem::remove_all(temp_dir_, ec);
+        std::filesystem::remove(bundle_path_, ec);
     }
 };
 

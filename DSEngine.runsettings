@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  VS2022 测试运行配置。
+  目的：让“测试资源管理器”顺序执行用例，避免多个用例并行时争抢同一临时文件/目录，
+        从而消除 AssetLruTest / AssetBundleIntegrationTest 等基于文件系统的偶发失败，
+        以及 Google Test Adapter 在并行 + 输出交错时把 SKIPPED 误报为“崩溃”的现象。
+
+  启用方式（任选其一）：
+    1) 菜单 Test > Configure Run Settings > Select Solution-wide runsettings File，选择本文件。
+    2) 菜单 Test > Test Settings 勾选 Auto Detect runsettings Files（同目录会自动发现）。
+
+  命令行 ctest -C Debug 默认即为单进程顺序执行，不受此文件影响、也无需它。
+-->
+<RunSettings>
+  <RunConfiguration>
+    <!-- VS 层面：限制并行度为 1，多个测试可执行文件/用例串行运行 -->
+    <MaxCpuCount>1</MaxCpuCount>
+  </RunConfiguration>
+
+  <GoogleTestAdapterSettings>
+    <SolutionSettings>
+      <Settings>
+        <!-- GTA 层面：关闭用例并行执行 -->
+        <ParallelTestExecution>false</ParallelTestExecution>
+        <MaxNrOfThreads>1</MaxNrOfThreads>
+      </Settings>
+    </SolutionSettings>
+  </GoogleTestAdapterSettings>
+</RunSettings>
