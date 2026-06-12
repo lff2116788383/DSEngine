@@ -1009,7 +1009,8 @@ foreach(_smoke_target
         dse_http_lua_smoke
         dse_net_smoke
         dse_net_capi_smoke
-        dse_net_lua_smoke)
+        dse_net_lua_smoke
+        dse_repl_smoke)
     if(TARGET ${_smoke_target})
         add_test(NAME ${_smoke_target} COMMAND ${_smoke_target})
         set_tests_properties(${_smoke_target} PROPERTIES
