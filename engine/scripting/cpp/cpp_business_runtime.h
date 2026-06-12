@@ -7,6 +7,7 @@
 #define DSE_CPP_BUSINESS_RUNTIME_H
 
 #include <functional>
+#include "engine/core/dse_export.h"
 #include "engine/ecs/world.h"
 
 class AssetManager;
@@ -27,7 +28,7 @@ struct CppBusinessHooks {
  * @brief 配置 C++ 业务层的回调钩子
  * @param hooks 包含启动、更新和关闭回调的结构体
  */
-void ConfigureCppBusinessHooks(CppBusinessHooks hooks);
+DSE_EXPORT void ConfigureCppBusinessHooks(CppBusinessHooks hooks);
 
 /**
  * @brief 触发 C++ 业务层的初始化逻辑
