@@ -286,7 +286,12 @@ engine/core/memory/
    - **`AssetManager` 对接（行为不变）**：`SetMemoryBudget` 额外把预算登记到 `Memory::SetBudget(MemoryTag::Asset, …)`；`TouchLru/RemoveLru/EvictLRU` 在 `estimated_memory_usage_` 变化处经 `Memory::ReportExternalUsage(MemoryTag::Asset, …)` 把资产估算用量纳入统一视图——仅新增上报，不改 LRU/预算逻辑（资产仍以 `shared_ptr` 自管，不经门面分配）。
    - 测试：新增 6 例于 `memory_test.cpp`（独立实例：预算读写/外部用量读写、越限沿回调只触发一次且回落后可再触发、预算 0 不限、无回调默认告警安全；门面：设预算+上报+越限判定、用量合并门面追踪量与外部用量）。需在本机 `ctest --preset windows-x64-debug` 验证。
    - **未做（留后续）**：资产层尚未逐字节走门面分配，故 Asset 用量为 LRU 估算上报值；按 Texture/Mesh 等细分标签的资产用量待资产迁移到门面后再拆分。
-6. **STL 适配器 + 标签化**：仅提供 + 示范，按硬规矩约束使用边界。
+6. **STL 适配器 + 标签化**：仅提供 + 示范，按硬规矩约束使用边界。 ✓ **已完成**
+   - 文件：`engine/core/memory/stl_allocator.h`（头文件实现，无 `.cpp`）。
+   - **`StlAllocator<T, Tag>`**：满足 C++ 具名要求 *Allocator* 的**无状态**分配器（`tag` 为模板非类型参数，默认 `MemoryTag::Default`）；`allocate/deallocate` 转发 `Memory::AllocAligned/Free`，纳入统一标签化追踪/预算视图。`is_always_equal = std::true_type`、`std::is_empty_v` 为真；`allocate` 失败抛 `std::bad_alloc`、`n > max_size()` 抛 `std::bad_array_new_length`。提供嵌套 `rebind`（保持 `Tag`，**必需**——含非类型参数时 `allocator_traits` 默认 rebind 不可用，节点型容器如 `map/list/set` 依赖之）。同 `Tag` 任意元素类型恒等价，不同 `Tag` 视为不等。
+   - **`Dse*` 别名**：`DseVector / DseDeque / DseList / DseString / DseMap / DseUnorderedMap / DseSet / DseUnorderedSet`（均带默认 `Tag` 参数）。
+   - **硬规矩（§3.9 / §4.6）**：`DseVector<T,Tag>` 与 `std::vector<T>` 是不同类型——**跨接口/模块边界一律用 `std` 默认分配器容器**，`Dse*` 仅在实现内部局部使用，避免类型传染与跨 DLL 所有权问题。故本阶段**只提供 + 测试示范，不替换既有公共接口**（符合「仅提供，不推广」）。
+   - 测试：新增 4 例于 `memory_test.cpp`（无状态/等价/rebind 保 tag 的编译期断言；`DseVector` 分配按 tag 计入门面且析构归零；`DseString` 长串强制堆分配并计费；`DseMap/DseUnorderedMap/DseList/DseSet` 经 rebind 的功能正确性，含有序性与去重）。需在本机 `ctest --preset windows-x64-debug` 验证。
 7. **（可选后续）** mimalloc 后端 + Handle 化热路径。
 
 每阶段一个提交/PR，独立可回滚；首版（1–4）即构成可用地基。

@@ -23,6 +23,7 @@
 #include "engine/core/memory/linear_allocator.h"
 #include "engine/core/memory/frame_allocator.h"
 #include "engine/core/memory/pool_allocator.h"
+#include "engine/core/memory/stl_allocator.h"
 #include "engine/core/object_pool.h"
 
 using namespace dse::core;
@@ -633,4 +634,86 @@ TEST(MemoryBudgetFacadeTest, UsageCombinesTrackedAndExternal) {
 
     Memory::ReportExternalUsage(tag, 0);
     Memory::SetBudget(tag, 0);
+}
+
+// ============================================================
+// StlAllocator + Dse* 容器别名（无状态、转发门面、标签化）
+// ============================================================
+
+TEST(StlAllocatorTest, StatelessAndEquality) {
+    static_assert(std::is_empty_v<StlAllocator<int, MemoryTag::Mesh>>, "must be stateless");
+    static_assert(StlAllocator<int, MemoryTag::Mesh>::is_always_equal::value, "always equal");
+    static_assert(StlAllocator<int, MemoryTag::Mesh>::kTag == MemoryTag::Mesh, "tag exposed");
+
+    StlAllocator<int, MemoryTag::Mesh> a;
+    StlAllocator<int, MemoryTag::Mesh> b;
+    StlAllocator<int, MemoryTag::Texture> c;
+    EXPECT_TRUE(a == b);  // 同 tag 恒等价
+    EXPECT_TRUE(a != c);  // 不同 tag 视为不等
+
+    using Rebound = StlAllocator<int, MemoryTag::Mesh>::rebind<double>::other;
+    static_assert(std::is_same_v<Rebound, StlAllocator<double, MemoryTag::Mesh>>, "rebind keeps tag");
+}
+
+TEST(StlAllocatorTest, VectorAllocationsAreTaggedAndRoutedToFacade) {
+    Memory::Init();
+    if (!Memory::TrackingEnabled()) {
+        GTEST_SKIP() << "未启用追踪，跳过标签计费断言";
+    }
+    const MemoryTag tag = MemoryTag::Scripting;
+    const MemoryStats before = Memory::Stats(tag);
+    {
+        DseVector<std::uint64_t, MemoryTag::Scripting> v;
+        v.reserve(4096); // 预留 -> 单次堆分配，避免扩容
+        for (std::uint64_t i = 0; i < 4096; ++i) {
+            v.push_back(i);
+        }
+        const MemoryStats mid = Memory::Stats(tag);
+        EXPECT_GE(mid.current - before.current, 4096u * sizeof(std::uint64_t));
+        EXPECT_GT(mid.alloc_count, before.alloc_count);
+        EXPECT_EQ(v.front(), 0u);
+        EXPECT_EQ(v.back(), 4095u);
+    }
+    EXPECT_EQ(Memory::Stats(tag).current, before.current); // 析构后增量归零
+}
+
+TEST(StlAllocatorTest, StringHeapAllocationIsTagged) {
+    Memory::Init();
+    if (!Memory::TrackingEnabled()) {
+        GTEST_SKIP() << "未启用追踪，跳过标签计费断言";
+    }
+    const MemoryTag tag = MemoryTag::Scripting;
+    const MemoryStats before = Memory::Stats(tag);
+    {
+        DseString<MemoryTag::Scripting> s(512, 'x'); // 远超 SSO，强制堆分配
+        const MemoryStats mid = Memory::Stats(tag);
+        EXPECT_GE(mid.current - before.current, 512u);
+        EXPECT_EQ(s.size(), 512u);
+        EXPECT_EQ(s.front(), 'x');
+    }
+    EXPECT_EQ(Memory::Stats(tag).current, before.current);
+}
+
+TEST(StlAllocatorTest, NodeContainersWorkViaRebind) {
+    DseUnorderedMap<int, std::string, MemoryTag::Scripting> m;
+    m.emplace(1, "one");
+    m.emplace(2, "two");
+    EXPECT_EQ(m.size(), 2u);
+    EXPECT_EQ(m.at(1), "one");
+
+    DseMap<int, int, MemoryTag::Scripting> om;
+    om[3] = 30;
+    om[1] = 10;
+    om[2] = 20;
+    std::vector<int> keys;
+    for (const auto& kv : om) {
+        keys.push_back(kv.first);
+    }
+    EXPECT_EQ(keys, (std::vector<int>{1, 2, 3})); // map 有序
+
+    DseList<int, MemoryTag::Scripting> lst{1, 2, 3};
+    EXPECT_EQ(lst.size(), 3u);
+
+    DseSet<int, MemoryTag::Scripting> st{5, 5, 7};
+    EXPECT_EQ(st.size(), 2u); // 去重
 }
