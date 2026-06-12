@@ -3,10 +3,11 @@
  * @brief DSEngine headless CLI（OUTPUT 名 `dse`）。脱离编辑器完成：建项目模板 / 打包加密 / 完整 build。
  *
  * 用法：
- *   dse new <empty|2d|3d|lua> <dir>        # 生成项目模板
+ *   dse new <empty|2d|3d|lua|cpp> <dir>    # 生成项目模板
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
+ *   dse help | -h | --help                 # 显示帮助
  *
  * 与运行时端到端对应：加密 build 产物可被 DSEngine_Game 挂载解密并加载 Lua（见
  * EngineInstance::Init 的 MountBundle / lua_runtime 的 VFS searcher）。
@@ -29,15 +30,36 @@ namespace fs = std::filesystem;
 
 namespace {
 
-int PrintUsage() {
+// 打印帮助。rc 作为返回码（无参/出错时为 1，显式 help 时为 0）。
+int PrintUsage(int rc = 1) {
     std::cout <<
-        "DSEngine CLI\n"
+        "DSEngine CLI (dse) — 脱离编辑器建项目 / 打包加密 / 一键 build\n"
+        "\n"
         "用法:\n"
-        "  dse new <empty|2d|3d|lua> <dir>          生成项目模板\n"
+        "  dse new <template> <dir>                 生成项目模板\n"
         "  dse pack <dir> <out.bun> [--key=KEY]     把目录打包成(可加密)资源包\n"
         "  dse build <project> [--out=DIR] [--key=KEY]\n"
-        "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch.bat\n";
-    return 1;
+        "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch 脚本\n"
+        "  dse help | -h | --help                   显示本帮助\n"
+        "\n"
+        "模板 (template):\n"
+        "  empty   仅项目骨架(无脚本)\n"
+        "  2d      2D 玩法 + Lua 入口脚本(on_init/on_update)\n"
+        "  3d      3D 演示场景(相机+平行光) + Lua 入口脚本\n"
+        "  lua     Lua 玩法 + 入口脚本\n"
+        "  cpp     C++ 宿主工程(src/main.cpp + CMakeLists.txt, 链接 dse_engine, 需自行 cmake 编译)\n"
+        "\n"
+        "选项:\n"
+        "  --key=KEY   AES-128-CTR 密钥(>=16 字节); 省略=明文打包\n"
+        "  --out=DIR   build 输出目录(默认 <project>/build)\n"
+        "\n"
+        "示例:\n"
+        "  dse new lua MyGame\n"
+        "  dse build MyGame --out dist --key 0123456789abcdef\n"
+        "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"
+        "\n"
+        "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 DSEngine_Game; cpp 模板需用 cmake 单独编译。\n";
+    return rc;
 }
 
 // 从形如 --key=VALUE 的参数中取值；命中返回 true。
@@ -75,7 +97,7 @@ int CmdNew(const std::vector<std::string>& args) {
     }
     dse::project::ProjectTemplate tmpl;
     if (!dse::project::ParseTemplateToken(args[0], tmpl)) {
-        std::cerr << "错误: 未知模板 '" << args[0] << "' (可选: empty|2d|3d|lua)\n";
+        std::cerr << "错误: 未知模板 '" << args[0] << "' (可选: empty|2d|3d|lua|cpp)\n";
         return 1;
     }
     const fs::path dir(args[1]);
@@ -92,6 +114,9 @@ int CmdNew(const std::vector<std::string>& args) {
     }
     std::cout << "已创建 " << dse::project::TemplateDisplayName(tmpl)
               << " 项目: " << fs::absolute(dir).string() << "\n";
+    if (tmpl == dse::project::ProjectTemplate::Cpp) {
+        std::cout << "提示: C++ 模板需自行编译 -> cmake -B build -DCMAKE_PREFIX_PATH=<dsengine_install_dir> && cmake --build build\n";
+    }
     return 0;
 }
 
@@ -336,8 +361,7 @@ int main(int argc, char** argv) {
     if (cmd == "pack")  return CmdPack(rest);
     if (cmd == "build") return CmdBuild(rest, argv[0]);
     if (cmd == "-h" || cmd == "--help" || cmd == "help") {
-        PrintUsage();
-        return 0;
+        return PrintUsage(0);
     }
 
     std::cerr << "错误: 未知子命令 '" << cmd << "'\n";

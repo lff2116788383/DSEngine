@@ -17,6 +17,7 @@ enum class ProjectTemplate {
     Game2D,
     Game3D,
     Lua,
+    Cpp,    ///< C++ 宿主工程（src/main.cpp + CMakeLists.txt，链接 dse_engine）
 };
 
 struct ScaffoldResult {
@@ -31,6 +32,7 @@ struct ScaffoldResult {
  *   - project.dseproj（项目描述，JSON）
  *   - scenes/main.json（按模板预置实体或空场景数组）
  *   - scripts/main.lua（2D/3D/Lua 模板提供入口脚本）
+ *   - src/main.cpp + CMakeLists.txt（仅 Cpp 模板：可独立 cmake 编译的 C++ 宿主）
  *   - assets/{textures,models,audio,font}/
  *   - .gitignore
  *
@@ -45,7 +47,7 @@ DSE_EXPORT ScaffoldResult ScaffoldProject(const std::string& project_root,
                                           ProjectTemplate tmpl,
                                           const std::string& engine_version = "");
 
-/// 将 CLI 模板 token（empty / 2d / 3d / lua）解析为枚举，未知返回 false。
+/// 将 CLI 模板 token（empty / 2d / 3d / lua / cpp）解析为枚举，未知返回 false。
 DSE_EXPORT bool ParseTemplateToken(const std::string& token, ProjectTemplate& out);
 
 /// 模板可读名称（用于日志/提示）。

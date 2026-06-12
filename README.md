@@ -377,7 +377,10 @@ python tools\verify_lua_3d_demos.py --entries all
 ### 方式 A：`dse` Headless CLI（推荐，像 Cocos 那样纯命令行）
 
 ```bash
-# 1) 建项目模板（empty | 2d | 3d | lua）
+# 查看帮助
+dse help            # 或 dse -h / --help
+
+# 1) 建项目模板（empty | 2d | 3d | lua | cpp）
 dse new lua MyGame
 
 # 2) 一键 build：定位 DSEngine_Game 运行时、拷贝 exe+DLL、打包加密、生成 launch.bat
@@ -393,6 +396,10 @@ dse pack MyGame dist/game.bun --key 0123456789abcdef
 
 > `dse` 与 `DSEngine_Game` 需在同一目录（或其 `bin/` 子目录）下，`build` 才能定位到运行时。
 > 默认构建会把两者都产出到仓库 `bin/`。
+>
+> 模板说明：`empty/2d/3d/lua` 是 **Lua/数据**工程，`dse build` 可直接打包跑通；
+> `cpp` 生成 **C++ 宿主工程**（`src/main.cpp` + `CMakeLists.txt`，链接 `dse_engine`），
+> 属于「改源码 + 编译」路线，需 `cmake -B build -DCMAKE_PREFIX_PATH=<dsengine_install_dir> && cmake --build build` 单独编译。
 
 ### 方式 B：编辑器
 

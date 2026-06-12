@@ -382,7 +382,10 @@ Three ways, all sharing the same pack / encrypt / mount implementation so they b
 ### Option A: `dse` headless CLI (recommended — pure command line, Cocos-style)
 
 ```bash
-# 1) Scaffold a project (empty | 2d | 3d | lua)
+# Show help
+dse help            # or dse -h / --help
+
+# 1) Scaffold a project (empty | 2d | 3d | lua | cpp)
 dse new lua MyGame
 
 # 2) One-shot build: locate the DSEngine_Game runtime, copy exe+DLLs, pack & encrypt, emit launch.bat
@@ -398,6 +401,11 @@ dse pack MyGame dist/game.bun --key 0123456789abcdef
 
 > `dse` and `DSEngine_Game` must live in the same directory (or its `bin/` subfolder) so `build` can
 > locate the runtime. A default build emits both into the repo's `bin/`.
+>
+> Templates: `empty/2d/3d/lua` are **Lua/data** projects that `dse build` packs and runs directly;
+> `cpp` scaffolds a **C++ host project** (`src/main.cpp` + `CMakeLists.txt`, linking `dse_engine`),
+> which follows the "edit source + compile" route — build it separately with
+> `cmake -B build -DCMAKE_PREFIX_PATH=<dsengine_install_dir> && cmake --build build`.
 
 ### Option B: Editor
 

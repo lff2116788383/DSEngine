@@ -16,7 +16,13 @@ namespace {
 namespace fs = std::filesystem;
 
 bool HasLuaScripting(ProjectTemplate tmpl) {
-    return tmpl != ProjectTemplate::Empty;
+    return tmpl == ProjectTemplate::Game2D
+        || tmpl == ProjectTemplate::Game3D
+        || tmpl == ProjectTemplate::Lua;
+}
+
+bool HasCppHost(ProjectTemplate tmpl) {
+    return tmpl == ProjectTemplate::Cpp;
 }
 
 std::string JsonEscape(const std::string& in) {
@@ -53,6 +59,8 @@ std::string BuildProjectDescriptor(const std::string& name,
                                    ProjectTemplate tmpl,
                                    const std::string& engine_version) {
     const bool lua = HasLuaScripting(tmpl);
+    const bool cpp = HasCppHost(tmpl);
+    const char* features = lua ? "\"lua_scripting\"" : (cpp ? "\"cpp_business\"" : "");
     std::ostringstream ss;
     ss << "{\n";
     ss << "    \"format_version\": 1,\n";
@@ -60,7 +68,7 @@ std::string BuildProjectDescriptor(const std::string& name,
     ss << "    \"version\": \"1.0.0\",\n";
     ss << "    \"engine_version\": \"" << JsonEscape(engine_version) << "\",\n";
     ss << "    \"description\": \"\",\n";
-    ss << "    \"features\": [" << (lua ? "\"lua_scripting\"" : "") << "],\n";
+    ss << "    \"features\": [" << features << "],\n";
     ss << "    \"entry_script\": \"" << (lua ? "scripts/main.lua" : "") << "\",\n";
     ss << "    \"default_scene\": \"scenes/main.json\",\n";
     ss << "    \"asset_dir\": \"assets/\",\n";
@@ -172,6 +180,64 @@ std::string BuildMainLua(const std::string& name, ProjectTemplate tmpl) {
     return ss.str();
 }
 
+std::string BuildCppMain(const std::string& name) {
+    std::ostringstream ss;
+    ss << "// " << name << " — DSEngine C++ host\n"
+       << "// 生命周期钩子与 Lua 的 on_init/on_update 对应：bootstrap / tick / shutdown。\n"
+       << "#include \"engine/runtime/engine_app.h\"\n"
+       << "#include \"engine/scripting/cpp/cpp_business_runtime.h\"\n"
+       << "#include \"engine/ecs/world.h\"\n"
+       << "#include \"engine/assets/asset_manager.h\"\n"
+       << "#include <iostream>\n\n"
+       << "namespace {\n\n"
+       << "void Bootstrap(World& world, AssetManager& assets) {\n"
+       << "    (void)world; (void)assets;\n"
+       << "    std::cout << \"[" << name << "] bootstrap\" << std::endl;\n"
+       << "}\n\n"
+       << "void Tick(World& world, float dt) {\n"
+       << "    (void)world; (void)dt;\n"
+       << "}\n\n"
+       << "void Shutdown() {\n"
+       << "    std::cout << \"[" << name << "] shutdown\" << std::endl;\n"
+       << "}\n\n"
+       << "} // namespace\n\n"
+       << "int main() {\n"
+       << "    dse::runtime::ConfigureCppBusinessHooks({ Bootstrap, Tick, Shutdown });\n\n"
+       << "    dse::runtime::EngineRunConfig config;\n"
+       << "    config.window_width = 1280;\n"
+       << "    config.window_height = 720;\n"
+       << "    config.window_title = \"" << name << "\";\n"
+       << "    config.business_mode = BusinessMode::Cpp;\n"
+       << "    config.enable_editor = false;\n"
+       << "    return dse::runtime::RunEngine(config);\n"
+       << "}\n";
+    return ss.str();
+}
+
+std::string BuildCppCMake(const std::string& name) {
+    std::ostringstream ss;
+    ss << "cmake_minimum_required(VERSION 3.17)\n"
+       << "project(" << name << " CXX)\n\n"
+       << "set(CMAKE_CXX_STANDARD 20)\n"
+       << "set(CMAKE_CXX_STANDARD_REQUIRED ON)\n\n"
+       << "if(MSVC)\n"
+       << "    add_compile_options(/utf-8 /wd4819)\n"
+       << "endif()\n\n"
+       << "# 查找已安装的 DSEngine SDK：\n"
+       << "#   cmake -B build -DCMAKE_PREFIX_PATH=<dsengine_install_dir>\n"
+       << "find_package(DSEngine REQUIRED)\n\n"
+       << "add_executable(" << name << " src/main.cpp)\n"
+       << "target_link_libraries(" << name << " PRIVATE DSEngine::dse_engine)\n\n"
+       << "# 把运行时 DLL 拷到可执行目录\n"
+       << "add_custom_command(TARGET " << name << " POST_BUILD\n"
+       << "    COMMAND ${CMAKE_COMMAND} -E copy_if_different\n"
+       << "    $<TARGET_RUNTIME_DLLS:" << name << ">\n"
+       << "    $<TARGET_FILE_DIR:" << name << ">\n"
+       << "    COMMAND_EXPAND_LISTS\n"
+       << ")\n";
+    return ss.str();
+}
+
 } // namespace
 
 bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
@@ -179,6 +245,7 @@ bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
     if (token == "2d")    { out = ProjectTemplate::Game2D; return true; }
     if (token == "3d")    { out = ProjectTemplate::Game3D; return true; }
     if (token == "lua")   { out = ProjectTemplate::Lua;    return true; }
+    if (token == "cpp")   { out = ProjectTemplate::Cpp;    return true; }
     return false;
 }
 
@@ -188,6 +255,7 @@ const char* TemplateDisplayName(ProjectTemplate tmpl) {
         case ProjectTemplate::Game2D: return "2D";
         case ProjectTemplate::Game3D: return "3D";
         case ProjectTemplate::Lua:    return "Lua";
+        case ProjectTemplate::Cpp:    return "C++";
     }
     return "Unknown";
 }
@@ -220,6 +288,19 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
     }
     if (HasLuaScripting(tmpl)) {
         if (!WriteTextFile(root / "scripts" / "main.lua", BuildMainLua(name, tmpl), result.error)) {
+            return result;
+        }
+    }
+    if (HasCppHost(tmpl)) {
+        fs::create_directories(root / "src", ec);
+        if (ec) {
+            result.error = "创建 src 目录失败: " + ec.message();
+            return result;
+        }
+        if (!WriteTextFile(root / "src" / "main.cpp", BuildCppMain(name), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(root / "CMakeLists.txt", BuildCppCMake(name), result.error)) {
             return result;
         }
     }
