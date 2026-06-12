@@ -19,6 +19,7 @@ target_include_directories(${DSE_GTEST_SMOKE_TARGET}
         ${CMAKE_SOURCE_DIR}/depends
         ${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src
         ${CMAKE_SOURCE_DIR}/depends/glm
+        ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps  # glad2 (<glad/gl.h>) for GL smoke tests
 )
 
 target_compile_features(${DSE_GTEST_SMOKE_TARGET} PRIVATE cxx_std_20)

@@ -56,9 +56,9 @@ TEST(OpenGLRhiDeviceTest, WhenNotInitializedShutdownSafety) {
     device.Shutdown();
 }
 
-TEST(OpenGLRhiDeviceTest, WhenNotInitializedBeginFrameSafety) {
-    GTEST_SKIP() << "Requires GL context";
-}
+// 注：BeginFrame 会触发 EnsureInitialized() 发起真实 GL 调用，需有效 GL 上下文，
+// 不属于本无 GPU 单元文件。其真实覆盖在 gl_rhi_smoke_test.cpp 的
+// GLRhiSmokeTest.SingleFrameEmptyDoesNotCrash / InitOpenGLSucceeds 中（有真实上下文时执行）。
 
 TEST(OpenGLRhiDeviceTest, WhenNotInitializedEndFrameSafety) {
     OpenGLRhiDevice device;
@@ -72,9 +72,8 @@ TEST(OpenGLRhiDeviceTest, WhenNotInitializedSubmitSafety) {
     device.Submit(cmd);
 }
 
-TEST(OpenGLRhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
-    GTEST_SKIP() << "Requires GL context";
-}
+// 注：CreateVertexArray 需有效 GL 上下文（glGenVertexArrays），不属于本无 GPU 单元文件。
+// 其真实覆盖在 gl_rhi_smoke_test.cpp 的 GLRhiSmokeTest.VertexArrayCreateIncrementsHandle 中。
 
 TEST(OpenGLRhiDeviceTest, DeleteVertexArray_NoOpDoesNotCrash) {
     OpenGLRhiDevice device;
