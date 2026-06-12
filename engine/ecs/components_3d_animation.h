@@ -169,9 +169,14 @@ struct Animator3DComponent {
 
     // Advanced AnimTree support
     bool use_anim_tree = false;
-    std::vector<AnimBlendNode> blend_nodes; // Simple 1D blend for now
+    std::vector<AnimBlendNode> blend_nodes;          // 1D blend space 采样点
     std::string blend_parameter = "speed";
     float blend_parameter_value = 0.0f;
+
+    // 2D blend space：blend_tree_is_2d 为 true 时改用以下字段（反距离加权混合）。
+    bool blend_tree_is_2d = false;
+    std::vector<AnimBlendNode2D> blend_nodes_2d;
+    glm::vec2 blend_parameter_2d = glm::vec2(0.0f);
     
     // Animation State Machine support
     std::shared_ptr<gameplay3d::AnimationStateMachine> state_machine;
