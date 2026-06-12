@@ -505,3 +505,132 @@ TEST(ObjectPoolTest, SupportsNonCopyableType) {
     pool.Release(a);
     pool.Release(b);
 }
+
+// ============================================================
+// MemoryBudget（独立实例：预算登记 + 越限沿回调）
+// ============================================================
+
+namespace {
+struct BudgetProbe {
+    static std::atomic<int> calls;
+    static std::atomic<uint16_t> last_tag;
+    static std::atomic<size_t> last_usage;
+    static std::atomic<size_t> last_budget;
+    static void Reset() {
+        calls.store(0);
+        last_tag.store(0);
+        last_usage.store(0);
+        last_budget.store(0);
+    }
+};
+std::atomic<int> BudgetProbe::calls{0};
+std::atomic<uint16_t> BudgetProbe::last_tag{0};
+std::atomic<size_t> BudgetProbe::last_usage{0};
+std::atomic<size_t> BudgetProbe::last_budget{0};
+} // namespace
+
+TEST(MemoryBudgetTest, SetGetBudgetAndExternalUsage) {
+    MemoryBudget budget;
+    EXPECT_EQ(budget.GetBudget(TagId(MemoryTag::Texture)), 0u); // 默认不限
+    budget.SetBudget(TagId(MemoryTag::Texture), 4096);
+    EXPECT_EQ(budget.GetBudget(TagId(MemoryTag::Texture)), 4096u);
+
+    EXPECT_EQ(budget.ExternalUsage(TagId(MemoryTag::Texture)), 0u);
+    budget.SetExternalUsage(TagId(MemoryTag::Texture), 1234);
+    EXPECT_EQ(budget.ExternalUsage(TagId(MemoryTag::Texture)), 1234u);
+}
+
+TEST(MemoryBudgetTest, CallbackFiresOnceOnRisingEdge) {
+    BudgetProbe::Reset();
+    MemoryBudget budget;
+    budget.SetExceededCallback([](uint16_t tag, size_t usage, size_t b) {
+        BudgetProbe::calls.fetch_add(1);
+        BudgetProbe::last_tag.store(tag);
+        BudgetProbe::last_usage.store(usage);
+        BudgetProbe::last_budget.store(b);
+    });
+    budget.SetBudget(TagId(MemoryTag::Mesh), 1000);
+
+    budget.CheckBudget(TagId(MemoryTag::Mesh), 500); // 未超
+    EXPECT_EQ(BudgetProbe::calls.load(), 0);
+
+    budget.CheckBudget(TagId(MemoryTag::Mesh), 1500); // 越限 -> 触发一次
+    EXPECT_EQ(BudgetProbe::calls.load(), 1);
+    EXPECT_EQ(BudgetProbe::last_tag.load(), TagId(MemoryTag::Mesh));
+    EXPECT_EQ(BudgetProbe::last_usage.load(), 1500u);
+    EXPECT_EQ(BudgetProbe::last_budget.load(), 1000u);
+
+    budget.CheckBudget(TagId(MemoryTag::Mesh), 1600); // 仍超 -> 不重复
+    EXPECT_EQ(BudgetProbe::calls.load(), 1);
+
+    budget.CheckBudget(TagId(MemoryTag::Mesh), 800);  // 回落到预算内
+    budget.CheckBudget(TagId(MemoryTag::Mesh), 1200); // 再次越限 -> 再触发
+    EXPECT_EQ(BudgetProbe::calls.load(), 2);
+}
+
+TEST(MemoryBudgetTest, ZeroBudgetIsUnlimited) {
+    BudgetProbe::Reset();
+    MemoryBudget budget;
+    budget.SetExceededCallback([](uint16_t, size_t, size_t) { BudgetProbe::calls.fetch_add(1); });
+    budget.CheckBudget(TagId(MemoryTag::Audio), size_t(1) << 30); // 预算 0：任意用量都不触发
+    EXPECT_EQ(BudgetProbe::calls.load(), 0);
+}
+
+TEST(MemoryBudgetTest, DefaultPathWithoutCallbackIsSafe) {
+    MemoryBudget budget;
+    budget.SetBudget(TagId(MemoryTag::Physics), 100);
+    EXPECT_NO_THROW(budget.CheckBudget(TagId(MemoryTag::Physics), 200)); // 无回调走默认告警日志
+}
+
+// ============================================================
+// Memory 门面预算（全局单例：用专用 tag 并在用例末复位）
+// ============================================================
+
+TEST(MemoryBudgetFacadeTest, SetBudgetReportUsageAndOverflow) {
+    const MemoryTag tag = MemoryTag::Navigation;
+    Memory::SetBudgetExceededCallback(nullptr);
+    Memory::ReportExternalUsage(tag, 0);
+    Memory::SetBudget(tag, 0);
+
+    constexpr size_t kBudget = 1u << 20; // 1 MB
+    Memory::SetBudget(tag, kBudget);
+    EXPECT_EQ(Memory::GetBudget(tag), kBudget);
+    EXPECT_FALSE(Memory::IsOverBudget(tag));
+
+    Memory::ReportExternalUsage(tag, 256u * 1024);
+    EXPECT_GE(Memory::BudgetUsage(tag), 256u * 1024);
+    EXPECT_FALSE(Memory::IsOverBudget(tag));
+
+    Memory::ReportExternalUsage(tag, 4u * 1024 * 1024);
+    EXPECT_TRUE(Memory::IsOverBudget(tag));
+    EXPECT_GE(Memory::BudgetUsage(tag), 4u * 1024 * 1024);
+
+    EXPECT_NO_THROW(Memory::ReportBudgets());
+
+    Memory::ReportExternalUsage(tag, 0);
+    Memory::SetBudget(tag, 0);
+}
+
+TEST(MemoryBudgetFacadeTest, UsageCombinesTrackedAndExternal) {
+    const MemoryTag tag = MemoryTag::Editor;
+    Memory::SetBudgetExceededCallback(nullptr);
+    Memory::SetBudget(tag, 0);
+    Memory::ReportExternalUsage(tag, 0);
+    Memory::Init();
+
+    const size_t base = Memory::BudgetUsage(tag);
+    Memory::ReportExternalUsage(tag, 5000);
+    EXPECT_EQ(Memory::BudgetUsage(tag) - base, 5000u); // 仅外部用量变化
+
+    void* p = Memory::Alloc(3000, tag);
+    ASSERT_NE(p, nullptr);
+    if (Memory::TrackingEnabled()) {
+        EXPECT_GE(Memory::BudgetUsage(tag), 5000u + 3000u); // 含门面追踪当前量
+    } else {
+        EXPECT_EQ(Memory::BudgetUsage(tag), 5000u); // 无追踪时仅外部用量
+    }
+    Memory::Free(p);
+
+    Memory::ReportExternalUsage(tag, 0);
+    Memory::SetBudget(tag, 0);
+}

@@ -279,7 +279,13 @@ engine/core/memory/
    - **删除死代码** `engine/core/memory_pool.h`（每次分配加锁、只增不减、无对齐），并从 `engine/dse.h` 移除其 include，改纳入 `memory/memory.h` + `memory/pool_allocator.h`。
    - **示范接入**：`JobSystem` 完成信号 `std::promise<void>` 由每次 `new/delete` 改为 `ObjectPool<std::promise<void>> promise_pool_`（`Acquire/Release` 全在 `queue_mutex_` 保护下，线程安全）。
    - 测试：原 `math_pool_test.cpp` 的 MemoryPool/ObjectPool 旧用例迁出，新增 6 例于 `memory_test.cpp`（池：分配/回收复用无碎片、超容量自动扩容保对齐、块步长下限与对齐；对象池：原地构造/析构 live 计数、借还千次不泄漏不增容、支持不可拷贝类型）。`ctest` 三套全绿。
-5. **预算 + 资产对接**：统一预算视图，`AssetManager` 上报；数据查询接口 + 日志（不做 UI 面板）。
+5. **预算 + 资产对接**：统一预算视图，`AssetManager` 上报；数据查询接口 + 日志（不做 UI 面板）。 ✓ **已完成**
+   - 文件：`engine/core/memory/{memory_tracker,memory}.{h,cpp}`（`MemoryBudget` 与门面预算 API）、`engine/core/memory/allocator.h`（`BudgetExceededCallback` 类型）、`engine/assets/asset_manager.cpp`（接入统一视图）。
+   - **`MemoryBudget`**（具体类型、与追踪开关无关、始终可用，按设计 §6 放入 `memory_tracker.{h,cpp}`）：按标签存「预算字节（0=不限）」+「子系统上报的外部用量」+ 越限沿去重标志（`kMaxTrackedTags=256` 桶，全原子）。`CheckBudget(tag, usage)` 在「未超 → 超」的**上升沿只触发一次**回调/告警，回落后重置，避免日志刷屏。
+   - **门面预算 API**：`Memory::SetBudget/GetBudget`、`ReportExternalUsage`（供自管内存子系统上报绝对用量）、`BudgetUsage`（= 门面追踪当前量 + 外部上报量）、`IsOverBudget`、`SetBudgetExceededCallback`（默认仅告警日志，可替换为 LRU 淘汰等策略）、`ReportBudgets`（按标签输出用量/预算到日志，**无 UI**）。
+   - **`AssetManager` 对接（行为不变）**：`SetMemoryBudget` 额外把预算登记到 `Memory::SetBudget(MemoryTag::Asset, …)`；`TouchLru/RemoveLru/EvictLRU` 在 `estimated_memory_usage_` 变化处经 `Memory::ReportExternalUsage(MemoryTag::Asset, …)` 把资产估算用量纳入统一视图——仅新增上报，不改 LRU/预算逻辑（资产仍以 `shared_ptr` 自管，不经门面分配）。
+   - 测试：新增 6 例于 `memory_test.cpp`（独立实例：预算读写/外部用量读写、越限沿回调只触发一次且回落后可再触发、预算 0 不限、无回调默认告警安全；门面：设预算+上报+越限判定、用量合并门面追踪量与外部用量）。需在本机 `ctest --preset windows-x64-debug` 验证。
+   - **未做（留后续）**：资产层尚未逐字节走门面分配，故 Asset 用量为 LRU 估算上报值；按 Texture/Mesh 等细分标签的资产用量待资产迁移到门面后再拆分。
 6. **STL 适配器 + 标签化**：仅提供 + 示范，按硬规矩约束使用边界。
 7. **（可选后续）** mimalloc 后端 + Handle 化热路径。
 

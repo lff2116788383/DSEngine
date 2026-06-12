@@ -75,6 +75,30 @@ public:
     /// 输出泄漏/占用报告到日志（启用追踪时按标签，否则仅总量）。
     static void ReportLeaks();
 
+    // —— 子系统预算（见设计文档 §3.8）——
+
+    /// 设定某标签预算（字节）；0 表示不限。设定后立即按当前用量评估一次。
+    static void SetBudget(MemoryTag tag, size_t bytes);
+
+    /// 读取某标签预算（字节）；0 表示不限。
+    static size_t GetBudget(MemoryTag tag);
+
+    /// 子系统上报其自管内存的当前用量（绝对值，字节），纳入统一预算视图。
+    /// 供 AssetManager 等以 shared_ptr/LRU 自管、不经门面分配的子系统使用。
+    static void ReportExternalUsage(MemoryTag tag, size_t current_bytes);
+
+    /// 某标签计入预算的当前用量（= 门面追踪当前量 + 外部上报量）。
+    static size_t BudgetUsage(MemoryTag tag);
+
+    /// 某标签是否已超出其预算（预算为 0 时恒为 false）。
+    static bool IsOverBudget(MemoryTag tag);
+
+    /// 注册预算超限回调（替代默认告警日志）；传 nullptr 恢复默认。
+    static void SetBudgetExceededCallback(BudgetExceededCallback cb);
+
+    /// 输出各已设预算标签的用量/预算报告到日志（无 UI）。
+    static void ReportBudgets();
+
     /// 访问通用堆后端（高级用法）。
     static IAllocator& Heap();
 

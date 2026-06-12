@@ -7,11 +7,11 @@
 #include "engine/core/memory/system_allocator.h"
 #include "engine/core/memory/frame_allocator.h"
 #include "engine/core/memory/linear_allocator.h"
+#include "engine/core/memory/memory_tracker.h"  // MemoryBudget（与追踪开关无关，始终可用）
 #include "engine/base/debug.h"
 
 #if defined(DSE_ENABLE_MEM_TRACKING)
 #include "engine/core/memory/tracking_allocator.h"
-#include "engine/core/memory/memory_tracker.h"
 #endif
 
 namespace dse {
@@ -114,6 +114,67 @@ void Memory::ReportLeaks() {
                        s.current, s.alloc_count - s.free_count);
     }
 #endif
+}
+
+void Memory::SetBudget(MemoryTag tag, size_t bytes) {
+    MemoryBudget& b = MemoryBudget::Instance();
+    b.SetBudget(TagId(tag), bytes);
+    b.CheckBudget(TagId(tag), BudgetUsage(tag));
+}
+
+size_t Memory::GetBudget(MemoryTag tag) {
+    return MemoryBudget::Instance().GetBudget(TagId(tag));
+}
+
+void Memory::ReportExternalUsage(MemoryTag tag, size_t current_bytes) {
+    MemoryBudget& b = MemoryBudget::Instance();
+    b.SetExternalUsage(TagId(tag), current_bytes);
+    b.CheckBudget(TagId(tag), BudgetUsage(tag));
+}
+
+size_t Memory::BudgetUsage(MemoryTag tag) {
+    size_t usage = MemoryBudget::Instance().ExternalUsage(TagId(tag));
+#if defined(DSE_ENABLE_MEM_TRACKING)
+    usage += MemoryTracker::Instance().Stats(TagId(tag)).current;
+#endif
+    return usage;
+}
+
+bool Memory::IsOverBudget(MemoryTag tag) {
+    const size_t budget = MemoryBudget::Instance().GetBudget(TagId(tag));
+    return budget != 0 && BudgetUsage(tag) > budget;
+}
+
+void Memory::SetBudgetExceededCallback(BudgetExceededCallback cb) {
+    MemoryBudget::Instance().SetExceededCallback(cb);
+}
+
+void Memory::ReportBudgets() {
+    MemoryBudget& b = MemoryBudget::Instance();
+    DEBUG_LOG_INFO("[Memory] budget report (usage = facade-tracked current + reported external)");
+    bool any = false;
+    const uint16_t count = MemoryTagCount();
+    for (uint16_t i = 0; i < count; ++i) {
+        const size_t budget = b.GetBudget(i);
+        size_t usage = b.ExternalUsage(i);
+#if defined(DSE_ENABLE_MEM_TRACKING)
+        usage += MemoryTracker::Instance().Stats(i).current;
+#endif
+        if (budget == 0 && usage == 0) {
+            continue;
+        }
+        any = true;
+        const bool over = budget != 0 && usage > budget;
+        DEBUG_LOG_INFO("  tag={} usage={} bytes budget={} bytes{}",
+                       MemoryTagName(i), usage, budget, over ? " [OVER]" : "");
+        if (over) {
+            DEBUG_LOG_WARN("  [BUDGET] tag={} over by {} bytes",
+                           MemoryTagName(i), usage - budget);
+        }
+    }
+    if (!any) {
+        DEBUG_LOG_INFO("  (no budgets set)");
+    }
 }
 
 FrameAllocator& Memory::Frame() {

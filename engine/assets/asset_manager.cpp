@@ -10,6 +10,7 @@
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/memory/memory.h"  // 统一内存预算视图（§4.4）
 #include <utility>
 #include <filesystem>
 #include <algorithm>
@@ -1826,6 +1827,8 @@ void AssetManager::TouchLru(const std::string& cache_key, std::size_t estimated_
     entry.last_access = std::chrono::steady_clock::now();
     lru_entries_[cache_key] = entry;
     estimated_memory_usage_ += estimated_bytes;
+    // 同步资产估算用量到统一预算视图（行为不变，仅上报）。
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
 void AssetManager::RemoveLru(const std::string& cache_key) {
@@ -1837,12 +1840,16 @@ void AssetManager::RemoveLru(const std::string& cache_key) {
             estimated_memory_usage_ = 0;
         }
         lru_entries_.erase(it);
+        dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
     }
 }
 
 void AssetManager::SetMemoryBudget(std::size_t budget_bytes) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     memory_budget_bytes_ = budget_bytes;
+    // 将资产预算纳入统一视图，并上报当前估算用量（不改变 LRU 行为）。
+    dse::core::Memory::SetBudget(dse::core::MemoryTag::Asset, budget_bytes);
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
 std::size_t AssetManager::EstimatedMemoryUsage() const {
@@ -1937,6 +1944,7 @@ std::size_t AssetManager::EvictLRU() {
         }
     }
 
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
     return evicted;
 }
 

@@ -118,5 +118,60 @@ size_t MemoryTracker::LivePointerCount() const {
 }
 #endif
 
+// ============================================================
+// MemoryBudget
+// ============================================================
+
+MemoryBudget& MemoryBudget::Instance() {
+    static MemoryBudget instance;
+    return instance;
+}
+
+void MemoryBudget::SetBudget(uint16_t tag, size_t bytes) {
+    TagBudget& b = tags_[Bucket(tag)];
+    b.budget.store(bytes, std::memory_order_relaxed);
+    // 预算变化后重置越限沿，使新预算下的首次越限可再次告警。
+    b.warned.store(false, std::memory_order_relaxed);
+}
+
+size_t MemoryBudget::GetBudget(uint16_t tag) const {
+    return tags_[Bucket(tag)].budget.load(std::memory_order_relaxed);
+}
+
+void MemoryBudget::SetExternalUsage(uint16_t tag, size_t current_bytes) {
+    tags_[Bucket(tag)].external.store(current_bytes, std::memory_order_relaxed);
+}
+
+size_t MemoryBudget::ExternalUsage(uint16_t tag) const {
+    return tags_[Bucket(tag)].external.load(std::memory_order_relaxed);
+}
+
+void MemoryBudget::SetExceededCallback(BudgetExceededCallback cb) {
+    callback_.store(cb, std::memory_order_relaxed);
+}
+
+void MemoryBudget::CheckBudget(uint16_t tag, size_t usage) {
+    TagBudget& b = tags_[Bucket(tag)];
+    const size_t budget = b.budget.load(std::memory_order_relaxed);
+    if (budget == 0) {
+        b.warned.store(false, std::memory_order_relaxed);
+        return;
+    }
+    if (usage > budget) {
+        // 仅在「未超 -> 超」的上升沿触发一次。
+        if (!b.warned.exchange(true, std::memory_order_relaxed)) {
+            BudgetExceededCallback cb = callback_.load(std::memory_order_relaxed);
+            if (cb != nullptr) {
+                cb(tag, usage, budget);
+            } else {
+                DEBUG_LOG_WARN("[MemoryBudget] tag={} over budget: usage={} bytes > budget={} bytes",
+                               MemoryTagName(tag), usage, budget);
+            }
+        }
+    } else {
+        b.warned.store(false, std::memory_order_relaxed);
+    }
+}
+
 } // namespace core
 } // namespace dse

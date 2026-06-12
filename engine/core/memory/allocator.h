@@ -87,6 +87,16 @@ struct MemoryStats {
 };
 
 /**
+ * @brief 预算超限回调：某标签用量越过其预算时调用一次（再次越过前不重复触发）。
+ * @param tag 触发的标签 id。
+ * @param usage 当前用量（字节，门面追踪量 + 子系统上报的外部用量）。
+ * @param budget 该标签设定的预算（字节）。
+ *
+ * 未设置回调时默认仅输出告警日志。可由 AssetManager 等注册以触发 LRU 淘汰等策略。
+ */
+using BudgetExceededCallback = void (*)(uint16_t tag, size_t usage, size_t budget);
+
+/**
  * @class IAllocator
  * @brief 通用堆后端接口（可替换：system / mimalloc / 追踪装饰器）。
  *
