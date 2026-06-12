@@ -629,9 +629,11 @@ else()
     target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
 endif()
 
-# 内存追踪：默认仅在 Debug 配置生效（Release 保持零开销）。PUBLIC 以便测试/消费端口径一致。
+# 内存追踪：在 Debug 与 RelWithDebInfo 配置生效（带调试信息的诊断构建），
+# Release 保持零开销。PUBLIC 以便测试/消费端口径一致。
 if(DSE_ENABLE_MEM_TRACKING)
-    target_compile_definitions(dse_engine PUBLIC $<$<CONFIG:Debug>:DSE_ENABLE_MEM_TRACKING=1>)
+    target_compile_definitions(dse_engine PUBLIC
+        $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:DSE_ENABLE_MEM_TRACKING=1>)
 endif()
 if(DSE_MEM_TRACK_POINTERS)
     target_compile_definitions(dse_engine PUBLIC DSE_MEM_TRACK_POINTERS=1)
