@@ -7,7 +7,7 @@
  * - 独立线程内自带消息泵与动画，主线程做初始化时 splash 仍能淡入并刷新状态文字。
  * - 后端无关、不触碰渲染管线：纯原生窗口实现，避免改动 OpenGL/Vulkan/D3D11 三后端。
  *
- * 平台支持：当前仅 Windows 提供原生实现；其它平台为安全 no-op（Show 返回 false）。
+ * 平台支持：Windows 与 Linux/X11 提供原生实现；macOS/Android 为安全 no-op（Show 返回 false）。
  */
 
 #ifndef DSE_PLATFORM_SPLASH_SCREEN_H

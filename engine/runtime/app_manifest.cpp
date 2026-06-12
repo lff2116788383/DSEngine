@@ -30,7 +30,7 @@ bool ReadArgb(const rapidjson::Value& obj, const char* key, uint32_t& out) {
     if (v.IsInt()) { out = static_cast<uint32_t>(v.GetInt()); return true; }
     if (v.IsString()) {
         std::string s = v.GetString();
-        if (!s.empty() && s[0] == '#') s = "FF" + s.substr(1);
+        if (!s.empty() && s[0] == '#') s = "0xFF" + s.substr(1);
         try {
             out = static_cast<uint32_t>(std::stoul(s, nullptr, 0));
             return true;

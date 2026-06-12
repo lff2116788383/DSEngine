@@ -816,7 +816,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"set_day_night_location",     L_EcsSetDayNightLocation},
         {"get_sun_elevation",          L_EcsGetSunElevation},
         {"get_sun_direction",          L_EcsGetSunDirection},
-        // 体积云（占位，VolumetricCloudPass 后续实现）
+        // 体积云（由 VolumetricCloudPass 渲染）
         {"add_volumetric_cloud",       L_EcsAddVolumetricCloud},
         {"set_cloud_layer",            L_EcsSetCloudLayer},
         {"set_cloud_wind",             L_EcsSetCloudWind},
