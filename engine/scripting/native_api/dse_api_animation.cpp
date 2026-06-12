@@ -502,6 +502,69 @@ extern "C" void dse_ik_set_enabled(uint32_t e, int enabled) {
 }
 
 // ============================================================
+// FootIK 系统（FootIK3DComponent）
+// ============================================================
+
+extern "C" void dse_foot_ik_add_component(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<FootIK3DComponent>(TE(e));
+}
+
+extern "C" int dse_foot_ik_add_foot(uint32_t e, const char* name, const char* foot_bone,
+                                    const char* hip_bone, float foot_height,
+                                    float max_ground_distance, float blend_speed, float weight) {
+    World* world = GW();
+    if (!world) return -1;
+    auto* comp = world->registry().try_get<FootIK3DComponent>(TE(e));
+    if (!comp) return -1;
+    FootIKConfig foot;
+    foot.name = name ? name : "";
+    foot.foot_bone = foot_bone ? foot_bone : "";
+    foot.hip_bone = hip_bone ? hip_bone : "";
+    if (!Keep(foot_height)) foot.foot_height = foot_height;
+    if (!Keep(max_ground_distance)) foot.max_ground_distance = max_ground_distance;
+    if (!Keep(blend_speed)) foot.blend_speed = blend_speed;
+    if (!Keep(weight)) foot.weight = weight;
+    foot.indices_dirty = true;
+    comp->feet.push_back(std::move(foot));
+    return static_cast<int>(comp->feet.size()) - 1;
+}
+
+extern "C" void dse_foot_ik_set_foot_weight(uint32_t e, int idx, float w) {
+    World* world = GW();
+    if (!world) return;
+    auto* comp = world->registry().try_get<FootIK3DComponent>(TE(e));
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->feet.size())) return;
+    comp->feet[idx].weight = w;
+}
+
+extern "C" void dse_foot_ik_set_foot_height(uint32_t e, int idx, float h) {
+    World* world = GW();
+    if (!world) return;
+    auto* comp = world->registry().try_get<FootIK3DComponent>(TE(e));
+    if (!comp || idx < 0 || idx >= static_cast<int>(comp->feet.size())) return;
+    comp->feet[idx].foot_height = h;
+}
+
+extern "C" void dse_foot_ik_set_pelvis(uint32_t e, float pelvis_weight, float max_pelvis_offset) {
+    World* world = GW();
+    if (!world) return;
+    auto* comp = world->registry().try_get<FootIK3DComponent>(TE(e));
+    if (!comp) return;
+    if (!Keep(pelvis_weight)) comp->pelvis_weight = pelvis_weight;
+    if (!Keep(max_pelvis_offset)) comp->max_pelvis_offset = max_pelvis_offset;
+}
+
+extern "C" void dse_foot_ik_set_enabled(uint32_t e, int enabled) {
+    World* world = GW();
+    if (!world) return;
+    auto* comp = world->registry().try_get<FootIK3DComponent>(TE(e));
+    if (!comp) return;
+    comp->enabled = (enabled != 0);
+}
+
+// ============================================================
 // 骨骼挂点系统（BoneAttachmentComponent）
 // ============================================================
 

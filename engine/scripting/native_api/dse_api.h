@@ -762,6 +762,17 @@ DSE_CAPI void dse_ik_set_pole_vector(uint32_t e, int idx, float x, float y, floa
 DSE_CAPI void dse_ik_set_iterations(uint32_t e, int idx, int iters);
 DSE_CAPI void dse_ik_set_enabled(uint32_t e, int enabled);
 
+// ---- FootIK（FootIK3DComponent）。脚部贴地，依赖物理 Raycast 检测地面。
+// add_foot 返回脚索引（-1=无组件）；浮点参数为 NaN 时保持默认值。 ----
+DSE_CAPI void dse_foot_ik_add_component(uint32_t e);
+DSE_CAPI int  dse_foot_ik_add_foot(uint32_t e, const char* name, const char* foot_bone,
+                                   const char* hip_bone, float foot_height,
+                                   float max_ground_distance, float blend_speed, float weight);
+DSE_CAPI void dse_foot_ik_set_foot_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_foot_ik_set_foot_height(uint32_t e, int idx, float h);
+DSE_CAPI void dse_foot_ik_set_pelvis(uint32_t e, float pelvis_weight, float max_pelvis_offset);
+DSE_CAPI void dse_foot_ik_set_enabled(uint32_t e, int enabled);
+
 // ---- 骨骼挂点（BoneAttachmentComponent）。set_offset: 缩放 sx/sy/sz 为 NaN 时取 1。
 // get_world_pos: 由目标实体动画姿态计算，out_xyz(3) 始终写入，返回 1=成功/0=失败。 ----
 DSE_CAPI void dse_bone_attach_add(uint32_t e, uint32_t target, const char* bone_name);

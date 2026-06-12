@@ -9,18 +9,19 @@
 
 ## 一、概要结论
 
-- **文档覆盖率：100%。** 实测注册 **862** 个 Lua 可见函数名，审计后 **0** 个未文档化。
+- **文档覆盖率：100%。** 实测注册 **876** 个 Lua 可见函数名，审计后 **0** 个未文档化。
   本次更新已把全部新增/遗漏的接口补进 `docs/api/LUA_API.md`。
-- **接口完整性：核心玩法链路完整。** 渲染、光照、物理 2D/3D、动画 2D/3D（FSM/层/IK/Root Motion/骨骼挂点）、
+- **本轮新增 24 个手写绑定**：手柄输入（4）+ 场景管理/过渡（11）+ UUID 读取/解析（3）+ FootIK（6）。详见 §五。
+- **接口完整性：核心玩法链路完整。** 渲染、光照、物理 2D/3D、动画 2D/3D（FSM/层/IK/FootIK/Root Motion/骨骼挂点）、
   粒子、UI（含输入框/滑块/下拉/滚动/虚拟列表/视觉效果）、音频（BGM/SFX/总线/DSP/快照）、
   地形（splat/瓦片流式/植被/树木）、导航、序列化、本地化、网络/HTTP 均有 Lua 绑定。
 - **剩余缺口：少量且非阻塞。** 见 §三，均为内部组件或无运行时系统的占位组件，不影响脚本开发。
 
 | 类别 | 数值 |
 |------|:----:|
-| 注册 Lua 函数总数 | 862 |
+| 注册 Lua 函数总数 | 876 |
 | 其中 Codegen 字段访问器（13 组件 / 165 字段） | 330 |
-| 手写绑定函数 | 532 |
+| 手写绑定函数 | 546 |
 | 顶层模块数（含条件编译 http/net/nav） | 19 |
 | 审计后未文档化函数 | **0** |
 
@@ -60,18 +61,18 @@
 | `UUIDComponent` | 实体稳定 ID，主要供序列化/编辑器使用 |
 | `LuaScriptComponent` | Sol2 路径运行期组件；当前脚本挂载走 `ScriptComponent`（已绑定 `add_script`） |
 
-### 3.2 已定义但缺运行时系统的占位组件（**建议先补系统再绑定**）
+### 3.2 FootIK3DComponent（已补绑定，本轮）
 
 | 组件 | 状态 |
 |------|------|
-| `FootIK3DComponent` | 定义于 `engine/ecs/components_3d_animation.h`，但无对应 System 实现、无绑定。属脚手架占位，暂不暴露；如需脚部 IK 应先实现系统。通用 IK 已由 `IKChain3D`（§5.25）覆盖 |
+| `FootIK3DComponent` | **已补绑定（本轮）**。更正前述判断：运行时系统 **早已存在**——`modules/gameplay_3d/animation/foot_ik_system.cpp` 的 `FootIKSystem`（物理 Raycast + FABRIK + 骨盆下沉）已实现，并在 `gameplay_3d_module.cpp` 帧管线中调用。缺的仅是 Lua 绑定，已补齐（见 §5.25 FootIK 系统 / §五）。早期分析只扫描了 `engine/**`，遗漏 `modules/**`，故误判为“占位” |
 
-### 3.3 可考虑补充的便利接口（**可选增强，非必需**）
+### 3.3 便利接口（本轮已补 / 可选增强）
 
-| 能力 | 现状 | 建议 |
+| 能力 | 现状 | 状态 |
 |------|------|------|
-| 实体 UUID 读取 | 无 `ecs.get_uuid(e)` | 若脚本需稳定跨存档/网络引用实体，可补只读访问器 |
-| 子场景/预制体 | 已有 `ecs.load_sub_scene`，但无卸载/查询 | 视需求补 `unload_sub_scene` / 状态查询 |
+| 实体 UUID 读取 | `ecs.get_uuid` / `set_uuid` / `resolve_uuid` | **已补（本轮）** |
+| 子场景/预制体 | `ecs.load_sub_scene_async` / `unload_sub_scene` / `unload_all_sub_scenes` / 查询计数 | **已补（本轮）** |
 | 材质实例参数读回 | `dssl.get_*` 已覆盖 DSSL 实例 | `MaterialInstanceComponent` 的非 DSSL 路径暂走 `set_mesh_material*`，按需扩展 |
 
 ---
@@ -91,16 +92,29 @@
 | GPU-driven 管线 / 批处理内部 | 只读统计已通过 `dse.metrics.*` 暴露（draw calls、实例数等），无需写接口 |
 | 画质 / VSync / MSAA / 分辨率缩放 | 引擎**无运行时 API**（由配置/启动参数控制），故不属“被遗漏”——`get_quality` 是网络连接质量，非渲染 |
 
-### 3a.2 能力已存在、Lua 未覆盖（**真实缺口，建议补**）
+### 3a.2 能力已存在、Lua 未覆盖 —— 本轮已全部补齐
 
-| 能力 | C++ 入口 | Lua 现状 | 影响 |
+| 能力 | C++ 入口 | Lua 绑定（新增） | 状态 |
 |------|----------|----------|------|
-| **手柄输入 Gamepad** | `engine/input/input.h`：`GetGamepadAxis` / `IsGamepadConnected` / `Set/GetGamepadDeadZone`（支持 4 个手柄） | `dse.app.*` 只绑了键盘 + 鼠标 | 手柄游戏脚本无法读摇杆/连接状态。**注意**：引擎当前也只有手柄“轴”，无手柄按键 API |
-| **场景管理 SceneManager** | `engine/scene/scene_manager.h`：`LoadSubSceneAsync`、`UnloadSubScene`、`UnloadAll`、`GetLoadedSubScenes`、`IsSubSceneLoaded`、`LoadedCount/PendingCount` | 仅同步 `ecs.load_scene` / `ecs.load_sub_scene` | 无法异步加载、卸载、查询已加载场景 |
-| **场景切换过渡** | `SceneManager::TransitionTo(path, mode, fade)` + `GetTransitionState` / `GetFadeProgress` | 无 | 脚本无法触发带淡入淡出的场景切换 |
-| **UUID → 实体解析** | `SceneManager::ResolveReference(uuid)` + `UUIDComponent` | 无 | 跨存档/预制体/网络的稳定实体引用无法在 Lua 解析 |
+| **手柄输入 Gamepad** | `engine/input/input.h`：`GetGamepadAxis` / `IsGamepadConnected` / `Set/GetGamepadDeadZone`（支持 4 个手柄） | `app.get_gamepad_axis` / `is_gamepad_connected` / `set/get_gamepad_dead_zone` | 已补（仍只有“轴”，无手柄按键） |
+| **场景管理 SceneManager** | `engine/scene/scene_manager.h`：`LoadSubSceneAsync`、`UnloadSubScene`、`UnloadAll`、`GetLoadedSubScenes`、`IsSubSceneLoaded`、`LoadedCount/PendingCount` | `ecs.load_sub_scene_async` / `unload_sub_scene` / `unload_all_sub_scenes` / `is_sub_scene_loaded` / `get_loaded_sub_scenes` / `get_sub_scene_count` / `get_pending_scene_count` / `get_active_scene` | 已补 |
+| **场景切换过渡** | `SceneManager::TransitionTo(path, mode, fade)` + `GetTransitionState` / `GetFadeProgress` | `ecs.transition_to` / `get_transition_state` / `get_fade_progress` | 已补 |
+| **UUID → 实体解析** | `SceneManager::ResolveReference(uuid)` + `UUIDComponent` | `ecs.get_uuid` / `set_uuid` / `resolve_uuid` | 已补 |
 
-> 以上 4 项共同构成“场景/资源生命周期 + 稳定引用”这一块的薄弱面，是当前最值得补的方向。
+> 这 4 项（外加 §3.2 的 FootIK）即上一轮识别出的全部真实缺口，本轮已全部实现并文档化。
+
+---
+
+## 五、本轮新增绑定明细（场景/资源生命周期 + 稳定引用 + 手柄 + FootIK）
+
+> 实现文件：`lua_binding_core.cpp`（手柄）、`lua_binding_ecs_core.cpp`（场景/UUID）、
+> `dse_api_animation.cpp` + `dse_api.h` + `lua_binding_ecs_animation.cpp`（FootIK C ABI + 绑定）。
+> 全部经 `debug-vulkan-jolt` 构建通过，`ctest -C Debug` 三套用例（unit/integration/smoke）全绿。
+
+- **手柄输入（4）**：`app.get_gamepad_axis`、`app.is_gamepad_connected`、`app.set_gamepad_dead_zone`、`app.get_gamepad_dead_zone`
+- **场景管理/过渡（11）**：`ecs.load_sub_scene_async`、`unload_sub_scene`、`unload_all_sub_scenes`、`is_sub_scene_loaded`、`get_loaded_sub_scenes`、`get_sub_scene_count`、`get_pending_scene_count`、`transition_to`、`get_transition_state`、`get_fade_progress`、`get_active_scene`（均经 `ServiceLocator::Get<scene::SceneManager>()`，路径按 data root 解析）
+- **UUID（3）**：`ecs.get_uuid`、`set_uuid`、`resolve_uuid`（`resolve_uuid` 仅解析经 SceneManager 加载的子场景实体）
+- **FootIK（6）**：`ecs.add_foot_ik_component`、`add_foot_ik_foot`、`set_foot_ik_foot_weight`、`set_foot_ik_foot_height`、`set_foot_ik_pelvis`、`set_foot_ik_enabled`（薄包装委托至新增 `dse_foot_ik_*` C ABI）
 
 ---
 
