@@ -18,11 +18,8 @@
 
 #include <gtest/gtest.h>
 
-#if !defined(DSE_ENABLE_PHYSX)
-TEST(Physics3DSmokeTest, PhysXNotEnabled_SkipAll) {
-    GTEST_SKIP() << "DSE_ENABLE_PHYSX not defined";
-}
-#else
+// PhysX 关闭时整文件不注册任何用例（编译期排除），不再保留占位 skip 哨兵。
+#if defined(DSE_ENABLE_PHYSX)
 
 #include "engine/physics/physics3d/physics3d_system.h"
 #include "engine/ecs/world.h"

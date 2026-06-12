@@ -657,11 +657,11 @@ TEST(StlAllocatorTest, StatelessAndEquality) {
     static_assert(std::is_same_v<Rebound, StlAllocator<double, MemoryTag::Mesh>>, "rebind keeps tag");
 }
 
+// 仅在启用按标签内存追踪（Debug + DSE_ENABLE_MEM_TRACKING）时注册：
+// 关闭时这些标签计费断言无意义，故编译期排除而非运行时跳过。
+#if defined(DSE_ENABLE_MEM_TRACKING)
 TEST(StlAllocatorTest, VectorAllocationsAreTaggedAndRoutedToFacade) {
     Memory::Init();
-    if (!Memory::TrackingEnabled()) {
-        GTEST_SKIP() << "未启用追踪，跳过标签计费断言";
-    }
     const MemoryTag tag = MemoryTag::Scripting;
     const MemoryStats before = Memory::Stats(tag);
     {
@@ -681,9 +681,6 @@ TEST(StlAllocatorTest, VectorAllocationsAreTaggedAndRoutedToFacade) {
 
 TEST(StlAllocatorTest, StringHeapAllocationIsTagged) {
     Memory::Init();
-    if (!Memory::TrackingEnabled()) {
-        GTEST_SKIP() << "未启用追踪，跳过标签计费断言";
-    }
     const MemoryTag tag = MemoryTag::Scripting;
     const MemoryStats before = Memory::Stats(tag);
     {
@@ -695,6 +692,7 @@ TEST(StlAllocatorTest, StringHeapAllocationIsTagged) {
     }
     EXPECT_EQ(Memory::Stats(tag).current, before.current);
 }
+#endif // DSE_ENABLE_MEM_TRACKING
 
 TEST(StlAllocatorTest, NodeContainersWorkViaRebind) {
     DseUnorderedMap<int, std::string, MemoryTag::Scripting> m;
