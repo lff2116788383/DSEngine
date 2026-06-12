@@ -117,6 +117,7 @@ various tool/test targets have **no config suffix**.
 | `dse_standalone` | `DSEngine_Game[_config].exe` | **Standalone game runtime** (no editor UI); this is what `File → Build Game...` exports | `dse_engine` |
 | `DSEngine_example_cpp` | `DSEngine_c++[_config].exe` | **C++ host sample**: drive the engine directly from C++ | `dse_engine` |
 | `dse_example_lua` | `DSEngine_lua[_config].exe` | **Lua scripting host sample** (requires `DSE_ENABLE_LUA`, ON by default) | `dse_engine` + Lua |
+| `dse_cli` | `dse.exe` | **Headless project CLI**: scaffold templates / pack & encrypt asset bundles / one-shot build (`new` / `pack` / `build`) | `dse_engine` |
 | `AssetBuilder` | `AssetBuilder.exe` | **Asset import/cook CLI**: glTF/FBX/textures → `.dmesh` / `.dmat`, etc. | tinygltf, assimp (optional), glm |
 | `dse_dssl_compiler` | `dse_dssl_compiler.exe` | **DSSL shading-language compiler** | — |
 | `dse_shader_compiler` | `dse_shader_compiler.exe` | **Shader compiler** (built only when no prebuilt one is found; or point at one via `-DDSE_HOST_SHADER_COMPILER=<path>`) | — |
@@ -141,7 +142,7 @@ various tool/test targets have **no config suffix**.
 > SDK/examples projects rather than the engine's default build; the Android platform additionally produces
 > `dse_android_host` (a `.so` shared library, not a standalone executable).
 
-In short: **a default desktop build ≈ 3 application hosts (standalone / cpp / lua) + 3 tools (AssetBuilder / dssl / shader) + 4 test programs**;
+In short: **a default desktop build ≈ 3 application hosts (standalone / cpp / lua) + 4 tools (dse / AssetBuilder / dssl / shader) + 4 test programs**;
 the editor, HTTP and networking (including `dse_repl_smoke`) all require an explicit switch. To run the replication smoke, remember `-DDSE_ENABLE_NET=ON`.
 
 ---
@@ -222,6 +223,7 @@ cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DCMAKE_POLICY_VERS
 cmake --build build_vs2022 --config Release --target dse_engine        # Engine library
 cmake --build build_vs2022 --config Release --target dse_editor_cpp    # Editor (needs -DDSE_BUILD_EDITOR=ON)
 cmake --build build_vs2022 --config Release --target dse_standalone    # Standalone runtime
+cmake --build build_vs2022 --config Release --target dse_cli           # Headless project CLI (outputs dse.exe)
 cmake --build build_vs2022 --config Release --target dse_example_lua   # Lua demo host
 ```
 
@@ -375,15 +377,50 @@ Screenshots and logs go to `tmp/lua_3d_verify/`.
 
 ## Building a Standalone Game
 
-From the editor: **File → Build Game...**
+Three ways, all sharing the same pack / encrypt / mount implementation so they behave identically end-to-end.
 
-Or manually:
+### Option A: `dse` headless CLI (recommended — pure command line, Cocos-style)
+
+```bash
+# 1) Scaffold a project (empty | 2d | 3d | lua)
+dse new lua MyGame
+
+# 2) One-shot build: locate the DSEngine_Game runtime, copy exe+DLLs, pack & encrypt, emit launch.bat
+#    Omit --key for a plaintext bundle; pass a >=16-byte key for AES-128-CTR encryption
+dse build MyGame --out dist --key 0123456789abcdef
+
+# 3) Run (launch.bat already wires --bundle/--key/--script)
+dist/launch.bat
+
+# You can also just pack a directory into a (optionally encrypted) bundle
+dse pack MyGame dist/game.bun --key 0123456789abcdef
+```
+
+> `dse` and `DSEngine_Game` must live in the same directory (or its `bin/` subfolder) so `build` can
+> locate the runtime. A default build emits both into the repo's `bin/`.
+
+### Option B: Editor
+
+**File → Build Game...** → tick **Encrypt (AES-128 → game.bun)** and enter a `>=16`-byte key for end-to-end
+encryption; leave it unticked to export a plaintext `game.dpak`. Encrypted builds auto-generate `launch.bat`,
+and `Run` / `Build & Run` launch with `--key` as well.
+
+### Option C: Manual
 
 1. Build the `dse_standalone` target
-2. Pack assets: use `pak_writer` or the editor's Build dialog
-3. Place `.dpak` next to `DSEngine_Game.exe` — it auto-detects on launch
+2. Pack assets: `dse pack` / `pak_writer` / the editor's Build dialog
+3. Place `game.bun` (or `.dpak`) next to `DSEngine_Game.exe` — it auto-detects on launch; an encrypted bundle needs `--key`
 
-CLI flags: `--scene=`, `--pak=`, `--script=`, `--width=`, `--height=`, `--title=`
+### Runtime CLI flags
+
+`--scene=`, `--pak=`, `--bundle=`, `--key=`, `--script=`, `--width=`, `--height=`, `--title=`
+
+### How end-to-end encryption works
+
+Pack side `PackDirectoryToBundle` (`engine/assets/bundle_packer.{h,cpp}`, shared by CLI / editor) → zip-compress
+then AES-128-CTR encrypt into `game.bun`; at runtime `EngineInstance::Init` `MountBundle`s it with the same key,
+filling the VFS → `AssetManager::LoadFileToMemory` (VFS → `.dpak` → disk) and the Lua VFS `require` searcher read
+straight from the bundle, so **no plaintext is left on disk** and encrypted Lua can still be `require`d.
 
 ---
 

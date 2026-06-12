@@ -114,6 +114,7 @@ DSEngine/
 | `dse_standalone` | `DSEngine_Game[_配置].exe` | **独立游戏运行时**（无编辑器 UI）；编辑器 `File → Build Game...` 导出的就是它 | `dse_engine` |
 | `DSEngine_example_cpp` | `DSEngine_c++[_配置].exe` | **C++ 宿主示例**：用 C++ 直接驱动引擎的入门样例 | `dse_engine` |
 | `dse_example_lua` | `DSEngine_lua[_配置].exe` | **Lua 脚本宿主示例**：用 Lua 跑游戏逻辑（需 `DSE_ENABLE_LUA`，默认 ON） | `dse_engine` + Lua |
+| `dse_cli` | `dse.exe` | **Headless 工程 CLI**：脱离编辑器建项目模板 / 打包加密资源包 / 一键 build（`new` / `pack` / `build`） | `dse_engine` |
 | `AssetBuilder` | `AssetBuilder.exe` | **资产导入/烘焙 CLI**：glTF/FBX/贴图 → `.dmesh` / `.dmat` 等引擎格式 | tinygltf、assimp（可选）、glm |
 | `dse_dssl_compiler` | `dse_dssl_compiler.exe` | **DSSL 着色语言编译器** | —— |
 | `dse_shader_compiler` | `dse_shader_compiler.exe` | **着色器编译器**（仅当未找到预构建编译器时才构建；也可用 `-DDSE_HOST_SHADER_COMPILER=<path>` 指定现成的） | —— |
@@ -137,7 +138,7 @@ DSEngine/
 > 其它：`examples/sdk_consumer` 的 `consumer_example` 是 SDK 最小消费示例，随 SDK/示例工程构建，不在引擎主默认构建里；
 > Android 平台另会产出 `dse_android_host`（`.so` 共享库，并非独立可执行程序）。
 
-一句话：**默认桌面构建 ≈ 3 个应用宿主（standalone / cpp / lua）+ 3 个工具（AssetBuilder / dssl / shader）+ 4 类测试程序**；
+一句话：**默认桌面构建 ≈ 3 个应用宿主（standalone / cpp / lua）+ 4 个工具（dse / AssetBuilder / dssl / shader）+ 4 类测试程序**；
 编辑器、HTTP、网络（含 `dse_repl_smoke`）均需显式开开关。要跑复制层冒烟，记得 `-DDSE_ENABLE_NET=ON`。
 
 ---
@@ -217,6 +218,7 @@ cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DCMAKE_POLICY_VERS
 cmake --build build_vs2022 --config Release --target dse_engine        # 引擎库
 cmake --build build_vs2022 --config Release --target dse_editor_cpp    # 编辑器（需 -DDSE_BUILD_EDITOR=ON）
 cmake --build build_vs2022 --config Release --target dse_standalone    # 独立运行时
+cmake --build build_vs2022 --config Release --target dse_cli           # headless 工程 CLI（输出 dse.exe）
 cmake --build build_vs2022 --config Release --target dse_example_lua   # Lua 示例宿主
 ```
 
@@ -370,15 +372,48 @@ python tools\verify_lua_3d_demos.py --entries all
 
 ## 构建独立游戏
 
-从编辑器：**File → Build Game...**
+有三种方式，底层共用同一套打包/加密/挂载实现，端到端一致：
 
-或手动：
+### 方式 A：`dse` Headless CLI（推荐，像 Cocos 那样纯命令行）
+
+```bash
+# 1) 建项目模板（empty | 2d | 3d | lua）
+dse new lua MyGame
+
+# 2) 一键 build：定位 DSEngine_Game 运行时、拷贝 exe+DLL、打包加密、生成 launch.bat
+#    --key 省略 = 明文打包；给定 >=16 字节的 key = AES-128-CTR 加密
+dse build MyGame --out dist --key 0123456789abcdef
+
+# 3) 运行（launch.bat 已写好 --bundle/--key/--script）
+dist/launch.bat
+
+# 也可只打包某个目录为（可加密）资源包
+dse pack MyGame dist/game.bun --key 0123456789abcdef
+```
+
+> `dse` 与 `DSEngine_Game` 需在同一目录（或其 `bin/` 子目录）下，`build` 才能定位到运行时。
+> 默认构建会把两者都产出到仓库 `bin/`。
+
+### 方式 B：编辑器
+
+**File → Build Game...** → 勾选 **Encrypt (AES-128 → game.bun)** 并填入 `>=16` 字节密钥即可端到端加密；
+不勾选则导出明文 `game.dpak`。加密构建会自动生成 `launch.bat`，`Run` / `Build & Run` 也会带上 `--key` 启动。
+
+### 方式 C：手动
 
 1. 构建 `dse_standalone` 目标
-2. 打包资产：使用 `pak_writer` 或编辑器的 Build 对话框
-3. 把 `.dpak` 放在 `DSEngine_Game.exe` 旁边 —— 启动时自动检测
+2. 打包资产：`dse pack` / `pak_writer` / 编辑器 Build 对话框
+3. 把 `game.bun`（或 `.dpak`）放在 `DSEngine_Game.exe` 旁边 —— 启动时自动检测；加密包需用 `--key` 传密钥
 
-命令行参数：`--scene=`、`--pak=`、`--script=`、`--width=`、`--height=`、`--title=`
+### 运行时命令行参数
+
+`--scene=`、`--pak=`、`--bundle=`、`--key=`、`--script=`、`--width=`、`--height=`、`--title=`
+
+### 端到端加密如何跑通
+
+打包侧 `PackDirectoryToBundle`（`engine/assets/bundle_packer.{h,cpp}`，CLI / 编辑器共用）→ zip 压缩后 AES-128-CTR 加密为 `game.bun`；
+运行时 `EngineInstance::Init` 用同一 key `MountBundle` 解密并填充 VFS → `AssetManager::LoadFileToMemory`
+（VFS → `.dpak` → 磁盘）与 Lua 的 VFS `require` searcher 直接从包内读取，**磁盘不留明文**，加密后的 Lua 也能 `require`。
 
 ---
 
