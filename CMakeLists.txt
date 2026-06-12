@@ -73,6 +73,8 @@ option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compi
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
 option(DSE_MEM_TRACK_POINTERS "Register every allocation by pointer for precise leak location (slower)" OFF)
+set(DSE_MEM_BACKEND "system" CACHE STRING "General-heap backend: system | mimalloc (mimalloc requires the dependency, default system = zero new deps)")
+set_property(CACHE DSE_MEM_BACKEND PROPERTY STRINGS system mimalloc)
 
 # --- Android NDK 交叉编译默认值 ---
 if(ANDROID)
@@ -106,6 +108,9 @@ if(DSE_ENABLE_VULKAN)
         "depends/Vulkan-Headers/include/vulkan/vulkan.h"
         "depends/glslang/CMakeLists.txt"
         "depends/spirv-cross/CMakeLists.txt")
+endif()
+if(DSE_MEM_BACKEND STREQUAL "mimalloc")
+    list(APPEND _DSE_SUBMODULE_SENTINELS "depends/mimalloc/CMakeLists.txt")
 endif()
 set(_DSE_MISSING_SUBMODULES "")
 foreach(_dse_s IN LISTS _DSE_SUBMODULE_SENTINELS)
@@ -630,6 +635,30 @@ if(DSE_ENABLE_MEM_TRACKING)
 endif()
 if(DSE_MEM_TRACK_POINTERS)
     target_compile_definitions(dse_engine PUBLIC DSE_MEM_TRACK_POINTERS=1)
+endif()
+
+# 通用堆后端：默认 system（零新增依赖）。mimalloc 为可选高性能后端，
+# 按仓库惯例以 git submodule 内置于 depends/mimalloc，源码 add_subdirectory 编入。
+# 仅当显式选择 mimalloc 时才编入 + 链接 + 定义 DSE_MEM_USE_MIMALLOC；
+# 否则 mimalloc_allocator.cpp 编译为空翻译单元，对默认构建零影响。
+if(DSE_MEM_BACKEND STREQUAL "mimalloc")
+    # 禁用 mimalloc 自带的测试/动态库/全局 override，仅编静态库。
+    set(MI_BUILD_TESTS  OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_OBJECT OFF CACHE BOOL "" FORCE)
+    set(MI_OVERRIDE     OFF CACHE BOOL "" FORCE)
+    add_subdirectory(depends/mimalloc EXCLUDE_FROM_ALL)
+    if(TARGET mimalloc-static)
+        target_link_libraries(dse_engine PRIVATE mimalloc-static)
+    else()
+        target_link_libraries(dse_engine PRIVATE mimalloc)
+    endif()
+    # include 目录随静态库目标传播；显式补一份以防不同版本未导出。
+    target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/mimalloc/include)
+    target_compile_definitions(dse_engine PRIVATE DSE_MEM_USE_MIMALLOC=1)
+    message(STATUS "Memory backend: mimalloc (depends/mimalloc submodule)")
+else()
+    message(STATUS "Memory backend: system (default)")
 endif()
 
 if(MSVC)

@@ -5,6 +5,7 @@
 
 #include "engine/core/memory/memory.h"
 #include "engine/core/memory/system_allocator.h"
+#include "engine/core/memory/mimalloc_allocator.h"
 #include "engine/core/memory/frame_allocator.h"
 #include "engine/core/memory/linear_allocator.h"
 #include "engine/core/memory/memory_tracker.h"  // MemoryBudget（与追踪开关无关，始终可用）
@@ -19,16 +20,35 @@ namespace core {
 
 namespace {
 
-/// 进程默认堆。Meyers 单例规避静态初始化顺序问题。
-SystemAllocator& DefaultHeap() {
+// 仅编译当前生效的后端单例（按 CMake DSE_MEM_BACKEND 编译期选择），避免未用函数告警。
+#if defined(DSE_MEM_USE_MIMALLOC)
+/// mimalloc 后端单例。Meyers 单例规避静态初始化顺序问题。
+MimallocAllocator& BackendInstance() {
+    static MimallocAllocator instance;
+    return instance;
+}
+#else
+/// system 后端单例。Meyers 单例规避静态初始化顺序问题。
+SystemAllocator& BackendInstance() {
     static SystemAllocator instance;
     return instance;
 }
+#endif
+
+/// 当前生效的通用堆后端（IAllocator 视图）。
+IAllocator& BackendHeap() {
+    return BackendInstance();
+}
+
+/// 当前后端的总量统计（具体类型，旁路 IAllocator 的非虚 TotalStats）。
+[[maybe_unused]] MemoryStats BackendTotalStats() {
+    return BackendInstance().TotalStats();
+}
 
 #if defined(DSE_ENABLE_MEM_TRACKING)
-/// 追踪装饰器，包裹默认堆并上报 MemoryTracker。
+/// 追踪装饰器，包裹生效后端并上报 MemoryTracker。
 TrackingAllocator& TrackingHeap() {
-    static TrackingAllocator instance(&DefaultHeap(), &MemoryTracker::Instance());
+    static TrackingAllocator instance(&BackendHeap(), &MemoryTracker::Instance());
     return instance;
 }
 #endif
@@ -44,7 +64,7 @@ void Memory::Init(const MemoryConfig& config) {
 #if defined(DSE_ENABLE_MEM_TRACKING)
         heap_ = &TrackingHeap();
 #else
-        heap_ = &DefaultHeap();
+        heap_ = &BackendHeap();
 #endif
     }
 }
@@ -89,7 +109,7 @@ MemoryStats Memory::TotalStats() {
 #if defined(DSE_ENABLE_MEM_TRACKING)
     return MemoryTracker::Instance().TotalStats();
 #else
-    return DefaultHeap().TotalStats();
+    return BackendTotalStats();
 #endif
 }
 
@@ -106,9 +126,9 @@ void Memory::ReportLeaks() {
 #if defined(DSE_ENABLE_MEM_TRACKING)
     MemoryTracker::Instance().Report("Memory::ReportLeaks");
 #else
-    const MemoryStats s = DefaultHeap().TotalStats();
+    const MemoryStats s = BackendTotalStats();
     DEBUG_LOG_INFO("[Memory] heap={} current={} bytes peak={} bytes allocs={} frees={}",
-                   DefaultHeap().Name(), s.current, s.peak, s.alloc_count, s.free_count);
+                   BackendHeap().Name(), s.current, s.peak, s.alloc_count, s.free_count);
     if (s.current != 0) {
         DEBUG_LOG_WARN("[Memory] {} bytes still live at report (live allocations={})",
                        s.current, s.alloc_count - s.free_count);

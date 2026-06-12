@@ -292,7 +292,16 @@ engine/core/memory/
    - **`Dse*` 别名**：`DseVector / DseDeque / DseList / DseString / DseMap / DseUnorderedMap / DseSet / DseUnorderedSet`（均带默认 `Tag` 参数）。
    - **硬规矩（§3.9 / §4.6）**：`DseVector<T,Tag>` 与 `std::vector<T>` 是不同类型——**跨接口/模块边界一律用 `std` 默认分配器容器**，`Dse*` 仅在实现内部局部使用，避免类型传染与跨 DLL 所有权问题。故本阶段**只提供 + 测试示范，不替换既有公共接口**（符合「仅提供，不推广」）。
    - 测试：新增 4 例于 `memory_test.cpp`（无状态/等价/rebind 保 tag 的编译期断言；`DseVector` 分配按 tag 计入门面且析构归零；`DseString` 长串强制堆分配并计费；`DseMap/DseUnorderedMap/DseList/DseSet` 经 rebind 的功能正确性，含有序性与去重）。需在本机 `ctest --preset windows-x64-debug` 验证。
-7. **（可选后续）** mimalloc 后端 + Handle 化热路径。
+7. **（可选后续）mimalloc 后端 + Handle 化**：提供高性能后端与句柄表基础设施（均默认不侵入既有代码）。 ✓ **已完成**
+   - **A. Handle 化**：`engine/core/memory/handle.h`（头文件实现，无 `.cpp`）。
+     - **`Handle<T>`**：`{index, generation}` 轻量值类型，平凡可拷贝；默认构造为无效句柄（哨兵 index）。按 `T` 类型化，不同资源句柄互不可混用；便于存入 ECS 组件 / 序列化 / 网络传输。
+     - **`HandleTable<T, Tag>`**：原地存储的资源表，`Create/Get/Destroy/IsValid/Size/Capacity/Clear`。槽位存于 `DseDeque`（push_back 不移动既有元素，元素地址稳定 → `Get` 返回指针在 `Destroy` 前恒有效）；释放槽入 free-list 复用，复用时 **generation 自增使所有旧句柄自动失效**（把"用已释放对象"变为可检测失败，去掉 `shared_ptr` 原子计数）。内部容器经 `StlAllocator` 计入 `Tag` 标签视图。
+     - 用途：逐步替换 RHI/资产热路径的 `shared_ptr`（§3.10）。本阶段**仅提供工具 + 测试**，实际迁移由各子系统按需增量进行（不在本阶段强制接入）。
+   - **B. mimalloc 后端**：`engine/core/memory/mimalloc_allocator.{h,cpp}` + CMake 开关 + `memory.cpp` 后端选择。
+     - **`MimallocAllocator`**：实现通用堆 `IAllocator`，转发 `mi_malloc_aligned/mi_free/mi_realloc_aligned`，字节统计以 `mi_usable_size` 为准（mimalloc 自管块大小，无需额外块头）；线程安全（原子统计）。
+     - **编译期后端选择**：`memory.cpp` 以匿名命名空间 `BackendInstance()` 按宏选择 system / mimalloc 单例（仅编译生效的一份，避免未用函数告警）；追踪开启时 `TrackingAllocator` 包裹生效后端。因所有分配都经门面 `Memory::Heap()`，**翻开关即让全引擎走门面的分配整体切到 mimalloc，无需改其它代码**。
+     - **CMake**：`DSE_MEM_BACKEND=system|mimalloc`（**默认 system，零新增依赖**）。按仓库惯例 mimalloc 以 git submodule 内置于 `depends/mimalloc`，仅当显式选 `mimalloc` 时才 `add_subdirectory(depends/mimalloc)`（关掉其 tests/shared/override，仅静态库）+ 链接 + 定义 `DSE_MEM_USE_MIMALLOC`，并加入 submodule sentinel 检查；否则 `mimalloc_allocator.cpp` 编译为**空翻译单元**，对默认构建零影响。启用前需 `git submodule add https://github.com/microsoft/mimalloc.git depends/mimalloc`（建议 checkout 稳定 tag，如 v2.1.7）。
+   - 测试：新增 5 例 Handle 用例于 `memory_test.cpp`（创建/取用/销毁；generation 失效旧句柄；构造/析构计数；容量与槽位复用；默认句柄无效）+ 1 例 mimalloc 用例（以 `DSE_MEM_USE_MIMALLOC` 包裹，默认不参与构建：对齐分配/统计/Realloc/释放归零）。需在本机 `ctest --preset windows-x64-debug` 验证。
 
 每阶段一个提交/PR，独立可回滚；首版（1–4）即构成可用地基。
 
@@ -319,8 +328,8 @@ engine/core/memory/
 ## 10. 残留技术债（诚实清单）
 
 **刻意推迟、可接受：**
-- Handle 化推后 → 热路径 `shared_ptr` 原子计数开销仍在（已标注）。
-- mimalloc 默认 OFF → 碎片/多线程吞吐上限收益未拿满（按需开）。
+- Handle 化工具已提供（`handle.h`），但热路径 `shared_ptr` 尚未实际迁移 → 原子计数开销仍在，待各子系统按需增量替换。
+- mimalloc 后端已提供（`DSE_MEM_BACKEND=mimalloc`），但默认 OFF → 碎片/多线程吞吐上限收益未拿满（按需开，需先加 `depends/mimalloc` submodule）。
 - 无 compaction/碎片整理 → 通用堆长期碎片化风险（主流引擎多数也不做整理，靠分配器策略，属可接受）。
 
 **已正视并写入设计：**

@@ -75,3 +75,6 @@
 [submodule "depends/libsodium"]
 	path = depends/libsodium
 	url = https://github.com/jedisct1/libsodium.git
+[submodule "depends/mimalloc"]
+	path = depends/mimalloc
+	url = https://github.com/microsoft/mimalloc.git

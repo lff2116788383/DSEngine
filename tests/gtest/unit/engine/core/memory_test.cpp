@@ -24,6 +24,8 @@
 #include "engine/core/memory/frame_allocator.h"
 #include "engine/core/memory/pool_allocator.h"
 #include "engine/core/memory/stl_allocator.h"
+#include "engine/core/memory/handle.h"
+#include "engine/core/memory/mimalloc_allocator.h"
 #include "engine/core/object_pool.h"
 
 using namespace dse::core;
@@ -717,3 +719,119 @@ TEST(StlAllocatorTest, NodeContainersWorkViaRebind) {
     DseSet<int, MemoryTag::Scripting> st{5, 5, 7};
     EXPECT_EQ(st.size(), 2u); // 去重
 }
+
+// ============================================================
+// Handle<T> + HandleTable<T, Tag>（index+generation 句柄化资源表）
+// ============================================================
+
+namespace {
+/// 统计构造/析构次数，验证 HandleTable 正确管理对象生命周期。
+struct LifeTracked {
+    static int alive;
+    int value;
+    explicit LifeTracked(int v) : value(v) { ++alive; }
+    ~LifeTracked() { --alive; }
+};
+int LifeTracked::alive = 0;
+} // namespace
+
+TEST(HandleTableTest, CreateGetDestroy) {
+    HandleTable<int, MemoryTag::Default> table;
+    EXPECT_TRUE(table.Empty());
+
+    Handle<int> h = table.Create(42);
+    EXPECT_TRUE(h.IsValid());
+    EXPECT_TRUE(table.IsValid(h));
+    ASSERT_NE(table.Get(h), nullptr);
+    EXPECT_EQ(*table.Get(h), 42);
+    EXPECT_EQ(table.Size(), 1u);
+
+    EXPECT_TRUE(table.Destroy(h));
+    EXPECT_FALSE(table.IsValid(h));
+    EXPECT_EQ(table.Get(h), nullptr);
+    EXPECT_EQ(table.Size(), 0u);
+    EXPECT_FALSE(table.Destroy(h)); // 重复销毁失败
+}
+
+TEST(HandleTableTest, GenerationInvalidatesStaleHandle) {
+    HandleTable<int> table;
+    Handle<int> h1 = table.Create(1);
+    EXPECT_TRUE(table.Destroy(h1));
+
+    // 复用同一槽位，generation 自增 -> 旧句柄失效、新句柄有效。
+    Handle<int> h2 = table.Create(2);
+    EXPECT_EQ(h1.index, h2.index);      // 槽位被复用
+    EXPECT_NE(h1, h2);                   // 但 generation 不同
+    EXPECT_FALSE(table.IsValid(h1));     // 旧句柄失效（悬垂安全）
+    EXPECT_EQ(table.Get(h1), nullptr);
+    ASSERT_NE(table.Get(h2), nullptr);
+    EXPECT_EQ(*table.Get(h2), 2);
+}
+
+TEST(HandleTableTest, ConstructsAndDestructsObjects) {
+    LifeTracked::alive = 0;
+    {
+        HandleTable<LifeTracked, MemoryTag::Default> table;
+        Handle<LifeTracked> a = table.Create(10);
+        Handle<LifeTracked> b = table.Create(20);
+        EXPECT_EQ(LifeTracked::alive, 2);
+        EXPECT_EQ(table.Get(a)->value, 10);
+
+        table.Destroy(a);
+        EXPECT_EQ(LifeTracked::alive, 1); // 析构被调用
+        EXPECT_EQ(table.Get(b)->value, 20);
+        // table 出作用域析构剩余对象
+    }
+    EXPECT_EQ(LifeTracked::alive, 0); // 表析构清理所有存活对象
+}
+
+TEST(HandleTableTest, SizeCapacityAndReuse) {
+    HandleTable<int> table;
+    Handle<int> a = table.Create(1);
+    Handle<int> b = table.Create(2);
+    Handle<int> c = table.Create(3);
+    EXPECT_EQ(table.Size(), 3u);
+    EXPECT_EQ(table.Capacity(), 3u);
+
+    table.Destroy(b);
+    EXPECT_EQ(table.Size(), 2u);
+    EXPECT_EQ(table.Capacity(), 3u); // 槽位保留
+
+    Handle<int> d = table.Create(4); // 复用空闲槽，不新增容量
+    EXPECT_EQ(table.Size(), 3u);
+    EXPECT_EQ(table.Capacity(), 3u);
+    EXPECT_EQ(*table.Get(a), 1);
+    EXPECT_EQ(*table.Get(c), 3);
+    EXPECT_EQ(*table.Get(d), 4);
+}
+
+TEST(HandleTableTest, DefaultHandleIsInvalid) {
+    HandleTable<int> table;
+    Handle<int> def;
+    EXPECT_FALSE(def.IsValid());
+    EXPECT_FALSE(table.IsValid(def));
+    EXPECT_EQ(table.Get(def), nullptr);
+}
+
+// ============================================================
+// MimallocAllocator（仅 DSE_MEM_BACKEND=mimalloc 时编译/运行）
+// ============================================================
+
+#if defined(DSE_MEM_USE_MIMALLOC)
+TEST(MimallocAllocatorTest, AllocateFreeAndStats) {
+    MimallocAllocator a;
+    void* p = a.Allocate(1000, 32, TagId(MemoryTag::Default));
+    ASSERT_NE(p, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(p) % 32u, 0u); // 对齐
+    const MemoryStats s = a.TotalStats();
+    EXPECT_GE(s.current, 1000u);
+    EXPECT_EQ(s.alloc_count, 1u);
+
+    void* q = a.Reallocate(p, 4000, 32, TagId(MemoryTag::Default));
+    ASSERT_NE(q, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(q) % 32u, 0u);
+
+    a.Deallocate(q);
+    EXPECT_EQ(a.TotalStats().current, 0u);
+}
+#endif
