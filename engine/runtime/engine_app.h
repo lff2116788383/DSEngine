@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/platform/splash_screen.h"
 
 namespace dse::platform { class PlatformApp; }
 namespace dse::assets { class NativeFileSystem; class LocalizationManager; }
@@ -113,6 +114,8 @@ private:
     float fixed_time_step_ = 0.02f;
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
     bool is_initialized_ = false;
+    bool first_frame_shown_ = false;
+    dse::platform::SplashScreen splash_;
     std::unique_ptr<dse::platform::PlatformApp> platform_;
     std::unique_ptr<dse::assets::NativeFileSystem> default_file_system_;
 };

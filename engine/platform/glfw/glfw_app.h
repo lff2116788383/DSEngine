@@ -31,6 +31,7 @@ public:
     void GetFramebufferSize(int& w, int& h) const override;
     void SetWindowTitle(const std::string& title) override;
     void RequestClose() override;
+    void Show() override;
 
     // --- 平台桥接 ---
     void* GetNativeWindowHandle() const override;

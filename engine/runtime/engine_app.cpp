@@ -87,6 +87,41 @@ void FlipImageRowsRgba8(std::vector<unsigned char>& pixels, int width, int heigh
     }
 }
 
+// 解析 splash logo 路径：优先 exe 旁，其次向上 data/icon/dse_icon.png。
+std::string ResolveSplashImagePath() {
+    std::filesystem::path exe_dir;
+#if defined(_WIN32)
+    wchar_t module_buf[MAX_PATH]{};
+    if (GetModuleFileNameW(nullptr, module_buf, MAX_PATH)) {
+        exe_dir = std::filesystem::path(module_buf).parent_path();
+    }
+#endif
+    const char* candidates[] = {
+        "data/icon/dse_icon.png",
+        "../data/icon/dse_icon.png",
+        "../../data/icon/dse_icon.png",
+    };
+    for (const char* rel : candidates) {
+        std::filesystem::path p = exe_dir.empty() ? std::filesystem::path(rel) : exe_dir / rel;
+        std::error_code ec;
+        if (std::filesystem::exists(p, ec)) {
+            return p.string();
+        }
+    }
+    return {};
+}
+
+// 是否启用启动 splash：自动化/截图/无头与 DSE_SPLASH=0 时关闭。
+bool ShouldShowSplash() {
+    if (const char* v = std::getenv("DSE_SPLASH")) {
+        if (std::string(v) == "0") return false;
+    }
+    if (!ReadNonEmptyEnv("DSE_MAX_FRAMES").empty()) return false;
+    if (!ReadNonEmptyEnv("DSE_SCREENSHOT_PATH").empty()) return false;
+    if (!ReadNonEmptyEnv("DSE_SCREENSHOT_FRAME").empty()) return false;
+    return true;
+}
+
 bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
     const std::string screenshot_path = ReadNonEmptyEnv("DSE_SCREENSHOT_PATH");
     if (screenshot_path.empty()) {
@@ -257,6 +292,7 @@ void EngineInstance::ResetRuntimeServices() {
 }
 
 void EngineInstance::CleanupOnInitFailure() {
+    splash_.Finish();
     ResetRuntimeServices();
     pipeline_->Shutdown();
     if (services_.job_system) {
@@ -278,19 +314,38 @@ bool EngineInstance::Init() {
     platform_ = dse::platform::CreateDefaultPlatformApp();
 
     if (!config_.enable_editor) {
+        // 启动 splash：进程一启动即弹出 logo，盖住窗口创建→首帧之间的空白期，带淡入淡出。
+        const bool splash_on = ShouldShowSplash();
+        if (std::getenv("DSE_SPLASH_DEBUG")) {
+            std::cerr << "[splash] splash_on=" << (int)splash_on
+                      << " img='" << ResolveSplashImagePath() << "'" << std::endl;
+        }
+        if (splash_on) {
+            dse::platform::SplashConfig splash_cfg;
+            splash_cfg.image_path = ResolveSplashImagePath();
+            splash_cfg.app_name = "DSEngine";
+            splash_cfg.initial_status = "正在启动…";
+            dse::platform::ApplySplashEnvOverrides(splash_cfg);
+            splash_.Show(splash_cfg);
+        }
+
         dse::platform::WindowConfig win_cfg;
         win_cfg.width  = config_.window_width;
         win_cfg.height = config_.window_height;
         win_cfg.title  = config_.window_title;
         win_cfg.no_graphics_api = !needs_gl_context;
         win_cfg.gl_fallback_33  = true;
+        win_cfg.start_hidden    = splash_on;  // 首帧后再 Show()
 
+        splash_.SetStatus("正在创建窗口…");
         if (!platform_->Init(win_cfg)) {
+            splash_.Finish();
             return false;
         }
 
         if (needs_gl_context) {
             if (!platform_->LoadGLFunctions()) {
+                splash_.Finish();
                 platform_->Shutdown();
                 return false;
             }
@@ -428,12 +483,14 @@ bool EngineInstance::Init() {
         );
     }
 
+    splash_.SetStatus("正在初始化渲染管线…");
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
         CleanupOnInitFailure();
         return false;
     }
     pipeline_->SetInitKeepAlive(nullptr);
+    splash_.SetStatus("正在加载场景…");
 
     if (!RunStartupSceneRegressionChecks()) {
         std::cerr << "Startup scene regression checks failed\n";
@@ -475,6 +532,7 @@ void EngineInstance::Tick() {
 void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
 
+    splash_.Finish();
     pipeline_->SetWindowTitleSetter(nullptr);
     pipeline_->Shutdown();
     if (services_.job_system) {
@@ -566,6 +624,13 @@ int EngineInstance::Run() {
         } else {
             // DX11/Vulkan: Present 交换链（EndFrame 不再包含 Present）
             pipeline_->PresentFrame();
+        }
+
+        // 首帧已上屏：显示主窗口并淡出 splash（满足最短显示时长后才真正消失）。
+        if (!first_frame_shown_) {
+            first_frame_shown_ = true;
+            platform_->Show();
+            splash_.Finish();
         }
         if (target_fps_ > 0.0f) {
             const double target_frame_time = 1.0 / static_cast<double>(target_fps_);

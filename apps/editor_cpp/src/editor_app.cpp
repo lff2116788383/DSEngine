@@ -245,6 +245,20 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     std::cerr << "[Editor] Starting..." << (headless ? " (headless)" : "") << std::endl;
 
+    // 启动 splash：进程一启动即弹出 logo，盖住窗口创建→首帧之间的空白期，带淡入淡出。
+    // 自动化/截图/无头模式与 DSE_SPLASH=0 时关闭。
+    const bool splash_on = !headless && test_config_.screenshot_path.empty() &&
+        frames_remaining_ < 0 &&
+        !(std::getenv("DSE_SPLASH") && std::string(std::getenv("DSE_SPLASH")) == "0");
+    if (splash_on) {
+        dse::platform::SplashConfig splash_cfg;
+        splash_cfg.image_path = (GetProjectRootPath() / "data" / "icon" / "dse_icon.png").string();
+        splash_cfg.app_name = "DSEngine Editor";
+        splash_cfg.initial_status = "正在启动编辑器…";
+        dse::platform::ApplySplashEnvOverrides(splash_cfg);
+        splash_.Show(splash_cfg);
+    }
+
     if (!glfwInit()) {
         std::cerr << "[Editor] glfwInit() failed!" << std::endl;
         return false;
@@ -257,11 +271,17 @@ bool EditorApp::Init(int argc, char* argv[]) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     } else {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+        // splash 期间隐藏主窗口，首帧后再 Show（仍以 MAXIMIZED 状态出现）。
+        if (splash_on) {
+            glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+            deferred_window_show_ = true;
+        }
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
     if (!window_) {
         std::cerr << "Failed to create GLFW window in Editor." << std::endl;
+        splash_.Finish();
         glfwTerminate();
         return false;
     }
@@ -297,6 +317,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
     if (!gladLoadGL(glfwGetProcAddress)) {
         std::cerr << "Failed to initialize OpenGL (gladLoadGL) in Editor." << std::endl;
+        splash_.Finish();
         glfwDestroyWindow(window_);
         glfwTerminate();
         return false;
@@ -351,6 +372,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
+    splash_.SetStatus("正在初始化渲染引擎…");
+
     // Initialize DSEngine
     dse::runtime::EngineRunConfig engine_config;
     int fb_w = 1280, fb_h = 720;
@@ -376,8 +399,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
     if (!engine_instance_->Init()) {
         delete engine_instance_;
         engine_instance_ = nullptr;
+        splash_.Finish();
         return false;
     }
+    splash_.SetStatus("正在加载工程与场景…");
 
     // 把引擎 RHI 设备注入编辑器 GPU 接入层：编辑器自建的零散 GPU 资源（资产缩略图等）
     // 经此走引擎 RHI 抽象，不再直接调用 OpenGL。
@@ -711,6 +736,13 @@ void EditorApp::Run() {
 
         glfwSwapBuffers(window_);
 
+        // 首帧已上屏：显示主窗口并淡出 splash（满足最短显示时长后才真正消失）。
+        if (!first_frame_shown_) {
+            first_frame_shown_ = true;
+            if (deferred_window_show_) glfwShowWindow(window_);
+            splash_.Finish();
+        }
+
         // Auto-screenshot: 在指定帧或退出前最后一帧截图
         if (!test_config_.screenshot_path.empty() && !screenshot_taken) {
             bool should_capture = false;
@@ -795,6 +827,8 @@ void EditorApp::Run() {
 // ─── Shutdown ───────────────────────────────────────────────────────────────
 
 void EditorApp::Shutdown() {
+    splash_.Finish();  // 若主循环未走到首帧（异常早退），确保 splash 线程被回收
+
     // Save editor settings
     dse::editor::EditorSettings editor_settings = dse::editor::LoadEditorSettings();
     editor_settings.last_scene_path = dse::editor::SceneTabManager::Get().GetActiveFilePath();

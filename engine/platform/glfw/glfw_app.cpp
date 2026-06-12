@@ -71,6 +71,9 @@ bool GlfwApp::Init(const WindowConfig& config) {
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     }
 
+    // splash 期间隐藏窗口：首帧渲染完成后再由上层调用 Show()，避免空白窗口闪烁。
+    glfwWindowHint(GLFW_VISIBLE, config.start_hidden ? GLFW_FALSE : GLFW_TRUE);
+
     window_ = glfwCreateWindow(config.width, config.height,
                                config.title.c_str(), nullptr, nullptr);
     if (!window_ && needs_gl && config.gl_fallback_33) {
@@ -191,6 +194,12 @@ void GlfwApp::SetWindowTitle(const std::string& title) {
 void GlfwApp::RequestClose() {
     if (window_) {
         glfwSetWindowShouldClose(window_, GLFW_TRUE);
+    }
+}
+
+void GlfwApp::Show() {
+    if (window_) {
+        glfwShowWindow(window_);
     }
 }
 

@@ -20,6 +20,7 @@ struct WindowConfig {
     std::string title = "DSEngine";
     bool no_graphics_api = false;  // D3D11/Vulkan：不创建 GL context
     bool gl_fallback_33 = true;    // GL 4.3 失败时降级到 3.3
+    bool start_hidden = false;     // 创建时隐藏窗口（splash 期间），首帧后再 Show()
 };
 
 class PlatformApp {
@@ -40,6 +41,7 @@ public:
     virtual void GetFramebufferSize(int& w, int& h) const = 0;
     virtual void SetWindowTitle(const std::string& title) = 0;
     virtual void RequestClose() = 0;
+    virtual void Show() {}                  // 显示之前以 start_hidden 创建的窗口；非桌面端 no-op
 
     // --- 渲染 Context 线程管理 ---
     virtual void MakeContextCurrent() {}    // GL: glfwMakeContextCurrent(window); 非 GL no-op
