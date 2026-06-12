@@ -12,6 +12,7 @@
 #include <rapidjson/prettywriter.h>
 
 #include "engine/dse_version.h"
+#include "engine/project/project_scaffold.h"
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -301,149 +302,22 @@ bool ProjectManager::CreateProject(const std::filesystem::path& parent_dir,
 void ProjectManager::GenerateTemplate(const std::filesystem::path& project_root,
                                        const std::string& name,
                                        ProjectTemplate tmpl) {
-    // 创建子目录
-    std::filesystem::create_directories(project_root / "scenes");
-    std::filesystem::create_directories(project_root / "scripts");
-    std::filesystem::create_directories(project_root / "assets" / "textures");
-    std::filesystem::create_directories(project_root / "assets" / "models");
-    std::filesystem::create_directories(project_root / "assets" / "audio");
-    std::filesystem::create_directories(project_root / "assets" / "font");
+    // 模板生成统一收敛到引擎层 dse::project::ScaffoldProject，与 dse CLI `new` 共用。
+    dse::project::ProjectTemplate scaffold_tmpl = dse::project::ProjectTemplate::Empty;
+    switch (tmpl) {
+    case ProjectTemplate::Empty:        scaffold_tmpl = dse::project::ProjectTemplate::Empty;  break;
+    case ProjectTemplate::Game2D:       scaffold_tmpl = dse::project::ProjectTemplate::Game2D; break;
+    case ProjectTemplate::Game3D:       scaffold_tmpl = dse::project::ProjectTemplate::Game3D; break;
+    case ProjectTemplate::LuaScripting: scaffold_tmpl = dse::project::ProjectTemplate::Lua;    break;
+    }
 
-    // 构建 ProjectDescriptor
-    ProjectDescriptor desc;
-    desc.name = name;
-
-    // 写入 engine_version
     std::ostringstream ver_ss;
     ver_ss << DSE_VERSION_MAJOR << "." << DSE_VERSION_MINOR << "." << DSE_VERSION_PATCH;
-    desc.engine_version = ver_ss.str();
 
-    // 按模板设置 features 和入口
-    switch (tmpl) {
-    case ProjectTemplate::Empty:
-        break;
-    case ProjectTemplate::Game2D:
-        desc.features.push_back("lua_scripting");
-        desc.entry_script = "scripts/main.lua";
-        break;
-    case ProjectTemplate::Game3D:
-        desc.features.push_back("lua_scripting");
-        desc.entry_script = "scripts/main.lua";
-        break;
-    case ProjectTemplate::LuaScripting:
-        desc.features.push_back("lua_scripting");
-        desc.entry_script = "scripts/main.lua";
-        break;
-    }
-
-    descriptor_ = desc;
-    SaveDescriptor(project_root / "project.dseproj");
-
-    // 生成默认场景
-    if (tmpl == ProjectTemplate::Game3D) {
-        // Game3D: 预置 Camera + DirectionalLight 实体
-        std::ofstream ofs(project_root / "scenes" / "main.json", std::ios::trunc);
-        ofs << "[\n"
-            << "    {\n"
-            << "        \"id\": 1,\n"
-            << "        \"name\": \"Main Camera\",\n"
-            << "        \"transform\": {\n"
-            << "            \"position\": [0.0, 4.0, 10.0],\n"
-            << "            \"rotation\": [0.0, 0.0, 0.0, 1.0],\n"
-            << "            \"scale\": [1.0, 1.0, 1.0],\n"
-            << "            \"dirty\": false\n"
-            << "        },\n"
-            << "        \"camera3d\": {\n"
-            << "            \"enabled\": true,\n"
-            << "            \"priority\": 0,\n"
-            << "            \"fov\": 60.0,\n"
-            << "            \"near_clip\": 0.1,\n"
-            << "            \"far_clip\": 500.0\n"
-            << "        }\n"
-            << "    },\n"
-            << "    {\n"
-            << "        \"id\": 2,\n"
-            << "        \"name\": \"Directional Light\",\n"
-            << "        \"transform\": {\n"
-            << "            \"position\": [0.0, 5.0, 0.0],\n"
-            << "            \"rotation\": [0.0, 0.0, 0.0, 1.0],\n"
-            << "            \"scale\": [1.0, 1.0, 1.0],\n"
-            << "            \"dirty\": false\n"
-            << "        },\n"
-            << "        \"directional_light3d\": {\n"
-            << "            \"enabled\": true,\n"
-            << "            \"color\": [1.0, 0.95, 0.85],\n"
-            << "            \"intensity\": 1.5,\n"
-            << "            \"cast_shadow\": false,\n"
-            << "            \"shadow_strength\": 1.0\n"
-            << "        }\n"
-            << "    }\n"
-            << "]\n";
-    } else {
-        // Empty / Game2D / LuaScripting: 空场景（正确的数组格式）
-        std::ofstream ofs(project_root / "scenes" / "main.json", std::ios::trunc);
-        ofs << "[]\n";
-    }
-
-    // 按模板生成脚本文件
-    if (tmpl == ProjectTemplate::Game2D || tmpl == ProjectTemplate::LuaScripting) {
-        std::ofstream ofs(project_root / "scripts" / "main.lua", std::ios::trunc);
-        ofs << "-- " << name << " entry script\n"
-            << "-- DSEngine Lua scripting\n\n"
-            << "function on_init()\n"
-            << "    print(\"" << name << " initialized\")\n"
-            << "end\n\n"
-            << "function on_update(dt)\n"
-            << "end\n";
-    } else if (tmpl == ProjectTemplate::Game3D) {
-        // 完整 3D 模板：运行时补充 FreeCameraController + 地面 + 示范物体
-        std::ofstream ofs(project_root / "scripts" / "main.lua", std::ios::trunc);
-        ofs << "-- " << name << " (3D) entry script\n"
-            << "-- DSEngine 3D project template\n"
-            << "-- Scene pre-populated with Camera + Directional Light via main.json\n\n"
-            << "local state = { camera = nil, ground = nil, cube = nil, time = 0.0 }\n\n"
-            << "local function cube_verts()\n"
-            << "    return { -0.5,-0.5, 0.5,  0.5,-0.5, 0.5,  0.5, 0.5, 0.5, -0.5, 0.5, 0.5,\n"
-            << "             -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5, 0.5,-0.5, -0.5, 0.5,-0.5 }\n"
-            << "end\n\n"
-            << "local function cube_idx()\n"
-            << "    return { 0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4 }\n"
-            << "end\n\n"
-            << "function on_init()\n"
-            << "    -- Add free-camera controller to the camera entity loaded from scene\n"
-            << "    local cam_entities = dse.ecs.find_entities_with_camera3d and dse.ecs.find_entities_with_camera3d() or {}\n"
-            << "    if #cam_entities > 0 then\n"
-            << "        state.camera = cam_entities[1]\n"
-            << "        dse.ecs.add_free_camera_controller(state.camera, 5.0, 0.12)\n"
-            << "    end\n\n"
-            << "    -- Ground plane\n"
-            << "    state.ground = dse.ecs.create_entity()\n"
-            << "    dse.ecs.add_transform(state.ground, 0, -0.06, 0, 10, 0.12, 10)\n"
-            << "    dse.ecs.add_mesh_renderer(state.ground, 0.35, 0.38, 0.35, 1.0, cube_verts(), cube_idx())\n"
-            << "    dse.ecs.set_mesh_shader_variant(state.ground, \"MESH_LIT\")\n"
-            << "    dse.ecs.set_mesh_material(state.ground, 0.0, 0.8, 1.0, 0, 0, 0, 1.0, true, true)\n\n"
-            << "    -- Demo cube (orange, slightly metallic)\n"
-            << "    state.cube = dse.ecs.create_entity()\n"
-            << "    dse.ecs.add_transform(state.cube, 0, 0.5, 0, 1, 1, 1)\n"
-            << "    dse.ecs.add_mesh_renderer(state.cube, 0.9, 0.45, 0.18, 1.0, cube_verts(), cube_idx())\n"
-            << "    dse.ecs.set_mesh_shader_variant(state.cube, \"MESH_LIT\")\n"
-            << "    dse.ecs.set_mesh_material(state.cube, 0.1, 0.4, 1.0, 0, 0, 0, 1.0, true, false)\n\n"
-            << "    print(\"[" << name << "] 3D scene ready. Right-click + W/A/S/D/Q/E to navigate.\")\n"
-            << "end\n\n"
-            << "function on_update(dt)\n"
-            << "    state.time = state.time + (dt or 0)\n"
-            << "    if state.cube then\n"
-            << "        dse.ecs.set_transform_rotation(state.cube, 0, state.time * 45.0, 0)\n"
-            << "    end\n"
-            << "end\n";
-    }
-
-    // .gitignore
-    {
-        std::ofstream ofs(project_root / ".gitignore", std::ios::trunc);
-        ofs << "build/\n"
-            << ".lock\n"
-            << "*.log\n";
+    dse::project::ScaffoldResult res =
+        dse::project::ScaffoldProject(project_root.string(), name, scaffold_tmpl, ver_ss.str());
+    if (!res.ok) {
+        EditorLog(LogLevel::Error, "Failed to scaffold project: " + res.error);
     }
 }
 

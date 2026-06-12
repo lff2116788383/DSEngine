@@ -379,6 +379,23 @@ bool EngineInstance::Init() {
             auto fs_shared = std::shared_ptr<dse::assets::FileSystem>(default_file_system_.get(), [](dse::assets::FileSystem*) {});
             service_locator().Register<dse::assets::FileSystem, dse::assets::FileSystem>(fs_shared);
         }
+
+        // 挂载离线打包产物：.dpak 归档 + 加密/明文 .bun 资源包。
+        // 挂载后 LoadFileToMemory 与 Lua VFS searcher 即可直接从中读取，无需磁盘松散文件。
+        if (!config_.asset_pak_path.empty()) {
+            if (services_.asset_manager->MountPak(config_.asset_pak_path)) {
+                std::cout << "Mounted pak: " << config_.asset_pak_path << std::endl;
+            } else {
+                std::cerr << "Failed to mount pak: " << config_.asset_pak_path << std::endl;
+            }
+        }
+        if (!config_.asset_bundle_path.empty()) {
+            if (services_.asset_manager->MountBundle(config_.asset_bundle_path, config_.asset_bundle_key)) {
+                std::cout << "Mounted bundle: " << config_.asset_bundle_path << std::endl;
+            } else {
+                std::cerr << "Failed to mount bundle: " << config_.asset_bundle_path << std::endl;
+            }
+        }
     }
     pipeline_->SetBusinessMode(config_.business_mode);
     if (platform_) {

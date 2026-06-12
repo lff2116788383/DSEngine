@@ -783,6 +783,9 @@ endif()
 # Standalone game runtime (no editor UI)
 add_subdirectory(apps/standalone)
 
+# 工具链：dse CLI（headless：建项目 / 打包加密 / 完整 build）
+add_subdirectory(apps/tools/dse_cli)
+
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
     apps/tools/asset_builder/main.cpp
