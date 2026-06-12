@@ -71,6 +71,72 @@ void AppendLog(BuildState& state, const std::string& msg) {
     state.build_log.push_back(msg);
 }
 
+std::string JsonEscape(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 8);
+    for (char c : s) {
+        switch (c) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default: out += c; break;
+        }
+    }
+    return out;
+}
+
+// 在 exe 旁写一份松散的 game.dsmanifest（窗口 + 品牌化 splash），standalone 宿主在
+// 创建窗口/弹出 splash 之前读取。splash 图必须松散放置（不能进 pak/bun），否则
+// 在挂载资源之前无法读取。
+void WriteGameManifest(BuildState& state, const std::filesystem::path& out_dir) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    std::string splash_image_rel;
+    if (state.icon_path[0] != '\0') {
+        fs::path icon(state.icon_path);
+        std::string ext = icon.extension().string();
+        for (auto& ch : ext) ch = static_cast<char>(::tolower(static_cast<unsigned char>(ch)));
+        const bool image_ok = (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+                               ext == ".bmp" || ext == ".tga");
+        if (image_ok && fs::exists(icon, ec)) {
+            fs::path dest = out_dir / ("splash" + ext);
+            fs::copy_file(icon, dest, fs::copy_options::overwrite_existing, ec);
+            if (!ec) {
+                splash_image_rel = dest.filename().string();
+                AppendLog(state, "Copied splash image -> " + dest.filename().string());
+            }
+        }
+    }
+
+    const std::string title = state.game_title;
+    std::ofstream ofs(out_dir / "game.dsmanifest", std::ios::trunc);
+    if (!ofs.is_open()) {
+        AppendLog(state, "WARNING: Failed to write game.dsmanifest");
+        return;
+    }
+    ofs << "{\n";
+    ofs << "    \"window\": {\n";
+    ofs << "        \"title\": \"" << JsonEscape(title) << "\",\n";
+    ofs << "        \"width\": 1280,\n";
+    ofs << "        \"height\": 720\n";
+    ofs << "    },\n";
+    ofs << "    \"splash\": {\n";
+    ofs << "        \"enabled\": true,\n";
+    ofs << "        \"image\": \"" << JsonEscape(splash_image_rel) << "\",\n";
+    ofs << "        \"app_name\": \"" << JsonEscape(title) << "\",\n";
+    ofs << "        \"background_argb\": \"0xFF1E1E28\",\n";
+    ofs << "        \"accent_argb\": \"0xFF4A9EFF\",\n";
+    ofs << "        \"fade_in_ms\": 600,\n";
+    ofs << "        \"min_display_ms\": 900,\n";
+    ofs << "        \"fade_out_ms\": 500\n";
+    ofs << "    }\n";
+    ofs << "}\n";
+    AppendLog(state, "Wrote game.dsmanifest (window + splash)");
+}
+
 void DoBuild(BuildState& state) {
     namespace fs = std::filesystem;
 
@@ -149,6 +215,9 @@ void DoBuild(BuildState& state) {
         }
     }
     AppendLog(state, "Copied " + std::to_string(dll_count) + " DLLs");
+
+    // 写启动清单（窗口 + 品牌化 splash），两种打包路径（明文/加密）都需要。
+    WriteGameManifest(state, out_dir);
 
     state.last_launch_args.clear();
 

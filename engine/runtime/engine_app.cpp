@@ -321,10 +321,12 @@ bool EngineInstance::Init() {
                       << " img='" << ResolveSplashImagePath() << "'" << std::endl;
         }
         if (splash_on) {
-            dse::platform::SplashConfig splash_cfg;
-            splash_cfg.image_path = ResolveSplashImagePath();
-            splash_cfg.app_name = "DSEngine";
-            splash_cfg.initial_status = "正在启动…";
+            // 优先用打包/工程提供的品牌化 splash 配置；未给出的字段回退到引擎默认。
+            dse::platform::SplashConfig splash_cfg = config_.use_splash_config ? config_.splash
+                                                                              : dse::platform::SplashConfig{};
+            if (splash_cfg.image_path.empty()) splash_cfg.image_path = ResolveSplashImagePath();
+            if (splash_cfg.app_name.empty()) splash_cfg.app_name = "DSEngine";
+            if (splash_cfg.initial_status.empty()) splash_cfg.initial_status = "正在启动…";
             dse::platform::ApplySplashEnvOverrides(splash_cfg);
             splash_.Show(splash_cfg);
         }

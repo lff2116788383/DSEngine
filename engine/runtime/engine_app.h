@@ -37,6 +37,10 @@ struct EngineRunConfig {
     std::string asset_bundle_key;
     /// .dpak 归档路径（编辑器 BuildGame 产物）；非空时 Init 会挂载。
     std::string asset_pak_path;
+    /// 启动 splash 配置（品牌化）。use_splash_config=true 时 Init 用它替代内置默认值；
+    /// 未显式给出的字段（空字符串/0）仍回退到引擎默认。环境变量覆盖仍生效。
+    bool use_splash_config = false;
+    dse::platform::SplashConfig splash{};
     RuntimeServices services{};
 
     EngineRunConfig& WithServices(RuntimeServices runtime_services) {

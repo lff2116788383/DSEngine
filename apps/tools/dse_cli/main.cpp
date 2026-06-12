@@ -15,6 +15,7 @@
 
 #include "engine/project/project_scaffold.h"
 #include "engine/assets/bundle_packer.h"
+#include "engine/runtime/app_manifest.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -295,6 +296,32 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
         }
     }
     std::cout << "已拷贝 exe + " << dll_count << " 个 DLL\n";
+
+    // 2b. 从 project.dseproj 的 window/splash 段生成松散 game.dsmanifest（窗口+品牌化 splash）。
+    //     splash 图必须松散放置（不能进 game.bun），否则挂载资源前无法读取。
+    {
+        dse::runtime::AppManifest manifest;
+        if (dse::runtime::LoadAppManifest(dseproj.string(), manifest)) {
+            if (!manifest.has_window_title) {
+                manifest.has_window_title = true;
+                manifest.window_title = game_name;
+            }
+            if (manifest.has_splash && !manifest.splash.image_path.empty()) {
+                fs::path src_img(manifest.splash.image_path);  // 已按 dseproj 目录解析为绝对路径
+                std::error_code img_ec;
+                if (fs::exists(src_img, img_ec)) {
+                    fs::path dest_img = out_dir / ("splash" + src_img.extension().string());
+                    fs::copy_file(src_img, dest_img, fs::copy_options::overwrite_existing, img_ec);
+                    manifest.splash.image_path = img_ec ? std::string() : dest_img.filename().string();
+                } else {
+                    manifest.splash.image_path.clear();  // dist 中无此图，回退引擎默认
+                }
+            }
+            if (dse::runtime::WriteAppManifest((out_dir / "game.dsmanifest").string(), manifest)) {
+                std::cout << "已生成 game.dsmanifest\n";
+            }
+        }
+    }
 
     // 3. 暂存项目内容并打包加密 game.bun
     fs::path staging = out_dir / ".dse_stage";
