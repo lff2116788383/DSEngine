@@ -76,6 +76,34 @@
 
 ---
 
+## 三·补、子系统 / 服务层面的缺口（不止组件）
+
+> 判定方式：枚举 `ServiceLocator` 注册的服务与各管理器公共 API，对比 Lua 绑定。
+> 服务清单：`AssetManager`、`EventBus`、`JobSystem`、`NavMeshSystem`、`Physics2D/3DSystem`、
+> `World`、`LocalizationManager`、`FontService`、`StreamingManager`、`SceneManager`。
+
+### 3a.1 故意不暴露（设计如此，**非缺口**）
+
+| 能力 | 原因 |
+|------|------|
+| `JobSystem`（多线程任务调度） | 引擎内部驱动并行；脚本不应直接操作线程，避免数据竞争 |
+| `EventBus` 的 `Publish<T>/Subscribe<T>` | 基于 C++ 模板与静态事件类型，无法直接跨 Lua 边界。脚本侧事件改用**轮询队列**暴露（碰撞/触发 `physics_3d_get_*_events`、动画 `pop_*_event`、UI 事件传递） |
+| GPU-driven 管线 / 批处理内部 | 只读统计已通过 `dse.metrics.*` 暴露（draw calls、实例数等），无需写接口 |
+| 画质 / VSync / MSAA / 分辨率缩放 | 引擎**无运行时 API**（由配置/启动参数控制），故不属“被遗漏”——`get_quality` 是网络连接质量，非渲染 |
+
+### 3a.2 能力已存在、Lua 未覆盖（**真实缺口，建议补**）
+
+| 能力 | C++ 入口 | Lua 现状 | 影响 |
+|------|----------|----------|------|
+| **手柄输入 Gamepad** | `engine/input/input.h`：`GetGamepadAxis` / `IsGamepadConnected` / `Set/GetGamepadDeadZone`（支持 4 个手柄） | `dse.app.*` 只绑了键盘 + 鼠标 | 手柄游戏脚本无法读摇杆/连接状态。**注意**：引擎当前也只有手柄“轴”，无手柄按键 API |
+| **场景管理 SceneManager** | `engine/scene/scene_manager.h`：`LoadSubSceneAsync`、`UnloadSubScene`、`UnloadAll`、`GetLoadedSubScenes`、`IsSubSceneLoaded`、`LoadedCount/PendingCount` | 仅同步 `ecs.load_scene` / `ecs.load_sub_scene` | 无法异步加载、卸载、查询已加载场景 |
+| **场景切换过渡** | `SceneManager::TransitionTo(path, mode, fade)` + `GetTransitionState` / `GetFadeProgress` | 无 | 脚本无法触发带淡入淡出的场景切换 |
+| **UUID → 实体解析** | `SceneManager::ResolveReference(uuid)` + `UUIDComponent` | 无 | 跨存档/预制体/网络的稳定实体引用无法在 Lua 解析 |
+
+> 以上 4 项共同构成“场景/资源生命周期 + 稳定引用”这一块的薄弱面，是当前最值得补的方向。
+
+---
+
 ## 四、维护方式
 
 1. **字段访问器（§18）**：唯一数据源是 `tools/codegen/binding_defs.json`，
