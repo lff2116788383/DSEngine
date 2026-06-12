@@ -550,6 +550,12 @@ DSE_CAPI int dse_physics3d_overlap_box(float min_x, float min_y, float min_z,
 DSE_CAPI int dse_render_world_to_screen(float wx, float wy, float wz,
                                         float* out_sx, float* out_sy);
 
+// screen_to_world_ray：由屏幕像素 (sx,sy) 用主相机反投影出世界空间拾取射线。
+// 填充非空 out_origin[3]（射线起点=相机位置）与 out_dir[3]（已归一化方向）。
+// 成功（存在启用的主相机）返回 1，否则返回 0 且不修改输出。
+DSE_CAPI int dse_render_screen_to_world_ray(float sx, float sy,
+                                            float* out_origin, float* out_dir);
+
 // MeshRenderer 材质/贴图加载（依赖 AssetManager）。
 // set_material_from_dmat：从 .dmat 载入 MaterialInstance 并拷入 MeshRenderer，成功返回 1。
 // set_texture：按 slot 名载入贴图并绑定到对应 handle，成功返回 1 并填充非空 out_*；slot 非法/加载失败返回 0。

@@ -9,9 +9,10 @@
 
 ## 一、概要结论
 
-- **文档覆盖率：100%。** 实测注册 **876** 个 Lua 可见函数名，审计后 **0** 个未文档化。
+- **文档覆盖率：100%。** 实测注册 **885** 个 Lua 可见函数名，审计后 **0** 个未文档化。
   本次更新已把全部新增/遗漏的接口补进 `docs/api/LUA_API.md`。
-- **本轮新增 24 个手写绑定**：手柄输入（4）+ 场景管理/过渡（11）+ UUID 读取/解析（3）+ FootIK（6）。详见 §五。
+- **第一轮新增 24 个手写绑定**：手柄输入（4）+ 场景管理/过渡（11）+ UUID 读取/解析（3）+ FootIK（6）。详见 §五。
+- **第二轮新增 9 个手写绑定（面向大型模拟经营）**：屏幕拾取（2）+ 通用 ECS 组件查询（4）+ 场景/预制体存档写盘（3）。详见 §六。
 - **接口完整性：核心玩法链路完整。** 渲染、光照、物理 2D/3D、动画 2D/3D（FSM/层/IK/FootIK/Root Motion/骨骼挂点）、
   粒子、UI（含输入框/滑块/下拉/滚动/虚拟列表/视觉效果）、音频（BGM/SFX/总线/DSP/快照）、
   地形（splat/瓦片流式/植被/树木）、导航、序列化、本地化、网络/HTTP 均有 Lua 绑定。
@@ -19,9 +20,9 @@
 
 | 类别 | 数值 |
 |------|:----:|
-| 注册 Lua 函数总数 | 876 |
+| 注册 Lua 函数总数 | 885 |
 | 其中 Codegen 字段访问器（13 组件 / 165 字段） | 330 |
-| 手写绑定函数 | 546 |
+| 手写绑定函数 | 555 |
 | 顶层模块数（含条件编译 http/net/nav） | 19 |
 | 审计后未文档化函数 | **0** |
 
@@ -115,6 +116,24 @@
 - **场景管理/过渡（11）**：`ecs.load_sub_scene_async`、`unload_sub_scene`、`unload_all_sub_scenes`、`is_sub_scene_loaded`、`get_loaded_sub_scenes`、`get_sub_scene_count`、`get_pending_scene_count`、`transition_to`、`get_transition_state`、`get_fade_progress`、`get_active_scene`（均经 `ServiceLocator::Get<scene::SceneManager>()`，路径按 data root 解析）
 - **UUID（3）**：`ecs.get_uuid`、`set_uuid`、`resolve_uuid`（`resolve_uuid` 仅解析经 SceneManager 加载的子场景实体）
 - **FootIK（6）**：`ecs.add_foot_ik_component`、`add_foot_ik_foot`、`set_foot_ik_foot_weight`、`set_foot_ik_foot_height`、`set_foot_ik_pelvis`、`set_foot_ik_enabled`（薄包装委托至新增 `dse_foot_ik_*` C ABI）
+
+---
+
+## 六、第二轮新增绑定明细（面向大型模拟经营游戏的薄弱点补强）
+
+> 针对“大型 3D 模拟经营”品类最易卡住的三处：点击拾取、批量实体查询、存档写盘。
+> 实现文件：`dse_api_render.cpp` + `dse_api.h` + `lua_binding_ecs_rendering_fx.cpp`（拾取），
+> `lua_binding_ecs_core.cpp`（查询 + 存档）。构建/测试同上，全绿。
+
+- **屏幕拾取（2）**：
+  - `ecs.screen_to_world_ray(sx, sy)` → 主相机反投影出世界拾取射线（C ABI `dse_render_screen_to_world_ray`，与 `world_to_screen` 互逆）
+  - `ecs.pick_entity(sx, sy, [max_dist])` → 屏幕像素 → 射线 → 3D 物理 raycast，一步拿到命中实体（经营游戏点击选建筑/地块的核心交互）
+- **通用 ECS 组件查询（4）**：`ecs.find_entities_with(name)`、`count_entities_with(name)`、`has_component(e, name)`、`get_queryable_components()`。基于一张组件名→`view<T>` 的静态分发表，覆盖 60+ 个常用组件（核心/2D/3D 渲染/物理/动画/地形/粒子/天气/导航）；未知名抛 Lua 错误。
+- **场景/预制体存档写盘（3）**：`ecs.save_scene(path)`（委托 `scene::Scene::Serialize`，补齐此前只读的 `load_scene`）、`ecs.save_prefab(e, path)`（委托 `scene::SaveEntityAsPrefab`）、`ecs.instantiate_prefab(path, [x,y,z])`（委托 `scene::InstantiatePrefab`）。
+
+> 说明：上一轮我曾把“通用 ECS 查询/存档写盘”列为薄弱面，本轮已补齐。仍属架构取舍、未改的点：
+> 上万实体每帧在 Lua 侧循环仍有 C 边界开销，建议核心模拟放 C++ 系统、Lua 做规则/事件钩子；
+> `EventBus` 的 pub/sub 仍按设计走轮询队列，未开放跨 Lua 模板订阅。
 
 ---
 

@@ -83,6 +83,63 @@ extern "C" int dse_render_world_to_screen(float wx, float wy, float wz,
 }
 
 // ============================================================
+// dse_render_screen_to_world_ray — 主相机 2D→3D 反投影拾取射线
+// ============================================================
+extern "C" int dse_render_screen_to_world_ray(float sx, float sy,
+                                              float* out_origin, float* out_dir) {
+    World* world = GW();
+    if (!world) return 0;
+
+    auto cam_view = world->registry().view<dse::Camera3DComponent, TransformComponent>();
+    entt::entity main_cam = entt::null;
+    int max_priority = -9999;
+    for (auto entity : cam_view) {
+        auto& cam = cam_view.get<dse::Camera3DComponent>(entity);
+        if (cam.enabled && cam.priority > max_priority) {
+            max_priority = cam.priority;
+            main_cam = entity;
+        }
+    }
+    if (main_cam == entt::null) return 0;
+
+    auto& cam = cam_view.get<dse::Camera3DComponent>(main_cam);
+    auto& transform = cam_view.get<TransformComponent>(main_cam);
+
+    glm::vec3 front = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+    glm::vec3 up = transform.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
+    glm::mat4 view_mat = glm::lookAt(transform.position, transform.position + front, up);
+    glm::mat4 proj_mat = glm::perspective(glm::radians(cam.fov), cam.aspect_ratio, cam.near_clip, cam.far_clip);
+    glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
+
+    float screen_w = static_cast<float>(Screen::width());
+    float screen_h = static_cast<float>(Screen::height());
+    if (screen_w <= 0.0f || screen_h <= 0.0f) return 0;
+
+    // 屏幕像素 → NDC（与 world_to_screen 的 Y 翻转互逆）
+    float ndc_x = (sx / screen_w) * 2.0f - 1.0f;
+    float ndc_y = 1.0f - (sy / screen_h) * 2.0f;
+
+    glm::vec4 near_clip = inv_vp * glm::vec4(ndc_x, ndc_y, -1.0f, 1.0f);
+    glm::vec4 far_clip  = inv_vp * glm::vec4(ndc_x, ndc_y,  1.0f, 1.0f);
+    if (near_clip.w == 0.0f || far_clip.w == 0.0f) return 0;
+    glm::vec3 near_pt = glm::vec3(near_clip) / near_clip.w;
+    glm::vec3 far_pt  = glm::vec3(far_clip) / far_clip.w;
+
+    glm::vec3 dir = glm::normalize(far_pt - near_pt);
+    if (out_origin) {
+        out_origin[0] = transform.position.x;
+        out_origin[1] = transform.position.y;
+        out_origin[2] = transform.position.z;
+    }
+    if (out_dir) {
+        out_dir[0] = dir.x;
+        out_dir[1] = dir.y;
+        out_dir[2] = dir.z;
+    }
+    return 1;
+}
+
+// ============================================================
 // dse_mesh_renderer_set_material_from_dmat — 从 .dmat 载入 MaterialInstance 并拷入组件
 // ============================================================
 extern "C" int dse_mesh_renderer_set_material_from_dmat(uint32_t e, const char* dmat_path,

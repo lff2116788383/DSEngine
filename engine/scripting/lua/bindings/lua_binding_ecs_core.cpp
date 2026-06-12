@@ -9,6 +9,11 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/script.h"
+#include "engine/ecs/sprite.h"
+#include "engine/ecs/camera.h"
+#include "engine/ecs/physics_2d.h"
+#include "engine/ecs/gameplay.h"
+#include "engine/ecs/components_3d_foliage.h"
 #include "engine/scene/scene.h"
 #include "engine/scene/sub_scene.h"
 #include "engine/scene/scene_manager.h"
@@ -19,6 +24,7 @@
 #include <glm/glm.hpp>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -423,6 +429,230 @@ int L_EcsResolveUuid(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// 通用 ECS 组件查询（按组件名字符串）
+// ============================================================
+
+template <typename T>
+void CollectComponentView(World* w, lua_State* L, int& idx) {
+    auto view = w->registry().view<T>();
+    for (auto e : view) {
+        helper::PushEntity(L, e);
+        lua_rawseti(L, -2, idx++);
+    }
+}
+
+template <typename T>
+size_t CountComponentView(World* w) {
+    return w->registry().view<T>().size();
+}
+
+template <typename T>
+bool HasComponentT(World* w, Entity e) {
+    return w->registry().all_of<T>(e);
+}
+
+struct ComponentOps {
+    void (*collect)(World*, lua_State*, int&);
+    size_t (*count)(World*);
+    bool (*has)(World*, Entity);
+};
+
+template <typename T>
+ComponentOps MakeOps() {
+    return ComponentOps{ &CollectComponentView<T>, &CountComponentView<T>, &HasComponentT<T> };
+}
+
+const std::unordered_map<std::string, ComponentOps>& ComponentOpsTable() {
+    static const std::unordered_map<std::string, ComponentOps> table = {
+        // 核心
+        {"transform",               MakeOps<TransformComponent>()},
+        {"parent",                  MakeOps<ParentComponent>()},
+        {"script",                  MakeOps<ScriptComponent>()},
+        {"uuid",                    MakeOps<UUIDComponent>()},
+        {"gameplay_tuning",         MakeOps<GameplayTuningComponent>()},
+        // 2D 渲染 / 物理
+        {"sprite_renderer",         MakeOps<SpriteRendererComponent>()},
+        {"spine_renderer",          MakeOps<SpineRendererComponent>()},
+        {"material_instance",       MakeOps<MaterialInstanceComponent>()},
+        {"camera",                  MakeOps<CameraComponent>()},
+        {"camera_follow",           MakeOps<CameraFollowComponent>()},
+        {"rigidbody_2d",            MakeOps<RigidBody2DComponent>()},
+        {"box_collider_2d",         MakeOps<BoxCollider2DComponent>()},
+        {"circle_collider_2d",      MakeOps<CircleCollider2DComponent>()},
+        // 3D 渲染
+        {"mesh_renderer",           MakeOps<dse::MeshRendererComponent>()},
+        {"lod_group",               MakeOps<dse::LODGroupComponent>()},
+        {"camera_3d",               MakeOps<dse::Camera3DComponent>()},
+        {"free_camera_controller",  MakeOps<dse::FreeCameraControllerComponent>()},
+        {"post_process",            MakeOps<dse::PostProcessComponent>()},
+        {"decal",                   MakeOps<dse::DecalComponent>()},
+        {"directional_light",       MakeOps<dse::DirectionalLight3DComponent>()},
+        {"point_light",             MakeOps<dse::PointLightComponent>()},
+        {"spot_light",              MakeOps<dse::SpotLightComponent>()},
+        {"sky_light",               MakeOps<dse::SkyLightComponent>()},
+        {"skybox",                  MakeOps<dse::SkyboxComponent>()},
+        {"water",                   MakeOps<dse::WaterComponent>()},
+        {"grass",                   MakeOps<dse::GrassComponent>()},
+        {"hair",                    MakeOps<dse::HairComponent>()},
+        {"light_probe",             MakeOps<dse::LightProbeComponent>()},
+        {"reflection_probe",        MakeOps<dse::ReflectionProbeComponent>()},
+        {"gi_probe_volume",         MakeOps<dse::GIProbeVolumeComponent>()},
+        {"morph_target",            MakeOps<dse::MorphTargetComponent>()},
+        {"sub_scene",               MakeOps<dse::SubSceneComponent>()},
+        // 地形 / 植被
+        {"terrain",                 MakeOps<dse::TerrainComponent>()},
+        {"terrain_tile_manager",    MakeOps<dse::TerrainTileManagerComponent>()},
+        {"tree",                    MakeOps<dse::TreeComponent>()},
+        {"foliage",                 MakeOps<dse::FoliageComponent>()},
+        // 3D 物理
+        {"rigidbody_3d",            MakeOps<dse::RigidBody3DComponent>()},
+        {"box_collider_3d",         MakeOps<dse::BoxCollider3DComponent>()},
+        {"sphere_collider_3d",      MakeOps<dse::SphereCollider3DComponent>()},
+        {"capsule_collider_3d",     MakeOps<dse::CapsuleCollider3DComponent>()},
+        {"mesh_collider_3d",        MakeOps<dse::MeshCollider3DComponent>()},
+        {"joint_3d",                MakeOps<dse::Joint3DComponent>()},
+        {"character_controller_3d", MakeOps<dse::CharacterController3DComponent>()},
+        {"terrain_heightmap",       MakeOps<dse::TerrainHeightmapComponent>()},
+        {"ragdoll",                 MakeOps<dse::RagdollComponent>()},
+        {"soft_body",               MakeOps<dse::SoftBodyComponent>()},
+        {"vehicle",                 MakeOps<dse::VehicleComponent>()},
+        {"rope",                    MakeOps<dse::RopeComponent>()},
+        {"buoyancy",                MakeOps<dse::BuoyancyComponent>()},
+        {"cloth",                   MakeOps<dse::ClothComponent>()},
+        {"fluid_emitter",           MakeOps<dse::FluidEmitterComponent>()},
+        // 动画
+        {"animator_3d",             MakeOps<dse::Animator3DComponent>()},
+        {"anim_layer",              MakeOps<dse::AnimLayerComponent>()},
+        {"ik_chain_3d",             MakeOps<dse::IKChain3DComponent>()},
+        {"foot_ik",                 MakeOps<dse::FootIK3DComponent>()},
+        {"bone_attachment",         MakeOps<dse::BoneAttachmentComponent>()},
+        // 粒子 / 天空 / 天气
+        {"particle_system_3d",      MakeOps<dse::ParticleSystem3DComponent>()},
+        {"atmosphere",              MakeOps<dse::AtmosphereComponent>()},
+        {"volumetric_cloud",        MakeOps<dse::VolumetricCloudComponent>()},
+        {"day_night_cycle",         MakeOps<dse::DayNightCycleComponent>()},
+        {"weather",                 MakeOps<dse::WeatherComponent>()},
+        {"snow_cover",              MakeOps<dse::SnowCoverComponent>()},
+        {"fracture",                MakeOps<dse::FractureComponent>()},
+        // 导航
+        {"dynamic_obstacle",        MakeOps<dse::DynamicObstacleComponent>()},
+        {"navmesh_auto_rebake",     MakeOps<dse::NavMeshAutoRebakeComponent>()},
+    };
+    return table;
+}
+
+// ecs.find_entities_with(component_name) -> table（持有该组件的全部实体）
+//   component_name 见文档 §5.1 支持列表；未知名抛出 Lua 错误。
+int L_EcsFindEntitiesWith(lua_State* L) {
+    World* world = GetWorld();
+    const char* name = luaL_checkstring(L, 1);
+    const auto& table = ComponentOpsTable();
+    auto it = table.find(name);
+    if (it == table.end()) {
+        return luaL_error(L, "find_entities_with: unknown component '%s'", name);
+    }
+    lua_newtable(L);
+    if (!world) return 1;
+    int idx = 1;
+    it->second.collect(world, L, idx);
+    return 1;
+}
+
+// ecs.count_entities_with(component_name) -> int
+int L_EcsCountEntitiesWith(lua_State* L) {
+    World* world = GetWorld();
+    const char* name = luaL_checkstring(L, 1);
+    const auto& table = ComponentOpsTable();
+    auto it = table.find(name);
+    if (it == table.end()) {
+        return luaL_error(L, "count_entities_with: unknown component '%s'", name);
+    }
+    lua_pushinteger(L, world ? static_cast<lua_Integer>(it->second.count(world)) : 0);
+    return 1;
+}
+
+// ecs.has_component(entity, component_name) -> bool
+int L_EcsHasComponent(lua_State* L) {
+    World* world = GetWorld();
+    Entity e = helper::CheckEntity(L, 1);
+    const char* name = luaL_checkstring(L, 2);
+    const auto& table = ComponentOpsTable();
+    auto it = table.find(name);
+    if (it == table.end()) {
+        return luaL_error(L, "has_component: unknown component '%s'", name);
+    }
+    lua_pushboolean(L, (world && it->second.has(world, e)) ? 1 : 0);
+    return 1;
+}
+
+// ecs.get_queryable_components() -> table（全部支持查询的组件名）
+int L_EcsGetQueryableComponents(lua_State* L) {
+    const auto& table = ComponentOpsTable();
+    lua_newtable(L);
+    int idx = 1;
+    for (const auto& kv : table) {
+        lua_pushstring(L, kv.first.c_str());
+        lua_rawseti(L, -2, idx++);
+    }
+    return 1;
+}
+
+// ============================================================
+// 场景 / 预制体 保存（写盘，补齐此前只读的加载侧）
+// ============================================================
+
+// ecs.save_scene(path) -> bool, string
+//   把当前 World 完整序列化到 path（路径按字面使用，不做 data root 拼接）。
+int L_EcsSaveScene(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) {
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, "world_unavailable");
+        return 2;
+    }
+    const char* path = luaL_checkstring(L, 1);
+    scene::Scene saver("lua_runtime_scene_saver");
+    saver.BindWorld(world);
+    const bool ok = saver.Serialize(path);
+    saver.UnbindWorld();
+    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushstring(L, ok ? "" : "scene_serialize_failed");
+    return 2;
+}
+
+// ecs.save_prefab(entity, path) -> bool
+int L_EcsSavePrefab(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushboolean(L, 0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const char* path = luaL_checkstring(L, 2);
+    lua_pushboolean(L, scene::SaveEntityAsPrefab(*world, e, path) ? 1 : 0);
+    return 1;
+}
+
+// ecs.instantiate_prefab(path, [x, y, z]) -> entity|nil
+//   省略坐标时使用预制体内置 Transform。
+int L_EcsInstantiatePrefab(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    const char* path = luaL_checkstring(L, 1);
+    Entity e;
+    if (lua_isnumber(L, 2) && lua_isnumber(L, 3) && lua_isnumber(L, 4)) {
+        scene::PrefabInstantiateOptions opts;
+        opts.override_position = true;
+        opts.position = glm::vec3(static_cast<float>(lua_tonumber(L, 2)),
+                                  static_cast<float>(lua_tonumber(L, 3)),
+                                  static_cast<float>(lua_tonumber(L, 4)));
+        e = scene::InstantiatePrefab(*world, path, opts);
+    } else {
+        e = scene::InstantiatePrefab(*world, path);
+    }
+    if (e == entt::null) { lua_pushnil(L); return 1; }
+    helper::PushEntity(L, e);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
@@ -449,6 +679,15 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"set_uuid",                   L_EcsSetUuid},
         {"resolve_uuid",               L_EcsResolveUuid},
         {"find_entities_by_mesh_path", L_EcsFindEntitiesByMeshPath},
+        // 通用组件查询
+        {"find_entities_with",         L_EcsFindEntitiesWith},
+        {"count_entities_with",        L_EcsCountEntitiesWith},
+        {"has_component",              L_EcsHasComponent},
+        {"get_queryable_components",   L_EcsGetQueryableComponents},
+        // 场景 / 预制体保存（写盘）
+        {"save_scene",                 L_EcsSaveScene},
+        {"save_prefab",                L_EcsSavePrefab},
+        {"instantiate_prefab",         L_EcsInstantiatePrefab},
         {"add_transform",              L_EcsAddTransform},
         // ParentComponent
         {"add_parent",                 L_EcsAddParent},

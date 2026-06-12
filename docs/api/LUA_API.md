@@ -244,6 +244,45 @@ if not ok then print("Load failed: " .. err) end
 | `ecs.set_uuid(e, [uuid_str])` | entity, `[string]` | `string` | 设置/添加 `UUIDComponent`；省略 `uuid_str` 时自动生成。返回最终 UUID 十六进制字符串 |
 | `ecs.resolve_uuid(uuid)` | `string`/`int` | `entity` / nil | 通过 UUID 解析实体（仅能解析经 SceneManager 加载的子场景实体）。接受十六进制字符串或整数 |
 
+#### 通用实体查询（按组件名）
+
+按组件名字符串查询/遍历实体，适合经济、人口、AI 等批量模拟逻辑。`component_name` 见下方支持列表；传入未知名会抛出 Lua 错误。
+
+| 函数 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `ecs.find_entities_with(component_name)` | `string` | `table` | 返回持有该组件的全部实体（数组表，可能为空） |
+| `ecs.count_entities_with(component_name)` | `string` | `int` | 持有该组件的实体数量 |
+| `ecs.has_component(e, component_name)` | entity, `string` | `bool` | 实体是否持有该组件 |
+| `ecs.get_queryable_components()` | — | `table` | 返回全部支持查询的组件名 |
+
+> **支持的 `component_name`（共 60+）**：
+> `transform`、`parent`、`script`、`uuid`、`gameplay_tuning`；
+> `sprite_renderer`、`spine_renderer`、`material_instance`、`camera`、`camera_follow`、`rigidbody_2d`、`box_collider_2d`、`circle_collider_2d`；
+> `mesh_renderer`、`lod_group`、`camera_3d`、`free_camera_controller`、`post_process`、`decal`、`directional_light`、`point_light`、`spot_light`、`sky_light`、`skybox`、`water`、`grass`、`hair`、`light_probe`、`reflection_probe`、`gi_probe_volume`、`morph_target`、`sub_scene`；
+> `terrain`、`terrain_tile_manager`、`tree`、`foliage`；
+> `rigidbody_3d`、`box_collider_3d`、`sphere_collider_3d`、`capsule_collider_3d`、`mesh_collider_3d`、`joint_3d`、`character_controller_3d`、`terrain_heightmap`、`ragdoll`、`soft_body`、`vehicle`、`rope`、`buoyancy`、`cloth`、`fluid_emitter`；
+> `animator_3d`、`anim_layer`、`ik_chain_3d`、`foot_ik`、`bone_attachment`；
+> `particle_system_3d`、`atmosphere`、`volumetric_cloud`、`day_night_cycle`、`weather`、`snow_cover`、`fracture`；
+> `dynamic_obstacle`、`navmesh_auto_rebake`。
+> 运行时可调用 `ecs.get_queryable_components()` 获取权威列表。
+
+#### 场景 / 预制体保存（写盘）
+
+补齐此前只读的加载侧（`load_scene` / `load_sub_scene`），支持把运行期世界写回磁盘，是存档/读档的基础。
+
+| 函数 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `ecs.save_scene(path)` | `string` | `bool, string` | 将当前 World 完整序列化到 `path`（路径按字面使用，不做 data root 拼接）。返回 (成功?, 错误信息) |
+| `ecs.save_prefab(e, path)` | entity, `string` | `bool` | 将单个实体保存为预制体文件 |
+| `ecs.instantiate_prefab(path, [x, y, z])` | `string`, `[float...]` | `entity` / nil | 实例化预制体到世界；给定坐标时覆盖其位置，否则用预制体内置 Transform |
+
+> 存档/读档示例：
+> ```lua
+> dse.ecs.save_scene("save/slot1.dscene")          -- 存档
+> -- ...
+> dse.ecs.load_scene("save/slot1.dscene")          -- 读档
+> ```
+
 ### 5.2 Transform
 
 | 函数 | 参数 | 返回值 | 说明 |
@@ -535,6 +574,15 @@ dse.ecs.set_water(water, true, 0.0,
 | 函数 | 参数 | 返回值 | 说明 |
 |------|------|--------|------|
 | `ecs.world_to_screen(wx, wy, wz)` | float, float, float | `sx, sy, visible` | 世界坐标投影到屏幕坐标（使用最高优先级摄像机） |
+| `ecs.screen_to_world_ray(sx, sy)` | float, float | `ox,oy,oz, dx,dy,dz` / nil | 屏幕像素反投影出世界拾取射线（起点=相机位置，方向已归一化）。无主相机返回 nil |
+| `ecs.pick_entity(sx, sy, [max_dist=1000])` | float, float, [float] | `entity, hx,hy,hz, nx,ny,nz, dist` / nil | 便捷拾取：屏幕像素 → 主相机射线 → 3D 物理 raycast，返回命中实体+命中点+法线+距离。无主相机或未命中返回 nil |
+
+> 拾取示例（鼠标点击选中实体）：
+> ```lua
+> local mx, my = dse.app.get_mouse_x(), dse.app.get_mouse_y()
+> local e = dse.ecs.pick_entity(mx, my)
+> if e then print("picked", e) end
+> ```
 
 ### 5.18 Morph Target
 
