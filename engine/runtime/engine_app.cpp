@@ -21,7 +21,9 @@
 #include <iostream>
 #include <thread>
 #include "engine/base/debug.h"
+#include "engine/diagnostics/crash_handler.h"
 #include "engine/core/job_system.h"
+#include "engine/core/memory/memory.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/event_bus.h"
 #include "engine/render/font/font_service.h"
@@ -141,6 +143,9 @@ bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
 EngineInstance::EngineInstance(const EngineRunConfig& config)
     : config_(config)
     , services_(config.services) {
+    // 最早期初始化内存子系统（幂等），早于任何子系统分配。
+    core::Memory::Init();
+
     if (services_.world == nullptr) {
         default_world_ = std::make_unique<World>();
         services_.world = default_world_.get();
@@ -208,7 +213,11 @@ void EngineInstance::RegisterRuntimeServices() {
         if (rhi) {
             font_service_->SetTextureCallbacks(
                 [rhi](int w, int h, const unsigned char* data, bool linear) {
-                    return rhi->CreateTexture2D(w, h, data, linear);
+                    // 字形图集用 ClampToEdge：避免相邻字形在 linear 采样下边缘出血(bleeding)。
+                    TextureSamplerDesc sampler;
+                    sampler.filter = linear ? TextureFilter::Linear : TextureFilter::Nearest;
+                    sampler.wrap = TextureWrap::ClampToEdge;
+                    return rhi->CreateTexture2D(w, h, data, sampler);
                 },
                 [rhi](unsigned int handle) {
                     rhi->DeleteTexture(handle);
@@ -325,6 +334,24 @@ bool EngineInstance::Init() {
     }
 
     Debug::Init();
+
+    // 进程级崩溃报告器（默认启用；设环境变量 DSE_CRASH_HANDLER=0 可关闭）。
+    // 纯本地：崩溃时在 dump 目录落地可读 .txt 报告，Windows 另写 minidump .dmp。
+    // 上传保持关闭——由上层按需注册 UploadCallback（自建端点复用 dse.http，或接
+    // Sentry/BugSplat 等 SaaS），引擎不内置任何后端，保证“零服务器即可用”。
+    {
+        const char* disable = std::getenv("DSE_CRASH_HANDLER");
+        if (!(disable && std::string(disable) == "0")) {
+            dse::diagnostics::CrashHandlerConfig crash_cfg;
+            crash_cfg.app_name = "DSEngine";
+            if (const char* dir = std::getenv("DSE_CRASH_DIR")) {
+                if (dir[0] != '\0') crash_cfg.dump_dir = dir;
+            }
+            dse::diagnostics::CrashReporter::Instance().Install(crash_cfg);
+            dse::diagnostics::CrashReporter::Instance().AddBreadcrumb("engine init");
+        }
+    }
+
     if (services_.job_system) {
         services_.job_system->Init();
     }
@@ -351,6 +378,23 @@ bool EngineInstance::Init() {
             services_.asset_manager->SetFileSystem(default_file_system_.get());
             auto fs_shared = std::shared_ptr<dse::assets::FileSystem>(default_file_system_.get(), [](dse::assets::FileSystem*) {});
             service_locator().Register<dse::assets::FileSystem, dse::assets::FileSystem>(fs_shared);
+        }
+
+        // 挂载离线打包产物：.dpak 归档 + 加密/明文 .bun 资源包。
+        // 挂载后 LoadFileToMemory 与 Lua VFS searcher 即可直接从中读取，无需磁盘松散文件。
+        if (!config_.asset_pak_path.empty()) {
+            if (services_.asset_manager->MountPak(config_.asset_pak_path)) {
+                std::cout << "Mounted pak: " << config_.asset_pak_path << std::endl;
+            } else {
+                std::cerr << "Failed to mount pak: " << config_.asset_pak_path << std::endl;
+            }
+        }
+        if (!config_.asset_bundle_path.empty()) {
+            if (services_.asset_manager->MountBundle(config_.asset_bundle_path, config_.asset_bundle_key)) {
+                std::cout << "Mounted bundle: " << config_.asset_bundle_path << std::endl;
+            } else {
+                std::cerr << "Failed to mount bundle: " << config_.asset_bundle_path << std::endl;
+            }
         }
     }
     pipeline_->SetBusinessMode(config_.business_mode);

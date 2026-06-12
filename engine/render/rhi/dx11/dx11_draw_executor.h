@@ -35,14 +35,8 @@ class DX11ResourceManager;
 class DX11PipelineStateManager;
 class DX11ShaderManager;
 
-/// PerFrame 常量缓冲数据
-struct DX11PerFrameCB {
-    glm::mat4 vp;
-    glm::mat4 view;
-    glm::vec4 camera_pos;     ///< xyz=position, w=global_wetness
-    glm::vec4 foliage_wind;   ///< x=time, y=strength, z=wind_dir_x, w=wind_dir_z
-    glm::vec4 foliage_push;   ///< xyz=character_pos, w=push_radius
-};
+/// PerFrame 常量缓冲数据（布局与共享 PerFrameUBO 一致，直接复用）
+using DX11PerFrameCB = PerFrameUBO;
 
 /// PerObject 常量缓冲数据
 struct DX11PerObjectCB {
@@ -53,81 +47,23 @@ struct DX11PerObjectCB {
     int foliage;
 };
 
-/// PerScene 常量缓冲数据
-struct DX11PerSceneCB {
-    glm::vec4 light_dir_and_enabled;
-    glm::vec4 light_color_and_ambient;
-    glm::vec4 light_params;
-    glm::vec4 cascade_splits;
-    glm::mat4 light_space_matrices[3];
-    glm::vec4 shadow_atlas_regions[3];  ///< per-cascade atlas region: xy=UV scale, zw=UV offset
-};
+/// PerScene 常量缓冲数据（布局与共享 PerSceneUBO 一致，直接复用）
+using DX11PerSceneCB = PerSceneUBO;
 
-/// PerMaterial 常量缓冲数据
-struct DX11PerMaterialCB {
-    glm::vec4 albedo;
-    glm::vec4 roughness_ao;
-    glm::vec4 emissive;
-    glm::vec4 flags;
-    glm::vec4 extra_params;  ///< x=sss_strength, y=clear_coat, z=clear_coat_roughness, w=anisotropy
-    glm::vec4 extra_params2; ///< x=pom_height_scale, y/z/w=sss_tint RGB
-    glm::vec4 toon_shadow_color; ///< xyz=shadow tint, w=shadow_threshold
-    glm::vec4 toon_params;       ///< x=shadow_softness, y=specular_size, z=specular_strength, w=rim_strength
-};
+/// PerMaterial 常量缓冲数据（布局与共享 PerMaterialUBO 一致，直接复用）
+using DX11PerMaterialCB = PerMaterialUBO;
 
-/// PointLight 单条目（每条 48B，3 × 16B，与 kPbrPS b4 对齐）
-struct DX11PointLightEntry {
-    glm::vec3 color;     float intensity;
-    glm::vec3 position;  float radius;
-    int cast_shadow;     int shadow_index;
-    int _pad0;           int _pad1;
-};
-static_assert(sizeof(DX11PointLightEntry) % 16 == 0,
-              "DX11PointLightEntry must be 16B aligned");
+/// PointLights 常量缓冲（布局与共享 PointLightsUBO 一致，每条 48B，与 kPbrPS b4 对齐）
+using DX11PointLightsCB = PointLightsUBO;
 
-/// PointLights 常量缓冲
-struct DX11PointLightsCB {
-    int count;
-    int _p0, _p1, _p2;
-    DX11PointLightEntry lights[64];
-};
-static_assert(sizeof(DX11PointLightsCB) % 16 == 0,
-              "DX11PointLightsCB must be 16B aligned");
+/// SpotLights 常量缓冲（布局与共享 SpotLightsUBO 一致，每条 64B）
+using DX11SpotLightsCB = SpotLightsUBO;
 
-/// SpotLight 单条目（每条 64B，4 × 16B）
-struct DX11SpotLightEntry {
-    glm::vec3 color;       float intensity;
-    glm::vec3 position;    float radius;
-    glm::vec3 direction;   float inner_cone;
-    float outer_cone;      int cast_shadow;
-    int shadow_index;      float _pad0;
-};
-static_assert(sizeof(DX11SpotLightEntry) % 16 == 0,
-              "DX11SpotLightEntry must be 16B aligned");
+/// 聚光灯光源空间矩阵（4×64B = 256B，布局与共享 SpotLightDataUBO 一致）
+using DX11SpotMatricesCB = SpotLightDataUBO;
 
-/// SpotLights 常量缓冲
-struct DX11SpotLightsCB {
-    int count;
-    int _p0, _p1, _p2;
-    DX11SpotLightEntry lights[64];
-};
-static_assert(sizeof(DX11SpotLightsCB) % 16 == 0,
-              "DX11SpotLightsCB must be 16B aligned");
-
-/// 聚光灯光源空间矩阵（4×64B = 256B）
-struct DX11SpotMatricesCB {
-    glm::mat4 spot_light_space_matrices[4];
-};
-static_assert(sizeof(DX11SpotMatricesCB) % 16 == 0,
-              "DX11SpotMatricesCB must be 16B aligned");
-
-/// LightProbeData 常量缓冲（160B）
-struct DX11LightProbeDataCB {
-    glm::vec4 sh_coefficients[9];
-    glm::vec4 probe_params;
-};
-static_assert(sizeof(DX11LightProbeDataCB) % 16 == 0,
-              "DX11LightProbeDataCB must be 16B aligned");
+/// LightProbeData 常量缓冲（160B，布局与共享 LightProbeDataUBO 一致）
+using DX11LightProbeDataCB = LightProbeDataUBO;
 
 struct DX11TerrainParamsCB {
     glm::vec4 flags;       // x=splat_enabled, y=snow_coverage, z=snow_normal_threshold, w=snow_edge_sharpness

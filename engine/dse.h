@@ -19,9 +19,10 @@
 #include "engine/core/event_bus.h"
 #include "engine/core/event_id.h"
 #include "engine/core/job_system.h"
-#include "engine/core/memory_pool.h"
 #include "engine/core/module.h"
 #include "engine/core/object_pool.h"
+#include "engine/core/memory/memory.h"
+#include "engine/core/memory/pool_allocator.h"
 #include "engine/core/dynamic_library.h"
 
 // Base

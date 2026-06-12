@@ -51,7 +51,7 @@ protected:
     }
 };
 
-TEST_F(LuaBindingAudioIntegrationTest, Lua创建音频源CPlusPlus侧可读取参数) {
+TEST_F(LuaBindingAudioIntegrationTest, LuaCreateAudioSourceCPlusPlusParametersCanBeReadFromTheSide) {
     LuaTempScript startup("test_audio_source.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -91,7 +91,7 @@ TEST_F(LuaBindingAudioIntegrationTest, Lua创建音频源CPlusPlus侧可读取�
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBindingAudioIntegrationTest, Lua控制音频播放状态不崩溃) {
+TEST_F(LuaBindingAudioIntegrationTest, LuaControlAudioPlaybackStatusWithoutCrashing) {
     LuaTempScript startup("test_audio_playing.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -127,7 +127,7 @@ TEST_F(LuaBindingAudioIntegrationTest, Lua控制音频播放状态不崩溃) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBindingAudioIntegrationTest, Lua设置3D空间化参数不崩溃) {
+TEST_F(LuaBindingAudioIntegrationTest, LuasetUp3DSpatializationParametersDoNotCollapse) {
     LuaTempScript startup("test_audio_spatial.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -167,7 +167,7 @@ TEST_F(LuaBindingAudioIntegrationTest, Lua设置3D空间化参数不崩溃) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaBindingAudioIntegrationTest, Lua音频API不存在时不崩溃) {
+TEST_F(LuaBindingAudioIntegrationTest, LuaAudioAPIDonTCrashIfItDoesnTExist) {
     LuaTempScript startup("test_audio_nil.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()

@@ -22,7 +22,7 @@ protected:
     World world;
 };
 
-TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponent默认值) {
+TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentDefaultValues) {
     dse::RigidBody3DComponent rb;
     EXPECT_EQ(rb.type, dse::RigidBody3DType::Dynamic);
     EXPECT_FLOAT_EQ(rb.mass, 1.0f);
@@ -33,7 +33,7 @@ TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponent默认值) {
     EXPECT_EQ(rb.runtime_body, nullptr);
 }
 
-TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponent字段修改) {
+TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentFieldModification) {
     dse::RigidBody3DComponent rb;
     rb.type = dse::RigidBody3DType::Kinematic;
     rb.mass = 5.0f;
@@ -50,7 +50,7 @@ TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponent字段修改) {
     EXPECT_FLOAT_EQ(rb.gravity_scale, 2.0f);
 }
 
-TEST_F(Physics3dEcsIntegrationTest, 带RigidBody3D实体创建不崩溃) {
+TEST_F(Physics3dEcsIntegrationTest, BringRigidBody3DEntityCreateDoesNotCrash) {
     auto e = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(e);
     auto& rb = world.registry().emplace<dse::RigidBody3DComponent>(e);
@@ -60,7 +60,7 @@ TEST_F(Physics3dEcsIntegrationTest, 带RigidBody3D实体创建不崩溃) {
     EXPECT_TRUE(world.registry().all_of<dse::RigidBody3DComponent>(e));
 }
 
-TEST_F(Physics3dEcsIntegrationTest, 多个物理实体共存不崩溃) {
+TEST_F(Physics3dEcsIntegrationTest, MultiEntityDoesNotCrash) {
     for (int i = 0; i < 10; ++i) {
         auto e = world.CreateEntity();
         world.registry().emplace<TransformComponent>(e);
@@ -69,7 +69,7 @@ TEST_F(Physics3dEcsIntegrationTest, 多个物理实体共存不崩溃) {
     EXPECT_EQ(world.EntityCount(), 10u);
 }
 
-TEST_F(Physics3dEcsIntegrationTest, 碰撞体组件默认值) {
+TEST_F(Physics3dEcsIntegrationTest, ComponentDefaultValue) {
     dse::BoxCollider3DComponent box;
     EXPECT_FLOAT_EQ(box.size.x, 1.0f);
     EXPECT_FLOAT_EQ(box.size.y, 1.0f);
@@ -86,7 +86,7 @@ TEST_F(Physics3dEcsIntegrationTest, 碰撞体组件默认值) {
     EXPECT_FALSE(mesh_collider.is_trigger);
 }
 
-TEST_F(Physics3dEcsIntegrationTest, 物理实体销毁后World一致) {
+TEST_F(Physics3dEcsIntegrationTest, EntityDestroyAfterWorldconsistent) {
     std::vector<Entity> entities;
     for (int i = 0; i < 5; ++i) {
         auto e = world.CreateEntity();

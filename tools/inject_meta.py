@@ -74,7 +74,7 @@ def extract_name(lines):
 
 # ---- Extract module table name (e.g. "FractureDemo") ----
 def find_module_table(lines):
-    """Find `local XXX = {}` near the top of file and return (name, line_index)."""
+    """Find `local <Name> = {}` near the top of file and return (name, line_index)."""
     for i, line in enumerate(lines[:20]):
         m = re.match(r'^local\s+(\w+)\s*=\s*\{\s*\}', line)
         if m:
@@ -114,7 +114,7 @@ def process_file(fpath, config_map):
 
     meta_block = build_meta_block(table_name, stem, name_str, category, config_body)
 
-    # Insert after the `local XXX = {}` line
+    # Insert after the `local <Name> = {}` line
     insert_idx = decl_idx + 1
     # Skip any blank lines right after declaration
     while insert_idx < len(lines) and lines[insert_idx].strip() == '':

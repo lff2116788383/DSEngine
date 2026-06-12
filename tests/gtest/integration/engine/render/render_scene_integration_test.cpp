@@ -27,7 +27,7 @@ protected:
     World world;
 };
 
-TEST_F(RenderSceneIntegrationTest, RenderGraph声明资源和添加Pass) {
+TEST_F(RenderSceneIntegrationTest, RenderGraphDeclareResourcesAndAddPass) {
     dse::render::RenderGraph dag;
     auto res1 = dag.DeclareResource("color");
     auto res2 = dag.DeclareResource("depth");
@@ -40,13 +40,13 @@ TEST_F(RenderSceneIntegrationTest, RenderGraph声明资源和添加Pass) {
     EXPECT_TRUE(compiled);
 }
 
-TEST_F(RenderSceneIntegrationTest, RenderGraph编译空图) {
+TEST_F(RenderSceneIntegrationTest, RenderGraphCompileEmptyGraph) {
     dse::render::RenderGraph dag;
     bool compiled = dag.Compile();
     EXPECT_TRUE(compiled);
 }
 
-TEST_F(RenderSceneIntegrationTest, RenderGraph重置后可重新构建) {
+TEST_F(RenderSceneIntegrationTest, RenderGraphCanBeRebuiltAfterReset) {
     dse::render::RenderGraph dag;
     auto res = dag.DeclareResource("color");
     auto pass = dag.AddPass("p1");
@@ -63,7 +63,7 @@ TEST_F(RenderSceneIntegrationTest, RenderGraph重置后可重新构建) {
     EXPECT_TRUE(dag.Compile());
 }
 
-TEST_F(RenderSceneIntegrationTest, MeshRendererComponent默认值) {
+TEST_F(RenderSceneIntegrationTest, MeshRendererComponentDefaultValues) {
     MeshRendererComponent mesh;
     EXPECT_TRUE(mesh.visible);
     EXPECT_TRUE(mesh.receive_shadow);
@@ -74,7 +74,7 @@ TEST_F(RenderSceneIntegrationTest, MeshRendererComponent默认值) {
     EXPECT_EQ(mesh.material_data_source, MeshRendererComponent::MaterialDataSource::ComponentFallback);
 }
 
-TEST_F(RenderSceneIntegrationTest, PostProcessComponent默认值) {
+TEST_F(RenderSceneIntegrationTest, PostProcessComponentDefaultValues) {
     PostProcessComponent pp;
     EXPECT_TRUE(pp.enabled);
     EXPECT_TRUE(pp.bloom_enabled);
@@ -85,7 +85,7 @@ TEST_F(RenderSceneIntegrationTest, PostProcessComponent默认值) {
     EXPECT_FALSE(pp.ssao_enabled);
 }
 
-TEST_F(RenderSceneIntegrationTest, DirectionalLight3DComponent默认值) {
+TEST_F(RenderSceneIntegrationTest, DirectionalLight3DComponentDefaultValues) {
     DirectionalLight3DComponent light;
     EXPECT_TRUE(light.enabled);
     EXPECT_TRUE(light.cast_shadow);
@@ -93,14 +93,14 @@ TEST_F(RenderSceneIntegrationTest, DirectionalLight3DComponent默认值) {
     EXPECT_EQ(light.direction.y, -1.0f);
 }
 
-TEST_F(RenderSceneIntegrationTest, PointLightComponent默认值) {
+TEST_F(RenderSceneIntegrationTest, PointLightComponentDefaultValues) {
     PointLightComponent light;
     EXPECT_TRUE(light.enabled);
     EXPECT_FLOAT_EQ(light.radius, 10.0f);
     EXPECT_FALSE(light.cast_shadow);
 }
 
-TEST_F(RenderSceneIntegrationTest, SpotLightComponent默认值) {
+TEST_F(RenderSceneIntegrationTest, SpotLightComponentDefaultValues) {
     SpotLightComponent light;
     EXPECT_TRUE(light.enabled);
     EXPECT_FLOAT_EQ(light.radius, 20.0f);
@@ -109,7 +109,7 @@ TEST_F(RenderSceneIntegrationTest, SpotLightComponent默认值) {
     EXPECT_FALSE(light.cast_shadow);
 }
 
-TEST_F(RenderSceneIntegrationTest, 场景实体增减不影响RenderGraph) {
+TEST_F(RenderSceneIntegrationTest, SceneEntityNotRenderGraph) {
     dse::render::RenderGraph dag;
     auto res = dag.DeclareResource("scene_color");
     auto pass = dag.AddPass("scene");
@@ -132,7 +132,7 @@ TEST_F(RenderSceneIntegrationTest, 场景实体增减不影响RenderGraph) {
     EXPECT_TRUE(dag.Compile());
 }
 
-TEST_F(RenderSceneIntegrationTest, TransformSystem更新后MeshRenderer不变) {
+TEST_F(RenderSceneIntegrationTest, TransformSystemAfterUpdateMeshRendererconstant) {
     auto e = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(e);
     tf.position = glm::vec3(1.0f, 2.0f, 3.0f);

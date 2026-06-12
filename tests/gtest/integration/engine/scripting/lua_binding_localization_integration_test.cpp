@@ -49,7 +49,7 @@ protected:
     std::shared_ptr<assets::LocalizationManager> l10n_;
 };
 
-TEST_F(LuaL10nBindingTest, Lua加载并查询翻译) {
+TEST_F(LuaL10nBindingTest, LuaLoadAndQueryTranslations) {
     TempLuaFile script("test_l10n.lua", R"(
         _G.test_results = {}
         function Awake()
@@ -84,7 +84,7 @@ TEST_F(LuaL10nBindingTest, Lua加载并查询翻译) {
     EXPECT_FALSE(l10n_->HasKey("missing"));
 }
 
-TEST_F(LuaL10nBindingTest, 未注册Manager不崩溃) {
+TEST_F(LuaL10nBindingTest, NotregisterManagerDoesNotCrash) {
     // Reset the manager so Lua gets nullptr
     core::ServiceLocator::Instance().Reset<assets::LocalizationManager>();
     l10n_.reset();

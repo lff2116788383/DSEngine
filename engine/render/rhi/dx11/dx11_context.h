@@ -75,6 +75,10 @@ public:
     bool tearing_supported() const { return tearing_supported_; }
     UINT msaa_4x_quality() const { return msaa_4x_quality_; }
     bool is_warp() const { return is_warp_; }
+    /// 实际所选适配器名称（设备创建后回查 DXGI 适配器得到）
+    const std::string& adapter_name() const { return adapter_name_; }
+    /// 是否软件渲染（WARP 或 Microsoft Basic Render Driver 等 software adapter）
+    bool is_software() const { return is_software_; }
 
     /// Feature Level 转可读字符串
     std::string FeatureLevelString() const;
@@ -100,6 +104,8 @@ private:
     bool tearing_supported_ = false; ///< DXGI_PRESENT_ALLOW_TEARING 是否可用
     UINT msaa_4x_quality_ = 0;    ///< MSAA 4x 质量等级（0 = 不支持）
     bool is_warp_ = false;        ///< 是否运行在 WARP 软件光栅器（无 GPU 回退）
+    std::string adapter_name_ = "unknown"; ///< 实际所选适配器名称
+    bool is_software_ = false;    ///< 是否软件渲染（WARP / Basic Render Driver）
 };
 
 } // namespace render

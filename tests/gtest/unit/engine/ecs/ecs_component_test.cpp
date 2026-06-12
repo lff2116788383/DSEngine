@@ -22,7 +22,7 @@
 // 单组件操作测试
 // ============================================================
 
-TEST(EcsComponentTest, 添加并获取TransformComponent) {
+TEST(EcsComponentTest, AddToAcquireTransformComponent) {
     World world;
     Entity e = world.CreateEntity();
     auto& reg = world.registry();
@@ -39,7 +39,7 @@ TEST(EcsComponentTest, 添加并获取TransformComponent) {
     EXPECT_EQ(got.scale.x, 2.0f);
 }
 
-TEST(EcsComponentTest, 组件默认值正确) {
+TEST(EcsComponentTest, ComponentDefaultValueCorrect) {
     World world;
     Entity e = world.CreateEntity();
     auto& reg = world.registry();
@@ -54,7 +54,7 @@ TEST(EcsComponentTest, 组件默认值正确) {
     EXPECT_TRUE(transform.dirty);
 }
 
-TEST(EcsComponentTest, 移除组件后不可访问) {
+TEST(EcsComponentTest, RemoveComponentAfterNotCan) {
     World world;
     Entity e = world.CreateEntity();
     auto& reg = world.registry();
@@ -66,7 +66,7 @@ TEST(EcsComponentTest, 移除组件后不可访问) {
     EXPECT_FALSE(reg.all_of<TransformComponent>(e));
 }
 
-TEST(EcsComponentTest, 替换组件值) {
+TEST(EcsComponentTest, Component) {
     World world;
     Entity e = world.CreateEntity();
     auto& reg = world.registry();
@@ -83,7 +83,7 @@ TEST(EcsComponentTest, 替换组件值) {
     EXPECT_EQ(t2.position.z, 15.0f);
 }
 
-TEST(EcsComponentTest, 实体无组件时all_of返回false) {
+TEST(EcsComponentTest, EntityWithoutComponentWhenall_OfReturnsfalse) {
     World world;
     Entity e = world.CreateEntity();
     auto& reg = world.registry();
@@ -96,7 +96,7 @@ TEST(EcsComponentTest, 实体无组件时all_of返回false) {
 // 多组件与 view 查询测试
 // ============================================================
 
-TEST(EcsComponentTest, 单组件view查询) {
+TEST(EcsComponentTest, SingleComponentviewQuery) {
     World world;
     auto& reg = world.registry();
 
@@ -117,7 +117,7 @@ TEST(EcsComponentTest, 单组件view查询) {
     EXPECT_EQ(count, 2);
 }
 
-TEST(EcsComponentTest, 多组件view查询) {
+TEST(EcsComponentTest, MultiComponentviewQuery) {
     World world;
     auto& reg = world.registry();
 
@@ -145,7 +145,7 @@ TEST(EcsComponentTest, 多组件view查询) {
     EXPECT_EQ(count, 1);  // 仅 e1 同时拥有两个组件
 }
 
-TEST(EcsComponentTest, view中获取组件引用) {
+TEST(EcsComponentTest, ViewGetComponentReferenceIn) {
     World world;
     auto& reg = world.registry();
 
@@ -168,7 +168,7 @@ TEST(EcsComponentTest, view中获取组件引用) {
     EXPECT_EQ(sum.z, 90.0f);
 }
 
-TEST(EcsComponentTest, 销毁实体自动移除组件) {
+TEST(EcsComponentTest, DestroyEntityAutoRemoveComponent) {
     World world;
     auto& reg = world.registry();
 
@@ -185,7 +185,7 @@ TEST(EcsComponentTest, 销毁实体自动移除组件) {
 // 批量实体与组件迭代测试
 // ============================================================
 
-TEST(EcsComponentTest, 批量创建实体并查询) {
+TEST(EcsComponentTest, CreateEntitiesInBatchesQuery) {
     World world;
     auto& reg = world.registry();
 
@@ -206,7 +206,7 @@ TEST(EcsComponentTest, 批量创建实体并查询) {
     EXPECT_EQ(count, kCount);
 }
 
-TEST(EcsComponentTest, 部分实体有组件时view仅返回匹配项) {
+TEST(EcsComponentTest, EntityWithComponentWhenviewReturns) {
     World world;
     auto& reg = world.registry();
 
@@ -230,7 +230,7 @@ TEST(EcsComponentTest, 部分实体有组件时view仅返回匹配项) {
 // World 与 registry 一致性测试
 // ============================================================
 
-TEST(EcsComponentTest, World计数与registry一致) {
+TEST(EcsComponentTest, WorldcountingWithregistryconsistent) {
     World world;
     auto& reg = world.registry();
 
@@ -253,7 +253,7 @@ TEST(EcsComponentTest, World计数与registry一致) {
     reg.destroy(e3);
 }
 
-TEST(EcsComponentTest, 多World实例组件隔离) {
+TEST(EcsComponentTest, MultiWorldExampleComponent) {
     World world_a;
     World world_b;
 
@@ -267,7 +267,7 @@ TEST(EcsComponentTest, 多World实例组件隔离) {
     EXPECT_TRUE(world_a.registry().all_of<TransformComponent>(ea));
 }
 
-TEST(EcsComponentTest, ParentComponent建立层级关系) {
+TEST(EcsComponentTest, ParentComponentEstablishHierarchicalRelationships) {
     World world;
     auto& reg = world.registry();
 

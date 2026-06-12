@@ -13,7 +13,7 @@
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/runtime_services.h"
 
-TEST(RuntimeContextTest, 默认构造字段为零值) {
+TEST(RuntimeContextTest, DefaultisZero) {
     dse::runtime::RuntimeContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
     EXPECT_EQ(ctx.asset_manager, nullptr);
@@ -22,12 +22,12 @@ TEST(RuntimeContextTest, 默认构造字段为零值) {
     EXPECT_FALSE(static_cast<bool>(ctx.window_title_setter));
 }
 
-TEST(RuntimeContextTest, business_mode默认为Lua) {
+TEST(RuntimeContextTest, business_ModeDefaultIsLua) {
     dse::runtime::RuntimeContext ctx;
     EXPECT_EQ(ctx.business_mode, BusinessMode::Lua);
 }
 
-TEST(RuntimeContextTest, 字段可修改) {
+TEST(RuntimeContextTest, CanRevise) {
     dse::runtime::RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;
     ctx.editor_mode = true;
@@ -35,7 +35,7 @@ TEST(RuntimeContextTest, 字段可修改) {
     EXPECT_TRUE(ctx.editor_mode);
 }
 
-TEST(RuntimeContextTest, window_title_setter可注入) {
+TEST(RuntimeContextTest, window_title_SetterInjectable) {
     dse::runtime::RuntimeContext ctx;
     std::string captured;
     ctx.window_title_setter = [&captured](const std::string& title) {
@@ -45,13 +45,13 @@ TEST(RuntimeContextTest, window_title_setter可注入) {
     EXPECT_EQ(captured, "hello");
 }
 
-TEST(RuntimeServicesTest, 默认所有指针为空) {
+TEST(RuntimeServicesTest, DefaultWithIsEmpty) {
     dse::runtime::RuntimeServices services;
     EXPECT_EQ(services.world, nullptr);
     EXPECT_EQ(services.asset_manager, nullptr);
     EXPECT_EQ(services.job_system, nullptr);
 }
 
-TEST(BusinessModeTest, Lua和Cpp枚举值不同) {
+TEST(BusinessModeTest, LuaAndCppenumerationValuesAreDifferent) {
     EXPECT_NE(BusinessMode::Lua, BusinessMode::Cpp);
 }

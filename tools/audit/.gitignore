@@ -1,0 +1,6 @@
+# 审计生成的中间产物（不纳入版本控制）
+audit_report.txt
+bound_inventory.json
+sig_detail.txt
+accessor_doc.md
+targets.json

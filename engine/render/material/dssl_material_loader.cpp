@@ -145,8 +145,9 @@ bool DSSLMaterialLoader::ParseDSSLForTemplate(const std::string& source,
                 } else if (info.type == "vec4") {
                     out.default_vec4s[info.name] = ParseVec4Default(default_str);
                 } else if (info.type == "vec3") {
-                    glm::vec4 v = ParseVec4Default("vec4" + default_str.substr(4)); // hack: reuse vec4 parser
-                    out.default_vec4s[info.name] = v;
+                    // vec3 复用 vec4 解析：解析器只取括号内分量、忽略类型前缀，
+                    // 缺省的第 4 分量按 w=1.0 补齐。
+                    out.default_vec4s[info.name] = ParseVec4Default(default_str);
                 }
             }
             continue;

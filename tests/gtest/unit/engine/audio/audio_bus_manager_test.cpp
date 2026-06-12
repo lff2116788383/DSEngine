@@ -26,7 +26,7 @@ using namespace dse::gameplay2d;
 // Part 1: DspEffectParams 纯数据
 // ============================================================
 
-TEST(DspEffectParamsTest, 默认值) {
+TEST(DspEffectParamsTest, DefaultValues) {
     DspEffectParams p;
     EXPECT_EQ(p.type, DspEffectType::LowPass);
     EXPECT_FLOAT_EQ(p.cutoff_hz, 1000.0f);
@@ -40,7 +40,7 @@ TEST(DspEffectParamsTest, 默认值) {
     EXPECT_TRUE(p.enabled);
 }
 
-TEST(DspEffectParamsTest, 枚举值连续且Count正确) {
+TEST(DspEffectParamsTest, EnumerationValueContinuousCountCorrect) {
     EXPECT_EQ(static_cast<int>(DspEffectType::LowPass),     0);
     EXPECT_EQ(static_cast<int>(DspEffectType::HighPass),    1);
     EXPECT_EQ(static_cast<int>(DspEffectType::BandPass),    2);
@@ -51,7 +51,7 @@ TEST(DspEffectParamsTest, 枚举值连续且Count正确) {
     EXPECT_EQ(static_cast<int>(DspEffectType::Count),       7);
 }
 
-TEST(DspEffectParamsTest, 所有字段可修改) {
+TEST(DspEffectParamsTest, WithCanRevise) {
     DspEffectParams p;
     p.type         = DspEffectType::Delay;
     p.delay_time_ms = 500.0f;
@@ -69,7 +69,7 @@ TEST(DspEffectParamsTest, 所有字段可修改) {
     EXPECT_FLOAT_EQ(p.q, 1.0f);
 }
 
-TEST(DspEffectParamsTest, 禁用效果不影响其他字段) {
+TEST(DspEffectParamsTest, DisabledNot) {
     DspEffectParams p;
     p.type    = DspEffectType::HighPass;
     p.enabled = false;
@@ -87,60 +87,60 @@ protected:
     AudioBusManager mgr;
 };
 
-TEST_F(AudioBusManagerUninitTest, 析构不崩溃) {}
+TEST_F(AudioBusManagerUninitTest, DoesNotCrash) {}
 
-TEST_F(AudioBusManagerUninitTest, 未初始化GetBus返回nullptr) {
+TEST_F(AudioBusManagerUninitTest, UninitializedGetBusReturnsnullptr) {
     EXPECT_EQ(mgr.GetBus("master"), nullptr);
     EXPECT_EQ(mgr.GetBus("music"),  nullptr);
     EXPECT_EQ(mgr.GetBus("sfx"),    nullptr);
     EXPECT_EQ(mgr.GetBus("voice"),  nullptr);
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化CreateBus返回false) {
+TEST_F(AudioBusManagerUninitTest, UninitializedCreateBusReturnsfalse) {
     EXPECT_FALSE(mgr.CreateBus("custom"));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化RemoveBus返回false) {
+TEST_F(AudioBusManagerUninitTest, UninitializedRemoveBusReturnsfalse) {
     EXPECT_FALSE(mgr.RemoveBus("custom"));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化AddEffect返回false) {
+TEST_F(AudioBusManagerUninitTest, UninitializedAddEffectReturnsfalse) {
     EXPECT_FALSE(mgr.AddEffect("master", DspEffectParams{}));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化RemoveEffect返回false) {
+TEST_F(AudioBusManagerUninitTest, UninitializedRemoveEffectReturnsfalse) {
     EXPECT_FALSE(mgr.RemoveEffect("master", 0));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化SetEffectParams返回false) {
+TEST_F(AudioBusManagerUninitTest, UninitializedSetEffectParamsReturnsfalse) {
     EXPECT_FALSE(mgr.SetEffectParams("master", 0, DspEffectParams{}));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化GetEffectCount返回0) {
+TEST_F(AudioBusManagerUninitTest, UninitializedGetEffectCountReturns0) {
     EXPECT_EQ(mgr.GetEffectCount("master"),  0u);
     EXPECT_EQ(mgr.GetEffectCount("music"),   0u);
     EXPECT_EQ(mgr.GetEffectCount("nonexist"),0u);
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化GetGroupHandle返回nullptr) {
+TEST_F(AudioBusManagerUninitTest, UninitializedGetGroupHandleReturnsnullptr) {
     EXPECT_EQ(mgr.GetGroupHandle("master"), nullptr);
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化GetBusNames返回空列表) {
+TEST_F(AudioBusManagerUninitTest, UninitializedGetBusNamesReturnsEmpty) {
     EXPECT_TRUE(mgr.GetBusNames().empty());
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化SetBusVolume不崩溃) {
+TEST_F(AudioBusManagerUninitTest, UninitializedSetBusVolumeDoesNotCrash) {
     EXPECT_NO_THROW(mgr.SetBusVolume("master", 0.5f));
     EXPECT_NO_THROW(mgr.SetBusVolume("nonexist", 0.3f));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化SetBusMuted不崩溃) {
+TEST_F(AudioBusManagerUninitTest, UninitializedSetBusMutedDoesNotCrash) {
     EXPECT_NO_THROW(mgr.SetBusMuted("master", true));
     EXPECT_NO_THROW(mgr.SetBusMuted("nonexist", false));
 }
 
-TEST_F(AudioBusManagerUninitTest, 未初始化Shutdown不崩溃) {
+TEST_F(AudioBusManagerUninitTest, UninitializedShutdownDoesNotCrash) {
     EXPECT_NO_THROW(mgr.Shutdown());
 }
 
@@ -176,15 +176,15 @@ protected:
     AudioBusManager mgr_;
 };
 
-TEST_F(AudioBusManagerEngineTest, 引擎初始化成功) {
+TEST_F(AudioBusManagerEngineTest, InitSucceeds) {
     EXPECT_TRUE(engine_ok_);
 }
 
-TEST_F(AudioBusManagerEngineTest, 总线管理器初始化成功) {
+TEST_F(AudioBusManagerEngineTest, BusManagerInitSucceeds) {
     EXPECT_TRUE(mgr_ok_);
 }
 
-TEST_F(AudioBusManagerEngineTest, 默认四条总线均存在) {
+TEST_F(AudioBusManagerEngineTest, DefaultBusexist) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_NE(mgr_.GetBus("master"), nullptr);
     EXPECT_NE(mgr_.GetBus("music"),  nullptr);
@@ -192,7 +192,7 @@ TEST_F(AudioBusManagerEngineTest, 默认四条总线均存在) {
     EXPECT_NE(mgr_.GetBus("voice"),  nullptr);
 }
 
-TEST_F(AudioBusManagerEngineTest, 默认总线GroupHandle非空) {
+TEST_F(AudioBusManagerEngineTest, DefaultBusGroupHandleNonEmpty) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_NE(mgr_.GetGroupHandle("master"), nullptr);
     EXPECT_NE(mgr_.GetGroupHandle("music"),  nullptr);
@@ -200,7 +200,7 @@ TEST_F(AudioBusManagerEngineTest, 默认总线GroupHandle非空) {
     EXPECT_NE(mgr_.GetGroupHandle("voice"),  nullptr);
 }
 
-TEST_F(AudioBusManagerEngineTest, GetBusNames包含四条默认总线) {
+TEST_F(AudioBusManagerEngineTest, GetBusNamesContainsFourDefaultBuses) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     auto names = mgr_.GetBusNames();
     EXPECT_GE(names.size(), 4u);
@@ -213,18 +213,18 @@ TEST_F(AudioBusManagerEngineTest, GetBusNames包含四条默认总线) {
     EXPECT_TRUE(has("voice"));
 }
 
-TEST_F(AudioBusManagerEngineTest, 不存在总线返回nullptr) {
+TEST_F(AudioBusManagerEngineTest, ThereIsNoBusReturnnullptr) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_EQ(mgr_.GetBus("nonexist"), nullptr);
     EXPECT_EQ(mgr_.GetGroupHandle("nonexist"), nullptr);
 }
 
-TEST_F(AudioBusManagerEngineTest, 重复初始化返回false) {
+TEST_F(AudioBusManagerEngineTest, InitializeReturnsfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.Initialize(&engine_));
 }
 
-TEST_F(AudioBusManagerEngineTest, 重复Shutdown不崩溃) {
+TEST_F(AudioBusManagerEngineTest, ShutdownDoesNotCrash) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     mgr_.Shutdown();
     EXPECT_NO_THROW(mgr_.Shutdown());
@@ -232,36 +232,36 @@ TEST_F(AudioBusManagerEngineTest, 重复Shutdown不崩溃) {
 
 // --- CreateBus / RemoveBus ---
 
-TEST_F(AudioBusManagerEngineTest, CreateBus挂载到master成功) {
+TEST_F(AudioBusManagerEngineTest, CreateBusmountTomasterSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_TRUE(mgr_.CreateBus("ambient", "master", 0.8f));
     EXPECT_NE(mgr_.GetBus("ambient"), nullptr);
 }
 
-TEST_F(AudioBusManagerEngineTest, CreateBus重复名称返回false) {
+TEST_F(AudioBusManagerEngineTest, CreateBusDuplicateNamesReturnedfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_TRUE(mgr_.CreateBus("fx2", "master"));
     EXPECT_FALSE(mgr_.CreateBus("fx2", "master"));
 }
 
-TEST_F(AudioBusManagerEngineTest, CreateBus空名称返回false) {
+TEST_F(AudioBusManagerEngineTest, CreateBusEmptyNameReturnedfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.CreateBus("", "master"));
 }
 
-TEST_F(AudioBusManagerEngineTest, CreateBus父总线不存在返回false) {
+TEST_F(AudioBusManagerEngineTest, CreateBusReturnIfTheParentBusDoesNotExistfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.CreateBus("orphan", "nonexist_parent"));
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveBus自定义总线成功) {
+TEST_F(AudioBusManagerEngineTest, RemoveBusCustomBusSuccessful) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_TRUE(mgr_.CreateBus("temp", "master"));
     EXPECT_TRUE(mgr_.RemoveBus("temp"));
     EXPECT_EQ(mgr_.GetBus("temp"), nullptr);
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveBus不允许删除内置总线) {
+TEST_F(AudioBusManagerEngineTest, RemoveBusDeletionOfBuiltInBusesIsNotAllowed) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.RemoveBus("master"));
     EXPECT_FALSE(mgr_.RemoveBus("music"));
@@ -269,26 +269,26 @@ TEST_F(AudioBusManagerEngineTest, RemoveBus不允许删除内置总线) {
     EXPECT_FALSE(mgr_.RemoveBus("voice"));
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveBus不存在总线返回false) {
+TEST_F(AudioBusManagerEngineTest, RemoveBusThereIsNoBusReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.RemoveBus("nonexist"));
 }
 
 // --- Volume / Mute ---
 
-TEST_F(AudioBusManagerEngineTest, SetBusVolume有效范围) {
+TEST_F(AudioBusManagerEngineTest, SetBusVolumeValidRange) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_NO_THROW(mgr_.SetBusVolume("master", 0.0f));
     EXPECT_NO_THROW(mgr_.SetBusVolume("master", 0.5f));
     EXPECT_NO_THROW(mgr_.SetBusVolume("master", 1.0f));
 }
 
-TEST_F(AudioBusManagerEngineTest, SetBusVolume不存在总线不崩溃) {
+TEST_F(AudioBusManagerEngineTest, SetBusVolumeTheBusDoesNotCrashIfItDoesNotExist) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_NO_THROW(mgr_.SetBusVolume("nonexist", 0.5f));
 }
 
-TEST_F(AudioBusManagerEngineTest, SetBusMuted静音后音量字段保留) {
+TEST_F(AudioBusManagerEngineTest, SetBusMutedVolumeFieldRetainedAfterMuting) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     mgr_.SetBusVolume("sfx", 0.7f);
     mgr_.SetBusMuted("sfx", true);
@@ -298,7 +298,7 @@ TEST_F(AudioBusManagerEngineTest, SetBusMuted静音后音量字段保留) {
     EXPECT_FLOAT_EQ(bus->volume, 0.7f);
 }
 
-TEST_F(AudioBusManagerEngineTest, SetBusMuted取消静音) {
+TEST_F(AudioBusManagerEngineTest, SetBusMutedUnmute) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     mgr_.SetBusMuted("music", true);
     mgr_.SetBusMuted("music", false);
@@ -309,7 +309,7 @@ TEST_F(AudioBusManagerEngineTest, SetBusMuted取消静音) {
 
 // --- AddEffect / GetEffectCount ---
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_LowPass成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_LowPassSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::LowPass;
@@ -318,7 +318,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_LowPass成功) {
     EXPECT_EQ(mgr_.GetEffectCount("master"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_HighPass成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_HighPassSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::HighPass;
@@ -327,7 +327,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_HighPass成功) {
     EXPECT_EQ(mgr_.GetEffectCount("sfx"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_BandPass成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_BandPassSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::BandPass;
@@ -336,7 +336,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_BandPass成功) {
     EXPECT_EQ(mgr_.GetEffectCount("music"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_Delay成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_DelaySucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::Delay;
@@ -346,7 +346,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_Delay成功) {
     EXPECT_EQ(mgr_.GetEffectCount("voice"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, 链式多个DSP效果) {
+TEST_F(AudioBusManagerEngineTest, ChainMultiDSP) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams lpf; lpf.type = DspEffectType::LowPass;  lpf.cutoff_hz = 2000.0f;
     DspEffectParams hpf; hpf.type = DspEffectType::HighPass; hpf.cutoff_hz = 200.0f;
@@ -357,14 +357,14 @@ TEST_F(AudioBusManagerEngineTest, 链式多个DSP效果) {
     EXPECT_EQ(mgr_.GetEffectCount("master"), 3u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect不存在总线返回false) {
+TEST_F(AudioBusManagerEngineTest, AddEffectThereIsNoBusReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.AddEffect("nonexist", DspEffectParams{}));
 }
 
 // --- RemoveEffect ---
 
-TEST_F(AudioBusManagerEngineTest, RemoveEffect成功减少效果数) {
+TEST_F(AudioBusManagerEngineTest, RemoveEffectSuccessfullyReducedTheNumberOfEffects) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p; p.type = DspEffectType::LowPass;
     mgr_.AddEffect("sfx", p);
@@ -373,7 +373,7 @@ TEST_F(AudioBusManagerEngineTest, RemoveEffect成功减少效果数) {
     EXPECT_EQ(mgr_.GetEffectCount("sfx"), 0u);
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveEffect越界索引返回false) {
+TEST_F(AudioBusManagerEngineTest, RemoveEffectOutOfBoundsIndexReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.RemoveEffect("master", 0));
     DspEffectParams p;
@@ -381,12 +381,12 @@ TEST_F(AudioBusManagerEngineTest, RemoveEffect越界索引返回false) {
     EXPECT_FALSE(mgr_.RemoveEffect("master", 5));
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveEffect不存在总线返回false) {
+TEST_F(AudioBusManagerEngineTest, RemoveEffectThereIsNoBusReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.RemoveEffect("nonexist", 0));
 }
 
-TEST_F(AudioBusManagerEngineTest, RemoveEffect中间效果链重建正确) {
+TEST_F(AudioBusManagerEngineTest, RemoveEffectIntermediateEffectsChainRebuiltCorrectly) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams lpf; lpf.type = DspEffectType::LowPass;
     DspEffectParams hpf; hpf.type = DspEffectType::HighPass;
@@ -404,7 +404,7 @@ TEST_F(AudioBusManagerEngineTest, RemoveEffect中间效果链重建正确) {
 
 // --- SetEffectParams ---
 
-TEST_F(AudioBusManagerEngineTest, SetEffectParams更新截止频率) {
+TEST_F(AudioBusManagerEngineTest, SetEffectParamsUpdateCutoffFrequency) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p; p.type = DspEffectType::LowPass; p.cutoff_hz = 500.0f;
     mgr_.AddEffect("sfx", p);
@@ -416,17 +416,17 @@ TEST_F(AudioBusManagerEngineTest, SetEffectParams更新截止频率) {
     EXPECT_FLOAT_EQ(bus->effects[0].cutoff_hz, 1500.0f);
 }
 
-TEST_F(AudioBusManagerEngineTest, SetEffectParams越界索引返回false) {
+TEST_F(AudioBusManagerEngineTest, SetEffectParamsOutOfBoundsIndexReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.SetEffectParams("master", 99, DspEffectParams{}));
 }
 
-TEST_F(AudioBusManagerEngineTest, SetEffectParams不存在总线返回false) {
+TEST_F(AudioBusManagerEngineTest, SetEffectParamsThereIsNoBusReturnfalse) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_FALSE(mgr_.SetEffectParams("nonexist", 0, DspEffectParams{}));
 }
 
-TEST_F(AudioBusManagerEngineTest, SetEffectParams禁用效果后GetEffectCount不变) {
+TEST_F(AudioBusManagerEngineTest, SetEffectParamsAfterDisablingTheEffectGetEffectCountconstant) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p; p.type = DspEffectType::HighPass;
     mgr_.AddEffect("voice", p);
@@ -440,12 +440,12 @@ TEST_F(AudioBusManagerEngineTest, SetEffectParams禁用效果后GetEffectCount�
 
 // --- GetEffectCount 边界 ---
 
-TEST_F(AudioBusManagerEngineTest, GetEffectCount不存在总线返回0) {
+TEST_F(AudioBusManagerEngineTest, GetEffectCountThereIsNoBusReturn0) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_EQ(mgr_.GetEffectCount("nonexist"), 0u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddRemoveEffect效果数正确) {
+TEST_F(AudioBusManagerEngineTest, AddRemoveEffectEffectCountIsCorrect) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     EXPECT_EQ(mgr_.GetEffectCount("master"), 0u);
     DspEffectParams p;
@@ -463,7 +463,7 @@ TEST_F(AudioBusManagerEngineTest, AddRemoveEffect效果数正确) {
 // Part 4: NotchFilter / PeakEQ 新增效果
 // ============================================================
 
-TEST(DspEffectParamsTest, NotchFilter参数构造) {
+TEST(DspEffectParamsTest, NotchFilterParameterConstruction) {
     DspEffectParams p;
     p.type = DspEffectType::NotchFilter;
     p.cutoff_hz = 1500.0f;
@@ -474,7 +474,7 @@ TEST(DspEffectParamsTest, NotchFilter参数构造) {
     EXPECT_FLOAT_EQ(p.gain_db, 0.0f);
 }
 
-TEST(DspEffectParamsTest, PeakEQ参数构造) {
+TEST(DspEffectParamsTest, PeakEQParameterConstruction) {
     DspEffectParams p;
     p.type = DspEffectType::PeakEQ;
     p.cutoff_hz = 3000.0f;
@@ -486,13 +486,13 @@ TEST(DspEffectParamsTest, PeakEQ参数构造) {
     EXPECT_FLOAT_EQ(p.gain_db, 6.0f);
 }
 
-TEST(DspEffectParamsTest, PeakEQ增益默认为零) {
+TEST(DspEffectParamsTest, PeakEQGainDefaultsToZero) {
     DspEffectParams p;
     p.type = DspEffectType::PeakEQ;
     EXPECT_FLOAT_EQ(p.gain_db, 0.0f);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_NotchFilter成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_NotchFilterSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::NotchFilter;
@@ -502,7 +502,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_NotchFilter成功) {
     EXPECT_EQ(mgr_.GetEffectCount("master"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, AddEffect_PeakEQ成功) {
+TEST_F(AudioBusManagerEngineTest, AddEffect_PeakEQSucceeds) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams p;
     p.type = DspEffectType::PeakEQ;
@@ -513,7 +513,7 @@ TEST_F(AudioBusManagerEngineTest, AddEffect_PeakEQ成功) {
     EXPECT_EQ(mgr_.GetEffectCount("sfx"), 1u);
 }
 
-TEST_F(AudioBusManagerEngineTest, 链式包含NotchFilter和PeakEQ) {
+TEST_F(AudioBusManagerEngineTest, ChainNotchFilterAndPeakEQ) {
     if (!mgr_ok_) GTEST_SKIP() << "AudioBusManager init failed";
     DspEffectParams notch;
     notch.type = DspEffectType::NotchFilter;

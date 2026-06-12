@@ -49,7 +49,7 @@ protected:
     }
 };
 
-TEST_F(LuaHostSmokeTest, 完整LuaVM生命周期) {
+TEST_F(LuaHostSmokeTest, LuaVMLifecycle) {
     LuaTempScript script("smoke_lifecycle.lua", R"(
         function Awake()
         end
@@ -76,7 +76,7 @@ TEST_F(LuaHostSmokeTest, 完整LuaVM生命周期) {
     SUCCEED();
 }
 
-TEST_F(LuaHostSmokeTest, Lua脚本修改CPlusPlus侧World) {
+TEST_F(LuaHostSmokeTest, LuaScriptModificationCPlusPlussideWorld) {
     LuaTempScript script("smoke_modify.lua", R"(
         function Awake()
             dse.ecs.create_entity()
@@ -102,7 +102,7 @@ TEST_F(LuaHostSmokeTest, Lua脚本修改CPlusPlus侧World) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaHostSmokeTest, 多次LuaVM初始化关闭不崩溃) {
+TEST_F(LuaHostSmokeTest, MultiTimesLuaVMInitializeShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         LuaTempScript script("smoke_multi_" + std::to_string(i) + ".lua", R"(
             function Awake() end
@@ -122,7 +122,7 @@ TEST_F(LuaHostSmokeTest, 多次LuaVM初始化关闭不崩溃) {
     }
 }
 
-TEST_F(LuaHostSmokeTest, Lua内存统计) {
+TEST_F(LuaHostSmokeTest, LuaMemoryStatistics) {
     LuaTempScript script("smoke_memory.lua", R"(
         function Awake()
             big_data = {}
@@ -150,7 +150,7 @@ TEST_F(LuaHostSmokeTest, Lua内存统计) {
     EXPECT_EQ(GetLuaMemoryUsage(), 0u);
 }
 
-TEST_F(LuaHostSmokeTest, LuaApiContext完整注入) {
+TEST_F(LuaHostSmokeTest, LuaApiContextfullInjection) {
     LuaTempScript script("smoke_ctx.lua", R"(
         function Awake() end
         function Update(dt) end
@@ -175,13 +175,13 @@ TEST_F(LuaHostSmokeTest, LuaApiContext完整注入) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaHostSmokeTest, 未配置Context时引导失败) {
+TEST_F(LuaHostSmokeTest, NotConfigurationContextWhenBootstrapFails) {
     // 不配置任何上下文
     bool result = BootstrapLuaRuntime();
     EXPECT_FALSE(result);
 }
 
-TEST_F(LuaHostSmokeTest, Lua脚本访问dse命名空间) {
+TEST_F(LuaHostSmokeTest, LuascriptAccessdsenamespace) {
     LuaTempScript script("smoke_dse.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -207,7 +207,7 @@ TEST_F(LuaHostSmokeTest, Lua脚本访问dse命名空间) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaHostSmokeTest, SetStartupLuaScriptPath路径设置) {
+TEST_F(LuaHostSmokeTest, SetStartupLuaScriptPathPathSettings) {
     LuaTempScript script("smoke_path_test.lua", R"(
         function Awake() end
     )");

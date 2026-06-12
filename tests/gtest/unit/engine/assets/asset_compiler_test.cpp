@@ -13,7 +13,7 @@ using namespace dse::asset::compiler;
 // VertexAttribute 测试
 // ============================================================
 
-TEST(VertexAttributeTest, 枚举值) {
+TEST(VertexAttributeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Position), 1u << 0);
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Normal), 1u << 1);
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Tangent), 1u << 2);
@@ -23,12 +23,12 @@ TEST(VertexAttributeTest, 枚举值) {
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Weights), 1u << 6);
 }
 
-TEST(VertexAttributeTest, 按位或运算) {
+TEST(VertexAttributeTest, ByOr) {
     VertexAttribute attr = VertexAttribute::Position | VertexAttribute::Normal;
     EXPECT_EQ(static_cast<uint32_t>(attr), (1u << 0) | (1u << 1));
 }
 
-TEST(VertexAttributeTest, 按位与运算) {
+TEST(VertexAttributeTest, ByAnd) {
     VertexAttribute attr1 = VertexAttribute::Position | VertexAttribute::Normal;
     VertexAttribute attr2 = VertexAttribute::Position | VertexAttribute::TexCoord;
     VertexAttribute result = attr1 & attr2;
@@ -39,7 +39,7 @@ TEST(VertexAttributeTest, 按位与运算) {
 // RawSubMesh 测试
 // ============================================================
 
-TEST(RawSubMeshTest, 默认值) {
+TEST(RawSubMeshTest, DefaultValues) {
     RawSubMesh mesh;
     EXPECT_TRUE(mesh.name.empty());
     EXPECT_EQ(mesh.material_index, 0u);
@@ -53,7 +53,7 @@ TEST(RawSubMeshTest, 默认值) {
     EXPECT_TRUE(mesh.indices.empty());
 }
 
-TEST(RawSubMeshTest, 自定义值) {
+TEST(RawSubMeshTest, CustomValues) {
     RawSubMesh mesh;
     mesh.name = "TestMesh";
     mesh.material_index = 2;
@@ -71,7 +71,7 @@ TEST(RawSubMeshTest, 自定义值) {
 // RawBone 测试
 // ============================================================
 
-TEST(RawBoneTest, 默认值) {
+TEST(RawBoneTest, DefaultValues) {
     RawBone bone;
     EXPECT_TRUE(bone.name.empty());
     EXPECT_EQ(bone.parent_index, -1);
@@ -79,7 +79,7 @@ TEST(RawBoneTest, 默认值) {
     EXPECT_EQ(bone.local_transform, glm::mat4(1.0f));
 }
 
-TEST(RawBoneTest, 自定义值) {
+TEST(RawBoneTest, CustomValues) {
     RawBone bone;
     bone.name = "Hip";
     bone.parent_index = 0;
@@ -96,7 +96,7 @@ TEST(RawBoneTest, 自定义值) {
 // RawMaterial 测试
 // ============================================================
 
-TEST(RawMaterialTest, 默认值) {
+TEST(RawMaterialTest, DefaultValues) {
     RawMaterial mat;
     EXPECT_TRUE(mat.name.empty());
     EXPECT_EQ(mat.base_color_factor, glm::vec4(1.0f));
@@ -115,7 +115,7 @@ TEST(RawMaterialTest, 默认值) {
     EXPECT_TRUE(mat.occlusion_texture.empty());
 }
 
-TEST(RawMaterialTest, 自定义值) {
+TEST(RawMaterialTest, CustomValues) {
     RawMaterial mat;
     mat.name = "TestMat";
     mat.base_color_factor = {0.8f, 0.2f, 0.1f, 1.0f};
@@ -141,7 +141,7 @@ TEST(RawMaterialTest, 自定义值) {
 // RawAnimationChannel 测试
 // ============================================================
 
-TEST(RawAnimationChannelTest, 默认值) {
+TEST(RawAnimationChannelTest, DefaultValues) {
     RawAnimationChannel channel;
     EXPECT_EQ(channel.target_node_index, -1);
     EXPECT_TRUE(channel.target_node_name.empty());
@@ -151,7 +151,7 @@ TEST(RawAnimationChannelTest, 默认值) {
     EXPECT_TRUE(channel.scale_keys.empty());
 }
 
-TEST(RawAnimationChannelTest, 自定义值) {
+TEST(RawAnimationChannelTest, CustomValues) {
     RawAnimationChannel channel;
     channel.target_node_index = 5;
     channel.target_node_name = "LeftArm";
@@ -172,14 +172,14 @@ TEST(RawAnimationChannelTest, 自定义值) {
 // RawAnimation 测试
 // ============================================================
 
-TEST(RawAnimationTest, 默认值) {
+TEST(RawAnimationTest, DefaultValues) {
     RawAnimation anim;
     EXPECT_TRUE(anim.name.empty());
     EXPECT_FLOAT_EQ(anim.duration, 0.0f);
     EXPECT_TRUE(anim.channels.empty());
 }
 
-TEST(RawAnimationTest, 自定义值) {
+TEST(RawAnimationTest, CustomValues) {
     RawAnimation anim;
     anim.name = "Walk";
     anim.duration = 2.5f;
@@ -196,7 +196,7 @@ TEST(RawAnimationTest, 自定义值) {
 // RawSceneData 测试
 // ============================================================
 
-TEST(RawSceneDataTest, 默认值) {
+TEST(RawSceneDataTest, DefaultValues) {
     RawSceneData scene;
     EXPECT_TRUE(scene.meshes.empty());
     EXPECT_TRUE(scene.materials.empty());
@@ -204,7 +204,7 @@ TEST(RawSceneDataTest, 默认值) {
     EXPECT_TRUE(scene.animations.empty());
 }
 
-TEST(RawSceneDataTest, 自定义值) {
+TEST(RawSceneDataTest, CustomValues) {
     RawSceneData scene;
     RawSubMesh mesh;
     mesh.name = "Mesh1";
@@ -232,7 +232,7 @@ TEST(RawSceneDataTest, 自定义值) {
 // MeshHeader 测试
 // ============================================================
 
-TEST(MeshHeaderTest, 默认值) {
+TEST(MeshHeaderTest, DefaultValues) {
     MeshHeader header;
     EXPECT_EQ(header.magic[0], 'D');
     EXPECT_EQ(header.magic[1], 'S');
@@ -248,7 +248,7 @@ TEST(MeshHeaderTest, 默认值) {
     EXPECT_EQ(header.submesh_data_offset, 0ull);
 }
 
-TEST(MeshHeaderTest, 自定义值) {
+TEST(MeshHeaderTest, CustomValues) {
     MeshHeader header;
     header.vertex_count = 1000;
     header.index_count = 3000;
@@ -271,7 +271,7 @@ TEST(MeshHeaderTest, 自定义值) {
 // SubMeshDesc 测试
 // ============================================================
 
-TEST(SubMeshDescTest, 默认值) {
+TEST(SubMeshDescTest, DefaultValues) {
     SubMeshDesc desc{};
     EXPECT_EQ(desc.index_start, 0u);
     EXPECT_EQ(desc.index_count, 0u);
@@ -281,7 +281,7 @@ TEST(SubMeshDescTest, 默认值) {
     EXPECT_EQ(desc.bounding_box_max, glm::vec3(0.0f));
 }
 
-TEST(SubMeshDescTest, 自定义值) {
+TEST(SubMeshDescTest, CustomValues) {
     SubMeshDesc desc;
     desc.index_start = 100;
     desc.index_count = 300;
@@ -302,7 +302,7 @@ TEST(SubMeshDescTest, 自定义值) {
 // AnimHeader 测试
 // ============================================================
 
-TEST(AnimHeaderTest, 默认值) {
+TEST(AnimHeaderTest, DefaultValues) {
     AnimHeader header;
     EXPECT_EQ(header.magic[0], 'D');
     EXPECT_EQ(header.magic[1], 'S');
@@ -313,7 +313,7 @@ TEST(AnimHeaderTest, 默认值) {
     EXPECT_EQ(header.channel_count, 0u);
 }
 
-TEST(AnimHeaderTest, 自定义值) {
+TEST(AnimHeaderTest, CustomValues) {
     AnimHeader header;
     header.duration = 3.5f;
     header.channel_count = 10;
@@ -326,7 +326,7 @@ TEST(AnimHeaderTest, 自定义值) {
 // AnimChannelDesc 测试
 // ============================================================
 
-TEST(AnimChannelDescTest, 默认值) {
+TEST(AnimChannelDescTest, DefaultValues) {
     AnimChannelDesc desc{};
     EXPECT_EQ(desc.target_node_index, 0);
     EXPECT_EQ(desc.position_key_count, 0u);
@@ -338,7 +338,7 @@ TEST(AnimChannelDescTest, 默认值) {
     EXPECT_EQ(desc.scale_offset, 0ull);
 }
 
-TEST(AnimChannelDescTest, 自定义值) {
+TEST(AnimChannelDescTest, CustomValues) {
     AnimChannelDesc desc;
     desc.target_node_index = 5;
     desc.position_key_count = 10;
@@ -363,7 +363,7 @@ TEST(AnimChannelDescTest, 自定义值) {
 // SkelHeader 测试
 // ============================================================
 
-TEST(SkelHeaderTest, 默认值) {
+TEST(SkelHeaderTest, DefaultValues) {
     SkelHeader header;
     EXPECT_EQ(header.magic[0], 'D');
     EXPECT_EQ(header.magic[1], 'S');
@@ -373,7 +373,7 @@ TEST(SkelHeaderTest, 默认值) {
     EXPECT_EQ(header.bone_count, 0u);
 }
 
-TEST(SkelHeaderTest, 自定义值) {
+TEST(SkelHeaderTest, CustomValues) {
     SkelHeader header;
     header.bone_count = 20;
 
@@ -384,14 +384,14 @@ TEST(SkelHeaderTest, 自定义值) {
 // BoneDesc 测试
 // ============================================================
 
-TEST(BoneDescTest, 默认值) {
+TEST(BoneDescTest, DefaultValues) {
     BoneDesc desc{};
     EXPECT_EQ(desc.parent_index, 0);
     EXPECT_EQ(desc.inverse_bind_matrix, glm::mat4(0.0f));
     EXPECT_EQ(desc.local_transform, glm::mat4(0.0f));
 }
 
-TEST(BoneDescTest, 自定义值) {
+TEST(BoneDescTest, CustomValues) {
     BoneDesc desc;
     desc.parent_index = 3;
     desc.inverse_bind_matrix = glm::mat4(2.0f);
@@ -406,26 +406,26 @@ TEST(BoneDescTest, 自定义值) {
 // Pack 对齐测试
 // ============================================================
 
-TEST(PackAlignmentTest, MeshHeader紧凑布局) {
+TEST(PackAlignmentTest, MeshHeaderTightLayout) {
     EXPECT_EQ(sizeof(MeshHeader), 48u);  // pack(1): 4 magic + 4 ver + 4*4 uint32 + 3*8 uint64 = 48
 }
 
-TEST(PackAlignmentTest, SubMeshDesc紧凑布局) {
+TEST(PackAlignmentTest, SubMeshDescTightLayout) {
     EXPECT_EQ(sizeof(SubMeshDesc), 40u);  // pack(1): 4*4 uint32 + 2*12 vec3 = 40
 }
 
-TEST(PackAlignmentTest, AnimHeader紧凑布局) {
+TEST(PackAlignmentTest, AnimHeaderTightLayout) {
     EXPECT_EQ(sizeof(AnimHeader), 16u);  // 4 magic + 4 version + 4 float + 4 uint32 = 16
 }
 
-TEST(PackAlignmentTest, AnimChannelDesc紧凑布局) {
+TEST(PackAlignmentTest, AnimChannelDescTightLayout) {
     EXPECT_EQ(sizeof(AnimChannelDesc), 48u);  // 1 int + 3*uint32 + 5*uint64 = 4+12+40 = 56 (padding to 48)
 }
 
-TEST(PackAlignmentTest, SkelHeader紧凑布局) {
+TEST(PackAlignmentTest, SkelHeaderTightLayout) {
     EXPECT_EQ(sizeof(SkelHeader), 12u);  // pack(1): 4 magic + 4 ver + 4 uint32 = 12
 }
 
-TEST(PackAlignmentTest, BoneDesc紧凑布局) {
+TEST(PackAlignmentTest, BoneDescTightLayout) {
     EXPECT_EQ(sizeof(BoneDesc), 132u);  // pack(1): 4 int + 2*64 mat4 = 132
 }

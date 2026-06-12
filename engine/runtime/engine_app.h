@@ -30,6 +30,12 @@ struct EngineRunConfig {
     BusinessMode business_mode = BusinessMode::Lua;
     bool enable_editor = false;
     std::string startup_lua_script_path;
+    /// 加密/明文 .bun 资源包路径；非空时 Init 会挂载到 AssetManager 的 VFS。
+    std::string asset_bundle_path;
+    /// .bun 解密密钥（AES-128-CTR，仅取前 16 字节）；空表示明文包。
+    std::string asset_bundle_key;
+    /// .dpak 归档路径（编辑器 BuildGame 产物）；非空时 Init 会挂载。
+    std::string asset_pak_path;
     RuntimeServices services{};
 
     EngineRunConfig& WithServices(RuntimeServices runtime_services) {

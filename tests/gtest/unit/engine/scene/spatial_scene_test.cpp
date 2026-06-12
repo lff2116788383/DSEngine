@@ -73,7 +73,7 @@ protected:
 
 // ---- 基础功能 ----
 
-TEST_F(SpatialSceneTest, 空场景BuildStatic不崩溃) {
+TEST_F(SpatialSceneTest, EmptySceneBuildStaticDoesNotCrash) {
     EXPECT_NO_THROW(spatial_.BuildStatic(world_));
     // 空场景无 BoundingBoxComponent 实体时 IsBuilt() 返回 false，
     // 这是预期行为：允许 FrustumCullingSystem 下一帧重试以捕获异步加载的实体
@@ -82,14 +82,14 @@ TEST_F(SpatialSceneTest, 空场景BuildStatic不崩溃) {
     EXPECT_EQ(spatial_.GetDynamicCount(), 0u);
 }
 
-TEST_F(SpatialSceneTest, 空场景CullFrustum不崩溃) {
+TEST_F(SpatialSceneTest, EmptySceneCullFrustumDoesNotCrash) {
     spatial_.BuildStatic(world_);
     spatial_.UpdateDynamicBounds(world_);
     EXPECT_NO_THROW(spatial_.CullFrustum(MakeViewProj(), world_, visible_));
     EXPECT_EQ(visible_.TotalCount(), 0u);
 }
 
-TEST_F(SpatialSceneTest, 静态实体归入静态树) {
+TEST_F(SpatialSceneTest, Entity) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateStaticEntity(glm::vec3(5, 0, 0));
 
@@ -98,7 +98,7 @@ TEST_F(SpatialSceneTest, 静态实体归入静态树) {
     EXPECT_EQ(spatial_.GetDynamicCount(), 0u);
 }
 
-TEST_F(SpatialSceneTest, 动态RigidBody归入动态列表) {
+TEST_F(SpatialSceneTest, RigidBody) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateDynamicEntity(glm::vec3(5, 0, 0));
 
@@ -109,7 +109,7 @@ TEST_F(SpatialSceneTest, 动态RigidBody归入动态列表) {
 
 // ---- 剔除正确性 ----
 
-TEST_F(SpatialSceneTest, 视锥内实体标记为可见) {
+TEST_F(SpatialSceneTest, FrustumInsideEntitymarkedAsCan) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -121,7 +121,7 @@ TEST_F(SpatialSceneTest, 视锥内实体标记为可见) {
     EXPECT_EQ(visible_.opaque.size(), 1u);
 }
 
-TEST_F(SpatialSceneTest, 视锥外实体标记为不可见) {
+TEST_F(SpatialSceneTest, FrustumOutsideEntitymarkedAsNotCan) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, -300));
 
     spatial_.BuildStatic(world_);
@@ -133,7 +133,7 @@ TEST_F(SpatialSceneTest, 视锥外实体标记为不可见) {
     EXPECT_EQ(visible_.opaque.size(), 0u);
 }
 
-TEST_F(SpatialSceneTest, 动态实体视锥内可见) {
+TEST_F(SpatialSceneTest, EntityFrustumInsideCan) {
     auto e = CreateDynamicEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -147,7 +147,7 @@ TEST_F(SpatialSceneTest, 动态实体视锥内可见) {
 
 // ---- 分层可见集 ----
 
-TEST_F(SpatialSceneTest, 不透明实体归入opaque集) {
+TEST_F(SpatialSceneTest, OpaqueEntitiesFallUnderopaqueset) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -158,7 +158,7 @@ TEST_F(SpatialSceneTest, 不透明实体归入opaque集) {
     EXPECT_EQ(visible_.transparent.size(), 0u);
 }
 
-TEST_F(SpatialSceneTest, 半透明实体归入transparent集) {
+TEST_F(SpatialSceneTest, HalfEntitytransparentset) {
     CreateTransparentEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -169,7 +169,7 @@ TEST_F(SpatialSceneTest, 半透明实体归入transparent集) {
     EXPECT_EQ(visible_.transparent.size(), 1u);
 }
 
-TEST_F(SpatialSceneTest, 混合场景分类正确) {
+TEST_F(SpatialSceneTest, SceneCorrect) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateTransparentEntity(glm::vec3(3, 0, 0));
     CreateDynamicEntity(glm::vec3(-3, 0, 0));
@@ -183,7 +183,7 @@ TEST_F(SpatialSceneTest, 混合场景分类正确) {
     EXPECT_EQ(visible_.transparent.size(), 1u);
 }
 
-TEST_F(SpatialSceneTest, 不透明物体默认投射阴影) {
+TEST_F(SpatialSceneTest, OpaqueObjectsCastShadowsByDefault) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -193,7 +193,7 @@ TEST_F(SpatialSceneTest, 不透明物体默认投射阴影) {
     EXPECT_EQ(visible_.shadow_casters.size(), 1u);
 }
 
-TEST_F(SpatialSceneTest, 半透明物体不投射阴影) {
+TEST_F(SpatialSceneTest, HalfNot) {
     CreateTransparentEntity(glm::vec3(0, 0, 0));
 
     spatial_.BuildStatic(world_);
@@ -205,7 +205,7 @@ TEST_F(SpatialSceneTest, 半透明物体不投射阴影) {
 
 // ---- Invalidate 和重建 ----
 
-TEST_F(SpatialSceneTest, Invalidate触发下次重建) {
+TEST_F(SpatialSceneTest, InvalidateTriggerNextRebuild) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     spatial_.BuildStatic(world_);
     EXPECT_TRUE(spatial_.IsBuilt());
@@ -214,7 +214,7 @@ TEST_F(SpatialSceneTest, Invalidate触发下次重建) {
     EXPECT_FALSE(spatial_.IsBuilt());
 }
 
-TEST_F(SpatialSceneTest, MarkDynamic切换后重建) {
+TEST_F(SpatialSceneTest, MarkDynamicRebuildAfterSwitching) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, 0));
     spatial_.BuildStatic(world_);
     EXPECT_EQ(spatial_.GetStaticCount(), 1u);
@@ -231,7 +231,7 @@ TEST_F(SpatialSceneTest, MarkDynamic切换后重建) {
 
 // ---- 多帧稳定性 ----
 
-TEST_F(SpatialSceneTest, 多帧连续剔除不崩溃) {
+TEST_F(SpatialSceneTest, MultiContinuousFramesDoesNotCrash) {
     for (int i = 0; i < 20; ++i) {
         CreateStaticEntity(glm::vec3(static_cast<float>(i) * 3.0f, 0, 0));
     }

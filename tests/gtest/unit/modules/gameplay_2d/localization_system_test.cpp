@@ -8,60 +8,60 @@
 
 using namespace dse::gameplay2d;
 
-TEST(LocalizationSystemTest, 默认语言为en) {
+TEST(LocalizationSystemTest, DefaultIsen) {
     LocalizationSystem loc;
     EXPECT_EQ(loc.GetCurrentLanguage(), "en");
 }
 
-TEST(LocalizationSystemTest, 键不存在时返回默认文本) {
+TEST(LocalizationSystemTest, DoesNotExistWhenReturnsdefault) {
     LocalizationSystem loc;
     EXPECT_EQ(loc.GetText("missing.key", "fallback"), "fallback");
 }
 
-TEST(LocalizationSystemTest, 键不存在且无默认返回空) {
+TEST(LocalizationSystemTest, DoesNotExistWithoutdefaultReturnsEmpty) {
     LocalizationSystem loc;
     EXPECT_EQ(loc.GetText("missing.key"), "");
 }
 
-TEST(LocalizationSystemTest, 设置未加载的语言返回失败) {
+TEST(LocalizationSystemTest, SetUpNotLoadReturnsFails) {
     LocalizationSystem loc;
     EXPECT_FALSE(loc.SetCurrentLanguage("zh"));
 }
 
-TEST(LocalizationSystemTest, 默认无已加载语言) {
+TEST(LocalizationSystemTest, DefaultWithoutAlreadyLoad) {
     LocalizationSystem loc;
     auto langs = loc.GetAvailableLanguages();
     EXPECT_TRUE(langs.empty());
 }
 
-TEST(LocalizationSystemTest, 检测英文为LTR方向) {
+TEST(LocalizationSystemTest, IsLTRToward) {
     LocalizationSystem loc;
     EXPECT_EQ(loc.DetectTextDirection("Hello"), TextDirection::LTR);
 }
 
-TEST(LocalizationSystemTest, 阿拉伯语为RTL语言) {
+TEST(LocalizationSystemTest, IsRTL) {
     LocalizationSystem loc;
     EXPECT_TRUE(loc.IsRTLLanguage("ar"));
 }
 
-TEST(LocalizationSystemTest, 英语不是RTL语言) {
+TEST(LocalizationSystemTest, NotRTL) {
     LocalizationSystem loc;
     EXPECT_FALSE(loc.IsRTLLanguage("en"));
 }
 
-TEST(LocalizationSystemTest, 无参数时GetTextWithParams返回默认文本) {
+TEST(LocalizationSystemTest, WithoutParametersWhenGetTextWithParamsReturnsdefault) {
     LocalizationSystem loc;
     std::unordered_map<std::string, std::string> params;
     EXPECT_EQ(loc.GetTextWithParams("missing.key", params, "Hello"), "Hello");
 }
 
-TEST(LocalizationSystemTest, 带参数替换获取文本) {
+TEST(LocalizationSystemTest, BringParametersAcquire) {
     LocalizationSystem loc;
     std::unordered_map<std::string, std::string> params = {{"name", "Player"}};
     EXPECT_EQ(loc.GetTextWithParams("missing.key", params, "Hello {name}"), "Hello Player");
 }
 
-TEST(LocalizationSystemTest, 语言变更回调注册与注销) {
+TEST(LocalizationSystemTest, RegisterAnd) {
     LocalizationSystem loc;
     std::string received_lang;
     int cb_id = loc.OnLanguageChanged([&](const std::string& lang) {
@@ -71,7 +71,7 @@ TEST(LocalizationSystemTest, 语言变更回调注册与注销) {
     loc.UnregisterLanguageChangeCallback(cb_id);
 }
 
-TEST(LocalizationSystemTest, Clear清空数据) {
+TEST(LocalizationSystemTest, ClearClearData) {
     LocalizationSystem loc;
     loc.Clear();
     EXPECT_EQ(loc.GetCurrentLanguage(), "en");

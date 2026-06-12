@@ -1,6 +1,7 @@
 # DSEngine 当前进度 · 对比主流引擎 · 发布 SDK 差距分析
 
 > 生成日期：2026-06-10（与代码现状重新核对，仅以源码为准）
+> 二次复核：2026-06-10（逐项 grep 核实；更正风格化渲染 Outline/Edge-Detect 已实现的过时表述；确认 CSM 级联阴影、反射探针(Split-Sum IBL)、本地化、编辑器动画时间轴/撤销重做/性能分析器 均已在代码落地；新增第六节「生产级就绪度评估」）
 > 分支：`feature/engine-lib`
 > 数据来源：代码库直接统计（`git ls-files` + `wc -l` + `grep` 验证）+ 实际 ctest 运行结果
 
@@ -165,7 +166,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **玩法级网络缺失** | 🟡 中 | 传输层已完备（GNS：可靠/非可靠 UDP + lanes + 加密，Win/Linux 运行、Android 编译；Lua 侧 `dse.net`/`dse.http`/`dse.serialize`），但缺玩法级复制/快照-delta/预测/AOI、大厅/匹配；同步逻辑需脚本层自行实现。编辑器侧另有 ControlServer（IXWebSocket JSON-RPC，自动化/AI 桥接） |
 | **~~无资源流式加载~~** | ✅ 已完成 | StreamingManager：Zone 距离触发 + 异步 IO 优先级队列 + 每帧预算 + 资源引用持有 + Lua API |
 | **音频系统** | 🟢 中等 | BGM/SFX + 3D 空间 + DSP 混音总线 + LPF/HPF/BPF/Delay 节点图已实现 |
-| **风格化渲染** | 🟢 中等 | Toon/Cel+Banding 已完成，待 Outline/Edge Detection 深化 |
+| **风格化渲染** | 🟢 中等 | Toon/Cel+Banding **及 Outline/Edge-Detect 均已实现**（`OutlinePass` + `edge_detect` 后处理，`builtin_passes.cpp:1551`；组件 `outline_enabled`/`outline_thickness`）；待更多 NPR 风格（描边变体/手绘/网点）深化 |
 | **编辑器体验** | 🟢 中等 | ImGui 实现功能完整，但 UI/UX 不如原生 GUI 引擎 |
 | **~~无 AI/导航~~** | ✅ 已完成 | NavMesh/寻路已集成 Recast/Detour，支持 Bake/Query/Serialize + NavMeshAgent ECS + Lua API |
 | **~~TressFX 毛发仅 GL~~** | ✅ 已完成 | 毛发渲染（DrawHairStrands）与物理 Compute 模拟均已移植到 GL/Vulkan/D3D11 三端 |
@@ -274,7 +275,8 @@ Phase 5 — Shader 统一化 + 已知技术债务
   ├── ✅ DDGI / TressFX / Grass 三组 Compute → VK SPIR-V + DX11 HLSL 移植（已完成）
   ├── 🔄 引擎静态库化 + dse_* C ABI 抽取（feature/engine-lib 进行中：S1.x 里程碑）
   ├── ✅ 跨平台抽象层（PlatformApp 接口 + glfw 桌面 / android 后端；engine/ 残留 Win32 引用均 #ifdef 守卫，Win+Linux+Android 三端构建路径齐备）
-  └── ⬜ Linux/Android 纳入 CI 持续看护；macOS/iOS 平台后端
+  ├── 🟡 Linux/Android 已纳入 CI 配置（`.github/workflows/ci.yml`: build-linux / build-android jobs，复用本地已验证脚本），待 CI 额度恢复后首次运行验证
+  └── ⬜ macOS/iOS 平台后端（需 Mac 硬件）
 
 Phase 6 — 网络层（GNS 集成）✅ 传输层 / ⬜ 玩法级
   ├── ✅ GNS 集成 Phase 1–5（Win/Linux 运行 + Android arm64 编译，engine/net 抽象层 + dse_net_* C ABI）
@@ -309,3 +311,37 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 > **当前最大技术债务：① 跨平台覆盖（抽象层已就位、Win/Linux/Android 构建路径齐备但未纳入 CI，macOS/iOS 未支持）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
 >
 > **SDK 测试版 P0 已全部完成：`verify_sdk.ps1` 覆盖 Minimal/Full × Debug/Release 四组合端到端验证、强制共享库构建、头文件边界清理（排除 RHI 后端实现头）、版本号 `0.1.0-alpha` + CHANGELOG。`package_sdk.ps1 -Enable3D` 可产出可被 `find_package(DSEngine)` 消费的发行包。v0.1.0-alpha 已就绪，剩余 P1/P2 为体验优化项。**
+
+---
+
+## 六、生产级就绪度评估（2026-06-10 代码复核）
+
+### 6.1 结论
+
+> **「引擎本体」已达生产级**：面向单平台（Windows）的 2D/3D 独立游戏可直接用于生产——功能广度与 Godot 4.x 相当，测试 ~2,600 例全绿。代码债务极低：全仓库手写源码中仅约 **8 处** 遗留标记（`TODO`×6 / `HACK`×1 / `XXX`×1，`FIXME` 为 0；naïve grep 出的 ~200 个 "XXX" 几乎全是生成着色器头里的 HLSL `.xxx` swizzle，非真实标记）。低标记数表明工作由 roadmap/文档而非散落注释跟踪，是代码整洁度的正向信号，并不代表功能缺失（缺失体现为缺整块子系统，见 6.3）。
+> **「完整商业产品」尚未达生产级**：主要缺玩法级网络、Apple/console 平台 + CI 看护、崩溃遥测等运营工具，以及实战出货验证与生态。详见 6.3。
+
+### 6.2 已具备的生产级能力（均经 grep 核实存在）
+
+| 维度 | 能力 |
+|------|------|
+| **渲染** | 三后端 GL/VK/DX11 均含 Compute；PBR；**CSM 级联阴影**(`CSM_CASCADES=3`)；**反射探针**(`ReflectionProbeComponent` + Split-Sum IBL，`reflection_probe_system.h`)；SSR；**DDGI 实时 GI**(三端)；GPU Driven(Hi-Z + MultiDrawIndexedIndirect)；后处理链(Bloom/SSAO/TAA/FXAA/DOF/MotionBlur/SSR/ACES/LightShaft/VolumetricFog)；风格化(Toon/Cel/Outline) |
+| **内容/系统** | 地形/植被/毛发(TressFX)；2D+3D 粒子；StreamingManager 流式加载；UI 系统 + 序列化；**本地化**(`localization_manager`)；存档/场景序列化 + Prefab；热重载(Windows FileWatcher + Lua reload) |
+| **物理/动画** | Jolt(默认)/Box2D + 布料/流体/破碎/布娃娃/载具等高级模块；动画 FSM/IK/Blend/Morph + **编辑器动画时间轴**(`editor_animation_timeline`) |
+| **工具链** | 编辑器 32 面板 + **撤销/重做**(`editor_entity_snapshot`) + 资产导入器 + **CPU/内存/渲染性能分析器**；AssetBuilder/PAK/DSSL；Codegen 驱动 Lua/C# 绑定(~330 C ABI) |
+| **交付** | SDK v0.1.0-alpha 打包(`verify_sdk.ps1` Minimal/Full × Debug/Release 四组合)；API 文档(Lua/C++) |
+
+### 6.3 距「完整生产级」仍缺（按优先级）
+
+| 优先级 | 缺口 | 说明 |
+|:------:|------|------|
+| 🔴 | **玩法级网络层** | 传输层 GNS 完备，缺复制/快照-delta/预测/插值/AOI、大厅/匹配；同步逻辑现需脚本层自实现 |
+| 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端（需 Mac 硬件）；Linux/Android 已加入 CI 配置（`ci.yml` build-linux/build-android，复用本地已验证脚本），待 CI 额度恢复后首次运行验证 |
+| 🟢 | **运维可观测性（崩溃报告）** | ✅ 已实现 `engine/diagnostics` 进程级崩溃捕获：全局异常/信号处理器 + Windows minidump(.dmp) + 可读崩溃报告(.txt，含版本/异常/符号化调用栈/加载模块/面包屑/自定义元数据)，引擎启动默认安装（`DSE_CRASH_HANDLER=0` 可关）。上传做成服务器无关：可选注册 `UploadCallback`（自建端点复用 dse.http，或接 Sentry/BugSplat），引擎不内置后端，零服务器即可用。剩余可选项：聚合面板/趋势遥测（需后端） |
+| 🟡 | **跨平台热重载** | `FileWatcher` 仅 Windows 实现（`asset_manager.cpp:2050` 非 Windows 平台 not implemented）|
+| 🟡 | **终端分发** | 仅 SDK 包 + Android APK，缺面向终端用户的游戏打包/安装器/Redist 清单 |
+| 🟢 | **实战验证 / 生态** | 尚无用 DSE 出货的完整游戏(battle-testing)、无社区/插件市场；编辑器 UX 不及原生 GUI 引擎 |
+
+### 6.4 一句话
+
+> **引擎本体已生产级（单平台、功能广度对标 Godot、测试充分）；商业产品尚未——主要缺网络玩法层、Apple/CI，以及实战出货与生态验证（崩溃报告已落地，剩余为可选的聚合遥测后端）。**

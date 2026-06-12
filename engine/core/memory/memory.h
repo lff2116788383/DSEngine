@@ -1,0 +1,146 @@
+/**
+ * @file memory.h
+ * @brief 内存子系统统一门面 dse::core::Memory。
+ *
+ * 所有引擎自管的通用堆分配应经此门面，以便集中追踪、限额与替换后端。
+ * 详见 docs/architecture/MEMORY_MANAGEMENT_DESIGN.md。
+ *
+ * 阶段1（当前）：门面 + SystemAllocator 后端，行为等价于 malloc/free。
+ * 追踪/预算/帧分配器/池在后续阶段接入。
+ */
+
+#ifndef DSE_CORE_MEMORY_MEMORY_H
+#define DSE_CORE_MEMORY_MEMORY_H
+
+#include <new>
+#include <utility>
+#include "engine/core/memory/allocator.h"
+
+namespace dse {
+namespace core {
+
+class FrameAllocator;
+class LinearAllocator;
+
+/**
+ * @struct MemoryConfig
+ * @brief 内存子系统初始化配置。
+ */
+struct MemoryConfig {
+    /// 每帧线性分配器单缓冲容量（字节）。
+    size_t frame_buffer_bytes = 16ull * 1024 * 1024;  // 16 MB
+    /// 帧分配器缓冲数（>=2；并行渲染建议 = 帧延迟 + 1）。
+    uint32_t frame_buffer_count = 2;
+    /// 每线程 scratch 线性分配器容量（字节）。
+    size_t scratch_bytes = 256ull * 1024;  // 256 KB
+};
+
+/**
+ * @class Memory
+ * @brief 进程级内存门面。生命周期由 EngineInstance 在最早期 Init、最末期 Shutdown。
+ *
+ * 设计边界：门面只负责「分配 + 统计采集」，不持有业务状态/策略；
+ * 因其早于 ServiceLocator，故为进程级而非注册服务（见设计文档 §4.1）。
+ * 未显式 Init 时首次使用会惰性初始化，便于测试与早期分配。
+ */
+class DSE_EXPORT Memory {
+public:
+    /// 初始化（幂等）。EngineInstance 构造最早期调用。
+    static void Init(const MemoryConfig& config = MemoryConfig{});
+
+    /// 关闭：输出泄漏报告（后续阶段）。后端为进程级，不在此销毁以容忍晚期释放。
+    static void Shutdown();
+
+    /// 通用堆分配（默认对齐）。
+    static void* Alloc(size_t size, MemoryTag tag = MemoryTag::Default);
+
+    /// 通用堆分配（指定对齐，必须为 2 的幂）。
+    static void* AllocAligned(size_t size, size_t alignment, MemoryTag tag = MemoryTag::Default);
+
+    /// 重新分配，保留原数据。
+    static void* Realloc(void* ptr, size_t new_size, MemoryTag tag = MemoryTag::Default);
+
+    /// 释放（size/标签由块头记录）。
+    static void Free(void* ptr);
+
+    /// 总量统计快照（聚合所有标签）。
+    static MemoryStats TotalStats();
+
+    /// 某标签统计快照（需启用 DSE_ENABLE_MEM_TRACKING；否则返回零值）。
+    static MemoryStats Stats(MemoryTag tag);
+
+    /// 是否已启用按标签追踪（编译期开关 DSE_ENABLE_MEM_TRACKING）。
+    static bool TrackingEnabled();
+
+    /// 输出泄漏/占用报告到日志（启用追踪时按标签，否则仅总量）。
+    static void ReportLeaks();
+
+    // —— 子系统预算（见设计文档 §3.8）——
+
+    /// 设定某标签预算（字节）；0 表示不限。设定后立即按当前用量评估一次。
+    static void SetBudget(MemoryTag tag, size_t bytes);
+
+    /// 读取某标签预算（字节）；0 表示不限。
+    static size_t GetBudget(MemoryTag tag);
+
+    /// 子系统上报其自管内存的当前用量（绝对值，字节），纳入统一预算视图。
+    /// 供 AssetManager 等以 shared_ptr/LRU 自管、不经门面分配的子系统使用。
+    static void ReportExternalUsage(MemoryTag tag, size_t current_bytes);
+
+    /// 某标签计入预算的当前用量（= 门面追踪当前量 + 外部上报量）。
+    static size_t BudgetUsage(MemoryTag tag);
+
+    /// 某标签是否已超出其预算（预算为 0 时恒为 false）。
+    static bool IsOverBudget(MemoryTag tag);
+
+    /// 注册预算超限回调（替代默认告警日志）；传 nullptr 恢复默认。
+    static void SetBudgetExceededCallback(BudgetExceededCallback cb);
+
+    /// 输出各已设预算标签的用量/预算报告到日志（无 UI）。
+    static void ReportBudgets();
+
+    /// 访问通用堆后端（高级用法）。
+    static IAllocator& Heap();
+
+    /// 主线程每帧线性分配器（瞬时数据；帧边界由 FramePipeline 调 Frame().BeginFrame() 复位）。
+    static FrameAllocator& Frame();
+
+    /// 从当前帧缓冲分配（容量不足返回 nullptr，调用方需退回 Alloc）。
+    static void* FrameAlloc(size_t size, size_t alignment = kDefaultAlignment);
+
+    /// 每线程 scratch 线性分配器（线程私有；零争用；按需 Reset）。
+    static LinearAllocator& ThreadScratch();
+
+private:
+    static IAllocator* heap_;
+    static MemoryConfig config_;
+};
+
+/**
+ * @brief 经门面分配并构造对象（带标签），返回 T*。
+ */
+template <class T, class... Args>
+T* New(MemoryTag tag, Args&&... args) {
+    void* mem = Memory::AllocAligned(sizeof(T), alignof(T), tag);
+    if (mem == nullptr) {
+        return nullptr;
+    }
+    return ::new (mem) T(std::forward<Args>(args)...);
+}
+
+/**
+ * @brief 析构并经门面释放由 New 创建的对象。
+ */
+template <class T>
+void Delete(T* ptr) {
+    if (ptr == nullptr) {
+        return;
+    }
+    ptr->~T();
+    Memory::Free(ptr);
+}
+
+} // namespace core
+} // namespace dse
+
+#endif // DSE_CORE_MEMORY_MEMORY_H

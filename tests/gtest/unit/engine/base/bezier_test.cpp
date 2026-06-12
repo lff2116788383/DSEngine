@@ -20,7 +20,7 @@ using namespace dse::math;
 // 二次贝塞尔曲线
 // ============================================================
 
-TEST(BezierCurve2DTest, 二次贝塞尔起点等于p0) {
+TEST(BezierCurve2DTest, TheQuadraticBezierStartingPointIsEqualTop0) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 2.0f);
     glm::vec2 p2(2.0f, 0.0f);
@@ -29,7 +29,7 @@ TEST(BezierCurve2DTest, 二次贝塞尔起点等于p0) {
     EXPECT_FLOAT_EQ(result.y, p0.y);
 }
 
-TEST(BezierCurve2DTest, 二次贝塞尔终点等于p2) {
+TEST(BezierCurve2DTest, TheQuadraticBezierEndPointIsEqualTop2) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 2.0f);
     glm::vec2 p2(2.0f, 0.0f);
@@ -38,7 +38,7 @@ TEST(BezierCurve2DTest, 二次贝塞尔终点等于p2) {
     EXPECT_FLOAT_EQ(result.y, p2.y);
 }
 
-TEST(BezierCurve2DTest, 二次贝塞尔中点值正确) {
+TEST(BezierCurve2DTest, QuadraticBezierMidpointValueIsCorrect) {
     // t=0.5 时二次贝塞尔公式: (1-t)^2*p0 + 2*(1-t)*t*p1 + t^2*p2
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 2.0f);
@@ -50,7 +50,7 @@ TEST(BezierCurve2DTest, 二次贝塞尔中点值正确) {
     EXPECT_FLOAT_EQ(result.y, 1.0f);
 }
 
-TEST(BezierCurve2DTest, 二次贝塞尔退化为直线) {
+TEST(BezierCurve2DTest, TimesIs) {
     // 当控制点在起终点连线上时，曲线退化为直线
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 1.0f); // p1 在 p0->p2 的连线上
@@ -64,7 +64,7 @@ TEST(BezierCurve2DTest, 二次贝塞尔退化为直线) {
 // 三次贝塞尔曲线
 // ============================================================
 
-TEST(BezierCurve2DTest, 三次贝塞尔起点等于p0) {
+TEST(BezierCurve2DTest, TheCubicBezierStartingPointIsEqualTop0) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 3.0f);
     glm::vec2 p2(3.0f, 3.0f);
@@ -74,7 +74,7 @@ TEST(BezierCurve2DTest, 三次贝塞尔起点等于p0) {
     EXPECT_FLOAT_EQ(result.y, p0.y);
 }
 
-TEST(BezierCurve2DTest, 三次贝塞尔终点等于p3) {
+TEST(BezierCurve2DTest, TheCubicBezierEndPointIsEqualTop3) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 3.0f);
     glm::vec2 p2(3.0f, 3.0f);
@@ -84,7 +84,7 @@ TEST(BezierCurve2DTest, 三次贝塞尔终点等于p3) {
     EXPECT_FLOAT_EQ(result.y, p3.y);
 }
 
-TEST(BezierCurve2DTest, 三次贝塞尔中点值正确) {
+TEST(BezierCurve2DTest, CubicBezierMidpointValueIsCorrect) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(0.0f, 2.0f);
     glm::vec2 p2(2.0f, 2.0f);
@@ -99,7 +99,7 @@ TEST(BezierCurve2DTest, 三次贝塞尔中点值正确) {
 }
 
 
-TEST(BezierCurve2DTest, 三次贝塞尔单调递增参数) {
+TEST(BezierCurve2DTest, CubicBezierMonotonicallyIncreasingParameters) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 1.0f);
     glm::vec2 p2(2.0f, 1.0f);

@@ -26,24 +26,24 @@ protected:
     FrustumCullingSystem sys;
 };
 
-TEST_F(FrustumCullingSystemTest, 空World调用Update不崩溃) {
+TEST_F(FrustumCullingSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
-TEST_F(FrustumCullingSystemTest, 带实体World调用Update不崩溃) {
+TEST_F(FrustumCullingSystemTest, BringEntityWorldCallsUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     EXPECT_NO_THROW(sys.Update(world));
 }
 
-TEST_F(FrustumCullingSystemTest, 带MeshRenderer实体Update不崩溃) {
+TEST_F(FrustumCullingSystemTest, BringMeshRendererEntityUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     world.registry().emplace<MeshRendererComponent>(e);
     EXPECT_NO_THROW(sys.Update(world));
 }
 
-TEST_F(FrustumCullingSystemTest, BoundingBoxComponent中心计算) {
+TEST_F(FrustumCullingSystemTest, BoundingBoxComponentcentralComputing) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-1.0f, -2.0f, -3.0f);
     bb.max_extents = glm::vec3(1.0f, 2.0f, 3.0f);
@@ -54,7 +54,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponent中心计算) {
     EXPECT_FLOAT_EQ(center.z, 0.0f);
 }
 
-TEST_F(FrustumCullingSystemTest, BoundingBoxComponent非对称中心) {
+TEST_F(FrustumCullingSystemTest, BoundingBoxComponentasymmetricCenter) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(0.0f, 0.0f, 0.0f);
     bb.max_extents = glm::vec3(2.0f, 4.0f, 6.0f);
@@ -65,7 +65,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponent非对称中心) {
     EXPECT_FLOAT_EQ(center.z, 3.0f);
 }
 
-TEST_F(FrustumCullingSystemTest, BoundingBoxComponent半范围计算) {
+TEST_F(FrustumCullingSystemTest, BoundingBoxComponenthalfRangeCalculation) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-2.0f, -4.0f, -6.0f);
     bb.max_extents = glm::vec3(2.0f, 4.0f, 6.0f);
@@ -76,7 +76,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponent半范围计算) {
     EXPECT_FLOAT_EQ(extents.z, 6.0f);
 }
 
-TEST_F(FrustumCullingSystemTest, Camera3DComponent默认值) {
+TEST_F(FrustumCullingSystemTest, Camera3DComponentDefaultValues) {
     Camera3DComponent cam;
     EXPECT_TRUE(cam.enabled);
     EXPECT_EQ(cam.priority, 0);
@@ -86,7 +86,7 @@ TEST_F(FrustumCullingSystemTest, Camera3DComponent默认值) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1000.0f);
 }
 
-TEST_F(FrustumCullingSystemTest, DirectionalLight3DComponent默认值) {
+TEST_F(FrustumCullingSystemTest, DirectionalLight3DComponentDefaultValues) {
     DirectionalLight3DComponent light;
     EXPECT_TRUE(light.enabled);
     EXPECT_TRUE(light.cast_shadow);
@@ -95,7 +95,7 @@ TEST_F(FrustumCullingSystemTest, DirectionalLight3DComponent默认值) {
     EXPECT_FLOAT_EQ(light.shadow_strength, 0.35f);
 }
 
-TEST_F(FrustumCullingSystemTest, 多次Update不崩溃) {
+TEST_F(FrustumCullingSystemTest, MultiTimesUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     world.registry().emplace<MeshRendererComponent>(e);

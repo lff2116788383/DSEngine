@@ -34,8 +34,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_definitions(-D GLM_FORCE_SWIZZLE)#GLM开启重排，随意转换。 vec2 v2 = v4.xz();
 add_definitions(-D GLM_ENABLE_EXPERIMENTAL)
 
-add_definitions(-D USE_FMOD_STUDIO)#是否使用fmod studio，加载bank文件的形式。
-
 # 注意：当前工程会把 vcpkg 的整个 lib 目录以通配方式拼进 MSVC 链接命令，
 # 其中如果存在 lua.lib，就会与源码内置 Lua 重复链接。
 # 这里显式忽略 Lua 默认库名，作为针对该项目链接命令的最小修复。
@@ -51,7 +49,11 @@ endif()
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
-option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
+if(ANDROID)
+    option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
+else()
+    option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" ON)
+endif()
 if(WIN32)
     option(DSE_ENABLE_D3D11 "Enable Direct3D 11 backend" ON)
 else()
@@ -68,6 +70,12 @@ option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 
+# --- 内存子系统 (engine/core/memory) ---
+option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
+option(DSE_MEM_TRACK_POINTERS "Register every allocation by pointer for precise leak location (slower)" OFF)
+set(DSE_MEM_BACKEND "system" CACHE STRING "General-heap backend: system | mimalloc (mimalloc requires the dependency, default system = zero new deps)")
+set_property(CACHE DSE_MEM_BACKEND PROPERTY STRINGS system mimalloc)
+
 # --- Android NDK 交叉编译默认值 ---
 if(ANDROID)
     set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
@@ -80,6 +88,47 @@ if(ANDROID)
     message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
 endif()
 
+
+# --- in-tree 依赖 submodule 完整性检查 ---
+# 本工程所有第三方依赖以 git submodule 形式内置于 depends/，克隆后必须先执行：
+#     git submodule update --init --recursive
+# 这里用代表性 sentinel 文件检测；缺失时给出明确指引，而非晦涩的下游编译/配置报错。
+set(_DSE_SUBMODULE_SENTINELS
+    "depends/glm/glm/glm.hpp"
+    "depends/imgui/imgui.h"
+    "depends/assimp/CMakeLists.txt"
+    "depends/glfw-3.3-3.4/CMakeLists.txt"
+    "depends/JoltPhysics/Build/CMakeLists.txt"
+    "depends/box2d-2.4.1/CMakeLists.txt"
+    "depends/spdlog/CMakeLists.txt"
+    "depends/entt-3.13.0/CMakeLists.txt"
+)
+if(DSE_ENABLE_VULKAN)
+    list(APPEND _DSE_SUBMODULE_SENTINELS
+        "depends/Vulkan-Headers/include/vulkan/vulkan.h"
+        "depends/glslang/CMakeLists.txt"
+        "depends/spirv-cross/CMakeLists.txt")
+endif()
+if(DSE_MEM_BACKEND STREQUAL "mimalloc")
+    list(APPEND _DSE_SUBMODULE_SENTINELS "depends/mimalloc/CMakeLists.txt")
+endif()
+set(_DSE_MISSING_SUBMODULES "")
+foreach(_dse_s IN LISTS _DSE_SUBMODULE_SENTINELS)
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${_dse_s}")
+        list(APPEND _DSE_MISSING_SUBMODULES "${_dse_s}")
+    endif()
+endforeach()
+if(_DSE_MISSING_SUBMODULES)
+    string(REPLACE ";" "\n    - " _DSE_MISSING_PRETTY "${_DSE_MISSING_SUBMODULES}")
+    message(FATAL_ERROR
+        "检测到依赖 submodule 缺失（depends/ 下内置第三方库未初始化）：\n"
+        "    - ${_DSE_MISSING_PRETTY}\n"
+        "\n"
+        "本工程所有依赖以 git submodule 内置于 depends/。请在仓库根目录执行：\n"
+        "    git submodule update --init --recursive\n"
+        "\n"
+        "完成后重新配置（VS：删除 build/ 目录后重新生成；命令行：重跑 cmake --preset）。")
+endif()
 
 if(DSE_ENABLE_NAVMESH)
     add_definitions(-D DSE_ENABLE_NAVMESH)
@@ -443,6 +492,11 @@ else()
     add_library(dse_engine STATIC ${DSE_ENGINE_ALL_SOURCES})
 endif()
 target_link_libraries(dse_engine PRIVATE box2d)
+# 崩溃报告子系统（engine/diagnostics/crash_handler.cpp）：Windows 上需 DbgHelp
+# 提供 MiniDumpWriteDump / StackWalk64 / Sym* 符号化。
+if(WIN32)
+    target_link_libraries(dse_engine PRIVATE Dbghelp)
+endif()
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_engine PRIVATE assimp)
 endif()
@@ -575,6 +629,40 @@ else()
     target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
 endif()
 
+# 内存追踪：在 Debug 与 RelWithDebInfo 配置生效（带调试信息的诊断构建），
+# Release 保持零开销。PUBLIC 以便测试/消费端口径一致。
+if(DSE_ENABLE_MEM_TRACKING)
+    target_compile_definitions(dse_engine PUBLIC
+        $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:DSE_ENABLE_MEM_TRACKING=1>)
+endif()
+if(DSE_MEM_TRACK_POINTERS)
+    target_compile_definitions(dse_engine PUBLIC DSE_MEM_TRACK_POINTERS=1)
+endif()
+
+# 通用堆后端：默认 system（零新增依赖）。mimalloc 为可选高性能后端，
+# 按仓库惯例以 git submodule 内置于 depends/mimalloc，源码 add_subdirectory 编入。
+# 仅当显式选择 mimalloc 时才编入 + 链接 + 定义 DSE_MEM_USE_MIMALLOC；
+# 否则 mimalloc_allocator.cpp 编译为空翻译单元，对默认构建零影响。
+if(DSE_MEM_BACKEND STREQUAL "mimalloc")
+    # 禁用 mimalloc 自带的测试/动态库/全局 override，仅编静态库。
+    set(MI_BUILD_TESTS  OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_OBJECT OFF CACHE BOOL "" FORCE)
+    set(MI_OVERRIDE     OFF CACHE BOOL "" FORCE)
+    add_subdirectory(depends/mimalloc EXCLUDE_FROM_ALL)
+    if(TARGET mimalloc-static)
+        target_link_libraries(dse_engine PRIVATE mimalloc-static)
+    else()
+        target_link_libraries(dse_engine PRIVATE mimalloc)
+    endif()
+    # include 目录随静态库目标传播；显式补一份以防不同版本未导出。
+    target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/mimalloc/include)
+    target_compile_definitions(dse_engine PRIVATE DSE_MEM_USE_MIMALLOC=1)
+    message(STATUS "Memory backend: mimalloc (depends/mimalloc submodule)")
+else()
+    message(STATUS "Memory backend: system (default)")
+endif()
+
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /utf-8 /wd5033 /wd4834)
 endif()
@@ -694,6 +782,9 @@ endif()
 
 # Standalone game runtime (no editor UI)
 add_subdirectory(apps/standalone)
+
+# 工具链：dse CLI（headless：建项目 / 打包加密 / 完整 build）
+add_subdirectory(apps/tools/dse_cli)
 
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
@@ -913,6 +1004,26 @@ install(FILES
 )
 
 enable_testing()
+
+# ── net/http 回环冒烟测试接入 ctest ───────────────────────────────────────────
+# 这些是独立可执行（127.0.0.1 回环，退出码 0=通过），仅在对应模块启用时存在
+# （-DDSE_ENABLE_HTTP=ON / -DDSE_ENABLE_NET=ON）。注册进 ctest 后，opt-in 构建
+# 可在默认 ctest 运行中自动自检；不影响未启用这两个模块的默认构建/CI。
+foreach(_smoke_target
+        dse_http_smoke
+        dse_http_lua_smoke
+        dse_net_smoke
+        dse_net_capi_smoke
+        dse_net_lua_smoke
+        dse_repl_smoke)
+    if(TARGET ${_smoke_target})
+        add_test(NAME ${_smoke_target} COMMAND ${_smoke_target})
+        set_tests_properties(${_smoke_target} PROPERTIES
+            LABELS "smoke;net_http"
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            TIMEOUT 60)
+    endif()
+endforeach()
 
 if(DSE_BUILD_GTESTS)
     set(DSE_LOCAL_GTEST_DIR "${CMAKE_SOURCE_DIR}/depends/googletest-1.17.0")

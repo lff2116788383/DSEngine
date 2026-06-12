@@ -30,17 +30,17 @@ protected:
     TilemapSystem system;
 };
 
-TEST_F(TilemapSystemTest, 空World调用Update不崩溃) {
+TEST_F(TilemapSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.Update(world.registry()));
 }
 
-TEST_F(TilemapSystemTest, 无TilemapComponent时Update不崩溃) {
+TEST_F(TilemapSystemTest, WithoutTilemapComponentWhenUpdateDoesNotCrash) {
     auto entity = world.CreateEntity();
     world.registry().emplace<TransformComponent>(entity);
     EXPECT_NO_THROW(system.Update(world.registry()));
 }
 
-TEST_F(TilemapSystemTest, 有效瓦片数据生成运行时实体) {
+TEST_F(TilemapSystemTest, ValiddatagenerateWhenEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     tf.position = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -60,7 +60,7 @@ TEST_F(TilemapSystemTest, 有效瓦片数据生成运行时实体) {
     EXPECT_FALSE(tilemap.dirty);
 }
 
-TEST_F(TilemapSystemTest, 空瓦片ID不生成实体) {
+TEST_F(TilemapSystemTest, EmptyIDNotgenerateEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
@@ -75,7 +75,7 @@ TEST_F(TilemapSystemTest, 空瓦片ID不生成实体) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
-TEST_F(TilemapSystemTest, 无效瓦片数据跳过) {
+TEST_F(TilemapSystemTest, Invaliddata) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
@@ -91,7 +91,7 @@ TEST_F(TilemapSystemTest, 无效瓦片数据跳过) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
-TEST_F(TilemapSystemTest, dirty为false时不更新) {
+TEST_F(TilemapSystemTest, DirtyIsfalseNotUpdatedFromTimeToTime) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     tf.dirty = false; // Transform 也不脏
@@ -107,7 +107,7 @@ TEST_F(TilemapSystemTest, dirty为false时不更新) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
-TEST_F(TilemapSystemTest, TransformDirty传播至Tilemap) {
+TEST_F(TilemapSystemTest, TransformDirtyspreadToTilemap) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     tf.position = glm::vec3(5.0f, 0.0f, 0.0f);
@@ -126,7 +126,7 @@ TEST_F(TilemapSystemTest, TransformDirty传播至Tilemap) {
     EXPECT_FALSE(tilemap.dirty);
 }
 
-TEST_F(TilemapSystemTest, generate_colliders生成碰撞体) {
+TEST_F(TilemapSystemTest, generate_CollidersGenerateCollisionBody) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
@@ -146,7 +146,7 @@ TEST_F(TilemapSystemTest, generate_colliders生成碰撞体) {
     EXPECT_TRUE(world.registry().all_of<BoxCollider2DComponent>(tile_entity));
 }
 
-TEST_F(TilemapSystemTest, 瓦片UV根据图集计算) {
+TEST_F(TilemapSystemTest, UVset) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     auto& tilemap = world.registry().emplace<TilemapComponent>(entity);
@@ -169,7 +169,7 @@ TEST_F(TilemapSystemTest, 瓦片UV根据图集计算) {
     EXPECT_FLOAT_EQ(sprite0.uv.w, 0.5f);  // v1
 }
 
-TEST_F(TilemapSystemTest, 重复Update不重复生成实体) {
+TEST_F(TilemapSystemTest, UpdateNotgenerateEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
     auto& tilemap = world.registry().emplace<TilemapComponent>(entity);

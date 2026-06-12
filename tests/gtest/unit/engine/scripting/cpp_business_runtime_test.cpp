@@ -15,19 +15,19 @@ protected:
     AssetManager assets;
 };
 
-TEST_F(CppBusinessRuntimeTest, 未配置hooks时Bootstrap返回false) {
+TEST_F(CppBusinessRuntimeTest, NotConfigurationhooksWhenBootstrapReturnsfalse) {
     ConfigureCppBusinessHooks({});
     EXPECT_FALSE(BootstrapCppBusiness(world, assets));
 }
 
-TEST_F(CppBusinessRuntimeTest, 缺少tick时Bootstrap返回false) {
+TEST_F(CppBusinessRuntimeTest, MissingtickWhenBootstrapReturnsfalse) {
     CppBusinessHooks hooks;
     hooks.bootstrap = [](World&, AssetManager&) {};
     ConfigureCppBusinessHooks(std::move(hooks));
     EXPECT_FALSE(BootstrapCppBusiness(world, assets));
 }
 
-TEST_F(CppBusinessRuntimeTest, BootstrapTickShutdown按配置调用) {
+TEST_F(CppBusinessRuntimeTest, BootstrapTickShutdownCallByConfiguration) {
     int bootstrap_count = 0;
     int tick_count = 0;
     int shutdown_count = 0;
@@ -59,14 +59,14 @@ TEST_F(CppBusinessRuntimeTest, BootstrapTickShutdown按配置调用) {
     EXPECT_FLOAT_EQ(last_dt, 0.25f);
 }
 
-TEST_F(CppBusinessRuntimeTest, 未配置tick时Tick为NoOp) {
+TEST_F(CppBusinessRuntimeTest, NotConfigurationtickWhenTickIsNoOp) {
     CppBusinessHooks hooks;
     hooks.shutdown = []() {};
     ConfigureCppBusinessHooks(std::move(hooks));
     EXPECT_NO_THROW(TickCppBusiness(world, 0.016f));
 }
 
-TEST_F(CppBusinessRuntimeTest, 未配置shutdown时Shutdown为NoOp) {
+TEST_F(CppBusinessRuntimeTest, NotConfigurationshutdownWhenShutdownIsNoOp) {
     CppBusinessHooks hooks;
     hooks.tick = [](World&, float) {};
     ConfigureCppBusinessHooks(std::move(hooks));

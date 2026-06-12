@@ -25,7 +25,7 @@ using namespace dse::render;
 // RHI Factory — Vulkan
 // ============================================================
 
-TEST(RhiFactoryVulkanTest, CreateRhiDevice_Vulkan返回非空) {
+TEST(RhiFactoryVulkanTest, CreateRhiDevice_VulkanReturnNonEmpty) {
     auto device = CreateRhiDevice(RhiBackend::Vulkan);
     EXPECT_NE(device, nullptr);
 }
@@ -34,44 +34,44 @@ TEST(RhiFactoryVulkanTest, CreateRhiDevice_Vulkan返回非空) {
 // VulkanRhiDevice 无 GPU 测试
 // ============================================================
 
-TEST(VkRhiDeviceBasicTest, 构造析构不崩溃) {
+TEST(VkRhiDeviceBasicTest, DoesNotCrash) {
     VulkanRhiDevice device;
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时Shutdown安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedShutdownSafety) {
     VulkanRhiDevice device;
     device.Shutdown();
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时BeginFrame安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedBeginFrameSafety) {
     VulkanRhiDevice device;
     device.BeginFrame();
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时EndFrame安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedEndFrameSafety) {
     VulkanRhiDevice device;
     device.EndFrame();
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时Submit安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedSubmitSafety) {
     VulkanRhiDevice device;
     auto cmd = std::make_shared<VulkanCommandBuffer>();
     device.Submit(cmd);
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时CreateBuffer返回零) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateBufferReturnsZero) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时CreateTexture2D返回零) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时CreateRenderTarget返回零) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     VulkanRhiDevice device;
     RenderTargetDesc desc{};
     desc.width = 256;
@@ -81,13 +81,13 @@ TEST(VkRhiDeviceBasicTest, 未初始化时CreateRenderTarget返回零) {
     EXPECT_EQ(handle, 0u);
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时UpdateBuffer安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedUpdateBufferSafety) {
     VulkanRhiDevice device;
     float data[] = {0.5f};
     device.UpdateBuffer(999, 0, sizeof(data), data, false);
 }
 
-TEST(VkRhiDeviceBasicTest, 未初始化时删除操作安全) {
+TEST(VkRhiDeviceBasicTest, WhenNotInitializedDeleteSafety) {
     VulkanRhiDevice device;
     device.DeleteRenderTarget(999);
     device.DeleteTexture(999);
@@ -95,7 +95,7 @@ TEST(VkRhiDeviceBasicTest, 未初始化时删除操作安全) {
     device.DeleteBuffer(999);
 }
 
-TEST(VkRhiDeviceBasicTest, LastFrameStats默认值为零) {
+TEST(VkRhiDeviceBasicTest, LastFrameStatsDefaultValueIsZero) {
     VulkanRhiDevice device;
     const auto& stats = device.LastFrameStats();
     EXPECT_EQ(stats.draw_calls, 0);
@@ -103,7 +103,7 @@ TEST(VkRhiDeviceBasicTest, LastFrameStats默认值为零) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
-TEST(VkRhiDeviceBasicTest, 子系统访问器可调用) {
+TEST(VkRhiDeviceBasicTest, SystemCanCalls) {
     VulkanRhiDevice device;
     auto& res    = device.resource_mgr();
     auto& state  = device.state_mgr();

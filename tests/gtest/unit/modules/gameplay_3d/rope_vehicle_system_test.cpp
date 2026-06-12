@@ -33,11 +33,11 @@ protected:
     RopeSystem system;
 };
 
-TEST_F(RopeSystemTest, 空WorldFixedUpdate不崩溃) {
+TEST_F(RopeSystemTest, EmptyWorldFixedUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.FixedUpdate(world, kDt));
 }
 
-TEST_F(RopeSystemTest, 初始化生成段数加一的粒子) {
+TEST_F(RopeSystemTest, InitializegenerateOne) {
     Entity e = CreateTransformEntity(world, glm::vec3(1.0f, 5.0f, -2.0f));
     auto& rope = world.registry().emplace<RopeComponent>(e);
     rope.segment_count = 4;
@@ -55,7 +55,7 @@ TEST_F(RopeSystemTest, 初始化生成段数加一的粒子) {
     EXPECT_NEAR(rope.positions.back().y, 3.0f, 0.001f);
 }
 
-TEST_F(RopeSystemTest, 禁用RopeComponent不初始化) {
+TEST_F(RopeSystemTest, DisabledRopeComponentNotInitialize) {
     Entity e = CreateTransformEntity(world, glm::vec3(0.0f));
     auto& rope = world.registry().emplace<RopeComponent>(e);
     rope.enabled = false;
@@ -66,7 +66,7 @@ TEST_F(RopeSystemTest, 禁用RopeComponent不初始化) {
     EXPECT_TRUE(rope.positions.empty());
 }
 
-TEST_F(RopeSystemTest, DeltaTime为零时只初始化不模拟重力) {
+TEST_F(RopeSystemTest, DeltaTimeWhenItIsZeroItOnlyInitializesAndDoesNotSimulateGravity) {
     Entity e = CreateTransformEntity(world, glm::vec3(0.0f, 3.0f, 0.0f));
     auto& rope = world.registry().emplace<RopeComponent>(e);
     rope.segment_count = 2;
@@ -80,7 +80,7 @@ TEST_F(RopeSystemTest, DeltaTime为零时只初始化不模拟重力) {
     EXPECT_NEAR(rope.positions[2].y, 1.0f, 0.001f);
 }
 
-TEST_F(RopeSystemTest, 锚点实体约束首尾粒子位置) {
+TEST_F(RopeSystemTest, PointEntity) {
     // RopeComponent 使用 0 表示“无锚点”，因此先创建一个占位实体，
     // 避免第一个有效锚点实体 ID 恰好为 0 时被当作未设置。
     (void)world.CreateEntity();
@@ -109,7 +109,7 @@ TEST_F(RopeSystemTest, 锚点实体约束首尾粒子位置) {
     EXPECT_NEAR(rope.positions.back().z, -0.3f, 0.001f);
 }
 
-TEST_F(RopeSystemTest, 地形高度约束防止粒子低于地面加半径) {
+TEST_F(RopeSystemTest, Half) {
     Entity terrain = world.CreateEntity();
     auto& hm = world.registry().emplace<TerrainHeightmapComponent>(terrain);
     hm.origin_x = 0.0f;
@@ -141,11 +141,11 @@ protected:
     VehicleSystem system;
 };
 
-TEST_F(VehicleSystemTest, 空WorldFixedUpdate不崩溃) {
+TEST_F(VehicleSystemTest, EmptyWorldFixedUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.FixedUpdate(world, kDt));
 }
 
-TEST_F(VehicleSystemTest, 无Physics注入时仍初始化默认四轮) {
+TEST_F(VehicleSystemTest, WithoutPhysicsInjectsWhenStillInitializedefault) {
     Entity e = CreateTransformEntity(world, glm::vec3(0.0f));
     auto& vehicle = world.registry().emplace<VehicleComponent>(e);
     world.registry().emplace<RigidBody3DComponent>(e);
@@ -161,7 +161,7 @@ TEST_F(VehicleSystemTest, 无Physics注入时仍初始化默认四轮) {
     EXPECT_TRUE(vehicle.wheels[3].is_drive_wheel);
 }
 
-TEST_F(VehicleSystemTest, 自定义车轮初始化保留配置并创建状态) {
+TEST_F(VehicleSystemTest, InitializeConfigurationCreateState) {
     Entity e = CreateTransformEntity(world, glm::vec3(0.0f));
     auto& vehicle = world.registry().emplace<VehicleComponent>(e);
     world.registry().emplace<RigidBody3DComponent>(e);
@@ -182,7 +182,7 @@ TEST_F(VehicleSystemTest, 自定义车轮初始化保留配置并创建状态) {
     EXPECT_TRUE(vehicle.wheels[0].is_steer_wheel);
 }
 
-TEST_F(VehicleSystemTest, 禁用VehicleComponent不初始化) {
+TEST_F(VehicleSystemTest, DisabledVehicleComponentNotInitialize) {
     Entity e = CreateTransformEntity(world, glm::vec3(0.0f));
     auto& vehicle = world.registry().emplace<VehicleComponent>(e);
     world.registry().emplace<RigidBody3DComponent>(e);
@@ -195,7 +195,7 @@ TEST_F(VehicleSystemTest, 禁用VehicleComponent不初始化) {
     EXPECT_TRUE(vehicle.wheel_states.empty());
 }
 
-TEST_F(VehicleSystemTest, 缺少刚体或Transform时不会被处理) {
+TEST_F(VehicleSystemTest, MissingOrTransformWhenNotBy) {
     Entity only_vehicle = world.CreateEntity();
     auto& vehicle = world.registry().emplace<VehicleComponent>(only_vehicle);
 

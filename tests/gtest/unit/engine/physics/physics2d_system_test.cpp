@@ -85,7 +85,7 @@ protected:
 // 1. 构造 / 析构
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 构造与析构不崩溃) {
+TEST_F(Physics2DSystemTest, AndDoesNotCrash) {
     Physics2DSystem sys;
 }
 
@@ -93,7 +93,7 @@ TEST_F(Physics2DSystemTest, 构造与析构不崩溃) {
 // 2. Init 创建物理世界
 // ============================================================
 
-TEST_F(Physics2DSystemTest, Init后刚体获得RuntimeBody) {
+TEST_F(Physics2DSystemTest, InitAfterTheRigidBodyIsObtainedRuntimeBody) {
     Entity e = CreateDynamicBox(0.0f, 5.0f);
     physics.Init(world);
 
@@ -101,7 +101,7 @@ TEST_F(Physics2DSystemTest, Init后刚体获得RuntimeBody) {
     EXPECT_NE(rb.runtime_body, nullptr);
 }
 
-TEST_F(Physics2DSystemTest, Init后碰撞体获得RuntimeFixture) {
+TEST_F(Physics2DSystemTest, InitPostCollisionBodyObtainedRuntimeFixture) {
     Entity e = CreateDynamicBox(0.0f, 5.0f);
     physics.Init(world);
 
@@ -113,14 +113,14 @@ TEST_F(Physics2DSystemTest, Init后碰撞体获得RuntimeFixture) {
 // 3. Shutdown 多次调用
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 多次Shutdown不崩溃) {
+TEST_F(Physics2DSystemTest, MultiTimesShutdownDoesNotCrash) {
     physics.Init(world);
     physics.Shutdown();
     physics.Shutdown();
     physics.Shutdown();
 }
 
-TEST_F(Physics2DSystemTest, Shutdown后再Init可正常工作) {
+TEST_F(Physics2DSystemTest, ShutdownLaterInitworksFine) {
     Entity e = CreateDynamicBox(0.0f, 0.0f);
     physics.Init(world);
     physics.Shutdown();
@@ -134,12 +134,12 @@ TEST_F(Physics2DSystemTest, Shutdown后再Init可正常工作) {
 // 4. 空场景 FixedUpdate
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 空场景FixedUpdate不崩溃) {
+TEST_F(Physics2DSystemTest, EmptySceneFixedUpdateDoesNotCrash) {
     physics.Init(world);
     physics.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST_F(Physics2DSystemTest, 未初始化时FixedUpdate不崩溃) {
+TEST_F(Physics2DSystemTest, WhenNotInitializedFixedUpdateDoesNotCrash) {
     physics.FixedUpdate(world, 1.0f / 60.0f);
 }
 
@@ -147,7 +147,7 @@ TEST_F(Physics2DSystemTest, 未初始化时FixedUpdate不崩溃) {
 // 5. 动态刚体在重力下下落
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 动态刚体在重力下Y坐标减小) {
+TEST_F(Physics2DSystemTest, ExistY) {
     Entity e = CreateDynamicBox(0.0f, 10.0f);
     physics.Init(world);
 
@@ -166,7 +166,7 @@ TEST_F(Physics2DSystemTest, 动态刚体在重力下Y坐标减小) {
 // 6. 静态刚体不移动
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 静态刚体位置不变) {
+TEST_F(Physics2DSystemTest, Constant) {
     Entity e = CreateStaticBox(0.0f, 0.0f);
     physics.Init(world);
 
@@ -185,7 +185,7 @@ TEST_F(Physics2DSystemTest, 静态刚体位置不变) {
 // 7. 碰撞检测：动态物体落到静态平台上会停住
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 动态物体落到静态平台停止下落) {
+TEST_F(Physics2DSystemTest, To) {
     CreateStaticBox(0.0f, -5.0f, {20.0f, 1.0f});
     Entity dynamic_e = CreateDynamicBox(0.0f, 5.0f, {1.0f, 1.0f});
     physics.Init(world);
@@ -203,7 +203,7 @@ TEST_F(Physics2DSystemTest, 动态物体落到静态平台停止下落) {
 // 8. Raycast 命中
 // ============================================================
 
-TEST_F(Physics2DSystemTest, Raycast命中存在的物体) {
+TEST_F(Physics2DSystemTest, RaycastHitAnExistingObject) {
     CreateStaticBox(0.0f, 0.0f, {4.0f, 4.0f});
     physics.Init(world);
 
@@ -224,7 +224,7 @@ TEST_F(Physics2DSystemTest, Raycast命中存在的物体) {
 // 9. Raycast 未命中
 // ============================================================
 
-TEST_F(Physics2DSystemTest, Raycast空场景返回false) {
+TEST_F(Physics2DSystemTest, RaycastEmptySceneReturnfalse) {
     physics.Init(world);
 
     Entity hit_entity = entt::null;
@@ -239,7 +239,7 @@ TEST_F(Physics2DSystemTest, Raycast空场景返回false) {
     EXPECT_FALSE(hit);
 }
 
-TEST_F(Physics2DSystemTest, Raycast偏离物体返回false) {
+TEST_F(Physics2DSystemTest, RaycastDeviatingObjectReturnsfalse) {
     CreateStaticBox(0.0f, 0.0f, {2.0f, 2.0f});
     physics.Init(world);
 
@@ -255,7 +255,7 @@ TEST_F(Physics2DSystemTest, Raycast偏离物体返回false) {
     EXPECT_FALSE(hit);
 }
 
-TEST_F(Physics2DSystemTest, 未初始化时Raycast返回false) {
+TEST_F(Physics2DSystemTest, WhenNotInitializedRaycastReturnsfalse) {
     Entity hit_entity = entt::null;
     glm::vec2 hit_point{0.0f};
     glm::vec2 hit_normal{0.0f};
@@ -272,18 +272,18 @@ TEST_F(Physics2DSystemTest, 未初始化时Raycast返回false) {
 // 10. DestroyJoint 安全性
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 无关节实体调用DestroyJoint不崩溃) {
+TEST_F(Physics2DSystemTest, WithoutEntityCallsDestroyJointDoesNotCrash) {
     Entity e = CreateDynamicBox(0.0f, 0.0f);
     physics.Init(world);
     physics.DestroyJoint(world, e);
 }
 
-TEST_F(Physics2DSystemTest, 对无效实体调用DestroyJoint不崩溃) {
+TEST_F(Physics2DSystemTest, InvalidEntityCallsDestroyJointDoesNotCrash) {
     physics.Init(world);
     physics.DestroyJoint(world, entt::null);
 }
 
-TEST_F(Physics2DSystemTest, 未初始化时DestroyJoint不崩溃) {
+TEST_F(Physics2DSystemTest, WhenNotInitializedDestroyJointDoesNotCrash) {
     Entity e = CreateDynamicBox(0.0f, 0.0f);
     physics.DestroyJoint(world, e);
 }
@@ -292,7 +292,7 @@ TEST_F(Physics2DSystemTest, 未初始化时DestroyJoint不崩溃) {
 // 11. 圆形碰撞体
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 圆形碰撞体Init后获得RuntimeFixture) {
+TEST_F(Physics2DSystemTest, InitAfterRuntimeFixture) {
     Entity e = CreateDynamicCircle(0.0f, 5.0f, 1.0f);
     physics.Init(world);
 
@@ -300,7 +300,7 @@ TEST_F(Physics2DSystemTest, 圆形碰撞体Init后获得RuntimeFixture) {
     EXPECT_NE(cc.runtime_fixture, nullptr);
 }
 
-TEST_F(Physics2DSystemTest, 圆形刚体在重力下下落) {
+TEST_F(Physics2DSystemTest, Exist) {
     Entity e = CreateDynamicCircle(0.0f, 10.0f, 0.5f);
     physics.Init(world);
 
@@ -319,7 +319,7 @@ TEST_F(Physics2DSystemTest, 圆形刚体在重力下下落) {
 // 12. 碰撞回调触发
 // ============================================================
 
-TEST_F(Physics2DSystemTest, 碰撞回调被触发) {
+TEST_F(Physics2DSystemTest, ByTriggers) {
     CreateStaticBox(0.0f, -2.0f, {10.0f, 1.0f});
     Entity dynamic_e = CreateDynamicBox(0.0f, 2.0f, {1.0f, 1.0f});
     physics.Init(world);
@@ -339,7 +339,7 @@ TEST_F(Physics2DSystemTest, 碰撞回调被触发) {
     EXPECT_TRUE(collision_detected) << "动态物体落向静态平台应触发碰撞回调";
 }
 
-TEST_F(Physics2DSystemTest, 触发器事件被投递到待处理队列) {
+TEST_F(Physics2DSystemTest, TriggerseventByTo) {
     Entity sensor_e = CreateStaticBox(0.0f, -2.0f, {10.0f, 1.0f});
     world.registry().get<BoxCollider2DComponent>(sensor_e).is_trigger = true;
 

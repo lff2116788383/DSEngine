@@ -23,7 +23,7 @@ protected:
 // 状态管理
 // ============================================================
 
-TEST_F(AnimStateMachineTest, 添加状态) {
+TEST_F(AnimStateMachineTest, AddToState) {
     AnimState state;
     state.name = "Idle";
     state.danim_path = "anim/idle.danim";
@@ -35,7 +35,7 @@ TEST_F(AnimStateMachineTest, 添加状态) {
     EXPECT_EQ(states.at("Idle").danim_path, "anim/idle.danim");
 }
 
-TEST_F(AnimStateMachineTest, 设置默认状态) {
+TEST_F(AnimStateMachineTest, SetUpDefaultState) {
     AnimState state;
     state.name = "Walk";
     sm.AddState(state);
@@ -47,26 +47,26 @@ TEST_F(AnimStateMachineTest, 设置默认状态) {
 // 参数管理
 // ============================================================
 
-TEST_F(AnimStateMachineTest, Float参数读写) {
+TEST_F(AnimStateMachineTest, FloatParameterReadingAndWriting) {
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     sm.SetFloat("speed", 5.0f);
     EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 5.0f);
 }
 
-TEST_F(AnimStateMachineTest, Int参数读写) {
+TEST_F(AnimStateMachineTest, IntParameterReadingAndWriting) {
     sm.AddParameter("count", AnimParamType::Int, 0);
     sm.SetInt("count", 3);
     EXPECT_EQ(sm.GetInt("count"), 3);
 }
 
-TEST_F(AnimStateMachineTest, Bool参数读写) {
+TEST_F(AnimStateMachineTest, BoolParameterReadingAndWriting) {
     sm.AddParameter("alive", AnimParamType::Bool, true);
     EXPECT_TRUE(sm.GetBool("alive"));
     sm.SetBool("alive", false);
     EXPECT_FALSE(sm.GetBool("alive"));
 }
 
-TEST_F(AnimStateMachineTest, Trigger设置与重置) {
+TEST_F(AnimStateMachineTest, TriggerSetupAndReset) {
     sm.AddTrigger("jump");
     sm.SetTrigger("jump");
     auto& params = sm.GetParameters();
@@ -80,7 +80,7 @@ TEST_F(AnimStateMachineTest, Trigger设置与重置) {
 // 条件评估
 // ============================================================
 
-TEST_F(AnimStateMachineTest, 评估转换_Greater条件满足) {
+TEST_F(AnimStateMachineTest, Transition_Greater) {
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     sm.SetFloat("speed", 5.0f);
 
@@ -95,7 +95,7 @@ TEST_F(AnimStateMachineTest, 评估转换_Greater条件满足) {
     EXPECT_TRUE(sm.EvaluateTransition(trans, 1.0f));
 }
 
-TEST_F(AnimStateMachineTest, 评估转换_If条件Bool判断) {
+TEST_F(AnimStateMachineTest, Transition_IfBool) {
     sm.AddParameter("grounded", AnimParamType::Bool, true);
 
     AnimTransition trans;
@@ -110,7 +110,7 @@ TEST_F(AnimStateMachineTest, 评估转换_If条件Bool判断) {
     EXPECT_FALSE(sm.EvaluateTransition(trans, 1.0f));
 }
 
-TEST_F(AnimStateMachineTest, 评估转换_无条件且有退出时间) {
+TEST_F(AnimStateMachineTest, Transition_WithoutWithTime) {
     AnimTransition trans;
     trans.has_exit_time = true;
     trans.exit_time = 0.8f;

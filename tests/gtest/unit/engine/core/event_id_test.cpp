@@ -19,38 +19,38 @@ using namespace dse::core;
 // EventId 测试
 // ============================================================
 
-TEST(EventIdTest, Fnv1aHash一致性) {
+TEST(EventIdTest, Fnv1aHashconsistency) {
     // 相同字符串必须产生相同哈希值
     constexpr EventId id1 = MakeEventId("TestEvent");
     constexpr EventId id2 = MakeEventId("TestEvent");
     EXPECT_EQ(id1, id2);
 }
 
-TEST(EventIdTest, Fnv1aHash不同字符串产生不同值) {
+TEST(EventIdTest, Fnv1aHashDifferentStringsProduceDifferentValues) {
     constexpr EventId id1 = MakeEventId("EventA");
     constexpr EventId id2 = MakeEventId("EventB");
     EXPECT_NE(id1, id2);
 }
 
-TEST(EventIdTest, 空字符串哈希等于FNV偏移基值) {
+TEST(EventIdTest, EmptyFNVoffset) {
     constexpr EventId empty_hash = MakeEventId("");
     constexpr EventId fnv_offset = 0xcbf29ce484222325ull;
     EXPECT_EQ(empty_hash, fnv_offset);
 }
 
-TEST(EventIdTest, 预定义事件ID非零) {
+TEST(EventIdTest, EventIDNonZero) {
     EXPECT_NE(events::kUiClick, 0u);
     EXPECT_NE(events::kResourceLoaded, 0u);
     EXPECT_NE(events::kSceneLifecycle, 0u);
 }
 
-TEST(EventIdTest, 预定义事件ID互不相等) {
+TEST(EventIdTest, EventIDNotEqual) {
     EXPECT_NE(events::kUiClick, events::kResourceLoaded);
     EXPECT_NE(events::kUiClick, events::kSceneLifecycle);
     EXPECT_NE(events::kResourceLoaded, events::kSceneLifecycle);
 }
 
-TEST(EventIdTest, 编译期求值) {
+TEST(EventIdTest, TestCase6) {
     // 验证 MakeEventId 可以在编译期使用（constexpr）
     static_assert(MakeEventId("CompileTime") != 0, "MakeEventId must be constexpr");
     SUCCEED();

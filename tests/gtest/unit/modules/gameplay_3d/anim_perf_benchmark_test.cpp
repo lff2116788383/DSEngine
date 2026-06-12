@@ -42,7 +42,7 @@ private:
 // AnimLayerBlendSystem 批量实体性能
 // ============================================================
 
-TEST(AnimPerfBenchmark, LayerBlendUpdate_100实体_3层) {
+TEST(AnimPerfBenchmark, LayerBlendUpdate_Case100Entity_Case3layer) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
 
@@ -88,7 +88,7 @@ TEST(AnimPerfBenchmark, LayerBlendUpdate_100实体_3层) {
 // IKSolverSystem 批量实体性能
 // ============================================================
 
-TEST(AnimPerfBenchmark, IKSolverUpdate_100实体_2链) {
+TEST(AnimPerfBenchmark, IKSolverUpdate_Case100Entity_Case2chain) {
     World world;
 
     constexpr int N = 100;
@@ -133,7 +133,7 @@ TEST(AnimPerfBenchmark, IKSolverUpdate_100实体_2链) {
 // anim_clip_eval::Interpolate 吞吐量
 // ============================================================
 
-TEST(AnimPerfBenchmark, Interpolate_Vec3_100K次) {
+TEST(AnimPerfBenchmark, Interpolate_Vec3_Case100KTimes) {
     constexpr int N = 100000;
 
     std::vector<float> times = {0.0f, 0.5f, 1.0f, 1.5f, 2.0f};
@@ -159,7 +159,7 @@ TEST(AnimPerfBenchmark, Interpolate_Vec3_100K次) {
     (void)sink;
 }
 
-TEST(AnimPerfBenchmark, Interpolate_Quat_100K次) {
+TEST(AnimPerfBenchmark, Interpolate_Quat_Case100KTimes) {
     constexpr int N = 100000;
 
     std::vector<float> times = {0.0f, 1.0f, 2.0f};
@@ -185,7 +185,7 @@ TEST(AnimPerfBenchmark, Interpolate_Quat_100K次) {
     (void)sink;
 }
 
-TEST(AnimPerfBenchmark, AdvanceClipTime_1M次) {
+TEST(AnimPerfBenchmark, AdvanceClipTime_Case1MTimes) {
     constexpr int N = 1000000;
 
     volatile float sink = 0.0f;

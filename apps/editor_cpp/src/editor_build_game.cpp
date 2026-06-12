@@ -9,11 +9,13 @@
 
 #include "engine/assets/pak_writer.h"
 #include "engine/assets/asset_scanner.h"
+#include "engine/assets/bundle_packer.h"
 #include "engine/base/debug.h"
 
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <fstream>
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -38,6 +40,8 @@ struct BuildState {
     BuildPlatform platform = BuildPlatform::Windows;
     BuildConfig config = BuildConfig::Release;
     bool compress_pak = true;
+    bool encrypt = false;              // 加密为 game.bun（AES-128-CTR）而非明文 game.dpak
+    char encrypt_key[65] = {};         // >=16 字符的 AES 密钥
     char icon_path[512] = {};
 
     // Build progress
@@ -49,6 +53,8 @@ struct BuildState {
     std::thread build_thread;
     std::string last_output_dir;
     std::string last_exe_name;
+
+    std::string last_launch_args;      // 加密构建时通过 launch 参数传 --bundle/--key/--script
 
     bool dialog_open = false;
     bool launch_after_build = false;
@@ -143,6 +149,74 @@ void DoBuild(BuildState& state) {
         }
     }
     AppendLog(state, "Copied " + std::to_string(dll_count) + " DLLs");
+
+    state.last_launch_args.clear();
+
+    // 3a. 端到端加密构建：把项目 scripts/scenes/assets 暂存后打包成加密 game.bun。
+    //     与 dse CLI build / 运行时 MountBundle 共用同一 PackDirectoryToBundle，磁盘不留明文。
+    if (state.encrypt) {
+        auto& proj = ProjectManager::Get();
+        std::string key(state.encrypt_key);
+        if (!proj.HasOpenProject()) {
+            AppendLog(state, "ERROR: Encrypted build requires an open project");
+            state.build_success = false; state.build_done = true; state.building = false; return;
+        }
+        if (key.size() < 16) {
+            AppendLog(state, "ERROR: Encryption key must be at least 16 characters");
+            state.build_success = false; state.build_done = true; state.building = false; return;
+        }
+
+        fs::path project_root = proj.GetProjectRoot();
+        fs::path staging = out_dir / ".dse_stage";
+        fs::remove_all(staging, ec);
+        fs::create_directories(staging, ec);
+        for (const char* sub : {"scripts", "scenes", "assets"}) {
+            fs::path src = project_root / sub;
+            if (fs::exists(src, ec)) {
+                fs::copy(src, staging / sub,
+                         fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+            }
+        }
+        if (fs::exists(project_root / "project.dseproj", ec)) {
+            fs::copy_file(project_root / "project.dseproj", staging / "project.dseproj",
+                          fs::copy_options::overwrite_existing, ec);
+        }
+
+        fs::path bundle_path = out_dir / "game.bun";
+        AppendLog(state, "Packing encrypted bundle " + bundle_path.string() + " ...");
+        bool ok = dse::assets::PackDirectoryToBundle(staging.string(), bundle_path.string(), key);
+        fs::remove_all(staging, ec);
+        if (!ok) {
+            AppendLog(state, "ERROR: Failed to write encrypted bundle");
+            state.build_success = false; state.build_done = true; state.building = false; return;
+        }
+
+        std::string entry = proj.GetDescriptor().entry_script;
+        if (entry.empty()) entry = "scripts/main.lua";
+        std::string launch_args = "--bundle=game.bun --key=" + key + " --script=" + entry;
+        state.last_launch_args = launch_args;
+        {
+            std::ofstream bat(out_dir / "launch.bat", std::ios::trunc);
+            bat << "@echo off\r\n";
+            bat << "cd /d \"%~dp0\"\r\n";
+            bat << "\"" << game_exe_name << "\" " << launch_args << "\r\n";
+        }
+
+        auto bun_sz = fs::file_size(bundle_path, ec);
+        if (!ec) {
+            double mb = static_cast<double>(bun_sz) / (1024.0 * 1024.0);
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Encrypted bundle size: %.2f MB", mb);
+            AppendLog(state, buf);
+        }
+        AppendLog(state, "Generated launch.bat (passes --bundle/--key/--script)");
+        AppendLog(state, "=== Build Complete (encrypted) ===");
+        AppendLog(state, "Output: " + out_dir.string());
+        state.build_success = true;
+        state.build_done = true;
+        state.building = false;
+        return;
+    }
 
     // 3. Collect files to pack
     std::vector<std::string> files_to_pack;
@@ -251,10 +325,11 @@ static void OpenInExplorer(const std::string& path) {
 #endif
 }
 
-static void LaunchExe(const std::string& dir, const std::string& exe_name) {
+static void LaunchExe(const std::string& dir, const std::string& exe_name, const std::string& args = "") {
 #if defined(_WIN32)
     std::filesystem::path full = std::filesystem::path(dir) / exe_name;
-    ShellExecuteA(nullptr, "open", full.string().c_str(), nullptr, dir.c_str(), SW_SHOWDEFAULT);
+    ShellExecuteA(nullptr, "open", full.string().c_str(),
+                  args.empty() ? nullptr : args.c_str(), dir.c_str(), SW_SHOWDEFAULT);
 #endif
 }
 
@@ -323,6 +398,17 @@ void DrawBuildGameDialog() {
         ImGui::SameLine();
         ImGui::Checkbox("Compress", &state.compress_pak);
 
+        // 加密：勾选后产出加密 game.bun（端到端，运行时用同一 key 解密挂载）
+        ImGui::Checkbox("Encrypt (AES-128 -> game.bun)", &state.encrypt);
+        if (state.encrypt) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(200);
+            ImGui::InputText("##enckey", state.encrypt_key, sizeof(state.encrypt_key),
+                             ImGuiInputTextFlags_Password);
+            ImGui::SameLine();
+            ImGui::TextDisabled("(key >= 16 chars)");
+        }
+
         // Icon (Windows only)
         if (state.platform == BuildPlatform::Windows) {
             ImGui::Text("Icon (.ico):");
@@ -350,7 +436,8 @@ void DrawBuildGameDialog() {
         };
 
         if (!busy) {
-            bool can_build = state.output_dir[0] != '\0' && state.game_title[0] != '\0';
+            bool key_ok = !state.encrypt || std::string(state.encrypt_key).size() >= 16;
+            bool can_build = state.output_dir[0] != '\0' && state.game_title[0] != '\0' && key_ok;
             ImGui::BeginDisabled(!can_build);
 
             const char* build_label = state.build_done.load() ? "Rebuild" : "Build";
@@ -369,7 +456,7 @@ void DrawBuildGameDialog() {
                     }
                     ImGui::SameLine();
                     if (ImGui::SmallButton(MDI_ICON_PLAY " Run")) {
-                        LaunchExe(state.last_output_dir, state.last_exe_name);
+                        LaunchExe(state.last_output_dir, state.last_exe_name, state.last_launch_args);
                     }
                 } else {
                     ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "  Build Failed");
@@ -392,7 +479,7 @@ void DrawBuildGameDialog() {
         // Auto-launch after successful build
         if (state.build_done.load() && state.build_success.load() && state.launch_after_build) {
             state.launch_after_build = false;
-            LaunchExe(state.last_output_dir, state.last_exe_name);
+            LaunchExe(state.last_output_dir, state.last_exe_name, state.last_launch_args);
         }
 
         // --- Log ---

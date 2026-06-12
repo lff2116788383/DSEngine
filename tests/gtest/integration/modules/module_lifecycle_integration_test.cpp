@@ -129,7 +129,7 @@ protected:
     }
 };
 
-TEST_F(ModuleLifecycleIntegrationTest, 完整生命周期按序调用) {
+TEST_F(ModuleLifecycleIntegrationTest, LifecycleByCalls) {
     // Init → Update → FixedUpdate → Shutdown
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
     module->OnUpdate(world, 0.016f);
@@ -143,7 +143,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 完整生命周期按序调用) {
     EXPECT_EQ(module->call_log[3], "OnShutdown");
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 模块初始化时创建实体) {
+TEST_F(ModuleLifecycleIntegrationTest, ModuleInitializeWhenCreateEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
 
     // 模块应创建了实体
@@ -158,7 +158,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 模块初始化时创建实体) {
     EXPECT_FLOAT_EQ(transform.position.z, 3.0f);
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 模块更新驱动实体运动) {
+TEST_F(ModuleLifecycleIntegrationTest, ModuleUpdatedriveEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
 
     // 模拟 3 帧更新
@@ -173,7 +173,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 模块更新驱动实体运动) {
     EXPECT_FLOAT_EQ(transform.position.x, 4.0f);
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 模块关闭时清理创建的实体) {
+TEST_F(ModuleLifecycleIntegrationTest, ModuleShutdownWhenCleanupCreateEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
     EXPECT_EQ(world.EntityCount(), 1u);
 
@@ -182,7 +182,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 模块关闭时清理创建的实体) {
     EXPECT_TRUE(module->created_entity == entt::null);
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 多次Init和Shutdown交替不崩溃) {
+TEST_F(ModuleLifecycleIntegrationTest, MultiTimesInitAndShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
         module->OnUpdate(world, 0.016f);
@@ -195,7 +195,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 多次Init和Shutdown交替不崩溃) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 多模块并存互不干扰) {
+TEST_F(ModuleLifecycleIntegrationTest, MultimoduleNot) {
     auto module2 = std::make_unique<SecondTestModule>();
 
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
@@ -222,7 +222,7 @@ TEST_F(ModuleLifecycleIntegrationTest, 多模块并存互不干扰) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST_F(ModuleLifecycleIntegrationTest, 模块获取自身名称正确) {
+TEST_F(ModuleLifecycleIntegrationTest, ModuleAcquireCorrect) {
     EXPECT_STREQ(module->GetName(), "TestLifecycle");
 
     auto module2 = std::make_unique<SecondTestModule>();

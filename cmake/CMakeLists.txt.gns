@@ -152,8 +152,12 @@ if(NOT _DSE_NET_SRC)
     return()
 endif()
 add_library(dse_net STATIC ${_DSE_NET_SRC})
+# 复制层(engine/net/replication/**)依赖 ECS：entt 与 glm 均为 header-only，
+# 加入 include 路径即可，无新增链接依赖。
 target_include_directories(dse_net
     PUBLIC  "${CMAKE_SOURCE_DIR}"
+            "${CMAKE_SOURCE_DIR}/depends/glm"
+            "${CMAKE_SOURCE_DIR}/depends/entt-3.13.0/src"
     PRIVATE "${_GNS_DIR}/include")
 target_link_libraries(dse_net PUBLIC GameNetworkingSockets::static)
 target_compile_features(dse_net PUBLIC cxx_std_17)
@@ -168,6 +172,13 @@ endif()
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_capi_smoke.cpp")
     add_executable(dse_net_capi_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_capi_smoke.cpp")
     target_link_libraries(dse_net_capi_smoke PRIVATE dse_net)
+endif()
+
+# ── 4c) 复制层回环冒烟 dse_repl_smoke（spawn / 全量快照 / 输入RPC / despawn 全链路）──
+# 单传输实例同时驱动 server+client（GNS 进程级回调约束，见 §10 D-5）。
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/repl_smoke.cpp")
+    add_executable(dse_repl_smoke "${CMAKE_SOURCE_DIR}/tests/net/repl_smoke.cpp")
+    target_link_libraries(dse_repl_smoke PRIVATE dse_net)
 endif()
 
 set(DSE_HAS_NET TRUE)

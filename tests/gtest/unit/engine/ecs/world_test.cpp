@@ -20,20 +20,20 @@ using namespace dse::core;
 // World 基础功能测试
 // ============================================================
 
-TEST(WorldTest, 创建实体返回有效ID) {
+TEST(WorldTest, CreateEntityReturnValidID) {
     World world;
     Entity e = world.CreateEntity();
     // 创建的实体应当存活
     EXPECT_TRUE(world.IsAlive(e));
 }
 
-TEST(WorldTest, 创建实体后计数为1) {
+TEST(WorldTest, AfterCreatingTheEntityIs1) {
     World world;
     world.CreateEntity();
     EXPECT_EQ(world.EntityCount(), 1u);
 }
 
-TEST(WorldTest, 创建多个实体计数递增) {
+TEST(WorldTest, CreateMultiEntityIncrements) {
     World world;
     world.CreateEntity();
     world.CreateEntity();
@@ -41,7 +41,7 @@ TEST(WorldTest, 创建多个实体计数递增) {
     EXPECT_EQ(world.EntityCount(), 3u);
 }
 
-TEST(WorldTest, 销毁实体后计数递减) {
+TEST(WorldTest, DestroyEntityAfter) {
     World world;
     Entity e = world.CreateEntity();
     EXPECT_EQ(world.EntityCount(), 1u);
@@ -50,14 +50,14 @@ TEST(WorldTest, 销毁实体后计数递减) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST(WorldTest, 销毁不存在的实体不崩溃) {
+TEST(WorldTest, DestroydoesNotExistEntityDoesNotCrash) {
     World world;
     Entity invalid = static_cast<Entity>(99999);
     world.DestroyEntity(invalid);
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST(WorldTest, IsAlive检查实体存活状态) {
+TEST(WorldTest, IsAliveCheckEntitySurvivalStatus) {
     World world;
     Entity e = world.CreateEntity();
     EXPECT_TRUE(world.IsAlive(e));
@@ -66,7 +66,7 @@ TEST(WorldTest, IsAlive检查实体存活状态) {
     EXPECT_FALSE(world.IsAlive(e));
 }
 
-TEST(WorldTest, Clear清空所有实体) {
+TEST(WorldTest, ClearClearAllEntities) {
     World world;
     world.CreateEntity();
     world.CreateEntity();
@@ -77,7 +77,7 @@ TEST(WorldTest, Clear清空所有实体) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST(WorldTest, registry返回有效引用) {
+TEST(WorldTest, RegistryReturnAValidReference) {
     World world;
     auto& reg = world.registry();
     // 通过 registry 直接创建实体应与 World 创建一致
@@ -100,7 +100,7 @@ protected:
     }
 };
 
-TEST_F(WorldInstanceTest, Instance委托到ServiceLocator) {
+TEST_F(WorldInstanceTest, InstanceentrustedToServiceLocator) {
     // 先注册一个 World 实例
     auto world = std::make_shared<World>();
     world->CreateEntity();
@@ -111,7 +111,7 @@ TEST_F(WorldInstanceTest, Instance委托到ServiceLocator) {
     EXPECT_EQ(instance.EntityCount(), 1u);
 }
 
-TEST_F(WorldInstanceTest, Instance未注册时抛出异常) {
+TEST_F(WorldInstanceTest, InstanceThrowsExceptionWhenNotRegistered) {
     // 未注册时 Instance() 应抛出异常，要求调用方显式管理 World 生命周期
     EXPECT_THROW({ World::Instance(); }, std::runtime_error);
 }
@@ -120,7 +120,7 @@ TEST_F(WorldInstanceTest, Instance未注册时抛出异常) {
 // 多 World 实例测试
 // ============================================================
 
-TEST(WorldTest, 多个World实例互不干扰) {
+TEST(WorldTest, MultiWorldExampleNot) {
     World world_a;
     World world_b;
 

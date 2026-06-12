@@ -18,6 +18,7 @@
 #endif
 #include <gtest/gtest.h>
 #include "engine/render/rhi/opengl/gl_rhi_device.h"
+#include "engine/render/rhi/opengl/gl_loader.h"
 #include "engine/render/rhi/rhi_device.h"
 
 #ifdef _WIN32
@@ -92,6 +93,19 @@ bool CreateHiddenGLWindow(GLContextGuard& guard, int width, int height) {
     return true;
 }
 
+/// glad2 函数指针加载器：优先 wglGetProcAddress（现代 GL 函数），
+/// 回退 opengl32.dll（GL 1.1 基础函数，wglGetProcAddress 对其返回 null）
+GLADapiproc GLSmokeGladLoad(const char* name) {
+    PROC proc = wglGetProcAddress(name);
+    if (proc == nullptr) {
+        static HMODULE gl_module = LoadLibraryA("opengl32.dll");
+        if (gl_module) {
+            proc = GetProcAddress(gl_module, name);
+        }
+    }
+    return reinterpret_cast<GLADapiproc>(proc);
+}
+
 #endif // _WIN32
 
 } // namespace
@@ -110,6 +124,15 @@ protected:
         if (!ok) {
             GTEST_SKIP() << "Failed to create hidden GL window (no GPU/driver?), skipping";
         }
+        // 加载现代 GL 函数指针；无真实 GPU 驱动时只能拿到软件 GL 1.1，
+        // 此时按能力优雅跳过（与 Vulkan 冒烟测试"无驱动则跳过"一致）。
+        const int gl_version = gladLoadGL(GLSmokeGladLoad);
+        if (gl_version == 0 || !GLAD_GL_VERSION_3_3) {
+            GTEST_SKIP() << "Requires OpenGL 3.3+ context (got "
+                         << GLAD_VERSION_MAJOR(gl_version) << "."
+                         << GLAD_VERSION_MINOR(gl_version)
+                         << "); no modern GL driver in this environment";
+        }
 #else
         GTEST_SKIP() << "OpenGL smoke test requires Win32";
 #endif
@@ -121,38 +144,101 @@ protected:
     }
 };
 
-TEST_F(GLRhiSmokeTest, InitOpenGL成功) {
-    bool ok = device_.InitDevice(static_cast<void*>(ctx_guard_.hwnd), kWidth, kHeight);
-    if (!ok) {
-        GTEST_SKIP() << "OpenGL init failed (no GPU/driver?), skipping";
+TEST_F(GLRhiSmokeTest, InitOpenGLSucceeds) {
+    device_.BeginFrame();
+    device_.EndFrame();
+    SUCCEED();
+}
+
+TEST_F(GLRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(cmd, nullptr);
+    device_.Submit(cmd);
+    device_.EndFrame();
+    SUCCEED();
+}
+
+TEST_F(GLRhiSmokeTest, MultiFramecycleStable) {
+    for (int i = 0; i < 3; ++i) {
+        device_.BeginFrame();
+        auto cmd = device_.CreateCommandBuffer();
+        device_.Submit(cmd);
+        device_.EndFrame();
     }
-    GTEST_SKIP() << "OpenGL smoke tests require GLEW init via runtime; GL context created but modern GL functions not loaded";
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, 单帧空提交不崩溃) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    device_.Submit(cmd);
+    device_.EndFrame();
+    device_.Shutdown();
+
+    device_.BeginFrame();
+    auto cmd2 = device_.CreateCommandBuffer();
+    device_.Submit(cmd2);
+    device_.EndFrame();
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, 多帧循环稳定) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
+    device_.BeginFrame();
+    unsigned char pixels[] = {
+        255,255,255,255, 255,255,255,255,
+        255,255,255,255, 255,255,255,255
+    };
+    unsigned int tex = device_.CreateTexture2D(2, 2, pixels, true);
+    EXPECT_NE(tex, 0u);
+    device_.DeleteTexture(tex);
+    device_.EndFrame();
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, Shutdown后重新Init不崩溃) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
+    for (int i = 0; i < 10; ++i) {
+        device_.BeginFrame();
+        auto cmd = device_.CreateCommandBuffer();
+        cmd->ClearColor(glm::vec4(0.1f * i, 0.0f, 0.0f, 1.0f));
+        device_.Submit(cmd);
+        device_.EndFrame();
+    }
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, 纹理创建销毁不崩溃) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
+    device_.BeginFrame();
+    RenderTargetDesc desc;
+    desc.width = 64;
+    desc.height = 64;
+    desc.has_depth = true;
+    unsigned int rt = device_.CreateRenderTarget(desc);
+    EXPECT_NE(rt, 0u);
+    device_.DeleteRenderTarget(rt);
+    device_.EndFrame();
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, 10帧连续提交稳定) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
+    device_.BeginFrame();
+    float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    unsigned int buf = device_.CreateBuffer(sizeof(data), data, false, false);
+    EXPECT_NE(buf, 0u);
+    device_.DeleteBuffer(buf);
+    device_.EndFrame();
+    SUCCEED();
 }
 
-TEST_F(GLRhiSmokeTest, RenderTarget创建销毁不崩溃) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
-}
-
-TEST_F(GLRhiSmokeTest, Buffer创建销毁不崩溃) {
-    GTEST_SKIP() << "Requires GLEW + full GL pipeline init (not available in smoke test env)";
+TEST_F(GLRhiSmokeTest, VertexArrayCreateIncrementsHandle) {
+    device_.BeginFrame();
+    dse::render::VertexArrayHandle vao1 = device_.CreateVertexArray();
+    dse::render::VertexArrayHandle vao2 = device_.CreateVertexArray();
+    EXPECT_NE(vao1.id, 0u);
+    EXPECT_NE(vao2.id, 0u);
+    EXPECT_NE(vao1.id, vao2.id);
+    device_.DeleteVertexArray(vao1);
+    device_.DeleteVertexArray(vao2);
+    device_.EndFrame();
+    SUCCEED();
 }

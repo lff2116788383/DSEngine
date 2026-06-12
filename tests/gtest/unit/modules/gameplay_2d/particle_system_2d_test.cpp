@@ -38,11 +38,11 @@ protected:
     }
 };
 
-TEST_F(ParticleSystem2DTest, 空World调用Update不崩溃) {
+TEST_F(ParticleSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kDt));
 }
 
-TEST_F(ParticleSystem2DTest, 持续发射粒子) {
+TEST_F(ParticleSystem2DTest, TestCase2) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 60.0f; // 每秒 60 个
@@ -56,7 +56,7 @@ TEST_F(ParticleSystem2DTest, 持续发射粒子) {
     EXPECT_GT(emitter->particles.size(), 0u);
 }
 
-TEST_F(ParticleSystem2DTest, 粒子生命周期耗尽后移除) {
+TEST_F(ParticleSystem2DTest, LifecycleAfterRemove) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 10.0f;
@@ -79,7 +79,7 @@ TEST_F(ParticleSystem2DTest, 粒子生命周期耗尽后移除) {
     EXPECT_EQ(emitter->particles.size(), 0u);
 }
 
-TEST_F(ParticleSystem2DTest, max_particles限制粒子池) {
+TEST_F(ParticleSystem2DTest, max_ParticlesrestrictedParticlePool) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 1000.0f; // 高发射率
@@ -93,7 +93,7 @@ TEST_F(ParticleSystem2DTest, max_particles限制粒子池) {
     EXPECT_LE(emitter->particles.size(), static_cast<size_t>(emitter->max_particles));
 }
 
-TEST_F(ParticleSystem2DTest, Burst一次性爆发) {
+TEST_F(ParticleSystem2DTest, BurstoneTimeOutbreak) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = false; // 关闭持续发射
     emitter->pending_burst = 3;
@@ -105,7 +105,7 @@ TEST_F(ParticleSystem2DTest, Burst一次性爆发) {
     EXPECT_EQ(emitter->pending_burst, 0);
 }
 
-TEST_F(ParticleSystem2DTest, 重力影响粒子速度) {
+TEST_F(ParticleSystem2DTest, Speed) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 60.0f;
@@ -126,7 +126,7 @@ TEST_F(ParticleSystem2DTest, 重力影响粒子速度) {
     EXPECT_LT(vy_after, vy_before);
 }
 
-TEST_F(ParticleSystem2DTest, 地面碰撞反弹) {
+TEST_F(ParticleSystem2DTest, TestCase7) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 60.0f;
@@ -153,7 +153,7 @@ TEST_F(ParticleSystem2DTest, 地面碰撞反弹) {
     EXPECT_GT(emitter->particles[0].velocity.y, 0.0f);
 }
 
-TEST_F(ParticleSystem2DTest, 随机参数模式) {
+TEST_F(ParticleSystem2DTest, Parametersmodel) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 100.0f;
@@ -179,7 +179,7 @@ TEST_F(ParticleSystem2DTest, 随机参数模式) {
     EXPECT_TRUE(has_variation);
 }
 
-TEST_F(ParticleSystem2DTest, 生命周期尺寸曲线) {
+TEST_F(ParticleSystem2DTest, Lifecycle) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 60.0f;
@@ -208,7 +208,7 @@ TEST_F(ParticleSystem2DTest, 生命周期尺寸曲线) {
     }
 }
 
-TEST_F(ParticleSystem2DTest, emit_rate_scale缩放发射率) {
+TEST_F(ParticleSystem2DTest, emit_rate_ScaleScaledEmissivity) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
     emitter->emit_rate = 10.0f;

@@ -15,7 +15,7 @@
 // CameraComponent
 // ============================================================
 
-TEST(CameraComponentTest, 默认值) {
+TEST(CameraComponentTest, DefaultValues) {
     CameraComponent cam;
     EXPECT_TRUE(cam.orthographic);
     EXPECT_TRUE(cam.enabled);
@@ -27,7 +27,7 @@ TEST(CameraComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1.0f);
 }
 
-TEST(CameraComponentTest, 切换为透视投影) {
+TEST(CameraComponentTest, Is) {
     CameraComponent cam;
     cam.orthographic = false;
     cam.fov = 90.0f;
@@ -37,7 +37,7 @@ TEST(CameraComponentTest, 切换为透视投影) {
     EXPECT_FLOAT_EQ(cam.fov, 90.0f);
 }
 
-TEST(CameraComponentTest, 视图投影矩阵默认为单位矩阵) {
+TEST(CameraComponentTest, DefaultIsSingle) {
     CameraComponent cam;
     EXPECT_EQ(cam.view, glm::mat4(1.0f));
     EXPECT_EQ(cam.projection, glm::mat4(1.0f));
@@ -47,7 +47,7 @@ TEST(CameraComponentTest, 视图投影矩阵默认为单位矩阵) {
 // CameraFollowComponent
 // ============================================================
 
-TEST(CameraFollowComponentTest, 默认值) {
+TEST(CameraFollowComponentTest, DefaultValues) {
     CameraFollowComponent follow;
     EXPECT_TRUE(follow.follow_x);
     EXPECT_TRUE(follow.follow_y);
@@ -57,7 +57,7 @@ TEST(CameraFollowComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(follow.dead_zone.x, 0.0f);
 }
 
-TEST(CameraFollowComponentTest, 设置目标偏移) {
+TEST(CameraFollowComponentTest, SetUpoffset) {
     CameraFollowComponent follow;
     follow.offset = glm::vec3(1.0f, 2.0f, 0.0f);
     follow.dead_zone = glm::vec2(0.5f, 0.5f);

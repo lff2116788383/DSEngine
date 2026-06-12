@@ -76,17 +76,17 @@ protected:
 // 生命周期
 // ═══════════════════════════════════════════════════
 
-TEST_F(GameApplicationTest, Bootstrap调用OnInit) {
+TEST_F(GameApplicationTest, BootstrapCallsOnInit) {
     EXPECT_EQ(app.init_count, 1);
 }
 
-TEST_F(GameApplicationTest, Tick调用OnUpdate并传递dt) {
+TEST_F(GameApplicationTest, TickCallsOnUpdateandPassdt) {
     app.Tick(world, 0.016f);
     EXPECT_EQ(app.update_count, 1);
     EXPECT_FLOAT_EQ(app.last_dt, 0.016f);
 }
 
-TEST_F(GameApplicationTest, Tick多次累加调用计数) {
+TEST_F(GameApplicationTest, TickAccumulateCallCountMultipleTimes) {
     app.Tick(world, 0.016f);
     app.Tick(world, 0.033f);
     app.Tick(world, 0.008f);
@@ -94,14 +94,14 @@ TEST_F(GameApplicationTest, Tick多次累加调用计数) {
     EXPECT_FLOAT_EQ(app.last_dt, 0.008f);
 }
 
-TEST_F(GameApplicationTest, Shutdown调用OnShutdown) {
+TEST_F(GameApplicationTest, ShutdownCallsOnShutdown) {
     // TearDown 会调用 ShutdownInternal
     // 这里额外调用一次来检查
     app.ShutdownInternal();
     EXPECT_EQ(app.shutdown_count, 1);
 }
 
-TEST_F(GameApplicationTest, Bootstrap注入World和AssetManager) {
+TEST_F(GameApplicationTest, BootstrapInjectsWorldAndAssetManager) {
     EXPECT_EQ(&app.GetWorld(), &world);
     EXPECT_EQ(&app.GetAssetManager(), &asset_manager);
 }
@@ -110,18 +110,18 @@ TEST_F(GameApplicationTest, Bootstrap注入World和AssetManager) {
 // ECS 基础操作
 // ═══════════════════════════════════════════════════
 
-TEST_F(GameApplicationTest, CreateEntity返回有效实体) {
+TEST_F(GameApplicationTest, CreateEntityReturnsAValidEntity) {
     Entity e = app.CreateEntity();
     EXPECT_TRUE(world.registry().valid(e));
 }
 
-TEST_F(GameApplicationTest, DestroyEntity销毁后实体无效) {
+TEST_F(GameApplicationTest, DestroyEntityEntityIsInvalidAfterDestruction) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
     EXPECT_FALSE(world.registry().valid(e));
 }
 
-TEST_F(GameApplicationTest, Emplace添加组件) {
+TEST_F(GameApplicationTest, EmplaceAddComponent) {
     Entity e = app.CreateEntity();
     auto& t = app.Emplace<TransformComponent>(e);
     t.position = glm::vec3(1, 2, 3);
@@ -132,7 +132,7 @@ TEST_F(GameApplicationTest, Emplace添加组件) {
     EXPECT_FLOAT_EQ(got.position.z, 3.0f);
 }
 
-TEST_F(GameApplicationTest, Emplace替换已有组件) {
+TEST_F(GameApplicationTest, EmplaceReplaceExistingComponents) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e).position = glm::vec3(1, 0, 0);
     app.Emplace<TransformComponent>(e).position = glm::vec3(9, 8, 7);
@@ -140,7 +140,7 @@ TEST_F(GameApplicationTest, Emplace替换已有组件) {
     EXPECT_FLOAT_EQ(t.position.x, 9.0f);
 }
 
-TEST_F(GameApplicationTest, Get返回组件指针) {
+TEST_F(GameApplicationTest, GetReturnComponentPointer) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e).position = glm::vec3(5, 6, 7);
     auto* ptr = app.Get<TransformComponent>(e);
@@ -148,33 +148,33 @@ TEST_F(GameApplicationTest, Get返回组件指针) {
     EXPECT_FLOAT_EQ(ptr->position.y, 6.0f);
 }
 
-TEST_F(GameApplicationTest, Get对无组件实体返回nullptr) {
+TEST_F(GameApplicationTest, GetReturnsForComponentlessEntitiesnullptr) {
     Entity e = app.CreateEntity();
     auto* ptr = app.Get<TransformComponent>(e);
     EXPECT_EQ(ptr, nullptr);
 }
 
-TEST_F(GameApplicationTest, Get对无效实体返回nullptr) {
+TEST_F(GameApplicationTest, GetReturnsForInvalidEntitiesnullptr) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
     auto* ptr = app.Get<TransformComponent>(e);
     EXPECT_EQ(ptr, nullptr);
 }
 
-TEST_F(GameApplicationTest, Has正确判断组件存在性) {
+TEST_F(GameApplicationTest, HasCorrectlyDetermineComponentExistence) {
     Entity e = app.CreateEntity();
     EXPECT_FALSE(app.Has<TransformComponent>(e));
     app.Emplace<TransformComponent>(e);
     EXPECT_TRUE(app.Has<TransformComponent>(e));
 }
 
-TEST_F(GameApplicationTest, Has对无效实体返回false) {
+TEST_F(GameApplicationTest, HasReturnsForInvalidEntitiesfalse) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
     EXPECT_FALSE(app.Has<TransformComponent>(e));
 }
 
-TEST_F(GameApplicationTest, Remove移除组件) {
+TEST_F(GameApplicationTest, RemoveRemoveComponent) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e);
     EXPECT_TRUE(app.Has<TransformComponent>(e));
@@ -182,7 +182,7 @@ TEST_F(GameApplicationTest, Remove移除组件) {
     EXPECT_FALSE(app.Has<TransformComponent>(e));
 }
 
-TEST_F(GameApplicationTest, Remove对无组件实体不崩溃) {
+TEST_F(GameApplicationTest, RemoveNoCrashForComponentlessEntities) {
     Entity e = app.CreateEntity();
     EXPECT_NO_THROW(app.Remove<TransformComponent>(e));
 }
@@ -191,7 +191,7 @@ TEST_F(GameApplicationTest, Remove对无组件实体不崩溃) {
 // 实体工厂
 // ═══════════════════════════════════════════════════
 
-TEST_F(GameApplicationTest, CreateEntityAt设置Position和Scale) {
+TEST_F(GameApplicationTest, CreateEntityAtsetUpPositionAndScale) {
     Entity e = app.CreateEntityAt(glm::vec3(10, 20, 30), glm::vec3(2, 3, 4));
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
     auto& t = world.registry().get<TransformComponent>(e);
@@ -204,7 +204,7 @@ TEST_F(GameApplicationTest, CreateEntityAt设置Position和Scale) {
     EXPECT_TRUE(t.dirty);
 }
 
-TEST_F(GameApplicationTest, CreateEntityAt默认Scale为1) {
+TEST_F(GameApplicationTest, CreateEntityAtdefaultScaleIs1) {
     Entity e = app.CreateEntityAt(glm::vec3(0));
     auto& t = world.registry().get<TransformComponent>(e);
     EXPECT_FLOAT_EQ(t.scale.x, 1.0f);
@@ -212,7 +212,7 @@ TEST_F(GameApplicationTest, CreateEntityAt默认Scale为1) {
     EXPECT_FLOAT_EQ(t.scale.z, 1.0f);
 }
 
-TEST_F(GameApplicationTest, CreateCamera3D创建相机和FreeCam) {
+TEST_F(GameApplicationTest, CreateCamera3DCreateCameraAndFreeCam) {
     Entity e = app.CreateCamera3D(glm::vec3(0, 5, 15), 90.0f, 0.5f, 500.0f);
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
     ASSERT_TRUE(world.registry().all_of<Camera3DComponent>(e));
@@ -229,7 +229,7 @@ TEST_F(GameApplicationTest, CreateCamera3D创建相机和FreeCam) {
     EXPECT_TRUE(cam.enabled);
 }
 
-TEST_F(GameApplicationTest, CreateCamera3D默认参数) {
+TEST_F(GameApplicationTest, CreateCamera3DDefaultParameters) {
     Entity e = app.CreateCamera3D(glm::vec3(0));
     auto& cam = world.registry().get<Camera3DComponent>(e);
     EXPECT_FLOAT_EQ(cam.fov, 60.0f);
@@ -237,7 +237,7 @@ TEST_F(GameApplicationTest, CreateCamera3D默认参数) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1000.0f);
 }
 
-TEST_F(GameApplicationTest, CreateDirectionalLight创建平行光) {
+TEST_F(GameApplicationTest, CreateDirectionalLightCreateDirectionalLights) {
     Entity e = app.CreateDirectionalLight(
         glm::vec3(-1, -1, 0), glm::vec3(1, 0.9f, 0.8f), 2.5f, false);
     ASSERT_TRUE(world.registry().all_of<DirectionalLight3DComponent>(e));
@@ -250,7 +250,7 @@ TEST_F(GameApplicationTest, CreateDirectionalLight创建平行光) {
     EXPECT_NEAR(glm::length(light.direction), 1.0f, 1e-5f);
 }
 
-TEST_F(GameApplicationTest, CreateDirectionalLight默认参数) {
+TEST_F(GameApplicationTest, CreateDirectionalLightDefaultParameters) {
     Entity e = app.CreateDirectionalLight(glm::vec3(0, -1, 0));
     auto& light = world.registry().get<DirectionalLight3DComponent>(e);
     EXPECT_FLOAT_EQ(light.intensity, 1.0f);
@@ -260,7 +260,7 @@ TEST_F(GameApplicationTest, CreateDirectionalLight默认参数) {
     EXPECT_FLOAT_EQ(light.color.b, 1.0f);
 }
 
-TEST_F(GameApplicationTest, CreatePointLight创建点光源) {
+TEST_F(GameApplicationTest, CreatePointLightCreateAPointLight) {
     Entity e = app.CreatePointLight(
         glm::vec3(5, 10, 15), glm::vec3(1, 0, 0), 3.0f, 25.0f);
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
@@ -274,14 +274,14 @@ TEST_F(GameApplicationTest, CreatePointLight创建点光源) {
     EXPECT_FLOAT_EQ(light.color.g, 0.0f);
 }
 
-TEST_F(GameApplicationTest, CreatePointLight默认参数) {
+TEST_F(GameApplicationTest, CreatePointLightDefaultParameters) {
     Entity e = app.CreatePointLight(glm::vec3(0));
     auto& light = world.registry().get<PointLightComponent>(e);
     EXPECT_FLOAT_EQ(light.intensity, 1.0f);
     EXPECT_FLOAT_EQ(light.radius, 10.0f);
 }
 
-TEST_F(GameApplicationTest, CreateMesh创建网格实体) {
+TEST_F(GameApplicationTest, CreateMeshCreateMeshEntities) {
     Entity e = app.CreateMesh(
         glm::vec3(1, 2, 3), "models/test.dmesh", glm::vec3(2));
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
@@ -296,7 +296,7 @@ TEST_F(GameApplicationTest, CreateMesh创建网格实体) {
     EXPECT_TRUE(mesh.receive_shadow);
 }
 
-TEST_F(GameApplicationTest, CreateMesh默认Scale为1) {
+TEST_F(GameApplicationTest, CreateMeshdefaultScaleIs1) {
     Entity e = app.CreateMesh(glm::vec3(0), "models/cube.dmesh");
     auto& t = world.registry().get<TransformComponent>(e);
     EXPECT_FLOAT_EQ(t.scale.x, 1.0f);
@@ -308,7 +308,7 @@ TEST_F(GameApplicationTest, CreateMesh默认Scale为1) {
 // 多实体综合场景
 // ═══════════════════════════════════════════════════
 
-TEST_F(GameApplicationTest, 综合场景_创建相机光源网格并销毁) {
+TEST_F(GameApplicationTest, Scene_CreateDestroy) {
     Entity cam = app.CreateCamera3D(glm::vec3(0, 5, 15));
     Entity sun = app.CreateDirectionalLight(glm::vec3(-1, -1, -1));
     Entity box1 = app.CreateMesh(glm::vec3(0), "models/cube.dmesh");

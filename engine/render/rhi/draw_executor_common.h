@@ -154,7 +154,7 @@ inline PerSceneUBO PreparePerSceneUBO(const MeshDrawItem& item,
         state.cascade_splits[0],
         state.cascade_splits[1],
         state.cascade_splits[2],
-        0.0f);
+        static_cast<float>(item.wboit_mode));
     for (int i = 0; i < 3; ++i)
         scene.light_space_matrices[i] = state.light_space_matrix[i];
     for (int i = 0; i < 3; ++i)
@@ -167,23 +167,28 @@ inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item,
                                             const DrawExecutorGlobalState& state) {
     PerMaterialUBO mat{};
     if (state.overdraw_mode) {
+        // Overdraw 可视化：每 fragment 输出固定低强度颜色，
+        // 通过 additive blend 叠加后以亮度显示过度绘制
         mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+        mat.roughness_ao = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+        mat.emissive = glm::vec4(0.0f);
+        mat.flags = glm::vec4(0.0f);
     } else {
         mat.albedo = glm::vec4(item.material_albedo, item.material_metallic);
+        mat.roughness_ao = glm::vec4(
+            item.material_roughness,
+            item.material_ao,
+            item.material_normal_strength,
+            item.material_alpha_cutoff);
+        mat.emissive = glm::vec4(
+            item.material_emissive,
+            item.material_alpha_test ? 1.0f : 0.0f);
+        mat.flags = glm::vec4(
+            item.normal_map_handle != 0 ? 1.0f : 0.0f,
+            item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
+            item.emissive_map_handle != 0 ? 1.0f : 0.0f,
+            item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
     }
-    mat.roughness_ao = glm::vec4(
-        item.material_roughness,
-        item.material_ao,
-        item.material_normal_strength,
-        item.material_alpha_cutoff);
-    mat.emissive = glm::vec4(
-        item.material_emissive,
-        item.material_alpha_test ? 1.0f : 0.0f);
-    mat.flags = glm::vec4(
-        item.normal_map_handle != 0 ? 1.0f : 0.0f,
-        item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
-        item.emissive_map_handle != 0 ? 1.0f : 0.0f,
-        item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
     mat.extra_params = glm::vec4(
         item.material_sss_strength,
         item.material_clear_coat,
@@ -192,10 +197,18 @@ inline PerMaterialUBO PreparePerMaterialUBO(const MeshDrawItem& item,
     mat.extra_params2 = glm::vec4(
         item.material_pom_height_scale,
         item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
-    mat.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
-    mat.toon_params = glm::vec4(
-        item.toon_shadow_softness, item.toon_specular_size,
-        item.toon_specular_strength, item.toon_rim_strength);
+    if (item.shading_mode == 5) {
+        // Watercolor 模式：复用 toon 槽位传递水彩参数
+        mat.toon_shadow_color = glm::vec4(
+            item.watercolor_paper_strength, item.watercolor_edge_darkening,
+            item.watercolor_color_bleed, item.watercolor_pigment_density);
+        mat.toon_params = glm::vec4(0.0f);
+    } else {
+        mat.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
+        mat.toon_params = glm::vec4(
+            item.toon_shadow_softness, item.toon_specular_size,
+            item.toon_specular_strength, item.toon_rim_strength);
+    }
     return mat;
 }
 

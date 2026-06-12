@@ -49,7 +49,7 @@ struct ScopedFileCleanup {
 // 1. 序列化/反序列化 往返
 // ============================================================
 
-TEST(SceneSerializationTest, Transform序列化往返一致) {
+TEST(SceneSerializationTest, TransformSerializationRoundTripConsistency) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
 
@@ -79,7 +79,7 @@ TEST(SceneSerializationTest, Transform序列化往返一致) {
     EXPECT_EQ(count, 1);
 }
 
-TEST(SceneSerializationTest, 多实体序列化往返) {
+TEST(SceneSerializationTest, MultiEntityroundTrip) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
 
@@ -107,7 +107,7 @@ TEST(SceneSerializationTest, 多实体序列化往返) {
     EXPECT_EQ(count, 5);
 }
 
-TEST(SceneSerializationTest, 空场景序列化反序列化) {
+TEST(SceneSerializationTest, EmptySceneserializationdeserialization) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
 
@@ -130,12 +130,12 @@ TEST(SceneSerializationTest, 空场景序列化反序列化) {
 // 2. 反序列化异常路径
 // ============================================================
 
-TEST(SceneSerializationTest, 反序列化不存在的文件返回false) {
+TEST(SceneSerializationTest, DoesNotExistReturnsfalse) {
     Scene s("nonexistent");
     EXPECT_FALSE(s.Deserialize("__nonexistent_file_that_does_not_exist.dscene"));
 }
 
-TEST(SceneSerializationTest, 序列化到无效路径返回false) {
+TEST(SceneSerializationTest, ToInvalidPathReturnsfalse) {
     Scene s("invalid_path");
     auto& w = s.GetWorld();
     Entity e = w.CreateEntity();
@@ -147,7 +147,7 @@ TEST(SceneSerializationTest, 序列化到无效路径返回false) {
 // 3. Prefab 存储/实例化
 // ============================================================
 
-TEST(SceneSerializationTest, Prefab保存与加载往返一致) {
+TEST(SceneSerializationTest, PrefabSaveAndLoadRoundTripsAreConsistent) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
 
@@ -169,7 +169,7 @@ TEST(SceneSerializationTest, Prefab保存与加载往返一致) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {2, 2, 2}));
 }
 
-TEST(SceneSerializationTest, Prefab实例化覆盖Position) {
+TEST(SceneSerializationTest, PrefabinstantiationOverridePosition) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
 
@@ -192,7 +192,7 @@ TEST(SceneSerializationTest, Prefab实例化覆盖Position) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {1, 1, 1}));
 }
 
-TEST(SceneSerializationTest, Prefab实例化覆盖Rotation和Scale) {
+TEST(SceneSerializationTest, PrefabinstantiationOverrideRotationAndScale) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
 
@@ -219,13 +219,13 @@ TEST(SceneSerializationTest, Prefab实例化覆盖Rotation和Scale) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {3, 3, 3}));
 }
 
-TEST(SceneSerializationTest, Prefab加载不存在的文件返回null) {
+TEST(SceneSerializationTest, PrefabLoadingAFileThatDoesNotExistReturnsnull) {
     World w;
     Entity result = InstantiatePrefab(w, "__nonexistent_prefab_file.dprefab");
     EXPECT_TRUE(result == entt::null);
 }
 
-TEST(SceneSerializationTest, SaveEntityAsPrefab无效实体返回false) {
+TEST(SceneSerializationTest, SaveEntityAsPrefabInvalidEntityReturnedfalse) {
     World w;
     EXPECT_FALSE(SaveEntityAsPrefab(w, entt::null, kTestPrefabFile));
 }
@@ -234,7 +234,7 @@ TEST(SceneSerializationTest, SaveEntityAsPrefab无效实体返回false) {
 // 4. 父子层级 Prefab
 // ============================================================
 
-TEST(SceneSerializationTest, Prefab保存恢复父子层级) {
+TEST(SceneSerializationTest, PrefabSaveAndRestoreParentChildHierarchy) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
 
@@ -268,14 +268,14 @@ TEST(SceneSerializationTest, Prefab保存恢复父子层级) {
 // 5. 内置回归样例
 // ============================================================
 
-TEST(SceneSerializationTest, RoundTrip回归样例通过) {
+TEST(SceneSerializationTest, RoundTripRegressionExamplePassed) {
     ScopedFileCleanup cleanup;
     const std::string path = "__test_roundtrip_regression.dscene";
     cleanup.Add(path);
     EXPECT_TRUE(RunSceneRoundTripRegressionSample(path));
 }
 
-TEST(SceneSerializationTest, 大世界与后处理组件序列化往返) {
+TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
 
@@ -386,7 +386,7 @@ TEST(SceneSerializationTest, 大世界与后处理组件序列化往返) {
     EXPECT_NEAR(pp.ssr_fade_distance, expected_pp.ssr_fade_distance, kEpsilon);
 }
 
-TEST(SceneSerializationTest, 向后兼容回归样例通过) {
+TEST(SceneSerializationTest, TowardAfterRegressionExamplePassed) {
     ScopedFileCleanup cleanup;
     const std::string path = "__test_backward_compat_regression.dscene";
     cleanup.Add(path);

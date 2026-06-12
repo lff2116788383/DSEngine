@@ -692,21 +692,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
     UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
 
     // 更新 PerScene CB
-    const auto& first = items[0];
-    DX11PerSceneCB scene_data{};
-    const float dx11_light_enabled = (first.lighting_enabled && !global_state_.force_unlit) ? 1.0f : 0.0f;
-    scene_data.light_dir_and_enabled = glm::vec4(first.light_direction, dx11_light_enabled);
-    scene_data.light_color_and_ambient = glm::vec4(
-        first.light_color, first.ambient_intensity);
-    scene_data.light_params = glm::vec4(
-        first.light_intensity, first.shadow_strength,
-        first.receive_shadow ? 1.0f : 0.0f, static_cast<float>(first.shading_mode));
-    scene_data.cascade_splits = glm::vec4(
-        global_state_.cascade_splits[0], global_state_.cascade_splits[1], global_state_.cascade_splits[2], static_cast<float>(first.wboit_mode));
-    for (int i = 0; i < 3; ++i)
-        scene_data.light_space_matrices[i] = global_state_.light_space_matrix[i];
-    for (int i = 0; i < 3; ++i)
-        scene_data.shadow_atlas_regions[i] = global_state_.shadow_atlas_region[i];
+    DX11PerSceneCB scene_data = dse::render::PreparePerSceneUBO(items[0], global_state_);
     UpdateConstantBuffer(per_scene_cb_.Get(), &scene_data, sizeof(scene_data));
 
     const bool gbuffer_mode = global_state_.gbuffer_rendering_mode;
@@ -759,18 +745,14 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
 
         // 填充聚光灯光源空间矩阵 CB（gen.h: b5 SpotLightData）并绑定
         {
-            DX11SpotMatricesCB sm_cb{};
-            for (int i = 0; i < 4; ++i)
-                sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
+            DX11SpotMatricesCB sm_cb = dse::render::PrepareSpotLightDataUBO(global_state_);
             UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
             dc->PSSetConstantBuffers(5, 1, per_spot_matrices_cb_.GetAddressOf());
         }
 
         // 填充 LightProbeData CB（gen.h: b2 LightProbeData）并绑定
         if (light_probe_data_cb_) {
-            DX11LightProbeDataCB lp_cb{};
-            for (int i = 0; i < 9; ++i) lp_cb.sh_coefficients[i] = global_state_.light_probe_sh[i];
-            lp_cb.probe_params = glm::vec4(global_state_.light_probe_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+            DX11LightProbeDataCB lp_cb = dse::render::PrepareLightProbeUBO(global_state_);
             UpdateConstantBuffer(light_probe_data_cb_.Get(), &lp_cb, sizeof(lp_cb));
             dc->PSSetConstantBuffers(2, 1, light_probe_data_cb_.GetAddressOf());
         }
@@ -1149,39 +1131,7 @@ void DX11DrawExecutor::DrawMeshBatch(const std::vector<MeshDrawItem>& items,
         UpdateConstantBuffer(per_object_cb_.Get(), &obj_data, sizeof(obj_data));
 
         // PerMaterial
-        DX11PerMaterialCB mat_data{};
-        if (global_state_.overdraw_mode) {
-            mat_data.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
-        } else {
-            mat_data.albedo = glm::vec4(item.material_albedo, item.material_metallic);
-        }
-        mat_data.roughness_ao = glm::vec4(item.material_roughness, item.material_ao,
-                                           item.material_normal_strength, item.material_alpha_cutoff);
-        mat_data.emissive = glm::vec4(item.material_emissive, item.material_alpha_test ? 1.0f : 0.0f);
-        mat_data.flags = glm::vec4(
-            item.normal_map_handle != 0 ? 1.0f : 0.0f,
-            item.metallic_roughness_map_handle != 0 ? 1.0f : 0.0f,
-            item.emissive_map_handle != 0 ? 1.0f : 0.0f,
-            item.occlusion_map_handle != 0 ? 1.0f : 0.0f);
-        mat_data.extra_params = glm::vec4(
-            item.material_sss_strength,
-            item.material_clear_coat,
-            item.material_clear_coat_roughness,
-            item.material_anisotropy);
-        mat_data.extra_params2 = glm::vec4(
-            item.material_pom_height_scale,
-            item.material_sss_tint.x, item.material_sss_tint.y, item.material_sss_tint.z);
-        if (item.shading_mode == 5) {
-            mat_data.toon_shadow_color = glm::vec4(
-                item.watercolor_paper_strength, item.watercolor_edge_darkening,
-                item.watercolor_color_bleed, item.watercolor_pigment_density);
-            mat_data.toon_params = glm::vec4(0.0f);
-        } else {
-            mat_data.toon_shadow_color = glm::vec4(item.toon_shadow_color, item.toon_shadow_threshold);
-            mat_data.toon_params = glm::vec4(
-                item.toon_shadow_softness, item.toon_specular_size,
-                item.toon_specular_strength, item.toon_rim_strength);
-        }
+        DX11PerMaterialCB mat_data = dse::render::PreparePerMaterialUBO(item, global_state_);
         UpdateConstantBuffer(per_material_cb_.Get(), &mat_data, sizeof(mat_data));
 
         // Re-upload PerScene CB when shading mode changes per item
@@ -2525,9 +2475,7 @@ void DX11DrawExecutor::SetupGPUDrivenPBR(const glm::mat4& view, const glm::mat4&
     vs_cbs[7] = draw_id_cb_.Get();     // b7 = DrawIdCB
     dc->VSSetConstantBuffers(0, 8, vs_cbs);
 
-    DX11SpotMatricesCB sm_cb{};
-    for (int i = 0; i < 4; ++i)
-        sm_cb.spot_light_space_matrices[i] = global_state_.spot_light_space_matrix[i];
+    DX11SpotMatricesCB sm_cb = dse::render::PrepareSpotLightDataUBO(global_state_);
     UpdateConstantBuffer(per_spot_matrices_cb_.Get(), &sm_cb, sizeof(sm_cb));
 
     DX11TerrainParamsCB terrain_params{};

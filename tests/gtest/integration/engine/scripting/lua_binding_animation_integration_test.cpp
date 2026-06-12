@@ -47,7 +47,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
-TEST_F(LuaAnimBindingTest, Lua创建2DAnimator并添加State) {
+TEST_F(LuaAnimBindingTest, LuaCreate2DAnimatorandAddState) {
     TempLuaFile script("test_anim_2d.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -76,7 +76,7 @@ TEST_F(LuaAnimBindingTest, Lua创建2DAnimator并添加State) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaAnimBindingTest, Lua创建3DAnimatorFSM) {
+TEST_F(LuaAnimBindingTest, LuaCreate3DAnimatorFSM) {
     TempLuaFile script("test_anim_3d_fsm.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -108,7 +108,7 @@ TEST_F(LuaAnimBindingTest, Lua创建3DAnimatorFSM) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaAnimBindingTest, Lua添加AnimLayer并设置Weight) {
+TEST_F(LuaAnimBindingTest, LuaAddToAnimLayerandSetWeight) {
     TempLuaFile script("test_anim_layer.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -141,7 +141,7 @@ TEST_F(LuaAnimBindingTest, Lua添加AnimLayer并设置Weight) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaAnimBindingTest, Lua添加IK组件) {
+TEST_F(LuaAnimBindingTest, LuaAddToIKComponent) {
     TempLuaFile script("test_ik.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -177,7 +177,7 @@ TEST_F(LuaAnimBindingTest, Lua添加IK组件) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaAnimBindingTest, 错误参数不崩溃) {
+TEST_F(LuaAnimBindingTest, ErrorParametersDoesNotCrash) {
     TempLuaFile script("test_anim_error.lua", R"(
         function Awake()
             -- 不存在的实体（不应崩溃）

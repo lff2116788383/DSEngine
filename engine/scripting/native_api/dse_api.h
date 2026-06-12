@@ -550,6 +550,12 @@ DSE_CAPI int dse_physics3d_overlap_box(float min_x, float min_y, float min_z,
 DSE_CAPI int dse_render_world_to_screen(float wx, float wy, float wz,
                                         float* out_sx, float* out_sy);
 
+// screen_to_world_ray：由屏幕像素 (sx,sy) 用主相机反投影出世界空间拾取射线。
+// 填充非空 out_origin[3]（射线起点=相机位置）与 out_dir[3]（已归一化方向）。
+// 成功（存在启用的主相机）返回 1，否则返回 0 且不修改输出。
+DSE_CAPI int dse_render_screen_to_world_ray(float sx, float sy,
+                                            float* out_origin, float* out_dir);
+
 // MeshRenderer 材质/贴图加载（依赖 AssetManager）。
 // set_material_from_dmat：从 .dmat 载入 MaterialInstance 并拷入 MeshRenderer，成功返回 1。
 // set_texture：按 slot 名载入贴图并绑定到对应 handle，成功返回 1 并填充非空 out_*；slot 非法/加载失败返回 0。
@@ -761,6 +767,17 @@ DSE_CAPI void dse_ik_set_weight(uint32_t e, int idx, float w);
 DSE_CAPI void dse_ik_set_pole_vector(uint32_t e, int idx, float x, float y, float z);
 DSE_CAPI void dse_ik_set_iterations(uint32_t e, int idx, int iters);
 DSE_CAPI void dse_ik_set_enabled(uint32_t e, int enabled);
+
+// ---- FootIK（FootIK3DComponent）。脚部贴地，依赖物理 Raycast 检测地面。
+// add_foot 返回脚索引（-1=无组件）；浮点参数为 NaN 时保持默认值。 ----
+DSE_CAPI void dse_foot_ik_add_component(uint32_t e);
+DSE_CAPI int  dse_foot_ik_add_foot(uint32_t e, const char* name, const char* foot_bone,
+                                   const char* hip_bone, float foot_height,
+                                   float max_ground_distance, float blend_speed, float weight);
+DSE_CAPI void dse_foot_ik_set_foot_weight(uint32_t e, int idx, float w);
+DSE_CAPI void dse_foot_ik_set_foot_height(uint32_t e, int idx, float h);
+DSE_CAPI void dse_foot_ik_set_pelvis(uint32_t e, float pelvis_weight, float max_pelvis_offset);
+DSE_CAPI void dse_foot_ik_set_enabled(uint32_t e, int enabled);
 
 // ---- 骨骼挂点（BoneAttachmentComponent）。set_offset: 缩放 sx/sy/sz 为 NaN 时取 1。
 // get_world_pos: 由目标实体动画姿态计算，out_xyz(3) 始终写入，返回 1=成功/0=失败。 ----

@@ -24,6 +24,26 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
+#include <string>
+#include <system_error>
+
+namespace {
+// 为每个用例生成唯一名字，避免并行执行时多个用例共享同一固定文件名而互相干扰
+// （一个用例挂载着 bundle 文件时，另一个用例的 TearDown 删它会触发“拒绝访问/被占用”）。
+std::string UniqueSuffix() {
+    static std::atomic<uint64_t> counter{0};
+    std::string s;
+    if (const auto* info = ::testing::UnitTest::GetInstance()->current_test_info()) {
+        s += info->name();
+    }
+    s += "_";
+    s += std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    s += "_";
+    s += std::to_string(counter.fetch_add(1));
+    return s;
+}
+}  // namespace
 
 // ============================================================
 // AssetManager 路径解析集成
@@ -40,12 +60,12 @@ protected:
     void TearDown() override {}
 };
 
-TEST_F(AssetManagerVfsIntegrationTest, 配置数据根目录后获取返回正确值) {
+TEST_F(AssetManagerVfsIntegrationTest, ConfigurationdataAfterAcquireReturnsCorrect) {
     asset_mgr.ConfigureDataRoot("data");
     EXPECT_EQ(asset_mgr.GetDataRoot(), "data");
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, ConfigureDataRoot可切换根目录) {
+TEST_F(AssetManagerVfsIntegrationTest, ConfigureDataRootSwitchableRootDirectory) {
     asset_mgr.ConfigureDataRoot("assets");
     EXPECT_EQ(asset_mgr.GetDataRoot(), "assets");
 
@@ -53,19 +73,19 @@ TEST_F(AssetManagerVfsIntegrationTest, ConfigureDataRoot可切换根目录) {
     EXPECT_EQ(asset_mgr.GetDataRoot(), "data");
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPath处理逻辑路径) {
+TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPathProcessingLogicalPaths) {
     // 纯逻辑路径应直接返回
     std::string result = asset_mgr.NormalizeAssetPath("textures/hero.png");
     EXPECT_FALSE(result.empty());
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPath处理带前缀路径) {
+TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPathHandlingPrefixedPaths) {
     // 带 data/ 前缀的路径应被规范化
     std::string result = asset_mgr.NormalizeAssetPath("data/textures/hero.png");
     EXPECT_FALSE(result.empty());
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, ResolveAssetPath返回可访问路径) {
+TEST_F(AssetManagerVfsIntegrationTest, ResolveAssetPathReturnAccessiblePath) {
     std::string resolved = asset_mgr.ResolveAssetPath("textures/test.png");
     // 无论文件是否存在，路径解析不应返回空（除非路径本身非法）
     // 此处主要验证不崩溃
@@ -83,9 +103,10 @@ protected:
     std::string bundle_path_;
 
     void SetUp() override {
-        // 创建临时目录和文件用于 Bundle 测试
-        temp_dir_ = "test_bundle_input";
-        bundle_path_ = "test_output.bun";
+        // 创建唯一临时目录和文件用于 Bundle 测试（并行安全）
+        const std::string suffix = UniqueSuffix();
+        temp_dir_ = (std::filesystem::temp_directory_path() / ("dse_bundle_input_" + suffix)).string();
+        bundle_path_ = (std::filesystem::temp_directory_path() / ("dse_bundle_output_" + suffix + ".bun")).string();
 
         std::filesystem::create_directories(temp_dir_);
         std::ofstream(temp_dir_ + "/test.txt") << "hello bundle";
@@ -94,13 +115,14 @@ protected:
     }
 
     void TearDown() override {
-        // 清理临时文件
-        std::filesystem::remove_all(temp_dir_);
-        std::filesystem::remove(bundle_path_);
+        // 清理临时文件（不抛异常）
+        std::error_code ec;
+        std::filesystem::remove_all(temp_dir_, ec);
+        std::filesystem::remove(bundle_path_, ec);
     }
 };
 
-TEST_F(AssetBundleIntegrationTest, PackBundle打包目录成功) {
+TEST_F(AssetBundleIntegrationTest, PackBundlePackagingDirectorySuccessful) {
     bool result = asset_mgr.PackBundle(temp_dir_, bundle_path_, "");
     // 打包应成功
     EXPECT_TRUE(result);
@@ -109,7 +131,7 @@ TEST_F(AssetBundleIntegrationTest, PackBundle打包目录成功) {
     EXPECT_TRUE(std::filesystem::exists(bundle_path_));
 }
 
-TEST_F(AssetBundleIntegrationTest, MountBundle后LoadFileToMemory可读取) {
+TEST_F(AssetBundleIntegrationTest, MountBundleAfterLoadFileToMemoryReadable) {
     // 先打包
     ASSERT_TRUE(asset_mgr.PackBundle(temp_dir_, bundle_path_, ""));
 
@@ -128,7 +150,7 @@ TEST_F(AssetBundleIntegrationTest, MountBundle后LoadFileToMemory可读取) {
     }
 }
 
-TEST_F(AssetBundleIntegrationTest, 加密Bundle打包和挂载) {
+TEST_F(AssetBundleIntegrationTest, BundleAnd) {
     std::string aes_key = "0123456789abcdef"; // 16 字节 AES 密钥
 
     bool pack_ok = asset_mgr.PackBundle(temp_dir_, bundle_path_, aes_key);
@@ -145,7 +167,7 @@ TEST_F(AssetBundleIntegrationTest, 加密Bundle打包和挂载) {
     }
 }
 
-TEST_F(AssetBundleIntegrationTest, 错误密钥挂载失败或读取异常) {
+TEST_F(AssetBundleIntegrationTest, ErrorFailsOrRead) {
     std::string correct_key = "0123456789abcdef";
     std::string wrong_key = "fedcba9876543210";
 
@@ -170,7 +192,7 @@ TEST_F(AssetBundleIntegrationTest, 错误密钥挂载失败或读取异常) {
 // 缓存机制
 // ============================================================
 
-TEST_F(AssetManagerVfsIntegrationTest, 创建材质实例缓存命中) {
+TEST_F(AssetManagerVfsIntegrationTest, CreateExampleCachehit) {
     auto mat1 = asset_mgr.CreateMaterialInstance("test_mat");
     auto mat2 = asset_mgr.GetMaterialInstance(mat1->GetId());
 
@@ -180,7 +202,7 @@ TEST_F(AssetManagerVfsIntegrationTest, 创建材质实例缓存命中) {
     EXPECT_EQ(mat1.get(), mat2.get());
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, 列出已创建的材质实例ID) {
+TEST_F(AssetManagerVfsIntegrationTest, AlreadyCreateExampleID) {
     auto mat_a = asset_mgr.CreateMaterialInstance("mat_a");
     auto mat_b = asset_mgr.CreateMaterialInstance("mat_b");
 
@@ -192,7 +214,7 @@ TEST_F(AssetManagerVfsIntegrationTest, 列出已创建的材质实例ID) {
 }
 
 
-TEST_F(AssetManagerVfsIntegrationTest, 卸载未使用资源) {
+TEST_F(AssetManagerVfsIntegrationTest, NotuseAsset) {
     auto mat = asset_mgr.CreateMaterialInstance("temp_mat");
     unsigned int mat_id = mat->GetId();
 
@@ -228,7 +250,7 @@ protected:
     }
 };
 
-TEST_F(AssetManagerAsyncIntegrationTest, 异步加载回调泵浦机制) {
+TEST_F(AssetManagerAsyncIntegrationTest, Load) {
     std::atomic<int> callback_count{0};
 
     // 提交异步加载（文件可能不存在，此处测试回调机制）
@@ -248,7 +270,7 @@ TEST_F(AssetManagerAsyncIntegrationTest, 异步加载回调泵浦机制) {
     SUCCEED();
 }
 
-TEST_F(AssetManagerAsyncIntegrationTest, PendingMainThreadCallbacks计数非负) {
+TEST_F(AssetManagerAsyncIntegrationTest, PendingMainThreadCallbackscountNonNegative) {
     EXPECT_GE(asset_mgr.PendingMainThreadCallbacks(), 0u);
     EXPECT_GE(asset_mgr.PendingMainThreadCallbacksHighWatermark(), 0u);
 }
@@ -257,13 +279,13 @@ TEST_F(AssetManagerAsyncIntegrationTest, PendingMainThreadCallbacks计数非负)
 // EventBus 集成
 // ============================================================
 
-TEST_F(AssetManagerVfsIntegrationTest, SetEventBus后GetEventBus返回正确指针) {
+TEST_F(AssetManagerVfsIntegrationTest, SetEventBusAfterGetEventBusReturnTheCorrectPointer) {
     dse::core::EventBus bus;
     asset_mgr.SetEventBus(&bus);
     EXPECT_EQ(asset_mgr.GetEventBus(), &bus);
 }
 
-TEST_F(AssetManagerVfsIntegrationTest, 设置JobSystem后获取返回正确指针) {
+TEST_F(AssetManagerVfsIntegrationTest, SetUpJobSystemAfterAcquireReturnTheCorrectPointer) {
     dse::core::JobSystem js;
     asset_mgr.SetJobSystem(&js);
     EXPECT_EQ(asset_mgr.GetJobSystem(), &js);

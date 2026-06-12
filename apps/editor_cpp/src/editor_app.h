@@ -106,6 +106,7 @@ private:
     bool show_streaming_debug_ = false;
     bool show_curve_editor_ = false;
     bool show_visual_script_ = false;
+    bool show_anim_retarget_ = false;
 
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;

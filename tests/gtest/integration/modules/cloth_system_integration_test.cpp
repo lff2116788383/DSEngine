@@ -82,7 +82,7 @@ protected:
     }
 };
 
-TEST_F(ClothSystemIntegrationTest, 初始化正确设置粒子数量) {
+TEST_F(ClothSystemIntegrationTest, InitializeCorrectsetUp) {
     auto e = CreateClothEntity();
     // FixedUpdate 会触发初始化
     system.FixedUpdate(world, 1.0f / 60.0f);
@@ -95,7 +95,7 @@ TEST_F(ClothSystemIntegrationTest, 初始化正确设置粒子数量) {
     EXPECT_EQ(cloth.inv_masses.size(), 16u);
 }
 
-TEST_F(ClothSystemIntegrationTest, 初始化构建距离约束) {
+TEST_F(ClothSystemIntegrationTest, Initialize) {
     auto e = CreateClothEntity();
     system.FixedUpdate(world, 1.0f / 60.0f);
 
@@ -109,7 +109,7 @@ TEST_F(ClothSystemIntegrationTest, 初始化构建距离约束) {
     }
 }
 
-TEST_F(ClothSystemIntegrationTest, 固定顶点逆质量为零) {
+TEST_F(ClothSystemIntegrationTest, PointisZero) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
 
@@ -124,7 +124,7 @@ TEST_F(ClothSystemIntegrationTest, 固定顶点逆质量为零) {
     EXPECT_GT(cloth.inv_masses[15], 0.0f);
 }
 
-TEST_F(ClothSystemIntegrationTest, 重力使非固定粒子下落) {
+TEST_F(ClothSystemIntegrationTest, MakeNon) {
     auto e = CreateClothEntity(true);
     float dt = 1.0f / 60.0f;
     // 初始化
@@ -150,7 +150,7 @@ TEST_F(ClothSystemIntegrationTest, 重力使非固定粒子下落) {
         << "固定粒子 Y 不应改变";
 }
 
-TEST_F(ClothSystemIntegrationTest, 无固定点全部粒子自由下落) {
+TEST_F(ClothSystemIntegrationTest, WithoutpointAll) {
     auto e = CreateClothEntity(false); // 不固定任何点
     float dt = 1.0f / 60.0f;
     system.FixedUpdate(world, dt);
@@ -175,7 +175,7 @@ TEST_F(ClothSystemIntegrationTest, 无固定点全部粒子自由下落) {
     EXPECT_LT(final_avg_y, initial_avg_y) << "所有粒子应该自由下落";
 }
 
-TEST_F(ClothSystemIntegrationTest, 距离约束限制拉伸) {
+TEST_F(ClothSystemIntegrationTest, TestCase6) {
     auto e = CreateClothEntity(true);
     float dt = 1.0f / 60.0f;
     system.FixedUpdate(world, dt);
@@ -198,7 +198,7 @@ TEST_F(ClothSystemIntegrationTest, 距离约束限制拉伸) {
         << "距离约束应限制过度拉伸";
 }
 
-TEST_F(ClothSystemIntegrationTest, 法线被重新计算) {
+TEST_F(ClothSystemIntegrationTest, By) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
     auto& cloth = world.registry().get<ClothComponent>(e);
@@ -215,14 +215,14 @@ TEST_F(ClothSystemIntegrationTest, 法线被重新计算) {
     EXPECT_TRUE(has_nonzero) << "初始化后应有非零法线";
 }
 
-TEST_F(ClothSystemIntegrationTest, mesh_dirty标记) {
+TEST_F(ClothSystemIntegrationTest, mesh_Dirtymark) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
     auto& cloth = world.registry().get<ClothComponent>(e);
     EXPECT_TRUE(cloth.mesh_dirty) << "模拟后应标记 mesh_dirty";
 }
 
-TEST_F(ClothSystemIntegrationTest, 禁用布料不模拟) {
+TEST_F(ClothSystemIntegrationTest, DisabledNot) {
     auto e = CreateClothEntity(true);
     auto& cloth = world.registry().get<ClothComponent>(e);
     cloth.enabled = false;

@@ -10,7 +10,7 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/audio.h"
 
-TEST(AudioSourceComponentTest, 默认值) {
+TEST(AudioSourceComponentTest, DefaultValues) {
     AudioSourceComponent audio;
     EXPECT_EQ(audio.clip, nullptr);
     EXPECT_TRUE(audio.play_on_awake);
@@ -22,7 +22,7 @@ TEST(AudioSourceComponentTest, 默认值) {
     EXPECT_EQ(audio.runtime_handle, 0u);
 }
 
-TEST(AudioSourceComponentTest, 字段修改) {
+TEST(AudioSourceComponentTest, FieldModification) {
     AudioSourceComponent audio;
     audio.loop = true;
     audio.volume = 0.5f;

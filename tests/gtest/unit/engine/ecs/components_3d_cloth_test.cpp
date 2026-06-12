@@ -10,14 +10,14 @@ using namespace dse;
 
 // ─── ClothDistanceConstraint ───────────────────────────────────────────
 
-TEST(ClothDistanceConstraintTest, 默认值) {
+TEST(ClothDistanceConstraintTest, DefaultValues) {
     ClothDistanceConstraint c;
     EXPECT_EQ(c.i, 0u);
     EXPECT_EQ(c.j, 0u);
     EXPECT_FLOAT_EQ(c.rest_length, 0.0f);
 }
 
-TEST(ClothDistanceConstraintTest, 字段修改) {
+TEST(ClothDistanceConstraintTest, FieldModification) {
     ClothDistanceConstraint c;
     c.i = 5;
     c.j = 12;
@@ -29,7 +29,7 @@ TEST(ClothDistanceConstraintTest, 字段修改) {
 
 // ─── ClothBendConstraint ───────────────────────────────────────────────
 
-TEST(ClothBendConstraintTest, 默认值) {
+TEST(ClothBendConstraintTest, DefaultValues) {
     ClothBendConstraint c;
     EXPECT_EQ(c.i0, 0u);
     EXPECT_EQ(c.i1, 0u);
@@ -40,7 +40,7 @@ TEST(ClothBendConstraintTest, 默认值) {
 
 // ─── ClothSphereCollider ───────────────────────────────────────────────
 
-TEST(ClothSphereColliderTest, 默认值) {
+TEST(ClothSphereColliderTest, DefaultValues) {
     ClothSphereCollider col;
     EXPECT_EQ(col.entity_id, UINT32_MAX);
     EXPECT_FLOAT_EQ(col.radius, 0.5f);
@@ -48,7 +48,7 @@ TEST(ClothSphereColliderTest, 默认值) {
 
 // ─── ClothCapsuleCollider ──────────────────────────────────────────────
 
-TEST(ClothCapsuleColliderTest, 默认值) {
+TEST(ClothCapsuleColliderTest, DefaultValues) {
     ClothCapsuleCollider col;
     EXPECT_EQ(col.entity_id, UINT32_MAX);
     EXPECT_FLOAT_EQ(col.radius, 0.3f);
@@ -57,7 +57,7 @@ TEST(ClothCapsuleColliderTest, 默认值) {
 
 // ─── ClothComponent ───────────────────────────────────────────────────
 
-TEST(ClothComponentTest, 默认配置值) {
+TEST(ClothComponentTest, DefaultConfiguration) {
     ClothComponent cloth;
     EXPECT_TRUE(cloth.enabled);
     EXPECT_TRUE(cloth.source_mesh_path.empty());
@@ -68,7 +68,7 @@ TEST(ClothComponentTest, 默认配置值) {
     EXPECT_FLOAT_EQ(cloth.friction, 0.3f);
 }
 
-TEST(ClothComponentTest, 默认外力) {
+TEST(ClothComponentTest, DefaultOutside) {
     ClothComponent cloth;
     EXPECT_FLOAT_EQ(cloth.gravity.x, 0.0f);
     EXPECT_FLOAT_EQ(cloth.gravity.y, -9.81f);
@@ -77,7 +77,7 @@ TEST(ClothComponentTest, 默认外力) {
     EXPECT_FLOAT_EQ(cloth.wind_turbulence, 0.0f);
 }
 
-TEST(ClothComponentTest, 默认碰撞) {
+TEST(ClothComponentTest, Default) {
     ClothComponent cloth;
     EXPECT_FLOAT_EQ(cloth.collision_radius, 0.02f);
     EXPECT_TRUE(cloth.sphere_colliders.empty());
@@ -85,7 +85,7 @@ TEST(ClothComponentTest, 默认碰撞) {
     EXPECT_TRUE(cloth.pinned_vertices.empty());
 }
 
-TEST(ClothComponentTest, 默认运行时状态) {
+TEST(ClothComponentTest, DefaultWhenState) {
     ClothComponent cloth;
     EXPECT_FALSE(cloth.initialized);
     EXPECT_EQ(cloth.particle_count, 0u);
@@ -102,7 +102,7 @@ TEST(ClothComponentTest, 默认运行时状态) {
     EXPECT_FALSE(cloth.mesh_dirty);
 }
 
-TEST(ClothComponentTest, 添加碰撞体) {
+TEST(ClothComponentTest, AddTo) {
     ClothComponent cloth;
     ClothSphereCollider sc;
     sc.radius = 1.0f;
@@ -116,7 +116,7 @@ TEST(ClothComponentTest, 添加碰撞体) {
     EXPECT_FLOAT_EQ(cloth.capsule_colliders[0].half_height, 1.0f);
 }
 
-TEST(ClothComponentTest, 固定顶点设置) {
+TEST(ClothComponentTest, PointsetUp) {
     ClothComponent cloth;
     cloth.pinned_vertices = {0, 1, 10, 11};
     EXPECT_EQ(cloth.pinned_vertices.size(), 4u);

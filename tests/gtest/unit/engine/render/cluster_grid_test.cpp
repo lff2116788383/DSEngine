@@ -28,7 +28,7 @@ TEST(ClusterGridConstantsTest, ZSlices) {
     EXPECT_EQ(kClusterZSlices, 24);
 }
 
-TEST(ClusterGridConstantsTest, SSBO绑定点不重叠) {
+TEST(ClusterGridConstantsTest, SSBOBindingPointsDoNotOverlap) {
     EXPECT_NE(kSSBOBindingClusterInfo, kSSBOBindingLightIndices);
     EXPECT_NE(kSSBOBindingClusterInfo, kSSBOBindingPointLights);
     EXPECT_NE(kSSBOBindingClusterInfo, kSSBOBindingSpotLights);
@@ -40,11 +40,11 @@ TEST(ClusterGridConstantsTest, SSBO绑定点不重叠) {
 // ClusterGridHeader 结构体
 // ============================================================
 
-TEST(ClusterGridHeaderTest, 大小32字节) {
+TEST(ClusterGridHeaderTest, Size32) {
     EXPECT_EQ(sizeof(ClusterGridHeader), 32u);
 }
 
-TEST(ClusterGridHeaderTest, 默认值全零) {
+TEST(ClusterGridHeaderTest, DefaultValuesAllZero) {
     ClusterGridHeader h{};
     EXPECT_EQ(h.tiles_x, 0u);
     EXPECT_EQ(h.tiles_y, 0u);
@@ -57,11 +57,11 @@ TEST(ClusterGridHeaderTest, 默认值全零) {
 // ClusterInfo 结构体
 // ============================================================
 
-TEST(ClusterInfoTest, 大小16字节) {
+TEST(ClusterInfoTest, Size16) {
     EXPECT_EQ(sizeof(ClusterInfo), 16u);
 }
 
-TEST(ClusterInfoTest, 默认值全零) {
+TEST(ClusterInfoTest, DefaultValuesAllZero) {
     ClusterInfo ci{};
     EXPECT_EQ(ci.offset, 0u);
     EXPECT_EQ(ci.point_count, 0u);
@@ -72,11 +72,11 @@ TEST(ClusterInfoTest, 默认值全零) {
 // GPUPointLight 结构体
 // ============================================================
 
-TEST(GPUPointLightTest, 大小48字节) {
+TEST(GPUPointLightTest, Size48) {
     EXPECT_EQ(sizeof(GPUPointLight), 48u);
 }
 
-TEST(GPUPointLightTest, 默认值) {
+TEST(GPUPointLightTest, DefaultValues) {
     GPUPointLight pl{};
     EXPECT_FLOAT_EQ(pl.color.x, 0.0f);
     EXPECT_FLOAT_EQ(pl.intensity, 0.0f);
@@ -88,11 +88,11 @@ TEST(GPUPointLightTest, 默认值) {
 // GPUSpotLight 结构体
 // ============================================================
 
-TEST(GPUSpotLightTest, 大小64字节) {
+TEST(GPUSpotLightTest, Size64) {
     EXPECT_EQ(sizeof(GPUSpotLight), 64u);
 }
 
-TEST(GPUSpotLightTest, 默认值) {
+TEST(GPUSpotLightTest, DefaultValues) {
     GPUSpotLight sl{};
     EXPECT_FLOAT_EQ(sl.color.x, 0.0f);
     EXPECT_FLOAT_EQ(sl.inner_cone, 0.0f);
@@ -103,7 +103,7 @@ TEST(GPUSpotLightTest, 默认值) {
 // LightBufferHeader 结构体
 // ============================================================
 
-TEST(LightBufferHeaderTest, 大小16字节) {
+TEST(LightBufferHeaderTest, Size16) {
     EXPECT_EQ(sizeof(LightBufferHeader), 16u);
 }
 
@@ -111,7 +111,7 @@ TEST(LightBufferHeaderTest, 大小16字节) {
 // 最大光源常量
 // ============================================================
 
-TEST(LightBufferConstantsTest, 最大光源数) {
+TEST(LightBufferConstantsTest, Max) {
     EXPECT_EQ(kMaxClusteredPointLights, 256);
     EXPECT_EQ(kMaxClusteredSpotLights, 256);
 }
@@ -120,7 +120,7 @@ TEST(LightBufferConstantsTest, 最大光源数) {
 // ClusterGrid 默认状态
 // ============================================================
 
-TEST(ClusterGridTest, 默认状态) {
+TEST(ClusterGridTest, DefaultState) {
     ClusterGrid grid;
     EXPECT_EQ(grid.tiles_x(), 0);
     EXPECT_EQ(grid.tiles_y(), 0);
@@ -131,7 +131,7 @@ TEST(ClusterGridTest, 默认状态) {
 // LightBuffer 默认状态
 // ============================================================
 
-TEST(LightBufferTest, 默认状态) {
+TEST(LightBufferTest, DefaultState) {
     LightBuffer buf;
     EXPECT_EQ(buf.point_light_count(), 0);
     EXPECT_EQ(buf.spot_light_count(), 0);

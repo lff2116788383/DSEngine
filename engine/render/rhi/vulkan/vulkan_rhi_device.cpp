@@ -163,6 +163,19 @@ struct VulkanRhiDevice::HiZImpl {
 VulkanRhiDevice::VulkanRhiDevice() = default;
 VulkanRhiDevice::~VulkanRhiDevice() = default;
 
+RenderDeviceInfo VulkanRhiDevice::GetDeviceInfo() const {
+    RenderDeviceInfo info;
+    VkPhysicalDevice physical_device = context_.physical_device();
+    if (physical_device != VK_NULL_HANDLE) {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(physical_device, &props);
+        info.adapter_name = props.deviceName;
+        // CPU 类型物理设备即软渲（如 lavapipe / SwiftShader）。
+        info.is_software = (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU);
+    }
+    return info;
+}
+
 bool VulkanRhiDevice::InitDevice(void* window_handle, int width, int height) {
 #ifdef NDEBUG
     return InitVulkan(window_handle, width, height, false);
@@ -613,6 +626,7 @@ void VulkanRhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
 // --- Compute Shader ---
 
 unsigned int VulkanRhiDevice::CreateComputeShader(const std::string& source) {
+    if (!initialized_) return 0u;
     return shader_mgr_.CreateComputeProgram(source);
 }
 
@@ -1151,6 +1165,7 @@ unsigned int VulkanRhiDevice::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& vk_src, const std::string& /*hlsl_src*/,
     uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
     uint32_t push_constant_bytes) {
+    if (!initialized_) return 0u;
     if (ssbo_count == 0 && storage_image_count == 0 && sampler_count == 0)
         return shader_mgr_.CreateComputeProgramSSBO(vk_src, 0, push_constant_bytes);
     return shader_mgr_.CreateComputeProgramFull(

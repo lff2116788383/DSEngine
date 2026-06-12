@@ -52,23 +52,23 @@ protected:
     std::unique_ptr<FloatingOriginSystem> system_;
 };
 
-TEST_F(FloatingOriginTest, 默认阈值为5000) {
+TEST_F(FloatingOriginTest, DefaultIs5000) {
     EXPECT_FLOAT_EQ(system_->rebase_threshold(), 5000.0f);
 }
 
-TEST_F(FloatingOriginTest, 可设置自定义阈值) {
+TEST_F(FloatingOriginTest, CansetUp) {
     system_->set_rebase_threshold(100.0f);
     EXPECT_FLOAT_EQ(system_->rebase_threshold(), 100.0f);
 }
 
-TEST_F(FloatingOriginTest, 初始累积原点为零) {
+TEST_F(FloatingOriginTest, PointisZero) {
     auto origin = system_->accumulated_origin();
     EXPECT_DOUBLE_EQ(origin.x, 0.0);
     EXPECT_DOUBLE_EQ(origin.y, 0.0);
     EXPECT_DOUBLE_EQ(origin.z, 0.0);
 }
 
-TEST_F(FloatingOriginTest, 相机在阈值内不触发Rebase) {
+TEST_F(FloatingOriginTest, ExistInsideDoesNotTriggerRebase) {
     World world;
     system_->set_rebase_threshold(100.0f);
     CreateCamera(world, glm::vec3(50.0f, 0.0f, 0.0f));
@@ -89,7 +89,7 @@ TEST_F(FloatingOriginTest, 相机在阈值内不触发Rebase) {
     }
 }
 
-TEST_F(FloatingOriginTest, 超过阈值触发Rebase平移所有Transform) {
+TEST_F(FloatingOriginTest, TriggersRebaseWithTransform) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -104,7 +104,7 @@ TEST_F(FloatingOriginTest, 超过阈值触发Rebase平移所有Transform) {
     EXPECT_NEAR(tf.position.z, 100.0f, 0.01f);
 }
 
-TEST_F(FloatingOriginTest, Rebase后相机位置归零) {
+TEST_F(FloatingOriginTest, RebaseResetCameraPositionToZero) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -116,7 +116,7 @@ TEST_F(FloatingOriginTest, Rebase后相机位置归零) {
     EXPECT_NEAR(tf.position.x, 0.0f, 0.01f);
 }
 
-TEST_F(FloatingOriginTest, Rebase后累积原点正确) {
+TEST_F(FloatingOriginTest, RebaseThePostAccumulationOriginIsCorrect) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -130,7 +130,7 @@ TEST_F(FloatingOriginTest, Rebase后累积原点正确) {
     EXPECT_NEAR(origin.z, 0.0, 0.01);
 }
 
-TEST_F(FloatingOriginTest, 多次Rebase累积正确) {
+TEST_F(FloatingOriginTest, MultiTimesRebaseCorrect) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -144,7 +144,7 @@ TEST_F(FloatingOriginTest, 多次Rebase累积正确) {
     EXPECT_NEAR(origin.x, 500.0, 0.01);
 }
 
-TEST_F(FloatingOriginTest, 无相机时不触发Rebase) {
+TEST_F(FloatingOriginTest, WithoutWhenDoesNotTriggerRebase) {
     World world;
     system_->set_rebase_threshold(100.0f);
     auto e = CreateEntity(world, glm::vec3(9999.0f, 0.0f, 0.0f));
@@ -158,7 +158,7 @@ TEST_F(FloatingOriginTest, 无相机时不触发Rebase) {
     EXPECT_DOUBLE_EQ(origin.x, 0.0);
 }
 
-TEST_F(FloatingOriginTest, 禁用相机不参与检测) {
+TEST_F(FloatingOriginTest, DisabledNotAnd) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -171,7 +171,7 @@ TEST_F(FloatingOriginTest, 禁用相机不参与检测) {
     EXPECT_FLOAT_EQ(tf.position.x, 50.0f);
 }
 
-TEST_F(FloatingOriginTest, 高优先级相机优先用于检测) {
+TEST_F(FloatingOriginTest, Prioritypriority) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -184,7 +184,7 @@ TEST_F(FloatingOriginTest, 高优先级相机优先用于检测) {
     EXPECT_NEAR(origin.x, 200.0, 0.01);
 }
 
-TEST_F(FloatingOriginTest, ToAbsolute将本地坐标转为绝对坐标) {
+TEST_F(FloatingOriginTest, ToAbsoluteConvertLocalCoordinatesToAbsoluteCoordinates) {
     World world;
     system_->set_rebase_threshold(100.0f);
     CreateCamera(world, glm::vec3(200.0f, 0.0f, 0.0f));
@@ -194,7 +194,7 @@ TEST_F(FloatingOriginTest, ToAbsolute将本地坐标转为绝对坐标) {
     EXPECT_NEAR(abs.x, 250.0, 0.01);
 }
 
-TEST_F(FloatingOriginTest, ToLocal将绝对坐标转为本地坐标) {
+TEST_F(FloatingOriginTest, ToLocalConvertAbsoluteCoordinatesToLocalCoordinates) {
     World world;
     system_->set_rebase_threshold(100.0f);
     CreateCamera(world, glm::vec3(200.0f, 0.0f, 0.0f));
@@ -204,7 +204,7 @@ TEST_F(FloatingOriginTest, ToLocal将绝对坐标转为本地坐标) {
     EXPECT_NEAR(local.x, 50.0f, 0.01f);
 }
 
-TEST_F(FloatingOriginTest, Rebase后Transform标记dirty) {
+TEST_F(FloatingOriginTest, RebaseAfterTransformmarkdirty) {
     World world;
     system_->set_rebase_threshold(100.0f);
 
@@ -217,7 +217,7 @@ TEST_F(FloatingOriginTest, Rebase后Transform标记dirty) {
     EXPECT_TRUE(world.registry().get<TransformComponent>(e).dirty);
 }
 
-TEST_F(FloatingOriginTest, EventBus广播OriginRebasedEvent) {
+TEST_F(FloatingOriginTest, EventBusBroadcastsOriginRebasedEvent) {
     World world;
     core::EventBus bus;
     system_->set_rebase_threshold(100.0f);

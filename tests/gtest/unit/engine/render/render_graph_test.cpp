@@ -30,21 +30,21 @@ using namespace dse::render;
 // 资源声明
 // ============================================================
 
-TEST(RenderGraphTest, 声明资源返回有效句柄) {
+TEST(RenderGraphTest, AssetReturnValid) {
     RenderGraph graph;
     auto handle = graph.DeclareResource("scene_color");
     EXPECT_TRUE(handle.is_valid());
     EXPECT_NE(handle.id, 0u);
 }
 
-TEST(RenderGraphTest, 重复声明同名资源返回相同句柄) {
+TEST(RenderGraphTest, AssetReturns) {
     RenderGraph graph;
     auto h1 = graph.DeclareResource("depth");
     auto h2 = graph.DeclareResource("depth");
     EXPECT_EQ(h1.id, h2.id);
 }
 
-TEST(RenderGraphTest, 不同名资源返回不同句柄) {
+TEST(RenderGraphTest, ResourcesWithDifferentNamesReturnDifferentHandles) {
     RenderGraph graph;
     auto h1 = graph.DeclareResource("color");
     auto h2 = graph.DeclareResource("depth");
@@ -55,35 +55,35 @@ TEST(RenderGraphTest, 不同名资源返回不同句柄) {
 // Pass 添加与读写
 // ============================================================
 
-TEST(RenderGraphTest, 添加Pass返回有效句柄) {
+TEST(RenderGraphTest, AddToPassReturnValid) {
     RenderGraph graph;
     auto pass = graph.AddPass("Forward");
     EXPECT_TRUE(pass.is_valid());
     EXPECT_NE(pass.id, 0u);
 }
 
-TEST(RenderGraphTest, 多个Pass句柄递增) {
+TEST(RenderGraphTest, MultiPassIncrements) {
     RenderGraph graph;
     auto p1 = graph.AddPass("Pass1");
     auto p2 = graph.AddPass("Pass2");
     EXPECT_NE(p1.id, p2.id);
 }
 
-TEST(RenderGraphTest, 无效句柄PassRead不崩溃) {
+TEST(RenderGraphTest, InvalidHandlePassReadDoesNotCrash) {
     RenderGraph graph;
     auto res = graph.DeclareResource("color");
     RenderPassHandle invalid_pass{0};
     EXPECT_NO_THROW(graph.PassRead(invalid_pass, res));
 }
 
-TEST(RenderGraphTest, 无效句柄PassWrite不崩溃) {
+TEST(RenderGraphTest, InvalidHandlePassWriteDoesNotCrash) {
     RenderGraph graph;
     auto res = graph.DeclareResource("color");
     RenderPassHandle invalid_pass{0};
     EXPECT_NO_THROW(graph.PassWrite(invalid_pass, res));
 }
 
-TEST(RenderGraphTest, 无效句柄PassSetExecute不崩溃) {
+TEST(RenderGraphTest, InvalidHandlePassSetExecuteDoesNotCrash) {
     RenderGraph graph;
     auto pass = graph.AddPass("P");
     RenderPassHandle invalid{0};
@@ -96,7 +96,7 @@ TEST(RenderGraphTest, 无效句柄PassSetExecute不崩溃) {
 
 /// 线性依赖：A→B→C，编译后 Pass 数正确即可
 /// 执行顺序验证见 integration/rendergraph_integration_test.cpp
-TEST(RenderGraphTest, 线性依赖编译后Pass数正确) {
+TEST(RenderGraphTest, AfterPassCorrect) {
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
     auto res_b = graph.DeclareResource("res_b");
@@ -116,7 +116,7 @@ TEST(RenderGraphTest, 线性依赖编译后Pass数正确) {
 }
 
 /// 菱形依赖编译后 Pass 数正确
-TEST(RenderGraphTest, 菱形依赖编译后Pass数正确) {
+TEST(RenderGraphTest, AfterPassCorrect_2) {
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
 
@@ -143,7 +143,7 @@ TEST(RenderGraphTest, 菱形依赖编译后Pass数正确) {
 }
 
 /// 无依赖 Pass 编译后数量正确
-TEST(RenderGraphTest, 无依赖Pass编译后数量正确) {
+TEST(RenderGraphTest, NoDependenciesPassAfterCorrect) {
     RenderGraph graph;
     graph.AddPass("A");
     graph.AddPass("B");
@@ -156,7 +156,7 @@ TEST(RenderGraphTest, 无依赖Pass编译后数量正确) {
 // 自动剔除
 // ============================================================
 
-TEST(RenderGraphTest, 无输出Pass被自动剔除) {
+TEST(RenderGraphTest, WithoutPassByAuto) {
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
     auto res_b = graph.DeclareResource("res_b");
@@ -181,7 +181,7 @@ TEST(RenderGraphTest, 无输出Pass被自动剔除) {
     EXPECT_EQ(graph.culled_pass_count(), 2u);
 }
 
-TEST(RenderGraphTest, 标记输出保护依赖链不被剔除) {
+TEST(RenderGraphTest, MarkchainnotBe) {
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
     auto res_b = graph.DeclareResource("res_b");
@@ -201,7 +201,7 @@ TEST(RenderGraphTest, 标记输出保护依赖链不被剔除) {
     EXPECT_EQ(graph.culled_pass_count(), 0u);
 }
 
-TEST(RenderGraphTest, 无标记输出时保留所有Pass) {
+TEST(RenderGraphTest, WithoutmarkWhenWithPass) {
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
 
@@ -221,7 +221,7 @@ TEST(RenderGraphTest, 无标记输出时保留所有Pass) {
 // 循环依赖检测
 // ============================================================
 
-TEST(RenderGraphTest, 循环依赖编译失败) {
+TEST(RenderGraphTest, CycleCompileFails) {
     // A 写 res_a，B 读 res_a 写 res_b，A 读 res_b → 构成环
     RenderGraph graph;
     auto res_a = graph.DeclareResource("res_a");
@@ -244,7 +244,7 @@ TEST(RenderGraphTest, 循环依赖编译失败) {
 // ============================================================
 
 /// 未编译时 is_compiled 返回 false
-TEST(RenderGraphTest, 未编译时状态正确) {
+TEST(RenderGraphTest, NotWhenStateCorrect) {
     RenderGraph graph;
     graph.AddPass("A");
     graph.AddPass("B");
@@ -252,7 +252,7 @@ TEST(RenderGraphTest, 未编译时状态正确) {
 }
 
 /// 编译后空 Pass Execute 不崩溃（仅验证 Compile 阶段）
-TEST(RenderGraphTest, 空Pass编译不崩溃) {
+TEST(RenderGraphTest, EmptyPassDoesNotCrash) {
     RenderGraph graph;
     auto pass = graph.AddPass("Empty");
     // 不设置 execute
@@ -264,7 +264,7 @@ TEST(RenderGraphTest, 空Pass编译不崩溃) {
 // 查询与重置
 // ============================================================
 
-TEST(RenderGraphTest, 空图编译成功) {
+TEST(RenderGraphTest, EmptyCompileSucceeds) {
     RenderGraph graph;
     EXPECT_TRUE(graph.Compile());
     EXPECT_EQ(graph.compiled_pass_count(), 0u);
@@ -272,13 +272,13 @@ TEST(RenderGraphTest, 空图编译成功) {
 }
 
 /// 空图重置不崩溃
-TEST(RenderGraphTest, 空图重置不崩溃) {
+TEST(RenderGraphTest, EmptyresetDoesNotCrash) {
     RenderGraph graph;
     graph.Compile();
     EXPECT_NO_THROW(graph.Reset());
 }
 
-TEST(RenderGraphTest, Reset清空所有状态) {
+TEST(RenderGraphTest, ResetClearAllStatus) {
     RenderGraph graph;
     graph.DeclareResource("res_a");
     graph.AddPass("A");
@@ -291,7 +291,7 @@ TEST(RenderGraphTest, Reset清空所有状态) {
     EXPECT_EQ(graph.culled_pass_count(), 0u);
 }
 
-TEST(RenderGraphTest, culled_pass_count统计正确) {
+TEST(RenderGraphTest, culled_pass_CountStatisticallyCorrect) {
     RenderGraph graph;
     auto res_kept = graph.DeclareResource("res_kept");
     auto res_unused = graph.DeclareResource("res_unused");
@@ -309,7 +309,7 @@ TEST(RenderGraphTest, culled_pass_count统计正确) {
     EXPECT_EQ(graph.culled_pass_count(), 1u);
 }
 
-TEST(RenderGraphTest, Compile后添加新Pass标记未编译) {
+TEST(RenderGraphTest, CompileaddNewAfterPassMarkNotCompiled) {
     RenderGraph graph;
     graph.AddPass("A");
     graph.Compile();
@@ -319,7 +319,7 @@ TEST(RenderGraphTest, Compile后添加新Pass标记未编译) {
     EXPECT_FALSE(graph.is_compiled());
 }
 
-TEST(RenderGraphTest, PassRead去重) {
+TEST(RenderGraphTest, PassReadRemoveDuplicates) {
     RenderGraph graph;
     auto res = graph.DeclareResource("res");
     auto pass = graph.AddPass("P");
@@ -330,7 +330,7 @@ TEST(RenderGraphTest, PassRead去重) {
     EXPECT_EQ(graph.compiled_pass_count(), 1u);
 }
 
-TEST(RenderGraphTest, PassWrite去重) {
+TEST(RenderGraphTest, PassWriteRemoveDuplicates) {
     RenderGraph graph;
     auto res = graph.DeclareResource("res");
     auto pass = graph.AddPass("P");
@@ -341,12 +341,12 @@ TEST(RenderGraphTest, PassWrite去重) {
     EXPECT_EQ(graph.compiled_pass_count(), 1u);
 }
 
-TEST(RenderGraphTest, GpuTiming默认启用) {
+TEST(RenderGraphTest, GpuTimingEnabledByDefault) {
     RenderGraph graph;
     EXPECT_TRUE(graph.IsGpuTimingEnabled());
 }
 
-TEST(RenderGraphTest, GpuTiming可禁用) {
+TEST(RenderGraphTest, GpuTimingCanBeDisabled) {
     RenderGraph graph;
     graph.SetGpuTimingEnabled(false);
     EXPECT_FALSE(graph.IsGpuTimingEnabled());

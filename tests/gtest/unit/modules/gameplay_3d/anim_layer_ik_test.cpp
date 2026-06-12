@@ -24,13 +24,13 @@ using namespace gameplay3d;
 // AnimLayerComponent 默认值
 // ============================================================
 
-TEST(AnimLayerTest, AnimLayerComponent默认值) {
+TEST(AnimLayerTest, AnimLayerComponentDefaultValues) {
     AnimLayerComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_TRUE(comp.layers.empty());
 }
 
-TEST(AnimLayerTest, AnimLayerConfig默认值) {
+TEST(AnimLayerTest, AnimLayerConfigDefaultValues) {
     AnimLayerConfig layer;
     EXPECT_TRUE(layer.name.empty());
     EXPECT_FLOAT_EQ(layer.weight, 1.0f);
@@ -44,7 +44,7 @@ TEST(AnimLayerTest, AnimLayerConfig默认值) {
     EXPECT_TRUE(layer.loop);
 }
 
-TEST(AnimLayerTest, AnimBlendNode2D默认值) {
+TEST(AnimLayerTest, AnimBlendNode2DDefaultValues) {
     AnimBlendNode2D node;
     EXPECT_TRUE(node.name.empty());
     EXPECT_TRUE(node.danim_path.empty());
@@ -54,13 +54,13 @@ TEST(AnimLayerTest, AnimBlendNode2D默认值) {
     EXPECT_TRUE(node.loop);
 }
 
-TEST(AnimLayerTest, 空World调用LayerBlendUpdate不崩溃) {
+TEST(AnimLayerTest, EmptyWorldCallsLayerBlendUpdateDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
     EXPECT_NO_THROW(AnimLayerBlendSystem::Update(world, 0.016f));
 }
 
-TEST(AnimLayerTest, 有组件但无AssetManager不崩溃) {
+TEST(AnimLayerTest, WithComponentWithoutAssetManagerDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
     auto e = world.CreateEntity();
@@ -75,13 +75,13 @@ TEST(AnimLayerTest, 有组件但无AssetManager不崩溃) {
 // IKChain3DComponent 默认值
 // ============================================================
 
-TEST(IKTest, IKChain3DComponent默认值) {
+TEST(IKTest, IKChain3DComponentDefaultValues) {
     IKChain3DComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_TRUE(comp.chains.empty());
 }
 
-TEST(IKTest, IKChainConfig默认值) {
+TEST(IKTest, IKChainConfigDefaultValues) {
     IKChainConfig chain;
     EXPECT_TRUE(chain.name.empty());
     EXPECT_EQ(chain.type, IKChainType::FABRIK);
@@ -97,12 +97,12 @@ TEST(IKTest, IKChainConfig默认值) {
     EXPECT_EQ(chain.tip_bone_index, -1);
 }
 
-TEST(IKTest, 空World调用IKUpdate不崩溃) {
+TEST(IKTest, EmptyWorldCallsIKUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(IKSolverSystem::Update(world, 0.016f));
 }
 
-TEST(IKTest, 有组件但无有效缓存不崩溃) {
+TEST(IKTest, WithComponentWithoutValidCacheDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(e);
@@ -271,7 +271,7 @@ TEST(AnimClipEvalTest, SolveFABRIK_EmptyChain) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
-TEST(AnimClipEvalTest, AnimBlendNode默认值) {
+TEST(AnimClipEvalTest, AnimBlendNodeDefaultValues) {
     AnimBlendNode node;
     EXPECT_TRUE(node.name.empty());
     EXPECT_TRUE(node.danim_path.empty());
@@ -287,7 +287,7 @@ TEST(AnimClipEvalTest, AnimBlendNode默认值) {
 // IK 算法正确性测试
 // ============================================================
 
-TEST(IKAlgorithmTest, FABRIK_收敛性_可达成目标) {
+TEST(IKAlgorithmTest, FABRIK_Convergence_AchievableGoals) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(1.0f, 0.0f, 0.0f),
@@ -301,7 +301,7 @@ TEST(IKAlgorithmTest, FABRIK_收敛性_可达成目标) {
     EXPECT_LT(tip_error, 0.05f); // Should converge within tolerance
 }
 
-TEST(IKAlgorithmTest, FABRIK_边界条件_零长度骨) {
+TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_ZeroLengthBone) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 0.0f) // Zero-length bone
@@ -311,7 +311,7 @@ TEST(IKAlgorithmTest, FABRIK_边界条件_零长度骨) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
-TEST(IKAlgorithmTest, FABRIK_边界条件_单骨链) {
+TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_SingleBoneChain) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f)
     };
@@ -320,7 +320,7 @@ TEST(IKAlgorithmTest, FABRIK_边界条件_单骨链) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
-TEST(IKAlgorithmTest, FABRIK_边界条件_目标与根重合) {
+TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_TheTargetCoincidesWithTheRoot) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(1.0f, 0.0f, 0.0f)
@@ -333,7 +333,7 @@ TEST(IKAlgorithmTest, FABRIK_边界条件_目标与根重合) {
     EXPECT_NEAR(glm::length(positions[1] - positions[0]), 1.0f, 0.1f);
 }
 
-TEST(IKAlgorithmTest, FABRIK_PoleVector_弯曲方向约束) {
+TEST(IKAlgorithmTest, FABRIK_PoleVector_BendingDirectionConstraint) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
         glm::vec3(1.0f, 0.0f, 0.0f),

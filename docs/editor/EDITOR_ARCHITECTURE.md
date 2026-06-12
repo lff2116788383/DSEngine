@@ -1,7 +1,7 @@
 # DSEngine 编辑器架构分析
 
-> 更新日期: 2026-05-18 (最近修订: EditorContext 统一 + 全局变量消除 + 表驱动 Tool 注册)
-> 基于 `apps/editor_cpp/` 源码审查
+> 更新日期: 2026-06-10 (最近修订: 全量代码现状核实 — 面板/工具/测试/已知边界对齐源码)
+> 基于 `apps/editor_cpp/` 源码审查（本次按真实文件逐项核实，修正过时计数与完成度）
 
 ---
 
@@ -21,9 +21,26 @@
 
 ## 二、代码规模与结构
 
-**总计：59 个源文件，约 48 万字节（~12,000 行有效代码）**
+**总计：约 110 个源文件（.cpp+.h），`src/` 下 ~30,664 行代码，约 60 个功能模块/面板。**
+（旧文档记 “59 文件 / 12,000 行 / 25 面板” 已严重过时，本次按 `find apps/editor_cpp/src` + `wc -l` 核实。）
 
-### 面板清单（按代码量排序）
+### 自上次文档以来新增/此前漏记的面板（均已落地，非占位）
+
+| 面板 | 文件 | 行数 | 功能 | 佐证 |
+|------|------|------|------|------|
+| Shader Graph | `editor_shader_graph.cpp` | 1248 | 节点式着色器图 + 贝塞尔连线 + 编译为 DSSL | `Compile`，7 例 `ShaderGraphCompileTest` |
+| Visual Script | `editor_visual_script.cpp` | 756 | 节点式可视脚本 → Lua 代码生成 | `Compile` / `DrawNode`（控制流见 §四） |
+| Anim State Machine | `editor_anim_state_machine.cpp` | 637 | 动画状态机图 + 过渡箭头 + 状态 Inspector | `DrawAnimStateMachinePanel` |
+| Tilemap | `editor_tilemap_panel.cpp` | 567 | 2D 瓦片笔刷/填充/橡皮 | — |
+| AI Chat Panel | `editor_chat_panel.cpp` | 892 | 编辑器内建 AI 对话 + @提及解析 + 历史持久化 | 接入 `editor_app.cpp:1022-1025` |
+| Curve Editor | `editor_curve_editor.cpp` | 327 | 通用曲线编辑控件 | `DrawCurveEditor` |
+| NavMesh Panel | `editor_navmesh_panel.cpp` | 316 | 导航网格烘焙参数 + Overlay 预览 | `DrawNavMeshPanel` / `DrawNavMeshOverlay` |
+| Lua Debugger | `editor_lua_debugger.cpp` | 303 | Lua 断点/单步调试面板 | `DrawLuaDebuggerPanel` |
+| Multi-Viewport | `editor_multi_viewport.cpp` | 173 | 多视口配置面板（默认关闭，可开启） | `DrawMultiViewportConfigPanel` |
+| Streaming Debug | `editor_streaming_panel.cpp` | 149 | 流式加载可视化 | `DrawStreamingDebugPanel` |
+| 其它 | Prefab Override / Lighting Gizmos / Physics Debug / Selection Outline / Scene View Mode / Autosave / Project Hub / Layout Manager / OS Drop / AI Config | — | 预制体覆盖、灯光/物理 Gizmo、选中描边、视图模式、自动保存、工程枢纽、布局管理、拖拽、AI 配置 | 均有独立 `.cpp` |
+
+### 面板清单（历史，按代码量排序）
 
 | 面板 | 文件 | 大小 | 功能 |
 |------|------|------|------|
@@ -145,21 +162,25 @@
 | **国际化** | 多语言切换 + 参数预览 | ✅ 完整 |
 | **探针** | Light Probe + Reflection Probe 可视化 | ✅ 完整 |
 | **自动化** | headless + 快照对比 | ✅ 完整 |
-| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，23 个 Tool + 插件模板文档 | ✅ 完整 |
+| **AI Control Server** | WebSocket JSON-RPC + MCP adapter，**32 个内建 Tool**（表驱动注册，详 §六） | ✅ 完整 |
 | **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
 | **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
+| **Shader Graph** | 节点式着色器图 → 编译为 DSSL（7 例编译测试） | ✅ 完整 |
+| **Visual Script** | 节点式可视脚本 → Lua：事件入口生成函数体、Branch→if/else、For Loop→数值 for、纯数据节点内联表达式、Flow 数据输出绑定局部变量（`editor_visual_script_compiler.{h,cpp}`，6 例测试） | ✅ 完整 |
+| **动画状态机** | 状态机图 + 过渡条件 + 状态 Inspector | ✅ 完整 |
+| **Animation Retargeting** | 导入源/目标模型（gltf/fbx）→ 按骨骼名自动映射（精确/归一化/人形同义词）+ 手动覆盖 → 烘焙以目标骨架命名的 `.danim`（`editor_anim_retarget_core.{h,cpp}` 纯核心 + `editor_anim_retarget.cpp` 面板，9 例测试） | ✅ 完整 |
+| **碰撞体可视化编辑** | Scene 视口 `ColEdit` 开关：对选中实体的 Box3D/Sphere3D/Box2D/Circle2D 用 ImGuizmo 直接拖拽 size/radius 与 center/offset（`editor_collider_edit.{h,cpp}` 纯核心 + `_gizmo.cpp` 视口交互，7 例测试） | ✅ 完整 |
+| **NavMesh 面板** | 烘焙参数 + Overlay 预览 | ✅ 完整 |
+| **AI Chat Panel** | 编辑器内建 AI 对话 + Python LLM bridge（原 Phase 3，已接入） | ✅ 完整 |
+| **Lua Debugger / Curve Editor / Streaming Debug** | Lua 调试、通用曲线、流式加载可视化 | ✅ 完整 |
+| **崩溃捕获（编辑器侧）** | 复用引擎进程级 CrashReporter，编辑器薄封装：最早期安装覆盖 Init 前阶段、`app_name=DSEngine-Editor` 区分进程、面包屑/元数据记录场景/Play/命令上下文、与 AutoSave 联动提示上次崩溃（`editor_crash.{h,cpp}`，8 例测试） | ✅ 完整 |
 
 ### 缺失功能
 
 | 优先级 | 功能 | 说明 |
 |--------|------|------|
-| � P2 | Visual Shader Graph / 节点编辑器 | DSSL 已覆盖 shader 自定义，Graph 仅面向非代码用户 |
-| 🟡 P1 | Animation Retargeting UI | 骨骼动画重定向工具 |
-| 🟡 P1 | 物理碰撞体可视化编辑 | Scene 中直接调整碰撞体形状 |
-| 🟡 P1 | NavMesh 可视化烘焙 | 导航网格生成与预览 |
-| 🟢 P2 | Multi-viewport | ImGui 多视口（因 CRT 稳定性暂禁） |
-| 🟢 P2 | 蓝图/可视化脚本 | 节点式逻辑编辑 |
-| � P1 | AI Chat Panel | 编辑器内建 AI 对话面板，🔧 Phase 3 进行中 |
+| 🟢 P2 | Multi-viewport 默认开启 | 面板已有开关，默认关闭（CRT 稳定性顾虑） |
+| 🟢 P2 | 非 Windows 原生文件对话框 | 仅 Windows 实现，非 Windows 返回空（详 §四） |
 
 ---
 
@@ -182,8 +203,10 @@
 | ~~main.cpp 过重~~ | ✅ 已修 | 拆分为 EditorApp 类，main.cpp 仅 10 行 |
 | ~~大量 static 全局状态~~ | ✅ 已修 | 全局变量已消除：profiler/gizmo/language 收入 EditorApp 成员，editor_state/backup_registry 改为 namespace-static，EditorContext 统一传递 |
 | ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
-| **仅 OpenGL** | 🟡 中 | 编辑器直接 `#include <glad/gl.h>`，未走 RHI |
-| **Multi-viewport 禁用** | 🟡 中 | CRT heap 断言，注释标注了原因 |
+| **部分走 RHI** | 🟡 中 | 主场景渲染早已经由引擎 RHI（`pipeline()->GetSceneTextureId()`）；编辑器自建 GPU 资源中**资产缩略图已迁移到 RHI**（`editor_gpu.{h,cpp}` 接入层 → `RhiDevice::CreateTexture2D/DeleteTexture`）。剩余直接 GL：视口拾取（自定义 shader+FBO+readback）、多视口 blit、ImGui 后缓冲清屏（详 §五·编辑器走 RHI） |
+| **Multi-viewport 默认关闭** | 🟡 中 | 已有配置面板与开关，默认关（CRT heap 稳定性顾虑） |
+| **Visual Script 控制流未接** | 🟡 中 | `editor_visual_script.cpp:374-381` 事件/分支 `{body}`/`{true_body}`/`{false_body}` 仅生成占位注释，数据流正常 |
+| **文件对话框仅 Windows** | 🟢 低 | `editor_file_dialog.cpp:101-106` 非 Windows 为空桩（与引擎 Windows-first 一致） |
 
 ### 改进建议
 
@@ -192,8 +215,119 @@
 | ~~🔴 高~~ | ~~拆分 main.cpp → EditorApp 类~~ | ~~1-2 天~~ | ✅ 完成 |
 | ~~🔴 高~~ | ~~Inspector 注册式 (Component → DrawFunc)~~ | ~~1 周~~ | ✅ 完成 |
 | ~~🟡 中~~ | ~~统一 EditorContext 替代残余 static 变量~~ | ~~2-3 天~~ | ✅ 完成 |
-| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 待开始 |
+| 🟡 中 | 编辑器走 RHI 而非直接 OpenGL | 1 周 | 🔄 进行中（缩略图已迁移，详 §五） |
 | 🟢 低 | 修复 Multi-viewport CRT 问题 | 未知 | 待开始 |
+
+---
+
+## 五、编辑器走 RHI（迁移评估与进度）
+
+> 目标：编辑器不再直接 `#include <glad/gl.h>` 调 OpenGL，所有 GPU 资源/绘制经引擎 `render::RhiDevice` 抽象，从而与引擎一致地支持 OpenGL / Vulkan / D3D11 三后端。
+
+### 现状
+
+编辑器的**主场景渲染本就走 RHI**：引擎管线把场景渲染进 RHI 渲染目标，编辑器仅通过 `pipeline()->GetSceneTextureId()` 取颜色纹理喂给 `ImGui::Image`。编辑器自身直接调 GL 的只剩少量自建 GPU 资源/绘制。
+
+### 接入层
+
+新增 `editor_gpu.{h,cpp}`：引擎 Init 后由 `editor_app` 调 `SetEditorRhiDevice(pipeline()->GetRhiDevice())` 注入设备；编辑器代码经 `EditorCreateTexture2D / EditorDeleteTexture` 等收敛到 RHI。后端无关：OpenGL 后端返回的句柄即 GL 纹理 id，可直接喂 ImGui。
+
+### 已迁移
+
+| 子系统 | 原直接 GL | 迁移后 |
+|--------|-----------|--------|
+| 资产缩略图（`editor_aux_panels.cpp`：球体预览 / 图片缩略图 / 缓存释放） | `glGenTextures`+`glTexImage2D`+`glDeleteTextures` | `EditorCreateTexture2D(linear,clamp)` / `EditorDeleteTexture` → `RhiDevice::CreateTexture2D(TextureSamplerDesc)` / `DeleteTexture`，行为一致（RGBA8 / Linear / ClampToEdge） |
+
+### 剩余（需扩展 RHI，风险较高）—— 概览
+
+| 子系统 | 位置 | 直接 GL 用法 | 阻塞点 | 依赖的新原语 |
+|--------|------|--------------|--------|--------------|
+| 视口拾取（颜色 ID） | `editor_viewport_panel.cpp` ~130-260 | 自建 shader + quad VAO/VBO + FBO，逐像素 `glReadPixels` 命中实体 | RHI 只暴露高层批绘制（`DrawMeshBatch/DrawSpriteBatch`），无「自定义 shader 任意几何即时绘制」入口 | A. 通用即时绘制 |
+| 多视口纹理 blit | `editor_viewport_panel.cpp` ~550-590 | `glBlitFramebuffer` 把源纹理拷到各视口纹理 | RHI 仅有 `BlitToScreen`，无通用 RT→RT / RT→texture blit | B. RT blit |
+| ImGui 后缓冲清屏 + 呈现 | `editor_app.cpp` ~689-697 | 绑定默认 FBO + `glClear`，再由 `imgui_impl_opengl3` 直接绘制 | 与 ImGui GL3 后端强耦合 | C. 默认帧缓冲清屏 + RHI 后端 ImGui 渲染器 |
+
+> 推进顺序：先做 **§5.A 通用即时绘制原语 + §5.B RT blit**（视口拾取/多视口都依赖它，且可离屏验证），再迁移 **§5.1 视口拾取 / §5.2 多视口 blit**，最后做 **§5.3 ImGui 呈现层**（最深、与窗口/交换链耦合）。在 §5.A/§5.B 落地前不要动 §5.1/§5.2，以免回归当前可用路径。
+
+---
+
+### §5.A 新增 RHI 原语：通用即时绘制（Immediate Draw）
+
+**目标**：让上层用「自定义 shader program + 一段顶点数据 + 少量 uniform」直接绘制到指定 RT，不经高层 Mesh/Sprite 批。视口拾取（颜色 ID quad）即用此原语重写。
+
+**建议接口签名**（加到 `rhi_device.h`，类型放 `rhi_types.h` 全局命名空间）：
+
+```cpp
+enum class ImmediateTopology : uint8_t { Triangles, Lines, LineStrip };
+struct ImmediateVertexAttrib { int location; int components; int offset_bytes; };
+struct ImmediateDrawDesc {
+    unsigned int render_target = 0;        // 目标 RT 句柄（0 = 默认帧缓冲）
+    unsigned int shader_program = 0;       // CreateShaderProgram 返回值
+    const void*  vertices = nullptr;       // 交错顶点数据
+    size_t       vertex_bytes = 0;
+    int          vertex_count = 0;
+    int          stride_bytes = 0;
+    std::vector<ImmediateVertexAttrib> attribs;
+    ImmediateTopology topology = ImmediateTopology::Triangles;
+    glm::ivec4 viewport = {0,0,0,0};       // x,y,w,h（0,0,0,0 = 用 RT 全尺寸）
+    bool clear = false; glm::vec4 clear_color = {0,0,0,0};
+    bool blend = false; bool depth_test = false;
+    // 自定义 program 的 uniform（按需填，名字对应 GLSL/HLSL 常量）
+    std::vector<std::pair<std::string,float>>      uniforms_f;
+    std::vector<std::pair<std::string,glm::vec2>>  uniforms_vec2;
+    std::vector<std::pair<std::string,glm::vec4>>  uniforms_vec4;
+};
+// 默认实现可空（return），便于后端逐步落地；落地后编辑器拾取改调它。
+virtual void ImmediateDraw(const ImmediateDrawDesc& desc) { (void)desc; }
+```
+
+**各后端实现要点**
+- **OpenGL**（`gl_rhi_device.cpp` + `gl_resource_manager`）：取 `RenderTargetResource::fbo_handle`（0→默认 FBO）→ `glBindFramebuffer`；按 `viewport` 调 `glViewport`；`clear` 时 `glClearColor/glClear`；`glUseProgram(shader_program)`；用一个**复用的内部 VAO** + 临时（或 orphan 的）VBO 上传 `vertices`，按 `attribs` 设 `glVertexAttribPointer/glEnableVertexAttribArray`；按名 `glGetUniformLocation` 设 uniform；`blend/depth_test` 切 `GL_BLEND/GL_DEPTH_TEST`；`glDrawArrays(topology, 0, vertex_count)`；结束恢复先前 FBO/viewport/blend（编辑器现有拾取代码 130-260 即此逻辑，可直接搬入后端）。
+- **Vulkan**（`vulkan_rhi_device.cpp` + `vulkan_resource_manager`）：最重。需为「自定义 program + 顶点布局 + 目标 RT 的 `render_pass`」动态建一个 `VkPipeline`（建议按 `{shader_program, attribs, topology, blend, depth}` 做 key 缓存，避免每帧建）；录命令到一个一次性 `VkCommandBuffer`：`vkCmdBeginRenderPass`（用 RT 的 `render_pass`/`render_pass_load`，依 `clear`）→ `vkCmdBindPipeline` → `vkCmdSetViewport` → 绑定上传了顶点的 `VkBuffer` → uniform 走 push constant 或小 UBO → `vkCmdDraw` → `vkCmdEndRenderPass` → 提交并等完成（编辑器拾取需同帧 readback，简单起见同步提交）。
+- **D3D11**（`dx11_rhi_device.cpp` + `dx11_resource_manager`）：取 `DX11RenderTarget::color_rtv`（0→交换链 RTV）→ `OMSetRenderTargets`；`clear` 时 `ClearRenderTargetView`；`RSSetViewports`；由 `shader_program` 拿编译好的 VS/PS 与输入布局（`IASetInputLayout`，`attribs`→`D3D11_INPUT_ELEMENT_DESC`）；顶点传 `Map(WRITE_DISCARD)` 的动态 `ID3D11Buffer` + `IASetVertexBuffers`；uniform 打包进常量缓冲（`UpdateSubresource`/`Map`）；`OMSetBlendState/OMSetDepthStencilState`；`IASetPrimitiveTopology` + `Draw`。
+
+**需补测试**（`tests/gtest/integration/render/` 离屏，无窗口）
+- `ImmediateDrawFillsRenderTarget`：建 RT → 用纯色 shader `ImmediateDraw` 一个全屏三角形 → `ReadRenderTargetColorRgba8WithSize` 验中心像素=期望色。
+- `ImmediateDrawViewportSubregion`：带 `viewport` 子区域绘制 → 验区域内/外像素。
+- `ImmediateDrawColorIdRoundTrip`：模拟拾取——画多个不同颜色 quad → 读指定像素 → 颜色↔ID 反解正确（覆盖编辑器拾取的核心数值逻辑，与 GPU 后端无关的那部分也可单测）。
+
+### §5.B 新增 RHI 原语：RT blit（RT→RT / RT→texture）
+
+**目标**：等尺寸把一个 RT 的颜色 0 号附件拷到另一个 RT 或一张纹理，替代多视口的 `glBlitFramebuffer`。
+
+**建议接口签名**：
+```cpp
+// 颜色 0 号附件，等尺寸拷贝；dst 需已按相同尺寸创建。
+virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) { (void)src_rt; (void)dst_rt; }
+```
+
+**各后端实现要点**
+- **OpenGL**：`glBindFramebuffer(READ, src.fbo)` + `glBindFramebuffer(DRAW, dst.fbo)` → `glBlitFramebuffer(..., GL_COLOR_BUFFER_BIT, GL_NEAREST)`（即编辑器 550-590 现逻辑）。
+- **Vulkan**：`vkCmdBlitImage`（已有先例 `vulkan_draw_executor.cpp:2004`）；注意 blit 前后用 `vkCmdPipelineBarrier` 把 src 转 `TRANSFER_SRC`、dst 转 `TRANSFER_DST`，完后转回 `SHADER_READ_ONLY`。
+- **D3D11**：同格式同尺寸首选 `CopyResource(dst.color_texture, src.color_texture)`（已有先例 `dx11_resource_manager.cpp:797`）；若 src 为 MSAA，先 `ResolveSubresource`；格式不同则退化为采样 `color_srv` 的全屏 `ImmediateDraw`。
+
+**需补测试**：`BlitRenderTargetCopiesColor`：填充 src（用 §5.A 画纯色）→ `BlitRenderTarget` → 读 dst 验颜色一致。
+
+### §5.1 迁移视口拾取（依赖 §5.A）
+
+`editor_viewport_panel.cpp` ~130-260：
+- 用 `CreateShaderProgram` 建拾取 shader（现 GLSL 已在文件内，HLSL 需补一份；或抽到 `engine/shaders` 让 `shader_manager` 跨后端编译）。
+- 拾取 RT 用 `CreateRenderTarget({w,h,has_color,has_depth})`，每帧（或尺寸变化时）复用。
+- 把每个候选实体的颜色 quad 顶点填进 `ImmediateDrawDesc` 调一次/批次 `ImmediateDraw`（`clear=true`、`blend=false`、`depth_test=true`）。
+- 命中读取：现 `glReadPixels(px,py,1,1)` → 改 `ReadRenderTargetColorRgba8WithSize` 后按 `(px,py)` 取那一像素（或后续给 RHI 加 `ReadRenderTargetPixelRgba8(rt,x,y)` 单像素重载以省带宽，可选）。
+- 删除该文件中的所有 `gl*` 调用与 `#include <glad/gl.h>`。
+- 测试：颜色↔实体 ID 编解码已可无头单测；GPU 路径靠 §5.A 的离屏测试 + 手动可视化验证。
+
+### §5.2 迁移多视口 blit（依赖 §5.B）
+
+`editor_viewport_panel.cpp` ~550-590：`s_mvp_fbos`/`s_mvp_textures` 改为 `CreateRenderTarget`/`GetRenderTargetColorTexture`；`glBlitFramebuffer` 改 `BlitRenderTarget`；删除相关 `gl*`。注意各视口尺寸变化时重建目标 RT。
+
+### §5.3 迁移 ImGui 呈现层（最深）
+
+`editor_app.cpp` ~689-697 的默认 FBO 清屏 + `imgui_impl_opengl3` 直接出图与 GL 强耦合。两条路：
+1. **小步**：给 RHI 加 `ClearDefaultFramebuffer(color)`（GL=绑 0 号 FBO 清屏；DX11=清交换链 RTV；Vulkan=swapchain pass 的 loadOp=CLEAR），先把那几行 `gl*` 收进 RHI；ImGui 仍用 GL3 后端（编辑器暂仍随 GL 后端运行）。
+2. **彻底**：引入「RHI 后端版 ImGui 渲染器」（按当前 RHI 后端选择 `imgui_impl_opengl3`/`_vulkan`/`_dx11`，或自写一个走 `ImmediateDraw` 的 ImGui draw-data 渲染器），使编辑器可在任意后端启动并彻底去掉对 glad 的直接依赖。这步建议放在引擎 RHI 后端切换（编辑器可选 Vulkan/D3D11 启动）真正落地时一起做。
+
+**需补测试**：ImGui 呈现属窗口/交换链路径，无头不可测；以 §5.A/§5.B 离屏测试兜底数值正确性，呈现层靠手动跑编辑器三后端各截图验证。
 
 ---
 
@@ -206,13 +340,20 @@
 
 | 文件 | 用例数 | 覆盖内容 |
 |------|--------|---------|
-| `editor_functional_test.cpp` | 41 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返、UIAnchor 往返、50 实体压力测试、Skybox 往返、UIGridLayout 往返、UICanvasScaler 往返、SceneTabManager CloseTab、UndoRedo+SaveScene 非破坏性集成 |
+| `editor_functional_test.cpp` | 75 | CreateEntity/DestroyEntity、PropertyChangeCommand、LambdaCommand、CompoundCommand、命令合并、历史上限裁剪、Redo栈新命令后清空、SaveScene/LoadScene 基础往返、Camera3D+MeshRenderer 往返、DirectionalLight3D 往返、RigidBody2D/3D 往返、空场景往返、Prefab 导入导出/IsPrefabInstance/多实例独立性/多组件完整性、SceneTabManager 多标签/实体隔离/dirty状态追踪、CLI 参数解析、RegistrySnapshot 导出/对比/实体数差异检测、CopyRegistry 单组件/多组件完整性（含 RigidBody3D bug 修复验证）、SpriteRenderer/UILabel/ParticleEmitter/PointLight/SpotLight/SkyLight 往返、SiblingIndex 多实体排序往返、Animator3D 往返、UIAnchor 往返、50 实体压力测试、Skybox 往返、UIGridLayout 往返、UICanvasScaler 往返、SceneTabManager CloseTab、UndoRedo+SaveScene 非破坏性集成 |
 | `editor_selection_integration_test.cpp` | 9 | SelectionManager 单选/多选/切换/防重复添加/移除/多选→单选/移除不存在不崩溃/主实体/GetPrimary 返回最后添加/null 清空 |
-| `editor_control_server_test.cpp` | 56 | ControlServer 全部 20 个内建 Tool Handler：ping/lua_execute/script_create/undo/redo/entity_create/delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight/SpotLight/RigidBody3D/SkyLight/Camera3D/BoxCollider3D）/remove_component/get_components/scene_get_state/editor_get_state/editor_play/stop/scene_save/load/screenshot/asset_import/material_create |
+| `editor_control_server_test.cpp` | 101 | ControlServer 内建 Tool Handler（现共 **32 个** `dsengine_*` 工具）：ping/lua_execute/script_create/undo/redo/entity_create/delete/batch_delete/modify（含 rotation/scale）/add_component（含 DirectionalLight/PointLight/SpotLight/RigidBody3D/SkyLight/Camera3D/BoxCollider3D）/remove_component/get_components/get_state/duplicate/reparent/find_by_name/scene_get_state/new/save/load/editor_get_state/play/stop/screenshot/asset_import/material_create/prefab_save/prefab_instantiate/undo_history/selection_get/set/clear |
 
 | `editor_plugin_manager_test.cpp` | 6 | PluginManager ScanPlugins（空目录/不存在目录/有效元数据/缺少字段/非法JSON）、StartPlugin error path（entry 文件不存在） |
 
-**总计：112 个集成测试用例，全部通过。**
+| `editor_plugin_api_test.cpp` | 8 | 插件 API：Tool 注册/调用/错误路径 |
+| `shader_graph_compile_test.cpp` | 7 | Shader Graph 节点图 → DSSL 编译正确性 |
+| `editor_unit_test.cpp`（unit 套） | 16 | UndoRedoManager / EditorSettings / EditorTestConfig / Lambda+Compound Command |
+
+**总计：编辑器专属测试 ~222 例（集成 ~206 + 单元 16），本次实跑全绿。**
+
+> 核实命令：`dse_gtest_integration_tests --gtest_filter='EditorFunctionalTest.*:ControlServerTest.*:SelectionManagerTest.*:EditorPluginApiTest.*:PluginManagerTest.*:ShaderGraphCompileTest.*'` → 206 例全过。
+> （旧文档 “112 例” 已过时。）
 
 ### 测试基础设施
 
@@ -233,7 +374,7 @@
 
 ---
 
-## 五、方案评估
+## 七、方案评估
 
 ### 与其他方案对比
 
@@ -246,4 +387,4 @@
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已经相当完整（7 个 Phase 全部交付）。架构改进中，main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成，AI Control Server (18 个 Tool) 已全部实现。下一步：AI Chat Panel (Phase 3 进行中)、编辑器走 RHI、碰撞体可视化编辑。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已相当完整（7 个 Phase 全部交付）：main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成；AI Control Server 现有 **32 个内建 Tool**；Shader Graph / 动画状态机 / NavMesh / AI Chat Panel / Lua Debugger 均已落地（原文档列为“缺失/进行中”的项本次已核实为已实现）。余下的打磨项：编辑器走 RHI、Visual Script 控制流生成、碰撞体可视化拖撞、Multi-viewport 默认开启。

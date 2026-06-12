@@ -257,6 +257,28 @@ bool DX11Context::CreateDeviceAndSwapChain(void* window_handle, int width, int h
     }
     if (preferred_adapter) preferred_adapter->Release();
 
+    // 回查实际所选适配器名称 + 软件渲染判定：覆盖「HARDWARE 驱动类型落到
+    // Microsoft Basic Render Driver」这种 is_warp_ 漏标的软渲情况，供性能基准
+    // 标注后端实际跑在硬件还是软渲（避免把软渲数当硬件数）。
+    {
+        ComPtr<IDXGIDevice> dxgi_device;
+        ComPtr<IDXGIAdapter> dxgi_adapter;
+        if (SUCCEEDED(device_.As(&dxgi_device)) &&
+            SUCCEEDED(dxgi_device->GetAdapter(dxgi_adapter.GetAddressOf()))) {
+            ComPtr<IDXGIAdapter1> dxgi_adapter1;
+            DXGI_ADAPTER_DESC1 desc{};
+            if (SUCCEEDED(dxgi_adapter.As(&dxgi_adapter1)) &&
+                SUCCEEDED(dxgi_adapter1->GetDesc1(&desc))) {
+                adapter_name_ = WideToUtf8(desc.Description);
+                is_software_ = is_warp_
+                    || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0
+                    || adapter_name_.find("Basic Render") != std::string::npos;
+            }
+        }
+        DEBUG_LOG_INFO("[D3D11] Render device: {} ({})", adapter_name_,
+            is_software_ ? "software" : "hardware");
+    }
+
     // MSAA 4x 支持查询（在设备创建后）
     UINT quality = 0;
     hr = device_->CheckMultisampleQualityLevels(DXGI_FORMAT_R16G16B16A16_FLOAT, 4, &quality);

@@ -42,6 +42,7 @@ public:
     ~VulkanRhiDevice();
 
     // --- RhiDevice 接口 ---
+    RenderDeviceInfo GetDeviceInfo() const override;
     bool InitDevice(void* window_handle, int width, int height) override;
     void Shutdown() override;
     void WaitIdle() override;

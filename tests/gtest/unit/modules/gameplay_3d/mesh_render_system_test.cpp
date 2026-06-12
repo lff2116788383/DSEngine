@@ -27,7 +27,7 @@ using namespace dse::gameplay3d;
 // MeshRendererComponent 默认值
 // ============================================================
 
-TEST(MeshRendererComponentTest, 默认值) {
+TEST(MeshRendererComponentTest, DefaultValues) {
     dse::MeshRendererComponent mr;
     EXPECT_TRUE(mr.mesh_path.empty());
     EXPECT_EQ(mr.material_instance_id, 0u);
@@ -44,7 +44,7 @@ TEST(MeshRendererComponentTest, 默认值) {
     EXPECT_EQ(mr.order_in_layer, 0);
 }
 
-TEST(MeshRendererComponentTest, 纹理句柄默认为零) {
+TEST(MeshRendererComponentTest, HandleDefaultsToZero) {
     dse::MeshRendererComponent mr;
     EXPECT_EQ(mr.albedo_texture_handle, 0u);
     EXPECT_EQ(mr.normal_texture_handle, 0u);
@@ -53,7 +53,7 @@ TEST(MeshRendererComponentTest, 纹理句柄默认为零) {
     EXPECT_EQ(mr.occlusion_texture_handle, 0u);
 }
 
-TEST(MeshRendererComponentTest, PBR扩展参数默认值) {
+TEST(MeshRendererComponentTest, PBRExtendedParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.sss_strength, 0.0f);
     EXPECT_FLOAT_EQ(mr.clear_coat, 0.0f);
@@ -62,7 +62,7 @@ TEST(MeshRendererComponentTest, PBR扩展参数默认值) {
     EXPECT_FLOAT_EQ(mr.pom_height_scale, 0.0f);
 }
 
-TEST(MeshRendererComponentTest, Toon参数默认值) {
+TEST(MeshRendererComponentTest, ToonParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.toon_shadow_threshold, 0.35f);
     EXPECT_FLOAT_EQ(mr.toon_shadow_softness, 0.05f);
@@ -71,7 +71,7 @@ TEST(MeshRendererComponentTest, Toon参数默认值) {
     EXPECT_FLOAT_EQ(mr.toon_rim_strength, 0.3f);
 }
 
-TEST(MeshRendererComponentTest, Watercolor参数默认值) {
+TEST(MeshRendererComponentTest, WatercolorParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.watercolor_paper_strength, 0.3f);
     EXPECT_FLOAT_EQ(mr.watercolor_edge_darkening, 0.4f);
@@ -79,7 +79,7 @@ TEST(MeshRendererComponentTest, Watercolor参数默认值) {
     EXPECT_FLOAT_EQ(mr.watercolor_pigment_density, 1.0f);
 }
 
-TEST(MeshRendererComponentTest, TempBuffers默认为空) {
+TEST(MeshRendererComponentTest, TempBuffersDefaultIsEmpty) {
     dse::MeshRendererComponent mr;
     EXPECT_TRUE(mr.temp_vertices.empty());
     EXPECT_TRUE(mr.temp_indices.empty());
@@ -93,12 +93,12 @@ TEST(MeshRendererComponentTest, TempBuffers默认为空) {
 // MeshRenderSystem 构造与注入
 // ============================================================
 
-TEST(MeshRenderSystemTest, 默认构造安全) {
+TEST(MeshRenderSystemTest, DefaultSafety) {
     MeshRenderSystem sys;
     (void)sys;
 }
 
-TEST(MeshRenderSystemTest, SetAssetManager_nullptr安全) {
+TEST(MeshRenderSystemTest, SetAssetManager_NullptrSafety) {
     MeshRenderSystem sys;
     sys.SetAssetManager(nullptr);
 }
@@ -107,14 +107,14 @@ TEST(MeshRenderSystemTest, SetAssetManager_nullptr安全) {
 // MeshRenderSystem + 空 World
 // ============================================================
 
-TEST(MeshRenderSystemTest, 空World不崩溃) {
+TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash) {
     MeshRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
     EXPECT_THROW(sys.Render(world, cmd), std::runtime_error);
 }
 
-TEST(MeshRenderSystemTest, 空World透明渲染不崩溃) {
+TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash_2) {
     MeshRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;

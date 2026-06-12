@@ -395,6 +395,65 @@ int L_EcsSetIKEnabled(lua_State* L) {
 }
 
 // ============================================================
+// FootIK 系统 (FootIK3DComponent) — 脚部贴地，依赖物理 Raycast
+// ============================================================
+
+// ecs.add_foot_ik_component(entity)
+int L_EcsAddFootIKComponent(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_foot_ik_add_component(EID(e));
+    return 0;
+}
+
+// ecs.add_foot_ik_foot(entity, name, foot_bone, hip_bone,
+//                      [foot_height], [max_ground_distance], [blend_speed], [weight]) -> index
+int L_EcsAddFootIKFoot(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    const char* name = luaL_optstring(L, 2, "");
+    const char* foot_bone = luaL_optstring(L, 3, "");
+    const char* hip_bone = luaL_optstring(L, 4, "");
+    float foot_height = (lua_gettop(L) >= 5) ? helper::CheckFloat(L, 5) : NAN;
+    float max_ground_distance = (lua_gettop(L) >= 6) ? helper::CheckFloat(L, 6) : NAN;
+    float blend_speed = (lua_gettop(L) >= 7) ? helper::CheckFloat(L, 7) : NAN;
+    float weight = (lua_gettop(L) >= 8) ? helper::CheckFloat(L, 8) : NAN;
+    helper::PushInt(L, dse_foot_ik_add_foot(EID(e), name, foot_bone, hip_bone,
+                                            foot_height, max_ground_distance, blend_speed, weight));
+    return 1;
+}
+
+// ecs.set_foot_ik_foot_weight(entity, idx, weight)
+int L_EcsSetFootIKFootWeight(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    dse_foot_ik_set_foot_weight(EID(e), idx, helper::CheckFloat(L, 3));
+    return 0;
+}
+
+// ecs.set_foot_ik_foot_height(entity, idx, height)
+int L_EcsSetFootIKFootHeight(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    int idx = helper::CheckInt(L, 2);
+    dse_foot_ik_set_foot_height(EID(e), idx, helper::CheckFloat(L, 3));
+    return 0;
+}
+
+// ecs.set_foot_ik_pelvis(entity, [pelvis_weight], [max_pelvis_offset])
+int L_EcsSetFootIKPelvis(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    float pelvis_weight = (lua_gettop(L) >= 2) ? helper::CheckFloat(L, 2) : NAN;
+    float max_pelvis_offset = (lua_gettop(L) >= 3) ? helper::CheckFloat(L, 3) : NAN;
+    dse_foot_ik_set_pelvis(EID(e), pelvis_weight, max_pelvis_offset);
+    return 0;
+}
+
+// ecs.set_foot_ik_enabled(entity, enabled)
+int L_EcsSetFootIKEnabled(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_foot_ik_set_enabled(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
+    return 0;
+}
+
+// ============================================================
 // 3D 动画事件 (Animator3DComponent)
 // ============================================================
 
@@ -599,6 +658,13 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"set_ik_pole_vector",               L_EcsSetIKPoleVector},
         {"set_ik_iterations",                L_EcsSetIKIterations},
         {"set_ik_enabled",                   L_EcsSetIKEnabled},
+        // FootIK 系统
+        {"add_foot_ik_component",            L_EcsAddFootIKComponent},
+        {"add_foot_ik_foot",                 L_EcsAddFootIKFoot},
+        {"set_foot_ik_foot_weight",          L_EcsSetFootIKFootWeight},
+        {"set_foot_ik_foot_height",          L_EcsSetFootIKFootHeight},
+        {"set_foot_ik_pelvis",               L_EcsSetFootIKPelvis},
+        {"set_foot_ik_enabled",              L_EcsSetFootIKEnabled},
         // 骨骼挂点系统
         {"add_bone_attachment",              L_EcsAddBoneAttachment},
         {"set_bone_attachment_offset",       L_EcsSetBoneAttachmentOffset},

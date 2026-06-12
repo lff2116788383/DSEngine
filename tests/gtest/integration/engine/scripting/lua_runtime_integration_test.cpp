@@ -58,12 +58,12 @@ protected:
     }
 };
 
-TEST_F(LuaRuntimeIntegrationTest, 无启动脚本时引导失败) {
+TEST_F(LuaRuntimeIntegrationTest, BootstrapFailsWithoutStartupScript) {
     bool result = BootstrapLuaRuntime();
     EXPECT_FALSE(result);
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 有效脚本时引导成功) {
+TEST_F(LuaRuntimeIntegrationTest, BootstrapSucceedsWithValidScript) {
     LuaTempScript script("test_bootstrap.lua", R"(
         function Awake()
         end
@@ -84,7 +84,7 @@ TEST_F(LuaRuntimeIntegrationTest, 有效脚本时引导成功) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 无World时引导失败) {
+TEST_F(LuaRuntimeIntegrationTest, WithoutWorldWhenBootstrapFails) {
     LuaTempScript script("test_no_world.lua", R"(
         function Awake() end
     )");
@@ -99,7 +99,7 @@ TEST_F(LuaRuntimeIntegrationTest, 无World时引导失败) {
     EXPECT_FALSE(result);
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 引导后关闭不崩溃) {
+TEST_F(LuaRuntimeIntegrationTest, ShutdownAfterBootstrapDoesNotCrash) {
     LuaTempScript script("test_shutdown.lua", R"(
         function Awake() end
     )");
@@ -123,7 +123,7 @@ TEST_F(LuaRuntimeIntegrationTest, 引导后关闭不崩溃) {
 // LuaApiContext injection
 // ============================================================
 
-TEST_F(LuaRuntimeIntegrationTest, LuaApiContext注入World) {
+TEST_F(LuaRuntimeIntegrationTest, LuaApiContextInjectsWorld) {
     LuaTempScript script("test_ctx_world.lua", R"(
         function Awake()
         end
@@ -148,7 +148,7 @@ TEST_F(LuaRuntimeIntegrationTest, LuaApiContext注入World) {
 // Tick driving
 // ============================================================
 
-TEST_F(LuaRuntimeIntegrationTest, 帧更新执行Update函数) {
+TEST_F(LuaRuntimeIntegrationTest, FrameUpdateExecuteUpdate) {
     LuaTempScript script("test_tick.lua", R"(
         update_count = 0
         function Update(dt)
@@ -173,7 +173,7 @@ TEST_F(LuaRuntimeIntegrationTest, 帧更新执行Update函数) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 未引导时帧更新不崩溃) {
+TEST_F(LuaRuntimeIntegrationTest, FrameUpdateWithoutBootstrapDoesNotCrash) {
     TickLuaRuntime(0.016f);
     SUCCEED();
 }
@@ -182,7 +182,7 @@ TEST_F(LuaRuntimeIntegrationTest, 未引导时帧更新不崩溃) {
 // ScriptComponent driving
 // ============================================================
 
-TEST_F(LuaRuntimeIntegrationTest, ScriptComponent驱动OnAwake与OnUpdate) {
+TEST_F(LuaRuntimeIntegrationTest, ScriptComponentdriveOnAwakeAndOnUpdate) {
     LuaTempScript startup("test_startup.lua", R"(
         function Awake() end
         function Update(dt) end
@@ -217,7 +217,7 @@ TEST_F(LuaRuntimeIntegrationTest, ScriptComponent驱动OnAwake与OnUpdate) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 禁用的ScriptComponent不执行) {
+TEST_F(LuaRuntimeIntegrationTest, DisabledScriptComponentDoesNotExecute) {
     LuaTempScript startup("test_startup2.lua", R"(
         function Awake() end
     )");
@@ -246,7 +246,7 @@ TEST_F(LuaRuntimeIntegrationTest, 禁用的ScriptComponent不执行) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaRuntimeIntegrationTest, 实体销毁后清理脚本实例) {
+TEST_F(LuaRuntimeIntegrationTest, ScriptInstanceCleanedUpAfterEntityDestroy) {
     LuaTempScript startup("test_startup3.lua", R"(
         function Awake() end
     )");
@@ -284,7 +284,7 @@ TEST_F(LuaRuntimeIntegrationTest, 实体销毁后清理脚本实例) {
 // Memory tracking
 // ============================================================
 
-TEST_F(LuaRuntimeIntegrationTest, GetLuaMemoryUsage返回非零值) {
+TEST_F(LuaRuntimeIntegrationTest, GetLuaMemoryUsageReturnsNonZeroValue) {
     LuaTempScript script("test_memory.lua", R"(
         function Awake() end
         big_table = {}
@@ -313,7 +313,7 @@ TEST_F(LuaRuntimeIntegrationTest, GetLuaMemoryUsage返回非零值) {
 // Error handling
 // ============================================================
 
-TEST_F(LuaRuntimeIntegrationTest, 语法错误导致引导失败) {
+TEST_F(LuaRuntimeIntegrationTest, SyntaxErrorCausesBootstrapFailure) {
     LuaTempScript script("test_syntax_error.lua", R"(
         function Awake(
         -- missing closing paren
@@ -330,7 +330,7 @@ TEST_F(LuaRuntimeIntegrationTest, 语法错误导致引导失败) {
     EXPECT_FALSE(result);
 }
 
-TEST_F(LuaRuntimeIntegrationTest, Awake中运行时错误导致引导失败) {
+TEST_F(LuaRuntimeIntegrationTest, AwakeRuntimeErrorCausesBootFailure) {
     LuaTempScript script("test_runtime_error.lua", R"(
         function Awake()
             error("intentional error")

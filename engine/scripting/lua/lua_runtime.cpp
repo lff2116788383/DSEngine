@@ -11,7 +11,9 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #endif
 #include "engine/ecs/script.h"
+#include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
+#include <algorithm>
 #include <filesystem>
 #include <vector>
 #include <cstdlib>
@@ -103,6 +105,7 @@ lua_State* CreateLuaState() {
 }
 
 std::string ResolveStartupLuaScript() {
+    // 磁盘优先：override / 环境变量指向的真实文件。
     if (!State().startup_script_override.empty() && std::filesystem::exists(State().startup_script_override)) {
         return State().startup_script_override;
     }
@@ -111,7 +114,91 @@ std::string ResolveStartupLuaScript() {
             return script_from_env;
         }
     }
+    // 磁盘不存在：保留逻辑路径（如 "scripts/main.lua"），交由已挂载的 .bun/.dpak VFS 加载。
+    // 端到端加密发行版中入口脚本只存在于资源包内，磁盘上没有明文。
+    if (!State().startup_script_override.empty()) {
+        return State().startup_script_override;
+    }
+    if (const char* script_from_env = std::getenv("DSE_STARTUP_LUA")) {
+        if (script_from_env[0] != '\0') {
+            return script_from_env;
+        }
+    }
     return "";
+}
+
+// 加载并执行启动脚本：磁盘优先，其次从 AssetManager 的 VFS（已挂载的 .bun/.dpak）读取。
+// 失败时错误信息保证压栈，供调用方 lua_tostring(L, -1) 读取。
+bool LoadAndRunStartupScript(lua_State* L, const std::string& path) {
+    std::error_code ec;
+    if (std::filesystem::exists(path, ec) && !ec) {
+        return luaL_dofile(L, path.c_str()) == LUA_OK;
+    }
+    AssetManager* am = State().api_context.asset_manager;
+    if (!am) {
+        lua_pushfstring(L, "startup script '%s' not on disk and no asset manager for VFS lookup", path.c_str());
+        return false;
+    }
+    std::vector<uint8_t> data;
+    if (!am->LoadFileToMemory(path, data)) {
+        lua_pushfstring(L, "startup script '%s' not found on disk or in mounted bundle/pak", path.c_str());
+        return false;
+    }
+    const std::string chunkname = "@" + path;
+    if (luaL_loadbuffer(L, reinterpret_cast<const char*>(data.data()), data.size(), chunkname.c_str()) != LUA_OK) {
+        return false; // load 错误已压栈
+    }
+    return lua_pcall(L, 0, LUA_MULTRET, 0) == LUA_OK; // run 错误（若有）已压栈
+}
+
+// package.searchers 的自定义 searcher：从 VFS 解析 require 的模块（支持加密 Lua）。
+int VfsLuaSearcher(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    AssetManager* am = State().api_context.asset_manager;
+    if (!am) {
+        lua_pushstring(L, "\n\t[VFS] no asset manager");
+        return 1;
+    }
+    std::string mod = name;
+    std::replace(mod.begin(), mod.end(), '.', '/');
+    const std::string candidates[] = {
+        mod + ".lua",
+        "scripts/" + mod + ".lua",
+        "script/" + mod + ".lua",
+        mod + "/init.lua",
+        "scripts/" + mod + "/init.lua",
+    };
+    for (const auto& cand : candidates) {
+        std::vector<uint8_t> data;
+        if (am->LoadFileToMemory(cand, data)) {
+            const std::string chunkname = "@" + cand;
+            if (luaL_loadbuffer(L, reinterpret_cast<const char*>(data.data()), data.size(), chunkname.c_str()) != LUA_OK) {
+                return lua_error(L);
+            }
+            lua_pushstring(L, cand.c_str()); // loader 的第二返回值（传给 loader 的额外数据）
+            return 2;
+        }
+    }
+    lua_pushfstring(L, "\n\tno VFS module '%s'", name);
+    return 1;
+}
+
+// 把 VFS searcher 追加到 package.searchers 末尾（不影响磁盘 package.path 行为）。
+void RegisterVfsLuaSearcher(lua_State* L) {
+    lua_getglobal(L, "package");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_getfield(L, -1, "searchers");
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 2);
+        return;
+    }
+    const lua_Integer count = static_cast<lua_Integer>(lua_rawlen(L, -1));
+    lua_pushcfunction(L, VfsLuaSearcher);
+    lua_rawseti(L, -2, count + 1);
+    lua_pop(L, 2);
 }
 
 void SetupLuaPackagePath(lua_State* L, const std::string& startup_script_path) {
@@ -448,10 +535,12 @@ bool BootstrapLuaRuntime() {
     lua_pop(state.state, 1);
     DEBUG_LOG_INFO("Lua bootstrap: package path setup begin");
     SetupLuaPackagePath(state.state, state.startup_script_path);
+    // 注册 VFS searcher：让 require 也能解析加密 .bun/.dpak 内的 Lua 模块。
+    RegisterVfsLuaSearcher(state.state);
     DEBUG_LOG_INFO("Lua bootstrap: register API begin");
     lua_binding::RegisterPhase1LuaApi(state.state);
     DEBUG_LOG_INFO("Lua bootstrap: loading startup script begin");
-    if (luaL_dofile(state.state, state.startup_script_path.c_str()) != LUA_OK) {
+    if (!LoadAndRunStartupScript(state.state, state.startup_script_path)) {
         DEBUG_LOG_ERROR("Lua startup load failed: {}", lua_tostring(state.state, -1));
         lua_pop(state.state, 1);
         lua_close(state.state);

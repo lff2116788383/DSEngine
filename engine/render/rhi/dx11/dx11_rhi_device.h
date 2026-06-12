@@ -41,6 +41,9 @@ public:
     ~DX11RhiDevice();
 
     // --- RhiDevice 接口 ---
+    RenderDeviceInfo GetDeviceInfo() const override {
+        return { context_.adapter_name(), context_.is_software() };
+    }
     bool InitDevice(void* window_handle, int width, int height) override;
     void Shutdown() override;
     void BeginFrame() override;

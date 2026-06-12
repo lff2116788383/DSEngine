@@ -42,7 +42,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
-TEST_F(LuaUIBindingTest, Lua创建UIRenderer可读取属性) {
+TEST_F(LuaUIBindingTest, LuaCreateUIRendererReadableProperties) {
     TempLuaFile script("test_ui_renderer.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -73,7 +73,7 @@ TEST_F(LuaUIBindingTest, Lua创建UIRenderer可读取属性) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua创建UILabel) {
+TEST_F(LuaUIBindingTest, LuaCreateUILabel) {
     TempLuaFile script("test_ui_label.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -99,7 +99,7 @@ TEST_F(LuaUIBindingTest, Lua创建UILabel) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua设置UIPosition) {
+TEST_F(LuaUIBindingTest, LuasetUpUIPosition) {
     TempLuaFile script("test_ui_pos.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -127,7 +127,7 @@ TEST_F(LuaUIBindingTest, Lua设置UIPosition) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, 错误参数不崩溃) {
+TEST_F(LuaUIBindingTest, ErrorParametersDoesNotCrash) {
     TempLuaFile script("test_ui_error.lua", R"(
         function Awake()
             dse.ui.add_renderer(99999, 0, 1,1,1,1, 0, 100, 50)
@@ -148,7 +148,7 @@ TEST_F(LuaUIBindingTest, 错误参数不崩溃) {
 // 新增 UI 组件 Lua 绑定集成测试
 // ============================================================
 
-TEST_F(LuaUIBindingTest, Lua创建TextInput并读写文本) {
+TEST_F(LuaUIBindingTest, LuaCreateTextInputandReadAndWriteText) {
     TempLuaFile script("test_ui_text_input.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -179,7 +179,7 @@ TEST_F(LuaUIBindingTest, Lua创建TextInput并读写文本) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua创建ScrollView并设置偏移) {
+TEST_F(LuaUIBindingTest, LuaCreateScrollViewandSetTheOffset) {
     TempLuaFile script("test_ui_scroll.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -210,7 +210,7 @@ TEST_F(LuaUIBindingTest, Lua创建ScrollView并设置偏移) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua创建Slider并读写值) {
+TEST_F(LuaUIBindingTest, LuaCreateSliderandReadAndWriteValues) {
     TempLuaFile script("test_ui_slider.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -238,7 +238,7 @@ TEST_F(LuaUIBindingTest, Lua创建Slider并读写值) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua创建Toggle并切换状态) {
+TEST_F(LuaUIBindingTest, LuaCreateToggleandSwitchStatus) {
     TempLuaFile script("test_ui_toggle.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -265,7 +265,7 @@ TEST_F(LuaUIBindingTest, Lua创建Toggle并切换状态) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, Lua创建ProgressBar并设置进度) {
+TEST_F(LuaUIBindingTest, LuaCreateProgressBarandSetTheProgress) {
     TempLuaFile script("test_ui_progress.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -293,7 +293,7 @@ TEST_F(LuaUIBindingTest, Lua创建ProgressBar并设置进度) {
     EXPECT_TRUE(found);
 }
 
-TEST_F(LuaUIBindingTest, 新UI组件错误参数不崩溃) {
+TEST_F(LuaUIBindingTest, UIComponentErrorParametersDoesNotCrash) {
     TempLuaFile script("test_ui_new_error.lua", R"(
         function Awake()
             dse.ui.add_text_input(99999, "bad", 10, false)
@@ -322,7 +322,7 @@ TEST_F(LuaUIBindingTest, 新UI组件错误参数不崩溃) {
     // 不崩溃即通过
 }
 
-TEST_F(LuaUIBindingTest, Lua创建UIParticles绑定) {
+TEST_F(LuaUIBindingTest, LuaCreateUIParticlesbinding) {
     TempLuaFile script("test_ui_particles.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()

@@ -30,12 +30,12 @@ protected:
     }
 };
 
-TEST_F(AnimatorSystem3DTest, 空World调用Update不崩溃) {
+TEST_F(AnimatorSystem3DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
-TEST_F(AnimatorSystem3DTest, 带Animator3DComponent实体Update不崩溃) {
+TEST_F(AnimatorSystem3DTest, BringAnimator3DComponentEntityUpdateDoesNotCrash) {
     World world;
     auto entity = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(entity);
@@ -43,7 +43,7 @@ TEST_F(AnimatorSystem3DTest, 带Animator3DComponent实体Update不崩溃) {
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
-TEST_F(AnimatorSystem3DTest, Animator3DComponent默认值) {
+TEST_F(AnimatorSystem3DTest, Animator3DComponentDefaultValues) {
     Animator3DComponent anim;
     EXPECT_TRUE(anim.enabled);
     EXPECT_TRUE(anim.dskel_path.empty());
@@ -57,7 +57,7 @@ TEST_F(AnimatorSystem3DTest, Animator3DComponent默认值) {
     EXPECT_TRUE(anim.final_bone_matrices.empty());
 }
 
-TEST_F(AnimatorSystem3DTest, Animator3DComponent字段修改) {
+TEST_F(AnimatorSystem3DTest, Animator3DComponentFieldModification) {
     Animator3DComponent anim;
     anim.enabled = false;
     anim.speed = 2.0f;
@@ -76,7 +76,7 @@ TEST_F(AnimatorSystem3DTest, Animator3DComponent字段修改) {
     EXPECT_FLOAT_EQ(anim.transition_duration, 0.3f);
 }
 
-TEST_F(AnimatorSystem3DTest, 禁用的Animator3D不影响其他实体) {
+TEST_F(AnimatorSystem3DTest, DisabledAnimator3DNotEntity) {
     World world;
     auto e1 = world.CreateEntity();
     auto& anim1 = world.registry().emplace<Animator3DComponent>(e1);
@@ -91,7 +91,7 @@ TEST_F(AnimatorSystem3DTest, 禁用的Animator3D不影响其他实体) {
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
-TEST_F(AnimatorSystem3DTest, BlendNode默认值) {
+TEST_F(AnimatorSystem3DTest, BlendNodeDefaultValues) {
     AnimBlendNode node;
     EXPECT_TRUE(node.name.empty());
     EXPECT_TRUE(node.danim_path.empty());
@@ -102,7 +102,7 @@ TEST_F(AnimatorSystem3DTest, BlendNode默认值) {
     EXPECT_FLOAT_EQ(node.threshold, 0.0f);
 }
 
-TEST_F(AnimatorSystem3DTest, MorphComponent默认值) {
+TEST_F(AnimatorSystem3DTest, MorphComponentDefaultValues) {
     MorphComponent morph;
     EXPECT_TRUE(morph.enabled);
     EXPECT_TRUE(morph.targets.empty());

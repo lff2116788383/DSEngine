@@ -20,31 +20,31 @@ using namespace dse::debug;
 // Format 格式化工具
 // ============================================================
 
-TEST(DebugFormatTest, 无占位符原样返回) {
+TEST(DebugFormatTest, WithoutReturns) {
     EXPECT_EQ(Format("hello world"), "hello world");
     EXPECT_EQ(Format(""), "");
 }
 
-TEST(DebugFormatTest, 单占位符替换) {
+TEST(DebugFormatTest, Single) {
     EXPECT_EQ(Format("value: {}", 42), "value: 42");
     EXPECT_EQ(Format("name: {}", std::string("test")), "name: test");
 }
 
-TEST(DebugFormatTest, 多占位符按序替换) {
+TEST(DebugFormatTest, MultiBy) {
     EXPECT_EQ(Format("{} + {} = {}", 1, 2, 3), "1 + 2 = 3");
 }
 
-TEST(DebugFormatTest, 占位符多于参数时剩余保留) {
+TEST(DebugFormatTest, MultiParametersWhen) {
     // 只提供一个参数，第二个 {} 不会被替换
     std::string result = Format("a={} b={}", 1);
     EXPECT_EQ(result, "a=1 b={}");
 }
 
-TEST(DebugFormatTest, 空格式字符串) {
+TEST(DebugFormatTest, Empty) {
     EXPECT_EQ(Format(""), "");
 }
 
-TEST(DebugFormatTest, 整数和浮点数格式化) {
+TEST(DebugFormatTest, Andpoint) {
     std::string result = Format("int={} float={}", 10, 3.14);
     EXPECT_EQ(result, "int=10 float=3.14");
 }
@@ -53,7 +53,7 @@ TEST(DebugFormatTest, 整数和浮点数格式化) {
 // LogLevel 与 SetLogLevel/GetLogLevel
 // ============================================================
 
-TEST(DebugLogLevelTest, 默认级别为Info) {
+TEST(DebugLogLevelTest, DefaultIsInfo) {
     // SetLogLevel/GetLogLevel 操作的是全局静态变量，测试后需恢复
     LogLevel original = GetLogLevel();
     // Debug::Init 会设为 Info
@@ -62,7 +62,7 @@ TEST(DebugLogLevelTest, 默认级别为Info) {
     SetLogLevel(original);
 }
 
-TEST(DebugLogLevelTest, SetLogLevel可修改级别) {
+TEST(DebugLogLevelTest, SetLogLevelModifiableLevel) {
     LogLevel original = GetLogLevel();
     SetLogLevel(LogLevel::Warn);
     EXPECT_EQ(GetLogLevel(), LogLevel::Warn);
@@ -72,7 +72,7 @@ TEST(DebugLogLevelTest, SetLogLevel可修改级别) {
     SetLogLevel(original);
 }
 
-TEST(DebugLogLevelTest, SetLogLevel为Off) {
+TEST(DebugLogLevelTest, SetLogLevelIsOff) {
     LogLevel original = GetLogLevel();
     SetLogLevel(LogLevel::Off);
     EXPECT_EQ(GetLogLevel(), LogLevel::Off);
@@ -83,19 +83,19 @@ TEST(DebugLogLevelTest, SetLogLevel为Off) {
 // Debug 生命周期
 // ============================================================
 
-TEST(DebugLifecycleTest, Init后CanLog返回true) {
+TEST(DebugLifecycleTest, InitAfterCanLogReturnstrue) {
     Debug::Init();
     EXPECT_TRUE(Debug::CanLog());
     Debug::ShutDown();
 }
 
-TEST(DebugLifecycleTest, ShutDown后CanLog返回false) {
+TEST(DebugLifecycleTest, ShutDownAfterCanLogReturnsfalse) {
     Debug::Init();
     Debug::ShutDown();
     EXPECT_FALSE(Debug::CanLog());
 }
 
-TEST(DebugLifecycleTest, 未初始化时CanLog返回false) {
+TEST(DebugLifecycleTest, WhenNotInitializedCanLogReturnsfalse) {
     // 先确保关闭状态
     Debug::ShutDown();
     EXPECT_FALSE(Debug::CanLog());
@@ -105,7 +105,7 @@ TEST(DebugLifecycleTest, 未初始化时CanLog返回false) {
 // LogMessage 安全性
 // ============================================================
 
-TEST(DebugLogTest, 各级别LogMessage不崩溃) {
+TEST(DebugLogTest, LogMessageDoesNotCrash) {
     Debug::Init();
     LogLevel original = GetLogLevel();
     SetLogLevel(LogLevel::Trace);
@@ -119,7 +119,7 @@ TEST(DebugLogTest, 各级别LogMessage不崩溃) {
     Debug::ShutDown();
 }
 
-TEST(DebugLogTest, 未初始化时LogMessage不崩溃) {
+TEST(DebugLogTest, WhenNotInitializedLogMessageDoesNotCrash) {
     Debug::ShutDown();
     EXPECT_NO_THROW(LogMessage(LogLevel::Info, "should be suppressed"));
 }

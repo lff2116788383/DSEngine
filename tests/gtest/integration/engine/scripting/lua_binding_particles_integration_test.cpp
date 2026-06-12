@@ -58,7 +58,7 @@ protected:
 // 3D 粒子系统
 // ============================================================
 
-TEST_F(LuaParticleBindingTest, AddParticleSystem3D创建组件) {
+TEST_F(LuaParticleBindingTest, AddParticleSystem3DCreateComponent) {
     LuaTempScript script("test_ps3d_add.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -86,7 +86,7 @@ TEST_F(LuaParticleBindingTest, AddParticleSystem3D创建组件) {
     EXPECT_EQ(found, 1);
 }
 
-TEST_F(LuaParticleBindingTest, SetParams修改参数) {
+TEST_F(LuaParticleBindingTest, SetParamsModifyParameters) {
     LuaTempScript script("test_ps3d_params.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -132,7 +132,7 @@ TEST_F(LuaParticleBindingTest, SetParams修改参数) {
 // 2D 粒子发射器
 // ============================================================
 
-TEST_F(LuaParticleBindingTest, AddParticleEmitter创建组件) {
+TEST_F(LuaParticleBindingTest, AddParticleEmitterCreateComponent) {
     LuaTempScript script("test_emitter.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -160,7 +160,7 @@ TEST_F(LuaParticleBindingTest, AddParticleEmitter创建组件) {
     EXPECT_EQ(found, 1);
 }
 
-TEST_F(LuaParticleBindingTest, ParticleBurst触发瞬发) {
+TEST_F(LuaParticleBindingTest, ParticleBursttriggerInstant) {
     LuaTempScript script("test_burst.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -192,7 +192,7 @@ TEST_F(LuaParticleBindingTest, ParticleBurst触发瞬发) {
 // GameplayTuning
 // ============================================================
 
-TEST_F(LuaParticleBindingTest, GameplayTuning创建和设置) {
+TEST_F(LuaParticleBindingTest, GameplayTuningCreateAndSetUp) {
     LuaTempScript script("test_tuning.lua", R"(
         function Awake()
             local e = dse.ecs.create_entity()
@@ -229,7 +229,7 @@ TEST_F(LuaParticleBindingTest, GameplayTuning创建和设置) {
 // 错误参数安全性
 // ============================================================
 
-TEST_F(LuaParticleBindingTest, 不存在实体不崩溃) {
+TEST_F(LuaParticleBindingTest, IfTheEntityDoesNotExistItWillNotCrash) {
     LuaTempScript script("test_safe.lua", R"(
         function Awake()
             dse.ecs.set_particle_system_3d_params(99999)

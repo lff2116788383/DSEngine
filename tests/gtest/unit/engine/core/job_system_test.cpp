@@ -33,7 +33,7 @@ protected:
     }
 };
 
-TEST_F(JobSystemInstanceTest, 初始化后执行异步任务) {
+TEST_F(JobSystemInstanceTest, InitializeAfterExecuteTasks) {
     JobSystem js;
     js.Init();
 
@@ -47,7 +47,7 @@ TEST_F(JobSystemInstanceTest, 初始化后执行异步任务) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, 多个异步任务全部执行) {
+TEST_F(JobSystemInstanceTest, MultiTasksAllExecute) {
     JobSystem js;
     js.Init();
 
@@ -77,7 +77,7 @@ TEST_F(JobSystemInstanceTest, 多个异步任务全部执行) {
 }
 
 
-TEST_F(JobSystemInstanceTest, 未初始化时同步执行) {
+TEST_F(JobSystemInstanceTest, WhenNotInitializedSynchronousExecution) {
     JobSystem js; // 不调用 Init()
 
     int value = 0;
@@ -85,7 +85,7 @@ TEST_F(JobSystemInstanceTest, 未初始化时同步执行) {
     EXPECT_EQ(value, 42);
 }
 
-TEST_F(JobSystemInstanceTest, 关闭后同步执行) {
+TEST_F(JobSystemInstanceTest, AfterClosingSynchronousExecution) {
     JobSystem js;
     js.Init();
     js.Shutdown();
@@ -95,7 +95,7 @@ TEST_F(JobSystemInstanceTest, 关闭后同步执行) {
     EXPECT_EQ(value, 99);
 }
 
-TEST_F(JobSystemInstanceTest, 空任务不崩溃) {
+TEST_F(JobSystemInstanceTest, EmptyTasksDoesNotCrash) {
     JobSystem js;
     js.Init();
     js.Execute(nullptr);
@@ -103,7 +103,7 @@ TEST_F(JobSystemInstanceTest, 空任务不崩溃) {
     SUCCEED();
 }
 
-TEST_F(JobSystemInstanceTest, 重复初始化不崩溃) {
+TEST_F(JobSystemInstanceTest, InitializeDoesNotCrash) {
     JobSystem js;
     js.Init();
     js.Init(); // 重复初始化
@@ -111,7 +111,7 @@ TEST_F(JobSystemInstanceTest, 重复初始化不崩溃) {
     SUCCEED();
 }
 
-TEST_F(JobSystemInstanceTest, 重复关闭不崩溃) {
+TEST_F(JobSystemInstanceTest, ShutdownDoesNotCrash) {
     JobSystem js;
     js.Init();
     js.Shutdown();
@@ -123,7 +123,7 @@ TEST_F(JobSystemInstanceTest, 重复关闭不崩溃) {
 // ServiceLocator 注入测试
 // ============================================================
 
-TEST_F(JobSystemInstanceTest, ServiceLocator可注入实例并执行任务) {
+TEST_F(JobSystemInstanceTest, ServiceLocatorCanBeInjectedIntoInstancesAndPerformTasks) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
     ServiceLocator::Instance().Register<JobSystem, JobSystem>(job_system);
@@ -156,7 +156,7 @@ TEST_F(JobSystemInstanceTest, ServiceLocator可注入实例并执行任务) {
     ServiceLocator::Instance().Reset<JobSystem>();
 }
 
-TEST_F(JobSystemInstanceTest, 未注册时调用方可回退为同步执行) {
+TEST_F(JobSystemInstanceTest, NotregisterWhenCallsCanrollbackIsSynchronousExecution) {
     int value = 0;
     auto* resolved = ServiceLocator::Instance().Get<JobSystem>();
     if (resolved) {
@@ -171,7 +171,7 @@ TEST_F(JobSystemInstanceTest, 未注册时调用方可回退为同步执行) {
 // JobHandle 与 Wait 测试
 // ============================================================
 
-TEST_F(JobSystemInstanceTest, Submit返回有效Handle) {
+TEST_F(JobSystemInstanceTest, SubmitReturnValidHandle) {
     JobSystem js;
     js.Init();
 
@@ -181,7 +181,7 @@ TEST_F(JobSystemInstanceTest, Submit返回有效Handle) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, Wait能等待任务完成) {
+TEST_F(JobSystemInstanceTest, WaitAbleToWaitForTasksToBeCompleted) {
     JobSystem js;
     js.Init();
 
@@ -196,7 +196,7 @@ TEST_F(JobSystemInstanceTest, Wait能等待任务完成) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, Wait无效Handle不崩溃) {
+TEST_F(JobSystemInstanceTest, WaitInvalidHandleDoesNotCrash) {
     JobSystem js;
     js.Init();
 
@@ -207,7 +207,7 @@ TEST_F(JobSystemInstanceTest, Wait无效Handle不崩溃) {
     SUCCEED();
 }
 
-TEST_F(JobSystemInstanceTest, Wait已完成任务立即返回) {
+TEST_F(JobSystemInstanceTest, WaitReturnImmediatelyAfterCompletingTheTask) {
     JobSystem js;
     js.Init();
 
@@ -224,7 +224,7 @@ TEST_F(JobSystemInstanceTest, Wait已完成任务立即返回) {
 // 优先级测试
 // ============================================================
 
-TEST_F(JobSystemInstanceTest, 高优先级任务优先执行) {
+TEST_F(JobSystemInstanceTest, PriorityTaskspriorityExecute) {
     JobSystem js;
     js.Init();
 
@@ -266,7 +266,7 @@ TEST_F(JobSystemInstanceTest, 高优先级任务优先执行) {
 // 依赖链测试
 // ============================================================
 
-TEST_F(JobSystemInstanceTest, 依赖任务在依赖完成后执行) {
+TEST_F(JobSystemInstanceTest, TasksexistAfterExecute) {
     JobSystem js;
     js.Init();
 
@@ -291,7 +291,7 @@ TEST_F(JobSystemInstanceTest, 依赖任务在依赖完成后执行) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, 多依赖全部完成后才执行) {
+TEST_F(JobSystemInstanceTest, MultiAllCompleteAfterExecute) {
     JobSystem js;
     js.Init();
 
@@ -320,7 +320,7 @@ TEST_F(JobSystemInstanceTest, 多依赖全部完成后才执行) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, 无依赖的SubmitWithDependency等价于Submit) {
+TEST_F(JobSystemInstanceTest, NoDependenciesSubmitWithDependencySubmit) {
     JobSystem js;
     js.Init();
 
@@ -335,7 +335,7 @@ TEST_F(JobSystemInstanceTest, 无依赖的SubmitWithDependency等价于Submit) {
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, 已完成依赖的SubmitWithDependency直接入队) {
+TEST_F(JobSystemInstanceTest, AlreadySubmitWithDependency) {
     JobSystem js;
     js.Init();
 
@@ -353,7 +353,7 @@ TEST_F(JobSystemInstanceTest, 已完成依赖的SubmitWithDependency直接入队
     js.Shutdown();
 }
 
-TEST_F(JobSystemInstanceTest, 依赖链可以级联) {
+TEST_F(JobSystemInstanceTest, ChainCan) {
     JobSystem js;
     js.Init();
 

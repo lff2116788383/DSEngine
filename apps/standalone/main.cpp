@@ -12,6 +12,8 @@ namespace {
 struct StandaloneConfig {
     std::string scene_path  = "main.dscene";
     std::string pak_path;
+    std::string bundle_path;   // --bundle=game.bun（加密/明文资源包）
+    std::string bundle_key;    // --key=...（AES-128-CTR 解密密钥）
     std::string lua_script  = "main.lua";
     std::string rhi_backend;   // --rhi=opengl|d3d11|vulkan
     std::string demo;          // --demo=3d_fracture
@@ -28,6 +30,10 @@ StandaloneConfig ParseArgs(int argc, char** argv) {
             cfg.scene_path = arg.substr(8);
         } else if (arg.rfind("--pak=", 0) == 0) {
             cfg.pak_path = arg.substr(6);
+        } else if (arg.rfind("--bundle=", 0) == 0) {
+            cfg.bundle_path = arg.substr(9);
+        } else if (arg.rfind("--key=", 0) == 0) {
+            cfg.bundle_key = arg.substr(6);
         } else if (arg.rfind("--script=", 0) == 0) {
             cfg.lua_script = arg.substr(9);
         } else if (arg.rfind("--rhi=", 0) == 0) {
@@ -45,11 +51,11 @@ StandaloneConfig ParseArgs(int argc, char** argv) {
     return cfg;
 }
 
-std::string FindPakNextToExe(const char* argv0) {
+std::string FindFileNextToExe(const char* argv0, const std::string& extension) {
     try {
         auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv0)).parent_path();
         for (const auto& entry : std::filesystem::directory_iterator(exe_dir)) {
-            if (entry.path().extension() == ".dpak") {
+            if (entry.path().extension() == extension) {
                 return entry.path().string();
             }
         }
@@ -82,10 +88,20 @@ int main(int argc, char** argv) {
 
     // Auto-detect .dpak next to executable if not specified
     if (cfg.pak_path.empty()) {
-        cfg.pak_path = FindPakNextToExe(argv[0]);
+        cfg.pak_path = FindFileNextToExe(argv[0], ".dpak");
     }
 
-    // Resolve Lua script path relative to exe
+    // Auto-detect encrypted/plain .bun bundle next to executable if not specified
+    if (cfg.bundle_path.empty()) {
+        auto detected = FindFileNextToExe(argv[0], ".bun");
+        if (!detected.empty()) {
+            cfg.bundle_path = detected;
+        }
+    }
+
+    // Resolve Lua script path relative to exe.
+    // 若磁盘存在则用绝对路径；否则保留逻辑路径（如 "scripts/main.lua"），
+    // 由 Lua 运行时从已挂载的 .bun/.dpak VFS 读取（端到端加密场景）。
     std::string startup_script = cfg.lua_script;
     try {
         auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
@@ -111,12 +127,15 @@ int main(int argc, char** argv) {
         } catch (...) {}
     }
 
-    return dse::runtime::RunEngine({
-        cfg.width,
-        cfg.height,
-        cfg.title,
-        BusinessMode::Lua,
-        false,
-        startup_script
-    });
+    dse::runtime::EngineRunConfig run_config;
+    run_config.window_width = cfg.width;
+    run_config.window_height = cfg.height;
+    run_config.window_title = cfg.title;
+    run_config.business_mode = BusinessMode::Lua;
+    run_config.enable_editor = false;
+    run_config.startup_lua_script_path = startup_script;
+    run_config.asset_bundle_path = cfg.bundle_path;
+    run_config.asset_bundle_key = cfg.bundle_key;
+    run_config.asset_pak_path = cfg.pak_path;
+    return dse::runtime::RunEngine(run_config);
 }

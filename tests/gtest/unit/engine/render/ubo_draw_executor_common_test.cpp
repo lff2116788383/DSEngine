@@ -21,43 +21,43 @@ using namespace dse::render;
 // UBO 结构体大小与默认值
 // ============================================================
 
-TEST(UBOTypesTest, PerFrameUBO大小176) {
+TEST(UBOTypesTest, PerFrameUBOsize176) {
     EXPECT_EQ(sizeof(PerFrameUBO), 176u);
 }
 
-TEST(UBOTypesTest, PerSceneUBO大小304) {
+TEST(UBOTypesTest, PerSceneUBOsize304) {
     EXPECT_EQ(sizeof(PerSceneUBO), 304u);
 }
 
-TEST(UBOTypesTest, PerMaterialUBO大小128) {
+TEST(UBOTypesTest, PerMaterialUBOsize128) {
     EXPECT_EQ(sizeof(PerMaterialUBO), 128u);
 }
 
-TEST(UBOTypesTest, PointLightEntry大小48) {
+TEST(UBOTypesTest, PointLightEntrysize48) {
     EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
-TEST(UBOTypesTest, SpotLightEntry大小64) {
+TEST(UBOTypesTest, SpotLightEntrysize64) {
     EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
-TEST(UBOTypesTest, BoneMatricesUBO大小16320) {
+TEST(UBOTypesTest, BoneMatricesUBOsize16320) {
     EXPECT_EQ(sizeof(BoneMatricesUBO), 16320u);
 }
 
-TEST(UBOTypesTest, MorphWeightsUBO大小64) {
+TEST(UBOTypesTest, MorphWeightsUBOsize64) {
     EXPECT_EQ(sizeof(MorphWeightsUBO), 64u);
 }
 
-TEST(UBOTypesTest, LightProbeDataUBO大小160) {
+TEST(UBOTypesTest, LightProbeDataUBOsize160) {
     EXPECT_EQ(sizeof(LightProbeDataUBO), 160u);
 }
 
-TEST(UBOTypesTest, SpotLightDataUBO大小256) {
+TEST(UBOTypesTest, SpotLightDataUBOsize256) {
     EXPECT_EQ(sizeof(SpotLightDataUBO), 256u);
 }
 
-TEST(UBOTypesTest, BindingPoint枚举值) {
+TEST(UBOTypesTest, BindingPointenumerationValue) {
     EXPECT_EQ(static_cast<unsigned int>(UBOBindingPoint::PerFrame), 0u);
     EXPECT_EQ(static_cast<unsigned int>(UBOBindingPoint::PerScene), 1u);
     EXPECT_EQ(static_cast<unsigned int>(UBOBindingPoint::PerMaterial), 2u);
@@ -72,7 +72,7 @@ TEST(UBOTypesTest, BindingPoint枚举值) {
 // DrawExecutorGlobalState
 // ============================================================
 
-TEST(DrawExecutorGlobalStateTest, 默认值) {
+TEST(DrawExecutorGlobalStateTest, DefaultValues) {
     DrawExecutorGlobalState s;
     for (int i = 0; i < 3; ++i) {
         EXPECT_EQ(s.shadow_map[i], 0u);
@@ -212,17 +212,17 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO) {
 // Scene View Mode 行为验证
 // ============================================================
 
-TEST(DrawExecutorGlobalStateTest, ForceUnlit默认关闭) {
+TEST(DrawExecutorGlobalStateTest, ForceUnlitOffByDefault) {
     DrawExecutorGlobalState s;
     EXPECT_FALSE(s.force_unlit);
 }
 
-TEST(DrawExecutorGlobalStateTest, OverdrawMode默认关闭) {
+TEST(DrawExecutorGlobalStateTest, OverdrawModeOffByDefault) {
     DrawExecutorGlobalState s;
     EXPECT_FALSE(s.overdraw_mode);
 }
 
-TEST(DrawExecutorGlobalStateTest, ForceUnlit可读写) {
+TEST(DrawExecutorGlobalStateTest, ForceUnlitReadableAndWritable) {
     DrawExecutorGlobalState s;
     s.force_unlit = true;
     EXPECT_TRUE(s.force_unlit);
@@ -230,7 +230,7 @@ TEST(DrawExecutorGlobalStateTest, ForceUnlit可读写) {
     EXPECT_FALSE(s.force_unlit);
 }
 
-TEST(DrawExecutorGlobalStateTest, OverdrawMode可读写) {
+TEST(DrawExecutorGlobalStateTest, OverdrawModeReadableAndWritable) {
     DrawExecutorGlobalState s;
     s.overdraw_mode = true;
     EXPECT_TRUE(s.overdraw_mode);
@@ -238,7 +238,7 @@ TEST(DrawExecutorGlobalStateTest, OverdrawMode可读写) {
     EXPECT_FALSE(s.overdraw_mode);
 }
 
-TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit强制关灯) {
+TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitForceLightsOff) {
     MeshDrawItem item;
     item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
     item.lighting_enabled = true;
@@ -250,7 +250,7 @@ TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit强制关灯) {
     EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
 }
 
-TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit不影响关灯的实体) {
+TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitDoesNotAffectTheEntityThatTurnsOffTheLights) {
     MeshDrawItem item;
     item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
     item.lighting_enabled = false;
@@ -262,7 +262,7 @@ TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlit不影响关灯的实体) {
     EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
 }
 
-TEST(PrepareUBOTest, PreparePerMaterialUBO_Overdraw固定色) {
+TEST(PrepareUBOTest, PreparePerMaterialUBO_OverdrawfixedColor) {
     MeshDrawItem item;
     item.material_albedo = glm::vec3(1.0f, 0.0f, 0.0f);
     item.material_metallic = 1.0f;
@@ -277,7 +277,7 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO_Overdraw固定色) {
     EXPECT_FLOAT_EQ(ubo.albedo.w, 0.0f);
 }
 
-TEST(PrepareUBOTest, PreparePerMaterialUBO_正常模式保留原色) {
+TEST(PrepareUBOTest, PreparePerMaterialUBO_NormalModeRetainsOriginalColors) {
     MeshDrawItem item;
     item.material_albedo = glm::vec3(0.5f, 0.6f, 0.7f);
     item.material_metallic = 0.3f;
@@ -296,13 +296,13 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO_正常模式保留原色) {
 // PreparePointLightsUBO / PrepareSpotLightsUBO
 // ============================================================
 
-TEST(PrepareUBOTest, PreparePointLightsUBO_空光源) {
+TEST(PrepareUBOTest, PreparePointLightsUBO_EmptyLightSource) {
     MeshDrawItem item;
     PointLightsUBO ubo = PreparePointLightsUBO(item);
     EXPECT_EQ(ubo.u_point_light_count, 0);
 }
 
-TEST(PrepareUBOTest, PreparePointLightsUBO_有光源) {
+TEST(PrepareUBOTest, PreparePointLightsUBO_ThereIsLightSource) {
     MeshDrawItem item;
     MeshDrawItem::PointLightData pl;
     pl.color = glm::vec3(1.0f, 0.5f, 0.0f);
@@ -321,7 +321,7 @@ TEST(PrepareUBOTest, PreparePointLightsUBO_有光源) {
     EXPECT_EQ(ubo.u_point_lights[0].shadow_index, 2);
 }
 
-TEST(PrepareUBOTest, PrepareSpotLightsUBO_有光源) {
+TEST(PrepareUBOTest, PrepareSpotLightsUBO_ThereIsLightSource) {
     MeshDrawItem item;
     MeshDrawItem::SpotLightData sl;
     sl.color = glm::vec3(0.0f, 1.0f, 0.0f);

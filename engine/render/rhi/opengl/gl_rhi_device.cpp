@@ -116,6 +116,7 @@ static void InitComputeProcAddresses() {
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <cstddef>
+#include <cctype>
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -140,6 +141,22 @@ struct OpenGLRhiDevice::HiZImpl {
 
 OpenGLRhiDevice::OpenGLRhiDevice() : hiz_impl_(std::make_unique<HiZImpl>()) {}
 OpenGLRhiDevice::~OpenGLRhiDevice() = default;
+
+RenderDeviceInfo OpenGLRhiDevice::GetDeviceInfo() const {
+    RenderDeviceInfo info;
+    const GLubyte* renderer = glGetString(GL_RENDERER);
+    if (renderer) {
+        info.adapter_name = reinterpret_cast<const char*>(renderer);
+    }
+    // 软件渲染识别：常见软光栅器/通用驱动名（GDI Generic / llvmpipe / softpipe /
+    // swrast / Mesa software / Microsoft）即视为软渲。
+    std::string lower = info.adapter_name;
+    for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (const char* needle : {"gdi generic", "llvmpipe", "softpipe", "swrast", "software", "microsoft"}) {
+        if (lower.find(needle) != std::string::npos) { info.is_software = true; break; }
+    }
+    return info;
+}
 
 // ============================================================
 // OpenGLCommandBuffer — 立即转发到 OpenGLRhiDevice
@@ -399,15 +416,23 @@ void OpenGLRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
 // --- 纹理 ---
 
 unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
+    return CreateTexture2D(width, height, rgba8_data,
+                           TextureSamplerDesc::FromLinearFlag(linear_filter));
+}
+
+unsigned int OpenGLRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data,
+                                              const TextureSamplerDesc& sampler) {
     EnsureInitialized();
+    const GLint filter = (sampler.filter == TextureFilter::Linear) ? GL_LINEAR : GL_NEAREST;
+    const GLint wrap = (sampler.wrap == TextureWrap::ClampToEdge) ? GL_CLAMP_TO_EDGE : GL_REPEAT;
     unsigned int texture_handle = 0;
     glGenTextures(1, &texture_handle);
     resource_mgr_.ledger().textures_created += 1;
     glBindTexture(GL_TEXTURE_2D, texture_handle);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba8_data);
     glBindTexture(GL_TEXTURE_2D, 0);
     return texture_handle;

@@ -75,7 +75,7 @@ void AutoTileResolve(TilemapComponent& tm, int cx, int cy, const AutoTileRule& r
 // Bresenham Line Tests
 // ============================================================
 
-TEST(BresenhamLineTest, 水平线_左到右) {
+TEST(BresenhamLineTest, Case_To) {
     auto pts = BresenhamLine(0, 0, 4, 0);
     ASSERT_EQ(pts.size(), 5u);
     for (int i = 0; i <= 4; i++) {
@@ -84,14 +84,14 @@ TEST(BresenhamLineTest, 水平线_左到右) {
     }
 }
 
-TEST(BresenhamLineTest, 水平线_右到左) {
+TEST(BresenhamLineTest, Case_To_2) {
     auto pts = BresenhamLine(3, 2, 0, 2);
     ASSERT_EQ(pts.size(), 4u);
     EXPECT_EQ(pts[0], std::make_pair(3, 2));
     EXPECT_EQ(pts[3], std::make_pair(0, 2));
 }
 
-TEST(BresenhamLineTest, 垂直线) {
+TEST(BresenhamLineTest, TestCase3) {
     auto pts = BresenhamLine(1, 0, 1, 5);
     ASSERT_EQ(pts.size(), 6u);
     for (auto& p : pts) EXPECT_EQ(p.first, 1);
@@ -99,7 +99,7 @@ TEST(BresenhamLineTest, 垂直线) {
     EXPECT_EQ(pts[5].second, 5);
 }
 
-TEST(BresenhamLineTest, 对角线_45度) {
+TEST(BresenhamLineTest, Case_Case45) {
     auto pts = BresenhamLine(0, 0, 3, 3);
     ASSERT_EQ(pts.size(), 4u);
     for (int i = 0; i < 4; i++) {
@@ -108,13 +108,13 @@ TEST(BresenhamLineTest, 对角线_45度) {
     }
 }
 
-TEST(BresenhamLineTest, 单点) {
+TEST(BresenhamLineTest, Singlepoint) {
     auto pts = BresenhamLine(5, 5, 5, 5);
     ASSERT_EQ(pts.size(), 1u);
     EXPECT_EQ(pts[0], std::make_pair(5, 5));
 }
 
-TEST(BresenhamLineTest, 斜线_首尾正确) {
+TEST(BresenhamLineTest, Case_Correct) {
     auto pts = BresenhamLine(1, 1, 5, 3);
     EXPECT_EQ(pts.front(), std::make_pair(1, 1));
     EXPECT_EQ(pts.back(), std::make_pair(5, 3));
@@ -129,7 +129,7 @@ TEST(BresenhamLineTest, 斜线_首尾正确) {
 // Auto-Tile Tests
 // ============================================================
 
-TEST(AutoTileTest, 中心无邻居_mask为0) {
+TEST(AutoTileTest, NoNeighborsInTheCenter_MaskIs0) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
     tm.tiles = {0, 0, 0,  0, 1, 0,  0, 0, 0};
@@ -144,7 +144,7 @@ TEST(AutoTileTest, 中心无邻居_mask为0) {
     EXPECT_EQ(tm.tiles[4], 10);
 }
 
-TEST(AutoTileTest, 四面包围_mask为15) {
+TEST(AutoTileTest, Case_MaskIs15) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
     tm.tiles = {0, 1, 0,  1, 1, 1,  0, 1, 0};
@@ -159,7 +159,7 @@ TEST(AutoTileTest, 四面包围_mask为15) {
     EXPECT_EQ(tm.tiles[4], 100 + 15);
 }
 
-TEST(AutoTileTest, 上方和右方有邻居_mask为3) {
+TEST(AutoTileTest, ThereAreNeighborsAboveAndToTheRight_MaskIs3) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
     tm.tiles = {0, 1, 0,  0, 1, 1,  0, 0, 0};
@@ -174,7 +174,7 @@ TEST(AutoTileTest, 上方和右方有邻居_mask为3) {
     EXPECT_EQ(tm.tiles[4], 53);
 }
 
-TEST(AutoTileTest, 空格子不解析) {
+TEST(AutoTileTest, EmptyNot) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
     tm.tiles = {0, 0, 0,  0, 0, 0,  0, 0, 0};
@@ -188,7 +188,7 @@ TEST(AutoTileTest, 空格子不解析) {
     EXPECT_EQ(tm.tiles[4], 0); // 未改动
 }
 
-TEST(AutoTileTest, 边缘格子不越界) {
+TEST(AutoTileTest, NotCrossTheLine) {
     TilemapComponent tm;
     tm.width = 2; tm.height = 2;
     tm.tiles = {1, 1,  1, 1};
@@ -203,7 +203,7 @@ TEST(AutoTileTest, 边缘格子不越界) {
     EXPECT_EQ(tm.tiles[0], 20 + 6);
 }
 
-TEST(AutoTileTest, 规则禁用不修改) {
+TEST(AutoTileTest, DisabledNotRevise) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
     tm.tiles = {0, 1, 0,  1, 1, 1,  0, 1, 0};

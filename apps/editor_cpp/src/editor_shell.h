@@ -24,6 +24,7 @@ struct PanelVisibility {
     bool* streaming_debug = nullptr;
     bool* curve_editor = nullptr;
     bool* visual_script = nullptr;
+    bool* anim_retarget = nullptr;
 };
 
 void BeginEditorShell();

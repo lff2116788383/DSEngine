@@ -13,11 +13,40 @@
 #include <gtest/gtest.h>
 #include "modules/gameplay_2d/localization/font_manager.h"
 
+#include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
 using namespace dse::gameplay2d;
 
 class FontManagerTest : public ::testing::Test {
 protected:
     FontManager mgr;
+    std::vector<std::string> temp_files_;
+
+    // 写一个带 sfnt(TrueType) 魔数头的临时字体文件，返回路径。
+    // 用于验证 LoadFont 真实读取磁盘字节（而非仅置位）。
+    std::string WriteTempFont(const std::string& name) {
+        namespace fs = std::filesystem;
+        fs::path p = fs::temp_directory_path() / name;
+        std::ofstream out(p, std::ios::binary);
+        const unsigned char magic[] = {0x00, 0x01, 0x00, 0x00, 'D', 'S', 'E', 'F'};
+        out.write(reinterpret_cast<const char*>(magic), sizeof(magic));
+        std::vector<char> pad(64, 0);
+        out.write(pad.data(), static_cast<std::streamsize>(pad.size()));
+        out.close();
+        temp_files_.push_back(p.string());
+        return p.string();
+    }
+
+    void TearDown() override {
+        for (const auto& f : temp_files_) {
+            std::error_code ec;
+            std::filesystem::remove(f, ec);
+        }
+    }
 };
 
 TEST_F(FontManagerTest, RegisterFont_Success) {
@@ -47,17 +76,20 @@ TEST_F(FontManagerTest, GetFont_NonExistent) {
 }
 
 TEST_F(FontManagerTest, UnloadFont_AfterLoad) {
-    mgr.RegisterFont("temp", "temp.ttf");
-    mgr.LoadFont("temp");
+    std::string path = WriteTempFont("dse_test_temp.ttf");
+    mgr.RegisterFont("temp", path);
+    EXPECT_TRUE(mgr.LoadFont("temp"));
     auto* font = mgr.GetFont("temp");
     ASSERT_NE(font, nullptr);
     EXPECT_TRUE(font->is_loaded);
+    EXPECT_NE(font->font_data, nullptr);
     mgr.UnloadFont("temp");
     // GetFont auto-loads, so check via const path
     const auto& cmgr = mgr;
     auto* cfont = cmgr.GetFont("temp");
     ASSERT_NE(cfont, nullptr);
     EXPECT_FALSE(cfont->is_loaded);
+    EXPECT_EQ(cfont->font_data, nullptr);
 }
 
 TEST_F(FontManagerTest, UnloadFont_NeverLoaded_Noop) {
@@ -70,10 +102,42 @@ TEST_F(FontManagerTest, UnloadFont_NeverLoaded_Noop) {
 }
 
 TEST_F(FontManagerTest, GetFont_AutoLoads) {
-    mgr.RegisterFont("auto", "auto.ttf");
+    std::string path = WriteTempFont("dse_test_auto.ttf");
+    mgr.RegisterFont("auto", path);
     auto* font = mgr.GetFont("auto"); // non-const triggers auto-load
     ASSERT_NE(font, nullptr);
     EXPECT_TRUE(font->is_loaded);
+    EXPECT_NE(font->font_data, nullptr);
+}
+
+TEST_F(FontManagerTest, LoadFont_RealFile_PopulatesData) {
+    std::string path = WriteTempFont("dse_test_real.ttf");
+    mgr.RegisterFont("real", path);
+    EXPECT_TRUE(mgr.LoadFont("real"));
+    const auto& cmgr = mgr;
+    auto* font = cmgr.GetFont("real");
+    ASSERT_NE(font, nullptr);
+    EXPECT_TRUE(font->is_loaded);
+    EXPECT_NE(font->font_data, nullptr);
+}
+
+TEST_F(FontManagerTest, LoadFont_MissingFile_Fails) {
+    mgr.RegisterFont("ghost", "does/not/exist_dse_xyz.ttf");
+    EXPECT_FALSE(mgr.LoadFont("ghost"));
+    const auto& cmgr = mgr;
+    auto* font = cmgr.GetFont("ghost");
+    ASSERT_NE(font, nullptr);
+    EXPECT_FALSE(font->is_loaded);
+    EXPECT_EQ(font->font_data, nullptr);
+}
+
+TEST_F(FontManagerTest, LoadFont_EmptyPath_Fails) {
+    mgr.RegisterFont("nopath", "");
+    EXPECT_FALSE(mgr.LoadFont("nopath"));
+    const auto& cmgr = mgr;
+    auto* font = cmgr.GetFont("nopath");
+    ASSERT_NE(font, nullptr);
+    EXPECT_FALSE(font->is_loaded);
 }
 
 TEST_F(FontManagerTest, SetDefaultFont) {

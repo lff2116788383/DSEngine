@@ -4,12 +4,14 @@
  */
 
 #include "engine/assets/asset_manager.h"
+#include "engine/assets/bundle_packer.h"
 #include "engine/assets/pak_reader.h"
 #include "engine/assets/native_file_system.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/core/event_bus.h"
+#include "engine/core/memory/memory.h"  // 统一内存预算视图（§4.4）
 #include <utility>
 #include <filesystem>
 #include <algorithm>
@@ -381,43 +383,8 @@ std::string AssetManager::ResolveAssetPath(const std::string& path) const {
 }
 
 bool AssetManager::PackBundle(const std::string& input_dir, const std::string& output_bundle, const std::string& aes_key) {
-    if (!std::filesystem::exists(input_dir)) return false;
-    bundle::archive pak;
-    int idx = 0;
-    for (auto const& entry : std::filesystem::recursive_directory_iterator(input_dir)) {
-        if (entry.is_regular_file()) {
-            std::ifstream file(entry.path(), std::ios::binary | std::ios::ate);
-            if (!file) continue;
-            std::streamsize size = file.tellg();
-            if (size < 0) {
-                continue;
-            }
-            file.seekg(0, std::ios::beg);
-            std::string content(static_cast<std::size_t>(size), '\0');
-            if (size == 0 || file.read(content.data(), size)) {
-                pak.resize(idx + 1);
-                std::string rel_path = std::filesystem::relative(entry.path(), input_dir).generic_string();
-                std::replace(rel_path.begin(), rel_path.end(), '\\', '/');
-                pak[idx]["name"] = rel_path;
-                pak[idx]["data"] = content;
-                idx++;
-            }
-        }
-    }
-    
-    std::string bin = pak.zip(60); // level 60
-    
-    if (!aes_key.empty() && aes_key.size() >= 16) {
-        struct AES_ctx ctx;
-        uint8_t iv[16] = {0}; // Fixed IV for simplicity
-        AES_init_ctx_iv(&ctx, (const uint8_t*)aes_key.c_str(), iv);
-        AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)bin.data(), bin.size());
-    }
-    
-    std::ofstream out(output_bundle, std::ios::binary);
-    if (!out) return false;
-    out.write(bin.data(), bin.size());
-    return true;
+    // 打包逻辑统一收敛到 dse::assets::PackDirectoryToBundle，与 CLI/编辑器共用。
+    return dse::assets::PackDirectoryToBundle(input_dir, output_bundle, aes_key);
 }
 
 bool AssetManager::MountBundle(const std::string& bundle_path, const std::string& aes_key) {
@@ -472,7 +439,12 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
             return true;
         }
     }
-    
+
+    // 已挂载的 .dpak 优先于松散磁盘文件（编辑器 BuildGame 产物在此生效）。
+    if (HasMountedPak() && ReadFromPak(vfs_key, out_data)) {
+        return true;
+    }
+
     const std::string load_path = resolved_path.empty() ? path : resolved_path;
 
     dse::assets::FileSystem* fs;
@@ -628,9 +600,21 @@ bool HasDdsExtension(const std::string& path) {
 } // anonymous namespace
 
 std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path) {
+    return LoadTexture(path, TextureSamplerDesc{});
+}
+
+std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
+                                                        const TextureSamplerDesc& sampler) {
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);
-    const std::string cache_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
+    const std::string base_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
+    // 采样描述并入缓存键：同一图以不同 filter/wrap 加载应得到各自的 GPU 纹理。
+    // 默认 {Linear, Repeat} 不加后缀，保持旧缓存键不变（向后兼容）。
+    const bool default_sampler = (sampler.filter == TextureFilter::Linear && sampler.wrap == TextureWrap::Repeat);
+    const std::string cache_key = default_sampler
+        ? base_key
+        : base_key + "|s=" + std::to_string(static_cast<int>(sampler.filter))
+                   + std::to_string(static_cast<int>(sampler.wrap));
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = textures_.find(cache_key);
@@ -658,7 +642,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
         {
             std::lock_guard<std::mutex> lock(config_mutex_);
             if (rhi_device_) {
-                handle = rhi_device_->CreateCompressedTexture2D(fmt, mips, true);
+                handle = rhi_device_->CreateCompressedTexture2D(fmt, mips, sampler.filter == TextureFilter::Linear);
             }
         }
         if (handle == 0) {
@@ -694,7 +678,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path)
     {
         std::lock_guard<std::mutex> lock(config_mutex_);
         if (rhi_device_) {
-            handle = rhi_device_->CreateTexture2D(width, height, data, true);
+            handle = rhi_device_->CreateTexture2D(width, height, data, sampler);
         }
     }
     if (handle == 0) {
@@ -1814,6 +1798,8 @@ void AssetManager::TouchLru(const std::string& cache_key, std::size_t estimated_
     entry.last_access = std::chrono::steady_clock::now();
     lru_entries_[cache_key] = entry;
     estimated_memory_usage_ += estimated_bytes;
+    // 同步资产估算用量到统一预算视图（行为不变，仅上报）。
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
 void AssetManager::RemoveLru(const std::string& cache_key) {
@@ -1825,12 +1811,16 @@ void AssetManager::RemoveLru(const std::string& cache_key) {
             estimated_memory_usage_ = 0;
         }
         lru_entries_.erase(it);
+        dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
     }
 }
 
 void AssetManager::SetMemoryBudget(std::size_t budget_bytes) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     memory_budget_bytes_ = budget_bytes;
+    // 将资产预算纳入统一视图，并上报当前估算用量（不改变 LRU 行为）。
+    dse::core::Memory::SetBudget(dse::core::MemoryTag::Asset, budget_bytes);
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
 std::size_t AssetManager::EstimatedMemoryUsage() const {
@@ -1925,6 +1915,7 @@ std::size_t AssetManager::EvictLRU() {
         }
     }
 
+    dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
     return evicted;
 }
 

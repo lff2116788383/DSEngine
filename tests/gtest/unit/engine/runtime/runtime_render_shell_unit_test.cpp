@@ -82,7 +82,7 @@ RuntimeRenderShellRhiDevice* InstallRhi(FramePipeline& pipeline) {
 }
 }
 
-TEST(RuntimeRenderShellUnitTest, BeginFrame和CreateCommandBuffer委托RhiDevice) {
+TEST(RuntimeRenderShellUnitTest, BeginFrameAndCreateCommandBufferentrustRhiDevice) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
 
@@ -93,7 +93,7 @@ TEST(RuntimeRenderShellUnitTest, BeginFrame和CreateCommandBuffer委托RhiDevice
     EXPECT_EQ(cmd, device->command_buffer);
 }
 
-TEST(RuntimeRenderShellUnitTest, BindShadowMaps从渲染目标深度贴图写入全局状态) {
+TEST(RuntimeRenderShellUnitTest, BindShadowMapsWritingGlobalStateFromRenderTargetDepthMap) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
 
@@ -117,7 +117,7 @@ TEST(RuntimeRenderShellUnitTest, BindShadowMaps从渲染目标深度贴图写入
     }
 }
 
-TEST(RuntimeRenderShellUnitTest, SubmitAndEndFrame按顺序提交命令并结束帧) {
+TEST(RuntimeRenderShellUnitTest, SubmitAndEndFrameSubmitCommandsInSequenceAndEndFrame) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
     auto cmd = CreateRuntimeRenderCommandBuffer(pipeline);
@@ -129,7 +129,7 @@ TEST(RuntimeRenderShellUnitTest, SubmitAndEndFrame按顺序提交命令并结束
     EXPECT_EQ(device->end_frame_count, 1);
 }
 
-TEST(RuntimeRenderShellUnitTest, FinalizeFrame同步Rhi统计到FramePipeline) {
+TEST(RuntimeRenderShellUnitTest, FinalizeFramesynchronousRhiStatisticsFramePipeline) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
     device->stats.draw_calls = 7;

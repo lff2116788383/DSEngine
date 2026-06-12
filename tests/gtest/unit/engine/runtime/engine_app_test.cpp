@@ -19,47 +19,47 @@
 
 using namespace dse::runtime;
 
-TEST(EngineRunConfigTest, 默认窗口尺寸为800x600) {
+TEST(EngineRunConfigTest, DefaultIs800x600) {
     EngineRunConfig config;
     EXPECT_EQ(config.window_width, 800);
     EXPECT_EQ(config.window_height, 600);
 }
 
-TEST(EngineRunConfigTest, 默认窗口标题) {
+TEST(EngineRunConfigTest, Default) {
     EngineRunConfig config;
     EXPECT_EQ(config.window_title, "DSEngine Phase 2");
 }
 
-TEST(EngineRunConfigTest, 默认业务模式为Lua) {
+TEST(EngineRunConfigTest, DefaultmodelIsLua) {
     EngineRunConfig config;
     EXPECT_EQ(config.business_mode, BusinessMode::Lua);
 }
 
-TEST(EngineRunConfigTest, 默认不启用编辑器) {
+TEST(EngineRunConfigTest, DefaultNotEnabled) {
     EngineRunConfig config;
     EXPECT_FALSE(config.enable_editor);
 }
 
-TEST(EngineRunConfigTest, 默认无启动Lua脚本) {
+TEST(EngineRunConfigTest, DefaultWithoutLua) {
     EngineRunConfig config;
     EXPECT_TRUE(config.startup_lua_script_path.empty());
 }
 
-TEST(EngineRunConfigTest, 默认服务指针为空) {
+TEST(EngineRunConfigTest, DefaultIsEmpty) {
     EngineRunConfig config;
     EXPECT_EQ(config.services.world, nullptr);
     EXPECT_EQ(config.services.asset_manager, nullptr);
     EXPECT_EQ(config.services.job_system, nullptr);
 }
 
-TEST(EngineRunConfigTest, WithServices链式调用) {
+TEST(EngineRunConfigTest, WithServiceschainCall) {
     RuntimeServices services;
     EngineRunConfig config;
     auto& ref = config.WithServices(services);
     EXPECT_EQ(&ref, &config);
 }
 
-TEST(EngineInstanceTest, 构造与析构不崩溃) {
+TEST(EngineInstanceTest, AndDoesNotCrash) {
     EngineRunConfig config;
     config.enable_editor = true; // 避免在析构时调用 glfwTerminate
     EXPECT_NO_THROW({
@@ -67,25 +67,25 @@ TEST(EngineInstanceTest, 构造与析构不崩溃) {
     });
 }
 
-TEST(EngineInstanceTest, 未初始化时pipeline返回非空) {
+TEST(EngineInstanceTest, WhenNotInitializedpipelineReturnNonEmpty) {
     EngineRunConfig config;
     EngineInstance instance(config);
     ASSERT_NE(instance.pipeline(), nullptr);
 }
 
-TEST(EngineInstanceTest, 未初始化时Tick不崩溃) {
+TEST(EngineInstanceTest, WhenNotInitializedTickDoesNotCrash) {
     EngineRunConfig config;
     EngineInstance instance(config);
     EXPECT_NO_THROW(instance.Tick());
 }
 
-TEST(EngineInstanceTest, 未初始化时Shutdown不崩溃) {
+TEST(EngineInstanceTest, WhenNotInitializedShutdownDoesNotCrash) {
     EngineRunConfig config;
     EngineInstance instance(config);
     EXPECT_NO_THROW(instance.Shutdown());
 }
 
-TEST(EngineInstanceTest, 注入外部World后ServiceLocator可获取) {
+TEST(EngineInstanceTest, InjectsOutsideWorldAfterServiceLocatorCanAcquire) {
     EngineRunConfig config;
     RuntimeServices svc;
     config.WithServices(svc);
@@ -95,7 +95,7 @@ TEST(EngineInstanceTest, 注入外部World后ServiceLocator可获取) {
     EXPECT_NO_THROW(instance.Shutdown());
 }
 
-TEST(EngineInstanceTest, 注入外部AssetManager不崩溃) {
+TEST(EngineInstanceTest, InjectsOutsideAssetManagerDoesNotCrash) {
     EngineRunConfig config;
     EXPECT_NO_THROW({
         EngineInstance instance(config);

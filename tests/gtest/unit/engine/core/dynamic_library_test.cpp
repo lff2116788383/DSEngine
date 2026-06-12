@@ -20,17 +20,17 @@ using namespace dse::core;
 // 构造与基本状态
 // ============================================================
 
-TEST(DynamicLibraryTest, 默认构造时未加载) {
+TEST(DynamicLibraryTest, DefaultWhenNotLoad) {
     DynamicLibrary lib;
     EXPECT_FALSE(lib.IsLoaded());
 }
 
-TEST(DynamicLibraryTest, Unload空库不崩溃) {
+TEST(DynamicLibraryTest, UnloadEmptyLibraryDoesNotCrash) {
     DynamicLibrary lib;
     EXPECT_NO_THROW(lib.Unload());
 }
 
-TEST(DynamicLibraryTest, GetSymbol未加载时返回nullptr) {
+TEST(DynamicLibraryTest, GetSymbolReturnWhenNotLoadednullptr) {
     DynamicLibrary lib;
     EXPECT_EQ(lib.GetSymbol("SomeSymbol"), nullptr);
 }
@@ -39,7 +39,7 @@ TEST(DynamicLibraryTest, GetSymbol未加载时返回nullptr) {
 // 加载不存在的库
 // ============================================================
 
-TEST(DynamicLibraryTest, 加载不存在的库返回false) {
+TEST(DynamicLibraryTest, LoaddoesNotExistReturnsfalse) {
     DynamicLibrary lib;
     bool result = lib.Load("nonexistent_library_that_does_not_exist_12345");
     EXPECT_FALSE(result);
@@ -50,7 +50,7 @@ TEST(DynamicLibraryTest, 加载不存在的库返回false) {
 // 移动语义
 // ============================================================
 
-TEST(DynamicLibraryTest, 移动构造转移所有权) {
+TEST(DynamicLibraryTest, With) {
     DynamicLibrary lib1;
     DynamicLibrary lib2(std::move(lib1));
     // 移动后 lib1 不应持有资源
@@ -58,7 +58,7 @@ TEST(DynamicLibraryTest, 移动构造转移所有权) {
     EXPECT_FALSE(lib2.IsLoaded()); // lib1 本来就没加载
 }
 
-TEST(DynamicLibraryTest, 移动赋值转移所有权) {
+TEST(DynamicLibraryTest, With_2) {
     DynamicLibrary lib1;
     DynamicLibrary lib2;
     lib2 = std::move(lib1);
@@ -72,7 +72,7 @@ TEST(DynamicLibraryTest, 移动赋值转移所有权) {
 
 #if defined(_WIN32)
 
-TEST(DynamicLibraryTest, 加载系统库kernel32) {
+TEST(DynamicLibraryTest, LoadSystemkernel32) {
     DynamicLibrary lib;
     bool result = lib.Load("kernel32.dll");
     EXPECT_TRUE(result);
@@ -90,7 +90,7 @@ TEST(DynamicLibraryTest, 加载系统库kernel32) {
     EXPECT_FALSE(lib.IsLoaded());
 }
 
-TEST(DynamicLibraryTest, 加载后Unload可重新加载) {
+TEST(DynamicLibraryTest, LoadAfterUnloadCanLoad) {
     DynamicLibrary lib;
     ASSERT_TRUE(lib.Load("kernel32.dll"));
     EXPECT_TRUE(lib.IsLoaded());
@@ -104,7 +104,7 @@ TEST(DynamicLibraryTest, 加载后Unload可重新加载) {
     lib.Unload();
 }
 
-TEST(DynamicLibraryTest, 移动已加载的库) {
+TEST(DynamicLibraryTest, AlreadyLoad) {
     DynamicLibrary lib1;
     ASSERT_TRUE(lib1.Load("kernel32.dll"));
     EXPECT_TRUE(lib1.IsLoaded());

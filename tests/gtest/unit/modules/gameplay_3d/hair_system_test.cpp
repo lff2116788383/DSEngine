@@ -20,7 +20,7 @@ using namespace dse::gameplay3d;
 // HairComponent 默认值
 // ============================================================
 
-TEST(HairComponentTest, 默认值) {
+TEST(HairComponentTest, DefaultValues) {
     HairComponent hc;
     EXPECT_TRUE(hc.enabled);
     EXPECT_TRUE(hc.hair_asset_path.empty());
@@ -33,7 +33,7 @@ TEST(HairComponentTest, 默认值) {
     EXPECT_FLOAT_EQ(hc.wind_turbulence, 0.2f);
 }
 
-TEST(HairComponentTest, 渲染参数默认值) {
+TEST(HairComponentTest, ParameterDefaultValue) {
     HairComponent hc;
     EXPECT_FLOAT_EQ(hc.root_color.r, 0.1f);
     EXPECT_FLOAT_EQ(hc.tip_color.a, 1.0f);
@@ -43,7 +43,7 @@ TEST(HairComponentTest, 渲染参数默认值) {
     EXPECT_FLOAT_EQ(hc.specular_power_secondary, 20.0f);
 }
 
-TEST(HairComponentTest, LOD参数默认值) {
+TEST(HairComponentTest, LODParameterDefaultValue) {
     HairComponent hc;
     EXPECT_FLOAT_EQ(hc.lod0_distance, 20.0f);
     EXPECT_FLOAT_EQ(hc.lod1_distance, 40.0f);
@@ -51,7 +51,7 @@ TEST(HairComponentTest, LOD参数默认值) {
     EXPECT_FLOAT_EQ(hc.cull_distance, 120.0f);
 }
 
-TEST(HairComponentTest, Follower参数默认值) {
+TEST(HairComponentTest, FollowerParameterDefaultValue) {
     HairComponent hc;
     EXPECT_EQ(hc.num_follow_per_guide, 4);
     EXPECT_FLOAT_EQ(hc.follow_root_offset, 1.5f);
@@ -59,7 +59,7 @@ TEST(HairComponentTest, Follower参数默认值) {
     EXPECT_TRUE(hc.receive_shadow);
 }
 
-TEST(HairComponentTest, 运行时索引默认值) {
+TEST(HairComponentTest, WhenDefaultValues) {
     HairComponent hc;
     EXPECT_EQ(hc.hair_instance_index_, -1);
 }
@@ -68,12 +68,12 @@ TEST(HairComponentTest, 运行时索引默认值) {
 // HairSystem 默认状态
 // ============================================================
 
-TEST(HairSystemTest, 默认构造) {
+TEST(HairSystemTest, Default) {
     HairSystem sys;
     EXPECT_TRUE(sys.instances().empty());
 }
 
-TEST(HairSystemTest, GetCachedAsset_未缓存返回nullptr) {
+TEST(HairSystemTest, GetCachedAsset_UncachedReturnnullptr) {
     HairSystem sys;
     EXPECT_EQ(sys.GetCachedAsset("nonexistent.dhair"), nullptr);
     EXPECT_EQ(sys.GetCachedAsset(""), nullptr);

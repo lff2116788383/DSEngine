@@ -49,7 +49,7 @@ protected:
     }
 };
 
-TEST_F(EventBusTest, 订阅后发布能收到事件) {
+TEST_F(EventBusTest, AfterPublishesreceiveevent) {
     EventBus bus;
     int received = 0;
     bus.Subscribe<TestIntEvent>([&received](const TestIntEvent& e) {
@@ -59,13 +59,13 @@ TEST_F(EventBusTest, 订阅后发布能收到事件) {
     EXPECT_EQ(received, 42);
 }
 
-TEST_F(EventBusTest, 未订阅的事件发布不崩溃) {
+TEST_F(EventBusTest, NoteventPublishesDoesNotCrash) {
     EventBus bus;
     bus.Publish<TestIntEvent>(99);
     SUCCEED();
 }
 
-TEST_F(EventBusTest, 多个订阅者都收到事件) {
+TEST_F(EventBusTest, Multireceiveevent) {
     EventBus bus;
     int count_a = 0;
     int count_b = 0;
@@ -76,7 +76,7 @@ TEST_F(EventBusTest, 多个订阅者都收到事件) {
     EXPECT_EQ(count_b, 1);
 }
 
-TEST_F(EventBusTest, 不同事件类型互不干扰) {
+TEST_F(EventBusTest, DifferentEventTypesDoNotInterfereWithEachOther) {
     EventBus bus;
     int int_received = 0;
     std::string str_received;
@@ -98,7 +98,7 @@ TEST_F(EventBusTest, 不同事件类型互不干扰) {
 // 取消订阅
 // ============================================================
 
-TEST_F(EventBusTest, 取消订阅后不再收到事件) {
+TEST_F(EventBusTest, AfterNotAgainreceiveevent) {
     EventBus bus;
     int count = 0;
     auto handle = bus.Subscribe<TestIntEvent>([&count](const TestIntEvent&) { ++count; });
@@ -110,14 +110,14 @@ TEST_F(EventBusTest, 取消订阅后不再收到事件) {
     EXPECT_EQ(count, 1); // 不应再增加
 }
 
-TEST_F(EventBusTest, 无效句柄取消不崩溃) {
+TEST_F(EventBusTest, InvalidHandleDoesNotCrash) {
     EventBus bus;
     SubscriptionHandle invalid{0, 0, false};
     bus.Unsubscribe(invalid);
     SUCCEED();
 }
 
-TEST_F(EventBusTest, 取消一个订阅者不影响其他) {
+TEST_F(EventBusTest, OneNot) {
     EventBus bus;
     int count_a = 0;
     int count_b = 0;
@@ -135,7 +135,7 @@ TEST_F(EventBusTest, 取消一个订阅者不影响其他) {
 // 内置事件类型
 // ============================================================
 
-TEST_F(EventBusTest, UiClickEvent发布与接收) {
+TEST_F(EventBusTest, UiClickEventPublishAndReceive) {
     EventBus bus;
     std::uint32_t received_entity = 0;
     bus.Subscribe<UiClickEvent>([&received_entity](const UiClickEvent& e) {
@@ -145,7 +145,7 @@ TEST_F(EventBusTest, UiClickEvent发布与接收) {
     EXPECT_EQ(received_entity, 12345u);
 }
 
-TEST_F(EventBusTest, ResourceLoadedEvent发布与接收) {
+TEST_F(EventBusTest, ResourceLoadedEventPublishAndReceive) {
     EventBus bus;
     std::string received_path;
     bool received_success = false;
@@ -158,7 +158,7 @@ TEST_F(EventBusTest, ResourceLoadedEvent发布与接收) {
     EXPECT_TRUE(received_success);
 }
 
-TEST_F(EventBusTest, SceneLifecycleEvent发布与接收) {
+TEST_F(EventBusTest, SceneLifecycleEventPublishAndReceive) {
     EventBus bus;
     SceneLifecyclePhase received = SceneLifecyclePhase::Init;
     bus.Subscribe<SceneLifecycleEvent>([&received](const SceneLifecycleEvent& e) {
@@ -172,7 +172,7 @@ TEST_F(EventBusTest, SceneLifecycleEvent发布与接收) {
 // EventTraits 反射机制
 // ============================================================
 
-TEST_F(EventBusTest, EventTraits使用kEventId) {
+TEST_F(EventBusTest, EventTraitsusekEventId) {
     // 有 kEventId 的事件应使用其常量
     constexpr EventId ui_click_id = EventTraits<UiClickEvent>::GetId();
     EXPECT_EQ(ui_click_id, UiClickEvent::kEventId);
@@ -185,7 +185,7 @@ TEST_F(EventBusTest, EventTraits使用kEventId) {
 // ServiceLocator 注入获取
 // ============================================================
 
-TEST_F(EventBusTest, 通过ServiceLocator注入获取) {
+TEST_F(EventBusTest, PassServiceLocatorInjectsAcquire) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -202,7 +202,7 @@ TEST_F(EventBusTest, 通过ServiceLocator注入获取) {
     ServiceLocator::Instance().Reset<EventBus>();
 }
 
-TEST_F(EventBusTest, Instance兼容接口可正常工作) {
+TEST_F(EventBusTest, InstanceCompatibleInterfacesWorkProperly) {
     // EventBus::Instance() 应能正常工作（兼容接口）
     EventBus& inst = EventBus::Instance();
     int received = 0;
@@ -227,12 +227,12 @@ protected:
     }
 };
 
-TEST_F(EventBusOwnerLocatorTest, 默认构造时OwnerLocator为空) {
+TEST_F(EventBusOwnerLocatorTest, DefaultWhenOwnerLocatorIsEmpty) {
     EventBus bus;
     EXPECT_EQ(bus.owner_locator(), nullptr);
 }
 
-TEST_F(EventBusOwnerLocatorTest, Instance记录全局ServiceLocator) {
+TEST_F(EventBusOwnerLocatorTest, InstanceRecordTheWholeSituationServiceLocator) {
     auto& bus = EventBus::Instance();
     EXPECT_EQ(bus.owner_locator(), &ServiceLocator::Instance());
 }
@@ -241,13 +241,13 @@ TEST_F(EventBusOwnerLocatorTest, Instance记录全局ServiceLocator) {
 // EventTraits 反射机制 - kEventId 一致性验证
 // ============================================================
 
-TEST(EventTraitsTest, 使用事件类内kEventId) {
+TEST(EventTraitsTest, UseeventInsidekEventId) {
     EventId id = EventTraits<UiClickEvent>::GetId();
     EXPECT_EQ(id, UiClickEvent::kEventId);
     EXPECT_EQ(id, events::kUiClick);
 }
 
-TEST(EventTraitsTest, ResourceLoadedEvent的kEventId) {
+TEST(EventTraitsTest, ResourceLoadedEventkEventId) {
     EventId id = EventTraits<ResourceLoadedEvent>::GetId();
     EXPECT_EQ(id, ResourceLoadedEvent::kEventId);
     EXPECT_EQ(id, events::kResourceLoaded);

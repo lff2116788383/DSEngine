@@ -44,7 +44,7 @@ static void BuildTestPlane(float min_val, float max_val, int n,
 // NavMeshBuildConfig 测试
 // ============================================================
 
-TEST(NavMeshBuildConfigTest, 默认值) {
+TEST(NavMeshBuildConfigTest, DefaultValues) {
     NavMeshBuildConfig cfg;
     EXPECT_FLOAT_EQ(cfg.cell_size, 0.3f);
     EXPECT_FLOAT_EQ(cfg.cell_height, 0.2f);
@@ -55,7 +55,7 @@ TEST(NavMeshBuildConfigTest, 默认值) {
     EXPECT_EQ(cfg.verts_per_poly, 6);
 }
 
-TEST(NavMeshBuildConfigTest, 自定义值) {
+TEST(NavMeshBuildConfigTest, CustomValues) {
     NavMeshBuildConfig cfg;
     cfg.cell_size = 0.5f;
     cfg.cell_height = 0.3f;
@@ -74,12 +74,12 @@ TEST(NavMeshBuildConfigTest, 自定义值) {
 // NavMeshSystem 生命周期测试
 // ============================================================
 
-TEST(NavMeshSystemTest, 默认构造不崩溃) {
+TEST(NavMeshSystemTest, DefaultDoesNotCrash) {
     NavMeshSystem nav;
     SUCCEED();
 }
 
-TEST(NavMeshSystemTest, Init成功) {
+TEST(NavMeshSystemTest, InitSucceeds) {
     NavMeshSystem nav;
     bool success = nav.Init();
     EXPECT_TRUE(success) << "NavMeshSystem::Init 应返回 true";
@@ -89,14 +89,14 @@ TEST(NavMeshSystemTest, Init成功) {
     }
 }
 
-TEST(NavMeshSystemTest, Shutdown不崩溃) {
+TEST(NavMeshSystemTest, ShutdownDoesNotCrash) {
     NavMeshSystem nav;
     nav.Init();
     nav.Shutdown();
     SUCCEED();
 }
 
-TEST(NavMeshSystemTest, 重复Shutdown不崩溃) {
+TEST(NavMeshSystemTest, ShutdownDoesNotCrash_2) {
     NavMeshSystem nav;
     nav.Init();
     nav.Shutdown();
@@ -104,12 +104,12 @@ TEST(NavMeshSystemTest, 重复Shutdown不崩溃) {
     SUCCEED();
 }
 
-TEST(NavMeshSystemTest, 未Init时IsReady返回false) {
+TEST(NavMeshSystemTest, NotInitWhenIsReadyReturnsfalse) {
     NavMeshSystem nav;
     EXPECT_FALSE(nav.IsReady());
 }
 
-TEST(NavMeshSystemTest, Init后未Bake时IsReady返回false) {
+TEST(NavMeshSystemTest, InitLaterBakeWhenIsReadyReturnsfalse) {
     NavMeshSystem nav;
     if (nav.Init()) {
         EXPECT_FALSE(nav.IsReady());
@@ -123,7 +123,7 @@ TEST(NavMeshSystemTest, Init后未Bake时IsReady返回false) {
 // BakeFromTriangles 测试
 // ============================================================
 
-TEST(NavMeshSystemTest, BakeFromTriangles空数据返回false) {
+TEST(NavMeshSystemTest, BakeFromTrianglesEmptyDataReturnedfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -135,7 +135,7 @@ TEST(NavMeshSystemTest, BakeFromTriangles空数据返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, BakeFromTriangles简单平面) {
+TEST(NavMeshSystemTest, BakeFromTrianglesSimplePlane) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -161,7 +161,7 @@ TEST(NavMeshSystemTest, BakeFromTriangles简单平面) {
 // FindPath 测试
 // ============================================================
 
-TEST(NavMeshSystemTest, FindPath未Bake返回false) {
+TEST(NavMeshSystemTest, FindPathNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -174,7 +174,7 @@ TEST(NavMeshSystemTest, FindPath未Bake返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, FindPath简单路径) {
+TEST(NavMeshSystemTest, FindPathsimplePath) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -207,7 +207,7 @@ TEST(NavMeshSystemTest, FindPath简单路径) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, FindPath起点终点相同返回单点) {
+TEST(NavMeshSystemTest, FindPathIfTheStartingPointAndEndPointAreTheSameReturnToASinglePoint) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -239,7 +239,7 @@ TEST(NavMeshSystemTest, FindPath起点终点相同返回单点) {
 // FindNearestPoint 测试
 // ============================================================
 
-TEST(NavMeshSystemTest, FindNearestPoint未Bake返回false) {
+TEST(NavMeshSystemTest, FindNearestPointNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -252,7 +252,7 @@ TEST(NavMeshSystemTest, FindNearestPoint未Bake返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, FindNearestPoint在navmesh内返回原点) {
+TEST(NavMeshSystemTest, FindNearestPointexistnavmeshReturnToOriginWithin) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -285,7 +285,7 @@ TEST(NavMeshSystemTest, FindNearestPoint在navmesh内返回原点) {
 // Raycast 测试
 // ============================================================
 
-TEST(NavMeshSystemTest, Raycast未Bake返回false) {
+TEST(NavMeshSystemTest, RaycastNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -298,7 +298,7 @@ TEST(NavMeshSystemTest, Raycast未Bake返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, Raycast在navmesh内不命中) {
+TEST(NavMeshSystemTest, RaycastexistnavmeshinternalMiss) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -322,7 +322,7 @@ TEST(NavMeshSystemTest, Raycast在navmesh内不命中) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, Raycast射出navmesh命中) {
+TEST(NavMeshSystemTest, Raycastejaculationnavmeshhit) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -350,7 +350,7 @@ TEST(NavMeshSystemTest, Raycast射出navmesh命中) {
 // 序列化测试
 // ============================================================
 
-TEST(NavMeshSystemTest, SaveNavMesh未Bake返回false) {
+TEST(NavMeshSystemTest, SaveNavMeshNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -362,7 +362,7 @@ TEST(NavMeshSystemTest, SaveNavMesh未Bake返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, LoadNavMesh文件不存在返回false) {
+TEST(NavMeshSystemTest, LoadNavMeshFileDoesNotExistReturnfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -374,7 +374,7 @@ TEST(NavMeshSystemTest, LoadNavMesh文件不存在返回false) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, SaveLoadNavMesh循环) {
+TEST(NavMeshSystemTest, SaveLoadNavMeshcycle) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -420,7 +420,7 @@ TEST(NavMeshSystemTest, SaveLoadNavMesh循环) {
 // Tiled NavMesh 测试
 // ============================================================
 
-TEST(NavMeshSystemTest, BakeTiledFromTriangles简单平面) {
+TEST(NavMeshSystemTest, BakeTiledFromTrianglesSimplePlane) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -444,7 +444,7 @@ TEST(NavMeshSystemTest, BakeTiledFromTriangles简单平面) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, BakeTiledFromTriangles后FindPath) {
+TEST(NavMeshSystemTest, BakeTiledFromTrianglesAfterFindPath) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -471,7 +471,7 @@ TEST(NavMeshSystemTest, BakeTiledFromTriangles后FindPath) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, RebakeTileAt增量重建) {
+TEST(NavMeshSystemTest, RebakeTileAtIncrementalReconstruction) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -499,7 +499,7 @@ TEST(NavMeshSystemTest, RebakeTileAt增量重建) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, RemoveTile删除后路径失败) {
+TEST(NavMeshSystemTest, RemoveTilePathFailedAfterDeletion) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";
@@ -525,7 +525,7 @@ TEST(NavMeshSystemTest, RemoveTile删除后路径失败) {
     nav.Shutdown();
 }
 
-TEST(NavMeshSystemTest, RebakeTileAt未初始化返回false) {
+TEST(NavMeshSystemTest, RebakeTileAtReturnUninitializedfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
         GTEST_SKIP() << "Init 失败，跳过测试";

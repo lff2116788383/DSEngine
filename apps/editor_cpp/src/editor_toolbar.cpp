@@ -23,6 +23,7 @@
 #include "modules/gameplay_2d/localization/localization_system.h"
 #include "editor_locale.h"
 #include "editor_preferences_panel.h"
+#include "editor_crash.h"
 
 namespace dse::editor {
 
@@ -75,6 +76,8 @@ void EnterPlayMode(entt::registry& registry) {
 
     ResetPlayModeRuntimeState();
     s_editor_state = EditorState::Play;
+    dse::editor::AddEditorBreadcrumb("editor: enter play mode");
+    dse::editor::SetEditorCrashMetadata("play_state", "play");
 }
 
 void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity,
@@ -100,6 +103,8 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity,
     selected_entity = entt::null;
     s_step_pending = false;
     s_editor_state = EditorState::Edit;
+    dse::editor::AddEditorBreadcrumb("editor: exit play mode");
+    dse::editor::SetEditorCrashMetadata("play_state", "edit");
 }
 
 bool IsEditorPaused() {

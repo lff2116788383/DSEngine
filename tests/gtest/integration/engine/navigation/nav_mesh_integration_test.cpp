@@ -35,7 +35,7 @@ bool BakeTestScene(NavMeshSystem& nav) {
 
 } // namespace
 
-TEST(NavMeshIntegrationTest, Bake有效场景成功) {
+TEST(NavMeshIntegrationTest, BakeEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
 
@@ -45,7 +45,7 @@ TEST(NavMeshIntegrationTest, Bake有效场景成功) {
     nav.Shutdown();
 }
 
-TEST(NavMeshIntegrationTest, FindNearestPoint有效场景成功) {
+TEST(NavMeshIntegrationTest, FindNearestPointEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
     ASSERT_TRUE(BakeTestScene(nav));
@@ -58,7 +58,7 @@ TEST(NavMeshIntegrationTest, FindNearestPoint有效场景成功) {
     nav.Shutdown();
 }
 
-TEST(NavMeshIntegrationTest, FindPath有效场景成功) {
+TEST(NavMeshIntegrationTest, FindPathEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
     ASSERT_TRUE(BakeTestScene(nav));
@@ -70,7 +70,7 @@ TEST(NavMeshIntegrationTest, FindPath有效场景成功) {
     nav.Shutdown();
 }
 
-TEST(NavMeshIntegrationTest, Raycast留在NavMesh内不命中) {
+TEST(NavMeshIntegrationTest, RaycaststayNavMeshinternalMiss) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
     ASSERT_TRUE(BakeTestScene(nav));

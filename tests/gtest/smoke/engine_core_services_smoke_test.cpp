@@ -48,7 +48,7 @@ protected:
     }
 };
 
-TEST_F(EngineCoreServicesSmokeTest, 核心服务完整生命周期不崩溃) {
+TEST_F(EngineCoreServicesSmokeTest, LifecycleDoesNotCrash) {
     // Init
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -91,7 +91,7 @@ TEST_F(EngineCoreServicesSmokeTest, 核心服务完整生命周期不崩溃) {
     ServiceLocator::Instance().Reset<EventBus>();
 }
 
-TEST_F(EngineCoreServicesSmokeTest, EventBus与World协作冒烟) {
+TEST_F(EngineCoreServicesSmokeTest, EventBusAndWorldCollaborationSmokes) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -118,7 +118,7 @@ TEST_F(EngineCoreServicesSmokeTest, EventBus与World协作冒烟) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST_F(EngineCoreServicesSmokeTest, JobSystem多任务并发冒烟) {
+TEST_F(EngineCoreServicesSmokeTest, JobSystemMultitaskingConcurrentSmoke) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
     ServiceLocator::Instance().Register<JobSystem, JobSystem>(job_system);
@@ -143,7 +143,7 @@ TEST_F(EngineCoreServicesSmokeTest, JobSystem多任务并发冒烟) {
     job_system->Shutdown();
 }
 
-TEST_F(EngineCoreServicesSmokeTest, ServiceLocator注册获取重置不崩溃) {
+TEST_F(EngineCoreServicesSmokeTest, ServiceLocatorRegisterToGetResetWithoutCrashing) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
 
@@ -154,7 +154,7 @@ TEST_F(EngineCoreServicesSmokeTest, ServiceLocator注册获取重置不崩溃) {
     EXPECT_EQ(ServiceLocator::Instance().Get<EventBus>(), nullptr);
 }
 
-TEST_F(EngineCoreServicesSmokeTest, World大量实体创建销毁不崩溃) {
+TEST_F(EngineCoreServicesSmokeTest, WorldALargeNumberOfEntitiesAreCreatedAndDestroyedWithoutCrashing) {
     World world;
     std::vector<Entity> entities;
 
@@ -173,7 +173,7 @@ TEST_F(EngineCoreServicesSmokeTest, World大量实体创建销毁不崩溃) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
-TEST_F(EngineCoreServicesSmokeTest, 多次InitShutdown交替不崩溃) {
+TEST_F(EngineCoreServicesSmokeTest, MultiTimesInitShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         auto job_system = std::make_shared<JobSystem>();
         job_system->Init();

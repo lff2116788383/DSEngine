@@ -23,32 +23,32 @@ protected:
     World world;
 };
 
-TEST_F(FramePipelineTest, 默认构造与析构不崩溃) {
+TEST_F(FramePipelineTest, DefaultAndDoesNotCrash) {
     // 验证构造/析构正常
 }
 
-TEST_F(FramePipelineTest, 未初始化时Update为空操作) {
+TEST_F(FramePipelineTest, WhenNotInitializedUpdateIsEmpty) {
     EXPECT_NO_THROW(pipeline.Update(0.016f));
 }
 
-TEST_F(FramePipelineTest, 未初始化时FixedUpdate为空操作) {
+TEST_F(FramePipelineTest, WhenNotInitializedFixedUpdateIsEmpty) {
     EXPECT_NO_THROW(pipeline.FixedUpdate(0.02f));
 }
 
-TEST_F(FramePipelineTest, 未初始化时Render为空操作) {
+TEST_F(FramePipelineTest, WhenNotInitializedRenderIsEmpty) {
     EXPECT_NO_THROW(pipeline.Render());
 }
 
-TEST_F(FramePipelineTest, 未初始化时Shutdown不崩溃) {
+TEST_F(FramePipelineTest, WhenNotInitializedShutdownDoesNotCrash) {
     EXPECT_NO_THROW(pipeline.Shutdown());
 }
 
-TEST_F(FramePipelineTest, 初始化前可设置World) {
+TEST_F(FramePipelineTest, InitializeBeforeCansetUpWorld) {
     pipeline.SetWorld(&world);
     EXPECT_NO_THROW(pipeline.world());
 }
 
-TEST_F(FramePipelineTest, 初始化前SetWorld拒绝空指针) {
+TEST_F(FramePipelineTest, InitializeBeforeSetWorldRejectsEmpty) {
     // SetWorld 在 !world 时直接返回，不注入 nullptr
     World* original = &world;
     pipeline.SetWorld(&world);
@@ -58,25 +58,25 @@ TEST_F(FramePipelineTest, 初始化前SetWorld拒绝空指针) {
     EXPECT_EQ(&pipeline.world(), original);
 }
 
-TEST_F(FramePipelineTest, 初始化前可启用编辑器模式) {
+TEST_F(FramePipelineTest, InitializeBeforeCanEnabledmodel) {
     pipeline.EnableEditorMode(true);
     // 无法直接读取 editor_mode，仅验证不崩溃
     SUCCEED();
 }
 
-TEST_F(FramePipelineTest, 初始化前可设置业务模式) {
+TEST_F(FramePipelineTest, InitializeBeforeCansetUpmodel) {
     pipeline.SetBusinessMode(BusinessMode::Cpp);
     SUCCEED();
 }
 
-TEST_F(FramePipelineTest, 渲染统计初始值为零) {
+TEST_F(FramePipelineTest, IsZero) {
     EXPECT_EQ(pipeline.LastDrawCalls(), 0);
     EXPECT_EQ(pipeline.LastMaterialSwitches(), 0);
     EXPECT_EQ(pipeline.LastMaxBatchSprites(), 0);
     EXPECT_EQ(pipeline.LastSpriteCount(), 0);
 }
 
-TEST_F(FramePipelineTest, 窗口标题回调注入与触发) {
+TEST_F(FramePipelineTest, InjectsAndTriggers) {
     std::string captured_title;
     pipeline.SetWindowTitleSetter([&captured_title](const std::string& title) {
         captured_title = title;
@@ -85,32 +85,32 @@ TEST_F(FramePipelineTest, 窗口标题回调注入与触发) {
     EXPECT_EQ(captured_title, "Test Title");
 }
 
-TEST_F(FramePipelineTest, 无标题回调时SetWindowTitle不崩溃) {
+TEST_F(FramePipelineTest, WithoutWhenSetWindowTitleDoesNotCrash) {
     pipeline.SetWindowTitleSetter(nullptr);
     EXPECT_NO_THROW(pipeline.SetWindowTitle("should not crash"));
 }
 
-TEST_F(FramePipelineTest, 无RHIDevice时ReadSceneColorRgba8返回空) {
+TEST_F(FramePipelineTest, WithoutRHIDeviceWhenReadSceneColorRgba8ReturnsEmpty) {
     auto pixels = pipeline.ReadSceneColorRgba8();
     EXPECT_TRUE(pixels.empty());
 }
 
-TEST_F(FramePipelineTest, 无RHIDevice时ReadMainColorRgba8返回空) {
+TEST_F(FramePipelineTest, WithoutRHIDeviceWhenReadMainColorRgba8ReturnsEmpty) {
     auto pixels = pipeline.ReadMainColorRgba8();
     EXPECT_TRUE(pixels.empty());
 }
 
-TEST_F(FramePipelineTest, 无RHIDevice时ReadSceneColorRgba8WithSize返回空) {
+TEST_F(FramePipelineTest, WithoutRHIDeviceWhenReadSceneColorRgba8WithSizeReturnsEmpty) {
     auto result = pipeline.ReadSceneColorRgba8WithSize();
     EXPECT_EQ(result.width, 0);
     EXPECT_EQ(result.height, 0);
     EXPECT_TRUE(result.pixels.empty());
 }
 
-TEST_F(FramePipelineTest, 无RHIDevice时GetSceneTextureId返回零) {
+TEST_F(FramePipelineTest, WithoutRHIDeviceWhenGetSceneTextureIdReturnsZero) {
     EXPECT_EQ(pipeline.GetSceneTextureId(), 0u);
 }
 
-TEST_F(FramePipelineTest, 无RHIDevice时GetMainTextureId返回零) {
+TEST_F(FramePipelineTest, WithoutRHIDeviceWhenGetMainTextureIdReturnsZero) {
     EXPECT_EQ(pipeline.GetMainTextureId(), 0u);
 }

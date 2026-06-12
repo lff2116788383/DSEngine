@@ -205,6 +205,39 @@ int L_AppGetMouseScrollDy(lua_State* L) {
     return 1;
 }
 
+// app.get_gamepad_axis([gamepad_id=0], axis) -> number  （已应用死区）
+int L_AppGetGamepadAxis(lua_State* L) {
+    int gamepad_id = 0;
+    int axis = 0;
+    if (lua_gettop(L) >= 2) {
+        gamepad_id = static_cast<int>(luaL_checkinteger(L, 1));
+        axis = static_cast<int>(luaL_checkinteger(L, 2));
+    } else {
+        axis = static_cast<int>(luaL_checkinteger(L, 1));
+    }
+    lua_pushnumber(L, static_cast<lua_Number>(Input::GetGamepadAxis(gamepad_id, axis)));
+    return 1;
+}
+
+// app.is_gamepad_connected([gamepad_id=0]) -> bool
+int L_AppIsGamepadConnected(lua_State* L) {
+    int gamepad_id = static_cast<int>(luaL_optinteger(L, 1, 0));
+    lua_pushboolean(L, Input::IsGamepadConnected(gamepad_id));
+    return 1;
+}
+
+// app.set_gamepad_dead_zone(dead_zone)
+int L_AppSetGamepadDeadZone(lua_State* L) {
+    Input::SetGamepadDeadZone(static_cast<float>(luaL_checknumber(L, 1)));
+    return 0;
+}
+
+// app.get_gamepad_dead_zone() -> number
+int L_AppGetGamepadDeadZone(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Input::GetGamepadDeadZone()));
+    return 1;
+}
+
 int L_MetricsGetFps(lua_State* L) {
     float dt = Time::delta_time();
     float fps = (dt > 0.0f) ? (1.0f / dt) : 0.0f;
@@ -297,6 +330,10 @@ void RegisterAppBindings(lua_State* L) {
     set_fn("get_mouse_middle_down", L_AppGetMouseMiddleDown);
     set_fn("get_mouse_scroll_dx", L_AppGetMouseScrollDx);
     set_fn("get_mouse_scroll_dy", L_AppGetMouseScrollDy);
+    set_fn("get_gamepad_axis", L_AppGetGamepadAxis);
+    set_fn("is_gamepad_connected", L_AppIsGamepadConnected);
+    set_fn("set_gamepad_dead_zone", L_AppSetGamepadDeadZone);
+    set_fn("get_gamepad_dead_zone", L_AppGetGamepadDeadZone);
 }
 
 void RegisterMetricsBindings(lua_State* L) {

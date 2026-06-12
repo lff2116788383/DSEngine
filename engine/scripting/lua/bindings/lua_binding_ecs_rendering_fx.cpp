@@ -137,6 +137,56 @@ int L_EcsWorldToScreen(lua_State* L) {
     return 3;
 }
 
+// screen_to_world_ray(sx, sy) -> ox,oy,oz, dx,dy,dz | nil
+// 由屏幕像素用主相机反投影出世界空间拾取射线（起点=相机位置，方向已归一化）。
+// 无可用主相机时返回 nil。
+int L_EcsScreenToWorldRay(lua_State* L) {
+    float sx = helper::CheckFloat(L, 1);
+    float sy = helper::CheckFloat(L, 2);
+    float origin[3] = {0.0f, 0.0f, 0.0f};
+    float dir[3]    = {0.0f, 0.0f, 0.0f};
+    if (!dse_render_screen_to_world_ray(sx, sy, origin, dir)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    helper::PushVec3(L, glm::vec3(origin[0], origin[1], origin[2]));
+    helper::PushVec3(L, glm::vec3(dir[0], dir[1], dir[2]));
+    return 6;
+}
+
+// pick_entity(sx, sy, [max_dist=1000]) -> entity, hx,hy,hz, nx,ny,nz, dist | nil
+// 便捷拾取：屏幕像素 → 主相机射线 → 3D 物理 raycast，返回命中的实体及命中信息。
+// 无主相机或未命中返回 nil。需要场景内有 3D 物理碰撞体。
+int L_EcsPickEntity(lua_State* L) {
+    float sx = helper::CheckFloat(L, 1);
+    float sy = helper::CheckFloat(L, 2);
+    float max_dist = helper::OptFloat(L, 3, 1000.0f);
+
+    float origin[3] = {0.0f, 0.0f, 0.0f};
+    float dir[3]    = {0.0f, 0.0f, 0.0f};
+    if (!dse_render_screen_to_world_ray(sx, sy, origin, dir)) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    uint32_t hit_entity = 0;
+    float point[3]  = {0.0f, 0.0f, 0.0f};
+    float normal[3] = {0.0f, 0.0f, 0.0f};
+    float distance  = 0.0f;
+    const int hit = dse_physics3d_raycast(origin[0], origin[1], origin[2],
+                                          dir[0], dir[1], dir[2],
+                                          max_dist, &hit_entity, point, normal, &distance);
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    helper::PushEntity(L, static_cast<Entity>(static_cast<entt::id_type>(hit_entity)));
+    helper::PushVec3(L, glm::vec3(point[0], point[1], point[2]));
+    helper::PushVec3(L, glm::vec3(normal[0], normal[1], normal[2]));
+    helper::PushFloat(L, distance);
+    return 8;
+}
+
 
 // ============================================================
 // LOD
@@ -304,6 +354,8 @@ void RegisterEcsRenderingFxBindings(lua_State* L) {
         {"set_hair_enabled",          L_EcsSetHairEnabled},
         {"set_hair_lod",              L_EcsSetHairLod},
         {"world_to_screen",           L_EcsWorldToScreen},
+        {"screen_to_world_ray",       L_EcsScreenToWorldRay},
+        {"pick_entity",               L_EcsPickEntity},
     });
 }
 

@@ -90,6 +90,7 @@
 #include "editor_snapshot.h"
 #include "editor_selection_outline.h"
 #include "editor_physics_debug.h"
+#include "editor_gpu.h"
 #include "editor_asset_browser.h"
 #include "editor_prefab_override.h"
 #include "editor_animation_timeline.h"
@@ -103,6 +104,8 @@
 #include "editor_streaming_panel.h"
 #include "editor_curve_editor.h"
 #include "editor_visual_script.h"
+#include "editor_anim_retarget.h"
+#include "editor_crash.h"
 
 
 
@@ -226,6 +229,11 @@ bool EditorApp::Init(int argc, char* argv[]) {
     test_config_ = dse::editor::test::ParseEditorTestArgs(argc, argv);
     const bool headless = test_config_.headless;
     frames_remaining_ = headless ? test_config_.max_frames : -1;
+
+    // 尽早安装崩溃处理器，覆盖 glfwInit/ImGui/字体加载等引擎 Init 之前的早期阶段。
+    dse::editor::InstallEditorCrashHandler();
+    dse::editor::SetEditorCrashMetadata("phase", "startup");
+    dse::editor::AddEditorBreadcrumb("editor: init start");
 
 #if defined(_WIN32)
     if (headless) {
@@ -371,6 +379,16 @@ bool EditorApp::Init(int argc, char* argv[]) {
         return false;
     }
 
+    // 把引擎 RHI 设备注入编辑器 GPU 接入层：编辑器自建的零散 GPU 资源（资产缩略图等）
+    // 经此走引擎 RHI 抽象，不再直接调用 OpenGL。
+    dse::editor::SetEditorRhiDevice(engine_instance_->pipeline()->GetRhiDevice());
+
+    // 引擎 Init 内部以 app_name "DSEngine" 重新安装并重置了面包屑；此处重申编辑器身份，
+    // 之后再补充编辑器专属面包屑/元数据，确保崩溃报告标记为编辑器进程且带编辑器上下文。
+    dse::editor::InstallEditorCrashHandler();
+    dse::editor::SetEditorCrashMetadata("phase", "running");
+    dse::editor::AddEditorBreadcrumb("editor: engine initialized");
+
     EnsureEditorLocalizationData();
     dse::editor::InstallEditorLogSink();
 
@@ -421,6 +439,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
             World& world = engine_instance_->pipeline()->world();
             LoadScene(world.registry(), editor_settings.last_scene_path);
             dse::editor::SetCurrentScenePath(editor_settings.last_scene_path);
+            dse::editor::SetEditorCrashMetadata("scene", editor_settings.last_scene_path);
+            dse::editor::AddEditorBreadcrumb("editor: loaded scene " + editor_settings.last_scene_path);
         }
     }
 
@@ -519,6 +539,14 @@ void EditorApp::Run() {
     bool screenshot_taken = false;
 
     dse::editor::AutoSaveManager::Get().CheckRecovery();
+
+    // 上次会话若异常退出（存在崩溃报告），与 AutoSave 恢复一并提示，并把路径写入控制台日志。
+    if (const std::string prev = dse::editor::GetPreviousSessionCrashReport(); !prev.empty()) {
+        dse::editor::EditorLog(dse::editor::LogLevel::Warning,
+            "上次会话异常退出，崩溃报告: " + prev);
+        dse::editor::AddEditorBreadcrumb("editor: previous session crash report found");
+    }
+    dse::editor::AddEditorBreadcrumb("editor: entering main loop");
 
     if (!test_config_.replay_path.empty()) {
         dse::editor::EditorLog(dse::editor::LogLevel::Warning,
@@ -906,7 +934,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
         &show_anim_state_machine_,
         &show_lua_debugger_,
-        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_
+        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_,
+        &show_anim_retarget_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -987,6 +1016,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("Visual Script", &show_visual_script_)) {
             dse::editor::DrawVisualScriptEditor(ctx);
+        }
+        ImGui::End();
+    }
+
+    // Animation Retargeting panel
+    if (show_anim_retarget_) {
+        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Anim Retarget", &show_anim_retarget_)) {
+            dse::editor::DrawAnimRetargetPanel(ctx);
         }
         ImGui::End();
     }

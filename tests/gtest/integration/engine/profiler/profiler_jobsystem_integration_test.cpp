@@ -43,7 +43,7 @@ protected:
     }
 };
 
-TEST_F(ProfilerIntegrationTest, CPUProfiler采样JobSystem异步任务耗时) {
+TEST_F(ProfilerIntegrationTest, CPUProfilersamplingJobSystemAsynchronousTasksTakeTime) {
     cpu_profiler.BeginFrame();
 
     cpu_profiler.BeginSample("AsyncTask");
@@ -64,7 +64,7 @@ TEST_F(ProfilerIntegrationTest, CPUProfiler采样JobSystem异步任务耗时) {
     EXPECT_EQ(stats.at("AsyncTask").call_count, 1);
 }
 
-TEST_F(ProfilerIntegrationTest, CPUProfiler多线程并发采样安全) {
+TEST_F(ProfilerIntegrationTest, CPUProfilerMultiThreadedConcurrentSamplingSafety) {
     constexpr int kThreadCount = 4;
     constexpr int kSamplesPerThread = 50;
 
@@ -90,7 +90,7 @@ TEST_F(ProfilerIntegrationTest, CPUProfiler多线程并发采样安全) {
     EXPECT_EQ(total_calls, kThreadCount * kSamplesPerThread);
 }
 
-TEST_F(ProfilerIntegrationTest, RenderProfiler与CPUProfiler联合帧模拟) {
+TEST_F(ProfilerIntegrationTest, RenderProfilerAndCPUProfilerjointFrameSimulation) {
     for (int frame = 0; frame < 5; ++frame) {
         cpu_profiler.BeginFrame();
         render_profiler.BeginFrame();
@@ -125,7 +125,7 @@ TEST_F(ProfilerIntegrationTest, RenderProfiler与CPUProfiler联合帧模拟) {
     EXPECT_GE(render_acc.peak_draw_calls, 2);
 }
 
-TEST_F(ProfilerIntegrationTest, MemoryProfiler资产分配释放与泄漏检测) {
+TEST_F(ProfilerIntegrationTest, MemoryProfilerAssetAllocationReleaseAndLeakDetection) {
     memory_profiler.RecordAlloc("Texture", 1024 * 1024);
     memory_profiler.RecordAlloc("Mesh", 512 * 1024);
     memory_profiler.RecordAlloc("Audio", 256 * 1024);
@@ -149,7 +149,7 @@ TEST_F(ProfilerIntegrationTest, MemoryProfiler资产分配释放与泄漏检测)
     EXPECT_TRUE(leaks.empty());
 }
 
-TEST_F(ProfilerIntegrationTest, ChromeTrace导出包含完整帧数据) {
+TEST_F(ProfilerIntegrationTest, ChromeTraceExportContainsFullFrameData) {
     cpu_profiler.BeginFrame();
     cpu_profiler.BeginSample("Physics");
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -168,7 +168,7 @@ TEST_F(ProfilerIntegrationTest, ChromeTrace导出包含完整帧数据) {
     EXPECT_NE(mem_trace.find("TestBuffer"), std::string::npos);
 }
 
-TEST_F(ProfilerIntegrationTest, Profiler通过ServiceLocator跨模块访问) {
+TEST_F(ProfilerIntegrationTest, ProfilerpassServiceLocatorCrossModuleAccess) {
     auto shared_cpu = std::make_shared<CPUProfiler>();
     auto shared_render = std::make_shared<RenderProfiler>();
     auto shared_memory = std::make_shared<MemoryProfiler>();
@@ -196,7 +196,7 @@ TEST_F(ProfilerIntegrationTest, Profiler通过ServiceLocator跨模块访问) {
     EXPECT_EQ(mem->GetSnapshot().active_allocations, 1);
 }
 
-TEST_F(ProfilerIntegrationTest, 多帧累积统计准确性) {
+TEST_F(ProfilerIntegrationTest, MultiFrame) {
     for (int frame = 0; frame < 10; ++frame) {
         cpu_profiler.BeginFrame();
         cpu_profiler.BeginSample("Tick");

@@ -47,7 +47,7 @@ protected:
     }
 };
 
-TEST_F(LuaLifecycleSmokeTest, 50帧连续Tick不泄漏) {
+TEST_F(LuaLifecycleSmokeTest, Case50ContinuousFramesTickNoLeak) {
     LuaTempFile script("lifecycle_50f.lua", R"(
         local frame = 0
         function Awake() end
@@ -78,7 +78,7 @@ TEST_F(LuaLifecycleSmokeTest, 50帧连续Tick不泄漏) {
     EXPECT_EQ(GetLuaMemoryUsage(), 0u);
 }
 
-TEST_F(LuaLifecycleSmokeTest, 动态创建实体多帧稳定) {
+TEST_F(LuaLifecycleSmokeTest, CreateEntityMultiFrameStable) {
     LuaTempFile script("lifecycle_spawn.lua", R"(
         local spawned = 0
         function Awake() end
@@ -112,7 +112,7 @@ TEST_F(LuaLifecycleSmokeTest, 动态创建实体多帧稳定) {
     ShutdownLuaRuntime();
 }
 
-TEST_F(LuaLifecycleSmokeTest, 语法错误脚本不崩溃) {
+TEST_F(LuaLifecycleSmokeTest, SyntaxErrorDoesNotCrash) {
     LuaTempFile script("lifecycle_error.lua", R"(
         function Awake()
             -- intentional syntax error

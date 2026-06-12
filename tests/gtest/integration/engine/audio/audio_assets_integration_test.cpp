@@ -39,7 +39,7 @@ private:
 };
 }
 
-TEST(AudioAssetsIntegrationTest, AssetManager加载AudioClip并缓存弱引用) {
+TEST(AudioAssetsIntegrationTest, AssetManagerLoadAudioClipandCacheWeakReferences) {
     AudioAssetsTempDir temp;
     temp.WriteBinary("clip.bin", {0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4});
 
@@ -55,7 +55,7 @@ TEST(AudioAssetsIntegrationTest, AssetManager加载AudioClip并缓存弱引用) 
     EXPECT_EQ(clip_a.get(), clip_b.get());
 }
 
-TEST(AudioAssetsIntegrationTest, 不存在AudioClip返回nullptr) {
+TEST(AudioAssetsIntegrationTest, DoesNotExistAudioClipReturnsnullptr) {
     AudioAssetsTempDir temp;
     AssetManager assets;
     assets.ConfigureDataRoot(temp.Root().string());
@@ -63,12 +63,12 @@ TEST(AudioAssetsIntegrationTest, 不存在AudioClip返回nullptr) {
     EXPECT_EQ(assets.LoadAudioClip("missing.wav"), nullptr);
 }
 
-TEST(AudioAssetsIntegrationTest, AudioSystem初始化拒绝空AssetManager) {
+TEST(AudioAssetsIntegrationTest, AudioSystemInitializationRejectsNullAssetManager) {
     AudioSystem audio;
     EXPECT_THROW(audio.Initialize(nullptr), std::runtime_error);
 }
 
-TEST(AudioAssetsIntegrationTest, 未初始化Update保持AudioSource安全状态) {
+TEST(AudioAssetsIntegrationTest, UninitializedUpdateAudioSourceSafetyState) {
     World world;
     AudioSystem audio;
 
@@ -82,7 +82,7 @@ TEST(AudioAssetsIntegrationTest, 未初始化Update保持AudioSource安全状态
     EXPECT_EQ(source.runtime_handle, 0u);
 }
 
-TEST(AudioAssetsIntegrationTest, 射线回调可注入并在未初始化Update时保持安全) {
+TEST(AudioAssetsIntegrationTest, InjectableexistUninitializedUpdateWhenSafety) {
     World world;
     AudioSystem audio;
     int raycast_calls = 0;

@@ -23,7 +23,7 @@ using namespace dse;
 
 #ifdef DSE_ENABLE_NAVMESH
 
-TEST(NavMeshAgentComponentTest, 默认值) {
+TEST(NavMeshAgentComponentTest, DefaultValues) {
     NavMeshAgentComponent nac;
     EXPECT_FLOAT_EQ(nac.speed, 3.5f);
     EXPECT_FLOAT_EQ(nac.acceleration, 8.0f);
@@ -38,7 +38,7 @@ TEST(NavMeshAgentComponentTest, 默认值) {
     EXPECT_EQ(nac.current_waypoint, 0);
 }
 
-TEST(NavMeshAgentComponentTest, 设置目标) {
+TEST(NavMeshAgentComponentTest, SetUp) {
     NavMeshAgentComponent nac;
     nac.destination = glm::vec3(10.0f, 0.0f, 20.0f);
     nac.path_pending = true;
@@ -48,7 +48,7 @@ TEST(NavMeshAgentComponentTest, 设置目标) {
     EXPECT_FLOAT_EQ(nac.destination.x, 10.0f);
 }
 
-TEST(NavAgentSystemTest, 默认构造) {
+TEST(NavAgentSystemTest, Default) {
     gameplay3d::NavAgentSystem sys;
     (void)sys;
     SUCCEED();
@@ -56,7 +56,7 @@ TEST(NavAgentSystemTest, 默认构造) {
 
 #else
 
-TEST(NavAgentSystemTest, NavMesh未启用_编译验证) {
+TEST(NavAgentSystemTest, NavMeshNotEnabled_CompilationVerification) {
     GTEST_SKIP() << "DSE_ENABLE_NAVMESH not defined";
 }
 

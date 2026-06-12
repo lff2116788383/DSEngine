@@ -22,7 +22,7 @@ using namespace gameplay3d;
 // FootIK3DComponent 默认值
 // ============================================================
 
-TEST(FootIKTest, FootIK3DComponent默认值) {
+TEST(FootIKTest, FootIK3DComponentDefaultValues) {
     FootIK3DComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_TRUE(comp.feet.empty());
@@ -30,7 +30,7 @@ TEST(FootIKTest, FootIK3DComponent默认值) {
     EXPECT_FLOAT_EQ(comp.max_pelvis_offset, 0.3f);
 }
 
-TEST(FootIKTest, FootIKConfig默认值) {
+TEST(FootIKTest, FootIKConfigDefaultValues) {
     FootIKConfig config;
     EXPECT_TRUE(config.name.empty());
     EXPECT_TRUE(config.hip_bone.empty());
@@ -44,12 +44,12 @@ TEST(FootIKTest, FootIKConfig默认值) {
 // 系统 Update 基本功能
 // ============================================================
 
-TEST(FootIKTest, 空World调用Update不崩溃) {
+TEST(FootIKTest, EmptyWorldCallsUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(FootIKSystem::Update(world, 0.016f));
 }
 
-TEST(FootIKTest, 有组件但无有效缓存不崩溃) {
+TEST(FootIKTest, WithComponentWithoutValidCacheDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(e);
@@ -59,7 +59,7 @@ TEST(FootIKTest, 有组件但无有效缓存不崩溃) {
     EXPECT_NO_THROW(FootIKSystem::Update(world, 0.016f));
 }
 
-TEST(FootIKTest, 有组件但无Transform不崩溃) {
+TEST(FootIKTest, WithComponentWithoutTransformDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(e);
@@ -73,7 +73,7 @@ TEST(FootIKTest, 有组件但无Transform不崩溃) {
 // 坐标系转换测试
 // ============================================================
 
-TEST(FootIKTest, 坐标系转换_世界空间到模型空间) {
+TEST(FootIKTest, Transition_EmptyToEmpty) {
     glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 5.0f, 0.0f));
     glm::mat4 inv_world = glm::inverse(entity_world);
 
@@ -85,7 +85,7 @@ TEST(FootIKTest, 坐标系转换_世界空间到模型空间) {
     EXPECT_NEAR(model_pos.z, 2.0f, 0.01f);
 }
 
-TEST(FootIKTest, 坐标系转换_模型空间到世界空间) {
+TEST(FootIKTest, Transition_EmptyToEmpty_2) {
     glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 5.0f, 0.0f));
 
     glm::vec3 model_pos(5.0f, 2.0f, 2.0f);
@@ -100,7 +100,7 @@ TEST(FootIKTest, 坐标系转换_模型空间到世界空间) {
 // 骨盆调整逻辑测试
 // ============================================================
 
-TEST(FootIKTest, 骨盆调整_最低脚下移) {
+TEST(FootIKTest, Case_Case) {
     // 模拟脚部需要下移的情况
     float min_foot_delta = -0.3f; // 最低脚需要下移 0.3 米
     float max_pelvis_offset = 0.5f;
@@ -113,7 +113,7 @@ TEST(FootIKTest, 骨盆调整_最低脚下移) {
     EXPECT_NEAR(pelvis_drop * pelvis_weight, -0.15f, 0.01f);
 }
 
-TEST(FootIKTest, 骨盆调整_不下移_当脚部上移) {
+TEST(FootIKTest, Case_Not_Case) {
     float min_foot_delta = 0.2f; // 脚部需要上移，不触发骨盆下移
     float max_pelvis_offset = 0.5f;
     float pelvis_weight = 0.5f;
@@ -128,7 +128,7 @@ TEST(FootIKTest, 骨盆调整_不下移_当脚部上移) {
 // 地面射线检测 fallback 测试
 // ============================================================
 
-TEST(FootIKTest, 地面高度检测_无物理系统返回原高度) {
+TEST(FootIKTest, Case_WithoutSystemReturns) {
     glm::vec3 world_pos(10.0f, 5.0f, 2.0f);
     float max_distance = 10.0f;
 
@@ -138,7 +138,7 @@ TEST(FootIKTest, 地面高度检测_无物理系统返回原高度) {
     EXPECT_NEAR(ground_height, 5.0f, 0.01f);
 }
 
-TEST(FootIKTest, 地面高度检测_无射线命中返回原高度) {
+TEST(FootIKTest, Case_WithouthitReturns) {
     glm::vec3 world_pos(10.0f, 5.0f, 2.0f);
     float max_distance = 10.0f;
 

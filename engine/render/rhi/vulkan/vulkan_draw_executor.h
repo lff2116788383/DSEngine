@@ -35,65 +35,20 @@ class VulkanPipelineStateManager;
 class VulkanShaderManager;
 struct VulkanShaderProgram;
 
-/// PerFrame UBO 数据布局（与着色器 set=0, binding=0 对齐）
-struct VulkanPerFrameUBO {
-    glm::mat4 vp;
-    glm::mat4 view;
-    glm::vec4 camera_pos;     ///< xyz=position, w=global_wetness
-    glm::vec4 foliage_wind;   ///< x=time, y=strength, z=wind_dir_x, w=wind_dir_z
-    glm::vec4 foliage_push;   ///< xyz=character_pos, w=push_radius
-};
+/// PerFrame UBO 数据布局（与着色器 set=0, binding=0 对齐；布局与共享 PerFrameUBO 一致，直接复用）
+using VulkanPerFrameUBO = PerFrameUBO;
 
-/// PerScene UBO 数据布局（与着色器 set=1, binding=0 对齐）
-struct VulkanPerSceneUBO {
-    glm::vec4 light_dir_and_enabled;    ///< xyz=direction, w=enabled
-    glm::vec4 light_color_and_ambient;  ///< xyz=color, w=ambient
-    glm::vec4 light_params;             ///< x=intensity, y=shadow_strength, z=receive_shadow, w=unused
-    glm::vec4 cascade_splits;           ///< xyz=cascade_splits, w=unused
-    glm::mat4 light_space_matrices[3];
-    glm::vec4 shadow_atlas_regions[3];  ///< per-cascade atlas region: xy=UV scale, zw=UV offset
-};
+/// PerScene UBO 数据布局（与着色器 set=1, binding=0 对齐；布局与共享 PerSceneUBO 一致，直接复用）
+using VulkanPerSceneUBO = PerSceneUBO;
 
-/// PerMaterial UBO 数据布局（与着色器 set=2, binding=0 对齐）
-struct VulkanPerMaterialUBO {
-    glm::vec4 albedo;           ///< xyz=albedo, w=metallic
-    glm::vec4 roughness_ao;     ///< x=roughness, y=ao, z=normal_strength, w=alpha_cutoff
-    glm::vec4 emissive;         ///< xyz=emissive, w=alpha_test
-    glm::vec4 flags;            ///< x=has_normal_map, y=has_metallic_roughness_map, z=has_emissive_map, w=has_occlusion_map
-    glm::vec4 extra_params;     ///< x=sss_strength, y=clear_coat, z=clear_coat_roughness, w=anisotropy
-    glm::vec4 extra_params2;    ///< x=pom_height_scale, y/z/w=sss_tint RGB
-    glm::vec4 toon_shadow_color; ///< xyz=shadow tint, w=shadow_threshold
-    glm::vec4 toon_params;       ///< x=shadow_softness, y=specular_size, z=specular_strength, w=rim_strength
-};
+/// PerMaterial UBO 数据布局（与着色器 set=2, binding=0 对齐；布局与共享 PerMaterialUBO 一致，直接复用）
+using VulkanPerMaterialUBO = PerMaterialUBO;
 
-/// PointLights UBO（set=1, binding=1，与 GLSL std140 PointLights block 对齐）
-struct VulkanPointLightsUBO {
-    int  u_point_light_count;
-    int  _pad0, _pad1, _pad2;
-    struct Entry {
-        glm::vec3 color;     float intensity;
-        glm::vec3 position;  float radius;
-        int cast_shadow;     int shadow_index;
-        glm::vec2 _pad;
-    } lights[64];
-};
-static_assert(sizeof(VulkanPointLightsUBO) % 16 == 0,
-              "VulkanPointLightsUBO must be 16B aligned");
+/// PointLights UBO（set=1, binding=1，与 GLSL std140 PointLights block 对齐；布局与共享 PointLightsUBO 一致，直接复用）
+using VulkanPointLightsUBO = PointLightsUBO;
 
-/// SpotLights UBO（set=1, binding=2，与 GLSL std140 SpotLights block 对齐）
-struct VulkanSpotLightsUBO {
-    int  u_spot_light_count;
-    int  _pad0, _pad1, _pad2;
-    struct Entry {
-        glm::vec3 color;       float intensity;
-        glm::vec3 position;    float radius;
-        glm::vec3 direction;   float inner_cone;
-        float outer_cone;      int cast_shadow;
-        int shadow_index;      float _pad2;
-    } lights[64];
-};
-static_assert(sizeof(VulkanSpotLightsUBO) % 16 == 0,
-              "VulkanSpotLightsUBO must be 16B aligned");
+/// SpotLights UBO（set=1, binding=2，与 GLSL std140 SpotLights block 对齐；布局与共享 SpotLightsUBO 一致，直接复用）
+using VulkanSpotLightsUBO = SpotLightsUBO;
 
 /**
  * @class VulkanDrawExecutor

@@ -27,13 +27,13 @@ using namespace dse::gameplay2d;
 // Phase 1: AudioListenerComponent
 // ============================================================
 
-TEST(AudioListenerComponentTest, 默认值) {
+TEST(AudioListenerComponentTest, DefaultValues) {
     AudioListenerComponent listener;
     EXPECT_TRUE(listener.enabled);
     EXPECT_EQ(listener.listener_index, 0u);
 }
 
-TEST(AudioListenerComponentTest, 字段修改) {
+TEST(AudioListenerComponentTest, FieldModification) {
     AudioListenerComponent listener;
     listener.enabled = false;
     listener.listener_index = 2;
@@ -41,7 +41,7 @@ TEST(AudioListenerComponentTest, 字段修改) {
     EXPECT_EQ(listener.listener_index, 2u);
 }
 
-TEST(AudioListenerComponentTest, 挂载到ECS实体) {
+TEST(AudioListenerComponentTest, MountToECSEntity) {
     entt::registry registry;
     auto entity = registry.create();
     registry.emplace<AudioListenerComponent>(entity);
@@ -58,7 +58,7 @@ TEST(AudioListenerComponentTest, 挂载到ECS实体) {
     EXPECT_FLOAT_EQ(transform.position.z, 3.0f);
 }
 
-TEST(AudioListenerComponentTest, 监听器方向来自旋转四元数) {
+TEST(AudioListenerComponentTest, Toward) {
     TransformComponent transform;
     transform.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // identity
     glm::vec3 forward = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
@@ -72,7 +72,7 @@ TEST(AudioListenerComponentTest, 监听器方向来自旋转四元数) {
     EXPECT_NEAR(up.z, 0.0f, 1e-5f);
 }
 
-TEST(AudioListenerComponentTest, 旋转90度Y轴方向正确) {
+TEST(AudioListenerComponentTest, Case90YTowardCorrect) {
     TransformComponent transform;
     // 绕 Y 轴旋转 90 度
     transform.rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -86,7 +86,7 @@ TEST(AudioListenerComponentTest, 旋转90度Y轴方向正确) {
     EXPECT_NEAR(up.y, 1.0f, 1e-4f);
 }
 
-TEST(AudioListenerComponentTest, Camera3D共存兼容) {
+TEST(AudioListenerComponentTest, Camera3DCoexistenceAndCompatibility) {
     entt::registry registry;
     auto entity = registry.create();
     registry.emplace<AudioListenerComponent>(entity);
@@ -97,7 +97,7 @@ TEST(AudioListenerComponentTest, Camera3D共存兼容) {
     EXPECT_TRUE(has_all);
 }
 
-TEST(AudioListenerComponentTest, Camera3D回退查找) {
+TEST(AudioListenerComponentTest, Camera3DFallbackSearch) {
     entt::registry registry;
     auto cam_entity = registry.create();
     registry.emplace<dse::Camera3DComponent>(cam_entity);
@@ -125,30 +125,30 @@ TEST(AudioListenerComponentTest, Camera3D回退查找) {
 // Phase 2: AudioAttenuationModel
 // ============================================================
 
-TEST(AudioAttenuationModelTest, 枚举值) {
+TEST(AudioAttenuationModelTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Inverse), 0);
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Linear), 1);
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Exponential), 2);
 }
 
-TEST(AudioAttenuationModelTest, 默认衰减模型为Inverse) {
+TEST(AudioAttenuationModelTest, DefaultDecaysIsInverse) {
     AudioSourceComponent audio;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Inverse);
 }
 
-TEST(AudioAttenuationModelTest, 可设置为Linear) {
+TEST(AudioAttenuationModelTest, CansetUpIsLinear) {
     AudioSourceComponent audio;
     audio.attenuation_model = AudioAttenuationModel::Linear;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Linear);
 }
 
-TEST(AudioAttenuationModelTest, 可设置为Exponential) {
+TEST(AudioAttenuationModelTest, CansetUpIsExponential) {
     AudioSourceComponent audio;
     audio.attenuation_model = AudioAttenuationModel::Exponential;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Exponential);
 }
 
-TEST(AudioAttenuationModelTest, 空间化参数组合) {
+TEST(AudioAttenuationModelTest, EmptyParameterscombination) {
     AudioSourceComponent audio;
     audio.spatial_enabled = true;
     audio.min_distance = 2.0f;
@@ -167,13 +167,13 @@ TEST(AudioAttenuationModelTest, 空间化参数组合) {
 // Phase 3: Occlusion
 // ============================================================
 
-TEST(AudioOcclusionTest, 默认遮挡关闭) {
+TEST(AudioOcclusionTest, DefaultShutdown) {
     AudioSourceComponent audio;
     EXPECT_FALSE(audio.occlusion_enabled);
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 0.2f);
 }
 
-TEST(AudioOcclusionTest, 遮挡字段可修改) {
+TEST(AudioOcclusionTest, CanRevise) {
     AudioSourceComponent audio;
     audio.occlusion_enabled = true;
     audio.occlusion_factor = 0.5f;
@@ -181,7 +181,7 @@ TEST(AudioOcclusionTest, 遮挡字段可修改) {
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 0.5f);
 }
 
-TEST(AudioOcclusionTest, 遮挡因子边界值) {
+TEST(AudioOcclusionTest, Because) {
     AudioSourceComponent audio;
     audio.occlusion_factor = 0.0f;
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 0.0f);
@@ -189,13 +189,13 @@ TEST(AudioOcclusionTest, 遮挡因子边界值) {
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 1.0f);
 }
 
-TEST(AudioOcclusionTest, SetRaycastFunction空回调不崩溃) {
+TEST(AudioOcclusionTest, SetRaycastFunctionEmptyCallbackDoesNotCrash) {
     AudioSystem audio;
     audio.SetRaycastFunction(nullptr);
     // 空回调表示禁用遮挡检测，不应崩溃
 }
 
-TEST(AudioOcclusionTest, SetRaycastFunction设置回调不崩溃) {
+TEST(AudioOcclusionTest, SetRaycastFunctionSetCallbackWithoutCrashing) {
     AudioSystem audio;
     audio.SetRaycastFunction([](const glm::vec3&, const glm::vec3&, float) {
         AudioRaycastResult r;
@@ -205,7 +205,7 @@ TEST(AudioOcclusionTest, SetRaycastFunction设置回调不崩溃) {
     });
 }
 
-TEST(AudioOcclusionTest, 遮挡需要空间化启用) {
+TEST(AudioOcclusionTest, EmptyEnabled) {
     AudioSourceComponent audio;
     audio.spatial_enabled = false;
     audio.occlusion_enabled = true;
@@ -215,7 +215,7 @@ TEST(AudioOcclusionTest, 遮挡需要空间化启用) {
     EXPECT_TRUE(audio.occlusion_enabled);
 }
 
-TEST(AudioOcclusionTest, 完整3D音源配置) {
+TEST(AudioOcclusionTest, Case3DConfiguration) {
     AudioSourceComponent audio;
     audio.spatial_enabled = true;
     audio.min_distance = 1.0f;
@@ -237,7 +237,7 @@ TEST(AudioOcclusionTest, 完整3D音源配置) {
 // AudioSystem 无后端测试
 // ============================================================
 
-TEST(AudioSystem3DTest, 未初始化时Update不崩溃) {
+TEST(AudioSystem3DTest, WhenNotInitializedUpdateDoesNotCrash) {
     AudioSystem audio;
     entt::registry registry;
     auto entity = registry.create();
@@ -246,7 +246,7 @@ TEST(AudioSystem3DTest, 未初始化时Update不崩溃) {
     audio.Update(registry, 0.016f);
 }
 
-TEST(AudioSystem3DTest, 未初始化时SetRaycastFunction不崩溃) {
+TEST(AudioSystem3DTest, WhenNotInitializedSetRaycastFunctionDoesNotCrash) {
     AudioSystem audio;
     audio.SetRaycastFunction(nullptr);
     audio.Shutdown();

@@ -10,13 +10,13 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/script.h"
 
-TEST(ScriptComponentTest, 默认值) {
+TEST(ScriptComponentTest, DefaultValues) {
     ScriptComponent script;
     EXPECT_TRUE(script.script_path.empty());
     EXPECT_TRUE(script.enabled);
 }
 
-TEST(ScriptComponentTest, 设置脚本路径) {
+TEST(ScriptComponentTest, SetUp) {
     ScriptComponent script;
     script.script_path = "scripts/player_controller.lua";
     script.enabled = false;
@@ -24,7 +24,7 @@ TEST(ScriptComponentTest, 设置脚本路径) {
     EXPECT_FALSE(script.enabled);
 }
 
-TEST(LuaScriptComponentTest, 默认值) {
+TEST(LuaScriptComponentTest, DefaultValues) {
     LuaScriptComponent lua;
     EXPECT_TRUE(lua.script_path.empty());
     EXPECT_FALSE(lua.is_initialized);

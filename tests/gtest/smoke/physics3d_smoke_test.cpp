@@ -18,11 +18,8 @@
 
 #include <gtest/gtest.h>
 
-#if !defined(DSE_ENABLE_PHYSX)
-TEST(Physics3DSmokeTest, PhysX未启用_跳过全部) {
-    GTEST_SKIP() << "DSE_ENABLE_PHYSX not defined";
-}
-#else
+// PhysX 关闭时整文件不注册任何用例（编译期排除），不再保留占位 skip 哨兵。
+#if defined(DSE_ENABLE_PHYSX)
 
 #include "engine/physics/physics3d/physics3d_system.h"
 #include "engine/ecs/world.h"
@@ -83,7 +80,7 @@ protected:
 
 // ---- 测试用例 ----
 
-TEST_F(Physics3DSmokeTest, 动态刚体受重力下落) {
+TEST_F(Physics3DSmokeTest, TestCase2) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 10.0f, 0.0f));
 
     StepN(60); // 1 秒
@@ -93,7 +90,7 @@ TEST_F(Physics3DSmokeTest, 动态刚体受重力下落) {
     EXPECT_LT(t.position.y, 6.0f);
 }
 
-TEST_F(Physics3DSmokeTest, 静态地面阻挡下落) {
+TEST_F(Physics3DSmokeTest, TestCase3) {
     CreateStaticGround(0.0f);
     auto box = CreateDynamicBox(glm::vec3(0.0f, 5.0f, 0.0f));
 
@@ -105,7 +102,7 @@ TEST_F(Physics3DSmokeTest, 静态地面阻挡下落) {
     EXPECT_LT(t.position.y, 3.0f);  // 应该已下落
 }
 
-TEST_F(Physics3DSmokeTest, Raycast命中刚体) {
+TEST_F(Physics3DSmokeTest, RaycasthitRigidBody) {
     CreateDynamicBox(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(2.0f));
 
     StepN(1); // 让 PhysX 创建 actor
@@ -119,7 +116,7 @@ TEST_F(Physics3DSmokeTest, Raycast命中刚体) {
     EXPECT_LT(result.distance, 15.0f);
 }
 
-TEST_F(Physics3DSmokeTest, AddImpulse施加冲量) {
+TEST_F(Physics3DSmokeTest, AddImpulseApplyImpulse) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 10.0f, 0.0f));
 
     StepN(1); // 创建 actor
@@ -134,7 +131,7 @@ TEST_F(Physics3DSmokeTest, AddImpulse施加冲量) {
     EXPECT_GT(t.position.y, 5.0f);
 }
 
-TEST_F(Physics3DSmokeTest, 碰撞事件产生) {
+TEST_F(Physics3DSmokeTest, Event) {
     CreateStaticGround(0.0f);
     CreateDynamicBox(glm::vec3(0.0f, 2.0f, 0.0f));
 
@@ -150,7 +147,7 @@ TEST_F(Physics3DSmokeTest, 碰撞事件产生) {
     EXPECT_TRUE(has_collision);
 }
 
-TEST_F(Physics3DSmokeTest, 多帧连续模拟稳定性) {
+TEST_F(Physics3DSmokeTest, MultiContinuousFramesStable) {
     CreateStaticGround(0.0f);
     for (int i = 0; i < 5; ++i) {
         CreateDynamicBox(glm::vec3(static_cast<float>(i) * 2.0f, 10.0f, 0.0f));
@@ -160,7 +157,7 @@ TEST_F(Physics3DSmokeTest, 多帧连续模拟稳定性) {
     EXPECT_NO_THROW(StepN(600));
 }
 
-TEST_F(Physics3DSmokeTest, RemoveActor安全移除) {
+TEST_F(Physics3DSmokeTest, RemoveActorsafeRemoval) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 5.0f, 0.0f));
 
     StepN(1); // 创建 actor
@@ -171,7 +168,7 @@ TEST_F(Physics3DSmokeTest, RemoveActor安全移除) {
     EXPECT_NO_THROW(StepN(60));
 }
 
-TEST_F(Physics3DSmokeTest, Raycast空场景未命中) {
+TEST_F(Physics3DSmokeTest, RaycastEmptySceneMiss) {
     StepN(1);
     auto result = sys_.Raycast(
         glm::vec3(0.0f, 0.0f, 0.0f),

@@ -48,7 +48,7 @@ protected:
     void TearDown() override { sys.Shutdown(); }
 };
 
-TEST_F(Physics2DJointIntegrationTest, 铰链关节创建成功) {
+TEST_F(Physics2DJointIntegrationTest, ChainCreateSucceeds) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -65,7 +65,7 @@ TEST_F(Physics2DJointIntegrationTest, 铰链关节创建成功) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 距离关节创建成功) {
+TEST_F(Physics2DJointIntegrationTest, CreateSucceeds) {
     auto bodyA   = MakeBody(world, 0.0f, 5.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -83,7 +83,7 @@ TEST_F(Physics2DJointIntegrationTest, 距离关节创建成功) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 棱柱关节创建成功) {
+TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_2) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 0.0f, 1.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -104,7 +104,7 @@ TEST_F(Physics2DJointIntegrationTest, 棱柱关节创建成功) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 焊接关节创建成功) {
+TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_3) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Dynamic);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -118,7 +118,7 @@ TEST_F(Physics2DJointIntegrationTest, 焊接关节创建成功) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, DestroyJoint后指针置空) {
+TEST_F(Physics2DJointIntegrationTest, DestroyJointTheBackPointerIsSetToEmpty) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -135,7 +135,7 @@ TEST_F(Physics2DJointIntegrationTest, DestroyJoint后指针置空) {
     EXPECT_EQ(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 缺刚体时关节不创建) {
+TEST_F(Physics2DJointIntegrationTest, MissingWhenDoesNotCreate) {
     auto bodyA    = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     Entity emptyE = world.CreateEntity();    // 无 RigidBody2DComponent
     Entity jEnt   = world.CreateEntity();
@@ -149,7 +149,7 @@ TEST_F(Physics2DJointIntegrationTest, 缺刚体时关节不创建) {
     EXPECT_EQ(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
-TEST_F(Physics2DJointIntegrationTest, Reinit后关节重建) {
+TEST_F(Physics2DJointIntegrationTest, ReinitposteriorJointReconstruction) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt  = world.CreateEntity();
@@ -169,7 +169,7 @@ TEST_F(Physics2DJointIntegrationTest, Reinit后关节重建) {
 // 马达运行时调速 API
 // ============================================================
 
-TEST_F(Physics2DJointIntegrationTest, 铰链马达运行时调速) {
+TEST_F(Physics2DJointIntegrationTest, ChainWhen) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt = world.CreateEntity();
@@ -192,7 +192,7 @@ TEST_F(Physics2DJointIntegrationTest, 铰链马达运行时调速) {
     EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_torque, 20.0f);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 棱柱马达运行时调速) {
+TEST_F(Physics2DJointIntegrationTest, When) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 0.0f, 1.0f, RigidBody2DType::Dynamic);
     Entity jEnt = world.CreateEntity();
@@ -216,7 +216,7 @@ TEST_F(Physics2DJointIntegrationTest, 棱柱马达运行时调速) {
     EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_force, 100.0f);
 }
 
-TEST_F(Physics2DJointIntegrationTest, 马达调速对无效实体不崩溃) {
+TEST_F(Physics2DJointIntegrationTest, InvalidEntityDoesNotCrash) {
     sys.Init(world);
     // 无效实体 — 应静默返回
     sys.SetRevoluteMotorSpeed(world, entt::null, 100.0f);
@@ -226,7 +226,7 @@ TEST_F(Physics2DJointIntegrationTest, 马达调速对无效实体不崩溃) {
     SUCCEED();  // 不崩溃即通过
 }
 
-TEST_F(Physics2DJointIntegrationTest, 马达调速对类型不匹配关节不崩溃) {
+TEST_F(Physics2DJointIntegrationTest, TypeNotDoesNotCrash) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
     Entity jEnt = world.CreateEntity();

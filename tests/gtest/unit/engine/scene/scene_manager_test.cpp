@@ -58,12 +58,12 @@ protected:
     }
 };
 
-TEST_F(SceneManagerTest, 初始状态无已加载子场景) {
+TEST_F(SceneManagerTest, StateWithoutAlreadyLoadScene) {
     EXPECT_EQ(mgr.LoadedCount(), 0u);
     EXPECT_TRUE(mgr.GetLoadedSubScenes().empty());
 }
 
-TEST_F(SceneManagerTest, 同步加载子场景) {
+TEST_F(SceneManagerTest, SynchronousLoadScene) {
     auto path = WriteTempScene("dse_mgr_sync.dscene", kSceneA);
     EXPECT_TRUE(mgr.LoadSubScene(path.string()));
     EXPECT_EQ(mgr.LoadedCount(), 1u);
@@ -72,7 +72,7 @@ TEST_F(SceneManagerTest, 同步加载子场景) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 重复加载同路径返回false) {
+TEST_F(SceneManagerTest, LoadReturnsfalse) {
     auto path = WriteTempScene("dse_mgr_dup.dscene", kSceneA);
     EXPECT_TRUE(mgr.LoadSubScene(path.string()));
     EXPECT_FALSE(mgr.LoadSubScene(path.string()));
@@ -80,7 +80,7 @@ TEST_F(SceneManagerTest, 重复加载同路径返回false) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 卸载子场景) {
+TEST_F(SceneManagerTest, Scene) {
     auto path = WriteTempScene("dse_mgr_unload.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
     mgr.UnloadSubScene(path.string());
@@ -90,12 +90,12 @@ TEST_F(SceneManagerTest, 卸载子场景) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 卸载不存在的路径无副作用) {
+TEST_F(SceneManagerTest, DoesNotExistWithout) {
     mgr.UnloadSubScene("nonexistent.dscene");
     EXPECT_EQ(mgr.LoadedCount(), 0u);
 }
 
-TEST_F(SceneManagerTest, 多子场景加载卸载) {
+TEST_F(SceneManagerTest, MultiSceneLoad) {
     auto pathA = WriteTempScene("dse_mgr_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_b.dscene", kSceneB);
 
@@ -112,7 +112,7 @@ TEST_F(SceneManagerTest, 多子场景加载卸载) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneManagerTest, UnloadAll清空所有子场景) {
+TEST_F(SceneManagerTest, UnloadAllClearAllSubScenes) {
     auto pathA = WriteTempScene("dse_mgr_all_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_all_b.dscene", kSceneB);
 
@@ -126,7 +126,7 @@ TEST_F(SceneManagerTest, UnloadAll清空所有子场景) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneManagerTest, GetLoadedSubScenes返回路径列表) {
+TEST_F(SceneManagerTest, GetLoadedSubScenesReturnPathList) {
     auto pathA = WriteTempScene("dse_mgr_list_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_list_b.dscene", kSceneB);
 
@@ -139,7 +139,7 @@ TEST_F(SceneManagerTest, GetLoadedSubScenes返回路径列表) {
     std::filesystem::remove(pathB);
 }
 
-TEST_F(SceneManagerTest, GetSubScene返回对应SubScene) {
+TEST_F(SceneManagerTest, GetSubSceneReturnCorrespondingSubScene) {
     auto path = WriteTempScene("dse_mgr_get.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
     const SubScene* sub = mgr.GetSubScene(path.string());
@@ -150,7 +150,7 @@ TEST_F(SceneManagerTest, GetSubScene返回对应SubScene) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, EventBus收到SubSceneLoaded事件) {
+TEST_F(SceneManagerTest, EventBusreceiveSubSceneLoadedevent) {
     auto path = WriteTempScene("dse_mgr_evt_load.dscene", kSceneA);
     bool received = false;
     std::string received_path;
@@ -166,7 +166,7 @@ TEST_F(SceneManagerTest, EventBus收到SubSceneLoaded事件) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, EventBus收到SubSceneUnloaded事件) {
+TEST_F(SceneManagerTest, EventBusreceiveSubSceneUnloadedevent) {
     auto path = WriteTempScene("dse_mgr_evt_unload.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
     bool received = false;
@@ -178,7 +178,7 @@ TEST_F(SceneManagerTest, EventBus收到SubSceneUnloaded事件) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 异步加载无JobSystem回退同步) {
+TEST_F(SceneManagerTest, LoadWithoutJobSystemrollbacksynchronous) {
     mgr.SetJobSystem(nullptr);
     auto path = WriteTempScene("dse_mgr_async_fallback.dscene", kSceneA);
     mgr.LoadSubSceneAsync(path.string());
@@ -188,7 +188,7 @@ TEST_F(SceneManagerTest, 异步加载无JobSystem回退同步) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 异步加载有JobSystem) {
+TEST_F(SceneManagerTest, LoadWithJobSystem) {
     JobSystem js;
     js.Init();
     mgr.SetJobSystem(&js);
@@ -209,12 +209,12 @@ TEST_F(SceneManagerTest, 异步加载有JobSystem) {
     std::filesystem::remove(path);
 }
 
-TEST_F(SceneManagerTest, 加载失败文件不影响状态) {
+TEST_F(SceneManagerTest, LoadFailsNotState) {
     EXPECT_FALSE(mgr.LoadSubScene("this_file_does_not_exist.dscene"));
     EXPECT_EQ(mgr.LoadedCount(), 0u);
 }
 
-TEST_F(SceneManagerTest, 未设置World时加载返回false) {
+TEST_F(SceneManagerTest, NotsetUpWorldWhenLoadReturnsfalse) {
     SceneManager mgr2;
     mgr2.SetAssetManager(&asset_manager);
     EXPECT_FALSE(mgr2.LoadSubScene("any.dscene"));

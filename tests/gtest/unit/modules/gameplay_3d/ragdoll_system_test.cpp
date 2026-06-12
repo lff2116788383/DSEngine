@@ -20,7 +20,7 @@ using namespace dse::gameplay3d;
 
 #ifdef DSE_ENABLE_PHYSX
 
-TEST(RagdollComponentTest, 默认值) {
+TEST(RagdollComponentTest, DefaultValues) {
     RagdollComponent rc;
     EXPECT_FALSE(rc.active);
     EXPECT_TRUE(rc.auto_setup);
@@ -34,30 +34,30 @@ TEST(RagdollComponentTest, 默认值) {
     EXPECT_FALSE(rc.initialized);
 }
 
-TEST(RagdollSystemTest, 构造安全) {
+TEST(RagdollSystemTest, Safety) {
     RagdollSystem sys;
     // 构造后不崩溃即可
 }
 
-TEST(RagdollSystemTest, SetNullptr安全) {
+TEST(RagdollSystemTest, SetNullptrSafety) {
     RagdollSystem sys;
     sys.SetAssetManager(nullptr);
     sys.SetPhysics3D(nullptr);
 }
 
-TEST(RagdollSystemTest, 空World不崩溃) {
+TEST(RagdollSystemTest, EmptyWorldDoesNotCrash) {
     RagdollSystem sys;
     World world;
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST(RagdollSystemTest, 零dt不崩溃) {
+TEST(RagdollSystemTest, ZerodtDoesNotCrash) {
     RagdollSystem sys;
     World world;
     sys.FixedUpdate(world, 0.0f);
 }
 
-TEST(RagdollSystemTest, 有未激活Ragdoll不崩溃) {
+TEST(RagdollSystemTest, WithNotRagdollDoesNotCrash) {
     RagdollSystem sys;
     World world;
     auto entity = world.registry().create();
@@ -66,7 +66,7 @@ TEST(RagdollSystemTest, 有未激活Ragdoll不崩溃) {
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
-TEST(RagdollSystemTest, Deactivate对无组件实体安全) {
+TEST(RagdollSystemTest, DeactivateSecurityForComponentlessEntities) {
     RagdollSystem sys;
     World world;
     auto entity = world.registry().create();

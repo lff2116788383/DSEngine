@@ -1,6 +1,7 @@
 #ifndef DSE_UI_LAYOUT_H
 #define DSE_UI_LAYOUT_H
 
+#include <cmath>
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include "engine/ecs/components_2d.h"
@@ -51,7 +52,14 @@ struct CanvasScalerData {
     glm::vec2 reference_resolution = glm::vec2(1920.0f, 1080.0f);
     float scale_factor = 1.0f;
     bool match_width_or_height = true;
+    float match = 0.5f;          ///< 宽高匹配权重 [0,1]：0=跟宽, 1=跟高, 0.5=均衡
+    bool pixel_snap = false;     ///< 像素吸附(pixel-perfect)
 };
+
+/// 将坐标吸附到最近的整数像素（pixel-perfect 渲染用）。
+inline glm::vec2 SnapToPixel(const glm::vec2& p) {
+    return glm::vec2(std::round(p.x), std::round(p.y));
+}
 
 class UILayoutSystem {
 public:

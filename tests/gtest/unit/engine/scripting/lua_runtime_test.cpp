@@ -43,14 +43,14 @@ static bool InitLuaWithWorld() {
 // 基础生命周期测试
 // ============================================================
 
-TEST(LuaRuntimeTest, 默认状态未初始化) {
+TEST(LuaRuntimeTest, DefaultStateUninitialized) {
     // BootstrapLuaRuntime 调用前，VM 不应存在
     // 注意：此测试假设 BootstrapLuaRuntime 不会在静态初始化时自动调用
     // 实际行为取决于实现，这里主要测试 Shutdown 不会崩溃
     ShutdownLuaRuntime();
 }
 
-TEST(LuaRuntimeTest, BootstrapLuaRuntime返回值) {
+TEST(LuaRuntimeTest, BootstrapLuaRuntimereturnValue) {
     // world=nullptr 时应返回 false（引擎需要有效的 ECS world 才能初始化 Lua 绑定）
     LuaApiContext ctx;  // world 为 nullptr
     ConfigureLuaApiContext(ctx);
@@ -62,7 +62,7 @@ TEST(LuaRuntimeTest, BootstrapLuaRuntime返回值) {
     ShutdownLuaRuntime();
 }
 
-TEST(LuaRuntimeTest, ShutdownLuaRuntime不崩溃) {
+TEST(LuaRuntimeTest, ShutdownLuaRuntimeDoesNotCrash) {
     if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
         SUCCEED();
@@ -73,7 +73,7 @@ TEST(LuaRuntimeTest, ShutdownLuaRuntime不崩溃) {
     }
 }
 
-TEST(LuaRuntimeTest, 重复Shutdown不崩溃) {
+TEST(LuaRuntimeTest, ShutdownDoesNotCrash) {
     if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
         ShutdownLuaRuntime();  // 重复调用应安全
@@ -85,14 +85,14 @@ TEST(LuaRuntimeTest, 重复Shutdown不崩溃) {
 // ExecuteLuaString 测试
 // ============================================================
 
-TEST(LuaRuntimeTest, ExecuteLuaString未初始化返回false) {
+TEST(LuaRuntimeTest, ExecuteLuaStringReturnUninitializedfalse) {
     ShutdownLuaRuntime();  // 确保 VM 关闭
     std::string result;
     bool success = ExecuteLuaString("print('hello')", &result);
     EXPECT_FALSE(success);
 }
 
-TEST(LuaRuntimeTest, ExecuteLuaString简单算术) {
+TEST(LuaRuntimeTest, ExecuteLuaStringsimpleArithmetic) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
@@ -107,7 +107,7 @@ TEST(LuaRuntimeTest, ExecuteLuaString简单算术) {
     ShutdownLuaRuntime();
 }
 
-TEST(LuaRuntimeTest, ExecuteLuaString语法错误) {
+TEST(LuaRuntimeTest, ExecuteLuaStringSyntaxError) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
@@ -122,7 +122,7 @@ TEST(LuaRuntimeTest, ExecuteLuaString语法错误) {
     ShutdownLuaRuntime();
 }
 
-TEST(LuaRuntimeTest, ExecuteLuaString空代码返回true) {
+TEST(LuaRuntimeTest, ExecuteLuaStringEmptyCodeReturntrue) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
@@ -137,14 +137,14 @@ TEST(LuaRuntimeTest, ExecuteLuaString空代码返回true) {
 // TickLuaRuntime 测试
 // ============================================================
 
-TEST(LuaRuntimeTest, TickLuaRuntime未初始化不崩溃) {
+TEST(LuaRuntimeTest, TickLuaRuntimeUninitializedDoesNotCrash) {
     ShutdownLuaRuntime();
     // 未初始化时调用 Tick 应安全（可能是 no-op）
     TickLuaRuntime(0.016f);
     SUCCEED();
 }
 
-TEST(LuaRuntimeTest, TickLuaRuntime正常调用不崩溃) {
+TEST(LuaRuntimeTest, TickLuaRuntimeNormalCallsDoNotCrash) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
@@ -159,13 +159,13 @@ TEST(LuaRuntimeTest, TickLuaRuntime正常调用不崩溃) {
 // GetLuaMemoryUsage 测试
 // ============================================================
 
-TEST(LuaRuntimeTest, GetLuaMemoryUsage未初始化返回零) {
+TEST(LuaRuntimeTest, GetLuaMemoryUsageUninitializedReturnsZero) {
     ShutdownLuaRuntime();
     size_t usage = GetLuaMemoryUsage();
     EXPECT_EQ(usage, 0u) << "未初始化时应返回 0";
 }
 
-TEST(LuaRuntimeTest, GetLuaMemoryUsage初始化后大于零) {
+TEST(LuaRuntimeTest, GetLuaMemoryUsageGreaterThanZeroAfterInitialization) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }
@@ -180,13 +180,13 @@ TEST(LuaRuntimeTest, GetLuaMemoryUsage初始化后大于零) {
 // PumpLuaScriptHotReloads 测试
 // ============================================================
 
-TEST(LuaRuntimeTest, PumpLuaScriptHotReloads未初始化返回零) {
+TEST(LuaRuntimeTest, PumpLuaScriptHotReloadsUninitializedReturnsZero) {
     ShutdownLuaRuntime();
     int count = PumpLuaScriptHotReloads();
     EXPECT_EQ(count, 0) << "未初始化时应返回 0";
 }
 
-TEST(LuaRuntimeTest, PumpLuaScriptHotReloads正常调用不崩溃) {
+TEST(LuaRuntimeTest, PumpLuaScriptHotReloadsNormalCallsDoNotCrash) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
     }

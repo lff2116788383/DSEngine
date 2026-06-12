@@ -29,11 +29,11 @@ protected:
     static constexpr float kAspect = 16.0f / 9.0f;
 };
 
-TEST_F(CameraSystem2DTest, 空World调用Update不崩溃) {
+TEST_F(CameraSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kAspect));
 }
 
-TEST_F(CameraSystem2DTest, 正交摄像机投影矩阵) {
+TEST_F(CameraSystem2DTest, TestCase2) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
     cam.orthographic = true;
@@ -49,7 +49,7 @@ TEST_F(CameraSystem2DTest, 正交摄像机投影矩阵) {
     EXPECT_NE(cam.projection, glm::mat4(1.0f));
 }
 
-TEST_F(CameraSystem2DTest, 透视摄像机投影矩阵) {
+TEST_F(CameraSystem2DTest, TestCase3) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
     cam.orthographic = false;
@@ -65,7 +65,7 @@ TEST_F(CameraSystem2DTest, 透视摄像机投影矩阵) {
     EXPECT_NE(cam.projection, glm::mat4(1.0f));
 }
 
-TEST_F(CameraSystem2DTest, 视图矩阵根据Transform更新) {
+TEST_F(CameraSystem2DTest, TransformUpdate) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
     cam.orthographic = true;
@@ -80,7 +80,7 @@ TEST_F(CameraSystem2DTest, 视图矩阵根据Transform更新) {
     EXPECT_NE(cam.view, glm::mat4(1.0f));
 }
 
-TEST_F(CameraSystem2DTest, CameraFollowComponent跟随目标) {
+TEST_F(CameraSystem2DTest, CameraFollowComponentfollowTarget) {
     auto target = world.CreateEntity();
     auto& target_tf = world.registry().emplace<TransformComponent>(target);
     target_tf.position = glm::vec3(100.0f, 0.0f, 0.0f);
@@ -106,7 +106,7 @@ TEST_F(CameraSystem2DTest, CameraFollowComponent跟随目标) {
     EXPECT_FLOAT_EQ(cam_tf.position.x, 100.0f);
 }
 
-TEST_F(CameraSystem2DTest, CameraFollowComponent死区内不移动) {
+TEST_F(CameraSystem2DTest, CameraFollowComponentNoMovementWithinTheDeadZone) {
     auto target = world.CreateEntity();
     auto& target_tf = world.registry().emplace<TransformComponent>(target);
     target_tf.position = glm::vec3(0.5f, 0.0f, 0.0f); // 在死区内
@@ -133,7 +133,7 @@ TEST_F(CameraSystem2DTest, CameraFollowComponent死区内不移动) {
     EXPECT_FLOAT_EQ(cam_tf.position.x, 0.0f);
 }
 
-TEST_F(CameraSystem2DTest, 禁用摄像机仍更新投影矩阵但跳过跟随) {
+TEST_F(CameraSystem2DTest, DisabledStillUpdate) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
     cam.orthographic = true;
@@ -148,7 +148,7 @@ TEST_F(CameraSystem2DTest, 禁用摄像机仍更新投影矩阵但跳过跟随) 
     EXPECT_EQ(cam.projection, glm::mat4(1.0f));
 }
 
-TEST_F(CameraSystem2DTest, AspectRatio为零时自动修正) {
+TEST_F(CameraSystem2DTest, AspectRatioAutomaticCorrectionWhenZero) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
     cam.orthographic = true;
