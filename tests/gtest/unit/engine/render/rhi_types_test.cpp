@@ -19,6 +19,7 @@ using namespace dse::render;
 // 渲染目标与管线状态描述
 // ============================================================
 
+// 测试 渲染目标描述符：默认值
 TEST(RenderTargetDescTest, DefaultValues) {
     RenderTargetDesc desc;
     EXPECT_EQ(desc.width, 0);
@@ -29,6 +30,7 @@ TEST(RenderTargetDescTest, DefaultValues) {
     EXPECT_FALSE(desc.cube_map);
 }
 
+// 测试 管线状态描述符：默认值
 TEST(PipelineStateDescTest, DefaultValues) {
     PipelineStateDesc desc;
     EXPECT_TRUE(desc.blend_enabled);
@@ -37,6 +39,7 @@ TEST(PipelineStateDescTest, DefaultValues) {
     EXPECT_TRUE(desc.culling_enabled);
 }
 
+// 测试 渲染通道描述符：默认值
 TEST(RenderPassDescTest, DefaultValues) {
     RenderPassDesc desc;
     EXPECT_EQ(desc.render_target, 0u);
@@ -44,6 +47,7 @@ TEST(RenderPassDescTest, DefaultValues) {
     EXPECT_FALSE(desc.clear_color_enabled);
 }
 
+// 测试 渲染目标回读：默认值
 TEST(RenderTargetReadbackTest, DefaultValues) {
     RenderTargetReadback rb;
     EXPECT_EQ(rb.width, 0);
@@ -55,6 +59,7 @@ TEST(RenderTargetReadbackTest, DefaultValues) {
 // 绘制项
 // ============================================================
 
+// 测试 精灵绘制项：默认值
 TEST(SpriteDrawItemTest, DefaultValues) {
     SpriteDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
@@ -66,6 +71,7 @@ TEST(SpriteDrawItemTest, DefaultValues) {
     EXPECT_EQ(item.uv, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
 }
 
+// 测试 批次顶点：默认值
 TEST(BatchVertexTest, DefaultValues) {
     BatchVertex v;
     EXPECT_EQ(v.normal, glm::vec3(0.0f, 0.0f, 1.0f));
@@ -74,6 +80,7 @@ TEST(BatchVertexTest, DefaultValues) {
     EXPECT_EQ(v.joints, glm::vec4(0.0f));
 }
 
+// 测试 网格绘制项：默认值
 TEST(MeshDrawItemTest, DefaultValues) {
     MeshDrawItem item;
     EXPECT_FALSE(static_cast<bool>(item.vao_override));
@@ -91,6 +98,7 @@ TEST(MeshDrawItemTest, DefaultValues) {
     EXPECT_TRUE(item.morph_weights.empty());
 }
 
+// 测试 粒子3D绘制项：默认值
 TEST(Particle3DDrawItemTest, DefaultValues) {
     Particle3DDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
@@ -107,6 +115,7 @@ TEST(Particle3DDrawItemTest, DefaultValues) {
 // RHI 统一回归测试 — OpenGL ProjectionCorrection
 // ============================================================
 
+// 测试 打开GL投影校正：返回单位
 TEST(OpenGLProjectionCorrectionTest, ReturnsIdentity) {
     // OpenGL 不需要投影修正，应返回单位矩阵
     OpenGLRhiDevice device;
@@ -118,6 +127,7 @@ TEST(OpenGLProjectionCorrectionTest, ReturnsIdentity) {
 // 渲染统计
 // ============================================================
 
+// 测试 渲染统计：默认值Allis零
 TEST(RenderStatsTest, DefaultValuesAllisZero) {
     RenderStats stats;
     EXPECT_EQ(stats.sprite_count, 0);
@@ -133,24 +143,28 @@ TEST(RenderStatsTest, DefaultValuesAllisZero) {
 // 纹理采样描述 TextureSamplerDesc / TextureFilter / TextureWrap
 // ============================================================
 
+// 测试 纹理采样器描述符：默认值线性重复
 TEST(TextureSamplerDescTest, Defaults_LinearRepeat) {
     TextureSamplerDesc d;
     EXPECT_EQ(d.filter, TextureFilter::Linear);
     EXPECT_EQ(d.wrap, TextureWrap::Repeat);
 }
 
+// 测试 纹理采样器描述符：从线性标志真为线性重复
 TEST(TextureSamplerDescTest, FromLinearFlag_True_IsLinearRepeat) {
     TextureSamplerDesc d = TextureSamplerDesc::FromLinearFlag(true);
     EXPECT_EQ(d.filter, TextureFilter::Linear);
     EXPECT_EQ(d.wrap, TextureWrap::Repeat);
 }
 
+// 测试 纹理采样器描述符：从线性标志假为最近重复
 TEST(TextureSamplerDescTest, FromLinearFlag_False_IsNearestRepeat) {
     TextureSamplerDesc d = TextureSamplerDesc::FromLinearFlag(false);
     EXPECT_EQ(d.filter, TextureFilter::Nearest);
     EXPECT_EQ(d.wrap, TextureWrap::Repeat);
 }
 
+// 测试 纹理采样器描述符：Pixel Art钳制Preset
 TEST(TextureSamplerDescTest, PixelArtClampPreset) {
     TextureSamplerDesc d;
     d.filter = TextureFilter::Nearest;

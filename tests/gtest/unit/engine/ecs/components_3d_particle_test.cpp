@@ -8,6 +8,7 @@
 
 using namespace dse;
 
+// 测试 粒子系统3D组件：默认值
 TEST(ParticleSystem3DComponentTest, DefaultValues) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.enabled);
@@ -26,6 +27,7 @@ TEST(ParticleSystem3DComponentTest, DefaultValues) {
     EXPECT_FALSE(ps.initialized);
 }
 
+// 测试 粒子系统3D组件：字段修改
 TEST(ParticleSystem3DComponentTest, FieldModification) {
     ParticleSystem3DComponent ps;
     ps.enabled = false;
@@ -38,6 +40,7 @@ TEST(ParticleSystem3DComponentTest, FieldModification) {
     EXPECT_FLOAT_EQ(ps.gravity.y, -20.0f);
 }
 
+// 测试 GPU粒子数据：默认
 TEST(GPUParticleDataTest, Default) {
     GPUParticleData p;
     EXPECT_FLOAT_EQ(p.life, 0.0f);

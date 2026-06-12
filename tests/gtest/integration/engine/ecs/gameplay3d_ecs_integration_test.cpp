@@ -24,6 +24,7 @@ protected:
     World world;
 };
 
+// 测试 玩法3D ECS集成：情形3D实体创建且查询
 TEST_F(Gameplay3dEcsIntegrationTest, Case3DEntityCreateAndQuery) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
@@ -35,6 +36,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, Case3DEntityCreateAndQuery) {
     EXPECT_TRUE(world.registry().all_of<Animator3DComponent>(e));
 }
 
+// 测试 玩法3D ECS集成：动画器3D状态过渡
 TEST_F(Gameplay3dEcsIntegrationTest, Animator3DStateTransition) {
     auto e = world.CreateEntity();
     auto& anim = world.registry().emplace<Animator3DComponent>(e);
@@ -63,6 +65,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, Animator3DStateTransition) {
     EXPECT_FALSE(anim.is_transitioning);
 }
 
+// 测试 玩法3D ECS集成：地形组件默认值
 TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponentDefaultValues) {
     TerrainComponent terrain;
     EXPECT_TRUE(terrain.enabled);
@@ -76,6 +79,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, TerrainComponentDefaultValues) {
     EXPECT_TRUE(terrain.is_dirty);
 }
 
+// 测试 玩法3D ECS集成：天空盒组件默认值
 TEST_F(Gameplay3dEcsIntegrationTest, SkyboxComponentDefaultValues) {
     SkyboxComponent skybox;
     EXPECT_TRUE(skybox.enabled);
@@ -83,12 +87,14 @@ TEST_F(Gameplay3dEcsIntegrationTest, SkyboxComponentDefaultValues) {
     EXPECT_TRUE(skybox.cubemap_path.empty());
 }
 
+// 测试 玩法3D ECS集成：天空灯光组件默认值
 TEST_F(Gameplay3dEcsIntegrationTest, SkyLightComponentDefaultValues) {
     SkyLightComponent sky;
     EXPECT_TRUE(sky.enabled);
     EXPECT_FLOAT_EQ(sky.intensity, 1.0f);
 }
 
+// 测试 玩法3D ECS集成：变形Componentassociated带实体
 TEST_F(Gameplay3dEcsIntegrationTest, MorphComponentassociatedWithEntity) {
     auto e = world.CreateEntity();
     auto& morph = world.registry().emplace<MorphComponent>(e);
@@ -102,6 +108,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, MorphComponentassociatedWithEntity) {
     EXPECT_FLOAT_EQ(morph.targets[1].weight, 0.0f);
 }
 
+// 测试 玩法3D ECS集成：多3D实体批次查询
 TEST_F(Gameplay3dEcsIntegrationTest, Multi3DEntityBatchQuery) {
     for (int i = 0; i < 5; ++i) {
         auto e = world.CreateEntity();
@@ -120,6 +127,7 @@ TEST_F(Gameplay3dEcsIntegrationTest, Multi3DEntityBatchQuery) {
     EXPECT_EQ(count, 5);
 }
 
+// 测试 玩法3D ECS集成：动画状态状态机基
 TEST_F(Gameplay3dEcsIntegrationTest, AnimationStateMachineBase) {
     dse::gameplay3d::AnimationStateMachine sm;
     dse::gameplay3d::AnimState idle_state;

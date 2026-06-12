@@ -47,6 +47,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
+// 测试 Lua动画绑定：Lua创建2D Animatorand添加状态
 TEST_F(LuaAnimBindingTest, LuaCreate2DAnimatorandAddState) {
     TempLuaFile script("test_anim_2d.lua", R"(
         function Awake()
@@ -76,6 +77,7 @@ TEST_F(LuaAnimBindingTest, LuaCreate2DAnimatorandAddState) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua动画绑定：Lua创建3D动画器FSM
 TEST_F(LuaAnimBindingTest, LuaCreate3DAnimatorFSM) {
     TempLuaFile script("test_anim_3d_fsm.lua", R"(
         function Awake()
@@ -108,6 +110,7 @@ TEST_F(LuaAnimBindingTest, LuaCreate3DAnimatorFSM) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua动画绑定：Lua添加到动画Layerand设置Weight
 TEST_F(LuaAnimBindingTest, LuaAddToAnimLayerandSetWeight) {
     TempLuaFile script("test_anim_layer.lua", R"(
         function Awake()
@@ -141,6 +144,7 @@ TEST_F(LuaAnimBindingTest, LuaAddToAnimLayerandSetWeight) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua动画绑定：Lua添加到IK组件
 TEST_F(LuaAnimBindingTest, LuaAddToIKComponent) {
     TempLuaFile script("test_ik.lua", R"(
         function Awake()
@@ -177,6 +181,7 @@ TEST_F(LuaAnimBindingTest, LuaAddToIKComponent) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua动画绑定：错误参数不崩溃
 TEST_F(LuaAnimBindingTest, ErrorParametersDoesNotCrash) {
     TempLuaFile script("test_anim_error.lua", R"(
         function Awake()

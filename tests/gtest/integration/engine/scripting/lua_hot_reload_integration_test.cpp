@@ -46,6 +46,7 @@ protected:
     World world;
 };
 
+// 测试 Lua热重新加载集成：之后状态加载
 TEST_F(LuaHotReloadIntegrationTest, AfterStateLoad) {
     LuaHotReloadTempScript startup("dse_hot_reload_startup.lua", R"(
         function Awake() end
@@ -95,6 +96,7 @@ TEST_F(LuaHotReloadIntegrationTest, AfterStateLoad) {
     EXPECT_EQ(after, "v2:12");
 }
 
+// 测试 Lua热重新加载集成：禁用脚本组件销毁示例不再次
 TEST_F(LuaHotReloadIntegrationTest, DisabledScriptComponentDestroyExampleNotAgain) {
     LuaHotReloadTempScript startup("dse_hot_reload_disabled_startup.lua", R"(
         function Awake() end

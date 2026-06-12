@@ -118,6 +118,7 @@ std::shared_ptr<EditorPlugin> MakeTestPlugin(const std::string& name) {
 // 注册 / 反注册
 // ============================================================
 
+// 测试 编辑器插件API：注册添加插件
 TEST(EditorPluginApiTest, Register_AddPlugin) {
     PluginManager mgr;
     auto p = MakeTestPlugin("TestPlugin_Reg");
@@ -130,12 +131,14 @@ TEST(EditorPluginApiTest, Register_AddPlugin) {
     EXPECT_EQ(mgr.GetPlugins().size(), 0u);
 }
 
+// 测试 编辑器插件API：注册空指针不崩溃
 TEST(EditorPluginApiTest, Register_NullPointerDoesNotCrash) {
     PluginManager mgr;
     mgr.RegisterPlugin(nullptr);
     EXPECT_EQ(mgr.GetPlugins().size(), 0u);
 }
 
+// 测试 编辑器插件API：注册重复名称Rejected
 TEST(EditorPluginApiTest, Register_DuplicateNameRejected) {
     PluginManager mgr;
     mgr.RegisterPlugin(MakeTestPlugin("Dup"));
@@ -147,6 +150,7 @@ TEST(EditorPluginApiTest, Register_DuplicateNameRejected) {
 // 面板可见性
 // ============================================================
 
+// 测试 编辑器插件API：切换面板可见性
 TEST(EditorPluginApiTest, TogglePanelVisibility) {
     PluginManager mgr;
     auto p = MakeTestPlugin("PanelPlugin");
@@ -163,6 +167,7 @@ TEST(EditorPluginApiTest, TogglePanelVisibility) {
     EXPECT_FALSE(mgr.GetPlugins()[0]->panels[0].visible);
 }
 
+// 测试 编辑器插件API：切换面板非存在Plug Ins执行不崩溃
 TEST(EditorPluginApiTest, TogglePanel_NonExistentPlugInsDoNotCrash) {
     PluginManager mgr;
     mgr.TogglePanelVisibility("NoSuch", "Panel"); // no crash
@@ -172,12 +177,14 @@ TEST(EditorPluginApiTest, TogglePanel_NonExistentPlugInsDoNotCrash) {
 // DLL 加载
 // ============================================================
 
+// 测试 编辑器插件API：加载DLL返回的非存在Pathfalse
 TEST(EditorPluginApiTest, LoadDll_ReturnOfNonExistentPathfalse) {
     PluginManager mgr;
     bool result = mgr.LoadPluginFromDll("C:\\nonexistent_path_xyz\\fake_plugin.dll");
     EXPECT_FALSE(result);
 }
 
+// 测试 编辑器插件API：扫描目录空目录返回0
 TEST(EditorPluginApiTest, ScanDirectory_EmptyDirectoryReturn0) {
     namespace fs = std::filesystem;
     auto dir = fs::temp_directory_path() / "dse_plugin_api_test_empty";
@@ -192,6 +199,7 @@ TEST(EditorPluginApiTest, ScanDirectory_EmptyDirectoryReturn0) {
     fs::remove_all(dir, ec);
 }
 
+// 测试 编辑器插件API：扫描目录不存在返回0
 TEST(EditorPluginApiTest, ScanDirectory_DirectoryThatDoesNotExistReturns0) {
     PluginManager mgr;
     int count = mgr.LoadPluginsFromDirectory("Z:\\absolutely_nonexistent_dir_12345");

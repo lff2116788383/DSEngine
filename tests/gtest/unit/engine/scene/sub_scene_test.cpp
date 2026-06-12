@@ -52,6 +52,7 @@ protected:
     }
 };
 
+// 测试 子场景：默认状态为Unloaded
 TEST_F(SubSceneTest, DefaultStateIsUnloaded) {
     SubScene sub;
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
@@ -59,12 +60,14 @@ TEST_F(SubSceneTest, DefaultStateIsUnloaded) {
     EXPECT_EQ(sub.EntityCount(), 0u);
 }
 
+// 测试 子场景：设置上
 TEST_F(SubSceneTest, SetUp) {
     SubScene sub("test/path.dscene");
     EXPECT_EQ(sub.GetPath(), "test/path.dscene");
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
 }
 
+// 测试 子场景：加载Deserialize实体到世界
 TEST_F(SubSceneTest, LoadDeserializeEntityToWorld) {
     auto path = WriteTempScene("dse_sub_scene_load.dscene", kTwoEntityScene);
     SubScene sub;
@@ -85,6 +88,7 @@ TEST_F(SubSceneTest, LoadDeserializeEntityToWorld) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：卸载销毁全部Owned实体
 TEST_F(SubSceneTest, UnloadDestroyAllOwnedEntity) {
     auto path = WriteTempScene("dse_sub_scene_unload.dscene", kTwoEntityScene);
     SubScene sub;
@@ -99,6 +103,7 @@ TEST_F(SubSceneTest, UnloadDestroyAllOwnedEntity) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：空场景加载成功
 TEST_F(SubSceneTest, EmptySceneLoadSucceeds) {
     auto path = WriteTempScene("dse_sub_scene_empty.dscene", kEmptyScene);
     SubScene sub;
@@ -109,6 +114,7 @@ TEST_F(SubSceneTest, EmptySceneLoadSucceeds) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：失败到加载非存在文件
 TEST_F(SubSceneTest, FailedToLoadNonExistentFile) {
     SubScene sub;
     bool ok = sub.Load(world, asset_manager, "nonexistent_file_12345.dscene");
@@ -116,6 +122,7 @@ TEST_F(SubSceneTest, FailedToLoadNonExistentFile) {
     EXPECT_EQ(sub.GetState(), SubSceneState::Unloaded);
 }
 
+// 测试 子场景：加载返回false
 TEST_F(SubSceneTest, LoadReturnsfalse) {
     auto path = WriteTempScene("dse_sub_scene_double.dscene", kTwoEntityScene);
     SubScene sub;
@@ -125,6 +132,7 @@ TEST_F(SubSceneTest, LoadReturnsfalse) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：Unloadcan应Restarted稍后加载
 TEST_F(SubSceneTest, UnloadcanBeRestartedLaterLoad) {
     auto path = WriteTempScene("dse_sub_scene_reload.dscene", kSingleEntityScene);
     SubScene sub;
@@ -139,6 +147,7 @@ TEST_F(SubSceneTest, UnloadcanBeRestartedLaterLoad) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：多子场景世界不
 TEST_F(SubSceneTest, MultiSubSceneWorldNot) {
     auto path1 = WriteTempScene("dse_sub1.dscene", kTwoEntityScene);
     auto path2 = WriteTempScene("dse_sub2.dscene", kSingleEntityScene);
@@ -165,6 +174,7 @@ TEST_F(SubSceneTest, MultiSubSceneWorldNot) {
     std::filesystem::remove(path2);
 }
 
+// 测试 子场景：不加载当卸载无
 TEST_F(SubSceneTest, NotLoadWhenUnloadWithout) {
     SubScene sub;
     sub.Unload(world);
@@ -172,6 +182,7 @@ TEST_F(SubSceneTest, NotLoadWhenUnloadWithout) {
     EXPECT_EQ(sub.EntityCount(), 0u);
 }
 
+// 测试 子场景：实体字段类型错误加载失败
 TEST_F(SubSceneTest, EntitiesFieldTypeErrorLoadingFailed) {
     // entities 存在但不是数组（格式损坏）→ 应失败，而非静默当成空场景。
     const char* kBadEntities = R"({ "name": "bad", "entities": { "oops": 1 } })";
@@ -185,6 +196,7 @@ TEST_F(SubSceneTest, EntitiesFieldTypeErrorLoadingFailed) {
     std::filesystem::remove(path);
 }
 
+// 测试 子场景：带
 TEST_F(SubSceneTest, With) {
     auto path = WriteTempScene("dse_sub_move.dscene", kTwoEntityScene);
     SubScene sub1;

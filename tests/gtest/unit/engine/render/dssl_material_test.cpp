@@ -26,6 +26,7 @@ using namespace dse::render;
 // DSSLUniformInfo 默认值
 // ============================================================
 
+// 测试 DSSL Uniform信息：默认值
 TEST(DSSLUniformInfoTest, DefaultValues) {
     DSSLUniformInfo info;
     EXPECT_TRUE(info.name.empty());
@@ -39,6 +40,7 @@ TEST(DSSLUniformInfoTest, DefaultValues) {
 // DSSLShaderType 枚举
 // ============================================================
 
+// 测试 DSSL着色器类型：枚举值
 TEST(DSSLShaderTypeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(DSSLShaderType::Surface), 0);
     EXPECT_EQ(static_cast<int>(DSSLShaderType::Unlit), 1);
@@ -52,6 +54,7 @@ TEST(DSSLShaderTypeTest, EnumerationValue) {
 // DSSLMaterialInstance 创建和基础属性
 // ============================================================
 
+// 测试 DSSL材质实例：情形3
 TEST(DSSLMaterialInstanceTest, TestCase3) {
     DSSLMaterialInstance inst(42, "test.dssl");
     EXPECT_EQ(inst.GetId(), 42u);
@@ -60,6 +63,7 @@ TEST(DSSLMaterialInstanceTest, TestCase3) {
     EXPECT_TRUE(inst.GetUniformInfos().empty());
 }
 
+// 测试 DSSL材质实例：设置着色器类型
 TEST(DSSLMaterialInstanceTest, SetShaderType) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetShaderType(DSSLShaderType::Unlit);
@@ -70,6 +74,7 @@ TEST(DSSLMaterialInstanceTest, SetShaderType) {
 // Uniform 设置/获取往返
 // ============================================================
 
+// 测试 DSSL材质实例：Floatset获取
 TEST(DSSLMaterialInstanceTest, FloatsetGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetFloat("roughness", 0.75f);
@@ -77,6 +82,7 @@ TEST(DSSLMaterialInstanceTest, FloatsetGet) {
     EXPECT_FLOAT_EQ(inst.GetFloat("nonexist", 99.0f), 99.0f);
 }
 
+// 测试 DSSL材质实例：向量2设置获取
 TEST(DSSLMaterialInstanceTest, Vec2setGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec2("uv_offset", glm::vec2(0.5f, 0.3f));
@@ -85,6 +91,7 @@ TEST(DSSLMaterialInstanceTest, Vec2setGet) {
     EXPECT_FLOAT_EQ(v.y, 0.3f);
 }
 
+// 测试 DSSL材质实例：向量3设置获取
 TEST(DSSLMaterialInstanceTest, Vec3setGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec3("emission_color", glm::vec3(1.0f, 0.0f, 0.0f));
@@ -93,6 +100,7 @@ TEST(DSSLMaterialInstanceTest, Vec3setGet) {
     EXPECT_FLOAT_EQ(v.g, 0.0f);
 }
 
+// 测试 DSSL材质实例：向量4设置获取
 TEST(DSSLMaterialInstanceTest, Vec4setGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec4("albedo_color", glm::vec4(0.2f, 0.3f, 0.4f, 1.0f));
@@ -101,6 +109,7 @@ TEST(DSSLMaterialInstanceTest, Vec4setGet) {
     EXPECT_FLOAT_EQ(v.a, 1.0f);
 }
 
+// 测试 DSSL材质实例：Intset获取
 TEST(DSSLMaterialInstanceTest, IntsetGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetInt("layers", 3);
@@ -108,6 +117,7 @@ TEST(DSSLMaterialInstanceTest, IntsetGet) {
     EXPECT_EQ(inst.GetInt("nonexist", -1), -1);
 }
 
+// 测试 DSSL材质实例：Textureset获取
 TEST(DSSLMaterialInstanceTest, TexturesetGet) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetTexture("albedo_tex", 100);
@@ -119,6 +129,7 @@ TEST(DSSLMaterialInstanceTest, TexturesetGet) {
 // 材质属性映射
 // ============================================================
 
+// 测试 DSSL材质实例：获取基颜色默认White
 TEST(DSSLMaterialInstanceTest, GetBaseColor_DefaultWhite) {
     DSSLMaterialInstance inst(1, "x.dssl");
     glm::vec4 bc = inst.GetBaseColor();
@@ -128,6 +139,7 @@ TEST(DSSLMaterialInstanceTest, GetBaseColor_DefaultWhite) {
     EXPECT_FLOAT_EQ(bc.a, 1.0f);
 }
 
+// 测试 DSSL材质实例：获取基颜色albedo Colorpriority
 TEST(DSSLMaterialInstanceTest, GetBaseColor_albedo_Colorpriority) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec4("albedo_color", glm::vec4(0.1f, 0.2f, 0.3f, 0.9f));
@@ -137,6 +149,7 @@ TEST(DSSLMaterialInstanceTest, GetBaseColor_albedo_Colorpriority) {
     EXPECT_FLOAT_EQ(bc.a, 0.9f);
 }
 
+// 测试 DSSL材质实例：获取基颜色向量3 rollback
 TEST(DSSLMaterialInstanceTest, GetBaseColor_Vec3rollback) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec3("albedo_color", glm::vec3(0.5f, 0.6f, 0.7f));
@@ -145,31 +158,37 @@ TEST(DSSLMaterialInstanceTest, GetBaseColor_Vec3rollback) {
     EXPECT_FLOAT_EQ(bc.a, 1.0f);
 }
 
+// 测试 DSSL材质实例：获取Metallic默认零
 TEST(DSSLMaterialInstanceTest, GetMetallic_DefaultZero) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FLOAT_EQ(inst.GetMetallic(), 0.0f);
 }
 
+// 测试 DSSL材质实例：获取Roughness默认0 5
 TEST(DSSLMaterialInstanceTest, GetRoughness_Default0_5) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FLOAT_EQ(inst.GetRoughness(), 0.5f);
 }
 
+// 测试 DSSL材质实例：获取AO默认1
 TEST(DSSLMaterialInstanceTest, GetAO_Default1) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FLOAT_EQ(inst.GetAO(), 1.0f);
 }
 
+// 测试 DSSL材质实例：获取法线Strength默认1
 TEST(DSSLMaterialInstanceTest, GetNormalStrength_Default1) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FLOAT_EQ(inst.GetNormalStrength(), 1.0f);
 }
 
+// 测试 DSSL材质实例：获取透明度截止默认0 5
 TEST(DSSLMaterialInstanceTest, GetAlphaCutoff_Default0_5) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FLOAT_EQ(inst.GetAlphaCutoff(), 0.5f);
 }
 
+// 测试 DSSL材质实例：获取自发光颜色默认Black
 TEST(DSSLMaterialInstanceTest, GetEmissiveColor_DefaultBlack) {
     DSSLMaterialInstance inst(1, "x.dssl");
     glm::vec3 ec = inst.GetEmissiveColor();
@@ -178,6 +197,7 @@ TEST(DSSLMaterialInstanceTest, GetEmissiveColor_DefaultBlack) {
     EXPECT_FLOAT_EQ(ec.b, 0.0f);
 }
 
+// 测试 DSSL材质实例：获取自发光颜色向量3优先级
 TEST(DSSLMaterialInstanceTest, GetEmissiveColor_Vec3priority) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec3("emission_color", glm::vec3(1.0f, 0.5f, 0.0f));
@@ -186,6 +206,7 @@ TEST(DSSLMaterialInstanceTest, GetEmissiveColor_Vec3priority) {
     EXPECT_FLOAT_EQ(ec.g, 0.5f);
 }
 
+// 测试 DSSL材质实例：获取自发光颜色向量4 rollback
 TEST(DSSLMaterialInstanceTest, GetEmissiveColor_Vec4rollback) {
     DSSLMaterialInstance inst(1, "x.dssl");
     inst.SetVec4("emissive_color", glm::vec4(0.2f, 0.3f, 0.4f, 1.0f));
@@ -198,6 +219,7 @@ TEST(DSSLMaterialInstanceTest, GetEmissiveColor_Vec4rollback) {
 // Texture 映射（多命名回退）
 // ============================================================
 
+// 测试 DSSL材质实例：获取Albedo纹理多个名称回退
 TEST(DSSLMaterialInstanceTest, GetAlbedoTexture_MultipleNameFallback) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_EQ(inst.GetAlbedoTexture(), 0u);
@@ -209,6 +231,7 @@ TEST(DSSLMaterialInstanceTest, GetAlbedoTexture_MultipleNameFallback) {
     EXPECT_EQ(inst.GetAlbedoTexture(), 300u);
 }
 
+// 测试 DSSL材质实例：获取法线纹理多个名称回退
 TEST(DSSLMaterialInstanceTest, GetNormalTexture_MultipleNameFallback) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_EQ(inst.GetNormalTexture(), 0u);
@@ -224,6 +247,7 @@ TEST(DSSLMaterialInstanceTest, GetNormalTexture_MultipleNameFallback) {
 // RenderModes 默认值和逻辑
 // ============================================================
 
+// 测试 DSSL材质实例：渲染Modes默认值
 TEST(DSSLMaterialInstanceTest, RenderModes_DefaultValues) {
     DSSLMaterialInstance inst(1, "x.dssl");
     auto& rm = inst.GetRenderModes();
@@ -234,11 +258,13 @@ TEST(DSSLMaterialInstanceTest, RenderModes_DefaultValues) {
     EXPECT_FALSE(rm.alpha_test);
 }
 
+// 测试 DSSL材质实例：获取透明度Falsedefault
 TEST(DSSLMaterialInstanceTest, GetAlphaTest_Falsedefault) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FALSE(inst.GetAlphaTest());
 }
 
+// 测试 DSSL材质实例：获取透明度之后Settingtrue
 TEST(DSSLMaterialInstanceTest, GetAlphaTest_AfterSettingtrue) {
     DSSLMaterialInstance inst(1, "x.dssl");
     DSSLMaterialInstance::RenderModes modes;
@@ -247,6 +273,7 @@ TEST(DSSLMaterialInstanceTest, GetAlphaTest_AfterSettingtrue) {
     EXPECT_TRUE(inst.GetAlphaTest());
 }
 
+// 测试 DSSL材质实例：获取Double Sided剔除禁用
 TEST(DSSLMaterialInstanceTest, GetDoubleSided_cull_disabled) {
     DSSLMaterialInstance inst(1, "x.dssl");
     EXPECT_FALSE(inst.GetDoubleSided());
@@ -261,24 +288,28 @@ TEST(DSSLMaterialInstanceTest, GetDoubleSided_cull_disabled) {
 // DSSLMaterialLoader 单例和基础操作
 // ============================================================
 
+// 测试 DSSL材质加载器：实例Singleton
 TEST(DSSLMaterialLoaderTest, Instance_Singleton) {
     auto& a = DSSLMaterialLoader::Instance();
     auto& b = DSSLMaterialLoader::Instance();
     EXPECT_EQ(&a, &b);
 }
 
+// 测试 DSSL材质加载器：获取实例返回无注册返回空指针
 TEST(DSSLMaterialLoaderTest, GetInstance_ReturnWithoutRegistrationnullptr) {
     auto& loader = DSSLMaterialLoader::Instance();
     EXPECT_EQ(loader.GetInstance(999999), nullptr);
     EXPECT_EQ(loader.GetInstance(0), nullptr);
 }
 
+// 测试 DSSL材质加载器：加载从文件返回若文件不Existnullptr
 TEST(DSSLMaterialLoaderTest, LoadFromFile_ReturnIfFileDoesNotExistnullptr) {
     auto& loader = DSSLMaterialLoader::Instance();
     auto inst = loader.LoadFromFile("nonexistent_path_12345.dssl");
     EXPECT_EQ(inst, nullptr);
 }
 
+// 测试 DSSL材质加载器：创建实例返回若文件不Existnullptr
 TEST(DSSLMaterialLoaderTest, CreateInstance_ReturnIfFileDoesNotExistnullptr) {
     auto& loader = DSSLMaterialLoader::Instance();
     auto inst = loader.CreateInstance("nonexistent_path_67890.dssl");
@@ -295,6 +326,7 @@ std::filesystem::path WriteTempDSSL(const std::string& name, const std::string& 
 }
 } // namespace
 
+// 测试 DSSL材质加载器：加载从文件空文件返回空指针
 TEST(DSSLMaterialLoaderTest, LoadFromFile_EmptyFileReturnednullptr) {
     // 文件能打开但内容为空 → 不是有效 DSSL，应失败而非返回全默认空模板。
     auto& loader = DSSLMaterialLoader::Instance();
@@ -304,6 +336,7 @@ TEST(DSSLMaterialLoaderTest, LoadFromFile_EmptyFileReturnednullptr) {
     std::filesystem::remove(path);
 }
 
+// 测试 DSSL材质加载器：加载从文件Pure Annotation文件返回空指针
 TEST(DSSLMaterialLoaderTest, LoadFromFile_PureAnnotationFileReturnnullptr) {
     // 只有注释/空行、无任何有效内容 → 同样视为无效 DSSL。
     auto& loader = DSSLMaterialLoader::Instance();
@@ -314,6 +347,7 @@ TEST(DSSLMaterialLoaderTest, LoadFromFile_PureAnnotationFileReturnnullptr) {
     std::filesystem::remove(path);
 }
 
+// 测试 DSSL材质加载器：加载从文件有效DSSL成功
 TEST(DSSLMaterialLoaderTest, LoadFromFile_ValidDSSLSucceeds) {
     // 回归保护：含 shader_type / uniform 的有效 DSSL 仍能正常加载并解析。
     auto& loader = DSSLMaterialLoader::Instance();
@@ -330,6 +364,7 @@ TEST(DSSLMaterialLoaderTest, LoadFromFile_ValidDSSLSucceeds) {
     std::filesystem::remove(path);
 }
 
+// 测试 DSSL材质加载器：加载从文件向量3默认值Parsingwrepair 1
 TEST(DSSLMaterialLoaderTest, LoadFromFile_Vec3DefaultValueParsingwrepair1) {
     // 回归保护：vec3 默认值经解析后应得到 (x,y,z,1.0)，
     // 校验 vec3 解析不再依赖 "vec4"+substr 字符串拼接 hack。
@@ -358,6 +393,7 @@ TEST(DSSLMaterialLoaderTest, LoadFromFile_Vec3DefaultValueParsingwrepair1) {
     std::filesystem::remove(path);
 }
 
+// 测试 DSSL材质加载器：清空查询为空之后Clearing
 TEST(DSSLMaterialLoaderTest, Clear_QueryIsEmptyAfterClearing) {
     auto& loader = DSSLMaterialLoader::Instance();
     loader.Clear();

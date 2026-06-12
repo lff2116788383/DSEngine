@@ -129,6 +129,7 @@ protected:
     }
 };
 
+// 测试 模块生命周期集成：生命周期按调用
 TEST_F(ModuleLifecycleIntegrationTest, LifecycleByCalls) {
     // Init → Update → FixedUpdate → Shutdown
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
@@ -143,6 +144,7 @@ TEST_F(ModuleLifecycleIntegrationTest, LifecycleByCalls) {
     EXPECT_EQ(module->call_log[3], "OnShutdown");
 }
 
+// 测试 模块生命周期集成：模块初始化当创建实体
 TEST_F(ModuleLifecycleIntegrationTest, ModuleInitializeWhenCreateEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
 
@@ -158,6 +160,7 @@ TEST_F(ModuleLifecycleIntegrationTest, ModuleInitializeWhenCreateEntity) {
     EXPECT_FLOAT_EQ(transform.position.z, 3.0f);
 }
 
+// 测试 模块生命周期集成：模块Updatedrive实体
 TEST_F(ModuleLifecycleIntegrationTest, ModuleUpdatedriveEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
 
@@ -173,6 +176,7 @@ TEST_F(ModuleLifecycleIntegrationTest, ModuleUpdatedriveEntity) {
     EXPECT_FLOAT_EQ(transform.position.x, 4.0f);
 }
 
+// 测试 模块生命周期集成：模块关闭当Cleanup创建实体
 TEST_F(ModuleLifecycleIntegrationTest, ModuleShutdownWhenCleanupCreateEntity) {
     ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
     EXPECT_EQ(world.EntityCount(), 1u);
@@ -182,6 +186,7 @@ TEST_F(ModuleLifecycleIntegrationTest, ModuleShutdownWhenCleanupCreateEntity) {
     EXPECT_TRUE(module->created_entity == entt::null);
 }
 
+// 测试 模块生命周期集成：多次数初始化且关闭不崩溃
 TEST_F(ModuleLifecycleIntegrationTest, MultiTimesInitAndShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         ASSERT_TRUE(module->OnInit(world, nullptr, nullptr));
@@ -195,6 +200,7 @@ TEST_F(ModuleLifecycleIntegrationTest, MultiTimesInitAndShutdownDoesNotCrash) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 模块生命周期集成：Multimodule不
 TEST_F(ModuleLifecycleIntegrationTest, MultimoduleNot) {
     auto module2 = std::make_unique<SecondTestModule>();
 
@@ -222,6 +228,7 @@ TEST_F(ModuleLifecycleIntegrationTest, MultimoduleNot) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 模块生命周期集成：模块获取正确
 TEST_F(ModuleLifecycleIntegrationTest, ModuleAcquireCorrect) {
     EXPECT_STREQ(module->GetName(), "TestLifecycle");
 

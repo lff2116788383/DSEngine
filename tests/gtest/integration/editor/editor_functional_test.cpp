@@ -75,6 +75,7 @@ protected:
 // Test 1: CreateEntityAddsToRegistry
 // ============================================================
 
+// 测试 编辑器功能：创建实体添加到注册表
 TEST_F(EditorFunctionalTest, CreateEntityAddsToRegistry) {
     EXPECT_EQ(world.EntityCount(), 0u);
 
@@ -108,6 +109,7 @@ TEST_F(EditorFunctionalTest, CreateEntityAddsToRegistry) {
 // Test 2: UndoRedoRestoresState
 // ============================================================
 
+// 测试 编辑器功能：撤销重做恢复状态
 TEST_F(EditorFunctionalTest, UndoRedoRestoresState) {
     dse::editor::UndoRedoManager undo_mgr;
 
@@ -152,6 +154,7 @@ TEST_F(EditorFunctionalTest, UndoRedoRestoresState) {
     EXPECT_FALSE(undo_mgr.CanRedo());
 }
 
+// 测试 编辑器功能：撤销重做lambda命令创建销毁
 TEST_F(EditorFunctionalTest, UndoRedoLambdaCommandCreateDestroy) {
     dse::editor::UndoRedoManager undo_mgr;
 
@@ -187,6 +190,7 @@ TEST_F(EditorFunctionalTest, UndoRedoLambdaCommandCreateDestroy) {
     EXPECT_EQ(world.EntityCount(), 1u);
 }
 
+// 测试 编辑器功能：撤销重做复合命令
 TEST_F(EditorFunctionalTest, UndoRedoCompoundCommand) {
     dse::editor::UndoRedoManager undo_mgr;
 
@@ -217,6 +221,7 @@ TEST_F(EditorFunctionalTest, UndoRedoCompoundCommand) {
     EXPECT_FLOAT_EQ(t.scale.x, 2.0f);
 }
 
+// 测试 编辑器功能：撤销重做合并
 TEST_F(EditorFunctionalTest, UndoRedoMerge) {
     dse::editor::UndoRedoManager undo_mgr;
 
@@ -244,6 +249,7 @@ TEST_F(EditorFunctionalTest, UndoRedoMerge) {
 // Test 3: SaveLoadRoundTrip
 // ============================================================
 
+// 测试 编辑器功能：保存加载往返
 TEST_F(EditorFunctionalTest, SaveLoadRoundTrip) {
     // Create entities with various components
     Entity e1 = world.CreateEntity();
@@ -304,6 +310,7 @@ TEST_F(EditorFunctionalTest, SaveLoadRoundTrip) {
 // Test 4: PrefabSaveLoadRoundTrip
 // ============================================================
 
+// 测试 编辑器功能：预制体保存加载往返
 TEST_F(EditorFunctionalTest, PrefabSaveLoadRoundTrip) {
     Entity source = world.CreateEntity();
     reg().emplace<EditorNameComponent>(source, "PrefabSource");
@@ -357,6 +364,7 @@ TEST_F(EditorFunctionalTest, PrefabSaveLoadRoundTrip) {
 // Test 5: SceneTabSwitching
 // ============================================================
 
+// 测试 编辑器功能：场景标签页切换
 TEST_F(EditorFunctionalTest, SceneTabSwitching) {
     // SceneTabManager is a singleton that touches ImGui in DrawTabBar.
     // Here we test the data-layer API only (Init/NewScene/SwitchTo/Close).
@@ -411,6 +419,7 @@ TEST_F(EditorFunctionalTest, SceneTabSwitching) {
 // Test 6: UndoRedoHistoryAndClear
 // ============================================================
 
+// 测试 编辑器功能：撤销重做历史且清空
 TEST_F(EditorFunctionalTest, UndoRedoHistoryAndClear) {
     dse::editor::UndoRedoManager undo_mgr;
 
@@ -459,6 +468,7 @@ TEST_F(EditorFunctionalTest, UndoRedoHistoryAndClear) {
 // Test 7: RegistrySnapshotExportCompare
 // ============================================================
 
+// 测试 编辑器功能：注册表快照导出比较
 TEST_F(EditorFunctionalTest, RegistrySnapshotExportCompare) {
     // Build a scene
     Entity e1 = world.CreateEntity();
@@ -499,6 +509,7 @@ TEST_F(EditorFunctionalTest, RegistrySnapshotExportCompare) {
 // Test 8: CLI Argument Parsing
 // ============================================================
 
+// 测试 编辑器功能：CLI Argument Parsing
 TEST_F(EditorFunctionalTest, CLIArgumentParsing) {
     // Test default config
     {
@@ -536,6 +547,7 @@ TEST_F(EditorFunctionalTest, CLIArgumentParsing) {
 // Test 9: CopyRegistry round-trip
 // ============================================================
 
+// 测试 编辑器功能：Copy注册表往返
 TEST_F(EditorFunctionalTest, CopyRegistryRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "CopyTest");
@@ -565,6 +577,7 @@ TEST_F(EditorFunctionalTest, CopyRegistryRoundTrip) {
 // Test 10: UndoRedo max-history trim
 // ============================================================
 
+// 测试 编辑器功能：撤销重做最大历史修剪
 TEST_F(EditorFunctionalTest, UndoRedoMaxHistoryTrim) {
     dse::editor::UndoRedoManager undo_mgr(3);  // 最多保留 3 步
 
@@ -591,6 +604,7 @@ TEST_F(EditorFunctionalTest, UndoRedoMaxHistoryTrim) {
 // Test 11: SceneIO Camera3D + MeshRenderer roundtrip
 // ============================================================
 
+// 测试 编辑器功能：场景IO相机3D且网格渲染器往返
 TEST_F(EditorFunctionalTest, SceneIO_Camera3DAndMeshRendererRoundTrip) {
     // 创建带 Camera3D 和 MeshRenderer 的实体
     Entity cam_e = world.CreateEntity();
@@ -646,6 +660,7 @@ TEST_F(EditorFunctionalTest, SceneIO_Camera3DAndMeshRendererRoundTrip) {
 // Test 12: Snapshot entity-count mismatch detection
 // ============================================================
 
+// 测试 编辑器功能：快照实体计数Mismatch
 TEST_F(EditorFunctionalTest, SnapshotEntityCountMismatch) {
     Entity e1 = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e1, "Alpha");
@@ -673,6 +688,7 @@ TEST_F(EditorFunctionalTest, SnapshotEntityCountMismatch) {
 // Test 13: SceneIO 空场景往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO空场景往返
 TEST_F(EditorFunctionalTest, SceneIO_EmptySceneRoundTrip) {
     const auto path = TempPath("dse_test_empty.dscene");
     SaveScene(reg(), path.string());
@@ -689,6 +705,7 @@ TEST_F(EditorFunctionalTest, SceneIO_EmptySceneRoundTrip) {
 // Test 14: SceneIO DirectionalLight3D 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO方向光灯光3D往返
 TEST_F(EditorFunctionalTest, SceneIO_DirectionalLight3DRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Sun");
@@ -724,6 +741,7 @@ TEST_F(EditorFunctionalTest, SceneIO_DirectionalLight3DRoundTrip) {
 // Test 15: SceneIO RigidBody2D 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO刚体2D往返
 TEST_F(EditorFunctionalTest, SceneIO_RigidBody2DRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Phys2D");
@@ -758,6 +776,7 @@ TEST_F(EditorFunctionalTest, SceneIO_RigidBody2DRoundTrip) {
 // Test 16: UndoRedo 新命令执行后清空 Redo 栈
 // ============================================================
 
+// 测试 编辑器功能：撤销重做新建命令清空重做
 TEST_F(EditorFunctionalTest, UndoRedo_NewCommandClearsRedo) {
     dse::editor::UndoRedoManager mgr;
     int v = 0;
@@ -785,6 +804,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_NewCommandClearsRedo) {
 // Test 17: SceneIO SpriteRenderer 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO精灵渲染器往返
 TEST_F(EditorFunctionalTest, SceneIO_SpriteRendererRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Sprite");
@@ -821,6 +841,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SpriteRendererRoundTrip) {
 // Test 18: SceneIO UILabel 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI标签往返
 TEST_F(EditorFunctionalTest, SceneIO_UILabelRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Label");
@@ -854,6 +875,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UILabelRoundTrip) {
 // Test 19: SceneIO ParticleEmitter 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO粒子发射器往返
 TEST_F(EditorFunctionalTest, SceneIO_ParticleEmitterRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Particles");
@@ -887,6 +909,7 @@ TEST_F(EditorFunctionalTest, SceneIO_ParticleEmitterRoundTrip) {
 // Test 20: SceneIO SiblingIndex 多实体排序往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO Sibling索引Preserved
 TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexPreserved) {
     Entity e0 = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e0, "E0");
@@ -925,6 +948,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexPreserved) {
 // Test 21: Prefab 实例化后 IsPrefabInstance 为真
 // ============================================================
 
+// 测试 编辑器功能：预制体实例为预制体实例
 TEST_F(EditorFunctionalTest, PrefabInstance_IsPrefabInstance) {
     Entity src = world.CreateEntity();
     reg().emplace<EditorNameComponent>(src, "SourceEntity");
@@ -947,6 +971,7 @@ TEST_F(EditorFunctionalTest, PrefabInstance_IsPrefabInstance) {
 // Test 22: Prefab 多实例独立性
 // ============================================================
 
+// 测试 编辑器功能：预制体多个实例独立
 TEST_F(EditorFunctionalTest, PrefabMultipleInstances_Independent) {
     Entity src = world.CreateEntity();
     reg().emplace<EditorNameComponent>(src, "PrefabSrc");
@@ -974,6 +999,7 @@ TEST_F(EditorFunctionalTest, PrefabMultipleInstances_Independent) {
 // Test 23: SceneTabManager 实体隔离
 // ============================================================
 
+// 测试 编辑器功能：场景标签页管理器实体Isolation
 TEST_F(EditorFunctionalTest, SceneTabManager_EntityIsolation) {
     auto& tab_mgr = dse::editor::SceneTabManager::Get();
     tab_mgr.Init("Untitled");
@@ -1009,6 +1035,7 @@ TEST_F(EditorFunctionalTest, SceneTabManager_EntityIsolation) {
 // Test 24: CopyRegistry 多组件完整性
 // ============================================================
 
+// 测试 编辑器功能：Copy注册表多组件Integrity
 TEST_F(EditorFunctionalTest, CopyRegistry_MultiComponent_Integrity) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "MultiComp");
@@ -1044,6 +1071,7 @@ TEST_F(EditorFunctionalTest, CopyRegistry_MultiComponent_Integrity) {
 // Test 25: SceneIO PointLight 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO点灯光往返
 TEST_F(EditorFunctionalTest, SceneIO_PointLightRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "PointLightEnt");
@@ -1081,6 +1109,7 @@ TEST_F(EditorFunctionalTest, SceneIO_PointLightRoundTrip) {
 // Test 26: SceneIO SpotLight 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO聚光灯光往返
 TEST_F(EditorFunctionalTest, SceneIO_SpotLightRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "SpotLightEnt");
@@ -1118,6 +1147,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SpotLightRoundTrip) {
 // Test 27: SceneIO SkyLight 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO天空灯光往返
 TEST_F(EditorFunctionalTest, SceneIO_SkyLightRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "SkyLightEnt");
@@ -1151,6 +1181,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SkyLightRoundTrip) {
 // Test 28: SceneTabManager dirty 状态追踪
 // ============================================================
 
+// 测试 编辑器功能：场景标签页管理器脏状态追踪
 TEST_F(EditorFunctionalTest, SceneTabManager_DirtyStateTracking) {
     auto& tab_mgr = dse::editor::SceneTabManager::Get();
     tab_mgr.Init("Untitled");
@@ -1181,6 +1212,7 @@ TEST_F(EditorFunctionalTest, SceneTabManager_DirtyStateTracking) {
 // Test 29: Prefab 多组件完整性
 // ============================================================
 
+// 测试 编辑器功能：预制体多组件往返
 TEST_F(EditorFunctionalTest, Prefab_MultiComponent_RoundTrip) {
     Entity src = world.CreateEntity();
     reg().emplace<EditorNameComponent>(src, "MultiCompPrefab");
@@ -1217,6 +1249,7 @@ TEST_F(EditorFunctionalTest, Prefab_MultiComponent_RoundTrip) {
 // Test 30: SceneIO Animator3D 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO动画器3D往返
 TEST_F(EditorFunctionalTest, SceneIO_Animator3DRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "AnimatorEnt");
@@ -1252,6 +1285,7 @@ TEST_F(EditorFunctionalTest, SceneIO_Animator3DRoundTrip) {
 // Test 31: SceneIO RigidBody3D 往返 + CopyRegistry bug 验证
 // ============================================================
 
+// 测试 编辑器功能：场景IO刚体3D往返
 TEST_F(EditorFunctionalTest, SceneIO_RigidBody3DRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "RB3DEnt");
@@ -1302,6 +1336,7 @@ TEST_F(EditorFunctionalTest, SceneIO_RigidBody3DRoundTrip) {
 // Test 32: SceneIO UIAnchor 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI锚点往返
 TEST_F(EditorFunctionalTest, SceneIO_UIAnchorRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "AnchorEnt");
@@ -1334,6 +1369,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UIAnchorRoundTrip) {
 // Test 33: SceneIO 50 实体压力测试（无 ID 碰撞/无丢失）
 // ============================================================
 
+// 测试 编辑器功能：场景IO多实体压力
 TEST_F(EditorFunctionalTest, SceneIO_MultiEntityStressTest) {
     const int kCount = 50;
     for (int i = 0; i < kCount; ++i) {
@@ -1368,6 +1404,7 @@ TEST_F(EditorFunctionalTest, SceneIO_MultiEntityStressTest) {
 // Test 34: SceneIO Skybox 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO天空盒往返
 TEST_F(EditorFunctionalTest, SceneIO_SkyboxRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "SkyboxEnt");
@@ -1399,6 +1436,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SkyboxRoundTrip) {
 // Test 35: SceneIO UIGridLayout 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI网格布局往返
 TEST_F(EditorFunctionalTest, SceneIO_UIGridLayoutRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "GridLayoutEnt");
@@ -1436,6 +1474,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UIGridLayoutRoundTrip) {
 // Test 36: SceneTabManager CloseTab 行为
 // ============================================================
 
+// 测试 编辑器功能：场景标签页管理器关闭标签页
 TEST_F(EditorFunctionalTest, SceneTabManager_CloseTab) {
     auto& tab_mgr = dse::editor::SceneTabManager::Get();
     tab_mgr.Init("Untitled");
@@ -1466,6 +1505,7 @@ TEST_F(EditorFunctionalTest, SceneTabManager_CloseTab) {
 // Test 37: UndoRedo + SaveScene 非破坏性集成测试
 // ============================================================
 
+// 测试 编辑器功能：撤销重做保存场景非Destructive
 TEST_F(EditorFunctionalTest, UndoRedo_SaveScene_NonDestructive) {
     Entity e = world.CreateEntity();
     auto& name_comp = reg().emplace<EditorNameComponent>(e, "OriginalName");
@@ -1503,6 +1543,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_SaveScene_NonDestructive) {
 // Test 41: SceneIO UICanvasScaler 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI画布缩放器往返
 TEST_F(EditorFunctionalTest, SceneIO_UICanvasScalerRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "CanvasScalerEnt");
@@ -1537,6 +1578,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UICanvasScalerRoundTrip) {
 // Test 42: SceneIO UIAnimation 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI动画往返
 TEST_F(EditorFunctionalTest, SceneIO_UIAnimationRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "UIAnimEnt");
@@ -1578,6 +1620,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UIAnimationRoundTrip) {
 // Test 43: SceneIO Camera3D 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO相机3D往返
 TEST_F(EditorFunctionalTest, SceneIO_Camera3DRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "CamEnt");
@@ -1615,6 +1658,7 @@ TEST_F(EditorFunctionalTest, SceneIO_Camera3DRoundTrip) {
 // Test 44: SceneTabManager SwitchTo 恢复 Registry
 // ============================================================
 
+// 测试 编辑器功能：场景标签页管理器切换到恢复注册表
 TEST_F(EditorFunctionalTest, SceneTabManager_SwitchTo_RestoresRegistry) {
     auto& tab_mgr = dse::editor::SceneTabManager::Get();
     tab_mgr.Init("Tab0");
@@ -1651,6 +1695,7 @@ TEST_F(EditorFunctionalTest, SceneTabManager_SwitchTo_RestoresRegistry) {
 // Test 45: SceneIO UIRenderer 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO UI渲染器往返
 TEST_F(EditorFunctionalTest, SceneIO_UIRendererRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "UIRenEnt");
@@ -1686,6 +1731,7 @@ TEST_F(EditorFunctionalTest, SceneIO_UIRendererRoundTrip) {
 // Test 46: SceneIO 复合多组件实体往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO多组件实体往返
 TEST_F(EditorFunctionalTest, SceneIO_MultiComponentEntityRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "ComplexEnt");
@@ -1729,6 +1775,7 @@ TEST_F(EditorFunctionalTest, SceneIO_MultiComponentEntityRoundTrip) {
 // Test 47: SceneIO Terrain 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO地形往返
 TEST_F(EditorFunctionalTest, SceneIO_TerrainRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "TerrainEnt");
@@ -1771,6 +1818,7 @@ TEST_F(EditorFunctionalTest, SceneIO_TerrainRoundTrip) {
 // Test 48: UndoRedo PropertyChangeCommand Execute 和 Undo
 // ============================================================
 
+// 测试 编辑器功能：撤销重做Property变更执行且撤销
 TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_ExecuteAndUndo) {
     dse::editor::UndoRedoManager mgr;
     float value = 1.0f;
@@ -1796,6 +1844,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_ExecuteAndUndo) {
 // Test 49: UndoRedo PropertyChangeCommand Merge
 // ============================================================
 
+// 测试 编辑器功能：撤销重做Property变更合并相同Description
 TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_MergeSameDescription) {
     dse::editor::UndoRedoManager mgr;
     float value = 0.0f;
@@ -1819,6 +1868,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_PropertyChange_MergeSameDescription) {
 // Test 50: UndoRedo CompoundCommand 反序 Undo
 // ============================================================
 
+// 测试 编辑器功能：撤销重做复合命令Reverse撤销
 TEST_F(EditorFunctionalTest, UndoRedo_CompoundCommand_ReverseUndo) {
     dse::editor::UndoRedoManager mgr;
     std::vector<int> log;
@@ -1848,6 +1898,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_CompoundCommand_ReverseUndo) {
 // Test 51: UndoRedo MaxHistory 裁剪
 // ============================================================
 
+// 测试 编辑器功能：撤销重做最大历史修剪
 TEST_F(EditorFunctionalTest, UndoRedo_MaxHistory_Trim) {
     dse::editor::UndoRedoManager mgr(5);
     int dummy = 0;
@@ -1867,6 +1918,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_MaxHistory_Trim) {
 // Test 52: UndoRedo LambdaCommand MergeById
 // ============================================================
 
+// 测试 编辑器功能：撤销重做lambda命令合并按ID
 TEST_F(EditorFunctionalTest, UndoRedo_LambdaCommand_MergeById) {
     dse::editor::UndoRedoManager mgr;
     float pos = 0.0f;
@@ -1887,6 +1939,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_LambdaCommand_MergeById) {
 // Test 53: InspectorRegistry Register 和排序
 // ============================================================
 
+// 测试 编辑器功能：检视器注册表排序顺序
 TEST_F(EditorFunctionalTest, InspectorRegistry_SortOrder) {
     std::vector<dse::editor::InspectorEntry> entries = {
         {"CompC", "3D", nullptr, nullptr, nullptr, 300},
@@ -1908,6 +1961,7 @@ TEST_F(EditorFunctionalTest, InspectorRegistry_SortOrder) {
 // Test 54: InspectorRegistry Has 回调
 // ============================================================
 
+// 测试 编辑器功能：检视器注册表拥有且添加回调
 TEST_F(EditorFunctionalTest, InspectorRegistry_HasAndAddCallback) {
     dse::editor::InspectorEntry entry{
         "TransformComponent", "Core", nullptr,
@@ -1932,6 +1986,7 @@ TEST_F(EditorFunctionalTest, InspectorRegistry_HasAndAddCallback) {
 // Test 55: InspectorRegistry Category 分类
 // ============================================================
 
+// 测试 编辑器功能：检视器注册表Singleton Accessible
 TEST_F(EditorFunctionalTest, InspectorRegistry_SingletonAccessible) {
     auto& registry = dse::editor::InspectorRegistry::Get();
     const auto& entries = registry.GetEntries();
@@ -1944,6 +1999,7 @@ TEST_F(EditorFunctionalTest, InspectorRegistry_SingletonAccessible) {
 // Test 56: EditorSettings AddRecentFile 去重和裁剪
 // ============================================================
 
+// 测试 编辑器功能：编辑器设置添加Recent文件Dedup且修剪
 TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_DedupAndTrim) {
     dse::editor::EditorSettings settings;
     settings.max_recent_files = 3;
@@ -1965,6 +2021,7 @@ TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_DedupAndTrim) {
 // Test 57: EditorSettings 默认值
 // ============================================================
 
+// 测试 编辑器功能：编辑器设置默认值
 TEST_F(EditorFunctionalTest, EditorSettings_DefaultValues) {
     dse::editor::EditorSettings settings;
     EXPECT_TRUE(settings.recent_files.empty());
@@ -1977,6 +2034,7 @@ TEST_F(EditorFunctionalTest, EditorSettings_DefaultValues) {
 // Test 58: EditorSettings Save 和 Load 往返
 // ============================================================
 
+// 测试 编辑器功能：编辑器设置保存加载往返
 TEST_F(EditorFunctionalTest, EditorSettings_SaveLoadRoundTrip) {
     dse::editor::EditorSettings original;
     original.recent_files = {"scene1.dscene", "scene2.dscene"};
@@ -1999,6 +2057,7 @@ TEST_F(EditorFunctionalTest, EditorSettings_SaveLoadRoundTrip) {
 // Test 59: Snapshot ExportRegistrySnapshot 基本输出
 // ============================================================
 
+// 测试 编辑器功能：快照导出注册表快照基础输出
 TEST_F(EditorFunctionalTest, Snapshot_ExportRegistrySnapshot_BasicOutput) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "SnapEntity");
@@ -2013,6 +2072,7 @@ TEST_F(EditorFunctionalTest, Snapshot_ExportRegistrySnapshot_BasicOutput) {
 // Test 60: Snapshot CompareSnapshot 检测差异
 // ============================================================
 
+// 测试 编辑器功能：快照比较快照Detects Difference
 TEST_F(EditorFunctionalTest, Snapshot_CompareSnapshot_DetectsDifference) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "Original");
@@ -2031,6 +2091,7 @@ TEST_F(EditorFunctionalTest, Snapshot_CompareSnapshot_DetectsDifference) {
 // Test 61: UndoRedo 新 Execute 清空 Redo 栈
 // ============================================================
 
+// 测试 编辑器功能：撤销重做执行清空重做栈
 TEST_F(EditorFunctionalTest, UndoRedo_ExecuteClearsRedoStack) {
     dse::editor::UndoRedoManager mgr;
     int val = 0;
@@ -2052,6 +2113,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_ExecuteClearsRedoStack) {
 // Test 62: UndoRedo Clear 后栈为空
 // ============================================================
 
+// 测试 编辑器功能：撤销重做清空Empties栈
 TEST_F(EditorFunctionalTest, UndoRedo_ClearEmptiesStack) {
     dse::editor::UndoRedoManager mgr;
     int val = 0;
@@ -2072,6 +2134,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_ClearEmptiesStack) {
 // Test 63: UndoRedo GetHistory 返回正确顺序
 // ============================================================
 
+// 测试 编辑器功能：撤销重做获取历史顺序
 TEST_F(EditorFunctionalTest, UndoRedo_GetHistoryOrder) {
     dse::editor::UndoRedoManager mgr;
     int dummy = 0;
@@ -2093,6 +2156,7 @@ TEST_F(EditorFunctionalTest, UndoRedo_GetHistoryOrder) {
 // Test 64: Prefab IsPrefabInstance 标记
 // ============================================================
 
+// 测试 编辑器功能：预制体为预制体实例之后Instantiate
 TEST_F(EditorFunctionalTest, Prefab_IsPrefabInstance_AfterInstantiate) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "PrefabSrc");
@@ -2113,6 +2177,7 @@ TEST_F(EditorFunctionalTest, Prefab_IsPrefabInstance_AfterInstantiate) {
 // Test 65: SceneIO SiblingIndex 往返
 // ============================================================
 
+// 测试 编辑器功能：场景IO Sibling索引往返
 TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexRoundTrip) {
     Entity e = world.CreateEntity();
     reg().emplace<EditorNameComponent>(e, "SiblingEnt");
@@ -2139,6 +2204,7 @@ TEST_F(EditorFunctionalTest, SceneIO_SiblingIndexRoundTrip) {
 // Test 66: EditorSettings AddRecentFile 忽略 Untitled 和空路径
 // ============================================================
 
+// 测试 编辑器功能：编辑器设置添加Recent文件忽略Untitled且空
 TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_IgnoresUntitledAndEmpty) {
     dse::editor::EditorSettings settings;
     dse::editor::AddRecentFile(settings, "valid.dscene");
@@ -2153,6 +2219,7 @@ TEST_F(EditorFunctionalTest, EditorSettings_AddRecentFile_IgnoresUntitledAndEmpt
 // Test 67: ChatProtocol ParseBridgeMessage - assistant_message
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析Assistant消息
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_AssistantMessage) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"assistant_message","content":"Hello world"})");
@@ -2165,6 +2232,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_AssistantMessage) {
 // Test 68: ChatProtocol ParseBridgeMessage - tool_call
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析Tool调用
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_ToolCall) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"tool_call","name":"dsengine_entity_create","arguments":"{\"name\":\"Box\"}","call_id":"abc123"})");
@@ -2179,6 +2247,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_ToolCall) {
 // Test 69: ChatProtocol ParseBridgeMessage - error
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析错误
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Error) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"error","message":"API key missing"})");
@@ -2191,6 +2260,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Error) {
 // Test 70: ChatProtocol ParseBridgeMessage - status
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析状态
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Status) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"status","message":"Connected"})");
@@ -2203,6 +2273,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_Status) {
 // Test 71: ChatProtocol ParseBridgeMessage - invalid JSON
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析无效JSON
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_InvalidJSON) {
     auto msg = dse::editor::ParseBridgeMessage("not json at all");
     EXPECT_FALSE(msg.valid);
@@ -2214,6 +2285,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_InvalidJSON) {
 // Test 72: ChatProtocol ParseBridgeMessage - unknown type
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析未知类型
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_UnknownType) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"custom_event","data":123})");
@@ -2225,6 +2297,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_Parse_UnknownType) {
 // Test 73: ChatProtocol BuildUserMessage 格式正确
 // ============================================================
 
+// 测试 编辑器功能：聊天协议构建User消息
 TEST_F(EditorFunctionalTest, ChatProtocol_BuildUserMessage) {
     std::string line = dse::editor::BuildUserMessage("Create a cube");
     EXPECT_TRUE(line.back() == '\n');
@@ -2240,6 +2313,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_BuildUserMessage) {
 // Test 74: ChatProtocol BuildToolResult 格式正确
 // ============================================================
 
+// 测试 编辑器功能：聊天协议构建Tool结果
 TEST_F(EditorFunctionalTest, ChatProtocol_BuildToolResult) {
     std::string line = dse::editor::BuildToolResult("call_42", R"({"ok":true})");
     EXPECT_TRUE(line.back() == '\n');
@@ -2256,6 +2330,7 @@ TEST_F(EditorFunctionalTest, ChatProtocol_BuildToolResult) {
 // Test 75: ChatProtocol ParseBridgeMessage - 空 content 字段
 // ============================================================
 
+// 测试 编辑器功能：聊天协议解析空内容
 TEST_F(EditorFunctionalTest, ChatProtocol_Parse_EmptyContent) {
     auto msg = dse::editor::ParseBridgeMessage(
         R"({"type":"assistant_message","content":""})");

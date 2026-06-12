@@ -58,6 +58,7 @@ protected:
 // 3D 粒子系统
 // ============================================================
 
+// 测试 Lua粒子绑定：添加粒子系统3D创建组件
 TEST_F(LuaParticleBindingTest, AddParticleSystem3DCreateComponent) {
     LuaTempScript script("test_ps3d_add.lua", R"(
         function Awake()
@@ -86,6 +87,7 @@ TEST_F(LuaParticleBindingTest, AddParticleSystem3DCreateComponent) {
     EXPECT_EQ(found, 1);
 }
 
+// 测试 Lua粒子绑定：设置参数修改参数
 TEST_F(LuaParticleBindingTest, SetParamsModifyParameters) {
     LuaTempScript script("test_ps3d_params.lua", R"(
         function Awake()
@@ -132,6 +134,7 @@ TEST_F(LuaParticleBindingTest, SetParamsModifyParameters) {
 // 2D 粒子发射器
 // ============================================================
 
+// 测试 Lua粒子绑定：添加粒子发射器创建组件
 TEST_F(LuaParticleBindingTest, AddParticleEmitterCreateComponent) {
     LuaTempScript script("test_emitter.lua", R"(
         function Awake()
@@ -160,6 +163,7 @@ TEST_F(LuaParticleBindingTest, AddParticleEmitterCreateComponent) {
     EXPECT_EQ(found, 1);
 }
 
+// 测试 Lua粒子绑定：粒子Bursttrigger即时
 TEST_F(LuaParticleBindingTest, ParticleBursttriggerInstant) {
     LuaTempScript script("test_burst.lua", R"(
         function Awake()
@@ -192,6 +196,7 @@ TEST_F(LuaParticleBindingTest, ParticleBursttriggerInstant) {
 // GameplayTuning
 // ============================================================
 
+// 测试 Lua粒子绑定：玩法调参创建且设置上
 TEST_F(LuaParticleBindingTest, GameplayTuningCreateAndSetUp) {
     LuaTempScript script("test_tuning.lua", R"(
         function Awake()
@@ -229,6 +234,7 @@ TEST_F(LuaParticleBindingTest, GameplayTuningCreateAndSetUp) {
 // 错误参数安全性
 // ============================================================
 
+// 测试 Lua粒子绑定：若实体不存在Will不崩溃
 TEST_F(LuaParticleBindingTest, IfTheEntityDoesNotExistItWillNotCrash) {
     LuaTempScript script("test_safe.lua", R"(
         function Awake()

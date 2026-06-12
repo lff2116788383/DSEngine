@@ -13,6 +13,7 @@
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/runtime_services.h"
 
+// 测试 运行时上下文：Defaultis零
 TEST(RuntimeContextTest, DefaultisZero) {
     dse::runtime::RuntimeContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
@@ -22,11 +23,13 @@ TEST(RuntimeContextTest, DefaultisZero) {
     EXPECT_FALSE(static_cast<bool>(ctx.window_title_setter));
 }
 
+// 测试 运行时上下文：业务模式默认为Lua
 TEST(RuntimeContextTest, business_ModeDefaultIsLua) {
     dse::runtime::RuntimeContext ctx;
     EXPECT_EQ(ctx.business_mode, BusinessMode::Lua);
 }
 
+// 测试 运行时上下文：能够修订
 TEST(RuntimeContextTest, CanRevise) {
     dse::runtime::RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;
@@ -35,6 +38,7 @@ TEST(RuntimeContextTest, CanRevise) {
     EXPECT_TRUE(ctx.editor_mode);
 }
 
+// 测试 运行时上下文：窗口标题Setter Injectable
 TEST(RuntimeContextTest, window_title_SetterInjectable) {
     dse::runtime::RuntimeContext ctx;
     std::string captured;
@@ -45,6 +49,7 @@ TEST(RuntimeContextTest, window_title_SetterInjectable) {
     EXPECT_EQ(captured, "hello");
 }
 
+// 测试 运行时服务：默认带为空
 TEST(RuntimeServicesTest, DefaultWithIsEmpty) {
     dse::runtime::RuntimeServices services;
     EXPECT_EQ(services.world, nullptr);
@@ -52,6 +57,7 @@ TEST(RuntimeServicesTest, DefaultWithIsEmpty) {
     EXPECT_EQ(services.job_system, nullptr);
 }
 
+// 测试 业务模式：Lua且Cppenumeration值为不同
 TEST(BusinessModeTest, LuaAndCppenumerationValuesAreDifferent) {
     EXPECT_NE(BusinessMode::Lua, BusinessMode::Cpp);
 }

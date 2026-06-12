@@ -17,6 +17,7 @@
 // SpriteBlendMode
 // ============================================================
 
+// 测试 精灵混合模式：枚举值正确
 TEST(SpriteBlendModeTest, EnumerationValueCorrect) {
     EXPECT_EQ(static_cast<int>(SpriteBlendMode::Alpha), 0);
     EXPECT_EQ(static_cast<int>(SpriteBlendMode::Additive), 1);
@@ -27,6 +28,7 @@ TEST(SpriteBlendModeTest, EnumerationValueCorrect) {
 // MaterialInstanceComponent
 // ============================================================
 
+// 测试 材质实例组件：默认值
 TEST(MaterialInstanceComponentTest, DefaultValues) {
     MaterialInstanceComponent mat;
     EXPECT_EQ(mat.material_id, 0u);
@@ -39,6 +41,7 @@ TEST(MaterialInstanceComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(mat.tint.a, 1.0f);
 }
 
+// 测试 材质实例组件：能够修订
 TEST(MaterialInstanceComponentTest, CanRevise) {
     MaterialInstanceComponent mat;
     mat.blend_mode = SpriteBlendMode::Additive;
@@ -51,6 +54,7 @@ TEST(MaterialInstanceComponentTest, CanRevise) {
 // SpriteRendererComponent
 // ============================================================
 
+// 测试 精灵渲染器组件：默认值
 TEST(SpriteRendererComponentTest, DefaultValues) {
     SpriteRendererComponent sprite;
     EXPECT_EQ(sprite.texture_handle, 0u);
@@ -65,6 +69,7 @@ TEST(SpriteRendererComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(sprite.uv_scroll_speed.x, 0.0f);
 }
 
+// 测试 精灵渲染器组件：Revisesorting Andblend
 TEST(SpriteRendererComponentTest, RevisesortingAndblend) {
     SpriteRendererComponent sprite;
     sprite.sorting_layer = 5;
@@ -79,6 +84,7 @@ TEST(SpriteRendererComponentTest, RevisesortingAndblend) {
 // SpineRendererComponent
 // ============================================================
 
+// 测试 Spine渲染器组件：默认值
 TEST(SpineRendererComponentTest, DefaultValues) {
     SpineRendererComponent spine;
     EXPECT_TRUE(spine.skeleton_data_path.empty());

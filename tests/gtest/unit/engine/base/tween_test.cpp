@@ -20,18 +20,21 @@ using namespace dse::utils;
 // Evaluate 缓动函数
 // ============================================================
 
+// 测试 补间：线性返回原始值
 TEST(TweenTest, LinearReturnOriginalValue) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::Linear, 0.0f), 0.0f);
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::Linear, 0.5f), 0.5f);
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::Linear, 1.0f), 1.0f);
 }
 
+// 测试 补间：缓动于Quadsquare Growth
 TEST(TweenTest, EaseInQuadsquareGrowth) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInQuad, 0.0f), 0.0f);
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInQuad, 0.5f), 0.25f);
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInQuad, 1.0f), 1.0f);
 }
 
+// 测试 补间：缓动输出Quadreverse方形
 TEST(TweenTest, EaseOutQuadreverseSquare) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseOutQuad, 0.0f), 0.0f);
     // t*(2-t) = 0.5*(2-0.5) = 0.5*1.5 = 0.75
@@ -39,6 +42,7 @@ TEST(TweenTest, EaseOutQuadreverseSquare) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseOutQuad, 1.0f), 1.0f);
 }
 
+// 测试 补间：缓动于输出四边形首个慢然后Fast然后慢
 TEST(TweenTest, EaseInOutQuadFirstSlowThenFastThenSlow) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInOutQuad, 0.0f), 0.0f);
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInOutQuad, 1.0f), 1.0f);
@@ -48,6 +52,7 @@ TEST(TweenTest, EaseInOutQuadFirstSlowThenFastThenSlow) {
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInOutQuad, 0.75f), 0.875f);
 }
 
+// 测试 补间：缓动于输出四边形中点为0点5
 TEST(TweenTest, EaseInOutQuadTheMidpointIs0point5) {
     // t=0.5 => -1+(4-1)*0.5 = -1+1.5 = 0.5
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::EaseInOutQuad, 0.5f), 0.5f);
@@ -57,6 +62,7 @@ TEST(TweenTest, EaseInOutQuadTheMidpointIs0point5) {
 // 参数 clamp
 // ============================================================
 
+// 测试 补间：T按钳制到01
 TEST(TweenTest, TByClampTo01) {
     // t < 0 应 clamp 到 0
     EXPECT_FLOAT_EQ(Tween::Evaluate(EaseType::Linear, -1.0f), 0.0f);
@@ -71,23 +77,27 @@ TEST(TweenTest, TByClampTo01) {
 // Lerp 线性插值
 // ============================================================
 
+// 测试 补间：线性插值默认线性插值
 TEST(TweenTest, LerpDefaultLinearInterpolation) {
     EXPECT_FLOAT_EQ(Tween::Lerp(0.0f, 100.0f, 0.0f), 0.0f);
     EXPECT_FLOAT_EQ(Tween::Lerp(0.0f, 100.0f, 0.5f), 50.0f);
     EXPECT_FLOAT_EQ(Tween::Lerp(0.0f, 100.0f, 1.0f), 100.0f);
 }
 
+// 测试 补间：Lerpuse缓动于四边形
 TEST(TweenTest, LerpuseEaseInQuad) {
     // start + (end-start)*eased_t = 0 + 100*0.25 = 25
     EXPECT_FLOAT_EQ(Tween::Lerp(0.0f, 100.0f, 0.5f, EaseType::EaseInQuad), 25.0f);
 }
 
+// 测试 补间：线性插值负范围
 TEST(TweenTest, LerpNegativeRange) {
     EXPECT_FLOAT_EQ(Tween::Lerp(-10.0f, 10.0f, 0.5f), 0.0f);
     EXPECT_FLOAT_EQ(Tween::Lerp(-10.0f, 10.0f, 0.0f), -10.0f);
     EXPECT_FLOAT_EQ(Tween::Lerp(-10.0f, 10.0f, 1.0f), 10.0f);
 }
 
+// 测试 补间：线性插值结果Remains Unchanged当启动且结束为相同
 TEST(TweenTest, LerpTheResultRemainsUnchangedWhenTheStartAndEndAreTheSame) {
     EXPECT_FLOAT_EQ(Tween::Lerp(5.0f, 5.0f, 0.0f), 5.0f);
     EXPECT_FLOAT_EQ(Tween::Lerp(5.0f, 5.0f, 0.5f), 5.0f);

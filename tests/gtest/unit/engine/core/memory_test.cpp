@@ -34,12 +34,14 @@ using namespace dse::core;
 // MemoryTag 注册表
 // ============================================================
 
+// 测试 内存标签：内置名称解析
 TEST(MemoryTagTest, BuiltinNamesResolve) {
     EXPECT_STREQ(MemoryTagName(MemoryTag::Default), "Default");
     EXPECT_STREQ(MemoryTagName(MemoryTag::Render), "Render");
     EXPECT_STREQ(MemoryTagName(MemoryTag::FrameTemp), "FrameTemp");
 }
 
+// 测试 内存标签：运行时注册获取Unique ID
 TEST(MemoryTagTest, RuntimeRegistrationGetsUniqueId) {
     const uint16_t builtin = static_cast<uint16_t>(MemoryTag::BuiltinCount);
     const uint16_t id = RegisterMemoryTag("UnitTestTagA");
@@ -52,6 +54,7 @@ TEST(MemoryTagTest, RuntimeRegistrationGetsUniqueId) {
     EXPECT_GE(MemoryTagCount(), static_cast<uint16_t>(builtin + 2));
 }
 
+// 测试 内存标签：未知ID为安全
 TEST(MemoryTagTest, UnknownIdIsSafe) {
     EXPECT_STREQ(MemoryTagName(static_cast<uint16_t>(60000)), "Unknown");
 }
@@ -60,6 +63,7 @@ TEST(MemoryTagTest, UnknownIdIsSafe) {
 // 对齐辅助
 // ============================================================
 
+// 测试 内存Align：Align上且Power的两个
 TEST(MemoryAlignTest, AlignUpAndPowerOfTwo) {
     EXPECT_EQ(AlignUp(0, 16), 0u);
     EXPECT_EQ(AlignUp(1, 16), 16u);
@@ -75,6 +79,7 @@ TEST(MemoryAlignTest, AlignUpAndPowerOfTwo) {
 // SystemAllocator
 // ============================================================
 
+// 测试 系统分配器：分配返回Aligned且Tracks尺寸
 TEST(SystemAllocatorTest, AllocateReturnsAlignedAndTracksSize) {
     SystemAllocator alloc;
     for (size_t alignment : {size_t(8), size_t(16), size_t(32), size_t(64), size_t(256)}) {
@@ -87,6 +92,7 @@ TEST(SystemAllocatorTest, AllocateReturnsAlignedAndTracksSize) {
     }
 }
 
+// 测试 系统分配器：统计反映Live Bytes
 TEST(SystemAllocatorTest, StatsReflectLiveBytes) {
     SystemAllocator alloc;
     const MemoryStats before = alloc.TotalStats();
@@ -107,6 +113,7 @@ TEST(SystemAllocatorTest, StatsReflectLiveBytes) {
     EXPECT_EQ(after.free_count - before.free_count, 2u);
 }
 
+// 测试 系统分配器：Realloc Preserves数据
 TEST(SystemAllocatorTest, ReallocPreservesData) {
     SystemAllocator alloc;
     auto* p = static_cast<uint8_t*>(alloc.Allocate(16, 16, TagId(MemoryTag::Default)));
@@ -120,6 +127,7 @@ TEST(SystemAllocatorTest, ReallocPreservesData) {
     alloc.Deallocate(q);
 }
 
+// 测试 系统分配器：空且零为安全
 TEST(SystemAllocatorTest, NullAndZeroAreSafe) {
     SystemAllocator alloc;
     EXPECT_NO_THROW(alloc.Deallocate(nullptr));
@@ -143,6 +151,7 @@ struct Tracked {
 int Tracked::live = 0;
 } // namespace
 
+// 测试 内存门面：分配释放且对齐
 TEST(MemoryFacadeTest, AllocFreeAndAlignment) {
     Memory::Init();
     void* p = Memory::AllocAligned(128, 64, MemoryTag::Render);
@@ -152,6 +161,7 @@ TEST(MemoryFacadeTest, AllocFreeAndAlignment) {
     EXPECT_NO_THROW(Memory::Free(nullptr));
 }
 
+// 测试 内存门面：新建删除Runs Constructor且Destructor
 TEST(MemoryFacadeTest, NewDeleteRunsConstructorAndDestructor) {
     Memory::Init();
     const int before = Tracked::live;
@@ -163,6 +173,7 @@ TEST(MemoryFacadeTest, NewDeleteRunsConstructorAndDestructor) {
     EXPECT_EQ(Tracked::live, before);
 }
 
+// 测试 内存门面：总计统计Increase开启分配
 TEST(MemoryFacadeTest, TotalStatsIncreaseOnAlloc) {
     Memory::Init();
     const MemoryStats before = Memory::TotalStats();
@@ -177,6 +188,7 @@ TEST(MemoryFacadeTest, TotalStatsIncreaseOnAlloc) {
 // MemoryTracker（独立实例，避免与全局单例相互干扰）
 // ============================================================
 
+// 测试 内存Tracker：每标签Counts且峰值
 TEST(MemoryTrackerTest, PerTagCountsAndPeak) {
     MemoryTracker tracker;
     EXPECT_FALSE(tracker.HasLiveAllocations());
@@ -210,6 +222,7 @@ TEST(MemoryTrackerTest, PerTagCountsAndPeak) {
 // TrackingAllocator 装饰器（后端无关）
 // ============================================================
 
+// 测试 追踪分配器：Wraps后端且Reports到Tracker
 TEST(TrackingAllocatorTest, WrapsBackendAndReportsToTracker) {
     SystemAllocator backend;
     MemoryTracker tracker;
@@ -230,6 +243,7 @@ TEST(TrackingAllocatorTest, WrapsBackendAndReportsToTracker) {
     EXPECT_FALSE(tracker.HasLiveAllocations());
 }
 
+// 测试 追踪分配器：Realloc Preserves数据且统计
 TEST(TrackingAllocatorTest, ReallocPreservesDataAndStats) {
     SystemAllocator backend;
     MemoryTracker tracker;
@@ -250,6 +264,7 @@ TEST(TrackingAllocatorTest, ReallocPreservesDataAndStats) {
 }
 
 #if defined(DSE_ENABLE_MEM_TRACKING)
+// 测试 内存门面：追踪启用统计每标签
 TEST(MemoryFacadeTest, TrackingEnabledStatsPerTag) {
     EXPECT_TRUE(Memory::TrackingEnabled());
     Memory::Init();
@@ -263,6 +278,7 @@ TEST(MemoryFacadeTest, TrackingEnabledStatsPerTag) {
     EXPECT_EQ(after.current, before.current);
 }
 #else
+// 测试 内存门面：追踪禁用返回零统计
 TEST(MemoryFacadeTest, TrackingDisabledReturnsZeroStats) {
     EXPECT_FALSE(Memory::TrackingEnabled());
     EXPECT_EQ(Memory::Stats(MemoryTag::Net).current, 0u);
@@ -273,6 +289,7 @@ TEST(MemoryFacadeTest, TrackingDisabledReturnsZeroStats) {
 // LinearAllocator（bump-pointer）
 // ============================================================
 
+// 测试 线性分配器：Bump分配对齐且用量
 TEST(LinearAllocatorTest, BumpAllocAlignmentAndUsage) {
     LinearAllocator la;
     la.Init(1024, MemoryTag::FrameTemp);
@@ -291,6 +308,7 @@ TEST(LinearAllocatorTest, BumpAllocAlignmentAndUsage) {
     EXPECT_GT(la.Used(), 0u);
 }
 
+// 测试 线性分配器：溢出返回空无崩溃
 TEST(LinearAllocatorTest, OverflowReturnsNullNoCrash) {
     LinearAllocator la;
     la.Init(64, MemoryTag::FrameTemp);
@@ -304,6 +322,7 @@ TEST(LinearAllocatorTest, OverflowReturnsNullNoCrash) {
     EXPECT_NE(c, nullptr);
 }
 
+// 测试 线性分配器：重置且标记Rewind
 TEST(LinearAllocatorTest, ResetAndMarkRewind) {
     LinearAllocator la;
     la.Init(256, MemoryTag::FrameTemp);
@@ -326,6 +345,7 @@ TEST(LinearAllocatorTest, ResetAndMarkRewind) {
 // FrameAllocator（多缓冲轮转 + fence 复位）
 // ============================================================
 
+// 测试 帧分配器：Rotates缓冲区且Resets
 TEST(FrameAllocatorTest, RotatesBuffersAndResets) {
     FrameAllocator fa;
     fa.Init(512, 2, MemoryTag::FrameTemp);
@@ -347,6 +367,7 @@ TEST(FrameAllocatorTest, RotatesBuffersAndResets) {
     EXPECT_EQ(fa.FrameNumber(), 2u);
 }
 
+// 测试 帧分配器：Clamps缓冲区计数
 TEST(FrameAllocatorTest, ClampsBufferCount) {
     FrameAllocator fa;
     fa.Init(128, 1, MemoryTag::FrameTemp); // <2 应被夹到 2
@@ -360,6 +381,7 @@ TEST(FrameAllocatorTest, ClampsBufferCount) {
 // ThreadScratch（每线程私有、零争用）
 // ============================================================
 
+// 测试 线程Scratch：每线程Distinct缓冲区无Race
 TEST(ThreadScratchTest, PerThreadDistinctBuffersNoRace) {
     constexpr int kThreads = 8;
     std::vector<std::thread> threads;
@@ -408,6 +430,7 @@ TEST(ThreadScratchTest, PerThreadDistinctBuffersNoRace) {
 // PoolAllocator（固定大小块池）
 // ============================================================
 
+// 测试 对象池分配器：分配释放复用无Fragmentation
 TEST(PoolAllocatorTest, AllocateFreeReuseNoFragmentation) {
     PoolAllocator pool;
     pool.Init(sizeof(int), alignof(int), 4, MemoryTag::Default);
@@ -429,6 +452,7 @@ TEST(PoolAllocatorTest, AllocateFreeReuseNoFragmentation) {
     EXPECT_EQ(reinterpret_cast<uintptr_t>(a) % alignof(int), 0u);
 }
 
+// 测试 对象池分配器：自动增长Beyond初始容量
 TEST(PoolAllocatorTest, AutoGrowsBeyondInitialCapacity) {
     PoolAllocator pool;
     pool.Init(64, 16, 2, MemoryTag::Default);
@@ -446,6 +470,7 @@ TEST(PoolAllocatorTest, AutoGrowsBeyondInitialCapacity) {
     EXPECT_EQ(pool.UsedCount(), 0u);
 }
 
+// 测试 对象池分配器：Block Stride Honors Min且对齐
 TEST(PoolAllocatorTest, BlockStrideHonorsMinAndAlignment) {
     PoolAllocator pool;
     pool.Init(1, 8, 4, MemoryTag::Default); // 1 字节请求 → 抬升到 >= sizeof(void*) 且 8 对齐
@@ -457,6 +482,7 @@ TEST(PoolAllocatorTest, BlockStrideHonorsMinAndAlignment) {
 // ObjectPool（原地构造 + 析构）
 // ============================================================
 
+// 测试 对象对象池：获取Constructs释放Destructs于Place
 TEST(ObjectPoolTest, AcquireConstructsReleaseDestructsInPlace) {
     static int live = 0;
     struct Tracked {
@@ -478,6 +504,7 @@ TEST(ObjectPoolTest, AcquireConstructsReleaseDestructsInPlace) {
     }
 }
 
+// 测试 对象对象池：周期复用无泄漏
 TEST(ObjectPoolTest, CycleReuseNoLeak) {
     ObjectPool<int> pool(8);
     const size_t cap = pool.Capacity();
@@ -491,6 +518,7 @@ TEST(ObjectPoolTest, CycleReuseNoLeak) {
     EXPECT_EQ(pool.Capacity(), cap); // 反复借还不增长容量
 }
 
+// 测试 对象对象池：支持非Copyable类型
 TEST(ObjectPoolTest, SupportsNonCopyableType) {
     struct NonCopyable {
         int id;
@@ -532,6 +560,7 @@ std::atomic<size_t> BudgetProbe::last_usage{0};
 std::atomic<size_t> BudgetProbe::last_budget{0};
 } // namespace
 
+// 测试 内存预算：设置获取预算且外部用量
 TEST(MemoryBudgetTest, SetGetBudgetAndExternalUsage) {
     MemoryBudget budget;
     EXPECT_EQ(budget.GetBudget(TagId(MemoryTag::Texture)), 0u); // 默认不限
@@ -543,6 +572,7 @@ TEST(MemoryBudgetTest, SetGetBudgetAndExternalUsage) {
     EXPECT_EQ(budget.ExternalUsage(TagId(MemoryTag::Texture)), 1234u);
 }
 
+// 测试 内存预算：回调Fires Once开启Rising Edge
 TEST(MemoryBudgetTest, CallbackFiresOnceOnRisingEdge) {
     BudgetProbe::Reset();
     MemoryBudget budget;
@@ -571,6 +601,7 @@ TEST(MemoryBudgetTest, CallbackFiresOnceOnRisingEdge) {
     EXPECT_EQ(BudgetProbe::calls.load(), 2);
 }
 
+// 测试 内存预算：零预算为Unlimited
 TEST(MemoryBudgetTest, ZeroBudgetIsUnlimited) {
     BudgetProbe::Reset();
     MemoryBudget budget;
@@ -579,6 +610,7 @@ TEST(MemoryBudgetTest, ZeroBudgetIsUnlimited) {
     EXPECT_EQ(BudgetProbe::calls.load(), 0);
 }
 
+// 测试 内存预算：默认路径无回调为安全
 TEST(MemoryBudgetTest, DefaultPathWithoutCallbackIsSafe) {
     MemoryBudget budget;
     budget.SetBudget(TagId(MemoryTag::Physics), 100);
@@ -589,6 +621,7 @@ TEST(MemoryBudgetTest, DefaultPathWithoutCallbackIsSafe) {
 // Memory 门面预算（全局单例：用专用 tag 并在用例末复位）
 // ============================================================
 
+// 测试 内存预算门面：设置预算报告用量且溢出
 TEST(MemoryBudgetFacadeTest, SetBudgetReportUsageAndOverflow) {
     const MemoryTag tag = MemoryTag::Navigation;
     Memory::SetBudgetExceededCallback(nullptr);
@@ -614,6 +647,7 @@ TEST(MemoryBudgetFacadeTest, SetBudgetReportUsageAndOverflow) {
     Memory::SetBudget(tag, 0);
 }
 
+// 测试 内存预算门面：用量Combines Tracked且外部
 TEST(MemoryBudgetFacadeTest, UsageCombinesTrackedAndExternal) {
     const MemoryTag tag = MemoryTag::Editor;
     Memory::SetBudgetExceededCallback(nullptr);
@@ -642,6 +676,7 @@ TEST(MemoryBudgetFacadeTest, UsageCombinesTrackedAndExternal) {
 // StlAllocator + Dse* 容器别名（无状态、转发门面、标签化）
 // ============================================================
 
+// 测试 STL分配器：Stateless且相等
 TEST(StlAllocatorTest, StatelessAndEquality) {
     static_assert(std::is_empty_v<StlAllocator<int, MemoryTag::Mesh>>, "must be stateless");
     static_assert(StlAllocator<int, MemoryTag::Mesh>::is_always_equal::value, "always equal");
@@ -660,6 +695,7 @@ TEST(StlAllocatorTest, StatelessAndEquality) {
 // 仅在启用按标签内存追踪（Debug + DSE_ENABLE_MEM_TRACKING）时注册：
 // 关闭时这些标签计费断言无意义，故编译期排除而非运行时跳过。
 #if defined(DSE_ENABLE_MEM_TRACKING)
+// 测试 STL分配器：向量Allocations为Tagged且Routed到门面
 TEST(StlAllocatorTest, VectorAllocationsAreTaggedAndRoutedToFacade) {
     Memory::Init();
     const MemoryTag tag = MemoryTag::Scripting;
@@ -679,6 +715,7 @@ TEST(StlAllocatorTest, VectorAllocationsAreTaggedAndRoutedToFacade) {
     EXPECT_EQ(Memory::Stats(tag).current, before.current); // 析构后增量归零
 }
 
+// 测试 STL分配器：字符串Heap分配为Tagged
 TEST(StlAllocatorTest, StringHeapAllocationIsTagged) {
     Memory::Init();
     const MemoryTag tag = MemoryTag::Scripting;
@@ -694,6 +731,7 @@ TEST(StlAllocatorTest, StringHeapAllocationIsTagged) {
 }
 #endif // DSE_ENABLE_MEM_TRACKING
 
+// 测试 STL分配器：节点Containers Work Via重新绑定
 TEST(StlAllocatorTest, NodeContainersWorkViaRebind) {
     DseUnorderedMap<int, std::string, MemoryTag::Scripting> m;
     m.emplace(1, "one");
@@ -733,6 +771,7 @@ struct LifeTracked {
 int LifeTracked::alive = 0;
 } // namespace
 
+// 测试 句柄表：创建获取销毁
 TEST(HandleTableTest, CreateGetDestroy) {
     HandleTable<int, MemoryTag::Default> table;
     EXPECT_TRUE(table.Empty());
@@ -751,6 +790,7 @@ TEST(HandleTableTest, CreateGetDestroy) {
     EXPECT_FALSE(table.Destroy(h)); // 重复销毁失败
 }
 
+// 测试 句柄表：代次Invalidates Stale句柄
 TEST(HandleTableTest, GenerationInvalidatesStaleHandle) {
     HandleTable<int> table;
     Handle<int> h1 = table.Create(1);
@@ -766,6 +806,7 @@ TEST(HandleTableTest, GenerationInvalidatesStaleHandle) {
     EXPECT_EQ(*table.Get(h2), 2);
 }
 
+// 测试 句柄表：Constructs且Destructs Objects
 TEST(HandleTableTest, ConstructsAndDestructsObjects) {
     LifeTracked::alive = 0;
     {
@@ -783,6 +824,7 @@ TEST(HandleTableTest, ConstructsAndDestructsObjects) {
     EXPECT_EQ(LifeTracked::alive, 0); // 表析构清理所有存活对象
 }
 
+// 测试 句柄表：尺寸容量且复用
 TEST(HandleTableTest, SizeCapacityAndReuse) {
     HandleTable<int> table;
     Handle<int> a = table.Create(1);
@@ -803,6 +845,7 @@ TEST(HandleTableTest, SizeCapacityAndReuse) {
     EXPECT_EQ(*table.Get(d), 4);
 }
 
+// 测试 句柄表：默认句柄为无效
 TEST(HandleTableTest, DefaultHandleIsInvalid) {
     HandleTable<int> table;
     Handle<int> def;
@@ -816,6 +859,7 @@ TEST(HandleTableTest, DefaultHandleIsInvalid) {
 // ============================================================
 
 #if defined(DSE_MEM_USE_MIMALLOC)
+// 测试 Mimalloc分配器：分配释放且统计
 TEST(MimallocAllocatorTest, AllocateFreeAndStats) {
     MimallocAllocator a;
     void* p = a.Allocate(1000, 32, TagId(MemoryTag::Default));

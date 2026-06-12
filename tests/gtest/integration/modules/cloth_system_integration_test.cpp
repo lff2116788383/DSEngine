@@ -82,6 +82,7 @@ protected:
     }
 };
 
+// 测试 布料系统集成：初始化Correctset上
 TEST_F(ClothSystemIntegrationTest, InitializeCorrectsetUp) {
     auto e = CreateClothEntity();
     // FixedUpdate 会触发初始化
@@ -95,6 +96,7 @@ TEST_F(ClothSystemIntegrationTest, InitializeCorrectsetUp) {
     EXPECT_EQ(cloth.inv_masses.size(), 16u);
 }
 
+// 测试 布料系统集成：初始化
 TEST_F(ClothSystemIntegrationTest, Initialize) {
     auto e = CreateClothEntity();
     system.FixedUpdate(world, 1.0f / 60.0f);
@@ -109,6 +111,7 @@ TEST_F(ClothSystemIntegrationTest, Initialize) {
     }
 }
 
+// 测试 布料系统集成：Pointis零
 TEST_F(ClothSystemIntegrationTest, PointisZero) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
@@ -124,6 +127,7 @@ TEST_F(ClothSystemIntegrationTest, PointisZero) {
     EXPECT_GT(cloth.inv_masses[15], 0.0f);
 }
 
+// 测试 布料系统集成：构造非
 TEST_F(ClothSystemIntegrationTest, MakeNon) {
     auto e = CreateClothEntity(true);
     float dt = 1.0f / 60.0f;
@@ -150,6 +154,7 @@ TEST_F(ClothSystemIntegrationTest, MakeNon) {
         << "固定粒子 Y 不应改变";
 }
 
+// 测试 布料系统集成：Withoutpoint全部
 TEST_F(ClothSystemIntegrationTest, WithoutpointAll) {
     auto e = CreateClothEntity(false); // 不固定任何点
     float dt = 1.0f / 60.0f;
@@ -175,6 +180,7 @@ TEST_F(ClothSystemIntegrationTest, WithoutpointAll) {
     EXPECT_LT(final_avg_y, initial_avg_y) << "所有粒子应该自由下落";
 }
 
+// 测试 布料系统集成：情形6
 TEST_F(ClothSystemIntegrationTest, TestCase6) {
     auto e = CreateClothEntity(true);
     float dt = 1.0f / 60.0f;
@@ -198,6 +204,7 @@ TEST_F(ClothSystemIntegrationTest, TestCase6) {
         << "距离约束应限制过度拉伸";
 }
 
+// 测试 布料系统集成：按
 TEST_F(ClothSystemIntegrationTest, By) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
@@ -215,6 +222,7 @@ TEST_F(ClothSystemIntegrationTest, By) {
     EXPECT_TRUE(has_nonzero) << "初始化后应有非零法线";
 }
 
+// 测试 布料系统集成：网格Dirtymark
 TEST_F(ClothSystemIntegrationTest, mesh_Dirtymark) {
     auto e = CreateClothEntity(true);
     system.FixedUpdate(world, 1.0f / 60.0f);
@@ -222,6 +230,7 @@ TEST_F(ClothSystemIntegrationTest, mesh_Dirtymark) {
     EXPECT_TRUE(cloth.mesh_dirty) << "模拟后应标记 mesh_dirty";
 }
 
+// 测试 布料系统集成：禁用不
 TEST_F(ClothSystemIntegrationTest, DisabledNot) {
     auto e = CreateClothEntity(true);
     auto& cloth = world.registry().get<ClothComponent>(e);

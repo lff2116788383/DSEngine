@@ -14,6 +14,7 @@ protected:
     RenderProfiler prof_;
 };
 
+// 测试 渲染性能分析器扩展：初始状态
 TEST_F(RenderProfilerExtTest, InitialState) {
     auto stats = prof_.GetCurrentFrameStats();
     EXPECT_EQ(stats.draw_calls, 0);
@@ -24,6 +25,7 @@ TEST_F(RenderProfilerExtTest, InitialState) {
     EXPECT_EQ(acc.frame_count, 0);
 }
 
+// 测试 渲染性能分析器扩展：记录绘制调用
 TEST_F(RenderProfilerExtTest, RecordDrawCall) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(300, 100);
@@ -34,6 +36,7 @@ TEST_F(RenderProfilerExtTest, RecordDrawCall) {
     EXPECT_EQ(stats.triangle_count, 300);
 }
 
+// 测试 渲染性能分析器扩展：记录精灵批次
 TEST_F(RenderProfilerExtTest, RecordSpriteBatch) {
     prof_.BeginFrame();
     prof_.RecordSpriteBatch(50);
@@ -45,6 +48,7 @@ TEST_F(RenderProfilerExtTest, RecordSpriteBatch) {
     EXPECT_EQ(stats.triangle_count, 100);
 }
 
+// 测试 渲染性能分析器扩展：纹理绑定且着色器切换
 TEST_F(RenderProfilerExtTest, TextureBindAndShaderSwitch) {
     prof_.BeginFrame();
     prof_.RecordTextureBind();
@@ -55,6 +59,7 @@ TEST_F(RenderProfilerExtTest, TextureBindAndShaderSwitch) {
     EXPECT_EQ(stats.shader_switches, 1);
 }
 
+// 测试 渲染性能分析器扩展：设置纹理内存
 TEST_F(RenderProfilerExtTest, SetTextureMemory) {
     prof_.BeginFrame();
     prof_.SetTextureMemory(1024 * 1024);
@@ -62,6 +67,7 @@ TEST_F(RenderProfilerExtTest, SetTextureMemory) {
     EXPECT_EQ(stats.texture_memory, 1024u * 1024u);
 }
 
+// 测试 渲染性能分析器扩展：结束帧Accumulates
 TEST_F(RenderProfilerExtTest, EndFrameAccumulates) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(100, 50);
@@ -75,6 +81,7 @@ TEST_F(RenderProfilerExtTest, EndFrameAccumulates) {
     EXPECT_EQ(acc.peak_draw_calls, 1);
 }
 
+// 测试 渲染性能分析器扩展：峰值追踪
 TEST_F(RenderProfilerExtTest, PeakTracking) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(100, 50);
@@ -92,6 +99,7 @@ TEST_F(RenderProfilerExtTest, PeakTracking) {
     EXPECT_EQ(acc.peak_vertices, 400);
 }
 
+// 测试 渲染性能分析器扩展：Average Computation
 TEST_F(RenderProfilerExtTest, AverageComputation) {
     for (int i = 0; i < 10; ++i) {
         prof_.BeginFrame();
@@ -104,6 +112,7 @@ TEST_F(RenderProfilerExtTest, AverageComputation) {
     EXPECT_NEAR(acc.avg_triangles, 50.0, 0.01);
 }
 
+// 测试 渲染性能分析器扩展：更新从RHI
 TEST_F(RenderProfilerExtTest, UpdateFromRhi) {
     prof_.BeginFrame();
     prof_.UpdateFromRhi(5, 1000, 500, 10, 3, 2);
@@ -116,6 +125,7 @@ TEST_F(RenderProfilerExtTest, UpdateFromRhi) {
     EXPECT_EQ(stats.shader_switches, 2);
 }
 
+// 测试 渲染性能分析器扩展：重置
 TEST_F(RenderProfilerExtTest, Reset) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(100, 50);
@@ -127,6 +137,7 @@ TEST_F(RenderProfilerExtTest, Reset) {
     EXPECT_EQ(acc.total_draw_calls, 0);
 }
 
+// 测试 渲染性能分析器扩展：导出CSV
 TEST_F(RenderProfilerExtTest, ExportCSV) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(100, 50);
@@ -136,6 +147,7 @@ TEST_F(RenderProfilerExtTest, ExportCSV) {
     EXPECT_NE(csv.find("DrawCalls"), std::string::npos);
 }
 
+// 测试 渲染性能分析器扩展：导出Chrome追踪
 TEST_F(RenderProfilerExtTest, ExportChromeTrace) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(100, 50);
@@ -145,6 +157,7 @@ TEST_F(RenderProfilerExtTest, ExportChromeTrace) {
     EXPECT_NE(trace.find("draw_calls"), std::string::npos);
 }
 
+// 测试 渲染性能分析器扩展：开始帧Resets当前统计
 TEST_F(RenderProfilerExtTest, BeginFrameResetsCurrentStats) {
     prof_.BeginFrame();
     prof_.RecordDrawCall(500, 200);

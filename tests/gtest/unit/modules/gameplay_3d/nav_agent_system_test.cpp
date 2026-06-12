@@ -23,6 +23,7 @@ using namespace dse;
 
 #ifdef DSE_ENABLE_NAVMESH
 
+// 测试 导航网格代理组件：默认值
 TEST(NavMeshAgentComponentTest, DefaultValues) {
     NavMeshAgentComponent nac;
     EXPECT_FLOAT_EQ(nac.speed, 3.5f);
@@ -38,6 +39,7 @@ TEST(NavMeshAgentComponentTest, DefaultValues) {
     EXPECT_EQ(nac.current_waypoint, 0);
 }
 
+// 测试 导航网格代理组件：设置上
 TEST(NavMeshAgentComponentTest, SetUp) {
     NavMeshAgentComponent nac;
     nac.destination = glm::vec3(10.0f, 0.0f, 20.0f);
@@ -48,6 +50,7 @@ TEST(NavMeshAgentComponentTest, SetUp) {
     EXPECT_FLOAT_EQ(nac.destination.x, 10.0f);
 }
 
+// 测试 导航代理系统：默认
 TEST(NavAgentSystemTest, Default) {
     gameplay3d::NavAgentSystem sys;
     (void)sys;
@@ -56,6 +59,7 @@ TEST(NavAgentSystemTest, Default) {
 
 #else
 
+// 测试 导航代理系统：导航网格不启用Compilation Verification
 TEST(NavAgentSystemTest, NavMeshNotEnabled_CompilationVerification) {
     GTEST_SKIP() << "DSE_ENABLE_NAVMESH not defined";
 }

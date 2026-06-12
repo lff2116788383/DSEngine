@@ -21,6 +21,7 @@ using namespace dse::scene;
 // Rect 测试
 // ============================================================
 
+// 测试 矩形：Insidepoint
 TEST(RectTest, Insidepoint) {
     Rect r{0.0f, 0.0f, 10.0f, 10.0f};
     EXPECT_TRUE(r.Contains(glm::vec2(5.0f, 5.0f)));
@@ -28,6 +29,7 @@ TEST(RectTest, Insidepoint) {
     EXPECT_TRUE(r.Contains(glm::vec2(10.0f, 10.0f)));
 }
 
+// 测试 矩形：不Contain外部点
 TEST(RectTest, DoesNotContainExternalPoints) {
     Rect r{0.0f, 0.0f, 10.0f, 10.0f};
     EXPECT_FALSE(r.Contains(glm::vec2(15.0f, 5.0f)));
@@ -35,6 +37,7 @@ TEST(RectTest, DoesNotContainExternalPoints) {
     EXPECT_FALSE(r.Contains(glm::vec2(-5.0f, 5.0f)));
 }
 
+// 测试 矩形：矩形
 TEST(RectTest, Rect) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{5.0f, 5.0f, 10.0f, 10.0f};
@@ -42,6 +45,7 @@ TEST(RectTest, Rect) {
     EXPECT_TRUE(b.Intersects(a));
 }
 
+// 测试 矩形：无重叠Rectdisjoint
 TEST(RectTest, NoOverlapRectdisjoint) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{20.0f, 20.0f, 10.0f, 10.0f};
@@ -49,6 +53,7 @@ TEST(RectTest, NoOverlapRectdisjoint) {
     EXPECT_FALSE(b.Intersects(a));
 }
 
+// 测试 矩形：矩形2
 TEST(RectTest, Rect_2) {
     Rect a{0.0f, 0.0f, 10.0f, 10.0f};
     Rect b{10.0f, 0.0f, 10.0f, 10.0f};
@@ -59,6 +64,7 @@ TEST(RectTest, Rect_2) {
 // QuadTree 基本功能
 // ============================================================
 
+// 测试 四边形树：查询Todata
 TEST(QuadTreeTest, QueryTodata) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
@@ -75,6 +81,7 @@ TEST(QuadTreeTest, QueryTodata) {
     EXPECT_EQ(found[0].entity, entity);
 }
 
+// 测试 四边形树：Querydisjoint返回空
 TEST(QuadTreeTest, QuerydisjointReturnsEmpty) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
@@ -89,6 +96,7 @@ TEST(QuadTreeTest, QuerydisjointReturnsEmpty) {
     EXPECT_TRUE(found.empty());
 }
 
+// 测试 四边形树：当
 TEST(QuadTreeTest, When) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     // capacity = 2，插入 5 个应触发细分
@@ -108,6 +116,7 @@ TEST(QuadTreeTest, When) {
     EXPECT_EQ(found.size(), 5u);
 }
 
+// 测试 四边形树：清空之后为空
 TEST(QuadTreeTest, ClearAfterIsEmpty) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 4);
@@ -123,6 +132,7 @@ TEST(QuadTreeTest, ClearAfterIsEmpty) {
     EXPECT_TRUE(found.empty());
 }
 
+// 测试 四边形树：多实体查询
 TEST(QuadTreeTest, MultiEntityQuery) {
     Rect bounds{0.0f, 0.0f, 100.0f, 100.0f};
     QuadTree tree(bounds, 8);
@@ -142,6 +152,7 @@ TEST(QuadTreeTest, MultiEntityQuery) {
     EXPECT_EQ(found.size(), 10u);
 }
 
+// 测试 四边形树：数据按
 TEST(QuadTreeTest, DataBy) {
     Rect bounds{0.0f, 0.0f, 10.0f, 10.0f};
     QuadTree tree(bounds, 4);

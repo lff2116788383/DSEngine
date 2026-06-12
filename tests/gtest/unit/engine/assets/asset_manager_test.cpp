@@ -80,6 +80,7 @@ std::filesystem::path WriteOnePixelPpm(const std::filesystem::path& dir) {
 // MaterialInstance 生命周期测试
 // ============================================================
 
+// 测试 资源管理器：创建材质实例返回有效实例
 TEST(AssetManagerTest, CreateMaterialInstanceReturnsAValidInstance) {
     AssetManager mgr;
     auto mat = mgr.CreateMaterialInstance("test_material");
@@ -88,6 +89,7 @@ TEST(AssetManagerTest, CreateMaterialInstanceReturnsAValidInstance) {
     EXPECT_GT(mat->GetId(), 0u);
 }
 
+// 测试 资源管理器：创建材质Instanceself递增ID
 TEST(AssetManagerTest, CreateMaterialInstanceselfIncreasingID) {
     AssetManager mgr;
     auto mat1 = mgr.CreateMaterialInstance("mat1");
@@ -95,6 +97,7 @@ TEST(AssetManagerTest, CreateMaterialInstanceselfIncreasingID) {
     EXPECT_LT(mat1->GetId(), mat2->GetId());
 }
 
+// 测试 资源管理器：获取材质Instancepass ID获取
 TEST(AssetManagerTest, GetMaterialInstancepassIDAcquire) {
     AssetManager mgr;
     auto mat = mgr.CreateMaterialInstance("test");
@@ -106,12 +109,14 @@ TEST(AssetManagerTest, GetMaterialInstancepassIDAcquire) {
     EXPECT_EQ(retrieved->GetName(), "test");
 }
 
+// 测试 资源管理器：获取材质Instancedoes不存在返回空指针
 TEST(AssetManagerTest, GetMaterialInstancedoesNotExistReturnnullptr) {
     AssetManager mgr;
     auto result = mgr.GetMaterialInstance(999999u);
     EXPECT_EQ(result, nullptr);
 }
 
+// 测试 资源管理器：列表材质实例ID返回Live实例
 TEST(AssetManagerTest, ListMaterialInstanceIdsReturnLiveInstance) {
     AssetManager mgr;
     auto mat1 = mgr.CreateMaterialInstance("mat1");
@@ -125,6 +130,7 @@ TEST(AssetManagerTest, ListMaterialInstanceIdsReturnLiveInstance) {
     EXPECT_NE(std::find(ids.begin(), ids.end(), mat2->GetId()), ids.end());
 }
 
+// 测试 资源管理器：弱Referencerelease之后获取材质实例返回空指针
 TEST(AssetManagerTest, WeakReferencereleaseAfterGetMaterialInstanceReturnsnullptr) {
     AssetManager mgr;
     unsigned int id;
@@ -137,6 +143,7 @@ TEST(AssetManagerTest, WeakReferencereleaseAfterGetMaterialInstanceReturnsnullpt
     EXPECT_EQ(result, nullptr);
 }
 
+// 测试 资源管理器：弱Referencerelease之后列表材质实例ID不已经
 TEST(AssetManagerTest, WeakReferencereleaseAfterListMaterialInstanceIdsNotAlready) {
     AssetManager mgr;
     auto mat1 = mgr.CreateMaterialInstance("alive");
@@ -151,6 +158,7 @@ TEST(AssetManagerTest, WeakReferencereleaseAfterListMaterialInstanceIdsNotAlread
     EXPECT_EQ(ids[0], mat1->GetId());
 }
 
+// 测试 资源管理器：卸载Unused Clean上Expired弱引用Entries
 TEST(AssetManagerTest, UnloadUnusedCleanUpExpiredWeakReferenceEntries) {
     AssetManager mgr;
     {
@@ -165,6 +173,7 @@ TEST(AssetManagerTest, UnloadUnusedCleanUpExpiredWeakReferenceEntries) {
     EXPECT_TRUE(ids.empty());
 }
 
+// 测试 资源管理器：卸载Unused保持实例仍于使用
 TEST(AssetManagerTest, UnloadUnusedKeepInstancesStillInUse) {
     AssetManager mgr;
     auto mat_alive = mgr.CreateMaterialInstance("alive");
@@ -179,6 +188,7 @@ TEST(AssetManagerTest, UnloadUnusedKeepInstancesStillInUse) {
     EXPECT_EQ(ids[0], mat_alive->GetId());
 }
 
+// 测试 资源管理器：弱引用之后释放GPU资源Stillrelease
 TEST(AssetManagerTest, WeakReferenceAfterReleaseGpuResourcesStillrelease) {
     AssetManagerFakeRhiDevice fake_rhi;
     const std::filesystem::path temp_dir = std::filesystem::temp_directory_path() / "dse_asset_manager_gpu_release_test";
@@ -211,6 +221,7 @@ TEST(AssetManagerTest, WeakReferenceAfterReleaseGpuResourcesStillrelease) {
 
 // 每纹理采样描述：默认 {Linear,Repeat} 沿用旧缓存键（同图复用同一纹理）；
 // 非默认采样（如 {Nearest,ClampToEdge}）走独立缓存键，生成独立 GPU 纹理。
+// 测试 资源管理器：加载纹理Differentiate Caches按采样Description
 TEST(AssetManagerTest, LoadTextureDifferentiateCachesBySamplingDescription) {
     AssetManagerFakeRhiDevice fake_rhi;
     const std::filesystem::path temp_dir =
@@ -255,6 +266,7 @@ TEST(AssetManagerTest, LoadTextureDifferentiateCachesBySamplingDescription) {
 // MaterialAsset 属性测试
 // ============================================================
 
+// 测试 材质资源：默认
 TEST(MaterialAssetTest, Default) {
     MaterialAsset mat(1, "default_test");
     EXPECT_EQ(mat.GetId(), 1u);
@@ -266,24 +278,28 @@ TEST(MaterialAssetTest, Default) {
     EXPECT_EQ(mat.GetBlendMode(), MaterialBlendMode::Alpha);
 }
 
+// 测试 材质资源：设置名称修改名称
 TEST(MaterialAssetTest, SetNameModifyName) {
     MaterialAsset mat(1, "old_name");
     mat.SetName("new_name");
     EXPECT_EQ(mat.GetName(), "new_name");
 }
 
+// 测试 材质资源：设置着色器变体修改着色器Variants
 TEST(MaterialAssetTest, SetShaderVariantModifyShaderVariants) {
     MaterialAsset mat(1, "test");
     mat.SetShaderVariant("PBR_LIT");
     EXPECT_EQ(mat.GetShaderVariant(), "PBR_LIT");
 }
 
+// 测试 材质资源：设置纹理句柄修改句柄
 TEST(MaterialAssetTest, SetTextureHandleModifyHandle) {
     MaterialAsset mat(1, "test");
     mat.SetTextureHandle(42u);
     EXPECT_EQ(mat.GetTextureHandle(), 42u);
 }
 
+// 测试 材质资源：设置Tint修改Coloring
 TEST(MaterialAssetTest, SetTintModifyColoring) {
     MaterialAsset mat(1, "test");
     glm::vec4 tint(0.5f, 0.6f, 0.7f, 0.8f);
@@ -291,6 +307,7 @@ TEST(MaterialAssetTest, SetTintModifyColoring) {
     EXPECT_EQ(mat.GetTint(), tint);
 }
 
+// 测试 材质资源：设置混合模式修改Blending模式
 TEST(MaterialAssetTest, SetBlendModeModifyBlendingMode) {
     MaterialAsset mat(1, "test");
     mat.SetBlendMode(MaterialBlendMode::Additive);
@@ -300,6 +317,7 @@ TEST(MaterialAssetTest, SetBlendModeModifyBlendingMode) {
     EXPECT_EQ(mat.GetBlendMode(), MaterialBlendMode::Opaque);
 }
 
+// 测试 材质资源：设置上且
 TEST(MaterialAssetTest, SetUpAnd) {
     MaterialAsset mat(1, "test");
     glm::vec4 base_color(0.1f, 0.2f, 0.3f, 1.0f);
@@ -310,6 +328,7 @@ TEST(MaterialAssetTest, SetUpAnd) {
     EXPECT_EQ(mat.GetEmissiveColor(), emissive);
 }
 
+// 测试 材质资源：纹理Slots默认全部Zeros
 TEST(MaterialAssetTest, TextureSlotsDefaultAllZeros) {
     MaterialAsset mat(1, "test");
     auto slots = mat.GetTextureSlots();
@@ -320,6 +339,7 @@ TEST(MaterialAssetTest, TextureSlotsDefaultAllZeros) {
     EXPECT_EQ(slots.occlusion, 0u);
 }
 
+// 测试 材质资源：Scalar Overrides默认值
 TEST(MaterialAssetTest, ScalarOverridesDefaultValues) {
     MaterialAsset mat(1, "test");
     auto scalars = mat.GetScalarOverrides();
@@ -331,6 +351,7 @@ TEST(MaterialAssetTest, ScalarOverridesDefaultValues) {
     EXPECT_FALSE(scalars.alpha_test);
 }
 
+// 测试 材质资源：Raster Overrides默认值
 TEST(MaterialAssetTest, RasterOverridesDefaultValues) {
     MaterialAsset mat(1, "test");
     auto raster = mat.GetRasterOverrides();
@@ -341,6 +362,7 @@ TEST(MaterialAssetTest, RasterOverridesDefaultValues) {
 // 数据资产封装测试
 // ============================================================
 
+// 测试 Dmesh资源：与数据
 TEST(DmeshAssetTest, Anddata) {
     std::vector<uint8_t> data = {0x01, 0x02, 0x03, 0x04};
     DmeshAsset mesh("test.dmesh", data);
@@ -350,6 +372,7 @@ TEST(DmeshAssetTest, Anddata) {
     EXPECT_EQ(mesh.GetData()[3], 0x04);
 }
 
+// 测试 Danim资源：与数据
 TEST(DanimAssetTest, Anddata) {
     std::vector<uint8_t> data = {0xAA, 0xBB};
     DanimAsset anim("test.danim", data);
@@ -357,6 +380,7 @@ TEST(DanimAssetTest, Anddata) {
     EXPECT_EQ(anim.GetData().size(), 2u);
 }
 
+// 测试 Dskel资源：与数据
 TEST(DskelAssetTest, Anddata) {
     std::vector<uint8_t> data(256, 0xFF);
     DskelAsset skel("test.dskel", data);
@@ -364,6 +388,7 @@ TEST(DskelAssetTest, Anddata) {
     EXPECT_EQ(skel.GetData().size(), 256u);
 }
 
+// 测试 音频剪辑资源：与数据
 TEST(AudioClipAssetTest, Anddata) {
     std::vector<uint8_t> data = {0x52, 0x49, 0x46, 0x46};  // RIFF header
     AudioClipAsset clip("test.wav", data);
@@ -375,6 +400,7 @@ TEST(AudioClipAssetTest, Anddata) {
 // AssetManager 配置测试
 // ============================================================
 
+// 测试 资源管理器：配置数据根设置且获取
 TEST(AssetManagerTest, ConfigureDataRootSetAndGet) {
     AssetManager mgr;
     EXPECT_EQ(mgr.GetDataRoot(), "data");  // 默认值
@@ -383,6 +409,7 @@ TEST(AssetManagerTest, ConfigureDataRootSetAndGet) {
     EXPECT_EQ(mgr.GetDataRoot(), "custom_assets");
 }
 
+// 测试 资源管理器：多次数创建示例不
 TEST(AssetManagerTest, MultiTimesCreateExampleNot) {
     AssetManager mgr;
     auto mat1 = mgr.CreateMaterialInstance("same_name");
@@ -392,6 +419,7 @@ TEST(AssetManagerTest, MultiTimesCreateExampleNot) {
     EXPECT_EQ(mat1->GetName(), mat2->GetName());
 }
 
+// 测试 资源管理器：示例创建且获取
 TEST(AssetManagerTest, ExampleCreateAndAcquire) {
     AssetManager mgr;
     constexpr int kCount = 100;
@@ -418,11 +446,13 @@ TEST(AssetManagerTest, ExampleCreateAndAcquire) {
 // 路径解析测试
 // ============================================================
 
+// 测试 资源管理器：归一化资源路径空字符串返回空
 TEST(AssetManagerTest, NormalizeAssetPathEmptyStringReturnsEmpty) {
     AssetManager mgr;
     EXPECT_EQ(mgr.NormalizeAssetPath(""), "");
 }
 
+// 测试 资源管理器：归一化资源Pathpeel关闭Dataprefix
 TEST(AssetManagerTest, NormalizeAssetPathpeelOffDataprefix) {
     AssetManager mgr;
     // data/ 前缀应被剥离为相对逻辑路径
@@ -430,6 +460,7 @@ TEST(AssetManagerTest, NormalizeAssetPathpeelOffDataprefix) {
     EXPECT_EQ(result, "textures/sprite.png");
 }
 
+// 测试 资源管理器：归一化资源路径保持原始路径无前缀
 TEST(AssetManagerTest, NormalizeAssetPathKeepTheOriginalPathWithoutPrefix) {
     AssetManager mgr;
     // 无 data/ 前缀的路径应保留
@@ -437,12 +468,14 @@ TEST(AssetManagerTest, NormalizeAssetPathKeepTheOriginalPathWithoutPrefix) {
     EXPECT_EQ(result, "textures/sprite.png");
 }
 
+// 测试 资源管理器：归一化资源Pathpeel关闭Bin Dataprefix
 TEST(AssetManagerTest, NormalizeAssetPathpeelOffBinDataprefix) {
     AssetManager mgr;
     std::string result = mgr.NormalizeAssetPath("bin/data/audio/bgm.wav");
     EXPECT_EQ(result, "audio/bgm.wav");
 }
 
+// 测试 资源管理器：归一化资源Pathpath Normalization
 TEST(AssetManagerTest, NormalizeAssetPathpathNormalization) {
     AssetManager mgr;
     // 路径中含 ./ 或 ../ 应被规范化
@@ -452,6 +485,7 @@ TEST(AssetManagerTest, NormalizeAssetPathpathNormalization) {
     EXPECT_EQ(result.find("./"), std::string::npos);
 }
 
+// 测试 资源管理器：解析资源路径Splicing数据根
 TEST(AssetManagerTest, ResolveAssetPathSplicingDataRoot) {
     AssetManager mgr;
     mgr.ConfigureDataRoot("data");
@@ -461,6 +495,7 @@ TEST(AssetManagerTest, ResolveAssetPathSplicingDataRoot) {
     EXPECT_NE(result.find("textures/sprite.png"), std::string::npos);  // 但应包含
 }
 
+// 测试 资源管理器：配置数据根空值为不Modified
 TEST(AssetManagerTest, ConfigureDataRootEmptyValuesAreNotModified) {
     AssetManager mgr;
     std::string original = mgr.GetDataRoot();
@@ -468,6 +503,7 @@ TEST(AssetManagerTest, ConfigureDataRootEmptyValuesAreNotModified) {
     EXPECT_EQ(mgr.GetDataRoot(), original);  // 空值不改变 data root
 }
 
+// 测试 资源管理器：配置数据Rootcustom路径
 TEST(AssetManagerTest, ConfigureDataRootcustomPath) {
     AssetManager mgr;
     mgr.ConfigureDataRoot("custom_assets");
@@ -478,6 +514,7 @@ TEST(AssetManagerTest, ConfigureDataRootcustomPath) {
 // MaterialValidationTest — 参数边界与 .dmat 降级验证
 // ============================================================
 
+// 测试 材质校验：Roughness默认值于有效范围
 TEST(MaterialValidationTest, RoughnessDefaultValueInValidRange) {
     MaterialAsset mat(1, "test");
     float r = mat.GetScalarOverrides().roughness;
@@ -485,6 +522,7 @@ TEST(MaterialValidationTest, RoughnessDefaultValueInValidRange) {
     EXPECT_LE(r, 1.0f);
 }
 
+// 测试 材质校验：Metallic默认值于有效范围
 TEST(MaterialValidationTest, MetallicDefaultValueInValidRange) {
     MaterialAsset mat(1, "test");
     float m = mat.GetScalarOverrides().metallic;
@@ -492,11 +530,13 @@ TEST(MaterialValidationTest, MetallicDefaultValueInValidRange) {
     EXPECT_LE(m, 1.0f);
 }
 
+// 测试 材质校验：AO默认值为单个
 TEST(MaterialValidationTest, AODefaultValueIsOne) {
     MaterialAsset mat(1, "test");
     EXPECT_FLOAT_EQ(mat.GetScalarOverrides().ao, 1.0f);
 }
 
+// 测试 材质校验：透明度截止默认值于有效范围
 TEST(MaterialValidationTest, AlphaCutoffDefaultValueInValidRange) {
     MaterialAsset mat(1, "test");
     float ac = mat.GetScalarOverrides().alpha_cutoff;
@@ -504,6 +544,7 @@ TEST(MaterialValidationTest, AlphaCutoffDefaultValueInValidRange) {
     EXPECT_LE(ac, 1.0f);
 }
 
+// 测试 材质校验：基颜色默认为不透明White
 TEST(MaterialValidationTest, BaseColorDefaultIsOpaqueWhite) {
     MaterialAsset mat(1, "test");
     auto bc = mat.GetBaseColor();
@@ -513,12 +554,14 @@ TEST(MaterialValidationTest, BaseColorDefaultIsOpaqueWhite) {
     EXPECT_GE(bc.b, 0.0f); EXPECT_LE(bc.b, 1.0f);
 }
 
+// 测试 材质校验：Dmat解析缺失字段Using默认值
 TEST(MaterialValidationTest, DmatResolveMissingFieldsUsingDefaultValues) {
     AssetManager mgr;
     auto result = mgr.LoadMaterialInstanceFromDmat("nonexistent.dmat", 0);
     EXPECT_EQ(result, nullptr);
 }
 
+// 测试 材质校验：创建材质实例返回有效ID
 TEST(MaterialValidationTest, CreateMaterialInstanceReturnValidID) {
     AssetManager mgr;
     auto mat = mgr.CreateMaterialInstance("pbr_test");

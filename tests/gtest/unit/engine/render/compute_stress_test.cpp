@@ -29,6 +29,7 @@ using namespace dse::render;
 #ifdef DSE_ENABLE_VULKAN
 #include "engine/render/rhi/vulkan/vulkan_rhi_device.h"
 
+// 测试 Vulkan计算压力：Uniform集上不崩溃
 TEST(VulkanComputeStressTest, UniformsetUpDoesNotCrash) {
     VulkanRhiDevice device;
     for (int i = 0; i < 100; ++i) {
@@ -37,6 +38,7 @@ TEST(VulkanComputeStressTest, UniformsetUpDoesNotCrash) {
     }
 }
 
+// 测试 Vulkan计算压力：Uniform集上
 TEST(VulkanComputeStressTest, UniformsetUp) {
     VulkanRhiDevice device;
     for (int i = 0; i < 50; ++i) {
@@ -45,6 +47,7 @@ TEST(VulkanComputeStressTest, UniformsetUp) {
     // 最后一次设置应覆盖前面的，不应累积内存
 }
 
+// 测试 Vulkan计算压力：多Shaderset上
 TEST(VulkanComputeStressTest, MultiShadersetUp) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
@@ -55,6 +58,7 @@ TEST(VulkanComputeStressTest, MultiShadersetUp) {
     device.SetComputeUniformVec3(2, "u_pos", 4.0f, 5.0f, 6.0f);
 }
 
+// 测试 Vulkan计算压力：清空参数设置稍后
 TEST(VulkanComputeStressTest, ClearParamsSetItLater) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_value", 3.14f);
@@ -62,6 +66,7 @@ TEST(VulkanComputeStressTest, ClearParamsSetItLater) {
     device.SetComputeUniformMat4(1, "u_mvp", identity);
 }
 
+// 测试 Vulkan计算压力：点
 TEST(VulkanComputeStressTest, Point) {
     VulkanRhiDevice device;
     device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
@@ -72,6 +77,7 @@ TEST(VulkanComputeStressTest, Point) {
     device.SetComputeUniformFloat(1, "u_min", std::numeric_limits<float>::lowest());
 }
 
+// 测试 Vulkan计算压力：空名称不崩溃
 TEST(VulkanComputeStressTest, EmptyNameDoesNotCrash) {
     VulkanRhiDevice device;
     device.SetComputeUniformInt(1, "", 42);
@@ -81,17 +87,20 @@ TEST(VulkanComputeStressTest, EmptyNameDoesNotCrash) {
     device.SetComputeUniformVec4(1, "", 1.0f, 2.0f, 3.0f, 4.0f);
 }
 
+// 测试 Vulkan计算压力：当不已初始化分发计算安全
 TEST(VulkanComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     VulkanRhiDevice device;
     device.DispatchCompute(999, 64, 64, 1);
 }
 
+// 测试 Vulkan计算压力：当不已初始化开始结束计算通道安全
 TEST(VulkanComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
     VulkanRhiDevice device;
     device.BeginComputePass();
     device.EndComputePass();
 }
 
+// 测试 Vulkan计算压力：当不已初始化设置计算纹理图像安全
 TEST(VulkanComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     VulkanRhiDevice device;
     device.SetComputeTextureImage(0, 100, true);
@@ -100,23 +109,27 @@ TEST(VulkanComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     device.SetComputeTextureSampler(0, 100);
 }
 
+// 测试 Vulkan计算压力：当不已初始化计算内存屏障安全
 TEST(VulkanComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
     VulkanRhiDevice device;
     device.ComputeMemoryBarrier();
 }
 
+// 测试 Vulkan计算压力：当不已初始化删除计算着色器安全
 TEST(VulkanComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     VulkanRhiDevice device;
     device.DeleteComputeShader(0);
     device.DeleteComputeShader(999);
 }
 
+// 测试 Vulkan计算压力：当不已初始化创建计算着色器返回零
 TEST(VulkanComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     VulkanRhiDevice device;
     unsigned int h = device.CreateComputeShader("void main() {}");
     EXPECT_EQ(h, 0u);
 }
 
+// 测试 Vulkan计算压力：SSBO当不已初始化读取SSBO安全
 TEST(VulkanComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     VulkanRhiDevice device;
     int buf[4] = {};
@@ -132,6 +145,7 @@ TEST(VulkanComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
 #ifdef DSE_ENABLE_D3D11
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
 
+// 测试 DX 11计算压力：Uniform集上不崩溃
 TEST(DX11ComputeStressTest, UniformsetUpDoesNotCrash) {
     DX11RhiDevice device;
     for (int i = 0; i < 100; ++i) {
@@ -141,6 +155,7 @@ TEST(DX11ComputeStressTest, UniformsetUpDoesNotCrash) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：Uniform集上
 TEST(DX11ComputeStressTest, UniformsetUp) {
     DX11RhiDevice device;
     for (int i = 0; i < 50; ++i) {
@@ -149,6 +164,7 @@ TEST(DX11ComputeStressTest, UniformsetUp) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：多Shaderset上
 TEST(DX11ComputeStressTest, MultiShadersetUp) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_alpha", 0.5f);
@@ -160,6 +176,7 @@ TEST(DX11ComputeStressTest, MultiShadersetUp) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：清空参数之后Condition为Clean
 TEST(DX11ComputeStressTest, ClearParamsAfterTheConditionIsClean) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_value", 3.14f);
@@ -170,6 +187,7 @@ TEST(DX11ComputeStressTest, ClearParamsAfterTheConditionIsClean) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：点
 TEST(DX11ComputeStressTest, Point) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_nan", std::numeric_limits<float>::quiet_NaN());
@@ -179,6 +197,7 @@ TEST(DX11ComputeStressTest, Point) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：空名称不崩溃
 TEST(DX11ComputeStressTest, EmptyNameDoesNotCrash) {
     DX11RhiDevice device;
     device.SetComputeUniformInt(1, "", 42);
@@ -187,17 +206,20 @@ TEST(DX11ComputeStressTest, EmptyNameDoesNotCrash) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：当不已初始化分发计算安全
 TEST(DX11ComputeStressTest, WhenNotInitializedDispatchComputeSafety) {
     DX11RhiDevice device;
     device.DispatchCompute(999, 64, 64, 1);
 }
 
+// 测试 DX 11计算压力：当不已初始化开始结束计算通道安全
 TEST(DX11ComputeStressTest, WhenNotInitializedBeginEndComputePassSafety) {
     DX11RhiDevice device;
     device.BeginComputePass();
     device.EndComputePass();
 }
 
+// 测试 DX 11计算压力：当不已初始化设置计算纹理图像安全
 TEST(DX11ComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     DX11RhiDevice device;
     device.SetComputeTextureImage(0, 100, true);
@@ -206,23 +228,27 @@ TEST(DX11ComputeStressTest, WhenNotInitializedSetComputeTextureImageSafety) {
     device.SetComputeTextureSampler(0, 100);
 }
 
+// 测试 DX 11计算压力：当不已初始化计算内存屏障安全
 TEST(DX11ComputeStressTest, WhenNotInitializedComputeMemoryBarrierSafety) {
     DX11RhiDevice device;
     device.ComputeMemoryBarrier();
 }
 
+// 测试 DX 11计算压力：当不已初始化删除计算着色器安全
 TEST(DX11ComputeStressTest, WhenNotInitializedDeleteComputeShaderSafety) {
     DX11RhiDevice device;
     device.DeleteComputeShader(0);
     device.DeleteComputeShader(999);
 }
 
+// 测试 DX 11计算压力：当不已初始化创建计算着色器返回零
 TEST(DX11ComputeStressTest, WhenNotInitializedCreateComputeShaderReturnsZero) {
     DX11RhiDevice device;
     unsigned int h = device.CreateComputeShader("void main() {}");
     EXPECT_EQ(h, 0u);
 }
 
+// 测试 DX 11计算压力：Flush计算参数回调未初始化安全
 TEST(DX11ComputeStressTest, FlushComputeParamsCBUninitializedSecurity) {
     DX11RhiDevice device;
     device.SetComputeUniformFloat(1, "u_test", 1.0f);
@@ -230,6 +256,7 @@ TEST(DX11ComputeStressTest, FlushComputeParamsCBUninitializedSecurity) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11计算压力：SSBO当不已初始化读取SSBO安全
 TEST(DX11ComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
     DX11RhiDevice device;
     int buf[4] = {};
@@ -242,6 +269,7 @@ TEST(DX11ComputeStressTest, SSBOWhenNotInitializedReadSSBOSafety) {
 // OpenGL Compute Stress Tests（无 GL context 下安全性）
 // ============================================================
 
+// 测试 GL计算压力：当不已初始化支持计算
 TEST(GLComputeStressTest, WhenNotInitializedSupportsCompute) {
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
     ASSERT_NE(device, nullptr);
@@ -254,6 +282,7 @@ TEST(GLComputeStressTest, WhenNotInitializedSupportsCompute) {
 // GPU Timer 接口测试（无 GPU）
 // ============================================================
 
+// 测试 GPU计时器接口：RHI设备不支持按默认GPU计时器
 TEST(GpuTimerInterfaceTest, RhiDeviceNotSupportedByDefaultGpuTimer) {
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
     ASSERT_NE(device, nullptr);
@@ -270,6 +299,7 @@ TEST(GpuTimerInterfaceTest, RhiDeviceNotSupportedByDefaultGpuTimer) {
 }
 
 #ifdef DSE_ENABLE_VULKAN
+// 测试 GPU计时器接口：Vulkan设备未初始化为不支持按默认
 TEST(GpuTimerInterfaceTest, VulkanDeviceUninitializedIsNotSupportedByDefault) {
     VulkanRhiDevice device;
     EXPECT_FALSE(device.SupportsGpuTimer());
@@ -282,6 +312,7 @@ TEST(GpuTimerInterfaceTest, VulkanDeviceUninitializedIsNotSupportedByDefault) {
 #endif
 
 #ifdef DSE_ENABLE_D3D11
+// 测试 GPU计时器接口：DX 11设备未初始化为不支持按默认
 TEST(GpuTimerInterfaceTest, DX11DeviceUninitializedIsNotSupportedByDefault) {
     DX11RhiDevice device;
     EXPECT_FALSE(device.SupportsGpuTimer());

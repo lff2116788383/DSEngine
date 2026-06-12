@@ -19,6 +19,7 @@ using namespace dse;
 // BoundingBoxComponent
 // ============================================================
 
+// 测试 包围盒组件：Defaultcenterexistpoint
 TEST(BoundingBoxComponentTest, Defaultcenterexistpoint) {
     BoundingBoxComponent bb;
     EXPECT_FLOAT_EQ(bb.center().x, 0.0f);
@@ -26,6 +27,7 @@ TEST(BoundingBoxComponentTest, Defaultcenterexistpoint) {
     EXPECT_FLOAT_EQ(bb.center().z, 0.0f);
 }
 
+// 测试 包围盒组件：Defaultextentsis零
 TEST(BoundingBoxComponentTest, DefaultextentsisZero) {
     BoundingBoxComponent bb;
     EXPECT_FLOAT_EQ(bb.extents().x, 0.0f);
@@ -33,6 +35,7 @@ TEST(BoundingBoxComponentTest, DefaultextentsisZero) {
     EXPECT_FLOAT_EQ(bb.extents().z, 0.0f);
 }
 
+// 测试 包围盒组件：Centerexistpoint
 TEST(BoundingBoxComponentTest, Centerexistpoint) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-1.0f, -2.0f, -3.0f);
@@ -43,6 +46,7 @@ TEST(BoundingBoxComponentTest, Centerexistpoint) {
     EXPECT_FLOAT_EQ(bb.center().z, 0.0f);
 }
 
+// 测试 包围盒组件：Extents正确
 TEST(BoundingBoxComponentTest, ExtentsCorrect) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-1.0f, -2.0f, -3.0f);
@@ -53,6 +57,7 @@ TEST(BoundingBoxComponentTest, ExtentsCorrect) {
     EXPECT_FLOAT_EQ(bb.extents().z, 3.0f);
 }
 
+// 测试 包围盒组件：Noncenteroffset
 TEST(BoundingBoxComponentTest, Noncenteroffset) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -63,6 +68,7 @@ TEST(BoundingBoxComponentTest, Noncenteroffset) {
     EXPECT_FLOAT_EQ(bb.center().z, 3.0f);
 }
 
+// 测试 包围盒组件：Nonextents正确
 TEST(BoundingBoxComponentTest, NonextentsCorrect) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -73,6 +79,7 @@ TEST(BoundingBoxComponentTest, NonextentsCorrect) {
     EXPECT_FLOAT_EQ(bb.extents().z, 3.0f);
 }
 
+// 测试 包围盒组件：Burden
 TEST(BoundingBoxComponentTest, Burden) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-10.0f);
@@ -86,12 +93,14 @@ TEST(BoundingBoxComponentTest, Burden) {
 // 3D 物理组件枚举与默认值
 // ============================================================
 
+// 测试 组件3D物理：刚体3D Typeenumeration值
 TEST(Components3DPhysicsTest, RigidBody3DTypeenumerationValue) {
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Static), 0);
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Kinematic), 1);
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Dynamic), 2);
 }
 
+// 测试 组件3D物理：刚体3D默认值
 TEST(Components3DPhysicsTest, RigidBody3DDefaultValues) {
     RigidBody3DComponent rb;
     EXPECT_EQ(rb.type, RigidBody3DType::Dynamic);
@@ -106,6 +115,7 @@ TEST(Components3DPhysicsTest, RigidBody3DDefaultValues) {
     EXPECT_EQ(rb.runtime_body, nullptr);
 }
 
+// 测试 组件3D物理：盒碰撞体3D默认值
 TEST(Components3DPhysicsTest, BoxCollider3DDefaultValues) {
     BoxCollider3DComponent col;
     EXPECT_EQ(col.size, glm::vec3(1.0f));
@@ -116,6 +126,7 @@ TEST(Components3DPhysicsTest, BoxCollider3DDefaultValues) {
     EXPECT_EQ(col.runtime_shape, nullptr);
 }
 
+// 测试 组件3D物理：球碰撞体3D默认值
 TEST(Components3DPhysicsTest, SphereCollider3DDefaultValues) {
     SphereCollider3DComponent col;
     EXPECT_FLOAT_EQ(col.radius, 0.5f);
@@ -126,6 +137,7 @@ TEST(Components3DPhysicsTest, SphereCollider3DDefaultValues) {
     EXPECT_EQ(col.runtime_shape, nullptr);
 }
 
+// 测试 组件3D物理：网格碰撞体3D默认值
 TEST(Components3DPhysicsTest, MeshCollider3DDefaultValues) {
     MeshCollider3DComponent col;
     EXPECT_FALSE(col.convex);
@@ -139,6 +151,7 @@ TEST(Components3DPhysicsTest, MeshCollider3DDefaultValues) {
 // 3D 渲染/光照组件默认值
 // ============================================================
 
+// 测试 组件3D：相机3D默认值
 TEST(Components3DTest, Camera3DDefaultValues) {
     Camera3DComponent cam;
     EXPECT_TRUE(cam.enabled);
@@ -149,6 +162,7 @@ TEST(Components3DTest, Camera3DDefaultValues) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1000.0f);
 }
 
+// 测试 组件3D：方向光灯光3D默认值
 TEST(Components3DTest, DirectionalLight3DDefaultValues) {
     DirectionalLight3DComponent light;
     EXPECT_TRUE(light.enabled);
@@ -157,6 +171,7 @@ TEST(Components3DTest, DirectionalLight3DDefaultValues) {
     EXPECT_TRUE(light.cast_shadow);
 }
 
+// 测试 组件3D：点灯光默认值
 TEST(Components3DTest, PointLightDefaultValues) {
     PointLightComponent light;
     EXPECT_TRUE(light.enabled);
@@ -165,6 +180,7 @@ TEST(Components3DTest, PointLightDefaultValues) {
     EXPECT_FALSE(light.cast_shadow);
 }
 
+// 测试 组件3D：聚光灯光默认值
 TEST(Components3DTest, SpotLightDefaultValues) {
     SpotLightComponent light;
     EXPECT_TRUE(light.enabled);
@@ -173,6 +189,7 @@ TEST(Components3DTest, SpotLightDefaultValues) {
     EXPECT_FLOAT_EQ(light.radius, 20.0f);
 }
 
+// 测试 组件3D：转向组件默认值
 TEST(Components3DTest, SteeringComponentDefaultValues) {
     SteeringComponent steer;
     EXPECT_TRUE(steer.enabled);

@@ -49,6 +49,7 @@ protected:
     }
 };
 
+// 测试 事件总线：之后Publishesreceiveevent
 TEST_F(EventBusTest, AfterPublishesreceiveevent) {
     EventBus bus;
     int received = 0;
@@ -59,12 +60,14 @@ TEST_F(EventBusTest, AfterPublishesreceiveevent) {
     EXPECT_EQ(received, 42);
 }
 
+// 测试 事件总线：Notevent发布不崩溃
 TEST_F(EventBusTest, NoteventPublishesDoesNotCrash) {
     EventBus bus;
     bus.Publish<TestIntEvent>(99);
     SUCCEED();
 }
 
+// 测试 事件总线：Multireceiveevent
 TEST_F(EventBusTest, Multireceiveevent) {
     EventBus bus;
     int count_a = 0;
@@ -76,6 +79,7 @@ TEST_F(EventBusTest, Multireceiveevent) {
     EXPECT_EQ(count_b, 1);
 }
 
+// 测试 事件总线：不同事件类型执行不Interfere带Each Other
 TEST_F(EventBusTest, DifferentEventTypesDoNotInterfereWithEachOther) {
     EventBus bus;
     int int_received = 0;
@@ -98,6 +102,7 @@ TEST_F(EventBusTest, DifferentEventTypesDoNotInterfereWithEachOther) {
 // 取消订阅
 // ============================================================
 
+// 测试 事件总线：之后不Againreceiveevent
 TEST_F(EventBusTest, AfterNotAgainreceiveevent) {
     EventBus bus;
     int count = 0;
@@ -110,6 +115,7 @@ TEST_F(EventBusTest, AfterNotAgainreceiveevent) {
     EXPECT_EQ(count, 1); // 不应再增加
 }
 
+// 测试 事件总线：无效句柄不崩溃
 TEST_F(EventBusTest, InvalidHandleDoesNotCrash) {
     EventBus bus;
     SubscriptionHandle invalid{0, 0, false};
@@ -117,6 +123,7 @@ TEST_F(EventBusTest, InvalidHandleDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 事件总线：单个不
 TEST_F(EventBusTest, OneNot) {
     EventBus bus;
     int count_a = 0;
@@ -135,6 +142,7 @@ TEST_F(EventBusTest, OneNot) {
 // 内置事件类型
 // ============================================================
 
+// 测试 事件总线：UI点击事件发布且接收
 TEST_F(EventBusTest, UiClickEventPublishAndReceive) {
     EventBus bus;
     std::uint32_t received_entity = 0;
@@ -145,6 +153,7 @@ TEST_F(EventBusTest, UiClickEventPublishAndReceive) {
     EXPECT_EQ(received_entity, 12345u);
 }
 
+// 测试 事件总线：资源已加载事件发布且接收
 TEST_F(EventBusTest, ResourceLoadedEventPublishAndReceive) {
     EventBus bus;
     std::string received_path;
@@ -158,6 +167,7 @@ TEST_F(EventBusTest, ResourceLoadedEventPublishAndReceive) {
     EXPECT_TRUE(received_success);
 }
 
+// 测试 事件总线：场景生命周期事件发布且接收
 TEST_F(EventBusTest, SceneLifecycleEventPublishAndReceive) {
     EventBus bus;
     SceneLifecyclePhase received = SceneLifecyclePhase::Init;
@@ -172,6 +182,7 @@ TEST_F(EventBusTest, SceneLifecycleEventPublishAndReceive) {
 // EventTraits 反射机制
 // ============================================================
 
+// 测试 事件总线：事件Traitsusek事件ID
 TEST_F(EventBusTest, EventTraitsusekEventId) {
     // 有 kEventId 的事件应使用其常量
     constexpr EventId ui_click_id = EventTraits<UiClickEvent>::GetId();
@@ -185,6 +196,7 @@ TEST_F(EventBusTest, EventTraitsusekEventId) {
 // ServiceLocator 注入获取
 // ============================================================
 
+// 测试 事件总线：通道服务定位器注入获取
 TEST_F(EventBusTest, PassServiceLocatorInjectsAcquire) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -202,6 +214,7 @@ TEST_F(EventBusTest, PassServiceLocatorInjectsAcquire) {
     ServiceLocator::Instance().Reset<EventBus>();
 }
 
+// 测试 事件总线：实例Compatible Interfaces Work Properly
 TEST_F(EventBusTest, InstanceCompatibleInterfacesWorkProperly) {
     // EventBus::Instance() 应能正常工作（兼容接口）
     EventBus& inst = EventBus::Instance();
@@ -227,11 +240,13 @@ protected:
     }
 };
 
+// 测试 事件总线所有者定位器：默认当所有者定位器为空
 TEST_F(EventBusOwnerLocatorTest, DefaultWhenOwnerLocatorIsEmpty) {
     EventBus bus;
     EXPECT_EQ(bus.owner_locator(), nullptr);
 }
 
+// 测试 事件总线所有者定位器：实例记录整体Situation服务定位器
 TEST_F(EventBusOwnerLocatorTest, InstanceRecordTheWholeSituationServiceLocator) {
     auto& bus = EventBus::Instance();
     EXPECT_EQ(bus.owner_locator(), &ServiceLocator::Instance());
@@ -241,12 +256,14 @@ TEST_F(EventBusOwnerLocatorTest, InstanceRecordTheWholeSituationServiceLocator) 
 // EventTraits 反射机制 - kEventId 一致性验证
 // ============================================================
 
+// 测试 事件Traits：Useevent Insidek事件ID
 TEST(EventTraitsTest, UseeventInsidekEventId) {
     EventId id = EventTraits<UiClickEvent>::GetId();
     EXPECT_EQ(id, UiClickEvent::kEventId);
     EXPECT_EQ(id, events::kUiClick);
 }
 
+// 测试 事件Traits：资源已加载Eventk事件ID
 TEST(EventTraitsTest, ResourceLoadedEventkEventId) {
     EventId id = EventTraits<ResourceLoadedEvent>::GetId();
     EXPECT_EQ(id, ResourceLoadedEvent::kEventId);

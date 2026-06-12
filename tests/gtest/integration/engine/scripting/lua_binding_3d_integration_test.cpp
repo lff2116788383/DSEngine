@@ -65,6 +65,7 @@ protected:
     }
 };
 
+// 测试 Lua绑定3D集成：Lua创建3D相机C++能够读取Fov
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DCameraCppCanReadFov) {
     LuaTempScript startup("test_3d_camera.lua", R"(
         function Awake()
@@ -102,6 +103,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DCameraCppCanReadFov) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua创建3D方向光灯光C++能够读取参数
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DDirectionalLightCppCanReadParams) {
     LuaTempScript startup("test_3d_light.lua", R"(
         function Awake()
@@ -138,6 +140,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DDirectionalLightCppCanReadParams)
 
 // S1.8：set_point_light_3d / set_spot_light_3d / set_spot_light_shadow 写入委托 C ABI 后，
 // 部分更新（nil 通道沿用当前值）+ 方向归一化 经 Lua→C ABI→registry 实链路验证
+// 测试 Lua绑定3D集成：Lua设置点且聚光灯光委托写入C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaSetPointAndSpotLightDelegatedWritesCppCanRead) {
     LuaTempScript startup("test_3d_light_setters.lua", R"(
         function Awake()
@@ -198,6 +201,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetPointAndSpotLightDelegatedWritesCppCan
 // S1.8 Tier B/C：set_directional_light_3d / set_point_light_shadow 写入委托 per-field C ABI，
 // set_directional_light_shadow 委托手写复合 dse_dir_light_set_shadow_params；经 Lua→C ABI→registry
 // 验证部分更新（nil 沿用现值）、方向归一化、enabled，以及 cascade 级联钳制 + clamp。
+// 测试 Lua绑定3D集成：Lua设置目录且点灯光委托写入C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaSetDirAndPointLightDelegatedWritesCppCanRead) {
     LuaTempScript startup("test_3d_light_tierbc.lua", R"(
         function Awake()
@@ -261,6 +265,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetDirAndPointLightDelegatedWritesCppCanR
 
 // S1.9：Animator3DComponent 纯字段经 codegen 入 defs，验证 Lua→C ABI→registry 实链路。
 // 含 danim_path 纯字符串写入（set 后系统按值比较自动重载，无副作用）。
+// 测试 Lua绑定3D集成：Lua设置动画器3D字段C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
     LuaTempScript startup("test_3d_animator.lua", R"(
         function Awake()
@@ -307,6 +312,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSetAnimator3DFieldsCppCanRead) {
 }
 
 // 动画 L4/L5：FSM / 动画层 / IK / Morph 经 C ABI 委托后，Lua→C ABI→组件 完整链路。
+// 测试 Lua绑定3D集成：Lua动画委托往返
 TEST_F(LuaBinding3DIntegrationTest, LuaAnimationDelegatedRoundTrip) {
     LuaTempScript startup("test_3d_animation_deleg.lua", R"(
         function Awake()
@@ -427,6 +433,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaAnimationDelegatedRoundTrip) {
 
 // L5：physics_3d_raycast 经 C ABI 委托后，验证 Lua→C ABI→Lua 完整返回链路。
 // 脚本把 raycast 命中点/法线/距离写回 marker 实体的 transform，C++ 读回断言。
+// 测试 Lua绑定3D集成：Lua物理3D射线检测委托返回命中
 TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
     LuaTempScript startup("test_3d_raycast.lua", R"(
         function Awake()
@@ -476,6 +483,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DRaycastDelegatedReturnsHit) {
 
 // L5：rigidbody_3d_set/get_velocity 经 C ABI 委托 — 无物理服务时走组件缓存。
 // 脚本 set→get→写回 marker，C++ 同时校验组件缓存与 Lua 返回链路。
+// 测试 Lua绑定3D集成：Lua刚体3D速度委托往返
 TEST_F(LuaBinding3DIntegrationTest, LuaRigidBody3DVelocityDelegatedRoundTrip) {
     LuaTempScript startup("test_3d_rb_velocity.lua", R"(
         function Awake()
@@ -528,6 +536,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaRigidBody3DVelocityDelegatedRoundTrip) {
 
 // L5：character_controller_3d_move 经 C ABI 委托 — 无物理服务时走 ECS 回退。
 // 空场景下按位移更新 transform 且不着地，move 把状态写入 CCT 组件，C++ 读回断言。
+// 测试 Lua绑定3D集成：Lua角色控制器3D移动委托ECS回退
 TEST_F(LuaBinding3DIntegrationTest, LuaCharacterController3DMoveDelegatedEcsFallback) {
     LuaTempScript startup("test_3d_cct_move.lua", R"(
         function Awake()
@@ -567,6 +576,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCharacterController3DMoveDelegatedEcsFall
 
 // L5：world_to_screen 经 C ABI 委托 — 主相机投影可见性（前方可见 / 背后不可见）。
 // 脚本把两次可见性编码进 marker.position.x / .y，C++ 读回断言。
+// 测试 Lua绑定3D集成：Lua世界到屏幕委托可见性
 TEST_F(LuaBinding3DIntegrationTest, LuaWorldToScreenDelegatedVisibility) {
     LuaTempScript startup("test_3d_w2s.lua", R"(
         function Awake()
@@ -612,6 +622,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaWorldToScreenDelegatedVisibility) {
 
 // S1.9：Cloth/Fluid 经 C ABI 委托 — Lua→dse_*→组件状态 完整链路。
 // 脚本配置布料(钉点/风)与流体发射器，并把粒子数写回 marker，C++ 读回断言。
+// 测试 Lua绑定3D集成：Lua布料流体委托往返
 TEST_F(LuaBinding3DIntegrationTest, LuaClothFluidDelegatedRoundTrip) {
     LuaTempScript startup("test_3d_cloth_fluid.lua", R"(
         function Awake()
@@ -679,6 +690,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaClothFluidDelegatedRoundTrip) {
 }
 
 // SoftBody + Rope 委托回环：Lua → dse_* C ABI → 组件状态（无条件编译子系统）。
+// 测试 Lua绑定3D集成：Lua柔性刚体绳索委托往返
 TEST_F(LuaBinding3DIntegrationTest, LuaSoftBodyRopeDelegatedRoundTrip) {
     LuaTempScript startup("test_3d_softbody_rope.lua", R"(
         function Awake()
@@ -736,6 +748,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaSoftBodyRopeDelegatedRoundTrip) {
 }
 
 // Batch 3：Lua → C ABI → 组件状态 的环境子系统回环（Weather/SnowCover/DayNight/Cloud）。
+// 测试 Lua绑定3D集成：Lua Environment委托往返
 TEST_F(LuaBinding3DIntegrationTest, LuaEnvironmentDelegatedRoundTrip) {
     LuaTempScript startup("test_3d_environment.lua", R"(
         function Awake()
@@ -828,6 +841,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaEnvironmentDelegatedRoundTrip) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua创建3D刚体且碰撞体C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     LuaTempScript startup("test_3d_physics.lua", R"(
         function Awake()
@@ -876,6 +890,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DRigidBodyAndColliderCppCanRead) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua创建3D粒子系统C++能够读取参数
 TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DParticleSystemCppCanReadParams) {
     LuaTempScript startup("test_3d_particles.lua", R"(
         function Awake()
@@ -911,6 +926,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreate3DParticleSystemCppCanReadParams) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua创建后期处理C++能够读取泛光参数
 TEST_F(LuaBinding3DIntegrationTest, LuaCreatePostProcessCppCanReadBloomParams) {
     LuaTempScript startup("test_3d_postprocess.lua", R"(
         function Awake()
@@ -945,6 +961,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaCreatePostProcessCppCanReadBloomParams) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua 3D球碰撞体创建C++能够Verify
 TEST_F(LuaBinding3DIntegrationTest, Lua3DSphereColliderCreateCppCanVerify) {
     LuaTempScript startup("test_3d_sphere_collider.lua", R"(
         function Awake()
@@ -981,6 +998,7 @@ TEST_F(LuaBinding3DIntegrationTest, Lua3DSphereColliderCreateCppCanVerify) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua配置网格材质且深度状态C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaConfigureMeshMaterialAndDepthStateCppCanRead) {
     LuaTempScript startup("test_3d_mesh_material.lua", R"(
         function Awake()
@@ -1034,6 +1052,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureMeshMaterialAndDepthStateCppCanR
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua配置地形且Heightmap C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaConfigureTerrainAndHeightmapCppCanRead) {
     LuaTempScript startup("test_3d_terrain.lua", R"(
         function Awake()
@@ -1089,6 +1108,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureTerrainAndHeightmapCppCanRead) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua配置3D物理Extended组件C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaConfigure3DPhysicsExtendedComponentsCppCanRead) {
     LuaTempScript startup("test_3d_physics_extended.lua", R"(
         function Awake()
@@ -1169,6 +1189,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigure3DPhysicsExtendedComponentsCppCa
 
 // Task 6: overlap_sphere 经委托后的 C ABI（Lua → dse_physics3d_overlap_sphere），
 // 验证返回的实体表与场景几何一致。
+// 测试 Lua绑定3D集成：Lua物理3D重叠球委托返回实体
 TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DOverlapSphereDelegatedReturnsEntities) {
     LuaTempScript startup("test_3d_overlap.lua", R"(
         function Awake()
@@ -1208,6 +1229,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaPhysics3DOverlapSphereDelegatedReturnsEnt
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua配置玩法3D高级组件C++能够读取
 TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppCanRead) {
     LuaTempScript startup("test_3d_gameplay_components.lua", R"(
         function Awake()
@@ -1380,6 +1402,7 @@ TEST_F(LuaBinding3DIntegrationTest, LuaConfigureGameplay3DAdvancedComponentsCppC
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定3D集成：Lua 3D错误Args无崩溃
 TEST_F(LuaBinding3DIntegrationTest, Lua3DErrorArgsNoCrash) {
     LuaTempScript startup("test_3d_error.lua", R"(
         function Awake()

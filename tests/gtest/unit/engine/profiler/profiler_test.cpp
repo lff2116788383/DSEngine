@@ -22,12 +22,14 @@ using namespace dse::profiler;
 // CPUProfiler 测试
 // ============================================================
 
+// 测试 CPU性能分析器：状态无
 TEST(CPUProfilerTest, StateWithout) {
     CPUProfiler profiler;
     EXPECT_TRUE(profiler.GetStats().empty());
     EXPECT_EQ(profiler.GetFrameStats().frame_count, 0);
 }
 
+// 测试 CPU性能分析器：开始结束采样记录统计
 TEST(CPUProfilerTest, BeginEndSampleRecordStatistics) {
     CPUProfiler profiler;
     profiler.BeginSample("TestSample");
@@ -42,6 +44,7 @@ TEST(CPUProfilerTest, BeginEndSampleRecordStatistics) {
     EXPECT_GT(stat.avg_ms, 0.0);
 }
 
+// 测试 CPU性能分析器：多Timessampling
 TEST(CPUProfilerTest, MultiTimessampling) {
     CPUProfiler profiler;
     for (int i = 0; i < 5; ++i) {
@@ -53,6 +56,7 @@ TEST(CPUProfilerTest, MultiTimessampling) {
     EXPECT_EQ(stat.call_count, 5);
 }
 
+// 测试 CPU性能分析器：开始帧结束帧更新帧统计
 TEST(CPUProfilerTest, BeginFrameEndFrameUpdateFrameStatistics) {
     CPUProfiler profiler;
     profiler.BeginFrame();
@@ -65,6 +69,7 @@ TEST(CPUProfilerTest, BeginFrameEndFrameUpdateFrameStatistics) {
     EXPECT_GT(fs.fps, 0.0);
 }
 
+// 测试 CPU性能分析器：多帧
 TEST(CPUProfilerTest, MultiFrame) {
     CPUProfiler profiler;
     for (int i = 0; i < 3; ++i) {
@@ -75,6 +80,7 @@ TEST(CPUProfilerTest, MultiFrame) {
     EXPECT_EQ(profiler.GetFrameStats().frame_count, 3);
 }
 
+// 测试 CPU性能分析器：重置清空全部统计
 TEST(CPUProfilerTest, ResetClearAllStatistics) {
     CPUProfiler profiler;
     profiler.BeginSample("S1");
@@ -87,6 +93,7 @@ TEST(CPUProfilerTest, ResetClearAllStatistics) {
     EXPECT_EQ(profiler.GetFrameStats().frame_count, 0);
 }
 
+// 测试 CPU性能分析器：CSV非空
 TEST(CPUProfilerTest, CSVNonEmpty) {
     CPUProfiler profiler;
     profiler.BeginSample("CSVTest");
@@ -97,6 +104,7 @@ TEST(CPUProfilerTest, CSVNonEmpty) {
     EXPECT_NE(csv.find("CSVTest"), std::string::npos);
 }
 
+// 测试 CPU性能分析器：JSON非空
 TEST(CPUProfilerTest, JSONNonEmpty) {
     CPUProfiler profiler;
     profiler.BeginSample("JSONTest");
@@ -107,11 +115,13 @@ TEST(CPUProfilerTest, JSONNonEmpty) {
     EXPECT_NE(json.find("JSONTest"), std::string::npos);
 }
 
+// 测试 CPU性能分析器：结束采样无匹配开始不崩溃
 TEST(CPUProfilerTest, EndSampleNoMatchBeginDoesNotCrash) {
     CPUProfiler profiler;
     EXPECT_NO_THROW(profiler.EndSample());
 }
 
+// 测试 CPU性能分析器：Scoped CPU Profile Automatically结束采样
 TEST(CPUProfilerTest, ScopedCPUProfileAutomaticallyEndSampling) {
     CPUProfiler profiler;
     {
@@ -125,6 +135,7 @@ TEST(CPUProfilerTest, ScopedCPUProfileAutomaticallyEndSampling) {
 // MemoryProfiler 测试
 // ============================================================
 
+// 测试 内存性能分析器：记录Allocincrease统计
 TEST(MemoryProfilerTest, RecordAllocincreaseStatistics) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Texture", 1024);
@@ -136,6 +147,7 @@ TEST(MemoryProfilerTest, RecordAllocincreaseStatistics) {
     EXPECT_EQ(snap.active_allocations, 2);
 }
 
+// 测试 内存性能分析器：记录释放Reduce用量
 TEST(MemoryProfilerTest, RecordFreeReduceUsage) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Buffer", 1024);
@@ -148,6 +160,7 @@ TEST(MemoryProfilerTest, RecordFreeReduceUsage) {
     EXPECT_EQ(snap.active_allocations, 0);
 }
 
+// 测试 内存性能分析器：峰值Usagerecord峰值
 TEST(MemoryProfilerTest, PeakUsagerecordPeak) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Mesh", 1000);
@@ -161,6 +174,7 @@ TEST(MemoryProfilerTest, PeakUsagerecordPeak) {
     EXPECT_EQ(snap2.peak_usage, 3000u); // 峰值不变
 }
 
+// 测试 内存性能分析器：Category统计Classification统计
 TEST(MemoryProfilerTest, CategoryStatsClassificationStatistics) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("GPU", 1024);
@@ -173,6 +187,7 @@ TEST(MemoryProfilerTest, CategoryStatsClassificationStatistics) {
     EXPECT_EQ(cats.at("CPU").current_bytes, 512u);
 }
 
+// 测试 内存性能分析器：检测泄漏检测泄漏
 TEST(MemoryProfilerTest, DetectLeaksDetectLeaks) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("LeakedTag", 100);
@@ -182,6 +197,7 @@ TEST(MemoryProfilerTest, DetectLeaksDetectLeaks) {
     EXPECT_EQ(leaks[0], "LeakedTag");
 }
 
+// 测试 内存性能分析器：无泄漏当检测泄漏返回空
 TEST(MemoryProfilerTest, WithoutLeakWhenDetectLeaksReturnsEmpty) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Clean", 100);
@@ -190,6 +206,7 @@ TEST(MemoryProfilerTest, WithoutLeakWhenDetectLeaksReturnsEmpty) {
     EXPECT_TRUE(leaks.empty());
 }
 
+// 测试 内存性能分析器：重置清空全部统计
 TEST(MemoryProfilerTest, ResetClearAllStatistics) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Test", 100);
@@ -201,6 +218,7 @@ TEST(MemoryProfilerTest, ResetClearAllStatistics) {
     EXPECT_EQ(snap.active_allocations, 0);
 }
 
+// 测试 内存性能分析器：CSV非空
 TEST(MemoryProfilerTest, CSVNonEmpty) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("CSV", 256);
@@ -213,6 +231,7 @@ TEST(MemoryProfilerTest, CSVNonEmpty) {
 // RenderProfiler 测试
 // ============================================================
 
+// 测试 渲染性能分析器：初始状态为零
 TEST(RenderProfilerTest, TheInitialStateIsZero) {
     RenderProfiler profiler;
     auto& frame = profiler.GetCurrentFrameStats();
@@ -221,6 +240,7 @@ TEST(RenderProfilerTest, TheInitialStateIsZero) {
     EXPECT_EQ(frame.vertex_count, 0);
 }
 
+// 测试 渲染性能分析器：调用
 TEST(RenderProfilerTest, Calls) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -233,6 +253,7 @@ TEST(RenderProfilerTest, Calls) {
     EXPECT_EQ(frame.triangle_count, 150);
 }
 
+// 测试 渲染性能分析器：次数Statistically正确
 TEST(RenderProfilerTest, TimesStatisticallyCorrect) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -246,6 +267,7 @@ TEST(RenderProfilerTest, TimesStatisticallyCorrect) {
     EXPECT_EQ(frame.triangle_count, 20); // 10 * 2
 }
 
+// 测试 渲染性能分析器：绑定且
 TEST(RenderProfilerTest, BindingAnd) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -258,6 +280,7 @@ TEST(RenderProfilerTest, BindingAnd) {
     EXPECT_EQ(frame.shader_switches, 1);
 }
 
+// 测试 渲染性能分析器：设置上内部
 TEST(RenderProfilerTest, SetUpInside) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -266,6 +289,7 @@ TEST(RenderProfilerTest, SetUpInside) {
     EXPECT_EQ(profiler.GetCurrentFrameStats().texture_memory, 1024u * 1024);
 }
 
+// 测试 渲染性能分析器：帧
 TEST(RenderProfilerTest, Frame) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -279,6 +303,7 @@ TEST(RenderProfilerTest, Frame) {
     EXPECT_EQ(acc.total_vertices, 100);
 }
 
+// 测试 渲染性能分析器：多帧峰值
 TEST(RenderProfilerTest, MultiFramePeak) {
     RenderProfiler profiler;
 
@@ -298,6 +323,7 @@ TEST(RenderProfilerTest, MultiFramePeak) {
     EXPECT_EQ(acc.peak_vertices, 350);
 }
 
+// 测试 渲染性能分析器：重置清空全部统计
 TEST(RenderProfilerTest, ResetClearAllStatistics) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -309,6 +335,7 @@ TEST(RenderProfilerTest, ResetClearAllStatistics) {
     EXPECT_EQ(profiler.GetCurrentFrameStats().draw_calls, 0);
 }
 
+// 测试 渲染性能分析器：CSV非空
 TEST(RenderProfilerTest, CSVNonEmpty) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -324,6 +351,7 @@ TEST(RenderProfilerTest, CSVNonEmpty) {
 // Chrome Trace 导出测试 — CPUProfiler
 // ============================================================
 
+// 测试 CPU性能分析器：导出Chrome追踪正确格式
 TEST(CPUProfilerTest, ExportChromeTraceCorrectFormat) {
     CPUProfiler profiler;
     profiler.BeginFrame();
@@ -345,6 +373,7 @@ TEST(CPUProfilerTest, ExportChromeTraceCorrectFormat) {
     EXPECT_NE(trace.find("\"tid\":"), std::string::npos);
 }
 
+// 测试 CPU性能分析器：导出Chrome Tracemulti采样
 TEST(CPUProfilerTest, ExportChromeTracemultiSampling) {
     CPUProfiler profiler;
     profiler.BeginSample("A");
@@ -357,12 +386,14 @@ TEST(CPUProfilerTest, ExportChromeTracemultiSampling) {
     EXPECT_NE(trace.find("\"name\":\"B\""), std::string::npos);
 }
 
+// 测试 CPU性能分析器：导出Chrome追踪空数据返回空数组
 TEST(CPUProfilerTest, ExportChromeTraceEmptyDataReturnsAnEmptyArray) {
     CPUProfiler profiler;
     std::string trace = profiler.ExportChromeTrace();
     EXPECT_EQ(trace, "[\n\n]");
 }
 
+// 测试 CPU性能分析器：重置清空Chrome追踪数据
 TEST(CPUProfilerTest, ResetClearChromeTracedata) {
     CPUProfiler profiler;
     profiler.BeginSample("X");
@@ -377,6 +408,7 @@ TEST(CPUProfilerTest, ResetClearChromeTracedata) {
 // Chrome Trace 导出测试 — MemoryProfiler
 // ============================================================
 
+// 测试 内存性能分析器：导出Chrome追踪正确格式
 TEST(MemoryProfilerTest, ExportChromeTraceCorrectFormat) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("TraceTag", 1024);
@@ -391,6 +423,7 @@ TEST(MemoryProfilerTest, ExportChromeTraceCorrectFormat) {
     EXPECT_NE(trace.find("\"ph\":\"C\""), std::string::npos);
 }
 
+// 测试 内存性能分析器：导出Chrome追踪记录分配且Deallocation
 TEST(MemoryProfilerTest, ExportChromeTraceRecordAllocationAndDeallocation) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("Buf", 100);
@@ -401,12 +434,14 @@ TEST(MemoryProfilerTest, ExportChromeTraceRecordAllocationAndDeallocation) {
     EXPECT_NE(trace.find("free:Buf"), std::string::npos);
 }
 
+// 测试 内存性能分析器：导出Chrome追踪空数据返回空数组
 TEST(MemoryProfilerTest, ExportChromeTraceEmptyDataReturnsAnEmptyArray) {
     MemoryProfiler profiler;
     std::string trace = profiler.ExportChromeTrace();
     EXPECT_EQ(trace, "[\n\n]");
 }
 
+// 测试 内存性能分析器：重置清空Chrome追踪数据
 TEST(MemoryProfilerTest, ResetClearChromeTracedata) {
     MemoryProfiler profiler;
     profiler.RecordAlloc("X", 100);
@@ -419,6 +454,7 @@ TEST(MemoryProfilerTest, ResetClearChromeTracedata) {
 // Chrome Trace 导出测试 — RenderProfiler
 // ============================================================
 
+// 测试 渲染性能分析器：导出Chrome追踪正确格式
 TEST(RenderProfilerTest, ExportChromeTraceCorrectFormat) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -434,6 +470,7 @@ TEST(RenderProfilerTest, ExportChromeTraceCorrectFormat) {
     EXPECT_NE(trace.find("\"draw_calls\":"), std::string::npos);
 }
 
+// 测试 渲染性能分析器：导出Chrome追踪多个帧录制
 TEST(RenderProfilerTest, ExportChromeTraceMultipleFrameRecording) {
     RenderProfiler profiler;
     for (int i = 0; i < 3; ++i) {
@@ -452,6 +489,7 @@ TEST(RenderProfilerTest, ExportChromeTraceMultipleFrameRecording) {
     EXPECT_EQ(count, 3u);
 }
 
+// 测试 渲染性能分析器：导出Chrome追踪空数据包含GPU线程元数据
 TEST(RenderProfilerTest, ExportChromeTraceEmptyDataContainsGPUThreadMetadata) {
     RenderProfiler profiler;
     std::string trace = profiler.ExportChromeTrace();
@@ -461,6 +499,7 @@ TEST(RenderProfilerTest, ExportChromeTraceEmptyDataContainsGPUThreadMetadata) {
     EXPECT_EQ(trace.find("render_stats"), std::string::npos);
 }
 
+// 测试 渲染性能分析器：重置清空Chrome追踪数据
 TEST(RenderProfilerTest, ResetClearChromeTracedata) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -476,6 +515,7 @@ TEST(RenderProfilerTest, ResetClearChromeTracedata) {
 // GPU Timer 集成测试 — RenderProfiler
 // ============================================================
 
+// 测试 渲染性能分析器：更新GPU Timers写入手柄Udata
 TEST(RenderProfilerTest, UpdateGpuTimersWriteGPUdata) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -497,6 +537,7 @@ TEST(RenderProfilerTest, UpdateGpuTimersWriteGPUdata) {
     EXPECT_EQ(result[2].name, "Lighting");
 }
 
+// 测试 渲染性能分析器：GPU总计时间Spent写入帧统计
 TEST(RenderProfilerTest, GPUTotalTimeSpentWritingFrameStats) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -506,6 +547,7 @@ TEST(RenderProfilerTest, GPUTotalTimeSpentWritingFrameStats) {
     EXPECT_FLOAT_EQ(profiler.GetCurrentFrameStats().total_gpu_time_ms, 3.0f);
 }
 
+// 测试 渲染性能分析器：GPU计时Appears在Chrome追踪Exporting
 TEST(RenderProfilerTest, GPUTimingAppearsAtChromeTraceExporting) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -519,6 +561,7 @@ TEST(RenderProfilerTest, GPUTimingAppearsAtChromeTraceExporting) {
     EXPECT_NE(trace.find("\"tid\":2"), std::string::npos);
 }
 
+// 测试 渲染性能分析器：GPU计时Appears在CSV Exporting
 TEST(RenderProfilerTest, GPUTimingAppearsAtCSVExporting) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -530,6 +573,7 @@ TEST(RenderProfilerTest, GPUTimingAppearsAtCSVExporting) {
     EXPECT_NE(csv.find("GPU:ForwardPass"), std::string::npos);
 }
 
+// 测试 渲染性能分析器：重置清空手柄Utiming数据
 TEST(RenderProfilerTest, ResetClearGPUtimingData) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -541,6 +585,7 @@ TEST(RenderProfilerTest, ResetClearGPUtimingData) {
     EXPECT_FLOAT_EQ(profiler.GetCurrentFrameStats().total_gpu_time_ms, 0.0f);
 }
 
+// 测试 渲染性能分析器：无手柄Udata当不Chrome追踪
 TEST(RenderProfilerTest, WithoutGPUdataWhenNotChromeTrace) {
     RenderProfiler profiler;
     profiler.BeginFrame();
@@ -556,6 +601,7 @@ TEST(RenderProfilerTest, WithoutGPUdataWhenNotChromeTrace) {
 // 性能基线测试
 // ============================================================
 
+// 测试 性能分析器基准：CPU采样开销为Lower比100微秒
 TEST(ProfilerBenchmark, CPUSamplingOverheadIsLowerThan100microseconds) {
     CPUProfiler profiler;
     auto start = std::chrono::high_resolution_clock::now();
@@ -569,6 +615,7 @@ TEST(ProfilerBenchmark, CPUSamplingOverheadIsLowerThan100microseconds) {
     EXPECT_LT(per_op_us, 100.0) << "per-op: " << per_op_us << " us";
 }
 
+// 测试 性能分析器基准：内存Logging开销为小于比100微秒
 TEST(ProfilerBenchmark, MemoryLoggingOverheadIsLessThan100microseconds) {
     MemoryProfiler profiler;
     auto start = std::chrono::high_resolution_clock::now();
@@ -581,6 +628,7 @@ TEST(ProfilerBenchmark, MemoryLoggingOverheadIsLessThan100microseconds) {
     EXPECT_LT(per_op_us, 100.0) << "per-op: " << per_op_us << " us";
 }
 
+// 测试 性能分析器基准：渲染Logging开销为小于比100微秒
 TEST(ProfilerBenchmark, RenderLoggingOverheadIsLessThan100microseconds) {
     RenderProfiler profiler;
     auto start = std::chrono::high_resolution_clock::now();
@@ -595,6 +643,7 @@ TEST(ProfilerBenchmark, RenderLoggingOverheadIsLessThan100microseconds) {
     EXPECT_LT(per_op_us, 100.0) << "per-op: " << per_op_us << " us";
 }
 
+// 测试 性能分析器基准：Chrome追踪导出10000 Pieces的数据Below 200 millisecond
 TEST(ProfilerBenchmark, ChromeTraceExport10000PiecesOfDataBelow200millisecond) {
     CPUProfiler profiler;
     for (int i = 0; i < 10000; ++i) {

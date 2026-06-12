@@ -63,6 +63,7 @@ static bool TestIsAABBInFrustum(const glm::vec4 planes[6],
 // 1.1 TreeComponent 默认值验证
 // ============================================================
 
+// 测试 树组件：默认值启用且
 TEST(TreeComponentTest, DefaultValues_EnabledAnd) {
     TreeComponent tc;
     EXPECT_TRUE(tc.enabled);
@@ -71,12 +72,14 @@ TEST(TreeComponentTest, DefaultValues_EnabledAnd) {
     EXPECT_FLOAT_EQ(tc.chunk_size, 32.0f);
 }
 
+// 测试 树组件：默认值情形
 TEST(TreeComponentTest, DefaultValues_Case) {
     TreeComponent tc;
     EXPECT_FLOAT_EQ(tc.min_scale, 0.8f);
     EXPECT_FLOAT_EQ(tc.max_scale, 1.3f);
 }
 
+// 测试 树组件：默认值LOD
 TEST(TreeComponentTest, DefaultValues_LOD) {
     TreeComponent tc;
     EXPECT_FLOAT_EQ(tc.lod1_distance, 60.0f);
@@ -84,6 +87,7 @@ TEST(TreeComponentTest, DefaultValues_LOD) {
     EXPECT_FLOAT_EQ(tc.cull_distance, 200.0f);
 }
 
+// 测试 树组件：默认值且
 TEST(TreeComponentTest, DefaultValues_And) {
     TreeComponent tc;
     EXPECT_FLOAT_EQ(tc.wind_strength, 0.3f);
@@ -91,11 +95,13 @@ TEST(TreeComponentTest, DefaultValues_And) {
     EXPECT_FLOAT_EQ(tc.shadow_distance, 80.0f);
 }
 
+// 测试 树组件：默认值当
 TEST(TreeComponentTest, DefaultValues_When) {
     TreeComponent tc;
     EXPECT_EQ(tc.cached_instance_count_, 0);
 }
 
+// 测试 树组件：默认值为空
 TEST(TreeComponentTest, DefaultValues_IsEmpty) {
     TreeComponent tc;
     EXPECT_TRUE(tc.mesh_path.empty());
@@ -107,6 +113,7 @@ TEST(TreeComponentTest, DefaultValues_IsEmpty) {
 // 1.2 ChunkKey 唯一性和可逆性
 // ============================================================
 
+// 测试 树块键：不同坐标产生不同键
 TEST(TreeChunkKeyTest, DifferentCoordinatesProduceDifferentKey) {
     EXPECT_NE(TestChunkKey(0, 0), TestChunkKey(1, 0));
     EXPECT_NE(TestChunkKey(0, 0), TestChunkKey(0, 1));
@@ -114,12 +121,14 @@ TEST(TreeChunkKeyTest, DifferentCoordinatesProduceDifferentKey) {
     EXPECT_NE(TestChunkKey(10, 20), TestChunkKey(20, 10));
 }
 
+// 测试 树块键：键
 TEST(TreeChunkKeyTest, Key) {
     EXPECT_EQ(TestChunkKey(5, 7), TestChunkKey(5, 7));
     EXPECT_EQ(TestChunkKey(0, 0), TestChunkKey(0, 0));
     EXPECT_EQ(TestChunkKey(-3, -4), TestChunkKey(-3, -4));
 }
 
+// 测试 树块键：负坐标正确
 TEST(TreeChunkKeyTest, NegativeCoordinatesCorrect) {
     uint64_t k_neg = TestChunkKey(-1, -1);
     uint64_t k_pos = TestChunkKey(1, 1);
@@ -129,6 +138,7 @@ TEST(TreeChunkKeyTest, NegativeCoordinatesCorrect) {
     EXPECT_NE(TestChunkKey(0, -1), TestChunkKey(0, 1));
 }
 
+// 测试 树块键：键无
 TEST(TreeChunkKeyTest, KeyWithout) {
     std::set<uint64_t> keys;
     for (int cx = -10; cx <= 10; ++cx) {
@@ -141,6 +151,7 @@ TEST(TreeChunkKeyTest, KeyWithout) {
     EXPECT_EQ(keys.size(), 21u * 21u);
 }
 
+// 测试 树块键：能够情形32
 TEST(TreeChunkKeyTest, Can_Case32) {
     int cx = -42, cz = 99;
     uint64_t key = TestChunkKey(cx, cz);
@@ -154,6 +165,7 @@ TEST(TreeChunkKeyTest, Can_Case32) {
 // 1.3 IsAABBInFrustum 已知平面测试
 // ============================================================
 
+// 测试 树视锥：AABB完全内部视锥
 TEST(TreeFrustumTest, AABBFullyInsideFrustum) {
     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(
@@ -170,6 +182,7 @@ TEST(TreeFrustumTest, AABBFullyInsideFrustum) {
         glm::vec3(1.0f, 1.0f, -5.0f)));
 }
 
+// 测试 树视锥：AABB完全外部视锥返回
 TEST(TreeFrustumTest, AABBFullyOutsideFrustum_Back) {
     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(
@@ -186,6 +199,7 @@ TEST(TreeFrustumTest, AABBFullyOutsideFrustum_Back) {
         glm::vec3(1.0f, 1.0f, 10.0f)));
 }
 
+// 测试 树视锥：AABB完全外部视锥远Away
 TEST(TreeFrustumTest, AABBFullyOutsideFrustum_FarAway) {
     glm::mat4 proj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 50.0f);
     glm::mat4 view = glm::lookAt(
@@ -202,6 +216,7 @@ TEST(TreeFrustumTest, AABBFullyOutsideFrustum_FarAway) {
         glm::vec3(1.0f, 1.0f, -100.0f)));
 }
 
+// 测试 树视锥：AABB外部视锥Left侧
 TEST(TreeFrustumTest, AABBOutsideFrustum_LeftSide) {
     glm::mat4 proj = glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 100.0f);
     glm::mat4 view = glm::lookAt(
@@ -218,6 +233,7 @@ TEST(TreeFrustumTest, AABBOutsideFrustum_LeftSide) {
         glm::vec3(-500.0f, 1.0f, -5.0f)));
 }
 
+// 测试 树视锥：对齐内部
 TEST(TreeFrustumTest, Alignment_Inside) {
     glm::vec4 planes[6] = {
         glm::vec4( 1.0f, 0.0f, 0.0f, 10.0f),  // x >= -10
@@ -231,6 +247,7 @@ TEST(TreeFrustumTest, Alignment_Inside) {
         glm::vec3(-5.0f), glm::vec3(5.0f)));
 }
 
+// 测试 树视锥：对齐外部
 TEST(TreeFrustumTest, Alignment_Outside) {
     glm::vec4 planes[6] = {
         glm::vec4( 1.0f, 0.0f, 0.0f, 10.0f),
@@ -249,18 +266,21 @@ TEST(TreeFrustumTest, Alignment_Outside) {
 // 1.4 TreeSystem 生命周期
 // ============================================================
 
+// 测试 树系统：默认不崩溃
 TEST(TreeSystemTest, DefaultDoesNotCrash) {
     TreeSystem sys;
     (void)sys;
     SUCCEED();
 }
 
+// 测试 树系统：初始化空指针设备不崩溃
 TEST(TreeSystemTest, Init_NullptrDeviceDoesNotCrash) {
     TreeSystem sys;
     sys.Init(nullptr);
     SUCCEED();
 }
 
+// 测试 树系统：关闭空世界不崩溃
 TEST(TreeSystemTest, Shutdown_EmptyWorldDoesNotCrash) {
     TreeSystem sys;
     sys.Init(nullptr);
@@ -269,6 +289,7 @@ TEST(TreeSystemTest, Shutdown_EmptyWorldDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 树系统：初始化稍后关闭不崩溃
 TEST(TreeSystemTest, InitLaterShutdownDoesNotCrash) {
     TreeSystem sys;
     sys.Init(nullptr);
@@ -281,6 +302,7 @@ TEST(TreeSystemTest, InitLaterShutdownDoesNotCrash) {
 // 1.5 GenerateChunkInstances 确定性测试
 // ============================================================
 
+// 测试 树系统：Updatetwice数量的缓存实例Remains Unchanged
 TEST(TreeSystemTest, Updatetwice_TheNumberOfCacheInstancesRemainsUnchanged) {
     TreeSystem sys;
     sys.Init(nullptr);
@@ -317,6 +339,7 @@ TEST(TreeSystemTest, Updatetwice_TheNumberOfCacheInstancesRemainsUnchanged) {
     sys.Shutdown(world);
 }
 
+// 测试 树系统：更新空世界不崩溃
 TEST(TreeSystemTest, Update_EmptyWorldDoesNotCrash) {
     TreeSystem sys;
     sys.Init(nullptr);
@@ -330,6 +353,7 @@ TEST(TreeSystemTest, Update_EmptyWorldDoesNotCrash) {
 // TreeInstanceLayout / TreeChunkData 默认值
 // ============================================================
 
+// 测试 树实例布局：初始化全部零
 TEST(TreeInstanceLayoutTest, InitializeAllZero) {
     TreeInstanceLayout layout{};
     EXPECT_FLOAT_EQ(layout.position.x, 0.0f);
@@ -339,6 +363,7 @@ TEST(TreeInstanceLayoutTest, InitializeAllZero) {
     EXPECT_FLOAT_EQ(layout.scale, 0.0f);
 }
 
+// 测试 树块数据：默认值
 TEST(TreeChunkDataTest, DefaultValues) {
     TreeChunkData chunk;
     EXPECT_TRUE(chunk.layouts.empty());

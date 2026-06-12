@@ -58,11 +58,13 @@ protected:
     }
 };
 
+// 测试 场景管理器：状态无已经加载场景
 TEST_F(SceneManagerTest, StateWithoutAlreadyLoadScene) {
     EXPECT_EQ(mgr.LoadedCount(), 0u);
     EXPECT_TRUE(mgr.GetLoadedSubScenes().empty());
 }
 
+// 测试 场景管理器：同步加载场景
 TEST_F(SceneManagerTest, SynchronousLoadScene) {
     auto path = WriteTempScene("dse_mgr_sync.dscene", kSceneA);
     EXPECT_TRUE(mgr.LoadSubScene(path.string()));
@@ -72,6 +74,7 @@ TEST_F(SceneManagerTest, SynchronousLoadScene) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：加载返回false
 TEST_F(SceneManagerTest, LoadReturnsfalse) {
     auto path = WriteTempScene("dse_mgr_dup.dscene", kSceneA);
     EXPECT_TRUE(mgr.LoadSubScene(path.string()));
@@ -80,6 +83,7 @@ TEST_F(SceneManagerTest, LoadReturnsfalse) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：场景
 TEST_F(SceneManagerTest, Scene) {
     auto path = WriteTempScene("dse_mgr_unload.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
@@ -90,11 +94,13 @@ TEST_F(SceneManagerTest, Scene) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：不存在无
 TEST_F(SceneManagerTest, DoesNotExistWithout) {
     mgr.UnloadSubScene("nonexistent.dscene");
     EXPECT_EQ(mgr.LoadedCount(), 0u);
 }
 
+// 测试 场景管理器：多场景加载
 TEST_F(SceneManagerTest, MultiSceneLoad) {
     auto pathA = WriteTempScene("dse_mgr_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_b.dscene", kSceneB);
@@ -112,6 +118,7 @@ TEST_F(SceneManagerTest, MultiSceneLoad) {
     std::filesystem::remove(pathB);
 }
 
+// 测试 场景管理器：卸载全部清空全部子场景
 TEST_F(SceneManagerTest, UnloadAllClearAllSubScenes) {
     auto pathA = WriteTempScene("dse_mgr_all_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_all_b.dscene", kSceneB);
@@ -126,6 +133,7 @@ TEST_F(SceneManagerTest, UnloadAllClearAllSubScenes) {
     std::filesystem::remove(pathB);
 }
 
+// 测试 场景管理器：获取已加载子场景返回路径列表
 TEST_F(SceneManagerTest, GetLoadedSubScenesReturnPathList) {
     auto pathA = WriteTempScene("dse_mgr_list_a.dscene", kSceneA);
     auto pathB = WriteTempScene("dse_mgr_list_b.dscene", kSceneB);
@@ -139,6 +147,7 @@ TEST_F(SceneManagerTest, GetLoadedSubScenesReturnPathList) {
     std::filesystem::remove(pathB);
 }
 
+// 测试 场景管理器：获取子场景返回Corresponding子场景
 TEST_F(SceneManagerTest, GetSubSceneReturnCorrespondingSubScene) {
     auto path = WriteTempScene("dse_mgr_get.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
@@ -150,6 +159,7 @@ TEST_F(SceneManagerTest, GetSubSceneReturnCorrespondingSubScene) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：事件Busreceive子场景Loadedevent
 TEST_F(SceneManagerTest, EventBusreceiveSubSceneLoadedevent) {
     auto path = WriteTempScene("dse_mgr_evt_load.dscene", kSceneA);
     bool received = false;
@@ -166,6 +176,7 @@ TEST_F(SceneManagerTest, EventBusreceiveSubSceneLoadedevent) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：事件Busreceive子场景Unloadedevent
 TEST_F(SceneManagerTest, EventBusreceiveSubSceneUnloadedevent) {
     auto path = WriteTempScene("dse_mgr_evt_unload.dscene", kSceneA);
     mgr.LoadSubScene(path.string());
@@ -178,6 +189,7 @@ TEST_F(SceneManagerTest, EventBusreceiveSubSceneUnloadedevent) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：加载无任务Systemrollbacksynchronous
 TEST_F(SceneManagerTest, LoadWithoutJobSystemrollbacksynchronous) {
     mgr.SetJobSystem(nullptr);
     auto path = WriteTempScene("dse_mgr_async_fallback.dscene", kSceneA);
@@ -188,6 +200,7 @@ TEST_F(SceneManagerTest, LoadWithoutJobSystemrollbacksynchronous) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：加载带任务系统
 TEST_F(SceneManagerTest, LoadWithJobSystem) {
     JobSystem js;
     js.Init();
@@ -209,11 +222,13 @@ TEST_F(SceneManagerTest, LoadWithJobSystem) {
     std::filesystem::remove(path);
 }
 
+// 测试 场景管理器：加载失败不状态
 TEST_F(SceneManagerTest, LoadFailsNotState) {
     EXPECT_FALSE(mgr.LoadSubScene("this_file_does_not_exist.dscene"));
     EXPECT_EQ(mgr.LoadedCount(), 0u);
 }
 
+// 测试 场景管理器：Notset上世界当加载返回false
 TEST_F(SceneManagerTest, NotsetUpWorldWhenLoadReturnsfalse) {
     SceneManager mgr2;
     mgr2.SetAssetManager(&asset_manager);

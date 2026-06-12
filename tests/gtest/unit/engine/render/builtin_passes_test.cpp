@@ -28,6 +28,7 @@ using namespace dse::render;
 // RenderPassContext 默认值
 // ============================================================
 
+// 测试 渲染通道上下文：默认值全部空
 TEST(RenderPassContextTest, DefaultValuesAllEmpty) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
@@ -42,6 +43,7 @@ TEST(RenderPassContextTest, DefaultValuesAllEmpty) {
     EXPECT_FALSE(ctx.auto_exposure_active);
 }
 
+// 测试 渲染通道上下文：管线States默认为零
 TEST(RenderPassContextTest, PipelineStatesDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.pipeline_states.sprite, 0u);
@@ -54,6 +56,7 @@ TEST(RenderPassContextTest, PipelineStatesDefaultIsZero) {
     EXPECT_EQ(ctx.pipeline_states.wboit_reveal, 0u);
 }
 
+// 测试 渲染通道上下文：渲染目标默认为零
 TEST(RenderPassContextTest, RenderTargetsDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_EQ(ctx.render_targets.main, 0u);
@@ -79,6 +82,7 @@ TEST(RenderPassContextTest, RenderTargetsDefaultIsZero) {
     }
 }
 
+// 测试 渲染通道上下文：TAA Jitter默认为零
 TEST(RenderPassContextTest, TAAJitterDefaultIsZero) {
     RenderPassContext ctx;
     EXPECT_FLOAT_EQ(ctx.taa_jitter.x, 0.0f);
@@ -127,6 +131,7 @@ PASS_NAME_TEST(PresentPass,         "present_pass")
 // TAAPass Jitter 测试
 // ============================================================
 
+// 测试 TAA通道：默认Jitteris零
 TEST(TAAPassTest, DefaultJitterisZero) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
@@ -135,6 +140,7 @@ TEST(TAAPassTest, DefaultJitterisZero) {
     EXPECT_FLOAT_EQ(j.y, 0.0f);
 }
 
+// 测试 TAA通道：更新Jitterchange值
 TEST(TAAPassTest, UpdateJitterchangeValue) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
@@ -149,6 +155,7 @@ TEST(TAAPassTest, UpdateJitterchangeValue) {
     }
 }
 
+// 测试 TAA通道：Jitterwithin Reason
 TEST(TAAPassTest, JitterwithinReason) {
     RenderPassContext ctx;
     TAAPass pass(ctx);
@@ -166,6 +173,7 @@ TEST(TAAPassTest, JitterwithinReason) {
 // IRenderPass 接口多态
 // ============================================================
 
+// 测试 I渲染通道：多获取名称
 TEST(IRenderPassTest, MultiGetName) {
     RenderPassContext ctx;
     PreZPass prez(ctx);
@@ -182,23 +190,27 @@ TEST(IRenderPassTest, MultiGetName) {
 // RenderGraph 基本声明/编译/重置
 // ============================================================
 
+// 测试 内置通道渲染图：空编译成功
 TEST(BuiltinPassesRenderGraphTest, EmptyCompileSucceeds) {
     RenderGraph graph;
     EXPECT_TRUE(graph.Compile());
 }
 
+// 测试 内置通道渲染图：资源返回有效
 TEST(BuiltinPassesRenderGraphTest, AssetReturnValid) {
     RenderGraph graph;
     auto h = graph.DeclareResource("scene_color");
     EXPECT_NE(h.id, 0u);
 }
 
+// 测试 内置通道渲染图：添加到通道返回有效
 TEST(BuiltinPassesRenderGraphTest, AddToPassReturnValid) {
     RenderGraph graph;
     auto h = graph.AddPass("test_pass");
     EXPECT_TRUE(h.is_valid());
 }
 
+// 测试 内置通道渲染图：重置之后Recompiling成功
 TEST(BuiltinPassesRenderGraphTest, ResetAfterRecompilingSuccessfully) {
     RenderGraph graph;
     graph.DeclareResource("res_a");
@@ -208,12 +220,14 @@ TEST(BuiltinPassesRenderGraphTest, ResetAfterRecompilingSuccessfully) {
     EXPECT_TRUE(graph.Compile());
 }
 
+// 测试 内置通道渲染图：外部资源
 TEST(BuiltinPassesRenderGraphTest, OutsideAsset) {
     RenderGraph graph;
     auto h = graph.ImportResource("backbuffer", 42);
     EXPECT_EQ(graph.GetResourceRT(h), 42u);
 }
 
+// 测试 内置通道渲染图：Notbinding资源渲染目标返回零
 TEST(BuiltinPassesRenderGraphTest, NotbindingAssetRTReturnsZero) {
     RenderGraph graph;
     auto h = graph.DeclareResource("unbound");

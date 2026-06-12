@@ -16,6 +16,7 @@
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 using namespace dse::render;
 
+// 测试 描述符绑定信息：默认值
 TEST(DescriptorBindingInfoTest, DefaultValues) {
     DescriptorBindingInfo info;
     EXPECT_EQ(info.set, 0u);
@@ -25,6 +26,7 @@ TEST(DescriptorBindingInfoTest, DefaultValues) {
     EXPECT_EQ(info.count, 1u);
 }
 
+// 测试 描述符绑定信息：相等
 TEST(DescriptorBindingInfoTest, Equality) {
     DescriptorBindingInfo a, b;
     a.set = 1; a.binding = 2; a.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -35,12 +37,14 @@ TEST(DescriptorBindingInfoTest, Equality) {
     EXPECT_FALSE(a == b);
 }
 
+// 测试 着色器反射：默认值
 TEST(ShaderReflectionTest, DefaultValues) {
     ShaderReflection ref;
     EXPECT_TRUE(ref.bindings.empty());
     EXPECT_FALSE(ref.has_push_constant);
 }
 
+// 测试 Vulkan着色器程序：默认
 TEST(VulkanShaderProgramTest, Default) {
     VulkanShaderProgram prog;
     EXPECT_EQ(prog.vert_module, VK_NULL_HANDLE);
@@ -49,6 +53,7 @@ TEST(VulkanShaderProgramTest, Default) {
     EXPECT_TRUE(prog.descriptor_set_layouts.empty());
 }
 
+// 测试 Vulkan计算程序：默认值
 TEST(VulkanComputeProgramTest, DefaultValues) {
     VulkanComputeProgram cp;
     EXPECT_EQ(cp.comp_module, VK_NULL_HANDLE);
@@ -59,6 +64,7 @@ TEST(VulkanComputeProgramTest, DefaultValues) {
     EXPECT_FALSE(cp.uses_ssbo_bindings);
 }
 
+// 测试 Vulkan着色器管理器：默认
 TEST(VulkanShaderManagerTest, Default) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
@@ -70,6 +76,7 @@ TEST(VulkanShaderManagerTest, Default) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
+// 测试 Vulkan着色器管理器：获取程序返回无注册返回空指针
 TEST(VulkanShaderManagerTest, GetProgram_ReturnWithoutRegistrationnullptr) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.GetProgram(999), nullptr);
@@ -86,6 +93,7 @@ TEST(VulkanShaderManagerTest, GetProgram_ReturnWithoutRegistrationnullptr) {
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 using namespace dse::render;
 
+// 测试 DX 11着色器程序：默认值
 TEST(DX11ShaderProgramTest, DefaultValues) {
     DX11ShaderProgram prog;
     EXPECT_TRUE(prog.vertex_shader.Get() == nullptr);
@@ -93,12 +101,14 @@ TEST(DX11ShaderProgramTest, DefaultValues) {
     EXPECT_TRUE(prog.vs_blob.Get() == nullptr);
 }
 
+// 测试 DX 11计算程序：默认值
 TEST(DX11ComputeProgramTest, DefaultValues) {
     DX11ComputeProgram cp;
     EXPECT_TRUE(cp.cs.Get() == nullptr);
     EXPECT_TRUE(cp.params_cb.Get() == nullptr);
 }
 
+// 测试 DX 11着色器管理器：默认
 TEST(DX11ShaderManagerTest, Default) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
@@ -110,6 +120,7 @@ TEST(DX11ShaderManagerTest, Default) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
+// 测试 DX 11着色器管理器：获取程序返回无注册返回空指针
 TEST(DX11ShaderManagerTest, GetProgram_ReturnWithoutRegistrationnullptr) {
     DX11ShaderManager mgr;
     EXPECT_TRUE(mgr.GetProgram(999) == nullptr);

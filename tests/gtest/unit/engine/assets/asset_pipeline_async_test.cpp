@@ -75,10 +75,12 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
+// 测试 资源LRU：Insideuseis零
 TEST_F(AssetLruTest, InsideuseisZero) {
     EXPECT_EQ(mgr_->EstimatedMemoryUsage(), 0u);
 }
 
+// 测试 资源LRU：加载资源之后内部
 TEST_F(AssetLruTest, LoadAssetAfterInside) {
     WriteDmeshFile("test.dmesh", 1024);
     auto dmesh = mgr_->LoadDmesh("test.dmesh");
@@ -86,12 +88,14 @@ TEST_F(AssetLruTest, LoadAssetAfterInside) {
     EXPECT_GT(mgr_->EstimatedMemoryUsage(), 0u);
 }
 
+// 测试 资源LRU：设置内存预算设置预算
 TEST_F(AssetLruTest, SetMemoryBudgetSetABudget) {
     mgr_->SetMemoryBudget(1024 * 1024);
     // 不应崩溃
     SUCCEED();
 }
 
+// 测试 资源LRU：驱逐LRU返回零若存在为无预算
 TEST_F(AssetLruTest, EvictLRUReturnsZeroIfThereIsNoBudget) {
     WriteDmeshFile("a.dmesh", 512);
     auto a = mgr_->LoadDmesh("a.dmesh");
@@ -102,6 +106,7 @@ TEST_F(AssetLruTest, EvictLRUReturnsZeroIfThereIsNoBudget) {
     EXPECT_EQ(evicted, 0u);
 }
 
+// 测试 资源LRU：驱逐LRU无Elimination范围内预算
 TEST_F(AssetLruTest, EvictLRUNoEliminationWithinBudget) {
     WriteDmeshFile("a.dmesh", 512);
     auto a = mgr_->LoadDmesh("a.dmesh");
@@ -112,6 +117,7 @@ TEST_F(AssetLruTest, EvictLRUNoEliminationWithinBudget) {
     EXPECT_EQ(evicted, 0u);
 }
 
+// 测试 资源LRU：驱逐LRU Eliminate Expired资源Beyond预算
 TEST_F(AssetLruTest, EvictLRUEliminateExpiredResourcesBeyondBudget) {
     WriteDmeshFile("a.dmesh", 2048);
     WriteDmeshFile("b.dmesh", 2048);
@@ -138,6 +144,7 @@ TEST_F(AssetLruTest, EvictLRUEliminateExpiredResourcesBeyondBudget) {
     EXPECT_LT(mgr_->EstimatedMemoryUsage(), usage_before);
 }
 
+// 测试 资源LRU：驱逐LRU执行不Retire资源为仍Referenced
 TEST_F(AssetLruTest, EvictLRUDoNotRetireResourcesThatAreStillReferenced) {
     WriteDmeshFile("a.dmesh", 2048);
 
@@ -180,6 +187,7 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
+// 测试 资源异步已展开：加载Dmesh异步回调为分发
 TEST_F(AssetAsyncExpandedTest, LoadDmeshAsynccallbackIsDispatched) {
     WriteFile("test.dmesh", std::string(128, '\0'));
 
@@ -193,6 +201,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDmeshAsynccallbackIsDispatched) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+// 测试 资源异步已展开：加载Danim异步回调为分发
 TEST_F(AssetAsyncExpandedTest, LoadDanimAsynccallbackIsDispatched) {
     WriteFile("test.danim", std::string(64, '\0'));
 
@@ -206,6 +215,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDanimAsynccallbackIsDispatched) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+// 测试 资源异步已展开：加载Dskel异步回调为分发
 TEST_F(AssetAsyncExpandedTest, LoadDskelAsynccallbackIsDispatched) {
     WriteFile("test.dskel", std::string(64, '\0'));
 
@@ -219,6 +229,7 @@ TEST_F(AssetAsyncExpandedTest, LoadDskelAsynccallbackIsDispatched) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+// 测试 资源异步已展开：加载音频剪辑异步回调为分发
 TEST_F(AssetAsyncExpandedTest, LoadAudioClipAsynccallbackIsDispatched) {
     WriteFile("test.wav", std::string(256, '\0'));
 
@@ -232,6 +243,7 @@ TEST_F(AssetAsyncExpandedTest, LoadAudioClipAsynccallbackIsDispatched) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+// 测试 资源异步已展开：加载无效路径返回空指针不崩溃
 TEST_F(AssetAsyncExpandedTest, LoadInvalidPathReturnsnullptrDoesNotCrash) {
     std::atomic<bool> callback_fired{false};
     mgr_->LoadDmeshAsync("///nonexistent.dmesh", [&callback_fired](std::shared_ptr<DmeshAsset> asset) {
@@ -244,6 +256,7 @@ TEST_F(AssetAsyncExpandedTest, LoadInvalidPathReturnsnullptrDoesNotCrash) {
     EXPECT_TRUE(callback_fired.load());
 }
 
+// 测试 资源异步已展开：Loadbring任务系统
 TEST_F(AssetAsyncExpandedTest, LoadbringJobSystem) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
@@ -289,6 +302,7 @@ protected:
     std::unique_ptr<AssetManager> mgr_;
 };
 
+// 测试 资源热重新加载：启动停止不崩溃
 TEST_F(AssetHotReloadTest, StartStopDoesNotCrash) {
     mgr_->StartFileWatcher();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -296,6 +310,7 @@ TEST_F(AssetHotReloadTest, StartStopDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 资源热重新加载：多次数启动停止不崩溃
 TEST_F(AssetHotReloadTest, MultiTimesStartStopDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         mgr_->StartFileWatcher();
@@ -305,11 +320,13 @@ TEST_F(AssetHotReloadTest, MultiTimesStartStopDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 资源热重新加载：泵送热重新加载返回零若Nothing为待处理
 TEST_F(AssetHotReloadTest, PumpHotReloadsReturnsZeroIfNothingIsPending) {
     std::size_t count = mgr_->PumpHotReloads();
     EXPECT_EQ(count, 0u);
 }
 
+// 测试 资源热重新加载：停止文件Watcher不崩溃当不Started
 TEST_F(AssetHotReloadTest, StopFileWatcherDoesNotCrashWhenNotStarted) {
     mgr_->StopFileWatcher();
     SUCCEED();

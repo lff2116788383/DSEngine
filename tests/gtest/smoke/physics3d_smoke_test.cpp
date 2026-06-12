@@ -80,6 +80,7 @@ protected:
 
 // ---- 测试用例 ----
 
+// 测试 物理3D冒烟：情形2
 TEST_F(Physics3DSmokeTest, TestCase2) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 10.0f, 0.0f));
 
@@ -90,6 +91,7 @@ TEST_F(Physics3DSmokeTest, TestCase2) {
     EXPECT_LT(t.position.y, 6.0f);
 }
 
+// 测试 物理3D冒烟：情形3
 TEST_F(Physics3DSmokeTest, TestCase3) {
     CreateStaticGround(0.0f);
     auto box = CreateDynamicBox(glm::vec3(0.0f, 5.0f, 0.0f));
@@ -102,6 +104,7 @@ TEST_F(Physics3DSmokeTest, TestCase3) {
     EXPECT_LT(t.position.y, 3.0f);  // 应该已下落
 }
 
+// 测试 物理3D冒烟：Raycasthit刚体
 TEST_F(Physics3DSmokeTest, RaycasthitRigidBody) {
     CreateDynamicBox(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(2.0f));
 
@@ -116,6 +119,7 @@ TEST_F(Physics3DSmokeTest, RaycasthitRigidBody) {
     EXPECT_LT(result.distance, 15.0f);
 }
 
+// 测试 物理3D冒烟：添加冲量Apply冲量
 TEST_F(Physics3DSmokeTest, AddImpulseApplyImpulse) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 10.0f, 0.0f));
 
@@ -131,6 +135,7 @@ TEST_F(Physics3DSmokeTest, AddImpulseApplyImpulse) {
     EXPECT_GT(t.position.y, 5.0f);
 }
 
+// 测试 物理3D冒烟：事件
 TEST_F(Physics3DSmokeTest, Event) {
     CreateStaticGround(0.0f);
     CreateDynamicBox(glm::vec3(0.0f, 2.0f, 0.0f));
@@ -147,6 +152,7 @@ TEST_F(Physics3DSmokeTest, Event) {
     EXPECT_TRUE(has_collision);
 }
 
+// 测试 物理3D冒烟：多连续帧稳定
 TEST_F(Physics3DSmokeTest, MultiContinuousFramesStable) {
     CreateStaticGround(0.0f);
     for (int i = 0; i < 5; ++i) {
@@ -157,6 +163,7 @@ TEST_F(Physics3DSmokeTest, MultiContinuousFramesStable) {
     EXPECT_NO_THROW(StepN(600));
 }
 
+// 测试 物理3D冒烟：移除Actorsafe Removal
 TEST_F(Physics3DSmokeTest, RemoveActorsafeRemoval) {
     auto box = CreateDynamicBox(glm::vec3(0.0f, 5.0f, 0.0f));
 
@@ -168,6 +175,7 @@ TEST_F(Physics3DSmokeTest, RemoveActorsafeRemoval) {
     EXPECT_NO_THROW(StepN(60));
 }
 
+// 测试 物理3D冒烟：射线检测空场景未命中
 TEST_F(Physics3DSmokeTest, RaycastEmptySceneMiss) {
     StepN(1);
     auto result = sys_.Raycast(

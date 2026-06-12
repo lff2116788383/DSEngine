@@ -22,6 +22,7 @@ protected:
     World world;
 };
 
+// 测试 物理3D ECS集成：刚体3D组件默认值
 TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentDefaultValues) {
     dse::RigidBody3DComponent rb;
     EXPECT_EQ(rb.type, dse::RigidBody3DType::Dynamic);
@@ -33,6 +34,7 @@ TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentDefaultValues) {
     EXPECT_EQ(rb.runtime_body, nullptr);
 }
 
+// 测试 物理3D ECS集成：刚体3D组件字段修改
 TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentFieldModification) {
     dse::RigidBody3DComponent rb;
     rb.type = dse::RigidBody3DType::Kinematic;
@@ -50,6 +52,7 @@ TEST_F(Physics3dEcsIntegrationTest, RigidBody3DComponentFieldModification) {
     EXPECT_FLOAT_EQ(rb.gravity_scale, 2.0f);
 }
 
+// 测试 物理3D ECS集成：带有刚体3D实体创建不崩溃
 TEST_F(Physics3dEcsIntegrationTest, BringRigidBody3DEntityCreateDoesNotCrash) {
     auto e = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(e);
@@ -60,6 +63,7 @@ TEST_F(Physics3dEcsIntegrationTest, BringRigidBody3DEntityCreateDoesNotCrash) {
     EXPECT_TRUE(world.registry().all_of<dse::RigidBody3DComponent>(e));
 }
 
+// 测试 物理3D ECS集成：多实体不崩溃
 TEST_F(Physics3dEcsIntegrationTest, MultiEntityDoesNotCrash) {
     for (int i = 0; i < 10; ++i) {
         auto e = world.CreateEntity();
@@ -69,6 +73,7 @@ TEST_F(Physics3dEcsIntegrationTest, MultiEntityDoesNotCrash) {
     EXPECT_EQ(world.EntityCount(), 10u);
 }
 
+// 测试 物理3D ECS集成：组件默认值
 TEST_F(Physics3dEcsIntegrationTest, ComponentDefaultValue) {
     dse::BoxCollider3DComponent box;
     EXPECT_FLOAT_EQ(box.size.x, 1.0f);
@@ -86,6 +91,7 @@ TEST_F(Physics3dEcsIntegrationTest, ComponentDefaultValue) {
     EXPECT_FALSE(mesh_collider.is_trigger);
 }
 
+// 测试 物理3D ECS集成：实体销毁之后Worldconsistent
 TEST_F(Physics3dEcsIntegrationTest, EntityDestroyAfterWorldconsistent) {
     std::vector<Entity> entities;
     for (int i = 0; i < 5; ++i) {

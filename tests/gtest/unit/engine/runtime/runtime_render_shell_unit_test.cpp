@@ -82,6 +82,7 @@ RuntimeRenderShellRhiDevice* InstallRhi(FramePipeline& pipeline) {
 }
 }
 
+// 测试 运行时渲染外壳单元：开始帧且创建命令Bufferentrust RHI设备
 TEST(RuntimeRenderShellUnitTest, BeginFrameAndCreateCommandBufferentrustRhiDevice) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
@@ -93,6 +94,7 @@ TEST(RuntimeRenderShellUnitTest, BeginFrameAndCreateCommandBufferentrustRhiDevic
     EXPECT_EQ(cmd, device->command_buffer);
 }
 
+// 测试 运行时渲染外壳单元：绑定阴影Maps写入全局状态从渲染目标深度映射
 TEST(RuntimeRenderShellUnitTest, BindShadowMapsWritingGlobalStateFromRenderTargetDepthMap) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
@@ -117,6 +119,7 @@ TEST(RuntimeRenderShellUnitTest, BindShadowMapsWritingGlobalStateFromRenderTarge
     }
 }
 
+// 测试 运行时渲染外壳单元：提交且结束帧提交Commands于Sequence且结束帧
 TEST(RuntimeRenderShellUnitTest, SubmitAndEndFrameSubmitCommandsInSequenceAndEndFrame) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);
@@ -129,6 +132,7 @@ TEST(RuntimeRenderShellUnitTest, SubmitAndEndFrameSubmitCommandsInSequenceAndEnd
     EXPECT_EQ(device->end_frame_count, 1);
 }
 
+// 测试 运行时渲染外壳单元：Finalize Framesynchronous RHI统计帧管线
 TEST(RuntimeRenderShellUnitTest, FinalizeFramesynchronousRhiStatisticsFramePipeline) {
     FramePipeline pipeline;
     auto* device = InstallRhi(pipeline);

@@ -33,6 +33,7 @@ protected:
     }
 };
 
+// 测试 场景世界集成：Scenebind外部世界后期实体Operation为正确
 TEST_F(SceneWorldIntegrationTest, ScenebindExternalWorldPostEntityOperationIsCorrect) {
     World world;
     scene::Scene sc("test_scene");
@@ -44,6 +45,7 @@ TEST_F(SceneWorldIntegrationTest, ScenebindExternalWorldPostEntityOperationIsCor
     EXPECT_EQ(world.EntityCount(), 1u);
 }
 
+// 测试 场景世界集成：Sceneunbundle Worldthen回退返回到已构建于世界
 TEST_F(SceneWorldIntegrationTest, SceneunbundleWorldthenFallBackToTheBuiltInWorld) {
     World world;
     scene::Scene sc("test_scene");
@@ -59,12 +61,14 @@ TEST_F(SceneWorldIntegrationTest, SceneunbundleWorldthenFallBackToTheBuiltInWorl
     EXPECT_EQ(world.EntityCount(), 1u);
 }
 
+// 测试 场景世界集成：场景使用已构建于世界创建实体
 TEST_F(SceneWorldIntegrationTest, SceneUseTheBuiltInWorldCreateEntity) {
     scene::Scene sc("internal_world_test");
     Entity e = sc.GetWorld().CreateEntity();
     EXPECT_TRUE(sc.GetWorld().IsAlive(e));
 }
 
+// 测试 场景世界集成：多场景世界不
 TEST_F(SceneWorldIntegrationTest, MultiSceneWorldNot) {
     scene::Scene sc1("scene_a");
     scene::Scene sc2("scene_b");
@@ -84,6 +88,7 @@ TEST_F(SceneWorldIntegrationTest, MultiSceneWorldNot) {
 // 实体组件在 Scene 中的操作
 // ============================================================
 
+// 测试 场景世界集成：场景Medium实体能够挂载且查询组件
 TEST_F(SceneWorldIntegrationTest, SceneMediumEntitiesCanMountAndQueryComponents) {
     scene::Scene sc("component_test");
     World& world = sc.GetWorld();
@@ -104,6 +109,7 @@ TEST_F(SceneWorldIntegrationTest, SceneMediumEntitiesCanMountAndQueryComponents)
     EXPECT_FLOAT_EQ(s.color.g, 0.0f);
 }
 
+// 测试 场景世界集成：场景创建且销毁实体于批次
 TEST_F(SceneWorldIntegrationTest, SceneCreateAndDestroyEntitiesInBatches) {
     scene::Scene sc("batch_test");
     World& world = sc.GetWorld();
@@ -129,6 +135,7 @@ TEST_F(SceneWorldIntegrationTest, SceneCreateAndDestroyEntitiesInBatches) {
 // 序列化往返一致性
 // ============================================================
 
+// 测试 场景世界集成：往返
 TEST_F(SceneWorldIntegrationTest, RoundTrip) {
     scene::Scene sc("roundtrip_test");
     World& world = sc.GetWorld();
@@ -160,6 +167,7 @@ TEST_F(SceneWorldIntegrationTest, RoundTrip) {
 // Prefab 集成
 // ============================================================
 
+// 测试 场景世界集成：预制体Saving且Instantiating基础Processes
 TEST_F(SceneWorldIntegrationTest, PrefabSavingAndInstantiatingBasicProcesses) {
     World world;
 
@@ -183,6 +191,7 @@ TEST_F(SceneWorldIntegrationTest, PrefabSavingAndInstantiatingBasicProcesses) {
     SUCCEED();
 }
 
+// 测试 场景世界集成：预制体Instantiation覆盖带Options变换
 TEST_F(SceneWorldIntegrationTest, PrefabInstantiationOverrideWithOptionsTransform) {
     World world;
 
@@ -213,6 +222,7 @@ TEST_F(SceneWorldIntegrationTest, PrefabInstantiationOverrideWithOptionsTransfor
 // 场景生命周期与 World 状态
 // ============================================================
 
+// 测试 场景世界集成：场景清空之后世界Stateconsistent
 TEST_F(SceneWorldIntegrationTest, SceneClearAfterWorldStateconsistent) {
     scene::Scene sc("lifecycle_test");
     World& world = sc.GetWorld();
@@ -226,6 +236,7 @@ TEST_F(SceneWorldIntegrationTest, SceneClearAfterWorldStateconsistent) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 场景世界集成：场景销毁实体之后正确
 TEST_F(SceneWorldIntegrationTest, SceneDestroyEntityAfterCorrect) {
     scene::Scene sc("destroy_test");
     World& world = sc.GetWorld();

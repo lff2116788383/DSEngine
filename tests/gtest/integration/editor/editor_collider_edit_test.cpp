@@ -25,6 +25,7 @@ void ExpectVec3Near(const glm::vec3& a, const glm::vec3& b, float eps = kEps) {
 
 // ── Box：Build/Extract 往返（含实体缩放） ────────────────────────────────────
 
+// 测试 碰撞体编辑：盒往返带实体缩放
 TEST(ColliderEdit, BoxRoundTripWithEntityScale) {
     const glm::vec3 epos(10.0f, 5.0f, -2.0f);
     const glm::vec3 escale(2.0f, 1.0f, 0.5f);
@@ -47,6 +48,7 @@ TEST(ColliderEdit, BoxRoundTripWithEntityScale) {
 
 // ── Box：拖拽放大一个面后，尺寸随之增大（模拟 Gizmo SCALE 改了世界矩阵） ─────────
 
+// 测试 碰撞体编辑：盒调整大小从矩阵增长尺寸
 TEST(ColliderEdit, BoxResizeFromMatrixGrowsSize) {
     const glm::vec3 epos(0.0f);
     const glm::vec3 escale(1.0f);
@@ -63,6 +65,7 @@ TEST(ColliderEdit, BoxResizeFromMatrixGrowsSize) {
 
 // ── Box：移动世界中心后，反解出的 local center 正确（除以实体缩放） ───────────────
 
+// 测试 碰撞体编辑：盒移动中心Divides按实体缩放
 TEST(ColliderEdit, BoxMoveCenterDividesByEntityScale) {
     const glm::vec3 epos(1.0f, 2.0f, 3.0f);
     const glm::vec3 escale(2.0f, 4.0f, 8.0f);
@@ -79,6 +82,7 @@ TEST(ColliderEdit, BoxMoveCenterDividesByEntityScale) {
 
 // ── Box：尺寸被钳制为正 ──────────────────────────────────────────────────────
 
+// 测试 碰撞体编辑：盒尺寸钳制Positive
 TEST(ColliderEdit, BoxSizeClampedPositive) {
     glm::mat4 m = BuildBoxMatrix(glm::vec3(0.0f), glm::vec3(1.0f), glm::vec3(0.0f), glm::vec3(1.0f));
     m[0][0] = 0.0f;  // 退化为 0
@@ -89,6 +93,7 @@ TEST(ColliderEdit, BoxSizeClampedPositive) {
 
 // ── Sphere：Build/Extract 往返（均匀缩放） ───────────────────────────────────
 
+// 测试 碰撞体编辑：球往返
 TEST(ColliderEdit, SphereRoundTrip) {
     const glm::vec3 epos(3.0f, 0.0f, 1.0f);
     const glm::vec3 escale(2.0f, 2.0f, 2.0f);
@@ -107,6 +112,7 @@ TEST(ColliderEdit, SphereRoundTrip) {
 
 // ── Sphere：放大世界矩阵 → 半径增大 ──────────────────────────────────────────
 
+// 测试 碰撞体编辑：球调整大小增长Radius
 TEST(ColliderEdit, SphereResizeGrowsRadius) {
     glm::mat4 m = BuildSphereMatrix(glm::vec3(0.0f), glm::vec3(1.0f), glm::vec3(0.0f), 1.0f);
     // 均匀放大 2 倍
@@ -118,6 +124,7 @@ TEST(ColliderEdit, SphereResizeGrowsRadius) {
 
 // ── SafeDiv：零除保护 ────────────────────────────────────────────────────────
 
+// 测试 碰撞体编辑：安全Div Guards零
 TEST(ColliderEdit, SafeDivGuardsZero) {
     EXPECT_NEAR(SafeDiv(4.0f, 2.0f), 2.0f, kEps);
     EXPECT_NEAR(SafeDiv(4.0f, 0.0f), 4.0f, kEps);  // 退化时原样返回，避免 NaN/inf

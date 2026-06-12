@@ -41,10 +41,12 @@ protected:
     }
 };
 
+// 测试 转向系统：空世界调用更新不崩溃
 TEST_F(SteeringSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kDt));
 }
 
+// 测试 转向系统：增量时间跳过更新若零
 TEST_F(SteeringSystemTest, DeltaTimeSkipUpdatesIfZero) {
     auto [e, steering, tf] = CreateSteeringEntity();
     steering->seek_enabled = true;
@@ -54,6 +56,7 @@ TEST_F(SteeringSystemTest, DeltaTimeSkipUpdatesIfZero) {
     EXPECT_EQ(steering->velocity, glm::vec3(0.0f));
 }
 
+// 测试 转向系统：Seek行为Moves朝向Goal
 TEST_F(SteeringSystemTest, SeekBehaviorMovesTowardGoal) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -70,6 +73,7 @@ TEST_F(SteeringSystemTest, SeekBehaviorMovesTowardGoal) {
     EXPECT_GT(tf->position.x, 0.0f);
 }
 
+// 测试 转向系统：Flee行为Away从目标
 TEST_F(SteeringSystemTest, FleeBehaviorAwayFromGoals) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -86,6 +90,7 @@ TEST_F(SteeringSystemTest, FleeBehaviorAwayFromGoals) {
     EXPECT_LT(tf->position.x, 0.0f);
 }
 
+// 测试 转向系统：Arrive行为Slows下作为Approaches目标
 TEST_F(SteeringSystemTest, ArriveBehaviorSlowsDownAsItApproachesTarget) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -111,6 +116,7 @@ TEST_F(SteeringSystemTest, ArriveBehaviorSlowsDownAsItApproachesTarget) {
     EXPECT_LT(near_speed, far_speed);
 }
 
+// 测试 转向系统：Arrive速度返回到零当Reaching目标
 TEST_F(SteeringSystemTest, ArriveSpeedReturnsToZeroWhenReachingTarget) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(5.0f, 0.0f, 0.0f);
@@ -123,6 +129,7 @@ TEST_F(SteeringSystemTest, ArriveSpeedReturnsToZeroWhenReachingTarget) {
     EXPECT_EQ(steering->velocity, glm::vec3(0.0f));
 }
 
+// 测试 转向系统：最大速度Limit Maximum速度
 TEST_F(SteeringSystemTest, MaxVelocityLimitMaximumSpeed) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -139,6 +146,7 @@ TEST_F(SteeringSystemTest, MaxVelocityLimitMaximumSpeed) {
     EXPECT_LE(glm::length(steering->velocity), steering->max_velocity + 0.01f);
 }
 
+// 测试 转向系统：禁用转向组件不更新
 TEST_F(SteeringSystemTest, DisabledSteeringComponentDoesNotUpdate) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -152,6 +160,7 @@ TEST_F(SteeringSystemTest, DisabledSteeringComponentDoesNotUpdate) {
     EXPECT_EQ(tf->position, glm::vec3(0.0f));
 }
 
+// 测试 转向系统：速度更新到变换
 TEST_F(SteeringSystemTest, SpeedUpdateToTransform) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);
@@ -166,6 +175,7 @@ TEST_F(SteeringSystemTest, SpeedUpdateToTransform) {
     EXPECT_NE(tf->position, pos_before);
 }
 
+// 测试 转向系统：朝向更新
 TEST_F(SteeringSystemTest, TowardUpdate) {
     auto [e, steering, tf] = CreateSteeringEntity();
     tf->position = glm::vec3(0.0f);

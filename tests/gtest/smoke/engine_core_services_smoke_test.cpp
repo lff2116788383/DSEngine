@@ -48,6 +48,7 @@ protected:
     }
 };
 
+// 测试 引擎核心服务冒烟：生命周期不崩溃
 TEST_F(EngineCoreServicesSmokeTest, LifecycleDoesNotCrash) {
     // Init
     auto bus = std::make_shared<EventBus>();
@@ -91,6 +92,7 @@ TEST_F(EngineCoreServicesSmokeTest, LifecycleDoesNotCrash) {
     ServiceLocator::Instance().Reset<EventBus>();
 }
 
+// 测试 引擎核心服务冒烟：事件总线且世界Collaboration Smokes
 TEST_F(EngineCoreServicesSmokeTest, EventBusAndWorldCollaborationSmokes) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -118,6 +120,7 @@ TEST_F(EngineCoreServicesSmokeTest, EventBusAndWorldCollaborationSmokes) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 引擎核心服务冒烟：任务系统Multitasking Concurrent冒烟
 TEST_F(EngineCoreServicesSmokeTest, JobSystemMultitaskingConcurrentSmoke) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
@@ -143,6 +146,7 @@ TEST_F(EngineCoreServicesSmokeTest, JobSystemMultitaskingConcurrentSmoke) {
     job_system->Shutdown();
 }
 
+// 测试 引擎核心服务冒烟：服务定位器注册到获取重置无崩溃
 TEST_F(EngineCoreServicesSmokeTest, ServiceLocatorRegisterToGetResetWithoutCrashing) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -154,6 +158,7 @@ TEST_F(EngineCoreServicesSmokeTest, ServiceLocatorRegisterToGetResetWithoutCrash
     EXPECT_EQ(ServiceLocator::Instance().Get<EventBus>(), nullptr);
 }
 
+// 测试 引擎核心服务冒烟：世界Large数量的实体为Created且Destroyed无崩溃
 TEST_F(EngineCoreServicesSmokeTest, WorldALargeNumberOfEntitiesAreCreatedAndDestroyedWithoutCrashing) {
     World world;
     std::vector<Entity> entities;
@@ -173,6 +178,7 @@ TEST_F(EngineCoreServicesSmokeTest, WorldALargeNumberOfEntitiesAreCreatedAndDest
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 引擎核心服务冒烟：多次数初始化关闭不崩溃
 TEST_F(EngineCoreServicesSmokeTest, MultiTimesInitShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         auto job_system = std::make_shared<JobSystem>();

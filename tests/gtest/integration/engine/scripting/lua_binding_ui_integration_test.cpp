@@ -42,6 +42,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
+// 测试 Lua UI绑定：Lua创建UI渲染器可读属性
 TEST_F(LuaUIBindingTest, LuaCreateUIRendererReadableProperties) {
     TempLuaFile script("test_ui_renderer.lua", R"(
         function Awake()
@@ -73,6 +74,7 @@ TEST_F(LuaUIBindingTest, LuaCreateUIRendererReadableProperties) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Lua创建UI标签
 TEST_F(LuaUIBindingTest, LuaCreateUILabel) {
     TempLuaFile script("test_ui_label.lua", R"(
         function Awake()
@@ -99,6 +101,7 @@ TEST_F(LuaUIBindingTest, LuaCreateUILabel) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Luaset上UI位置
 TEST_F(LuaUIBindingTest, LuasetUpUIPosition) {
     TempLuaFile script("test_ui_pos.lua", R"(
         function Awake()
@@ -127,6 +130,7 @@ TEST_F(LuaUIBindingTest, LuasetUpUIPosition) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：错误参数不崩溃
 TEST_F(LuaUIBindingTest, ErrorParametersDoesNotCrash) {
     TempLuaFile script("test_ui_error.lua", R"(
         function Awake()
@@ -148,6 +152,7 @@ TEST_F(LuaUIBindingTest, ErrorParametersDoesNotCrash) {
 // 新增 UI 组件 Lua 绑定集成测试
 // ============================================================
 
+// 测试 Lua UI绑定：Lua创建文本Inputand读取且写入文本
 TEST_F(LuaUIBindingTest, LuaCreateTextInputandReadAndWriteText) {
     TempLuaFile script("test_ui_text_input.lua", R"(
         function Awake()
@@ -179,6 +184,7 @@ TEST_F(LuaUIBindingTest, LuaCreateTextInputandReadAndWriteText) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Lua创建滚动Viewand设置偏移
 TEST_F(LuaUIBindingTest, LuaCreateScrollViewandSetTheOffset) {
     TempLuaFile script("test_ui_scroll.lua", R"(
         function Awake()
@@ -210,6 +216,7 @@ TEST_F(LuaUIBindingTest, LuaCreateScrollViewandSetTheOffset) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Lua创建Sliderand读取且写入值
 TEST_F(LuaUIBindingTest, LuaCreateSliderandReadAndWriteValues) {
     TempLuaFile script("test_ui_slider.lua", R"(
         function Awake()
@@ -238,6 +245,7 @@ TEST_F(LuaUIBindingTest, LuaCreateSliderandReadAndWriteValues) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Lua创建Toggleand切换状态
 TEST_F(LuaUIBindingTest, LuaCreateToggleandSwitchStatus) {
     TempLuaFile script("test_ui_toggle.lua", R"(
         function Awake()
@@ -265,6 +273,7 @@ TEST_F(LuaUIBindingTest, LuaCreateToggleandSwitchStatus) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：Lua创建进度Barand设置进度
 TEST_F(LuaUIBindingTest, LuaCreateProgressBarandSetTheProgress) {
     TempLuaFile script("test_ui_progress.lua", R"(
         function Awake()
@@ -293,6 +302,7 @@ TEST_F(LuaUIBindingTest, LuaCreateProgressBarandSetTheProgress) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua UI绑定：UI组件错误参数不崩溃
 TEST_F(LuaUIBindingTest, UIComponentErrorParametersDoesNotCrash) {
     TempLuaFile script("test_ui_new_error.lua", R"(
         function Awake()
@@ -322,6 +332,7 @@ TEST_F(LuaUIBindingTest, UIComponentErrorParametersDoesNotCrash) {
     // 不崩溃即通过
 }
 
+// 测试 Lua UI绑定：Lua创建UI Particlesbinding
 TEST_F(LuaUIBindingTest, LuaCreateUIParticlesbinding) {
     TempLuaFile script("test_ui_particles.lua", R"(
         function Awake()

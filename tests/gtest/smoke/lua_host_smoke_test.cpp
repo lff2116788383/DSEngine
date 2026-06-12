@@ -49,6 +49,7 @@ protected:
     }
 };
 
+// 测试 Lua宿主冒烟：Lua VM生命周期
 TEST_F(LuaHostSmokeTest, LuaVMLifecycle) {
     LuaTempScript script("smoke_lifecycle.lua", R"(
         function Awake()
@@ -76,6 +77,7 @@ TEST_F(LuaHostSmokeTest, LuaVMLifecycle) {
     SUCCEED();
 }
 
+// 测试 Lua宿主冒烟：Lua脚本修改C加Plusside世界
 TEST_F(LuaHostSmokeTest, LuaScriptModificationCPlusPlussideWorld) {
     LuaTempScript script("smoke_modify.lua", R"(
         function Awake()
@@ -102,6 +104,7 @@ TEST_F(LuaHostSmokeTest, LuaScriptModificationCPlusPlussideWorld) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua宿主冒烟：多次数Lua VM初始化关闭不崩溃
 TEST_F(LuaHostSmokeTest, MultiTimesLuaVMInitializeShutdownDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         LuaTempScript script("smoke_multi_" + std::to_string(i) + ".lua", R"(
@@ -122,6 +125,7 @@ TEST_F(LuaHostSmokeTest, MultiTimesLuaVMInitializeShutdownDoesNotCrash) {
     }
 }
 
+// 测试 Lua宿主冒烟：Lua内存统计
 TEST_F(LuaHostSmokeTest, LuaMemoryStatistics) {
     LuaTempScript script("smoke_memory.lua", R"(
         function Awake()
@@ -150,6 +154,7 @@ TEST_F(LuaHostSmokeTest, LuaMemoryStatistics) {
     EXPECT_EQ(GetLuaMemoryUsage(), 0u);
 }
 
+// 测试 Lua宿主冒烟：Lua API Contextfull Injection
 TEST_F(LuaHostSmokeTest, LuaApiContextfullInjection) {
     LuaTempScript script("smoke_ctx.lua", R"(
         function Awake() end
@@ -175,12 +180,14 @@ TEST_F(LuaHostSmokeTest, LuaApiContextfullInjection) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua宿主冒烟：不配置上下文当引导失败
 TEST_F(LuaHostSmokeTest, NotConfigurationContextWhenBootstrapFails) {
     // 不配置任何上下文
     bool result = BootstrapLuaRuntime();
     EXPECT_FALSE(result);
 }
 
+// 测试 Lua宿主冒烟：Luascript Accessdsenamespace
 TEST_F(LuaHostSmokeTest, LuascriptAccessdsenamespace) {
     LuaTempScript script("smoke_dse.lua", R"(
         function Awake()
@@ -207,6 +214,7 @@ TEST_F(LuaHostSmokeTest, LuascriptAccessdsenamespace) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua宿主冒烟：设置启动Lua脚本路径设置
 TEST_F(LuaHostSmokeTest, SetStartupLuaScriptPathPathSettings) {
     LuaTempScript script("smoke_path_test.lua", R"(
         function Awake() end

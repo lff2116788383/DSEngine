@@ -43,6 +43,7 @@ protected:
     }
 };
 
+// 测试 性能分析器集成：CPU Profilersampling任务系统Asynchronous任务Take时间
 TEST_F(ProfilerIntegrationTest, CPUProfilersamplingJobSystemAsynchronousTasksTakeTime) {
     cpu_profiler.BeginFrame();
 
@@ -64,6 +65,7 @@ TEST_F(ProfilerIntegrationTest, CPUProfilersamplingJobSystemAsynchronousTasksTak
     EXPECT_EQ(stats.at("AsyncTask").call_count, 1);
 }
 
+// 测试 性能分析器集成：CPU性能分析器多Threaded Concurrent采样安全
 TEST_F(ProfilerIntegrationTest, CPUProfilerMultiThreadedConcurrentSamplingSafety) {
     constexpr int kThreadCount = 4;
     constexpr int kSamplesPerThread = 50;
@@ -90,6 +92,7 @@ TEST_F(ProfilerIntegrationTest, CPUProfilerMultiThreadedConcurrentSamplingSafety
     EXPECT_EQ(total_calls, kThreadCount * kSamplesPerThread);
 }
 
+// 测试 性能分析器集成：渲染性能分析器且CPU Profilerjoint帧Simulation
 TEST_F(ProfilerIntegrationTest, RenderProfilerAndCPUProfilerjointFrameSimulation) {
     for (int frame = 0; frame < 5; ++frame) {
         cpu_profiler.BeginFrame();
@@ -125,6 +128,7 @@ TEST_F(ProfilerIntegrationTest, RenderProfilerAndCPUProfilerjointFrameSimulation
     EXPECT_GE(render_acc.peak_draw_calls, 2);
 }
 
+// 测试 性能分析器集成：内存性能分析器资源分配释放且泄漏Detection
 TEST_F(ProfilerIntegrationTest, MemoryProfilerAssetAllocationReleaseAndLeakDetection) {
     memory_profiler.RecordAlloc("Texture", 1024 * 1024);
     memory_profiler.RecordAlloc("Mesh", 512 * 1024);
@@ -149,6 +153,7 @@ TEST_F(ProfilerIntegrationTest, MemoryProfilerAssetAllocationReleaseAndLeakDetec
     EXPECT_TRUE(leaks.empty());
 }
 
+// 测试 性能分析器集成：Chrome追踪导出包含完整帧数据
 TEST_F(ProfilerIntegrationTest, ChromeTraceExportContainsFullFrameData) {
     cpu_profiler.BeginFrame();
     cpu_profiler.BeginSample("Physics");
@@ -168,6 +173,7 @@ TEST_F(ProfilerIntegrationTest, ChromeTraceExportContainsFullFrameData) {
     EXPECT_NE(mem_trace.find("TestBuffer"), std::string::npos);
 }
 
+// 测试 性能分析器集成：Profilerpass服务定位器交叉模块访问
 TEST_F(ProfilerIntegrationTest, ProfilerpassServiceLocatorCrossModuleAccess) {
     auto shared_cpu = std::make_shared<CPUProfiler>();
     auto shared_render = std::make_shared<RenderProfiler>();
@@ -196,6 +202,7 @@ TEST_F(ProfilerIntegrationTest, ProfilerpassServiceLocatorCrossModuleAccess) {
     EXPECT_EQ(mem->GetSnapshot().active_allocations, 1);
 }
 
+// 测试 性能分析器集成：多帧
 TEST_F(ProfilerIntegrationTest, MultiFrame) {
     for (int frame = 0; frame < 10; ++frame) {
         cpu_profiler.BeginFrame();

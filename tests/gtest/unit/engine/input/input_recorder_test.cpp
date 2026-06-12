@@ -10,12 +10,14 @@ using namespace dse::input;
 
 class InputRecorderExtTest : public ::testing::Test {};
 
+// 测试 输入录制器扩展：初始状态
 TEST_F(InputRecorderExtTest, InitialState) {
     InputRecorder rec;
     EXPECT_FALSE(rec.IsRecording());
     EXPECT_EQ(rec.GetEventCount(), 0u);
 }
 
+// 测试 输入录制器扩展：启动停止录制
 TEST_F(InputRecorderExtTest, StartStopRecording) {
     InputRecorder rec;
     rec.StartRecording();
@@ -24,6 +26,7 @@ TEST_F(InputRecorderExtTest, StartStopRecording) {
     EXPECT_FALSE(rec.IsRecording());
 }
 
+// 测试 输入录制器扩展：记录While录制
 TEST_F(InputRecorderExtTest, RecordWhileRecording) {
     InputRecorder rec;
     rec.StartRecording();
@@ -38,12 +41,14 @@ TEST_F(InputRecorderExtTest, RecordWhileRecording) {
     EXPECT_EQ(events[1].key_action, 0);
 }
 
+// 测试 输入录制器扩展：忽略事件当不录制
 TEST_F(InputRecorderExtTest, IgnoreEventsWhenNotRecording) {
     InputRecorder rec;
     rec.RecordEvent(65, 1, 0.0);
     EXPECT_EQ(rec.GetEventCount(), 0u);
 }
 
+// 测试 输入录制器扩展：清空
 TEST_F(InputRecorderExtTest, Clear) {
     InputRecorder rec;
     rec.StartRecording();
@@ -53,6 +58,7 @@ TEST_F(InputRecorderExtTest, Clear) {
     EXPECT_EQ(rec.GetEventCount(), 0u);
 }
 
+// 测试 输入录制器扩展：导出导入JSON往返
 TEST_F(InputRecorderExtTest, ExportImportJSONRoundTrip) {
     InputRecorder rec;
     rec.StartRecording();
@@ -75,6 +81,7 @@ TEST_F(InputRecorderExtTest, ExportImportJSONRoundTrip) {
     EXPECT_EQ(events[2].key_code, 68);
 }
 
+// 测试 输入录制器扩展：导入空JSON
 TEST_F(InputRecorderExtTest, ImportEmptyJSON) {
     InputRecorder rec;
     EXPECT_TRUE(rec.ImportJSON("[]"));
@@ -87,6 +94,7 @@ TEST_F(InputRecorderExtTest, ImportEmptyJSON) {
 
 class InputPlayerExtTest : public ::testing::Test {};
 
+// 测试 输入玩家扩展：初始状态
 TEST_F(InputPlayerExtTest, InitialState) {
     InputPlayer player;
     EXPECT_FALSE(player.IsPlaying());
@@ -95,6 +103,7 @@ TEST_F(InputPlayerExtTest, InitialState) {
     EXPECT_EQ(player.GetTotalEvents(), 0u);
 }
 
+// 测试 输入玩家扩展：加载从录制器
 TEST_F(InputPlayerExtTest, LoadFromRecorder) {
     InputRecorder rec;
     rec.StartRecording();
@@ -108,6 +117,7 @@ TEST_F(InputPlayerExtTest, LoadFromRecorder) {
     EXPECT_FALSE(player.IsPlaying());
 }
 
+// 测试 输入玩家扩展：加载从向量
 TEST_F(InputPlayerExtTest, LoadFromVector) {
     std::vector<InputEvent> events;
     events.push_back({0.1, 65, 1});
@@ -118,6 +128,7 @@ TEST_F(InputPlayerExtTest, LoadFromVector) {
     EXPECT_EQ(player.GetTotalEvents(), 2u);
 }
 
+// 测试 输入玩家扩展：启动且停止
 TEST_F(InputPlayerExtTest, StartAndStop) {
     std::vector<InputEvent> events;
     events.push_back({0.1, 65, 1});

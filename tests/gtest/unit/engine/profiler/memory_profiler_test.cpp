@@ -15,6 +15,7 @@ protected:
     MemoryProfiler prof_;
 };
 
+// 测试 内存性能分析器扩展：初始快照
 TEST_F(MemoryProfilerExtTest, InitialSnapshot) {
     auto snap = prof_.GetSnapshot();
     EXPECT_EQ(snap.total_allocated, 0u);
@@ -24,6 +25,7 @@ TEST_F(MemoryProfilerExtTest, InitialSnapshot) {
     EXPECT_EQ(snap.active_allocations, 0);
 }
 
+// 测试 内存性能分析器扩展：单一分配
 TEST_F(MemoryProfilerExtTest, SingleAlloc) {
     prof_.RecordAlloc("gpu", 1024);
     auto snap = prof_.GetSnapshot();
@@ -33,6 +35,7 @@ TEST_F(MemoryProfilerExtTest, SingleAlloc) {
     EXPECT_EQ(snap.active_allocations, 1);
 }
 
+// 测试 内存性能分析器扩展：分配且释放
 TEST_F(MemoryProfilerExtTest, AllocAndFree) {
     prof_.RecordAlloc("gpu", 1024);
     prof_.RecordFree("gpu", 1024);
@@ -44,6 +47,7 @@ TEST_F(MemoryProfilerExtTest, AllocAndFree) {
     EXPECT_EQ(snap.active_allocations, 0);
 }
 
+// 测试 内存性能分析器扩展：峰值追踪
 TEST_F(MemoryProfilerExtTest, PeakTracking) {
     prof_.RecordAlloc("a", 500);
     prof_.RecordAlloc("b", 800);
@@ -53,6 +57,7 @@ TEST_F(MemoryProfilerExtTest, PeakTracking) {
     EXPECT_EQ(snap.current_usage, 800u);
 }
 
+// 测试 内存性能分析器扩展：Category统计
 TEST_F(MemoryProfilerExtTest, CategoryStats) {
     prof_.RecordAlloc("texture", 2048);
     prof_.RecordAlloc("texture", 1024);
@@ -69,6 +74,7 @@ TEST_F(MemoryProfilerExtTest, CategoryStats) {
     EXPECT_EQ(it->second.peak_bytes, 3072u);
 }
 
+// 测试 内存性能分析器扩展：检测泄漏
 TEST_F(MemoryProfilerExtTest, DetectLeaks) {
     prof_.RecordAlloc("leaky", 512);
     prof_.RecordAlloc("clean", 256);
@@ -79,6 +85,7 @@ TEST_F(MemoryProfilerExtTest, DetectLeaks) {
     EXPECT_EQ(leaks[0], "leaky");
 }
 
+// 测试 内存性能分析器扩展：检测无泄漏
 TEST_F(MemoryProfilerExtTest, DetectNoLeaks) {
     prof_.RecordAlloc("a", 100);
     prof_.RecordFree("a", 100);
@@ -86,6 +93,7 @@ TEST_F(MemoryProfilerExtTest, DetectNoLeaks) {
     EXPECT_TRUE(leaks.empty());
 }
 
+// 测试 内存性能分析器扩展：重置
 TEST_F(MemoryProfilerExtTest, Reset) {
     prof_.RecordAlloc("x", 999);
     prof_.Reset();
@@ -95,6 +103,7 @@ TEST_F(MemoryProfilerExtTest, Reset) {
     EXPECT_TRUE(prof_.GetCategoryStats().empty());
 }
 
+// 测试 内存性能分析器扩展：导出CSV
 TEST_F(MemoryProfilerExtTest, ExportCSV) {
     prof_.RecordAlloc("gpu", 4096);
     std::string csv = prof_.ExportCSV();
@@ -103,6 +112,7 @@ TEST_F(MemoryProfilerExtTest, ExportCSV) {
     EXPECT_NE(csv.find("4096"), std::string::npos);
 }
 
+// 测试 内存性能分析器扩展：导出Chrome追踪
 TEST_F(MemoryProfilerExtTest, ExportChromeTrace) {
     prof_.RecordAlloc("mesh", 2048);
     prof_.RecordFree("mesh", 2048);
@@ -112,6 +122,7 @@ TEST_F(MemoryProfilerExtTest, ExportChromeTrace) {
     EXPECT_NE(trace.find("memory_usage"), std::string::npos);
 }
 
+// 测试 内存性能分析器扩展：释放More比Allocated
 TEST_F(MemoryProfilerExtTest, FreeMoreThanAllocated) {
     prof_.RecordAlloc("buf", 100);
     prof_.RecordFree("buf", 200);

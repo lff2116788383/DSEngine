@@ -49,6 +49,7 @@ protected:
     }
 };
 
+// 测试 Lua ECS集成：Lua创建实体C加能够应Queried开启侧
 TEST_F(LuaEcsIntegrationTest, LuaCreateEntityCPlusPlusCanBeQueriedOnTheSide) {
     LuaTempScript startup("test_ecs_create.lua", R"(
         function Awake()
@@ -74,6 +75,7 @@ TEST_F(LuaEcsIntegrationTest, LuaCreateEntityCPlusPlusCanBeQueriedOnTheSide) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：Lua添加到变换之后C加侧可读位置
 TEST_F(LuaEcsIntegrationTest, LuaAddToTransformAfterCPlusPlusSideReadablePosition) {
     LuaTempScript startup("test_ecs_transform.lua", R"(
         function Awake()
@@ -109,6 +111,7 @@ TEST_F(LuaEcsIntegrationTest, LuaAddToTransformAfterCPlusPlusSideReadablePositio
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：Lua读取C加Location Where实体为Created
 TEST_F(LuaEcsIntegrationTest, LuaReadCPlusPlusTheLocationWhereTheEntityIsCreated) {
     LuaTempScript startup("test_ecs_read.lua", R"(
         entity_ids = {}
@@ -149,6 +152,7 @@ TEST_F(LuaEcsIntegrationTest, LuaReadCPlusPlusTheLocationWhereTheEntityIsCreated
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：Lua创建实体于批次
 TEST_F(LuaEcsIntegrationTest, LuaCreateEntitiesInBatches) {
     LuaTempScript startup("test_ecs_batch.lua", R"(
         function Awake()
@@ -183,6 +187,7 @@ TEST_F(LuaEcsIntegrationTest, LuaCreateEntitiesInBatches) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：Lua错误脚本不崩溃引擎
 TEST_F(LuaEcsIntegrationTest, LuaErrorScriptDoesNotCrashEngine) {
     LuaTempScript startup("test_ecs_error.lua", R"(
         function Awake()
@@ -211,6 +216,7 @@ TEST_F(LuaEcsIntegrationTest, LuaErrorScriptDoesNotCrashEngine) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：Lua Destroying实体之后Creation不崩溃
 TEST_F(LuaEcsIntegrationTest, LuaDestroyingTheEntityAfterCreationDoesNotCrash) {
     LuaTempScript startup("test_ecs_destroy.lua", R"(
         function Awake()
@@ -249,6 +255,7 @@ TEST_F(LuaEcsIntegrationTest, LuaDestroyingTheEntityAfterCreationDoesNotCrash) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua ECS集成：脚本组件且Lua ECS Collaboration
 TEST_F(LuaEcsIntegrationTest, ScriptComponentAndLuaECSCollaboration) {
     LuaTempScript startup("test_ecs_script.lua", R"(
         function Awake()

@@ -15,6 +15,7 @@
 // CameraComponent
 // ============================================================
 
+// 测试 相机组件：默认值
 TEST(CameraComponentTest, DefaultValues) {
     CameraComponent cam;
     EXPECT_TRUE(cam.orthographic);
@@ -27,6 +28,7 @@ TEST(CameraComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1.0f);
 }
 
+// 测试 相机组件：为
 TEST(CameraComponentTest, Is) {
     CameraComponent cam;
     cam.orthographic = false;
@@ -37,6 +39,7 @@ TEST(CameraComponentTest, Is) {
     EXPECT_FLOAT_EQ(cam.fov, 90.0f);
 }
 
+// 测试 相机组件：默认为单一
 TEST(CameraComponentTest, DefaultIsSingle) {
     CameraComponent cam;
     EXPECT_EQ(cam.view, glm::mat4(1.0f));
@@ -47,6 +50,7 @@ TEST(CameraComponentTest, DefaultIsSingle) {
 // CameraFollowComponent
 // ============================================================
 
+// 测试 相机跟随组件：默认值
 TEST(CameraFollowComponentTest, DefaultValues) {
     CameraFollowComponent follow;
     EXPECT_TRUE(follow.follow_x);
@@ -57,6 +61,7 @@ TEST(CameraFollowComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(follow.dead_zone.x, 0.0f);
 }
 
+// 测试 相机跟随组件：设置Upoffset
 TEST(CameraFollowComponentTest, SetUpoffset) {
     CameraFollowComponent follow;
     follow.offset = glm::vec3(1.0f, 2.0f, 0.0f);

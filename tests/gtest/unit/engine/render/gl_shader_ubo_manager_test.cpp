@@ -18,6 +18,7 @@ using namespace dse::render;
 // PBRShaderLocations 默认值
 // ============================================================
 
+// 测试 PBR着色器位置：默认值
 TEST(PBRShaderLocationsTest, DefaultValues) {
     PBRShaderLocations loc;
     EXPECT_EQ(loc.per_frame_block_index, 0u);
@@ -32,12 +33,14 @@ TEST(PBRShaderLocationsTest, DefaultValues) {
     for (int i = 0; i < 4; ++i) EXPECT_EQ(loc.point_shadow_map[i], -1);
 }
 
+// 测试 天空盒着色器位置：默认值
 TEST(SkyboxShaderLocationsTest, DefaultValues) {
     SkyboxShaderLocations loc;
     EXPECT_EQ(loc.vp, -1);
     EXPECT_EQ(loc.tex, -1);
 }
 
+// 测试 粒子着色器位置：默认值
 TEST(ParticleShaderLocationsTest, DefaultValues) {
     ParticleShaderLocations loc;
     EXPECT_EQ(loc.per_frame_block_index, 0u);
@@ -48,6 +51,7 @@ TEST(ParticleShaderLocationsTest, DefaultValues) {
 // GLShaderManager
 // ============================================================
 
+// 测试 GL着色器管理器：默认安全
 TEST(GLShaderManagerTest, DefaultSafety) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
@@ -57,6 +61,7 @@ TEST(GLShaderManagerTest, DefaultSafety) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
+// 测试 GL着色器管理器：SSBO Ologo
 TEST(GLShaderManagerTest, SSBOlogo) {
     GLShaderManager mgr;
     EXPECT_TRUE(mgr.supports_ssbo()); // 默认 true
@@ -66,18 +71,21 @@ TEST(GLShaderManagerTest, SSBOlogo) {
     EXPECT_TRUE(mgr.supports_ssbo());
 }
 
+// 测试 GL着色器管理器：Gen PP着色器未知特效返回零
 TEST(GLShaderManagerTest, GenPPShader_UnknownEffectReturnsZero) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.GetOrCreateGenPPShader("__nonexistent__"), 0u);
     EXPECT_EQ(mgr.GetOrCreateGenPPShader(""), 0u);
 }
 
+// 测试 GL着色器管理器：设置天空盒句柄
 TEST(GLShaderManagerTest, SetSkyboxHandle) {
     GLShaderManager mgr;
     mgr.set_skybox_shader_handle(42);
     EXPECT_EQ(mgr.skybox_shader_handle(), 42u);
 }
 
+// 测试 GL着色器管理器：设置粒子句柄
 TEST(GLShaderManagerTest, SetParticleHandle) {
     GLShaderManager mgr;
     mgr.set_particle_shader_handle(99);
@@ -88,6 +96,7 @@ TEST(GLShaderManagerTest, SetParticleHandle) {
 // UBOManager
 // ============================================================
 
+// 测试 UBO管理器：默认安全
 TEST(UBOManagerTest, DefaultSafety) {
     UBOManager mgr;
     EXPECT_FALSE(mgr.initialized());

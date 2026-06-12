@@ -13,12 +13,14 @@ protected:
     void TearDown() override { Screen::Reset(); }
 };
 
+// 测试 屏幕：默认值
 TEST_F(ScreenTest, DefaultValues) {
     EXPECT_EQ(Screen::width(), 0);
     EXPECT_EQ(Screen::height(), 0);
     EXPECT_FLOAT_EQ(Screen::aspect_ratio(), 0.0f);
 }
 
+// 测试 屏幕：设置宽度高度
 TEST_F(ScreenTest, SetWidthHeight) {
     Screen::set_width_height(1920, 1080);
     EXPECT_EQ(Screen::width(), 1920);
@@ -26,6 +28,7 @@ TEST_F(ScreenTest, SetWidthHeight) {
     EXPECT_NEAR(Screen::aspect_ratio(), 16.0f / 9.0f, 0.01f);
 }
 
+// 测试 屏幕：设置宽度然后高度
 TEST_F(ScreenTest, SetWidthThenHeight) {
     Screen::set_width_height(800, 600);
     EXPECT_EQ(Screen::width(), 800);
@@ -41,11 +44,13 @@ TEST_F(ScreenTest, SetWidthThenHeight) {
     EXPECT_NEAR(Screen::aspect_ratio(), 1024.0f / 768.0f, 0.01f);
 }
 
+// 测试 屏幕：方形宽高比
 TEST_F(ScreenTest, SquareAspect) {
     Screen::set_width_height(512, 512);
     EXPECT_FLOAT_EQ(Screen::aspect_ratio(), 1.0f);
 }
 
+// 测试 屏幕：重置
 TEST_F(ScreenTest, Reset) {
     Screen::set_width_height(2560, 1440);
     Screen::Reset();
@@ -54,6 +59,7 @@ TEST_F(ScreenTest, Reset) {
     EXPECT_FLOAT_EQ(Screen::aspect_ratio(), 0.0f);
 }
 
+// 测试 屏幕：宽度变更更新宽高比
 TEST_F(ScreenTest, WidthChangeUpdatesAspect) {
     Screen::set_width_height(1920, 1080);
     float old_ratio = Screen::aspect_ratio();
@@ -63,6 +69,7 @@ TEST_F(ScreenTest, WidthChangeUpdatesAspect) {
     EXPECT_NEAR(Screen::aspect_ratio(), 3840.0f / 1080.0f, 0.01f);
 }
 
+// 测试 屏幕：高度变更更新宽高比
 TEST_F(ScreenTest, HeightChangeUpdatesAspect) {
     Screen::set_width_height(1920, 1080);
     float old_ratio = Screen::aspect_ratio();

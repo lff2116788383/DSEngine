@@ -44,6 +44,7 @@ static void BuildTestPlane(float min_val, float max_val, int n,
 // NavMeshBuildConfig 测试
 // ============================================================
 
+// 测试 导航网格构建配置：默认值
 TEST(NavMeshBuildConfigTest, DefaultValues) {
     NavMeshBuildConfig cfg;
     EXPECT_FLOAT_EQ(cfg.cell_size, 0.3f);
@@ -55,6 +56,7 @@ TEST(NavMeshBuildConfigTest, DefaultValues) {
     EXPECT_EQ(cfg.verts_per_poly, 6);
 }
 
+// 测试 导航网格构建配置：自定义值
 TEST(NavMeshBuildConfigTest, CustomValues) {
     NavMeshBuildConfig cfg;
     cfg.cell_size = 0.5f;
@@ -74,11 +76,13 @@ TEST(NavMeshBuildConfigTest, CustomValues) {
 // NavMeshSystem 生命周期测试
 // ============================================================
 
+// 测试 导航网格系统：默认不崩溃
 TEST(NavMeshSystemTest, DefaultDoesNotCrash) {
     NavMeshSystem nav;
     SUCCEED();
 }
 
+// 测试 导航网格系统：初始化成功
 TEST(NavMeshSystemTest, InitSucceeds) {
     NavMeshSystem nav;
     bool success = nav.Init();
@@ -89,6 +93,7 @@ TEST(NavMeshSystemTest, InitSucceeds) {
     }
 }
 
+// 测试 导航网格系统：关闭不崩溃
 TEST(NavMeshSystemTest, ShutdownDoesNotCrash) {
     NavMeshSystem nav;
     nav.Init();
@@ -96,6 +101,7 @@ TEST(NavMeshSystemTest, ShutdownDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 导航网格系统：关闭不崩溃2
 TEST(NavMeshSystemTest, ShutdownDoesNotCrash_2) {
     NavMeshSystem nav;
     nav.Init();
@@ -104,11 +110,13 @@ TEST(NavMeshSystemTest, ShutdownDoesNotCrash_2) {
     SUCCEED();
 }
 
+// 测试 导航网格系统：不初始化当为就绪返回false
 TEST(NavMeshSystemTest, NotInitWhenIsReadyReturnsfalse) {
     NavMeshSystem nav;
     EXPECT_FALSE(nav.IsReady());
 }
 
+// 测试 导航网格系统：初始化稍后烘焙当为就绪返回false
 TEST(NavMeshSystemTest, InitLaterBakeWhenIsReadyReturnsfalse) {
     NavMeshSystem nav;
     if (nav.Init()) {
@@ -123,6 +131,7 @@ TEST(NavMeshSystemTest, InitLaterBakeWhenIsReadyReturnsfalse) {
 // BakeFromTriangles 测试
 // ============================================================
 
+// 测试 导航网格系统：烘焙从三角形空数据返回false
 TEST(NavMeshSystemTest, BakeFromTrianglesEmptyDataReturnedfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -135,6 +144,7 @@ TEST(NavMeshSystemTest, BakeFromTrianglesEmptyDataReturnedfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：烘焙从三角形简单Plane
 TEST(NavMeshSystemTest, BakeFromTrianglesSimplePlane) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -161,6 +171,7 @@ TEST(NavMeshSystemTest, BakeFromTrianglesSimplePlane) {
 // FindPath 测试
 // ============================================================
 
+// 测试 导航网格系统：查找路径不烘焙返回false
 TEST(NavMeshSystemTest, FindPathNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -174,6 +185,7 @@ TEST(NavMeshSystemTest, FindPathNotBakeReturnsfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：查找Pathsimple路径
 TEST(NavMeshSystemTest, FindPathsimplePath) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -207,6 +219,7 @@ TEST(NavMeshSystemTest, FindPathsimplePath) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：查找路径若起始点且结束点为相同返回到单一点
 TEST(NavMeshSystemTest, FindPathIfTheStartingPointAndEndPointAreTheSameReturnToASinglePoint) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -239,6 +252,7 @@ TEST(NavMeshSystemTest, FindPathIfTheStartingPointAndEndPointAreTheSameReturnToA
 // FindNearestPoint 测试
 // ============================================================
 
+// 测试 导航网格系统：查找最近点不烘焙返回false
 TEST(NavMeshSystemTest, FindNearestPointNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -252,6 +266,7 @@ TEST(NavMeshSystemTest, FindNearestPointNotBakeReturnsfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：查找最近Pointexistnavmesh返回到原点范围内
 TEST(NavMeshSystemTest, FindNearestPointexistnavmeshReturnToOriginWithin) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -285,6 +300,7 @@ TEST(NavMeshSystemTest, FindNearestPointexistnavmeshReturnToOriginWithin) {
 // Raycast 测试
 // ============================================================
 
+// 测试 导航网格系统：射线检测不烘焙返回false
 TEST(NavMeshSystemTest, RaycastNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -298,6 +314,7 @@ TEST(NavMeshSystemTest, RaycastNotBakeReturnsfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：Raycastexistnavmeshinternal未命中
 TEST(NavMeshSystemTest, RaycastexistnavmeshinternalMiss) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -322,6 +339,7 @@ TEST(NavMeshSystemTest, RaycastexistnavmeshinternalMiss) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：Raycastejaculationnavmeshhit
 TEST(NavMeshSystemTest, Raycastejaculationnavmeshhit) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -350,6 +368,7 @@ TEST(NavMeshSystemTest, Raycastejaculationnavmeshhit) {
 // 序列化测试
 // ============================================================
 
+// 测试 导航网格系统：保存导航网格不烘焙返回false
 TEST(NavMeshSystemTest, SaveNavMeshNotBakeReturnsfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -362,6 +381,7 @@ TEST(NavMeshSystemTest, SaveNavMeshNotBakeReturnsfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：加载导航网格文件不存在返回false
 TEST(NavMeshSystemTest, LoadNavMeshFileDoesNotExistReturnfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -374,6 +394,7 @@ TEST(NavMeshSystemTest, LoadNavMeshFileDoesNotExistReturnfalse) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：保存加载导航Meshcycle
 TEST(NavMeshSystemTest, SaveLoadNavMeshcycle) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -420,6 +441,7 @@ TEST(NavMeshSystemTest, SaveLoadNavMeshcycle) {
 // Tiled NavMesh 测试
 // ============================================================
 
+// 测试 导航网格系统：烘焙Tiled从三角形简单Plane
 TEST(NavMeshSystemTest, BakeTiledFromTrianglesSimplePlane) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -444,6 +466,7 @@ TEST(NavMeshSystemTest, BakeTiledFromTrianglesSimplePlane) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：烘焙Tiled从三角形之后查找路径
 TEST(NavMeshSystemTest, BakeTiledFromTrianglesAfterFindPath) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -471,6 +494,7 @@ TEST(NavMeshSystemTest, BakeTiledFromTrianglesAfterFindPath) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：重新烘焙瓦片在Incremental重建
 TEST(NavMeshSystemTest, RebakeTileAtIncrementalReconstruction) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -499,6 +523,7 @@ TEST(NavMeshSystemTest, RebakeTileAtIncrementalReconstruction) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：移除瓦片路径失败之后Deletion
 TEST(NavMeshSystemTest, RemoveTilePathFailedAfterDeletion) {
     NavMeshSystem nav;
     if (!nav.Init()) {
@@ -525,6 +550,7 @@ TEST(NavMeshSystemTest, RemoveTilePathFailedAfterDeletion) {
     nav.Shutdown();
 }
 
+// 测试 导航网格系统：重新烘焙瓦片在返回未初始化为false
 TEST(NavMeshSystemTest, RebakeTileAtReturnUninitializedfalse) {
     NavMeshSystem nav;
     if (!nav.Init()) {

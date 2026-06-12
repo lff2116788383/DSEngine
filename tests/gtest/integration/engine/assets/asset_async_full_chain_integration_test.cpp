@@ -45,6 +45,7 @@ protected:
     std::unique_ptr<AssetManager> asset_manager;
 };
 
+// 测试 资源异步完整链集成：加载之后泵送主线程回调
 TEST_F(AssetAsyncFullChainIntegrationTest, LoadAfterPumpMainThreadCallbacks) {
     std::atomic<bool> callback_fired{false};
     std::shared_ptr<TextureAsset> received_texture;
@@ -71,6 +72,7 @@ TEST_F(AssetAsyncFullChainIntegrationTest, LoadAfterPumpMainThreadCallbacks) {
     SUCCEED();
 }
 
+// 测试 资源异步完整链集成：待处理主线程回调初始零且非负
 TEST_F(AssetAsyncFullChainIntegrationTest, PendingMainThreadCallbacksInitiallyZeroAndNonNegative) {
     // 初始应为 0 或接近 0
     std::size_t initial = asset_manager->PendingMainThreadCallbacks();
@@ -92,12 +94,14 @@ TEST_F(AssetAsyncFullChainIntegrationTest, PendingMainThreadCallbacksInitiallyZe
     EXPECT_LE(after_pump, pending);
 }
 
+// 测试 资源异步完整链集成：记录峰值
 TEST_F(AssetAsyncFullChainIntegrationTest, RecordPeak) {
     // 高水位应 >= 0
     std::size_t hw = asset_manager->PendingMainThreadCallbacksHighWatermark();
     EXPECT_GE(hw, 0u);
 }
 
+// 测试 资源异步完整链集成：加载且任务系统
 TEST_F(AssetAsyncFullChainIntegrationTest, LoadAndJobSystem) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
@@ -133,6 +137,7 @@ TEST_F(AssetAsyncFullChainIntegrationTest, LoadAndJobSystem) {
     job_system->Shutdown();
 }
 
+// 测试 资源异步完整链集成：加载且事件总线
 TEST_F(AssetAsyncFullChainIntegrationTest, LoadAndEventBus) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -157,6 +162,7 @@ TEST_F(AssetAsyncFullChainIntegrationTest, LoadAndEventBus) {
     SUCCEED();
 }
 
+// 测试 资源异步完整链集成：多次数泵送主线程回调不崩溃
 TEST_F(AssetAsyncFullChainIntegrationTest, MultiTimesPumpMainThreadCallbacksDoesNotCrash) {
     for (int i = 0; i < 100; ++i) {
         asset_manager->PumpMainThreadCallbacks(1);
@@ -164,6 +170,7 @@ TEST_F(AssetAsyncFullChainIntegrationTest, MultiTimesPumpMainThreadCallbacksDoes
     SUCCEED();
 }
 
+// 测试 资源异步完整链集成：无效路径加载不崩溃
 TEST_F(AssetAsyncFullChainIntegrationTest, InvalidPathLoadDoesNotCrash) {
     std::atomic<bool> callback_called{false};
 

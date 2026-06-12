@@ -73,6 +73,7 @@ protected:
     }
 };
 
+// 测试 物理2D多边形碰撞体：Triangular碰撞刚体回退Due到重力
 TEST_F(Physics2DPolygonColliderTest, TriangularCollisionBodyFallsDueToGravity) {
     Entity tri = MakePolygonBody(0.0f, 10.0f, Triangle());
     sys.Init(world);
@@ -86,6 +87,7 @@ TEST_F(Physics2DPolygonColliderTest, TriangularCollisionBodyFallsDueToGravity) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
+// 测试 物理2D多边形碰撞体：多且
 TEST_F(Physics2DPolygonColliderTest, MultiAnd) {
     // 地面
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
@@ -105,6 +107,7 @@ TEST_F(Physics2DPolygonColliderTest, MultiAnd) {
     EXPECT_LT(t.position.y, 5.0f);
 }
 
+// 测试 物理2D多边形碰撞体：命中多
 TEST_F(Physics2DPolygonColliderTest, HitMulti) {
     MakePolygonBody(0.0f, 0.0f, Pentagon(), RigidBody2DType::Static);
     sys.Init(world);
@@ -119,6 +122,7 @@ TEST_F(Physics2DPolygonColliderTest, HitMulti) {
     EXPECT_TRUE(hit_entity != entt::null);
 }
 
+// 测试 物理2D多边形碰撞体：多触发不
 TEST_F(Physics2DPolygonColliderTest, MultiTriggersNot) {
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
 
@@ -137,6 +141,7 @@ TEST_F(Physics2DPolygonColliderTest, MultiTriggersNot) {
     EXPECT_LT(t.position.y, -5.0f);
 }
 
+// 测试 物理2D多边形碰撞体：点不3当不Createfixture
 TEST_F(Physics2DPolygonColliderTest, PointNot3WhenDoesNotCreatefixture) {
     // 只有2个顶点
     std::vector<glm::vec2> bad_verts = {{0.0f, 0.0f}, {1.0f, 0.0f}};
@@ -147,6 +152,7 @@ TEST_F(Physics2DPolygonColliderTest, PointNot3WhenDoesNotCreatefixture) {
     EXPECT_EQ(pc.runtime_fixture, nullptr);
 }
 
+// 测试 物理2D多边形碰撞体：实体销毁之后系统法线
 TEST_F(Physics2DPolygonColliderTest, EntityDestroyAfterSystemNormal) {
     Entity tri = MakePolygonBody(0.0f, 5.0f, Triangle());
     sys.Init(world);

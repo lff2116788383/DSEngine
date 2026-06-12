@@ -24,6 +24,7 @@ using namespace dse::gameplay3d;
 // TerrainComponent 默认值
 // ============================================================
 
+// 测试 地形组件：默认值
 TEST(TerrainComponentTest, DefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.enabled);
@@ -37,6 +38,7 @@ TEST(TerrainComponentTest, DefaultValues) {
     EXPECT_EQ(tc.resolution_z, 64);
 }
 
+// 测试 地形组件：LOD参数默认值
 TEST(TerrainComponentTest, LODParameterDefaultValue) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.use_dynamic_lod);
@@ -46,6 +48,7 @@ TEST(TerrainComponentTest, LODParameterDefaultValue) {
     EXPECT_TRUE(tc.visible);
 }
 
+// 测试 地形组件：泼溅映射默认值
 TEST(TerrainComponentTest, SplatMapDefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.splat_data.empty());
@@ -57,6 +60,7 @@ TEST(TerrainComponentTest, SplatMapDefaultValues) {
     }
 }
 
+// 测试 地形组件：内部状态默认值
 TEST(TerrainComponentTest, InsideStateDefaultValues) {
     TerrainComponent tc;
     EXPECT_TRUE(tc.is_dirty);
@@ -69,6 +73,7 @@ TEST(TerrainComponentTest, InsideStateDefaultValues) {
     EXPECT_EQ(tc.index_count, 0u);
 }
 
+// 测试 地形组件：数据写入
 TEST(TerrainComponentTest, DataWrite) {
     TerrainComponent tc;
     tc.resolution_x = 4;
@@ -83,11 +88,13 @@ TEST(TerrainComponentTest, DataWrite) {
 // TerrainSystem
 // ============================================================
 
+// 测试 地形系统：默认安全
 TEST(TerrainSystemTest, DefaultSafety) {
     TerrainSystem sys;
     (void)sys;
 }
 
+// 测试 地形系统：空世界不崩溃
 TEST(TerrainSystemTest, EmptyWorldDoesNotCrash) {
     TerrainSystem sys;
     World world;
@@ -95,6 +102,7 @@ TEST(TerrainSystemTest, EmptyWorldDoesNotCrash) {
     sys.Render(world, cmd);
 }
 
+// 测试 地形系统：禁用不渲染
 TEST(TerrainSystemTest, DisabledDoesNotRender) {
     TerrainSystem sys;
     World world;
@@ -193,6 +201,7 @@ TerrainComponent MakeSplatTerrain(int w, int h, float fill) {
 
 } // namespace
 
+// 测试 地形泼溅上传：无当
 TEST(TerrainSplatUploadTest, WithoutWhen) {
     TerrainSystem sys;  // 未 Init，rhi_ == nullptr
     TerrainComponent tc = MakeSplatTerrain(2, 2, 1.0f);
@@ -201,6 +210,7 @@ TEST(TerrainSplatUploadTest, WithoutWhen) {
     EXPECT_EQ(tc.splat_weight_texture, 0u);
 }
 
+// 测试 地形泼溅上传：非当不
 TEST(TerrainSplatUploadTest, NonWhenNot) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
@@ -212,6 +222,7 @@ TEST(TerrainSplatUploadTest, NonWhenNot) {
     EXPECT_EQ(tc.splat_weight_texture, 0u);
 }
 
+// 测试 地形泼溅上传：Validdata
 TEST(TerrainSplatUploadTest, Validdata) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
@@ -233,6 +244,7 @@ TEST(TerrainSplatUploadTest, Validdata) {
     EXPECT_FALSE(tc.splat_dirty);  // 脏标志已消费
 }
 
+// 测试 地形泼溅上传：Floatweight钳制到0 255
 TEST(TerrainSplatUploadTest, FloatweightClampedTo0_255) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;
@@ -253,6 +265,7 @@ TEST(TerrainSplatUploadTest, FloatweightClampedTo0_255) {
     EXPECT_EQ(fake.created[0].rgba8[3], 255);          //  2.0 → 255
 }
 
+// 测试 地形泼溅上传：数据不Whenrollbackrelease
 TEST(TerrainSplatUploadTest, DataNotWhenrollbackrelease) {
     TerrainFakeRhiDevice fake;
     TerrainSystem sys;

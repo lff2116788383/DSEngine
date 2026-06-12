@@ -21,42 +21,52 @@ using namespace dse::render;
 // UBO 结构体大小与默认值
 // ============================================================
 
+// 测试 UBO类型：每帧UBO尺寸176
 TEST(UBOTypesTest, PerFrameUBOsize176) {
     EXPECT_EQ(sizeof(PerFrameUBO), 176u);
 }
 
+// 测试 UBO类型：每场景UBO尺寸304
 TEST(UBOTypesTest, PerSceneUBOsize304) {
     EXPECT_EQ(sizeof(PerSceneUBO), 304u);
 }
 
+// 测试 UBO类型：每材质UBO尺寸128
 TEST(UBOTypesTest, PerMaterialUBOsize128) {
     EXPECT_EQ(sizeof(PerMaterialUBO), 128u);
 }
 
+// 测试 UBO类型：点灯光Entrysize 48
 TEST(UBOTypesTest, PointLightEntrysize48) {
     EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
+// 测试 UBO类型：聚光灯光Entrysize 64
 TEST(UBOTypesTest, SpotLightEntrysize64) {
     EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
+// 测试 UBO类型：骨骼矩阵UBO尺寸16320
 TEST(UBOTypesTest, BoneMatricesUBOsize16320) {
     EXPECT_EQ(sizeof(BoneMatricesUBO), 16320u);
 }
 
+// 测试 UBO类型：变形Weights UBO尺寸64
 TEST(UBOTypesTest, MorphWeightsUBOsize64) {
     EXPECT_EQ(sizeof(MorphWeightsUBO), 64u);
 }
 
+// 测试 UBO类型：灯光探针数据UBO尺寸160
 TEST(UBOTypesTest, LightProbeDataUBOsize160) {
     EXPECT_EQ(sizeof(LightProbeDataUBO), 160u);
 }
 
+// 测试 UBO类型：聚光灯光数据UBO尺寸256
 TEST(UBOTypesTest, SpotLightDataUBOsize256) {
     EXPECT_EQ(sizeof(SpotLightDataUBO), 256u);
 }
 
+// 测试 UBO类型：绑定Pointenumeration值
 TEST(UBOTypesTest, BindingPointenumerationValue) {
     EXPECT_EQ(static_cast<unsigned int>(UBOBindingPoint::PerFrame), 0u);
     EXPECT_EQ(static_cast<unsigned int>(UBOBindingPoint::PerScene), 1u);
@@ -72,6 +82,7 @@ TEST(UBOTypesTest, BindingPointenumerationValue) {
 // DrawExecutorGlobalState
 // ============================================================
 
+// 测试 绘制执行器全局状态：默认值
 TEST(DrawExecutorGlobalStateTest, DefaultValues) {
     DrawExecutorGlobalState s;
     for (int i = 0; i < 3; ++i) {
@@ -88,6 +99,7 @@ TEST(DrawExecutorGlobalStateTest, DefaultValues) {
     EXPECT_FALSE(s.overdraw_mode);
 }
 
+// 测试 绘制执行器全局状态：设置阴影映射
 TEST(DrawExecutorGlobalStateTest, SetShadowMap) {
     DrawExecutorGlobalState s;
     s.SetShadowMap(0, 42);
@@ -97,6 +109,7 @@ TEST(DrawExecutorGlobalStateTest, SetShadowMap) {
     EXPECT_EQ(s.shadow_map[2], 99u);
 }
 
+// 测试 绘制执行器全局状态：设置聚光阴影映射
 TEST(DrawExecutorGlobalStateTest, SetSpotShadowMap) {
     DrawExecutorGlobalState s;
     s.SetSpotShadowMap(1, 77);
@@ -104,12 +117,14 @@ TEST(DrawExecutorGlobalStateTest, SetSpotShadowMap) {
     s.SetSpotShadowMap(10, 0); // 越界
 }
 
+// 测试 绘制执行器全局状态：设置点阴影映射
 TEST(DrawExecutorGlobalStateTest, SetPointShadowMap) {
     DrawExecutorGlobalState s;
     s.SetPointShadowMap(3, 55);
     EXPECT_EQ(s.point_shadow_map[3], 55u);
 }
 
+// 测试 绘制执行器全局状态：设置灯光Space矩阵
 TEST(DrawExecutorGlobalStateTest, SetLightSpaceMatrix) {
     DrawExecutorGlobalState s;
     glm::mat4 m(2.0f);
@@ -117,6 +132,7 @@ TEST(DrawExecutorGlobalStateTest, SetLightSpaceMatrix) {
     EXPECT_FLOAT_EQ(s.light_space_matrix[1][0][0], 2.0f);
 }
 
+// 测试 绘制执行器全局状态：设置级联Split
 TEST(DrawExecutorGlobalStateTest, SetCascadeSplit) {
     DrawExecutorGlobalState s;
     s.SetCascadeSplit(0, 10.0f);
@@ -127,6 +143,7 @@ TEST(DrawExecutorGlobalStateTest, SetCascadeSplit) {
     EXPECT_FLOAT_EQ(s.cascade_splits[2], 200.0f);
 }
 
+// 测试 绘制执行器全局状态：设置灯光探针SH
 TEST(DrawExecutorGlobalStateTest, SetLightProbeSH) {
     DrawExecutorGlobalState s;
     glm::vec4 sh[9];
@@ -136,6 +153,7 @@ TEST(DrawExecutorGlobalStateTest, SetLightProbeSH) {
     EXPECT_FLOAT_EQ(s.light_probe_sh[3].x, 3.0f);
 }
 
+// 测试 绘制执行器全局状态：开始结束帧
 TEST(DrawExecutorGlobalStateTest, BeginEndFrame) {
     DrawExecutorGlobalState s;
     s.current_frame_stats.draw_calls = 10;
@@ -145,6 +163,7 @@ TEST(DrawExecutorGlobalStateTest, BeginEndFrame) {
     EXPECT_EQ(s.current_frame_stats.draw_calls, 0);
 }
 
+// 测试 绘制执行器全局状态：设置G缓冲区纹理
 TEST(DrawExecutorGlobalStateTest, SetGBufferTexture) {
     DrawExecutorGlobalState s;
     s.SetGBufferTexture(0, 111);
@@ -158,6 +177,7 @@ TEST(DrawExecutorGlobalStateTest, SetGBufferTexture) {
 // PreparePerSceneUBO
 // ============================================================
 
+// 测试 准备UBO：准备每场景UBO
 TEST(PrepareUBOTest, PreparePerSceneUBO) {
     MeshDrawItem item;
     item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -190,6 +210,7 @@ TEST(PrepareUBOTest, PreparePerSceneUBO) {
 // PreparePerMaterialUBO
 // ============================================================
 
+// 测试 准备UBO：准备每材质UBO
 TEST(PrepareUBOTest, PreparePerMaterialUBO) {
     MeshDrawItem item;
     item.material_albedo = glm::vec3(0.9f, 0.1f, 0.2f);
@@ -212,16 +233,19 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO) {
 // Scene View Mode 行为验证
 // ============================================================
 
+// 测试 绘制执行器全局状态：强制无光照关闭按默认
 TEST(DrawExecutorGlobalStateTest, ForceUnlitOffByDefault) {
     DrawExecutorGlobalState s;
     EXPECT_FALSE(s.force_unlit);
 }
 
+// 测试 绘制执行器全局状态：过度绘制模式关闭按默认
 TEST(DrawExecutorGlobalStateTest, OverdrawModeOffByDefault) {
     DrawExecutorGlobalState s;
     EXPECT_FALSE(s.overdraw_mode);
 }
 
+// 测试 绘制执行器全局状态：强制无光照可读且可写
 TEST(DrawExecutorGlobalStateTest, ForceUnlitReadableAndWritable) {
     DrawExecutorGlobalState s;
     s.force_unlit = true;
@@ -230,6 +254,7 @@ TEST(DrawExecutorGlobalStateTest, ForceUnlitReadableAndWritable) {
     EXPECT_FALSE(s.force_unlit);
 }
 
+// 测试 绘制执行器全局状态：过度绘制模式可读且可写
 TEST(DrawExecutorGlobalStateTest, OverdrawModeReadableAndWritable) {
     DrawExecutorGlobalState s;
     s.overdraw_mode = true;
@@ -238,6 +263,7 @@ TEST(DrawExecutorGlobalStateTest, OverdrawModeReadableAndWritable) {
     EXPECT_FALSE(s.overdraw_mode);
 }
 
+// 测试 准备UBO：准备每场景UBO强制无光照强制灯光关闭
 TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitForceLightsOff) {
     MeshDrawItem item;
     item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -250,6 +276,7 @@ TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitForceLightsOff) {
     EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
 }
 
+// 测试 准备UBO：准备每场景UBO强制无光照不Affect实体Turns关闭灯光
 TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitDoesNotAffectTheEntityThatTurnsOffTheLights) {
     MeshDrawItem item;
     item.light_direction = glm::vec3(0.0f, -1.0f, 0.0f);
@@ -262,6 +289,7 @@ TEST(PrepareUBOTest, PreparePerSceneUBO_ForceUnlitDoesNotAffectTheEntityThatTurn
     EXPECT_FLOAT_EQ(ubo.light_dir_and_enabled.w, 0.0f);
 }
 
+// 测试 准备UBO：准备每材质UBO Overdrawfixed颜色
 TEST(PrepareUBOTest, PreparePerMaterialUBO_OverdrawfixedColor) {
     MeshDrawItem item;
     item.material_albedo = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -277,6 +305,7 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO_OverdrawfixedColor) {
     EXPECT_FLOAT_EQ(ubo.albedo.w, 0.0f);
 }
 
+// 测试 准备UBO：准备每材质UBO法线模式Retains原始Colors
 TEST(PrepareUBOTest, PreparePerMaterialUBO_NormalModeRetainsOriginalColors) {
     MeshDrawItem item;
     item.material_albedo = glm::vec3(0.5f, 0.6f, 0.7f);
@@ -296,12 +325,14 @@ TEST(PrepareUBOTest, PreparePerMaterialUBO_NormalModeRetainsOriginalColors) {
 // PreparePointLightsUBO / PrepareSpotLightsUBO
 // ============================================================
 
+// 测试 准备UBO：准备点灯光UBO空灯光源
 TEST(PrepareUBOTest, PreparePointLightsUBO_EmptyLightSource) {
     MeshDrawItem item;
     PointLightsUBO ubo = PreparePointLightsUBO(item);
     EXPECT_EQ(ubo.u_point_light_count, 0);
 }
 
+// 测试 准备UBO：准备点灯光UBO存在为灯光源
 TEST(PrepareUBOTest, PreparePointLightsUBO_ThereIsLightSource) {
     MeshDrawItem item;
     MeshDrawItem::PointLightData pl;
@@ -321,6 +352,7 @@ TEST(PrepareUBOTest, PreparePointLightsUBO_ThereIsLightSource) {
     EXPECT_EQ(ubo.u_point_lights[0].shadow_index, 2);
 }
 
+// 测试 准备UBO：准备聚光灯光UBO存在为灯光源
 TEST(PrepareUBOTest, PrepareSpotLightsUBO_ThereIsLightSource) {
     MeshDrawItem item;
     MeshDrawItem::SpotLightData sl;
@@ -341,6 +373,7 @@ TEST(PrepareUBOTest, PrepareSpotLightsUBO_ThereIsLightSource) {
 // PrepareLightProbeUBO / PrepareSpotLightDataUBO
 // ============================================================
 
+// 测试 准备UBO：准备灯光探针UBO
 TEST(PrepareUBOTest, PrepareLightProbeUBO) {
     DrawExecutorGlobalState state;
     glm::vec4 sh[9];
@@ -352,6 +385,7 @@ TEST(PrepareUBOTest, PrepareLightProbeUBO) {
     EXPECT_FLOAT_EQ(ubo.probe_params.x, 1.0f); // enabled
 }
 
+// 测试 准备UBO：准备聚光灯光数据UBO
 TEST(PrepareUBOTest, PrepareSpotLightDataUBO) {
     DrawExecutorGlobalState state;
     glm::mat4 m(7.0f);

@@ -30,11 +30,13 @@ protected:
     }
 };
 
+// 测试 动画器系统3D：空世界调用更新不崩溃
 TEST_F(AnimatorSystem3DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
+// 测试 动画器系统3D：带有动画器3D组件实体更新不崩溃
 TEST_F(AnimatorSystem3DTest, BringAnimator3DComponentEntityUpdateDoesNotCrash) {
     World world;
     auto entity = world.CreateEntity();
@@ -43,6 +45,7 @@ TEST_F(AnimatorSystem3DTest, BringAnimator3DComponentEntityUpdateDoesNotCrash) {
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
+// 测试 动画器系统3D：动画器3D组件默认值
 TEST_F(AnimatorSystem3DTest, Animator3DComponentDefaultValues) {
     Animator3DComponent anim;
     EXPECT_TRUE(anim.enabled);
@@ -57,6 +60,7 @@ TEST_F(AnimatorSystem3DTest, Animator3DComponentDefaultValues) {
     EXPECT_TRUE(anim.final_bone_matrices.empty());
 }
 
+// 测试 动画器系统3D：动画器3D组件字段修改
 TEST_F(AnimatorSystem3DTest, Animator3DComponentFieldModification) {
     Animator3DComponent anim;
     anim.enabled = false;
@@ -76,6 +80,7 @@ TEST_F(AnimatorSystem3DTest, Animator3DComponentFieldModification) {
     EXPECT_FLOAT_EQ(anim.transition_duration, 0.3f);
 }
 
+// 测试 动画器系统3D：禁用动画器3D不实体
 TEST_F(AnimatorSystem3DTest, DisabledAnimator3DNotEntity) {
     World world;
     auto e1 = world.CreateEntity();
@@ -91,6 +96,7 @@ TEST_F(AnimatorSystem3DTest, DisabledAnimator3DNotEntity) {
     EXPECT_NO_THROW(AnimatorSystem::Update(world, 0.016f));
 }
 
+// 测试 动画器系统3D：混合节点默认值
 TEST_F(AnimatorSystem3DTest, BlendNodeDefaultValues) {
     AnimBlendNode node;
     EXPECT_TRUE(node.name.empty());
@@ -102,6 +108,7 @@ TEST_F(AnimatorSystem3DTest, BlendNodeDefaultValues) {
     EXPECT_FLOAT_EQ(node.threshold, 0.0f);
 }
 
+// 测试 动画器系统3D：变形组件默认值
 TEST_F(AnimatorSystem3DTest, MorphComponentDefaultValues) {
     MorphComponent morph;
     EXPECT_TRUE(morph.enabled);

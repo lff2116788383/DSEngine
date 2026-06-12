@@ -18,6 +18,7 @@ using namespace dse::render;
 // ComputeFlatTextureUnits
 // ============================================================
 
+// 测试 计算平面纹理单位：空返回零
 TEST(ComputeFlatTextureUnitsTest, EmptyReturnsZero) {
     shader_reflect::StageReflection empty{};
     std::vector<gl_reflect::TextureUnitEntry> entries;
@@ -26,6 +27,7 @@ TEST(ComputeFlatTextureUnitsTest, EmptyReturnsZero) {
     EXPECT_TRUE(entries.empty());
 }
 
+// 测试 计算平面纹理单位：单一单元0
 TEST(ComputeFlatTextureUnitsTest, Single_unit_0) {
     shader_reflect::ResourceBinding tex = {
         "u_texture", shader_reflect::ResourceType::SampledImage,
@@ -44,6 +46,7 @@ TEST(ComputeFlatTextureUnitsTest, Single_unit_0) {
     EXPECT_EQ(next, 1u);
 }
 
+// 测试 计算平面纹理单位：数组Continuousunit
 TEST(ComputeFlatTextureUnitsTest, ArrayContinuousunit) {
     shader_reflect::ResourceBinding textures[] = {
         {"u_texture", shader_reflect::ResourceType::SampledImage,
@@ -71,6 +74,7 @@ TEST(ComputeFlatTextureUnitsTest, ArrayContinuousunit) {
     EXPECT_EQ(next, 5u);
 }
 
+// 测试 计算平面纹理单位：基单元偏移
 TEST(ComputeFlatTextureUnitsTest, base_unit_Offset) {
     shader_reflect::ResourceBinding tex = {
         "u_texture", shader_reflect::ResourceType::SampledImage,
@@ -87,6 +91,7 @@ TEST(ComputeFlatTextureUnitsTest, base_unit_Offset) {
     EXPECT_EQ(next, 6u);
 }
 
+// 测试 计算平面纹理单位：PBR反射数据无重叠
 TEST(ComputeFlatTextureUnitsTest, PBRReflectionData_NoOverlap) {
     using namespace generated_shaders::reflect;
     std::vector<gl_reflect::TextureUnitEntry> entries;
@@ -101,6 +106,7 @@ TEST(ComputeFlatTextureUnitsTest, PBRReflectionData_NoOverlap) {
 // AutoCreateInputLayout (DX11)
 // ============================================================
 
+// 测试 自动创建输入布局：PB Rvertex布局
 TEST(AutoCreateInputLayoutTest, PBRvertexLayout) {
     using namespace generated_shaders::reflect;
     std::vector<dx11_reflect::InputElementDesc> elements;
@@ -111,6 +117,7 @@ TEST(AutoCreateInputLayoutTest, PBRvertexLayout) {
     EXPECT_STREQ(elements[0].semantic_name, "TEXCOORD");
 }
 
+// 测试 自动创建输入布局：空返回零
 TEST(AutoCreateInputLayoutTest, EmptyReturnsZero) {
     shader_reflect::StageReflection empty{};
     std::vector<dx11_reflect::InputElementDesc> elements;
@@ -123,6 +130,7 @@ TEST(AutoCreateInputLayoutTest, EmptyReturnsZero) {
 // ValidateTextureSlotOverlaps
 // ============================================================
 
+// 测试 校验纹理Slot Overlaps：无重叠
 TEST(ValidateTextureSlotOverlapsTest, NoOverlap) {
     std::vector<gl_reflect::TextureUnitEntry> entries = {
         {"tex0", 0, 1},
@@ -133,6 +141,7 @@ TEST(ValidateTextureSlotOverlapsTest, NoOverlap) {
     EXPECT_EQ(shader_reflect_debug::ValidateTextureSlotOverlaps(entries), 0u);
 }
 
+// 测试 校验纹理Slot Overlaps：情形9
 TEST(ValidateTextureSlotOverlapsTest, TestCase9) {
     std::vector<gl_reflect::TextureUnitEntry> entries = {
         {"tex0", 0, 3}, // 占 0,1,2
@@ -145,6 +154,7 @@ TEST(ValidateTextureSlotOverlapsTest, TestCase9) {
 // ValidateUBOSize
 // ============================================================
 
+// 测试 校验UBO尺寸：尺寸返回true
 TEST(ValidateUBOSizeTest, SizeReturnstrue) {
     shader_reflect::ResourceBinding ubo = {
         "PerFrame", shader_reflect::ResourceType::UniformBuffer,
@@ -157,6 +167,7 @@ TEST(ValidateUBOSizeTest, SizeReturnstrue) {
     EXPECT_TRUE(shader_reflect_debug::ValidateUBOSize(refl, "PerFrame", 144));
 }
 
+// 测试 校验UBO尺寸：尺寸不返回false
 TEST(ValidateUBOSizeTest, SizeNotReturnsfalse) {
     shader_reflect::ResourceBinding ubo = {
         "PerFrame", shader_reflect::ResourceType::UniformBuffer,
@@ -169,6 +180,7 @@ TEST(ValidateUBOSizeTest, SizeNotReturnsfalse) {
     EXPECT_FALSE(shader_reflect_debug::ValidateUBOSize(refl, "PerFrame", 128));
 }
 
+// 测试 校验UBO尺寸：不到UBO返回true
 TEST(ValidateUBOSizeTest, NotToUBOReturnstrue) {
     shader_reflect::StageReflection refl{};
     EXPECT_TRUE(shader_reflect_debug::ValidateUBOSize(refl, "NonExistent", 64));
@@ -178,6 +190,7 @@ TEST(ValidateUBOSizeTest, NotToUBOReturnstrue) {
 // ValidateUBOBindings
 // ============================================================
 
+// 测试 校验UBO绑定：PBR存在为无Abnormality于反射数据
 TEST(ValidateUBOBindingsTest, PBRThereIsNoAbnormalityInTheReflectionData) {
     using namespace generated_shaders::reflect;
     EXPECT_EQ(shader_reflect_debug::ValidateUBOBindings(kpbr_frag_reflection, "PBR.frag"), 0u);
@@ -188,6 +201,7 @@ TEST(ValidateUBOBindingsTest, PBRThereIsNoAbnormalityInTheReflectionData) {
 // ValidateVertexInputs
 // ============================================================
 
+// 测试 校验顶点Inputs：PBR顶点输入为Legal
 TEST(ValidateVertexInputsTest, PBRVertexInputIsLegal) {
     using namespace generated_shaders::reflect;
     EXPECT_EQ(shader_reflect_debug::ValidateVertexInputs(kpbr_vert_reflection), 0u);
@@ -197,6 +211,7 @@ TEST(ValidateVertexInputsTest, PBRVertexInputIsLegal) {
 // ExtractDescriptorBindings (Vulkan)
 // ============================================================
 
+// 测试 Extract描述符绑定：PB Rmerge Vert Frag
 TEST(ExtractDescriptorBindingsTest, PBRmergeVertFrag) {
     using namespace generated_shaders::reflect;
     shader_reflect::ProgramReflection prog{kpbr_vert_reflection, kpbr_frag_reflection};

@@ -18,6 +18,7 @@ using namespace dse::asset::compiler;
 // VertexAttribute 位运算
 // ============================================================
 
+// 测试 顶点属性：或Combine多个属性
 TEST(VertexAttributeTest, ORCombineMultipleProperties) {
     auto combined = VertexAttribute::Position | VertexAttribute::Normal;
     EXPECT_TRUE(static_cast<bool>(combined & VertexAttribute::Position));
@@ -25,6 +26,7 @@ TEST(VertexAttributeTest, ORCombineMultipleProperties) {
     EXPECT_FALSE(static_cast<bool>(combined & VertexAttribute::TexCoord));
 }
 
+// 测试 顶点属性：或Combine全部属性
 TEST(VertexAttributeTest, ORCombineAllProperties) {
     auto all = VertexAttribute::Position | VertexAttribute::Normal |
                VertexAttribute::Tangent | VertexAttribute::TexCoord |
@@ -34,20 +36,24 @@ TEST(VertexAttributeTest, ORCombineAllProperties) {
     EXPECT_TRUE(static_cast<bool>(all & VertexAttribute::Weights));
 }
 
+// 测试 顶点属性：且单一
 TEST(VertexAttributeTest, AndSingle) {
     auto pos_norm = VertexAttribute::Position | VertexAttribute::Normal;
     EXPECT_TRUE(static_cast<bool>(pos_norm & VertexAttribute::Position));
     EXPECT_FALSE(static_cast<bool>(pos_norm & VertexAttribute::Color));
 }
 
+// 测试 顶点属性：单一且为
 TEST(VertexAttributeTest, SingleANDIs) {
     EXPECT_TRUE(static_cast<bool>(VertexAttribute::Position & VertexAttribute::Position));
 }
 
+// 测试 顶点属性：不同属性Dis假
 TEST(VertexAttributeTest, DifferentPropertiesANDisFalse) {
     EXPECT_FALSE(static_cast<bool>(VertexAttribute::Position & VertexAttribute::Normal));
 }
 
+// 测试 顶点属性：为2
 TEST(VertexAttributeTest, Is2) {
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Position), 1u);
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Normal), 2u);
@@ -62,6 +68,7 @@ TEST(VertexAttributeTest, Is2) {
 // 二进制头结构体默认值
 // ============================================================
 
+// 测试 网格头：默认魔数为DSEM
 TEST(MeshHeaderTest, DefaultmagicIsDSEM) {
     MeshHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -70,11 +77,13 @@ TEST(MeshHeaderTest, DefaultmagicIsDSEM) {
     EXPECT_EQ(header.magic[3], 'M');
 }
 
+// 测试 网格头：默认为1
 TEST(MeshHeaderTest, DefaultIs1) {
     MeshHeader header;
     EXPECT_EQ(header.version, 1u);
 }
 
+// 测试 网格头：默认为0
 TEST(MeshHeaderTest, DefaultIs0) {
     MeshHeader header;
     EXPECT_EQ(header.vertex_count, 0u);
@@ -82,6 +91,7 @@ TEST(MeshHeaderTest, DefaultIs0) {
     EXPECT_EQ(header.submesh_count, 0u);
 }
 
+// 测试 动画头：默认魔数为DSEA
 TEST(AnimHeaderTest, DefaultmagicIsDSEA) {
     AnimHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -90,6 +100,7 @@ TEST(AnimHeaderTest, DefaultmagicIsDSEA) {
     EXPECT_EQ(header.magic[3], 'A');
 }
 
+// 测试 动画头：默认为2
 TEST(AnimHeaderTest, DefaultIs2) {
     AnimHeader header;
     EXPECT_EQ(header.version, 2u);
@@ -97,6 +108,7 @@ TEST(AnimHeaderTest, DefaultIs2) {
     EXPECT_EQ(header.channel_count, 0u);
 }
 
+// 测试 骨架头：默认魔数为DSES
 TEST(SkelHeaderTest, DefaultmagicIsDSES) {
     SkelHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -105,6 +117,7 @@ TEST(SkelHeaderTest, DefaultmagicIsDSES) {
     EXPECT_EQ(header.magic[3], 'S');
 }
 
+// 测试 骨架头：默认为2
 TEST(SkelHeaderTest, DefaultIs2) {
     SkelHeader header;
     EXPECT_EQ(header.version, 2u);
@@ -115,6 +128,7 @@ TEST(SkelHeaderTest, DefaultIs2) {
 // RawSceneData 数据组装
 // ============================================================
 
+// 测试 原始场景数据：空数据默认值
 TEST(RawSceneDataTest, EmptyDataDefaultValues) {
     RawSceneData data;
     EXPECT_TRUE(data.meshes.empty());
@@ -123,6 +137,7 @@ TEST(RawSceneDataTest, EmptyDataDefaultValues) {
     EXPECT_TRUE(data.animations.empty());
 }
 
+// 测试 原始场景数据：添加到子网格
 TEST(RawSceneDataTest, AddToSubMesh) {
     RawSceneData data;
     RawSubMesh mesh;
@@ -136,6 +151,7 @@ TEST(RawSceneDataTest, AddToSubMesh) {
     EXPECT_EQ(data.meshes[0].positions.size(), 2u);
 }
 
+// 测试 原始场景数据：添加到材质
 TEST(RawSceneDataTest, AddToMaterial) {
     RawSceneData data;
     RawMaterial mat;
@@ -148,12 +164,14 @@ TEST(RawSceneDataTest, AddToMaterial) {
     EXPECT_FLOAT_EQ(data.materials[0].metallic_factor, 0.5f);
 }
 
+// 测试 原始骨骼：Defaultparent为
 TEST(RawBoneTest, DefaultparentIs) {
     RawBone bone;
     bone.name = "root";
     EXPECT_EQ(bone.parent_index, -1);
 }
 
+// 测试 原始动画：空
 TEST(RawAnimationTest, Empty) {
     RawAnimation anim;
     anim.name = "idle";

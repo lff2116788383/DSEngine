@@ -23,6 +23,7 @@ protected:
 // 状态管理
 // ============================================================
 
+// 测试 动画状态状态机：添加到状态
 TEST_F(AnimStateMachineTest, AddToState) {
     AnimState state;
     state.name = "Idle";
@@ -35,6 +36,7 @@ TEST_F(AnimStateMachineTest, AddToState) {
     EXPECT_EQ(states.at("Idle").danim_path, "anim/idle.danim");
 }
 
+// 测试 动画状态状态机：设置上默认状态
 TEST_F(AnimStateMachineTest, SetUpDefaultState) {
     AnimState state;
     state.name = "Walk";
@@ -47,18 +49,21 @@ TEST_F(AnimStateMachineTest, SetUpDefaultState) {
 // 参数管理
 // ============================================================
 
+// 测试 动画状态状态机：浮点参数读取且写入
 TEST_F(AnimStateMachineTest, FloatParameterReadingAndWriting) {
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     sm.SetFloat("speed", 5.0f);
     EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 5.0f);
 }
 
+// 测试 动画状态状态机：整数参数读取且写入
 TEST_F(AnimStateMachineTest, IntParameterReadingAndWriting) {
     sm.AddParameter("count", AnimParamType::Int, 0);
     sm.SetInt("count", 3);
     EXPECT_EQ(sm.GetInt("count"), 3);
 }
 
+// 测试 动画状态状态机：布尔参数读取且写入
 TEST_F(AnimStateMachineTest, BoolParameterReadingAndWriting) {
     sm.AddParameter("alive", AnimParamType::Bool, true);
     EXPECT_TRUE(sm.GetBool("alive"));
@@ -66,6 +71,7 @@ TEST_F(AnimStateMachineTest, BoolParameterReadingAndWriting) {
     EXPECT_FALSE(sm.GetBool("alive"));
 }
 
+// 测试 动画状态状态机：触发Setup且重置
 TEST_F(AnimStateMachineTest, TriggerSetupAndReset) {
     sm.AddTrigger("jump");
     sm.SetTrigger("jump");
@@ -80,6 +86,7 @@ TEST_F(AnimStateMachineTest, TriggerSetupAndReset) {
 // 条件评估
 // ============================================================
 
+// 测试 动画状态状态机：过渡大于
 TEST_F(AnimStateMachineTest, Transition_Greater) {
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
     sm.SetFloat("speed", 5.0f);
@@ -95,6 +102,7 @@ TEST_F(AnimStateMachineTest, Transition_Greater) {
     EXPECT_TRUE(sm.EvaluateTransition(trans, 1.0f));
 }
 
+// 测试 动画状态状态机：过渡若布尔
 TEST_F(AnimStateMachineTest, Transition_IfBool) {
     sm.AddParameter("grounded", AnimParamType::Bool, true);
 
@@ -110,6 +118,7 @@ TEST_F(AnimStateMachineTest, Transition_IfBool) {
     EXPECT_FALSE(sm.EvaluateTransition(trans, 1.0f));
 }
 
+// 测试 动画状态状态机：过渡无带时间
 TEST_F(AnimStateMachineTest, Transition_WithoutWithTime) {
     AnimTransition trans;
     trans.has_exit_time = true;

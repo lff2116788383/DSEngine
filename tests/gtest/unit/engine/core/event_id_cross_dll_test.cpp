@@ -35,6 +35,7 @@ namespace dll_b {
 // FNV-1a 哈希一致性测试
 // ============================================================
 
+// 测试 事件ID交叉DLL：情形1
 TEST(EventIdCrossDllTest, TestCase1) {
     // 不同作用域中相同字符串应产生相同 ID
     EXPECT_EQ(kDllA_MyEvent, dll_b::kMyEvent);
@@ -42,6 +43,7 @@ TEST(EventIdCrossDllTest, TestCase1) {
     EXPECT_EQ(kDllA_ResourceLoaded, dll_b::kResourceLoaded);
 }
 
+// 测试 事件ID交叉DLL：Insideevent且一致
 TEST(EventIdCrossDllTest, InsideeventAndconsistent) {
     // 集中定义的常量应与直接计算一致
     EXPECT_EQ(dse::core::events::kUiClick, dse::core::MakeEventId("UiClick"));
@@ -49,6 +51,7 @@ TEST(EventIdCrossDllTest, InsideeventAndconsistent) {
     EXPECT_EQ(dse::core::events::kSceneLifecycle, dse::core::MakeEventId("SceneLifecycle"));
 }
 
+// 测试 事件ID交叉DLL：不同Strings产生不同Hashes
 TEST(EventIdCrossDllTest, DifferentStringsProduceDifferentHashes) {
     // 不同的事件名应产生不同的 ID
     EXPECT_NE(dse::core::events::kUiClick, dse::core::events::kResourceLoaded);
@@ -60,6 +63,7 @@ TEST(EventIdCrossDllTest, DifferentStringsProduceDifferentHashes) {
     EXPECT_NE(kDllA_MyEvent, kDllA_ResourceLoaded);
 }
 
+// 测试 事件ID交叉DLL：且一致
 TEST(EventIdCrossDllTest, Andconsistent) {
     // constexpr 编译期求值
     constexpr dse::core::EventId compile_time = dse::core::MakeEventId("RuntimeTestEvent");
@@ -69,12 +73,14 @@ TEST(EventIdCrossDllTest, Andconsistent) {
     EXPECT_EQ(compile_time, runtime_time);
 }
 
+// 测试 事件ID交叉DLL：空不零
 TEST(EventIdCrossDllTest, EmptyNotZero) {
     // FNV-1a 对空字符串返回偏移基础值，不是 0
     constexpr dse::core::EventId empty_hash = dse::core::MakeEventId("");
     EXPECT_NE(empty_hash, 0ull);
 }
 
+// 测试 事件ID交叉DLL：尺寸
 TEST(EventIdCrossDllTest, Size) {
     constexpr dse::core::EventId lower = dse::core::MakeEventId("myevent");
     constexpr dse::core::EventId upper = dse::core::MakeEventId("MyEvent");
@@ -84,6 +90,7 @@ TEST(EventIdCrossDllTest, Size) {
     EXPECT_NE(upper, mixed);
 }
 
+// 测试 事件ID交叉DLL：FNV 1偏移基值为正确
 TEST(EventIdCrossDllTest, FNV1aOffsetBaseValueIsCorrect) {
     // 验证 FNV-1a 偏移基础值
     // 对空字符串，哈希应等于初始偏移值 0xcbf29ce484222325
@@ -91,6 +98,7 @@ TEST(EventIdCrossDllTest, FNV1aOffsetBaseValueIsCorrect) {
     EXPECT_EQ(empty_hash, 0xcbf29ce484222325ull);
 }
 
+// 测试 事件ID交叉DLL：单一能够
 TEST(EventIdCrossDllTest, SingleCan) {
     // 验证单字符 FNV-1a 计算过程可复现
     // 'a' 的 FNV-1a: offset_basis XOR 'a' (0x61) * FNV_prime
@@ -101,6 +109,7 @@ TEST(EventIdCrossDllTest, SingleCan) {
     EXPECT_EQ(hash_a, expected);
 }
 
+// 测试 事件ID交叉DLL：事件无
 TEST(EventIdCrossDllTest, EventWithout) {
     // 验证 events 命名空间中所有集中定义的事件 ID 之间无哈希碰撞
     constexpr dse::core::EventId ids[] = {
@@ -163,6 +172,7 @@ TEST(EventIdCrossDllTest, EventWithout) {
     }
 }
 
+// 测试 事件ID交叉DLL：设置于且一致
 TEST(EventIdCrossDllTest, SetInAndconsistent) {
     // 验证 events 命名空间中的每个常量都等价于 MakeEventId 直接计算
     EXPECT_EQ(dse::core::events::kUiClick,         dse::core::MakeEventId("UiClick"));

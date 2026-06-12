@@ -29,10 +29,12 @@ protected:
     static constexpr float kAspect = 16.0f / 9.0f;
 };
 
+// 测试 相机系统2D：空世界调用更新不崩溃
 TEST_F(CameraSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kAspect));
 }
 
+// 测试 相机系统2D：情形2
 TEST_F(CameraSystem2DTest, TestCase2) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
@@ -49,6 +51,7 @@ TEST_F(CameraSystem2DTest, TestCase2) {
     EXPECT_NE(cam.projection, glm::mat4(1.0f));
 }
 
+// 测试 相机系统2D：情形3
 TEST_F(CameraSystem2DTest, TestCase3) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
@@ -65,6 +68,7 @@ TEST_F(CameraSystem2DTest, TestCase3) {
     EXPECT_NE(cam.projection, glm::mat4(1.0f));
 }
 
+// 测试 相机系统2D：变换更新
 TEST_F(CameraSystem2DTest, TransformUpdate) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
@@ -80,6 +84,7 @@ TEST_F(CameraSystem2DTest, TransformUpdate) {
     EXPECT_NE(cam.view, glm::mat4(1.0f));
 }
 
+// 测试 相机系统2D：相机跟随Componentfollow目标
 TEST_F(CameraSystem2DTest, CameraFollowComponentfollowTarget) {
     auto target = world.CreateEntity();
     auto& target_tf = world.registry().emplace<TransformComponent>(target);
@@ -106,6 +111,7 @@ TEST_F(CameraSystem2DTest, CameraFollowComponentfollowTarget) {
     EXPECT_FLOAT_EQ(cam_tf.position.x, 100.0f);
 }
 
+// 测试 相机系统2D：相机跟随组件无Movement范围内Dead区域
 TEST_F(CameraSystem2DTest, CameraFollowComponentNoMovementWithinTheDeadZone) {
     auto target = world.CreateEntity();
     auto& target_tf = world.registry().emplace<TransformComponent>(target);
@@ -133,6 +139,7 @@ TEST_F(CameraSystem2DTest, CameraFollowComponentNoMovementWithinTheDeadZone) {
     EXPECT_FLOAT_EQ(cam_tf.position.x, 0.0f);
 }
 
+// 测试 相机系统2D：禁用仍更新
 TEST_F(CameraSystem2DTest, DisabledStillUpdate) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);
@@ -148,6 +155,7 @@ TEST_F(CameraSystem2DTest, DisabledStillUpdate) {
     EXPECT_EQ(cam.projection, glm::mat4(1.0f));
 }
 
+// 测试 相机系统2D：宽高比Ratio Automatic校正当零
 TEST_F(CameraSystem2DTest, AspectRatioAutomaticCorrectionWhenZero) {
     auto e = world.CreateEntity();
     auto& cam = world.registry().emplace<CameraComponent>(e);

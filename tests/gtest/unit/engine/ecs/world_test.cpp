@@ -20,6 +20,7 @@ using namespace dse::core;
 // World 基础功能测试
 // ============================================================
 
+// 测试 世界：创建实体返回有效ID
 TEST(WorldTest, CreateEntityReturnValidID) {
     World world;
     Entity e = world.CreateEntity();
@@ -27,12 +28,14 @@ TEST(WorldTest, CreateEntityReturnValidID) {
     EXPECT_TRUE(world.IsAlive(e));
 }
 
+// 测试 世界：之后创建实体为1
 TEST(WorldTest, AfterCreatingTheEntityIs1) {
     World world;
     world.CreateEntity();
     EXPECT_EQ(world.EntityCount(), 1u);
 }
 
+// 测试 世界：创建多实体递增
 TEST(WorldTest, CreateMultiEntityIncrements) {
     World world;
     world.CreateEntity();
@@ -41,6 +44,7 @@ TEST(WorldTest, CreateMultiEntityIncrements) {
     EXPECT_EQ(world.EntityCount(), 3u);
 }
 
+// 测试 世界：销毁实体之后
 TEST(WorldTest, DestroyEntityAfter) {
     World world;
     Entity e = world.CreateEntity();
@@ -50,6 +54,7 @@ TEST(WorldTest, DestroyEntityAfter) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 世界：Destroydoes不存在实体不崩溃
 TEST(WorldTest, DestroydoesNotExistEntityDoesNotCrash) {
     World world;
     Entity invalid = static_cast<Entity>(99999);
@@ -57,6 +62,7 @@ TEST(WorldTest, DestroydoesNotExistEntityDoesNotCrash) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 世界：为Alive Check实体Survival状态
 TEST(WorldTest, IsAliveCheckEntitySurvivalStatus) {
     World world;
     Entity e = world.CreateEntity();
@@ -66,6 +72,7 @@ TEST(WorldTest, IsAliveCheckEntitySurvivalStatus) {
     EXPECT_FALSE(world.IsAlive(e));
 }
 
+// 测试 世界：清空全部实体
 TEST(WorldTest, ClearClearAllEntities) {
     World world;
     world.CreateEntity();
@@ -77,6 +84,7 @@ TEST(WorldTest, ClearClearAllEntities) {
     EXPECT_EQ(world.EntityCount(), 0u);
 }
 
+// 测试 世界：注册表返回有效引用
 TEST(WorldTest, RegistryReturnAValidReference) {
     World world;
     auto& reg = world.registry();
@@ -100,6 +108,7 @@ protected:
     }
 };
 
+// 测试 世界实例：Instanceentrusted到服务定位器
 TEST_F(WorldInstanceTest, InstanceentrustedToServiceLocator) {
     // 先注册一个 World 实例
     auto world = std::make_shared<World>();
@@ -111,6 +120,7 @@ TEST_F(WorldInstanceTest, InstanceentrustedToServiceLocator) {
     EXPECT_EQ(instance.EntityCount(), 1u);
 }
 
+// 测试 世界实例：实例Throws Exception当不Registered
 TEST_F(WorldInstanceTest, InstanceThrowsExceptionWhenNotRegistered) {
     // 未注册时 Instance() 应抛出异常，要求调用方显式管理 World 生命周期
     EXPECT_THROW({ World::Instance(); }, std::runtime_error);
@@ -120,6 +130,7 @@ TEST_F(WorldInstanceTest, InstanceThrowsExceptionWhenNotRegistered) {
 // 多 World 实例测试
 // ============================================================
 
+// 测试 世界：多世界示例不
 TEST(WorldTest, MultiWorldExampleNot) {
     World world_a;
     World world_b;

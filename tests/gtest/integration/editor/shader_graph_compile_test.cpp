@@ -152,6 +152,7 @@ std::string CompileTestGraph(const GraphState& s) {
 // Tests
 // ============================================================
 
+// 测试 着色器图编译：空生成最小GLSL
 TEST(ShaderGraphCompileTest, Empty_GenerateMinimalGLSL) {
     GraphState s;
     std::string glsl = CompileTestGraph(s);
@@ -160,6 +161,7 @@ TEST(ShaderGraphCompileTest, Empty_GenerateMinimalGLSL) {
     EXPECT_NE(glsl.find("}"), std::string::npos);
 }
 
+// 测试 着色器图编译：单一Floatconstant节点生成
 TEST(ShaderGraphCompileTest, SingleFloatconstantNode_Generate) {
     GraphState s;
     Node n;
@@ -174,6 +176,7 @@ TEST(ShaderGraphCompileTest, SingleFloatconstantNode_Generate) {
     EXPECT_NE(glsl.find("0.75"), std::string::npos);
 }
 
+// 测试 着色器图编译：Colorconstant节点Generatevec 4
 TEST(ShaderGraphCompileTest, ColorconstantNode_Generatevec4) {
     GraphState s;
     Node n;
@@ -189,6 +192,7 @@ TEST(ShaderGraphCompileTest, ColorconstantNode_Generatevec4) {
     EXPECT_NE(glsl.find("n2_col"), std::string::npos);
 }
 
+// 测试 着色器图编译：添加节点Link两个浮点
 TEST(ShaderGraphCompileTest, AddNode_LinkTwoFloat) {
     GraphState s;
     // Float A
@@ -226,6 +230,7 @@ TEST(ShaderGraphCompileTest, AddNode_LinkTwoFloat) {
     EXPECT_NE(glsl.find("n1_val + n2_val"), std::string::npos);
 }
 
+// 测试 着色器图编译：PBR输出默认颜色无Links
 TEST(ShaderGraphCompileTest, PBROutput_DefaultColorForNoLinks) {
     GraphState s;
     Node pbr; pbr.id = 5; pbr.name = "PBR Output";
@@ -238,6 +243,7 @@ TEST(ShaderGraphCompileTest, PBROutput_DefaultColorForNoLinks) {
     EXPECT_NE(glsl.find("vec4(0.8, 0.8, 0.8, 1.0)"), std::string::npos);
 }
 
+// 测试 着色器图编译：PBR输出Link颜色Spread颜色
 TEST(ShaderGraphCompileTest, PBROutput_LinkColor_SpreadColor) {
     GraphState s;
     // Color node
@@ -261,6 +267,7 @@ TEST(ShaderGraphCompileTest, PBROutput_LinkColor_SpreadColor) {
     EXPECT_NE(glsl.find("FragColor = n1_col"), std::string::npos);
 }
 
+// 测试 着色器图编译：情形存在Beforegenerate
 TEST(ShaderGraphCompileTest, Case_ExistBeforegenerate) {
     // Color -> PBR Output
     GraphState s;

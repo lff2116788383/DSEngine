@@ -32,6 +32,7 @@ protected:
     fs::path tmp_dir_;
 };
 
+// 测试 资源扫描器：扫描实体带组件
 TEST_F(AssetScannerTest, ScanEntitiesWithComponents) {
     std::string scene = WriteScene("test.dscene", R"({
         "entities": [
@@ -61,6 +62,7 @@ TEST_F(AssetScannerTest, ScanEntitiesWithComponents) {
     EXPECT_TRUE(contains("test.dscene"));
 }
 
+// 测试 资源扫描器：扫描空场景
 TEST_F(AssetScannerTest, ScanEmptyScene) {
     std::string scene = WriteScene("empty.dscene", R"({"entities": []})");
     auto paths = dse::pak::ScanSceneAssetPaths(scene);
@@ -68,6 +70,7 @@ TEST_F(AssetScannerTest, ScanEmptyScene) {
     EXPECT_EQ(paths[0], "empty.dscene");
 }
 
+// 测试 资源扫描器：扫描动画器3D混合Nodes
 TEST_F(AssetScannerTest, ScanAnimator3DBlendNodes) {
     std::string scene = WriteScene("anim.dscene", R"({
         "entities": [
@@ -96,17 +99,20 @@ TEST_F(AssetScannerTest, ScanAnimator3DBlendNodes) {
     EXPECT_TRUE(contains("anims/run.danim"));
 }
 
+// 测试 资源扫描器：无效文件
 TEST_F(AssetScannerTest, InvalidFile) {
     auto paths = dse::pak::ScanSceneAssetPaths("nonexistent.dscene");
     EXPECT_TRUE(paths.empty());
 }
 
+// 测试 资源扫描器：Malformed JSON
 TEST_F(AssetScannerTest, MalformedJSON) {
     std::string scene = WriteScene("bad.dscene", "not json at all {{{");
     auto paths = dse::pak::ScanSceneAssetPaths(scene);
     EXPECT_TRUE(paths.empty());
 }
 
+// 测试 资源扫描器：收集目录Files
 TEST_F(AssetScannerTest, CollectDirectoryFiles) {
     fs::create_directories(tmp_dir_ / "sub");
     {

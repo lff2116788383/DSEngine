@@ -35,6 +35,7 @@ protected:
     }
 };
 
+// 测试 运行时生命周期冒烟：引擎运行配置默认值
 TEST_F(RuntimeLifecycleSmokeTest, EngineRunConfigDefaultValues) {
     EngineRunConfig config;
     EXPECT_EQ(config.window_width, 800);
@@ -43,6 +44,7 @@ TEST_F(RuntimeLifecycleSmokeTest, EngineRunConfigDefaultValues) {
     EXPECT_FALSE(config.enable_editor);
 }
 
+// 测试 运行时生命周期冒烟：运行时上下文模式切换
 TEST_F(RuntimeLifecycleSmokeTest, RuntimeContextModeSwitch) {
     RuntimeContext ctx;
     EXPECT_EQ(ctx.business_mode, BusinessMode::Lua);
@@ -51,6 +53,7 @@ TEST_F(RuntimeLifecycleSmokeTest, RuntimeContextModeSwitch) {
     EXPECT_EQ(ctx.business_mode, BusinessMode::Cpp);
 }
 
+// 测试 运行时生命周期冒烟：业务运行时桥接无世界当C++模式启动失败
 TEST_F(RuntimeLifecycleSmokeTest, BusinessRuntimeBridgeWithoutWorldWhenCppModeBootFailed) {
     RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;
@@ -62,6 +65,7 @@ TEST_F(RuntimeLifecycleSmokeTest, BusinessRuntimeBridgeWithoutWorldWhenCppModeBo
     EXPECT_FALSE(result);
 }
 
+// 测试 运行时生命周期冒烟：帧管线安全Operation不已初始化
 TEST_F(RuntimeLifecycleSmokeTest, FramePipelineSecurityOperationNotInitialized) {
     FramePipeline pipeline;
     EXPECT_NO_THROW(pipeline.Update(0.016f));
@@ -71,6 +75,7 @@ TEST_F(RuntimeLifecycleSmokeTest, FramePipelineSecurityOperationNotInitialized) 
     EXPECT_EQ(pipeline.LastDrawCalls(), 0);
 }
 
+// 测试 运行时生命周期冒烟：情形5
 TEST_F(RuntimeLifecycleSmokeTest, TestCase5) {
     auto bus = std::make_shared<dse::core::EventBus>();
     ServiceLocator::Instance().Register<dse::core::EventBus, dse::core::EventBus>(bus);
@@ -98,6 +103,7 @@ TEST_F(RuntimeLifecycleSmokeTest, TestCase5) {
     ServiceLocator::Instance().Reset<dse::core::EventBus>();
 }
 
+// 测试 运行时生命周期冒烟：运行时服务Injection且默认
 TEST_F(RuntimeLifecycleSmokeTest, RuntimeServicesInjectionAndDefault) {
     RuntimeServices services;
     EXPECT_EQ(services.world, nullptr);
@@ -109,6 +115,7 @@ TEST_F(RuntimeLifecycleSmokeTest, RuntimeServicesInjectionAndDefault) {
     EXPECT_EQ(services.world, &w);
 }
 
+// 测试 运行时生命周期冒烟：多次数帧管线不崩溃
 TEST_F(RuntimeLifecycleSmokeTest, MultiTimesFramePipelineDoesNotCrash) {
     for (int i = 0; i < 3; ++i) {
         FramePipeline pipeline;
@@ -117,6 +124,7 @@ TEST_F(RuntimeLifecycleSmokeTest, MultiTimesFramePipelineDoesNotCrash) {
     }
 }
 
+// 测试 运行时生命周期冒烟：业务运行时桥接Lua模式Scriptless启动失败
 TEST_F(RuntimeLifecycleSmokeTest, BusinessRuntimeBridgeLuaModeScriptlessBootFails) {
     RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Lua;

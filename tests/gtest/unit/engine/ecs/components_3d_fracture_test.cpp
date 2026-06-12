@@ -10,6 +10,7 @@ using namespace dse;
 
 // ─── FragmentDescriptor ────────────────────────────────────────────────
 
+// 测试 片段描述符：默认值
 TEST(FragmentDescriptorTest, DefaultValues) {
     FragmentDescriptor desc;
     EXPECT_TRUE(desc.mesh_path.empty());
@@ -22,6 +23,7 @@ TEST(FragmentDescriptorTest, DefaultValues) {
     EXPECT_EQ(desc.runtime_vertex_stride, 0);
 }
 
+// 测试 片段描述符：字段修改
 TEST(FragmentDescriptorTest, FieldModification) {
     FragmentDescriptor desc;
     desc.mesh_path = "fragments/frag_00.dmesh";
@@ -36,12 +38,14 @@ TEST(FragmentDescriptorTest, FieldModification) {
 
 // ─── FractureAsset ─────────────────────────────────────────────────────
 
+// 测试 断裂资源：默认值
 TEST(FractureAssetTest, DefaultValues) {
     FractureAsset asset;
     EXPECT_TRUE(asset.source_mesh.empty());
     EXPECT_TRUE(asset.fragments.empty());
 }
 
+// 测试 断裂资源：添加到
 TEST(FractureAssetTest, AddTo) {
     FractureAsset asset;
     asset.source_mesh = "barrel.dmesh";
@@ -59,6 +63,7 @@ TEST(FractureAssetTest, AddTo) {
 
 // ─── FractureTriggerMode ───────────────────────────────────────────────
 
+// 测试 断裂触发模式：枚举值
 TEST(FractureTriggerModeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(FractureTriggerMode::ImpactForce), 0);
     EXPECT_EQ(static_cast<int>(FractureTriggerMode::DamageAccumulation), 1);
@@ -66,6 +71,7 @@ TEST(FractureTriggerModeTest, EnumerationValue) {
 
 // ─── FractureSource ────────────────────────────────────────────────────
 
+// 测试 断裂源：枚举值
 TEST(FractureSourceTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(FractureSource::Prefractured), 0);
     EXPECT_EQ(static_cast<int>(FractureSource::RuntimeVoronoi), 1);
@@ -73,6 +79,7 @@ TEST(FractureSourceTest, EnumerationValue) {
 
 // ─── FractureComponent ────────────────────────────────────────────────
 
+// 测试 断裂组件：默认值
 TEST(FractureComponentTest, DefaultValues) {
     FractureComponent fc;
     EXPECT_EQ(fc.source, FractureSource::Prefractured);
@@ -95,6 +102,7 @@ TEST(FractureComponentTest, DefaultValues) {
     EXPECT_EQ(fc.cached_asset, nullptr);
 }
 
+// 测试 断裂组件：运行时Voronoi配置
 TEST(FractureComponentTest, RuntimeVoronoiConfiguration) {
     FractureComponent fc;
     fc.source = FractureSource::RuntimeVoronoi;
@@ -107,6 +115,7 @@ TEST(FractureComponentTest, RuntimeVoronoiConfiguration) {
     EXPECT_FALSE(fc.cluster_near_impact);
 }
 
+// 测试 断裂组件：模型
 TEST(FractureComponentTest, Model) {
     FractureComponent fc;
     fc.trigger_mode = FractureTriggerMode::DamageAccumulation;
@@ -120,6 +129,7 @@ TEST(FractureComponentTest, Model) {
 
 // ─── FragmentTagComponent ──────────────────────────────────────────────
 
+// 测试 片段标签组件：默认值
 TEST(FragmentTagComponentTest, DefaultValues) {
     FragmentTagComponent tag;
     EXPECT_EQ(tag.source_entity_id, UINT32_MAX);
@@ -129,6 +139,7 @@ TEST(FragmentTagComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(tag.initial_alpha, 1.0f);
 }
 
+// 测试 片段标签组件：情形11
 TEST(FragmentTagComponentTest, TestCase11) {
     FragmentTagComponent tag;
     tag.lifetime = 3.0f;

@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/audio.h"
 
+// 测试 音频源组件：默认值
 TEST(AudioSourceComponentTest, DefaultValues) {
     AudioSourceComponent audio;
     EXPECT_EQ(audio.clip, nullptr);
@@ -22,6 +23,7 @@ TEST(AudioSourceComponentTest, DefaultValues) {
     EXPECT_EQ(audio.runtime_handle, 0u);
 }
 
+// 测试 音频源组件：字段修改
 TEST(AudioSourceComponentTest, FieldModification) {
     AudioSourceComponent audio;
     audio.loop = true;

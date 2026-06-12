@@ -24,6 +24,7 @@
 // UIRendererComponent
 // ============================================================
 
+// 测试 UI渲染器组件：默认值
 TEST(UIRendererComponentTest, DefaultValues) {
     UIRendererComponent ui;
     EXPECT_EQ(ui.texture_handle, 0u);
@@ -39,6 +40,7 @@ TEST(UIRendererComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(ui.pressed_scale, 0.94f);
 }
 
+// 测试 UI渲染器组件：Jiugongge为禁用按默认
 TEST(UIRendererComponentTest, JiugonggeIsDisabledByDefault) {
     UIRendererComponent ui;
     EXPECT_FALSE(ui.nine_slice_enabled);
@@ -50,6 +52,7 @@ TEST(UIRendererComponentTest, JiugonggeIsDisabledByDefault) {
     EXPECT_FLOAT_EQ(ui.nine_slice_src_size.y, 0.0f);
 }
 
+// 测试 UI渲染器组件：Nine方形网格边框赋值
 TEST(UIRendererComponentTest, NineSquareGridBorderAssignment) {
     UIRendererComponent ui;
     ui.nine_slice_enabled = true;
@@ -65,6 +68,7 @@ TEST(UIRendererComponentTest, NineSquareGridBorderAssignment) {
 // UIPanelComponent
 // ============================================================
 
+// 测试 UI面板组件：默认不
 TEST(UIPanelComponentTest, DefaultNot) {
     UIPanelComponent panel;
     EXPECT_FALSE(panel.blocks_input);
@@ -74,6 +78,7 @@ TEST(UIPanelComponentTest, DefaultNot) {
 // UIButtonComponent
 // ============================================================
 
+// 测试 UI按钮组件：默认
 TEST(UIButtonComponentTest, Default) {
     UIButtonComponent btn;
     EXPECT_FLOAT_EQ(btn.normal_color.r, 1.0f);
@@ -85,6 +90,7 @@ TEST(UIButtonComponentTest, Default) {
 // UILabelComponent
 // ============================================================
 
+// 测试 UI标签组件：默认值
 TEST(UILabelComponentTest, DefaultValues) {
     UILabelComponent label;
     EXPECT_TRUE(label.text.empty());
@@ -97,6 +103,7 @@ TEST(UILabelComponentTest, DefaultValues) {
     EXPECT_TRUE(label.dirty);
 }
 
+// 测试 UI标签组件：模型
 TEST(UILabelComponentTest, Model) {
     UILabelComponent label;
     label.numeric_mode = true;
@@ -109,6 +116,7 @@ TEST(UILabelComponentTest, Model) {
 // UIMaskComponent
 // ============================================================
 
+// 测试 UI掩码组件：默认值
 TEST(UIMaskComponentTest, DefaultValues) {
     UIMaskComponent mask;
     EXPECT_TRUE(mask.enabled);
@@ -120,6 +128,7 @@ TEST(UIMaskComponentTest, DefaultValues) {
 // UIRichTextComponent
 // ============================================================
 
+// 测试 UI Rich文本组件：默认值
 TEST(UIRichTextComponentTest, DefaultValues) {
     UIRichTextComponent rich;
     EXPECT_TRUE(rich.text.empty());
@@ -133,6 +142,7 @@ TEST(UIRichTextComponentTest, DefaultValues) {
 // UIJoystickComponent
 // ============================================================
 
+// 测试 UI Joystick组件：默认值
 TEST(UIJoystickComponentTest, DefaultValues) {
     UIJoystickComponent joystick;
     EXPECT_FLOAT_EQ(joystick.direction.x, 0.0f);
@@ -146,6 +156,7 @@ TEST(UIJoystickComponentTest, DefaultValues) {
 // UIAnchorComponent
 // ============================================================
 
+// 测试 UI锚点组件：默认值
 TEST(UIAnchorComponentTest, DefaultValues) {
     UIAnchorComponent anchor;
     EXPECT_EQ(anchor.anchor, 5);
@@ -156,6 +167,7 @@ TEST(UIAnchorComponentTest, DefaultValues) {
 // UIGridLayoutComponent
 // ============================================================
 
+// 测试 UI网格布局组件：默认值
 TEST(UIGridLayoutComponentTest, DefaultValues) {
     UIGridLayoutComponent grid;
     EXPECT_EQ(grid.columns, 1);
@@ -168,6 +180,7 @@ TEST(UIGridLayoutComponentTest, DefaultValues) {
 // UICanvasScalerComponent
 // ============================================================
 
+// 测试 UI画布缩放器组件：默认值
 TEST(UICanvasScalerComponentTest, DefaultValues) {
     UICanvasScalerComponent scaler;
     EXPECT_FLOAT_EQ(scaler.reference_resolution.x, 1920.0f);
@@ -180,6 +193,7 @@ TEST(UICanvasScalerComponentTest, DefaultValues) {
 // UIAnimationComponent
 // ============================================================
 
+// 测试 UI动画组件：默认值
 TEST(UIAnimationComponentTest, DefaultValues) {
     UIAnimationComponent anim;
     EXPECT_FLOAT_EQ(anim.duration, 0.3f);

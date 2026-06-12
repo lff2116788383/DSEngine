@@ -22,6 +22,7 @@ using namespace dse::editor;
 // UndoRedoManager + Commands
 // ============================================================
 
+// 测试 撤销重做管理器：状态
 TEST(UndoRedoManagerTest, State) {
     UndoRedoManager mgr;
     EXPECT_FALSE(mgr.CanUndo());
@@ -32,6 +33,7 @@ TEST(UndoRedoManagerTest, State) {
     EXPECT_EQ(mgr.GetRedoDescription(), "");
 }
 
+// 测试 撤销重做管理器：执行撤销重做
 TEST(UndoRedoManagerTest, Execute_Undo_Redo) {
     UndoRedoManager mgr;
     int value = 0;
@@ -55,6 +57,7 @@ TEST(UndoRedoManagerTest, Execute_Undo_Redo) {
     EXPECT_FALSE(mgr.CanRedo());
 }
 
+// 测试 撤销重做管理器：Executeclear之后重做
 TEST(UndoRedoManagerTest, ExecuteclearAfterRedo) {
     UndoRedoManager mgr;
     int value = 0;
@@ -69,6 +72,7 @@ TEST(UndoRedoManagerTest, ExecuteclearAfterRedo) {
     EXPECT_EQ(value, 2);
 }
 
+// 测试 撤销重做管理器：最大
 TEST(UndoRedoManagerTest, Max) {
     UndoRedoManager mgr(3);
     int value = 0;
@@ -79,6 +83,7 @@ TEST(UndoRedoManagerTest, Max) {
     EXPECT_EQ(mgr.GetUndoCount(), 3); // max_history=3, 只保留最近 3 个
 }
 
+// 测试 撤销重做管理器：Mergemerge
 TEST(UndoRedoManagerTest, Mergemerge) {
     UndoRedoManager mgr;
     int value = 0;
@@ -93,6 +98,7 @@ TEST(UndoRedoManagerTest, Mergemerge) {
     EXPECT_EQ(value, 0); // 撤销到初始值
 }
 
+// 测试 撤销重做管理器：获取历史
 TEST(UndoRedoManagerTest, GetHistory) {
     UndoRedoManager mgr;
     int v = 0;
@@ -112,6 +118,7 @@ TEST(UndoRedoManagerTest, GetHistory) {
     EXPECT_EQ(redo_hist[0], "B");
 }
 
+// 测试 lambda命令：执行撤销
 TEST(LambdaCommandTest, Execute_Undo) {
     int counter = 0;
     LambdaCommand cmd("inc", [&]() { counter++; }, [&]() { counter--; });
@@ -122,6 +129,7 @@ TEST(LambdaCommandTest, Execute_Undo) {
     EXPECT_EQ(cmd.GetDescription(), "inc");
 }
 
+// 测试 lambda命令：合并ID
 TEST(LambdaCommandTest, MergeId) {
     int v = 0;
     LambdaCommand cmd1("drag", [&]() { v = 10; }, [&]() { v = 0; }, "drag_x");
@@ -133,6 +141,7 @@ TEST(LambdaCommandTest, MergeId) {
     EXPECT_EQ(v, 0);  // undo 走最早
 }
 
+// 测试 复合命令：情形9
 TEST(CompoundCommandTest, TestCase9) {
     int a = 0, b = 0;
     auto compound = std::make_unique<CompoundCommand>("batch");
@@ -151,6 +160,7 @@ TEST(CompoundCommandTest, TestCase9) {
     EXPECT_EQ(b, 0);
 }
 
+// 测试 撤销重做管理器：清空
 TEST(UndoRedoManagerTest, Clear) {
     UndoRedoManager mgr;
     int v = 0;
@@ -166,6 +176,7 @@ TEST(UndoRedoManagerTest, Clear) {
 // EditorTestConfig CLI 解析
 // ============================================================
 
+// 测试 编辑器配置：默认值
 TEST(EditorTestConfigTest, DefaultValues) {
     test::EditorTestConfig config;
     EXPECT_FALSE(config.headless);
@@ -175,6 +186,7 @@ TEST(EditorTestConfigTest, DefaultValues) {
     EXPECT_EQ(config.max_frames, 300);
 }
 
+// 测试 编辑器配置：Headless
 TEST(EditorTestConfigTest, Headless) {
     char arg0[] = "editor";
     char arg1[] = "--headless";
@@ -184,6 +196,7 @@ TEST(EditorTestConfigTest, Headless) {
     EXPECT_TRUE(test::HasTestArgs(config));
 }
 
+// 测试 编辑器配置：Replay verify
 TEST(EditorTestConfigTest, Replay_verify) {
     char arg0[] = "editor";
     char arg1[] = "--replay=test.json";
@@ -199,6 +212,7 @@ TEST(EditorTestConfigTest, Replay_verify) {
     EXPECT_TRUE(test::HasTestArgs(config));
 }
 
+// 测试 编辑器配置：无参数当拥有Args为false
 TEST(EditorTestConfigTest, WithoutParametersWhenHasTestArgsIsfalse) {
     char arg0[] = "editor";
     char* argv[] = {arg0};
@@ -206,6 +220,7 @@ TEST(EditorTestConfigTest, WithoutParametersWhenHasTestArgsIsfalse) {
     EXPECT_FALSE(test::HasTestArgs(config));
 }
 
+// 测试 编辑器配置：最大帧负数值回退返回到300
 TEST(EditorTestConfigTest, max_FramesNegativeNumbersFallBackTo300) {
     char arg0[] = "editor";
     char arg1[] = "--max-frames=-5";
@@ -218,6 +233,7 @@ TEST(EditorTestConfigTest, max_FramesNegativeNumbersFallBackTo300) {
 // EditorSettings 默认值
 // ============================================================
 
+// 测试 编辑器设置：默认值
 TEST(EditorSettingsTest, DefaultValues) {
     EditorSettings settings;
     EXPECT_TRUE(settings.recent_files.empty());

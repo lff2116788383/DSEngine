@@ -10,11 +10,13 @@
 
 using namespace scene;
 
+// 测试 场景绑定世界：构造带名称
 TEST(SceneBindWorldTest, ConstructionWithName) {
     Scene s("TestScene");
     EXPECT_EQ(s.GetName(), "TestScene");
 }
 
+// 测试 场景绑定世界：默认世界Usable
 TEST(SceneBindWorldTest, DefaultWorldUsable) {
     Scene s("DefaultWorld");
     auto& world = s.GetWorld();
@@ -27,6 +29,7 @@ TEST(SceneBindWorldTest, DefaultWorldUsable) {
     EXPECT_FLOAT_EQ(t.position.z, 3.0f);
 }
 
+// 测试 场景绑定世界：绑定外部世界
 TEST(SceneBindWorldTest, BindExternalWorld) {
     Scene s("BindTest");
     World external_world;
@@ -47,6 +50,7 @@ TEST(SceneBindWorldTest, BindExternalWorld) {
     EXPECT_EQ(count, 1);
 }
 
+// 测试 场景绑定世界：解绑回退返回到Owned世界
 TEST(SceneBindWorldTest, UnbindFallsBackToOwnedWorld) {
     Scene s("UnbindTest");
 
@@ -67,6 +71,7 @@ TEST(SceneBindWorldTest, UnbindFallsBackToOwnedWorld) {
     EXPECT_EQ(s.GetWorld().registry().view<TransformComponent>().size(), 1u);
 }
 
+// 测试 场景绑定世界：绑定空指针回退返回
 TEST(SceneBindWorldTest, BindNullptrFallsBack) {
     Scene s("NullBind");
     s.BindWorld(nullptr);

@@ -26,6 +26,7 @@ static SpriteDrawItem MakeBase() {
 // 等比缩放模式（src_size = 0,0）
 // ============================================================
 
+// 测试 展开9切片：情形9绘制项
 TEST(Expand9SliceTest, Case9DrawItem) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(200.0f, 100.0f);
@@ -43,6 +44,7 @@ TEST(Expand9SliceTest, Case9DrawItem) {
 // 全零边框：左/右列和上/下行退化，只有中心格存活
 // ============================================================
 
+// 测试 展开9切片：零于有效
 TEST(Expand9SliceTest, ZeroInValid) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(100.0f, 100.0f);
@@ -62,6 +64,7 @@ TEST(Expand9SliceTest, ZeroInValid) {
 // 角块 UV 校验（左下角 col=0,row=0）
 // ============================================================
 
+// 测试 展开9切片：UV正确
 TEST(Expand9SliceTest, UVCorrect) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(150.0f, 75.0f);
@@ -84,6 +87,7 @@ TEST(Expand9SliceTest, UVCorrect) {
 // 右上角 UV 校验（col=2, row=2）
 // ============================================================
 
+// 测试 展开9切片：UV正确2
 TEST(Expand9SliceTest, UVCorrect_2) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(0.0f, 0.0f);
@@ -106,6 +110,7 @@ TEST(Expand9SliceTest, UVCorrect_2) {
 // 屏幕尺寸校验：各格宽高之和应等于 widget 总尺寸（等比模式）
 // ============================================================
 
+// 测试 展开9切片：模型且
 TEST(Expand9SliceTest, ModelAnd) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 center(200.0f, 200.0f);
@@ -134,6 +139,7 @@ TEST(Expand9SliceTest, ModelAnd) {
 // base_item 属性传递（texture_handle / order_in_layer）
 // ============================================================
 
+// 测试 展开9切片：基正确
 TEST(Expand9SliceTest, BaseCorrect) {
     SpriteDrawItem base = MakeBase();
     base.texture_handle = 77u;
@@ -158,6 +164,7 @@ TEST(Expand9SliceTest, BaseCorrect) {
 // 固定角块模式（src_size > 0）：角块屏幕尺寸 = border × src_size，不随 widget 变化
 // ============================================================
 
+// 测试 展开9切片：模型独立
 TEST(Expand9SliceTest, ModelIndependent) {
     SpriteDrawItem base = MakeBase();
     glm::vec4 uv(0.0f, 0.0f, 1.0f, 1.0f);
@@ -179,6 +186,7 @@ TEST(Expand9SliceTest, ModelIndependent) {
     EXPECT_NEAR(corner_w_large, 10.0f, 1e-3f);  // 固定，不随 widget 变化
 }
 
+// 测试 展开9切片：模型仍
 TEST(Expand9SliceTest, ModelStill) {
     SpriteDrawItem base = MakeBase();
     glm::vec2 size(500.0f, 80.0f);
@@ -203,6 +211,7 @@ TEST(Expand9SliceTest, ModelStill) {
     EXPECT_NEAR(total_h, size.y, 1e-3f);
 }
 
+// 测试 展开9切片：模型UV Andmodel
 TEST(Expand9SliceTest, ModelUVAndmodel) {
     // UV 分割点由 border UV 分量决定，与 src_size 无关
     SpriteDrawItem base = MakeBase();

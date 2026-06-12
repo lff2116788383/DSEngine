@@ -67,11 +67,13 @@ protected:
 
 // ── FindLatestCrashReportInDir ────────────────────────────────────────────────
 
+// 测试 编辑器崩溃：查找最新空开启缺失目录
 TEST_F(EditorCrashTest, FindLatest_EmptyOnMissingDir) {
     EXPECT_TRUE(FindLatestCrashReportInDir("definitely/not/here_xyz").empty());
     EXPECT_TRUE(FindLatestCrashReportInDir("").empty());
 }
 
+// 测试 编辑器崩溃：查找最新忽略非编辑器Reports
 TEST_F(EditorCrashTest, FindLatest_IgnoresNonEditorReports) {
     fs::path dir = MakeUniqueTempDir("ignore");
     WriteFile(dir / "crash_DSEngine_20260101_1.txt", "player crash");   // 引擎/玩家进程，前缀不符
@@ -81,6 +83,7 @@ TEST_F(EditorCrashTest, FindLatest_IgnoresNonEditorReports) {
     fs::remove_all(dir);
 }
 
+// 测试 编辑器崩溃：查找最新返回Newest编辑器报告
 TEST_F(EditorCrashTest, FindLatest_ReturnsNewestEditorReport) {
     fs::path dir = MakeUniqueTempDir("newest");
     fs::path older = dir / "crash_DSEngine-Editor_20260101_1.txt";
@@ -98,6 +101,7 @@ TEST_F(EditorCrashTest, FindLatest_ReturnsNewestEditorReport) {
 
 // ── GetEditorCrashDir ────────────────────────────────────────────────────────
 
+// 测试 编辑器崩溃：获取崩溃目录默认且覆盖
 TEST_F(EditorCrashTest, GetCrashDir_DefaultAndOverride) {
     UnsetEnvVar("DSE_CRASH_DIR");
     EXPECT_EQ(GetEditorCrashDir(), "crashes/editor");
@@ -108,6 +112,7 @@ TEST_F(EditorCrashTest, GetCrashDir_DefaultAndOverride) {
 
 // ── Install + breadcrumb/metadata 转发 ───────────────────────────────────────
 
+// 测试 编辑器崩溃：Install设置编辑器单位且Forwards
 TEST_F(EditorCrashTest, Install_SetsEditorIdentityAndForwards) {
     fs::path dir = MakeUniqueTempDir("install");
     SetEnvVar("DSE_CRASH_DIR", dir.string());
@@ -138,6 +143,7 @@ TEST_F(EditorCrashTest, Install_SetsEditorIdentityAndForwards) {
     fs::remove_all(dir);
 }
 
+// 测试 编辑器崩溃：Install禁用按Env
 TEST_F(EditorCrashTest, Install_DisabledByEnv) {
     SetEnvVar("DSE_CRASH_HANDLER", "0");
     InstallEditorCrashHandler();
@@ -146,6 +152,7 @@ TEST_F(EditorCrashTest, Install_DisabledByEnv) {
 
 // ── GetPreviousSessionCrashReport ────────────────────────────────────────────
 
+// 测试 编辑器崩溃：先前Session Snapshots Leftover报告
 TEST_F(EditorCrashTest, PreviousSession_SnapshotsLeftoverReport) {
     fs::path dir = MakeUniqueTempDir("prev");
     fs::path leftover = dir / "crash_DSEngine-Editor_20260101_99.txt";
@@ -159,6 +166,7 @@ TEST_F(EditorCrashTest, PreviousSession_SnapshotsLeftoverReport) {
     fs::remove_all(dir);
 }
 
+// 测试 编辑器崩溃：先前Session空当无Leftover
 TEST_F(EditorCrashTest, PreviousSession_EmptyWhenNoLeftover) {
     fs::path dir = MakeUniqueTempDir("clean");
     SetEnvVar("DSE_CRASH_DIR", dir.string());

@@ -23,6 +23,7 @@ using namespace dse::gameplay3d;
 
 #ifdef DSE_ENABLE_PHYSX
 
+// 测试 载具滚轮配置：默认值
 TEST(VehicleWheelConfigTest, DefaultValues) {
     VehicleWheelConfig cfg;
     EXPECT_FLOAT_EQ(cfg.position.x, 0.0f);
@@ -41,6 +42,7 @@ TEST(VehicleWheelConfigTest, DefaultValues) {
 // VehicleWheelState 默认值
 // ============================================================
 
+// 测试 载具滚轮状态：默认值
 TEST(VehicleWheelStateTest, DefaultValues) {
     VehicleWheelState ws;
     EXPECT_FLOAT_EQ(ws.compression, 0.0f);
@@ -55,6 +57,7 @@ TEST(VehicleWheelStateTest, DefaultValues) {
 // VehicleComponent 默认值
 // ============================================================
 
+// 测试 载具组件：默认值
 TEST(VehicleComponentTest, DefaultValues) {
     VehicleComponent vc;
     EXPECT_TRUE(vc.enabled);
@@ -70,6 +73,7 @@ TEST(VehicleComponentTest, DefaultValues) {
     EXPECT_FALSE(vc.initialized);
 }
 
+// 测试 载具组件：添加到
 TEST(VehicleComponentTest, AddTo) {
     VehicleComponent vc;
     VehicleWheelConfig w;
@@ -86,12 +90,14 @@ TEST(VehicleComponentTest, AddTo) {
 // VehicleSystem 构造安全（无条件编译保护）
 // ============================================================
 
+// 测试 载具系统基础：默认
 TEST(VehicleSystemBasicTest, Default) {
     VehicleSystem sys;
     (void)sys;
     SUCCEED();
 }
 
+// 测试 载具系统基础：设置物理3D空指针安全
 TEST(VehicleSystemBasicTest, SetPhysics3D_NullptrSafety) {
     VehicleSystem sys;
     sys.SetPhysics3D(nullptr);

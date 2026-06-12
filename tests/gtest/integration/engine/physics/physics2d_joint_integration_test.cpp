@@ -48,6 +48,7 @@ protected:
     void TearDown() override { sys.Shutdown(); }
 };
 
+// 测试 物理2D关节集成：链创建成功
 TEST_F(Physics2DJointIntegrationTest, ChainCreateSucceeds) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -65,6 +66,7 @@ TEST_F(Physics2DJointIntegrationTest, ChainCreateSucceeds) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：创建成功
 TEST_F(Physics2DJointIntegrationTest, CreateSucceeds) {
     auto bodyA   = MakeBody(world, 0.0f, 5.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -83,6 +85,7 @@ TEST_F(Physics2DJointIntegrationTest, CreateSucceeds) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：创建成功2
 TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_2) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 0.0f, 1.0f, RigidBody2DType::Dynamic);
@@ -104,6 +107,7 @@ TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_2) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：创建成功3
 TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_3) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Dynamic);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -118,6 +122,7 @@ TEST_F(Physics2DJointIntegrationTest, CreateSucceeds_3) {
     EXPECT_NE(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：销毁关节返回指针为设置到空
 TEST_F(Physics2DJointIntegrationTest, DestroyJointTheBackPointerIsSetToEmpty) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -135,6 +140,7 @@ TEST_F(Physics2DJointIntegrationTest, DestroyJointTheBackPointerIsSetToEmpty) {
     EXPECT_EQ(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：缺失当不创建
 TEST_F(Physics2DJointIntegrationTest, MissingWhenDoesNotCreate) {
     auto bodyA    = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     Entity emptyE = world.CreateEntity();    // 无 RigidBody2DComponent
@@ -149,6 +155,7 @@ TEST_F(Physics2DJointIntegrationTest, MissingWhenDoesNotCreate) {
     EXPECT_EQ(world.registry().get<Joint2DComponent>(jEnt).runtime_joint, nullptr);
 }
 
+// 测试 物理2D关节集成：Reinitposterior关节重建
 TEST_F(Physics2DJointIntegrationTest, ReinitposteriorJointReconstruction) {
     auto bodyA   = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB   = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -169,6 +176,7 @@ TEST_F(Physics2DJointIntegrationTest, ReinitposteriorJointReconstruction) {
 // 马达运行时调速 API
 // ============================================================
 
+// 测试 物理2D关节集成：链当
 TEST_F(Physics2DJointIntegrationTest, ChainWhen) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);
@@ -192,6 +200,7 @@ TEST_F(Physics2DJointIntegrationTest, ChainWhen) {
     EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_torque, 20.0f);
 }
 
+// 测试 物理2D关节集成：当
 TEST_F(Physics2DJointIntegrationTest, When) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 0.0f, 1.0f, RigidBody2DType::Dynamic);
@@ -216,6 +225,7 @@ TEST_F(Physics2DJointIntegrationTest, When) {
     EXPECT_FLOAT_EQ(world.registry().get<Joint2DComponent>(jEnt).max_motor_force, 100.0f);
 }
 
+// 测试 物理2D关节集成：无效实体不崩溃
 TEST_F(Physics2DJointIntegrationTest, InvalidEntityDoesNotCrash) {
     sys.Init(world);
     // 无效实体 — 应静默返回
@@ -226,6 +236,7 @@ TEST_F(Physics2DJointIntegrationTest, InvalidEntityDoesNotCrash) {
     SUCCEED();  // 不崩溃即通过
 }
 
+// 测试 物理2D关节集成：类型不崩溃
 TEST_F(Physics2DJointIntegrationTest, TypeNotDoesNotCrash) {
     auto bodyA  = MakeBody(world, 0.0f, 0.0f, RigidBody2DType::Static);
     auto bodyB  = MakeBody(world, 1.0f, 0.0f, RigidBody2DType::Dynamic);

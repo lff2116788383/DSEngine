@@ -20,17 +20,20 @@
 // Linear 曲线
 // ============================================================
 
+// 测试 粒子曲线：Linearendpoint值
 TEST(ParticleCurveTest, LinearendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
+// 测试 粒子曲线：Linearmidpoint
 TEST(ParticleCurveTest, Linearmidpoint) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 0.0f, 100.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 50.0f);
 }
 
+// 测试 粒子曲线：Linearquarter点
 TEST(ParticleCurveTest, LinearquarterPoint) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.25f), 0.25f);
@@ -41,18 +44,21 @@ TEST(ParticleCurveTest, LinearquarterPoint) {
 // EaseIn 曲线（t^2）
 // ============================================================
 
+// 测试 粒子曲线：缓动Inendpoint值
 TEST(ParticleCurveTest, EaseInendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
+// 测试 粒子曲线：缓动于中点慢启动
 TEST(ParticleCurveTest, EaseInMidpointSlowStart) {
     // EaseIn: shaped_t = 0.5^2 = 0.25, mix(0,1,0.25) = 0.25
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.25f);
 }
 
+// 测试 粒子曲线：缓动于先前值为小于比线性
 TEST(ParticleCurveTest, EaseInThePreviousValueIsLessThanLinear) {
     ParticleCurve ease_in{true, ParticleCurveType::EaseIn, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
@@ -63,18 +69,21 @@ TEST(ParticleCurveTest, EaseInThePreviousValueIsLessThanLinear) {
 // EaseOut 曲线（1 - (1-t)^2）
 // ============================================================
 
+// 测试 粒子曲线：缓动Outendpoint值
 TEST(ParticleCurveTest, EaseOutendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseOut, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
+// 测试 粒子曲线：缓动输出中点Quick启动
 TEST(ParticleCurveTest, EaseOutMidpointQuickStart) {
     // EaseOut: shaped_t = 1-(1-0.5)^2 = 1-0.25 = 0.75, mix(0,1,0.75) = 0.75
     ParticleCurve curve{true, ParticleCurveType::EaseOut, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.75f);
 }
 
+// 测试 粒子曲线：缓动输出先前值为大于比线性
 TEST(ParticleCurveTest, EaseOutThePreviousValueIsGreaterThanLinear) {
     ParticleCurve ease_out{true, ParticleCurveType::EaseOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
@@ -85,18 +94,21 @@ TEST(ParticleCurveTest, EaseOutThePreviousValueIsGreaterThanLinear) {
 // EaseInOut 曲线
 // ============================================================
 
+// 测试 粒子曲线：缓动于Outendpoint值
 TEST(ParticleCurveTest, EaseInOutendpointValue) {
     ParticleCurve curve{true, ParticleCurveType::EaseInOut, 1.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 1.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
+// 测试 粒子曲线：缓动于Outmidpoint
 TEST(ParticleCurveTest, EaseInOutmidpoint) {
     // t=0.5: shaped_t = 2*(0.5)^2 = 0.5, mix(0,1,0.5) = 0.5
     ParticleCurve curve{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.5f), 0.5f);
 }
 
+// 测试 粒子曲线：缓动于输出首个半为Similar缓动于
 TEST(ParticleCurveTest, EaseInOutTheFirstHalfIsSimilarEaseIn) {
     ParticleCurve ease_in_out{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
@@ -104,6 +116,7 @@ TEST(ParticleCurveTest, EaseInOutTheFirstHalfIsSimilarEaseIn) {
     EXPECT_LT(ease_in_out.Evaluate(0.25f), linear.Evaluate(0.25f));
 }
 
+// 测试 粒子曲线：缓动于输出Second半为Similar缓动输出
 TEST(ParticleCurveTest, EaseInOutTheSecondHalfIsSimilarEaseOut) {
     ParticleCurve ease_in_out{true, ParticleCurveType::EaseInOut, 0.0f, 1.0f};
     ParticleCurve linear{true, ParticleCurveType::Linear, 0.0f, 1.0f};
@@ -115,12 +128,14 @@ TEST(ParticleCurveTest, EaseInOutTheSecondHalfIsSimilarEaseOut) {
 // 通用特性
 // ============================================================
 
+// 测试 粒子曲线：Twhen Crossing Lineclamp到01
 TEST(ParticleCurveTest, TwhenCrossingTheLineclampTo01) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 10.0f, 20.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(-1.0f), 10.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(2.0f), 20.0f);
 }
 
+// 测试 粒子曲线：当
 TEST(ParticleCurveTest, When) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 5.0f, 5.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 5.0f);
@@ -128,6 +143,7 @@ TEST(ParticleCurveTest, When) {
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 5.0f);
 }
 
+// 测试 粒子曲线：Towardstartend
 TEST(ParticleCurveTest, Towardstartend) {
     ParticleCurve curve{true, ParticleCurveType::Linear, 10.0f, 0.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(0.0f), 10.0f);
@@ -135,12 +151,14 @@ TEST(ParticleCurveTest, Towardstartend) {
     EXPECT_FLOAT_EQ(curve.Evaluate(1.0f), 0.0f);
 }
 
+// 测试 粒子曲线：缓动于交叉Lineclamp
 TEST(ParticleCurveTest, EaseInCrossTheLineclamp) {
     ParticleCurve curve{true, ParticleCurveType::EaseIn, 0.0f, 100.0f};
     EXPECT_FLOAT_EQ(curve.Evaluate(-0.5f), 0.0f);
     EXPECT_FLOAT_EQ(curve.Evaluate(1.5f), 100.0f);
 }
 
+// 测试 粒子曲线：默认值为单一衰减
 TEST(ParticleCurveTest, TheDefaultValueIsSingleDecays) {
     ParticleCurve curve;
     EXPECT_FALSE(curve.enabled);

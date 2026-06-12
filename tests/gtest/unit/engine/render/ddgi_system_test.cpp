@@ -24,6 +24,7 @@ using namespace dse::render::gi;
 // DDGIVolumeConfig 默认值
 // ============================================================
 
+// 测试 DDGI体积配置：默认值
 TEST(DDGIVolumeConfigTest, DefaultValues) {
     DDGIVolumeConfig cfg;
     EXPECT_FLOAT_EQ(cfg.origin.x, 0.0f);
@@ -41,6 +42,7 @@ TEST(DDGIVolumeConfigTest, DefaultValues) {
 // TotalProbeCount
 // ============================================================
 
+// 测试 DDGI体积配置：总计探针计数
 TEST(DDGIVolumeConfigTest, TotalProbeCount) {
     DDGIVolumeConfig cfg;
     EXPECT_EQ(cfg.TotalProbeCount(), 512);  // 8*8*8
@@ -53,6 +55,7 @@ TEST(DDGIVolumeConfigTest, TotalProbeCount) {
 // ProbeSpacing
 // ============================================================
 
+// 测试 DDGI体积配置：探针Spacing
 TEST(DDGIVolumeConfigTest, ProbeSpacing) {
     DDGIVolumeConfig cfg;
     cfg.extent = glm::vec3(70.0f, 35.0f, 14.0f);
@@ -64,6 +67,7 @@ TEST(DDGIVolumeConfigTest, ProbeSpacing) {
     EXPECT_FLOAT_EQ(spacing.z, 2.0f);
 }
 
+// 测试 DDGI体积配置：探针Spacing单一Axis分辨率1
 TEST(DDGIVolumeConfigTest, ProbeSpacing_SingleAxisResolution1) {
     DDGIVolumeConfig cfg;
     cfg.extent = glm::vec3(10.0f);
@@ -80,6 +84,7 @@ TEST(DDGIVolumeConfigTest, ProbeSpacing_SingleAxisResolution1) {
 // ProbeIndex / ProbeCoord 往返
 // ============================================================
 
+// 测试 DDGI体积配置：探针索引探针Coordround往返
 TEST(DDGIVolumeConfigTest, ProbeIndex_ProbeCoordroundTrip) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
@@ -101,6 +106,7 @@ TEST(DDGIVolumeConfigTest, ProbeIndex_ProbeCoordroundTrip) {
 // ProbePosition
 // ============================================================
 
+// 测试 DDGI体积配置：探针位置原点探针
 TEST(DDGIVolumeConfigTest, ProbePosition_OriginProbe) {
     DDGIVolumeConfig cfg;
     cfg.origin = glm::vec3(10.0f, 20.0f, 30.0f);
@@ -113,6 +119,7 @@ TEST(DDGIVolumeConfigTest, ProbePosition_OriginProbe) {
     EXPECT_FLOAT_EQ(pos.z, 30.0f);
 }
 
+// 测试 DDGI体积配置：探针位置结束探针
 TEST(DDGIVolumeConfigTest, ProbePosition_EndProbe) {
     DDGIVolumeConfig cfg;
     cfg.origin = glm::vec3(0.0f);
@@ -130,6 +137,7 @@ TEST(DDGIVolumeConfigTest, ProbePosition_EndProbe) {
 // Atlas 尺寸
 // ============================================================
 
+// 测试 DDGI体积配置：Irradiance图集尺寸
 TEST(DDGIVolumeConfigTest, IrradianceAtlasSize) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
@@ -141,6 +149,7 @@ TEST(DDGIVolumeConfigTest, IrradianceAtlasSize) {
     EXPECT_EQ(size.y, 24);   // 3 * 8
 }
 
+// 测试 DDGI体积配置：可见性图集尺寸
 TEST(DDGIVolumeConfigTest, VisibilityAtlasSize) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
@@ -155,6 +164,7 @@ TEST(DDGIVolumeConfigTest, VisibilityAtlasSize) {
 // ProbeIrradianceOffset / ProbeVisibilityOffset
 // ============================================================
 
+// 测试 DDGI体积配置：探针Irradiance偏移首个探针
 TEST(DDGIVolumeConfigTest, ProbeIrradianceOffset_FirstProbe) {
     DDGIVolumeConfig cfg;
     cfg.resolution = glm::ivec3(4, 3, 2);
@@ -169,6 +179,7 @@ TEST(DDGIVolumeConfigTest, ProbeIrradianceOffset_FirstProbe) {
 // OctEncode / OctDecode 往返
 // ============================================================
 
+// 测试 八面体映射：往返朝向
 TEST(OctahedralMapTest, RoundTrip_Toward) {
     glm::vec3 dirs[] = {
         { 1, 0, 0}, {-1, 0, 0},
@@ -185,6 +196,7 @@ TEST(OctahedralMapTest, RoundTrip_Toward) {
     }
 }
 
+// 测试 八面体映射：往返朝向2
 TEST(OctahedralMapTest, RoundTrip_Toward_2) {
     glm::vec3 d = glm::normalize(glm::vec3(1.0f, 1.0f, 1.0f));
     glm::vec2 uv = OctEncode(d);
@@ -194,6 +206,7 @@ TEST(OctahedralMapTest, RoundTrip_Toward_2) {
     EXPECT_NEAR(decoded.z, d.z, 0.01f);
 }
 
+// 测试 八面体映射：U Vin范围零到单个
 TEST(OctahedralMapTest, UVinTheRangeZeroToOne) {
     glm::vec3 d = glm::normalize(glm::vec3(-0.3f, 0.7f, -0.5f));
     glm::vec2 uv = OctEncode(d);
@@ -207,6 +220,7 @@ TEST(OctahedralMapTest, UVinTheRangeZeroToOne) {
 // DDGIResources 默认值
 // ============================================================
 
+// 测试 DDGI资源：默认值
 TEST(DDGIResourcesTest, DefaultValues) {
     DDGIResources res;
     EXPECT_EQ(res.irradiance_atlas, 0u);
@@ -220,10 +234,12 @@ TEST(DDGIResourcesTest, DefaultValues) {
 // ProbeState / RSMSample 默认值
 // ============================================================
 
+// 测试 探针状态：对齐16
 TEST(ProbeStateTest, Alignment16) {
     EXPECT_EQ(sizeof(ProbeState) % 16, 0u);
 }
 
+// 测试 RSM采样：对齐16
 TEST(RSMSampleTest, Alignment16) {
     EXPECT_EQ(sizeof(RSMSample) % 16, 0u);
 }
@@ -232,6 +248,7 @@ TEST(RSMSampleTest, Alignment16) {
 // DDGISystem 默认状态
 // ============================================================
 
+// 测试 DDGI系统：默认未初始化
 TEST(DDGISystemTest, DefaultUninitialized) {
     DDGISystem sys;
     EXPECT_FALSE(sys.IsInitialized());
