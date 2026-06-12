@@ -478,16 +478,20 @@ void ShutdownLuaRuntime() {
             DestroyScriptInstance(state.state, static_cast<int>(pair.first), pair.second, false);
         }
         state.script_instances.clear();
+        // 必须在 lua_close 之前 detach：Detach() 会对 lua_State 调用 lua_sethook，
+        // 若先 close 再 detach 则是对已释放的 lua_State 解引用（偶发访问越界）。
+        dse::scripting::LuaDebugger::Instance().Detach();
         DEBUG_LOG_INFO("[LuaRuntime] lua_close state={}", static_cast<void*>(state.state));
         lua_close(state.state);
         state.state = nullptr;
         DEBUG_LOG_INFO("[LuaRuntime] lua_close complete");
+    } else {
+        dse::scripting::LuaDebugger::Instance().Detach();
     }
     state.lua_memory_usage = 0;
     state.awake_called = false;
     state.startup_script_path.clear();
     state.shutting_down = false;
-    dse::scripting::LuaDebugger::Instance().Detach();
     DEBUG_LOG_INFO("[LuaRuntime] Shutdown end");
 }
 
