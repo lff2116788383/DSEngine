@@ -11,6 +11,7 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 
@@ -21,6 +22,7 @@ PlatformApp::KeyCallback         WebApp::s_key_cb_       = nullptr;
 PlatformApp::MouseButtonCallback WebApp::s_mouse_btn_cb_ = nullptr;
 PlatformApp::ScrollCallback      WebApp::s_scroll_cb_    = nullptr;
 PlatformApp::CursorPosCallback   WebApp::s_cursor_pos_cb_= nullptr;
+double                           WebApp::s_dpr_          = 1.0;
 
 void WebApp::GlfwKeyCallback(GLFWwindow*, int key, int, int action, int) {
     if (s_key_cb_) s_key_cb_(key, action);
@@ -35,7 +37,38 @@ void WebApp::GlfwScrollCallback(GLFWwindow*, double, double yoffset) {
 }
 
 void WebApp::GlfwCursorPosCallback(GLFWwindow*, double xpos, double ypos) {
-    if (s_cursor_pos_cb_) s_cursor_pos_cb_(static_cast<float>(xpos), static_cast<float>(ypos));
+    // Emscripten GLFW reports cursor in CSS pixels; scale to drawing-buffer
+    // pixels so coords match the (DPI-aware) framebuffer / Screen size.
+    if (s_cursor_pos_cb_) s_cursor_pos_cb_(static_cast<float>(xpos * s_dpr_),
+                                           static_cast<float>(ypos * s_dpr_));
+}
+
+// --- Canvas size / DPI sync ---
+// The canvas CSS size (shell.html sets it to 100vw x 100vh) follows the
+// window, but the drawing buffer does not auto-track it. Set the drawing
+// buffer to CSS size * devicePixelRatio so rendering is crisp on HiDPI.
+// GetFramebufferSize reports the real canvas size, and the per-frame poll
+// in EngineInstance::RunOneFrame turns a size change into OnWindowResize.
+static const char* const kCanvasTarget = "#canvas";
+
+static void UpdateCanvasSize() {
+    double css_w = 0.0, css_h = 0.0;
+    if (emscripten_get_element_css_size(kCanvasTarget, &css_w, &css_h) != EMSCRIPTEN_RESULT_SUCCESS) {
+        return;
+    }
+    double dpr = emscripten_get_device_pixel_ratio();
+    if (dpr <= 0.0) dpr = 1.0;
+    WebApp::s_dpr_ = dpr;
+    int fb_w = static_cast<int>(std::lround(css_w * dpr));
+    int fb_h = static_cast<int>(std::lround(css_h * dpr));
+    if (fb_w < 1) fb_w = 1;
+    if (fb_h < 1) fb_h = 1;
+    emscripten_set_canvas_element_size(kCanvasTarget, fb_w, fb_h);
+}
+
+static EM_BOOL OnCanvasResize(int /*event_type*/, const EmscriptenUiEvent* /*e*/, void* /*user*/) {
+    UpdateCanvasSize();
+    return EM_FALSE;
 }
 
 // --- 触屏 → 鼠标左键映射（对齐 Android：单指作为 button 0 + 光标位置） ---
@@ -43,8 +76,8 @@ static EM_BOOL OnTouch(int event_type, const EmscriptenTouchEvent* e, void*) {
     if (e->numTouches <= 0) return EM_FALSE;
     const EmscriptenTouchPoint& t = e->touches[0];
     if (WebApp::s_cursor_pos_cb_) {
-        WebApp::s_cursor_pos_cb_(static_cast<float>(t.targetX),
-                                 static_cast<float>(t.targetY));
+        WebApp::s_cursor_pos_cb_(static_cast<float>(t.targetX * WebApp::s_dpr_),
+                                 static_cast<float>(t.targetY * WebApp::s_dpr_));
     }
     if (WebApp::s_mouse_btn_cb_) {
         const int action = (event_type == EMSCRIPTEN_EVENT_TOUCHSTART) ? 1 /*press*/
@@ -92,6 +125,10 @@ bool WebApp::Init(const WindowConfig& config) {
     }
 
     InstallTouchHandlers();
+
+    // Canvas size / DPI: listen for window resize and do an initial sync.
+    emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, EM_TRUE, OnCanvasResize);
+    UpdateCanvasSize();
 
     initialized_ = true;
     return true;
@@ -144,6 +181,15 @@ double WebApp::GetTime() const {
 }
 
 void WebApp::GetFramebufferSize(int& w, int& h) const {
+    // Real drawing-buffer size (already includes devicePixelRatio),
+    // matching what UpdateCanvasSize() applied.
+    int cw = 0, ch = 0;
+    emscripten_get_canvas_element_size(kCanvasTarget, &cw, &ch);
+    if (cw > 0 && ch > 0) {
+        w = cw;
+        h = ch;
+        return;
+    }
     if (window_) {
         glfwGetFramebufferSize(window_, &w, &h);
     }

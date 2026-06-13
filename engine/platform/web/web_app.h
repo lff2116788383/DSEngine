@@ -61,6 +61,7 @@ public:
     static MouseButtonCallback s_mouse_btn_cb_;
     static ScrollCallback s_scroll_cb_;
     static CursorPosCallback s_cursor_pos_cb_;
+    static double s_dpr_;  // devicePixelRatio; scales input coords to drawing-buffer space
 
 private:
     GLFWwindow* window_ = nullptr;
