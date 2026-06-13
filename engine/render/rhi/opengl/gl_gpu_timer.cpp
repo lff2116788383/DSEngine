@@ -18,7 +18,7 @@ GLGpuTimer::~GLGpuTimer() {
 void GLGpuTimer::Init() {
     if (initialized_) return;
 
-#ifdef __ANDROID__
+#if DSE_GL_ES_RUNTIME
     // GLES 核心无时间戳查询（需 GL_EXT_disjoint_timer_query 扩展）；移动端禁用 GPU 计时器。
     DEBUG_LOG_WARN("[GLGpuTimer] timestamp queries unavailable on GLES; GPU timer disabled");
     return;
@@ -58,7 +58,7 @@ GpuTimerId GLGpuTimer::GetOrCreateGpuTimer(const std::string& name) {
     slot.name = name;
     for (int f = 0; f < kFrameCount; ++f) {
         glGenQueries(2, slot.queries[f]);
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
         // 初始化 query 避免首帧读取未发出的 query
         glQueryCounter(slot.queries[f][0], GL_TIMESTAMP);
         glQueryCounter(slot.queries[f][1], GL_TIMESTAMP);
@@ -73,7 +73,7 @@ void GLGpuTimer::BeginGpuTimer(GpuTimerId id) {
     if (!initialized_ || id == kInvalidGpuTimerId) return;
     size_t idx = id - 1;
     if (idx >= slots_.size()) return;
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glQueryCounter(slots_[idx].queries[write_frame_][0], GL_TIMESTAMP);
 #endif
 }
@@ -82,7 +82,7 @@ void GLGpuTimer::EndGpuTimer(GpuTimerId id) {
     if (!initialized_ || id == kInvalidGpuTimerId) return;
     size_t idx = id - 1;
     if (idx >= slots_.size()) return;
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glQueryCounter(slots_[idx].queries[write_frame_][1], GL_TIMESTAMP);
 #endif
 }
@@ -102,7 +102,7 @@ void GLGpuTimer::ResetGpuTimers() {
 
 void GLGpuTimer::ResolveGpuTimers() {
     if (!initialized_) return;
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     for (auto& slot : slots_) {
         GLuint q_begin = slot.queries[read_frame_][0];
         GLuint q_end = slot.queries[read_frame_][1];

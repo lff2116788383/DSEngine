@@ -514,11 +514,19 @@ const std::unordered_map<std::string, ComponentOps>& ComponentOpsTable() {
         {"joint_3d",                MakeOps<dse::Joint3DComponent>()},
         {"character_controller_3d", MakeOps<dse::CharacterController3DComponent>()},
         {"terrain_heightmap",       MakeOps<dse::TerrainHeightmapComponent>()},
+        // Ragdoll/Vehicle/Buoyancy 仅在 3D 物理后端（PhysX/Jolt）启用时定义（见
+        // engine/ecs/components_3d_physics.h），无物理构建（如 Web MVP）下不绑定。
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
         {"ragdoll",                 MakeOps<dse::RagdollComponent>()},
+#endif
         {"soft_body",               MakeOps<dse::SoftBodyComponent>()},
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
         {"vehicle",                 MakeOps<dse::VehicleComponent>()},
+#endif
         {"rope",                    MakeOps<dse::RopeComponent>()},
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
         {"buoyancy",                MakeOps<dse::BuoyancyComponent>()},
+#endif
         {"cloth",                   MakeOps<dse::ClothComponent>()},
         {"fluid_emitter",           MakeOps<dse::FluidEmitterComponent>()},
         // 动画

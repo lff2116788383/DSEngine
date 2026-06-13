@@ -81,6 +81,16 @@ public:
     int Run();
 
     /**
+     * @brief 执行一帧主循环体（PollEvents→Resize→Tick→Present）。
+     * @return 应继续循环返回 true；遇到关闭请求或达到 DSE_MAX_FRAMES 返回 false。
+     *
+     * 供无法阻塞主线程的平台（Web/Emscripten）由外部循环驱动：apps/web_host 通过
+     * emscripten_set_main_loop 反复调用本方法。桌面 Run() 内部循环同样复用它，
+     * 避免主循环逻辑出现两份实现。需先成功调用 Init()。
+     */
+    bool RunOneFrame();
+
+    /**
      * @brief 获取渲染管线
      */
     FramePipeline* pipeline() const { return pipeline_.get(); }
@@ -117,6 +127,14 @@ private:
     float accumulator_ = 0.0f;
     float fixed_time_step_ = 0.02f;
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
+    // 主循环跨帧状态（Run() 与 RunOneFrame() 共用；首次调用 RunOneFrame 惰性初始化）
+    bool  loop_started_ = false;
+    int   loop_max_frames_ = 0;
+    int   loop_screenshot_frame_ = 0;
+    bool  loop_screenshot_taken_ = false;
+    int   loop_frame_counter_ = 0;
+    int   loop_prev_fb_width_ = 0;
+    int   loop_prev_fb_height_ = 0;
     bool is_initialized_ = false;
     bool first_frame_shown_ = false;
     dse::platform::SplashScreen splash_;

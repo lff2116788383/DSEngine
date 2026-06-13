@@ -88,6 +88,29 @@ if(ANDROID)
     message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
 endif()
 
+# --- Emscripten (Web/WASM) 交叉编译默认值 ---
+# Web MVP：WebGL2(=GLES3.0，无 Compute)；关闭桌面/移动专属与重型后端，先把 2D 跑通。
+# 高级特性按 RHI 能力标志在运行时自动门控，核心渲染代码不出现平台宏。
+if(EMSCRIPTEN)
+    set(DSE_ENABLE_VULKAN  OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_D3D11   OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PHYSX   OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_JOLT    OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_3D      OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_NAVMESH OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_NET     OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_HTTP    OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PCH     OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_EDITOR   OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_GTESTS   OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_SHARED   OFF CACHE BOOL "" FORCE)
+    # GLFW3 由 Emscripten 端口提供（-sUSE_GLFW=3）；GLES3 头文件随工具链。编译期亦需该开关。
+    add_compile_options(-sUSE_GLFW=3)
+    message(STATUS "Emscripten build: Vulkan/D3D11/PhysX/Jolt/3D/NavMesh/Net/HTTP/Editor/Launcher/GTest disabled (WebGL2 2D MVP)")
+endif()
+
 
 # --- in-tree 依赖 submodule 完整性检查 ---
 # 本工程所有第三方依赖以 git submodule 形式内置于 depends/，克隆后必须先执行：
@@ -181,10 +204,11 @@ if (MSVC)
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
     add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
-if(NOT ANDROID)
-    include(cmake/CMakeLists.txt.glfw)
-else()
+if(ANDROID OR EMSCRIPTEN)
+    # Android: 使用 AndroidApp；Emscripten: GLFW3 由 -sUSE_GLFW=3 端口提供。均不在 in-tree 编 GLFW。
     set(glfw_sources "")
+else()
+    include(cmake/CMakeLists.txt.glfw)
 endif()
 include(cmake/CMakeLists.txt.FreeType)
 if(DSE_ENABLE_PROFILER)
@@ -250,7 +274,8 @@ include_directories(
     "depends/tinygltf"
 )
 set(DSE_HAS_ASSIMP OFF)
-if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt")
+# Emscripten 2D MVP 不需要 assimp（3D 模型导入）；避免在 WASM 上编译重型库。
+if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt" AND NOT EMSCRIPTEN)
     include_directories("depends/assimp/include")
     set(DSE_HAS_ASSIMP ON)
 endif()
@@ -368,8 +393,8 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
-# Android: 排除 GLFW platform 实现（使用 AndroidApp 替代）
-if(ANDROID)
+# Android / Web(Emscripten): 排除桌面 GLFW platform 实现（各自有专用后端）
+if(ANDROID OR EMSCRIPTEN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
 endif()
 
@@ -377,6 +402,11 @@ endif()
 if(NOT ANDROID)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/android/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/android_asset_fs\\.cpp$")
+endif()
+
+# 非 Emscripten: 排除 Web 专用实现（依赖 emscripten 头文件）
+if(NOT EMSCRIPTEN)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/web/.*\\.cpp$")
 endif()
 
 # D3D11 RHI 后端源文件仅在启用时编译
@@ -429,7 +459,10 @@ elseif(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     # Vehicle / Buoyancy / Fracture / Ragdoll 均已适配 Jolt 后端
 endif()
 if(NOT _HAS_ANY_PHYSICS3D)
-    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
+    # 仅排除 physics3d/ 目录下的后端实现；保留后端无关的 C ABI 包装
+    # (native_api/dse_api_physics3d.cpp 通过 ServiceLocator 取 IPhysics3DSystem，
+    #  无物理服务时回退 ECS 碰撞体遍历/返回空命中，可独立链接)。
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/physics3d/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/vehicle/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/buoyancy/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/ragdoll/.*\\.cpp$")
@@ -457,7 +490,8 @@ endif()
 # Android(arm64 等非 x86)：bundle 的 MCM/TANGELO 高比率编解码器内联了 x86 SSE/MMX intrinsics
 # （emmintrin/mmintrin），无法在 ARM 上编译。DSEngine 仅用 ZIP(miniz/DEFLATE) 路径，这些编解码器
 # 从未被使用，按 bundle 自带的库配置开关排除即可（不改第三方源码、不影响打包/解包功能）。
-if(ANDROID)
+if(ANDROID OR EMSCRIPTEN)
+    # ARM(Android) 与 WASM(Emscripten) 均无 x86 SSE/MMX intrinsics；排除 bundle 的高比率编解码器。
     set_source_files_properties(${bundle_cpp} PROPERTIES
         COMPILE_DEFINITIONS "BUNDLE_NO_MCM;BUNDLE_NO_TANGELO")
 endif()
@@ -670,7 +704,8 @@ endif()
 target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT EMSCRIPTEN)
+    # glad 仅桌面端使用；Android/Web 用静态链接的 GLES3 符号。
     target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/glad/include)
 endif()
 
@@ -680,7 +715,9 @@ if(ANDROID)
 endif()
 
 # --- Linux 桌面链接库 (X11 窗口 + GL + dl + pthread) ---
-if(UNIX AND NOT APPLE AND NOT ANDROID)
+# 注意：Emscripten 也满足 UNIX AND NOT APPLE AND NOT ANDROID，但 GL/audio/线程由
+# emscripten 端口（-lGL/-lal/-lhtml5）提供，且 WASM 无 X11，故必须排除。
+if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
     find_package(Threads REQUIRED)
     target_link_libraries(dse_engine PRIVATE
         X11 Xrandr Xinerama Xcursor Xi
@@ -772,6 +809,12 @@ endfunction()
 function(dse_copy_runtime_dlls target_name)
     add_dependencies(${target_name} dse_copy_assets)
 endfunction()
+
+# Web(Emscripten) 交叉编译：只构建 dse_engine + web_host，跳过桌面 apps / 工具 / 测试 / 打包。
+if(EMSCRIPTEN)
+    add_subdirectory(apps/web_host)
+    return()
+endif()
 
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)

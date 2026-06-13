@@ -641,7 +641,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     }
     if (desc.has_depth) {
         if (desc.cube_map) {
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
             glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture_handle, 0);
             if (num_color == 0) {
                 glDrawBuffer(GL_NONE);
@@ -1156,7 +1156,7 @@ void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* nam
 void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
     if (!supports_ssbo_ || handle == 0 || !dst || size == 0) return;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-#ifdef __ANDROID__
+#if DSE_GL_ES_RUNTIME
     // GLES 无 glGetBufferSubData：用 glMapBufferRange 读回。
     if (void* mapped = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(offset),
                                         static_cast<GLsizeiptr>(size), GL_MAP_READ_BIT)) {
@@ -1513,7 +1513,7 @@ void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
 
 void OpenGLRhiDevice::SetWireframeMode(bool enable) {
     if (!initialized_) return;
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
 #else
     (void)enable;  // GLES 不支持 glPolygonMode 线框模式（编辑器功能，移动端忽略）
