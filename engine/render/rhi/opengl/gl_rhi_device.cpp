@@ -273,15 +273,16 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
-#if defined(__EMSCRIPTEN__)
-    // WebGL2 (GLES 3.0): no SSBO/compute, so the 3D PBR program and the heavy
-    // post-process warmup cannot lower to ESSL300. Initialize only the
-    // dedicated ES3.0 2D batch program (Web target is 2D-only for now).
-    shader_mgr_.InitSprite2DShader();
-#else
-    shader_mgr_.InitBuiltinPBRShader();
-    shader_mgr_.WarmupAllPostProcessShaders();
-#endif
+    // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
+    // notably WebGL2 (GLES 3.0) — cannot lower the 3D PBR program or the heavy
+    // post-process warmup to their shading dialect, so fall back to the
+    // dedicated ES3.0-compatible 2D batch program (current Web target is 2D).
+    if (!supports_ssbo_) {
+        shader_mgr_.InitSprite2DShader();
+    } else {
+        shader_mgr_.InitBuiltinPBRShader();
+        shader_mgr_.WarmupAllPostProcessShaders();
+    }
     resource_mgr_.ledger().shader_programs_created += 1;
 
     // 鍒濆鍖?UBO 绠＄悊鍣?

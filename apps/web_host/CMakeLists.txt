@@ -17,6 +17,7 @@ set(DSE_WEB_PRELOAD_ITEMS
     "data/main.lua"
     "data/icon"
     "data/font"
+    "data/audio"
     CACHE STRING "Repo-relative paths preloaded into the Emscripten MEMFS")
 
 set(_dse_web_link_flags

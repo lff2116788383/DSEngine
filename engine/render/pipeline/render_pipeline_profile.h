@@ -80,6 +80,7 @@ struct RenderPipelineValidationContext {
 const RenderPipelineRegistry& BuiltinRenderPipelineRegistry();
 RenderPipelineProfile MakeForwardPlusDefaultProfile();
 RenderPipelineProfile MakeForwardPlusLiteProfile();
+RenderPipelineProfile MakeForward2DProfile();
 RenderPipelineProfile MakeDebugDepthProfile();
 RenderPipelineLoadResult ResolveRenderPipelineProfileFromEnvironment(const std::string& backend_name,
                                                                     const std::string& data_root);

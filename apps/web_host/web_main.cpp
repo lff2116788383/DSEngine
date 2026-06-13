@@ -14,6 +14,7 @@
 
 #include <emscripten/emscripten.h>
 
+#include <cstdlib>
 #include <memory>
 
 namespace {
@@ -32,6 +33,11 @@ void WebFrame() {
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/) {
+    // Web 为 2D-first MVP：默认选用最小 2D 前向管线，避免在 WebGL2 上运行完整
+    // 延迟着色 + HDR 后处理链（其多 RT ping-pong 在纯 2D 内容上不成立）。
+    // overwrite=0：保留用户通过环境变量的显式覆盖。
+    setenv("DSE_RENDER_PIPELINE_PROFILE", "forward_2d", /*overwrite=*/0);
+
     dse::runtime::EngineRunConfig cfg;
     cfg.window_width  = 1280;
     cfg.window_height = 720;

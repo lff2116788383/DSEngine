@@ -1,22 +1,31 @@
--- DSEngine minimal 2D Web demo (A1 M3 "sprite on screen" + input).
+-- DSEngine minimal 2D Web demo (A1 M3 "sprite on screen" + input + audio).
 -- Self-contained: only the repo data/ dir is preloaded into the Web MEMFS,
 -- so this entry must NOT require() the sample modules under samples/lua.
 -- Lifecycle: the engine calls global Awake() once, then Update(dt) per frame.
 --
--- Controls (these verify the Web input wiring):
+-- Controls (these verify the Web input/audio wiring):
 --   WASD / Arrow keys : move the white hero sprite
 --   Hold Left Mouse   : tint the hero red
+--   Click (press)     : play a one-shot SFX
+--   M                 : toggle the looping background music
 --   Mouse Wheel       : grow / shrink the hero
 
 -- GLFW key codes (no symbolic key constants are exposed to Lua).
 local KEY_W, KEY_A, KEY_S, KEY_D = 87, 65, 83, 68
 local KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT = 265, 264, 263, 262
+local KEY_M = 77
+
+-- The only audio clip shipped under data/ (preloaded into the Web MEMFS).
+local AUDIO_CLIP = "audio/spatial/spatial_ping.wav"
 
 local hero
 local hero_tex = 0
 local hx, hy = 0.0, -2.0
 local hscale = 1.0
 local t = 0.0
+local prev_lmb = false
+local prev_m = false
+local bgm_on = true
 
 local function load_tex(path)
     local h = dse.assets.load_texture(path)
@@ -34,7 +43,7 @@ local function make_sprite(tex, x, y, sx, sy, order, r, g, b, a)
 end
 
 function Awake()
-    dse.app.set_window_title("DSEngine Web - 2D Demo (WASD/Arrows move, LMB tint, wheel zoom)")
+    dse.app.set_window_title("DSEngine Web - 2D Demo (WASD/Arrows move, LMB tint, click=SFX, M=BGM, wheel zoom)")
 
     -- Orthographic 2D camera at the origin.
     local cam = dse.ecs.create_entity()
@@ -51,6 +60,13 @@ function Awake()
 
     -- The interactive hero sprite (driven by input in Update).
     hero = make_sprite(hero_tex, hx, hy, 1.0, 1.0, 1, 1.0, 1.0, 1.0, 1.0)
+
+    -- Looping background music at low volume. WebAudio starts suspended until
+    -- the first user gesture; shell.html calls _dse_resume_audio() then, so
+    -- playback begins on the first click/keypress.
+    if dse.audio and dse.audio.play_bgm then
+        dse.audio.play_bgm(AUDIO_CLIP, 0.2, true)
+    end
 end
 
 local function key(code)
@@ -91,6 +107,24 @@ function Update(delta_time)
     else
         dse.ecs.add_sprite(hero, 1.0, 1.0, 1.0, 1.0, 1, hero_tex)
     end
+
+    -- A click (press edge) plays a one-shot SFX (verifies Web audio output).
+    if pressed and not prev_lmb and dse.audio and dse.audio.play_sfx then
+        dse.audio.play_sfx(AUDIO_CLIP, 0.8)
+    end
+    prev_lmb = pressed and true or false
+
+    -- 'M' (press edge) toggles the background music (verifies pause/resume).
+    local m_down = key(KEY_M)
+    if m_down and not prev_m and dse.audio then
+        bgm_on = not bgm_on
+        if bgm_on then
+            if dse.audio.resume_bgm then dse.audio.resume_bgm() end
+        else
+            if dse.audio.pause_bgm then dse.audio.pause_bgm() end
+        end
+    end
+    prev_m = m_down and true or false
 end
 
 function exit() end

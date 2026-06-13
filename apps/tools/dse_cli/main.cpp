@@ -7,6 +7,8 @@
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
+ *   dse dist --target web [--in=DIR] [--out=DIR]
+ *                                          # 收集 emscripten 产物为可上传(itch.io)的 Web 包
  *   dse help | -h | --help                 # 显示帮助
  *
  * 与运行时端到端对应：加密 build 产物可被 DSEngine_Game 挂载解密并加载 Lua（见
@@ -14,6 +16,7 @@
  */
 
 #include "engine/project/project_scaffold.h"
+#include "engine/project/web_dist.h"
 #include "engine/assets/bundle_packer.h"
 #include "engine/runtime/app_manifest.h"
 
@@ -41,6 +44,8 @@ int PrintUsage(int rc = 1) {
         "  dse pack <dir> <out.bun> [--key=KEY]     把目录打包成(可加密)资源包\n"
         "  dse build <project> [--out=DIR] [--key=KEY]\n"
         "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch 脚本\n"
+        "  dse dist --target web [--in=DIR] [--out=DIR]\n"
+        "                                           收集 emscripten 产物(index.html/.js/.wasm[/.data])为可上传的 Web 包\n"
         "  dse help | -h | --help                   显示本帮助\n"
         "\n"
         "模板 (template):\n"
@@ -58,6 +63,7 @@ int PrintUsage(int rc = 1) {
         "  dse new lua MyGame\n"
         "  dse build MyGame --out dist --key 0123456789abcdef\n"
         "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"
+        "  dse dist --target web --out dist/web   # 之后压缩 dist/web 即可上传 itch.io\n"
         "\n"
         "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 DSEngine_Game; cpp 模板需用 cmake 单独编译。\n";
     return rc;
@@ -372,6 +378,57 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
     return 0;
 }
 
+int CmdDist(const std::vector<std::string>& args, const char* argv0) {
+    std::string target;
+    std::string in_opt;
+    std::string out_opt;
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        std::string v;
+        if (MatchOption(a, "--target=", v)) {
+            target = v;
+        } else if (a == "--target" && i + 1 < args.size()) {
+            target = args[++i];
+        } else if (MatchOption(a, "--in=", v)) {
+            in_opt = v;
+        } else if (MatchOption(a, "--out=", v)) {
+            out_opt = v;
+        }
+    }
+    if (target != "web") {
+        std::cerr << "错误: dist 目前仅支持 --target web\n";
+        return PrintUsage();
+    }
+
+    // 默认输入目录 = dse 自身所在目录（即 bin/，emscripten 产物与桌面产物同处 bin/）。
+    std::error_code ec;
+    fs::path in_dir;
+    if (!in_opt.empty()) {
+        in_dir = in_opt;
+    } else {
+        try {
+            in_dir = fs::absolute(fs::path(argv0)).parent_path();
+        } catch (...) {
+            in_dir = fs::current_path(ec) / "bin";
+        }
+    }
+    const fs::path out_dir = out_opt.empty() ? fs::path("dist") / "web" : fs::path(out_opt);
+
+    dse::project::WebDistResult res =
+        dse::project::CollectWebDistribution(in_dir.string(), out_dir.string());
+    if (!res.ok) {
+        std::cerr << "错误: " << res.error << "\n";
+        return 1;
+    }
+    std::cout << "已收集 " << res.files.size() << " 个 Web 产物 -> "
+              << fs::absolute(out_dir).string() << "  (" << res.total_bytes << " bytes)\n";
+    for (const auto& f : res.files) {
+        std::cout << "  + " << f << "\n";
+    }
+    std::cout << "提示: 压缩该目录(zip)即可上传 itch.io；本机可用 scripts/package_web.ps1 直接打 zip。\n";
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -387,6 +444,7 @@ int main(int argc, char** argv) {
     if (cmd == "new")   return CmdNew(rest);
     if (cmd == "pack")  return CmdPack(rest);
     if (cmd == "build") return CmdBuild(rest, argv[0]);
+    if (cmd == "dist")  return CmdDist(rest, argv[0]);
     if (cmd == "-h" || cmd == "--help" || cmd == "help") {
         return PrintUsage(0);
     }

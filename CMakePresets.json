@@ -103,6 +103,38 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "web-base",
+      "hidden": true,
+      "description": "Web/Emscripten：WebGL2(=GLES3.0) 单线程 2D。需先执行 emsdk 的 emsdk_env 使 $EMSDK 生效；着色器 embed 头由桌面构建预生成(已含 essl300)。",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "condition": {
+        "type": "notEquals",
+        "lhs": "$env{EMSDK}",
+        "rhs": ""
+      },
+      "cacheVariables": {
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
+      }
+    },
+    {
+      "name": "web-debug",
+      "displayName": "Web Debug (wasm/WebGL2)",
+      "inherits": "web-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "web-release",
+      "displayName": "Web Release (wasm/WebGL2)",
+      "inherits": "web-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
@@ -135,6 +167,18 @@
       "name": "wsl-release",
       "displayName": "WSL Release",
       "configurePreset": "wsl-release"
+    },
+    {
+      "name": "web-debug",
+      "displayName": "Web Debug (wasm/WebGL2)",
+      "configurePreset": "web-debug",
+      "targets": ["dse_web_host"]
+    },
+    {
+      "name": "web-release",
+      "displayName": "Web Release (wasm/WebGL2)",
+      "configurePreset": "web-release",
+      "targets": ["dse_web_host"]
     }
   ],
   "testPresets": [

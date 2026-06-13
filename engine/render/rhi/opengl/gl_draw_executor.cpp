@@ -513,16 +513,16 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
     ubo_mgr.BindAll();
 
     // The GL 2D batch normally draws with the PBR program (shared vertex
-    // interface). On Web (WebGL2) PBR cannot lower to ESSL300, so fall back
-    // to the dedicated ES3.0 2D batch program when it is available.
+    // interface). Capability-driven (not platform #ifdef): on contexts that
+    // cannot lower PBR to their dialect (e.g. WebGL2), gl_rhi_device initializes
+    // the dedicated ES3.0 2D batch program instead, so prefer it whenever it
+    // exists. On desktop this handle stays 0 and the PBR program is used.
     const PBRShaderLocations* loc_ptr = &shader_mgr.pbr_locations();
     unsigned int default_prog = shader_mgr.pbr_shader_handle();
-#if defined(__EMSCRIPTEN__)
     if (shader_mgr.sprite2d_shader_handle() != 0) {
         loc_ptr = &shader_mgr.sprite2d_locations();
         default_prog = shader_mgr.sprite2d_shader_handle();
     }
-#endif
     const auto& loc = *loc_ptr;
     const auto& slots = shader_mgr.pbr_texture_slots();
     glUseProgram(default_prog);
