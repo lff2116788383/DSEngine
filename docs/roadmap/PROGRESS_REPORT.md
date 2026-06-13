@@ -2,8 +2,9 @@
 
 > 生成日期：2026-06-10（与代码现状重新核对，仅以源码为准）
 > 二次复核：2026-06-10（逐项 grep 核实；更正风格化渲染 Outline/Edge-Detect 已实现的过时表述；确认 CSM 级联阴影、反射探针(Split-Sum IBL)、本地化、编辑器动画时间轴/撤销重做/性能分析器 均已在代码落地；新增第六节「生产级就绪度评估」）
+> 三次复核：2026-06-13（基于 `feature/engine-lib@f4d8e652`，自上次报告后 +88 提交；仅以源码为准重新逐项核实）。本轮主要变化：① 新增**内存管理子系统**（`engine/core/memory/`：Memory 门面 + Linear/Frame/Pool 分配器 + Handle/HandleTable + 可选 mimalloc 后端）；② 网络新增**玩法级复制层 MVP**（`engine/net/replication/`：服务器权威 Transform 同步 + spawn/快照/属主输入 RPC）；③ **资产热重载新增 Linux inotify 后端**（`asset_manager.cpp`，原仅 Windows）；④ headless **dse CLI** + 端到端加密资源打包；⑤ 启动 Splash（编辑器/运行时/打包游戏/Linux X11）；⑥ CI 增加 editor / Linux / Android 作业；⑦ Lua 绑定大幅补全（C ABI 由 ~330 增至 ~518）。
 > 分支：`feature/engine-lib`
-> 数据来源：代码库直接统计（`git ls-files` + `wc -l` + `grep` 验证）+ 实际 ctest 运行结果
+> 数据来源：代码库直接统计（`git ls-files` + `cat | wc -l` + `grep` 验证）+ 实际 ctest / `--gtest_list_tests` 运行结果
 
 ---
 
@@ -13,22 +14,24 @@
 
 | 维度 | 数值 |
 |------|:----:|
-| **引擎核心 C++** | ~107,582 行（engine/ 90,985 · 326 文件 + modules/ 16,597 · 84 文件）<br>注：engine/ 含 ~5,304 行生成的 `.gen.h` 着色器头 |
-| **编辑器 C++** | ~30,664 行（apps/editor_cpp/ · 126 文件） |
-| **其他 apps** | ~364 行（standalone / runtime / 工具宿主，apps/ 合计 31,028 行） |
-| **测试代码** | ~45,067 行（tests/ · 204 文件，其中 gtest 203 个源文件） |
-| **Lua 脚本** | ~13,650 行（samples/ 10,387 · 68 文件 + examples/ 3,263 · 14 文件） |
-| **自有代码合计** | ~197,000 行（engine+modules+apps+tests+lua samples/examples = 197,327） |
-| **第三方依赖** | ~29 个（depends/ 目录，其中 23 个为 git submodule；旧 LuaSocket 子模块已移除） |
-| **渲染后端** | OpenGL 4.5 / Vulkan / D3D11（基础渲染 + 全部后处理 + Compute 功能三端统一） |
-| **测试体系** | ~2,600 个测试用例实跑（unit 2,048 + integration 510 + smoke 42；定义的 TEST 宏 2,780，含 disabled/参数化） |
+| **引擎核心 C++** | ~115,620 行（engine/ 98,832 · 372 文件 + modules/ 16,788 · 85 文件）<br>注：生成的着色器头现为构建期生成（`build_vs2022/`），不再入库；仓内仅 1 个 `.gen.h` |
+| **编辑器 C++** | ~32,115 行（apps/editor_cpp/ · 139 文件） |
+| **其他 apps** | ~930 行（standalone / runtime / **dse CLI** 等工具宿主；apps/ 合计 33,045 行 · 145 文件） |
+| **测试代码** | ~51,651 行（tests/ · 221 文件） |
+| **Lua 脚本** | ~13,658 行（samples/ 10,387 · 68 文件 + examples/ 3,271 · 14 文件） |
+| **自有代码合计** | ~21.4 万行（engine+modules+apps+tests+lua samples/examples = 213,974） |
+| **第三方依赖** | ~33 个（depends/ 目录，其中 25 个为 git submodule；本轮新增 mimalloc 子模块；旧 LuaSocket 已移除） |
+| **渲染后端** | OpenGL 4.5 / Vulkan / D3D11（基础渲染 + 全部后处理 + Compute 功能三端统一；Vulkan 桌面默认 ON） |
+| **内存子系统** | `engine/core/memory/`（~2,146 行）：Memory 门面（分配/释放 + per-tag 追踪/预算/泄漏报告）+ Linear/Frame/Pool/Object 分配器 + StlAllocator/Dse* 容器 + Handle/HandleTable；可选 mimalloc 后端（`DSE_MEM_BACKEND=mimalloc`，默认 system = 零新依赖） |
+| **测试体系** | 实跑 ~2,512 个 GoogleTest 用例（3D OFF 构建：unit 1,990 + integration 470 + smoke 52，全绿）；定义的 TEST 宏 2,909（含 disabled/参数化/3D 门控） |
 | **引擎库形态** | 默认**静态库** `DSEngine.lib`（Debug 后缀 `_debug`）；可选 `-DDSE_BUILD_SHARED=ON` 输出 `DSEngine.dll`。第三方库（glfw/freetype/lua/spine/imgui 等）编译进引擎库；网络依赖（GNS/protobuf/libsodium/IXWebSocket/OpenSSL）为可选，默认 OFF（旧 LuaSocket 已移除） |
-| **脚本绑定** | Lua（原生 Lua C API + 代码生成 `.gen.cpp`，**非 sol2**）+ C#（`GameScripts/DSEngine/Native.gen.cs` 代码生成）；底层 `dse_*` C ABI ~330 个函数 |
+| **脚本绑定** | Lua（原生 Lua C API + 代码生成 `.gen.cpp`，**非 sol2**；depends/sol2 仅代码中注释提及，未实际用于绑定）+ C#（`GameScripts/DSEngine/Native.gen.cs` 代码生成）；底层 `dse_*` C ABI ~518 个函数（native_api 头定义） |
 
 ### 1.2 功能完整度评分
 
 ```
 核心基础设施          ████████████ 95%  ✅ ServiceLocator/EventBus/JobSystem
+内存管理子系统        ███████████░ 85%  ✅ Memory门面+per-tag追踪/预算+Linear/Frame/Pool+Handle/HandleTable+可选mimalloc(默认system零依赖)
 ECS 实体组件系统       ████████████ 95%  ✅ EnTT 驱动，102 个 *Component 结构体
 2D 游戏玩法           ████████████ 90%  ✅ Sprite/UI/Spine/Tilemap/粒子
 2D 物理 (Box2D)       ████████████ 95%  ✅ 功能丰富
@@ -41,21 +44,45 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 场景管理              ████████████ 85%  ✅ SubScene/Prefab/异步加载
 资产管理              ████████████ 85%  ✅ 异步+LRU+热重载+PAK打包
 编辑器                ████████████ 80%  ✅ 16 个面板模块 / 34 个 ImGui 窗口
-脚本绑定 (Lua/C#)     ████████████ 90%  ✅ dse_* C ABI ~330 函数 + 代码生成 Lua/C# 绑定
-测试体系              ████████████ 90%  ✅ 203 个 gtest 文件，~2,600 个测试用例（实跑全绿）
+脚本绑定 (Lua/C#)     ████████████ 92%  ✅ dse_* C ABI ~518 函数 + 代码生成 Lua/C# 绑定（本轮大幅补全子系统/服务层缺口）
+测试体系              ████████████ 90%  ✅ ~2,909 个 TEST 宏；3D OFF 构建实跑 ~2,512 例（unit 1,990+integration 470+smoke 52）全绿
 实时全局光照 (DDGI)    ███████████░ 85%  ✅ GL/Vulkan/D3D11 三端 Compute 均已移植（GLSL/SPIR-V/HLSL 三套源）
 风格化渲染            ██████░░░░░░ 55%  ✅ Toon/Cel+Banding+Outline+VolumetricFog+LightShaft
 音频系统              █████████░░░ 78%  ✅ BGM/SFX+3D空间+DSP混音总线+效果链(LPF/HPF/BPF/Delay)+Lua API
-跨平台                ████████░░░░ 70%  ✅ 平台抽象层(PlatformApp: glfw桌面 + android后端)；Win(CI)+Linux+Android 三端均有完整构建路径与端到端验证脚本(engine静态库/Lua运行时/APK打包签名)，engine/ 残留 Win32 引用均 #ifdef 守卫；❌ Linux/Android 未纳入 CI、macOS/iOS 无平台后端
-网络                  ████░░░░░░░░ 40%  ✅ 传输层 GNS(可靠/非可靠UDP+lanes+加密,三端)+Lua dse.net/dse.http/dse.serialize；❌ 无玩法级复制/同步层
+跨平台                ████████░░░░ 70%  ✅ 平台抽象层(PlatformApp: glfw桌面 + android后端)；Win(CI)+Linux+Android 三端均有完整构建路径与端到端验证脚本(engine静态库/Lua运行时/APK打包签名)，engine/ 残留 Win32 引用均 #ifdef 守卫；资产热重载 Win(ReadDirectoryChangesW)+Linux(inotify) 双端；CI 已加 editor/linux/android 作业；❌ macOS/iOS 无平台后端、CI 待额度恢复后首跑
+网络                  █████░░░░░░░ 52%  ✅ 传输层 GNS(可靠/非可靠UDP+lanes+加密,三端)+Lua dse.net/dse.http/dse.serialize；🟡 玩法级复制层 MVP(服务器权威Transform同步+spawn/despawn+全量快照+属主输入RPC，回环smoke)；❌ 仍缺快照-delta/预测/插值/AOI/大厅匹配
 ```
 
 ### 1.3 最近提交的增量（`feature/engine-lib` git log）
 
-> 本分支**最新主线**为「网络层（GNS 集成 Phase 1–6）+ Lua 网络/REST/序列化绑定」；
-> 此前主线为「引擎静态库化 + `dse_*` C ABI 抽取 + Codegen 驱动的 Lua/C# 绑定 + 动画/Gameplay3D 模块上提」（S1.x 里程碑）。
+> 本分支**最新主线**（2026-06-13，自顶向下为最近提交）为「内存管理子系统 + 玩法级网络复制层 MVP + headless dse CLI / 启动 Splash / Linux 热重载 / CI 扩面 / Lua 绑定补全」；
+> 此前主线为「网络层（GNS 集成 Phase 1–6）+ Lua 网络/REST/序列化绑定」，再之前为「引擎静态库化 + `dse_*` C ABI 抽取 + Codegen 驱动的 Lua/C# 绑定 + 动画/Gameplay3D 模块上提」（S1.x 里程碑）。
 
-**网络层增量（最新，自顶向下为最近提交）：**
+**最新增量（2026-06-13，自上次报告 `ec8dcdf3` 后 +88 提交，按代码现状核实）：**
+
+| 提交 | 功能 | 复杂度 |
+|:----:|------|:------:|
+| `f4d8e652` | 修复 `ShutdownLuaRuntime` 调试器 detach 的 use-after-free 崩溃 | 🟡 中 |
+| `cfb5de35` | legacy `Animator3D` 支持 2D blend space + 抽取可复用混合逻辑 | 🟡 中 |
+| `994ce113` | **资产热重载 Linux 后端**（inotify）：`FileWatcher` 不再仅 Windows | 🔴 高 |
+| `c9c2e0a8` | **玩法级网络复制层 MVP**：spawn/全量快照/属主输入 RPC 回环（`engine/net/replication/`） | 🔴 高 |
+| `ffdd294f` | 内存 phase 7：`Handle`/`HandleTable` + 可选 mimalloc 后端（depends/mimalloc 子模块） | 🔴 高 |
+| `e024d7b8` | 内存 phase 6：`StlAllocator` + `Dse*` 容器适配器 | 🟡 中 |
+| `85acac5e` | 内存 phase 5：per-tag `MemoryBudget` + AssetManager 统一视图 | 🟡 中 |
+| `6c445caa` | 内存 phase 4：定长 `PoolAllocator` + 原地 `ObjectPool` | 🟡 中 |
+| `f695e1f0` | 内存 phase 3：linear/frame 分配器 + per-thread scratch | 🟡 中 |
+| `96bed866` / `828a703e` | 内存 phase 1–2：Memory 门面 + `SystemAllocator` + per-tag 追踪/泄漏报告 | 🟡 中 |
+| `b454645c` / `495a961d` / `1b7ae807` | **headless dse CLI** + 端到端加密资源打包 + 新 cpp 项目模板 + 编辑器 BuildGame | 🔴 高 |
+| `a0c6fc7e` / `d4652094` / `3de474c6` | 启动 Splash（编辑器/运行时淡入淡出 + 打包游戏 `game.dsmanifest` + Linux/X11 原生） | 🟡 中 |
+| `e0ff6664` / `9967947b` | CI 扩面：覆盖 editor、net/http smoke 注册进 ctest、SDK 打包闭环作业 | 🟡 中 |
+| `0027c72f` / `0c1993c7` / `a45c7058` | Lua 绑定大幅补全（屏幕拾取/ECS 查询/存档/手柄/场景管理/UUID/FootIK），C ABI ~330→~518，API 文档 100% 覆盖 | 🔴 高 |
+| `c6e4b2dd` / `d3cbac9f` / `b8aff6ae` | RHI 统一收口（三端 UBO 填充统一）+ Vulkan 桌面默认 ON + CI 全矩阵 | 🔴 高 |
+| `5cf96314` / `ab144229` | 新增 `CMakePresets.json`（VS2022 打开即编译 + 子模块缺失检测，按构建类型组织 Ninja） | 🟡 中 |
+| `e2fc95eb` / `fa9f38e2` / `fef746c8` / `8185967b` | 编辑器：崩溃捕获薄封装 + Visual Script 控制流→Lua + 碰撞体视图拖编 + Animation Retargeting 面板 | 🔴 高 |
+
+> 上表为本轮新增主线，更早的「网络传输层（GNS）」与「S1.x 里程碑」增量见下两表（保留备查）。
+
+**网络传输层增量（GNS，此前主线）：**
 
 | 提交 | 功能 | 复杂度 |
 |:----:|------|:------:|
@@ -102,7 +129,7 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 
 | 维度 | DSEngine | Unity 6 | Unreal Engine 5 |
 |------|:--------:|:-------:|:---------------:|
-| **代码量** | ~19.7 万行自研 | ~数千万行 | ~数千万行 |
+| **代码量** | ~21.4 万行自研 | ~数千万行 | ~数千万行 |
 | **团队规模** | 个人/小团队 | 数千人 · 数十年 | 数千人 · 数十年 |
 | **核心架构** | EnTT ECS ✅ 数据驱动 | OOP + DOTS ECS（双轨） | Actor OOP（无 ECS） |
 | **多线程 JobSystem** | ✅ 工作窃取+依赖链 | ✅ C# Job System | ✅ TaskGraph |
@@ -112,9 +139,9 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **后处理链** | ✅ Bloom/SSAO/TAA/FXAA/DOF/MotionBlur/SSR/ACES/LightShaft/VolumetricFog | ✅ | ✅ |
 | **GPU Driven 渲染** | ✅ Hi-Z Cull + Indirect Draw | ✅ GPU Resident Drawer | ✅ Nanite |
 | **实时全局光照** | ✅ DDGI Probe（GL/VK/DX11 三端 Compute 均可用） | ✅ HDRP GI | ✅ Lumen |
-| **跨平台** | 🟡 Win(CI)+Linux+Android 构建路径齐备（脚本验证，未纳入 CI）；macOS/iOS 未支持 | ✅ 20+ 平台 | ✅ 20+ 平台 |
+| **跨平台** | 🟡 Win+Linux+Android 构建路径齐备（CI 已加 editor/linux/android 作业，待额度恢复后首跑）；macOS/iOS 未支持 | ✅ 20+ 平台 | ✅ 20+ 平台 |
 | **资源流式加载** | ✅ StreamingManager（Zone 距离触发 + 异步 IO） | ✅ Addressables | ✅ World Partition |
-| **网络模块** | 🟡 传输层完备（GNS UDP + Lua dse.net/http/serialize），无玩法级复制/同步层 | ✅ 完整 | ✅ 完整 |
+| **网络模块** | 🟡 传输层完备（GNS UDP + Lua dse.net/http/serialize）+ 玩法级复制层 MVP（Transform 同步/spawn/快照/属主输入 RPC），仍缺 delta/预测/AOI/匹配 | ✅ 完整 | ✅ 完整 |
 | **编辑器** | ImGui（功能全但体验一般） | ✅ 可视化极成熟 | ✅ 可视化极成熟 |
 | **生态/社区** | ❌ 无 | ✅ Asset Store | ✅ Marketplace |
 | **包体大小** | ~10-20MB | ~100MB+ | ~1GB+ |
@@ -123,23 +150,23 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 
 | 维度 | DSEngine | Godot 4.x | 谁胜出 |
 |------|:--------:|:---------:|:------:|
-| **代码量** | ~19.7 万行 | ~150 万行 | **DSE**（~7.6 倍精简） |
+| **代码量** | ~21.4 万行 | ~150 万行 | **DSE**（~7 倍精简） |
 | **核心架构** | EnTT ECS ✅ 纯正数据驱动 | Node/Scene 树（非 ECS） | **DSE** |
 | **3D 物理** | Jolt（默认）/ PhysX（可选） ✅ 行业标准 | GodotPhysics（自研） | **DSE** |
 | **3D 高级模块** | 布料/流体/破碎/布娃娃/载具 | 需第三方插件 | **DSE** |
 | **编辑器成熟度** | ImGui 实现，功能完整 | 原生 GUI，极其成熟 | **Godot** |
-| **跨平台** | 🟡 Win/Linux/Android（脚本验证，未入 CI）；macOS/iOS 未支持 | ✅ 全平台 | **Godot** |
+| **跨平台** | 🟡 Win/Linux/Android（CI 已配置作业，待额度恢复首跑）；macOS/iOS 未支持 | ✅ 全平台 | **Godot** |
 | **脚本易用性** | C++ + Lua + C# | GDScript（类 Python） | **Godot** |
 | **开源生态** | ❌ 闭源 | ✅ MIT 开源 | **Godot** |
-| **代码可读性** | ✅ ~19.7 万行可通读全部源码 | 150 万行难掌握全貌 | **DSE** |
+| **代码可读性** | ✅ ~21.4 万行可通读全部源码 | 150 万行难掌握全貌 | **DSE** |
 | **渲染能力** | PBR/后处理/阴影/DDGI GI | PBR/后处理/阴影 | **平手/DSE 略胜** |
 | **2D 能力** | 完整 | 行业最佳之一 | **Godot 略胜** |
 
 ### 2.3 核心结论
 
-> **DSEngine 在功能覆盖面 ≈ Godot 4.x**（都有 2D→3D→编辑器→物理→脚本的完整管线，且三端渲染含 Compute/GI），但自研代码量仅为 Godot 的 **~1/7.6**。
+> **DSEngine 在功能覆盖面 ≈ Godot 4.x**（都有 2D→3D→编辑器→物理→脚本的完整管线，且三端渲染含 Compute/GI），但自研代码量仅为 Godot 的 **~1/7**。
 >
-> 在**"架构/体量比"**这个独特维度上，DSE 找不到对手——用一个人能通读的 ~19.7 万行代码，实现了通常需要上百万行才能做到的引擎完整度。
+> 在**"架构/体量比"**这个独特维度上，DSE 找不到对手——用一个人能通读的 ~21.4 万行代码，实现了通常需要上百万行才能做到的引擎完整度。
 
 ---
 
@@ -152,18 +179,19 @@ ECS 实体组件系统       ████████████ 95%  ✅ EnTT 
 | **架构现代** | ECS + JobSystem + RenderGraph + RHI 抽象，与 2026 年行业最佳实践一致，甚至比 UE5（仍以 Actor OOP 为主）更前卫 |
 | **功能广度完整** | 从 2D 到 3D、从物理到脚本、从编辑器到运行时的完整管线，90% 的独立游戏可以在上面直接开发 |
 | **三端渲染对等** | OpenGL / Vulkan / D3D11 基础渲染、后处理、阴影、Instancing、LOD **以及 Compute 功能（DDGI/TressFX/Grass）三端统一**——每个 compute 着色器都提供 GLSL/SPIR-V/HLSL 三套源，经 `CreateComputeShaderEx` 按后端分派 |
-| **C ABI + 双语言脚本** | 底层 `dse_*` C ABI（~330 函数）+ Codegen 自动生成 Lua/C# 绑定，引擎可作为静态库被宿主链接 |
-| **代码量极小** | ~19.7 万行自研代码（含 Lua），个人可在数周内通读全部源码——这是 UE/Unity 数千万行完全做不到的 |
+| **C ABI + 双语言脚本** | 底层 `dse_*` C ABI（~518 函数）+ Codegen 自动生成 Lua/C# 绑定，引擎可作为静态库被宿主链接 |
+| **统一内存子系统** | `engine/core/memory/`：Memory 门面（per-tag 追踪/预算/泄漏报告）+ Linear/Frame/Pool/Object 分配器 + Handle/HandleTable + 可选 mimalloc 后端（默认 system 零新依赖），为大世界/流式加载提供可观测的内存治理 |
+| **代码量极小** | ~21.4 万行自研代码（含 Lua），个人可在数周内通读全部源码——这是 UE/Unity 数千万行完全做不到的 |
 | **零外部锁死** | 核心依赖为 EnTT + Jolt/PhysX + GLFW + Lua（原生 C API）等开源库，无订阅制/分成/License 限制 |
 
 ### ❌ 核心劣势
 
 | 劣势 | 影响等级 | 说明 |
 |:----:|:--------:|------|
-| **跨平台未 CI 看护 / 缺 Apple** | 🟡 中 | 平台抽象层(PlatformApp)已就位，Win(CI)+Linux+Android 三端均有完整构建路径与端到端验证脚本(`scripts/verify_linux_build.sh` 构建 engine 静态库+Lua 运行时 ELF；`scripts/verify_android_apk.ps1` arm64-v8a 交叉编译→NativeActivity→aapt2/zipalign/apksigner 打包签名)，engine/ 残留 Win32 引用均为 #ifdef 守卫的跨平台代码（dlopen/VK surface 等已有 Linux/Android/Apple 分支）；但 Linux/Android 未纳入 CI 持续看护，macOS/iOS 尚无平台后端 |
+| **跨平台缺 Apple / CI 待首跑** | 🟡 中 | 平台抽象层(PlatformApp)已就位，Win+Linux+Android 三端均有完整构建路径与端到端验证脚本(`scripts/verify_linux_build.sh` 构建 engine 静态库+Lua 运行时 ELF；`scripts/verify_android_apk.ps1` arm64-v8a 交叉编译→NativeActivity→aapt2/zipalign/apksigner 打包签名)，engine/ 残留 Win32 引用均为 #ifdef 守卫的跨平台代码（dlopen/VK surface 等已有 Linux/Android/Apple 分支）；**CI 已加 build-linux / build-android / editor-build-d3d11 作业**（`.github/workflows/ci.yml`，复用上述验证脚本），待 CI 额度恢复后首次运行；macOS/iOS 尚无平台后端 |
 | **~~无 GPU Driven 渲染~~** | ✅ 已完成 | Hi-Z Occlusion Culling + Compute 视锥剔除 + Mega VBO/IBO + MultiDrawIndexedIndirect，CPU readback 双保险 |
 | **~~实时全局光照仅 GL~~** | ✅ 已完成 | DDGI Probe 的 Compute 着色器已提供 GLSL/SPIR-V/HLSL 三套源，GL/Vulkan/D3D11 三端均可运行 |
-| **玩法级网络缺失** | 🟡 中 | 传输层已完备（GNS：可靠/非可靠 UDP + lanes + 加密，Win/Linux 运行、Android 编译；Lua 侧 `dse.net`/`dse.http`/`dse.serialize`），但缺玩法级复制/快照-delta/预测/AOI、大厅/匹配；同步逻辑需脚本层自行实现。编辑器侧另有 ControlServer（IXWebSocket JSON-RPC，自动化/AI 桥接） |
+| **玩法级网络仅 MVP** | 🟡 中 | 传输层已完备（GNS：可靠/非可靠 UDP + lanes + 加密，Win/Linux 运行、Android 编译；Lua 侧 `dse.net`/`dse.http`/`dse.serialize`）；**玩法级复制层已有 MVP**（`engine/net/replication/`：`ReplicationServer`/`ReplicationClient`，服务器权威 `TransformComponent` 同步 + spawn/despawn + 全量快照 + 属主输入 RPC，`tests/net/repl_smoke.cpp` 回环验证）；但仍缺快照-delta/预测/插值/AOI、大厅/匹配，复杂同步逻辑仍需脚本层自行扩展。编辑器侧另有 ControlServer（IXWebSocket JSON-RPC，自动化/AI 桥接） |
 | **~~无资源流式加载~~** | ✅ 已完成 | StreamingManager：Zone 距离触发 + 异步 IO 优先级队列 + 每帧预算 + 资源引用持有 + Lua API |
 | **音频系统** | 🟢 中等 | BGM/SFX + 3D 空间 + DSP 混音总线 + LPF/HPF/BPF/Delay 节点图已实现 |
 | **风格化渲染** | 🟢 中等 | Toon/Cel+Banding **及 Outline/Edge-Detect 均已实现**（`OutlinePass` + `edge_detect` 后处理，`builtin_passes.cpp:1551`；组件 `outline_enabled`/`outline_thickness`）；待更多 NPR 风格（描边变体/手绘/网点）深化 |
@@ -278,13 +306,21 @@ Phase 5 — Shader 统一化 + 已知技术债务
   ├── 🟡 Linux/Android 已纳入 CI 配置（`.github/workflows/ci.yml`: build-linux / build-android jobs，复用本地已验证脚本），待 CI 额度恢复后首次运行验证
   └── ⬜ macOS/iOS 平台后端（需 Mac 硬件）
 
-Phase 6 — 网络层（GNS 集成）✅ 传输层 / ⬜ 玩法级
+Phase 6 — 网络层（GNS 集成）✅ 传输层 / 🟡 玩法级 MVP
   ├── ✅ GNS 集成 Phase 1–5（Win/Linux 运行 + Android arm64 编译，engine/net 抽象层 + dse_net_* C ABI）
   ├── ✅ Lua dse.net（游戏 UDP 可靠/非可靠 + lanes + 质量 + 事件回调，回环 smoke 全绿）
   ├── ✅ Lua dse.http（异步 HTTP(S)，IXWebSocket + OpenSSL TLS，供 DeepSeek 等 AI NPC）
   ├── ✅ Lua dse.serialize（自描述二进制序列化，配合 dse.net 收发结构化消息）
-  └── ⬜ 玩法级复制/同步层（状态复制/快照-delta/预测/插值/AOI）、P2P/ICE、iOS arm64（按需，暂未做）
+  ├── 🟡 玩法级复制层 MVP（engine/net/replication：ReplicationServer/Client，服务器权威 Transform 同步 + spawn/despawn + 全量快照 + 属主输入 RPC，repl_smoke 回环验证）
+  └── ⬜ 复制层深化（快照-delta/预测/插值/AOI）、大厅/匹配、P2P/ICE、iOS arm64（按需，暂未做）
        注：网络默认 OFF（DSE_ENABLE_NET / DSE_ENABLE_HTTP），关闭零回归
+
+Phase 7 — 工程化 / 基础设施  ✅（2026-06-13 新增主线）
+  ├── ✅ 内存管理子系统（engine/core/memory：Memory 门面 + per-tag 追踪/预算/泄漏报告 + Linear/Frame/Pool/Object 分配器 + Handle/HandleTable + 可选 mimalloc 后端，默认 system 零新依赖）
+  ├── ✅ headless dse CLI（apps/tools/dse_cli）+ 端到端加密资源打包 + 新 cpp 项目模板 + 编辑器 BuildGame
+  ├── ✅ 启动 Splash（engine/platform/splash_screen：编辑器/运行时淡入淡出 + 打包游戏 game.dsmanifest + Linux/X11 原生）
+  ├── ✅ 资产热重载 Linux inotify 后端（asset_manager.cpp，原仅 Windows）
+  └── ✅ CI 扩面（.github/workflows/ci.yml：build-and-test/editor-build-d3d11/build-linux/build-android + net/http smoke 注册进 ctest）
 ```
 
 #### 依赖关系（均已落地）
@@ -304,44 +340,45 @@ Compute Shader 管线 ──┬── ✅ GPU Driven 渲染
 
 ## 五、一句话总结
 
-> **DSEngine 当前自研代码约 19.7 万行（C++ + Lua），功能覆盖 2D→3D→编辑器→物理→脚本→三端渲染→实时 GI→资源流式加载的完整管线，在"个人/小团队自研引擎"维度里完成度是顶级水准。**
+> **DSEngine 当前自研代码约 21.4 万行（C++ + Lua），功能覆盖 2D→3D→编辑器→物理→脚本→三端渲染→实时 GI→资源流式加载的完整管线，在"个人/小团队自研引擎"维度里完成度是顶级水准。**
 >
-> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——网络已具备完整传输层地基（GNS + Lua 绑定），但缺玩法级复制/同步层；跨平台已具备 Win/Linux/Android 三端构建路径（脚本验证，未入 CI），尚缺 macOS/iOS 与 CI 持续看护。这些深度需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台广度（Godot 全平台 vs DSE 三端且未入 CI、无 Apple）、编辑器体验和社区生态上落后。**
+> **与 UE5/Unity 的差距不在架构设计（ECS/JobSystem/RenderGraph 与行业最佳实践一致），而在功能覆盖深度——网络已具备完整传输层地基（GNS + Lua 绑定）与玩法级复制层 MVP（服务器权威 Transform 同步/spawn/快照/属主输入 RPC），但仍缺 delta/预测/插值/AOI/匹配；跨平台已具备 Win/Linux/Android 三端构建路径（CI 已配置作业，待额度恢复首跑），尚缺 macOS/iOS。这些深度需要成千上万倍的人年投入。GPU Driven 渲染、地形植被、资源流式加载、DDGI 实时 GI、TressFX 毛发等核心特性均已实现，且 DDGI/TressFX/Grass 三组 Compute 着色器已统一移植到 GL/Vulkan/D3D11 三端（GLSL/SPIR-V/HLSL 三套源经 `CreateComputeShaderEx` 分派）。与 Godot 相比，DSE 在 ECS 架构和 3D 物理上占优，但在跨平台广度（Godot 全平台 vs DSE 三端，CI 已配置作业待首跑、无 Apple）、编辑器体验和社区生态上落后。**
 >
-> **当前最大技术债务：① 跨平台覆盖（抽象层已就位、Win/Linux/Android 构建路径齐备但未纳入 CI，macOS/iOS 未支持）；② 玩法级网络缺失（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 已完备，但无复制/同步/预测/AOI）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 正在推进引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~330 个 C ABI 函数）。**
+> **当前最大技术债务：① 跨平台覆盖（抽象层已就位、Win/Linux/Android 构建路径齐备且 CI 已配置作业但待首跑，macOS/iOS 未支持）；② 玩法级网络仅 MVP（传输层 GNS + Lua `dse.net`/`dse.http`/`dse.serialize` 完备，`engine/net/replication` 提供 Transform 复制/spawn/快照/属主输入 RPC 的 MVP，仍缺 delta/预测/AOI/匹配）。原"VK/DX11 Compute 移植"债务已清偿。本分支 `feature/engine-lib` 已落地引擎静态库化与 `dse_*` C ABI 抽取（Codegen 驱动 Lua/C# 绑定，~518 个 C ABI 函数），并新增统一内存管理子系统（engine/core/memory）。**
 >
 > **SDK 测试版 P0 已全部完成：`verify_sdk.ps1` 覆盖 Minimal/Full × Debug/Release 四组合端到端验证、强制共享库构建、头文件边界清理（排除 RHI 后端实现头）、版本号 `0.1.0-alpha` + CHANGELOG。`package_sdk.ps1 -Enable3D` 可产出可被 `find_package(DSEngine)` 消费的发行包。v0.1.0-alpha 已就绪，剩余 P1/P2 为体验优化项。**
 
 ---
 
-## 六、生产级就绪度评估（2026-06-10 代码复核）
+## 六、生产级就绪度评估（2026-06-13 代码复核）
 
 ### 6.1 结论
 
-> **「引擎本体」已达生产级**：面向单平台（Windows）的 2D/3D 独立游戏可直接用于生产——功能广度与 Godot 4.x 相当，测试 ~2,600 例全绿。代码债务极低：全仓库手写源码中仅约 **8 处** 遗留标记（`TODO`×6 / `HACK`×1 / `XXX`×1，`FIXME` 为 0；naïve grep 出的 ~200 个 "XXX" 几乎全是生成着色器头里的 HLSL `.xxx` swizzle，非真实标记）。低标记数表明工作由 roadmap/文档而非散落注释跟踪，是代码整洁度的正向信号，并不代表功能缺失（缺失体现为缺整块子系统，见 6.3）。
-> **「完整商业产品」尚未达生产级**：主要缺玩法级网络、Apple/console 平台 + CI 看护、崩溃遥测等运营工具，以及实战出货验证与生态。详见 6.3。
+> **「引擎本体」已达生产级**：面向单平台（Windows）的 2D/3D 独立游戏可直接用于生产——功能广度与 Godot 4.x 相当，测试 ~2,512 例（3D OFF 构建）全绿。代码债务极低：全仓库手写源码中 `TODO`/`FIXME`/`HACK` 均为 **0**（经 2026-06-13 grep 复核，已随 `76e64aa6` 等提交清零；naïve grep 出的 "XXX" 几乎全是生成着色器头里的 HLSL `.xxx` swizzle，非真实标记）。零标记表明工作由 roadmap/文档而非散落注释跟踪，是代码整洁度的正向信号，并不代表功能缺失（缺失体现为缺整块子系统，见 6.3）。
+> **「完整商业产品」尚未达生产级**：主要缺玩法级网络深度（仅 MVP）、Apple/console 平台 + CI 首跑看护、崩溃遥测聚合后端等运营工具，以及实战出货验证与生态。详见 6.3。
 
 ### 6.2 已具备的生产级能力（均经 grep 核实存在）
 
 | 维度 | 能力 |
 |------|------|
 | **渲染** | 三后端 GL/VK/DX11 均含 Compute；PBR；**CSM 级联阴影**(`CSM_CASCADES=3`)；**反射探针**(`ReflectionProbeComponent` + Split-Sum IBL，`reflection_probe_system.h`)；SSR；**DDGI 实时 GI**(三端)；GPU Driven(Hi-Z + MultiDrawIndexedIndirect)；后处理链(Bloom/SSAO/TAA/FXAA/DOF/MotionBlur/SSR/ACES/LightShaft/VolumetricFog)；风格化(Toon/Cel/Outline) |
-| **内容/系统** | 地形/植被/毛发(TressFX)；2D+3D 粒子；StreamingManager 流式加载；UI 系统 + 序列化；**本地化**(`localization_manager`)；存档/场景序列化 + Prefab；热重载(Windows FileWatcher + Lua reload) |
+| **内容/系统** | 地形/植被/毛发(TressFX)；2D+3D 粒子；StreamingManager 流式加载；UI 系统 + 序列化；**本地化**(`localization_manager`)；存档/场景序列化 + Prefab；热重载(Win `ReadDirectoryChangesW` + Linux `inotify` + Lua reload) |
 | **物理/动画** | Jolt(默认)/Box2D + 布料/流体/破碎/布娃娃/载具等高级模块；动画 FSM/IK/Blend/Morph + **编辑器动画时间轴**(`editor_animation_timeline`) |
-| **工具链** | 编辑器 32 面板 + **撤销/重做**(`editor_entity_snapshot`) + 资产导入器 + **CPU/内存/渲染性能分析器**；AssetBuilder/PAK/DSSL；Codegen 驱动 Lua/C# 绑定(~330 C ABI) |
-| **交付** | SDK v0.1.0-alpha 打包(`verify_sdk.ps1` Minimal/Full × Debug/Release 四组合)；API 文档(Lua/C++) |
+| **工具链** | 编辑器多面板 + **撤销/重做**(`editor_entity_snapshot`) + 资产导入器 + Visual Script→Lua + Animation Retargeting + **CPU/内存/渲染性能分析器**；AssetBuilder/PAK/DSSL；**headless dse CLI** + 端到端加密资源打包；Codegen 驱动 Lua/C# 绑定(~518 C ABI) |
+| **内存** | Memory 门面 + per-tag 追踪/预算/泄漏报告 + Linear/Frame/Pool/Object 分配器 + Handle/HandleTable + 可选 mimalloc 后端(默认 system 零依赖) |
+| **交付** | SDK v0.1.0-alpha 打包(`verify_sdk.ps1` Minimal/Full × Debug/Release 四组合)；启动 Splash(编辑器/运行时/打包游戏/Linux X11)；API 文档(Lua/C++) |
 
 ### 6.3 距「完整生产级」仍缺（按优先级）
 
 | 优先级 | 缺口 | 说明 |
 |:------:|------|------|
-| 🔴 | **玩法级网络层** | 传输层 GNS 完备，缺复制/快照-delta/预测/插值/AOI、大厅/匹配；同步逻辑现需脚本层自实现 |
-| 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端（需 Mac 硬件）；Linux/Android 已加入 CI 配置（`ci.yml` build-linux/build-android，复用本地已验证脚本），待 CI 额度恢复后首次运行验证 |
+| 🟡 | **玩法级网络（仅 MVP）** | 传输层 GNS 完备；玩法级复制层已有 MVP（`engine/net/replication/`：服务器权威 Transform 同步 + spawn/快照 + 属主输入 RPC），仍缺快照-delta/预测/插值/AOI、大厅/匹配；复杂同步逻辑现需脚本层自实现 |
+| 🔴 | **平台广度 / CI** | 无 macOS/iOS 平台后端（需 Mac 硬件）；Linux/Android/editor 已加入 CI 配置（`ci.yml` build-linux/build-android/editor-build-d3d11，复用本地已验证脚本），待 CI 额度恢复后首次运行验证 |
 | 🟢 | **运维可观测性（崩溃报告）** | ✅ 已实现 `engine/diagnostics` 进程级崩溃捕获：全局异常/信号处理器 + Windows minidump(.dmp) + 可读崩溃报告(.txt，含版本/异常/符号化调用栈/加载模块/面包屑/自定义元数据)，引擎启动默认安装（`DSE_CRASH_HANDLER=0` 可关）。上传做成服务器无关：可选注册 `UploadCallback`（自建端点复用 dse.http，或接 Sentry/BugSplat），引擎不内置后端，零服务器即可用。剩余可选项：聚合面板/趋势遥测（需后端） |
-| 🟡 | **跨平台热重载** | `FileWatcher` 仅 Windows 实现（`asset_manager.cpp:2050` 非 Windows 平台 not implemented）|
+| 🟢 | **跨平台热重载** | ✅ `FileWatcher` 已覆盖 Win（`ReadDirectoryChangesW`）+ Linux（`inotify`，`asset_manager.cpp` `__linux__ && !__ANDROID__` 分支）；仅 Android 与 Apple 尚未接热重载 |
 | 🟡 | **终端分发** | 仅 SDK 包 + Android APK，缺面向终端用户的游戏打包/安装器/Redist 清单 |
 | 🟢 | **实战验证 / 生态** | 尚无用 DSE 出货的完整游戏(battle-testing)、无社区/插件市场；编辑器 UX 不及原生 GUI 引擎 |
 
 ### 6.4 一句话
 
-> **引擎本体已生产级（单平台、功能广度对标 Godot、测试充分）；商业产品尚未——主要缺网络玩法层、Apple/CI，以及实战出货与生态验证（崩溃报告已落地，剩余为可选的聚合遥测后端）。**
+> **引擎本体已生产级（单平台、功能广度对标 Godot、测试充分；本轮新增统一内存子系统）；商业产品尚未——主要缺网络玩法层深度（已有复制层 MVP，缺 delta/预测/AOI/匹配）、Apple/CI 首跑，以及实战出货与生态验证（崩溃报告、热重载 Linux 化、dse CLI 已落地，剩余为可选的聚合遥测后端）。**
