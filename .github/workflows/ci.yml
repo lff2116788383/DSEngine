@@ -270,3 +270,57 @@ jobs:
             -Abi arm64-v8a -ApiLevel 24 `
             -BuildTools $env:ANDROID_BUILD_TOOLS -Platform $env:ANDROID_TARGET_PLATFORM `
             -HostShaderCompiler "$PWD/bin/dse_shader_compiler"
+
+  # ---------------------------------------------------------------------------
+  # Web (Emscripten / WebGL2) build. Mirrors build-android: the cross build needs
+  # a host-built dse_shader_compiler. The EMSCRIPTEN CMake branch returns before
+  # the shader-gen custom command, so embed/*.gen.h (incl. ESSL 300) must be
+  # generated explicitly before the wasm link.
+  build-web:
+    runs-on: ubuntu-latest
+    name: web-wasm-webgl2
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install host build deps (for dse_shader_compiler)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Build host shader compiler (x86_64 -> bin/dse_shader_compiler)
+        run: |
+          cmake -S . -B build_host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+          cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
+
+      - name: Generate shader embed headers (incl. ESSL 300 for WebGL2)
+        run: |
+          ./bin/dse_shader_compiler \
+            --input-dir engine/render/shaders/src \
+            --output-dir engine/render/shaders/generated \
+            --target all --embed
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Configure (emcmake) + build dse_web_host
+        run: |
+          emcmake cmake -S . -B build_web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_HOST_SHADER_COMPILER="$PWD/bin/dse_shader_compiler"
+          cmake --build build_web --target dse_web_host -j "$(nproc)"
+
+      - name: Verify web artifacts (index.html / .js / .wasm)
+        run: |
+          ls -lh bin/index.html bin/index.js bin/index.wasm

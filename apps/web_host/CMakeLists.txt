@@ -9,8 +9,15 @@ target_link_libraries(dse_web_host PRIVATE dse_engine)
 set_target_properties(dse_web_host PROPERTIES OUTPUT_NAME "index" SUFFIX ".html")
 
 # 资源预打包目录：把工程 data/ 打进 MEMFS（运行时只读 VFS）。
-set(DSE_WEB_PRELOAD_DIR "${CMAKE_SOURCE_DIR}/data" CACHE PATH
-    "Directory preloaded into the Emscripten MEMFS via --preload-file")
+# Curated MEMFS preload: only the assets the Web 2D demo actually needs, so
+# the .data payload stays small (the full data/ tree contains large demo
+# assets like vse_demo/ and mirror_assets/ that are not used on Web).
+# Each entry maps <repo>/<path> to /<path> in MEMFS.
+set(DSE_WEB_PRELOAD_ITEMS
+    "data/main.lua"
+    "data/icon"
+    "data/font"
+    CACHE STRING "Repo-relative paths preloaded into the Emscripten MEMFS")
 
 set(_dse_web_link_flags
     "-sUSE_GLFW=3"
@@ -23,9 +30,12 @@ set(_dse_web_link_flags
     "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
 )
 
-if(EXISTS "${DSE_WEB_PRELOAD_DIR}")
-    list(APPEND _dse_web_link_flags "--preload-file=${DSE_WEB_PRELOAD_DIR}@/data")
-endif()
+foreach(_item IN LISTS DSE_WEB_PRELOAD_ITEMS)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/${_item}")
+        list(APPEND _dse_web_link_flags
+            "--preload-file=${CMAKE_SOURCE_DIR}/${_item}@/${_item}")
+    endif()
+endforeach()
 
 target_link_options(dse_web_host PRIVATE ${_dse_web_link_flags})
 

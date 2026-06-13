@@ -1930,6 +1930,11 @@ std::size_t AssetManager::EvictLRU() {
 // ============================================================
 
 void AssetManager::StartFileWatcher() {
+#if defined(__EMSCRIPTEN__)
+    // Web has no pthreads and assets live in MEMFS (no host FS to watch);
+    // skip the background hot-reload watcher thread.
+    return;
+#endif
     if (file_watcher_running_.load()) {
         return;
     }

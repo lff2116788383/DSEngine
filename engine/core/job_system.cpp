@@ -21,6 +21,12 @@ JobSystem::~JobSystem() {
 }
 
 void JobSystem::Init() {
+#if defined(__EMSCRIPTEN__)
+    // WebGL2/WASM build links single-threaded (no -pthread): std::thread
+    // construction throws std::system_error and aborts. Leave the pool
+    // uninitialized so Submit/Execute fall back to synchronous execution.
+    return;
+#endif
     int num_threads = 0;
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);

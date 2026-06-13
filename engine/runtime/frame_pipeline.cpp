@@ -581,7 +581,9 @@ bool FramePipeline::Init() {
     const bool enable_gameplay3d = runtime_modules.empty() ||
         std::find(runtime_modules.begin(), runtime_modules.end(), "Gameplay3D") != runtime_modules.end();
     DEBUG_LOG_INFO("FramePipeline init: Gameplay3D module enabled={}", enable_gameplay3d);
-#ifdef DSE_ENABLE_3D
+#if defined(DSE_ENABLE_3D) && !defined(__EMSCRIPTEN__)
+    // Web has no pthreads: Jolt JobSystemThreadPool spawns std::thread and
+    // would abort. Web target is 2D-only, so skip 3D physics entirely.
     {
         auto sys = CreatePhysics3DSystem();
         if (sys && sys->Init(*runtime_context_.world)) {

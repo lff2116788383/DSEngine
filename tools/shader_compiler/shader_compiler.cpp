@@ -290,6 +290,37 @@ static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
 }
 
 // ============================================================================
+// spirv-cross: SPIR-V -> ESSL 300 (OpenGL ES 3.0 / WebGL2)
+// ============================================================================
+
+static std::string CrossCompileToESSL300(const std::vector<uint32_t>& spirv,
+                                          EShLanguage stage) {
+    // OpenGL ES 3.0 (WebGL2) has no compute stage; skip it (ESSL 310 covers it).
+    if (stage == EShLangCompute) return "";
+    try {
+        spirv_cross::CompilerGLSL compiler(spirv);
+        spirv_cross::CompilerGLSL::Options options;
+        options.version = 300;
+        options.es = true;
+        options.vulkan_semantics = false;
+        options.enable_420pack_extension = false;
+        compiler.set_common_options(options);
+
+        auto resources = compiler.get_shader_resources();
+        for (auto& pc : resources.push_constant_buffers) {
+            compiler.set_decoration(pc.id, spv::DecorationBinding, 0);
+        }
+
+        std::string essl = compiler.compile();
+        essl = FlattenPushConstantsInGLSL(essl);
+        return essl;
+    } catch (const spirv_cross::CompilerError& e) {
+        std::cerr << "[ERROR] spirv-cross ESSL300: " << e.what() << "\n";
+        return "";
+    }
+}
+
+// ============================================================================
 // HLSL 后处理: 合并超限 sampler (SM5.0 最多 16 个 s0-s15)
 // ============================================================================
 
@@ -1154,6 +1185,7 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
                                         const std::vector<uint32_t>& spirv,
                                         const std::string& glsl430,
                                         const std::string& essl310,
+                                        const std::string& essl300,
                                         const std::string& hlsl,
                                         const std::vector<uint8_t>& dxbc = {}) {
     std::ostringstream ss;
@@ -1188,6 +1220,10 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
     // ESSL 310 (OpenGL ES 3.1 / Android)
     ss << "// OpenGL ES ESSL 310\n";
     EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_essl310", essl310);
+
+    // ESSL 300 (OpenGL ES 3.0 / WebGL2) -- empty when the shader cannot lower to ES 3.0
+    ss << "// OpenGL ES ESSL 300\n";
+    EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_essl300", essl300);
 
     // HLSL SM5 — split into chunks to avoid MSVC C2026
     ss << "// DX11 HLSL SM5.0\n";
@@ -1342,9 +1378,11 @@ int main(int argc, char* argv[]) {
 
         // Generate embed header
         std::string essl310;
+        std::string essl300;
         if (opts.embed) {
             if (glsl430.empty()) glsl430 = CrossCompileToGLSL430(spirv, stage);
             essl310 = CrossCompileToESSL310(spirv, stage);
+            essl300 = CrossCompileToESSL300(spirv, stage);
             if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage);
 
             // Compile HLSL to DXBC bytecode (Windows only)
@@ -1363,7 +1401,7 @@ int main(int argc, char* argv[]) {
             }
 #endif
 
-            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl430, essl310, hlsl, dxbc);
+            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl430, essl310, essl300, hlsl, dxbc);
             fs::path header_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + ".gen.h");
             WriteFile(header_path, header);
 
@@ -1377,6 +1415,7 @@ int main(int argc, char* argv[]) {
         std::cout << "OK (spv:" << spirv.size() * 4 << "B";
         if (!glsl430.empty()) std::cout << " glsl:" << glsl430.size() << "B";
         if (!essl310.empty() && opts.embed) std::cout << " essl310:" << essl310.size() << "B";
+        if (!essl300.empty() && opts.embed) std::cout << " essl300:" << essl300.size() << "B";
         if (!hlsl.empty()) std::cout << " hlsl:" << hlsl.size() << "B";
         std::cout << ")\n";
         success_count++;
@@ -1460,6 +1499,7 @@ int main(int argc, char* argv[]) {
                     if (opts.embed) {
                         if (v_glsl430.empty()) v_glsl430 = CrossCompileToGLSL430(v_spirv, stage);
                         std::string v_essl310 = CrossCompileToESSL310(v_spirv, stage);
+                        std::string v_essl300 = CrossCompileToESSL300(v_spirv, stage);
                         if (v_hlsl.empty()) v_hlsl = CrossCompileToHLSL(v_spirv, stage);
 
                         std::vector<uint8_t> v_dxbc;
@@ -1476,7 +1516,7 @@ int main(int argc, char* argv[]) {
 #endif
                         std::string v_header = GenerateEmbedHeader(
                             variant_name, stage_suffix, v_spirv,
-                            v_glsl430, v_essl310, v_hlsl, v_dxbc);
+                            v_glsl430, v_essl310, v_essl300, v_hlsl, v_dxbc);
                         fs::path v_hdr_path = opts.output_dir / "embed" /
                             (variant_name + "_" + stage_suffix + ".gen.h");
                         WriteFile(v_hdr_path, v_header);

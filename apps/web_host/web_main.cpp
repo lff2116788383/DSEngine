@@ -38,7 +38,7 @@ int main(int /*argc*/, char** /*argv*/) {
     cfg.window_title  = "DSEngine Web";
     cfg.business_mode = BusinessMode::Lua;  // BusinessMode 在全局命名空间（runtime_context.h）
     cfg.enable_editor = false;
-    cfg.startup_lua_script_path = "main.lua";
+    cfg.startup_lua_script_path = "data/main.lua";
 
     g_instance = std::make_unique<dse::runtime::EngineInstance>(cfg);
     if (!g_instance->Init()) {

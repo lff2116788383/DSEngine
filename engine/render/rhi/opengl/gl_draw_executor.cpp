@@ -512,9 +512,20 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
 
     ubo_mgr.BindAll();
 
-    const auto& loc = shader_mgr.pbr_locations();
+    // The GL 2D batch normally draws with the PBR program (shared vertex
+    // interface). On Web (WebGL2) PBR cannot lower to ESSL300, so fall back
+    // to the dedicated ES3.0 2D batch program when it is available.
+    const PBRShaderLocations* loc_ptr = &shader_mgr.pbr_locations();
+    unsigned int default_prog = shader_mgr.pbr_shader_handle();
+#if defined(__EMSCRIPTEN__)
+    if (shader_mgr.sprite2d_shader_handle() != 0) {
+        loc_ptr = &shader_mgr.sprite2d_locations();
+        default_prog = shader_mgr.sprite2d_shader_handle();
+    }
+#endif
+    const auto& loc = *loc_ptr;
     const auto& slots = shader_mgr.pbr_texture_slots();
-    glUseProgram(shader_mgr.pbr_shader_handle());
+    glUseProgram(default_prog);
     if (state_mgr.active_pipeline_state() != 0) {
         state_mgr.ApplyState(state_mgr.active_pipeline_state());
     } else {
@@ -591,7 +602,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
                 if (sdf_loc.shadow_softness >= 0) glUniform1f(sdf_loc.shadow_softness, cur_sdf_params.w);
             }
         } else if (!want_sdf && using_sdf_shader) {
-            glUseProgram(shader_mgr.pbr_shader_handle());
+            glUseProgram(default_prog);
             glUniform1i(loc.texture, slots.albedo);
             if (loc.model >= 0) {
                 const glm::mat4 identity(1.0f);
@@ -611,7 +622,7 @@ void GLDrawExecutor::DrawBatch(const std::vector<SpriteDrawItem>& items,
                 using_vfx_shader = true;
             }
         } else if (!current_vfx.enabled && using_vfx_shader) {
-            glUseProgram(shader_mgr.pbr_shader_handle());
+            glUseProgram(default_prog);
             glUniform1i(loc.texture, slots.albedo);
             if (loc.model >= 0) {
                 const glm::mat4 identity(1.0f);

@@ -56,6 +56,8 @@
 #include "embed/gbuffer_frag.gen.h"
 #include "embed/sprite_vert.gen.h"
 #include "embed/sprite_frag.gen.h"
+#include "embed/sprite2d_vert.gen.h"
+#include "embed/sprite2d_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -77,8 +79,26 @@
 #include "embed/shadow_frag_reflect.gen.h"
 #include "embed/sprite_vert_reflect.gen.h"
 #include "embed/sprite_frag_reflect.gen.h"
+#include "embed/sprite2d_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
+
+// ---------------------------------------------------------------------------
+// GLSL variant selection by active GL profile (capability-driven; see gl_loader.h).
+//   Desktop GL 4.x      -> *_glsl430
+//   GLES 3.1 (Android)  -> *_essl310  (compute / SSBO available)
+//   GLES 3.0 (WebGL2)   -> *_essl300  (no compute / SSBO)
+// Token-paste over the embedded constant base name, e.g. DSE_SL(ksprite_vert).
+// ---------------------------------------------------------------------------
+#if DSE_GL_ES_RUNTIME
+#  if defined(__EMSCRIPTEN__)
+#    define DSE_SL(base) base##_essl300
+#  else
+#    define DSE_SL(base) base##_essl310
+#  endif
+#else
+#  define DSE_SL(base) base##_glsl430
+#endif
 
 namespace dse {
 namespace render {
@@ -88,6 +108,12 @@ namespace render {
 // ============================================================
 
 unsigned int GLShaderManager::CompileProgram(const char* vertex_src, const char* fragment_src) {
+    // A variant may be empty when the active GL profile cannot express it (e.g.
+    // SSBO/compute shaders have no ESSL 300 / WebGL2 lowering). Skip cleanly.
+    if (vertex_src == nullptr || vertex_src[0] == '\0' ||
+        fragment_src == nullptr || fragment_src[0] == '\0') {
+        return 0;
+    }
     unsigned int vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex_shader, 1, &vertex_src, nullptr);
     glCompileShader(vertex_shader);
@@ -259,7 +285,8 @@ static bool ReplaceSpotLoopHeader(std::string& src, const std::string& spot_inst
 
 std::string GLShaderManager::GenerateUBOGLSL() {
     using namespace dse::render::generated_shaders;
-    std::string src = kpbr_frag_glsl430;
+    std::string src = DSE_SL(kpbr_frag);
+    if (src.empty()) return src;  // no ES3.0 (WebGL2) PBR variant; caller skips
 
     // 1. 保持 #version 430 不降级。NVIDIA 在 GL 3.3 context 中也接受 #version 430
     //    （gbuffer shader 已验证）；降到 330 会导致 layout(binding) 编译失败。
@@ -317,14 +344,14 @@ void GLShaderManager::InitBuiltinPBRShader() {
     using namespace dse::render::generated_shaders;
     if (!supports_ssbo_) {
         static std::string ubo_frag_src = GenerateUBOGLSL();
-        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl430, ubo_frag_src.c_str());
+        pbr_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), ubo_frag_src.c_str());
     } else {
-        pbr_shader_handle_ = CompileProgram(kpbr_vert_glsl430, kpbr_frag_glsl430);
+        pbr_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(kpbr_frag));
     }
     programs_created_ += 1;
     CachePBRLocations();
 
-    eye_shader_handle_ = CompileProgram(kpbr_vert_glsl430, keye_frag_glsl430);
+    eye_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(keye_frag));
     if (eye_shader_handle_) {
         programs_created_ += 1;
         DEBUG_LOG_INFO("[GL] Eye shader created: {}", eye_shader_handle_);
@@ -488,7 +515,7 @@ void GLShaderManager::CachePBRLocations() {
 void GLShaderManager::InitSkyboxShader() {
     if (skybox_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    skybox_shader_handle_ = CompileProgram(kskybox_vert_glsl430, kskybox_frag_glsl430);
+    skybox_shader_handle_ = CompileProgram(DSE_SL(kskybox_vert), DSE_SL(kskybox_frag));
     programs_created_ += 1;
 
     skybox_locations_.vp = glGetUniformLocation(skybox_shader_handle_, "u_vp");
@@ -502,7 +529,7 @@ void GLShaderManager::InitSkyboxShader() {
 void GLShaderManager::InitParticleShader() {
     if (particle_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    particle_shader_handle_ = CompileProgram(kparticle_vert_glsl430, kparticle_frag_glsl430);
+    particle_shader_handle_ = CompileProgram(DSE_SL(kparticle_vert), DSE_SL(kparticle_frag));
     programs_created_ += 1;
 
     // Particle shader uses PerFrame UBO for vp/view matrices
@@ -523,7 +550,7 @@ void GLShaderManager::InitGBufferShader() {
     if (gbuffer_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
 
-    gbuffer_shader_handle_ = CompileProgram(kpbr_vert_glsl430, kgbuffer_frag_glsl430);
+    gbuffer_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(kgbuffer_frag));
     programs_created_ += 1;
 
     // GBuffer UBO 缁戝畾锛坮eflection 椹卞嫊锛?
@@ -549,7 +576,7 @@ void GLShaderManager::InitGBufferShader() {
 void GLShaderManager::InitSpriteShader() {
     if (sprite_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    sprite_shader_handle_ = CompileProgram(ksprite_vert_glsl430, ksprite_frag_glsl430);
+    sprite_shader_handle_ = CompileProgram(DSE_SL(ksprite_vert), DSE_SL(ksprite_frag));
     programs_created_ += 1;
 
     // Sprite UBO 缁戝畾锛坮eflection 椹卞姩锛?
@@ -559,13 +586,33 @@ void GLShaderManager::InitSpriteShader() {
 }
 
 // ============================================================
+// 2D batch shader (ES3.0-capable; used on Web in place of PBR)
+// ============================================================
+
+void GLShaderManager::InitSprite2DShader() {
+    if (sprite2d_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite2d_shader_handle_ = CompileProgram(DSE_SL(ksprite2d_vert), DSE_SL(ksprite2d_frag));
+    if (sprite2d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: 2D batch shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite2d_shader_handle_, ksprite2d_vert_reflection);
+    glUseProgram(sprite2d_shader_handle_);
+    sprite2d_locations_.texture = glGetUniformLocation(sprite2d_shader_handle_, "u_texture");
+    glUseProgram(0);
+}
+
+// ============================================================
 // SDF 文本着色器
 // ============================================================
 
 void GLShaderManager::InitTextSdfShader() {
     if (text_sdf_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    text_sdf_shader_handle_ = CompileProgram(ksprite_vert_glsl430, ktext_sdf_frag_glsl430);
+    text_sdf_shader_handle_ = CompileProgram(DSE_SL(ksprite_vert), DSE_SL(ktext_sdf_frag));
     if (text_sdf_shader_handle_ == 0) {
         DEBUG_LOG_ERROR("GLShaderManager: SDF text shader compile failed");
         return;
@@ -591,7 +638,7 @@ void GLShaderManager::InitUIEffectsShader() {
     unsigned int prog = GetOrCreateGenPPShader("ui_effects");
     if (prog == 0) {
         using namespace dse::render::generated_shaders;
-        const char* vert = ksprite_vert_glsl430;
+        const char* vert = DSE_SL(ksprite_vert);
         const char* frag = nullptr;
         (void)vert;
         (void)frag;
@@ -613,7 +660,7 @@ void GLShaderManager::InitUIEffectsShader() {
 void GLShaderManager::InitShadowShader() {
     if (shadow_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    shadow_shader_handle_ = CompileProgram(kshadow_vert_glsl430, kshadow_frag_glsl430);
+    shadow_shader_handle_ = CompileProgram(DSE_SL(kshadow_vert), DSE_SL(kshadow_frag));
     programs_created_ += 1;
 
     // Shadow UBO 缁戝畾锛坮eflection 椹卞姩锛?
@@ -639,44 +686,45 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
 
     using namespace dse::render::generated_shaders;
     const char* fs = nullptr;
-    if      (effect_name == "fxaa")             fs = kfxaa_frag_glsl430;
-    else if (effect_name == "bloom_extract")     fs = kbloom_extract_frag_glsl430;
-    else if (effect_name == "bloom_downsample")  fs = kbloom_downsample_frag_glsl430;
-    else if (effect_name == "bloom_upsample")    fs = kbloom_upsample_frag_glsl430;
-    else if (effect_name == "tonemapping")         fs = ktonemapping_frag_glsl430;
-    else if (effect_name == "color_grading")       fs = kcolor_grading_frag_glsl430;
-    else if (effect_name == "edge_detect")          fs = kedge_detect_frag_glsl430;
-    else if (effect_name == "postprocess_passthrough") fs = kpostprocess_passthrough_frag_glsl430;
-    else if (effect_name == "bloom_composite")     fs = kbloom_composite_ssao_ae_frag_glsl430;
-    else if (effect_name == "ssao_apply")           fs = kssao_apply_frag_glsl430;
-    else if (effect_name == "ssao")                 fs = kssao_frag_glsl430;
-    else if (effect_name == "ssao_blur")             fs = kssao_blur_frag_glsl430;
-    else if (effect_name == "contact_shadow")        fs = kcontact_shadow_frag_glsl430;
-    else if (effect_name == "dof")                   fs = kdof_frag_glsl430;
-    else if (effect_name == "motion_vector")         fs = kmotion_vector_frag_glsl430;
-    else if (effect_name == "motion_blur")           fs = kmotion_blur_frag_glsl430;
-    else if (effect_name == "ssr")                   fs = kssr_frag_glsl430;
-    else if (effect_name == "taa_resolve")           fs = ktaa_resolve_frag_glsl430;
-    else if (effect_name == "ui_overlay")             fs = kpostprocess_passthrough_frag_glsl430;
-    else if (effect_name == "deferred_lighting")     fs = kdeferred_lighting_frag_glsl430;
-    else if (effect_name == "light_shaft")           fs = klight_shaft_frag_glsl430;
-    else if (effect_name == "volumetric_fog")        fs = kvolumetric_fog_frag_glsl430;
-    else if (effect_name == "volumetric_cloud")     fs = kvolumetric_cloud_frag_glsl430;
-    else if (effect_name == "decal")                 fs = kdecal_frag_glsl430;
-    else if (effect_name == "water")                 fs = kwater_frag_glsl430;
-    else if (effect_name == "wboit_composite")       fs = kwboit_composite_frag_glsl430;
-    else if (effect_name == "lum_compute")           fs = klum_compute_frag_glsl430;
-    else if (effect_name == "lum_adapt")             fs = klum_adapt_frag_glsl430;
-    else if (effect_name == "bloom_blur_h")          fs = kbloom_blur_h_frag_glsl430;
-    else if (effect_name == "bloom_blur_v")          fs = kbloom_blur_v_frag_glsl430;
-    else if (effect_name == "copy")                  fs = kpostprocess_passthrough_frag_glsl430;
-    else if (effect_name == "atmosphere_transmittance_lut") fs = katmosphere_transmittance_lut_frag_glsl430;
-    else if (effect_name == "atmosphere_sky")        fs = katmosphere_sky_frag_glsl430;
-    else if (effect_name == "sss_blur")               fs = ksss_blur_frag_glsl430;
-    else if (effect_name == "weather_particle")        fs = kweather_particle_frag_glsl430;
+    if      (effect_name == "fxaa")             fs = DSE_SL(kfxaa_frag);
+    else if (effect_name == "bloom_extract")     fs = DSE_SL(kbloom_extract_frag);
+    else if (effect_name == "bloom_downsample")  fs = DSE_SL(kbloom_downsample_frag);
+    else if (effect_name == "bloom_upsample")    fs = DSE_SL(kbloom_upsample_frag);
+    else if (effect_name == "tonemapping")         fs = DSE_SL(ktonemapping_frag);
+    else if (effect_name == "color_grading")       fs = DSE_SL(kcolor_grading_frag);
+    else if (effect_name == "edge_detect")          fs = DSE_SL(kedge_detect_frag);
+    else if (effect_name == "postprocess_passthrough") fs = DSE_SL(kpostprocess_passthrough_frag);
+    else if (effect_name == "bloom_composite")     fs = DSE_SL(kbloom_composite_ssao_ae_frag);
+    else if (effect_name == "ssao_apply")           fs = DSE_SL(kssao_apply_frag);
+    else if (effect_name == "ssao")                 fs = DSE_SL(kssao_frag);
+    else if (effect_name == "ssao_blur")             fs = DSE_SL(kssao_blur_frag);
+    else if (effect_name == "contact_shadow")        fs = DSE_SL(kcontact_shadow_frag);
+    else if (effect_name == "dof")                   fs = DSE_SL(kdof_frag);
+    else if (effect_name == "motion_vector")         fs = DSE_SL(kmotion_vector_frag);
+    else if (effect_name == "motion_blur")           fs = DSE_SL(kmotion_blur_frag);
+    else if (effect_name == "ssr")                   fs = DSE_SL(kssr_frag);
+    else if (effect_name == "taa_resolve")           fs = DSE_SL(ktaa_resolve_frag);
+    else if (effect_name == "ui_overlay")             fs = DSE_SL(kpostprocess_passthrough_frag);
+    else if (effect_name == "deferred_lighting")     fs = DSE_SL(kdeferred_lighting_frag);
+    else if (effect_name == "light_shaft")           fs = DSE_SL(klight_shaft_frag);
+    else if (effect_name == "volumetric_fog")        fs = DSE_SL(kvolumetric_fog_frag);
+    else if (effect_name == "volumetric_cloud")     fs = DSE_SL(kvolumetric_cloud_frag);
+    else if (effect_name == "decal")                 fs = DSE_SL(kdecal_frag);
+    else if (effect_name == "water")                 fs = DSE_SL(kwater_frag);
+    else if (effect_name == "wboit_composite")       fs = DSE_SL(kwboit_composite_frag);
+    else if (effect_name == "lum_compute")           fs = DSE_SL(klum_compute_frag);
+    else if (effect_name == "lum_adapt")             fs = DSE_SL(klum_adapt_frag);
+    else if (effect_name == "bloom_blur_h")          fs = DSE_SL(kbloom_blur_h_frag);
+    else if (effect_name == "bloom_blur_v")          fs = DSE_SL(kbloom_blur_v_frag);
+    else if (effect_name == "copy")                  fs = DSE_SL(kpostprocess_passthrough_frag);
+    else if (effect_name == "atmosphere_transmittance_lut") fs = DSE_SL(katmosphere_transmittance_lut_frag);
+    else if (effect_name == "atmosphere_sky")        fs = DSE_SL(katmosphere_sky_frag);
+    else if (effect_name == "sss_blur")               fs = DSE_SL(ksss_blur_frag);
+    else if (effect_name == "weather_particle")        fs = DSE_SL(kweather_particle_frag);
     else return 0;
 
-    unsigned int shader = CompileProgram(kpostprocess_vert_glsl430, fs);
+    if (fs == nullptr || fs[0] == '\0') return 0;  // no variant for this GL profile
+    unsigned int shader = CompileProgram(DSE_SL(kpostprocess_vert), fs);
     if (shader == 0) {
         DEBUG_LOG_ERROR("Failed to compile gen.h PP shader: {}", effect_name);
         return 0;
@@ -720,7 +768,7 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
 
     // SPIRV-Cross 为 DSEInstBuf 分配了 binding=0，但 CPU 侧绑定到 kSSBOBindingInstances(=5)
     // 编译前 patch 源码将 instance SSBO binding 修正为 5
-    std::string vert_patched = kpbr_gpu_driven_vert_glsl430;
+    std::string vert_patched = DSE_SL(kpbr_gpu_driven_vert);
     {
         const std::string old_binding = "layout(binding = 0, std430) readonly buffer DSEInstBuf";
         const std::string new_binding = "layout(binding = 5, std430) readonly buffer DSEInstBuf";
@@ -731,7 +779,7 @@ void GLShaderManager::InitGPUDrivenPBRShader() {
             fprintf(stderr, "[GLShaderManager] GPU-driven PBR: DSEInstBuf binding=0 not found for patch\n");
         }
     }
-    const char* frag_src = kpbr_gpu_driven_frag_glsl430;
+    const char* frag_src = DSE_SL(kpbr_gpu_driven_frag);
 
     gpu_driven_pbr_shader_handle_ = CompileProgram(vert_patched.c_str(), frag_src);
     if (gpu_driven_pbr_shader_handle_ == 0) {
@@ -770,7 +818,7 @@ void GLShaderManager::InitGPUDrivenShadowShader() {
     using namespace dse::render::generated_shaders::reflect;
 
     // 使用预编译的 GPU-driven shadow 变体，仅需 patch SSBO binding 0→5
-    std::string vert_src = kshadow_gpu_driven_vert_glsl430;
+    std::string vert_src = DSE_SL(kshadow_gpu_driven_vert);
     {
         const std::string old_binding = "layout(binding = 0, std430) readonly buffer DSEInstBuf";
         const std::string new_binding = "layout(binding = 5, std430) readonly buffer DSEInstBuf";
@@ -782,7 +830,7 @@ void GLShaderManager::InitGPUDrivenShadowShader() {
         }
     }
 
-    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), kshadow_frag_glsl430);
+    gpu_driven_shadow_shader_handle_ = CompileProgram(vert_src.c_str(), DSE_SL(kshadow_frag));
     if (gpu_driven_shadow_shader_handle_ == 0) {
         fprintf(stderr, "[GLShaderManager] GPU-driven Shadow shader compilation failed\n");
         return;

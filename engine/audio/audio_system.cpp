@@ -17,6 +17,23 @@
 
 #define MINIAUDIO_IMPLEMENTATION
 #include <miniaudio/miniaudio.h>
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+namespace {
+// Active ma_engine; used to resume the WebAudio context after the first user
+// gesture. Browsers start AudioContext suspended until a user interaction.
+ma_engine* g_dse_web_audio_engine = nullptr;
+}  // namespace
+// Called from shell.html on first pointerdown/keydown: Module._dse_resume_audio()
+extern "C" EMSCRIPTEN_KEEPALIVE void dse_resume_audio() {
+    if (g_dse_web_audio_engine == nullptr) return;
+    ma_device* device = ma_engine_get_device(g_dse_web_audio_engine);
+    if (device != nullptr) {
+        (void)ma_device_start(device);
+    }
+}
+#endif  // __EMSCRIPTEN__
 #ifdef PlaySound
 #undef PlaySound
 #endif
@@ -229,6 +246,9 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
     engine->initialized = true;
     resource_manager_handle_ = std::move(resource_manager);
     engine_handle_ = std::move(engine);
+#if defined(__EMSCRIPTEN__)
+    g_dse_web_audio_engine = engine_handle_->get();
+#endif
     SetMasterVolume(master_volume_);
 
     // 初始化混音总线系统
@@ -489,6 +509,9 @@ void AudioSystem::Shutdown() {
     crossfading_ = false;
     bus_manager_.Shutdown();
     resource_manager_handle_.reset();
+#if defined(__EMSCRIPTEN__)
+    g_dse_web_audio_engine = nullptr;
+#endif
     engine_handle_.reset();
     g_audio_asset_manager = nullptr;
     asset_manager_ = nullptr;
