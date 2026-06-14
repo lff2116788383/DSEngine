@@ -118,7 +118,7 @@
 
 浏览器实测（Chrome/WebGL2 over ANGLE→D3D11）：3D 场景真实出画，引擎逐帧统计 `meshes=4, draw_calls=4, render_passes=5, gpu_driven_supported=0`；立方体（36 索引）+ 地面（6 索引）每帧绘制，带透视 + 深度 + 光照，PBR 程序在 WebGL2 编译/链接/绘制通过，不黑屏不崩。
 
-**已记录的债（见 §五 DEBT-6）**：当前画面整体偏亮发灰、相机构图偏近，属观感打磨项（光照强度/曝光/相机距离/材质表现），非底层阻塞，留待后续调优。
+**观感打磨（DEBT-6，已偿还，2026-06-14）**：在 `data/main3d.lua`（场景作者层，三后端通用、对 WebGL2 能力安全）做了如下调整：相机后拉并抬高（`radius 6.5→9.5`、`height 2.2→3.4`）修正构图偏近；方向光降平铺环境光、提关键光强（`ambient 0.25→0.10`、`intensity 1.5→2.4`）让立方体各面拉开明暗、不再发灰；新增 `SkyLight` 半球环境色（CPU 端 `mix(down,up)*intensity` 的环境色 uniform，无 Compute/SSBO/bake，Web 安全）给环境上冷调；立方体 `roughness 0.55→0.38` 出清晰高光；新增 `PostProcess` 组件显式定曝光（`exposure=0.9`）+ 轻微 vignette（composite pass 内 tonemap 即生效，无需新增 pass）。桌面 D3D11/WARP 实跑核对：立方体呈现明确的三维明暗与高光、构图留白合理。
 
 ### 2.9 风险与对策
 | 风险 | 等级 | 对策 |
@@ -181,7 +181,7 @@
 | DEBT-4 | 单线程（无 pthreads） | 避开 COOP/COEP 与多线程 WASM 复杂度 | Web 端无并行 Job | 后续接 emscripten pthreads + COOP/COEP | 🟢 |
 | DEBT-5 | 多指触控未做（仅单指） | MVP 求快 | 复杂手势类游戏受限 | 后续补多指/手势 | 🟢 |
 
-| DEBT-6 | M5 Web 3D 观感未打磨（整体偏亮发灰、构图偏近） | 尽力版优先打通"能跑通 3D 前向"，观感未调 | Web 3D demo 视觉效果欠佳，但功能链路（编译/着色/绘制/光照/深度/透视）已完整 | 后续调光照强度/曝光（可加 PostProcess 组件设曝光）、相机距离与材质表现；必要时为 Forward3D 显式接 tonemap 输入 | 🟢 |
+| DEBT-6 | ~~M5 Web 3D 观感未打磨（整体偏亮发灰、构图偏近）~~ → 已偿还（2026-06-14） | 尽力版优先打通"能跑通 3D 前向"，观感未调 | ~~Web 3D demo 视觉效果欠佳~~；已在 `data/main3d.lua` 调相机/光照/材质/曝光，画面明暗与构图改善（详见 §2.8b） | 已完成：场景层调光照强度/曝光（新增 PostProcess 设曝光+vignette）、相机距离、材质表现、SkyLight 半球环境光；Forward3D 的 composite pass 本就跑 tonemap，无需额外接线 | ✅ |
 
 > 原则：以上均为**有意识、显式登记**的债，非隐性债；每项都有偿还路径与触发条件。
 
