@@ -3,6 +3,8 @@
 > 制定日期：2026-06-13 · 分支：`feature/engine-lib`
 > 依据：基于源码现状核实（见 `PROGRESS_REPORT.md` 三次复核），非愿景文档。
 > 目标读者：引擎维护者 / 决策者。
+>
+> **更新（2026-06-14）**：阶段 A 的 **A1 Web/WASM 导出已达 MVP（可演示 demo）并真机验证**（含音频 / 单指触屏 / `dse build --target web` 出包链路）——详见 `A_WEB_AND_DOCS_PLAN.md` §2.3b/§2.3c/§2.6/§2.8c-d。Web/WASM 暂作**非主力**分支保留在此水位；下一步推荐方向见 §五。
 
 ---
 
@@ -27,7 +29,7 @@
 ### 关键缺口（决定采用率）
 | 缺口 | 现状 | 对独游影响 |
 |------|------|-----------|
-| **导出目标窄** | 仅 Win 桌面 + Android APK；平台后端仅 `glfw`(桌面) + `android` | 🔴 致命：缺 macOS / **Web(WASM)** / Linux 发行 / 主机 |
+| **导出目标窄** | Win 桌面 + Android APK + **Web/WASM(MVP，可演示)**；平台后端 `glfw`(桌面) + `android` + **`web`** | 🟡 改善中：Web 已补齐(MVP)；仍缺 macOS / Linux 发行 / 主机 |
 | **一键出包** | `dse dist` 雏形 + SDK 包 + APK | 🔴 高：无面向玩家的安装器 / Export Templates 体验 |
 | **文档/教程** | 有 API 文档与设计文档，缺面向新手的 Getting Started / 教程系列 | 🔴 高：采用头号决定因素 |
 | **示例模板** | `samples/`(68 Lua) + `examples/sdk_consumer` | 🟡 中：缺"clone 即玩"的完整品类模板 |
@@ -41,12 +43,15 @@
 
 ### 🔴 阶段 A（0–2 个月）：打通"能出货 + 能上手" —— 最高优先级
 
-**A1. Web/WASM 导出**（投入大、回报最大）
-- 新增 `engine/platform/web`(Emscripten + WebGL2/WebGPU) 后端，复用 `PlatformApp` 抽象
-- RHI：GL 后端走 WebGL2(或新增 WebGPU 后端)；裁剪线程/文件系统依赖(用 IDBFS/预打包 VFS)
+**A1. Web/WASM 导出** ✅ 已达 MVP（2026-06-14，可演示 demo）
+- 新增 `engine/platform/web`(Emscripten + WebGL2) 后端，复用 `PlatformApp` 抽象
+- RHI：GL 后端走 WebGL2；裁剪线程/文件系统依赖(用 IDBFS/预打包 VFS)
 - `dse build --target web` 产出可上传 itch.io 的 `index.html + .wasm + .data`
 - 验收：一个 2D 示例在浏览器跑通，CI 增加 `build-web` 作业
 - 价值：覆盖 itch.io/Web Demo 这一独游命脉，"试玩门槛 = 一个链接"
+- **完成状态（MVP）**：`engine/platform/web`(Emscripten/WebGL2) 后端 + `apps/web_host` 宿主已落地；GL 后端经**能力标志**在 WebGL2 自动绕过 Compute/SSBO/Indirect（无平台 `#ifdef` 污染 render 核心）；`dse build --target web` / `dse dist --target web` 出包链路打通；真机 Chrome/WebGL2 验证 2D/3D 出画 + 键鼠 + 单指触屏 + 音频(BGM)。debug+release 双产物均验过（release wasm≈3.74MB）。
+- **本期有意延后（非 bug，平台边界 / 技术债）**：资源懒加载(DEBT-1)、pthreads+COOP/COEP 多线程(DEBT-4)、多指触控(DEBT-5)、WebGPU 第 4 后端（解锁 Web 端 Compute/GPU-Driven，远期质变）、真实 GPU 浏览器复验（本机无独显，现走 SwiftShader 软光栅）、CI `build-web`（无额度，暂略）。
+- **定位**：作为「可演示 demo」水位的**非主力**分支保留；要扶正为主力时再上 WebGPU + 多线程两步。
 
 **A2. 一键出包 + 平台安装器**（基于已有 `dse dist`）
 - 把 `dse dist` 做成各平台 Export Template：Win(zip + 可选 NSIS/Inno 安装器)、Linux(AppImage/tar)、Android(APK 已有)、Web(A1)
@@ -106,7 +111,7 @@
 
 | 指标 | 现状 | 阶段 A 目标 | 阶段 B 目标 |
 |------|------|------------|------------|
-| 导出目标数 | 2(Win/Android) | 4(+Web/Linux 发行) | 5(+macOS) |
+| 导出目标数 | **3(Win/Android/Web-MVP)** | 4(+Linux 发行) | 5(+macOS) |
 | 从零到导出一个游戏的耗时 | 未知/高 | < 30 分钟(照文档) | < 15 分钟(用模板) |
 | 上手文档/教程篇数 | ~0(面向新手) | ≥ 1 套完整教程 | ≥ 3 篇品类教程 |
 | 可 clone 即玩的模板 | 0 | 1 | 3 |
@@ -117,9 +122,12 @@
 
 ## 五、近期可立即启动的第一步（建议）
 
-> 三选一作为起点，均可独立交付：
-> - **最高获客杠杆**：A1 Web/WASM 导出（技术挑战最大，回报最大）
-> - **最快见效**：A3 Getting Started + 教程（无需改引擎，纯文档/示例）
-> - **最稳基建**：A2 一键出包（已有 `dse dist` 雏形，工程化即可）
+> **A1 Web/WASM 导出已达 MVP（2026-06-14）**，且 Web 暂定为非主力。故下一步建议从以下里优先（按"采用力"杠杆排）：
+> - **首推 · 最快见效**：**A3 Getting Started + 一套上手教程**（无需改引擎，纯文档/示例；采用头号杠杆，边际成本趋零）
+> - **次推 · 最稳基建**：**A2 一键出包 / Export Templates**（已有 `dse dist` 雏形，把 Win/Linux/Android/Web 出包工程化为一条龙）
+> - **再次 · clone 即玩**：**B2 品类模板工程**（2D 平台跳跃 / 俯视 RPG / 3D 第三人称，接 `dse new --template`），与 A3 教程互为素材
+> - **桌面补全（按需）**：**B1 macOS 后端**走 MoltenVK（复用现有 Vulkan），成本远低于原生 Metal
+>
+> Web/WASM 若日后要扶正为主力：①**WebGPU 第 4 后端**（解锁 Compute/GPU-Driven，质变）②**pthreads+COOP/COEP 多线程**(DEBT-4)。
 
 > 注：本文件为方向性路线图，不含具体排期承诺；实际推进顺序以维护者确认为准。
