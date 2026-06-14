@@ -5,6 +5,8 @@
 > 目标读者：引擎维护者 / 决策者。
 >
 > **更新（2026-06-14）**：阶段 A 的 **A1 Web/WASM 导出已达 MVP（可演示 demo）并真机验证**（含音频 / 单指触屏 / `dse build --target web` 出包链路）——详见 `../plans/WEB_AND_DOCS_PLAN.md` §2.3b/§2.3c/§2.6/§2.8c-d。Web/WASM 暂作**非主力**分支保留在此水位；下一步推荐方向见 §五。
+>
+> **更新（2026-06-14）**：**A3 上手教程已落地**（`../getting-started/QUICKSTART.md` + `../getting-started/TUTORIAL_2D_FIRST_GAME.md`，对照源码核实并 llvmpipe 实跑验证）；顺带修复脚手架（`on_init/on_update`→`Awake/Update`、2D 模板默认相机+精灵+`local app=dse.app` 别名）。**A2 已开第一刀**：`game.dsmanifest` 记录 `entry_script`，导出包**双击即玩**（无需 `launch.bat`，加密包除外）。A2/A3 详细完成状态与剩余待办见 §六。
 
 ---
 
@@ -53,16 +55,19 @@
 - **本期有意延后（非 bug，平台边界 / 技术债）**：资源懒加载(DEBT-1)、pthreads+COOP/COEP 多线程(DEBT-4)、多指触控(DEBT-5)、WebGPU 第 4 后端（解锁 Web 端 Compute/GPU-Driven，远期质变）、真实 GPU 浏览器复验（本机无独显，现走 SwiftShader 软光栅）、CI `build-web`（无额度，暂略）。
 - **定位**：作为「可演示 demo」水位的**非主力**分支保留；要扶正为主力时再上 WebGPU + 多线程两步。
 
-**A2. 一键出包 + 平台安装器**（基于已有 `dse dist`）
+**A2. 一键出包 + 平台安装器**（基于已有 `dse dist`）🟡 已开第一刀（2026-06-14）
 - 把 `dse dist` 做成各平台 Export Template：Win(zip + 可选 NSIS/Inno 安装器)、Linux(AppImage/tar)、Android(APK 已有)、Web(A1)
 - 自动收集运行时 DLL/Redist、资源加密打包(已有)、图标/启动 Splash(已有)注入
 - 验收：从空项目 `dse new` → `dse build` → `dse dist --target <p>` 一条龙产出可分发包
+- **已完成（2026-06-14）**：`game.dsmanifest` 增加 `entry_script` 字段，`dse build` 写入入口脚本；standalone 宿主未传 `--script` 时从 manifest 读取——**未加密导出包双击 exe 即玩**（详见 §六）。剩余项见 §六待办台账。
 
-**A3. Getting Started + 一套上手教程**（采用头号杠杆）
+**A3. Getting Started + 一套上手教程**（采用头号杠杆）✅ 已落地（2026-06-14）
 - `docs/getting-started.md`：5 分钟从安装到运行第一个窗口/精灵
 - "做一个小游戏"教程系列(2D 为主)：输入→精灵→碰撞→分数→打包发布
 - API 速查页 + 常见问题(FAQ)；中英双语(已有英文 README 基础)
 - 验收：一个没接触过引擎的人能照文档独立做出并导出一个小游戏
+- **已完成（2026-06-14）**：`../getting-started/QUICKSTART.md`（纯 CLI 黄金路径，30 分钟从零到可分发 2D 游戏，含 llvmpipe 软件渲染回退 + 故障排查表）+ `../getting-started/TUTORIAL_2D_FIRST_GAME.md`（金币收集教程：移动/碰撞/计分/通关，每个 `dse.*` 接口对照源码核实并实跑）。`GETTING_STARTED.md` 加横幅指向 QUICKSTART、`docs/README.md` 入门索引补两条。配套修复脚手架（见 §六）。
+- **剩余（可选）**：英文版 QUICKSTART/教程；FAQ 独立页；更多品类教程（与 B2 模板互为素材）。
 
 ### 🟡 阶段 B（2–4 个月）：降低门槛 + 建立信任
 
@@ -129,5 +134,30 @@
 > - **桌面补全（按需）**：**B1 macOS 后端**走 MoltenVK（复用现有 Vulkan），成本远低于原生 Metal
 >
 > Web/WASM 若日后要扶正为主力：①**WebGPU 第 4 后端**（解锁 Compute/GPU-Driven，质变）②**pthreads+COOP/COEP 多线程**(DEBT-4)。
+
+---
+
+## 六、上手链路台账（A2/A3 进展 + 剩余待办）
+
+> 2026-06-14 在写 A3 教程时把整条「上手链路」当试金石实跑，逐个暴露并记录卡点。**纯文档/脚手架/CLI 改动，未动渲染等引擎核心。** 以下为已修与待办，方便后续接手。
+
+### 已修复（已提交到 `feature/engine-lib`，无 PR）
+| 项 | 问题 | 修复 | 验证 |
+|----|------|------|------|
+| 脚手架生命周期钩子 | 模板生成 `on_init/on_update`，但运行时调用 `Awake/Update`，新手代码不执行 | `project_scaffold.cpp` 全模板(2d/3d/lua/cpp)改 `Awake/Update`；`dse help` 文案同步 | `dse new 2d`→`dse build`→运行，脚本生效 |
+| 2D 模板空场景 | 旧模板无相机/精灵，跑起来黑屏，新手没有正反馈 | 2D 模板默认生成正交相机 + 可移动青色精灵 | 运行即见方块，WASD/方向键移动 |
+| 输入 `nil 'app'` 崩溃 | 模板写 `app.get_key` 但 `app` 未定义（API 在 `dse.app`），每帧报错 | 模板加 `local app = dse.app` 别名 | 运行无报错，输入响应正常 |
+| 双击 exe 空窗口（摩擦点①） | 裸跑 `<proj>.exe` 不加载入口脚本，必须用 `launch.bat` 传 `--script` | `game.dsmanifest` 增 `entry_script`；`dse build` 写入；standalone 未传 `--script` 时从 manifest 读取 | 裸跑 `<proj>.exe`（无参数）渲染+输入正常；单测 12/12 |
+
+### 剩余待办（按优先级，未做）
+1. **无预编译 `dse` 二进制下载**（A2，**高**）：新手首次必须 `bootstrap_windows.ps1` 从源码构建一次才能拿到 `dse.exe` + 运行时。建议加 `dse` release 流程或 CI 产物：打一个自带运行时的 `dse` 工具包 zip，README 提供下载直链，使「装好 dse → `dse new` → `dse build` → 双击玩」彻底免编译。
+2. **编辑器 Build Game 与 CLI 对齐**（A2，中）：`apps/editor_cpp/src/editor_build_game.cpp` 仍用 `--script` 拼 launch 参数、不写 `game.dsmanifest` 的 `entry_script`。应改为复用 `WriteAppManifest`（带 `entry_script`），使编辑器出包与 `dse build` 一致、同样双击即玩。
+3. **加密资源包仍需 `launch.bat`**（A2，低/可接受）：`--key` 加密包裸跑无密钥，仍靠 `launch.bat` 传 `--key`。可接受（未加密包是新手默认路径）；若要加密包也双击即玩，需另设密钥分发方案（不建议明文入 manifest）。
+4. **无独显环境需手动部署软件 GL**（A2/DX，中）：无 GPU/远程桌面/VM 下首次启动报 `Failed to create GLFW window`，需手动 `setup_swgl.ps1` + 设 `GALLIUM_DRIVER=llvmpipe`。可选：`dse dist` 增 `--with-swgl` 开关，自动把 llvmpipe 一并打进 dist 并在 `launch.bat` 里设好环境变量。
+5. **`dse dist` 各平台 Export Template**（A2 主体，高）：Win zip/NSIS/Inno、Linux AppImage/tar 工程化（Android/Web 已有）。见 §二 A2。
+6. **英文文档 + FAQ 独立页**（A3 收尾，中）：QUICKSTART/2D 教程英文版；FAQ 单列页。
+7. **品类模板工程**（B2，中）：2D 平台跳跃 / 俯视 RPG / 3D 第三人称，接 `dse new --template`，与 A3 教程互为素材。
+
+---
 
 > 注：本文件为方向性路线图，不含具体排期承诺；实际推进顺序以维护者确认为准。
