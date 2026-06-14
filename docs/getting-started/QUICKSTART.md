@@ -2,7 +2,7 @@
 
 > 面向**完全没碰过 DSEngine** 的人。跟着走完，你会得到一个能用键盘控制、可双击运行、可打包分发的 2D 小游戏——全程只用命令行 `dse`，不需要打开编辑器、不需要写 C++、不需要 GPU。
 >
-> 平台：Windows 10/11 x64。预计耗时 30 分钟（其中大头是第 0 步首次编译引擎）。
+> 平台：Windows 10/11 x64。预计耗时 30 分钟（若直接下载预编译工具包，可省去首次编译，只需几分钟）。
 
 ---
 
@@ -23,9 +23,22 @@ dse new 2d MyGame      →   dse build MyGame      →   运行 build/dist/MyGam
 
 ## 第 0 步：拿到 `dse` 命令行（首次必做）
 
-目前 DSEngine 还没有预编译的二进制下载包，所以第一次需要**从源码构建一次引擎**，构建产物里就包含 `bin/dse.exe` 和运行时 `bin/DSEngine_Game_*.exe`（`dse build` 会用到它）。
+你需要 `dse.exe` 和运行时 `DSEngine_Game.exe`（`dse build` 会用到它）。二选一：
 
-前置工具：Git、CMake 3.24+、Visual Studio 2022（C++ 桌面工作负载）。仓库自带的脚本会自动装好工具链并构建：
+### 方式 A（推荐，最快）：下载预编译工具包
+
+到本仓库的 **Releases** 页面下载 `DSEngine-tools-vX.Y.Z-win-x64.zip`，解压即可——里面有 `dse.exe` + `DSEngine_Game.exe`，开箱即用，**不需要装编译器、不需要从源码构建**。
+
+- 下载直链：仓库 **Releases** 页（`<repo-url>/releases/latest`）的资产 `DSEngine-tools-*-win-x64.zip`
+
+```powershell
+# 解压到任意目录后，把该目录加进 PATH 或直接用全路径
+.\dse.exe help
+```
+
+### 方式 B：从源码构建一次引擎
+
+前置工具：Git、CMake 3.24+、Visual Studio 2022（C++ 桌面工作负载）。仓库自带脚本会自动装好工具链并构建：
 
 ```powershell
 git clone --recursive <repo-url>
@@ -40,7 +53,10 @@ dir bin\dse.exe
 dir bin\DSEngine_Game_*.exe
 ```
 
-> 为了后面命令简短，可以把 `bin\` 加进 PATH，或直接用全路径 `bin\dse.exe`。下文统一写 `dse`。
+> 维护者发布工具包：`powershell -ExecutionPolicy Bypass -File scripts\package_dse_tools.ps1`
+> 会编译 `dse_cli`/`dse_standalone` 并打出上面那个 `DSEngine-tools-*.zip`，作为 Release 资产上传即可。
+
+> 为了后面命令简短，可以把工具目录加进 PATH，或直接用全路径 `dse.exe`。下文统一写 `dse`。
 
 ---
 
@@ -217,8 +233,10 @@ dse build <project>               # 构建 + 打包到 <project>\build\dist
 dse build <project> --out=DIR     # 指定输出目录
 dse build <project> --key=KEY     # 用 AES-128-CTR 加密资源包（KEY ≥ 16 字节）
 dse pack <dir> <out.bun>          # 单独把一个目录打成资源包
+dse build <project> --with-swgl   # 随包发行软件 OpenGL（无独显机器可跑）
 dse build --target web [--3d]     # 用 Emscripten 编译 Web 产物
 dse dist  --target web --out=DIR  # 收集 Web 产物为可上传包
+dse dist  --target win|linux      # 把已构建目录打成 .zip / .tar.gz（Export Template）
 dse help                          # 查看完整帮助
 ```
 
@@ -238,6 +256,6 @@ dse help                          # 查看完整帮助
 |------|------------|
 | 双击 exe 是空窗口 | 确认同目录有 `game.dsmanifest`（记录入口脚本）和 `game.bun`；用 `--key` 加密过资源时改用 `launch.bat` 启动 |
 | `Failed to create GLFW window` | 没有硬件 OpenGL，按第 3 步部署 llvmpipe 软件渲染 |
-| 找不到 `dse.exe` | 还没构建引擎，先做第 0 步的 `bootstrap_windows.ps1` |
+| 找不到 `dse.exe` | 还没拿到工具——按第 0 步方式 A 下载预编译工具包，或方式 B 跑 `bootstrap_windows.ps1` |
 | 脚本改了没生效 | 改完要重新 `dse build`，再运行 exe |
 | `Lua ... failed: attempt to index a nil value (global 'app')` | 脚本里直接用了 `app` 却没写 `local app = dse.app` 别名 |
