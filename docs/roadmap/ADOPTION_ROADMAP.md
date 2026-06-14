@@ -149,14 +149,17 @@
 | 输入 `nil 'app'` 崩溃 | 模板写 `app.get_key` 但 `app` 未定义（API 在 `dse.app`），每帧报错 | 模板加 `local app = dse.app` 别名 | 运行无报错，输入响应正常 |
 | 双击 exe 空窗口（摩擦点①） | 裸跑 `<proj>.exe` 不加载入口脚本，必须用 `launch.bat` 传 `--script` | `game.dsmanifest` 增 `entry_script`；`dse build` 写入；standalone 未传 `--script` 时从 manifest 读取 | 裸跑 `<proj>.exe`（无参数）渲染+输入正常；单测 12/12 |
 
-### 剩余待办（按优先级，未做）
-1. **无预编译 `dse` 二进制下载**（A2，**高**）：新手首次必须 `bootstrap_windows.ps1` 从源码构建一次才能拿到 `dse.exe` + 运行时。建议加 `dse` release 流程或 CI 产物：打一个自带运行时的 `dse` 工具包 zip，README 提供下载直链，使「装好 dse → `dse new` → `dse build` → 双击玩」彻底免编译。
-2. **编辑器 Build Game 与 CLI 对齐**（A2，中）：`apps/editor_cpp/src/editor_build_game.cpp` 仍用 `--script` 拼 launch 参数、不写 `game.dsmanifest` 的 `entry_script`。应改为复用 `WriteAppManifest`（带 `entry_script`），使编辑器出包与 `dse build` 一致、同样双击即玩。
-3. **加密资源包仍需 `launch.bat`**（A2，低/可接受）：`--key` 加密包裸跑无密钥，仍靠 `launch.bat` 传 `--key`。可接受（未加密包是新手默认路径）；若要加密包也双击即玩，需另设密钥分发方案（不建议明文入 manifest）。
-4. **无独显环境需手动部署软件 GL**（A2/DX，中）：无 GPU/远程桌面/VM 下首次启动报 `Failed to create GLFW window`，需手动 `setup_swgl.ps1` + 设 `GALLIUM_DRIVER=llvmpipe`。可选：`dse dist` 增 `--with-swgl` 开关，自动把 llvmpipe 一并打进 dist 并在 `launch.bat` 里设好环境变量。
-5. **`dse dist` 各平台 Export Template**（A2 主体，高）：Win zip/NSIS/Inno、Linux AppImage/tar 工程化（Android/Web 已有）。见 §二 A2。
-6. **英文文档 + FAQ 独立页**（A3 收尾，中）：QUICKSTART/2D 教程英文版；FAQ 单列页。
-7. **品类模板工程**（B2，中）：2D 平台跳跃 / 俯视 RPG / 3D 第三人称，接 `dse new --template`，与 A3 教程互为素材。
+### 剩余待办进展（2026-06-14 全部落地）
+
+> 下列 7 项均已在 `feature/engine-lib` 完成、构建+测试（ctest 3/3）通过；品类模板在 llvmpipe 软件渲染下三模板实跑 `Awake OK`。**仍为文档/脚手架/CLI/编辑器出包改动，未动渲染等引擎核心。**
+
+1. ✅ **无预编译 `dse` 二进制下载**（A2，高）：新增 `scripts/package_dse_tools.ps1`，编译 `dse_cli`/`dse_standalone` 并收集 `dse.exe` + `DSEngine_Game.exe` + DLL 打成 `DSEngine-tools-vX.Y.Z-win-x64.zip`（含内嵌 README）；QUICKSTART 第 0 步改为「下载预编译 / bootstrap」二选一，README 提供 Releases 直链。`.gitignore` 忽略 `dist/`。
+2. ✅ **编辑器 Build Game 与 CLI 对齐**（A2，中）：`apps/editor_cpp/src/editor_build_game.cpp` 改用 `WriteAppManifest` 写 `entry_script`，并把 `scripts/`+`scenes/` 松散拷到 exe 旁 → 编辑器出包同样双击即玩。
+3. ✅ **加密资源包仍需 `launch.bat`**（A2，低/可接受）：维持现状（明文包为新手默认双击路径），并在 QUICKSTART 与新建 FAQ 中明确说明「加密包须随发 `launch.bat` 并以其启动」。
+4. ✅ **无独显环境需手动部署软件 GL**（A2/DX，中）：`dse build` 增 `--with-swgl` 开关，校验 llvmpipe DLL 是否随包并在 launch 脚本设 `GALLIUM_DRIVER=llvmpipe`；QUICKSTART/FAQ 给出 `setup_swgl.ps1` 步骤。
+5. ✅ **`dse dist` 各平台 Export Template**（A2 主体，高）：`dse dist --target win|linux` 把已构建目录工程化为 `.zip`/`.tar.gz`（Export Template），`--installer`（Inno Setup `iscc`）/`--appimage`（`appimagetool`）可选附带安装器。
+6. ✅ **英文文档 + FAQ 独立页**（A3 收尾，中）：新增 `../getting-started/QUICKSTART.en.md`（英文版上手）与 `../getting-started/FAQ.md`（双语 FAQ：拿工具/运行/打包加密/分发/模板）；`docs/README.md` 与 `README.en.md` 加索引。
+7. ✅ **品类模板工程**（B2，中）：`dse new` 增 `platformer`/`topdown`/`thirdperson` 三个品类模板（接 `dse new --template=`），各生成带完整玩法的可运行 `main.lua`（2D 平台跳跃 / 俯视 RPG / 3D 第三人称），仅用已文档化的 `dse.app`/`dse.ecs` API。
 
 ---
 

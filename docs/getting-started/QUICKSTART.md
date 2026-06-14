@@ -85,6 +85,11 @@ MyGame/
 | `3d`    | 3D 演示场景（相机 + 平行光 + Lua 入口脚本） |
 | `lua`   | 纯 Lua 入口脚本 |
 | `cpp`   | C++ 宿主工程（`src/main.cpp` + `CMakeLists.txt`，需自己跑 CMake 编译） |
+| `platformer`  | 品类模板：2D 平台跳跃（重力 / 跳跃 / 平台 AABB 碰撞 / 相机跟随） |
+| `topdown`     | 品类模板：俯视 RPG（8 向移动 / 障碍碰撞 / 可拾取金币 / 相机跟随） |
+| `thirdperson` | 品类模板：3D 第三人称（地面 + 角色方块 / 固定偏移跟随相机） |
+
+> 品类模板生成的 `main.lua` 已经是带完整玩法的可运行小游戏，直接 `dse build` 即可玩，适合在其基础上改造。
 
 打开 `MyGame\scripts\main.lua` 看一眼，它已经是一个**能跑的完整小游戏**：
 
@@ -228,7 +233,8 @@ dse dist --target web --out dist\web
 ## 常用命令速查
 
 ```powershell
-dse new <template> <dir>          # 创建项目（模板：empty/2d/3d/lua/cpp）
+dse new <template> <dir>          # 创建项目（模板：empty/2d/3d/lua/cpp/platformer/topdown/thirdperson）
+dse new <dir> --template=<template>  # 同上（模板用具名选项指定）
 dse build <project>               # 构建 + 打包到 <project>\build\dist
 dse build <project> --out=DIR     # 指定输出目录
 dse build <project> --key=KEY     # 用 AES-128-CTR 加密资源包（KEY ≥ 16 字节）
@@ -247,6 +253,8 @@ dse help                          # 查看完整帮助
 - [第一篇 2D 教程：金币收集小游戏](TUTORIAL_2D_FIRST_GAME.md) —— 在本模板基础上加金币、计分、胜利判定
 - [Lua API 参考](../api/LUA_API.md) —— 全部可用的 `dse.*` 接口（对照源码核实）
 - [从源码构建引擎 / 用编辑器 / 测试](GETTING_STARTED.md) —— 面向贡献者的完整构建指南
+- [常见问题 FAQ](FAQ.md) —— 出包 / 运行 / 加密 / 软件渲染 等高频问题
+- [English QUICKSTART](QUICKSTART.en.md)
 
 ---
 

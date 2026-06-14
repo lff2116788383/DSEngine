@@ -339,6 +339,8 @@ Drag the script into the Viewport or onto the entity's `LuaScriptComponent` `scr
 
 ## Quick Start
 
+> New here? The fastest path is the CLI: scaffold, build, and play a game in minutes — see the [English Quick Start](docs/getting-started/QUICKSTART.en.md) and the [FAQ](docs/getting-started/FAQ.md). The sections below cover the editor and Lua demos.
+
 ### Run the Editor
 
 ```powershell
