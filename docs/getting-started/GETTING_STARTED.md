@@ -1,5 +1,9 @@
 # Getting Started with DSEngine
 
+> **只想最快做出一个能玩、能导出的小游戏？** 看 [快速上手（QUICKSTART.md）](QUICKSTART.md) —— 只用 `dse` 命令行，30 分钟从零到一个可分发的 2D 游戏，不需要打开编辑器或写 C++。
+>
+> 本文是面向**贡献者 / 想从源码构建引擎**的人的完整指南（构建引擎、使用编辑器、运行 Demo、测试）。
+
 This guide walks you through building, running, and creating your first project with DSEngine.
 
 ---

@@ -55,7 +55,7 @@ int PrintUsage(int rc = 1) {
         "\n"
         "模板 (template):\n"
         "  empty   仅项目骨架(无脚本)\n"
-        "  2d      2D 玩法 + Lua 入口脚本(on_init/on_update)\n"
+        "  2d      2D 玩法 + Lua 入口脚本(相机+可移动精灵, Awake/Update)\n"
         "  3d      3D 演示场景(相机+平行光) + Lua 入口脚本\n"
         "  lua     Lua 玩法 + 入口脚本\n"
         "  cpp     C++ 宿主工程(src/main.cpp + CMakeLists.txt, 链接 dse_engine, 需自行 cmake 编译)\n"

@@ -25,7 +25,9 @@ docs/
 
 | 文档 | 说明 |
 |------|------|
-| [GETTING_STARTED.md](getting-started/GETTING_STARTED.md) | 构建、运行、创建首个项目、测试 |
+| [QUICKSTART.md](getting-started/QUICKSTART.md) | **新手首选**：只用 `dse` 命令行，30 分钟从零做出并导出一个 2D 小游戏 |
+| [TUTORIAL_2D_FIRST_GAME.md](getting-started/TUTORIAL_2D_FIRST_GAME.md) | 第一篇 2D 教程：金币收集小游戏（移动 / 碰撞 / 计分 / 通关） |
+| [GETTING_STARTED.md](getting-started/GETTING_STARTED.md) | 面向贡献者：从源码构建引擎、使用编辑器、运行 Demo、测试 |
 
 ## 🏗️ 架构设计
 
