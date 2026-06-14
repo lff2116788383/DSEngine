@@ -87,6 +87,17 @@
 - `dse dist --target web`：打包 `index.html + .wasm + .data + .js` 成可上传压缩包。
 - MVP 阶段可先用 CMake 预设手动跑通，再回填到 CLI。
 
+#### 2.6 实现状态（2026-06-14，已完成）
+- **`dse dist --target web`**：已实现（`apps/tools/dse_cli/main.cpp` 的 `CmdDist` + `engine/project/web_dist.{h,cpp}` 的 `CollectWebDistribution`），把 `bin/` 下的 emscripten 产物（`index.html/.js/.wasm[/.data][/.wasm.map]`）收集到目标目录，可直接 zip 上传 itch.io。
+- **`dse build --target web`**：本轮新增（`engine/project/web_build.{h,cpp}` + CLI 接线）。用法：
+  `dse build --target web [--3d] [--debug] [--preset=NAME] [--source=DIR] [--out=DIR] [--no-dist]`。
+  - 预设解析 `ResolveWebPreset(debug, enable_3d, explicit_preset)`：默认 `web-release`，`--debug`→`web-debug`，`--3d` 追加 `-3d`，`--preset=` 显式覆盖。
+  - `RunWebBuild()`：校验 `EMSDK` 环境变量与仓库根 `CMakePresets.json`，切到仓库根后 `cmake --preset <p>` 配置 + `cmake --build --preset <p>` 编译；**纯能力/环境驱动，无平台 `#ifdef`**（隔离纪律）。
+  - 构建后默认调用 `CollectWebDistribution(<source>/bin → --out，默认 <source>/dist/web)` 收包；`--no-dist` 可跳过。
+  - 逻辑层在 `tests/gtest/unit/engine/project/web_build_test.cpp` 有 7 个单测覆盖（预设解析 / 命令串 / EMSDK 缺失 / presets 缺失 / 禁用步骤直通）。
+  - 本机端到端验证：`dse build --target web --3d` → 解析 `web-release-3d`、emscripten 配置+编译、收集 4 个产物（`index.html/.js/.wasm/.data`，~5.8MB）到 `dist/web`；桌面 `ctest` 3/3 不回归。
+  - 至此 §2.6 / M4「出包」一环 CLI 侧闭合（CI `build-web` 仍按用户要求略过，无额度）。
+
 ### 2.6b WebGPU：规划中的未来后端（v2 写明，非本期实现）
 - WebGL2 **无 Compute** → Web 上 DDGI/TressFX/GPU-Driven 永久缺席。这是平台限制，非本项目债；但为拿回 Compute 能力，**未来可加 WebGPU 作为第 4 个 RHI 后端**（引擎已是多后端架构，属"加后端"非重写）。
 - 因此 v2 的隔离纪律（能力门控 + 平台宏不入核心）正是为 WebGPU 平滑接入铺路。

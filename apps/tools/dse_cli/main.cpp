@@ -7,6 +7,8 @@
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
+ *   dse build --target web [--3d] [--debug] [--out=DIR]
+ *                                          # 用 emscripten 预设编译 Web 产物并收集出包（需 EMSDK）
  *   dse dist --target web [--in=DIR] [--out=DIR]
  *                                          # 收集 emscripten 产物为可上传(itch.io)的 Web 包
  *   dse help | -h | --help                 # 显示帮助
@@ -17,6 +19,7 @@
 
 #include "engine/project/project_scaffold.h"
 #include "engine/project/web_dist.h"
+#include "engine/project/web_build.h"
 #include "engine/assets/bundle_packer.h"
 #include "engine/runtime/app_manifest.h"
 
@@ -44,6 +47,8 @@ int PrintUsage(int rc = 1) {
         "  dse pack <dir> <out.bun> [--key=KEY]     把目录打包成(可加密)资源包\n"
         "  dse build <project> [--out=DIR] [--key=KEY]\n"
         "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch 脚本\n"
+        "  dse build --target web [--3d] [--debug] [--preset=NAME] [--source=DIR] [--out=DIR] [--no-dist]\n"
+        "                                           用 emscripten 预设配置+编译 Web 产物(默认 web-release), 并收集到 --out\n"
         "  dse dist --target web [--in=DIR] [--out=DIR]\n"
         "                                           收集 emscripten 产物(index.html/.js/.wasm[/.data])为可上传的 Web 包\n"
         "  dse help | -h | --help                   显示本帮助\n"
@@ -58,14 +63,21 @@ int PrintUsage(int rc = 1) {
         "选项:\n"
         "  --key=KEY   AES-128-CTR 密钥(>=16 字节); 省略=明文打包\n"
         "  --out=DIR   build 输出目录(默认 <project>/build)\n"
+        "  --target web    用于 build/dist 时选择 Web(Emscripten) 目标\n"
+        "  --3d / --debug  Web 构建选 *-3d / web-debug* 预设(默认 web-release)\n"
+        "  --preset=NAME   直接指定 CMake 预设(覆盖 --3d/--debug)\n"
+        "  --source=DIR    仓库根(含 CMakePresets.json); 省略则自动向上探测\n"
+        "  --no-dist       Web 构建后不收集出包\n"
         "\n"
         "示例:\n"
         "  dse new lua MyGame\n"
         "  dse build MyGame --out dist --key 0123456789abcdef\n"
         "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"
+        "  dse build --target web --3d            # 编译 web-release-3d 产物并收集到 dist/web\n"
         "  dse dist --target web --out dist/web   # 之后压缩 dist/web 即可上传 itch.io\n"
         "\n"
-        "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 DSEngine_Game; cpp 模板需用 cmake 单独编译。\n";
+        "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 DSEngine_Game; cpp 模板需用 cmake 单独编译。\n"
+        "    build --target web 例外: 它驱动 emscripten 预设真正编译 Web 产物, 需先设置 EMSDK。\n";
     return rc;
 }
 
@@ -232,7 +244,121 @@ bool StageProjectForPacking(const fs::path& project_root, const fs::path& stagin
     return true;
 }
 
+// 在 cwd / exe 目录及其各级父目录中定位含 CMakePresets.json 的仓库根。
+fs::path LocateSourceDir(const char* argv0) {
+    std::error_code ec;
+    std::vector<fs::path> starts;
+    starts.push_back(fs::current_path(ec));
+    try {
+        starts.push_back(fs::absolute(fs::path(argv0)).parent_path());
+    } catch (...) {
+    }
+    for (const auto& start : starts) {
+        for (fs::path d = start; !d.empty(); d = d.parent_path()) {
+            if (fs::exists(d / "CMakePresets.json", ec)) {
+                return d;
+            }
+            if (d == d.root_path()) break;
+        }
+    }
+    return {};
+}
+
+// dse build --target web：用 emscripten 预设真正配置+编译 Web 产物，
+// 成功后默认复用 dist 逻辑收集为可上传包。
+int CmdBuildWeb(const std::vector<std::string>& args, const char* argv0) {
+    dse::project::WebBuildOptions opts;
+    std::string out_opt;
+    std::string source_opt;
+    bool no_dist = false;
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        std::string v;
+        if (MatchOption(a, "--target=", v)) {
+            // 已由 CmdBuild 路由确认为 web，忽略。
+        } else if (a == "--target") {
+            if (i + 1 < args.size()) ++i;  // 跳过其值(web)
+        } else if (MatchOption(a, "--preset=", v)) {
+            opts.preset = v;
+        } else if (a == "--preset" && i + 1 < args.size()) {
+            opts.preset = args[++i];
+        } else if (MatchOption(a, "--source=", v)) {
+            source_opt = v;
+        } else if (a == "--source" && i + 1 < args.size()) {
+            source_opt = args[++i];
+        } else if (MatchOption(a, "--out=", v)) {
+            out_opt = v;
+        } else if (a == "--out" && i + 1 < args.size()) {
+            out_opt = args[++i];
+        } else if (a == "--3d") {
+            opts.enable_3d = true;
+        } else if (a == "--debug") {
+            opts.debug = true;
+        } else if (a == "--no-dist") {
+            no_dist = true;
+        } else {
+            std::cerr << "错误: build --target web 未知选项: " << a << "\n";
+            return PrintUsage();
+        }
+    }
+
+    fs::path source = source_opt.empty() ? LocateSourceDir(argv0) : fs::path(source_opt);
+    if (source.empty()) {
+        std::cerr << "错误: 未能定位 CMakePresets.json；请用 --source=<仓库根> 指定\n";
+        return 1;
+    }
+    opts.source_dir = source.string();
+
+    std::cout << "Web 构建: 仓库根 " << fs::absolute(source).string() << "\n";
+    dse::project::WebBuildResult res = dse::project::RunWebBuild(opts);
+    std::cout << "预设: " << res.preset << "\n"
+              << "  配置: " << res.configure_command << "\n"
+              << "  编译: " << res.build_command << "\n";
+    if (!res.ok) {
+        std::cerr << "错误: " << res.error << "\n";
+        return 1;
+    }
+    std::cout << "Web 产物已生成于 " << (source / "bin").string()
+              << " (index.html/.js/.wasm[/.data])\n";
+
+    if (no_dist) {
+        std::cout << "提示: 已跳过收集；如需出包运行 `dse dist --target web`\n";
+        return 0;
+    }
+
+    const fs::path out_dir = out_opt.empty() ? (source / "dist" / "web") : fs::path(out_opt);
+    dse::project::WebDistResult dist =
+        dse::project::CollectWebDistribution((source / "bin").string(), out_dir.string());
+    if (!dist.ok) {
+        std::cerr << "错误: 收集 Web 产物失败: " << dist.error << "\n";
+        return 1;
+    }
+    std::cout << "已收集 " << dist.files.size() << " 个 Web 产物 -> "
+              << fs::absolute(out_dir).string() << "  (" << dist.total_bytes << " bytes)\n";
+    for (const auto& f : dist.files) {
+        std::cout << "  + " << f << "\n";
+    }
+    std::cout << "提示: 压缩该目录(zip)即可上传 itch.io。\n";
+    return 0;
+}
+
 int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
+    // --target web 走 emscripten 预设构建（与桌面 build 完全不同的流程）。
+    for (size_t i = 0; i < args.size(); ++i) {
+        std::string v;
+        if (MatchOption(args[i], "--target=", v)) {
+            if (v == "web") return CmdBuildWeb(args, argv0);
+            std::cerr << "错误: build 暂不支持 --target " << v << " (仅 web)\n";
+            return PrintUsage();
+        }
+        if (args[i] == "--target") {
+            const std::string t = (i + 1 < args.size()) ? args[i + 1] : "";
+            if (t == "web") return CmdBuildWeb(args, argv0);
+            std::cerr << "错误: build 暂不支持 --target " << t << " (仅 web)\n";
+            return PrintUsage();
+        }
+    }
+
     std::string key;
     std::string out_opt;
     std::vector<std::string> positional;
