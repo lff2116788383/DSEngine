@@ -62,6 +62,7 @@ static ma_result CustomVFS_Open(ma_vfs* pVFS, const char* pFilePath, ma_uint32 o
     (void)pVFS;
     std::vector<uint8_t> data;
     if (!RequireAssetManager(g_audio_asset_manager).LoadFileToMemory(pFilePath, data)) {
+        std::cerr << "[Audio][VFS] not found: " << (pFilePath ? pFilePath : "(null)") << std::endl;
         return MA_DOES_NOT_EXIST;
     }
     auto* f = new CustomVFSFile();
@@ -225,8 +226,23 @@ bool AudioSystem::Initialize(AssetManager* asset_manager) {
     auto resource_manager = std::make_unique<ResourceManagerHandle>();
     ma_resource_manager_config rm_config = ma_resource_manager_config_init();
     rm_config.pVFS = &g_custom_vfs_callbacks;
-    if (ma_resource_manager_init(&rm_config, &resource_manager->value) == MA_SUCCESS) {
+#if defined(__EMSCRIPTEN__)
+    // 单线程 Web 构建 (未启用 pthreads, 见 DEBT-4) 无法创建后台作业线程。默认配置
+    // 下 miniaudio 资源管理器会尝试起 1 个作业线程并使用阻塞作业队列, 在此环境会
+    // 失败 (ma_resource_manager_init 返回 MA_INVALID_OPERATION), 导致引擎回退到默认
+    // VFS (fopen 相对 CWD), 找不到 MEMFS 中 /data 下的音频文件 -> BGM 静音。
+    // 这里显式启用「无线程」模式 (作业线程数 0), 资源管理器将在调用线程上同步处理,
+    // 从而正确走我们的自定义 VFS (经 AssetManager 解析 /data 前缀)。
+    rm_config.flags |= MA_RESOURCE_MANAGER_FLAG_NO_THREADING;
+    rm_config.jobThreadCount = 0;
+#endif
+    const ma_result rm_result = ma_resource_manager_init(&rm_config, &resource_manager->value);
+    if (rm_result == MA_SUCCESS) {
         resource_manager->initialized = true;
+    } else {
+        std::cerr << "[Audio] 资源管理器初始化失败 (ma_result="
+                  << static_cast<int>(rm_result)
+                  << "), 引擎将退回默认 VFS" << std::endl;
     }
 
     auto engine = std::make_unique<EngineHandle>();
@@ -616,6 +632,19 @@ bool AudioSystem::PreloadAudio(const std::string& filepath) {
     return true;
 }
 
+// 选择 BGM 载入标志。
+// 桌面端使用流式解码 (MA_SOUND_FLAG_STREAM) 以降低内存占用; 但单线程 Web
+// 构建 (未启用 pthreads, 见 DEBT-4) 没有后台作业线程, miniaudio 的流式解码
+// 作业 (page 解码) 不会被执行 -> 输出静音。因此 Web 端改为整段载入内存同步
+// 解码 (flag 0), 与 SFX 路径一致。BGM 片段通常很小, 内存解码完全可接受。
+static ma_uint32 SelectBgmSoundFlags() {
+#if defined(__EMSCRIPTEN__)
+    return 0;
+#else
+    return MA_SOUND_FLAG_STREAM;
+#endif
+}
+
 bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) {
     if (!is_initialized || !engine_handle_ || !engine_handle_->get() || filepath.empty()) {
         return false;
@@ -627,11 +656,13 @@ bool AudioSystem::PlayBgm(const std::string& filepath, float volume, bool loop) 
     const ma_result result = ma_sound_init_from_file(
         engine_handle_->get(),
         filepath.c_str(),
-        MA_SOUND_FLAG_STREAM,
+        SelectBgmSoundFlags(),
         music_group,
         nullptr,
         &new_sound->value);
     if (result != MA_SUCCESS) {
+        std::cerr << "[Audio] BGM init FAILED '" << filepath
+                  << "' ma_result=" << static_cast<int>(result) << std::endl;
         return false;
     }
 
@@ -677,7 +708,7 @@ bool AudioSystem::CrossfadeBgm(const std::string& filepath, float fade_sec, floa
     const ma_result result = ma_sound_init_from_file(
         engine_handle_->get(),
         filepath.c_str(),
-        MA_SOUND_FLAG_STREAM,
+        SelectBgmSoundFlags(),
         music_group,
         nullptr,
         &new_sound->value);

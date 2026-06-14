@@ -64,6 +64,13 @@
 - 引擎音频后端为 **miniaudio**（`engine/audio/audio_system.cpp`），miniaudio 原生支持 Emscripten/WebAudio——**走现有抽象，仅在 CMake 为 emscripten 选 miniaudio 的 web 后端**，不加业务层特例。
 - 验证任务：浏览器内播放一段 BGM + 一个音效；注意浏览器自动播放策略（需首次用户交互后 resume AudioContext）。
 
+#### 2.3b 实现状态（2026-06-14，已完成并真机验证）
+- **自动播放策略路径**：`dse_resume_audio()`（`EMSCRIPTEN_KEEPALIVE`）在 `shell.html` 的首次 `pointerdown/keydown` 时调用 `ma_device_start`。真机 Chrome 验证：首次点击前 `AudioContext=suspended`、BGM 信号 `peak=0`；点击后 `AudioContext=running`、BGM 信号 `peak>0`。通过。
+- **静音根因（已修）**：单线程 Web 构建（未启用 pthreads，见 DEBT-4）下 `ma_resource_manager_init` 返回 `MA_INVALID_OPERATION (-3)`——miniaudio 的线程支持是编译进来的，默认配置会尝试起 1 个后台作业线程并使用阻塞作业队列，在无 pthreads 环境失败。结果：引擎回退到 miniaudio **默认 VFS**（`fopen` 相对 CWD），找不到 MEMFS 中 `/data/...` 下的音频文件 → `ma_sound_init_from_file` 返回 `MA_DOES_NOT_EXIST (-7)` → BGM 静音。
+- **修复**：仅在 `#if defined(__EMSCRIPTEN__)` 下（`engine/audio` 本就是允许平台分支的边界层，与隔离纪律不冲突）对资源管理器配置设 `flags |= MA_RESOURCE_MANAGER_FLAG_NO_THREADING; jobThreadCount = 0;`，让资源管理器在调用线程上同步运行 → 初始化成功 → 正确走我们经 `AssetManager` 解析 `/data` 前缀的自定义 VFS（`g_custom_vfs_callbacks`），文件命中（`bytes=19888`），BGM 正常播放。
+- **`SelectBgmSoundFlags()`**：在 emscripten 上对 BGM 不使用 `MA_SOUND_FLAG_STREAM`（改为全量内存同步解码），因为流式分页同样依赖作业线程；这是与上面同源问题的稳妥处理，**本身不是静音的修复点**（即便流式，在 NO_THREADING 模式下分页作业也不会被泵送）。
+- **真机验证（Chrome/WebGL2，web-release-3d）**：① 首次手势后 `AudioContext` suspended→running 且 BGM 信号非零；② AnalyserNode 在 miniaudio 输出节点上 3 秒持续测量 `peak=0.00437`、约 87% 采样非零（声音偏小是因 `play_bgm(..., 0.2, ...)` 音量 0.2 × ping 素材本身较轻）；③ `M` 键暂停使信号归零、再按恢复信号非零；④ 生产构建（诊断已裁剪为仅失败路径）控制台无任何音频失败日志。诊断日志仅保留失败分支（VFS 未找到 / BGM 初始化失败 / 资源管理器初始化失败）。
+
 ### 2.3c 输入：键鼠 + 触屏（v2 新增）
 - 复用 `PlatformApp` 输入回调；Web 后端把 emscripten 键鼠事件接上。
 - **触屏**：照搬 Android 已有的 `touch→pointer(button 0)` 映射（`android_app.cpp`），让移动端 Web / 微信可玩；单指优先，多指后续。
