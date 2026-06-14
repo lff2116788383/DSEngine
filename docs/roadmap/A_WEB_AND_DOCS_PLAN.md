@@ -121,7 +121,7 @@
 
 **观感打磨（DEBT-6，已偿还，2026-06-14）**：在 `data/main3d.lua`（场景作者层，三后端通用、对 WebGL2 能力安全）做了如下调整：相机后拉并抬高（`radius 6.5→9.5`、`height 2.2→3.4`）修正构图偏近；方向光降平铺环境光、提关键光强（`ambient 0.25→0.10`、`intensity 1.5→2.4`）让立方体各面拉开明暗、不再发灰；新增 `SkyLight` 半球环境色（CPU 端 `mix(down,up)*intensity` 的环境色 uniform，无 Compute/SSBO/bake，Web 安全）给环境上冷调；立方体 `roughness 0.55→0.38` 出清晰高光；新增 `PostProcess` 组件显式定曝光（`exposure=0.9`）+ 轻微 vignette（composite pass 内 tonemap 即生效，无需新增 pass）。桌面 D3D11/WARP 实跑核对：立方体呈现明确的三维明暗与高光、构图留白合理。
 
-### 2.8c 真机 WebGL2 端到端验证与修复（2026-06-14，进行中）
+### 2.8c 真机 WebGL2 端到端验证与修复（2026-06-14，已完成）
 
 > 重要更正：§2.8b 中「浏览器实测」一段实际是在**桌面 D3D11/WARP**（同样走非 SSBO 的 UBO 着色器路径）上核对的，**并未**在真实浏览器 WebGL2 端到端验证。本轮首次在真实 Chrome/WebGL2 跑 wasm 产物，发现 M5 Web 3D 之前其实是**黑屏**，根因有三，均已在代码侧修复（不改 `.glsl` 源、不改场景）：
 
@@ -135,7 +135,14 @@
 
 3. （定位）reflection 仍按 SSBO 列出灯光/骨骼块，非 SSBO 路径需显式绑定——已随第 1 项处理。
 
-桌面回归：`ctest` 3/3 通过（unit/integration/smoke）。**剩余（后续）**：重编 `web-debug-3d` → 真机 Chrome/WebGL2 复验立方体出画（DEBT-6 观感可见、旋转、键盘）并录屏 → 补 CI `build-web` 与冒烟测试 → 复验通过后回填本节结论。
+桌面回归：`ctest` 3/3 通过（unit/integration/smoke）。
+
+**真机复验结论（2026-06-14，通过）**：重编 `web-debug-3d` 产物后，在真实 Chrome/WebGL2（ANGLE→SwiftShader 软光栅）端到端复跑 `bin/index.html`，M5 Web 3D **出画正常、不再黑屏**：
+- 控制台确认 `RHI 后端=OpenGL`、`adapter="WebKit WebGL"`、`Render pipeline profile: Forward3D`（`gpu_driven=false, shadows=off, postprocess=none`），`data/main3d.lua` 加载、`Awake OK`；逐帧统计 `entities=6, meshes=4, draw_calls=4, render_passes=5`。**不再出现**上文第 1 项的顶点 SSBO 编译失败、第 2 项的 `Two textures of different types use the same sampler location` 合成报错——两条黑屏根因确认消除。残留仅 `[GenerateUBOGLSL] #version 430 not found`、`[GLGpuTimer] timestamp queries unavailable on GLES`（均非致命、不影响出画）。
+- 观感（DEBT-6）可见：立方体呈饱和蓝、各面明暗拉开、有清晰高光与轻微 vignette，地面透视 + 深度正确，立方体持续自转。
+- 交互可用：键盘 `A/D` 绕轨、`W/S` 推拉相机均生效（构图与受光面随相机改变）。已录屏留证。
+
+**剩余（后续，本轮范围外）**：补 CI `build-web` 与冒烟测试（当前无 CI 额度，暂缓）。
 
 ### 2.9 风险与对策
 | 风险 | 等级 | 对策 |
