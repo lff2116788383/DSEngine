@@ -519,6 +519,31 @@ if(NOT ANDROID)
 endif()
 
 option(DSE_BUILD_SHARED "Build dse_engine as shared library (DLL). Requires DSE_EXPORT on public APIs." OFF)
+
+# --- LTCG / IPO（Release 链接期代码生成，缩小二进制 + 跨翻译单元优化）---
+# 仅对「静态」配置启用：DSE_BUILD_SHARED=ON 时 /GL 与导出 .def 生成不兼容
+# （cmake -E __create_def 读不了 /GL 产出的 .obj 符号表），故共享库构建保持关闭。
+# 通过 dse_enable_lto() 按目标精确开启，避免波及第三方依赖（assimp/Jolt 等）。
+option(DSE_ENABLE_LTO "Enable Link-Time Code Generation (/GL+/LTCG) on Release for first-party targets" ON)
+set(DSE_IPO_SUPPORTED OFF)
+if(DSE_ENABLE_LTO AND NOT DSE_BUILD_SHARED)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _dse_ipo_ok OUTPUT _dse_ipo_msg LANGUAGES CXX)
+    if(_dse_ipo_ok)
+        set(DSE_IPO_SUPPORTED ON)
+        message(STATUS "LTCG/IPO enabled for first-party Release builds")
+    else()
+        message(STATUS "LTCG/IPO unsupported, skipping: ${_dse_ipo_msg}")
+    endif()
+endif()
+# 对单个目标在 Release / RelWithDebInfo 配置启用 IPO（Debug 不启用，保留快编译 + 可调试）。
+function(dse_enable_lto target)
+    if(DSE_IPO_SUPPORTED)
+        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    endif()
+endfunction()
+
 set(DSE_ENGINE_ALL_SOURCES
     ${glfw_sources}
     ${freetype_src}
@@ -776,9 +801,10 @@ endif()
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # 注意：LTCG (/GL) 与 WINDOWS_EXPORT_ALL_SYMBOLS 不兼容。
-    # cmake -E __create_def 无法读取 /GL 产出的 .obj 文件（无标准 COFF 符号表）。
-    # 因此不启用 INTERPROCEDURAL_OPTIMIZATION，Release 依赖 /O2 + Unity Build 即可。
+    # LTCG (/GL+/LTCG)：静态库配置（默认 DSE_BUILD_SHARED=OFF）下启用，Release 缩小二进制。
+    # 共享库配置不可用——/GL 产出的 .obj 无标准 COFF 符号表，cmake -E __create_def 读不了，
+    # 故 dse_enable_lto() 已用 NOT DSE_BUILD_SHARED 守卫（见上方定义）。
+    dse_enable_lto(dse_engine)
 
     # Workaround: CMake 4.3 VS generator 在非 Debug 配置下可能不生成 objects.txt，
     # 导致 WINDOWS_EXPORT_ALL_SYMBOLS 的 __create_def PreLinkEvent 失败。
@@ -838,6 +864,10 @@ add_subdirectory(apps/standalone)
 
 # 工具链：dse CLI（headless：建项目 / 打包加密 / 完整 build）
 add_subdirectory(apps/tools/dse_cli)
+
+# 对随 SDK/工具包发行的可执行文件启用 LTCG（与静态 dse_engine 的 /GL 配合做跨模块优化）。
+dse_enable_lto(dse_standalone)
+dse_enable_lto(dse_cli)
 
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
