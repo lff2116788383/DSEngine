@@ -214,6 +214,24 @@ static bool TransformSSBOToUBO(std::string& src, const char* ssbo_name, const ch
     return true;
 }
 
+// Lower the skinning/instancing SSBOs of a PBR/shadow vertex shader to bounded
+// UBOs so the program links on capability-limited contexts without SSBO support
+// (WebGL2 / GLES 3.0, desktop GL < 4.3). ES 3.0 (WebGL2) rejects
+// `buffer`/`std430`/`readonly` outright, so this is mandatory there.
+//   - BoneMatricesSSBO -> BoneMatrices UBO (binding 6, bound explicitly later),
+//     sized to the engine's BoneMatricesUBO (kMaxBones).
+//   - SkinnedInstBuf (GPU instancing) / ComputeSkinBuf (compute skinning) are
+//     unreachable without SSBO/compute (u_skinned is never 2/3 there); they are
+//     bounded minimally and never read, so they stay at the default binding.
+static std::string LowerVertexSSBOToUBO(const char* vert_src) {
+    if (vert_src == nullptr || vert_src[0] == '\0') return std::string();
+    std::string src = vert_src;
+    TransformSSBOToUBO(src, "BoneMatricesSSBO", "BoneMatrices",   "u_bone_matrices",   kMaxBones);
+    TransformSSBOToUBO(src, "SkinnedInstBuf",   "SkinnedInstUBO", "skinned_instances", 1);
+    TransformSSBOToUBO(src, "ComputeSkinBuf",   "ComputeSkinUBO", "compute_skin_verts", 1);
+    return src;
+}
+
 // 鍔ㄦ€佹彁鍙?UBO 鍧楃殑 spirv-cross 瀹炰緥鍚嶏紙濡?"_2008"锛夛紝闅?shader 鍙樺姩鑰屽彉鍔?
 static std::string ExtractInstanceName(const std::string& src, const char* ubo_name) {
     const std::string marker = std::string("uniform ") + ubo_name + "\n";
@@ -342,16 +360,20 @@ std::string GLShaderManager::GenerateUBOGLSL() {
 
 void GLShaderManager::InitBuiltinPBRShader() {
     using namespace dse::render::generated_shaders;
-    if (!supports_ssbo_) {
-        static std::string ubo_frag_src = GenerateUBOGLSL();
-        pbr_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), ubo_frag_src.c_str());
-    } else {
-        pbr_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(kpbr_frag));
-    }
+    // On capability-limited contexts without SSBO (WebGL2 / GLES 3.0, desktop
+    // GL < 4.3) both the vertex and fragment shaders must be lowered from SSBO
+    // to bounded UBO; the eye shader reuses the same (lowered) vertex.
+    const std::string pbr_vert = supports_ssbo_
+        ? std::string(DSE_SL(kpbr_vert))
+        : LowerVertexSSBOToUBO(DSE_SL(kpbr_vert));
+    const std::string pbr_frag = supports_ssbo_
+        ? std::string(DSE_SL(kpbr_frag))
+        : GenerateUBOGLSL();
+    pbr_shader_handle_ = CompileProgram(pbr_vert.c_str(), pbr_frag.c_str());
     programs_created_ += 1;
     CachePBRLocations();
 
-    eye_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(keye_frag));
+    eye_shader_handle_ = CompileProgram(pbr_vert.c_str(), DSE_SL(keye_frag));
     if (eye_shader_handle_) {
         programs_created_ += 1;
         DEBUG_LOG_INFO("[GL] Eye shader created: {}", eye_shader_handle_);
@@ -414,6 +436,21 @@ void GLShaderManager::CachePBRLocations() {
     loc.bone_matrices_block_index = glGetUniformBlockIndex(h, "BoneMatrices");
     loc.morph_weights_block_index = glGetUniformBlockIndex(h, "MorphWeights");
     loc.light_probe_data_block_index = glGetUniformBlockIndex(h, "LightProbeData");
+
+    // The PointLightUBO/SpotLightUBO/BoneMatrices blocks are lowered from SSBOs
+    // at runtime, so the reflection metadata (which still lists them as storage
+    // buffers) cannot bind them. Without explicit binding they default to 0 and
+    // alias PerFrame -> garbage light counts / a block larger than the bound
+    // buffer. Bind them to their engine UBO binding points here.
+    if (!supports_ssbo_) {
+        const auto bind_block = [h](unsigned int idx, UBOBindingPoint bp) {
+            if (idx != GL_INVALID_INDEX)
+                glUniformBlockBinding(h, idx, static_cast<unsigned int>(bp));
+        };
+        bind_block(loc.point_lights_block_index, UBOBindingPoint::PointLights);
+        bind_block(loc.spot_lights_block_index,  UBOBindingPoint::SpotLights);
+        bind_block(loc.bone_matrices_block_index, UBOBindingPoint::BoneMatrices);
+    }
 
     // --- 绾圭悊 unit 鑷姩鍒嗛厤锛坮eflection 椹卞姩锛屼竴娆℃€х粦瀹氾級---
     {
@@ -660,13 +697,24 @@ void GLShaderManager::InitUIEffectsShader() {
 void GLShaderManager::InitShadowShader() {
     if (shadow_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-    shadow_shader_handle_ = CompileProgram(DSE_SL(kshadow_vert), DSE_SL(kshadow_frag));
+    // Same SSBO->UBO lowering as the PBR vertex shader for SSBO-less contexts.
+    const std::string shadow_vert = supports_ssbo_
+        ? std::string(DSE_SL(kshadow_vert))
+        : LowerVertexSSBOToUBO(DSE_SL(kshadow_vert));
+    shadow_shader_handle_ = CompileProgram(shadow_vert.c_str(), DSE_SL(kshadow_frag));
     programs_created_ += 1;
 
     // Shadow UBO 缁戝畾锛坮eflection 椹卞姩锛?
     using namespace dse::render::generated_shaders::reflect;
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_vert_reflection);
     BindUBOsFromReflection(shadow_shader_handle_, kshadow_frag_reflection);
+    // BoneMatrices is lowered from an SSBO, so reflection cannot bind it.
+    if (!supports_ssbo_) {
+        unsigned int bm = glGetUniformBlockIndex(shadow_shader_handle_, "BoneMatrices");
+        if (bm != GL_INVALID_INDEX)
+            glUniformBlockBinding(shadow_shader_handle_, bm,
+                                  static_cast<unsigned int>(UBOBindingPoint::BoneMatrices));
+    }
 
     shadow_locations_.model        = glGetUniformLocation(shadow_shader_handle_, "u_model");
     shadow_locations_.skinned      = glGetUniformLocation(shadow_shader_handle_, "u_skinned");

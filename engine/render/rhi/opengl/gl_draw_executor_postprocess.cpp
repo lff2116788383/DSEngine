@@ -363,6 +363,17 @@ static void BindBloomComposite(unsigned int prog,
                                 unsigned int& /*ubo*/) {
     const CompositeParamsView cv(params);
     const auto bcp = PrepareBloomCompositeParams(cv);
+    // 次级采样器单元绑定（见 BindTonemapping）：ESSL300 剥离 sampler 的
+    // layout(binding=N)，未显式赋单元的采样器全部回退到单元 0。本着色器同时含
+    // sampler2D（bloomBlur/ssao/ae/contactShadow）与 sampler3D（u_lut），同处单元 0
+    // 在 WebGL2/GLES3 上触发 INVALID_OPERATION（不同类型采样器共用单元），令整个
+    // 合成 draw 失败、场景无法呈现到屏幕。这里按各效果固定槽位显式赋单元（与下方
+    // 纹理绑定一致），桌面端与 layout(binding) 等价、为 no-op。
+    glUniform1i(glGetUniformLocation(prog, "bloomBlur"), 2);
+    glUniform1i(glGetUniformLocation(prog, "ssaoTexture"), 3);
+    glUniform1i(glGetUniformLocation(prog, "autoExposureTex"), 4);
+    glUniform1i(glGetUniformLocation(prog, "u_lut"), 5);
+    glUniform1i(glGetUniformLocation(prog, "contactShadowTex"), 6);
     glUniform1f(glGetUniformLocation(prog, "_90.exposure"), bcp.exposure);
     glUniform1f(glGetUniformLocation(prog, "_90.bloomIntensity"), bcp.bloom_intensity);
     glUniform1i(glGetUniformLocation(prog, "_90.bloomEnabled"), bcp.bloom_enabled);

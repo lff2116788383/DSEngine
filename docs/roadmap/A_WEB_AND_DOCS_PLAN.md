@@ -117,8 +117,25 @@
 - ESSL300 会剥离 sampler 的 `layout(binding)`，PBR 路径已由 `CachePBRLocations()` → `BindSamplersOnce()`（反射驱动显式 `glUniform1i` 赋采样单元）自动处理。
 
 浏览器实测（Chrome/WebGL2 over ANGLE→D3D11）：3D 场景真实出画，引擎逐帧统计 `meshes=4, draw_calls=4, render_passes=5, gpu_driven_supported=0`；立方体（36 索引）+ 地面（6 索引）每帧绘制，带透视 + 深度 + 光照，PBR 程序在 WebGL2 编译/链接/绘制通过，不黑屏不崩。
+> ⚠️ 更正（2026-06-14）：上述「浏览器实测」实为桌面 D3D11/WARP 核对，非真实 WebGL2；真机验证见 §2.8c。
 
 **观感打磨（DEBT-6，已偿还，2026-06-14）**：在 `data/main3d.lua`（场景作者层，三后端通用、对 WebGL2 能力安全）做了如下调整：相机后拉并抬高（`radius 6.5→9.5`、`height 2.2→3.4`）修正构图偏近；方向光降平铺环境光、提关键光强（`ambient 0.25→0.10`、`intensity 1.5→2.4`）让立方体各面拉开明暗、不再发灰；新增 `SkyLight` 半球环境色（CPU 端 `mix(down,up)*intensity` 的环境色 uniform，无 Compute/SSBO/bake，Web 安全）给环境上冷调；立方体 `roughness 0.55→0.38` 出清晰高光；新增 `PostProcess` 组件显式定曝光（`exposure=0.9`）+ 轻微 vignette（composite pass 内 tonemap 即生效，无需新增 pass）。桌面 D3D11/WARP 实跑核对：立方体呈现明确的三维明暗与高光、构图留白合理。
+
+### 2.8c 真机 WebGL2 端到端验证与修复（2026-06-14，进行中）
+
+> 重要更正：§2.8b 中「浏览器实测」一段实际是在**桌面 D3D11/WARP**（同样走非 SSBO 的 UBO 着色器路径）上核对的，**并未**在真实浏览器 WebGL2 端到端验证。本轮首次在真实 Chrome/WebGL2 跑 wasm 产物，发现 M5 Web 3D 之前其实是**黑屏**，根因有三，均已在代码侧修复（不改 `.glsl` 源、不改场景）：
+
+环境：本机无独显，Chrome 137（Chrome for Testing）经 ANGLE→SwiftShader 软件光栅跑 WebGL2，需启动参数 `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`。emsdk：`C:\emsdk`（emcc 6.0.0）。web 调试产物（`web-debug-3d` preset）：`bin/index.{html,js,wasm,data}`，调试 wasm ~98–102MB。本地 `python -m http.server 8080` 起服务，CDP（`--remote-debugging-port` + `--remote-allow-origins=*`）抓取控制台与运行时 WebGL 状态定位问题。
+
+1. **顶点着色器 SSBO 非法（编译失败）**：生成的 ESSL300 顶点变体（`kpbr_vert_essl300`/`kshadow_vert_essl300`）仍保留 `layout(std430) readonly buffer`（`BoneMatricesSSBO`/`SkinnedInstBuf`/`ComputeSkinBuf`），而 GLES3.0/WebGL2 不支持 SSBO/std430/readonly → 顶点编译失败、程序链接失败。之前桌面 NVIDIA GL3.3 驱动「宽容」接受了 SSBO 才一直没暴露。
+   - 修复：`gl_shader_manager.cpp` 新增 `LowerVertexSSBOToUBO()`，在 `!supports_ssbo_` 路径把上述 SSBO 降级为定长 UBO（`BoneMatrices`→binding 6，按 `kMaxBones` 定长；另两者最小定长、不可达不读），与既有 fragment 的 `GenerateUBOGLSL` 对称；`InitBuiltinPBRShader()`/`InitShadowShader()` 接入；非 SSBO 路径下显式 `glUniformBlockBinding` 绑定 `BoneMatrices`/`PointLights`/`SpotLights`（反射元数据仍按 SSBO 列出、无法自动绑定）。
+
+2. **合成（后处理）着色器采样器单元冲突（绘制失败 → 黑屏）**：`Forward3D` 的 composite 用 `bloom_composite_ssao_ae`，其 `screenTexture/bloomBlur/ssaoTexture/autoExposureTex/contactShadowTex`（sampler2D）与 `u_lut`（sampler3D）在 ESSL300 下被剥离 `layout(binding)`、未显式赋单元者全部回退到单元 0；同一单元 0 上 sampler2D 与 sampler3D 共存，在 WebGL2 触发 `GL_INVALID_OPERATION: Two textures of different types use the same sampler location`，**整个合成 draw 失败**——场景已渲到离屏 FBO 却无法合成到屏幕，于是黑屏。
+   - 修复：`gl_draw_executor_postprocess.cpp` 的 `BindBloomComposite` 显式 `glUniform1i` 把各次级采样器赋到固定单元（bloom=2/ssao=3/ae=4/lut=5/cs=6，与其纹理绑定一致），与既有 `BindTonemapping`/`BindColorGrading` 同一套路；桌面端与 `layout(binding)` 等价、为 no-op。
+
+3. （定位）reflection 仍按 SSBO 列出灯光/骨骼块，非 SSBO 路径需显式绑定——已随第 1 项处理。
+
+桌面回归：`ctest` 3/3 通过（unit/integration/smoke）。**剩余（后续）**：重编 `web-debug-3d` → 真机 Chrome/WebGL2 复验立方体出画（DEBT-6 观感可见、旋转、键盘）并录屏 → 补 CI `build-web` 与冒烟测试 → 复验通过后回填本节结论。
 
 ### 2.9 风险与对策
 | 风险 | 等级 | 对策 |
