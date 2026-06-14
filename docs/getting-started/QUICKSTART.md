@@ -15,8 +15,8 @@
 整条「黄金路径」就三步：
 
 ```
-dse new 2d MyGame      →   dse build MyGame      →   运行 build/dist/launch.bat
-（生成项目）                （拷贝运行时 + 打包）        （玩）
+dse new 2d MyGame      →   dse build MyGame      →   运行 build/dist/MyGame.exe
+（生成项目）                （拷贝运行时 + 打包）        （双击即玩）
 ```
 
 ---
@@ -129,8 +129,8 @@ dse build MyGame
 dist/
 ├── MyGame.exe          ← 运行时可执行文件
 ├── game.bun            ← 打包后的脚本 + 资源
-├── game.dsmanifest     ← 窗口标题 / 尺寸 / 启动画面配置
-└── launch.bat          ← 启动脚本（已带好正确参数）
+├── game.dsmanifest     ← 窗口标题 / 尺寸 / 启动画面 / 入口脚本配置
+└── launch.bat          ← 启动脚本（等价于双击 exe，加密资源时需要它带 --key）
 ```
 
 > 注意：`dse build` **不会重新编译引擎**——它把 `bin\` 下预构建的运行时拷过来、打包你的资源、生成启动脚本。所以构建只要几秒。
@@ -139,13 +139,17 @@ dist/
 
 ## 第 3 步：运行（玩！）
 
+直接双击 `MyGame\build\dist\MyGame.exe` 即可（或在命令行里跑）：
+
 ```powershell
-MyGame\build\dist\launch.bat
+MyGame\build\dist\MyGame.exe
 ```
 
 窗口出现后，按 **WASD** 或**方向键**移动青色方块。
 
-> ⚠️ **务必用 `launch.bat` 启动，别直接双击 `MyGame.exe`。** 入口脚本路径是通过 `launch.bat` 里的 `--script=scripts/main.lua` 参数传进去的；直接跑 exe 不带这个参数会看到空窗口。
+> exe 会自动读取同目录的 `game.dsmanifest`（里面记录了入口脚本 `scripts/main.lua`）和 `game.bun` 资源包，所以双击即玩。
+>
+> 什么时候还需要 `launch.bat`？当你用 `--key` **加密**了资源包时——解密密钥要通过 `launch.bat` 里的 `--key=...` 参数传入，这种情况下用 `launch.bat` 启动。
 
 ### 没有独立显卡 / 在远程桌面或虚拟机里？
 
@@ -159,7 +163,7 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_swgl.ps1 -BinDir "MyGame\
 
 ```powershell
 $env:GALLIUM_DRIVER = "llvmpipe"
-MyGame\build\dist\launch.bat
+MyGame\build\dist\MyGame.exe
 ```
 
 ---
@@ -182,7 +186,7 @@ dse.ecs.add_sprite(player, 1.0, 0.4, 0.2, 1.0, 0)   -- 橙色
 
 ```powershell
 dse build MyGame
-MyGame\build\dist\launch.bat
+MyGame\build\dist\MyGame.exe
 ```
 
 想做更完整的玩法（加金币、计分、胜利条件）？接着看 [第一篇 2D 教程](TUTORIAL_2D_FIRST_GAME.md)。
@@ -232,8 +236,8 @@ dse help                          # 查看完整帮助
 
 | 现象 | 原因 / 解决 |
 |------|------------|
-| 双击 exe 是空窗口 | 用 `launch.bat` 启动（它带了 `--script` 参数） |
+| 双击 exe 是空窗口 | 确认同目录有 `game.dsmanifest`（记录入口脚本）和 `game.bun`；用 `--key` 加密过资源时改用 `launch.bat` 启动 |
 | `Failed to create GLFW window` | 没有硬件 OpenGL，按第 3 步部署 llvmpipe 软件渲染 |
 | 找不到 `dse.exe` | 还没构建引擎，先做第 0 步的 `bootstrap_windows.ps1` |
-| 脚本改了没生效 | 改完要重新 `dse build`，再跑 `launch.bat` |
+| 脚本改了没生效 | 改完要重新 `dse build`，再运行 exe |
 | `Lua ... failed: attempt to index a nil value (global 'app')` | 脚本里直接用了 `app` 却没写 `local app = dse.app` 别名 |

@@ -25,6 +25,7 @@ struct StandaloneConfig {
     bool width_set = false;
     bool height_set = false;
     bool title_set = false;
+    bool script_set = false;
 };
 
 StandaloneConfig ParseArgs(int argc, char** argv) {
@@ -41,6 +42,7 @@ StandaloneConfig ParseArgs(int argc, char** argv) {
             cfg.bundle_key = arg.substr(6);
         } else if (arg.rfind("--script=", 0) == 0) {
             cfg.lua_script = arg.substr(9);
+            cfg.script_set = true;
         } else if (arg.rfind("--rhi=", 0) == 0) {
             cfg.rhi_backend = arg.substr(6);
         } else if (arg.rfind("--width=", 0) == 0) {
@@ -107,6 +109,29 @@ int main(int argc, char** argv) {
         }
     }
 
+    // 读取 exe 旁的 game.dsmanifest（窗口 + 品牌化 splash + 入口脚本），命令行参数优先级更高。
+    dse::runtime::AppManifest manifest;
+    bool has_manifest = false;
+    try {
+        auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
+        auto manifest_path = exe_dir / "game.dsmanifest";
+        if (std::filesystem::exists(manifest_path)) {
+            has_manifest = dse::runtime::LoadAppManifest(manifest_path.string(), manifest);
+        }
+    } catch (...) {}
+
+    if (has_manifest) {
+        if (manifest.has_window_title && !cfg.title_set) cfg.title = manifest.window_title;
+        if (manifest.has_window_size) {
+            if (!cfg.width_set && manifest.window_width > 0) cfg.width = manifest.window_width;
+            if (!cfg.height_set && manifest.window_height > 0) cfg.height = manifest.window_height;
+        }
+        // 未显式传 --script 时，用 manifest 记录的入口脚本，使双击 exe 即可运行。
+        if (manifest.has_entry_script && !cfg.script_set && !manifest.entry_script.empty()) {
+            cfg.lua_script = manifest.entry_script;
+        }
+    }
+
     // Resolve Lua script path relative to exe.
     // 若磁盘存在则用绝对路径；否则保留逻辑路径（如 "scripts/main.lua"），
     // 由 Lua 运行时从已挂载的 .bun/.dpak VFS 读取（端到端加密场景）。
@@ -133,25 +158,6 @@ int main(int argc, char** argv) {
 #endif
             }
         } catch (...) {}
-    }
-
-    // 读取 exe 旁的 game.dsmanifest（窗口 + 品牌化 splash），命令行参数优先级更高。
-    dse::runtime::AppManifest manifest;
-    bool has_manifest = false;
-    try {
-        auto exe_dir = std::filesystem::absolute(std::filesystem::path(argv[0])).parent_path();
-        auto manifest_path = exe_dir / "game.dsmanifest";
-        if (std::filesystem::exists(manifest_path)) {
-            has_manifest = dse::runtime::LoadAppManifest(manifest_path.string(), manifest);
-        }
-    } catch (...) {}
-
-    if (has_manifest) {
-        if (manifest.has_window_title && !cfg.title_set) cfg.title = manifest.window_title;
-        if (manifest.has_window_size) {
-            if (!cfg.width_set && manifest.window_width > 0) cfg.width = manifest.window_width;
-            if (!cfg.height_set && manifest.window_height > 0) cfg.height = manifest.window_height;
-        }
     }
 
     dse::runtime::EngineRunConfig run_config;

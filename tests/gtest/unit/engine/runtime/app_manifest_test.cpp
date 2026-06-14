@@ -191,6 +191,8 @@ TEST(AppManifestTest, WriteThenLoadRoundTrip) {
     src.has_window_size = true;
     src.window_width = 1600;
     src.window_height = 900;
+    src.has_entry_script = true;
+    src.entry_script = "scripts/main.lua";
     src.has_splash = true;
     // 用绝对路径，避免读回时按目录再次解析。
     src.splash.image_path = (tmp.path() / "logo.png").string();
@@ -218,6 +220,9 @@ TEST(AppManifestTest, WriteThenLoadRoundTrip) {
     EXPECT_TRUE(dst.has_window_size);
     EXPECT_EQ(dst.window_width, src.window_width);
     EXPECT_EQ(dst.window_height, src.window_height);
+
+    EXPECT_TRUE(dst.has_entry_script);
+    EXPECT_EQ(dst.entry_script, src.entry_script);
 
     ASSERT_TRUE(dst.has_splash);
     EXPECT_EQ(std::filesystem::path(dst.splash.image_path),
@@ -247,5 +252,6 @@ TEST(AppManifestTest, WriteEmptyManifestProducesLoadableEmptyObject) {
     ASSERT_TRUE(LoadAppManifest(p.string(), dst));
     EXPECT_FALSE(dst.has_window_title);
     EXPECT_FALSE(dst.has_window_size);
+    EXPECT_FALSE(dst.has_entry_script);
     EXPECT_FALSE(dst.has_splash);
 }

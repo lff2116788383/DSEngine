@@ -5,7 +5,7 @@
 >
 > 全程只改一个文件：`scripts/main.lua`。本教程用到的每个 `dse.*` 接口都对照引擎源码核实过，复制即可运行。
 
-预计耗时 20 分钟。前置：已按快速上手跑通 `dse new 2d` → `dse build` → `launch.bat`。
+预计耗时 20 分钟。前置：已按快速上手跑通 `dse new 2d` → `dse build` → 运行 exe。
 
 ---
 
@@ -19,7 +19,7 @@ dse new 2d CoinGame
 
 ```powershell
 dse build CoinGame
-CoinGame\build\dist\launch.bat
+CoinGame\build\dist\CoinGame.exe
 ```
 
 > 没独显 / 在虚拟机里跑不出窗口？先按快速上手第 3 步部署 llvmpipe 软件渲染，并设 `$env:GALLIUM_DRIVER="llvmpipe"`。

@@ -66,6 +66,10 @@ bool LoadAppManifest(const std::string& path, AppManifest& out) {
 
     const std::filesystem::path base_dir = std::filesystem::path(path).parent_path();
 
+    if (ReadString(doc, "entry_script", out.entry_script) && !out.entry_script.empty()) {
+        out.has_entry_script = true;
+    }
+
     if (doc.HasMember("window") && doc["window"].IsObject()) {
         const auto& w = doc["window"];
         if (ReadString(w, "title", out.window_title)) out.has_window_title = true;
@@ -122,6 +126,10 @@ bool WriteAppManifest(const std::string& path, const AppManifest& manifest) {
     auto str = [&alloc](const std::string& s) {
         return rapidjson::Value(s.c_str(), static_cast<rapidjson::SizeType>(s.size()), alloc);
     };
+
+    if (manifest.has_entry_script && !manifest.entry_script.empty()) {
+        doc.AddMember("entry_script", str(manifest.entry_script), alloc);
+    }
 
     if (manifest.has_window_title || manifest.has_window_size) {
         rapidjson::Value w(rapidjson::kObjectType);

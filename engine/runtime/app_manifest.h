@@ -28,6 +28,11 @@ struct AppManifest {
     int window_width = 0;
     int window_height = 0;
 
+    /// 入口 Lua 脚本（相对包/exe 的逻辑路径，如 "scripts/main.lua"）。
+    /// standalone 宿主在未显式传 --script 时用它启动，使打包成品双击即可运行。
+    bool has_entry_script = false;
+    std::string entry_script;
+
     /// 清单是否包含 "splash" 段；为 true 时 splash 字段有效。
     bool has_splash = false;
     dse::platform::SplashConfig splash{};

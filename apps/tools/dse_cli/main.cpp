@@ -438,6 +438,9 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
                 manifest.has_window_title = true;
                 manifest.window_title = game_name;
             }
+            // 入口脚本写入 manifest，使双击 exe（不带 --script）也能加载脚本。
+            manifest.entry_script = ReadEntryScript(dseproj, "scripts/main.lua");
+            manifest.has_entry_script = !manifest.entry_script.empty();
             if (manifest.has_splash && !manifest.splash.image_path.empty()) {
                 fs::path src_img(manifest.splash.image_path);  // 已按 dseproj 目录解析为绝对路径
                 std::error_code img_ec;
