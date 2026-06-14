@@ -24,6 +24,7 @@
 #include "engine/runtime/app_manifest.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -45,12 +46,14 @@ int PrintUsage(int rc = 1) {
         "用法:\n"
         "  dse new <template> <dir>                 生成项目模板\n"
         "  dse pack <dir> <out.bun> [--key=KEY]     把目录打包成(可加密)资源包\n"
-        "  dse build <project> [--out=DIR] [--key=KEY]\n"
+        "  dse build <project> [--out=DIR] [--key=KEY] [--with-swgl]\n"
         "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch 脚本\n"
         "  dse build --target web [--3d] [--debug] [--preset=NAME] [--source=DIR] [--out=DIR] [--no-dist]\n"
         "                                           用 emscripten 预设配置+编译 Web 产物(默认 web-release), 并收集到 --out\n"
         "  dse dist --target web [--in=DIR] [--out=DIR]\n"
         "                                           收集 emscripten 产物(index.html/.js/.wasm[/.data])为可上传的 Web 包\n"
+        "  dse dist --target win|linux [--in=DIR] [--out=ARCHIVE] [--name=NAME] [--installer] [--appimage]\n"
+        "                                           把已构建游戏目录打成 .zip / .tar.gz (Export Template; 可选安装器)\n"
         "  dse help | -h | --help                   显示本帮助\n"
         "\n"
         "模板 (template):\n"
@@ -63,11 +66,16 @@ int PrintUsage(int rc = 1) {
         "选项:\n"
         "  --key=KEY   AES-128-CTR 密钥(>=16 字节); 省略=明文打包\n"
         "  --out=DIR   build 输出目录(默认 <project>/build)\n"
-        "  --target web    用于 build/dist 时选择 Web(Emscripten) 目标\n"
+        "  --with-swgl     桌面 build: 随包发行软件 OpenGL(llvmpipe) 并在 launch 脚本设 GALLIUM_DRIVER\n"
+        "  --target web|win|linux  用于 build/dist 时选择目标\n"
         "  --3d / --debug  Web 构建选 *-3d / web-debug* 预设(默认 web-release)\n"
         "  --preset=NAME   直接指定 CMake 预设(覆盖 --3d/--debug)\n"
         "  --source=DIR    仓库根(含 CMakePresets.json); 省略则自动向上探测\n"
         "  --no-dist       Web 构建后不收集出包\n"
+        "  --in=DIR        dist: 已构建游戏目录(默认 build/dist)\n"
+        "  --name=NAME     dist win|linux: 归档/安装器名(默认按工程名)\n"
+        "  --installer     dist win: 若装有 Inno Setup(iscc) 则附带生成安装器\n"
+        "  --appimage      dist linux: 若装有 appimagetool 则尝试 AppImage\n"
         "\n"
         "示例:\n"
         "  dse new lua MyGame\n"
@@ -88,6 +96,16 @@ bool MatchOption(const std::string& arg, const std::string& prefix, std::string&
         return true;
     }
     return false;
+}
+
+// 在 PATH 中是否能找到某个可执行程序（用于探测可选打包工具）。
+bool ToolInPath(const std::string& tool) {
+#if defined(_WIN32)
+    const std::string cmd = "where " + tool + " >NUL 2>NUL";
+#else
+    const std::string cmd = "command -v " + tool + " >/dev/null 2>&1";
+#endif
+    return std::system(cmd.c_str()) == 0;
 }
 
 std::string ReadEntryScript(const fs::path& dseproj, const std::string& fallback) {
@@ -361,6 +379,7 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
 
     std::string key;
     std::string out_opt;
+    bool with_swgl = false;
     std::vector<std::string> positional;
     for (const auto& a : args) {
         std::string v;
@@ -368,6 +387,8 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
             key = v;
         } else if (MatchOption(a, "--out=", v)) {
             out_opt = v;
+        } else if (a == "--with-swgl") {
+            with_swgl = true;
         } else {
             positional.push_back(a);
         }
@@ -429,6 +450,26 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
     }
     std::cout << "已拷贝 exe + " << dll_count << " 个 DLL\n";
 
+    // 2a. --with-swgl：确保软件 OpenGL（Mesa llvmpipe）随包发行，便于在无独显的机器
+    //     （远程桌面 / VM / 无 GPU 服务器）上双击即跑。这些 DLL 若已由 setup_swgl.ps1
+    //     落到运行时目录，上一步已随所有 DLL 一并拷贝；这里仅做校验与提示。
+    if (with_swgl) {
+        const char* swgl_dlls[] = {"opengl32.dll", "libgallium_wgl.dll", "dxil.dll"};
+        bool have_core = fs::exists(out_dir / "opengl32.dll", ec) &&
+                         fs::exists(out_dir / "libgallium_wgl.dll", ec);
+        if (have_core) {
+            int n = 0;
+            for (const char* d : swgl_dlls) {
+                if (fs::exists(out_dir / d, ec)) ++n;
+            }
+            std::cout << "已随包发行软件 OpenGL (llvmpipe): " << n << " 个 Mesa DLL\n";
+        } else {
+            std::cerr << "警告: --with-swgl 已指定, 但运行时目录缺少 Mesa 软件 GL DLL"
+                         " (opengl32.dll/libgallium_wgl.dll)。\n"
+                         "      请先运行 scripts/setup_swgl.ps1 部署 llvmpipe 到运行时 bin/ 后重试。\n";
+        }
+    }
+
     // 2b. 从 project.dseproj 的 window/splash 段生成松散 game.dsmanifest（窗口+品牌化 splash）。
     //     splash 图必须松散放置（不能进 game.bun），否则挂载资源前无法读取。
     {
@@ -484,6 +525,7 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
         std::ofstream bat(out_dir / "launch.bat", std::ios::trunc);
         bat << "@echo off\r\n";
         bat << "cd /d \"%~dp0\"\r\n";
+        if (with_swgl) bat << "set GALLIUM_DRIVER=llvmpipe\r\n";
         bat << "\"" << game_name << ".exe\""
             << " --bundle=game.bun"
             << (key.empty() ? "" : (" --key=" + key))
@@ -495,6 +537,7 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
         std::ofstream sh(out_dir / "launch.sh", std::ios::trunc);
         sh << "#!/bin/sh\n";
         sh << "cd \"$(dirname \"$0\")\"\n";
+        if (with_swgl) sh << "export GALLIUM_DRIVER=llvmpipe\n";
         sh << "./" << game_name
            << " --bundle=game.bun"
            << (key.empty() ? "" : (" --key=" + key))
@@ -504,6 +547,129 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
 #endif
 
     std::cout << "Build 完成: " << fs::absolute(out_dir).string() << "\n";
+    return 0;
+}
+
+// dse dist --target win|linux：把 `dse build` / 编辑器 Build Game 产出的可运行游戏目录
+// 工程化为可分发归档（Export Template）。Win 出 .zip（+ 可选 Inno/NSIS 安装器），
+// Linux 出 .tar.gz（+ 可选 AppImage）。归档/安装器借助系统自带工具完成，缺失时降级并提示。
+int CmdDistDesktop(const std::string& target, const std::vector<std::string>& args) {
+    std::error_code ec;
+    std::string in_opt, out_opt, name_opt;
+    bool make_installer = false;
+    bool make_appimage = false;
+    for (size_t i = 0; i < args.size(); ++i) {
+        const std::string& a = args[i];
+        std::string v;
+        if (MatchOption(a, "--in=", v)) in_opt = v;
+        else if (MatchOption(a, "--out=", v)) out_opt = v;
+        else if (MatchOption(a, "--name=", v)) name_opt = v;
+        else if (a == "--installer") make_installer = true;
+        else if (a == "--appimage") make_appimage = true;
+    }
+
+    // 输入目录：默认沿用 `dse build` 的默认输出 build/dist。
+    fs::path in_dir = in_opt.empty() ? (fs::path("build") / "dist") : fs::path(in_opt);
+    if (!fs::exists(in_dir, ec) || !fs::is_directory(in_dir, ec)) {
+        std::cerr << "错误: 可分发目录不存在: " << in_dir.string() << "\n"
+                     "      请先 `dse build <project> --out " << in_dir.string()
+                  << "` 产出可运行目录, 或用 --in 指定。\n";
+        return 1;
+    }
+    const fs::path abs_in = fs::absolute(in_dir);
+
+    // 包名：优先 --name；否则从 build/dist 结构回推工程名，再否则取目录名。
+    std::string game = name_opt;
+    if (game.empty()) {
+        if (abs_in.filename() == "dist" && abs_in.parent_path().filename() == "build") {
+            game = abs_in.parent_path().parent_path().filename().string();
+        } else {
+            game = abs_in.filename().string();
+        }
+        if (game.empty()) game = "game";
+    }
+
+    const std::string arch_suffix = (target == "win") ? "-win-x64.zip" : "-linux-x64.tar.gz";
+    fs::path out_archive = out_opt.empty() ? fs::path(game + arch_suffix) : fs::path(out_opt);
+    const fs::path out_parent = fs::absolute(out_archive).parent_path();
+    if (!out_parent.empty()) fs::create_directories(out_parent, ec);
+    const fs::path abs_out = fs::absolute(out_archive);
+    if (fs::exists(abs_out, ec)) fs::remove(abs_out, ec);
+
+    // 1. 生成归档。
+    int rc = 1;
+    if (target == "win") {
+        if (ToolInPath("powershell")) {
+            const std::string cmd =
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Compress-Archive -Path '" +
+                (abs_in / "*").string() + "' -DestinationPath '" + abs_out.string() + "' -Force\"";
+            rc = std::system(cmd.c_str());
+        } else if (ToolInPath("zip")) {
+            const std::string cmd = "cd \"" + abs_in.string() + "\" && zip -r -q \"" + abs_out.string() + "\" .";
+            rc = std::system(cmd.c_str());
+        } else {
+            std::cerr << "错误: 未找到 powershell 或 zip, 无法生成 .zip。\n";
+            return 1;
+        }
+    } else {  // linux
+        if (ToolInPath("tar")) {
+            const std::string cmd = "tar -czf \"" + abs_out.string() + "\" -C \"" + abs_in.string() + "\" .";
+            rc = std::system(cmd.c_str());
+        } else {
+            std::cerr << "错误: 未找到 tar, 无法生成 .tar.gz。\n";
+            return 1;
+        }
+    }
+    if (rc != 0) {
+        std::cerr << "错误: 打包失败 (rc=" << rc << ")\n";
+        return 1;
+    }
+    std::cout << "已打包 " << abs_in.string() << " -> " << abs_out.string()
+              << "  (" << (fs::exists(abs_out, ec) ? fs::file_size(abs_out, ec) : 0) << " bytes)\n";
+
+    // 2. 可选安装器 / AppImage（缺工具则降级提示，不视为失败）。
+    if (make_installer && target == "win") {
+        const fs::path iss = out_parent / (game + ".iss");
+        if (ToolInPath("iscc")) {
+#if defined(_WIN32)
+            const std::string exe_name = game + ".exe";
+#else
+            const std::string exe_name = game;
+#endif
+            std::ofstream s(iss, std::ios::trunc);
+            s << "; 由 dse dist 自动生成的 Inno Setup 脚本\n"
+              << "[Setup]\n"
+              << "AppName=" << game << "\n"
+              << "AppVersion=1.0\n"
+              << "DefaultDirName={autopf}\\" << game << "\n"
+              << "DefaultGroupName=" << game << "\n"
+              << "OutputDir=" << out_parent.string() << "\n"
+              << "OutputBaseFilename=" << game << "-setup\n"
+              << "Compression=lzma2\nSolidCompression=yes\n\n"
+              << "[Files]\n"
+              << "Source: \"" << abs_in.string() << "\\*\"; DestDir: \"{app}\"; Flags: recursesubdirs createallsubdirs\n\n"
+              << "[Icons]\n"
+              << "Name: \"{group}\\" << game << "\"; Filename: \"{app}\\" << exe_name << "\"\n";
+            s.close();
+            const std::string cmd = "iscc \"" + iss.string() + "\"";
+            if (std::system(cmd.c_str()) == 0) {
+                std::cout << "已生成 Inno Setup 安装器 -> " << (out_parent / (game + "-setup.exe")).string() << "\n";
+            } else {
+                std::cerr << "警告: iscc 执行失败, 跳过安装器 (zip 已生成)。\n";
+            }
+        } else {
+            std::cerr << "提示: 未找到 Inno Setup (iscc), 跳过安装器。安装 Inno Setup 后重试 --installer 即可。\n";
+        }
+    }
+    if (make_appimage && target == "linux") {
+        if (ToolInPath("appimagetool")) {
+            std::cout << "提示: 检测到 appimagetool；AppImage 需要 AppDir 结构, 当前版本仅生成 tar.gz。\n";
+        } else {
+            std::cerr << "提示: 未找到 appimagetool, 跳过 AppImage (tar.gz 已生成)。\n";
+        }
+    }
+
+    std::cout << "Dist 完成: " << abs_out.string() << "\n";
     return 0;
 }
 
@@ -524,8 +690,11 @@ int CmdDist(const std::vector<std::string>& args, const char* argv0) {
             out_opt = v;
         }
     }
+    if (target == "win" || target == "linux") {
+        return CmdDistDesktop(target, args);
+    }
     if (target != "web") {
-        std::cerr << "错误: dist 目前仅支持 --target web\n";
+        std::cerr << "错误: dist 仅支持 --target web|win|linux\n";
         return PrintUsage();
     }
 
