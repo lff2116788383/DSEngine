@@ -259,18 +259,18 @@ Full    (3D + Jolt：3D/Jolt ON)    ×  Debug / Release
 
 | 序号 | 任务 | 当前状态 | 预估工期 | 说明 |
 |:----:|:------:|:--------:|:--------:|------|
-| **6** | **LTCG 编译优化** | ⬜ 待办 | **0.3 天** | `/GL` + `/LTCG` 降二进制 10-20% |
-| **7** | **CMake 残留引用清理** | ⬜ 待办 | **0.2 天** | 核查 CMakeLists 是否还有不存在目录引用 |
-| **8** | **消费者示例完善** | ⬜ 待办 | **1 天** | `examples/sdk_consumer/` 补一个完整 Demo（3D 场景 + Lua 脚本 + 物理） |
+| **6** | **LTCG 编译优化** | ✅ 已完成 | — | 新增 `DSE_ENABLE_LTO`（默认 ON），经 `check_ipo_supported` 探测后对首方目标 Release 启用 `/GL+/LTCG`（`NOT DSE_BUILD_SHARED` 守卫）。MSVC 默认 `/OPT:REF` 已死代码剔除，体积收益微（11.35→11.33MB），主要收益为跨模块内联（运行时性能） |
+| **7** | **CMake 残留引用清理** | ✅ 已完成 | — | 审计全部首方 `add_subdirectory`/路径引用，移除唯一失效引用（旧版 JS 编辑器 `apps/editor` 死块 + 仅服务它的 npm/npx 探测） |
+| **8** | **消费者示例完善** | ✅ 已完成 | — | `examples/sdk_consumer/` 新增 `consumer_game`（C++ 宿主 `RunEngine(BusinessMode::Lua)` + `demo_scene.lua` 3D 物理塔）；`verify_sdk -Profiles Full` 全过，实跑 120 帧无泄漏 |
 | **9** | **SDK 文档 / API 参考** | ✅ 已完成 | — | `docs/api/LUA_API.md` + `docs/api/CPP_API.md` + `docs/api/API_GAP_ANALYSIS.md` |
-| **10** | **.dll/.lib 发布清单** | ⬜ 待办 | **0.3 天** | 明确 SDK 含哪些产物（VC 运行时、PhysX/Jolt 等）及 Redist 说明 |
+| **10** | **.dll/.lib 发布清单** | ✅ 已完成 | — | 新增 `docs/getting-started/REDIST.md`，明确 SDK 产物（静态/动态库、VC 运行时、可选 PhysX/Jolt 等）及再分发说明 |
 
 #### 🟢 P2：锦上添花的
 
 | 序号 | 任务 | 当前状态 | 预估工期 | 说明 |
 |:----:|:------:|:--------:|:------:|------|
-| **11** | **纹理 .dds / BCn 直接上传** | ⬜ 待办 | **1 天** | 降 VRAM 30-40% |
-| **12** | **默认关闭非必需第三方依赖** | ⬜ 待办 | **0.5 天** | Assimp/Spine 默认 OFF，SDK 包体更小 |
+| **11** | **纹理 .dds / BCn 直接上传** | ✅ 已完成 | — | 直传链路此前已实现（GL/DX11/Vulkan 三后端）；本轮将 DDS 解析提取为 `engine/assets/dds_parser.{h,cpp}`（`dse::assets::ParseDds`）并补 8 个回归用例（DXT1/DXT5 mip 链/DX10 BC7/非法输入） |
+| **12** | **默认关闭非必需第三方依赖** | ✅ 已完成 | — | `DSE_ENABLE_ASSIMP`/`DSE_ENABLE_SPINE` 默认 OFF（可按需开启）；glTF 导入与 `SpineRendererComponent`/`dse.spine.*` 绑定不受影响；双关与双开两种配置均构建+测试通过 |
 | **13** | **D3D11 作为默认后端之一** | ✅ 已完成 | — | D3D11 已完整实现（含 Compute） |
 | **14** | **Vulkan 后端在 SDK 中保持 OFF** | ✅ 设计如此 | — | Vulkan 作为可选能力，SDK 发布版先不默认开启 |
 
@@ -279,11 +279,11 @@ Full    (3D + Jolt：3D/Jolt ON)    ×  Debug / Release
 | 优先级 | 待办任务数 | 总工期 |
 |:-----:|:-----:|:------:|
 | 🔴 P0 | 0 项（全部完成） | — |
-| 🟡 P1 | 4 项 | ~1.8 天 |
-| 🟢 P2 | 2 项 | ~1.5 天 |
-| **合计** | **6 项** | **~3.3 天** |
+| 🟡 P1 | 0 项（全部完成） | — |
+| 🟢 P2 | 0 项（全部完成） | — |
+| **合计** | **0 项** | **—** |
 
-> **P0 已全部完成：v0.1.0-alpha 的 SDK 现可在本机端到端打包→安装→消费者编译运行（Minimal/Full × Debug/Release 四组合全通过）。剩余 P1/P2 为体验优化项，不阻塞 alpha 交付。**
+> **P0/P1/P2 §4 SDK 优化项全部完成：v0.1.0-alpha 的 SDK 现可在本机端到端打包→安装→消费者编译运行（Minimal/Full × Debug/Release 四组合全通过）；LTCG、消费者完整 Demo、Redist 清单、DDS/BCn 直传可单测化、Assimp/Spine 默认关均已落地并构建+测试验证。**
 
 ### 4.4 引擎路线图（按代码现状标注）
 
