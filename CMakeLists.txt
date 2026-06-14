@@ -51,7 +51,12 @@ option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 # Web/Emscripten 默认是 2D-first MVP（见下方 if(EMSCRIPTEN)）；打开此开关后
 # Web 构建保留 3D 前向路径（无 Compute/SSBO，依靠 UBO 版 PBR 着色器 + 能力门控）。
 option(DSE_WEB_ENABLE_3D "Keep the 3D forward path on Web/Emscripten builds (M5 best-effort)" OFF)
-option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
+# Spine（2D 骨骼动画运行时）与 Assimp（FBX/OBJ 等模型导入）默认关闭以缩小 SDK 包体；
+# 需要时按需开启：-DDSE_ENABLE_SPINE=ON / -DDSE_ENABLE_ASSIMP=ON。
+# 关闭 Spine 时 SpineRendererComponent 与 dse.spine.* 绑定仍在（纯数据/ECS），仅不编译 spine-cpp 运行时与 SpineSystem。
+# 关闭 Assimp 时 glTF 导入（tinygltf）不受影响，仅 FBX/OBJ 等 Assimp 格式不可用。
+option(DSE_ENABLE_SPINE "Enable Spine runtime path (2D skeletal animation)" OFF)
+option(DSE_ENABLE_ASSIMP "Build with Assimp model importer (FBX/OBJ/...); off keeps glTF-only and shrinks the package" OFF)
 if(ANDROID)
     option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
 else()
@@ -284,8 +289,8 @@ include_directories(
     "depends/tinygltf"
 )
 set(DSE_HAS_ASSIMP OFF)
-# Emscripten 2D MVP 不需要 assimp（3D 模型导入）；避免在 WASM 上编译重型库。
-if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt" AND NOT EMSCRIPTEN)
+# Assimp 默认关闭（DSE_ENABLE_ASSIMP=OFF）以缩小包体；Emscripten 2D MVP 始终不编译该重型库。
+if(DSE_ENABLE_ASSIMP AND EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt" AND NOT EMSCRIPTEN)
     include_directories("depends/assimp/include")
     set(DSE_HAS_ASSIMP ON)
 endif()
@@ -485,7 +490,10 @@ if(NOT DSE_ENABLE_NAVMESH)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_3d/ai/nav_.*\\.cpp$")
 endif()
 
-file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
+# Spine 运行时（重型第三方库）仅在启用时编译，缩小包体。
+if(DSE_ENABLE_SPINE)
+    file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
+endif()
 set(tiny_aes_c
     "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c"
 )
@@ -696,6 +704,11 @@ if(DSE_BUILD_SHARED)
     target_compile_definitions(dse_engine PRIVATE DSE_ENGINE_EXPORTS)
 else()
     target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
+endif()
+
+# Spine 运行时启用标记：PUBLIC 以便头文件（gameplay_2d_module.h）与消费端口径一致。
+if(DSE_ENABLE_SPINE)
+    target_compile_definitions(dse_engine PUBLIC DSE_ENABLE_SPINE)
 endif()
 
 # 内存追踪：在 Debug 与 RelWithDebInfo 配置生效（带调试信息的诊断构建），

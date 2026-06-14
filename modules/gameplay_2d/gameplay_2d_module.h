@@ -10,7 +10,9 @@
 #include "modules/gameplay_2d/tilemap/tilemap_system.h"
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
+#ifdef DSE_ENABLE_SPINE
 #include "modules/gameplay_2d/spine/spine_system.h"
+#endif
 
 class AssetManager;
 
@@ -36,7 +38,9 @@ public:
     Physics2DSystem& physics2d_system() { return physics2d_system_; }
     AnimationSystem& animation_system() { return animation_system_; }
     ParticleSystem& particle_system() { return particle_system_; }
+#ifdef DSE_ENABLE_SPINE
     SpineSystem& spine_system() { return spine_system_; }
+#endif
     UISystem& ui_logic_system() { return ui_logic_system_; }
     AudioSystem& audio_system() { return audio_system_; }
     TilemapSystem& tilemap_system() { return tilemap_system_; }
@@ -52,7 +56,9 @@ private:
     Physics2DSystem physics2d_system_;
     AnimationSystem animation_system_;
     ParticleSystem particle_system_;
+#ifdef DSE_ENABLE_SPINE
     SpineSystem spine_system_;
+#endif
     UISystem ui_logic_system_;
     AudioSystem audio_system_;
     TilemapSystem tilemap_system_;
