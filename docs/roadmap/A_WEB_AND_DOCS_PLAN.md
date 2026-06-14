@@ -75,6 +75,12 @@
 - 复用 `PlatformApp` 输入回调；Web 后端把 emscripten 键鼠事件接上。
 - **触屏**：照搬 Android 已有的 `touch→pointer(button 0)` 映射（`android_app.cpp`），让移动端 Web / 微信可玩；单指优先，多指后续。
 
+#### 2.3c 实现状态（2026-06-14，单指触屏已真机验证）
+- **映射实现**：`engine/platform/web/web_app.cpp` 的 `OnTouch` 把单指 `touch` 映射为「光标位置 + 鼠标 button 0 按下/抬起」，对齐 Android：取 `e->touches[0]`，调用 `s_cursor_pos_cb_(targetX*dpr, targetY*dpr)`；`touchstart`→按下、`touchend/touchcancel`→抬起，调用 `s_mouse_btn_cb_(0, action)`，返回 `EM_TRUE` 消费事件（`emscripten_set_touch{start,move,end,cancel}_callback` 注册于 `EMSCRIPTEN_EVENT_TARGET_WINDOW`）。引擎侧 `engine_app.cpp::SetInputCallbacks` 把光标回调接到 `Input::RecordMousePosition`、button 回调接到 `Input::RecordKey(0,·)`（`GetMouseButton(idx)==GetKey(idx)`）。
+- **验证方法**：在 `web-release-3d` 真机产物上，注入「DOM 触摸事件 + 引擎 Input」双视图叠加层；引擎 Input 经一枚临时 `EMSCRIPTEN_KEEPALIVE` 探针直读 `Input::mousePosition()` 与 `GetMouseButton(0)`（验证后已回退，不入库）。触摸来源含两类：① 合法 `TouchEvent`（`dispatchEvent`，走真实浏览器事件管线）；② **CDP `Input.dispatchTouchEvent` 注入的真机级可信触摸**。
+- **真机验证（Chrome/WebGL2，web-release-3d）**：① `touchstart`→引擎 Input 光标即时等于触点、`button0` 置为按下，且事件被 `OnTouch` 消费（`defaultPrevented=true`/`EM_TRUE`）；② `touchmove` 拖动→Input 光标随触点连续更新（数值为画布内部像素空间，与 DOM 的 CSS 像素坐标存在固定缩放关系），`button0` 保持按下；③ `touchend`→引擎在下一帧 `Input::Update()` 清除抬起标志后 `button0` 归为抬起；④ CDP 注入的真机级触摸序列 5/5 被消费，Input 光标跟随至触点并正确按下/抬起。结论：单指触屏 → 鼠标 button 0 + 光标位置 的映射在真机 WebGL2 上确认生效。
+- **说明 / 范围**：当前 3D 演示场景 `data/main3d.lua` 仅读取键盘（`dse.app.get_key`），不读鼠标/触点，故触屏不会"可见地"驱动相机；验证落在 **触屏 → 引擎 Input** 的接线层（已由探针直读 Input 状态证实）。**多指触控为显式技术债 DEBT-5（延后）**。
+
 ### 2.4 构建系统
 - CMake 新增 `if(EMSCRIPTEN)` 分支（仿 `ANDROID`）：
   - 强制 `DSE_ENABLE_VULKAN=OFF`、`DSE_ENABLE_D3D11=OFF`、`DSE_ENABLE_3D` 可选、`DSE_ENABLE_NET=OFF`。
