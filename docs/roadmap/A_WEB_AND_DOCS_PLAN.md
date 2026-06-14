@@ -101,7 +101,24 @@
 2. **M2 跑通帧循环 + 清屏**：`emscripten_set_main_loop` + WebGL2 clear 出颜色。
 3. **M3 2D 渲染**：精灵/UI/文本在浏览器显示，键鼠输入可用。
 4. **M4 出包 + CI**：`dse dist --target web` 出可上传包；CI `build-web` 绿。
-5. **M5（尽力）**：基础 3D 前向场景跑通。
+5. **M5（尽力）**：基础 3D 前向场景跑通。**尽力版已达成**（2026-06-13）：Web/WebGL2 上 3D 前向真实出画，详见 §2.8b。
+
+### 2.8b M5 实现纪要（尽力版，2026-06-13）
+
+开关与构建：
+- 新增 `DSE_WEB_ENABLE_3D`（默认 OFF）。`if(EMSCRIPTEN)` 块仅在 `NOT DSE_WEB_ENABLE_3D` 时才强制 `DSE_ENABLE_3D=OFF`；置 ON 即在 Web 保留 3D 前向路径（物理/Vulkan/D3D11 仍强制关）。见 `CMakeLists.txt`。
+- 新增配置/构建预设 `web-debug-3d` / `web-release-3d`（继承 `web-base`，`DSE_WEB_ENABLE_3D=ON`）。
+- 实测：开 3D 后整套 `modules/gameplay_3d/*` 在 Emscripten 下编译链接通过（无物理后端时排除 physics3d/vehicle/buoyancy/ragdoll/fracture）。
+
+运行时（全部能力门控，非平台宏 —— 守防债原则 1）：
+- `gl_rhi_device.cpp`：`!supports_ssbo_`（即 WebGL2）下除 `InitSprite2DShader()` 外，当 `DSE_ENABLE_3D` 时也调 `InitBuiltinPBRShader()`。该函数本就有非 SSBO 的 UBO 分支（桌面 GL<4.3 同路径），降级到 ESSL300；GPU-Driven/Compute 变体仍在其内部按能力门控关闭。
+- 新增 `Forward3D` 管线 profile（`render_pipeline_profile.cpp` 的 `MakeForward3DProfile()`，选择器 `forward_3d`/`3d`/`web3d`）：`pre_z → forward_scene → ui → composite → present`，`gpu_driven=false`、无 shadow、无 HDR 后处理链——全部需要 Compute/SSBO 的环节都不在内。
+- `web_main.cpp`：`DSE_ENABLE_3D` 构建下自动选 `forward_3d` profile 并加载 `data/main3d.lua`；否则维持已验证的 2D-first MVP（`forward_2d` + `data/main.lua`）。
+- ESSL300 会剥离 sampler 的 `layout(binding)`，PBR 路径已由 `CachePBRLocations()` → `BindSamplersOnce()`（反射驱动显式 `glUniform1i` 赋采样单元）自动处理。
+
+浏览器实测（Chrome/WebGL2 over ANGLE→D3D11）：3D 场景真实出画，引擎逐帧统计 `meshes=4, draw_calls=4, render_passes=5, gpu_driven_supported=0`；立方体（36 索引）+ 地面（6 索引）每帧绘制，带透视 + 深度 + 光照，PBR 程序在 WebGL2 编译/链接/绘制通过，不黑屏不崩。
+
+**已记录的债（见 §五 DEBT-6）**：当前画面整体偏亮发灰、相机构图偏近，属观感打磨项（光照强度/曝光/相机距离/材质表现），非底层阻塞，留待后续调优。
 
 ### 2.9 风险与对策
 | 风险 | 等级 | 对策 |
@@ -160,9 +177,11 @@
 |----|------|------|------|----------|------|
 | DEBT-1 | 资源全量预载（`--preload-file`） | MVP 求快 | 大游戏/微信分包上限会爆 | VFS IO 后端预留可替换点；后续改 lazy fetch + IndexedDB 缓存 | 🟡 |
 | DEBT-2 | Web 无 Compute（DDGI/TressFX/GPU-Driven 缺席） | WebGL2 平台限制 | Web 渲染功能缩水 | 未来加 WebGPU 第 4 后端；v2 隔离纪律已为此铺路（微信仍需 WebGL2） | 🟡 |
-| DEBT-3 | MVP 关 3D / 部分第三方库 | 求 2D 先跑通 + 库 WASM 兼容性 | Web 暂只 2D | 逐库验证后分阶段开 3D（M5 起） | 🟢 |
+| DEBT-3 | MVP 关 3D / 部分第三方库 | 求 2D 先跑通 + 库 WASM 兼容性 | ~~Web 暂只 2D~~ → 已开 3D 前向（`DSE_WEB_ENABLE_3D`，opt-in） | M5 尽力版已开 3D 前向并实测出画（见 §2.8b）；物理/部分库仍关，按需逐库验证 | 🟢 |
 | DEBT-4 | 单线程（无 pthreads） | 避开 COOP/COEP 与多线程 WASM 复杂度 | Web 端无并行 Job | 后续接 emscripten pthreads + COOP/COEP | 🟢 |
 | DEBT-5 | 多指触控未做（仅单指） | MVP 求快 | 复杂手势类游戏受限 | 后续补多指/手势 | 🟢 |
+
+| DEBT-6 | M5 Web 3D 观感未打磨（整体偏亮发灰、构图偏近） | 尽力版优先打通"能跑通 3D 前向"，观感未调 | Web 3D demo 视觉效果欠佳，但功能链路（编译/着色/绘制/光照/深度/透视）已完整 | 后续调光照强度/曝光（可加 PostProcess 组件设曝光）、相机距离与材质表现；必要时为 Forward3D 显式接 tonemap 输入 | 🟢 |
 
 > 原则：以上均为**有意识、显式登记**的债，非隐性债；每项都有偿还路径与触发条件。
 

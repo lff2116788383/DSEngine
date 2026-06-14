@@ -33,10 +33,19 @@ void WebFrame() {
 } // namespace
 
 int main(int /*argc*/, char** /*argv*/) {
-    // Web 为 2D-first MVP：默认选用最小 2D 前向管线，避免在 WebGL2 上运行完整
-    // 延迟着色 + HDR 后处理链（其多 RT ping-pong 在纯 2D 内容上不成立）。
-    // overwrite=0：保留用户通过环境变量的显式覆盖。
+    // Web 默认选用最小前向管线，避免在 WebGL2 上运行完整延迟着色 + HDR 后处理链
+    // （其多 RT ping-pong 与 Compute 在 WebGL2 上不成立）。overwrite=0：保留用户
+    // 通过环境变量的显式覆盖。
+    //
+    // DSE_ENABLE_3D（由 DSE_WEB_ENABLE_3D 开启，M5）：默认载入 3D forward 场景；
+    // 否则维持已验证的 2D-first MVP。两条路径都用各自的最小非 Compute profile。
+#ifdef DSE_ENABLE_3D
+    setenv("DSE_RENDER_PIPELINE_PROFILE", "forward_3d", /*overwrite=*/0);
+    const char* startup_lua = "data/main3d.lua";
+#else
     setenv("DSE_RENDER_PIPELINE_PROFILE", "forward_2d", /*overwrite=*/0);
+    const char* startup_lua = "data/main.lua";
+#endif
 
     dse::runtime::EngineRunConfig cfg;
     cfg.window_width  = 1280;
@@ -44,7 +53,7 @@ int main(int /*argc*/, char** /*argv*/) {
     cfg.window_title  = "DSEngine Web";
     cfg.business_mode = BusinessMode::Lua;  // BusinessMode 在全局命名空间（runtime_context.h）
     cfg.enable_editor = false;
-    cfg.startup_lua_script_path = "data/main.lua";
+    cfg.startup_lua_script_path = startup_lua;
 
     g_instance = std::make_unique<dse::runtime::EngineInstance>(cfg);
     if (!g_instance->Init()) {

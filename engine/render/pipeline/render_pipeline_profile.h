@@ -81,6 +81,7 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry();
 RenderPipelineProfile MakeForwardPlusDefaultProfile();
 RenderPipelineProfile MakeForwardPlusLiteProfile();
 RenderPipelineProfile MakeForward2DProfile();
+RenderPipelineProfile MakeForward3DProfile();
 RenderPipelineProfile MakeDebugDepthProfile();
 RenderPipelineLoadResult ResolveRenderPipelineProfileFromEnvironment(const std::string& backend_name,
                                                                     const std::string& data_root);

@@ -274,11 +274,18 @@ void OpenGLRhiDevice::EnsureInitialized() {
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
     // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
-    // notably WebGL2 (GLES 3.0) — cannot lower the 3D PBR program or the heavy
-    // post-process warmup to their shading dialect, so fall back to the
-    // dedicated ES3.0-compatible 2D batch program (current Web target is 2D).
+    // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the heavy
+    // post-process warmup, so they use the dedicated ES3.0-compatible 2D batch
+    // program for sprites/UI.
     if (!supports_ssbo_) {
         shader_mgr_.InitSprite2DShader();
+#ifdef DSE_ENABLE_3D
+        // M5 (best-effort 3D forward on capability-limited contexts, WebGL2
+        // included): InitBuiltinPBRShader has a non-SSBO UBO branch — the same
+        // path desktop GL<4.3 uses — that lowers to ESSL300. The GPU-driven and
+        // compute variants stay gated off inside it (they require SSBO).
+        shader_mgr_.InitBuiltinPBRShader();
+#endif
     } else {
         shader_mgr_.InitBuiltinPBRShader();
         shader_mgr_.WarmupAllPostProcessShaders();

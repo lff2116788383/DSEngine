@@ -15,6 +15,7 @@ set_target_properties(dse_web_host PROPERTIES OUTPUT_NAME "index" SUFFIX ".html"
 # Each entry maps <repo>/<path> to /<path> in MEMFS.
 set(DSE_WEB_PRELOAD_ITEMS
     "data/main.lua"
+    "data/main3d.lua"
     "data/icon"
     "data/font"
     "data/audio"
