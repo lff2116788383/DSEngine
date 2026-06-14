@@ -22,8 +22,8 @@ local camera
 local cube
 local t = 0.0
 local yaw = 0.0        -- camera orbit angle (radians)
-local radius = 6.5     -- horizontal distance from the origin
-local height = 2.2     -- camera height
+local radius = 9.5     -- horizontal distance from the origin
+local height = 3.4     -- camera height
 local prev_m = false
 local bgm_on = true
 
@@ -50,8 +50,14 @@ end
 
 local function setup_light()
     local light = dse.ecs.create_entity()
-    -- dir(x,y,z), color(r,g,b), intensity, ambient, sky-blend (mirrors samples/lua/3d/cube.lua)
-    dse.ecs.add_directional_light_3d(light, -0.5, -1.0, -0.4, 1.0, 0.96, 0.88, 1.5, 0.25, 0.35)
+    -- dir(x,y,z), color(r,g,b), intensity, ambient, shadow_strength.
+    -- Keep the key light strong but the flat ambient low so the cube faces read
+    -- as distinct planes (a high flat ambient washes the scene out to flat grey).
+    dse.ecs.add_directional_light_3d(light, -0.5, -1.0, -0.4, 1.0, 0.96, 0.88, 2.4, 0.10, 0.35)
+    -- Hemisphere ambient: cool sky from above, warm-dark bounce from below. This
+    -- replaces the flat grey ambient with a directional tint so the form pops.
+    local sky = dse.ecs.create_entity()
+    dse.ecs.add_sky_light(sky, 0.34, 0.42, 0.55, 0.10, 0.09, 0.08, 1.0)
 end
 
 -- A unit cube: 8 shared corners, 6 faces, 12 triangles.
@@ -73,7 +79,7 @@ local function setup_cube()
     dse.ecs.add_mesh_renderer(cube, 0.30, 0.62, 1.0, 1.0, v, idx)
     dse.ecs.set_mesh_shader_variant(cube, "MESH_LIT")
     -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
-    dse.ecs.set_mesh_material(cube, 0.05, 0.55, 1.0, 0.02, 0.02, 0.06, 1.0, false)
+    dse.ecs.set_mesh_material(cube, 0.05, 0.38, 1.0, 0.02, 0.02, 0.06, 1.0, false)
 end
 
 -- A large flat quad under the cube for depth/parallax context.
@@ -88,10 +94,25 @@ local function setup_ground()
     dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, false)
 end
 
+-- Explicit tone-mapping control. Forward3D has no HDR post chain, so the
+-- composite pass tone-maps with whatever exposure this component carries;
+-- pinning it (plus a soft vignette) keeps the framing tidy and the midtones
+-- from lifting to flat grey.
+local function setup_post_process()
+    local pp = dse.ecs.create_entity()
+    -- entity, bloom_enabled, bloom_threshold, bloom_intensity, exposure
+    dse.ecs.add_post_process(pp, false, 1.0, 1.0, 0.9)
+    if dse.ecs.set_post_process_vignette then
+        -- enabled, intensity, radius, softness
+        dse.ecs.set_post_process_vignette(pp, true, 0.35, 0.85, 0.45)
+    end
+end
+
 function Awake()
     dse.app.set_window_title("DSEngine Web - 3D Demo (A/D orbit, W/S dolly, M=BGM)")
     setup_camera()
     setup_light()
+    setup_post_process()
     setup_ground()
     setup_cube()
     if dse.audio and dse.audio.play_bgm then
