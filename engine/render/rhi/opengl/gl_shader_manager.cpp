@@ -309,9 +309,10 @@ std::string GLShaderManager::GenerateUBOGLSL() {
     // 1. 保持 #version 430 不降级。NVIDIA 在 GL 3.3 context 中也接受 #version 430
     //    （gbuffer shader 已验证）；降到 330 会导致 layout(binding) 编译失败。
     {
-        const auto pos = src.find("#version 430");
-        if (pos == std::string::npos)
-            fprintf(stderr, "[GenerateUBOGLSL] #version 430 not found\n");
+        const bool has_gl430 = src.find("#version 430") != std::string::npos;
+        const bool has_es300 = src.find("#version 300 es") != std::string::npos;
+        if (!has_gl430 && !has_es300)
+            fprintf(stderr, "[GenerateUBOGLSL] unexpected shader version (expected 430 or 300 es)\n");
     }
 
     // 2. 绉婚櫎 ClusterInfoEntry 缁撴瀯浣擄紙鎸夊悕绉板畾浣嶏紝ID 鏃犲叧锛?

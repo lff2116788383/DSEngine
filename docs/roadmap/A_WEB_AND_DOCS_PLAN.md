@@ -144,6 +144,16 @@
 
 **剩余（后续，本轮范围外）**：补 CI `build-web` 与冒烟测试（当前无 CI 额度，暂缓）。
 
+### 2.8d 残留日志修复与 web-release-3d 优化产物验证（2026-06-14，已完成）
+
+承 §2.8c 残留项，本轮处理两项：
+
+1. **`[GenerateUBOGLSL] #version 430 not found` 误报（已修，非功能性）**：`GenerateUBOGLSL()`（`gl_shader_manager.cpp`，fragment SSBO→UBO 降级）此前硬编码检查源码须含 `#version 430`，否则 `fprintf(stderr)` 告警。但在 `__EMSCRIPTEN__` 下 `DSE_SL(kpbr_frag)` 解析为 `kpbr_frag_essl300` 变体，其版本声明合法地为 `#version 300 es` → 触发该误报（被浏览器以 `[error]` 着色，实为 stderr 输出，**不影响渲染**：该检查块仅做诊断、从不改写着色器源；其后的 `ClusterInfoSSBO`/`PointLightSSBO`→UBO 等真实降级照常生效，故同变体的 eye shader 仍编译成功）。
+   - 修复：把检查改为「`#version 430` 或 `#version 300 es` 二者皆可」，仅在两者都缺失时才告警。桌面 SSBO 路径根本不调用 `GenerateUBOGLSL()`（`supports_ssbo_` 取首分支）、桌面非 SSBO 路径喂入含 430 的 `kpbr_frag_glsl430`——行为零变化。重编后真机 Chrome/WebGL2 控制台确认该 `[error]` 已消失，仅余 `[GLGpuTimer] timestamp queries unavailable on GLES`（GLES 既有限制，预期）。
+   - 桌面回归：空载下 `ctest` 3/3 通过（unit/integration/smoke）。注：unit 内 `PerformanceBaseline.ECS_CreateAndDestroy10KEntity` 为墙钟阈值用例（< 50000us），空载约 15–17ms 稳过；高负载并发（编译 + 软光栅浏览器）时曾测得 92ms 偶发超时，系该用例对机器负载敏感所致，非本改动回归（本改动仅改一条诊断 `fprintf` 条件，不触及 ECS）。
+
+2. **`web-release-3d` 优化产物（已编译并验证出画）**：`cmake --preset web-release-3d` + `cmake --build --preset web-release-3d`（target `dse_web_host`，`-Os`、Release）→ `bin/index.{html,js,wasm,data}`。优化后 `index.wasm` 约 **3.74MB**（相较 `web-debug-3d` 的 ~98MB 调试产物缩减约 26×），`index.js` ~0.2MB、`index.data` ~1.59MB。真机 Chrome/WebGL2 端到端复跑：受光立方体 + 地面出画正常、持续自转、不黑屏；`A/D` 绕轨、`W/S` 推拉相机均生效；控制台 `backend=OpenGL adapter="WebKit WebGL"`、`Forward3D`、5 个 pass 全开、`Eye shader created`，无致命 GL 错误。已录屏留证。
+
 ### 2.9 风险与对策
 | 风险 | 等级 | 对策 |
 |------|------|------|
