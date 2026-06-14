@@ -66,7 +66,7 @@
 按"能交付给第三方做出一个小游戏"的标准（2026-06-11 已按代码重新核实，下列状态为核实后）：
 
 **已完成 / 不再阻塞（核实纠偏）**
-- ~~**RHI 统一收尾**~~ **已完成**：`engine/render/RHI_UNIFICATION_TASKS.md` 7 项全部 `[x]`，`docs/roadmap/rhi_unification_closeout_plan.md` 阶段 A/B 均收口；UBO 填充逻辑统一到 `engine/render/rhi/draw_executor_common.h` 的 `Prepare*` 共用函数、跨端类型收敛到 `ubo_types.h`。per-backend draw_executor 文件仍大（体量问题），但当年「跨端重复逻辑」债已清，**不再是 P0**。
+- ~~**RHI 统一收尾**~~ **已完成**：`engine/render/RHI_UNIFICATION_TASKS.md` 7 项全部 `[x]`，`docs/plans/RHI_UNIFICATION_CLOSEOUT_PLAN.md` 阶段 A/B 均收口；UBO 填充逻辑统一到 `engine/render/rhi/draw_executor_common.h` 的 `Prepare*` 共用函数、跨端类型收敛到 `ubo_types.h`。per-backend draw_executor 文件仍大（体量问题），但当年「跨端重复逻辑」债已清，**不再是 P0**。
 
 **P0（发布阻塞）**
 1. **Vulkan 后端稳定性转正或明确降级**：勘误——Vulkan 在桌面默认 **ON**（非 Android），CI Windows 三个配置（Debug/Release/RelWithDebInfo）均开 Vulkan 构建；所以问题不是“默认关/未启用”，而是运行时稳定性与 GL/DX11 是否同级（需画面/回归验证）。发布前要么达到同级稳定，要么 v0.1 明确只发 GL+DX11。

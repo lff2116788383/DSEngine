@@ -4,7 +4,7 @@
 > 依据：基于源码现状核实（见 `PROGRESS_REPORT.md` 三次复核），非愿景文档。
 > 目标读者：引擎维护者 / 决策者。
 >
-> **更新（2026-06-14）**：阶段 A 的 **A1 Web/WASM 导出已达 MVP（可演示 demo）并真机验证**（含音频 / 单指触屏 / `dse build --target web` 出包链路）——详见 `A_WEB_AND_DOCS_PLAN.md` §2.3b/§2.3c/§2.6/§2.8c-d。Web/WASM 暂作**非主力**分支保留在此水位；下一步推荐方向见 §五。
+> **更新（2026-06-14）**：阶段 A 的 **A1 Web/WASM 导出已达 MVP（可演示 demo）并真机验证**（含音频 / 单指触屏 / `dse build --target web` 出包链路）——详见 `../plans/WEB_AND_DOCS_PLAN.md` §2.3b/§2.3c/§2.6/§2.8c-d。Web/WASM 暂作**非主力**分支保留在此水位；下一步推荐方向见 §五。
 
 ---
 
