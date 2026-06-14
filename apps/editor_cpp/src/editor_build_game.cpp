@@ -10,6 +10,7 @@
 #include "engine/assets/pak_writer.h"
 #include "engine/assets/asset_scanner.h"
 #include "engine/assets/bundle_packer.h"
+#include "engine/runtime/app_manifest.h"
 #include "engine/base/debug.h"
 
 #include <string>
@@ -71,30 +72,42 @@ void AppendLog(BuildState& state, const std::string& msg) {
     state.build_log.push_back(msg);
 }
 
-std::string JsonEscape(const std::string& s) {
-    std::string out;
-    out.reserve(s.size() + 8);
-    for (char c : s) {
-        switch (c) {
-            case '"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
-            default: out += c; break;
-        }
-    }
-    return out;
-}
-
-// 在 exe 旁写一份松散的 game.dsmanifest（窗口 + 品牌化 splash），standalone 宿主在
-// 创建窗口/弹出 splash 之前读取。splash 图必须松散放置（不能进 pak/bun），否则
-// 在挂载资源之前无法读取。
+// 在 exe 旁写一份松散的 game.dsmanifest（入口脚本 + 窗口 + 品牌化 splash），standalone
+// 宿主在创建窗口/弹出 splash 之前读取，并在未显式传 --script 时用 entry_script 启动
+// （与 dse CLI build 共用 WriteAppManifest，使编辑器出包同样“双击即玩”）。splash 图
+// 必须松散放置（不能进 pak/bun），否则在挂载资源之前无法读取。
 void WriteGameManifest(BuildState& state, const std::filesystem::path& out_dir) {
     namespace fs = std::filesystem;
     std::error_code ec;
 
-    std::string splash_image_rel;
+    dse::runtime::AppManifest manifest;
+    const std::string title = state.game_title;
+    manifest.has_window_title = true;
+    manifest.window_title = title;
+    manifest.has_window_size = true;
+    manifest.window_width = 1280;
+    manifest.window_height = 720;
+
+    // 入口脚本：取自当前打开项目的描述符，缺省回退 scripts/main.lua。
+    {
+        auto& proj = ProjectManager::Get();
+        std::string entry = proj.HasOpenProject() ? proj.GetDescriptor().entry_script : std::string();
+        if (entry.empty()) entry = "scripts/main.lua";
+        manifest.entry_script = entry;
+        manifest.has_entry_script = true;
+    }
+
+    // splash：保留编辑器既有的品牌化外观与时序（与旧手写清单一致）。
+    manifest.has_splash = true;
+    dse::platform::SplashConfig& cfg = manifest.splash;
+    cfg.enabled = true;
+    cfg.app_name = title;
+    cfg.bg_argb = 0xFF1E1E28u;
+    cfg.accent_argb = 0xFF4A9EFFu;
+    cfg.fade_in_ms = 600;
+    cfg.min_display_ms = 900;
+    cfg.fade_out_ms = 500;
+
     if (state.icon_path[0] != '\0') {
         fs::path icon(state.icon_path);
         std::string ext = icon.extension().string();
@@ -105,36 +118,17 @@ void WriteGameManifest(BuildState& state, const std::filesystem::path& out_dir) 
             fs::path dest = out_dir / ("splash" + ext);
             fs::copy_file(icon, dest, fs::copy_options::overwrite_existing, ec);
             if (!ec) {
-                splash_image_rel = dest.filename().string();
+                cfg.image_path = dest.filename().string();
                 AppendLog(state, "Copied splash image -> " + dest.filename().string());
             }
         }
     }
 
-    const std::string title = state.game_title;
-    std::ofstream ofs(out_dir / "game.dsmanifest", std::ios::trunc);
-    if (!ofs.is_open()) {
+    if (dse::runtime::WriteAppManifest((out_dir / "game.dsmanifest").string(), manifest)) {
+        AppendLog(state, "Wrote game.dsmanifest (entry_script + window + splash)");
+    } else {
         AppendLog(state, "WARNING: Failed to write game.dsmanifest");
-        return;
     }
-    ofs << "{\n";
-    ofs << "    \"window\": {\n";
-    ofs << "        \"title\": \"" << JsonEscape(title) << "\",\n";
-    ofs << "        \"width\": 1280,\n";
-    ofs << "        \"height\": 720\n";
-    ofs << "    },\n";
-    ofs << "    \"splash\": {\n";
-    ofs << "        \"enabled\": true,\n";
-    ofs << "        \"image\": \"" << JsonEscape(splash_image_rel) << "\",\n";
-    ofs << "        \"app_name\": \"" << JsonEscape(title) << "\",\n";
-    ofs << "        \"background_argb\": \"0xFF1E1E28\",\n";
-    ofs << "        \"accent_argb\": \"0xFF4A9EFF\",\n";
-    ofs << "        \"fade_in_ms\": 600,\n";
-    ofs << "        \"min_display_ms\": 900,\n";
-    ofs << "        \"fade_out_ms\": 500\n";
-    ofs << "    }\n";
-    ofs << "}\n";
-    AppendLog(state, "Wrote game.dsmanifest (window + splash)");
 }
 
 void DoBuild(BuildState& state) {
@@ -364,6 +358,24 @@ void DoBuild(BuildState& state) {
         fs::copy(data_dir, dest_data, fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
         if (ec) {
             AppendLog(state, "WARNING: Some files failed to copy: " + ec.message());
+        }
+    }
+
+    // 5b. 明文出包：把项目 scripts/ 与 scenes/ 松散拷到 exe 旁，使 game.dsmanifest 的
+    //     entry_script（如 scripts/main.lua）在磁盘上可直接解析——双击 exe 即玩，
+    //     无需 launch.bat（与 dse CLI build 的明文路径行为一致）。
+    {
+        auto& proj = ProjectManager::Get();
+        if (proj.HasOpenProject()) {
+            fs::path project_root = proj.GetProjectRoot();
+            for (const char* sub : {"scripts", "scenes"}) {
+                fs::path src = project_root / sub;
+                if (fs::exists(src, ec) && fs::is_directory(src, ec)) {
+                    fs::copy(src, out_dir / sub,
+                             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+                    if (!ec) AppendLog(state, std::string("Copied ") + sub + "/ (loose, for double-click run)");
+                }
+            }
         }
     }
 
