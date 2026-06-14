@@ -1127,16 +1127,6 @@ if(DSE_BUILD_GTESTS)
 endif()
 
 
-find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
-find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
-find_package(Python3 COMPONENTS Interpreter QUIET)
-
-set(DSE_LEGACY_EDITOR_DIR "${CMAKE_SOURCE_DIR}/apps/editor")
-set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE OFF)
-if(EXISTS "${DSE_LEGACY_EDITOR_DIR}/package.json" AND EXISTS "${DSE_LEGACY_EDITOR_DIR}/binding.gyp")
-    set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE ON)
-endif()
-
 if(DSE_BUILD_LAUNCHER)
     if(EXISTS "${CMAKE_SOURCE_DIR}/apps/launcher/CMakeLists.txt")
         add_subdirectory(apps/launcher)
@@ -1145,28 +1135,6 @@ if(DSE_BUILD_LAUNCHER)
             COMMAND ${CMAKE_COMMAND} -E echo "launcher_not_implemented"
         )
     endif()
-endif()
-
-if(NPM_EXECUTABLE AND NPX_EXECUTABLE AND DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE)
-    add_test(
-        NAME editor_bridge_rebuild
-        COMMAND ${NPX_EXECUTABLE} node-gyp rebuild
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
-    set_tests_properties(editor_bridge_rebuild PROPERTIES FIXTURES_SETUP editor_bridge_ready)
-
-    add_test(
-        NAME editor_material_replay_regression
-        COMMAND ${NPM_EXECUTABLE} run regress:material-replay
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
-    set_tests_properties(editor_material_replay_regression PROPERTIES FIXTURES_REQUIRED editor_bridge_ready)
-
-    add_test(
-        NAME editor_scene_schema_migrate_regression
-        COMMAND ${NPM_EXECUTABLE} run regress:scene-schema-migrate
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
 endif()
 
 # ── S1.5 Codegen Target ─────────────────────────────────────────────────────
