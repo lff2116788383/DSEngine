@@ -3,7 +3,7 @@
  * @brief DSEngine headless CLI（OUTPUT 名 `dse`）。脱离编辑器完成：建项目模板 / 打包加密 / 完整 build。
  *
  * 用法：
- *   dse new <empty|2d|3d|lua|cpp> <dir>    # 生成项目模板
+ *   dse new <empty|2d|3d|lua|cpp|platformer|topdown|thirdperson> <dir>  # 生成项目模板
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
@@ -45,6 +45,7 @@ int PrintUsage(int rc = 1) {
         "\n"
         "用法:\n"
         "  dse new <template> <dir>                 生成项目模板\n"
+        "  dse new <dir> --template=<template>      同上(模板用具名选项指定)\n"
         "  dse pack <dir> <out.bun> [--key=KEY]     把目录打包成(可加密)资源包\n"
         "  dse build <project> [--out=DIR] [--key=KEY] [--with-swgl]\n"
         "                                           定位运行时, 拷贝 exe+dll, 打包加密, 生成 launch 脚本\n"
@@ -62,6 +63,9 @@ int PrintUsage(int rc = 1) {
         "  3d      3D 演示场景(相机+平行光) + Lua 入口脚本\n"
         "  lua     Lua 玩法 + 入口脚本\n"
         "  cpp     C++ 宿主工程(src/main.cpp + CMakeLists.txt, 链接 dse_engine, 需自行 cmake 编译)\n"
+        "  platformer   品类模板: 2D 平台跳跃(重力/跳跃/平台 AABB 碰撞, 相机跟随)\n"
+        "  topdown      品类模板: 俯视 RPG(8 向移动/障碍碰撞/可拾取金币, 相机跟随)\n"
+        "  thirdperson  品类模板: 3D 第三人称(地面+角色方块, 固定偏移跟随相机)\n"
         "\n"
         "选项:\n"
         "  --key=KEY   AES-128-CTR 密钥(>=16 字节); 省略=明文打包\n"
@@ -79,6 +83,8 @@ int PrintUsage(int rc = 1) {
         "\n"
         "示例:\n"
         "  dse new lua MyGame\n"
+        "  dse new platformer MyPlatformer        # 2D 平台跳跃品类模板\n"
+        "  dse new MyRPG --template=topdown       # 俯视 RPG(具名选项写法)\n"
         "  dse build MyGame --out dist --key 0123456789abcdef\n"
         "  dse pack MyGame/assets assets.bun --key=0123456789abcdef\n"
         "  dse build --target web --3d            # 编译 web-release-3d 产物并收集到 dist/web\n"
@@ -128,16 +134,45 @@ std::string ReadEntryScript(const fs::path& dseproj, const std::string& fallback
 }
 
 int CmdNew(const std::vector<std::string>& args) {
-    if (args.size() < 2) {
-        std::cerr << "错误: new 需要 <模板> <目录>\n";
-        return PrintUsage();
+    // 兼容两种写法：
+    //   dse new <模板> <目录>
+    //   dse new <目录> --template=<模板>
+    std::string tmpl_opt;
+    std::vector<std::string> positional;
+    for (const auto& a : args) {
+        std::string v;
+        if (MatchOption(a, "--template=", v)) {
+            tmpl_opt = v;
+        } else {
+            positional.push_back(a);
+        }
     }
+
+    std::string tmpl_token;
+    std::string dir_token;
+    if (!tmpl_opt.empty()) {
+        if (positional.empty()) {
+            std::cerr << "错误: new --template=<模板> 仍需要 <目录>\n";
+            return PrintUsage();
+        }
+        tmpl_token = tmpl_opt;
+        dir_token = positional[0];
+    } else {
+        if (positional.size() < 2) {
+            std::cerr << "错误: new 需要 <模板> <目录>\n";
+            return PrintUsage();
+        }
+        tmpl_token = positional[0];
+        dir_token = positional[1];
+    }
+
     dse::project::ProjectTemplate tmpl;
-    if (!dse::project::ParseTemplateToken(args[0], tmpl)) {
-        std::cerr << "错误: 未知模板 '" << args[0] << "' (可选: empty|2d|3d|lua|cpp)\n";
+    if (!dse::project::ParseTemplateToken(tmpl_token, tmpl)) {
+        std::cerr << "错误: 未知模板 '" << tmpl_token
+                  << "' (可选: empty|2d|3d|lua|cpp|platformer|topdown|thirdperson)\n";
         return 1;
     }
-    const fs::path dir(args[1]);
+    const fs::path dir(dir_token);
     std::error_code ec;
     if (fs::exists(dir, ec) && !fs::is_empty(dir, ec)) {
         std::cerr << "错误: 目标目录非空: " << dir.string() << "\n";
