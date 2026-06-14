@@ -13,7 +13,6 @@ docs/
 ├── analysis/            引擎分析报告
 ├── design/              子系统设计文档
 ├── editor/              编辑器架构与插件系统
-├── examples/lua/        Lua 示例脚本
 ├── blog/                技术博客（27 篇）
 └── _archive/            已归档的历史文档
 ```
@@ -111,7 +110,7 @@ docs/
 
 ## 📦 示例
 
-`examples/lua/` 包含 Lua 示例脚本：`deepseek_npc.lua`、`json.lua`、`net_loopback.lua`、`net_message.lua`。
+可运行的 Lua 示例脚本位于仓库顶层 [`examples/lua/`](../examples/lua/)：`deepseek_npc.lua`、`json.lua`、`net_loopback.lua`、`net_message.lua`。
 
 ## 📝 技术博客
 

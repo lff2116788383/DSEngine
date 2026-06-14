@@ -2,7 +2,7 @@
 
 > 目的：让 Lua 脚本能调用外部 REST API（如 DeepSeek、各类 AI/后端服务）做「智能 NPC」等业务，
 > 而不阻塞游戏主循环。引擎**只**提供通用异步 HTTP 客户端；DeepSeek/JSON/对话管理等业务逻辑
-> 全部放在脚本层（见 `docs/examples/lua/`），引擎核心保持通用。
+> 全部放在脚本层（见 `examples/lua/`），引擎核心保持通用。
 
 状态：✅ 已落地并验证（Windows 实跑：本地回环 GET/POST + 真实 https/TLS 握手 + Lua 绑定回调，均 PASS）。
 
@@ -96,12 +96,12 @@ OpenSSL 相关开关 / 覆盖：
 
 ## 6. 脚本层示例（不进引擎核心）
 
-- `docs/examples/lua/json.lua` — 极简纯 Lua JSON 编/解码器（自测通过；生产建议换 lua-cjson）。
-- `docs/examples/lua/deepseek_npc.lua` — 用 `dse.http` + `json.lua` 调 DeepSeek `chat/completions`
+- `examples/lua/json.lua` — 极简纯 Lua JSON 编/解码器（自测通过；生产建议换 lua-cjson）。
+- `examples/lua/deepseek_npc.lua` — 用 `dse.http` + `json.lua` 调 DeepSeek `chat/completions`
   的智能 NPC 示例（多轮对话、异步回复、错误处理）。运行需自备 `DEEPSEEK_API_KEY`：
 
   ```bat
   set DEEPSEEK_API_KEY=sk-...
-  bin\DSEngine_lua_debug.exe --script=docs/examples/lua/deepseek_npc.lua
+  bin\DSEngine_lua_debug.exe --script=examples/lua/deepseek_npc.lua
   ```
   （宿主须以 `DSE_ENABLE_HTTP=ON` 构建，否则 `dse.http` 不存在。）

@@ -6,7 +6,7 @@
 ---   * DeepSeek 的 JSON 拼装/解析、对话管理等「业务逻辑」全在脚本层（本文件），
 ---     不进引擎核心——这样引擎保持通用，换任何 REST API 都不用改 C++。
 ---   * 真实调用需你自己的 DeepSeek API Key（见下）。本文件可直接被引擎 Lua 宿主加载：
----       bin/DSEngine_lua_debug.exe --script=docs/examples/lua/deepseek_npc.lua
+---       bin/DSEngine_lua_debug.exe --script=examples/lua/deepseek_npc.lua
 ---     （需用 DSE_ENABLE_HTTP=ON 构建的宿主；否则 dse.http 不存在。）
 ---
 --- dse.http API 速查：

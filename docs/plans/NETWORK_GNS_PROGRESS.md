@@ -265,7 +265,7 @@ dse.net.on(event, fn)                  -- event: "connecting"(conn,host,port)/"c
   握手 `connected=2`，客户端 `configure_lanes({0,0},{1,1})` 后经 **lane 1** 发可靠消息，
   服务端 `on("message")` 回调在 Lua 上下文拿到 `"NET_LUA_HELLO"` 且 `lane==1`。
 - 已并入 `verify_windows_build.ps1 -WithNet`（构建并运行 `dse_net_lua_smoke`）。
-- 示例：`docs/examples/lua/net_loopback.lua`。
+- 示例：`examples/lua/net_loopback.lua`。
 
 ---
 

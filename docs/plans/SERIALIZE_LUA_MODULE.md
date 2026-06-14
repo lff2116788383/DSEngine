@@ -47,7 +47,7 @@ dse.net.on("message", function(conn, data, lane)
 end)
 ```
 
-完整示例：`docs/examples/lua/net_message.lua`。
+完整示例：`examples/lua/net_message.lua`。
 
 ## 二进制格式（参考；小端，标签 1 字节）
 
