@@ -3,7 +3,8 @@
     打包"预编译 dse 工具包"：dse.exe + 运行时 DSEngine_Game.exe(+依赖) -> 一个 ZIP。
 .DESCRIPTION
     新手无需先用 bootstrap_windows.ps1 从源码构建整套引擎，只要下载本工具包解压，
-    即可用 `dse new / build / dist` 创建并打包游戏（运行时为静态链接，开箱即用）。
+    即可用 `dse new / build / dist` 创建并打包游戏。运行时动态链接 MSVC CRT，
+    本包已随附 app-local 的 VC++ 运行时 DLL，未装 VC++ Redistributable 也可开箱即用。
 
     流程：进 VS2022 x64 开发者环境 -> 用指定预设配置+编译 dse_cli 与 dse_standalone
     -> 从 bin/ 收集 dse.exe / DSEngine_Game.exe(+任何同目录 DLL) -> 写 README -> 打 ZIP。
@@ -102,7 +103,7 @@ if (-not $runtimeSrc) {
 # 统一落为 DSEngine_Game.exe，使 dse build 的 LocateRuntimeExe 在同目录即可命中。
 Copy-Item $runtimeSrc (Join-Path $StageDir "DSEngine_Game.exe") -Force
 
-# 同目录的依赖 DLL（当前为静态构建，通常为 0 个；有则一并带上）。
+# 同目录的依赖 DLL（引擎 / 插件运行时 DLL，有则一并带上）。
 $dllCount = 0
 Get-ChildItem $BinDir -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Object {
     Copy-Item $_.FullName (Join-Path $StageDir $_.Name) -Force
@@ -114,6 +115,22 @@ Write-Host "  + $dllCount 个依赖 DLL"
 
 if (Test-Path "$SourceDir\LICENSE") { Copy-Item "$SourceDir\LICENSE" $StageDir -Force }
 
+# ── 第三方许可证聚合（合规） ──
+Write-Host "`n[+] 聚合第三方许可证 (THIRD_PARTY_LICENSES.md)..."
+& "$PSScriptRoot\collect_third_party_licenses.ps1" -SourceDir $SourceDir -OutFile (Join-Path $StageDir "THIRD_PARTY_LICENSES.md")
+if ($LASTEXITCODE -ne 0) { throw "第三方许可证聚合失败 (exit $LASTEXITCODE)" }
+
+# ── 随包附带 VC++ 运行时 (app-local)：dse.exe / DSEngine_Game.exe 动态链接 CRT，
+#    未装 VC++ Redistributable 的机器靠这些 DLL 才能启动 ──
+Write-Host "`n[+] 收集 VC++ 运行时 DLL..."
+& "$PSScriptRoot\collect_runtime_deps.ps1" -DestDir $StageDir
+if ($LASTEXITCODE -ne 0) { throw "VC++ 运行时收集失败 (exit $LASTEXITCODE)；请安装 'Visual C++ 2015-2022 Redistributable (x64)' 后重试" }
+
+# ── 发行前依赖审计：揪出误带的 debug/dev DLL，确认运行时齐备 ──
+Write-Host "`n[+] 依赖审计 (发行前)..."
+& "$PSScriptRoot\audit_runtime_deps.ps1" -Dir $StageDir -RequireRuntime
+if ($LASTEXITCODE -ne 0) { throw "依赖审计未通过 (exit $LASTEXITCODE)" }
+
 # ── 3. README ───────────────────────────────────────────────────────
 $readme = @"
 # DSEngine 工具包 v${Version} (win-x64)
@@ -123,6 +140,8 @@ $readme = @"
 ## 包含
 - ``dse.exe``            —— 命令行工具：new / pack / build / dist
 - ``DSEngine_Game.exe``  —— standalone 运行时（被 ``dse build`` 复制进出包）
+- ``vcruntime140*.dll`` / ``msvcp140*.dll`` —— app-local VC++ 运行时（开箱即用）
+- ``THIRD_PARTY_LICENSES.md`` —— 第三方组件许可证汇总
 
 ## 快速上手
 将本目录加入 PATH（或在本目录内执行），然后：

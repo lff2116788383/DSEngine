@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     SDK end-to-end verification: package -> install -> consume -> compile -> run.
 .DESCRIPTION
@@ -125,6 +125,22 @@ foreach ($cfg in $Configs) {
             if (-not (Test-Path $fp)) { throw "Missing install file: $f" }
         }
         Write-OK "Install (all key files present)"
+
+        # -- Step 3.5/4: Release packaging additions + dependency audit -------
+        # Mirror what package_sdk.ps1 ships (third-party licenses + app-local
+        # VC++ runtime), then audit the result so a debug/dev DLL leak or a
+        # missing runtime DLL is caught by the same e2e flow. Release only:
+        # the Debug profile links the debug CRT by design and is not shipped.
+        if ($cfg -eq "Release") {
+            Write-Step "[$testLabel] Step 3.5/4 - Bundle licenses + runtime, then audit"
+            & "$PSScriptRoot\collect_third_party_licenses.ps1" -SourceDir $SourceDir -OutFile (Join-Path $installDir "THIRD_PARTY_LICENSES.md") *> $null
+            if ($LASTEXITCODE -ne 0) { throw "License aggregation failed (exit $LASTEXITCODE)" }
+            & "$PSScriptRoot\collect_runtime_deps.ps1" -DestDir (Join-Path $installDir "bin") *> $null
+            if ($LASTEXITCODE -ne 0) { throw "Runtime collection failed (exit $LASTEXITCODE)" }
+            & "$PSScriptRoot\audit_runtime_deps.ps1" -Dir $installDir -RequireRuntime
+            if ($LASTEXITCODE -ne 0) { throw "Dependency audit failed (exit $LASTEXITCODE)" }
+            Write-OK "Licenses + runtime bundled and audited"
+        }
 
         # -- Step 4/4: Build consumer example ---------------------------------
         Write-Step "[$testLabel] Step 4/4 - Build Consumer Example"

@@ -147,15 +147,36 @@ target_link_libraries(your_app PRIVATE DSEngine::dse_engine)
 
 - ``include/DSEngine/``  — Public headers
 - ``lib/``               — Import libraries (.lib)
-- ``bin/``               — Runtime DLLs
+- ``bin/``               — Runtime DLLs (engine + app-local VC++ runtime)
 - ``lib/cmake/DSEngine/``— CMake package config
 - ``share/DSEngine/``    — Lua scripts and data
+- ``THIRD_PARTY_LICENSES.md`` — Bundled third-party component licenses
+
+> ``bin/`` ships the VC++ runtime DLLs (vcruntime140*.dll, msvcp140*.dll) so the
+> SDK runs on machines without the "Visual C++ 2015-2022 Redistributable" installed.
 "@
 
 Set-Content -Path (Join-Path $InstallDir "README.md") -Value $readmeContent -Encoding UTF8
 
 if (Test-Path "$SourceDir\LICENSE") {
     Copy-Item "$SourceDir\LICENSE" -Destination $InstallDir
+}
+
+# ── 第三方许可证聚合（合规：随包提供所有依赖的版权 / 许可证文本） ──
+Write-Host "`n[+] 聚合第三方许可证 (THIRD_PARTY_LICENSES.md)..."
+& "$PSScriptRoot\collect_third_party_licenses.ps1" -SourceDir $SourceDir -OutFile (Join-Path $InstallDir "THIRD_PARTY_LICENSES.md")
+if ($LASTEXITCODE -ne 0) { throw "第三方许可证聚合失败 (exit $LASTEXITCODE)" }
+
+# ── 随包附带 VC++ 运行时 (app-local)：未装 VC++ Redistributable 的机器也能直接运行 ──
+Write-Host "`n[+] 收集 VC++ 运行时 DLL -> bin/ ..."
+& "$PSScriptRoot\collect_runtime_deps.ps1" -DestDir (Join-Path $InstallDir "bin")
+if ($LASTEXITCODE -ne 0) { throw "VC++ 运行时收集失败 (exit $LASTEXITCODE)；请安装 'Visual C++ 2015-2022 Redistributable (x64)' 后重试" }
+
+# ── 发行前依赖审计：揪出误带的 debug/dev DLL，确认运行时齐备 ──
+if ($Config -eq "Release") {
+    Write-Host "`n[+] 依赖审计 (发行前)..."
+    & "$PSScriptRoot\audit_runtime_deps.ps1" -Dir $InstallDir -RequireRuntime
+    if ($LASTEXITCODE -ne 0) { throw "依赖审计未通过 (exit $LASTEXITCODE)" }
 }
 
 # ── 打包 ZIP ─────────────────────────────────────────────────────
