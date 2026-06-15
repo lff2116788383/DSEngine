@@ -183,14 +183,35 @@ docs/qa/samples_lua_render/
 ├── montage_vulkan.png              # Vulkan 全量出图拼图（62 demo，真机）
 ├── opengl/
 │   ├── summary.csv                 # 逐 demo：exit / shot / [ERROR] 数 / 着色器失败数 / 适配器
-│   ├── shots/<demo>.png            # 注册 demo 截图（第 55 帧）+ dssl_*.png（DSSL 示例）
-│   └── logs/<demo>.log             # 逐 demo 完整 stdout+stderr 日志 + dssl_*.log
+│   ├── shots/<demo>.png            # 62 个注册 demo 截图（第 55 帧，真机）+ dssl_material_demo.png（DSSL 示例）
+│   └── logs/<demo>.log             # 逐 demo 完整 stdout+stderr 日志
 ├── d3d11/  { summary.csv, shots/, logs/ }
-└── vulkan/ { summary.csv, shots/, logs/ }   # 含 *_lowres.log（重场景的低分辨率补跑记录）
+└── vulkan/ { summary.csv, shots/, logs/ }
 ```
+> `summary.csv` 本次新增 `submitFail` / `uboOverflow` / `retries` 三列（见 §0）。
 
 定位问题示例：
 - A1：`*/logs/3d_morph_target.log` 搜 `Lua Awake failed`
-- A3/A4：`opengl/logs/dssl_demo_npr_light.log.err` / `dssl_demo_toon.log.err`
-- C：任一 `d3d11/logs/*.log` 搜 `Shader compile error` / `X3511`
-- D：`vulkan/logs/3d_postprocess_showcase.log` 搜 `avg_render_ms`（单帧耗时）
+- B（缺资源）：`*/logs/3d_hair.log` / `3d_animation_ik_layers.log` 搜 `Failed to (read|open)`
+- C（D3D11 HLSL 告警）：任一 `d3d11/logs/*.log` 搜 `Shader compile error` / `X35`
+- E（device-lost）：`vulkan/summary.csv` 看 `submitFail` / `retries` 列
+
+---
+
+## 6. 未来工作：三端一致性可量化回归方案（待做）
+
+> **现状**：目前「三端一致」是靠 montage 肉眼对比 + 错误日志归因来判断，对「能跑通 + 功能广度冒烟」足够；但还不是像素级、可量化、可回归的严格验证。本节记录后续要做的方案，**本轮暂不实现**（当前结论：暂时足够）。
+
+### 当前方法的三个短板
+1. 动态 demo（物理/粒子/水/流体/2D）用固定第 55 帧截图，三端跑到同一帧号时场景状态不同（时序差），画面不可直接对比。
+2. 没有自动化的三端 pixel-diff / SSIM 量化指标，无法回归。
+3. 个别 demo（`3d_water` / `3d_fluid`）三端观感有可见差异，尚未定性是「时序」还是「后端实现差异」。
+
+### 拟定方案
+1. **确定性渲染（去除时序噪声）**：为截图路径固定随机种子与固定步长（fixed timestep），并允许「跑到第 K 帧后暂停再回读」；对物理用固定 dt、禁用随机抖动，保证三端同帧号 = 同场景状态。
+2. **三端逐 demo 量化对比**：以 OpenGL 为基准，对 D3D11 / Vulkan 算每个 demo 的 SSIM 与归一化像素差（可用 PIL/numpy，无需外部依赖），设阈值（例 SSIM ≥ 0.95），超阈列入「差异榜」。
+3. **产出**：`consistency.csv`（demo, ssim_d3d11, ssim_vulkan, maxpixdiff, verdict）+ 三端并排差异图（只针对超阈 demo，省空间），并在本 README 生成「三端一致性概览」表。
+4. **回归集成**：把上述脚本接入 `demo_harness.ps1` 之后的一步，每次三端复跑后自动出具一致性报告；CI/人工只需看「差异榜」是否为空。
+5. **先处理已知可疑点**：`3d_water` / `3d_fluid` 在确定性渲染下复测，区分是时序还是后端实现差异；若是后者则当作渲染 bug 单独立项修复。
+
+> 验收标准（未来）：除「缺资源」与「动态时序」类外，其余 demo 三端 SSIM 均 ≥ 0.95；`consistency.csv` 纳入归档与回归。
