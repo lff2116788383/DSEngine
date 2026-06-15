@@ -258,27 +258,30 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     WriteToBuffer(device, particle_vbo_mem_, 0, sizeof(particle_vertices), particle_vertices);
 
     // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盖） ---
-    // per_frame: 128 batches/frame × 256B = 32KB（含 shadow passes + GPU Driven setup）
-    // per_scene/material/lights: 512 items/frame × 256B = 128KB
+    // per_frame:  128 batches/frame × 256B = 32KB（含 shadow passes + GPU Driven setup）
+    // per_object: 每个 draw item 占 1 slot；重实例化/多 shadow pass 场景下单帧可达数千 draw
+    //             （实测 3d_instancing 峰值 ~2165 slot），故 per_scene/material/terrain 取 4096 slot ×256B = 1MB。
+    // lights:     512 slot，但每 slot 为 kLightUboSlotAlignment(4352B)，单独保留以免浪费显存。
     constexpr size_t kPerFrameSlots  = 128;
-    constexpr size_t kPerItemSlots   = 512;
+    constexpr size_t kPerObjectSlots = 4096;   // per-scene / per-material / terrain（每 draw 1 slot）
+    constexpr size_t kLightSlots     = 512;    // 点/聚光灯 UBO（大对齐，单独限额）
     constexpr size_t kSlotAlign      = kUboSlotAlignment;
     per_frame_ubo_capacity_ = kPerFrameSlots * kSlotAlign;
-    per_scene_ubo_capacity_ = kPerItemSlots * kSlotAlign;
-    per_material_ubo_capacity_ = kPerItemSlots * kSlotAlign;
-    terrain_params_ubo_capacity_ = kPerItemSlots * kSlotAlign;
+    per_scene_ubo_capacity_ = kPerObjectSlots * kSlotAlign;
+    per_material_ubo_capacity_ = kPerObjectSlots * kSlotAlign;
+    terrain_params_ubo_capacity_ = kPerObjectSlots * kSlotAlign;
     for (int i = 0; i < MAX_FRAMES; ++i) {
         CreateUBOBufferInternal(device, physical_device, kPerFrameSlots * kSlotAlign,
                                 per_frame_ubo_[i], per_frame_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+        CreateUBOBufferInternal(device, physical_device, kPerObjectSlots * kSlotAlign,
                                 per_scene_ubo_[i], per_scene_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+        CreateUBOBufferInternal(device, physical_device, kPerObjectSlots * kSlotAlign,
                                 per_material_ubo_[i], per_material_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kSlotAlign,
+        CreateUBOBufferInternal(device, physical_device, kPerObjectSlots * kSlotAlign,
                                 terrain_params_ubo_[i], terrain_params_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
+        CreateUBOBufferInternal(device, physical_device, kLightSlots * kLightUboSlotAlignment,
                                 per_point_lights_ubo_[i], per_point_lights_ubo_mem_[i]);
-        CreateUBOBufferInternal(device, physical_device, kPerItemSlots * kLightUboSlotAlignment,
+        CreateUBOBufferInternal(device, physical_device, kLightSlots * kLightUboSlotAlignment,
                                 per_spot_lights_ubo_[i], per_spot_lights_ubo_mem_[i]);
     }
 

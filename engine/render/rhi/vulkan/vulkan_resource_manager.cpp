@@ -1629,17 +1629,20 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 // ============================================================
 
 bool VulkanResourceManager::CreateDescriptorPool() {
+    // 每个 mesh draw 最多分配 4 个 descriptor set；重实例化/多 shadow pass 场景下
+    // 单帧 set 数可达数千（实测 3d_instancing 峰值 ~4911 set），故将容量提升 ~4×。
+    // descriptor pool 仅为主机端记账，成本很小。
     std::vector<VkDescriptorPoolSize> pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2048},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         32768},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 32768},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         8192},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          256},
     };
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 4096;
+    pool_info.maxSets = 16384;
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
 
@@ -1650,7 +1653,7 @@ bool VulkanResourceManager::CreateDescriptorPool() {
         }
     }
 
-    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=4096 each)", kMaxFramesInFlight);
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=16384 each)", kMaxFramesInFlight);
     return true;
 }
 
