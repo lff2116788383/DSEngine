@@ -35,8 +35,8 @@ void main() {
     for (int i = 0; i < samples; i++) {
         uv += delta_uv;
         vec2 suv = clamp(uv, 0.001, 0.999);
-        float d = texture(u_depth_tex, suv).r;
-        vec3 s = texture(screenTexture, suv).rgb;
+        float d = textureLod(u_depth_tex, suv, 0.0).r;
+        vec3 s = textureLod(screenTexture, suv, 0.0).rgb;
         float sky = step(0.9999, d);
         float lum = dot(s, vec3(0.2126, 0.7152, 0.0722));
         float bright = smoothstep(0.8, 1.2, lum);

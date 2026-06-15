@@ -61,7 +61,7 @@ void main() {
         vec3 sampleDir = kernel[i];
         if (dot(sampleDir, normal) < 0.0) sampleDir = -sampleDir;
         vec2 sampleUV = vTexCoords + sampleDir.xy * rScale * (1.0 / u_screen_size);
-        float sampleDepth = linearizeDepth(texture(screenTexture, sampleUV).r);
+        float sampleDepth = linearizeDepth(textureLod(screenTexture, sampleUV, 0.0).r);
         float rangeCheck = smoothstep(0.0, 1.0, u_radius / abs(linDepth - sampleDepth));
         if (sampleDepth < linDepth - u_bias) occlusion += rangeCheck;
     }

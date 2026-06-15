@@ -21,7 +21,7 @@ void main() {
         float t = float(i) / float(samples);
         vec2 sample_uv = vTexCoords + velocity * t;
         if (sample_uv.x >= 0.0 && sample_uv.x <= 1.0 && sample_uv.y >= 0.0 && sample_uv.y <= 1.0) {
-            color += texture(u_color_texture, sample_uv).rgb;
+            color += textureLod(u_color_texture, sample_uv, 0.0).rgb;
             total += 1.0;
         }
     }

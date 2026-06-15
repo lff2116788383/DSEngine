@@ -47,7 +47,7 @@ float MiePhase(float cos_theta, float g) {
 vec3 SampleTransmittance(float h, float cos_theta) {
     float u = cos_theta * 0.5 + 0.5;
     float v = h / u_atmosphere_height;
-    return texture(u_transmittance_lut, vec2(u, v)).rgb;
+    return textureLod(u_transmittance_lut, vec2(u, v), 0.0).rgb;
 }
 
 // 大气密度 at height

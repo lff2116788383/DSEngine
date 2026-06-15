@@ -34,10 +34,10 @@ void main() {
         float r = sqrt(float(i) / float(SAMPLES)) * radius;
         float theta = float(i) * GOLDEN_ANGLE;
         vec2 offset = vec2(cos(theta), sin(theta)) * r * texel;
-        float sample_depth = linearizeDepth(texture(screenTexture, vTexCoords + offset).r);
+        float sample_depth = linearizeDepth(textureLod(screenTexture, vTexCoords + offset, 0.0).r);
         float sample_coc = clamp(abs(sample_depth - focus_distance) / focus_range, 0.0, 1.0);
         float w = max(sample_coc, coc);
-        color += texture(u_color_texture, vTexCoords + offset).rgb * w;
+        color += textureLod(u_color_texture, vTexCoords + offset, 0.0).rgb * w;
         total_weight += w;
     }
     if (total_weight > 0.0) color /= total_weight;
