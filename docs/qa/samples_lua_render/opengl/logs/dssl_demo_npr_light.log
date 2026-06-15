@@ -1,0 +1,73 @@
+Starting DSEngine Runtime...
+[INFO] debug logger init success
+Business mode: lua
+[INFO] RHI Factory: 创建 OpenGL 后端
+[INFO] FramePipeline RHI 后端: OpenGL
+[INFO] [InitTiming] RHI device init: 1ms
+[INFO] DSE_RENDER_DEVICE backend=OpenGL adapter="llvmpipe (LLVM 22.1.6, 256 bits)" software=1
+[INFO] Render pipeline profile: using built-in ForwardPlusDefault
+[INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
+  0: pre_z [enabled]
+  1: hiz_build [skipped(no_hiz)]
+  2: hiz_cull [skipped(no_hiz)]
+  3: csm_shadow [enabled]
+  4: spot_shadow [enabled]
+  5: point_shadow [enabled]
+  6: gpu_cull [skipped(no_gpu_driven)]
+  7: rsm [enabled]
+  8: ddgi_update [enabled]
+  9: gbuffer [enabled]
+  10: deferred_lighting [enabled]
+  11: forward_scene [enabled]
+  12: atmosphere_sky [enabled]
+  13: wboit [enabled]
+  14: water [enabled]
+  15: bloom [enabled]
+  16: ssao [enabled]
+  17: contact_shadow [enabled]
+  18: auto_exposure [enabled]
+  19: motion_vector [enabled]
+  20: ssr [enabled]
+  21: outline [enabled]
+  22: light_shaft [enabled]
+  23: volumetric_fog [enabled]
+  24: decal [enabled]
+  25: ui [enabled]
+  26: composite [enabled]
+  27: dof [enabled]
+  28: motion_blur [enabled]
+  29: fxaa [enabled]
+  30: taa [enabled]
+  31: present [enabled]
+[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [GL] Eye shader created: 6
+[INFO] [GLShaderManager] Warmed up 39 post-process shaders
+[INFO] [GLGpuTimer] Initialized (double-buffered timestamp queries)
+[INFO] Hi-Z texture created: handle=500000 gl_tex=32 1280x701 mips=11
+[INFO] Hi-Z Occlusion Culling initialized: texture=500000 vis_ssbo=15 aabb_ssbo=16 capacity=65536 shaders=(119,121,123)
+[INFO] GPU Driven Rendering: supported=1, cull_shader=125
+[INFO] [InitTiming] render resources: 1040ms
+[INFO] FramePipeline init: systems init begin
+[INFO] [Physics2D] Init world_valid=1
+[INFO] FramePipeline init: systems init complete
+[INFO] FramePipeline init: Gameplay3D module enabled=1
+[INFO] Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies=4096, threads=2)
+[INFO] FramePipeline init: Physics3DSystem initialized and registered
+[INFO] FramePipeline init: NavMeshSystem initialized and registered
+[INFO] [GrassSystem] GPU wind compute shader created: 127
+[INFO] [GrassSystem] Initialized. blade_verts=10, billboard_verts=8, gpu_compute=1
+[INFO] [TreeSystem] Initialized
+[INFO] [HairSystem] Initialized, gpu_compute=1
+[INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
+[INFO] [InitTiming] systems init: 30ms
+[INFO] FramePipeline init: business bootstrap begin
+[INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\bin\samples/lua/dssl/demo_npr_light.lua
+[INFO] Lua bootstrap: package path setup begin
+[INFO] Lua bootstrap: register API begin
+[INFO] Lua bootstrap: loading startup script begin
+[INFO] Lua business mode bootstrap: FAILED
+[INFO] debug logger shutdown
