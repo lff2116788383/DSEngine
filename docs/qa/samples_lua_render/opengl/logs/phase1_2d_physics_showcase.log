@@ -1,0 +1,113 @@
+Starting DSEngine Runtime...
+[INFO] debug logger init success
+Business mode: lua
+[INFO] RHI Factory: 创建 OpenGL 后端
+[INFO] FramePipeline RHI 后端: OpenGL
+[INFO] [InitTiming] RHI device init: 4ms
+[INFO] DSE_RENDER_DEVICE backend=OpenGL adapter="llvmpipe (LLVM 22.1.6, 256 bits)" software=1
+[INFO] Render pipeline profile: using built-in ForwardPlusDefault
+[INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
+  0: pre_z [enabled]
+  1: hiz_build [skipped(no_hiz)]
+  2: hiz_cull [skipped(no_hiz)]
+  3: csm_shadow [enabled]
+  4: spot_shadow [enabled]
+  5: point_shadow [enabled]
+  6: gpu_cull [skipped(no_gpu_driven)]
+  7: rsm [enabled]
+  8: ddgi_update [enabled]
+  9: gbuffer [enabled]
+  10: deferred_lighting [enabled]
+  11: forward_scene [enabled]
+  12: atmosphere_sky [enabled]
+  13: wboit [enabled]
+  14: water [enabled]
+  15: bloom [enabled]
+  16: ssao [enabled]
+  17: contact_shadow [enabled]
+  18: auto_exposure [enabled]
+  19: motion_vector [enabled]
+  20: ssr [enabled]
+  21: outline [enabled]
+  22: light_shaft [enabled]
+  23: volumetric_fog [enabled]
+  24: decal [enabled]
+  25: ui [enabled]
+  26: composite [enabled]
+  27: dof [enabled]
+  28: motion_blur [enabled]
+  29: fxaa [enabled]
+  30: taa [enabled]
+  31: present [enabled]
+[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [GL] Eye shader created: 6
+[INFO] [GLShaderManager] Warmed up 39 post-process shaders
+[INFO] [GLGpuTimer] Initialized (double-buffered timestamp queries)
+[INFO] Hi-Z texture created: handle=500000 gl_tex=32 1280x701 mips=11
+[INFO] Hi-Z Occlusion Culling initialized: texture=500000 vis_ssbo=15 aabb_ssbo=16 capacity=65536 shaders=(119,121,123)
+[INFO] GPU Driven Rendering: supported=1, cull_shader=125
+[INFO] [InitTiming] render resources: 1003ms
+[INFO] FramePipeline init: systems init begin
+[INFO] [Physics2D] Init world_valid=1
+[INFO] FramePipeline init: systems init complete
+[INFO] FramePipeline init: Gameplay3D module enabled=1
+[INFO] Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies=4096, threads=2)
+[INFO] FramePipeline init: Physics3DSystem initialized and registered
+[INFO] FramePipeline init: NavMeshSystem initialized and registered
+[INFO] [GrassSystem] GPU wind compute shader created: 127
+[INFO] [GrassSystem] Initialized. blade_verts=10, billboard_verts=8, gpu_compute=1
+[INFO] [TreeSystem] Initialized
+[INFO] [HairSystem] Initialized, gpu_compute=1
+[INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
+[INFO] [InitTiming] systems init: 60ms
+[INFO] FramePipeline init: business bootstrap begin
+[INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua bootstrap: package path setup begin
+[INFO] Lua bootstrap: register API begin
+[INFO] Lua bootstrap: loading startup script begin
+[main] 加载 demo: phase1_2d_physics_showcase
+[INFO] Lua bootstrap: startup script load OK
+[INFO] Lua bootstrap: Awake begin
+[INFO] Data root updated from lua: data\
+[INFO] Lua bootstrap: Awake OK
+[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua business mode bootstrap: OK
+[INFO] [InitTiming] business bootstrap: 16ms
+[INFO] [InitTiming] BuildRenderGraph: 1ms
+[INFO] [InitTiming] light buffer + cluster grid: 0ms
+[INFO] [LightProbeSystem] Initialized, face_res=64, RT=320039
+[INFO] [InitTiming] LightProbeSystem: 3ms
+[INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
+[INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=53 (cached)
+[INFO] [ReflectionProbeSystem] Initialized, bake_res=128
+[INFO] [InitTiming] ReflectionProbeSystem: 2ms
+[INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
+[INFO] [InitTiming] StreamingManager: 5ms
+[INFO] [GPUSkinning] Initialized (shader=137, initial_capacity=4096v/1024b)
+[INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
+[INFO] [InitTiming] GPUSkinning: 10ms
+[INFO] EngineInstance init: startup scene regression checks skipped by env
+[INFO] [Physics2D] CreateBody entity=3 valid=1
+[INFO] [Physics2D] CreateBody entity=2 valid=1
+[INFO] [Physics2D] CreateBody entity=1 valid=1
+[INFO] Runtime stats: entities=27, sprites=237, meshes=0, draw_calls=3, material_switches=0, shadow_passes=1, max_batch_sprites=219, render_passes=11, physics_bodies=3, particle_emitters=0, active_particles=0, avg_update_ms=0.2256, avg_fixed_ms=1.07074, avg_render_ms=6261.47, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=27, sprites=237, meshes=0, draw_calls=3, material_switches=0, shadow_passes=1, max_batch_sprites=219, render_passes=11, physics_bodies=3, particle_emitters=0, active_particles=0, avg_update_ms=0.1363, avg_fixed_ms=0.03006, avg_render_ms=6399.58, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=27, sprites=237, meshes=0, draw_calls=3, material_switches=0, shadow_passes=1, max_batch_sprites=219, render_passes=11, physics_bodies=3, particle_emitters=0, active_particles=0, avg_update_ms=0.1111, avg_fixed_ms=0.02994, avg_render_ms=16.3205, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=27, sprites=243, meshes=0, draw_calls=3, material_switches=0, shadow_passes=1, max_batch_sprites=225, render_passes=11, physics_bodies=3, particle_emitters=0, active_particles=0, avg_update_ms=0.0824676, avg_fixed_ms=0.034632, avg_render_ms=15.4129, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\opengl\shots\phase1_2d_physics_showcase.png target=scene size=1280x701
+[INFO] Runtime stats: entities=27, sprites=234, meshes=0, draw_calls=3, material_switches=0, shadow_passes=1, max_batch_sprites=216, render_passes=11, physics_bodies=3, particle_emitters=0, active_particles=0, avg_update_ms=0.0818167, avg_fixed_ms=0.0357686, avg_render_ms=16.4666, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+DSE_MAX_FRAMES reached: 70
+[INFO] [StreamingManager] Shutdown
+[INFO] [LuaRuntime] Shutdown begin state=000001F357FB2A18 script_instances=0 lua_memory_usage=151159 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000001F357FB2A18
+[INFO] [LuaRuntime] lua_close complete
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [HairSystem] Shutdown, released all hair resources
+[INFO] Physics3DSystem Shutdown (Jolt)
+[INFO] RHI resource ledger: textures=54/54, framebuffers=41/41, shader_programs=1/1, vaos=3/3, buffers=16/16, render_targets=41/41, pipeline_states=8/8
+[INFO] FileWatcher: stopped
+[INFO] debug logger shutdown

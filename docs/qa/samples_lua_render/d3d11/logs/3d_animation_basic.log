@@ -1,0 +1,224 @@
+Starting DSEngine Runtime...
+[INFO] debug logger init success
+Business mode: lua
+[INFO] RHI Factory: 创建 D3D11 后端
+[INFO] FramePipeline RHI 后端: D3D11
+[INFO] [D3D11] VSync: ON
+[INFO] [D3D11] Adapter 0: [SKIP software] Microsoft Basic Render Driver
+[INFO] [D3D11] Adapter 1: [SKIP no VRAM] Microsoft Basic Render Driver
+[INFO] [D3D11] Adapter 2: [SKIP no VRAM] Microsoft Basic Render Driver
+[INFO] [D3D11] Tearing support: YES
+[INFO] [D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)
+[INFO] [D3D11] Render device: Microsoft Basic Render Driver (software)
+[INFO] [D3D11] MSAA 4x quality=0
+[INFO] [D3D11] MSAA 4x not supported, will use 1x
+[INFO] [D3D11] Context initialized — Feature Level: 11.1
+[INFO] [D3D11] ResourceManager initialized
+[INFO] [D3D11] ShaderManager initialized
+[INFO] [D3D11] PipelineStateManager initialized
+[INFO] [D3D11] DrawExecutor geometry buffers initialized
+[INFO] [D3D11] DrawExecutor initialized
+[INFO] [D3D11] Builtin sprite shader created (DXBC): 840000
+[INFO] [D3D11] Builtin SDF text shader created (DXBC): 840001
+[INFO] [D3D11] Builtin UI effects shader created (DXBC): 840002
+[INFO] [D3D11] Builtin PBR shader created: 840003
+[INFO] [D3D11] Eye shader created (DXBC): 840004
+[INFO] [D3D11] Builtin skybox shader created (DXBC): 840005
+[INFO] [D3D11] Builtin particle shader created (DXBC): 840006
+[INFO] [D3D11] Builtin postprocess shader created (DXBC): 840007
+[INFO] [D3D11] Builtin shadow shader created (DXBC): 840008
+[INFO] [D3D11] Builtin bloom downsample CS created: 850000
+[INFO] [D3D11] Builtin bloom upsample CS created: 850001
+[INFO] [D3D11] Builtin bloom_composite shader created (DXBC): 840009
+[INFO] [D3D11] Builtin bloom_extract shader created (DXBC): 840010
+[INFO] [D3D11] Builtin fxaa shader created (DXBC): 840011
+[INFO] [D3D11] Builtin ssao shader created (DXBC): 840012
+[INFO] [D3D11] Builtin ssao_blur shader created (DXBC): 840013
+[INFO] [D3D11] Builtin ssao_apply shader created (DXBC): 840014
+[INFO] [D3D11] Builtin contact_shadow shader created (DXBC): 840015
+[INFO] [D3D11] Builtin bloom_composite_ssao shader created (DXBC): 840016
+[INFO] [D3D11] Builtin lum_compute shader created (DXBC): 840017
+[INFO] [D3D11] Builtin lum_adapt shader created (DXBC): 840018
+[INFO] [D3D11] Builtin tonemapping shader created (DXBC): 840019
+[INFO] [D3D11] Builtin bloom_composite_ssao_ae shader created (DXBC): 840020
+[INFO] [D3D11] Builtin color_grading shader created (DXBC): 840021
+[INFO] [D3D11] Builtin taa_resolve shader created (DXBC): 840022
+[INFO] [D3D11] Builtin dof shader created (DXBC): 840023
+[INFO] [D3D11] Builtin motion_blur shader created (DXBC): 840024
+[INFO] [D3D11] Builtin ssr shader created (DXBC): 840025
+[INFO] [D3D11] Builtin motion_vector shader created (DXBC): 840026
+[INFO] [D3D11] Builtin deferred_lighting shader created (DXBC): 840027
+[INFO] [D3D11] Builtin edge_detect shader created (DXBC): 840028
+[INFO] [D3D11] Builtin volumetric_fog shader created (DXBC): 840029
+[INFO] [D3D11] Builtin volumetric_cloud shader created (DXBC): 840030
+[INFO] [D3D11] Builtin decal shader created (DXBC): 840031
+[INFO] [D3D11] Builtin wboit_composite shader created (DXBC): 840032
+[INFO] [D3D11] Builtin water shader created (DXBC): 840033
+[INFO] [D3D11] Builtin light_shaft shader created (DXBC): 840034
+[INFO] [D3D11] Builtin atmosphere_transmittance_lut shader created (DXBC): 840035
+[INFO] [D3D11] Builtin sss_blur shader created (DXBC): 840036
+[INFO] [D3D11] Builtin weather_particle shader created (DXBC): 840037
+[INFO] [D3D11] Builtin GBuffer shader created (DXBC): 840038
+[INFO] [DX11] GPU-driven PBR shader created: handle=840039
+[INFO] [DX11] GPU-driven Shadow shader created: handle=840040
+[INFO] [DX11GpuTimer] Initialized (double-buffered timestamp queries)
+[INFO] [D3D11] RhiDevice initialized (all subsystems ready)
+[INFO] [InitTiming] RHI device init: 1145ms
+[INFO] DSE_RENDER_DEVICE backend=D3D11 adapter="Microsoft Basic Render Driver" software=1
+[INFO] Render pipeline profile: using built-in ForwardPlusDefault
+[INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
+  0: pre_z [enabled]
+  1: hiz_build [skipped(no_hiz)]
+  2: hiz_cull [skipped(no_hiz)]
+  3: csm_shadow [enabled]
+  4: spot_shadow [enabled]
+  5: point_shadow [enabled]
+  6: gpu_cull [skipped(no_gpu_driven)]
+  7: rsm [enabled]
+  8: ddgi_update [enabled]
+  9: gbuffer [enabled]
+  10: deferred_lighting [enabled]
+  11: forward_scene [enabled]
+  12: atmosphere_sky [enabled]
+  13: wboit [enabled]
+  14: water [enabled]
+  15: bloom [enabled]
+  16: ssao [enabled]
+  17: contact_shadow [enabled]
+  18: auto_exposure [enabled]
+  19: motion_vector [enabled]
+  20: ssr [enabled]
+  21: outline [enabled]
+  22: light_shaft [enabled]
+  23: volumetric_fog [enabled]
+  24: decal [enabled]
+  25: ui [enabled]
+  26: composite [enabled]
+  27: dof [enabled]
+  28: motion_blur [enabled]
+  29: fxaa [enabled]
+  30: taa [enabled]
+  31: present [enabled]
+[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [DX11] Hi-Z texture created: handle=850000 1280x701 mips=11
+[INFO] Hi-Z Occlusion Culling initialized: texture=850000 vis_ssbo=815000 aabb_ssbo=815001 capacity=65536 shaders=(850002,850003,850004)
+[INFO] GPU Driven Rendering: supported=1, cull_shader=850005
+[INFO] [InitTiming] render resources: 29ms
+[INFO] FramePipeline init: systems init begin
+[INFO] [Physics2D] Init world_valid=1
+[INFO] FramePipeline init: systems init complete
+[INFO] FramePipeline init: Gameplay3D module enabled=1
+[INFO] Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies=4096, threads=2)
+[INFO] FramePipeline init: Physics3DSystem initialized and registered
+[INFO] FramePipeline init: NavMeshSystem initialized and registered
+[INFO] [GrassSystem] GPU wind compute shader created: 850006
+[INFO] [GrassSystem] Initialized. blade_verts=10, billboard_verts=8, gpu_compute=1
+[INFO] [TreeSystem] Initialized
+[INFO] [HairSystem] Initialized, gpu_compute=1
+[INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
+[INFO] [InitTiming] systems init: 57ms
+[INFO] FramePipeline init: business bootstrap begin
+[INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua bootstrap: package path setup begin
+[INFO] Lua bootstrap: register API begin
+[INFO] Lua bootstrap: loading startup script begin
+[main] 加载 demo: 3d_animation_basic
+[main] name: animation basic showcase
+[INFO] Lua bootstrap: startup script load OK
+[INFO] Lua bootstrap: Awake begin
+[INFO] Data root updated from lua: data\
+[3D][Animation] setup: animator_resource_chain real_animation_resource mesh_path=animation/minimal_rig/two_bone.dmesh material_path=animation/minimal_rig/two_bone.dmat danim_path=animation/minimal_rig/two_bone_idle_walk.danim dskel_path=animation/minimal_rig/two_bone.dskel resource_paths_configured=true; animator_state_api get_animator_3d_state=true state=idle normalized_time=0.00 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=0 has_skeleton=true; fallback cube rig retained
+[3D][Animation] skinned_mesh_resource animator_state_api get_animator_3d_state=true state=idle normalized_time=0.00 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=0 has_skeleton=true mesh_path=animation/minimal_rig/two_bone.dmesh material_path=animation/minimal_rig/two_bone.dmat
+[3D][Animation] animator_state_api real_animation_resource get_animator_3d_state=true state=idle normalized_time=0.00 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=0 has_skeleton=true danim_path=animation/minimal_rig/two_bone_idle_walk.danim dskel_path=animation/minimal_rig/two_bone.dskel
+[INFO] Lua bootstrap: Awake OK
+[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua business mode bootstrap: OK
+[INFO] [InitTiming] business bootstrap: 16ms
+[INFO] [InitTiming] BuildRenderGraph: 0ms
+[INFO] [InitTiming] light buffer + cluster grid: 0ms
+[INFO] [LightProbeSystem] Initialized, face_res=64, RT=820039
+[INFO] [InitTiming] LightProbeSystem: 1ms
+[INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
+[INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=800048 (cached)
+[INFO] [ReflectionProbeSystem] Initialized, bake_res=128
+[INFO] [InitTiming] ReflectionProbeSystem: 1ms
+[INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
+[INFO] [InitTiming] StreamingManager: 0ms
+[INFO] [GPUSkinning] Initialized (shader=850011, initial_capacity=4096v/1024b)
+[INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
+[INFO] [InitTiming] GPUSkinning: 4ms
+[INFO] EngineInstance init: startup scene regression checks skipped by env
+[INFO] [3D][VSE15.22] animator_system_first_update entity=4 dskel_path=animation/minimal_rig/two_bone.dskel bone_count=2 final_bones=2 note=animator_system_confirms_bone_count
+[INFO] [3D][VSE15.22] animator_system_first_update entity=3 dskel_path=animation/minimal_rig/two_bone.dskel bone_count=2 final_bones=2 note=animator_system_confirms_bone_count
+[INFO] [DIAG-MeshVtx] path=animation/minimal_rig/two_bone.dmesh stride=20 vtx=6 idx=12 skinned=1 item_color=(0.35,0.75,1,1) dmesh_vc0=(0,0,0,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47204,-0.147388) bone_t_max=(0,0.0133333,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] Runtime stats: entities=13, sprites=0, meshes=50, draw_calls=54, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=1.3694, avg_fixed_ms=0.02874, avg_render_ms=32.6689, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47277,-0.116981) bone_t_max=(0,0.0180534,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46801,-0.0301857) bone_t_max=(0,0.0313867,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46428,-0.00185783) bone_t_max=(0,0.0357161,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46,0) bone_t_max=(0,0.0396224,0.0237046) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.44969,0) bone_t_max=(0,0.0469141,0.0713244) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.44521,0) bone_t_max=(0,0.0495508,0.0884831) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.43317,0) bone_t_max=(0,0.0557357,0.128532) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.41776,0) bone_t_max=(0,0.0624088,0.17132) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.40943,0) bone_t_max=(0,0.0656315,0.191784) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.39273,0) bone_t_max=(0,0.0715234,0.228794) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.38071,0) bone_t_max=(0,0.0753971,0.252804) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.38136,0) bone_t_max=(0,0.0751953,0.25156) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.39284,0) bone_t_max=(0,0.0714844,0.228551) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.42051,0) bone_t_max=(0,0.0612956,0.164218) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.43689,0) bone_t_max=(0,0.0539388,0.11693) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] Runtime stats: entities=13, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.23102, avg_fixed_ms=0.0240412, avg_render_ms=59.5166, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=9, gpu_instances=9, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.44787,0) bone_t_max=(0,0.0480143,0.0784896) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.45784,0) bone_t_max=(0,0.0413412,0.0349451) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46534,-0.00914396) bone_t_max=(0,0.0346029,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46832,-0.0329955) bone_t_max=(0,0.030957,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[3D][Animation] runtime: animator_state_api real_animation_resource get_animator_3d_state=true state=idle normalized_time=0.81 clip_time=0.97 speed=1.00 loop=true transitioning=false final_bones=2 has_skeleton=true mesh_state=idle mesh_final_bones=2 mesh_has_skeleton=true mesh_norm=0.81 mesh_clip=0.97
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47252,-0.0951734) bone_t_max=(0,0.0214193,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47245,-0.136425) bone_t_max=(0,0.0150391,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47094,-0.166471) bone_t_max=(0,0.0103516,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46461,-0.22344) bone_t_max=(0,0.00133463,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46329,-0.231763) bone_t_max=(0,0,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47158,-0.156484) bone_t_max=(0,0.0119141,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47276,-0.117738) bone_t_max=(0,0.0179362,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.4716,-0.0727326) bone_t_max=(0,0.0248698,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46742,-0.0251185) bone_t_max=(0,0.0321615,0) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.4634,0) bone_t_max=(0,0.0365885,0.00385196) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.45729,0) bone_t_max=(0,0.0417643,0.0377115) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.45001,0) bone_t_max=(0,0.0467122,0.0700094) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.43669,0) bone_t_max=(0,0.0540365,0.117561) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.42545,0) bone_t_max=(0,0.0592122,0.150887) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.40858,0) bone_t_max=(0,0.0659505,0.193801) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.3799,0) bone_t_max=(0,0.075651,0.254368) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.3766,0) bone_t_max=(0,0.0766667,0.260611) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] Runtime stats: entities=13, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.267605, avg_fixed_ms=0.0569327, avg_render_ms=48.1437, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=9, gpu_instances=9, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.39234,0) bone_t_max=(0,0.0716536,0.229606) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.41497,0) bone_t_max=(0,0.0635156,0.178364) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+[INFO] [DIAG-MeshSubmit] entity=4 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.316241,-0.903545,-0.289134) ambient=0.18 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.42619,0) bone_t_max=(0,0.0588932,0.148841) bounds_min=(-1.525,-0.05,0) bounds_max=(-0.975,1.7625,0)
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\d3d11\shots\3d_animation_basic.png target=scene size=1280x701
+[INFO] Runtime stats: entities=13, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.22104, avg_fixed_ms=0.0227574, avg_render_ms=42.5336, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=9, gpu_instances=9, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[3D][Animation] animator_state_api real_animation_resource get_animator_3d_state=true state=walk normalized_time=0.47 clip_time=0.00 speed=1.15 loop=true transitioning=false final_bones=2 has_skeleton=true danim_path=animation/minimal_rig/two_bone_idle_walk.danim dskel_path=animation/minimal_rig/two_bone.dskel
+[3D][Animation] runtime: animator_state_api real_animation_resource get_animator_3d_state=true state=walk normalized_time=0.47 clip_time=0.00 speed=1.15 loop=true transitioning=false final_bones=2 has_skeleton=true mesh_state=walk mesh_final_bones=2 mesh_has_skeleton=true mesh_norm=0.47 mesh_clip=0.00
+DSE_MAX_FRAMES reached: 70
+[INFO] [StreamingManager] Shutdown
+[INFO] [LuaRuntime] Shutdown begin state=000001BE90A31E68 script_instances=0 lua_memory_usage=161607 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000001BE90A31E68
+[INFO] [LuaRuntime] lua_close complete
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [HairSystem] Shutdown, released all hair resources
+[INFO] Physics3DSystem Shutdown (Jolt)
+[INFO] [D3D11] DrawExecutor shutdown
+[INFO] [D3D11] PipelineStateManager shutdown
+[INFO] [D3D11] ShaderManager shutdown
+[INFO] [D3D11] ResourceManager shutdown
+[INFO] [D3D11] Context shutdown
+[INFO] [D3D11] RhiDevice shutdown
+[INFO] FileWatcher: stopped
+[INFO] debug logger shutdown
+[ERROR] [D3D11] Shader compile error: C:\Users\Administrator\repos\DSEngine\Shader@0x000001BE90872DA0(92,12-81): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop
+C:\Users\Administrator\repos\DSEngine\Shader@0x000001BE90872DA0(145,5-35): error X3511: unable to unroll loop, loop does not appear to terminate in a timely manner (523 iterations) or unrolled loop is too large, use the [unroll(n)] attribute to force an exact higher number
+

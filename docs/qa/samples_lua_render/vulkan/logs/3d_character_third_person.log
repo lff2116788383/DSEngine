@@ -1,0 +1,378 @@
+Starting DSEngine Runtime...
+[INFO] debug logger init success
+Business mode: lua
+[INFO] RHI Factory: 创建 Vulkan 后端
+[INFO] FramePipeline RHI 后端: Vulkan
+[INFO] [Vulkan] Selected GPU: llvmpipe (LLVM 22.1.6, 256 bits)
+[INFO] [Vulkan] Pipeline cache loaded: 32 bytes
+[INFO] [Vulkan] Present mode: FIFO (VSync on)
+[INFO] [Vulkan] Created 2 swapchain framebuffers
+[INFO] [Vulkan] Swapchain created: 1280x701 format=44 colorspace=0 hdr=no images=2
+[INFO] [Vulkan] Context initialized: 1280x701 validation=0
+[INFO] [Vulkan] Descriptor pools created (2x, maxSets=4096 each)
+[INFO] [Vulkan] ResourceManager initialized
+[INFO] VulkanPipelineStateManager initialized
+[INFO] VulkanShaderManager initialized
+[INFO] Created Vulkan shader program #540000 (pre-compiled SPIR-V)
+[INFO] Vulkan PBR shader created: handle=540000
+[INFO] Created Vulkan shader program #540001 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Eye shader created: handle=540001
+[INFO] Created Vulkan shader program #540002 (pre-compiled SPIR-V)
+[INFO] Vulkan skybox shader created: handle=540002
+[INFO] Created Vulkan shader program #540003 (pre-compiled SPIR-V)
+[INFO] Vulkan particle shader created: handle=540003
+[INFO] Created Vulkan shader program #540004 (pre-compiled SPIR-V)
+[INFO] Vulkan sprite shader created: handle=540004
+[INFO] Created Vulkan shader program #540005 (pre-compiled SPIR-V)
+[INFO] Vulkan SDF text shader created: handle=540005
+[INFO] Created Vulkan shader program #540006 (pre-compiled SPIR-V)
+[INFO] Vulkan shadow shader created: handle=540006
+[INFO] Created Vulkan shader program #540007 (pre-compiled SPIR-V)
+[INFO] [Vulkan] GPU-driven PBR shader created: handle=540007
+[INFO] Created Vulkan shader program #540008 (pre-compiled SPIR-V)
+[INFO] [Vulkan] GPU-driven Shadow shader created: handle=540008
+[INFO] Created Vulkan shader program #540009 (pre-compiled SPIR-V)
+[INFO] Vulkan post-process shader created: handle=540009
+[INFO] Created Vulkan shader program #540010 (pre-compiled SPIR-V)
+[INFO] [Vulkan] BloomExtract shader created (gen.h SPIR-V): handle=540010
+[INFO] Created Vulkan shader program #540011 (pre-compiled SPIR-V)
+[INFO] [Vulkan] FXAA shader created (gen.h SPIR-V): handle=540011
+[INFO] Created Vulkan shader program #540012 (pre-compiled SPIR-V)
+[INFO] [Vulkan] SSAO shader created (gen.h SPIR-V): handle=540012
+[INFO] Created Vulkan shader program #540013 (pre-compiled SPIR-V)
+[INFO] [Vulkan] SSAO Blur shader created (gen.h SPIR-V): handle=540013
+[INFO] Created Vulkan shader program #540014 (pre-compiled SPIR-V)
+[INFO] [Vulkan] ContactShadow shader created (gen.h SPIR-V): handle=540014
+[INFO] Created Vulkan shader program #540015 (pre-compiled SPIR-V)
+[INFO] [Vulkan] LumCompute shader created (gen.h SPIR-V): handle=540015
+[INFO] Created Vulkan shader program #540016 (pre-compiled SPIR-V)
+[INFO] [Vulkan] LumAdapt shader created (gen.h SPIR-V): handle=540016
+[INFO] Created Vulkan shader program #540017 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Tonemapping shader created (gen.h SPIR-V): handle=540017
+[INFO] Created Vulkan shader program #540018 (pre-compiled SPIR-V)
+[INFO] [Vulkan] BloomCompositeSsaoAe shader created (gen.h SPIR-V): handle=540018
+[INFO] Created Vulkan shader program #540019 (pre-compiled SPIR-V)
+[INFO] [Vulkan] ColorGrading shader created (gen.h SPIR-V): handle=540019
+[INFO] Created Vulkan shader program #540020 (pre-compiled SPIR-V)
+[INFO] [Vulkan] TAA Resolve shader created (gen.h SPIR-V): handle=540020
+[INFO] Created Vulkan shader program #540021 (pre-compiled SPIR-V)
+[INFO] [Vulkan] DOF shader created (gen.h SPIR-V): handle=540021
+[INFO] Created Vulkan shader program #540022 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Motion Blur shader created (gen.h SPIR-V): handle=540022
+[INFO] Created Vulkan shader program #540023 (pre-compiled SPIR-V)
+[INFO] [Vulkan] SSR shader created (gen.h SPIR-V): handle=540023
+[INFO] Created Vulkan shader program #540024 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Motion Vector shader created (gen.h SPIR-V): handle=540024
+[INFO] Created Vulkan shader program #540025 (pre-compiled SPIR-V)
+[INFO] [Vulkan] GBuffer shader created (SPIR-V): handle=540025
+[INFO] Created Vulkan shader program #540026 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Deferred Lighting shader created (gen.h SPIR-V): handle=540026
+[INFO] Created Vulkan shader program #540027 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Edge Detect shader created (gen.h SPIR-V): handle=540027
+[INFO] Created Vulkan shader program #540028 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Volumetric Fog shader created (gen.h SPIR-V): handle=540028
+[INFO] Created Vulkan shader program #540029 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Volumetric Cloud shader created (gen.h SPIR-V): handle=540029
+[INFO] Created Vulkan shader program #540030 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Decal shader created (gen.h SPIR-V): handle=540030
+[INFO] Created Vulkan shader program #540031 (pre-compiled SPIR-V)
+[INFO] [Vulkan] WBOIT Composite shader created (gen.h SPIR-V): handle=540031
+[INFO] Created Vulkan shader program #540032 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Water shader created (gen.h SPIR-V): handle=540032
+[INFO] Created Vulkan shader program #540033 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Light Shaft shader created (gen.h SPIR-V): handle=540033
+[INFO] Created Vulkan shader program #540034 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Atmosphere Transmittance LUT shader created (gen.h SPIR-V): handle=540034
+[INFO] Created Vulkan shader program #540035 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Atmosphere Sky shader created (gen.h SPIR-V): handle=540035
+[INFO] Created Vulkan shader program #540036 (pre-compiled SPIR-V)
+[INFO] [Vulkan] SSS Blur shader created (gen.h SPIR-V): handle=540036
+[INFO] Created Vulkan shader program #540037 (pre-compiled SPIR-V)
+[INFO] [Vulkan] Weather Particle shader created (gen.h SPIR-V): handle=540037
+[INFO] [Vulkan] Compute program created (pre-compiled SPIR-V): handle=540038
+[INFO] [Vulkan] Compute program created (pre-compiled SPIR-V): handle=540039
+[INFO] [Vulkan] Bloom CS programs initialized (down=540038 up=540039)
+[INFO] VulkanDrawExecutor geometry buffers + UBO buffers initialized
+[INFO] [VulkanGpuTimer] Initialized (period={:.2f} ns/tick)
+[INFO] [Vulkan] RhiDevice initialized with all subsystems
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [InitTiming] RHI device init: 143ms
+[INFO] DSE_RENDER_DEVICE backend=Vulkan adapter="llvmpipe (LLVM 22.1.6, 256 bits)" software=1
+[INFO] Render pipeline profile: using built-in ForwardPlusDefault
+[INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
+  0: pre_z [enabled]
+  1: hiz_build [skipped(no_hiz)]
+  2: hiz_cull [skipped(no_hiz)]
+  3: csm_shadow [enabled]
+  4: spot_shadow [enabled]
+  5: point_shadow [enabled]
+  6: gpu_cull [skipped(no_gpu_driven)]
+  7: rsm [enabled]
+  8: ddgi_update [enabled]
+  9: gbuffer [enabled]
+  10: deferred_lighting [enabled]
+  11: forward_scene [enabled]
+  12: atmosphere_sky [enabled]
+  13: wboit [enabled]
+  14: water [enabled]
+  15: bloom [enabled]
+  16: ssao [enabled]
+  17: contact_shadow [enabled]
+  18: auto_exposure [enabled]
+  19: motion_vector [enabled]
+  20: ssr [enabled]
+  21: outline [enabled]
+  22: light_shaft [enabled]
+  23: volumetric_fog [enabled]
+  24: decal [enabled]
+  25: ui [enabled]
+  26: composite [enabled]
+  27: dof [enabled]
+  28: motion_blur [enabled]
+  29: fxaa [enabled]
+  30: taa [enabled]
+  31: present [enabled]
+[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420000
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=4 uav=0 handle=420001
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420002
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=0 msaa=1 uav=0 handle=420003
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420004
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=1 handle=420005
+[INFO] [Vulkan] RenderTarget created: 320x175 color_count=1 msaa=1 uav=1 handle=420006
+[INFO] [Vulkan] RenderTarget created: 160x87 color_count=1 msaa=1 uav=1 handle=420007
+[INFO] [Vulkan] RenderTarget created: 80x43 color_count=1 msaa=1 uav=1 handle=420008
+[INFO] [Vulkan] RenderTarget created: 40x21 color_count=1 msaa=1 uav=1 handle=420009
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420010
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420011
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420012
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420013
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420014
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420015
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420016
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420017
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420018
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420019
+[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420020
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420021
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420022
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420023
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=3 msaa=1 uav=0 handle=420024
+[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420025
+[INFO] [Vulkan] Hi-Z texture created: handle=450000 1280x701 mips=11
+[INFO] [Vulkan] RenderTarget created: 64x64 color_count=1 msaa=1 uav=0 handle=420026
+[INFO] [Vulkan] RenderTarget created: 1x1 color_count=1 msaa=1 uav=0 handle=420027
+[INFO] [Vulkan] RenderTarget created: 1x1 color_count=1 msaa=1 uav=0 handle=420028
+[INFO] [Vulkan] Full compute program created: handle=540040, ssbo=0, img=1, smp=1, pc=8
+[INFO] [Vulkan] Full compute program created: handle=540041, ssbo=0, img=2, smp=0, pc=16
+[INFO] [Vulkan] Full compute program created: handle=540042, ssbo=2, img=0, smp=1, pc=80
+[INFO] Hi-Z Occlusion Culling initialized: texture=450000 vis_ssbo=415000 aabb_ssbo=415001 capacity=65536 shaders=(540040,540041,540042)
+[INFO] [Vulkan] RenderTarget created: 4096x2048 color_count=0 msaa=1 uav=0 handle=420029
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420030
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420031
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420032
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420033
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420034
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420035
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420036
+[INFO] [Vulkan] RenderTarget created: 1024x1024 color_count=0 msaa=1 uav=0 handle=420037
+[INFO] [Vulkan] RenderTarget created: 512x512 color_count=3 msaa=1 uav=0 handle=420038
+[INFO] [Vulkan] Full compute program created: handle=540043, ssbo=2, img=0, smp=1, pc=176
+[INFO] GPU Driven Rendering: supported=1, cull_shader=540043
+[INFO] [InitTiming] render resources: 136ms
+[INFO] FramePipeline init: systems init begin
+[INFO] [Physics2D] Init world_valid=1
+[INFO] FramePipeline init: systems init complete
+[INFO] FramePipeline init: Gameplay3D module enabled=1
+[INFO] Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies=4096, threads=2)
+[INFO] FramePipeline init: Physics3DSystem initialized and registered
+[INFO] FramePipeline init: NavMeshSystem initialized and registered
+[INFO] [Vulkan] Full compute program created: handle=540044, ssbo=2, img=0, smp=0, pc=28
+[INFO] [GrassSystem] GPU wind compute shader created: 540044
+[INFO] [GrassSystem] Initialized. blade_verts=10, billboard_verts=8, gpu_compute=1
+[INFO] [TreeSystem] Initialized
+[INFO] [Vulkan] Full compute program created: handle=540045, ssbo=4, img=0, smp=0, pc=48
+[INFO] [Vulkan] Full compute program created: handle=540046, ssbo=3, img=0, smp=0, pc=4
+[INFO] [Vulkan] Full compute program created: handle=540047, ssbo=3, img=0, smp=0, pc=12
+[INFO] [Vulkan] Full compute program created: handle=540048, ssbo=3, img=0, smp=0, pc=12
+[INFO] [HairSystem] Initialized, gpu_compute=1
+[INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
+[INFO] [InitTiming] systems init: 37ms
+[INFO] FramePipeline init: business bootstrap begin
+[INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua bootstrap: package path setup begin
+[INFO] Lua bootstrap: register API begin
+[INFO] Lua bootstrap: loading startup script begin
+[main] 加载 demo: 3d_character_third_person
+[main] name: third-person character showcase
+[INFO] Lua bootstrap: startup script load OK
+[INFO] Lua bootstrap: Awake begin
+[INFO] Data root updated from lua: data\
+[3D][Character] setup: character_steering_api add_steering=true get_steering_state=true enabled=true seek=false flee=false arrive=false third-person follow camera + cube character rig fallback. States: run/attack.
+[3D][Character] character_animation_resource character_animator_state_api resource_paths_configured=true mesh_path=animation/minimal_rig/two_bone.dmesh material_path=animation/minimal_rig/two_bone.dmat danim_path=animation/minimal_rig/two_bone_idle_walk.danim dskel_path=animation/minimal_rig/two_bone.dskel get_animator_3d_state=true state=run normalized_time=0.00 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=0 has_skeleton=true
+[3D][Character] character_skinned_mesh_resource get_animator_3d_state=true state=run normalized_time=0.00 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=0 has_skeleton=true
+[INFO] Lua bootstrap: Awake OK
+[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua business mode bootstrap: OK
+[INFO] [InitTiming] business bootstrap: 19ms
+[INFO] [InitTiming] BuildRenderGraph: 0ms
+[INFO] [InitTiming] light buffer + cluster grid: 0ms
+[INFO] [Vulkan] RenderTarget created: 64x64 color_count=1 msaa=1 uav=0 handle=420039
+[INFO] [LightProbeSystem] Initialized, face_res=64, RT=420039
+[INFO] [InitTiming] LightProbeSystem: 2ms
+[INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
+[INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=400008 (cached)
+[INFO] [Vulkan] RenderTarget created: 128x128 color_count=1 msaa=1 uav=0 handle=420040
+[INFO] [ReflectionProbeSystem] Initialized, bake_res=128
+[INFO] [InitTiming] ReflectionProbeSystem: 5ms
+[INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
+[INFO] [InitTiming] StreamingManager: 0ms
+[INFO] [Vulkan] Full compute program created: handle=540049, ssbo=5, img=0, smp=0, pc=8
+[INFO] [GPUSkinning] Initialized (shader=540049, initial_capacity=4096v/1024b)
+[INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
+[INFO] [InitTiming] GPUSkinning: 5ms
+[INFO] EngineInstance init: startup scene regression checks skipped by env
+[3D][Character] steering_target set_steering_target=true behavior=seek target=(2.25,0.09)
+[3D][Character] state=run speed=0.00 pos=(0.00,0.00) steering_state_api=true
+[INFO] [3D][VSE15.22] animator_system_first_update entity=6 dskel_path=animation/minimal_rig/two_bone.dskel bone_count=2 final_bones=2 note=animator_system_confirms_bone_count
+[INFO] [3D][VSE15.22] animator_system_first_update entity=5 dskel_path=animation/minimal_rig/two_bone.dskel bone_count=2 final_bones=2 note=animator_system_confirms_bone_count
+[INFO] [DIAG-MeshVtx] path=animation/minimal_rig/two_bone.dmesh stride=20 vtx=6 idx=12 skinned=1 item_color=(0.35,0.75,1,1) dmesh_vc0=(0,0,0,0)
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47204,-0.147388) bone_t_max=(0,0.0133333,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] Runtime stats: entities=15, sprites=0, meshes=60, draw_calls=64, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=2.475, avg_fixed_ms=0.02362, avg_render_ms=31654.7, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[3D][Character] runtime: character_steering_api get_steering_state=true steering_enabled=true seek=true arrive=false velocity=(0.28,0.00,0.01) speed=0.28 speed_nonzero=true max_velocity=2.80 max_force=10.00 mass=1.00 target=(2.24,0.18)
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47204,-0.147388) bone_t_max=(0,0.0133333,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] Runtime stats: entities=15, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=2.0609, avg_fixed_ms=0.0202, avg_render_ms=28142.5, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=11, gpu_instances=11, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.47204,-0.147388) bone_t_max=(0,0.0133333,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] Runtime stats: entities=15, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.2677, avg_fixed_ms=0.0199, avg_render_ms=54.1345, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=11, gpu_instances=11, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46931,-0.18573) bone_t_max=(0,0.00732422,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46866,-0.192121) bone_t_max=(0,0.0063151,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46814,-0.196854) bone_t_max=(0,0.00556641,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.4683,-0.195415) bone_t_max=(0,0.00579427,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46859,-0.192739) bone_t_max=(0,0.00621745,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46828,-0.19562) bone_t_max=(0,0.00576172,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46857,-0.192945) bone_t_max=(0,0.0061849,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46839,-0.194592) bone_t_max=(0,0.00592448,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46877,-0.191092) bone_t_max=(0,0.00647786,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46859,-0.192739) bone_t_max=(0,0.00621745,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46896,-0.189237) bone_t_max=(0,0.00677083,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46814,-0.196854) bone_t_max=(0,0.00556641,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46839,-0.194592) bone_t_max=(0,0.00592448,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46875,-0.191298) bone_t_max=(0,0.00644531,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46841,-0.194386) bone_t_max=(0,0.00595703,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[3D][Character] runtime_animation: character_animation_resource character_animator_state_api get_animator_3d_state=true state=run normalized_time=0.04 clip_time=0.00 speed=1.00 loop=true transitioning=false final_bones=2 has_skeleton=true mesh_state=run mesh_final_bones=2 mesh_has_skeleton=true mesh_norm=0.04 mesh_clip=0.00
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46864,-0.192327) bone_t_max=(0,0.00628255,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46864,-0.192327) bone_t_max=(0,0.00628255,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46846,-0.193974) bone_t_max=(0,0.00602213,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46883,-0.190473) bone_t_max=(0,0.00657552,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46821,-0.196237) bone_t_max=(0,0.00566406,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46873,-0.191504) bone_t_max=(0,0.00641276,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46864,-0.192327) bone_t_max=(0,0.00628255,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] Runtime stats: entities=15, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.219586, avg_fixed_ms=0.0208, avg_render_ms=45.5957, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=11, gpu_instances=11, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.4687,-0.19171) bone_t_max=(0,0.00638021,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.4685,-0.193563) bone_t_max=(0,0.00608724,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46828,-0.19562) bone_t_max=(0,0.00576172,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46864,-0.192327) bone_t_max=(0,0.00628255,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46837,-0.194797) bone_t_max=(0,0.00589193,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46862,-0.192533) bone_t_max=(0,0.00625,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46862,-0.192533) bone_t_max=(0,0.00625,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46844,-0.19418) bone_t_max=(0,0.00598958,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46816,-0.196648) bone_t_max=(0,0.00559896,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46835,-0.195003) bone_t_max=(0,0.00585938,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46848,-0.193769) bone_t_max=(0,0.00605469,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46823,-0.196032) bone_t_max=(0,0.00569661,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46837,-0.194797) bone_t_max=(0,0.00589193,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46823,-0.196032) bone_t_max=(0,0.00569661,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [DIAG-MeshSubmit] entity=6 path=animation/minimal_rig/two_bone.dmesh shared=1 vtx=6 idx=12 stride=20 shading=0 lit=1 recv_shadow=1 shadow_strength=0.35 light_dir=(-0.377339,-0.898425,-0.224606) ambient=0.2 intensity=1.2 tex=0 normal_tex=0 mr_tex=0 color=(0.35,0.75,1,1) mat=(0.35,0.75,1) metal=0 rough=0.45 ao=1 ds=1 v0_color=(0.35,0.75,1,1) v0_n=(0,0,1) v0_uv=(0,0) v0_w=(1,0,0,0) v0_j=(0,0,0,0) bones=2 palettes=1 b0=1 bone_t_min=(0,-1.46802,-0.197882) bone_t_max=(0,0.00540365,0) bounds_min=(-0.863902,0.05,-0.632618) bounds_max=(-0.836098,1.7175,-0.127382)
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] Runtime stats: entities=15, sprites=0, meshes=5, draw_calls=10, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.186178, avg_fixed_ms=0.0191843, avg_render_ms=43.2129, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=11, gpu_instances=11, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\vulkan\shots\3d_character_third_person.png target=scene size=1280x701
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=3064650536112 rp=3064652707424 imgIdx=0
+DSE_MAX_FRAMES reached: 70
+[INFO] [StreamingManager] Shutdown
+[INFO] [LuaRuntime] Shutdown begin state=000002C9A0ABB568 script_instances=0 lua_memory_usage=144728 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000002C9A0ABB568
+[INFO] [LuaRuntime] lua_close complete
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [HairSystem] Shutdown, released all hair resources
+[INFO] Physics3DSystem Shutdown (Jolt)
+[INFO] VulkanDrawExecutor geometry buffers destroyed
+[INFO] VulkanShaderManager shutdown: 38 programs created, 0 destroyed
+[INFO] VulkanPipelineStateManager shutdown, 0 states remaining
+[INFO] [Vulkan] ResourceManager shutdown
+[INFO] [Vulkan] Pipeline cache saved: 32 bytes (+ 32 header)
+[INFO] [Vulkan] Context shutdown complete
+[INFO] [Vulkan] RhiDevice shutdown
+[INFO] FileWatcher: stopped
+[INFO] debug logger shutdown

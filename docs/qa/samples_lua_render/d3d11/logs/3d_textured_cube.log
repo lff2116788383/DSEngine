@@ -1,0 +1,177 @@
+Starting DSEngine Runtime...
+[INFO] debug logger init success
+Business mode: lua
+[INFO] RHI Factory: 创建 D3D11 后端
+[INFO] FramePipeline RHI 后端: D3D11
+[INFO] [D3D11] VSync: ON
+[INFO] [D3D11] Adapter 0: [SKIP software] Microsoft Basic Render Driver
+[INFO] [D3D11] Adapter 1: [SKIP no VRAM] Microsoft Basic Render Driver
+[INFO] [D3D11] Adapter 2: [SKIP no VRAM] Microsoft Basic Render Driver
+[INFO] [D3D11] Tearing support: YES
+[INFO] [D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)
+[INFO] [D3D11] Render device: Microsoft Basic Render Driver (software)
+[INFO] [D3D11] MSAA 4x quality=0
+[INFO] [D3D11] MSAA 4x not supported, will use 1x
+[INFO] [D3D11] Context initialized — Feature Level: 11.1
+[INFO] [D3D11] ResourceManager initialized
+[INFO] [D3D11] ShaderManager initialized
+[INFO] [D3D11] PipelineStateManager initialized
+[INFO] [D3D11] DrawExecutor geometry buffers initialized
+[INFO] [D3D11] DrawExecutor initialized
+[INFO] [D3D11] Builtin sprite shader created (DXBC): 840000
+[INFO] [D3D11] Builtin SDF text shader created (DXBC): 840001
+[INFO] [D3D11] Builtin UI effects shader created (DXBC): 840002
+[INFO] [D3D11] Builtin PBR shader created: 840003
+[INFO] [D3D11] Eye shader created (DXBC): 840004
+[INFO] [D3D11] Builtin skybox shader created (DXBC): 840005
+[INFO] [D3D11] Builtin particle shader created (DXBC): 840006
+[INFO] [D3D11] Builtin postprocess shader created (DXBC): 840007
+[INFO] [D3D11] Builtin shadow shader created (DXBC): 840008
+[INFO] [D3D11] Builtin bloom downsample CS created: 850000
+[INFO] [D3D11] Builtin bloom upsample CS created: 850001
+[INFO] [D3D11] Builtin bloom_composite shader created (DXBC): 840009
+[INFO] [D3D11] Builtin bloom_extract shader created (DXBC): 840010
+[INFO] [D3D11] Builtin fxaa shader created (DXBC): 840011
+[INFO] [D3D11] Builtin ssao shader created (DXBC): 840012
+[INFO] [D3D11] Builtin ssao_blur shader created (DXBC): 840013
+[INFO] [D3D11] Builtin ssao_apply shader created (DXBC): 840014
+[INFO] [D3D11] Builtin contact_shadow shader created (DXBC): 840015
+[INFO] [D3D11] Builtin bloom_composite_ssao shader created (DXBC): 840016
+[INFO] [D3D11] Builtin lum_compute shader created (DXBC): 840017
+[INFO] [D3D11] Builtin lum_adapt shader created (DXBC): 840018
+[INFO] [D3D11] Builtin tonemapping shader created (DXBC): 840019
+[INFO] [D3D11] Builtin bloom_composite_ssao_ae shader created (DXBC): 840020
+[INFO] [D3D11] Builtin color_grading shader created (DXBC): 840021
+[INFO] [D3D11] Builtin taa_resolve shader created (DXBC): 840022
+[INFO] [D3D11] Builtin dof shader created (DXBC): 840023
+[INFO] [D3D11] Builtin motion_blur shader created (DXBC): 840024
+[INFO] [D3D11] Builtin ssr shader created (DXBC): 840025
+[INFO] [D3D11] Builtin motion_vector shader created (DXBC): 840026
+[INFO] [D3D11] Builtin deferred_lighting shader created (DXBC): 840027
+[INFO] [D3D11] Builtin edge_detect shader created (DXBC): 840028
+[INFO] [D3D11] Builtin volumetric_fog shader created (DXBC): 840029
+[INFO] [D3D11] Builtin volumetric_cloud shader created (DXBC): 840030
+[INFO] [D3D11] Builtin decal shader created (DXBC): 840031
+[INFO] [D3D11] Builtin wboit_composite shader created (DXBC): 840032
+[INFO] [D3D11] Builtin water shader created (DXBC): 840033
+[INFO] [D3D11] Builtin light_shaft shader created (DXBC): 840034
+[INFO] [D3D11] Builtin atmosphere_transmittance_lut shader created (DXBC): 840035
+[INFO] [D3D11] Builtin sss_blur shader created (DXBC): 840036
+[INFO] [D3D11] Builtin weather_particle shader created (DXBC): 840037
+[INFO] [D3D11] Builtin GBuffer shader created (DXBC): 840038
+[INFO] [DX11] GPU-driven PBR shader created: handle=840039
+[INFO] [DX11] GPU-driven Shadow shader created: handle=840040
+[INFO] [DX11GpuTimer] Initialized (double-buffered timestamp queries)
+[INFO] [D3D11] RhiDevice initialized (all subsystems ready)
+[INFO] [InitTiming] RHI device init: 1018ms
+[INFO] DSE_RENDER_DEVICE backend=D3D11 adapter="Microsoft Basic Render Driver" software=1
+[INFO] Render pipeline profile: using built-in ForwardPlusDefault
+[INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
+  0: pre_z [enabled]
+  1: hiz_build [skipped(no_hiz)]
+  2: hiz_cull [skipped(no_hiz)]
+  3: csm_shadow [enabled]
+  4: spot_shadow [enabled]
+  5: point_shadow [enabled]
+  6: gpu_cull [skipped(no_gpu_driven)]
+  7: rsm [enabled]
+  8: ddgi_update [enabled]
+  9: gbuffer [enabled]
+  10: deferred_lighting [enabled]
+  11: forward_scene [enabled]
+  12: atmosphere_sky [enabled]
+  13: wboit [enabled]
+  14: water [enabled]
+  15: bloom [enabled]
+  16: ssao [enabled]
+  17: contact_shadow [enabled]
+  18: auto_exposure [enabled]
+  19: motion_vector [enabled]
+  20: ssr [enabled]
+  21: outline [enabled]
+  22: light_shaft [enabled]
+  23: volumetric_fog [enabled]
+  24: decal [enabled]
+  25: ui [enabled]
+  26: composite [enabled]
+  27: dof [enabled]
+  28: motion_blur [enabled]
+  29: fxaa [enabled]
+  30: taa [enabled]
+  31: present [enabled]
+[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
+[INFO] [DX11] Hi-Z texture created: handle=850000 1280x701 mips=11
+[INFO] Hi-Z Occlusion Culling initialized: texture=850000 vis_ssbo=815000 aabb_ssbo=815001 capacity=65536 shaders=(850002,850003,850004)
+[INFO] GPU Driven Rendering: supported=1, cull_shader=850005
+[INFO] [InitTiming] render resources: 11ms
+[INFO] FramePipeline init: systems init begin
+[INFO] [Physics2D] Init world_valid=1
+[INFO] FramePipeline init: systems init complete
+[INFO] FramePipeline init: Gameplay3D module enabled=1
+[INFO] Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies=4096, threads=2)
+[INFO] FramePipeline init: Physics3DSystem initialized and registered
+[INFO] FramePipeline init: NavMeshSystem initialized and registered
+[INFO] [GrassSystem] GPU wind compute shader created: 850006
+[INFO] [GrassSystem] Initialized. blade_verts=10, billboard_verts=8, gpu_compute=1
+[INFO] [TreeSystem] Initialized
+[INFO] [HairSystem] Initialized, gpu_compute=1
+[INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
+[INFO] [InitTiming] systems init: 23ms
+[INFO] FramePipeline init: business bootstrap begin
+[INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua bootstrap: package path setup begin
+[INFO] Lua bootstrap: register API begin
+[INFO] Lua bootstrap: loading startup script begin
+[main] 加载 demo: 3d_textured_cube
+[main] name: textured cube
+[INFO] Lua bootstrap: startup script load OK
+[INFO] Lua bootstrap: Awake begin
+[INFO] Data root updated from lua: data\
+[3D][TexturedCube] setup: left=solid hand-written cube, right=.dmesh/.dmat textured cube. Use free camera to inspect UV/texture.
+[3D][TexturedCube] textured cube uses mesh=models/cube.dmesh material=models/cube.dmat; expected albedo texture from dmat.
+[INFO] Lua bootstrap: Awake OK
+[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua business mode bootstrap: OK
+[INFO] [InitTiming] business bootstrap: 20ms
+[INFO] [InitTiming] BuildRenderGraph: 0ms
+[INFO] [InitTiming] light buffer + cluster grid: 1ms
+[INFO] [LightProbeSystem] Initialized, face_res=64, RT=820039
+[INFO] [InitTiming] LightProbeSystem: 0ms
+[INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
+[INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=800049 (cached)
+[INFO] [ReflectionProbeSystem] Initialized, bake_res=128
+[INFO] [InitTiming] ReflectionProbeSystem: 2ms
+[INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
+[INFO] [InitTiming] StreamingManager: 2ms
+[INFO] [GPUSkinning] Initialized (shader=850011, initial_capacity=4096v/1024b)
+[INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
+[INFO] [InitTiming] GPUSkinning: 4ms
+[INFO] EngineInstance init: startup scene regression checks skipped by env
+[INFO] Runtime stats: entities=4, sprites=0, meshes=10, draw_calls=14, material_switches=5, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.2318, avg_fixed_ms=0.03282, avg_render_ms=39.8162, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=4, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.05705, avg_fixed_ms=0.0228311, avg_render_ms=44.0321, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=2, gpu_instances=2, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=4, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0532625, avg_fixed_ms=0.021964, avg_render_ms=42.5671, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=2, gpu_instances=2, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\d3d11\shots\3d_textured_cube.png target=scene size=1280x701
+[INFO] Runtime stats: entities=4, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0596864, avg_fixed_ms=0.0244457, avg_render_ms=40.9063, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=2, gpu_instances=2, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+DSE_MAX_FRAMES reached: 70
+[INFO] [StreamingManager] Shutdown
+[INFO] [LuaRuntime] Shutdown begin state=000002E6F67E5158 script_instances=0 lua_memory_usage=133285 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000002E6F67E5158
+[INFO] [LuaRuntime] lua_close complete
+[INFO] [LuaRuntime] Shutdown end
+[INFO] [HairSystem] Shutdown, released all hair resources
+[INFO] Physics3DSystem Shutdown (Jolt)
+[INFO] [D3D11] DrawExecutor shutdown
+[INFO] [D3D11] PipelineStateManager shutdown
+[INFO] [D3D11] ShaderManager shutdown
+[INFO] [D3D11] ResourceManager shutdown
+[INFO] [D3D11] Context shutdown
+[INFO] [D3D11] RhiDevice shutdown
+[INFO] FileWatcher: stopped
+[INFO] debug logger shutdown
+[ERROR] [D3D11] Shader compile error: C:\Users\Administrator\repos\DSEngine\Shader@0x000002E6F97E6040(92,12-81): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop
+C:\Users\Administrator\repos\DSEngine\Shader@0x000002E6F97E6040(145,5-35): error X3511: unable to unroll loop, loop does not appear to terminate in a timely manner (523 iterations) or unrolled loop is too large, use the [unroll(n)] attribute to force an exact higher number
+
