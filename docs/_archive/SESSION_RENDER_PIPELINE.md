@@ -7,7 +7,7 @@
 
 ## 项目信息
 
-- **仓库**: `c:\Users\Administrator\Desktop\Engine\DSEngine`
+- **仓库**: `.`
 - **分支**: `feature/render-pipeline`（需 rebase 到 master d142240）
 - **切换分支**: `git checkout feature/render-pipeline && git rebase master`
 

@@ -74,7 +74,7 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
 ### 3.1 依赖预构建（在仓库外，**不入库**；脚本会自动完成）
 - **libsodium**：用自带 MSVC 解决方案构建（`StaticRelease|x64` + `StaticDebug|x64`），
   并整理成 GNS `Findsodium.cmake` 期望的布局，落地在：
-  `C:\Users\Administrator\dse_net_deps\sodium\`
+  `%USERPROFILE%\dse_net_deps\sodium\`
   - `include\sodium.h` …
   - `x64\{Debug,Release}\{v143,v144}\static\libsodium.lib`
   - 注：本机 MSVC = 19.44（`_MSC_VER` 1944），Findsodium 算出工具集后缀为 **v144**；
@@ -87,7 +87,7 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
     ```
 - **protobuf v3.21.12**：MSVC 静态库、`/MD` 运行库（`protobuf_MSVC_STATIC_RUNTIME=OFF`，与引擎一致）、
   关 tests/zlib，Release+Debug 都 install 到：
-  `C:\Users\Administrator\dse_net_deps\protobuf\`（含 `lib\libprotobuf.lib`/`libprotobufd.lib`、
+  `%USERPROFILE%\dse_net_deps\protobuf\`（含 `lib\libprotobuf.lib`/`libprotobufd.lib`、
   `bin\protoc.exe`、`cmake\protobuf-config.cmake`）。
   - **关键**：必须带上与引擎一致的 CRT 宏，否则与在树编译的 `.pb.cc`/GNS 目标链接时报
     `LNK2038: _CRT_STDIO_ISO_WIDE_SPECIFIERS 0 vs 1`（顶层 `CMakeLists.txt` 全局
@@ -98,7 +98,7 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
     cmake -S depends/protobuf -B build_protobuf -G "Visual Studio 17 2022" -A x64 \
       -Dprotobuf_BUILD_TESTS=OFF -Dprotobuf_MSVC_STATIC_RUNTIME=OFF \
       -Dprotobuf_WITH_ZLIB=OFF -Dprotobuf_BUILD_SHARED_LIBS=OFF \
-      -DCMAKE_INSTALL_PREFIX=C:/Users/Administrator/dse_net_deps/protobuf \
+      -DCMAKE_INSTALL_PREFIX=%USERPROFILE%/dse_net_deps/protobuf \
       -DCMAKE_CXX_FLAGS="%CRT%" -DCMAKE_C_FLAGS="%CRT%"
     cmake --build build_protobuf --config Release --target install
     cmake --build build_protobuf --config Debug   --target install
@@ -118,8 +118,8 @@ WITH_NET=1 BUILD_DIR=$HOME/dse_verify_net bash scripts/verify_linux_build.sh --w
    cmake -S . -B build_vs2022_net -G "Visual Studio 17 2022" -A x64 ^
      -DDSE_BUILD_EDITOR=OFF -DDSE_BUILD_LAUNCHER=OFF -DDSE_ENABLE_3D=OFF ^
      -DDSE_ENABLE_NET=ON ^
-     -DDSE_NET_SODIUM_DIR=C:/Users/Administrator/dse_net_deps/sodium ^
-     -DDSE_NET_PROTOBUF_DIR=C:/Users/Administrator/dse_net_deps/protobuf ^
+     -DDSE_NET_SODIUM_DIR=%USERPROFILE%/dse_net_deps/sodium ^
+     -DDSE_NET_PROTOBUF_DIR=%USERPROFILE%/dse_net_deps/protobuf ^
      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
    cmake --build build_vs2022_net --target dse_net_smoke --config Debug
    bin\dse_net_smoke.exe   # 实测退出码 0：reliable + unreliable 回环都收到
