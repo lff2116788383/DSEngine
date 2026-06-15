@@ -82,6 +82,7 @@ apps/  ->  modules/  ->  engine/  ->  depends/
   - 纹理句柄统一通过 `.Tex(slot, handle)` / `.Tex3D(slot, handle)` 写入 `textures[]` 数组，三端执行器用 `request.FindTex(slot)` 读取。
   - slot 编号对应 GLSL `layout(binding = N)`（spirv-cross 映射为 DX11 `tN` / Vulkan `binding = N`）。
 - 新增 [`RhiDevice`](engine/render/rhi/rhi_device.h) 接口或行为时，所有后端与测试桩都要同步。
+- **着色器编译链**：GLSL 源在 [`engine/render/shaders/src/`](engine/render/shaders/src/)（`*.frag/.vert/.comp`），经 `dse_shader_compiler` 编译为 SPIR-V 再嵌入为 `*.gen.h` 烧进可执行文件；`generated/` 是 gitignore 产物，**只提交着色器源、绝不手改 `*.gen.h`**，改源后需重生成并重建 `dse_engine`。在**变迭代次数循环**里采样要用 `textureLod(s, uv, 0.0)` 而非隐式梯度 `texture()`，否则 FXC 报 `X3570`/`X3511`。
 
 ### 3.4 模块与运行时更新路径
 
@@ -103,6 +104,9 @@ apps/  ->  modules/  ->  engine/  ->  depends/
 ### 4.1 CMake 配置
 
 - 根 [`CMakeLists.txt`](CMakeLists.txt) 是唯一构建入口。
+- 构建目录有两条并存路径，按需选用：
+  - **CMakePresets（推荐）**：见 [`CMakePresets.json`](CMakePresets.json)，Ninja 生成器，输出到 `out/build/<preset>`（`windows-x64-{debug,relwithdebinfo,release}` / `wsl-*` / `web-*`）。已固定 `CMAKE_POLICY_VERSION_MINIMUM=3.5`。
+  - **`build_vs2022`（脚本 / CI）**：VS 2022 生成器；[`scripts/win/`](scripts/win/) 下的 `.bat` 与 CI（`BUILD_DIR=build_vs2022`）走这条。
 - 当前核心引擎目标是 `dse_engine`；相关宿主程序位于 [`apps/runtime`](apps/runtime/)、[`apps/standalone`](apps/standalone/) 与 [`apps/editor_cpp`](apps/editor_cpp/)。
 - 常见条件编译开关以根 [`CMakeLists.txt`](CMakeLists.txt) 为准，例如：
   - `DSE_ENABLE_2D`
@@ -150,7 +154,8 @@ apps/  ->  modules/  ->  engine/  ->  depends/
 ### 5.3 运行测试
 
 ```bat
-ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
+ctest --preset windows-x64-debug                                    :: 预设方式（Ninja, out/build）
+ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest  :: build_vs2022 方式
 scripts\win\build_fast_tests.bat
 scripts\win\verify_all.bat
 ```
@@ -217,7 +222,10 @@ EngineInstance (生命周期管理)
 ### 7.3 构建与运行
 
 ```bat
-cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64
+cmake --preset windows-x64-debug          :: 推荐：CMakePresets（Ninja → out/build/<preset>）
+cmake --build --preset windows-x64-debug
+
+cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64   :: 或：VS 生成器（脚本 / CI 用）
 cmake --build build_vs2022 --config Debug
 scripts\win\build_fast_tests.bat
 scripts\win\build_all.bat

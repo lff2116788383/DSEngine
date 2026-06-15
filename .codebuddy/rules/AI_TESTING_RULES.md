@@ -10,8 +10,8 @@ DSEngine 项目的统一测试规范，供 CodeBuddy 在测试设计、代码变
 *.*
 
 ## Rule Governance
-- **规则集版本**: `v2.0.0`
-- **生效日期**: `2026-04-24`
+- **规则集版本**: `v2.1.0`
+- **生效日期**: `2026-06-15`
 - **冲突优先级声明**: 本文件受 [`AI_DEVELOPMENT_RULES.md`](.codebuddy/rules/AI_DEVELOPMENT_RULES.md) 约束；当效率与验证充分性冲突时，以验证充分性为准。
 
 ## Content
@@ -39,7 +39,7 @@ DSEngine 项目的统一测试规范，供 CodeBuddy 在测试设计、代码变
 - **边界清晰**: 单元测试避免真实窗口、图形上下文、外部设备和不可控 IO 依赖。
 - **资源可复现**: 测试依赖的场景、脚本、贴图、模型等资源必须来自仓库已签入内容。
 - **命名清晰**: 测试名称必须准确表达场景、行为和预期结果，避免含糊命名。
-- **文件归档一致**: 新增测试优先沿用现有 [`tests/gtest/`](tests/gtest/)、[`tests/engine/`](tests/engine/)、[`tests/modules/`](tests/modules/) 等目录结构。
+- **文件归档一致**: 新增测试优先沿用现有目录结构 —— GTest 用例在 [`tests/gtest/`](tests/gtest/) 的 `unit/ integration/ smoke/`；专项冒烟/隔离用例在 [`tests/http/`](tests/http/)、[`tests/net/`](tests/net/)、[`tests/serialize/`](tests/serialize/)、[`tests/regression/`](tests/regression/)。
 
 ### 5. 执行与验证要求
 - **最小必要验证**: 默认执行与改动直接相关的最小验证集合，避免无差别全量回归。
@@ -58,4 +58,5 @@ DSEngine 项目的统一测试规范，供 CodeBuddy 在测试设计、代码变
 - **规划与现状分离**: 推荐方向可以写入文档，但必须明确标注为“规划中”或“待接入”，不得伪装成当前能力。
 
 ## Version History
+- `v2.1.0` (`2026-06-15`): 测试目录归档口径对齐实际结构（`tests/gtest/{unit,integration,smoke}` + `tests/{http,net,serialize,regression}`），移除不存在的 `tests/engine`、`tests/modules` 引用。
 - `v2.0.0` (`2026-04-24`): 重写为新的测试规范文档，移除历史遗留表述，统一为 Google Test 主线、`ctest` 聚合执行、GMock / Google Benchmark 按真实接入状态启用的简洁口径。
