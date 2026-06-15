@@ -8,6 +8,7 @@
 
 // RigidBody2DComponent / BoxCollider2DComponent 定义在全局命名空间
 
+// 测试 刚体2D组件：默认值
 TEST(RigidBody2DComponentTest, DefaultValues) {
     RigidBody2DComponent rb;
     EXPECT_EQ(rb.type, RigidBody2DType::Dynamic);
@@ -18,6 +19,7 @@ TEST(RigidBody2DComponentTest, DefaultValues) {
     EXPECT_EQ(rb.runtime_body, nullptr);
 }
 
+// 测试 刚体2D组件：类型修订
 TEST(RigidBody2DComponentTest, TypeRevise) {
     RigidBody2DComponent rb;
     rb.type = RigidBody2DType::Static;
@@ -26,6 +28,7 @@ TEST(RigidBody2DComponentTest, TypeRevise) {
     EXPECT_EQ(rb.type, RigidBody2DType::Kinematic);
 }
 
+// 测试 刚体2D组件：速度修订
 TEST(RigidBody2DComponentTest, SpeedRevise) {
     RigidBody2DComponent rb;
     rb.velocity = glm::vec2(3.0f, -5.0f);
@@ -33,6 +36,7 @@ TEST(RigidBody2DComponentTest, SpeedRevise) {
     EXPECT_FLOAT_EQ(rb.velocity.y, -5.0f);
 }
 
+// 测试 盒碰撞体2D组件：默认值
 TEST(BoxCollider2DComponentTest, DefaultValues) {
     BoxCollider2DComponent bc;
     EXPECT_FLOAT_EQ(bc.size.x, 1.0f);
@@ -46,6 +50,7 @@ TEST(BoxCollider2DComponentTest, DefaultValues) {
     EXPECT_EQ(bc.runtime_fixture, nullptr);
 }
 
+// 测试 盒碰撞体2D组件：字段修改
 TEST(BoxCollider2DComponentTest, FieldModification) {
     BoxCollider2DComponent bc;
     bc.size = glm::vec2(2.0f, 3.0f);

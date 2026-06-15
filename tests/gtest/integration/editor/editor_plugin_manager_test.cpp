@@ -38,6 +38,7 @@ void RemoveDir(const fs::path& dir) {
 // Test 1: ScanPlugins - 空目录 -> 0 插件
 // ============================================================
 
+// 测试 插件管理器：扫描插件空目录返回零
 TEST(PluginManagerTest, ScanPlugins_EmptyDir_ReturnsZero) {
     auto dir = TempPluginDir("empty");
     RemoveDir(dir);
@@ -54,6 +55,7 @@ TEST(PluginManagerTest, ScanPlugins_EmptyDir_ReturnsZero) {
 // Test 2: ScanPlugins - 目录不存在 -> 自动创建 + 0 插件
 // ============================================================
 
+// 测试 插件管理器：扫描插件非存在目录创建且返回零
 TEST(PluginManagerTest, ScanPlugins_NonExistentDir_CreatesAndReturnsZero) {
     auto dir = TempPluginDir("nonexistent_xyz");
     RemoveDir(dir);
@@ -70,6 +72,7 @@ TEST(PluginManagerTest, ScanPlugins_NonExistentDir_CreatesAndReturnsZero) {
 // Test 3: ScanPlugins - 有效 plugin.json -> 元数据正确解析
 // ============================================================
 
+// 测试 插件管理器：扫描插件有效插件元数据Parsed
 TEST(PluginManagerTest, ScanPlugins_ValidPlugin_MetadataParsed) {
     auto dir = TempPluginDir("valid");
     RemoveDir(dir);
@@ -105,6 +108,7 @@ TEST(PluginManagerTest, ScanPlugins_ValidPlugin_MetadataParsed) {
 // Test 4: ScanPlugins - 缺少 name 字段 -> 回退到目录名
 // ============================================================
 
+// 测试 插件管理器：扫描插件缺失名称回退返回到目录名称
 TEST(PluginManagerTest, ScanPlugins_MissingName_FallsBackToDirName) {
     auto dir = TempPluginDir("noname");
     RemoveDir(dir);
@@ -127,6 +131,7 @@ TEST(PluginManagerTest, ScanPlugins_MissingName_FallsBackToDirName) {
 // Test 5: ScanPlugins - 非法 JSON -> 跳过，不崩溃
 // ============================================================
 
+// 测试 插件管理器：扫描插件无效JSON Skips Bad插件
 TEST(PluginManagerTest, ScanPlugins_InvalidJson_SkipsBadPlugin) {
     auto dir = TempPluginDir("badjson");
     RemoveDir(dir);
@@ -150,6 +155,7 @@ TEST(PluginManagerTest, ScanPlugins_InvalidJson_SkipsBadPlugin) {
 // Test 6: StartPlugin - entry 文件不存在 -> 返回 false + state = Error
 // ============================================================
 
+// 测试 插件管理器：启动插件条目不Found返回错误状态
 TEST(PluginManagerTest, StartPlugin_EntryNotFound_ReturnsErrorState) {
     auto dir = TempPluginDir("noentry");
     RemoveDir(dir);

@@ -10,18 +10,21 @@
 
 class LutLoaderTest : public ::testing::Test {};
 
+// 测试 LUT加载器：单位LUT默认尺寸
 TEST_F(LutLoaderTest, IdentityLutDefaultSize) {
     auto lut = dse::assets::GenerateIdentityLut();
     EXPECT_EQ(lut.size, 32);
     EXPECT_EQ(lut.rgba8.size(), static_cast<size_t>(32 * 32 * 32 * 4));
 }
 
+// 测试 LUT加载器：单位LUT自定义尺寸
 TEST_F(LutLoaderTest, IdentityLutCustomSize) {
     auto lut = dse::assets::GenerateIdentityLut(4);
     EXPECT_EQ(lut.size, 4);
     EXPECT_EQ(lut.rgba8.size(), static_cast<size_t>(4 * 4 * 4 * 4));
 }
 
+// 测试 LUT加载器：单位LUT Corner值
 TEST_F(LutLoaderTest, IdentityLutCornerValues) {
     auto lut = dse::assets::GenerateIdentityLut(4);
 
@@ -40,6 +43,7 @@ TEST_F(LutLoaderTest, IdentityLutCornerValues) {
     EXPECT_EQ(lut.rgba8[idx_333 + 3], 255);
 }
 
+// 测试 LUT加载器：单位LUT透明度Always 255
 TEST_F(LutLoaderTest, IdentityLutAlphaAlways255) {
     auto lut = dse::assets::GenerateIdentityLut(8);
     for (int i = 0; i < 8 * 8 * 8; ++i) {
@@ -47,6 +51,7 @@ TEST_F(LutLoaderTest, IdentityLutAlphaAlways255) {
     }
 }
 
+// 测试 LUT加载器：加载立方体LUT从文件
 TEST_F(LutLoaderTest, LoadCubeLutFromFile) {
     namespace fs = std::filesystem;
     auto tmp = fs::temp_directory_path() / "dse_lut_test.cube";
@@ -76,11 +81,13 @@ TEST_F(LutLoaderTest, LoadCubeLutFromFile) {
     fs::remove(tmp);
 }
 
+// 测试 LUT加载器：加载立方体LUT无效路径
 TEST_F(LutLoaderTest, LoadCubeLutInvalidPath) {
     dse::assets::LutData data;
     EXPECT_FALSE(dse::assets::LoadCubeLut("nonexistent.cube", data));
 }
 
+// 测试 LUT加载器：加载立方体LUT Malformed
 TEST_F(LutLoaderTest, LoadCubeLutMalformed) {
     namespace fs = std::filesystem;
     auto tmp = fs::temp_directory_path() / "dse_lut_bad.cube";

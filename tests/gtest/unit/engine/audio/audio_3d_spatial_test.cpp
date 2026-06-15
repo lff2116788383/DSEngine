@@ -27,12 +27,14 @@ using namespace dse::gameplay2d;
 // Phase 1: AudioListenerComponent
 // ============================================================
 
+// 测试 音频监听器组件：默认值
 TEST(AudioListenerComponentTest, DefaultValues) {
     AudioListenerComponent listener;
     EXPECT_TRUE(listener.enabled);
     EXPECT_EQ(listener.listener_index, 0u);
 }
 
+// 测试 音频监听器组件：字段修改
 TEST(AudioListenerComponentTest, FieldModification) {
     AudioListenerComponent listener;
     listener.enabled = false;
@@ -41,6 +43,7 @@ TEST(AudioListenerComponentTest, FieldModification) {
     EXPECT_EQ(listener.listener_index, 2u);
 }
 
+// 测试 音频监听器组件：挂载到ECS实体
 TEST(AudioListenerComponentTest, MountToECSEntity) {
     entt::registry registry;
     auto entity = registry.create();
@@ -58,6 +61,7 @@ TEST(AudioListenerComponentTest, MountToECSEntity) {
     EXPECT_FLOAT_EQ(transform.position.z, 3.0f);
 }
 
+// 测试 音频监听器组件：朝向
 TEST(AudioListenerComponentTest, Toward) {
     TransformComponent transform;
     transform.rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f); // identity
@@ -72,6 +76,7 @@ TEST(AudioListenerComponentTest, Toward) {
     EXPECT_NEAR(up.z, 0.0f, 1e-5f);
 }
 
+// 测试 音频监听器组件：情形90 Y朝向正确
 TEST(AudioListenerComponentTest, Case90YTowardCorrect) {
     TransformComponent transform;
     // 绕 Y 轴旋转 90 度
@@ -86,6 +91,7 @@ TEST(AudioListenerComponentTest, Case90YTowardCorrect) {
     EXPECT_NEAR(up.y, 1.0f, 1e-4f);
 }
 
+// 测试 音频监听器组件：相机3D Coexistence且Compatibility
 TEST(AudioListenerComponentTest, Camera3DCoexistenceAndCompatibility) {
     entt::registry registry;
     auto entity = registry.create();
@@ -97,6 +103,7 @@ TEST(AudioListenerComponentTest, Camera3DCoexistenceAndCompatibility) {
     EXPECT_TRUE(has_all);
 }
 
+// 测试 音频监听器组件：相机3D回退Search
 TEST(AudioListenerComponentTest, Camera3DFallbackSearch) {
     entt::registry registry;
     auto cam_entity = registry.create();
@@ -125,29 +132,34 @@ TEST(AudioListenerComponentTest, Camera3DFallbackSearch) {
 // Phase 2: AudioAttenuationModel
 // ============================================================
 
+// 测试 音频衰减模型：枚举值
 TEST(AudioAttenuationModelTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Inverse), 0);
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Linear), 1);
     EXPECT_EQ(static_cast<int>(AudioAttenuationModel::Exponential), 2);
 }
 
+// 测试 音频衰减模型：默认衰减为Inverse
 TEST(AudioAttenuationModelTest, DefaultDecaysIsInverse) {
     AudioSourceComponent audio;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Inverse);
 }
 
+// 测试 音频衰减模型：可设置上为线性
 TEST(AudioAttenuationModelTest, CansetUpIsLinear) {
     AudioSourceComponent audio;
     audio.attenuation_model = AudioAttenuationModel::Linear;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Linear);
 }
 
+// 测试 音频衰减模型：可设置上为Exponential
 TEST(AudioAttenuationModelTest, CansetUpIsExponential) {
     AudioSourceComponent audio;
     audio.attenuation_model = AudioAttenuationModel::Exponential;
     EXPECT_EQ(audio.attenuation_model, AudioAttenuationModel::Exponential);
 }
 
+// 测试 音频衰减模型：空Parameterscombination
 TEST(AudioAttenuationModelTest, EmptyParameterscombination) {
     AudioSourceComponent audio;
     audio.spatial_enabled = true;
@@ -167,12 +179,14 @@ TEST(AudioAttenuationModelTest, EmptyParameterscombination) {
 // Phase 3: Occlusion
 // ============================================================
 
+// 测试 音频遮挡：默认关闭
 TEST(AudioOcclusionTest, DefaultShutdown) {
     AudioSourceComponent audio;
     EXPECT_FALSE(audio.occlusion_enabled);
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 0.2f);
 }
 
+// 测试 音频遮挡：能够修订
 TEST(AudioOcclusionTest, CanRevise) {
     AudioSourceComponent audio;
     audio.occlusion_enabled = true;
@@ -181,6 +195,7 @@ TEST(AudioOcclusionTest, CanRevise) {
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 0.5f);
 }
 
+// 测试 音频遮挡：Because
 TEST(AudioOcclusionTest, Because) {
     AudioSourceComponent audio;
     audio.occlusion_factor = 0.0f;
@@ -189,12 +204,14 @@ TEST(AudioOcclusionTest, Because) {
     EXPECT_FLOAT_EQ(audio.occlusion_factor, 1.0f);
 }
 
+// 测试 音频遮挡：设置射线检测函数空回调不崩溃
 TEST(AudioOcclusionTest, SetRaycastFunctionEmptyCallbackDoesNotCrash) {
     AudioSystem audio;
     audio.SetRaycastFunction(nullptr);
     // 空回调表示禁用遮挡检测，不应崩溃
 }
 
+// 测试 音频遮挡：设置射线检测函数设置回调无崩溃
 TEST(AudioOcclusionTest, SetRaycastFunctionSetCallbackWithoutCrashing) {
     AudioSystem audio;
     audio.SetRaycastFunction([](const glm::vec3&, const glm::vec3&, float) {
@@ -205,6 +222,7 @@ TEST(AudioOcclusionTest, SetRaycastFunctionSetCallbackWithoutCrashing) {
     });
 }
 
+// 测试 音频遮挡：空启用
 TEST(AudioOcclusionTest, EmptyEnabled) {
     AudioSourceComponent audio;
     audio.spatial_enabled = false;
@@ -215,6 +233,7 @@ TEST(AudioOcclusionTest, EmptyEnabled) {
     EXPECT_TRUE(audio.occlusion_enabled);
 }
 
+// 测试 音频遮挡：情形3D配置
 TEST(AudioOcclusionTest, Case3DConfiguration) {
     AudioSourceComponent audio;
     audio.spatial_enabled = true;
@@ -237,6 +256,7 @@ TEST(AudioOcclusionTest, Case3DConfiguration) {
 // AudioSystem 无后端测试
 // ============================================================
 
+// 测试 音频系统3D：当不已初始化更新不崩溃
 TEST(AudioSystem3DTest, WhenNotInitializedUpdateDoesNotCrash) {
     AudioSystem audio;
     entt::registry registry;
@@ -246,6 +266,7 @@ TEST(AudioSystem3DTest, WhenNotInitializedUpdateDoesNotCrash) {
     audio.Update(registry, 0.016f);
 }
 
+// 测试 音频系统3D：当不已初始化设置射线检测函数不崩溃
 TEST(AudioSystem3DTest, WhenNotInitializedSetRaycastFunctionDoesNotCrash) {
     AudioSystem audio;
     audio.SetRaycastFunction(nullptr);

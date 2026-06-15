@@ -58,11 +58,13 @@ protected:
     }
 };
 
+// 测试 Lua运行时集成：引导失败无启动脚本
 TEST_F(LuaRuntimeIntegrationTest, BootstrapFailsWithoutStartupScript) {
     bool result = BootstrapLuaRuntime();
     EXPECT_FALSE(result);
 }
 
+// 测试 Lua运行时集成：引导成功带有效脚本
 TEST_F(LuaRuntimeIntegrationTest, BootstrapSucceedsWithValidScript) {
     LuaTempScript script("test_bootstrap.lua", R"(
         function Awake()
@@ -84,6 +86,7 @@ TEST_F(LuaRuntimeIntegrationTest, BootstrapSucceedsWithValidScript) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时集成：无世界当引导失败
 TEST_F(LuaRuntimeIntegrationTest, WithoutWorldWhenBootstrapFails) {
     LuaTempScript script("test_no_world.lua", R"(
         function Awake() end
@@ -99,6 +102,7 @@ TEST_F(LuaRuntimeIntegrationTest, WithoutWorldWhenBootstrapFails) {
     EXPECT_FALSE(result);
 }
 
+// 测试 Lua运行时集成：关闭之后引导不崩溃
 TEST_F(LuaRuntimeIntegrationTest, ShutdownAfterBootstrapDoesNotCrash) {
     LuaTempScript script("test_shutdown.lua", R"(
         function Awake() end
@@ -123,6 +127,7 @@ TEST_F(LuaRuntimeIntegrationTest, ShutdownAfterBootstrapDoesNotCrash) {
 // LuaApiContext injection
 // ============================================================
 
+// 测试 Lua运行时集成：Lua API上下文注入世界
 TEST_F(LuaRuntimeIntegrationTest, LuaApiContextInjectsWorld) {
     LuaTempScript script("test_ctx_world.lua", R"(
         function Awake()
@@ -148,6 +153,7 @@ TEST_F(LuaRuntimeIntegrationTest, LuaApiContextInjectsWorld) {
 // Tick driving
 // ============================================================
 
+// 测试 Lua运行时集成：帧更新执行更新
 TEST_F(LuaRuntimeIntegrationTest, FrameUpdateExecuteUpdate) {
     LuaTempScript script("test_tick.lua", R"(
         update_count = 0
@@ -173,6 +179,7 @@ TEST_F(LuaRuntimeIntegrationTest, FrameUpdateExecuteUpdate) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时集成：帧更新无引导不崩溃
 TEST_F(LuaRuntimeIntegrationTest, FrameUpdateWithoutBootstrapDoesNotCrash) {
     TickLuaRuntime(0.016f);
     SUCCEED();
@@ -182,6 +189,7 @@ TEST_F(LuaRuntimeIntegrationTest, FrameUpdateWithoutBootstrapDoesNotCrash) {
 // ScriptComponent driving
 // ============================================================
 
+// 测试 Lua运行时集成：脚本Componentdrive开启Awake且开启更新
 TEST_F(LuaRuntimeIntegrationTest, ScriptComponentdriveOnAwakeAndOnUpdate) {
     LuaTempScript startup("test_startup.lua", R"(
         function Awake() end
@@ -217,6 +225,7 @@ TEST_F(LuaRuntimeIntegrationTest, ScriptComponentdriveOnAwakeAndOnUpdate) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时集成：禁用脚本组件不执行
 TEST_F(LuaRuntimeIntegrationTest, DisabledScriptComponentDoesNotExecute) {
     LuaTempScript startup("test_startup2.lua", R"(
         function Awake() end
@@ -246,6 +255,7 @@ TEST_F(LuaRuntimeIntegrationTest, DisabledScriptComponentDoesNotExecute) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时集成：脚本实例Cleaned上之后实体销毁
 TEST_F(LuaRuntimeIntegrationTest, ScriptInstanceCleanedUpAfterEntityDestroy) {
     LuaTempScript startup("test_startup3.lua", R"(
         function Awake() end
@@ -284,6 +294,7 @@ TEST_F(LuaRuntimeIntegrationTest, ScriptInstanceCleanedUpAfterEntityDestroy) {
 // Memory tracking
 // ============================================================
 
+// 测试 Lua运行时集成：获取Lua内存用量返回非零值
 TEST_F(LuaRuntimeIntegrationTest, GetLuaMemoryUsageReturnsNonZeroValue) {
     LuaTempScript script("test_memory.lua", R"(
         function Awake() end
@@ -313,6 +324,7 @@ TEST_F(LuaRuntimeIntegrationTest, GetLuaMemoryUsageReturnsNonZeroValue) {
 // Error handling
 // ============================================================
 
+// 测试 Lua运行时集成：语法错误Causes引导失败
 TEST_F(LuaRuntimeIntegrationTest, SyntaxErrorCausesBootstrapFailure) {
     LuaTempScript script("test_syntax_error.lua", R"(
         function Awake(
@@ -330,6 +342,7 @@ TEST_F(LuaRuntimeIntegrationTest, SyntaxErrorCausesBootstrapFailure) {
     EXPECT_FALSE(result);
 }
 
+// 测试 Lua运行时集成：Awake运行时错误Causes启动失败
 TEST_F(LuaRuntimeIntegrationTest, AwakeRuntimeErrorCausesBootFailure) {
     LuaTempScript script("test_runtime_error.lua", R"(
         function Awake()

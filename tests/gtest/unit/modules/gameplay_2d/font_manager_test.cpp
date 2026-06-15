@@ -49,6 +49,7 @@ protected:
     }
 };
 
+// 测试 字体管理器：注册字体Success
 TEST_F(FontManagerTest, RegisterFont_Success) {
     EXPECT_TRUE(mgr.RegisterFont("main", "data/fonts/main.ttf", 24));
     const auto& cmgr = mgr;
@@ -60,6 +61,7 @@ TEST_F(FontManagerTest, RegisterFont_Success) {
     EXPECT_FALSE(font->is_loaded);
 }
 
+// 测试 字体管理器：注册字体重复Rejected
 TEST_F(FontManagerTest, RegisterFont_DuplicateRejected) {
     EXPECT_TRUE(mgr.RegisterFont("main", "path1.ttf", 16));
     EXPECT_FALSE(mgr.RegisterFont("main", "path2.ttf", 32));
@@ -69,12 +71,14 @@ TEST_F(FontManagerTest, RegisterFont_DuplicateRejected) {
     EXPECT_EQ(font->font_size, 16);
 }
 
+// 测试 字体管理器：获取字体非存在
 TEST_F(FontManagerTest, GetFont_NonExistent) {
     EXPECT_EQ(mgr.GetFont("missing"), nullptr);
     const auto& cmgr = mgr;
     EXPECT_EQ(cmgr.GetFont("missing"), nullptr);
 }
 
+// 测试 字体管理器：卸载字体之后加载
 TEST_F(FontManagerTest, UnloadFont_AfterLoad) {
     std::string path = WriteTempFont("dse_test_temp.ttf");
     mgr.RegisterFont("temp", path);
@@ -92,6 +96,7 @@ TEST_F(FontManagerTest, UnloadFont_AfterLoad) {
     EXPECT_EQ(cfont->font_data, nullptr);
 }
 
+// 测试 字体管理器：卸载字体Never已加载Noop
 TEST_F(FontManagerTest, UnloadFont_NeverLoaded_Noop) {
     mgr.RegisterFont("temp", "temp.ttf");
     mgr.UnloadFont("temp"); // is_loaded=false, noop
@@ -101,6 +106,7 @@ TEST_F(FontManagerTest, UnloadFont_NeverLoaded_Noop) {
     EXPECT_FALSE(cfont->is_loaded);
 }
 
+// 测试 字体管理器：获取字体自动加载
 TEST_F(FontManagerTest, GetFont_AutoLoads) {
     std::string path = WriteTempFont("dse_test_auto.ttf");
     mgr.RegisterFont("auto", path);
@@ -110,6 +116,7 @@ TEST_F(FontManagerTest, GetFont_AutoLoads) {
     EXPECT_NE(font->font_data, nullptr);
 }
 
+// 测试 字体管理器：加载字体Real文件Populates数据
 TEST_F(FontManagerTest, LoadFont_RealFile_PopulatesData) {
     std::string path = WriteTempFont("dse_test_real.ttf");
     mgr.RegisterFont("real", path);
@@ -121,6 +128,7 @@ TEST_F(FontManagerTest, LoadFont_RealFile_PopulatesData) {
     EXPECT_NE(font->font_data, nullptr);
 }
 
+// 测试 字体管理器：加载字体缺失文件失败
 TEST_F(FontManagerTest, LoadFont_MissingFile_Fails) {
     mgr.RegisterFont("ghost", "does/not/exist_dse_xyz.ttf");
     EXPECT_FALSE(mgr.LoadFont("ghost"));
@@ -131,6 +139,7 @@ TEST_F(FontManagerTest, LoadFont_MissingFile_Fails) {
     EXPECT_EQ(font->font_data, nullptr);
 }
 
+// 测试 字体管理器：加载字体空路径失败
 TEST_F(FontManagerTest, LoadFont_EmptyPath_Fails) {
     mgr.RegisterFont("nopath", "");
     EXPECT_FALSE(mgr.LoadFont("nopath"));
@@ -140,26 +149,31 @@ TEST_F(FontManagerTest, LoadFont_EmptyPath_Fails) {
     EXPECT_FALSE(font->is_loaded);
 }
 
+// 测试 字体管理器：设置默认字体
 TEST_F(FontManagerTest, SetDefaultFont) {
     mgr.RegisterFont("custom", "custom.ttf");
     EXPECT_TRUE(mgr.SetDefaultFont("custom"));
     EXPECT_EQ(mgr.GetDefaultFont(), "custom");
 }
 
+// 测试 字体管理器：设置默认字体非存在
 TEST_F(FontManagerTest, SetDefaultFont_NonExistent) {
     EXPECT_FALSE(mgr.SetDefaultFont("nonexistent"));
 }
 
+// 测试 字体管理器：Language字体映射
 TEST_F(FontManagerTest, LanguageFontMapping) {
     mgr.RegisterFont("cn_font", "cn.ttf");
     EXPECT_TRUE(mgr.SetFontForLanguage("zh", "cn_font"));
     EXPECT_EQ(mgr.GetFontForLanguage("zh"), "cn_font");
 }
 
+// 测试 字体管理器：获取字体Language回退
 TEST_F(FontManagerTest, GetFontForLanguage_Fallback) {
     EXPECT_EQ(mgr.GetFontForLanguage("unknown"), mgr.GetDefaultFont());
 }
 
+// 测试 字体管理器：字体回退链
 TEST_F(FontManagerTest, FontFallbackChain) {
     mgr.RegisterFont("primary", "primary.ttf");
     mgr.RegisterFont("fallback1", "fb1.ttf");
@@ -172,11 +186,13 @@ TEST_F(FontManagerTest, FontFallbackChain) {
     EXPECT_EQ(chain[1], "fallback2");
 }
 
+// 测试 字体管理器：获取字体Fallbacks空
 TEST_F(FontManagerTest, GetFontFallbacks_Empty) {
     auto chain = mgr.GetFontFallbacks("nope");
     EXPECT_TRUE(chain.empty());
 }
 
+// 测试 字体管理器：获取全部字体ID
 TEST_F(FontManagerTest, GetAllFontIds) {
     mgr.RegisterFont("a", "a.ttf");
     mgr.RegisterFont("b", "b.ttf");
@@ -184,6 +200,7 @@ TEST_F(FontManagerTest, GetAllFontIds) {
     EXPECT_EQ(ids.size(), 2u);
 }
 
+// 测试 字体管理器：清空
 TEST_F(FontManagerTest, Clear) {
     mgr.RegisterFont("x", "x.ttf");
     mgr.SetFontForLanguage("en", "x");

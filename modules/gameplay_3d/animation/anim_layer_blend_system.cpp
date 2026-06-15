@@ -1,5 +1,6 @@
 #include "modules/gameplay_3d/animation/anim_layer_blend_system.h"
 #include "modules/gameplay_3d/animation/anim_clip_eval.h"
+#include "modules/gameplay_3d/animation/anim_blend_weights.h"
 #include "engine/ecs/components_3d.h"
 #include <algorithm>
 
@@ -22,28 +23,10 @@ bool EvaluateBlendTree1D(
 {
     if (nodes.empty()) return false;
 
-    // Compute threshold weights
-    std::vector<float> weights(nodes.size(), 0.0f);
-    if (nodes.size() >= 2) {
-        size_t lo = 0, hi = nodes.size() - 1;
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            if (nodes[i].threshold <= param_value) lo = i;
-            if (nodes[i].threshold >= param_value) { hi = i; break; }
-        }
-        if (param_value <= nodes.front().threshold) { lo = hi = 0; }
-        else if (param_value >= nodes.back().threshold) { lo = hi = nodes.size() - 1; }
-
-        if (lo == hi || std::abs(nodes[hi].threshold - nodes[lo].threshold) <= 0.0001f) {
-            weights[lo] = 1.0f;
-        } else {
-            float t = std::clamp((param_value - nodes[lo].threshold) /
-                (nodes[hi].threshold - nodes[lo].threshold), 0.0f, 1.0f);
-            weights[lo] = 1.0f - t;
-            weights[hi] = t;
-        }
-    } else {
-        weights[0] = 1.0f;
-    }
+    // threshold 权重（线性插值），见 anim_blend::ComputeBlend1DWeights。
+    std::vector<float> thresholds(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i) thresholds[i] = nodes[i].threshold;
+    const std::vector<float> weights = anim_blend::ComputeBlend1DWeights(thresholds, param_value);
 
     AnimSampleBuffer acc(bone_count);
     std::fill(acc.rotations.begin(), acc.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
@@ -102,37 +85,10 @@ bool EvaluateBlendTree2D(
 {
     if (nodes.empty()) return false;
 
-    // Inverse-distance weighting for arbitrary point layout (Grid Mode fallback)
-    std::vector<float> weights(nodes.size(), 0.0f);
-    float total_w = 0.0f;
-
-    // Check for exact match first
-    bool exact = false;
-    for (size_t i = 0; i < nodes.size(); ++i) {
-        float dx = param.x - nodes[i].x;
-        float dy = param.y - nodes[i].y;
-        float dist2 = dx * dx + dy * dy;
-        if (dist2 < 1e-6f) {
-            weights[i] = 1.0f;
-            total_w = 1.0f;
-            exact = true;
-            break;
-        }
-    }
-
-    if (!exact) {
-        // Shepard's method (IDW p=2)
-        for (size_t i = 0; i < nodes.size(); ++i) {
-            float dx = param.x - nodes[i].x;
-            float dy = param.y - nodes[i].y;
-            float dist2 = dx * dx + dy * dy;
-            float w = 1.0f / std::max(dist2, 1e-8f);
-            weights[i] = w;
-            total_w += w;
-        }
-    }
-
-    if (total_w <= 0.0f) return false;
+    // 反距离加权（Shepard IDW, p=2），归一化权重求和为 1。
+    std::vector<glm::vec2> points(nodes.size());
+    for (size_t i = 0; i < nodes.size(); ++i) points[i] = glm::vec2(nodes[i].x, nodes[i].y);
+    const std::vector<float> weights = anim_blend::ComputeBlend2DWeights(points, param);
 
     AnimSampleBuffer acc(bone_count);
     std::fill(acc.rotations.begin(), acc.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
@@ -142,7 +98,7 @@ bool EvaluateBlendTree2D(
 
     float effective_total = 0.0f;
     for (size_t ni = 0; ni < nodes.size(); ++ni) {
-        float w = weights[ni] / total_w;
+        float w = weights[ni];
         if (w <= 0.001f) continue;
         auto& node = nodes[ni];
 

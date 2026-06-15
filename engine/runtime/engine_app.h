@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/platform/splash_screen.h"
 
 namespace dse::platform { class PlatformApp; }
 namespace dse::assets { class NativeFileSystem; class LocalizationManager; }
@@ -36,6 +37,10 @@ struct EngineRunConfig {
     std::string asset_bundle_key;
     /// .dpak 归档路径（编辑器 BuildGame 产物）；非空时 Init 会挂载。
     std::string asset_pak_path;
+    /// 启动 splash 配置（品牌化）。use_splash_config=true 时 Init 用它替代内置默认值；
+    /// 未显式给出的字段（空字符串/0）仍回退到引擎默认。环境变量覆盖仍生效。
+    bool use_splash_config = false;
+    dse::platform::SplashConfig splash{};
     RuntimeServices services{};
 
     EngineRunConfig& WithServices(RuntimeServices runtime_services) {
@@ -76,6 +81,16 @@ public:
     int Run();
 
     /**
+     * @brief 执行一帧主循环体（PollEvents→Resize→Tick→Present）。
+     * @return 应继续循环返回 true；遇到关闭请求或达到 DSE_MAX_FRAMES 返回 false。
+     *
+     * 供无法阻塞主线程的平台（Web/Emscripten）由外部循环驱动：apps/web_host 通过
+     * emscripten_set_main_loop 反复调用本方法。桌面 Run() 内部循环同样复用它，
+     * 避免主循环逻辑出现两份实现。需先成功调用 Init()。
+     */
+    bool RunOneFrame();
+
+    /**
      * @brief 获取渲染管线
      */
     FramePipeline* pipeline() const { return pipeline_.get(); }
@@ -112,7 +127,17 @@ private:
     float accumulator_ = 0.0f;
     float fixed_time_step_ = 0.02f;
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
+    // 主循环跨帧状态（Run() 与 RunOneFrame() 共用；首次调用 RunOneFrame 惰性初始化）
+    bool  loop_started_ = false;
+    int   loop_max_frames_ = 0;
+    int   loop_screenshot_frame_ = 0;
+    bool  loop_screenshot_taken_ = false;
+    int   loop_frame_counter_ = 0;
+    int   loop_prev_fb_width_ = 0;
+    int   loop_prev_fb_height_ = 0;
     bool is_initialized_ = false;
+    bool first_frame_shown_ = false;
+    dse::platform::SplashScreen splash_;
     std::unique_ptr<dse::platform::PlatformApp> platform_;
     std::unique_ptr<dse::assets::NativeFileSystem> default_file_system_;
 };

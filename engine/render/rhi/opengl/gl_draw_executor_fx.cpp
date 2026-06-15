@@ -211,7 +211,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glEnable(GL_LINE_SMOOTH);  // GLES 无线条抗锯齿，移动端忽略
 #endif
 
@@ -243,7 +243,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
         glUniform3fv(hair_loc_scol_,   1, &item.specular_color[0]);
 
         // 每个 strand 是一个 GL_LINE_STRIP
-#ifdef __ANDROID__
+#if DSE_GL_ES_RUNTIME
         // GLES 无 glMultiDrawArrays：逐 strand 调用 glDrawArrays 回退。
         for (GLsizei s = 0; s < static_cast<GLsizei>(item.strand_count); ++s)
             glDrawArrays(GL_LINE_STRIP, item.strand_firsts[s], item.strand_counts[s]);
@@ -261,7 +261,7 @@ void GLDrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
     glDisable(GL_BLEND);
     glLineWidth(1.0f);
     glDepthMask(GL_TRUE);
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glDisable(GL_LINE_SMOOTH);
 #endif
     glBindVertexArray(0);

@@ -27,6 +27,7 @@ protected:
     World world;
 };
 
+// 测试 渲染场景集成：渲染图Declare资源且添加通道
 TEST_F(RenderSceneIntegrationTest, RenderGraphDeclareResourcesAndAddPass) {
     dse::render::RenderGraph dag;
     auto res1 = dag.DeclareResource("color");
@@ -40,12 +41,14 @@ TEST_F(RenderSceneIntegrationTest, RenderGraphDeclareResourcesAndAddPass) {
     EXPECT_TRUE(compiled);
 }
 
+// 测试 渲染场景集成：渲染图编译空图
 TEST_F(RenderSceneIntegrationTest, RenderGraphCompileEmptyGraph) {
     dse::render::RenderGraph dag;
     bool compiled = dag.Compile();
     EXPECT_TRUE(compiled);
 }
 
+// 测试 渲染场景集成：渲染图能够应重建之后重置
 TEST_F(RenderSceneIntegrationTest, RenderGraphCanBeRebuiltAfterReset) {
     dse::render::RenderGraph dag;
     auto res = dag.DeclareResource("color");
@@ -63,6 +66,7 @@ TEST_F(RenderSceneIntegrationTest, RenderGraphCanBeRebuiltAfterReset) {
     EXPECT_TRUE(dag.Compile());
 }
 
+// 测试 渲染场景集成：网格渲染器组件默认值
 TEST_F(RenderSceneIntegrationTest, MeshRendererComponentDefaultValues) {
     MeshRendererComponent mesh;
     EXPECT_TRUE(mesh.visible);
@@ -74,6 +78,7 @@ TEST_F(RenderSceneIntegrationTest, MeshRendererComponentDefaultValues) {
     EXPECT_EQ(mesh.material_data_source, MeshRendererComponent::MaterialDataSource::ComponentFallback);
 }
 
+// 测试 渲染场景集成：后期处理组件默认值
 TEST_F(RenderSceneIntegrationTest, PostProcessComponentDefaultValues) {
     PostProcessComponent pp;
     EXPECT_TRUE(pp.enabled);
@@ -85,6 +90,7 @@ TEST_F(RenderSceneIntegrationTest, PostProcessComponentDefaultValues) {
     EXPECT_FALSE(pp.ssao_enabled);
 }
 
+// 测试 渲染场景集成：方向光灯光3D组件默认值
 TEST_F(RenderSceneIntegrationTest, DirectionalLight3DComponentDefaultValues) {
     DirectionalLight3DComponent light;
     EXPECT_TRUE(light.enabled);
@@ -93,6 +99,7 @@ TEST_F(RenderSceneIntegrationTest, DirectionalLight3DComponentDefaultValues) {
     EXPECT_EQ(light.direction.y, -1.0f);
 }
 
+// 测试 渲染场景集成：点灯光组件默认值
 TEST_F(RenderSceneIntegrationTest, PointLightComponentDefaultValues) {
     PointLightComponent light;
     EXPECT_TRUE(light.enabled);
@@ -100,6 +107,7 @@ TEST_F(RenderSceneIntegrationTest, PointLightComponentDefaultValues) {
     EXPECT_FALSE(light.cast_shadow);
 }
 
+// 测试 渲染场景集成：聚光灯光组件默认值
 TEST_F(RenderSceneIntegrationTest, SpotLightComponentDefaultValues) {
     SpotLightComponent light;
     EXPECT_TRUE(light.enabled);
@@ -109,6 +117,7 @@ TEST_F(RenderSceneIntegrationTest, SpotLightComponentDefaultValues) {
     EXPECT_FALSE(light.cast_shadow);
 }
 
+// 测试 渲染场景集成：场景实体不渲染图
 TEST_F(RenderSceneIntegrationTest, SceneEntityNotRenderGraph) {
     dse::render::RenderGraph dag;
     auto res = dag.DeclareResource("scene_color");
@@ -132,6 +141,7 @@ TEST_F(RenderSceneIntegrationTest, SceneEntityNotRenderGraph) {
     EXPECT_TRUE(dag.Compile());
 }
 
+// 测试 渲染场景集成：变换系统之后更新网格Rendererconstant
 TEST_F(RenderSceneIntegrationTest, TransformSystemAfterUpdateMeshRendererconstant) {
     auto e = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(e);

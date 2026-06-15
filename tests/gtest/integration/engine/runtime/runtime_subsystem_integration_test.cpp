@@ -62,6 +62,7 @@ protected:
     }
 };
 
+// 测试 运行时子系统集成：帧管线且物理2D Physical更新之后手动Assembly
 TEST_F(RuntimeSubsystemIntegrationTest, FramePipelineAndPhysics2DPhysicalUpdateAfterManualAssembly) {
     World world;
 
@@ -92,6 +93,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, FramePipelineAndPhysics2DPhysicalUpdateA
     physics.Shutdown();
 }
 
+// 测试 运行时子系统集成：引擎实例构造且Destruction执行不泄漏
 TEST_F(RuntimeSubsystemIntegrationTest, EngineInstanceConstructionAndDestructionDoNotLeak) {
     EngineRunConfig config;
     config.window_width = 320;
@@ -104,6 +106,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, EngineInstanceConstructionAndDestruction
     // 析构不崩溃即通过
 }
 
+// 测试 运行时子系统集成：引擎实例稳定带多个Constructions且Destructions
 TEST_F(RuntimeSubsystemIntegrationTest, EngineInstanceStableWithMultipleConstructionsAndDestructions) {
     for (int i = 0; i < 3; ++i) {
         EngineRunConfig config;
@@ -113,6 +116,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, EngineInstanceStableWithMultipleConstruc
     }
 }
 
+// 测试 运行时子系统集成：服务Locatorregister物理2D且事件总线
 TEST_F(RuntimeSubsystemIntegrationTest, ServiceLocatorregisterPhysics2DAndEventBus) {
     auto physics = std::make_shared<Physics2DSystem>();
     auto event_bus = std::make_shared<EventBus>();
@@ -136,6 +140,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, ServiceLocatorregisterPhysics2DAndEventB
     EXPECT_NO_THROW(p->Shutdown());
 }
 
+// 测试 运行时子系统集成：业务运行时桥接Lua Pattern创建实体
 TEST_F(RuntimeSubsystemIntegrationTest, BusinessRuntimeBridgeLuaPatternCreatesEntities) {
     TempLuaFile script("test_runtime_lua.lua", R"(
         function Awake()
@@ -168,6 +173,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, BusinessRuntimeBridgeLuaPatternCreatesEn
     ShutdownLuaRuntime();
 }
 
+// 测试 运行时子系统集成：Allchainregisteruse Againregister
 TEST_F(RuntimeSubsystemIntegrationTest, AllchainregisteruseAgainregister) {
     auto bus1 = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus1);
@@ -189,6 +195,7 @@ TEST_F(RuntimeSubsystemIntegrationTest, AllchainregisteruseAgainregister) {
     EXPECT_NE(ServiceLocator::Instance().Get<EventBus>(), bus1.get());
 }
 
+// 测试 运行时子系统集成：物理2D系统关闭之后状态重置
 TEST_F(RuntimeSubsystemIntegrationTest, Physics2DSystemShutdownAfterStateReset) {
     World world;
     auto e = world.CreateEntity();

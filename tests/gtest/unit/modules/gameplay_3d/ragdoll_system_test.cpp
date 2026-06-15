@@ -20,6 +20,7 @@ using namespace dse::gameplay3d;
 
 #ifdef DSE_ENABLE_PHYSX
 
+// 测试 布娃娃组件：默认值
 TEST(RagdollComponentTest, DefaultValues) {
     RagdollComponent rc;
     EXPECT_FALSE(rc.active);
@@ -34,29 +35,34 @@ TEST(RagdollComponentTest, DefaultValues) {
     EXPECT_FALSE(rc.initialized);
 }
 
+// 测试 布娃娃系统：安全
 TEST(RagdollSystemTest, Safety) {
     RagdollSystem sys;
     // 构造后不崩溃即可
 }
 
+// 测试 布娃娃系统：设置空指针安全
 TEST(RagdollSystemTest, SetNullptrSafety) {
     RagdollSystem sys;
     sys.SetAssetManager(nullptr);
     sys.SetPhysics3D(nullptr);
 }
 
+// 测试 布娃娃系统：空世界不崩溃
 TEST(RagdollSystemTest, EmptyWorldDoesNotCrash) {
     RagdollSystem sys;
     World world;
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
+// 测试 布娃娃系统：零增量时间不崩溃
 TEST(RagdollSystemTest, ZerodtDoesNotCrash) {
     RagdollSystem sys;
     World world;
     sys.FixedUpdate(world, 0.0f);
 }
 
+// 测试 布娃娃系统：带不布娃娃不崩溃
 TEST(RagdollSystemTest, WithNotRagdollDoesNotCrash) {
     RagdollSystem sys;
     World world;
@@ -66,6 +72,7 @@ TEST(RagdollSystemTest, WithNotRagdollDoesNotCrash) {
     sys.FixedUpdate(world, 1.0f / 60.0f);
 }
 
+// 测试 布娃娃系统：Deactivate安全无组件实体
 TEST(RagdollSystemTest, DeactivateSecurityForComponentlessEntities) {
     RagdollSystem sys;
     World world;

@@ -19,11 +19,13 @@ using namespace dse::core;
 
 // ========== UUIDComponent 单元测试 ==========
 
+// 测试 UUID组件：Generategenerate非零值
 TEST(UUIDComponentTest, GenerategenerateANonZeroValue) {
     auto id = UUIDComponent::Generate();
     EXPECT_NE(id, 0u);
 }
 
+// 测试 UUID组件：Generatemultiple次数无Repeating
 TEST(UUIDComponentTest, GeneratemultipleTimesWithoutRepeating) {
     std::set<uint64_t> ids;
     for (int i = 0; i < 1000; ++i) {
@@ -32,6 +34,7 @@ TEST(UUIDComponentTest, GeneratemultipleTimesWithoutRepeating) {
     EXPECT_EQ(ids.size(), 1000u);
 }
 
+// 测试 UUID组件：到字符串且从Stringreciprocal
 TEST(UUIDComponentTest, ToStringAndFromStringreciprocal) {
     UUIDComponent comp;
     comp.uuid = 0xDEADBEEFCAFE1234ULL;
@@ -39,6 +42,7 @@ TEST(UUIDComponentTest, ToStringAndFromStringreciprocal) {
     EXPECT_EQ(UUIDComponent::FromString(str), comp.uuid);
 }
 
+// 测试 UUID组件：从字符串空字符串返回零
 TEST(UUIDComponentTest, FromStringEmptyStringReturnsZero) {
     EXPECT_EQ(UUIDComponent::FromString(""), 0u);
 }
@@ -99,6 +103,7 @@ protected:
     }
 };
 
+// 测试 交叉场景引用：UUI Dserializationdeserialization
 TEST_F(CrossSceneRefTest, UUIDserializationdeserialization) {
     auto path = WriteTempScene("dse_uuid_ser.dscene", kSceneWithUUID_A);
     mgr.LoadSubScene(path.string());
@@ -117,6 +122,7 @@ TEST_F(CrossSceneRefTest, UUIDserializationdeserialization) {
     std::filesystem::remove(path);
 }
 
+// 测试 交叉场景引用：解析引用Search范围内单一场景
 TEST_F(CrossSceneRefTest, ResolveReferenceSearchWithinASingleScene) {
     auto path = WriteTempScene("dse_uuid_resolve1.dscene", kSceneWithUUID_A);
     mgr.LoadSubScene(path.string());
@@ -132,6 +138,7 @@ TEST_F(CrossSceneRefTest, ResolveReferenceSearchWithinASingleScene) {
     std::filesystem::remove(path);
 }
 
+// 测试 交叉场景引用：解析引用Across多个子场景查找
 TEST_F(CrossSceneRefTest, ResolveReferenceAcrossMultipleSubSceneFind) {
     auto pathA = WriteTempScene("dse_uuid_cross_a.dscene", kSceneWithUUID_A);
     auto pathB = WriteTempScene("dse_uuid_cross_b.dscene", kSceneWithUUID_B);
@@ -152,6 +159,7 @@ TEST_F(CrossSceneRefTest, ResolveReferenceAcrossMultipleSubSceneFind) {
     std::filesystem::remove(pathB);
 }
 
+// 测试 交叉场景引用：解析Referencedoes不存在UUID Returnsnull
 TEST_F(CrossSceneRefTest, ResolveReferencedoesNotExistUUIDReturnsnull) {
     auto path = WriteTempScene("dse_uuid_miss.dscene", kSceneWithUUID_A);
     mgr.LoadSubScene(path.string());
@@ -162,6 +170,7 @@ TEST_F(CrossSceneRefTest, ResolveReferencedoesNotExistUUIDReturnsnull) {
     std::filesystem::remove(path);
 }
 
+// 测试 交叉场景引用：解析引用UUID返回Zeronull
 TEST_F(CrossSceneRefTest, ResolveReference_UUIDReturnsZeronull) {
     auto path = WriteTempScene("dse_uuid_zero.dscene", kSceneWithUUID_A);
     mgr.LoadSubScene(path.string());
@@ -169,6 +178,7 @@ TEST_F(CrossSceneRefTest, ResolveReference_UUIDReturnsZeronull) {
     std::filesystem::remove(path);
 }
 
+// 测试 交叉场景引用：子场景之后UUID不再次能够
 TEST_F(CrossSceneRefTest, SubSceneAfterUUIDNotAgainCan) {
     auto path = WriteTempScene("dse_uuid_unload.dscene", kSceneWithUUID_A);
     mgr.LoadSubScene(path.string());
@@ -180,6 +190,7 @@ TEST_F(CrossSceneRefTest, SubSceneAfterUUIDNotAgainCan) {
     std::filesystem::remove(path);
 }
 
+// 测试 交叉场景引用：无UUID组件实体不查找
 TEST_F(CrossSceneRefTest, WithoutUUIDComponentEntityNotFind) {
     auto pathUuid = WriteTempScene("dse_uuid_mix_a.dscene", kSceneWithUUID_A);
     auto pathNoUuid = WriteTempScene("dse_uuid_mix_b.dscene", kSceneNoUUID);

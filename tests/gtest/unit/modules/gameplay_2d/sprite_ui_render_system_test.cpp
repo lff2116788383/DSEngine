@@ -25,11 +25,13 @@ using namespace dse::render;
 // SpriteRenderSystem
 // ============================================================
 
+// 测试 精灵渲染系统：默认安全
 TEST(SpriteRenderSystemTest, DefaultSafety) {
     SpriteRenderSystem sys;
     (void)sys;
 }
 
+// 测试 精灵渲染系统：空世界不崩溃
 TEST(SpriteRenderSystemTest, EmptyWorldDoesNotCrash) {
     SpriteRenderSystem sys;
     World world;
@@ -41,11 +43,13 @@ TEST(SpriteRenderSystemTest, EmptyWorldDoesNotCrash) {
 // UIRenderSystem
 // ============================================================
 
+// 测试 UI渲染系统：默认安全
 TEST(UIRenderSystemTest, DefaultSafety) {
     UIRenderSystem sys;
     (void)sys;
 }
 
+// 测试 UI渲染系统：空世界不崩溃
 TEST(UIRenderSystemTest, EmptyWorldDoesNotCrash) {
     UIRenderSystem sys;
     World world;
@@ -53,6 +57,7 @@ TEST(UIRenderSystemTest, EmptyWorldDoesNotCrash) {
     sys.Render(world, cmd, 1920, 1080);
 }
 
+// 测试 UI渲染系统：零不崩溃
 TEST(UIRenderSystemTest, ZeroDoesNotCrash) {
     UIRenderSystem sys;
     World world;
@@ -64,6 +69,7 @@ TEST(UIRenderSystemTest, ZeroDoesNotCrash) {
 // UIRendererComponent 默认值
 // ============================================================
 
+// 测试 精灵UI渲染组件：默认值
 TEST(SpriteUIRenderComponentTest, DefaultValues) {
     UIRendererComponent ui;
     EXPECT_EQ(ui.texture_handle, 0u);
@@ -76,6 +82,7 @@ TEST(SpriteUIRenderComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(ui.pressed_scale, 0.94f);
 }
 
+// 测试 精灵UI渲染组件：参数默认值
 TEST(SpriteUIRenderComponentTest, ParameterDefaultValue) {
     UIRendererComponent ui;
     EXPECT_FLOAT_EQ(ui.position.x, 0.0f);
@@ -87,6 +94,7 @@ TEST(SpriteUIRenderComponentTest, ParameterDefaultValue) {
     EXPECT_FLOAT_EQ(ui.pivot.x, 0.5f);
 }
 
+// 测试 精灵UI渲染组件：状态默认值
 TEST(SpriteUIRenderComponentTest, StateDefaultValues) {
     UIRendererComponent ui;
     EXPECT_TRUE(ui.interactable);
@@ -99,6 +107,7 @@ TEST(SpriteUIRenderComponentTest, StateDefaultValues) {
 // Expand9SliceItems
 // ============================================================
 
+// 测试 展开9切片：Zerogenerate 1项
 TEST(Expand9SliceTest, Zerogenerate1Item) {
     SpriteDrawItem base;
     base.texture_handle = 42;
@@ -115,6 +124,7 @@ TEST(Expand9SliceTest, Zerogenerate1Item) {
     EXPECT_GE(out.size(), 1u);
 }
 
+// 测试 展开9切片：Validgenerate多9项
 TEST(Expand9SliceTest, ValidgenerateMulti9Item) {
     SpriteDrawItem base;
     base.texture_handle = 42;
@@ -131,6 +141,7 @@ TEST(Expand9SliceTest, ValidgenerateMulti9Item) {
     EXPECT_LE(out.size(), 9u);
 }
 
+// 测试 展开9切片：带项
 TEST(Expand9SliceTest, WithItem) {
     SpriteDrawItem base;
     base.texture_handle = 99;

@@ -79,8 +79,8 @@
 **目标**：彻底讲清楚 PBR 的核心思想——金属/粗糙度工作流、能量守恒、微表面模型。
 
 **参考代码位置（供素材提取，不直接引用）：**
-- [pbr.frag](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/shaders/src/pbr.frag) — PBR 着色器主逻辑
-- [ubo_types.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/ubo_types.h) — PBR 材质参数定义
+- [pbr.frag](../../engine/render/shaders/src/pbr.frag) — PBR 着色器主逻辑
+- [ubo_types.h](../../engine/render/rhi/ubo_types.h) — PBR 材质参数定义
 
 **建议内容大纲：**
 1. PBR 之前：游戏画面为什么"假"？（固定函数光照的局限性）
@@ -95,8 +95,8 @@
 **目标**：讲清楚 GPU 编程和 CPU 编程的区别，vertex shader 和 fragment shader 分别干什么。
 
 **参考代码位置：**
-- [builtin_passes.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) — 各个 Pass 的执行逻辑
-- [gl_draw_executor.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/gl_draw_executor.cpp) — inline shader 源码示例
+- [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) — 各个 Pass 的执行逻辑
+- [gl_draw_executor.cpp](../../engine/render/rhi/gl_draw_executor.cpp) — inline shader 源码示例
 
 **建议内容大纲：**
 1. CPU vs GPU：一个像几个博士生（串行），一个像一万个小学生（并行）
@@ -111,8 +111,8 @@
 **目标**：讲清楚两种渲染路径的区别、各自的优劣势、为什么 DSEngine 两者都支持。
 
 **参考代码位置：**
-- [frame_pipeline.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/runtime/frame_pipeline.cpp) — 渲染流程调度
-- [builtin_passes.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) — 含 DeferredLightingPass
+- [frame_pipeline.cpp](../../engine/runtime/frame_pipeline.cpp) — 渲染流程调度
+- [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) — 含 DeferredLightingPass
 
 **建议内容大纲：**
 1. 前向渲染：每个物体自己算光照——简单直接
@@ -128,8 +128,8 @@
 **目标**：讲清楚 Shadow Mapping 的核心原理、CSM 级联、PCSS 软阴影。
 
 **参考代码位置：**
-- [builtin_passes.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) — CSMShadowPass/SpotShadowPass/PointShadowPass
-- [frame_pipeline.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/runtime/frame_pipeline.cpp#L241-L247) — 阴影贴图分辨率配置
+- [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) — CSMShadowPass/SpotShadowPass/PointShadowPass
+- [frame_pipeline.cpp](../../engine/runtime/frame_pipeline.cpp#L241-L247) — 阴影贴图分辨率配置
 
 **建议内容大纲：**
 1. 影子本质：光源看不到的地方就是阴影
@@ -151,8 +151,8 @@
 **目标**：用对比方式讲清楚 ECS 和传统 OOP 继承的区别，为什么 DSEngine 选 ECS。
 
 **参考代码位置：**
-- [ecs/](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/) — 组件定义
-- [world.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/world.h) — World 接口
+- [ecs/](../../engine/ecs/) — 组件定义
+- [world.h](../../engine/ecs/world.h) — World 接口
 
 **建议内容大纲：**
 1. 传统 OOP 做法：`class Car extends Vehicle`——继承链越深越难维护
@@ -166,7 +166,7 @@
 **目标**：讲清楚为什么需要服务定位器，它怎么替代了"到处写全局变量"。
 
 **参考代码位置：**
-- [service_locator.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/core/service_locator.h)
+- [service_locator.h](../../engine/core/service_locator.h)
 
 **建议内容大纲：**
 1. 全局变量的痛点：谁都能改，改出问题找不到是谁干的
@@ -180,7 +180,7 @@
 **目标**：讲清楚多线程任务系统的基本原理，工作窃取算法。
 
 **参考代码位置：**
-- [job_system.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/core/job_system.h)
+- [job_system.h](../../engine/core/job_system.h)
 
 **建议内容大纲：**
 1. 单线程的问题：一个工人干所有活
@@ -200,8 +200,8 @@
 **目标**：讲清楚泛光效果的原理：提取亮部 → 模糊 → 叠加。
 
 **参考代码位置：**
-- [builtin_passes.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) — BloomPass
-- [gl_draw_executor.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/gl_draw_executor.cpp#L1174L1293) — Bloom composite shader
+- [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) — BloomPass
+- [gl_draw_executor.cpp](../../engine/render/rhi/gl_draw_executor.cpp#L1174L1293) — Bloom composite shader
 
 **建议内容大纲：**
 1. 人眼对亮部有"光晕"感——Bloom 模拟这个
@@ -215,7 +215,7 @@
 **目标**：讲清楚游戏物理引擎的基本工作原理。
 
 **参考代码位置：**
-- [physics3d_system.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/physics/physics3d/physics3d_system.h)
+- [physics3d_system.h](../../engine/physics/physics3d/physics3d_system.h)
 
 **建议内容大纲：**
 1. 物理引擎的"三步曲"：检测碰撞 → 算力 → 更新位置
@@ -230,8 +230,8 @@
 **目标**：讲清楚正向运动学和反向运动学的区别。
 
 **参考代码位置：**
-- [ik_solver_system.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/modules/gameplay_3d/animation/ik_solver_system.h)
-- [anim_layer_ik_test.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/tests/gtest/unit/modules/gameplay_3d/anim_layer_ik_test.cpp)
+- [ik_solver_system.h](../../modules/gameplay_3d/animation/ik_solver_system.h)
+- [anim_layer_ik_test.cpp](../../tests/gtest/unit/modules/gameplay_3d/anim_layer_ik_test.cpp)
 
 **建议内容大纲：**
 1. 正向运动学（FK）：从肩膀到手指，一步步计算每个关节的位置
@@ -249,16 +249,16 @@
 #### 第 11 篇：LOD——远处的山为什么看不清？
 
 **参考代码位置：**
-- [lod_system.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/modules/gameplay_3d/rendering/lod_system.h)
-- [lod_system_test.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/tests/gtest/unit/modules/gameplay_3d/lod_system_test.cpp)
+- [lod_system.h](../../modules/gameplay_3d/rendering/lod_system.h)
+- [lod_system_test.cpp](../../tests/gtest/unit/modules/gameplay_3d/lod_system_test.cpp)
 
 **大纲要点：** 近处高清/远处低清、hysteresis 防抖动、屏幕空间投影公式的直观理解。
 
 #### 第 12 篇：GPU Instancing——一千棵树一次画完
 
 **参考代码位置：**
-- [rhi_types.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/rhi_types.h) — MeshDrawItem::instance_transforms
-- [mesh_render_system.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/modules/gameplay_3d/rendering/mesh_render_system.cpp)
+- [rhi_types.h](../../engine/render/rhi/rhi_types.h) — MeshDrawItem::instance_transforms
+- [mesh_render_system.cpp](../../modules/gameplay_3d/rendering/mesh_render_system.cpp)
 
 **大纲要点：** Draw Call 是什么、为什么 Draw Call 多了会卡、Instancing 怎么合并。
 
@@ -277,9 +277,9 @@
 **目标**：讲清楚粒子系统的核心概念：发射器、粒子生命周期、GPU 粒子。
 
 **参考代码位置：**
-- [components_3d_particle.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/components_3d_particle.h) — 3D 粒子组件
-- [particle_2d.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/particle_2d.h) — 2D 粒子组件
-- [gl_draw_executor.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/gl_draw_executor.cpp) — 粒子绘制
+- [components_3d_particle.h](../../engine/ecs/components_3d_particle.h) — 3D 粒子组件
+- [particle_2d.h](../../engine/ecs/particle_2d.h) — 2D 粒子组件
+- [gl_draw_executor.cpp](../../engine/render/rhi/gl_draw_executor.cpp) — 粒子绘制
 
 **建议内容大纲：**
 1. 粒子就是"很多很多小东西"——烟花、火焰、魔法都是粒子
@@ -294,8 +294,8 @@
 **目标**：讲清楚 3D 音频的基本原理：空间化、距离衰减、多普勒效应。
 
 **参考代码位置：**
-- [audio_system.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/audio/audio_system.h) — 音频系统接口
-- [audio.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/audio.h) — 音频 ECS 组件
+- [audio_system.h](../../engine/audio/audio_system.h) — 音频系统接口
+- [audio.h](../../engine/ecs/audio.h) — 音频 ECS 组件
 
 **建议内容大纲：**
 1. 人耳怎么判断声音方向？（双耳效应、头部相关传输函数 HRTF）
@@ -310,8 +310,8 @@
 **目标**：讲清楚骨骼动画的完整工作流：骨骼、蒙皮、动画混合。
 
 **参考代码位置：**
-- [animation.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/ecs/animation.h) — 动画组件
-- [lua_binding_ecs_animation.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/scripting/lua/bindings/lua_binding_ecs_animation.cpp) — 动画的 Lua 绑定
+- [animation.h](../../engine/ecs/animation.h) — 动画组件
+- [lua_binding_ecs_animation.cpp](../../engine/scripting/lua/bindings/lua_binding_ecs_animation.cpp) — 动画的 Lua 绑定
 
 **建议内容大纲：**
 1. 骨骼：角色的"内部骨架"
@@ -326,8 +326,8 @@
 **目标**：讲清楚脚本语言和引擎语言的关系、为什么游戏喜欢 Lua。
 
 **参考代码位置：**
-- [lua_runtime.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/scripting/lua/lua_runtime.h) — Lua 运行时
-- [lua_binding_registry.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/scripting/lua/bindings/lua_binding_registry.cpp) — 绑定注册
+- [lua_runtime.h](../../engine/scripting/lua/lua_runtime.h) — Lua 运行时
+- [lua_binding_registry.cpp](../../engine/scripting/lua/bindings/lua_binding_registry.cpp) — 绑定注册
 
 **建议内容大纲：**
 1. C++ 像"厨房大厨"——性能好但学起来难
@@ -342,8 +342,8 @@
 **目标**：讲清楚资源管理的核心概念：导入、打包、加载、缓存、生命周期。
 
 **参考代码位置：**
-- [asset_manager.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/assets/asset_manager.h) — 资产管理器
-- [pak_writer.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/assets/pak_writer.h) / [pak_reader.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/assets/pak_reader.h) — PAK 打包读取
+- [asset_manager.h](../../engine/assets/asset_manager.h) — 资产管理器
+- [pak_writer.h](../../engine/assets/pak_writer.h) / [pak_reader.h](../../engine/assets/pak_reader.h) — PAK 打包读取
 
 **建议内容大纲：**
 1. 资源管理的"五步走"：发现 → 导入 → 打包 → 加载 → 卸载
@@ -358,8 +358,8 @@
 **目标**：讲清楚发布-订阅模式，为什么比直接调用更好。
 
 **参考代码位置：**
-- [event_bus.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/core/event_bus.h) — EventBus 接口
-- [event_id.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/core/event_id.h) — 事件 ID 定义
+- [event_bus.h](../../engine/core/event_bus.h) — EventBus 接口
+- [event_id.h](../../engine/core/event_id.h) — 事件 ID 定义
 
 **建议内容大纲：**
 1. 直接调用的痛点：A 通知 B，但 B 可能不存在
@@ -374,9 +374,9 @@
 **目标**：讲清楚输入系统的层次：硬件输入 → 抽象映射 → 动作响应。
 
 **参考代码位置：**
-- [input.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/input/input.h) — 输入系统
-- [action_mapping.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/input/action_mapping.h) — 动作映射
-- [input_recorder.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/input/input_recorder.h) — 输入录制回放
+- [input.h](../../engine/input/input.h) — 输入系统
+- [action_mapping.h](../../engine/input/action_mapping.h) — 动作映射
+- [input_recorder.h](../../engine/input/input_recorder.h) — 输入录制回放
 
 **建议内容大纲：**
 1. 从物理按键到游戏动作：键盘的 W 键 → 角色"向前走"
@@ -391,10 +391,10 @@
 **目标**：讲清楚市面上所有主流图形 API 的区别——OpenGL/OpenGL ES、D3D11/D3D12、Vulkan、Metal、WebGL/WebGPU，各自的优劣势和适用平台。
 
 **参考代码位置：**
-- [rhi_factory.cpp](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/rhi_factory.cpp) — RHI 后端工厂创建逻辑
-- [rhi_device.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/rhi_device.h) — RHI 抽象接口
-- [vulkan_rhi_device.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/vulkan/vulkan_rhi_device.h) — Vulkan 后端
-- [dx11_rhi_device.h](file:///c:/Users/wenbilin/Desktop/Engine/DSEngine/engine/render/rhi/dx11/dx11_rhi_device.h) — Direct3D 11 后端
+- [rhi_factory.cpp](../../engine/render/rhi/rhi_factory.cpp) — RHI 后端工厂创建逻辑
+- [rhi_device.h](../../engine/render/rhi/rhi_device.h) — RHI 抽象接口
+- [vulkan_rhi_device.h](../../engine/render/rhi/vulkan/vulkan_rhi_device.h) — Vulkan 后端
+- [dx11_rhi_device.h](../../engine/render/rhi/dx11/dx11_rhi_device.h) — Direct3D 11 后端
 
 **建议内容大纲：**
 1. 什么是图形 API？—— 游戏和显卡之间的"翻译官"

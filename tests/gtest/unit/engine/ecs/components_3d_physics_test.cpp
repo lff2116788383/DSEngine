@@ -8,12 +8,14 @@
 
 using namespace dse;
 
+// 测试 刚体3D类型：枚举值
 TEST(RigidBody3DTypeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Static), 0);
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Kinematic), 1);
     EXPECT_EQ(static_cast<int>(RigidBody3DType::Dynamic), 2);
 }
 
+// 测试 刚体3D组件：默认值
 TEST(RigidBody3DComponentTest, DefaultValues) {
     RigidBody3DComponent rb;
     EXPECT_EQ(rb.type, RigidBody3DType::Dynamic);
@@ -26,6 +28,7 @@ TEST(RigidBody3DComponentTest, DefaultValues) {
     EXPECT_EQ(rb.runtime_body, nullptr);
 }
 
+// 测试 刚体3D组件：字段修改
 TEST(RigidBody3DComponentTest, FieldModification) {
     RigidBody3DComponent rb;
     rb.type = RigidBody3DType::Static;
@@ -39,6 +42,7 @@ TEST(RigidBody3DComponentTest, FieldModification) {
     EXPECT_FALSE(rb.use_gravity);
 }
 
+// 测试 盒碰撞体3D组件：默认值
 TEST(BoxCollider3DComponentTest, DefaultValues) {
     BoxCollider3DComponent bc;
     EXPECT_FLOAT_EQ(bc.size.x, 1.0f);
@@ -51,6 +55,7 @@ TEST(BoxCollider3DComponentTest, DefaultValues) {
     EXPECT_EQ(bc.runtime_shape, nullptr);
 }
 
+// 测试 球碰撞体3D组件：默认值
 TEST(SphereCollider3DComponentTest, DefaultValues) {
     SphereCollider3DComponent sc;
     EXPECT_FLOAT_EQ(sc.radius, 0.5f);
@@ -60,6 +65,7 @@ TEST(SphereCollider3DComponentTest, DefaultValues) {
     EXPECT_EQ(sc.runtime_shape, nullptr);
 }
 
+// 测试 网格碰撞体3D组件：默认值
 TEST(MeshCollider3DComponentTest, DefaultValues) {
     MeshCollider3DComponent mc;
     EXPECT_FALSE(mc.convex);

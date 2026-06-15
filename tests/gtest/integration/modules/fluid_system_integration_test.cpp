@@ -49,11 +49,13 @@ protected:
     }
 };
 
+// 测试 流体系统集成：初始化不崩溃
 TEST_F(FluidSystemIntegrationTest, InitializeDoesNotCrash) {
     system.Init(world, nullptr);
     EXPECT_NO_THROW(system.Shutdown(world));
 }
 
+// 测试 流体系统集成：情形2
 TEST_F(FluidSystemIntegrationTest, TestCase2) {
     auto e = CreateFluidEmitter();
     system.Init(world, nullptr);
@@ -67,6 +69,7 @@ TEST_F(FluidSystemIntegrationTest, TestCase2) {
     EXPECT_TRUE(fluid.gpu_dirty);
 }
 
+// 测试 流体系统集成：Andrate
 TEST_F(FluidSystemIntegrationTest, Andrate) {
     auto e = CreateFluidEmitter();
     system.Init(world, nullptr);
@@ -78,6 +81,7 @@ TEST_F(FluidSystemIntegrationTest, Andrate) {
     EXPECT_LT(fluid.particles.size(), 70u);
 }
 
+// 测试 流体系统集成：存在
 TEST_F(FluidSystemIntegrationTest, Exist) {
     auto e = CreateFluidEmitter();
     system.Init(world, nullptr);
@@ -104,6 +108,7 @@ TEST_F(FluidSystemIntegrationTest, Exist) {
     EXPECT_TRUE(any_dropped) << "粒子应在重力下下落";
 }
 
+// 测试 流体系统集成：情形不
 TEST_F(FluidSystemIntegrationTest, Case_Not) {
     auto e = CreateFluidEmitter();
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -126,6 +131,7 @@ TEST_F(FluidSystemIntegrationTest, Case_Not) {
     }
 }
 
+// 测试 流体系统集成：生命周期移除
 TEST_F(FluidSystemIntegrationTest, Lifecycle_Remove) {
     auto e = CreateFluidEmitter();
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -147,6 +153,7 @@ TEST_F(FluidSystemIntegrationTest, Lifecycle_Remove) {
         << "过期粒子应被移除";
 }
 
+// 测试 流体系统集成：SP Hdensity Estimate当粒子为Densely Packed Density为大于比零
 TEST_F(FluidSystemIntegrationTest, SPHdensityEstimate_WhenParticlesAreDenselyPackedTheDensityIsGreaterThanZero) {
     auto e = CreateFluidEmitter();
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -168,6 +175,7 @@ TEST_F(FluidSystemIntegrationTest, SPHdensityEstimate_WhenParticlesAreDenselyPac
     EXPECT_TRUE(has_density) << "密集粒子的 SPH 密度应 > 0";
 }
 
+// 测试 流体系统集成：发射器存在内部
 TEST_F(FluidSystemIntegrationTest, Emitter_ExistInside) {
     auto e = CreateFluidEmitter(FluidEmitterShape::Sphere);
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -186,6 +194,7 @@ TEST_F(FluidSystemIntegrationTest, Emitter_ExistInside) {
     }
 }
 
+// 测试 流体系统集成：发射器存在内部2
 TEST_F(FluidSystemIntegrationTest, Emitter_ExistInside_2) {
     auto e = CreateFluidEmitter(FluidEmitterShape::Box);
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -205,6 +214,7 @@ TEST_F(FluidSystemIntegrationTest, Emitter_ExistInside_2) {
     }
 }
 
+// 测试 流体系统集成：禁用发射器不
 TEST_F(FluidSystemIntegrationTest, DisabledEmitterNot) {
     auto e = CreateFluidEmitter();
     auto& fluid = world.registry().get<FluidEmitterComponent>(e);
@@ -215,12 +225,14 @@ TEST_F(FluidSystemIntegrationTest, DisabledEmitterNot) {
     EXPECT_EQ(fluid.particles.size(), 0u) << "禁用时不应发射粒子";
 }
 
+// 测试 流体系统集成：零增量时间不崩溃
 TEST_F(FluidSystemIntegrationTest, ZerodtDoesNotCrash) {
     CreateFluidEmitter();
     system.Init(world, nullptr);
     EXPECT_NO_THROW(system.Update(world, 0.0f));
 }
 
+// 测试 流体系统集成：Burdendt不崩溃
 TEST_F(FluidSystemIntegrationTest, BurdendtDoesNotCrash) {
     CreateFluidEmitter();
     system.Init(world, nullptr);

@@ -28,19 +28,23 @@ protected:
 };
 
 // 验证 GPU 结构体布局
+// 测试 灯光缓冲区收集：GPU点灯光布局
 TEST_F(LightBufferCollectTest, GPUPointLightLayout) {
     static_assert(sizeof(GPUPointLight) == 48, "GPUPointLight must be 48 bytes");
 }
 
+// 测试 灯光缓冲区收集：GPU聚光灯光布局
 TEST_F(LightBufferCollectTest, GPUSpotLightLayout) {
     static_assert(sizeof(GPUSpotLight) == 64, "GPUSpotLight must be 64 bytes");
 }
 
+// 测试 灯光缓冲区收集：灯光缓冲区头布局
 TEST_F(LightBufferCollectTest, LightBufferHeaderLayout) {
     static_assert(sizeof(LightBufferHeader) == 16, "LightBufferHeader must be 16 bytes");
 }
 
 // 验证空场景收集无光源
+// 测试 灯光缓冲区收集：收集空世界
 TEST_F(LightBufferCollectTest, CollectEmptyWorld) {
     buf_.CollectLights(*world_);
     EXPECT_EQ(buf_.point_light_count(), 0);
@@ -48,6 +52,7 @@ TEST_F(LightBufferCollectTest, CollectEmptyWorld) {
 }
 
 // 验证收集点光源
+// 测试 灯光缓冲区收集：收集点灯光
 TEST_F(LightBufferCollectTest, CollectPointLights) {
     auto& reg = world_->registry();
 
@@ -74,6 +79,7 @@ TEST_F(LightBufferCollectTest, CollectPointLights) {
 }
 
 // 验证收集聚光灯
+// 测试 灯光缓冲区收集：收集聚光灯光
 TEST_F(LightBufferCollectTest, CollectSpotLights) {
     auto& reg = world_->registry();
 
@@ -101,6 +107,7 @@ TEST_F(LightBufferCollectTest, CollectSpotLights) {
 }
 
 // 验证 disabled 光源被跳过
+// 测试 灯光缓冲区收集：跳过禁用灯光
 TEST_F(LightBufferCollectTest, SkipDisabledLights) {
     auto& reg = world_->registry();
 
@@ -120,6 +127,7 @@ TEST_F(LightBufferCollectTest, SkipDisabledLights) {
 }
 
 // 验证阴影索引分配（最多 4 个）
+// 测试 灯光缓冲区收集：阴影索引Limit
 TEST_F(LightBufferCollectTest, ShadowIndexLimit) {
     auto& reg = world_->registry();
 
@@ -143,6 +151,7 @@ TEST_F(LightBufferCollectTest, ShadowIndexLimit) {
 }
 
 // CollectLights 每帧清空重新收集
+// 测试 灯光缓冲区收集：收集清空先前帧
 TEST_F(LightBufferCollectTest, CollectClearsPreviousFrame) {
     auto& reg = world_->registry();
 

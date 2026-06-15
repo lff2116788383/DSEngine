@@ -38,28 +38,33 @@ protected:
 // 键盘输入
 // ============================================================
 
+// 测试 输入：状态无按
 TEST_F(InputTest, StateWithoutBy) {
     EXPECT_FALSE(Input::GetKey(KEY_CODE_A));
     EXPECT_FALSE(Input::GetKeyDown(KEY_CODE_A));
     EXPECT_FALSE(Input::GetKeyUp(KEY_CODE_A));
 }
 
+// 测试 输入：记录键之后按下获取键为true
 TEST_F(InputTest, RecordKeyAfterPressingGetKeyIstrue) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
     EXPECT_TRUE(Input::GetKey(KEY_CODE_A));
 }
 
+// 测试 输入：记录键保持按下获取键为true
 TEST_F(InputTest, RecordKeyKeepPressingGetKeyIstrue) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_REPEAT);
     EXPECT_TRUE(Input::GetKey(KEY_CODE_A));
 }
 
+// 测试 输入：记录键之后Loosening获取键上为true
 TEST_F(InputTest, RecordKeyAfterLooseningGetKeyUpIstrue) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_UP);
     EXPECT_TRUE(Input::GetKeyUp(KEY_CODE_A));
 }
 
+// 测试 输入：Updateclear之后上状态
 TEST_F(InputTest, UpdateclearAfterUpState) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
     Input::Update();
@@ -67,6 +72,7 @@ TEST_F(InputTest, UpdateclearAfterUpState) {
     EXPECT_TRUE(Input::GetKey(KEY_CODE_A));
 }
 
+// 测试 输入：更新清空Released键
 TEST_F(InputTest, UpdateClearReleasedKeys) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_UP);
@@ -78,6 +84,7 @@ TEST_F(InputTest, UpdateClearReleasedKeys) {
 // 鼠标输入（委托到键盘接口）
 // ============================================================
 
+// 测试 输入：获取Mouse按钮Press Fortrue
 TEST_F(InputTest, GetMouseButtonPressFortrue) {
     Input::RecordKey(MOUSE_BUTTON_LEFT, KEY_ACTION_DOWN);
     EXPECT_TRUE(Input::GetMouseButton(0));
@@ -87,6 +94,7 @@ TEST_F(InputTest, GetMouseButtonPressFortrue) {
 // Reset
 // ============================================================
 
+// 测试 输入：重置清空全部按钮状态
 TEST_F(InputTest, ResetClearAllButtonStatus) {
     Input::RecordKey(KEY_CODE_A, KEY_ACTION_DOWN);
     Input::RecordKey(KEY_CODE_W, KEY_ACTION_DOWN);
@@ -99,6 +107,7 @@ TEST_F(InputTest, ResetClearAllButtonStatus) {
 // Gamepad 按钮
 // ============================================================
 
+// 测试 输入：手柄按钮Press且释放
 TEST_F(InputTest, GamepadButtonPressAndRelease) {
     Input::RecordKey(GAMEPAD_BUTTON_A, KEY_ACTION_DOWN);
     EXPECT_TRUE(Input::GetKey(GAMEPAD_BUTTON_A));
@@ -106,6 +115,7 @@ TEST_F(InputTest, GamepadButtonPressAndRelease) {
     EXPECT_TRUE(Input::GetKeyUp(GAMEPAD_BUTTON_A));
 }
 
+// 测试 输入：手柄多个Buttons Pressed Simultaneously
 TEST_F(InputTest, GamepadMultipleButtonsPressedSimultaneously) {
     Input::RecordKey(GAMEPAD_BUTTON_A, KEY_ACTION_DOWN);
     Input::RecordKey(GAMEPAD_BUTTON_B, KEY_ACTION_DOWN);
@@ -113,6 +123,7 @@ TEST_F(InputTest, GamepadMultipleButtonsPressedSimultaneously) {
     EXPECT_TRUE(Input::GetKey(GAMEPAD_BUTTON_B));
 }
 
+// 测试 输入：手柄Arrow键
 TEST_F(InputTest, GamepadArrowKeys) {
     Input::RecordKey(GAMEPAD_BUTTON_DPAD_UP, KEY_ACTION_DOWN);
     EXPECT_TRUE(Input::GetKey(GAMEPAD_BUTTON_DPAD_UP));
@@ -123,16 +134,19 @@ TEST_F(InputTest, GamepadArrowKeys) {
 // Gamepad 摇杆轴
 // ============================================================
 
+// 测试 输入：Gamepadaxis为初始零
 TEST_F(InputTest, GamepadaxisIsInitiallyZero) {
     EXPECT_FLOAT_EQ(Input::GetGamepadAxis(0, GAMEPAD_AXIS_LEFT_X), 0.0f);
     EXPECT_FLOAT_EQ(Input::GetGamepadAxis(0, GAMEPAD_AXIS_LEFT_Y), 0.0f);
 }
 
+// 测试 输入：手柄Axis录制且读取
 TEST_F(InputTest, GamepadAxisRecordingAndReading) {
     Input::RecordGamepadAxis(0, GAMEPAD_AXIS_LEFT_X, 0.8f);
     EXPECT_FLOAT_EQ(Input::GetGamepadAxis(0, GAMEPAD_AXIS_LEFT_X), 0.8f);
 }
 
+// 测试 输入：手柄Shaft Dead区域Filtering
 TEST_F(InputTest, GamepadShaftDeadZoneFiltering) {
     Input::SetGamepadDeadZone(0.2f);
     Input::RecordGamepadAxis(0, GAMEPAD_AXIS_LEFT_X, 0.1f);
@@ -141,6 +155,7 @@ TEST_F(InputTest, GamepadShaftDeadZoneFiltering) {
     EXPECT_FLOAT_EQ(Input::GetGamepadAxis(0, GAMEPAD_AXIS_LEFT_X), 0.3f);
 }
 
+// 测试 输入：手柄多句柄独立
 TEST_F(InputTest, GamepadMultiHandleIndependent) {
     Input::RecordGamepadAxis(0, GAMEPAD_AXIS_LEFT_X, 0.5f);
     Input::RecordGamepadAxis(1, GAMEPAD_AXIS_LEFT_X, -0.5f);
@@ -148,6 +163,7 @@ TEST_F(InputTest, GamepadMultiHandleIndependent) {
     EXPECT_FLOAT_EQ(Input::GetGamepadAxis(1, GAMEPAD_AXIS_LEFT_X), -0.5f);
 }
 
+// 测试 输入：手柄交叉线ID安全
 TEST_F(InputTest, GamepadCrossTheLineIDSafety) {
     EXPECT_NO_THROW(Input::RecordGamepadAxis(-1, 0, 1.0f));
     EXPECT_NO_THROW(Input::RecordGamepadAxis(99, 0, 1.0f));
@@ -159,10 +175,12 @@ TEST_F(InputTest, GamepadCrossTheLineIDSafety) {
 // Gamepad 连接状态
 // ============================================================
 
+// 测试 输入：手柄不Connected初始
 TEST_F(InputTest, GamepadNotConnectedInitially) {
     EXPECT_FALSE(Input::IsGamepadConnected(0));
 }
 
+// 测试 输入：手柄Connect且Disconnect
 TEST_F(InputTest, GamepadConnectAndDisconnect) {
     Input::SetGamepadConnected(0, true);
     EXPECT_TRUE(Input::IsGamepadConnected(0));
@@ -170,6 +188,7 @@ TEST_F(InputTest, GamepadConnectAndDisconnect) {
     EXPECT_FALSE(Input::IsGamepadConnected(0));
 }
 
+// 测试 输入：重置清空手柄状态
 TEST_F(InputTest, ResetClearGamepadState) {
     Input::SetGamepadConnected(0, true);
     Input::RecordGamepadAxis(0, GAMEPAD_AXIS_LEFT_X, 1.0f);
@@ -184,6 +203,7 @@ TEST_F(InputTest, ResetClearGamepadState) {
 
 using dse::input::ActionMapping;
 
+// 测试 动作映射：注册且查询
 TEST(ActionMappingTest, RegisterAndQuery) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -191,6 +211,7 @@ TEST(ActionMappingTest, RegisterAndQuery) {
     EXPECT_FALSE(mapping.HasAction("Fire"));
 }
 
+// 测试 动作映射：移除
 TEST(ActionMappingTest, Remove) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -198,6 +219,7 @@ TEST(ActionMappingTest, Remove) {
     EXPECT_FALSE(mapping.HasAction("Jump"));
 }
 
+// 测试 动作映射：绑定
 TEST(ActionMappingTest, Binding) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -207,6 +229,7 @@ TEST(ActionMappingTest, Binding) {
     EXPECT_EQ(bindings[0], KEY_CODE_SPACE);
 }
 
+// 测试 动作映射：Multibinding单个
 TEST(ActionMappingTest, MultibindingOne) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -215,6 +238,7 @@ TEST(ActionMappingTest, MultibindingOne) {
     EXPECT_EQ(mapping.GetBindings("Jump").size(), 2u);
 }
 
+// 测试 动作映射：绑定不添加到
 TEST(ActionMappingTest, BindingNotAddTo) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -235,6 +259,7 @@ protected:
     }
 };
 
+// 测试 动作映射输入：获取动作反映键状态
 TEST_F(ActionMappingInputTest, GetActionReflectKeyStatus) {
     ActionMapping mapping;
     mapping.BindKey("Fire", MOUSE_BUTTON_LEFT);
@@ -243,6 +268,7 @@ TEST_F(ActionMappingInputTest, GetActionReflectKeyStatus) {
     EXPECT_TRUE(mapping.GetAction("Fire"));
 }
 
+// 测试 动作映射输入：多或
 TEST_F(ActionMappingInputTest, MultiOR) {
     ActionMapping mapping;
     mapping.BindKey("Move", KEY_CODE_W);
@@ -251,6 +277,7 @@ TEST_F(ActionMappingInputTest, MultiOR) {
     EXPECT_TRUE(mapping.GetAction("Move"));
 }
 
+// 测试 动作映射输入：获取动作下检测Moment的按下
 TEST_F(ActionMappingInputTest, GetActionDownDetectTheMomentOfPressing) {
     ActionMapping mapping;
     mapping.BindKey("Jump", KEY_CODE_SPACE);
@@ -258,6 +285,7 @@ TEST_F(ActionMappingInputTest, GetActionDownDetectTheMomentOfPressing) {
     EXPECT_TRUE(mapping.GetActionDown("Jump"));
 }
 
+// 测试 动作映射输入：获取动作上检测Moment的释放
 TEST_F(ActionMappingInputTest, GetActionUpDetectTheMomentOfRelease) {
     ActionMapping mapping;
     mapping.BindKey("Jump", KEY_CODE_SPACE);
@@ -266,6 +294,7 @@ TEST_F(ActionMappingInputTest, GetActionUpDetectTheMomentOfRelease) {
     EXPECT_TRUE(mapping.GetActionUp("Jump"));
 }
 
+// 测试 动作映射输入：解绑键解绑在运行时
 TEST_F(ActionMappingInputTest, UnbindKeyUnbindAtRuntime) {
     ActionMapping mapping;
     mapping.BindKey("Jump", KEY_CODE_SPACE);
@@ -274,6 +303,7 @@ TEST_F(ActionMappingInputTest, UnbindKeyUnbindAtRuntime) {
     EXPECT_FALSE(mapping.GetAction("Jump"));
 }
 
+// 测试 动作映射输入：当重新绑定
 TEST_F(ActionMappingInputTest, WhenRebind) {
     ActionMapping mapping;
     mapping.BindKey("Jump", KEY_CODE_SPACE);
@@ -285,6 +315,7 @@ TEST_F(ActionMappingInputTest, WhenRebind) {
     EXPECT_TRUE(mapping.GetAction("Jump"));
 }
 
+// 测试 动作映射：获取全部Actionslist全部Actions
 TEST(ActionMappingTest, GetAllActionslistAllActions) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -295,6 +326,7 @@ TEST(ActionMappingTest, GetAllActionslistAllActions) {
     EXPECT_EQ(actions.size(), 3u);
 }
 
+// 测试 动作映射：重置清空全部Actions
 TEST(ActionMappingTest, ResetClearAllActions) {
     ActionMapping mapping;
     mapping.RegisterAction("Jump");
@@ -304,6 +336,7 @@ TEST(ActionMappingTest, ResetClearAllActions) {
     EXPECT_FALSE(mapping.HasAction("Jump"));
 }
 
+// 测试 动作映射：不注册获取绑定返回空
 TEST(ActionMappingTest, NotregisterGetBindingsReturnsEmpty) {
     ActionMapping mapping;
     EXPECT_TRUE(mapping.GetBindings("NonExistent").empty());
@@ -317,12 +350,14 @@ using dse::input::InputRecorder;
 using dse::input::InputPlayer;
 using dse::input::InputEvent;
 
+// 测试 输入录制器：状态不记录
 TEST(InputRecorderTest, StateNotRecord) {
     InputRecorder recorder;
     EXPECT_FALSE(recorder.IsRecording());
     EXPECT_EQ(recorder.GetEventCount(), 0u);
 }
 
+// 测试 输入录制器：且记录
 TEST(InputRecorderTest, AndRecord) {
     InputRecorder recorder;
     recorder.StartRecording();
@@ -331,6 +366,7 @@ TEST(InputRecorderTest, AndRecord) {
     EXPECT_FALSE(recorder.IsRecording());
 }
 
+// 测试 输入录制器：Recordevent
 TEST(InputRecorderTest, Recordevent) {
     InputRecorder recorder;
     recorder.StartRecording();
@@ -341,12 +377,14 @@ TEST(InputRecorderTest, Recordevent) {
     EXPECT_EQ(recorder.GetEvents()[1].key_action, KEY_ACTION_UP);
 }
 
+// 测试 输入录制器：不记录Whenevent
 TEST(InputRecorderTest, NotRecordWhenevent) {
     InputRecorder recorder;
     recorder.RecordEvent(KEY_CODE_A, KEY_ACTION_DOWN, 0.0);
     EXPECT_EQ(recorder.GetEventCount(), 0u);
 }
 
+// 测试 输入录制器：Clearclear事件
 TEST(InputRecorderTest, ClearclearEvent) {
     InputRecorder recorder;
     recorder.StartRecording();
@@ -356,6 +394,7 @@ TEST(InputRecorderTest, ClearclearEvent) {
     EXPECT_FALSE(recorder.IsRecording());
 }
 
+// 测试 输入录制器：导出JSON正确格式
 TEST(InputRecorderTest, ExportJSONCorrectFormat) {
     InputRecorder recorder;
     recorder.StartRecording();
@@ -369,6 +408,7 @@ TEST(InputRecorderTest, ExportJSONCorrectFormat) {
     EXPECT_NE(json.find("\"action\":"), std::string::npos);
 }
 
+// 测试 输入录制器：导入JSON撤销事件
 TEST(InputRecorderTest, ImportJSONUndoEvent) {
     InputRecorder recorder;
     recorder.StartRecording();
@@ -400,12 +440,14 @@ protected:
     }
 };
 
+// 测试 输入玩家：状态不回放
 TEST_F(InputPlayerTest, StateNotPlayback) {
     InputPlayer player;
     EXPECT_FALSE(player.IsPlaying());
     EXPECT_FALSE(player.IsFinished());
 }
 
+// 测试 输入玩家：加载回放
 TEST_F(InputPlayerTest, LoadPlayback) {
     std::vector<InputEvent> events = {{0.0, KEY_CODE_A, KEY_ACTION_DOWN}};
     InputPlayer player;
@@ -414,6 +456,7 @@ TEST_F(InputPlayerTest, LoadPlayback) {
     EXPECT_TRUE(player.IsPlaying());
 }
 
+// 测试 输入玩家：更新Replay事件到输入
 TEST_F(InputPlayerTest, UpdateReplayEventsToInput) {
     std::vector<InputEvent> events = {
         {0.0, KEY_CODE_A, KEY_ACTION_DOWN},
@@ -428,6 +471,7 @@ TEST_F(InputPlayerTest, UpdateReplayEventsToInput) {
     EXPECT_TRUE(Input::GetKeyUp(KEY_CODE_A));
 }
 
+// 测试 输入玩家：回放为Finished为true
 TEST_F(InputPlayerTest, PlaybackIsFinishedIstrue) {
     std::vector<InputEvent> events = {{0.0, KEY_CODE_A, KEY_ACTION_DOWN}};
     InputPlayer player;
@@ -437,6 +481,7 @@ TEST_F(InputPlayerTest, PlaybackIsFinishedIstrue) {
     EXPECT_TRUE(player.IsFinished());
 }
 
+// 测试 输入玩家：Stopstop Midway
 TEST_F(InputPlayerTest, StopstopMidway) {
     std::vector<InputEvent> events = {
         {0.0, KEY_CODE_A, KEY_ACTION_DOWN},
@@ -451,6 +496,7 @@ TEST_F(InputPlayerTest, StopstopMidway) {
     EXPECT_FALSE(player.IsFinished());
 }
 
+// 测试 输入玩家：从录制器加载
 TEST_F(InputPlayerTest, FromRecorderLoad) {
     InputRecorder recorder;
     recorder.StartRecording();

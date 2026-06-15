@@ -31,6 +31,7 @@ protected:
     fs::path tmp_dir_;
 };
 
+// 测试 PAK往返：写入且读取单一文件
 TEST_F(PakRoundtripTest, WriteAndReadSingleFile) {
     const std::string payload = "Hello DSEngine Pak!";
     WriteFile("hello.txt", payload);
@@ -53,6 +54,7 @@ TEST_F(PakRoundtripTest, WriteAndReadSingleFile) {
     EXPECT_EQ(recovered, payload);
 }
 
+// 测试 PAK往返：写入且读取多个Files
 TEST_F(PakRoundtripTest, WriteAndReadMultipleFiles) {
     WriteFile("a.bin", std::string(256, 'A'));
     WriteFile("b.bin", std::string(1024, 'B'));
@@ -83,17 +85,20 @@ TEST_F(PakRoundtripTest, WriteAndReadMultipleFiles) {
     EXPECT_EQ(std::string(data.begin(), data.end()), "tiny");
 }
 
+// 测试 PAK往返：空文件列表
 TEST_F(PakRoundtripTest, EmptyFileList) {
     std::string pak_path = (tmp_dir_ / "empty.dpak").string();
     EXPECT_FALSE(dse::pak::WriteDpak(pak_path, tmp_dir_.string(), {}));
 }
 
+// 测试 PAK往返：读取不存在文件
 TEST_F(PakRoundtripTest, ReadNonexistentFile) {
     dse::pak::PakReader reader;
     EXPECT_FALSE(reader.Open("nonexistent.dpak"));
     EXPECT_FALSE(reader.IsOpen());
 }
 
+// 测试 PAK往返：读取缺失条目
 TEST_F(PakRoundtripTest, ReadMissingEntry) {
     WriteFile("only.txt", "content");
     std::string pak_path = (tmp_dir_ / "one.dpak").string();
@@ -107,6 +112,7 @@ TEST_F(PakRoundtripTest, ReadMissingEntry) {
     EXPECT_FALSE(reader.ReadFile("no_such_file.txt", data));
 }
 
+// 测试 PAK往返：关闭且Reopen
 TEST_F(PakRoundtripTest, CloseAndReopen) {
     WriteFile("data.bin", "reopen_test");
     std::string pak_path = (tmp_dir_ / "reopen.dpak").string();

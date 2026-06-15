@@ -87,6 +87,41 @@ void FlipImageRowsRgba8(std::vector<unsigned char>& pixels, int width, int heigh
     }
 }
 
+// 解析 splash logo 路径：优先 exe 旁，其次向上 data/icon/dse_icon.png。
+std::string ResolveSplashImagePath() {
+    std::filesystem::path exe_dir;
+#if defined(_WIN32)
+    wchar_t module_buf[MAX_PATH]{};
+    if (GetModuleFileNameW(nullptr, module_buf, MAX_PATH)) {
+        exe_dir = std::filesystem::path(module_buf).parent_path();
+    }
+#endif
+    const char* candidates[] = {
+        "data/icon/dse_icon.png",
+        "../data/icon/dse_icon.png",
+        "../../data/icon/dse_icon.png",
+    };
+    for (const char* rel : candidates) {
+        std::filesystem::path p = exe_dir.empty() ? std::filesystem::path(rel) : exe_dir / rel;
+        std::error_code ec;
+        if (std::filesystem::exists(p, ec)) {
+            return p.string();
+        }
+    }
+    return {};
+}
+
+// 是否启用启动 splash：自动化/截图/无头与 DSE_SPLASH=0 时关闭。
+bool ShouldShowSplash() {
+    if (const char* v = std::getenv("DSE_SPLASH")) {
+        if (std::string(v) == "0") return false;
+    }
+    if (!ReadNonEmptyEnv("DSE_MAX_FRAMES").empty()) return false;
+    if (!ReadNonEmptyEnv("DSE_SCREENSHOT_PATH").empty()) return false;
+    if (!ReadNonEmptyEnv("DSE_SCREENSHOT_FRAME").empty()) return false;
+    return true;
+}
+
 bool CaptureRuntimeScreenshot(FramePipeline& pipeline) {
     const std::string screenshot_path = ReadNonEmptyEnv("DSE_SCREENSHOT_PATH");
     if (screenshot_path.empty()) {
@@ -257,6 +292,7 @@ void EngineInstance::ResetRuntimeServices() {
 }
 
 void EngineInstance::CleanupOnInitFailure() {
+    splash_.Finish();
     ResetRuntimeServices();
     pipeline_->Shutdown();
     if (services_.job_system) {
@@ -278,19 +314,40 @@ bool EngineInstance::Init() {
     platform_ = dse::platform::CreateDefaultPlatformApp();
 
     if (!config_.enable_editor) {
+        // 启动 splash：进程一启动即弹出 logo，盖住窗口创建→首帧之间的空白期，带淡入淡出。
+        const bool splash_on = ShouldShowSplash();
+        if (std::getenv("DSE_SPLASH_DEBUG")) {
+            std::cerr << "[splash] splash_on=" << (int)splash_on
+                      << " img='" << ResolveSplashImagePath() << "'" << std::endl;
+        }
+        if (splash_on) {
+            // 优先用打包/工程提供的品牌化 splash 配置；未给出的字段回退到引擎默认。
+            dse::platform::SplashConfig splash_cfg = config_.use_splash_config ? config_.splash
+                                                                              : dse::platform::SplashConfig{};
+            if (splash_cfg.image_path.empty()) splash_cfg.image_path = ResolveSplashImagePath();
+            if (splash_cfg.app_name.empty()) splash_cfg.app_name = "DSEngine";
+            if (splash_cfg.initial_status.empty()) splash_cfg.initial_status = "正在启动…";
+            dse::platform::ApplySplashEnvOverrides(splash_cfg);
+            splash_.Show(splash_cfg);
+        }
+
         dse::platform::WindowConfig win_cfg;
         win_cfg.width  = config_.window_width;
         win_cfg.height = config_.window_height;
         win_cfg.title  = config_.window_title;
         win_cfg.no_graphics_api = !needs_gl_context;
         win_cfg.gl_fallback_33  = true;
+        win_cfg.start_hidden    = splash_on;  // 首帧后再 Show()
 
+        splash_.SetStatus("正在创建窗口…");
         if (!platform_->Init(win_cfg)) {
+            splash_.Finish();
             return false;
         }
 
         if (needs_gl_context) {
             if (!platform_->LoadGLFunctions()) {
+                splash_.Finish();
                 platform_->Shutdown();
                 return false;
             }
@@ -428,12 +485,14 @@ bool EngineInstance::Init() {
         );
     }
 
+    splash_.SetStatus("正在初始化渲染管线…");
     if (!pipeline_->Init()) {
         std::cerr << "Failed to initialize FramePipeline\n";
         CleanupOnInitFailure();
         return false;
     }
     pipeline_->SetInitKeepAlive(nullptr);
+    splash_.SetStatus("正在加载场景…");
 
     if (!RunStartupSceneRegressionChecks()) {
         std::cerr << "Startup scene regression checks failed\n";
@@ -475,6 +534,7 @@ void EngineInstance::Tick() {
 void EngineInstance::Shutdown() {
     if (!is_initialized_) return;
 
+    splash_.Finish();
     pipeline_->SetWindowTitleSetter(nullptr);
     pipeline_->Shutdown();
     if (services_.job_system) {
@@ -517,6 +577,82 @@ void EngineInstance::Shutdown() {
     is_initialized_ = false;
 }
 
+bool EngineInstance::RunOneFrame() {
+    if (!platform_) return false;
+
+    if (!loop_started_) {
+        loop_started_ = true;
+        loop_max_frames_ = 0;
+        if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
+            loop_max_frames_ = (std::max)(0, std::atoi(env_max_frames));
+        }
+        loop_screenshot_frame_ = 0;
+        if (const char* env_ss_frame = std::getenv("DSE_SCREENSHOT_FRAME")) {
+            loop_screenshot_frame_ = (std::max)(0, std::atoi(env_ss_frame));
+        }
+        loop_screenshot_taken_ = false;
+        loop_frame_counter_ = 0;
+        loop_prev_fb_width_  = Screen::width();
+        loop_prev_fb_height_ = Screen::height();
+    }
+
+    if (platform_->ShouldClose()) return false;
+
+    const double frame_start = platform_->GetTime();
+    platform_->PollEvents();
+
+    int width = 0;
+    int height = 0;
+    platform_->GetFramebufferSize(width, height);
+
+    if (width > 0 && height > 0 &&
+        (width != loop_prev_fb_width_ || height != loop_prev_fb_height_)) {
+        pipeline_->OnWindowResize(width, height);
+        loop_prev_fb_width_  = width;
+        loop_prev_fb_height_ = height;
+    }
+
+    Tick();
+
+    // Present / SwapBuffers 在 render 计时之外执行
+    // Phase 2: 渲染线程活跃时由渲染线程负责 SwapBuffers
+    if (platform_->HasGLContext() && !pipeline_->IsRenderThreadActive()) {
+        platform_->SwapBuffers();
+    } else {
+        // DX11/Vulkan: Present 交换链（EndFrame 不再包含 Present）
+        pipeline_->PresentFrame();
+    }
+
+    // 首帧已上屏：显示主窗口并淡出 splash（满足最短显示时长后才真正消失）。
+    if (!first_frame_shown_) {
+        first_frame_shown_ = true;
+        platform_->Show();
+        splash_.Finish();
+    }
+    if (target_fps_ > 0.0f) {
+        const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
+        double remaining = target_frame_time - (platform_->GetTime() - frame_start);
+        // sleep 大部分等待时间（保留 1.5ms 给 spin-wait 以补偿 OS 调度抖动）
+        if (remaining > 0.0015) {
+            std::this_thread::sleep_for(
+                std::chrono::microseconds(static_cast<int>((remaining - 0.0015) * 1e6)));
+        }
+        // spin-wait 精确到目标时刻
+        while ((platform_->GetTime() - frame_start) < target_frame_time) {
+            // busy wait
+        }
+    }
+    loop_frame_counter_ += 1;
+    if (loop_screenshot_frame_ > 0 && loop_frame_counter_ == loop_screenshot_frame_ && !loop_screenshot_taken_) {
+        loop_screenshot_taken_ = CaptureRuntimeScreenshot(*pipeline_);
+    }
+    if (loop_max_frames_ > 0 && loop_frame_counter_ >= loop_max_frames_) {
+        std::cout << "DSE_MAX_FRAMES reached: " << loop_frame_counter_ << std::endl;
+        return false;
+    }
+    return true;
+}
+
 int EngineInstance::Run() {
     if (!Init()) return -1;
 
@@ -530,71 +666,15 @@ int EngineInstance::Run() {
     timeBeginPeriod(1);
 #endif
 
-    int max_frames = 0;
-    if (const char* env_max_frames = std::getenv("DSE_MAX_FRAMES")) {
-        max_frames = (std::max)(0, std::atoi(env_max_frames));
-    }
-    int screenshot_frame = 0;
-    if (const char* env_ss_frame = std::getenv("DSE_SCREENSHOT_FRAME")) {
-        screenshot_frame = (std::max)(0, std::atoi(env_ss_frame));
-    }
-    bool screenshot_taken = false;
-    int frame_counter = 0;
-    int prev_fb_width  = Screen::width();
-    int prev_fb_height = Screen::height();
-    while (!platform_->ShouldClose()) {
-        const double frame_start = platform_->GetTime();
-        platform_->PollEvents();
-
-        int width = 0;
-        int height = 0;
-        platform_->GetFramebufferSize(width, height);
-
-        if (width > 0 && height > 0 &&
-            (width != prev_fb_width || height != prev_fb_height)) {
-            pipeline_->OnWindowResize(width, height);
-            prev_fb_width  = width;
-            prev_fb_height = height;
-        }
-
-        Tick();
-
-        // Present / SwapBuffers 在 render 计时之外执行
-        // Phase 2: 渲染线程活跃时由渲染线程负责 SwapBuffers
-        if (platform_->HasGLContext() && !pipeline_->IsRenderThreadActive()) {
-            platform_->SwapBuffers();
-        } else {
-            // DX11/Vulkan: Present 交换链（EndFrame 不再包含 Present）
-            pipeline_->PresentFrame();
-        }
-        if (target_fps_ > 0.0f) {
-            const double target_frame_time = 1.0 / static_cast<double>(target_fps_);
-            double remaining = target_frame_time - (platform_->GetTime() - frame_start);
-            // sleep 大部分等待时间（保留 1.5ms 给 spin-wait 以补偿 OS 调度抖动）
-            if (remaining > 0.0015) {
-                std::this_thread::sleep_for(
-                    std::chrono::microseconds(static_cast<int>((remaining - 0.0015) * 1e6)));
-            }
-            // spin-wait 精确到目标时刻
-            while ((platform_->GetTime() - frame_start) < target_frame_time) {
-                // busy wait
-            }
-        }
-        frame_counter += 1;
-        if (screenshot_frame > 0 && frame_counter == screenshot_frame && !screenshot_taken) {
-            screenshot_taken = CaptureRuntimeScreenshot(*pipeline_);
-        }
-        if (max_frames > 0 && frame_counter >= max_frames) {
-            std::cout << "DSE_MAX_FRAMES reached: " << frame_counter << std::endl;
-            break;
-        }
+    while (RunOneFrame()) {
+        // 桌面端阻塞主循环；Web 端改由 emscripten_set_main_loop 逐帧驱动 RunOneFrame()。
     }
 
 #ifdef _WIN32
     timeEndPeriod(1);
 #endif
 
-    const bool screenshot_ok = screenshot_taken || CaptureRuntimeScreenshot(*pipeline_);
+    const bool screenshot_ok = loop_screenshot_taken_ || CaptureRuntimeScreenshot(*pipeline_);
 
     Shutdown();
     return screenshot_ok ? 0 : -2;

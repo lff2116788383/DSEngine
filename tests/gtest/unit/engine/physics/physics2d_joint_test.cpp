@@ -17,6 +17,7 @@
 // Joint2DType 枚举
 // ============================================================
 
+// 测试 关节2D类型：枚举值能够
 TEST(Joint2DTypeTest, EnumerationValueCan) {
     EXPECT_NE(Joint2DType::Revolute,  Joint2DType::Distance);
     EXPECT_NE(Joint2DType::Distance,  Joint2DType::Prismatic);
@@ -27,16 +28,19 @@ TEST(Joint2DTypeTest, EnumerationValueCan) {
 // Joint2DComponent 默认值
 // ============================================================
 
+// 测试 关节2D组件：默认类型为Revolute
 TEST(Joint2DComponentTest, DefaultTypeIsRevolute) {
     Joint2DComponent jc;
     EXPECT_EQ(jc.type, Joint2DType::Revolute);
 }
 
+// 测试 关节2D组件：默认当Isnullptr
 TEST(Joint2DComponentTest, DefaultWhenIsnullptr) {
     Joint2DComponent jc;
     EXPECT_EQ(jc.runtime_joint, nullptr);
 }
 
+// 测试 关节2D组件：Defaultpointis零朝向
 TEST(Joint2DComponentTest, DefaultpointisZeroToward) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.anchor_a.x, 0.0f);
@@ -45,6 +49,7 @@ TEST(Joint2DComponentTest, DefaultpointisZeroToward) {
     EXPECT_FLOAT_EQ(jc.anchor_b.y, 0.0f);
 }
 
+// 测试 关节2D组件：链禁用按默认且
 TEST(Joint2DComponentTest, ChainDisabledByDefaultAnd) {
     Joint2DComponent jc;
     EXPECT_FALSE(jc.enable_limit);
@@ -55,6 +60,7 @@ TEST(Joint2DComponentTest, ChainDisabledByDefaultAnd) {
     EXPECT_FLOAT_EQ(jc.max_motor_torque, 0.0f);
 }
 
+// 测试 关节2D组件：默认参数
 TEST(Joint2DComponentTest, DefaultParameters) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.min_length, 0.0f);
@@ -63,6 +69,7 @@ TEST(Joint2DComponentTest, DefaultParameters) {
     EXPECT_FLOAT_EQ(jc.damping,    0.0f);
 }
 
+// 测试 关节2D组件：默认为X
 TEST(Joint2DComponentTest, DefaultIsX) {
     Joint2DComponent jc;
     EXPECT_FLOAT_EQ(jc.prismatic_axis.x, 1.0f);
@@ -73,6 +80,7 @@ TEST(Joint2DComponentTest, DefaultIsX) {
     EXPECT_FLOAT_EQ(jc.max_motor_force,       0.0f);
 }
 
+// 测试 关节2D组件：默认不已经
 TEST(Joint2DComponentTest, DefaultNotAlready) {
     Joint2DComponent jc;
     EXPECT_FALSE(jc.collide_connected);
@@ -82,6 +90,7 @@ TEST(Joint2DComponentTest, DefaultNotAlready) {
 // 马达参数运行时可修改（字段层面）
 // ============================================================
 
+// 测试 关节2D组件：链参数能够
 TEST(Joint2DComponentTest, ChainParametersCan) {
     Joint2DComponent jc;
     jc.enable_motor = true;
@@ -92,6 +101,7 @@ TEST(Joint2DComponentTest, ChainParametersCan) {
     EXPECT_FLOAT_EQ(jc.max_motor_torque, 10.0f);
 }
 
+// 测试 关节2D组件：参数能够
 TEST(Joint2DComponentTest, ParametersCan) {
     Joint2DComponent jc;
     jc.enable_motor = true;

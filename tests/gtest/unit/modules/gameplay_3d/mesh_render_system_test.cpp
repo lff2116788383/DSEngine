@@ -27,6 +27,7 @@ using namespace dse::gameplay3d;
 // MeshRendererComponent 默认值
 // ============================================================
 
+// 测试 网格渲染器组件：默认值
 TEST(MeshRendererComponentTest, DefaultValues) {
     dse::MeshRendererComponent mr;
     EXPECT_TRUE(mr.mesh_path.empty());
@@ -44,6 +45,7 @@ TEST(MeshRendererComponentTest, DefaultValues) {
     EXPECT_EQ(mr.order_in_layer, 0);
 }
 
+// 测试 网格渲染器组件：句柄默认值到零
 TEST(MeshRendererComponentTest, HandleDefaultsToZero) {
     dse::MeshRendererComponent mr;
     EXPECT_EQ(mr.albedo_texture_handle, 0u);
@@ -53,6 +55,7 @@ TEST(MeshRendererComponentTest, HandleDefaultsToZero) {
     EXPECT_EQ(mr.occlusion_texture_handle, 0u);
 }
 
+// 测试 网格渲染器组件：PBR Extended参数默认值
 TEST(MeshRendererComponentTest, PBRExtendedParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.sss_strength, 0.0f);
@@ -62,6 +65,7 @@ TEST(MeshRendererComponentTest, PBRExtendedParameterDefaultValue) {
     EXPECT_FLOAT_EQ(mr.pom_height_scale, 0.0f);
 }
 
+// 测试 网格渲染器组件：Toon参数默认值
 TEST(MeshRendererComponentTest, ToonParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.toon_shadow_threshold, 0.35f);
@@ -71,6 +75,7 @@ TEST(MeshRendererComponentTest, ToonParameterDefaultValue) {
     EXPECT_FLOAT_EQ(mr.toon_rim_strength, 0.3f);
 }
 
+// 测试 网格渲染器组件：Watercolor参数默认值
 TEST(MeshRendererComponentTest, WatercolorParameterDefaultValue) {
     dse::MeshRendererComponent mr;
     EXPECT_FLOAT_EQ(mr.watercolor_paper_strength, 0.3f);
@@ -79,6 +84,7 @@ TEST(MeshRendererComponentTest, WatercolorParameterDefaultValue) {
     EXPECT_FLOAT_EQ(mr.watercolor_pigment_density, 1.0f);
 }
 
+// 测试 网格渲染器组件：Temp缓冲区默认为空
 TEST(MeshRendererComponentTest, TempBuffersDefaultIsEmpty) {
     dse::MeshRendererComponent mr;
     EXPECT_TRUE(mr.temp_vertices.empty());
@@ -93,11 +99,13 @@ TEST(MeshRendererComponentTest, TempBuffersDefaultIsEmpty) {
 // MeshRenderSystem 构造与注入
 // ============================================================
 
+// 测试 网格渲染系统：默认安全
 TEST(MeshRenderSystemTest, DefaultSafety) {
     MeshRenderSystem sys;
     (void)sys;
 }
 
+// 测试 网格渲染系统：设置资源管理器空指针安全
 TEST(MeshRenderSystemTest, SetAssetManager_NullptrSafety) {
     MeshRenderSystem sys;
     sys.SetAssetManager(nullptr);
@@ -107,6 +115,7 @@ TEST(MeshRenderSystemTest, SetAssetManager_NullptrSafety) {
 // MeshRenderSystem + 空 World
 // ============================================================
 
+// 测试 网格渲染系统：空世界不崩溃
 TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash) {
     MeshRenderSystem sys;
     World world;
@@ -114,6 +123,7 @@ TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash) {
     EXPECT_THROW(sys.Render(world, cmd), std::runtime_error);
 }
 
+// 测试 网格渲染系统：空世界不崩溃2
 TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash_2) {
     MeshRenderSystem sys;
     World world;

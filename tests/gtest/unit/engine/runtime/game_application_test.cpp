@@ -76,16 +76,19 @@ protected:
 // 生命周期
 // ═══════════════════════════════════════════════════
 
+// 测试 游戏应用：引导调用开启初始化
 TEST_F(GameApplicationTest, BootstrapCallsOnInit) {
     EXPECT_EQ(app.init_count, 1);
 }
 
+// 测试 游戏应用：滴答调用开启Updateand Passdt
 TEST_F(GameApplicationTest, TickCallsOnUpdateandPassdt) {
     app.Tick(world, 0.016f);
     EXPECT_EQ(app.update_count, 1);
     EXPECT_FLOAT_EQ(app.last_dt, 0.016f);
 }
 
+// 测试 游戏应用：滴答Accumulate调用计数多个次数
 TEST_F(GameApplicationTest, TickAccumulateCallCountMultipleTimes) {
     app.Tick(world, 0.016f);
     app.Tick(world, 0.033f);
@@ -94,6 +97,7 @@ TEST_F(GameApplicationTest, TickAccumulateCallCountMultipleTimes) {
     EXPECT_FLOAT_EQ(app.last_dt, 0.008f);
 }
 
+// 测试 游戏应用：关闭调用开启关闭
 TEST_F(GameApplicationTest, ShutdownCallsOnShutdown) {
     // TearDown 会调用 ShutdownInternal
     // 这里额外调用一次来检查
@@ -101,6 +105,7 @@ TEST_F(GameApplicationTest, ShutdownCallsOnShutdown) {
     EXPECT_EQ(app.shutdown_count, 1);
 }
 
+// 测试 游戏应用：引导注入世界且资源管理器
 TEST_F(GameApplicationTest, BootstrapInjectsWorldAndAssetManager) {
     EXPECT_EQ(&app.GetWorld(), &world);
     EXPECT_EQ(&app.GetAssetManager(), &asset_manager);
@@ -110,17 +115,20 @@ TEST_F(GameApplicationTest, BootstrapInjectsWorldAndAssetManager) {
 // ECS 基础操作
 // ═══════════════════════════════════════════════════
 
+// 测试 游戏应用：创建实体返回有效实体
 TEST_F(GameApplicationTest, CreateEntityReturnsAValidEntity) {
     Entity e = app.CreateEntity();
     EXPECT_TRUE(world.registry().valid(e));
 }
 
+// 测试 游戏应用：销毁实体为无效之后Destruction
 TEST_F(GameApplicationTest, DestroyEntityEntityIsInvalidAfterDestruction) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
     EXPECT_FALSE(world.registry().valid(e));
 }
 
+// 测试 游戏应用：就地构造添加组件
 TEST_F(GameApplicationTest, EmplaceAddComponent) {
     Entity e = app.CreateEntity();
     auto& t = app.Emplace<TransformComponent>(e);
@@ -132,6 +140,7 @@ TEST_F(GameApplicationTest, EmplaceAddComponent) {
     EXPECT_FLOAT_EQ(got.position.z, 3.0f);
 }
 
+// 测试 游戏应用：就地构造Replace已存在组件
 TEST_F(GameApplicationTest, EmplaceReplaceExistingComponents) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e).position = glm::vec3(1, 0, 0);
@@ -140,6 +149,7 @@ TEST_F(GameApplicationTest, EmplaceReplaceExistingComponents) {
     EXPECT_FLOAT_EQ(t.position.x, 9.0f);
 }
 
+// 测试 游戏应用：获取返回组件指针
 TEST_F(GameApplicationTest, GetReturnComponentPointer) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e).position = glm::vec3(5, 6, 7);
@@ -148,12 +158,14 @@ TEST_F(GameApplicationTest, GetReturnComponentPointer) {
     EXPECT_FLOAT_EQ(ptr->position.y, 6.0f);
 }
 
+// 测试 游戏应用：获取返回无组件Entitiesnullptr
 TEST_F(GameApplicationTest, GetReturnsForComponentlessEntitiesnullptr) {
     Entity e = app.CreateEntity();
     auto* ptr = app.Get<TransformComponent>(e);
     EXPECT_EQ(ptr, nullptr);
 }
 
+// 测试 游戏应用：获取返回无效Entitiesnullptr
 TEST_F(GameApplicationTest, GetReturnsForInvalidEntitiesnullptr) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
@@ -161,6 +173,7 @@ TEST_F(GameApplicationTest, GetReturnsForInvalidEntitiesnullptr) {
     EXPECT_EQ(ptr, nullptr);
 }
 
+// 测试 游戏应用：拥有正确Determine组件存在
 TEST_F(GameApplicationTest, HasCorrectlyDetermineComponentExistence) {
     Entity e = app.CreateEntity();
     EXPECT_FALSE(app.Has<TransformComponent>(e));
@@ -168,12 +181,14 @@ TEST_F(GameApplicationTest, HasCorrectlyDetermineComponentExistence) {
     EXPECT_TRUE(app.Has<TransformComponent>(e));
 }
 
+// 测试 游戏应用：拥有返回无效Entitiesfalse
 TEST_F(GameApplicationTest, HasReturnsForInvalidEntitiesfalse) {
     Entity e = app.CreateEntity();
     app.DestroyEntity(e);
     EXPECT_FALSE(app.Has<TransformComponent>(e));
 }
 
+// 测试 游戏应用：移除组件
 TEST_F(GameApplicationTest, RemoveRemoveComponent) {
     Entity e = app.CreateEntity();
     app.Emplace<TransformComponent>(e);
@@ -182,6 +197,7 @@ TEST_F(GameApplicationTest, RemoveRemoveComponent) {
     EXPECT_FALSE(app.Has<TransformComponent>(e));
 }
 
+// 测试 游戏应用：移除无崩溃无组件实体
 TEST_F(GameApplicationTest, RemoveNoCrashForComponentlessEntities) {
     Entity e = app.CreateEntity();
     EXPECT_NO_THROW(app.Remove<TransformComponent>(e));
@@ -191,6 +207,7 @@ TEST_F(GameApplicationTest, RemoveNoCrashForComponentlessEntities) {
 // 实体工厂
 // ═══════════════════════════════════════════════════
 
+// 测试 游戏应用：创建实体Atset上位置且缩放
 TEST_F(GameApplicationTest, CreateEntityAtsetUpPositionAndScale) {
     Entity e = app.CreateEntityAt(glm::vec3(10, 20, 30), glm::vec3(2, 3, 4));
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
@@ -204,6 +221,7 @@ TEST_F(GameApplicationTest, CreateEntityAtsetUpPositionAndScale) {
     EXPECT_TRUE(t.dirty);
 }
 
+// 测试 游戏应用：创建实体Atdefault缩放为1
 TEST_F(GameApplicationTest, CreateEntityAtdefaultScaleIs1) {
     Entity e = app.CreateEntityAt(glm::vec3(0));
     auto& t = world.registry().get<TransformComponent>(e);
@@ -212,6 +230,7 @@ TEST_F(GameApplicationTest, CreateEntityAtdefaultScaleIs1) {
     EXPECT_FLOAT_EQ(t.scale.z, 1.0f);
 }
 
+// 测试 游戏应用：创建相机3D创建相机且释放Cam
 TEST_F(GameApplicationTest, CreateCamera3DCreateCameraAndFreeCam) {
     Entity e = app.CreateCamera3D(glm::vec3(0, 5, 15), 90.0f, 0.5f, 500.0f);
     ASSERT_TRUE(world.registry().all_of<TransformComponent>(e));
@@ -229,6 +248,7 @@ TEST_F(GameApplicationTest, CreateCamera3DCreateCameraAndFreeCam) {
     EXPECT_TRUE(cam.enabled);
 }
 
+// 测试 游戏应用：创建相机3D默认参数
 TEST_F(GameApplicationTest, CreateCamera3DDefaultParameters) {
     Entity e = app.CreateCamera3D(glm::vec3(0));
     auto& cam = world.registry().get<Camera3DComponent>(e);
@@ -237,6 +257,7 @@ TEST_F(GameApplicationTest, CreateCamera3DDefaultParameters) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1000.0f);
 }
 
+// 测试 游戏应用：创建方向光灯光创建方向光灯光
 TEST_F(GameApplicationTest, CreateDirectionalLightCreateDirectionalLights) {
     Entity e = app.CreateDirectionalLight(
         glm::vec3(-1, -1, 0), glm::vec3(1, 0.9f, 0.8f), 2.5f, false);
@@ -250,6 +271,7 @@ TEST_F(GameApplicationTest, CreateDirectionalLightCreateDirectionalLights) {
     EXPECT_NEAR(glm::length(light.direction), 1.0f, 1e-5f);
 }
 
+// 测试 游戏应用：创建方向光灯光默认参数
 TEST_F(GameApplicationTest, CreateDirectionalLightDefaultParameters) {
     Entity e = app.CreateDirectionalLight(glm::vec3(0, -1, 0));
     auto& light = world.registry().get<DirectionalLight3DComponent>(e);
@@ -260,6 +282,7 @@ TEST_F(GameApplicationTest, CreateDirectionalLightDefaultParameters) {
     EXPECT_FLOAT_EQ(light.color.b, 1.0f);
 }
 
+// 测试 游戏应用：创建点灯光创建点灯光
 TEST_F(GameApplicationTest, CreatePointLightCreateAPointLight) {
     Entity e = app.CreatePointLight(
         glm::vec3(5, 10, 15), glm::vec3(1, 0, 0), 3.0f, 25.0f);
@@ -274,6 +297,7 @@ TEST_F(GameApplicationTest, CreatePointLightCreateAPointLight) {
     EXPECT_FLOAT_EQ(light.color.g, 0.0f);
 }
 
+// 测试 游戏应用：创建点灯光默认参数
 TEST_F(GameApplicationTest, CreatePointLightDefaultParameters) {
     Entity e = app.CreatePointLight(glm::vec3(0));
     auto& light = world.registry().get<PointLightComponent>(e);
@@ -281,6 +305,7 @@ TEST_F(GameApplicationTest, CreatePointLightDefaultParameters) {
     EXPECT_FLOAT_EQ(light.radius, 10.0f);
 }
 
+// 测试 游戏应用：创建网格创建网格实体
 TEST_F(GameApplicationTest, CreateMeshCreateMeshEntities) {
     Entity e = app.CreateMesh(
         glm::vec3(1, 2, 3), "models/test.dmesh", glm::vec3(2));
@@ -296,6 +321,7 @@ TEST_F(GameApplicationTest, CreateMeshCreateMeshEntities) {
     EXPECT_TRUE(mesh.receive_shadow);
 }
 
+// 测试 游戏应用：创建Meshdefault缩放为1
 TEST_F(GameApplicationTest, CreateMeshdefaultScaleIs1) {
     Entity e = app.CreateMesh(glm::vec3(0), "models/cube.dmesh");
     auto& t = world.registry().get<TransformComponent>(e);
@@ -308,6 +334,7 @@ TEST_F(GameApplicationTest, CreateMeshdefaultScaleIs1) {
 // 多实体综合场景
 // ═══════════════════════════════════════════════════
 
+// 测试 游戏应用：场景创建销毁
 TEST_F(GameApplicationTest, Scene_CreateDestroy) {
     Entity cam = app.CreateCamera3D(glm::vec3(0, 5, 15));
     Entity sun = app.CreateDirectionalLight(glm::vec3(-1, -1, -1));

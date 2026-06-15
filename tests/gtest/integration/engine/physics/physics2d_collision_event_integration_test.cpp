@@ -38,6 +38,7 @@ protected:
     }
 };
 
+// 测试 物理2D碰撞事件集成：存在触发Enter
 TEST_F(Physics2DCollisionEventIntegrationTest, ExistTriggersEnter) {
     // 创建地面
     Entity ground = world.CreateEntity();
@@ -93,6 +94,7 @@ TEST_F(Physics2DCollisionEventIntegrationTest, ExistTriggersEnter) {
     EXPECT_TRUE(found_ground);
 }
 
+// 测试 物理2D碰撞事件集成：当两个动态刚体Bodies Collide Both Parties接收回调
 TEST_F(Physics2DCollisionEventIntegrationTest, WhenTwoDynamicRigidBodiesCollideBothPartiesReceiveCallbacks) {
     Entity e1 = world.CreateEntity();
     auto& t1 = world.registry().emplace<TransformComponent>(e1);
@@ -138,6 +140,7 @@ TEST_F(Physics2DCollisionEventIntegrationTest, WhenTwoDynamicRigidBodiesCollideB
     EXPECT_TRUE(e2_collision_entered);
 }
 
+// 测试 物理2D碰撞事件集成：Triggersmodeluse触发
 TEST_F(Physics2DCollisionEventIntegrationTest, TriggersmodeluseTrigger) {
     // 创建静态区域作为触发器
     Entity trigger_zone = world.CreateEntity();
@@ -186,6 +189,7 @@ TEST_F(Physics2DCollisionEventIntegrationTest, TriggersmodeluseTrigger) {
     EXPECT_TRUE(collision_enter_entities.empty());
 }
 
+// 测试 物理2D碰撞事件集成：无当不触发
 TEST_F(Physics2DCollisionEventIntegrationTest, WithoutWhenDoesNotTrigger) {
     // 两个远离的静态物体，不会碰撞
     Entity e1 = world.CreateEntity();

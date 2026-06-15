@@ -30,10 +30,12 @@ protected:
     FreeCameraControllerSystem system;
 };
 
+// 测试 释放相机控制器系统：空世界调用更新不崩溃
 TEST_F(FreeCameraControllerSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
+// 测试 释放相机控制器系统：无控制器组件当不崩溃
 TEST_F(FreeCameraControllerSystemTest, WithoutControllerComponentWhenDoesNotCrash) {
     auto entity = world.CreateEntity();
     world.registry().emplace<TransformComponent>(entity);
@@ -41,6 +43,7 @@ TEST_F(FreeCameraControllerSystemTest, WithoutControllerComponentWhenDoesNotCras
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
+// 测试 释放相机控制器系统：释放相机控制器组件默认值
 TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentDefaultValues) {
     FreeCameraControllerComponent ctrl;
     EXPECT_TRUE(ctrl.enabled);
@@ -50,6 +53,7 @@ TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentDefaultValue
     EXPECT_FLOAT_EQ(ctrl.yaw, -90.0f);
 }
 
+// 测试 释放相机控制器系统：释放相机控制器组件字段修改
 TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentFieldModification) {
     FreeCameraControllerComponent ctrl;
     ctrl.enabled = false;
@@ -65,6 +69,7 @@ TEST_F(FreeCameraControllerSystemTest, FreeCameraControllerComponentFieldModific
     EXPECT_FLOAT_EQ(ctrl.yaw, 0.0f);
 }
 
+// 测试 释放相机控制器系统：禁用组件Whenconstant
 TEST_F(FreeCameraControllerSystemTest, DisabledComponentWhenconstant) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -78,6 +83,7 @@ TEST_F(FreeCameraControllerSystemTest, DisabledComponentWhenconstant) {
     EXPECT_EQ(tf.position, pos_before);
 }
 
+// 测试 释放相机控制器系统：Pitch范围约束校验
 TEST_F(FreeCameraControllerSystemTest, PitchRangeConstraintValidation) {
     // 验证默认 yaw=-90 使得相机朝 -Z 方向，pitch=0 无仰角
     FreeCameraControllerComponent ctrl;

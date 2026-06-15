@@ -23,6 +23,7 @@ using namespace dse::gameplay3d;
 // GPUParticleData 默认值
 // ============================================================
 
+// 测试 GPU粒子数据：默认值
 TEST(GPUParticleDataTest, DefaultValues) {
     GPUParticleData p;
     EXPECT_FLOAT_EQ(p.position.x, 0.0f);
@@ -43,6 +44,7 @@ TEST(GPUParticleDataTest, DefaultValues) {
 // ParticleSystem3DComponent 默认值
 // ============================================================
 
+// 测试 粒子3D系统组件：默认值
 TEST(Particle3DSystemComponentTest, DefaultValues) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.enabled);
@@ -51,6 +53,7 @@ TEST(Particle3DSystemComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(ps.emission_accumulator, 0.0f);
 }
 
+// 测试 粒子3D系统组件：参数默认值
 TEST(Particle3DSystemComponentTest, ParameterDefaultValue) {
     ParticleSystem3DComponent ps;
     EXPECT_FLOAT_EQ(ps.start_life_min, 1.0f);
@@ -63,6 +66,7 @@ TEST(Particle3DSystemComponentTest, ParameterDefaultValue) {
     EXPECT_FLOAT_EQ(ps.start_color.a, 1.0f);
 }
 
+// 测试 粒子3D系统组件：参数默认值2
 TEST(Particle3DSystemComponentTest, ParameterDefaultValue_2) {
     ParticleSystem3DComponent ps;
     EXPECT_FLOAT_EQ(ps.gravity.x, 0.0f);
@@ -70,6 +74,7 @@ TEST(Particle3DSystemComponentTest, ParameterDefaultValue_2) {
     EXPECT_FLOAT_EQ(ps.gravity.z, 0.0f);
 }
 
+// 测试 粒子3D系统组件：GPU资源默认值
 TEST(Particle3DSystemComponentTest, GPUResourceDefaults) {
     ParticleSystem3DComponent ps;
     EXPECT_TRUE(ps.texture_path.empty());
@@ -80,6 +85,7 @@ TEST(Particle3DSystemComponentTest, GPUResourceDefaults) {
     EXPECT_FALSE(ps.initialized);
 }
 
+// 测试 粒子3D系统组件：修改参数
 TEST(Particle3DSystemComponentTest, ModifyParameters) {
     ParticleSystem3DComponent ps;
     ps.max_particles = 500;
@@ -96,17 +102,20 @@ TEST(Particle3DSystemComponentTest, ModifyParameters) {
 // Particle3DSystem 构造与生命周期
 // ============================================================
 
+// 测试 粒子3D系统：默认安全
 TEST(Particle3DSystemTest, DefaultSafety) {
     Particle3DSystem sys;
     (void)sys;
 }
 
+// 测试 粒子3D系统：初始化空指针安全
 TEST(Particle3DSystemTest, Init_NullptrSafety) {
     Particle3DSystem sys;
     World world;
     sys.Init(world, nullptr);
 }
 
+// 测试 粒子3D系统：关闭空指针RHI安全
 TEST(Particle3DSystemTest, Shutdown_nullptr_RhiSafety) {
     Particle3DSystem sys;
     World world;
@@ -114,6 +123,7 @@ TEST(Particle3DSystemTest, Shutdown_nullptr_RhiSafety) {
     sys.Shutdown(world);
 }
 
+// 测试 粒子3D系统：设置资源管理器空指针安全
 TEST(Particle3DSystemTest, SetAssetManager_NullptrSafety) {
     Particle3DSystem sys;
     sys.SetAssetManager(nullptr);
@@ -123,6 +133,7 @@ TEST(Particle3DSystemTest, SetAssetManager_NullptrSafety) {
 // Particle3DSystem 空 World
 // ============================================================
 
+// 测试 粒子3D系统：空世界关闭不崩溃
 TEST(Particle3DSystemTest, EmptyWorld_ShutdownDoesNotCrash) {
     Particle3DSystem sys;
     World world;

@@ -13,6 +13,7 @@ using namespace dse::asset::compiler;
 // VertexAttribute 测试
 // ============================================================
 
+// 测试 顶点属性：枚举值
 TEST(VertexAttributeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Position), 1u << 0);
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Normal), 1u << 1);
@@ -23,11 +24,13 @@ TEST(VertexAttributeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<uint32_t>(VertexAttribute::Weights), 1u << 6);
 }
 
+// 测试 顶点属性：按或
 TEST(VertexAttributeTest, ByOr) {
     VertexAttribute attr = VertexAttribute::Position | VertexAttribute::Normal;
     EXPECT_EQ(static_cast<uint32_t>(attr), (1u << 0) | (1u << 1));
 }
 
+// 测试 顶点属性：按且
 TEST(VertexAttributeTest, ByAnd) {
     VertexAttribute attr1 = VertexAttribute::Position | VertexAttribute::Normal;
     VertexAttribute attr2 = VertexAttribute::Position | VertexAttribute::TexCoord;
@@ -39,6 +42,7 @@ TEST(VertexAttributeTest, ByAnd) {
 // RawSubMesh 测试
 // ============================================================
 
+// 测试 原始子网格：默认值
 TEST(RawSubMeshTest, DefaultValues) {
     RawSubMesh mesh;
     EXPECT_TRUE(mesh.name.empty());
@@ -53,6 +57,7 @@ TEST(RawSubMeshTest, DefaultValues) {
     EXPECT_TRUE(mesh.indices.empty());
 }
 
+// 测试 原始子网格：自定义值
 TEST(RawSubMeshTest, CustomValues) {
     RawSubMesh mesh;
     mesh.name = "TestMesh";
@@ -71,6 +76,7 @@ TEST(RawSubMeshTest, CustomValues) {
 // RawBone 测试
 // ============================================================
 
+// 测试 原始骨骼：默认值
 TEST(RawBoneTest, DefaultValues) {
     RawBone bone;
     EXPECT_TRUE(bone.name.empty());
@@ -79,6 +85,7 @@ TEST(RawBoneTest, DefaultValues) {
     EXPECT_EQ(bone.local_transform, glm::mat4(1.0f));
 }
 
+// 测试 原始骨骼：自定义值
 TEST(RawBoneTest, CustomValues) {
     RawBone bone;
     bone.name = "Hip";
@@ -96,6 +103,7 @@ TEST(RawBoneTest, CustomValues) {
 // RawMaterial 测试
 // ============================================================
 
+// 测试 原始材质：默认值
 TEST(RawMaterialTest, DefaultValues) {
     RawMaterial mat;
     EXPECT_TRUE(mat.name.empty());
@@ -115,6 +123,7 @@ TEST(RawMaterialTest, DefaultValues) {
     EXPECT_TRUE(mat.occlusion_texture.empty());
 }
 
+// 测试 原始材质：自定义值
 TEST(RawMaterialTest, CustomValues) {
     RawMaterial mat;
     mat.name = "TestMat";
@@ -141,6 +150,7 @@ TEST(RawMaterialTest, CustomValues) {
 // RawAnimationChannel 测试
 // ============================================================
 
+// 测试 原始动画通道：默认值
 TEST(RawAnimationChannelTest, DefaultValues) {
     RawAnimationChannel channel;
     EXPECT_EQ(channel.target_node_index, -1);
@@ -151,6 +161,7 @@ TEST(RawAnimationChannelTest, DefaultValues) {
     EXPECT_TRUE(channel.scale_keys.empty());
 }
 
+// 测试 原始动画通道：自定义值
 TEST(RawAnimationChannelTest, CustomValues) {
     RawAnimationChannel channel;
     channel.target_node_index = 5;
@@ -172,6 +183,7 @@ TEST(RawAnimationChannelTest, CustomValues) {
 // RawAnimation 测试
 // ============================================================
 
+// 测试 原始动画：默认值
 TEST(RawAnimationTest, DefaultValues) {
     RawAnimation anim;
     EXPECT_TRUE(anim.name.empty());
@@ -179,6 +191,7 @@ TEST(RawAnimationTest, DefaultValues) {
     EXPECT_TRUE(anim.channels.empty());
 }
 
+// 测试 原始动画：自定义值
 TEST(RawAnimationTest, CustomValues) {
     RawAnimation anim;
     anim.name = "Walk";
@@ -196,6 +209,7 @@ TEST(RawAnimationTest, CustomValues) {
 // RawSceneData 测试
 // ============================================================
 
+// 测试 原始场景数据：默认值
 TEST(RawSceneDataTest, DefaultValues) {
     RawSceneData scene;
     EXPECT_TRUE(scene.meshes.empty());
@@ -204,6 +218,7 @@ TEST(RawSceneDataTest, DefaultValues) {
     EXPECT_TRUE(scene.animations.empty());
 }
 
+// 测试 原始场景数据：自定义值
 TEST(RawSceneDataTest, CustomValues) {
     RawSceneData scene;
     RawSubMesh mesh;
@@ -232,6 +247,7 @@ TEST(RawSceneDataTest, CustomValues) {
 // MeshHeader 测试
 // ============================================================
 
+// 测试 网格头：默认值
 TEST(MeshHeaderTest, DefaultValues) {
     MeshHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -248,6 +264,7 @@ TEST(MeshHeaderTest, DefaultValues) {
     EXPECT_EQ(header.submesh_data_offset, 0ull);
 }
 
+// 测试 网格头：自定义值
 TEST(MeshHeaderTest, CustomValues) {
     MeshHeader header;
     header.vertex_count = 1000;
@@ -271,6 +288,7 @@ TEST(MeshHeaderTest, CustomValues) {
 // SubMeshDesc 测试
 // ============================================================
 
+// 测试 子网格描述符：默认值
 TEST(SubMeshDescTest, DefaultValues) {
     SubMeshDesc desc{};
     EXPECT_EQ(desc.index_start, 0u);
@@ -281,6 +299,7 @@ TEST(SubMeshDescTest, DefaultValues) {
     EXPECT_EQ(desc.bounding_box_max, glm::vec3(0.0f));
 }
 
+// 测试 子网格描述符：自定义值
 TEST(SubMeshDescTest, CustomValues) {
     SubMeshDesc desc;
     desc.index_start = 100;
@@ -302,6 +321,7 @@ TEST(SubMeshDescTest, CustomValues) {
 // AnimHeader 测试
 // ============================================================
 
+// 测试 动画头：默认值
 TEST(AnimHeaderTest, DefaultValues) {
     AnimHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -313,6 +333,7 @@ TEST(AnimHeaderTest, DefaultValues) {
     EXPECT_EQ(header.channel_count, 0u);
 }
 
+// 测试 动画头：自定义值
 TEST(AnimHeaderTest, CustomValues) {
     AnimHeader header;
     header.duration = 3.5f;
@@ -326,6 +347,7 @@ TEST(AnimHeaderTest, CustomValues) {
 // AnimChannelDesc 测试
 // ============================================================
 
+// 测试 动画通道描述符：默认值
 TEST(AnimChannelDescTest, DefaultValues) {
     AnimChannelDesc desc{};
     EXPECT_EQ(desc.target_node_index, 0);
@@ -338,6 +360,7 @@ TEST(AnimChannelDescTest, DefaultValues) {
     EXPECT_EQ(desc.scale_offset, 0ull);
 }
 
+// 测试 动画通道描述符：自定义值
 TEST(AnimChannelDescTest, CustomValues) {
     AnimChannelDesc desc;
     desc.target_node_index = 5;
@@ -363,6 +386,7 @@ TEST(AnimChannelDescTest, CustomValues) {
 // SkelHeader 测试
 // ============================================================
 
+// 测试 骨架头：默认值
 TEST(SkelHeaderTest, DefaultValues) {
     SkelHeader header;
     EXPECT_EQ(header.magic[0], 'D');
@@ -373,6 +397,7 @@ TEST(SkelHeaderTest, DefaultValues) {
     EXPECT_EQ(header.bone_count, 0u);
 }
 
+// 测试 骨架头：自定义值
 TEST(SkelHeaderTest, CustomValues) {
     SkelHeader header;
     header.bone_count = 20;
@@ -384,6 +409,7 @@ TEST(SkelHeaderTest, CustomValues) {
 // BoneDesc 测试
 // ============================================================
 
+// 测试 骨骼描述符：默认值
 TEST(BoneDescTest, DefaultValues) {
     BoneDesc desc{};
     EXPECT_EQ(desc.parent_index, 0);
@@ -391,6 +417,7 @@ TEST(BoneDescTest, DefaultValues) {
     EXPECT_EQ(desc.local_transform, glm::mat4(0.0f));
 }
 
+// 测试 骨骼描述符：自定义值
 TEST(BoneDescTest, CustomValues) {
     BoneDesc desc;
     desc.parent_index = 3;
@@ -406,26 +433,32 @@ TEST(BoneDescTest, CustomValues) {
 // Pack 对齐测试
 // ============================================================
 
+// 测试 打包对齐：网格头紧凑布局
 TEST(PackAlignmentTest, MeshHeaderTightLayout) {
     EXPECT_EQ(sizeof(MeshHeader), 48u);  // pack(1): 4 magic + 4 ver + 4*4 uint32 + 3*8 uint64 = 48
 }
 
+// 测试 打包对齐：子网格描述符紧凑布局
 TEST(PackAlignmentTest, SubMeshDescTightLayout) {
     EXPECT_EQ(sizeof(SubMeshDesc), 40u);  // pack(1): 4*4 uint32 + 2*12 vec3 = 40
 }
 
+// 测试 打包对齐：动画头紧凑布局
 TEST(PackAlignmentTest, AnimHeaderTightLayout) {
     EXPECT_EQ(sizeof(AnimHeader), 16u);  // 4 magic + 4 version + 4 float + 4 uint32 = 16
 }
 
+// 测试 打包对齐：动画通道描述符紧凑布局
 TEST(PackAlignmentTest, AnimChannelDescTightLayout) {
     EXPECT_EQ(sizeof(AnimChannelDesc), 48u);  // 1 int + 3*uint32 + 5*uint64 = 4+12+40 = 56 (padding to 48)
 }
 
+// 测试 打包对齐：骨架头紧凑布局
 TEST(PackAlignmentTest, SkelHeaderTightLayout) {
     EXPECT_EQ(sizeof(SkelHeader), 12u);  // pack(1): 4 magic + 4 ver + 4 uint32 = 12
 }
 
+// 测试 打包对齐：骨骼描述符紧凑布局
 TEST(PackAlignmentTest, BoneDescTightLayout) {
     EXPECT_EQ(sizeof(BoneDesc), 132u);  // pack(1): 4 int + 2*64 mat4 = 132
 }

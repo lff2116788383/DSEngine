@@ -75,6 +75,7 @@ void AutoTileResolve(TilemapComponent& tm, int cx, int cy, const AutoTileRule& r
 // Bresenham Line Tests
 // ============================================================
 
+// 测试 Bresenham线：情形到
 TEST(BresenhamLineTest, Case_To) {
     auto pts = BresenhamLine(0, 0, 4, 0);
     ASSERT_EQ(pts.size(), 5u);
@@ -84,6 +85,7 @@ TEST(BresenhamLineTest, Case_To) {
     }
 }
 
+// 测试 Bresenham线：情形到2
 TEST(BresenhamLineTest, Case_To_2) {
     auto pts = BresenhamLine(3, 2, 0, 2);
     ASSERT_EQ(pts.size(), 4u);
@@ -91,6 +93,7 @@ TEST(BresenhamLineTest, Case_To_2) {
     EXPECT_EQ(pts[3], std::make_pair(0, 2));
 }
 
+// 测试 Bresenham线：情形3
 TEST(BresenhamLineTest, TestCase3) {
     auto pts = BresenhamLine(1, 0, 1, 5);
     ASSERT_EQ(pts.size(), 6u);
@@ -99,6 +102,7 @@ TEST(BresenhamLineTest, TestCase3) {
     EXPECT_EQ(pts[5].second, 5);
 }
 
+// 测试 Bresenham线：情形45
 TEST(BresenhamLineTest, Case_Case45) {
     auto pts = BresenhamLine(0, 0, 3, 3);
     ASSERT_EQ(pts.size(), 4u);
@@ -108,12 +112,14 @@ TEST(BresenhamLineTest, Case_Case45) {
     }
 }
 
+// 测试 Bresenham线：Singlepoint
 TEST(BresenhamLineTest, Singlepoint) {
     auto pts = BresenhamLine(5, 5, 5, 5);
     ASSERT_EQ(pts.size(), 1u);
     EXPECT_EQ(pts[0], std::make_pair(5, 5));
 }
 
+// 测试 Bresenham线：情形正确
 TEST(BresenhamLineTest, Case_Correct) {
     auto pts = BresenhamLine(1, 1, 5, 3);
     EXPECT_EQ(pts.front(), std::make_pair(1, 1));
@@ -129,6 +135,7 @@ TEST(BresenhamLineTest, Case_Correct) {
 // Auto-Tile Tests
 // ============================================================
 
+// 测试 自动瓦片：无Neighbors于中心掩码为0
 TEST(AutoTileTest, NoNeighborsInTheCenter_MaskIs0) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
@@ -144,6 +151,7 @@ TEST(AutoTileTest, NoNeighborsInTheCenter_MaskIs0) {
     EXPECT_EQ(tm.tiles[4], 10);
 }
 
+// 测试 自动瓦片：情形掩码为15
 TEST(AutoTileTest, Case_MaskIs15) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
@@ -159,6 +167,7 @@ TEST(AutoTileTest, Case_MaskIs15) {
     EXPECT_EQ(tm.tiles[4], 100 + 15);
 }
 
+// 测试 自动瓦片：存在为Neighbors Above且到Right掩码为3
 TEST(AutoTileTest, ThereAreNeighborsAboveAndToTheRight_MaskIs3) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
@@ -174,6 +183,7 @@ TEST(AutoTileTest, ThereAreNeighborsAboveAndToTheRight_MaskIs3) {
     EXPECT_EQ(tm.tiles[4], 53);
 }
 
+// 测试 自动瓦片：空不
 TEST(AutoTileTest, EmptyNot) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;
@@ -188,6 +198,7 @@ TEST(AutoTileTest, EmptyNot) {
     EXPECT_EQ(tm.tiles[4], 0); // 未改动
 }
 
+// 测试 自动瓦片：不交叉线
 TEST(AutoTileTest, NotCrossTheLine) {
     TilemapComponent tm;
     tm.width = 2; tm.height = 2;
@@ -203,6 +214,7 @@ TEST(AutoTileTest, NotCrossTheLine) {
     EXPECT_EQ(tm.tiles[0], 20 + 6);
 }
 
+// 测试 自动瓦片：禁用不修订
 TEST(AutoTileTest, DisabledNotRevise) {
     TilemapComponent tm;
     tm.width = 3; tm.height = 3;

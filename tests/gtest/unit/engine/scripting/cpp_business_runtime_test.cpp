@@ -15,11 +15,13 @@ protected:
     AssetManager assets;
 };
 
+// 测试 C++业务运行时：不Configurationhooks当引导返回false
 TEST_F(CppBusinessRuntimeTest, NotConfigurationhooksWhenBootstrapReturnsfalse) {
     ConfigureCppBusinessHooks({});
     EXPECT_FALSE(BootstrapCppBusiness(world, assets));
 }
 
+// 测试 C++业务运行时：Missingtick当引导返回false
 TEST_F(CppBusinessRuntimeTest, MissingtickWhenBootstrapReturnsfalse) {
     CppBusinessHooks hooks;
     hooks.bootstrap = [](World&, AssetManager&) {};
@@ -27,6 +29,7 @@ TEST_F(CppBusinessRuntimeTest, MissingtickWhenBootstrapReturnsfalse) {
     EXPECT_FALSE(BootstrapCppBusiness(world, assets));
 }
 
+// 测试 C++业务运行时：引导滴答关闭调用按配置
 TEST_F(CppBusinessRuntimeTest, BootstrapTickShutdownCallByConfiguration) {
     int bootstrap_count = 0;
     int tick_count = 0;
@@ -59,6 +62,7 @@ TEST_F(CppBusinessRuntimeTest, BootstrapTickShutdownCallByConfiguration) {
     EXPECT_FLOAT_EQ(last_dt, 0.25f);
 }
 
+// 测试 C++业务运行时：不Configurationtick当滴答为无操作
 TEST_F(CppBusinessRuntimeTest, NotConfigurationtickWhenTickIsNoOp) {
     CppBusinessHooks hooks;
     hooks.shutdown = []() {};
@@ -66,6 +70,7 @@ TEST_F(CppBusinessRuntimeTest, NotConfigurationtickWhenTickIsNoOp) {
     EXPECT_NO_THROW(TickCppBusiness(world, 0.016f));
 }
 
+// 测试 C++业务运行时：不Configurationshutdown当关闭为无操作
 TEST_F(CppBusinessRuntimeTest, NotConfigurationshutdownWhenShutdownIsNoOp) {
     CppBusinessHooks hooks;
     hooks.tick = [](World&, float) {};

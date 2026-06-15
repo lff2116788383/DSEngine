@@ -38,10 +38,12 @@ protected:
     }
 };
 
+// 测试 粒子系统2D：空世界调用更新不崩溃
 TEST_F(ParticleSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, kDt));
 }
 
+// 测试 粒子系统2D：情形2
 TEST_F(ParticleSystem2DTest, TestCase2) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -56,6 +58,7 @@ TEST_F(ParticleSystem2DTest, TestCase2) {
     EXPECT_GT(emitter->particles.size(), 0u);
 }
 
+// 测试 粒子系统2D：生命周期之后移除
 TEST_F(ParticleSystem2DTest, LifecycleAfterRemove) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -79,6 +82,7 @@ TEST_F(ParticleSystem2DTest, LifecycleAfterRemove) {
     EXPECT_EQ(emitter->particles.size(), 0u);
 }
 
+// 测试 粒子系统2D：最大Particlesrestricted粒子对象池
 TEST_F(ParticleSystem2DTest, max_ParticlesrestrictedParticlePool) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -93,6 +97,7 @@ TEST_F(ParticleSystem2DTest, max_ParticlesrestrictedParticlePool) {
     EXPECT_LE(emitter->particles.size(), static_cast<size_t>(emitter->max_particles));
 }
 
+// 测试 粒子系统2D：Burstone时间Outbreak
 TEST_F(ParticleSystem2DTest, BurstoneTimeOutbreak) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = false; // 关闭持续发射
@@ -105,6 +110,7 @@ TEST_F(ParticleSystem2DTest, BurstoneTimeOutbreak) {
     EXPECT_EQ(emitter->pending_burst, 0);
 }
 
+// 测试 粒子系统2D：速度
 TEST_F(ParticleSystem2DTest, Speed) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -126,6 +132,7 @@ TEST_F(ParticleSystem2DTest, Speed) {
     EXPECT_LT(vy_after, vy_before);
 }
 
+// 测试 粒子系统2D：情形7
 TEST_F(ParticleSystem2DTest, TestCase7) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -153,6 +160,7 @@ TEST_F(ParticleSystem2DTest, TestCase7) {
     EXPECT_GT(emitter->particles[0].velocity.y, 0.0f);
 }
 
+// 测试 粒子系统2D：Parametersmodel
 TEST_F(ParticleSystem2DTest, Parametersmodel) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -179,6 +187,7 @@ TEST_F(ParticleSystem2DTest, Parametersmodel) {
     EXPECT_TRUE(has_variation);
 }
 
+// 测试 粒子系统2D：生命周期
 TEST_F(ParticleSystem2DTest, Lifecycle) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;
@@ -208,6 +217,7 @@ TEST_F(ParticleSystem2DTest, Lifecycle) {
     }
 }
 
+// 测试 粒子系统2D：emit速率缩放Scaled Emissivity
 TEST_F(ParticleSystem2DTest, emit_rate_ScaleScaledEmissivity) {
     auto [e, emitter, tf] = CreateEmitter();
     emitter->emitting = true;

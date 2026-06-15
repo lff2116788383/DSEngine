@@ -16,12 +16,14 @@ using namespace dse;
 // 3.1 DynamicObstacleComponent 默认值
 // ============================================================
 
+// 测试 动态障碍组件：默认值情形
 TEST(DynamicObstacleComponentTest, DefaultValues_Case) {
     DynamicObstacleComponent doc;
     EXPECT_TRUE(doc.enabled);
     EXPECT_EQ(doc.shape, DynamicObstacleComponent::Shape::Box);
 }
 
+// 测试 动态障碍组件：默认值盒
 TEST(DynamicObstacleComponentTest, DefaultValues_Box) {
     DynamicObstacleComponent doc;
     EXPECT_FLOAT_EQ(doc.box_extents.x, 1.0f);
@@ -29,12 +31,14 @@ TEST(DynamicObstacleComponentTest, DefaultValues_Box) {
     EXPECT_FLOAT_EQ(doc.box_extents.z, 1.0f);
 }
 
+// 测试 动态障碍组件：默认值Cylinder参数
 TEST(DynamicObstacleComponentTest, DefaultValues_CylinderParameters) {
     DynamicObstacleComponent doc;
     EXPECT_FLOAT_EQ(doc.cylinder_radius, 1.0f);
     EXPECT_FLOAT_EQ(doc.cylinder_height, 2.0f);
 }
 
+// 测试 动态障碍组件：默认值当状态
 TEST(DynamicObstacleComponentTest, DefaultValues_WhenState) {
     DynamicObstacleComponent doc;
     EXPECT_EQ(doc.obstacle_ref_, 0u);
@@ -45,12 +49,14 @@ TEST(DynamicObstacleComponentTest, DefaultValues_WhenState) {
 // 3.2 NavMeshAutoRebakeComponent 默认值
 // ============================================================
 
+// 测试 导航网格自动重新烘焙组件：默认值启用且
 TEST(NavMeshAutoRebakeComponentTest, DefaultValues_EnabledAnd) {
     NavMeshAutoRebakeComponent nrc;
     EXPECT_TRUE(nrc.enabled);
     EXPECT_FLOAT_EQ(nrc.tile_size, 48.0f);
 }
 
+// 测试 导航网格自动重新烘焙组件：默认值触发
 TEST(NavMeshAutoRebakeComponentTest, DefaultValues_Triggers) {
     NavMeshAutoRebakeComponent nrc;
     EXPECT_FLOAT_EQ(nrc.rebake_cooldown, 1.0f);
@@ -58,6 +64,7 @@ TEST(NavMeshAutoRebakeComponentTest, DefaultValues_Triggers) {
     EXPECT_TRUE(nrc.collect_mesh_renderers);
 }
 
+// 测试 导航网格自动重新烘焙组件：默认值代理参数
 TEST(NavMeshAutoRebakeComponentTest, DefaultValues_AgentParameters) {
     NavMeshAutoRebakeComponent nrc;
     EXPECT_FLOAT_EQ(nrc.agent_height, 2.0f);
@@ -66,12 +73,14 @@ TEST(NavMeshAutoRebakeComponentTest, DefaultValues_AgentParameters) {
     EXPECT_FLOAT_EQ(nrc.agent_max_slope, 45.0f);
 }
 
+// 测试 导航网格自动重新烘焙组件：默认值参数
 TEST(NavMeshAutoRebakeComponentTest, DefaultValues_Parameters) {
     NavMeshAutoRebakeComponent nrc;
     EXPECT_FLOAT_EQ(nrc.cell_size, 0.3f);
     EXPECT_FLOAT_EQ(nrc.cell_height, 0.2f);
 }
 
+// 测试 导航网格自动重新烘焙组件：默认值当状态
 TEST(NavMeshAutoRebakeComponentTest, DefaultValues_WhenState) {
     NavMeshAutoRebakeComponent nrc;
     EXPECT_FLOAT_EQ(nrc.cooldown_timer_, 0.0f);

@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 #include "engine/ecs/tilemap.h"
 
+// 测试 瓦片地图组件：默认值
 TEST(TilemapComponentTest, DefaultValues) {
     TilemapComponent tm;
     EXPECT_TRUE(tm.tiles.empty());
@@ -25,6 +26,7 @@ TEST(TilemapComponentTest, DefaultValues) {
     EXPECT_TRUE(tm.dirty);
 }
 
+// 测试 瓦片地图组件：Tiles数据赋值且访问
 TEST(TilemapComponentTest, TilesDataAssignmentAndAccess) {
     TilemapComponent tm;
     tm.width = 3;
@@ -35,6 +37,7 @@ TEST(TilemapComponentTest, TilesDataAssignmentAndAccess) {
     EXPECT_EQ(tm.tiles[4], 0);
 }
 
+// 测试 瓦片地图组件：Tileset参数修改
 TEST(TilemapComponentTest, TilesetParameterModification) {
     TilemapComponent tm;
     tm.tileset_cols = 4;

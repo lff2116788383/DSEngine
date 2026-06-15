@@ -39,6 +39,7 @@ private:
 };
 }
 
+// 测试 音频资源集成：资源管理器加载音频Clipand缓存弱References
 TEST(AudioAssetsIntegrationTest, AssetManagerLoadAudioClipandCacheWeakReferences) {
     AudioAssetsTempDir temp;
     temp.WriteBinary("clip.bin", {0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4});
@@ -55,6 +56,7 @@ TEST(AudioAssetsIntegrationTest, AssetManagerLoadAudioClipandCacheWeakReferences
     EXPECT_EQ(clip_a.get(), clip_b.get());
 }
 
+// 测试 音频资源集成：不存在音频剪辑返回空指针
 TEST(AudioAssetsIntegrationTest, DoesNotExistAudioClipReturnsnullptr) {
     AudioAssetsTempDir temp;
     AssetManager assets;
@@ -63,11 +65,13 @@ TEST(AudioAssetsIntegrationTest, DoesNotExistAudioClipReturnsnullptr) {
     EXPECT_EQ(assets.LoadAudioClip("missing.wav"), nullptr);
 }
 
+// 测试 音频资源集成：音频系统初始化Rejects空资源管理器
 TEST(AudioAssetsIntegrationTest, AudioSystemInitializationRejectsNullAssetManager) {
     AudioSystem audio;
     EXPECT_THROW(audio.Initialize(nullptr), std::runtime_error);
 }
 
+// 测试 音频资源集成：未初始化更新音频源安全状态
 TEST(AudioAssetsIntegrationTest, UninitializedUpdateAudioSourceSafetyState) {
     World world;
     AudioSystem audio;
@@ -82,6 +86,7 @@ TEST(AudioAssetsIntegrationTest, UninitializedUpdateAudioSourceSafetyState) {
     EXPECT_EQ(source.runtime_handle, 0u);
 }
 
+// 测试 音频资源集成：Injectableexist未初始化更新当安全
 TEST(AudioAssetsIntegrationTest, InjectableexistUninitializedUpdateWhenSafety) {
     World world;
     AudioSystem audio;

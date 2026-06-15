@@ -52,6 +52,16 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
         DEBUG_LOG_WARN("[Vulkan] Failed to create default sampler");
     }
 
+    // 创建材质采样器（linear repeat）：网格材质 UV 可能越界 [0,1]，需 REPEAT 回绕，
+    // 与 OpenGL/D3D11 网格贴图默认 wrap 行为一致（CLAMP 会把越界 UV 钳到边缘导致整面单色）。
+    VkSamplerCreateInfo material_sampler_ci = sampler_ci;
+    material_sampler_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    material_sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    material_sampler_ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    if (vkCreateSampler(device_, &material_sampler_ci, nullptr, &material_sampler_) != VK_SUCCESS) {
+        DEBUG_LOG_WARN("[Vulkan] Failed to create material sampler");
+    }
+
     // 创建阴影比较采样器（sampler2DShadow PCF 要求 compareEnable=VK_TRUE）
     VkSamplerCreateInfo shadow_sampler_ci{};
     shadow_sampler_ci.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -140,6 +150,11 @@ void VulkanResourceManager::Shutdown() {
     if (default_sampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(device_, default_sampler_, nullptr);
         default_sampler_ = VK_NULL_HANDLE;
+    }
+
+    if (material_sampler_ != VK_NULL_HANDLE) {
+        vkDestroySampler(device_, material_sampler_, nullptr);
+        material_sampler_ = VK_NULL_HANDLE;
     }
 
     if (shadow_comparison_sampler_ != VK_NULL_HANDLE) {
@@ -1614,17 +1629,20 @@ uint32_t VulkanResourceManager::FindMemoryType(uint32_t type_filter, VkMemoryPro
 // ============================================================
 
 bool VulkanResourceManager::CreateDescriptorPool() {
+    // 每个 mesh draw 最多分配 4 个 descriptor set；重实例化/多 shadow pass 场景下
+    // 单帧 set 数可达数千（实测 3d_instancing 峰值 ~4911 set），故将容量提升 ~4×。
+    // descriptor pool 仅为主机端记账，成本很小。
     std::vector<VkDescriptorPoolSize> pool_sizes = {
-        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         2048},
-        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8192},
-        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         2048},
-        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          64},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         32768},
+        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 32768},
+        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         8192},
+        {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          256},
     };
 
     VkDescriptorPoolCreateInfo pool_info{};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 4096;
+    pool_info.maxSets = 16384;
     pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_info.pPoolSizes = pool_sizes.data();
 
@@ -1635,7 +1653,7 @@ bool VulkanResourceManager::CreateDescriptorPool() {
         }
     }
 
-    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=4096 each)", kMaxFramesInFlight);
+    DEBUG_LOG_INFO("[Vulkan] Descriptor pools created ({}x, maxSets=16384 each)", kMaxFramesInFlight);
     return true;
 }
 

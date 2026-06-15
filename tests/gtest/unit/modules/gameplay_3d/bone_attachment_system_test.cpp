@@ -22,11 +22,13 @@ using namespace gameplay3d;
 
 class BoneAttachmentSystemTest : public ::testing::Test {};
 
+// 测试 骨骼附件系统：空世界不崩溃
 TEST_F(BoneAttachmentSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(BoneAttachmentSystem::Update(world));
 }
 
+// 测试 骨骼附件系统：组件默认值
 TEST_F(BoneAttachmentSystemTest, ComponentDefaultValues) {
     BoneAttachmentComponent comp;
     EXPECT_TRUE(comp.bone_name.empty());
@@ -37,6 +39,7 @@ TEST_F(BoneAttachmentSystemTest, ComponentDefaultValues) {
     EXPECT_TRUE(comp.index_dirty);
 }
 
+// 测试 骨骼附件系统：无效当不崩溃
 TEST_F(BoneAttachmentSystemTest, InvalidWhenDoesNotCrash) {
     World world;
     auto attachment = world.CreateEntity();
@@ -47,6 +50,7 @@ TEST_F(BoneAttachmentSystemTest, InvalidWhenDoesNotCrash) {
     EXPECT_NO_THROW(BoneAttachmentSystem::Update(world));
 }
 
+// 测试 骨骼附件系统：不存在当不写入变换
 TEST_F(BoneAttachmentSystemTest, DoesNotExistWhenNotWriteTransform) {
     World world;
     // 创建目标实体（有 Animator3D + Transform）
@@ -75,6 +79,7 @@ TEST_F(BoneAttachmentSystemTest, DoesNotExistWhenNotWriteTransform) {
     EXPECT_EQ(sword_xform.local_to_world[0][0], 999.0f);
 }
 
+// 测试 骨骼附件系统：正确
 TEST_F(BoneAttachmentSystemTest, Correct) {
     World world;
     // 创建目标实体
@@ -118,6 +123,7 @@ TEST_F(BoneAttachmentSystemTest, Correct) {
     EXPECT_NEAR(result_pos.z, 0.0f, 1e-4f);
 }
 
+// 测试 骨骼附件系统：偏移正确
 TEST_F(BoneAttachmentSystemTest, OffsetCorrect) {
     World world;
     auto character = world.CreateEntity();
@@ -148,6 +154,7 @@ TEST_F(BoneAttachmentSystemTest, OffsetCorrect) {
     EXPECT_NEAR(result_pos.z, -0.5f, 1e-4f);
 }
 
+// 测试 骨骼附件系统：触发
 TEST_F(BoneAttachmentSystemTest, Triggers) {
     World world;
     auto character = world.CreateEntity();

@@ -85,6 +85,7 @@ protected:
     }
 };
 
+// 测试 Vulkan RHI冒烟：初始化Vulkan成功
 TEST_F(VulkanRhiSmokeTest, InitVulkanSucceeds) {
     bool ok = device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true);
     // 如果机器没有 Vulkan 驱动，跳过而非失败
@@ -94,6 +95,7 @@ TEST_F(VulkanRhiSmokeTest, InitVulkanSucceeds) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：单一帧空不崩溃
 TEST_F(VulkanRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -106,6 +108,7 @@ TEST_F(VulkanRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：多帧周期稳定
 TEST_F(VulkanRhiSmokeTest, MultiFramecycleStable) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -119,6 +122,7 @@ TEST_F(VulkanRhiSmokeTest, MultiFramecycleStable) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：关闭之后初始化不崩溃
 TEST_F(VulkanRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -138,6 +142,7 @@ TEST_F(VulkanRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：创建且销毁无崩溃
 TEST_F(VulkanRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -153,6 +158,7 @@ TEST_F(VulkanRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：情形10连续帧提交稳定
 TEST_F(VulkanRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -167,6 +173,7 @@ TEST_F(VulkanRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：渲染目标创建且销毁无崩溃
 TEST_F(VulkanRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";
@@ -181,6 +188,7 @@ TEST_F(VulkanRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 Vulkan RHI冒烟：缓冲区创建且销毁无崩溃
 TEST_F(VulkanRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No Vulkan";

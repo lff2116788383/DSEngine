@@ -25,6 +25,7 @@ protected:
     void TearDown() override { js_.Shutdown(); }
 };
 
+// 测试 任务系统压力：情形100全部任务完成
 TEST_F(JobSystemStressTest, Case100AllTasksComplete) {
     constexpr int N = 100;
     std::atomic<int> counter{0};
@@ -39,6 +40,7 @@ TEST_F(JobSystemStressTest, Case100AllTasksComplete) {
     EXPECT_EQ(counter.load(), N);
 }
 
+// 测试 任务系统压力：情形1000全部任务完成
 TEST_F(JobSystemStressTest, Case1000AllTasksComplete) {
     constexpr int N = 1000;
     std::atomic<int> counter{0};
@@ -53,6 +55,7 @@ TEST_F(JobSystemStressTest, Case1000AllTasksComplete) {
     EXPECT_EQ(counter.load(), N);
 }
 
+// 测试 任务系统压力：优先级全部完成
 TEST_F(JobSystemStressTest, PriorityAllComplete) {
     constexpr int N = 300;
     std::atomic<int> counter{0};
@@ -70,6 +73,7 @@ TEST_F(JobSystemStressTest, PriorityAllComplete) {
     EXPECT_EQ(counter.load(), N);
 }
 
+// 测试 任务系统压力：情形多任务单个之前
 TEST_F(JobSystemStressTest, Case_MultiTasksOneBefore) {
     std::atomic<int> counter{0};
     auto root = js_.Submit([&counter]() {
@@ -88,6 +92,7 @@ TEST_F(JobSystemStressTest, Case_MultiTasksOneBefore) {
     EXPECT_EQ(counter.load(), 1 + FANOUT);
 }
 
+// 测试 任务系统压力：情形单个任务多之前
 TEST_F(JobSystemStressTest, Case_OneTasksMultiBefore) {
     constexpr int FANIN = 20;
     std::atomic<int> counter{0};
@@ -106,6 +111,7 @@ TEST_F(JobSystemStressTest, Case_OneTasksMultiBefore) {
     EXPECT_EQ(counter.load(), FANIN + 100);
 }
 
+// 测试 任务系统压力：链
 TEST_F(JobSystemStressTest, Chain) {
     constexpr int CHAIN = 50;
     std::atomic<int> counter{0};
@@ -127,6 +133,7 @@ TEST_F(JobSystemStressTest, Chain) {
 // 反复 Init/Shutdown
 // ============================================================
 
+// 测试 任务系统Stability：初始化关闭无泄漏
 TEST(JobSystemStabilityTest, InitShutdownNoLeak) {
     for (int i = 0; i < 10; ++i) {
         JobSystem js;
@@ -139,6 +146,7 @@ TEST(JobSystemStabilityTest, InitShutdownNoLeak) {
     }
 }
 
+// 测试 任务系统Stability：关闭之后提交同步执行
 TEST(JobSystemStabilityTest, ShutdownAfterSubmitSynchronousExecution) {
     JobSystem js;
     js.Init();

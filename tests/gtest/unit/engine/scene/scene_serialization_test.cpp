@@ -49,6 +49,7 @@ struct ScopedFileCleanup {
 // 1. 序列化/反序列化 往返
 // ============================================================
 
+// 测试 场景序列化：变换序列化往返Consistency
 TEST(SceneSerializationTest, TransformSerializationRoundTripConsistency) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
@@ -79,6 +80,7 @@ TEST(SceneSerializationTest, TransformSerializationRoundTripConsistency) {
     EXPECT_EQ(count, 1);
 }
 
+// 测试 场景序列化：多Entityround往返
 TEST(SceneSerializationTest, MultiEntityroundTrip) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
@@ -107,6 +109,7 @@ TEST(SceneSerializationTest, MultiEntityroundTrip) {
     EXPECT_EQ(count, 5);
 }
 
+// 测试 场景序列化：空Sceneserializationdeserialization
 TEST(SceneSerializationTest, EmptySceneserializationdeserialization) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
@@ -130,11 +133,13 @@ TEST(SceneSerializationTest, EmptySceneserializationdeserialization) {
 // 2. 反序列化异常路径
 // ============================================================
 
+// 测试 场景序列化：不存在返回false
 TEST(SceneSerializationTest, DoesNotExistReturnsfalse) {
     Scene s("nonexistent");
     EXPECT_FALSE(s.Deserialize("__nonexistent_file_that_does_not_exist.dscene"));
 }
 
+// 测试 场景序列化：到无效路径返回false
 TEST(SceneSerializationTest, ToInvalidPathReturnsfalse) {
     Scene s("invalid_path");
     auto& w = s.GetWorld();
@@ -147,6 +152,7 @@ TEST(SceneSerializationTest, ToInvalidPathReturnsfalse) {
 // 3. Prefab 存储/实例化
 // ============================================================
 
+// 测试 场景序列化：预制体保存且加载往返Trips为Consistent
 TEST(SceneSerializationTest, PrefabSaveAndLoadRoundTripsAreConsistent) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
@@ -169,6 +175,7 @@ TEST(SceneSerializationTest, PrefabSaveAndLoadRoundTripsAreConsistent) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {2, 2, 2}));
 }
 
+// 测试 场景序列化：Prefabinstantiation覆盖位置
 TEST(SceneSerializationTest, PrefabinstantiationOverridePosition) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
@@ -192,6 +199,7 @@ TEST(SceneSerializationTest, PrefabinstantiationOverridePosition) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {1, 1, 1}));
 }
 
+// 测试 场景序列化：Prefabinstantiation覆盖Rotation且缩放
 TEST(SceneSerializationTest, PrefabinstantiationOverrideRotationAndScale) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
@@ -219,12 +227,14 @@ TEST(SceneSerializationTest, PrefabinstantiationOverrideRotationAndScale) {
     EXPECT_TRUE(NearEqual(inst_t.scale, {3, 3, 3}));
 }
 
+// 测试 场景序列化：预制体加载文件不存在Returnsnull
 TEST(SceneSerializationTest, PrefabLoadingAFileThatDoesNotExistReturnsnull) {
     World w;
     Entity result = InstantiatePrefab(w, "__nonexistent_prefab_file.dprefab");
     EXPECT_TRUE(result == entt::null);
 }
 
+// 测试 场景序列化：保存实体作为预制体无效实体返回false
 TEST(SceneSerializationTest, SaveEntityAsPrefabInvalidEntityReturnedfalse) {
     World w;
     EXPECT_FALSE(SaveEntityAsPrefab(w, entt::null, kTestPrefabFile));
@@ -234,6 +244,7 @@ TEST(SceneSerializationTest, SaveEntityAsPrefabInvalidEntityReturnedfalse) {
 // 4. 父子层级 Prefab
 // ============================================================
 
+// 测试 场景序列化：预制体保存且Restore父Child Hierarchy
 TEST(SceneSerializationTest, PrefabSaveAndRestoreParentChildHierarchy) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestPrefabFile);
@@ -268,6 +279,7 @@ TEST(SceneSerializationTest, PrefabSaveAndRestoreParentChildHierarchy) {
 // 5. 内置回归样例
 // ============================================================
 
+// 测试 场景序列化：往返Regression示例Passed
 TEST(SceneSerializationTest, RoundTripRegressionExamplePassed) {
     ScopedFileCleanup cleanup;
     const std::string path = "__test_roundtrip_regression.dscene";
@@ -275,6 +287,7 @@ TEST(SceneSerializationTest, RoundTripRegressionExamplePassed) {
     EXPECT_TRUE(RunSceneRoundTripRegressionSample(path));
 }
 
+// 测试 场景序列化：且之后Componentround往返
 TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     ScopedFileCleanup cleanup;
     cleanup.Add(kTestSceneFile);
@@ -386,6 +399,7 @@ TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     EXPECT_NEAR(pp.ssr_fade_distance, expected_pp.ssr_fade_distance, kEpsilon);
 }
 
+// 测试 场景序列化：朝向之后Regression示例Passed
 TEST(SceneSerializationTest, TowardAfterRegressionExamplePassed) {
     ScopedFileCleanup cleanup;
     const std::string path = "__test_backward_compat_regression.dscene";

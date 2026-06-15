@@ -18,7 +18,16 @@ namespace fs = std::filesystem;
 bool HasLuaScripting(ProjectTemplate tmpl) {
     return tmpl == ProjectTemplate::Game2D
         || tmpl == ProjectTemplate::Game3D
-        || tmpl == ProjectTemplate::Lua;
+        || tmpl == ProjectTemplate::Lua
+        || tmpl == ProjectTemplate::Platformer2D
+        || tmpl == ProjectTemplate::TopDownRPG
+        || tmpl == ProjectTemplate::ThirdPerson3D;
+}
+
+// 是否使用 3D 场景预置（相机 + 平行光）。
+bool Uses3DScene(ProjectTemplate tmpl) {
+    return tmpl == ProjectTemplate::Game3D
+        || tmpl == ProjectTemplate::ThirdPerson3D;
 }
 
 bool HasCppHost(ProjectTemplate tmpl) {
@@ -77,13 +86,29 @@ std::string BuildProjectDescriptor(const std::string& name,
     ss << "    \"build\": {\n";
     ss << "        \"output_dir\": \"build/\",\n";
     ss << "        \"target\": \"standalone\"\n";
+    ss << "    },\n";
+    ss << "    \"window\": {\n";
+    ss << "        \"title\": \"" << JsonEscape(name) << "\",\n";
+    ss << "        \"width\": 1280,\n";
+    ss << "        \"height\": 720\n";
+    ss << "    },\n";
+    ss << "    \"splash\": {\n";
+    ss << "        \"enabled\": true,\n";
+    ss << "        \"image\": \"\",\n";
+    ss << "        \"app_name\": \"" << JsonEscape(name) << "\",\n";
+    ss << "        \"initial_status\": \"\",\n";
+    ss << "        \"background_argb\": \"0xFF1E1E28\",\n";
+    ss << "        \"accent_argb\": \"0xFF4A9EFF\",\n";
+    ss << "        \"fade_in_ms\": 600,\n";
+    ss << "        \"min_display_ms\": 900,\n";
+    ss << "        \"fade_out_ms\": 500\n";
     ss << "    }\n";
     ss << "}\n";
     return ss.str();
 }
 
 std::string BuildSceneJson(ProjectTemplate tmpl) {
-    if (tmpl == ProjectTemplate::Game3D) {
+    if (Uses3DScene(tmpl)) {
         std::ostringstream ss;
         ss << "[\n"
            << "    {\n"
@@ -127,15 +152,311 @@ std::string BuildSceneJson(ProjectTemplate tmpl) {
     return "[]\n";
 }
 
+// 把模板中的 __NAME__ 占位符替换为工程名（仅出现在 print 文案里，便于用 raw 字符串编写）。
+std::string SubstName(std::string body, const std::string& name) {
+    const std::string token = "__NAME__";
+    for (size_t p = body.find(token); p != std::string::npos; p = body.find(token, p)) {
+        body.replace(p, token.size(), name);
+        p += name.size();
+    }
+    return body;
+}
+
+// 品类模板：2D 平台跳跃（重力 + 跳跃 + 平台 AABB 碰撞 + 相机跟随）。
+std::string BuildPlatformerLua(const std::string& name) {
+    static const char* kBody = R"LUA(-- __NAME__ — DSEngine 2D platformer template (gravity + jump + AABB platforms)
+-- Lifecycle: Awake() once at startup; Update(dt) every frame. Physics is hand-rolled in Lua.
+local app = dse.app
+local KEY_A, KEY_D, KEY_LEFT, KEY_RIGHT, KEY_SPACE = 65, 68, 263, 262, 32
+
+-- Player state (center position + velocity; PW/PH are half-extents)
+local player
+local px, py = 0.0, 2.0
+local vx, vy = 0.0, 0.0
+local on_ground = false
+local PW, PH = 0.5, 0.5
+local MOVE, JUMP, GRAVITY = 6.0, 13.0, -30.0
+
+-- Static platforms: center x,y + half-extents hw,hh
+local platforms = {
+  { x = 0.0,  y = -0.5, hw = 9.0, hh = 0.5 },   -- ground
+  { x = -5.0, y = 1.5,  hw = 1.6, hh = 0.25 },
+  { x = 0.0,  y = 2.8,  hw = 1.6, hh = 0.25 },
+  { x = 5.0,  y = 4.1,  hw = 1.4, hh = 0.25 },
+}
+
+local function spawn_quad(x, y, sx, sy, r, g, b, order)
+  local e = dse.ecs.create_entity()
+  dse.ecs.add_transform(e, x, y, 0.0, sx, sy, 1.0)
+  dse.ecs.add_sprite(e, r, g, b, 1.0, order or 0)
+  return e
+end
+
+function Awake()
+  player = spawn_quad(px, py, PW * 2.0, PH * 2.0, 0.30, 0.80, 1.0, 1)
+
+  -- 2D orthographic camera that follows the player
+  local camera = dse.ecs.create_entity()
+  dse.ecs.add_transform(camera, 0.0, 2.0, 0.0, 1, 1, 1)
+  dse.ecs.add_camera(camera, 6.0)
+  dse.ecs.set_camera_follow(camera, player, 0.12)
+
+  for _, p in ipairs(platforms) do
+    spawn_quad(p.x, p.y, p.hw * 2.0, p.hh * 2.0, 0.45, 0.50, 0.60, 0)
+  end
+  print("[__NAME__] platformer ready -- A/D move, Space to jump")
+end
+
+local function overlaps(ax, ay, ahw, ahh, b)
+  return math.abs(ax - b.x) < (ahw + b.hw) and math.abs(ay - b.y) < (ahh + b.hh)
+end
+
+function Update(dt)
+  dt = dt or 0.0
+  if dt > 0.05 then dt = 0.05 end   -- clamp for stable collision
+
+  vx = 0.0
+  if app.get_key(KEY_A) or app.get_key(KEY_LEFT)  then vx = vx - MOVE end
+  if app.get_key(KEY_D) or app.get_key(KEY_RIGHT) then vx = vx + MOVE end
+  if on_ground and app.get_key_down(KEY_SPACE) then vy, on_ground = JUMP, false end
+  vy = vy + GRAVITY * dt
+
+  -- Integrate + resolve X
+  px = px + vx * dt
+  for _, p in ipairs(platforms) do
+    if overlaps(px, py, PW, PH, p) then
+      if px < p.x then px = p.x - p.hw - PW else px = p.x + p.hw + PW end
+    end
+  end
+
+  -- Integrate + resolve Y (landing detection)
+  py = py + vy * dt
+  on_ground = false
+  for _, p in ipairs(platforms) do
+    if overlaps(px, py, PW, PH, p) then
+      if vy <= 0.0 then py, on_ground = p.y + p.hh + PH, true
+      else py = p.y - p.hh - PH end
+      vy = 0.0
+    end
+  end
+
+  if py < -20.0 then px, py, vx, vy = 0.0, 2.0, 0.0, 0.0 end  -- fell off -> respawn
+  dse.ecs.set_transform_position(player, px, py, 0.0)
+end
+)LUA";
+    return SubstName(kBody, name);
+}
+
+// 品类模板：俯视 RPG（8 向移动 + 障碍 AABB 碰撞 + 可拾取金币 + 相机跟随）。
+std::string BuildTopDownLua(const std::string& name) {
+    static const char* kBody = R"LUA(-- __NAME__ — DSEngine top-down RPG template (8-way move, obstacles, pickups)
+local app = dse.app
+local KEY_A, KEY_D, KEY_W, KEY_S = 65, 68, 87, 83
+local KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN = 263, 262, 265, 264
+
+local player
+local px, py = 0.0, 0.0
+local PW, PH = 0.4, 0.4
+local SPEED = 5.0
+
+-- Obstacles block movement; coins are collectible pickups.
+local obstacles = {
+  { x = -3.0, y = 2.0,  hw = 0.6, hh = 0.6 },
+  { x =  3.0, y = -1.0, hw = 0.6, hh = 0.6 },
+  { x =  1.5, y = 3.0,  hw = 0.6, hh = 0.6 },
+}
+local coins = {
+  { x = -4.0, y = -3.0 }, { x = 4.0, y = 3.5 }, { x = 0.0, y = 4.0 },
+  { x = -2.0, y = -4.0 }, { x = 5.0, y = 0.0 },
+}
+local score = 0
+
+local function spawn_quad(x, y, sx, sy, r, g, b, order)
+  local e = dse.ecs.create_entity()
+  dse.ecs.add_transform(e, x, y, 0.0, sx, sy, 1.0)
+  dse.ecs.add_sprite(e, r, g, b, 1.0, order or 0)
+  return e
+end
+
+function Awake()
+  player = spawn_quad(px, py, PW * 2.0, PH * 2.0, 0.30, 0.80, 1.0, 2)
+
+  local camera = dse.ecs.create_entity()
+  dse.ecs.add_transform(camera, 0.0, 0.0, 0.0, 1, 1, 1)
+  dse.ecs.add_camera(camera, 6.0)
+  dse.ecs.set_camera_follow(camera, player, 0.15)
+
+  for _, o in ipairs(obstacles) do
+    spawn_quad(o.x, o.y, o.hw * 2.0, o.hh * 2.0, 0.55, 0.40, 0.35, 0)
+  end
+  for _, c in ipairs(coins) do
+    c.e = spawn_quad(c.x, c.y, 0.4, 0.4, 1.0, 0.85, 0.20, 1)
+    c.taken = false
+  end
+  print("[__NAME__] top-down ready -- WASD/arrows to move, collect the gold coins")
+end
+
+local function overlaps(ax, ay, ahw, ahh, bx, by, bhw, bhh)
+  return math.abs(ax - bx) < (ahw + bhw) and math.abs(ay - by) < (ahh + bhh)
+end
+
+function Update(dt)
+  dt = dt or 0.0
+  local dx, dy = 0.0, 0.0
+  if app.get_key(KEY_A) or app.get_key(KEY_LEFT)  then dx = dx - 1.0 end
+  if app.get_key(KEY_D) or app.get_key(KEY_RIGHT) then dx = dx + 1.0 end
+  if app.get_key(KEY_W) or app.get_key(KEY_UP)    then dy = dy + 1.0 end
+  if app.get_key(KEY_S) or app.get_key(KEY_DOWN)  then dy = dy - 1.0 end
+  if dx ~= 0.0 and dy ~= 0.0 then dx, dy = dx * 0.70710678, dy * 0.70710678 end
+
+  -- Move X then resolve against obstacles
+  px = px + dx * SPEED * dt
+  for _, o in ipairs(obstacles) do
+    if overlaps(px, py, PW, PH, o.x, o.y, o.hw, o.hh) then
+      if px < o.x then px = o.x - o.hw - PW else px = o.x + o.hw + PW end
+    end
+  end
+  -- Move Y then resolve
+  py = py + dy * SPEED * dt
+  for _, o in ipairs(obstacles) do
+    if overlaps(px, py, PW, PH, o.x, o.y, o.hw, o.hh) then
+      if py < o.y then py = o.y - o.hh - PH else py = o.y + o.hh + PH end
+    end
+  end
+  dse.ecs.set_transform_position(player, px, py, 0.0)
+
+  -- Pickups
+  for _, c in ipairs(coins) do
+    if not c.taken and overlaps(px, py, PW, PH, c.x, c.y, 0.2, 0.2) then
+      c.taken = true
+      score = score + 1
+      dse.ecs.set_transform_position(c.e, 9999.0, 9999.0, 0.0)  -- hide off-screen
+      print(string.format("[__NAME__] coin %d/%d", score, #coins))
+      if score == #coins then print("[__NAME__] all coins collected!") end
+    end
+  end
+end
+)LUA";
+    return SubstName(kBody, name);
+}
+
+// 品类模板：3D 第三人称（地面 + 角色方块 + 固定偏移跟随相机）。
+std::string BuildThirdPersonLua(const std::string& name) {
+    static const char* kBody = R"LUA(-- __NAME__ — DSEngine 3D third-person template (follow camera + WASD movement)
+-- Scene main.json pre-populates a Camera + Directional Light. We drive the camera
+-- ourselves (no free controller): keep its scene orientation, translate to follow.
+local app = dse.app
+local KEY_A, KEY_D, KEY_W, KEY_S = 65, 68, 87, 83
+local KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN = 263, 262, 265, 264
+local atan2 = math.atan2 or math.atan   -- Lua 5.1 has math.atan2; 5.3+ folds it into math.atan
+
+local state = { camera = nil, player = nil, px = 0.0, pz = 0.0, yaw = 0.0 }
+local SPEED = 6.0
+local CAM_BACK, CAM_UP = 9.0, 5.0   -- camera offset behind/above the player
+
+local function cube_verts()
+  return { -0.5,-0.5, 0.5,  0.5,-0.5, 0.5,  0.5, 0.5, 0.5, -0.5, 0.5, 0.5,
+           -0.5,-0.5,-0.5,  0.5,-0.5,-0.5,  0.5, 0.5,-0.5, -0.5, 0.5,-0.5 }
+end
+local function cube_idx()
+  return { 0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4 }
+end
+
+function Awake()
+  -- Grab the scene camera (no free controller attached: we position it each frame).
+  local cams = dse.ecs.find_entities_with_camera3d and dse.ecs.find_entities_with_camera3d() or {}
+  if #cams > 0 then state.camera = cams[1] end
+
+  local ground = dse.ecs.create_entity()
+  dse.ecs.add_transform(ground, 0, -0.06, 0, 20, 0.12, 20)
+  dse.ecs.add_mesh_renderer(ground, 0.32, 0.36, 0.33, 1.0, cube_verts(), cube_idx())
+  dse.ecs.set_mesh_shader_variant(ground, "MESH_LIT")
+  dse.ecs.set_mesh_material(ground, 0.0, 0.85, 1.0, 0, 0, 0, 1.0, true, true)
+
+  state.player = dse.ecs.create_entity()
+  dse.ecs.add_transform(state.player, 0, 0.5, 0, 1, 1, 1)
+  dse.ecs.add_mesh_renderer(state.player, 0.20, 0.70, 1.0, 1.0, cube_verts(), cube_idx())
+  dse.ecs.set_mesh_shader_variant(state.player, "MESH_LIT")
+  dse.ecs.set_mesh_material(state.player, 0.1, 0.5, 1.0, 0, 0, 0, 1.0, true, false)
+
+  print("[__NAME__] third-person ready -- WASD to move; camera follows from behind")
+end
+
+function Update(dt)
+  dt = dt or 0.0
+  local dx, dz = 0.0, 0.0
+  if app.get_key(KEY_A) or app.get_key(KEY_LEFT)  then dx = dx - 1.0 end
+  if app.get_key(KEY_D) or app.get_key(KEY_RIGHT) then dx = dx + 1.0 end
+  if app.get_key(KEY_W) or app.get_key(KEY_UP)    then dz = dz - 1.0 end   -- forward = -Z
+  if app.get_key(KEY_S) or app.get_key(KEY_DOWN)  then dz = dz + 1.0 end
+  if dx ~= 0.0 and dz ~= 0.0 then dx, dz = dx * 0.70710678, dz * 0.70710678 end
+
+  state.px = state.px + dx * SPEED * dt
+  state.pz = state.pz + dz * SPEED * dt
+
+  if state.player then
+    dse.ecs.set_transform_position(state.player, state.px, 0.5, state.pz)
+    if dx ~= 0.0 or dz ~= 0.0 then
+      state.yaw = math.deg(atan2(dx, -dz))   -- face movement direction
+      dse.ecs.set_transform_rotation(state.player, 0.0, state.yaw, 0.0)
+    end
+  end
+
+  -- Fixed-offset third-person follow (keeps the scene camera's -Z orientation).
+  if state.camera then
+    dse.ecs.set_transform_position(state.camera, state.px, 0.5 + CAM_UP, state.pz + CAM_BACK)
+  end
+end
+)LUA";
+    return SubstName(kBody, name);
+}
+
 std::string BuildMainLua(const std::string& name, ProjectTemplate tmpl) {
+    if (tmpl == ProjectTemplate::Platformer2D)  return BuildPlatformerLua(name);
+    if (tmpl == ProjectTemplate::TopDownRPG)    return BuildTopDownLua(name);
+    if (tmpl == ProjectTemplate::ThirdPerson3D) return BuildThirdPersonLua(name);
     std::ostringstream ss;
-    if (tmpl == ProjectTemplate::Game2D || tmpl == ProjectTemplate::Lua) {
-        ss << "-- " << name << " entry script\n"
-           << "-- DSEngine Lua scripting\n\n"
-           << "function on_init()\n"
+    if (tmpl == ProjectTemplate::Game2D) {
+        ss << "-- " << name << " \xE2\x80\x94 DSEngine 2D entry script\n"
+           << "-- Lifecycle: Awake() runs once at startup; Update(dt) runs every frame.\n"
+           << "-- Input: dse.app.get_key(code) uses GLFW key codes (A=65 D=68 W=87 S=83; arrows 262-265).\n\n"
+           << "local app = dse.app\n"
+           << "local KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_UP = 263, 262, 264, 265\n"
+           << "local KEY_A, KEY_D, KEY_S, KEY_W = 65, 68, 83, 87\n\n"
+           << "local player\n"
+           << "local pos = { x = 0.0, y = 0.0 }\n"
+           << "local speed = 5.0\n\n"
+           << "function Awake()\n"
+           << "    -- Orthographic 2D camera (vertical half-size = 5 world units)\n"
+           << "    local camera = dse.ecs.create_entity()\n"
+           << "    dse.ecs.add_transform(camera, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0)\n"
+           << "    dse.ecs.add_camera(camera, 5.0)\n\n"
+           << "    -- Player: a solid-color quad (texture handle 0 => white, tinted by color)\n"
+           << "    player = dse.ecs.create_entity()\n"
+           << "    dse.ecs.add_transform(player, pos.x, pos.y, 0.0, 1.0, 1.0, 1.0)\n"
+           << "    dse.ecs.add_sprite(player, 0.30, 0.80, 1.0, 1.0, 0)\n\n"
+           << "    print(\"[" << name << "] ready -- move the square with WASD or arrow keys\")\n"
+           << "end\n\n"
+           << "function Update(dt)\n"
+           << "    dt = dt or 0.0\n"
+           << "    local dx, dy = 0.0, 0.0\n"
+           << "    if app.get_key(KEY_A) or app.get_key(KEY_LEFT)  then dx = dx - 1.0 end\n"
+           << "    if app.get_key(KEY_D) or app.get_key(KEY_RIGHT) then dx = dx + 1.0 end\n"
+           << "    if app.get_key(KEY_W) or app.get_key(KEY_UP)    then dy = dy + 1.0 end\n"
+           << "    if app.get_key(KEY_S) or app.get_key(KEY_DOWN)  then dy = dy - 1.0 end\n"
+           << "    pos.x = pos.x + dx * speed * dt\n"
+           << "    pos.y = pos.y + dy * speed * dt\n"
+           << "    dse.ecs.set_transform_position(player, pos.x, pos.y, 0.0)\n"
+           << "end\n";
+    } else if (tmpl == ProjectTemplate::Lua) {
+        ss << "-- " << name << " entry script (DSEngine Lua)\n"
+           << "-- Lifecycle hooks called by the runtime:\n"
+           << "--   Awake()    -> once at startup\n"
+           << "--   Update(dt) -> every frame (dt = seconds since last frame)\n\n"
+           << "function Awake()\n"
            << "    print(\"" << name << " initialized\")\n"
            << "end\n\n"
-           << "function on_update(dt)\n"
+           << "function Update(dt)\n"
            << "end\n";
     } else if (tmpl == ProjectTemplate::Game3D) {
         ss << "-- " << name << " (3D) entry script\n"
@@ -149,7 +470,7 @@ std::string BuildMainLua(const std::string& name, ProjectTemplate tmpl) {
            << "local function cube_idx()\n"
            << "    return { 0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4 }\n"
            << "end\n\n"
-           << "function on_init()\n"
+           << "function Awake()\n"
            << "    -- Add free-camera controller to the camera entity loaded from scene\n"
            << "    local cam_entities = dse.ecs.find_entities_with_camera3d and dse.ecs.find_entities_with_camera3d() or {}\n"
            << "    if #cam_entities > 0 then\n"
@@ -170,7 +491,7 @@ std::string BuildMainLua(const std::string& name, ProjectTemplate tmpl) {
            << "    dse.ecs.set_mesh_material(state.cube, 0.1, 0.4, 1.0, 0, 0, 0, 1.0, true, false)\n\n"
            << "    print(\"[" << name << "] 3D scene ready. Right-click + W/A/S/D/Q/E to navigate.\")\n"
            << "end\n\n"
-           << "function on_update(dt)\n"
+           << "function Update(dt)\n"
            << "    state.time = state.time + (dt or 0)\n"
            << "    if state.cube then\n"
            << "        dse.ecs.set_transform_rotation(state.cube, 0, state.time * 45.0, 0)\n"
@@ -183,7 +504,7 @@ std::string BuildMainLua(const std::string& name, ProjectTemplate tmpl) {
 std::string BuildCppMain(const std::string& name) {
     std::ostringstream ss;
     ss << "// " << name << " — DSEngine C++ host\n"
-       << "// 生命周期钩子与 Lua 的 on_init/on_update 对应：bootstrap / tick / shutdown。\n"
+       << "// 生命周期钩子与 Lua 的 Awake/Update 对应：bootstrap / tick / shutdown。\n"
        << "#include \"engine/runtime/engine_app.h\"\n"
        << "#include \"engine/scripting/cpp/cpp_business_runtime.h\"\n"
        << "#include \"engine/ecs/world.h\"\n"
@@ -241,11 +562,14 @@ std::string BuildCppCMake(const std::string& name) {
 } // namespace
 
 bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
-    if (token == "empty") { out = ProjectTemplate::Empty;  return true; }
-    if (token == "2d")    { out = ProjectTemplate::Game2D; return true; }
-    if (token == "3d")    { out = ProjectTemplate::Game3D; return true; }
-    if (token == "lua")   { out = ProjectTemplate::Lua;    return true; }
-    if (token == "cpp")   { out = ProjectTemplate::Cpp;    return true; }
+    if (token == "empty")        { out = ProjectTemplate::Empty;         return true; }
+    if (token == "2d")           { out = ProjectTemplate::Game2D;        return true; }
+    if (token == "3d")           { out = ProjectTemplate::Game3D;        return true; }
+    if (token == "lua")          { out = ProjectTemplate::Lua;           return true; }
+    if (token == "cpp")          { out = ProjectTemplate::Cpp;           return true; }
+    if (token == "platformer")   { out = ProjectTemplate::Platformer2D;  return true; }
+    if (token == "topdown")      { out = ProjectTemplate::TopDownRPG;    return true; }
+    if (token == "thirdperson")  { out = ProjectTemplate::ThirdPerson3D; return true; }
     return false;
 }
 
@@ -256,6 +580,9 @@ const char* TemplateDisplayName(ProjectTemplate tmpl) {
         case ProjectTemplate::Game3D: return "3D";
         case ProjectTemplate::Lua:    return "Lua";
         case ProjectTemplate::Cpp:    return "C++";
+        case ProjectTemplate::Platformer2D:  return "2D Platformer";
+        case ProjectTemplate::TopDownRPG:    return "Top-Down RPG";
+        case ProjectTemplate::ThirdPerson3D: return "3D Third-Person";
     }
     return "Unknown";
 }

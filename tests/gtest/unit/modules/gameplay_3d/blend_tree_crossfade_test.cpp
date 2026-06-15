@@ -20,12 +20,14 @@ using namespace dse::gameplay3d;
 // BlendTreeNode / AnimState 数据结构
 // ============================================================
 
+// 测试 混合树节点：默认值
 TEST(BlendTreeNodeTest, DefaultValues) {
     BlendTreeNode node;
     EXPECT_TRUE(node.danim_path.empty());
     EXPECT_FLOAT_EQ(node.threshold, 0.0f);
 }
 
+// 测试 动画状态：默认值单一
 TEST(AnimStateTest, DefaultValues_Single) {
     AnimState state;
     EXPECT_TRUE(state.name.empty());
@@ -38,6 +40,7 @@ TEST(AnimStateTest, DefaultValues_Single) {
     EXPECT_TRUE(state.transitions.empty());
 }
 
+// 测试 动画状态：混合树配置
 TEST(AnimStateTest, BlendTreeConfiguration) {
     AnimState state;
     state.name = "Locomotion";
@@ -58,6 +61,7 @@ TEST(AnimStateTest, BlendTreeConfiguration) {
 // AnimTransition / Crossfade
 // ============================================================
 
+// 测试 动画过渡：默认值
 TEST(AnimTransitionTest, DefaultValues) {
     AnimTransition t;
     EXPECT_TRUE(t.target_state.empty());
@@ -67,6 +71,7 @@ TEST(AnimTransitionTest, DefaultValues) {
     EXPECT_TRUE(t.conditions.empty());
 }
 
+// 测试 动画过渡：Crossfade参数
 TEST(AnimTransitionTest, CrossfadeParameters) {
     AnimTransition t;
     t.target_state = "Attack";
@@ -88,6 +93,7 @@ TEST(AnimTransitionTest, CrossfadeParameters) {
 // AnimationStateMachine 参数系统
 // ============================================================
 
+// 测试 动画状态状态机：浮点参数
 TEST(AnimationStateMachineTest, FloatParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
@@ -96,6 +102,7 @@ TEST(AnimationStateMachineTest, FloatParameters) {
     EXPECT_FLOAT_EQ(sm.GetFloat("speed"), 0.75f);
 }
 
+// 测试 动画状态状态机：整数参数
 TEST(AnimationStateMachineTest, IntParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("combo", AnimParamType::Int, 0);
@@ -104,6 +111,7 @@ TEST(AnimationStateMachineTest, IntParameters) {
     EXPECT_EQ(sm.GetInt("combo"), 3);
 }
 
+// 测试 动画状态状态机：布尔参数
 TEST(AnimationStateMachineTest, BoolParameters) {
     AnimationStateMachine sm;
     sm.AddParameter("grounded", AnimParamType::Bool, true);
@@ -112,6 +120,7 @@ TEST(AnimationStateMachineTest, BoolParameters) {
     EXPECT_FALSE(sm.GetBool("grounded"));
 }
 
+// 测试 动画状态状态机：触发参数
 TEST(AnimationStateMachineTest, TriggerParameters) {
     AnimationStateMachine sm;
     sm.AddTrigger("jump");
@@ -130,6 +139,7 @@ TEST(AnimationStateMachineTest, TriggerParameters) {
 // 状态管理
 // ============================================================
 
+// 测试 动画状态状态机：添加状态且默认状态
 TEST(AnimationStateMachineTest, AddStateAndDefaultState) {
     AnimationStateMachine sm;
     AnimState idle;
@@ -143,6 +153,7 @@ TEST(AnimationStateMachineTest, AddStateAndDefaultState) {
     EXPECT_NE(sm.GetStates().find("Idle"), sm.GetStates().end());
 }
 
+// 测试 动画状态状态机：多状态混合树
 TEST(AnimationStateMachineTest, MultiStateBlendTree) {
     AnimationStateMachine sm;
 
@@ -172,6 +183,7 @@ TEST(AnimationStateMachineTest, MultiStateBlendTree) {
 // EvaluateTransition
 // ============================================================
 
+// 测试 动画状态状态机：求值过渡浮点大于
 TEST(AnimationStateMachineTest, EvaluateTransition_Float_Greater) {
     AnimationStateMachine sm;
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);
@@ -192,6 +204,7 @@ TEST(AnimationStateMachineTest, EvaluateTransition_Float_Greater) {
     EXPECT_TRUE(sm.EvaluateTransition(t, 1.0f));
 }
 
+// 测试 动画状态状态机：求值过渡Exit时间
 TEST(AnimationStateMachineTest, EvaluateTransition_ExitTime) {
     AnimationStateMachine sm;
     AnimTransition t;
@@ -206,6 +219,7 @@ TEST(AnimationStateMachineTest, EvaluateTransition_ExitTime) {
     EXPECT_TRUE(sm.EvaluateTransition(t, 0.95f));
 }
 
+// 测试 动画状态状态机：求值过渡触发
 TEST(AnimationStateMachineTest, EvaluateTransition_Trigger) {
     AnimationStateMachine sm;
     sm.AddTrigger("attack");
@@ -225,6 +239,7 @@ TEST(AnimationStateMachineTest, EvaluateTransition_Trigger) {
     EXPECT_TRUE(sm.EvaluateTransition(t, 1.0f));
 }
 
+// 测试 动画状态状态机：求值过渡多个条件且
 TEST(AnimationStateMachineTest, EvaluateTransition_MultipleConditionsAND) {
     AnimationStateMachine sm;
     sm.AddParameter("speed", AnimParamType::Float, 0.0f);

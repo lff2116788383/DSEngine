@@ -10,6 +10,7 @@ using namespace dse;
 
 // ─── FluidParticle ─────────────────────────────────────────────────────
 
+// 测试 流体粒子：默认值
 TEST(FluidParticleTest, DefaultValues) {
     FluidParticle p;
     EXPECT_FLOAT_EQ(p.position.x, 0.0f);
@@ -21,6 +22,7 @@ TEST(FluidParticleTest, DefaultValues) {
 
 // ─── FluidEmitterShape ─────────────────────────────────────────────────
 
+// 测试 流体发射器Shape：枚举值
 TEST(FluidEmitterShapeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(FluidEmitterShape::Point), 0);
     EXPECT_EQ(static_cast<int>(FluidEmitterShape::Sphere), 1);
@@ -29,6 +31,7 @@ TEST(FluidEmitterShapeTest, EnumerationValue) {
 
 // ─── FluidEmitterComponent ─────────────────────────────────────────────
 
+// 测试 流体发射器组件：默认配置
 TEST(FluidEmitterComponentTest, DefaultConfiguration) {
     FluidEmitterComponent fluid;
     EXPECT_TRUE(fluid.enabled);
@@ -41,6 +44,7 @@ TEST(FluidEmitterComponentTest, DefaultConfiguration) {
     EXPECT_FLOAT_EQ(fluid.emit_spread, 0.3f);
 }
 
+// 测试 流体发射器组件：默认发射器参数
 TEST(FluidEmitterComponentTest, DefaultEmitterParameters) {
     FluidEmitterComponent fluid;
     EXPECT_FLOAT_EQ(fluid.sphere_radius, 0.5f);
@@ -49,6 +53,7 @@ TEST(FluidEmitterComponentTest, DefaultEmitterParameters) {
     EXPECT_FLOAT_EQ(fluid.box_half_extents.z, 0.5f);
 }
 
+// 测试 流体发射器组件：默认参数
 TEST(FluidEmitterComponentTest, DefaultParameters) {
     FluidEmitterComponent fluid;
     EXPECT_FLOAT_EQ(fluid.gravity.y, -9.81f);
@@ -59,12 +64,14 @@ TEST(FluidEmitterComponentTest, DefaultParameters) {
     EXPECT_FLOAT_EQ(fluid.damping, 0.01f);
 }
 
+// 测试 流体发射器组件：默认
 TEST(FluidEmitterComponentTest, Default) {
     FluidEmitterComponent fluid;
     EXPECT_FLOAT_EQ(fluid.collision_restitution, 0.3f);
     EXPECT_FLOAT_EQ(fluid.floor_y, 0.0f);
 }
 
+// 测试 流体发射器组件：默认参数2
 TEST(FluidEmitterComponentTest, DefaultParameters_2) {
     FluidEmitterComponent fluid;
     EXPECT_FLOAT_EQ(fluid.color.r, 0.2f);
@@ -77,6 +84,7 @@ TEST(FluidEmitterComponentTest, DefaultParameters_2) {
     EXPECT_FLOAT_EQ(fluid.depth_smoothing_radius, 5.0f);
 }
 
+// 测试 流体发射器组件：默认当状态
 TEST(FluidEmitterComponentTest, DefaultWhenState) {
     FluidEmitterComponent fluid;
     EXPECT_TRUE(fluid.particles.empty());
@@ -86,6 +94,7 @@ TEST(FluidEmitterComponentTest, DefaultWhenState) {
     EXPECT_FALSE(fluid.gpu_dirty);
 }
 
+// 测试 流体发射器组件：添加到且
 TEST(FluidEmitterComponentTest, AddToAnd) {
     FluidEmitterComponent fluid;
     FluidParticle p;
@@ -99,6 +108,7 @@ TEST(FluidEmitterComponentTest, AddToAnd) {
     EXPECT_FLOAT_EQ(fluid.particles[0].life, 2.5f);
 }
 
+// 测试 流体发射器组件：发射器
 TEST(FluidEmitterComponentTest, Emitter) {
     FluidEmitterComponent fluid;
     fluid.shape = FluidEmitterShape::Sphere;

@@ -1,6 +1,7 @@
 #include "modules/gameplay_3d/animation/animator_system.h"
 #include "modules/gameplay_3d/animation/animation_state_machine.h"
 #include "modules/gameplay_3d/animation/anim_clip_eval.h"
+#include "modules/gameplay_3d/animation/anim_blend_weights.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/assets/asset_manager.h"
@@ -208,49 +209,12 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                 return false;
             }
 
-            std::vector<float> evaluated_weights(blend_nodes.size(), 0.0f);
+            std::vector<float> evaluated_weights;
             const bool use_threshold_blend = blend_nodes.size() >= 2;
             if (use_threshold_blend) {
-                size_t lower_index = 0;
-                size_t upper_index = blend_nodes.size() - 1;
-                float lower_threshold = blend_nodes.front().threshold;
-                float upper_threshold = blend_nodes.back().threshold;
-
-                for (size_t i = 0; i < blend_nodes.size(); ++i) {
-                    const float threshold = blend_nodes[i].threshold;
-                    if (threshold <= blend_parameter_value) {
-                        lower_index = i;
-                        lower_threshold = threshold;
-                    }
-                    if (threshold >= blend_parameter_value) {
-                        upper_index = i;
-                        upper_threshold = threshold;
-                        break;
-                    }
-                }
-
-                if (blend_parameter_value <= blend_nodes.front().threshold) {
-                    lower_index = 0;
-                    upper_index = 0;
-                    lower_threshold = blend_nodes.front().threshold;
-                    upper_threshold = blend_nodes.front().threshold;
-                } else if (blend_parameter_value >= blend_nodes.back().threshold) {
-                    lower_index = blend_nodes.size() - 1;
-                    upper_index = blend_nodes.size() - 1;
-                    lower_threshold = blend_nodes.back().threshold;
-                    upper_threshold = blend_nodes.back().threshold;
-                }
-
-                if (lower_index == upper_index || std::abs(upper_threshold - lower_threshold) <= 0.0001f) {
-                    evaluated_weights[lower_index] = 1.0f;
-                } else {
-                    const float range = upper_threshold - lower_threshold;
-                    const float t = std::clamp((blend_parameter_value - lower_threshold) / range, 0.0f, 1.0f);
-                    evaluated_weights[lower_index] = 1.0f - t;
-                    evaluated_weights[upper_index] = t;
-                }
-            } else {
-                evaluated_weights[0] = 1.0f;
+                std::vector<float> thresholds(blend_nodes.size());
+                for (size_t i = 0; i < blend_nodes.size(); ++i) thresholds[i] = blend_nodes[i].threshold;
+                evaluated_weights = anim_blend::ComputeBlend1DWeights(thresholds, blend_parameter_value);
             }
 
             reuse_blend_accum.Reset(bone_count);
@@ -310,6 +274,69 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
                 if (!has_anim[i]) {
                     continue;
                 }
+                out_sample.positions[i] = accumulated.positions[i] / total_weight;
+                out_sample.rotations[i] = glm::normalize(accumulated.rotations[i]);
+                out_sample.scales[i] = accumulated.scales[i] / total_weight;
+            }
+            return true;
+        };
+
+        // 2D blend space：反距离加权混合多个采样点（见 anim_blend::ComputeBlend2DWeights）。
+        auto EvaluateLegacyBlendTree2D = [&](std::vector<AnimBlendNode2D>& nodes,
+                                             glm::vec2 param, SampleBuffer& out_sample) -> bool {
+            if (nodes.empty()) return false;
+
+            std::vector<glm::vec2> points(nodes.size());
+            for (size_t i = 0; i < nodes.size(); ++i) points[i] = glm::vec2(nodes[i].x, nodes[i].y);
+            const std::vector<float> weights = anim_blend::ComputeBlend2DWeights(points, param);
+
+            reuse_blend_accum.Reset(bone_count);
+            std::fill(reuse_blend_accum.positions.begin(), reuse_blend_accum.positions.end(), glm::vec3(0.0f));
+            std::fill(reuse_blend_accum.rotations.begin(), reuse_blend_accum.rotations.end(), glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
+            std::fill(reuse_blend_accum.scales.begin(), reuse_blend_accum.scales.end(), glm::vec3(0.0f));
+            auto& accumulated = reuse_blend_accum;
+            auto& has_anim = reuse_blend_accum.touched;
+
+            float total_weight = 0.0f;
+            for (size_t node_index = 0; node_index < nodes.size(); ++node_index) {
+                auto& node = nodes[node_index];
+                const float evaluated_weight = weights[node_index];
+                if (evaluated_weight <= 0.001f || node.danim_path.empty()) continue;
+
+                auto danim = asset_manager.LoadDanim(node.danim_path);
+                if (!danim || danim->GetData().empty()) continue;
+
+                const uint8_t* data = danim->GetData().data();
+                const asset::compiler::AnimHeader* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
+                if (!anim_util::IsValidAnimHeader(header)) continue;
+
+                node.current_time = AdvanceClipTime(node.current_time, delta_time, node.speed, header->duration, node.loop);
+
+                float clip_duration = 0.0f;
+                reuse_blend_node.Reset(bone_count);
+                auto& node_sample = reuse_blend_node;
+                if (!EvaluateClip(node.danim_path, node.current_time, node_sample, clip_duration)) continue;
+                node.current_time = AdvanceClipTime(node.current_time, 0.0f, node.speed, clip_duration, node.loop);
+                total_weight += evaluated_weight;
+
+                for (uint32_t i = 0; i < bone_count; ++i) {
+                    if (!node_sample.touched[i]) continue;
+                    if (!has_anim[i]) {
+                        accumulated.positions[i] = node_sample.positions[i] * evaluated_weight;
+                        accumulated.rotations[i] = node_sample.rotations[i] * evaluated_weight;
+                        accumulated.scales[i] = node_sample.scales[i] * evaluated_weight;
+                        has_anim[i] = true;
+                    } else {
+                        accumulated.positions[i] += node_sample.positions[i] * evaluated_weight;
+                        accumulated.rotations[i] += node_sample.rotations[i] * evaluated_weight;
+                        accumulated.scales[i] += node_sample.scales[i] * evaluated_weight;
+                    }
+                }
+            }
+
+            if (total_weight <= 0.0f) return false;
+            for (uint32_t i = 0; i < bone_count; ++i) {
+                if (!has_anim[i]) continue;
                 out_sample.positions[i] = accumulated.positions[i] / total_weight;
                 out_sample.rotations[i] = glm::normalize(accumulated.rotations[i]);
                 out_sample.scales[i] = accumulated.scales[i] / total_weight;
@@ -495,9 +522,12 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
             WriteSampleToPoseBuffer(reuse_sample_a);
             pose_palette_cache[early_key] = &animator;
         } else {
-            // --- LEGACY ANIM TREE (1D Blend) PATH ---
+            // --- LEGACY ANIM TREE (1D / 2D Blend) PATH ---
             reuse_sample_a.Reset(bone_count);
-            if (EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, reuse_sample_a)) {
+            const bool blended = animator.blend_tree_is_2d
+                ? EvaluateLegacyBlendTree2D(animator.blend_nodes_2d, animator.blend_parameter_2d, reuse_sample_a)
+                : EvaluateLegacyBlendTree(animator.blend_nodes, animator.blend_parameter_value, reuse_sample_a);
+            if (blended) {
                 WriteSampleToPoseBuffer(reuse_sample_a);
             }
         }

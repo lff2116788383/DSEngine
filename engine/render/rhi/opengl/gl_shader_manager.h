@@ -173,6 +173,12 @@ public:
     // --- 精灵着色器 ---
     void InitSpriteShader();
 
+    // 2D batch program (Web/ESSL300): replaces PBR on the sprite batch
+    // path where the 3D PBR shader cannot lower to GLES 3.0 / WebGL2.
+    void InitSprite2DShader();
+    unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+    const PBRShaderLocations& sprite2d_locations() const { return sprite2d_locations_; }
+
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
         int texture = -1;
@@ -239,6 +245,9 @@ private:
     ShadowShaderLocations shadow_locations_;
     TextSdfLocations text_sdf_locations_;
     UIEffectsLocations ui_effects_locations_;
+
+    unsigned int sprite2d_shader_handle_ = 0;
+    PBRShaderLocations sprite2d_locations_;
 };
 
 } // namespace render

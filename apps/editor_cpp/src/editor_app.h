@@ -9,6 +9,7 @@
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 #include "engine/profiler/render_profiler.h"
+#include "engine/platform/splash_screen.h"
 #include "editor_test_harness.h"
 #include "editor_control_server.h"
 #include "editor_plugin_manager.h"
@@ -54,6 +55,11 @@ private:
 
     // Window
     GLFWwindow* window_ = nullptr;
+
+    // 启动 splash（原生窗口，logo + 加载状态 + 淡入淡出）
+    dse::platform::SplashScreen splash_;
+    bool first_frame_shown_ = false;
+    bool deferred_window_show_ = false;  // splash 期间窗口隐藏，首帧后需 Show
 
     // Engine
     dse::runtime::EngineInstance* engine_instance_ = nullptr;

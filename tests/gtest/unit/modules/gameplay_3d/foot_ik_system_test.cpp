@@ -22,6 +22,7 @@ using namespace gameplay3d;
 // FootIK3DComponent 默认值
 // ============================================================
 
+// 测试 足部IK：足部IK 3D组件默认值
 TEST(FootIKTest, FootIK3DComponentDefaultValues) {
     FootIK3DComponent comp;
     EXPECT_TRUE(comp.enabled);
@@ -30,6 +31,7 @@ TEST(FootIKTest, FootIK3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(comp.max_pelvis_offset, 0.3f);
 }
 
+// 测试 足部IK：足部IK配置默认值
 TEST(FootIKTest, FootIKConfigDefaultValues) {
     FootIKConfig config;
     EXPECT_TRUE(config.name.empty());
@@ -44,11 +46,13 @@ TEST(FootIKTest, FootIKConfigDefaultValues) {
 // 系统 Update 基本功能
 // ============================================================
 
+// 测试 足部IK：空世界调用更新不崩溃
 TEST(FootIKTest, EmptyWorldCallsUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(FootIKSystem::Update(world, 0.016f));
 }
 
+// 测试 足部IK：带组件无有效缓存不崩溃
 TEST(FootIKTest, WithComponentWithoutValidCacheDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
@@ -59,6 +63,7 @@ TEST(FootIKTest, WithComponentWithoutValidCacheDoesNotCrash) {
     EXPECT_NO_THROW(FootIKSystem::Update(world, 0.016f));
 }
 
+// 测试 足部IK：带组件无变换不崩溃
 TEST(FootIKTest, WithComponentWithoutTransformDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
@@ -73,6 +78,7 @@ TEST(FootIKTest, WithComponentWithoutTransformDoesNotCrash) {
 // 坐标系转换测试
 // ============================================================
 
+// 测试 足部IK：过渡空到空
 TEST(FootIKTest, Transition_EmptyToEmpty) {
     glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 5.0f, 0.0f));
     glm::mat4 inv_world = glm::inverse(entity_world);
@@ -85,6 +91,7 @@ TEST(FootIKTest, Transition_EmptyToEmpty) {
     EXPECT_NEAR(model_pos.z, 2.0f, 0.01f);
 }
 
+// 测试 足部IK：过渡空到空2
 TEST(FootIKTest, Transition_EmptyToEmpty_2) {
     glm::mat4 entity_world = glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 5.0f, 0.0f));
 
@@ -100,6 +107,7 @@ TEST(FootIKTest, Transition_EmptyToEmpty_2) {
 // 骨盆调整逻辑测试
 // ============================================================
 
+// 测试 足部IK：情形
 TEST(FootIKTest, Case_Case) {
     // 模拟脚部需要下移的情况
     float min_foot_delta = -0.3f; // 最低脚需要下移 0.3 米
@@ -113,6 +121,7 @@ TEST(FootIKTest, Case_Case) {
     EXPECT_NEAR(pelvis_drop * pelvis_weight, -0.15f, 0.01f);
 }
 
+// 测试 足部IK：情形不情形
 TEST(FootIKTest, Case_Not_Case) {
     float min_foot_delta = 0.2f; // 脚部需要上移，不触发骨盆下移
     float max_pelvis_offset = 0.5f;
@@ -128,6 +137,7 @@ TEST(FootIKTest, Case_Not_Case) {
 // 地面射线检测 fallback 测试
 // ============================================================
 
+// 测试 足部IK：情形无系统返回
 TEST(FootIKTest, Case_WithoutSystemReturns) {
     glm::vec3 world_pos(10.0f, 5.0f, 2.0f);
     float max_distance = 10.0f;
@@ -138,6 +148,7 @@ TEST(FootIKTest, Case_WithoutSystemReturns) {
     EXPECT_NEAR(ground_height, 5.0f, 0.01f);
 }
 
+// 测试 足部IK：情形Withouthit返回
 TEST(FootIKTest, Case_WithouthitReturns) {
     glm::vec3 world_pos(10.0f, 5.0f, 2.0f);
     float max_distance = 10.0f;

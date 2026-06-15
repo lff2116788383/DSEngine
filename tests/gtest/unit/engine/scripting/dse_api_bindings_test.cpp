@@ -43,6 +43,7 @@ protected:
     World world_;
 };
 
+// 测试 DSE API绑定：动态障碍Shape往返
 TEST_F(DseApiBindingsTest, DynamicObstacle_ShapeRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::DynamicObstacleComponent>(e);
@@ -54,6 +55,7 @@ TEST_F(DseApiBindingsTest, DynamicObstacle_ShapeRoundTrip) {
               dse::DynamicObstacleComponent::Shape::Cylinder);
 }
 
+// 测试 DSE API绑定：动态障碍Setters标记脏
 TEST_F(DseApiBindingsTest, DynamicObstacle_SettersMarkDirty) {
     Entity e = world_.CreateEntity();
     auto& obstacle = world_.registry().emplace<dse::DynamicObstacleComponent>(e);
@@ -72,6 +74,7 @@ TEST_F(DseApiBindingsTest, DynamicObstacle_SettersMarkDirty) {
     EXPECT_TRUE(world_.registry().get<dse::DynamicObstacleComponent>(e).dirty_);
 }
 
+// 测试 DSE API绑定：导航网格自动重新烘焙字段往返
 TEST_F(DseApiBindingsTest, NavMeshAutoRebake_FieldRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
@@ -86,6 +89,7 @@ TEST_F(DseApiBindingsTest, NavMeshAutoRebake_FieldRoundTrip) {
     EXPECT_EQ(dse_navmesh_rebake_get_collect_terrain(id), 0);
 }
 
+// 测试 DSE API绑定：树网格路径往返
 TEST_F(DseApiBindingsTest, Tree_MeshPathRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::TreeComponent>(e);
@@ -102,6 +106,7 @@ TEST_F(DseApiBindingsTest, Tree_MeshPathRoundTrip) {
     EXPECT_STREQ(buf, "models/tree_lod1.dmesh");
 }
 
+// 测试 DSE API绑定：网格渲染器着色器变体往返
 TEST_F(DseApiBindingsTest, MeshRenderer_ShaderVariantRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::MeshRendererComponent>(e);
@@ -118,6 +123,7 @@ TEST_F(DseApiBindingsTest, MeshRenderer_ShaderVariantRoundTrip) {
     EXPECT_EQ(world_.registry().get<dse::MeshRendererComponent>(e).shader_variant, "MESH_PBR");
 }
 
+// 测试 DSE API绑定：网格渲染器网格路径往返
 TEST_F(DseApiBindingsTest, MeshRenderer_MeshPathRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::MeshRendererComponent>(e);
@@ -132,6 +138,7 @@ TEST_F(DseApiBindingsTest, MeshRenderer_MeshPathRoundTrip) {
 }
 
 // set_mesh_path 必须清空过程网格缓存，否则 MeshRenderSystem 见 temp_* 非空会跳过加载新 mesh_path
+// 测试 DSE API绑定：网格渲染器设置网格路径清空程序化缓冲区
 TEST_F(DseApiBindingsTest, MeshRenderer_SetMeshPathClearsProceduralBuffers) {
     Entity e = world_.CreateEntity();
     auto& mr = world_.registry().emplace<dse::MeshRendererComponent>(e);
@@ -153,6 +160,7 @@ TEST_F(DseApiBindingsTest, MeshRenderer_SetMeshPathClearsProceduralBuffers) {
 }
 
 // S1.8-3b：PostProcess 字段进 defs 后，每字段 dse_post_process_* 访问器覆盖 float/int/bool/vec3
+// 测试 DSE API绑定：后期处理字段往返
 TEST_F(DseApiBindingsTest, PostProcess_FieldRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::PostProcessComponent>(e);
@@ -182,6 +190,7 @@ TEST_F(DseApiBindingsTest, PostProcess_FieldRoundTrip) {
 }
 
 // 组件缺失时 getter 应返回 defs 中声明的默认值（与 header 一致）
+// 测试 DSE API绑定：后期处理缺失组件返回默认
 TEST_F(DseApiBindingsTest, PostProcess_MissingComponentReturnsDefault) {
     Entity e = world_.CreateEntity();  // 不添加 PostProcessComponent
     const uint32_t id = EntityId(e);
@@ -190,6 +199,7 @@ TEST_F(DseApiBindingsTest, PostProcess_MissingComponentReturnsDefault) {
 }
 
 // S1.8 Tier B：新增 dir_light.enabled / point_light.cast_shadow 每字段访问器 round-trip
+// 测试 DSE API绑定：灯光Tier B字段往返
 TEST_F(DseApiBindingsTest, Light_TierBFieldRoundTrip) {
     Entity d = world_.CreateEntity();
     world_.registry().emplace<dse::DirectionalLight3DComponent>(d);
@@ -207,6 +217,7 @@ TEST_F(DseApiBindingsTest, Light_TierBFieldRoundTrip) {
 }
 
 // S1.8 Tier C：手写复合 dse_dir_light_set_shadow_params 的 cascade 级联约束 + clamp
+// 测试 DSE API绑定：目录灯光阴影参数钳制且级联
 TEST_F(DseApiBindingsTest, DirLight_ShadowParamsClampAndCascade) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
@@ -226,6 +237,7 @@ TEST_F(DseApiBindingsTest, DirLight_ShadowParamsClampAndCascade) {
 
 // S1.9：Animator3DComponent 纯字段进 defs 后的每字段访问器 round-trip。
 // danim_path/dskel_path 为纯字符串 setter（无清缓存副作用，动画系统按路径值比较重载）。
+// 测试 DSE API绑定：动画器3D字段往返
 TEST_F(DseApiBindingsTest, Animator3D_FieldRoundTrip) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::Animator3DComponent>(e);
@@ -262,6 +274,7 @@ TEST_F(DseApiBindingsTest, Animator3D_FieldRoundTrip) {
 }
 
 // L5：dse_physics3d_raycast — 无物理服务时走 ECS 碰撞体回退（Box AABB）。
+// 测试 DSE API绑定：物理3D射线检测ECS盒命中且未命中
 TEST_F(DseApiBindingsTest, Physics3DRaycast_EcsBoxHitAndMiss) {
     Entity e = world_.CreateEntity();
     auto& tf = world_.registry().emplace<TransformComponent>(e);
@@ -296,6 +309,7 @@ TEST_F(DseApiBindingsTest, Physics3DRaycast_EcsBoxHitAndMiss) {
 
 // L5：dse_rigidbody3d_* — 无物理服务时 set/get velocity 走组件缓存，set_gravity 同步组件，
 // add_force/add_impulse/add_torque/set_angular_velocity 为 no-op（仅验证安全 + 角速度回退 0）。
+// 测试 DSE API绑定：刚体3D速度且重力ECS缓存
 TEST_F(DseApiBindingsTest, RigidBody3D_VelocityAndGravityEcsCache) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<TransformComponent>(e);
@@ -331,6 +345,7 @@ TEST_F(DseApiBindingsTest, RigidBody3D_VelocityAndGravityEcsCache) {
 }
 
 // L5：dse_character_controller3d_move — 无物理服务时 ECS 回退（空场景：按位移更新，不着地）。
+// 测试 DSE API绑定：角色控制器3D移动ECS回退无地形
 TEST_F(DseApiBindingsTest, CharacterController3DMove_EcsFallbackNoTerrain) {
     Entity e = world_.CreateEntity();
     auto& tf = world_.registry().emplace<TransformComponent>(e);
@@ -350,6 +365,7 @@ TEST_F(DseApiBindingsTest, CharacterController3DMove_EcsFallbackNoTerrain) {
 }
 
 // L5：CCT move — 平坦地形贴地（低于地形高度 → 着地 + Down flag）。
+// 测试 DSE API绑定：角色控制器3D移动地形Snap Grounds
 TEST_F(DseApiBindingsTest, CharacterController3DMove_TerrainSnapGrounds) {
     Entity e = world_.CreateEntity();
     auto& tf = world_.registry().emplace<TransformComponent>(e);
@@ -373,6 +389,7 @@ TEST_F(DseApiBindingsTest, CharacterController3DMove_TerrainSnapGrounds) {
 }
 
 // L5：dse_render_world_to_screen — 主相机可见性判定（屏幕尺寸无关）。
+// 测试 DSE API绑定：渲染世界到屏幕可见性Front Vs Behind
 TEST_F(DseApiBindingsTest, RenderWorldToScreen_VisibilityFrontVsBehind) {
     Entity cam = world_.CreateEntity();
     world_.registry().emplace<dse::Camera3DComponent>(cam);   // enabled, priority 0
@@ -395,6 +412,7 @@ TEST_F(DseApiBindingsTest, RenderWorldToScreen_VisibilityFrontVsBehind) {
 }
 
 // L5：MeshRenderer 材质/贴图加载在无 AssetManager 时安全返回 0。
+// 测试 DSE API绑定：网格渲染器材质纹理无资源管理器
 TEST_F(DseApiBindingsTest, MeshRenderer_MaterialTextureNoAssetManager) {
     Entity e = world_.CreateEntity();
     world_.registry().emplace<dse::MeshRendererComponent>(e);
@@ -405,6 +423,7 @@ TEST_F(DseApiBindingsTest, MeshRenderer_MaterialTextureNoAssetManager) {
 }
 
 // Gameplay3D：Fracture C ABI — add/set_params(NaN 保持)/apply_damage/trigger/is_fractured。
+// 测试 DSE API绑定：断裂添加伤害触发ECS
 TEST_F(DseApiBindingsTest, Fracture_AddDamageTriggerEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -438,6 +457,7 @@ TEST_F(DseApiBindingsTest, Fracture_AddDamageTriggerEcs) {
 }
 
 // Gameplay3D：Cloth C ABI — add/set_wind(turbulence NaN 保持)/pin_vertices/add_sphere_collider。
+// 测试 DSE API绑定：布料添加Wind Pin碰撞体ECS
 TEST_F(DseApiBindingsTest, Cloth_AddWindPinColliderEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -470,6 +490,7 @@ TEST_F(DseApiBindingsTest, Cloth_AddWindPinColliderEcs) {
 }
 
 // Gameplay3D：Fluid C ABI — add/set_physics(NaN 保持)/set_rendering/emit_direction(归一化)/floor/count。
+// 测试 DSE API绑定：流体添加物理渲染Emit ECS
 TEST_F(DseApiBindingsTest, Fluid_AddPhysicsRenderEmitEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -501,6 +522,7 @@ TEST_F(DseApiBindingsTest, Fluid_AddPhysicsRenderEmitEcs) {
 }
 
 // Gameplay3D：缺组件/无效实体时安全 no-op（不崩溃，getter 返回默认）。
+// 测试 DSE API绑定：玩法3D缺失组件安全
 TEST_F(DseApiBindingsTest, Gameplay3D_MissingComponentSafe) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -515,6 +537,7 @@ TEST_F(DseApiBindingsTest, Gameplay3D_MissingComponentSafe) {
 
 #if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // Gameplay3D：Ragdoll C ABI — add/activate/deactivate/is_active/collision_layer。
+// 测试 DSE API绑定：布娃娃添加Activate层ECS
 TEST_F(DseApiBindingsTest, Ragdoll_AddActivateLayerEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -539,6 +562,7 @@ TEST_F(DseApiBindingsTest, Ragdoll_AddActivateLayerEcs) {
 #endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 // Gameplay3D：SoftBody C ABI — add/set_gravity(NaN 保持)/pin_vertex/get_particle_count。
+// 测试 DSE API绑定：柔性刚体添加重力Pin计数ECS
 TEST_F(DseApiBindingsTest, SoftBody_AddGravityPinCountEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -568,6 +592,7 @@ TEST_F(DseApiBindingsTest, SoftBody_AddGravityPinCountEcs) {
 
 #if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // Gameplay3D：Vehicle C ABI — add/add_wheel/set_input(clamp)/get_speed/get_wheel_count。
+// 测试 DSE API绑定：载具添加滚轮输入速度ECS
 TEST_F(DseApiBindingsTest, Vehicle_AddWheelInputSpeedEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -596,6 +621,7 @@ TEST_F(DseApiBindingsTest, Vehicle_AddWheelInputSpeedEcs) {
 #endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 // Gameplay3D：Rope C ABI — add/set_anchors/set_gravity(NaN 保持)/get_positions(两段式)。
+// 测试 DSE API绑定：绳索添加Anchors重力Positions ECS
 TEST_F(DseApiBindingsTest, Rope_AddAnchorsGravityPositionsEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -631,6 +657,7 @@ TEST_F(DseApiBindingsTest, Rope_AddAnchorsGravityPositionsEcs) {
 
 #if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // Gameplay3D：Buoyancy C ABI — add/add_sample_point/set_water_level/get_submerge_ratio/set_use_fluid。
+// 测试 DSE API绑定：浮力添加采样Water Ratio ECS
 TEST_F(DseApiBindingsTest, Buoyancy_AddSampleWaterRatioEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -658,6 +685,7 @@ TEST_F(DseApiBindingsTest, Buoyancy_AddSampleWaterRatioEcs) {
 #endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 // Batch 3 — Weather C ABI：add(type int)/set(type<0 + NaN 保持)/set_spawn(max<0 保持)。
+// 测试 DSE API绑定：天气添加设置Spawn ECS
 TEST_F(DseApiBindingsTest, Weather_AddSetSpawnEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -687,6 +715,7 @@ TEST_F(DseApiBindingsTest, Weather_AddSetSpawnEcs) {
 }
 
 // Batch 3 — SnowCover C ABI：add/set/appearance(NaN 保持)/get/enabled/texture/displacement/remove。
+// 测试 DSE API绑定：积雪覆盖完整生命周期ECS
 TEST_F(DseApiBindingsTest, SnowCover_FullLifecycleEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -735,6 +764,7 @@ TEST_F(DseApiBindingsTest, SnowCover_FullLifecycleEcs) {
 }
 
 // Batch 3 — Atmosphere C ABI：add/params/rayleigh/mie/sun_intensity（NaN 保持）。
+// 测试 DSE API绑定：Atmosphere参数ECS
 TEST_F(DseApiBindingsTest, Atmosphere_ParamsEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -763,6 +793,7 @@ TEST_F(DseApiBindingsTest, Atmosphere_ParamsEcs) {
 }
 
 // Batch 3 — DayNightCycle C ABI：add/set_time/get_time/speed/auto/location/sun getters。
+// 测试 DSE API绑定：白天夜晚周期字段ECS
 TEST_F(DseApiBindingsTest, DayNightCycle_FieldsEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -801,6 +832,7 @@ TEST_F(DseApiBindingsTest, DayNightCycle_FieldsEcs) {
 }
 
 // Batch 3 — VolumetricCloud C ABI：add/set_layer/set_wind（NaN 保持）。
+// 测试 DSE API绑定：Volumetric Cloud层Wind ECS
 TEST_F(DseApiBindingsTest, VolumetricCloud_LayerWindEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -823,6 +855,7 @@ TEST_F(DseApiBindingsTest, VolumetricCloud_LayerWindEcs) {
 
 // ---- 动画子系统 L4/L5 C ABI ----
 
+// 测试 DSE API绑定：动画2D状态播放事件ECS
 TEST_F(DseApiBindingsTest, Anim2D_StatePlayEventEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -854,6 +887,7 @@ TEST_F(DseApiBindingsTest, Anim2D_StatePlayEventEcs) {
     EXPECT_STREQ(buf, "footstep");
 }
 
+// 测试 DSE API绑定：动画3D Fsm过渡参数ECS
 TEST_F(DseApiBindingsTest, Anim3D_FsmTransitionParamsEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -903,6 +937,7 @@ TEST_F(DseApiBindingsTest, Anim3D_FsmTransitionParamsEcs) {
     EXPECT_EQ(has_skel, 1);
 }
 
+// 测试 DSE API绑定：动画3D事件根Motion ECS
 TEST_F(DseApiBindingsTest, Anim3D_EventRootMotionEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -927,6 +962,7 @@ TEST_F(DseApiBindingsTest, Anim3D_EventRootMotionEcs) {
     EXPECT_STREQ(buf, "hit");
 }
 
+// 测试 DSE API绑定：动画层剪辑混合树掩码ECS
 TEST_F(DseApiBindingsTest, AnimLayer_ClipBlendTreeMaskEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -961,6 +997,7 @@ TEST_F(DseApiBindingsTest, AnimLayer_ClipBlendTreeMaskEcs) {
     EXPECT_FALSE(comp.enabled);
 }
 
+// 测试 DSE API绑定：IK链目标ECS
 TEST_F(DseApiBindingsTest, IK_ChainTargetEcs) {
     Entity e = world_.CreateEntity();
     Entity tgt = world_.CreateEntity();
@@ -995,6 +1032,7 @@ TEST_F(DseApiBindingsTest, IK_ChainTargetEcs) {
     EXPECT_EQ(comp.chains[0].target_entity, UINT32_MAX);
 }
 
+// 测试 DSE API绑定：骨骼Attach添加偏移移除ECS
 TEST_F(DseApiBindingsTest, BoneAttach_AddOffsetRemoveEcs) {
     Entity e = world_.CreateEntity();
     Entity tgt = world_.CreateEntity();
@@ -1023,6 +1061,7 @@ TEST_F(DseApiBindingsTest, BoneAttach_AddOffsetRemoveEcs) {
     EXPECT_FALSE(world_.registry().all_of<dse::BoneAttachmentComponent>(e));
 }
 
+// 测试 DSE API绑定：变形添加目标Weight ECS
 TEST_F(DseApiBindingsTest, Morph_AddTargetWeightEcs) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -1047,6 +1086,7 @@ TEST_F(DseApiBindingsTest, Morph_AddTargetWeightEcs) {
     EXPECT_EQ(comp.vertex_count, 2);
 }
 
+// 测试 DSE API绑定：无效实体返回安全默认值
 TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
     const uint32_t invalid = 0xFFFFFFFEu;
     EXPECT_EQ(dse_dyn_obstacle_get_shape(invalid), 0);
@@ -1062,6 +1102,7 @@ TEST_F(DseApiBindingsTest, InvalidEntity_ReturnsSafeDefaults) {
 // Task 6: phys3d C ABI 上移（组件创建 / 标量 setter / 重叠查询）
 // ============================================================
 
+// 测试 DSE API绑定：物理3D添加组件匹配Inline值
 TEST_F(DseApiBindingsTest, Phys3D_AddComponents_MatchInlineValues) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -1082,6 +1123,7 @@ TEST_F(DseApiBindingsTest, Phys3D_AddComponents_MatchInlineValues) {
     EXPECT_TRUE(cap.is_trigger);
 }
 
+// 测试 DSE API绑定：物理3D关节Setters且Queries
 TEST_F(DseApiBindingsTest, Phys3D_JointSettersAndQueries) {
     Entity a = world_.CreateEntity();
     const uint32_t id = EntityId(a);
@@ -1103,6 +1145,7 @@ TEST_F(DseApiBindingsTest, Phys3D_JointSettersAndQueries) {
     EXPECT_EQ(dse_joint3d_is_broken(id), 0);
 }
 
+// 测试 DSE API绑定：物理3D碰撞体触发且材质全部类型
 TEST_F(DseApiBindingsTest, Phys3D_ColliderTriggerAndMaterial_AllTypes) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -1120,6 +1163,7 @@ TEST_F(DseApiBindingsTest, Phys3D_ColliderTriggerAndMaterial_AllTypes) {
     EXPECT_FLOAT_EQ(sph.bounciness, 0.2f);
 }
 
+// 测试 DSE API绑定：物理3D碰撞层往返
 TEST_F(DseApiBindingsTest, Phys3D_CollisionLayerRoundTrip) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -1130,6 +1174,7 @@ TEST_F(DseApiBindingsTest, Phys3D_CollisionLayerRoundTrip) {
     EXPECT_EQ(rb.collision_mask, 0x00FFu);
 }
 
+// 测试 DSE API绑定：物理3D地形Heightmap数据且查询
 TEST_F(DseApiBindingsTest, Phys3D_TerrainHeightmapDataAndQuery) {
     Entity e = world_.CreateEntity();
     const uint32_t id = EntityId(e);
@@ -1146,6 +1191,7 @@ TEST_F(DseApiBindingsTest, Phys3D_TerrainHeightmapDataAndQuery) {
     EXPECT_FLOAT_EQ(y, 0.0f);
 }
 
+// 测试 DSE API绑定：物理3D重叠球Finds实体于范围
 TEST_F(DseApiBindingsTest, Phys3D_OverlapSphere_FindsEntitiesInRange) {
     Entity inside = world_.CreateEntity();
     auto& t1 = world_.registry().emplace<TransformComponent>(inside);
@@ -1167,6 +1213,7 @@ TEST_F(DseApiBindingsTest, Phys3D_OverlapSphere_FindsEntitiesInRange) {
     EXPECT_EQ(hits[0], EntityId(inside));
 }
 
+// 测试 DSE API绑定：物理3D重叠盒Finds盒重叠
 TEST_F(DseApiBindingsTest, Phys3D_OverlapBox_FindsBoxOverlap) {
     Entity e = world_.CreateEntity();
     auto& t = world_.registry().emplace<TransformComponent>(e);

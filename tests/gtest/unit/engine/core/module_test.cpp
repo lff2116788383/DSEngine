@@ -74,6 +74,7 @@ private:
 // 生命周期
 // ============================================================
 
+// 测试 模块：开启Initis被调用且接收参数
 TEST(ModuleTest, OnInitisCalledAndReceivesParameters) {
     MockModule mod("TestModule");
     World world;
@@ -85,6 +86,7 @@ TEST(ModuleTest, OnInitisCalledAndReceivesParameters) {
     EXPECT_EQ(mod.init_asset_mgr, nullptr);
 }
 
+// 测试 模块：开启Updateis被调用且Passeddelta时间
 TEST(ModuleTest, OnUpdateisCalledAndPasseddelta_time) {
     MockModule mod("TestModule");
     World world;
@@ -96,6 +98,7 @@ TEST(ModuleTest, OnUpdateisCalledAndPasseddelta_time) {
     EXPECT_FLOAT_EQ(mod.last_delta, 0.016f);
 }
 
+// 测试 模块：开启固定Updateis被调用且Passedfixed增量
 TEST(ModuleTest, OnFixedUpdateisCalledAndPassedfixed_delta) {
     MockModule mod("TestModule");
     World world;
@@ -106,6 +109,7 @@ TEST(ModuleTest, OnFixedUpdateisCalledAndPassedfixed_delta) {
     EXPECT_FLOAT_EQ(mod.last_fixed_delta, 0.02f);
 }
 
+// 测试 模块：开启Shutdowncalled
 TEST(ModuleTest, OnShutdowncalled) {
     MockModule mod("TestModule");
     World world;
@@ -115,6 +119,7 @@ TEST(ModuleTest, OnShutdowncalled) {
     EXPECT_TRUE(mod.shutdown_called);
 }
 
+// 测试 模块：获取名称返回模块名称
 TEST(ModuleTest, GetNameReturnModuleName) {
     MockModule mod("Gameplay2D");
     EXPECT_STREQ(mod.GetName(), "Gameplay2D");
@@ -124,6 +129,7 @@ TEST(ModuleTest, GetNameReturnModuleName) {
 // 虚方法默认行为
 // ============================================================
 
+// 测试 模块：默认不崩溃
 TEST(ModuleTest, DefaultDoesNotCrash) {
     MockModule mod("TestModule");
     World world;
@@ -143,6 +149,7 @@ TEST(ModuleTest, DefaultDoesNotCrash) {
 // 多模块场景
 // ============================================================
 
+// 测试 模块：Multimodule独立生命周期
 TEST(ModuleTest, MultimoduleIndependentLifecycle) {
     auto mod_a = std::make_unique<MockModule>("ModuleA");
     auto mod_b = std::make_unique<MockModule>("ModuleB");
@@ -165,6 +172,7 @@ TEST(ModuleTest, MultimoduleIndependentLifecycle) {
     EXPECT_TRUE(mod_b->shutdown_called);
 }
 
+// 测试 模块：多次数更新调用正确
 TEST(ModuleTest, MultiTimesUpdateCallsCorrect) {
     MockModule mod("Counter");
     World world;
@@ -184,6 +192,7 @@ TEST(ModuleTest, MultiTimesUpdateCallsCorrect) {
 // 多态使用
 // ============================================================
 
+// 测试 模块：通道调用多
 TEST(ModuleTest, PassCallsMulti) {
     std::unique_ptr<IModule> mod = std::make_unique<MockModule>("PolyModule");
     World world;

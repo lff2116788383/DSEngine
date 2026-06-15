@@ -23,6 +23,30 @@ local cube_v = {
 }
 local cube_i = {0,1,2,2,3,0, 1,5,6,6,2,1, 5,4,7,7,6,5, 4,0,3,3,7,4, 3,2,6,6,7,3, 4,5,1,1,0,4}
 
+-- morph delta：每顶点 6 float（dpx,dpy,dpz, dnx,dny,dnz），共 8 顶点 = 48 float。
+-- 按各轴系数放大顶点坐标，得到该 blend shape 在 weight=1 时的位置偏移；法线偏移留 0。
+local function make_morph_deltas(ax, ay, az)
+    local d = {}
+    for vi = 0, 7 do
+        d[#d+1] = cube_v[vi*3 + 1] * ax
+        d[#d+1] = cube_v[vi*3 + 2] * ay
+        d[#d+1] = cube_v[vi*3 + 3] * az
+        d[#d+1] = 0.0
+        d[#d+1] = 0.0
+        d[#d+1] = 0.0
+    end
+    return d
+end
+
+-- 各 blend shape 名称 → 位置偏移轴系数
+local morph_shapes = {
+    stretch_x = { 0.6, 0.0, 0.0}, stretch_y = { 0.0, 0.6, 0.0},
+    bulge_top = { 0.0, 0.5, 0.0}, bulge_side = { 0.5, 0.0, 0.0},
+    squash    = { 0.4,-0.4, 0.0}, flatten   = { 0.0,-0.5, 0.0},
+    twist_cw  = { 0.3, 0.0, 0.3}, twist_ccw = {-0.3, 0.0,-0.3}, lean = { 0.3, 0.0, 0.0},
+    smile     = { 0.2, 0.2, 0.0}, frown     = { 0.2,-0.2, 0.0}, blink = { 0.0, 0.3, 0.0},
+}
+
 local function make_box(x, y, z, sx, sy, sz, r, g, b)
     local e = dse.ecs.create_entity()
     dse.ecs.add_transform(e, x, y, z, sx, sy, sz)
@@ -68,7 +92,8 @@ local function setup_scene()
         -- 添加 morph component
         dse.ecs.add_morph(e)
         for _, target_name in ipairs(cfg.targets) do
-            dse.ecs.morph_add_target(e, target_name, 0.0)
+            local shp = morph_shapes[target_name] or {0.4, 0.4, 0.4}
+            dse.ecs.morph_add_target(e, target_name, make_morph_deltas(shp[1], shp[2], shp[3]))
         end
         dse.ecs.set_morph_enabled(e, true)
 

@@ -19,6 +19,7 @@ using dse::asset::compiler::RawAnimationChannel;
 
 // ── 归一化 ───────────────────────────────────────────────────────────────────
 
+// 测试 动画重定向：归一化剥离前缀且分隔符
 TEST(AnimRetarget, NormalizeStripsPrefixAndSeparators) {
     EXPECT_EQ(NormalizeBoneName("mixamorig:LeftArm"), "leftarm");
     EXPECT_EQ(NormalizeBoneName("Left_Arm"), "leftarm");
@@ -27,6 +28,7 @@ TEST(AnimRetarget, NormalizeStripsPrefixAndSeparators) {
 
 // ── 人形规范化（含侧别） ────────────────────────────────────────────────────
 
+// 测试 动画重定向：Humanoid Canonical Maps Synonyms且侧
 TEST(AnimRetarget, HumanoidCanonicalMapsSynonymsAndSide) {
     EXPECT_EQ(HumanoidCanonical("LeftForeArm"), "lowerarm.l");   // forearm → lowerarm
     EXPECT_EQ(HumanoidCanonical("RightThigh"), "upperleg.r");    // thigh → upperleg
@@ -37,6 +39,7 @@ TEST(AnimRetarget, HumanoidCanonicalMapsSynonymsAndSide) {
 
 // ── 自动映射：精确名优先 ────────────────────────────────────────────────────
 
+// 测试 动画重定向：自动映射Exact名称Wins
 TEST(AnimRetarget, AutoMapExactNameWins) {
     std::vector<std::string> src = {"Hips", "Spine", "Head"};
     std::vector<std::string> tgt = {"Hips", "Spine", "Head"};
@@ -50,6 +53,7 @@ TEST(AnimRetarget, AutoMapExactNameWins) {
 
 // ── 自动映射：跨命名约定走人形同义词 ────────────────────────────────────────
 
+// 测试 动画重定向：自动映射Humanoid Across Conventions
 TEST(AnimRetarget, AutoMapHumanoidAcrossConventions) {
     std::vector<std::string> src = {"mixamorig:LeftForeArm", "mixamorig:RightUpLeg"};
     std::vector<std::string> tgt = {"lowerarm_l", "thigh_r"};
@@ -65,6 +69,7 @@ TEST(AnimRetarget, AutoMapHumanoidAcrossConventions) {
 
 // ── 归一化匹配：大小写/分隔符差异 ───────────────────────────────────────────
 
+// 测试 动画重定向：自动映射归一化匹配
 TEST(AnimRetarget, AutoMapNormalizedMatch) {
     std::vector<std::string> src = {"Left_Hand"};
     std::vector<std::string> tgt = {"lefthand"};
@@ -76,6 +81,7 @@ TEST(AnimRetarget, AutoMapNormalizedMatch) {
 
 // ── 无匹配 ───────────────────────────────────────────────────────────────────
 
+// 测试 动画重定向：Unmapped当无目标
 TEST(AnimRetarget, UnmappedWhenNoTarget) {
     std::vector<std::string> src = {"WeirdBoneXYZ"};
     std::vector<std::string> tgt = {"Hips", "Spine"};
@@ -88,6 +94,7 @@ TEST(AnimRetarget, UnmappedWhenNoTarget) {
 
 // ── 手动覆盖 ─────────────────────────────────────────────────────────────────
 
+// 测试 动画重定向：手动覆盖设置且清空
 TEST(AnimRetarget, ManualOverrideSetsAndClears) {
     std::vector<std::string> src = {"BoneA"};
     std::vector<std::string> tgt = {"X", "Y"};
@@ -102,6 +109,7 @@ TEST(AnimRetarget, ManualOverrideSetsAndClears) {
 
 // ── 动画重定向：通道改写到目标索引/名，未映射的丢弃 ─────────────────────────
 
+// 测试 动画重定向：重定向动画重映射通道
 TEST(AnimRetarget, RetargetAnimationRemapsChannels) {
     std::vector<std::string> src = {"Hips", "Spine", "OrphanBone"};
     std::vector<std::string> tgt = {"pelvis", "chest"};  // Hips→pelvis(human), Spine→? chest is spine1
@@ -138,6 +146,7 @@ TEST(AnimRetarget, RetargetAnimationRemapsChannels) {
 
 // ── 动画重定向：通道仅带骨骼名（index=-1）也能解析 ──────────────────────────
 
+// 测试 动画重定向：重定向解析通道按名称
 TEST(AnimRetarget, RetargetResolvesChannelByName) {
     std::vector<std::string> src = {"Hips"};
     std::vector<std::string> tgt = {"Hips"};

@@ -24,7 +24,13 @@ namespace core {
  *
  * 字节统计以 `mi_usable_size` 为准（mimalloc 自管块大小，无需额外块头）。
  */
+#if defined(DSE_MEM_USE_MIMALLOC)
 class DSE_EXPORT MimallocAllocator : public IAllocator {
+#else
+// 未启用 mimalloc 后端时方法不编译（见 .cpp），故不可标 dllexport，
+// 否则 DLL 构建会强制导出未定义的成员符号导致链接失败。
+class MimallocAllocator : public IAllocator {
+#endif
 public:
     MimallocAllocator() = default;
     ~MimallocAllocator() override = default;

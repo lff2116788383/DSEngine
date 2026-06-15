@@ -17,20 +17,24 @@
 using namespace dse;
 using namespace dse::gameplay3d;
 
+// 测试 动画层混合系统：设置资源管理器空指针安全
 TEST(AnimLayerBlendSystemTest, SetAssetManager_NullptrSafety) {
     AnimLayerBlendSystem::SetAssetManager(nullptr);
 }
 
+// 测试 动画层混合系统：空世界不崩溃
 TEST(AnimLayerBlendSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::Update(world, 1.0f / 60.0f);
 }
 
+// 测试 动画层混合系统：零增量时间不崩溃
 TEST(AnimLayerBlendSystemTest, ZerodtDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::Update(world, 0.0f);
 }
 
+// 测试 动画层混合系统：带动画器3D无动画层不崩溃
 TEST(AnimLayerBlendSystemTest, WithAnimator3DWithoutAnimLayerDoesNotCrash) {
     World world;
     auto entity = world.registry().create();

@@ -28,6 +28,7 @@ using namespace dse::render;
 // DrawElementsIndirectCommand 结构体验证
 // ============================================================
 
+// 测试 间接绘制Struct：绘制元素间接命令布局正确
 TEST(IndirectDrawStructTest, DrawElementsIndirectCommand_LayoutCorrect) {
     DrawElementsIndirectCommand cmd{};
     cmd.count          = 36;
@@ -44,6 +45,7 @@ TEST(IndirectDrawStructTest, DrawElementsIndirectCommand_LayoutCorrect) {
 // OpenGL indirect draw — NULL device 鲁棒性
 // ============================================================
 
+// 测试 GL间接绘制：创建更新空Devices执行不崩溃
 TEST(GLIndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     OpenGLRhiDevice device;
     // 未初始化设备，supports_ssbo_ 默认 true 但 GL context 无效
@@ -57,6 +59,7 @@ TEST(GLIndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     SUCCEED();
 }
 
+// 测试 GL间接绘制：支持间接绘制返回值为Legal
 TEST(GLIndirectDrawTest, SupportsIndirectDraw_TheReturnValueIsLegal) {
     OpenGLRhiDevice device;
     // 未初始化时 supports_ssbo_ 默认 true；仅验证不崩溃
@@ -70,11 +73,13 @@ TEST(GLIndirectDrawTest, SupportsIndirectDraw_TheReturnValueIsLegal) {
 // ============================================================
 
 #ifdef DSE_ENABLE_D3D11
+// 测试 DX 11间接绘制：支持间接绘制返回true
 TEST(DX11IndirectDrawTest, SupportsIndirectDraw_Returnstrue) {
     DX11RhiDevice device;
     EXPECT_TRUE(device.SupportsIndirectDraw());
 }
 
+// 测试 DX 11间接绘制：创建更新空Devices执行不崩溃
 TEST(DX11IndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
     DX11RhiDevice device;
     // D3D11 未初始化，device_ == nullptr，应返回 0
@@ -93,11 +98,13 @@ TEST(DX11IndirectDrawTest, CreateUpdate_EmptyDevicesDoNotCrash) {
 // ============================================================
 
 #ifdef DSE_ENABLE_VULKAN
+// 测试 Vulkan间接绘制：支持间接绘制返回true
 TEST(VulkanIndirectDrawTest, SupportsIndirectDraw_Returnstrue) {
     VulkanRhiDevice device;
     EXPECT_TRUE(device.SupportsIndirectDraw());
 }
 
+// 测试 Vulkan间接绘制：创建删除未初始化返回零无崩溃
 TEST(VulkanIndirectDrawTest, CreateDelete_UninitializedReturnsZeroWithoutCrashing) {
     VulkanRhiDevice device;
     DrawElementsIndirectCommand cmd{36, 1, 0, 0, 0};
@@ -112,6 +119,7 @@ TEST(VulkanIndirectDrawTest, CreateDelete_UninitializedReturnsZeroWithoutCrashin
 // MakeSortKey 单元测试（P0 验证）
 // ============================================================
 
+// 测试 构造排序键：生成
 TEST(MakeSortKeyTest, Generate) {
     MeshDrawItem a, b;
     a.blend_mode = 0; a.shading_mode = 0; a.texture_handle = 42; a.normal_map_handle = 7;
@@ -119,6 +127,7 @@ TEST(MakeSortKeyTest, Generate) {
     EXPECT_EQ(MakeSortKey(a), MakeSortKey(b));
 }
 
+// 测试 构造排序键：混合Modehighest优先级
 TEST(MakeSortKeyTest, blend_ModehighestPriority) {
     MeshDrawItem opaque, transparent;
     opaque.blend_mode      = 0;
@@ -127,6 +136,7 @@ TEST(MakeSortKeyTest, blend_ModehighestPriority) {
     EXPECT_LT(MakeSortKey(opaque), MakeSortKey(transparent));
 }
 
+// 测试 构造排序键：Differenttexturegenerate不同键
 TEST(MakeSortKeyTest, DifferenttexturegenerateDifferentKeys) {
     MeshDrawItem a, b;
     a.texture_handle = 100;

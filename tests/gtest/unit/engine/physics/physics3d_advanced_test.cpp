@@ -29,6 +29,7 @@ using namespace dse::physics3d;
 // 碰撞事件测试
 // ============================================================
 
+// 测试 物理3D高级：初始化Afterevent为空
 TEST(Physics3DAdvancedTest, InitializeAftereventIsEmpty) {
     Physics3DSystem sys;
     World world;
@@ -40,6 +41,7 @@ TEST(Physics3DAdvancedTest, InitializeAftereventIsEmpty) {
     sys.Shutdown();
 }
 
+// 测试 物理3D高级：Flush事件清空队列
 TEST(Physics3DAdvancedTest, FlushEventsClearTheQueue) {
     Physics3DSystem sys;
     World world;
@@ -58,6 +60,7 @@ TEST(Physics3DAdvancedTest, FlushEventsClearTheQueue) {
 // 角色控制器测试
 // ============================================================
 
+// 测试 物理3D高级：移动角色未初始化返回失败
 TEST(Physics3DAdvancedTest, MoveCharacterUninitializedReturnsFailure) {
     Physics3DSystem sys;
     World world;
@@ -70,6 +73,7 @@ TEST(Physics3DAdvancedTest, MoveCharacterUninitializedReturnsFailure) {
     EXPECT_FLOAT_EQ(result.final_position.x, 0.0f);
 }
 
+// 测试 物理3D高级：Jump角色返回未初始化为false
 TEST(Physics3DAdvancedTest, JumpCharacterReturnUninitializedfalse) {
     Physics3DSystem sys;
     World world;
@@ -80,6 +84,7 @@ TEST(Physics3DAdvancedTest, JumpCharacterReturnUninitializedfalse) {
     EXPECT_FALSE(success);
 }
 
+// 测试 物理3D高级：为角色Grounded返回未初始化为false
 TEST(Physics3DAdvancedTest, IsCharacterGroundedReturnUninitializedfalse) {
     Physics3DSystem sys;
     World world;
@@ -90,6 +95,7 @@ TEST(Physics3DAdvancedTest, IsCharacterGroundedReturnUninitializedfalse) {
     EXPECT_FALSE(grounded);
 }
 
+// 测试 物理3D高级：获取角色位置未初始化返回零
 TEST(Physics3DAdvancedTest, GetCharacterPositionUninitializedReturnsZero) {
     Physics3DSystem sys;
     World world;
@@ -106,6 +112,7 @@ TEST(Physics3DAdvancedTest, GetCharacterPositionUninitializedReturnsZero) {
 // 动力学 API 测试
 // ============================================================
 
+// 测试 物理3D高级：添加强制未初始化不崩溃
 TEST(Physics3DAdvancedTest, AddForceUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -114,6 +121,7 @@ TEST(Physics3DAdvancedTest, AddForceUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.AddForce(entity, {0,100,0}));
 }
 
+// 测试 物理3D高级：添加Torque未初始化不崩溃
 TEST(Physics3DAdvancedTest, AddTorqueUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -122,6 +130,7 @@ TEST(Physics3DAdvancedTest, AddTorqueUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.AddTorque(entity, {0,0,100}));
 }
 
+// 测试 物理3D高级：添加冲量未初始化不崩溃
 TEST(Physics3DAdvancedTest, AddImpulseUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -130,6 +139,7 @@ TEST(Physics3DAdvancedTest, AddImpulseUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.AddImpulse(entity, {0,10,0}));
 }
 
+// 测试 物理3D高级：设置速度未初始化不崩溃
 TEST(Physics3DAdvancedTest, SetVelocityUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -138,6 +148,7 @@ TEST(Physics3DAdvancedTest, SetVelocityUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.SetVelocity(entity, {1,0,0}));
 }
 
+// 测试 物理3D高级：设置Angular速度未初始化不崩溃
 TEST(Physics3DAdvancedTest, SetAngularVelocityUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -146,6 +157,7 @@ TEST(Physics3DAdvancedTest, SetAngularVelocityUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.SetAngularVelocity(entity, {0,1,0}));
 }
 
+// 测试 物理3D高级：获取速度未初始化返回零
 TEST(Physics3DAdvancedTest, GetVelocityUninitializedReturnsZero) {
     Physics3DSystem sys;
     World world;
@@ -158,6 +170,7 @@ TEST(Physics3DAdvancedTest, GetVelocityUninitializedReturnsZero) {
     EXPECT_FLOAT_EQ(vel.z, 0.0f);
 }
 
+// 测试 物理3D高级：获取Angular速度未初始化返回零
 TEST(Physics3DAdvancedTest, GetAngularVelocityUninitializedReturnsZero) {
     Physics3DSystem sys;
     World world;
@@ -170,6 +183,7 @@ TEST(Physics3DAdvancedTest, GetAngularVelocityUninitializedReturnsZero) {
     EXPECT_FLOAT_EQ(ang_vel.z, 0.0f);
 }
 
+// 测试 物理3D高级：设置重力启用未初始化不崩溃
 TEST(Physics3DAdvancedTest, SetGravityEnabledUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -178,6 +192,7 @@ TEST(Physics3DAdvancedTest, SetGravityEnabledUninitializedDoesNotCrash) {
     EXPECT_NO_THROW(sys.SetGravityEnabled(entity, false));
 }
 
+// 测试 物理3D高级：为重力启用返回Uninitializedtrue
 TEST(Physics3DAdvancedTest, IsGravityEnabledReturnUninitializedtrue) {
     Physics3DSystem sys;
     World world;
@@ -188,6 +203,7 @@ TEST(Physics3DAdvancedTest, IsGravityEnabledReturnUninitializedtrue) {
     EXPECT_TRUE(enabled);  // 默认值
 }
 
+// 测试 物理3D高级：移除Actor未初始化不崩溃
 TEST(Physics3DAdvancedTest, RemoveActorUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -200,6 +216,7 @@ TEST(Physics3DAdvancedTest, RemoveActorUninitializedDoesNotCrash) {
 // 碰撞层测试
 // ============================================================
 
+// 测试 物理3D高级：设置碰撞层未初始化不崩溃
 TEST(Physics3DAdvancedTest, SetCollisionLayerUninitializedDoesNotCrash) {
     Physics3DSystem sys;
     World world;
@@ -212,12 +229,14 @@ TEST(Physics3DAdvancedTest, SetCollisionLayerUninitializedDoesNotCrash) {
 // 材质组件测试
 // ============================================================
 
+// 测试 物理3D高级：物理材质3D组件默认值
 TEST(Physics3DAdvancedTest, PhysicsMaterial3DComponentDefaultValues) {
     PhysicsMaterial3DComponent mat;
     EXPECT_FLOAT_EQ(mat.friction, 0.5f);
     EXPECT_FLOAT_EQ(mat.bounciness, 0.0f);
 }
 
+// 测试 物理3D高级：物理材质3D组件自定义值
 TEST(Physics3DAdvancedTest, PhysicsMaterial3DComponentCustomValues) {
     PhysicsMaterial3DComponent mat;
     mat.friction = 0.8f;
@@ -231,6 +250,7 @@ TEST(Physics3DAdvancedTest, PhysicsMaterial3DComponentCustomValues) {
 // 角色控制器组件测试
 // ============================================================
 
+// 测试 物理3D高级：角色控制器3D组件默认值
 TEST(Physics3DAdvancedTest, CharacterController3DComponentDefaultValues) {
     CharacterController3DComponent cc;
     EXPECT_FLOAT_EQ(cc.height, 2.0f);
@@ -240,6 +260,7 @@ TEST(Physics3DAdvancedTest, CharacterController3DComponentDefaultValues) {
     EXPECT_FALSE(cc.auto_bake);
 }
 
+// 测试 物理3D高级：角色控制器3D组件自定义值
 TEST(Physics3DAdvancedTest, CharacterController3DComponentCustomValues) {
     CharacterController3DComponent cc;
     cc.height = 1.8f;
@@ -259,6 +280,7 @@ TEST(Physics3DAdvancedTest, CharacterController3DComponentCustomValues) {
 // Joint3D 组件测试
 // ============================================================
 
+// 测试 物理3D高级：关节3D组件默认值
 TEST(Physics3DAdvancedTest, Joint3DComponentDefaultValues) {
     Joint3DComponent joint;
     EXPECT_EQ(joint.type, JointType3D::Fixed);
@@ -268,6 +290,7 @@ TEST(Physics3DAdvancedTest, Joint3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(joint.break_torque, 0.0f);
 }
 
+// 测试 物理3D高级：关节3D组件自定义值
 TEST(Physics3DAdvancedTest, Joint3DComponentCustomValues) {
     Joint3DComponent joint;
     joint.type = JointType3D::Hinge;
@@ -279,6 +302,7 @@ TEST(Physics3DAdvancedTest, Joint3DComponentCustomValues) {
     EXPECT_FLOAT_EQ(joint.break_torque, 500.0f);
 }
 
+// 测试 物理3D高级：关节类型3 Denumeration值
 TEST(Physics3DAdvancedTest, JointType3DenumerationValue) {
     EXPECT_EQ(static_cast<int>(JointType3D::Fixed), 0);
     EXPECT_EQ(static_cast<int>(JointType3D::Distance), 1);
@@ -292,6 +316,7 @@ TEST(Physics3DAdvancedTest, JointType3DenumerationValue) {
 // Rigidbody3D 组件测试
 // ============================================================
 
+// 测试 物理3D高级：Rigidbody 3D组件默认值
 TEST(Physics3DAdvancedTest, Rigidbody3DComponentDefaultValues) {
     Rigidbody3DComponent rb;
     EXPECT_FLOAT_EQ(rb.mass, 1.0f);
@@ -301,6 +326,7 @@ TEST(Physics3DAdvancedTest, Rigidbody3DComponentDefaultValues) {
     EXPECT_FALSE(rb.use_gravity);
 }
 
+// 测试 物理3D高级：Rigidbody 3D组件自定义值
 TEST(Physics3DAdvancedTest, Rigidbody3DComponentCustomValues) {
     Rigidbody3DComponent rb;
     rb.mass = 10.0f;
@@ -320,6 +346,7 @@ TEST(Physics3DAdvancedTest, Rigidbody3DComponentCustomValues) {
 // 碰撞体组件测试
 // ============================================================
 
+// 测试 物理3D高级：盒碰撞体3D组件默认值
 TEST(Physics3DAdvancedTest, BoxCollider3DComponentDefaultValues) {
     BoxCollider3DComponent box;
     EXPECT_FLOAT_EQ(box.size.x, 1.0f);
@@ -330,6 +357,7 @@ TEST(Physics3DAdvancedTest, BoxCollider3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(box.bounciness, 0.0f);
 }
 
+// 测试 物理3D高级：球碰撞体3D组件默认值
 TEST(Physics3DAdvancedTest, SphereCollider3DComponentDefaultValues) {
     SphereCollider3DComponent sphere;
     EXPECT_FLOAT_EQ(sphere.radius, 0.5f);
@@ -338,6 +366,7 @@ TEST(Physics3DAdvancedTest, SphereCollider3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(sphere.bounciness, 0.0f);
 }
 
+// 测试 物理3D高级：Capsule碰撞体3D组件默认值
 TEST(Physics3DAdvancedTest, CapsuleCollider3DComponentDefaultValues) {
     CapsuleCollider3DComponent capsule;
     EXPECT_FLOAT_EQ(capsule.height, 1.0f);

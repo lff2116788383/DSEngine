@@ -51,6 +51,7 @@ protected:
     }
 };
 
+// 测试 Lua绑定音频集成：Lua创建音频源C加参数能够应读取从侧
 TEST_F(LuaBindingAudioIntegrationTest, LuaCreateAudioSourceCPlusPlusParametersCanBeReadFromTheSide) {
     LuaTempScript startup("test_audio_source.lua", R"(
         function Awake()
@@ -91,6 +92,7 @@ TEST_F(LuaBindingAudioIntegrationTest, LuaCreateAudioSourceCPlusPlusParametersCa
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定音频集成：Lua控制音频回放状态无崩溃
 TEST_F(LuaBindingAudioIntegrationTest, LuaControlAudioPlaybackStatusWithoutCrashing) {
     LuaTempScript startup("test_audio_playing.lua", R"(
         function Awake()
@@ -127,6 +129,7 @@ TEST_F(LuaBindingAudioIntegrationTest, LuaControlAudioPlaybackStatusWithoutCrash
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定音频集成：Luaset上3D Spatialization参数执行不折叠
 TEST_F(LuaBindingAudioIntegrationTest, LuasetUp3DSpatializationParametersDoNotCollapse) {
     LuaTempScript startup("test_audio_spatial.lua", R"(
         function Awake()
@@ -167,6 +170,7 @@ TEST_F(LuaBindingAudioIntegrationTest, LuasetUp3DSpatializationParametersDoNotCo
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua绑定音频集成：Lua音频API Don T崩溃若Doesn T存在
 TEST_F(LuaBindingAudioIntegrationTest, LuaAudioAPIDonTCrashIfItDoesnTExist) {
     LuaTempScript startup("test_audio_nil.lua", R"(
         function Awake()

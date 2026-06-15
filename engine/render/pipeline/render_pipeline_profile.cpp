@@ -363,6 +363,47 @@ RenderPipelineProfile MakeForwardPlusLiteProfile() {
     return profile;
 }
 
+RenderPipelineProfile MakeForward2DProfile() {
+    // 面向 2D-first 平台（如 Web/WebGL2）的最小前向管线：不跑延迟着色、WBOIT、
+    // HDR 后处理链，仅 清屏深度 → 前向场景（精灵批次）→ UI → 合成 → 呈现。
+    RenderPipelineProfile profile;
+    profile.name = "Forward2D";
+    profile.settings.gpu_driven = false;
+    profile.settings.shadows = false;
+    profile.settings.shadow_quality = "off";
+    profile.settings.postprocess_quality = "none";
+    profile.passes = {
+        Pass("pre_z"),
+        Pass("forward_scene"),
+        Pass("ui"),
+        Pass("composite"),
+        Pass("present"),
+    };
+    return profile;
+}
+
+RenderPipelineProfile MakeForward3DProfile() {
+    // M5 best-effort 3D forward for capability-limited platforms (Web/WebGL2):
+    // the same minimal forward pass set as Forward2D — depth pre-pass → forward
+    // scene (now also draws lit 3D meshes via the UBO PBR program) → UI →
+    // composite → present. No GPU-driven culling, shadow maps, deferred shading
+    // or the HDR post chain, all of which require Compute/SSBO absent on WebGL2.
+    RenderPipelineProfile profile;
+    profile.name = "Forward3D";
+    profile.settings.gpu_driven = false;
+    profile.settings.shadows = false;
+    profile.settings.shadow_quality = "off";
+    profile.settings.postprocess_quality = "none";
+    profile.passes = {
+        Pass("pre_z"),
+        Pass("forward_scene"),
+        Pass("ui"),
+        Pass("composite"),
+        Pass("present"),
+    };
+    return profile;
+}
+
 RenderPipelineProfile MakeDebugDepthProfile() {
     RenderPipelineProfile profile;
     profile.name = "DebugDepth";
@@ -402,6 +443,18 @@ RenderPipelineLoadResult ResolveRenderPipelineProfileFromEnvironment(const std::
         if (normalized_selector == "lite" || normalized_selector == "forward_plus_lite") {
             result.profile = MakeForwardPlusLiteProfile();
             result.message = "using built-in ForwardPlusLite";
+            return result;
+        }
+        if (normalized_selector == "forward_2d" || normalized_selector == "2d" ||
+            normalized_selector == "web2d") {
+            result.profile = MakeForward2DProfile();
+            result.message = "using built-in Forward2D";
+            return result;
+        }
+        if (normalized_selector == "forward_3d" || normalized_selector == "3d" ||
+            normalized_selector == "web3d") {
+            result.profile = MakeForward3DProfile();
+            result.message = "using built-in Forward3D";
             return result;
         }
         if (normalized_selector == "debug_depth") {

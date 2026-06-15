@@ -87,6 +87,7 @@ protected:
     }
 };
 
+// 测试 DX 11 RHI冒烟：初始化D 3D 11成功
 TEST_F(DX11RhiSmokeTest, InitD3D11Succeeds) {
     bool ok = device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true);
     if (!ok) {
@@ -95,6 +96,7 @@ TEST_F(DX11RhiSmokeTest, InitD3D11Succeeds) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：单一帧空不崩溃
 TEST_F(DX11RhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -107,6 +109,7 @@ TEST_F(DX11RhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：多帧周期稳定
 TEST_F(DX11RhiSmokeTest, MultiFramecycleStable) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -120,6 +123,7 @@ TEST_F(DX11RhiSmokeTest, MultiFramecycleStable) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：关闭之后初始化不崩溃
 TEST_F(DX11RhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -138,6 +142,7 @@ TEST_F(DX11RhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：创建且销毁无崩溃
 TEST_F(DX11RhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -152,6 +157,7 @@ TEST_F(DX11RhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：情形10连续帧提交稳定
 TEST_F(DX11RhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -166,6 +172,7 @@ TEST_F(DX11RhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：渲染目标创建且销毁无崩溃
 TEST_F(DX11RhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -180,6 +187,7 @@ TEST_F(DX11RhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 DX 11 RHI冒烟：缓冲区创建且销毁无崩溃
 TEST_F(DX11RhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -194,6 +202,7 @@ TEST_F(DX11RhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
 // 离屏渲染 + 像素回读校验：清屏到已知颜色后回读，断言每个像素都正确。
 // WARP 是参考级（conformant）软件光栅器，结果可信，可在无 GPU 环境验证
 // D3D11 实际渲染输出的正确性（而不仅是"不崩溃"）。
+// 测试 DX 11 RHI冒烟：正确
 TEST_F(DX11RhiSmokeTest, Correct) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";
@@ -251,6 +260,7 @@ TEST_F(DX11RhiSmokeTest, Correct) {
 // 再回读 dest 断言像素正确。比清屏更进一步——覆盖顶点装配 + 光栅化 + 片元采样 +
 // passthrough 片元着色器（"copy" effect 走 DX11 的标准全屏路径，与引擎最终 present
 // 拷贝同一代码路）。source 为纯色，故采样/过滤不影响结果。
+// 测试 DX 11 RHI冒烟：全部正确
 TEST_F(DX11RhiSmokeTest, AllCorrect) {
     if (!device_.InitD3D11(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
         GTEST_SKIP() << "No D3D11";

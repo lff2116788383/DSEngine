@@ -1,0 +1,3 @@
+[ERROR] [D3D11] Shader compile error: C:\Users\Administrator\repos\DSEngine\Shader@0x00000228A9C8D040(92,12-81): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop
+C:\Users\Administrator\repos\DSEngine\Shader@0x00000228A9C8D040(145,5-35): error X3511: unable to unroll loop, loop does not appear to terminate in a timely manner (523 iterations) or unrolled loop is too large, use the [unroll(n)] attribute to force an exact higher number
+

@@ -66,6 +66,7 @@ protected:
     std::shared_ptr<EventBus> event_bus_;
 };
 
+// 测试 任务系统事件总线集成：任务之后发布事件
 TEST_F(JobSystemEventBusIntegrationTest, TasksAfterPublishesevent) {
     std::atomic<int> event_received{0};
 
@@ -85,6 +86,7 @@ TEST_F(JobSystemEventBusIntegrationTest, TasksAfterPublishesevent) {
     EXPECT_EQ(event_received.load(), 42);
 }
 
+// 测试 任务系统事件总线集成：多任务之后发布事件
 TEST_F(JobSystemEventBusIntegrationTest, MultiTasksAfterPublishesevent) {
     std::atomic<int> event_count{0};
     std::mutex vec_mutex;
@@ -113,6 +115,7 @@ TEST_F(JobSystemEventBusIntegrationTest, MultiTasksAfterPublishesevent) {
     EXPECT_EQ(completed_job_ids.size(), static_cast<size_t>(kJobCount));
 }
 
+// 测试 任务系统事件总线集成：链任务之后发布事件
 TEST_F(JobSystemEventBusIntegrationTest, ChainTasksAfterPublishesevent) {
     std::atomic<int> final_result{0};
 
@@ -140,6 +143,7 @@ TEST_F(JobSystemEventBusIntegrationTest, ChainTasksAfterPublishesevent) {
     EXPECT_EQ(final_result.load(), 15);
 }
 
+// 测试 任务系统事件总线集成：提交新建Task于事件回调
 TEST_F(JobSystemEventBusIntegrationTest, SubmitANewTaskInTheEventCallback) {
     std::atomic<int> chain_result{0};
 
@@ -170,6 +174,7 @@ TEST_F(JobSystemEventBusIntegrationTest, SubmitANewTaskInTheEventCallback) {
 // 线程安全性
 // ============================================================
 
+// 测试 任务系统事件总线集成：多发布事件不崩溃
 TEST_F(JobSystemEventBusIntegrationTest, MultiPublisheseventDoesNotCrash) {
     std::atomic<int> total_events{0};
 
@@ -196,6 +201,7 @@ TEST_F(JobSystemEventBusIntegrationTest, MultiPublisheseventDoesNotCrash) {
 // 通过 ServiceLocator 协作
 // ============================================================
 
+// 测试 任务系统事件总线集成：通道服务定位器获取
 TEST_F(JobSystemEventBusIntegrationTest, PassServiceLocatorAcquire) {
     auto* js = ServiceLocator::Instance().Get<JobSystem>();
     auto* bus = ServiceLocator::Instance().Get<EventBus>();
@@ -220,6 +226,7 @@ TEST_F(JobSystemEventBusIntegrationTest, PassServiceLocatorAcquire) {
 // 优先级任务与事件交互
 // ============================================================
 
+// 测试 任务系统事件总线集成：优先级任务发布事件
 TEST_F(JobSystemEventBusIntegrationTest, PriorityTasksPublishesevent) {
     std::vector<int> event_order;
     std::mutex order_mutex;

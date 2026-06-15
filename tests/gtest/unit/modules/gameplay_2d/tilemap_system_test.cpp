@@ -30,16 +30,19 @@ protected:
     TilemapSystem system;
 };
 
+// 测试 瓦片地图系统：空世界调用更新不崩溃
 TEST_F(TilemapSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(system.Update(world.registry()));
 }
 
+// 测试 瓦片地图系统：无瓦片地图组件当更新不崩溃
 TEST_F(TilemapSystemTest, WithoutTilemapComponentWhenUpdateDoesNotCrash) {
     auto entity = world.CreateEntity();
     world.registry().emplace<TransformComponent>(entity);
     EXPECT_NO_THROW(system.Update(world.registry()));
 }
 
+// 测试 瓦片地图系统：Validdatagenerate当实体
 TEST_F(TilemapSystemTest, ValiddatagenerateWhenEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -60,6 +63,7 @@ TEST_F(TilemapSystemTest, ValiddatagenerateWhenEntity) {
     EXPECT_FALSE(tilemap.dirty);
 }
 
+// 测试 瓦片地图系统：空ID不生成实体
 TEST_F(TilemapSystemTest, EmptyIDNotgenerateEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -75,6 +79,7 @@ TEST_F(TilemapSystemTest, EmptyIDNotgenerateEntity) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
+// 测试 瓦片地图系统：Invaliddata
 TEST_F(TilemapSystemTest, Invaliddata) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -91,6 +96,7 @@ TEST_F(TilemapSystemTest, Invaliddata) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
+// 测试 瓦片地图系统：脏为false不Updated从时间到时间
 TEST_F(TilemapSystemTest, DirtyIsfalseNotUpdatedFromTimeToTime) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -107,6 +113,7 @@ TEST_F(TilemapSystemTest, DirtyIsfalseNotUpdatedFromTimeToTime) {
     EXPECT_EQ(tilemap.runtime_tile_entities.size(), 0u);
 }
 
+// 测试 瓦片地图系统：变换Dirtyspread到瓦片地图
 TEST_F(TilemapSystemTest, TransformDirtyspreadToTilemap) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -126,6 +133,7 @@ TEST_F(TilemapSystemTest, TransformDirtyspreadToTilemap) {
     EXPECT_FALSE(tilemap.dirty);
 }
 
+// 测试 瓦片地图系统：生成Colliders生成碰撞刚体
 TEST_F(TilemapSystemTest, generate_CollidersGenerateCollisionBody) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -146,6 +154,7 @@ TEST_F(TilemapSystemTest, generate_CollidersGenerateCollisionBody) {
     EXPECT_TRUE(world.registry().all_of<BoxCollider2DComponent>(tile_entity));
 }
 
+// 测试 瓦片地图系统：U Vset
 TEST_F(TilemapSystemTest, UVset) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);
@@ -169,6 +178,7 @@ TEST_F(TilemapSystemTest, UVset) {
     EXPECT_FLOAT_EQ(sprite0.uv.w, 0.5f);  // v1
 }
 
+// 测试 瓦片地图系统：更新不生成实体
 TEST_F(TilemapSystemTest, UpdateNotgenerateEntity) {
     auto entity = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(entity);

@@ -60,6 +60,7 @@ struct TestInstancingKeyHash {
 // MaterialBlendMode 枚举
 // ============================================================
 
+// 测试 材质混合模式：枚举值
 TEST(MaterialBlendModeTest, EnumerationValue) {
     EXPECT_EQ(static_cast<int>(MaterialBlendMode::Alpha), 0);
     EXPECT_EQ(static_cast<int>(MaterialBlendMode::Additive), 1);
@@ -71,6 +72,7 @@ TEST(MaterialBlendModeTest, EnumerationValue) {
 // MeshDrawItem 默认值和 instance_transforms
 // ============================================================
 
+// 测试 网格绘制项实例化：默认值
 TEST(MeshDrawItemInstancingTest, DefaultValues) {
     MeshDrawItem item;
     EXPECT_EQ(item.texture_handle, 0u);
@@ -86,6 +88,7 @@ TEST(MeshDrawItemInstancingTest, DefaultValues) {
     EXPECT_TRUE(item.depth_write_enabled);
 }
 
+// 测试 网格绘制项实例化：实例Transforms Triggersinstanced绘制
 TEST(MeshDrawItemInstancingTest, instance_TransformsTriggersinstanced_draw) {
     MeshDrawItem item;
     EXPECT_TRUE(item.instance_transforms.empty());
@@ -95,6 +98,7 @@ TEST(MeshDrawItemInstancingTest, instance_TransformsTriggersinstanced_draw) {
     EXPECT_EQ(item.instance_transforms.size(), 2u);
 }
 
+// 测试 网格绘制项实例化：不透明仅于批次
 TEST(MeshDrawItemInstancingTest, OpaqueOnlyInBatches) {
     // can_instance 条件之一: blend_mode == Opaque
     MeshDrawItem opaque_item;
@@ -106,6 +110,7 @@ TEST(MeshDrawItemInstancingTest, OpaqueOnlyInBatches) {
     EXPECT_NE(alpha_item.blend_mode, static_cast<unsigned int>(MaterialBlendMode::Opaque));
 }
 
+// 测试 网格绘制项实例化：Skinned Andmorph Exclude Batching
 TEST(MeshDrawItemInstancingTest, SkinnedAndmorphExcludeBatching) {
     MeshDrawItem item;
     item.skinned = true;
@@ -125,6 +130,7 @@ TEST(MeshDrawItemInstancingTest, SkinnedAndmorphExcludeBatching) {
 // InstancingKey 相等性和 Hash
 // ============================================================
 
+// 测试 实例化键：键
 TEST(InstancingKeyTest, Key) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
@@ -137,6 +143,7 @@ TEST(InstancingKeyTest, Key) {
     EXPECT_TRUE(a == b);
 }
 
+// 测试 实例化键：不同Textures为不相等
 TEST(InstancingKeyTest, DifferentTexturesAreNotEqual) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
@@ -149,6 +156,7 @@ TEST(InstancingKeyTest, DifferentTexturesAreNotEqual) {
     EXPECT_FALSE(a == b);
 }
 
+// 测试 实例化键：Differentmesh路径不相等
 TEST(InstancingKeyTest, Differentmesh_PathNotEqual) {
     std::string mesh_a = "model/box.obj";
     std::string mesh_b = "model/sphere.obj";
@@ -160,6 +168,7 @@ TEST(InstancingKeyTest, Differentmesh_PathNotEqual) {
     EXPECT_FALSE(a == b);
 }
 
+// 测试 实例化键：Hashconsistency
 TEST(InstancingKeyTest, Hashconsistency) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
@@ -174,6 +183,7 @@ TEST(InstancingKeyTest, Hashconsistency) {
     EXPECT_EQ(hasher(a), hasher(b));
 }
 
+// 测试 实例化键：哈希Difference
 TEST(InstancingKeyTest, HashDifference) {
     std::string mesh = "model/box.obj";
     TestInstancingKey a{}, b{};
@@ -188,6 +198,7 @@ TEST(InstancingKeyTest, HashDifference) {
     EXPECT_NE(hasher(a), hasher(b));
 }
 
+// 测试 实例化键：哈希映射批次Simulation
 TEST(InstancingKeyTest, HashMapBatchSimulation) {
     std::string mesh = "model/box.obj";
     std::unordered_map<TestInstancingKey, size_t, TestInstancingKeyHash> map;
@@ -219,6 +230,7 @@ TEST(InstancingKeyTest, HashMapBatchSimulation) {
 // RenderStats instancing 统计
 // ============================================================
 
+// 测试 渲染统计实例化：默认值
 TEST(RenderStatsInstancingTest, DefaultValues) {
     RenderStats stats;
     EXPECT_EQ(stats.sprite_count, 0);
@@ -230,6 +242,7 @@ TEST(RenderStatsInstancingTest, DefaultValues) {
     EXPECT_EQ(stats.gpu_culled_count, 0);
 }
 
+// 测试 渲染统计实例化：实例化统计Accumulation
 TEST(RenderStatsInstancingTest, InstancingStatisticsAccumulation) {
     RenderStats stats;
     stats.instanced_draw_calls = 5;
@@ -242,6 +255,7 @@ TEST(RenderStatsInstancingTest, InstancingStatisticsAccumulation) {
 // DrawElementsIndirectCommand 结构体
 // ============================================================
 
+// 测试 绘制元素间接命令：尺寸且对齐
 TEST(DrawElementsIndirectCommandTest, SizeAndAlignment) {
     EXPECT_EQ(sizeof(DrawElementsIndirectCommand), 20u);
     DrawElementsIndirectCommand cmd{};

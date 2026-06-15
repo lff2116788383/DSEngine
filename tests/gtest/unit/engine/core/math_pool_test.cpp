@@ -20,6 +20,7 @@
 // BezierCurve2D 测试
 // ============================================================
 
+// 测试 贝塞尔曲线2D：二次贝塞尔起始点
 TEST(BezierCurve2DTest, QuadraticBezierStartingPoint) {
     glm::vec2 p0(0.0f, 0.0f), p1(1.0f, 2.0f), p2(3.0f, 0.0f);
     glm::vec2 result = dse::math::BezierCurve2D::EvaluateQuadratic(0.0f, p0, p1, p2);
@@ -27,6 +28,7 @@ TEST(BezierCurve2DTest, QuadraticBezierStartingPoint) {
     EXPECT_NEAR(result.y, 0.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：二次贝塞尔结束点
 TEST(BezierCurve2DTest, QuadraticBezierEndPoint) {
     glm::vec2 p0(0.0f, 0.0f), p1(1.0f, 2.0f), p2(3.0f, 0.0f);
     glm::vec2 result = dse::math::BezierCurve2D::EvaluateQuadratic(1.0f, p0, p1, p2);
@@ -34,6 +36,7 @@ TEST(BezierCurve2DTest, QuadraticBezierEndPoint) {
     EXPECT_NEAR(result.y, 0.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：二次贝塞尔中点
 TEST(BezierCurve2DTest, QuadraticBezierMidpoint) {
     glm::vec2 p0(0.0f, 0.0f), p1(1.0f, 2.0f), p2(3.0f, 0.0f);
     // t=0.5: (1-0.5)^2*p0 + 2*(1-0.5)*0.5*p1 + 0.5^2*p2 = 0.25*p0 + 0.5*p1 + 0.25*p2
@@ -42,6 +45,7 @@ TEST(BezierCurve2DTest, QuadraticBezierMidpoint) {
     EXPECT_NEAR(result.y, 0.25f * 0.0f + 0.5f * 2.0f + 0.25f * 0.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：二次贝塞尔线性Degeneration
 TEST(BezierCurve2DTest, QuadraticBezierLinearDegeneration) {
     // 控制点在起点终点的连线上，应退化为线性插值
     glm::vec2 p0(0.0f, 0.0f), p1(2.0f, 2.0f), p2(4.0f, 4.0f);
@@ -50,6 +54,7 @@ TEST(BezierCurve2DTest, QuadraticBezierLinearDegeneration) {
     EXPECT_NEAR(result.y, 2.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：三次贝塞尔起始点
 TEST(BezierCurve2DTest, CubicBezierStartingPoint) {
     glm::vec2 p0(0, 0), p1(1, 3), p2(4, 3), p3(5, 0);
     glm::vec2 result = dse::math::BezierCurve2D::EvaluateCubic(0.0f, p0, p1, p2, p3);
@@ -57,6 +62,7 @@ TEST(BezierCurve2DTest, CubicBezierStartingPoint) {
     EXPECT_NEAR(result.y, 0.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：Triple贝塞尔结束
 TEST(BezierCurve2DTest, TripleBezierEnd) {
     glm::vec2 p0(0, 0), p1(1, 3), p2(4, 3), p3(5, 0);
     glm::vec2 result = dse::math::BezierCurve2D::EvaluateCubic(1.0f, p0, p1, p2, p3);
@@ -64,6 +70,7 @@ TEST(BezierCurve2DTest, TripleBezierEnd) {
     EXPECT_NEAR(result.y, 0.0f, 1e-5f);
 }
 
+// 测试 贝塞尔曲线2D：三次贝塞尔Symmetry
 TEST(BezierCurve2DTest, CubicBezierSymmetry) {
     // 反转控制点顺序并在 t→1-t 时应得到相同结果
     glm::vec2 p0(0, 0), p1(1, 3), p2(4, 3), p3(5, 0);
@@ -78,22 +85,26 @@ TEST(BezierCurve2DTest, CubicBezierSymmetry) {
 // Tween 测试
 // ============================================================
 
+// 测试 补间：Lineareasing Constant
 TEST(TweenTest, LineareasingConstant) {
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::Linear, 0.0f), 0.0f, 1e-5f);
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::Linear, 0.5f), 0.5f, 1e-5f);
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::Linear, 1.0f), 1.0f, 1e-5f);
 }
 
+// 测试 补间：缓动于四边形值为正确
 TEST(TweenTest, EaseInQuadValueIsCorrect) {
     float t = 0.5f;
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::EaseInQuad, t), t * t, 1e-5f);
 }
 
+// 测试 补间：缓动输出四边形值为正确
 TEST(TweenTest, EaseOutQuadValueIsCorrect) {
     float t = 0.5f;
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::EaseOutQuad, t), t * (2.0f - t), 1e-5f);
 }
 
+// 测试 补间：缓动于输出四边形首个半为Equivalent到缓动于
 TEST(TweenTest, EaseInOutQuadTheFirstHalfIsEquivalentToEaseIn) {
     float t = 0.3f;
     float io_val = dse::utils::Tween::Evaluate(dse::utils::EaseType::EaseInOutQuad, t);
@@ -101,6 +112,7 @@ TEST(TweenTest, EaseInOutQuadTheFirstHalfIsEquivalentToEaseIn) {
     EXPECT_NEAR(io_val, expected, 1e-5f);
 }
 
+// 测试 补间：缓动于输出四边形Second半为Equivalent到缓动Outdeformation
 TEST(TweenTest, EaseInOutQuadTheSecondHalfIsEquivalentToEaseOutdeformation) {
     float t = 0.7f;
     float io_val = dse::utils::Tween::Evaluate(dse::utils::EaseType::EaseInOutQuad, t);
@@ -108,16 +120,19 @@ TEST(TweenTest, EaseInOutQuadTheSecondHalfIsEquivalentToEaseOutdeformation) {
     EXPECT_NEAR(io_val, expected, 1e-5f);
 }
 
+// 测试 补间：T按钳制
 TEST(TweenTest, TByClamp) {
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::Linear, -1.0f), 0.0f, 1e-5f);
     EXPECT_NEAR(dse::utils::Tween::Evaluate(dse::utils::EaseType::Linear, 2.0f), 1.0f, 1e-5f);
 }
 
+// 测试 补间：线性插值线性插值为正确
 TEST(TweenTest, LerpLinearInterpolationIsCorrect) {
     EXPECT_NEAR(dse::utils::Tween::Lerp(0.0f, 100.0f, 0.5f), 50.0f, 1e-5f);
     EXPECT_NEAR(dse::utils::Tween::Lerp(-10.0f, 10.0f, 0.5f), 0.0f, 1e-5f);
 }
 
+// 测试 补间：线性插值正确插值带Easing
 TEST(TweenTest, LerpCorrectInterpolationWithEasing) {
     float result = dse::utils::Tween::Lerp(0.0f, 100.0f, 0.5f, dse::utils::EaseType::EaseInQuad);
     float eased_t = 0.5f * 0.5f; // EaseInQuad(0.5) = 0.25

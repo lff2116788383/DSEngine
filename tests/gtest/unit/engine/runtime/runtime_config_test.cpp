@@ -14,6 +14,7 @@ using namespace dse::runtime;
 // EngineRunConfig
 // ============================================================
 
+// 测试 引擎运行配置：默认值
 TEST(EngineRunConfigTest, DefaultValues) {
     EngineRunConfig cfg;
     EXPECT_EQ(cfg.window_width, 800);
@@ -24,6 +25,7 @@ TEST(EngineRunConfigTest, DefaultValues) {
     EXPECT_TRUE(cfg.startup_lua_script_path.empty());
 }
 
+// 测试 引擎运行配置：带服务链
 TEST(EngineRunConfigTest, WithServicesChain) {
     RuntimeServices svc;
     svc.job_system = reinterpret_cast<dse::core::JobSystem*>(0x1234);
@@ -35,6 +37,7 @@ TEST(EngineRunConfigTest, WithServicesChain) {
     EXPECT_EQ(cfg.services.job_system, svc.job_system);
 }
 
+// 测试 引擎运行配置：自定义值
 TEST(EngineRunConfigTest, CustomValues) {
     EngineRunConfig cfg;
     cfg.window_width = 1920;
@@ -56,6 +59,7 @@ TEST(EngineRunConfigTest, CustomValues) {
 // RuntimeContext
 // ============================================================
 
+// 测试 运行时上下文：默认空Pointers
 TEST(RuntimeContextTest, DefaultNullPointers) {
     RuntimeContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
@@ -65,12 +69,14 @@ TEST(RuntimeContextTest, DefaultNullPointers) {
     EXPECT_EQ(ctx.audio_system, nullptr);
 }
 
+// 测试 运行时上下文：默认业务模式Lua
 TEST(RuntimeContextTest, DefaultBusinessModeLua) {
     RuntimeContext ctx;
     EXPECT_EQ(ctx.business_mode, BusinessMode::Lua);
     EXPECT_FALSE(ctx.editor_mode);
 }
 
+// 测试 运行时上下文：回调默认空
 TEST(RuntimeContextTest, CallbacksDefaultNull) {
     RuntimeContext ctx;
     EXPECT_FALSE(static_cast<bool>(ctx.window_title_setter));
@@ -82,6 +88,7 @@ TEST(RuntimeContextTest, CallbacksDefaultNull) {
     EXPECT_FALSE(static_cast<bool>(ctx.present_frame));
 }
 
+// 测试 运行时上下文：注入且Invoke回调
 TEST(RuntimeContextTest, InjectAndInvokeCallbacks) {
     RuntimeContext ctx;
 
@@ -106,6 +113,7 @@ TEST(RuntimeContextTest, InjectAndInvokeCallbacks) {
 // BusinessMode enum
 // ============================================================
 
+// 测试 业务模式：枚举值
 TEST(BusinessModeTest, EnumValues) {
     EXPECT_EQ(static_cast<int>(BusinessMode::Lua), 0);
     EXPECT_EQ(static_cast<int>(BusinessMode::Cpp), 1);

@@ -20,6 +20,7 @@ using namespace dse::math;
 // 二次贝塞尔曲线
 // ============================================================
 
+// 测试 贝塞尔曲线2D：二次贝塞尔起始点为相等顶部0
 TEST(BezierCurve2DTest, TheQuadraticBezierStartingPointIsEqualTop0) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 2.0f);
@@ -29,6 +30,7 @@ TEST(BezierCurve2DTest, TheQuadraticBezierStartingPointIsEqualTop0) {
     EXPECT_FLOAT_EQ(result.y, p0.y);
 }
 
+// 测试 贝塞尔曲线2D：二次贝塞尔结束点为相等顶部2
 TEST(BezierCurve2DTest, TheQuadraticBezierEndPointIsEqualTop2) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 2.0f);
@@ -38,6 +40,7 @@ TEST(BezierCurve2DTest, TheQuadraticBezierEndPointIsEqualTop2) {
     EXPECT_FLOAT_EQ(result.y, p2.y);
 }
 
+// 测试 贝塞尔曲线2D：二次贝塞尔中点值为正确
 TEST(BezierCurve2DTest, QuadraticBezierMidpointValueIsCorrect) {
     // t=0.5 时二次贝塞尔公式: (1-t)^2*p0 + 2*(1-t)*t*p1 + t^2*p2
     glm::vec2 p0(0.0f, 0.0f);
@@ -50,6 +53,7 @@ TEST(BezierCurve2DTest, QuadraticBezierMidpointValueIsCorrect) {
     EXPECT_FLOAT_EQ(result.y, 1.0f);
 }
 
+// 测试 贝塞尔曲线2D：次数为
 TEST(BezierCurve2DTest, TimesIs) {
     // 当控制点在起终点连线上时，曲线退化为直线
     glm::vec2 p0(0.0f, 0.0f);
@@ -64,6 +68,7 @@ TEST(BezierCurve2DTest, TimesIs) {
 // 三次贝塞尔曲线
 // ============================================================
 
+// 测试 贝塞尔曲线2D：三次贝塞尔起始点为相等顶部0
 TEST(BezierCurve2DTest, TheCubicBezierStartingPointIsEqualTop0) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 3.0f);
@@ -74,6 +79,7 @@ TEST(BezierCurve2DTest, TheCubicBezierStartingPointIsEqualTop0) {
     EXPECT_FLOAT_EQ(result.y, p0.y);
 }
 
+// 测试 贝塞尔曲线2D：三次贝塞尔结束点为相等顶部3
 TEST(BezierCurve2DTest, TheCubicBezierEndPointIsEqualTop3) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 3.0f);
@@ -84,6 +90,7 @@ TEST(BezierCurve2DTest, TheCubicBezierEndPointIsEqualTop3) {
     EXPECT_FLOAT_EQ(result.y, p3.y);
 }
 
+// 测试 贝塞尔曲线2D：三次贝塞尔中点值为正确
 TEST(BezierCurve2DTest, CubicBezierMidpointValueIsCorrect) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(0.0f, 2.0f);
@@ -99,6 +106,7 @@ TEST(BezierCurve2DTest, CubicBezierMidpointValueIsCorrect) {
 }
 
 
+// 测试 贝塞尔曲线2D：三次贝塞尔Monotonically递增参数
 TEST(BezierCurve2DTest, CubicBezierMonotonicallyIncreasingParameters) {
     glm::vec2 p0(0.0f, 0.0f);
     glm::vec2 p1(1.0f, 1.0f);

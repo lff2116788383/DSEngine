@@ -54,6 +54,7 @@ protected:
     }
 };
 
+// 测试 事件总线服务定位器集成：注册事件总线之后Canpass服务定位器
 TEST_F(EventBusServiceLocatorIntegrationTest, RegisterEventBusAfterCanpassServiceLocator) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -69,6 +70,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, RegisterEventBusAfterCanpassServic
     EXPECT_EQ(received, 42);
 }
 
+// 测试 事件总线服务定位器集成：就地构造创建事件总线示例
 TEST_F(EventBusServiceLocatorIntegrationTest, EmplaceCreateEventBusExample) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
 
@@ -87,6 +89,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, EmplaceCreateEventBusExample) {
 // EventBus Instance() 与 ServiceLocator 一致性
 // ============================================================
 
+// 测试 事件总线服务定位器集成：实例且服务定位器注册返回相同对象
 TEST_F(EventBusServiceLocatorIntegrationTest, InstanceAndServiceLocatorRegistrationReturnsTheSameObject) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -101,6 +104,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, InstanceAndServiceLocatorRegistrat
 // 多服务协作
 // ============================================================
 
+// 测试 事件总线服务定位器集成：Multiregister之后能够
 TEST_F(EventBusServiceLocatorIntegrationTest, MultiregisterAfterCan) {
     auto bus = std::make_shared<EventBus>();
     auto world = std::make_shared<World>();
@@ -121,6 +125,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, MultiregisterAfterCan) {
     job_system->Shutdown();
 }
 
+// 测试 事件总线服务定位器集成：事件
 TEST_F(EventBusServiceLocatorIntegrationTest, Event) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -144,6 +149,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, Event) {
 // BridgeTo 跨定位器桥接
 // ============================================================
 
+// 测试 事件总线服务定位器集成：桥接到Transfer服务到目标定位器
 TEST_F(EventBusServiceLocatorIntegrationTest, BridgeToTransferServiceToTargetLocator) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -159,6 +165,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, BridgeToTransferServiceToTargetLoc
     EXPECT_EQ(ptr1, ptr2);
 }
 
+// 测试 事件总线服务定位器集成：不注册返回失败
 TEST_F(EventBusServiceLocatorIntegrationTest, NotregisterReturnsFails) {
     ServiceLocator::Instance().Reset<EventBus>();
     // BridgeTo 对未注册服务返回 false
@@ -170,6 +177,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, NotregisterReturnsFails) {
 // 生命周期管理
 // ============================================================
 
+// 测试 事件总线服务定位器集成：重置全部清空全部服务
 TEST_F(EventBusServiceLocatorIntegrationTest, ResetAllClearAllServices) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
     ServiceLocator::Instance().Emplace<World, World>();
@@ -183,6 +191,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, ResetAllClearAllServices) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<World>());
 }
 
+// 测试 事件总线服务定位器集成：重置不
 TEST_F(EventBusServiceLocatorIntegrationTest, ResetNot) {
     ServiceLocator::Instance().Emplace<EventBus, EventBus>();
     ServiceLocator::Instance().Emplace<World, World>();
@@ -193,6 +202,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, ResetNot) {
     EXPECT_TRUE(ServiceLocator::Instance().Has<World>());
 }
 
+// 测试 事件总线服务定位器集成：重置之后事件总线不再次能够
 TEST_F(EventBusServiceLocatorIntegrationTest, ResetAfterEventBusNotAgainCan) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);
@@ -217,6 +227,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, ResetAfterEventBusNotAgainCan) {
 // Has 检查
 // ============================================================
 
+// 测试 事件总线服务定位器集成：拥有正确反映注册状态
 TEST_F(EventBusServiceLocatorIntegrationTest, HasCorrectlyReflectRegistrationStatus) {
     EXPECT_FALSE(ServiceLocator::Instance().Has<EventBus>());
 
@@ -231,6 +242,7 @@ TEST_F(EventBusServiceLocatorIntegrationTest, HasCorrectlyReflectRegistrationSta
 // 场景生命周期事件驱动 World 操作
 // ============================================================
 
+// 测试 事件总线服务定位器集成：场景Lifecycleeventdrive世界
 TEST_F(EventBusServiceLocatorIntegrationTest, SceneLifecycleeventdriveWorld) {
     auto bus = std::make_shared<EventBus>();
     ServiceLocator::Instance().Register<EventBus, EventBus>(bus);

@@ -346,7 +346,7 @@ bin\dsengine-editor.exe
 ### 运行 Lua 演示
 
 ```powershell
-build_fast_lua.bat
+scripts\win\build_fast_lua.bat
 bin\DSEngine_lua_debug.exe
 ```
 
@@ -440,7 +440,7 @@ dse pack MyGame dist/game.bun --key 0123456789abcdef
 
 ```powershell
 # 一键：配置（开启 gtest）+ 构建三套测试 + 用 ctest 运行
-build_fast_tests.bat
+scripts\win\build_fast_tests.bat
 
 # 或手动：
 cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_GTESTS=ON

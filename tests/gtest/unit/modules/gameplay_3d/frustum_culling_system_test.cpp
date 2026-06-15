@@ -26,16 +26,19 @@ protected:
     FrustumCullingSystem sys;
 };
 
+// 测试 视锥剔除系统：空世界调用更新不崩溃
 TEST_F(FrustumCullingSystemTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
+// 测试 视锥剔除系统：带有实体世界调用更新不崩溃
 TEST_F(FrustumCullingSystemTest, BringEntityWorldCallsUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
     EXPECT_NO_THROW(sys.Update(world));
 }
 
+// 测试 视锥剔除系统：带有网格渲染器实体更新不崩溃
 TEST_F(FrustumCullingSystemTest, BringMeshRendererEntityUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
@@ -43,6 +46,7 @@ TEST_F(FrustumCullingSystemTest, BringMeshRendererEntityUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
+// 测试 视锥剔除系统：包围盒Componentcentral Computing
 TEST_F(FrustumCullingSystemTest, BoundingBoxComponentcentralComputing) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-1.0f, -2.0f, -3.0f);
@@ -54,6 +58,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponentcentralComputing) {
     EXPECT_FLOAT_EQ(center.z, 0.0f);
 }
 
+// 测试 视锥剔除系统：包围盒Componentasymmetric中心
 TEST_F(FrustumCullingSystemTest, BoundingBoxComponentasymmetricCenter) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -65,6 +70,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponentasymmetricCenter) {
     EXPECT_FLOAT_EQ(center.z, 3.0f);
 }
 
+// 测试 视锥剔除系统：包围盒Componenthalf范围Calculation
 TEST_F(FrustumCullingSystemTest, BoundingBoxComponenthalfRangeCalculation) {
     BoundingBoxComponent bb;
     bb.min_extents = glm::vec3(-2.0f, -4.0f, -6.0f);
@@ -76,6 +82,7 @@ TEST_F(FrustumCullingSystemTest, BoundingBoxComponenthalfRangeCalculation) {
     EXPECT_FLOAT_EQ(extents.z, 6.0f);
 }
 
+// 测试 视锥剔除系统：相机3D组件默认值
 TEST_F(FrustumCullingSystemTest, Camera3DComponentDefaultValues) {
     Camera3DComponent cam;
     EXPECT_TRUE(cam.enabled);
@@ -86,6 +93,7 @@ TEST_F(FrustumCullingSystemTest, Camera3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(cam.far_clip, 1000.0f);
 }
 
+// 测试 视锥剔除系统：方向光灯光3D组件默认值
 TEST_F(FrustumCullingSystemTest, DirectionalLight3DComponentDefaultValues) {
     DirectionalLight3DComponent light;
     EXPECT_TRUE(light.enabled);
@@ -95,6 +103,7 @@ TEST_F(FrustumCullingSystemTest, DirectionalLight3DComponentDefaultValues) {
     EXPECT_FLOAT_EQ(light.shadow_strength, 0.35f);
 }
 
+// 测试 视锥剔除系统：多次数更新不崩溃
 TEST_F(FrustumCullingSystemTest, MultiTimesUpdateDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);

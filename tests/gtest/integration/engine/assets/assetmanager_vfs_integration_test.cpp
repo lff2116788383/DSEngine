@@ -60,11 +60,13 @@ protected:
     void TearDown() override {}
 };
 
+// 测试 资源管理器VFS集成：Configurationdata之后获取返回正确
 TEST_F(AssetManagerVfsIntegrationTest, ConfigurationdataAfterAcquireReturnsCorrect) {
     asset_mgr.ConfigureDataRoot("data");
     EXPECT_EQ(asset_mgr.GetDataRoot(), "data");
 }
 
+// 测试 资源管理器VFS集成：配置数据根Switchable根目录
 TEST_F(AssetManagerVfsIntegrationTest, ConfigureDataRootSwitchableRootDirectory) {
     asset_mgr.ConfigureDataRoot("assets");
     EXPECT_EQ(asset_mgr.GetDataRoot(), "assets");
@@ -73,18 +75,21 @@ TEST_F(AssetManagerVfsIntegrationTest, ConfigureDataRootSwitchableRootDirectory)
     EXPECT_EQ(asset_mgr.GetDataRoot(), "data");
 }
 
+// 测试 资源管理器VFS集成：归一化资源路径Processing Logical Paths
 TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPathProcessingLogicalPaths) {
     // 纯逻辑路径应直接返回
     std::string result = asset_mgr.NormalizeAssetPath("textures/hero.png");
     EXPECT_FALSE(result.empty());
 }
 
+// 测试 资源管理器VFS集成：归一化资源路径Handling Prefixed Paths
 TEST_F(AssetManagerVfsIntegrationTest, NormalizeAssetPathHandlingPrefixedPaths) {
     // 带 data/ 前缀的路径应被规范化
     std::string result = asset_mgr.NormalizeAssetPath("data/textures/hero.png");
     EXPECT_FALSE(result.empty());
 }
 
+// 测试 资源管理器VFS集成：解析资源路径返回Accessible路径
 TEST_F(AssetManagerVfsIntegrationTest, ResolveAssetPathReturnAccessiblePath) {
     std::string resolved = asset_mgr.ResolveAssetPath("textures/test.png");
     // 无论文件是否存在，路径解析不应返回空（除非路径本身非法）
@@ -122,6 +127,7 @@ protected:
     }
 };
 
+// 测试 资源资源包集成：打包资源包Packaging目录成功
 TEST_F(AssetBundleIntegrationTest, PackBundlePackagingDirectorySuccessful) {
     bool result = asset_mgr.PackBundle(temp_dir_, bundle_path_, "");
     // 打包应成功
@@ -131,6 +137,7 @@ TEST_F(AssetBundleIntegrationTest, PackBundlePackagingDirectorySuccessful) {
     EXPECT_TRUE(std::filesystem::exists(bundle_path_));
 }
 
+// 测试 资源资源包集成：挂载资源包之后加载文件到内存可读
 TEST_F(AssetBundleIntegrationTest, MountBundleAfterLoadFileToMemoryReadable) {
     // 先打包
     ASSERT_TRUE(asset_mgr.PackBundle(temp_dir_, bundle_path_, ""));
@@ -150,6 +157,7 @@ TEST_F(AssetBundleIntegrationTest, MountBundleAfterLoadFileToMemoryReadable) {
     }
 }
 
+// 测试 资源资源包集成：资源包且
 TEST_F(AssetBundleIntegrationTest, BundleAnd) {
     std::string aes_key = "0123456789abcdef"; // 16 字节 AES 密钥
 
@@ -167,6 +175,7 @@ TEST_F(AssetBundleIntegrationTest, BundleAnd) {
     }
 }
 
+// 测试 资源资源包集成：错误失败或读取
 TEST_F(AssetBundleIntegrationTest, ErrorFailsOrRead) {
     std::string correct_key = "0123456789abcdef";
     std::string wrong_key = "fedcba9876543210";
@@ -192,6 +201,7 @@ TEST_F(AssetBundleIntegrationTest, ErrorFailsOrRead) {
 // 缓存机制
 // ============================================================
 
+// 测试 资源管理器VFS集成：创建示例Cachehit
 TEST_F(AssetManagerVfsIntegrationTest, CreateExampleCachehit) {
     auto mat1 = asset_mgr.CreateMaterialInstance("test_mat");
     auto mat2 = asset_mgr.GetMaterialInstance(mat1->GetId());
@@ -202,6 +212,7 @@ TEST_F(AssetManagerVfsIntegrationTest, CreateExampleCachehit) {
     EXPECT_EQ(mat1.get(), mat2.get());
 }
 
+// 测试 资源管理器VFS集成：已经创建示例ID
 TEST_F(AssetManagerVfsIntegrationTest, AlreadyCreateExampleID) {
     auto mat_a = asset_mgr.CreateMaterialInstance("mat_a");
     auto mat_b = asset_mgr.CreateMaterialInstance("mat_b");
@@ -214,6 +225,7 @@ TEST_F(AssetManagerVfsIntegrationTest, AlreadyCreateExampleID) {
 }
 
 
+// 测试 资源管理器VFS集成：Notuse资源
 TEST_F(AssetManagerVfsIntegrationTest, NotuseAsset) {
     auto mat = asset_mgr.CreateMaterialInstance("temp_mat");
     unsigned int mat_id = mat->GetId();
@@ -250,6 +262,7 @@ protected:
     }
 };
 
+// 测试 资源管理器异步集成：加载
 TEST_F(AssetManagerAsyncIntegrationTest, Load) {
     std::atomic<int> callback_count{0};
 
@@ -270,6 +283,7 @@ TEST_F(AssetManagerAsyncIntegrationTest, Load) {
     SUCCEED();
 }
 
+// 测试 资源管理器异步集成：待处理主线程Callbackscount非负
 TEST_F(AssetManagerAsyncIntegrationTest, PendingMainThreadCallbackscountNonNegative) {
     EXPECT_GE(asset_mgr.PendingMainThreadCallbacks(), 0u);
     EXPECT_GE(asset_mgr.PendingMainThreadCallbacksHighWatermark(), 0u);
@@ -279,12 +293,14 @@ TEST_F(AssetManagerAsyncIntegrationTest, PendingMainThreadCallbackscountNonNegat
 // EventBus 集成
 // ============================================================
 
+// 测试 资源管理器VFS集成：设置事件总线之后获取事件总线返回正确指针
 TEST_F(AssetManagerVfsIntegrationTest, SetEventBusAfterGetEventBusReturnTheCorrectPointer) {
     dse::core::EventBus bus;
     asset_mgr.SetEventBus(&bus);
     EXPECT_EQ(asset_mgr.GetEventBus(), &bus);
 }
 
+// 测试 资源管理器VFS集成：设置上任务系统之后获取返回正确指针
 TEST_F(AssetManagerVfsIntegrationTest, SetUpJobSystemAfterAcquireReturnTheCorrectPointer) {
     dse::core::JobSystem js;
     asset_mgr.SetJobSystem(&js);

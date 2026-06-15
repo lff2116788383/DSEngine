@@ -20,6 +20,7 @@ using namespace dse;
 // 2.1 TerrainTileManagerComponent 默认值
 // ============================================================
 
+// 测试 地形瓦片管理器组件：默认值配置
 TEST(TerrainTileManagerComponentTest, DefaultValues_Configuration) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.enabled);
@@ -30,24 +31,28 @@ TEST(TerrainTileManagerComponentTest, DefaultValues_Configuration) {
     EXPECT_FLOAT_EQ(ttm.lod_distance_factor, 50.0f);
 }
 
+// 测试 地形瓦片管理器组件：默认值加载半
 TEST(TerrainTileManagerComponentTest, DefaultValues_LoadHalf) {
     TerrainTileManagerComponent ttm;
     EXPECT_FLOAT_EQ(ttm.load_radius, 200.0f);
     EXPECT_FLOAT_EQ(ttm.unload_radius, 250.0f);
 }
 
+// 测试 地形瓦片管理器组件：默认值程序化代次
 TEST(TerrainTileManagerComponentTest, DefaultValues_ProceduralGeneration) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.use_procedural);
     EXPECT_FLOAT_EQ(ttm.procedural_base_height, 0.0f);
 }
 
+// 测试 地形瓦片管理器组件：默认值情形
 TEST(TerrainTileManagerComponentTest, DefaultValues_Case) {
     TerrainTileManagerComponent ttm;
     EXPECT_EQ(ttm.loaded_tile_count, 0);
     EXPECT_EQ(ttm.visible_tile_count, 0);
 }
 
+// 测试 地形瓦片管理器组件：默认值Tiles为空
 TEST(TerrainTileManagerComponentTest, DefaultValues_TilesIsEmpty) {
     TerrainTileManagerComponent ttm;
     EXPECT_TRUE(ttm.tiles.empty());
@@ -57,6 +62,7 @@ TEST(TerrainTileManagerComponentTest, DefaultValues_TilesIsEmpty) {
 // 2.2 TerrainTileData 默认值
 // ============================================================
 
+// 测试 地形瓦片数据：默认值
 TEST(TerrainTileDataTest, DefaultValues) {
     TerrainTileData td;
     EXPECT_TRUE(td.gpu_dirty);
@@ -65,12 +71,14 @@ TEST(TerrainTileDataTest, DefaultValues) {
     EXPECT_EQ(td.index_count, 0u);
 }
 
+// 测试 地形瓦片数据：默认值情形
 TEST(TerrainTileDataTest, DefaultValues_Case) {
     TerrainTileData td;
     EXPECT_EQ(td.tile_x, 0);
     EXPECT_EQ(td.tile_z, 0);
 }
 
+// 测试 地形瓦片数据：默认值数据为空
 TEST(TerrainTileDataTest, DefaultValues_DataIsEmpty) {
     TerrainTileData td;
     EXPECT_TRUE(td.height_data.empty());
@@ -81,12 +89,14 @@ TEST(TerrainTileDataTest, DefaultValues_DataIsEmpty) {
 // 2.3 TerrainTileKey 正确性
 // ============================================================
 
+// 测试 地形瓦片：瓦片键不同坐标且不同值
 TEST(TerrainTileTest, TileKeyDifferentCoordinatesAndDifferentValues) {
     EXPECT_NE(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(1, 0));
     EXPECT_NE(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(0, 1));
     EXPECT_NE(dse::TerrainTileKey(1, 2), dse::TerrainTileKey(2, 1));
 }
 
+// 测试 地形瓦片：瓦片键负坐标
 TEST(TerrainTileTest, TileKeyNegativeCoordinates) {
     int64_t k1 = dse::TerrainTileKey(-1, -1);
     int64_t k2 = dse::TerrainTileKey(1, 1);
@@ -96,12 +106,14 @@ TEST(TerrainTileTest, TileKeyNegativeCoordinates) {
     EXPECT_NE(dse::TerrainTileKey(0, -1), dse::TerrainTileKey(0, 1));
 }
 
+// 测试 地形瓦片：瓦片键相同坐标相同值
 TEST(TerrainTileTest, TileKeySameCoordinatesSameValue) {
     EXPECT_EQ(dse::TerrainTileKey(5, 7), dse::TerrainTileKey(5, 7));
     EXPECT_EQ(dse::TerrainTileKey(0, 0), dse::TerrainTileKey(0, 0));
     EXPECT_EQ(dse::TerrainTileKey(-3, -4), dse::TerrainTileKey(-3, -4));
 }
 
+// 测试 地形瓦片：瓦片键无碰撞于Wide范围
 TEST(TerrainTileTest, TileKeyNoCollisionInAWideRange) {
     std::set<int64_t> keys;
     for (int tx = -10; tx <= 10; ++tx) {
@@ -118,6 +130,7 @@ TEST(TerrainTileTest, TileKeyNoCollisionInAWideRange) {
 // 2.4 tiles map 增删
 // ============================================================
 
+// 测试 地形瓦片映射：且查找
 TEST(TerrainTileMapTest, AndFind) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
@@ -132,6 +145,7 @@ TEST(TerrainTileMapTest, AndFind) {
     EXPECT_TRUE(tiles[key].loaded);
 }
 
+// 测试 地形瓦片映射：删除
 TEST(TerrainTileMapTest, Delete) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
@@ -148,6 +162,7 @@ TEST(TerrainTileMapTest, Delete) {
     EXPECT_EQ(tiles.count(k2), 1u);
 }
 
+// 测试 地形瓦片映射：写入
 TEST(TerrainTileMapTest, Write) {
     std::unordered_map<int64_t, TerrainTileData> tiles;
 
@@ -163,11 +178,13 @@ TEST(TerrainTileMapTest, Write) {
 // 2.5 load_radius < unload_radius 防抖
 // ============================================================
 
+// 测试 地形瓦片滞后：默认值
 TEST(TerrainTileHysteresisTest, DefaultValues) {
     TerrainTileManagerComponent ttm;
     EXPECT_LT(ttm.load_radius, ttm.unload_radius);
 }
 
+// 测试 地形瓦片滞后：情形17
 TEST(TerrainTileHysteresisTest, TestCase17) {
     TerrainTileManagerComponent ttm;
     float gap = ttm.unload_radius - ttm.load_radius;

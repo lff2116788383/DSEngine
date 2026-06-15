@@ -33,6 +33,7 @@ protected:
     }
 };
 
+// 测试 任务系统实例：初始化之后执行任务
 TEST_F(JobSystemInstanceTest, InitializeAfterExecuteTasks) {
     JobSystem js;
     js.Init();
@@ -47,6 +48,7 @@ TEST_F(JobSystemInstanceTest, InitializeAfterExecuteTasks) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：多任务全部执行
 TEST_F(JobSystemInstanceTest, MultiTasksAllExecute) {
     JobSystem js;
     js.Init();
@@ -77,6 +79,7 @@ TEST_F(JobSystemInstanceTest, MultiTasksAllExecute) {
 }
 
 
+// 测试 任务系统实例：当不已初始化同步执行
 TEST_F(JobSystemInstanceTest, WhenNotInitializedSynchronousExecution) {
     JobSystem js; // 不调用 Init()
 
@@ -85,6 +88,7 @@ TEST_F(JobSystemInstanceTest, WhenNotInitializedSynchronousExecution) {
     EXPECT_EQ(value, 42);
 }
 
+// 测试 任务系统实例：之后关闭同步执行
 TEST_F(JobSystemInstanceTest, AfterClosingSynchronousExecution) {
     JobSystem js;
     js.Init();
@@ -95,6 +99,7 @@ TEST_F(JobSystemInstanceTest, AfterClosingSynchronousExecution) {
     EXPECT_EQ(value, 99);
 }
 
+// 测试 任务系统实例：空任务不崩溃
 TEST_F(JobSystemInstanceTest, EmptyTasksDoesNotCrash) {
     JobSystem js;
     js.Init();
@@ -103,6 +108,7 @@ TEST_F(JobSystemInstanceTest, EmptyTasksDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 任务系统实例：初始化不崩溃
 TEST_F(JobSystemInstanceTest, InitializeDoesNotCrash) {
     JobSystem js;
     js.Init();
@@ -111,6 +117,7 @@ TEST_F(JobSystemInstanceTest, InitializeDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 任务系统实例：关闭不崩溃
 TEST_F(JobSystemInstanceTest, ShutdownDoesNotCrash) {
     JobSystem js;
     js.Init();
@@ -123,6 +130,7 @@ TEST_F(JobSystemInstanceTest, ShutdownDoesNotCrash) {
 // ServiceLocator 注入测试
 // ============================================================
 
+// 测试 任务系统实例：服务定位器能够应Injected Into实例且Perform任务
 TEST_F(JobSystemInstanceTest, ServiceLocatorCanBeInjectedIntoInstancesAndPerformTasks) {
     auto job_system = std::make_shared<JobSystem>();
     job_system->Init();
@@ -156,6 +164,7 @@ TEST_F(JobSystemInstanceTest, ServiceLocatorCanBeInjectedIntoInstancesAndPerform
     ServiceLocator::Instance().Reset<JobSystem>();
 }
 
+// 测试 任务系统实例：不注册当调用Canrollback为同步执行
 TEST_F(JobSystemInstanceTest, NotregisterWhenCallsCanrollbackIsSynchronousExecution) {
     int value = 0;
     auto* resolved = ServiceLocator::Instance().Get<JobSystem>();
@@ -171,6 +180,7 @@ TEST_F(JobSystemInstanceTest, NotregisterWhenCallsCanrollbackIsSynchronousExecut
 // JobHandle 与 Wait 测试
 // ============================================================
 
+// 测试 任务系统实例：提交返回有效句柄
 TEST_F(JobSystemInstanceTest, SubmitReturnValidHandle) {
     JobSystem js;
     js.Init();
@@ -181,6 +191,7 @@ TEST_F(JobSystemInstanceTest, SubmitReturnValidHandle) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：等待Able到等待任务到应Completed
 TEST_F(JobSystemInstanceTest, WaitAbleToWaitForTasksToBeCompleted) {
     JobSystem js;
     js.Init();
@@ -196,6 +207,7 @@ TEST_F(JobSystemInstanceTest, WaitAbleToWaitForTasksToBeCompleted) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：等待无效句柄不崩溃
 TEST_F(JobSystemInstanceTest, WaitInvalidHandleDoesNotCrash) {
     JobSystem js;
     js.Init();
@@ -207,6 +219,7 @@ TEST_F(JobSystemInstanceTest, WaitInvalidHandleDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 任务系统实例：等待返回Immediately之后Completing Task
 TEST_F(JobSystemInstanceTest, WaitReturnImmediatelyAfterCompletingTheTask) {
     JobSystem js;
     js.Init();
@@ -224,6 +237,7 @@ TEST_F(JobSystemInstanceTest, WaitReturnImmediatelyAfterCompletingTheTask) {
 // 优先级测试
 // ============================================================
 
+// 测试 任务系统实例：优先级Taskspriority执行
 TEST_F(JobSystemInstanceTest, PriorityTaskspriorityExecute) {
     JobSystem js;
     js.Init();
@@ -266,6 +280,7 @@ TEST_F(JobSystemInstanceTest, PriorityTaskspriorityExecute) {
 // 依赖链测试
 // ============================================================
 
+// 测试 任务系统实例：Tasksexist之后执行
 TEST_F(JobSystemInstanceTest, TasksexistAfterExecute) {
     JobSystem js;
     js.Init();
@@ -291,6 +306,7 @@ TEST_F(JobSystemInstanceTest, TasksexistAfterExecute) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：多全部完成之后执行
 TEST_F(JobSystemInstanceTest, MultiAllCompleteAfterExecute) {
     JobSystem js;
     js.Init();
@@ -320,6 +336,7 @@ TEST_F(JobSystemInstanceTest, MultiAllCompleteAfterExecute) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：无依赖提交带依赖提交
 TEST_F(JobSystemInstanceTest, NoDependenciesSubmitWithDependencySubmit) {
     JobSystem js;
     js.Init();
@@ -335,6 +352,7 @@ TEST_F(JobSystemInstanceTest, NoDependenciesSubmitWithDependencySubmit) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：已经提交带依赖
 TEST_F(JobSystemInstanceTest, AlreadySubmitWithDependency) {
     JobSystem js;
     js.Init();
@@ -353,6 +371,7 @@ TEST_F(JobSystemInstanceTest, AlreadySubmitWithDependency) {
     js.Shutdown();
 }
 
+// 测试 任务系统实例：链能够
 TEST_F(JobSystemInstanceTest, ChainCan) {
     JobSystem js;
     js.Init();

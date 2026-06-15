@@ -32,6 +32,7 @@ using Clock = std::chrono::high_resolution_clock;
 // ECS 吞吐量
 // ============================================================
 
+// 测试 性能基线：ECS情形10 K实体Iteration
 TEST(PerformanceBaseline, ECS_Case10KEntityIteration) {
     World world;
     constexpr int N = 10000;
@@ -55,6 +56,7 @@ TEST(PerformanceBaseline, ECS_Case10KEntityIteration) {
     EXPECT_LT(elapsed, 5000) << "ECS iteration too slow: " << elapsed << " us";
 }
 
+// 测试 性能基线：ECS创建且销毁10 K实体
 TEST(PerformanceBaseline, ECS_CreateAndDestroy10KEntity) {
     auto start = Clock::now();
     {
@@ -74,6 +76,7 @@ TEST(PerformanceBaseline, ECS_CreateAndDestroy10KEntity) {
 // JobSystem 吞吐量
 // ============================================================
 
+// 测试 性能基线：任务系统情形1 Ktask Throughput
 TEST(PerformanceBaseline, JobSystem_Case1KtaskThroughput) {
     dse::core::JobSystem js;
     js.Init();
@@ -101,6 +104,7 @@ TEST(PerformanceBaseline, JobSystem_Case1KtaskThroughput) {
     js.Shutdown();
 }
 
+// 测试 性能基线：任务系统无Deadlock于依赖链
 TEST(PerformanceBaseline, JobSystem_NoDeadlockInDependencyChain) {
     dse::core::JobSystem js;
     js.Init();
@@ -127,6 +131,7 @@ TEST(PerformanceBaseline, JobSystem_NoDeadlockInDependencyChain) {
 // ServiceLocator 查询性能
 // ============================================================
 
+// 测试 性能基线：服务定位器情形100 K查询
 TEST(PerformanceBaseline, ServiceLocator_Case100KQuery) {
     auto& sl = dse::core::ServiceLocator::Instance();
 
@@ -154,6 +159,7 @@ struct PerfTestEvent : public dse::core::Event {
 };
 } // namespace
 
+// 测试 性能基线：事件总线情形10 K广播
 TEST(PerformanceBaseline, EventBus_Case10KBroadcasts) {
     auto bus = std::make_shared<dse::core::EventBus>();
 

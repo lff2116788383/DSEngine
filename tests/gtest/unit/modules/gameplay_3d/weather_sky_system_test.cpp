@@ -29,6 +29,7 @@ size_t CountView(entt::registry& reg) {
 //  WeatherSystem
 // ============================================================
 
+// 测试 天气系统：无天气组件不创建发射器
 TEST(WeatherSystemTest, NoWeatherComponentDoesNotCreateEmitter) {
     WeatherSystem sys;
     World world;
@@ -36,6 +37,7 @@ TEST(WeatherSystemTest, NoWeatherComponentDoesNotCreateEmitter) {
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
+// 测试 天气系统：类型None不创建发射器
 TEST(WeatherSystemTest, TypeNoneDoesNotCreateEmitter) {
     WeatherSystem sys;
     World world;
@@ -49,6 +51,7 @@ TEST(WeatherSystemTest, TypeNoneDoesNotCreateEmitter) {
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
+// 测试 天气系统：积雪天气创建发射器且设置参数
 TEST(WeatherSystemTest, SnowWeatherCreatesEmitterAndSetsParameters) {
     WeatherSystem sys;
     World world;
@@ -84,6 +87,7 @@ TEST(WeatherSystemTest, SnowWeatherCreatesEmitterAndSetsParameters) {
     EXPECT_TRUE(found);
 }
 
+// 测试 天气系统：Rain天气参数Differ从积雪
 TEST(WeatherSystemTest, RainWeatherParametersDifferFromSnow) {
     WeatherSystem sys;
     World world;
@@ -117,6 +121,7 @@ TEST(WeatherSystemTest, RainWeatherParametersDifferFromSnow) {
     EXPECT_TRUE(found);
 }
 
+// 测试 天气系统：Emission速率衰减之后天气禁用
 TEST(WeatherSystemTest, EmissionRateDecaysAfterWeatherDisabled) {
     WeatherSystem sys;
     World world;
@@ -147,6 +152,7 @@ TEST(WeatherSystemTest, EmissionRateDecaysAfterWeatherDisabled) {
     }
 }
 
+// 测试 天气系统：多帧
 TEST(WeatherSystemTest, MultiFrame) {
     WeatherSystem sys;
     World world;
@@ -194,6 +200,7 @@ TEST(WeatherSystemTest, MultiFrame) {
     }
 }
 
+// 测试 天气系统：关闭销毁发射器
 TEST(WeatherSystemTest, ShutdownDestroyEmitter) {
     WeatherSystem sys;
     World world;
@@ -219,6 +226,7 @@ TEST(WeatherSystemTest, ShutdownDestroyEmitter) {
     EXPECT_EQ(CountView<ParticleSystem3DComponent>(world.registry()), 0u);
 }
 
+// 测试 天气系统：发射器
 TEST(WeatherSystemTest, Emitter) {
     WeatherSystem sys;
     World world;
@@ -251,6 +259,7 @@ TEST(WeatherSystemTest, Emitter) {
 //  SnowCoverSystem
 // ============================================================
 
+// 测试 积雪覆盖系统：无天气当积雪零
 TEST(SnowCoverSystemTest, WithoutWeatherWhenSnowZero) {
     SnowCoverSystem sys;
     World world;
@@ -268,6 +277,7 @@ TEST(SnowCoverSystemTest, WithoutWeatherWhenSnowZero) {
     EXPECT_NEAR(sc.coverage, 0.0f, 0.001f);
 }
 
+// 测试 积雪覆盖系统：积雪天气积雪
 TEST(SnowCoverSystemTest, SnowWeatherSnow) {
     SnowCoverSystem sys;
     World world;
@@ -292,6 +302,7 @@ TEST(SnowCoverSystemTest, SnowWeatherSnow) {
     EXPECT_FLOAT_EQ(sc.target_coverage, 0.8f);
 }
 
+// 测试 积雪覆盖系统：到零单个
 TEST(SnowCoverSystemTest, ToZeroOne) {
     SnowCoverSystem sys;
     World world;
@@ -313,6 +324,7 @@ TEST(SnowCoverSystemTest, ToZeroOne) {
     EXPECT_GE(sc.coverage, 0.0f);
 }
 
+// 测试 积雪覆盖系统：禁用组件按
 TEST(SnowCoverSystemTest, DisabledComponentBy) {
     SnowCoverSystem sys;
     World world;
@@ -333,6 +345,7 @@ TEST(SnowCoverSystemTest, DisabledComponentBy) {
     EXPECT_FLOAT_EQ(sc.coverage, 0.0f);
 }
 
+// 测试 积雪覆盖系统：积雪之后正确
 TEST(SnowCoverSystemTest, SnowAfterCorrect) {
     SnowCoverSystem sys;
     World world;
@@ -365,6 +378,7 @@ TEST(SnowCoverSystemTest, SnowAfterCorrect) {
     EXPECT_NEAR(before - after, 0.1f, 0.02f);
 }
 
+// 测试 积雪覆盖系统：Rain不积雪
 TEST(SnowCoverSystemTest, RainNotSnow) {
     SnowCoverSystem sys;
     World world;
@@ -391,6 +405,7 @@ TEST(SnowCoverSystemTest, RainNotSnow) {
 //  DayNightCycleSystem
 // ============================================================
 
+// 测试 白天夜晚周期系统：情形15
 TEST(DayNightCycleSystemTest, TestCase15) {
     DayNightCycleSystem sys;
     World world;
@@ -412,6 +427,7 @@ TEST(DayNightCycleSystemTest, TestCase15) {
     EXPECT_GT(cycle.sun_elevation_, 50.0f);
 }
 
+// 测试 白天夜晚周期系统：存在
 TEST(DayNightCycleSystemTest, Exist) {
     DayNightCycleSystem sys;
     World world;
@@ -433,6 +449,7 @@ TEST(DayNightCycleSystemTest, Exist) {
     EXPECT_LT(cycle.sun_direction_.y, 0.0f);
 }
 
+// 测试 白天夜晚周期系统：自动推进时间
 TEST(DayNightCycleSystemTest, AutoAdvanceTime) {
     DayNightCycleSystem sys;
     World world;
@@ -454,6 +471,7 @@ TEST(DayNightCycleSystemTest, AutoAdvanceTime) {
     EXPECT_NEAR(after - before, 1.0f, 0.01f);
 }
 
+// 测试 白天夜晚周期系统：禁用组件按
 TEST(DayNightCycleSystemTest, DisabledComponentBy) {
     DayNightCycleSystem sys;
     World world;
@@ -474,6 +492,7 @@ TEST(DayNightCycleSystemTest, DisabledComponentBy) {
     EXPECT_FLOAT_EQ(cycle.time_of_day, 6.0f);
 }
 
+// 测试 白天夜晚周期系统：朝向且
 TEST(DayNightCycleSystemTest, TowardTowardAnd) {
     DayNightCycleSystem sys;
     World world;
@@ -502,6 +521,7 @@ TEST(DayNightCycleSystemTest, TowardTowardAnd) {
     EXPECT_GT(light.color.b, 0.7f);
 }
 
+// 测试 白天夜晚周期系统：时间自动24当
 TEST(DayNightCycleSystemTest, TimeAuto24When) {
     DayNightCycleSystem sys;
     World world;
@@ -523,6 +543,7 @@ TEST(DayNightCycleSystemTest, TimeAuto24When) {
     EXPECT_NEAR(cycle.time_of_day, 1.5f, 0.01f);
 }
 
+// 测试 白天夜晚周期系统：情形21
 TEST(DayNightCycleSystemTest, TestCase21) {
     DayNightCycleSystem sys;
     World world;
@@ -542,6 +563,7 @@ TEST(DayNightCycleSystemTest, TestCase21) {
     EXPECT_LT(light.intensity, 0.2f);
 }
 
+// 测试 白天夜晚周期系统：实体Towardpriorityuse
 TEST(DayNightCycleSystemTest, EntityTowardpriorityuse) {
     DayNightCycleSystem sys;
     World world;

@@ -19,32 +19,38 @@
 
 using namespace dse::runtime;
 
+// 测试 引擎运行配置：默认为800 x 600
 TEST(EngineRunConfigTest, DefaultIs800x600) {
     EngineRunConfig config;
     EXPECT_EQ(config.window_width, 800);
     EXPECT_EQ(config.window_height, 600);
 }
 
+// 测试 引擎运行配置：默认
 TEST(EngineRunConfigTest, Default) {
     EngineRunConfig config;
     EXPECT_EQ(config.window_title, "DSEngine Phase 2");
 }
 
+// 测试 引擎运行配置：Defaultmodel为Lua
 TEST(EngineRunConfigTest, DefaultmodelIsLua) {
     EngineRunConfig config;
     EXPECT_EQ(config.business_mode, BusinessMode::Lua);
 }
 
+// 测试 引擎运行配置：默认不启用
 TEST(EngineRunConfigTest, DefaultNotEnabled) {
     EngineRunConfig config;
     EXPECT_FALSE(config.enable_editor);
 }
 
+// 测试 引擎运行配置：默认无Lua
 TEST(EngineRunConfigTest, DefaultWithoutLua) {
     EngineRunConfig config;
     EXPECT_TRUE(config.startup_lua_script_path.empty());
 }
 
+// 测试 引擎运行配置：默认为空
 TEST(EngineRunConfigTest, DefaultIsEmpty) {
     EngineRunConfig config;
     EXPECT_EQ(config.services.world, nullptr);
@@ -52,6 +58,7 @@ TEST(EngineRunConfigTest, DefaultIsEmpty) {
     EXPECT_EQ(config.services.job_system, nullptr);
 }
 
+// 测试 引擎运行配置：带Serviceschain调用
 TEST(EngineRunConfigTest, WithServiceschainCall) {
     RuntimeServices services;
     EngineRunConfig config;
@@ -59,6 +66,7 @@ TEST(EngineRunConfigTest, WithServiceschainCall) {
     EXPECT_EQ(&ref, &config);
 }
 
+// 测试 引擎实例：且不崩溃
 TEST(EngineInstanceTest, AndDoesNotCrash) {
     EngineRunConfig config;
     config.enable_editor = true; // 避免在析构时调用 glfwTerminate
@@ -67,24 +75,28 @@ TEST(EngineInstanceTest, AndDoesNotCrash) {
     });
 }
 
+// 测试 引擎实例：当不Initializedpipeline返回非空
 TEST(EngineInstanceTest, WhenNotInitializedpipelineReturnNonEmpty) {
     EngineRunConfig config;
     EngineInstance instance(config);
     ASSERT_NE(instance.pipeline(), nullptr);
 }
 
+// 测试 引擎实例：当不已初始化滴答不崩溃
 TEST(EngineInstanceTest, WhenNotInitializedTickDoesNotCrash) {
     EngineRunConfig config;
     EngineInstance instance(config);
     EXPECT_NO_THROW(instance.Tick());
 }
 
+// 测试 引擎实例：当不已初始化关闭不崩溃
 TEST(EngineInstanceTest, WhenNotInitializedShutdownDoesNotCrash) {
     EngineRunConfig config;
     EngineInstance instance(config);
     EXPECT_NO_THROW(instance.Shutdown());
 }
 
+// 测试 引擎实例：注入外部世界之后服务定位器能够获取
 TEST(EngineInstanceTest, InjectsOutsideWorldAfterServiceLocatorCanAcquire) {
     EngineRunConfig config;
     RuntimeServices svc;
@@ -95,6 +107,7 @@ TEST(EngineInstanceTest, InjectsOutsideWorldAfterServiceLocatorCanAcquire) {
     EXPECT_NO_THROW(instance.Shutdown());
 }
 
+// 测试 引擎实例：注入外部资源管理器不崩溃
 TEST(EngineInstanceTest, InjectsOutsideAssetManagerDoesNotCrash) {
     EngineRunConfig config;
     EXPECT_NO_THROW({

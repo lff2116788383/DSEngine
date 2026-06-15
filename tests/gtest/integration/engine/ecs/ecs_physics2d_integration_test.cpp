@@ -34,6 +34,7 @@ protected:
     }
 };
 
+// 测试 ECS物理2D集成：情形1
 TEST_F(EcsPhysics2DIntegrationTest, TestCase1) {
     // 创建带物理组件的实体
     Entity e = world.CreateEntity();
@@ -63,6 +64,7 @@ TEST_F(EcsPhysics2DIntegrationTest, TestCase1) {
     EXPECT_LT(transform.position.y, 10.0f);
 }
 
+// 测试 ECS物理2D集成：不
 TEST_F(EcsPhysics2DIntegrationTest, Not) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -86,6 +88,7 @@ TEST_F(EcsPhysics2DIntegrationTest, Not) {
     EXPECT_FLOAT_EQ(transform.position.y, 5.0f);
 }
 
+// 测试 ECS物理2D集成：不能够速度
 TEST_F(EcsPhysics2DIntegrationTest, NotCanSpeed) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -112,6 +115,7 @@ TEST_F(EcsPhysics2DIntegrationTest, NotCanSpeed) {
     EXPECT_FLOAT_EQ(transform.position.y, 0.0f);
 }
 
+// 测试 ECS物理2D集成：命中
 TEST_F(EcsPhysics2DIntegrationTest, Hit) {
     // 创建一个静态地面
     Entity ground = world.CreateEntity();
@@ -138,6 +142,7 @@ TEST_F(EcsPhysics2DIntegrationTest, Hit) {
     EXPECT_TRUE(hit_entity != entt::null);
 }
 
+// 测试 ECS物理2D集成：未命中返回false
 TEST_F(EcsPhysics2DIntegrationTest, NothitReturnsfalse) {
     Entity ground = world.CreateEntity();
     auto& gt = world.registry().emplace<TransformComponent>(ground);
@@ -162,6 +167,7 @@ TEST_F(EcsPhysics2DIntegrationTest, NothitReturnsfalse) {
     EXPECT_FALSE(hit);
 }
 
+// 测试 ECS物理2D集成：实体销毁之后系统仍能够法线
 TEST_F(EcsPhysics2DIntegrationTest, EntityDestroyAfterSystemStillCanNormal) {
     Entity e1 = world.CreateEntity();
     auto& t1 = world.registry().emplace<TransformComponent>(e1);
@@ -183,6 +189,7 @@ TEST_F(EcsPhysics2DIntegrationTest, EntityDestroyAfterSystemStillCanNormal) {
     SUCCEED();
 }
 
+// 测试 ECS物理2D集成：之后关闭再次次数初始化不崩溃
 TEST_F(EcsPhysics2DIntegrationTest, AfterClosingAgainTimesInitializeDoesNotCrash) {
     Entity e = world.CreateEntity();
     auto& t = world.registry().emplace<TransformComponent>(e);

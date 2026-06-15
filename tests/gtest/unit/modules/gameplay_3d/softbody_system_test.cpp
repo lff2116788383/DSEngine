@@ -25,6 +25,7 @@ using namespace dse::gameplay3d;
 // SoftBodyDistConstraint 默认值
 // ============================================================
 
+// 测试 柔性刚体Dist约束：默认值
 TEST(SoftBodyDistConstraintTest, DefaultValues) {
     SoftBodyDistConstraint c;
     EXPECT_EQ(c.i0, 0u);
@@ -36,6 +37,7 @@ TEST(SoftBodyDistConstraintTest, DefaultValues) {
 // SoftBodyComponent 默认值
 // ============================================================
 
+// 测试 柔性刚体组件：默认值
 TEST(SoftBodyComponentTest, DefaultValues) {
     SoftBodyComponent sb;
     EXPECT_TRUE(sb.enabled);
@@ -59,16 +61,19 @@ TEST(SoftBodyComponentTest, DefaultValues) {
 // SoftBodySystem 空 World
 // ============================================================
 
+// 测试 柔性刚体系统：默认安全
 TEST(SoftBodySystemTest, DefaultSafety) {
     SoftBodySystem sys;
     (void)sys;
 }
 
+// 测试 柔性刚体系统：设置资源管理器空指针安全
 TEST(SoftBodySystemTest, SetAssetManager_NullptrSafety) {
     SoftBodySystem sys;
     sys.SetAssetManager(nullptr);
 }
 
+// 测试 柔性刚体系统：空世界不崩溃
 TEST(SoftBodySystemTest, EmptyWorldDoesNotCrash) {
     SoftBodySystem sys;
     World world;
@@ -109,6 +114,7 @@ SoftBodyComponent MakeSimpleSoftBody() {
 
 } // anonymous namespace
 
+// 测试 柔性刚体模拟：构造
 TEST(SoftBodySimulateTest, Make) {
     // 直接测试 SoftBodyComponent 的模拟效果
     // 创建 World + SoftBody 实体
@@ -126,6 +132,7 @@ TEST(SoftBodySimulateTest, Make) {
     EXPECT_LT(sb_after.positions[1].y, 10.0f);
 }
 
+// 测试 柔性刚体模拟：点不
 TEST(SoftBodySimulateTest, PointNot) {
     World world;
     auto entity = world.registry().create();
@@ -144,6 +151,7 @@ TEST(SoftBodySimulateTest, PointNot) {
     EXPECT_LT(sb_after.positions[1].y, 10.0f);
 }
 
+// 测试 柔性刚体模拟：禁用不
 TEST(SoftBodySimulateTest, DisabledNot) {
     World world;
     auto entity = world.registry().create();
@@ -159,6 +167,7 @@ TEST(SoftBodySimulateTest, DisabledNot) {
     EXPECT_FLOAT_EQ(sb_after.positions[1].y, 10.0f);
 }
 
+// 测试 柔性刚体模拟：零增量时间不
 TEST(SoftBodySimulateTest, ZerodtNot) {
     World world;
     auto entity = world.registry().create();
@@ -171,6 +180,7 @@ TEST(SoftBodySimulateTest, ZerodtNot) {
     EXPECT_FLOAT_EQ(sb_after.positions[0].y, 10.0f);
 }
 
+// 测试 柔性刚体模拟：情形10
 TEST(SoftBodySimulateTest, TestCase10) {
     World world;
     auto entity = world.registry().create();
@@ -192,6 +202,7 @@ TEST(SoftBodySimulateTest, TestCase10) {
     EXPECT_NEAR(dist, 1.0f, 0.15f); // 允许一定误差
 }
 
+// 测试 柔性刚体模拟：网格Dirtymark
 TEST(SoftBodySimulateTest, mesh_Dirtymark) {
     World world;
     auto entity = world.registry().create();

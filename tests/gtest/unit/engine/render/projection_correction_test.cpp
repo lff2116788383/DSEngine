@@ -35,12 +35,14 @@ static void ExpectMatNear(const glm::mat4& a, const glm::mat4& b, float eps = 1e
 // OpenGL 补充：ShadowSampleCorrection
 // ============================================================
 
+// 测试 投影校正：GL阴影采样校正单位
 TEST(ProjectionCorrectionTest, GL_ShadowSampleCorrection_Identity) {
     OpenGLRhiDevice dev;
     glm::mat4 sc = dev.GetShadowSampleCorrection();
     ExpectMatNear(sc, glm::mat4(1.0f));
 }
 
+// 测试 投影校正：GL Z Rangekeep Minus单个到单个
 TEST(ProjectionCorrectionTest, GL_ZRangekeepMinusOneToOne) {
     OpenGLRhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
@@ -58,6 +60,7 @@ TEST(ProjectionCorrectionTest, GL_ZRangekeepMinusOneToOne) {
 // ============================================================
 #ifdef DSE_ENABLE_VULKAN
 
+// 测试 投影校正：Vulkan投影校正Y翻转Z重映射
 TEST(ProjectionCorrectionTest, VK_ProjectionCorrection_YFlip_ZRemap) {
     VulkanRhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
@@ -69,6 +72,7 @@ TEST(ProjectionCorrectionTest, VK_ProjectionCorrection_YFlip_ZRemap) {
     EXPECT_FLOAT_EQ(corr[3][3], 1.0f);
 }
 
+// 测试 投影校正：Vulkan阴影采样校正Y翻转无Z重映射
 TEST(ProjectionCorrectionTest, VK_ShadowSampleCorrection_YFlip_NoZRemap) {
     VulkanRhiDevice dev;
     glm::mat4 sc = dev.GetShadowSampleCorrection();
@@ -78,11 +82,13 @@ TEST(ProjectionCorrectionTest, VK_ShadowSampleCorrection_YFlip_NoZRemap) {
     EXPECT_FLOAT_EQ(sc[3][2], 0.0f);
 }
 
+// 测试 投影校正：Vulkan需要回读Y翻转假
 TEST(ProjectionCorrectionTest, VK_NeedsReadbackYFlip_False) {
     VulkanRhiDevice dev;
     EXPECT_FALSE(dev.NeedsReadbackYFlip());
 }
 
+// 测试 投影校正：Vulkan ND Ctransform
 TEST(ProjectionCorrectionTest, VK_NDCtransform) {
     VulkanRhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
@@ -100,6 +106,7 @@ TEST(ProjectionCorrectionTest, VK_NDCtransform) {
 // ============================================================
 #ifdef DSE_ENABLE_D3D11
 
+// 测试 投影校正：DX 11投影校正Z重映射仅
 TEST(ProjectionCorrectionTest, DX11_ProjectionCorrection_ZRemapOnly) {
     DX11RhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
@@ -110,6 +117,7 @@ TEST(ProjectionCorrectionTest, DX11_ProjectionCorrection_ZRemapOnly) {
     EXPECT_FLOAT_EQ(corr[0][0], 1.0f);
 }
 
+// 测试 投影校正：DX 11阴影采样校正Y翻转
 TEST(ProjectionCorrectionTest, DX11_ShadowSampleCorrection_YFlip) {
     DX11RhiDevice dev;
     glm::mat4 sc = dev.GetShadowSampleCorrection();
@@ -119,11 +127,13 @@ TEST(ProjectionCorrectionTest, DX11_ShadowSampleCorrection_YFlip) {
     EXPECT_FLOAT_EQ(sc[3][3], 1.0f);
 }
 
+// 测试 投影校正：DX 11需要回读Y翻转假
 TEST(ProjectionCorrectionTest, DX11_NeedsReadbackYFlip_False) {
     DX11RhiDevice dev;
     EXPECT_FALSE(dev.NeedsReadbackYFlip());
 }
 
+// 测试 投影校正：DX 11 ND Ctransform
 TEST(ProjectionCorrectionTest, DX11_NDCtransform) {
     DX11RhiDevice dev;
     glm::mat4 corr = dev.GetProjectionCorrection();
@@ -140,6 +150,7 @@ TEST(ProjectionCorrectionTest, DX11_NDCtransform) {
 // RHI 类型补充：RenderTargetDesc 相等性、HairDrawItem
 // ============================================================
 
+// 测试 渲染目标描述符扩展：MSA Aequality
 TEST(RenderTargetDescExtTest, MSAAequality) {
     RenderTargetDesc a, b;
     a.width = 1920; a.height = 1080; a.has_depth = true;
@@ -149,6 +160,7 @@ TEST(RenderTargetDescExtTest, MSAAequality) {
     EXPECT_FALSE(a == b);
 }
 
+// 测试 毛发绘制项：默认值
 TEST(HairDrawItemTest, DefaultValues) {
     HairDrawItem hdi;
     EXPECT_FALSE(hdi.position_ssbo);
@@ -159,6 +171,7 @@ TEST(HairDrawItemTest, DefaultValues) {
     EXPECT_FLOAT_EQ(hdi.opacity, 0.9f);
 }
 
+// 测试 绘制元素间接命令扩展：情形13
 TEST(DrawElementsIndirectCommandExtTest, TestCase13) {
     DrawElementsIndirectCommand cmd{};
     cmd.count = 36;

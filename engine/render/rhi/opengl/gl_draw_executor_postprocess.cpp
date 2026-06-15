@@ -332,6 +332,12 @@ static void BindTonemapping(unsigned int prog,
                              const std::vector<float>& params,
                              unsigned int& /*ubo*/) {
     glUniform1f(glGetUniformLocation(prog, "_68.u_manual_exposure"), params[0]);
+    // 次级采样器单元绑定（ESSL300 会剥离 sampler 的 layout(binding=N)，使
+    // 不同类型的采样器都回退到单元 0；sampler2D 与 sampler3D 同单元在
+    // WebGL2/GLES3 上是 INVALID_OPERATION，导致整个后处理 draw 失败。这里
+    // 按效果固定槽位显式赋单元，桌面端与 layout(binding) 一致，为 no-op。
+    glUniform1i(glGetUniformLocation(prog, "autoExposureTex"), 2);
+    glUniform1i(glGetUniformLocation(prog, "u_lut"), 5);
     const bool has_ae  = req.FindTex(2) != 0;
     const bool has_lut = req.FindTex(5) != 0;
     glUniform1i(glGetUniformLocation(prog, "_68.u_auto_exposure_enabled"), has_ae ? 1 : 0);
@@ -346,6 +352,8 @@ static void BindColorGrading(unsigned int prog,
                               unsigned int& /*ubo*/) {
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_3D, static_cast<unsigned int>(params[0]));
+    // 见 BindTonemapping：ESSL300 下显式把 LUT 采样器指向单元 5。
+    glUniform1i(glGetUniformLocation(prog, "u_lut"), 5);
     glUniform1f(glGetUniformLocation(prog, "_40.u_lut_intensity"), params[1]);
 }
 
@@ -355,6 +363,17 @@ static void BindBloomComposite(unsigned int prog,
                                 unsigned int& /*ubo*/) {
     const CompositeParamsView cv(params);
     const auto bcp = PrepareBloomCompositeParams(cv);
+    // 次级采样器单元绑定（见 BindTonemapping）：ESSL300 剥离 sampler 的
+    // layout(binding=N)，未显式赋单元的采样器全部回退到单元 0。本着色器同时含
+    // sampler2D（bloomBlur/ssao/ae/contactShadow）与 sampler3D（u_lut），同处单元 0
+    // 在 WebGL2/GLES3 上触发 INVALID_OPERATION（不同类型采样器共用单元），令整个
+    // 合成 draw 失败、场景无法呈现到屏幕。这里按各效果固定槽位显式赋单元（与下方
+    // 纹理绑定一致），桌面端与 layout(binding) 等价、为 no-op。
+    glUniform1i(glGetUniformLocation(prog, "bloomBlur"), 2);
+    glUniform1i(glGetUniformLocation(prog, "ssaoTexture"), 3);
+    glUniform1i(glGetUniformLocation(prog, "autoExposureTex"), 4);
+    glUniform1i(glGetUniformLocation(prog, "u_lut"), 5);
+    glUniform1i(glGetUniformLocation(prog, "contactShadowTex"), 6);
     glUniform1f(glGetUniformLocation(prog, "_90.exposure"), bcp.exposure);
     glUniform1f(glGetUniformLocation(prog, "_90.bloomIntensity"), bcp.bloom_intensity);
     glUniform1i(glGetUniformLocation(prog, "_90.bloomEnabled"), bcp.bloom_enabled);
@@ -543,6 +562,18 @@ void GLDrawExecutor::DrawPostProcess(const dse::render::PostProcessRequest& requ
     // 绑定 source texture
     glActiveTexture(GL_TEXTURE0 + request.source_binding);
     glBindTexture(GL_TEXTURE_2D, source_texture);
+
+    // 主采样器单元绑定：桌面 GLSL 通过 layout(binding=N) 设定采样单元，
+    // 但 ESSL300（WebGL2/GLES3）会剥离 sampler 的 binding 限定符，使其默认回退到
+    // 单元 0，从而采样到上一批次残留在单元 0 的纹理。这里显式把主采样器指向
+    // source_binding，使各 GL/GLES 目标一致（桌面端为 no-op）。
+    for (const char* sampler_name : {"screenTexture", "u_scene_color", "u_texture"}) {
+        const int loc = glGetUniformLocation(gen_shader, sampler_name);
+        if (loc >= 0) {
+            glUniform1i(loc, request.source_binding);
+            break;
+        }
+    }
 
     // 绑定 request.textures[] 中声明的额外纹理
     for (const auto& tb : request.textures) {

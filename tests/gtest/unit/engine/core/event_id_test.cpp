@@ -19,6 +19,7 @@ using namespace dse::core;
 // EventId 测试
 // ============================================================
 
+// 测试 事件ID：FNV 1 Hashconsistency
 TEST(EventIdTest, Fnv1aHashconsistency) {
     // 相同字符串必须产生相同哈希值
     constexpr EventId id1 = MakeEventId("TestEvent");
@@ -26,30 +27,35 @@ TEST(EventIdTest, Fnv1aHashconsistency) {
     EXPECT_EQ(id1, id2);
 }
 
+// 测试 事件ID：FNV 1哈希不同Strings产生不同值
 TEST(EventIdTest, Fnv1aHashDifferentStringsProduceDifferentValues) {
     constexpr EventId id1 = MakeEventId("EventA");
     constexpr EventId id2 = MakeEventId("EventB");
     EXPECT_NE(id1, id2);
 }
 
+// 测试 事件ID：空FN Voffset
 TEST(EventIdTest, EmptyFNVoffset) {
     constexpr EventId empty_hash = MakeEventId("");
     constexpr EventId fnv_offset = 0xcbf29ce484222325ull;
     EXPECT_EQ(empty_hash, fnv_offset);
 }
 
+// 测试 事件ID：事件ID非零
 TEST(EventIdTest, EventIDNonZero) {
     EXPECT_NE(events::kUiClick, 0u);
     EXPECT_NE(events::kResourceLoaded, 0u);
     EXPECT_NE(events::kSceneLifecycle, 0u);
 }
 
+// 测试 事件ID：事件ID不相等
 TEST(EventIdTest, EventIDNotEqual) {
     EXPECT_NE(events::kUiClick, events::kResourceLoaded);
     EXPECT_NE(events::kUiClick, events::kSceneLifecycle);
     EXPECT_NE(events::kResourceLoaded, events::kSceneLifecycle);
 }
 
+// 测试 事件ID：情形6
 TEST(EventIdTest, TestCase6) {
     // 验证 MakeEventId 可以在编译期使用（constexpr）
     static_assert(MakeEventId("CompileTime") != 0, "MakeEventId must be constexpr");

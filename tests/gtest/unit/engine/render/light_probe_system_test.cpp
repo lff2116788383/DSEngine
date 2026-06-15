@@ -23,6 +23,7 @@ using namespace dse::render;
 // SHL2 / BakedProbe 数据结构
 // ============================================================
 
+// 测试 SHL 2：默认值全部零
 TEST(SHL2Test, DefaultValuesAllZero) {
     SHL2 sh;
     for (int i = 0; i < 9; ++i) {
@@ -32,6 +33,7 @@ TEST(SHL2Test, DefaultValuesAllZero) {
     }
 }
 
+// 测试 Baked探针：默认值
 TEST(BakedProbeTest, DefaultValues) {
     BakedProbe bp;
     EXPECT_FLOAT_EQ(bp.position.x, 0.0f);
@@ -44,6 +46,7 @@ TEST(BakedProbeTest, DefaultValues) {
 // LightProbeComponent ECS 默认值
 // ============================================================
 
+// 测试 灯光探针组件：默认值
 TEST(LightProbeComponentTest, DefaultValues) {
     dse::LightProbeComponent comp;
     EXPECT_TRUE(comp.enabled);
@@ -61,23 +64,27 @@ TEST(LightProbeComponentTest, DefaultValues) {
 // LightProbeSystem 生命周期（无 GPU）
 // ============================================================
 
+// 测试 灯光探针系统：默认未初始化
 TEST(LightProbeSystemTest, DefaultUninitialized) {
     LightProbeSystem sys;
     EXPECT_TRUE(sys.baked_probes().empty());
 }
 
+// 测试 灯光探针系统：初始化空指针安全
 TEST(LightProbeSystemTest, Init_NullptrSafety) {
     LightProbeSystem sys;
     sys.Init(nullptr);
     EXPECT_TRUE(sys.baked_probes().empty());
 }
 
+// 测试 灯光探针系统：关闭安全
 TEST(LightProbeSystemTest, ShutdownSafety) {
     LightProbeSystem sys;
     sys.Shutdown();
     EXPECT_TRUE(sys.baked_probes().empty());
 }
 
+// 测试 灯光探针系统：关闭安全2
 TEST(LightProbeSystemTest, ShutdownSafety_2) {
     LightProbeSystem sys;
     sys.Shutdown();
@@ -88,6 +95,7 @@ TEST(LightProbeSystemTest, ShutdownSafety_2) {
 // IntegrateFaceSH — 纯 CPU 积分测试
 // ============================================================
 
+// 测试 积分面SH：Allis零
 TEST(IntegrateFaceSHTest, AllisZero) {
     const int w = 4, h = 4;
     std::vector<unsigned char> black(w * h * 4, 0);
@@ -100,6 +108,7 @@ TEST(IntegrateFaceSHTest, AllisZero) {
     }
 }
 
+// 测试 积分面SH：全部非零
 TEST(IntegrateFaceSHTest, AllNonZero) {
     const int w = 4, h = 4;
     std::vector<unsigned char> white(w * h * 4, 255);
@@ -111,6 +120,7 @@ TEST(IntegrateFaceSHTest, AllNonZero) {
     EXPECT_GT(sh.coeffs[0].z, 0.0f);
 }
 
+// 测试 积分面SH：全部DC 4 PI
 TEST(IntegrateFaceSHTest, AllDC4PI) {
     const int w = 16, h = 16;
     std::vector<unsigned char> white(w * h * 4, 255);
@@ -127,6 +137,7 @@ TEST(IntegrateFaceSHTest, AllDC4PI) {
     EXPECT_NEAR(total.coeffs[0].x, expected_dc, expected_dc * 0.2f);
 }
 
+// 测试 积分面SH：带R
 TEST(IntegrateFaceSHTest, WithR) {
     const int w = 4, h = 4;
     std::vector<unsigned char> red(w * h * 4, 0);
@@ -141,6 +152,7 @@ TEST(IntegrateFaceSHTest, WithR) {
     EXPECT_FLOAT_EQ(sh.coeffs[0].z, 0.0f);
 }
 
+// 测试 积分面SH：不崩溃
 TEST(IntegrateFaceSHTest, DoesNotCrash) {
     const int w = 2, h = 2;
     std::vector<unsigned char> pixels(w * h * 4, 128);
@@ -150,6 +162,7 @@ TEST(IntegrateFaceSHTest, DoesNotCrash) {
     }
 }
 
+// 测试 积分面SH：烘焙SH在位置空指针安全
 TEST(IntegrateFaceSHTest, BakeSHAtPosition_NullptrSafety) {
     RenderPassContext ctx;
     SHL2 sh = LightProbeSystem::BakeSHAtPosition(glm::vec3(0.0f), 64, nullptr, 0, ctx);

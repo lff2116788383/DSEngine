@@ -143,6 +143,9 @@ public:
     // --- 默认采样器 ---
     VkSampler default_sampler() const { return default_sampler_; }
 
+    // --- 材质采样器（linear repeat，供网格材质贴图使用，与 GL/D3D11 默认 wrap 对齐）---
+    VkSampler material_sampler() const { return material_sampler_; }
+
     // --- 阴影比较采样器（compareEnable=VK_TRUE，用于 sampler2DShadow PCF）---
     VkSampler shadow_comparison_sampler() const { return shadow_comparison_sampler_; }
 
@@ -200,6 +203,9 @@ private:
 
     // 默认采样器（linear clamp，供 Compute Shader 使用）
     VkSampler default_sampler_ = VK_NULL_HANDLE;
+
+    // 材质采样器（linear repeat，供网格材质贴图使用，匹配 GL/D3D11 默认 wrap=REPEAT）
+    VkSampler material_sampler_ = VK_NULL_HANDLE;
 
     // 阴影比较采样器（compareEnable=VK_TRUE，compareOp=LESS_OR_EQUAL，供 sampler2DShadow PCF）
     VkSampler shadow_comparison_sampler_ = VK_NULL_HANDLE;

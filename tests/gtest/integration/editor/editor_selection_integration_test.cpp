@@ -81,12 +81,14 @@ protected:
     void SetUp() override { sm_.Clear(); }
 };
 
+// 测试 选择管理器：初始状态为空
 TEST_F(SelectionManagerTest, TheInitialStateIsEmpty) {
     EXPECT_TRUE(sm_.IsEmpty());
     EXPECT_EQ(sm_.Count(), 0);
     EXPECT_EQ(sm_.GetPrimary(), kNullEntity);
 }
 
+// 测试 选择管理器：设置单一Choice
 TEST_F(SelectionManagerTest, SetSingleSingleChoice) {
     Entity e = 1;
 
@@ -97,6 +99,7 @@ TEST_F(SelectionManagerTest, SetSingleSingleChoice) {
     EXPECT_TRUE(sm_.Contains(e));
 }
 
+// 测试 选择管理器：切换Counter Election
 TEST_F(SelectionManagerTest, ToggleCounterElection) {
     Entity e1 = 1;
     Entity e2 = 2;
@@ -112,6 +115,7 @@ TEST_F(SelectionManagerTest, ToggleCounterElection) {
     EXPECT_TRUE(sm_.Contains(e2));
 }
 
+// 测试 选择管理器：添加Prevents重复
 TEST_F(SelectionManagerTest, AddPreventsDuplicate) {
     Entity e = 1;
 
@@ -121,6 +125,7 @@ TEST_F(SelectionManagerTest, AddPreventsDuplicate) {
     EXPECT_EQ(sm_.Count(), 1);
 }
 
+// 测试 选择管理器：移除
 TEST_F(SelectionManagerTest, RemoveRemove) {
     Entity e1 = 10;
     Entity e2 = 20;
@@ -133,6 +138,7 @@ TEST_F(SelectionManagerTest, RemoveRemove) {
     EXPECT_TRUE(sm_.Contains(e2));
 }
 
+// 测试 选择管理器：设置单一空清空
 TEST_F(SelectionManagerTest, SetSingle_NullClear) {
     Entity e = 5;
 
@@ -141,6 +147,7 @@ TEST_F(SelectionManagerTest, SetSingle_NullClear) {
     EXPECT_TRUE(sm_.IsEmpty());
 }
 
+// 测试 选择管理器：设置单一多个选择到单一选择
 TEST_F(SelectionManagerTest, SetSingle_MultipleSelectionToSingleSelection) {
     sm_.Add(1);
     sm_.Add(2);
@@ -154,6 +161,7 @@ TEST_F(SelectionManagerTest, SetSingle_MultipleSelectionToSingleSelection) {
     EXPECT_FALSE(sm_.Contains(3));
 }
 
+// 测试 选择管理器：移除若实体不存在Will不崩溃
 TEST_F(SelectionManagerTest, Remove_IfTheEntityDoesNotExistItWillNotCrash) {
     sm_.Add(10);
     sm_.Remove(99);  // 不存在，不应崩溃
@@ -161,6 +169,7 @@ TEST_F(SelectionManagerTest, Remove_IfTheEntityDoesNotExistItWillNotCrash) {
     EXPECT_TRUE(sm_.Contains(10));
 }
 
+// 测试 选择管理器：获取Primary返回最后已添加
 TEST_F(SelectionManagerTest, GetPrimary_ReturnsTheLastAdded) {
     sm_.Add(1);
     sm_.Add(2);

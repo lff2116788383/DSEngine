@@ -19,6 +19,7 @@ using namespace dse::render;
 // ReflectionProbeComponent ECS 默认值
 // ============================================================
 
+// 测试 反射探针组件：默认值
 TEST(ReflectionProbeComponentTest, DefaultValues) {
     dse::ReflectionProbeComponent comp;
     EXPECT_TRUE(comp.enabled);
@@ -37,12 +38,14 @@ TEST(ReflectionProbeComponentTest, DefaultValues) {
 // ReflectionProbeSystem 生命周期
 // ============================================================
 
+// 测试 反射探针系统：默认未初始化
 TEST(ReflectionProbeSystemTest, DefaultUninitialized) {
     ReflectionProbeSystem sys;
     EXPECT_EQ(sys.brdf_lut_handle(), 0u);
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
+// 测试 反射探针系统：初始化空指针安全
 TEST(ReflectionProbeSystemTest, Init_NullptrSafety) {
     ReflectionProbeSystem sys;
     sys.Init(nullptr);
@@ -50,18 +53,21 @@ TEST(ReflectionProbeSystemTest, Init_NullptrSafety) {
     EXPECT_FALSE(sys.IsIBLAvailable());
 }
 
+// 测试 反射探针系统：关闭未初始化安全
 TEST(ReflectionProbeSystemTest, ShutdownUninitializedSecurity) {
     ReflectionProbeSystem sys;
     sys.Shutdown(nullptr);
     EXPECT_EQ(sys.brdf_lut_handle(), 0u);
 }
 
+// 测试 反射探针系统：关闭安全
 TEST(ReflectionProbeSystemTest, ShutdownSafety) {
     ReflectionProbeSystem sys;
     sys.Shutdown(nullptr);
     sys.Shutdown(nullptr);
 }
 
+// 测试 反射探针系统：当不已初始化IBL不能够
 TEST(ReflectionProbeSystemTest, WhenNotInitializedIBLNotCan) {
     ReflectionProbeSystem sys;
     EXPECT_FALSE(sys.IsIBLAvailable());
@@ -71,12 +77,14 @@ TEST(ReflectionProbeSystemTest, WhenNotInitializedIBLNotCan) {
 // ReflectionProbeComponent 手动修改
 // ============================================================
 
+// 测试 反射探针组件：Reviseresolution
 TEST(ReflectionProbeComponentTest, Reviseresolution) {
     dse::ReflectionProbeComponent comp;
     comp.resolution = 256;
     EXPECT_EQ(comp.resolution, 256);
 }
 
+// 测试 反射探针组件：Revisecubemap句柄
 TEST(ReflectionProbeComponentTest, Revisecubemap_handle) {
     dse::ReflectionProbeComponent comp;
     comp.cubemap_handle = 42;
@@ -85,6 +93,7 @@ TEST(ReflectionProbeComponentTest, Revisecubemap_handle) {
     EXPECT_FALSE(comp.needs_rebake);
 }
 
+// 测试 反射探针组件：盒投影参数
 TEST(ReflectionProbeComponentTest, BoxProjectionParameters) {
     dse::ReflectionProbeComponent comp;
     comp.use_box_projection = true;

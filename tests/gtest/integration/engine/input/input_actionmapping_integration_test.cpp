@@ -35,6 +35,7 @@ protected:
     }
 };
 
+// 测试 输入集成：动作映射多帧Hold状态为正确
 TEST_F(InputIntegrationTest, ActionMappingMultiFrameHoldStateIsCorrect) {
     ActionMapping mapping;
     mapping.BindKey("Fire", MOUSE_BUTTON_LEFT);
@@ -58,6 +59,7 @@ TEST_F(InputIntegrationTest, ActionMappingMultiFrameHoldStateIsCorrect) {
     EXPECT_FALSE(mapping.GetActionUp("Fire"));
 }
 
+// 测试 输入集成：手柄Axes且Buttons动作Mappingcombination
 TEST_F(InputIntegrationTest, GamepadAxesAndButtonsActionMappingcombination) {
     ActionMapping mapping;
     mapping.BindKey("Jump", GAMEPAD_BUTTON_A);
@@ -78,6 +80,7 @@ TEST_F(InputIntegrationTest, GamepadAxesAndButtonsActionMappingcombination) {
     EXPECT_TRUE(mapping.GetAction("Jump"));
 }
 
+// 测试 输入集成：录制器记录导出导入Playerplayback Driver动作映射
 TEST_F(InputIntegrationTest, RecorderRecordExportImportPlayerplaybackDriverActionMapping) {
     ActionMapping mapping;
     mapping.BindKey("MoveRight", KEY_CODE_D);
@@ -116,6 +119,7 @@ TEST_F(InputIntegrationTest, RecorderRecordExportImportPlayerplaybackDriverActio
     EXPECT_TRUE(player.IsFinished());
 }
 
+// 测试 输入集成：Playerplayback Driver ECS实体Movement
 TEST_F(InputIntegrationTest, PlayerplaybackDriverECSEntityMovement) {
     World world;
     auto entity = world.CreateEntity();
@@ -148,6 +152,7 @@ TEST_F(InputIntegrationTest, PlayerplaybackDriverECSEntityMovement) {
     EXPECT_GT(transform.position.x, 0.0f);
 }
 
+// 测试 输入集成：当重新绑定之后记录仍法线
 TEST_F(InputIntegrationTest, WhenRebindAfterRecordStillNormal) {
     ActionMapping mapping;
     mapping.BindKey("Shoot", KEY_CODE_F);
@@ -176,6 +181,7 @@ TEST_F(InputIntegrationTest, WhenRebindAfterRecordStillNormal) {
     EXPECT_FALSE(mapping.GetAction("Shoot") && !Input::GetKey(KEY_CODE_G));
 }
 
+// 测试 输入集成：多
 TEST_F(InputIntegrationTest, MultiMulti) {
     ActionMapping p1_mapping;
     p1_mapping.BindKey("P1_Jump", GAMEPAD_BUTTON_A);
@@ -197,6 +203,7 @@ TEST_F(InputIntegrationTest, MultiMulti) {
     EXPECT_TRUE(p2_mapping.GetAction("P2_Jump"));
 }
 
+// 测试 输入集成：全部重置之后动作映射且手柄状态
 TEST_F(InputIntegrationTest, AllResetAfterActionMappingAndGamepadState) {
     ActionMapping mapping;
     mapping.BindKey("Fire", KEY_CODE_F);

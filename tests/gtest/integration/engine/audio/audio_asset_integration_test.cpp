@@ -27,6 +27,7 @@ protected:
     AudioSystem audio;
 };
 
+// 测试 音频资源集成：音频源组件默认值为相同作为资源管理器无依赖
 TEST_F(AudioAssetIntegrationTest, AudioSourceComponentTheDefaultValueIsTheSameAsAssetManagerNoDependencies) {
     AudioSourceComponent audio_comp;
     EXPECT_EQ(audio_comp.clip, nullptr);
@@ -36,22 +37,26 @@ TEST_F(AudioAssetIntegrationTest, AudioSourceComponentTheDefaultValueIsTheSameAs
     EXPECT_FLOAT_EQ(audio_comp.pitch, 1.0f);
 }
 
+// 测试 音频资源集成：未初始化音频Systemset上不崩溃
 TEST_F(AudioAssetIntegrationTest, UninitializedAudioSystemsetUpDoesNotCrash) {
     EXPECT_NO_THROW(audio.SetMasterVolume(0.5f));
     EXPECT_NO_THROW(audio.SetBgmVolume(0.3f));
     EXPECT_NO_THROW(audio.SetSfxVolume(0.7f));
 }
 
+// 测试 音频资源集成：未初始化音频系统停止回放不崩溃
 TEST_F(AudioAssetIntegrationTest, UninitializedAudioSystemStopPlaybackDoesNotCrash) {
     EXPECT_NO_THROW(audio.StopAllSfx());
     EXPECT_NO_THROW(audio.StopBgm());
 }
 
+// 测试 音频资源集成：且Parametersset上
 TEST_F(AudioAssetIntegrationTest, AndParameterssetUp) {
     EXPECT_NO_THROW(audio.SetMaxConcurrentSfxPerClip(8));
     EXPECT_NO_THROW(audio.SetSfxTriggerCooldownMs(50));
 }
 
+// 测试 音频资源集成：带有音频源组件实体创建且销毁无崩溃
 TEST_F(AudioAssetIntegrationTest, BringAudioSourceComponentEntityCreateAndDestroyWithoutCrashing) {
     auto e = world.CreateEntity();
     auto& tf = world.registry().emplace<TransformComponent>(e);
@@ -67,6 +72,7 @@ TEST_F(AudioAssetIntegrationTest, BringAudioSourceComponentEntityCreateAndDestro
     EXPECT_FALSE(world.IsAlive(e));
 }
 
+// 测试 音频资源集成：多音频源实体
 TEST_F(AudioAssetIntegrationTest, MultiAudioSourceEntity) {
     for (int i = 0; i < 5; ++i) {
         auto e = world.CreateEntity();
@@ -84,6 +90,7 @@ TEST_F(AudioAssetIntegrationTest, MultiAudioSourceEntity) {
     EXPECT_EQ(count, 5);
 }
 
+// 测试 音频资源集成：资源管理器且音频系统独立生命周期
 TEST_F(AudioAssetIntegrationTest, AssetManagerAndAudioSystemIndependentLifecycle) {
     AssetManager am;
     // AudioSystem 不持有 AssetManager 引用（未初始化状态）

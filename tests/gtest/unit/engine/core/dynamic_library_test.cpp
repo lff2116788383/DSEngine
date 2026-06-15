@@ -20,16 +20,19 @@ using namespace dse::core;
 // 构造与基本状态
 // ============================================================
 
+// 测试 动态库：默认当不加载
 TEST(DynamicLibraryTest, DefaultWhenNotLoad) {
     DynamicLibrary lib;
     EXPECT_FALSE(lib.IsLoaded());
 }
 
+// 测试 动态库：卸载空库不崩溃
 TEST(DynamicLibraryTest, UnloadEmptyLibraryDoesNotCrash) {
     DynamicLibrary lib;
     EXPECT_NO_THROW(lib.Unload());
 }
 
+// 测试 动态库：获取Symbol返回当不Loadednullptr
 TEST(DynamicLibraryTest, GetSymbolReturnWhenNotLoadednullptr) {
     DynamicLibrary lib;
     EXPECT_EQ(lib.GetSymbol("SomeSymbol"), nullptr);
@@ -39,6 +42,7 @@ TEST(DynamicLibraryTest, GetSymbolReturnWhenNotLoadednullptr) {
 // 加载不存在的库
 // ============================================================
 
+// 测试 动态库：Loaddoes不存在返回false
 TEST(DynamicLibraryTest, LoaddoesNotExistReturnsfalse) {
     DynamicLibrary lib;
     bool result = lib.Load("nonexistent_library_that_does_not_exist_12345");
@@ -50,6 +54,7 @@ TEST(DynamicLibraryTest, LoaddoesNotExistReturnsfalse) {
 // 移动语义
 // ============================================================
 
+// 测试 动态库：带
 TEST(DynamicLibraryTest, With) {
     DynamicLibrary lib1;
     DynamicLibrary lib2(std::move(lib1));
@@ -58,6 +63,7 @@ TEST(DynamicLibraryTest, With) {
     EXPECT_FALSE(lib2.IsLoaded()); // lib1 本来就没加载
 }
 
+// 测试 动态库：带2
 TEST(DynamicLibraryTest, With_2) {
     DynamicLibrary lib1;
     DynamicLibrary lib2;
@@ -72,6 +78,7 @@ TEST(DynamicLibraryTest, With_2) {
 
 #if defined(_WIN32)
 
+// 测试 动态库：加载Systemkernel 32
 TEST(DynamicLibraryTest, LoadSystemkernel32) {
     DynamicLibrary lib;
     bool result = lib.Load("kernel32.dll");
@@ -90,6 +97,7 @@ TEST(DynamicLibraryTest, LoadSystemkernel32) {
     EXPECT_FALSE(lib.IsLoaded());
 }
 
+// 测试 动态库：加载之后卸载能够加载
 TEST(DynamicLibraryTest, LoadAfterUnloadCanLoad) {
     DynamicLibrary lib;
     ASSERT_TRUE(lib.Load("kernel32.dll"));
@@ -104,6 +112,7 @@ TEST(DynamicLibraryTest, LoadAfterUnloadCanLoad) {
     lib.Unload();
 }
 
+// 测试 动态库：已经加载
 TEST(DynamicLibraryTest, AlreadyLoad) {
     DynamicLibrary lib1;
     ASSERT_TRUE(lib1.Load("kernel32.dll"));

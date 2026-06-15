@@ -20,12 +20,14 @@ protected:
     RenderGraph graph_;
 };
 
+// 测试 渲染图执行：空执行不崩溃
 TEST_F(RenderGraphExecuteTest, EmptyExecuteDoesNotCrash) {
     graph_.Compile();
     OpenGLCommandBuffer cmd;
     graph_.Execute(cmd);
 }
 
+// 测试 渲染图执行：单一通道执行
 TEST_F(RenderGraphExecuteTest, SinglePassExecute) {
     auto color = graph_.DeclareResource("color");
     graph_.MarkOutput(color);
@@ -45,6 +47,7 @@ TEST_F(RenderGraphExecuteTest, SinglePassExecute) {
     EXPECT_EQ(counter.load(), 1);
 }
 
+// 测试 渲染图执行：两个独立通道全部Executed
 TEST_F(RenderGraphExecuteTest, TwoIndependentPassAllExecuted) {
     auto color_a = graph_.DeclareResource("color_a");
     auto color_b = graph_.DeclareResource("color_b");
@@ -66,6 +69,7 @@ TEST_F(RenderGraphExecuteTest, TwoIndependentPassAllExecuted) {
     EXPECT_EQ(counter.load(), 2);
 }
 
+// 测试 渲染图执行：链执行
 TEST_F(RenderGraphExecuteTest, ChainExecute) {
     auto depth = graph_.DeclareResource("depth");
     auto color = graph_.DeclareResource("color");
@@ -95,6 +99,7 @@ TEST_F(RenderGraphExecuteTest, ChainExecute) {
     EXPECT_LT(shadow_order.load(), forward_order.load());
 }
 
+// 测试 渲染图执行：全部执行
 TEST_F(RenderGraphExecuteTest, AllExecute) {
     auto depth = graph_.DeclareResource("depth");
     auto color_a = graph_.DeclareResource("color_a");

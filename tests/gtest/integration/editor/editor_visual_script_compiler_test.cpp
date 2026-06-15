@@ -70,6 +70,7 @@ struct Builder {
 
 // ── 事件 + Branch + 两个 Print ─────────────────────────────────────────────
 
+// 测试 可视化脚本编译器：事件Branch Generates若Else带Bodies
 TEST(VisualScriptCompiler, EventBranchGeneratesIfElseWithBodies) {
     Builder b;
 
@@ -114,6 +115,7 @@ TEST(VisualScriptCompiler, EventBranchGeneratesIfElseWithBodies) {
 
 // ── For Loop：Body 续接 + Done 续接 ────────────────────────────────────────
 
+// 测试 可视化脚本编译器：循环Generates Numeric且Continuation
 TEST(VisualScriptCompiler, ForLoopGeneratesNumericForAndContinuation) {
     Builder b;
 
@@ -162,6 +164,7 @@ TEST(VisualScriptCompiler, ForLoopGeneratesNumericForAndContinuation) {
 
 // ── 数据流内联：Print(Message = Add(2,3)) ──────────────────────────────────
 
+// 测试 可视化脚本编译器：数据流Inlines Expression
 TEST(VisualScriptCompiler, DataFlowInlinesExpression) {
     Builder b;
 
@@ -190,6 +193,7 @@ TEST(VisualScriptCompiler, DataFlowInlinesExpression) {
 
 // ── Create Entity 的数据输出赋局部变量并可被后续引用 ───────────────────────
 
+// 测试 可视化脚本编译器：流数据输出Bound到本地
 TEST(VisualScriptCompiler, FlowDataOutputBoundToLocal) {
     Builder b;
 
@@ -222,6 +226,7 @@ TEST(VisualScriptCompiler, FlowDataOutputBoundToLocal) {
 
 // ── 空事件体回退 ───────────────────────────────────────────────────────────
 
+// 测试 可视化脚本编译器：空事件刚体回退
 TEST(VisualScriptCompiler, EmptyEventBodyFallback) {
     Builder b;
     auto& ev = b.Add(1, "On Update", "Event", "function on_update(dt)\n{body}\nend");
@@ -236,6 +241,7 @@ TEST(VisualScriptCompiler, EmptyEventBodyFallback) {
 
 // ── 无事件回退：纯数据节点输出局部变量 ─────────────────────────────────────
 
+// 测试 可视化脚本编译器：无事件回退Emits数据Locals
 TEST(VisualScriptCompiler, NoEventFallbackEmitsDataLocals) {
     Builder b;
     auto& add = b.Add(1, "Add", "Math", "{output0} = {input0} + {input1}");

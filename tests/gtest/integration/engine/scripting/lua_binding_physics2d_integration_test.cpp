@@ -71,6 +71,7 @@ protected:
     }
 };
 
+// 测试 Lua绑定物理2D：Lua添加环形碰撞体
 TEST_F(LuaBindingPhysics2DTest, LuaAddACircularCollider) {
     RunLuaScript("test_circle_collider.lua", R"(
         function Awake()
@@ -95,6 +96,7 @@ TEST_F(LuaBindingPhysics2DTest, LuaAddACircularCollider) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua绑定物理2D：Lua设置上环形碰撞体触发
 TEST_F(LuaBindingPhysics2DTest, LuaSetUpCircularColliderTrigger) {
     RunLuaScript("test_circle_trigger.lua", R"(
         function Awake()
@@ -113,6 +115,7 @@ TEST_F(LuaBindingPhysics2DTest, LuaSetUpCircularColliderTrigger) {
     }
 }
 
+// 测试 Lua绑定物理2D：Lua添加Welded关节
 TEST_F(LuaBindingPhysics2DTest, LuaAddWeldedJoints) {
     RunLuaScript("test_add_weld_joint.lua", R"(
         function Awake()
@@ -142,6 +145,7 @@ TEST_F(LuaBindingPhysics2DTest, LuaAddWeldedJoints) {
     EXPECT_TRUE(found);
 }
 
+// 测试 Lua绑定物理2D：Lua添加Hinge关节且设置参数
 TEST_F(LuaBindingPhysics2DTest, LuaAddHingeJointsAndSetParameters) {
     RunLuaScript("test_revolute_joint.lua", R"(
         function Awake()
@@ -175,6 +179,7 @@ TEST_F(LuaBindingPhysics2DTest, LuaAddHingeJointsAndSetParameters) {
     }
 }
 
+// 测试 Lua绑定物理2D：Lua添加距离关节且设置参数
 TEST_F(LuaBindingPhysics2DTest, LuaAddDistanceJointsAndSetParameters) {
     RunLuaScript("test_distance_joint.lua", R"(
         function Awake()
@@ -206,6 +211,7 @@ TEST_F(LuaBindingPhysics2DTest, LuaAddDistanceJointsAndSetParameters) {
     }
 }
 
+// 测试 Lua绑定物理2D：Lua添加Prismatic关节且设置参数
 TEST_F(LuaBindingPhysics2DTest, LuaAddPrismaticJointsAndSetParameters) {
     RunLuaScript("test_prismatic_joint.lua", R"(
         function Awake()

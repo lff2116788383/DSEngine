@@ -42,6 +42,7 @@ private:
 // AnimLayerBlendSystem 批量实体性能
 // ============================================================
 
+// 测试 动画性能基准：层混合更新情形100实体情形3层
 TEST(AnimPerfBenchmark, LayerBlendUpdate_Case100Entity_Case3layer) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
@@ -88,6 +89,7 @@ TEST(AnimPerfBenchmark, LayerBlendUpdate_Case100Entity_Case3layer) {
 // IKSolverSystem 批量实体性能
 // ============================================================
 
+// 测试 动画性能基准：IK Solver更新情形100实体情形2链
 TEST(AnimPerfBenchmark, IKSolverUpdate_Case100Entity_Case2chain) {
     World world;
 
@@ -133,6 +135,7 @@ TEST(AnimPerfBenchmark, IKSolverUpdate_Case100Entity_Case2chain) {
 // anim_clip_eval::Interpolate 吞吐量
 // ============================================================
 
+// 测试 动画性能基准：插值向量3情形100 K次数
 TEST(AnimPerfBenchmark, Interpolate_Vec3_Case100KTimes) {
     constexpr int N = 100000;
 
@@ -159,6 +162,7 @@ TEST(AnimPerfBenchmark, Interpolate_Vec3_Case100KTimes) {
     (void)sink;
 }
 
+// 测试 动画性能基准：插值Quat情形100 K次数
 TEST(AnimPerfBenchmark, Interpolate_Quat_Case100KTimes) {
     constexpr int N = 100000;
 
@@ -185,6 +189,7 @@ TEST(AnimPerfBenchmark, Interpolate_Quat_Case100KTimes) {
     (void)sink;
 }
 
+// 测试 动画性能基准：推进剪辑时间情形1 M次数
 TEST(AnimPerfBenchmark, AdvanceClipTime_Case1MTimes) {
     constexpr int N = 1000000;
 

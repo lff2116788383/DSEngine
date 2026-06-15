@@ -61,6 +61,7 @@ protected:
     }
 };
 
+// 测试 物理2D圆碰撞体：情形1
 TEST_F(Physics2DCircleColliderTest, TestCase1) {
     Entity ball = MakeCircleBody(0.0f, 10.0f, 0.5f);
     sys.Init(world);
@@ -74,6 +75,7 @@ TEST_F(Physics2DCircleColliderTest, TestCase1) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
+// 测试 物理2D圆碰撞体：且
 TEST_F(Physics2DCircleColliderTest, And) {
     // 地面
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
@@ -93,6 +95,7 @@ TEST_F(Physics2DCircleColliderTest, And) {
     EXPECT_LT(t.position.y, 5.0f);
 }
 
+// 测试 物理2D圆碰撞体：命中
 TEST_F(Physics2DCircleColliderTest, Hit) {
     MakeCircleBody(0.0f, 0.0f, 1.0f, RigidBody2DType::Static);
     sys.Init(world);
@@ -107,6 +110,7 @@ TEST_F(Physics2DCircleColliderTest, Hit) {
     EXPECT_TRUE(hit_entity != entt::null);
 }
 
+// 测试 物理2D圆碰撞体：触发不
 TEST_F(Physics2DCircleColliderTest, TriggersNot) {
     MakeBoxBody(0.0f, -5.0f, 20.0f, 1.0f);
 
@@ -125,6 +129,7 @@ TEST_F(Physics2DCircleColliderTest, TriggersNot) {
     EXPECT_LT(t.position.y, -5.0f);
 }
 
+// 测试 物理2D圆碰撞体：单个实体当带盒且圆
 TEST_F(Physics2DCircleColliderTest, OneEntityWhenWithBoxAndCircle) {
     Entity e = world.CreateEntity();
     TransformComponent tc;
@@ -154,6 +159,7 @@ TEST_F(Physics2DCircleColliderTest, OneEntityWhenWithBoxAndCircle) {
     EXPECT_LT(t.position.y, 10.0f);
 }
 
+// 测试 物理2D圆碰撞体：实体销毁之后系统法线
 TEST_F(Physics2DCircleColliderTest, EntityDestroyAfterSystemNormal) {
     Entity ball = MakeCircleBody(0.0f, 5.0f, 0.5f);
     sys.Init(world);
@@ -166,6 +172,7 @@ TEST_F(Physics2DCircleColliderTest, EntityDestroyAfterSystemNormal) {
     SUCCEED();
 }
 
+// 测试 物理2D圆碰撞体：Reinit后期环形碰撞刚体重建
 TEST_F(Physics2DCircleColliderTest, ReinitPostCircularCollisionBodyReconstruction) {
     Entity ball = MakeCircleBody(0.0f, 0.0f, 1.0f, RigidBody2DType::Static);
     sys.Init(world);

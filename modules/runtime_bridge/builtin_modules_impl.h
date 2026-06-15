@@ -16,7 +16,9 @@
 #include "modules/gameplay_2d/tilemap/tilemap_system.h"
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
+#ifdef DSE_ENABLE_SPINE
 #include "modules/gameplay_2d/spine/spine_system.h"
+#endif
 #include "modules/gameplay_2d/gameplay_2d_module.h"
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #ifdef DSE_ENABLE_3D

@@ -4,9 +4,9 @@
 > 状态：**设计待评审 + MVP 已落地**（传输底座已实现并三端实测；复制/同步层的**最小可用闭环**已实现，见 §8「MVP 已实现」）
 > v2 相对 v1 的变化（吃进评审意见）：① `NetId` 由"直接用 64-bit UUID"改为**会话内紧凑稠密 id**（复用 Phase 7 `Handle{index,generation}`），UUID 仅用于 spawn 关联/持久化；② 新增 §4.12「协议版本/迟加入/重连」；③ §4.3/§4.8/§4.9 写清范围限制；④ §10 重构为「技术债与范围限制（诚实登记 D-1…D-6）」。
 > 前置文档：
-> - `docs/roadmap/NETWORK_GNS_INTEGRATION_PLAN.md` —— 传输底座选型与构建方案（GNS）
-> - `docs/roadmap/NETWORK_GNS_PROGRESS.md` —— 传输底座落地进度（Phase 0–6，已实测）
-> - `docs/roadmap/HTTP_LUA_MODULE.md` / `docs/AI_CHAT_INTEGRATION_PLAN.md` —— HTTP 客户端
+> - `docs/plans/NETWORK_GNS_INTEGRATION_PLAN.md` —— 传输底座选型与构建方案（GNS）
+> - `docs/plans/NETWORK_GNS_PROGRESS.md` —— 传输底座落地进度（Phase 0–6，已实测）
+> - `docs/plans/HTTP_LUA_MODULE.md` / `docs/plans/AI_CHAT_INTEGRATION_PLAN.md` —— HTTP 客户端
 >
 > 本文档定位：把网络层**作为一个整体**讲清楚——下层「传输底座」现状（已实现，简述）+ 上层「复制/同步层」设计（未实现，重点）+ 分阶段路线图。体例对齐 `MEMORY_MANAGEMENT_DESIGN.md`。
 

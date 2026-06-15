@@ -22,6 +22,7 @@
 // 单实体变换
 // ============================================================
 
+// 测试 变换系统：单一实体正确
 TEST(TransformSystemTest, SingleEntityCorrect) {
     World world;
     TransformSystem sys;
@@ -42,6 +43,7 @@ TEST(TransformSystemTest, SingleEntityCorrect) {
     EXPECT_FALSE(result.dirty);
 }
 
+// 测试 变换系统：单一实体正确2
 TEST(TransformSystemTest, SingleEntityCorrect_2) {
     World world;
     TransformSystem sys;
@@ -60,6 +62,7 @@ TEST(TransformSystemTest, SingleEntityCorrect_2) {
     EXPECT_FLOAT_EQ(result.local_to_world[2][2], 4.0f);
 }
 
+// 测试 变换系统：默认变换为单一
 TEST(TransformSystemTest, DefaultTransformIsSingle) {
     World world;
     TransformSystem sys;
@@ -78,6 +81,7 @@ TEST(TransformSystemTest, DefaultTransformIsSingle) {
 // 父子层级变换
 // ============================================================
 
+// 测试 变换系统：实体变换
 TEST(TransformSystemTest, Entitytransform) {
     World world;
     TransformSystem sys;
@@ -103,6 +107,7 @@ TEST(TransformSystemTest, Entitytransform) {
     EXPECT_FLOAT_EQ(child_result.local_to_world[3][0], 11.0f);
 }
 
+// 测试 变换系统：情形5
 TEST(TransformSystemTest, TestCase5) {
     World world;
     TransformSystem sys;
@@ -128,6 +133,7 @@ TEST(TransformSystemTest, TestCase5) {
 // dirty 标志
 // ============================================================
 
+// 测试 变换系统：之后Updatedirtylogo按清空
 TEST(TransformSystemTest, AfterUpdatedirtylogoByClear) {
     World world;
     TransformSystem sys;
@@ -145,6 +151,7 @@ TEST(TransformSystemTest, AfterUpdatedirtylogoByClear) {
 // 无变换组件的实体
 // ============================================================
 
+// 测试 变换系统：无变换组件实体不系统
 TEST(TransformSystemTest, WithoutTransformComponentEntityNotSystem) {
     World world;
     TransformSystem sys;
@@ -165,6 +172,7 @@ TEST(TransformSystemTest, WithoutTransformComponentEntityNotSystem) {
 // 多级层级
 // ============================================================
 
+// 测试 变换系统：Third级别Transformation为正确
 TEST(TransformSystemTest, TheThirdLevelTransformationIsCorrect) {
     World world;
     TransformSystem sys;

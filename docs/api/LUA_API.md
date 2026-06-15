@@ -1570,8 +1570,8 @@ end)
 -- 每帧：dse.net.poll()（引擎宿主自动驱动）
 ```
 
-> 完整示例：`docs/examples/lua/net_loopback.lua`、`docs/examples/lua/net_message.lua`（net + serialize）、
-> `docs/examples/lua/deepseek_npc.lua`（http + AI NPC）。
+> 完整示例：`examples/lua/net_loopback.lua`、`examples/lua/net_message.lua`（net + serialize）、
+> `examples/lua/deepseek_npc.lua`（http + AI NPC）。
 
 ## 18. ECS 组件字段访问器（Codegen 自动生成）
 

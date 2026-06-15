@@ -61,6 +61,7 @@ protected:
     lua_State* L_ = nullptr;
 };
 
+// 测试 序列化锯齿往返：零且Small Magnitudes
 TEST_F(SerializeZigzagRoundtripTest, ZeroAndSmallMagnitudes) {
     EXPECT_EQ(RoundtripInt(0), 0);
     EXPECT_EQ(RoundtripInt(1), 1);
@@ -71,6 +72,7 @@ TEST_F(SerializeZigzagRoundtripTest, ZeroAndSmallMagnitudes) {
     EXPECT_EQ(RoundtripInt(-63), -63);
 }
 
+// 测试 序列化锯齿往返：多Byte Varint Boundaries
 TEST_F(SerializeZigzagRoundtripTest, MultiByteVarintBoundaries) {
     // 跨越 SLEB128 单字节/多字节边界的值
     const int64_t values[] = {127, 128, -128, -129, 16383, 16384, -16384, -16385,
@@ -80,6 +82,7 @@ TEST_F(SerializeZigzagRoundtripTest, MultiByteVarintBoundaries) {
     }
 }
 
+// 测试 序列化锯齿往返：整数64 Extremes
 TEST_F(SerializeZigzagRoundtripTest, Int64Extremes) {
     // 直接命中 zigzag 符号位扩展（s >> 63）在 64 位极值下的正确性
     EXPECT_EQ(RoundtripInt(std::numeric_limits<int64_t>::max()),

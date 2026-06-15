@@ -48,7 +48,15 @@ if(DSE_ENABLE_PHYSX AND DSE_ENABLE_JOLT)
 endif()
 option(DSE_ENABLE_2D "Enable 2D runtime path" ON)
 option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
-option(DSE_ENABLE_SPINE "Enable Spine runtime path" ON)
+# Web/Emscripten 默认是 2D-first MVP（见下方 if(EMSCRIPTEN)）；打开此开关后
+# Web 构建保留 3D 前向路径（无 Compute/SSBO，依靠 UBO 版 PBR 着色器 + 能力门控）。
+option(DSE_WEB_ENABLE_3D "Keep the 3D forward path on Web/Emscripten builds (M5 best-effort)" OFF)
+# Spine（2D 骨骼动画运行时）与 Assimp（FBX/OBJ 等模型导入）默认关闭以缩小 SDK 包体；
+# 需要时按需开启：-DDSE_ENABLE_SPINE=ON / -DDSE_ENABLE_ASSIMP=ON。
+# 关闭 Spine 时 SpineRendererComponent 与 dse.spine.* 绑定仍在（纯数据/ECS），仅不编译 spine-cpp 运行时与 SpineSystem。
+# 关闭 Assimp 时 glTF 导入（tinygltf）不受影响，仅 FBX/OBJ 等 Assimp 格式不可用。
+option(DSE_ENABLE_SPINE "Enable Spine runtime path (2D skeletal animation)" OFF)
+option(DSE_ENABLE_ASSIMP "Build with Assimp model importer (FBX/OBJ/...); off keeps glTF-only and shrinks the package" OFF)
 if(ANDROID)
     option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
 else()
@@ -86,6 +94,36 @@ if(ANDROID)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
     add_definitions(-D __ANDROID__)
     message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
+endif()
+
+# --- Emscripten (Web/WASM) 交叉编译默认值 ---
+# Web MVP：WebGL2(=GLES3.0，无 Compute)；关闭桌面/移动专属与重型后端，先把 2D 跑通。
+# 高级特性按 RHI 能力标志在运行时自动门控，核心渲染代码不出现平台宏。
+if(EMSCRIPTEN)
+    set(DSE_ENABLE_VULKAN  OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_D3D11   OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PHYSX   OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_JOLT    OFF CACHE BOOL "" FORCE)
+    # 物理后端在 Web 无 pthreads，始终关闭；3D 渲染前向路径由 DSE_WEB_ENABLE_3D 控制。
+    if(NOT DSE_WEB_ENABLE_3D)
+        set(DSE_ENABLE_3D  OFF CACHE BOOL "" FORCE)
+    endif()
+    set(DSE_ENABLE_NAVMESH OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_NET     OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_HTTP    OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PCH     OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_EDITOR   OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_GTESTS   OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_SHARED   OFF CACHE BOOL "" FORCE)
+    # GLFW3 由 Emscripten 端口提供（-sUSE_GLFW=3）；GLES3 头文件随工具链。编译期亦需该开关。
+    add_compile_options(-sUSE_GLFW=3)
+    if(DSE_ENABLE_3D)
+        message(STATUS "Emscripten build: 3D forward path KEPT (DSE_WEB_ENABLE_3D=ON); physics/Vulkan/D3D11/NavMesh/Net/HTTP disabled (WebGL2, no Compute)")
+    else()
+        message(STATUS "Emscripten build: Vulkan/D3D11/PhysX/Jolt/3D/NavMesh/Net/HTTP/Editor/Launcher/GTest disabled (WebGL2 2D MVP)")
+    endif()
 endif()
 
 
@@ -181,10 +219,11 @@ if (MSVC)
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
     add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
-if(NOT ANDROID)
-    include(cmake/CMakeLists.txt.glfw)
-else()
+if(ANDROID OR EMSCRIPTEN)
+    # Android: 使用 AndroidApp；Emscripten: GLFW3 由 -sUSE_GLFW=3 端口提供。均不在 in-tree 编 GLFW。
     set(glfw_sources "")
+else()
+    include(cmake/CMakeLists.txt.glfw)
 endif()
 include(cmake/CMakeLists.txt.FreeType)
 if(DSE_ENABLE_PROFILER)
@@ -250,7 +289,8 @@ include_directories(
     "depends/tinygltf"
 )
 set(DSE_HAS_ASSIMP OFF)
-if(EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt")
+# Assimp 默认关闭（DSE_ENABLE_ASSIMP=OFF）以缩小包体；Emscripten 2D MVP 始终不编译该重型库。
+if(DSE_ENABLE_ASSIMP AND EXISTS "${CMAKE_SOURCE_DIR}/depends/assimp/CMakeLists.txt" AND NOT EMSCRIPTEN)
     include_directories("depends/assimp/include")
     set(DSE_HAS_ASSIMP ON)
 endif()
@@ -368,8 +408,8 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
-# Android: 排除 GLFW platform 实现（使用 AndroidApp 替代）
-if(ANDROID)
+# Android / Web(Emscripten): 排除桌面 GLFW platform 实现（各自有专用后端）
+if(ANDROID OR EMSCRIPTEN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
 endif()
 
@@ -377,6 +417,11 @@ endif()
 if(NOT ANDROID)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/android/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/android_asset_fs\\.cpp$")
+endif()
+
+# 非 Emscripten: 排除 Web 专用实现（依赖 emscripten 头文件）
+if(NOT EMSCRIPTEN)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/web/.*\\.cpp$")
 endif()
 
 # D3D11 RHI 后端源文件仅在启用时编译
@@ -429,7 +474,10 @@ elseif(DSE_ENABLE_JOLT AND DSE_HAS_JOLT)
     # Vehicle / Buoyancy / Fracture / Ragdoll 均已适配 Jolt 后端
 endif()
 if(NOT _HAS_ANY_PHYSICS3D)
-    list(FILTER engine_cpp EXCLUDE REGEX ".*physics3d.*\\.cpp$")
+    # 仅排除 physics3d/ 目录下的后端实现；保留后端无关的 C ABI 包装
+    # (native_api/dse_api_physics3d.cpp 通过 ServiceLocator 取 IPhysics3DSystem，
+    #  无物理服务时回退 ECS 碰撞体遍历/返回空命中，可独立链接)。
+    list(FILTER engine_cpp EXCLUDE REGEX ".*/physics3d/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/vehicle/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/buoyancy/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/ragdoll/.*\\.cpp$")
@@ -442,7 +490,10 @@ if(NOT DSE_ENABLE_NAVMESH)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_3d/ai/nav_.*\\.cpp$")
 endif()
 
-file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
+# Spine 运行时（重型第三方库）仅在启用时编译，缩小包体。
+if(DSE_ENABLE_SPINE)
+    file(GLOB_RECURSE spine_cpp "${CMAKE_SOURCE_DIR}/depends/spine-runtimes/spine-cpp/spine-cpp/src/spine/*.cpp")
+endif()
 set(tiny_aes_c
     "${CMAKE_SOURCE_DIR}/depends/tiny-AES-c/aes.c"
 )
@@ -457,7 +508,8 @@ endif()
 # Android(arm64 等非 x86)：bundle 的 MCM/TANGELO 高比率编解码器内联了 x86 SSE/MMX intrinsics
 # （emmintrin/mmintrin），无法在 ARM 上编译。DSEngine 仅用 ZIP(miniz/DEFLATE) 路径，这些编解码器
 # 从未被使用，按 bundle 自带的库配置开关排除即可（不改第三方源码、不影响打包/解包功能）。
-if(ANDROID)
+if(ANDROID OR EMSCRIPTEN)
+    # ARM(Android) 与 WASM(Emscripten) 均无 x86 SSE/MMX intrinsics；排除 bundle 的高比率编解码器。
     set_source_files_properties(${bundle_cpp} PROPERTIES
         COMPILE_DEFINITIONS "BUNDLE_NO_MCM;BUNDLE_NO_TANGELO")
 endif()
@@ -475,6 +527,31 @@ if(NOT ANDROID)
 endif()
 
 option(DSE_BUILD_SHARED "Build dse_engine as shared library (DLL). Requires DSE_EXPORT on public APIs." OFF)
+
+# --- LTCG / IPO（Release 链接期代码生成，缩小二进制 + 跨翻译单元优化）---
+# 仅对「静态」配置启用：DSE_BUILD_SHARED=ON 时 /GL 与导出 .def 生成不兼容
+# （cmake -E __create_def 读不了 /GL 产出的 .obj 符号表），故共享库构建保持关闭。
+# 通过 dse_enable_lto() 按目标精确开启，避免波及第三方依赖（assimp/Jolt 等）。
+option(DSE_ENABLE_LTO "Enable Link-Time Code Generation (/GL+/LTCG) on Release for first-party targets" ON)
+set(DSE_IPO_SUPPORTED OFF)
+if(DSE_ENABLE_LTO AND NOT DSE_BUILD_SHARED)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _dse_ipo_ok OUTPUT _dse_ipo_msg LANGUAGES CXX)
+    if(_dse_ipo_ok)
+        set(DSE_IPO_SUPPORTED ON)
+        message(STATUS "LTCG/IPO enabled for first-party Release builds")
+    else()
+        message(STATUS "LTCG/IPO unsupported, skipping: ${_dse_ipo_msg}")
+    endif()
+endif()
+# 对单个目标在 Release / RelWithDebInfo 配置启用 IPO（Debug 不启用，保留快编译 + 可调试）。
+function(dse_enable_lto target)
+    if(DSE_IPO_SUPPORTED)
+        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    endif()
+endfunction()
+
 set(DSE_ENGINE_ALL_SOURCES
     ${glfw_sources}
     ${freetype_src}
@@ -629,6 +706,11 @@ else()
     target_compile_definitions(dse_engine PUBLIC DSE_BUILD_STATIC)
 endif()
 
+# Spine 运行时启用标记：PUBLIC 以便头文件（gameplay_2d_module.h）与消费端口径一致。
+if(DSE_ENABLE_SPINE)
+    target_compile_definitions(dse_engine PUBLIC DSE_ENABLE_SPINE)
+endif()
+
 # 内存追踪：在 Debug 与 RelWithDebInfo 配置生效（带调试信息的诊断构建），
 # Release 保持零开销。PUBLIC 以便测试/消费端口径一致。
 if(DSE_ENABLE_MEM_TRACKING)
@@ -670,7 +752,8 @@ endif()
 target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
-if(NOT ANDROID)
+if(NOT ANDROID AND NOT EMSCRIPTEN)
+    # glad 仅桌面端使用；Android/Web 用静态链接的 GLES3 符号。
     target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/glad/include)
 endif()
 
@@ -680,7 +763,9 @@ if(ANDROID)
 endif()
 
 # --- Linux 桌面链接库 (X11 窗口 + GL + dl + pthread) ---
-if(UNIX AND NOT APPLE AND NOT ANDROID)
+# 注意：Emscripten 也满足 UNIX AND NOT APPLE AND NOT ANDROID，但 GL/audio/线程由
+# emscripten 端口（-lGL/-lal/-lhtml5）提供，且 WASM 无 X11，故必须排除。
+if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
     find_package(Threads REQUIRED)
     target_link_libraries(dse_engine PRIVATE
         X11 Xrandr Xinerama Xcursor Xi
@@ -729,9 +814,10 @@ endif()
 
 if (MSVC)
     set_property(TARGET dse_engine PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-    # 注意：LTCG (/GL) 与 WINDOWS_EXPORT_ALL_SYMBOLS 不兼容。
-    # cmake -E __create_def 无法读取 /GL 产出的 .obj 文件（无标准 COFF 符号表）。
-    # 因此不启用 INTERPROCEDURAL_OPTIMIZATION，Release 依赖 /O2 + Unity Build 即可。
+    # LTCG (/GL+/LTCG)：静态库配置（默认 DSE_BUILD_SHARED=OFF）下启用，Release 缩小二进制。
+    # 共享库配置不可用——/GL 产出的 .obj 无标准 COFF 符号表，cmake -E __create_def 读不了，
+    # 故 dse_enable_lto() 已用 NOT DSE_BUILD_SHARED 守卫（见上方定义）。
+    dse_enable_lto(dse_engine)
 
     # Workaround: CMake 4.3 VS generator 在非 Debug 配置下可能不生成 objects.txt，
     # 导致 WINDOWS_EXPORT_ALL_SYMBOLS 的 __create_def PreLinkEvent 失败。
@@ -773,6 +859,12 @@ function(dse_copy_runtime_dlls target_name)
     add_dependencies(${target_name} dse_copy_assets)
 endfunction()
 
+# Web(Emscripten) 交叉编译：只构建 dse_engine + web_host，跳过桌面 apps / 工具 / 测试 / 打包。
+if(EMSCRIPTEN)
+    add_subdirectory(apps/web_host)
+    return()
+endif()
+
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
 
@@ -785,6 +877,10 @@ add_subdirectory(apps/standalone)
 
 # 工具链：dse CLI（headless：建项目 / 打包加密 / 完整 build）
 add_subdirectory(apps/tools/dse_cli)
+
+# 对随 SDK/工具包发行的可执行文件启用 LTCG（与静态 dse_engine 的 /GL 配合做跨模块优化）。
+dse_enable_lto(dse_standalone)
+dse_enable_lto(dse_cli)
 
 # 工具链：AssetBuilder
 add_executable(AssetBuilder 
@@ -1044,16 +1140,6 @@ if(DSE_BUILD_GTESTS)
 endif()
 
 
-find_program(NPM_EXECUTABLE NAMES npm.cmd npm)
-find_program(NPX_EXECUTABLE NAMES npx.cmd npx)
-find_package(Python3 COMPONENTS Interpreter QUIET)
-
-set(DSE_LEGACY_EDITOR_DIR "${CMAKE_SOURCE_DIR}/apps/editor")
-set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE OFF)
-if(EXISTS "${DSE_LEGACY_EDITOR_DIR}/package.json" AND EXISTS "${DSE_LEGACY_EDITOR_DIR}/binding.gyp")
-    set(DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE ON)
-endif()
-
 if(DSE_BUILD_LAUNCHER)
     if(EXISTS "${CMAKE_SOURCE_DIR}/apps/launcher/CMakeLists.txt")
         add_subdirectory(apps/launcher)
@@ -1062,28 +1148,6 @@ if(DSE_BUILD_LAUNCHER)
             COMMAND ${CMAKE_COMMAND} -E echo "launcher_not_implemented"
         )
     endif()
-endif()
-
-if(NPM_EXECUTABLE AND NPX_EXECUTABLE AND DSE_LEGACY_EDITOR_HAS_NODE_PIPELINE)
-    add_test(
-        NAME editor_bridge_rebuild
-        COMMAND ${NPX_EXECUTABLE} node-gyp rebuild
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
-    set_tests_properties(editor_bridge_rebuild PROPERTIES FIXTURES_SETUP editor_bridge_ready)
-
-    add_test(
-        NAME editor_material_replay_regression
-        COMMAND ${NPM_EXECUTABLE} run regress:material-replay
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
-    set_tests_properties(editor_material_replay_regression PROPERTIES FIXTURES_REQUIRED editor_bridge_ready)
-
-    add_test(
-        NAME editor_scene_schema_migrate_regression
-        COMMAND ${NPM_EXECUTABLE} run regress:scene-schema-migrate
-        WORKING_DIRECTORY ${DSE_LEGACY_EDITOR_DIR}
-    )
 endif()
 
 # ── S1.5 Codegen Target ─────────────────────────────────────────────────────

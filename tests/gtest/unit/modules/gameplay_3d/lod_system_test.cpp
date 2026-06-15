@@ -27,6 +27,7 @@ using namespace gameplay3d;
 // 组件默认值
 // ============================================================
 
+// 测试 LOD分组组件：默认值
 TEST(LODGroupComponentTest, DefaultValues) {
     LODGroupComponent lod;
     EXPECT_TRUE(lod.enabled);
@@ -37,6 +38,7 @@ TEST(LODGroupComponentTest, DefaultValues) {
     EXPECT_TRUE(lod.original_mesh_path.empty());
 }
 
+// 测试 LOD级别配置：默认值
 TEST(LODLevelConfigTest, DefaultValues) {
     LODLevelConfig level;
     EXPECT_TRUE(level.mesh_path.empty());
@@ -45,6 +47,7 @@ TEST(LODLevelConfigTest, DefaultValues) {
     EXPECT_FALSE(level.loaded);
 }
 
+// 测试 网格渲染器组件：网格句柄覆盖默认为零
 TEST(MeshRendererComponentTest, mesh_handle_OverrideDefaultIsZero) {
     MeshRendererComponent mesh;
     EXPECT_EQ(mesh.mesh_handle_override, 0u);
@@ -54,6 +57,7 @@ TEST(MeshRendererComponentTest, mesh_handle_OverrideDefaultIsZero) {
 // 屏幕空间公式正确性
 // ============================================================
 
+// 测试 LOD屏幕尺寸公式：之前
 TEST(LODScreenSizeFormulaTest, Before) {
     // proj_scale = 1/tan(fov/2), fov=60° -> tan(30°)=0.5774 -> proj_scale~1.732
     const float fov_deg    = 60.0f;
@@ -72,6 +76,7 @@ TEST(LODScreenSizeFormulaTest, Before) {
     EXPECT_NEAR(screen_size, 3.0f * 100.0f / 10000.0f, 1e-3f);
 }
 
+// 测试 LOD屏幕尺寸公式：全局Scalescale到缩放
 TEST(LODScreenSizeFormulaTest, global_ScalescaleToScale) {
     const float fov_deg    = 90.0f;
     const float half_fov   = glm::radians(fov_deg) * 0.5f;
@@ -89,6 +94,7 @@ TEST(LODScreenSizeFormulaTest, global_ScalescaleToScale) {
     EXPECT_GT(base_scale2, base_scale1);
 }
 
+// 测试 LOD屏幕尺寸公式：为零当不零
 TEST(LODScreenSizeFormulaTest, IsZeroWhenNotZero) {
     const float proj_scale = 1.0f;
     const float bbox_radius = 1.0f;
@@ -115,10 +121,12 @@ protected:
     }
 };
 
+// 测试 LOD系统：空世界不崩溃
 TEST_F(LODSystemTest, EmptyWorldDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
+// 测试 LOD系统：无资源管理器不崩溃
 TEST_F(LODSystemTest, WithoutAssetManagerDoesNotCrash) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
@@ -134,6 +142,7 @@ TEST_F(LODSystemTest, WithoutAssetManagerDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world));
 }
 
+// 测试 LOD系统：无不LOD
 TEST_F(LODSystemTest, WithoutNotLOD) {
     auto e = world.CreateEntity();
     world.registry().emplace<TransformComponent>(e);
@@ -152,6 +161,7 @@ TEST_F(LODSystemTest, WithoutNotLOD) {
     EXPECT_EQ(world.registry().get<LODGroupComponent>(e).current_lod, -1);
 }
 
+// 测试 LOD系统：禁用组件为不Processed
 TEST_F(LODSystemTest, DisabledComponentIsNotProcessed) {
     auto e = world.CreateEntity();
 
@@ -178,12 +188,14 @@ TEST_F(LODSystemTest, DisabledComponentIsNotProcessed) {
     EXPECT_EQ(world.registry().get<LODGroupComponent>(e2).current_lod, -1);
 }
 
+// 测试 LOD系统：多次数更新不崩溃
 TEST_F(LODSystemTest, MultiTimesUpdateDoesNotCrash) {
     for (int i = 0; i < 10; ++i) {
         EXPECT_NO_THROW(sys.Update(world));
     }
 }
 
+// 测试 LOD滞后：情形12
 TEST(LODHysteresisTest, TestCase12) {
     const float threshold = 0.5f;
     const float hyst = 0.05f;
@@ -195,6 +207,7 @@ TEST(LODHysteresisTest, TestCase12) {
     EXPECT_LT(lower, threshold);
 }
 
+// 测试 LOD系统：Disabledrestore Originalmesh Pathand Cleartemp
 TEST_F(LODSystemTest, DisabledrestoreOriginalmesh_PathandCleartemp) {
     auto e = world.CreateEntity();
     world.registry().emplace<Camera3DComponent>(e).enabled = true;

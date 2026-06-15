@@ -73,6 +73,7 @@ protected:
 
 // ---- 基础功能 ----
 
+// 测试 空间场景：空场景构建Static不崩溃
 TEST_F(SpatialSceneTest, EmptySceneBuildStaticDoesNotCrash) {
     EXPECT_NO_THROW(spatial_.BuildStatic(world_));
     // 空场景无 BoundingBoxComponent 实体时 IsBuilt() 返回 false，
@@ -82,6 +83,7 @@ TEST_F(SpatialSceneTest, EmptySceneBuildStaticDoesNotCrash) {
     EXPECT_EQ(spatial_.GetDynamicCount(), 0u);
 }
 
+// 测试 空间场景：空场景剔除视锥不崩溃
 TEST_F(SpatialSceneTest, EmptySceneCullFrustumDoesNotCrash) {
     spatial_.BuildStatic(world_);
     spatial_.UpdateDynamicBounds(world_);
@@ -89,6 +91,7 @@ TEST_F(SpatialSceneTest, EmptySceneCullFrustumDoesNotCrash) {
     EXPECT_EQ(visible_.TotalCount(), 0u);
 }
 
+// 测试 空间场景：实体
 TEST_F(SpatialSceneTest, Entity) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateStaticEntity(glm::vec3(5, 0, 0));
@@ -98,6 +101,7 @@ TEST_F(SpatialSceneTest, Entity) {
     EXPECT_EQ(spatial_.GetDynamicCount(), 0u);
 }
 
+// 测试 空间场景：刚体
 TEST_F(SpatialSceneTest, RigidBody) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateDynamicEntity(glm::vec3(5, 0, 0));
@@ -109,6 +113,7 @@ TEST_F(SpatialSceneTest, RigidBody) {
 
 // ---- 剔除正确性 ----
 
+// 测试 空间场景：视锥内部Entitymarked作为能够
 TEST_F(SpatialSceneTest, FrustumInsideEntitymarkedAsCan) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, 0));
 
@@ -121,6 +126,7 @@ TEST_F(SpatialSceneTest, FrustumInsideEntitymarkedAsCan) {
     EXPECT_EQ(visible_.opaque.size(), 1u);
 }
 
+// 测试 空间场景：视锥外部Entitymarked作为不能够
 TEST_F(SpatialSceneTest, FrustumOutsideEntitymarkedAsNotCan) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, -300));
 
@@ -133,6 +139,7 @@ TEST_F(SpatialSceneTest, FrustumOutsideEntitymarkedAsNotCan) {
     EXPECT_EQ(visible_.opaque.size(), 0u);
 }
 
+// 测试 空间场景：实体视锥内部能够
 TEST_F(SpatialSceneTest, EntityFrustumInsideCan) {
     auto e = CreateDynamicEntity(glm::vec3(0, 0, 0));
 
@@ -147,6 +154,7 @@ TEST_F(SpatialSceneTest, EntityFrustumInsideCan) {
 
 // ---- 分层可见集 ----
 
+// 测试 空间场景：不透明实体回退Underopaqueset
 TEST_F(SpatialSceneTest, OpaqueEntitiesFallUnderopaqueset) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
 
@@ -158,6 +166,7 @@ TEST_F(SpatialSceneTest, OpaqueEntitiesFallUnderopaqueset) {
     EXPECT_EQ(visible_.transparent.size(), 0u);
 }
 
+// 测试 空间场景：半Entitytransparentset
 TEST_F(SpatialSceneTest, HalfEntitytransparentset) {
     CreateTransparentEntity(glm::vec3(0, 0, 0));
 
@@ -169,6 +178,7 @@ TEST_F(SpatialSceneTest, HalfEntitytransparentset) {
     EXPECT_EQ(visible_.transparent.size(), 1u);
 }
 
+// 测试 空间场景：场景正确
 TEST_F(SpatialSceneTest, SceneCorrect) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     CreateTransparentEntity(glm::vec3(3, 0, 0));
@@ -183,6 +193,7 @@ TEST_F(SpatialSceneTest, SceneCorrect) {
     EXPECT_EQ(visible_.transparent.size(), 1u);
 }
 
+// 测试 空间场景：不透明Objects Cast Shadows按默认
 TEST_F(SpatialSceneTest, OpaqueObjectsCastShadowsByDefault) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
 
@@ -193,6 +204,7 @@ TEST_F(SpatialSceneTest, OpaqueObjectsCastShadowsByDefault) {
     EXPECT_EQ(visible_.shadow_casters.size(), 1u);
 }
 
+// 测试 空间场景：半不
 TEST_F(SpatialSceneTest, HalfNot) {
     CreateTransparentEntity(glm::vec3(0, 0, 0));
 
@@ -205,6 +217,7 @@ TEST_F(SpatialSceneTest, HalfNot) {
 
 // ---- Invalidate 和重建 ----
 
+// 测试 空间场景：Invalidate触发Next Rebuild
 TEST_F(SpatialSceneTest, InvalidateTriggerNextRebuild) {
     CreateStaticEntity(glm::vec3(0, 0, 0));
     spatial_.BuildStatic(world_);
@@ -214,6 +227,7 @@ TEST_F(SpatialSceneTest, InvalidateTriggerNextRebuild) {
     EXPECT_FALSE(spatial_.IsBuilt());
 }
 
+// 测试 空间场景：标记动态Rebuild之后切换
 TEST_F(SpatialSceneTest, MarkDynamicRebuildAfterSwitching) {
     auto e = CreateStaticEntity(glm::vec3(0, 0, 0));
     spatial_.BuildStatic(world_);
@@ -231,6 +245,7 @@ TEST_F(SpatialSceneTest, MarkDynamicRebuildAfterSwitching) {
 
 // ---- 多帧稳定性 ----
 
+// 测试 空间场景：多连续帧不崩溃
 TEST_F(SpatialSceneTest, MultiContinuousFramesDoesNotCrash) {
     for (int i = 0; i < 20; ++i) {
         CreateStaticEntity(glm::vec3(static_cast<float>(i) * 3.0f, 0, 0));

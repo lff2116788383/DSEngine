@@ -96,6 +96,7 @@ protected:
     }
 };
 
+// 测试 渲染图集成：单一通道资源之后执行
 TEST_F(RenderGraphIntegrationTest, SinglePassAssetAfterExecute) {
     auto res = graph.DeclareResource("color_buffer");
     auto pass = graph.AddPass("ClearPass");
@@ -110,6 +111,7 @@ TEST_F(RenderGraphIntegrationTest, SinglePassAssetAfterExecute) {
     EXPECT_TRUE(log.Contains("ClearPass"));
 }
 
+// 测试 渲染图集成：链写入B读取
 TEST_F(RenderGraphIntegrationTest, ChainAWriteBRead) {
     auto depth = graph.DeclareResource("depth_buffer");
     auto color = graph.DeclareResource("color_buffer");
@@ -133,6 +135,7 @@ TEST_F(RenderGraphIntegrationTest, ChainAWriteBRead) {
     EXPECT_LT(log.IndexOf("ShadowMap"), log.IndexOf("Forward"));
 }
 
+// 测试 渲染图集成：三通道链依赖Topology为Sorted正确
 TEST_F(RenderGraphIntegrationTest, ThreePassTheChainDependencyTopologyIsSortedCorrectly) {
     auto res_a = graph.DeclareResource("res_a");
     auto res_b = graph.DeclareResource("res_b");
@@ -167,6 +170,7 @@ TEST_F(RenderGraphIntegrationTest, ThreePassTheChainDependencyTopologyIsSortedCo
 // Pass 剔除
 // ============================================================
 
+// 测试 渲染图集成：无按读取通道按
 TEST_F(RenderGraphIntegrationTest, WithoutByReadPassBy) {
     auto used = graph.DeclareResource("used");
     auto unused = graph.DeclareResource("unused");
@@ -190,6 +194,7 @@ TEST_F(RenderGraphIntegrationTest, WithoutByReadPassBy) {
     EXPECT_FALSE(log.Contains("DeadPass"));
 }
 
+// 测试 渲染图集成：标记Passnot应
 TEST_F(RenderGraphIntegrationTest, MarkPassnotBe) {
     auto res = graph.DeclareResource("final_output");
 
@@ -211,6 +216,7 @@ TEST_F(RenderGraphIntegrationTest, MarkPassnotBe) {
 // 复杂 DAG
 // ============================================================
 
+// 测试 渲染图集成：正确
 TEST_F(RenderGraphIntegrationTest, Correct) {
     auto res1 = graph.DeclareResource("res1");
     auto res2 = graph.DeclareResource("res2");
@@ -254,6 +260,7 @@ TEST_F(RenderGraphIntegrationTest, Correct) {
 // Compile/Execute 重复与 Reset
 // ============================================================
 
+// 测试 渲染图集成：能够应重建之后重置DAG
 TEST_F(RenderGraphIntegrationTest, CanBeRebuiltAfterResetDAG) {
     auto res = graph.DeclareResource("first_res");
     auto pass = graph.AddPass("FirstPass");
@@ -279,6 +286,7 @@ TEST_F(RenderGraphIntegrationTest, CanBeRebuiltAfterResetDAG) {
 // 边界场景
 // ============================================================
 
+// 测试 渲染图集成：空渲染Graphpass
 TEST_F(RenderGraphIntegrationTest, EmptyRenderGraphpass) {
     EXPECT_TRUE(graph.Compile());
     EXPECT_EQ(graph.compiled_pass_count(), 0u);
@@ -287,6 +295,7 @@ TEST_F(RenderGraphIntegrationTest, EmptyRenderGraphpass) {
     SUCCEED();
 }
 
+// 测试 渲染图集成：带标记输出无Passpass
 TEST_F(RenderGraphIntegrationTest, WithMarkOutputWithoutPasspass) {
     auto res = graph.DeclareResource("orphan_res");
     graph.MarkOutput(res);
@@ -357,6 +366,7 @@ protected:
     }
 };
 
+// 测试 泛光通道：泛光通道禁用不调用绘制后期处理
 TEST_F(BloomPassTest, BloomPass_Disabled_DoesNotCallDrawPostProcess) {
     SetBloomConfig(false);
 
@@ -367,6 +377,7 @@ TEST_F(BloomPassTest, BloomPass_Disabled_DoesNotCallDrawPostProcess) {
     pass.Execute(mock);
 }
 
+// 测试 泛光通道：泛光通道启用Callsdownsample Andupsample
 TEST_F(BloomPassTest, BloomPass_Enabled_CallsdownsampleAndupsample) {
     SetBloomConfig(true, 0.8f);
 
@@ -417,6 +428,7 @@ protected:
     }
 };
 
+// 测试 组合通道：组合通道泛光禁用Usecopy
 TEST_F(CompositePassTest, CompositePass_BloomDisabled_Usecopy) {
     SetBloomConfig(false);
 
@@ -430,6 +442,7 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_Usecopy) {
     pass.Execute(mock);
 }
 
+// 测试 组合通道：组合通道泛光启用Usebloom组合
 TEST_F(CompositePassTest, CompositePass_BloomEnabled_Usebloom_composite) {
     SetBloomConfig(true, 0.5f, 1.0f);
 
@@ -447,6 +460,7 @@ TEST_F(CompositePassTest, CompositePass_BloomEnabled_Usebloom_composite) {
 // Phase H3 — RenderGraph WAW 冲突检测
 // ============================================================
 
+// 测试 渲染图集成：WAW Conflict Compilation失败
 TEST_F(RenderGraphIntegrationTest, WAWConflictCompilationFailed) {
     auto res = graph.DeclareResource("rt_color");
     graph.AddPass("PassA", {}, {{res, ResourceState::RenderTarget}},
@@ -461,6 +475,7 @@ TEST_F(RenderGraphIntegrationTest, WAWConflictCompilationFailed) {
 // Phase RG — 自动 Barrier 生成
 // ============================================================
 
+// 测试 渲染图集成：自动屏障渲染目标到着色器读取
 TEST_F(RenderGraphIntegrationTest, AutoBarrier_RenderTargetToShaderRead) {
     auto res = graph.DeclareResource("rt_color");
     auto output = graph.DeclareResource("final");
@@ -494,6 +509,7 @@ TEST_F(RenderGraphIntegrationTest, AutoBarrier_RenderTargetToShaderRead) {
     EXPECT_TRUE(found_barrier);
 }
 
+// 测试 渲染图集成：自动屏障UAV到着色器读取
 TEST_F(RenderGraphIntegrationTest, AutoBarrier_UAVToShaderRead) {
     auto res = graph.DeclareResource("compute_out");
     auto output = graph.DeclareResource("final");
@@ -523,6 +539,7 @@ TEST_F(RenderGraphIntegrationTest, AutoBarrier_UAVToShaderRead) {
     EXPECT_TRUE(found_barrier);
 }
 
+// 测试 渲染图集成：自动屏障深度写入到着色器读取
 TEST_F(RenderGraphIntegrationTest, AutoBarrier_DepthWriteToShaderRead) {
     auto depth = graph.DeclareResource("depth");
     auto color = graph.DeclareResource("color");
@@ -551,6 +568,7 @@ TEST_F(RenderGraphIntegrationTest, AutoBarrier_DepthWriteToShaderRead) {
     EXPECT_TRUE(found);
 }
 
+// 测试 渲染图集成：无状态不生成屏障
 TEST_F(RenderGraphIntegrationTest, WithoutStateNotgenerateBarrier) {
     auto res = graph.DeclareResource("rt_color");
 
@@ -594,6 +612,7 @@ public:
     }
 };
 
+// 测试 渲染图集成：Transient渲染目标编译Distribution且Resetrelease
 TEST_F(RenderGraphIntegrationTest, TransientRT_CompileDistributionAndResetrelease) {
     TransientRTStub stub;
     graph.SetRhiDevice(&stub);
@@ -630,6 +649,7 @@ TEST_F(RenderGraphIntegrationTest, TransientRT_CompileDistributionAndResetreleas
     graph.SetRhiDevice(nullptr);
 }
 
+// 测试 渲染图集成：Transient渲染目标非Overlapping资源Alias复用
 TEST_F(RenderGraphIntegrationTest, TransientRT_NonOverlappingResourcesAliasReuse) {
     TransientRTStub stub;
     graph.SetRhiDevice(&stub);

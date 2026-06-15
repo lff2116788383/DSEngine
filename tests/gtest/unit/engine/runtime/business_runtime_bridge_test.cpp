@@ -46,6 +46,7 @@ bool BusinessRuntimeBridgeTest::bootstrap_called_ = false;
 int BusinessRuntimeBridgeTest::tick_count_ = 0;
 bool BusinessRuntimeBridgeTest::shutdown_called_ = false;
 
+// 测试 业务运行时桥接：C++模式引导带Hooks
 TEST_F(BusinessRuntimeBridgeTest, CppModeBootstrapWithHooks) {
     ConfigureCppBusinessHooks({
         [](World&, AssetManager&) { bootstrap_called_ = true; },
@@ -63,6 +64,7 @@ TEST_F(BusinessRuntimeBridgeTest, CppModeBootstrapWithHooks) {
     EXPECT_TRUE(bootstrap_called_);
 }
 
+// 测试 业务运行时桥接：C++模式滴答
 TEST_F(BusinessRuntimeBridgeTest, CppModeTick) {
     ConfigureCppBusinessHooks({
         [](World&, AssetManager&) {},
@@ -83,6 +85,7 @@ TEST_F(BusinessRuntimeBridgeTest, CppModeTick) {
     EXPECT_EQ(tick_count_, 2);
 }
 
+// 测试 业务运行时桥接：C++模式关闭
 TEST_F(BusinessRuntimeBridgeTest, CppModeShutdown) {
     ConfigureCppBusinessHooks({
         [](World&, AssetManager&) {},
@@ -101,6 +104,7 @@ TEST_F(BusinessRuntimeBridgeTest, CppModeShutdown) {
     EXPECT_TRUE(shutdown_called_);
 }
 
+// 测试 业务运行时桥接：C++模式空世界失败
 TEST_F(BusinessRuntimeBridgeTest, CppModeNullWorldFails) {
     RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;
@@ -116,6 +120,7 @@ TEST_F(BusinessRuntimeBridgeTest, CppModeNullWorldFails) {
     EXPECT_FALSE(BootstrapBusinessRuntime(ctx, stats));
 }
 
+// 测试 业务运行时桥接：C++模式空资源管理器失败
 TEST_F(BusinessRuntimeBridgeTest, CppModeNullAssetManagerFails) {
     RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;
@@ -131,6 +136,7 @@ TEST_F(BusinessRuntimeBridgeTest, CppModeNullAssetManagerFails) {
     EXPECT_FALSE(BootstrapBusinessRuntime(ctx, stats));
 }
 
+// 测试 业务运行时桥接：滴答带空世界安全
 TEST_F(BusinessRuntimeBridgeTest, TickWithNullWorldSafe) {
     RuntimeContext ctx;
     ctx.business_mode = BusinessMode::Cpp;

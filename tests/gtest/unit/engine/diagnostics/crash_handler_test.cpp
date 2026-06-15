@@ -22,6 +22,7 @@ using namespace dse::diagnostics;
 
 // ----------------------------- BreadcrumbBuffer -----------------------------
 
+// 测试 面包屑缓冲区：Push范围内容量Keeps顺序
 TEST(BreadcrumbBufferTest, PushWithinCapacity_KeepsOrder) {
     BreadcrumbBuffer buf(4);
     buf.Push("a");
@@ -35,6 +36,7 @@ TEST(BreadcrumbBufferTest, PushWithinCapacity_KeepsOrder) {
     EXPECT_EQ(buf.Size(), 3u);
 }
 
+// 测试 面包屑缓冲区：溢出Drops Oldest
 TEST(BreadcrumbBufferTest, OverflowDropsOldest) {
     BreadcrumbBuffer buf(3);
     buf.Push("1");
@@ -51,6 +53,7 @@ TEST(BreadcrumbBufferTest, OverflowDropsOldest) {
     EXPECT_EQ(buf.Capacity(), 3u);
 }
 
+// 测试 面包屑缓冲区：清空Empties
 TEST(BreadcrumbBufferTest, Clear_Empties) {
     BreadcrumbBuffer buf(2);
     buf.Push("x");
@@ -59,6 +62,7 @@ TEST(BreadcrumbBufferTest, Clear_Empties) {
     EXPECT_TRUE(buf.Snapshot().empty());
 }
 
+// 测试 面包屑缓冲区：零容量Coerced到单个
 TEST(BreadcrumbBufferTest, ZeroCapacityCoercedToOne) {
     BreadcrumbBuffer buf(0);
     EXPECT_EQ(buf.Capacity(), 1u);
@@ -86,6 +90,7 @@ static CrashReportInfo MakeSampleInfo() {
     return info;
 }
 
+// 测试 崩溃报告格式：文本包含键字段
 TEST(CrashReportFormatTest, TextContainsKeyFields) {
     const std::string txt = FormatCrashReport(MakeSampleInfo());
     EXPECT_NE(txt.find("TestApp"), std::string::npos);
@@ -98,6 +103,7 @@ TEST(CrashReportFormatTest, TextContainsKeyFields) {
     EXPECT_NE(txt.find("dse_engine.dll"), std::string::npos);
 }
 
+// 测试 崩溃报告格式：空栈Renders Unavailable
 TEST(CrashReportFormatTest, EmptyStackRendersUnavailable) {
     CrashReportInfo info = MakeSampleInfo();
     info.call_stack.clear();
@@ -105,6 +111,7 @@ TEST(CrashReportFormatTest, EmptyStackRendersUnavailable) {
     EXPECT_NE(txt.find("(unavailable)"), std::string::npos);
 }
 
+// 测试 崩溃报告格式：JSON Escapes且包含Arrays
 TEST(CrashReportFormatTest, JsonEscapesAndContainsArrays) {
     CrashReportInfo info = MakeSampleInfo();
     info.breadcrumbs = {"line\"with\"quotes", "tab\there"};
@@ -139,6 +146,7 @@ protected:
     }
 };
 
+// 测试 崩溃报告文件：写入文件带内容
 TEST_F(CrashReportFileTest, WritesFileWithContent) {
     const std::string path = WriteCrashReport(dir_.string(), MakeSampleInfo());
     ASSERT_FALSE(path.empty());
@@ -150,6 +158,7 @@ TEST_F(CrashReportFileTest, WritesFileWithContent) {
 
 // ----------------------------- CrashReporter -----------------------------
 
+// 测试 崩溃报告文件：Reporter Builds信息从Breadcrumbs且元数据
 TEST_F(CrashReportFileTest, ReporterBuildsInfoFromBreadcrumbsAndMetadata) {
     CrashHandlerConfig cfg;
     cfg.app_name = "SelfTestApp";
@@ -179,6 +188,7 @@ TEST_F(CrashReportFileTest, ReporterBuildsInfoFromBreadcrumbsAndMetadata) {
     r.Uninstall();
 }
 
+// 测试 崩溃报告文件：手动报告写入文件
 TEST_F(CrashReportFileTest, ManualReportWritesFile) {
     CrashHandlerConfig cfg;
     cfg.app_name = "ManualApp";

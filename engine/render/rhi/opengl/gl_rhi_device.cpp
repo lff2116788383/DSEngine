@@ -273,8 +273,23 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
-    shader_mgr_.InitBuiltinPBRShader();
-    shader_mgr_.WarmupAllPostProcessShaders();
+    // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
+    // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the heavy
+    // post-process warmup, so they use the dedicated ES3.0-compatible 2D batch
+    // program for sprites/UI.
+    if (!supports_ssbo_) {
+        shader_mgr_.InitSprite2DShader();
+#ifdef DSE_ENABLE_3D
+        // M5 (best-effort 3D forward on capability-limited contexts, WebGL2
+        // included): InitBuiltinPBRShader has a non-SSBO UBO branch — the same
+        // path desktop GL<4.3 uses — that lowers to ESSL300. The GPU-driven and
+        // compute variants stay gated off inside it (they require SSBO).
+        shader_mgr_.InitBuiltinPBRShader();
+#endif
+    } else {
+        shader_mgr_.InitBuiltinPBRShader();
+        shader_mgr_.WarmupAllPostProcessShaders();
+    }
     resource_mgr_.ledger().shader_programs_created += 1;
 
     // 鍒濆鍖?UBO 绠＄悊鍣?
@@ -641,7 +656,7 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     }
     if (desc.has_depth) {
         if (desc.cube_map) {
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
             glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture_handle, 0);
             if (num_color == 0) {
                 glDrawBuffer(GL_NONE);
@@ -1156,7 +1171,7 @@ void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* nam
 void OpenGLRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, void* dst) {
     if (!supports_ssbo_ || handle == 0 || !dst || size == 0) return;
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, handle);
-#ifdef __ANDROID__
+#if DSE_GL_ES_RUNTIME
     // GLES 无 glGetBufferSubData：用 glMapBufferRange 读回。
     if (void* mapped = glMapBufferRange(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(offset),
                                         static_cast<GLsizeiptr>(size), GL_MAP_READ_BIT)) {
@@ -1513,7 +1528,7 @@ void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
 
 void OpenGLRhiDevice::SetWireframeMode(bool enable) {
     if (!initialized_) return;
-#ifndef __ANDROID__
+#if !DSE_GL_ES_RUNTIME
     glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
 #else
     (void)enable;  // GLES 不支持 glPolygonMode 线框模式（编辑器功能，移动端忽略）

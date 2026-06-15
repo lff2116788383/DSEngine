@@ -17,11 +17,13 @@
 #include <filesystem>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
+#ifdef DSE_HAS_ASSIMP
 #include <assimp/Importer.hpp>
 #include <assimp/material.h>
 #include <assimp/mesh.h>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
+#endif
 #include <cctype>
 #include <cstdio>
 #include <cstring>
@@ -68,6 +70,7 @@ std::string DecodeBase64Data(const std::string& encoded) {
     return out;
 }
 
+#ifdef DSE_HAS_ASSIMP
 glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
     glm::mat4 result(1.0f);
     result[0][0] = matrix.a1; result[1][0] = matrix.a2; result[2][0] = matrix.a3; result[3][0] = matrix.a4;
@@ -76,6 +79,7 @@ glm::mat4 AiMatrix4x4ToGlm(const aiMatrix4x4& matrix) {
     result[0][3] = matrix.d1; result[1][3] = matrix.d2; result[2][3] = matrix.d3; result[3][3] = matrix.d4;
     return result;
 }
+#endif
 
 bool MaterializeAsciiGltfBufferDataUris(std::string& source, const std::filesystem::path& source_file, std::vector<std::filesystem::path>& temp_files) {
     constexpr const char* kPrefix = "data:application/octet-stream;base64,";
@@ -121,6 +125,7 @@ bool MaterializeAsciiGltfBufferDataUris(std::string& source, const std::filesyst
 }
 
 
+#ifdef DSE_HAS_ASSIMP
 std::string ResolveAssimpTexturePath(const std::filesystem::path& source_file, const aiMaterial* material, aiTextureType type) {
     if (!material) {
         return {};
@@ -155,6 +160,7 @@ void BuildAssimpBoneHierarchy(const aiNode* node, int parent_index, std::unorder
         BuildAssimpBoneHierarchy(node->mChildren[child_index], current_parent_index, bone_index_map, out_scene);
     }
 }
+#endif // DSE_HAS_ASSIMP
 
 } // namespace
 
@@ -543,6 +549,7 @@ struct RuntimeVertex {
     glm::vec4 color{1.0f, 1.0f, 1.0f, 1.0f};
 };
 
+#ifdef DSE_HAS_ASSIMP
 bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
     Assimp::Importer importer;
 
@@ -757,6 +764,15 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
 
     return !out_scene.meshes.empty() || !out_scene.animations.empty();
 }
+#else // DSE_HAS_ASSIMP
+bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
+    (void)file_path;
+    (void)out_scene;
+    std::cerr << "[importer] FBX/model import via Assimp is disabled in this build. "
+                 "Rebuild with -DDSE_ENABLE_ASSIMP=ON to enable FBX/OBJ/... import." << std::endl;
+    return false;
+}
+#endif // DSE_HAS_ASSIMP
 
 
 bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& output_path) {

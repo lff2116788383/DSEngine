@@ -36,6 +36,7 @@ protected:
     void TearDown() override {}
 };
 
+// 测试 ECS变换集成：单一实体变换之后更新非单一
 TEST_F(EcsTransformIntegrationTest, SingleEntitytransformAfterUpdateNonSingle) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -51,6 +52,7 @@ TEST_F(EcsTransformIntegrationTest, SingleEntitytransformAfterUpdateNonSingle) {
     EXPECT_FLOAT_EQ(transform.local_to_world[3][2], 3.0f);
 }
 
+// 测试 ECS变换集成：Withouttransform实体为单一
 TEST_F(EcsTransformIntegrationTest, WithouttransformEntityIsSingle) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -64,6 +66,7 @@ TEST_F(EcsTransformIntegrationTest, WithouttransformEntityIsSingle) {
     EXPECT_EQ(transform.local_to_world, glm::mat4(1.0f));
 }
 
+// 测试 ECS变换集成：Transformexist于
 TEST_F(EcsTransformIntegrationTest, TransformexistIn) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -78,6 +81,7 @@ TEST_F(EcsTransformIntegrationTest, TransformexistIn) {
     EXPECT_FLOAT_EQ(glm::length(transform.local_to_world[2]), 4.0f);
 }
 
+// 测试 ECS变换集成：Dirtymarked Asfalse跳过更新当
 TEST_F(EcsTransformIntegrationTest, DirtymarkedAsfalseSkipUpdatesWhen) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);
@@ -101,6 +105,7 @@ TEST_F(EcsTransformIntegrationTest, DirtymarkedAsfalseSkipUpdatesWhen) {
 // 父子层级集成
 // ============================================================
 
+// 测试 ECS变换集成：层实体
 TEST_F(EcsTransformIntegrationTest, LayerEntity) {
     Entity parent = world.CreateEntity();
     auto& parent_transform = world.registry().emplace<TransformComponent>(parent);
@@ -119,6 +124,7 @@ TEST_F(EcsTransformIntegrationTest, LayerEntity) {
     EXPECT_FLOAT_EQ(child_transform.local_to_world[3][0], 11.0f);
 }
 
+// 测试 ECS变换集成：Multilayertransform正确
 TEST_F(EcsTransformIntegrationTest, MultilayertransformCorrect) {
     Entity grandparent = world.CreateEntity();
     auto& gp_transform = world.registry().emplace<TransformComponent>(grandparent);
@@ -147,6 +153,7 @@ TEST_F(EcsTransformIntegrationTest, MultilayertransformCorrect) {
 // 批量实体更新
 // ============================================================
 
+// 测试 ECS变换集成：批次实体变换Updateconsistency
 TEST_F(EcsTransformIntegrationTest, BatchEntitytransformUpdateconsistency) {
     constexpr int kEntityCount = 100;
     std::vector<Entity> entities;
@@ -174,6 +181,7 @@ TEST_F(EcsTransformIntegrationTest, BatchEntitytransformUpdateconsistency) {
 // 实体生命周期与变换一致性
 // ============================================================
 
+// 测试 ECS变换集成：销毁实体之后实体变换不
 TEST_F(EcsTransformIntegrationTest, DestroyEntityAfterEntitytransformNot) {
     Entity e1 = world.CreateEntity();
     auto& t1 = world.registry().emplace<TransformComponent>(e1);
@@ -197,6 +205,7 @@ TEST_F(EcsTransformIntegrationTest, DestroyEntityAfterEntitytransformNot) {
     EXPECT_FLOAT_EQ(t2.local_to_world[3][0], 20.0f);
 }
 
+// 测试 ECS变换集成：连续多帧Updatetransform正确
 TEST_F(EcsTransformIntegrationTest, ContinuousMultiFrameUpdatetransformCorrect) {
     Entity e = world.CreateEntity();
     auto& transform = world.registry().emplace<TransformComponent>(e);

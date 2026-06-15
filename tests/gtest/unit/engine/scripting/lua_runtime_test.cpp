@@ -43,6 +43,7 @@ static bool InitLuaWithWorld() {
 // 基础生命周期测试
 // ============================================================
 
+// 测试 Lua运行时：默认状态未初始化
 TEST(LuaRuntimeTest, DefaultStateUninitialized) {
     // BootstrapLuaRuntime 调用前，VM 不应存在
     // 注意：此测试假设 BootstrapLuaRuntime 不会在静态初始化时自动调用
@@ -50,6 +51,7 @@ TEST(LuaRuntimeTest, DefaultStateUninitialized) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时：引导Lua Runtimereturn值
 TEST(LuaRuntimeTest, BootstrapLuaRuntimereturnValue) {
     // world=nullptr 时应返回 false（引擎需要有效的 ECS world 才能初始化 Lua 绑定）
     LuaApiContext ctx;  // world 为 nullptr
@@ -62,6 +64,7 @@ TEST(LuaRuntimeTest, BootstrapLuaRuntimereturnValue) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时：关闭Lua运行时不崩溃
 TEST(LuaRuntimeTest, ShutdownLuaRuntimeDoesNotCrash) {
     if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
@@ -73,6 +76,7 @@ TEST(LuaRuntimeTest, ShutdownLuaRuntimeDoesNotCrash) {
     }
 }
 
+// 测试 Lua运行时：关闭不崩溃
 TEST(LuaRuntimeTest, ShutdownDoesNotCrash) {
     if (InitLuaWithWorld()) {
         ShutdownLuaRuntime();
@@ -85,6 +89,7 @@ TEST(LuaRuntimeTest, ShutdownDoesNotCrash) {
 // ExecuteLuaString 测试
 // ============================================================
 
+// 测试 Lua运行时：执行Lua字符串返回未初始化为false
 TEST(LuaRuntimeTest, ExecuteLuaStringReturnUninitializedfalse) {
     ShutdownLuaRuntime();  // 确保 VM 关闭
     std::string result;
@@ -92,6 +97,7 @@ TEST(LuaRuntimeTest, ExecuteLuaStringReturnUninitializedfalse) {
     EXPECT_FALSE(success);
 }
 
+// 测试 Lua运行时：执行Lua Stringsimple Arithmetic
 TEST(LuaRuntimeTest, ExecuteLuaStringsimpleArithmetic) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
@@ -107,6 +113,7 @@ TEST(LuaRuntimeTest, ExecuteLuaStringsimpleArithmetic) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时：执行Lua字符串语法错误
 TEST(LuaRuntimeTest, ExecuteLuaStringSyntaxError) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
@@ -122,6 +129,7 @@ TEST(LuaRuntimeTest, ExecuteLuaStringSyntaxError) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua运行时：执行Lua字符串空Code Returntrue
 TEST(LuaRuntimeTest, ExecuteLuaStringEmptyCodeReturntrue) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
@@ -137,6 +145,7 @@ TEST(LuaRuntimeTest, ExecuteLuaStringEmptyCodeReturntrue) {
 // TickLuaRuntime 测试
 // ============================================================
 
+// 测试 Lua运行时：滴答Lua运行时未初始化不崩溃
 TEST(LuaRuntimeTest, TickLuaRuntimeUninitializedDoesNotCrash) {
     ShutdownLuaRuntime();
     // 未初始化时调用 Tick 应安全（可能是 no-op）
@@ -144,6 +153,7 @@ TEST(LuaRuntimeTest, TickLuaRuntimeUninitializedDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 Lua运行时：滴答Lua运行时法线调用执行不崩溃
 TEST(LuaRuntimeTest, TickLuaRuntimeNormalCallsDoNotCrash) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
@@ -159,12 +169,14 @@ TEST(LuaRuntimeTest, TickLuaRuntimeNormalCallsDoNotCrash) {
 // GetLuaMemoryUsage 测试
 // ============================================================
 
+// 测试 Lua运行时：获取Lua内存用量未初始化返回零
 TEST(LuaRuntimeTest, GetLuaMemoryUsageUninitializedReturnsZero) {
     ShutdownLuaRuntime();
     size_t usage = GetLuaMemoryUsage();
     EXPECT_EQ(usage, 0u) << "未初始化时应返回 0";
 }
 
+// 测试 Lua运行时：获取Lua内存用量大于比零之后初始化
 TEST(LuaRuntimeTest, GetLuaMemoryUsageGreaterThanZeroAfterInitialization) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";
@@ -180,12 +192,14 @@ TEST(LuaRuntimeTest, GetLuaMemoryUsageGreaterThanZeroAfterInitialization) {
 // PumpLuaScriptHotReloads 测试
 // ============================================================
 
+// 测试 Lua运行时：泵送Lua脚本热重新加载未初始化返回零
 TEST(LuaRuntimeTest, PumpLuaScriptHotReloadsUninitializedReturnsZero) {
     ShutdownLuaRuntime();
     int count = PumpLuaScriptHotReloads();
     EXPECT_EQ(count, 0) << "未初始化时应返回 0";
 }
 
+// 测试 Lua运行时：泵送Lua脚本热重新加载法线调用执行不崩溃
 TEST(LuaRuntimeTest, PumpLuaScriptHotReloadsNormalCallsDoNotCrash) {
     if (!InitLuaWithWorld()) {
         GTEST_SKIP() << "InitLuaWithWorld 失败，跳过测试";

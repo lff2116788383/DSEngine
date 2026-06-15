@@ -37,6 +37,7 @@ static_assert(std::is_standard_layout_v<VertexArrayHandle>);
 // 默认值
 // ============================================================
 
+// 测试 类型化句柄：默认为零
 TEST(TypedHandleTest, DefaultIsZero) {
     BufferHandle h;
     EXPECT_EQ(h.id, 0u);
@@ -47,12 +48,14 @@ TEST(TypedHandleTest, DefaultIsZero) {
 // 构造与 bool 转换
 // ============================================================
 
+// 测试 类型化句柄：Explicit构造
 TEST(TypedHandleTest, ExplicitConstruct) {
     BufferHandle h{42};
     EXPECT_EQ(h.id, 42u);
     EXPECT_TRUE(static_cast<bool>(h));
 }
 
+// 测试 类型化句柄：从原始且原始
 TEST(TypedHandleTest, FromRawAndRaw) {
     auto h = TextureHandle::from_raw(123);
     EXPECT_EQ(h.raw(), 123u);
@@ -63,6 +66,7 @@ TEST(TypedHandleTest, FromRawAndRaw) {
 // 比较运算符
 // ============================================================
 
+// 测试 类型化句柄：相等
 TEST(TypedHandleTest, Equality) {
     BufferHandle a{10}, b{10}, c{20};
     EXPECT_TRUE(a == b);
@@ -71,6 +75,7 @@ TEST(TypedHandleTest, Equality) {
     EXPECT_TRUE(a != c);
 }
 
+// 测试 类型化句柄：小于比
 TEST(TypedHandleTest, LessThan) {
     BufferHandle a{5}, b{10};
     EXPECT_TRUE(a < b);
@@ -82,6 +87,7 @@ TEST(TypedHandleTest, LessThan) {
 // std::hash — unordered 容器可用
 // ============================================================
 
+// 测试 类型化句柄：哈希于Unordered设置
 TEST(TypedHandleTest, HashInUnorderedSet) {
     std::unordered_set<BufferHandle> s;
     s.insert(BufferHandle{1});
@@ -96,6 +102,7 @@ TEST(TypedHandleTest, HashInUnorderedSet) {
 // operator< — ordered 容器可用
 // ============================================================
 
+// 测试 类型化句柄：Ordered设置
 TEST(TypedHandleTest, OrderedSet) {
     std::set<TextureHandle> s;
     s.insert(TextureHandle{30});
@@ -111,6 +118,7 @@ TEST(TypedHandleTest, OrderedSet) {
 // 类型隔离 — 不同 Tag 的 handle 是不同类型
 // ============================================================
 
+// 测试 类型化句柄：不同Tags为不同类型
 TEST(TypedHandleTest, DifferentTagsAreDifferentTypes) {
     // 编译期保证：以下赋值若取消注释则编译失败
     // BufferHandle bh{1};
@@ -127,6 +135,7 @@ TEST(TypedHandleTest, DifferentTagsAreDifferentTypes) {
 // GpuBufferUsage — 位运算
 // ============================================================
 
+// 测试 GPU缓冲区用量：Bitwise或
 TEST(GpuBufferUsageTest, BitwiseOr) {
     auto combined = GpuBufferUsage::kVertex | GpuBufferUsage::kStorage;
     EXPECT_TRUE(has(combined, GpuBufferUsage::kVertex));
@@ -135,6 +144,7 @@ TEST(GpuBufferUsageTest, BitwiseOr) {
     EXPECT_FALSE(has(combined, GpuBufferUsage::kIndirect));
 }
 
+// 测试 GPU缓冲区用量：Bitwise或Assign
 TEST(GpuBufferUsageTest, BitwiseOrAssign) {
     auto flags = GpuBufferUsage::kIndex;
     flags |= GpuBufferUsage::kTransferDst;
@@ -142,6 +152,7 @@ TEST(GpuBufferUsageTest, BitwiseOrAssign) {
     EXPECT_TRUE(has(flags, GpuBufferUsage::kTransferDst));
 }
 
+// 测试 GPU缓冲区用量：None为空
 TEST(GpuBufferUsageTest, NoneIsEmpty) {
     EXPECT_FALSE(has(GpuBufferUsage::kNone, GpuBufferUsage::kVertex));
     EXPECT_FALSE(has(GpuBufferUsage::kNone, GpuBufferUsage::kStorage));
@@ -151,6 +162,7 @@ TEST(GpuBufferUsageTest, NoneIsEmpty) {
 // GpuBufferDesc — 默认值
 // ============================================================
 
+// 测试 GPU缓冲区描述符：默认值
 TEST(GpuBufferDescTest, Defaults) {
     GpuBufferDesc desc;
     EXPECT_EQ(desc.size, 0u);
@@ -159,6 +171,7 @@ TEST(GpuBufferDescTest, Defaults) {
     EXPECT_EQ(desc.debug_name, nullptr);
 }
 
+// 测试 GPU缓冲区描述符：自定义值
 TEST(GpuBufferDescTest, CustomValues) {
     GpuBufferDesc desc;
     desc.size = 4096;

@@ -35,6 +35,7 @@ bool BakeTestScene(NavMeshSystem& nav) {
 
 } // namespace
 
+// 测试 导航网格集成：烘焙生效场景成功
 TEST(NavMeshIntegrationTest, BakeEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
@@ -45,6 +46,7 @@ TEST(NavMeshIntegrationTest, BakeEffectiveScenarioSuccessful) {
     nav.Shutdown();
 }
 
+// 测试 导航网格集成：查找最近点生效场景成功
 TEST(NavMeshIntegrationTest, FindNearestPointEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
@@ -58,6 +60,7 @@ TEST(NavMeshIntegrationTest, FindNearestPointEffectiveScenarioSuccessful) {
     nav.Shutdown();
 }
 
+// 测试 导航网格集成：查找路径生效场景成功
 TEST(NavMeshIntegrationTest, FindPathEffectiveScenarioSuccessful) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());
@@ -70,6 +73,7 @@ TEST(NavMeshIntegrationTest, FindPathEffectiveScenarioSuccessful) {
     nav.Shutdown();
 }
 
+// 测试 导航网格集成：Raycaststay导航Meshinternal未命中
 TEST(NavMeshIntegrationTest, RaycaststayNavMeshinternalMiss) {
     NavMeshSystem nav;
     ASSERT_TRUE(nav.Init());

@@ -59,19 +59,23 @@ using namespace dse::render;
 // 1. RHI Factory
 // ============================================================
 
+// 测试 RHI工厂：后端到字符串打开GL
 TEST(RhiFactoryTest, BackendToString_OpenGL) {
     EXPECT_EQ(RhiBackendToString(RhiBackend::OpenGL), "OpenGL");
 }
 
+// 测试 RHI工厂：后端到字符串Vulkan
 TEST(RhiFactoryTest, BackendToString_Vulkan) {
     EXPECT_EQ(RhiBackendToString(RhiBackend::Vulkan), "Vulkan");
 }
 
+// 测试 RHI工厂：后端到字符串未知
 TEST(RhiFactoryTest, BackendToString_Unknown) {
     auto str = RhiBackendToString(static_cast<RhiBackend>(99));
     EXPECT_EQ(str, "Unknown");
 }
 
+// 测试 RHI工厂：解析RHI后端从Env默认值
 TEST(RhiFactoryTest, ResolveRhiBackendFromEnv_DefaultValues) {
     // 未设置环境变量时应返回 Default
     // 注意：若 CI 中设置了 DSE_RHI_BACKEND 此测试可能需调整
@@ -81,6 +85,7 @@ TEST(RhiFactoryTest, ResolveRhiBackendFromEnv_DefaultValues) {
     EXPECT_LE(val, 1u);
 }
 
+// 测试 RHI工厂：创建RHI设备打开GL返回非空
 TEST(RhiFactoryTest, CreateRhiDevice_OpenGLReturnNonEmpty) {
     // OpenGL 后端始终可用（不需 GPU context 创建也能构造）
     auto device = CreateRhiDevice(RhiBackend::OpenGL);
@@ -88,11 +93,13 @@ TEST(RhiFactoryTest, CreateRhiDevice_OpenGLReturnNonEmpty) {
 }
 
 #ifdef DSE_ENABLE_VULKAN
+// 测试 RHI工厂：创建RHI设备Vulkan返回非空
 TEST(RhiFactoryTest, CreateRhiDevice_VulkanReturnNonEmpty) {
     auto device = CreateRhiDevice(RhiBackend::Vulkan);
     EXPECT_NE(device, nullptr);
 }
 
+// 测试 RHI工厂：创建RHI设备默认回退到Vulkan
 TEST(RhiFactoryTest, CreateRhiDevice_DefaultFallbackToVulkan) {
     // DSE_ENABLE_VULKAN 时 Default 回退到 Vulkan
     auto device = CreateRhiDevice(RhiBackend::Default);
@@ -106,22 +113,26 @@ TEST(RhiFactoryTest, CreateRhiDevice_DefaultFallbackToVulkan) {
 
 #ifdef DSE_ENABLE_VULKAN
 
+// 测试 Vulkan RHI设备：不崩溃
 TEST(VulkanRhiDeviceTest, DoesNotCrash) {
     VulkanRhiDevice device;
     // 未调用 InitVulkan，直接析构应安全
 }
 
+// 测试 Vulkan RHI设备：当不已初始化关闭安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedShutdownSafety) {
     VulkanRhiDevice device;
     device.Shutdown(); // initialized_=false，应直接 return
 }
 
+// 测试 Vulkan RHI设备：当不已初始化提交安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedSubmitSafety) {
     VulkanRhiDevice device;
     auto cmd = std::make_shared<VulkanCommandBuffer>();
     device.Submit(cmd); // initialized_=false，应直接 return
 }
 
+// 测试 Vulkan RHI设备：创建顶点数组返回Increment句柄
 TEST(VulkanRhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
     VulkanRhiDevice device;
     auto h1 = device.CreateVertexArray();
@@ -130,12 +141,14 @@ TEST(VulkanRhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
     EXPECT_GT(h2.raw(), h1.raw());
 }
 
+// 测试 Vulkan RHI设备：删除顶点数组无操作不崩溃
 TEST(VulkanRhiDeviceTest, DeleteVertexArray_NoOpDoesNotCrash) {
     VulkanRhiDevice device;
     device.DeleteVertexArray(VertexArrayHandle::from_raw(12345)); // no-op
     device.DeleteVertexArray(VertexArrayHandle{});                // no-op
 }
 
+// 测试 Vulkan RHI设备：最后帧统计默认值为零
 TEST(VulkanRhiDeviceTest, LastFrameStatsDefaultValueIsZero) {
     VulkanRhiDevice device;
     const auto& stats = device.LastFrameStats();
@@ -144,6 +157,7 @@ TEST(VulkanRhiDeviceTest, LastFrameStatsDefaultValueIsZero) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
+// 测试 Vulkan RHI设备：系统能够调用
 TEST(VulkanRhiDeviceTest, SystemCanCalls) {
     VulkanRhiDevice device;
     // 验证子系统对象可访问（即使未初始化也不应崩溃）
@@ -155,6 +169,7 @@ TEST(VulkanRhiDeviceTest, SystemCanCalls) {
     (void)ctx; (void)res; (void)state; (void)shader; (void)draw;
 }
 
+// 测试 Vulkan RHI设备：全部接口不崩溃
 TEST(VulkanRhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     VulkanRhiDevice device;
     device.SetGlobalShadowMap(0, 100);
@@ -166,16 +181,19 @@ TEST(VulkanRhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     device.SetGlobalSpotLightSpaceMatrix(0, glm::mat4(1.0f));
 }
 
+// 测试 Vulkan RHI设备：当不已初始化开始帧安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedBeginFrameSafety) {
     VulkanRhiDevice device;
     device.BeginFrame();
 }
 
+// 测试 Vulkan RHI设备：当不已初始化结束帧安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedEndFrameSafety) {
     VulkanRhiDevice device;
     device.EndFrame();
 }
 
+// 测试 Vulkan RHI设备：当不已初始化创建渲染目标返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     VulkanRhiDevice device;
     RenderTargetDesc desc{};
@@ -186,12 +204,14 @@ TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 Vulkan RHI设备：当不已初始化创建纹理2D返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 Vulkan RHI设备：当不已初始化创建缓冲区返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
     VulkanRhiDevice device;
     float data[] = {1.0f, 2.0f, 3.0f};
@@ -199,12 +219,14 @@ TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateBufferReturnsZero) {
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 Vulkan RHI设备：当不已初始化创建着色器程序返回零
 TEST(VulkanRhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     VulkanRhiDevice device;
     unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 Vulkan RHI设备：当不已初始化删除安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedDeleteSafety) {
     VulkanRhiDevice device;
     device.DeleteRenderTarget(999);
@@ -212,6 +234,7 @@ TEST(VulkanRhiDeviceTest, WhenNotInitializedDeleteSafety) {
     device.DeleteShaderProgram(999);
 }
 
+// 测试 Vulkan RHI设备：当不已初始化更新缓冲区安全
 TEST(VulkanRhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     VulkanRhiDevice device;
     float data[] = {0.5f};
@@ -222,11 +245,13 @@ TEST(VulkanRhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
 // 3. VulkanCommandBuffer 无 GPU 测试
 // ============================================================
 
+// 测试 Vulkan命令缓冲区：之后Vulkan命令缓冲区为空句柄
 TEST(VulkanCommandBufferTest, AfterVkCommandBufferIsNULL_HANDLE) {
     VulkanCommandBuffer cmd;
     EXPECT_EQ(cmd.GetVkCommandBuffer(), VK_NULL_HANDLE);
 }
 
+// 测试 Vulkan命令缓冲区：Resetreset状态
 TEST(VulkanCommandBufferTest, ResetresetState) {
     VulkanCommandBuffer cmd;
     cmd.SetVkCommandBuffer(reinterpret_cast<VkCommandBuffer>(0x1234));
@@ -234,6 +259,7 @@ TEST(VulkanCommandBufferTest, ResetresetState) {
     EXPECT_EQ(cmd.GetVkCommandBuffer(), VK_NULL_HANDLE);
 }
 
+// 测试 Vulkan命令缓冲区：设置Camerastorage矩阵
 TEST(VulkanCommandBufferTest, SetCamerastorageMatrix) {
     VulkanCommandBuffer cmd;
     glm::mat4 view = glm::mat4(2.0f);
@@ -243,6 +269,7 @@ TEST(VulkanCommandBufferTest, SetCamerastorageMatrix) {
     // 矩阵值会在 Draw 时通过 executor 消费
 }
 
+// 测试 Vulkan命令缓冲区：Alluniform且清空
 TEST(VulkanCommandBufferTest, AlluniformAndClear) {
     VulkanCommandBuffer cmd;
 
@@ -261,12 +288,14 @@ TEST(VulkanCommandBufferTest, AlluniformAndClear) {
     EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制精灵批次空安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
     VulkanCommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
     cmd.DrawSpriteBatch(items);
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制网格批次安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     VulkanCommandBuffer cmd;
     std::vector<MeshDrawItem> items;
@@ -274,6 +303,7 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     cmd.DrawMeshBatch(items);
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制精灵批次安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
     VulkanCommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
@@ -281,6 +311,7 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
     cmd.DrawSpriteBatch(items);
 }
 
+// 测试 Vulkan命令缓冲区：无设备当开始结束渲染通道安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     VulkanCommandBuffer cmd;
     RenderPassDesc desc;
@@ -288,32 +319,38 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     cmd.EndRenderPass();
 }
 
+// 测试 Vulkan命令缓冲区：无设备当设置管线状态安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
     VulkanCommandBuffer cmd;
     cmd.SetPipelineState(12345);
 }
 
+// 测试 Vulkan命令缓冲区：无设备当清空颜色安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     VulkanCommandBuffer cmd;
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制天空盒安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSkyboxSafety) {
     VulkanCommandBuffer cmd;
     cmd.DrawSkybox(100);
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制后期处理安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     VulkanCommandBuffer cmd;
     cmd.DrawPostProcess({"bloom", 100, {1.0f, 0.5f}});
 }
 
+// 测试 Vulkan命令缓冲区：无设备当绘制粒子3D安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawParticles3DSafety) {
     VulkanCommandBuffer cmd;
     std::vector<Particle3DDrawItem> items;
     cmd.DrawParticles3D(items, glm::mat4(1.0f), glm::mat4(1.0f));
 }
 
+// 测试 Vulkan命令缓冲区：无设备当延迟阴影映射安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     VulkanCommandBuffer cmd;
     cmd.BindGlobalShadowMap(0, 100);
@@ -321,6 +358,7 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
+// 测试 Vulkan命令缓冲区：设置设备且设置Vulkan命令缓冲区
 TEST(VulkanCommandBufferTest, SetDeviceAndSetVkCommandBuffer) {
     VulkanCommandBuffer cmd;
     cmd.SetDevice(nullptr);
@@ -332,6 +370,7 @@ TEST(VulkanCommandBufferTest, SetDeviceAndSetVkCommandBuffer) {
 // 4. Vulkan 子系统接口一致性测试
 // ============================================================
 
+// 测试 Vulkan管线状态管理器：混合因子枚举映射完成
 TEST(VulkanPipelineStateManagerTest, BlendFactorEnumMappingComplete) {
     // 验证所有 BlendFactor 值都能映射到有效 VkBlendFactor
     EXPECT_EQ(VulkanPipelineStateManager::ToVkBlendFactor(BlendFactor::Zero), VK_BLEND_FACTOR_ZERO);
@@ -346,6 +385,7 @@ TEST(VulkanPipelineStateManagerTest, BlendFactorEnumMappingComplete) {
     EXPECT_EQ(VulkanPipelineStateManager::ToVkBlendFactor(BlendFactor::OneMinusDstColor), VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR);
 }
 
+// 测试 Vulkan管线状态管理器：比较函数枚举映射完成
 TEST(VulkanPipelineStateManagerTest, CompareFuncEnumMappingComplete) {
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCompareOp(CompareFunc::Never), VK_COMPARE_OP_NEVER);
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCompareOp(CompareFunc::Less), VK_COMPARE_OP_LESS);
@@ -357,34 +397,40 @@ TEST(VulkanPipelineStateManagerTest, CompareFuncEnumMappingComplete) {
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCompareOp(CompareFunc::Always), VK_COMPARE_OP_ALWAYS);
 }
 
+// 测试 Vulkan管线状态管理器：剔除面枚举映射完成
 TEST(VulkanPipelineStateManagerTest, CullFaceEnumMappingComplete) {
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCullMode(CullFace::Back), VK_CULL_MODE_BACK_BIT);
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCullMode(CullFace::Front), VK_CULL_MODE_FRONT_BIT);
     EXPECT_EQ(VulkanPipelineStateManager::ToVkCullMode(CullFace::None), VK_CULL_MODE_NONE);
 }
 
+// 测试 Vulkan管线状态管理器：当不Initializedpipeline状态Countis零
 TEST(VulkanPipelineStateManagerTest, WhenNotInitializedpipeline_state_CountisZero) {
     VulkanPipelineStateManager mgr;
     EXPECT_EQ(mgr.pipeline_state_count(), 0u);
     EXPECT_EQ(mgr.active_pipeline_state(), 0u);
 }
 
+// 测试 Vulkan管线状态管理器：设置激活管线状态可读且可写
 TEST(VulkanPipelineStateManagerTest, set_active_pipeline_StateReadableAndWritable) {
     VulkanPipelineStateManager mgr;
     mgr.set_active_pipeline_state(42);
     EXPECT_EQ(mgr.active_pipeline_state(), 42u);
 }
 
+// 测试 Vulkan管线状态管理器：线框关闭按默认
 TEST(VulkanPipelineStateManagerTest, WireframeOffByDefault) {
     VulkanPipelineStateManager mgr;
     EXPECT_FALSE(mgr.wireframe_mode());
 }
 
+// 测试 Vulkan管线状态管理器：过度绘制关闭按默认
 TEST(VulkanPipelineStateManagerTest, OverdrawOffByDefault) {
     VulkanPipelineStateManager mgr;
     EXPECT_FALSE(mgr.overdraw_mode());
 }
 
+// 测试 Vulkan管线状态管理器：设置线框模式可读且可写
 TEST(VulkanPipelineStateManagerTest, SetWireframeModeReadableAndWritable) {
     VulkanPipelineStateManager mgr;
     mgr.SetWireframeMode(true);
@@ -393,6 +439,7 @@ TEST(VulkanPipelineStateManagerTest, SetWireframeModeReadableAndWritable) {
     EXPECT_FALSE(mgr.wireframe_mode());
 }
 
+// 测试 Vulkan管线状态管理器：设置过度绘制模式可读且可写
 TEST(VulkanPipelineStateManagerTest, SetOverdrawModeReadableAndWritable) {
     VulkanPipelineStateManager mgr;
     mgr.SetOverdrawMode(true);
@@ -401,6 +448,7 @@ TEST(VulkanPipelineStateManagerTest, SetOverdrawModeReadableAndWritable) {
     EXPECT_FALSE(mgr.overdraw_mode());
 }
 
+// 测试 Vulkan管线状态管理器：线框Overdrawindependent的Each Other
 TEST(VulkanPipelineStateManagerTest, WireframeOverdrawindependentOfEachOther) {
     VulkanPipelineStateManager mgr;
     mgr.SetWireframeMode(true);
@@ -413,6 +461,7 @@ TEST(VulkanPipelineStateManagerTest, WireframeOverdrawindependentOfEachOther) {
     EXPECT_TRUE(mgr.overdraw_mode());
 }
 
+// 测试 Vulkan上下文：默认状态
 TEST(VulkanContextTest, DefaultState) {
     VulkanContext ctx;
     EXPECT_EQ(ctx.instance(), VK_NULL_HANDLE);
@@ -428,26 +477,31 @@ TEST(VulkanContextTest, DefaultState) {
     EXPECT_EQ(ctx.current_image_index(), 0u);
 }
 
+// 测试 Vulkan上下文：当不已初始化关闭安全
 TEST(VulkanContextTest, WhenNotInitializedShutdownSafety) {
     VulkanContext ctx;
     ctx.Shutdown();
 }
 
+// 测试 Vulkan上下文：当不已初始化等待Idle安全
 TEST(VulkanContextTest, WhenNotInitializedWaitIdleSafety) {
     VulkanContext ctx;
     ctx.WaitIdle(); // device_=VK_NULL_HANDLE, 应跳过 vkDeviceWaitIdle
 }
 
+// 测试 Vulkan上下文：最大帧于FLIGH Tconstant正确
 TEST(VulkanContextTest, MAX_FRAMES_IN_FLIGHTconstantCorrect) {
     EXPECT_EQ(VulkanContext::MAX_FRAMES_IN_FLIGHT, 2u);
 }
 
+// 测试 Vulkan资源管理器：当不Initializedcommand对象池为空
 TEST(VulkanResourceManagerTest, WhenNotInitializedcommand_PoolIsEmpty) {
     VulkanResourceManager mgr;
     EXPECT_EQ(mgr.command_pool(), VK_NULL_HANDLE);
     EXPECT_EQ(mgr.descriptor_pool(), VK_NULL_HANDLE);
 }
 
+// 测试 Vulkan着色器管理器：当不初始化为零
 TEST(VulkanShaderManagerTest, WhenNotInitializedisZero) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
@@ -459,12 +513,14 @@ TEST(VulkanShaderManagerTest, WhenNotInitializedisZero) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
+// 测试 Vulkan着色器管理器：获取程序无效句柄返回空指针
 TEST(VulkanShaderManagerTest, GetProgramInvalidHandleReturnednullptr) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.GetProgram(0), nullptr);
     EXPECT_EQ(mgr.GetProgram(999), nullptr);
 }
 
+// 测试 Vulkan绘制执行器：全部状态
 TEST(VulkanDrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
     // index < 3 / < 4 的有效索引
@@ -485,6 +541,7 @@ TEST(VulkanDrawExecutorTest, AllState) {
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f)); // 越界
 }
 
+// 测试 Vulkan绘制执行器：当不Initializedcurrent帧统计默认为零
 TEST(VulkanDrawExecutorTest, WhenNotInitializedcurrent_frame_StatsDefaultIsZero) {
     // BeginFrame/EndFrame 需要 context_ 非空，此处仅验证 stats 默认值
     DrawExecutorGlobalState state;
@@ -493,6 +550,7 @@ TEST(VulkanDrawExecutorTest, WhenNotInitializedcurrent_frame_StatsDefaultIsZero)
     EXPECT_EQ(stats.draw_calls, 0);
 }
 
+// 测试 Vulkan绘制执行器：默认统计为零
 TEST(VulkanDrawExecutorTest, DefaultstatsisZero) {
     DrawExecutorGlobalState state;
     VulkanDrawExecutor exec(state);
@@ -506,11 +564,13 @@ TEST(VulkanDrawExecutorTest, DefaultstatsisZero) {
 // 5. QueueFamilyIndices 数据结构
 // ============================================================
 
+// 测试 队列族索引：默认为完成为false
 TEST(QueueFamilyIndicesTest, DefaultIsCompleteIsfalse) {
     QueueFamilyIndices indices;
     EXPECT_FALSE(indices.IsComplete());
 }
 
+// 测试 队列族索引：设置Upgraphics Andpresent之后为完成为true
 TEST(QueueFamilyIndicesTest, SetUpgraphicsAndpresentAfterIsCompleteIstrue) {
     QueueFamilyIndices indices;
     indices.graphics = 0;
@@ -518,6 +578,7 @@ TEST(QueueFamilyIndicesTest, SetUpgraphicsAndpresentAfterIsCompleteIstrue) {
     EXPECT_TRUE(indices.IsComplete());
 }
 
+// 测试 队列族索引：Graphics不为完成
 TEST(QueueFamilyIndicesTest, GraphicsNotIsComplete) {
     QueueFamilyIndices indices;
     indices.graphics = 0;
@@ -528,6 +589,7 @@ TEST(QueueFamilyIndicesTest, GraphicsNotIsComplete) {
 // 6. Vulkan 数据结构默认值
 // ============================================================
 
+// 测试 Vulkan缓冲区：默认值
 TEST(VulkanBufferTest, DefaultValues) {
     VulkanBuffer buf;
     EXPECT_EQ(buf.buffer, VK_NULL_HANDLE);
@@ -537,6 +599,7 @@ TEST(VulkanBufferTest, DefaultValues) {
     EXPECT_FALSE(buf.is_dynamic);
 }
 
+// 测试 Vulkan纹理：默认值
 TEST(VulkanTextureTest, DefaultValues) {
     VulkanTexture tex;
     EXPECT_EQ(tex.image, VK_NULL_HANDLE);
@@ -548,6 +611,7 @@ TEST(VulkanTextureTest, DefaultValues) {
     EXPECT_EQ(tex.channels, 4);
 }
 
+// 测试 Vulkan渲染目标：默认值
 TEST(VulkanRenderTargetTest, DefaultValues) {
     VulkanRenderTarget rt;
     EXPECT_EQ(rt.width, 0);
@@ -564,6 +628,7 @@ TEST(VulkanRenderTargetTest, DefaultValues) {
 // ============================================================
 
 // C1 — MSAA 新字段默认值
+// 测试 Vulkan渲染目标：C 1 MSAA字段默认值
 TEST(VulkanRenderTargetTest, C1_MSAAFieldDefaultValues) {
     VulkanRenderTarget rt;
     EXPECT_FALSE(rt.is_msaa);
@@ -576,12 +641,14 @@ TEST(VulkanRenderTargetTest, C1_MSAAFieldDefaultValues) {
 }
 
 // C2 — HDR Context 访问器
+// 测试 Vulkan上下文：C 2 HDR禁用按默认
 TEST(VulkanContextTest, C2_HDRDisabledByDefault) {
     VulkanContext ctx;
     EXPECT_FALSE(ctx.hdr_enabled());
 }
 
 // C3 — Bloom CS 句柄默认值
+// 测试 Vulkan着色器管理器：C 3泛光C Shandle默认值到零
 TEST(VulkanShaderManagerTest, C3_BloomCShandleDefaultsToZero) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.bloom_downsample_cs_handle(), 0u);
@@ -589,6 +656,7 @@ TEST(VulkanShaderManagerTest, C3_BloomCShandleDefaultsToZero) {
 }
 
 // C3 — GetComputeProgram 无效句柄返回 nullptr
+// 测试 Vulkan着色器管理器：C 3获取计算程序无效句柄返回空指针
 TEST(VulkanShaderManagerTest, C3_GetComputeProgramInvalidHandleReturnednullptr) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.GetComputeProgram(0), nullptr);
@@ -596,6 +664,7 @@ TEST(VulkanShaderManagerTest, C3_GetComputeProgramInvalidHandleReturnednullptr) 
 }
 
 // C3 — VulkanComputeProgram 默认值
+// 测试 Vulkan计算程序：C 3默认值
 TEST(VulkanComputeProgramTest, C3_DefaultValues) {
     VulkanComputeProgram prog;
     EXPECT_EQ(prog.comp_module, VK_NULL_HANDLE);
@@ -605,11 +674,13 @@ TEST(VulkanComputeProgramTest, C3_DefaultValues) {
 }
 
 // C1 — VulkanResourceManager 新增 default_sampler 默认空
+// 测试 Vulkan资源管理器：C 1默认Samplernot已初始化到空
 TEST(VulkanResourceManagerTest, C1_default_SamplernotInitializedToNULL) {
     VulkanResourceManager mgr;
     EXPECT_EQ(mgr.default_sampler(), VK_NULL_HANDLE);
 }
 
+// 测试 Vulkan着色器程序：默认值
 TEST(VulkanShaderProgramTest, DefaultValues) {
     VulkanShaderProgram prog;
     EXPECT_EQ(prog.vert_module, VK_NULL_HANDLE);
@@ -619,6 +690,7 @@ TEST(VulkanShaderProgramTest, DefaultValues) {
     EXPECT_FALSE(prog.reflection.has_push_constant);
 }
 
+// 测试 Vulkan管线状态：默认值
 TEST(VulkanPipelineStateTest, DefaultValues) {
     VulkanPipelineState state;
     EXPECT_EQ(state.pipeline, VK_NULL_HANDLE);
@@ -627,6 +699,7 @@ TEST(VulkanPipelineStateTest, DefaultValues) {
     EXPECT_EQ(state.shader_program_handle, 0u);
 }
 
+// 测试 Vulkan每帧UBO：尺寸
 TEST(VulkanPerFrameUBOTest, Size) {
     // 确保 UBO 结构体大小符合预期（对齐到 std140 布局）
     VulkanPerFrameUBO ubo;
@@ -636,6 +709,7 @@ TEST(VulkanPerFrameUBOTest, Size) {
     EXPECT_GE(sizeof(VulkanPerFrameUBO), sizeof(glm::mat4) * 2 + sizeof(glm::vec4));
 }
 
+// 测试 描述符绑定信息：情形74
 TEST(DescriptorBindingInfoTest, TestCase74) {
     DescriptorBindingInfo a;
     a.set = 0; a.binding = 1; a.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -652,27 +726,33 @@ TEST(DescriptorBindingInfoTest, TestCase74) {
 // Phase J: VulkanPointLights/SpotLights UBO 结构体验证
 // ============================================================
 
+// 测试 Vulkan点灯光UBO：J 1 Structure尺寸16 B对齐
 TEST(VulkanPointLightUBOTest, J1_StructureSize16BAlignment) {
     EXPECT_EQ(sizeof(VulkanPointLightsUBO) % 16u, 0u);
 }
 
+// 测试 Vulkan点灯光UBO：J 1条目正确尺寸
 TEST(VulkanPointLightUBOTest, J1_EntrycorrectSize) {
     EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
+// 测试 Vulkan点灯光UBO：J 1默认计数为零
 TEST(VulkanPointLightUBOTest, J1_DefaultcountisZero) {
     VulkanPointLightsUBO ubo{};
     EXPECT_EQ(ubo.u_point_light_count, 0);
 }
 
+// 测试 Vulkan聚光灯光UBO：J 1 Structure尺寸16 B对齐
 TEST(VulkanSpotLightsUBOTest, J1_StructureSize16BAlignment) {
     EXPECT_EQ(sizeof(VulkanSpotLightsUBO) % 16u, 0u);
 }
 
+// 测试 Vulkan聚光灯光UBO：J 1条目正确尺寸
 TEST(VulkanSpotLightsUBOTest, J1_EntrycorrectSize) {
     EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
+// 测试 Vulkan聚光灯光UBO：J 1默认计数为零
 TEST(VulkanSpotLightsUBOTest, J1_DefaultcountisZero) {
     VulkanSpotLightsUBO ubo{};
     EXPECT_EQ(ubo.u_spot_light_count, 0);
@@ -682,6 +762,7 @@ TEST(VulkanSpotLightsUBOTest, J1_DefaultcountisZero) {
 // Phase K: GLSL 着色器字符串关键声明验证（无 GPU 依赖）
 // ============================================================
 
+// 测试 Vulkan GLSL着色器：K点灯光SSBO Odeclare存在
 TEST(VulkanGLSLShaderTest, K_PointLightsSSBOdeclareExistence) {
     using namespace dse::render::generated_shaders::reflect;
     bool found = false;
@@ -694,6 +775,7 @@ TEST(VulkanGLSLShaderTest, K_PointLightsSSBOdeclareExistence) {
     EXPECT_TRUE(found) << "PointLightSSBO should be at set=1 binding=1";
 }
 
+// 测试 Vulkan GLSL着色器：K聚光灯光SSBO Odeclare存在
 TEST(VulkanGLSLShaderTest, K_SpotLightsSSBOdeclareExistence) {
     using namespace dse::render::generated_shaders::reflect;
     bool found = false;
@@ -706,12 +788,14 @@ TEST(VulkanGLSLShaderTest, K_SpotLightsSSBOdeclareExistence) {
     EXPECT_TRUE(found) << "SpotLightSSBO should be at set=1 binding=2";
 }
 
+// 测试 Vulkan GLSL着色器：K点灯光立方体阴影采样器Declaration存在
 TEST(VulkanGLSLShaderTest, K_PointLightCubeShadowSamplerDeclarationExists) {
     std::string src(dse::render::generated_shaders::kpbr_frag_glsl430);
     EXPECT_NE(src.find("u_point_shadow_maps"), std::string::npos)
         << "kPbrFragment should declare u_point_shadow_maps samplerCube";
 }
 
+// 测试 Vulkan GLSL着色器：K聚光Lightusefloat Pad Nonvec 2 pad
 TEST(VulkanGLSLShaderTest, K_SpotLightusefloat_PadNonvec2_pad) {
     std::string src(dse::render::generated_shaders::kpbr_frag_glsl430);
     // SpotLight 含有 outer_cone 字段；在 outer_cone 之后到下一个 "};" 之间
@@ -729,11 +813,13 @@ TEST(VulkanGLSLShaderTest, K_SpotLightusefloat_PadNonvec2_pad) {
 // RHI 统一回归测试
 // ============================================================
 
+// 测试 Vulkan管线状态管理器：Front面为CC Wbecause Y翻转且Viewport Yoffset
 TEST(VulkanPipelineStateManagerTest, FrontFaceIsCCWbecauseYFlipAndViewportYoffset) {
     // 投影 Y-flip 与 Vulkan viewport Y-inversion 相互抵消 → 帧缓冲绕序保持 CCW
     EXPECT_EQ(VulkanPipelineStateManager::ToVkFrontFace(), VK_FRONT_FACE_COUNTER_CLOCKWISE);
 }
 
+// 测试 Vulkan投影校正：Y翻转Row且Column值为正确
 TEST(VulkanProjectionCorrectionTest, YFlipRowAndColumnValuesAreCorrect) {
     VulkanRhiDevice device;
     glm::mat4 corr = device.GetProjectionCorrection();
@@ -746,6 +832,7 @@ TEST(VulkanProjectionCorrectionTest, YFlipRowAndColumnValuesAreCorrect) {
     EXPECT_FLOAT_EQ(corr[3][2], 0.5f);
 }
 
+// 测试 Vulkan天空盒着色器：采样Towardusea Pos
 TEST(VulkanSkyboxShaderTest, SamplingTowarduseaPos) {
     std::string src(dse::render::generated_shaders::kskybox_vert_glsl430);
     EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
@@ -758,6 +845,7 @@ TEST(VulkanSkyboxShaderTest, SamplingTowarduseaPos) {
 // ToneMappingTest — ACES Filmic 纯数学验证（无 GPU 依赖）
 // ============================================================
 
+// 测试 色调映射：ACES电影级Black输入为零
 TEST(ToneMappingTest, ACESFilmic_BlackInputIsZero) {
     float x = 0.0f;
     float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
@@ -765,6 +853,7 @@ TEST(ToneMappingTest, ACESFilmic_BlackInputIsZero) {
     EXPECT_NEAR(result, 0.0f, 1e-5f);
 }
 
+// 测试 色调映射：ACES电影级Highlights Truncated到无More比1
 TEST(ToneMappingTest, ACESFilmic_HighlightsTruncatedToNoMoreThan1) {
     float x = 100.0f;
     float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
@@ -773,6 +862,7 @@ TEST(ToneMappingTest, ACESFilmic_HighlightsTruncatedToNoMoreThan1) {
     EXPECT_LE(result, 1.0f);
 }
 
+// 测试 色调映射：ACES电影级Neutral输入为于打开Interval
 TEST(ToneMappingTest, ACESFilmic_NeutralInputIsInTheOpenInterval) {
     float x = 1.0f;
     float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
@@ -785,6 +875,7 @@ TEST(ToneMappingTest, ACESFilmic_NeutralInputIsInTheOpenInterval) {
 // ShadowPCFTest — PCF 纯数学验证（无 GPU 依赖）
 // ============================================================
 
+// 测试 阴影PCF：PCF完整遮挡返回零
 TEST(ShadowPCFTest, PCF_FullOcclusionReturnsZero) {
     float samples[9] = {0,0,0,0,0,0,0,0,0};
     float sum = 0.0f;
@@ -792,6 +883,7 @@ TEST(ShadowPCFTest, PCF_FullOcclusionReturnsZero) {
     EXPECT_NEAR(sum / 9.0f, 0.0f, 1e-5f);
 }
 
+// 测试 阴影PCF：PCF返回到单个无遮挡
 TEST(ShadowPCFTest, PCF_ReturnToOneWithoutOcclusion) {
     float samples[9] = {1,1,1,1,1,1,1,1,1};
     float sum = 0.0f;
@@ -799,6 +891,7 @@ TEST(ShadowPCFTest, PCF_ReturnToOneWithoutOcclusion) {
     EXPECT_NEAR(sum / 9.0f, 1.0f, 1e-5f);
 }
 
+// 测试 阴影PCF：PCF半遮挡为于打开范围
 TEST(ShadowPCFTest, PCF_HalfOcclusionIsInTheOpenRange) {
     float samples[9] = {1,0,1,0,1,0,1,0,1};
     float sum = 0.0f;

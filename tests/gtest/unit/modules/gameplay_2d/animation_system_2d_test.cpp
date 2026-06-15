@@ -35,16 +35,19 @@ protected:
     }
 };
 
+// 测试 动画系统2D：空世界调用更新不崩溃
 TEST_F(AnimationSystem2DTest, EmptyWorldCallsUpdateDoesNotCrash) {
     EXPECT_NO_THROW(sys.Update(world, 1.0f / 60.0f));
 }
 
+// 测试 动画系统2D：无状态当更新不崩溃
 TEST_F(AnimationSystem2DTest, WithoutStateWhenUpdateDoesNotCrash) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     // animator.states 为空，Update 应跳过
     EXPECT_NO_THROW(sys.Update(world, 1.0f / 60.0f));
 }
 
+// 测试 动画系统2D：单一状态自动Initializecurrent状态
 TEST_F(AnimationSystem2DTest, SingleStateAutoInitializecurrent_state) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -59,6 +62,7 @@ TEST_F(AnimationSystem2DTest, SingleStateAutoInitializecurrent_state) {
     EXPECT_EQ(anim->current_state, "idle");
 }
 
+// 测试 动画系统2D：帧Advancecurrent帧递增
 TEST_F(AnimationSystem2DTest, FrameAdvancecurrent_FrameIncrements) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -76,6 +80,7 @@ TEST_F(AnimationSystem2DTest, FrameAdvancecurrent_FrameIncrements) {
     EXPECT_GT(anim->current_frame, 0);
 }
 
+// 测试 动画系统2D：循环回放Wraps到首个帧在结束
 TEST_F(AnimationSystem2DTest, LoopPlaybackWrapsToFirstFrameAtEnd) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -93,6 +98,7 @@ TEST_F(AnimationSystem2DTest, LoopPlaybackWrapsToFirstFrameAtEnd) {
     EXPECT_EQ(anim->current_frame, 0); // 回到首帧
 }
 
+// 测试 动画系统2D：非循环回放Stops在最后帧
 TEST_F(AnimationSystem2DTest, NonLoopPlaybackStopsAtLastFrame) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -111,6 +117,7 @@ TEST_F(AnimationSystem2DTest, NonLoopPlaybackStopsAtLastFrame) {
     EXPECT_EQ(anim->current_frame, 1); // 停在末帧
 }
 
+// 测试 动画系统2D：设置Booltrigger状态过渡
 TEST_F(AnimationSystem2DTest, SetBooltriggerStateTransition) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
 
@@ -147,6 +154,7 @@ TEST_F(AnimationSystem2DTest, SetBooltriggerStateTransition) {
     EXPECT_EQ(anim->current_frame, 0);
 }
 
+// 测试 动画系统2D：播放段回放
 TEST_F(AnimationSystem2DTest, PlaySegmentSegmentPlayback) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -163,6 +171,7 @@ TEST_F(AnimationSystem2DTest, PlaySegmentSegmentPlayback) {
     EXPECT_TRUE(anim->playing);
 }
 
+// 测试 动画系统2D：帧速率Controls推进速度
 TEST_F(AnimationSystem2DTest, FrameRateControlsAdvanceSpeed) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;
@@ -184,6 +193,7 @@ TEST_F(AnimationSystem2DTest, FrameRateControlsAdvanceSpeed) {
     EXPECT_EQ(anim->current_frame, 1); // 推进到第 1 帧
 }
 
+// 测试 动画系统2D：时间不推进之后停止回放
 TEST_F(AnimationSystem2DTest, TimeDoesNotAdvanceAfterStopPlayback) {
     auto [e, anim, sprite] = CreateAnimatedEntity();
     AnimationState state;

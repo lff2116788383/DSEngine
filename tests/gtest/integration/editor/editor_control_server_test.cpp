@@ -103,6 +103,7 @@ protected:
 
 // ─── DispatchTool: 未知方法 ──────────────────────────────────────────────────
 
+// 测试 控制服务器：未知Method返回Method不Found
 TEST_F(ControlServerTest, UnknownMethodReturnsMethodNotFound) {
     auto resp = Dispatch("dsengine_nonexistent_tool");
     EXPECT_TRUE(resp.is_error);
@@ -111,6 +112,7 @@ TEST_F(ControlServerTest, UnknownMethodReturnsMethodNotFound) {
 
 // ─── dsengine_ping ───────────────────────────────────────────────────────────
 
+// 测试 控制服务器：Ping返回Pong
 TEST_F(ControlServerTest, Ping_ReturnsPong) {
     auto resp = Dispatch("dsengine_ping");
     ASSERT_FALSE(resp.is_error);
@@ -121,6 +123,7 @@ TEST_F(ControlServerTest, Ping_ReturnsPong) {
 
 // ─── dsengine_lua_execute ────────────────────────────────────────────────────
 
+// 测试 控制服务器：Lua执行Missingcode参数返回错误
 TEST_F(ControlServerTest, LuaExecute_MissingcodeParameterReturnerror) {
     auto resp = Dispatch("dsengine_lua_execute", R"({"other": 1})");
     EXPECT_TRUE(resp.is_error);
@@ -129,18 +132,21 @@ TEST_F(ControlServerTest, LuaExecute_MissingcodeParameterReturnerror) {
 
 // ─── dsengine_script_create ──────────────────────────────────────────────────
 
+// 测试 控制服务器：脚本创建缺失路径参数返回错误
 TEST_F(ControlServerTest, ScriptCreate_MissingpathParameterReturnerror) {
     auto resp = Dispatch("dsengine_script_create", R"({"content": "x = 1"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：脚本创建Missingcontent参数返回错误
 TEST_F(ControlServerTest, ScriptCreate_MissingcontentParameterReturnerror) {
     auto resp = Dispatch("dsengine_script_create", R"({"path": "test.lua"})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：脚本创建路径Containsdotdotrejected
 TEST_F(ControlServerTest, ScriptCreate_ThePathContainsdotdotrejected) {
     auto resp = Dispatch("dsengine_script_create",
         R"({"path": "../escape.lua", "content": "x = 1"})");
@@ -148,6 +154,7 @@ TEST_F(ControlServerTest, ScriptCreate_ThePathContainsdotdotrejected) {
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：脚本创建法线写入Returnwritten
 TEST_F(ControlServerTest, ScriptCreate_NormalWriteReturnwritten) {
     fs::path tmp = fs::temp_directory_path() / "dse_test_script_create.lua";
     std::string params = R"({"path": ")" + tmp.string() + R"(", "content": "return 42"})";
@@ -164,6 +171,7 @@ TEST_F(ControlServerTest, ScriptCreate_NormalWriteReturnwritten) {
 
 // ─── dsengine_editor_undo / redo ─────────────────────────────────────────────
 
+// 测试 控制服务器：编辑器撤销返回空Stacksuccess假
 TEST_F(ControlServerTest, EditorUndo_ReturnEmptyStacksuccess_false) {
     auto resp = Dispatch("dsengine_editor_undo");
     ASSERT_FALSE(resp.is_error);
@@ -171,6 +179,7 @@ TEST_F(ControlServerTest, EditorUndo_ReturnEmptyStacksuccess_false) {
     EXPECT_FALSE(resp.result["success"].GetBool());
 }
 
+// 测试 控制服务器：编辑器重做返回空Stacksuccess假
 TEST_F(ControlServerTest, EditorRedo_ReturnEmptyStacksuccess_false) {
     auto resp = Dispatch("dsengine_editor_redo");
     ASSERT_FALSE(resp.is_error);
@@ -178,6 +187,7 @@ TEST_F(ControlServerTest, EditorRedo_ReturnEmptyStacksuccess_false) {
     EXPECT_FALSE(resp.result["success"].GetBool());
 }
 
+// 测试 控制服务器：编辑器撤销重做撤销然后重做之后执行
 TEST_F(ControlServerTest, EditorUndoRedo_UndoThenRedoAfterExecute) {
     auto& mgr = dse::editor::GetUndoRedoManager();
     mgr.Clear();
@@ -205,12 +215,14 @@ TEST_F(ControlServerTest, EditorUndoRedo_UndoThenRedoAfterExecute) {
 
 // ─── dsengine_entity_create ──────────────────────────────────────────────────
 
+// 测试 控制服务器：实体创建Missingname参数返回错误
 TEST_F(ControlServerTest, EntityCreate_MissingnameParameterReturnerror) {
     auto resp = Dispatch("dsengine_entity_create", R"({"position": [0,0,0]})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：实体创建最小参数创建实体
 TEST_F(ControlServerTest, EntityCreate_MinimalParametersCreateEntity) {
     auto resp = Dispatch("dsengine_entity_create", R"({"name": "TestEntity"})");
     ASSERT_FALSE(resp.is_error) << resp.error_message;
@@ -222,6 +234,7 @@ TEST_F(ControlServerTest, EntityCreate_MinimalParametersCreateEntity) {
     EXPECT_TRUE(world_.registry().valid(entity));
 }
 
+// 测试 控制服务器：实体创建Bringpositiongenerated正确变换
 TEST_F(ControlServerTest, EntityCreate_BringpositiongeneratedCorrectlyTransform) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "PosEntity", "position": [1.0, 2.0, 3.0]})");
@@ -235,6 +248,7 @@ TEST_F(ControlServerTest, EntityCreate_BringpositiongeneratedCorrectlyTransform)
     EXPECT_FLOAT_EQ(t.position.z, 3.0f);
 }
 
+// 测试 控制服务器：实体创建Bringmesh Automatically已添加网格渲染器
 TEST_F(ControlServerTest, EntityCreate_BringmeshAutomaticallyAddedMeshRenderer) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "MeshEntity", "mesh": "assets/cube.dmesh"})");
@@ -246,6 +260,7 @@ TEST_F(ControlServerTest, EntityCreate_BringmeshAutomaticallyAddedMeshRenderer) 
     EXPECT_EQ(mr.mesh_path, "assets/cube.dmesh");
 }
 
+// 测试 控制服务器：实体创建Bringcomponents数组批次Addition
 TEST_F(ControlServerTest, EntityCreate_BringcomponentsArrayBatchAddition) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name": "LightEntity", "components": ["DirectionalLight", "SkyLight"]})");
@@ -258,17 +273,20 @@ TEST_F(ControlServerTest, EntityCreate_BringcomponentsArrayBatchAddition) {
 
 // ─── dsengine_entity_delete ──────────────────────────────────────────────────
 
+// 测试 控制服务器：实体删除Invalidid返回错误
 TEST_F(ControlServerTest, EntityDelete_InvalididReturnserror) {
     auto resp = Dispatch("dsengine_entity_delete", R"({"entity_id": 9999999})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：实体删除缺失实体ID返回错误
 TEST_F(ControlServerTest, EntityDelete_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_delete", "{}");
     EXPECT_TRUE(resp.is_error);
 }
 
+// 测试 控制服务器：实体删除实体Normally
 TEST_F(ControlServerTest, EntityDelete_DeleteEntitiesNormally) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "ToDelete"})");
     ASSERT_FALSE(create.is_error);
@@ -285,12 +303,14 @@ TEST_F(ControlServerTest, EntityDelete_DeleteEntitiesNormally) {
 
 // ─── dsengine_entity_modify ──────────────────────────────────────────────────
 
+// 测试 控制服务器：实体修改Invalidid返回错误
 TEST_F(ControlServerTest, EntityModify_InvalididReturnserror) {
     auto resp = Dispatch("dsengine_entity_modify", R"({"entity_id": 9999999})");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：实体修改Revisename
 TEST_F(ControlServerTest, EntityModify_Revisename) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "OldName"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -305,6 +325,7 @@ TEST_F(ControlServerTest, EntityModify_Revisename) {
     EXPECT_EQ(name_comp.name, "NewName");
 }
 
+// 测试 控制服务器：实体修改Reviseposition更新变换
 TEST_F(ControlServerTest, EntityModify_RevisepositionUpdateTransform) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "MoveMe"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -323,11 +344,13 @@ TEST_F(ControlServerTest, EntityModify_RevisepositionUpdateTransform) {
 
 // ─── dsengine_entity_add_component ──────────────────────────────────────────
 
+// 测试 控制服务器：实体添加组件缺失实体ID返回错误
 TEST_F(ControlServerTest, EntityAddComponent_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_add_component", R"({"type": "Camera3D"})");
     EXPECT_TRUE(resp.is_error);
 }
 
+// 测试 控制服务器：实体添加组件Missingtype返回错误
 TEST_F(ControlServerTest, EntityAddComponent_MissingtypeReturnserror) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "E"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -336,6 +359,7 @@ TEST_F(ControlServerTest, EntityAddComponent_MissingtypeReturnserror) {
     EXPECT_TRUE(resp.is_error);
 }
 
+// 测试 控制服务器：实体添加组件添加到相机3D成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToCamera3DSucceeds) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CamEntity"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -349,6 +373,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToCamera3DSucceeds) {
     EXPECT_TRUE(world_.registry().all_of<Camera3DComponent>(entity));
 }
 
+// 测试 控制服务器：实体添加组件相机3 Dbringproperties
 TEST_F(ControlServerTest, EntityAddComponent_Camera3Dbringproperties) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CamFov"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -365,11 +390,13 @@ TEST_F(ControlServerTest, EntityAddComponent_Camera3Dbringproperties) {
 
 // ─── dsengine_entity_remove_component ────────────────────────────────────────
 
+// 测试 控制服务器：实体移除组件缺失实体ID返回错误
 TEST_F(ControlServerTest, EntityRemoveComponent_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_remove_component", R"({"type": "Camera3D"})");
     EXPECT_TRUE(resp.is_error);
 }
 
+// 测试 控制服务器：实体移除组件移除已存在组件
 TEST_F(ControlServerTest, EntityRemoveComponent_RemoveExistingComponents) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "RemoveTest"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -386,6 +413,7 @@ TEST_F(ControlServerTest, EntityRemoveComponent_RemoveExistingComponents) {
     EXPECT_FALSE(world_.registry().all_of<SkyLightComponent>(entity));
 }
 
+// 测试 控制服务器：实体移除组件非存在组件Returnsremoved假
 TEST_F(ControlServerTest, EntityRemoveComponent_NonExistentComponentReturnsremoved_false) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "NoComp"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -398,11 +426,13 @@ TEST_F(ControlServerTest, EntityRemoveComponent_NonExistentComponentReturnsremov
 
 // ─── dsengine_entity_get_components ─────────────────────────────────────────
 
+// 测试 控制服务器：实体获取组件缺失实体ID返回错误
 TEST_F(ControlServerTest, EntityGetComponents_Missingentity_IdReturnserror) {
     auto resp = Dispatch("dsengine_entity_get_components", "{}");
     EXPECT_TRUE(resp.is_error);
 }
 
+// 测试 控制服务器：实体获取组件新建实体包含变换
 TEST_F(ControlServerTest, EntityGetComponents_TheNewEntityContainsTransform) {
     auto create = Dispatch("dsengine_entity_create", R"({"name": "CompTest"})");
     uint32_t eid = create.result["entity_id"].GetUint();
@@ -428,6 +458,7 @@ TEST_F(ControlServerTest, EntityGetComponents_TheNewEntityContainsTransform) {
 
 // ─── dsengine_scene_get_state ────────────────────────────────────────────────
 
+// 测试 控制服务器：场景获取状态数量的空场景实体为0
 TEST_F(ControlServerTest, SceneGetState_TheNumberOfEmptySceneEntitiesIs0) {
     auto resp = Dispatch("dsengine_scene_get_state");
     ASSERT_FALSE(resp.is_error);
@@ -437,6 +468,7 @@ TEST_F(ControlServerTest, SceneGetState_TheNumberOfEmptySceneEntitiesIs0) {
     EXPECT_STREQ(resp.result["editor_state"].GetString(), "edit");
 }
 
+// 测试 控制服务器：场景获取状态Quantity Increases之后创建实体
 TEST_F(ControlServerTest, SceneGetState_TheQuantityIncreasesAfterCreatingTheEntity) {
     Dispatch("dsengine_entity_create", R"({"name": "A"})");
     Dispatch("dsengine_entity_create", R"({"name": "B"})");
@@ -448,6 +480,7 @@ TEST_F(ControlServerTest, SceneGetState_TheQuantityIncreasesAfterCreatingTheEnti
 
 // ─── dsengine_editor_get_state ───────────────────────────────────────────────
 
+// 测试 控制服务器：编辑器获取状态初始状态Isedit
 TEST_F(ControlServerTest, EditorGetState_TheInitialStateIsedit) {
     auto resp = Dispatch("dsengine_editor_get_state");
     ASSERT_FALSE(resp.is_error);
@@ -457,6 +490,7 @@ TEST_F(ControlServerTest, EditorGetState_TheInitialStateIsedit) {
 
 // ─── dsengine_editor_play / stop ─────────────────────────────────────────────
 
+// 测试 控制服务器：编辑器播放Enterplaymodel
 TEST_F(ControlServerTest, EditorPlay_Enterplaymodel) {
     auto resp = Dispatch("dsengine_editor_play");
     ASSERT_FALSE(resp.is_error) << resp.error_message;
@@ -464,6 +498,7 @@ TEST_F(ControlServerTest, EditorPlay_Enterplaymodel) {
     EXPECT_EQ(dse::editor::GetEditorState(), dse::editor::EditorState::Play);
 }
 
+// 测试 控制服务器：编辑器播放已经Inplay返回错误
 TEST_F(ControlServerTest, EditorPlay_AlreadyInplayReturnserror) {
     Dispatch("dsengine_editor_play");
     auto resp = Dispatch("dsengine_editor_play");
@@ -471,12 +506,14 @@ TEST_F(ControlServerTest, EditorPlay_AlreadyInplayReturnserror) {
     EXPECT_EQ(resp.error_code, -32603);
 }
 
+// 测试 控制服务器：编辑器停止不Hereplay返回错误
 TEST_F(ControlServerTest, EditorStop_NotHereplayReturnserror) {
     auto resp = Dispatch("dsengine_editor_stop");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32603);
 }
 
+// 测试 控制服务器：编辑器停止Fromplay Exit Returnedit
 TEST_F(ControlServerTest, EditorStop_FromplayExitReturnedit) {
     Dispatch("dsengine_editor_play");
     auto resp = Dispatch("dsengine_editor_stop");
@@ -487,12 +524,14 @@ TEST_F(ControlServerTest, EditorStop_FromplayExitReturnedit) {
 
 // ─── dsengine_scene_save ─────────────────────────────────────────────────────
 
+// 测试 控制服务器：场景保存Withoutpath无当前场景Returnederror
 TEST_F(ControlServerTest, SceneSave_WithoutpathNoCurrentSceneReturnederror) {
     auto resp = Dispatch("dsengine_scene_save", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：场景保存Specified路径为Saved成功
 TEST_F(ControlServerTest, SceneSave_TheSpecifiedPathIsSavedSuccessfully) {
     fs::path tmp = fs::temp_directory_path() / "dse_test_scene_save.dscene";
     std::string path_fwd = tmp.string();
@@ -509,12 +548,14 @@ TEST_F(ControlServerTest, SceneSave_TheSpecifiedPathIsSavedSuccessfully) {
 
 // ─── dsengine_scene_load ─────────────────────────────────────────────────────
 
+// 测试 控制服务器：场景加载缺失路径返回错误
 TEST_F(ControlServerTest, SceneLoad_MissingpathReturnserror) {
     auto resp = Dispatch("dsengine_scene_load", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：场景加载文件不存在返回错误
 TEST_F(ControlServerTest, SceneLoad_FileDoesNotExistReturnerror) {
     auto resp = Dispatch("dsengine_scene_load",
         R"({"path": "/nonexistent/scene.dscene"})");
@@ -522,6 +563,7 @@ TEST_F(ControlServerTest, SceneLoad_FileDoesNotExistReturnerror) {
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：场景加载保存然后加载往返
 TEST_F(ControlServerTest, SceneLoad_SaveThenLoadRoundTrip) {
     Dispatch("dsengine_entity_create", R"({"name": "RoundTripEntity"})");
 
@@ -546,6 +588,7 @@ TEST_F(ControlServerTest, SceneLoad_SaveThenLoadRoundTrip) {
 
 // ─── dsengine_editor_screenshot ──────────────────────────────────────────────
 
+// 测试 控制服务器：Screenshot无GPU返回错误
 TEST_F(ControlServerTest, Screenshot_WithoutGPUReturnserror) {
     auto resp = Dispatch("dsengine_editor_screenshot");
     EXPECT_TRUE(resp.is_error);
@@ -554,12 +597,14 @@ TEST_F(ControlServerTest, Screenshot_WithoutGPUReturnserror) {
 
 // ─── dsengine_asset_import ────────────────────────────────────────────────────
 
+// 测试 控制服务器：资源导入缺失路径返回错误
 TEST_F(ControlServerTest, AssetImport_MissingpathReturnserror) {
     auto resp = Dispatch("dsengine_asset_import", "{}");
     EXPECT_TRUE(resp.is_error);
     EXPECT_EQ(resp.error_code, -32602);
 }
 
+// 测试 控制服务器：资源导入无资源管理器返回错误
 TEST_F(ControlServerTest, AssetImport_WithoutAssetManagerReturnserror) {
     auto resp = Dispatch("dsengine_asset_import",
         R"({"path": "assets/tex.png", "type": "texture"})");
@@ -569,6 +614,7 @@ TEST_F(ControlServerTest, AssetImport_WithoutAssetManagerReturnserror) {
 
 // ─── dsengine_material_create ─────────────────────────────────────────────────
 
+// 测试 控制服务器：材质创建Specified路径为Written成功
 TEST_F(ControlServerTest, MaterialCreate_TheSpecifiedPathIsWrittenSuccessfully) {
     auto tmp_path = fs::temp_directory_path() / "dse_test_mat.dmat";
     std::string tmp = tmp_path.generic_string();
@@ -581,6 +627,7 @@ TEST_F(ControlServerTest, MaterialCreate_TheSpecifiedPathIsWrittenSuccessfully) 
     fs::remove(tmp);
 }
 
+// 测试 控制服务器：材质创建Illegal路径返回错误
 TEST_F(ControlServerTest, MaterialCreate_IllegalPathReturnerror) {
     auto resp = Dispatch("dsengine_material_create",
         R"({"name":"x","save_path":"Z:\\nonexistent_dir_xyz\\a\\b\\c.dmat"})");
@@ -590,6 +637,7 @@ TEST_F(ControlServerTest, MaterialCreate_IllegalPathReturnerror) {
 
 // ─── EntityModify rotation / scale ───────────────────────────────────────────
 
+// 测试 控制服务器：实体修改Reviserotation Euler Angles
 TEST_F(ControlServerTest, EntityModify_ReviserotationEulerAngles) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RotTest"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -610,6 +658,7 @@ TEST_F(ControlServerTest, EntityModify_ReviserotationEulerAngles) {
     EXPECT_NEAR(std::abs(euler.x), 30.0f, 1.0f);
 }
 
+// 测试 控制服务器：实体修改Revisescale
 TEST_F(ControlServerTest, EntityModify_Revisescale) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"ScaleTest"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -632,6 +681,7 @@ TEST_F(ControlServerTest, EntityModify_Revisescale) {
 
 // ─── EntityAddComponent DirectionalLight / PointLight ────────────────────────
 
+// 测试 控制服务器：实体添加组件添加到方向光灯光成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToDirectionalLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"DirLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -650,6 +700,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToDirectionalLightSucceeds) {
     EXPECT_NEAR(registry.get<DirectionalLight3DComponent>(entity).intensity, 2.5f, 0.01f);
 }
 
+// 测试 控制服务器：实体添加组件添加到点灯光成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToPointLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"PointLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -670,6 +721,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToPointLightSucceeds) {
     EXPECT_NEAR(pl.radius, 15.0f, 0.01f);
 }
 
+// 测试 控制服务器：实体添加组件添加到聚光灯光成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToSpotLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SpotLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -691,6 +743,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToSpotLightSucceeds) {
     EXPECT_NEAR(sl.outer_cone_angle, 35.0f, 0.01f);
 }
 
+// 测试 控制服务器：实体添加组件添加到刚体3D成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToRigidBody3DSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"RB3DEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -711,6 +764,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToRigidBody3DSucceeds) {
     EXPECT_EQ(rb.type, dse::RigidBody3DType::Dynamic);
 }
 
+// 测试 控制服务器：实体添加组件添加到天空灯光成功
 TEST_F(ControlServerTest, EntityAddComponent_AddToSkyLightSucceeds) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"SkyLightEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -727,6 +781,7 @@ TEST_F(ControlServerTest, EntityAddComponent_AddToSkyLightSucceeds) {
     EXPECT_TRUE(registry.all_of<dse::SkyLightComponent>(entity));
 }
 
+// 测试 控制服务器：实体添加组件相机3D Near远剪辑
 TEST_F(ControlServerTest, EntityAddComponent_Camera3D_NearFarClip) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"CamNearFar"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -748,6 +803,7 @@ TEST_F(ControlServerTest, EntityAddComponent_Camera3D_NearFarClip) {
     EXPECT_FLOAT_EQ(cam.far_clip, 2000.0f);
 }
 
+// 测试 控制服务器：实体添加组件盒碰撞体3D带Props
 TEST_F(ControlServerTest, EntityAddComponent_BoxCollider3D_WithProps) {
     auto create_resp = Dispatch("dsengine_entity_create", R"({"name":"ColliderEnt"})");
     ASSERT_FALSE(create_resp.is_error);
@@ -772,6 +828,7 @@ TEST_F(ControlServerTest, EntityAddComponent_BoxCollider3D_WithProps) {
 
 // ─── Test 57: modify_component 修改 PointLight 属性 ─────────────────────────
 
+// 测试 控制服务器：实体修改组件点灯光
 TEST_F(ControlServerTest, EntityModify_ModifyComponent_PointLight) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"PLEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -795,6 +852,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_PointLight) {
 
 // ─── Test 58: get_components 返回正确组件列表 ────────────────────────────────
 
+// 测试 控制服务器：实体获取组件返回正确列表
 TEST_F(ControlServerTest, EntityGetComponents_ReturnsCorrectList) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"MultiCompEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -829,6 +887,7 @@ TEST_F(ControlServerTest, EntityGetComponents_ReturnsCorrectList) {
 
 // ─── Test 59: remove_component 移除不存在组件不崩溃 ─────────────────────────
 
+// 测试 控制服务器：实体移除组件非存在返回假
 TEST_F(ControlServerTest, EntityRemoveComponent_NonExistent_ReturnsFalse) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"NoCompEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -843,6 +902,7 @@ TEST_F(ControlServerTest, EntityRemoveComponent_NonExistent_ReturnsFalse) {
 
 // ─── Test 60: modify_components 数组批量 patch ─────────────────────────────
 
+// 测试 控制服务器：实体修改组件批次数组
 TEST_F(ControlServerTest, EntityModify_ModifyComponents_BatchArray) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"BatchEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -874,6 +934,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_BatchArray) {
 
 // ─── Test 61: modify_component 修改 AudioSource ──────────────────────────────
 
+// 测试 控制服务器：实体修改组件音频源
 TEST_F(ControlServerTest, EntityModify_ModifyComponent_AudioSource) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"AudioEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -897,6 +958,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_AudioSource) {
 
 // ─── Test 62: modify_component 修改 SpotLight ────────────────────────────────
 
+// 测试 控制服务器：实体修改组件聚光灯光
 TEST_F(ControlServerTest, EntityModify_ModifyComponent_SpotLight) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"SpotEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -921,6 +983,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_SpotLight) {
 
 // ─── Test 63: scene_get_state include_components=false ───────────────────────
 
+// 测试 控制服务器：场景获取状态无组件无组件字段
 TEST_F(ControlServerTest, SceneGetState_WithoutComponents_NoComponentsField) {
     Dispatch("dsengine_entity_create", R"({"name":"StateTestEnt"})");
 
@@ -937,6 +1000,7 @@ TEST_F(ControlServerTest, SceneGetState_WithoutComponents_NoComponentsField) {
 
 // ─── Test 64: entity_create 带 rotation + scale ──────────────────────────────
 
+// 测试 控制服务器：实体创建带Rotation且缩放
 TEST_F(ControlServerTest, EntityCreate_WithRotationAndScale) {
     auto resp = Dispatch("dsengine_entity_create",
         R"({"name":"FullTransform","position":[1,2,3],"rotation":[0,90,0],"scale":[2,2,2]})");
@@ -953,6 +1017,7 @@ TEST_F(ControlServerTest, EntityCreate_WithRotationAndScale) {
 
 // ─── Test 65: delete 后 get_components 返回 invalid entity ──────────────────
 
+// 测试 控制服务器：实体删除然后获取组件返回无效
 TEST_F(ControlServerTest, EntityDelete_ThenGetComponents_ReturnsInvalid) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"WillDie"})");
     ASSERT_FALSE(cr.is_error);
@@ -970,6 +1035,7 @@ TEST_F(ControlServerTest, EntityDelete_ThenGetComponents_ReturnsInvalid) {
 
 // ─── Test 66: modify_component RigidBody3D mass + body_type ──────────────────
 
+// 测试 控制服务器：实体修改组件刚体3D
 TEST_F(ControlServerTest, EntityModify_ModifyComponent_RigidBody3D) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"RBEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -992,6 +1058,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_RigidBody3D) {
 
 // ─── Test 67: add_components 批量带 properties 对象 ──────────────────────────
 
+// 测试 控制服务器：实体修改添加组件带属性
 TEST_F(ControlServerTest, EntityModify_AddComponents_WithProperties) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"AddBatchEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -1014,6 +1081,7 @@ TEST_F(ControlServerTest, EntityModify_AddComponents_WithProperties) {
 
 // ─── Test 68: asset_import 未知扩展名 auto-detect 失败 ───────────────────────
 
+// 测试 控制服务器：资源导入未知Extension返回错误
 TEST_F(ControlServerTest, AssetImport_UnknownExtension_ReturnsError) {
     auto resp = Dispatch("dsengine_asset_import",
         R"({"path":"test_file.xyz"})");
@@ -1023,6 +1091,7 @@ TEST_F(ControlServerTest, AssetImport_UnknownExtension_ReturnsError) {
 
 // ─── Test 69: modify_component 无效组件类型 ─────────────────────────────────
 
+// 测试 控制服务器：实体修改组件无效类型无特效
 TEST_F(ControlServerTest, EntityModify_ModifyComponent_InvalidType_NoEffect) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"NoComp"})");
     ASSERT_FALSE(cr.is_error);
@@ -1040,6 +1109,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponent_InvalidType_NoEffect) {
 
 // ─── Test 70: scene_load 不存在路径 ─────────────────────────────────────────
 
+// 测试 控制服务器：场景加载非存在路径返回错误
 TEST_F(ControlServerTest, SceneLoad_NonExistentPath_ReturnsError) {
     auto resp = Dispatch("dsengine_scene_load",
         R"({"path":"__non_existent_path_12345__.dscene"})");
@@ -1048,6 +1118,7 @@ TEST_F(ControlServerTest, SceneLoad_NonExistentPath_ReturnsError) {
 
 // ─── Test 71: add_component 重复添加同类型 ──────────────────────────────────
 
+// 测试 控制服务器：实体添加组件重复无错误
 TEST_F(ControlServerTest, EntityAddComponent_Duplicate_NoError) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"DupTest"})");
     ASSERT_FALSE(cr.is_error);
@@ -1065,6 +1136,7 @@ TEST_F(ControlServerTest, EntityAddComponent_Duplicate_NoError) {
 
 // ─── Test 72: entity_modify 无效 entity_id ──────────────────────────────────
 
+// 测试 控制服务器：实体修改无效实体ID返回错误
 TEST_F(ControlServerTest, EntityModify_InvalidEntityId_ReturnsError) {
     auto resp = Dispatch("dsengine_entity_modify",
         R"({"entity_id":99999,"name":"Ghost"})");
@@ -1074,6 +1146,7 @@ TEST_F(ControlServerTest, EntityModify_InvalidEntityId_ReturnsError) {
 
 // ─── Test 73: material_create 基本调用 ──────────────────────────────────────
 
+// 测试 控制服务器：材质创建基础
 TEST_F(ControlServerTest, MaterialCreate_Basic) {
     auto resp = Dispatch("dsengine_material_create",
         R"({"name":"test_mat_new","shader_variant":"MESH_PBR","base_color":[1,1,1,1]})");
@@ -1083,6 +1156,7 @@ TEST_F(ControlServerTest, MaterialCreate_Basic) {
 
 // ─── Test 74: scene_get_state include_components=true 有 components 字段 ───
 
+// 测试 控制服务器：场景获取状态带组件拥有组件字段
 TEST_F(ControlServerTest, SceneGetState_WithComponents_HasComponentsField) {
     Dispatch("dsengine_entity_create", R"({"name":"CompEnt"})");
 
@@ -1098,6 +1172,7 @@ TEST_F(ControlServerTest, SceneGetState_WithComponents_HasComponentsField) {
 
 // ─── Test 75: modify_components 三组件批量（PointLight + SpotLight + AudioSource）────
 
+// 测试 控制服务器：实体修改组件三类型
 TEST_F(ControlServerTest, EntityModify_ModifyComponents_ThreeTypes) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"ThreeCompEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -1134,6 +1209,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_ThreeTypes) {
 
 // ─── Test 76: modify_components 部分命中（数组中含未挂载类型 → 只更新存在的，不报错）────
 
+// 测试 控制服务器：实体修改组件Partial命中
 TEST_F(ControlServerTest, EntityModify_ModifyComponents_PartialHit) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"PartialHitEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -1160,6 +1236,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_PartialHit) {
 
 // ─── Test 77: modify_components 空数组 → no-op，不报错 ─────────────────────────
 
+// 测试 控制服务器：实体修改组件空数组无操作
 TEST_F(ControlServerTest, EntityModify_ModifyComponents_EmptyArray_NoOp) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"EmptyBatchEnt"})");
     ASSERT_FALSE(cr.is_error);
@@ -1172,6 +1249,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_EmptyArray_NoOp) {
 
 // ─── Test 78: name + modify_components 并存 ────────────────────────────────────
 
+// 测试 控制服务器：实体修改组件带顶部级别名称
 TEST_F(ControlServerTest, EntityModify_ModifyComponents_WithTopLevelName) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"OrigName"})");
     ASSERT_FALSE(cr.is_error);
@@ -1197,6 +1275,7 @@ TEST_F(ControlServerTest, EntityModify_ModifyComponents_WithTopLevelName) {
 
 // ─── Test 79: entity_get_state 返回 transform + 组件详情 ─────────────────────
 
+// 测试 控制服务器：实体获取状态返回变换且组件
 TEST_F(ControlServerTest, EntityGetState_ReturnsTransformAndComponents) {
     auto cr = Dispatch("dsengine_entity_create",
         R"({"name":"StateEnt","position":[1.0,2.0,3.0],"components":["PointLight"]})");
@@ -1219,6 +1298,7 @@ TEST_F(ControlServerTest, EntityGetState_ReturnsTransformAndComponents) {
 
 // ─── Test 80: entity_get_state 对无效 entity_id 报错 ──────────────────────────
 
+// 测试 控制服务器：实体获取状态无效ID返回错误
 TEST_F(ControlServerTest, EntityGetState_InvalidId_ReturnsError) {
     auto resp = Dispatch("dsengine_entity_get_state", R"({"entity_id":99999})");
     EXPECT_TRUE(resp.is_error);
@@ -1226,6 +1306,7 @@ TEST_F(ControlServerTest, EntityGetState_InvalidId_ReturnsError) {
 
 // ─── Test 81: entity_duplicate 复制实体含组件 ────────────────────────────────
 
+// 测试 控制服务器：实体重复Copies名称且组件
 TEST_F(ControlServerTest, EntityDuplicate_CopiesNameAndComponents) {
     auto cr = Dispatch("dsengine_entity_create",
         R"({"name":"Original","components":["PointLight"]})");
@@ -1248,6 +1329,7 @@ TEST_F(ControlServerTest, EntityDuplicate_CopiesNameAndComponents) {
 
 // ─── Test 82: entity_duplicate 对无效 id 报错 ────────────────────────────────
 
+// 测试 控制服务器：实体重复无效ID返回错误
 TEST_F(ControlServerTest, EntityDuplicate_InvalidId_ReturnsError) {
     auto resp = Dispatch("dsengine_entity_duplicate", R"({"entity_id":99999})");
     EXPECT_TRUE(resp.is_error);
@@ -1255,6 +1337,7 @@ TEST_F(ControlServerTest, EntityDuplicate_InvalidId_ReturnsError) {
 
 // ─── Test 83: prefab_save + prefab_instantiate 往返 ──────────────────────────
 
+// 测试 控制服务器：预制体保存且Instantiate往返
 TEST_F(ControlServerTest, PrefabSaveAndInstantiate_RoundTrip) {
     auto cr = Dispatch("dsengine_entity_create",
         R"({"name":"PrefabSrc","mesh":"cube.obj"})");
@@ -1287,6 +1370,7 @@ TEST_F(ControlServerTest, PrefabSaveAndInstantiate_RoundTrip) {
 
 // ─── Test 84: scene_new 清空所有实体 ─────────────────────────────────────────
 
+// 测试 控制服务器：场景新建清空全部实体
 TEST_F(ControlServerTest, SceneNew_ClearsAllEntities) {
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"Ent1"})");
     ASSERT_FALSE(cr.is_error);
@@ -1308,6 +1392,7 @@ TEST_F(ControlServerTest, SceneNew_ClearsAllEntities) {
 
 // ─── Test 85: entity_reparent 设置父节点 ─────────────────────────────────────
 
+// 测试 控制服务器：实体重设父级设置父组件
 TEST_F(ControlServerTest, EntityReparent_SetsParentComponent) {
     auto pr = Dispatch("dsengine_entity_create", R"({"name":"Parent"})");
     ASSERT_FALSE(pr.is_error);
@@ -1331,6 +1416,7 @@ TEST_F(ControlServerTest, EntityReparent_SetsParentComponent) {
 
 // ─── Test 86: entity_reparent 用 0xFFFFFFFF 解除父节点 ───────────────────────
 
+// 测试 控制服务器：实体重设父级Detach带最大Uint
 TEST_F(ControlServerTest, EntityReparent_DetachWithMaxUint) {
     auto pr = Dispatch("dsengine_entity_create", R"({"name":"Parent"})");
     uint32_t parent_id = pr.result["entity_id"].GetUint();
@@ -1356,6 +1442,7 @@ TEST_F(ControlServerTest, EntityReparent_DetachWithMaxUint) {
 
 // ─── Test 87: entity_reparent 循环检测报错 ───────────────────────────────────
 
+// 测试 控制服务器：实体重设父级环形父返回错误
 TEST_F(ControlServerTest, EntityReparent_CircularParent_ReturnsError) {
     auto ar = Dispatch("dsengine_entity_create", R"({"name":"A"})");
     uint32_t a_id = ar.result["entity_id"].GetUint();
@@ -1376,6 +1463,7 @@ TEST_F(ControlServerTest, EntityReparent_CircularParent_ReturnsError) {
 
 // ─── Test 88: selection_get 空选择返回 count=0 ───────────────────────────────
 
+// 测试 控制服务器：选择获取空返回零
 TEST_F(ControlServerTest, SelectionGet_EmptyReturnsZero) {
     Dispatch("dsengine_selection_clear", "{}");
     auto resp = Dispatch("dsengine_selection_get", "{}");
@@ -1388,6 +1476,7 @@ TEST_F(ControlServerTest, SelectionGet_EmptyReturnsZero) {
 
 // ─── Test 89: selection_set 批量设置选择 ─────────────────────────────────────
 
+// 测试 控制服务器：选择设置多个实体
 TEST_F(ControlServerTest, SelectionSet_SetsMultipleEntities) {
     auto r1 = Dispatch("dsengine_entity_create", R"({"name":"Sel1"})");
     auto r2 = Dispatch("dsengine_entity_create", R"({"name":"Sel2"})");
@@ -1410,6 +1499,7 @@ TEST_F(ControlServerTest, SelectionSet_SetsMultipleEntities) {
 
 // ─── Test 90: selection_set 过滤无效 entity_id ───────────────────────────────
 
+// 测试 控制服务器：选择设置Filters无效ID
 TEST_F(ControlServerTest, SelectionSet_FiltersInvalidIds) {
     auto r = Dispatch("dsengine_entity_create", R"({"name":"Valid"})");
     uint32_t valid_id = r.result["entity_id"].GetUint();
@@ -1423,6 +1513,7 @@ TEST_F(ControlServerTest, SelectionSet_FiltersInvalidIds) {
 
 // ─── Test 91: selection_clear 清空选择 ───────────────────────────────────────
 
+// 测试 控制服务器：选择清空选择
 TEST_F(ControlServerTest, SelectionClear_ClearsSelection) {
     auto r = Dispatch("dsengine_entity_create", R"({"name":"ToDeselect"})");
     uint32_t id = r.result["entity_id"].GetUint();
@@ -1439,6 +1530,7 @@ TEST_F(ControlServerTest, SelectionClear_ClearsSelection) {
 
 // ─── Test 92: entity_batch_delete 批量删除多个实体 ────────────────────────────
 
+// 测试 控制服务器：实体批次删除Deletes多个
 TEST_F(ControlServerTest, EntityBatchDelete_DeletesMultiple) {
     auto r1 = Dispatch("dsengine_entity_create", R"({"name":"BatchA"})");
     auto r2 = Dispatch("dsengine_entity_create", R"({"name":"BatchB"})");
@@ -1462,6 +1554,7 @@ TEST_F(ControlServerTest, EntityBatchDelete_DeletesMultiple) {
 
 // ─── Test 93: entity_batch_delete 过滤无效 id ────────────────────────────────
 
+// 测试 控制服务器：实体批次删除Filters无效ID
 TEST_F(ControlServerTest, EntityBatchDelete_FiltersInvalidIds) {
     auto r = Dispatch("dsengine_entity_create", R"({"name":"OnlyOne"})");
     uint32_t valid_id = r.result["entity_id"].GetUint();
@@ -1476,6 +1569,7 @@ TEST_F(ControlServerTest, EntityBatchDelete_FiltersInvalidIds) {
 
 // ─── Test 94: entity_batch_delete Undo 恢复所有实体 ──────────────────────────
 
+// 测试 控制服务器：实体批次删除撤销恢复实体
 TEST_F(ControlServerTest, EntityBatchDelete_UndoRestoresEntities) {
     auto r1 = Dispatch("dsengine_entity_create", R"({"name":"UndoA"})");
     auto r2 = Dispatch("dsengine_entity_create", R"({"name":"UndoB"})");
@@ -1494,6 +1588,7 @@ TEST_F(ControlServerTest, EntityBatchDelete_UndoRestoresEntities) {
 
 // ─── Test 95: undo_history 空栈时 can_undo=false ──────────────────────────────
 
+// 测试 控制服务器：撤销历史空栈
 TEST_F(ControlServerTest, UndoHistory_EmptyStack) {
     Dispatch("dsengine_scene_new", "{}");  // clears undo stack
     auto resp = Dispatch("dsengine_undo_history", "{}");
@@ -1508,6 +1603,7 @@ TEST_F(ControlServerTest, UndoHistory_EmptyStack) {
 
 // ─── Test 96: undo_history 创建实体后 can_undo=true ──────────────────────────
 
+// 测试 控制服务器：撤销历史之后创建能够撤销
 TEST_F(ControlServerTest, UndoHistory_AfterCreate_CanUndo) {
     Dispatch("dsengine_scene_new", "{}");
     Dispatch("dsengine_entity_create", R"({"name":"H1"})");
@@ -1523,6 +1619,7 @@ TEST_F(ControlServerTest, UndoHistory_AfterCreate_CanUndo) {
 
 // ─── Test 97: undo 后 can_redo=true，redo_description 非空 ──────────────────
 
+// 测试 控制服务器：撤销历史之后撤销能够重做
 TEST_F(ControlServerTest, UndoHistory_AfterUndo_CanRedo) {
     Dispatch("dsengine_scene_new", "{}");
     Dispatch("dsengine_entity_create", R"({"name":"RedoMe"})");
@@ -1537,6 +1634,7 @@ TEST_F(ControlServerTest, UndoHistory_AfterUndo_CanRedo) {
 
 // ─── Test 98: entity_find_by_name 精确匹配 ────────────────────────────────────
 
+// 测试 控制服务器：实体查找按名称Exact匹配
 TEST_F(ControlServerTest, EntityFindByName_ExactMatch) {
     Dispatch("dsengine_scene_new", "{}");
     Dispatch("dsengine_entity_create", R"({"name":"UniqueAlpha"})");
@@ -1550,6 +1648,7 @@ TEST_F(ControlServerTest, EntityFindByName_ExactMatch) {
 
 // ─── Test 99: entity_find_by_name 部分匹配 ────────────────────────────────────
 
+// 测试 控制服务器：实体查找按名称Partial匹配
 TEST_F(ControlServerTest, EntityFindByName_PartialMatch) {
     Dispatch("dsengine_scene_new", "{}");
     Dispatch("dsengine_entity_create", R"({"name":"TreeA"})");
@@ -1565,6 +1664,7 @@ TEST_F(ControlServerTest, EntityFindByName_PartialMatch) {
 
 // ─── Test 100: entity_find_by_name 未找到时 count=0 entity_id=null ───────────
 
+// 测试 控制服务器：实体查找按名称无匹配
 TEST_F(ControlServerTest, EntityFindByName_NoMatch) {
     auto resp = Dispatch("dsengine_entity_find_by_name",
         R"({"name":"__nonexistent_xyz__"})");
@@ -1575,6 +1675,7 @@ TEST_F(ControlServerTest, EntityFindByName_NoMatch) {
 
 // ─── Test 101: entity_modify rename 支持 Undo ─────────────────────────────────
 
+// 测试 控制服务器：实体修改Rename撤销
 TEST_F(ControlServerTest, EntityModify_RenameUndo) {
     Dispatch("dsengine_scene_new", "{}");
     auto cr = Dispatch("dsengine_entity_create", R"({"name":"OrigName"})");

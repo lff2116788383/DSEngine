@@ -12,6 +12,7 @@ using namespace dse::platform;
 // 生命周期测试
 // ============================================================
 
+// 测试 平台应用：Withoutmodel初始化成功
 TEST(PlatformAppTest, WithoutmodelInitSucceeds) {
     auto app = CreateDefaultPlatformApp();
     ASSERT_NE(app, nullptr);
@@ -30,6 +31,7 @@ TEST(PlatformAppTest, WithoutmodelInitSucceeds) {
     }
 }
 
+// 测试 平台应用：关闭不崩溃
 TEST(PlatformAppTest, ShutdownDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -46,6 +48,7 @@ TEST(PlatformAppTest, ShutdownDoesNotCrash) {
     }
 }
 
+// 测试 平台应用：Initpost默认Should关闭返回false
 TEST(PlatformAppTest, InitpostDefaultShouldCloseReturnsfalse) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -64,6 +67,7 @@ TEST(PlatformAppTest, InitpostDefaultShouldCloseReturnsfalse) {
 // 窗口信息测试
 // ============================================================
 
+// 测试 平台应用：获取Framebuffer尺寸返回配置尺寸
 TEST(PlatformAppTest, GetFramebufferSizeReturnConfigurationSize) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -83,6 +87,7 @@ TEST(PlatformAppTest, GetFramebufferSizeReturnConfigurationSize) {
     app->Shutdown();
 }
 
+// 测试 平台应用：设置窗口标题修改标题
 TEST(PlatformAppTest, SetWindowTitleModifyTitle) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -99,6 +104,7 @@ TEST(PlatformAppTest, SetWindowTitleModifyTitle) {
     app->Shutdown();
 }
 
+// 测试 平台应用：Request Closemake Should关闭返回true
 TEST(PlatformAppTest, RequestClosemakeShouldCloseReturnstrue) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -119,6 +125,7 @@ TEST(PlatformAppTest, RequestClosemakeShouldCloseReturnstrue) {
 // 平台桥接测试
 // ============================================================
 
+// 测试 平台应用：Withoutmodel拥有GL上下文返回false
 TEST(PlatformAppTest, WithoutmodelHasGLContextReturnsfalse) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -133,6 +140,7 @@ TEST(PlatformAppTest, WithoutmodelHasGLContextReturnsfalse) {
     app->Shutdown();
 }
 
+// 测试 平台应用：获取Native窗口句柄返回非空
 TEST(PlatformAppTest, GetNativeWindowHandleReturnNonEmpty) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -152,6 +160,7 @@ TEST(PlatformAppTest, GetNativeWindowHandleReturnNonEmpty) {
 // 输入回调测试
 // ============================================================
 
+// 测试 平台应用：设置上不崩溃
 TEST(PlatformAppTest, SetUpDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -181,6 +190,7 @@ TEST(PlatformAppTest, SetUpDoesNotCrash) {
 // 时间函数测试
 // ============================================================
 
+// 测试 平台应用：获取时间返回非负值
 TEST(PlatformAppTest, GetTimeReturnANonNegativeValue) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -200,6 +210,7 @@ TEST(PlatformAppTest, GetTimeReturnANonNegativeValue) {
 // 主循环驱动测试
 // ============================================================
 
+// 测试 平台应用：Poll事件不崩溃
 TEST(PlatformAppTest, PollEventsDoesNotCrash) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;
@@ -215,6 +226,7 @@ TEST(PlatformAppTest, PollEventsDoesNotCrash) {
     app->Shutdown();
 }
 
+// 测试 平台应用：Swap缓冲区无Graphics模式Crashes
 TEST(PlatformAppTest, SwapBuffersNoGraphicsModeCrashes) {
     auto app = CreateDefaultPlatformApp();
     WindowConfig config;

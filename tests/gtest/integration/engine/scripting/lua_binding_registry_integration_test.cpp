@@ -37,6 +37,7 @@ protected:
     World world;
 };
 
+// 测试 Lua绑定注册表集成：注册基Lua且
 TEST_F(LuaBindingRegistryIntegrationTest, RegisterBaseLuaAnd) {
     LuaRegistryTempScript startup("dse_lua_registry_startup.lua", R"(
         function Awake() end
@@ -76,6 +77,7 @@ TEST_F(LuaBindingRegistryIntegrationTest, RegisterBaseLuaAnd) {
         "function,function,function,function,function,function");
 }
 
+// 测试 Lua绑定注册表集成：缺失能够导航不基API
 TEST_F(LuaBindingRegistryIntegrationTest, MissingCanNavNotBaseAPI) {
     LuaRegistryTempScript startup("dse_lua_registry_nav_startup.lua", R"(
         function Awake() end

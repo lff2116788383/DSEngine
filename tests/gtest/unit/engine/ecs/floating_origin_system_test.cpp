@@ -52,15 +52,18 @@ protected:
     std::unique_ptr<FloatingOriginSystem> system_;
 };
 
+// 测试 浮动原点：默认为5000
 TEST_F(FloatingOriginTest, DefaultIs5000) {
     EXPECT_FLOAT_EQ(system_->rebase_threshold(), 5000.0f);
 }
 
+// 测试 浮动原点：可设置上
 TEST_F(FloatingOriginTest, CansetUp) {
     system_->set_rebase_threshold(100.0f);
     EXPECT_FLOAT_EQ(system_->rebase_threshold(), 100.0f);
 }
 
+// 测试 浮动原点：Pointis零
 TEST_F(FloatingOriginTest, PointisZero) {
     auto origin = system_->accumulated_origin();
     EXPECT_DOUBLE_EQ(origin.x, 0.0);
@@ -68,6 +71,7 @@ TEST_F(FloatingOriginTest, PointisZero) {
     EXPECT_DOUBLE_EQ(origin.z, 0.0);
 }
 
+// 测试 浮动原点：存在内部不触发变基
 TEST_F(FloatingOriginTest, ExistInsideDoesNotTriggerRebase) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -89,6 +93,7 @@ TEST_F(FloatingOriginTest, ExistInsideDoesNotTriggerRebase) {
     }
 }
 
+// 测试 浮动原点：触发变基带变换
 TEST_F(FloatingOriginTest, TriggersRebaseWithTransform) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -104,6 +109,7 @@ TEST_F(FloatingOriginTest, TriggersRebaseWithTransform) {
     EXPECT_NEAR(tf.position.z, 100.0f, 0.01f);
 }
 
+// 测试 浮动原点：变基重置相机位置到零
 TEST_F(FloatingOriginTest, RebaseResetCameraPositionToZero) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -116,6 +122,7 @@ TEST_F(FloatingOriginTest, RebaseResetCameraPositionToZero) {
     EXPECT_NEAR(tf.position.x, 0.0f, 0.01f);
 }
 
+// 测试 浮动原点：变基后期Accumulation原点为正确
 TEST_F(FloatingOriginTest, RebaseThePostAccumulationOriginIsCorrect) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -130,6 +137,7 @@ TEST_F(FloatingOriginTest, RebaseThePostAccumulationOriginIsCorrect) {
     EXPECT_NEAR(origin.z, 0.0, 0.01);
 }
 
+// 测试 浮动原点：多次数变基正确
 TEST_F(FloatingOriginTest, MultiTimesRebaseCorrect) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -144,6 +152,7 @@ TEST_F(FloatingOriginTest, MultiTimesRebaseCorrect) {
     EXPECT_NEAR(origin.x, 500.0, 0.01);
 }
 
+// 测试 浮动原点：无当不触发变基
 TEST_F(FloatingOriginTest, WithoutWhenDoesNotTriggerRebase) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -158,6 +167,7 @@ TEST_F(FloatingOriginTest, WithoutWhenDoesNotTriggerRebase) {
     EXPECT_DOUBLE_EQ(origin.x, 0.0);
 }
 
+// 测试 浮动原点：禁用不且
 TEST_F(FloatingOriginTest, DisabledNotAnd) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -171,6 +181,7 @@ TEST_F(FloatingOriginTest, DisabledNotAnd) {
     EXPECT_FLOAT_EQ(tf.position.x, 50.0f);
 }
 
+// 测试 浮动原点：Prioritypriority
 TEST_F(FloatingOriginTest, Prioritypriority) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -184,6 +195,7 @@ TEST_F(FloatingOriginTest, Prioritypriority) {
     EXPECT_NEAR(origin.x, 200.0, 0.01);
 }
 
+// 测试 浮动原点：到绝对转换本地坐标到绝对坐标
 TEST_F(FloatingOriginTest, ToAbsoluteConvertLocalCoordinatesToAbsoluteCoordinates) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -194,6 +206,7 @@ TEST_F(FloatingOriginTest, ToAbsoluteConvertLocalCoordinatesToAbsoluteCoordinate
     EXPECT_NEAR(abs.x, 250.0, 0.01);
 }
 
+// 测试 浮动原点：到本地转换绝对坐标到本地坐标
 TEST_F(FloatingOriginTest, ToLocalConvertAbsoluteCoordinatesToLocalCoordinates) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -204,6 +217,7 @@ TEST_F(FloatingOriginTest, ToLocalConvertAbsoluteCoordinatesToLocalCoordinates) 
     EXPECT_NEAR(local.x, 50.0f, 0.01f);
 }
 
+// 测试 浮动原点：变基之后Transformmarkdirty
 TEST_F(FloatingOriginTest, RebaseAfterTransformmarkdirty) {
     World world;
     system_->set_rebase_threshold(100.0f);
@@ -217,6 +231,7 @@ TEST_F(FloatingOriginTest, RebaseAfterTransformmarkdirty) {
     EXPECT_TRUE(world.registry().get<TransformComponent>(e).dirty);
 }
 
+// 测试 浮动原点：事件总线广播原点Rebased事件
 TEST_F(FloatingOriginTest, EventBusBroadcastsOriginRebasedEvent) {
     World world;
     core::EventBus bus;

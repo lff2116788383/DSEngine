@@ -66,6 +66,7 @@ protected:
     }
 };
 
+// 测试 断裂系统集成：模型无不崩溃
 TEST_F(FractureSystemIntegrationTest, Model_WithoutDoesNotCrash) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -79,6 +80,7 @@ TEST_F(FractureSystemIntegrationTest, Model_WithoutDoesNotCrash) {
     EXPECT_NO_THROW(system.Update(world, 0.016f));
 }
 
+// 测试 断裂系统集成：当Voronoi生成实体
 TEST_F(FractureSystemIntegrationTest, WhenVoronoi_GenerateEntity) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -112,6 +114,7 @@ TEST_F(FractureSystemIntegrationTest, WhenVoronoi_GenerateEntity) {
     }
 }
 
+// 测试 断裂系统集成：当Voronoi组件
 TEST_F(FractureSystemIntegrationTest, WhenVoronoiComponent) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -142,6 +145,7 @@ TEST_F(FractureSystemIntegrationTest, WhenVoronoiComponent) {
     }
 }
 
+// 测试 断裂系统集成：Aftermesh
 TEST_F(FractureSystemIntegrationTest, Aftermesh) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -157,6 +161,7 @@ TEST_F(FractureSystemIntegrationTest, Aftermesh) {
     EXPECT_FALSE(mr.visible) << "碎裂后原始 mesh 应隐藏";
 }
 
+// 测试 断裂系统集成：无效
 TEST_F(FractureSystemIntegrationTest, Invalid) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -186,6 +191,7 @@ TEST_F(FractureSystemIntegrationTest, Invalid) {
     EXPECT_EQ(count_after_first, count_after_second) << "重复碎裂不应生成新碎片";
 }
 
+// 测试 断裂系统集成：Apply伤害Cumulative触发
 TEST_F(FractureSystemIntegrationTest, ApplyDamageDamageCumulativeTrigger) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;
@@ -208,6 +214,7 @@ TEST_F(FractureSystemIntegrationTest, ApplyDamageDamageCumulativeTrigger) {
     EXPECT_TRUE(world.registry().get<FractureComponent>(e).is_fractured);
 }
 
+// 测试 断裂系统集成：生命周期销毁
 TEST_F(FractureSystemIntegrationTest, Lifecycle_Destroy) {
     auto e = CreateDestructibleEntity();
     FractureComponent fc;

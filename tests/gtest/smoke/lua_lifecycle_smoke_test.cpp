@@ -47,6 +47,7 @@ protected:
     }
 };
 
+// 测试 Lua生命周期冒烟：情形50连续帧滴答无泄漏
 TEST_F(LuaLifecycleSmokeTest, Case50ContinuousFramesTickNoLeak) {
     LuaTempFile script("lifecycle_50f.lua", R"(
         local frame = 0
@@ -78,6 +79,7 @@ TEST_F(LuaLifecycleSmokeTest, Case50ContinuousFramesTickNoLeak) {
     EXPECT_EQ(GetLuaMemoryUsage(), 0u);
 }
 
+// 测试 Lua生命周期冒烟：创建实体多帧稳定
 TEST_F(LuaLifecycleSmokeTest, CreateEntityMultiFrameStable) {
     LuaTempFile script("lifecycle_spawn.lua", R"(
         local spawned = 0
@@ -112,6 +114,7 @@ TEST_F(LuaLifecycleSmokeTest, CreateEntityMultiFrameStable) {
     ShutdownLuaRuntime();
 }
 
+// 测试 Lua生命周期冒烟：语法错误不崩溃
 TEST_F(LuaLifecycleSmokeTest, SyntaxErrorDoesNotCrash) {
     LuaTempFile script("lifecycle_error.lua", R"(
         function Awake()

@@ -17,6 +17,7 @@ using namespace dse::runtime;
 
 class RuntimeUpdateGraphIntegrationTest : public ::testing::Test {};
 
+// 测试 运行时更新图集成：运行时上下文默认值
 TEST_F(RuntimeUpdateGraphIntegrationTest, RuntimeContextDefaults) {
     RuntimeContext ctx;
     EXPECT_EQ(ctx.world, nullptr);
@@ -28,6 +29,7 @@ TEST_F(RuntimeUpdateGraphIntegrationTest, RuntimeContextDefaults) {
     EXPECT_EQ(ctx.audio_system, nullptr);
 }
 
+// 测试 运行时更新图集成：运行时上下文回调
 TEST_F(RuntimeUpdateGraphIntegrationTest, RuntimeContextCallbacks) {
     RuntimeContext ctx;
     std::string title;

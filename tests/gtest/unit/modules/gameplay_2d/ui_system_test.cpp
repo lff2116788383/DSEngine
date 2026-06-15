@@ -25,6 +25,7 @@ using namespace dse::gameplay2d;
 // UIAnchorData / GridLayoutData / CanvasScalerData 默认值
 // ============================================================
 
+// 测试 UI锚点数据：默认值
 TEST(UIAnchorDataTest, DefaultValues) {
     UIAnchorData a;
     EXPECT_EQ(a.anchor, UIAnchor::MiddleCenter);
@@ -34,6 +35,7 @@ TEST(UIAnchorDataTest, DefaultValues) {
     EXPECT_FLOAT_EQ(a.size.y, 100.0f);
 }
 
+// 测试 网格布局数据：默认值
 TEST(GridLayoutDataTest, DefaultValues) {
     GridLayoutData g;
     EXPECT_EQ(g.columns, 1);
@@ -45,6 +47,7 @@ TEST(GridLayoutDataTest, DefaultValues) {
     EXPECT_EQ(g.alignment, GridLayoutAlignment::UpperLeft);
 }
 
+// 测试 画布缩放器数据：默认值
 TEST(CanvasScalerDataTest, DefaultValues) {
     CanvasScalerData cs;
     EXPECT_FLOAT_EQ(cs.reference_resolution.x, 1920.0f);
@@ -59,6 +62,7 @@ TEST(CanvasScalerDataTest, DefaultValues) {
 // UIButtonComponent / UIPanelComponent 默认值
 // ============================================================
 
+// 测试 UI按钮组件：默认值
 TEST(UIButtonComponentTest, DefaultValues) {
     UIButtonComponent btn;
     EXPECT_FLOAT_EQ(btn.normal_color.r, 1.0f);
@@ -66,6 +70,7 @@ TEST(UIButtonComponentTest, DefaultValues) {
     EXPECT_FLOAT_EQ(btn.pressed_color.r, 0.8f);
 }
 
+// 测试 UI面板组件：默认值
 TEST(UIPanelComponentTest, DefaultValues) {
     UIPanelComponent panel;
     EXPECT_FALSE(panel.blocks_input);
@@ -75,6 +80,7 @@ TEST(UIPanelComponentTest, DefaultValues) {
 // UILayoutSystem::CalculateScaleFactor
 // ============================================================
 
+// 测试 UI布局系统：缩放因子相同分辨率
 TEST(UILayoutSystemTest, ScaleFactor_SameResolution) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -83,6 +89,7 @@ TEST(UILayoutSystemTest, ScaleFactor_SameResolution) {
     EXPECT_NEAR(sf, 1.0f, 0.01f);
 }
 
+// 测试 UI布局系统：缩放因子半分辨率
 TEST(UILayoutSystemTest, ScaleFactor_HalfResolution) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -91,6 +98,7 @@ TEST(UILayoutSystemTest, ScaleFactor_HalfResolution) {
     EXPECT_NEAR(sf, 0.5f, 0.01f);
 }
 
+// 测试 UI布局系统：缩放因子Double分辨率
 TEST(UILayoutSystemTest, ScaleFactor_DoubleResolution) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -102,6 +110,7 @@ TEST(UILayoutSystemTest, ScaleFactor_DoubleResolution) {
 // ---- match 0..1 权重（Unity 式宽高匹配） ----
 
 // 非等比分辨率下：match=0 应只跟宽度比，match=1 只跟高度比，match=0.5 取均值。
+// 测试 UI布局系统：缩放因子匹配宽度仅
 TEST(UILayoutSystemTest, ScaleFactor_MatchWidthOnly) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -112,6 +121,7 @@ TEST(UILayoutSystemTest, ScaleFactor_MatchWidthOnly) {
     EXPECT_NEAR(sf, 2.0f, 0.001f);
 }
 
+// 测试 UI布局系统：缩放因子匹配高度仅
 TEST(UILayoutSystemTest, ScaleFactor_MatchHeightOnly) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -121,6 +131,7 @@ TEST(UILayoutSystemTest, ScaleFactor_MatchHeightOnly) {
     EXPECT_NEAR(sf, 1.0f, 0.001f);
 }
 
+// 测试 UI布局系统：缩放因子匹配半Equals Old Average
 TEST(UILayoutSystemTest, ScaleFactor_MatchHalf_EqualsOldAverage) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -130,6 +141,7 @@ TEST(UILayoutSystemTest, ScaleFactor_MatchHalf_EqualsOldAverage) {
     EXPECT_NEAR(sf, 1.5f, 0.001f);
 }
 
+// 测试 UI布局系统：缩放因子匹配钳制输出的范围
 TEST(UILayoutSystemTest, ScaleFactor_MatchClampedOutOfRange) {
     UILayoutSystem layout;
     CanvasScalerData cs;
@@ -141,6 +153,7 @@ TEST(UILayoutSystemTest, ScaleFactor_MatchClampedOutOfRange) {
 
 // ---- 像素吸附 SnapToPixel ----
 
+// 测试 UI布局系统：Snap到Pixel Rounds到最近Integer
 TEST(UILayoutSystemTest, SnapToPixel_RoundsToNearestInteger) {
     EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(10.4f, 20.6f)).x, 10.0f);
     EXPECT_FLOAT_EQ(SnapToPixel(glm::vec2(10.4f, 20.6f)).y, 21.0f);
@@ -154,6 +167,7 @@ TEST(UILayoutSystemTest, SnapToPixel_RoundsToNearestInteger) {
 // UILayoutSystem::CalculateAnchorPosition
 // ============================================================
 
+// 测试 UI布局系统：锚点顶部Left
 TEST(UILayoutSystemTest, Anchor_TopLeft) {
     UILayoutSystem layout;
     UIAnchorData a;
@@ -165,6 +179,7 @@ TEST(UILayoutSystemTest, Anchor_TopLeft) {
     EXPECT_LT(pos.y, 100.0f);
 }
 
+// 测试 UI布局系统：锚点Middle中心
 TEST(UILayoutSystemTest, Anchor_MiddleCenter) {
     UILayoutSystem layout;
     UIAnchorData a;
@@ -176,6 +191,7 @@ TEST(UILayoutSystemTest, Anchor_MiddleCenter) {
     EXPECT_NEAR(pos.y, 540.0f, 10.0f);
 }
 
+// 测试 UI布局系统：锚点Bottom Right
 TEST(UILayoutSystemTest, Anchor_BottomRight) {
     UILayoutSystem layout;
     UIAnchorData a;
@@ -191,17 +207,20 @@ TEST(UILayoutSystemTest, Anchor_BottomRight) {
 // UISystem empty registry
 // ============================================================
 
+// 测试 UI系统：默认构造安全
 TEST(UISystemTest, DefaultConstructSafe) {
     UISystem sys;
     (void)sys;
 }
 
+// 测试 UI系统：空注册表无崩溃
 TEST(UISystemTest, EmptyRegistryNoCrash) {
     UISystem sys;
     entt::registry reg;
     sys.Update(reg, 1.0f / 60.0f, glm::vec2(1920, 1080), glm::vec2(0), false);
 }
 
+// 测试 UI系统：零增量时间无崩溃
 TEST(UISystemTest, ZeroDtNoCrash) {
     UISystem sys;
     entt::registry reg;
@@ -212,11 +231,13 @@ TEST(UISystemTest, ZeroDtNoCrash) {
 // UILayoutSystem empty registry
 // ============================================================
 
+// 测试 UI布局系统：默认构造安全
 TEST(UILayoutSystemTest, DefaultConstructSafe) {
     UILayoutSystem layout;
     (void)layout;
 }
 
+// 测试 UI布局系统：空注册表无崩溃
 TEST(UILayoutSystemTest, EmptyRegistryNoCrash) {
     UILayoutSystem layout;
     entt::registry reg;
@@ -243,6 +264,7 @@ entt::entity MakeFullScreenUI(entt::registry& reg) {
 }
 }
 
+// 测试 UI系统：滑块Drag更新值
 TEST(UISystemTest, SliderDragUpdatesValue) {
     UISystem sys;
     entt::registry reg;
@@ -268,6 +290,7 @@ TEST(UISystemTest, SliderDragUpdatesValue) {
     EXPECT_NEAR(received_value, 50.0f, 5.0f);
 }
 
+// 测试 UI系统：滑块整体数值
 TEST(UISystemTest, SliderWholeNumbers) {
     UISystem sys;
     entt::registry reg;
@@ -284,6 +307,7 @@ TEST(UISystemTest, SliderWholeNumbers) {
     EXPECT_FLOAT_EQ(slider.value, std::round(slider.value));
 }
 
+// 测试 UI系统：切换点击切换
 TEST(UISystemTest, ToggleClickToggle) {
     UISystem sys;
     entt::registry reg;
@@ -306,6 +330,7 @@ TEST(UISystemTest, ToggleClickToggle) {
     EXPECT_TRUE(callback_fired);
 }
 
+// 测试 UI系统：切换Mutual Exclusion
 TEST(UISystemTest, ToggleMutualExclusion) {
     UISystem sys;
     entt::registry reg;
@@ -330,6 +355,7 @@ TEST(UISystemTest, ToggleMutualExclusion) {
     EXPECT_FALSE(t1.is_on);
 }
 
+// 测试 UI系统：文本输入Cursor Blink
 TEST(UISystemTest, TextInputCursorBlink) {
     UISystem sys;
     entt::registry reg;
@@ -347,6 +373,7 @@ TEST(UISystemTest, TextInputCursorBlink) {
     EXPECT_FALSE(input.cursor_visible);
 }
 
+// 测试 UI系统：文本输入Unfocused无Blink
 TEST(UISystemTest, TextInputUnfocusedNoBlink) {
     UISystem sys;
     entt::registry reg;
@@ -360,6 +387,7 @@ TEST(UISystemTest, TextInputUnfocusedNoBlink) {
     EXPECT_FLOAT_EQ(input.cursor_blink_timer, 0.0f);
 }
 
+// 测试 UI系统：滚动视图Drag滚动
 TEST(UISystemTest, ScrollViewDragScroll) {
     UISystem sys;
     entt::registry reg;
@@ -379,6 +407,7 @@ TEST(UISystemTest, ScrollViewDragScroll) {
     EXPECT_GT(sv.scroll_offset.y, 100.0f);
 }
 
+// 测试 UI系统：滚动视图Elastic Bounce
 TEST(UISystemTest, ScrollViewElasticBounce) {
     UISystem sys;
     entt::registry reg;
@@ -398,6 +427,7 @@ TEST(UISystemTest, ScrollViewElasticBounce) {
     EXPECT_NEAR(sv.scroll_offset.y, 0.0f, 1.0f);
 }
 
+// 测试 UI系统：进度条无崩溃
 TEST(UISystemTest, ProgressBarNoCrash) {
     UISystem sys;
     entt::registry reg;
@@ -415,6 +445,7 @@ TEST(UISystemTest, ProgressBarNoCrash) {
 // UIDropdownComponent tests
 // ============================================================
 
+// 测试 UI下拉框组件：默认值
 TEST(UIDropdownComponentTest, DefaultValues) {
     UIDropdownComponent dd;
     EXPECT_EQ(dd.selected_index, -1);
@@ -426,6 +457,7 @@ TEST(UIDropdownComponentTest, DefaultValues) {
     EXPECT_EQ(dd.GetSelectedValue(), "");
 }
 
+// 测试 UI下拉框组件：Selected项访问
 TEST(UIDropdownComponentTest, SelectedItemAccess) {
     UIDropdownComponent dd;
     dd.options.push_back({"Option A", "a"});
@@ -435,6 +467,7 @@ TEST(UIDropdownComponentTest, SelectedItemAccess) {
     EXPECT_EQ(dd.GetSelectedValue(), "b");
 }
 
+// 测试 UI系统：下拉框点击打开
 TEST(UISystemTest, DropdownClickOpen) {
     UISystem sys;
     entt::registry reg;
@@ -454,6 +487,7 @@ TEST(UISystemTest, DropdownClickOpen) {
     EXPECT_TRUE(dd.is_open);
 }
 
+// 测试 UI系统：下拉框无崩溃
 TEST(UISystemTest, DropdownNoCrash) {
     UISystem sys;
     entt::registry reg;
@@ -467,6 +501,7 @@ TEST(UISystemTest, DropdownNoCrash) {
 // UIFilledImageComponent tests
 // ============================================================
 
+// 测试 UI填充图像组件：默认值
 TEST(UIFilledImageComponentTest, DefaultValues) {
     UIFilledImageComponent fi;
     EXPECT_FLOAT_EQ(fi.fill_amount, 1.0f);
@@ -475,6 +510,7 @@ TEST(UIFilledImageComponentTest, DefaultValues) {
     EXPECT_TRUE(fi.clockwise);
 }
 
+// 测试 UI填充图像组件：填充数量范围
 TEST(UIFilledImageComponentTest, FillAmountRange) {
     UIFilledImageComponent fi;
     fi.fill_amount = 0.5f;
@@ -487,6 +523,7 @@ TEST(UIFilledImageComponentTest, FillAmountRange) {
 // UIFocusNavigableComponent tests
 // ============================================================
 
+// 测试 UI Focus Navigable组件：默认值
 TEST(UIFocusNavigableComponentTest, DefaultValues) {
     UIFocusNavigableComponent fn;
     EXPECT_EQ(fn.tab_index, 0);
@@ -497,6 +534,7 @@ TEST(UIFocusNavigableComponentTest, DefaultValues) {
     EXPECT_FALSE(fn.is_focused);
 }
 
+// 测试 UI系统：Focus Navigable无崩溃
 TEST(UISystemTest, FocusNavigableNoCrash) {
     UISystem sys;
     entt::registry reg;
@@ -511,6 +549,7 @@ TEST(UISystemTest, FocusNavigableNoCrash) {
 // UISerializer tests
 // ============================================================
 
+// 测试 UI序列化器：空JSON无崩溃
 TEST(UISerializerTest, EmptyJsonNoCrash) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -518,6 +557,7 @@ TEST(UISerializerTest, EmptyJsonNoCrash) {
     EXPECT_TRUE(entities.empty());
 }
 
+// 测试 UI序列化器：无效JSON无崩溃
 TEST(UISerializerTest, InvalidJsonNoCrash) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -525,6 +565,7 @@ TEST(UISerializerTest, InvalidJsonNoCrash) {
     EXPECT_TRUE(entities.empty());
 }
 
+// 测试 UI序列化器：基础UI实体解析
 TEST(UISerializerTest, BasicUIEntityParse) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -559,6 +600,7 @@ TEST(UISerializerTest, BasicUIEntityParse) {
     EXPECT_EQ(ui.order, 5);
 }
 
+// 测试 UI序列化器：父Child Hierarchy
 TEST(UISerializerTest, ParentChildHierarchy) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -590,6 +632,7 @@ TEST(UISerializerTest, ParentChildHierarchy) {
     EXPECT_EQ(label.text, "Hello");
 }
 
+// 测试 UI序列化器：下拉框序列化
 TEST(UISerializerTest, DropdownSerialization) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -623,6 +666,7 @@ TEST(UISerializerTest, DropdownSerialization) {
     EXPECT_FLOAT_EQ(dd.item_height, 30.0f);
 }
 
+// 测试 UI序列化器：事件传播序列化
 TEST(UISerializerTest, EventPropagationSerialization) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -643,6 +687,7 @@ TEST(UISerializerTest, EventPropagationSerialization) {
     EXPECT_TRUE(ep.bubbles_hover);
 }
 
+// 测试 UI序列化器：可视化特效序列化
 TEST(UISerializerTest, VisualEffectSerialization) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -663,6 +708,7 @@ TEST(UISerializerTest, VisualEffectSerialization) {
     EXPECT_FLOAT_EQ(vfx.blur_radius, 5.0f);
 }
 
+// 测试 UI序列化器：填充图像序列化
 TEST(UISerializerTest, FilledImageSerialization) {
     dse::UISerializer serializer;
     entt::registry reg;
@@ -695,6 +741,7 @@ TEST(UISerializerTest, FilledImageSerialization) {
 // P3: UIEventPropagationComponent tests
 // ============================================================
 
+// 测试 UI事件传播组件：默认值
 TEST(UIEventPropagationComponentTest, DefaultValues) {
     UIEventPropagationComponent ep;
     EXPECT_TRUE(ep.bubbles_click);
@@ -702,6 +749,7 @@ TEST(UIEventPropagationComponentTest, DefaultValues) {
     EXPECT_FALSE(ep.stop_propagation);
 }
 
+// 测试 UI系统：事件Bubbles到父
 TEST(UISystemTest, EventBubblesToParent) {
     UISystem sys;
     entt::registry reg;
@@ -726,6 +774,7 @@ TEST(UISystemTest, EventBubblesToParent) {
     EXPECT_TRUE(parent_clicked);
 }
 
+// 测试 UI系统：停止传播Blocks Bubble
 TEST(UISystemTest, StopPropagationBlocksBubble) {
     UISystem sys;
     entt::registry reg;
@@ -754,6 +803,7 @@ TEST(UISystemTest, StopPropagationBlocksBubble) {
 // P3: UIVisualEffectComponent tests
 // ============================================================
 
+// 测试 UI可视化特效组件：默认值
 TEST(UIVisualEffectComponentTest, DefaultValues) {
     UIVisualEffectComponent vfx;
     EXPECT_FLOAT_EQ(vfx.corner_radius, 0.0f);
@@ -766,6 +816,7 @@ TEST(UIVisualEffectComponentTest, DefaultValues) {
 // P3: UIVirtualScrollComponent tests
 // ============================================================
 
+// 测试 UI虚拟滚动组件：默认值
 TEST(UIVirtualScrollComponentTest, DefaultValues) {
     UIVirtualScrollComponent vs;
     EXPECT_EQ(vs.total_item_count, 0);
@@ -776,6 +827,7 @@ TEST(UIVirtualScrollComponentTest, DefaultValues) {
     EXPECT_TRUE(vs.dirty);
 }
 
+// 测试 UI系统：虚拟滚动创建对象池实体
 TEST(UISystemTest, VirtualScrollCreatesPoolEntities) {
     UISystem sys;
     entt::registry reg;
@@ -799,6 +851,7 @@ TEST(UISystemTest, VirtualScrollCreatesPoolEntities) {
     EXPECT_GT(vs.visible_end_index, 0);
 }
 
+// 测试 UI系统：虚拟滚动无崩溃
 TEST(UISystemTest, VirtualScrollNoCrash) {
     UISystem sys;
     entt::registry reg;

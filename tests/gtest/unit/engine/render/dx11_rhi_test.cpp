@@ -37,10 +37,12 @@ using namespace dse::render;
 
 #ifdef DSE_ENABLE_D3D11
 
+// 测试 RHI工厂：后端到字符串D 3D 11
 TEST(RhiFactoryTest, BackendToString_D3D11) {
     EXPECT_EQ(RhiBackendToString(RhiBackend::D3D11), "D3D11");
 }
 
+// 测试 RHI工厂：创建RHI设备D 3D 11返回非空
 TEST(RhiFactoryTest, CreateRhiDevice_D3D11ReturnNonEmpty) {
     auto device = CreateRhiDevice(RhiBackend::D3D11);
     EXPECT_NE(device, nullptr);
@@ -50,31 +52,37 @@ TEST(RhiFactoryTest, CreateRhiDevice_D3D11ReturnNonEmpty) {
 // DX11RhiDevice 无 GPU 测试
 // ============================================================
 
+// 测试 DX 11 RHI设备：不崩溃
 TEST(DX11RhiDeviceTest, DoesNotCrash) {
     DX11RhiDevice device;
 }
 
+// 测试 DX 11 RHI设备：当不已初始化关闭安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedShutdownSafety) {
     DX11RhiDevice device;
     device.Shutdown();
 }
 
+// 测试 DX 11 RHI设备：当不已初始化开始帧安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedBeginFrameSafety) {
     DX11RhiDevice device;
     device.BeginFrame();
 }
 
+// 测试 DX 11 RHI设备：当不已初始化结束帧安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedEndFrameSafety) {
     DX11RhiDevice device;
     device.EndFrame();
 }
 
+// 测试 DX 11 RHI设备：当不已初始化提交安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedSubmitSafety) {
     DX11RhiDevice device;
     auto cmd = std::make_shared<DX11CommandBuffer>();
     device.Submit(cmd);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化创建渲染目标返回零
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     DX11RhiDevice device;
     RenderTargetDesc desc{};
@@ -85,24 +93,28 @@ TEST(DX11RhiDeviceTest, WhenNotInitializedCreateRenderTargetReturnsZero) {
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化创建纹理2D返回零
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateTexture2DReturnsZero) {
     DX11RhiDevice device;
     unsigned int handle = device.CreateTexture2D(4, 4, nullptr, false);
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化创建缓冲区安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateBufferSafety) {
     DX11RhiDevice device;
     unsigned int handle = device.CreateBuffer(16, nullptr, false, false);
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化创建着色器程序返回零
 TEST(DX11RhiDeviceTest, WhenNotInitializedCreateShaderProgramReturnsZero) {
     DX11RhiDevice device;
     unsigned int handle = device.CreateShaderProgram("void main(){}", "void main(){}");
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化删除安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedDeleteSafety) {
     DX11RhiDevice device;
     device.DeleteRenderTarget(999);
@@ -110,12 +122,14 @@ TEST(DX11RhiDeviceTest, WhenNotInitializedDeleteSafety) {
     device.DeleteShaderProgram(999);
 }
 
+// 测试 DX 11 RHI设备：当不已初始化更新缓冲区安全
 TEST(DX11RhiDeviceTest, WhenNotInitializedUpdateBufferSafety) {
     DX11RhiDevice device;
     float data[] = {0.5f};
     device.UpdateBuffer(999, 0, sizeof(data), data, false);
 }
 
+// 测试 DX 11 RHI设备：创建顶点数组返回Increment句柄
 TEST(DX11RhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
     DX11RhiDevice device;
     auto h1 = device.CreateVertexArray();
@@ -124,12 +138,14 @@ TEST(DX11RhiDeviceTest, CreateVertexArrayReturnIncrementHandle) {
     EXPECT_GT(h2.raw(), h1.raw());
 }
 
+// 测试 DX 11 RHI设备：删除顶点数组无操作不崩溃
 TEST(DX11RhiDeviceTest, DeleteVertexArray_NoOpDoesNotCrash) {
     DX11RhiDevice device;
     device.DeleteVertexArray(VertexArrayHandle{99999});
     device.DeleteVertexArray(VertexArrayHandle{0});
 }
 
+// 测试 DX 11 RHI设备：最后帧统计默认值为零
 TEST(DX11RhiDeviceTest, LastFrameStatsDefaultValueIsZero) {
     DX11RhiDevice device;
     const auto& stats = device.LastFrameStats();
@@ -138,6 +154,7 @@ TEST(DX11RhiDeviceTest, LastFrameStatsDefaultValueIsZero) {
     EXPECT_EQ(stats.mesh_count, 0);
 }
 
+// 测试 DX 11 RHI设备：系统能够调用
 TEST(DX11RhiDeviceTest, SystemCanCalls) {
     DX11RhiDevice device;
     auto& ctx    = device.context();
@@ -152,6 +169,7 @@ TEST(DX11RhiDeviceTest, SystemCanCalls) {
 // SetGlobalShadowMap 越界静默忽略
 // ============================================================
 
+// 测试 DX 11 RHI设备：设置全局阴影映射交叉边框静默忽略
 TEST(DX11RhiDeviceTest, SetGlobalShadowMapCrossBorderSilentlyIgnore) {
     DX11RhiDevice device;
     // 有效索引
@@ -162,6 +180,7 @@ TEST(DX11RhiDeviceTest, SetGlobalShadowMapCrossBorderSilentlyIgnore) {
     device.SetGlobalShadowMap(100, 999);
 }
 
+// 测试 DX 11 RHI设备：全部接口不崩溃
 TEST(DX11RhiDeviceTest, AllTheInterfaceDoesNotCrash) {
     DX11RhiDevice device;
     device.SetGlobalShadowMap(0, 1);
@@ -178,10 +197,12 @@ TEST(DX11RhiDeviceTest, AllTheInterfaceDoesNotCrash) {
 // DX11CommandBuffer 无 device 测试
 // ============================================================
 
+// 测试 DX 11命令缓冲区：不崩溃
 TEST(DX11CommandBufferTest, DoesNotCrash) {
     DX11CommandBuffer cmd;
 }
 
+// 测试 DX 11命令缓冲区：无设备当开始结束渲染通道安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     DX11CommandBuffer cmd;
     RenderPassDesc desc{};
@@ -189,6 +210,7 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     cmd.EndRenderPass();
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制网格批次安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     DX11CommandBuffer cmd;
     std::vector<MeshDrawItem> items;
@@ -196,6 +218,7 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     cmd.DrawMeshBatch(items);
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制精灵批次安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
     DX11CommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
@@ -203,38 +226,45 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
     cmd.DrawSpriteBatch(items);
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制精灵批次空安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
     DX11CommandBuffer cmd;
     std::vector<SpriteDrawItem> items;
     cmd.DrawSpriteBatch(items);
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制天空盒安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSkyboxSafety) {
     DX11CommandBuffer cmd;
     cmd.DrawSkybox(100);
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制后期处理安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     DX11CommandBuffer cmd;
     cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
 }
 
+// 测试 DX 11命令缓冲区：无设备当绘制粒子3D安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawParticles3DSafety) {
     DX11CommandBuffer cmd;
     std::vector<Particle3DDrawItem> items;
     cmd.DrawParticles3D(items, glm::mat4(1.0f), glm::mat4(1.0f));
 }
 
+// 测试 DX 11命令缓冲区：无设备当清空颜色安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     DX11CommandBuffer cmd;
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
+// 测试 DX 11命令缓冲区：无设备当设置管线状态安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
     DX11CommandBuffer cmd;
     cmd.SetPipelineState(12345);
 }
 
+// 测试 DX 11命令缓冲区：无设备当延迟阴影映射安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     DX11CommandBuffer cmd;
     cmd.BindGlobalShadowMap(0, 100);
@@ -242,11 +272,13 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
+// 测试 DX 11命令缓冲区：设置相机Storage矩阵不折叠
 TEST(DX11CommandBufferTest, SetCameraStorageMatrixDoesNotCollapse) {
     DX11CommandBuffer cmd;
     cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
 }
 
+// 测试 DX 11命令缓冲区：Alluniform且清空
 TEST(DX11CommandBufferTest, AlluniformAndClear) {
     DX11CommandBuffer cmd;
     cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
@@ -264,6 +296,7 @@ TEST(DX11CommandBufferTest, AlluniformAndClear) {
     EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
+// 测试 DX 11命令缓冲区：Resetresetuniform状态
 TEST(DX11CommandBufferTest, ResetresetuniformState) {
     DX11CommandBuffer cmd;
     cmd.SetGlobalMat4("test", glm::mat4(1.0f));
@@ -275,6 +308,7 @@ TEST(DX11CommandBufferTest, ResetresetuniformState) {
 // DX11DrawExecutor 全局状态边界检查
 // ============================================================
 
+// 测试 DX 11绘制执行器：全部状态
 TEST(DX11DrawExecutorTest, AllState) {
     DrawExecutorGlobalState state;
     // 有效索引
@@ -294,6 +328,7 @@ TEST(DX11DrawExecutorTest, AllState) {
     state.SetSpotLightSpaceMatrix(4, glm::mat4(1.0f));
 }
 
+// 测试 DX 11绘制执行器：默认统计为零
 TEST(DX11DrawExecutorTest, DefaultstatsisZero) {
     DrawExecutorGlobalState state;
     DX11DrawExecutor exec(state);
@@ -307,6 +342,7 @@ TEST(DX11DrawExecutorTest, DefaultstatsisZero) {
 // DX11ShaderManager 未初始化状态
 // ============================================================
 
+// 测试 DX 11着色器管理器：当不初始化为零
 TEST(DX11ShaderManagerTest, WhenNotInitializedisZero) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
@@ -319,12 +355,14 @@ TEST(DX11ShaderManagerTest, WhenNotInitializedisZero) {
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
 
+// 测试 DX 11着色器管理器：获取程序无效句柄返回空指针
 TEST(DX11ShaderManagerTest, GetProgramInvalidHandleReturnednullptr) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.GetProgram(0), nullptr);
     EXPECT_EQ(mgr.GetProgram(999), nullptr);
 }
 
+// 测试 DX 11着色器管理器：获取输入布局无效句柄返回空指针
 TEST(DX11ShaderManagerTest, GetInputLayoutInvalidHandleReturnednullptr) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.GetInputLayout(0), nullptr);
@@ -335,6 +373,7 @@ TEST(DX11ShaderManagerTest, GetInputLayoutInvalidHandleReturnednullptr) {
 // DX11 数据结构默认值
 // ============================================================
 
+// 测试 DX 11纹理：默认值
 TEST(DX11TextureTest, DefaultValues) {
     DX11Texture tex;
     EXPECT_EQ(tex.texture.Get(), nullptr);
@@ -344,6 +383,7 @@ TEST(DX11TextureTest, DefaultValues) {
     EXPECT_FALSE(tex.is_cube);
 }
 
+// 测试 DX 11缓冲区：默认值
 TEST(DX11BufferTest, DefaultValues) {
     DX11Buffer buf;
     EXPECT_EQ(buf.buffer.Get(), nullptr);
@@ -352,6 +392,7 @@ TEST(DX11BufferTest, DefaultValues) {
     EXPECT_FALSE(buf.is_index);
 }
 
+// 测试 DX 11渲染目标：默认值
 TEST(DX11RenderTargetTest, DefaultValues) {
     DX11RenderTarget rt;
     EXPECT_EQ(rt.width, 0);
@@ -362,6 +403,7 @@ TEST(DX11RenderTargetTest, DefaultValues) {
     EXPECT_EQ(rt.depth_texture_handle, 0u);
 }
 
+// 测试 DX 11上下文：当不Initializeddevice为空
 TEST(DX11ContextTest, WhenNotInitializeddeviceIsEmpty) {
     DX11Context ctx;
     EXPECT_EQ(ctx.device(), nullptr);
@@ -372,16 +414,19 @@ TEST(DX11ContextTest, WhenNotInitializeddeviceIsEmpty) {
     EXPECT_FALSE(ctx.initialized());
 }
 
+// 测试 DX 11上下文：当不已初始化关闭安全
 TEST(DX11ContextTest, WhenNotInitializedShutdownSafety) {
     DX11Context ctx;
     ctx.Shutdown();
 }
 
+// 测试 渲染目标描述符：MSAA Samples默认值为1
 TEST(RenderTargetDescTest, msaa_SamplesTheDefaultValueIs1) {
     RenderTargetDesc desc{};
     EXPECT_EQ(desc.msaa_samples, 1);
 }
 
+// 测试 渲染目标描述符：allow Uav默认值为false
 TEST(RenderTargetDescTest, allow_UavTheDefaultValueIsfalse) {
     RenderTargetDesc desc{};
     EXPECT_FALSE(desc.allow_uav);
@@ -391,12 +436,14 @@ TEST(RenderTargetDescTest, allow_UavTheDefaultValueIsfalse) {
 // ComparisonSamplerTest — shadow_sampler_ 配置验证（无 GPU）
 // ============================================================
 
+// 测试 比较采样器：PCF采样器过滤类型为正确
 TEST(ComparisonSamplerTest, PCFSamplerFilterTypeIsCorrect) {
     // D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT = 0x94 (148)
     // = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT(0x14) | D3D11 comparison bit(0x80)
     EXPECT_EQ(static_cast<int>(D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT), 0x94);
 }
 
+// 测试 比较采样器：小于相等比较函数值为正确
 TEST(ComparisonSamplerTest, LESS_EQUALTheComparisonFunctionValueIsCorrect) {
     EXPECT_EQ(static_cast<int>(D3D11_COMPARISON_LESS_EQUAL), 4);
 }
@@ -405,27 +452,33 @@ TEST(ComparisonSamplerTest, LESS_EQUALTheComparisonFunctionValueIsCorrect) {
 // Phase J: DX11 PointLight/SpotLight CB 结构体验证
 // ============================================================
 
+// 测试 点灯光回调：J 3点灯光C Bsize 16 B对齐
 TEST(PointLightCBTest, J3_PointLightsCBsize16BAlignment) {
     EXPECT_EQ(sizeof(DX11PointLightsCB) % 16u, 0u);
 }
 
+// 测试 点灯光回调：J 3点灯光条目正确尺寸
 TEST(PointLightCBTest, J3_PointLightEntrycorrectSize) {
     EXPECT_EQ(sizeof(PointLightEntry), 48u);
 }
 
+// 测试 点灯光回调：J 3默认计数为零
 TEST(PointLightCBTest, J3_DefaultcountisZero) {
     DX11PointLightsCB cb{};
     EXPECT_EQ(cb.u_point_light_count, 0);
 }
 
+// 测试 聚光灯光回调：J 3聚光灯光C Bsize 16 B对齐
 TEST(SpotLightCBTest, J3_SpotLightsCBsize16BAlignment) {
     EXPECT_EQ(sizeof(DX11SpotLightsCB) % 16u, 0u);
 }
 
+// 测试 聚光灯光回调：J 3聚光灯光条目正确尺寸
 TEST(SpotLightCBTest, J3_SpotLightEntrycorrectSize) {
     EXPECT_EQ(sizeof(SpotLightEntry), 64u);
 }
 
+// 测试 聚光灯光回调：J 3默认计数为零
 TEST(SpotLightCBTest, J3_DefaultcountisZero) {
     DX11SpotLightsCB cb{};
     EXPECT_EQ(cb.u_spot_light_count, 0);
@@ -435,6 +488,7 @@ TEST(SpotLightCBTest, J3_DefaultcountisZero) {
 // Phase L: DX11 kPbrPS 聚光灯着色器字符串校验（无 GPU）
 // ============================================================
 
+// 测试 聚光灯光着色器：L Spotlight PBR环形存在
 TEST(SpotLightShaderTest, L_SpotlightPBRCircularExistence) {
     std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
     EXPECT_NE(src.find("SpotLight"), std::string::npos)
@@ -443,6 +497,7 @@ TEST(SpotLightShaderTest, L_SpotlightPBRCircularExistence) {
         << "kPbrPS should contain spot light cluster loop";
 }
 
+// 测试 聚光灯光着色器：L Cone Angle Falloff Calculation存在
 TEST(SpotLightShaderTest, L_ConeAngleFalloffCalculationExists) {
     std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
     EXPECT_NE(src.find("outer_cone"), std::string::npos)
@@ -451,12 +506,14 @@ TEST(SpotLightShaderTest, L_ConeAngleFalloffCalculationExists) {
         << "kPbrPS should compute cone attenuation using inner_cone";
 }
 
+// 测试 聚光灯光着色器：L Spotlight阴影Mapt 12 declare存在
 TEST(SpotLightShaderTest, L_SpotlightShadowMapt12declareExistence) {
     std::string src(dse::render::generated_shaders::kpbr_frag_hlsl);
     EXPECT_NE(src.find("register(t"), std::string::npos)
         << "kPbrPS should declare spot shadow map texture registers";
 }
 
+// 测试 聚光灯光着色器：L聚光矩阵C Bcorrect尺寸
 TEST(SpotLightShaderTest, L_SpotMatricesCBcorrectSize) {
     EXPECT_EQ(sizeof(DX11SpotMatricesCB), 256u);
     EXPECT_EQ(sizeof(DX11SpotMatricesCB) % 16u, 0u);
@@ -466,6 +523,7 @@ TEST(SpotLightShaderTest, L_SpotMatricesCBcorrectSize) {
 // RHI 统一回归测试
 // ============================================================
 
+// 测试 DX 11投影校正：Z重映射仅无Y翻转
 TEST(DX11ProjectionCorrectionTest, ZRemapOnlyWithoutYFlip) {
     DX11RhiDevice device;
     glm::mat4 corr = device.GetProjectionCorrection();
@@ -478,6 +536,7 @@ TEST(DX11ProjectionCorrectionTest, ZRemapOnlyWithoutYFlip) {
     EXPECT_FLOAT_EQ(corr[3][2], 0.5f);
 }
 
+// 测试 DX 11天空盒着色器：采样Towarduseinput Pos
 TEST(DX11SkyboxShaderTest, SamplingTowarduseinputPos) {
     std::string src(dse::render::generated_shaders::kskybox_vert_hlsl);
     EXPECT_NE(src.find("vTexCoords = aPos"), std::string::npos)
@@ -488,6 +547,7 @@ TEST(DX11SkyboxShaderTest, SamplingTowarduseinputPos) {
 // DX11PipelineStateManager 枚举映射完整性
 // ============================================================
 
+// 测试 DX 11管线状态管理器：混合因子枚举映射完成
 TEST(DX11PipelineStateManagerTest, BlendFactorEnumMappingComplete) {
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::Zero),             D3D11_BLEND_ZERO);
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::One),              D3D11_BLEND_ONE);
@@ -497,6 +557,7 @@ TEST(DX11PipelineStateManagerTest, BlendFactorEnumMappingComplete) {
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11Blend(BlendFactor::OneMinusDstAlpha), D3D11_BLEND_INV_DEST_ALPHA);
 }
 
+// 测试 DX 11管线状态管理器：比较函数枚举映射完成
 TEST(DX11PipelineStateManagerTest, CompareFuncEnumMappingComplete) {
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Never),        D3D11_COMPARISON_NEVER);
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Less),         D3D11_COMPARISON_LESS);
@@ -508,12 +569,14 @@ TEST(DX11PipelineStateManagerTest, CompareFuncEnumMappingComplete) {
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11ComparisonFunc(CompareFunc::Always),       D3D11_COMPARISON_ALWAYS);
 }
 
+// 测试 DX 11管线状态管理器：剔除面枚举映射完成
 TEST(DX11PipelineStateManagerTest, CullFaceEnumMappingComplete) {
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::None),  D3D11_CULL_NONE);
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::Front), D3D11_CULL_FRONT);
     EXPECT_EQ(DX11PipelineStateManager::ToD3D11CullMode(CullFace::Back),  D3D11_CULL_BACK);
 }
 
+// 测试 DX 11管线状态管理器：当不已初始化创建管线状态返回零
 TEST(DX11PipelineStateManagerTest, WhenNotInitializedCreatePipelineStateReturnsZero) {
     DX11PipelineStateManager mgr;
     PipelineStateDesc desc{};
@@ -521,6 +584,7 @@ TEST(DX11PipelineStateManagerTest, WhenNotInitializedCreatePipelineStateReturnsZ
     EXPECT_EQ(handle, 0u);
 }
 
+// 测试 DX 11管线状态管理器：设置激活管线状态可读且可写
 TEST(DX11PipelineStateManagerTest, set_active_pipeline_StateReadableAndWritable) {
     DX11PipelineStateManager mgr;
     mgr.set_active_pipeline_state(42);
@@ -533,12 +597,14 @@ TEST(DX11PipelineStateManagerTest, set_active_pipeline_StateReadableAndWritable)
 // DX11 编辑器场景视图模式 (Scene View Mode)
 // ============================================================
 
+// 测试 DX 11 RHI设备：设置线框模式未初始化不崩溃
 TEST(DX11RhiDeviceTest, SetWireframeModeUninitializedDoesNotCrash) {
     DX11RhiDevice device;
     device.SetWireframeMode(true);
     device.SetWireframeMode(false);
 }
 
+// 测试 DX 11 RHI设备：设置强制无光照可读且可写
 TEST(DX11RhiDeviceTest, SetForceUnlitReadableAndWritable) {
     DX11RhiDevice device;
     device.SetForceUnlit(true);
@@ -547,6 +613,7 @@ TEST(DX11RhiDeviceTest, SetForceUnlitReadableAndWritable) {
     EXPECT_FALSE(device.GetGlobalRenderState().force_unlit);
 }
 
+// 测试 DX 11 RHI设备：设置过度绘制模式未初始化不崩溃
 TEST(DX11RhiDeviceTest, SetOverdrawModeUninitializedDoesNotCrash) {
     DX11RhiDevice device;
     device.SetOverdrawMode(true);
@@ -557,6 +624,7 @@ TEST(DX11RhiDeviceTest, SetOverdrawModeUninitializedDoesNotCrash) {
 // DX11ResourceManager 基本句柄分配
 // ============================================================
 
+// 测试 DX 11 RHI设备：创建顶点数组返回Incrementing非零句柄
 TEST(DX11RhiDeviceTest, CreateVertexArrayReturnsAnIncrementingNonZeroHandle) {
     DX11RhiDevice device;
     auto h1 = device.CreateVertexArray();
@@ -570,6 +638,7 @@ TEST(DX11RhiDeviceTest, CreateVertexArrayReturnsAnIncrementingNonZeroHandle) {
 // Compute Uniform — name→offset 映射（无 GPU 验证路径安全+不崩溃）
 // ============================================================
 
+// 测试 DX 11 RHI设备：计算Uniform未初始化不崩溃
 TEST(DX11RhiDeviceTest, ComputeUniformUninitializedDoesNotCrash) {
     DX11RhiDevice device;
     device.SetComputeUniformInt  (1, "u_count", 42);
@@ -582,6 +651,7 @@ TEST(DX11RhiDeviceTest, ComputeUniformUninitializedDoesNotCrash) {
     device.ClearComputeParams();
 }
 
+// 测试 DX 11 RHI设备：计算Uniform参数带相同名称执行不崩溃
 TEST(DX11RhiDeviceTest, ComputeUniformParametersWithTheSameNameDoNotCrash) {
     DX11RhiDevice device;
     device.SetComputeUniformInt(1, "u_count", 42);

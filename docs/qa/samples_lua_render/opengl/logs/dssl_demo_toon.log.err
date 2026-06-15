@@ -1,0 +1,2 @@
+[ERROR] Lua startup load failed: ...trator\repos\DSEngine\bin\samples/lua/dssl/demo_toon.lua:5: attempt to call a nil value (field 'get_world')
+Failed to initialize FramePipeline

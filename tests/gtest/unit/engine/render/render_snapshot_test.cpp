@@ -8,6 +8,7 @@
 
 using namespace dse::render;
 
+// 测试 渲染快照：默认相机3D无效
 TEST(RenderSnapshotTest, DefaultCamera3DInvalid) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.camera_3d.valid);
@@ -16,17 +17,20 @@ TEST(RenderSnapshotTest, DefaultCamera3DInvalid) {
     EXPECT_FLOAT_EQ(snap.camera_3d.far_clip, 1000.0f);
 }
 
+// 测试 渲染快照：默认相机2D无效
 TEST(RenderSnapshotTest, DefaultCamera2DInvalid) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.camera_2d.valid);
 }
 
+// 测试 渲染快照：默认天空盒无效
 TEST(RenderSnapshotTest, DefaultSkyboxInvalid) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.skybox.valid);
     EXPECT_EQ(snap.skybox.cubemap_handle, 0u);
 }
 
+// 测试 渲染快照：默认方向光灯光
 TEST(RenderSnapshotTest, DefaultDirectionalLight) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.directional_light.valid);
@@ -35,6 +39,7 @@ TEST(RenderSnapshotTest, DefaultDirectionalLight) {
     EXPECT_FLOAT_EQ(snap.directional_light.ambient_intensity, 0.1f);
 }
 
+// 测试 渲染快照：默认后期处理
 TEST(RenderSnapshotTest, DefaultPostProcess) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.post_process.valid);
@@ -47,6 +52,7 @@ TEST(RenderSnapshotTest, DefaultPostProcess) {
     EXPECT_FALSE(snap.post_process.dof_enabled);
 }
 
+// 测试 渲染快照：Constexpr Limits
 TEST(RenderSnapshotTest, ConstexprLimits) {
     EXPECT_EQ(RenderThinSnapshot::kMaxSpotShadowLights, 4);
     EXPECT_EQ(RenderThinSnapshot::kMaxPointShadowLights, 4);
@@ -54,6 +60,7 @@ TEST(RenderSnapshotTest, ConstexprLimits) {
     EXPECT_EQ(RenderThinSnapshot::kMaxDecals, 32);
 }
 
+// 测试 渲染快照：默认Counts零
 TEST(RenderSnapshotTest, DefaultCountsZero) {
     RenderThinSnapshot snap;
     EXPECT_EQ(snap.spot_shadow_count, 0);
@@ -62,11 +69,13 @@ TEST(RenderSnapshotTest, DefaultCountsZero) {
     EXPECT_EQ(snap.decal_count, 0);
 }
 
+// 测试 渲染快照：默认灯光探针SH无效
 TEST(RenderSnapshotTest, DefaultLightProbeSHInvalid) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.light_probe_sh.valid);
 }
 
+// 测试 渲染快照：默认DDGI禁用
 TEST(RenderSnapshotTest, DefaultDDGIDisabled) {
     RenderThinSnapshot snap;
     EXPECT_FALSE(snap.ddgi_config.enabled);
@@ -75,6 +84,7 @@ TEST(RenderSnapshotTest, DefaultDDGIDisabled) {
     EXPECT_EQ(snap.ddgi_config.rays_per_probe, 128);
 }
 
+// 测试 渲染快照：Populate且重置
 TEST(RenderSnapshotTest, PopulateAndReset) {
     RenderThinSnapshot snap;
 
@@ -113,12 +123,14 @@ TEST(RenderSnapshotTest, PopulateAndReset) {
     EXPECT_FALSE(snap.ddgi_config.enabled);
 }
 
+// 测试 渲染快照：聚光灯光默认值
 TEST(RenderSnapshotTest, SpotLightDefaultValues) {
     RenderThinSnapshot::SpotLight sl;
     EXPECT_FLOAT_EQ(sl.outer_cone_angle, 17.5f);
     EXPECT_FLOAT_EQ(sl.radius, 20.0f);
 }
 
+// 测试 渲染快照：Water Surface默认值
 TEST(RenderSnapshotTest, WaterSurfaceDefaultValues) {
     RenderThinSnapshot::WaterSurface ws;
     EXPECT_FLOAT_EQ(ws.water_level, 0.0f);

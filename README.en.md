@@ -339,6 +339,8 @@ Drag the script into the Viewport or onto the entity's `LuaScriptComponent` `scr
 
 ## Quick Start
 
+> New here? The fastest path is the CLI: scaffold, build, and play a game in minutes — see the [English Quick Start](docs/getting-started/QUICKSTART.en.md) and the [FAQ](docs/getting-started/FAQ.md). The sections below cover the editor and Lua demos.
+
 ### Run the Editor
 
 ```powershell
@@ -351,7 +353,7 @@ bin\dsengine-editor.exe
 ### Run a Lua Demo
 
 ```powershell
-build_fast_lua.bat
+scripts\win\build_fast_lua.bat
 bin\DSEngine_lua_debug.exe
 ```
 
@@ -448,7 +450,7 @@ straight from the bundle, so **no plaintext is left on disk** and encrypted Lua 
 
 ```powershell
 # One-shot: configure (gtests on) + build the three suites + run via ctest
-build_fast_tests.bat
+scripts\win\build_fast_tests.bat
 
 # Or manually:
 cmake -S . -B build_vs2022 -G "Visual Studio 17 2022" -A x64 -DDSE_BUILD_GTESTS=ON

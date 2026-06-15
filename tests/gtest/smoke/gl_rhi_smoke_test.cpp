@@ -144,12 +144,14 @@ protected:
     }
 };
 
+// 测试 GL RHI冒烟：初始化打开GL成功
 TEST_F(GLRhiSmokeTest, InitOpenGLSucceeds) {
     device_.BeginFrame();
     device_.EndFrame();
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：单一帧空不崩溃
 TEST_F(GLRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     device_.BeginFrame();
     auto cmd = device_.CreateCommandBuffer();
@@ -159,6 +161,7 @@ TEST_F(GLRhiSmokeTest, SingleFrameEmptyDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：多帧周期稳定
 TEST_F(GLRhiSmokeTest, MultiFramecycleStable) {
     for (int i = 0; i < 3; ++i) {
         device_.BeginFrame();
@@ -169,6 +172,7 @@ TEST_F(GLRhiSmokeTest, MultiFramecycleStable) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：关闭之后初始化不崩溃
 TEST_F(GLRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     device_.BeginFrame();
     auto cmd = device_.CreateCommandBuffer();
@@ -183,6 +187,7 @@ TEST_F(GLRhiSmokeTest, ShutdownAfterReInitDoesNotCrash) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：创建且销毁无崩溃
 TEST_F(GLRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     device_.BeginFrame();
     unsigned char pixels[] = {
@@ -196,6 +201,7 @@ TEST_F(GLRhiSmokeTest, CreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：情形10连续帧提交稳定
 TEST_F(GLRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     for (int i = 0; i < 10; ++i) {
         device_.BeginFrame();
@@ -207,6 +213,7 @@ TEST_F(GLRhiSmokeTest, Case10ContinuousFrameSubmitStable) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：渲染目标创建且销毁无崩溃
 TEST_F(GLRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     device_.BeginFrame();
     RenderTargetDesc desc;
@@ -220,6 +227,7 @@ TEST_F(GLRhiSmokeTest, RenderTargetCreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：缓冲区创建且销毁无崩溃
 TEST_F(GLRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     device_.BeginFrame();
     float data[] = {1.0f, 2.0f, 3.0f, 4.0f};
@@ -230,6 +238,7 @@ TEST_F(GLRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 测试 GL RHI冒烟：顶点数组创建递增句柄
 TEST_F(GLRhiSmokeTest, VertexArrayCreateIncrementsHandle) {
     device_.BeginFrame();
     dse::render::VertexArrayHandle vao1 = device_.CreateVertexArray();

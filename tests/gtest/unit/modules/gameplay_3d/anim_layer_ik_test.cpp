@@ -24,12 +24,14 @@ using namespace gameplay3d;
 // AnimLayerComponent 默认值
 // ============================================================
 
+// 测试 动画层：动画层组件默认值
 TEST(AnimLayerTest, AnimLayerComponentDefaultValues) {
     AnimLayerComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_TRUE(comp.layers.empty());
 }
 
+// 测试 动画层：动画层配置默认值
 TEST(AnimLayerTest, AnimLayerConfigDefaultValues) {
     AnimLayerConfig layer;
     EXPECT_TRUE(layer.name.empty());
@@ -44,6 +46,7 @@ TEST(AnimLayerTest, AnimLayerConfigDefaultValues) {
     EXPECT_TRUE(layer.loop);
 }
 
+// 测试 动画层：动画混合节点2D默认值
 TEST(AnimLayerTest, AnimBlendNode2DDefaultValues) {
     AnimBlendNode2D node;
     EXPECT_TRUE(node.name.empty());
@@ -54,12 +57,14 @@ TEST(AnimLayerTest, AnimBlendNode2DDefaultValues) {
     EXPECT_TRUE(node.loop);
 }
 
+// 测试 动画层：空世界调用层混合更新不崩溃
 TEST(AnimLayerTest, EmptyWorldCallsLayerBlendUpdateDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
     EXPECT_NO_THROW(AnimLayerBlendSystem::Update(world, 0.016f));
 }
 
+// 测试 动画层：带组件无资源管理器不崩溃
 TEST(AnimLayerTest, WithComponentWithoutAssetManagerDoesNotCrash) {
     World world;
     AnimLayerBlendSystem::SetAssetManager(nullptr);
@@ -75,12 +80,14 @@ TEST(AnimLayerTest, WithComponentWithoutAssetManagerDoesNotCrash) {
 // IKChain3DComponent 默认值
 // ============================================================
 
+// 测试 IK：IK链3D组件默认值
 TEST(IKTest, IKChain3DComponentDefaultValues) {
     IKChain3DComponent comp;
     EXPECT_TRUE(comp.enabled);
     EXPECT_TRUE(comp.chains.empty());
 }
 
+// 测试 IK：IK链配置默认值
 TEST(IKTest, IKChainConfigDefaultValues) {
     IKChainConfig chain;
     EXPECT_TRUE(chain.name.empty());
@@ -97,11 +104,13 @@ TEST(IKTest, IKChainConfigDefaultValues) {
     EXPECT_EQ(chain.tip_bone_index, -1);
 }
 
+// 测试 IK：空世界调用IK更新不崩溃
 TEST(IKTest, EmptyWorldCallsIKUpdateDoesNotCrash) {
     World world;
     EXPECT_NO_THROW(IKSolverSystem::Update(world, 0.016f));
 }
 
+// 测试 IK：带组件无有效缓存不崩溃
 TEST(IKTest, WithComponentWithoutValidCacheDoesNotCrash) {
     World world;
     auto e = world.CreateEntity();
@@ -122,22 +131,26 @@ TEST(IKTest, WithComponentWithoutValidCacheDoesNotCrash) {
 // anim_clip_eval.h 工具函数测试
 // ============================================================
 
+// 测试 动画剪辑求值：推进剪辑时间循环
 TEST(AnimClipEvalTest, AdvanceClipTime_Loop) {
     float t = anim_util::AdvanceClipTime(0.9f, 0.016f, 10.0f, 1.0f, true);
     EXPECT_GE(t, 0.0f);
     EXPECT_LT(t, 1.0f);
 }
 
+// 测试 动画剪辑求值：推进剪辑时间无循环钳制
 TEST(AnimClipEvalTest, AdvanceClipTime_NoLoop_Clamp) {
     float t = anim_util::AdvanceClipTime(0.9f, 0.016f, 10.0f, 1.0f, false);
     EXPECT_FLOAT_EQ(t, 1.0f);
 }
 
+// 测试 动画剪辑求值：推进剪辑时间零Duration
 TEST(AnimClipEvalTest, AdvanceClipTime_ZeroDuration) {
     float t = anim_util::AdvanceClipTime(0.5f, 0.016f, 1.0f, 0.0f, true);
     EXPECT_FLOAT_EQ(t, 0.0f);
 }
 
+// 测试 动画剪辑求值：插值单一键
 TEST(AnimClipEvalTest, Interpolate_SingleKey) {
     std::vector<float> times = {0.0f};
     std::vector<glm::vec3> values = {glm::vec3(1.0f, 2.0f, 3.0f)};
@@ -147,6 +160,7 @@ TEST(AnimClipEvalTest, Interpolate_SingleKey) {
     EXPECT_FLOAT_EQ(r.z, 3.0f);
 }
 
+// 测试 动画剪辑求值：插值两个键中点
 TEST(AnimClipEvalTest, Interpolate_TwoKeys_Midpoint) {
     std::vector<float> times = {0.0f, 1.0f};
     std::vector<glm::vec3> values = {glm::vec3(0.0f), glm::vec3(10.0f)};
@@ -156,6 +170,7 @@ TEST(AnimClipEvalTest, Interpolate_TwoKeys_Midpoint) {
     EXPECT_NEAR(r.z, 5.0f, 0.01f);
 }
 
+// 测试 动画剪辑求值：插值Quat Slerp
 TEST(AnimClipEvalTest, Interpolate_QuatSlerp) {
     std::vector<float> times = {0.0f, 1.0f};
     glm::quat q0 = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
@@ -166,6 +181,7 @@ TEST(AnimClipEvalTest, Interpolate_QuatSlerp) {
     EXPECT_NEAR(angle, 45.0f, 1.0f);
 }
 
+// 测试 动画剪辑求值：动画采样缓冲区初始化
 TEST(AnimClipEvalTest, AnimSampleBuffer_Init) {
     anim_util::AnimSampleBuffer buf(4);
     EXPECT_EQ(buf.positions.size(), 4u);
@@ -182,6 +198,7 @@ TEST(AnimClipEvalTest, AnimSampleBuffer_Init) {
 // 新增共享函数测试
 // ============================================================
 
+// 测试 动画剪辑求值：计算骨骼Globals简单链
 TEST(AnimClipEvalTest, ComputeBoneGlobals_SimpleChain) {
     Animator3DComponent::SkeletalCache cache;
     cache.bone_count = 3;
@@ -207,6 +224,7 @@ TEST(AnimClipEvalTest, ComputeBoneGlobals_SimpleChain) {
     EXPECT_FLOAT_EQ(globals[1][3].x, 1.0f); // Child at (1,0,0)
 }
 
+// 测试 动画剪辑求值：计算链Positions
 TEST(AnimClipEvalTest, ComputeChainPositions) {
     Animator3DComponent::SkeletalCache cache;
     cache.bone_count = 3;
@@ -234,6 +252,7 @@ TEST(AnimClipEvalTest, ComputeChainPositions) {
     EXPECT_FLOAT_EQ(positions[1].x, 1.0f);
 }
 
+// 测试 动画剪辑求值：求解FABRIK Reachable目标
 TEST(AnimClipEvalTest, SolveFABRIK_ReachableTarget) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -248,6 +267,7 @@ TEST(AnimClipEvalTest, SolveFABRIK_ReachableTarget) {
     EXPECT_LT(tip_error, 0.3f); // Should converge reasonably close
 }
 
+// 测试 动画剪辑求值：求解FABRIK Unreachable目标
 TEST(AnimClipEvalTest, SolveFABRIK_UnreachableTarget) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -264,6 +284,7 @@ TEST(AnimClipEvalTest, SolveFABRIK_UnreachableTarget) {
     EXPECT_GT(dot, 0.99f); // Should align with target direction
 }
 
+// 测试 动画剪辑求值：求解FABRIK空链
 TEST(AnimClipEvalTest, SolveFABRIK_EmptyChain) {
     std::vector<glm::vec3> positions;
     glm::vec3 target(1.0f, 0.0f, 0.0f);
@@ -271,6 +292,7 @@ TEST(AnimClipEvalTest, SolveFABRIK_EmptyChain) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
+// 测试 动画剪辑求值：动画混合节点默认值
 TEST(AnimClipEvalTest, AnimBlendNodeDefaultValues) {
     AnimBlendNode node;
     EXPECT_TRUE(node.name.empty());
@@ -287,6 +309,7 @@ TEST(AnimClipEvalTest, AnimBlendNodeDefaultValues) {
 // IK 算法正确性测试
 // ============================================================
 
+// 测试 IK算法：FABRIK Convergence Achievable目标
 TEST(IKAlgorithmTest, FABRIK_Convergence_AchievableGoals) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -301,6 +324,7 @@ TEST(IKAlgorithmTest, FABRIK_Convergence_AchievableGoals) {
     EXPECT_LT(tip_error, 0.05f); // Should converge within tolerance
 }
 
+// 测试 IK算法：FABRIK边界条件零Length骨骼
 TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_ZeroLengthBone) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -311,6 +335,7 @@ TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_ZeroLengthBone) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
+// 测试 IK算法：FABRIK边界条件单一骨骼链
 TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_SingleBoneChain) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f)
@@ -320,6 +345,7 @@ TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_SingleBoneChain) {
     EXPECT_NO_THROW(anim_util::SolveFABRIK(positions, target, glm::vec3(0), 5, 0.01f));
 }
 
+// 测试 IK算法：FABRIK边界条件目标Coincides带根
 TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_TheTargetCoincidesWithTheRoot) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),
@@ -333,6 +359,7 @@ TEST(IKAlgorithmTest, FABRIK_BoundaryConditions_TheTargetCoincidesWithTheRoot) {
     EXPECT_NEAR(glm::length(positions[1] - positions[0]), 1.0f, 0.1f);
 }
 
+// 测试 IK算法：FABRIK Pole向量Bending Direction约束
 TEST(IKAlgorithmTest, FABRIK_PoleVector_BendingDirectionConstraint) {
     std::vector<glm::vec3> positions = {
         glm::vec3(0.0f, 0.0f, 0.0f),

@@ -12,7 +12,7 @@
 
 > ℹ️ **状态更新 (2026-05-21)**：GPU Driven 已完成三端对齐并默认启用。以下瓶颈分析保留作为历史背景参考。
 
-DSEngine 的 CPU fallback 路径走的是 **CPU 逐物体 Draw Call**，在 [gl_draw_executor_mesh.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) 的核心循环中：
+DSEngine 的 CPU fallback 路径走的是 **CPU 逐物体 Draw Call**，在 [gl_draw_executor_mesh.cpp](../../engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) 的核心循环中：
 
 ```cpp
 for (const auto& item : items) {       // 每个 MeshDrawItem = 一个物体
@@ -69,7 +69,7 @@ for (const auto& item : items) {       // 每个 MeshDrawItem = 一个物体
 
 #### 材质排序
 
-在 [gl_draw_executor_mesh.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) 的排序函数 `dse::render::UpdateSortBatchStats` 中增加三级排序：
+在 [gl_draw_executor_mesh.cpp](../../engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) 的排序函数 `dse::render::UpdateSortBatchStats` 中增加三级排序：
 
 ```cpp
 // 增强排序：按 (shader, material_instance_id, mesh) 三级
@@ -208,15 +208,15 @@ Godot 4             ───  200-500 万      ★★★
 
 | 功能 | 实现位置 |
 |:-----|:---------|
-| **流式加载 StreamingManager** | [streaming_manager.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/assets/streaming_manager.cpp) — 异步 IO、优先级队列、并发限制、Zone 系统 |
-| **植被/Grass 系统** | [grass_system.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/modules/gameplay_3d/rendering/grass_system.h) — GPU Compute 风场 + LOD + Chunk + 地形贴合 |
-| **地形 Terrain 系统** | [components_3d.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/ecs/components_3d.h) — 高度图、SplatMap 4 层混合、Dynamic LOD 1-8 |
-| **LOD 系统** | [components_3d.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/ecs/components_3d.h) — LODGroupComponent + screen_size threshold + hysteresis |
-| **性能剖析 Profiler** | [editor_profiler_panel.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/apps/editor_cpp/src/editor_profiler_panel.cpp) — CPU/Memory/Render 三引擎 + CSV/JSON 导出 |
+| **流式加载 StreamingManager** | [streaming_manager.cpp](../../engine/assets/streaming_manager.cpp) — 异步 IO、优先级队列、并发限制、Zone 系统 |
+| **植被/Grass 系统** | [grass_system.h](../../modules/gameplay_3d/rendering/grass_system.h) — GPU Compute 风场 + LOD + Chunk + 地形贴合 |
+| **地形 Terrain 系统** | [components_3d.h](../../engine/ecs/components_3d.h) — 高度图、SplatMap 4 层混合、Dynamic LOD 1-8 |
+| **LOD 系统** | [components_3d.h](../../engine/ecs/components_3d.h) — LODGroupComponent + screen_size threshold + hysteresis |
+| **性能剖析 Profiler** | [editor_profiler_panel.cpp](../../apps/editor_cpp/src/editor_profiler_panel.cpp) — CPU/Memory/Render 三引擎 + CSV/JSON 导出 |
 | **运行时 UI 系统** | UIRendererComponent / UILabel / UIAnchor / UIGridLayout / UIAnimation / UIRichText |
-| **GPU Driven ✅** | [rhi_gpu_driven.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/rhi_gpu_driven.h) — 三端实现并集成，默认启用，含 Hi-Z Culling + Compute Cull |
-| **GPU Skinning + Morph Target ✅** | [gpu_skinning.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/skinning/gpu_skinning.h) — GPU Compute Skinning 三后端 + Morph Target 完整管线 + 双缓冲 Readback |
-| **C# 绑定** | [Native.gen.cs](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/GameScripts/DSEngine/Native.gen.cs) — 自动生成 |
+| **GPU Driven ✅** | [rhi_gpu_driven.h](../../engine/render/rhi/rhi_gpu_driven.h) — 三端实现并集成，默认启用，含 Hi-Z Culling + Compute Cull |
+| **GPU Skinning + Morph Target ✅** | [gpu_skinning.h](../../engine/render/skinning/gpu_skinning.h) — GPU Compute Skinning 三后端 + Morph Target 完整管线 + 双缓冲 Readback |
+| **C# 绑定** | [Native.gen.cs](../../GameScripts/DSEngine/Native.gen.cs) — 自动生成 |
 | **物理 PhysX + Box2D** | 3D: PhysX (Static/Dynamic/Kinematic), 2D: Box2D |
 
 ---
@@ -541,13 +541,13 @@ GPU-driven 路径与 module per-item 路径的关系：
 
 | 文件 | 说明 |
 |:-----|:------|
-| [gl_draw_executor_mesh.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) | 当前逐物体 Draw Call 核心循环 |
-| [rhi_gpu_driven.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/rhi/rhi_gpu_driven.h) | GPU Driven 接口定义（✅ 三端已实现并集成） |
-| [frame_pipeline.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/runtime/frame_pipeline.cpp) | GPU Driven + Hi-Z 初始化 + 渲染线程分离 |
-| [grass_system.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/modules/gameplay_3d/rendering/grass_system.h) | GPU Compute 草风场 |
-| [streaming_manager.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/assets/streaming_manager.cpp) | 资产级流式加载完整实现 |
-| [platform_app.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/platform/platform_app.h) | 平台抽象接口（跨平台扩展入口） |
-| [components_3d.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/ecs/components_3d.h) | 3D 组件定义（Terrain/LODGroup 等） |
-| [builtin_passes.cpp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/passes/builtin_passes.cpp) | 31 个后处理 Pass 实现 |
-| [gpu_skinning.h](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/skinning/gpu_skinning.h) | GPU Compute Skinning + Morph Target 系统 |
-| [skinning.comp](file:///c:/Users/Administrator/Desktop/Engine/DSEngine/engine/render/shaders/src/skinning.comp) | 蒙皮 Compute Shader（GLSL 450，含 morph blending） |
+| [gl_draw_executor_mesh.cpp](../../engine/render/rhi/opengl/gl_draw_executor_mesh.cpp) | 当前逐物体 Draw Call 核心循环 |
+| [rhi_gpu_driven.h](../../engine/render/rhi/rhi_gpu_driven.h) | GPU Driven 接口定义（✅ 三端已实现并集成） |
+| [frame_pipeline.cpp](../../engine/runtime/frame_pipeline.cpp) | GPU Driven + Hi-Z 初始化 + 渲染线程分离 |
+| [grass_system.h](../../modules/gameplay_3d/rendering/grass_system.h) | GPU Compute 草风场 |
+| [streaming_manager.cpp](../../engine/assets/streaming_manager.cpp) | 资产级流式加载完整实现 |
+| [platform_app.h](../../engine/platform/platform_app.h) | 平台抽象接口（跨平台扩展入口） |
+| [components_3d.h](../../engine/ecs/components_3d.h) | 3D 组件定义（Terrain/LODGroup 等） |
+| [builtin_passes.cpp](../../engine/render/passes/builtin_passes.cpp) | 31 个后处理 Pass 实现 |
+| [gpu_skinning.h](../../engine/render/skinning/gpu_skinning.h) | GPU Compute Skinning + Morph Target 系统 |
+| [skinning.comp](../../engine/render/shaders/src/skinning.comp) | 蒙皮 Compute Shader（GLSL 450，含 morph blending） |

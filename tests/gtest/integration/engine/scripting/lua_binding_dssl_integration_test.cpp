@@ -41,6 +41,7 @@ protected:
     void TearDown() override { ShutdownLuaRuntime(); }
 };
 
+// 测试 Lua DSSL绑定：DSS Ltable存在
 TEST_F(LuaDSSLBindingTest, DSSLtableExists) {
     TempLuaFile script("test_dssl_exists.lua", R"(
         function Awake()
@@ -56,6 +57,7 @@ TEST_F(LuaDSSLBindingTest, DSSLtableExists) {
     TickLuaRuntime(0.016f);
 }
 
+// 测试 Lua DSSL绑定：加载材质返回若文件不存在Nil
 TEST_F(LuaDSSLBindingTest, LoadMaterialReturnIfFileDoesNotExistNil) {
     TempLuaFile script("test_dssl_nil.lua", R"(
         function Awake()
@@ -73,6 +75,7 @@ TEST_F(LuaDSSLBindingTest, LoadMaterialReturnIfFileDoesNotExistNil) {
     TickLuaRuntime(0.016f);
 }
 
+// 测试 Lua DSSL绑定：设置浮点错误ID不崩溃
 TEST_F(LuaDSSLBindingTest, SetFloatErrorIDDoesNotCrash) {
     TempLuaFile script("test_dssl_error.lua", R"(
         function Awake()
