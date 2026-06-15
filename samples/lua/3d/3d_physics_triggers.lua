@@ -202,9 +202,16 @@ state.velocity_done = false
 local function phase_2d_collision_poll()
     if state.collision_poll_done then return end
     if dse.ecs.poll_collision_event then
-        -- 轮询一次 2D 碰撞事件（在纯 3D 场景中通常不会有 2D 碰撞，仅验证 API 可调用）
-        local has_event, entity_a, entity_b, normal_x, normal_y = dse.ecs.poll_collision_event()
-        print(string.format("[3D][PhysicsTriggers] phase4: 2d_poll_collision_event has_event=%s (3d_scene_has_no_2d_bodies)", tostring(has_event)))
+        -- poll_collision_event(entity) 轮询指定刚体的 2D 接触事件，返回
+        --   has_event, other_entity, is_trigger, is_enter
+        -- 纯 3D 场景中实体无 RigidBody2D，应优雅返回 has_event=false（仅验证 API 可调用）
+        local probe = state.cubes_3d[1] and state.cubes_3d[1].entity
+        if probe then
+            local has_event, other_entity, is_trigger, is_enter = dse.ecs.poll_collision_event(probe)
+            print(string.format("[3D][PhysicsTriggers] phase4: 2d_poll_collision_event has_event=%s (3d_scene_has_no_2d_bodies)", tostring(has_event)))
+        else
+            print("[3D][PhysicsTriggers] phase4: 无探针实体，跳过 2D 碰撞轮询")
+        end
     else
         print("[3D][PhysicsTriggers] phase4: poll_collision_event API not available (2D only)")
     end
