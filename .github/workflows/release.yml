@@ -1,0 +1,78 @@
+# DSEngine Release — tag-triggered: build & package the win-x64 SDK and publish a GitHub Release.
+# Trigger: push a tag like `v0.1.0-alpha` (or run manually via workflow_dispatch with a tag input).
+# Produces: DSEngine-SDK-v<version>-win-x64-release.zip (Full / Release / Jolt ON / Vulkan OFF),
+# release notes extracted from the matching CHANGELOG.md section.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.1.0-alpha). Created from the current ref if it does not exist.'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release-sdk-win-x64:
+    runs-on: windows-latest
+    name: release-sdk-win-x64
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Package SDK (Full / Release / win-x64, Vulkan OFF)
+        shell: pwsh
+        run: ./scripts/package_sdk.ps1 -Config Release -Enable3D
+
+      - name: Resolve tag, locate zip, extract release notes
+        id: prep
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "${{ github.ref_name }}" }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+          $zip = Get-ChildItem -Path . -Filter 'DSEngine-SDK-v*-win-x64-release.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'SDK zip not found after packaging' }
+          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "SDK zip: $($zip.Name)"
+
+          $ver = $tag -replace '^v', ''
+          $body = "DSEngine $tag"
+          if (Test-Path CHANGELOG.md) {
+            $cl = Get-Content CHANGELOG.md -Raw
+            $pattern = '(?s)##\s*\[' + [regex]::Escape($ver) + '\].*?(?=\r?\n##\s*\[|\z)'
+            $m = [regex]::Match($cl, $pattern)
+            if ($m.Success) { $body = $m.Value.Trim() }
+          }
+          [System.IO.File]::WriteAllText("$PWD\release_notes.md", $body, (New-Object System.Text.UTF8Encoding($false)))
+          Write-Host "----- release notes -----"
+          Write-Host $body
+
+      - name: Create GitHub Release and upload SDK
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.prep.outputs.tag }}"
+          $zip = "${{ steps.prep.outputs.zip }}"
+          $ghArgs = @($tag, $zip, '--title', "DSEngine $tag", '--notes-file', 'release_notes.md')
+          if ($tag -match '-') { $ghArgs += '--prerelease' }
+          if (gh release view $tag 2>$null) {
+            Write-Host "Release $tag exists; uploading asset (clobber)."
+            gh release upload $tag $zip --clobber
+          } else {
+            gh release create @ghArgs
+          }
