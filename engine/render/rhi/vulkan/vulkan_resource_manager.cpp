@@ -52,6 +52,16 @@ bool VulkanResourceManager::Init(VulkanContext* context) {
         DEBUG_LOG_WARN("[Vulkan] Failed to create default sampler");
     }
 
+    // 创建材质采样器（linear repeat）：网格材质 UV 可能越界 [0,1]，需 REPEAT 回绕，
+    // 与 OpenGL/D3D11 网格贴图默认 wrap 行为一致（CLAMP 会把越界 UV 钳到边缘导致整面单色）。
+    VkSamplerCreateInfo material_sampler_ci = sampler_ci;
+    material_sampler_ci.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    material_sampler_ci.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    material_sampler_ci.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    if (vkCreateSampler(device_, &material_sampler_ci, nullptr, &material_sampler_) != VK_SUCCESS) {
+        DEBUG_LOG_WARN("[Vulkan] Failed to create material sampler");
+    }
+
     // 创建阴影比较采样器（sampler2DShadow PCF 要求 compareEnable=VK_TRUE）
     VkSamplerCreateInfo shadow_sampler_ci{};
     shadow_sampler_ci.sType         = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -140,6 +150,11 @@ void VulkanResourceManager::Shutdown() {
     if (default_sampler_ != VK_NULL_HANDLE) {
         vkDestroySampler(device_, default_sampler_, nullptr);
         default_sampler_ = VK_NULL_HANDLE;
+    }
+
+    if (material_sampler_ != VK_NULL_HANDLE) {
+        vkDestroySampler(device_, material_sampler_, nullptr);
+        material_sampler_ = VK_NULL_HANDLE;
     }
 
     if (shadow_comparison_sampler_ != VK_NULL_HANDLE) {

@@ -784,7 +784,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
         if (tex && has_binding(2, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             VkDescriptorImageInfo img_info{};
-            img_info.sampler = resource_mgr.default_sampler();
+            img_info.sampler = resource_mgr.material_sampler();
             img_info.imageView = tex->image_view;
             img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
@@ -841,7 +841,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
             if (!tex) continue;
 
-            image_infos[i].sampler = resource_mgr.default_sampler();
+            image_infos[i].sampler = resource_mgr.material_sampler();
             image_infos[i].imageView = tex->image_view;
             image_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
@@ -1014,7 +1014,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
             if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
             if (!tex) continue;
-            splat_infos[i].sampler = resource_mgr.default_sampler();
+            splat_infos[i].sampler = resource_mgr.material_sampler();
             splat_infos[i].imageView = tex->image_view;
             splat_infos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             splat_writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -3994,7 +3994,7 @@ void VulkanDrawExecutor::BindGPUDrivenTextures(VkCommandBuffer cmd_buf,
     for (const auto& tb : tex_bindings) {
         unsigned int h = tb.handle != 0 ? tb.handle : white_texture_handle_;
         const VulkanTexture* tex = resource_mgr.GetTexture(h);
-        push_image(tb.binding, tex ? tex : white_tex, resource_mgr.default_sampler(),
+        push_image(tb.binding, tex ? tex : white_tex, resource_mgr.material_sampler(),
                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
