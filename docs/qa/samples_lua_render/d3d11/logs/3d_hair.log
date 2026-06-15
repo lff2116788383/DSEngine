@@ -4,12 +4,13 @@ Business mode: lua
 [INFO] RHI Factory: 创建 D3D11 后端
 [INFO] FramePipeline RHI 后端: D3D11
 [INFO] [D3D11] VSync: ON
-[INFO] [D3D11] Adapter 0: [SKIP software] Microsoft Basic Render Driver
-[INFO] [D3D11] Adapter 1: [SKIP no VRAM] Microsoft Basic Render Driver
-[INFO] [D3D11] Adapter 2: [SKIP no VRAM] Microsoft Basic Render Driver
+[INFO] [D3D11] Adapter 0: NVIDIA GeForce RTX 3070 (VRAM=8018 MB)
+[INFO] [D3D11] Adapter 1: NVIDIA GeForce RTX 3070 (VRAM=8018 MB)
+[INFO] [D3D11] Adapter 2: [SKIP software] Microsoft Basic Render Driver
+[INFO] [D3D11] Selected adapter: NVIDIA GeForce RTX 3070 (VRAM=8018 MB)
 [INFO] [D3D11] Tearing support: YES
 [INFO] [D3D11] HDR SwapChain enabled (R16G16B16A16_FLOAT, FLIP_DISCARD)
-[INFO] [D3D11] Render device: Microsoft Basic Render Driver (software)
+[INFO] [D3D11] Render device: NVIDIA GeForce RTX 3070 (hardware)
 [INFO] [D3D11] MSAA 4x quality=0
 [INFO] [D3D11] MSAA 4x not supported, will use 1x
 [INFO] [D3D11] Context initialized — Feature Level: 11.1
@@ -63,8 +64,8 @@ Business mode: lua
 [INFO] [DX11] GPU-driven Shadow shader created: handle=840040
 [INFO] [DX11GpuTimer] Initialized (double-buffered timestamp queries)
 [INFO] [D3D11] RhiDevice initialized (all subsystems ready)
-[INFO] [InitTiming] RHI device init: 923ms
-[INFO] DSE_RENDER_DEVICE backend=D3D11 adapter="Microsoft Basic Render Driver" software=1
+[INFO] [InitTiming] RHI device init: 839ms
+[INFO] DSE_RENDER_DEVICE backend=D3D11 adapter="NVIDIA GeForce RTX 3070" software=0
 [INFO] Render pipeline profile: using built-in ForwardPlusDefault
 [INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
   0: pre_z [enabled]
@@ -99,12 +100,12 @@ Business mode: lua
   29: fxaa [enabled]
   30: taa [enabled]
   31: present [enabled]
-[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
-[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
-[INFO] [DX11] Hi-Z texture created: handle=850000 1280x701 mips=11
+[INFO] Runtime data root: C:\Users\Administrator\Desktop\Engine\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\Desktop\Engine\DSEngine\bin\data
+[INFO] [DX11] Hi-Z texture created: handle=850000 1280x720 mips=11
 [INFO] Hi-Z Occlusion Culling initialized: texture=850000 vis_ssbo=815000 aabb_ssbo=815001 capacity=65536 shaders=(850002,850003,850004)
 [INFO] GPU Driven Rendering: supported=1, cull_shader=850005
-[INFO] [InitTiming] render resources: 13ms
+[INFO] [InitTiming] render resources: 6ms
 [INFO] FramePipeline init: systems init begin
 [INFO] [Physics2D] Init world_valid=1
 [INFO] FramePipeline init: systems init complete
@@ -117,12 +118,12 @@ Business mode: lua
 [INFO] [TreeSystem] Initialized
 [INFO] [HairSystem] Initialized, gpu_compute=1
 [INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
-[INFO] [InitTiming] systems init: 33ms
+[INFO] [InitTiming] systems init: 23ms
 [INFO] FramePipeline init: business bootstrap begin
 [INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
 [INFO] [LuaRuntime] Shutdown end
-[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
-[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF71D7F5950 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\Desktop\Engine\DSEngine\samples\lua\main.lua
 [INFO] Lua bootstrap: package path setup begin
 [INFO] Lua bootstrap: register API begin
 [INFO] Lua bootstrap: loading startup script begin
@@ -135,32 +136,29 @@ Business mode: lua
 [Hair] Short Stiff / Medium Soft / Long Flowing / Curly Dense
 [Hair] WASD 移动相机, 观察毛发物理和风力效果
 [INFO] Lua bootstrap: Awake OK
-[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua startup script loaded: C:\Users\Administrator\Desktop\Engine\DSEngine\samples\lua\main.lua
 [INFO] Lua business mode bootstrap: OK
-[INFO] [InitTiming] business bootstrap: 16ms
-[INFO] [InitTiming] BuildRenderGraph: 1ms
+[INFO] [InitTiming] business bootstrap: 3ms
+[INFO] [InitTiming] BuildRenderGraph: 0ms
 [INFO] [InitTiming] light buffer + cluster grid: 0ms
 [INFO] [LightProbeSystem] Initialized, face_res=64, RT=820039
 [INFO] [InitTiming] LightProbeSystem: 0ms
 [INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
 [INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=800048 (cached)
 [INFO] [ReflectionProbeSystem] Initialized, bake_res=128
-[INFO] [InitTiming] ReflectionProbeSystem: 1ms
+[INFO] [InitTiming] ReflectionProbeSystem: 0ms
 [INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
 [INFO] [InitTiming] StreamingManager: 0ms
 [INFO] [GPUSkinning] Initialized (shader=850011, initial_capacity=4096v/1024b)
 [INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
-[INFO] [InitTiming] GPUSkinning: 1ms
+[INFO] [InitTiming] GPUSkinning: 0ms
 [INFO] EngineInstance init: startup scene regression checks skipped by env
-[INFO] Runtime stats: entities=15, sprites=0, meshes=65, draw_calls=69, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=14.7352, avg_fixed_ms=0.02962, avg_render_ms=26.3279, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] Runtime stats: entities=15, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=9.28961, avg_fixed_ms=0.0220829, avg_render_ms=48.7046, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=10, gpu_instances=10, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] Runtime stats: entities=15, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=5.73483, avg_fixed_ms=0.0229538, avg_render_ms=44.097, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=10, gpu_instances=10, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\d3d11\shots\3d_hair.png target=scene size=1280x701
-[INFO] Runtime stats: entities=15, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=5.87664, avg_fixed_ms=0.0221854, avg_render_ms=42.1114, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=10, gpu_instances=10, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] Runtime stats: entities=15, sprites=0, meshes=65, draw_calls=69, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=7.0102, avg_fixed_ms=0.01246, avg_render_ms=12.3109, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs_real\d3d11\shots\3d_hair.png target=scene size=1280x720
 DSE_MAX_FRAMES reached: 70
 [INFO] [StreamingManager] Shutdown
-[INFO] [LuaRuntime] Shutdown begin state=000001C11997DED8 script_instances=0 lua_memory_usage=139544 awake_called=1
-[INFO] [LuaRuntime] lua_close state=000001C11997DED8
+[INFO] [LuaRuntime] Shutdown begin state=000001CD70B49008 script_instances=0 lua_memory_usage=139733 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000001CD70B49008
 [INFO] [LuaRuntime] lua_close complete
 [INFO] [LuaRuntime] Shutdown end
 [INFO] [HairSystem] Shutdown, released all hair resources
@@ -173,8 +171,8 @@ DSE_MAX_FRAMES reached: 70
 [INFO] [D3D11] RhiDevice shutdown
 [INFO] FileWatcher: stopped
 [INFO] debug logger shutdown
-[ERROR] [D3D11] Shader compile error: C:\Users\Administrator\repos\DSEngine\Shader@0x000001C116754BA0(92,12-81): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop
-C:\Users\Administrator\repos\DSEngine\Shader@0x000001C116754BA0(145,5-35): error X3511: unable to unroll loop, loop does not appear to terminate in a timely manner (523 iterations) or unrolled loop is too large, use the [unroll(n)] attribute to force an exact higher number
+[ERROR] [D3D11] Shader compile error: C:\Users\Administrator\Desktop\Engine\DSEngine\Shader@0x000001CD6999EA80(92,12-81): warning X3570: gradient instruction used in a loop with varying iteration, attempting to unroll the loop
+C:\Users\Administrator\Desktop\Engine\DSEngine\Shader@0x000001CD6999EA80(145,5-35): error X3511: unable to unroll loop, loop does not appear to terminate in a timely manner (523 iterations) or unrolled loop is too large, use the [unroll(n)] attribute to force an exact higher number
 
 [ERROR] [HairAsset] Failed to open: models/cube.dmesh
 [ERROR] [HairSystem] Failed to load hair asset: models/cube.dmesh

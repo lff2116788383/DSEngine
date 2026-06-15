@@ -3,13 +3,13 @@ Starting DSEngine Runtime...
 Business mode: lua
 [INFO] RHI Factory: 创建 Vulkan 后端
 [INFO] FramePipeline RHI 后端: Vulkan
-[INFO] [Vulkan] Selected GPU: llvmpipe (LLVM 22.1.6, 256 bits)
-[INFO] [Vulkan] Pipeline cache loaded: 32 bytes
+[INFO] [Vulkan] Selected GPU: NVIDIA GeForce RTX 3070
+[INFO] [Vulkan] Pipeline cache loaded: 1921746 bytes
 [INFO] [Vulkan] Present mode: FIFO (VSync on)
-[INFO] [Vulkan] Created 2 swapchain framebuffers
-[INFO] [Vulkan] Swapchain created: 1280x701 format=44 colorspace=0 hdr=no images=2
-[INFO] [Vulkan] Context initialized: 1280x701 validation=0
-[INFO] [Vulkan] Descriptor pools created (2x, maxSets=4096 each)
+[INFO] [Vulkan] Created 3 swapchain framebuffers
+[INFO] [Vulkan] Swapchain created: 1280x720 format=44 colorspace=0 hdr=no images=3
+[INFO] [Vulkan] Context initialized: 1280x720 validation=0
+[INFO] [Vulkan] Descriptor pools created (2x, maxSets=16384 each)
 [INFO] [Vulkan] ResourceManager initialized
 [INFO] VulkanPipelineStateManager initialized
 [INFO] VulkanShaderManager initialized
@@ -95,9 +95,9 @@ Business mode: lua
 [INFO] VulkanDrawExecutor geometry buffers + UBO buffers initialized
 [INFO] [VulkanGpuTimer] Initialized (period={:.2f} ns/tick)
 [INFO] [Vulkan] RhiDevice initialized with all subsystems
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [InitTiming] RHI device init: 189ms
-[INFO] DSE_RENDER_DEVICE backend=Vulkan adapter="llvmpipe (LLVM 22.1.6, 256 bits)" software=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [InitTiming] RHI device init: 304ms
+[INFO] DSE_RENDER_DEVICE backend=Vulkan adapter="NVIDIA GeForce RTX 3070" software=0
 [INFO] Render pipeline profile: using built-in ForwardPlusDefault
 [INFO] RenderPipelineProfile ForwardPlusDefault settings{gpu_driven=true, shadows=true, shadow_quality=default, postprocess_quality=default}
   0: pre_z [enabled]
@@ -132,35 +132,35 @@ Business mode: lua
   29: fxaa [enabled]
   30: taa [enabled]
   31: present [enabled]
-[INFO] Runtime data root: C:\Users\Administrator\repos\DSEngine\bin\data
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420000
-[INFO] FileWatcher: started monitoring C:\Users\Administrator\repos\DSEngine\bin\data
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=4 uav=0 handle=420001
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420002
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=0 msaa=1 uav=0 handle=420003
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420004
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=1 handle=420005
-[INFO] [Vulkan] RenderTarget created: 320x175 color_count=1 msaa=1 uav=1 handle=420006
-[INFO] [Vulkan] RenderTarget created: 160x87 color_count=1 msaa=1 uav=1 handle=420007
-[INFO] [Vulkan] RenderTarget created: 80x43 color_count=1 msaa=1 uav=1 handle=420008
-[INFO] [Vulkan] RenderTarget created: 40x21 color_count=1 msaa=1 uav=1 handle=420009
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420010
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420011
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420012
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420013
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420014
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420015
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420016
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420017
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420018
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420019
-[INFO] [Vulkan] RenderTarget created: 640x350 color_count=1 msaa=1 uav=0 handle=420020
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420021
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420022
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420023
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=3 msaa=1 uav=0 handle=420024
-[INFO] [Vulkan] RenderTarget created: 1280x701 color_count=1 msaa=1 uav=0 handle=420025
-[INFO] [Vulkan] Hi-Z texture created: handle=450000 1280x701 mips=11
+[INFO] Runtime data root: C:\Users\Administrator\Desktop\Engine\DSEngine\bin\data
+[INFO] FileWatcher: started monitoring C:\Users\Administrator\Desktop\Engine\DSEngine\bin\data
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420000
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=4 uav=0 handle=420001
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420002
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=0 msaa=1 uav=0 handle=420003
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420004
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=1 handle=420005
+[INFO] [Vulkan] RenderTarget created: 320x180 color_count=1 msaa=1 uav=1 handle=420006
+[INFO] [Vulkan] RenderTarget created: 160x90 color_count=1 msaa=1 uav=1 handle=420007
+[INFO] [Vulkan] RenderTarget created: 80x45 color_count=1 msaa=1 uav=1 handle=420008
+[INFO] [Vulkan] RenderTarget created: 40x22 color_count=1 msaa=1 uav=1 handle=420009
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420010
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420011
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420012
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420013
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420014
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420015
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420016
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420017
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420018
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420019
+[INFO] [Vulkan] RenderTarget created: 640x360 color_count=1 msaa=1 uav=0 handle=420020
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420021
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420022
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420023
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=3 msaa=1 uav=0 handle=420024
+[INFO] [Vulkan] RenderTarget created: 1280x720 color_count=1 msaa=1 uav=0 handle=420025
+[INFO] [Vulkan] Hi-Z texture created: handle=450000 1280x720 mips=11
 [INFO] [Vulkan] RenderTarget created: 64x64 color_count=1 msaa=1 uav=0 handle=420026
 [INFO] [Vulkan] RenderTarget created: 1x1 color_count=1 msaa=1 uav=0 handle=420027
 [INFO] [Vulkan] RenderTarget created: 1x1 color_count=1 msaa=1 uav=0 handle=420028
@@ -180,7 +180,7 @@ Business mode: lua
 [INFO] [Vulkan] RenderTarget created: 512x512 color_count=3 msaa=1 uav=0 handle=420038
 [INFO] [Vulkan] Full compute program created: handle=540043, ssbo=2, img=0, smp=1, pc=176
 [INFO] GPU Driven Rendering: supported=1, cull_shader=540043
-[INFO] [InitTiming] render resources: 149ms
+[INFO] [InitTiming] render resources: 107ms
 [INFO] FramePipeline init: systems init begin
 [INFO] [Physics2D] Init world_valid=1
 [INFO] FramePipeline init: systems init complete
@@ -198,12 +198,12 @@ Business mode: lua
 [INFO] [Vulkan] Full compute program created: handle=540048, ssbo=3, img=0, smp=0, pc=12
 [INFO] [HairSystem] Initialized, gpu_compute=1
 [INFO] FramePipeline init: Gameplay3D module OnInit OK (static)
-[INFO] [InitTiming] systems init: 35ms
+[INFO] [InitTiming] systems init: 27ms
 [INFO] FramePipeline init: business bootstrap begin
 [INFO] [LuaRuntime] Shutdown begin state=0000000000000000 script_instances=0 lua_memory_usage=0 awake_called=0
 [INFO] [LuaRuntime] Shutdown end
-[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF70403DED0 seed=0
-[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] [LuaRuntime] lua_newstate begin allocator=00007FF71D7F5950 seed=0
+[INFO] Lua bootstrap: startup script resolved to C:\Users\Administrator\Desktop\Engine\DSEngine\samples\lua\main.lua
 [INFO] Lua bootstrap: package path setup begin
 [INFO] Lua bootstrap: register API begin
 [INFO] Lua bootstrap: loading startup script begin
@@ -216,107 +216,103 @@ Business mode: lua
 [LOD] LOD0(近)=绿, LOD1(中)=黄, LOD2(远)=红
 [LOD] WASD 移动相机, 前后移动观察 LOD 切换
 [INFO] Lua bootstrap: Awake OK
-[INFO] Lua startup script loaded: C:\Users\Administrator\repos\DSEngine\samples\lua\main.lua
+[INFO] Lua startup script loaded: C:\Users\Administrator\Desktop\Engine\DSEngine\samples\lua\main.lua
 [INFO] Lua business mode bootstrap: OK
-[INFO] [InitTiming] business bootstrap: 12ms
-[INFO] [InitTiming] BuildRenderGraph: 1ms
-[INFO] [InitTiming] light buffer + cluster grid: 1ms
+[INFO] [InitTiming] business bootstrap: 3ms
+[INFO] [InitTiming] BuildRenderGraph: 0ms
+[INFO] [InitTiming] light buffer + cluster grid: 0ms
 [INFO] [Vulkan] RenderTarget created: 64x64 color_count=1 msaa=1 uav=0 handle=420039
 [INFO] [LightProbeSystem] Initialized, face_res=64, RT=420039
-[INFO] [InitTiming] LightProbeSystem: 3ms
+[INFO] [InitTiming] LightProbeSystem: 1ms
 [INFO] [ReflectionProbeSystem] BRDF LUT loaded from cache
 [INFO] [ReflectionProbeSystem] BRDF LUT generated: 128x128, handle=400008 (cached)
 [INFO] [Vulkan] RenderTarget created: 128x128 color_count=1 msaa=1 uav=0 handle=420040
 [INFO] [ReflectionProbeSystem] Initialized, bake_res=128
-[INFO] [InitTiming] ReflectionProbeSystem: 6ms
+[INFO] [InitTiming] ReflectionProbeSystem: 2ms
 [INFO] [StreamingManager] Initialized (budget=8/frame, max_concurrent=32)
-[INFO] [InitTiming] StreamingManager: 1ms
+[INFO] [InitTiming] StreamingManager: 0ms
 [INFO] [Vulkan] Full compute program created: handle=540049, ssbo=5, img=0, smp=0, pc=8
 [INFO] [GPUSkinning] Initialized (shader=540049, initial_capacity=4096v/1024b)
 [INFO] FramePipeline init: GPUSkinningSystem initialized (compute skinning available)
-[INFO] [InitTiming] GPUSkinning: 6ms
+[INFO] [InitTiming] GPUSkinning: 2ms
 [INFO] EngineInstance init: startup scene regression checks skipped by env
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=25, draw_calls=29, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.6533, avg_fixed_ms=0.02284, avg_render_ms=31109.8, instanced_meshes=75, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.1186, avg_fixed_ms=0.01996, avg_render_ms=27961.9, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0874, avg_fixed_ms=0.02038, avg_render_ms=52.9149, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0539273, avg_fixed_ms=0.0200725, avg_render_ms=45.9756, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0502318, avg_fixed_ms=0.0193039, avg_render_ms=46.3108, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs\vulkan\shots\3d_lod.png target=scene size=1280x701
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0500619, avg_fixed_ms=0.0194408, avg_render_ms=44.5914, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
-[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2535567918816 rp=2535608061584 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] Runtime stats: entities=21, sprites=0, meshes=25, draw_calls=29, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=1.8758, avg_fixed_ms=0.01206, avg_render_ms=15.0847, instanced_meshes=75, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=0, gpu_driven_active=0, gpu_indirect_draws=0, gpu_instances=0, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+DSE_SCREENSHOT_WRITTEN path=C:\Users\Administrator\demo_runs_real\vulkan\shots\3d_lod.png target=scene size=1280x720
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] Runtime stats: entities=21, sprites=0, meshes=0, draw_calls=5, material_switches=0, shadow_passes=2, max_batch_sprites=0, render_passes=12, physics_bodies=0, particle_emitters=0, active_particles=0, avg_update_ms=0.0592708, avg_fixed_ms=0.0144892, avg_render_ms=10.0946, instanced_meshes=0, gpu_driven_requested=1, gpu_driven_supported=1, gpu_driven_prepared=1, gpu_driven_active=1, gpu_indirect_draws=19, gpu_instances=19, pending_upload_callbacks=0, pending_upload_callbacks_hwm=0, upload_budget=16
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169120064 rp=2101181684736 imgIdx=1
+[INFO] [Vulkan] BeginRenderPass SWAPCHAIN: fb=2101169117472 rp=2101181684736 imgIdx=0
 DSE_MAX_FRAMES reached: 70
 [INFO] [StreamingManager] Shutdown
-[INFO] [LuaRuntime] Shutdown begin state=0000024E5E794BD8 script_instances=0 lua_memory_usage=133739 awake_called=1
-[INFO] [LuaRuntime] lua_close state=0000024E5E794BD8
+[INFO] [LuaRuntime] Shutdown begin state=000001E94EE1E4E8 script_instances=0 lua_memory_usage=133928 awake_called=1
+[INFO] [LuaRuntime] lua_close state=000001E94EE1E4E8
 [INFO] [LuaRuntime] lua_close complete
 [INFO] [LuaRuntime] Shutdown end
 [INFO] [HairSystem] Shutdown, released all hair resources
@@ -325,7 +321,7 @@ DSE_MAX_FRAMES reached: 70
 [INFO] VulkanShaderManager shutdown: 38 programs created, 0 destroyed
 [INFO] VulkanPipelineStateManager shutdown, 0 states remaining
 [INFO] [Vulkan] ResourceManager shutdown
-[INFO] [Vulkan] Pipeline cache saved: 32 bytes (+ 32 header)
+[INFO] [Vulkan] Pipeline cache saved: 1921746 bytes (+ 32 header)
 [INFO] [Vulkan] Context shutdown complete
 [INFO] [Vulkan] RhiDevice shutdown
 [INFO] FileWatcher: stopped
