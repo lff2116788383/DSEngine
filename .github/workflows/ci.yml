@@ -110,17 +110,22 @@ jobs:
         shell: pwsh
         run: |
           $cfg = "${{ matrix.config }}"
-          $bin = "bin"
-          New-Item -ItemType Directory -Force -Path $bin | Out-Null
-          # The project builds its own Vulkan loader; the LunarG SDK Bin does not ship vulkan-1.dll
-          # and GPU-less runners have none in System32, so copy it next to the test exes.
-          $vks = Get-ChildItem "${{ env.BUILD_DIR }}" -Recurse -Filter "vulkan-1*.dll" -ErrorAction SilentlyContinue
-          $vk = $vks | Sort-Object @{ Expression = { $_.Directory.Name -ieq $cfg }; Descending = $true } | Select-Object -First 1
-          if($vk){ Copy-Item $vk.FullName (Join-Path $bin "vulkan-1.dll") -Force; Write-Host "vulkan-1.dll <= $($vk.FullName)" } else { Write-Error "vulkan-1.dll not found anywhere under ${{ env.BUILD_DIR }}"; exit 1 }
-          # Debug CRT is not present on clean runners; needed by Debug/RelWithDebInfo test exes.
-          if($env:VCToolsRedistDir){ Get-ChildItem (Join-Path $env:VCToolsRedistDir "debug_nonredist\x64\Microsoft.VC*.DebugCRT\*.dll") -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $bin -Force } }
-          if($env:UniversalCRTSdkDir -and $env:UCRTVersion){ $u = Join-Path $env:UniversalCRTSdkDir ("bin\" + $env:UCRTVersion + "\x64\ucrt\ucrtbased.dll"); if(Test-Path $u){ Copy-Item $u $bin -Force } }
-          Write-Host "bin DLLs:"; Get-ChildItem $bin -Filter *.dll | ForEach-Object { Write-Host "  $($_.Name)" }
+          # Test exes may live in bin\ (flat) or bin\<config>\ depending on per-config RUNTIME_OUTPUT_DIRECTORY; deploy next to each.
+          $exes = Get-ChildItem "bin" -Recurse -Filter "dse_gtest_*.exe" -ErrorAction SilentlyContinue
+          $targets = @($exes | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique)
+          if(-not $targets){ $targets = @((Join-Path (Get-Location) "bin")) }
+          New-Item -ItemType Directory -Force -Path $targets | Out-Null
+          # The project builds its own Vulkan loader; clean GPU-less runners have no vulkan-1.dll in System32.
+          $vk = Get-ChildItem "${{ env.BUILD_DIR }}" -Recurse -Filter "vulkan-1*.dll" -ErrorAction SilentlyContinue | Sort-Object @{ Expression = { $_.Directory.Name -ieq $cfg }; Descending = $true } | Select-Object -First 1
+          if(-not $vk){ Write-Error "vulkan-1.dll not found anywhere under ${{ env.BUILD_DIR }}"; exit 1 }
+          $crt = @()
+          if($env:VCToolsRedistDir){ $crt += Get-ChildItem (Join-Path $env:VCToolsRedistDir "debug_nonredist\x64\Microsoft.VC*.DebugCRT\*.dll") -ErrorAction SilentlyContinue }
+          if($env:UniversalCRTSdkDir -and $env:UCRTVersion){ $u = Join-Path $env:UniversalCRTSdkDir ("bin\" + $env:UCRTVersion + "\x64\ucrt\ucrtbased.dll"); if(Test-Path $u){ $crt += Get-Item $u } }
+          foreach($t in $targets){
+            Copy-Item $vk.FullName (Join-Path $t "vulkan-1.dll") -Force
+            foreach($c in $crt){ Copy-Item $c.FullName $t -Force }
+            Write-Host "Deployed to $t : vulkan-1.dll + $($crt.Count) CRT dll(s)"
+          }
       - name: Run Tests
         working-directory: ${{ env.BUILD_DIR }}
         run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 120 -T Test
