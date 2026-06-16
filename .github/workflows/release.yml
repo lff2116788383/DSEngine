@@ -99,7 +99,13 @@ jobs:
 
       - name: Package SDK (Release, shared, find_package-ready)
         shell: pwsh
-        run: ./scripts/package_sdk.ps1 -Config Release
+        run: |
+          ./scripts/package_sdk.ps1 -Config Release
+          $ver = "${{ env.REF_NAME }}".TrimStart('v')
+          $dst = "DSEngine-SDK-v$ver-win-x64-release.zip"
+          $src = Get-ChildItem "DSEngine-SDK-*.zip" | Where-Object { $_.Name -ne $dst } | Select-Object -First 1
+          if($src){ Move-Item $src.FullName $dst -Force }
+          Get-ChildItem DSEngine-SDK-*.zip | Select-Object Name,Length
 
       - name: Upload SDK artifact
         uses: actions/upload-artifact@v4
