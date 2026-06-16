@@ -4,7 +4,7 @@
   <img src="data/icon/dse_icon.png" alt="DSEngine Logo" width="128">
 </p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
 [![CMake](https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg)](https://cmake.org)
 
@@ -472,7 +472,7 @@ ctest --test-dir build_vs2022 -C Debug --output-on-failure -L gtest
 
 ## 许可证
 
-本项目基于 **MIT License** 授权 —— 详见 [LICENSE](LICENSE) 文件。
+本项目基于 **Apache License 2.0** 授权 —— 详见 [LICENSE](LICENSE) 文件。
 
 ---
 

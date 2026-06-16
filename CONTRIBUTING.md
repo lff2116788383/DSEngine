@@ -68,5 +68,5 @@ Thanks for your interest in DSEngine! This document describes how to contribute.
 
 ## 许可证 / License
 
-提交贡献即表示你同意你的贡献以本项目的 [MIT License](LICENSE) 授权。
-By contributing, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).
+提交贡献即表示你同意你的贡献以本项目的 [Apache License 2.0](LICENSE) 授权。
+By contributing, you agree that your contributions will be licensed under the project's [Apache License 2.0](LICENSE).
