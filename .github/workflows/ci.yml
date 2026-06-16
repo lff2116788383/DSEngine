@@ -114,9 +114,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path $bin | Out-Null
           # The project builds its own Vulkan loader; the LunarG SDK Bin does not ship vulkan-1.dll
           # and GPU-less runners have none in System32, so copy it next to the test exes.
-          $vk = Get-ChildItem "${{ env.BUILD_DIR }}\third_party\vulkan-loader\loader\$cfg\vulkan-1*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if(-not $vk){ $vk = Get-ChildItem "${{ env.BUILD_DIR }}\third_party\vulkan-loader\loader\*\vulkan-1*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1 }
-          if($vk){ Copy-Item $vk.FullName (Join-Path $bin "vulkan-1.dll") -Force; Write-Host "vulkan-1.dll <= $($vk.FullName)" } else { Write-Warning "vulkan-1.dll not found in build tree" }
+          $vks = Get-ChildItem "${{ env.BUILD_DIR }}" -Recurse -Filter "vulkan-1*.dll" -ErrorAction SilentlyContinue
+          $vk = $vks | Sort-Object @{ Expression = { $_.Directory.Name -ieq $cfg }; Descending = $true } | Select-Object -First 1
+          if($vk){ Copy-Item $vk.FullName (Join-Path $bin "vulkan-1.dll") -Force; Write-Host "vulkan-1.dll <= $($vk.FullName)" } else { Write-Error "vulkan-1.dll not found anywhere under ${{ env.BUILD_DIR }}"; exit 1 }
           # Debug CRT is not present on clean runners; needed by Debug/RelWithDebInfo test exes.
           if($env:VCToolsRedistDir){ Get-ChildItem (Join-Path $env:VCToolsRedistDir "debug_nonredist\x64\Microsoft.VC*.DebugCRT\*.dll") -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName $bin -Force } }
           if($env:UniversalCRTSdkDir -and $env:UCRTVersion){ $u = Join-Path $env:UniversalCRTSdkDir ("bin\" + $env:UCRTVersion + "\x64\ucrt\ucrtbased.dll"); if(Test-Path $u){ Copy-Item $u $bin -Force } }
