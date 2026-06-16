@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +125,7 @@ jobs:
   # 至少编译一次 editor，避免 editor 代码回归在 CI 漏检。
   # 仅编译（不运行 GUI）：editor 走 OpenGL，故关 Vulkan、用 D3D11 作为一条 RHI 后端。
   editor-build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     name: editor-build-d3d11
     steps:
       - name: Checkout (with submodules)
@@ -174,7 +174,7 @@ jobs:
   # 用 find_package(DSEngine) 编译 examples/sdk_consumer → 运行可执行确认 DLL 可加载。
   # 取 Full/Release 作为发布主配置门槛（Vulkan OFF，无需 Vulkan SDK）。
   sdk-verify:
-    runs-on: windows-latest
+    runs-on: windows-2022
     name: sdk-verify-full-release
     steps:
       - name: Checkout (with submodules)
@@ -249,8 +249,8 @@ jobs:
 
       - name: Install Android SDK packages (platform + build-tools + NDK r26d)
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;${ANDROID_TARGET_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}"
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; [ -x "$SDKMANAGER" ] || SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -name sdkmanager -type f 2>/dev/null | head -1)"; echo "sdkmanager=$SDKMANAGER"; yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;${ANDROID_TARGET_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}"
           echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
 
