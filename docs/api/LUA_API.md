@@ -1385,6 +1385,21 @@ dssl.apply_material(entity, 0, inst)
 | `ecs.get_nav_destination(e)` | entity | `x, y, z` | 获取导航目标位置 |
 | `ecs.nav_agent_has_path(e)` | entity | `bool` | 查询是否已规划出路径 |
 
+**`ecs.get_nav_agent(e)` 返回表字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `speed` | number | 移动速度 |
+| `acceleration` | number | 加速度 |
+| `stopping_dist` | number | 到点停止距离 |
+| `radius` | number | 代理半径 |
+| `height` | number | 代理高度 |
+| `dest_x` / `dest_y` / `dest_z` | number | 当前目标位置 |
+| `has_path` | bool | 是否已规划出路径（与 `nav_agent_has_path` 一致） |
+| `path_pending` | bool | 是否正在等待重新规划路径 |
+| `arrived` | bool | 是否已到达目标 |
+| `current_waypoint` | integer | 当前路径点索引（从 0 开始） |
+
 **示例：**
 ```lua
 nav.load("data/navmesh/level01.navmesh")
