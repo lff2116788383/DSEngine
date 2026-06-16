@@ -220,14 +220,15 @@ jobs:
         run: |
           ./scripts/verify_android_apk.ps1 `
             -Abi arm64-v8a -ApiLevel 24 `
+            -BuildDir "$PWD/build_android" `
             -BuildTools $env:ANDROID_BUILD_TOOLS -Platform $env:ANDROID_TARGET_PLATFORM `
             -HostShaderCompiler "$PWD/bin/dse_shader_compiler"
 
       - name: Stage APK
         run: |
           ver="${REF_NAME#v}"
-          apk="$(find . -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
-          test -n "$apk" || { echo "APK not found"; exit 1; }
+          apk="$(find build_android .. -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
+          test -n "$apk" || { echo "APK not found"; find . .. -name '*.apk' 2>/dev/null; exit 1; }
           cp "$apk" "DSEngine-v${ver}-android-arm64.apk"
           ls -lh DSEngine-*.apk
 
