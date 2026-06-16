@@ -317,6 +317,69 @@ fs::path LocateSourceDir(const char* argv0) {
     return {};
 }
 
+#if defined(_WIN32)
+// 把 MSVC C/C++ 运行时 (VCRUNTIME140 / MSVCP140 等) 以 app-local 方式补齐到 out_dir，
+// 使没装 "Visual C++ 2015-2022 Redistributable" 的干净机器双击导出的游戏也能启动。
+// 与 scripts/collect_runtime_deps.ps1 等价，但内置进 CLI，覆盖 `dse build` 从源码树
+// 直接构建运行时（其 bin/ 里通常不含 CRT DLL）的兜底场景。
+void EnsureVcRuntime(const fs::path& out_dir) {
+    const char* required[] = {"vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"};
+
+    std::error_code ec;
+    std::vector<std::string> need;
+    for (const char* d : required) {
+        if (!fs::exists(out_dir / d, ec)) need.push_back(d);
+    }
+    if (need.empty()) {
+        std::cout << "VC++ 运行时已随包发行 (vcruntime140 / msvcp140)\n";
+        return;
+    }
+
+    // 候选源：VS 开发环境的 Redist 目录 -> System32 兜底（两者均为可再分发副本）。
+    std::vector<fs::path> sources;
+    if (const char* redist = std::getenv("VCToolsRedistDir")) {
+        fs::path x64 = fs::path(redist) / "x64";
+        if (fs::exists(x64, ec)) {
+            for (const auto& e : fs::directory_iterator(x64, ec)) {
+                if (!e.is_directory()) continue;
+                const std::string n = e.path().filename().string();
+                if (n.rfind("Microsoft.VC", 0) == 0 && n.find(".CRT") != std::string::npos) {
+                    sources.push_back(e.path());
+                }
+            }
+        }
+    }
+    if (const char* windir = std::getenv("WINDIR")) {
+        sources.push_back(fs::path(windir) / "System32");
+    }
+
+    int copied = 0;
+    std::vector<std::string> missing;
+    for (const std::string& dll : need) {
+        bool done = false;
+        for (const auto& src : sources) {
+            fs::path p = src / dll;
+            if (fs::exists(p, ec)) {
+                fs::copy_file(p, out_dir / dll, fs::copy_options::overwrite_existing, ec);
+                if (!ec) { ++copied; done = true; break; }
+                ec.clear();
+            }
+        }
+        if (!done) missing.push_back(dll);
+    }
+
+    if (copied > 0) {
+        std::cout << "已随包发行 VC++ 运行时: " << copied << " 个 DLL (app-local)\n";
+    }
+    if (!missing.empty()) {
+        std::cerr << "警告: 未能定位部分 VC++ 运行时 DLL: ";
+        for (size_t i = 0; i < missing.size(); ++i) std::cerr << (i ? ", " : "") << missing[i];
+        std::cerr << "\n      目标机若未安装 'Visual C++ 2015-2022 Redistributable (x64)' 可能无法启动；\n"
+                     "      请在本机安装该运行时后重试, 或手动拷贝上述 DLL 到输出目录。\n";
+    }
+}
+#endif  // _WIN32
+
 // dse build --target web：用 emscripten 预设真正配置+编译 Web 产物，
 // 成功后默认复用 dist 逻辑收集为可上传包。
 int CmdBuildWeb(const std::vector<std::string>& args, const char* argv0) {
@@ -484,6 +547,12 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
         }
     }
     std::cout << "已拷贝 exe + " << dll_count << " 个 DLL\n";
+
+#if defined(_WIN32)
+    // 2a0. 兜底补齐 VC++ 运行时（vcruntime140 / msvcp140），确保干净机（未装 VC++ Redist）
+    //      也能双击启动。从源码树构建的运行时 bin/ 通常不含这些 CRT DLL。
+    EnsureVcRuntime(out_dir);
+#endif
 
     // 2a. --with-swgl：确保软件 OpenGL（Mesa llvmpipe）随包发行，便于在无独显的机器
     //     （远程桌面 / VM / 无 GPU 服务器）上双击即跑。这些 DLL 若已由 setup_swgl.ps1

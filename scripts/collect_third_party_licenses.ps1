@@ -42,13 +42,46 @@ $licensePatterns = @(
 #   FromLastMatch: 起始标记（最后一次出现，用于许可证在文件末尾）
 #   UntilMatch  : 终止标记（可选，遇到则停）
 #   MaxLines    : 最多抽取行数
+#   LiteralText : 直接给定许可证全文（用于精简/二进制 checkout，仓库内无任何许可证文件可定位）
 #   Spdx / Note : 元信息
+$physxLicense = @'
+BSD 3-Clause License
+
+Copyright (c) 2008-2023, NVIDIA Corporation. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+'@
+
 $supplemental = [ordered]@{
     "depends/lua"          = @{ File = "depends\lua\lua.h";                    FromLastMatch = "Copyright (C)"; UntilMatch = "#endif"; MaxLines = 30; Spdx = "MIT" }
     "depends/miniaudio"    = @{ File = "depends\miniaudio\miniaudio.h";        FromMatch = "This software is available as a choice"; MaxLines = 140; Spdx = "Public Domain OR MIT-0" }
     "third_party/imguizmo" = @{ File = "third_party\imguizmo\ImGuizmo.h";      FromMatch = "The MIT License"; UntilMatch = "----"; MaxLines = 30; Spdx = "MIT" }
     "depends/glad"         = @{ File = "depends\glad\include\KHR\khrplatform.h"; FromMatch = "Copyright"; UntilMatch = "*/"; MaxLines = 40; Spdx = "MIT (glad generator) / Khronos"; Note = "OpenGL 加载器由 glad 0.1.36 生成（生成器本身 MIT，生成代码置于公有领域）。以下为其依赖的 Khronos khrplatform.h 许可证。" }
     "depends/glm_ext"      = @{ InheritFrom = "depends/glm"; Spdx = "MIT (GLM)"; Note = "项目本地的 GLM 扩展头文件，遵循 GLM (MIT) 许可证（见 depends/glm）。" }
+    "depends/physx"        = @{ LiteralText = $physxLicense; Spdx = "BSD-3-Clause"; Note = "NVIDIA PhysX SDK（精简 checkout，仅含 include/ 与预编译 bin/，仓库内无独立 LICENSE 文件）。默认 DSE_ENABLE_PHYSX=OFF，仅在显式开启时随包发行。以下为其 BSD-3-Clause 许可证全文。" }
 }
 
 $codeExt = @(".cpp", ".h", ".hpp", ".c", ".cc", ".cmake", ".py", ".sh", ".bat", ".rs", ".cs", ".java", ".js", ".ts")
@@ -131,6 +164,10 @@ foreach ($root in $depRoots) {
         if ($sup) {
             if ($sup.Contains('InheritFrom')) {
                 $components += [PSCustomObject]@{ Name = $name; Dir = $dir.FullName; Status = "inherited"; Source = $sup.InheritFrom; Spdx = $sup.Spdx; Note = $sup.Note; Text = "" }
+                continue
+            }
+            if ($sup.Contains('LiteralText')) {
+                $components += [PSCustomObject]@{ Name = $name; Dir = $dir.FullName; Status = "embedded"; Source = "(literal)"; Spdx = $sup.Spdx; Note = $sup.Note; Text = ([string]$sup.LiteralText).TrimEnd() }
                 continue
             }
             $emb = Get-EmbeddedLicense $sup
