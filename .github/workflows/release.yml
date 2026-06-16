@@ -1,26 +1,24 @@
-# DSEngine Release — tag-triggered: build & package the win-x64 SDK and publish a GitHub Release.
-# Trigger: push a tag like `v0.1.0-alpha` (or run manually via workflow_dispatch with a tag input).
-# Produces: DSEngine-SDK-v<version>-win-x64-release.zip (Full / Release / Jolt ON / Vulkan OFF),
-# release notes extracted from the matching CHANGELOG.md section.
+# DSEngine Release - build per-platform artifacts and publish a GitHub Release on tag push.
 name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v0.1.0-alpha). Created from the current ref if it does not exist.'
+        description: 'Existing tag to (re)build a release for, e.g. v0.1.0-alpha'
         required: true
 
-permissions:
-  contents: write
+env:
+  BUILD_DIR: build_vs2022
+  REF_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
-  release-sdk-win-x64:
-    runs-on: windows-latest
-    name: release-sdk-win-x64
+  # ── Windows runnable package: engine + dse CLI + game runtime + editor (D3D11, no Vulkan dep) ──
+  windows-runtime:
+    runs-on: windows-2022
+    name: windows-runtime
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -32,47 +30,277 @@ jobs:
         with:
           arch: x64
 
-      - name: Package SDK (Full / Release / win-x64, Vulkan OFF)
-        shell: pwsh
-        run: ./scripts/package_sdk.ps1 -Config Release -Enable3D
+      - name: CMake Configure (editor ON, D3D11, no Vulkan)
+        run: |
+          cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
+            -DDSE_BUILD_EDITOR=ON `
+            -DDSE_BUILD_LAUNCHER=OFF `
+            -DDSE_BUILD_GTESTS=OFF `
+            -DDSE_ENABLE_SPINE=ON `
+            -DDSE_ENABLE_3D=ON `
+            -DDSE_ENABLE_VULKAN=OFF `
+            -DDSE_ENABLE_D3D11=ON `
+            -DDSE_ENABLE_PHYSX=OFF `
+            -DDSE_ENABLE_JOLT=ON `
+            -DDSE_ENABLE_PCH=ON
 
-      - name: Resolve tag, locate zip, extract release notes
-        id: prep
+      - name: Build runtime targets
+        run: |
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_engine --parallel
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_cli --parallel
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_standalone --parallel
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_editor_cpp --parallel
+
+      - name: Copy Runtime Assets
+        run: cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_copy_assets
+
+      - name: Package Windows runtime zip
         shell: pwsh
         run: |
-          $tag = "${{ github.event.inputs.tag }}"
-          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "${{ github.ref_name }}" }
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
-          $zip = Get-ChildItem -Path . -Filter 'DSEngine-SDK-v*-win-x64-release.zip' | Select-Object -First 1
-          if (-not $zip) { throw 'SDK zip not found after packaging' }
-          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
-          Write-Host "SDK zip: $($zip.Name)"
-
-          $ver = $tag -replace '^v', ''
-          $body = "DSEngine $tag"
-          if (Test-Path CHANGELOG.md) {
-            $cl = Get-Content CHANGELOG.md -Raw
-            $pattern = '(?s)##\s*\[' + [regex]::Escape($ver) + '\].*?(?=\r?\n##\s*\[|\z)'
-            $m = [regex]::Match($cl, $pattern)
-            if ($m.Success) { $body = $m.Value.Trim() }
+          $ver = "${{ env.REF_NAME }}".TrimStart('v')
+          if(Test-Path scripts/collect_runtime_deps.ps1){ try { ./scripts/collect_runtime_deps.ps1 -DestDir bin } catch { Write-Warning "collect_runtime_deps: $_" } }
+          $stage = "stage_win_runtime"
+          if(Test-Path $stage){ Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $binRoot = (Resolve-Path bin).Path
+          $exclude = '\.(lib|exp|pdb|ilk)$|dse_gtest_|_smoke|AssetBuilder'
+          Get-ChildItem bin -Recurse -File | Where-Object { $_.FullName -notmatch $exclude } | ForEach-Object {
+            $rel = $_.FullName.Substring($binRoot.Length + 1)
+            $dest = Join-Path $stage $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+            Copy-Item $_.FullName $dest -Force
           }
-          [System.IO.File]::WriteAllText("$PWD\release_notes.md", $body, (New-Object System.Text.UTF8Encoding($false)))
-          Write-Host "----- release notes -----"
-          Write-Host $body
+          Copy-Item LICENSE,NOTICE,THIRD_PARTY_LICENSES.md $stage -Force -ErrorAction SilentlyContinue
+          $zip = "DSEngine-runtime-v$ver-win-x64.zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath $zip -Force
+          Write-Host "== $zip =="; Get-Item $zip | Select-Object Name,Length
 
-      - name: Create GitHub Release and upload SDK
+      - name: Upload Windows runtime artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-runtime
+          path: DSEngine-runtime-*.zip
+          if-no-files-found: error
+
+  # ── Windows C++ SDK package (find_package(DSEngine)) via author's packager ──
+  windows-sdk:
+    runs-on: windows-2022
+    name: windows-sdk
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Package SDK (Release, shared, find_package-ready)
         shell: pwsh
+        run: ./scripts/package_sdk.ps1 -Config Release
+
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-sdk
+          path: DSEngine-SDK-*.zip
+          if-no-files-found: error
+
+  # ── Web (Emscripten / WebGL2) ──
+  web:
+    runs-on: ubuntu-latest
+    name: web
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install host build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Build host shader compiler
+        run: |
+          cmake -S . -B build_host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+          cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
+
+      - name: Generate shader embed headers (incl. ESSL 300 for WebGL2)
+        run: |
+          ./bin/dse_shader_compiler \
+            --input-dir engine/render/shaders/src \
+            --output-dir engine/render/shaders/generated \
+            --target all --embed
+
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.64
+
+      - name: Configure (emcmake) + build dse_web_host
+        run: |
+          emcmake cmake -S . -B build_web -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_HOST_SHADER_COMPILER="$PWD/bin/dse_shader_compiler"
+          cmake --build build_web --target dse_web_host -j "$(nproc)"
+
+      - name: Package web zip
+        run: |
+          ver="${REF_NAME#v}"
+          stage="DSEngine-web-v${ver}"
+          mkdir -p "$stage"
+          cp bin/index.html bin/index.js bin/index.wasm "$stage"/
+          [ -f bin/index.data ] && cp bin/index.data "$stage"/ || true
+          cp LICENSE NOTICE "$stage"/ 2>/dev/null || true
+          zip -r "${stage}.zip" "$stage"
+          ls -lh "${stage}.zip"
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: DSEngine-web-*.zip
+          if-no-files-found: error
+
+  # ── Android arm64-v8a signed APK ──
+  android:
+    runs-on: ubuntu-latest
+    name: android
+    env:
+      ANDROID_NDK_VERSION: "26.3.11579264"
+      ANDROID_BUILD_TOOLS: "34.0.0"
+      ANDROID_TARGET_PLATFORM: "android-34"
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install host build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Install Android SDK packages (platform + build-tools + NDK r26d)
+        run: |
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; [ -x "$SDKMANAGER" ] || SDKMANAGER="$(find "$ANDROID_SDK_ROOT" -name sdkmanager -type f 2>/dev/null | head -1)"; echo "sdkmanager=$SDKMANAGER"; yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platforms;${ANDROID_TARGET_PLATFORM}" "build-tools;${ANDROID_BUILD_TOOLS}" "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+
+      - name: Build host shader compiler
+        run: |
+          cmake -S . -B build_host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_BUILD_GTESTS=OFF -DDSE_ENABLE_3D=ON -DDSE_ENABLE_JOLT=ON \
+            -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
+          cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
+
+      - name: Build signed APK (arm64-v8a)
+        shell: pwsh
+        run: |
+          ./scripts/verify_android_apk.ps1 `
+            -Abi arm64-v8a -ApiLevel 24 `
+            -BuildTools $env:ANDROID_BUILD_TOOLS -Platform $env:ANDROID_TARGET_PLATFORM `
+            -HostShaderCompiler "$PWD/bin/dse_shader_compiler"
+
+      - name: Stage APK
+        run: |
+          ver="${REF_NAME#v}"
+          apk="$(find . -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
+          test -n "$apk" || { echo "APK not found"; exit 1; }
+          cp "$apk" "DSEngine-v${ver}-android-arm64.apk"
+          ls -lh DSEngine-*.apk
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: DSEngine-*-android-arm64.apk
+          if-no-files-found: error
+
+  # ── Linux (GLFW/X11/GL) engine static lib + Lua runtime ELF ──
+  linux:
+    runs-on: ubuntu-latest
+    name: linux
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - name: Build (engine static lib + Lua runtime)
+        run: bash scripts/verify_linux_build.sh
         env:
-          GH_TOKEN: ${{ github.token }}
+          BUILD_TYPE: Release
+          BUILD_DIR: ${{ github.workspace }}/build_linux
+
+      - name: Package linux tarball
         run: |
-          $tag = "${{ steps.prep.outputs.tag }}"
-          $zip = "${{ steps.prep.outputs.zip }}"
-          $ghArgs = @($tag, $zip, '--title', "DSEngine $tag", '--notes-file', 'release_notes.md')
-          if ($tag -match '-') { $ghArgs += '--prerelease' }
-          if (gh release view $tag 2>$null) {
-            Write-Host "Release $tag exists; uploading asset (clobber)."
-            gh release upload $tag $zip --clobber
-          } else {
-            gh release create @ghArgs
-          }
+          ver="${REF_NAME#v}"
+          stage="DSEngine-linux-x64-v${ver}"
+          mkdir -p "$stage/lib" "$stage/bin"
+          find build_linux -maxdepth 3 -name 'libDSEngine*.a' -exec cp {} "$stage/lib/" \;
+          luaexe="$(find bin build_linux -maxdepth 3 -type f -name 'DSEngine_lua*' ! -name '*.a' ! -name '*.pdb' 2>/dev/null | head -1)"
+          [ -n "$luaexe" ] && cp "$luaexe" "$stage/bin/" || true
+          cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "$stage"/ 2>/dev/null || true
+          tar -czf "${stage}.tar.gz" "$stage"
+          ls -lh "${stage}.tar.gz"
+
+      - name: Upload linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: DSEngine-linux-*.tar.gz
+          if-no-files-found: error
+
+  # ── Publish GitHub Release with all artifacts ──
+  release:
+    needs: [windows-runtime, windows-sdk, web, android, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f -printf '%p  %s bytes\n'
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.REF_NAME }}
+          name: DSEngine ${{ env.REF_NAME }}
+          generate_release_notes: true
+          prerelease: ${{ contains(env.REF_NAME, '-') }}
+          fail_on_unmatched_files: true
+          files: artifacts/**/*
