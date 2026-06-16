@@ -84,6 +84,12 @@ $supplemental = [ordered]@{
     "depends/physx"        = @{ LiteralText = $physxLicense; Spdx = "BSD-3-Clause"; Note = "NVIDIA PhysX SDK（精简 checkout，仅含 include/ 与预编译 bin/，仓库内无独立 LICENSE 文件）。默认 DSE_ENABLE_PHYSX=OFF，仅在显式开启时随包发行。以下为其 BSD-3-Clause 许可证全文。" }
 }
 
+# 仓库内零散嵌入的第三方文件（非 submodule，位于 depends/ 与 third_party/ 之外）。
+# 字段语义与 $supplemental 相同：File / FromMatch / UntilMatch / MaxLines / Spdx / Note。
+$extraVendored = [ordered]@{
+    "script/dev/lua_panda.lua" = @{ File = "script\dev\lua_panda.lua"; FromMatch = "Tencent is pleased"; UntilMatch = "API:"; MaxLines = 12; Spdx = "BSD-3-Clause"; Note = "LuaPanda 调试器脚本（Lua 远程调试，由 script/debug.lua 通过 require(`"dev.lua_panda`") 调用）。来自 Tencent/LuaPanda，BSD-3-Clause。注意：该文件内另捆绑了 serpent 序列化模块（MIT），其声明位于文件内部。" }
+}
+
 $codeExt = @(".cpp", ".h", ".hpp", ".c", ".cc", ".cmake", ".py", ".sh", ".bat", ".rs", ".cs", ".java", ".js", ".ts")
 
 function Find-LicenseFile([string]$componentDir) {
@@ -133,7 +139,7 @@ function Get-EmbeddedLicense($entry) {
         for ($i = $startIdx + 1; $i -le $endIdx; $i++) { if ($lines[$i].Contains($entry.UntilMatch)) { $endIdx = $i - 1; break } }
     }
     $block = $lines[$startIdx..$endIdx] | ForEach-Object {
-        ($_ -replace '^\s*(//+|/\*+|\*+/|\*)\s?', '').TrimEnd()
+        ($_ -replace '^\s*(//+|/\*+|\*+/|\*|--+)\s?', '').TrimEnd()
     }
     return (($block -join "`n").Trim())
 }
@@ -178,6 +184,18 @@ foreach ($root in $depRoots) {
         }
 
         $components += [PSCustomObject]@{ Name = $name; Dir = $dir.FullName; Status = "missing"; Source = ""; Spdx = ""; Note = ""; Text = "" }
+    }
+}
+
+# 追加：仓库内零散第三方文件（如 script/dev/lua_panda.lua），不在 depends/ 与 third_party/ 下。
+foreach ($name in $extraVendored.Keys) {
+    $sup = $extraVendored[$name]
+    $full = Join-Path $SourceDir $sup.File
+    $emb = Get-EmbeddedLicense $sup
+    if ($emb) {
+        $components += [PSCustomObject]@{ Name = $name; Dir = $full; Status = "embedded"; Source = ($sup.File -replace '\\', '/'); Spdx = $sup.Spdx; Note = $sup.Note; Text = $emb }
+    } else {
+        $components += [PSCustomObject]@{ Name = $name; Dir = $full; Status = "missing"; Source = ""; Spdx = ""; Note = ""; Text = "" }
     }
 }
 
