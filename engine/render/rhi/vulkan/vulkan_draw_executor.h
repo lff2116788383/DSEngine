@@ -128,6 +128,16 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 
+    // --- 通用绘制原语 (A1) ---
+    void PrimBindShaderProgram(unsigned int program_handle);
+    void PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride, const std::vector<VertexAttr>& attrs);
+    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
+    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
+                  VulkanPipelineStateManager& pipeline_mgr,
+                  VulkanShaderManager& shader_mgr,
+                  VulkanResourceManager& resource_mgr);
+
     // --- GPU-Driven PBR 渲染设置 ---
     void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                             const glm::mat4& view, const glm::mat4& proj,
@@ -379,6 +389,15 @@ private:
     unsigned int hair_shader_handle_ = 0;
     VkPipeline hair_pipeline_ = VK_NULL_HANDLE;
     VkRenderPass hair_pipeline_rp_ = VK_NULL_HANDLE;
+
+    // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装 pipeline/descriptor/draw
+    unsigned int prim_program_handle_ = 0;
+    VkBuffer prim_vbo_ = VK_NULL_HANDLE;
+    uint32_t prim_stride_ = 0;
+    std::vector<VertexAttr> prim_attrs_;
+    unsigned int prim_cubemap_ = 0;
+    glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);
+    bool prim_has_push_ = false;
 
 };
 

@@ -1308,6 +1308,75 @@ void DX11DrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     dc->OMSetDepthStencilState(prev_dss.Get(), prev_stencil_ref);
 }
 
+// ============================================================
+// 通用绘制原语 (A1)
+// ============================================================
+
+void DX11DrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
+    prim_program_handle_ = program_handle;
+}
+
+void DX11DrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                                            const std::vector<VertexAttr>& attrs) {
+    prim_vbo_handle_ = buffer_handle;
+    prim_stride_ = stride;
+    prim_attrs_ = attrs;
+}
+
+void DX11DrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    prim_cube_slot_ = slot;
+    prim_cubemap_ = cubemap_handle;
+}
+
+void DX11DrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
+    prim_push_mat4_ = value;
+    prim_has_push_ = true;
+}
+
+void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
+                                DX11ShaderManager& shader_mgr,
+                                DX11ResourceManager& resource_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+
+    const auto* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) return;
+    const auto* buf = resource_mgr.GetBuffer(prim_vbo_handle_);
+    if (!buf || !buf->buffer) return;
+
+    // push-constant 风格的 mat4（u_vp）→ PerFrame cbuffer b0。
+    // 天空盒 VS 仅读取首个 mat4（PerFrameUBO.vp，offset 0），其余字段无关。
+    if (prim_has_push_) {
+        DX11PerFrameCB frame_data{};
+        frame_data.vp = prim_push_mat4_;
+        UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
+        ID3D11Buffer* cbs[] = {per_frame_cb_.Get()};
+        dc->VSSetConstantBuffers(0, 1, cbs);
+    }
+
+    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+
+    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (prim_cubemap_ != 0) {
+        const auto* tex = resource_mgr.GetTexture(prim_cubemap_);
+        if (tex) {
+            dc->PSSetShaderResources(prim_cube_slot_, 1, tex->srv.GetAddressOf());
+            dc->PSSetSamplers(prim_cube_slot_, 1, tex->sampler.GetAddressOf());
+        }
+    }
+
+    UINT stride = prim_stride_;
+    UINT offset = 0;
+    dc->IASetVertexBuffers(0, 1, buf->buffer.GetAddressOf(), &stride, &offset);
+
+    // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定，此处不再 save/restore。
+    dc->Draw(vertex_count, first_vertex);
+    global_state_.current_frame_stats.draw_calls++;
+}
+
 void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
                                          DX11PipelineStateManager& pipeline_mgr,
                                          DX11ShaderManager& shader_mgr,

@@ -40,6 +40,14 @@ public:
     void ClearDepth(float depth = 1.0f) override;
     void BlitToScreen(unsigned int source_rt) override;
 
+    // --- 通用绘制原语 (A1) ---
+    void BindShaderProgram(unsigned int program_handle) override;
+    void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                          const std::vector<VertexAttr>& attrs) override;
+    void BindTextureCube(unsigned int slot, unsigned int cubemap_handle) override;
+    void PushConstantsMat4(const glm::mat4& value) override;
+    void Draw(uint32_t vertex_count, uint32_t first_vertex) override;
+
     /// 获取底层 VkCommandBuffer
     VkCommandBuffer GetVkCommandBuffer() const { return vk_command_buffer_; }
     void SetVkCommandBuffer(VkCommandBuffer cmd) { vk_command_buffer_ = cmd; }

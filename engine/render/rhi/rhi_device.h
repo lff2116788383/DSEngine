@@ -65,6 +65,29 @@ public:
     virtual void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) = 0;
     virtual void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) = 0;
     virtual void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) = 0;
+
+    // --- 通用绘制原语 (A1) ---
+    // 高层渲染器（如 SkyboxRenderer）用这组后端无关的原语组合出绘制，
+    // 取代把具体效果（DrawSkybox 等）做成 RHI 虚函数的做法。
+    // 默认空实现：尚未实现该组原语的后端/Mock 仍可编译。
+
+    /// 绑定着色器程序（取代各效果隐式绑定自己的 shader）
+    virtual void BindShaderProgram(unsigned int program_handle) { (void)program_handle; }
+    /// 绑定顶点缓冲 + 顶点布局（float 属性）。布局随 VB 一起提供，后端据此建立输入布局。
+    virtual void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                                  const std::vector<VertexAttr>& attrs) {
+        (void)buffer_handle; (void)stride; (void)attrs;
+    }
+    /// 绑定 cubemap 纹理到指定 slot
+    virtual void BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+        (void)slot; (void)cubemap_handle;
+    }
+    /// 设置 push-constant 风格的 mat4（GL→uniform / Vulkan→push constant / DX11→CB）
+    virtual void PushConstantsMat4(const glm::mat4& value) { (void)value; }
+    /// 非索引绘制
+    virtual void Draw(uint32_t vertex_count, uint32_t first_vertex = 0) {
+        (void)vertex_count; (void)first_vertex;
+    }
 };
 
 /**
@@ -126,6 +149,16 @@ public:
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
     virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
+
+    // --- 内建资源（供高层渲染器用通用原语绘制，A1）---
+    // 着色器在各后端是预编译的（GL=GLSL / Vulkan=SPIR-V / DX11=DXBC），无法由后端无关层创建，
+    // 故由各后端懒初始化并通过下列访问器暴露句柄。默认返回 0（未实现该资源的后端）。
+
+    /// 内建天空盒着色器程序句柄（懒初始化）
+    virtual unsigned int GetSkyboxShaderProgram() { return 0; }
+    /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
+    virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
+
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
     virtual void DeleteBuffer(unsigned int handle) = 0;

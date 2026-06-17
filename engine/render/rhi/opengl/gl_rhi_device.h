@@ -177,6 +177,17 @@ public:
     void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
 
+    // --- 通用绘制原语 (A1) ---
+    void RealBindShaderProgram(unsigned int program_handle);
+    void RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs);
+    void RealBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
+    void RealPushConstantsMat4(const glm::mat4& value);
+    void RealDraw(uint32_t vertex_count, uint32_t first_vertex);
+
+    // --- 内建资源访问器 (A1) ---
+    unsigned int GetSkyboxShaderProgram() override;
+    unsigned int GetSkyboxCubeVertexBuffer() override;
+
     // --- 子系统访问器 ---
     GLResourceManager& resource_mgr() { return resource_mgr_; }
     GLPipelineStateManager& state_mgr() { return state_mgr_; }
@@ -197,6 +208,9 @@ private:
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄，需在 Shutdown 中统一清理
     std::unordered_set<unsigned int> external_shader_programs_;
+
+    /// 内建天空盒立方体顶点缓冲（懒初始化，A1 通用原语用）
+    unsigned int skybox_cube_vbo_ = 0;
 
     /// 通过 CreateComputeShader 创建的 compute 程序句柄
     std::unordered_set<unsigned int> compute_programs_;

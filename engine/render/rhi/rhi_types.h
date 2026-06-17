@@ -151,6 +151,13 @@ struct PipelineStateDesc {
     CullFace cull_face = CullFace::Back;
 };
 
+/// 顶点属性描述（通用绘制原语 BindVertexBuffer 用，目前仅支持 float 分量）
+struct VertexAttr {
+    uint32_t location = 0;    ///< 着色器中的 attribute location
+    uint32_t components = 0;  ///< 分量数 (1..4)，对应 float/vec2/vec3/vec4
+    uint32_t offset = 0;      ///< 在顶点结构体内的字节偏移
+};
+
 /// 渲染通道描述符
 struct RenderPassDesc {
     unsigned int render_target = 0;

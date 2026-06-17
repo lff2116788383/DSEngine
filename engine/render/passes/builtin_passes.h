@@ -10,6 +10,7 @@
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_graph.h"
 #include "engine/render/scene_renderer.h"
+#include "engine/render/skybox_renderer.h"
 #include <glm/glm.hpp>
 
 namespace dse {
@@ -97,6 +98,7 @@ public:
     const char* GetName() const override { return "scene_pass"; }
 private:
     RenderPassContext& ctx_;
+    SkyboxRenderer skybox_renderer_;
 };
 
 // ---- Post Process (Bloom) Pass ----

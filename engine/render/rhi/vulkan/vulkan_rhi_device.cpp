@@ -87,6 +87,38 @@ void VulkanCommandBuffer::DrawPostProcess(PostProcessRequest request) {
         device_->state_mgr(), device_->shader_mgr());
 }
 
+// --- 通用绘制原语 (A1) ---
+
+void VulkanCommandBuffer::BindShaderProgram(unsigned int program_handle) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindShaderProgram(program_handle);
+}
+
+void VulkanCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                                           const std::vector<VertexAttr>& attrs) {
+    if (!device_) return;
+    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle);
+    VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
+    device_->draw_executor().PrimBindVertexBuffer(vk_buf, stride, attrs);
+}
+
+void VulkanCommandBuffer::BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindTextureCube(slot, cubemap_handle);
+}
+
+void VulkanCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
+    if (!device_) return;
+    device_->draw_executor().PrimPushConstantsMat4(value);
+}
+
+void VulkanCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
+    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->draw_executor().PrimDraw(
+        vk_command_buffer_, vertex_count, first_vertex,
+        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
+}
+
 void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().BlitRenderTargetToSwapchain(
@@ -568,6 +600,38 @@ unsigned int VulkanRhiDevice::CreatePipelineState(const PipelineStateDesc& desc)
 
 unsigned int VulkanRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
     return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
+}
+
+// --- 内建资源访问器 (A1) ---
+
+unsigned int VulkanRhiDevice::GetSkyboxShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.skybox_shader_handle() == 0) {
+        shader_mgr_.InitSkyboxShader();
+    }
+    return shader_mgr_.skybox_shader_handle();
+}
+
+unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
+    EnsureInitialized();
+    if (skybox_cube_vbo_handle_ == 0) {
+        static const float kSkyboxVertices[] = {
+            -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
+        };
+        skybox_cube_vbo_handle_ = resource_mgr_.CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
+    }
+    return skybox_cube_vbo_handle_;
 }
 
 void VulkanRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {

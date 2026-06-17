@@ -203,6 +203,32 @@ void OpenGLCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
     device_->RealSubmitDrawSkybox(cubemap_texture_handle, view_, projection_);
 }
 
+void OpenGLCommandBuffer::BindShaderProgram(unsigned int program_handle) {
+    if (!device_) return;
+    device_->RealBindShaderProgram(program_handle);
+}
+
+void OpenGLCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                                           const std::vector<VertexAttr>& attrs) {
+    if (!device_) return;
+    device_->RealBindVertexBuffer(buffer_handle, stride, attrs);
+}
+
+void OpenGLCommandBuffer::BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    if (!device_) return;
+    device_->RealBindTextureCube(slot, cubemap_handle);
+}
+
+void OpenGLCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
+    if (!device_) return;
+    device_->RealPushConstantsMat4(value);
+}
+
+void OpenGLCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
+    if (!device_) return;
+    device_->RealDraw(vertex_count, first_vertex);
+}
+
 void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->RealSubmitDrawPostProcess(request);
@@ -844,6 +870,60 @@ void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDraw
 
 void OpenGLRhiDevice::RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawHairStrands(items, view, projection, shader_mgr_);
+}
+
+// --- 通用绘制原语 (A1) ---
+
+void OpenGLRhiDevice::RealBindShaderProgram(unsigned int program_handle) {
+    draw_executor_.PrimBindShaderProgram(program_handle);
+}
+
+void OpenGLRhiDevice::RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs) {
+    draw_executor_.PrimBindVertexBuffer(buffer_handle, stride, attrs);
+}
+
+void OpenGLRhiDevice::RealBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    draw_executor_.PrimBindTextureCube(slot, cubemap_handle);
+}
+
+void OpenGLRhiDevice::RealPushConstantsMat4(const glm::mat4& value) {
+    draw_executor_.PrimPushConstantsMat4(value);
+}
+
+void OpenGLRhiDevice::RealDraw(uint32_t vertex_count, uint32_t first_vertex) {
+    draw_executor_.PrimDraw(vertex_count, first_vertex);
+}
+
+// --- 内建资源访问器 (A1) ---
+
+unsigned int OpenGLRhiDevice::GetSkyboxShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.skybox_shader_handle() == 0) {
+        shader_mgr_.InitSkyboxShader();
+    }
+    return shader_mgr_.skybox_shader_handle();
+}
+
+unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
+    EnsureInitialized();
+    if (skybox_cube_vbo_ == 0) {
+        static const float kSkyboxVertices[] = {
+            -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f, -1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+             1.0f, -1.0f, -1.0f,   1.0f, -1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f,  1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,   1.0f, -1.0f,  1.0f,  -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,   1.0f,  1.0f, -1.0f,   1.0f,  1.0f,  1.0f,
+             1.0f,  1.0f,  1.0f,  -1.0f,  1.0f,  1.0f,  -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f, -1.0f,
+             1.0f, -1.0f, -1.0f,  -1.0f, -1.0f,  1.0f,   1.0f, -1.0f,  1.0f
+        };
+        skybox_cube_vbo_ = CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
+    }
+    return skybox_cube_vbo_;
 }
 
 // --- SSBO (Shader Storage Buffer Object) ---

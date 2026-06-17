@@ -39,6 +39,14 @@ public:
     void SetViewport(int x, int y, int width, int height) override;
     void ClearDepth(float depth = 1.0f) override;
 
+    // --- 通用绘制原语 (A1) ---
+    void BindShaderProgram(unsigned int program_handle) override;
+    void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                          const std::vector<VertexAttr>& attrs) override;
+    void BindTextureCube(unsigned int slot, unsigned int cubemap_handle) override;
+    void PushConstantsMat4(const glm::mat4& value) override;
+    void Draw(uint32_t vertex_count, uint32_t first_vertex) override;
+
     /// 设置所属设备（由 OpenGLRhiDevice::CreateCommandBuffer 注入）
     void SetDevice(OpenGLRhiDevice* device);
 

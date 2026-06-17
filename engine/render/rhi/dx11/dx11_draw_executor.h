@@ -131,6 +131,18 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (A1) ---
+    // Bind* 仅暂存累积状态；PrimDraw 时组装 shader/cbuffer/纹理/VB 并发出 draw。
+    // 深度/光栅/混合由 SetPipelineState→ApplyPipelineState 设定，PrimDraw 不再 save/restore。
+    void PrimBindShaderProgram(unsigned int program_handle);
+    void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                              const std::vector<VertexAttr>& attrs);
+    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
+    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
+                  DX11ShaderManager& shader_mgr,
+                  DX11ResourceManager& resource_mgr);
+
     void DispatchCompute(unsigned int cs_handle,
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,
@@ -252,6 +264,16 @@ private:
 
     // 天空盒深度状态（LEQUAL + no depth write）
     ComPtr<ID3D11DepthStencilState> skybox_dss_;
+
+    // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装并发出 draw
+    unsigned int prim_program_handle_ = 0;   ///< 当前绑定的着色器句柄
+    unsigned int prim_vbo_handle_ = 0;       ///< 当前绑定的顶点缓冲句柄
+    uint32_t prim_stride_ = 0;               ///< 顶点步长（字节）
+    std::vector<VertexAttr> prim_attrs_;     ///< 顶点属性（DX11 输入布局来自 shader 反射，此处仅留作记录）
+    unsigned int prim_cubemap_ = 0;          ///< 当前绑定的 cubemap 句柄（0=无）
+    unsigned int prim_cube_slot_ = 0;        ///< cubemap 绑定槽位
+    glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);  ///< push-constant 风格的 mat4（→ PerFrame.vp）
+    bool prim_has_push_ = false;             ///< 是否设置过 push constant
 
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;

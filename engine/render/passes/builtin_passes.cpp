@@ -613,7 +613,8 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetCamera(gpu_view, gpu_proj);
 
         if (snap.skybox.valid) {
-            cmd_buffer.DrawSkybox(snap.skybox.cubemap_handle);
+            skybox_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, snap.skybox.cubemap_handle,
+                                  gpu_view, gpu_proj);
         }
     } else if (snap.camera_3d.valid) {
         render_3d = true;
@@ -634,12 +635,11 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.SetCamera(gpu_view, projection);
 
         if (snap.skybox.valid) {
-            if (snap.skybox.has_transform) {
-                glm::mat4 sky_inv_rot = glm::mat4_cast(glm::conjugate(snap.skybox.rotation));
-                cmd_buffer.SetCamera(gpu_view * sky_inv_rot, projection);
-            }
-            cmd_buffer.DrawSkybox(snap.skybox.cubemap_handle);
-            cmd_buffer.SetCamera(gpu_view, projection);
+            const glm::mat4 skybox_view = snap.skybox.has_transform
+                ? gpu_view * glm::mat4_cast(glm::conjugate(snap.skybox.rotation))
+                : gpu_view;
+            skybox_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, snap.skybox.cubemap_handle,
+                                  skybox_view, projection);
         }
     } else if (snap.camera_2d.valid) {
         const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();

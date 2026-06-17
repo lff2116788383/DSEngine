@@ -202,6 +202,12 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &skybox_vbo_handle_); }
         skybox_vbo_handle_ = 0;
     }
+    // 通用原语 VAO (A1)
+    if (prim_vao_handle_) {
+        if (delete_vao_fn_) { delete_vao_fn_(prim_vao_handle_); }
+        else { unsigned int r = prim_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
+        prim_vao_handle_ = {};
+    }
     // 后处理全屏四边形
     if (pp_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(pp_vao_handle_); }
@@ -469,6 +475,50 @@ void GLDrawExecutor::DrawSkybox(unsigned int cubemap_texture_handle,
     glDepthMask(GL_TRUE);
     glDepthFunc(GL_LESS);
 
+    global_state_.current_frame_stats.draw_calls += 1;
+}
+
+// ============================================================
+// 通用绘制原语 (A1)
+// ============================================================
+
+void GLDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
+    prim_program_ = program_handle;
+    glUseProgram(program_handle);
+}
+
+void GLDrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                                          const std::vector<VertexAttr>& attrs) {
+    if (!prim_vao_handle_ && create_vao_fn_) {
+        prim_vao_handle_ = create_vao_fn_();
+    }
+    glBindVertexArray(prim_vao_handle_.raw());
+    glBindBuffer(GL_ARRAY_BUFFER, buffer_handle);
+    for (const auto& a : attrs) {
+        glEnableVertexAttribArray(a.location);
+        glVertexAttribPointer(a.location, static_cast<GLint>(a.components), GL_FLOAT, GL_FALSE,
+                              static_cast<GLsizei>(stride),
+                              reinterpret_cast<const void*>(static_cast<uintptr_t>(a.offset)));
+    }
+}
+
+void GLDrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_handle);
+    // GLSL sampler uniform 默认绑定到纹理单元 0；spike 仅用 slot 0，无需显式设置 sampler uniform。
+}
+
+void GLDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
+    if (prim_program_ == 0) return;
+    // push_constant 块在 GL 后端被 lower 为名为 "u_vp" 的 uniform。
+    GLint loc = glGetUniformLocation(prim_program_, "u_vp");
+    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(value));
+}
+
+void GLDrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex) {
+    glBindVertexArray(prim_vao_handle_.raw());
+    glDrawArrays(GL_TRIANGLES, static_cast<GLint>(first_vertex), static_cast<GLsizei>(vertex_count));
+    glBindVertexArray(0);
     global_state_.current_frame_stats.draw_calls += 1;
 }
 

@@ -2762,6 +2762,95 @@ void VulkanDrawExecutor::DrawSkybox(
 }
 
 // ============================================================================
+// 通用绘制原语 (A1)
+// ============================================================================
+
+void VulkanDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
+    prim_program_handle_ = program_handle;
+}
+
+void VulkanDrawExecutor::PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride,
+                                              const std::vector<VertexAttr>& attrs) {
+    prim_vbo_ = buffer;
+    prim_stride_ = stride;
+    prim_attrs_ = attrs;
+}
+
+void VulkanDrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
+    (void)slot;  // spike 仅用 set 0 的单 cubemap binding
+    prim_cubemap_ = cubemap_handle;
+}
+
+void VulkanDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
+    prim_push_mat4_ = value;
+    prim_has_push_ = true;
+}
+
+void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
+                                  VulkanPipelineStateManager& pipeline_mgr,
+                                  VulkanShaderManager& shader_mgr,
+                                  VulkanResourceManager& resource_mgr) {
+    if (skip_current_pass_) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: shader program not available");
+        return;
+    }
+    if (prim_vbo_ == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: vertex buffer not bound");
+        return;
+    }
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    // 顶点输入：由 BindVertexBuffer 提供的 VertexAttr 列表翻译为 Vulkan 顶点输入描述
+    std::vector<VkVertexInputBindingDescription> bindings = {
+        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
+    };
+    std::vector<VkVertexInputAttributeDescription> vk_attrs;
+    vk_attrs.reserve(prim_attrs_.size());
+    for (const auto& a : prim_attrs_) {
+        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+        switch (a.components) {
+            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+            default: break;
+        }
+        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
+    }
+
+    VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        bindings, vk_attrs,
+        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        false);
+    if (pipeline == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: failed to create pipeline");
+        return;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    if (prim_has_push_) {
+        vkCmdPushConstants(cmd_buf, program->pipeline_layout,
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &prim_push_mat4_);
+    }
+
+    if (prim_cubemap_ != 0) {
+        AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, program, prim_cubemap_, resource_mgr);
+    }
+
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    vkCmdDraw(cmd_buf, vertex_count, 1, first_vertex, 0);
+
+    global_state_.current_frame_stats.draw_calls++;
+}
+
+// ============================================================================
 // DrawPostProcess — 后处理绘制
 // ============================================================================
 

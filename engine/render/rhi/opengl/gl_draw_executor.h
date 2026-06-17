@@ -102,6 +102,14 @@ public:
                           const glm::mat4& projection,
                           GLShaderManager& shader_mgr);
 
+    // --- 通用绘制原语 (A1) ---
+    void PrimBindShaderProgram(unsigned int program_handle);
+    void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
+                              const std::vector<VertexAttr>& attrs);
+    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
+    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimDraw(uint32_t vertex_count, uint32_t first_vertex);
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
@@ -187,6 +195,10 @@ private:
     // 天空盒几何
     VertexArrayHandle skybox_vao_handle_;
     unsigned int skybox_vbo_handle_ = 0;
+
+    // 通用绘制原语状态 (A1)
+    VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
+    unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
 
     // 后处理全屏四边形
     VertexArrayHandle pp_vao_handle_;

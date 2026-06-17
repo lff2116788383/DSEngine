@@ -65,6 +65,10 @@ public:
     void DeleteShaderProgram(unsigned int program_handle) override;
     unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
+
+    // --- 内建资源访问器 (A1) ---
+    unsigned int GetSkyboxShaderProgram() override;
+    unsigned int GetSkyboxCubeVertexBuffer() override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
     void DeleteBuffer(unsigned int handle) override;
     VertexArrayHandle CreateVertexArray() override;
@@ -233,6 +237,9 @@ private:
 
     /// 通过 CreateShaderProgram 外部创建的着色器句柄
     std::unordered_set<unsigned int> external_shader_programs_;
+
+    /// 内建天空盒立方体顶点缓冲句柄（懒初始化，A1 通用原语用）
+    unsigned int skybox_cube_vbo_handle_ = 0;
 
     /// Compute Shader 绑定的 SSBO 追踪（binding_point → {handle, writable}）
     struct BoundSSBO { unsigned int handle = 0; bool writable = false; };
