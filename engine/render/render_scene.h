@@ -56,10 +56,7 @@ struct RenderScenePassContext {
     const glm::mat4* clip_correction = nullptr;
     glm::vec3 camera_offset{0.0f};  ///< Camera-Relative: model matrix 平移减去此偏移
     int cascade_index = 0;
-    int wboit_mode = 0;
 };
-
-using RenderQueueCallback = std::function<void(CommandBuffer&, const RenderScenePassContext&)>;
 
 struct RenderScene {
     void Clear() {
@@ -68,15 +65,6 @@ struct RenderScene {
         cpu_meshes.skinned.clear();
         cpu_meshes.transparent.clear();
         cpu_meshes.static_cpu_fallback.clear();
-        prez_callbacks.clear();
-        shadow_callbacks.clear();
-        opaque_callbacks.clear();
-        transparent_callbacks.clear();
-        terrain_callbacks.clear();
-        foliage_callbacks.clear();
-        hair_callbacks.clear();
-        particle_callbacks.clear();
-        debug_callbacks.clear();
         scene_renderers.clear();
     }
 
@@ -108,28 +96,11 @@ struct RenderScene {
         if (!cpu_meshes.transparent.empty()) cmd.DrawMeshBatch(cpu_meshes.transparent);
     }
 
-    void ExecuteCallbacks(const std::vector<RenderQueueCallback>& callbacks,
-                          CommandBuffer& cmd,
-                          const RenderScenePassContext& pass_ctx) const {
-        for (const auto& cb : callbacks) {
-            if (cb) cb(cmd, pass_ctx);
-        }
-    }
-
     std::vector<RenderObjectRef> objects;
     CpuMeshQueue cpu_meshes;
-    std::vector<RenderQueueCallback> prez_callbacks;
-    std::vector<RenderQueueCallback> shadow_callbacks;
-    std::vector<RenderQueueCallback> opaque_callbacks;
-    std::vector<RenderQueueCallback> transparent_callbacks;
-    std::vector<RenderQueueCallback> terrain_callbacks;
-    std::vector<RenderQueueCallback> foliage_callbacks;
-    std::vector<RenderQueueCallback> hair_callbacks;
-    std::vector<RenderQueueCallback> particle_callbacks;
-    std::vector<RenderQueueCallback> debug_callbacks;
 
     /// 模块注册的强类型场景贡献对象（逐帧由模块在 BuildRenderQueues 时注册）。
-    /// 由内建 Pass 在各自渲染作用域内按阶段调用，逐步取代上面的裸 lambda 回调桶。
+    /// 由内建 Pass 在各自渲染作用域内按阶段（PreZ/Shadow/Opaque/Transparent）调用。
     std::vector<ISceneRenderer*> scene_renderers;
 };
 

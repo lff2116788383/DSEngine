@@ -11,16 +11,9 @@
 #include "engine/render/render_graph.h"
 #include "engine/render/scene_renderer.h"
 #include <glm/glm.hpp>
-#include <vector>
 
 namespace dse {
 namespace render {
-
-/// 执行 RenderScene 的裸 lambda 回调桶（历史路径，逐步被 ISceneRenderer 取代）。
-void ExecuteRenderSceneCallbacks(const RenderScene* scene,
-                                 const std::vector<RenderQueueCallback>& callbacks,
-                                 CommandBuffer& cmd_buffer,
-                                 const RenderScenePassContext& pass_ctx);
 
 /// 调用模块注册的强类型场景贡献对象（ISceneRenderer）的指定阶段。
 void ExecuteSceneRenderers(const RenderScene* scene,

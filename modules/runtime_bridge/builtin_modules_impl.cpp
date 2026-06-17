@@ -59,10 +59,6 @@ void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd) {
     mesh_render_system_.Render(world, cmd);
 }
 
-void BuiltinModulesImpl::RenderTransparentMeshes(World& world, CommandBuffer& cmd, int wboit_mode) {
-    mesh_render_system_.RenderTransparent(world, cmd, wboit_mode);
-}
-
 void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
 #ifdef DSE_ENABLE_3D
     gameplay3d_module_.BuildRenderQueues(world, scene);

@@ -139,14 +139,6 @@ DirectionalLightCamera ComputeDirectionalLightCamera(
 
 } // anonymous namespace
 
-void ExecuteRenderSceneCallbacks(const RenderScene* scene,
-                                 const std::vector<RenderQueueCallback>& callbacks,
-                                 CommandBuffer& cmd_buffer,
-                                 const RenderScenePassContext& pass_ctx) {
-    if (!scene) return;
-    scene->ExecuteCallbacks(callbacks, cmd_buffer, pass_ctx);
-}
-
 // 调用模块注册的强类型场景贡献对象（ISceneRenderer）的指定阶段。
 void ExecuteSceneRenderers(const RenderScene* scene,
                            SceneRenderStage stage,
@@ -216,7 +208,6 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.view = &snap.camera_3d.view;
         pass_ctx.projection = &projection;
         pass_ctx.camera_offset = ctx_.camera_offset;
-        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->prez_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::PreZ, cmd_buffer, pass_ctx);
     }
     cmd_buffer.EndRenderPass();
@@ -321,7 +312,6 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 pass_ctx.projection = &cam.projection;
                 pass_ctx.camera_offset = ctx_.camera_offset;
                 pass_ctx.cascade_index = i;
-                ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
                 ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
             }
         }
@@ -408,7 +398,6 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.projection = &light_proj;
         pass_ctx.camera_offset = ctx_.camera_offset;
         pass_ctx.cascade_index = CSM_CASCADES;
-        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
         cmd_buffer.EndRenderPass();
         const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
@@ -489,7 +478,6 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             pass_ctx.projection = &light_proj;
             pass_ctx.camera_offset = ctx_.camera_offset;
             pass_ctx.cascade_index = CSM_CASCADES + 1 + face;
-            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
             ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
             cmd_buffer.EndRenderPass();
         }
@@ -755,7 +743,6 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.render_scene) {
             ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
         }
-        ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
 
         // ShadedWireframe: 正常渲染已完成，叠加一遍线框
@@ -774,7 +761,6 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             if (ctx_.render_scene) {
                 ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
             }
-            ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
             ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
             ctx_.rhi_device->SetWireframeMode(false);
         }
@@ -1896,11 +1882,9 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     RenderScenePassContext accum_ctx;
     accum_ctx.world = ctx_.world;
     accum_ctx.clip_correction = &scene_clip_correction;
-    accum_ctx.wboit_mode = 1;
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawTransparent(cmd_buffer, 1);
     }
-    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->transparent_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, accum_ctx);
     cmd_buffer.EndRenderPass();
 
     // --- Pass 2: Revealage (blend ZERO, ONE_MINUS_SRC_ALPHA) ---
@@ -1910,11 +1894,9 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     RenderScenePassContext reveal_ctx;
     reveal_ctx.world = ctx_.world;
     reveal_ctx.clip_correction = &scene_clip_correction;
-    reveal_ctx.wboit_mode = 2;
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawTransparent(cmd_buffer, 2);
     }
-    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->transparent_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, reveal_ctx);
     cmd_buffer.EndRenderPass();
 
     // --- Pass 3: Composite WBOIT onto scene RT ---
@@ -3106,7 +3088,6 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
     }
-    ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
     ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, pass_ctx);
 
     ctx_.rhi_device->SetGBufferRenderingMode(false);
@@ -3299,19 +3280,9 @@ void FoliagePass::Setup(RenderGraph& graph) {
 }
 
 void FoliagePass::Execute(CommandBuffer& cmd_buffer) {
-    // FoliagePass delegates to RenderScene foliage_callbacks
-    // Actual vegetation rendering is handled by the module's foliage system
-    if (!ctx_.render_scene) return;
-    const auto& callbacks = ctx_.render_scene->foliage_callbacks;
-    if (callbacks.empty()) return;
-
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
-    cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    dse::render::RenderScenePassContext pass_ctx{};
-    for (const auto& cb : callbacks) {
-        cb(cmd_buffer, pass_ctx);
-    }
-    cmd_buffer.EndRenderPass();
+    // 植被（grass/tree）已通过 Gameplay3D 的 ISceneRenderer 在 PreZ/Shadow/Opaque
+    // 阶段贡献绘制，本 Pass 不再承载任何渲染（历史 foliage_callbacks 已移除）。
+    (void)cmd_buffer;
 }
 
 } // namespace render

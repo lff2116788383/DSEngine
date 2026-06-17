@@ -44,7 +44,6 @@ public:
     void InitMeshSystem(AssetManager* asset_mgr) override;
     void ShutdownMeshSystem() override;
     void RenderMeshes(World& world, CommandBuffer& cmd) override;
-    void RenderTransparentMeshes(World& world, CommandBuffer& cmd, int wboit_mode) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene) override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
     void ResetGPUSceneState() override;

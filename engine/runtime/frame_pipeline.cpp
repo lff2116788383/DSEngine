@@ -1808,9 +1808,6 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
         modules_impl_->RenderMeshes(world, cmd);
     };
-    render_pass_context_.render_transparent_meshes = [this](World& world, CommandBuffer& cmd, int wboit_mode) {
-        modules_impl_->RenderTransparentMeshes(world, cmd, wboit_mode);
-    };
 
     // ---- 澹版槑澶栭儴杈撳嚭 ----
     auto main_color  = render_graph_dag_.DeclareResource("main_color");

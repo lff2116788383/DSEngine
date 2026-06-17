@@ -57,7 +57,6 @@ public:
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;
     virtual void ShutdownMeshSystem() = 0;
     virtual void RenderMeshes(World& world, CommandBuffer& cmd) = 0;
-    virtual void RenderTransparentMeshes(World& world, CommandBuffer& cmd, int wboit_mode) = 0;
     virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene) = 0;
     virtual int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) = 0;
     virtual void ResetGPUSceneState() = 0;

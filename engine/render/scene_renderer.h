@@ -18,7 +18,7 @@ enum class SceneRenderStage {
 /**
  * @brief 模块向内建渲染 Pass 贡献几何的强类型接口。
  *
- * 取代 RenderScene 的裸 lambda 回调桶（prez/shadow/opaque/transparent_callbacks）。
+ * 模块渲染贡献的唯一入口（已取代历史的 RenderScene 裸 lambda 回调桶）。
  * 实现者（如 Gameplay3D）把各阶段的绘制封装为方法；拥有渲染作用域的内建 Pass
  * （PreZPass / CSMShadowPass / ForwardScenePass / WBOITPass）在其
  * BeginRenderPass/EndRenderPass 内调用对应阶段方法。各方法默认空实现，
