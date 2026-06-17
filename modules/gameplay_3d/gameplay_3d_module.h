@@ -58,8 +58,12 @@ public:
     void OnShutdown(World& world) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
 
-    // ISceneRenderer：3D 不透明几何（terrain/grass/tree/particle/hair）的渲染贡献，
-    // 由 ForwardScenePass / RSMRenderPass 在其渲染作用域内调用。
+    // ISceneRenderer：3D 几何（terrain/grass/tree/particle/hair）的渲染贡献，
+    // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。
+    void RenderPreZ(dse::render::CommandBuffer& cmd,
+                    const dse::render::RenderScenePassContext& ctx) override;
+    void RenderShadow(dse::render::CommandBuffer& cmd,
+                      const dse::render::RenderScenePassContext& ctx) override;
     void RenderOpaque(dse::render::CommandBuffer& cmd,
                       const dse::render::RenderScenePassContext& ctx) override;
 

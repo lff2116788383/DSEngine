@@ -217,6 +217,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.projection = &projection;
         pass_ctx.camera_offset = ctx_.camera_offset;
         ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->prez_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+        ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::PreZ, cmd_buffer, pass_ctx);
     }
     cmd_buffer.EndRenderPass();
 }
@@ -321,6 +322,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 pass_ctx.camera_offset = ctx_.camera_offset;
                 pass_ctx.cascade_index = i;
                 ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+                ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
             }
         }
 
@@ -407,6 +409,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         pass_ctx.camera_offset = ctx_.camera_offset;
         pass_ctx.cascade_index = CSM_CASCADES;
         ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+        ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
         cmd_buffer.EndRenderPass();
         const glm::mat4 sample_proj = shadow_sample_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         spot_light_space_matrices.push_back(sample_proj * light_view_mat);
@@ -487,6 +490,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             pass_ctx.camera_offset = ctx_.camera_offset;
             pass_ctx.cascade_index = CSM_CASCADES + 1 + face;
             ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->shadow_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+            ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Shadow, cmd_buffer, pass_ctx);
             cmd_buffer.EndRenderPass();
         }
 

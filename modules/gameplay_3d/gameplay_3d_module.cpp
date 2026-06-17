@@ -172,21 +172,25 @@ void Gameplay3DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
 
 void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
     mesh_render_system_.BuildRenderQueues(world, scene);
-    World* world_ptr = &world;
-
-    scene.prez_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-        terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
-        grass_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
-        tree_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
-    });
-    scene.shadow_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-        terrain_system_.Render(*world_ptr, cmd, pass_ctx.camera_offset);
-        grass_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
-        tree_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
-    });
-    // 不透明几何（terrain/grass/tree/particle/hair）通过 ISceneRenderer::RenderOpaque
-    // 贡献，由 ForwardScenePass / RSMRenderPass 在其渲染作用域内调用。
+    // 各渲染阶段（prez/shadow/opaque）的贡献统一通过 ISceneRenderer 注册，
+    // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。
     scene.scene_renderers.push_back(this);
+}
+
+void Gameplay3DModule::RenderPreZ(dse::render::CommandBuffer& cmd,
+                                  const dse::render::RenderScenePassContext& ctx) {
+    if (!ctx.world) return;
+    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+    grass_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+    tree_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+}
+
+void Gameplay3DModule::RenderShadow(dse::render::CommandBuffer& cmd,
+                                    const dse::render::RenderScenePassContext& ctx) {
+    if (!ctx.world) return;
+    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+    grass_system_.RenderShadow(*ctx.world, cmd, ctx.camera_offset);
+    tree_system_.RenderShadow(*ctx.world, cmd, ctx.camera_offset);
 }
 
 void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
