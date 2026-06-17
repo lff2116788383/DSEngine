@@ -13,6 +13,7 @@ namespace dse {
 namespace render {
 
 class CommandBuffer;
+class ISceneRenderer;
 
 struct RenderObjectId {
     uint64_t value = 0;
@@ -76,6 +77,7 @@ struct RenderScene {
         hair_callbacks.clear();
         particle_callbacks.clear();
         debug_callbacks.clear();
+        scene_renderers.clear();
     }
 
     /// Camera-Relative Rendering: 将所有 CPU mesh model matrix 的平移部分减去 camera_offset
@@ -125,6 +127,10 @@ struct RenderScene {
     std::vector<RenderQueueCallback> hair_callbacks;
     std::vector<RenderQueueCallback> particle_callbacks;
     std::vector<RenderQueueCallback> debug_callbacks;
+
+    /// 模块注册的强类型场景贡献对象（逐帧由模块在 BuildRenderQueues 时注册）。
+    /// 由内建 Pass 在各自渲染作用域内按阶段调用，逐步取代上面的裸 lambda 回调桶。
+    std::vector<ISceneRenderer*> scene_renderers;
 };
 
 } // namespace render

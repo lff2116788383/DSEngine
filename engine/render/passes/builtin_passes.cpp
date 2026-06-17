@@ -46,6 +46,7 @@
 #include "engine/core/module.h"
 #include "engine/render/light_buffer.h"
 #include "engine/render/cluster_grid.h"
+#include "engine/render/scene_renderer.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <limits>
 #include <cstdint>
@@ -144,6 +145,23 @@ void ExecuteRenderSceneCallbacks(const RenderScene* scene,
                                  const RenderScenePassContext& pass_ctx) {
     if (!scene) return;
     scene->ExecuteCallbacks(callbacks, cmd_buffer, pass_ctx);
+}
+
+// 调用模块注册的强类型场景贡献对象（ISceneRenderer）的指定阶段。
+void ExecuteSceneRenderers(const RenderScene* scene,
+                           SceneRenderStage stage,
+                           CommandBuffer& cmd_buffer,
+                           const RenderScenePassContext& pass_ctx) {
+    if (!scene) return;
+    for (auto* renderer : scene->scene_renderers) {
+        if (!renderer) continue;
+        switch (stage) {
+            case SceneRenderStage::PreZ:        renderer->RenderPreZ(cmd_buffer, pass_ctx); break;
+            case SceneRenderStage::Shadow:      renderer->RenderShadow(cmd_buffer, pass_ctx); break;
+            case SceneRenderStage::Opaque:      renderer->RenderOpaque(cmd_buffer, pass_ctx); break;
+            case SceneRenderStage::Transparent: renderer->RenderTransparent(cmd_buffer, pass_ctx); break;
+        }
+    }
 }
 
 // ============================================================
@@ -734,6 +752,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
         }
         ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
+        ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
 
         // ShadedWireframe: 正常渲染已完成，叠加一遍线框
         if (view_mode == 2) {
@@ -752,6 +771,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
             }
             ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, scene_pass_ctx);
+            ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
             ctx_.rhi_device->SetWireframeMode(false);
         }
 
@@ -3083,6 +3103,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
         ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
     }
     ExecuteRenderSceneCallbacks(ctx_.render_scene, ctx_.render_scene ? ctx_.render_scene->opaque_callbacks : std::vector<RenderQueueCallback>{}, cmd_buffer, pass_ctx);
+    ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, pass_ctx);
 
     ctx_.rhi_device->SetGBufferRenderingMode(false);
     cmd_buffer.EndRenderPass();

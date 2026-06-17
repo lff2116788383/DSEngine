@@ -692,3 +692,87 @@ TEST_F(RenderGraphIntegrationTest, TransientRT_NonOverlappingResourcesAliasReuse
     graph.Reset();
     graph.SetRhiDevice(nullptr);
 }
+
+// ============================================================
+// ISceneRenderer 注册 / 阶段分发（A2 Phase 2）
+// ============================================================
+
+namespace {
+class RecordingSceneRenderer : public ISceneRenderer {
+public:
+    void RenderPreZ(CommandBuffer&, const RenderScenePassContext&) override { ++prez; }
+    void RenderShadow(CommandBuffer&, const RenderScenePassContext&) override { ++shadow; }
+    void RenderOpaque(CommandBuffer&, const RenderScenePassContext&) override { ++opaque; }
+    void RenderTransparent(CommandBuffer&, const RenderScenePassContext&) override { ++transparent; }
+    int prez = 0, shadow = 0, opaque = 0, transparent = 0;
+};
+} // namespace
+
+TEST(SceneRendererTest, ExecuteSceneRenderersDispatchesRequestedStage) {
+    RenderScene scene;
+    RecordingSceneRenderer r;
+    scene.scene_renderers.push_back(&r);
+
+    MockCommandBuffer cmd;
+    RenderScenePassContext ctx;
+
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Opaque, cmd, ctx);
+    EXPECT_EQ(r.opaque, 1);
+    EXPECT_EQ(r.prez, 0);
+    EXPECT_EQ(r.shadow, 0);
+    EXPECT_EQ(r.transparent, 0);
+
+    ExecuteSceneRenderers(&scene, SceneRenderStage::PreZ, cmd, ctx);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Shadow, cmd, ctx);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Transparent, cmd, ctx);
+    EXPECT_EQ(r.prez, 1);
+    EXPECT_EQ(r.shadow, 1);
+    EXPECT_EQ(r.transparent, 1);
+    EXPECT_EQ(r.opaque, 1);
+}
+
+TEST(SceneRendererTest, ExecuteSceneRenderersToleratesNullSceneAndNullEntry) {
+    MockCommandBuffer cmd;
+    RenderScenePassContext ctx;
+
+    // 空 scene 不崩溃
+    ExecuteSceneRenderers(nullptr, SceneRenderStage::Opaque, cmd, ctx);
+
+    // 含 nullptr 项的注册表被跳过
+    RenderScene scene;
+    scene.scene_renderers.push_back(nullptr);
+    RecordingSceneRenderer r;
+    scene.scene_renderers.push_back(&r);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Opaque, cmd, ctx);
+    EXPECT_EQ(r.opaque, 1);
+}
+
+TEST(SceneRendererTest, RenderSceneClearResetsRegistry) {
+    RenderScene scene;
+    RecordingSceneRenderer r;
+    scene.scene_renderers.push_back(&r);
+    EXPECT_EQ(scene.scene_renderers.size(), 1u);
+
+    scene.Clear();
+    EXPECT_TRUE(scene.scene_renderers.empty());
+}
+
+TEST(SceneRendererTest, DefaultSceneRendererStagesAreNoOps) {
+    // 仅重写 Opaque 的渲染器：其余阶段走基类默认空实现，不应崩溃。
+    class OpaqueOnly : public ISceneRenderer {
+    public:
+        void RenderOpaque(CommandBuffer&, const RenderScenePassContext&) override { ++opaque; }
+        int opaque = 0;
+    } r;
+    RenderScene scene;
+    scene.scene_renderers.push_back(&r);
+
+    MockCommandBuffer cmd;
+    RenderScenePassContext ctx;
+    ExecuteSceneRenderers(&scene, SceneRenderStage::PreZ, cmd, ctx);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Shadow, cmd, ctx);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Transparent, cmd, ctx);
+    EXPECT_EQ(r.opaque, 0);
+    ExecuteSceneRenderers(&scene, SceneRenderStage::Opaque, cmd, ctx);
+    EXPECT_EQ(r.opaque, 1);
+}

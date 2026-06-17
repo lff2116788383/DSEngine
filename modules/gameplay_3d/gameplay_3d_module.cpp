@@ -184,46 +184,52 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
         grass_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
         tree_system_.RenderShadow(*world_ptr, cmd, pass_ctx.camera_offset);
     });
-    scene.opaque_callbacks.push_back([this, world_ptr](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-        World& callback_world = *world_ptr;
-        terrain_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
-        grass_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
-        tree_system_.Render(callback_world, cmd, pass_ctx.camera_offset);
+    // 不透明几何（terrain/grass/tree/particle/hair）通过 ISceneRenderer::RenderOpaque
+    // 贡献，由 ForwardScenePass / RSMRenderPass 在其渲染作用域内调用。
+    scene.scene_renderers.push_back(this);
+}
 
-        auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
-        std::vector<Particle3DDrawItem> p_items;
-        for (auto entity : p_view) {
-            const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
-            if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo != 0) {
-                Particle3DDrawItem item;
-                item.texture_handle = ps.texture_handle;
-                item.particle_count = ps.active_particle_count;
-                item.instance_vbo = ps.instance_vbo;
-                p_items.push_back(item);
-            }
-        }
+void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
+                                    const dse::render::RenderScenePassContext& ctx) {
+    if (!ctx.world) return;
+    World& callback_world = *ctx.world;
+    terrain_system_.Render(callback_world, cmd, ctx.camera_offset);
+    grass_system_.Render(callback_world, cmd, ctx.camera_offset);
+    tree_system_.Render(callback_world, cmd, ctx.camera_offset);
 
-        auto f_view = callback_world.registry().view<dse::FluidEmitterComponent>();
-        for (auto entity : f_view) {
-            const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
-            if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
-                Particle3DDrawItem item;
-                item.texture_handle = 0;
-                item.particle_count = static_cast<int>(fluid.active_count);
-                item.instance_vbo = fluid.instance_vbo;
-                p_items.push_back(item);
-            }
+    auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
+    std::vector<Particle3DDrawItem> p_items;
+    for (auto entity : p_view) {
+        const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
+        if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo != 0) {
+            Particle3DDrawItem item;
+            item.texture_handle = ps.texture_handle;
+            item.particle_count = ps.active_particle_count;
+            item.instance_vbo = ps.instance_vbo;
+            p_items.push_back(item);
         }
+    }
 
-        const glm::mat4 view_at_origin = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
-        const glm::mat4 projection = pass_ctx.projection ? *pass_ctx.projection : glm::mat4(1.0f);
-        // Camera-Relative: 粒子/毛发数据仍在世界空间，需要用包含 camera_offset 平移的 view
-        const glm::mat4 world_to_view = view_at_origin * glm::translate(glm::mat4(1.0f), -pass_ctx.camera_offset);
-        if (!p_items.empty()) {
-            cmd.DrawParticles3D(p_items, world_to_view, projection);
+    auto f_view = callback_world.registry().view<dse::FluidEmitterComponent>();
+    for (auto entity : f_view) {
+        const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
+        if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
+            Particle3DDrawItem item;
+            item.texture_handle = 0;
+            item.particle_count = static_cast<int>(fluid.active_count);
+            item.instance_vbo = fluid.instance_vbo;
+            p_items.push_back(item);
         }
-        hair_system_.Render(callback_world, cmd, world_to_view, projection);
-    });
+    }
+
+    const glm::mat4 view_at_origin = ctx.view ? *ctx.view : glm::mat4(1.0f);
+    const glm::mat4 projection = ctx.projection ? *ctx.projection : glm::mat4(1.0f);
+    // Camera-Relative: 粒子/毛发数据仍在世界空间，需要用包含 camera_offset 平移的 view
+    const glm::mat4 world_to_view = view_at_origin * glm::translate(glm::mat4(1.0f), -ctx.camera_offset);
+    if (!p_items.empty()) {
+        cmd.DrawParticles3D(p_items, world_to_view, projection);
+    }
+    hair_system_.Render(callback_world, cmd, world_to_view, projection);
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {

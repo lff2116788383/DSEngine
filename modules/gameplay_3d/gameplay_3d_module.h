@@ -2,6 +2,7 @@
 
 #include "engine/core/module.h"
 #include "engine/core/event_bus.h"
+#include "engine/render/scene_renderer.h"
 #include "engine/physics/physics3d/i_physics3d_system.h"
 
 // 3D Systems
@@ -47,7 +48,7 @@ namespace gameplay3d {
  * @class Gameplay3DModule
  * @brief 将所有的 3D 功能系统打包为一个独立模块，实现与引擎核心的解耦
  */
-class Gameplay3DModule : public core::IModule {
+class Gameplay3DModule : public core::IModule, public dse::render::ISceneRenderer {
 public:
     const char* GetName() const override { return "Gameplay3D"; }
 
@@ -56,6 +57,11 @@ public:
     void OnFixedUpdate(World& world, float fixed_delta_time) override;
     void OnShutdown(World& world) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
+
+    // ISceneRenderer：3D 不透明几何（terrain/grass/tree/particle/hair）的渲染贡献，
+    // 由 ForwardScenePass / RSMRenderPass 在其渲染作用域内调用。
+    void RenderOpaque(dse::render::CommandBuffer& cmd,
+                      const dse::render::RenderScenePassContext& ctx) override;
 
     MeshRenderSystem& mesh_render_system() { return mesh_render_system_; }
     const MeshRenderSystem& mesh_render_system() const { return mesh_render_system_; }
