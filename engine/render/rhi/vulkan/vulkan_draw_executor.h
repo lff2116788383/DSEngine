@@ -131,6 +131,17 @@ public:
                   VulkanShaderManager& shader_mgr,
                   VulkanResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+    void PrimBindIndexBuffer(VkBuffer buffer, IndexType type);
+    void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
+    void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
+    void PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index_count, uint32_t first_index,
+                         int32_t base_vertex,
+                         VulkanPipelineStateManager& pipeline_mgr,
+                         VulkanShaderManager& shader_mgr,
+                         VulkanResourceManager& resource_mgr);
+
     // --- GPU-Driven PBR 渲染设置 ---
     void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                             const glm::mat4& view, const glm::mat4& proj,
@@ -217,6 +228,13 @@ private:
         VkBuffer inst_ssbo = VK_NULL_HANDLE,
         VkDeviceSize inst_ssbo_size = 0,
         VkDeviceSize inst_ssbo_offset = 0);
+
+    /// 为通用原语 (B0) 绘制分配并更新 DescriptorSet：反射驱动，按 (set,binding) 升序
+    /// 把契约 slot 顺序映射到具体 UBO/纹理 binding，其余 binding 用 dummy 占位。
+    void AllocateAndUpdateGenericDescriptorSets(
+        VkCommandBuffer cmd_buf,
+        const VulkanShaderProgram* program,
+        VulkanResourceManager& resource_mgr);
 
     /// 为天空盒绘制分配并更新 DescriptorSet
     VkDescriptorSet AllocateAndUpdateSkyboxDescriptorSets(
@@ -391,6 +409,12 @@ private:
     unsigned int prim_cubemap_ = 0;
     glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);
     bool prim_has_push_ = false;
+
+    // 通用绘制原语 (B0) 累积状态：索引缓冲 / 2D 纹理(slot→handle) / UBO(slot→handle)
+    VkBuffer prim_index_buffer_ = VK_NULL_HANDLE;          ///< 当前绑定的索引缓冲（VK_NULL_HANDLE=无）
+    VkIndexType prim_index_type_ = VK_INDEX_TYPE_UINT16;   ///< 索引类型
+    std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< 契约 slot → 2D 纹理句柄
+    std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< 契约 slot → UBO 句柄
 
 };
 

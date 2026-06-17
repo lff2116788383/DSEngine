@@ -110,6 +110,8 @@ public:
 
     // --- 缓冲区 ---
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index);
+    /// 创建 uniform buffer（VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT，host-visible 持久映射，B0 通用 UBO 原语用）
+    unsigned int CreateUniformBuffer(size_t size, const void* data, bool is_dynamic);
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data);
     void DeleteBuffer(unsigned int handle);
     const VulkanBuffer* GetBuffer(unsigned int handle) const;

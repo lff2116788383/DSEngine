@@ -124,6 +124,8 @@ public:
 
     // --- 缓冲区 ---
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index);
+    /// 创建 constant buffer（D3D11_BIND_CONSTANT_BUFFER，B0 通用 UBO 原语用）
+    unsigned int CreateConstantBuffer(size_t size, const void* data, bool is_dynamic);
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index);
     void DeleteBuffer(unsigned int handle);
     const DX11Buffer* GetBuffer(unsigned int handle) const;

@@ -46,6 +46,13 @@ public:
     void PushConstantsMat4(const glm::mat4& value) override;
     void Draw(uint32_t vertex_count, uint32_t first_vertex) override;
 
+    // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+    void BindIndexBuffer(unsigned int buffer_handle, IndexType type) override;
+    void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) override;
+    void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                           uint32_t offset, uint32_t size) override;
+    void DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) override;
+
     /// 重置命令缓冲状态
     void Reset();
 

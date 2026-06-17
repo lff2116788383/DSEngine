@@ -69,6 +69,12 @@ public:
     // --- 内建资源访问器 (A1) ---
     unsigned int GetSkyboxShaderProgram() override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
+
+    // --- 内建资源访问器 (B0) ---
+    unsigned int GetSprite2DShaderProgram() override;
+
+    // kUniform 用途需走 constant buffer（D3D11_BIND_CONSTANT_BUFFER），覆写基类路由。
+    BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
     void DeleteBuffer(unsigned int handle) override;
     VertexArrayHandle CreateVertexArray() override;

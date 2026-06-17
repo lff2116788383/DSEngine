@@ -112,6 +112,33 @@ void VulkanCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
+// --- 通用绘制原语 (B0) ---
+
+void VulkanCommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    if (!device_) return;
+    const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle);
+    VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
+    device_->draw_executor().PrimBindIndexBuffer(vk_buf, type);
+}
+
+void VulkanCommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindTexture(slot, texture_handle, dim);
+}
+
+void VulkanCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                            uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+}
+
+void VulkanCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->draw_executor().PrimDrawIndexed(
+        vk_command_buffer_, index_count, first_index, base_vertex,
+        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
+}
+
 void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().BlitRenderTargetToSwapchain(
@@ -625,6 +652,29 @@ unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
         skybox_cube_vbo_handle_ = resource_mgr_.CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_handle_;
+}
+
+// --- 内建资源访问器 (B0) ---
+
+unsigned int VulkanRhiDevice::GetSprite2DShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite2d_shader_handle() == 0) {
+        shader_mgr_.InitSprite2DShader();
+    }
+    return shader_mgr_.sprite2d_shader_handle();
+}
+
+BufferHandle VulkanRhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
+    // kUniform（非 storage/indirect/index）→ VK_BUFFER_USAGE_UNIFORM_BUFFER（host-visible 持久映射）
+    if (has(desc.usage, GpuBufferUsage::kUniform) &&
+        !has(desc.usage, GpuBufferUsage::kStorage) &&
+        !has(desc.usage, GpuBufferUsage::kIndirect) &&
+        !has(desc.usage, GpuBufferUsage::kIndex)) {
+        BufferHandle h{resource_mgr_.CreateUniformBuffer(desc.size, initial_data, desc.is_dynamic)};
+        if (h) gpu_buffer_usage_map_[h.raw()] = desc.usage;
+        return h;
+    }
+    return RhiDevice::CreateGpuBuffer(desc, initial_data);
 }
 
 void VulkanRhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {

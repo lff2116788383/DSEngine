@@ -8,6 +8,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     gl_rhi_smoke_test.cpp
     vulkan_rhi_smoke_test.cpp
     dx11_rhi_smoke_test.cpp
+    sprite_primitive_smoke_test.cpp
     physics3d_smoke_test.cpp
 )
 

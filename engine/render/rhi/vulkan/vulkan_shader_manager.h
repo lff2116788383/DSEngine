@@ -117,6 +117,12 @@ public:
     /// 初始化 2D 精灵着色器
     void InitSpriteShader();
 
+    /// 初始化 sprite2d 着色器（B0 通用原语活体验证用，set0=PerFrame UBO / set2=2D 纹理）
+    void InitSprite2DShader();
+
+    /// sprite2d 着色器句柄（base ShaderManagerBase 未含）
+    unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -211,6 +217,9 @@ private:
 
     /// Compute 着色器程序
     std::unordered_map<unsigned int, VulkanComputeProgram> compute_programs_;
+
+    /// 内建 sprite2d 着色器句柄（B0；base ShaderManagerBase 未含）
+    unsigned int sprite2d_shader_handle_ = 0;
 };
 
 } // namespace render

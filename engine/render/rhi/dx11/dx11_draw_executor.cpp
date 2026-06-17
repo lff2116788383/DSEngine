@@ -1311,6 +1311,72 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     global_state_.current_frame_stats.draw_calls++;
 }
 
+// --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+
+void DX11DrawExecutor::PrimBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    prim_index_buffer_handle_ = buffer_handle;
+    prim_index_format_ = (type == IndexType::UInt32) ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT;
+}
+
+void DX11DrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim /*dim*/) {
+    // DX11 的 SRV 在纹理创建时已按维度定型；slot 直接映射到 t<slot>/s<slot>。
+    prim_textures_[slot] = texture_handle;
+}
+
+void DX11DrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                             uint32_t /*offset*/, uint32_t /*size*/) {
+    // D3D11 constant buffer 整块绑定到 b<slot>（offset/size 子区间 v1 暂不支持）。
+    prim_ubos_[slot] = buffer_handle;
+}
+
+void DX11DrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
+                                       DX11ShaderManager& shader_mgr,
+                                       DX11ResourceManager& resource_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+
+    const auto* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) return;
+    const auto* vb = resource_mgr.GetBuffer(prim_vbo_handle_);
+    if (!vb || !vb->buffer) return;
+    const auto* ib = resource_mgr.GetBuffer(prim_index_buffer_handle_);
+    if (!ib || !ib->buffer) return;
+
+    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+
+    // UBO（constant buffer）按 slot → b<slot>，VS+PS 同绑（PS 未用则无害）。
+    for (const auto& [slot, handle] : prim_ubos_) {
+        const auto* cbuf = resource_mgr.GetBuffer(handle);
+        if (cbuf && cbuf->buffer) {
+            ID3D11Buffer* cb = cbuf->buffer.Get();
+            dc->VSSetConstantBuffers(slot, 1, &cb);
+            dc->PSSetConstantBuffers(slot, 1, &cb);
+        }
+    }
+
+    // 2D 纹理按 slot → t<slot>/s<slot>。
+    for (const auto& [slot, handle] : prim_textures_) {
+        const auto* tex = resource_mgr.GetTexture(handle);
+        if (tex) {
+            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+        }
+    }
+
+    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    UINT stride = prim_stride_;
+    UINT offset = 0;
+    dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+    dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
+
+    // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定。
+    dc->DrawIndexed(index_count, first_index, base_vertex);
+    global_state_.current_frame_stats.draw_calls++;
+}
+
 void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
                                          DX11PipelineStateManager& pipeline_mgr,
                                          DX11ShaderManager& shader_mgr,

@@ -9,6 +9,8 @@
 #include "engine/render/shaders/generated/embed/pbr_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sprite2d_vert.gen.h"
+#include "engine/render/shaders/generated/embed/sprite2d_frag.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_frag.gen.h"
 #include "engine/render/shaders/generated/embed/particle_vert.gen.h"
@@ -61,6 +63,7 @@
 #include "engine/render/shaders/generated/embed/shadow_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -146,6 +149,7 @@ void DX11ShaderManager::Shutdown() {
     skybox_shader_handle_ = 0;
     particle_shader_handle_ = 0;
     sprite_shader_handle_ = 0;
+    sprite2d_shader_handle_ = 0;
     text_sdf_shader_handle_ = 0;
     ui_effects_shader_handle_ = 0;
     postprocess_shader_handle_ = 0;
@@ -352,6 +356,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(sprite_shader_handle_, sprite_layout.data(),
                                    static_cast<int>(sprite_layout.size()));
     }
+
+    // ---- 2D sprite 着色器 (B0 通用原语活体验证) ----
+    sprite2d_shader_handle_ = CreateProgramFromDXBC(
+        ksprite2d_vert_dxbc, ksprite2d_vert_dxbc_size,
+        ksprite2d_frag_dxbc, ksprite2d_frag_dxbc_size);
+    if (sprite2d_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin sprite2d shader created (DXBC): {}", sprite2d_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> sprite2d_layout;
+        CreateInputLayoutFromReflection(ksprite2d_vert_reflection, sprite2d_layout);
+        CreateInputLayoutForShader(sprite2d_shader_handle_, sprite2d_layout.data(),
+                                   static_cast<int>(sprite2d_layout.size()));
+    }
+    pulse();
 
     text_sdf_shader_handle_ = CreateProgramFromDXBC(
         ksprite_vert_dxbc, ksprite_vert_dxbc_size,

@@ -649,6 +649,11 @@ void GLShaderManager::InitSprite2DShader() {
     BindUBOsFromReflection(sprite2d_shader_handle_, ksprite2d_vert_reflection);
     glUseProgram(sprite2d_shader_handle_);
     sprite2d_locations_.texture = glGetUniformLocation(sprite2d_shader_handle_, "u_texture");
+    // B0: 把 u_texture 采样器一次性绑定到纹理单元 0，使通用原语 BindTexture(slot=0, Tex2D)
+    // 路径无需知道 uniform 名即可生效（与 InitSkyboxShader 的 sampler 绑定同理）。
+    if (sprite2d_locations_.texture >= 0) {
+        glUniform1i(sprite2d_locations_.texture, 0);
+    }
     glUseProgram(0);
 }
 

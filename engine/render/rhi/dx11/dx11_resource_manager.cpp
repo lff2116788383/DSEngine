@@ -400,6 +400,38 @@ unsigned int DX11ResourceManager::CreateBuffer(size_t size, const void* data, bo
     return handle;
 }
 
+unsigned int DX11ResourceManager::CreateConstantBuffer(size_t size, const void* data, bool is_dynamic) {
+    if (!device_) return 0;
+    DX11Buffer buf;
+    buf.size = size;
+    buf.is_dynamic = is_dynamic;
+    buf.is_index = false;
+
+    D3D11_BUFFER_DESC bd{};
+    // constant buffer 的 ByteWidth 必须是 16 的倍数
+    bd.ByteWidth = static_cast<UINT>((size + 15) & ~size_t(15));
+    bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    if (is_dynamic) {
+        bd.Usage = D3D11_USAGE_DYNAMIC;
+        bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    } else {
+        bd.Usage = D3D11_USAGE_DEFAULT;
+    }
+
+    D3D11_SUBRESOURCE_DATA init_data{};
+    init_data.pSysMem = data;
+
+    HRESULT hr = device_->CreateBuffer(&bd, data ? &init_data : nullptr, buf.buffer.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] CreateConstantBuffer failed: 0x{:08X}", static_cast<unsigned>(hr));
+        return 0;
+    }
+
+    unsigned int handle = next_buffer_handle_++;
+    buffers_[handle] = std::move(buf);
+    return handle;
+}
+
 void DX11ResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool /*is_index*/) {
     if (!device_) return;
     auto it = buffers_.find(handle);

@@ -224,6 +224,27 @@ void OpenGLCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
     device_->RealDraw(vertex_count, first_vertex);
 }
 
+void OpenGLCommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    if (!device_) return;
+    device_->RealBindIndexBuffer(buffer_handle, type);
+}
+
+void OpenGLCommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    if (!device_) return;
+    device_->RealBindTexture(slot, texture_handle, dim);
+}
+
+void OpenGLCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                            uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->RealBindUniformBuffer(slot, buffer_handle, offset, size);
+}
+
+void OpenGLCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    if (!device_) return;
+    device_->RealDrawIndexed(index_count, first_index, base_vertex);
+}
+
 void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->RealSubmitDrawPostProcess(request);
@@ -885,6 +906,24 @@ void OpenGLRhiDevice::RealDraw(uint32_t vertex_count, uint32_t first_vertex) {
     draw_executor_.PrimDraw(vertex_count, first_vertex);
 }
 
+// --- 通用绘制原语 (B0) ---
+
+void OpenGLRhiDevice::RealBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    draw_executor_.PrimBindIndexBuffer(buffer_handle, type);
+}
+
+void OpenGLRhiDevice::RealBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    draw_executor_.PrimBindTexture(slot, texture_handle, dim);
+}
+
+void OpenGLRhiDevice::RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) {
+    draw_executor_.PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+}
+
+void OpenGLRhiDevice::RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    draw_executor_.PrimDrawIndexed(index_count, first_index, base_vertex);
+}
+
 // --- 内建资源访问器 (A1) ---
 
 unsigned int OpenGLRhiDevice::GetSkyboxShaderProgram() {
@@ -915,6 +954,14 @@ unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
         skybox_cube_vbo_ = CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_;
+}
+
+unsigned int OpenGLRhiDevice::GetSprite2DShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite2d_shader_handle() == 0) {
+        shader_mgr_.InitSprite2DShader();
+    }
+    return shader_mgr_.sprite2d_shader_handle();
 }
 
 // --- SSBO (Shader Storage Buffer Object) ---

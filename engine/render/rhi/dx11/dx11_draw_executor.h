@@ -137,6 +137,15 @@ public:
                   DX11ShaderManager& shader_mgr,
                   DX11ResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+    void PrimBindIndexBuffer(unsigned int buffer_handle, IndexType type);
+    void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
+    void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
+    void PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
+                         DX11ShaderManager& shader_mgr,
+                         DX11ResourceManager& resource_mgr);
+
     void DispatchCompute(unsigned int cs_handle,
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,
@@ -268,6 +277,12 @@ private:
     unsigned int prim_cube_slot_ = 0;        ///< cubemap 绑定槽位
     glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);  ///< push-constant 风格的 mat4（→ PerFrame.vp）
     bool prim_has_push_ = false;             ///< 是否设置过 push constant
+
+    // B0 通用原语累积状态：索引缓冲 / 2D 纹理(slot→t/s) / UBO(slot→b)
+    unsigned int prim_index_buffer_handle_ = 0;       ///< 当前绑定的索引缓冲句柄（0=无）
+    DXGI_FORMAT prim_index_format_ = DXGI_FORMAT_R16_UINT;  ///< 索引格式
+    std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< slot → 2D 纹理句柄
+    std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< slot → constant buffer 句柄
 
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;

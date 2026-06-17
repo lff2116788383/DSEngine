@@ -2777,6 +2777,201 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 }
 
 // ============================================================================
+// 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制
+// ============================================================================
+
+void VulkanDrawExecutor::PrimBindIndexBuffer(VkBuffer buffer, IndexType type) {
+    prim_index_buffer_ = buffer;
+    prim_index_type_ = (type == IndexType::UInt32) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
+}
+
+void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim /*dim*/) {
+    // Vulkan 的 image view 在纹理创建时已按维度定型；契约 slot 暂存，PrimDrawIndexed 时映射到具体 binding。
+    prim_textures_[slot] = texture_handle;
+}
+
+void VulkanDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                               uint32_t /*offset*/, uint32_t /*size*/) {
+    // 契约 slot 暂存（offset/size 子区间 v1 暂不支持，整块绑定）。
+    prim_ubos_[slot] = buffer_handle;
+}
+
+void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
+    VkCommandBuffer cmd_buf,
+    const VulkanShaderProgram* program,
+    VulkanResourceManager& resource_mgr) {
+
+    auto device = context_->device();
+    uint32_t fi = current_frame_index_;
+    const uint32_t set_count = static_cast<uint32_t>(program->descriptor_set_layouts.size());
+    if (set_count == 0) return;
+
+    std::vector<VkDescriptorSet> sets(set_count, VK_NULL_HANDLE);
+    for (uint32_t s = 0; s < set_count; ++s) {
+        sets[s] = resource_mgr.AllocateDescriptorSet(program->descriptor_set_layouts[s]);
+        if (sets[s] == VK_NULL_HANDLE) return;
+    }
+
+    const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
+    VkSampler default_samp = resource_mgr.default_sampler();
+
+    VkDescriptorBufferInfo dummy_ubo_info{};
+    dummy_ubo_info.buffer = per_frame_ubo_[fi];
+    dummy_ubo_info.offset = 0;
+    dummy_ubo_info.range = sizeof(VulkanPerFrameUBO);
+
+    VkDescriptorBufferInfo dummy_ssbo_info{};
+    dummy_ssbo_info.buffer = dummy_ssbo_buffer_;
+    dummy_ssbo_info.offset = 0;
+    dummy_ssbo_info.range = VK_WHOLE_SIZE;
+
+    VkDescriptorImageInfo dummy_img_info{};
+    dummy_img_info.sampler = default_samp;
+    dummy_img_info.imageView = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
+    dummy_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    // 反射 binding 按 (set,binding) 升序：把契约 slot 顺序映射到第 N 个同类 binding。
+    std::vector<DescriptorBindingInfo> sorted = program->reflection.bindings;
+    std::sort(sorted.begin(), sorted.end(), [](const DescriptorBindingInfo& a, const DescriptorBindingInfo& b) {
+        return a.set != b.set ? a.set < b.set : a.binding < b.binding;
+    });
+
+    // info 池在所有写入收集完毕后再 realloc 定稿，故先记 base 索引、最后修指针。
+    std::vector<VkDescriptorBufferInfo> buf_pool;
+    std::vector<VkDescriptorImageInfo> img_pool;
+    buf_pool.reserve(sorted.size());
+    img_pool.reserve(sorted.size() * 4 + 1);
+    std::vector<VkWriteDescriptorSet> writes;
+    writes.reserve(sorted.size());
+    std::vector<std::tuple<size_t, bool, size_t>> fixups;  // <write_idx, is_image, pool_base>
+
+    uint32_t ubo_slot = 0;  // 契约 BindUniformBuffer slot 计数（按 binding 升序）
+    uint32_t tex_slot = 0;  // 契约 BindTexture slot 计数（按 binding 升序）
+
+    for (const auto& b : sorted) {
+        if (b.set >= set_count) continue;
+        VkWriteDescriptorSet w{};
+        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        w.dstSet = sets[b.set];
+        w.dstBinding = b.binding;
+        w.descriptorCount = b.count;
+        w.descriptorType = b.type;
+
+        if (b.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ||
+            b.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) {
+            VkDescriptorBufferInfo info = dummy_ubo_info;
+            auto it = prim_ubos_.find(ubo_slot);
+            if (it != prim_ubos_.end()) {
+                const VulkanBuffer* ub = resource_mgr.GetBuffer(it->second);
+                if (ub && ub->buffer) { info.buffer = ub->buffer; info.offset = 0; info.range = ub->size; }
+            }
+            size_t base = buf_pool.size();
+            buf_pool.push_back(info);
+            fixups.push_back({writes.size(), false, base});
+            writes.push_back(w);
+            ++ubo_slot;
+        } else if (b.type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER) {
+            VkDescriptorImageInfo info = dummy_img_info;
+            auto it = prim_textures_.find(tex_slot);
+            if (it != prim_textures_.end()) {
+                const VulkanTexture* t = resource_mgr.GetTexture(it->second);
+                if (t && t->image_view) {
+                    info.imageView = t->image_view;
+                    if (t->sampler) info.sampler = t->sampler;
+                }
+            }
+            size_t base = img_pool.size();
+            for (uint32_t j = 0; j < b.count; ++j) img_pool.push_back(info);
+            fixups.push_back({writes.size(), true, base});
+            writes.push_back(w);
+            ++tex_slot;
+        } else if (b.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+            size_t base = buf_pool.size();
+            buf_pool.push_back(dummy_ssbo_info);
+            fixups.push_back({writes.size(), false, base});
+            writes.push_back(w);
+        } else {
+            // 其它类型 (storage image / sampled image 等) v1 暂用 dummy ubo 占位，避免未初始化描述符。
+            size_t base = buf_pool.size();
+            buf_pool.push_back(dummy_ubo_info);
+            fixups.push_back({writes.size(), false, base});
+            writes.push_back(w);
+        }
+    }
+
+    for (auto& [wi, is_img, base] : fixups) {
+        if (is_img) writes[wi].pImageInfo = &img_pool[base];
+        else        writes[wi].pBufferInfo = &buf_pool[base];
+    }
+
+    if (!writes.empty()) {
+        vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()),
+                               writes.data(), 0, nullptr);
+    }
+    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            program->pipeline_layout, 0,
+                            set_count, sets.data(), 0, nullptr);
+}
+
+void VulkanDrawExecutor::PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index_count,
+                                         uint32_t first_index, int32_t base_vertex,
+                                         VulkanPipelineStateManager& pipeline_mgr,
+                                         VulkanShaderManager& shader_mgr,
+                                         VulkanResourceManager& resource_mgr) {
+    if (skip_current_pass_) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: shader program not available");
+        return;
+    }
+    if (prim_vbo_ == VK_NULL_HANDLE || prim_index_buffer_ == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: vertex/index buffer not bound");
+        return;
+    }
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    std::vector<VkVertexInputBindingDescription> bindings = {
+        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
+    };
+    std::vector<VkVertexInputAttributeDescription> vk_attrs;
+    vk_attrs.reserve(prim_attrs_.size());
+    for (const auto& a : prim_attrs_) {
+        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+        switch (a.components) {
+            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+            default: break;
+        }
+        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
+    }
+
+    VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        bindings, vk_attrs,
+        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        false);
+    if (pipeline == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: failed to create pipeline");
+        return;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
+
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
+    vkCmdDrawIndexed(cmd_buf, index_count, 1, first_index, base_vertex, 0);
+
+    global_state_.current_frame_stats.draw_calls++;
+}
+
+// ============================================================================
 // DrawPostProcess — 后处理绘制
 // ============================================================================
 

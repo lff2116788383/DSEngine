@@ -105,6 +105,13 @@ public:
     void PrimPushConstantsMat4(const glm::mat4& value);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex);
 
+    // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+    void PrimBindIndexBuffer(unsigned int buffer_handle, IndexType type);
+    void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
+    void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
+    void PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();
@@ -194,6 +201,7 @@ private:
     // 通用绘制原语状态 (A1)
     VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
+    unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
 
     // 后处理全屏四边形
     VertexArrayHandle pp_vao_handle_;

@@ -458,6 +458,57 @@ void GLDrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex) {
     global_state_.current_frame_stats.draw_calls += 1;
 }
 
+// --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+
+void GLDrawExecutor::PrimBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    // EBO 绑定记录在当前 VAO 状态里，故须先确保 prim VAO 已绑定
+    // （SpriteRenderer 先调 BindVertexBuffer 创建/绑定该 VAO）。
+    if (!prim_vao_handle_ && create_vao_fn_) {
+        prim_vao_handle_ = create_vao_fn_();
+    }
+    glBindVertexArray(prim_vao_handle_.raw());
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buffer_handle);
+    prim_index_type_ = (type == IndexType::UInt16) ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+}
+
+void GLDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    GLenum target = GL_TEXTURE_2D;
+    switch (dim) {
+        case TextureDim::TexCube:    target = GL_TEXTURE_CUBE_MAP;       break;
+        case TextureDim::Tex2DArray: target = GL_TEXTURE_2D_ARRAY;       break;
+        case TextureDim::Tex2D:      default: target = GL_TEXTURE_2D;     break;
+    }
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(target, texture_handle);
+    // GLSL sampler 须指向该纹理单元。各内建着色器在初始化时把其采样器绑定到约定单元
+    // （见 GLShaderManager::InitSprite2DShader / InitSkyboxShader）。
+}
+
+void GLDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                           uint32_t offset, uint32_t size) {
+    if (size == 0) {
+        glBindBufferBase(GL_UNIFORM_BUFFER, slot, buffer_handle);
+    } else {
+        glBindBufferRange(GL_UNIFORM_BUFFER, slot, buffer_handle,
+                          static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size));
+    }
+}
+
+void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    glBindVertexArray(prim_vao_handle_.raw());
+    const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
+    const void* offset_ptr = reinterpret_cast<const void*>(static_cast<uintptr_t>(first_index) * elem);
+    if (base_vertex != 0) {
+        glDrawElementsBaseVertex(GL_TRIANGLES, static_cast<GLsizei>(index_count),
+                                 prim_index_type_, offset_ptr, base_vertex);
+    } else {
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(index_count),
+                       prim_index_type_, offset_ptr);
+    }
+    glBindVertexArray(0);
+    global_state_.current_frame_stats.draw_calls += 1;
+}
+
 // ============================================================
 // 后处理绘制
 // ============================================================

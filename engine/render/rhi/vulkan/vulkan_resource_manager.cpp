@@ -844,6 +844,37 @@ unsigned int VulkanResourceManager::CreateBuffer(size_t size, const void* data, 
     return handle;
 }
 
+unsigned int VulkanResourceManager::CreateUniformBuffer(size_t size, const void* data, bool /*is_dynamic*/) {
+    if (!device_) return 0;
+    unsigned int handle = next_buffer_handle_++;
+    VulkanBuffer buf;
+    buf.size = size;
+    // B0 通用 UBO：host-visible + 持久映射，UpdateBuffer 走 memcpy 路径（sprite 每帧更新 MVP）
+    buf.is_dynamic = true;
+
+    VkBufferCreateInfo buffer_info{};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(device_, &buffer_info, nullptr, &buf.buffer) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device_, buf.buffer, &mem_reqs);
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = FindMemoryType(mem_reqs.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (vkAllocateMemory(device_, &alloc_info, nullptr, &buf.memory) != VK_SUCCESS) return 0;
+    vkBindBufferMemory(device_, buf.buffer, buf.memory, 0);
+    vkMapMemory(device_, buf.memory, 0, size, 0, &buf.mapped);
+    if (data && buf.mapped) memcpy(buf.mapped, data, size);
+
+    buffers_[handle] = buf;
+    return handle;
+}
+
 void VulkanResourceManager::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data) {
     if (!device_) return;
     auto it = buffers_.find(handle);

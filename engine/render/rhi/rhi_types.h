@@ -158,6 +158,23 @@ struct VertexAttr {
     uint32_t offset = 0;      ///< 在顶点结构体内的字节偏移
 };
 
+// ============================================================
+// 通用绘制原语枚举 (B0 — 见 docs/architecture/RHI_PRIMITIVE_CONTRACT.md)
+// ============================================================
+
+/// 索引缓冲元素类型
+enum class IndexType : uint8_t {
+    UInt16 = 0,
+    UInt32 = 1,
+};
+
+/// 纹理维度（BindTexture 用，归并 cubemap / 2D / 2D 数组）
+enum class TextureDim : uint8_t {
+    Tex2D      = 0,
+    TexCube    = 1,
+    Tex2DArray = 2,
+};
+
 /// 渲染通道描述符
 struct RenderPassDesc {
     unsigned int render_target = 0;

@@ -143,6 +143,30 @@ void DX11CommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
         device_->shader_mgr(), device_->resource_mgr());
 }
 
+// --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+
+void DX11CommandBuffer::BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindIndexBuffer(buffer_handle, type);
+}
+
+void DX11CommandBuffer::BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindTexture(slot, texture_handle, dim);
+}
+
+void DX11CommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                          uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+}
+
+void DX11CommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    if (!device_) return;
+    device_->draw_executor().PrimDrawIndexed(index_count, first_index, base_vertex,
+        device_->shader_mgr(), device_->resource_mgr());
+}
+
 void DX11CommandBuffer::Reset() {
     ResetBase();
 }
@@ -403,6 +427,26 @@ unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
             sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_handle_;
+}
+
+// --- 内建资源访问器 (B0) ---
+
+unsigned int DX11RhiDevice::GetSprite2DShaderProgram() {
+    // 内建 sprite2d 着色器在 InitD3D11→ShaderManager 初始化时已创建（DXBC）。
+    return shader_mgr_.sprite2d_shader_handle();
+}
+
+BufferHandle DX11RhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
+    // kUniform（非 storage/indirect/index）→ D3D11 constant buffer
+    if (has(desc.usage, GpuBufferUsage::kUniform) &&
+        !has(desc.usage, GpuBufferUsage::kStorage) &&
+        !has(desc.usage, GpuBufferUsage::kIndirect) &&
+        !has(desc.usage, GpuBufferUsage::kIndex)) {
+        BufferHandle h{resource_mgr_.CreateConstantBuffer(desc.size, initial_data, desc.is_dynamic)};
+        if (h) gpu_buffer_usage_map_[h.raw()] = desc.usage;
+        return h;
+    }
+    return RhiDevice::CreateGpuBuffer(desc, initial_data);
 }
 
 void DX11RhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {

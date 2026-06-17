@@ -118,6 +118,9 @@ public:
 
     // 内置着色器句柄访问器继承自 ShaderManagerBase
 
+    /// 内建 2D sprite 着色器句柄（B0 通用原语活体验证用，base 未含）
+    unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
 private:
@@ -139,6 +142,9 @@ private:
     /// Compute Shader 程序映射
     std::unordered_map<unsigned int, DX11ComputeProgram> compute_programs_;
     unsigned int next_cs_handle_ = 850000;
+
+    /// 内建 2D sprite 着色器句柄（B0；base ShaderManagerBase 未含）
+    unsigned int sprite2d_shader_handle_ = 0;
 
 };
 

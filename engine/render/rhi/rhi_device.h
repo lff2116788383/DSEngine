@@ -87,6 +87,29 @@ public:
     virtual void Draw(uint32_t vertex_count, uint32_t first_vertex = 0) {
         (void)vertex_count; (void)first_vertex;
     }
+
+    // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
+    // 这组原语由 mesh/sprite 类消费者倒推（见 RHI_PRIMITIVE_CONTRACT.md §4）。
+    // 默认空实现，未实现的后端/Mock 仍可编译。
+
+    /// 绑定索引缓冲（供 DrawIndexed 使用）
+    virtual void BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+        (void)buffer_handle; (void)type;
+    }
+    /// 绑定纹理到指定 slot（按维度区分 2D / cube / 2D 数组）
+    virtual void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+        (void)slot; (void)texture_handle; (void)dim;
+    }
+    /// 绑定 uniform/constant buffer 到指定 slot（offset/size=0 表示整个 buffer）
+    virtual void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                   uint32_t offset = 0, uint32_t size = 0) {
+        (void)slot; (void)buffer_handle; (void)offset; (void)size;
+    }
+    /// 索引绘制
+    virtual void DrawIndexed(uint32_t index_count, uint32_t first_index = 0,
+                             int32_t base_vertex = 0) {
+        (void)index_count; (void)first_index; (void)base_vertex;
+    }
 };
 
 /**
@@ -157,6 +180,9 @@ public:
     virtual unsigned int GetSkyboxShaderProgram() { return 0; }
     /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
     virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
+    /// 内建 2D sprite 着色器程序句柄（pos\@0/color\@1/uv\@2 + PerFrame UBO + u_texture，懒初始化）
+    /// 供 B0 SpriteRenderer 用新通用原语做活体验证。
+    virtual unsigned int GetSprite2DShaderProgram() { return 0; }
 
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;
