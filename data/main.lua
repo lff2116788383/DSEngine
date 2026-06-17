@@ -1,4 +1,4 @@
--- DSEngine minimal 2D Web demo (A1 M3 "sprite on screen" + input + audio).
+-- DSEngine minimal 2D demo (A1 M3 "sprite on screen" + input + audio).
 -- Self-contained: only the repo data/ dir is preloaded into the Web MEMFS,
 -- so this entry must NOT require() the sample modules under samples/lua.
 -- Lifecycle: the engine calls global Awake() once, then Update(dt) per frame.
@@ -43,7 +43,7 @@ local function make_sprite(tex, x, y, sx, sy, order, r, g, b, a)
 end
 
 function Awake()
-    dse.app.set_window_title("DSEngine Web - 2D Demo (WASD/Arrows move, LMB tint, click=SFX, M=BGM, wheel zoom)")
+    dse.app.set_window_title("DSEngine - 2D Demo (WASD/Arrows move, LMB tint, click=SFX, M=BGM, wheel zoom)")
 
     -- Orthographic 2D camera at the origin.
     local cam = dse.ecs.create_entity()
