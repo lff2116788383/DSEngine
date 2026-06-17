@@ -119,7 +119,8 @@ void LightProbeSystem::IntegrateFaceSH(const unsigned char* rgba8, int width, in
 // ============================================================================
 SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_resolution,
                                          RhiDevice* rhi_device, unsigned int cubemap_rt,
-                                         RenderPassContext& ctx) {
+                                         RenderPassContext& ctx,
+                                         SkyboxRenderer* skybox_renderer) {
     SHL2 sh;
     if (!rhi_device || cubemap_rt == 0) return sh;
 
@@ -133,19 +134,21 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
         auto face_cmd = rhi_device->CreateCommandBuffer();
         face_cmd->BeginRenderPass({cubemap_rt, glm::vec4(0.0f), true});
         face_cmd->SetCamera(view, proj);
-        face_cmd->SetPipelineState(ctx.pipeline_states.mesh);
 
-        // 渲染天空盒
-        auto skybox_view = ctx.world->registry().view<dse::SkyboxComponent>();
-        for (auto sky_entity : skybox_view) {
-            auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-            if (skybox.enabled && skybox.cubemap_handle != 0) {
-                face_cmd->DrawSkybox(skybox.cubemap_handle);
+        // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
+        if (skybox_renderer) {
+            auto skybox_view = ctx.world->registry().view<dse::SkyboxComponent>();
+            for (auto sky_entity : skybox_view) {
+                auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
+                if (skybox.enabled && skybox.cubemap_handle != 0) {
+                    skybox_renderer->Draw(*face_cmd, *rhi_device, skybox.cubemap_handle, view, proj);
+                }
+                break;
             }
-            break;
         }
 
         // 渲染 3D 网格（通过 render_meshes 回调）
+        face_cmd->SetPipelineState(ctx.pipeline_states.mesh);
         if (ctx.render_meshes) {
             ctx.render_meshes(*ctx.world, *face_cmd);
         }
@@ -183,7 +186,7 @@ void LightProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_device,
 
         auto& transform = probe_view.get<TransformComponent>(entity);
         SHL2 sh = BakeSHAtPosition(transform.position, face_resolution_,
-                                    rhi_device, cubemap_rt_, ctx);
+                                    rhi_device, cubemap_rt_, ctx, &skybox_renderer_);
 
         // 写回 ECS 组件
         for (int i = 0; i < 9; ++i) {

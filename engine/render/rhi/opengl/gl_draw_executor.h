@@ -84,11 +84,6 @@ public:
                          GLResourceManager& resource_mgr,
                          UBOManager& ubo_mgr);
 
-    void DrawSkybox(unsigned int cubemap_texture_handle,
-                      const glm::mat4& view,
-                      const glm::mat4& projection,
-                      GLShaderManager& shader_mgr);
-
     void DrawPostProcess(const dse::render::PostProcessRequest& request,
                            GLShaderManager& shader_mgr);
 

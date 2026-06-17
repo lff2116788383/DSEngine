@@ -47,7 +47,6 @@ public:
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
     virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
-    virtual void DrawSkybox(unsigned int cubemap_texture_handle) = 0;
     virtual void DrawPostProcess(PostProcessRequest request) = 0;
     virtual void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;

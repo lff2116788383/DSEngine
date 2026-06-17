@@ -102,13 +102,6 @@ public:
                         VulkanShaderManager& shader_mgr,
                         VulkanResourceManager& resource_mgr);
 
-    void DrawSkybox(VkCommandBuffer cmd_buf,
-                     unsigned int cubemap_texture_handle,
-                     const glm::mat4& view,
-                     const glm::mat4& projection,
-                     VulkanPipelineStateManager& pipeline_mgr,
-                     VulkanShaderManager& shader_mgr);
-
     void DrawPostProcess(VkCommandBuffer cmd_buf,
                           const PostProcessRequest& request,
                           VulkanPipelineStateManager& pipeline_mgr,

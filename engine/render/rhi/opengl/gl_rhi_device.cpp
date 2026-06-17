@@ -198,11 +198,6 @@ void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     device_->RealClearColor(color);
 }
 
-void OpenGLCommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
-    if (!device_) return;
-    device_->RealSubmitDrawSkybox(cubemap_texture_handle, view_, projection_);
-}
-
 void OpenGLCommandBuffer::BindShaderProgram(unsigned int program_handle) {
     if (!device_) return;
     device_->RealBindShaderProgram(program_handle);
@@ -854,10 +849,6 @@ void OpenGLRhiDevice::RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem
 
 void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawMeshBatch(items, view, projection, state_mgr_, shader_mgr_, resource_mgr_, ubo_mgr_);
-}
-
-void OpenGLRhiDevice::RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection) {
-    draw_executor_.DrawSkybox(cubemap_texture_handle, view, projection, shader_mgr_);
 }
 
 void OpenGLRhiDevice::RealSubmitDrawPostProcess(const PostProcessRequest& request) {

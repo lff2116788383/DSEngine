@@ -15,6 +15,8 @@
 #include <vector>
 #include <cstdint>
 
+#include "engine/render/skybox_renderer.h"
+
 class World;
 class AssetManager;
 
@@ -67,7 +69,8 @@ public:
     /// 对单个位置渲染 cubemap 并积分 SH L2（CPU 端）
     static SHL2 BakeSHAtPosition(const glm::vec3& position, int face_resolution,
                                   RhiDevice* rhi_device, unsigned int cubemap_rt,
-                                  RenderPassContext& ctx);
+                                  RenderPassContext& ctx,
+                                  SkyboxRenderer* skybox_renderer = nullptr);
 
     /// 从 RGBA8 像素数据积分单面 SH（CPU 端纯计算）
     static void IntegrateFaceSH(const unsigned char* rgba8, int width, int height,
@@ -77,6 +80,7 @@ private:
     unsigned int cubemap_rt_ = 0;       ///< 用于 bake 的 cubemap 渲染目标
     int face_resolution_ = 64;          ///< cubemap 单面分辨率
     std::vector<BakedProbe> baked_probes_;
+    SkyboxRenderer skybox_renderer_;    ///< A1：天空盒用通用原语绘制（取代 DrawSkybox）
     bool initialized_ = false;
 };
 

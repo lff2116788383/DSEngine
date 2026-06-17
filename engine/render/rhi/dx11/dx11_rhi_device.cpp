@@ -66,12 +66,6 @@ void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     }
 }
 
-void DX11CommandBuffer::DrawSkybox(unsigned int cubemap_texture_handle) {
-    if (!device_) return;
-    device_->draw_executor().DrawSkybox(cubemap_texture_handle, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void DX11CommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->draw_executor().DrawPostProcess(request,

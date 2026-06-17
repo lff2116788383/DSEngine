@@ -236,12 +236,6 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
     cmd.DrawSpriteBatch(items);
 }
 
-// 测试 打开GL命令缓冲区：无设备当绘制天空盒安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSkyboxSafety) {
-    OpenGLCommandBuffer cmd;
-    cmd.DrawSkybox(100);
-}
-
 // 测试 打开GL命令缓冲区：无设备当绘制后期处理安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     OpenGLCommandBuffer cmd;
@@ -293,10 +287,9 @@ TEST(OpenGLCommandBufferTest, SetGlobalMat4RecordingCommand) {
 TEST(OpenGLCommandBufferTest, ResetresetState) {
     OpenGLCommandBuffer cmd;
     cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
-    cmd.DrawSkybox(100);
     cmd.Reset();
     // After Reset, view/projection are identity, pending uniforms cleared
-    cmd.DrawSkybox(200);
+    cmd.SetCamera(glm::mat4(1.0f), glm::mat4(1.0f));
 }
 
 // ============================================================

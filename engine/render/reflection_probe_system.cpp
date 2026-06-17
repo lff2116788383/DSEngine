@@ -229,17 +229,18 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
             auto face_cmd = rhi_device->CreateCommandBuffer();
             face_cmd->BeginRenderPass({bake_rt_, glm::vec4(0.0f), true});
             face_cmd->SetCamera(view, proj);
-            face_cmd->SetPipelineState(ctx.pipeline_states.mesh);
 
+            // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
             auto skybox_view = ctx.world->registry().view<dse::SkyboxComponent>();
             for (auto sky_entity : skybox_view) {
                 auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
                 if (skybox.enabled && skybox.cubemap_handle != 0) {
-                    face_cmd->DrawSkybox(skybox.cubemap_handle);
+                    skybox_renderer_.Draw(*face_cmd, *rhi_device, skybox.cubemap_handle, view, proj);
                 }
                 break;
             }
 
+            face_cmd->SetPipelineState(ctx.pipeline_states.mesh);
             if (ctx.render_meshes) {
                 ctx.render_meshes(*ctx.world, *face_cmd);
             }

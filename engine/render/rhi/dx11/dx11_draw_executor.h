@@ -108,12 +108,6 @@ public:
                         DX11ShaderManager& shader_mgr,
                         DX11ResourceManager& resource_mgr);
 
-    void DrawSkybox(unsigned int cubemap_texture_handle,
-                     const glm::mat4& view, const glm::mat4& projection,
-                     DX11PipelineStateManager& pipeline_mgr,
-                     DX11ShaderManager& shader_mgr,
-                     DX11ResourceManager& resource_mgr);
-
     void DrawPostProcess(const PostProcessRequest& request,
                           DX11PipelineStateManager& pipeline_mgr,
                           DX11ShaderManager& shader_mgr,

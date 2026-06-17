@@ -8,7 +8,6 @@
  * - DescriptorSet 分配/更新/绑定
  * - DrawSpriteBatch：2D 精灵批处理
  * - DrawMeshBatch：3D PBR 网格绘制（push constant + descriptor set）
- * - DrawSkybox：天空盒绘制
  * - DrawPostProcess：后处理全屏四边形
  * - DrawParticles3D：3D 粒子 billboard
  */
@@ -2686,79 +2685,6 @@ void VulkanDrawExecutor::DrawMeshBatch(
         }
         global_state_.current_frame_stats.triangle_count += static_cast<int>(idx_count / 3) * static_cast<int>(is_instanced ? item.instance_transforms.size() : 1);
     }
-}
-
-// ============================================================================
-// DrawSkybox — 天空盒绘制
-// ============================================================================
-
-void VulkanDrawExecutor::DrawSkybox(
-    VkCommandBuffer cmd_buf,
-    unsigned int cubemap_texture_handle,
-    const glm::mat4& view,
-    const glm::mat4& projection,
-    VulkanPipelineStateManager& pipeline_mgr,
-    VulkanShaderManager& shader_mgr) {
-
-    if (skip_current_pass_) return;
-    const VulkanShaderProgram* skybox_program = shader_mgr.GetProgram(shader_mgr.skybox_shader_handle());
-    if (!skybox_program) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor: Skybox shader not available");
-        return;
-    }
-
-    // 使用当前激活的 render pass
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
-
-    // 天空盒专用管线状态：depth test=LEQUAL, depth write=OFF, no cull（缓存 handle 避免每帧重建）
-    if (skybox_pipeline_state_ == 0) {
-        PipelineStateDesc skybox_desc;
-        skybox_desc.depth_test_enabled = true;
-        skybox_desc.depth_write_enabled = false;
-        skybox_desc.depth_func = CompareFunc::LessEqual;
-        skybox_desc.culling_enabled = false;
-        skybox_desc.blend_enabled = false;
-        skybox_pipeline_state_ = pipeline_mgr.CreatePipelineState(skybox_desc);
-    }
-    unsigned int skybox_state = skybox_pipeline_state_;
-
-    VkPipeline skybox_pipeline = pipeline_mgr.GetOrCreateVkPipeline(
-        skybox_state,
-        skybox_program,
-        active_rp,
-        // 天空盒顶点格式：vec3 pos
-        { VkVertexInputBindingDescription{0, 12, VK_VERTEX_INPUT_RATE_VERTEX} },
-        { {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0} },
-        context_->swapchain_extent(),
-        current_msaa_samples_,
-        current_color_attachment_count_,
-        false);  // wireframe not applicable for skybox
-
-    if (skybox_pipeline == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor: failed to create skybox pipeline");
-        return;
-    }
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox_pipeline);
-
-    // Push constants: skybox VP（去除 view 平移，仅保留旋转）
-    glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
-    glm::mat4 skybox_vp = projection * skybox_view;
-    vkCmdPushConstants(cmd_buf, skybox_program->pipeline_layout,
-                       VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &skybox_vp);
-
-    AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, skybox_program, cubemap_texture_handle,
-                                           *resource_mgr_);
-
-    // 绑定天空盒 VBO
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &skybox_vbo_, offsets);
-
-    // 36 个顶点（6 面 * 2 三角形 * 3 顶点）
-    vkCmdDraw(cmd_buf, 36, 1, 0, 0);
-
-    global_state_.current_frame_stats.draw_calls++;
 }
 
 // ============================================================================

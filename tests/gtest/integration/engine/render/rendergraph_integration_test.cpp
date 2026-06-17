@@ -47,7 +47,6 @@ public:
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
     MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
-    MOCK_METHOD(void, DrawSkybox, (unsigned int), (override));
     MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest request), (override));
     MOCK_METHOD(void, DrawParticles3D, (const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));

@@ -233,12 +233,6 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
     cmd.DrawSpriteBatch(items);
 }
 
-// 测试 DX 11命令缓冲区：无设备当绘制天空盒安全
-TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawSkyboxSafety) {
-    DX11CommandBuffer cmd;
-    cmd.DrawSkybox(100);
-}
-
 // 测试 DX 11命令缓冲区：无设备当绘制后期处理安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     DX11CommandBuffer cmd;

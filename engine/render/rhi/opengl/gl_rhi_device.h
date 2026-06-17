@@ -172,7 +172,6 @@ public:
     void RealClearColor(const glm::vec4& color);
     void RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
-    void RealSubmitDrawSkybox(unsigned int cubemap_texture_handle, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawPostProcess(const PostProcessRequest& request);
     void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);

@@ -14,6 +14,8 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+#include "engine/render/skybox_renderer.h"
+
 class World;
 
 namespace dse {
@@ -63,6 +65,7 @@ private:
     unsigned int brdf_lut_handle_ = 0;
     unsigned int bake_rt_ = 0;             ///< 单面渲染 RT
     int bake_resolution_ = 128;
+    SkyboxRenderer skybox_renderer_;       ///< A1：天空盒用通用原语绘制（取代 DrawSkybox）
 
     struct ProbeEntry {
         glm::vec3 position;

@@ -30,7 +30,6 @@ public:
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
     void SetGlobalMat4Array(const std::string&, const std::vector<glm::mat4>&) override {}
     void SetGlobalFloatArray(const std::string&, const std::vector<float>&) override {}
-    void DrawSkybox(unsigned int) override {}
     void DrawPostProcess(PostProcessRequest) override {}
     void DrawParticles3D(const std::vector<Particle3DDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
     void DrawHairStrands(const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
