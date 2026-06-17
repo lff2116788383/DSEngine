@@ -44,20 +44,7 @@ void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     physics2d_system_.FixedUpdate(world, fixed_delta_time);
 }
 
-void Gameplay2DModule::OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {
-    (void)world;
-    (void)cmd_buffer;
-}
-
-void Gameplay2DModule::OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) {
-    (void)world;
-    (void)cmd_buffer;
-    (void)cascade_index;
-    (void)light_view;
-    (void)light_proj;
-}
-
-void Gameplay2DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
+void Gameplay2DModule::RenderScene2D(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
     (void)clip_correction;
     sprite_render_system_.Render(world, cmd_buffer);
 #ifdef DSE_ENABLE_SPINE
@@ -66,7 +53,7 @@ void Gameplay2DModule::OnRenderScene(World& world, CommandBuffer& cmd_buffer, co
     particle_system_.Render(world, cmd_buffer);
 }
 
-void Gameplay2DModule::OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
+void Gameplay2DModule::RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
     ui_render_system_.Render(world, cmd_buffer, screen_width, screen_height, clip_correction);
 }
 

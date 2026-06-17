@@ -1665,30 +1665,9 @@ void FramePipeline::BuildRenderSceneQueues() {
     modules_impl_->BuildRenderQueues(*world, render_scene_);
 #endif
 
-    for (auto& mod : render_pass_context_.modules) {
-        auto* instance = mod.instance;
-        if (!instance) continue;
-        render_scene_.prez_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
-            if (pass_world) instance->OnRenderPreZ(*pass_world, cmd);
-        });
-        render_scene_.shadow_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
-            const glm::mat4 view = pass_ctx.view ? *pass_ctx.view : glm::mat4(1.0f);
-            const glm::mat4 projection = pass_ctx.projection ? *pass_ctx.projection : glm::mat4(1.0f);
-            if (pass_world) instance->OnRenderShadow(*pass_world, cmd, pass_ctx.cascade_index, view, projection);
-        });
-        render_scene_.opaque_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
-            const glm::mat4 clip = pass_ctx.clip_correction ? *pass_ctx.clip_correction : glm::mat4(1.0f);
-            if (pass_world) instance->OnRenderScene(*pass_world, cmd, clip);
-        });
-        render_scene_.transparent_callbacks.push_back([instance, world](CommandBuffer& cmd, const dse::render::RenderScenePassContext& pass_ctx) {
-            World* pass_world = pass_ctx.world ? pass_ctx.world : world;
-            const glm::mat4 clip = pass_ctx.clip_correction ? *pass_ctx.clip_correction : glm::mat4(1.0f);
-            if (pass_world) instance->OnRenderTransparent(*pass_world, cmd, clip, pass_ctx.wboit_mode);
-        });
-    }
+    // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
+    // 不再经由 IModule 的固定阶段回调包装进 RenderScene 回调桶。
+    (void)world;
 }
 
 void FramePipeline::BuildRenderGraphInternal() {
@@ -1926,7 +1905,7 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
     (void)reg.view<dse::SkyboxComponent>();
     (void)reg.view<dse::DecalComponent, TransformComponent>();
     (void)reg.view<dse::WaterComponent>();
-    // --- 妯″潡娓叉煋鍥炶皟 (OnRenderScene / OnRenderTransparent) 闂存帴浣跨敤 ---
+    // --- 模块渲染（BuildRenderQueues / RenderPassContext 钩子）间接使用 ---
     (void)reg.view<TransformComponent, dse::MeshRendererComponent>();
     (void)reg.view<dse::SkyLightComponent>();
     (void)reg.view<dse::TerrainComponent, TransformComponent>();

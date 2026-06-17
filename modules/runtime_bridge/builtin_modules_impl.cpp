@@ -32,11 +32,11 @@ void BuiltinModulesImpl::ShutdownGameplay2D(World& world) {
 }
 
 void BuiltinModulesImpl::RenderScene2D(World& world, CommandBuffer& cmd) {
-    gameplay2d_module_.OnRenderScene(world, cmd);
+    gameplay2d_module_.RenderScene2D(world, cmd);
 }
 
 void BuiltinModulesImpl::RenderUI2D(World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
-    gameplay2d_module_.OnRenderUI(world, cmd, w, h, clip);
+    gameplay2d_module_.RenderUI2D(world, cmd, w, h, clip);
 }
 
 dse::gameplay2d::AudioSystem& BuiltinModulesImpl::GetAudioSystem() {

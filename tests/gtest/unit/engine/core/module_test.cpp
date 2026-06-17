@@ -4,7 +4,7 @@
  *
  * 覆盖场景：
  * - MockModule 生命周期回调（OnInit/OnUpdate/OnFixedUpdate/OnShutdown）
- * - 虚方法默认行为（OnRenderPreZ/OnRenderShadow/OnRenderScene/OnRenderUI 不崩溃）
+ * - 渲染扩展点 RegisterRenderPasses：默认不注册；模块注册的 Pass 被收集且可 Setup
  * - GetName 返回值正确
  * - 多模块独立生命周期
  * - 多态销毁
@@ -13,6 +13,10 @@
 #include <gtest/gtest.h>
 #include "engine/core/module.h"
 #include "engine/ecs/world.h"
+#include "engine/render/render_graph.h"
+#include "engine/render/passes/render_pass_interface.h"
+#include "engine/render/passes/render_pass_context.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -126,23 +130,76 @@ TEST(ModuleTest, GetNameReturnModuleName) {
 }
 
 // ============================================================
-// 虚方法默认行为
+// 渲染扩展点：RegisterRenderPasses
 // ============================================================
 
-// 测试 模块：默认不崩溃
-TEST(ModuleTest, DefaultDoesNotCrash) {
-    MockModule mod("TestModule");
-    World world;
-    mod.OnInit(world, nullptr, nullptr);
+namespace {
 
-    CommandBuffer* cmd = nullptr;  // 默认实现不使用 cmd_buffer，传 nullptr 应安全
-    // OnRenderPreZ / OnRenderShadow / OnRenderScene / OnRenderUI 默认空实现
-    EXPECT_NO_THROW(mod.OnRenderPreZ(world, *cmd));
-    // 注意：OnRenderShadow 需要更多参数，但默认实现是空函数体，不会访问 cmd
-    glm::mat4 identity(1.0f);
-    EXPECT_NO_THROW(mod.OnRenderShadow(world, *cmd, 0, identity, identity));
-    EXPECT_NO_THROW(mod.OnRenderScene(world, *cmd));
-    EXPECT_NO_THROW(mod.OnRenderUI(world, *cmd, 800, 600));
+/// 测试用 Mock 渲染 Pass，记录是否被 Setup
+class MockRenderPass : public dse::render::IRenderPass {
+public:
+    void Setup(dse::render::RenderGraph& graph) override {
+        setup_called = true;
+        graph.AddPass(GetName());
+    }
+    void Execute(dse::render::CommandBuffer& /*cmd_buffer*/) override { execute_called = true; }
+    const char* GetName() const override { return "MockRenderPass"; }
+
+    bool setup_called = false;
+    bool execute_called = false;
+};
+
+/// 仅通过 RegisterRenderPasses 参与渲染的模块
+class RenderRegisteringModule : public IModule {
+public:
+    const char* GetName() const override { return "RenderRegistering"; }
+    bool OnInit(World&, RhiDevice*, AssetManager*) override { return true; }
+    void OnUpdate(World&, float) override {}
+    void OnFixedUpdate(World&, float) override {}
+    void OnShutdown(World&) override {}
+
+    void RegisterRenderPasses(
+        dse::render::RenderGraph& graph,
+        dse::render::RenderPassContext& ctx,
+        std::vector<std::unique_ptr<dse::render::IRenderPass>>& out_passes) override {
+        (void)graph;
+        (void)ctx;
+        out_passes.push_back(std::make_unique<MockRenderPass>());
+    }
+};
+
+} // namespace
+
+// 测试 模块：基类 RegisterRenderPasses 默认不注册任何 Pass
+TEST(ModuleTest, RegisterRenderPassesDefaultRegistersNothing) {
+    MockModule mod("TestModule");
+    dse::render::RenderGraph graph;
+    dse::render::RenderPassContext ctx;
+    std::vector<std::unique_ptr<dse::render::IRenderPass>> passes;
+
+    mod.RegisterRenderPasses(graph, ctx, passes);
+    EXPECT_TRUE(passes.empty());
+}
+
+// 测试 模块：模块通过 RegisterRenderPasses 注册的 Pass 被收集且可 Setup
+TEST(ModuleTest, RegisterRenderPassesCollectsAndSetsUpPasses) {
+    RenderRegisteringModule mod;
+    dse::render::RenderGraph graph;
+    dse::render::RenderPassContext ctx;
+    std::vector<std::unique_ptr<dse::render::IRenderPass>> passes;
+
+    mod.RegisterRenderPasses(graph, ctx, passes);
+    ASSERT_EQ(passes.size(), 1u);
+    EXPECT_STREQ(passes[0]->GetName(), "MockRenderPass");
+
+    // 模拟 FramePipeline 对收集到的 Pass 调用 Setup
+    for (auto& pass : passes) {
+        pass->Setup(graph);
+    }
+    auto* mock = dynamic_cast<MockRenderPass*>(passes[0].get());
+    ASSERT_NE(mock, nullptr);
+    EXPECT_TRUE(mock->setup_called);
+    EXPECT_TRUE(graph.Compile());
 }
 
 // ============================================================

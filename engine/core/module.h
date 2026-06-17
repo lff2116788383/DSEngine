@@ -53,38 +53,12 @@ public:
     virtual void OnFixedUpdate(World& world, float fixed_delta_time) = 0;
 
     /**
-     * @brief 模块渲染：PreZ (深度预渲染阶段)
-     */
-    virtual void OnRenderPreZ(World& world, CommandBuffer& cmd_buffer) {}
-
-    /**
-     * @brief 模块渲染：Shadow (阴影贴图渲染阶段)
-     */
-    virtual void OnRenderShadow(World& world, CommandBuffer& cmd_buffer, int cascade_index, const glm::mat4& light_view, const glm::mat4& light_proj) {}
-
-    /**
-     * @brief 模块渲染：Scene (主场景渲染阶段，仅不透明物体)
-     */
-    virtual void OnRenderScene(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f)) {}
-
-    /**
-     * @brief 模块渲染：Transparent (WBOIT 透明物体渲染阶段)
-     *
-     * ForwardScenePass 结束后由 WBOITPass 调用，仅渲染 blend_mode != Opaque 的半透明物体。
-     * @param wboit_mode 1=accumulation, 2=revealage
-     */
-    virtual void OnRenderTransparent(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction, int wboit_mode) {}
-
-    /**
-     * @brief 模块渲染：UI (独立于场景的 UI 渲染阶段)
-     *
-     * UI 渲染通常使用独立的正交投影和 RenderTarget，
-     * 与 Scene Pass 分离以保证 UI 不被深度测试影响
-     */
-    virtual void OnRenderUI(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f)) {}
-
-    /**
      * @brief 模块向 RenderGraph 注册自定义渲染 Pass
+     *
+     * 这是模块参与渲染的唯一入口。模块不再实现固定阶段渲染回调
+     * （历史上的 OnRenderPreZ/Shadow/Scene/Transparent/UI 已移除）；
+     * 渲染贡献应封装为 IRenderPass，由 RenderGraph 统一编排排序，
+     * 管线实现细节（如 WBOIT 的 accumulation/revealage）留在 Pass 内部。
      *
      * 引擎在 BuildRenderGraph 时调用此方法，模块可创建自己的 IRenderPass 实例
      * 并添加到 out_passes。引擎将自动调用 Setup() 和管理生命周期。
