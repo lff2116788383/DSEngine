@@ -6,7 +6,7 @@ end
 
 -- ============================================================
 -- Demo 解析：优先级 DSE_DEMO 环境变量 > config.game_entry > 默认
--- 用法: DSEngine_Game_release.exe --demo=3d_fracture
+-- 用法: dsengine_game_release.exe --demo=3d_fracture
 --       或 set DSE_DEMO=3d_fracture
 --       或修改 config.lua 的 Config.game_entry
 -- ============================================================

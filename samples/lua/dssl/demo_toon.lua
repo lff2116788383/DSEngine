@@ -2,7 +2,7 @@
 -- Toon / Cel Shading 演示：展示 toon_*.dssl 材质的各参数效果
 --
 -- 独立运行:
---   DSEngine_Game_release.exe --script=samples/lua/dssl/demo_toon.lua
+--   dsengine_game_release.exe --script=samples/lua/dssl/demo_toon.lua
 --------------------------------------------------------------------------------
 local ecs = dse.ecs
 local app = dse.app

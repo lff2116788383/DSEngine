@@ -237,9 +237,9 @@ def capture_demo(engine_root, demo_name, out_path, wait_seconds=5.0, timeout=30.
     print(f"{'=' * 60}")
 
     bin_dir = engine_root / "bin"
-    exe = bin_dir / "DSEngine_lua_release.exe"
+    exe = bin_dir / "dsengine_lua_release.exe"
     if not exe.exists():
-        exe = bin_dir / "DSEngine_lua_debug.exe"
+        exe = bin_dir / "dsengine_lua_debug.exe"
     if not exe.exists():
         print(f"  [ERROR] Executable not found in {bin_dir}")
         return None

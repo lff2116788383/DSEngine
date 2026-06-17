@@ -436,7 +436,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         )
     )
 
-    call :resolve_first_existing_exe CPP_EXE ".\bin\DSEngine_c++_debug.exe" ".\bin\DSEngine_c++.exe" ".\bin\DSEngine_example_cpp.exe"
+    call :resolve_first_existing_exe CPP_EXE ".\bin\dsengine_cpp_debug.exe" ".\bin\dsengine_cpp.exe"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find C++ example executable in .\bin
         popd
@@ -444,7 +444,7 @@ if "%VERIFY_EXECUTABLES%"=="1" (
         exit /b 1
     )
 
-    call :resolve_first_existing_exe LUA_EXE ".\bin\DSEngine_lua_debug.exe" ".\bin\DSEngine_lua.exe"
+    call :resolve_first_existing_exe LUA_EXE ".\bin\dsengine_lua_debug.exe" ".\bin\dsengine_lua.exe"
     if !ERRORLEVEL! neq 0 (
         echo [ERROR] Cannot find Lua example executable in .\bin
         popd

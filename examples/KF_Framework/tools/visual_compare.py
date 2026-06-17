@@ -448,7 +448,7 @@ def capture_dse(engine_root, kf_dir, out_path, frames=300, timeout=60, demo_play
     print(f"{'='*60}")
 
     exe = None
-    for c in ["DSEngine_Game_release.exe", "DSEngine_Game_debug.exe"]:
+    for c in ["dsengine_game_release.exe", "dsengine_game_debug.exe"]:
         p = engine_root / "bin" / c
         if p.exists():
             exe = p; break

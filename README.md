@@ -74,7 +74,7 @@ DSEngine/
 │   └── scripting/     Lua 虚拟机、绑定、热重载
 ├── apps/
 │   ├── editor_cpp/    基于 ImGui 的编辑器（dsengine-editor.exe）
-│   ├── standalone/    独立游戏运行时（DSEngine_Game.exe）
+│   ├── standalone/    独立游戏运行时（dsengine_game.exe）
 │   ├── runtime/       Lua 宿主与 C++ 宿主示例
 │   └── tools/         AssetBuilder 命令行工具
 ├── modules/           可选引擎模块（地形、动画等）
@@ -111,9 +111,9 @@ DSEngine/
 | 目标 | 输出（`bin/`） | 用途 | 主要依赖 |
 |------|----------------|------|----------|
 | `dse_engine` | `DSEngine[_配置].lib`（或 `.dll`） | 引擎核心库，被下方所有应用/工具链接 | EnTT、Box2D、Jolt、assimp、Lua、freetype 等 |
-| `dse_standalone` | `DSEngine_Game[_配置].exe` | **独立游戏运行时**（无编辑器 UI）；编辑器 `File → Build Game...` 导出的就是它 | `dse_engine` |
-| `DSEngine_example_cpp` | `DSEngine_c++[_配置].exe` | **C++ 宿主示例**：用 C++ 直接驱动引擎的入门样例 | `dse_engine` |
-| `dse_example_lua` | `DSEngine_lua[_配置].exe` | **Lua 脚本宿主示例**：用 Lua 跑游戏逻辑（需 `DSE_ENABLE_LUA`，默认 ON） | `dse_engine` + Lua |
+| `dse_standalone` | `dsengine_game[_配置].exe` | **独立游戏运行时**（无编辑器 UI）；编辑器 `File → Build Game...` 导出的就是它 | `dse_engine` |
+| `DSEngine_example_cpp` | `dsengine_cpp[_配置].exe` | **C++ 宿主示例**：用 C++ 直接驱动引擎的入门样例 | `dse_engine` |
+| `dse_example_lua` | `dsengine_lua[_配置].exe` | **Lua 脚本宿主示例**：用 Lua 跑游戏逻辑（需 `DSE_ENABLE_LUA`，默认 ON） | `dse_engine` + Lua |
 | `dse_cli` | `dse.exe` | **Headless 工程 CLI**：脱离编辑器建项目模板 / 打包加密资源包 / 一键 build（`new` / `pack` / `build`） | `dse_engine` |
 | `AssetBuilder` | `AssetBuilder.exe` | **资产导入/烘焙 CLI**：glTF/FBX/贴图 → `.dmesh` / `.dmat` 等引擎格式 | tinygltf、assimp（可选）、glm |
 | `dse_dssl_compiler` | `dse_dssl_compiler.exe` | **DSSL 着色语言编译器** | —— |
@@ -198,7 +198,7 @@ cmake --build --preset wsl-debug
 #### 编译整个工程
 
 打开文件夹后，用 **生成 ▸ 全部生成（Build All）** 或菜单底部 **生成 → DSEngine** 编译整个工程；
-顶部 **启动项（Startup Item）** 下拉里选 `dsengine-editor.exe`（编辑器）或 `DSEngine_Game_*.exe`（运行时）即可 F5 调试。
+顶部 **启动项（Startup Item）** 下拉里选 `dsengine-editor.exe`（编辑器）或 `dsengine_game_*.exe`（运行时）即可 F5 调试。
 
 > 若 VS 把默认目标显示成 `glview` 等 `depends/` 下的**第三方示例**（如 tinygltf 的 `glview`），那只是旧的
 > `.vs/` 缓存残留——这些示例**并不在 DSEngine 的构建里**（tinygltf 仅作头文件 include，从不 `add_subdirectory`）。
@@ -264,7 +264,7 @@ cmake --build build_vs2022 --config Release --target dse_editor_cpp
 
 > 构建成功后，`bin/` 目录里应包含（以下为 Release 构建）：
 > - `dsengine-editor.exe` —— 编辑器（无配置后缀）
-> - `DSEngine_Game_release.exe` —— 独立游戏运行时（Debug 构建为 `DSEngine_Game_debug.exe`）
+> - `dsengine_game_release.exe` —— 独立游戏运行时（Debug 构建为 `dsengine_game_debug.exe`）
 > - `AssetBuilder.exe` —— 资产转换工具（无配置后缀）
 
 ### 步骤 2：创建项目
@@ -325,7 +325,7 @@ return MyScript
 1. **File → Build Game...**
 2. 填写输出目录和游戏名称
 3. 点击 **Build** —— 编辑器会：
-   - 将 `DSEngine_Game.exe` 复制并重命名
+   - 将 `dsengine_game.exe` 复制并重命名
    - 将所有资产打包为 `game.dpak`
    - 复制必要的 DLL
 4. 构建完成后点 **Open Folder** 或 **Run** 直接测试
@@ -347,7 +347,7 @@ bin\dsengine-editor.exe
 
 ```powershell
 scripts\win\build_fast_lua.bat
-bin\DSEngine_lua_debug.exe
+bin\dsengine_lua_debug.exe
 ```
 
 默认演示：`samples/lua/phase1_2d_physics_showcase.lua`（2D 物理）。
@@ -383,7 +383,7 @@ dse help            # 或 dse -h / --help
 # 1) 建项目模板（empty | 2d | 3d | lua | cpp）
 dse new lua MyGame
 
-# 2) 一键 build：定位 DSEngine_Game 运行时、拷贝 exe+DLL、打包加密、生成 launch.bat
+# 2) 一键 build：定位 dsengine_game 运行时、拷贝 exe+DLL、打包加密、生成 launch.bat
 #    --key 省略 = 明文打包；给定 >=16 字节的 key = AES-128-CTR 加密
 dse build MyGame --out dist --key 0123456789abcdef
 
@@ -394,7 +394,7 @@ dist/launch.bat
 dse pack MyGame dist/game.bun --key 0123456789abcdef
 ```
 
-> `dse` 与 `DSEngine_Game` 需在同一目录（或其 `bin/` 子目录）下，`build` 才能定位到运行时。
+> `dse` 与 `dsengine_game` 需在同一目录（或其 `bin/` 子目录）下，`build` 才能定位到运行时。
 > 默认构建会把两者都产出到仓库 `bin/`。
 >
 > 模板说明：`empty/2d/3d/lua` 是 **Lua/数据**工程，`dse build` 可直接打包跑通；
@@ -410,7 +410,7 @@ dse pack MyGame dist/game.bun --key 0123456789abcdef
 
 1. 构建 `dse_standalone` 目标
 2. 打包资产：`dse pack` / `pak_writer` / 编辑器 Build 对话框
-3. 把 `game.bun`（或 `.dpak`）放在 `DSEngine_Game.exe` 旁边 —— 启动时自动检测；加密包需用 `--key` 传密钥
+3. 把 `game.bun`（或 `.dpak`）放在 `dsengine_game.exe` 旁边 —— 启动时自动检测；加密包需用 `--key` 传密钥
 
 ### 运行时命令行参数
 

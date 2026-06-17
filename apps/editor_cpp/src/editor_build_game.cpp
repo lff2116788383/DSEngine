@@ -156,7 +156,7 @@ void DoBuild(BuildState& state) {
     try {
         fs::path editor_dir = fs::current_path();
         // Try common names
-        for (const auto& name : {"DSEngine_Game_release.exe", "DSEngine_Game.exe", "DSEngine_Game_debug.exe"}) {
+        for (const auto& name : {"dsengine_game_release.exe", "dsengine_game.exe", "dsengine_game_debug.exe"}) {
             fs::path candidate = editor_dir / name;
             if (fs::exists(candidate)) {
                 exe_path = candidate;
@@ -165,7 +165,7 @@ void DoBuild(BuildState& state) {
         }
         // Also check bin/ directory
         if (exe_path.empty()) {
-            for (const auto& name : {"DSEngine_Game_release.exe", "DSEngine_Game.exe"}) {
+            for (const auto& name : {"dsengine_game_release.exe", "dsengine_game.exe"}) {
                 fs::path candidate = editor_dir / ".." / "bin" / name;
                 if (fs::exists(candidate)) {
                     exe_path = fs::canonical(candidate);
@@ -176,7 +176,7 @@ void DoBuild(BuildState& state) {
     } catch (...) {}
 
     if (exe_path.empty()) {
-        AppendLog(state, "ERROR: Cannot find DSEngine_Game executable.");
+        AppendLog(state, "ERROR: Cannot find dsengine_game executable.");
         AppendLog(state, "  Build the 'dse_standalone' target first.");
         state.build_success = false;
         state.build_done = true;

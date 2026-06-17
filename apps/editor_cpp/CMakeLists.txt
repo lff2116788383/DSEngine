@@ -80,3 +80,12 @@ endif()
 if(TARGET dse_standalone)
     add_dependencies(dse_editor_cpp dse_standalone)
 endif()
+
+# Ship editor fonts next to the executable so the packaged/installed editor
+# can render CJK glyphs (NotoSansSC) instead of garbled text.
+add_custom_command(TARGET dse_editor_cpp POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts"
+        "$<TARGET_FILE_DIR:dse_editor_cpp>/fonts"
+    COMMENT "Copying editor fonts next to dsengine-editor"
+)

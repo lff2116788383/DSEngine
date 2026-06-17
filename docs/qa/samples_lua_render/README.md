@@ -9,7 +9,7 @@
 
 ## 0. 本次真机复跑与修复（2026-06-15）
 
-**环境**：NVIDIA GeForce RTX 3070 ｜ Vulkan 1.3 ｜ Windows Server 2022 ｜ 产物 `bin\DSEngine_Game_relwithdebinfo.exe`（启用 Vulkan 的 RelWithDebInfo 构建）。
+**环境**：NVIDIA GeForce RTX 3070 ｜ Vulkan 1.3 ｜ Windows Server 2022 ｜ 产物 `bin\dsengine_game_relwithdebinfo.exe`（启用 Vulkan 的 RelWithDebInfo 构建）。
 
 **结果总览（62 demo × 三端，真机）**：
 
@@ -38,7 +38,7 @@
 
 ### 步骤 0 — 构建运行时
 ```powershell
-# 已构建可跳过；产物 bin\DSEngine_Game_release.exe
+# 已构建可跳过；产物 bin\dsengine_game_release.exe
 scripts\bootstrap_windows.ps1            # 配置工具链 + 子模块
 cmake --build --preset windows-x64-release
 ```
@@ -74,17 +74,17 @@ cmake --build --preset windows-x64-release
 ```powershell
 $env:GALLIUM_DRIVER='llvmpipe'; $env:DSE_MAX_FRAMES='70'; $env:DSE_SCREENSHOT_FRAME='55'; $env:DSE_SCREENSHOT_PATH='shot.png'
 # OpenGL / D3D11
-./bin/DSEngine_Game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=opengl
-./bin/DSEngine_Game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=d3d11
+./bin/dsengine_game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=opengl
+./bin/dsengine_game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=d3d11
 # Vulkan（先部署 lavapipe ICD 到 bin/）
 $icd="$PWD/bin/lvp_icd.x86_64.json"; $env:VK_ICD_FILENAMES=$icd; $env:VK_DRIVER_FILES=$icd
-./bin/DSEngine_Game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=vulkan
+./bin/dsengine_game_release.exe --demo=3d_lighting_showcase --script=samples/lua/main.lua --rhi=vulkan
 ```
 
 ### 步骤 5 — DSSL 示例（直接入口脚本，不经 main.lua）
 ```powershell
 $env:DSE_MAX_FRAMES='60'; $env:DSE_SCREENSHOT_FRAME='45'; $env:DSE_SCREENSHOT_PATH='dssl.png'
-./bin/DSEngine_Game_release.exe --script=samples/lua/dssl/dssl_material_demo.lua --rhi=opengl
+./bin/dsengine_game_release.exe --script=samples/lua/dssl/dssl_material_demo.lua --rhi=opengl
 ```
 
 ### 步骤 6 — 重场景的软件 Vulkan 处理

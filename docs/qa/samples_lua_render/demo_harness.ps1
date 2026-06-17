@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = 'Continue'
 $repo = 'C:\Users\Administrator\Desktop\Engine\DSEngine'
-$exe  = Join-Path $repo 'bin\DSEngine_Game_relwithdebinfo.exe'
+$exe  = Join-Path $repo 'bin\dsengine_game_relwithdebinfo.exe'
 $script = Join-Path $repo 'samples\lua\main.lua'
 
 # Enumerate demos: 2 top-level 2D + all 3d/*.lua

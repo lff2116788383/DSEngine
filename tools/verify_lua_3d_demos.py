@@ -643,7 +643,7 @@ def main() -> int:
     source_samples = root / "samples"
     bin_samples = root / "bin" / "samples"
     config_path = bin_samples / "lua" / "config.lua"
-    exe = root / "bin" / "DSEngine_lua_debug.exe"
+    exe = root / "bin" / "dsengine_lua_debug.exe"
     out_dir = root / args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 

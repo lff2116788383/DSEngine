@@ -74,7 +74,7 @@ DSEngine/
 │   └── scripting/     Lua VM, bindings, hot-reload
 ├── apps/
 │   ├── editor_cpp/    ImGui-based editor (dsengine-editor.exe)
-│   ├── standalone/    Standalone game runtime (DSEngine_Game.exe)
+│   ├── standalone/    Standalone game runtime (dsengine_game.exe)
 │   ├── runtime/       Lua host & C++ host examples
 │   └── tools/         AssetBuilder CLI
 ├── modules/           Optional engine modules (terrain, animation, etc.)
@@ -114,9 +114,9 @@ various tool/test targets have **no config suffix**.
 | Target | Output (`bin/`) | Purpose | Key dependencies |
 |--------|-----------------|---------|------------------|
 | `dse_engine` | `DSEngine[_config].lib` (or `.dll`) | Core engine library, linked by every app/tool below | EnTT, Box2D, Jolt, assimp, Lua, freetype, … |
-| `dse_standalone` | `DSEngine_Game[_config].exe` | **Standalone game runtime** (no editor UI); this is what `File → Build Game...` exports | `dse_engine` |
-| `DSEngine_example_cpp` | `DSEngine_c++[_config].exe` | **C++ host sample**: drive the engine directly from C++ | `dse_engine` |
-| `dse_example_lua` | `DSEngine_lua[_config].exe` | **Lua scripting host sample** (requires `DSE_ENABLE_LUA`, ON by default) | `dse_engine` + Lua |
+| `dse_standalone` | `dsengine_game[_config].exe` | **Standalone game runtime** (no editor UI); this is what `File → Build Game...` exports | `dse_engine` |
+| `DSEngine_example_cpp` | `dsengine_cpp[_config].exe` | **C++ host sample**: drive the engine directly from C++ | `dse_engine` |
+| `dse_example_lua` | `dsengine_lua[_config].exe` | **Lua scripting host sample** (requires `DSE_ENABLE_LUA`, ON by default) | `dse_engine` + Lua |
 | `dse_cli` | `dse.exe` | **Headless project CLI**: scaffold templates / pack & encrypt asset bundles / one-shot build (`new` / `pack` / `build`) | `dse_engine` |
 | `AssetBuilder` | `AssetBuilder.exe` | **Asset import/cook CLI**: glTF/FBX/textures → `.dmesh` / `.dmat`, etc. | tinygltf, assimp (optional), glm |
 | `dse_dssl_compiler` | `dse_dssl_compiler.exe` | **DSSL shading-language compiler** | — |
@@ -203,7 +203,7 @@ All presets pin `CMAKE_POLICY_VERSION_MINIMUM=3.5` (CMake 4 compatibility with o
 #### Building the whole project
 
 After opening the folder, use **Build ▸ Build All** or **Build → DSEngine** to compile everything;
-in the **Startup Item** dropdown pick `dsengine-editor.exe` (editor) or `DSEngine_Game_*.exe` (runtime) to F5-debug.
+in the **Startup Item** dropdown pick `dsengine-editor.exe` (editor) or `dsengine_game_*.exe` (runtime) to F5-debug.
 
 > If VS shows a default target like `glview` — a **third-party sample** under `depends/` (e.g. tinygltf's `glview`) —
 > that's just a stale `.vs/` cache. Such samples are **not part of the DSEngine build** (tinygltf is header-only and
@@ -269,7 +269,7 @@ cmake --build build_vs2022 --config Release --target dse_editor_cpp
 
 > After a successful build, `bin/` should contain (Release build shown):
 > - `dsengine-editor.exe` — the editor (no config suffix)
-> - `DSEngine_Game_release.exe` — the standalone game runtime (Debug build is `DSEngine_Game_debug.exe`)
+> - `dsengine_game_release.exe` — the standalone game runtime (Debug build is `dsengine_game_debug.exe`)
 > - `AssetBuilder.exe` — the asset conversion tool (no config suffix)
 
 ### Step 2: Create a project
@@ -330,7 +330,7 @@ Drag the script into the Viewport or onto the entity's `LuaScriptComponent` `scr
 1. **File → Build Game...**
 2. Fill in the output directory and game name
 3. Click **Build** — the editor will:
-   - Copy and rename `DSEngine_Game.exe`
+   - Copy and rename `dsengine_game.exe`
    - Pack all assets into `game.dpak`
    - Copy the required DLLs
 4. After building, click **Open Folder** or **Run** to test
@@ -354,7 +354,7 @@ bin\dsengine-editor.exe
 
 ```powershell
 scripts\win\build_fast_lua.bat
-bin\DSEngine_lua_debug.exe
+bin\dsengine_lua_debug.exe
 ```
 
 Default demo: `samples/lua/phase1_2d_physics_showcase.lua` (2D physics).
@@ -390,7 +390,7 @@ dse help            # or dse -h / --help
 # 1) Scaffold a project (empty | 2d | 3d | lua | cpp)
 dse new lua MyGame
 
-# 2) One-shot build: locate the DSEngine_Game runtime, copy exe+DLLs, pack & encrypt, emit launch.bat
+# 2) One-shot build: locate the dsengine_game runtime, copy exe+DLLs, pack & encrypt, emit launch.bat
 #    Omit --key for a plaintext bundle; pass a >=16-byte key for AES-128-CTR encryption
 dse build MyGame --out dist --key 0123456789abcdef
 
@@ -401,7 +401,7 @@ dist/launch.bat
 dse pack MyGame dist/game.bun --key 0123456789abcdef
 ```
 
-> `dse` and `DSEngine_Game` must live in the same directory (or its `bin/` subfolder) so `build` can
+> `dse` and `dsengine_game` must live in the same directory (or its `bin/` subfolder) so `build` can
 > locate the runtime. A default build emits both into the repo's `bin/`.
 >
 > Templates: `empty/2d/3d/lua` are **Lua/data** projects that `dse build` packs and runs directly;
@@ -419,7 +419,7 @@ and `Run` / `Build & Run` launch with `--key` as well.
 
 1. Build the `dse_standalone` target
 2. Pack assets: `dse pack` / `pak_writer` / the editor's Build dialog
-3. Place `game.bun` (or `.dpak`) next to `DSEngine_Game.exe` — it auto-detects on launch; an encrypted bundle needs `--key`
+3. Place `game.bun` (or `.dpak`) next to `dsengine_game.exe` — it auto-detects on launch; an encrypted bundle needs `--key`
 
 ### Runtime CLI flags
 

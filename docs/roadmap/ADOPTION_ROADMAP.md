@@ -153,7 +153,7 @@
 
 > 下列 7 项均已在 `feature/engine-lib` 完成、构建+测试（ctest 3/3）通过；品类模板在 llvmpipe 软件渲染下三模板实跑 `Awake OK`。**仍为文档/脚手架/CLI/编辑器出包改动，未动渲染等引擎核心。**
 
-1. ✅ **无预编译 `dse` 二进制下载**（A2，高）：新增 `scripts/package_dse_tools.ps1`，编译 `dse_cli`/`dse_standalone` 并收集 `dse.exe` + `DSEngine_Game.exe` + DLL 打成 `DSEngine-tools-vX.Y.Z-win-x64.zip`（含内嵌 README）；QUICKSTART 第 0 步改为「下载预编译 / bootstrap」二选一，README 提供 Releases 直链。`.gitignore` 忽略 `dist/`。
+1. ✅ **无预编译 `dse` 二进制下载**（A2，高）：新增 `scripts/package_dse_tools.ps1`，编译 `dse_cli`/`dse_standalone` 并收集 `dse.exe` + `dsengine_game.exe` + DLL 打成 `DSEngine-tools-vX.Y.Z-win-x64.zip`（含内嵌 README）；QUICKSTART 第 0 步改为「下载预编译 / bootstrap」二选一，README 提供 Releases 直链。`.gitignore` 忽略 `dist/`。
 2. ✅ **编辑器 Build Game 与 CLI 对齐**（A2，中）：`apps/editor_cpp/src/editor_build_game.cpp` 改用 `WriteAppManifest` 写 `entry_script`，并把 `scripts/`+`scenes/` 松散拷到 exe 旁 → 编辑器出包同样双击即玩。
 3. ✅ **加密资源包仍需 `launch.bat`**（A2，低/可接受）：维持现状（明文包为新手默认双击路径），并在 QUICKSTART 与新建 FAQ 中明确说明「加密包须随发 `launch.bat` 并以其启动」。
 4. ✅ **无独显环境需手动部署软件 GL**（A2/DX，中）：`dse build` 增 `--with-swgl` 开关，校验 llvmpipe DLL 是否随包并在 launch 脚本设 `GALLIUM_DRIVER=llvmpipe`；QUICKSTART/FAQ 给出 `setup_swgl.ps1` 步骤。

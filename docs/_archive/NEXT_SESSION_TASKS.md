@@ -49,7 +49,7 @@ cmake --build build_vs2022 --target dse_standalone --config Release
 
 # 运行 KF demo (OpenGL)
 $env:DSE_RHI_BACKEND="opengl"; $env:DSE_MAX_FRAMES="180"; $env:DSE_SCREENSHOT_PATH="screenshots/verify.png"; $env:DSE_SCREENSHOT_TARGET="main"; $env:DSE_AUTO_BATTLE="1"; $env:DSE_DISABLE_STARTUP_SCENE_REGRESSION="1"; $env:DSE_STARTUP_LUA="examples\KF_Framework\script\main.lua"; $env:DSE_DATA_ROOT="examples\KF_Framework"
-.\bin\DSEngine_Game_release.exe --script=examples\KF_Framework\script\main.lua
+.\bin\dsengine_game_release.exe --script=examples\KF_Framework\script\main.lua
 
 # 三端对比
 python examples\KF_Framework\tools\compare_all.py

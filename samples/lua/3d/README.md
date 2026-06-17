@@ -2,7 +2,7 @@
 
 按功能分类，所有 demo 遵循相同接口约定：`M.Setup(config)` + `M.Update(dt)`
 
-运行方式：`DSEngine_Game_release.exe --script=samples\lua\main.lua --demo=3d_<name>`
+运行方式：`dsengine_game_release.exe --script=samples\lua\main.lua --demo=3d_<name>`
 
 ---
 

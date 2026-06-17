@@ -359,7 +359,26 @@ bool EditorApp::Init(int argc, char* argv[]) {
     dse::editor::InitPreferencesFromSettings();
 
     {
-        std::filesystem::path fonts_dir = GetProjectRootPath() / "apps" / "editor_cpp" / "fonts";
+        namespace fs = std::filesystem;
+        // Resolve editor fonts: prefer fonts shipped next to the executable
+        // (release package / installed layout), fall back to the source tree.
+        fs::path fonts_dir;
+#if defined(_WIN32)
+        std::wstring exe_path(MAX_PATH, L'\0');
+        const DWORD exe_len = GetModuleFileNameW(nullptr, exe_path.data(),
+                                                 static_cast<DWORD>(exe_path.size()));
+        if (exe_len > 0) {
+            exe_path.resize(exe_len);
+            const fs::path exe_fonts = fs::path(exe_path).parent_path() / "fonts";
+            if (fs::exists(exe_fonts)) fonts_dir = exe_fonts;
+        }
+#endif
+        if (fonts_dir.empty() && fs::exists(GetEditorBinPath() / "fonts"))
+            fonts_dir = GetEditorBinPath() / "fonts";
+        if (fonts_dir.empty() && fs::exists(GetProjectRootPath() / "fonts"))
+            fonts_dir = GetProjectRootPath() / "fonts";
+        if (fonts_dir.empty())
+            fonts_dir = GetProjectRootPath() / "apps" / "editor_cpp" / "fonts";
         dse::editor::LoadEditorFonts(fonts_dir);
     }
 

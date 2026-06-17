@@ -5,7 +5,7 @@ add_executable(dse_example_lua
 )
 
 target_link_libraries(dse_example_lua PRIVATE dse_engine)
-set_target_properties(dse_example_lua PROPERTIES OUTPUT_NAME "DSEngine_lua")
+set_target_properties(dse_example_lua PROPERTIES OUTPUT_NAME "dsengine_lua")
 dse_apply_config_postfix(dse_example_lua)
 
 if (MSVC)

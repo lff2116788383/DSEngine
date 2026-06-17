@@ -25,11 +25,11 @@ dse new 2d MyGame      →   dse build MyGame      →   run build/dist/MyGame.e
 
 ## Step 0: Get the `dse` command line (first time only)
 
-You need `dse.exe` and the runtime `DSEngine_Game.exe` (used by `dse build`). Pick one:
+You need `dse.exe` and the runtime `dsengine_game.exe` (used by `dse build`). Pick one:
 
 ### Option A (recommended, fastest): download the prebuilt toolkit
 
-Download `DSEngine-tools-vX.Y.Z-win-x64.zip` from this repo's **Releases** page and unzip it — it contains `dse.exe` + `DSEngine_Game.exe`, ready to use, **no compiler and no source build needed**.
+Download `DSEngine-tools-vX.Y.Z-win-x64.zip` from this repo's **Releases** page and unzip it — it contains `dse.exe` + `dsengine_game.exe`, ready to use, **no compiler and no source build needed**.
 
 - Direct link: the `DSEngine-tools-*-win-x64.zip` asset on the repo **Releases** page (`<repo-url>/releases/latest`)
 
@@ -52,7 +52,7 @@ When it finishes, confirm these two files exist:
 
 ```powershell
 dir bin\dse.exe
-dir bin\DSEngine_Game_*.exe
+dir bin\dsengine_game_*.exe
 ```
 
 > Maintainers publishing the toolkit: `powershell -ExecutionPolicy Bypass -File scripts\package_dse_tools.ps1`

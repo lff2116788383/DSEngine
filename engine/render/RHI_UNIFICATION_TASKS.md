@@ -136,11 +136,11 @@ Vulkan/DX11 面序相同, 但 **Y 轴方向不同**:
 3. 修复后编译: `cmake --build build_vs2022 --target dse_standalone --config Release`
 4. 运行验证 (OpenGL 不退化):
    ```
-   .\bin\DSEngine_Game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=opengl
+   .\bin\dsengine_game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=opengl
    ```
 5. 如果有 Vulkan 运行时, 同时验证:
    ```
-   .\bin\DSEngine_Game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=vulkan
+   .\bin\dsengine_game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=vulkan
    ```
 6. 全部完成后提交:
    ```

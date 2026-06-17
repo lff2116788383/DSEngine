@@ -20,7 +20,7 @@ python examples/stress_test/run_benchmark.py --backends opengl dx11 vulkan
 
 ```bash
 DSE_RHI_BACKEND=dx11 DSE_ENTITY_COUNT=10000 DSE_PERF_FRAMES=600 \
-  ./bin/DSEngine_Game_release.exe \
+  ./bin/dsengine_game_release.exe \
   --script=examples/stress_test/script/main.lua --rhi=dx11
 ```
 

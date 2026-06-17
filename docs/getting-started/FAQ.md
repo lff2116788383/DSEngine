@@ -10,15 +10,15 @@ Common questions about getting `dse`, building, running, packaging, and distribu
 
 ### Q: I don't have `dse.exe`. Where do I get it? / 我没有 `dse.exe`，去哪拿？
 
-**EN:** Two options. (A) Download the prebuilt toolkit `DSEngine-tools-vX.Y.Z-win-x64.zip` from the repo **Releases** page and unzip — it ships `dse.exe` + `DSEngine_Game.exe`, no compiler needed. (B) Build from source once with `scripts\bootstrap_windows.ps1`; the binaries land in `bin\`.
+**EN:** Two options. (A) Download the prebuilt toolkit `DSEngine-tools-vX.Y.Z-win-x64.zip` from the repo **Releases** page and unzip — it ships `dse.exe` + `dsengine_game.exe`, no compiler needed. (B) Build from source once with `scripts\bootstrap_windows.ps1`; the binaries land in `bin\`.
 
-**中文：** 两条路。(A) 到仓库 **Releases** 页下载预编译工具包 `DSEngine-tools-vX.Y.Z-win-x64.zip`，解压即用——内含 `dse.exe` + `DSEngine_Game.exe`，不需要编译器。(B) 用 `scripts\bootstrap_windows.ps1` 从源码构建一次，产物在 `bin\`。
+**中文：** 两条路。(A) 到仓库 **Releases** 页下载预编译工具包 `DSEngine-tools-vX.Y.Z-win-x64.zip`，解压即用——内含 `dse.exe` + `dsengine_game.exe`，不需要编译器。(B) 用 `scripts\bootstrap_windows.ps1` 从源码构建一次，产物在 `bin\`。
 
 ### Q: `dse build` says it can't find the runtime. / `dse build` 找不到运行时怎么办？
 
-**EN:** `dse build` does not compile the engine — it copies a prebuilt `DSEngine_Game*.exe`. It must sit next to `dse.exe` or in a sibling `bin\`. If you used the prebuilt toolkit, run `dse` from inside the unzipped folder. If you built from source, run the `dse.exe` in `bin\`.
+**EN:** `dse build` does not compile the engine — it copies a prebuilt `dsengine_game*.exe`. It must sit next to `dse.exe` or in a sibling `bin\`. If you used the prebuilt toolkit, run `dse` from inside the unzipped folder. If you built from source, run the `dse.exe` in `bin\`.
 
-**中文：** `dse build` 不编译引擎，而是拷贝预构建的 `DSEngine_Game*.exe`。它必须和 `dse.exe` 同目录，或在相邻的 `bin\` 里。用预编译工具包时，在解压目录内运行 `dse`；从源码构建时，用 `bin\` 里的 `dse.exe`。
+**中文：** `dse build` 不编译引擎，而是拷贝预构建的 `dsengine_game*.exe`。它必须和 `dse.exe` 同目录，或在相邻的 `bin\` 里。用预编译工具包时，在解压目录内运行 `dse`；从源码构建时，用 `bin\` 里的 `dse.exe`。
 
 ---
 

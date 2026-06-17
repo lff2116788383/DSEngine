@@ -33,7 +33,7 @@ cmake --build %BUILD_DIR% --config Debug --target %TARGET_NAME% --parallel
 if %ERRORLEVEL% equ 0 (
     echo.
     echo [OK] Build successful! You can find the executable in the bin\ directory.
-    echo Run bin\DSEngine_c++_debug.exe or bin\DSEngine_c++.exe to start.
+    echo Run bin\dsengine_cpp_debug.exe or bin\dsengine_cpp.exe to start.
 ) else (
     echo.
     echo [ERROR] Build failed! Check the output above.

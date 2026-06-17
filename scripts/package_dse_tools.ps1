@@ -1,17 +1,17 @@
 ﻿<#
 .SYNOPSIS
-    打包"预编译 dse 工具包"：dse.exe + 运行时 DSEngine_Game.exe(+依赖) -> 一个 ZIP。
+    打包"预编译 dse 工具包"：dse.exe + 运行时 dsengine_game.exe(+依赖) -> 一个 ZIP。
 .DESCRIPTION
     新手无需先用 bootstrap_windows.ps1 从源码构建整套引擎，只要下载本工具包解压，
     即可用 `dse new / build / dist` 创建并打包游戏。运行时动态链接 MSVC CRT，
     本包已随附 app-local 的 VC++ 运行时 DLL，未装 VC++ Redistributable 也可开箱即用。
 
     流程：进 VS2022 x64 开发者环境 -> 用指定预设配置+编译 dse_cli 与 dse_standalone
-    -> 从 bin/ 收集 dse.exe / DSEngine_Game.exe(+任何同目录 DLL) -> 写 README -> 打 ZIP。
+    -> 从 bin/ 收集 dse.exe / dsengine_game.exe(+任何同目录 DLL) -> 写 README -> 打 ZIP。
 
     适合作为 GitHub Release 资产或 CI 产物：把生成的 zip 直链挂到 README 下载处即可。
 .PARAMETER Preset
-    CMake 预设。默认 windows-x64-release（产出无 _debug 后缀的运行时 DSEngine_Game.exe）。
+    CMake 预设。默认 windows-x64-release（产出无 _debug 后缀的运行时 dsengine_game.exe）。
 .PARAMETER OutDir
     ZIP 输出目录。默认 <repo>/dist。
 .PARAMETER SkipBuild
@@ -90,18 +90,18 @@ if (-not (Test-Path $dseExe)) {
 }
 Copy-Item $dseExe (Join-Path $StageDir "dse.exe") -Force
 
-# 运行时：release 为 DSEngine_Game.exe，debug 为 DSEngine_Game_debug.exe，任取其一。
-$runtimeNames = @("DSEngine_Game.exe", "DSEngine_Game_release.exe", "DSEngine_Game_debug.exe")
+# 运行时：release 为 dsengine_game.exe，debug 为 dsengine_game_debug.exe，任取其一。
+$runtimeNames = @("dsengine_game.exe", "dsengine_game_release.exe", "dsengine_game_debug.exe")
 $runtimeSrc = $null
 foreach ($n in $runtimeNames) {
     $cand = Join-Path $BinDir $n
     if (Test-Path $cand) { $runtimeSrc = $cand; break }
 }
 if (-not $runtimeSrc) {
-    throw "未找到运行时 DSEngine_Game(.exe)。请构建 dse_standalone 目标。"
+    throw "未找到运行时 dsengine_game(.exe)。请构建 dse_standalone 目标。"
 }
-# 统一落为 DSEngine_Game.exe，使 dse build 的 LocateRuntimeExe 在同目录即可命中。
-Copy-Item $runtimeSrc (Join-Path $StageDir "DSEngine_Game.exe") -Force
+# 统一落为 dsengine_game.exe，使 dse build 的 LocateRuntimeExe 在同目录即可命中。
+Copy-Item $runtimeSrc (Join-Path $StageDir "dsengine_game.exe") -Force
 
 # 同目录的依赖 DLL（引擎 / 插件运行时 DLL，有则一并带上）。
 $dllCount = 0
@@ -110,7 +110,7 @@ Get-ChildItem $BinDir -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Obje
     $dllCount++
 }
 Write-Host "  + dse.exe"
-Write-Host "  + DSEngine_Game.exe (源: $(Split-Path -Leaf $runtimeSrc))"
+Write-Host "  + dsengine_game.exe (源: $(Split-Path -Leaf $runtimeSrc))"
 Write-Host "  + $dllCount 个依赖 DLL"
 
 if (Test-Path "$SourceDir\LICENSE") { Copy-Item "$SourceDir\LICENSE" $StageDir -Force }
@@ -120,7 +120,7 @@ Write-Host "`n[+] 聚合第三方许可证 (THIRD_PARTY_LICENSES.md)..."
 & "$PSScriptRoot\collect_third_party_licenses.ps1" -SourceDir $SourceDir -OutFile (Join-Path $StageDir "THIRD_PARTY_LICENSES.md")
 if ($LASTEXITCODE -ne 0) { throw "第三方许可证聚合失败 (exit $LASTEXITCODE)" }
 
-# ── 随包附带 VC++ 运行时 (app-local)：dse.exe / DSEngine_Game.exe 动态链接 CRT，
+# ── 随包附带 VC++ 运行时 (app-local)：dse.exe / dsengine_game.exe 动态链接 CRT，
 #    未装 VC++ Redistributable 的机器靠这些 DLL 才能启动 ──
 Write-Host "`n[+] 收集 VC++ 运行时 DLL..."
 & "$PSScriptRoot\collect_runtime_deps.ps1" -DestDir $StageDir
@@ -139,7 +139,7 @@ $readme = @"
 
 ## 包含
 - ``dse.exe``            —— 命令行工具：new / pack / build / dist
-- ``DSEngine_Game.exe``  —— standalone 运行时（被 ``dse build`` 复制进出包）
+- ``dsengine_game.exe``  —— standalone 运行时（被 ``dse build`` 复制进出包）
 - ``vcruntime140*.dll`` / ``msvcp140*.dll`` —— app-local VC++ 运行时（开箱即用）
 - ``THIRD_PARTY_LICENSES.md`` —— 第三方组件许可证汇总
 

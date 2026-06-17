@@ -13,7 +13,7 @@
  *                                          # 收集 emscripten 产物为可上传(itch.io)的 Web 包
  *   dse help | -h | --help                 # 显示帮助
  *
- * 与运行时端到端对应：加密 build 产物可被 DSEngine_Game 挂载解密并加载 Lua（见
+ * 与运行时端到端对应：加密 build 产物可被 dsengine_game 挂载解密并加载 Lua（见
  * EngineInstance::Init 的 MountBundle / lua_runtime 的 VFS searcher）。
  */
 
@@ -90,7 +90,7 @@ int PrintUsage(int rc = 1) {
         "  dse build --target web --3d            # 编译 web-release-3d 产物并收集到 dist/web\n"
         "  dse dist --target web --out dist/web   # 之后压缩 dist/web 即可上传 itch.io\n"
         "\n"
-        "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 DSEngine_Game; cpp 模板需用 cmake 单独编译。\n"
+        "注: build 不编译引擎, 而是定位同目录/bin 下已构建的 dsengine_game; cpp 模板需用 cmake 单独编译。\n"
         "    build --target web 例外: 它驱动 emscripten 预设真正编译 Web 产物, 需先设置 EMSDK。\n";
     return rc;
 }
@@ -231,15 +231,15 @@ int CmdPack(const std::vector<std::string>& args) {
     return 0;
 }
 
-// 在 CLI 自身所在目录与 bin/ 下定位 standalone 运行时（DSEngine_Game[.exe]）。
+// 在 CLI 自身所在目录与 bin/ 下定位 standalone 运行时（dsengine_game[.exe]）。
 fs::path LocateRuntimeExe(const char* argv0) {
 #if defined(_WIN32)
     const char* names[] = {
-        "DSEngine_Game.exe", "DSEngine_Game_release.exe", "DSEngine_Game_debug.exe",
+        "dsengine_game.exe", "dsengine_game_release.exe", "dsengine_game_debug.exe",
     };
 #else
     const char* names[] = {
-        "DSEngine_Game", "DSEngine_Game_release", "DSEngine_Game_debug",
+        "dsengine_game", "dsengine_game_release", "dsengine_game_debug",
     };
 #endif
     std::error_code ec;
@@ -520,8 +520,8 @@ int CmdBuild(const std::vector<std::string>& args, const char* argv0) {
     // 1. 定位运行时
     fs::path runtime_exe = LocateRuntimeExe(argv0);
     if (runtime_exe.empty()) {
-        std::cerr << "错误: 未找到 DSEngine_Game 运行时。请先构建 dse_standalone 目标，"
-                     "或把 dse 与 DSEngine_Game 放在同一目录/其 bin 子目录下。\n";
+        std::cerr << "错误: 未找到 dsengine_game 运行时。请先构建 dse_standalone 目标，"
+                     "或把 dse 与 dsengine_game 放在同一目录/其 bin 子目录下。\n";
         return 1;
     }
     std::cout << "运行时: " << runtime_exe.string() << "\n";

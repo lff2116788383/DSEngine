@@ -196,10 +196,10 @@ if "%SKIP_DEMOS%"=="1" (
 
 :: 检查 Lua 可执行文件
 set "LUA_EXE="
-if exist ".\bin\DSEngine_lua_debug.exe" (
-    set "LUA_EXE=.\bin\DSEngine_lua_debug.exe"
-) else if exist ".\bin\DSEngine_lua.exe" (
-    set "LUA_EXE=.\bin\DSEngine_lua.exe"
+if exist ".\bin\dsengine_lua_debug.exe" (
+    set "LUA_EXE=.\bin\dsengine_lua_debug.exe"
+) else if exist ".\bin\dsengine_lua.exe" (
+    set "LUA_EXE=.\bin\dsengine_lua.exe"
 ) else (
     echo [WARN] 未找到 Lua 可执行文件，跳过 Demo 验证。
     echo        请先运行 build_fast_lua.bat 构建 Lua 运行时。

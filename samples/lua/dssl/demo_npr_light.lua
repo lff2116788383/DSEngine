@@ -3,7 +3,7 @@
 -- hatching (交叉线影) / gradient_ramp (渐变色带) / minnaert (月球散射)
 --
 -- 独立运行:
---   DSEngine_Game_release.exe --script=samples/lua/dssl/demo_npr_light.lua
+--   dsengine_game_release.exe --script=samples/lua/dssl/demo_npr_light.lua
 --------------------------------------------------------------------------------
 local ecs = dse.ecs
 local app = dse.app

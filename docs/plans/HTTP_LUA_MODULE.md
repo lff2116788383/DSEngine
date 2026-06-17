@@ -91,7 +91,7 @@ OpenSSL 相关开关 / 覆盖：
 
 - `dse_http_smoke.exe`：`[GET]=200 hello-get`、`[POST]=200 echo`、`[TLS]=204`（真实 https 握手成功）→ **HTTP_SMOKE_PASS**。
 - `dse_http_lua_smoke.exe`：Lua 脚本 `dse.http.request{...on_done}` 回调拿到 `status=200`、`body={"echo":{"q":42}}` → **HTTP_LUA_SMOKE_PASS**。
-- 全引擎 `DSE_ENABLE_HTTP=ON` 构建：`DSEngine_lua_debug.exe` 链接通过（`dse.http` 绑定编入引擎）。
+- 全引擎 `DSE_ENABLE_HTTP=ON` 构建：`dsengine_lua_debug.exe` 链接通过（`dse.http` 绑定编入引擎）。
 - **回归**：`DSE_ENABLE_HTTP=OFF`（默认）全引擎构建通过，零影响。
 
 ## 6. 脚本层示例（不进引擎核心）
@@ -102,6 +102,6 @@ OpenSSL 相关开关 / 覆盖：
 
   ```bat
   set DEEPSEEK_API_KEY=sk-...
-  bin\DSEngine_lua_debug.exe --script=examples/lua/deepseek_npc.lua
+  bin\dsengine_lua_debug.exe --script=examples/lua/deepseek_npc.lua
   ```
   （宿主须以 `DSE_ENABLE_HTTP=ON` 构建，否则 `dse.http` 不存在。）

@@ -175,8 +175,8 @@ danim v2 布局: [AnimHeader] [AnimChannelDesc × N] [名称表: u32 total + (u1
 
 ## 5. 构建注意事项
 
-- **CMake 目标名**: `dse_standalone`（不是 `DSEngine_Game`）
-- **输出路径**: `bin/DSEngine_Game_release.exe`
+- **CMake 目标名**: `dse_standalone`（不是 `dsengine_game`）
+- **输出路径**: `bin/dsengine_game_release.exe`
 - **强制重编译单文件**: 需要 `touch` 源文件或清理 obj，增量构建有时不重编
 - **链接警告**: `lua_error` / `luaL_argerror` 的 LNK4217/4286 是已知无害警告
 
@@ -371,7 +371,7 @@ $env:DSE_MAX_FRAMES = "5"
 $env:DSE_STARTUP_SCENE_REGRESSION = "0"
 $crashed = 0; $ok = 0
 for ($i = 1; $i -le 50; $i++) {
-    $proc = Start-Process -FilePath "bin\DSEngine_Game_release.exe" `
+    $proc = Start-Process -FilePath "bin\dsengine_game_release.exe" `
         -ArgumentList "--script=examples\KF_Framework\script\main.lua" `
         -PassThru -WindowStyle Hidden
     $exited = $proc.WaitForExit(15000)

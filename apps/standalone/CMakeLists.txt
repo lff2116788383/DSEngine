@@ -5,7 +5,7 @@ add_executable(dse_standalone
 )
 
 target_link_libraries(dse_standalone PRIVATE dse_engine)
-set_target_properties(dse_standalone PROPERTIES OUTPUT_NAME "DSEngine_Game")
+set_target_properties(dse_standalone PROPERTIES OUTPUT_NAME "dsengine_game")
 dse_apply_config_postfix(dse_standalone)
 
 if (MSVC)

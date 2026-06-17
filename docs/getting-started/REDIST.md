@@ -9,7 +9,7 @@
 
 | 形态 | 产物 | 引擎链接方式 | 适用 |
 | --- | --- | --- | --- |
-| **游戏出包**（默认） | `DSEngine_Game[_release].exe`（重命名为你的游戏名）+ 资源 | **静态**（`DSE_BUILD_SHARED=OFF`，默认）——引擎与全部第三方库（Jolt / Lua / Box2D / EnTT / assimp …）已编入 exe | 把游戏发给玩家 |
+| **游戏出包**（默认） | `dsengine_game[_release].exe`（重命名为你的游戏名）+ 资源 | **静态**（`DSE_BUILD_SHARED=OFF`，默认）——引擎与全部第三方库（Jolt / Lua / Box2D / EnTT / assimp …）已编入 exe | 把游戏发给玩家 |
 | **SDK 分发** | `DSEngine.dll` + `.lib` 导入库 + 公共头 | **动态**（`DSE_BUILD_SHARED=ON`，SDK 打包脚本使用） | 把引擎发给其他开发者用 `find_package(DSEngine)` 集成 |
 
 `dse build` / `dse dist` 默认走「游戏出包」静态形态，**exe 自包含**，第三方物理/脚本/资源库**不**单独出 DLL。
@@ -18,7 +18,7 @@
 
 ## 2. 游戏出包：必带文件 / Game build redistributables
 
-用 `dumpbin /DEPENDENTS DSEngine_Game_release.exe` 实测，默认 Release 静态 exe 的运行时依赖如下：
+用 `dumpbin /DEPENDENTS dsengine_game_release.exe` 实测，默认 Release 静态 exe 的运行时依赖如下：
 
 ### 2.1 必须确保存在（开发者需关注）
 

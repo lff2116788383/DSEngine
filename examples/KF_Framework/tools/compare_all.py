@@ -72,10 +72,10 @@ REGIONS_720P = {
 def find_dse_exe():
     """查找 DSEngine 可执行文件"""
     candidates = [
-        ENGINE_ROOT / "bin" / "RelWithDebInfo" / "DSEngine_Game_relwithdebinfo.exe",
-        ENGINE_ROOT / "bin" / "Release" / "DSEngine_Game_release.exe",
-        ENGINE_ROOT / "bin" / "DSEngine_Game_release.exe",
-        ENGINE_ROOT / "bin" / "DSEngine_Game_debug.exe",
+        ENGINE_ROOT / "bin" / "RelWithDebInfo" / "dsengine_game_relwithdebinfo.exe",
+        ENGINE_ROOT / "bin" / "Release" / "dsengine_game_release.exe",
+        ENGINE_ROOT / "bin" / "dsengine_game_release.exe",
+        ENGINE_ROOT / "bin" / "dsengine_game_debug.exe",
     ]
     for p in candidates:
         if p.exists():

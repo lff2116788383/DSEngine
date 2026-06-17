@@ -129,10 +129,10 @@ def baseline_dir_for(root: pathlib.Path, backend: str) -> pathlib.Path:
 def find_exe(root: pathlib.Path) -> Optional[pathlib.Path]:
     """查找可用的引擎可执行文件"""
     candidates = [
-        root / "bin" / "DSEngine_Game_release.exe",
-        root / "bin" / "RelWithDebInfo" / "DSEngine_Game_relwithdebinfo.exe",
-        root / "bin" / "DSEngine_Game_debug.exe",
-        root / "bin" / "DSEngine_lua_debug.exe",
+        root / "bin" / "dsengine_game_release.exe",
+        root / "bin" / "RelWithDebInfo" / "dsengine_game_relwithdebinfo.exe",
+        root / "bin" / "dsengine_game_debug.exe",
+        root / "bin" / "dsengine_lua_debug.exe",
     ]
     for c in candidates:
         if c.exists():
@@ -175,7 +175,7 @@ def run_demo(
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [str(exe)]
-    # standalone exe (DSEngine_Game_*) 需要 --script 参数
+    # standalone exe (dsengine_game_*) 需要 --script 参数
     if "Game" in exe.name or "standalone" in exe.name:
         cmd.append("--script=samples/lua/main.lua")
 

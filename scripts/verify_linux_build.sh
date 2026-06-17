@@ -120,8 +120,8 @@ ENGINE_LIB="$(find "$BUILD_DIR" -maxdepth 2 -name 'libDSEngine*.a' | head -1)"
 ok "引擎静态库: $ENGINE_LIB ($(du -h "$ENGINE_LIB" | cut -f1))"
 
 # Lua 运行时可执行文件输出到源码 bin/（RUNTIME_OUTPUT_DIRECTORY=${SRC}/bin），兼查构建目录
-LUA_EXE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'DSEngine_lua*' ! -name '*.a' ! -name '*.pdb' 2>/dev/null | head -1)"
-[ -n "$LUA_EXE" ] && [ -f "$LUA_EXE" ] || die "未找到 Lua 运行时可执行文件 DSEngine_lua*。"
+LUA_EXE="$(find "$SRC_DIR/bin" "$BUILD_DIR" -maxdepth 3 -type f -name 'dsengine_lua*' ! -name '*.a' ! -name '*.pdb' 2>/dev/null | head -1)"
+[ -n "$LUA_EXE" ] && [ -f "$LUA_EXE" ] || die "未找到 Lua 运行时可执行文件 dsengine_lua*。"
 if command -v file >/dev/null 2>&1; then
     file "$LUA_EXE" | grep -q "ELF" || die "Lua 运行时不是合法 ELF：$LUA_EXE"
 fi

@@ -140,4 +140,4 @@
 - 优先最小改动，逐步验证
 - 每完成一个步骤 commit 一次，commit message 格式: `feat(render): <具体内容>`
 - 编译命令: `cmake --build build_vs2022 --target dse_standalone --config Release`
-- 运行验证: `.\bin\DSEngine_Game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=opengl`
+- 运行验证: `.\bin\dsengine_game_release.exe --script=examples\KF_Framework\script\main.lua --rhi=opengl`

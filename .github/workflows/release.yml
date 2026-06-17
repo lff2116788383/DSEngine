@@ -242,7 +242,7 @@ jobs:
             -DDSE_ENABLE_PHYSX=OFF -DDSE_ENABLE_D3D11=OFF -DDSE_ENABLE_VULKAN=OFF
           cmake --build build_host --target dse_shader_compiler -j "$(nproc)"
 
-      - name: Build signed APK (arm64-v8a)
+      - name: Build demo APK (arm64-v8a)
         shell: pwsh
         run: |
           ./scripts/verify_android_apk.ps1 `
@@ -251,19 +251,47 @@ jobs:
             -BuildTools $env:ANDROID_BUILD_TOOLS -Platform $env:ANDROID_TARGET_PLATFORM `
             -HostShaderCompiler "$PWD/bin/dse_shader_compiler"
 
-      - name: Stage APK
+      - name: Package Android engine library (arm64-v8a)
+        run: |
+          ver="${REF_NAME#v}"
+          pkg="DSEngine-android-arm64-v8a-v${ver}"
+          mkdir -p "$pkg/lib" "$pkg/include/DSEngine"
+          # Static engine library produced by the arm64-v8a cross build
+          find build_android -maxdepth 5 -type f -name 'libDSEngine*.a' -exec cp {} "$pkg/lib/" \;
+          ls "$pkg/lib"/libDSEngine*.a >/dev/null 2>&1 || { echo 'engine .a not found'; find build_android -name 'libDSEngine*'; exit 1; }
+          # Public headers (mirrors the find_package SDK layout)
+          rsync -a --prune-empty-dirs \
+            --exclude='render/rhi/dx11/***' --exclude='render/rhi/opengl/***' --exclude='render/rhi/vulkan/***' \
+            --include='*/' --include='*.h' --exclude='*' \
+            engine/ "$pkg/include/DSEngine/engine/"
+          [ -f build_android/generated/engine/dse_version.h ] && cp build_android/generated/engine/dse_version.h "$pkg/include/DSEngine/engine/" || true
+          rsync -a --prune-empty-dirs --include='*/' --include='*.h' --exclude='*' modules/ "$pkg/include/DSEngine/modules/"
+          rsync -a depends/glm/glm/ "$pkg/include/DSEngine/third_party/glm/glm/"
+          rsync -a --prune-empty-dirs --include='*/' --include='*.h' --include='*.hpp' --include='*.inl' --exclude='*' depends/glm_ext/ "$pkg/include/DSEngine/third_party/glm_ext/"
+          rsync -a --prune-empty-dirs --include='*/' --include='*.hpp' --include='*.h' --exclude='*' depends/entt-3.13.0/src/ "$pkg/include/DSEngine/third_party/entt/src/"
+          rsync -a --prune-empty-dirs --include='*/' --include='*.h' --exclude='*' depends/box2d-2.4.1/include/ "$pkg/include/DSEngine/third_party/box2d/include/"
+          # Bundle libc++_shared.so (dynamic STL) for convenience
+          libcxx="$(find "$ANDROID_NDK_HOME" -name 'libc++_shared.so' -path '*aarch64-linux-android*' 2>/dev/null | head -1)"
+          [ -n "$libcxx" ] && cp "$libcxx" "$pkg/lib/" || true
+          cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "$pkg"/ 2>/dev/null || true
+          zip -r "${pkg}.zip" "$pkg"
+          ls -lh "${pkg}.zip"
+
+      - name: Stage demo APK
         run: |
           ver="${REF_NAME#v}"
           apk="$(find build_android .. -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
           test -n "$apk" || { echo "APK not found"; find . .. -name '*.apk' 2>/dev/null; exit 1; }
-          cp "$apk" "DSEngine-v${ver}-android-arm64.apk"
+          cp "$apk" "DSEngine-v${ver}-android-arm64-demo.apk"
           ls -lh DSEngine-*.apk
 
-      - name: Upload Android artifact
+      - name: Upload Android artifacts (library + demo APK)
         uses: actions/upload-artifact@v4
         with:
           name: android
-          path: DSEngine-*-android-arm64.apk
+          path: |
+            DSEngine-android-arm64-v8a-*.zip
+            DSEngine-*-android-arm64-demo.apk
           if-no-files-found: error
 
   # ── Linux (GLFW/X11/GL) engine static lib + Lua runtime ELF ──
@@ -295,7 +323,7 @@ jobs:
           stage="DSEngine-linux-x64-v${ver}"
           mkdir -p "$stage/lib" "$stage/bin"
           find build_linux -maxdepth 3 -name 'libDSEngine*.a' -exec cp {} "$stage/lib/" \;
-          luaexe="$(find bin build_linux -maxdepth 3 -type f -name 'DSEngine_lua*' ! -name '*.a' ! -name '*.pdb' 2>/dev/null | head -1)"
+          luaexe="$(find bin build_linux -maxdepth 3 -type f -name 'dsengine_lua*' ! -name '*.a' ! -name '*.pdb' 2>/dev/null | head -1)"
           [ -n "$luaexe" ] && cp "$luaexe" "$stage/bin/" || true
           cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "$stage"/ 2>/dev/null || true
           tar -czf "${stage}.tar.gz" "$stage"

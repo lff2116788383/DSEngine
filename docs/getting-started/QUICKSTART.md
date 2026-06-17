@@ -23,11 +23,11 @@ dse new 2d MyGame      →   dse build MyGame      →   运行 build/dist/MyGam
 
 ## 第 0 步：拿到 `dse` 命令行（首次必做）
 
-你需要 `dse.exe` 和运行时 `DSEngine_Game.exe`（`dse build` 会用到它）。二选一：
+你需要 `dse.exe` 和运行时 `dsengine_game.exe`（`dse build` 会用到它）。二选一：
 
 ### 方式 A（推荐，最快）：下载预编译工具包
 
-到本仓库的 **Releases** 页面下载 `DSEngine-tools-vX.Y.Z-win-x64.zip`，解压即可——里面有 `dse.exe` + `DSEngine_Game.exe`，开箱即用，**不需要装编译器、不需要从源码构建**。
+到本仓库的 **Releases** 页面下载 `DSEngine-tools-vX.Y.Z-win-x64.zip`，解压即可——里面有 `dse.exe` + `dsengine_game.exe`，开箱即用，**不需要装编译器、不需要从源码构建**。
 
 - 下载直链：仓库 **Releases** 页（`<repo-url>/releases/latest`）的资产 `DSEngine-tools-*-win-x64.zip`
 
@@ -50,7 +50,7 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap_windows.ps1
 
 ```powershell
 dir bin\dse.exe
-dir bin\DSEngine_Game_*.exe
+dir bin\dsengine_game_*.exe
 ```
 
 > 维护者发布工具包：`powershell -ExecutionPolicy Bypass -File scripts\package_dse_tools.ps1`

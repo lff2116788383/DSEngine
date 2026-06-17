@@ -102,7 +102,7 @@ scripts\win\verify_all.bat         # 全链路验证
 | `DSE_BUILD_SHARED` | OFF | 把 `dse_engine` 编成 DLL |
 | `DSE_MEM_BACKEND` | system | `system`（零依赖）或 `mimalloc` |
 
-可执行产物统一输出到 `bin/`。应用宿主按配置加后缀（`_debug/_release/...`），编辑器/工具/测试**无后缀**。主要目标：`dse_engine`(库)、`dse_standalone`(`DSEngine_Game[_cfg].exe`)、`DSEngine_example_cpp`、`dse_example_lua`、`dse_cli`(`dse.exe`)、`AssetBuilder`、`dse_dssl_compiler`、`dse_shader_compiler`、`dse_editor_cpp`(`dsengine-editor.exe`，opt-in)。
+可执行产物统一输出到 `bin/`。应用宿主按配置加后缀（`_debug/_release/...`），编辑器/工具/测试**无后缀**。主要目标：`dse_engine`(库)、`dse_standalone`(`dsengine_game[_cfg].exe`)、`DSEngine_example_cpp`、`dse_example_lua`、`dse_cli`(`dse.exe`)、`AssetBuilder`、`dse_dssl_compiler`、`dse_shader_compiler`、`dse_editor_cpp`(`dsengine-editor.exe`，opt-in)。
 
 ---
 
@@ -194,7 +194,7 @@ EngineInstance（生命周期）
 
 ## 10. 运行 / 调试 / 演示
 
-- 运行编辑器：`bin\dsengine-editor.exe`；运行 Lua 宿主：`bin\DSEngine_lua_debug.exe`（演示入口在 [`samples/lua/config.lua`](samples/lua/config.lua) 的 `Config.game_entry`）。
+- 运行编辑器：`bin\dsengine-editor.exe`；运行 Lua 宿主：`bin\dsengine_lua_debug.exe`（演示入口在 [`samples/lua/config.lua`](samples/lua/config.lua) 的 `Config.game_entry`）。
 - 批量验证 3D 演示：`python tools\verify_lua_3d_demos.py --entries all`。
 - 独立游戏（headless CLI）：`dse new lua MyGame` → `dse build MyGame --out dist [--key <≥16B>]` → `dist\launch.bat`。
 - **Headless/CI/截图环境变量**：`DSE_MAX_FRAMES`（N 帧后退出）、`DSE_SCREENSHOT_PATH`、`DSE_SCREENSHOT_TARGET`(`main`/`scene`)、`DSE_STARTUP_LUA`、`DSE_RENDER_READBACK_DIAG=1`。

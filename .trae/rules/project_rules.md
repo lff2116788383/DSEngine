@@ -233,7 +233,7 @@ scripts\win\verify_all.bat
 ```
 
 - 如果需要启用特定能力，如 Vulkan / Editor / Launcher，以根 [`CMakeLists.txt`](CMakeLists.txt) 当前选项为准追加开关。
-- 常见可执行文件位于 `bin/`，例如 `DSEngine_lua_debug.exe`、`dsengine-editor.exe`，但具体产物名仍以当前构建结果为准。
+- 常见可执行文件位于 `bin/`，例如 `dsengine_lua_debug.exe`、`dsengine-editor.exe`，但具体产物名仍以当前构建结果为准。
 
 ### 7.4 常用构建脚本
 

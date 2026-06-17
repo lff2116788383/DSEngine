@@ -199,9 +199,9 @@ def main():
         exe = pathlib.Path(args.exe)
     else:
         for candidate in [
-            engine_root / "bin" / "DSEngine_Game_release.exe",
-            engine_root / "bin" / "DSEngine_Game_debug.exe",
-            engine_root / "bin" / "DSEngine_lua_debug.exe",
+            engine_root / "bin" / "dsengine_game_release.exe",
+            engine_root / "bin" / "dsengine_game_debug.exe",
+            engine_root / "bin" / "dsengine_lua_debug.exe",
         ]:
             if candidate.exists():
                 exe = candidate

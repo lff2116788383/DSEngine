@@ -2,7 +2,7 @@
 -- 验证: load_material → set_float/color/texture → get_float/color → apply_material → create_instance
 --
 -- 独立运行:
---   DSEngine_Game_release.exe --script=samples/lua/dssl/dssl_material_demo.lua
+--   dsengine_game_release.exe --script=samples/lua/dssl/dssl_material_demo.lua
 --------------------------------------------------------------------------------
 local ecs = dse.ecs
 local app = dse.app

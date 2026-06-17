@@ -79,7 +79,7 @@ bin\dsengine-editor.exe
 
 ```powershell
 build_fast_lua.bat
-bin\DSEngine_lua_debug.exe
+bin\dsengine_lua_debug.exe
 ```
 
 The Lua host loads `samples/lua/main.lua`, which reads `samples/lua/config.lua` to pick the demo.
@@ -123,7 +123,7 @@ Config.game_entry = "3d_scene_showcase"
 5. Click **Build**
 
 The dialog will:
-- Copy `DSEngine_Game.exe` + DLLs to the output folder
+- Copy `dsengine_game.exe` + DLLs to the output folder
 - Pack assets into `game.dpak`
 - Copy `data/` as fallback
 
@@ -133,11 +133,11 @@ The dialog will:
 # 1. Build the standalone target
 cmake --build build_vs2022 --config Release --target dse_standalone
 
-# 2. The exe is at bin\DSEngine_Game_release.exe
+# 2. The exe is at bin\dsengine_game_release.exe
 # 3. Place your .dpak next to it, or keep data/ alongside
 
 # 4. Run
-bin\DSEngine_Game_release.exe --title="My Game" --width=1280 --height=720
+bin\dsengine_game_release.exe --title="My Game" --width=1280 --height=720
 ```
 
 CLI arguments:

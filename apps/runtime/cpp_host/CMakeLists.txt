@@ -4,7 +4,7 @@ add_executable(DSEngine_example_cpp
 )
 
 target_link_libraries(DSEngine_example_cpp PRIVATE dse_engine)
-set_target_properties(DSEngine_example_cpp PROPERTIES OUTPUT_NAME "DSEngine_c++")
+set_target_properties(DSEngine_example_cpp PROPERTIES OUTPUT_NAME "dsengine_cpp")
 dse_apply_config_postfix(DSEngine_example_cpp)
 
 if (MSVC)
