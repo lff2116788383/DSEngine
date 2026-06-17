@@ -57,30 +57,28 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     }
 
     // --- 娣卞害娴嬭瘯 Diff ---
-    if (state.depth_test_enabled != cached.depth_test_enabled) {
-        if (state.depth_test_enabled) {
-            glEnable(GL_DEPTH_TEST);
-        } else {
-            glDisable(GL_DEPTH_TEST);
-        }
+    // A1 fix: apply depth/cull state authoritatively on every PSO bind.
+    // Many raw glDepthFunc/glDepthMask/glEnable(GL_DEPTH_TEST) calls across the
+    // GL executors bypass this manager, so cached_gl_state_ does NOT reliably
+    // mirror real GL state. Diffing against it can skip needed updates (e.g. the
+    // skybox PSO's LEQUAL), leaving func at GL_LESS so the z=1.0 skybox is fully
+    // depth-rejected -> black background. Apply unconditionally to stay correct.
+    if (state.depth_test_enabled) {
+        glEnable(GL_DEPTH_TEST);
+    } else {
+        glDisable(GL_DEPTH_TEST);
     }
-    if (state.depth_write_enabled != cached.depth_write_enabled) {
-        glDepthMask(state.depth_write_enabled ? GL_TRUE : GL_FALSE);
-    }
-    if (state.depth_test_enabled && state.depth_func != cached.depth_func) {
+    glDepthMask(state.depth_write_enabled ? GL_TRUE : GL_FALSE);
+    if (state.depth_test_enabled) {
         glDepthFunc(ToGLCompareFunc(state.depth_func));
     }
 
     // --- 瑁佸壀闈?Diff ---
-    if (state.culling_enabled != cached.culling_enabled) {
-        if (state.culling_enabled) {
-            glEnable(GL_CULL_FACE);
-        } else {
-            glDisable(GL_CULL_FACE);
-        }
-    }
-    if (state.culling_enabled && state.cull_face != cached.cull_face) {
+    if (state.culling_enabled) {
+        glEnable(GL_CULL_FACE);
         glCullFace(ToGLCullFace(state.cull_face));
+    } else {
+        glDisable(GL_CULL_FACE);
     }
 
     // 鏇存柊缂撳瓨
