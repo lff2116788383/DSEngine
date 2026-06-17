@@ -33,6 +33,8 @@
 param(
     [string]$Abi = "arm64-v8a",
     [int]$ApiLevel = 24,
+    [ValidateSet("Debug", "Release", "RelWithDebInfo", "MinSizeRel")]
+    [string]$Config = "Debug",
     [string]$BuildTools = "34.0.0",
     [string]$Platform = "android-34",
     [string]$BuildDir = "",
@@ -121,7 +123,7 @@ if (-not (Test-Path (Join-Path $BuildDir "build.ninja"))) {
         "-DCMAKE_MAKE_PROGRAM=$Ninja" `
         "-DANDROID_ABI=$Abi" `
         "-DANDROID_PLATFORM=android-$ApiLevel" `
-        "-DCMAKE_BUILD_TYPE=Debug" `
+        "-DCMAKE_BUILD_TYPE=$Config" `
         "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
         "-DDSE_BUILD_SHARED=OFF" `
         "-DDSE_BUILD_GTESTS=OFF" `
