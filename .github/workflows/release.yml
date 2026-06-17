@@ -255,7 +255,9 @@ jobs:
         run: |
           ver="${REF_NAME#v}"
           pkg="DSEngine-android-arm64-v8a-v${ver}"
-          mkdir -p "$pkg/lib" "$pkg/include/DSEngine"
+          mkdir -p "$pkg/lib" "$pkg/include/DSEngine/engine" "$pkg/include/DSEngine/modules" \
+            "$pkg/include/DSEngine/third_party/glm/glm" "$pkg/include/DSEngine/third_party/glm_ext" \
+            "$pkg/include/DSEngine/third_party/entt/src" "$pkg/include/DSEngine/third_party/box2d/include"
           # Static engine library produced by the arm64-v8a cross build
           find build_android -maxdepth 5 -type f -name 'libDSEngine*.a' -exec cp {} "$pkg/lib/" \;
           ls "$pkg/lib"/libDSEngine*.a >/dev/null 2>&1 || { echo 'engine .a not found'; find build_android -name 'libDSEngine*'; exit 1; }
