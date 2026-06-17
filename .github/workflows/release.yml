@@ -42,10 +42,10 @@ jobs:
           echo "VULKAN_SDK=$sdkPath" >> $env:GITHUB_ENV
           echo "$sdkPath\Bin" >> $env:GITHUB_PATH
 
-      - name: CMake Configure (editor ON, D3D11 + Vulkan)
+      - name: CMake Configure (editor OFF, D3D11 + Vulkan)
         run: |
           cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
-            -DDSE_BUILD_EDITOR=ON `
+            -DDSE_BUILD_EDITOR=OFF `
             -DDSE_BUILD_LAUNCHER=OFF `
             -DDSE_BUILD_GTESTS=OFF `
             -DDSE_ENABLE_SPINE=ON `
@@ -61,7 +61,6 @@ jobs:
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_engine --parallel
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_cli --parallel
           cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_standalone --parallel
-          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_editor_cpp --parallel
 
       - name: Copy Runtime Assets
         run: cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_copy_assets
@@ -276,24 +275,19 @@ jobs:
           libcxx="$(find "$ANDROID_NDK_HOME" -name 'libc++_shared.so' -path '*aarch64-linux-android*' 2>/dev/null | head -1)"
           [ -n "$libcxx" ] && cp "$libcxx" "$pkg/lib/" || true
           cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "$pkg"/ 2>/dev/null || true
+          # Bundle the demo APK alongside the library
+          mkdir -p "$pkg/demo"
+          apk="$(find build_android .. -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
+          test -n "$apk" || { echo "APK not found"; find . .. -name '*.apk' 2>/dev/null; exit 1; }
+          cp "$apk" "$pkg/demo/DSEngine-v${ver}-android-arm64-demo.apk"
           zip -r "${pkg}.zip" "$pkg"
           ls -lh "${pkg}.zip"
 
-      - name: Stage demo APK
-        run: |
-          ver="${REF_NAME#v}"
-          apk="$(find build_android .. -type f -name 'dsengine-host.apk' 2>/dev/null | head -1)"
-          test -n "$apk" || { echo "APK not found"; find . .. -name '*.apk' 2>/dev/null; exit 1; }
-          cp "$apk" "DSEngine-v${ver}-android-arm64-demo.apk"
-          ls -lh DSEngine-*.apk
-
-      - name: Upload Android artifacts (library + demo APK)
+      - name: Upload Android artifact (engine library + demo APK)
         uses: actions/upload-artifact@v4
         with:
           name: android
-          path: |
-            DSEngine-android-arm64-v8a-*.zip
-            DSEngine-*-android-arm64-demo.apk
+          path: DSEngine-android-arm64-v8a-*.zip
           if-no-files-found: error
 
   # ── Linux (GLFW/X11/GL) engine static lib + Lua runtime ELF ──
