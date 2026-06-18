@@ -188,8 +188,12 @@ void DrawIndexed(uint32_t index_count, uint32_t instance_count = 1,// [新增]
 ---
 
 ## 附：后续阶段（B1–B5，便于全局对照）
-- **B1**：跨后端离屏像素 smoke gtest（先补 skybox），作为后续每次迁移的回归闸门。
-- **B2**：迁 Sprite/Mesh → 抽高层渲染器 + 删其旧 ABI + 像素测试。
-- **B3**：迁 Particles（验证 Dispatch/实例化）。
-- **B4**：迁 Hair（SSBO + 多段绘制）。
-- **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。
+- [x] **A1**：DrawSkybox 改通用原语 + 删 ABI（`d885d0eb`）。
+- [x] **B0**：原语契约 v1 实现 + SpriteRenderer 脚手架 + 跨后端像素 smoke（`2d059e49`）。
+- [x] **B1**：跨后端离屏像素 smoke gtest（先补 skybox），作为后续每次迁移的回归闸门（`560fc7d4`）。
+- [~] **B2**：迁 Sprite/Mesh → 抽高层渲染器 + 删其旧 ABI + 像素测试。
+  - [x] **B2a** 迁 Sprite（`SpriteBatchRenderer`，默认/SDF/VFX）+ 删 DrawSpriteBatch（`11d61181`..`43240e8e`）。
+  - [ ] **B2b** 迁 Mesh（`MeshRenderer`）—— 阻塞于 SSBO + 实例化原语，方向待定，见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
+- [ ] **B3**：迁 Particles（验证 Dispatch/实例化）；DrawPostProcess 一并考虑。
+- [ ] **B4**：迁 Hair（SSBO + 多段绘制）。
+- [ ] **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。
