@@ -3,6 +3,7 @@ set(DSE_GTEST_SMOKE_TARGET dse_gtest_smoke_tests)
 add_executable(${DSE_GTEST_SMOKE_TARGET}
     rhi_pixel_harness.cpp
     skybox_pixel_smoke_test.cpp
+    sprite_batch_pixel_smoke_test.cpp
     engine_core_services_smoke_test.cpp
     lua_host_smoke_test.cpp
     lua_lifecycle_smoke_test.cpp

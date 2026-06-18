@@ -40,20 +40,21 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
     }
 
     const auto& state = it->second;
-    const auto& cached = cached_gl_state_;
 
-    // --- 娣峰悎鐘舵€?Diff ---
-    if (state.blend_enabled != cached.blend_enabled) {
-        if (state.blend_enabled) {
-            glEnable(GL_BLEND);
-        } else {
-            glDisable(GL_BLEND);
-        }
-    }
-    if (state.blend_enabled && (state.blend_src != cached.blend_src || state.blend_dst != cached.blend_dst
-        || state.alpha_blend_src != cached.alpha_blend_src || state.alpha_blend_dst != cached.alpha_blend_dst)) {
+    // --- 娣峰悎鐘舵€?---
+    // Apply blend state authoritatively on every PSO bind, for the same reason
+    // as depth/cull below: raw glEnable(GL_BLEND)/glBlendFunc* calls across the
+    // GL executors bypass this manager, so cached_gl_state_ does NOT reliably
+    // mirror real GL state. Diffing against it can skip needed updates (e.g. the
+    // default cached desc already has blend_enabled=true, so a freshly-created
+    // context whose GL_BLEND is still disabled never gets glEnable -> sprite
+    // alpha blending silently no-ops). Issue unconditionally to stay correct.
+    if (state.blend_enabled) {
+        glEnable(GL_BLEND);
         glBlendFuncSeparate(ToGLBlendFactor(state.blend_src), ToGLBlendFactor(state.blend_dst),
                             ToGLBlendFactor(state.alpha_blend_src), ToGLBlendFactor(state.alpha_blend_dst));
+    } else {
+        glDisable(GL_BLEND);
     }
 
     // --- 娣卞害娴嬭瘯 Diff ---
