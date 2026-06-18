@@ -887,6 +887,49 @@ DX11ResourceManager::ReadbackResult DX11ResourceManager::ReadRenderTargetColor(u
     return result;
 }
 
+DX11ResourceManager::DepthReadbackResult DX11ResourceManager::ReadRenderTargetDepth(unsigned int handle) const {
+    DepthReadbackResult result;
+    auto it = render_targets_.find(handle);
+    if (it == render_targets_.end() || !it->second.has_depth || !it->second.depth_texture) return result;
+
+    auto& rt = it->second;
+    result.width = rt.width;
+    result.height = rt.height;
+
+    // staging 纹理（与深度纹理同 desc：R24G8_TYPELESS）用于回读。
+    D3D11_TEXTURE2D_DESC td{};
+    rt.depth_texture->GetDesc(&td);
+    td.Usage = D3D11_USAGE_STAGING;
+    td.BindFlags = 0;
+    td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    td.MiscFlags = 0;
+
+    ComPtr<ID3D11Texture2D> staging;
+    HRESULT hr = device_->CreateTexture2D(&td, nullptr, staging.GetAddressOf());
+    if (FAILED(hr)) return {};
+
+    dc_->CopyResource(staging.Get(), rt.depth_texture.Get());
+
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    hr = dc_->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped);
+    if (FAILED(hr)) return {};
+
+    // D24_UNORM_S8：每 texel 32 位，低 24 位深度（R24_UNORM），高 8 位模板。
+    constexpr float kInv24 = 1.0f / 16777215.0f;  // 1/(2^24-1)
+    result.depth.resize(static_cast<size_t>(rt.width) * rt.height, 1.0f);
+    const unsigned char* src = static_cast<const unsigned char*>(mapped.pData);
+    for (int y = 0; y < rt.height; ++y) {
+        const uint32_t* row = reinterpret_cast<const uint32_t*>(src + y * mapped.RowPitch);
+        float* dst = result.depth.data() + static_cast<size_t>(y) * rt.width;
+        for (int x = 0; x < rt.width; ++x) {
+            dst[x] = static_cast<float>(row[x] & 0x00FFFFFFu) * kInv24;
+        }
+    }
+    dc_->Unmap(staging.Get(), 0);
+
+    return result;
+}
+
 // ============================================================
 // 顶点数组（D3D11 无 VAO 概念，占位实现）
 // ============================================================

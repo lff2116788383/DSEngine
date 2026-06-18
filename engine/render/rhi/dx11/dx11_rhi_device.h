@@ -54,6 +54,7 @@ public:
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
+    RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const override;
     unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) override;
     unsigned int CreateCompressedTexture2D(CompressedTextureFormat format,
                                            const std::vector<CompressedMipLevel>& mips,

@@ -200,6 +200,11 @@ public:
     void InitForwardPbrInstancedShader();
     unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
 
+    // --- 仅深度 forward PBR 着色器（B2b-4）：forward_pbr.vert + shadow.frag（空片元）。
+    // PerFrame\@0 UBO；只写深度、不输出颜色，配 has_color=false RT。
+    void InitForwardPbrDepthShader();
+    unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
         int texture = -1;
@@ -274,6 +279,7 @@ private:
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
+    unsigned int forward_pbr_depth_shader_handle_ = 0;
 };
 
 } // namespace render

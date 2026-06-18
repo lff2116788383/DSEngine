@@ -180,6 +180,11 @@ public:
     virtual unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const = 0;
     virtual std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const = 0;
     virtual RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const = 0;
+    /// 回读渲染目标深度附件为归一化 float [0,1]（行优先）。默认返回空（后端未实现 / 无深度附件）。
+    /// 用于 depth-only pass 校验（B2b-4）：各后端把原生深度格式（D24S8 等）解包为 [0,1]。
+    virtual RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+        (void)render_target_handle; return {};
+    }
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     /// 带采样描述(过滤 + 环绕)的 2D 纹理创建。默认实现退化为旧的 filter-only 行为
     /// (环绕 = Repeat)，后端可覆盖以支持 ClampToEdge / 点采样等。

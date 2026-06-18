@@ -161,6 +161,14 @@ public:
     };
     ReadbackResult ReadRenderTargetColor(unsigned int handle) const;
 
+    /// 深度回读结果（归一化深度 [0,1]，行优先）。
+    struct DepthReadbackResult {
+        int width = 0;
+        int height = 0;
+        std::vector<float> depth;
+    };
+    DepthReadbackResult ReadRenderTargetDepth(unsigned int handle) const;
+
     // --- 顶点数组（D3D11 无 VAO，占位） ---
     dse::render::VertexArrayHandle CreateVertexArray();
     void DeleteVertexArray(dse::render::VertexArrayHandle handle);

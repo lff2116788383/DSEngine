@@ -367,6 +367,15 @@ RenderTargetReadback DX11RhiDevice::ReadRenderTargetColorRgba8WithSize(unsigned 
     return readback;
 }
 
+RenderTargetDepthReadback DX11RhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+    auto result = resource_mgr_.ReadRenderTargetDepth(render_target_handle);
+    RenderTargetDepthReadback readback;
+    readback.width = result.width;
+    readback.height = result.height;
+    readback.depth = std::move(result.depth);
+    return readback;
+}
+
 unsigned int DX11RhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
     return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
 }
@@ -420,6 +429,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbr:  return shader_mgr_.forward_pbr_shader_handle();
         case BuiltinProgram::ForwardPbrSkinned: return shader_mgr_.forward_pbr_skinned_shader_handle();
         case BuiltinProgram::ForwardPbrInstanced: return shader_mgr_.forward_pbr_instanced_shader_handle();
+        case BuiltinProgram::ForwardPbrDepth: return shader_mgr_.forward_pbr_depth_shader_handle();
     }
     return 0;
 }

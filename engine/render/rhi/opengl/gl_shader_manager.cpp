@@ -759,6 +759,23 @@ void GLShaderManager::InitForwardPbrInstancedShader() {
     }
 }
 
+void GLShaderManager::InitForwardPbrDepthShader() {
+    if (forward_pbr_depth_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // 仅深度 VS（复用静态 forward_pbr.vert，世界空间顶点仅施 vp）+ 空 shadow.frag。
+    forward_pbr_depth_shader_handle_ =
+        CompileProgram(DSE_SL(kforward_pbr_vert), DSE_SL(kshadow_frag));
+    if (forward_pbr_depth_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward PBR depth shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    // 仅 PerFrame\@0 UBO（shadow.frag 空，无纹理/无其它 UBO）。
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_pbr_depth_shader_handle_, kforward_pbr_vert_reflection);
+}
+
 void GLShaderManager::InitSpriteFxSdfShader() {
     if (sprite_fx_sdf_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;

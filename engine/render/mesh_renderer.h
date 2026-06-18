@@ -149,6 +149,20 @@ public:
                        const MeshMaterial& material,
                        const DirectionalLight& light);
 
+    /// 记录一次仅深度绘制（B2b-4 shadow / depth-only）。顶点在 CPU 侧预变换到世界空间，
+    /// VS 仅施 vp（复用静态 forward_pbr.vert + 空 shadow.frag）；只写深度、不输出颜色，
+    /// 须配 has_color=false / has_depth=true 的渲染目标。用于 shadow map / depth pre-pass。
+    /// @param vertices  局部空间顶点（内部按 model 预变换到世界空间）
+    /// @param indices   16 位索引
+    /// @param model     模型矩阵
+    /// @param view/proj 相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection，否则深度方向错）
+    void DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
+                       const std::vector<MeshVertex>& vertices,
+                       const std::vector<uint16_t>& indices,
+                       const glm::mat4& model,
+                       const glm::mat4& view,
+                       const glm::mat4& proj);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 

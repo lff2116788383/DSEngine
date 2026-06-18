@@ -132,6 +132,9 @@ public:
     /// 实例化 forward PBR 着色器句柄（B2b-3；forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@t0）
     unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
 
+    /// 仅深度 forward PBR 着色器句柄（B2b-4；forward_pbr.vert + 空 shadow.frag；只写深度、不输出颜色）
+    unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
 private:
@@ -161,6 +164,7 @@ private:
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
+    unsigned int forward_pbr_depth_shader_handle_ = 0;
 
 };
 

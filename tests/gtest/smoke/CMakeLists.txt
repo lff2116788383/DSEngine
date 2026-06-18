@@ -18,6 +18,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     forward_pbr_pixel_smoke_test.cpp
     skinned_mesh_pixel_smoke_test.cpp
     instanced_mesh_pixel_smoke_test.cpp
+    depth_only_pixel_smoke_test.cpp
     physics3d_smoke_test.cpp
 )
 

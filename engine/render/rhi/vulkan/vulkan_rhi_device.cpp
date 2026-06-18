@@ -587,6 +587,126 @@ RenderTargetReadback VulkanRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     return result;
 }
 
+RenderTargetDepthReadback VulkanRhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+    // const_cast: 底层读回操作语义只读，但 Vulkan 命令提交需非 const 访问。
+    auto& resource_mgr = const_cast<VulkanResourceManager&>(resource_mgr_);
+    const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_target_handle);
+    if (!rt || !rt->has_depth || rt->depth_texture.image == VK_NULL_HANDLE) {
+        return {};
+    }
+
+    auto device = context_.device();
+    auto physical_device = context_.physical_device();
+
+    const int width = rt->width;
+    const int height = rt->height;
+    // D24_UNORM_S8：拷贝深度 aspect 时每 texel 打包为 32 位（深度在低 24 位）。
+    const size_t data_size = static_cast<size_t>(width) * height * 4;
+
+    VkBuffer readback_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory readback_memory = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo buf_info{};
+    buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buf_info.size = data_size;
+    buf_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(device, &buf_info, nullptr, &readback_buffer) != VK_SUCCESS) {
+        return {};
+    }
+
+    VkMemoryRequirements mem_reqs;
+    vkGetBufferMemoryRequirements(device, readback_buffer, &mem_reqs);
+    VkPhysicalDeviceMemoryProperties mem_props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+    uint32_t memory_type_index = UINT32_MAX;
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+        if ((mem_reqs.memoryTypeBits & (1 << i)) &&
+            (mem_props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+            memory_type_index = i;
+            break;
+        }
+    }
+    if (memory_type_index == UINT32_MAX) {
+        vkDestroyBuffer(device, readback_buffer, nullptr);
+        return {};
+    }
+
+    VkMemoryAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = mem_reqs.size;
+    alloc_info.memoryTypeIndex = memory_type_index;
+    if (vkAllocateMemory(device, &alloc_info, nullptr, &readback_memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device, readback_buffer, nullptr);
+        return {};
+    }
+    vkBindBufferMemory(device, readback_buffer, readback_memory, 0);
+
+    VkCommandBuffer cmd = resource_mgr.BeginSingleTimeCommands();
+
+    // 深度附件 pass 结束后处于 DEPTH_STENCIL_READ_ONLY_OPTIMAL → 过渡到 TRANSFER_SRC。
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = rt->depth_texture.image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1};
+    vkCmdCopyImageToBuffer(cmd, rt->depth_texture.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           readback_buffer, 1, &region);
+
+    // 过渡回 DEPTH_STENCIL_READ_ONLY_OPTIMAL。
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+    resource_mgr.EndSingleTimeCommands(cmd);
+
+    RenderTargetDepthReadback result;
+    result.width = width;
+    result.height = height;
+    result.depth.resize(static_cast<size_t>(width) * height, 1.0f);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(device, readback_memory, 0, data_size, 0, &mapped) == VK_SUCCESS) {
+        constexpr float kInv24 = 1.0f / 16777215.0f;  // 1/(2^24-1)
+        const uint32_t* src = static_cast<const uint32_t*>(mapped);
+        for (int i = 0; i < width * height; ++i) {
+            result.depth[i] = static_cast<float>(src[i] & 0x00FFFFFFu) * kInv24;
+        }
+        vkUnmapMemory(device, readback_memory);
+    }
+
+    vkDestroyBuffer(device, readback_buffer, nullptr);
+    vkFreeMemory(device, readback_memory, nullptr);
+
+    return result;
+}
+
 unsigned int VulkanRhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
     return resource_mgr_.CreateTexture2D(width, height, rgba8_data, linear_filter);
 }
@@ -656,6 +776,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrInstanced:
             if (shader_mgr_.forward_pbr_instanced_shader_handle() == 0) shader_mgr_.InitForwardPbrInstancedShader();
             return shader_mgr_.forward_pbr_instanced_shader_handle();
+        case BuiltinProgram::ForwardPbrDepth:
+            if (shader_mgr_.forward_pbr_depth_shader_handle() == 0) shader_mgr_.InitForwardPbrDepthShader();
+            return shader_mgr_.forward_pbr_depth_shader_handle();
     }
     return 0;
 }

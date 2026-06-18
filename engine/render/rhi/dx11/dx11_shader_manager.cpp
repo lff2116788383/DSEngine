@@ -424,6 +424,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     }
     pulse();
 
+    // ---- 仅深度 forward PBR 着色器 (B2b-4)：静态 forward_pbr.vert + 空 shadow.frag ----
+    forward_pbr_depth_shader_handle_ = CreateProgramFromDXBC(
+        kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,
+        kshadow_frag_dxbc, kshadow_frag_dxbc_size);
+    if (forward_pbr_depth_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward PBR depth shader created (DXBC): {}", forward_pbr_depth_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fpbrd_layout;
+        CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fpbrd_layout);
+        CreateInputLayoutForShader(forward_pbr_depth_shader_handle_, fpbrd_layout.data(),
+                                   static_cast<int>(fpbrd_layout.size()));
+    }
+    pulse();
+
     text_sdf_shader_handle_ = CreateProgramFromDXBC(
         ksprite_vert_dxbc, ksprite_vert_dxbc_size,
         ktext_sdf_frag_dxbc, ktext_sdf_frag_dxbc_size);

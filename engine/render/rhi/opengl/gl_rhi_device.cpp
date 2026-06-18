@@ -818,6 +818,28 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
     return readback;
 }
 
+RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
+    auto* rt = resource_mgr_.GetRenderTarget(render_target_handle);
+    if (!rt || !rt->desc.has_depth || rt->desc.width <= 0 || rt->desc.height <= 0) {
+        return {};
+    }
+
+    RenderTargetDepthReadback readback;
+    readback.width = rt->desc.width;
+    readback.height = rt->desc.height;
+    readback.depth.resize(static_cast<std::size_t>(rt->desc.width) * static_cast<std::size_t>(rt->desc.height), 1.0f);
+
+    GLint previous_fbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo_handle);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    // GL 经视口变换后深度落 [0,1]（与 DX/VK 经 GetProjectionCorrection 后一致）。
+    glReadPixels(0, 0, rt->desc.width, rt->desc.height, GL_DEPTH_COMPONENT, GL_FLOAT, readback.depth.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previous_fbo));
+
+    return readback;
+}
+
 // --- 着色器 ---
 
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
@@ -964,6 +986,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrInstanced:
             if (shader_mgr_.forward_pbr_instanced_shader_handle() == 0) shader_mgr_.InitForwardPbrInstancedShader();
             return shader_mgr_.forward_pbr_instanced_shader_handle();
+        case BuiltinProgram::ForwardPbrDepth:
+            if (shader_mgr_.forward_pbr_depth_shader_handle() == 0) shader_mgr_.InitForwardPbrDepthShader();
+            return shader_mgr_.forward_pbr_depth_shader_handle();
     }
     return 0;
 }

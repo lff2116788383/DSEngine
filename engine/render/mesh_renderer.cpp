@@ -355,6 +355,67 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
+void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
+                                 const std::vector<MeshVertex>& vertices,
+                                 const std::vector<uint16_t>& indices,
+                                 const glm::mat4& model,
+                                 const glm::mat4& view,
+                                 const glm::mat4& proj) {
+    if (vertices.empty() || indices.empty()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth);
+    if (program == 0) return;  // 该后端未提供 depth-only 内建着色器
+
+    EnsureResources(device);
+    if (!per_frame_ubo_) return;
+
+    // --- CPU 侧预变换顶点到世界空间（仅 position 影响深度；normal/tangent 复用以保持布局一致）---
+    const glm::mat3 model3 = glm::mat3(model);
+    std::vector<GpuMeshVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const MeshVertex& v = vertices[i];
+        const glm::vec3 wp = glm::vec3(model * glm::vec4(v.position, 1.0f));
+        const glm::vec3 wn = model3 * v.normal;
+        const glm::vec3 wt = model3 * v.tangent;
+        GpuMeshVertex& g = gpu_verts[i];
+        g.px = wp.x; g.py = wp.y; g.pz = wp.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = wn.x; g.ny = wn.y; g.nz = wn.z;
+        g.tx = wt.x; g.ty = wt.y; g.tz = wt.z;
+    }
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuMeshVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // --- 仅 PerFrame UBO（shadow.frag 空，不需 scene/material/纹理）---
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(0.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+    };
+
+    cmd.SetPipelineState(pso_);             // 写/测深度（Less）、背面剔除
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
+}
+
 void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
                                  const std::vector<MeshVertex>& vertices,
                                  const std::vector<uint16_t>& indices,

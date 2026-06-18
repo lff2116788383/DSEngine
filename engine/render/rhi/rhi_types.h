@@ -185,6 +185,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardPbr  = 4,  ///< 静态 forward PBR（forward_pbr.vert/.frag + PerFrame/PerScene/PerMaterial UBO + 5 纹理槽）
     ForwardPbrSkinned = 5,  ///< 蒙皮 forward PBR（forward_pbr_skinned.vert + forward_pbr.frag + 骨骼矩阵 SSBO\@set3.b0）
     ForwardPbrInstanced = 6,  ///< 硬件实例化 forward PBR（forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@set3.b0）
+    ForwardPbrDepth = 7,  ///< 仅深度 pass（forward_pbr.vert + shadow.frag 空片元；只写深度、不输出颜色，配 has_color=false RT）
 };
 
 /// 渲染通道描述符
@@ -199,6 +200,13 @@ struct RenderTargetReadback {
     int width = 0;
     int height = 0;
     std::vector<unsigned char> pixels;
+};
+
+/// 渲染目标深度回读结果（归一化深度 [0,1]，行优先；空 depth 表示该后端不支持或无深度附件）
+struct RenderTargetDepthReadback {
+    int width = 0;
+    int height = 0;
+    std::vector<float> depth;
 };
 
 // ============================================================

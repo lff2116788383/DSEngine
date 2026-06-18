@@ -141,6 +141,10 @@ public:
     void InitForwardPbrInstancedShader();
     unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
 
+    /// 初始化仅深度 forward PBR 着色器（B2b-4；forward_pbr.vert + 空 shadow.frag；只写深度、不输出颜色）
+    void InitForwardPbrDepthShader();
+    unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -243,6 +247,7 @@ private:
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
+    unsigned int forward_pbr_depth_shader_handle_ = 0;
 };
 
 } // namespace render
