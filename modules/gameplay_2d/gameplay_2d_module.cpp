@@ -16,6 +16,10 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     }
 
     physics2d_system_.Init(world);
+    // 注入 RhiDevice：2D sprite/UI/particle 渲染均经 SpriteBatchRenderer 通用原语路径。
+    sprite_render_system_.SetRhiDevice(rhi_device_);
+    ui_render_system_.SetRhiDevice(rhi_device_);
+    particle_system_.SetRhiDevice(rhi_device_);
 #ifdef DSE_ENABLE_SPINE
     spine_system_.SetAssetManager(asset_manager_);
 #endif
@@ -58,6 +62,10 @@ void Gameplay2DModule::RenderUI2D(World& world, CommandBuffer& cmd_buffer, int s
 }
 
 void Gameplay2DModule::OnShutdown(World& world) {
+    // 释放 SpriteBatchRenderer GPU 资源（须在 rhi_device_ 置空前）。
+    sprite_render_system_.Shutdown();
+    ui_render_system_.Shutdown();
+    particle_system_.Shutdown();
     audio_system_.Shutdown();
     physics2d_system_.Shutdown();
 #ifdef DSE_ENABLE_SPINE

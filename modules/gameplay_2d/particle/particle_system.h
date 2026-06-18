@@ -8,6 +8,7 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/sprite_batch_renderer.h"
 
 class Physics2DSystem;
 
@@ -34,6 +35,15 @@ public:
      * @param cmd_buffer 目标渲染命令缓冲
      */
     void Render(World& world, CommandBuffer& cmd_buffer);
+
+    /// 注入 RhiDevice（由所属模块在初始化时调用）。新 SpriteBatchRenderer 路径需要。
+    void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
+    /// 释放内部批渲染器 GPU 资源（模块关闭、device 仍有效时调用）。
+    void Shutdown() { if (rhi_device_) sprite_batch_.Shutdown(*rhi_device_); }
+
+private:
+    RhiDevice* rhi_device_ = nullptr;
+    dse::render::SpriteBatchRenderer sprite_batch_;
 };
 
 #endif

@@ -27,6 +27,9 @@ public:
         projection_ = projection;
     }
 
+    glm::mat4 GetViewMatrix() const override { return view_; }
+    glm::mat4 GetProjectionMatrix() const override { return projection_; }
+
     void SetGlobalMat4(const std::string& name, const glm::mat4& value) override {
         pending_mat4_[name] = value;
     }

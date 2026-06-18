@@ -119,7 +119,10 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
         return a.order_in_layer < b.order_in_layer;
     });
-    cmd_buffer.DrawSpriteBatch(items);
+    if (rhi_device_ && !items.empty()) {
+        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items,
+                           cmd_buffer.GetViewMatrix(), cmd_buffer.GetProjectionMatrix());
+    }
 }
 
 void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
@@ -229,7 +232,8 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
     // Orthographic projection matching screen pixels, origin at bottom-left
     glm::mat4 ortho = clip_correction * glm::ortho(0.0f, static_cast<float>(screen_width), 0.0f, static_cast<float>(screen_height), -1.0f, 1.0f);
     glm::mat4 view_mat = glm::mat4(1.0f);
-    
-    cmd_buffer.SetCamera(view_mat, ortho);
-    cmd_buffer.DrawSpriteBatch(items);
+
+    if (rhi_device_) {
+        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items, view_mat, ortho);
+    }
 }

@@ -41,6 +41,9 @@ public:
     virtual void EndRenderPass() = 0;
     virtual void SetPipelineState(unsigned int pipeline_state_handle) = 0;
     virtual void SetCamera(const glm::mat4& view, const glm::mat4& projection) = 0;
+    /// 返回 SetCamera 缓存的 view/projection（高层渲染器经通用原语绘制时取用）。
+    virtual glm::mat4 GetViewMatrix() const { return glm::mat4(1.0f); }
+    virtual glm::mat4 GetProjectionMatrix() const { return glm::mat4(1.0f); }
     virtual void DrawMeshBatch(const std::vector<MeshDrawItem>& items) = 0;
     virtual void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) = 0;
     virtual void ClearColor(const glm::vec4& color) = 0;

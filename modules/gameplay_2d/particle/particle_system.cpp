@@ -257,7 +257,8 @@ void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
     }
     
-    if (!items.empty()) {
-        cmd_buffer.DrawSpriteBatch(items);
+    if (rhi_device_ && !items.empty()) {
+        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items,
+                           cmd_buffer.GetViewMatrix(), cmd_buffer.GetProjectionMatrix());
     }
 }
