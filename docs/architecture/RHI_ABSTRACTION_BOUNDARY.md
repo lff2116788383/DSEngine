@@ -147,19 +147,20 @@
 | D2 | **`BindShaderProgram` 与 PSO 分离**（契约 §8.1） | Metal/DX12/Vulkan 把 shader 烘进 PSO，未来落 Metal 要返工 | B5 聚合为图形管线对象 |
 | D3 | **过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`、`PushConstantsMat4` 未泛化为 `PushConstants(stage,off,data,size)` | 两套写法并存，需纪律 | 迁移收尾 / B5 清理 |
 | D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
-| D5 | **每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO） | 为满足 Vulkan 生命周期牺牲了跨系统合批与显存复用 | 可用**共享 frame-ring 分配器**优化（见 8.3） |
+| D5 | ~~**每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO）→ 共享 frame-ring 分配器~~ | **复评后降级**：3 系统用不同相机/不同 pass（sprite=world、UI=ortho、particle），本无跨系统合批可言；显存节省也微小。原「优化」收益≈0 | 不单独做；真正问题见 D9 |
+| D9 | **sprite 动态缓冲单缓冲，但引擎 2 帧在飞**（`MAX_FRAMES_IN_FLIGHT=2`）：`SpriteBatchRenderer` 每帧 `UpdateGpuBuffer` 覆写同一 `vbo_/ubo_/fx_ubos_`，而 `AcquireNextImage` 的 fence 只保证 N-2 帧完成 → 帧 N+1 可能在帧 N 仍被 GPU 读取时覆写。mesh 执行器已用 `MAX_FRAMES` 双缓冲规避，sprite 没有 | 真机 2 帧在飞下的潜在竞争（软渲掩盖，呼应 D7）；测试走离屏+fence 等待故不暴露 | **建议**：把 mesh 执行器既有的「每在飞帧缓冲」抽成可复用 helper，B2b 的 MeshRenderer 落地时一并做，再回填 sprite。非阻塞 |
 | D6 | **`CommandBuffer::GetView/GetProjectionMatrix()`** 把相机状态缓存在命令缓冲上 | 概念上相机属 frame/scene context，轻微耦合泄漏 | 引入 FrameContext 时收敛 |
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
 | D8 | **契约把 SSBO 排 B4，但 B2b(mesh) 先需 SSBO** | 路线图顺序自相矛盾，B2b 被阻塞 | §5 三方向之一，待定 |
 
 ### 8.3 优化空间（非阻塞，按收益排序）
-1. **共享 frame-ring buffer 分配器**：所有高层渲染器（sprite 现 3 实例 + 未来 mesh/particle）共用一个按帧环形复用的动态顶点/UBO 池，解决 D5 的显存与合批问题，同时天然满足 Vulkan「提交前不复用」约束。
+1. **可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）：把 mesh 执行器既有的 `MAX_FRAMES` 双缓冲模式抽成小工具，按 `current_frame_index_` 轮转动态顶点/UBO，满足 2 帧在飞的「提交前不覆写」约束。B2b 的 MeshRenderer 必然需要它，落地时一并做，再回填 sprite。
 2. ~~**shader 注册表**（解 D4）~~ → **已落地**：`RhiDevice::GetBuiltinProgram(BuiltinProgram)` 取代逐 program 访问器。
 3. **bind group / argument buffer**（契约 §2.3）：把 PerFrame/PerScene/PerMaterial + 多纹理打成一次绑定，减少状态切换；为 Metal/DX12 铺路。
 4. **实例化/间接绘制原语**随 B2b/B3 落地（新增重载，不改现签名）。
 
 ### 8.4 结论
 - **合理**：是；增量、可回归、债务显式。
-- **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；D5（frame-ring 分配器）进行中。
+- **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；原 D5（共享分配器）经复评收益≈0 已降级，真正问题是 D9（sprite 单缓冲 vs 2 帧在飞），建议随 B2b 抽「每在飞帧缓冲」helper 一并解决。
 - **最佳？**：是「低风险务实最优」，非「理论最优」（后者是 bind group + program/PSO 聚合的一次性大改）。
 - **技术债**：未隐藏，8.2 全部登记并各有偿还阶段；唯一需即时决策的是 D8（B2b 的 SSBO 顺序）。
