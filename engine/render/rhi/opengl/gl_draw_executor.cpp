@@ -517,6 +517,17 @@ void GLDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_ha
     }
 }
 
+void GLDrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                           uint32_t offset, uint32_t size) {
+    // 图形阶段 SSBO 绑定到 GL_SHADER_STORAGE_BUFFER 的 binding=slot；size!=0 绑定子区间。
+    if (size == 0) {
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, slot, buffer_handle);
+    } else {
+        glBindBufferRange(GL_SHADER_STORAGE_BUFFER, slot, buffer_handle,
+                          static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(size));
+    }
+}
+
 void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     glBindVertexArray(prim_vao_handle_.raw());
     const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;

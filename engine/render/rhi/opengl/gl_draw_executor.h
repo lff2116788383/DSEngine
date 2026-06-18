@@ -103,6 +103,8 @@ public:
     void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
     void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
+    void PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
     void PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---

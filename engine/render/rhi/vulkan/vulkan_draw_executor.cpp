@@ -2517,6 +2517,12 @@ void VulkanDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffe
     prim_ubos_[slot] = buffer_handle;
 }
 
+void VulkanDrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                               uint32_t offset, uint32_t size) {
+    // 契约 slot 暂存，PrimDrawIndexed* 时映射到第 N 个 STORAGE_BUFFER binding（offset/size 走 range）。
+    prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size};
+}
+
 void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
     VkCommandBuffer cmd_buf,
     const VulkanShaderProgram* program,
@@ -2566,8 +2572,9 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
     writes.reserve(sorted.size());
     std::vector<std::tuple<size_t, bool, size_t>> fixups;  // <write_idx, is_image, pool_base>
 
-    uint32_t ubo_slot = 0;  // 契约 BindUniformBuffer slot 计数（按 binding 升序）
-    uint32_t tex_slot = 0;  // 契约 BindTexture slot 计数（按 binding 升序）
+    uint32_t ubo_slot = 0;   // 契约 BindUniformBuffer slot 计数（按 binding 升序）
+    uint32_t tex_slot = 0;   // 契约 BindTexture slot 计数（按 binding 升序）
+    uint32_t ssbo_slot = 0;  // 契约 BindStorageBuffer slot 计数（按 binding 升序）
 
     for (const auto& b : sorted) {
         if (b.set >= set_count) continue;
@@ -2607,10 +2614,23 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
             writes.push_back(w);
             ++tex_slot;
         } else if (b.type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER) {
+            VkDescriptorBufferInfo info = dummy_ssbo_info;
+            auto it = prim_ssbos_.find(ssbo_slot);
+            if (it != prim_ssbos_.end()) {
+                const VulkanBuffer* sb = resource_mgr.GetSSBO(it->second.handle);
+                if (sb && sb->buffer) {
+                    info.buffer = sb->buffer;
+                    info.offset = it->second.offset;
+                    info.range = (it->second.size != 0)
+                        ? it->second.size
+                        : (sb->size - it->second.offset);
+                }
+            }
             size_t base = buf_pool.size();
-            buf_pool.push_back(dummy_ssbo_info);
+            buf_pool.push_back(info);
             fixups.push_back({writes.size(), false, base});
             writes.push_back(w);
+            ++ssbo_slot;
         } else {
             // 其它类型 (storage image / sampled image 等) v1 暂用 dummy ubo 占位，避免未初始化描述符。
             size_t base = buf_pool.size();

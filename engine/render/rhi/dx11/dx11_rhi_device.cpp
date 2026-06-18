@@ -155,6 +155,12 @@ void DX11CommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_han
     device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
 }
 
+void DX11CommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                          uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle, offset, size);
+}
+
 void DX11CommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     if (!device_) return;
     device_->draw_executor().PrimDrawIndexed(index_count, first_index, base_vertex,

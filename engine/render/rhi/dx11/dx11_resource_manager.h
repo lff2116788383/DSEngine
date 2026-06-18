@@ -83,6 +83,8 @@ struct DX11SSBO {
     ComPtr<ID3D11UnorderedAccessView> uav;
     size_t size = 0;
     size_t stride = 0; // 结构体步长（element size for StructuredBuffer）
+    /// 图形阶段子区间 RAW SRV 缓存：key=(uint64_t)offset<<32 | size（字节），整块绑定走 srv。
+    std::unordered_map<uint64_t, ComPtr<ID3D11ShaderResourceView>> range_srvs;
 };
 
 /// D3D11 顶点数组模拟（InputLayout + Buffer 绑定组合）
@@ -137,6 +139,8 @@ public:
     void BindSSBOForCompute(unsigned int handle, unsigned int binding_point, bool writable);
     void DeleteSSBO(unsigned int handle);
     const DX11SSBO* GetSSBO(unsigned int handle) const;
+    /// 图形阶段子区间 SSBO SRV（offset/size 字节，RAW BufferEx）。offset==0&&size==0 时返回整块 srv。
+    ID3D11ShaderResourceView* GetSSBORangeSRV(unsigned int handle, uint32_t offset, uint32_t size);
     void set_ssbo_register_base(unsigned int base) { ssbo_register_base_ = base; }
 
     // --- 渲染目标 ---

@@ -571,6 +571,34 @@ const DX11SSBO* DX11ResourceManager::GetSSBO(unsigned int handle) const {
     return it != ssbos_.end() ? &it->second : nullptr;
 }
 
+ID3D11ShaderResourceView* DX11ResourceManager::GetSSBORangeSRV(unsigned int handle,
+                                                              uint32_t offset, uint32_t size) {
+    auto it = ssbos_.find(handle);
+    if (it == ssbos_.end()) return nullptr;
+    DX11SSBO& ssbo = it->second;
+    if (offset == 0 && size == 0) return ssbo.srv.Get();  // 整块绑定
+
+    // RAW BufferEx 按 4 字节元素寻址；子区间 SRV 按 (offset,size) 缓存。
+    const uint64_t key = (static_cast<uint64_t>(offset) << 32) | static_cast<uint64_t>(size);
+    auto cached = ssbo.range_srvs.find(key);
+    if (cached != ssbo.range_srvs.end()) return cached->second.Get();
+
+    const uint32_t range_bytes = (size != 0) ? size : (static_cast<uint32_t>(ssbo.size) - offset);
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+    srv_desc.BufferEx.FirstElement = offset / 4;
+    srv_desc.BufferEx.NumElements = range_bytes / 4;
+    srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+
+    ComPtr<ID3D11ShaderResourceView> srv;
+    HRESULT hr = device_->CreateShaderResourceView(ssbo.buffer.Get(), &srv_desc, srv.GetAddressOf());
+    if (FAILED(hr)) return ssbo.srv.Get();  // 退回整块，避免空绑定
+    ID3D11ShaderResourceView* raw = srv.Get();
+    ssbo.range_srvs.emplace(key, std::move(srv));
+    return raw;
+}
+
 // ============================================================
 // 渲染目标
 // ============================================================

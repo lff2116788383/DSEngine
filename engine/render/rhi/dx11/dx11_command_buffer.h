@@ -50,6 +50,8 @@ public:
     void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) override;
     void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
                            uint32_t offset, uint32_t size) override;
+    void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                           uint32_t offset, uint32_t size) override;
     void DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) override;
 
     // --- 通用绘制原语 (B2b 前置) ---

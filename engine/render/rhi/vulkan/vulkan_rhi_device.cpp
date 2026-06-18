@@ -125,6 +125,12 @@ void VulkanCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_h
     device_->draw_executor().PrimBindUniformBuffer(slot, buffer_handle, offset, size);
 }
 
+void VulkanCommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                            uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->draw_executor().PrimBindStorageBuffer(slot, buffer_handle, offset, size);
+}
+
 void VulkanCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().PrimDrawIndexed(

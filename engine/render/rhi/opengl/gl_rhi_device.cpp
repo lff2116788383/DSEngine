@@ -235,6 +235,12 @@ void OpenGLCommandBuffer::BindUniformBuffer(uint32_t slot, unsigned int buffer_h
     device_->RealBindUniformBuffer(slot, buffer_handle, offset, size);
 }
 
+void OpenGLCommandBuffer::BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                            uint32_t offset, uint32_t size) {
+    if (!device_) return;
+    device_->RealBindStorageBuffer(slot, buffer_handle, offset, size);
+}
+
 void OpenGLCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     if (!device_) return;
     device_->RealDrawIndexed(index_count, first_index, base_vertex);
@@ -916,6 +922,10 @@ void OpenGLRhiDevice::RealBindTexture(uint32_t slot, unsigned int texture_handle
 
 void OpenGLRhiDevice::RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) {
     draw_executor_.PrimBindUniformBuffer(slot, buffer_handle, offset, size);
+}
+
+void OpenGLRhiDevice::RealBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) {
+    draw_executor_.PrimBindStorageBuffer(slot, buffer_handle, offset, size);
 }
 
 void OpenGLRhiDevice::RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {

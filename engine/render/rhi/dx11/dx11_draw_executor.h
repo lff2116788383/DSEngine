@@ -136,6 +136,8 @@ public:
     void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
     void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
+    void PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
     void PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
                          DX11ShaderManager& shader_mgr,
                          DX11ResourceManager& resource_mgr);
@@ -283,6 +285,8 @@ private:
     DXGI_FORMAT prim_index_format_ = DXGI_FORMAT_R16_UINT;  ///< 索引格式
     std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< slot → 2D 纹理句柄
     std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< slot → constant buffer 句柄
+    struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
+    std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< slot → SSBO 句柄+子区间
 
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;

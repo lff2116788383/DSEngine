@@ -129,6 +129,8 @@ public:
     void PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
     void PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
                                uint32_t offset, uint32_t size);
+    void PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                               uint32_t offset, uint32_t size);
     void PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index_count, uint32_t first_index,
                          int32_t base_vertex,
                          VulkanPipelineStateManager& pipeline_mgr,
@@ -415,6 +417,8 @@ private:
     VkIndexType prim_index_type_ = VK_INDEX_TYPE_UINT16;   ///< 索引类型
     std::unordered_map<uint32_t, unsigned int> prim_textures_;  ///< 契约 slot → 2D 纹理句柄
     std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< 契约 slot → UBO 句柄
+    struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
+    std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< 契约 slot → SSBO 句柄+子区间
 
 };
 

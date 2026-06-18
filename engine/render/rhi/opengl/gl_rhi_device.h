@@ -186,6 +186,7 @@ public:
     void RealBindIndexBuffer(unsigned int buffer_handle, IndexType type);
     void RealBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
     void RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
+    void RealBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
     void RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---

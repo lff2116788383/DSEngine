@@ -1166,6 +1166,12 @@ void DX11DrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_
     prim_ubos_[slot] = buffer_handle;
 }
 
+void DX11DrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                             uint32_t offset, uint32_t size) {
+    // SSBO(ByteAddressBuffer SRV) 映射到 t<slot>；offset/size!=0 走子区间 SRV。
+    prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size};
+}
+
 void DX11DrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
                                        DX11ShaderManager& shader_mgr,
                                        DX11ResourceManager& resource_mgr) {
@@ -1205,6 +1211,15 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         if (tex) {
             dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
             dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+        }
+    }
+
+    // 图形阶段 SSBO 按 slot → t<slot>，VS+PS 同绑（PS 未用则无害）。
+    for (const auto& [slot, b] : prim_ssbos_) {
+        ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
+        if (srv) {
+            dc->VSSetShaderResources(slot, 1, &srv);
+            dc->PSSetShaderResources(slot, 1, &srv);
         }
     }
 

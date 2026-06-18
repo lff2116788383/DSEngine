@@ -107,6 +107,14 @@ public:
                                    uint32_t offset = 0, uint32_t size = 0) {
         (void)slot; (void)buffer_handle; (void)offset; (void)size;
     }
+    /// 绑定图形阶段 storage buffer (SSBO) 到指定 slot（offset/size=0 表示整个 buffer，
+    /// 非 0 表示绑定子区间，蒙皮/实例数据按 item 偏移取用）。
+    /// GL→glBindBufferBase/Range(GL_SHADER_STORAGE_BUFFER)；DX11→StructuredBuffer SRV→t-register(VS/PS)；
+    /// Vulkan→VK_DESCRIPTOR_TYPE_STORAGE_BUFFER descriptor。
+    virtual void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                   uint32_t offset = 0, uint32_t size = 0) {
+        (void)slot; (void)buffer_handle; (void)offset; (void)size;
+    }
     /// 索引绘制
     virtual void DrawIndexed(uint32_t index_count, uint32_t first_index = 0,
                              int32_t base_vertex = 0) {
