@@ -96,12 +96,6 @@ public:
     void EndRenderPass();
 
     // --- 绘制命令 ---
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items,
-                          const glm::mat4& view, const glm::mat4& projection,
-                          DX11PipelineStateManager& pipeline_mgr,
-                          DX11ShaderManager& shader_mgr,
-                          DX11ResourceManager& resource_mgr);
-
     void DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                         const glm::mat4& view, const glm::mat4& projection,
                         DX11PipelineStateManager& pipeline_mgr,

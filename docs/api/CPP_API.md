@@ -488,9 +488,7 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 | `BeginRenderPass(desc)` / `EndRenderPass()` | 渲染 Pass 边界 |
 | `SetPipelineState(handle)` | 设置管线状态 |
 | `SetCamera(view, proj)` | 设置相机矩阵 |
-| `DrawBatch(items)` | 绘制 2D 批次 |
 | `DrawMeshBatch(items)` | 绘制 3D 网格批次 |
-| `DrawSpriteBatch(items)` | 绘制精灵批次 |
 | `DrawPostProcess(src, effect, params)` | 后处理 |
 | `DrawParticles3D(items, view, proj)` | 绘制 3D 粒子 |
 | `DrawHairStrands(items, view, proj)` | 绘制毛发 |

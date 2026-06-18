@@ -221,21 +221,6 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     cmd.DrawMeshBatch(items);
 }
 
-// 测试 打开GL命令缓冲区：无设备当绘制精灵批次安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
-    OpenGLCommandBuffer cmd;
-    std::vector<SpriteDrawItem> items;
-    items.emplace_back();
-    cmd.DrawSpriteBatch(items);
-}
-
-// 测试 打开GL命令缓冲区：无设备当绘制精灵批次空安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
-    OpenGLCommandBuffer cmd;
-    std::vector<SpriteDrawItem> items;
-    cmd.DrawSpriteBatch(items);
-}
-
 // 测试 打开GL命令缓冲区：无设备当绘制后期处理安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     OpenGLCommandBuffer cmd;

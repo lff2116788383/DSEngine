@@ -188,11 +188,6 @@ void OpenGLCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) 
     device_->RealSubmitDrawMeshBatch(items, view_, projection_);
 }
 
-void OpenGLCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
-    if (!device_ || items.empty()) return;
-    device_->RealSubmitDrawSpriteBatch(items, view_, projection_);
-}
-
 void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     device_->RealClearColor(color);
@@ -862,10 +857,6 @@ void OpenGLRhiDevice::RealEndRenderPass() {
 
 void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     state_mgr_.ApplyState(pipeline_state_handle);
-}
-
-void OpenGLRhiDevice::RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    draw_executor_.DrawBatch(items, view, projection, state_mgr_, shader_mgr_, ubo_mgr_);
 }
 
 void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {

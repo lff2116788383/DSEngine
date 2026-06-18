@@ -69,13 +69,6 @@ public:
     void ClearColor(const glm::vec4& color);
 
     // --- 绘制命令 ---
-    void DrawBatch(const std::vector<SpriteDrawItem>& items,
-                    const glm::mat4& view,
-                    const glm::mat4& projection,
-                    GLPipelineStateManager& state_mgr,
-                    GLShaderManager& shader_mgr,
-                    UBOManager& ubo_mgr);
-
     void DrawMeshBatch(const std::vector<MeshDrawItem>& items,
                          const glm::mat4& view,
                          const glm::mat4& projection,

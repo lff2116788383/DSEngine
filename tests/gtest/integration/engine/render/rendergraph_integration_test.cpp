@@ -42,7 +42,6 @@ public:
     MOCK_METHOD(void, SetPipelineState, (unsigned int), (override));
     MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DrawMeshBatch, (const std::vector<MeshDrawItem>&), (override));
-    MOCK_METHOD(void, DrawSpriteBatch, (const std::vector<SpriteDrawItem>&), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));

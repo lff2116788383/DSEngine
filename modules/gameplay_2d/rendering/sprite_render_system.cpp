@@ -145,7 +145,7 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
             parent_h * ui.anchor_min.y
         );
 
-        // 2. Convert authoring position/pivot into the quad center expected by DrawSpriteBatch.
+        // 2. Convert authoring position/pivot into the quad center expected by SpriteBatchRenderer.
         glm::vec2 pivot_to_center = glm::vec2(
             ui.size.x * (0.5f - ui.pivot.x),
             ui.size.y * (0.5f - ui.pivot.y)

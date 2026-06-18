@@ -60,13 +60,6 @@ void VulkanCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) 
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void VulkanCommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
-    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->draw_executor().DrawSpriteBatch(
-        vk_command_buffer_, items, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
     // Vulkan 中清除在 BeginRenderPass 时通过 VkClearValue 处理
     // 此处为空操作，或在已开启 RenderPass 时用 vkCmdClearAttachments

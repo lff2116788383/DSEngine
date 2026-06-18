@@ -288,27 +288,12 @@ TEST(VulkanCommandBufferTest, AlluniformAndClear) {
     EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
-// 测试 Vulkan命令缓冲区：无设备当绘制精灵批次空安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchEmptySafety) {
-    VulkanCommandBuffer cmd;
-    std::vector<SpriteDrawItem> items;
-    cmd.DrawSpriteBatch(items);
-}
-
 // 测试 Vulkan命令缓冲区：无设备当绘制网格批次安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     VulkanCommandBuffer cmd;
     std::vector<MeshDrawItem> items;
     items.emplace_back();
     cmd.DrawMeshBatch(items);
-}
-
-// 测试 Vulkan命令缓冲区：无设备当绘制精灵批次安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawSpriteBatchSafety) {
-    VulkanCommandBuffer cmd;
-    std::vector<SpriteDrawItem> items;
-    items.emplace_back();
-    cmd.DrawSpriteBatch(items);
 }
 
 // 测试 Vulkan命令缓冲区：无设备当开始结束渲染通道安全

@@ -50,12 +50,6 @@ void DX11CommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void DX11CommandBuffer::DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) {
-    if (!device_ || items.empty()) return;
-    device_->draw_executor().DrawSpriteBatch(items, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     ID3D11DeviceContext* dc = device_->context().device_context();

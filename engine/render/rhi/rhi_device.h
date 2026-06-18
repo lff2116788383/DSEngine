@@ -45,7 +45,6 @@ public:
     virtual glm::mat4 GetViewMatrix() const { return glm::mat4(1.0f); }
     virtual glm::mat4 GetProjectionMatrix() const { return glm::mat4(1.0f); }
     virtual void DrawMeshBatch(const std::vector<MeshDrawItem>& items) = 0;
-    virtual void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) = 0;
     virtual void ClearColor(const glm::vec4& color) = 0;
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;

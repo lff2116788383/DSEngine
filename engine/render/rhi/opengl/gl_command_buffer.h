@@ -30,7 +30,6 @@ public:
     void EndRenderPass() override;
     void SetPipelineState(unsigned int pipeline_state_handle) override;
     void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
     void DrawPostProcess(PostProcessRequest request) override;
     void DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;

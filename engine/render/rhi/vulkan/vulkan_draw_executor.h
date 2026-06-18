@@ -86,13 +86,6 @@ public:
                                       VulkanResourceManager& resource_mgr);
 
     // --- 绘制命令（录制到 VkCommandBuffer） ---
-    void DrawSpriteBatch(VkCommandBuffer cmd_buf,
-                          const std::vector<SpriteDrawItem>& items,
-                          const glm::mat4& view,
-                          const glm::mat4& projection,
-                          VulkanPipelineStateManager& pipeline_mgr,
-                          VulkanShaderManager& shader_mgr,
-                          VulkanResourceManager& resource_mgr);
 
     void DrawMeshBatch(VkCommandBuffer cmd_buf,
                         const std::vector<MeshDrawItem>& items,

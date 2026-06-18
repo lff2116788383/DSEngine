@@ -25,7 +25,6 @@ public:
     void SetPipelineState(unsigned int) override {}
     void SetCamera(const glm::mat4&, const glm::mat4&) override {}
     void DrawMeshBatch(const std::vector<MeshDrawItem>&) override {}
-    void DrawSpriteBatch(const std::vector<SpriteDrawItem>&) override {}
     void ClearColor(const glm::vec4&) override {}
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
     void SetGlobalMat4Array(const std::string&, const std::vector<glm::mat4>&) override {}

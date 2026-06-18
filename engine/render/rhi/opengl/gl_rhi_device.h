@@ -170,7 +170,6 @@ public:
     void RealEndRenderPass();
     void RealSetPipelineState(unsigned int pipeline_state_handle);
     void RealClearColor(const glm::vec4& color);
-    void RealSubmitDrawSpriteBatch(const std::vector<SpriteDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawPostProcess(const PostProcessRequest& request);
     void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
