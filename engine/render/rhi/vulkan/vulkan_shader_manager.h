@@ -129,6 +129,10 @@ public:
     unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
     unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
 
+    /// 初始化静态 forward PBR 着色器（B2b-1；PerFrame\@0/PerScene\@1/PerMaterial\@2 + 5 纹理槽）
+    void InitForwardPbrShader();
+    unsigned int forward_pbr_shader_handle() const { return forward_pbr_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -228,6 +232,7 @@ private:
     unsigned int sprite2d_shader_handle_ = 0;
     unsigned int sprite_fx_sdf_shader_handle_ = 0;
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
+    unsigned int forward_pbr_shader_handle_ = 0;
 };
 
 } // namespace render

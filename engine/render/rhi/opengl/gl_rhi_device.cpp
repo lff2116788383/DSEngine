@@ -955,6 +955,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::SpriteFxVfx:
             if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) shader_mgr_.InitSpriteFxVfxShader();
             return shader_mgr_.sprite_fx_vfx_shader_handle();
+        case BuiltinProgram::ForwardPbr:
+            if (shader_mgr_.forward_pbr_shader_handle() == 0) shader_mgr_.InitForwardPbrShader();
+            return shader_mgr_.forward_pbr_shader_handle();
     }
     return 0;
 }

@@ -58,6 +58,8 @@
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
 #include "embed/sprite2d_frag.gen.h"
+#include "embed/forward_pbr_vert.gen.h"
+#include "embed/forward_pbr_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -83,6 +85,8 @@
 #include "embed/sprite_vert_reflect.gen.h"
 #include "embed/sprite_frag_reflect.gen.h"
 #include "embed/sprite2d_vert_reflect.gen.h"
+#include "embed/forward_pbr_vert_reflect.gen.h"
+#include "embed/forward_pbr_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -660,6 +664,33 @@ void GLShaderManager::InitSprite2DShader() {
         glUniform1i(sprite2d_locations_.texture, 0);
     }
     glUseProgram(0);
+}
+
+void GLShaderManager::InitForwardPbrShader() {
+    if (forward_pbr_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    forward_pbr_shader_handle_ = CompileProgram(DSE_SL(kforward_pbr_vert), DSE_SL(kforward_pbr_frag));
+    if (forward_pbr_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward PBR shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    // UBO block 绑定（reflection 驱动）：PerFrame\@0 / PerScene\@1 / PerMaterial\@2。
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_pbr_shader_handle_, kforward_pbr_vert_reflection);
+    BindUBOsFromReflection(forward_pbr_shader_handle_, kforward_pbr_frag_reflection);
+
+    // 纹理 sampler 一次性绑定到 flat unit（按 (set,binding) 排序：
+    // u_texture=0 / u_normal_map=1 / u_metallic_roughness_map=2 / u_emissive_map=3 / u_occlusion_map=4）。
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kforward_pbr_frag_reflection, tex_entries);
+        glUseProgram(forward_pbr_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_pbr_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
 }
 
 void GLShaderManager::InitSpriteFxSdfShader() {

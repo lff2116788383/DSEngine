@@ -417,6 +417,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Sprite2D:    return shader_mgr_.sprite2d_shader_handle();
         case BuiltinProgram::SpriteFxSdf: return shader_mgr_.sprite_fx_sdf_shader_handle();
         case BuiltinProgram::SpriteFxVfx: return shader_mgr_.sprite_fx_vfx_shader_handle();
+        case BuiltinProgram::ForwardPbr:  return shader_mgr_.forward_pbr_shader_handle();
     }
     return 0;
 }

@@ -11,6 +11,8 @@
 #include "engine/render/shaders/generated/embed/sprite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_frag.gen.h"
+#include "engine/render/shaders/generated/embed/forward_pbr_vert.gen.h"
+#include "engine/render/shaders/generated/embed/forward_pbr_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_sdf_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vfx_frag.gen.h"
@@ -67,6 +69,7 @@
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/forward_pbr_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert_reflect.gen.h"
@@ -372,6 +375,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(ksprite2d_vert_reflection, sprite2d_layout);
         CreateInputLayoutForShader(sprite2d_shader_handle_, sprite2d_layout.data(),
                                    static_cast<int>(sprite2d_layout.size()));
+    }
+    pulse();
+
+    // ---- 静态 forward PBR 着色器 (B2b-1) ----
+    forward_pbr_shader_handle_ = CreateProgramFromDXBC(
+        kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,
+        kforward_pbr_frag_dxbc, kforward_pbr_frag_dxbc_size);
+    if (forward_pbr_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward PBR shader created (DXBC): {}", forward_pbr_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fpbr_layout;
+        CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fpbr_layout);
+        CreateInputLayoutForShader(forward_pbr_shader_handle_, fpbr_layout.data(),
+                                   static_cast<int>(fpbr_layout.size()));
     }
     pulse();
 

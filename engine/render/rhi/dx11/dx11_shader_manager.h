@@ -123,6 +123,8 @@ public:
     /// SpriteBatchRenderer SDF/VFX 路径着色器（sprite_fx.vert + sprite_fx_{sdf,vfx}.frag）
     unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
     unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
+    /// 静态 forward PBR 着色器句柄（B2b-1；PerFrame\@b0/PerScene\@b1/PerMaterial\@b2 + 5 纹理槽 t0..t4）
+    unsigned int forward_pbr_shader_handle() const { return forward_pbr_shader_handle_; }
 
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
@@ -150,6 +152,7 @@ private:
     unsigned int sprite2d_shader_handle_ = 0;
     unsigned int sprite_fx_sdf_shader_handle_ = 0;
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
+    unsigned int forward_pbr_shader_handle_ = 0;
 
 };
 
