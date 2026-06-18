@@ -149,6 +149,29 @@ public:
                        const MeshMaterial& material,
                        const DirectionalLight& light);
 
+    /// 记录一次 GPU-driven 间接实例化 PBR 网格绘制（B2b-5）。语义同 DrawInstanced（每实例 model
+    /// 走 instance SSBO\@slot 0，VS 按 gl_InstanceIndex 取出，复用 ForwardPbrInstanced），区别在于
+    /// 绘制参数（index/instance count）来自 GPU 端 indirect buffer，经 CommandBuffer::DrawIndexedIndirect
+    /// 发起——可由 compute 剔除/LOD pass 在 GPU 上回写 instance_count（写 0 即 culled）。
+    /// 契约：DX11 SV_InstanceID 始终从 0 起，base_instance 偏移须经 SSBO 偏移表达（RHI_PRIMITIVE_CONTRACT §6），
+    /// 故内部 indirect command 的 base_instance 恒 0、配 0 基 SSBO 索引。
+    /// @param vertices         局部空间顶点（所有实例共享）
+    /// @param indices          16 位索引
+    /// @param instance_models  每实例 model 矩阵（世界空间），实例数 = size()
+    /// @param view/proj        相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos       世界空间相机位置
+    /// @param material         材质参数 + 纹理（所有实例共享）
+    /// @param light            单方向光
+    void DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
+                      const std::vector<MeshVertex>& vertices,
+                      const std::vector<uint16_t>& indices,
+                      const std::vector<glm::mat4>& instance_models,
+                      const glm::mat4& view,
+                      const glm::mat4& proj,
+                      const glm::vec3& camera_pos,
+                      const MeshMaterial& material,
+                      const DirectionalLight& light);
+
     /// 记录一次仅深度绘制（B2b-4 shadow / depth-only）。顶点在 CPU 侧预变换到世界空间，
     /// VS 仅施 vp（复用静态 forward_pbr.vert + 空 shadow.frag）；只写深度、不输出颜色，
     /// 须配 has_color=false / has_depth=true 的渲染目标。用于 shadow map / depth pre-pass。
@@ -172,6 +195,7 @@ private:
     void EnsureIndexCapacity(RhiDevice& device, size_t index_bytes);
     void EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes);
     void EnsureInstanceCapacity(RhiDevice& device, size_t instance_bytes);
+    void EnsureIndirectBuffer(RhiDevice& device);
 
     unsigned int pso_ = 0;
     unsigned int white_tex_ = 0;
@@ -182,6 +206,7 @@ private:
     BufferHandle per_material_ubo_;
     BufferHandle bone_ssbo_;
     BufferHandle instance_ssbo_;
+    BufferHandle indirect_buffer_;  ///< GPU-driven 间接绘制命令缓冲（B2b-5，单条 DrawElementsIndirectCommand）
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
     size_t bone_ssbo_capacity_ = 0;

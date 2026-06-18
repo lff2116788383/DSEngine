@@ -59,6 +59,9 @@ public:
                               uint32_t first_index, int32_t base_vertex,
                               uint32_t first_instance) override;
 
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) override;
+
     /// 重置命令缓冲状态
     void Reset();
 

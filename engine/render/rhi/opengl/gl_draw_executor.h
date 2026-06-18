@@ -112,6 +112,12 @@ public:
                                   uint32_t first_index, int32_t base_vertex,
                                   uint32_t first_instance);
 
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    // 间接绘制在 OpenGLRhiDevice::RealDrawIndexedIndirect 里发起（pfn_glMultiDrawElementsIndirect
+    // 解析在 device 端），但须复用本执行器记录的 prim VAO（含 VBO 属性 + EBO）与索引元素类型。
+    unsigned int PrimVaoHandle() const { return prim_vao_handle_.raw(); }
+    unsigned int PrimIndexType() const { return prim_index_type_; }
+
     // --- 渲染统计 ---
     void BeginFrame();
     void EndFrame();

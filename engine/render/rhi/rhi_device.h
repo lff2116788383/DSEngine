@@ -135,6 +135,23 @@ public:
         (void)index_count; (void)instance_count; (void)first_index;
         (void)base_vertex; (void)first_instance;
     }
+
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    // 由 mesh（GPU-driven indirect）倒推。绘制参数（index/instance count、偏移）来自
+    // GPU 端 indirect buffer，而非 CPU 立即数——可由 compute 剔除/LOD pass 在 GPU 上写入。
+    // 默认空实现，未实现的后端/Mock 仍可编译。
+
+    /// 间接索引绘制：从 indirect_buffer 的 byte_offset 处读取一条
+    /// DrawElementsIndirectCommand{count, instance_count, first_index, base_vertex, base_instance}
+    /// 发起一次索引实例化绘制。三后端原语对齐：
+    /// GL→glMultiDrawElementsIndirect(draw_count=1) / Vulkan→vkCmdDrawIndexedIndirect /
+    /// DX11→DrawIndexedInstancedIndirect（args 布局三端一致，均 5×uint32）。
+    /// 契约同 DrawIndexedInstanced：DX11 的 SV_InstanceID 仍从 0 起，base_instance 偏移须经
+    /// SSBO 偏移表达，不能靠 base_instance 取数（见 RHI_PRIMITIVE_CONTRACT.md §6）。
+    /// indirect_buffer 须经 CreateGpuBuffer(GpuBufferUsage::kIndirect) 创建。
+    virtual void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset = 0) {
+        (void)indirect_buffer; (void)byte_offset;
+    }
 };
 
 /**

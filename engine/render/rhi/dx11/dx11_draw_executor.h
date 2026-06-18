@@ -148,6 +148,11 @@ public:
                                   DX11ShaderManager& shader_mgr,
                                   DX11ResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    void PrimDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset,
+                                 DX11ShaderManager& shader_mgr,
+                                 DX11ResourceManager& resource_mgr);
+
     void DispatchCompute(unsigned int cs_handle,
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,

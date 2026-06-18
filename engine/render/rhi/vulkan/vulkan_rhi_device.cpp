@@ -147,6 +147,13 @@ void VulkanCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t in
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
+void VulkanCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
+    device_->draw_executor().PrimDrawIndexedIndirect(
+        vk_command_buffer_, indirect_buffer, byte_offset,
+        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
+}
+
 void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().BlitRenderTargetToSwapchain(

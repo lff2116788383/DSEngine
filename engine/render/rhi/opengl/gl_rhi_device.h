@@ -195,6 +195,9 @@ public:
                                   uint32_t first_index, int32_t base_vertex,
                                   uint32_t first_instance);
 
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    void RealDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset);
+
     // --- 内建资源访问器 ---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;

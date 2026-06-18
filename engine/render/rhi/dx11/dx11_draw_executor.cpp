@@ -1245,6 +1245,75 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
     global_state_.current_frame_stats.draw_calls++;
 }
 
+void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset,
+                                               DX11ShaderManager& shader_mgr,
+                                               DX11ResourceManager& resource_mgr) {
+    ID3D11DeviceContext* dc = context_->device_context();
+
+    const auto* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) return;
+    const auto* vb = resource_mgr.GetBuffer(prim_vbo_handle_);
+    if (!vb || !vb->buffer) return;
+    const auto* ib = resource_mgr.GetBuffer(prim_index_buffer_handle_);
+    if (!ib || !ib->buffer) return;
+
+    // 解析 indirect args buffer：先查 indirect map，再退回 SSBO map（draw cmd 存于 SSBO）。
+    ID3D11Buffer* args_buf = nullptr;
+    const DX11IndirectBuffer* ibuf = resource_mgr.GetIndirectBuffer(indirect_buffer);
+    if (ibuf && ibuf->buffer) {
+        args_buf = ibuf->buffer.Get();
+    } else {
+        const DX11SSBO* sbuf = resource_mgr.GetSSBO(indirect_buffer);
+        if (sbuf && sbuf->buffer) args_buf = sbuf->buffer.Get();
+    }
+    if (!args_buf) return;
+
+    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
+
+    // UBO（constant buffer）按 slot → b<slot>，VS+PS 同绑（PS 未用则无害）。
+    for (const auto& [slot, handle] : prim_ubos_) {
+        const auto* cbuf = resource_mgr.GetBuffer(handle);
+        if (cbuf && cbuf->buffer) {
+            ID3D11Buffer* cb = cbuf->buffer.Get();
+            dc->VSSetConstantBuffers(slot, 1, &cb);
+            dc->PSSetConstantBuffers(slot, 1, &cb);
+        }
+    }
+
+    // 2D 纹理按 slot → t<slot>/s<slot>。
+    for (const auto& [slot, handle] : prim_textures_) {
+        const auto* tex = resource_mgr.GetTexture(handle);
+        if (tex) {
+            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+        }
+    }
+
+    // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS（与 PrimDrawIndexedInstanced 同语义）。
+    for (const auto& [slot, b] : prim_ssbos_) {
+        ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
+        if (srv) {
+            dc->VSSetShaderResources(slot, 1, &srv);
+        }
+    }
+
+    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    if (layout) dc->IASetInputLayout(layout);
+    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    UINT stride = prim_stride_;
+    UINT offset = 0;
+    dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+    dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
+
+    // 间接绘制：从 args buffer 的 byte_offset 处读取 5×uint32 参数。
+    // 契约：DX11 SV_InstanceID 仍从 0 起，base_instance 偏移须经 SSBO 偏移表达（§6）。
+    dc->DrawIndexedInstancedIndirect(args_buf, byte_offset);
+    global_state_.current_frame_stats.draw_calls++;
+    global_state_.current_frame_stats.indirect_draw_calls++;
+}
+
 void DX11DrawExecutor::DrawPostProcess(const PostProcessRequest& request,
                                          DX11PipelineStateManager& pipeline_mgr,
                                          DX11ShaderManager& shader_mgr,

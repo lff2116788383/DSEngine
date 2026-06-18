@@ -253,6 +253,11 @@ void OpenGLCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t in
     device_->RealDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
 }
 
+void OpenGLCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+    if (!device_) return;
+    device_->RealDrawIndexedIndirect(indirect_buffer, byte_offset);
+}
+
 void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->RealSubmitDrawPostProcess(request);
@@ -958,6 +963,36 @@ void OpenGLRhiDevice::RealDrawIndexedInstanced(uint32_t index_count, uint32_t in
                                                uint32_t first_index, int32_t base_vertex,
                                                uint32_t first_instance) {
     draw_executor_.PrimDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
+}
+
+void OpenGLRhiDevice::RealDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+    if (indirect_buffer == 0) return;
+    InitComputeProcAddresses();
+    if (!pfn_glMultiDrawElementsIndirect) {
+        DEBUG_LOG_WARN("glMultiDrawElementsIndirect not available (indirect draw skipped)");
+        return;
+    }
+    // 解析 indirect buffer handle → GL buffer：先查 indirect map，找不到当作 raw GL handle。
+    unsigned int gl_buf = indirect_buffer;
+    auto it = indirect_buffers_.find(indirect_buffer);
+    if (it != indirect_buffers_.end()) gl_buf = it->second;
+
+    // 复用 prim VAO（含 VBO 属性 + EBO，由 BindVertexBuffer/BindIndexBuffer 建立）。
+    glBindVertexArray(draw_executor_.PrimVaoHandle());
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, gl_buf);
+    // draw_count=1：从 byte_offset 处读取一条 DrawElementsIndirectCommand；
+    // 元素类型取 prim 当前索引类型（MeshRenderer 用 uint16）。
+    pfn_glMultiDrawElementsIndirect(
+        GL_TRIANGLES,
+        static_cast<GLenum>(draw_executor_.PrimIndexType()),
+        reinterpret_cast<const void*>(static_cast<uintptr_t>(byte_offset)),
+        1,
+        static_cast<GLsizei>(sizeof(DrawElementsIndirectCommand)));
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    glBindVertexArray(0);
+
+    draw_executor_.MutableCurrentStats().draw_calls += 1;
+    draw_executor_.MutableCurrentStats().indirect_draw_calls += 1;
 }
 
 // --- 内建资源访问器 (A1) ---

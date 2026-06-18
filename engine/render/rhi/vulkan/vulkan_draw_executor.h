@@ -144,6 +144,12 @@ public:
                                   VulkanShaderManager& shader_mgr,
                                   VulkanResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
+    void PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsigned int indirect_buffer, uint32_t byte_offset,
+                                 VulkanPipelineStateManager& pipeline_mgr,
+                                 VulkanShaderManager& shader_mgr,
+                                 VulkanResourceManager& resource_mgr);
+
     // --- GPU-Driven PBR 渲染设置 ---
     void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                             const glm::mat4& view, const glm::mat4& proj,

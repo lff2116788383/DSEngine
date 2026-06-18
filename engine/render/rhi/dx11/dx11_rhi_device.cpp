@@ -175,6 +175,12 @@ void DX11CommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t inst
         base_vertex, first_instance, device_->shader_mgr(), device_->resource_mgr());
 }
 
+void DX11CommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+    if (!device_) return;
+    device_->draw_executor().PrimDrawIndexedIndirect(indirect_buffer, byte_offset,
+        device_->shader_mgr(), device_->resource_mgr());
+}
+
 void DX11CommandBuffer::Reset() {
     ResetBase();
 }

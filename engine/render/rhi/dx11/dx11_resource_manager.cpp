@@ -1049,9 +1049,10 @@ unsigned int DX11ResourceManager::CreateIndirectBuffer(size_t size, const void* 
 
     D3D11_BUFFER_DESC bd{};
     bd.ByteWidth = static_cast<UINT>(size);
-    bd.Usage = D3D11_USAGE_DYNAMIC;
+    // DRAWINDIRECT_ARGS 缓不能 DYNAMIC（多数驱动/WARP 不支持 Map），须 DEFAULT + UpdateSubresource。
+    bd.Usage = D3D11_USAGE_DEFAULT;
     bd.BindFlags = 0;  // DX11 spec: MISC_DRAWINDIRECT_ARGS 不允许任何 BindFlags
-    bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    bd.CPUAccessFlags = 0;
     bd.MiscFlags = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
     bd.StructureByteStride = 0;
 
@@ -1073,11 +1074,13 @@ void DX11ResourceManager::UpdateIndirectBuffer(unsigned int handle,
     if (!dc_ || !data) return;
     auto it = indirect_buffers_.find(handle);
     if (it == indirect_buffers_.end() || !it->second.buffer) return;
-    D3D11_MAPPED_SUBRESOURCE mapped{};
-    HRESULT hr = dc_->Map(it->second.buffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) return;
-    std::memcpy(static_cast<unsigned char*>(mapped.pData) + offset, data, size);
-    dc_->Unmap(it->second.buffer.Get(), 0);
+    // DEFAULT 用法须经 UpdateSubresource 局部更新；box 覆盖 [offset, offset+size)。
+    D3D11_BOX box{};
+    box.left = static_cast<UINT>(offset);
+    box.right = static_cast<UINT>(offset + size);
+    box.top = 0; box.bottom = 1;
+    box.front = 0; box.back = 1;
+    dc_->UpdateSubresource(it->second.buffer.Get(), 0, &box, data, 0, 0);
 }
 
 void DX11ResourceManager::DeleteIndirectBuffer(unsigned int handle) {

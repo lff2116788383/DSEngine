@@ -2725,6 +2725,78 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     }
 }
 
+void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsigned int indirect_buffer,
+                                                 uint32_t byte_offset,
+                                                 VulkanPipelineStateManager& pipeline_mgr,
+                                                 VulkanShaderManager& shader_mgr,
+                                                 VulkanResourceManager& resource_mgr) {
+    if (skip_current_pass_) return;
+    const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
+    if (!program) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: shader program not available");
+        return;
+    }
+    if (prim_vbo_ == VK_NULL_HANDLE || prim_index_buffer_ == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: vertex/index buffer not bound");
+        return;
+    }
+
+    // 解析 indirect VkBuffer：先查 indirect map，再退回 SSBO map（draw cmd 存于带 INDIRECT_BIT 的 SSBO）。
+    const VulkanBuffer* arg_buf = resource_mgr.GetIndirectBuffer(indirect_buffer);
+    if (!arg_buf || arg_buf->buffer == VK_NULL_HANDLE) {
+        arg_buf = resource_mgr.GetSSBO(indirect_buffer);
+    }
+    if (!arg_buf || arg_buf->buffer == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: indirect buffer not found");
+        return;
+    }
+
+    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
+        ? current_render_pass_ : context_->swapchain_render_pass();
+
+    std::vector<VkVertexInputBindingDescription> bindings = {
+        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
+    };
+    std::vector<VkVertexInputAttributeDescription> vk_attrs;
+    vk_attrs.reserve(prim_attrs_.size());
+    for (const auto& a : prim_attrs_) {
+        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+        switch (a.components) {
+            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+            default: break;
+        }
+        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
+    }
+
+    VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
+        pipeline_mgr.active_pipeline_state(), program, active_rp,
+        bindings, vk_attrs,
+        context_->swapchain_extent(), current_msaa_samples_, current_color_attachment_count_,
+        false);
+    if (pipeline == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: failed to create pipeline");
+        return;
+    }
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
+
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
+    // draw_count=1：从 byte_offset 处读取一条 VkDrawIndexedIndirectCommand（5×uint32，三端布局一致）。
+    // 契约：base_instance 偏移须经 SSBO 偏移表达（§6）。
+    vkCmdDrawIndexedIndirect(cmd_buf, arg_buf->buffer, static_cast<VkDeviceSize>(byte_offset),
+                             1, static_cast<uint32_t>(sizeof(DrawElementsIndirectCommand)));
+
+    global_state_.current_frame_stats.draw_calls++;
+    global_state_.current_frame_stats.indirect_draw_calls++;
+}
+
 // ============================================================================
 // DrawPostProcess — 后处理绘制
 // ============================================================================
