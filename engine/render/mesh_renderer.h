@@ -42,6 +42,19 @@ struct MeshVertex {
     glm::vec3 tangent{1.0f, 0.0f, 0.0f};
 };
 
+/// 蒙皮 forward PBR 顶点（局部/绑定空间输入；VS 按 bone index/weight 混合后施 vp）。
+/// 内存布局须与 forward_pbr_skinned.vert 输入一致：
+/// pos\@0 / color\@1 / uv\@2 / normal\@3 / tangent\@4 / boneIndices\@5 / boneWeights\@6。
+struct SkinnedMeshVertex {
+    glm::vec3 position{0.0f};
+    glm::vec4 color{1.0f};
+    glm::vec2 uv{0.0f};
+    glm::vec3 normal{0.0f, 0.0f, 1.0f};
+    glm::vec3 tangent{1.0f, 0.0f, 0.0f};
+    glm::vec4 bone_indices{0.0f};               ///< 4 骨骼索引（float 承载）
+    glm::vec4 bone_weights{1.0f, 0.0f, 0.0f, 0.0f}; ///< 4 骨骼权重（和应为 1）
+};
+
 /// PBR 材质参数 + 5 纹理槽（句柄 0 表示缺省，回退到内建 1x1 白纹理并关闭对应贴图采样）。
 struct MeshMaterial {
     glm::vec3 albedo{1.0f};       ///< 基础色（与纹理、顶点色相乘）
@@ -94,6 +107,27 @@ public:
               const MeshMaterial& material,
               const DirectionalLight& light);
 
+    /// 记录一次蒙皮 PBR 网格绘制（B2b-2）。顶点为局部/绑定空间，VS 按 bone index/weight
+    /// 混合骨骼矩阵后施 vp（骨骼矩阵走 SSBO\@slot 0，复用静态 PBR frag）。
+    /// @param vertices       局部/绑定空间顶点 + 骨骼索引/权重
+    /// @param indices        16 位索引
+    /// @param model          模型矩阵（内部预乘进每根骨骼矩阵）
+    /// @param bone_matrices  绑定→局部空间的骨骼矩阵（内部左乘 model 得世界空间）
+    /// @param view/proj      相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos     世界空间相机位置
+    /// @param material       材质参数 + 纹理
+    /// @param light          单方向光
+    void DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
+                     const std::vector<SkinnedMeshVertex>& vertices,
+                     const std::vector<uint16_t>& indices,
+                     const glm::mat4& model,
+                     const std::vector<glm::mat4>& bone_matrices,
+                     const glm::mat4& view,
+                     const glm::mat4& proj,
+                     const glm::vec3& camera_pos,
+                     const MeshMaterial& material,
+                     const DirectionalLight& light);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
@@ -101,6 +135,7 @@ private:
     void EnsureResources(RhiDevice& device);
     void EnsureVertexCapacity(RhiDevice& device, size_t vertex_bytes);
     void EnsureIndexCapacity(RhiDevice& device, size_t index_bytes);
+    void EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes);
 
     unsigned int pso_ = 0;
     unsigned int white_tex_ = 0;
@@ -109,8 +144,10 @@ private:
     BufferHandle per_frame_ubo_;
     BufferHandle per_scene_ubo_;
     BufferHandle per_material_ubo_;
+    BufferHandle bone_ssbo_;
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
+    size_t bone_ssbo_capacity_ = 0;
     bool init_ = false;
 };
 

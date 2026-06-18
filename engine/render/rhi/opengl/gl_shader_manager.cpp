@@ -60,6 +60,7 @@
 #include "embed/sprite2d_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
+#include "embed/forward_pbr_skinned_vert.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -87,6 +88,7 @@
 #include "embed/sprite2d_vert_reflect.gen.h"
 #include "embed/forward_pbr_vert_reflect.gen.h"
 #include "embed/forward_pbr_frag_reflect.gen.h"
+#include "embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -688,6 +690,37 @@ void GLShaderManager::InitForwardPbrShader() {
         gl_reflect::ComputeFlatTextureUnits(kforward_pbr_frag_reflection, tex_entries);
         glUseProgram(forward_pbr_shader_handle_);
         gl_reflect::BindSamplersOnce(forward_pbr_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
+void GLShaderManager::InitForwardPbrSkinnedShader() {
+    if (forward_pbr_skinned_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: forward PBR skinned 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // 蒙皮 VS（骨骼 SSBO\@set3.b0）+ 复用静态 PBR frag。
+    forward_pbr_skinned_shader_handle_ =
+        CompileProgram(DSE_SL(kforward_pbr_skinned_vert), DSE_SL(kforward_pbr_frag));
+    if (forward_pbr_skinned_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward PBR skinned shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_pbr_skinned_shader_handle_, kforward_pbr_skinned_vert_reflection);
+    BindUBOsFromReflection(forward_pbr_skinned_shader_handle_, kforward_pbr_frag_reflection);
+
+    // 骨骼 SSBO 在 GLSL430 显式 layout(binding=0)，通用原语 BindStorageBuffer(0) 直接命中，无需重映射。
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kforward_pbr_frag_reflection, tex_entries);
+        glUseProgram(forward_pbr_skinned_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_pbr_skinned_shader_handle_, tex_entries,
                                      glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }

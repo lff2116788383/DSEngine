@@ -1214,12 +1214,13 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         }
     }
 
-    // 图形阶段 SSBO 按 slot → t<slot>，VS+PS 同绑（PS 未用则无害）。
+    // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS：骨骼/实例是顶点级资源，
+    // 且离线编译器对 @SSBO_LOW_REGISTERS 着色器把 SSBO 落到低位 t（如 t0），
+    // 同绑 PS 会覆盖 PS 纹理槽（如反照率 t0）。VS 无纹理，故仅 VS 安全。
     for (const auto& [slot, b] : prim_ssbos_) {
         ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
         if (srv) {
             dc->VSSetShaderResources(slot, 1, &srv);
-            dc->PSSetShaderResources(slot, 1, &srv);
         }
     }
 

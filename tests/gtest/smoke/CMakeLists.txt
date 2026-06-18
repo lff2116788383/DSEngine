@@ -16,6 +16,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     sprite_primitive_smoke_test.cpp
     instanced_ssbo_pixel_smoke_test.cpp
     forward_pbr_pixel_smoke_test.cpp
+    skinned_mesh_pixel_smoke_test.cpp
     physics3d_smoke_test.cpp
 )
 

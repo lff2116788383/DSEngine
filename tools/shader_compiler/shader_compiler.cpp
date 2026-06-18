@@ -675,7 +675,8 @@ static std::string OptimizeSkinnedVertexHLSLStorageBuffers(std::string hlsl, ESh
 // ============================================================================
 
 static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
-                                       EShLanguage stage) {
+                                       EShLanguage stage,
+                                       uint32_t ssbo_hlsl_base = 16) {
     try {
         spirv_cross::CompilerHLSL compiler(spirv);
         spirv_cross::CompilerHLSL::Options options;
@@ -764,9 +765,12 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
             }
         }
 
-        // ---- SSBO (storage buffers) → SRV t{tex_slot}+ 避免与纹理 t-register 冲突 ----
+        // ---- SSBO (storage buffers) → SRV t-register ----
+        // 默认 t16+（避开纹理 t 槽）；标注 @SSBO_LOW_REGISTERS 的着色器用低位 t{binding}，
+        // 使其与通用原语 BindStorageBuffer(slot) 在三后端对齐（仅顶点级 VS SSBO 安全，VS 无纹理）。
         {
-            uint32_t ssbo_base = (tex_slot < 16) ? 16 : tex_slot; // 最低 t16
+            uint32_t ssbo_base = ssbo_hlsl_base;
+            if (ssbo_base >= 16 && tex_slot > ssbo_base) ssbo_base = tex_slot; // 高位默认仍避让纹理
             for (auto& ssbo : resources.storage_buffers) {
                 auto [s, b] = get_set_binding(ssbo.id);
                 spirv_cross::HLSLResourceBinding hlsl_binding{};
@@ -1327,6 +1331,10 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        // @SSBO_LOW_REGISTERS：HLSL SSBO 落到低位 t{binding}（与通用原语 BindStorageBuffer slot 对齐）。
+        const uint32_t ssbo_hlsl_base =
+            (source.find("@SSBO_LOW_REGISTERS") != std::string::npos) ? 0u : 16u;
+
         // Compile to SPIR-V
         std::vector<uint32_t> spirv;
         std::vector<std::string> inc_dirs = { filepath.parent_path().string() };
@@ -1364,7 +1372,7 @@ int main(int argc, char* argv[]) {
         // Cross-compile to HLSL
         std::string hlsl;
         if (do_hlsl) {
-            hlsl = CrossCompileToHLSL(spirv, stage);
+            hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base);
             if (hlsl.empty()) {
                 std::cerr << "FAILED (hlsl)\n";
                 error_count++;
@@ -1383,7 +1391,7 @@ int main(int argc, char* argv[]) {
             if (glsl430.empty()) glsl430 = CrossCompileToGLSL430(spirv, stage);
             essl310 = CrossCompileToESSL310(spirv, stage);
             essl300 = CrossCompileToESSL300(spirv, stage);
-            if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage);
+            if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base);
 
             // Compile HLSL to DXBC bytecode (Windows only)
             std::vector<uint8_t> dxbc;
@@ -1483,7 +1491,7 @@ int main(int argc, char* argv[]) {
 
                     std::string v_hlsl;
                     if (v_do_hlsl) {
-                        v_hlsl = CrossCompileToHLSL(v_spirv, stage);
+                        v_hlsl = CrossCompileToHLSL(v_spirv, stage, ssbo_hlsl_base);
                         if (v_hlsl.empty()) {
                             std::cerr << "FAILED (hlsl)\n";
                             error_count++;
@@ -1500,7 +1508,7 @@ int main(int argc, char* argv[]) {
                         if (v_glsl430.empty()) v_glsl430 = CrossCompileToGLSL430(v_spirv, stage);
                         std::string v_essl310 = CrossCompileToESSL310(v_spirv, stage);
                         std::string v_essl300 = CrossCompileToESSL300(v_spirv, stage);
-                        if (v_hlsl.empty()) v_hlsl = CrossCompileToHLSL(v_spirv, stage);
+                        if (v_hlsl.empty()) v_hlsl = CrossCompileToHLSL(v_spirv, stage, ssbo_hlsl_base);
 
                         std::vector<uint8_t> v_dxbc;
 #ifdef DSE_HAS_D3DCOMPILE

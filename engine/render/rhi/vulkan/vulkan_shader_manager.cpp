@@ -27,6 +27,7 @@
 #include "embed/sprite2d_frag.gen.h"
 #include "embed/forward_pbr_vert.gen.h"
 #include "embed/forward_pbr_frag.gen.h"
+#include "embed/forward_pbr_skinned_vert.gen.h"
 #include "embed/sprite_fx_vert.gen.h"
 #include "embed/sprite_fx_sdf_frag.gen.h"
 #include "embed/sprite_fx_vfx_frag.gen.h"
@@ -672,6 +673,20 @@ void VulkanShaderManager::InitForwardPbrShader() {
         DEBUG_LOG_ERROR("Vulkan forward PBR shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan forward PBR shader created: handle={}", forward_pbr_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitForwardPbrSkinnedShader() {
+    if (forward_pbr_skinned_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // 蒙皮 VS（骨骼 SSBO\@set3.b0）+ 复用静态 PBR frag；descriptor set layout 由 SPIR-V 反射驱动。
+    forward_pbr_skinned_shader_handle_ = CreateProgramFromSpirv(
+        kforward_pbr_skinned_vert_spv, kforward_pbr_skinned_vert_spv_size,
+        kforward_pbr_frag_spv, kforward_pbr_frag_spv_size);
+    if (forward_pbr_skinned_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan forward PBR skinned shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan forward PBR skinned shader created: handle={}", forward_pbr_skinned_shader_handle_);
     }
 }
 

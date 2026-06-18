@@ -30,6 +30,20 @@ struct GpuMeshVertex {
 };
 static_assert(sizeof(GpuMeshVertex) == 60, "GpuMeshVertex must be tightly packed (3+4+2+3+3 floats)");
 
+// 与 forward_pbr_skinned.vert 输入布局一致（紧凑打包，92 字节）：
+// pos\@0(0) + color\@1(12) + uv\@2(28) + normal\@3(36) + tangent\@4(48) +
+// boneIndices\@5(60) + boneWeights\@6(76)。
+struct GpuSkinnedVertex {
+    float px, py, pz;       // local/bind-space position
+    float r, g, b, a;       // vertex color
+    float u, v;             // texcoord
+    float nx, ny, nz;       // local/bind-space normal
+    float tx, ty, tz;       // local/bind-space tangent
+    float bi0, bi1, bi2, bi3; // bone indices
+    float bw0, bw1, bw2, bw3; // bone weights
+};
+static_assert(sizeof(GpuSkinnedVertex) == 92, "GpuSkinnedVertex must be tightly packed (3+4+2+3+3+4+4 floats)");
+
 // std140 PerFrame 块（176 字节）：mat4 vp + mat4 view + vec4 camera_pos +
 // vec4 foliage_wind + vec4 foliage_push。着色器仅用 vp / camera_pos。
 struct FwdPerFrameUBO {
@@ -118,6 +132,123 @@ void MeshRenderer::EnsureIndexCapacity(RhiDevice& device, size_t index_bytes) {
     ib_desc.is_dynamic = true;
     ibo_ = device.CreateGpuBuffer(ib_desc, nullptr);
     ibo_capacity_ = index_bytes;
+}
+
+void MeshRenderer::EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes) {
+    if (bone_ssbo_ && bone_ssbo_capacity_ >= bone_bytes) return;
+    if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
+    GpuBufferDesc b_desc;
+    b_desc.size = bone_bytes;
+    b_desc.usage = GpuBufferUsage::kStorage;
+    b_desc.is_dynamic = true;
+    bone_ssbo_ = device.CreateGpuBuffer(b_desc, nullptr);
+    bone_ssbo_capacity_ = bone_bytes;
+}
+
+void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
+                               const std::vector<SkinnedMeshVertex>& vertices,
+                               const std::vector<uint16_t>& indices,
+                               const glm::mat4& model,
+                               const std::vector<glm::mat4>& bone_matrices,
+                               const glm::mat4& view,
+                               const glm::mat4& proj,
+                               const glm::vec3& camera_pos,
+                               const MeshMaterial& material,
+                               const DirectionalLight& light) {
+    if (vertices.empty() || indices.empty() || bone_matrices.empty()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrSkinned);
+    if (program == 0) return;  // 该后端未提供蒙皮 forward PBR 内建着色器
+
+    EnsureResources(device);
+    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
+
+    // --- 顶点打包（局部/绑定空间，VS 施骨骼混合 + vp，不在 CPU 预变换） ---
+    std::vector<GpuSkinnedVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const SkinnedMeshVertex& v = vertices[i];
+        GpuSkinnedVertex& g = gpu_verts[i];
+        g.px = v.position.x; g.py = v.position.y; g.pz = v.position.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = v.normal.x; g.ny = v.normal.y; g.nz = v.normal.z;
+        g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
+        g.bi0 = v.bone_indices.x; g.bi1 = v.bone_indices.y;
+        g.bi2 = v.bone_indices.z; g.bi3 = v.bone_indices.w;
+        g.bw0 = v.bone_weights.x; g.bw1 = v.bone_weights.y;
+        g.bw2 = v.bone_weights.z; g.bw3 = v.bone_weights.w;
+    }
+
+    // --- 骨骼矩阵：左乘 model 得世界空间，写入 SSBO ---
+    std::vector<glm::mat4> world_bones(bone_matrices.size());
+    for (size_t i = 0; i < bone_matrices.size(); ++i) {
+        world_bones[i] = model * bone_matrices[i];
+    }
+    const size_t bone_bytes = world_bones.size() * sizeof(glm::mat4);
+    EnsureBoneCapacity(device, bone_bytes);
+    if (!bone_ssbo_) return;
+    device.UpdateGpuBuffer(bone_ssbo_, 0, bone_bytes, world_bones.data());
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuSkinnedVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // --- UBO 填充（与静态路径同构） ---
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    FwdPerSceneUBO scene{};
+    const glm::vec3 to_light = glm::normalize(-light.direction);
+    scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
+    scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
+    scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
+
+    FwdPerMaterialUBO mat{};
+    mat.albedo = glm::vec4(material.albedo, material.metallic);
+    mat.roughness_ao = glm::vec4(material.roughness, material.ao,
+                                 material.normal_strength, material.alpha_cutoff);
+    mat.emissive = glm::vec4(material.emissive, material.alpha_test ? 1.0f : 0.0f);
+    mat.flags = glm::vec4(material.normal_tex ? 1.0f : 0.0f,
+                          material.metallic_roughness_tex ? 1.0f : 0.0f,
+                          material.emissive_tex ? 1.0f : 0.0f,
+                          material.occlusion_tex ? 1.0f : 0.0f);
+    device.UpdateGpuBuffer(per_material_ubo_, 0, sizeof(mat), &mat);
+
+    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+        VertexAttr{5u, 4u, 60u},   // bone indices
+        VertexAttr{6u, 4u, 76u},   // bone weights
+    };
+
+    cmd.SetPipelineState(pso_);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
+    cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
+    cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
+    cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
+    cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
+    cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
+    // 骨骼矩阵 SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
+    cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
 void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
@@ -219,8 +350,10 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_frame_ubo_) device.DeleteGpuBuffer(per_frame_ubo_);
     if (per_scene_ubo_) device.DeleteGpuBuffer(per_scene_ubo_);
     if (per_material_ubo_) device.DeleteGpuBuffer(per_material_ubo_);
+    if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     vbo_ = ibo_ = per_frame_ubo_ = per_scene_ubo_ = per_material_ubo_ = BufferHandle{};
-    vbo_capacity_ = ibo_capacity_ = 0;
+    bone_ssbo_ = BufferHandle{};
+    vbo_capacity_ = ibo_capacity_ = bone_ssbo_capacity_ = 0;
     init_ = false;
 }
 

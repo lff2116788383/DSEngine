@@ -183,6 +183,7 @@ enum class BuiltinProgram : uint8_t {
     SpriteFxSdf = 2,  ///< SDF 文本批（sprite_fx.vert + sprite_fx_sdf.frag + SpriteFx push-block UBO）
     SpriteFxVfx = 3,  ///< UI 特效批（sprite_fx.vert + sprite_fx_vfx.frag + SpriteFx push-block UBO）
     ForwardPbr  = 4,  ///< 静态 forward PBR（forward_pbr.vert/.frag + PerFrame/PerScene/PerMaterial UBO + 5 纹理槽）
+    ForwardPbrSkinned = 5,  ///< 蒙皮 forward PBR（forward_pbr_skinned.vert + forward_pbr.frag + 骨骼矩阵 SSBO\@set3.b0）
 };
 
 /// 渲染通道描述符

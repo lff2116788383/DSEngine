@@ -958,6 +958,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbr:
             if (shader_mgr_.forward_pbr_shader_handle() == 0) shader_mgr_.InitForwardPbrShader();
             return shader_mgr_.forward_pbr_shader_handle();
+        case BuiltinProgram::ForwardPbrSkinned:
+            if (shader_mgr_.forward_pbr_skinned_shader_handle() == 0) shader_mgr_.InitForwardPbrSkinnedShader();
+            return shader_mgr_.forward_pbr_skinned_shader_handle();
     }
     return 0;
 }
