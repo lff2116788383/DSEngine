@@ -5,6 +5,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     skybox_pixel_smoke_test.cpp
     sprite_batch_pixel_smoke_test.cpp
     sprite_batch_sdf_pixel_smoke_test.cpp
+    sprite_batch_vfx_pixel_smoke_test.cpp
     engine_core_services_smoke_test.cpp
     lua_host_smoke_test.cpp
     lua_lifecycle_smoke_test.cpp
