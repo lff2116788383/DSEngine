@@ -135,6 +135,13 @@ public:
                          VulkanShaderManager& shader_mgr,
                          VulkanResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
+    void PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint32_t index_count, uint32_t instance_count,
+                                  uint32_t first_index, int32_t base_vertex, uint32_t first_instance,
+                                  VulkanPipelineStateManager& pipeline_mgr,
+                                  VulkanShaderManager& shader_mgr,
+                                  VulkanResourceManager& resource_mgr);
+
     // --- GPU-Driven PBR 渲染设置 ---
     void SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                             const glm::mat4& view, const glm::mat4& proj,

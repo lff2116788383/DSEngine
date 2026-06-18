@@ -240,6 +240,13 @@ void OpenGLCommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index
     device_->RealDrawIndexed(index_count, first_index, base_vertex);
 }
 
+void OpenGLCommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                               uint32_t first_index, int32_t base_vertex,
+                                               uint32_t first_instance) {
+    if (!device_) return;
+    device_->RealDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
+}
+
 void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     if (!device_) return;
     device_->RealSubmitDrawPostProcess(request);
@@ -913,6 +920,12 @@ void OpenGLRhiDevice::RealBindUniformBuffer(uint32_t slot, unsigned int buffer_h
 
 void OpenGLRhiDevice::RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
     draw_executor_.PrimDrawIndexed(index_count, first_index, base_vertex);
+}
+
+void OpenGLRhiDevice::RealDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                               uint32_t first_index, int32_t base_vertex,
+                                               uint32_t first_instance) {
+    draw_executor_.PrimDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
 }
 
 // --- 内建资源访问器 (A1) ---

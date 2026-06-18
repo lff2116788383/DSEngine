@@ -112,6 +112,21 @@ public:
                              int32_t base_vertex = 0) {
         (void)index_count; (void)first_index; (void)base_vertex;
     }
+
+    // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
+    // 由 mesh（蒙皮硬件实例化）倒推。现有 DrawIndexed 签名保持不变——新增独立重载，
+    // 避免 DrawIndexed(n, 0) 把 first_index 的 0 误读为 instance_count。默认空实现。
+
+    /// 实例化索引绘制：绘制 instance_count 个实例。first_instance 为基实例
+    /// （GL→glDrawElementsInstancedBaseVertexBaseInstance / Vulkan→vkCmdDrawIndexed.firstInstance /
+    /// DX11→DrawIndexedInstanced.StartInstanceLocation；DX11 的 SV_InstanceID 仍从 0 起，
+    /// 实例数据偏移需经 SSBO/instance VB 偏移表达，见 RHI_PRIMITIVE_CONTRACT.md §6）。
+    virtual void DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                      uint32_t first_index = 0, int32_t base_vertex = 0,
+                                      uint32_t first_instance = 0) {
+        (void)index_count; (void)instance_count; (void)first_index;
+        (void)base_vertex; (void)first_instance;
+    }
 };
 
 /**

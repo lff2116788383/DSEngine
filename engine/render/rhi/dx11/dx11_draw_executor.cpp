@@ -1169,6 +1169,14 @@ void DX11DrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_
 void DX11DrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex,
                                        DX11ShaderManager& shader_mgr,
                                        DX11ResourceManager& resource_mgr) {
+    PrimDrawIndexedInstanced(index_count, 1, first_index, base_vertex, 0, shader_mgr, resource_mgr);
+}
+
+void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                                uint32_t first_index, int32_t base_vertex,
+                                                uint32_t first_instance,
+                                                DX11ShaderManager& shader_mgr,
+                                                DX11ResourceManager& resource_mgr) {
     ID3D11DeviceContext* dc = context_->device_context();
 
     const auto* program = shader_mgr.GetProgram(prim_program_handle_);
@@ -1210,7 +1218,14 @@ void DX11DrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_inde
     dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
 
     // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定。
-    dc->DrawIndexed(index_count, first_index, base_vertex);
+    if (instance_count == 1 && first_instance == 0) {
+        dc->DrawIndexed(index_count, first_index, base_vertex);
+    } else {
+        // 注：DX11 的 SV_InstanceID 始终从 0 起，StartInstanceLocation 仅偏移 per-instance 顶点取数；
+        // 实例数据偏移需经 SSBO/instance VB 偏移表达（见 RHI_PRIMITIVE_CONTRACT.md §6）。
+        dc->DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
+        global_state_.current_frame_stats.instanced_draw_calls++;
+    }
     global_state_.current_frame_stats.draw_calls++;
 }
 

@@ -161,6 +161,14 @@ void DX11CommandBuffer::DrawIndexed(uint32_t index_count, uint32_t first_index, 
         device_->shader_mgr(), device_->resource_mgr());
 }
 
+void DX11CommandBuffer::DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                             uint32_t first_index, int32_t base_vertex,
+                                             uint32_t first_instance) {
+    if (!device_) return;
+    device_->draw_executor().PrimDrawIndexedInstanced(index_count, instance_count, first_index,
+        base_vertex, first_instance, device_->shader_mgr(), device_->resource_mgr());
+}
+
 void DX11CommandBuffer::Reset() {
     ResetBase();
 }

@@ -53,6 +53,11 @@ public:
                            uint32_t offset, uint32_t size) override;
     void DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) override;
 
+    // --- 通用绘制原语 (B2b 前置) ---
+    void DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                              uint32_t first_index, int32_t base_vertex,
+                              uint32_t first_instance) override;
+
     /// 获取底层 VkCommandBuffer
     VkCommandBuffer GetVkCommandBuffer() const { return vk_command_buffer_; }
     void SetVkCommandBuffer(VkCommandBuffer cmd) { vk_command_buffer_ = cmd; }

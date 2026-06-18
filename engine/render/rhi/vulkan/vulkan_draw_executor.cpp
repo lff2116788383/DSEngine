@@ -2639,14 +2639,24 @@ void VulkanDrawExecutor::PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index
                                          VulkanPipelineStateManager& pipeline_mgr,
                                          VulkanShaderManager& shader_mgr,
                                          VulkanResourceManager& resource_mgr) {
+    PrimDrawIndexedInstanced(cmd_buf, index_count, 1, first_index, base_vertex, 0,
+                             pipeline_mgr, shader_mgr, resource_mgr);
+}
+
+void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint32_t index_count,
+                                                  uint32_t instance_count, uint32_t first_index,
+                                                  int32_t base_vertex, uint32_t first_instance,
+                                                  VulkanPipelineStateManager& pipeline_mgr,
+                                                  VulkanShaderManager& shader_mgr,
+                                                  VulkanResourceManager& resource_mgr) {
     if (skip_current_pass_) return;
     const VulkanShaderProgram* program = shader_mgr.GetProgram(prim_program_handle_);
     if (!program) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: shader program not available");
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: shader program not available");
         return;
     }
     if (prim_vbo_ == VK_NULL_HANDLE || prim_index_buffer_ == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexed: vertex/index buffer not bound");
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: vertex/index buffer not bound");
         return;
     }
 
@@ -2687,9 +2697,12 @@ void VulkanDrawExecutor::PrimDrawIndexed(VkCommandBuffer cmd_buf, uint32_t index
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
     vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
-    vkCmdDrawIndexed(cmd_buf, index_count, 1, first_index, base_vertex, 0);
+    vkCmdDrawIndexed(cmd_buf, index_count, instance_count, first_index, base_vertex, first_instance);
 
     global_state_.current_frame_stats.draw_calls++;
+    if (instance_count != 1 || first_instance != 0) {
+        global_state_.current_frame_stats.instanced_draw_calls++;
+    }
 }
 
 // ============================================================================

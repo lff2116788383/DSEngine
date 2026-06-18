@@ -140,6 +140,12 @@ public:
                          DX11ShaderManager& shader_mgr,
                          DX11ResourceManager& resource_mgr);
 
+    // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
+    void PrimDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                  uint32_t first_index, int32_t base_vertex, uint32_t first_instance,
+                                  DX11ShaderManager& shader_mgr,
+                                  DX11ResourceManager& resource_mgr);
+
     void DispatchCompute(unsigned int cs_handle,
                           unsigned int srv_texture_handle,
                           unsigned int uav_rt_handle,

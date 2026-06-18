@@ -509,6 +509,27 @@ void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index,
     global_state_.current_frame_stats.draw_calls += 1;
 }
 
+void GLDrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                              uint32_t first_index, int32_t base_vertex,
+                                              uint32_t first_instance) {
+    glBindVertexArray(prim_vao_handle_.raw());
+    const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
+    const void* offset_ptr = reinterpret_cast<const void*>(static_cast<uintptr_t>(first_index) * elem);
+    if (first_instance != 0 && glDrawElementsInstancedBaseVertexBaseInstance) {
+        glDrawElementsInstancedBaseVertexBaseInstance(
+            GL_TRIANGLES, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
+            static_cast<GLsizei>(instance_count), base_vertex, first_instance);
+    } else {
+        // first_instance==0（或驱动无 baseInstance）：实例数据偏移由 SSBO/instance VB 偏移表达。
+        glDrawElementsInstancedBaseVertex(
+            GL_TRIANGLES, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
+            static_cast<GLsizei>(instance_count), base_vertex);
+    }
+    glBindVertexArray(0);
+    global_state_.current_frame_stats.draw_calls += 1;
+    global_state_.current_frame_stats.instanced_draw_calls += 1;
+}
+
 // ============================================================
 // 后处理绘制
 // ============================================================

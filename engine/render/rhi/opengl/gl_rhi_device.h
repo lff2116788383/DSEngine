@@ -188,6 +188,11 @@ public:
     void RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
     void RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
 
+    // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
+    void RealDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                  uint32_t first_index, int32_t base_vertex,
+                                  uint32_t first_instance);
+
     // --- 内建资源访问器 ---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
