@@ -35,6 +35,29 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 static const unsigned int kAdditiveVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("SPRITE_ADDITIVE"));
 static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
 
+// glDrawElementsInstancedBaseVertexBaseInstance 属 GL 4.2，而桌面 gl_loader.h 走 <glad/gl.h>
+// 仅加载 GL 3.3 core，未声明该符号；与 gl_rhi_device.cpp 一致，首次使用时手动解析其入口。
+// GLES（Android/Web）无此入口，恒回退 BaseVertex 路径。
+using PFN_DrawElementsInstancedBaseVertexBaseInstance =
+    void(GLAD_API_PTR*)(GLenum, GLsizei, GLenum, const void*, GLsizei, GLint, GLuint);
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+#if defined(_WIN32)
+extern "C" __declspec(dllimport) void* __stdcall wglGetProcAddress(const char*);
+#endif
+static PFN_DrawElementsInstancedBaseVertexBaseInstance ResolveDrawBaseVertexBaseInstance() {
+    static PFN_DrawElementsInstancedBaseVertexBaseInstance pfn =
+        []() -> PFN_DrawElementsInstancedBaseVertexBaseInstance {
+#if defined(_WIN32)
+            return reinterpret_cast<PFN_DrawElementsInstancedBaseVertexBaseInstance>(
+                wglGetProcAddress("glDrawElementsInstancedBaseVertexBaseInstance"));
+#else
+            return nullptr;  // 非 Windows 桌面：缺平台 GL proc 解析，回退 BaseVertex 路径
+#endif
+        }();
+    return pfn;
+}
+#endif
+
 namespace dse {
 namespace render {
 
@@ -515,8 +538,13 @@ void GLDrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t ins
     glBindVertexArray(prim_vao_handle_.raw());
     const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
     const void* offset_ptr = reinterpret_cast<const void*>(static_cast<uintptr_t>(first_index) * elem);
-    if (first_instance != 0 && glDrawElementsInstancedBaseVertexBaseInstance) {
-        glDrawElementsInstancedBaseVertexBaseInstance(
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
+    static const auto pfn_draw_base_instance = ResolveDrawBaseVertexBaseInstance();
+#else
+    constexpr PFN_DrawElementsInstancedBaseVertexBaseInstance pfn_draw_base_instance = nullptr;
+#endif
+    if (first_instance != 0 && pfn_draw_base_instance) {
+        pfn_draw_base_instance(
             GL_TRIANGLES, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
             static_cast<GLsizei>(instance_count), base_vertex, first_instance);
     } else {
