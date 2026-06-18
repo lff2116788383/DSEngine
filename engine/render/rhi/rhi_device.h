@@ -178,19 +178,11 @@ public:
     // 着色器在各后端是预编译的（GL=GLSL / Vulkan=SPIR-V / DX11=DXBC），无法由后端无关层创建，
     // 故由各后端懒初始化并通过下列访问器暴露句柄。默认返回 0（未实现该资源的后端）。
 
-    /// 内建天空盒着色器程序句柄（懒初始化）
-    virtual unsigned int GetSkyboxShaderProgram() { return 0; }
+    /// 内建着色器程序句柄（懒初始化）。按 BuiltinProgram 标识取用，取代每效果一个访问器。
+    /// 默认返回 0（未实现该程序的后端/Mock）。
+    virtual unsigned int GetBuiltinProgram(BuiltinProgram program) { (void)program; return 0; }
     /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
     virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
-    /// 内建 2D sprite 着色器程序句柄（pos\@0/color\@1/uv\@2 + PerFrame UBO + u_texture，懒初始化）
-    /// 供 B0 SpriteRenderer 用新通用原语做活体验证。
-    virtual unsigned int GetSprite2DShaderProgram() { return 0; }
-    /// 内建 SDF 文本批着色器（sprite_fx.vert + sprite_fx_sdf.frag，SpriteFx push-block
-    /// UBO\@slot0 + u_texture\@slot0，懒初始化）。供 SpriteBatchRenderer SDF 路径。
-    virtual unsigned int GetSpriteFxSdfShaderProgram() { return 0; }
-    /// 内建 UI 特效批着色器（sprite_fx.vert + sprite_fx_vfx.frag，SpriteFx push-block
-    /// UBO\@slot0 + u_texture\@slot0，懒初始化）。供 SpriteBatchRenderer VFX 路径。
-    virtual unsigned int GetSpriteFxVfxShaderProgram() { return 0; }
 
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;

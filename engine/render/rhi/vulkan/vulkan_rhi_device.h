@@ -66,14 +66,9 @@ public:
     unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
 
-    // --- 内建资源访问器 (A1) ---
-    unsigned int GetSkyboxShaderProgram() override;
+    // --- 内建资源访问器 ---
+    unsigned int GetBuiltinProgram(BuiltinProgram program) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
-
-    // --- 内建资源访问器 (B0) ---
-    unsigned int GetSprite2DShaderProgram() override;
-    unsigned int GetSpriteFxSdfShaderProgram() override;
-    unsigned int GetSpriteFxVfxShaderProgram() override;
     // kUniform 用途需走 VK_BUFFER_USAGE_UNIFORM_BUFFER（host-visible 持久映射），覆写基类路由。
     BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;

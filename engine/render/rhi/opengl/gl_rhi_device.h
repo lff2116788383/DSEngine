@@ -188,12 +188,9 @@ public:
     void RealBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
     void RealDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
 
-    // --- 内建资源访问器 (A1) ---
-    unsigned int GetSkyboxShaderProgram() override;
+    // --- 内建资源访问器 ---
+    unsigned int GetBuiltinProgram(BuiltinProgram program) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
-    unsigned int GetSprite2DShaderProgram() override;
-    unsigned int GetSpriteFxSdfShaderProgram() override;
-    unsigned int GetSpriteFxVfxShaderProgram() override;
 
     // --- 子系统访问器 ---
     GLResourceManager& resource_mgr() { return resource_mgr_; }

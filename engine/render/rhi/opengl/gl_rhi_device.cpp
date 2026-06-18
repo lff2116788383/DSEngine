@@ -917,12 +917,23 @@ void OpenGLRhiDevice::RealDrawIndexed(uint32_t index_count, uint32_t first_index
 
 // --- 内建资源访问器 (A1) ---
 
-unsigned int OpenGLRhiDevice::GetSkyboxShaderProgram() {
+unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     EnsureInitialized();
-    if (shader_mgr_.skybox_shader_handle() == 0) {
-        shader_mgr_.InitSkyboxShader();
+    switch (program) {
+        case BuiltinProgram::Skybox:
+            if (shader_mgr_.skybox_shader_handle() == 0) shader_mgr_.InitSkyboxShader();
+            return shader_mgr_.skybox_shader_handle();
+        case BuiltinProgram::Sprite2D:
+            if (shader_mgr_.sprite2d_shader_handle() == 0) shader_mgr_.InitSprite2DShader();
+            return shader_mgr_.sprite2d_shader_handle();
+        case BuiltinProgram::SpriteFxSdf:
+            if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) shader_mgr_.InitSpriteFxSdfShader();
+            return shader_mgr_.sprite_fx_sdf_shader_handle();
+        case BuiltinProgram::SpriteFxVfx:
+            if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) shader_mgr_.InitSpriteFxVfxShader();
+            return shader_mgr_.sprite_fx_vfx_shader_handle();
     }
-    return shader_mgr_.skybox_shader_handle();
+    return 0;
 }
 
 unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
@@ -945,30 +956,6 @@ unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
         skybox_cube_vbo_ = CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_;
-}
-
-unsigned int OpenGLRhiDevice::GetSprite2DShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite2d_shader_handle() == 0) {
-        shader_mgr_.InitSprite2DShader();
-    }
-    return shader_mgr_.sprite2d_shader_handle();
-}
-
-unsigned int OpenGLRhiDevice::GetSpriteFxSdfShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) {
-        shader_mgr_.InitSpriteFxSdfShader();
-    }
-    return shader_mgr_.sprite_fx_sdf_shader_handle();
-}
-
-unsigned int OpenGLRhiDevice::GetSpriteFxVfxShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) {
-        shader_mgr_.InitSpriteFxVfxShader();
-    }
-    return shader_mgr_.sprite_fx_vfx_shader_handle();
 }
 
 // --- SSBO (Shader Storage Buffer Object) ---

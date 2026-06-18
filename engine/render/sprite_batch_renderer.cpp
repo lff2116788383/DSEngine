@@ -212,7 +212,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                const glm::mat4& view, const glm::mat4& projection) {
     if (items.empty()) return;
 
-    unsigned int sprite_prog = device.GetSprite2DShaderProgram();
+    unsigned int sprite_prog = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
     if (sprite_prog == 0) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device, items.size());
@@ -288,8 +288,8 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     size_t fx_batch_count = 0;
     for (const Batch& b : batches) if (path_of(b) != 0) ++fx_batch_count;
     if (fx_batch_count > 0) {
-        sdf_prog = device.GetSpriteFxSdfShaderProgram();
-        vfx_prog = device.GetSpriteFxVfxShaderProgram();
+        sdf_prog = device.GetBuiltinProgram(BuiltinProgram::SpriteFxSdf);
+        vfx_prog = device.GetBuiltinProgram(BuiltinProgram::SpriteFxVfx);
         EnsureFxUbos(device, fx_batch_count);
     }
 

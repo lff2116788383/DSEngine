@@ -77,7 +77,7 @@ void SpriteRenderer::EnsureResources(RhiDevice& device) {
 void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int texture_handle,
                           const glm::mat4& vp, float half_extent, const glm::vec4& tint) {
     if (texture_handle == 0) return;
-    unsigned int program = device.GetSprite2DShaderProgram();
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
     if (program == 0) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device);

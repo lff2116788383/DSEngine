@@ -17,7 +17,7 @@ void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int cu
                           const glm::mat4& view, const glm::mat4& projection) {
     if (cubemap_handle == 0) return;
 
-    unsigned int program = device.GetSkyboxShaderProgram();
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Skybox);
     unsigned int vbo = device.GetSkyboxCubeVertexBuffer();
     if (program == 0 || vbo == 0) return;
 

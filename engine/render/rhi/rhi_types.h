@@ -175,6 +175,15 @@ enum class TextureDim : uint8_t {
     Tex2DArray = 2,
 };
 
+/// 引擎内建着色器程序标识（由各后端懒初始化预编译着色器，经 RhiDevice::GetBuiltinProgram 暴露句柄）。
+/// 取代「每效果一个 GetXxxShaderProgram 访问器」，避免设备接口随效果线性膨胀。
+enum class BuiltinProgram : uint8_t {
+    Skybox      = 0,  ///< 天空盒（cubemap 采样）
+    Sprite2D    = 1,  ///< 2D sprite（pos\@0/color\@1/uv\@2 + PerFrame UBO + u_texture）
+    SpriteFxSdf = 2,  ///< SDF 文本批（sprite_fx.vert + sprite_fx_sdf.frag + SpriteFx push-block UBO）
+    SpriteFxVfx = 3,  ///< UI 特效批（sprite_fx.vert + sprite_fx_vfx.frag + SpriteFx push-block UBO）
+};
+
 /// 渲染通道描述符
 struct RenderPassDesc {
     unsigned int render_target = 0;

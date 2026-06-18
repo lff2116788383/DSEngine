@@ -58,8 +58,7 @@
 | `DrawIndexed(index_count, first_index, base_vertex)` | B0 | **无** instance 参数 | ✅ 三后端 |
 | `GetView/GetProjectionMatrix()` | B2a | 读 `SetCamera` 缓存 | ✅（高层渲染器取相机矩阵） |
 
-内建资源访问器（`RhiDevice`，供高层渲染器复用引擎着色器/几何）：
-`GetSkyboxShaderProgram` / `GetSkyboxCubeVertexBuffer` / `GetSprite2DShaderProgram` / `GetSpriteFxSdfShaderProgram` / `GetSpriteFxVfxShaderProgram`。
+内建资源访问器（`RhiDevice`，供高层渲染器复用引擎着色器/几何）：`GetBuiltinProgram(BuiltinProgram)`（按枚举取 Skybox/Sprite2D/SpriteFxSdf/SpriteFxVfx 程序，取代每效果一个访问器——见 §8.2 D4）+ `GetSkyboxCubeVertexBuffer`。
 
 ### 3.2 仍存的逐效果 ABI（边界**之上**待下沉）
 
@@ -147,7 +146,7 @@
 | D1 | **通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败） | 与历史黑屏同类的隐患：后端漏实现 → 静默不绘制 | 像素闸门兜底；终态可考虑改纯虚 + 显式 Mock |
 | D2 | **`BindShaderProgram` 与 PSO 分离**（契约 §8.1） | Metal/DX12/Vulkan 把 shader 烘进 PSO，未来落 Metal 要返工 | B5 聚合为图形管线对象 |
 | D3 | **过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`、`PushConstantsMat4` 未泛化为 `PushConstants(stage,off,data,size)` | 两套写法并存，需纪律 | 迁移收尾 / B5 清理 |
-| D4 | **`RhiDevice` 内建资源访问器随效果线性增长**（`GetSprite2D/SpriteFxSdf/SpriteFxVfx/Skybox…`） | mesh 会引入 gbuffer/shadow/toon/watercolor… 多 program，访问器爆炸，等于把 per-effect 表面搬到 device | B2b 前宜引入**按名/句柄的 shader 注册表**取代逐 program 访问器 |
+| D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
 | D5 | **每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO） | 为满足 Vulkan 生命周期牺牲了跨系统合批与显存复用 | 可用**共享 frame-ring 分配器**优化（见 8.3） |
 | D6 | **`CommandBuffer::GetView/GetProjectionMatrix()`** 把相机状态缓存在命令缓冲上 | 概念上相机属 frame/scene context，轻微耦合泄漏 | 引入 FrameContext 时收敛 |
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
@@ -155,12 +154,12 @@
 
 ### 8.3 优化空间（非阻塞，按收益排序）
 1. **共享 frame-ring buffer 分配器**：所有高层渲染器（sprite 现 3 实例 + 未来 mesh/particle）共用一个按帧环形复用的动态顶点/UBO 池，解决 D5 的显存与合批问题，同时天然满足 Vulkan「提交前不复用」约束。
-2. **shader 注册表**（解 D4）：device 暴露 `GetBuiltinProgram(name/enum)`，避免每效果加一个虚函数。
+2. ~~**shader 注册表**（解 D4）~~ → **已落地**：`RhiDevice::GetBuiltinProgram(BuiltinProgram)` 取代逐 program 访问器。
 3. **bind group / argument buffer**（契约 §2.3）：把 PerFrame/PerScene/PerMaterial + 多纹理打成一次绑定，减少状态切换；为 Metal/DX12 铺路。
 4. **实例化/间接绘制原语**随 B2b/B3 落地（新增重载，不改现签名）。
 
 ### 8.4 结论
 - **合理**：是；增量、可回归、债务显式。
-- **有优化空间**：有（8.3，主要是 frame-ring 分配器与 shader 注册表，建议在 B2b 之前先落 D4/D5 以免 mesh 阶段放大）。
+- **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；D5（frame-ring 分配器）进行中。
 - **最佳？**：是「低风险务实最优」，非「理论最优」（后者是 bind group + program/PSO 聚合的一次性大改）。
 - **技术债**：未隐藏，8.2 全部登记并各有偿还阶段；唯一需即时决策的是 D8（B2b 的 SSBO 顺序）。

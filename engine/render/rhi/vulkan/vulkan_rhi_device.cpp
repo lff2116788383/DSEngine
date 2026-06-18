@@ -615,14 +615,25 @@ unsigned int VulkanRhiDevice::CreateBuffer(size_t size, const void* data, bool i
     return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
 }
 
-// --- 内建资源访问器 (A1) ---
+// --- 内建资源访问器 ---
 
-unsigned int VulkanRhiDevice::GetSkyboxShaderProgram() {
+unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     EnsureInitialized();
-    if (shader_mgr_.skybox_shader_handle() == 0) {
-        shader_mgr_.InitSkyboxShader();
+    switch (program) {
+        case BuiltinProgram::Skybox:
+            if (shader_mgr_.skybox_shader_handle() == 0) shader_mgr_.InitSkyboxShader();
+            return shader_mgr_.skybox_shader_handle();
+        case BuiltinProgram::Sprite2D:
+            if (shader_mgr_.sprite2d_shader_handle() == 0) shader_mgr_.InitSprite2DShader();
+            return shader_mgr_.sprite2d_shader_handle();
+        case BuiltinProgram::SpriteFxSdf:
+            if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) shader_mgr_.InitSpriteFxSdfShader();
+            return shader_mgr_.sprite_fx_sdf_shader_handle();
+        case BuiltinProgram::SpriteFxVfx:
+            if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) shader_mgr_.InitSpriteFxVfxShader();
+            return shader_mgr_.sprite_fx_vfx_shader_handle();
     }
-    return shader_mgr_.skybox_shader_handle();
+    return 0;
 }
 
 unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
@@ -645,32 +656,6 @@ unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
         skybox_cube_vbo_handle_ = resource_mgr_.CreateBuffer(sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_handle_;
-}
-
-// --- 内建资源访问器 (B0) ---
-
-unsigned int VulkanRhiDevice::GetSprite2DShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite2d_shader_handle() == 0) {
-        shader_mgr_.InitSprite2DShader();
-    }
-    return shader_mgr_.sprite2d_shader_handle();
-}
-
-unsigned int VulkanRhiDevice::GetSpriteFxSdfShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) {
-        shader_mgr_.InitSpriteFxSdfShader();
-    }
-    return shader_mgr_.sprite_fx_sdf_shader_handle();
-}
-
-unsigned int VulkanRhiDevice::GetSpriteFxVfxShaderProgram() {
-    EnsureInitialized();
-    if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) {
-        shader_mgr_.InitSpriteFxVfxShader();
-    }
-    return shader_mgr_.sprite_fx_vfx_shader_handle();
 }
 
 BufferHandle VulkanRhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {

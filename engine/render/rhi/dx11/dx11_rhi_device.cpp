@@ -394,11 +394,17 @@ unsigned int DX11RhiDevice::CreateBuffer(size_t size, const void* data, bool is_
     return resource_mgr_.CreateBuffer(size, data, is_dynamic, is_index);
 }
 
-// --- 内建资源访问器 (A1) ---
+// --- 内建资源访问器 ---
+// 内建着色器在 InitD3D11→ShaderManager 初始化时已创建（DXBC），此处仅取句柄。
 
-unsigned int DX11RhiDevice::GetSkyboxShaderProgram() {
-    // 内建天空盒着色器在 InitD3D11→ShaderManager 初始化时已创建（DXBC）。
-    return shader_mgr_.skybox_shader_handle();
+unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
+    switch (program) {
+        case BuiltinProgram::Skybox:      return shader_mgr_.skybox_shader_handle();
+        case BuiltinProgram::Sprite2D:    return shader_mgr_.sprite2d_shader_handle();
+        case BuiltinProgram::SpriteFxSdf: return shader_mgr_.sprite_fx_sdf_shader_handle();
+        case BuiltinProgram::SpriteFxVfx: return shader_mgr_.sprite_fx_vfx_shader_handle();
+    }
+    return 0;
 }
 
 unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
@@ -421,21 +427,6 @@ unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
             sizeof(kSkyboxVertices), kSkyboxVertices, false, false);
     }
     return skybox_cube_vbo_handle_;
-}
-
-// --- 内建资源访问器 (B0) ---
-
-unsigned int DX11RhiDevice::GetSprite2DShaderProgram() {
-    // 内建 sprite2d 着色器在 InitD3D11→ShaderManager 初始化时已创建（DXBC）。
-    return shader_mgr_.sprite2d_shader_handle();
-}
-
-unsigned int DX11RhiDevice::GetSpriteFxSdfShaderProgram() {
-    return shader_mgr_.sprite_fx_sdf_shader_handle();
-}
-
-unsigned int DX11RhiDevice::GetSpriteFxVfxShaderProgram() {
-    return shader_mgr_.sprite_fx_vfx_shader_handle();
 }
 
 BufferHandle DX11RhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
