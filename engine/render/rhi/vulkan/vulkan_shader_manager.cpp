@@ -25,6 +25,9 @@
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
 #include "embed/sprite2d_frag.gen.h"
+#include "embed/sprite_fx_vert.gen.h"
+#include "embed/sprite_fx_sdf_frag.gen.h"
+#include "embed/sprite_fx_vfx_frag.gen.h"
 #include "embed/postprocess_vert.gen.h"
 #include "embed/postprocess_passthrough_frag.gen.h"
 #include "embed/bloom_downsample_comp.gen.h"
@@ -654,6 +657,28 @@ void VulkanShaderManager::InitSprite2DShader() {
         DEBUG_LOG_ERROR("Vulkan sprite2d shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan sprite2d shader created: handle={}", sprite2d_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitSpriteFxSdfShader() {
+    if (sprite_fx_sdf_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite_fx_sdf_shader_handle_ = CreateProgramFromSpirv(
+        ksprite_fx_vert_spv, ksprite_fx_vert_spv_size,
+        ksprite_fx_sdf_frag_spv, ksprite_fx_sdf_frag_spv_size);
+    if (sprite_fx_sdf_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan sprite_fx SDF shader creation failed (pre-compiled SPIR-V)");
+    }
+}
+
+void VulkanShaderManager::InitSpriteFxVfxShader() {
+    if (sprite_fx_vfx_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite_fx_vfx_shader_handle_ = CreateProgramFromSpirv(
+        ksprite_fx_vert_spv, ksprite_fx_vert_spv_size,
+        ksprite_fx_vfx_frag_spv, ksprite_fx_vfx_frag_spv_size);
+    if (sprite_fx_vfx_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan sprite_fx VFX shader creation failed (pre-compiled SPIR-V)");
     }
 }
 

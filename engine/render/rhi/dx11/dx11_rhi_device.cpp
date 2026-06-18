@@ -436,6 +436,14 @@ unsigned int DX11RhiDevice::GetSprite2DShaderProgram() {
     return shader_mgr_.sprite2d_shader_handle();
 }
 
+unsigned int DX11RhiDevice::GetSpriteFxSdfShaderProgram() {
+    return shader_mgr_.sprite_fx_sdf_shader_handle();
+}
+
+unsigned int DX11RhiDevice::GetSpriteFxVfxShaderProgram() {
+    return shader_mgr_.sprite_fx_vfx_shader_handle();
+}
+
 BufferHandle DX11RhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
     // kUniform（非 storage/indirect/index）→ D3D11 constant buffer
     if (has(desc.usage, GpuBufferUsage::kUniform) &&

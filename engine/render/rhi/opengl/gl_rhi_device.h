@@ -193,6 +193,8 @@ public:
     unsigned int GetSkyboxShaderProgram() override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
     unsigned int GetSprite2DShaderProgram() override;
+    unsigned int GetSpriteFxSdfShaderProgram() override;
+    unsigned int GetSpriteFxVfxShaderProgram() override;
 
     // --- 子系统访问器 ---
     GLResourceManager& resource_mgr() { return resource_mgr_; }

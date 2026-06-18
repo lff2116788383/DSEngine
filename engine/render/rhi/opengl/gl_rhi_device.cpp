@@ -964,6 +964,22 @@ unsigned int OpenGLRhiDevice::GetSprite2DShaderProgram() {
     return shader_mgr_.sprite2d_shader_handle();
 }
 
+unsigned int OpenGLRhiDevice::GetSpriteFxSdfShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) {
+        shader_mgr_.InitSpriteFxSdfShader();
+    }
+    return shader_mgr_.sprite_fx_sdf_shader_handle();
+}
+
+unsigned int OpenGLRhiDevice::GetSpriteFxVfxShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) {
+        shader_mgr_.InitSpriteFxVfxShader();
+    }
+    return shader_mgr_.sprite_fx_vfx_shader_handle();
+}
+
 // --- SSBO (Shader Storage Buffer Object) ---
 
 unsigned int OpenGLRhiDevice::CreateSSBO(size_t size, const void* data) {

@@ -39,6 +39,19 @@ struct SpritePerFrameUBO {
 };
 static_assert(sizeof(SpritePerFrameUBO) == 176, "SpritePerFrameUBO std140 layout = 176 bytes");
 
+// SDF/VFX 路径的 SpriteFx push-block（std140，128B）。vp 供顶点变换，p0..p3 载效果参数：
+//   SDF: p0 = (threshold, smoothing, outline_width, shadow_softness)
+//   VFX: p0 = gradient_start, p1 = gradient_end,
+//        p2 = (rect_w, rect_h, corner_radius, gradient_dir), p3 = (blur_radius, blur_intensity, 0, 0)
+struct SpriteFxUBO {
+    glm::mat4 vp;
+    glm::vec4 p0;
+    glm::vec4 p1;
+    glm::vec4 p2;
+    glm::vec4 p3;
+};
+static_assert(sizeof(SpriteFxUBO) == 128, "SpriteFxUBO std140 layout = 128 bytes");
+
 // 着色器变体 key（与 sprite_render_system / draw_executor 一致）。
 const unsigned int kSdfVariantKey =
     static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
@@ -65,11 +78,31 @@ struct Batch {
     unsigned int shader_variant = 0;
 };
 
+const SpriteVisualEffect& Vfx(const SpriteDrawItem& i) { return i.visual_effect; }
+
+// 游程合批要求批内所有项的「程序选择 + push-block 参数」一致，否则取代表项参数会出错。
+// 故除 texture/material/variant/blend 外，还比较 SDF 与 VFX 全部参数。
 bool SameState(const SpriteDrawItem& a, const SpriteDrawItem& b) {
-    return a.texture_handle == b.texture_handle &&
-           a.material_instance_id == b.material_instance_id &&
-           a.shader_variant_key == b.shader_variant_key &&
-           a.blend_mode == b.blend_mode;
+    if (a.texture_handle != b.texture_handle ||
+        a.material_instance_id != b.material_instance_id ||
+        a.shader_variant_key != b.shader_variant_key ||
+        a.blend_mode != b.blend_mode) {
+        return false;
+    }
+    if (a.sdf_threshold != b.sdf_threshold || a.sdf_smoothing != b.sdf_smoothing ||
+        a.sdf_outline_width != b.sdf_outline_width || a.sdf_shadow_softness != b.sdf_shadow_softness) {
+        return false;
+    }
+    const SpriteVisualEffect& va = Vfx(a);
+    const SpriteVisualEffect& vb = Vfx(b);
+    return va.enabled == vb.enabled &&
+           va.corner_radius == vb.corner_radius &&
+           va.gradient_direction == vb.gradient_direction &&
+           va.blur_radius == vb.blur_radius &&
+           va.blur_intensity == vb.blur_intensity &&
+           va.rect_size == vb.rect_size &&
+           va.gradient_start == vb.gradient_start &&
+           va.gradient_end == vb.gradient_end;
 }
 
 }  // namespace
@@ -122,6 +155,17 @@ void SpriteBatchRenderer::EnsureResources(RhiDevice& device, size_t needed_quads
         ib_desc.usage = GpuBufferUsage::kIndex;
         ibo_ = device.CreateGpuBuffer(ib_desc, indices.data());
         ibo_cap_quads_ = needed_quads;
+    }
+}
+
+void SpriteBatchRenderer::EnsureFxUbos(RhiDevice& device, size_t needed) {
+    // 每 fx 批需独立缓冲（参数互异，且延迟后端提交前不可别名）。池跨帧持久，按需增长。
+    while (fx_ubos_.size() < needed) {
+        GpuBufferDesc desc;
+        desc.size = sizeof(SpriteFxUBO);
+        desc.usage = GpuBufferUsage::kUniform;
+        desc.is_dynamic = true;
+        fx_ubos_.push_back(device.CreateGpuBuffer(desc, nullptr));
     }
 }
 
@@ -231,11 +275,60 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{2u, 2u, 28u},   // uv
     };
 
+    // 路径分类：SDF（变体 key）/ VFX（visual_effect.enabled）/ 默认。fx 程序懒取，
+    // 缺失（后端未提供）则回退默认程序，绘出带纹理 quad 而非崩溃。
+    auto path_of = [&](const Batch& b) -> int {
+        const SpriteDrawItem& rep = items[b.start_quad];
+        if (b.shader_variant == kSdfVariantKey) return 1;       // SDF
+        if (rep.visual_effect.enabled) return 2;                // VFX
+        return 0;                                               // 默认
+    };
+
+    unsigned int sdf_prog = 0, vfx_prog = 0;
+    size_t fx_batch_count = 0;
+    for (const Batch& b : batches) if (path_of(b) != 0) ++fx_batch_count;
+    if (fx_batch_count > 0) {
+        sdf_prog = device.GetSpriteFxSdfShaderProgram();
+        vfx_prog = device.GetSpriteFxVfxShaderProgram();
+        EnsureFxUbos(device, fx_batch_count);
+    }
+
+    size_t fx_idx = 0;
     for (const Batch& b : batches) {
         const unsigned int blend = (b.shader_variant == kAdditiveVariantKey) ? 1u : b.blend_mode;
         cmd.SetPipelineState(PsoForBlend(device, blend));
-        cmd.BindShaderProgram(sprite_prog);
-        cmd.BindUniformBuffer(0u, ubo_.raw());
+
+        const int path = path_of(b);
+        unsigned int prog = sprite_prog;
+        unsigned int ubo_handle = ubo_.raw();
+
+        if (path != 0) {
+            const SpriteDrawItem& rep = items[b.start_quad];
+            unsigned int fx_prog = (path == 1) ? sdf_prog : vfx_prog;
+            if (fx_prog != 0) {
+                SpriteFxUBO fx{};
+                fx.vp = uniforms.vp;
+                if (path == 1) {  // SDF
+                    fx.p0 = glm::vec4(rep.sdf_threshold, rep.sdf_smoothing,
+                                      rep.sdf_outline_width, rep.sdf_shadow_softness);
+                } else {          // VFX
+                    const SpriteVisualEffect& ve = rep.visual_effect;
+                    fx.p0 = ve.gradient_start;
+                    fx.p1 = ve.gradient_end;
+                    fx.p2 = glm::vec4(ve.rect_size.x, ve.rect_size.y,
+                                      ve.corner_radius, ve.gradient_direction);
+                    fx.p3 = glm::vec4(ve.blur_radius, ve.blur_intensity, 0.0f, 0.0f);
+                }
+                BufferHandle fx_ubo = fx_ubos_[fx_idx++];
+                device.UpdateGpuBuffer(fx_ubo, 0, sizeof(fx), &fx);
+                prog = fx_prog;
+                ubo_handle = fx_ubo.raw();
+            }
+            // fx_prog==0：保持默认程序 + PerFrame UBO（回退）。
+        }
+
+        cmd.BindShaderProgram(prog);
+        cmd.BindUniformBuffer(0u, ubo_handle);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
         cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
         cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
@@ -248,10 +341,12 @@ void SpriteBatchRenderer::Shutdown(RhiDevice& device) {
     if (vbo_) device.DeleteGpuBuffer(vbo_);
     if (ibo_) device.DeleteGpuBuffer(ibo_);
     if (ubo_) device.DeleteGpuBuffer(ubo_);
-    if (sdf_ubo_) device.DeleteGpuBuffer(sdf_ubo_);
-    if (vfx_ubo_) device.DeleteGpuBuffer(vfx_ubo_);
+    for (BufferHandle& h : fx_ubos_) {
+        if (h) device.DeleteGpuBuffer(h);
+    }
+    fx_ubos_.clear();
     if (white_tex_) device.DeleteTexture(white_tex_);
-    vbo_ = ibo_ = ubo_ = sdf_ubo_ = vfx_ubo_ = BufferHandle{};
+    vbo_ = ibo_ = ubo_ = BufferHandle{};
     white_tex_ = 0;
     vbo_cap_quads_ = ibo_cap_quads_ = 0;
     init_ = false;

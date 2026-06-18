@@ -123,6 +123,12 @@ public:
     /// sprite2d 着色器句柄（base ShaderManagerBase 未含）
     unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
 
+    /// 初始化 SpriteBatchRenderer SDF/VFX 着色器（sprite_fx.vert + sprite_fx_{sdf,vfx}.frag）
+    void InitSpriteFxSdfShader();
+    void InitSpriteFxVfxShader();
+    unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
+    unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -220,6 +226,8 @@ private:
 
     /// 内建 sprite2d 着色器句柄（B0；base ShaderManagerBase 未含）
     unsigned int sprite2d_shader_handle_ = 0;
+    unsigned int sprite_fx_sdf_shader_handle_ = 0;
+    unsigned int sprite_fx_vfx_shader_handle_ = 0;
 };
 
 } // namespace render

@@ -72,6 +72,8 @@ public:
 
     // --- 内建资源访问器 (B0) ---
     unsigned int GetSprite2DShaderProgram() override;
+    unsigned int GetSpriteFxSdfShaderProgram() override;
+    unsigned int GetSpriteFxVfxShaderProgram() override;
 
     // kUniform 用途需走 constant buffer（D3D11_BIND_CONSTANT_BUFFER），覆写基类路由。
     BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;

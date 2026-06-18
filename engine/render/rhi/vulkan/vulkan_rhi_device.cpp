@@ -664,6 +664,22 @@ unsigned int VulkanRhiDevice::GetSprite2DShaderProgram() {
     return shader_mgr_.sprite2d_shader_handle();
 }
 
+unsigned int VulkanRhiDevice::GetSpriteFxSdfShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite_fx_sdf_shader_handle() == 0) {
+        shader_mgr_.InitSpriteFxSdfShader();
+    }
+    return shader_mgr_.sprite_fx_sdf_shader_handle();
+}
+
+unsigned int VulkanRhiDevice::GetSpriteFxVfxShaderProgram() {
+    EnsureInitialized();
+    if (shader_mgr_.sprite_fx_vfx_shader_handle() == 0) {
+        shader_mgr_.InitSpriteFxVfxShader();
+    }
+    return shader_mgr_.sprite_fx_vfx_shader_handle();
+}
+
 BufferHandle VulkanRhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
     // kUniform（非 storage/indirect/index）→ VK_BUFFER_USAGE_UNIFORM_BUFFER（host-visible 持久映射）
     if (has(desc.usage, GpuBufferUsage::kUniform) &&

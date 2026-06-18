@@ -43,6 +43,7 @@ public:
 
 private:
     void EnsureResources(RhiDevice& device, size_t needed_quads);
+    void EnsureFxUbos(RhiDevice& device, size_t needed);
     unsigned int PsoForBlend(RhiDevice& device, unsigned int blend_mode);
 
     unsigned int pso_alpha_ = 0;
@@ -52,9 +53,10 @@ private:
 
     BufferHandle vbo_;   ///< 动态顶点缓冲（按需扩容）
     BufferHandle ibo_;   ///< 静态 quad 索引（0,1,2,0,2,3 重复）
-    BufferHandle ubo_;   ///< PerFrame（std140，176B；着色器仅用 vp）
-    BufferHandle sdf_ubo_;  ///< TEXT_SDF 参数 push-block
-    BufferHandle vfx_ubo_;  ///< ui_effects 参数 push-block
+    BufferHandle ubo_;   ///< PerFrame（std140，176B；默认 sprite2d 路径仅用 vp）
+    /// SDF/VFX 批的 push-block 参数 UBO 池（SpriteFx 布局，128B/个）。每 fx 批一个独立
+    /// 缓冲（参数互异），跨帧持久复用——满足 Vulkan「提交前不可别名/删除」生命周期约束。
+    std::vector<BufferHandle> fx_ubos_;
 
     size_t vbo_cap_quads_ = 0;
     size_t ibo_cap_quads_ = 0;

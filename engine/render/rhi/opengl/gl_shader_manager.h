@@ -178,6 +178,12 @@ public:
     void InitSprite2DShader();
     unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
     const PBRShaderLocations& sprite2d_locations() const { return sprite2d_locations_; }
+    // SpriteBatchRenderer SDF/VFX 路径：sprite_fx.vert + sprite_fx_{sdf,vfx}.frag，
+    // 参数走 SpriteFx push-block UBO\@slot0，纹理\@slot0。
+    void InitSpriteFxSdfShader();
+    void InitSpriteFxVfxShader();
+    unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
+    unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
 
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
@@ -248,6 +254,8 @@ private:
 
     unsigned int sprite2d_shader_handle_ = 0;
     PBRShaderLocations sprite2d_locations_;
+    unsigned int sprite_fx_sdf_shader_handle_ = 0;
+    unsigned int sprite_fx_vfx_shader_handle_ = 0;
 };
 
 } // namespace render

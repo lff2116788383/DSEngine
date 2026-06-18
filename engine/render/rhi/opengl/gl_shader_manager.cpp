@@ -61,6 +61,9 @@
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
+#include "embed/sprite_fx_vert.gen.h"
+#include "embed/sprite_fx_sdf_frag.gen.h"
+#include "embed/sprite_fx_vfx_frag.gen.h"
 
 // GPU-Driven PBR 变体（预编译，无运行时 string patch）
 #include "embed/pbr_gpu_driven_vert.gen.h"
@@ -80,6 +83,7 @@
 #include "embed/sprite_vert_reflect.gen.h"
 #include "embed/sprite_frag_reflect.gen.h"
 #include "embed/sprite2d_vert_reflect.gen.h"
+#include "embed/sprite_fx_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
 
@@ -391,6 +395,7 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     if (std::strcmp(name, "PerFrame") == 0)       return UBOBindingPoint::PerFrame;
     if (std::strcmp(name, "PerScene") == 0)       return UBOBindingPoint::PerScene;
     if (std::strcmp(name, "PerMaterial") == 0)    return UBOBindingPoint::PerMaterial;
+    if (std::strcmp(name, "SpriteFx") == 0)       return UBOBindingPoint::PerFrame;
     if (std::strcmp(name, "PointLightUBO") == 0)  return UBOBindingPoint::PointLights;
     if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
     if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
@@ -654,6 +659,40 @@ void GLShaderManager::InitSprite2DShader() {
     if (sprite2d_locations_.texture >= 0) {
         glUniform1i(sprite2d_locations_.texture, 0);
     }
+    glUseProgram(0);
+}
+
+void GLShaderManager::InitSpriteFxSdfShader() {
+    if (sprite_fx_sdf_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite_fx_sdf_shader_handle_ = CompileProgram(DSE_SL(ksprite_fx_vert), DSE_SL(ksprite_fx_sdf_frag));
+    if (sprite_fx_sdf_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: sprite_fx SDF shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite_fx_sdf_shader_handle_, ksprite_fx_vert_reflection);
+    glUseProgram(sprite_fx_sdf_shader_handle_);
+    int tex_loc = glGetUniformLocation(sprite_fx_sdf_shader_handle_, "u_texture");
+    if (tex_loc >= 0) glUniform1i(tex_loc, 0);  // 通用 BindTexture(slot=0) → 单元 0
+    glUseProgram(0);
+}
+
+void GLShaderManager::InitSpriteFxVfxShader() {
+    if (sprite_fx_vfx_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    sprite_fx_vfx_shader_handle_ = CompileProgram(DSE_SL(ksprite_fx_vert), DSE_SL(ksprite_fx_vfx_frag));
+    if (sprite_fx_vfx_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: sprite_fx VFX shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(sprite_fx_vfx_shader_handle_, ksprite_fx_vert_reflection);
+    glUseProgram(sprite_fx_vfx_shader_handle_);
+    int tex_loc = glGetUniformLocation(sprite_fx_vfx_shader_handle_, "u_texture");
+    if (tex_loc >= 0) glUniform1i(tex_loc, 0);
     glUseProgram(0);
 }
 

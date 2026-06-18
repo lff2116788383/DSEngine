@@ -183,6 +183,12 @@ public:
     /// 内建 2D sprite 着色器程序句柄（pos\@0/color\@1/uv\@2 + PerFrame UBO + u_texture，懒初始化）
     /// 供 B0 SpriteRenderer 用新通用原语做活体验证。
     virtual unsigned int GetSprite2DShaderProgram() { return 0; }
+    /// 内建 SDF 文本批着色器（sprite_fx.vert + sprite_fx_sdf.frag，SpriteFx push-block
+    /// UBO\@slot0 + u_texture\@slot0，懒初始化）。供 SpriteBatchRenderer SDF 路径。
+    virtual unsigned int GetSpriteFxSdfShaderProgram() { return 0; }
+    /// 内建 UI 特效批着色器（sprite_fx.vert + sprite_fx_vfx.frag，SpriteFx push-block
+    /// UBO\@slot0 + u_texture\@slot0，懒初始化）。供 SpriteBatchRenderer VFX 路径。
+    virtual unsigned int GetSpriteFxVfxShaderProgram() { return 0; }
 
     virtual unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) = 0;
     virtual void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) = 0;

@@ -120,6 +120,9 @@ public:
 
     /// 内建 2D sprite 着色器句柄（B0 通用原语活体验证用，base 未含）
     unsigned int sprite2d_shader_handle() const { return sprite2d_shader_handle_; }
+    /// SpriteBatchRenderer SDF/VFX 路径着色器（sprite_fx.vert + sprite_fx_{sdf,vfx}.frag）
+    unsigned int sprite_fx_sdf_shader_handle() const { return sprite_fx_sdf_shader_handle_; }
+    unsigned int sprite_fx_vfx_shader_handle() const { return sprite_fx_vfx_shader_handle_; }
 
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
@@ -145,6 +148,8 @@ private:
 
     /// 内建 2D sprite 着色器句柄（B0；base ShaderManagerBase 未含）
     unsigned int sprite2d_shader_handle_ = 0;
+    unsigned int sprite_fx_sdf_shader_handle_ = 0;
+    unsigned int sprite_fx_vfx_shader_handle_ = 0;
 
 };
 

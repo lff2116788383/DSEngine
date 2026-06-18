@@ -11,6 +11,9 @@
 #include "engine/render/shaders/generated/embed/sprite_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sprite_fx_vert.gen.h"
+#include "engine/render/shaders/generated/embed/sprite_fx_sdf_frag.gen.h"
+#include "engine/render/shaders/generated/embed/sprite_fx_vfx_frag.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_frag.gen.h"
 #include "engine/render/shaders/generated/embed/particle_vert.gen.h"
@@ -64,6 +67,7 @@
 #include "engine/render/shaders/generated/embed/pbr_gpu_driven_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite2d_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/sprite_fx_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -393,6 +397,31 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(ksprite_vert_reflection, vfx_layout);
         CreateInputLayoutForShader(ui_effects_shader_handle_, vfx_layout.data(),
                                    static_cast<int>(vfx_layout.size()));
+    }
+
+    // ---- SpriteBatchRenderer SDF/VFX 路径着色器 (sprite_fx.vert + sprite_fx_{sdf,vfx}.frag) ----
+    sprite_fx_sdf_shader_handle_ = CreateProgramFromDXBC(
+        ksprite_fx_vert_dxbc, ksprite_fx_vert_dxbc_size,
+        ksprite_fx_sdf_frag_dxbc, ksprite_fx_sdf_frag_dxbc_size);
+    if (sprite_fx_sdf_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin sprite_fx SDF shader created (DXBC): {}", sprite_fx_sdf_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fx_layout;
+        CreateInputLayoutFromReflection(ksprite_fx_vert_reflection, fx_layout);
+        CreateInputLayoutForShader(sprite_fx_sdf_shader_handle_, fx_layout.data(),
+                                   static_cast<int>(fx_layout.size()));
+    }
+
+    sprite_fx_vfx_shader_handle_ = CreateProgramFromDXBC(
+        ksprite_fx_vert_dxbc, ksprite_fx_vert_dxbc_size,
+        ksprite_fx_vfx_frag_dxbc, ksprite_fx_vfx_frag_dxbc_size);
+    if (sprite_fx_vfx_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin sprite_fx VFX shader created (DXBC): {}", sprite_fx_vfx_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fx_layout;
+        CreateInputLayoutFromReflection(ksprite_fx_vert_reflection, fx_layout);
+        CreateInputLayoutForShader(sprite_fx_vfx_shader_handle_, fx_layout.data(),
+                                   static_cast<int>(fx_layout.size()));
     }
 
     pulse();
