@@ -419,6 +419,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::SpriteFxVfx: return shader_mgr_.sprite_fx_vfx_shader_handle();
         case BuiltinProgram::ForwardPbr:  return shader_mgr_.forward_pbr_shader_handle();
         case BuiltinProgram::ForwardPbrSkinned: return shader_mgr_.forward_pbr_skinned_shader_handle();
+        case BuiltinProgram::ForwardPbrInstanced: return shader_mgr_.forward_pbr_instanced_shader_handle();
     }
     return 0;
 }

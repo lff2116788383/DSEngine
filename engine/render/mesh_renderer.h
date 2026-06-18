@@ -128,6 +128,27 @@ public:
                      const MeshMaterial& material,
                      const DirectionalLight& light);
 
+    /// 记录一次硬件实例化 PBR 网格绘制（B2b-3）。顶点为局部空间，每实例 model 矩阵走
+    /// instance SSBO\@slot 0，VS 按 gl_InstanceIndex 取出后施 model + vp（复用静态 PBR frag）。
+    /// 契约：DX11 SV_InstanceID 始终从 0 起，故内部恒以 DrawIndexedInstanced(first_instance=0)
+    /// 配 0 基 SSBO 索引（RHI_PRIMITIVE_CONTRACT §6）。
+    /// @param vertices         局部空间顶点（所有实例共享）
+    /// @param indices          16 位索引
+    /// @param instance_models  每实例 model 矩阵（世界空间），实例数 = size()
+    /// @param view/proj        相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos       世界空间相机位置
+    /// @param material         材质参数 + 纹理（所有实例共享）
+    /// @param light            单方向光
+    void DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
+                       const std::vector<MeshVertex>& vertices,
+                       const std::vector<uint16_t>& indices,
+                       const std::vector<glm::mat4>& instance_models,
+                       const glm::mat4& view,
+                       const glm::mat4& proj,
+                       const glm::vec3& camera_pos,
+                       const MeshMaterial& material,
+                       const DirectionalLight& light);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
@@ -136,6 +157,7 @@ private:
     void EnsureVertexCapacity(RhiDevice& device, size_t vertex_bytes);
     void EnsureIndexCapacity(RhiDevice& device, size_t index_bytes);
     void EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes);
+    void EnsureInstanceCapacity(RhiDevice& device, size_t instance_bytes);
 
     unsigned int pso_ = 0;
     unsigned int white_tex_ = 0;
@@ -145,9 +167,11 @@ private:
     BufferHandle per_scene_ubo_;
     BufferHandle per_material_ubo_;
     BufferHandle bone_ssbo_;
+    BufferHandle instance_ssbo_;
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
     size_t bone_ssbo_capacity_ = 0;
+    size_t instance_ssbo_capacity_ = 0;
     bool init_ = false;
 };
 

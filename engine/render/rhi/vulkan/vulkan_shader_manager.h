@@ -137,6 +137,10 @@ public:
     void InitForwardPbrSkinnedShader();
     unsigned int forward_pbr_skinned_shader_handle() const { return forward_pbr_skinned_shader_handle_; }
 
+    /// 初始化实例化 forward PBR 着色器（B2b-3；forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@set3.b0）
+    void InitForwardPbrInstancedShader();
+    unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -238,6 +242,7 @@ private:
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
+    unsigned int forward_pbr_instanced_shader_handle_ = 0;
 };
 
 } // namespace render

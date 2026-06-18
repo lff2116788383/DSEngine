@@ -129,6 +129,9 @@ public:
     /// 蒙皮 forward PBR 着色器句柄（B2b-2；forward_pbr_skinned.vert + forward_pbr.frag + 骨骼 SSBO\@t0）
     unsigned int forward_pbr_skinned_shader_handle() const { return forward_pbr_skinned_shader_handle_; }
 
+    /// 实例化 forward PBR 着色器句柄（B2b-3；forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@t0）
+    unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
+
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
 private:
@@ -157,6 +160,7 @@ private:
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
+    unsigned int forward_pbr_instanced_shader_handle_ = 0;
 
 };
 

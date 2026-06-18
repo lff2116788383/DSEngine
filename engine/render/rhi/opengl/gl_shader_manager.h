@@ -195,6 +195,11 @@ public:
     void InitForwardPbrSkinnedShader();
     unsigned int forward_pbr_skinned_shader_handle() const { return forward_pbr_skinned_shader_handle_; }
 
+    // --- 实例化 forward PBR 着色器（B2b-3）：forward_pbr_instanced.vert + forward_pbr.frag。
+    // PerFrame\@0 UBO + 每实例 model SSBO\@set3.b0（通用原语 BindStorageBuffer(0)）。
+    void InitForwardPbrInstancedShader();
+    unsigned int forward_pbr_instanced_shader_handle() const { return forward_pbr_instanced_shader_handle_; }
+
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
         int texture = -1;
@@ -268,6 +273,7 @@ private:
     unsigned int sprite_fx_vfx_shader_handle_ = 0;
     unsigned int forward_pbr_shader_handle_ = 0;
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
+    unsigned int forward_pbr_instanced_shader_handle_ = 0;
 };
 
 } // namespace render
