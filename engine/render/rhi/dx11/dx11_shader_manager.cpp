@@ -18,6 +18,7 @@
 #include "engine/render/shaders/generated/embed/forward_shaded_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_instanced_vert.gen.h"
+#include "engine/render/shaders/generated/embed/forward_shaded_morph_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_sdf_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vfx_frag.gen.h"
@@ -78,6 +79,7 @@
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_instanced_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/forward_shaded_morph_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
@@ -482,6 +484,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kforward_shaded_instanced_vert_reflection, fis_layout);
         CreateInputLayoutForShader(forward_instanced_shaded_shader_handle_, fis_layout.data(),
                                    static_cast<int>(fis_layout.size()));
+    }
+    pulse();
+
+    // ---- Morph target + 高级 shading 组合着色器 (Final-Feat-5)：morph VS（增量 SSBO\@t0 + 权重 UBO\@b8）+ forward_shaded.frag ----
+    forward_morph_shaded_shader_handle_ = CreateProgramFromDXBC(
+        kforward_shaded_morph_vert_dxbc, kforward_shaded_morph_vert_dxbc_size,
+        kforward_shaded_frag_dxbc, kforward_shaded_frag_dxbc_size);
+    if (forward_morph_shaded_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward morph shaded shader created (DXBC): {}", forward_morph_shaded_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fms_layout;
+        CreateInputLayoutFromReflection(kforward_shaded_morph_vert_reflection, fms_layout);
+        CreateInputLayoutForShader(forward_morph_shaded_shader_handle_, fms_layout.data(),
+                                   static_cast<int>(fms_layout.size()));
     }
     pulse();
 

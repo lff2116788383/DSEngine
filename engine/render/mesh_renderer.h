@@ -188,6 +188,15 @@ struct ShadedGI {
     float ddgi_normal_bias = 0.2f;
 };
 
+/// Morph target（形变目标，Final-Feat-5）。每个 target 提供与基网格顶点一一对应的
+/// 位置/法线增量（局部空间，内部按 model 预变换：位置用 model 线性部分、法线用法线矩阵）。
+/// 最终顶点 = 基顶点 + Σ weight_i * delta_i，在 VS 内按 gl_VertexIndex 取增量加权求和。
+struct MeshMorphTarget {
+    std::vector<glm::vec3> position_deltas;  ///< 顶点位置增量（局部空间），size 须 == 基网格顶点数
+    std::vector<glm::vec3> normal_deltas;    ///< 顶点法线增量（局部空间）；空 = 该 target 不形变法线
+    float weight = 0.0f;                     ///< 该 target 当前权重
+};
+
 /**
  * @class MeshRenderer
  * @brief 用通用原语绘制单个带材质的 PBR 网格。资源（PSO / UBO / 白纹理 / VB / IB）首帧懒创建，
@@ -368,6 +377,37 @@ public:
                              const ShadedGI& gi = {},
                              const std::vector<ShadedSpotLight>& spot_lights = {});
 
+    /// 记录一次 Morph target + 高级 shading 网格绘制（Final-Feat-5）。基顶点在 CPU 侧预变换到世界空间
+    /// （同 DrawShaded），每个 morph target 的位置/法线增量亦按 model 预变换为世界空间增量写入 morph
+    /// 增量 SSBO\@slot 0（布局 [target*vertex_count+vertex]）；权重/计数写入 morph 权重 UBO\@slot 8；
+    /// VS 按 gl_VertexIndex 加权求和后施 vp，复用 BuiltinProgram::ForwardMorphShaded
+    ///（forward_shaded_morph.vert + forward_shaded.frag）与 DrawShaded 全套高级 shading 片元。
+    /// morph_targets 为空时退化为静态 DrawShaded 输出（VS 形变循环不执行，不回归）。
+    /// @param vertices       局部空间基顶点（内部按 model 预变换到世界空间）
+    /// @param indices        16 位索引
+    /// @param morph_targets  形变目标列表（≤64；每个的 deltas 须与 vertices 等长，否则该 target 跳过）
+    /// @param model          模型矩阵（基顶点 + 增量均按此预变换）
+    /// @param view/proj      相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos     世界空间相机位置
+    /// @param material       高级 shading 材质参数 + 纹理
+    /// @param light          单方向光
+    /// @param point_lights   clustered 点光（≤64；超出截断；空=仅方向光）
+    /// @param gi             全局光照（默认关 → 退化为平坦环境光）
+    /// @param spot_lights    聚光灯（≤64；超出截断；空=无聚光灯）
+    void DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
+                         const std::vector<MeshVertex>& vertices,
+                         const std::vector<uint16_t>& indices,
+                         const std::vector<MeshMorphTarget>& morph_targets,
+                         const glm::mat4& model,
+                         const glm::mat4& view,
+                         const glm::mat4& proj,
+                         const glm::vec3& camera_pos,
+                         const ShadedMaterial& material,
+                         const DirectionalLight& light,
+                         const std::vector<ShadedPointLight>& point_lights = {},
+                         const ShadedGI& gi = {},
+                         const std::vector<ShadedSpotLight>& spot_lights = {});
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
@@ -377,6 +417,7 @@ private:
     void EnsureIndexCapacity(RhiDevice& device, size_t index_bytes);
     void EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes);
     void EnsureInstanceCapacity(RhiDevice& device, size_t instance_bytes);
+    void EnsureMorphCapacity(RhiDevice& device, size_t morph_bytes);
     void EnsureIndirectBuffer(RhiDevice& device);
     void EnsureShadedResources(RhiDevice& device);
 
@@ -398,11 +439,13 @@ private:
     BufferHandle per_material_ubo_;
     BufferHandle bone_ssbo_;
     BufferHandle instance_ssbo_;
+    BufferHandle morph_ssbo_;       ///< morph 增量 SSBO（set7.b0，slot=0，Final-Feat-5；[target*vertex_count+vertex]）
     BufferHandle indirect_buffer_;  ///< GPU-driven 间接绘制命令缓冲（B2b-5，单条 DrawElementsIndirectCommand）
     size_t vbo_capacity_ = 0;
     size_t ibo_capacity_ = 0;
     size_t bone_ssbo_capacity_ = 0;
     size_t instance_ssbo_capacity_ = 0;
+    size_t morph_ssbo_capacity_ = 0;
     bool init_ = false;
 };
 

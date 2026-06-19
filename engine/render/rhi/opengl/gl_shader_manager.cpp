@@ -65,6 +65,7 @@
 #include "embed/forward_shaded_frag.gen.h"
 #include "embed/forward_shaded_skinned_vert.gen.h"
 #include "embed/forward_shaded_instanced_vert.gen.h"
+#include "embed/forward_shaded_morph_vert.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -95,6 +96,7 @@
 #include "embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "embed/forward_shaded_skinned_vert_reflect.gen.h"
 #include "embed/forward_shaded_instanced_vert_reflect.gen.h"
+#include "embed/forward_shaded_morph_vert_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
@@ -421,6 +423,9 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     // Final-Feat-4: ForwardShaded 的聚光灯 UBO 置于 set=7/b1 → 契约 slot 7（复用 binding point 7；
     // 该着色器不含 MorphWeights 块，无冲突；通用原语 BindUniformBuffer(7) → glBindBufferBase(...,7)）。
     if (std::strcmp(name, "FwdSpotLightUBO") == 0) return static_cast<UBOBindingPoint>(7);
+    // Final-Feat-5: ForwardMorphShaded 的 morph 权重 UBO 置于 set=7/b3 → 契约 slot 8（按 (set,binding)
+    // 排在 FwdSpotLightUBO set7.b1 之后；通用原语 BindUniformBuffer(8) → glBindBufferBase(...,8)）。
+    if (std::strcmp(name, "FwdMorphWeights") == 0) return static_cast<UBOBindingPoint>(8);
     if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
     if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
     if (std::strcmp(name, "BoneMatrices") == 0)   return UBOBindingPoint::BoneMatrices;
@@ -801,6 +806,37 @@ void GLShaderManager::InitForwardInstancedShadedShader() {
         gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
         glUseProgram(forward_instanced_shaded_shader_handle_);
         gl_reflect::BindSamplersOnce(forward_instanced_shaded_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
+void GLShaderManager::InitForwardMorphShadedShader() {
+    if (forward_morph_shaded_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: forward morph shaded 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // Morph VS（morph 增量 SSBO\@set7.b0 + 权重 UBO\@set7.b3）+ 高级 shading frag。
+    forward_morph_shaded_shader_handle_ =
+        CompileProgram(DSE_SL(kforward_shaded_morph_vert), DSE_SL(kforward_shaded_frag));
+    if (forward_morph_shaded_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward morph shaded shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_morph_shaded_shader_handle_, kforward_shaded_morph_vert_reflection);
+    BindUBOsFromReflection(forward_morph_shaded_shader_handle_, kforward_shaded_frag_reflection);
+
+    // morph 增量 SSBO 在 GLSL430 显式 layout(binding=0)（set 被剥离），通用原语 BindStorageBuffer(0) 直接命中，无需重映射。
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
+        glUseProgram(forward_morph_shaded_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_morph_shaded_shader_handle_, tex_entries,
                                      glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }

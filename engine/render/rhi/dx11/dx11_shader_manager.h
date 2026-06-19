@@ -144,6 +144,9 @@ public:
     /// 实例化 + 高级 shading 组合着色器句柄（Final-Feat-3；forward_shaded_instanced.vert + forward_shaded.frag + 每实例 model SSBO\@t0）
     unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
 
+    /// Morph target + 高级 shading 组合着色器句柄（Final-Feat-5；forward_shaded_morph.vert + forward_shaded.frag + morph 增量 SSBO\@t0 + 权重 UBO\@b8）
+    unsigned int forward_morph_shaded_shader_handle() const { return forward_morph_shaded_shader_handle_; }
+
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
 private:
@@ -177,6 +180,7 @@ private:
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
+    unsigned int forward_morph_shaded_shader_handle_ = 0;
 
 };
 

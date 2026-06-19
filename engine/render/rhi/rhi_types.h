@@ -189,6 +189,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardShaded = 8,  ///< 高级 shading forward（forward_pbr.vert + forward_shaded.frag；shading_mode 0/2-6 + SSS/clearcoat/anisotropy/POM/alpha-test/double-sided + 扩展 PerMaterial UBO）
     ForwardSkinnedShaded = 9,  ///< 蒙皮 + 高级 shading 组合（forward_shaded_skinned.vert + forward_shaded.frag；骨骼矩阵 SSBO\@set7.b0 避开 frag set0-6）
     ForwardInstancedShaded = 10,  ///< 硬件实例化 + 高级 shading 组合（forward_shaded_instanced.vert + forward_shaded.frag；每实例 model SSBO\@set7.b0 避开 frag set0-6）
+    ForwardMorphShaded = 11,  ///< Morph target + 高级 shading 组合（forward_shaded_morph.vert + forward_shaded.frag；morph 增量 SSBO\@set7.b0 + 权重 UBO\@set7.b3）
 };
 
 /// 渲染通道描述符

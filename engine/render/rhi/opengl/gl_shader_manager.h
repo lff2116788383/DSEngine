@@ -220,6 +220,11 @@ public:
     void InitForwardInstancedShadedShader();
     unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
 
+    // --- Morph target + 高级 shading 组合着色器（Final-Feat-5）：forward_shaded_morph.vert + forward_shaded.frag。
+    // morph 增量 SSBO\@set7.b0（避开 frag set0-6）+ morph 权重 UBO\@set7.b3 + 高级 shading frag 全套 UBO/纹理槽。
+    void InitForwardMorphShadedShader();
+    unsigned int forward_morph_shaded_shader_handle() const { return forward_morph_shaded_shader_handle_; }
+
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
         int texture = -1;
@@ -298,6 +303,7 @@ private:
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
+    unsigned int forward_morph_shaded_shader_handle_ = 0;
 };
 
 } // namespace render
