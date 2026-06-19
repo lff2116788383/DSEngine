@@ -418,6 +418,9 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     // 该着色器不含 SpotLightData/BoneMatrices 块，无冲突）。
     if (std::strcmp(name, "FwdLightProbe") == 0)  return static_cast<UBOBindingPoint>(5);
     if (std::strcmp(name, "FwdDDGI") == 0)        return static_cast<UBOBindingPoint>(6);
+    // Final-Feat-4: ForwardShaded 的聚光灯 UBO 置于 set=7/b1 → 契约 slot 7（复用 binding point 7；
+    // 该着色器不含 MorphWeights 块，无冲突；通用原语 BindUniformBuffer(7) → glBindBufferBase(...,7)）。
+    if (std::strcmp(name, "FwdSpotLightUBO") == 0) return static_cast<UBOBindingPoint>(7);
     if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
     if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
     if (std::strcmp(name, "BoneMatrices") == 0)   return UBOBindingPoint::BoneMatrices;

@@ -156,6 +156,20 @@ struct ShadedPointLight {
     int shadow_index = -1;
 };
 
+/// 聚光灯（Final-Feat-4）。布局对应 ubo_types.h SpotLightEntry（≤64，UBO fallback）。
+/// 平方反比半径衰减 + 内/外锥半角平滑过渡；shadow 字段保留给后续聚光灯阴影步骤。
+struct ShadedSpotLight {
+    glm::vec3 color{1.0f};
+    float intensity = 1.0f;
+    glm::vec3 position{0.0f};
+    float radius = 10.0f;
+    glm::vec3 direction{0.0f, -1.0f, 0.0f}; ///< 光线传播方向（光源→场景）
+    float inner_cone = 12.5f;               ///< 内锥半角（度）：theta>innerCos 全亮
+    float outer_cone = 17.5f;               ///< 外锥半角（度）：theta<outerCos 全暗
+    bool cast_shadow = false;
+    int shadow_index = -1;
+};
+
 /// 全局光照（B2c-5）。SH L2 间接漫反射（LightProbe）+ DDGI irradiance atlas 探针体。
 /// 两者皆关（默认）时退化为 DirectionalLight::ambient 平坦环境光，与 B2c-4 输出一致。
 struct ShadedGI {
@@ -295,7 +309,8 @@ public:
                     const ShadedMaterial& material,
                     const DirectionalLight& light,
                     const std::vector<ShadedPointLight>& point_lights = {},
-                    const ShadedGI& gi = {});
+                    const ShadedGI& gi = {},
+                    const std::vector<ShadedSpotLight>& spot_lights = {});
 
     /// 记录一次蒙皮 + 高级 shading 网格绘制（Final-Feat-2）。融合 DrawSkinned 的骨骼
     /// 顶点装配（顶点局部/绑定空间，骨骼矩阵走 SSBO\@slot 0，VS 施骨骼混合 + vp）与
@@ -323,7 +338,8 @@ public:
                            const ShadedMaterial& material,
                            const DirectionalLight& light,
                            const std::vector<ShadedPointLight>& point_lights = {},
-                           const ShadedGI& gi = {});
+                           const ShadedGI& gi = {},
+                           const std::vector<ShadedSpotLight>& spot_lights = {});
 
     /// 记录一次硬件实例化 + 高级 shading 网格绘制（Final-Feat-3）。融合 DrawInstanced 的
     /// 每实例 model 矩阵 SSBO\@slot 0（按 gl_InstanceIndex 取，VS 施 model + vp）与 DrawShaded
@@ -349,7 +365,8 @@ public:
                              const ShadedMaterial& material,
                              const DirectionalLight& light,
                              const std::vector<ShadedPointLight>& point_lights = {},
-                             const ShadedGI& gi = {});
+                             const ShadedGI& gi = {},
+                             const std::vector<ShadedSpotLight>& spot_lights = {});
 
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
@@ -372,6 +389,7 @@ private:
     BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）
     BufferHandle per_light_probe_ubo_;      ///< LightProbe SH UBO（160B，slot=5，B2c-5）
     BufferHandle per_ddgi_ubo_;             ///< DDGI 参数 UBO（64B，slot=6，B2c-5）
+    BufferHandle per_spot_lights_ubo_;      ///< 聚光灯 UBO（4112B，set7.b1，slot=7，Final-Feat-4；count=0 时无聚光灯）
     unsigned int white_tex_ = 0;
     BufferHandle vbo_;
     BufferHandle ibo_;

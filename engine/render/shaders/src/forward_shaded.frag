@@ -59,6 +59,27 @@ layout(std140, set = 3, binding = 0) uniform PointLightUBO {
     FwdPointLight u_point_lights[64];
 };
 
+// Final-Feat-4: 聚光灯 SpotLight（≤64，UBO fallback）。布局与 ubo_types.h SpotLightEntry（64B）一致：
+//   SpotLightEntry = { vec3 color; float intensity; vec3 position; float radius;
+//                      vec3 direction; float inner_cone; float outer_cone;
+//                      int cast_shadow; int shadow_index; float _pad; } = 64B
+// 置于 set=7/binding=1（排序在 set6 之后）→ 通用原语契约 slot 7：
+//   GL glBindBufferBase(...,7)，DX11 register(b7)，Vulkan 第 8 个 UBO descriptor。
+// 与顶点级 SSBO（set7.b0）描述符类型不同，三后端互不冲突。
+struct FwdSpotLight {
+    vec3 color;        float intensity;
+    vec3 position;     float radius;
+    vec3 direction;    float inner_cone;   // 内锥半角（度）
+    float outer_cone;                       // 外锥半角（度）
+    int  cast_shadow;  int shadow_index;
+    float _pad;
+};
+layout(std140, set = 7, binding = 1) uniform FwdSpotLightUBO {
+    int u_spot_light_count;
+    int _slpad0, _slpad1, _slpad2;
+    FwdSpotLight u_spot_lights[64];
+};
+
 layout(set = 2, binding = 1) uniform sampler2D u_texture;                  // albedo  -> flat unit 0
 layout(set = 2, binding = 2) uniform sampler2D u_normal_map;               // normal  -> flat unit 1
 layout(set = 2, binding = 3) uniform sampler2D u_metallic_roughness_map;   // MR      -> flat unit 2
@@ -212,6 +233,39 @@ vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
         float atten = clamp(1.0 - (dist * dist) / (r * r + 1e-4), 0.0, 1.0);
         atten *= atten;
         vec3 radiance = u_point_lights[i].color * u_point_lights[i].intensity * atten;
+        vec3 H = normalize(V + L);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 specular = (NDF * G * F) /
+                        (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        float NdotL = max(dot(N, L), 0.0);
+        sum += (kD * surface_albedo / PI + specular) * radiance * NdotL;
+    }
+    return sum;
+}
+
+// 聚光灯 Cook-Torrance 贡献（点光衰减 + 锥角 inner/outer 平滑衰减；与生产 pbr.frag 聚光循环一致）。
+// direction 为光线传播方向（光源→场景），故 L·(-dir) 衡量片元是否落在锥内。
+vec3 SpotLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
+                  float roughness, float metallic, vec3 F0) {
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < u_spot_light_count; ++i) {
+        vec3 d = u_spot_lights[i].position - world_pos;
+        float dist = length(d);
+        vec3 L = d / max(dist, 1e-4);
+        float r = u_spot_lights[i].radius;
+        float atten = clamp(1.0 - (dist * dist) / (r * r + 1e-4), 0.0, 1.0);
+        atten *= atten;
+        // 锥角衰减：theta = L·spotDir（spotDir 指向光源）。
+        vec3 spotDir = normalize(-u_spot_lights[i].direction);
+        float theta = dot(L, spotDir);
+        float innerCos = cos(radians(u_spot_lights[i].inner_cone));
+        float outerCos = cos(radians(u_spot_lights[i].outer_cone));
+        float cone = clamp((theta - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+        if (cone <= 0.0) continue;
+        vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * atten * cone;
         vec3 H = normalize(V + L);
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);
@@ -490,6 +544,9 @@ void main() {
 
         // clustered 点光（≤64）：附加 Cook-Torrance 贡献。
         Lo += PointLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);
+
+        // 聚光灯（≤64，Final-Feat-4）：锥角衰减后附加 Cook-Torrance 贡献（空=不影响）。
+        Lo += SpotLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);
 
         // 间接漫反射：DDGI（探针体）优先，其次 LightProbe SH，否则退化为平坦环境光。
         // 两者皆关时结果与 B2c-4 一致（不回归）。

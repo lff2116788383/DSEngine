@@ -94,6 +94,26 @@ struct FwdShadedMaterialUBO {
 };
 static_assert(sizeof(FwdShadedMaterialUBO) == 160, "FwdShadedMaterialUBO std140 = 160 bytes");
 
+// Final-Feat-4: 从 ShadedSpotLight 列表填充 SpotLightsUBO（复用 ubo_types.h SpotLightEntry 布局，
+// ≤64 超出截断）。count=0 时着色器 SpotLightsLo 循环不执行 → 无聚光灯贡献（不回归）。
+void FillSpotLightsUBO(const std::vector<ShadedSpotLight>& spot_lights, SpotLightsUBO& out) {
+    const int n = static_cast<int>(
+        (std::min)(spot_lights.size(), static_cast<size_t>(kMaxSpotLightsUBO)));
+    out.u_spot_light_count = n;
+    for (int i = 0; i < n; ++i) {
+        const ShadedSpotLight& s = spot_lights[i];
+        out.u_spot_lights[i].color = s.color;
+        out.u_spot_lights[i].intensity = s.intensity;
+        out.u_spot_lights[i].position = s.position;
+        out.u_spot_lights[i].radius = s.radius;
+        out.u_spot_lights[i].direction = s.direction;
+        out.u_spot_lights[i].inner_cone = s.inner_cone;
+        out.u_spot_lights[i].outer_cone = s.outer_cone;
+        out.u_spot_lights[i].cast_shadow = s.cast_shadow ? 1 : 0;
+        out.u_spot_lights[i].shadow_index = s.shadow_index;
+    }
+}
+
 } // namespace
 
 void MeshRenderer::EnsureResources(RhiDevice& device) {
@@ -268,6 +288,14 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         d_desc.is_dynamic = true;
         per_ddgi_ubo_ = device.CreateGpuBuffer(d_desc, nullptr);
     }
+    // 聚光灯 UBO（4112B，set7.b1/slot=7；count=0 时无聚光灯贡献，输出与 Final-Feat-3 一致）。
+    if (!per_spot_lights_ubo_) {
+        GpuBufferDesc sl_desc;
+        sl_desc.size = sizeof(SpotLightsUBO);
+        sl_desc.usage = GpuBufferUsage::kUniform;
+        sl_desc.is_dynamic = true;
+        per_spot_lights_ubo_ = device.CreateGpuBuffer(sl_desc, nullptr);
+    }
 }
 
 void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
@@ -280,7 +308,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                               const ShadedMaterial& material,
                               const DirectionalLight& light,
                               const std::vector<ShadedPointLight>& point_lights,
-                              const ShadedGI& gi) {
+                              const ShadedGI& gi,
+                              const std::vector<ShadedSpotLight>& spot_lights) {
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
@@ -404,6 +433,11 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
+    SpotLightsUBO slights{};
+    FillSpotLightsUBO(spot_lights, slights);
+    device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -427,6 +461,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0（B2c-3）
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0（B2c-5）
     cmd.BindUniformBuffer(6u, per_ddgi_ubo_.raw());             // FwdDDGI      @ set6.b0（B2c-5）
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
@@ -459,7 +494,8 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
                                      const ShadedMaterial& material,
                                      const DirectionalLight& light,
                                      const std::vector<ShadedPointLight>& point_lights,
-                                     const ShadedGI& gi) {
+                                     const ShadedGI& gi,
+                                     const std::vector<ShadedSpotLight>& spot_lights) {
     if (vertices.empty() || indices.empty() || bone_matrices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardSkinnedShaded);
@@ -586,6 +622,11 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
+    SpotLightsUBO slights{};
+    FillSpotLightsUBO(spot_lights, slights);
+    device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -623,6 +664,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 骨骼矩阵 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
@@ -640,7 +682,8 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
                                        const ShadedMaterial& material,
                                        const DirectionalLight& light,
                                        const std::vector<ShadedPointLight>& point_lights,
-                                       const ShadedGI& gi) {
+                                       const ShadedGI& gi,
+                                       const std::vector<ShadedSpotLight>& spot_lights) {
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
@@ -759,6 +802,11 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
+    SpotLightsUBO slights{};
+    FillSpotLightsUBO(spot_lights, slights);
+    device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -794,6 +842,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 每实例 model SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
