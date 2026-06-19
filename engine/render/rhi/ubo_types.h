@@ -230,6 +230,34 @@ struct LightProbeDataUBO {
 };
 static_assert(sizeof(LightProbeDataUBO) == 160, "LightProbeDataUBO must be 160 bytes for std140 layout");
 
+// ============================================================
+// TerrainParams UBO（ForwardShaded 专用，set=4 / 契约 slot=4）
+// ============================================================
+
+/**
+ * @struct TerrainParamsUBO
+ * @brief 地形 splatmap（4 layer 权重混合）+ 积雪覆盖参数（B2c-3）
+ *
+ * 对应 GLSL:
+ *   layout(std140, set=4, binding=0) uniform TerrainParams {
+ *       float u_splat_enabled;         // 0-3
+ *       float u_snow_coverage;         // 4-7
+ *       float u_snow_normal_threshold; // 8-11
+ *       float u_snow_edge_sharpness;   // 12-15
+ *       vec4  u_splat_tiling;          // 16-31
+ *       vec4  u_snow_params;           // 32-47, xyz=snow_albedo, w=snow_roughness
+ *   };
+ */
+struct TerrainParamsUBO {
+    float u_splat_enabled = 0.0f;
+    float u_snow_coverage = 0.0f;
+    float u_snow_normal_threshold = 0.4f;
+    float u_snow_edge_sharpness = 3.0f;
+    glm::vec4 u_splat_tiling{10.0f};
+    glm::vec4 u_snow_params{0.92f, 0.93f, 0.96f, 0.75f}; ///< xyz=雪面反照率, w=雪面粗糙度
+};
+static_assert(sizeof(TerrainParamsUBO) == 48, "TerrainParamsUBO must be 48 bytes for std140 layout");
+
 } // namespace render
 } // namespace dse
 

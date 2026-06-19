@@ -62,6 +62,25 @@ layout(set = 2, binding = 3) uniform sampler2D u_metallic_roughness_map;   // MR
 layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;             // emissive-> flat unit 3
 layout(set = 2, binding = 5) uniform sampler2D u_occlusion_map;            // AO      -> flat unit 4
 
+// B2c-3: 地形 splatmap（权重图 + 4 layer）。binding 11-15 排序在上述 5 槽之后，
+// 故通用原语 flat 纹理单元为 5/6/7/8/9（BindTexture slot 同号），不挪动已有 0-4 槽。
+layout(set = 2, binding = 11) uniform sampler2D u_splat_weight_map;        // flat unit 5
+layout(set = 2, binding = 12) uniform sampler2D u_splat_layer0;            // flat unit 6
+layout(set = 2, binding = 13) uniform sampler2D u_splat_layer1;            // flat unit 7
+layout(set = 2, binding = 14) uniform sampler2D u_splat_layer2;            // flat unit 8
+layout(set = 2, binding = 15) uniform sampler2D u_splat_layer3;            // flat unit 9
+
+// B2c-3: 地形参数 UBO。置于 set=4（紧接 PointLightUBO set=3 之后），使三后端
+// 契约 slot 一致为 4：DX11 register(b4) / Vulkan 排序第 5 个 UBO / GL binding point 4。
+layout(std140, set = 4, binding = 0) uniform TerrainParams {
+    float u_splat_enabled;          // >0.5 = splatmap 混合 4 layer
+    float u_snow_coverage;          // [0,1] 积雪覆盖率（0=关）
+    float u_snow_normal_threshold;  // N.y 阈值
+    float u_snow_edge_sharpness;    // 边缘锐利度（pow 指数）
+    vec4  u_splat_tiling;           // 每 layer UV tiling
+    vec4  u_snow_params;            // xyz = 雪面反照率, w = 雪面粗糙度
+};
+
 const float PI = 3.14159265359;
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -179,7 +198,21 @@ void main() {
         finalUV = ParallaxOcclusionMapping(vTexCoord, viewDirTS, pom_height_scale);
     }
 
-    vec4 texColor = texture(u_texture, finalUV) * vColor;
+    // 地形 splatmap：按权重图归一化混合 4 个 layer；否则采样普通 albedo。
+    vec4 baseTex;
+    if (u_splat_enabled > 0.5) {
+        vec4 w = texture(u_splat_weight_map, finalUV);
+        float ws = w.r + w.g + w.b + w.a;
+        if (ws > 0.001) w /= ws;
+        vec3 c0 = texture(u_splat_layer0, finalUV * u_splat_tiling.x).rgb;
+        vec3 c1 = texture(u_splat_layer1, finalUV * u_splat_tiling.y).rgb;
+        vec3 c2 = texture(u_splat_layer2, finalUV * u_splat_tiling.z).rgb;
+        vec3 c3 = texture(u_splat_layer3, finalUV * u_splat_tiling.w).rgb;
+        baseTex = vec4(c0 * w.r + c1 * w.g + c2 * w.b + c3 * w.a, 1.0);
+    } else {
+        baseTex = texture(u_texture, finalUV);
+    }
+    vec4 texColor = baseTex * vColor;
     float albedo_alpha = texColor.a;
 
     // alpha-test。
@@ -289,6 +322,18 @@ void main() {
         }
         if (has_occlusion) ao *= texture(u_occlusion_map, finalUV).r;
         if (has_emissive) surface_emissive *= texture(u_emissive_map, finalUV).rgb;
+
+        // 积雪覆盖：朝上表面（N.y 大）按阈值/锐利度混入雪面反照率与粗糙度。
+        if (u_snow_coverage > 0.001) {
+            float snow_dot = max(N.y, 0.0);
+            float snow_mask = pow(smoothstep(u_snow_normal_threshold, 1.0, snow_dot),
+                                  u_snow_edge_sharpness);
+            float snow_factor = snow_mask * u_snow_coverage;
+            vec3 snow_alb = pow(u_snow_params.xyz, vec3(2.2));
+            surface_albedo = mix(surface_albedo, snow_alb, snow_factor);
+            roughness = mix(roughness, u_snow_params.w, snow_factor);
+            metallic = mix(metallic, 0.0, snow_factor);
+        }
 
         vec3 F0 = mix(vec3(0.04), surface_albedo, metallic);
         vec3 H = normalize(V + L);

@@ -279,3 +279,126 @@ TEST(ForwardShadedPixelSmokeTest, PointLightCrossBackend) {
     auto fn = [](RhiDevice& d) { return RenderPointLit(d, true); };
     CheckCrossBackend(fn, 12.0);
 }
+
+// ── 地形 splatmap（B2c-3） ──
+// 居中正面片，unlit（输出 = texColor*albedo）。权重图 100% 落 layer0（纯绿），splat 开启时
+// 中心应为绿（G≫R,B）；关闭时 u_texture 为白默认 → 中心近白。
+RenderTargetReadback RenderSplat(RhiDevice& device, bool splat_enabled) {
+    auto solid = [&](unsigned char r, unsigned char g, unsigned char b, unsigned char a) {
+        const unsigned char px[16] = { r,g,b,a, r,g,b,a, r,g,b,a, r,g,b,a };  // 2x2 RGBA
+        return device.CreateTexture2D(2, 2, px, false);
+    };
+    unsigned int w_map = solid(255, 0, 0, 0);    // 权重：100% layer0
+    unsigned int l0 = solid(0, 255, 0, 255);     // layer0 纯绿
+    unsigned int l1 = solid(255, 0, 0, 255);     // layer1 纯红（权重 0，不显）
+    unsigned int l2 = solid(0, 0, 255, 255);     // layer2 纯蓝（权重 0）
+    unsigned int l3 = solid(255, 255, 0, 255);   // layer3 纯黄（权重 0）
+
+    ShadedMaterial m;
+    m.albedo = glm::vec3(1.0f);
+    m.shading_mode = 0;
+    m.splat_enabled = splat_enabled;
+    m.splat_weight_map = w_map;
+    m.splat_layers[0] = l0;
+    m.splat_layers[1] = l1;
+    m.splat_layers[2] = l2;
+    m.splat_layers[3] = l3;
+    m.splat_tiling = glm::vec4(1.0f);
+
+    DirectionalLight light;
+    light.enabled = false;  // unlit：输出 ~ texColor * albedo，便于直接比对 splat 混合色
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeCenterQuad(verts, indices, /*winding_ccw=*/true);
+    RenderTargetReadback rb = RenderShadedScene(device, m, light, verts, indices);
+
+    device.DeleteTexture(w_map);
+    device.DeleteTexture(l0);
+    device.DeleteTexture(l1);
+    device.DeleteTexture(l2);
+    device.DeleteTexture(l3);
+    return rb;
+}
+
+TEST(ForwardShadedPixelSmokeTest, SplatBlendsLayers) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderSplat(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderSplat(d, false); });
+
+    const int c = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, c, c);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, c, c);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    // splat 开启：layer0 纯绿主导 → G 远大于 R/B。
+    EXPECT_GT(on_c[1], 100) << "splat center G";
+    EXPECT_GT(on_c[1], on_c[0] + 40) << "splat center G > R";
+    EXPECT_GT(on_c[1], on_c[2] + 40) << "splat center G > B";
+    // splat 关闭：默认白纹理 → 中心近白（R 高）。
+    EXPECT_GT(off_c[0], 100) << "non-splat center R (white default)";
+}
+
+TEST(ForwardShadedPixelSmokeTest, SplatCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderSplat(d, true); };
+    CheckCrossBackend(fn, 12.0);
+}
+
+// ── 积雪（B2c-3） ──
+// 居中正面片，法线作 +Y（朝上）使积雪 mask 命中；PBR + 沿 +Y 方向光。
+// 雪覆盖开启时表面反照率→白 → 中心显著变亮。
+RenderTargetReadback RenderSnow(RhiDevice& device, bool snow) {
+    ShadedMaterial m;
+    m.albedo = glm::vec3(0.12f, 0.09f, 0.05f);  // 暗褐基色
+    m.roughness = 0.8f;
+    m.shading_mode = 0;  // PBR
+    if (snow) {
+        m.snow_coverage = 1.0f;
+        m.snow_albedo = glm::vec3(0.95f);
+        m.snow_roughness = 0.7f;
+        m.snow_normal_threshold = 0.2f;
+        m.snow_edge_sharpness = 2.0f;
+    }
+    DirectionalLight light;
+    light.direction = glm::vec3(0.0f, -1.0f, 0.0f);  // to_light = +Y
+    light.color = glm::vec3(1.0f);
+    light.intensity = 2.0f;
+    light.ambient = 0.05f;
+    light.enabled = true;
+
+    // 居中面片，法线改为 +Y（朝上）以触发积雪；几何仍在 XY 平面朝 +Z 相机可见。
+    const glm::vec4 col(1.0f);
+    const glm::vec3 n(0.0f, 1.0f, 0.0f);
+    const float x0 = -0.6f, x1 = 0.6f, y0 = -0.6f, y1 = 0.6f;
+    std::vector<MeshVertex> verts = {
+        {{x0, y0, 0.0f}, col, {0.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}},
+        {{x1, y0, 0.0f}, col, {1.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}},
+        {{x1, y1, 0.0f}, col, {1.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}},
+        {{x0, y1, 0.0f}, col, {0.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}},
+    };
+    std::vector<uint16_t> indices = {0, 1, 2, 0, 2, 3};
+    return RenderShadedScene(device, m, light, verts, indices);
+}
+
+TEST(ForwardShadedPixelSmokeTest, SnowBrightensSurface) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderSnow(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderSnow(d, false); });
+
+    const int c = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, c, c);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, c, c);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    const int on_lum = on_c[0] + on_c[1] + on_c[2];
+    const int off_lum = off_c[0] + off_c[1] + off_c[2];
+    // 积雪显著抬高表面亮度。
+    EXPECT_GT(on_lum, off_lum + 120) << "snow should brighten surface";
+    EXPECT_GT(on_c[0], 120) << "snow-covered center should be near white";
+}
+
+TEST(ForwardShadedPixelSmokeTest, SnowCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderSnow(d, true); };
+    CheckCrossBackend(fn, 12.0);
+}

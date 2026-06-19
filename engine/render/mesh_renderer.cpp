@@ -210,6 +210,14 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         p_desc.is_dynamic = true;
         per_point_lights_ubo_ = device.CreateGpuBuffer(p_desc, nullptr);
     }
+    // 地形参数 UBO（48B，slot=4；splat_enabled=0 且 snow_coverage=0 时与 B2c-2 输出一致）。
+    if (!per_terrain_ubo_) {
+        GpuBufferDesc t_desc;
+        t_desc.size = sizeof(TerrainParamsUBO);
+        t_desc.usage = GpuBufferUsage::kUniform;
+        t_desc.is_dynamic = true;
+        per_terrain_ubo_ = device.CreateGpuBuffer(t_desc, nullptr);
+    }
 }
 
 void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
@@ -230,7 +238,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
-        !per_point_lights_ubo_) return;
+        !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
     // --- CPU 侧预变换顶点到世界空间（与 Draw 一致）---
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
@@ -308,6 +316,16 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     }
     device.UpdateGpuBuffer(per_point_lights_ubo_, 0, sizeof(plights), &plights);
 
+    // 地形参数 UBO（splat 4 层 + 积雪；均关闭时输出与 B2c-2 一致）。
+    TerrainParamsUBO terrain{};
+    terrain.u_splat_enabled = material.splat_enabled ? 1.0f : 0.0f;
+    terrain.u_snow_coverage = material.snow_coverage;
+    terrain.u_snow_normal_threshold = material.snow_normal_threshold;
+    terrain.u_snow_edge_sharpness = material.snow_edge_sharpness;
+    terrain.u_splat_tiling = material.splat_tiling;
+    terrain.u_snow_params = glm::vec4(material.snow_albedo, material.snow_roughness);
+    device.UpdateGpuBuffer(per_terrain_ubo_, 0, sizeof(terrain), &terrain);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -323,12 +341,19 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
-    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights @ set3.b0（B2c-2）
+    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0（B2c-2）
+    cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0（B2c-3）
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
+    // 地形 splat 纹理（slot 5-9，flat unit 5-9）。未用时绑白纹理保证三后端 descriptor 有定义。
+    cmd.BindTexture(5u, tex_or_white(material.splat_weight_map), TextureDim::Tex2D);
+    cmd.BindTexture(6u, tex_or_white(material.splat_layers[0]), TextureDim::Tex2D);
+    cmd.BindTexture(7u, tex_or_white(material.splat_layers[1]), TextureDim::Tex2D);
+    cmd.BindTexture(8u, tex_or_white(material.splat_layers[2]), TextureDim::Tex2D);
+    cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
@@ -808,12 +833,14 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_material_ubo_) device.DeleteGpuBuffer(per_material_ubo_);
     if (per_material_shaded_ubo_) device.DeleteGpuBuffer(per_material_shaded_ubo_);
     if (per_point_lights_ubo_) device.DeleteGpuBuffer(per_point_lights_ubo_);
+    if (per_terrain_ubo_) device.DeleteGpuBuffer(per_terrain_ubo_);
     if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
     vbo_ = ibo_ = per_frame_ubo_ = per_scene_ubo_ = per_material_ubo_ = BufferHandle{};
     per_material_shaded_ubo_ = BufferHandle{};
     per_point_lights_ubo_ = BufferHandle{};
+    per_terrain_ubo_ = BufferHandle{};
     bone_ssbo_ = BufferHandle{};
     instance_ssbo_ = BufferHandle{};
     indirect_buffer_ = BufferHandle{};

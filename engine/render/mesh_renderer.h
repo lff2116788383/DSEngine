@@ -112,6 +112,19 @@ struct ShadedMaterial {
     unsigned int metallic_roughness_tex = 0;  ///< u_metallic_roughness_map
     unsigned int emissive_tex = 0;            ///< u_emissive_map
     unsigned int occlusion_tex = 0;           ///< u_occlusion_map
+
+    // 地形 splatmap（B2c-3）。splat_enabled 时 albedo 由 4 层权重混合取代。
+    bool splat_enabled = false;                       ///< 开启 splatmap 4 层混合
+    unsigned int splat_weight_map = 0;                ///< 权重图（rgba = 4 层权重）
+    unsigned int splat_layers[4] = {0, 0, 0, 0};      ///< 4 个 layer albedo
+    glm::vec4 splat_tiling{10.0f};                    ///< 每 layer UV tiling
+
+    // 积雪（B2c-3）。snow_coverage>0 时朝上表面按阈值/锐利度混入雪面。
+    float snow_coverage = 0.0f;                        ///< 积雪覆盖率 [0,1]（0=关）
+    glm::vec3 snow_albedo{0.92f, 0.93f, 0.96f};        ///< 雪面反照率
+    float snow_roughness = 0.75f;                      ///< 雪面粗糙度
+    float snow_normal_threshold = 0.4f;                ///< N.y 阈值
+    float snow_edge_sharpness = 3.0f;                  ///< 边缘锐利度（pow 指数）
 };
 
 /// 单方向光。
@@ -271,6 +284,7 @@ private:
     unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
+    BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）
     unsigned int white_tex_ = 0;
     BufferHandle vbo_;
     BufferHandle ibo_;

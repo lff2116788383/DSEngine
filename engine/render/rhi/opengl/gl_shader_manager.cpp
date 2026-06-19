@@ -407,6 +407,9 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     if (std::strcmp(name, "PerMaterial") == 0)    return UBOBindingPoint::PerMaterial;
     if (std::strcmp(name, "SpriteFx") == 0)       return UBOBindingPoint::PerFrame;
     if (std::strcmp(name, "PointLightUBO") == 0)  return UBOBindingPoint::PointLights;
+    // B2c-3: ForwardShaded 的 TerrainParams 置于 set=4 / 契约 slot=4，复用 binding point 4
+    // （该着色器不含 SpotLights，无冲突；通用原语 BindUniformBuffer(4) → glBindBufferBase(...,4,...)）。
+    if (std::strcmp(name, "TerrainParams") == 0)  return static_cast<UBOBindingPoint>(4);
     if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
     if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
     if (std::strcmp(name, "BoneMatrices") == 0)   return UBOBindingPoint::BoneMatrices;
