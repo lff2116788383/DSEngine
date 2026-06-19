@@ -258,6 +258,30 @@ struct TerrainParamsUBO {
 };
 static_assert(sizeof(TerrainParamsUBO) == 48, "TerrainParamsUBO must be 48 bytes for std140 layout");
 
+// ============================================================
+// FwdDDGIParams UBO（ForwardShaded 专用，set=6 / 契约 slot=6，B2c-5）
+// ============================================================
+
+/**
+ * @struct FwdDDGIParamsUBO
+ * @brief DDGI 探针体网格参数（irradiance atlas 三线性采样所需），对应 forward_shaded.frag FwdDDGI。
+ *
+ * 对应 GLSL:
+ *   layout(std140, set=6, binding=0) uniform FwdDDGI {
+ *       vec4  u_ddgi_origin;     // xyz=grid origin, w=ddgi_enabled
+ *       vec4  u_ddgi_spacing;    // xyz=probe spacing, w=gi_intensity
+ *       ivec4 u_ddgi_resolution; // xyz=grid resolution, w=irradiance_texels
+ *       vec4  u_ddgi_misc;       // x=normal_bias
+ *   };
+ */
+struct FwdDDGIParamsUBO {
+    glm::vec4  origin{0.0f};            ///< xyz = 网格最小角, w = ddgi_enabled (0/1)
+    glm::vec4  spacing{1.0f, 1.0f, 1.0f, 1.0f}; ///< xyz = 探针间距, w = gi_intensity
+    glm::ivec4 resolution{0, 0, 0, 8};  ///< xyz = 各轴探针数, w = irradiance_texels
+    glm::vec4  misc{0.2f, 0.0f, 0.0f, 0.0f};    ///< x = normal_bias
+};
+static_assert(sizeof(FwdDDGIParamsUBO) == 64, "FwdDDGIParamsUBO must be 64 bytes for std140 layout");
+
 } // namespace render
 } // namespace dse
 

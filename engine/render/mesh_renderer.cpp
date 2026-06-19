@@ -248,6 +248,22 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         t_desc.is_dynamic = true;
         per_terrain_ubo_ = device.CreateGpuBuffer(t_desc, nullptr);
     }
+    // LightProbe SH UBO（160B，slot=5；sh_enabled=0 时不影响间接光，B2c-5）。
+    if (!per_light_probe_ubo_) {
+        GpuBufferDesc lp_desc;
+        lp_desc.size = sizeof(LightProbeDataUBO);
+        lp_desc.usage = GpuBufferUsage::kUniform;
+        lp_desc.is_dynamic = true;
+        per_light_probe_ubo_ = device.CreateGpuBuffer(lp_desc, nullptr);
+    }
+    // DDGI 参数 UBO（64B，slot=6；ddgi_enabled=0 时不影响间接光，B2c-5）。
+    if (!per_ddgi_ubo_) {
+        GpuBufferDesc d_desc;
+        d_desc.size = sizeof(FwdDDGIParamsUBO);
+        d_desc.usage = GpuBufferUsage::kUniform;
+        d_desc.is_dynamic = true;
+        per_ddgi_ubo_ = device.CreateGpuBuffer(d_desc, nullptr);
+    }
 }
 
 void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
@@ -259,7 +275,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                               const glm::vec3& camera_pos,
                               const ShadedMaterial& material,
                               const DirectionalLight& light,
-                              const std::vector<ShadedPointLight>& point_lights) {
+                              const std::vector<ShadedPointLight>& point_lights,
+                              const ShadedGI& gi) {
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
@@ -358,6 +375,21 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     terrain.u_snow_params = glm::vec4(material.snow_albedo, material.snow_roughness);
     device.UpdateGpuBuffer(per_terrain_ubo_, 0, sizeof(terrain), &terrain);
 
+    // LightProbe SH UBO（slot=5）。sh_enabled=0 时 probe_params.x=0 → 着色器不取 SH。
+    LightProbeDataUBO probe{};
+    for (int i = 0; i < 9; ++i) probe.sh_coefficients[i] = gi.sh_coefficients[i];
+    probe.probe_params = glm::vec4(gi.sh_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_light_probe_ubo_, 0, sizeof(probe), &probe);
+
+    // DDGI 参数 UBO（slot=6）。ddgi_enabled=0 或无 atlas 时 origin.w=0 → 着色器不取 DDGI。
+    const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas != 0;
+    FwdDDGIParamsUBO ddgi{};
+    ddgi.origin = glm::vec4(gi.ddgi_grid_origin, ddgi_on ? 1.0f : 0.0f);
+    ddgi.spacing = glm::vec4(gi.ddgi_grid_spacing, gi.ddgi_gi_intensity);
+    ddgi.resolution = glm::ivec4(gi.ddgi_grid_resolution, gi.ddgi_irradiance_texels);
+    ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -379,6 +411,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0（B2c-2）
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0（B2c-3）
+    cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0（B2c-5）
+    cmd.BindUniformBuffer(6u, per_ddgi_ubo_.raw());             // FwdDDGI      @ set6.b0（B2c-5）
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
@@ -390,6 +424,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(7u, tex_or_white(material.splat_layers[1]), TextureDim::Tex2D);
     cmd.BindTexture(8u, tex_or_white(material.splat_layers[2]), TextureDim::Tex2D);
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
+    // DDGI irradiance atlas（slot 10，flat unit 10）。未启用时绑白纹理保证三后端 descriptor 有定义。
+    cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
@@ -870,6 +906,8 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_material_shaded_ubo_) device.DeleteGpuBuffer(per_material_shaded_ubo_);
     if (per_point_lights_ubo_) device.DeleteGpuBuffer(per_point_lights_ubo_);
     if (per_terrain_ubo_) device.DeleteGpuBuffer(per_terrain_ubo_);
+    if (per_light_probe_ubo_) device.DeleteGpuBuffer(per_light_probe_ubo_);
+    if (per_ddgi_ubo_) device.DeleteGpuBuffer(per_ddgi_ubo_);
     if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
@@ -877,6 +915,8 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     per_material_shaded_ubo_ = BufferHandle{};
     per_point_lights_ubo_ = BufferHandle{};
     per_terrain_ubo_ = BufferHandle{};
+    per_light_probe_ubo_ = BufferHandle{};
+    per_ddgi_ubo_ = BufferHandle{};
     bone_ssbo_ = BufferHandle{};
     instance_ssbo_ = BufferHandle{};
     indirect_buffer_ = BufferHandle{};

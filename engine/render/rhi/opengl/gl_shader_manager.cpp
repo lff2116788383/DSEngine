@@ -410,6 +410,10 @@ static UBOBindingPoint MapUBONameToBindingPoint(const char* name) {
     // B2c-3: ForwardShaded 的 TerrainParams 置于 set=4 / 契约 slot=4，复用 binding point 4
     // （该着色器不含 SpotLights，无冲突；通用原语 BindUniformBuffer(4) → glBindBufferBase(...,4,...)）。
     if (std::strcmp(name, "TerrainParams") == 0)  return static_cast<UBOBindingPoint>(4);
+    // B2c-5: ForwardShaded 的全局光照 UBO 置于 set=5/6 → 契约 slot 5/6（复用 binding point 5/6；
+    // 该着色器不含 SpotLightData/BoneMatrices 块，无冲突）。
+    if (std::strcmp(name, "FwdLightProbe") == 0)  return static_cast<UBOBindingPoint>(5);
+    if (std::strcmp(name, "FwdDDGI") == 0)        return static_cast<UBOBindingPoint>(6);
     if (std::strcmp(name, "SpotLightUBO") == 0)   return UBOBindingPoint::SpotLights;
     if (std::strcmp(name, "SpotLightData") == 0)  return UBOBindingPoint::SpotLightData;
     if (std::strcmp(name, "BoneMatrices") == 0)   return UBOBindingPoint::BoneMatrices;

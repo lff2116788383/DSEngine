@@ -76,7 +76,8 @@ RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& 
                                        const DirectionalLight& light,
                                        const std::vector<MeshVertex>& verts,
                                        const std::vector<uint16_t>& indices,
-                                       const std::vector<ShadedPointLight>& point_lights = {}) {
+                                       const std::vector<ShadedPointLight>& point_lights = {},
+                                       const ShadedGI& gi = {}) {
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -103,7 +104,7 @@ RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& 
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        renderer.DrawShaded(*cmd, device, verts, indices, I, I, proj, cam_pos, material, light, point_lights);
+        renderer.DrawShaded(*cmd, device, verts, indices, I, I, proj, cam_pos, material, light, point_lights, gi);
         cmd->EndRenderPass();
         device.Submit(cmd);
     }
@@ -488,5 +489,116 @@ TEST(ForwardShadedPixelSmokeTest, WboitRevealageOrderIndependent) {
 
 TEST(ForwardShadedPixelSmokeTest, WboitRevealageCrossBackend) {
     auto fn = [](RhiDevice& d) { return RenderWboit(d, 2, false); };
+    CheckCrossBackend(fn, 12.0);
+}
+
+// ── 全局光照：LightProbe SH（B2c-5） ──
+// 居中正面片，PBR；直接光强度=0、平坦环境=0 → 仅留间接项。SH 仅置 L0（DC）系数为绿色，
+// EvaluateSH 对任意法线返回常数绿辐照度 → 中心显著变绿；SH 关时中心近黑。
+RenderTargetReadback RenderProbeSH(RhiDevice& device, bool sh_on) {
+    ShadedMaterial m;
+    m.albedo = glm::vec3(0.6f);
+    m.roughness = 0.5f;
+    m.shading_mode = 0;  // PBR
+    DirectionalLight light;
+    light.enabled = true;     // 进入 PBR 分支（unlit 分支无间接项）
+    light.intensity = 0.0f;   // 直接光归零
+    light.ambient = 0.0f;     // 平坦环境光归零，凸显 SH
+    ShadedGI gi;
+    if (sh_on) {
+        gi.sh_enabled = true;
+        const float c0 = 1.0f / 0.282095f;  // L0 基函数常数 → EvaluateSH(任意 N)=系数*0.282095
+        gi.sh_coefficients[0] = glm::vec4(0.1f * c0, 0.7f * c0, 0.1f * c0, 0.0f);
+    }
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeCenterQuad(verts, indices, /*winding_ccw=*/true);
+    return RenderShadedScene(device, m, light, verts, indices, {}, gi);
+}
+
+TEST(ForwardShadedPixelSmokeTest, ProbeSHAddsIndirect) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderProbeSH(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderProbeSH(d, false); });
+
+    const int c = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, c, c);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, c, c);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    // SH 开启：绿色间接漫反射 → G 显著且远大于 R/B；关闭时中心近黑。
+    EXPECT_GT(on_c[1], 90) << "SH center G";
+    EXPECT_GT(on_c[1], on_c[0] + 30) << "SH center G > R";
+    EXPECT_GT(on_c[1], on_c[2] + 30) << "SH center G > B";
+    EXPECT_GT(on_c[1], off_c[1] + 60) << "SH should brighten indirect green";
+}
+
+TEST(ForwardShadedPixelSmokeTest, ProbeSHCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderProbeSH(d, true); };
+    CheckCrossBackend(fn, 12.0);
+}
+
+// ── 全局光照：DDGI irradiance atlas（B2c-5） ──
+// 2x2x2 探针网格，每探针 8 texel → atlas (res.x*res.z*8, res.y*8) = 32x16，全填纯蓝。
+// 网格覆盖面片所在 [-1,1]^3 区间，三线性混合 8 探针后采到纯蓝 → 中心显著变蓝；关闭时近黑。
+RenderTargetReadback RenderDDGI(RhiDevice& device, bool ddgi_on) {
+    constexpr int kTexels = 8;
+    const glm::ivec3 res(2, 2, 2);
+    const int aw = res.x * res.z * kTexels;  // 32
+    const int ah = res.y * kTexels;          // 16
+    std::vector<unsigned char> atlas(static_cast<size_t>(aw) * ah * 4);
+    for (size_t i = 0; i < atlas.size(); i += 4) {
+        atlas[i + 0] = 0; atlas[i + 1] = 0; atlas[i + 2] = 255; atlas[i + 3] = 255;  // 纯蓝
+    }
+    unsigned int atlas_tex = device.CreateTexture2D(aw, ah, atlas.data(), false);
+
+    ShadedMaterial m;
+    m.albedo = glm::vec3(0.6f);
+    m.roughness = 0.5f;
+    m.shading_mode = 0;  // PBR
+    DirectionalLight light;
+    light.enabled = true;
+    light.intensity = 0.0f;
+    light.ambient = 0.0f;
+    ShadedGI gi;
+    if (ddgi_on) {
+        gi.ddgi_enabled = true;
+        gi.ddgi_irradiance_atlas = atlas_tex;
+        gi.ddgi_grid_origin = glm::vec3(-1.0f);
+        gi.ddgi_grid_spacing = glm::vec3(2.0f);   // 覆盖 [-1,1]^3
+        gi.ddgi_grid_resolution = res;
+        gi.ddgi_irradiance_texels = kTexels;
+        gi.ddgi_gi_intensity = 1.0f;
+        gi.ddgi_normal_bias = 0.2f;
+    }
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeCenterQuad(verts, indices, /*winding_ccw=*/true);
+    RenderTargetReadback rb = RenderShadedScene(device, m, light, verts, indices, {}, gi);
+    device.DeleteTexture(atlas_tex);
+    return rb;
+}
+
+TEST(ForwardShadedPixelSmokeTest, DDGIAddsIndirect) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderDDGI(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderDDGI(d, false); });
+
+    const int c = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, c, c);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, c, c);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    // DDGI 开启：蓝色 irradiance atlas → B 显著且远大于 R/G；关闭时中心近黑。
+    EXPECT_GT(on_c[2], 90) << "DDGI center B";
+    EXPECT_GT(on_c[2], on_c[0] + 30) << "DDGI center B > R";
+    EXPECT_GT(on_c[2], on_c[1] + 30) << "DDGI center B > G";
+    EXPECT_GT(on_c[2], off_c[2] + 60) << "DDGI should brighten indirect blue";
+}
+
+TEST(ForwardShadedPixelSmokeTest, DDGICrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderDDGI(d, true); };
     CheckCrossBackend(fn, 12.0);
 }

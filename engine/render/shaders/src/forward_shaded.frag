@@ -81,7 +81,81 @@ layout(std140, set = 4, binding = 0) uniform TerrainParams {
     vec4  u_snow_params;            // xyz = 雪面反照率, w = 雪面粗糙度
 };
 
+// B2c-5: 全局光照。LightProbeData（SH L2 间接漫反射）置 set=5 → 契约 slot 5；
+// DDGIParams（探针体网格参数）置 set=6 → 契约 slot 6（DX11 b5/b6、Vulkan 排序第 6/7、GL 绑定点 5/6）。
+layout(std140, set = 5, binding = 0) uniform FwdLightProbe {
+    vec4 sh_coefficients[9];   // SH L2 系数（xyz 有效）
+    vec4 probe_params;         // x = sh_enabled（>0.5 启用 SH 间接漫反射）
+};
+layout(std140, set = 6, binding = 0) uniform FwdDDGI {
+    vec4  u_ddgi_origin;       // xyz = 网格最小角世界坐标, w = ddgi_enabled（>0.5）
+    vec4  u_ddgi_spacing;      // xyz = 探针间距, w = gi_intensity
+    ivec4 u_ddgi_resolution;   // xyz = 各轴探针数, w = irradiance_texels（含 1px 边界）
+    vec4  u_ddgi_misc;         // x = normal_bias
+};
+// DDGI irradiance atlas：binding 19 排序在 PBR(1-5)/splat(11-15) 之后 → flat unit 10。
+layout(set = 2, binding = 19) uniform sampler2D u_ddgi_irradiance_atlas;   // flat unit 10
+
 const float PI = 3.14159265359;
+
+// SH L2 求值（与 includes/lighting_utils.glsl EvaluateSH 一致），返回方向 N 的间接漫反射辐照度。
+vec3 EvaluateSH(vec3 N) {
+    vec3 r = sh_coefficients[0].xyz * 0.282095
+           + sh_coefficients[1].xyz * 0.488603 * N.y
+           + sh_coefficients[2].xyz * 0.488603 * N.z
+           + sh_coefficients[3].xyz * 0.488603 * N.x
+           + sh_coefficients[4].xyz * 1.092548 * N.x * N.y
+           + sh_coefficients[5].xyz * 1.092548 * N.y * N.z
+           + sh_coefficients[6].xyz * 0.315392 * (3.0 * N.z * N.z - 1.0)
+           + sh_coefficients[7].xyz * 1.092548 * N.x * N.z
+           + sh_coefficients[8].xyz * 0.546274 * (N.x * N.x - N.y * N.y);
+    return max(r, vec3(0.0));
+}
+
+// 八面体编码（与 gi/ddgi_types.h OctEncode 一致）：单位方向 → [0,1]^2。
+vec2 OctEncode(vec3 n) {
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    vec2 oct = n.xy;
+    if (n.z < 0.0) {
+        oct = (vec2(1.0) - abs(vec2(n.y, n.x)))
+              * vec2(n.x >= 0.0 ? 1.0 : -1.0, n.y >= 0.0 ? 1.0 : -1.0);
+    }
+    return oct * 0.5 + 0.5;
+}
+
+// DDGI：在 worldPos 处按法线方向对 8 个邻近探针做三线性混合采样 irradiance atlas。
+// atlas 排列与 DDGIVolumeConfig::IrradianceAtlasSize/ProbeIrradianceOffset 一致：
+//   probes_per_row = res.x*res.z，每探针占 texels^2（含 1px 边界），col=x+z*res.x、row=y。
+vec3 SampleDDGI(vec3 worldPos, vec3 N) {
+    ivec3 res = u_ddgi_resolution.xyz;
+    int texels = u_ddgi_resolution.w;
+    if (res.x <= 0 || res.y <= 0 || res.z <= 0 || texels <= 2) return vec3(0.0);
+
+    vec3 biased = worldPos + N * u_ddgi_misc.x;
+    vec3 gridF = (biased - u_ddgi_origin.xyz) / max(u_ddgi_spacing.xyz, vec3(1e-4));
+    gridF = clamp(gridF, vec3(0.0), vec3(res) - vec3(1.0));
+    ivec3 base = ivec3(floor(gridF));
+    vec3 fr = gridF - vec3(base);
+
+    vec2 octUV = OctEncode(normalize(N));
+    int probes_per_row = res.x * res.z;
+    vec2 atlasSize = vec2(float(probes_per_row * texels), float(res.y * texels));
+    vec2 interior = octUV * float(texels - 2) + 1.0;   // 落在 [1, texels-1] 内部，避开边界
+
+    vec3 sum = vec3(0.0);
+    float wsum = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        ivec3 off = ivec3(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+        ivec3 c = clamp(base + off, ivec3(0), res - ivec3(1));
+        vec3 t = vec3(off) * fr + (vec3(1.0) - vec3(off)) * (vec3(1.0) - fr);
+        float w = t.x * t.y * t.z;
+        int col = c.x + c.z * res.x;
+        vec2 pix = vec2(float(col * texels), float(c.y * texels)) + interior;
+        sum += texture(u_ddgi_irradiance_atlas, pix / atlasSize).rgb * w;
+        wsum += w;
+    }
+    return (wsum > 1e-5) ? sum / wsum : vec3(0.0);
+}
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a = roughness * roughness;
@@ -364,7 +438,12 @@ void main() {
         // clustered 点光（≤64）：附加 Cook-Torrance 贡献。
         Lo += PointLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);
 
-        vec3 ambient_term = vec3(ambient) * surface_albedo * ao;
+        // 间接漫反射：DDGI（探针体）优先，其次 LightProbe SH，否则退化为平坦环境光。
+        // 两者皆关时结果与 B2c-4 一致（不回归）。
+        vec3 indirect = vec3(ambient);
+        if (probe_params.x > 0.5) indirect = EvaluateSH(N);
+        if (u_ddgi_origin.w > 0.5) indirect = SampleDDGI(vWorldPos, N) * u_ddgi_spacing.w;
+        vec3 ambient_term = indirect * surface_albedo * ao;
         color = ambient_term + Lo + surface_emissive;
     }
 

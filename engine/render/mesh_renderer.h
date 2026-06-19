@@ -151,6 +151,24 @@ struct ShadedPointLight {
     int shadow_index = -1;
 };
 
+/// 全局光照（B2c-5）。SH L2 间接漫反射（LightProbe）+ DDGI irradiance atlas 探针体。
+/// 两者皆关（默认）时退化为 DirectionalLight::ambient 平坦环境光，与 B2c-4 输出一致。
+struct ShadedGI {
+    // LightProbe SH（L2，9 系数；仅 xyz 有效）。
+    bool sh_enabled = false;
+    glm::vec4 sh_coefficients[9] = {};
+
+    // DDGI 探针体。irradiance_atlas=0 或 ddgi_enabled=false 时不启用。
+    bool ddgi_enabled = false;
+    unsigned int ddgi_irradiance_atlas = 0;
+    glm::vec3 ddgi_grid_origin{0.0f};
+    glm::vec3 ddgi_grid_spacing{1.0f};
+    glm::ivec3 ddgi_grid_resolution{0};
+    int ddgi_irradiance_texels = 8;       ///< 每探针 octahedral 分辨率（含 1px 边界）
+    float ddgi_gi_intensity = 1.0f;
+    float ddgi_normal_bias = 0.2f;
+};
+
 /**
  * @class MeshRenderer
  * @brief 用通用原语绘制单个带材质的 PBR 网格。资源（PSO / UBO / 白纹理 / VB / IB）首帧懒创建，
@@ -261,6 +279,7 @@ public:
     /// @param material 高级 shading 材质参数 + 纹理
     /// @param light    单方向光
     /// @param point_lights clustered 点光（B2c-2，≤64；超出截断；空=仅方向光，输出与 B2c-1 一致）
+    /// @param gi       全局光照（B2c-5；默认关 → 退化为平坦环境光，与 B2c-4 输出一致）
     void DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                     const std::vector<MeshVertex>& vertices,
                     const std::vector<uint16_t>& indices,
@@ -270,7 +289,8 @@ public:
                     const glm::vec3& camera_pos,
                     const ShadedMaterial& material,
                     const DirectionalLight& light,
-                    const std::vector<ShadedPointLight>& point_lights = {});
+                    const std::vector<ShadedPointLight>& point_lights = {},
+                    const ShadedGI& gi = {});
 
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
@@ -291,6 +311,8 @@ private:
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
     BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）
+    BufferHandle per_light_probe_ubo_;      ///< LightProbe SH UBO（160B，slot=5，B2c-5）
+    BufferHandle per_ddgi_ubo_;             ///< DDGI 参数 UBO（64B，slot=6，B2c-5）
     unsigned int white_tex_ = 0;
     BufferHandle vbo_;
     BufferHandle ibo_;
