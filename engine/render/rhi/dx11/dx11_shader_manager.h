@@ -138,6 +138,9 @@ public:
     /// 高级 shading forward 着色器句柄（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@b2 + 5 纹理槽 t0..t4）
     unsigned int forward_shaded_shader_handle() const { return forward_shaded_shader_handle_; }
 
+    /// 蒙皮 + 高级 shading 组合着色器句柄（Final-Feat-2；forward_shaded_skinned.vert + forward_shaded.frag + 骨骼 SSBO\@t0）
+    unsigned int forward_skinned_shaded_shader_handle() const { return forward_skinned_shaded_shader_handle_; }
+
     const DX11PBRTextureSlots& pbr_texture_slots() const { return pbr_texture_slots_; }
 
 private:
@@ -169,6 +172,7 @@ private:
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
+    unsigned int forward_skinned_shaded_shader_handle_ = 0;
 
 };
 

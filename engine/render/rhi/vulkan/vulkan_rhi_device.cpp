@@ -789,6 +789,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();
+        case BuiltinProgram::ForwardSkinnedShaded:
+            if (shader_mgr_.forward_skinned_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedShadedShader();
+            return shader_mgr_.forward_skinned_shaded_shader_handle();
     }
     return 0;
 }

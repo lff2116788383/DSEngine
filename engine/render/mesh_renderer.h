@@ -297,6 +297,34 @@ public:
                     const std::vector<ShadedPointLight>& point_lights = {},
                     const ShadedGI& gi = {});
 
+    /// 记录一次蒙皮 + 高级 shading 网格绘制（Final-Feat-2）。融合 DrawSkinned 的骨骼
+    /// 顶点装配（顶点局部/绑定空间，骨骼矩阵走 SSBO\@slot 0，VS 施骨骼混合 + vp）与
+    /// DrawShaded 的高级 shading 片元（shading_mode 0/2-6 + SSS/clearcoat/anisotropy/POM/
+    /// alpha-test/double-sided + clustered 点光 + 地形 splat/雪 + WBOIT + GI + CSM 阴影），
+    /// 复用 BuiltinProgram::ForwardSkinnedShaded（forward_shaded_skinned.vert + forward_shaded.frag）。
+    /// @param vertices       局部/绑定空间顶点 + 骨骼索引/权重
+    /// @param indices        16 位索引
+    /// @param model          模型矩阵（内部预乘进每根骨骼矩阵）
+    /// @param bone_matrices  绑定→局部空间的骨骼矩阵（内部左乘 model 得世界空间）
+    /// @param view/proj      相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos     世界空间相机位置
+    /// @param material       高级 shading 材质参数 + 纹理
+    /// @param light          单方向光
+    /// @param point_lights   clustered 点光（≤64；超出截断；空=仅方向光）
+    /// @param gi             全局光照（默认关 → 退化为平坦环境光）
+    void DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
+                           const std::vector<SkinnedMeshVertex>& vertices,
+                           const std::vector<uint16_t>& indices,
+                           const glm::mat4& model,
+                           const std::vector<glm::mat4>& bone_matrices,
+                           const glm::mat4& view,
+                           const glm::mat4& proj,
+                           const glm::vec3& camera_pos,
+                           const ShadedMaterial& material,
+                           const DirectionalLight& light,
+                           const std::vector<ShadedPointLight>& point_lights = {},
+                           const ShadedGI& gi = {});
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
