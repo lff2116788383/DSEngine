@@ -129,6 +129,11 @@ struct ShadedMaterial {
     // 透明 WBOIT（B2c-4）。0=不透明直写；1=accumulation 通道（加性混合，深度不写）；
     // 2=revealage 通道（ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度不写）。
     int wboit_mode = 0;
+
+    // CSM 方向光阴影（Final-Feat-1）。receive_shadow 开启后 DrawShaded 从 device 全局渲染状态
+    // （light_space_matrix / cascade_splits / shadow_atlas_region / shadow_map[0]）取 CSM 数据采样。
+    bool receive_shadow = false;        ///< 接收方向光 CSM 阴影（默认关，不回归既有调用）
+    float shadow_strength = 1.0f;       ///< 阴影强度 [0,1]
 };
 
 /// 单方向光。

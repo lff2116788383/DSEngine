@@ -4,8 +4,8 @@
 // 复用 forward_pbr.vert（世界空间顶点 + vp）。在 forward_pbr.frag 基础上扩展 PerMaterial UBO，
 // 支持 shading_mode 0/2/3/4/5/6（PBR / HalfLambert-Skin / HalfLambert-Static / Toon / Watercolor /
 // FaceSDF）+ SSS / clearcoat / anisotropy / POM / alpha-test / double-sided。
-// 单方向光（无 shadow map / 点光，留给后续步骤）。着色 math 移植自生产 pbr.frag。
-// 仅依赖 PerFrame/PerScene/PerMaterial 三个 UBO + 5 纹理槽，便于 MeshRenderer 用通用原语满足全部绑定。
+// 方向光 + clustered 点光 + CSM 方向光阴影（手动 PCF 采样深度纹理）。着色 math 移植自生产 pbr.frag。
+// 依赖 PerFrame/PerScene/PerMaterial 等 UBO + 纹理槽，便于 MeshRenderer 用通用原语满足全部绑定。
 
 layout(location = 0) in vec4 vColor;
 layout(location = 1) in vec2 vTexCoord;
@@ -26,7 +26,10 @@ layout(std140, set = 0, binding = 0) uniform PerFrame {
 layout(std140, set = 1, binding = 0) uniform PerScene {
     vec4 light_dir_and_enabled;    // xyz = direction TO light (L), w = lighting_enabled
     vec4 light_color_and_ambient;  // xyz = light color, w = ambient_intensity
-    vec4 light_params;             // x = light_intensity
+    vec4 light_params;             // x = light_intensity, y = shadow_strength, z = receive_shadow(>0.5)
+    vec4 cascade_splits;           // xyz = view-space split distances per CSM cascade
+    mat4 light_space_matrices[3];  // 各级联 shadow-sample 矩阵（含 shadow_sample_correction）
+    vec4 shadow_atlas_regions[3];  // xy = UV scale, zw = UV offset（atlas 内子区域）
 };
 
 layout(std140, set = 2, binding = 0) uniform PerMaterial {
@@ -96,7 +99,13 @@ layout(std140, set = 6, binding = 0) uniform FwdDDGI {
 // DDGI irradiance atlas：binding 19 排序在 PBR(1-5)/splat(11-15) 之后 → flat unit 10。
 layout(set = 2, binding = 19) uniform sampler2D u_ddgi_irradiance_atlas;   // flat unit 10
 
+// CSM 方向光 shadow atlas：binding 20 排序在 DDGI(19) 之后 → flat unit 11。
+// 用普通 sampler2D 采样深度 .r 并手动比较（同 SpotShadowCalculation 思路），
+// 避免依赖硬件比较采样器，可用通用 BindTexture 原语绑定深度纹理。
+layout(set = 2, binding = 20) uniform sampler2D u_shadow_atlas;            // flat unit 11
+
 const float PI = 3.14159265359;
+const int CSM_CASCADES = 3;
 
 // SH L2 求值（与 includes/lighting_utils.glsl EvaluateSH 一致），返回方向 N 的间接漫反射辐照度。
 vec3 EvaluateSH(vec3 N) {
@@ -246,6 +255,41 @@ vec2 ParallaxOcclusionMapping(vec2 uv, vec3 viewDirTS, float height_scale) {
     return mix(curUV, prevUV, w);
 }
 
+// CSM 单级联手动 PCF：投影到 light space → atlas 子区域 UV → 3x3 PCF 深度比较。
+// 返回阴影量 [0,1]（1=全阴影）。与生产 shadow.glsl ShadowForCascade 同语义（手动比较版）。
+float SampleCascadeShadow(int idx, vec3 worldPos, float bias) {
+    vec4 lp = light_space_matrices[idx] * vec4(worldPos, 1.0);
+    if (lp.w <= 1e-5) return 0.0;
+    vec3 pc = lp.xyz / lp.w;
+    pc = pc * 0.5 + 0.5;            // NDC[-1,1] → [0,1]（矩阵含 shadow_sample_correction，三后端一致）
+    if (pc.z > 1.0) return 0.0;
+    if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0) return 0.0;
+    vec2 uv = pc.xy * shadow_atlas_regions[idx].xy + shadow_atlas_regions[idx].zw;
+    vec2 texel = 1.0 / vec2(textureSize(u_shadow_atlas, 0));
+    float occ = 0.0;
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float d = textureLod(u_shadow_atlas, uv + vec2(x, y) * texel, 0.0).r;
+            occ += (pc.z - bias) > d ? 1.0 : 0.0;
+        }
+    }
+    return occ / 9.0;
+}
+
+// 方向光 CSM 阴影：view-space 深度选级联 → PCF → 乘 shadow_strength。
+// receive_shadow 关 / 无 shadow map 时退化为 0（不影响着色）。
+float DirectionalShadow(vec3 worldPos, vec3 N, vec3 L) {
+    if (light_params.z < 0.5) return 0.0;                  // receive_shadow off
+    float viewDepth = abs((view * vec4(worldPos, 1.0)).z);
+    int idx = CSM_CASCADES - 1;
+    for (int i = 0; i < CSM_CASCADES - 1; ++i) {
+        if (viewDepth < cascade_splits[i]) { idx = i; break; }
+    }
+    float bias = max(0.0025 * (1.0 - dot(N, L)), 0.0004);
+    float shadow = SampleCascadeShadow(idx, worldPos, bias);
+    return clamp(shadow * light_params.y, 0.0, 1.0);       // light_params.y = shadow_strength
+}
+
 void main() {
     int shading_mode = int(mode_params.x + 0.5);
     bool double_sided = mode_params.y > 0.5;
@@ -306,6 +350,9 @@ void main() {
     bool lighting_enabled = light_dir_and_enabled.w > 0.5;
     vec3 L = normalize(light_dir_and_enabled.xyz);   // direction TO light
 
+    // CSM 方向光阴影（receive_shadow 关 / 无 shadow map 时为 0，不影响着色）。
+    float shadow = DirectionalShadow(vWorldPos, N, L);
+
     vec3 color;
     float out_alpha = texColor.a;
 
@@ -318,7 +365,7 @@ void main() {
         vec3 R = reflect(-L, N);
         float hl = dot(N, L) * 0.5 + 0.5;
         vec3 base_color = texColor.rgb * albedo.xyz;
-        vec3 diffuse_color = base_color * light_color * (hl * light_intensity + ambient * 0.5);
+        vec3 diffuse_color = base_color * light_color * (hl * light_intensity * (1.0 - shadow) + ambient * 0.5);
         float spec_b = pow(max(dot(R, V), 0.0), 100.0);
         vec3 spec_tex = has_mr ? texture(u_metallic_roughness_map, finalUV).rgb : vec3(0.0);
         color = diffuse_color + spec_tex * spec_b;
@@ -327,7 +374,7 @@ void main() {
         // Half-Lambert STATIC (KF default)。
         vec3 R = reflect(-L, N);
         float hl = dot(N, L) * 0.5 + 0.5;
-        vec3 diffuse = albedo.xyz * hl * light_color * light_intensity;
+        vec3 diffuse = albedo.xyz * hl * light_color * light_intensity * (1.0 - shadow);
         float spec_power = max(roughness_ao.x, 1.0);
         vec3 spec_color = vec3(albedo.w);
         vec3 specular = spec_color * pow(max(dot(R, V), 0.0), spec_power);
@@ -344,8 +391,9 @@ void main() {
         vec3 baseColor = texColor.rgb * albedo.xyz;
         vec3 shadowColor = baseColor * toon_shadow.xyz;
         vec3 diffuse = mix(shadowColor, baseColor * light_color, cel);
+        diffuse = mix(shadowColor, diffuse, 1.0 - shadow);   // 阴影内压向阴影色
         float spec = step(toon_params.y, max(dot(N, H), 0.0)) * toon_params.z;
-        vec3 specular = light_color * spec;
+        vec3 specular = light_color * spec * (1.0 - shadow);
         float rim = pow(1.0 - max(dot(N, V), 0.0), 4.0) * toon_params.w;
         color = diffuse + specular + vec3(rim);
     } else if (shading_mode == 5) {
@@ -360,6 +408,7 @@ void main() {
         vec3 lit = baseColor * light_color * light_intensity;
         vec3 shade = baseColor * vec3(0.45, 0.4, 0.5) * ambient;
         vec3 diffuse = mix(shade, lit, soft_band);
+        diffuse *= (1.0 - shadow * 0.6);
         float fresnel = 1.0 - max(dot(N, V), 0.0);
         float edge_factor = pow(fresnel, 3.0) * wc_edge;
         diffuse *= (1.0 - edge_factor * 0.5);
@@ -380,6 +429,7 @@ void main() {
         vec3 baseColor = albedo.xyz * vColor.rgb;
         vec3 shadowColor = baseColor * toon_shadow.xyz;
         color = mix(shadowColor, baseColor * light_color * light_intensity, face_lit);
+        color = mix(shadowColor, color, 1.0 - shadow * 0.5);   // 阴影压向阴影色
         float rim = pow(1.0 - max(dot(N, V), 0.0), 4.0) * toon_params.w;
         color += light_color * rim;
     } else {
@@ -434,6 +484,9 @@ void main() {
                            (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
             Lo += spec_cc * clearcoat.x * NdotL * light_color * light_intensity;
         }
+
+        // 方向光阴影：仅作用于方向光项（含 SSS / clearcoat），不影响点光。
+        Lo *= (1.0 - shadow);
 
         // clustered 点光（≤64）：附加 Cook-Torrance 贡献。
         Lo += PointLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);

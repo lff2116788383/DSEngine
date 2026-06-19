@@ -58,13 +58,17 @@ struct FwdPerFrameUBO {
 };
 static_assert(sizeof(FwdPerFrameUBO) == 176, "FwdPerFrameUBO std140 = 176 bytes");
 
-// std140 PerScene 块（48 字节）。
+// std140 PerScene 块（304 字节）。尾部 CSM 阴影字段仅 DrawShaded 填充；
+// 基础 Draw/DrawSkinned/DrawInstanced 仅写前 3 个 vec4，其余置零（forward_pbr.frag 不读 → 不回归）。
 struct FwdPerSceneUBO {
-    glm::vec4 light_dir_and_enabled;    ///< xyz=指向光源方向(L), w=启用
-    glm::vec4 light_color_and_ambient;  ///< xyz=光色, w=环境系数
-    glm::vec4 light_params;             ///< x=强度
+    glm::vec4 light_dir_and_enabled;       ///< xyz=指向光源方向(L), w=启用
+    glm::vec4 light_color_and_ambient;     ///< xyz=光色, w=环境系数
+    glm::vec4 light_params;                ///< x=强度, y=shadow_strength, z=receive_shadow
+    glm::vec4 cascade_splits;              ///< xyz=view-space 级联分裂距离
+    glm::mat4 light_space_matrices[3];     ///< 各级联 shadow-sample 矩阵
+    glm::vec4 shadow_atlas_regions[3];     ///< xy=UV scale, zw=UV offset
 };
-static_assert(sizeof(FwdPerSceneUBO) == 48, "FwdPerSceneUBO std140 = 48 bytes");
+static_assert(sizeof(FwdPerSceneUBO) == 304, "FwdPerSceneUBO std140 = 304 bytes");
 
 // std140 PerMaterial 块（64 字节）。
 struct FwdPerMaterialUBO {
@@ -323,7 +327,17 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     const glm::vec3 to_light = glm::normalize(-light.direction);
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
-    scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    // CSM 方向光阴影：从 device 全局渲染状态取级联矩阵/分裂/atlas 区域（与执行器 DrawMeshBatch 同源）。
+    const auto& grs = device.GetGlobalRenderState();
+    scene.light_params = glm::vec4(light.intensity,
+                                   material.shadow_strength,
+                                   material.receive_shadow ? 1.0f : 0.0f, 0.0f);
+    scene.cascade_splits = glm::vec4(grs.cascade_splits[0], grs.cascade_splits[1],
+                                     grs.cascade_splits[2], 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        scene.light_space_matrices[i] = grs.light_space_matrix[i];
+        scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
+    }
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -426,6 +440,9 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     // DDGI irradiance atlas（slot 10，flat unit 10）。未启用时绑白纹理保证三后端 descriptor 有定义。
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
+    // CSM shadow atlas（slot 11，flat unit 11）。无 shadow map（grs.shadow_map[0]==0）或 receive_shadow 关时
+    // 绑白纹理：着色器内 receive_shadow 门控已返回 0，白纹理深度=1 也不会产生阴影。
+    cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);

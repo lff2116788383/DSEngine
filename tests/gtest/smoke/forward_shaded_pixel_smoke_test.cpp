@@ -193,6 +193,129 @@ void CheckCrossBackend(const dse::test::RenderFn& fn, double threshold) {
     if (ok(dx) && ok(vk)) EXPECT_LT(dse::test::ComputeRmse(dx.readback, vk.readback), threshold) << "DX11 vs Vulkan";
 }
 
+// ── CSM 方向光阴影（Final-Feat-1）──
+// 作者化「shadow map」：居中方块存近深度(0.30=遮挡物)，四周存远深度(1.0=清屏)。
+// light_space_matrix=I → 接收面 world(x,y,0) → shadow UV(x/2+.5,y/2+.5)、投影深度 0.5。
+// 接收面中心投影到遮挡方块(0.30) → 0.5>0.30 → 阴影；边缘投影到 1.0 → 不阴影 → 亮。
+// 此法绕开多 pass 深度附件采样的跨后端 layout 差异，确定性地验证 CSM 采样/级联/门控的着色逻辑。
+constexpr int kShadowTexSize = 64;
+
+unsigned int CreateAuthoredShadowMap(RhiDevice& device) {
+    std::vector<unsigned char> px(static_cast<size_t>(kShadowTexSize) * kShadowTexSize * 4, 255);  // 远 (1.0)
+    const int lo = kShadowTexSize * 5 / 16;    // ~20
+    const int hi = kShadowTexSize * 11 / 16;   // ~44
+    for (int y = lo; y < hi; ++y)
+        for (int x = lo; x < hi; ++x)
+            px[(static_cast<size_t>(y) * kShadowTexSize + x) * 4 + 0] = 77;  // 0.30 近深度（遮挡物，存 .r）
+    return device.CreateTexture2D(kShadowTexSize, kShadowTexSize, px.data(), /*linear_filter=*/false);
+}
+
+// 居中大面片 z=0、法线 +Z（朝 +Z 相机/朝光），覆盖 xy[-0.9,0.9]。
+void MakeReceiverQuad(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indices) {
+    const glm::vec4 col(1.0f);
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    const float a = 0.9f;
+    verts.push_back({{-a, -a, 0.0f}, col, {0.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}});
+    verts.push_back({{ a, -a, 0.0f}, col, {1.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}});
+    verts.push_back({{ a,  a, 0.0f}, col, {1.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}});
+    verts.push_back({{-a,  a, 0.0f}, col, {0.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}});
+    indices = {0, 1, 2, 0, 2, 3};
+}
+
+RenderTargetReadback RenderShadowReceiver(RhiDevice& device, bool receive_shadow) {
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = true;
+    unsigned int rt = device.CreateRenderTarget(rt_desc);
+    if (rt == 0) return {};
+    if (device.GetBuiltinProgram(BuiltinProgram::ForwardShaded) == 0) {
+        device.DeleteRenderTarget(rt);
+        return {};
+    }
+    unsigned int shadow_tex = CreateAuthoredShadowMap(device);
+    if (shadow_tex == 0) {
+        device.DeleteRenderTarget(rt);
+        return {};
+    }
+
+    // 全局 CSM 状态：单级联即可（split 足够大使 cascade 0 命中），light_space=I、atlas 全幅。
+    device.SetGlobalShadowMap(0, shadow_tex);
+    for (unsigned int i = 0; i < 3; ++i) {
+        device.SetGlobalLightSpaceMatrix(i, glm::mat4(1.0f));
+        device.SetGlobalCascadeSplit(i, 1000.0f);
+        device.SetGlobalShadowAtlasRegion(i, glm::vec4(1.0f, 1.0f, 0.0f, 0.0f));
+    }
+
+    ShadedMaterial m;
+    m.albedo = glm::vec3(0.8f);
+    m.roughness = 0.6f;
+    m.shading_mode = 0;  // PBR
+    m.receive_shadow = receive_shadow;
+    m.shadow_strength = 1.0f;
+
+    DirectionalLight light;
+    light.direction = glm::vec3(0.0f, 0.0f, -1.0f);  // to_light = +Z（与法线同向 → N·L=1 全亮）
+    light.color = glm::vec3(1.0f);
+    light.intensity = 3.0f;
+    light.ambient = 0.05f;
+    light.enabled = true;
+
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeReceiverQuad(verts, indices);
+
+    const glm::mat4 I(1.0f);
+    const glm::mat4 proj = device.GetProjectionCorrection();
+    const glm::vec3 cam_pos(0.0f, 0.0f, 1.0f);
+
+    MeshRenderer renderer;
+    device.BeginFrame();
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        renderer.DrawShaded(*cmd, device, verts, indices, I, I, proj, cam_pos, m, light);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    renderer.Shutdown(device);
+    device.SetGlobalShadowMap(0, 0);  // 复位，避免影响同 device 后续绘制
+    device.DeleteTexture(shadow_tex);
+    device.DeleteRenderTarget(rt);
+    return rb;
+}
+
+RenderTargetReadback RenderShadowOn(RhiDevice& device) { return RenderShadowReceiver(device, true); }
+RenderTargetReadback RenderShadowOff(RhiDevice& device) { return RenderShadowReceiver(device, false); }
+
+void VerifyShadow(const RenderTargetReadback& rb, const char* backend) {
+    ASSERT_EQ(rb.width, kRtSize) << backend;
+    ASSERT_EQ(rb.height, kRtSize) << backend;
+    ASSERT_EQ(rb.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4) << backend;
+    const int cy = kRtSize / 2;
+    const unsigned char* center = dse::test::PixelAt(rb, cy, cy);   // 阴影内
+    const unsigned char* edge = dse::test::PixelAt(rb, 40, cy);     // 光照内
+    ASSERT_NE(center, nullptr) << backend;
+    ASSERT_NE(edge, nullptr) << backend;
+    EXPECT_GT(edge[0], 90) << backend << " lit edge bright";
+    EXPECT_LT(center[0] + center[1] + center[2] + 30,
+              edge[0] + edge[1] + edge[2]) << backend << " shadow center darker than lit edge";
+}
+
+void RunSingleBackendShadow(dse::test::BackendResult r, const char* backend) {
+    if (!r.available) GTEST_SKIP() << r.skip_reason;
+    if (r.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded builtin program unavailable (" << backend << ")";
+    VerifyShadow(r.readback, backend);
+}
+
 }  // namespace
 
 // ── HalfLambert-Static(3) ──
@@ -601,4 +724,27 @@ TEST(ForwardShadedPixelSmokeTest, DDGIAddsIndirect) {
 TEST(ForwardShadedPixelSmokeTest, DDGICrossBackend) {
     auto fn = [](RhiDevice& d) { return RenderDDGI(d, true); };
     CheckCrossBackend(fn, 12.0);
+}
+
+// ── CSM 方向光阴影（Final-Feat-1）──
+TEST(ForwardShadedPixelSmokeTest, OpenGLShadow) { RunSingleBackendShadow(dse::test::RunOpenGL(RenderShadowOn), "OpenGL"); }
+TEST(ForwardShadedPixelSmokeTest, D3D11Shadow) { RunSingleBackendShadow(dse::test::RunD3D11(RenderShadowOn), "D3D11"); }
+TEST(ForwardShadedPixelSmokeTest, VulkanShadow) { RunSingleBackendShadow(dse::test::RunVulkan(RenderShadowOn), "Vulkan"); }
+TEST(ForwardShadedPixelSmokeTest, ShadowCrossBackend) { CheckCrossBackend(RenderShadowOn, 12.0); }
+
+// receive_shadow 开 → 中心被遮挡变暗；关 → 中心与边缘同亮（不回归既有无阴影行为）。
+TEST(ForwardShadedPixelSmokeTest, ShadowVsNoShadow) {
+    auto on = dse::test::RunOpenGL(RenderShadowOn);
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL(RenderShadowOff);
+    const int cy = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, cy, cy);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, cy, cy);
+    const unsigned char* off_e = dse::test::PixelAt(off.readback, 40, cy);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    ASSERT_NE(off_e, nullptr);
+    EXPECT_LT(on_c[0] + 30, off_c[0]) << "shadow darkens center vs no-shadow";
+    EXPECT_NEAR(off_c[0], off_e[0], 40) << "no-shadow: center ~ edge (uniform lit)";
 }
