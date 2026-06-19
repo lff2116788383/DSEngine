@@ -402,3 +402,91 @@ TEST(ForwardShadedPixelSmokeTest, SnowCrossBackend) {
     auto fn = [](RhiDevice& d) { return RenderSnow(d, true); };
     CheckCrossBackend(fn, 12.0);
 }
+
+// ── 透明 WBOIT（B2c-4） ──
+// 两块半透明面片（红 a=0.5 在左、绿 a=0.5 在右）水平交叠于中央，z 同深度。unlit 使片元色即顶点色。
+// WBOIT 深度不写 → 两片元恒贡献；accumulation 加性、revealage 乘性，均与绘制顺序无关。
+// swap 反转两片在单次 draw 内的索引顺序，用于验证顺序无关性。
+void MakeWboitQuads(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indices, bool swap) {
+    const glm::vec3 n(0.0f, 0.0f, 1.0f);
+    auto add_quad = [&](float x0, float x1, const glm::vec4& c) -> uint16_t {
+        const uint16_t base = static_cast<uint16_t>(verts.size());
+        const float y0 = -0.6f, y1 = 0.6f;
+        verts.push_back({{x0, y0, 0.0f}, c, {0.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}});
+        verts.push_back({{x1, y0, 0.0f}, c, {1.0f, 0.0f}, n, {1.0f, 0.0f, 0.0f}});
+        verts.push_back({{x1, y1, 0.0f}, c, {1.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}});
+        verts.push_back({{x0, y1, 0.0f}, c, {0.0f, 1.0f}, n, {1.0f, 0.0f, 0.0f}});
+        return base;
+    };
+    const uint16_t red = add_quad(-0.6f, 0.2f, glm::vec4(1.0f, 0.0f, 0.0f, 0.5f));
+    const uint16_t grn = add_quad(-0.2f, 0.6f, glm::vec4(0.0f, 1.0f, 0.0f, 0.5f));
+    auto emit = [&](uint16_t b) {
+        indices.push_back(b); indices.push_back(b + 1); indices.push_back(b + 2);
+        indices.push_back(b); indices.push_back(b + 2); indices.push_back(b + 3);
+    };
+    if (swap) { emit(grn); emit(red); } else { emit(red); emit(grn); }
+}
+
+RenderTargetReadback RenderWboit(RhiDevice& device, int mode, bool swap) {
+    ShadedMaterial m;
+    m.albedo = glm::vec3(1.0f);
+    m.shading_mode = 0;
+    m.wboit_mode = mode;
+    DirectionalLight light;
+    light.enabled = false;  // unlit：片元色 = 顶点色，便于直接比对累加/乘性结果
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeWboitQuads(verts, indices, swap);
+    return RenderShadedScene(device, m, light, verts, indices);
+}
+
+// accumulation：交叠区红+绿加性累加 → 饱和为黄；左/右单片区为纯红/纯绿。顺序无关。
+TEST(ForwardShadedPixelSmokeTest, WboitAccumOrderIndependent) {
+    auto a = dse::test::RunOpenGL([](RhiDevice& d) { return RenderWboit(d, 1, false); });
+    if (!a.available) GTEST_SKIP() << a.skip_reason;
+    if (a.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto b = dse::test::RunOpenGL([](RhiDevice& d) { return RenderWboit(d, 1, true); });
+
+    EXPECT_LT(dse::test::ComputeRmse(a.readback, b.readback), 1.0) << "accum 应顺序无关";
+
+    const int cy = kRtSize / 2;
+    const unsigned char* ctr = dse::test::PixelAt(a.readback, kRtSize / 2, cy);  // 交叠 → 黄
+    const unsigned char* left = dse::test::PixelAt(a.readback, 70, cy);          // 仅红
+    const unsigned char* right = dse::test::PixelAt(a.readback, 186, cy);        // 仅绿
+    ASSERT_NE(ctr, nullptr);
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+    EXPECT_GT(ctr[0], 200);  EXPECT_GT(ctr[1], 200);  EXPECT_LT(ctr[2], 60);  // 黄
+    EXPECT_GT(left[0], 200); EXPECT_LT(left[1], 60);                          // 红
+    EXPECT_GT(right[1], 200); EXPECT_LT(right[0], 60);                        // 绿
+}
+
+TEST(ForwardShadedPixelSmokeTest, WboitAccumCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderWboit(d, 1, false); };
+    CheckCrossBackend(fn, 12.0);
+}
+
+// revealage：清屏 alpha=1，乘性混合 dst*=(1-srcAlpha)。交叠区 alpha=0.25、单片区 alpha=0.5。顺序无关。
+TEST(ForwardShadedPixelSmokeTest, WboitRevealageOrderIndependent) {
+    auto a = dse::test::RunOpenGL([](RhiDevice& d) { return RenderWboit(d, 2, false); });
+    if (!a.available) GTEST_SKIP() << a.skip_reason;
+    if (a.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto b = dse::test::RunOpenGL([](RhiDevice& d) { return RenderWboit(d, 2, true); });
+
+    EXPECT_LT(dse::test::ComputeRmse(a.readback, b.readback), 1.0) << "revealage 应顺序无关";
+
+    const int cy = kRtSize / 2;
+    const unsigned char* ctr = dse::test::PixelAt(a.readback, kRtSize / 2, cy);  // 交叠 → (1-.5)(1-.5)=0.25
+    const unsigned char* left = dse::test::PixelAt(a.readback, 70, cy);          // 单片 → 0.5
+    ASSERT_NE(ctr, nullptr);
+    ASSERT_NE(left, nullptr);
+    // alpha 通道：交叠 ~64（0.25*255），单片 ~128（0.5*255）。交叠遮蔽更强（剩余更小）。
+    EXPECT_LT(ctr[3], left[3] - 30) << "交叠 revealage 应低于单片";
+    EXPECT_NEAR(ctr[3], 64, 24);
+    EXPECT_NEAR(left[3], 128, 24);
+}
+
+TEST(ForwardShadedPixelSmokeTest, WboitRevealageCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderWboit(d, 2, false); };
+    CheckCrossBackend(fn, 12.0);
+}

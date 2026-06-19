@@ -194,6 +194,36 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         desc.culling_enabled = false;
         pso_no_cull_ = device.CreatePipelineState(desc);
     }
+    // WBOIT accumulation PSO（B2c-4）：加性混合（color/alpha 均 ONE/ONE），深度测试开但不写、不剔除，
+    // 使各透明片元贡献顺序无关地累加（着色器 wboit_mode=1 输出预乘加权 color/alpha）。
+    if (pso_wboit_accum_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::One;
+        desc.blend_dst = BlendFactor::One;
+        desc.alpha_blend_src = BlendFactor::One;
+        desc.alpha_blend_dst = BlendFactor::One;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = false;
+        desc.depth_func = CompareFunc::Less;
+        desc.culling_enabled = false;
+        pso_wboit_accum_ = device.CreatePipelineState(desc);
+    }
+    // WBOIT revealage PSO（B2c-4）：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合（dst *= (1-srcAlpha)），
+    // 深度测试开但不写、不剔除（着色器 wboit_mode=2 输出 (0,0,0,alpha)）。
+    if (pso_wboit_reveal_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::Zero;
+        desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+        desc.alpha_blend_src = BlendFactor::Zero;
+        desc.alpha_blend_dst = BlendFactor::OneMinusSrcAlpha;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = false;
+        desc.depth_func = CompareFunc::Less;
+        desc.culling_enabled = false;
+        pso_wboit_reveal_ = device.CreatePipelineState(desc);
+    }
     // 扩展 PerMaterial UBO（160B）。
     if (!per_material_shaded_ubo_) {
         GpuBufferDesc m_desc;
@@ -292,7 +322,9 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.double_sided ? 1.0f : 0.0f,
                                 material.anisotropy, material.pom_height_scale);
     mat.sss = glm::vec4(material.sss_tint, material.sss_strength);
-    mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness, 0.0f, 0.0f);
+    // clearcoat.z 复用为 wboit_mode（B2c-4）：着色器据此切换 accumulation/revealage 输出。
+    mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness,
+                              static_cast<float>(material.wboit_mode), 0.0f);
     mat.toon_shadow = glm::vec4(material.toon_shadow_color, material.toon_shadow_threshold);
     mat.toon_params = glm::vec4(material.toon_shadow_softness, material.toon_specular_size,
                                 material.toon_specular_strength, material.toon_rim_strength);
@@ -336,7 +368,11 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.SetPipelineState(material.double_sided ? pso_no_cull_ : pso_);
+    // PSO 选择：WBOIT 透明通道优先（accumulation/revealage），否则按 double-sided 选剔除状态。
+    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
+    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
+    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0

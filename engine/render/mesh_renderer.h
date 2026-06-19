@@ -125,6 +125,10 @@ struct ShadedMaterial {
     float snow_roughness = 0.75f;                      ///< 雪面粗糙度
     float snow_normal_threshold = 0.4f;                ///< N.y 阈值
     float snow_edge_sharpness = 3.0f;                  ///< 边缘锐利度（pow 指数）
+
+    // 透明 WBOIT（B2c-4）。0=不透明直写；1=accumulation 通道（加性混合，深度不写）；
+    // 2=revealage 通道（ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度不写）。
+    int wboit_mode = 0;
 };
 
 /// 单方向光。
@@ -282,6 +286,8 @@ private:
 
     unsigned int pso_ = 0;
     unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
+    unsigned int pso_wboit_accum_ = 0;   ///< WBOIT accumulation：加性混合 ONE/ONE，深度测试不写（B2c-4）
+    unsigned int pso_wboit_reveal_ = 0;  ///< WBOIT revealage：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度测试不写（B2c-4）
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
     BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）

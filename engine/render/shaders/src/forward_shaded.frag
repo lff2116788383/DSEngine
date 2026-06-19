@@ -371,5 +371,21 @@ void main() {
     // Reinhard tonemap + gamma（与 forward_pbr.frag 一致，保证软渲下三后端 LDR 输出一致）。
     color = color / (color + vec3(1.0));
     color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
+
+    // B2c-4: 透明 WBOIT（加权混合 OIT）。clearcoat.z 复用为 wboit_mode：
+    //   0 = 普通（直写 color/alpha）；1 = accumulation 通道（预乘加权，配加性混合 ONE/ONE）；
+    //   2 = revealage 通道（写 alpha，配 ZERO/ONE_MINUS_SRC_ALPHA 乘性混合）。
+    // 权重函数与 includes/output.glsl 的 OutputFragment 一致，保证与既有透明路径同语义。
+    float wboit_mode = clearcoat.z;
+    if (wboit_mode > 0.5) {
+        float z = gl_FragCoord.z;
+        float weight = out_alpha * max(1e-2, 3e3 * pow(1.0 - z, 3.0));
+        if (wboit_mode < 1.5) {
+            FragColor = vec4(color * out_alpha * weight, out_alpha * weight);
+        } else {
+            FragColor = vec4(0.0, 0.0, 0.0, out_alpha);
+        }
+        return;
+    }
     FragColor = vec4(color, out_alpha);
 }
