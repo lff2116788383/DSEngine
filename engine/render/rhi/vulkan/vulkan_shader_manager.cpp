@@ -31,6 +31,7 @@
 #include "embed/forward_pbr_instanced_vert.gen.h"
 #include "embed/forward_shaded_frag.gen.h"
 #include "embed/forward_shaded_skinned_vert.gen.h"
+#include "embed/forward_shaded_instanced_vert.gen.h"
 #include "embed/sprite_fx_vert.gen.h"
 #include "embed/sprite_fx_sdf_frag.gen.h"
 #include "embed/sprite_fx_vfx_frag.gen.h"
@@ -704,6 +705,20 @@ void VulkanShaderManager::InitForwardSkinnedShadedShader() {
         DEBUG_LOG_ERROR("Vulkan forward skinned shaded shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan forward skinned shaded shader created: handle={}", forward_skinned_shaded_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitForwardInstancedShadedShader() {
+    if (forward_instanced_shaded_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // 实例化 VS（每实例 model SSBO\@set7.b0，避开 frag set0-6）+ 高级 shading frag；descriptor set layout 由 SPIR-V 反射驱动。
+    forward_instanced_shaded_shader_handle_ = CreateProgramFromSpirv(
+        kforward_shaded_instanced_vert_spv, kforward_shaded_instanced_vert_spv_size,
+        kforward_shaded_frag_spv, kforward_shaded_frag_spv_size);
+    if (forward_instanced_shaded_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan forward instanced shaded shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan forward instanced shaded shader created: handle={}", forward_instanced_shaded_shader_handle_);
     }
 }
 

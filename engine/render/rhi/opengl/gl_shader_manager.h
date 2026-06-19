@@ -215,6 +215,11 @@ public:
     void InitForwardSkinnedShadedShader();
     unsigned int forward_skinned_shaded_shader_handle() const { return forward_skinned_shaded_shader_handle_; }
 
+    // --- 实例化 + 高级 shading 组合着色器（Final-Feat-3）：forward_shaded_instanced.vert + forward_shaded.frag。
+    // 每实例 model 矩阵 SSBO\@set7.b0（避开 frag set0-6）+ 高级 shading frag 全套 UBO/纹理槽。
+    void InitForwardInstancedShadedShader();
+    unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
+
     // --- SDF 文本着色器 ---
     struct TextSdfLocations {
         int texture = -1;
@@ -292,6 +297,7 @@ private:
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
+    unsigned int forward_instanced_shaded_shader_handle_ = 0;
 };
 
 } // namespace render

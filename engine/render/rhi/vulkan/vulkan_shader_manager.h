@@ -153,6 +153,10 @@ public:
     void InitForwardSkinnedShadedShader();
     unsigned int forward_skinned_shaded_shader_handle() const { return forward_skinned_shaded_shader_handle_; }
 
+    /// 初始化实例化 + 高级 shading 组合着色器（Final-Feat-3；forward_shaded_instanced.vert + forward_shaded.frag + 每实例 model SSBO\@set7.b0）
+    void InitForwardInstancedShadedShader();
+    unsigned int forward_instanced_shaded_shader_handle() const { return forward_instanced_shaded_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -258,6 +262,7 @@ private:
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
+    unsigned int forward_instanced_shaded_shader_handle_ = 0;
 };
 
 } // namespace render

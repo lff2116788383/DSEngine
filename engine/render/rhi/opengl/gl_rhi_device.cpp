@@ -1030,6 +1030,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardSkinnedShaded:
             if (shader_mgr_.forward_skinned_shaded_shader_handle() == 0) shader_mgr_.InitForwardSkinnedShadedShader();
             return shader_mgr_.forward_skinned_shaded_shader_handle();
+        case BuiltinProgram::ForwardInstancedShaded:
+            if (shader_mgr_.forward_instanced_shaded_shader_handle() == 0) shader_mgr_.InitForwardInstancedShadedShader();
+            return shader_mgr_.forward_instanced_shaded_shader_handle();
     }
     return 0;
 }

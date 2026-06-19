@@ -64,6 +64,7 @@
 #include "embed/forward_pbr_instanced_vert.gen.h"
 #include "embed/forward_shaded_frag.gen.h"
 #include "embed/forward_shaded_skinned_vert.gen.h"
+#include "embed/forward_shaded_instanced_vert.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -93,6 +94,7 @@
 #include "embed/forward_pbr_frag_reflect.gen.h"
 #include "embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "embed/forward_shaded_skinned_vert_reflect.gen.h"
+#include "embed/forward_shaded_instanced_vert_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
@@ -765,6 +767,37 @@ void GLShaderManager::InitForwardSkinnedShadedShader() {
         gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
         glUseProgram(forward_skinned_shaded_shader_handle_);
         gl_reflect::BindSamplersOnce(forward_skinned_shaded_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
+void GLShaderManager::InitForwardInstancedShadedShader() {
+    if (forward_instanced_shaded_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: forward instanced shaded 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // 实例化 VS（每实例 model SSBO\@set7.b0）+ 高级 shading frag。
+    forward_instanced_shaded_shader_handle_ =
+        CompileProgram(DSE_SL(kforward_shaded_instanced_vert), DSE_SL(kforward_shaded_frag));
+    if (forward_instanced_shaded_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward instanced shaded shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_instanced_shaded_shader_handle_, kforward_shaded_instanced_vert_reflection);
+    BindUBOsFromReflection(forward_instanced_shaded_shader_handle_, kforward_shaded_frag_reflection);
+
+    // 实例 SSBO 在 GLSL430 显式 layout(binding=0)（set 被剥离），通用原语 BindStorageBuffer(0) 直接命中，无需重映射。
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
+        glUseProgram(forward_instanced_shaded_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_instanced_shaded_shader_handle_, tex_entries,
                                      glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }
