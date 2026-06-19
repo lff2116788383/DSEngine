@@ -42,6 +42,20 @@ layout(std140, set = 2, binding = 0) uniform PerMaterial {
     vec4 watercolor;    // x = paper_strength, y = edge_darkening, z = color_bleed, w = pigment_density
 };
 
+// B2c-2: clustered 点光（≤64，UBO fallback）。布局与 ubo_types.h PointLightsUBO（binding=3）一致：
+//   PointLightEntry = { vec3 color; float intensity; vec3 position; float radius; int cast_shadow; int shadow_index; vec2 _pad; } = 48B
+struct FwdPointLight {
+    vec3 color;        float intensity;
+    vec3 position;     float radius;
+    int  cast_shadow;  int   shadow_index;
+    vec2 _pad;
+};
+layout(std140, set = 3, binding = 0) uniform PointLightUBO {
+    int u_point_light_count;
+    int _plpad0, _plpad1, _plpad2;
+    FwdPointLight u_point_lights[64];
+};
+
 layout(set = 2, binding = 1) uniform sampler2D u_texture;                  // albedo  -> flat unit 0
 layout(set = 2, binding = 2) uniform sampler2D u_normal_map;               // normal  -> flat unit 1
 layout(set = 2, binding = 3) uniform sampler2D u_metallic_roughness_map;   // MR      -> flat unit 2
@@ -82,6 +96,31 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+// 点光源 Cook-Torrance 贡献（与生产 pbr.frag 点光循环一致：平方反比半径衰减）。
+vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
+                   float roughness, float metallic, vec3 F0) {
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < u_point_light_count; ++i) {
+        vec3 d = u_point_lights[i].position - world_pos;
+        float dist = length(d);
+        vec3 L = d / max(dist, 1e-4);
+        float r = u_point_lights[i].radius;
+        float atten = clamp(1.0 - (dist * dist) / (r * r + 1e-4), 0.0, 1.0);
+        atten *= atten;
+        vec3 radiance = u_point_lights[i].color * u_point_lights[i].intensity * atten;
+        vec3 H = normalize(V + L);
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 specular = (NDF * G * F) /
+                        (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+        vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+        float NdotL = max(dot(N, L), 0.0);
+        sum += (kD * surface_albedo / PI + specular) * radiance * NdotL;
+    }
+    return sum;
 }
 
 vec3 SubsurfaceScattering(vec3 N, vec3 L, vec3 alb, float sss_s, vec3 light_col, float li, vec3 tint) {
@@ -276,6 +315,9 @@ void main() {
                            (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
             Lo += spec_cc * clearcoat.x * NdotL * light_color * light_intensity;
         }
+
+        // clustered 点光（≤64）：附加 Cook-Torrance 贡献。
+        Lo += PointLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);
 
         vec3 ambient_term = vec3(ambient) * surface_albedo * ao;
         color = ambient_term + Lo + surface_emissive;

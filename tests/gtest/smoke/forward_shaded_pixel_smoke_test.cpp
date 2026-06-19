@@ -75,7 +75,8 @@ void MakeCenterQuad(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indic
 RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& material,
                                        const DirectionalLight& light,
                                        const std::vector<MeshVertex>& verts,
-                                       const std::vector<uint16_t>& indices) {
+                                       const std::vector<uint16_t>& indices,
+                                       const std::vector<ShadedPointLight>& point_lights = {}) {
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -102,7 +103,7 @@ RenderTargetReadback RenderShadedScene(RhiDevice& device, const ShadedMaterial& 
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        renderer.DrawShaded(*cmd, device, verts, indices, I, I, proj, cam_pos, material, light);
+        renderer.DrawShaded(*cmd, device, verts, indices, I, I, proj, cam_pos, material, light, point_lights);
         cmd->EndRenderPass();
         device.Submit(cmd);
     }
@@ -227,4 +228,54 @@ TEST(ForwardShadedPixelSmokeTest, DoubleSidedRendersBackface) {
 TEST(ForwardShadedPixelSmokeTest, DoubleSidedCrossBackend) {
     auto fn_on = [](RhiDevice& d) { return RenderDoubleSided(d, true); };
     CheckCrossBackend(fn_on, 12.0);
+}
+
+// ── clustered 点光（B2c-2） ──
+// 正面朝 +Z 的居中面片，低强度方向光作基底；一盞亮点光位于轴上正前方（x=y=0），
+// 场景沿 y=128 对称。with_point=true 时中心显著变亮。
+RenderTargetReadback RenderPointLit(RhiDevice& device, bool with_point) {
+    ShadedMaterial m;
+    m.albedo = glm::vec3(0.8f);
+    m.roughness = 0.5f;
+    m.shading_mode = 0;  // PBR
+    DirectionalLight light;
+    light.direction = glm::vec3(0.0f, 0.0f, -1.0f);  // to_light = +Z
+    light.color = glm::vec3(1.0f);
+    light.intensity = 0.2f;  // 低基底光
+    light.ambient = 0.02f;
+    light.enabled = true;
+    std::vector<MeshVertex> verts;
+    std::vector<uint16_t> indices;
+    MakeCenterQuad(verts, indices, /*winding_ccw=*/true);  // front-facing 不被剔
+    std::vector<ShadedPointLight> pls;
+    if (with_point) {
+        ShadedPointLight pl;
+        pl.color = glm::vec3(1.0f);
+        pl.intensity = 5.0f;
+        pl.position = glm::vec3(0.0f, 0.0f, 0.5f);  // 轴上正前方
+        pl.radius = 3.0f;
+        pls.push_back(pl);
+    }
+    return RenderShadedScene(device, m, light, verts, indices, pls);
+}
+
+TEST(ForwardShadedPixelSmokeTest, PointLightBrightensCenter) {
+    auto on = dse::test::RunOpenGL([](RhiDevice& d) { return RenderPointLit(d, true); });
+    if (!on.available) GTEST_SKIP() << on.skip_reason;
+    if (on.readback.pixels.empty()) GTEST_SKIP() << "ForwardShaded unavailable (OpenGL)";
+    auto off = dse::test::RunOpenGL([](RhiDevice& d) { return RenderPointLit(d, false); });
+
+    const int c = kRtSize / 2;
+    const unsigned char* on_c = dse::test::PixelAt(on.readback, c, c);
+    const unsigned char* off_c = dse::test::PixelAt(off.readback, c, c);
+    ASSERT_NE(on_c, nullptr);
+    ASSERT_NE(off_c, nullptr);
+    // 点光显著抬高中心亮度。
+    EXPECT_GT(on_c[0], off_c[0] + 30) << "point light should brighten center R";
+    EXPECT_GT(on_c[0], 100) << "point-lit center should be bright";
+}
+
+TEST(ForwardShadedPixelSmokeTest, PointLightCrossBackend) {
+    auto fn = [](RhiDevice& d) { return RenderPointLit(d, true); };
+    CheckCrossBackend(fn, 12.0);
 }

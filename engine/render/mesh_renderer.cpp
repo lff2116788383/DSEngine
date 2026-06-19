@@ -8,6 +8,9 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/rhi/ubo_types.h"
+
+#include <algorithm>
 
 #include <glm/gtc/matrix_inverse.hpp>
 
@@ -199,6 +202,14 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         m_desc.is_dynamic = true;
         per_material_shaded_ubo_ = device.CreateGpuBuffer(m_desc, nullptr);
     }
+    // 点光 UBO（3088B，binding=3；count=0 时退化为纯方向光，输出与 B2c-1 一致）。
+    if (!per_point_lights_ubo_) {
+        GpuBufferDesc p_desc;
+        p_desc.size = sizeof(PointLightsUBO);
+        p_desc.usage = GpuBufferUsage::kUniform;
+        p_desc.is_dynamic = true;
+        per_point_lights_ubo_ = device.CreateGpuBuffer(p_desc, nullptr);
+    }
 }
 
 void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
@@ -209,7 +220,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                               const glm::mat4& proj,
                               const glm::vec3& camera_pos,
                               const ShadedMaterial& material,
-                              const DirectionalLight& light) {
+                              const DirectionalLight& light,
+                              const std::vector<ShadedPointLight>& point_lights) {
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
@@ -217,7 +229,8 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
 
     EnsureResources(device);
     EnsureShadedResources(device);
-    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_) return;
+    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
+        !per_point_lights_ubo_) return;
 
     // --- CPU 侧预变换顶点到世界空间（与 Draw 一致）---
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
@@ -279,6 +292,22 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
+    // 点光 UBO（clustered ≤64，超出截断）。
+    PointLightsUBO plights{};
+    const int pl_count = static_cast<int>(
+        (std::min)(point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
+    plights.u_point_light_count = pl_count;
+    for (int i = 0; i < pl_count; ++i) {
+        const ShadedPointLight& pl = point_lights[i];
+        plights.u_point_lights[i].color = pl.color;
+        plights.u_point_lights[i].intensity = pl.intensity;
+        plights.u_point_lights[i].position = pl.position;
+        plights.u_point_lights[i].radius = pl.radius;
+        plights.u_point_lights[i].cast_shadow = pl.cast_shadow ? 1 : 0;
+        plights.u_point_lights[i].shadow_index = pl.shadow_index;
+    }
+    device.UpdateGpuBuffer(per_point_lights_ubo_, 0, sizeof(plights), &plights);
+
     auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
 
     const std::vector<VertexAttr> attrs = {
@@ -294,6 +323,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
+    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights @ set3.b0（B2c-2）
     cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
     cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
@@ -777,11 +807,13 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_scene_ubo_) device.DeleteGpuBuffer(per_scene_ubo_);
     if (per_material_ubo_) device.DeleteGpuBuffer(per_material_ubo_);
     if (per_material_shaded_ubo_) device.DeleteGpuBuffer(per_material_shaded_ubo_);
+    if (per_point_lights_ubo_) device.DeleteGpuBuffer(per_point_lights_ubo_);
     if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
     vbo_ = ibo_ = per_frame_ubo_ = per_scene_ubo_ = per_material_ubo_ = BufferHandle{};
     per_material_shaded_ubo_ = BufferHandle{};
+    per_point_lights_ubo_ = BufferHandle{};
     bone_ssbo_ = BufferHandle{};
     instance_ssbo_ = BufferHandle{};
     indirect_buffer_ = BufferHandle{};

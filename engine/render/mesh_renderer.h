@@ -123,6 +123,17 @@ struct DirectionalLight {
     bool enabled = true;
 };
 
+/// clustered 点光（B2c-2）。布局对应 ubo_types.h PointLightEntry（≤64，UBO fallback）。
+/// 平方反比半径衰减；shadow 字段保留给后续点光阴影步骤。
+struct ShadedPointLight {
+    glm::vec3 color{1.0f};
+    float intensity = 1.0f;
+    glm::vec3 position{0.0f};
+    float radius = 10.0f;
+    bool cast_shadow = false;
+    int shadow_index = -1;
+};
+
 /**
  * @class MeshRenderer
  * @brief 用通用原语绘制单个带材质的 PBR 网格。资源（PSO / UBO / 白纹理 / VB / IB）首帧懒创建，
@@ -231,6 +242,8 @@ public:
     /// VS 仅施 vp），但复用 BuiltinProgram::ForwardShaded 支持 shading_mode 0/2-6 +
     /// SSS/clearcoat/anisotropy/POM/alpha-test/double-sided（单方向光，无 shadow map/点光）。
     /// @param material 高级 shading 材质参数 + 纹理
+    /// @param light    单方向光
+    /// @param point_lights clustered 点光（B2c-2，≤64；超出截断；空=仅方向光，输出与 B2c-1 一致）
     void DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                     const std::vector<MeshVertex>& vertices,
                     const std::vector<uint16_t>& indices,
@@ -239,7 +252,8 @@ public:
                     const glm::mat4& proj,
                     const glm::vec3& camera_pos,
                     const ShadedMaterial& material,
-                    const DirectionalLight& light);
+                    const DirectionalLight& light,
+                    const std::vector<ShadedPointLight>& point_lights = {});
 
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
@@ -256,6 +270,7 @@ private:
     unsigned int pso_ = 0;
     unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
+    BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
     unsigned int white_tex_ = 0;
     BufferHandle vbo_;
     BufferHandle ibo_;
