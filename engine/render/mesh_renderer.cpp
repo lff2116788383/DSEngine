@@ -72,6 +72,21 @@ struct FwdPerMaterialUBO {
 };
 static_assert(sizeof(FwdPerMaterialUBO) == 64, "FwdPerMaterialUBO std140 = 64 bytes");
 
+// std140 扩展 PerMaterial 块（160 字节）—— ForwardShaded 专用，须与 forward_shaded.frag 布局逐字段一致。
+struct FwdShadedMaterialUBO {
+    glm::vec4 albedo;        ///< xyz=基础色, w=金属度
+    glm::vec4 roughness_ao;  ///< x=粗糙, y=ao, z=法线强度, w=alpha cutoff
+    glm::vec4 emissive;      ///< xyz=自发光, w=alpha test 开关
+    glm::vec4 flags;         ///< x=法线贴图, y=mr 贴图, z=自发光贴图, w=遮蔽贴图
+    glm::vec4 mode_params;   ///< x=shading_mode, y=double_sided, z=anisotropy, w=pom_height_scale
+    glm::vec4 sss;           ///< xyz=sss_tint, w=sss_strength
+    glm::vec4 clearcoat;     ///< x=clear_coat, y=clear_coat_roughness
+    glm::vec4 toon_shadow;   ///< xyz=toon_shadow_color, w=toon_shadow_threshold
+    glm::vec4 toon_params;   ///< x=softness, y=spec_size, z=spec_strength, w=rim_strength
+    glm::vec4 watercolor;    ///< x=paper, y=edge, z=bleed, w=pigment
+};
+static_assert(sizeof(FwdShadedMaterialUBO) == 160, "FwdShadedMaterialUBO std140 = 160 bytes");
+
 } // namespace
 
 void MeshRenderer::EnsureResources(RhiDevice& device) {
@@ -163,6 +178,130 @@ void MeshRenderer::EnsureIndirectBuffer(RhiDevice& device) {
     d_desc.usage = GpuBufferUsage::kIndirect;
     d_desc.is_dynamic = true;
     indirect_buffer_ = device.CreateGpuBuffer(d_desc, nullptr);
+}
+
+void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
+    // 不剔除 PSO（double-sided 用），与 pso_ 同状态但关背面剔除。
+    if (pso_no_cull_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = false;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = true;
+        desc.depth_func = CompareFunc::Less;
+        desc.culling_enabled = false;
+        pso_no_cull_ = device.CreatePipelineState(desc);
+    }
+    // 扩展 PerMaterial UBO（160B）。
+    if (!per_material_shaded_ubo_) {
+        GpuBufferDesc m_desc;
+        m_desc.size = sizeof(FwdShadedMaterialUBO);
+        m_desc.usage = GpuBufferUsage::kUniform;
+        m_desc.is_dynamic = true;
+        per_material_shaded_ubo_ = device.CreateGpuBuffer(m_desc, nullptr);
+    }
+}
+
+void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
+                              const std::vector<MeshVertex>& vertices,
+                              const std::vector<uint16_t>& indices,
+                              const glm::mat4& model,
+                              const glm::mat4& view,
+                              const glm::mat4& proj,
+                              const glm::vec3& camera_pos,
+                              const ShadedMaterial& material,
+                              const DirectionalLight& light) {
+    if (vertices.empty() || indices.empty()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+    if (program == 0) return;  // 该后端未提供高级 shading 内建着色器
+
+    EnsureResources(device);
+    EnsureShadedResources(device);
+    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_) return;
+
+    // --- CPU 侧预变换顶点到世界空间（与 Draw 一致）---
+    const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
+    const glm::mat3 model3 = glm::mat3(model);
+    std::vector<GpuMeshVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const MeshVertex& v = vertices[i];
+        const glm::vec3 wp = glm::vec3(model * glm::vec4(v.position, 1.0f));
+        const glm::vec3 wn = glm::normalize(normal_matrix * v.normal);
+        const glm::vec3 wt = model3 * v.tangent;
+        GpuMeshVertex& g = gpu_verts[i];
+        g.px = wp.x; g.py = wp.y; g.pz = wp.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = wn.x; g.ny = wn.y; g.nz = wn.z;
+        g.tx = wt.x; g.ty = wt.y; g.tz = wt.z;
+    }
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuMeshVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // --- UBO 填充 ---
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    FwdPerSceneUBO scene{};
+    const glm::vec3 to_light = glm::normalize(-light.direction);
+    scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
+    scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
+    scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
+
+    FwdShadedMaterialUBO mat{};
+    mat.albedo = glm::vec4(material.albedo, material.metallic);
+    mat.roughness_ao = glm::vec4(material.roughness, material.ao,
+                                 material.normal_strength, material.alpha_cutoff);
+    mat.emissive = glm::vec4(material.emissive, material.alpha_test ? 1.0f : 0.0f);
+    mat.flags = glm::vec4(material.normal_tex ? 1.0f : 0.0f,
+                          material.metallic_roughness_tex ? 1.0f : 0.0f,
+                          material.emissive_tex ? 1.0f : 0.0f,
+                          material.occlusion_tex ? 1.0f : 0.0f);
+    mat.mode_params = glm::vec4(static_cast<float>(material.shading_mode),
+                                material.double_sided ? 1.0f : 0.0f,
+                                material.anisotropy, material.pom_height_scale);
+    mat.sss = glm::vec4(material.sss_tint, material.sss_strength);
+    mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness, 0.0f, 0.0f);
+    mat.toon_shadow = glm::vec4(material.toon_shadow_color, material.toon_shadow_threshold);
+    mat.toon_params = glm::vec4(material.toon_shadow_softness, material.toon_specular_size,
+                                material.toon_specular_strength, material.toon_rim_strength);
+    mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
+                               material.watercolor_color_bleed, material.watercolor_pigment_density);
+    device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
+
+    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+    };
+
+    cmd.SetPipelineState(material.double_sided ? pso_no_cull_ : pso_);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
+    cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
+    cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
+    cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
+    cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
+    cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
 void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
@@ -637,10 +776,12 @@ void MeshRenderer::Shutdown(RhiDevice& device) {
     if (per_frame_ubo_) device.DeleteGpuBuffer(per_frame_ubo_);
     if (per_scene_ubo_) device.DeleteGpuBuffer(per_scene_ubo_);
     if (per_material_ubo_) device.DeleteGpuBuffer(per_material_ubo_);
+    if (per_material_shaded_ubo_) device.DeleteGpuBuffer(per_material_shaded_ubo_);
     if (bone_ssbo_) device.DeleteGpuBuffer(bone_ssbo_);
     if (instance_ssbo_) device.DeleteGpuBuffer(instance_ssbo_);
     if (indirect_buffer_) device.DeleteGpuBuffer(indirect_buffer_);
     vbo_ = ibo_ = per_frame_ubo_ = per_scene_ubo_ = per_material_ubo_ = BufferHandle{};
+    per_material_shaded_ubo_ = BufferHandle{};
     bone_ssbo_ = BufferHandle{};
     instance_ssbo_ = BufferHandle{};
     indirect_buffer_ = BufferHandle{};

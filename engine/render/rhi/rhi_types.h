@@ -186,6 +186,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardPbrSkinned = 5,  ///< 蒙皮 forward PBR（forward_pbr_skinned.vert + forward_pbr.frag + 骨骼矩阵 SSBO\@set3.b0）
     ForwardPbrInstanced = 6,  ///< 硬件实例化 forward PBR（forward_pbr_instanced.vert + forward_pbr.frag + 每实例 model SSBO\@set3.b0）
     ForwardPbrDepth = 7,  ///< 仅深度 pass（forward_pbr.vert + shadow.frag 空片元；只写深度、不输出颜色，配 has_color=false RT）
+    ForwardShaded = 8,  ///< 高级 shading forward（forward_pbr.vert + forward_shaded.frag；shading_mode 0/2-6 + SSS/clearcoat/anisotropy/POM/alpha-test/double-sided + 扩展 PerMaterial UBO）
 };
 
 /// 渲染通道描述符

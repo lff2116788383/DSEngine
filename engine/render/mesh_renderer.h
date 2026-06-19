@@ -73,6 +73,47 @@ struct MeshMaterial {
     unsigned int occlusion_tex = 0;           ///< u_occlusion_map
 };
 
+/// 高级 shading 材质（B2c-1）：在 MeshMaterial 基础上扩展 shading_mode 0/2-6 +
+/// SSS / clearcoat / anisotropy / POM / alpha-test / double-sided。配 BuiltinProgram::ForwardShaded。
+/// 纹理槽含义同 MeshMaterial；在 FaceSDF(6) 模式下 albedo_tex 槽存 SDF 灰度图。
+struct ShadedMaterial {
+    glm::vec3 albedo{1.0f};       ///< 基础色
+    float metallic = 0.0f;        ///< 金属度 [0,1]
+    float roughness = 0.5f;       ///< 粗糙度 [0,1]
+    float ao = 1.0f;              ///< 环境光遮蔽常数
+    float normal_strength = 1.0f; ///< 法线贴图强度
+    glm::vec3 emissive{0.0f};     ///< 自发光颜色
+    float alpha_cutoff = 0.5f;    ///< alpha test 阈值
+    bool alpha_test = false;      ///< 开启 alpha test（< cutoff 丢弃）
+    bool double_sided = false;    ///< 双面（关背面剔除 + 背面法线翻转）
+    int shading_mode = 0;         ///< 0=PBR, 2=HalfLambert-Skin, 3=HalfLambert-Static, 4=Toon, 5=Watercolor, 6=FaceSDF
+
+    float sss_strength = 0.0f;          ///< 次表面散射强度（0=关）
+    glm::vec3 sss_tint{0.0f};           ///< SSS 色调（零向量=用默认肉色）
+    float clear_coat = 0.0f;            ///< 清漆层强度（0=关）
+    float clear_coat_roughness = 0.1f;  ///< 清漆层粗糙度
+    float anisotropy = 0.0f;            ///< 各向异性 [-1,1]（0=各向同性）
+    float pom_height_scale = 0.0f;      ///< 视差遮蔽高度缩放（0=关；需法线/高度贴图）
+
+    glm::vec3 toon_shadow_color{0.15f, 0.1f, 0.18f}; ///< Toon/FaceSDF 阴影色
+    float toon_shadow_threshold = 0.35f;   ///< Toon 阴影阈值
+    float toon_shadow_softness = 0.05f;    ///< Toon/FaceSDF 边缘柔度
+    float toon_specular_size = 0.6f;       ///< Toon 高光尺寸阈值
+    float toon_specular_strength = 0.8f;   ///< Toon 高光强度
+    float toon_rim_strength = 0.3f;        ///< Toon/FaceSDF 边缘光强度
+
+    float watercolor_paper_strength = 0.3f;  ///< 水彩纸张颗粒
+    float watercolor_edge_darkening = 0.4f;  ///< 水彩边缘加深
+    float watercolor_color_bleed = 0.2f;     ///< 水彩色彩渗透
+    float watercolor_pigment_density = 1.0f; ///< 水彩颜料浓度
+
+    unsigned int albedo_tex = 0;              ///< u_texture（FaceSDF 模式为 SDF 图）
+    unsigned int normal_tex = 0;              ///< u_normal_map（.a = POM 高度）
+    unsigned int metallic_roughness_tex = 0;  ///< u_metallic_roughness_map
+    unsigned int emissive_tex = 0;            ///< u_emissive_map
+    unsigned int occlusion_tex = 0;           ///< u_occlusion_map
+};
+
 /// 单方向光。
 struct DirectionalLight {
     glm::vec3 direction{0.0f, -1.0f, 0.0f}; ///< 光线传播方向（从光源射向场景）
@@ -186,6 +227,20 @@ public:
                        const glm::mat4& view,
                        const glm::mat4& proj);
 
+    /// 记录一次高级 shading 网格绘制（B2c-1）。语义同 Draw（顶点 CPU 预变换到世界空间，
+    /// VS 仅施 vp），但复用 BuiltinProgram::ForwardShaded 支持 shading_mode 0/2-6 +
+    /// SSS/clearcoat/anisotropy/POM/alpha-test/double-sided（单方向光，无 shadow map/点光）。
+    /// @param material 高级 shading 材质参数 + 纹理
+    void DrawShaded(CommandBuffer& cmd, RhiDevice& device,
+                    const std::vector<MeshVertex>& vertices,
+                    const std::vector<uint16_t>& indices,
+                    const glm::mat4& model,
+                    const glm::mat4& view,
+                    const glm::mat4& proj,
+                    const glm::vec3& camera_pos,
+                    const ShadedMaterial& material,
+                    const DirectionalLight& light);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
@@ -196,8 +251,11 @@ private:
     void EnsureBoneCapacity(RhiDevice& device, size_t bone_bytes);
     void EnsureInstanceCapacity(RhiDevice& device, size_t instance_bytes);
     void EnsureIndirectBuffer(RhiDevice& device);
+    void EnsureShadedResources(RhiDevice& device);
 
     unsigned int pso_ = 0;
+    unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
+    BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     unsigned int white_tex_ = 0;
     BufferHandle vbo_;
     BufferHandle ibo_;

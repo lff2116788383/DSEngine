@@ -62,6 +62,7 @@
 #include "embed/forward_pbr_frag.gen.h"
 #include "embed/forward_pbr_skinned_vert.gen.h"
 #include "embed/forward_pbr_instanced_vert.gen.h"
+#include "embed/forward_shaded_frag.gen.h"
 #include "embed/shadow_vert.gen.h"
 #include "embed/shadow_frag.gen.h"
 #include "embed/text_sdf_frag.gen.h"
@@ -91,6 +92,7 @@
 #include "embed/forward_pbr_frag_reflect.gen.h"
 #include "embed/forward_pbr_skinned_vert_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
+#include "embed/forward_shaded_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
 #include "embed/gbuffer_frag_reflect.gen.h"
 #include "engine/render/shader_reflection.h"
@@ -754,6 +756,31 @@ void GLShaderManager::InitForwardPbrInstancedShader() {
         gl_reflect::ComputeFlatTextureUnits(kforward_pbr_frag_reflection, tex_entries);
         glUseProgram(forward_pbr_instanced_shader_handle_);
         gl_reflect::BindSamplersOnce(forward_pbr_instanced_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
+void GLShaderManager::InitForwardShadedShader() {
+    if (forward_shaded_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // 复用静态 forward_pbr.vert（世界空间顶点 + vp）+ 高级 shading frag。
+    forward_shaded_shader_handle_ = CompileProgram(DSE_SL(kforward_pbr_vert), DSE_SL(kforward_shaded_frag));
+    if (forward_shaded_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward shaded shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_shaded_shader_handle_, kforward_pbr_vert_reflection);
+    BindUBOsFromReflection(forward_shaded_shader_handle_, kforward_shaded_frag_reflection);
+
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kforward_shaded_frag_reflection, tex_entries);
+        glUseProgram(forward_shaded_shader_handle_);
+        gl_reflect::BindSamplersOnce(forward_shaded_shader_handle_, tex_entries,
                                      glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }

@@ -15,6 +15,7 @@
 #include "engine/render/shaders/generated/embed/forward_pbr_frag.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_skinned_vert.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_instanced_vert.gen.h"
+#include "engine/render/shaders/generated/embed/forward_shaded_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_sdf_frag.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vfx_frag.gen.h"
@@ -435,6 +436,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fpbrd_layout);
         CreateInputLayoutForShader(forward_pbr_depth_shader_handle_, fpbrd_layout.data(),
                                    static_cast<int>(fpbrd_layout.size()));
+    }
+    pulse();
+
+    // ---- 高级 shading forward 着色器 (B2c-1)：复用静态 forward_pbr.vert + forward_shaded.frag ----
+    forward_shaded_shader_handle_ = CreateProgramFromDXBC(
+        kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,
+        kforward_shaded_frag_dxbc, kforward_shaded_frag_dxbc_size);
+    if (forward_shaded_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward shaded shader created (DXBC): {}", forward_shaded_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fsh_layout;
+        CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, fsh_layout);
+        CreateInputLayoutForShader(forward_shaded_shader_handle_, fsh_layout.data(),
+                                   static_cast<int>(fsh_layout.size()));
     }
     pulse();
 
