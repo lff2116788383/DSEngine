@@ -68,10 +68,16 @@ void DrawIndexed(uint32_t index_count, uint32_t instance_count = 1,// [新增]
                  uint32_t first_index = 0, int32_t base_vertex = 0,
                  uint32_t first_instance = 0);
 
-// ---- 间接绘制 / compute（不在本契约重定义，复用既有） ----
-// 间接绘制:  IRhiGpuDriven::*Indirect*
-// compute:   IRhiCompute::DispatchCompute / BeginComputePass / ComputeMemoryBarrier
+// ---- 间接绘制 / compute ----
+// compute:   IRhiCompute::DispatchCompute / BeginComputePass / ComputeMemoryBarrier（设备级，复用既有）
+void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5] CommandBuffer 级间接索引绘制
+                         uint32_t byte_offset = 0);
+// 从 indirect_buffer 的 byte_offset 处读一条 DrawElementsIndirectCommand
+// {count, instance_count, first_index, base_vertex, base_instance} 发起索引实例化绘制；
+// 三后端实现见 §6.4，args 布局三端一致（5×uint32）。indirect_buffer 经 CreateIndirectBuffer 创建。
 ```
+
+> **实现进度（P0 / B2b，2026-06）**：契约的实例化与 SSBO 能力已落地——`DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance)`（P0a 新增重载，**不改** `DrawIndexed` 签名）、`BindStorageBuffer(slot, handle, offset, size)`（P0b，图形阶段读 SSBO）、`DrawIndexedIndirect(indirect_buffer, byte_offset)`（B2b-5，CommandBuffer 级间接绘制）。活体消费者为 `MeshRenderer`（B2b-1..5：静态 / 蒙皮 / 实例化 / depth-only / 间接 forward PBR），各配跨后端像素 smoke。进度详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §2–§3。
 
 ### 旧原语的归并关系（过渡期保留，迁移完再删）
 | 旧（skybox spike） | 新 | 处理 |
@@ -149,6 +155,16 @@ void DrawIndexed(uint32_t index_count, uint32_t instance_count = 1,// [新增]
 - IB：`IASetIndexBuffer`；draw：`DrawIndexedInstanced`/`DrawInstanced`。
 - **限制**：DX11 `DrawInstanced` 的 `StartInstanceLocation` 影响顶点取数但 `SV_InstanceID` 仍从 0 起——`first_instance` 语义与 GL/Vulkan/Metal 不完全一致，实例数据偏移需用 instance VB 偏移表达（在文档标注，迁移时注意）。
 
+### 间接绘制 `DrawIndexedIndirect`（B2b-5，三后端实现要点）
+
+`CommandBuffer::DrawIndexedIndirect(indirect_buffer, byte_offset)` 从 indirect buffer 读一条 `DrawElementsIndirectCommand` 发起索引实例化绘制。**args 布局三后端严格一致**：5×uint32 `{count, instance_count, first_index, base_vertex, base_instance}`（与 GL `DrawElementsIndirectCommand` / Vulkan `VkDrawIndexedIndirectCommand` 同序同宽）。
+
+- **OpenGL**：`glMultiDrawElementsIndirect(GL_TRIANGLES, index_type, (void*)byte_offset, draw_count=1, stride=sizeof(cmd))`，args 缓绑到 `GL_DRAW_INDIRECT_BUFFER`（需 GL4.3+）。
+- **Vulkan**：`vkCmdDrawIndexedIndirect(cmd, buffer, byte_offset, drawCount=1, stride)`；args 缓须含 `VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT`；被命令缓冲引用的资源在 fence 前不可删（教训 1）。
+- **DX11**：`DrawIndexedInstancedIndirect(args_buffer, byte_offset)`；args 缓须 `MISC_DRAWINDIRECT_ARGS`。**限制**：该缓**不能 `USAGE_DYNAMIC`**（多数驱动 / WARP 不支持 `Map`），须 `USAGE_DEFAULT` + `UpdateSubresource`（局部更新走 `D3D11_BOX`），否则 `instance_count` 不生效、仅渲首实例；`MISC_DRAWINDIRECT_ARGS` 不允许任何 `BindFlags`。
+
+**契约同实例化（见上 DX11 限制）**：DX11 `SV_InstanceID` 仍从 0 起，`base_instance` 偏移须经 0 基 SSBO 索引表达，不能靠 `base_instance` 取数；`MeshRenderer::DrawIndirect` 因此恒置 `base_instance=0`。
+
 ---
 
 ## 7. 本步（B0）实现范围与验证策略（已定：策略 B）
@@ -193,7 +209,16 @@ void DrawIndexed(uint32_t index_count, uint32_t instance_count = 1,// [新增]
 - [x] **B1**：跨后端离屏像素 smoke gtest（先补 skybox），作为后续每次迁移的回归闸门（`560fc7d4`）。
 - [~] **B2**：迁 Sprite/Mesh → 抽高层渲染器 + 删其旧 ABI + 像素测试。
   - [x] **B2a** 迁 Sprite（`SpriteBatchRenderer`，默认/SDF/VFX）+ 删 DrawSpriteBatch（`11d61181`..`43240e8e`）。
-  - [ ] **B2b** 迁 Mesh（`MeshRenderer`）—— 阻塞于 SSBO + 实例化原语，方向待定，见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
+  - [~] **B2b** 抽 `MeshRenderer`（后端无关 forward-PBR 能力，与 `DrawMeshBatch` ABI **并存**，ABI 暂不删）：
+    - [x] **P0a** `DrawIndexedInstanced` 三后端原语（`f38d0b13`/`e0f061f7`）。
+    - [x] **P0b** `BindStorageBuffer` 图形阶段三后端原语（`10f3ff2d`）+ 组合像素 smoke（`68c81b84`）。
+    - [x] **B2b-1** forward PBR 静态网格（`ee97d1ab`）。
+    - [x] **B2b-2** 骨骼蒙皮（bone SSBO，`88301df8`）。
+    - [x] **B2b-3** GPU 实例化（instance SSBO，`34bb4328`）。
+    - [x] **B2b-4** depth-only / shadow（三后端深度回读，`eaf61c2d`）。
+    - [x] **B2b-5** GPU-driven 间接绘制（`DrawIndexedIndirect` 三后端，`25fb30a6`）。
+    - [ ] **删 `DrawMeshBatch` ABI**：**推迟**——6 个调用点依赖 `MeshRenderer` 未实现的高级特性（toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI），待高级 shading 迁移完成后再删（用户决策：保留 ABI 并存）。
+    - 基线：smoke 76 → **92**（B2b-2..5 各 +4 跨后端像素 smoke），详见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 - [ ] **B3**：迁 Particles（验证 Dispatch/实例化）；DrawPostProcess 一并考虑。
 - [ ] **B4**：迁 Hair（SSBO + 多段绘制）。
 - [ ] **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。
