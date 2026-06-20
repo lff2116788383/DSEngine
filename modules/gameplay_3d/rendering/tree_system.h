@@ -4,6 +4,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/mesh_renderer.h"
 #include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
@@ -48,8 +49,11 @@ public:
 
     void Update(World& world, float delta_time);
 
+    /// 主渲染：depth_only=true 时（PreZ 深度预通道）走 DrawMeshBatch 深度路径，
+    /// false 时（Opaque 彩色通道）走 MeshRenderer 前向路径。
     void Render(World& world, CommandBuffer& cmd_buffer,
-                const glm::vec3& camera_offset = glm::vec3(0.0f));
+                const glm::vec3& camera_offset = glm::vec3(0.0f),
+                bool depth_only = false);
 
     void RenderShadow(World& world, CommandBuffer& cmd_buffer,
                       const glm::vec3& camera_offset = glm::vec3(0.0f));
@@ -68,20 +72,32 @@ private:
                                 const glm::vec3& aabb_max);
     static void ExtractFrustumPlanes(const glm::mat4& vp, glm::vec4 out_planes[6]);
 
+    /// depth_only：当前 pass 绑定无彩色的深度 RT（PreZ/Shadow）→ 走 DrawMeshBatch 深度路径；
+    /// shadow_pass：光源视角阴影 pass（用 shadow_distance + 跳 billboard）。
     void RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                        bool shadow_pass, const glm::vec3& camera_offset);
+                        bool depth_only, bool shadow_pass,
+                        const glm::vec3& camera_offset);
 
     /// 从 AssetManager 加载 mesh 并缓存为 BatchVertex + indices
     bool EnsureMeshLoaded(const std::string& mesh_path);
-
-    RhiDevice* rhi_ = nullptr;
-    AssetManager* asset_manager_ = nullptr;
 
     /// mesh_path → 缓存的顶点/索引数据
     struct MeshCacheEntry {
         std::vector<BatchVertex> vertices;
         std::vector<uint32_t> indices;
+        /// 前向 pass 用：共享局部空间模板 GPU 缓冲（懒建，DrawSharedTemplateInstanced 消费）
+        dse::render::ExternalShadedMesh tmpl;
+        uint32_t index_count = 0;
+        bool gpu_template_built = false;
     };
+
+    /// 懒建/复用 entry 的共享局部空间模板 GPU 缓冲（前向 pass）。返回是否可用。
+    bool EnsureTemplateBuilt(MeshCacheEntry& entry);
+
+    RhiDevice* rhi_ = nullptr;
+    AssetManager* asset_manager_ = nullptr;
+    dse::render::MeshRenderer mesh_renderer_;  ///< 前向 pass 通用网格渲染器（B2b-6 迁移）
+
     std::unordered_map<std::string, MeshCacheEntry> mesh_cache_;
 
     struct EntityCache {

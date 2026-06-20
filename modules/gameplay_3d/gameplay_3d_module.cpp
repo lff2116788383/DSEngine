@@ -180,15 +180,17 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
 void Gameplay3DModule::RenderPreZ(dse::render::CommandBuffer& cmd,
                                   const dse::render::RenderScenePassContext& ctx) {
     if (!ctx.world) return;
-    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset);
-    grass_system_.Render(*ctx.world, cmd, ctx.camera_offset);
-    tree_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+    // PreZ 深度预通道：绑定无彩色深度 RT → 走 DrawMeshBatch 深度路径（depth_only=true）。
+    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset, /*depth_only=*/true);
+    grass_system_.Render(*ctx.world, cmd, ctx.camera_offset, /*depth_only=*/true);
+    tree_system_.Render(*ctx.world, cmd, ctx.camera_offset, /*depth_only=*/true);
 }
 
 void Gameplay3DModule::RenderShadow(dse::render::CommandBuffer& cmd,
                                     const dse::render::RenderScenePassContext& ctx) {
     if (!ctx.world) return;
-    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset);
+    // 阴影 pass：深度 RT（depth_only=true）；地形无独立阴影方法，复用 Render 深度路径。
+    terrain_system_.Render(*ctx.world, cmd, ctx.camera_offset, /*depth_only=*/true);
     grass_system_.RenderShadow(*ctx.world, cmd, ctx.camera_offset);
     tree_system_.RenderShadow(*ctx.world, cmd, ctx.camera_offset);
 }
@@ -197,9 +199,10 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
                                     const dse::render::RenderScenePassContext& ctx) {
     if (!ctx.world) return;
     World& callback_world = *ctx.world;
-    terrain_system_.Render(callback_world, cmd, ctx.camera_offset);
-    grass_system_.Render(callback_world, cmd, ctx.camera_offset);
-    tree_system_.Render(callback_world, cmd, ctx.camera_offset);
+    // Opaque 彩色通道：彩色 RT（depth_only=false）→ 走 MeshRenderer 前向路径。
+    terrain_system_.Render(callback_world, cmd, ctx.camera_offset, /*depth_only=*/false);
+    grass_system_.Render(callback_world, cmd, ctx.camera_offset, /*depth_only=*/false);
+    tree_system_.Render(callback_world, cmd, ctx.camera_offset, /*depth_only=*/false);
 
     auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
     std::vector<Particle3DDrawItem> p_items;

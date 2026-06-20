@@ -4,6 +4,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
+#include "engine/render/mesh_renderer.h"
 #include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
@@ -53,8 +54,9 @@ public:
     /// 每帧更新：增量维护 chunk 缓存
     void Update(World& world, float delta_time);
 
-    /// 主场景渲染
-    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
+    /// 主场景渲染：depth_only=true（PreZ 深度预通道）走 DrawMeshBatch，false（Opaque 彩色）走 MeshRenderer。
+    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
+                bool depth_only = false);
 
     /// 阴影 pass 渲染（仅近距离 LOD 0）
     void RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
@@ -86,10 +88,13 @@ private:
     static void ExtractFrustumPlanes(const glm::mat4& vp, glm::vec4 out_planes[6]);
 
     /// 内部渲染辅助（场景 pass 和阴影 pass 共用）
+    /// depth_only：当前 pass 绑定无彩色深度 RT（PreZ/Shadow）→ DrawMeshBatch；shadow_pass：光源视角阴影 pass。
     void RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                        bool shadow_pass, const glm::vec3& camera_offset = glm::vec3(0.0f));
+                        bool depth_only, bool shadow_pass,
+                        const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     RhiDevice* rhi_ = nullptr;
+    dse::render::MeshRenderer mesh_renderer_;  ///< 前向 pass 通用网格渲染器（B2b-6 迁移）
 
     // 共享草叶 mesh 数据 (LOD 0) — CPU 侧缓存，每帧拷贝到 MeshDrawItem
     std::vector<BatchVertex> blade_vertices_;

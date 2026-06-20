@@ -340,6 +340,7 @@ struct TerrainComponent {
     std::vector<float> height_data;
     dse::render::VertexArrayHandle vao;
     dse::render::BufferHandle vbo;
+    dse::render::BufferHandle shaded_vbo; // GpuMeshVertex 局部空间模板 VB（MeshRenderer 前向 pass，B2b-6）
     dse::render::BufferHandle ebo; // The base EBO (max LOD)
     std::vector<dse::render::BufferHandle> lod_ebos; // EBOs for different LOD levels
     std::vector<unsigned int> lod_index_counts;

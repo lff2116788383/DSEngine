@@ -27,10 +27,50 @@ void TreeSystem::SetAssetManager(AssetManager* asset_manager) {
 }
 
 void TreeSystem::Shutdown(World& /*world*/) {
+    // 释放前向 pass 的 GPU 资源（须在 rhi_ 仍有效时）。
+    if (rhi_) {
+        for (auto& [path, entry] : mesh_cache_) {
+            if (entry.tmpl.vertex_buffer) rhi_->DeleteGpuBuffer(entry.tmpl.vertex_buffer);
+            if (entry.tmpl.index_buffer) rhi_->DeleteGpuBuffer(entry.tmpl.index_buffer);
+        }
+        mesh_renderer_.Shutdown(*rhi_);
+    }
     entity_caches_.clear();
     mesh_cache_.clear();
     rhi_ = nullptr;
     asset_manager_ = nullptr;
+}
+
+// 懒建一份共享局部空间模板 GPU 缓冲（BatchVertex → MeshVertex，索引保持 32 位），供前向
+// pass 的 DrawSharedTemplateInstanced 复用（一份模板顶点 + 每实例 model 矩阵）。
+bool TreeSystem::EnsureTemplateBuilt(MeshCacheEntry& entry) {
+    if (entry.gpu_template_built) {
+        return entry.tmpl.vertex_buffer && entry.tmpl.index_buffer;
+    }
+    entry.gpu_template_built = true;  // 只尝试一次（失败也不反复重试）
+    if (!rhi_ || entry.vertices.empty() || entry.indices.empty()) return false;
+
+    std::vector<dse::render::MeshVertex> verts;
+    verts.reserve(entry.vertices.size());
+    for (const auto& bv : entry.vertices) {
+        dse::render::MeshVertex mv;
+        mv.position = bv.pos;
+        mv.color = bv.color;
+        mv.uv = bv.uv;
+        mv.normal = bv.normal;
+        mv.tangent = bv.tangent;
+        verts.push_back(mv);
+    }
+    entry.tmpl.vertex_buffer = dse::render::MeshRenderer::BuildShadedLocalVertexBuffer(*rhi_, verts);
+
+    dse::render::GpuBufferDesc ib_desc;
+    ib_desc.size = entry.indices.size() * sizeof(uint32_t);
+    ib_desc.usage = dse::render::GpuBufferUsage::kIndex;
+    ib_desc.is_dynamic = false;
+    entry.tmpl.index_buffer = rhi_->CreateGpuBuffer(ib_desc, entry.indices.data());
+    entry.tmpl.index_type = IndexType::UInt32;
+    entry.index_count = static_cast<uint32_t>(entry.indices.size());
+    return entry.tmpl.vertex_buffer && entry.tmpl.index_buffer;
 }
 
 // ============================================================
@@ -311,16 +351,18 @@ void TreeSystem::Update(World& world, float /*delta_time*/) {
 // 渲染
 // ============================================================
 
-void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, false, camera_offset);
+void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
+                        bool depth_only) {
+    // Opaque 彩色通道：depth_only=false → MeshRenderer；PreZ 深度预通道：depth_only=true → DrawMeshBatch。
+    RenderInternal(world, cmd_buffer, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
 void TreeSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, true, camera_offset);
+    RenderInternal(world, cmd_buffer, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
 void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                                 bool shadow_pass, const glm::vec3& camera_offset) {
+                                 bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
     if (!rhi_) return;
 
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
@@ -348,6 +390,12 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
     glm::mat4 vp = proj_matrix * view_matrix;
     glm::vec4 frustum_planes[6];
     ExtractFrustumPlanes(vp, frustum_planes);
+
+    // 前向 pass 绘制使用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正），
+    // 而非上方仅用于视锥剔除的本地相机矩阵。
+    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
+    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
 
     // 获取方向光参数
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
@@ -381,7 +429,7 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
         auto cache_it = entity_caches_.find(eid);
         if (cache_it == entity_caches_.end()) continue;
 
-        const auto& mesh_entry = mesh_cache_[tree.mesh_path];
+        auto& mesh_entry = mesh_cache_[tree.mesh_path];
         float max_dist = shadow_pass ? tree.shadow_distance : tree.cull_distance;
 
         std::vector<glm::mat4> transforms;
@@ -410,37 +458,68 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
 
         if (transforms.empty()) continue;
 
-        MeshDrawItem item;
-        item.shared_vertex_ptr = mesh_entry.vertices.data();
-        item.shared_index_ptr = mesh_entry.indices.data();
-        item.shared_vertex_count = static_cast<uint32_t>(mesh_entry.vertices.size());
-        item.shared_index_count = static_cast<uint32_t>(mesh_entry.indices.size());
-        item.foliage = true;
-        item.lighting_enabled = true;
-        item.shading_mode = 0;
-        item.material_albedo = glm::vec3(1.0f);
-        item.material_metallic = 0.0f;
-        item.material_roughness = 0.85f;
-        item.material_ao = 1.0f;
-        item.material_double_sided = false;
-        item.receive_shadow = true;
-        item.depth_test_enabled = true;
-        item.depth_write_enabled = true;
-        item.light_direction = light_dir;
-        item.light_color = light_color;
-        item.light_intensity = light_intensity;
-        item.ambient_intensity = ambient_intensity;
-        item.shadow_strength = shadow_strength_val;
+        if (depth_only) {
+            // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch：其会自动切到深度-only shader
+            // （带 foliage/实例剔除），MeshRenderer 侧无对应的实例化深度方法，故不迁移（ABI 本就保留）。
+            MeshDrawItem item;
+            item.shared_vertex_ptr = mesh_entry.vertices.data();
+            item.shared_index_ptr = mesh_entry.indices.data();
+            item.shared_vertex_count = static_cast<uint32_t>(mesh_entry.vertices.size());
+            item.shared_index_count = static_cast<uint32_t>(mesh_entry.indices.size());
+            item.foliage = true;
+            item.lighting_enabled = true;
+            item.shading_mode = 0;
+            item.material_albedo = glm::vec3(1.0f);
+            item.material_metallic = 0.0f;
+            item.material_roughness = 0.85f;
+            item.material_ao = 1.0f;
+            item.material_double_sided = false;
+            item.receive_shadow = true;
+            item.depth_test_enabled = true;
+            item.depth_write_enabled = true;
+            item.light_direction = light_dir;
+            item.light_color = light_color;
+            item.light_intensity = light_intensity;
+            item.ambient_intensity = ambient_intensity;
+            item.shadow_strength = shadow_strength_val;
 
-        if (transforms.size() == 1) {
-            item.model = transforms[0];
-        } else {
-            item.model = glm::mat4(1.0f);
-            item.instance_transforms = std::move(transforms);
+            if (transforms.size() == 1) {
+                item.model = transforms[0];
+            } else {
+                item.model = glm::mat4(1.0f);
+                item.instance_transforms = std::move(transforms);
+            }
+
+            std::vector<MeshDrawItem> items = {std::move(item)};
+            cmd_buffer.DrawMeshBatch(items);
+            continue;
         }
 
-        std::vector<MeshDrawItem> items = {std::move(item)};
-        cmd_buffer.DrawMeshBatch(items);
+        // 彩色前向 pass（Opaque）：迁移到 MeshRenderer::DrawSharedTemplateInstanced（共享局部空间
+        // 模板 + 每实例 model 矩阵；foliage 顶点风弯曲沿用 device 全局风场）。
+        if (!EnsureTemplateBuilt(mesh_entry)) continue;
+
+        dse::render::ShadedMaterial material;
+        material.albedo = glm::vec3(1.0f);
+        material.metallic = 0.0f;
+        material.roughness = 0.85f;
+        material.ao = 1.0f;
+        material.double_sided = false;
+        material.shading_mode = 0;
+        material.receive_shadow = true;
+        material.shadow_strength = shadow_strength_val;
+        material.foliage = true;
+
+        dse::render::DirectionalLight light;
+        light.direction = light_dir;
+        light.color = light_color;
+        light.intensity = light_intensity;
+        light.ambient = ambient_intensity;
+        light.enabled = true;
+
+        mesh_renderer_.DrawSharedTemplateInstanced(
+            cmd_buffer, *rhi_, mesh_entry.tmpl, mesh_entry.index_count, 0u,
+            transforms, draw_view, draw_proj, draw_cam_pos, material, light);
     }
 }
 

@@ -21,6 +21,7 @@ struct TerrainTileData {
     // GPU resources
     dse::render::VertexArrayHandle vao;
     dse::render::BufferHandle vbo;
+    dse::render::BufferHandle shaded_vbo; // GpuMeshVertex 局部空间模板 VB（MeshRenderer 前向 pass，B2b-6）
     std::vector<dse::render::BufferHandle> lod_ebos;
     std::vector<unsigned int> lod_index_counts;
     unsigned int index_count = 0;

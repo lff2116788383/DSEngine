@@ -12,6 +12,26 @@
 namespace dse {
 namespace gameplay3d {
 
+namespace {
+// BatchVertex 模板 → GpuMeshVertex 局部空间常驻 VB（MeshRenderer 前向 pass 共享模板，B2b-6）。
+dse::render::BufferHandle BuildTerrainShadedVbo(RhiDevice& rhi,
+                                                const std::vector<BatchVertex>& vertices) {
+    if (vertices.empty()) return dse::render::BufferHandle{};
+    std::vector<dse::render::MeshVertex> verts;
+    verts.reserve(vertices.size());
+    for (const auto& bv : vertices) {
+        dse::render::MeshVertex mv;
+        mv.position = bv.pos;
+        mv.color = bv.color;
+        mv.uv = bv.uv;
+        mv.normal = bv.normal;
+        mv.tangent = bv.tangent;
+        verts.push_back(mv);
+    }
+    return dse::render::MeshRenderer::BuildShadedLocalVertexBuffer(rhi, verts);
+}
+}  // namespace
+
 // ============================================================
 // 生命周期
 // ============================================================
@@ -28,6 +48,7 @@ void TerrainSystem::Shutdown(World& world) {
         auto& terrain = view.get<TerrainComponent>(entity);
         DestroyTerrainGPU(terrain);
     }
+    mesh_renderer_.Shutdown(*rhi_);
     rhi_ = nullptr;
 }
 
@@ -44,6 +65,10 @@ void TerrainSystem::DestroyTerrainGPU(TerrainComponent& terrain) {
         terrain.lod_index_counts.clear();
         terrain.ebo = {};
         terrain.index_count = 0;
+    }
+    if (terrain.shaded_vbo && rhi_) {
+        rhi_->DeleteGpuBuffer(terrain.shaded_vbo);
+        terrain.shaded_vbo = {};
     }
     if (terrain.splat_weight_texture != 0 && rhi_) {
         rhi_->DeleteTexture(terrain.splat_weight_texture);
@@ -255,6 +280,9 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
         terrain.index_count = terrain.lod_index_counts.empty() ? 0 : terrain.lod_index_counts[0];
     }
 
+    // MeshRenderer 前向 pass 的共享局部空间模板 VB（复用 lod_ebos 作索引）。
+    terrain.shaded_vbo = BuildTerrainShadedVbo(*rhi_, vertices);
+
     terrain.is_dirty = false;
     DEBUG_LOG_INFO("[TerrainSystem] Rebuilt terrain '{}x{}' \u2192 {} verts, {} LODs, vao={}",
                   rx, rz, total_vert_count, terrain.max_lod_levels, terrain.vao.raw());
@@ -264,10 +292,11 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
 // 渲染
 // ============================================================
 
-void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
+void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
+                           bool depth_only) {
     // Tiled terrain lifecycle update + render
     UpdateTiles(world);
-    RenderTiles(world, cmd_buffer, camera_offset);
+    RenderTiles(world, cmd_buffer, camera_offset, depth_only);
 
     // Single-patch terrain (original path)
     auto view = world.registry().view<TerrainComponent, TransformComponent>();
@@ -280,8 +309,35 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::v
                                * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
     }
 
-    std::vector<MeshDrawItem> items;
-    items.reserve(view.size_hint());
+    // 前向 pass 绘制矩阵（与 DrawMeshBatch 执行器同源，含投影修正）。
+    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
+    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
+
+    // 方向光（深度/前向 pass 共用）。
+    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.2f;
+    float shadow_strength_val = 0.35f;
+    bool has_light = false;
+    {
+        auto light_view = world.registry().view<DirectionalLight3DComponent>();
+        if (light_view.begin() != light_view.end()) {
+            auto& light = light_view.get<DirectionalLight3DComponent>(*light_view.begin());
+            if (light.enabled) {
+                light_dir = light.direction;
+                light_color = light.color;
+                light_intensity = light.intensity;
+                ambient_intensity = light.ambient_intensity;
+                shadow_strength_val = light.shadow_strength;
+                has_light = true;
+            }
+        }
+    }
+
+    std::vector<MeshDrawItem> depth_items;
+    depth_items.reserve(view.size_hint());
 
     for (auto entity : view) {
         auto& terrain = view.get<TerrainComponent>(entity);
@@ -315,68 +371,114 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::v
         int lod = terrain.current_lod;
         if (lod < 0 || static_cast<size_t>(lod) >= terrain.lod_ebos.size()) lod = 0;
 
-        MeshDrawItem item;
-        item.model = transform.local_to_world;
-        item.model[3] -= glm::vec4(camera_offset, 0.0f);
-        item.vao_override = terrain.vao;
-        item.ebo_override = terrain.lod_ebos[static_cast<size_t>(lod)];
-        item.index_count_override = terrain.lod_index_counts[static_cast<size_t>(lod)];
+        glm::mat4 model = transform.local_to_world;
+        model[3] -= glm::vec4(camera_offset, 0.0f);
 
-        // PBR 材质
-        item.lighting_enabled = true;
-        item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f);
-        item.material_metallic = 0.0f;
-        item.material_roughness = 0.9f;
-        item.receive_shadow = true;
-
-        // Snow cover
-        auto* snow = world.registry().try_get<SnowCoverComponent>(entity);
-        if (snow && snow->enabled && snow->coverage > 0.001f) {
-            item.snow_coverage = snow->coverage;
-            item.snow_albedo = snow->snow_albedo;
-            item.snow_roughness = snow->snow_roughness;
-            item.snow_normal_threshold = snow->normal_threshold;
-            item.snow_edge_sharpness = snow->edge_sharpness;
-        }
-
-        // Splatmap
-        UploadSplatWeightMap(terrain);  // 脏时把 splat_data 上传为权重图（内部按 dirty 早退）
+        // Splatmap（脏时把 splat_data 上传为权重图，内部按 dirty 早退）。
+        UploadSplatWeightMap(terrain);
         bool has_any_splat = false;
         for (int si = 0; si < 4; ++si) {
             if (terrain.splat_texture_handles[si] != 0) { has_any_splat = true; break; }
         }
+        // 优先使用 splat_data 上传的权重图；无则回退到预烘焙的 terrain.texture_handle。
+        const unsigned int splat_weight_handle = terrain.splat_weight_texture != 0
+            ? terrain.splat_weight_texture : terrain.texture_handle;
+
+        // Snow cover
+        auto* snow = world.registry().try_get<SnowCoverComponent>(entity);
+        const bool has_snow = snow && snow->enabled && snow->coverage > 0.001f;
+
+        if (depth_only) {
+            // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch：自动切到深度-only shader。
+            MeshDrawItem item;
+            item.model = model;
+            item.vao_override = terrain.vao;
+            item.ebo_override = terrain.lod_ebos[static_cast<size_t>(lod)];
+            item.index_count_override = terrain.lod_index_counts[static_cast<size_t>(lod)];
+            item.lighting_enabled = true;
+            item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f);
+            item.material_metallic = 0.0f;
+            item.material_roughness = 0.9f;
+            item.receive_shadow = true;
+            if (has_snow) {
+                item.snow_coverage = snow->coverage;
+                item.snow_albedo = snow->snow_albedo;
+                item.snow_roughness = snow->snow_roughness;
+                item.snow_normal_threshold = snow->normal_threshold;
+                item.snow_edge_sharpness = snow->edge_sharpness;
+            }
+            if (has_any_splat) {
+                item.splat_enabled = true;
+                item.splat_weight_map_handle = splat_weight_handle;
+                for (int si = 0; si < 4; ++si) {
+                    item.splat_layer_handles[si] = terrain.splat_texture_handles[si];
+                }
+                item.splat_tiling = terrain.splat_tiling;
+            } else {
+                item.texture_handle = terrain.texture_handle;
+            }
+            if (has_light) {
+                item.light_direction = light_dir;
+                item.light_color = light_color;
+                item.light_intensity = light_intensity;
+                item.ambient_intensity = ambient_intensity;
+                item.shadow_strength = shadow_strength_val;
+            }
+            depth_items.push_back(item);
+            continue;
+        }
+
+        // 彩色前向 pass（Opaque）：迁移到 MeshRenderer::DrawSharedTemplateInstanced（单实例；复用 LOD
+        // EBO 作索引；splat/snow 经 ShadedMaterial 喂入共享 forward_shaded.frag）。
+        if (!terrain.shaded_vbo) continue;
+
+        dse::render::ShadedMaterial material;
+        material.albedo = glm::vec3(0.5f, 0.7f, 0.3f);
+        material.metallic = 0.0f;
+        material.roughness = 0.9f;
+        material.ao = 1.0f;
+        material.double_sided = false;
+        material.shading_mode = 0;
+        material.receive_shadow = true;
+        material.shadow_strength = shadow_strength_val;
         if (has_any_splat) {
-            item.splat_enabled = true;
-            // 优先使用 splat_data 上传的权重图；无则回退到预烘焙的 terrain.texture_handle。
-            item.splat_weight_map_handle = terrain.splat_weight_texture != 0
-                ? terrain.splat_weight_texture
-                : terrain.texture_handle;
+            material.splat_enabled = true;
+            material.splat_weight_map = splat_weight_handle;
             for (int si = 0; si < 4; ++si) {
-                item.splat_layer_handles[si] = terrain.splat_texture_handles[si];
+                material.splat_layers[si] = terrain.splat_texture_handles[si];
             }
-            item.splat_tiling = terrain.splat_tiling;
+            material.splat_tiling = terrain.splat_tiling;
         } else {
-            item.texture_handle = terrain.texture_handle;
+            material.albedo_tex = terrain.texture_handle;
+        }
+        if (has_snow) {
+            material.snow_coverage = snow->coverage;
+            material.snow_albedo = snow->snow_albedo;
+            material.snow_roughness = snow->snow_roughness;
+            material.snow_normal_threshold = snow->normal_threshold;
+            material.snow_edge_sharpness = snow->edge_sharpness;
         }
 
-        // 方向光
-        auto light_view = world.registry().view<DirectionalLight3DComponent>();
-        if (light_view.begin() != light_view.end()) {
-            auto& light = light_view.get<DirectionalLight3DComponent>(*light_view.begin());
-            if (light.enabled) {
-                item.light_direction = light.direction;
-                item.light_color = light.color;
-                item.light_intensity = light.intensity;
-                item.ambient_intensity = light.ambient_intensity;
-                item.shadow_strength = light.shadow_strength;
-            }
-        }
+        dse::render::DirectionalLight light;
+        light.direction = light_dir;
+        light.color = light_color;
+        light.intensity = light_intensity;
+        light.ambient = ambient_intensity;
+        light.enabled = has_light;
 
-        items.push_back(item);
+        dse::render::ExternalShadedMesh mesh;
+        mesh.vertex_buffer = terrain.shaded_vbo;
+        mesh.index_buffer = terrain.lod_ebos[static_cast<size_t>(lod)];
+        mesh.index_type = IndexType::UInt32;
+
+        std::vector<glm::mat4> models = { model };
+        mesh_renderer_.DrawSharedTemplateInstanced(
+            cmd_buffer, *rhi_, mesh, terrain.lod_index_counts[static_cast<size_t>(lod)], 0u,
+            models, draw_view, draw_proj, draw_cam_pos, material, light);
     }
 
-    if (!items.empty()) {
-        cmd_buffer.DrawMeshBatch(items);
+    if (!depth_items.empty()) {
+        cmd_buffer.DrawMeshBatch(depth_items);
     }
 }
 
@@ -415,6 +517,10 @@ void TerrainSystem::DestroyTileMeshGPU(TerrainTileData& tile) {
         tile.lod_ebos.clear();
         tile.lod_index_counts.clear();
         tile.index_count = 0;
+    }
+    if (tile.shaded_vbo && rhi_) {
+        rhi_->DeleteGpuBuffer(tile.shaded_vbo);
+        tile.shaded_vbo = {};
     }
 }
 
@@ -586,6 +692,8 @@ void TerrainSystem::BuildTileMesh(TerrainTileData& tile,
         tile.index_count = tile.lod_index_counts.empty() ? 0 : tile.lod_index_counts[0];
     }
 
+    tile.shaded_vbo = BuildTerrainShadedVbo(*rhi_, vertices);
+
     tile.gpu_dirty = false;
     DEBUG_LOG_INFO("[TerrainSystem] Built tile ({},{}) → {} verts, {} LODs, vao={}",
                    tile_x, tile_z, total_vert_count, actual_lod_count, tile.vao.raw());
@@ -702,7 +810,8 @@ void TerrainSystem::UpdateTiles(World& world) {
 // Tiled Terrain — 渲染
 // ============================================================
 
-void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
+void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
+                                bool depth_only) {
     if (!rhi_) return;
 
     auto tile_view = world.registry().view<TerrainTileManagerComponent, TransformComponent>();
@@ -729,7 +838,18 @@ void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const g
         }
     }
 
-    std::vector<MeshDrawItem> items;
+    // 前向 pass 绘制矩阵 + 方向光结构（与 DrawMeshBatch 执行器同源）。
+    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
+    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
+    dse::render::DirectionalLight dir_light;
+    dir_light.direction = light_dir;
+    dir_light.color = light_color;
+    dir_light.intensity = light_intensity;
+    dir_light.ambient = ambient_intensity;
+    dir_light.enabled = has_light;
+
+    std::vector<MeshDrawItem> depth_items;
 
     for (auto entity : tile_view) {
         auto& mgr = tile_view.get<TerrainTileManagerComponent>(entity);
@@ -745,6 +865,7 @@ void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const g
 
         // Snow cover
         auto* snow = world.registry().try_get<SnowCoverComponent>(entity);
+        const bool has_snow = snow && snow->enabled && snow->coverage > 0.001f;
 
         for (auto& [key, tile] : mgr.tiles) {
             if (!tile.vao) continue;
@@ -752,52 +873,93 @@ void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const g
             int lod = tile.current_lod;
             if (lod < 0 || static_cast<size_t>(lod) >= tile.lod_ebos.size()) lod = 0;
 
-            MeshDrawItem item;
-            item.model = transform.local_to_world;
-            item.model[3] -= glm::vec4(camera_offset, 0.0f);
-            item.vao_override = tile.vao;
-            item.ebo_override = tile.lod_ebos[static_cast<size_t>(lod)];
-            item.index_count_override = tile.lod_index_counts[static_cast<size_t>(lod)];
+            glm::mat4 model = transform.local_to_world;
+            model[3] -= glm::vec4(camera_offset, 0.0f);
 
-            item.lighting_enabled = true;
-            item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f);
-            item.material_metallic = 0.0f;
-            item.material_roughness = 0.9f;
-            item.receive_shadow = true;
-
-            if (snow && snow->enabled && snow->coverage > 0.001f) {
-                item.snow_coverage = snow->coverage;
-                item.snow_albedo = snow->snow_albedo;
-                item.snow_roughness = snow->snow_roughness;
-                item.snow_normal_threshold = snow->normal_threshold;
-                item.snow_edge_sharpness = snow->edge_sharpness;
-            }
-
-            if (has_any_splat) {
-                item.splat_enabled = true;
-                item.splat_weight_map_handle = mgr.base_texture_handle;
-                for (int si = 0; si < 4; ++si) {
-                    item.splat_layer_handles[si] = mgr.splat_texture_handles[si];
+            if (depth_only) {
+                // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch：自动切到深度-only shader。
+                MeshDrawItem item;
+                item.model = model;
+                item.vao_override = tile.vao;
+                item.ebo_override = tile.lod_ebos[static_cast<size_t>(lod)];
+                item.index_count_override = tile.lod_index_counts[static_cast<size_t>(lod)];
+                item.lighting_enabled = true;
+                item.material_albedo = glm::vec3(0.5f, 0.7f, 0.3f);
+                item.material_metallic = 0.0f;
+                item.material_roughness = 0.9f;
+                item.receive_shadow = true;
+                if (has_snow) {
+                    item.snow_coverage = snow->coverage;
+                    item.snow_albedo = snow->snow_albedo;
+                    item.snow_roughness = snow->snow_roughness;
+                    item.snow_normal_threshold = snow->normal_threshold;
+                    item.snow_edge_sharpness = snow->edge_sharpness;
                 }
-                item.splat_tiling = mgr.splat_tiling;
+                if (has_any_splat) {
+                    item.splat_enabled = true;
+                    item.splat_weight_map_handle = mgr.base_texture_handle;
+                    for (int si = 0; si < 4; ++si) {
+                        item.splat_layer_handles[si] = mgr.splat_texture_handles[si];
+                    }
+                    item.splat_tiling = mgr.splat_tiling;
+                } else {
+                    item.texture_handle = mgr.base_texture_handle;
+                }
+                if (has_light) {
+                    item.light_direction = light_dir;
+                    item.light_color = light_color;
+                    item.light_intensity = light_intensity;
+                    item.ambient_intensity = ambient_intensity;
+                    item.shadow_strength = shadow_strength;
+                }
+                depth_items.push_back(item);
+                continue;
+            }
+
+            // 彩色前向 pass（Opaque）：MeshRenderer::DrawSharedTemplateInstanced（单实例，复用 LOD EBO）。
+            if (!tile.shaded_vbo) continue;
+
+            dse::render::ShadedMaterial material;
+            material.albedo = glm::vec3(0.5f, 0.7f, 0.3f);
+            material.metallic = 0.0f;
+            material.roughness = 0.9f;
+            material.ao = 1.0f;
+            material.double_sided = false;
+            material.shading_mode = 0;
+            material.receive_shadow = true;
+            material.shadow_strength = shadow_strength;
+            if (has_any_splat) {
+                material.splat_enabled = true;
+                material.splat_weight_map = mgr.base_texture_handle;
+                for (int si = 0; si < 4; ++si) {
+                    material.splat_layers[si] = mgr.splat_texture_handles[si];
+                }
+                material.splat_tiling = mgr.splat_tiling;
             } else {
-                item.texture_handle = mgr.base_texture_handle;
+                material.albedo_tex = mgr.base_texture_handle;
+            }
+            if (has_snow) {
+                material.snow_coverage = snow->coverage;
+                material.snow_albedo = snow->snow_albedo;
+                material.snow_roughness = snow->snow_roughness;
+                material.snow_normal_threshold = snow->normal_threshold;
+                material.snow_edge_sharpness = snow->edge_sharpness;
             }
 
-            if (has_light) {
-                item.light_direction = light_dir;
-                item.light_color = light_color;
-                item.light_intensity = light_intensity;
-                item.ambient_intensity = ambient_intensity;
-                item.shadow_strength = shadow_strength;
-            }
+            dse::render::ExternalShadedMesh mesh;
+            mesh.vertex_buffer = tile.shaded_vbo;
+            mesh.index_buffer = tile.lod_ebos[static_cast<size_t>(lod)];
+            mesh.index_type = IndexType::UInt32;
 
-            items.push_back(item);
+            std::vector<glm::mat4> models = { model };
+            mesh_renderer_.DrawSharedTemplateInstanced(
+                cmd_buffer, *rhi_, mesh, tile.lod_index_counts[static_cast<size_t>(lod)], 0u,
+                models, draw_view, draw_proj, draw_cam_pos, material, dir_light);
         }
     }
 
-    if (!items.empty()) {
-        cmd_buffer.DrawMeshBatch(items);
+    if (!depth_items.empty()) {
+        cmd_buffer.DrawMeshBatch(depth_items);
     }
 }
 

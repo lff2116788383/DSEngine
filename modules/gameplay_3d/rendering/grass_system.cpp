@@ -310,6 +310,7 @@ void GrassSystem::Init(RhiDevice* rhi_device) {
 void GrassSystem::Shutdown(World& world) {
     (void)world;
     ShutdownComputeResources();
+    if (rhi_) mesh_renderer_.Shutdown(*rhi_);
     blade_vertices_.clear();
     blade_indices_.clear();
     billboard_vertices_.clear();
@@ -673,16 +674,17 @@ void GrassSystem::Update(World& world, float delta_time) {
 // 渲染
 // ============================================================
 
-void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, false, camera_offset);
+void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
+                         bool depth_only) {
+    RenderInternal(world, cmd_buffer, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
 void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, true, camera_offset);
+    RenderInternal(world, cmd_buffer, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
 void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
-                                  bool shadow_pass, const glm::vec3& camera_offset) {
+                                  bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
     if (blade_vertices_.empty()) return;
 
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
@@ -710,6 +712,11 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
     glm::mat4 vp = proj_matrix * view_matrix;
     glm::vec4 frustum_planes[6];
     ExtractFrustumPlanes(vp, frustum_planes);
+
+    // 前向 pass 绘制用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正）。
+    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
+    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
 
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
     glm::vec3 light_color(1.0f);
@@ -906,18 +913,62 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             for (auto& m : instances) {
                 m[3] -= offset4;
             }
-            MeshDrawItem item;
-            item.vertices = verts;
-            item.indices = idxs;
-            if (instances.size() == 1) {
-                item.model = instances[0];
-            } else {
-                item.model = glm::mat4(1.0f);
-                item.instance_transforms = std::move(instances);
+
+            if (depth_only) {
+                // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch（深度-only shader 路径，MeshRenderer 无对应实例化深度方法）。
+                MeshDrawItem item;
+                item.vertices = verts;
+                item.indices = idxs;
+                if (instances.size() == 1) {
+                    item.model = instances[0];
+                } else {
+                    item.model = glm::mat4(1.0f);
+                    item.instance_transforms = std::move(instances);
+                }
+                fill_item(item);
+                std::vector<MeshDrawItem> items = {std::move(item)};
+                cmd_buffer.DrawMeshBatch(items);
+                return;
             }
-            fill_item(item);
-            std::vector<MeshDrawItem> items = {std::move(item)};
-            cmd_buffer.DrawMeshBatch(items);
+
+            // 前向 pass：迁移到 MeshRenderer::DrawInstancedShaded（逐帧上传顶点 + 每实例 model）。
+            // 风场已由 BuildWindMatrix 烘进每实例矩阵，故 material.foliage 保持 false。
+            std::vector<dse::render::MeshVertex> mv;
+            mv.reserve(verts.size());
+            for (const auto& bv : verts) {
+                dse::render::MeshVertex v;
+                v.position = bv.pos;
+                v.color = bv.color;
+                v.uv = bv.uv;
+                v.normal = bv.normal;
+                v.tangent = bv.tangent;
+                mv.push_back(v);
+            }
+            std::vector<uint16_t> idx16;
+            idx16.reserve(idxs.size());
+            for (uint32_t ix : idxs) idx16.push_back(static_cast<uint16_t>(ix));
+
+            dse::render::ShadedMaterial material;
+            material.albedo = glm::vec3(1.0f);
+            material.metallic = 0.0f;
+            material.roughness = 0.85f;
+            material.ao = 1.0f;
+            material.double_sided = true;
+            material.shading_mode = 0;
+            material.albedo_tex = grass.albedo_texture;
+            material.receive_shadow = true;
+            material.shadow_strength = shadow_strength_val;
+
+            dse::render::DirectionalLight light;
+            light.direction = light_dir;
+            light.color = light_color;
+            light.intensity = light_intensity;
+            light.ambient = ambient_intensity;
+            light.enabled = true;
+
+            mesh_renderer_.DrawInstancedShaded(
+                cmd_buffer, *rhi_, mv, idx16, instances,
+                draw_view, draw_proj, draw_cam_pos, material, light);
         };
 
         submit_batch(lod0_matrices, blade_colored, blade_indices_);

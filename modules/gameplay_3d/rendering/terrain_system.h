@@ -3,6 +3,7 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/mesh_renderer.h"
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include <glm/glm.hpp>
 
@@ -13,7 +14,9 @@ class TerrainSystem {
 public:
     void Init(RhiDevice* rhi_device);
     void Shutdown(World& world);
-    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
+    /// depth_only=true（PreZ/Shadow 深度 RT）走 DrawMeshBatch，false（Opaque 彩色）走 MeshRenderer。
+    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
+                bool depth_only = false);
 
     /// CPU 侧双线性插值高度查询（世界空间 xz → 高度 y）
     static float SampleHeight(const TerrainComponent& terrain,
@@ -30,13 +33,15 @@ private:
 
     // Tiled terrain
     void UpdateTiles(World& world);
-    void RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset);
+    void RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
+                     bool depth_only);
     void BuildTileMesh(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tile_x, int tile_z);
     void DestroyTileMeshGPU(TerrainTileData& tile);
     void GenerateProceduralTile(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tx, int tz);
     void ShutdownTiles(World& world);
 
     RhiDevice* rhi_ = nullptr;
+    dse::render::MeshRenderer mesh_renderer_;  ///< 前向 pass 通用网格渲染器（B2b-6 迁移）
 };
 
 } // namespace gameplay3d
