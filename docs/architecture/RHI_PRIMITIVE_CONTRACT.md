@@ -77,7 +77,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 // 三后端实现见 §6.4，args 布局三端一致（5×uint32）。indirect_buffer 经 CreateIndirectBuffer 创建。
 ```
 
-> **实现进度（P0 / B2b，2026-06）**：契约的实例化与 SSBO 能力已落地——`DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance)`（P0a 新增重载，**不改** `DrawIndexed` 签名）、`BindStorageBuffer(slot, handle, offset, size)`（P0b，图形阶段读 SSBO）、`DrawIndexedIndirect(indirect_buffer, byte_offset)`（B2b-5，CommandBuffer 级间接绘制）。活体消费者为 `MeshRenderer`（B2b-1..5：静态 / 蒙皮 / 实例化 / depth-only / 间接 forward PBR），各配跨后端像素 smoke。进度详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §2–§3。
+> **实现进度（P0 / B2b / 2c / Final-Feat，2026-06）**：契约的实例化与 SSBO 能力已落地——`DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance)`（P0a 新增重载，**不改** `DrawIndexed` 签名）、`BindStorageBuffer(slot, handle, offset, size)`（P0b，图形阶段读 SSBO）、`DrawIndexedIndirect(indirect_buffer, byte_offset)`（B2b-5，CommandBuffer 级间接绘制）。活体消费者为 `MeshRenderer`（B2b-1..5：静态 / 蒙皮 / 实例化 / depth-only / 间接 forward PBR；2c-1..5：高级 shading 全模式 + 地形 splat/积雪 + WBOIT + DDGI/LightProbe；Final-Feat-1..7：CSM/蒙皮/实例化/聚光/morph 高级 shading + 外部常驻 VAO/EBO + 共享网格模板），各配跨后端像素 smoke（smoke 76→92→**181**）。注：2c / Final-Feat **未新增任何 CommandBuffer 原语**，均复用上述原语，系 `MeshRenderer` 方法而非新原语。进度详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §2–§3。
 
 ### 旧原语的归并关系（过渡期保留，迁移完再删）
 | 旧（skybox spike） | 新 | 处理 |
@@ -217,8 +217,9 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
     - [x] **B2b-3** GPU 实例化（instance SSBO，`34bb4328`）。
     - [x] **B2b-4** depth-only / shadow（三后端深度回读，`eaf61c2d`）。
     - [x] **B2b-5** GPU-driven 间接绘制（`DrawIndexedIndirect` 三后端，`25fb30a6`）。
-    - [ ] **删 `DrawMeshBatch` ABI**：**推迟**——6 个调用点依赖 `MeshRenderer` 未实现的高级特性（toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI），待高级 shading 迁移完成后再删（用户决策：保留 ABI 并存）。
-    - 基线：smoke 76 → **92**（B2b-2..5 各 +4 跨后端像素 smoke），详见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
+    - [x] **2c-1..5 + Final-Feat-1..7** 高级 shading 全模式（`debcaead`…`db8c320b`）：shading_mode/SSS/clearcoat/POM、地形 splat/积雪、WBOIT、DDGI/LightProbe、CSM、蒙皮/实例化/聚光/morph、外部常驻 VAO/EBO（tiled terrain）、共享网格模板去重（tree）——均复用现有原语，各配跨后端像素 smoke。
+    - [ ] **删 `DrawMeshBatch` ABI**：**推迟**——原「高级 shading 未迁」理由已不成立（上述能力均已落地）；现推迟理由改为**调用点未迁 + spine 2D 蒙皮能力缺口**——需补 spine 2D 蒙皮 → 迁 6 调用点 → 全仓 grep 确认后才删（用户决策：当前保留 ABI 并存）。
+    - 基线：smoke 76 → 92（B2b-2..5）→ **181**（2c-1..5 + Final-Feat-1..7 各增跨后端像素 smoke），详见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 - [ ] **B3**：迁 Particles（验证 Dispatch/实例化）；DrawPostProcess 一并考虑。
 - [ ] **B4**：迁 Hair（SSBO + 多段绘制）。
 - [ ] **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。

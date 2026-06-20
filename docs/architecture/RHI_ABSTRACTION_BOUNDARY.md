@@ -2,8 +2,8 @@
 
 > 本文结合**提交历史**与**当前代码现状**，描述 RHI 抽象边界从「每效果一个虚函数」收敛为「后端无关通用原语 + 高层渲染器」的重画过程、已落地范围、以及剩余边界。
 > 配套文档：契约设计见 [`RHI_PRIMITIVE_CONTRACT.md`](./RHI_PRIMITIVE_CONTRACT.md)（终态接口 + Metal 映射）；mesh 迁移摸底见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
-> 分支：`feature/engine-lib`。基线：单元 2281 / 集成 544 / smoke **92**（三后端 llvmpipe/WARP/lavapipe 像素 smoke 全绿；B2a 时为 68，P0+B2b-2..5 累加至 92）。
-> HEAD：`25fb30a6`（B2b-5 间接绘制）。
+> 分支：`feature/engine-lib`。基线：单元 2281 / 集成 544 / smoke **181**（三后端 llvmpipe/WARP/lavapipe 像素 smoke 全绿；B2a 时为 68，P0+B2b-2..5 累加至 92，2c-1..5 + Final-Feat-1..7 续加至 181）。
+> HEAD：`a6de6042`（文档同步；代码 HEAD `db8c320b` = Final-Feat-7 共享网格模板）。
 
 ---
 
@@ -17,7 +17,7 @@
 重画前（每效果一个 ABI，各后端各实现一遍）        重画后（边界下沉到通用原语）
 ┌─────────────── 高层 ───────────────┐         ┌──────────── 高层渲染器 ────────────┐
 │ Scene / UI / Particle / ...        │         │ SkyboxRenderer  SpriteBatchRenderer │
-└───────────────┬────────────────────┘         │ MeshRenderer（B2b-1..5，ABI 并存） │
+└───────────────┬────────────────────┘         │ MeshRenderer（B2b+2c+Feat，ABI 并存）│
    cmd.DrawSkybox/DrawSpriteBatch/...           └──────────────┬─────────────────────┘
 ┌───────────────┴─ CommandBuffer ABI ┐            BindShaderProgram/BindVertexBuffer/
 │ DrawSkybox  DrawSpriteBatch  DrawMesh│  ===>     BindTexture/BindUniformBuffer/
@@ -39,6 +39,7 @@
 | **B2a**（迁 Sprite） | `11d61181`（默认）→ `dc356ea5`（SDF）→ `f011ba3a`（VFX）→ `fc21e1b5`（迁 3 调用点）→ `43240e8e`（**删 DrawSpriteBatch ABI**） | 抽生产级 `SpriteBatchRenderer`（默认/SDF/VFX 全特性，SDF/VFX 参数走 push-block UBO），迁 SpriteRenderSystem/UIRenderSystem/ParticleSystem，删旧 ABI + 失效测试/mock/文档 | 第二个效果下沉；第二条 ABI 删除 |
 | **P0**（mesh 前置原语） | `f38d0b13`→`e0f061f7`（P0a）/ `10f3ff2d`+`68c81b84`（P0b） | P0a `DrawIndexedInstanced` 三后端；P0b 图形阶段 `BindStorageBuffer(slot,handle,offset,size)` 三后端 + 组合像素 smoke | 原语集扩展（实例化 + SSBO，只增不删） |
 | **B2b**（抽 MeshRenderer，ABI 并存） | `ee97d1ab`→`88301df8`→`34bb4328`→`eaf61c2d`→`25fb30a6` | 后端无关 `MeshRenderer`：B2b-1 静态 PBR / B2b-2 蒙皮(bone SSBO) / B2b-3 实例化(instance SSBO) / B2b-4 depth-only / B2b-5 间接(`DrawIndexedIndirect`)；各配跨后端像素 smoke | 第三效果**部分**下沉；`DrawMeshBatch` ABI **暂保留**（高级 shading 未迁） |
+| **2c + Final-Feat**（MeshRenderer 高级 shading + 几何来源） | `debcaead`→`7295d247`→`b930db38`→`5a46be01`→`1048b815`→`5e460e2e`→`fb986188`→`1c909e5a`→`c9b516e3`→`f4645f46`→`44c1f487`→`db8c320b` | MeshRenderer 补：shading_mode 0/2-6 + SSS/clearcoat/POM、clustered 点光、地形 splat/积雪、WBOIT、DDGI/LightProbe、CSM 阴影、蒙皮/实例化/聚光/morph 高级 shading、外部常驻 VAO/EBO（tiled terrain）、共享网格模板去重（tree）；各配跨后端像素 smoke（92→181） | MeshRenderer 能力基本补齐；`DrawMeshBatch` ABI 仍并存（调用点未迁） |
 
 **B2a 关键设计**：三个 2D 系统各持独立 `SpriteBatchRenderer` 实例（每帧各画一次 → 各自动态 VBO 互不别名，满足 Vulkan 帧提交生命周期）；view/proj 经新增的 `CommandBuffer::GetView/GetProjectionMatrix()`（读 `SetCamera` 缓存）取用。
 
@@ -64,7 +65,9 @@
 | `BindStorageBuffer(slot, handle, offset, size)` | P0b | 图形阶段读 SSBO | ✅ 三后端（GL SSBO / DX11 StructuredBuffer SRV 仅绑 VS / Vulkan storage descriptor） |
 | `DrawIndexedIndirect(indirect_buffer, byte_offset)` | B2b-5 | CommandBuffer 级间接 | ✅ 三后端（GL glMultiDrawElementsIndirect / Vulkan vkCmdDrawIndexedIndirect / DX11 DrawIndexedInstancedIndirect） |
 
-内建资源访问器（`RhiDevice`，供高层渲染器复用引擎着色器/几何）：`GetBuiltinProgram(BuiltinProgram)`（按枚举取 Skybox/Sprite2D/SpriteFxSdf/SpriteFxVfx + **ForwardPbr/ForwardPbrSkinned/ForwardPbrInstanced/ForwardPbrDepth**（B2b-1..5）程序，取代每效果一个访问器——见 §8.2 D4）+ `GetSkyboxCubeVertexBuffer`；间接缓管理 `CreateIndirectBuffer/UpdateIndirectBuffer/DeleteIndirectBuffer`（B2b-5）。
+内建资源访问器（`RhiDevice`，供高层渲染器复用引擎着色器/几何）：`GetBuiltinProgram(BuiltinProgram)`（按枚举取 Skybox/Sprite2D/SpriteFxSdf/SpriteFxVfx + **ForwardPbr/ForwardPbrSkinned/ForwardPbrInstanced/ForwardPbrDepth**（B2b-1..5）+ **ForwardShaded/ForwardSkinnedShaded/ForwardInstancedShaded/ForwardMorphShaded**（2c-1 + Final-Feat-2/3/5 高级 shading）程序，取代每效果一个访问器——见 §8.2 D4）+ `GetSkyboxCubeVertexBuffer`；间接缓管理 `CreateIndirectBuffer/UpdateIndirectBuffer/DeleteIndirectBuffer`（B2b-5）。
+
+> **说明（2c + Final-Feat）**：高级 shading 与几何来源能力均落在 `MeshRenderer` 层（`DrawShaded` 系列 + Final-Feat-6 `DrawShadedExternal`/`BuildShadedWorldVertexBuffer` + Final-Feat-7 `DrawSharedTemplateInstanced`/`BuildShadedLocalVertexBuffer`），**未新增任何 CommandBuffer 原语**——全部复用既有 `DrawIndexed/DrawIndexedInstanced/BindStorageBuffer/BindUniformBuffer/BindVertexBuffer/BindIndexBuffer`，故 §3.1 原语表不变。
 
 ### 3.2 仍存的逐效果 ABI（边界**之上**待下沉）
 
@@ -72,7 +75,7 @@
 |---|---|---|
 | ~~`DrawSkybox`~~ | A1 | ✅ 已删（`d885d0eb`） |
 | ~~`DrawSpriteBatch`~~ | B2a | ✅ 已删（`43240e8e`） |
-| `DrawMeshBatch(items)` | **B2b** | 🔶 `MeshRenderer` 已**并存**承接 forward-PBR 子集（B2b-1..5）；ABI 删除**推迟**（高级 shading 未迁，见 §5） |
+| `DrawMeshBatch(items)` | **B2b** | 🔶 `MeshRenderer` 已**并存**承接 forward-PBR + 高级 shading 全模式（B2b-1..5 + 2c-1..5 + Final-Feat-1..7）；ABI 删除**仍推迟**——能力已基本齐备，剩迁 6 调用点 + spine 2D 蒙皮缺口（见 §5） |
 | `DrawParticles3D(items, view, proj)` | B3 | ⏳ 待迁 |
 | `DrawHairStrands(items, view, proj)` | B4 | ⏳ 待迁 |
 | `DrawPostProcess(request)` | 未排期（B3 后） | ⏳ 待迁 |
@@ -84,7 +87,7 @@
 | `SkyboxRenderer` | `engine/render/skybox_renderer.{h,cpp}` | 生产（A1，DrawSkybox 已删） |
 | `SpriteBatchRenderer` | `engine/render/sprite_batch_renderer.{h,cpp}` | 生产（B2a，DrawSpriteBatch 已删） |
 | `SpriteRenderer` | `engine/render/sprite_renderer.{h,cpp}` | B0 契约验证脚手架（非生产） |
-| `MeshRenderer` | `engine/render/mesh_renderer.{h,cpp}` | B2b-1..5 后端无关 forward-PBR 能力（静态/蒙皮/实例化/depth-only/间接）；与 `DrawMeshBatch` ABI **并存**，**未取代**（高级 shading 未覆盖） |
+| `MeshRenderer` | `engine/render/mesh_renderer.{h,cpp}` | 后端无关 forward 能力：B2b-1..5（静态/蒙皮/实例化/depth-only/间接）+ 2c-1..5 与 Final-Feat-1..7（高级 shading 全模式/CSM/聚光/morph、地形 splat+积雪、WBOIT、DDGI/LightProbe、外部常驻 VAO/EBO、共享网格模板去重）；与 `DrawMeshBatch` ABI **并存**，**尚未取代**（调用点未迁、spine 2D 蒙皮未覆盖） |
 
 ---
 
@@ -104,7 +107,7 @@
 
 ---
 
-## 5. B2b 现状：原语已补齐，MeshRenderer 能力并存，ABI 删除被高级 shading 阻塞
+## 5. B2b 现状：原语 + 高级 shading 能力均已补齐，剩调用点迁移 + 删 ABI
 
 `DrawMeshBatch` 是**引擎整个 3D 渲染核心**（三后端各 ~700–1115 行），覆盖 forward PBR / deferred gbuffer / shadow depth-only / 6 种 shading 模型 / 骨骼蒙皮 / GPU 实例化 / GPU-driven 间接绘制 / DDGI / 光探针 / 地形 splat / 积雪 / WBOIT，调用点 6 处（mesh/terrain×2/tree/grass/spine）。
 
@@ -115,9 +118,15 @@
 
 据此抽出后端无关 `MeshRenderer`，逐子步闭环：B2b-1 静态 PBR / B2b-2 蒙皮 / B2b-3 实例化 / B2b-4 depth-only / B2b-5 间接，各配跨后端像素 smoke（smoke 76→92）。
 
-**剩余阻塞（ABI 删除）**：`MeshRenderer` 仅实现 forward-PBR 静态/蒙皮/实例化/depth-only/间接，而 6 个调用点均依赖其**未实现**的高级特性：shading_mode 2/3/4/5/6（HalfLambert/Toon/Watercolor/FaceSDF）、SSS/clearcoat/anisotropy/POM、地形 splatmap + 积雪、WBOIT、clustered 点光（≤4～64）、DDGI/LightProbe。现阶段删 ABI 会破坏地形/植被/风格化角色/spine，且可能 gtest 仍绿但像素错（教训 3）。
+**高级 shading 阻塞已解**：原「剩余阻塞」是 `MeshRenderer` 缺高级特性、调用点无法迁。2c-1..5 + Final-Feat-1..7 已补齐（smoke 92→181，各配跨后端像素 smoke）：
+- 2c-1/2c-2：shading_mode 0/2-6（HalfLambert/Toon/Watercolor/FaceSDF）+ SSS/clearcoat/anisotropy/POM + ≤64 clustered 点光；
+- 2c-3/2c-4/2c-5：地形 splatmap + 积雪、WBOIT、DDGI/LightProbe；
+- Final-Feat-1..5：CSM 方向光阴影、蒙皮/实例化/聚光/morph 的高级 shading 变体；
+- Final-Feat-6/7：外部常驻 VAO/EBO + index_count_override（tiled terrain）、共享网格模板去重（tree foliage）。
 
-**用户决策（选项 B）**：本阶段**保留 `DrawMeshBatch` ABI 与 MeshRenderer 并存**，ABI 删除推迟到高级 shading 迁移完成后。拆解见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
+**剩余工作（ABI 删除，B2b-6）**：能力已基本齐备，剩的不再是「能力缺口」而是工程收尾——① 补 `spine_system` 2D 蒙皮（唯一未覆盖能力）；② 迁 6 个调用点（mesh_render_system / terrain×2 / tree / grass / spine）到 `MeshRenderer`；③ 全仓 `grep` 确认无残留调用后删 `DrawMeshBatch` ABI + 失效测试/mock/文档。
+
+**用户决策（选项 B）**：当前**保留 `DrawMeshBatch` ABI 与 MeshRenderer 并存**，ABI 删除待上述收尾。拆解见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 
 ---
 
@@ -135,7 +144,7 @@
 
 ## 7. 剩余路线图（便于全局对照）
 
-- **B2b**：抽 `MeshRenderer`（forward-PBR 静态/蒙皮/实例化/depth-only/间接）——已完成且与 `DrawMeshBatch` 并存。**剩：**高级 shading（toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI）迁入 MeshRenderer 后，迁 6 调用点 → 删 `DrawMeshBatch` ABI。
+- **B2b**：抽 `MeshRenderer`——forward-PBR（B2b-1..5）+ 高级 shading 全模式（2c-1..5 + Final-Feat-1..7：toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI + CSM + 蒙皮/实例化/聚光/morph + 外部 VAO/EBO + 共享模板）均已迁入，与 `DrawMeshBatch` 并存。**剩：**补 spine 2D 蒙皮 → 迁 6 调用点 → 删 `DrawMeshBatch` ABI。
 - **B3**：迁 `DrawParticles3D`（验证 Dispatch/实例化）；`DrawPostProcess` 一并考虑。
 - **B4**：迁 `DrawHairStrands`（SSBO + 多段绘制）。
 - **B5**：全局绑定收敛（shadow map / global uniforms / `BindShaderProgram`+PSO 聚合，偿还契约 §8.1 债务）。
@@ -164,7 +173,7 @@
 | D6 | **`CommandBuffer::GetView/GetProjectionMatrix()`** 把相机状态缓存在命令缓冲上 | 概念上相机属 frame/scene context，轻微耦合泄漏 | 引入 FrameContext 时收敛 |
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
 | D8 | ~~**契约把 SSBO 排 B4，但 B2b(mesh) 先需 SSBO**~~ → **已解**：P0b 把 `BindStorageBuffer` 提前到 B2b 之前落地（`10f3ff2d`），mesh 蒙皮/实例已消费 | — | ✅ 已解 |
-| D10 | **`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**（forward-PBR 子集 vs 全特性） | 两条 mesh 路径并存，需纪律；高级 shading 调用点仍走旧 ABI | 高级 shading 迁入 MeshRenderer 后删 ABI（用户决策：本阶段保留） |
+| D10 | **`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**（现 MeshRenderer 已覆盖高级 shading 全模式 + 外部 VAO + 共享模板，仅差 spine 2D 蒙皮） | 两条 mesh 路径并存，需纪律；6 调用点仍走旧 ABI | 补 spine 2D 蒙皮 → 迁 6 调用点 → 删 ABI（用户决策：本阶段保留） |
 
 ### 8.3 优化空间（非阻塞，按收益排序）
 1. **可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）：把 mesh 执行器既有的 `MAX_FRAMES` 双缓冲模式抽成小工具，按 `current_frame_index_` 轮转动态顶点/UBO，满足 2 帧在飞的「提交前不覆写」约束。B2b 的 MeshRenderer 必然需要它，落地时一并做，再回填 sprite。
