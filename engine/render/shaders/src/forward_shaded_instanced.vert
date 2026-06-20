@@ -46,6 +46,33 @@ void main() {
     vec4 worldPos = model * vec4(aPos, 1.0);
     mat3 model3 = mat3(model);
 
+    // 植被风弯曲 + 角色推力（与 pbr.vert:112-138 同算）。foliage_wind.y<=0 时整段跳过，
+    // 故非植被绘制（MeshRenderer 喂零 wind）零位移、不回归；植被绘制由 CPU 侧喂入 grs 风参。
+    if (foliage_wind.y > 0.001) {
+        float height_factor = clamp(aPos.y, 0.0, 1.0);
+        float hf2 = height_factor * height_factor;
+
+        float t = foliage_wind.x;
+        vec2 wind_dir = vec2(foliage_wind.z, foliage_wind.w);
+        float wind_str = foliage_wind.y;
+        float phase = dot(worldPos.xz, vec2(0.3, 0.7));
+        float sway = sin(t * 2.0 + phase) * 0.5 + sin(t * 3.7 + phase * 1.3) * 0.3;
+        worldPos.xz += wind_dir * sway * wind_str * hf2 * 0.15;
+        worldPos.y -= abs(sway) * wind_str * hf2 * 0.02;
+
+        if (foliage_push.w > 0.001) {
+            vec3 push_delta = worldPos.xyz - foliage_push.xyz;
+            float push_dist = length(push_delta.xz);
+            float push_factor = 1.0 - clamp(push_dist / foliage_push.w, 0.0, 1.0);
+            push_factor = push_factor * push_factor * hf2;
+            if (push_dist > 0.001) {
+                vec2 push_dir = push_delta.xz / push_dist;
+                worldPos.xz += push_dir * push_factor * 0.5;
+                worldPos.y -= push_factor * 0.15;
+            }
+        }
+    }
+
     vWorldPos = worldPos.xyz;
     vNormal   = normalize(model3 * aNormal);
     vTangent  = model3 * aTangent;

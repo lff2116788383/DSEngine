@@ -144,6 +144,11 @@ struct ShadedMaterial {
     // （light_space_matrix / cascade_splits / shadow_atlas_region / shadow_map[0]）取 CSM 数据采样。
     bool receive_shadow = false;        ///< 接收方向光 CSM 阴影（默认关，不回归既有调用）
     float shadow_strength = 1.0f;       ///< 阴影强度 [0,1]
+
+    // 植被风弯曲（B2b-6，tree/grass 迁移）。开启后 DrawInstancedShaded / DrawSharedTemplateInstanced
+    // 从 device 全局渲染状态取 foliage_wind/foliage_push 喂入 forward_shaded_instanced.vert 施风；
+    // 默认关 → 喂零 wind，VS 整段跳过，不回归既有非植被实例化调用。
+    bool foliage = false;               ///< 顶点风弯曲（tree/grass）
 };
 
 /// 单方向光。

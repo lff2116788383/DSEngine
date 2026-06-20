@@ -789,6 +789,12 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     frame.vp = proj * view;
     frame.view = view;
     frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    // 植被风弯曲（B2b-6，tree）：material.foliage 时喂入 grs 风参，否则保持零 → VS 整段跳过。
+    if (material.foliage) {
+        const auto& grs_f = device.GetGlobalRenderState();
+        frame.foliage_wind = grs_f.foliage_wind;
+        frame.foliage_push = grs_f.foliage_push;
+    }
     device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
 
     FwdPerSceneUBO scene{};
@@ -1157,6 +1163,12 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     frame.vp = proj * view;
     frame.view = view;
     frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    // 植被风弯曲（B2b-6，grass）：material.foliage 时喂入 grs 风参，否则保持零 → VS 整段跳过。
+    if (material.foliage) {
+        const auto& grs_f = device.GetGlobalRenderState();
+        frame.foliage_wind = grs_f.foliage_wind;
+        frame.foliage_push = grs_f.foliage_push;
+    }
     device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
 
     FwdPerSceneUBO scene{};
