@@ -452,6 +452,39 @@ public:
                             const ShadedGI& gi = {},
                             const std::vector<ShadedSpotLight>& spot_lights = {});
 
+    /// 构建一份**局部空间**模板顶点缓冲（GpuMeshVertex 布局，Final-Feat-7）。与 BuildShadedWorldVertexBuffer
+    /// 不同：**不**做 model 预变换（顶点保持局部空间），因为每个实例各有 model 矩阵、由 VS 按实例变换。
+    /// 建一份静态 GPU 顶点缓冲（is_dynamic=false）供大量实例共享（shared_vertex_ptr：一份模板顶点 + 每实例
+    /// model 矩阵，省去 N 份顶点副本）。返回的句柄由调用方持有并负责释放（device.DeleteGpuBuffer）。
+    /// vertices 为空时返回空句柄。
+    static BufferHandle BuildShadedLocalVertexBuffer(RhiDevice& device,
+                                                     const std::vector<MeshVertex>& vertices);
+
+    /// 记录一次「共享网格模板 + 硬件实例化」高级 shading 绘制（Final-Feat-7：shared_vertex_ptr 去重）。
+    /// 复用 BuiltinProgram::ForwardInstancedShaded（每实例 model 矩阵 SSBO\@slot0，VS 按 gl_InstanceIndex 取并
+    /// 变换局部空间顶点/法线）。绑定调用方持有的**共享局部空间模板** tmpl.vertex_buffer / tmpl.index_buffer
+    /// （由 BuildShadedLocalVertexBuffer 构建），按 [first_index, first_index+index_count) 子段对每个实例
+    /// DrawIndexedInstanced —— 即大量 tree 实例共享一份顶点模板、各自 model 矩阵，显存只存一份模板顶点。
+    /// material/light/point_lights/gi/spot_lights 语义与 DrawInstancedShaded 完全一致。
+    /// index_count==0 / instance_models 空 / tmpl 句柄无效时直接返回（不绘制）。
+    /// @param tmpl            共享局部空间模板 VB/IB + 索引类型（调用方持有，多次绘制/多帧复用）
+    /// @param index_count     每实例绘制的索引数（index_count_override；从 first_index 起）
+    /// @param first_index     起始索引偏移（模板内子网格起点）
+    /// @param instance_models 每实例 world-space model 矩阵（写入内部实例 SSBO，0 基索引）
+    void DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& device,
+                                     const ExternalShadedMesh& tmpl,
+                                     uint32_t index_count,
+                                     uint32_t first_index,
+                                     const std::vector<glm::mat4>& instance_models,
+                                     const glm::mat4& view,
+                                     const glm::mat4& proj,
+                                     const glm::vec3& camera_pos,
+                                     const ShadedMaterial& material,
+                                     const DirectionalLight& light,
+                                     const std::vector<ShadedPointLight>& point_lights = {},
+                                     const ShadedGI& gi = {},
+                                     const std::vector<ShadedSpotLight>& spot_lights = {});
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 

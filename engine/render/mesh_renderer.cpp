@@ -682,6 +682,189 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.DrawIndexed(index_count, first_index, 0);
 }
 
+BufferHandle MeshRenderer::BuildShadedLocalVertexBuffer(RhiDevice& device,
+                                                        const std::vector<MeshVertex>& vertices) {
+    if (vertices.empty()) return BufferHandle{};
+    // 局部空间打包（不做 model 预变换；每实例 model 由 VS 按 gl_InstanceIndex 变换）。
+    std::vector<GpuMeshVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const MeshVertex& v = vertices[i];
+        GpuMeshVertex& g = gpu_verts[i];
+        g.px = v.position.x; g.py = v.position.y; g.pz = v.position.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = v.normal.x; g.ny = v.normal.y; g.nz = v.normal.z;
+        g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
+    }
+    GpuBufferDesc vb_desc;
+    vb_desc.size = gpu_verts.size() * sizeof(GpuMeshVertex);
+    vb_desc.usage = GpuBufferUsage::kVertex;
+    vb_desc.is_dynamic = false;  // 常驻静态模板缓冲（多实例/多帧共享）
+    return device.CreateGpuBuffer(vb_desc, gpu_verts.data());
+}
+
+void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& device,
+                                               const ExternalShadedMesh& tmpl,
+                                               uint32_t index_count,
+                                               uint32_t first_index,
+                                               const std::vector<glm::mat4>& instance_models,
+                                               const glm::mat4& view,
+                                               const glm::mat4& proj,
+                                               const glm::vec3& camera_pos,
+                                               const ShadedMaterial& material,
+                                               const DirectionalLight& light,
+                                               const std::vector<ShadedPointLight>& point_lights,
+                                               const ShadedGI& gi,
+                                               const std::vector<ShadedSpotLight>& spot_lights) {
+    if (index_count == 0 || instance_models.empty() ||
+        !tmpl.vertex_buffer || !tmpl.index_buffer) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
+    if (program == 0) return;  // 该后端未提供实例化高级 shading 内建着色器
+
+    EnsureResources(device);
+    EnsureShadedResources(device);
+    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
+        !per_point_lights_ubo_ || !per_terrain_ubo_) return;
+
+    // 每实例 model 矩阵写入内部实例 SSBO（世界空间，0 基索引）。共享的是「顶点模板」，实例矩阵仍逐次提交。
+    const size_t inst_bytes = instance_models.size() * sizeof(glm::mat4);
+    EnsureInstanceCapacity(device, inst_bytes);
+    if (!instance_ssbo_) return;
+    device.UpdateGpuBuffer(instance_ssbo_, 0, inst_bytes, instance_models.data());
+
+    // 共享模板 VB/IB 由 BuildShadedLocalVertexBuffer + caller 提供，常驻不重传。
+    // --- UBO 填充（与 DrawInstancedShaded 同源）---
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    FwdPerSceneUBO scene{};
+    const glm::vec3 to_light = glm::normalize(-light.direction);
+    scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
+    scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
+    const auto& grs = device.GetGlobalRenderState();
+    scene.light_params = glm::vec4(light.intensity,
+                                   material.shadow_strength,
+                                   material.receive_shadow ? 1.0f : 0.0f, 0.0f);
+    scene.cascade_splits = glm::vec4(grs.cascade_splits[0], grs.cascade_splits[1],
+                                     grs.cascade_splits[2], 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        scene.light_space_matrices[i] = grs.light_space_matrix[i];
+        scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
+    }
+    device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
+
+    FwdShadedMaterialUBO mat{};
+    mat.albedo = glm::vec4(material.albedo, material.metallic);
+    mat.roughness_ao = glm::vec4(material.roughness, material.ao,
+                                 material.normal_strength, material.alpha_cutoff);
+    mat.emissive = glm::vec4(material.emissive, material.alpha_test ? 1.0f : 0.0f);
+    mat.flags = glm::vec4(material.normal_tex ? 1.0f : 0.0f,
+                          material.metallic_roughness_tex ? 1.0f : 0.0f,
+                          material.emissive_tex ? 1.0f : 0.0f,
+                          material.occlusion_tex ? 1.0f : 0.0f);
+    mat.mode_params = glm::vec4(static_cast<float>(material.shading_mode),
+                                material.double_sided ? 1.0f : 0.0f,
+                                material.anisotropy, material.pom_height_scale);
+    mat.sss = glm::vec4(material.sss_tint, material.sss_strength);
+    mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness,
+                              static_cast<float>(material.wboit_mode), 0.0f);
+    mat.toon_shadow = glm::vec4(material.toon_shadow_color, material.toon_shadow_threshold);
+    mat.toon_params = glm::vec4(material.toon_shadow_softness, material.toon_specular_size,
+                                material.toon_specular_strength, material.toon_rim_strength);
+    mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
+                               material.watercolor_color_bleed, material.watercolor_pigment_density);
+    device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
+
+    PointLightsUBO plights{};
+    const int pl_count = static_cast<int>(
+        (std::min)(point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
+    plights.u_point_light_count = pl_count;
+    for (int i = 0; i < pl_count; ++i) {
+        const ShadedPointLight& pl = point_lights[i];
+        plights.u_point_lights[i].color = pl.color;
+        plights.u_point_lights[i].intensity = pl.intensity;
+        plights.u_point_lights[i].position = pl.position;
+        plights.u_point_lights[i].radius = pl.radius;
+        plights.u_point_lights[i].cast_shadow = pl.cast_shadow ? 1 : 0;
+        plights.u_point_lights[i].shadow_index = pl.shadow_index;
+    }
+    device.UpdateGpuBuffer(per_point_lights_ubo_, 0, sizeof(plights), &plights);
+
+    TerrainParamsUBO terrain{};
+    terrain.u_splat_enabled = material.splat_enabled ? 1.0f : 0.0f;
+    terrain.u_snow_coverage = material.snow_coverage;
+    terrain.u_snow_normal_threshold = material.snow_normal_threshold;
+    terrain.u_snow_edge_sharpness = material.snow_edge_sharpness;
+    terrain.u_splat_tiling = material.splat_tiling;
+    terrain.u_snow_params = glm::vec4(material.snow_albedo, material.snow_roughness);
+    device.UpdateGpuBuffer(per_terrain_ubo_, 0, sizeof(terrain), &terrain);
+
+    LightProbeDataUBO probe{};
+    for (int i = 0; i < 9; ++i) probe.sh_coefficients[i] = gi.sh_coefficients[i];
+    probe.probe_params = glm::vec4(gi.sh_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_light_probe_ubo_, 0, sizeof(probe), &probe);
+
+    const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas != 0;
+    FwdDDGIParamsUBO ddgi{};
+    ddgi.origin = glm::vec4(gi.ddgi_grid_origin, ddgi_on ? 1.0f : 0.0f);
+    ddgi.spacing = glm::vec4(gi.ddgi_grid_spacing, gi.ddgi_gi_intensity);
+    ddgi.resolution = glm::ivec4(gi.ddgi_grid_resolution, gi.ddgi_irradiance_texels);
+    ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
+
+    SpotLightsUBO slights{};
+    FillSpotLightsUBO(spot_lights, slights);
+    device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
+
+    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+    };
+
+    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
+    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
+    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    cmd.SetPipelineState(pso);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());
+    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());
+    cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());
+    cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());
+    cmd.BindUniformBuffer(6u, per_ddgi_ubo_.raw());
+    cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
+    cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
+    cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
+    cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
+    cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
+    cmd.BindTexture(5u, tex_or_white(material.splat_weight_map), TextureDim::Tex2D);
+    cmd.BindTexture(6u, tex_or_white(material.splat_layers[0]), TextureDim::Tex2D);
+    cmd.BindTexture(7u, tex_or_white(material.splat_layers[1]), TextureDim::Tex2D);
+    cmd.BindTexture(8u, tex_or_white(material.splat_layers[2]), TextureDim::Tex2D);
+    cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
+    cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
+    cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1
+    // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
+    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
+    // 共享局部空间模板 VB/IB（caller 持有、常驻），按 index_count_override 子段对每实例绘制。
+    cmd.BindVertexBuffer(tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
+    cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
+                             first_index, 0, 0u);
+}
+
 void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
                                      const std::vector<SkinnedMeshVertex>& vertices,
                                      const std::vector<uint16_t>& indices,
