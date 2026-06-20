@@ -8,6 +8,7 @@
 
 #include <entt/entt.hpp>
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/mesh_renderer.h"
 #include "engine/ecs/world.h"
 class AssetManager;
 
@@ -35,9 +36,14 @@ public:
     void Shutdown(entt::registry& registry);
     void SetAssetManager(AssetManager* asset_manager);
 
+    /// 注入 RhiDevice（由所属模块初始化时调用）。spine 2D 渲染经 DrawUnlit2D 通用原语路径需要。
+    void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
+
 private:
     void CleanupComponent(SpineRendererComponent& comp);
     AssetManager* asset_manager_ = nullptr;
+    RhiDevice* rhi_device_ = nullptr;
+    dse::render::MeshRenderer mesh_renderer_;
 };
 
 } // namespace gameplay2d

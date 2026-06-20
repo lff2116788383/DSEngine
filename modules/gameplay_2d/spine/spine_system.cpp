@@ -236,6 +236,10 @@ void SpineSystem::CleanupComponent(SpineRendererComponent& comp) {
 }
 
 void SpineSystem::Shutdown(entt::registry& registry) {
+    // 释放 MeshRenderer GPU 资源（须在 rhi_device_ 仍有效时调用）。
+    if (rhi_device_) {
+        mesh_renderer_.Shutdown(*rhi_device_);
+    }
     auto view = registry.view<SpineRendererComponent>();
     for (auto entity : view) {
         auto& comp = view.get<SpineRendererComponent>(entity);
@@ -293,8 +297,19 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
 }
 
 void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+    if (!rhi_device_) return;  // 未注入设备则无法走通用原语路径
+
     auto view = world.registry().view<TransformComponent, SpineRendererComponent>();
-    std::vector<MeshDrawItem> batch_items;
+
+    // spine 项均为 lighting_enabled=false 的 2D 无光照三角网格：迁出旧 DrawMeshBatch
+    // （pbr.frag 无光照分支 = texColor*vColor），改用 MeshRenderer::DrawUnlit2D（Sprite2D = texColor*vColor），
+    // 语义一致。顶点 computeWorldVertices 为骨架空间，按 entity transform.local_to_world 在 CPU 侧
+    // 预变换到世界空间（旧路径由 VS 施 model）。按绘制顺序逐 slot 立即绘制，保持 alpha 合成次序。
+    const glm::mat4 vp_view = cmd_buffer.GetViewMatrix();
+    const glm::mat4 vp_proj = cmd_buffer.GetProjectionMatrix();
+
+    std::vector<dse::render::Unlit2DVertex> verts;
+    std::vector<uint16_t> indices;
 
     for (auto entity : view) {
         auto [transform, comp] = view.get<TransformComponent, SpineRendererComponent>(entity);
@@ -304,6 +319,7 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {
         }
 
         auto* skeleton = runtime->skeleton.get();
+        const glm::mat4& model = transform.local_to_world;
 
         for (int i = 0; i < skeleton->getSlots().size(); ++i) {
             Slot* slot = skeleton->getDrawOrder()[i];
@@ -312,65 +328,61 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {
                 continue;
             }
 
-            MeshDrawItem item;
-            item.model = transform.local_to_world;
-            item.sorting_layer = comp.sorting_layer;
-            item.order_in_layer = comp.order_in_layer;
-            item.blend_mode = 0;
+            unsigned int texture_handle = 0;
+            verts.clear();
+            indices.clear();
 
             if (attachment->getRTTI().isExactly(RegionAttachment::rtti)) {
                 auto* region = static_cast<RegionAttachment*>(attachment);
                 auto* page = static_cast<AtlasPage*>(static_cast<AtlasRegion*>(region->getRegion())->page);
                 if (page) {
-                    item.texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
+                    texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
                 }
-
-                item.vertices.resize(4);
-                item.indices = {0, 1, 2, 2, 3, 0};
 
                 float vertices[8];
                 region->computeWorldVertices(*slot, vertices, 0, 2);
+                verts.resize(4);
                 for (int v = 0; v < 4; ++v) {
-                    item.vertices[v].pos = glm::vec3(vertices[v * 2], vertices[v * 2 + 1], 0.0f);
-                    item.vertices[v].color = glm::vec4(
+                    verts[v].position = glm::vec3(model * glm::vec4(vertices[v * 2], vertices[v * 2 + 1], 0.0f, 1.0f));
+                    verts[v].color = glm::vec4(
                         skeleton->getColor().r * slot->getColor().r * region->getColor().r,
                         skeleton->getColor().g * slot->getColor().g * region->getColor().g,
                         skeleton->getColor().b * slot->getColor().b * region->getColor().b,
                         skeleton->getColor().a * slot->getColor().a * region->getColor().a);
-                    item.vertices[v].uv = glm::vec2(region->getUVs()[v * 2], region->getUVs()[v * 2 + 1]);
+                    verts[v].uv = glm::vec2(region->getUVs()[v * 2], region->getUVs()[v * 2 + 1]);
                 }
-                batch_items.push_back(std::move(item));
+                indices = {0, 1, 2, 2, 3, 0};
             } else if (attachment->getRTTI().isExactly(MeshAttachment::rtti)) {
                 auto* mesh = static_cast<MeshAttachment*>(attachment);
                 auto* page = static_cast<AtlasPage*>(static_cast<AtlasRegion*>(mesh->getRegion())->page);
                 if (page) {
-                    item.texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
+                    texture_handle = static_cast<unsigned int>(reinterpret_cast<uintptr_t>(page->texture));
                 }
 
                 const size_t num_vertices = mesh->getWorldVerticesLength() / 2;
-                item.vertices.resize(num_vertices);
                 std::vector<float> vertices(mesh->getWorldVerticesLength());
                 mesh->computeWorldVertices(*slot, 0, mesh->getWorldVerticesLength(), vertices.data(), 0, 2);
-
+                verts.resize(num_vertices);
                 for (size_t v = 0; v < num_vertices; ++v) {
-                    item.vertices[v].pos = glm::vec3(vertices[v * 2], vertices[v * 2 + 1], 0.0f);
-                    item.vertices[v].color = glm::vec4(
+                    verts[v].position = glm::vec3(model * glm::vec4(vertices[v * 2], vertices[v * 2 + 1], 0.0f, 1.0f));
+                    verts[v].color = glm::vec4(
                         skeleton->getColor().r * slot->getColor().r * mesh->getColor().r,
                         skeleton->getColor().g * slot->getColor().g * mesh->getColor().g,
                         skeleton->getColor().b * slot->getColor().b * mesh->getColor().b,
                         skeleton->getColor().a * slot->getColor().a * mesh->getColor().a);
-                    item.vertices[v].uv = glm::vec2(mesh->getUVs()[v * 2], mesh->getUVs()[v * 2 + 1]);
+                    verts[v].uv = glm::vec2(mesh->getUVs()[v * 2], mesh->getUVs()[v * 2 + 1]);
                 }
 
-                auto& indices = mesh->getTriangles();
-                item.indices.assign(indices.buffer(), indices.buffer() + indices.size());
-                batch_items.push_back(std::move(item));
+                auto& tris = mesh->getTriangles();
+                indices.assign(tris.buffer(), tris.buffer() + tris.size());
+            } else {
+                continue;
             }
-        }
-    }
 
-    if (!batch_items.empty()) {
-        cmd_buffer.DrawMeshBatch(batch_items);
+            // blend_mode=0（alpha），与旧路径 spine 硬编码一致。
+            mesh_renderer_.DrawUnlit2D(cmd_buffer, *rhi_device_, verts, indices,
+                                       vp_view, vp_proj, texture_handle, 0u);
+        }
     }
 }
 

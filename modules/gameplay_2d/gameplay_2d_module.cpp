@@ -22,6 +22,8 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     particle_system_.SetRhiDevice(rhi_device_);
 #ifdef DSE_ENABLE_SPINE
     spine_system_.SetAssetManager(asset_manager_);
+    // 注入 RhiDevice：spine 2D 渲染经 MeshRenderer::DrawUnlit2D 通用原语路径。
+    spine_system_.SetRhiDevice(rhi_device_);
 #endif
     audio_system_.Initialize(asset_manager_);
     return true;
