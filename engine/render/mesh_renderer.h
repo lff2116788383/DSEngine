@@ -43,6 +43,15 @@ struct MeshVertex {
     glm::vec3 tangent{1.0f, 0.0f, 0.0f};
 };
 
+/// 无光照 2D 顶点（B2b-6：spine 2D 蒙皮迁移）。位置须为**世界空间**（spine runtime 已用
+/// computeWorldVertices 做完 2D 蒙皮），内存布局须与 BuiltinProgram::Sprite2D 输入一致：
+/// pos\@0(vec3) / color\@1(vec4) / uv\@2(vec2)，紧凑 36 字节。
+struct Unlit2DVertex {
+    glm::vec3 position{0.0f};  ///< 世界空间位置（pos.z 通常为 0）
+    glm::vec4 color{1.0f};     ///< 顶点色（与纹理相乘）
+    glm::vec2 uv{0.0f};        ///< 纹理坐标
+};
+
 /// 蒙皮 forward PBR 顶点（局部/绑定空间输入；VS 按 bone index/weight 混合后施 vp）。
 /// 内存布局须与 forward_pbr_skinned.vert 输入一致：
 /// pos\@0 / color\@1 / uv\@2 / normal\@3 / tangent\@4 / boneIndices\@5 / boneWeights\@6。
@@ -485,6 +494,25 @@ public:
                                      const ShadedGI& gi = {},
                                      const std::vector<ShadedSpotLight>& spot_lights = {});
 
+    /// 记录一次无光照 2D 三角网格绘制（B2b-6：spine 2D 蒙皮迁移，取代 DrawMeshBatch 对 spine 项的处理）。
+    /// 顶点为**世界空间**（spine runtime computeWorldVertices 已做完 2D 骨骼蒙皮），复用
+    /// BuiltinProgram::Sprite2D（VS 仅施 vp，frag = texture * vertexColor）——与 DrawMeshBatch 对
+    /// lighting_enabled=false 的 2D 项语义一致：无光照、纹理 × 顶点色、关深度测试/写入/背面剔除。
+    /// 支持**任意三角拓扑**（spine MeshAttachment 非仅 quad，故不能复用 quad-only 的 SpriteBatchRenderer）。
+    /// vertices/indices 为空时直接返回（不绘制）。
+    /// @param vertices   世界空间 2D 顶点（位置 + 顶点色 + uv）
+    /// @param indices    16 位三角索引（任意拓扑）
+    /// @param view/proj  相机视图 / 投影矩阵（vp = proj * view 下发到 Sprite2D PerFrame；proj 须含 GetProjectionCorrection）
+    /// @param texture    纹理句柄（0 → 回退内建 1x1 白纹理，输出纯顶点色）
+    /// @param blend_mode 0=alpha（默认）/ 1=additive / 2=multiply，与 SpriteBatchRenderer 一致
+    void DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
+                     const std::vector<Unlit2DVertex>& vertices,
+                     const std::vector<uint16_t>& indices,
+                     const glm::mat4& view,
+                     const glm::mat4& proj,
+                     unsigned int texture,
+                     unsigned int blend_mode = 0);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 
@@ -497,11 +525,15 @@ private:
     void EnsureMorphCapacity(RhiDevice& device, size_t morph_bytes);
     void EnsureIndirectBuffer(RhiDevice& device);
     void EnsureShadedResources(RhiDevice& device);
+    void EnsureUnlit2DResources(RhiDevice& device);  ///< 懒建无光照 2D 的 alpha/additive/multiply 混合 PSO（B2b-6）
 
     unsigned int pso_ = 0;
     unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
     unsigned int pso_wboit_accum_ = 0;   ///< WBOIT accumulation：加性混合 ONE/ONE，深度测试不写（B2c-4）
     unsigned int pso_wboit_reveal_ = 0;  ///< WBOIT revealage：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度测试不写（B2c-4）
+    unsigned int pso_unlit2d_alpha_ = 0;     ///< 无光照 2D alpha 混合 PSO（深度测试/写入/剔除全关，B2b-6）
+    unsigned int pso_unlit2d_additive_ = 0;  ///< 无光照 2D additive 混合 PSO（B2b-6）
+    unsigned int pso_unlit2d_multiply_ = 0;  ///< 无光照 2D multiply 混合 PSO（B2b-6）
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
     BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）

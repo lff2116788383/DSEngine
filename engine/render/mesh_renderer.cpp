@@ -33,6 +33,15 @@ struct GpuMeshVertex {
 };
 static_assert(sizeof(GpuMeshVertex) == 60, "GpuMeshVertex must be tightly packed (3+4+2+3+3 floats)");
 
+// 与 BuiltinProgram::Sprite2D 输入布局一致（紧凑 36 字节）：
+// pos\@0(vec3,0) + color\@1(vec4,12) + uv\@2(vec2,28)。无光照 2D（B2b-6）专用。
+struct GpuUnlit2DVertex {
+    float px, py, pz;       // world-space position
+    float r, g, b, a;       // vertex color
+    float u, v;             // texcoord
+};
+static_assert(sizeof(GpuUnlit2DVertex) == 36, "GpuUnlit2DVertex must be tightly packed (3+4+2 floats)");
+
 // 与 forward_pbr_skinned.vert 输入布局一致（紧凑打包，92 字节）：
 // pos\@0(0) + color\@1(12) + uv\@2(28) + normal\@3(36) + tangent\@4(48) +
 // boneIndices\@5(60) + boneWeights\@6(76)。
@@ -163,6 +172,47 @@ void MeshRenderer::EnsureResources(RhiDevice& device) {
     per_material_ubo_ = device.CreateGpuBuffer(m_desc, nullptr);
 
     init_ = true;
+}
+
+void MeshRenderer::EnsureUnlit2DResources(RhiDevice& device) {
+    // 无光照 2D 的三个混合 PSO（与 SpriteBatchRenderer::PsoForBlend 一致）：关深度测试/写入/剔除。
+    // alpha 默认：color = SrcAlpha/OneMinusSrcAlpha，alpha 通道 One/OneMinusSrcAlpha（分离）。
+    if (pso_unlit2d_alpha_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::SrcAlpha;
+        desc.blend_dst = BlendFactor::OneMinusSrcAlpha;
+        desc.alpha_blend_src = BlendFactor::One;
+        desc.alpha_blend_dst = BlendFactor::OneMinusSrcAlpha;
+        desc.depth_test_enabled = false;
+        desc.depth_write_enabled = false;
+        desc.culling_enabled = false;
+        pso_unlit2d_alpha_ = device.CreatePipelineState(desc);
+    }
+    if (pso_unlit2d_additive_ == 0) {  // additive：SrcAlpha/One
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::SrcAlpha;
+        desc.blend_dst = BlendFactor::One;
+        desc.alpha_blend_src = BlendFactor::SrcAlpha;
+        desc.alpha_blend_dst = BlendFactor::One;
+        desc.depth_test_enabled = false;
+        desc.depth_write_enabled = false;
+        desc.culling_enabled = false;
+        pso_unlit2d_additive_ = device.CreatePipelineState(desc);
+    }
+    if (pso_unlit2d_multiply_ == 0) {  // multiply：DstColor/Zero
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::DstColor;
+        desc.blend_dst = BlendFactor::Zero;
+        desc.alpha_blend_src = BlendFactor::DstColor;
+        desc.alpha_blend_dst = BlendFactor::Zero;
+        desc.depth_test_enabled = false;
+        desc.depth_write_enabled = false;
+        desc.culling_enabled = false;
+        pso_unlit2d_multiply_ = device.CreatePipelineState(desc);
+    }
 }
 
 void MeshRenderer::EnsureVertexCapacity(RhiDevice& device, size_t vertex_bytes) {
@@ -1903,6 +1953,65 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 间接绘制：绘制参数取自 indirect buffer 偏移 0 处的 DrawElementsIndirectCommand。
     cmd.DrawIndexedIndirect(indirect_buffer_.raw(), 0u);
+}
+
+void MeshRenderer::DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
+                              const std::vector<Unlit2DVertex>& vertices,
+                              const std::vector<uint16_t>& indices,
+                              const glm::mat4& view,
+                              const glm::mat4& proj,
+                              unsigned int texture,
+                              unsigned int blend_mode) {
+    if (vertices.empty() || indices.empty()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::Sprite2D);
+    if (program == 0) return;  // 该后端未提供 sprite2d 内建着色器
+
+    EnsureResources(device);          // 复用 per_frame_ubo_（176B，vp 在首）/ vbo_ / ibo_ / white_tex_
+    EnsureUnlit2DResources(device);   // 懒建无光照 2D 混合 PSO
+    if (!per_frame_ubo_) return;
+
+    // 顶点已是世界空间（spine runtime computeWorldVertices 已做 2D 蒙皮）；按 Sprite2D 布局打包。
+    std::vector<GpuUnlit2DVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const Unlit2DVertex& v = vertices[i];
+        GpuUnlit2DVertex& g = gpu_verts[i];
+        g.px = v.position.x; g.py = v.position.y; g.pz = v.position.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+    }
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuUnlit2DVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // Sprite2D PerFrame 块（FwdPerFrameUBO 与 SpritePerFrameUBO 同布局，着色器仅用 vp）。
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+    };
+
+    unsigned int pso = pso_unlit2d_alpha_;
+    if (blend_mode == 1) pso = pso_unlit2d_additive_;
+    else if (blend_mode == 2) pso = pso_unlit2d_multiply_;
+
+    cmd.SetPipelineState(pso);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());                       // PerFrame @ set0.b0（仅 vp）
+    cmd.BindTexture(0u, texture ? texture : white_tex_, TextureDim::Tex2D); // u_texture @ slot 0
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
 
 void MeshRenderer::Shutdown(RhiDevice& device) {
