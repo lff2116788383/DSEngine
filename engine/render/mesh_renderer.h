@@ -25,6 +25,7 @@
 #include <glm/glm.hpp>
 
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/rhi_types.h"  // IndexType（ExternalShadedMesh 用）
 
 namespace dse {
 namespace render {
@@ -195,6 +196,18 @@ struct MeshMorphTarget {
     std::vector<glm::vec3> position_deltas;  ///< 顶点位置增量（局部空间），size 须 == 基网格顶点数
     std::vector<glm::vec3> normal_deltas;    ///< 顶点法线增量（局部空间）；空 = 该 target 不形变法线
     float weight = 0.0f;                     ///< 该 target 当前权重
+};
+
+/// 外部常驻顶点/索引缓冲网格（Final-Feat-6）。顶点须为 ForwardShaded 兼容的 GpuMeshVertex
+/// **世界空间**布局（用 MeshRenderer::BuildShadedWorldVertexBuffer 构建），索引为 16/32 位。
+/// 缓冲由调用方持有/释放（device.DeleteGpuBuffer），不随 MeshRenderer 生命周期回收。
+/// 多个 tile 可共享同一对 VB/IB，按 [first_index, first_index+index_count) 索引子段分别绘制
+///（index_count_override）——这正是 tiled terrain 的「一份共享地形缓冲、每 tile 画各自索引段、
+/// 零每帧顶点重传」用法。
+struct ExternalShadedMesh {
+    BufferHandle vertex_buffer;                 ///< GpuMeshVertex 世界空间顶点（调用方持有）
+    BufferHandle index_buffer;                  ///< 索引缓冲（调用方持有）
+    IndexType index_type = IndexType::UInt16;   ///< 索引元素类型（16/32 位）
 };
 
 /**
@@ -407,6 +420,37 @@ public:
                          const std::vector<ShadedPointLight>& point_lights = {},
                          const ShadedGI& gi = {},
                          const std::vector<ShadedSpotLight>& spot_lights = {});
+
+    /// 构建一份 ForwardShaded 兼容的常驻顶点缓冲（GpuMeshVertex 世界空间布局，Final-Feat-6）。
+    /// 把局部空间 vertices 按 model 预变换到世界空间（位置 model、法线用法线矩阵、切线 model 线性部分，
+    /// 与 DrawShaded 的 CPU 预变换一致）后建一份**静态** GPU 顶点缓冲（is_dynamic=false）。
+    /// 返回的句柄由调用方持有并负责释放（device.DeleteGpuBuffer）；供 DrawShadedExternal 复用。
+    /// vertices 为空时返回空句柄。
+    static BufferHandle BuildShadedWorldVertexBuffer(RhiDevice& device,
+                                                     const std::vector<MeshVertex>& vertices,
+                                                     const glm::mat4& model);
+
+    /// 记录一次「外部常驻 VAO/EBO + index_count_override」高级 shading 绘制（Final-Feat-6）。
+    /// 复用 BuiltinProgram::ForwardShaded（顶点须世界空间，VS 仅施 vp），但不在内部重传顶点/索引：
+    /// 绑定调用方持有的 mesh.vertex_buffer / mesh.index_buffer，按 [first_index, first_index+index_count)
+    /// 索引子段 DrawIndexed —— 适配 tiled terrain：一份共享地形 VB/IB，每 tile 一次本调用画各自索引段。
+    /// material/light/point_lights/gi/spot_lights 语义与 DrawShaded 完全一致（含 splat/雪/WBOIT/GI/CSM）。
+    /// index_count==0 或 mesh 句柄无效时直接返回（不绘制）。
+    /// @param mesh         外部常驻 VB/IB + 索引类型
+    /// @param index_count  本次绘制的索引数（index_count_override；从 first_index 起）
+    /// @param first_index  起始索引偏移（tile 在共享 IB 中的子段起点）
+    void DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
+                            const ExternalShadedMesh& mesh,
+                            uint32_t index_count,
+                            uint32_t first_index,
+                            const glm::mat4& view,
+                            const glm::mat4& proj,
+                            const glm::vec3& camera_pos,
+                            const ShadedMaterial& material,
+                            const DirectionalLight& light,
+                            const std::vector<ShadedPointLight>& point_lights = {},
+                            const ShadedGI& gi = {},
+                            const std::vector<ShadedSpotLight>& spot_lights = {});
 
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
