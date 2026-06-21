@@ -19,6 +19,7 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     // a second PxFoundation in its own module-local locator.
     (void)world;
 #endif
+    rhi_device_ = rhi_device;
     terrain_system_.Init(rhi_device);
     grass_system_.Init(rhi_device);
     tree_system_.Init(rhi_device);
@@ -205,14 +206,14 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     tree_system_.Render(callback_world, cmd, ctx.camera_offset, /*depth_only=*/false);
 
     auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
-    std::vector<Particle3DDrawItem> p_items;
+    std::vector<dse::render::ParticleDrawItem> p_items;
     for (auto entity : p_view) {
         const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
         if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo != 0) {
-            Particle3DDrawItem item;
+            dse::render::ParticleDrawItem item;
             item.texture_handle = ps.texture_handle;
             item.particle_count = ps.active_particle_count;
-            item.instance_vbo = ps.instance_vbo;
+            item.instance_buffer = ps.instance_vbo;
             p_items.push_back(item);
         }
     }
@@ -221,10 +222,10 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     for (auto entity : f_view) {
         const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
         if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo != 0) {
-            Particle3DDrawItem item;
+            dse::render::ParticleDrawItem item;
             item.texture_handle = 0;
             item.particle_count = static_cast<int>(fluid.active_count);
-            item.instance_vbo = fluid.instance_vbo;
+            item.instance_buffer = fluid.instance_vbo;
             p_items.push_back(item);
         }
     }
@@ -233,8 +234,9 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     const glm::mat4 projection = ctx.projection ? *ctx.projection : glm::mat4(1.0f);
     // Camera-Relative: 粒子/毛发数据仍在世界空间，需要用包含 camera_offset 平移的 view
     const glm::mat4 world_to_view = view_at_origin * glm::translate(glm::mat4(1.0f), -ctx.camera_offset);
-    if (!p_items.empty()) {
-        cmd.DrawParticles3D(p_items, world_to_view, projection);
+    if (!p_items.empty() && rhi_device_ != nullptr) {
+        // B3：高层 ParticleRenderer 走通用绘制原语 + BuiltinProgram::Particle3D（取代 DrawParticles3D ABI）。
+        particle_renderer_.DrawParticles(cmd, *rhi_device_, p_items, world_to_view, projection);
     }
     hair_system_.Render(callback_world, cmd, world_to_view, projection);
 }
@@ -255,6 +257,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     weather_system_.Shutdown(world);
     snow_cover_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
+    if (rhi_device_ != nullptr) particle_renderer_.Shutdown(*rhi_device_);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);

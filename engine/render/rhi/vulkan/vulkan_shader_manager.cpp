@@ -21,6 +21,7 @@
 #include "embed/skybox_frag.gen.h"
 #include "embed/particle_vert.gen.h"
 #include "embed/particle_frag.gen.h"
+#include "embed/particle_instanced_vert.gen.h"
 #include "embed/sprite_vert.gen.h"
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
@@ -632,18 +633,6 @@ void VulkanShaderManager::InitSkyboxShader() {
     }
 }
 
-void VulkanShaderManager::InitParticleShader() {
-    using namespace dse::render::generated_shaders;
-    particle_shader_handle_ = CreateProgramFromSpirv(
-        kparticle_vert_spv, kparticle_vert_spv_size,
-        kparticle_frag_spv, kparticle_frag_spv_size);
-    if (particle_shader_handle_ == 0) {
-        DEBUG_LOG_ERROR("Vulkan particle shader creation failed (pre-compiled SPIR-V)");
-    } else {
-        DEBUG_LOG_INFO("Vulkan particle shader created: handle={}", particle_shader_handle_);
-    }
-}
-
 void VulkanShaderManager::InitSpriteShader() {
     using namespace dse::render::generated_shaders;
     sprite_shader_handle_ = CreateProgramFromSpirv(
@@ -776,6 +765,21 @@ void VulkanShaderManager::InitForwardPbrDepthShader() {
         DEBUG_LOG_ERROR("Vulkan forward PBR depth shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan forward PBR depth shader created: handle={}", forward_pbr_depth_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitParticle3DShader() {
+    if (particle3d_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // SSBO 驱动的 3D 粒子广告牌：particle_instanced.vert（每实例 pos/size/color SSBO\@set7.b0）+ particle.frag（u_texture\@set2.b1）；
+    // descriptor set layout 由 SPIR-V 反射驱动（PerFrame UBO + 实例 SSBO + 纹理）。
+    particle3d_shader_handle_ = CreateProgramFromSpirv(
+        kparticle_instanced_vert_spv, kparticle_instanced_vert_spv_size,
+        kparticle_frag_spv, kparticle_frag_spv_size);
+    if (particle3d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan particle3d shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan particle3d shader created: handle={}", particle3d_shader_handle_);
     }
 }
 

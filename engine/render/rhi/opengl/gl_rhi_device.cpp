@@ -263,11 +263,6 @@ void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
     device_->RealSubmitDrawPostProcess(request);
 }
 
-void OpenGLCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || items.empty()) return;
-    device_->RealSubmitDrawParticles3D(items, view, projection);
-}
-
 void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || items.empty()) return;
     device_->RealSubmitDrawHairStrands(items, view, projection);
@@ -907,10 +902,6 @@ void OpenGLRhiDevice::RealSubmitDrawPostProcess(const PostProcessRequest& reques
     draw_executor_.DrawPostProcess(request, shader_mgr_);
 }
 
-void OpenGLRhiDevice::RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    draw_executor_.DrawParticles3D(items, view, projection, shader_mgr_);
-}
-
 void OpenGLRhiDevice::RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawHairStrands(items, view, projection, shader_mgr_);
 }
@@ -1027,6 +1018,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardInstancedDepth:
             if (shader_mgr_.forward_instanced_depth_shader_handle() == 0) shader_mgr_.InitForwardInstancedDepthShader();
             return shader_mgr_.forward_instanced_depth_shader_handle();
+        case BuiltinProgram::Particle3D:
+            if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
+            return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();

@@ -111,9 +111,6 @@ public:
     /// 初始化天空盒着色器
     void InitSkyboxShader();
 
-    /// 初始化粒子着色器
-    void InitParticleShader();
-
     /// 初始化 2D 精灵着色器
     void InitSpriteShader();
 
@@ -146,6 +143,9 @@ public:
     unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
     void InitForwardInstancedDepthShader();
     unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
+    /// 初始化 3D 粒子广告牌着色器（B3：particle_instanced.vert + particle.frag）
+    void InitParticle3DShader();
+    unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
 
     /// 初始化高级 shading forward 着色器（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@2 + 5 纹理槽）
     void InitForwardShadedShader();
@@ -267,6 +267,7 @@ private:
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_instanced_depth_shader_handle_ = 0;
+    unsigned int particle3d_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;

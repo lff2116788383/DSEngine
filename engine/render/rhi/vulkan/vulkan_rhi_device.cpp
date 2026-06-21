@@ -160,13 +160,6 @@ void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
         vk_command_buffer_, source_rt, device_->resource_mgr());
 }
 
-void VulkanCommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->draw_executor().DrawParticles3D(
-        vk_command_buffer_, items, view, projection,
-        device_->state_mgr(), device_->shader_mgr());
-}
-
 void VulkanCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
     device_->draw_executor().DrawHairStrands(
@@ -261,7 +254,6 @@ void VulkanRhiDevice::EnsureInitialized() {
     // 编译内置着色器
     shader_mgr_.InitBuiltinPBRShader();
     shader_mgr_.InitSkyboxShader();
-    shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitTextSdfShader();
     shader_mgr_.InitShadowShader();
@@ -301,7 +293,6 @@ bool VulkanRhiDevice::InitVulkan(void* window_handle, int width, int height, boo
     shader_mgr_.InitBuiltinPBRShader();
     KeepAlive();
     shader_mgr_.InitSkyboxShader();
-    shader_mgr_.InitParticleShader();
     shader_mgr_.InitSpriteShader();
     shader_mgr_.InitTextSdfShader();
     shader_mgr_.InitShadowShader();
@@ -789,6 +780,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardInstancedDepth:
             if (shader_mgr_.forward_instanced_depth_shader_handle() == 0) shader_mgr_.InitForwardInstancedDepthShader();
             return shader_mgr_.forward_instanced_depth_shader_handle();
+        case BuiltinProgram::Particle3D:
+            if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
+            return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();

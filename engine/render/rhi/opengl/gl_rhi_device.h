@@ -173,7 +173,6 @@ public:
     void RealClearColor(const glm::vec4& color);
     void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawPostProcess(const PostProcessRequest& request);
-    void RealSubmitDrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
     void RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
 
     // --- 通用绘制原语 (A1) ---

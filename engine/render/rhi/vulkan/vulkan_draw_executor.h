@@ -100,12 +100,6 @@ public:
                           VulkanPipelineStateManager& pipeline_mgr,
                           VulkanShaderManager& shader_mgr);
 
-    void DrawParticles3D(VkCommandBuffer cmd_buf,
-                          const std::vector<Particle3DDrawItem>& items,
-                          const glm::mat4& view,
-                          const glm::mat4& projection,
-                          VulkanPipelineStateManager& pipeline_mgr,
-                          VulkanShaderManager& shader_mgr);
 
     void DrawHairStrands(VkCommandBuffer cmd_buf,
                           const std::vector<HairDrawItem>& items,

@@ -109,12 +109,6 @@ struct ShadowShaderLocations {
     int foliage = -1;
 };
 
-/// 粒子着色器 uniform location 缓存
-struct ParticleShaderLocations {
-    unsigned int per_frame_block_index = 0;  ///< PerFrame UBO
-    int texture = -1;
-};
-
 /**
  * @class GLShaderManager
  * @brief OpenGL 着色器管理器
@@ -165,11 +159,6 @@ public:
     void InitSkyboxShader();
     void set_skybox_shader_handle(unsigned int h) { skybox_shader_handle_ = h; }
 
-    // --- 粒子着色器 ---
-    const ParticleShaderLocations& particle_locations() const { return particle_locations_; }
-    void InitParticleShader();
-    void set_particle_shader_handle(unsigned int h) { particle_shader_handle_ = h; }
-
     // --- 精灵着色器 ---
     void InitSpriteShader();
 
@@ -209,6 +198,11 @@ public:
     // PerFrame\@0 UBO + 每实例 model SSBO\@binding0 + 植被风；只写深度、不输出颜色，配 has_color=false RT。
     void InitForwardInstancedDepthShader();
     unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
+
+    // --- 3D 粒子广告牌着色器（B3）：particle_instanced.vert + particle.frag。
+    // PerFrame\@0 UBO + 每实例 pos/size/color SSBO\@binding0 + u_texture\@flat unit 0。
+    void InitParticle3DShader();
+    unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
 
     // --- 高级 shading forward 着色器（B2c-1）：forward_pbr.vert + forward_shaded.frag。
     // PerFrame\@0 / PerScene\@1 / PerMaterial(扩展)\@2 UBO + 5 纹理槽（flat unit 0..4）。
@@ -280,7 +274,6 @@ private:
     PBRShaderLocations pbr_locations_;
     PBRTextureSlots pbr_texture_slots_;
     SkyboxShaderLocations skybox_locations_;
-    ParticleShaderLocations particle_locations_;
 
     /// 后处理着色器缓存：effect_name → shader_program_handle
     std::unordered_map<std::string, unsigned int> pp_shaders_;
@@ -306,6 +299,7 @@ private:
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_instanced_depth_shader_handle_ = 0;
+    unsigned int particle3d_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;

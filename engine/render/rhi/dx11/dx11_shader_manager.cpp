@@ -26,6 +26,7 @@
 #include "engine/render/shaders/generated/embed/skybox_frag.gen.h"
 #include "engine/render/shaders/generated/embed/particle_vert.gen.h"
 #include "engine/render/shaders/generated/embed/particle_frag.gen.h"
+#include "engine/render/shaders/generated/embed/particle_instanced_vert.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_frag.gen.h"
@@ -80,6 +81,7 @@
 #include "engine/render/shaders/generated/embed/forward_shaded_skinned_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_instanced_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_shaded_morph_vert_reflect.gen.h"
+#include "engine/render/shaders/generated/embed/particle_instanced_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/sprite_fx_vert_reflect.gen.h"
 #include "engine/render/shaders/generated/embed/skybox_vert_reflect.gen.h"
@@ -166,6 +168,7 @@ void DX11ShaderManager::Shutdown() {
     pbr_shader_handle_ = 0;
     skybox_shader_handle_ = 0;
     particle_shader_handle_ = 0;
+    particle3d_shader_handle_ = 0;
     sprite_shader_handle_ = 0;
     sprite2d_shader_handle_ = 0;
     text_sdf_shader_handle_ = 0;
@@ -456,6 +459,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kforward_shaded_instanced_vert_reflection, fid_layout);
         CreateInputLayoutForShader(forward_instanced_depth_shader_handle_, fid_layout.data(),
                                    static_cast<int>(fid_layout.size()));
+    }
+    pulse();
+
+    // ---- 3D 粒子广告牌着色器 (B3)：particle_instanced.vert（每实例 pos/size/color SSBO\@t0）+ particle.frag ----
+    particle3d_shader_handle_ = CreateProgramFromDXBC(
+        kparticle_instanced_vert_dxbc, kparticle_instanced_vert_dxbc_size,
+        kparticle_frag_dxbc, kparticle_frag_dxbc_size);
+    if (particle3d_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin particle3d shader created (DXBC): {}", particle3d_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> p3d_layout;
+        CreateInputLayoutFromReflection(kparticle_instanced_vert_reflection, p3d_layout);
+        CreateInputLayoutForShader(particle3d_shader_handle_, p3d_layout.data(),
+                                   static_cast<int>(p3d_layout.size()));
     }
     pulse();
 

@@ -80,11 +80,6 @@ public:
     void DrawPostProcess(const dse::render::PostProcessRequest& request,
                            GLShaderManager& shader_mgr);
 
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items,
-                           const glm::mat4& view,
-                           const glm::mat4& projection,
-                           GLShaderManager& shader_mgr);
-
     void DrawHairStrands(const std::vector<HairDrawItem>& items,
                           const glm::mat4& view,
                           const glm::mat4& projection,
@@ -213,10 +208,6 @@ private:
     VertexArrayHandle pp_vao_handle_;
     unsigned int pp_vbo_handle_ = 0;
     unsigned int pp_param_ubo_ = 0;  ///< gen.h PP shader 参数 UBO (binding=2)
-
-    // 3D 粒子四边形
-    VertexArrayHandle particle_quad_vao_handle_;
-    unsigned int particle_quad_vbo_handle_ = 0;
 
     // 毛发 (Hair strands)
     VertexArrayHandle hair_vao_handle_;

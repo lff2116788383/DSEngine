@@ -29,7 +29,6 @@ public:
     // --- 内置着色器句柄访问器 ---
     unsigned int pbr_shader_handle() const { return pbr_shader_handle_; }
     unsigned int skybox_shader_handle() const { return skybox_shader_handle_; }
-    unsigned int particle_shader_handle() const { return particle_shader_handle_; }
     unsigned int sprite_shader_handle() const { return sprite_shader_handle_; }
     unsigned int postprocess_shader_handle() const { return postprocess_shader_handle_; }
     unsigned int shadow_shader_handle() const { return shadow_shader_handle_; }
@@ -85,7 +84,6 @@ protected:
     // --- 内置着色器句柄 ---
     unsigned int pbr_shader_handle_ = 0;
     unsigned int skybox_shader_handle_ = 0;
-    unsigned int particle_shader_handle_ = 0;
     unsigned int sprite_shader_handle_ = 0;
     unsigned int postprocess_shader_handle_ = 0;
     unsigned int shadow_shader_handle_ = 0;

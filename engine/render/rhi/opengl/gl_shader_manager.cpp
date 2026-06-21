@@ -18,6 +18,7 @@
 #include "embed/skybox_frag.gen.h"
 #include "embed/particle_vert.gen.h"
 #include "embed/particle_frag.gen.h"
+#include "embed/particle_instanced_vert.gen.h"
 #include "embed/postprocess_vert.gen.h"
 #include "embed/postprocess_passthrough_frag.gen.h"
 #include "embed/bloom_extract_frag.gen.h"
@@ -97,6 +98,8 @@
 #include "embed/forward_shaded_skinned_vert_reflect.gen.h"
 #include "embed/forward_shaded_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_morph_vert_reflect.gen.h"
+#include "embed/particle_instanced_vert_reflect.gen.h"
+#include "embed/particle_frag_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_frag_reflect.gen.h"
 #include "embed/sprite_fx_vert_reflect.gen.h"
@@ -604,26 +607,6 @@ void GLShaderManager::InitSkyboxShader() {
 }
 
 // ============================================================
-// 绮掑瓙鐫€鑹插櫒
-// ============================================================
-
-void GLShaderManager::InitParticleShader() {
-    if (particle_shader_handle_ != 0) return;
-    using namespace dse::render::generated_shaders;
-    particle_shader_handle_ = CompileProgram(DSE_SL(kparticle_vert), DSE_SL(kparticle_frag));
-    programs_created_ += 1;
-
-    // Particle shader uses PerFrame UBO for vp/view matrices
-    unsigned int pf_idx = glGetUniformBlockIndex(particle_shader_handle_, "PerFrame");
-    if (pf_idx != GL_INVALID_INDEX) {
-        glUniformBlockBinding(particle_shader_handle_, pf_idx,
-                              static_cast<unsigned int>(UBOBindingPoint::PerFrame));
-    }
-    particle_locations_.per_frame_block_index = pf_idx;
-    particle_locations_.texture = glGetUniformLocation(particle_shader_handle_, "u_texture");
-}
-
-// ============================================================
 // GBuffer 鐫€鑹插櫒锛堝欢杩熸覆鏌撳嚑浣曢€氶亾锛?
 // ============================================================
 
@@ -936,6 +919,35 @@ void GLShaderManager::InitForwardInstancedDepthShader() {
     BindUBOsFromReflection(forward_instanced_depth_shader_handle_, kforward_shaded_instanced_vert_reflection);
 }
 
+void GLShaderManager::InitParticle3DShader() {
+    if (particle3d_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: particle3d 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // SSBO 驱动的广告牌 VS（每实例 pos/size/color SSBO\@binding0）+ particle.frag（u_texture\@flat unit 0）。
+    particle3d_shader_handle_ =
+        CompileProgram(DSE_SL(kparticle_instanced_vert), DSE_SL(kparticle_frag));
+    if (particle3d_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: particle3d shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    using namespace dse::render::generated_shaders::reflect;
+    // PerFrame\@0 UBO + 实例 SSBO（layout(binding=0)，BindStorageBuffer(0) 直接命中）。
+    BindUBOsFromReflection(particle3d_shader_handle_, kparticle_instanced_vert_reflection);
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kparticle_frag_reflection, tex_entries);
+        glUseProgram(particle3d_shader_handle_);
+        gl_reflect::BindSamplersOnce(particle3d_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+}
+
 void GLShaderManager::InitSpriteFxSdfShader() {
     if (sprite_fx_sdf_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
@@ -1233,11 +1245,6 @@ void GLShaderManager::Shutdown() {
         glDeleteProgram(skybox_shader_handle_);
         programs_destroyed_ += 1;
         skybox_shader_handle_ = 0;
-    }
-    if (particle_shader_handle_ != 0) {
-        glDeleteProgram(particle_shader_handle_);
-        programs_destroyed_ += 1;
-        particle_shader_handle_ = 0;
     }
     if (gpu_driven_pbr_shader_handle_ != 0) {
         glDeleteProgram(gpu_driven_pbr_shader_handle_);

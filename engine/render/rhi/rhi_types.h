@@ -8,7 +8,7 @@
  * - 管线状态描述 (PipelineStateDesc)
  * - 渲染通道描述 (RenderPassDesc)
  * - 渲染目标回读 (RenderTargetReadback)
- * - 绘制项 (SpriteDrawItem / MeshDrawItem / Particle3DDrawItem)
+ * - 绘制项 (SpriteDrawItem / MeshDrawItem / HairDrawItem)
  * - 顶点格式 (BatchVertex)
  * - 渲染统计 (RenderStats)
  */
@@ -191,6 +191,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardInstancedShaded = 10,  ///< 硬件实例化 + 高级 shading 组合（forward_shaded_instanced.vert + forward_shaded.frag；每实例 model SSBO\@set7.b0 避开 frag set0-6）
     ForwardMorphShaded = 11,  ///< Morph target + 高级 shading 组合（forward_shaded_morph.vert + forward_shaded.frag；morph 增量 SSBO\@set7.b0 + 权重 UBO\@set7.b3）
     ForwardInstancedDepth = 12,  ///< 实例化仅深度 pass（forward_shaded_instanced.vert + shadow.frag 空片元；每实例 model SSBO\@set7.b0 + 植被风；只写深度、不输出颜色，配 has_color=false RT）
+    Particle3D = 13,  ///< 3D 粒子广告牌（particle_instanced.vert + particle.frag；每实例 pos/size/color SSBO\@set7.b0 + u_texture\@set2.b1；加性混合、不写深度，配 ParticleRenderer）
 };
 
 /// 渲染通道描述符
@@ -388,16 +389,6 @@ struct MeshDrawItem {
     const uint32_t* shared_index_ptr = nullptr;
     uint32_t shared_vertex_count = 0;
     uint32_t shared_index_count = 0;
-};
-
-/// 3D 粒子绘制项
-struct Particle3DDrawItem {
-    unsigned int texture_handle = 0;
-    unsigned int material_instance_id = 0;
-    unsigned int shader_variant_key = 0;
-    unsigned int blend_mode = 0;
-    int particle_count = 0;
-    unsigned int instance_vbo = 0;       ///< 实例变换/颜色 VBO
 };
 
 /// 毛发绘制项 (per-instance)

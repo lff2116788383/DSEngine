@@ -53,7 +53,7 @@ void Particle3DSystem::Shutdown(World& world) {
     for (auto entity : view) {
         auto& ps = view.get<ParticleSystem3DComponent>(entity);
         if (ps.instance_vbo != 0) {
-            rhi_->DeleteBuffer(ps.instance_vbo);
+            rhi_->DeleteGpuBuffer(dse::render::BufferHandle{ps.instance_vbo});
             ps.instance_vbo = 0;
         }
     }
@@ -119,8 +119,13 @@ void Particle3DSystem::Update(World& world, float delta_time) {
             ps.particles.resize(ps.max_particles);
             for (auto& p : ps.particles) p.life = -1.0f; // All dead initially
 
-            // Create instance VBO (size = max_particles * 8 floats)
-            ps.instance_vbo = rhi_->CreateBuffer(ps.max_particles * 8 * sizeof(float), nullptr, true, false);
+            // 创建每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子），
+            // 供 ParticleRenderer 经通用原语 BindStorageBuffer 绑定（跨三后端 SSBO/StructuredBuffer）。
+            dse::render::GpuBufferDesc inst_desc;
+            inst_desc.size = static_cast<size_t>(ps.max_particles) * 8 * sizeof(float);
+            inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
+            inst_desc.is_dynamic = true;
+            ps.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr).raw();
             ps.initialized = true;
         }
 
@@ -157,14 +162,15 @@ void Particle3DSystem::Update(World& world, float delta_time) {
                     p.position += p.velocity * delta_time;
                     // Optional: Fade out color over time based on start_life vs life
 
+                    // std430 布局：pos_size = (pos.xyz, size)，color = (r,g,b,a)。
                     gpu_data.push_back(p.position.x);
                     gpu_data.push_back(p.position.y);
                     gpu_data.push_back(p.position.z);
+                    gpu_data.push_back(p.size);
                     gpu_data.push_back(p.color.r);
                     gpu_data.push_back(p.color.g);
                     gpu_data.push_back(p.color.b);
                     gpu_data.push_back(p.color.a);
-                    gpu_data.push_back(p.size);
 
                     highest_active++;
                 }
@@ -175,7 +181,8 @@ void Particle3DSystem::Update(World& world, float delta_time) {
 
         // 3. Upload to GPU
         if (ps.active_particle_count > 0 && !gpu_data.empty()) {
-            rhi_->UpdateBuffer(ps.instance_vbo, 0, gpu_data.size() * sizeof(float), gpu_data.data(), false);
+            rhi_->UpdateGpuBuffer(dse::render::BufferHandle{ps.instance_vbo}, 0,
+                                  gpu_data.size() * sizeof(float), gpu_data.data());
         }
 
         // 4. Resolve Texture

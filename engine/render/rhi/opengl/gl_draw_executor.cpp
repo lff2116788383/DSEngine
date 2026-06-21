@@ -247,18 +247,6 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { glDeleteBuffers(1, &pp_param_ubo_); }
         pp_param_ubo_ = 0;
     }
-    // 3D 粒子四边形
-    if (particle_quad_vao_handle_) {
-        if (delete_vao_fn_) { delete_vao_fn_(particle_quad_vao_handle_); }
-        else { unsigned int r = particle_quad_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
-        particle_quad_vao_handle_ = {};
-    }
-    if (particle_quad_vbo_handle_ != 0) {
-        if (delete_buffer_fn_) { delete_buffer_fn_(particle_quad_vbo_handle_); }
-        else { glDeleteBuffers(1, &particle_quad_vbo_handle_); }
-        particle_quad_vbo_handle_ = 0;
-    }
-
     // 毛发渲染资源
     if (hair_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(hair_vao_handle_); }

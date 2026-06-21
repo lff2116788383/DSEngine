@@ -66,12 +66,6 @@ void DX11CommandBuffer::DrawPostProcess(PostProcessRequest request) {
         device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
-void DX11CommandBuffer::DrawParticles3D(const std::vector<Particle3DDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || items.empty()) return;
-    device_->draw_executor().DrawParticles3D(items, view, projection,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || items.empty()) return;
     device_->draw_executor().DrawHairStrands(items, view, projection,
@@ -437,6 +431,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrInstanced: return shader_mgr_.forward_pbr_instanced_shader_handle();
         case BuiltinProgram::ForwardPbrDepth: return shader_mgr_.forward_pbr_depth_shader_handle();
         case BuiltinProgram::ForwardInstancedDepth: return shader_mgr_.forward_instanced_depth_shader_handle();
+        case BuiltinProgram::Particle3D: return shader_mgr_.particle3d_shader_handle();
         case BuiltinProgram::ForwardShaded: return shader_mgr_.forward_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded: return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded: return shader_mgr_.forward_instanced_shaded_shader_handle();

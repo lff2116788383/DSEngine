@@ -138,6 +138,9 @@ public:
     /// 实例化仅深度着色器句柄（B2b-6；forward_shaded_instanced.vert + 空 shadow.frag + 每实例 model SSBO\@t0；只写深度）
     unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
 
+    /// 3D 粒子广告牌着色器句柄（B3；particle_instanced.vert + particle.frag + 每实例 pos/size/color SSBO\@t0）
+    unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
+
     /// 高级 shading forward 着色器句柄（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@b2 + 5 纹理槽 t0..t4）
     unsigned int forward_shaded_shader_handle() const { return forward_shaded_shader_handle_; }
 
@@ -181,6 +184,7 @@ private:
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_instanced_depth_shader_handle_ = 0;
+    unsigned int particle3d_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;

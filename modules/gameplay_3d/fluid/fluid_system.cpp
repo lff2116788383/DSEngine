@@ -112,7 +112,7 @@ void FluidSystem::Shutdown(World& world) {
     for (auto entity : view) {
         auto& fluid = view.get<FluidEmitterComponent>(entity);
         if (fluid.instance_vbo != 0) {
-            rhi_->DeleteBuffer(fluid.instance_vbo);
+            rhi_->DeleteGpuBuffer(dse::render::BufferHandle{fluid.instance_vbo});
             fluid.instance_vbo = 0;
         }
     }
@@ -151,34 +151,38 @@ void FluidSystem::UploadGpuData(FluidEmitterComponent& fluid) {
     const uint32_t count = fluid.active_count;
     if (count == 0) return;
 
-    // Create instance VBO on first use (8 floats per particle: x,y,z, r,g,b,a, size)
+    // 首次使用创建每实例 SSBO（std430：{ vec4 pos_size; vec4 color } = 8 floats/粒子），
+    // 供 ParticleRenderer 经通用原语 BindStorageBuffer 绑定。
     const size_t max_particles = 16384;
     if (fluid.instance_vbo == 0) {
-        fluid.instance_vbo = rhi_->CreateBuffer(
-            max_particles * 8 * sizeof(float), nullptr, true, false);
+        dse::render::GpuBufferDesc inst_desc;
+        inst_desc.size = max_particles * 8 * sizeof(float);
+        inst_desc.usage = dse::render::GpuBufferUsage::kStorage;
+        inst_desc.is_dynamic = true;
+        fluid.instance_vbo = rhi_->CreateGpuBuffer(inst_desc, nullptr).raw();
     }
 
-    // Pack particle data: position(3) + color(4) + size(1) = 8 floats
+    // std430 布局：pos_size = (pos.xyz, size)，color = (r,g,b,a)。
     std::vector<float> gpu_data;
     gpu_data.reserve(static_cast<size_t>(count) * 8);
 
     for (const auto& p : fluid.particles) {
         if (p.life <= 0.0f) continue;
+        // Fade alpha based on remaining life / total lifetime
+        float alpha = fluid.color.a * glm::clamp(p.life / fluid.particle_lifetime, 0.0f, 1.0f);
         gpu_data.push_back(p.position.x);
         gpu_data.push_back(p.position.y);
         gpu_data.push_back(p.position.z);
-        // Fade alpha based on remaining life / total lifetime
-        float alpha = fluid.color.a * glm::clamp(p.life / fluid.particle_lifetime, 0.0f, 1.0f);
+        gpu_data.push_back(fluid.particle_radius * 20.0f); // Visual size scale
         gpu_data.push_back(fluid.color.r);
         gpu_data.push_back(fluid.color.g);
         gpu_data.push_back(fluid.color.b);
         gpu_data.push_back(alpha);
-        gpu_data.push_back(fluid.particle_radius * 20.0f); // Visual size scale
     }
 
     if (!gpu_data.empty()) {
-        rhi_->UpdateBuffer(fluid.instance_vbo, 0,
-                           gpu_data.size() * sizeof(float), gpu_data.data(), false);
+        rhi_->UpdateGpuBuffer(dse::render::BufferHandle{fluid.instance_vbo}, 0,
+                              gpu_data.size() * sizeof(float), gpu_data.data());
     }
 }
 

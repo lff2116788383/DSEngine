@@ -11,6 +11,7 @@
 #include "modules/gameplay_3d/rendering/grass_system.h"
 #include "modules/gameplay_3d/rendering/tree_system.h"
 #include "modules/gameplay_3d/rendering/hair_system.h"
+#include "engine/render/particle_renderer.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
 #include "modules/gameplay_3d/rendering/lod_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -71,6 +72,8 @@ public:
     const MeshRenderSystem& mesh_render_system() const { return mesh_render_system_; }
 
 private:
+    RhiDevice* rhi_device_ = nullptr;
+    dse::render::ParticleRenderer particle_renderer_;
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     GrassSystem grass_system_;
