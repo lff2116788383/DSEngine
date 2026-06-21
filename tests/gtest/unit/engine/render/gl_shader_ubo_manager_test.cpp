@@ -3,7 +3,7 @@
  * @brief GLShaderManager + UBOManager 无 GPU 单元测试
  *
  * 测试策略：
- * - PBRShaderLocations / SkyboxShaderLocations / ParticleShaderLocations 默认值
+ * - PBRShaderLocations / SkyboxShaderLocations 默认值
  * - GLShaderManager 构造、访问器、SSBO 标志
  * - UBOManager 构造、initialized 状态
  */
@@ -40,13 +40,6 @@ TEST(SkyboxShaderLocationsTest, DefaultValues) {
     EXPECT_EQ(loc.tex, -1);
 }
 
-// 测试 粒子着色器位置：默认值
-TEST(ParticleShaderLocationsTest, DefaultValues) {
-    ParticleShaderLocations loc;
-    EXPECT_EQ(loc.per_frame_block_index, 0u);
-    EXPECT_EQ(loc.texture, -1);
-}
-
 // ============================================================
 // GLShaderManager
 // ============================================================
@@ -56,7 +49,6 @@ TEST(GLShaderManagerTest, DefaultSafety) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.particle_shader_handle(), 0u);
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }
@@ -83,13 +75,6 @@ TEST(GLShaderManagerTest, SetSkyboxHandle) {
     GLShaderManager mgr;
     mgr.set_skybox_shader_handle(42);
     EXPECT_EQ(mgr.skybox_shader_handle(), 42u);
-}
-
-// 测试 GL着色器管理器：设置粒子句柄
-TEST(GLShaderManagerTest, SetParticleHandle) {
-    GLShaderManager mgr;
-    mgr.set_particle_shader_handle(99);
-    EXPECT_EQ(mgr.particle_shader_handle(), 99u);
 }
 
 // ============================================================

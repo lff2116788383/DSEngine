@@ -167,7 +167,6 @@ void DX11ShaderManager::Shutdown() {
     programs_destroyed_ = 0;
     pbr_shader_handle_ = 0;
     skybox_shader_handle_ = 0;
-    particle_shader_handle_ = 0;
     particle3d_shader_handle_ = 0;
     sprite_shader_handle_ = 0;
     sprite2d_shader_handle_ = 0;
@@ -650,22 +649,6 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kskybox_vert_reflection, skybox_layout);
         CreateInputLayoutForShader(skybox_shader_handle_, skybox_layout.data(),
                                    static_cast<int>(skybox_layout.size()));
-    }
-
-    // ---- 粒子着色器 (DXBC) ----
-    particle_shader_handle_ = CreateProgramFromDXBC(
-        kparticle_vert_dxbc, kparticle_vert_dxbc_size,
-        kparticle_frag_dxbc, kparticle_frag_dxbc_size);
-    if (particle_shader_handle_) {
-        DEBUG_LOG_INFO("[D3D11] Builtin particle shader created (DXBC): {}", particle_shader_handle_);
-        D3D11_INPUT_ELEMENT_DESC layout[] = {
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D11_INPUT_PER_VERTEX_DATA,   0},
-            {"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT,       0, 12, D3D11_INPUT_PER_VERTEX_DATA,   0},
-            {"TEXCOORD", 2, DXGI_FORMAT_R32G32B32_FLOAT,    1,  0, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-            {"TEXCOORD", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 12, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-            {"TEXCOORD", 4, DXGI_FORMAT_R32_FLOAT,           1, 28, D3D11_INPUT_PER_INSTANCE_DATA, 1},
-        };
-        CreateInputLayoutForShader(particle_shader_handle_, layout, 5);
     }
 
     // ---- 后处理着色器 (DXBC) ----

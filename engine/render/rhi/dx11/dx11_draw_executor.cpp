@@ -2241,56 +2241,6 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
     dc->CSSetShader(nullptr, nullptr, 0);
 }
 
-void DX11DrawExecutor::DrawParticles3D(const std::vector<Particle3DDrawItem>& items,
-                                         const glm::mat4& view, const glm::mat4& projection,
-                                         DX11PipelineStateManager& pipeline_mgr,
-                                         DX11ShaderManager& shader_mgr,
-                                         DX11ResourceManager& resource_mgr) {
-    if (items.empty()) return;
-    ID3D11DeviceContext* dc = context_->device_context();
-
-    DX11PerFrameCB frame_data;
-    frame_data.vp = projection * view;
-    frame_data.view = view;
-    frame_data.camera_pos = glm::vec4(0.0f);
-    UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
-
-    ID3D11Buffer* cbs[] = {per_frame_cb_.Get()};
-    dc->VSSetConstantBuffers(0, 1, cbs);
-
-    const auto* program = shader_mgr.GetProgram(shader_mgr.particle_shader_handle());
-    if (!program) return;
-    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
-    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
-
-    auto* layout = shader_mgr.GetInputLayout(shader_mgr.particle_shader_handle());
-    if (layout) dc->IASetInputLayout(layout);
-    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    dc->IASetIndexBuffer(particle_quad_ibo_.Get(), DXGI_FORMAT_R16_UINT, 0);
-
-    for (const auto& item : items) {
-        if (item.particle_count <= 0) continue;
-
-        // slot 0: 公告板四边形，slot 1: 实例数据
-        const auto* inst_buf = resource_mgr.GetBuffer(item.instance_vbo);
-        ID3D11Buffer* vbs[2] = {particle_quad_vbo_.Get(),
-                                 inst_buf ? inst_buf->buffer.Get() : nullptr};
-        UINT strides[2] = {sizeof(float) * 5, sizeof(float) * 8};  // 20B vertex, 32B instance
-        UINT offsets[2] = {0, 0};
-        dc->IASetVertexBuffers(0, 2, vbs, strides, offsets);
-
-        const auto* tex = resource_mgr.GetTexture(item.texture_handle);
-        if (tex) {
-            dc->PSSetShaderResources(0, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(0, 1, tex->sampler.GetAddressOf());
-        }
-
-        dc->DrawIndexedInstanced(6, item.particle_count, 0, 0, 0);
-        global_state_.current_frame_stats.draw_calls++;
-        global_state_.current_frame_stats.particle_count += item.particle_count;
-    }
-}
-
 // ============================================================================
 // Hair Strand 渲染 (DX11)
 // ============================================================================
