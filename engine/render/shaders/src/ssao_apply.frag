@@ -7,10 +7,10 @@ layout(set = 2, binding = 2) uniform sampler2D ssaoTexture;
 layout(set = 2, binding = 3) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D lutTexture;
 
-layout(push_constant) uniform SsaoApplyParams {
+layout(std140, set = 2, binding = 0) uniform SsaoApplyParams {
     float exposure;
-    int autoExposureEnabled;
-    int lutEnabled;
+    float autoExposureEnabled;
+    float lutEnabled;
     float lutIntensity;
 };
 
@@ -24,12 +24,12 @@ void main() {
     float ao = texture(ssaoTexture, vTexCoords).r;
     hdrColor *= ao;
     float finalExposure = exposure;
-    if (autoExposureEnabled != 0) {
+    if (autoExposureEnabled != 0.0) {
         finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
     }
     vec3 result = AcesFilmic(hdrColor * finalExposure);
     result = pow(result, vec3(1.0 / 2.2));
-    if (lutEnabled != 0) {
+    if (lutEnabled != 0.0) {
         vec3 lutColor = texture(lutTexture, clamp(result, 0.0, 1.0)).rgb;
         result = mix(result, lutColor, lutIntensity);
     }

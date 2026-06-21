@@ -430,8 +430,10 @@ TEST_F(CompositePassTest, CompositePass_BloomDisabled_Usecopy) {
     SetBloomConfig(false);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "tonemapping")))
-        .Times(1);
+    // tonemapping/ssao_apply 已迁到 PostProcessRenderer（走通用原语，不再经 DrawPostProcess）；
+    // 此处验证 bloom 禁用时不会走 bloom_composite，且 ui_overlay 仍经 DrawPostProcess。
+    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_composite")))
+        .Times(0);
     EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "ui_overlay")))
         .Times(1);
 

@@ -124,12 +124,11 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(src_slot, req.source_texture, TextureDim::Tex2D);
 
     // 额外纹理：slot 存 GLSL binding，同样映射到 t<binding-1>。
-    // 注：3D 纹理（color_grading LUT 等）暂经 Tex2D 维度绑定——通用 BindTexture
-    // 尚无 3D 维度；迁移到带 3D 纹理的效果时再扩 TextureDim。
+    // 3D 纹理（color_grading / tonemapping 的 LUT 等）经 is_3d 标志走 TextureDim::Tex3D。
     for (const PPTextureBinding& t : req.textures) {
         if (t.handle == 0) break;
         const uint32_t slot = t.slot > 0 ? t.slot - 1 : 0u;
-        cmd.BindTexture(slot, t.handle, TextureDim::Tex2D);
+        cmd.BindTexture(slot, t.handle, t.is_3d ? TextureDim::Tex3D : TextureDim::Tex2D);
     }
 
     static const std::vector<VertexAttr> kAttrs = {

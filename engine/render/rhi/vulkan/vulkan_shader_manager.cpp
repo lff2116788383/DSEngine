@@ -908,6 +908,7 @@ void VulkanShaderManager::InitPostProcessShader() {
     lum_compute_shader_handle_ = create_pp_spv(generated_shaders::klum_compute_frag_spv, generated_shaders::klum_compute_frag_spv_size, "LumCompute");
     lum_adapt_shader_handle_ = create_pp_spv(generated_shaders::klum_adapt_frag_spv, generated_shaders::klum_adapt_frag_spv_size, "LumAdapt");
     tonemapping_shader_handle_ = create_pp_spv(generated_shaders::ktonemapping_frag_spv, generated_shaders::ktonemapping_frag_spv_size, "Tonemapping");
+    ssao_apply_shader_handle_ = create_pp_spv(generated_shaders::kssao_apply_frag_spv, generated_shaders::kssao_apply_frag_spv_size, "SSAO Apply");
     bloom_composite_ssao_ae_shader_handle_ = create_pp_spv(generated_shaders::kbloom_composite_ssao_ae_frag_spv, generated_shaders::kbloom_composite_ssao_ae_frag_spv_size, "BloomCompositeSsaoAe");
     color_grading_shader_handle_ = create_pp_spv(generated_shaders::kcolor_grading_frag_spv, generated_shaders::kcolor_grading_frag_spv_size, "ColorGrading");
     taa_resolve_shader_handle_ = create_pp_spv(generated_shaders::ktaa_resolve_frag_spv, generated_shaders::ktaa_resolve_frag_spv_size, "TAA Resolve");

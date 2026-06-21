@@ -173,6 +173,7 @@ enum class TextureDim : uint8_t {
     Tex2D      = 0,
     TexCube    = 1,
     Tex2DArray = 2,
+    Tex3D      = 3,   ///< 3D 体纹理（如 Color Grading LUT），GL 用 GL_TEXTURE_3D 绑定
 };
 
 /// 引擎内建着色器程序标识（由各后端懒初始化预编译着色器，经 RhiDevice::GetBuiltinProgram 暴露句柄）。

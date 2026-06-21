@@ -6,10 +6,10 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D u_lut;
 
-layout(push_constant) uniform TonemapParams {
+layout(std140, set = 2, binding = 0) uniform TonemapParams {
     float u_manual_exposure;
-    int u_auto_exposure_enabled;
-    int u_lut_enabled;
+    float u_auto_exposure_enabled;
+    float u_lut_enabled;
     float u_lut_intensity;
 };
 
@@ -21,12 +21,12 @@ vec3 AcesFilmic(vec3 x) {
 void main() {
     vec3 hdrColor = texture(screenTexture, vTexCoords).rgb;
     float finalExposure = u_manual_exposure;
-    if (u_auto_exposure_enabled != 0) {
+    if (u_auto_exposure_enabled != 0.0) {
         finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
     }
     vec3 result = AcesFilmic(hdrColor * finalExposure);
     result = pow(result, vec3(1.0 / 2.2));
-    if (u_lut_enabled != 0) {
+    if (u_lut_enabled != 0.0) {
         vec3 lutColor = texture(u_lut, clamp(result, 0.0, 1.0)).rgb;
         result = mix(result, lutColor, u_lut_intensity);
     }

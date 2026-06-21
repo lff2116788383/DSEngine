@@ -989,20 +989,31 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             film_grain_time
         }});
     } else {
+        // tonemapping / ssao_apply 已迁到 PostProcessRenderer：UBO 为 4 标量
+        // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}；
+        // enable 标志按纹理在否在调用点派生（旧 binder 原由 FindTex 推导）。
+        // 可选纹理仅在非零时挂载——渲染器纹理循环遇 handle==0 即停，避免中断后续绑定。
+        const float ae_enabled  = ae_tex != 0 ? 1.0f : 0.0f;
+        const float lut_enabled = static_cast<unsigned int>(lut_tex) != 0 ? 1.0f : 0.0f;
         if (ssao_tex != 0) {
-            cmd_buffer.DrawPostProcess(PostProcessRequest{"ssao_apply", scene_color_tex,
-                {pp_config.exposure, lut_intensity}}
-                .Tex(2, ssao_tex).Tex(3, ae_tex).Tex3D(5, static_cast<unsigned int>(lut_tex)));
+            PostProcessRequest req{"ssao_apply", scene_color_tex,
+                {pp_config.exposure, ae_enabled, lut_enabled, lut_intensity}};
+            req.Tex(2, ssao_tex);
+            if (ae_tex != 0) req.Tex(3, ae_tex);
+            if (static_cast<unsigned int>(lut_tex) != 0) req.Tex3D(5, static_cast<unsigned int>(lut_tex));
+            post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
         } else {
-            cmd_buffer.DrawPostProcess(PostProcessRequest{"tonemapping", scene_color_tex,
-                {pp_config.exposure, lut_intensity}}
-                .Tex(2, ae_tex).Tex3D(5, static_cast<unsigned int>(lut_tex)));
+            PostProcessRequest req{"tonemapping", scene_color_tex,
+                {pp_config.exposure, ae_enabled, lut_enabled, lut_intensity}};
+            if (ae_tex != 0) req.Tex(2, ae_tex);
+            if (static_cast<unsigned int>(lut_tex) != 0) req.Tex3D(5, static_cast<unsigned int>(lut_tex));
+            post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
         }
     }
 
     if (ui_color_tex != 0) {
-        // 注：bloom_composite/tonemapping/ssao_apply 仍走旧 ABI（3D LUT 基础设施未就绪），
-        // ui_overlay 与其同属 composite 延后簇，待 3D LUT 落地后一并迁移，暂留 DrawPostProcess。
+        // 注：bloom_composite 仍走旧 ABI（多变体着色器+vignette/film_grain，待收敛）；
+        // ui_overlay 与其同属 composite 延后簇，暂留 DrawPostProcess。
         cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
     }
     cmd_buffer.EndRenderPass();

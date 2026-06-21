@@ -182,6 +182,7 @@ public:
     const char* GetName() const override { return "composite_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- TAA Pass ----

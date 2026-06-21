@@ -487,6 +487,7 @@ void GLDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle,
     switch (dim) {
         case TextureDim::TexCube:    target = GL_TEXTURE_CUBE_MAP;       break;
         case TextureDim::Tex2DArray: target = GL_TEXTURE_2D_ARRAY;       break;
+        case TextureDim::Tex3D:      target = GL_TEXTURE_3D;             break;
         case TextureDim::Tex2D:      default: target = GL_TEXTURE_2D;     break;
     }
     glActiveTexture(GL_TEXTURE0 + slot);

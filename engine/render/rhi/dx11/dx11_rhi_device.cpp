@@ -467,6 +467,8 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
     if (effect_name == "wboit_composite") return shader_mgr_.wboit_composite_shader_handle();
     if (effect_name == "weather_particle") return shader_mgr_.weather_particle_shader_handle();
     if (effect_name == "sss_blur") return shader_mgr_.sss_blur_shader_handle();
+    if (effect_name == "tonemapping") return shader_mgr_.tonemapping_shader_handle();
+    if (effect_name == "ssao_apply") return shader_mgr_.ssao_apply_shader_handle();
     return 0;
 }
 
