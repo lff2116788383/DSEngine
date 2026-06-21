@@ -199,6 +199,7 @@ public:
 
     // --- 内建资源访问器 ---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;
+    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
 
     // --- 子系统访问器 ---

@@ -225,6 +225,13 @@ public:
     /// 内建着色器程序句柄（懒初始化）。按 BuiltinProgram 标识取用，取代每效果一个访问器。
     /// 默认返回 0（未实现该程序的后端/Mock）。
     virtual unsigned int GetBuiltinProgram(BuiltinProgram program) { (void)program; return 0; }
+    /// 后处理效果的 gen 着色器程序句柄（懒编译/取用），供 PostProcessRenderer 经通用原语绑定。
+    /// effect_name 见 gl_draw_executor_postprocess 的 kEffectTable（"postprocess_passthrough"/
+    /// "tonemapping"/...）。未实现该效果的后端/Mock 或未知名返回 0。
+    virtual unsigned int GetGenPPShaderProgram(const std::string& effect_name) {
+        (void)effect_name;
+        return 0;
+    }
     /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
     virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
 

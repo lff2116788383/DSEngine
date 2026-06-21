@@ -20,6 +20,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/rhi/postprocess_common.h"
+#include "engine/render/post_process_renderer.h"
 
 #include <vector>
 
@@ -103,8 +104,58 @@ RenderTargetReadback RenderPP(RhiDevice& device, const PostProcessRequest& req_t
     return rb;
 }
 
+// 同 RenderPP，但 driver 换成 PostProcessRenderer（通用原语路径），断言不变。
+// 验证迁移后的渲染器与 DrawPostProcess ABI 产出同样的解析真值像素。
+RenderTargetReadback RenderPPViaRenderer(RhiDevice& device,
+                                         const PostProcessRequest& req_template,
+                                         const std::vector<unsigned char>& src_texels) {
+    const unsigned int src_tex =
+        device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
+    if (src_tex == 0) return {};
+
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = false;
+    const unsigned int rt = device.CreateRenderTarget(rt_desc);
+    if (rt == 0) { device.DeleteTexture(src_tex); return {}; }
+
+    PostProcessRequest req = req_template;
+    req.source_texture = src_tex;
+
+    PostProcessRenderer renderer;
+    bool drawn = false;
+    device.BeginFrame();
+    renderer.BeginFrame();
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        drawn = renderer.Draw(*cmd, device, req);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb;
+    if (drawn) rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    renderer.Shutdown(device);
+    device.DeleteRenderTarget(rt);
+    device.DeleteTexture(src_tex);
+    return rb;  // drawn==false → 空 readback（效果未迁移），断言会因尺寸不符而失败/暴露
+}
+
 RenderTargetReadback RenderPassthrough(RhiDevice& device) {
     return RenderPP(device, PostProcessRequest("postprocess_passthrough", 0), BuildSplitTexels());
+}
+
+RenderTargetReadback RenderPassthroughViaRenderer(RhiDevice& device) {
+    return RenderPPViaRenderer(device, PostProcessRequest("postprocess_passthrough", 0),
+                               BuildSplitTexels());
 }
 
 RenderTargetReadback RenderTonemapping(RhiDevice& device) {
@@ -194,6 +245,20 @@ TEST(PostProcessPixelSmokeTest, VulkanPassthrough) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendPassthroughConsistent) {
     CrossBackendRmse(RenderPassthrough, "passthrough", 8.0);
+}
+
+// PostProcessRenderer（通用原语）路径：passthrough 必须产出与 ABI 同样的逐像素真值。
+TEST(PostProcessPixelSmokeTest, OpenGLPassthroughRenderer) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderPassthroughViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, D3D11PassthroughRenderer) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderPassthroughViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, VulkanPassthroughRenderer) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderPassthroughViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendPassthroughRendererConsistent) {
+    CrossBackendRmse(RenderPassthroughViaRenderer, "passthrough_renderer", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {

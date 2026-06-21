@@ -69,6 +69,7 @@ public:
 
     // --- 内建资源访问器 ---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;
+    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
     // kUniform 用途需走 VK_BUFFER_USAGE_UNIFORM_BUFFER（host-visible 持久映射），覆写基类路由。
     BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;

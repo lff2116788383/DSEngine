@@ -440,6 +440,16 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     return 0;
 }
 
+unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+    // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
+    // 其余效果尚未迁到 PostProcessRenderer，返回 0 → 调用方继续走 DrawPostProcess ABI。
+    if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
+        effect_name == "ui_overlay") {
+        return shader_mgr_.postprocess_shader_handle();
+    }
+    return 0;
+}
+
 unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {
     if (skybox_cube_vbo_handle_ == 0) {
         static const float kSkyboxVertices[] = {

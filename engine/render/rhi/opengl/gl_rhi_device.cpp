@@ -1037,6 +1037,12 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     return 0;
 }
 
+unsigned int OpenGLRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+    EnsureInitialized();
+    // GL 侧 gen PP 程序经统一懒编译缓存（postprocess.vert + gen.h 片元），按 effect 名取用。
+    return shader_mgr_.GetOrCreateGenPPShader(effect_name);
+}
+
 unsigned int OpenGLRhiDevice::GetSkyboxCubeVertexBuffer() {
     EnsureInitialized();
     if (skybox_cube_vbo_ == 0) {
