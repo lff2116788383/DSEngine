@@ -3,7 +3,7 @@
 > 本文结合**提交历史**与**当前代码现状**，描述 RHI 抽象边界从「每效果一个虚函数」收敛为「后端无关通用原语 + 高层渲染器」的重画过程、已落地范围、以及剩余边界。
 > 配套文档：契约设计见 [`RHI_PRIMITIVE_CONTRACT.md`](./RHI_PRIMITIVE_CONTRACT.md)（终态接口 + Metal 映射）；mesh 迁移摸底见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 > 分支：`feature/engine-lib`。基线：单元 2281 / 集成 544 / smoke **181**（三后端 llvmpipe/WARP/lavapipe 像素 smoke 全绿；B2a 时为 68，P0+B2b-2..5 累加至 92，2c-1..5 + Final-Feat-1..7 续加至 181）。
-> HEAD：`a6de6042`（文档同步；代码 HEAD `db8c320b` = Final-Feat-7 共享网格模板）。
+> HEAD：`a191e6ef`（`feature/engine-lib`；**阶段 2b 后处理迁移进行中**——见 §5B）。Mesh 线（B2b/2c/Final-Feat）代码已在本分支，时间线 HEAD 曾为 `db8c320b`。
 
 ---
 
@@ -16,7 +16,7 @@
 ```
 重画前（每效果一个 ABI，各后端各实现一遍）        重画后（边界下沉到通用原语）
 ┌─────────────── 高层 ───────────────┐         ┌──────────── 高层渲染器 ────────────┐
-│ Scene / UI / Particle / ...        │         │ SkyboxRenderer  SpriteBatchRenderer │
+│ Scene / UI / Particle / ...        │         │ SkyboxRenderer SpriteBatchRenderer PostProcessRenderer│
 └───────────────┬────────────────────┘         │ MeshRenderer（B2b+2c+Feat，ABI 并存）│
    cmd.DrawSkybox/DrawSpriteBatch/...           └──────────────┬─────────────────────┘
 ┌───────────────┴─ CommandBuffer ABI ┐            BindShaderProgram/BindVertexBuffer/
@@ -40,6 +40,8 @@
 | **P0**（mesh 前置原语） | `f38d0b13`→`e0f061f7`（P0a）/ `10f3ff2d`+`68c81b84`（P0b） | P0a `DrawIndexedInstanced` 三后端；P0b 图形阶段 `BindStorageBuffer(slot,handle,offset,size)` 三后端 + 组合像素 smoke | 原语集扩展（实例化 + SSBO，只增不删） |
 | **B2b**（抽 MeshRenderer，ABI 并存） | `ee97d1ab`→`88301df8`→`34bb4328`→`eaf61c2d`→`25fb30a6` | 后端无关 `MeshRenderer`：B2b-1 静态 PBR / B2b-2 蒙皮(bone SSBO) / B2b-3 实例化(instance SSBO) / B2b-4 depth-only / B2b-5 间接(`DrawIndexedIndirect`)；各配跨后端像素 smoke | 第三效果**部分**下沉；`DrawMeshBatch` ABI **暂保留**（高级 shading 未迁） |
 | **2c + Final-Feat**（MeshRenderer 高级 shading + 几何来源） | `debcaead`→`7295d247`→`b930db38`→`5a46be01`→`1048b815`→`5e460e2e`→`fb986188`→`1c909e5a`→`c9b516e3`→`f4645f46`→`44c1f487`→`db8c320b` | MeshRenderer 补：shading_mode 0/2-6 + SSS/clearcoat/POM、clustered 点光、地形 splat/积雪、WBOIT、DDGI/LightProbe、CSM 阴影、蒙皮/实例化/聚光/morph 高级 shading、外部常驻 VAO/EBO（tiled terrain）、共享网格模板去重（tree）；各配跨后端像素 smoke（92→181） | MeshRenderer 能力基本补齐；`DrawMeshBatch` ABI 仍并存（调用点未迁） |
+| **B3**（迁粒子） | `c8f84edf`→`5e8fbe30`→`171aff31` | 抽 `ParticleRenderer`（`BuiltinProgram::Particle3D`，SSBO 实例化），迁调用点 + **删 `DrawParticles3D` ABI** + 三后端死代码清理（DX11 particle_quad / Vulkan particle_vbo） | 第四条 ABI 删除 |
+| **阶段 2b**（迁后处理，进行中） | `ac4bcd2d`（闸门）→`edc3a3d5`/`012570c3`→…→`27b742fd`→`b7e7e900`→`a191e6ef` | 抽 `PostProcessRenderer`（全屏 quad/UBO/纹理/PSO），逐效果迁移配方（.frag→std140 UBO + device 访问器 + 调用点 + D3D11 像素闸门），3D LUT 基础设施（`TextureDim::Tex3D`）+ `source==0` 支持；已迁 **26** 效果 | `DrawPostProcess` ABI 删除受 **compute mip 链架构岔口**阻塞（见 §5B） |
 
 **B2a 关键设计**：三个 2D 系统各持独立 `SpriteBatchRenderer` 实例（每帧各画一次 → 各自动态 VBO 互不别名，满足 Vulkan 帧提交生命周期）；view/proj 经新增的 `CommandBuffer::GetView/GetProjectionMatrix()`（读 `SetCamera` 缓存）取用。
 
@@ -78,7 +80,7 @@
 | `DrawMeshBatch(items)` | **B2b** | 🔶 `MeshRenderer` 已**并存**承接 forward-PBR + 高级 shading 全模式（B2b-1..5 + 2c-1..5 + Final-Feat-1..7）；ABI 删除**仍推迟**——能力已基本齐备，剩迁 6 调用点 + spine 2D 蒙皮缺口（见 §5） |
 | ~~`DrawParticles3D(items, view, proj)`~~ | B3 | ✅ 已删（`c8f84edf` + `5e8fbe30`，迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`） |
 | `DrawHairStrands(items, view, proj)` | B4 | ⏳ 待迁 |
-| `DrawPostProcess(request)` | 未排期（B3 后） | ⏳ 待迁 |
+| `DrawPostProcess(request)` | **阶段 2b** | 🔶 `PostProcessRenderer` 已**并存**承接 26 效果（见 §5B）；ABI 删除受 **compute mip 链架构岔口**阻塞（bloom_downsample/upsample：DX11=compute/UAV, GL=全屏 quad），另 bloom_composite/atmosphere_sky/ui_overlay@Composite 手写 HLSL 簇暂留 |
 
 ### 3.3 高层渲染器（边界**之上**，跑在原语上）
 
@@ -88,6 +90,8 @@
 | `SpriteBatchRenderer` | `engine/render/sprite_batch_renderer.{h,cpp}` | 生产（B2a，DrawSpriteBatch 已删） |
 | `SpriteRenderer` | `engine/render/sprite_renderer.{h,cpp}` | B0 契约验证脚手架（非生产） |
 | `MeshRenderer` | `engine/render/mesh_renderer.{h,cpp}` | 后端无关 forward 能力：B2b-1..5（静态/蒙皮/实例化/depth-only/间接）+ 2c-1..5 与 Final-Feat-1..7（高级 shading 全模式/CSM/聚光/morph、地形 splat+积雪、WBOIT、DDGI/LightProbe、外部常驻 VAO/EBO、共享网格模板去重）；与 `DrawMeshBatch` ABI **并存**，**尚未取代**（调用点未迁、spine 2D 蒙皮未覆盖） |
+| `ParticleRenderer` | `engine/render/particle_renderer.{h,cpp}` | 生产（B3，DrawParticles3D 已删，SSBO 实例化） |
+| `PostProcessRenderer` | `engine/render/post_process_renderer.{h,cpp}` | 生产（阶段 2b）：全屏 quad + std140 UBO（set=2,b0）+ 纹理（2D/3D）+ PSO；已承接 26 效果，与 `DrawPostProcess` ABI **并存**（见 §5B） |
 
 ---
 
@@ -130,6 +134,26 @@
 
 ---
 
+## 5B. 阶段 2b 现状：DrawPostProcess → PostProcessRenderer（进行中）
+
+`DrawPostProcess` 是约 30 个全屏后处理效果的总入口，调用点散落在 `builtin_passes.cpp` + `atmosphere_sky_pass.cpp` + editor。三后端「参数上传」实现发散（GL 按 SPIRV-Cross 名 `glUniform`、Vulkan push_constant、DX11 cbuffer，且每效果有特判 binder），是典型的 O(效果 × 后端) 成本。
+
+**迁移配方**（每效果原子闭环）：① `.frag` 参数块 `push_constant → std140 set=2,binding=0 UBO`（vec2/vec3/mat4 一律标量化，避免 std140 填充与调用点紧排 float 数组错位）；② device 访问器 `GetGenPPShaderProgram(effect)→handle`（DX11/Vulkan 显式映射，GL 走泛型名查表）；③ 迁调用点到 `PostProcessRenderer::Draw`（混合效果 `blend=true`，额外纹理经 `.Tex(slot)` / `.Tex3D(slot)`）；④ 加 D3D11 像素闸门。
+
+**基础设施**：2b-① 跨后端 PP 像素闸门 `postprocess_pixel_smoke_test`（passthrough/tonemapping 解析真值基线）；2b-② `RhiDevice::GetGenPPShaderProgram` + `PostProcessRenderer`（全屏 quad/UBO/纹理/PSO，仿 `SpriteBatchRenderer`）；3D LUT 基础设施（`TextureDim::Tex3D` 三后端 + 渲染器 `is_3d` + GL `GL_TEXTURE_3D`）；渲染器支持 `source_texture==0`（无源纹理程序化效果，如 atmosphere_transmittance_lut）。
+
+**已迁 26 效果**（device 访问器登记）：passthrough、copy、ui_overlay\*、fxaa、bloom_extract、lum_compute、ssao_blur、ssao、contact_shadow、edge_detect、lum_adapt、dof、motion_blur、ssr、taa_resolve、motion_vector、volumetric_fog、volumetric_cloud、water、decal、wboit_composite、weather_particle、sss_blur、tonemapping、ssao_apply、light_shaft、atmosphere_transmittance_lut。（\*ui_overlay 部分调用点已迁，但 CompositePass 内仍暂留旧 ABI）
+
+**剩余 5 个生产调用点 + 删 ABI 闸门**：
+1. **bloom_downsample / bloom_upsample（架构岔口，删 ABI 的真正闸门）**：后端实现发散——DX11 走 `DispatchCompute` 写 UAV（计算着色器），GL 走全屏 quad ping-pong。`PostProcessRenderer` 只画全屏 quad，**无法承载 DX11 compute 路径**。彻底删 ABI 需二选一：**(A)** 新增通用 `DispatchCompute` 原语到 RHI 边界（最干净终态，工作量大，属边界扩张）；**(B)** 保留精简 compute-only 路径，只删全屏 quad 部分 ABI。**待用户决策。**
+2. **bloom_composite**：DX11 是 3 个运行时按纹理选择的手写 HLSL 变体 + 混合 int/float 96B CB + 专用 SRV 槽 t0–t5，不走交叉编译；迁移需收敛为单 flag 驱动 UBO 着色器并重写 HLSL 契约，本机 GL/Vulkan 不可像素验证，有静默回归风险。
+3. **atmosphere_sky**：DX11 手写 HLSL，同上风险。
+4. **ui_overlay@CompositePass**：混合语义 + 集成测试 `CompositePassTest` 断言其仍走 `DrawPostProcess`，与 bloom_composite/tonemapping/ssao_apply 同属该 pass 簇。
+
+**验证缺口**：本机仅 D3D11(WARP) 可跑像素；GL/Vulkan 无驱动一律 skip（既有状况）。已迁效果的 GL/Vulkan 着色器/绑定改动只能靠编译 + 镜像保证，运行像素验证待多后端 CI。
+
+---
+
 ## 6. 不变量与闸门（每次迁移必守）
 
 每个效果迁移是**独立闭环**：迁移 → 跨后端像素 smoke → 删该 ABI（含全部调用点 + 失效测试/mock/文档）→ 三后端绿 → 直接推 `feature/engine-lib`（无 PR）。
@@ -145,7 +169,8 @@
 ## 7. 剩余路线图（便于全局对照）
 
 - **B2b**：抽 `MeshRenderer`——forward-PBR（B2b-1..5）+ 高级 shading 全模式（2c-1..5 + Final-Feat-1..7：toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI + CSM + 蒙皮/实例化/聚光/morph + 外部 VAO/EBO + 共享模板）均已迁入，与 `DrawMeshBatch` 并存。**剩：**补 spine 2D 蒙皮 → 迁 6 调用点 → 删 `DrawMeshBatch` ABI。
-- **B3**：✅ 已删 `DrawParticles3D`——迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`（SSBO 实例化）；`DrawPostProcess` 见 B3 后续（阶段 2b）。
+- **B3**：✅ 已删 `DrawParticles3D`——迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`（SSBO 实例化）。
+- **阶段 2b**：迁 `DrawPostProcess`——`PostProcessRenderer`（全屏 quad/UBO 契约）已承接 **26** 效果；**剩**：compute mip 链架构岔口（`DispatchCompute` 原语 vs compute-only 路径，待用户决策）+ bloom_composite/atmosphere_sky/ui_overlay 手写 HLSL 簇 → 删 `DrawPostProcess` ABI。详见 §5B。
 - **B4**：迁 `DrawHairStrands`（SSBO + 多段绘制）。
 - **B5**：全局绑定收敛（shadow map / global uniforms / `BindShaderProgram`+PSO 聚合，偿还契约 §8.1 债务）。
 

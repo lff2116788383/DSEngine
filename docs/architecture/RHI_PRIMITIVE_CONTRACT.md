@@ -220,6 +220,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
     - [x] **2c-1..5 + Final-Feat-1..7** 高级 shading 全模式（`debcaead`…`db8c320b`）：shading_mode/SSS/clearcoat/POM、地形 splat/积雪、WBOIT、DDGI/LightProbe、CSM、蒙皮/实例化/聚光/morph、外部常驻 VAO/EBO（tiled terrain）、共享网格模板去重（tree）——均复用现有原语，各配跨后端像素 smoke。
     - [ ] **删 `DrawMeshBatch` ABI**：**推迟**——原「高级 shading 未迁」理由已不成立（上述能力均已落地）；现推迟理由改为**调用点未迁 + spine 2D 蒙皮能力缺口**——需补 spine 2D 蒙皮 → 迁 6 调用点 → 全仓 grep 确认后才删（用户决策：当前保留 ABI 并存）。
     - 基线：smoke 76 → 92（B2b-2..5）→ **181**（2c-1..5 + Final-Feat-1..7 各增跨后端像素 smoke），详见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
-- [ ] **B3**：迁 Particles（验证 Dispatch/实例化）；DrawPostProcess 一并考虑。
+- [x] **B3**：✅ 迁 Particles（`ParticleRenderer` + SSBO 实例化），**删 `DrawParticles3D` ABI**。
+- [~] **阶段 2b**：迁 `DrawPostProcess` → `PostProcessRenderer`（全屏 quad/std140 UBO 契约）。**已迁 26 效果**；剩 compute mip 链（bloom_downsample/upsample）+ 手写 HLSL 簇（bloom_composite/atmosphere_sky/ui_overlay）→ 删 ABI。**删 ABI 闸门**：compute 链后端发散（DX11=`DispatchCompute`/UAV，GL=全屏 quad），需决策 (A) 把设备级 `DispatchCompute`（见 §「间接绘制/compute」，已存在于 `IRhiCompute`）提升为 CommandBuffer 级通用原语彻底删 ABI，或 (B) 保留精简 compute-only 路径。详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §5B。
 - [ ] **B4**：迁 Hair（SSBO + 多段绘制）。
 - [ ] **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。

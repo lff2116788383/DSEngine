@@ -489,7 +489,7 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 | `SetPipelineState(handle)` | 设置管线状态 |
 | `SetCamera(view, proj)` | 设置相机矩阵 |
 | `DrawMeshBatch(items)` | 绘制 3D 网格批次 |
-| `DrawPostProcess(src, effect, params)` | 后处理 |
+| `DrawPostProcess(src, effect, params)` | 后处理（**阶段 2b 迁移中**：26 效果已改走 `PostProcessRenderer`/通用原语；本 ABI 暂与渲染器并存，待 compute mip 链 + 手写 HLSL 簇迁完后删除） |
 | `DrawHairStrands(items, view, proj)` | 绘制毛发 |
 | `ClearColor(color)` | 清屏 |
 | `SetGlobalMat4(name, mat)` | 设置全局 mat4 |
