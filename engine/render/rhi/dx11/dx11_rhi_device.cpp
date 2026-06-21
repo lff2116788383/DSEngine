@@ -451,6 +451,7 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
     if (effect_name == "bloom_extract") return shader_mgr_.bloom_extract_shader_handle();
     if (effect_name == "lum_compute") return shader_mgr_.lum_compute_shader_handle();
     if (effect_name == "ssao_blur") return shader_mgr_.ssao_blur_shader_handle();
+    if (effect_name == "ssao") return shader_mgr_.ssao_shader_handle();
     return 0;
 }
 

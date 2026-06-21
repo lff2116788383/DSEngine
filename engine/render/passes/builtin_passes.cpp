@@ -1094,10 +1094,11 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
     float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
+    post_process_renderer_.BeginFrame();
+
     // Pass 1: SSAO 计算（半分辨率）
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess({"ssao", depth_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao", depth_tex, {
         pp_config.ssao_radius,
         pp_config.ssao_bias,
         near_plane,
@@ -1113,7 +1114,6 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 2: 双边模糊
     const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
-    post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao_blur", ssao_tex});
     cmd_buffer.EndRenderPass();
 }
