@@ -14,7 +14,7 @@ class TerrainSystem {
 public:
     void Init(RhiDevice* rhi_device);
     void Shutdown(World& world);
-    /// depth_only=true（PreZ/Shadow 深度 RT）走 DrawMeshBatch，false（Opaque 彩色）走 MeshRenderer。
+    /// depth_only=true（PreZ/Shadow 深度 RT）走 MeshRenderer::DrawDepthOnlySharedTemplateInstanced，false（Opaque 彩色）走 MeshRenderer::DrawSharedTemplateInstanced。
     void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 

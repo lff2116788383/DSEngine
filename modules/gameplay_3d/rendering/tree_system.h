@@ -49,7 +49,7 @@ public:
 
     void Update(World& world, float delta_time);
 
-    /// 主渲染：depth_only=true 时（PreZ 深度预通道）走 DrawMeshBatch 深度路径，
+    /// 主渲染：depth_only=true 时（PreZ 深度预通道）走 MeshRenderer 实例化深度路径，
     /// false 时（Opaque 彩色通道）走 MeshRenderer 前向路径。
     void Render(World& world, CommandBuffer& cmd_buffer,
                 const glm::vec3& camera_offset = glm::vec3(0.0f),
@@ -72,7 +72,7 @@ private:
                                 const glm::vec3& aabb_max);
     static void ExtractFrustumPlanes(const glm::mat4& vp, glm::vec4 out_planes[6]);
 
-    /// depth_only：当前 pass 绑定无彩色的深度 RT（PreZ/Shadow）→ 走 DrawMeshBatch 深度路径；
+    /// depth_only：当前 pass 绑定无彩色的深度 RT（PreZ/Shadow）→ 走 MeshRenderer 实例化深度路径；
     /// shadow_pass：光源视角阴影 pass（用 shadow_distance + 跳 billboard）。
     void RenderInternal(World& world, CommandBuffer& cmd_buffer,
                         bool depth_only, bool shadow_pass,

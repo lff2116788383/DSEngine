@@ -205,6 +205,11 @@ public:
     void InitForwardPbrDepthShader();
     unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
 
+    // --- 实例化仅深度着色器（B2b-6）：forward_shaded_instanced.vert + shadow.frag（空片元）。
+    // PerFrame\@0 UBO + 每实例 model SSBO\@binding0 + 植被风；只写深度、不输出颜色，配 has_color=false RT。
+    void InitForwardInstancedDepthShader();
+    unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
+
     // --- 高级 shading forward 着色器（B2c-1）：forward_pbr.vert + forward_shaded.frag。
     // PerFrame\@0 / PerScene\@1 / PerMaterial(扩展)\@2 UBO + 5 纹理槽（flat unit 0..4）。
     void InitForwardShadedShader();
@@ -300,6 +305,7 @@ private:
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
+    unsigned int forward_instanced_depth_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;

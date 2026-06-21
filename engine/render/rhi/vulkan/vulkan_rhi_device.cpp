@@ -786,6 +786,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrDepth:
             if (shader_mgr_.forward_pbr_depth_shader_handle() == 0) shader_mgr_.InitForwardPbrDepthShader();
             return shader_mgr_.forward_pbr_depth_shader_handle();
+        case BuiltinProgram::ForwardInstancedDepth:
+            if (shader_mgr_.forward_instanced_depth_shader_handle() == 0) shader_mgr_.InitForwardInstancedDepthShader();
+            return shader_mgr_.forward_instanced_depth_shader_handle();
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();

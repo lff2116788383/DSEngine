@@ -885,25 +885,6 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
         auto billboard_colored = make_gradient_verts(billboard_vertices_);
 
         // === Phase 4: 提交 instanced draw ===
-        auto fill_item = [&](MeshDrawItem& item) {
-            item.lighting_enabled = true;
-            item.shading_mode = 0;
-            item.material_albedo = glm::vec3(1.0f);
-            item.material_metallic = 0.0f;
-            item.material_roughness = 0.85f;
-            item.material_ao = 1.0f;
-            item.material_double_sided = true;
-            item.receive_shadow = true;
-            item.depth_test_enabled = true;
-            item.depth_write_enabled = true;
-            item.texture_handle = grass.albedo_texture;
-            item.light_direction = light_dir;
-            item.light_color = light_color;
-            item.light_intensity = light_intensity;
-            item.ambient_intensity = ambient_intensity;
-            item.shadow_strength = shadow_strength_val;
-        };
-
         auto submit_batch = [&](std::vector<glm::mat4>& instances,
                                const std::vector<BatchVertex>& verts,
                                const std::vector<uint32_t>& idxs) {
@@ -915,19 +896,26 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
             }
 
             if (depth_only) {
-                // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch（深度-only shader 路径，MeshRenderer 无对应实例化深度方法）。
-                MeshDrawItem item;
-                item.vertices = verts;
-                item.indices = idxs;
-                if (instances.size() == 1) {
-                    item.model = instances[0];
-                } else {
-                    item.model = glm::mat4(1.0f);
-                    item.instance_transforms = std::move(instances);
+                // 深度 pass（PreZ / Shadow）：迁移到 MeshRenderer::DrawDepthOnlyInstanced
+                //（逐帧上传顶点 + 每实例 model；ForwardInstancedDepth）。风场已由 BuildWindMatrix
+                // 烘进每实例矩阵，故 foliage=false，与彩色前向 pass 完全同变换 → 阴影/深度不错位。
+                std::vector<dse::render::MeshVertex> dv;
+                dv.reserve(verts.size());
+                for (const auto& bv : verts) {
+                    dse::render::MeshVertex v;
+                    v.position = bv.pos;
+                    v.color = bv.color;
+                    v.uv = bv.uv;
+                    v.normal = bv.normal;
+                    v.tangent = bv.tangent;
+                    dv.push_back(v);
                 }
-                fill_item(item);
-                std::vector<MeshDrawItem> items = {std::move(item)};
-                cmd_buffer.DrawMeshBatch(items);
+                std::vector<uint16_t> didx;
+                didx.reserve(idxs.size());
+                for (uint32_t ix : idxs) didx.push_back(static_cast<uint16_t>(ix));
+                mesh_renderer_.DrawDepthOnlyInstanced(
+                    cmd_buffer, *rhi_, dv, didx, instances,
+                    draw_view, draw_proj, /*foliage=*/false);
                 return;
             }
 

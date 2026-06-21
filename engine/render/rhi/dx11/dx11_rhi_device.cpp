@@ -436,6 +436,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrSkinned: return shader_mgr_.forward_pbr_skinned_shader_handle();
         case BuiltinProgram::ForwardPbrInstanced: return shader_mgr_.forward_pbr_instanced_shader_handle();
         case BuiltinProgram::ForwardPbrDepth: return shader_mgr_.forward_pbr_depth_shader_handle();
+        case BuiltinProgram::ForwardInstancedDepth: return shader_mgr_.forward_instanced_depth_shader_handle();
         case BuiltinProgram::ForwardShaded: return shader_mgr_.forward_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded: return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded: return shader_mgr_.forward_instanced_shaded_shader_handle();

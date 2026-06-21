@@ -144,6 +144,8 @@ public:
     /// 初始化仅深度 forward PBR 着色器（B2b-4；forward_pbr.vert + 空 shadow.frag；只写深度、不输出颜色）
     void InitForwardPbrDepthShader();
     unsigned int forward_pbr_depth_shader_handle() const { return forward_pbr_depth_shader_handle_; }
+    void InitForwardInstancedDepthShader();
+    unsigned int forward_instanced_depth_shader_handle() const { return forward_instanced_depth_shader_handle_; }
 
     /// 初始化高级 shading forward 着色器（B2c-1；forward_pbr.vert + forward_shaded.frag + 扩展 PerMaterial\@2 + 5 纹理槽）
     void InitForwardShadedShader();
@@ -264,6 +266,7 @@ private:
     unsigned int forward_pbr_skinned_shader_handle_ = 0;
     unsigned int forward_pbr_instanced_shader_handle_ = 0;
     unsigned int forward_pbr_depth_shader_handle_ = 0;
+    unsigned int forward_instanced_depth_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;

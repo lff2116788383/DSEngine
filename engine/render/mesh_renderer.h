@@ -518,6 +518,36 @@ public:
                      unsigned int texture,
                      unsigned int blend_mode = 0);
 
+    /// 记录一次硬件实例化仅深度绘制（B2b-6：grass 深度/阴影 pass）。顶点为局部空间，每实例 model
+    /// 矩阵走 instance SSBO\@slot0，VS 按 gl_InstanceIndex 取出后施 model + vp（可选植被风）+ 空 shadow.frag；
+    /// 只写深度、不输出颜色，配 has_color=false RT。复用 BuiltinProgram::ForwardInstancedDepth。
+    /// @param vertices        局部空间顶点（所有实例共享；VS 按实例 model 变换，不在 CPU 预变换）
+    /// @param indices         16 位索引
+    /// @param instance_models 每实例 world-space model 矩阵（写入内部实例 SSBO，0 基索引；契约 first_instance=0）
+    /// @param view/proj       相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param foliage         true=喂入全局植被风参（与 forward pass 同算，避免阴影错位）；false=不位移
+    void DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
+                                const std::vector<MeshVertex>& vertices,
+                                const std::vector<uint16_t>& indices,
+                                const std::vector<glm::mat4>& instance_models,
+                                const glm::mat4& view,
+                                const glm::mat4& proj,
+                                bool foliage = false);
+
+    /// 记录一次「共享网格模板 + 硬件实例化」仅深度绘制（B2b-6：tree 深度/阴影 pass）。绑定调用方持有的
+    /// 共享**局部空间**模板 tmpl.vertex_buffer / tmpl.index_buffer（由 BuildShadedLocalVertexBuffer 构建），
+    /// 按 [first_index, first_index+index_count) 子段对每个实例 DrawIndexedInstanced；语义同
+    /// DrawDepthOnlyInstanced（ForwardInstancedDepth + 仅 PerFrame UBO + 实例 SSBO + 可选植被风）。
+    /// index_count==0 / instance_models 空 / tmpl 句柄无效时直接返回。
+    void DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& device,
+                                              const ExternalShadedMesh& tmpl,
+                                              uint32_t index_count,
+                                              uint32_t first_index,
+                                              const std::vector<glm::mat4>& instance_models,
+                                              const glm::mat4& view,
+                                              const glm::mat4& proj,
+                                              bool foliage = false);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 

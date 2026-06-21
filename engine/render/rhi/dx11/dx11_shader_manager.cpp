@@ -445,6 +445,20 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     }
     pulse();
 
+    // ---- 实例化仅深度着色器 (B2b-6)：forward_shaded_instanced.vert（每实例 model SSBO\@t0 + 植被风）+ 空 shadow.frag ----
+    forward_instanced_depth_shader_handle_ = CreateProgramFromDXBC(
+        kforward_shaded_instanced_vert_dxbc, kforward_shaded_instanced_vert_dxbc_size,
+        kshadow_frag_dxbc, kshadow_frag_dxbc_size);
+    if (forward_instanced_depth_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin forward instanced depth shader created (DXBC): {}", forward_instanced_depth_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> fid_layout;
+        CreateInputLayoutFromReflection(kforward_shaded_instanced_vert_reflection, fid_layout);
+        CreateInputLayoutForShader(forward_instanced_depth_shader_handle_, fid_layout.data(),
+                                   static_cast<int>(fid_layout.size()));
+    }
+    pulse();
+
     // ---- 高级 shading forward 着色器 (B2c-1)：复用静态 forward_pbr.vert + forward_shaded.frag ----
     forward_shaded_shader_handle_ = CreateProgramFromDXBC(
         kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,

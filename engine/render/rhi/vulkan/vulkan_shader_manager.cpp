@@ -779,6 +779,21 @@ void VulkanShaderManager::InitForwardPbrDepthShader() {
     }
 }
 
+void VulkanShaderManager::InitForwardInstancedDepthShader() {
+    if (forward_instanced_depth_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // 实例化仅深度：forward_shaded_instanced.vert（每实例 model SSBO\@set7.b0 + 植被风）+ 空 shadow.frag；
+    // descriptor set layout 由 SPIR-V 反射驱动（PerFrame UBO + 实例 SSBO）。
+    forward_instanced_depth_shader_handle_ = CreateProgramFromSpirv(
+        kforward_shaded_instanced_vert_spv, kforward_shaded_instanced_vert_spv_size,
+        kshadow_frag_spv, kshadow_frag_spv_size);
+    if (forward_instanced_depth_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan forward instanced depth shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan forward instanced depth shader created: handle={}", forward_instanced_depth_shader_handle_);
+    }
+}
+
 void VulkanShaderManager::InitSpriteFxSdfShader() {
     if (sprite_fx_sdf_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;

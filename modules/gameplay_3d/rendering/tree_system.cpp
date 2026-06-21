@@ -353,7 +353,8 @@ void TreeSystem::Update(World& world, float /*delta_time*/) {
 
 void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
                         bool depth_only) {
-    // Opaque 彩色通道：depth_only=false → MeshRenderer；PreZ 深度预通道：depth_only=true → DrawMeshBatch。
+    // Opaque 彩色通道：depth_only=false → MeshRenderer::DrawSharedTemplateInstanced；
+    // PreZ 深度预通道：depth_only=true → MeshRenderer::DrawDepthOnlySharedTemplateInstanced。
     RenderInternal(world, cmd_buffer, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
@@ -459,39 +460,13 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
         if (transforms.empty()) continue;
 
         if (depth_only) {
-            // 深度 pass（PreZ / Shadow）保留 DrawMeshBatch：其会自动切到深度-only shader
-            // （带 foliage/实例剔除），MeshRenderer 侧无对应的实例化深度方法，故不迁移（ABI 本就保留）。
-            MeshDrawItem item;
-            item.shared_vertex_ptr = mesh_entry.vertices.data();
-            item.shared_index_ptr = mesh_entry.indices.data();
-            item.shared_vertex_count = static_cast<uint32_t>(mesh_entry.vertices.size());
-            item.shared_index_count = static_cast<uint32_t>(mesh_entry.indices.size());
-            item.foliage = true;
-            item.lighting_enabled = true;
-            item.shading_mode = 0;
-            item.material_albedo = glm::vec3(1.0f);
-            item.material_metallic = 0.0f;
-            item.material_roughness = 0.85f;
-            item.material_ao = 1.0f;
-            item.material_double_sided = false;
-            item.receive_shadow = true;
-            item.depth_test_enabled = true;
-            item.depth_write_enabled = true;
-            item.light_direction = light_dir;
-            item.light_color = light_color;
-            item.light_intensity = light_intensity;
-            item.ambient_intensity = ambient_intensity;
-            item.shadow_strength = shadow_strength_val;
-
-            if (transforms.size() == 1) {
-                item.model = transforms[0];
-            } else {
-                item.model = glm::mat4(1.0f);
-                item.instance_transforms = std::move(transforms);
-            }
-
-            std::vector<MeshDrawItem> items = {std::move(item)};
-            cmd_buffer.DrawMeshBatch(items);
+            // 深度 pass（PreZ / Shadow）：迁移到 MeshRenderer::DrawDepthOnlySharedTemplateInstanced
+            //（与彩色前向 pass 同一份共享局部空间模板 + 每实例 model；ForwardInstancedDepth + 植被风，
+            // 风场与剔除变换一致 → 阴影/深度不与彩色错位）。
+            if (!EnsureTemplateBuilt(mesh_entry)) continue;
+            mesh_renderer_.DrawDepthOnlySharedTemplateInstanced(
+                cmd_buffer, *rhi_, mesh_entry.tmpl, mesh_entry.index_count, 0u,
+                transforms, draw_view, draw_proj, /*foliage=*/true);
             continue;
         }
 

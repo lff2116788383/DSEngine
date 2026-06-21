@@ -915,6 +915,27 @@ void GLShaderManager::InitForwardPbrDepthShader() {
     BindUBOsFromReflection(forward_pbr_depth_shader_handle_, kforward_pbr_vert_reflection);
 }
 
+void GLShaderManager::InitForwardInstancedDepthShader() {
+    if (forward_instanced_depth_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: forward instanced depth 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // 实例化仅深度 VS（每实例 model SSBO\@binding0 + 植被风）+ 空 shadow.frag（仅写深度）。
+    forward_instanced_depth_shader_handle_ =
+        CompileProgram(DSE_SL(kforward_shaded_instanced_vert), DSE_SL(kshadow_frag));
+    if (forward_instanced_depth_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: forward instanced depth shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+
+    // 仅 PerFrame\@0 UBO + 实例 SSBO（layout(binding=0)，BindStorageBuffer(0) 直接命中）。
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(forward_instanced_depth_shader_handle_, kforward_shaded_instanced_vert_reflection);
+}
+
 void GLShaderManager::InitSpriteFxSdfShader() {
     if (sprite_fx_sdf_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;

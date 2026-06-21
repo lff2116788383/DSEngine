@@ -54,7 +54,7 @@ public:
     /// 每帧更新：增量维护 chunk 缓存
     void Update(World& world, float delta_time);
 
-    /// 主场景渲染：depth_only=true（PreZ 深度预通道）走 DrawMeshBatch，false（Opaque 彩色）走 MeshRenderer。
+    /// 主场景渲染：depth_only=true（PreZ 深度预通道）走 MeshRenderer::DrawDepthOnlyInstanced，false（Opaque 彩色）走 MeshRenderer::DrawInstancedShaded。
     void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
@@ -88,7 +88,7 @@ private:
     static void ExtractFrustumPlanes(const glm::mat4& vp, glm::vec4 out_planes[6]);
 
     /// 内部渲染辅助（场景 pass 和阴影 pass 共用）
-    /// depth_only：当前 pass 绑定无彩色深度 RT（PreZ/Shadow）→ DrawMeshBatch；shadow_pass：光源视角阴影 pass。
+    /// depth_only：当前 pass 绑定无彩色深度 RT（PreZ/Shadow）→ MeshRenderer 实例化深度路径；shadow_pass：光源视角阴影 pass。
     void RenderInternal(World& world, CommandBuffer& cmd_buffer,
                         bool depth_only, bool shadow_pass,
                         const glm::vec3& camera_offset = glm::vec3(0.0f));
