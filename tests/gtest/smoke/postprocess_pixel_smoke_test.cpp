@@ -1,0 +1,210 @@
+/**
+ * @file postprocess_pixel_smoke_test.cpp
+ * @brief 阶段 2b 跨后端后处理像素闸门：在 GL/DX11/Vulkan 三后端跑同一份后处理请求，
+ *        断言①解析真值（passthrough 逐像素等于输入；tonemapping 把匀色输入映成
+ *        匀色灰阶输出）②三后端互相一致（RMSE 阈内）。
+ *
+ * 本闸门是 DrawPostProcess → PostProcessRenderer 迁移的回归基线（仿 A1 skybox /
+ * B2a sprite 的做法）：断言后端无关的解析真值，而非对照旧实现，使迁移前后同一份
+ * PostProcessRequest 必须产出同样像素。迁移时只需把 RenderFn 内的 driver 从
+ * cmd.DrawPostProcess 换成 PostProcessRenderer，断言不变。
+ *
+ * 取样点用「左右竖分」与「匀色」两种对 DX11 离屏回读垂直翻转鲁棒的图案
+ * （竖直翻转不改变左右半 / 匀色），故跨后端整帧比较与定点校验都不受翻转影响。
+ */
+
+#include "rhi_pixel_harness.h"
+
+#include <gtest/gtest.h>
+
+#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/rhi_types.h"
+#include "engine/render/rhi/postprocess_common.h"
+
+#include <vector>
+
+using namespace dse::render;
+
+namespace {
+
+constexpr int kRtSize = 256;
+
+// 左半红 / 右半蓝（关于水平中线对称，竖直翻转不变）。alpha 全 255。
+std::vector<unsigned char> BuildSplitTexels() {
+    std::vector<unsigned char> px(static_cast<size_t>(kRtSize) * kRtSize * 4);
+    for (int y = 0; y < kRtSize; ++y) {
+        for (int x = 0; x < kRtSize; ++x) {
+            unsigned char* p = px.data() + (static_cast<size_t>(y) * kRtSize + x) * 4;
+            const bool left = x < kRtSize / 2;
+            p[0] = left ? 255 : 0;
+            p[1] = 0;
+            p[2] = left ? 0 : 255;
+            p[3] = 255;
+        }
+    }
+    return px;
+}
+
+// 匀色中灰（HDR 输入），用于 tonemapping：匀色进 → 匀色出。
+std::vector<unsigned char> BuildUniformTexels(unsigned char v) {
+    std::vector<unsigned char> px(static_cast<size_t>(kRtSize) * kRtSize * 4);
+    for (size_t i = 0; i < px.size(); i += 4) {
+        px[i] = v; px[i + 1] = v; px[i + 2] = v; px[i + 3] = 255;
+    }
+    return px;
+}
+
+// 公共：建源纹理 → 建输出 RT → 在一个 render pass 内跑一次 DrawPostProcess → 回读。
+RenderTargetReadback RenderPP(RhiDevice& device, const PostProcessRequest& req_template,
+                              const std::vector<unsigned char>& src_texels) {
+    const unsigned int src_tex =
+        device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
+    if (src_tex == 0) return {};
+
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = false;
+    const unsigned int rt = device.CreateRenderTarget(rt_desc);
+    if (rt == 0) { device.DeleteTexture(src_tex); return {}; }
+
+    PostProcessRequest req = req_template;
+    req.source_texture = src_tex;
+
+    // 后处理全屏四边形需要关闭背面剔除（生产里各 Pass 在 DrawPostProcess 前都会
+    // SetPipelineState 到一个 cull-off 的 PSO；DX11 默认 PP 路径不自带剔除状态，
+    // 缺此会被默认 cull-back 丢弃整屏）。深度/混合关闭。
+    PipelineStateDesc pp_pso_desc;
+    pp_pso_desc.blend_enabled = false;
+    pp_pso_desc.depth_test_enabled = false;
+    pp_pso_desc.depth_write_enabled = false;
+    pp_pso_desc.culling_enabled = false;
+    const unsigned int pp_pso = device.CreatePipelineState(pp_pso_desc);
+
+    device.BeginFrame();
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        if (pp_pso != 0) cmd->SetPipelineState(pp_pso);
+        cmd->DrawPostProcess(req);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    device.DeleteRenderTarget(rt);
+    device.DeleteTexture(src_tex);
+    return rb;
+}
+
+RenderTargetReadback RenderPassthrough(RhiDevice& device) {
+    return RenderPP(device, PostProcessRequest("postprocess_passthrough", 0), BuildSplitTexels());
+}
+
+RenderTargetReadback RenderTonemapping(RhiDevice& device) {
+    // exposure = 1.0；无 auto-exposure / LUT 额外纹理。
+    return RenderPP(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
+}
+
+void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
+                     int r, int g, int b, const char* tag) {
+    const unsigned char* p = dse::test::PixelAt(rb, x, y);
+    ASSERT_NE(p, nullptr) << tag << " (" << x << "," << y << ")";
+    const int tol = 12;
+    EXPECT_NEAR(static_cast<int>(p[0]), r, tol) << tag << " R @(" << x << "," << y << ")";
+    EXPECT_NEAR(static_cast<int>(p[1]), g, tol) << tag << " G @(" << x << "," << y << ")";
+    EXPECT_NEAR(static_cast<int>(p[2]), b, tol) << tag << " B @(" << x << "," << y << ")";
+}
+
+// passthrough 解析真值：输出逐像素等于输入（左半红、右半蓝），取样点避开 x=128 分界。
+void VerifyPassthrough(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 64, 128, 255, 0, 0, tag);    // 左半红
+    ExpectColorNear(rb, 192, 128, 0, 0, 255, tag);   // 右半蓝
+    ExpectColorNear(rb, 64, 40, 255, 0, 0, tag);     // 左半红（另一行）
+    ExpectColorNear(rb, 192, 220, 0, 0, 255, tag);   // 右半蓝（另一行）
+}
+
+// tonemapping 真值：匀色进 → 匀色灰阶出（R==G==B，且非纯黑/纯白），全屏一致。
+void VerifyTonemapping(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    const unsigned char* c = dse::test::PixelAt(rb, 128, 128);
+    ASSERT_NE(c, nullptr) << tag;
+    const int r = c[0], g = c[1], b = c[2];
+    EXPECT_GT(r, 4) << tag << " 输出过暗（接近纯黑）";
+    EXPECT_LT(r, 251) << tag << " 输出过亮（接近纯白）";
+    EXPECT_NEAR(g, r, 6) << tag << " 灰阶不保（G≠R）";
+    EXPECT_NEAR(b, r, 6) << tag << " 灰阶不保（B≠R）";
+    // 全屏匀色：四角与中心一致。
+    for (auto [x, y] : {std::pair<int,int>{20, 20}, {235, 20}, {20, 235}, {235, 235}}) {
+        const unsigned char* p = dse::test::PixelAt(rb, x, y);
+        ASSERT_NE(p, nullptr) << tag;
+        EXPECT_NEAR(static_cast<int>(p[0]), r, 6) << tag << " 非匀色 @(" << x << "," << y << ")";
+    }
+}
+
+void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
+                const dse::test::RenderFn& fn, void (*verify)(const RenderTargetReadback&, const char*)) {
+    auto r = run(fn);
+    if (!r.available) GTEST_SKIP() << backend << " unavailable: " << r.skip_reason;
+    verify(r.readback, backend);
+}
+
+void CrossBackendRmse(const dse::test::RenderFn& fn, const char* label, double gate) {
+    auto gl = dse::test::RunOpenGL(fn);
+    auto dx = dse::test::RunD3D11(fn);
+    auto vk = dse::test::RunVulkan(fn);
+    const int available = (gl.available ? 1 : 0) + (dx.available ? 1 : 0) + (vk.available ? 1 : 0);
+    if (available < 2) GTEST_SKIP() << "need >=2 backends for cross-backend RMSE";
+    if (gl.available && vk.available) {
+        double rmse = dse::test::ComputeRmse(gl.readback, vk.readback);
+        fprintf(stderr, "[PP-2b %s] GL-vs-Vulkan RMSE = %.4f\n", label, rmse);
+        EXPECT_LT(rmse, gate) << "GL vs Vulkan diverged";
+    }
+    if (gl.available && dx.available) {
+        double rmse = dse::test::ComputeRmse(gl.readback, dx.readback);
+        fprintf(stderr, "[PP-2b %s] GL-vs-D3D11 RMSE = %.4f\n", label, rmse);
+        EXPECT_LT(rmse, gate) << "GL vs D3D11 diverged";
+    }
+    if (dx.available && vk.available) {
+        double rmse = dse::test::ComputeRmse(dx.readback, vk.readback);
+        fprintf(stderr, "[PP-2b %s] D3D11-vs-Vulkan RMSE = %.4f\n", label, rmse);
+        EXPECT_LT(rmse, gate) << "D3D11 vs Vulkan diverged";
+    }
+}
+
+}  // namespace
+
+TEST(PostProcessPixelSmokeTest, OpenGLPassthrough) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderPassthrough, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, D3D11Passthrough) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderPassthrough, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, VulkanPassthrough) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderPassthrough, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendPassthroughConsistent) {
+    CrossBackendRmse(RenderPassthrough, "passthrough", 8.0);
+}
+
+TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderTonemapping, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, D3D11Tonemapping) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderTonemapping, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, VulkanTonemapping) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderTonemapping, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendTonemappingConsistent) {
+    CrossBackendRmse(RenderTonemapping, "tonemapping", 10.0);
+}
