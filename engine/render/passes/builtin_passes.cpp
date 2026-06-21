@@ -1040,7 +1040,8 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 1: 场景 → 64x64 log luminance (8x8 采样网格)
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_temp, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"lum_compute", scene_color_tex});
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"lum_compute", scene_color_tex});
     cmd_buffer.EndRenderPass();
 
     // Pass 2: 64x64 → 1x1 adapted exposure (EMA blend with previous frame)
@@ -1112,7 +1113,8 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     // Pass 2: 双边模糊
     const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess({"ssao_blur", ssao_tex});
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao_blur", ssao_tex});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1230,7 +1232,8 @@ void PresentPass::Execute(CommandBuffer& cmd_buffer) {
     }
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"copy", present_tex});
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", present_tex});
     cmd_buffer.EndRenderPass();
 }
 
@@ -1314,7 +1317,8 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
     if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess({"copy", taa_out_tex});
+        post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", taa_out_tex});
         cmd_buffer.EndRenderPass();
     }
 
@@ -1391,7 +1395,8 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (dof_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess({"copy", dof_tex});
+        post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", dof_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1497,7 +1502,8 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (mb_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        cmd_buffer.DrawPostProcess({"copy", mb_tex});
+        post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", mb_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1768,7 +1774,8 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
     if (fog_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess({"copy", fog_tex});
+        post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", fog_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1850,7 +1857,8 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
         const unsigned int cloud_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.cloud);
         if (cloud_tex != 0) {
             cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-            cmd_buffer.DrawPostProcess({"copy", cloud_tex});
+            post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", cloud_tex});
             cmd_buffer.EndRenderPass();
         }
     }

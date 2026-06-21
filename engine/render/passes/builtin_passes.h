@@ -123,6 +123,7 @@ public:
     const char* GetName() const override { return "ssao_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Contact Shadow Pass ----
@@ -157,6 +158,7 @@ public:
     const char* GetName() const override { return "auto_exposure_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- UI Pass ----
@@ -204,6 +206,7 @@ private:
     bool has_valid_history_ = false;     ///< 历史帧是否可用
     glm::vec2 current_jitter_ = {};
     int frame_index_ = 0;
+    PostProcessRenderer post_process_renderer_;
 
     void EnsureHistoryRT(int width, int height);
     static float Halton(int index, int base);
@@ -218,6 +221,7 @@ public:
     const char* GetName() const override { return "dof_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Motion Vector Pass ----
@@ -242,6 +246,7 @@ public:
     const char* GetName() const override { return "motion_blur_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- SSR Pass ----
@@ -286,6 +291,7 @@ public:
     const char* GetName() const override { return "volumetric_fog_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Volumetric Cloud Pass ----
@@ -297,6 +303,7 @@ public:
     const char* GetName() const override { return "volumetric_cloud_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- WBOIT (Weighted Blended OIT) Pass ----
@@ -341,6 +348,7 @@ public:
     const char* GetName() const override { return "present_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Hi-Z Build Pass (Compute) ----
