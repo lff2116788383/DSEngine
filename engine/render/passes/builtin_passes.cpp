@@ -1301,9 +1301,9 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
 
     // TAA resolve：写入当前帧的 history RT（直接做输出，省掉 copy）
     const int write_idx = history_index_;
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({history_rt_[write_idx], glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"taa_resolve", main_color_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"taa_resolve", main_color_tex, {
         blend_factor,
         current_jitter_.x,
         current_jitter_.y,
@@ -1317,8 +1317,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
     if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
-        post_process_renderer_.BeginFrame();
-    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", taa_out_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", taa_out_tex});
         cmd_buffer.EndRenderPass();
     }
 

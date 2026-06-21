@@ -201,6 +201,70 @@ RenderTargetReadback RenderPPViaRenderer2Tex(RhiDevice& device,
     return rb;
 }
 
+// 同 RenderPPViaRenderer，但可绑定多张额外纹理（slot → t<slot-1>），用于三纹理+
+// 效果（如 taa_resolve：source + u_motion_vector + u_history）。
+struct ExtraTex { uint32_t slot; std::vector<unsigned char> texels; };
+RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
+                                             const PostProcessRequest& req_template,
+                                             const std::vector<unsigned char>& src_texels,
+                                             const std::vector<ExtraTex>& extras) {
+    const unsigned int src_tex =
+        device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
+    if (src_tex == 0) return {};
+    std::vector<unsigned int> extra_handles;
+    for (const auto& e : extras) {
+        const unsigned int h =
+            device.CreateTexture2D(kRtSize, kRtSize, e.texels.data(), /*linear_filter=*/false);
+        if (h == 0) {
+            for (unsigned int x : extra_handles) device.DeleteTexture(x);
+            device.DeleteTexture(src_tex);
+            return {};
+        }
+        extra_handles.push_back(h);
+    }
+
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = false;
+    const unsigned int rt = device.CreateRenderTarget(rt_desc);
+    if (rt == 0) {
+        for (unsigned int x : extra_handles) device.DeleteTexture(x);
+        device.DeleteTexture(src_tex);
+        return {};
+    }
+
+    PostProcessRequest req = req_template;
+    req.source_texture = src_tex;
+    for (size_t i = 0; i < extras.size(); ++i) req.Tex(extras[i].slot, extra_handles[i]);
+
+    PostProcessRenderer renderer;
+    bool drawn = false;
+    device.BeginFrame();
+    renderer.BeginFrame();
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        drawn = renderer.Draw(*cmd, device, req);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb;
+    if (drawn) rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    renderer.Shutdown(device);
+    device.DeleteRenderTarget(rt);
+    device.DeleteTexture(src_tex);
+    for (unsigned int x : extra_handles) device.DeleteTexture(x);
+    return rb;
+}
+
 RenderTargetReadback RenderPassthrough(RhiDevice& device) {
     return RenderPP(device, PostProcessRequest("postprocess_passthrough", 0), BuildSplitTexels());
 }
@@ -267,6 +331,18 @@ RenderTargetReadback RenderSsrEarlyOut(RhiDevice& device) {
         PostProcessRequest("ssr", 0, {100.0f, 0.5f, 1.0f, 32.0f, 0.1f, 1000.0f,
                            static_cast<float>(kRtSize), static_cast<float>(kRtSize), 0.1f, 0.8f}),
         BuildUniformTexels(255), 2, BuildUniformTexels(200));
+}
+
+// taa_resolve（三纹理）：frame_index=0 → alpha=1 → 输出 = current（screenTexture@t0）。
+// source=左红右蓝分块、motion_vector(t1)=匀色 0、history(t4)=匀色任意。
+// 输出复用 passthrough 真值 → 验证三纹理绑定 + 源@t0 + frame_index UBO 走首帧路径。
+RenderTargetReadback RenderTaaFirstFrame(RhiDevice& device) {
+    return RenderPPViaRendererNTex(
+        device,
+        PostProcessRequest("taa_resolve", 0, {0.9f, 0.0f, 0.0f, 0.0f,
+                           static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
+        BuildSplitTexels(),
+        {{2, BuildUniformTexels(0)}, {5, BuildUniformTexels(64)}});
 }
 
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
@@ -349,6 +425,11 @@ void VerifySsrEarlyOut(const RenderTargetReadback& rb, const char* tag) {
     ExpectColorNear(rb, 128, 128, 0, 0, 0, tag);
     ExpectColorNear(rb, 40, 40, 0, 0, 0, tag);
     ExpectColorNear(rb, 220, 220, 0, 0, 0, tag);
+}
+
+// taa 首帧真值：alpha=1 → 输出 = current = source（复用 passthrough 左红右蓝）。
+void VerifyTaaFirstFrame(const RenderTargetReadback& rb, const char* tag) {
+    VerifyPassthrough(rb, tag);
 }
 
 void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
@@ -487,6 +568,20 @@ TEST(PostProcessPixelSmokeTest, VulkanSsrEarlyOut) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendSsrEarlyOutConsistent) {
     CrossBackendRmse(RenderSsrEarlyOut, "ssr_early_out", 8.0);
+}
+
+// taa_resolve 经 PostProcessRenderer：三纹理绑定 + frame_index UBO 首帧路径。
+TEST(PostProcessPixelSmokeTest, OpenGLTaaFirstFrame) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderTaaFirstFrame, VerifyTaaFirstFrame);
+}
+TEST(PostProcessPixelSmokeTest, D3D11TaaFirstFrame) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderTaaFirstFrame, VerifyTaaFirstFrame);
+}
+TEST(PostProcessPixelSmokeTest, VulkanTaaFirstFrame) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderTaaFirstFrame, VerifyTaaFirstFrame);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendTaaFirstFrameConsistent) {
+    CrossBackendRmse(RenderTaaFirstFrame, "taa_first_frame", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {

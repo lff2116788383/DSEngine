@@ -6,11 +6,11 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 5) uniform sampler2D u_history;
 layout(set = 2, binding = 2) uniform sampler2D u_motion_vector;
 
-layout(push_constant) uniform TaaParams {
+layout(std140, set = 2, binding = 0) uniform TaaParams {
     float u_blend_factor;
     float u_jitter_x;
     float u_jitter_y;
-    int   u_frame_index;
+    float u_frame_index;
     float u_screen_w;
     float u_screen_h;
 };
@@ -37,6 +37,6 @@ void main() {
     history = clamp(history, aabb_min, aabb_max);
     float velocity_len = length(mv * vec2(u_screen_w, u_screen_h));
     float vel_weight = clamp(velocity_len * 0.5, 0.0, 0.5);
-    float alpha = u_frame_index < 2 ? 1.0 : clamp(u_blend_factor + vel_weight, u_blend_factor, 1.0);
+    float alpha = int(u_frame_index) < 2 ? 1.0 : clamp(u_blend_factor + vel_weight, u_blend_factor, 1.0);
     FragColor = vec4(mix(history, current, alpha), 1.0);
 }
