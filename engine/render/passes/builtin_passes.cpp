@@ -1152,9 +1152,9 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
     float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
     float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.contact_shadow, glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess({"contact_shadow", depth_tex, {
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"contact_shadow", depth_tex, {
         light_dir.x, light_dir.y, light_dir.z,
         near_plane,
         far_plane,

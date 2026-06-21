@@ -135,6 +135,7 @@ public:
     const char* GetName() const override { return "contact_shadow_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- FXAA Pass ----

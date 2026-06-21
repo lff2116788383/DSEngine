@@ -4,14 +4,17 @@ layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 
-layout(push_constant) uniform ContactShadowParams {
-    vec3 u_light_dir;
+layout(std140, set = 2, binding = 0) uniform ContactShadowParams {
+    float u_light_dir_x;
+    float u_light_dir_y;
+    float u_light_dir_z;
     float u_near;
     float u_far;
-    vec2 u_screen_size;
+    float u_screen_w;
+    float u_screen_h;
     float u_strength;
+    float u_num_steps;
     float u_step_size;
-    int u_num_steps;
 };
 
 float linearizeDepth(float d) {
@@ -23,11 +26,11 @@ void main() {
     float depth = texture(screenTexture, vTexCoords).r;
     if (depth >= 1.0) { FragColor = vec4(1.0); return; }
     float linDepth = linearizeDepth(depth);
-    vec3 lightDir = normalize(u_light_dir);
-    vec2 texelSize = 1.0 / u_screen_size;
+    vec3 lightDir = normalize(vec3(u_light_dir_x, u_light_dir_y, u_light_dir_z));
+    vec2 texelSize = 1.0 / vec2(u_screen_w, u_screen_h);
     float occlusion = 0.0;
     int validSteps = 0;
-    for (int i = 1; i <= u_num_steps; ++i) {
+    for (int i = 1; i <= int(u_num_steps); ++i) {
         float dist = u_step_size * float(i);
         vec2 sampleUV = vTexCoords + lightDir.xy * texelSize * dist * 50.0;
         if (sampleUV.x < 0.0 || sampleUV.y < 0.0 || sampleUV.x > 1.0 || sampleUV.y > 1.0) break;
