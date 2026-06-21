@@ -1487,9 +1487,9 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
 
     // motion_blur 现在读 motion_vector RT 而非深度 + reproj
     // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"motion_blur", mv_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"motion_blur", mv_tex, {
         pp_config.motion_blur_intensity,
         static_cast<float>(pp_config.motion_blur_samples),
         static_cast<float>(Screen::width()),
@@ -1501,8 +1501,7 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int mb_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (mb_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        post_process_renderer_.BeginFrame();
-    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", mb_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", mb_tex});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1538,9 +1537,9 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     // Pass 1: 渲染 SSR 到半分辨率 ssr RT
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssr, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"ssr", depth_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"ssr", depth_tex, {
         pp_config.ssr_max_distance,
         pp_config.ssr_thickness,
         pp_config.ssr_step_size,

@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_color_texture;
 
-layout(push_constant) uniform MotionBlurParams {
+layout(std140, set = 2, binding = 0) uniform MotionBlurParams {
     float intensity;
     float num_samples;
     float screen_w;

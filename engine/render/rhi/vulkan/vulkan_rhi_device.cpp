@@ -818,6 +818,8 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "edge_detect") return shader_mgr_.edge_detect_shader_handle();
     if (effect_name == "lum_adapt") return shader_mgr_.lum_adapt_shader_handle();
     if (effect_name == "dof") return shader_mgr_.dof_shader_handle();
+    if (effect_name == "motion_blur") return shader_mgr_.motion_blur_shader_handle();
+    if (effect_name == "ssr") return shader_mgr_.ssr_shader_handle();
     return 0;
 }
 

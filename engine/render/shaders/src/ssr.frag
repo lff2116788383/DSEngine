@@ -5,11 +5,11 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_color_texture;
 
-layout(push_constant) uniform SsrParams {
+layout(std140, set = 2, binding = 0) uniform SsrParams {
     float max_distance;
     float thickness;
     float step_size;
-    int max_steps;
+    float max_steps;
     float near_plane;
     float far_plane;
     float screen_w;
@@ -50,14 +50,15 @@ void main() {
     vec2 texel = 1.0 / vec2(screen_w, screen_h);
     vec2 ray_uv = vTexCoords;
     float ray_depth = lin_depth;
-    for (int i = 0; i < max_steps; ++i) {
+    int num_steps = int(max_steps);
+    for (int i = 0; i < num_steps; ++i) {
         ray_uv += reflect_dir.xy * texel * step_size;
         if (ray_uv.x < 0.0 || ray_uv.x > 1.0 || ray_uv.y < 0.0 || ray_uv.y > 1.0) break;
         float sample_depth = linearizeDepth(textureLod(screenTexture, ray_uv, 0.0).r);
         ray_depth += reflect_dir.z * step_size;
         float depth_diff = ray_depth - sample_depth;
         if (depth_diff > 0.0 && depth_diff < thickness) {
-            float step_fade = 1.0 - float(i) / float(max_steps);
+            float step_fade = 1.0 - float(i) / max_steps;
             float screen_fade = edgeFade(ray_uv);
             float hit_dc = linearizeDepth(textureLod(screenTexture, ray_uv, 0.0).r);
             float hit_dl = linearizeDepth(textureLod(screenTexture, ray_uv - vec2(texel.x, 0.0), 0.0).r);

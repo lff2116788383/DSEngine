@@ -259,6 +259,7 @@ public:
     const char* GetName() const override { return "ssr_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Outline / Edge Detection Pass ----

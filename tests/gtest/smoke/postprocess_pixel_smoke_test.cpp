@@ -249,6 +249,26 @@ RenderTargetReadback RenderDofColorPass(RhiDevice& device) {
         BuildUniformTexels(128), 2, BuildUniformTexels(200));
 }
 
+// motion_blur（双纹理）：mv 源(t0)=匀色 0 → velocity=0 → 所有采样落中心 →
+// 输出 = u_color_texture（t1）匀色 180。验证额外纹理 t1 绑定 + 着色器 UBO 上传。
+RenderTargetReadback RenderMotionBlurColorPass(RhiDevice& device) {
+    return RenderPPViaRenderer2Tex(
+        device,
+        PostProcessRequest("motion_blur", 0, {1.0f, 8.0f,
+                           static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
+        BuildUniformTexels(0), 2, BuildUniformTexels(180));
+}
+
+// ssr：depth>=1.0 像素走早退（FragColor=0）。源(depth@t0)=匀色 255(=1.0) → 全屏早退 → 全黑。
+// 验证 ssr 着色器编译 / 源纹理绑定 / UBO 上传不崩（颜色 t1 提供但早退路径不读）。
+RenderTargetReadback RenderSsrEarlyOut(RhiDevice& device) {
+    return RenderPPViaRenderer2Tex(
+        device,
+        PostProcessRequest("ssr", 0, {100.0f, 0.5f, 1.0f, 32.0f, 0.1f, 1000.0f,
+                           static_cast<float>(kRtSize), static_cast<float>(kRtSize), 0.1f, 0.8f}),
+        BuildUniformTexels(255), 2, BuildUniformTexels(200));
+}
+
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
                      int r, int g, int b, const char* tag) {
     const unsigned char* p = dse::test::PixelAt(rb, x, y);
@@ -311,6 +331,24 @@ void VerifyDofColorPass(const RenderTargetReadback& rb, const char* tag) {
     ExpectColorNear(rb, 128, 128, 200, 200, 200, tag);
     ExpectColorNear(rb, 40, 40, 200, 200, 200, tag);
     ExpectColorNear(rb, 220, 220, 200, 200, 200, tag);
+}
+
+// motion_blur 双纹理真值：全屏 = 颜色纹理 t1 的匀色 180。
+void VerifyMotionBlurColorPass(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 180, 180, 180, tag);
+    ExpectColorNear(rb, 40, 220, 180, 180, 180, tag);
+    ExpectColorNear(rb, 220, 40, 180, 180, 180, tag);
+}
+
+// ssr 早退真值：全屏近黑。
+void VerifySsrEarlyOut(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 0, 0, 0, tag);
+    ExpectColorNear(rb, 40, 40, 0, 0, 0, tag);
+    ExpectColorNear(rb, 220, 220, 0, 0, 0, tag);
 }
 
 void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
@@ -421,6 +459,34 @@ TEST(PostProcessPixelSmokeTest, VulkanDofColorPass) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendDofColorPassConsistent) {
     CrossBackendRmse(RenderDofColorPass, "dof_color", 8.0);
+}
+
+// motion_blur 经 PostProcessRenderer：双纹理额外通路（u_color_texture@t1）。
+TEST(PostProcessPixelSmokeTest, OpenGLMotionBlurColorPass) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderMotionBlurColorPass, VerifyMotionBlurColorPass);
+}
+TEST(PostProcessPixelSmokeTest, D3D11MotionBlurColorPass) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderMotionBlurColorPass, VerifyMotionBlurColorPass);
+}
+TEST(PostProcessPixelSmokeTest, VulkanMotionBlurColorPass) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderMotionBlurColorPass, VerifyMotionBlurColorPass);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendMotionBlurColorPassConsistent) {
+    CrossBackendRmse(RenderMotionBlurColorPass, "motion_blur_color", 8.0);
+}
+
+// ssr 经 PostProcessRenderer：depth>=1.0 早退黑屏（源绑定 + UBO 上传健全性）。
+TEST(PostProcessPixelSmokeTest, OpenGLSsrEarlyOut) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderSsrEarlyOut, VerifySsrEarlyOut);
+}
+TEST(PostProcessPixelSmokeTest, D3D11SsrEarlyOut) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderSsrEarlyOut, VerifySsrEarlyOut);
+}
+TEST(PostProcessPixelSmokeTest, VulkanSsrEarlyOut) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderSsrEarlyOut, VerifySsrEarlyOut);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendSsrEarlyOutConsistent) {
+    CrossBackendRmse(RenderSsrEarlyOut, "ssr_early_out", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {
