@@ -258,11 +258,6 @@ void OpenGLCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint
     device_->RealDrawIndexedIndirect(indirect_buffer, byte_offset);
 }
 
-void OpenGLCommandBuffer::DrawPostProcess(PostProcessRequest request) {
-    if (!device_) return;
-    device_->RealSubmitDrawPostProcess(request);
-}
-
 void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     if (!device_ || items.empty()) return;
     device_->RealSubmitDrawHairStrands(items, view, projection);
@@ -896,10 +891,6 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
 
 void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawMeshBatch(items, view, projection, state_mgr_, shader_mgr_, resource_mgr_, ubo_mgr_);
-}
-
-void OpenGLRhiDevice::RealSubmitDrawPostProcess(const PostProcessRequest& request) {
-    draw_executor_.DrawPostProcess(request, shader_mgr_);
 }
 
 void OpenGLRhiDevice::RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {

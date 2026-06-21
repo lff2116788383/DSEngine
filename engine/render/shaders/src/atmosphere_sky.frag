@@ -6,7 +6,7 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 layout(set = 2, binding = 3) uniform sampler2D u_transmittance_lut;
 
-layout(push_constant) uniform AtmosphereSkyParams {
+layout(std140, set = 2, binding = 0) uniform AtmosphereSkyParams {
     float u_sun_dir_x;  float u_sun_dir_y;  float u_sun_dir_z;
     float u_rayleigh_r; float u_rayleigh_g; float u_rayleigh_b;
     float u_rayleigh_scale_h;

@@ -60,10 +60,10 @@ void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     }
 }
 
-void DX11CommandBuffer::DrawPostProcess(PostProcessRequest request) {
+void DX11CommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
     if (!device_) return;
-    device_->draw_executor().DrawPostProcess(request,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
+    device_->draw_executor().DispatchComputePass(dispatch,
+        device_->shader_mgr(), device_->resource_mgr());
 }
 
 void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
@@ -442,7 +442,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
 
 unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
-    // 其余效果尚未迁到 PostProcessRenderer，返回 0 → 调用方继续走 DrawPostProcess ABI。
+    // PostProcessRenderer 按 effect 名取 gen-PP 程序句柄；未映射效果返回 0（调用方跳过）。
     if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
         effect_name == "ui_overlay") {
         return shader_mgr_.postprocess_shader_handle();
@@ -471,7 +471,14 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
     if (effect_name == "ssao_apply") return shader_mgr_.ssao_apply_shader_handle();
     if (effect_name == "light_shaft") return shader_mgr_.light_shaft_shader_handle();
     if (effect_name == "atmosphere_transmittance_lut") return shader_mgr_.atmosphere_transmittance_lut_shader_handle();
+    if (effect_name == "atmosphere_sky") return shader_mgr_.atmosphere_sky_shader_handle();
+    if (effect_name == "bloom_composite") return shader_mgr_.bloom_composite_ssao_ae_shader_handle();
     return 0;
+}
+
+unsigned int DX11RhiDevice::GetBloomComputeShader(bool upsample) const {
+    return upsample ? shader_mgr_.bloom_upsample_cs_handle()
+                    : shader_mgr_.bloom_downsample_cs_handle();
 }
 
 unsigned int DX11RhiDevice::GetSkyboxCubeVertexBuffer() {

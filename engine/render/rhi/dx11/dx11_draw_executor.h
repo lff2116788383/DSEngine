@@ -102,10 +102,11 @@ public:
                         DX11ShaderManager& shader_mgr,
                         DX11ResourceManager& resource_mgr);
 
-    void DrawPostProcess(const PostProcessRequest& request,
-                          DX11PipelineStateManager& pipeline_mgr,
-                          DX11ShaderManager& shader_mgr,
-                          DX11ResourceManager& resource_mgr);
+    // CommandBuffer 级 compute 原语：输入 dispatch.source_texture，输出当前绑定 RT 的 UAV。
+    // 复刻原 bloom CS 路径（解绑 RTV → CSSetUAV → Dispatch → 重绑 RTV）。
+    void DispatchComputePass(const ComputeDispatch& dispatch,
+                             DX11ShaderManager& shader_mgr,
+                             DX11ResourceManager& resource_mgr);
 
     void DrawHairStrands(const std::vector<HairDrawItem>& items,
                           const glm::mat4& view, const glm::mat4& projection,

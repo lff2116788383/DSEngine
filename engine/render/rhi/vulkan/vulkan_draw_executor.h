@@ -95,10 +95,11 @@ public:
                         VulkanShaderManager& shader_mgr,
                         VulkanResourceManager& resource_mgr);
 
-    void DrawPostProcess(VkCommandBuffer cmd_buf,
-                          const PostProcessRequest& request,
-                          VulkanPipelineStateManager& pipeline_mgr,
-                          VulkanShaderManager& shader_mgr);
+    // CommandBuffer 级 compute 原语：输入 dispatch.source_texture，输出当前绑定 RT 的 storage image。
+    // 复刻原 bloom CS 路径（DispatchBloomCompute，含 layout 过渡 + 8×8 tile 调度）。
+    void DispatchComputePass(VkCommandBuffer cmd_buf,
+                             const ComputeDispatch& dispatch,
+                             VulkanShaderManager& shader_mgr);
 
 
     void DrawHairStrands(VkCommandBuffer cmd_buf,

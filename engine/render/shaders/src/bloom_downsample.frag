@@ -4,11 +4,12 @@ layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 
-layout(std140, set = 2, binding = 2) uniform BloomParams {
-    vec2 srcResolution;
+layout(std140, set = 2, binding = 0) uniform BloomParams {
+    float srcResX;
+    float srcResY;
 };
 void main() {
-    vec2 srcTexelSize = 1.0 / srcResolution;
+    vec2 srcTexelSize = 1.0 / vec2(srcResX, srcResY);
     float x = srcTexelSize.x;
     float y = srcTexelSize.y;
     vec3 a = texture(screenTexture, vec2(vTexCoords.x - 2*x, vTexCoords.y + 2*y)).rgb;

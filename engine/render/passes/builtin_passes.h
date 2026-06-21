@@ -12,6 +12,7 @@
 #include "engine/render/scene_renderer.h"
 #include "engine/render/skybox_renderer.h"
 #include "engine/render/post_process_renderer.h"
+#include "engine/render/bloom_renderer.h"
 #include <glm/glm.hpp>
 
 namespace dse {
@@ -111,7 +112,8 @@ public:
     const char* GetName() const override { return "post_process_pass"; }
 private:
     RenderPassContext& ctx_;
-    PostProcessRenderer post_process_renderer_;
+    PostProcessRenderer post_process_renderer_;  ///< bloom_extract 全屏 quad
+    BloomRenderer bloom_renderer_;               ///< mip 链（compute 或 quad，按后端能力分派）
 };
 
 // ---- SSAO Pass ----

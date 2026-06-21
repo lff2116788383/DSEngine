@@ -22,6 +22,7 @@
 #endif
 #include <gtest/gtest.h>
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
+#include "engine/render/post_process_renderer.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -288,7 +289,9 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
     unsigned int ps = device_.CreatePipelineState(ps_desc);
     ASSERT_NE(ps, 0u);
 
+    dse::render::PostProcessRenderer pp_renderer;
     device_.BeginFrame();
+    pp_renderer.BeginFrame();
     auto cmd = device_.CreateCommandBuffer();
     ASSERT_NE(cmd, nullptr);
 
@@ -309,7 +312,8 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
         cmd->SetPipelineState(ps);
-        cmd->DrawPostProcess(dse::render::PostProcessRequest("copy", device_.GetRenderTargetColorTexture(src)));
+        pp_renderer.Draw(*cmd, device_,
+            dse::render::PostProcessRequest("copy", device_.GetRenderTargetColorTexture(src)));
         cmd->EndRenderPass();
     }
     device_.Submit(cmd);
@@ -336,6 +340,7 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
         ASSERT_TRUE(within_tol(px[3], exp_a)) << "pixel " << p << " A=" << int(px[3]) << " expected~" << int(exp_a);
     }
 
+    pp_renderer.Shutdown(device_);
     device_.resource_mgr().DeleteRenderTarget(src);
     device_.resource_mgr().DeleteRenderTarget(dst);
 }

@@ -818,6 +818,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     post_process_renderer_.BeginFrame();
+    bloom_renderer_.BeginFrame();
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
@@ -833,7 +834,9 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     int mip_h = Screen::height() / 2;
     for (size_t i = 0; i < ctx_.render_targets.bloom_mips.size(); ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_mips[i], glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess({"bloom_downsample", current_src, {static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2)}});
+        // compute 后端（DX11/Vulkan）走 DispatchComputePass 写 UAV；GL 回退全屏 quad。
+        bloom_renderer_.Downsample(cmd_buffer, *ctx_.rhi_device, current_src,
+                                   static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2));
         cmd_buffer.EndRenderPass();
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         mip_w /= 2;
@@ -847,7 +850,9 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
         const float mip_texel = 1.0f / static_cast<float>(std::max(mip_w, 1));
-        cmd_buffer.DrawPostProcess({"bloom_upsample", current_src, {mip_texel, pp_config.bloom_mip_weight}});
+        // compute 后端（DX11/Vulkan）走 DispatchComputePass 累加进 UAV；GL 回退全屏 quad（alpha 混合）。
+        bloom_renderer_.Upsample(cmd_buffer, *ctx_.rhi_device, current_src,
+                                 mip_texel, pp_config.bloom_mip_weight);
         cmd_buffer.EndRenderPass();
     }
 }
@@ -936,24 +941,9 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     // bloom_composite 是历史 effect name，当前实际承担 final composite 职责。
-    // 以下为 final composite 参数布局（按固定顺序传递到三后端）:
-    // [0] bloom_tex_handle
-    // [1] manual_exposure
-    // [2] bloom_intensity
-    // [3] bloom_enabled
-    // [4] ssao_tex_handle
-    // [5] auto_exposure_tex_handle
-    // [6] lut_tex_handle
-    // [7] lut_intensity
-    // [8] contact_shadow_tex_handle
-    // [9] contact_shadow_strength
-    // [10] vignette_enabled
-    // [11] vignette_intensity
-    // [12] vignette_radius
-    // [13] vignette_softness
-    // [14] film_grain_enabled
-    // [15] film_grain_intensity
-    // [16] film_grain_time
+    // 已迁到 PostProcessRenderer：纯 float UBO（16 标量，见下方 PostProcessRequest，
+    // 字段顺序与 bloom_composite_ssao_ae.frag 的 std140 UBO 一致）；各纹理经 .Tex/.Tex3D
+    // 写入对应 binding（bloomBlur@2 / ssao@3 / autoExposure@4 / lut@5(3D) / contactShadow@6）。
     float film_grain_time = 0.0f;
     if (pp_enabled && pp_config.film_grain_enabled && pp_config.film_grain_intensity > 0.0f) {
         film_grain_time = static_cast<float>(std::fmod(Time::TimeSinceStartup() * pp_config.film_grain_time_scale, 4096.0f));
@@ -967,18 +957,22 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         const unsigned int bloom_tex = (bloom_enabled && !ctx_.render_targets.bloom_mips.empty())
             ? ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[0])
             : 0;
-        cmd_buffer.DrawPostProcess({"bloom_composite", scene_color_tex, {
-            static_cast<float>(bloom_tex),
+        const float bloom_intensity = ctx_.pipeline_overrides.bloom_intensity >= 0.0f
+            ? ctx_.pipeline_overrides.bloom_intensity
+            : pp_config.bloom_intensity;
+        const unsigned int lut_handle = static_cast<unsigned int>(lut_tex);
+        // bloom_composite 已迁到 PostProcessRenderer：params 纯 float UBO（16 标量，
+        // 与 bloom_composite_ssao_ae.frag 字段同序）；纹理一律经 .Tex/.Tex3D 写入，
+        // 使能标志按纹理在否派生（渲染器额外纹理循环遇 handle==0 即停，故仅挂非零纹理）。
+        PostProcessRequest req{"bloom_composite", scene_color_tex, {
             pp_config.exposure,
-            ctx_.pipeline_overrides.bloom_intensity >= 0.0f
-                ? ctx_.pipeline_overrides.bloom_intensity
-                : pp_config.bloom_intensity,
-            bloom_enabled ? 1.0f : 0.0f,
-            static_cast<float>(ssao_tex),
-            static_cast<float>(ae_tex),
-            lut_tex,
+            bloom_intensity,
+            bloom_tex != 0 ? 1.0f : 0.0f,
+            ssao_tex != 0 ? 1.0f : 0.0f,
+            ae_tex != 0 ? 1.0f : 0.0f,
+            lut_handle != 0 ? 1.0f : 0.0f,
             lut_intensity,
-            static_cast<float>(contact_shadow_tex),
+            contact_shadow_tex != 0 ? 1.0f : 0.0f,
             pp_config.contact_shadow_strength,
             pp_config.vignette_enabled ? 1.0f : 0.0f,
             pp_config.vignette_intensity,
@@ -987,7 +981,13 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             pp_config.film_grain_enabled ? 1.0f : 0.0f,
             pp_config.film_grain_intensity,
             film_grain_time
-        }});
+        }};
+        if (bloom_tex != 0)          req.Tex(2, bloom_tex);
+        if (ssao_tex != 0)           req.Tex(3, ssao_tex);
+        if (ae_tex != 0)             req.Tex(4, ae_tex);
+        if (lut_handle != 0)         req.Tex3D(5, lut_handle);
+        if (contact_shadow_tex != 0) req.Tex(6, contact_shadow_tex);
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
     } else {
         // tonemapping / ssao_apply 已迁到 PostProcessRenderer：UBO 为 4 标量
         // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}；
@@ -1012,9 +1012,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     if (ui_color_tex != 0) {
-        // 注：bloom_composite 仍走旧 ABI（多变体着色器+vignette/film_grain，待收敛）；
-        // ui_overlay 与其同属 composite 延后簇，暂留 DrawPostProcess。
-        cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", ui_color_tex, {}, true});
     }
     cmd_buffer.EndRenderPass();
 }

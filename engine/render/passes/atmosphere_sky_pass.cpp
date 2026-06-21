@@ -92,7 +92,7 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"atmosphere_sky", scene_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"atmosphere_sky", scene_tex, {
         sun_dir.x, sun_dir.y, sun_dir.z,
         atm.rayleigh_coeff.x, atm.rayleigh_coeff.y, atm.rayleigh_coeff.z,
         atm.rayleigh_scale_height,

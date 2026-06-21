@@ -419,6 +419,24 @@ struct HairDrawItem {
 };
 
 // ============================================================
+// Compute 调度原语 (B-compute)
+// ============================================================
+
+/// CommandBuffer 级通用 compute 调度描述（取代把 bloom mip 等 compute 效果
+/// 藏在 DrawPostProcess 里靠 effect_name 检测的旧做法）。
+/// 语义：以 source_texture 作输入 SRV（combined image sampler binding 0），
+/// 当前 BeginRenderPass 绑定的 RT 颜色附件作输出 UAV/storage image，跑一次 compute；
+/// 线程组数与 texel 尺寸由后端按 RT/源纹理尺寸推导（8×8 tile），与旧 bloom CS 路径一致。
+/// blend_weight 供 upsample 等需要混合权重的 CS 经参数块读取。
+/// 仅 compute 后端（DX11 FL11+/Vulkan）消费；不支持 compute 的后端（GL）由高层渲染器
+/// 经 GetBloomComputeShader()==0 回退全屏 quad，不会调到该原语，故默认空实现即可。
+struct ComputeDispatch {
+    unsigned int shader = 0;          ///< 设备级 compute shader handle
+    unsigned int source_texture = 0;  ///< 输入 SRV（0 表示无输入）
+    float blend_weight = 1.0f;        ///< 混合权重（upsample 累加用，downsample 取 1.0）
+};
+
+// ============================================================
 // GPU Driven Indirect Draw
 // ============================================================
 

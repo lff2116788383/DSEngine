@@ -28,6 +28,7 @@
 #include "engine/ecs/components_3d.h"
 #include <vector>
 #include <string>
+#include <algorithm>
 
 using namespace dse::render;
 
@@ -46,8 +47,8 @@ public:
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
     MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
-    MOCK_METHOD(void, DrawPostProcess, (dse::render::PostProcessRequest request), (override));
     MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
+    MOCK_METHOD(void, DispatchComputePass, (const ComputeDispatch&), (override));
     MOCK_METHOD(void, SetViewport, (int, int, int, int), (override));
     MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, unsigned int), (override));
     MOCK_METHOD(void, BindGlobalSpotShadowMap, (unsigned int, unsigned int), (override));
@@ -308,6 +309,16 @@ TEST_F(RenderGraphIntegrationTest, WithMarkOutputWithoutPasspass) {
 class StubRhiDevice : public RhiDevice {
     RenderStats stats_{};
 public:
+    // 记录高层 Pass 迁移后经 PostProcessRenderer 向后端索取的 gen-PP 效果名，
+    // 用于断言 CompositePass 的路由（bloom 启用→bloom_composite / ui_overlay 等）。
+    mutable std::vector<std::string> requested_pp_effects;
+    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override {
+        requested_pp_effects.push_back(effect_name);
+        return 1;  // 非 0：表示该效果已迁到 PostProcessRenderer（受支持）
+    }
+    // bloom mip 链走 CommandBuffer 级 compute 原语（Option A）：返回非 0 句柄启用 compute
+    // 路径（downsample=99 / upsample=88），供 BloomPass 测试区分两种调度。
+    unsigned int GetBloomComputeShader(bool upsample) const override { return upsample ? 88u : 99u; }
     void Shutdown() override {}
     void BeginFrame() override {}
     unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }
@@ -363,29 +374,32 @@ protected:
     }
 };
 
-// 测试 泛光通道：泛光通道禁用不调用绘制后期处理
-TEST_F(BloomPassTest, BloomPass_Disabled_DoesNotCallDrawPostProcess) {
+// 测试 泛光通道：泛光禁用时不发起 compute 调度（提前返回，无渲染）
+TEST_F(BloomPassTest, BloomPass_Disabled_DoesNotDispatch) {
     SetBloomConfig(false);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_)).Times(0);
+    EXPECT_CALL(mock, DispatchComputePass(::testing::_)).Times(0);
+    EXPECT_CALL(mock, BeginRenderPass(::testing::_)).Times(0);
 
     dse::render::BloomPass pass(ctx);
     pass.Execute(mock);
 }
 
-// 测试 泛光通道：泛光通道启用Callsdownsample Andupsample
-TEST_F(BloomPassTest, BloomPass_Enabled_CallsdownsampleAndupsample) {
+// 测试 泛光通道：泛光启用 → compute 后端经 DispatchComputePass 跑 down/upsample mip 链。
+// stub 设备 GetBloomComputeShader 返回 99(降)/88(升)，据 ComputeDispatch::shader 区分两段。
+TEST_F(BloomPassTest, BloomPass_Enabled_DispatchesDownsampleAndUpsample) {
     SetBloomConfig(true, 0.8f);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    // 兜底：允许 bloom_extract 等其他效果自由调用
-    EXPECT_CALL(mock, DrawPostProcess(::testing::_))
+    // 兜底：允许任意 compute 调度
+    EXPECT_CALL(mock, DispatchComputePass(::testing::_))
         .Times(::testing::AnyNumber());
-    // 具体验证
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_downsample")))
+    // 降采样 mip 链（shader=99）
+    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(&ComputeDispatch::shader, 99u)))
         .Times(::testing::AtLeast(1));
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_upsample")))
+    // 升采样 mip 链（shader=88）
+    EXPECT_CALL(mock, DispatchComputePass(::testing::Field(&ComputeDispatch::shader, 88u)))
         .Times(::testing::AtLeast(1));
     EXPECT_CALL(mock, BeginRenderPass(::testing::_))
         .Times(::testing::AtLeast(6));
@@ -425,34 +439,32 @@ protected:
     }
 };
 
-// 测试 组合通道：组合通道泛光禁用Usecopy
-TEST_F(CompositePassTest, CompositePass_BloomDisabled_Usecopy) {
+// CompositePass 已全迁到 PostProcessRenderer：路由经 device.GetGenPPShaderProgram(effect)
+// 体现（stub 记录效果名）。bloom 禁用 → 走 tonemapping，不取 bloom_composite；ui_overlay 恒取。
+TEST_F(CompositePassTest, CompositePass_BloomDisabled_UsesTonemapping) {
     SetBloomConfig(false);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    // tonemapping/ssao_apply 已迁到 PostProcessRenderer（走通用原语，不再经 DrawPostProcess）；
-    // 此处验证 bloom 禁用时不会走 bloom_composite，且 ui_overlay 仍经 DrawPostProcess。
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_composite")))
-        .Times(0);
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "ui_overlay")))
-        .Times(1);
-
     dse::render::CompositePass pass(ctx);
     pass.Execute(mock);
+
+    const auto& fx = rhi_dev.requested_pp_effects;
+    EXPECT_EQ(std::count(fx.begin(), fx.end(), std::string("bloom_composite")), 0);
+    EXPECT_EQ(std::count(fx.begin(), fx.end(), std::string("tonemapping")), 1);
+    EXPECT_EQ(std::count(fx.begin(), fx.end(), std::string("ui_overlay")), 1);
 }
 
-// 测试 组合通道：组合通道泛光启用Usebloom组合
-TEST_F(CompositePassTest, CompositePass_BloomEnabled_Usebloom_composite) {
+// bloom 启用 → 取 bloom_composite（final composite），且 ui_overlay 恒取。
+TEST_F(CompositePassTest, CompositePass_BloomEnabled_UsesBloomComposite) {
     SetBloomConfig(true, 0.5f, 1.0f);
 
     ::testing::NiceMock<MockCommandBuffer> mock;
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "bloom_composite")))
-        .Times(1);
-    EXPECT_CALL(mock, DrawPostProcess(::testing::Field(&dse::render::PostProcessRequest::effect_name, "ui_overlay")))
-        .Times(1);
-
     dse::render::CompositePass pass(ctx);
     pass.Execute(mock);
+
+    const auto& fx = rhi_dev.requested_pp_effects;
+    EXPECT_EQ(std::count(fx.begin(), fx.end(), std::string("bloom_composite")), 1);
+    EXPECT_EQ(std::count(fx.begin(), fx.end(), std::string("ui_overlay")), 1);
 }
 
 // ============================================================

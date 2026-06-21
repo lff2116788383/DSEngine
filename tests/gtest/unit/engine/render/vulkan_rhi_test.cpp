@@ -316,10 +316,10 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
-// 测试 Vulkan命令缓冲区：无设备当绘制后期处理安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
+// 测试 Vulkan命令缓冲区：无设备当 compute 调度安全
+TEST(VulkanCommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     VulkanCommandBuffer cmd;
-    cmd.DrawPostProcess({"bloom", 100, {1.0f, 0.5f}});
+    cmd.DispatchComputePass(ComputeDispatch{1, 100, 0.5f});
 }
 
 // 测试 Vulkan命令缓冲区：无设备当延迟阴影映射安全

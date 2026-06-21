@@ -2,7 +2,7 @@
  * @file post_process_renderer.h
  * @brief 生产级后处理渲染器（后端无关，仅用通用绘制原语）。
  *
- * 逐步替代旧 ABI CommandBuffer::DrawPostProcess（阶段 2b）。复刻其语义：
+ * 后端无关的后处理渲染器（阶段 2b 已全面取代旧 ABI CommandBuffer::DrawPostProcess）。语义：
  *   - 全屏 quad（clip-space，pos\@0 vec2 + uv\@1 vec2）→ postprocess.vert；
  *   - 每效果取 gen 着色器程序（device.GetGenPPShaderProgram(effect)），
  *     绑源纹理 + 额外纹理 + 参数 UBO（set=2,binding=0）后 DrawIndexed(6)。
@@ -10,8 +10,8 @@
  *
  * 资源（全屏 VB / IB / 参数 UBO 池 / PSO）首帧懒建并跨帧复用。
  *
- * 渐进迁移：Draw 仅处理已由后端 GetGenPPShaderProgram 支持（返回非 0）的效果；
- * 其余返回 false，调用方回退 cmd.DrawPostProcess。全部效果迁完后删除该 ABI。
+ * Draw 仅处理已由后端 GetGenPPShaderProgram 支持（返回非 0）的效果；其余返回 false
+ * （未知/未实现效果，调用方按需跳过）。bloom mip 链经 BloomRenderer 走 compute 原语。
  */
 
 #ifndef DSE_RENDER_POST_PROCESS_RENDERER_H
@@ -35,7 +35,7 @@ class RhiDevice;
 class PostProcessRenderer {
 public:
     /// 执行一次后处理。req.effect_name 必须已被后端 GetGenPPShaderProgram 支持，
-    /// 否则返回 false（调用方回退 cmd.DrawPostProcess）。须在 BeginRenderPass 内调用。
+    /// 否则返回 false（未知/未实现效果）。须在 BeginRenderPass 内调用。
     bool Draw(CommandBuffer& cmd, RhiDevice& device, const PostProcessRequest& req);
 
     /// 新一帧开始：复位参数 UBO 池游标（缓冲本身跨帧持久复用）。

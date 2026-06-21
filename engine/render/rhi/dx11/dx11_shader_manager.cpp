@@ -749,7 +749,7 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
     water_shader_handle_ = create_pp_dxbc(kwater_frag_dxbc, kwater_frag_dxbc_size, "water");
     light_shaft_shader_handle_ = create_pp_dxbc(klight_shaft_frag_dxbc, klight_shaft_frag_dxbc_size, "light_shaft");
     atmosphere_transmittance_lut_shader_handle_ = create_pp_dxbc(katmosphere_transmittance_lut_frag_dxbc, katmosphere_transmittance_lut_frag_dxbc_size, "atmosphere_transmittance_lut");
-    atmosphere_sky_shader_handle_ = create_pp_hlsl(katmosphere_sky_frag_hlsl, "atmosphere_sky");
+    atmosphere_sky_shader_handle_ = create_pp_dxbc(katmosphere_sky_frag_dxbc, katmosphere_sky_frag_dxbc_size, "atmosphere_sky");
     sss_blur_shader_handle_ = (ksss_blur_frag_dxbc_size > 0)
         ? create_pp_dxbc(ksss_blur_frag_dxbc, ksss_blur_frag_dxbc_size, "sss_blur")
         : create_pp_hlsl(ksss_blur_frag_hlsl, "sss_blur");

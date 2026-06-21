@@ -77,9 +77,6 @@ public:
                          GLResourceManager& resource_mgr,
                          UBOManager& ubo_mgr);
 
-    void DrawPostProcess(const dse::render::PostProcessRequest& request,
-                           GLShaderManager& shader_mgr);
-
     void DrawHairStrands(const std::vector<HairDrawItem>& items,
                           const glm::mat4& view,
                           const glm::mat4& projection,
@@ -203,11 +200,6 @@ private:
     VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
     unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
-
-    // 后处理全屏四边形
-    VertexArrayHandle pp_vao_handle_;
-    unsigned int pp_vbo_handle_ = 0;
-    unsigned int pp_param_ubo_ = 0;  ///< gen.h PP shader 参数 UBO (binding=2)
 
     // 毛发 (Hair strands)
     VertexArrayHandle hair_vao_handle_;

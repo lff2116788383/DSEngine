@@ -9,21 +9,21 @@ layout(set = 2, binding = 4) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D u_lut;
 layout(set = 2, binding = 6) uniform sampler2D contactShadowTex;
 
-layout(push_constant) uniform BloomCompositeAeParams {
+layout(std140, set = 2, binding = 0) uniform BloomCompositeAeParams {
     float exposure;
     float bloomIntensity;
-    int bloomEnabled;
-    int ssaoEnabled;
-    int autoExposureEnabled;
-    int lutEnabled;
+    float bloomEnabled;
+    float ssaoEnabled;
+    float autoExposureEnabled;
+    float lutEnabled;
     float lutIntensity;
-    int csEnabled;
+    float csEnabled;
     float csStrength;
-    int vignetteEnabled;
+    float vignetteEnabled;
     float vignetteIntensity;
     float vignetteRadius;
     float vignetteSoftness;
-    int filmGrainEnabled;
+    float filmGrainEnabled;
     float filmGrainIntensity;
     float filmGrainTime;
 };
@@ -39,36 +39,36 @@ float GrainNoise(vec2 uv, float time_seed) {
 
 void main() {
     vec3 color = texture(screenTexture, vTexCoords).rgb;
-    if (ssaoEnabled != 0) {
+    if (ssaoEnabled != 0.0) {
         float ao = texture(ssaoTexture, vTexCoords).r;
         color *= ao;
     }
-    if (bloomEnabled != 0) {
+    if (bloomEnabled != 0.0) {
         vec3 bloomColor = texture(bloomBlur, vTexCoords).rgb;
         color += bloomColor * bloomIntensity;
     }
-    if (csEnabled != 0) {
+    if (csEnabled != 0.0) {
         float cs = texture(contactShadowTex, vTexCoords).r;
         color *= (1.0 - (1.0 - cs) * csStrength);
     }
     float finalExposure = exposure;
-    if (autoExposureEnabled != 0) {
+    if (autoExposureEnabled != 0.0) {
         finalExposure = texture(autoExposureTex, vec2(0.5, 0.5)).r;
     }
     color = AcesFilmic(color * finalExposure);
     color = pow(color, vec3(1.0 / 2.2));
-    if (lutEnabled != 0) {
+    if (lutEnabled != 0.0) {
         vec3 lutColor = texture(u_lut, clamp(color, 0.0, 1.0)).rgb;
         color = mix(color, lutColor, lutIntensity);
     }
-    if (vignetteEnabled != 0) {
+    if (vignetteEnabled != 0.0) {
         float dist = length(vTexCoords - vec2(0.5));
         float radius = clamp(vignetteRadius, 0.001, 1.5);
         float softness = max(vignetteSoftness, 0.0001);
         float vignette = 1.0 - smoothstep(radius, radius + softness, dist);
         color *= mix(1.0, vignette, clamp(vignetteIntensity, 0.0, 1.0));
     }
-    if (filmGrainEnabled != 0) {
+    if (filmGrainEnabled != 0.0) {
         float grain = GrainNoise(vTexCoords * vec2(1280.0, 720.0), filmGrainTime) - 0.5;
         color = clamp(color + grain * filmGrainIntensity, 0.0, 1.0);
     }

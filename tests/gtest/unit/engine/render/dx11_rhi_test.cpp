@@ -218,10 +218,10 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
     cmd.DrawMeshBatch(items);
 }
 
-// 测试 DX 11命令缓冲区：无设备当绘制后期处理安全
-TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
+// 测试 DX 11命令缓冲区：无设备当 compute 调度安全
+TEST(DX11CommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     DX11CommandBuffer cmd;
-    cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
+    cmd.DispatchComputePass(ComputeDispatch{1, 100, 0.5f});
 }
 
 // 测试 DX 11命令缓冲区：无设备当清空颜色安全

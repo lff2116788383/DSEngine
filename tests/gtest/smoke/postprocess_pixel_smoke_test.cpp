@@ -55,57 +55,8 @@ std::vector<unsigned char> BuildUniformTexels(unsigned char v) {
     return px;
 }
 
-// 公共：建源纹理 → 建输出 RT → 在一个 render pass 内跑一次 DrawPostProcess → 回读。
-RenderTargetReadback RenderPP(RhiDevice& device, const PostProcessRequest& req_template,
-                              const std::vector<unsigned char>& src_texels) {
-    const unsigned int src_tex =
-        device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
-    if (src_tex == 0) return {};
-
-    RenderTargetDesc rt_desc;
-    rt_desc.width = kRtSize;
-    rt_desc.height = kRtSize;
-    rt_desc.has_color = true;
-    rt_desc.has_depth = false;
-    const unsigned int rt = device.CreateRenderTarget(rt_desc);
-    if (rt == 0) { device.DeleteTexture(src_tex); return {}; }
-
-    PostProcessRequest req = req_template;
-    req.source_texture = src_tex;
-
-    // 后处理全屏四边形需要关闭背面剔除（生产里各 Pass 在 DrawPostProcess 前都会
-    // SetPipelineState 到一个 cull-off 的 PSO；DX11 默认 PP 路径不自带剔除状态，
-    // 缺此会被默认 cull-back 丢弃整屏）。深度/混合关闭。
-    PipelineStateDesc pp_pso_desc;
-    pp_pso_desc.blend_enabled = false;
-    pp_pso_desc.depth_test_enabled = false;
-    pp_pso_desc.depth_write_enabled = false;
-    pp_pso_desc.culling_enabled = false;
-    const unsigned int pp_pso = device.CreatePipelineState(pp_pso_desc);
-
-    device.BeginFrame();
-    auto cmd = device.CreateCommandBuffer();
-    if (cmd) {
-        RenderPassDesc rp;
-        rp.render_target = rt;
-        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-        rp.clear_color_enabled = true;
-        cmd->BeginRenderPass(rp);
-        if (pp_pso != 0) cmd->SetPipelineState(pp_pso);
-        cmd->DrawPostProcess(req);
-        cmd->EndRenderPass();
-        device.Submit(cmd);
-    }
-    device.EndFrame();
-
-    RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
-    device.DeleteRenderTarget(rt);
-    device.DeleteTexture(src_tex);
-    return rb;
-}
-
-// 同 RenderPP，但 driver 换成 PostProcessRenderer（通用原语路径），断言不变。
-// 验证迁移后的渲染器与 DrawPostProcess ABI 产出同样的解析真值像素。
+// 公共：建源纹理 → 建输出 RT → 在一个 render pass 内经 PostProcessRenderer
+// （通用原语路径，DrawPostProcess ABI 已删）跑一次后处理 → 回读。
 RenderTargetReadback RenderPPViaRenderer(RhiDevice& device,
                                          const PostProcessRequest& req_template,
                                          const std::vector<unsigned char>& src_texels) {
@@ -265,10 +216,6 @@ RenderTargetReadback RenderPPViaRendererNTex(RhiDevice& device,
     return rb;
 }
 
-RenderTargetReadback RenderPassthrough(RhiDevice& device) {
-    return RenderPP(device, PostProcessRequest("postprocess_passthrough", 0), BuildSplitTexels());
-}
-
 RenderTargetReadback RenderPassthroughViaRenderer(RhiDevice& device) {
     return RenderPPViaRenderer(device, PostProcessRequest("postprocess_passthrough", 0),
                                BuildSplitTexels());
@@ -286,7 +233,7 @@ RenderTargetReadback RenderFxaaViaRenderer(RhiDevice& device) {
 
 RenderTargetReadback RenderTonemapping(RhiDevice& device) {
     // exposure = 1.0；无 auto-exposure / LUT 额外纹理。
-    return RenderPP(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
+    return RenderPPViaRenderer(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
 }
 
 // bloom_extract（带参 UBO 契约，强校验 threshold 真实生效）：
@@ -378,6 +325,28 @@ RenderTargetReadback RenderDecalDepthDiscard(RhiDevice& device) {
         PostProcessRequest("decal", 0, std::vector<float>(24, 0.0f), /*blend=*/true),
         BuildUniformTexels(128),
         {{2, BuildUniformTexels(255)}, {3, BuildUniformTexels(200)}});
+}
+
+// bloom_composite（final composite，16 浮点 UBO 强校验）：bloomEnabled/ssao/ae/lut/cs/vignette/
+// filmGrain 全关、exposure=1 → 退化为 ACES+gamma 色调映射。源(screenTexture@t0)=匀色 128 →
+// 全屏匀色灰阶输出（R==G==B，非黑非白）。验证 16 浮点 UBO 顺序与 .frag 字段一致 + 源@t0 绑定。
+RenderTargetReadback RenderBloomCompositeNeutral(RhiDevice& device) {
+    return RenderPPViaRenderer(
+        device,
+        PostProcessRequest("bloom_composite", 0,
+            {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f}),
+        BuildUniformTexels(128));
+}
+
+// atmosphere_sky（双纹理 + 36 浮点 UBO）：depth@t1(binding=2) = 128(=0.502) < 0.9999 → 早退
+// FragColor=scene。源(screenTexture@t0)=左红右蓝分块 → 输出复用 passthrough 真值。验证源@t0 +
+// 深度@t1 双纹理绑定 + 36 浮点 UBO 上传不破坏早退路径（参数早退前不读，填 0 即可）。
+RenderTargetReadback RenderAtmosphereSkyDepthPass(RhiDevice& device) {
+    return RenderPPViaRenderer2Tex(
+        device,
+        PostProcessRequest("atmosphere_sky", 0, std::vector<float>(36, 0.0f)),
+        BuildSplitTexels(), 2, BuildUniformTexels(128));
 }
 
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
@@ -509,20 +478,7 @@ void CrossBackendRmse(const dse::test::RenderFn& fn, const char* label, double g
 
 }  // namespace
 
-TEST(PostProcessPixelSmokeTest, OpenGLPassthrough) {
-    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderPassthrough, VerifyPassthrough);
-}
-TEST(PostProcessPixelSmokeTest, D3D11Passthrough) {
-    RunBackend("D3D11", &dse::test::RunD3D11, RenderPassthrough, VerifyPassthrough);
-}
-TEST(PostProcessPixelSmokeTest, VulkanPassthrough) {
-    RunBackend("Vulkan", &dse::test::RunVulkan, RenderPassthrough, VerifyPassthrough);
-}
-TEST(PostProcessPixelSmokeTest, CrossBackendPassthroughConsistent) {
-    CrossBackendRmse(RenderPassthrough, "passthrough", 8.0);
-}
-
-// PostProcessRenderer（通用原语）路径：passthrough 必须产出与 ABI 同样的逐像素真值。
+// PostProcessRenderer（通用原语）路径：passthrough 逐像素真值（DrawPostProcess ABI 已删）。
 TEST(PostProcessPixelSmokeTest, OpenGLPassthroughRenderer) {
     RunBackend("OpenGL", &dse::test::RunOpenGL, RenderPassthroughViaRenderer, VerifyPassthrough);
 }
@@ -682,4 +638,32 @@ TEST(PostProcessPixelSmokeTest, VulkanDecalDepthDiscard) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendDecalDepthDiscardConsistent) {
     CrossBackendRmse(RenderDecalDepthDiscard, "decal_depth_discard", 8.0);
+}
+
+// bloom_composite 经 PostProcessRenderer：中性参数 → ACES+gamma 灰阶（16 浮点 UBO + 源@t0）。
+TEST(PostProcessPixelSmokeTest, OpenGLBloomCompositeNeutral) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderBloomCompositeNeutral, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, D3D11BloomCompositeNeutral) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderBloomCompositeNeutral, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, VulkanBloomCompositeNeutral) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderBloomCompositeNeutral, VerifyTonemapping);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendBloomCompositeNeutralConsistent) {
+    CrossBackendRmse(RenderBloomCompositeNeutral, "bloom_composite_neutral", 8.0);
+}
+
+// atmosphere_sky 经 PostProcessRenderer：depth 早退 → passthrough（双纹理绑定 + 36 浮点 UBO）。
+TEST(PostProcessPixelSmokeTest, OpenGLAtmosphereSkyDepthPass) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderAtmosphereSkyDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, D3D11AtmosphereSkyDepthPass) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderAtmosphereSkyDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, VulkanAtmosphereSkyDepthPass) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderAtmosphereSkyDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendAtmosphereSkyDepthPassConsistent) {
+    CrossBackendRmse(RenderAtmosphereSkyDepthPass, "atmosphere_sky_depth", 8.0);
 }

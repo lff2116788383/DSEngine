@@ -49,7 +49,6 @@ public:
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
     virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
-    virtual void DrawPostProcess(PostProcessRequest request) = 0;
     virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
     /// 设置视口区域（用于 shadow atlas 等 viewport-based 渲染）
@@ -119,6 +118,14 @@ public:
                              int32_t base_vertex = 0) {
         (void)index_count; (void)first_index; (void)base_vertex;
     }
+
+    // --- 通用 compute 原语 (B-compute) ---
+    // 把设备级 compute 提升为 CommandBuffer 级可录制原语，供 BloomRenderer 等高层渲染器
+    // 在录制流中发起 compute 调度（bloom mip 链）。语义见 rhi_types.h ComputeDispatch。
+    // 输出目标取当前 BeginRenderPass 绑定的 RT；默认空实现（GL/Mock 不消费）。
+
+    /// 录制一次 compute 调度：输入 dispatch.source_texture，输出当前绑定 RT 颜色附件。
+    virtual void DispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
     // 由 mesh（蒙皮硬件实例化）倒推。现有 DrawIndexed 签名保持不变——新增独立重载，
@@ -226,12 +233,18 @@ public:
     /// 默认返回 0（未实现该程序的后端/Mock）。
     virtual unsigned int GetBuiltinProgram(BuiltinProgram program) { (void)program; return 0; }
     /// 后处理效果的 gen 着色器程序句柄（懒编译/取用），供 PostProcessRenderer 经通用原语绑定。
-    /// effect_name 见 gl_draw_executor_postprocess 的 kEffectTable（"postprocess_passthrough"/
-    /// "tonemapping"/...）。未实现该效果的后端/Mock 或未知名返回 0。
+    /// effect_name 为 gen-PP 效果名（"passthrough"/"tonemapping"/"bloom_composite"/...，
+    /// 见各后端 GetGenPPShaderProgram 映射）。未实现该效果的后端/Mock 或未知名返回 0。
     virtual unsigned int GetGenPPShaderProgram(const std::string& effect_name) {
         (void)effect_name;
         return 0;
     }
+    /// bloom 降采样/升采样 compute shader 句柄，供 BloomRenderer 选择 compute vs quad 路径。
+    /// compute 后端（DX11 FL11+/Vulkan）返回有效句柄；不支持/未启用 compute 的后端（GL）
+    /// 返回 0，BloomRenderer 据此回退全屏 quad（避免新写不可验证的 GL compute 着色器）。
+    /// upsample=false → 降采样 CS；true → 升采样 CS。
+    virtual unsigned int GetBloomComputeShader(bool upsample) const { (void)upsample; return 0; }
+
     /// 内建天空盒立方体顶点缓冲句柄（36 顶点，vec3 pos，懒初始化）
     virtual unsigned int GetSkyboxCubeVertexBuffer() { return 0; }
 

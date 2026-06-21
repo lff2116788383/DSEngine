@@ -70,6 +70,7 @@ public:
     // --- 内建资源访问器 ---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;
     unsigned int GetGenPPShaderProgram(const std::string& effect_name) override;
+    unsigned int GetBloomComputeShader(bool upsample) const override;
     unsigned int GetSkyboxCubeVertexBuffer() override;
 
     // kUniform 用途需走 constant buffer（D3D11_BIND_CONSTANT_BUFFER），覆写基类路由。

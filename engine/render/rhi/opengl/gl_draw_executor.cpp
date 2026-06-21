@@ -231,22 +231,6 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { unsigned int r = prim_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
         prim_vao_handle_ = {};
     }
-    // 后处理全屏四边形
-    if (pp_vao_handle_) {
-        if (delete_vao_fn_) { delete_vao_fn_(pp_vao_handle_); }
-        else { unsigned int r = pp_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
-        pp_vao_handle_ = {};
-    }
-    if (pp_vbo_handle_ != 0) {
-        if (delete_buffer_fn_) { delete_buffer_fn_(pp_vbo_handle_); }
-        else { glDeleteBuffers(1, &pp_vbo_handle_); }
-        pp_vbo_handle_ = 0;
-    }
-    if (pp_param_ubo_ != 0) {
-        if (delete_buffer_fn_) { delete_buffer_fn_(pp_param_ubo_); }
-        else { glDeleteBuffers(1, &pp_param_ubo_); }
-        pp_param_ubo_ = 0;
-    }
     // 毛发渲染资源
     if (hair_vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(hair_vao_handle_); }

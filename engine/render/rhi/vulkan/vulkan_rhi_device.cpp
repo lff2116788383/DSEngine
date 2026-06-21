@@ -66,11 +66,10 @@ void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
     (void)color;
 }
 
-void VulkanCommandBuffer::DrawPostProcess(PostProcessRequest request) {
+void VulkanCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
     if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->draw_executor().DrawPostProcess(
-        vk_command_buffer_, request,
-        device_->state_mgr(), device_->shader_mgr());
+    device_->draw_executor().DispatchComputePass(
+        vk_command_buffer_, dispatch, device_->shader_mgr());
 }
 
 // --- 通用绘制原语 (A1) ---
@@ -802,7 +801,7 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
 unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     EnsureInitialized();
     // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
-    // 其余效果尚未迁到 PostProcessRenderer，返回 0 → 调用方继续走 DrawPostProcess ABI。
+    // PostProcessRenderer 按 effect 名取 gen-PP 程序句柄；未映射效果返回 0（调用方跳过）。
     // InitPostProcessShader 一次创建 passthrough/fxaa 等全部 PP 效果着色器。
     if (shader_mgr_.postprocess_shader_handle() == 0) shader_mgr_.InitPostProcessShader();
     if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
@@ -833,7 +832,14 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "ssao_apply") return shader_mgr_.ssao_apply_shader_handle();
     if (effect_name == "light_shaft") return shader_mgr_.light_shaft_shader_handle();
     if (effect_name == "atmosphere_transmittance_lut") return shader_mgr_.atmosphere_transmittance_lut_shader_handle();
+    if (effect_name == "atmosphere_sky") return shader_mgr_.atmosphere_sky_shader_handle();
+    if (effect_name == "bloom_composite") return shader_mgr_.bloom_composite_ssao_ae_shader_handle();
     return 0;
+}
+
+unsigned int VulkanRhiDevice::GetBloomComputeShader(bool upsample) const {
+    return upsample ? shader_mgr_.bloom_upsample_cs_handle()
+                    : shader_mgr_.bloom_downsample_cs_handle();
 }
 
 unsigned int VulkanRhiDevice::GetSkyboxCubeVertexBuffer() {
