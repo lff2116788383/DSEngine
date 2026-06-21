@@ -1593,9 +1593,9 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
 
     // Pass 1: 边缘检测 → outline RT
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
-    cmd_buffer.DrawPostProcess({"edge_detect", depth_tex, {
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"edge_detect", depth_tex, {
         pp.outline_thickness,
         pp.outline_depth_threshold,
         pp.outline_normal_threshold,

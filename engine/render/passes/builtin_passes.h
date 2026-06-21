@@ -270,6 +270,7 @@ public:
     const char* GetName() const override { return "outline_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Light Shaft / God Ray Pass ----
