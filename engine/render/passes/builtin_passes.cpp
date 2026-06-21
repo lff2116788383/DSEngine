@@ -1687,7 +1687,9 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     // [11-14] reserved (pad)
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"light_shaft", scene_tex, {
+    // 已迁到 PostProcessRenderer：screenTexture set=2,b1 / u_depth_tex set=2,b2 /
+    // 参数 std140 set=2,b0（15 标量，去除旧 vestigial u_depth_handle 字段）。
+    PostProcessRequest req{"light_shaft", scene_tex, {
         sun_uv_x, sun_uv_y,
         pp->light_shaft_color.r, pp->light_shaft_color.g, pp->light_shaft_color.b,
         pp->light_shaft_density,
@@ -1697,7 +1699,9 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
         static_cast<float>(pp->light_shaft_samples),
         pp->light_shaft_intensity,
         0.0f, 0.0f, 0.0f, 0.0f
-    }, false, 0}.Tex(2, depth_tex));
+    }, false, 0};
+    req.Tex(2, depth_tex);
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
     cmd_buffer.EndRenderPass();
 }
 

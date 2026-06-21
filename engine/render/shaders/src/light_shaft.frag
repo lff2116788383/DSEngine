@@ -1,8 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(push_constant) uniform LightShaftParams {
-    float u_depth_handle;
+layout(std140, set = 2, binding = 0) uniform LightShaftParams {
     float u_sun_x;
     float u_sun_y;
     float u_light_r;
@@ -17,7 +16,7 @@ layout(push_constant) uniform LightShaftParams {
     float pad0; float pad1; float pad2; float pad3;
 };
 
-layout(set = 0, binding = 0) uniform sampler2D screenTexture;
+layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
 layout(location = 0) in vec2 vTexCoords;

@@ -3,7 +3,7 @@
 layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 
-layout(push_constant) uniform TransmittanceLutParams {
+layout(std140, set = 2, binding = 0) uniform TransmittanceLutParams {
     float u_planet_radius;
     float u_atmosphere_height;
     float u_rayleigh_r; float u_rayleigh_g; float u_rayleigh_b;

@@ -4,6 +4,7 @@
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_graph.h"
+#include "engine/render/post_process_renderer.h"
 
 namespace dse {
 namespace render {
@@ -39,6 +40,8 @@ private:
     size_t prev_params_hash_ = 0;
 
     bool active_ = false;
+
+    PostProcessRenderer post_process_renderer_;
 
     void EnsureTransmittanceLUT(int width, int height);
     void RenderTransmittanceLUT(CommandBuffer& cmd_buffer);

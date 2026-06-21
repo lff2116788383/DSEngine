@@ -285,6 +285,7 @@ public:
     const char* GetName() const override { return "light_shaft_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Volumetric Fog Pass ----

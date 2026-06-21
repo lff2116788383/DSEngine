@@ -152,14 +152,16 @@ void AtmosphereSkyPass::RenderTransmittanceLUT(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({transmittance_rt_, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"atmosphere_transmittance_lut", 0, {
-        atm.planet_radius,
-        atm.atmosphere_height,
-        atm.rayleigh_coeff.x, atm.rayleigh_coeff.y, atm.rayleigh_coeff.z,
-        atm.rayleigh_scale_height,
-        atm.mie_coeff,
-        atm.mie_scale_height
-    }});
+    // 已迁到 PostProcessRenderer：无源纹理效果（仅由 8 标量 UBO 程序化生成 LUT）。
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+        PostProcessRequest{"atmosphere_transmittance_lut", 0, {
+            atm.planet_radius,
+            atm.atmosphere_height,
+            atm.rayleigh_coeff.x, atm.rayleigh_coeff.y, atm.rayleigh_coeff.z,
+            atm.rayleigh_scale_height,
+            atm.mie_coeff,
+            atm.mie_scale_height
+        }});
     cmd_buffer.EndRenderPass();
 }
 

@@ -831,6 +831,8 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "sss_blur") return shader_mgr_.sss_blur_shader_handle();
     if (effect_name == "tonemapping") return shader_mgr_.tonemapping_shader_handle();
     if (effect_name == "ssao_apply") return shader_mgr_.ssao_apply_shader_handle();
+    if (effect_name == "light_shaft") return shader_mgr_.light_shaft_shader_handle();
+    if (effect_name == "atmosphere_transmittance_lut") return shader_mgr_.atmosphere_transmittance_lut_shader_handle();
     return 0;
 }
 

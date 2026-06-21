@@ -99,10 +99,10 @@ void PostProcessRenderer::BeginFrame() {
 
 bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                const PostProcessRequest& req) {
-    if (req.source_texture == 0) return false;
-
     const unsigned int prog = device.GetGenPPShaderProgram(req.effect_name);
     if (prog == 0) return false;  // 该效果尚未迁移到 PostProcessRenderer
+    // 注：source_texture==0 是合法的（如 atmosphere_transmittance_lut 仅由参数程序化生成，
+    // 不采样输入纹理）；此时跳过主输入绑定即可，不再据此提前返回。
 
     EnsureResources(device);
     if (!quad_vbo_ || !quad_ibo_) return false;
@@ -119,9 +119,12 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     }
 
     // 主输入纹理：GLSL binding=N → t<N-1>（b0 被参数 UBO 占用，纹理从 t0 起）。
-    const uint32_t src_slot =
-        req.source_binding > 0 ? static_cast<uint32_t>(req.source_binding - 1) : 0u;
-    cmd.BindTexture(src_slot, req.source_texture, TextureDim::Tex2D);
+    // 无源纹理效果（source_texture==0）跳过该绑定。
+    if (req.source_texture != 0) {
+        const uint32_t src_slot =
+            req.source_binding > 0 ? static_cast<uint32_t>(req.source_binding - 1) : 0u;
+        cmd.BindTexture(src_slot, req.source_texture, TextureDim::Tex2D);
+    }
 
     // 额外纹理：slot 存 GLSL binding，同样映射到 t<binding-1>。
     // 3D 纹理（color_grading / tonemapping 的 LUT 等）经 is_3d 标志走 TextureDim::Tex3D。
