@@ -98,19 +98,6 @@ TEST(MeshDrawItemTest, DefaultValues) {
     EXPECT_TRUE(item.morph_weights.empty());
 }
 
-// 测试 粒子3D绘制项：默认值
-TEST(Particle3DDrawItemTest, DefaultValues) {
-    Particle3DDrawItem item;
-    EXPECT_EQ(item.texture_handle, 0u);
-    EXPECT_EQ(item.material_instance_id, 0u);
-    EXPECT_EQ(item.particle_count, 0);
-    EXPECT_EQ(item.instance_vbo, 0u);
-}
-
-// ============================================================
-// 渲染统计
-// ============================================================
-
 // ============================================================
 // RHI 统一回归测试 — OpenGL ProjectionCorrection
 // ============================================================

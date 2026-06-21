@@ -322,13 +322,6 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     cmd.DrawPostProcess({"bloom", 100, {1.0f, 0.5f}});
 }
 
-// 测试 Vulkan命令缓冲区：无设备当绘制粒子3D安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawParticles3DSafety) {
-    VulkanCommandBuffer cmd;
-    std::vector<Particle3DDrawItem> items;
-    cmd.DrawParticles3D(items, glm::mat4(1.0f), glm::mat4(1.0f));
-}
-
 // 测试 Vulkan命令缓冲区：无设备当延迟阴影映射安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     VulkanCommandBuffer cmd;
@@ -485,7 +478,6 @@ TEST(VulkanShaderManagerTest, WhenNotInitializedisZero) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.particle_shader_handle(), 0u);
     EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
     EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
     EXPECT_EQ(mgr.programs_created(), 0u);

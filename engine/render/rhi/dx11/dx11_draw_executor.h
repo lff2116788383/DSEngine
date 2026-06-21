@@ -107,12 +107,6 @@ public:
                           DX11ShaderManager& shader_mgr,
                           DX11ResourceManager& resource_mgr);
 
-    void DrawParticles3D(const std::vector<Particle3DDrawItem>& items,
-                          const glm::mat4& view, const glm::mat4& projection,
-                          DX11PipelineStateManager& pipeline_mgr,
-                          DX11ShaderManager& shader_mgr,
-                          DX11ResourceManager& resource_mgr);
-
     void DrawHairStrands(const std::vector<HairDrawItem>& items,
                           const glm::mat4& view, const glm::mat4& projection,
                           DX11PipelineStateManager& pipeline_mgr,

@@ -227,13 +227,6 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawPostProcessSafety) {
     cmd.DrawPostProcess({"bloom_downsample", 100, {1.0f, 0.5f}});
 }
 
-// 测试 打开GL命令缓冲区：无设备当绘制粒子3D安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawParticles3DSafety) {
-    OpenGLCommandBuffer cmd;
-    std::vector<Particle3DDrawItem> items;
-    cmd.DrawParticles3D(items, glm::mat4(1.0f), glm::mat4(1.0f));
-}
-
 // 测试 打开GL命令缓冲区：无设备当清空颜色安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     OpenGLCommandBuffer cmd;
@@ -368,7 +361,6 @@ TEST(GLShaderManagerTest, WhenNotInitializedisZero) {
     GLShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.particle_shader_handle(), 0u);
     EXPECT_EQ(mgr.programs_created(), 0u);
     EXPECT_EQ(mgr.programs_destroyed(), 0u);
 }

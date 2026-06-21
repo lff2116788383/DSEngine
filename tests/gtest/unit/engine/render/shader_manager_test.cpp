@@ -69,7 +69,6 @@ TEST(VulkanShaderManagerTest, Default) {
     VulkanShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.particle_shader_handle(), 0u);
     EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
     EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
     EXPECT_EQ(mgr.programs_created(), 0u);
@@ -113,7 +112,6 @@ TEST(DX11ShaderManagerTest, Default) {
     DX11ShaderManager mgr;
     EXPECT_EQ(mgr.pbr_shader_handle(), 0u);
     EXPECT_EQ(mgr.skybox_shader_handle(), 0u);
-    EXPECT_EQ(mgr.particle_shader_handle(), 0u);
     EXPECT_EQ(mgr.sprite_shader_handle(), 0u);
     EXPECT_EQ(mgr.postprocess_shader_handle(), 0u);
     EXPECT_EQ(mgr.programs_created(), 0u);
