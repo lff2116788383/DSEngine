@@ -1049,7 +1049,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int prev_adapted_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[read_idx]);
 
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_adapted[write_idx], glm::vec4(1.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"lum_adapt", lum_temp_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"lum_adapt", lum_temp_tex, {
         ctx_.delta_time,
         pp_config.adaptation_speed_up,
         pp_config.adaptation_speed_down,

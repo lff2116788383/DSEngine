@@ -816,6 +816,7 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "ssao") return shader_mgr_.ssao_shader_handle();
     if (effect_name == "contact_shadow") return shader_mgr_.contact_shadow_shader_handle();
     if (effect_name == "edge_detect") return shader_mgr_.edge_detect_shader_handle();
+    if (effect_name == "lum_adapt") return shader_mgr_.lum_adapt_shader_handle();
     return 0;
 }
 

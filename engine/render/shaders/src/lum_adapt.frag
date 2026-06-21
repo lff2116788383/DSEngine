@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D prevAdaptedTex;
 
-layout(push_constant) uniform LumAdaptParams {
+layout(std140, set = 2, binding = 0) uniform LumAdaptParams {
     float u_dt;
     float u_speed_up;
     float u_speed_down;
