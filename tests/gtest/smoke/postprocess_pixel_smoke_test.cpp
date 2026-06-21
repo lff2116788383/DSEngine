@@ -345,6 +345,41 @@ RenderTargetReadback RenderTaaFirstFrame(RhiDevice& device) {
         {{2, BuildUniformTexels(0)}, {5, BuildUniformTexels(64)}});
 }
 
+// motion_vector（标量化 mat4 UBO 强校验）：reproj = 单位矩阵 → prev_uv == vTexCoords →
+// velocity == 0 → 全屏黑 (0,0,0)。若 16 个标量在 std140 下与调用点紧排数组错位，
+// 重组出的矩阵非单位 → velocity≠0 → 非黑 → 被捕获。源(depth@t0)任意（单位阵下与深度无关）。
+RenderTargetReadback RenderMotionVectorIdentity(RhiDevice& device) {
+    return RenderPPViaRenderer(
+        device,
+        PostProcessRequest("motion_vector", 0,
+            {static_cast<float>(kRtSize), static_cast<float>(kRtSize),
+             1.0f, 0.0f, 0.0f, 0.0f,
+             0.0f, 1.0f, 0.0f, 0.0f,
+             0.0f, 0.0f, 1.0f, 0.0f,
+             0.0f, 0.0f, 0.0f, 1.0f}),
+        BuildUniformTexels(128));
+}
+
+// volumetric_fog（双纹理 + 28 浮点 UBO）：depth@t1 = 255(=1.0) ≥ 0.9999 → 早退 FragColor=scene。
+// 源(screenTexture@t0)=左红右蓝分块 → 输出复用 passthrough 真值。验证源@t0 + 深度@t1 双纹理
+// 绑定 + 28 浮点 UBO 上传不破坏早退路径（参数早退前不读，填 0 即可）。
+RenderTargetReadback RenderVolumetricFogDepthPass(RhiDevice& device) {
+    return RenderPPViaRenderer2Tex(
+        device,
+        PostProcessRequest("volumetric_fog", 0, std::vector<float>(28, 0.0f)),
+        BuildSplitTexels(), 2, BuildUniformTexels(255));
+}
+
+// decal（三纹理 + 24 浮点矩阵 UBO + 混合）：depth@t2(slot=2) = 255(=1.0) ≥ 0.9999 → discard →
+// RT 保持 clear color 全黑。验证 depth@slot2 + decal@slot3 三纹理绑定 + 24 浮点 UBO 上传不崩。
+RenderTargetReadback RenderDecalDepthDiscard(RhiDevice& device) {
+    return RenderPPViaRendererNTex(
+        device,
+        PostProcessRequest("decal", 0, std::vector<float>(24, 0.0f), /*blend=*/true),
+        BuildUniformTexels(128),
+        {{2, BuildUniformTexels(255)}, {3, BuildUniformTexels(200)}});
+}
+
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
                      int r, int g, int b, const char* tag) {
     const unsigned char* p = dse::test::PixelAt(rb, x, y);
@@ -430,6 +465,16 @@ void VerifySsrEarlyOut(const RenderTargetReadback& rb, const char* tag) {
 // taa 首帧真值：alpha=1 → 输出 = current = source（复用 passthrough 左红右蓝）。
 void VerifyTaaFirstFrame(const RenderTargetReadback& rb, const char* tag) {
     VerifyPassthrough(rb, tag);
+}
+
+// 通用全屏近黑真值（早退/discard/零向量输出）。
+void VerifyBlack(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 0, 0, 0, tag);
+    ExpectColorNear(rb, 40, 40, 0, 0, 0, tag);
+    ExpectColorNear(rb, 220, 220, 0, 0, 0, tag);
+    ExpectColorNear(rb, 40, 220, 0, 0, 0, tag);
 }
 
 void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
@@ -595,4 +640,46 @@ TEST(PostProcessPixelSmokeTest, VulkanTonemapping) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendTonemappingConsistent) {
     CrossBackendRmse(RenderTonemapping, "tonemapping", 10.0);
+}
+
+// motion_vector 经 PostProcessRenderer：单位重投影矩阵 → 零速度黑屏（标量化 mat4 UBO 强校验）。
+TEST(PostProcessPixelSmokeTest, OpenGLMotionVectorIdentity) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderMotionVectorIdentity, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, D3D11MotionVectorIdentity) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderMotionVectorIdentity, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, VulkanMotionVectorIdentity) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderMotionVectorIdentity, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendMotionVectorIdentityConsistent) {
+    CrossBackendRmse(RenderMotionVectorIdentity, "motion_vector_identity", 8.0);
+}
+
+// volumetric_fog 经 PostProcessRenderer：depth 早退 passthrough（双纹理绑定 + 28 浮点 UBO）。
+TEST(PostProcessPixelSmokeTest, OpenGLVolumetricFogDepthPass) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderVolumetricFogDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, D3D11VolumetricFogDepthPass) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderVolumetricFogDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, VulkanVolumetricFogDepthPass) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderVolumetricFogDepthPass, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendVolumetricFogDepthPassConsistent) {
+    CrossBackendRmse(RenderVolumetricFogDepthPass, "volumetric_fog_depth", 8.0);
+}
+
+// decal 经 PostProcessRenderer：depth discard → 全黑（三纹理绑定 + 24 浮点矩阵 UBO + 混合）。
+TEST(PostProcessPixelSmokeTest, OpenGLDecalDepthDiscard) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderDecalDepthDiscard, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, D3D11DecalDepthDiscard) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderDecalDepthDiscard, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, VulkanDecalDepthDiscard) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderDecalDepthDiscard, VerifyBlack);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendDecalDepthDiscardConsistent) {
+    CrossBackendRmse(RenderDecalDepthDiscard, "decal_depth_discard", 8.0);
 }

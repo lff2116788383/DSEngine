@@ -5,8 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(push_constant) uniform WaterParams {
-    float u_depth_handle;
+layout(std140, set = 2, binding = 0) uniform WaterParams {
     float u_water_level;
     float u_deep_r;    float u_deep_g;    float u_deep_b;
     float u_shallow_r; float u_shallow_g; float u_shallow_b;

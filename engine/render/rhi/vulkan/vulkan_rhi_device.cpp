@@ -821,6 +821,14 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     if (effect_name == "motion_blur") return shader_mgr_.motion_blur_shader_handle();
     if (effect_name == "ssr") return shader_mgr_.ssr_shader_handle();
     if (effect_name == "taa_resolve") return shader_mgr_.taa_resolve_shader_handle();
+    if (effect_name == "motion_vector") return shader_mgr_.motion_vector_shader_handle();
+    if (effect_name == "volumetric_fog") return shader_mgr_.volumetric_fog_shader_handle();
+    if (effect_name == "volumetric_cloud") return shader_mgr_.volumetric_cloud_shader_handle();
+    if (effect_name == "water") return shader_mgr_.water_shader_handle();
+    if (effect_name == "decal") return shader_mgr_.decal_shader_handle();
+    if (effect_name == "wboit_composite") return shader_mgr_.wboit_composite_shader_handle();
+    if (effect_name == "weather_particle") return shader_mgr_.weather_particle_shader_handle();
+    if (effect_name == "sss_blur") return shader_mgr_.sss_blur_shader_handle();
     return 0;
 }
 

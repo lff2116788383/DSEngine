@@ -236,6 +236,7 @@ private:
     RenderPassContext& ctx_;
     glm::mat4 prev_vp_ = glm::mat4(1.0f);
     bool has_prev_vp_ = false;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Motion Blur Pass ----
@@ -318,6 +319,7 @@ public:
     const char* GetName() const override { return "wboit_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Water / Ocean Pass ----
@@ -329,6 +331,7 @@ public:
     const char* GetName() const override { return "water_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Screen-Space Decal Pass ----
@@ -340,6 +343,7 @@ public:
     const char* GetName() const override { return "decal_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Present Pass (runtime only) ----
@@ -425,6 +429,7 @@ public:
     const char* GetName() const override { return "sss_blur_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Weather Particle Pass ----
@@ -442,6 +447,7 @@ private:
     };
     std::vector<Particle> particles_;
     float last_time_ = 0.0f;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Vegetation / Foliage Pass ----

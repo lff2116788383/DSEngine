@@ -5,7 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(push_constant) uniform WeatherParams {
+layout(std140, set = 2, binding = 0) uniform WeatherParams {
     float u_time;
     float u_intensity;        // [0,1]
     float u_wind_x;

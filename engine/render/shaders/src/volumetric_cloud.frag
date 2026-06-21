@@ -5,8 +5,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_depth_tex;
 
-layout(push_constant) uniform VolumetricCloudParams {
-    float u_depth_handle;
+layout(std140, set = 2, binding = 0) uniform VolumetricCloudParams {
     float u_cloud_bottom;
     float u_cloud_top;
     float u_coverage;

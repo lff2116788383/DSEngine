@@ -5,10 +5,6 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D u_reveal_tex;
 
-layout(push_constant) uniform WboitParams {
-    float u_reveal_handle;
-};
-
 void main() {
     vec4 accum = texture(screenTexture, vTexCoords);
     float revealage = texture(u_reveal_tex, vTexCoords).r;

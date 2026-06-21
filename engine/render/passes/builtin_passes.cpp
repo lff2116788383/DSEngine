@@ -1001,6 +1001,8 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     if (ui_color_tex != 0) {
+        // 注：bloom_composite/tonemapping/ssao_apply 仍走旧 ABI（3D LUT 基础设施未就绪），
+        // ui_overlay 与其同属 composite 延后簇，待 3D LUT 落地后一并迁移，暂留 DrawPostProcess。
         cmd_buffer.DrawPostProcess({"ui_overlay", ui_color_tex});
     }
     cmd_buffer.EndRenderPass();
@@ -1451,7 +1453,8 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"motion_vector", depth_tex, params});
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"motion_vector", depth_tex, params});
     cmd_buffer.EndRenderPass();
 
     prev_vp_ = current_vp;
@@ -1556,7 +1559,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
     if (ssr_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess({"ui_overlay", ssr_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", ssr_tex, {}, true});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1610,7 +1613,7 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
     if (outline_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-        cmd_buffer.DrawPostProcess({"ui_overlay", outline_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ui_overlay", outline_tex, {}, true});
         cmd_buffer.EndRenderPass();
     }
 }
@@ -1751,7 +1754,8 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     // [29]     aspect
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"volumetric_fog", scene_tex, {
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"volumetric_fog", scene_tex, {
         pp->fog_color.r, pp->fog_color.g, pp->fog_color.b,
         pp->fog_density, pp->fog_height_falloff, pp->fog_height_offset - ctx_.camera_offset.y,
         pp->fog_start, pp->fog_end,
@@ -1834,7 +1838,8 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     // params 布局（30 个 float，三后端通用）：
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), use_half_res});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"volumetric_cloud", scene_tex, {
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"volumetric_cloud", scene_tex, {
         cloud_bottom_rel, cloud_top_rel,
         vc.coverage, vc.density,
         vc.shape_scale, vc.detail_scale, vc.detail_strength, vc.erosion,
@@ -1915,7 +1920,9 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"wboit_composite", accum_tex}.Tex(2, reveal_tex));
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+        PostProcessRequest{"wboit_composite", accum_tex, {}, true}.Tex(2, reveal_tex));
     cmd_buffer.EndRenderPass();
 }
 
@@ -2000,7 +2007,8 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         params[35] = wc.underwater_fog_density;
         params[36] = wc.underwater_fog_color.r; params[37] = wc.underwater_fog_color.g; params[38] = wc.underwater_fog_color.b;
 
-        cmd_buffer.DrawPostProcess(PostProcessRequest{"water", scene_tex, params}.Tex(2, depth_tex));
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+            PostProcessRequest{"water", scene_tex, params, true}.Tex(2, depth_tex));
     }
     cmd_buffer.EndRenderPass();
 }
@@ -2062,7 +2070,8 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
         params[22] = decal_up.y;
         params[23] = decal_up.z;
 
-        cmd_buffer.DrawPostProcess(PostProcessRequest{"decal", scene_tex, params}
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+            PostProcessRequest{"decal", scene_tex, params, true}
             .Tex(2, depth_tex).Tex(3, dc.albedo_texture));
     }
     cmd_buffer.EndRenderPass();
@@ -3185,7 +3194,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
             depth_falloff
         });
         req.Tex(2, depth_tex);
-        cmd_buffer.DrawPostProcess(std::move(req));
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, std::move(req));
     }
     cmd_buffer.EndRenderPass();
 
@@ -3201,7 +3210,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
             depth_falloff
         });
         req.Tex(2, depth_tex);
-        cmd_buffer.DrawPostProcess(std::move(req));
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, std::move(req));
     }
     cmd_buffer.EndRenderPass();
 }
@@ -3273,7 +3282,9 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"weather_particle", scene_tex, params}.Tex(2, depth_tex));
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+        PostProcessRequest{"weather_particle", scene_tex, params}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 }
 

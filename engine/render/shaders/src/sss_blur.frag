@@ -11,12 +11,16 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D u_scene_color;  // alpha = SSS strength mask from PBR output
 layout(set = 2, binding = 2) uniform sampler2D u_depth_texture;
 
-layout(push_constant) uniform SSSBlurParams {
-    vec2 u_direction;          // (1,0) for horizontal, (0,1) for vertical
-    vec2 u_screen_size;        // screen width, height
+layout(std140, set = 2, binding = 0) uniform SSSBlurParams {
+    float u_dir_x;             // (1,0) for horizontal, (0,1) for vertical
+    float u_dir_y;
+    float u_screen_w;          // screen width
+    float u_screen_h;          // screen height
     float u_sss_width;         // SSS kernel width in screen pixels (default ~11)
     float u_depth_falloff;     // depth sensitivity (higher = stricter edge detection)
 };
+#define u_direction vec2(u_dir_x, u_dir_y)
+#define u_screen_size vec2(u_screen_w, u_screen_h)
 
 // Burley's normalized diffusion profile approximation (skin)
 // Weights for 7-tap kernel at fixed offsets
