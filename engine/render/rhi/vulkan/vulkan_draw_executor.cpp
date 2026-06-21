@@ -240,21 +240,6 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        pp_vbo_, pp_vbo_mem_);
     WriteToBuffer(device, pp_vbo_mem_, 0, sizeof(pp_vertices), pp_vertices);
 
-    // --- 粒子四边形 VBO ---
-    // 4 顶点 billboard：vec3 pos, vec2 uv
-    const float particle_vertices[] = {
-        -0.5f, -0.5f, 0.0f,  0.0f, 0.0f,
-         0.5f, -0.5f, 0.0f,  1.0f, 0.0f,
-         0.5f,  0.5f, 0.0f,  1.0f, 1.0f,
-        -0.5f,  0.5f, 0.0f,  0.0f, 1.0f,
-    };
-
-    CreateVulkanBuffer(device, physical_device, sizeof(particle_vertices),
-                       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       particle_vbo_, particle_vbo_mem_);
-    WriteToBuffer(device, particle_vbo_mem_, 0, sizeof(particle_vertices), particle_vertices);
-
     // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盖） ---
     // per_frame:  128 batches/frame × 256B = 32KB（含 shadow passes + GPU Driven setup）
     // per_object: 每个 draw item 占 1 slot；重实例化/多 shadow pass 场景下单帧可达数千 draw
@@ -435,7 +420,6 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     instance_vbo_capacity_ = 0;
     destroy_buffer(skybox_vbo_, skybox_vbo_mem_);
     destroy_buffer(pp_vbo_, pp_vbo_mem_);
-    destroy_buffer(particle_vbo_, particle_vbo_mem_);
 
     for (int i = 0; i < MAX_FRAMES; ++i) {
         destroy_buffer(per_frame_ubo_[i], per_frame_ubo_mem_[i]);
@@ -1424,74 +1408,6 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 
     return sets;
-}
-
-VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateParticleDescriptorSets(
-    VkCommandBuffer cmd_buf,
-    const VulkanShaderProgram* program,
-    unsigned int texture_handle,
-    VulkanResourceManager& resource_mgr) {
-
-    if (program->descriptor_set_layouts.empty()) return VK_NULL_HANDLE;
-
-    auto device = context_->device();
-    uint32_t fi = current_frame_index_;
-    const uint32_t set_count = static_cast<uint32_t>(program->descriptor_set_layouts.size());
-
-    // 分配所有 set（包括空 layout 的 set）
-    std::vector<VkDescriptorSet> sets(set_count, VK_NULL_HANDLE);
-    for (uint32_t s = 0; s < set_count; ++s) {
-        sets[s] = resource_mgr.AllocateDescriptorSet(program->descriptor_set_layouts[s]);
-        if (sets[s] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
-    }
-
-    std::vector<VkWriteDescriptorSet> writes;
-
-    // Set 0 binding 0: PerFrame UBO（particle VS 使用此 binding；sprite VS 已改用 push constants）
-    // 通过 SPIR-V reflection 检查 set 0 是否有 bindings
-    VkDescriptorBufferInfo frame_buf{};
-    frame_buf.buffer = per_frame_ubo_[fi];
-    frame_buf.offset = 0;
-    frame_buf.range  = sizeof(VulkanPerFrameUBO);
-    bool set0_has_ubo = false;
-    for (const auto& b : program->reflection.bindings) {
-        if (b.set == 0 && b.binding == 0) { set0_has_ubo = true; break; }
-    }
-    if (set_count > 0 && set0_has_ubo) {
-        VkWriteDescriptorSet w{};
-        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        w.dstSet = sets[0]; w.dstBinding = 0;
-        w.descriptorCount = 1;
-        w.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        w.pBufferInfo = &frame_buf;
-        writes.push_back(w);
-    }
-
-    // Set 2 binding 1: 纹理（sprite/particle FS 都使用此 binding）
-    VkDescriptorImageInfo img_info{};
-    unsigned int tex_h = (texture_handle != 0) ? texture_handle : white_texture_handle_;
-    const VulkanTexture* tex = resource_mgr.GetTexture(tex_h);
-    if (!tex) tex = resource_mgr.GetTexture(white_texture_handle_);
-    if (tex && set_count > 2) {
-        img_info.sampler     = resource_mgr.default_sampler();
-        img_info.imageView   = tex->image_view;
-        img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        VkWriteDescriptorSet w{};
-        w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        w.dstSet = sets[2]; w.dstBinding = 1;
-        w.descriptorCount = 1;
-        w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        w.pImageInfo = &img_info;
-        writes.push_back(w);
-    }
-
-    if (!writes.empty())
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
-
-    vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            program->pipeline_layout, 0,
-                            set_count, sets.data(), 0, nullptr);
-    return sets[0];
 }
 
 VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(

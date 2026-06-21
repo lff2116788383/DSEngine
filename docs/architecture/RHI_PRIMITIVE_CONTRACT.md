@@ -7,7 +7,7 @@
 
 ## 1. 背景与动机
 
-当前 RHI 成本是 **O(效果数 × 后端数)**：`DrawMeshBatch / DrawPostProcess / DrawParticles3D / DrawHairStrands`（+ 已删的 `DrawSkybox / DrawSpriteBatch`）每个都在 GL/Vulkan/DX11 各实现一遍。
+当前 RHI 成本是 **O(效果数 × 后端数)**：`DrawMeshBatch / DrawPostProcess / DrawHairStrands`（+ 已删的 `DrawSkybox / DrawSpriteBatch / DrawParticles3D`）每个都在 GL/Vulkan/DX11 各实现一遍。
 
 - **加后端**（确定要加 Metal）= 把每个效果重写一遍。
 - **行为漂移**：同一效果在不同后端的实现会跑偏（如 `RHI_UNIFICATION_TASKS.md:107` 记录的 skybox view 平移处理 GL 与其它后端不一致）。

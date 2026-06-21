@@ -21,7 +21,7 @@
    cmd.DrawSkybox/DrawSpriteBatch/...           └──────────────┬─────────────────────┘
 ┌───────────────┴─ CommandBuffer ABI ┐            BindShaderProgram/BindVertexBuffer/
 │ DrawSkybox  DrawSpriteBatch  DrawMesh│  ===>     BindTexture/BindUniformBuffer/
-│ DrawPostProcess DrawParticles3D Hair │           PushConstants/DrawIndexed/...
+│ DrawPostProcess  DrawHairStrands     │           PushConstants/DrawIndexed/...
 └──┬───────────┬───────────┬───────────┘        ┌──────────────┴─ CommandBuffer 原语 ─┐
   GL          DX11       Vulkan                  │  GL    DX11    Vulkan（各实现一组原语）│
  (各效果 × 各后端 = N×M 份实现)                   └─────────────────────────────────────┘
@@ -76,7 +76,7 @@
 | ~~`DrawSkybox`~~ | A1 | ✅ 已删（`d885d0eb`） |
 | ~~`DrawSpriteBatch`~~ | B2a | ✅ 已删（`43240e8e`） |
 | `DrawMeshBatch(items)` | **B2b** | 🔶 `MeshRenderer` 已**并存**承接 forward-PBR + 高级 shading 全模式（B2b-1..5 + 2c-1..5 + Final-Feat-1..7）；ABI 删除**仍推迟**——能力已基本齐备，剩迁 6 调用点 + spine 2D 蒙皮缺口（见 §5） |
-| `DrawParticles3D(items, view, proj)` | B3 | ⏳ 待迁 |
+| ~~`DrawParticles3D(items, view, proj)`~~ | B3 | ✅ 已删（`c8f84edf` + `5e8fbe30`，迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`） |
 | `DrawHairStrands(items, view, proj)` | B4 | ⏳ 待迁 |
 | `DrawPostProcess(request)` | 未排期（B3 后） | ⏳ 待迁 |
 
@@ -145,7 +145,7 @@
 ## 7. 剩余路线图（便于全局对照）
 
 - **B2b**：抽 `MeshRenderer`——forward-PBR（B2b-1..5）+ 高级 shading 全模式（2c-1..5 + Final-Feat-1..7：toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI + CSM + 蒙皮/实例化/聚光/morph + 外部 VAO/EBO + 共享模板）均已迁入，与 `DrawMeshBatch` 并存。**剩：**补 spine 2D 蒙皮 → 迁 6 调用点 → 删 `DrawMeshBatch` ABI。
-- **B3**：迁 `DrawParticles3D`（验证 Dispatch/实例化）；`DrawPostProcess` 一并考虑。
+- **B3**：✅ 已删 `DrawParticles3D`——迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`（SSBO 实例化）；`DrawPostProcess` 见 B3 后续（阶段 2b）。
 - **B4**：迁 `DrawHairStrands`（SSBO + 多段绘制）。
 - **B5**：全局绑定收敛（shadow map / global uniforms / `BindShaderProgram`+PSO 聚合，偿还契约 §8.1 债务）。
 

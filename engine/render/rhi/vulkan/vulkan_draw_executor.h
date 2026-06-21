@@ -173,7 +173,6 @@ public:
     VkBuffer mesh_ibo() const { return mesh_ibo_; }
     VkBuffer skybox_vbo() const { return skybox_vbo_; }
     VkBuffer pp_vbo() const { return pp_vbo_; }
-    VkBuffer particle_vbo() const { return particle_vbo_; }
 
     unsigned int white_texture_handle() const { return white_texture_handle_; }
 
@@ -251,13 +250,6 @@ private:
         const VulkanShaderProgram* program,
         VulkanResourceManager& resource_mgr);
 
-    /// 为粒子绘制分配并更新 DescriptorSet
-    VkDescriptorSet AllocateAndUpdateParticleDescriptorSets(
-        VkCommandBuffer cmd_buf,
-        const VulkanShaderProgram* program,
-        unsigned int texture_handle,
-        VulkanResourceManager& resource_mgr);
-
     /// 为后处理绘制分配并更新 DescriptorSet
     /// extra_bindings: set2 中额外纹理 {binding, texture_handle} 列表
     VkDescriptorSet AllocateAndUpdatePostProcessDescriptorSets(
@@ -300,9 +292,6 @@ private:
 
     VkBuffer pp_vbo_ = VK_NULL_HANDLE;
     VkDeviceMemory pp_vbo_mem_ = VK_NULL_HANDLE;
-
-    VkBuffer particle_vbo_ = VK_NULL_HANDLE;
-    VkDeviceMemory particle_vbo_mem_ = VK_NULL_HANDLE;
 
     // 白色纹理
     unsigned int white_texture_handle_ = 0;

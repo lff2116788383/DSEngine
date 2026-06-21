@@ -179,8 +179,6 @@ void DX11DrawExecutor::Shutdown() {
     skybox_vbo_.Reset();
     postprocess_vbo_.Reset();
     postprocess_ibo_.Reset();
-    particle_quad_vbo_.Reset();
-    particle_quad_ibo_.Reset();
     shadow_sampler_.Reset();
     skybox_dss_.Reset();
     no_cull_rasterizer_state_.Reset();
@@ -291,36 +289,6 @@ void DX11DrawExecutor::InitGeometryBuffers() {
         D3D11_SUBRESOURCE_DATA init{};
         init.pSysMem = indices;
         device->CreateBuffer(&bd, &init, postprocess_ibo_.GetAddressOf());
-    }
-
-    // ---- 粒子公告板 VBO（静态）----
-    {
-        // float3 pos + float2 uv = 20B per vertex
-        float verts[] = {
-            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f,
-             0.5f, -0.5f, 0.0f, 1.0f, 1.0f,
-             0.5f,  0.5f, 0.0f, 1.0f, 0.0f,
-            -0.5f,  0.5f, 0.0f, 0.0f, 0.0f,
-        };
-        D3D11_BUFFER_DESC bd{};
-        bd.ByteWidth = sizeof(verts);
-        bd.Usage = D3D11_USAGE_IMMUTABLE;
-        bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        D3D11_SUBRESOURCE_DATA init{};
-        init.pSysMem = verts;
-        device->CreateBuffer(&bd, &init, particle_quad_vbo_.GetAddressOf());
-    }
-
-    // ---- 粒子公告板 IBO（静态）----
-    {
-        unsigned short indices[] = {0, 1, 2, 0, 2, 3};
-        D3D11_BUFFER_DESC bd{};
-        bd.ByteWidth = sizeof(indices);
-        bd.Usage = D3D11_USAGE_IMMUTABLE;
-        bd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-        D3D11_SUBRESOURCE_DATA init{};
-        init.pSysMem = indices;
-        device->CreateBuffer(&bd, &init, particle_quad_ibo_.GetAddressOf());
     }
 
     EnsureInstanceVBOCapacity(80);

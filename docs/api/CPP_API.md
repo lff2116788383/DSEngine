@@ -490,7 +490,6 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 | `SetCamera(view, proj)` | 设置相机矩阵 |
 | `DrawMeshBatch(items)` | 绘制 3D 网格批次 |
 | `DrawPostProcess(src, effect, params)` | 后处理 |
-| `DrawParticles3D(items, view, proj)` | 绘制 3D 粒子 |
 | `DrawHairStrands(items, view, proj)` | 绘制毛发 |
 | `ClearColor(color)` | 清屏 |
 | `SetGlobalMat4(name, mat)` | 设置全局 mat4 |

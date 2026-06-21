@@ -249,10 +249,6 @@ private:
     // Motion Blur 参数 CB（160B，含两个 mat4）
     ComPtr<ID3D11Buffer> mb_params_cb_;
 
-    // 粒子公告板四边形（静态 VBO+IBO）
-    ComPtr<ID3D11Buffer> particle_quad_vbo_;
-    ComPtr<ID3D11Buffer> particle_quad_ibo_;
-
     // 阴影 pass 检测（深度 only 渲染目标 = shadow pass）
     bool is_depth_only_pass_ = false;
 
