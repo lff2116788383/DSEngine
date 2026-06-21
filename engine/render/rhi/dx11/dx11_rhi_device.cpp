@@ -448,6 +448,7 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
         return shader_mgr_.postprocess_shader_handle();
     }
     if (effect_name == "fxaa") return shader_mgr_.fxaa_shader_handle();
+    if (effect_name == "bloom_extract") return shader_mgr_.bloom_extract_shader_handle();
     return 0;
 }
 

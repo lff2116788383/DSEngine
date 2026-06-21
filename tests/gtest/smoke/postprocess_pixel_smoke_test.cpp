@@ -173,6 +173,19 @@ RenderTargetReadback RenderTonemapping(RhiDevice& device) {
     return RenderPP(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
 }
 
+// bloom_extract（带参 UBO 契约，强校验 threshold 真实生效）：
+// 匀色 0.5（亮度 0.5）输入。高阈值 0.9 → contribution=0 → 全黑；
+// 低阈值 0.05 → contribution=1 → 原样灰 128。两条对比证明 threshold UBO 确实绑定
+// （若 UBO 未绑定/读到大垃圾值，高阈值用例不会变黑 → 被捕获）。
+RenderTargetReadback RenderBloomExtractHigh(RhiDevice& device) {
+    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", 0, {0.9f, 0.05f}),
+                               BuildUniformTexels(128));
+}
+RenderTargetReadback RenderBloomExtractLow(RhiDevice& device) {
+    return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", 0, {0.05f, 0.05f}),
+                               BuildUniformTexels(128));
+}
+
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
                      int r, int g, int b, const char* tag) {
     const unsigned char* p = dse::test::PixelAt(rb, x, y);
@@ -210,6 +223,22 @@ void VerifyTonemapping(const RenderTargetReadback& rb, const char* tag) {
         ASSERT_NE(p, nullptr) << tag;
         EXPECT_NEAR(static_cast<int>(p[0]), r, 6) << tag << " 非匀色 @(" << x << "," << y << ")";
     }
+}
+
+// bloom_extract 高阈值真值：全屏近黑。
+void VerifyBloomExtractHigh(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 0, 0, 0, tag);
+    ExpectColorNear(rb, 20, 20, 0, 0, 0, tag);
+    ExpectColorNear(rb, 235, 235, 0, 0, 0, tag);
+}
+// bloom_extract 低阈值真值：全屏原样灰 128。
+void VerifyBloomExtractLow(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 128, 128, 128, tag);
+    ExpectColorNear(rb, 20, 235, 128, 128, 128, tag);
 }
 
 void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
@@ -283,6 +312,29 @@ TEST(PostProcessPixelSmokeTest, VulkanFxaaRenderer) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendFxaaRendererConsistent) {
     CrossBackendRmse(RenderFxaaViaRenderer, "fxaa_renderer", 8.0);
+}
+
+// bloom_extract 经 PostProcessRenderer：threshold UBO 参数生效校验（高阈值黑 / 低阈值灰）。
+TEST(PostProcessPixelSmokeTest, OpenGLBloomExtractHigh) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderBloomExtractHigh, VerifyBloomExtractHigh);
+}
+TEST(PostProcessPixelSmokeTest, D3D11BloomExtractHigh) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderBloomExtractHigh, VerifyBloomExtractHigh);
+}
+TEST(PostProcessPixelSmokeTest, VulkanBloomExtractHigh) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderBloomExtractHigh, VerifyBloomExtractHigh);
+}
+TEST(PostProcessPixelSmokeTest, OpenGLBloomExtractLow) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderBloomExtractLow, VerifyBloomExtractLow);
+}
+TEST(PostProcessPixelSmokeTest, D3D11BloomExtractLow) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderBloomExtractLow, VerifyBloomExtractLow);
+}
+TEST(PostProcessPixelSmokeTest, VulkanBloomExtractLow) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderBloomExtractLow, VerifyBloomExtractLow);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendBloomExtractConsistent) {
+    CrossBackendRmse(RenderBloomExtractLow, "bloom_extract", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {

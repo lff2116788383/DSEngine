@@ -817,13 +817,15 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         return;
     }
 
+    post_process_renderer_.BeginFrame();
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
     const float bloom_threshold = ctx_.pipeline_overrides.bloom_threshold >= 0.0f
         ? ctx_.pipeline_overrides.bloom_threshold
         : pp_config.bloom_threshold;
-    cmd_buffer.DrawPostProcess({"bloom_extract", scene_color_tex, {bloom_threshold, pp_config.bloom_knee}});
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+        {"bloom_extract", scene_color_tex, {bloom_threshold, pp_config.bloom_knee}});
     cmd_buffer.EndRenderPass();
 
     unsigned int current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_extract);
