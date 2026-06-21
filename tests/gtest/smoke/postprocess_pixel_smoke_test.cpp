@@ -158,6 +158,16 @@ RenderTargetReadback RenderPassthroughViaRenderer(RhiDevice& device) {
                                BuildSplitTexels());
 }
 
+// fxaa：平坦区域（lumaRange < 阈值）走早退直通，故左右半内部逐像素 = 输入。
+// 取样点（x=64/192）远离 x=128 分界，不受边缘混合影响 → 复用 passthrough 真值。
+RenderTargetReadback RenderFxaaViaRenderer(RhiDevice& device) {
+    return RenderPPViaRenderer(
+        device,
+        PostProcessRequest("fxaa", 0,
+                           {static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
+        BuildSplitTexels());
+}
+
 RenderTargetReadback RenderTonemapping(RhiDevice& device) {
     // exposure = 1.0；无 auto-exposure / LUT 额外纹理。
     return RenderPP(device, PostProcessRequest("tonemapping", 0, {1.0f}), BuildUniformTexels(128));
@@ -259,6 +269,20 @@ TEST(PostProcessPixelSmokeTest, VulkanPassthroughRenderer) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendPassthroughRendererConsistent) {
     CrossBackendRmse(RenderPassthroughViaRenderer, "passthrough_renderer", 8.0);
+}
+
+// fxaa（首个带参 UBO 契约效果）经 PostProcessRenderer：平坦区直通真值。
+TEST(PostProcessPixelSmokeTest, OpenGLFxaaRenderer) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderFxaaViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, D3D11FxaaRenderer) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderFxaaViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, VulkanFxaaRenderer) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderFxaaViaRenderer, VerifyPassthrough);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendFxaaRendererConsistent) {
+    CrossBackendRmse(RenderFxaaViaRenderer, "fxaa_renderer", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {

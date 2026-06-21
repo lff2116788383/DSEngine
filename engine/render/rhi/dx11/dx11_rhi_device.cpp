@@ -447,6 +447,7 @@ unsigned int DX11RhiDevice::GetGenPPShaderProgram(const std::string& effect_name
         effect_name == "ui_overlay") {
         return shader_mgr_.postprocess_shader_handle();
     }
+    if (effect_name == "fxaa") return shader_mgr_.fxaa_shader_handle();
     return 0;
 }
 

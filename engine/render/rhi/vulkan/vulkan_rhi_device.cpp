@@ -803,11 +803,13 @@ unsigned int VulkanRhiDevice::GetGenPPShaderProgram(const std::string& effect_na
     EnsureInitialized();
     // 无参 sampler-only 效果共用内建 passthrough（fullscreen quad 采样源纹理）。
     // 其余效果尚未迁到 PostProcessRenderer，返回 0 → 调用方继续走 DrawPostProcess ABI。
+    // InitPostProcessShader 一次创建 passthrough/fxaa 等全部 PP 效果着色器。
+    if (shader_mgr_.postprocess_shader_handle() == 0) shader_mgr_.InitPostProcessShader();
     if (effect_name == "postprocess_passthrough" || effect_name == "copy" ||
         effect_name == "ui_overlay") {
-        if (shader_mgr_.postprocess_shader_handle() == 0) shader_mgr_.InitPostProcessShader();
         return shader_mgr_.postprocess_shader_handle();
     }
+    if (effect_name == "fxaa") return shader_mgr_.fxaa_shader_handle();
     return 0;
 }
 

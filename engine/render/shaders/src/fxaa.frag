@@ -5,7 +5,7 @@ layout(location = 0) in vec2 vTexCoords;
 layout(location = 0) out vec4 FragColor;
 layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 
-layout(push_constant) uniform FxaaParams {
+layout(set = 2, binding = 0) uniform FxaaParams {
     vec2 u_resolution;
 };
 

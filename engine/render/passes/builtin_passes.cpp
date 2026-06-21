@@ -1191,10 +1191,12 @@ void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fxaa, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess({"fxaa", main_color_tex, {
-        static_cast<float>(Screen::width()),
-        static_cast<float>(Screen::height())
-    }});
+    post_process_renderer_.BeginFrame();
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
+        {"fxaa", main_color_tex, {
+            static_cast<float>(Screen::width()),
+            static_cast<float>(Screen::height())
+        }});
     cmd_buffer.EndRenderPass();
 }
 

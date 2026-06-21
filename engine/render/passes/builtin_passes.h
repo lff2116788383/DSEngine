@@ -11,6 +11,7 @@
 #include "engine/render/render_graph.h"
 #include "engine/render/scene_renderer.h"
 #include "engine/render/skybox_renderer.h"
+#include "engine/render/post_process_renderer.h"
 #include <glm/glm.hpp>
 
 namespace dse {
@@ -143,6 +144,7 @@ public:
     const char* GetName() const override { return "fxaa_pass"; }
 private:
     RenderPassContext& ctx_;
+    PostProcessRenderer post_process_renderer_;
 };
 
 // ---- Auto Exposure Pass ----
