@@ -1210,7 +1210,11 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         const auto* tex = resource_mgr.GetTexture(handle);
         if (tex) {
             dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+            // D3D11 仅 16 个采样器槽（s0..s15）。点光 cube 阴影 SRV 落在 t16..t19，
+            // 其采样器经 SPIRV-Cross 去重后复用 s10（DDGI 采样器），故 slot>=16 只绑 SRV、
+            // 不绑采样器；否则 PSSetSamplers(StartSlot>=16) 越界，触发运行期错误/崩溃。
+            if (slot < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT)
+                dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
         }
     }
 
@@ -1286,7 +1290,11 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
         const auto* tex = resource_mgr.GetTexture(handle);
         if (tex) {
             dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+            // D3D11 仅 16 个采样器槽（s0..s15）。点光 cube 阴影 SRV 落在 t16..t19，
+            // 其采样器经 SPIRV-Cross 去重后复用 s10（DDGI 采样器），故 slot>=16 只绑 SRV、
+            // 不绑采样器；否则 PSSetSamplers(StartSlot>=16) 越界，触发运行期错误/崩溃。
+            if (slot < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT)
+                dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
         }
     }
 

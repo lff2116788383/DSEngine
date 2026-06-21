@@ -30,6 +30,7 @@ layout(std140, set = 1, binding = 0) uniform PerScene {
     vec4 cascade_splits;           // xyz = view-space split distances per CSM cascade
     mat4 light_space_matrices[3];  // 各级联 shadow-sample 矩阵（含 shadow_sample_correction）
     vec4 shadow_atlas_regions[3];  // xy = UV scale, zw = UV offset（atlas 内子区域）
+    mat4 u_spot_light_space_matrices[4];  // 聚光灯 light-space 矩阵（Final-Feat-8；点光用 cube 距离，无需矩阵）
 };
 
 layout(std140, set = 2, binding = 0) uniform PerMaterial {
@@ -124,6 +125,18 @@ layout(set = 2, binding = 19) uniform sampler2D u_ddgi_irradiance_atlas;   // fl
 // 用普通 sampler2D 采样深度 .r 并手动比较（同 SpotShadowCalculation 思路），
 // 避免依赖硬件比较采样器，可用通用 BindTexture 原语绑定深度纹理。
 layout(set = 2, binding = 20) uniform sampler2D u_shadow_atlas;            // flat unit 11
+
+// Final-Feat-8: 聚光灯 shadow map（sampler2D，binding 21-24 排序在 u_shadow_atlas(20) 之后 → flat unit 12-15）。
+// 点光 shadow cube（samplerCube，binding 25-28 → flat unit 16-19）。均用单独采样器 + if-ladder 索引，
+// 避免 sampler 数组在三后端 flat-unit 反射上的歧义；未用槽位绑定默认白色 2D/cube 深度纹理（采样得 1.0 → 无阴影）。
+layout(set = 2, binding = 21) uniform sampler2D u_spot_shadow_map_0;        // flat unit 12
+layout(set = 2, binding = 22) uniform sampler2D u_spot_shadow_map_1;        // flat unit 13
+layout(set = 2, binding = 23) uniform sampler2D u_spot_shadow_map_2;        // flat unit 14
+layout(set = 2, binding = 24) uniform sampler2D u_spot_shadow_map_3;        // flat unit 15
+layout(set = 2, binding = 25) uniform samplerCube u_point_shadow_cube_0;    // flat unit 16
+layout(set = 2, binding = 26) uniform samplerCube u_point_shadow_cube_1;    // flat unit 17
+layout(set = 2, binding = 27) uniform samplerCube u_point_shadow_cube_2;    // flat unit 18
+layout(set = 2, binding = 28) uniform samplerCube u_point_shadow_cube_3;    // flat unit 19
 
 const float PI = 3.14159265359;
 const int CSM_CASCADES = 3;
@@ -221,6 +234,55 @@ vec3 FresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+// Final-Feat-8: 聚光灯阴影。投影到 spot light space → atlas-less 单图 3x3 PCF 手动深度比较。
+// 返回 阴影量*shadow_strength [0,1]（与生产 shadow.glsl SpotShadowCalculation 同语义）。
+// shadow_index<0（无阴影图）时返回 0；未用采样器槽绑白纹理（深度=1 → 不产生阴影）。
+float SpotShadow(int shadowIndex, vec3 worldPos, vec3 N, vec3 L) {
+    if (shadowIndex < 0 || shadowIndex >= 4) return 0.0;
+    vec4 lp = u_spot_light_space_matrices[shadowIndex] * vec4(worldPos, 1.0);
+    if (lp.w <= 1e-5) return 0.0;
+    vec3 pc = lp.xyz / lp.w;
+    pc = pc * 0.5 + 0.5;
+    if (pc.z > 1.0) return 0.0;
+    if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0) return 0.0;
+    float bias = max(0.003 * (1.0 - dot(N, L)), 0.0005);
+    float cur = pc.z;
+    vec2 texel;
+    if (shadowIndex == 0)      texel = 1.0 / vec2(textureSize(u_spot_shadow_map_0, 0));
+    else if (shadowIndex == 1) texel = 1.0 / vec2(textureSize(u_spot_shadow_map_1, 0));
+    else if (shadowIndex == 2) texel = 1.0 / vec2(textureSize(u_spot_shadow_map_2, 0));
+    else                       texel = 1.0 / vec2(textureSize(u_spot_shadow_map_3, 0));
+    float occ = 0.0;
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            vec2 uv = pc.xy + vec2(x, y) * texel;
+            float d;
+            if (shadowIndex == 0)      d = textureLod(u_spot_shadow_map_0, uv, 0.0).r;
+            else if (shadowIndex == 1) d = textureLod(u_spot_shadow_map_1, uv, 0.0).r;
+            else if (shadowIndex == 2) d = textureLod(u_spot_shadow_map_2, uv, 0.0).r;
+            else                       d = textureLod(u_spot_shadow_map_3, uv, 0.0).r;
+            occ += (cur - bias) > d ? 1.0 : 0.0;
+        }
+    }
+    return clamp(occ / 9.0 * light_params.y, 0.0, 1.0);
+}
+
+// Final-Feat-8: 点光阴影。cube 距离深度比较（与生产 shadow.glsl PointShadowCalculation 同语义）。
+// 存储深度归一化到 [0,1]（× radius 还原）；shadow_index<0 或片元超出半径时返回 0。
+float PointShadow(int shadowIndex, vec3 worldPos, vec3 lightPos, float radius) {
+    if (shadowIndex < 0 || shadowIndex >= 4) return 0.0;
+    vec3 toFrag = worldPos - lightPos;
+    float cur = length(toFrag);
+    if (cur >= radius) return 0.0;
+    float closest;
+    if (shadowIndex == 0)      closest = textureLod(u_point_shadow_cube_0, toFrag, 0.0).r * radius;
+    else if (shadowIndex == 1) closest = textureLod(u_point_shadow_cube_1, toFrag, 0.0).r * radius;
+    else if (shadowIndex == 2) closest = textureLod(u_point_shadow_cube_2, toFrag, 0.0).r * radius;
+    else                       closest = textureLod(u_point_shadow_cube_3, toFrag, 0.0).r * radius;
+    float bias = 0.05;
+    return (cur - bias) > closest ? light_params.y : 0.0;
+}
+
 // 点光源 Cook-Torrance 贡献（与生产 pbr.frag 点光循环一致：平方反比半径衰减）。
 vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
                    float roughness, float metallic, vec3 F0) {
@@ -232,7 +294,10 @@ vec3 PointLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
         float r = u_point_lights[i].radius;
         float atten = clamp(1.0 - (dist * dist) / (r * r + 1e-4), 0.0, 1.0);
         atten *= atten;
-        vec3 radiance = u_point_lights[i].color * u_point_lights[i].intensity * atten;
+        // Final-Feat-8: 点光阴影衰减（cast_shadow 且 shadow_index>=0 时生效）。
+        float psh = (u_point_lights[i].cast_shadow != 0)
+            ? PointShadow(u_point_lights[i].shadow_index, world_pos, u_point_lights[i].position, r) : 0.0;
+        vec3 radiance = u_point_lights[i].color * u_point_lights[i].intensity * atten * (1.0 - psh);
         vec3 H = normalize(V + L);
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);
@@ -265,7 +330,10 @@ vec3 SpotLightsLo(vec3 N, vec3 V, vec3 world_pos, vec3 surface_albedo,
         float outerCos = cos(radians(u_spot_lights[i].outer_cone));
         float cone = clamp((theta - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
         if (cone <= 0.0) continue;
-        vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * atten * cone;
+        // Final-Feat-8: 聚光灯阴影衰减（cast_shadow 且 shadow_index>=0 时生效）。
+        float ssh = (u_spot_lights[i].cast_shadow != 0)
+            ? SpotShadow(u_spot_lights[i].shadow_index, world_pos, N, L) : 0.0;
+        vec3 radiance = u_spot_lights[i].color * u_spot_lights[i].intensity * atten * cone * (1.0 - ssh);
         vec3 H = normalize(V + L);
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);

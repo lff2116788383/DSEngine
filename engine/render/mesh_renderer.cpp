@@ -76,8 +76,9 @@ struct FwdPerSceneUBO {
     glm::vec4 cascade_splits;              ///< xyz=view-space 级联分裂距离
     glm::mat4 light_space_matrices[3];     ///< 各级联 shadow-sample 矩阵
     glm::vec4 shadow_atlas_regions[3];     ///< xy=UV scale, zw=UV offset
+    glm::mat4 spot_light_space_matrices[4];///< 聚光灯 light-space 矩阵（Final-Feat-8；点光用 cube 距离无需矩阵）
 };
-static_assert(sizeof(FwdPerSceneUBO) == 304, "FwdPerSceneUBO std140 = 304 bytes");
+static_assert(sizeof(FwdPerSceneUBO) == 560, "FwdPerSceneUBO std140 = 560 bytes");
 
 // std140 PerMaterial 块（64 字节）。
 struct FwdPerMaterialUBO {
@@ -152,6 +153,10 @@ void MeshRenderer::EnsureResources(RhiDevice& device) {
     // 1x1 白纹理：缺省纹理槽回退（采样得 1.0，配合 flags 关闭对应贴图）。
     const unsigned char white[4] = {255, 255, 255, 255};
     white_tex_ = device.CreateTexture2D(1, 1, white, /*linear_filter=*/true);
+    // Final-Feat-8: 1x1 白色 cube（6 面），点光 shadow cube 缺省槽回退。采样得 .r=1.0 →
+    // closestDepth=radius，(cur-bias)>radius 恒假 → 不产生阴影。保证三后端 cube descriptor 维度匹配。
+    const unsigned char* white_faces[6] = {white, white, white, white, white, white};
+    white_cube_tex_ = device.CreateTextureCube(1, 1, white_faces, /*linear_filter=*/true);
 
     GpuBufferDesc f_desc;
     f_desc.size = sizeof(FwdPerFrameUBO);
@@ -439,6 +444,9 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -550,6 +558,16 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     // CSM shadow atlas（slot 11，flat unit 11）。无 shadow map（grs.shadow_map[0]==0）或 receive_shadow 关时
     // 绑白纹理：着色器内 receive_shadow 门控已返回 0，白纹理深度=1 也不会产生阴影。
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
@@ -626,6 +644,9 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -726,6 +747,16 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     // 外部常驻缓冲：绑 caller 持有的 VB/IB，按 index_count_override 子段绘制。
     cmd.BindVertexBuffer(mesh.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(mesh.index_buffer.raw(), mesh.index_type);
@@ -811,6 +842,9 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -910,6 +944,16 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
@@ -999,6 +1043,9 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1102,6 +1149,16 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 骨骼矩阵 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
@@ -1185,6 +1242,9 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1286,6 +1346,16 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 每实例 model SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
@@ -1394,6 +1464,9 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1493,6 +1566,16 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight    @ set7.b1（Final-Feat-4）
     // morph 合并增量 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan SSBO 第0(set7.b0) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, morph_ssbo_.raw(), 0u, static_cast<uint32_t>(morph_bytes));

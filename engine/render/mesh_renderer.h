@@ -546,6 +546,7 @@ private:
     BufferHandle per_ddgi_ubo_;             ///< DDGI 参数 UBO（64B，slot=6，B2c-5）
     BufferHandle per_spot_lights_ubo_;      ///< 聚光灯 UBO（4112B，set7.b1，slot=7，Final-Feat-4；count=0 时无聚光灯）
     unsigned int white_tex_ = 0;
+    unsigned int white_cube_tex_ = 0;       ///< 1x1 白色 cube：点光 shadow cube 缺省槽回退（Final-Feat-8）
     BufferHandle vbo_;
     BufferHandle ibo_;
     BufferHandle per_frame_ubo_;
