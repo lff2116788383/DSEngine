@@ -149,6 +149,58 @@ RenderTargetReadback RenderPPViaRenderer(RhiDevice& device,
     return rb;  // drawn==false → 空 readback（效果未迁移），断言会因尺寸不符而失败/暴露
 }
 
+// 同 RenderPPViaRenderer，但额外绑定一张纹理（slot=GLSL binding → t<slot-1>），
+// 用于强校验双纹理效果的额外纹理通路（如 dof 的 u_color_texture@binding2 → t1）。
+RenderTargetReadback RenderPPViaRenderer2Tex(RhiDevice& device,
+                                             const PostProcessRequest& req_template,
+                                             const std::vector<unsigned char>& src_texels,
+                                             uint32_t extra_slot,
+                                             const std::vector<unsigned char>& extra_texels) {
+    const unsigned int src_tex =
+        device.CreateTexture2D(kRtSize, kRtSize, src_texels.data(), /*linear_filter=*/false);
+    if (src_tex == 0) return {};
+    const unsigned int extra_tex =
+        device.CreateTexture2D(kRtSize, kRtSize, extra_texels.data(), /*linear_filter=*/false);
+    if (extra_tex == 0) { device.DeleteTexture(src_tex); return {}; }
+
+    RenderTargetDesc rt_desc;
+    rt_desc.width = kRtSize;
+    rt_desc.height = kRtSize;
+    rt_desc.has_color = true;
+    rt_desc.has_depth = false;
+    const unsigned int rt = device.CreateRenderTarget(rt_desc);
+    if (rt == 0) { device.DeleteTexture(src_tex); device.DeleteTexture(extra_tex); return {}; }
+
+    PostProcessRequest req = req_template;
+    req.source_texture = src_tex;
+    req.Tex(extra_slot, extra_tex);
+
+    PostProcessRenderer renderer;
+    bool drawn = false;
+    device.BeginFrame();
+    renderer.BeginFrame();
+    auto cmd = device.CreateCommandBuffer();
+    if (cmd) {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.clear_color_enabled = true;
+        cmd->BeginRenderPass(rp);
+        drawn = renderer.Draw(*cmd, device, req);
+        cmd->EndRenderPass();
+        device.Submit(cmd);
+    }
+    device.EndFrame();
+
+    RenderTargetReadback rb;
+    if (drawn) rb = device.ReadRenderTargetColorRgba8WithSize(rt);
+    renderer.Shutdown(device);
+    device.DeleteRenderTarget(rt);
+    device.DeleteTexture(src_tex);
+    device.DeleteTexture(extra_tex);
+    return rb;
+}
+
 RenderTargetReadback RenderPassthrough(RhiDevice& device) {
     return RenderPP(device, PostProcessRequest("postprocess_passthrough", 0), BuildSplitTexels());
 }
@@ -184,6 +236,17 @@ RenderTargetReadback RenderBloomExtractHigh(RhiDevice& device) {
 RenderTargetReadback RenderBloomExtractLow(RhiDevice& device) {
     return RenderPPViaRenderer(device, PostProcessRequest("bloom_extract", 0, {0.05f, 0.05f}),
                                BuildUniformTexels(128));
+}
+
+// dof（双纹理强校验）：bokeh_radius=0 → 16 个采样全落中心 → 输出 = u_color_texture（t1）。
+// 源(depth@t0)=匀色 128，颜色(t1)=匀色 200。若额外纹理 t1 未绑定 → 输出近黑 → 被捕获，
+// 证明 PostProcessRenderer 额外纹理通路（.Tex(2,..) → t1）真实生效。
+RenderTargetReadback RenderDofColorPass(RhiDevice& device) {
+    return RenderPPViaRenderer2Tex(
+        device,
+        PostProcessRequest("dof", 0, {10.0f, 5.0f, 0.0f, 0.1f, 1000.0f,
+                                      static_cast<float>(kRtSize), static_cast<float>(kRtSize)}),
+        BuildUniformTexels(128), 2, BuildUniformTexels(200));
 }
 
 void ExpectColorNear(const RenderTargetReadback& rb, int x, int y,
@@ -239,6 +302,15 @@ void VerifyBloomExtractLow(const RenderTargetReadback& rb, const char* tag) {
     ASSERT_EQ(rb.height, kRtSize) << tag;
     ExpectColorNear(rb, 128, 128, 128, 128, 128, tag);
     ExpectColorNear(rb, 20, 235, 128, 128, 128, tag);
+}
+
+// dof 双纹理真值：全屏 = 颜色纹理 t1 的匀色 200。
+void VerifyDofColorPass(const RenderTargetReadback& rb, const char* tag) {
+    ASSERT_EQ(rb.width, kRtSize) << tag;
+    ASSERT_EQ(rb.height, kRtSize) << tag;
+    ExpectColorNear(rb, 128, 128, 200, 200, 200, tag);
+    ExpectColorNear(rb, 40, 40, 200, 200, 200, tag);
+    ExpectColorNear(rb, 220, 220, 200, 200, 200, tag);
 }
 
 void RunBackend(const char* backend, dse::test::BackendResult (*run)(const dse::test::RenderFn&),
@@ -335,6 +407,20 @@ TEST(PostProcessPixelSmokeTest, VulkanBloomExtractLow) {
 }
 TEST(PostProcessPixelSmokeTest, CrossBackendBloomExtractConsistent) {
     CrossBackendRmse(RenderBloomExtractLow, "bloom_extract", 8.0);
+}
+
+// dof 经 PostProcessRenderer：双纹理额外通路（u_color_texture@t1）强校验。
+TEST(PostProcessPixelSmokeTest, OpenGLDofColorPass) {
+    RunBackend("OpenGL", &dse::test::RunOpenGL, RenderDofColorPass, VerifyDofColorPass);
+}
+TEST(PostProcessPixelSmokeTest, D3D11DofColorPass) {
+    RunBackend("D3D11", &dse::test::RunD3D11, RenderDofColorPass, VerifyDofColorPass);
+}
+TEST(PostProcessPixelSmokeTest, VulkanDofColorPass) {
+    RunBackend("Vulkan", &dse::test::RunVulkan, RenderDofColorPass, VerifyDofColorPass);
+}
+TEST(PostProcessPixelSmokeTest, CrossBackendDofColorPassConsistent) {
+    CrossBackendRmse(RenderDofColorPass, "dof_color", 8.0);
 }
 
 TEST(PostProcessPixelSmokeTest, OpenGLTonemapping) {

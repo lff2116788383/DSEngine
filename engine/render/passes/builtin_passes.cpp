@@ -1378,9 +1378,9 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
 
     // Pass 1: DOF → dof RT
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
-    cmd_buffer.DrawPostProcess(PostProcessRequest{"dof", depth_tex, {
+    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"dof", depth_tex, {
         pp_config.dof_focus_distance,
         pp_config.dof_focus_range,
         pp_config.dof_bokeh_radius,
@@ -1395,8 +1395,7 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (dof_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
-        post_process_renderer_.BeginFrame();
-    post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", dof_tex});
+        post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", dof_tex});
         cmd_buffer.EndRenderPass();
     }
 }
