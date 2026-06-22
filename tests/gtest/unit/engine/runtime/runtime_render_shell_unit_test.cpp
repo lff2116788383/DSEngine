@@ -23,6 +23,17 @@ public:
     void BeginRenderPass(const RenderPassDesc&) override {}
     void EndRenderPass() override {}
     void BindPipeline(unsigned int) override {}
+    void BindVertexBuffer(unsigned int, uint32_t, const std::vector<VertexAttr>&) override {}
+    void PushConstants(ShaderStage, uint32_t, const void*, uint32_t) override {}
+    void Draw(uint32_t, uint32_t) override {}
+    void BindIndexBuffer(unsigned int, IndexType) override {}
+    void BindTexture(uint32_t, unsigned int, TextureDim) override {}
+    void BindUniformBuffer(uint32_t, unsigned int, uint32_t, uint32_t) override {}
+    void BindStorageBuffer(uint32_t, unsigned int, uint32_t, uint32_t) override {}
+    void DrawIndexed(uint32_t, uint32_t, int32_t) override {}
+    void DispatchComputePass(const ComputeDispatch&) override {}
+    void DrawIndexedInstanced(uint32_t, uint32_t, uint32_t, int32_t, uint32_t) override {}
+    void DrawIndexedIndirect(unsigned int, uint32_t) override {}
     void SetCamera(const glm::mat4&, const glm::mat4&) override {}
     void ClearColor(const glm::vec4&) override {}
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}

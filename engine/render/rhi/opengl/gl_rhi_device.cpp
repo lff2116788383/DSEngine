@@ -243,6 +243,11 @@ void OpenGLCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint
     device_->RealDrawIndexedIndirect(indirect_buffer, byte_offset);
 }
 
+void OpenGLCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
+    // GL 无 compute 路径：消费者经 GetBloomComputeShader()==0 回退全屏 quad，此处不应被命中。
+    (void)dispatch;
+}
+
 void OpenGLCommandBuffer::SetViewport(int x, int y, int width, int height) {
     glViewport(x, y, width, height);
     glScissor(x, y, width, height);

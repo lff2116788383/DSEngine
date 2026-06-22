@@ -41,6 +41,16 @@ public:
     MOCK_METHOD(void, BeginRenderPass, (const RenderPassDesc&), (override));
     MOCK_METHOD(void, EndRenderPass, (), (override));
     MOCK_METHOD(void, BindPipeline, (unsigned int), (override));
+    MOCK_METHOD(void, BindVertexBuffer, (unsigned int, uint32_t, (const std::vector<VertexAttr>&)), (override));
+    MOCK_METHOD(void, PushConstants, (ShaderStage, uint32_t, const void*, uint32_t), (override));
+    MOCK_METHOD(void, Draw, (uint32_t, uint32_t), (override));
+    MOCK_METHOD(void, BindIndexBuffer, (unsigned int, IndexType), (override));
+    MOCK_METHOD(void, BindTexture, (uint32_t, unsigned int, TextureDim), (override));
+    MOCK_METHOD(void, BindUniformBuffer, (uint32_t, unsigned int, uint32_t, uint32_t), (override));
+    MOCK_METHOD(void, BindStorageBuffer, (uint32_t, unsigned int, uint32_t, uint32_t), (override));
+    MOCK_METHOD(void, DrawIndexed, (uint32_t, uint32_t, int32_t), (override));
+    MOCK_METHOD(void, DrawIndexedInstanced, (uint32_t, uint32_t, uint32_t, int32_t, uint32_t), (override));
+    MOCK_METHOD(void, DrawIndexedIndirect, (unsigned int, uint32_t), (override));
     MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));

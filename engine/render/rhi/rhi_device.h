@@ -63,68 +63,54 @@ public:
     // --- 通用绘制原语 (A1) ---
     // 高层渲染器（如 SkyboxRenderer）用这组后端无关的原语组合出绘制，
     // 取代把具体效果（DrawSkybox 等）做成 RHI 虚函数的做法。
-    // 默认空实现：尚未实现该组原语的后端/Mock 仍可编译。
+    // 纯虚：所有 CommandBuffer 实现（三后端 + 测试 Mock）必须显式实现，
+    // 杜绝旧 no-op 默认在某后端/Mock 漏实现时静默吞掉绘制而难以察觉。
 
     /// 绑定图形管线对象（B5-3b：聚合 PSO 子状态 + program，取代分离的 SetPipelineState+BindShaderProgram）。
     /// 句柄经 RhiDevice::GetGraphicsPipeline 取得；恒应用 PSO 状态，desc.program!=0 时再绑 program。
-    virtual void BindPipeline(unsigned int graphics_pipeline_handle) { (void)graphics_pipeline_handle; }
+    virtual void BindPipeline(unsigned int graphics_pipeline_handle) = 0;
     /// 绑定顶点缓冲 + 顶点布局（float 属性）。布局随 VB 一起提供，后端据此建立输入布局。
     virtual void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                  const std::vector<VertexAttr>& attrs) {
-        (void)buffer_handle; (void)stride; (void)attrs;
-    }
+                                  const std::vector<VertexAttr>& attrs) = 0;
     /// 通用 push constant 字节块写入（Vulkan→真 push constant / DX11→push cbuffer(b0) /
     /// GL→push-block UBO(DsePush{VS,FS}) 按 offset memcpy）。stage 指定写入哪个阶段的 push 块。
-    virtual void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
-        (void)stage; (void)offset; (void)data; (void)size;
-    }
+    virtual void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) = 0;
     /// 非索引绘制
-    virtual void Draw(uint32_t vertex_count, uint32_t first_vertex = 0) {
-        (void)vertex_count; (void)first_vertex;
-    }
+    virtual void Draw(uint32_t vertex_count, uint32_t first_vertex = 0) = 0;
 
     // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
-    // 这组原语由 mesh/sprite 类消费者倒推（见 RHI_PRIMITIVE_CONTRACT.md §4）。
-    // 默认空实现，未实现的后端/Mock 仍可编译。
+    // 这组原语由 mesh/sprite 类消费者倒推（见 RHI_PRIMITIVE_CONTRACT.md §4）。纯虚：见上。
 
     /// 绑定索引缓冲（供 DrawIndexed 使用）
-    virtual void BindIndexBuffer(unsigned int buffer_handle, IndexType type) {
-        (void)buffer_handle; (void)type;
-    }
+    virtual void BindIndexBuffer(unsigned int buffer_handle, IndexType type) = 0;
     /// 绑定纹理到指定 slot（按维度区分 2D / cube / 2D 数组）
-    virtual void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
-        (void)slot; (void)texture_handle; (void)dim;
-    }
+    virtual void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) = 0;
     /// 绑定 uniform/constant buffer 到指定 slot（offset/size=0 表示整个 buffer）
     virtual void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
-                                   uint32_t offset = 0, uint32_t size = 0) {
-        (void)slot; (void)buffer_handle; (void)offset; (void)size;
-    }
+                                   uint32_t offset = 0, uint32_t size = 0) = 0;
     /// 绑定图形阶段 storage buffer (SSBO) 到指定 slot（offset/size=0 表示整个 buffer，
     /// 非 0 表示绑定子区间，蒙皮/实例数据按 item 偏移取用）。
     /// GL→glBindBufferBase/Range(GL_SHADER_STORAGE_BUFFER)；DX11→StructuredBuffer SRV→t-register(VS/PS)；
     /// Vulkan→VK_DESCRIPTOR_TYPE_STORAGE_BUFFER descriptor。
     virtual void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
-                                   uint32_t offset = 0, uint32_t size = 0) {
-        (void)slot; (void)buffer_handle; (void)offset; (void)size;
-    }
+                                   uint32_t offset = 0, uint32_t size = 0) = 0;
     /// 索引绘制
     virtual void DrawIndexed(uint32_t index_count, uint32_t first_index = 0,
-                             int32_t base_vertex = 0) {
-        (void)index_count; (void)first_index; (void)base_vertex;
-    }
+                             int32_t base_vertex = 0) = 0;
 
     // --- 通用 compute 原语 (B-compute) ---
     // 把设备级 compute 提升为 CommandBuffer 级可录制原语，供 BloomRenderer 等高层渲染器
     // 在录制流中发起 compute 调度（bloom mip 链）。语义见 rhi_types.h ComputeDispatch。
-    // 输出目标取当前 BeginRenderPass 绑定的 RT；默认空实现（GL/Mock 不消费）。
+    // 输出目标取当前 BeginRenderPass 绑定的 RT。纯虚：无 compute 能力的后端（GL）
+    // 须提供显式 no-op 实现并在调用前经 RhiDevice::GetBloomComputeShader()==0 门控回退，
+    // 而非依赖旧的静默 no-op 默认。
 
     /// 录制一次 compute 调度：输入 dispatch.source_texture，输出当前绑定 RT 颜色附件。
-    virtual void DispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
+    virtual void DispatchComputePass(const ComputeDispatch& dispatch) = 0;
 
     // --- 通用绘制原语 (B2b 前置): 实例化索引绘制 ---
     // 由 mesh（蒙皮硬件实例化）倒推。现有 DrawIndexed 签名保持不变——新增独立重载，
-    // 避免 DrawIndexed(n, 0) 把 first_index 的 0 误读为 instance_count。默认空实现。
+    // 避免 DrawIndexed(n, 0) 把 first_index 的 0 误读为 instance_count。纯虚：见上。
 
     /// 实例化索引绘制：绘制 instance_count 个实例。first_instance 为基实例
     /// （GL→glDrawElementsInstancedBaseVertexBaseInstance / Vulkan→vkCmdDrawIndexed.firstInstance /
@@ -132,15 +118,11 @@ public:
     /// 实例数据偏移需经 SSBO/instance VB 偏移表达，见 RHI_PRIMITIVE_CONTRACT.md §6）。
     virtual void DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
                                       uint32_t first_index = 0, int32_t base_vertex = 0,
-                                      uint32_t first_instance = 0) {
-        (void)index_count; (void)instance_count; (void)first_index;
-        (void)base_vertex; (void)first_instance;
-    }
+                                      uint32_t first_instance = 0) = 0;
 
     // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
     // 由 mesh（GPU-driven indirect）倒推。绘制参数（index/instance count、偏移）来自
-    // GPU 端 indirect buffer，而非 CPU 立即数——可由 compute 剔除/LOD pass 在 GPU 上写入。
-    // 默认空实现，未实现的后端/Mock 仍可编译。
+    // GPU 端 indirect buffer，而非 CPU 立即数——可由 compute 剔除/LOD pass 在 GPU 上写入。纯虚：见上。
 
     /// 间接索引绘制：从 indirect_buffer 的 byte_offset 处读取一条
     /// DrawElementsIndirectCommand{count, instance_count, first_index, base_vertex, base_instance}
@@ -150,9 +132,7 @@ public:
     /// 契约同 DrawIndexedInstanced：DX11 的 SV_InstanceID 仍从 0 起，base_instance 偏移须经
     /// SSBO 偏移表达，不能靠 base_instance 取数（见 RHI_PRIMITIVE_CONTRACT.md §6）。
     /// indirect_buffer 须经 CreateGpuBuffer(GpuBufferUsage::kIndirect) 创建。
-    virtual void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset = 0) {
-        (void)indirect_buffer; (void)byte_offset;
-    }
+    virtual void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset = 0) = 0;
 };
 
 /**

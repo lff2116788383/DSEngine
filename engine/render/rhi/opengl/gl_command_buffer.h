@@ -56,6 +56,11 @@ public:
     // --- 通用绘制原语 (B2b-5): GPU-driven 间接索引绘制 ---
     void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) override;
 
+    // --- 通用 compute 原语 (B-compute) ---
+    // GL 后端无 compute 路径：GetBloomComputeShader() 恒返回 0，消费者（BloomRenderer 等）
+    // 据此回退全屏 quad，DispatchComputePass 在 GL 上不应被调用。提供显式 no-op 以满足纯虚契约。
+    void DispatchComputePass(const ComputeDispatch& dispatch) override;
+
     /// 设置所属设备（由 OpenGLRhiDevice::CreateCommandBuffer 注入）
     void SetDevice(OpenGLRhiDevice* device);
 
