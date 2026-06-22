@@ -598,6 +598,22 @@ public:
                                               const glm::mat4& proj,
                                               bool foliage = false);
 
+    /// 记录一队 CPU mesh 的批量绘制（阶段4-M4：取代 DrawMeshBatch ABI 在 RenderScene::
+    /// DrawOpaqueCpu / DrawTransparent 上的全部职责）。逐 item 据 skinned/instanced/morph 字段
+    /// 与全局渲染状态（GetGlobalRenderState 的 current_pass_depth_only / gbuffer_rendering_mode /
+    /// wireframe/overdraw/force_unlit）路由到对应 Draw*Shaded / DrawGBuffer 方法（复用 M1–M3 成果）：
+    ///   - gbuffer_rendering_mode：走 DrawGBuffer（蒙皮/实例在 CPU 预蒙皮/逐实例展开）；
+    ///   - 否则（forward 或 depth-only）：走 DrawShaded / DrawSkinnedShaded / DrawInstancedShaded /
+    ///     DrawSkinnedInstancedShaded（depth-only RT 无颜色附件 → frag 颜色被丢弃、仅写深度）。
+    /// depth-only 阴影 pass（ortho）按三后端执行器原算法对实例做 shadow-cull 预算 + lightspace 裁剪；
+    /// PreZ（透视 depth-only）整体跳过蒙皮实例。morph item 因 MeshDrawItem 不携带形变增量（与执行器
+    /// 一致）退化为静态/蒙皮路径。索引按 16 位下发（cpu_mesh 顶点数 < 65536）。
+    /// view/proj 取自 cmd.GetViewMatrix()/GetProjectionMatrix()（须含 GetProjectionCorrection，与执行器同源）。
+    void DrawBatch(CommandBuffer& cmd, RhiDevice& device,
+                   const std::vector<MeshDrawItem>& items,
+                   const glm::mat4& view,
+                   const glm::mat4& proj);
+
     /// 释放内建资源（可选；设备析构时缓冲随之回收）
     void Shutdown(RhiDevice& device);
 

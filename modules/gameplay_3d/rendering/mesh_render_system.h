@@ -15,7 +15,7 @@
 class AssetManager;
 
 
-namespace dse { namespace render { struct RenderPassContext; struct RenderScene; } }
+namespace dse { namespace render { struct RenderPassContext; struct RenderScene; class MeshRenderer; } }
 
 namespace dse {
 namespace gameplay3d {
@@ -44,6 +44,14 @@ public:
     void RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode);
 
     void SetAssetManager(AssetManager* asset_manager);
+
+    /// 阶段4-M4：注入 CPU mesh 绘制所需的设备 + 常驻 MeshRenderer（取代旧 cmd.DrawMeshBatch ABI）。
+    /// 由探针/反射捕获路径（BuiltinModulesImpl::RenderMeshes）在每次渲染前设置；
+    /// 未设置（如单元测试）时 Render/RenderTransparent 跳过绘制。
+    void SetRenderContext(dse::render::RhiDevice* device, dse::render::MeshRenderer* renderer) {
+        rhi_device_ = device;
+        mesh_renderer_ = renderer;
+    }
 
 
     /// 释放 GPU Driven 资源（Mega VAO/VBO/IBO），必须在 RHI Shutdown 之前调用
@@ -121,6 +129,8 @@ public:
 
 private:
     AssetManager* asset_manager_ = nullptr;
+    dse::render::RhiDevice* rhi_device_ = nullptr;      ///< 阶段4-M4：DrawBatch 设备（非拥有，外部注入）
+    dse::render::MeshRenderer* mesh_renderer_ = nullptr; ///< 阶段4-M4：CPU mesh 常驻渲染器（非拥有，外部注入）
     std::vector<MeshDrawItem> transparent_items_;  ///< 每帧缓存的透明绘制项
 
     /// 静态合批：首帧构建后缓存，后续帧直接复用

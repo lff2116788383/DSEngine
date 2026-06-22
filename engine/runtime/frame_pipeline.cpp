@@ -1679,6 +1679,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
     render_pass_context_.render_scene = &render_scene_;
+    render_pass_context_.mesh_renderer = &cpu_mesh_renderer_;
     render_pass_context_.light_buffer = &light_buffer_;
     render_pass_context_.cluster_grid = &cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
@@ -1806,7 +1807,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RenderUI2D(world, cmd, w, h, clip);
     };
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
-        modules_impl_->RenderMeshes(world, cmd);
+        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, cpu_mesh_renderer_);
     };
 
     // ---- 澹版槑澶栭儴杈撳嚭 ----

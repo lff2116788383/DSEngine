@@ -11,6 +11,8 @@
 #include "engine/render/rhi/ubo_types.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 
 #include <glm/gtc/matrix_inverse.hpp>
 
@@ -64,6 +66,161 @@ struct MeshSkinnedInstGPU {
     int32_t pad0, pad1, pad2;
 };
 static_assert(sizeof(MeshSkinnedInstGPU) == 80, "MeshSkinnedInstGPU std430 = 80 bytes (mat4 + int + 3 pad)");
+
+// ===== 阶段4-M4：MeshDrawItem → MeshRenderer 入参映射（DrawBatch 分发翻译层）=====
+
+// BatchVertex（pos/color/uv/normal/tangent/weights/joints）→ MeshVertex（局部空间）。
+inline MeshVertex BatchToMeshVertex(const BatchVertex& bv) {
+    MeshVertex mv;
+    mv.position = bv.pos;
+    mv.color = bv.color;
+    mv.uv = bv.uv;
+    mv.normal = bv.normal;
+    mv.tangent = bv.tangent;
+    return mv;
+}
+
+// BatchVertex → SkinnedMeshVertex（joints→bone_indices、weights→bone_weights，局部/绑定空间）。
+inline SkinnedMeshVertex BatchToSkinnedVertex(const BatchVertex& bv) {
+    SkinnedMeshVertex sv;
+    sv.position = bv.pos;
+    sv.color = bv.color;
+    sv.uv = bv.uv;
+    sv.normal = bv.normal;
+    sv.tangent = bv.tangent;
+    sv.bone_indices = bv.joints;
+    sv.bone_weights = bv.weights;
+    return sv;
+}
+
+// MeshDrawItem 材质字段 → ShadedMaterial（与执行器 PreparePerMaterialUBO 同源；force_unlit/
+// overdraw/wireframe 由 DrawShaded 内部读 GetGlobalRenderState 生效，此处不消费）。
+inline ShadedMaterial BatchToShadedMaterial(const MeshDrawItem& it) {
+    ShadedMaterial m;
+    m.albedo = it.material_albedo;
+    m.metallic = it.material_metallic;
+    m.roughness = it.material_roughness;
+    m.ao = it.material_ao;
+    m.normal_strength = it.material_normal_strength;
+    m.emissive = it.material_emissive;
+    m.alpha_cutoff = it.material_alpha_cutoff;
+    m.alpha_test = it.material_alpha_test;
+    m.double_sided = it.material_double_sided;
+    m.shading_mode = it.shading_mode;
+    m.sss_strength = it.material_sss_strength;
+    m.sss_tint = it.material_sss_tint;
+    m.clear_coat = it.material_clear_coat;
+    m.clear_coat_roughness = it.material_clear_coat_roughness;
+    m.anisotropy = it.material_anisotropy;
+    m.pom_height_scale = it.material_pom_height_scale;
+    m.toon_shadow_color = it.toon_shadow_color;
+    m.toon_shadow_threshold = it.toon_shadow_threshold;
+    m.toon_shadow_softness = it.toon_shadow_softness;
+    m.toon_specular_size = it.toon_specular_size;
+    m.toon_specular_strength = it.toon_specular_strength;
+    m.toon_rim_strength = it.toon_rim_strength;
+    m.watercolor_paper_strength = it.watercolor_paper_strength;
+    m.watercolor_edge_darkening = it.watercolor_edge_darkening;
+    m.watercolor_color_bleed = it.watercolor_color_bleed;
+    m.watercolor_pigment_density = it.watercolor_pigment_density;
+    m.albedo_tex = it.texture_handle;
+    m.normal_tex = it.normal_map_handle;
+    m.metallic_roughness_tex = it.metallic_roughness_map_handle;
+    m.emissive_tex = it.emissive_map_handle;
+    m.occlusion_tex = it.occlusion_map_handle;
+    m.splat_enabled = it.splat_enabled;
+    m.splat_weight_map = it.splat_weight_map_handle;
+    for (int i = 0; i < 4; ++i) m.splat_layers[i] = it.splat_layer_handles[i];
+    m.splat_tiling = it.splat_tiling;
+    m.snow_coverage = it.snow_coverage;
+    m.snow_albedo = it.snow_albedo;
+    m.snow_roughness = it.snow_roughness;
+    m.snow_normal_threshold = it.snow_normal_threshold;
+    m.snow_edge_sharpness = it.snow_edge_sharpness;
+    m.wboit_mode = it.wboit_mode;
+    m.receive_shadow = it.receive_shadow;
+    m.shadow_strength = it.shadow_strength;
+    m.foliage = it.foliage;
+    return m;
+}
+
+// MeshDrawItem 光照字段 → DirectionalLight（force_unlit 由 DrawShaded 内部生效，此处仅传 enabled）。
+inline DirectionalLight BatchToDirLight(const MeshDrawItem& it) {
+    DirectionalLight l;
+    l.direction = it.light_direction;
+    l.color = it.light_color;
+    l.intensity = it.light_intensity;
+    l.ambient = it.ambient_intensity;
+    l.enabled = it.lighting_enabled;
+    return l;
+}
+
+// MeshDrawItem 点光列表 → ShadedPointLight（语义同执行器 PreparePointLightsUBO）。
+inline std::vector<ShadedPointLight> BatchToPointLights(const MeshDrawItem& it) {
+    std::vector<ShadedPointLight> out;
+    out.reserve(it.point_lights.size());
+    for (const auto& pl : it.point_lights) {
+        ShadedPointLight sp;
+        sp.color = pl.color;
+        sp.intensity = pl.intensity;
+        sp.position = pl.position;
+        sp.radius = pl.radius;
+        sp.cast_shadow = pl.cast_shadow;
+        sp.shadow_index = pl.shadow_index;
+        out.push_back(sp);
+    }
+    return out;
+}
+
+// MeshDrawItem 聚光灯列表 → ShadedSpotLight（语义同执行器 PrepareSpotLightsUBO）。
+inline std::vector<ShadedSpotLight> BatchToSpotLights(const MeshDrawItem& it) {
+    std::vector<ShadedSpotLight> out;
+    out.reserve(it.spot_lights.size());
+    for (const auto& sl : it.spot_lights) {
+        ShadedSpotLight ss;
+        ss.color = sl.color;
+        ss.intensity = sl.intensity;
+        ss.position = sl.position;
+        ss.radius = sl.radius;
+        ss.direction = sl.direction;
+        ss.inner_cone = sl.inner_cone;
+        ss.outer_cone = sl.outer_cone;
+        ss.cast_shadow = sl.cast_shadow;
+        ss.shadow_index = sl.shadow_index;
+        out.push_back(ss);
+    }
+    return out;
+}
+
+// 把一组 BatchVertex 在 CPU 侧按骨骼调色板蒙皮到**局部空间**（bind→local，未乘 model；
+// DrawGBuffer 再施 model）。供 gbuffer 模式下蒙皮/蒙皮实例项展开为静态世界几何。
+inline std::vector<MeshVertex> SkinBatchToLocal(const BatchVertex* v, size_t n,
+                                                const std::vector<glm::mat4>& bones) {
+    std::vector<MeshVertex> out(n);
+    for (size_t i = 0; i < n; ++i) {
+        const BatchVertex& bv = v[i];
+        glm::mat4 skin(0.0f);
+        float wsum = 0.0f;
+        for (int k = 0; k < 4; ++k) {
+            const float w = bv.weights[k];
+            if (w <= 0.0f) continue;
+            const int bi = static_cast<int>(bv.joints[k]);
+            if (bi >= 0 && bi < static_cast<int>(bones.size())) {
+                skin += w * bones[bi];
+                wsum += w;
+            }
+        }
+        if (wsum <= 0.0f) skin = glm::mat4(1.0f);
+        const glm::mat3 skin3(skin);
+        MeshVertex& mv = out[i];
+        mv.position = glm::vec3(skin * glm::vec4(bv.pos, 1.0f));
+        mv.color = bv.color;
+        mv.uv = bv.uv;
+        mv.normal = glm::normalize(skin3 * bv.normal);
+        mv.tangent = skin3 * bv.tangent;
+    }
+    return out;
+}
 
 // std140 PerFrame 块（176 字节）：mat4 vp + mat4 view + vec4 camera_pos +
 // vec4 foliage_wind + vec4 foliage_push。着色器仅用 vp / camera_pos。
@@ -903,6 +1060,154 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
+}
+
+void MeshRenderer::DrawBatch(CommandBuffer& cmd, RhiDevice& device,
+                             const std::vector<MeshDrawItem>& items,
+                             const glm::mat4& view,
+                             const glm::mat4& proj) {
+    if (items.empty()) return;
+
+    const DrawExecutorGlobalState& grs = device.GetGlobalRenderState();
+    const bool depth_only = grs.current_pass_depth_only;
+    const bool gbuffer_mode = grs.gbuffer_rendering_mode;
+    const glm::vec3 camera_pos = glm::vec3(glm::inverse(view)[3]);
+
+    // --- Shadow-cull 预算（仅 depth-only + ortho 阴影 pass；常数/算法与三后端执行器逐位一致）---
+    // is_ortho 用 proj[2][3]≈0 判定（与执行器同式：perspective=-1/ortho=0；clip 修正不改该元素）。
+    const bool is_ortho = std::abs(proj[2][3]) < 0.01f;
+    const bool shadow_cull_active = depth_only && is_ortho;
+    // PreZ（透视 depth-only）：蒙皮实例 VS 骨骼开销极大、阴影收益低，整体跳过（与执行器一致）。
+    const bool prez_skip_skinned = depth_only && !is_ortho;
+    float shadow_cull_limit = 0.0f;
+    size_t shadow_inst_budget = SIZE_MAX;
+    if (shadow_cull_active && std::abs(proj[0][0]) > 1e-6f) {
+        constexpr float kShadowCullMargin       = 150.0f;
+        constexpr float kBudgetOrthoThreshold   = 2000.0f;
+        constexpr float kBudgetBaseInstances    = 800.0f;
+        constexpr float kBudgetMinInstances     = 64.0f;
+        constexpr float kSkinnedShadowSkipOrtho = 1500.0f;
+        constexpr float kSkinnedBudgetOrtho     = 400.0f;
+        constexpr float kSkinnedBudgetBase      = 200.0f;
+        const float ortho_size = 1.0f / proj[0][0];
+        shadow_cull_limit = ortho_size + kShadowCullMargin;
+        if (ortho_size > kBudgetOrthoThreshold) {
+            shadow_inst_budget = static_cast<size_t>(
+                std::max(kBudgetBaseInstances * kBudgetOrthoThreshold / ortho_size, kBudgetMinInstances));
+        }
+        if (ortho_size > kSkinnedShadowSkipOrtho) {
+            shadow_inst_budget = 0;
+        } else if (ortho_size > kSkinnedBudgetOrtho) {
+            shadow_inst_budget = static_cast<size_t>(
+                std::max(kSkinnedBudgetBase * kSkinnedBudgetOrtho / ortho_size, 0.0f));
+        }
+    }
+
+    for (const auto& item : items) {
+        // 顶点/索引数据源：优先 shared_vertex_ptr（共享模板），否则 item 内联缓冲（与执行器同序）。
+        const BatchVertex* vtx_data = item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+        const uint32_t* idx_data = item.shared_index_ptr ? item.shared_index_ptr : item.indices.data();
+        const size_t vtx_count = item.shared_vertex_ptr ? item.shared_vertex_count : item.vertices.size();
+        const size_t idx_count = item.shared_index_ptr ? item.shared_index_count : item.indices.size();
+        if (vtx_count == 0 || idx_count == 0) continue;
+
+        const bool is_instanced = item.instance_transforms.size() > 1;
+        const bool skinned_instanced = item.skinned
+            && (!item.per_instance_bones.empty() || !item.bone_palette.empty())
+            && is_instanced;
+        const bool single_skinned = item.skinned && !is_instanced && !item.bone_matrices.empty();
+
+        // 索引 uint32 → uint16（MeshRenderer 逐变体方法契约为 16 位；cpu_mesh 顶点数 < 65536）。
+        std::vector<uint16_t> indices16(idx_count);
+        for (size_t k = 0; k < idx_count; ++k)
+            indices16[k] = static_cast<uint16_t>(idx_data[k]);
+
+        const ShadedMaterial material = BatchToShadedMaterial(item);
+        const DirectionalLight light = BatchToDirLight(item);
+        const std::vector<ShadedPointLight> point_lights = BatchToPointLights(item);
+        const std::vector<ShadedSpotLight> spot_lights = BatchToSpotLights(item);
+        const ShadedGI gi{};  // 与已迁移的 terrain/tree/grass 一致：CPU mesh forward 路径不带 DDGI/SH。
+
+        // --- 实例可见集（仅 instanced）：depth-only ortho 阴影 pass 按预算 + lightspace 裁剪 ---
+        std::vector<glm::mat4> vis_models;
+        std::vector<int> vis_palette_idx;
+        if (is_instanced) {
+            if (prez_skip_skinned && skinned_instanced) continue;  // PreZ 跳过蒙皮实例
+            const size_t n = item.instance_transforms.size();
+            vis_models.reserve(n);
+            if (skinned_instanced) vis_palette_idx.reserve(n);
+            for (size_t j = 0; j < n; ++j) {
+                if (shadow_cull_active) {
+                    if (vis_models.size() >= shadow_inst_budget) break;
+                    if (shadow_cull_limit > 0.0f) {
+                        const glm::vec3 wp(item.instance_transforms[j][3]);
+                        const glm::vec4 ls = view * glm::vec4(wp, 1.0f);
+                        if (std::abs(ls.x) > shadow_cull_limit || std::abs(ls.y) > shadow_cull_limit)
+                            continue;
+                    }
+                }
+                vis_models.push_back(item.instance_transforms[j]);
+                if (skinned_instanced) {
+                    const int pidx = (j < item.instance_bone_palette_idx.size())
+                        ? item.instance_bone_palette_idx[j] : 0;
+                    vis_palette_idx.push_back(pidx);
+                }
+            }
+            if (vis_models.empty()) continue;  // 全部被剔除
+        }
+
+        // ===== GBuffer 模式（RSM；非 depth-only）：蒙皮/实例在 CPU 展开为静态世界几何 =====
+        if (gbuffer_mode) {
+            const unsigned int albedo_tex = item.texture_handle;
+            if (skinned_instanced) {
+                for (size_t j = 0; j < vis_models.size(); ++j) {
+                    const int pidx = vis_palette_idx[j];
+                    const std::vector<glm::mat4>& pal =
+                        (pidx >= 0 && pidx < static_cast<int>(item.bone_palette.size()))
+                            ? item.bone_palette[pidx] : item.bone_palette[0];
+                    std::vector<MeshVertex> sk = SkinBatchToLocal(vtx_data, vtx_count, pal);
+                    DrawGBuffer(cmd, device, sk, indices16, vis_models[j], view, proj, albedo_tex);
+                }
+            } else if (is_instanced) {
+                std::vector<MeshVertex> mverts(vtx_count);
+                for (size_t i = 0; i < vtx_count; ++i) mverts[i] = BatchToMeshVertex(vtx_data[i]);
+                for (const auto& mdl : vis_models)
+                    DrawGBuffer(cmd, device, mverts, indices16, mdl, view, proj, albedo_tex);
+            } else if (single_skinned) {
+                std::vector<MeshVertex> sk = SkinBatchToLocal(vtx_data, vtx_count, item.bone_matrices);
+                DrawGBuffer(cmd, device, sk, indices16, item.model, view, proj, albedo_tex);
+            } else {
+                std::vector<MeshVertex> mverts(vtx_count);
+                for (size_t i = 0; i < vtx_count; ++i) mverts[i] = BatchToMeshVertex(vtx_data[i]);
+                DrawGBuffer(cmd, device, mverts, indices16, item.model, view, proj, albedo_tex);
+            }
+            continue;
+        }
+
+        // ===== forward / depth-only：复用 forward program（depth-only RT 无颜色附件 → frag 丢弃）=====
+        if (skinned_instanced) {
+            std::vector<SkinnedMeshVertex> sverts(vtx_count);
+            for (size_t i = 0; i < vtx_count; ++i) sverts[i] = BatchToSkinnedVertex(vtx_data[i]);
+            DrawSkinnedInstancedShaded(cmd, device, sverts, indices16, vis_models,
+                                       item.bone_palette, vis_palette_idx, view, proj, camera_pos,
+                                       material, light, point_lights, gi, spot_lights);
+        } else if (is_instanced) {
+            std::vector<MeshVertex> mverts(vtx_count);
+            for (size_t i = 0; i < vtx_count; ++i) mverts[i] = BatchToMeshVertex(vtx_data[i]);
+            DrawInstancedShaded(cmd, device, mverts, indices16, vis_models, view, proj, camera_pos,
+                                material, light, point_lights, gi, spot_lights);
+        } else if (single_skinned) {
+            std::vector<SkinnedMeshVertex> sverts(vtx_count);
+            for (size_t i = 0; i < vtx_count; ++i) sverts[i] = BatchToSkinnedVertex(vtx_data[i]);
+            DrawSkinnedShaded(cmd, device, sverts, indices16, item.model, item.bone_matrices,
+                              view, proj, camera_pos, material, light, point_lights, gi, spot_lights);
+        } else {
+            std::vector<MeshVertex> mverts(vtx_count);
+            for (size_t i = 0; i < vtx_count; ++i) mverts[i] = BatchToMeshVertex(vtx_data[i]);
+            DrawShaded(cmd, device, mverts, indices16, item.model, view, proj, camera_pos,
+                       material, light, point_lights, gi, spot_lights);
+        }
+    }
 }
 
 BufferHandle MeshRenderer::BuildShadedLocalVertexBuffer(RhiDevice& device,

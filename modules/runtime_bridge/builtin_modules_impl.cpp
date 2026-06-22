@@ -55,7 +55,9 @@ void BuiltinModulesImpl::ShutdownMeshSystem() {
     mesh_render_system_.SetAssetManager(nullptr);
 }
 
-void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd) {
+void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer) {
+    // 阶段4-M4：注入设备 + 常驻 MeshRenderer，Render 内部经 DrawBatch 取代旧 cmd.DrawMeshBatch。
+    mesh_render_system_.SetRenderContext(&device, &renderer);
     mesh_render_system_.Render(world, cmd);
 }
 

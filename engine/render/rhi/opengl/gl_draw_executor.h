@@ -68,15 +68,6 @@ public:
     void EndRenderPass(GLResourceManager& resource_mgr);
     void ClearColor(const glm::vec4& color);
 
-    // --- 绘制命令 ---
-    void DrawMeshBatch(const std::vector<MeshDrawItem>& items,
-                         const glm::mat4& view,
-                         const glm::mat4& projection,
-                         GLPipelineStateManager& state_mgr,
-                         GLShaderManager& shader_mgr,
-                         GLResourceManager& resource_mgr,
-                         UBOManager& ubo_mgr);
-
     // --- 通用绘制原语 (A1) ---
     /// 设置后续 Prim* 绘制的图元拓扑（由 SetPipelineState 从 PSO desc 推送）。
     void PrimSetTopology(PrimitiveTopology topology);

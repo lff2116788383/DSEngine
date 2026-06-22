@@ -29,7 +29,6 @@ public:
     void BeginRenderPass(const RenderPassDesc& render_pass) override;
     void EndRenderPass() override;
     void SetPipelineState(unsigned int pipeline_state_handle) override;
-    void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
     void DispatchComputePass(const ComputeDispatch& dispatch) override;
     void SetViewport(int x, int y, int width, int height) override;

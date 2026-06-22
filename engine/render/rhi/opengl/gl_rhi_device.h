@@ -171,7 +171,6 @@ public:
     void RealEndRenderPass();
     void RealSetPipelineState(unsigned int pipeline_state_handle);
     void RealClearColor(const glm::vec4& color);
-    void RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection);
 
     // --- 通用绘制原语 (A1) ---
     void RealBindShaderProgram(unsigned int program_handle);

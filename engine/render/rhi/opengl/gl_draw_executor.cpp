@@ -328,6 +328,7 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             is_depth_only_pass_ = true;
         }
     }
+    global_state_.current_pass_depth_only = is_depth_only_pass_;
     if (render_pass.clear_color_enabled) {
         glClearColor(render_pass.clear_color.r, render_pass.clear_color.g, render_pass.clear_color.b, render_pass.clear_color.a);
         if (has_depth) {
@@ -377,6 +378,8 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
 }
 
 void GLDrawExecutor::EndRenderPass(GLResourceManager& resource_mgr) {
+    is_depth_only_pass_ = false;
+    global_state_.current_pass_depth_only = false;
     if (active_render_target_ != 0) {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         active_render_target_ = 0;

@@ -17,7 +17,7 @@
 重画前（每效果一个 ABI，各后端各实现一遍）        重画后（边界下沉到通用原语）
 ┌─────────────── 高层 ───────────────┐         ┌──────────── 高层渲染器 ────────────┐
 │ Scene / UI / Particle / ...        │         │ SkyboxRenderer SpriteBatchRenderer PostProcessRenderer│
-└───────────────┬────────────────────┘         │ MeshRenderer（B2b+2c+Feat，ABI 并存）│
+└───────────────┬────────────────────┘         │ MeshRenderer（B2b+2c+Feat+阶段4，ABI 已删）│
    cmd.DrawSkybox/DrawSpriteBatch/...           └──────────────┬─────────────────────┘
 ┌───────────────┴─ CommandBuffer ABI ┐            BindShaderProgram/BindVertexBuffer/
 │ DrawSkybox  DrawSpriteBatch  DrawMesh│  ===>     BindTexture/BindUniformBuffer/
@@ -43,6 +43,7 @@
 | **B3**（迁粒子） | `c8f84edf`→`5e8fbe30`→`171aff31` | 抽 `ParticleRenderer`（`BuiltinProgram::Particle3D`，SSBO 实例化），迁调用点 + **删 `DrawParticles3D` ABI** + 三后端死代码清理（DX11 particle_quad / Vulkan particle_vbo） | 第四条 ABI 删除 |
 | **阶段 2b**（迁后处理，✅ 已完成） | `ac4bcd2d`（闸门）→`edc3a3d5`/`012570c3`→…→`b7e7e900`→`a191e6ef`→`f959d65c`→收尾提交 | 抽 `PostProcessRenderer`（全屏 quad/UBO/纹理/PSO），逐效果迁移配方（.frag→std140 UBO + device 访问器 + 调用点 + D3D11 像素闸门），3D LUT 基础设施（`TextureDim::Tex3D`）+ `source==0` 支持；迁全部 **29** 效果（含 bloom_composite/atmosphere_sky/ui_overlay 手写 HLSL 簇）；compute mip 链选 **Option A**——新增 CommandBuffer 级 `DispatchComputePass` 原语 + `BloomRenderer`（compute/quad 分支）；**已删 `DrawPostProcess` ABI** | ✅ 三后端编译零错误 + ctest 三套件全绿 + D3D11 atmosphere_sky/bloom_composite 像素闸门绿 |
 | **阶段 3（B4）**（迁毛发，✅ 已完成） | 阶段 3 收尾提交 | 新增 `PrimitiveTopology` 贯穿 PSO（LINE_STRIP）+ vertexless 通用 `Draw`（缺省 VBO + 补 UBO/SSBO 绑定）；三后端 shader manager 加 `InitHairStrandShader` + `BuiltinProgram::HairStrand`；抽 `HairRenderer`（组合 HairUniforms UBO\@set0.b0 + position/tangent SSBO\@set7.b0/b1，逐 strand `cmd.Draw`）；迁 `hair_system` 调用点；**已删 `DrawHairStrands` ABI** | ✅ 三后端编译零错误 + ctest 三套件全绿 + D3D11 `hair_pixel_smoke_test` 像素闸门绿 |
+| **阶段 4（M1–M4）**（迁 mesh，✅ 已完成） | `c86d8cbd`（M1）→`b1300c07`（M2）→`e47f9db8`（M3）→ M4 收尾提交 | 先补 MeshRenderer 三处覆盖缺口：**M1** 蒙皮×硬件实例化（bone-palette 去重，`BuiltinProgram::ForwardSkinnedInstancedShaded` + 实例/骨骼双 SSBO）/**M2** 编辑器视图模式（wireframe line-fill PSO / overdraw 加性 / force_unlit）/**M3** GBuffer/RSM MRT（`BuiltinProgram::GBufferMesh` + DX11 MRT 多附件绑定修复）；**M4** 加 `MeshRenderer::DrawBatch`（逐 item 据 skinned/instanced/morph + `current_pass_depth_only`/`gbuffer_rendering_mode`/编辑器标志路由到 M1–M3 Draw\* 方法，保留 shadow-cull 实例预算 + PreZ 蒙皮实例跳过；depth/gbuffer 复用 forward program，零新增着色器），迁 6 调用点（`render_scene` DrawOpaqueCpu/DrawTransparent → 常驻 `FramePipeline::cpu_mesh_renderer_`；terrain/tree/grass/spine/mesh_render 早已迁），**删 `DrawMeshBatch` ABI**（纯虚 + 三后端 forwarder + 三执行器实现 + `gl_draw_executor_mesh.cpp` 整文件 + GL `RealSubmitDrawMeshBatch`）+ 失效测试/mock/文档 | ✅ 三后端编译零错误 + ctest 三套件全绿 + D3D11 GBuffer/SkinnedInstanced/EditorViewMode/DepthOnly 像素闸门绿（GL/Vulkan 无驱动 skip） |
 
 **B2a 关键设计**：三个 2D 系统各持独立 `SpriteBatchRenderer` 实例（每帧各画一次 → 各自动态 VBO 互不别名，满足 Vulkan 帧提交生命周期）；view/proj 经新增的 `CommandBuffer::GetView/GetProjectionMatrix()`（读 `SetCamera` 缓存）取用。
 
@@ -79,7 +80,7 @@
 |---|---|---|
 | ~~`DrawSkybox`~~ | A1 | ✅ 已删（`d885d0eb`） |
 | ~~`DrawSpriteBatch`~~ | B2a | ✅ 已删（`43240e8e`） |
-| `DrawMeshBatch(items)` | **B2b** | 🔶 `MeshRenderer` 已**并存**承接 forward-PBR + 高级 shading 全模式（B2b-1..5 + 2c-1..5 + Final-Feat-1..7）；ABI 删除**仍推迟**——能力已基本齐备，剩迁 6 调用点 + spine 2D 蒙皮缺口（见 §5） |
+| ~~`DrawMeshBatch(items)`~~ | **B2b → 阶段 4（M1–M4）** | ✅ 已删（阶段 4 M4 收尾提交）；迁至 `MeshRenderer`（M1 蒙皮×实例化 / M2 编辑器视图模式 / M3 GBuffer-MRT 补齐覆盖缺口后，M4 加 `DrawBatch` 分发层路由全部 CPU mesh 队列，保留 shadow-cull 预算 + PreZ 跳过）；删纯虚 + 三后端 forwarder + 三执行器实现 + `gl_draw_executor_mesh.cpp` 整文件（见 §5） |
 | ~~`DrawParticles3D(items, view, proj)`~~ | B3 | ✅ 已删（`c8f84edf` + `5e8fbe30`，迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`） |
 | ~~`DrawHairStrands(items, view, proj)`~~ | **阶段 3（B4）** | ✅ 已删（阶段 3 收尾提交）；迁至 `HairRenderer` + `BuiltinProgram::HairStrand`，LINE_STRIP 拓扑经 PSO 贯穿 vertexless 非索引 `Draw`，position/tangent 走 SSBO\@slot0/1（见 §5C） |
 | ~~`DrawPostProcess(request)`~~ | **阶段 2b** | ✅ 已删（阶段 2b 收尾提交）；全部 29 效果迁至 `PostProcessRenderer`，bloom mip 链经 `BloomRenderer` 走 `DispatchComputePass` 原语（见 §5B） |
@@ -91,7 +92,7 @@
 | `SkyboxRenderer` | `engine/render/skybox_renderer.{h,cpp}` | 生产（A1，DrawSkybox 已删） |
 | `SpriteBatchRenderer` | `engine/render/sprite_batch_renderer.{h,cpp}` | 生产（B2a，DrawSpriteBatch 已删） |
 | `SpriteRenderer` | `engine/render/sprite_renderer.{h,cpp}` | B0 契约验证脚手架（非生产） |
-| `MeshRenderer` | `engine/render/mesh_renderer.{h,cpp}` | 后端无关 forward 能力：B2b-1..5（静态/蒙皮/实例化/depth-only/间接）+ 2c-1..5 与 Final-Feat-1..7（高级 shading 全模式/CSM/聚光/morph、地形 splat+积雪、WBOIT、DDGI/LightProbe、外部常驻 VAO/EBO、共享网格模板去重）；与 `DrawMeshBatch` ABI **并存**，**尚未取代**（调用点未迁、spine 2D 蒙皮未覆盖） |
+| `MeshRenderer` | `engine/render/mesh_renderer.{h,cpp}` | 生产（B2b + 阶段 4，✅ `DrawMeshBatch` 已删）：后端无关 forward 能力 B2b-1..5（静态/蒙皮/实例化/depth-only/间接）+ 2c-1..5 与 Final-Feat-1..7（高级 shading 全模式/CSM/聚光/morph、地形 splat+积雪、WBOIT、DDGI/LightProbe、外部常驻 VAO/EBO、共享网格模板去重）+ 阶段 4 M1 蒙皮×实例化 / M2 编辑器视图模式 / M3 GBuffer-MRT；M4 `DrawBatch(cmd, device, items, view, proj)` 据 item 字段 + 全局渲染状态路由全部 CPU mesh 队列，**已取代 `DrawMeshBatch` ABI** |
 | `ParticleRenderer` | `engine/render/particle_renderer.{h,cpp}` | 生产（B3，DrawParticles3D 已删，SSBO 实例化） |
 | `HairRenderer` | `engine/render/hair_renderer.{h,cpp}` | 生产（阶段 3/B4，`DrawHairStrands` 已删）：组合 HairUniforms UBO\@set0.b0（VS/FS 共享）+ position/tangent SSBO\@set7.b0/b1（vertexless，`gl_VertexIndex` 取数）；PSO 烘焙 LINE_STRIP 拓扑，逐 strand `cmd.Draw(count, first)` |
 | `PostProcessRenderer` | `engine/render/post_process_renderer.{h,cpp}` | 生产（阶段 2b，✅ `DrawPostProcess` 已删）：全屏 quad + std140 UBO（set=2,b0）+ 纹理（2D/3D）+ PSO；承接全部 29 个全屏后处理效果 |
@@ -115,7 +116,7 @@
 
 ---
 
-## 5. B2b 现状：原语 + 高级 shading 能力均已补齐，剩调用点迁移 + 删 ABI
+## 5. B2b + 阶段 4：✅ 已完成（MeshRenderer 取代 `DrawMeshBatch`，ABI 已删）
 
 `DrawMeshBatch` 是**引擎整个 3D 渲染核心**（三后端各 ~700–1115 行），覆盖 forward PBR / deferred gbuffer / shadow depth-only / 6 种 shading 模型 / 骨骼蒙皮 / GPU 实例化 / GPU-driven 间接绘制 / DDGI / 光探针 / 地形 splat / 积雪 / WBOIT，调用点 6 处（mesh/terrain×2/tree/grass/spine）。
 
@@ -132,9 +133,18 @@
 - Final-Feat-1..5：CSM 方向光阴影、蒙皮/实例化/聚光/morph 的高级 shading 变体；
 - Final-Feat-6/7：外部常驻 VAO/EBO + index_count_override（tiled terrain）、共享网格模板去重（tree foliage）。
 
-**剩余工作（ABI 删除，B2b-6）**：能力已基本齐备，剩的不再是「能力缺口」而是工程收尾——① 补 `spine_system` 2D 蒙皮（唯一未覆盖能力）；② 迁 6 个调用点（mesh_render_system / terrain×2 / tree / grass / spine）到 `MeshRenderer`；③ 全仓 `grep` 确认无残留调用后删 `DrawMeshBatch` ABI + 失效测试/mock/文档。
+**阶段 4 收尾（M1–M4，✅ 已完成）**：用户决策选项 B（性能对齐——先补 MeshRenderer 覆盖缺口再删 ABI）。
+- **M1 蒙皮×硬件实例化**（`c86d8cbd`）：`BuiltinProgram::ForwardSkinnedInstancedShaded`（`forward_shaded_skinned_instanced.vert` + `forward_shaded.frag`）三后端 + `MeshRenderer::DrawSkinnedInstancedShaded`（bone-palette 去重密排，实例 SSBO\@slot0 `MeshSkinnedInst{mat4;int bone_offset}` 80B + 骨骼 SSBO\@slot1，不预乘 model）；D3D11 像素闸门 `skinned_instanced_shaded_pixel_smoke_test`。
+- **M2 编辑器视图模式**（`b1300c07`）：`PipelineStateDesc.wireframe` 三后端 PSO（DX11 `D3D11_FILL_WIREFRAME` / GL `glPolygonMode` / Vulkan `VK_POLYGON_MODE_LINE`）；MeshRenderer forward 路径读 `GetGlobalRenderState()` 的 wireframe/overdraw/force_unlit；D3D11 像素闸门 `editor_view_mode_pixel_smoke_test`。
+- **M3 GBuffer/RSM MRT**（`e47f9db8`）：`BuiltinProgram::GBufferMesh`（`forward_pbr.vert` + `gbuffer.frag`）+ `MeshRenderer::DrawGBuffer`（CPU 预变换世界顶点，MRT 输出 gAlbedo/gNormal/gPosition）；修复 DX11 `BeginRenderPass` 仅绑 attachment0 的缺口（MRT 绑全部 RTV + 逐附件清屏）；D3D11 像素闸门 `gbuffer_mesh_pixel_smoke_test` 逐附件校验。
+- **M4 迁调用点 + 删 ABI**（M4 收尾提交）：
+  - `MeshRenderer::DrawBatch(cmd, device, items, view, proj)` 分发翻译层——逐 item 据 `skinned`/`instance_transforms`/`morph` + `DrawExecutorGlobalState::current_pass_depth_only`（三后端在 `BeginRenderPass` 据有无彩色附件写入）/`gbuffer_rendering_mode`/编辑器三标志，路由到 M1–M3 的 `DrawShaded`/`DrawSkinnedShaded`/`DrawInstancedShaded`/`DrawSkinnedInstancedShaded`/`DrawGBuffer`；保留 shadow-cull 实例预算（ortho 检测 + per-item 预过滤 `instance_transforms`，渲染实例数与执行器逐位一致）+ PreZ（透视 depth-only）跳过蒙皮实例；depth-only/gbuffer **复用 forward program**（depth pass frag 颜色被丢弃、gbuffer 输出 MRT），**零新增着色器**。
+  - 常驻持有者：`FramePipeline::cpu_mesh_renderer_`（跨帧复用内部 VBO/SSBO），经 `RenderPassContext::mesh_renderer` plumb 到各 pass；`render_scene.h` 的 `DrawOpaqueCpu/DrawTransparent` 改签名收 `(cmd, device, MeshRenderer&)`；`MeshRenderSystem` 经 `SetRenderContext(device, renderer)` 注入（`i_builtin_modules`→`BuiltinModulesImpl`→`RenderMeshes` 三层接口同步）。terrain/tree/grass/spine/mesh_render 调用点早已迁 MeshRenderer。
+  - 删 `DrawMeshBatch` ABI：`rhi_device.h` 纯虚 + 三后端 `*_command_buffer.h` forwarder 声明 + 三执行器实现（`dx11_draw_executor.cpp` / `vulkan_draw_executor.cpp` / `gl_draw_executor_mesh.cpp` **整文件删除**）+ GL `RealSubmitDrawMeshBatch`；失效测试/mock（`{dx11,gl,vulkan}_rhi_test.cpp` 的 `*DrawMeshBatchSafety` 用例、`rendergraph_integration_test.cpp` MOCK_METHOD、`runtime_render_shell_unit_test.cpp` override）+ 文档（本文 + `CPP_API.md`）。
+  - 注：阴影矩阵不再经旧 `cmd.SetGlobalMat4Array` 缓冲 + `DispatchPendingLightArrays`（DrawMeshBatch 入口）路径，改由 `ShadowPass` 直接 `device.SetGlobalLightSpaceMatrix/SetGlobalCascadeSplit` 写全局状态（`builtin_passes.cpp`），MeshRenderer 各路径从 `GetGlobalRenderState()` 读取，与 M1–M3 已迁移系统一致。
+  - 验证：三后端编译零错误 + ctest 三套件全绿 + D3D11 GBuffer/SkinnedInstanced/EditorViewMode/DepthOnly 像素闸门绿（GL/Vulkan 无驱动 skip）。
 
-**用户决策（选项 B）**：当前**保留 `DrawMeshBatch` ABI 与 MeshRenderer 并存**，ABI 删除待上述收尾。拆解见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
+拆解见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 
 ---
 
@@ -189,7 +199,7 @@
 
 ## 7. 剩余路线图（便于全局对照）
 
-- **B2b**：抽 `MeshRenderer`——forward-PBR（B2b-1..5）+ 高级 shading 全模式（2c-1..5 + Final-Feat-1..7：toon/watercolor/SSS/FaceSDF + 地形 splat/积雪 + WBOIT + clustered 点光 + DDGI + CSM + 蒙皮/实例化/聚光/morph + 外部 VAO/EBO + 共享模板）均已迁入，与 `DrawMeshBatch` 并存。**剩：**补 spine 2D 蒙皮 → 迁 6 调用点 → 删 `DrawMeshBatch` ABI。
+- **B2b + 阶段 4**：✅ 已完成。抽 `MeshRenderer`——forward-PBR（B2b-1..5）+ 高级 shading 全模式（2c-1..5 + Final-Feat-1..7）+ 阶段 4 M1 蒙皮×实例化 / M2 编辑器视图模式 / M3 GBuffer-MRT；M4 加 `DrawBatch` 分发层路由全部 CPU mesh 队列、迁 6 调用点（常驻 `FramePipeline::cpu_mesh_renderer_`）、**已删 `DrawMeshBatch` ABI**（三后端 executor + forwarder + 纯虚 + `gl_draw_executor_mesh.cpp` 整文件 + GL `RealSubmitDrawMeshBatch`）。详见 §5。
 - **B3**：✅ 已删 `DrawParticles3D`——迁至 `ParticleRenderer` + `BuiltinProgram::Particle3D`（SSBO 实例化）。
 - **阶段 2b**：✅ 已完成。`PostProcessRenderer` 承接全部 **29** 效果（含末三手写 HLSL 簇）；compute mip 链选 Option A——新增 CommandBuffer 级 `DispatchComputePass` 原语 + `BloomRenderer`（compute/quad 分支）；**已删 `DrawPostProcess` ABI**（三后端 executor + forwarder + 纯虚）。详见 §5B。
 - **阶段 3（B4）**：✅ 已完成。迁 `DrawHairStrands`（SSBO + 多段绘制）至 `HairRenderer` + `BuiltinProgram::HairStrand`；新增 `PrimitiveTopology` 贯穿 PSO（LINE_STRIP）+ vertexless 通用 `Draw`；**已删 `DrawHairStrands` ABI**（三后端 executor + forwarder + 纯虚）。详见 §5C。
@@ -219,7 +229,7 @@
 | D6 | **`CommandBuffer::GetView/GetProjectionMatrix()`** 把相机状态缓存在命令缓冲上 | 概念上相机属 frame/scene context，轻微耦合泄漏 | 引入 FrameContext 时收敛 |
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
 | D8 | ~~**契约把 SSBO 排 B4，但 B2b(mesh) 先需 SSBO**~~ → **已解**：P0b 把 `BindStorageBuffer` 提前到 B2b 之前落地（`10f3ff2d`），mesh 蒙皮/实例已消费 | — | ✅ 已解 |
-| D10 | **`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**（现 MeshRenderer 已覆盖高级 shading 全模式 + 外部 VAO + 共享模板，仅差 spine 2D 蒙皮） | 两条 mesh 路径并存，需纪律；6 调用点仍走旧 ABI | 补 spine 2D 蒙皮 → 迁 6 调用点 → 删 ABI（用户决策：本阶段保留） |
+| D10 | ~~**`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**~~ → **已解**：阶段 4（M1–M4）补齐 MeshRenderer 覆盖缺口（蒙皮×实例化 / 编辑器视图模式 / GBuffer-MRT）后，M4 加 `DrawBatch` 分发层、迁 6 调用点、**删 `DrawMeshBatch` ABI**（含 `gl_draw_executor_mesh.cpp` 整文件） | — | ✅ 已解 |
 
 ### 8.3 优化空间（非阻塞，按收益排序）
 1. **可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）：把 mesh 执行器既有的 `MAX_FRAMES` 双缓冲模式抽成小工具，按 `current_frame_index_` 轮转动态顶点/UBO，满足 2 帧在飞的「提交前不覆写」约束。B2b 的 MeshRenderer 必然需要它，落地时一并做，再回填 sprite。

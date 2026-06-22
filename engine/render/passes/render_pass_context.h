@@ -28,6 +28,7 @@ namespace render {
 
 class RhiDevice;
 class CommandBuffer;
+class MeshRenderer;
 
 class LightBuffer;
 class ClusterGrid;
@@ -47,6 +48,8 @@ struct RenderPassContext {
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
     RenderScene* render_scene = nullptr;
+    MeshRenderer* mesh_renderer = nullptr;  ///< 阶段4-M4：CPU mesh 队列（DrawOpaqueCpu/DrawTransparent）的常驻渲染器（FramePipeline 持有）
+
     LightBuffer* light_buffer = nullptr;
     ClusterGrid* cluster_grid = nullptr;
     bool editor_mode = false;

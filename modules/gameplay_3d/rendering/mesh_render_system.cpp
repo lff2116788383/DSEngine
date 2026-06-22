@@ -615,7 +615,10 @@ struct InstancingKeyHash {
 void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     dse::render::RenderScene scene;
     BuildRenderQueues(world, scene);
-    scene.DrawOpaqueCpu(cmd_buffer);
+    // 阶段4-M4：取代 cmd.DrawMeshBatch，经常驻 MeshRenderer::DrawBatch 分发。
+    // 渲染上下文未注入（如单元测试无设备）时跳过绘制（构建队列的副作用/异常仍保留）。
+    if (rhi_device_ && mesh_renderer_)
+        scene.DrawOpaqueCpu(cmd_buffer, *rhi_device_, *mesh_renderer_);
 }
 
 void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
@@ -1556,7 +1559,10 @@ void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer
     for (auto& item : transparent_items_) {
         item.wboit_mode = wboit_mode;
     }
-    cmd_buffer.DrawMeshBatch(transparent_items_);
+    // 阶段4-M4：取代 cmd.DrawMeshBatch，经常驻 MeshRenderer::DrawBatch 分发（view/proj 取自 cmd）。
+    if (rhi_device_ && mesh_renderer_)
+        mesh_renderer_->DrawBatch(cmd_buffer, *rhi_device_, transparent_items_,
+                                  cmd_buffer.GetViewMatrix(), cmd_buffer.GetProjectionMatrix());
 }
 
 int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {

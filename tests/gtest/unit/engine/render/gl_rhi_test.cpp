@@ -213,14 +213,6 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     cmd.EndRenderPass();
 }
 
-// 测试 打开GL命令缓冲区：无设备当绘制网格批次安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
-    OpenGLCommandBuffer cmd;
-    std::vector<MeshDrawItem> items;
-    items.emplace_back();
-    cmd.DrawMeshBatch(items);
-}
-
 // 测试 打开GL命令缓冲区：无设备当 compute 调度安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     OpenGLCommandBuffer cmd;

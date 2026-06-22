@@ -201,7 +201,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
         }
         RenderScenePassContext pass_ctx;
         pass_ctx.world = ctx_.world;
@@ -304,7 +304,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
             if (!skip_cpu_shadow) {
                 if (ctx_.render_scene) {
-                    ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+                    ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
                 }
                 RenderScenePassContext pass_ctx;
                 pass_ctx.world = ctx_.world;
@@ -390,7 +390,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
         }
         RenderScenePassContext pass_ctx;
         pass_ctx.world = ctx_.world;
@@ -470,7 +470,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             }
 
             if (ctx_.render_scene) {
-                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
             }
             RenderScenePassContext pass_ctx;
             pass_ctx.world = ctx_.world;
@@ -741,7 +741,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         scene_pass_ctx.camera_offset = ctx_.camera_offset;
         scene_pass_ctx.clip_correction = &scene_clip_correction;
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
         }
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
 
@@ -759,7 +759,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->UnbindVAO();
             }
             if (ctx_.render_scene) {
-                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
             }
             ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
             ctx_.rhi_device->SetWireframeMode(false);
@@ -1910,7 +1910,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     accum_ctx.world = ctx_.world;
     accum_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawTransparent(cmd_buffer, 1);
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 1, *ctx_.rhi_device, *ctx_.mesh_renderer);
     }
     cmd_buffer.EndRenderPass();
 
@@ -1922,7 +1922,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     reveal_ctx.world = ctx_.world;
     reveal_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawTransparent(cmd_buffer, 2);
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 2, *ctx_.rhi_device, *ctx_.mesh_renderer);
     }
     cmd_buffer.EndRenderPass();
 
@@ -3117,7 +3117,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     pass_ctx.projection = &cam.projection;
     pass_ctx.camera_offset = ctx_.camera_offset;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawOpaqueCpu(cmd_buffer);
+        ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
     }
     ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, pass_ctx);
 

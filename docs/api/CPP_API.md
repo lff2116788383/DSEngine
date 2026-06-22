@@ -488,7 +488,6 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 | `BeginRenderPass(desc)` / `EndRenderPass()` | 渲染 Pass 边界 |
 | `SetPipelineState(handle)` | 设置管线状态 |
 | `SetCamera(view, proj)` | 设置相机矩阵 |
-| `DrawMeshBatch(items)` | 绘制 3D 网格批次 |
 | `ClearColor(color)` | 清屏 |
 | `SetGlobalMat4(name, mat)` | 设置全局 mat4 |
 | `SetGlobalMat4Array(name, mats)` | 设置全局 mat4 数组 |

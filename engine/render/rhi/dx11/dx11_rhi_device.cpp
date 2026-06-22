@@ -46,13 +46,6 @@ void DX11CommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
 }
 
-void DX11CommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
-    if (!device_ || items.empty()) return;
-    DispatchPendingLightArrays();
-    device_->draw_executor().DrawMeshBatch(items, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     ID3D11DeviceContext* dc = device_->context().device_context();

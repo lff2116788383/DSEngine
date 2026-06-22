@@ -210,14 +210,6 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     cmd.EndRenderPass();
 }
 
-// 测试 DX 11命令缓冲区：无设备当绘制网格批次安全
-TEST(DX11CommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
-    DX11CommandBuffer cmd;
-    std::vector<MeshDrawItem> items;
-    items.emplace_back();
-    cmd.DrawMeshBatch(items);
-}
-
 // 测试 DX 11命令缓冲区：无设备当 compute 调度安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenDispatchComputePassSafety) {
     DX11CommandBuffer cmd;

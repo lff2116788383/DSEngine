@@ -43,7 +43,7 @@ public:
     // ---- MeshRenderSystem ----
     void InitMeshSystem(AssetManager* asset_mgr) override;
     void ShutdownMeshSystem() override;
-    void RenderMeshes(World& world, CommandBuffer& cmd) override;
+    void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene) override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
     void ResetGPUSceneState() override;

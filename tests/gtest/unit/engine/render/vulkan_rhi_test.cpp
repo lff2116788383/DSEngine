@@ -288,14 +288,6 @@ TEST(VulkanCommandBufferTest, AlluniformAndClear) {
     EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
-// 测试 Vulkan命令缓冲区：无设备当绘制网格批次安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenDrawMeshBatchSafety) {
-    VulkanCommandBuffer cmd;
-    std::vector<MeshDrawItem> items;
-    items.emplace_back();
-    cmd.DrawMeshBatch(items);
-}
-
 // 测试 Vulkan命令缓冲区：无设备当开始结束渲染通道安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     VulkanCommandBuffer cmd;

@@ -182,12 +182,6 @@ void OpenGLCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     device_->RealSetPipelineState(pipeline_state_handle);
 }
 
-void OpenGLCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
-    if (!device_ || items.empty()) return;
-    DispatchPendingLightArrays();
-    device_->RealSubmitDrawMeshBatch(items, view_, projection_);
-}
-
 void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     device_->RealClearColor(color);
@@ -885,10 +879,6 @@ void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     // 把 PSO 拓扑推给绘制执行器（通用 Prim* 绘制据此选 glDraw* mode，毛发用 LINE_STRIP）。
     const PipelineStateDesc* ps = state_mgr_.GetPipelineState(pipeline_state_handle);
     draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
-}
-
-void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    draw_executor_.DrawMeshBatch(items, view, projection, state_mgr_, shader_mgr_, resource_mgr_, ubo_mgr_);
 }
 
 // --- 通用绘制原语 (A1) ---

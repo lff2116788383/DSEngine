@@ -73,8 +73,9 @@ public:
     }
 
 protected:
-    /// 将 pending 阴影/光源 mat4 array 派发到 Device 全局状态。
-    /// 供子类在 DrawMeshBatch() 入口调用，统一派发时机。
+    /// 将 pending 阴影/光源 mat4 array 派发到 Device 全局状态（旧 cmd.SetGlobalMat4Array 缓冲路径）。
+    /// 阶段4-M4 删 DrawMeshBatch ABI 后已无生产调用方；阴影矩阵改由 ShadowPass 直接经
+    /// device.SetGlobalLightSpaceMatrix/SetGlobalCascadeSplit 写入全局状态（builtin_passes.cpp）。保留以兼容缓冲 ABI。
     void DispatchPendingLightArrays() {
         if (!base_device_) return;
         {

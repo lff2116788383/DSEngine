@@ -51,15 +51,6 @@ void VulkanCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     device_->state_mgr().set_active_pipeline_state(pipeline_state_handle);
 }
 
-void VulkanCommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
-    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    DispatchPendingLightArrays();
-    device_->draw_executor().SetBoundSSBOs(device_->bound_ssbos());
-    device_->draw_executor().DrawMeshBatch(
-        vk_command_buffer_, items, view_, projection_,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
-}
-
 void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
     // Vulkan 中清除在 BeginRenderPass 时通过 VkClearValue 处理
     // 此处为空操作，或在已开启 RenderPass 时用 vkCmdClearAttachments

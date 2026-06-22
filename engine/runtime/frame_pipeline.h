@@ -35,6 +35,7 @@
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/business_runtime_bridge.h"
 #include "engine/render/render_graph.h"
+#include "engine/render/mesh_renderer.h"
 #include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
@@ -413,6 +414,10 @@ private:
 
     /// 渲染 Pass 共享上下文
     dse::render::RenderPassContext render_pass_context_;
+
+    /// 阶段4-M4：CPU mesh 队列（RenderScene::DrawOpaqueCpu/DrawTransparent）的常驻渲染器，
+    /// 取代旧 cmd.DrawMeshBatch ABI；常驻以跨帧复用内部 VBO/SSBO 缓冲。
+    dse::render::MeshRenderer cpu_mesh_renderer_;
 
     /// 双缓冲薄快照池（Phase 1 流水线并行基础设施）
     dse::render::RenderThinSnapshot snapshot_pool_[2];

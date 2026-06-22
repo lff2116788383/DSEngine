@@ -64,6 +64,11 @@ struct DrawExecutorGlobalState {
     unsigned int gbuffer_texture[kMaxGBufferTextures] = {};
     bool gbuffer_rendering_mode = false;  ///< true: DrawMeshBatch 使用 GBuffer shader
 
+    // --- 当前 pass 深度专用标志（阶段4-M4）---
+    // 由各后端 BeginRenderPass 据 RT 有无颜色附件设置；供 MeshRenderer::DrawBatch
+    // 路由「depth-only → 复用 forward program + depth-only PSO + shadow-cull 预算」。
+    bool current_pass_depth_only = false;
+
     // --- 全局湿度（天气系统驱动 PBR 湿表面效果） ---
     float global_wetness = 0.0f;
 
