@@ -159,6 +159,7 @@ struct PipelineStateDesc {
     bool culling_enabled = true;
     CullFace cull_face = CullFace::Back;
     PrimitiveTopology topology = PrimitiveTopology::TriangleList;  ///< 图元拓扑（毛发用 LineStrip）
+    bool wireframe = false;  ///< 线框填充模式（编辑器视图模式；DX11 D3D11_FILL_WIREFRAME / GL glPolygonMode(LINE) / Vulkan VK_POLYGON_MODE_LINE）
 };
 
 /// 顶点属性描述（通用绘制原语 BindVertexBuffer 用，目前仅支持 float 分量）

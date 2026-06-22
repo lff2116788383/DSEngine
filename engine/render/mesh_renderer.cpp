@@ -144,7 +144,42 @@ void FillSpotLightsUBO(const std::vector<ShadedSpotLight>& spot_lights, SpotLigh
     }
 }
 
+// ============================================================
+// 编辑器场景视图模式覆盖（阶段4-M2）。MeshRenderer 高级 shading forward 路径读
+// device.GetGlobalRenderState() 的 force_unlit/overdraw_mode 标志并在 PerScene/PerMaterial
+// UBO 上生效（wireframe 走 PSO，见 SelectShadedPso），语义与执行器 DrawMeshBatch 路径一致：
+//  - force_unlit：PerScene light_dir_and_enabled.w 置 0 → forward_shaded.frag 走 Unlit 分支（纯 albedo）。
+//  - overdraw   ：PerMaterial 覆盖为固定低强度材质，配合加性混合 PSO 以亮度叠加显示过度绘制。
+// ============================================================
+
+/// force_unlit：关方向光（等价 light.enabled=0）。其余光照/材质不变。
+void ApplyEditorSceneOverride(RhiDevice& device, FwdPerSceneUBO& scene) {
+    if (device.GetGlobalRenderState().force_unlit) {
+        scene.light_dir_and_enabled.w = 0.0f;
+    }
+}
+
+/// overdraw：固定低强度材质（与 draw_executor_common.h PreparePerMaterialUBO 的 overdraw 分支一致）。
+void ApplyEditorMaterialOverride(RhiDevice& device, FwdShadedMaterialUBO& mat) {
+    if (device.GetGlobalRenderState().overdraw_mode) {
+        mat.albedo = glm::vec4(0.1f, 0.04f, 0.02f, 0.0f);
+        mat.roughness_ao = glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);
+        mat.emissive = glm::vec4(0.0f);
+        mat.flags = glm::vec4(0.0f);
+    }
+}
+
 } // namespace
+
+unsigned int MeshRenderer::SelectShadedPso(RhiDevice& device, const ShadedMaterial& material) {
+    const auto& grs = device.GetGlobalRenderState();
+    if (grs.wireframe_mode) return pso_wireframe_;
+    if (grs.overdraw_mode) return pso_overdraw_;
+    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
+    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
+    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    return pso;
+}
 
 void MeshRenderer::EnsureResources(RhiDevice& device) {
     if (init_) return;
@@ -334,6 +369,34 @@ void MeshRenderer::EnsureShadedResources(RhiDevice& device) {
         desc.culling_enabled = false;
         pso_wboit_reveal_ = device.CreatePipelineState(desc);
     }
+    // 编辑器线框视图模式 PSO（阶段4-M2）：与 pso_ 同状态（写/测深度、背面剔除、不混合），仅 wireframe=true。
+    if (pso_wireframe_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = false;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = true;
+        desc.depth_func = CompareFunc::Less;
+        desc.culling_enabled = true;
+        desc.cull_face = CullFace::Back;
+        desc.wireframe = true;
+        pso_wireframe_ = device.CreatePipelineState(desc);
+    }
+    // 编辑器 overdraw 视图模式 PSO（阶段4-M2）：加性混合 ONE/ONE + 深度测试开但不写、不剔除，
+    // 配合 ApplyEditorMaterialOverride 的固定低强度材质，使重叠片元以亮度叠加显示过度绘制
+    //（与执行器 DX11 SetOverdrawMode / Vulkan overdraw_mode_ 语义一致）。
+    if (pso_overdraw_ == 0) {
+        PipelineStateDesc desc;
+        desc.blend_enabled = true;
+        desc.blend_src = BlendFactor::One;
+        desc.blend_dst = BlendFactor::One;
+        desc.alpha_blend_src = BlendFactor::One;
+        desc.alpha_blend_dst = BlendFactor::One;
+        desc.depth_test_enabled = true;
+        desc.depth_write_enabled = false;
+        desc.depth_func = CompareFunc::LessEqual;
+        desc.culling_enabled = false;
+        pso_overdraw_ = device.CreatePipelineState(desc);
+    }
     // 扩展 PerMaterial UBO（160B）。
     if (!per_material_shaded_ubo_) {
         GpuBufferDesc m_desc;
@@ -456,6 +519,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -479,6 +543,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     // 点光 UBO（clustered ≤64，超出截断）。
@@ -538,9 +603,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：WBOIT 透明通道优先（accumulation/revealage），否则按 double-sided 选剔除状态。
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
@@ -656,6 +719,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -678,6 +742,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -731,9 +796,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
@@ -854,6 +917,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -876,6 +940,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -929,9 +994,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
@@ -1055,6 +1118,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1077,6 +1141,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -1134,9 +1199,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
@@ -1254,6 +1317,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1276,6 +1340,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -1331,9 +1396,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
@@ -1475,6 +1538,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     }
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1497,6 +1561,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -1554,9 +1619,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
@@ -1698,6 +1761,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdShadedMaterialUBO mat{};
@@ -1720,6 +1784,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.toon_specular_strength, material.toon_rim_strength);
     mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
                                material.watercolor_color_bleed, material.watercolor_pigment_density);
+    ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
     PointLightsUBO plights{};
@@ -1773,9 +1838,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
-    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
-    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    unsigned int pso = SelectShadedPso(device, material);
     cmd.SetPipelineState(pso);
     cmd.BindShaderProgram(program);
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
@@ -1879,6 +1942,7 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
     scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdPerMaterialUBO mat{};
@@ -1975,6 +2039,7 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
     scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdPerMaterialUBO mat{};
@@ -2249,6 +2314,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
     scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdPerMaterialUBO mat{};
@@ -2359,6 +2425,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
     scene.light_params = glm::vec4(light.intensity, 0.0f, 0.0f, 0.0f);
+    ApplyEditorSceneOverride(device, scene);
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
     FwdPerMaterialUBO mat{};

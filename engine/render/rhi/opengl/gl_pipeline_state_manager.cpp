@@ -82,6 +82,11 @@ void GLPipelineStateManager::ApplyState(unsigned int handle) {
         glDisable(GL_CULL_FACE);
     }
 
+    // --- 线框填充（编辑器视图模式；GLES 无 glPolygonMode，忽略）---
+#if !DSE_GL_ES_RUNTIME
+    glPolygonMode(GL_FRONT_AND_BACK, state.wireframe ? GL_LINE : GL_FILL);
+#endif
+
     // 鏇存柊缂撳瓨
     cached_gl_state_ = state;
 }

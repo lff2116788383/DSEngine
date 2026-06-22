@@ -96,7 +96,7 @@ unsigned int DX11PipelineStateManager::CreatePipelineState(const PipelineStateDe
 
     // Rasterizer State
     D3D11_RASTERIZER_DESC rast_desc{};
-    rast_desc.FillMode = D3D11_FILL_SOLID;
+    rast_desc.FillMode = desc.wireframe ? D3D11_FILL_WIREFRAME : D3D11_FILL_SOLID;
     rast_desc.CullMode = desc.culling_enabled ? ToD3D11CullMode(desc.cull_face) : D3D11_CULL_NONE;
     rast_desc.FrontCounterClockwise = TRUE;
     rast_desc.DepthBias = 0;

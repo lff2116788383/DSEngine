@@ -208,7 +208,7 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.depthClampEnable = VK_FALSE;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = wireframe_mode_ ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterizer.polygonMode = (wireframe_mode_ || state.desc.wireframe) ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
     rasterizer.cullMode = state.desc.culling_enabled
                              ? ToVkCullMode(state.desc.cull_face)
                              : VK_CULL_MODE_NONE;

@@ -596,10 +596,17 @@ private:
     void EnsureShadedResources(RhiDevice& device);
     void EnsureUnlit2DResources(RhiDevice& device);  ///< 懒建无光照 2D 的 alpha/additive/multiply 混合 PSO（B2b-6）
 
+    /// 据编辑器视图模式（GetGlobalRenderState 的 wireframe_mode/overdraw_mode）与材质属性挑选高级 shading
+    /// forward 路径 PSO（阶段4-M2）。优先级：wireframe > overdraw > WBOIT(accum/reveal) > double-sided。
+    /// force_unlit 不影响 PSO（仅经 ApplyEditorSceneOverride 关方向光），单独处理。
+    unsigned int SelectShadedPso(RhiDevice& device, const ShadedMaterial& material);
+
     unsigned int pso_ = 0;
     unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
     unsigned int pso_wboit_accum_ = 0;   ///< WBOIT accumulation：加性混合 ONE/ONE，深度测试不写（B2c-4）
     unsigned int pso_wboit_reveal_ = 0;  ///< WBOIT revealage：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度测试不写（B2c-4）
+    unsigned int pso_wireframe_ = 0;  ///< 编辑器线框视图模式 PSO（line-fill，与 pso_ 同状态但 wireframe=true，阶段4-M2）
+    unsigned int pso_overdraw_ = 0;   ///< 编辑器 overdraw 视图模式 PSO（加性混合 ONE/ONE + 深度测试不写，阶段4-M2）
     unsigned int pso_unlit2d_alpha_ = 0;     ///< 无光照 2D alpha 混合 PSO（深度测试/写入/剔除全关，B2b-6）
     unsigned int pso_unlit2d_additive_ = 0;  ///< 无光照 2D additive 混合 PSO（B2b-6）
     unsigned int pso_unlit2d_multiply_ = 0;  ///< 无光照 2D multiply 混合 PSO（B2b-6）

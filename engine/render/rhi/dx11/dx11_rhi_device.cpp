@@ -1376,6 +1376,7 @@ void DX11RhiDevice::UpdateGPUDrivenMaterial(const void* mat_data) {
 // --- 编辑器场景视图模式 ---
 
 void DX11RhiDevice::SetWireframeMode(bool enable) {
+    global_render_state_.wireframe_mode = enable;
     auto* ctx = context_.device_context();
     if (!ctx) return;
     

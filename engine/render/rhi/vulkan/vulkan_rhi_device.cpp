@@ -1816,6 +1816,7 @@ void VulkanRhiDevice::UpdateGPUDrivenMaterial(const void* mat_data) {
 // --- 编辑器场景视图模式 ---
 
 void VulkanRhiDevice::SetWireframeMode(bool enable) {
+    global_render_state_.wireframe_mode = enable;
     state_mgr_.SetWireframeMode(enable);
 }
 

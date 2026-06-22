@@ -1737,6 +1737,7 @@ void OpenGLRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
 // --- 编辑器场景视图模式 ---
 
 void OpenGLRhiDevice::SetWireframeMode(bool enable) {
+    global_render_state_.wireframe_mode = enable;
     if (!initialized_) return;
 #if !DSE_GL_ES_RUNTIME
     glPolygonMode(GL_FRONT_AND_BACK, enable ? GL_LINE : GL_FILL);
