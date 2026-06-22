@@ -79,22 +79,8 @@ unsigned int PostProcessRenderer::PsoFor(RhiDevice& device, bool blend) {
     return pso_opaque_;
 }
 
-BufferHandle PostProcessRenderer::NextParamUbo(RhiDevice& device, size_t bytes) {
-    if (param_ubo_next_ >= param_ubos_.size()) {
-        GpuBufferDesc desc;
-        // 固定上限尺寸，避免按 effect 频繁重建；std140 参数块远小于此。
-        desc.size = 256;
-        desc.usage = GpuBufferUsage::kUniform;
-        desc.is_dynamic = true;
-        param_ubos_.push_back(device.CreateGpuBuffer(desc, nullptr));
-    }
-    BufferHandle h = param_ubos_[param_ubo_next_++];
-    (void)bytes;
-    return h;
-}
-
 void PostProcessRenderer::BeginFrame() {
-    param_ubo_next_ = 0;
+    // 参数已改走 push constant（PushConstants ABI），无帧间状态需复位。保留作帧首钩子。
 }
 
 bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
@@ -110,15 +96,14 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     cmd.SetPipelineState(PsoFor(device, req.blend_enabled));
     cmd.BindShaderProgram(prog);
 
-    // 参数块 → UBO\@set2.binding0（b0）。仅当效果着色器已采用 UBO 契约（params 非空）时上传。
+    // 参数块 → push constant（FRAGMENT）。效果着色器把 params 声明为 layout(push_constant)，
+    // 三后端统一经 PushConstants 字节块路由（Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO）。
     if (!req.params.empty()) {
-        const size_t bytes = req.params.size() * sizeof(float);
-        BufferHandle ubo = NextParamUbo(device, bytes);
-        device.UpdateGpuBuffer(ubo, 0, bytes, req.params.data());
-        cmd.BindUniformBuffer(0u, ubo.raw());
+        const uint32_t bytes = static_cast<uint32_t>(req.params.size() * sizeof(float));
+        cmd.PushConstants(ShaderStage::Fragment, 0, req.params.data(), bytes);
     }
 
-    // 主输入纹理：GLSL binding=N → t<N-1>（b0 被参数 UBO 占用，纹理从 t0 起）。
+    // 主输入纹理：GLSL binding=N → t<N-1>（push cbuffer 占 b0，纹理从 t0 起）。
     // 无源纹理效果（source_texture==0）跳过该绑定。
     if (req.source_texture != 0) {
         const uint32_t src_slot =
@@ -147,11 +132,6 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 void PostProcessRenderer::Shutdown(RhiDevice& device) {
     if (quad_vbo_) device.DeleteGpuBuffer(quad_vbo_);
     if (quad_ibo_) device.DeleteGpuBuffer(quad_ibo_);
-    for (BufferHandle& h : param_ubos_) {
-        if (h) device.DeleteGpuBuffer(h);
-    }
-    param_ubos_.clear();
-    param_ubo_next_ = 0;
     quad_vbo_ = quad_ibo_ = BufferHandle{};
     pso_opaque_ = pso_blend_ = 0;
     init_ = false;

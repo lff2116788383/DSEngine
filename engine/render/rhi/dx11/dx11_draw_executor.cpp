@@ -70,6 +70,7 @@ void DX11DrawExecutor::Init(DX11Context* context, DX11ResourceManager* resource_
     per_object_cb_ = CreateConstantBuffer(sizeof(DX11PerObjectCB));
     per_scene_cb_ = CreateConstantBuffer(sizeof(DX11PerSceneCB));
     per_material_cb_ = CreateConstantBuffer(sizeof(DX11PerMaterialCB));
+    prim_push_cb_          = CreateConstantBuffer(DX11DrawExecutor::kPrimPushMaxBytes); // 通用 push cbuffer（b0）
     sprite_push_cb_        = CreateConstantBuffer(128); // [model(64B) | vp(64B)] for sprite.vert
     sdf_ps_cb_             = CreateConstantBuffer(144); // [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
     vfx_ps_cb_             = CreateConstantBuffer(64);  // [gradient_start | gradient_end | rect_size_and_radius | blur_params]
@@ -163,6 +164,7 @@ void DX11DrawExecutor::Shutdown() {
     per_spot_matrices_cb_.Reset();
     terrain_params_cb_.Reset();
 
+    prim_push_cb_.Reset();
     sprite_push_cb_.Reset();
     sdf_ps_cb_.Reset();
     vfx_ps_cb_.Reset();
@@ -495,8 +497,11 @@ void DX11DrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t
     prim_attrs_ = attrs;
 }
 
-void DX11DrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
-    prim_push_mat4_ = value;
+void DX11DrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+    if (!data || size == 0) return;
+    if (offset + size > kPrimPushMaxBytes) return; // 越界保护
+    std::memcpy(prim_push_data_ + offset, data, size);
+    prim_push_stage_mask_ |= static_cast<uint32_t>(stage);
     prim_has_push_ = true;
 }
 
@@ -520,16 +525,6 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     // 顶点缓冲可缺省（vertexless：SV_VertexID 取 SSBO）。prim_vbo_handle_==0 时不绑 VB。
     const auto* buf = resource_mgr.GetBuffer(prim_vbo_handle_);
 
-    // push-constant 风格的 mat4（u_vp）→ PerFrame cbuffer b0。
-    // 天空盒 VS 仅读取首个 mat4（PerFrameUBO.vp，offset 0），其余字段无关。
-    if (prim_has_push_) {
-        DX11PerFrameCB frame_data{};
-        frame_data.vp = prim_push_mat4_;
-        UpdateConstantBuffer(per_frame_cb_.Get(), &frame_data, sizeof(frame_data));
-        ID3D11Buffer* cbs[] = {per_frame_cb_.Get()};
-        dc->VSSetConstantBuffers(0, 1, cbs);
-    }
-
     dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
     dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
 
@@ -541,6 +536,18 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
             dc->VSSetConstantBuffers(slot, 1, &cb);
             dc->PSSetConstantBuffers(slot, 1, &cb);
         }
+    }
+
+    // 通用 push constant 字节块 → push cbuffer b0。须在 UBO 循环之后绑定：prim_ubos_ 跨绘制
+    // 累积不清零，b0 可能残留前次 BindUniformBuffer(0)（sprite/hair 等）的句柄；push 在后覆盖
+    // 之，确保 skybox/PP 的 push 数据胜出（这些 shader 的 b0 即 push 块，无真 UBO 落 b0）。
+    if (prim_has_push_) {
+        UpdateConstantBuffer(prim_push_cb_.Get(), prim_push_data_, kPrimPushMaxBytes);
+        ID3D11Buffer* push_cbs[] = {prim_push_cb_.Get()};
+        if (prim_push_stage_mask_ & static_cast<uint32_t>(ShaderStage::Vertex))
+            dc->VSSetConstantBuffers(0, 1, push_cbs);
+        if (prim_push_stage_mask_ & static_cast<uint32_t>(ShaderStage::Fragment))
+            dc->PSSetConstantBuffers(0, 1, push_cbs);
     }
 
     // 2D 纹理按 slot → t<slot>/s<slot>。
@@ -575,6 +582,10 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定，此处不再 save/restore。
     dc->Draw(vertex_count, first_vertex);
     global_state_.current_frame_stats.draw_calls++;
+
+    // push 状态按绘制清零，避免泄漏到后续不写 push 的绘制（其 shader 若有 b0 push 块会读到陈旧字节）。
+    prim_has_push_ = false;
+    prim_push_stage_mask_ = 0;
 }
 
 // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
@@ -634,6 +645,17 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         }
     }
 
+    // 通用 push constant 字节块 → push cbuffer b0（后处理参数走此路）。须在 UBO 循环之后绑定，
+    // 覆盖 prim_ubos_ 残留的 b0 句柄（PP shader 的 b0 即 push 块，无真 UBO 落 b0）。
+    if (prim_has_push_) {
+        UpdateConstantBuffer(prim_push_cb_.Get(), prim_push_data_, kPrimPushMaxBytes);
+        ID3D11Buffer* push_cbs[] = {prim_push_cb_.Get()};
+        if (prim_push_stage_mask_ & static_cast<uint32_t>(ShaderStage::Vertex))
+            dc->VSSetConstantBuffers(0, 1, push_cbs);
+        if (prim_push_stage_mask_ & static_cast<uint32_t>(ShaderStage::Fragment))
+            dc->PSSetConstantBuffers(0, 1, push_cbs);
+    }
+
     // 2D 纹理按 slot → t<slot>/s<slot>。
     for (const auto& [slot, handle] : prim_textures_) {
         const auto* tex = resource_mgr.GetTexture(handle);
@@ -678,6 +700,9 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         global_state_.current_frame_stats.instanced_draw_calls++;
     }
     global_state_.current_frame_stats.draw_calls++;
+
+    prim_has_push_ = false;
+    prim_push_stage_mask_ = 0;
 }
 
 void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset,
@@ -751,6 +776,10 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
     dc->DrawIndexedInstancedIndirect(args_buf, byte_offset);
     global_state_.current_frame_stats.draw_calls++;
     global_state_.current_frame_stats.indirect_draw_calls++;
+
+    // 间接路径（GPU 驱动网格）不消费 push；仍按绘制清零，保持 push 状态严格的每绘制语义。
+    prim_has_push_ = false;
+    prim_push_stage_mask_ = 0;
 }
 
 void DX11DrawExecutor::DispatchComputePass(const ComputeDispatch& dispatch,

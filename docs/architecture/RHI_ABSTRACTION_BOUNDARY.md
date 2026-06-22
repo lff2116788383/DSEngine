@@ -58,7 +58,7 @@
 | `BindShaderProgram(program)` | A1 | `(unsigned int)` | ✅ 三后端 |
 | `BindVertexBuffer(buffer, stride, attrs)` | A1 | 单 slot、无 rate | ✅ 三后端（**未含** slot/PerInstance） |
 | ~~`BindTextureCube(slot, h)`~~ | A1 | — | ✅ **B5-1 已删**：统一走 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿） |
-| `PushConstantsMat4(m)` | A1 | 仅 mat4 | ✅ 三后端（泛化为字节块 `PushConstants` **挪 B5-3**：GL push_constant→具名 uniform，泛化需配 GL 降级为 UBO，待 bind-group 一并改） |
+| ~~`PushConstantsMat4(m)`~~ → `PushConstants(stage,offset,data,size)` | A1 | 字节块（`ShaderStage` 路由） | ✅ **B5-3a 已泛化**：三后端字节块（Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO `DsePush{VS,FS,CS}`）；skybox/PP/compute 三消费点统一经此 ABI（删 `BindUniformBuffer(0)` 参数路径与 DX11 PerFrame-b0 hack）。详见 §8.2 D3 |
 | `Draw(vertex_count, first_vertex)` | A1 | **无** instance 参数 | ✅ 三后端 |
 | `BindIndexBuffer(buffer, IndexType)` | B0 | — | ✅ 三后端 |
 | `BindTexture(slot, h, TextureDim)` | B0 | 2D/Cube/2DArray | ✅ 三后端 |
@@ -107,7 +107,7 @@
 | 终态原语（契约 §3） | 现状 | 阻塞/排期 |
 |---|---|---|
 | `BindStorageBuffer(slot, h, offset, size)`（图形阶段读 SSBO） | ✅ **已实现**（P0b `10f3ff2d`，三后端） | mesh 蒙皮/实例（B2b-2/3）+ hair（阶段 3/B4，position/tangent SSBO\@slot0/1）已消费 |
-| 泛化 `PushConstants(stage, offset, data, size)`（取代 `PushConstantsMat4`） | 仅 `PushConstantsMat4` | 待 mesh 等需要非 mat4 push 数据时落地 |
+| 泛化 `PushConstants(stage, offset, data, size)`（取代 `PushConstantsMat4`） | ✅ **B5-3a 已实现**（三后端字节块，删旧 `PushConstantsMat4`） | skybox/PP/compute 三消费点已统一消费 |
 | 实例化 `DrawIndexedInstanced`（`instance_count`/`first_instance`） | ✅ **已实现**（P0a `f38d0b13`，新增重载不改现签名） | mesh 实例化已消费（B2b-3）；particles（B3）待消费 |
 | 间接绘制 `DrawIndexedIndirect`（CommandBuffer 级） | ✅ **已实现**（B2b-5 `25fb30a6`，三后端） | mesh 间接已消费（`MeshRenderer::DrawIndirect`） |
 | slot 化 `BindVertexBuffer(slot, …, rate)`（PerVertex/PerInstance） | 单 slot、无 rate | 同上，随实例化落地 |
@@ -211,7 +211,8 @@
 - **B5**：全局绑定收敛（shadow map / global uniforms / `BindShaderProgram`+PSO 聚合，偿还契约 §8.1 债务）。
   - **B5-1**：✅ 已完成。去重过渡期重复原语之 cube：删 `BindTextureCube`，统一 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿）。`PushConstantsMat4` 泛化为字节块 `PushConstants` 挪 B5-3（GL push_constant 降级为具名 uniform，泛化需配 GL→UBO 降级，随 program+PSO 聚合一并改）。详见 §5 / §8.2 D3。
   - **B5-2**：✅ 已完成。删 M4 遗留死缓冲路径（`SetGlobalMat4Array`/`SetGlobalFloatArray` + `DispatchPendingLightArrays`，全仓无生产调用方）；`RhiDevice` 阴影/光源全局状态接口收敛为统一 `(index, value)` 签名并按类别分组，删冗余单参重载（语义不变、调用点零改动）。详见 §5。
-  - **B5-3**（高风险，§8 拍板项，单独立项）：`BindShaderProgram`+PSO 聚合为单一图形管线对象（含 `PushConstants` 泛化 + GL push_constant→UBO 降级），为 Metal/DX12 铺路。
+  - **B5-3a**：✅ 已完成。`PushConstantsMat4` 泛化为字节块 `PushConstants(ShaderStage, offset, data, size)`（三后端：Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO）；编译器把 GL/ESSL 的 `layout(push_constant)` 降级为按阶段区分的 std140 块 `DsePush{VS,FS,CS}`（规避同名块跨阶段一致约束）；skybox/PP/compute 三消费点统一经 `PushConstants` ABI，删 `BindUniformBuffer(0)` 参数路径与 DX11 skybox PerFrame-b0 hack。验证：三后端零错 + ctest 全绿 + DX11 像素闸门（skybox + PP tonemapping/bloom 参数）。GL/Vulkan 无驱动靠编译+std140/反射镜像。详见 §8.2 D3。
+  - **B5-3b**（高风险，§8 拍板项，单独立项）：`BindShaderProgram`+PSO 聚合为单一图形管线对象，为 Metal/DX12 铺路。
 
 ---
 
@@ -230,7 +231,7 @@
 |---|---|---|---|
 | D1 | **通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败） | 与历史黑屏同类的隐患：后端漏实现 → 静默不绘制 | 像素闸门兜底；终态可考虑改纯虚 + 显式 Mock |
 | D2 | **`BindShaderProgram` 与 PSO 分离**（契约 §8.1） | Metal/DX12/Vulkan 把 shader 烘进 PSO，未来落 Metal 要返工 | B5 聚合为图形管线对象 |
-| D3 | **过渡期重复原语**：~~`BindTextureCube` vs `BindTexture(…,TexCube)`~~（B5-1 已删 cube 重复原语）；`PushConstantsMat4` 未泛化为 `PushConstants(stage,off,data,size)` | 两套写法并存，需纪律 | cube 重复 **B5-1 已还**；`PushConstants` 泛化挪 **B5-3**（随 GL push_constant→UBO 降级一并改） |
+| D3 | ~~**过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`；`PushConstantsMat4` 未泛化~~ → **已还**：cube 重复 B5-1 删；`PushConstantsMat4` B5-3a 泛化为字节块 `PushConstants(stage,off,data,size)`（三后端 + GL push_constant→`DsePush{VS,FS,CS}` UBO 降级），skybox/PP/compute 统一路由 | — | ✅ **已还**（cube B5-1、PushConstants B5-3a） |
 | D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
 | D5 | ~~**每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO）→ 共享 frame-ring 分配器~~ | **复评后降级**：3 系统用不同相机/不同 pass（sprite=world、UI=ortho、particle），本无跨系统合批可言；显存节省也微小。原「优化」收益≈0 | 不单独做；真正问题见 D9 |
 | D9 | **sprite 动态缓冲单缓冲，但引擎 2 帧在飞**（`MAX_FRAMES_IN_FLIGHT=2`）：`SpriteBatchRenderer` 每帧 `UpdateGpuBuffer` 覆写同一 `vbo_/ubo_/fx_ubos_`，而 `AcquireNextImage` 的 fence 只保证 N-2 帧完成 → 帧 N+1 可能在帧 N 仍被 GPU 读取时覆写。mesh 执行器已用 `MAX_FRAMES` 双缓冲规避，sprite 没有 | 真机 2 帧在飞下的潜在竞争（软渲掩盖，呼应 D7）；测试走离屏+fence 等待故不暴露 | **建议**：把 mesh 执行器既有的「每在飞帧缓冲」抽成可复用 helper，B2b 的 MeshRenderer 落地时一并做，再回填 sprite。非阻塞 |

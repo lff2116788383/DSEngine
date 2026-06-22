@@ -105,9 +105,9 @@ void DX11CommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t st
     device_->draw_executor().PrimBindVertexBuffer(buffer_handle, stride, attrs);
 }
 
-void DX11CommandBuffer::PushConstantsMat4(const glm::mat4& value) {
+void DX11CommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimPushConstantsMat4(value);
+    device_->draw_executor().PrimPushConstants(stage, offset, data, size);
 }
 
 void DX11CommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {

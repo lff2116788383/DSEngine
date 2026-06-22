@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
+#include <cctype>
 #include <utility>
 
 #ifdef DSE_HAS_D3DCOMPILE
@@ -152,79 +153,107 @@ static bool CompileToSpirv(const std::string& source, EShLanguage stage,
 // spirv-cross: SPIR-V → GLSL 430
 // ============================================================================
 
-// 后处理: 将 GLSL 430 中的 "struct PushConstants {...}; uniform PushConstants pc;"
-// 展平为独立 uniform 声明，将 "pc.member" 替换为 "member"。
-static std::string FlattenPushConstantsInGLSL(const std::string& src) {
+// 后处理: 将 spirv-cross 为非 Vulkan GLSL 生成的 push_constant
+//   "struct T {...}; uniform T inst;"
+// 转换为约定的 std140 UBO 块（push-block UBO 降级，契约 §8.2 待决 2 方向）：
+//   layout(std140) uniform DsePush<STAGE> { <members> } _dsePush<STAGE>;
+// 并把 body 内 "inst.member" 重写为 "_dsePush<STAGE>.member"。
+//
+// 设计要点：
+// - 块名/实例名按 stage 取固定后缀（VS/FS/CS），使同一 program 内 VS+FS 的
+//   push 块（如 sprite.vert 128B + text_sdf.frag 144B 布局发散）成为**不同块**，
+//   规避 GL「同名 uniform 块跨阶段定义须一致」的链接约束。
+// - **不写死 binding**（ESSL300 不支持 UBO 显式 binding 限定符）——GL 后端按固定
+//   块名 glGetUniformBlockIndex + glUniformBlockBinding 绑到约定保留槽（VS=9/FS=10/CS=9）。
+// - 成员沿用 struct 原文，std140 偏移与 SPIR-V push_constant 反射偏移一致
+//   （当前全部为 mat4/标量，std140==std430==push_constant 布局）。
+static std::string ConvertPushConstantToUBO(const std::string& src,
+                                            const std::string& stage_suffix) {
     std::string result = src;
 
-    // 查找 "struct PushConstants" block
-    auto struct_pos = result.find("struct PushConstants");
-    if (struct_pos == std::string::npos) return result;
+    // 定位 push_constant 对应的 "uniform <StructName> <inst>;"。
+    // push_constant 是唯一「结构体类型的默认块 uniform」（采样器/图像非结构体；
+    // 普通 UBO 用 "layout(...) uniform Block {...}"）。遍历各 struct 匹配其 uniform 实例。
+    std::string struct_name, inst_name;
+    {
+        size_t search = 0;
+        while (true) {
+            size_t sp = result.find("struct ", search);
+            if (sp == std::string::npos) break;
+            size_t name_start = sp + 7;
+            size_t name_end = result.find_first_of(" \t\r\n{", name_start);
+            if (name_end == std::string::npos) break;
+            std::string sname = result.substr(name_start, name_end - name_start);
+            search = name_end;
 
-    // 找到对应的 '{' 和 '}'
-    auto brace_open = result.find('{', struct_pos);
-    auto brace_close = result.find("};", brace_open);
+            std::string needle = "uniform " + sname + " ";
+            size_t up = result.find(needle);
+            if (up == std::string::npos) continue;
+            size_t inst_start = up + needle.size();
+            size_t semi = result.find(';', inst_start);
+            if (semi == std::string::npos) continue;
+            std::string iname = result.substr(inst_start, semi - inst_start);
+            while (!iname.empty() && (iname.back() == ' ' || iname.back() == '\t'))
+                iname.pop_back();
+            // 实例名须为单一标识符（排除数组/含点等误匹配）
+            if (iname.empty() || iname.find_first_of(" \t.[]") != std::string::npos) continue;
+            struct_name = sname;
+            inst_name = iname;
+            break;
+        }
+    }
+    if (struct_name.empty()) return result; // 无 push_constant，原样返回
+
+    // 提取 struct 成员块文本
+    size_t struct_pos = result.find("struct " + struct_name);
+    size_t brace_open = result.find('{', struct_pos);
+    size_t brace_close = result.find("};", brace_open);
     if (brace_open == std::string::npos || brace_close == std::string::npos) return result;
-
-    // 提取 struct 成员列表
     std::string members_block = result.substr(brace_open + 1, brace_close - brace_open - 1);
 
-    // 解析每个成员 "TYPE NAME;"
-    std::vector<std::pair<std::string, std::string>> members; // (type, name)
-    std::istringstream mss(members_block);
-    std::string line;
-    while (std::getline(mss, line)) {
-        // 去空白
-        size_t start = line.find_first_not_of(" \t\r\n");
-        if (start == std::string::npos) continue;
-        line = line.substr(start);
-        if (line.empty() || line[0] == '/') continue;  // 跳过注释/空行
-        // 期望 "TYPE NAME;"
-        auto semi = line.find(';');
-        if (semi == std::string::npos) continue;
-        std::string decl = line.substr(0, semi);
-        auto last_space = decl.find_last_of(" \t");
-        if (last_space == std::string::npos) continue;
-        std::string type = decl.substr(0, last_space);
-        std::string name = decl.substr(last_space + 1);
-        // 去 type 末尾空白
-        while (!type.empty() && (type.back() == ' ' || type.back() == '\t'))
-            type.pop_back();
-        members.push_back({type, name});
-    }
+    const std::string block_name = "DsePush" + stage_suffix;
+    const std::string new_inst = "_dsePush" + stage_suffix;
 
-    // 生成独立 uniform 声明
-    std::string uniform_block;
-    for (auto& [type, name] : members) {
-        uniform_block += "uniform " + type + " " + name + ";\n";
-    }
-
-    // 删除 "struct PushConstants {...};\n"
-    auto struct_end = brace_close + 2; // 跳过 "};"
+    // 1) 删除 "struct <name> {...};" 及其后换行
+    size_t struct_end = brace_close + 2; // 跳过 "};"
     while (struct_end < result.size() && (result[struct_end] == '\n' || result[struct_end] == '\r'))
         struct_end++;
     result.erase(struct_pos, struct_end - struct_pos);
 
-    // 删除 "uniform PushConstants pc;\n"
-    auto uniform_pos = result.find("uniform PushConstants pc;");
-    if (uniform_pos != std::string::npos) {
-        auto uniform_end = uniform_pos + std::string("uniform PushConstants pc;").size();
-        while (uniform_end < result.size() && (result[uniform_end] == '\n' || result[uniform_end] == '\r'))
-            uniform_end++;
-        result.replace(uniform_pos, uniform_end - uniform_pos, uniform_block);
-    }
+    // 2) 用 UBO 块替换 "uniform <name> <inst>;"（删 struct 后需重新定位）
+    std::string old_uniform = "uniform " + struct_name + " " + inst_name + ";";
+    size_t up2 = result.find(old_uniform);
+    if (up2 == std::string::npos) return src; // 兜底：放弃转换
+    std::string ubo_decl = "layout(std140) uniform " + block_name + "\n{" +
+                           members_block + "} " + new_inst + ";";
+    result.replace(up2, old_uniform.size(), ubo_decl);
 
-    // 替换所有 "pc.member" → "member"
-    for (auto& [type, name] : members) {
-        std::string from = "pc." + name;
-        size_t pos = 0;
-        while ((pos = result.find(from, pos)) != std::string::npos) {
-            result.replace(pos, from.size(), name);
-            pos += name.size();
+    // 3) body: "<inst>.member" → "<new_inst>.member"（要求 inst 前为非标识符字符）
+    const std::string from = inst_name + ".";
+    const std::string to = new_inst + ".";
+    size_t pos = 0;
+    while ((pos = result.find(from, pos)) != std::string::npos) {
+        bool ok_prev = (pos == 0) ||
+            !(std::isalnum((unsigned char)result[pos - 1]) || result[pos - 1] == '_');
+        if (ok_prev) {
+            result.replace(pos, from.size(), to);
+            pos += to.size();
+        } else {
+            pos += from.size();
         }
     }
 
     return result;
+}
+
+// 阶段 → push-block UBO 块名后缀（VS/FS/CS）
+static std::string PushUBOStageSuffix(EShLanguage stage) {
+    switch (stage) {
+        case EShLangVertex:   return "VS";
+        case EShLangFragment: return "FS";
+        case EShLangCompute:  return "CS";
+        default:              return "XS";
+    }
 }
 
 static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
@@ -250,8 +279,8 @@ static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
 
         std::string glsl = compiler.compile();
 
-        // 后处理: 展平 PushConstants struct → 独立 uniform
-        glsl = FlattenPushConstantsInGLSL(glsl);
+        // 后处理: push_constant → 约定块名的 std140 UBO（GL 后端按块名绑保留槽）
+        glsl = ConvertPushConstantToUBO(glsl, PushUBOStageSuffix(stage));
 
         return glsl;
     } catch (const spirv_cross::CompilerError& e) {
@@ -281,7 +310,7 @@ static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
         }
 
         std::string essl = compiler.compile();
-        essl = FlattenPushConstantsInGLSL(essl);
+        essl = ConvertPushConstantToUBO(essl, PushUBOStageSuffix(stage));
         return essl;
     } catch (const spirv_cross::CompilerError& e) {
         std::cerr << "[ERROR] spirv-cross ESSL310: " << e.what() << "\n";
@@ -312,7 +341,7 @@ static std::string CrossCompileToESSL300(const std::vector<uint32_t>& spirv,
         }
 
         std::string essl = compiler.compile();
-        essl = FlattenPushConstantsInGLSL(essl);
+        essl = ConvertPushConstantToUBO(essl, PushUBOStageSuffix(stage));
         return essl;
     } catch (const spirv_cross::CompilerError& e) {
         std::cerr << "[ERROR] spirv-cross ESSL300: " << e.what() << "\n";

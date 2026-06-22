@@ -78,9 +78,9 @@ void VulkanCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t 
     device_->draw_executor().PrimBindVertexBuffer(vk_buf, stride, attrs);
 }
 
-void VulkanCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
+void VulkanCommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
     if (!device_) return;
-    device_->draw_executor().PrimPushConstantsMat4(value);
+    device_->draw_executor().PrimPushConstants(stage, offset, data, size);
 }
 
 void VulkanCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {

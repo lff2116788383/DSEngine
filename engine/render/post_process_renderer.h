@@ -38,7 +38,7 @@ public:
     /// 否则返回 false（未知/未实现效果）。须在 BeginRenderPass 内调用。
     bool Draw(CommandBuffer& cmd, RhiDevice& device, const PostProcessRequest& req);
 
-    /// 新一帧开始：复位参数 UBO 池游标（缓冲本身跨帧持久复用）。
+    /// 新一帧开始（帧首钩子）。参数已改走 push constant，无帧间状态需复位。
     void BeginFrame();
 
     /// 释放内部 GPU 资源（析构/重置时调用）。
@@ -47,15 +47,9 @@ public:
 private:
     void EnsureResources(RhiDevice& device);
     unsigned int PsoFor(RhiDevice& device, bool blend);
-    BufferHandle NextParamUbo(RhiDevice& device, size_t bytes);
 
     BufferHandle quad_vbo_;   ///< 全屏 quad 顶点（clip-space，pos2+uv2，静态）
     BufferHandle quad_ibo_;   ///< 全屏 quad 索引（0,1,2,0,2,3，静态）
-
-    /// 参数 UBO 池（每次带参 Draw 取一个独立缓冲，跨帧持久——满足 Vulkan
-    /// 「提交前不可别名/删除」生命周期约束）。BeginFrame 复位游标循环复用。
-    std::vector<BufferHandle> param_ubos_;
-    size_t param_ubo_next_ = 0;
 
     unsigned int pso_opaque_ = 0;  ///< 关剔除/深度/混合
     unsigned int pso_blend_  = 0;  ///< 关剔除/深度 + alpha 混合

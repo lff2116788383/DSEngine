@@ -94,7 +94,7 @@ public:
     // --- 通用绘制原语 (A1) ---
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride, const std::vector<VertexAttr>& attrs);
-    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
                   VulkanPipelineStateManager& pipeline_mgr,
                   VulkanShaderManager& shader_mgr,
@@ -375,7 +375,10 @@ private:
     uint32_t prim_stride_ = 0;
     std::vector<VertexAttr> prim_attrs_;
     unsigned int prim_cubemap_ = 0;
-    glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);
+    // 通用 push constant 字节块（→ 真 vkCmdPushConstants，stageFlags 取程序反射 range）。
+    static constexpr uint32_t kPrimPushMaxBytes = 256;
+    uint8_t prim_push_data_[kPrimPushMaxBytes] = {};
+    uint32_t prim_push_size_ = 0;            ///< 已写入字节范围 [0, size)
     bool prim_has_push_ = false;
 
     // 通用绘制原语 (B0) 累积状态：索引缓冲 / 2D 纹理(slot→handle) / UBO(slot→handle)

@@ -74,7 +74,7 @@ public:
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
-    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex);
 
     // --- 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制 ---
@@ -188,6 +188,25 @@ private:
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
     unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
     unsigned int prim_topology_ = 0x0004;     ///< GL_TRIANGLES，当前 PSO 拓扑（SetPipelineState 推送）
+
+    // 通用 push constant → push-block UBO 降级支撑（契约 §8.2）。
+    // 编译器把 layout(push_constant) 降级为按 stage 命名的 std140 UBO 块（DsePushVS/FS，
+    // 无显式 binding——ESSL300 不支持）。后端按块名反射 + glUniformBlockBinding 绑到保留
+    // binding（VS=14/FS=15，避开真 UBO 的 0..9）+ 建 backing UBO，PushConstants 按 offset 写。
+    static constexpr unsigned int kPushUboBindingVS = 14;
+    static constexpr unsigned int kPushUboBindingFS = 15;
+    struct PushUboStage {
+        unsigned int ubo = 0;       ///< backing UBO（0=该程序此 stage 无 push 块）
+        unsigned int binding = 0;   ///< 保留 binding 点
+        int size = 0;               ///< 块字节大小（GL_UNIFORM_BLOCK_DATA_SIZE）
+    };
+    struct PushUboProgram {
+        PushUboStage vs;
+        PushUboStage fs;
+        bool initialized = false;
+    };
+    std::unordered_map<unsigned int, PushUboProgram> push_ubo_programs_;
+    PushUboProgram& EnsurePushUbo(unsigned int program);
 
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;

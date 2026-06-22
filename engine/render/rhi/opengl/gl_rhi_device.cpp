@@ -198,9 +198,9 @@ void OpenGLCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t 
     device_->RealBindVertexBuffer(buffer_handle, stride, attrs);
 }
 
-void OpenGLCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
+void OpenGLCommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
     if (!device_) return;
-    device_->RealPushConstantsMat4(value);
+    device_->RealPushConstants(stage, offset, data, size);
 }
 
 void OpenGLCommandBuffer::Draw(uint32_t vertex_count, uint32_t first_vertex) {
@@ -363,6 +363,12 @@ void OpenGLRhiDevice::Shutdown() {
             resource_mgr_.ledger().shader_programs_destroyed += live_external;
         }
     }
+
+    // 清理 compute push 常量 backing UBO
+    for (auto& [prog, st] : compute_push_ubos_) {
+        if (st.ubo) glDeleteBuffers(1, &st.ubo);
+    }
+    compute_push_ubos_.clear();
 
     // 清理 compute shader programs
     for (auto handle : compute_programs_) {
@@ -886,8 +892,8 @@ void OpenGLRhiDevice::RealBindVertexBuffer(unsigned int buffer_handle, uint32_t 
     draw_executor_.PrimBindVertexBuffer(buffer_handle, stride, attrs);
 }
 
-void OpenGLRhiDevice::RealPushConstantsMat4(const glm::mat4& value) {
-    draw_executor_.PrimPushConstantsMat4(value);
+void OpenGLRhiDevice::RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+    draw_executor_.PrimPushConstants(stage, offset, data, size);
 }
 
 void OpenGLRhiDevice::RealDraw(uint32_t vertex_count, uint32_t first_vertex) {
@@ -1150,8 +1156,28 @@ void OpenGLRhiDevice::DispatchCompute(unsigned int shader_handle,
     if (!supports_ssbo_ || shader_handle == 0) return;
     InitComputeProcAddresses();
     glUseProgram(shader_handle);
+
+    // push 常量（降级后的 DsePushCS）→ backing UBO 整块上传 + 绑保留 binding。
+    if (!compute_uniform_staging_.empty()) {
+        ComputePushUbo& cpu = EnsureComputePushUbo(shader_handle);
+        if (cpu.ubo) {
+            size_t cap = cpu.size > 0 ? static_cast<size_t>(cpu.size) : compute_uniform_staging_.size();
+            size_t n = std::min(compute_uniform_staging_.size(), cap);
+            glBindBuffer(GL_UNIFORM_BUFFER, cpu.ubo);
+            glBufferSubData(GL_UNIFORM_BUFFER, 0, static_cast<GLsizeiptr>(n),
+                            compute_uniform_staging_.data());
+            glBindBuffer(GL_UNIFORM_BUFFER, 0);
+            glBindBufferBase(GL_UNIFORM_BUFFER, kComputePushUboBinding, cpu.ubo);
+        }
+    }
+
     if (pfn_glDispatchCompute) pfn_glDispatchCompute(groups_x, groups_y, groups_z);
     glUseProgram(0);
+
+    // 每次 dispatch 自带一组 push 常量：上传后清空暂存与定位表（与 DX11 ClearComputeParams 同义）。
+    compute_uniform_staging_.clear();
+    compute_uniform_name_to_offset_.clear();
+    compute_uniform_next_offset_ = 0;
 }
 
 // ============================================================
@@ -1303,61 +1329,101 @@ unsigned int OpenGLRhiDevice::GetHiZGpuTexture(unsigned int handle) const {
 }
 
 // --- Compute Uniform ---
+// 编译器已把 compute 的 layout(push_constant) 降级为 std140 块 DsePushCS（契约 §8.2），
+// 故按名 glUniform 已失效。改为按调用序累积到 staging（与 DX11/Vulkan 同的 16B 对齐定位方案），
+// DispatchCompute 时整块上传到 DsePushCS backing UBO 并绑到保留 binding。
+#ifndef GL_UNIFORM_BLOCK_DATA_SIZE
+#define GL_UNIFORM_BLOCK_DATA_SIZE 0x8A40
+#endif
+#ifndef GL_INVALID_INDEX
+#define GL_INVALID_INDEX 0xFFFFFFFFu
+#endif
+
+size_t OpenGLRhiDevice::GetOrCreateComputeUniformOffset(const char* name, size_t data_size) {
+    auto it = compute_uniform_name_to_offset_.find(name);
+    if (it != compute_uniform_name_to_offset_.end()) return it->second;
+    size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);  // 16B 对齐（同 DX11/Vulkan）
+    compute_uniform_name_to_offset_[name] = offset;
+    compute_uniform_next_offset_ = offset + data_size;
+    return offset;
+}
+
+static void GLWriteComputeStaging(std::vector<uint8_t>& staging, size_t offset,
+                                  const void* data, size_t size) {
+    if (staging.size() < offset + size) staging.resize(offset + size, 0);
+    std::memcpy(staging.data() + offset, data, size);
+}
 
 void OpenGLRhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform1i(loc, value);
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(int)), &value, sizeof(int));
 }
 
 void OpenGLRhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform1f(loc, value);
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(float)), &value, sizeof(float));
 }
 
 void OpenGLRhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform2i(loc, x, y);
+    int d[2]{x, y};
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
 void OpenGLRhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform2f(loc, x, y);
+    float d[2]{x, y};
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
 void OpenGLRhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform3f(loc, x, y, z);
+    float d[3]{x, y, z};
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
 void OpenGLRhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform3i(loc, x, y, z);
+    int d[3]{x, y, z};
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
 void OpenGLRhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
     if (!supports_ssbo_ || shader == 0 || !name) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniform4f(loc, x, y, z, w);
+    float d[4]{x, y, z, w};
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, sizeof(d)), d, sizeof(d));
 }
 
 void OpenGLRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
     if (!supports_ssbo_ || shader == 0 || !name || !data) return;
-    glUseProgram(shader);
-    GLint loc = glGetUniformLocation(shader, name);
-    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, data);
+    GLWriteComputeStaging(compute_uniform_staging_,
+                          GetOrCreateComputeUniformOffset(name, 64), data, 64);
+}
+
+OpenGLRhiDevice::ComputePushUbo& OpenGLRhiDevice::EnsureComputePushUbo(unsigned int program) {
+    ComputePushUbo& st = compute_push_ubos_[program];
+    if (st.initialized) return st;
+    st.initialized = true;
+    unsigned int idx = glGetUniformBlockIndex(program, "DsePushCS");
+    if (idx == GL_INVALID_INDEX) return st;  // 该程序无 push 块
+    glUniformBlockBinding(program, idx, kComputePushUboBinding);
+    GLint data_size = 0;
+    glGetActiveUniformBlockiv(program, idx, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+    unsigned int ubo = 0;
+    glGenBuffers(1, &ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+    glBufferData(GL_UNIFORM_BUFFER, data_size > 0 ? data_size : 256, nullptr, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    st.ubo = ubo;
+    st.size = data_size;
+    return st;
 }
 
 // --- SSBO 璇诲洖 ---

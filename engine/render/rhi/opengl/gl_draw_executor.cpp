@@ -198,6 +198,12 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         skinned_inst_ssbo_ = 0;
         skinned_inst_ssbo_capacity_ = 0;
     }
+    // push-block UBO backing buffers
+    for (auto& [prog, st] : push_ubo_programs_) {
+        if (st.vs.ubo) glDeleteBuffers(1, &st.vs.ubo);
+        if (st.fs.ubo) glDeleteBuffers(1, &st.fs.ubo);
+    }
+    push_ubo_programs_.clear();
     // 2D 精灵缓冲
     if (vao_handle_) {
         if (delete_vao_fn_) { delete_vao_fn_(vao_handle_); }
@@ -419,11 +425,54 @@ void GLDrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t s
     }
 }
 
-void GLDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
-    if (prim_program_ == 0) return;
-    // push_constant 块在 GL 后端被 lower 为名为 "u_vp" 的 uniform。
-    GLint loc = glGetUniformLocation(prim_program_, "u_vp");
-    if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(value));
+#ifndef GL_UNIFORM_BLOCK_DATA_SIZE
+#define GL_UNIFORM_BLOCK_DATA_SIZE 0x8A40
+#endif
+#ifndef GL_INVALID_INDEX
+#define GL_INVALID_INDEX 0xFFFFFFFFu
+#endif
+
+GLDrawExecutor::PushUboProgram& GLDrawExecutor::EnsurePushUbo(unsigned int program) {
+    PushUboProgram& st = push_ubo_programs_[program];
+    if (st.initialized) return st;
+    st.initialized = true;
+    // 编译器按 stage 发不同块名（DsePushVS/FS），使同一 program 内两阶段发散的 push 块
+    // 成为不同 UBO 类型，规避 GL「同名块跨阶段须一致」的链接约束。逐块反射并绑保留 binding。
+    struct { const char* name; PushUboStage* stage; unsigned int binding; } blocks[] = {
+        {"DsePushVS", &st.vs, kPushUboBindingVS},
+        {"DsePushFS", &st.fs, kPushUboBindingFS},
+    };
+    for (auto& b : blocks) {
+        unsigned int idx = glGetUniformBlockIndex(program, b.name);
+        if (idx == GL_INVALID_INDEX) continue;
+        glUniformBlockBinding(program, idx, b.binding);  // block→binding 关联（程序态，持久）
+        GLint data_size = 0;
+        glGetActiveUniformBlockiv(program, idx, GL_UNIFORM_BLOCK_DATA_SIZE, &data_size);
+        unsigned int ubo = 0;
+        glGenBuffers(1, &ubo);
+        glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+        glBufferData(GL_UNIFORM_BUFFER, data_size > 0 ? data_size : 256, nullptr, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+        b.stage->ubo = ubo;
+        b.stage->binding = b.binding;
+        b.stage->size = data_size;
+    }
+    return st;
+}
+
+void GLDrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+    if (prim_program_ == 0 || !data || size == 0) return;
+    PushUboProgram& st = EnsurePushUbo(prim_program_);
+    PushUboStage* s = nullptr;
+    if (stage & ShaderStage::Vertex)        s = &st.vs;
+    else if (stage & ShaderStage::Fragment) s = &st.fs;
+    if (!s || s->ubo == 0) return;  // 该程序此 stage 无 push 块
+    glBindBuffer(GL_UNIFORM_BUFFER, s->ubo);
+    glBufferSubData(GL_UNIFORM_BUFFER, static_cast<GLintptr>(offset),
+                    static_cast<GLsizeiptr>(size), data);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    // 把 backing UBO 绑到保留 binding 点（绘制期生效；保留位不与真 UBO 冲突）。
+    glBindBufferBase(GL_UNIFORM_BUFFER, s->binding, s->ubo);
 }
 
 void GLDrawExecutor::PrimSetTopology(PrimitiveTopology topology) {

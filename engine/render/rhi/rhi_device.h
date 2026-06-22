@@ -73,8 +73,11 @@ public:
                                   const std::vector<VertexAttr>& attrs) {
         (void)buffer_handle; (void)stride; (void)attrs;
     }
-    /// 设置 push-constant 风格的 mat4（GL→uniform / Vulkan→push constant / DX11→CB）
-    virtual void PushConstantsMat4(const glm::mat4& value) { (void)value; }
+    /// 通用 push constant 字节块写入（Vulkan→真 push constant / DX11→push cbuffer(b0) /
+    /// GL→push-block UBO(DsePush{VS,FS}) 按 offset memcpy）。stage 指定写入哪个阶段的 push 块。
+    virtual void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+        (void)stage; (void)offset; (void)data; (void)size;
+    }
     /// 非索引绘制
     virtual void Draw(uint32_t vertex_count, uint32_t first_vertex = 0) {
         (void)vertex_count; (void)first_vertex;

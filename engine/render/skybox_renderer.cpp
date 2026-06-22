@@ -39,7 +39,7 @@ void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int cu
 
     cmd.SetPipelineState(pso_);
     cmd.BindShaderProgram(program);
-    cmd.PushConstantsMat4(vp);
+    cmd.PushConstants(ShaderStage::Vertex, 0, &vp, sizeof(vp));
     cmd.BindTexture(0, cubemap_handle, TextureDim::TexCube);
 
     const std::vector<VertexAttr> attrs = { VertexAttr{0u, 3u, 0u} };

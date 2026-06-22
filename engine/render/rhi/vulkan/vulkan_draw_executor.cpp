@@ -1878,8 +1878,12 @@ void VulkanDrawExecutor::PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride,
     prim_attrs_ = attrs;
 }
 
-void VulkanDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
-    prim_push_mat4_ = value;
+void VulkanDrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+    (void)stage; // Vulkan 按程序反射的 push_constant_range.stageFlags 推送，无需逐次 stage
+    if (!data || size == 0) return;
+    if (offset + size > kPrimPushMaxBytes) return;
+    std::memcpy(prim_push_data_ + offset, data, size);
+    if (offset + size > prim_push_size_) prim_push_size_ = offset + size;
     prim_has_push_ = true;
 }
 
@@ -1930,10 +1934,16 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    if (prim_has_push_) {
+    if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
+        // stageFlags 取程序反射的 push range（skybox=VERTEX / PP=FRAGMENT），
+        // 推送已写入的字节范围 [0, prim_push_size_)。
+        uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
         vkCmdPushConstants(cmd_buf, program->pipeline_layout,
-                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &prim_push_mat4_);
+                           program->reflection.push_constant_range.stageFlags,
+                           0, pc_size, prim_push_data_);
     }
+    prim_has_push_ = false;
+    prim_push_size_ = 0;
 
     if (prim_cubemap_ != 0) {
         AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, program, prim_cubemap_, resource_mgr);
@@ -2173,6 +2183,16 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     }
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
+        // 后处理参数走真 push constant（stageFlags=FRAGMENT，取程序反射 range）。
+        uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
+        vkCmdPushConstants(cmd_buf, program->pipeline_layout,
+                           program->reflection.push_constant_range.stageFlags,
+                           0, pc_size, prim_push_data_);
+    }
+    prim_has_push_ = false;
+    prim_push_size_ = 0;
 
     AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
 

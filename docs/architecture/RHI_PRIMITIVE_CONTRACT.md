@@ -84,7 +84,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 |---|---|---|
 | `BindVertexBuffer(buffer, stride, attrs)` | `BindVertexBuffer(slot=0, …, PerVertex)` | 旧签名转调新签名 |
 | `BindTextureCube(slot, h)` | `BindTexture(slot, h, TexCube)` | 旧转调新 |
-| `PushConstantsMat4(m)` | `PushConstants(Vertex, 0, &m, 64)` | 旧转调新 |
+| `PushConstantsMat4(m)` | `PushConstants(Vertex, 0, &m, 64)` | **B5-3a 已泛化删旧**（无转调；skybox/PP/compute 统一经字节块 ABI） |
 | `Draw(vc, first)` | `Draw(vc, 1, first, 0)` | 旧转调新 |
 
 > `SkyboxRenderer` 暂不动（仍用旧原语，由旧转调新保证行为不变）；待 B1 给它补像素测试后再切到新原语。

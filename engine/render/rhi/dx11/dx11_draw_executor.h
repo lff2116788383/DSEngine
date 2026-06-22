@@ -110,7 +110,7 @@ public:
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
-    void PrimPushConstantsMat4(const glm::mat4& value);
+    void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
                   DX11ShaderManager& shader_mgr,
                   DX11ResourceManager& resource_mgr);
@@ -209,6 +209,7 @@ private:
     // 精灵四边形（动态 VBO，静态 IBO）
     ComPtr<ID3D11Buffer> sprite_quad_vbo_;
     ComPtr<ID3D11Buffer> sprite_quad_ibo_;
+    ComPtr<ID3D11Buffer> prim_push_cb_;     // 通用 push cbuffer（b0），承载 PushConstants 字节块
     ComPtr<ID3D11Buffer> sprite_push_cb_;   // 128B: [model(64B) | vp(64B)] for sprite.vert
     ComPtr<ID3D11Buffer> sdf_ps_cb_;        // 144B: [model(64B) | vp(64B) | sdf_params(16B)] for text_sdf.frag
     ComPtr<ID3D11Buffer> vfx_ps_cb_;        // 64B: [gradient_start(16) | gradient_end(16) | rect_size_and_radius(16) | blur_params(16)] for ui_effects.frag
@@ -260,8 +261,12 @@ private:
     unsigned int prim_vbo_handle_ = 0;       ///< 当前绑定的顶点缓冲句柄
     uint32_t prim_stride_ = 0;               ///< 顶点步长（字节）
     std::vector<VertexAttr> prim_attrs_;     ///< 顶点属性（DX11 输入布局来自 shader 反射，此处仅留作记录）
-    glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);  ///< push-constant 风格的 mat4（→ PerFrame.vp）
-    bool prim_has_push_ = false;             ///< 是否设置过 push constant
+    // 通用 push constant 字节块（→ push cbuffer b0；VS/PS 按 stage 绑定）。
+    // 真 UBO 在 HLSL 均显式 register(b1+)，push cbuffer 恒落 b0，故统一绑 b0 安全。
+    static constexpr uint32_t kPrimPushMaxBytes = 256;
+    uint8_t prim_push_data_[kPrimPushMaxBytes] = {};  ///< CPU 暂存（零填充，整块上传）
+    uint32_t prim_push_stage_mask_ = 0;      ///< 已写入的阶段位掩码（ShaderStage）
+    bool prim_has_push_ = false;             ///< 本次绘制是否设置过 push constant
 
     // B0 通用原语累积状态：索引缓冲 / 2D 纹理(slot→t/s) / UBO(slot→b)
     unsigned int prim_index_buffer_handle_ = 0;       ///< 当前绑定的索引缓冲句柄（0=无）

@@ -19,6 +19,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace dse {
 namespace render {
@@ -175,7 +177,7 @@ public:
     // --- 通用绘制原语 (A1) ---
     void RealBindShaderProgram(unsigned int program_handle);
     void RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs);
-    void RealPushConstantsMat4(const glm::mat4& value);
+    void RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void RealDraw(uint32_t vertex_count, uint32_t first_vertex);
 
     // --- 通用绘制原语 (B0) ---
@@ -238,6 +240,23 @@ private:
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
+
+    // --- Compute push 常量 → DsePushCS UBO 降级支撑（契约 §8.2）---
+    // 编译器把 compute 的 layout(push_constant) 降级为 std140 块 DsePushCS（无 binding）。
+    // SetComputeUniform* 按调用序累积到 staging（与 DX11/Vulkan 同的 16B 对齐定位方案），
+    // DispatchCompute 时反射块 + 绑保留 binding + backing UBO + 整块上传。
+    static constexpr unsigned int kComputePushUboBinding = 13;  ///< 避开真 UBO/SSBO 低位 binding
+    struct ComputePushUbo {
+        unsigned int ubo = 0;       ///< backing UBO（0=该程序无 DsePushCS 块）
+        int size = 0;               ///< 块字节大小（GL_UNIFORM_BLOCK_DATA_SIZE）
+        bool initialized = false;
+    };
+    std::unordered_map<unsigned int, ComputePushUbo> compute_push_ubos_;
+    std::vector<uint8_t> compute_uniform_staging_;             ///< CPU 暂存（定位累积，整块上传）
+    std::unordered_map<std::string, size_t> compute_uniform_name_to_offset_;
+    size_t compute_uniform_next_offset_ = 0;
+    size_t GetOrCreateComputeUniformOffset(const char* name, size_t data_size);
+    ComputePushUbo& EnsureComputePushUbo(unsigned int program);
 
 public:
     // --- IRhiGpuTimer 接口 ---

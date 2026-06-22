@@ -33,6 +33,21 @@ enum class RhiBackend : unsigned int {
     Default = OpenGL  ///< 默认使用 OpenGL 后端
 };
 
+/// 着色器阶段（push constant 等按阶段路由的原语使用，位掩码可组合）
+enum class ShaderStage : uint32_t {
+    Vertex      = 1,
+    Fragment    = 2,
+    Compute     = 4,
+    AllGraphics = Vertex | Fragment,
+};
+
+inline ShaderStage operator|(ShaderStage a, ShaderStage b) {
+    return static_cast<ShaderStage>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline uint32_t operator&(ShaderStage a, ShaderStage b) {
+    return static_cast<uint32_t>(a) & static_cast<uint32_t>(b);
+}
+
 /// 混合因子
 enum class BlendFactor : unsigned int {
     Zero = 0,
