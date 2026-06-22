@@ -69,7 +69,7 @@ public:
     void ClearColor(const glm::vec4& color);
 
     // --- 通用绘制原语 (A1) ---
-    /// 设置后续 Prim* 绘制的图元拓扑（由 SetPipelineState 从 PSO desc 推送）。
+    /// 设置后续 Prim* 绘制的图元拓扑（由 BindPipeline 从 PSO desc 推送）。
     void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
@@ -187,7 +187,7 @@ private:
     VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
     unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
-    unsigned int prim_topology_ = 0x0004;     ///< GL_TRIANGLES，当前 PSO 拓扑（SetPipelineState 推送）
+    unsigned int prim_topology_ = 0x0004;     ///< GL_TRIANGLES，当前 PSO 拓扑（BindPipeline 推送）
 
     // 通用 push constant → push-block UBO 降级支撑（契约 §8.2）。
     // 编译器把 layout(push_constant) 降级为按 stage 命名的 std140 UBO 块（DsePushVS/FS，

@@ -311,7 +311,7 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        cmd->SetPipelineState(ps);
+        cmd->BindPipeline(device_.GetGraphicsPipeline(ps, 0));
         pp_renderer.Draw(*cmd, device_,
             dse::render::PostProcessRequest("copy", device_.GetRenderTargetColorTexture(src)));
         cmd->EndRenderPass();

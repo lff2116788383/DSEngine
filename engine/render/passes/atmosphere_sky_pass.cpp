@@ -90,7 +90,7 @@ void AtmosphereSkyPass::Execute(CommandBuffer& cmd_buffer) {
 
     unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"atmosphere_sky", scene_tex, {
         sun_dir.x, sun_dir.y, sun_dir.z,
@@ -150,7 +150,7 @@ void AtmosphereSkyPass::RenderTransmittanceLUT(CommandBuffer& cmd_buffer) {
     // [6] mie_coeff
     // [7] mie_scale_height
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({transmittance_rt_, glm::vec4(0.0f), true});
     // 已迁到 PostProcessRenderer：无源纹理效果（仅由 8 标量 UBO 程序化生成 LUT）。
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,

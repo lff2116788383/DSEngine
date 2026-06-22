@@ -93,8 +93,7 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     EnsureResources(device);
     if (!quad_vbo_ || !quad_ibo_) return false;
 
-    cmd.SetPipelineState(PsoFor(device, req.blend_enabled));
-    cmd.BindShaderProgram(prog);
+    cmd.BindPipeline(device.GetGraphicsPipeline(PsoFor(device, req.blend_enabled), prog));
 
     // 参数块 → push constant（FRAGMENT）。效果着色器把 params 声明为 layout(push_constant)，
     // 三后端统一经 PushConstants 字节块路由（Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO）。

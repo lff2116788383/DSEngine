@@ -296,7 +296,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     size_t fx_idx = 0;
     for (const Batch& b : batches) {
         const unsigned int blend = (b.shader_variant == kAdditiveVariantKey) ? 1u : b.blend_mode;
-        cmd.SetPipelineState(PsoForBlend(device, blend));
+        const unsigned int pso = PsoForBlend(device, blend);
 
         const int path = path_of(b);
         unsigned int prog = sprite_prog;
@@ -327,7 +327,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
             // fx_prog==0：保持默认程序 + PerFrame UBO（回退）。
         }
 
-        cmd.BindShaderProgram(prog);
+        cmd.BindPipeline(device.GetGraphicsPipeline(pso, prog));
         cmd.BindUniformBuffer(0u, ubo_handle);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
         cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);

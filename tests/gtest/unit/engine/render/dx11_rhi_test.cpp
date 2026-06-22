@@ -222,10 +222,10 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
-// 测试 DX 11命令缓冲区：无设备当设置管线状态安全
-TEST(DX11CommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
+// 测试 DX 11命令缓冲区：无设备当绑定图形管线安全
+TEST(DX11CommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     DX11CommandBuffer cmd;
-    cmd.SetPipelineState(12345);
+    cmd.BindPipeline(12345);
 }
 
 // 测试 DX 11命令缓冲区：无设备当延迟阴影映射安全

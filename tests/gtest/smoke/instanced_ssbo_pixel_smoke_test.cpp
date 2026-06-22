@@ -172,8 +172,7 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
-        cmd->SetPipelineState(pso);
-        cmd->BindShaderProgram(program);
+        cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
         cmd->BindVertexBuffer(vbo.raw(), sizeof(float) * 2, {});  // 无属性，仅占位
         cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
         cmd->BindStorageBuffer(0, ssbo.raw(), 0, 0);              // P0b：图形阶段 SSBO → slot 0

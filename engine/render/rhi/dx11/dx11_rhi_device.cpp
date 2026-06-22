@@ -38,14 +38,6 @@ void DX11CommandBuffer::EndRenderPass() {
     device_->draw_executor().EndRenderPass();
 }
 
-void DX11CommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
-    if (!device_) return;
-    device_->state_mgr().ApplyPipelineState(pipeline_state_handle, device_->context().device_context());
-    // 把 PSO 拓扑推送给 executor，供通用 Prim* 绘制采用（默认 TriangleList）。
-    const auto* ps = device_->state_mgr().GetPipelineState(pipeline_state_handle);
-    device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
-}
-
 void DX11CommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     ID3D11DeviceContext* dc = device_->context().device_context();
@@ -94,9 +86,15 @@ void DX11CommandBuffer::ClearDepth(float depth) {
 
 // --- 通用绘制原语 (A1) ---
 
-void DX11CommandBuffer::BindShaderProgram(unsigned int program_handle) {
+void DX11CommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
     if (!device_) return;
-    device_->draw_executor().PrimBindShaderProgram(program_handle);
+    const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
+    if (!desc) return;
+    // 恒应用 PSO 子状态（深度/光栅/混合）+ 拓扑；program!=0 时再绑 program（PSO-only 管线 program==0）。
+    device_->state_mgr().ApplyPipelineState(desc->pso_state, device_->context().device_context());
+    const auto* ps = device_->state_mgr().GetPipelineState(desc->pso_state);
+    device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
+    if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
 }
 
 void DX11CommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,

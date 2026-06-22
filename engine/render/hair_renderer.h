@@ -2,7 +2,7 @@
  * @file hair_renderer.h
  * @brief 后端无关的毛发线带渲染器（B4）。
  *
- * 用通用绘制原语（SetPipelineState / BindShaderProgram / BindUniformBuffer /
+ * 用通用绘制原语（BindPipeline / BindUniformBuffer /
  * BindStorageBuffer / Draw）消费内建程序 BuiltinProgram::HairStrand
  * （hair.vert + hair.frag）：组合 HairUniforms UBO\@set0.b0（VS/FS 共享）+
  * position/tangent SSBO\@set7.b0/b1（@SSBO_LOW_REGISTERS → 三后端 BindStorageBuffer(0/1) 对齐）。

@@ -148,7 +148,7 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
         }
 
         // 渲染 3D 网格（通过 render_meshes 回调）
-        face_cmd->SetPipelineState(ctx.pipeline_states.mesh);
+        face_cmd->BindPipeline(ctx.pipeline_states.mesh);
         if (ctx.render_meshes) {
             ctx.render_meshes(*ctx.world, *face_cmd);
         }

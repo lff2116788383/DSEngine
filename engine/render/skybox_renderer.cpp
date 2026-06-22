@@ -37,8 +37,7 @@ void SkyboxRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int cu
     const glm::mat4 skybox_view = glm::mat4(glm::mat3(view));
     const glm::mat4 vp = projection * skybox_view;
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.PushConstants(ShaderStage::Vertex, 0, &vp, sizeof(vp));
     cmd.BindTexture(0, cubemap_handle, TextureDim::TexCube);
 

@@ -40,7 +40,7 @@ class MockCommandBuffer : public CommandBuffer {
 public:
     MOCK_METHOD(void, BeginRenderPass, (const RenderPassDesc&), (override));
     MOCK_METHOD(void, EndRenderPass, (), (override));
-    MOCK_METHOD(void, SetPipelineState, (unsigned int), (override));
+    MOCK_METHOD(void, BindPipeline, (unsigned int), (override));
     MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));

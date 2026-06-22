@@ -579,7 +579,7 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
         dc->IASetVertexBuffers(0, 1, buf->buffer.GetAddressOf(), &stride, &offset);
     }
 
-    // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定，此处不再 save/restore。
+    // 深度/光栅/混合已由 BindPipeline→ApplyPipelineState 设定，此处不再 save/restore。
     dc->Draw(vertex_count, first_vertex);
     global_state_.current_frame_stats.draw_calls++;
 
@@ -690,7 +690,7 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
     }
     dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
 
-    // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定。
+    // 深度/光栅/混合已由 BindPipeline→ApplyPipelineState 设定。
     if (instance_count == 1 && first_instance == 0) {
         dc->DrawIndexed(index_count, first_index, base_vertex);
     } else {

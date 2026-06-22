@@ -39,7 +39,6 @@ public:
     virtual ~CommandBuffer() = default;
     virtual void BeginRenderPass(const RenderPassDesc& render_pass) = 0;
     virtual void EndRenderPass() = 0;
-    virtual void SetPipelineState(unsigned int pipeline_state_handle) = 0;
     virtual void SetCamera(const glm::mat4& view, const glm::mat4& projection) = 0;
     /// 返回 SetCamera 缓存的 view/projection（高层渲染器经通用原语绘制时取用）。
     virtual glm::mat4 GetViewMatrix() const { return glm::mat4(1.0f); }
@@ -66,8 +65,9 @@ public:
     // 取代把具体效果（DrawSkybox 等）做成 RHI 虚函数的做法。
     // 默认空实现：尚未实现该组原语的后端/Mock 仍可编译。
 
-    /// 绑定着色器程序（取代各效果隐式绑定自己的 shader）
-    virtual void BindShaderProgram(unsigned int program_handle) { (void)program_handle; }
+    /// 绑定图形管线对象（B5-3b：聚合 PSO 子状态 + program，取代分离的 SetPipelineState+BindShaderProgram）。
+    /// 句柄经 RhiDevice::GetGraphicsPipeline 取得；恒应用 PSO 状态，desc.program!=0 时再绑 program。
+    virtual void BindPipeline(unsigned int graphics_pipeline_handle) { (void)graphics_pipeline_handle; }
     /// 绑定顶点缓冲 + 顶点布局（float 属性）。布局随 VB 一起提供，后端据此建立输入布局。
     virtual void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                                   const std::vector<VertexAttr>& attrs) {
@@ -219,6 +219,23 @@ public:
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
     virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
+
+    /// 图形管线对象（B5-3b）：把 PSO 子状态句柄 + 着色器程序句柄聚合为单一管线句柄并惰性缓存（按 (pso,program) 去重）。
+    /// program==0 表示「仅 PSO 状态」管线。供 CommandBuffer::BindPipeline 取用，取代分离的 SetPipelineState+BindShaderProgram。
+    /// 后端无关：仅登记句柄对，绑定时由各后端 command buffer 经 GetGraphicsPipelineDesc 解出 (pso,program) 分别应用。
+    unsigned int GetGraphicsPipeline(unsigned int pso_state, unsigned int program) {
+        const GraphicsPipelineDesc desc{pso_state, program};
+        for (size_t i = 0; i < graphics_pipelines_.size(); ++i) {
+            if (graphics_pipelines_[i] == desc) return static_cast<unsigned int>(i + 1);
+        }
+        graphics_pipelines_.push_back(desc);
+        return static_cast<unsigned int>(graphics_pipelines_.size());
+    }
+    /// 解析图形管线句柄为 (pso,program) 描述符（句柄从 1 起，0/越界返回 nullptr）。
+    const GraphicsPipelineDesc* GetGraphicsPipelineDesc(unsigned int handle) const {
+        if (handle == 0 || handle > graphics_pipelines_.size()) return nullptr;
+        return &graphics_pipelines_[handle - 1];
+    }
 
     // --- 内建资源（供高层渲染器用通用原语绘制，A1）---
     // 着色器在各后端是预编译的（GL=GLSL / Vulkan=SPIR-V / DX11=DXBC），无法由后端无关层创建，
@@ -458,6 +475,9 @@ protected:
 
     /// 共享全局渲染状态（阴影/光源/GBuffer/DDGI/LightProbe），三端通过引用访问
     DrawExecutorGlobalState global_render_state_;
+
+    /// 图形管线对象登记表（B5-3b）：句柄=索引+1，存 (pso,program) 对，三端共用此后端无关缓存。
+    std::vector<GraphicsPipelineDesc> graphics_pipelines_;
 };
 
 } // namespace render

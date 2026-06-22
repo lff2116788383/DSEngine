@@ -177,20 +177,16 @@ void OpenGLCommandBuffer::EndRenderPass() {
     device_->RealEndRenderPass();
 }
 
-void OpenGLCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
-    if (!device_) return;
-    device_->RealSetPipelineState(pipeline_state_handle);
-}
-
 void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     if (!device_) return;
     device_->RealClearColor(color);
 }
 
-void OpenGLCommandBuffer::BindShaderProgram(unsigned int program_handle) {
+void OpenGLCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
     if (!device_) return;
-    device_->RealBindShaderProgram(program_handle);
+    device_->RealBindPipeline(graphics_pipeline_handle);
 }
+
 
 void OpenGLCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                                            const std::vector<VertexAttr>& attrs) {
@@ -875,17 +871,16 @@ void OpenGLRhiDevice::RealEndRenderPass() {
     draw_executor_.EndRenderPass(resource_mgr_);
 }
 
-void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
-    state_mgr_.ApplyState(pipeline_state_handle);
-    // 把 PSO 拓扑推给绘制执行器（通用 Prim* 绘制据此选 glDraw* mode，毛发用 LINE_STRIP）。
-    const PipelineStateDesc* ps = state_mgr_.GetPipelineState(pipeline_state_handle);
-    draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
-}
-
 // --- 通用绘制原语 (A1) ---
 
-void OpenGLRhiDevice::RealBindShaderProgram(unsigned int program_handle) {
-    draw_executor_.PrimBindShaderProgram(program_handle);
+void OpenGLRhiDevice::RealBindPipeline(unsigned int graphics_pipeline_handle) {
+    const auto* desc = GetGraphicsPipelineDesc(graphics_pipeline_handle);
+    if (!desc) return;
+    // 恒应用 PSO 状态 + 拓扑；program!=0 时再绑 program（PSO-only 管线 program==0）。
+    state_mgr_.ApplyState(desc->pso_state);
+    const PipelineStateDesc* ps = state_mgr_.GetPipelineState(desc->pso_state);
+    draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
+    if (desc->program != 0) draw_executor_.PrimBindShaderProgram(desc->program);
 }
 
 void OpenGLRhiDevice::RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs) {

@@ -177,6 +177,18 @@ struct PipelineStateDesc {
     bool wireframe = false;  ///< 线框填充模式（编辑器视图模式；DX11 D3D11_FILL_WIREFRAME / GL glPolygonMode(LINE) / Vulkan VK_POLYGON_MODE_LINE）
 };
 
+/// 图形管线对象描述符（B5-3b：聚合 PSO 子状态 + 着色器程序，为 Metal/DX12「shader 烘进 pipeline」铺路）。
+/// 经 RhiDevice::GetGraphicsPipeline(pso_state, program) 惰性缓存为单一句柄，CommandBuffer::BindPipeline 一次绑定。
+/// program==0 表示「仅 PSO 状态」管线（Pass 层用：GPU-driven 间接绘制自绑 program / 被渲染器覆盖，cmd 不绑 program）。
+struct GraphicsPipelineDesc {
+    unsigned int pso_state = 0;  ///< CreatePipelineState 返回的 PSO 子状态句柄（光栅/混合/深度/拓扑/线框）
+    unsigned int program = 0;    ///< 着色器程序句柄（0 = 不绑 program，仅应用 PSO 状态）
+
+    bool operator==(const GraphicsPipelineDesc& o) const {
+        return pso_state == o.pso_state && program == o.program;
+    }
+};
+
 /// 顶点属性描述（通用绘制原语 BindVertexBuffer 用，目前仅支持 float 分量）
 struct VertexAttr {
     uint32_t location = 0;    ///< 着色器中的 attribute location

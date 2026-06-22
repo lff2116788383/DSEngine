@@ -761,8 +761,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
 
     // PSO 选择：WBOIT 透明通道优先（accumulation/revealage），否则按 double-sided 选剔除状态。
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
@@ -954,8 +953,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     };
 
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());
@@ -1052,8 +1050,7 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // 不透明几何 PSO（写/测深度、背面剔除、不混合）：MRT 各 attachment 共用此关混合状态。
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());  // PerScene @ set1.b0（占位）
     cmd.BindTexture(0u, albedo_tex ? albedo_tex : white_tex_, TextureDim::Tex2D);  // u_texture @ set2.b1
@@ -1370,8 +1367,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     };
 
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());
@@ -1575,8 +1571,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
@@ -1772,8 +1767,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
@@ -1995,8 +1989,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
@@ -2214,8 +2207,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     unsigned int pso = SelectShadedPso(device, material);
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
@@ -2343,8 +2335,7 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{6u, 4u, 76u},   // bone weights
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
@@ -2439,8 +2430,7 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
@@ -2507,8 +2497,7 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.SetPipelineState(pso_);             // 写/测深度（Less）、背面剔除
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
@@ -2572,8 +2561,7 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{3u, 3u, 36u}, VertexAttr{4u, 3u, 48u},
     };
 
-    cmd.SetPipelineState(pso_);             // 写/测深度（Less）、背面剔除
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
@@ -2623,8 +2611,7 @@ void MeshRenderer::DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiD
         VertexAttr{3u, 3u, 36u}, VertexAttr{4u, 3u, 48u},
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     // 共享局部空间模板 VB/IB（caller 持有、常驻），按子段对每实例绘制。
@@ -2713,8 +2700,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
@@ -2824,8 +2810,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());     // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());     // PerScene    @ set1.b0
     cmd.BindUniformBuffer(2u, per_material_ubo_.raw());  // PerMaterial @ set2.b0
@@ -2892,8 +2877,7 @@ void MeshRenderer::DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
     if (blend_mode == 1) pso = pso_unlit2d_additive_;
     else if (blend_mode == 2) pso = pso_unlit2d_multiply_;
 
-    cmd.SetPipelineState(pso);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());                       // PerFrame @ set0.b0（仅 vp）
     cmd.BindTexture(0u, texture ? texture : white_tex_, TextureDim::Tex2D); // u_texture @ slot 0
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);

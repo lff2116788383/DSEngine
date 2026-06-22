@@ -104,8 +104,7 @@ void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int te
         VertexAttr{2u, 2u, 28u},   // uv
     };
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, ubo_.raw());                       // PerFrame @ set0.b0
     cmd.BindTexture(0u, texture_handle, TextureDim::Tex2D);      // u_texture @ set2.b1
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), attrs);

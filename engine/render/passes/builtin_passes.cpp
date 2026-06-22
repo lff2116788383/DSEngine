@@ -183,7 +183,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         cmd_buffer.SetCamera(snap.camera_3d.view, projection);
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.prez);
+        cmd_buffer.BindPipeline(ctx_.pipeline_states.prez);
 
         // GPU-driven PreZ: eligible 实体 depth-only indirect draw
         const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
@@ -268,7 +268,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     // 单次 BeginRenderPass 绑定 atlas RT，全量清除深度
     {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), true});
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+        cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 
         float prev_split = cam_near;
         for (int i = 0; i < CSM_CASCADES; ++i) {
@@ -376,7 +376,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[i], glm::vec4(1.0f), true});
         cmd_buffer.SetCamera(light_view_mat, light_proj);
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+        cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 
         if (use_gpu_indirect) {
             auto* rhi = ctx_.rhi_device;
@@ -456,7 +456,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             const glm::mat4 light_view_mat = glm::lookAt(pl_pos_relative, pl_pos_relative + face_directions[face], face_ups[face]);
             cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
             cmd_buffer.SetCamera(light_view_mat, light_proj);
-            cmd_buffer.SetPipelineState(ctx_.pipeline_states.shadow);
+            cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 
             if (use_gpu_indirect) {
                 auto* rhi = ctx_.rhi_device;
@@ -647,7 +647,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
     if (render_3d) {
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+        cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
 
         // 编辑器场景视图模式 (仅在 editor_mode 下生效)
         // 0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw
@@ -778,7 +778,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     }
 
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.sprite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.sprite);
     if (ctx_.render_2d_scene) {
         ctx_.render_2d_scene(*ctx_.world, cmd_buffer);
     }
@@ -819,7 +819,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
 
     post_process_renderer_.BeginFrame();
     bloom_renderer_.BeginFrame();
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_extract, glm::vec4(0.0f), false});
     const unsigned int scene_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
     const float bloom_threshold = ctx_.pipeline_overrides.bloom_threshold >= 0.0f
@@ -869,7 +869,7 @@ void UIPass::Setup(RenderGraph& graph) {
 }
 
 void UIPass::Execute(CommandBuffer& cmd_buffer) {
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.sprite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.sprite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ui, glm::vec4(0.0f), true});
     if (ctx_.render_2d_ui) {
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
@@ -949,7 +949,7 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         film_grain_time = static_cast<float>(std::fmod(Time::TimeSinceStartup() * pp_config.film_grain_time_scale, 4096.0f));
     }
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
 
     const bool bloom_enabled = ctx_.pipeline_features.bloom && pp_config.bloom_enabled;
@@ -1049,7 +1049,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const int read_idx  = 1 - write_idx;
 
     // Pass 1: 场景 → 64x64 log luminance (8x8 采样网格)
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_temp, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"lum_compute", scene_color_tex});
@@ -1204,7 +1204,7 @@ void FXAAPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
     if (main_color_tex == 0) return;
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fxaa, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
@@ -1241,7 +1241,7 @@ void PresentPass::Execute(CommandBuffer& cmd_buffer) {
     if (present_tex == 0) {
         return;
     }
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({0, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"copy", present_tex});
@@ -1444,7 +1444,7 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
         prev_vp_ = current_vp;
         has_prev_vp_ = true;
         // 首帧输出零速度
-        cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+        cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
         cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
         cmd_buffer.EndRenderPass();
         return;
@@ -1460,7 +1460,7 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
     // [2..17]: reproj matrix
     for (int i = 0; i < 16; ++i) params.push_back(reproj_ptr[i]);
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"motion_vector", depth_tex, params});
@@ -1683,7 +1683,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     // [9]    num_samples
     // [10]   intensity
     // [11-14] reserved (pad)
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     // 已迁到 PostProcessRenderer：screenTexture set=2,b1 / u_depth_tex set=2,b2 /
     // 参数 std140 set=2,b0（15 标量，去除旧 vestigial u_depth_handle 字段）。
@@ -1765,7 +1765,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     // [25-27]  cam_fwd.xyz
     // [28]     tan_fov_y
     // [29]     aspect
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.fog, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"volumetric_fog", scene_tex, {
@@ -1849,7 +1849,7 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int target_rt = use_half_res ? ctx_.render_targets.cloud : ctx_.render_targets.scene;
 
     // params 布局（30 个 float，三后端通用）：
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), use_half_res});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"volumetric_cloud", scene_tex, {
@@ -1903,7 +1903,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
 
     // --- Pass 1: Accumulation (blend ONE, ONE) ---
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_accum);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.wboit_accum);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_accum, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
 
     RenderScenePassContext accum_ctx;
@@ -1915,7 +1915,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.EndRenderPass();
 
     // --- Pass 2: Revealage (blend ZERO, ONE_MINUS_SRC_ALPHA) ---
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.wboit_reveal);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.wboit_reveal);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_reveal, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true});
 
     RenderScenePassContext reveal_ctx;
@@ -1931,7 +1931,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int reveal_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.wboit_reveal);
     if (accum_tex == 0 || reveal_tex == 0) return;
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
@@ -1986,7 +1986,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
 
     const float current_time = Time::TimeSinceStartup();
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
     // params 布局（40 float = 160 bytes）
@@ -2058,7 +2058,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
 
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.decal_blend);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
     std::vector<float> params(24);
@@ -3109,7 +3109,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
     ctx_.rhi_device->SetGBufferRenderingMode(true);
     cmd_buffer.SetCamera(cam.view, cam.projection);
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.mesh);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
 
     RenderScenePassContext pass_ctx;
     pass_ctx.world = ctx_.world;
@@ -3194,7 +3194,7 @@ void SSSBlurPass::Execute(CommandBuffer& cmd_buffer) {
     const float sss_width = 11.0f;
     const float depth_falloff = 500.0f;
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
 
     // Pass 1: Horizontal blur → sss_temp
     cmd_buffer.BeginRenderPass({ctx_.render_targets.sss_temp, glm::vec4(0.0f), true});
@@ -3293,7 +3293,7 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
     params[22] = aspect;
     params[23] = w.intensity;  // wetness = rain intensity
 
-    cmd_buffer.SetPipelineState(ctx_.pipeline_states.composite);
+    cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,

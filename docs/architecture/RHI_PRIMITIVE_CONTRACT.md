@@ -42,8 +42,9 @@ enum class ShaderStage     : uint32_t { Vertex = 1, Fragment = 2, Compute = 4,
 enum class VertexAttrFormat : uint8_t { Float = 0, /* 预留: Int, UInt, ... */ };
 
 // ---- 状态 ----
-void SetPipelineState(unsigned int pso_handle);                  // [既有]  blend/depth/cull/raster
-void BindShaderProgram(unsigned int program_handle);             // [既有]
+// B5-3b：原 SetPipelineState(pso)+BindShaderProgram(prog) 已聚合为单一图形管线对象。
+// 经 RhiDevice::GetGraphicsPipeline(pso, program) 惰性去重缓存为句柄，program==0 = 仅 PSO 状态。
+void BindPipeline(unsigned int graphics_pipeline_handle);        // [B5-3b]  pso 子状态 + program 聚合
 
 // ---- 顶点 / 索引输入 ----
 void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, // [扩展] +slot +rate
@@ -113,8 +114,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 
 | 本契约原语 | Metal（MTLRenderCommandEncoder / MTLComputeCommandEncoder） | 映射质量 |
 |---|---|---|
-| `SetPipelineState(pso)` | `setRenderPipelineState:`（含 vertex/fragment function + color/blend + vertex descriptor）+ `setDepthStencilState:` + `setCullMode:` + `setFrontFacingWinding:` + `setTriangleFillMode:` | 干净（PSO 句柄聚合二者） |
-| `BindShaderProgram(prog)` | 着色器函数在 Metal 中被烘进 `MTLRenderPipelineState` | ⚠ Metal 下 shader 属于 PSO，无独立绑定——见 §8 备注（program+PSO 应聚合） |
+| `BindPipeline(handle)`（B5-3b 聚合 pso+program） | `setRenderPipelineState:`（含 vertex/fragment function + color/blend + vertex descriptor）+ `setDepthStencilState:` + `setCullMode:` + `setFrontFacingWinding:` + `setTriangleFillMode:` | **完美对应**：单一图形管线对象正是 Metal `MTLRenderPipelineState` 的语义（shader 烘进 PSO） |
 | `BindVertexBuffer(slot, …, rate)` | `setVertexBuffer:offset:atIndex:`；`rate` → pipeline 的 `MTLVertexBufferLayoutDescriptor.stepFunction`(perVertex/perInstance) | 干净 |
 | `BindIndexBuffer(buf, type)` | index buffer + `MTLIndexType` 作为 `drawIndexedPrimitives` 入参 | 干净（Metal 把 IB 当 draw 入参，RHI 缓存到 draw 时传入） |
 | `BindTexture(slot, tex, dim)` | `setFragmentTexture:atIndex:` / `setVertexTexture:atIndex:`（dim 由 MTLTexture 自带） | 干净 |
@@ -126,7 +126,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 | compute `Dispatch`（既有 IRhiCompute） | `MTLComputeCommandEncoder` `setComputePipelineState:` + `dispatchThreadgroups:threadsPerThreadgroup:` | 干净 |
 | 绑定组（未来） | `setVertexBuffer:` 指向 **argument buffer** | 干净（未来优化方向天然支持） |
 
-**校验结论**：契约整体干净映射到 Metal，无需为 Metal 反推新概念。唯一需注意的是 §8 的 `BindShaderProgram` 与 PSO 的聚合问题——这对 DX12/Vulkan 同样存在，应在契约层面收敛。
+**校验结论**：契约整体干净映射到 Metal，无需为 Metal 反推新概念。原 §8 的 `BindShaderProgram` 与 PSO 分离问题已于 **B5-3b 聚合为单一图形管线对象 `BindPipeline`**（见上表），Metal `MTLRenderPipelineState` 自此完美对应。
 
 ---
 
@@ -197,8 +197,8 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 
 ## 8. 待决问题（实现前需拍板）
 
-1. **`BindShaderProgram` 与 PSO 的关系**：Metal/Vulkan/DX12 把 shader 烘进 pipeline。是否在契约层把「program + PSO」聚合为一个「图形管线对象」？v1 可暂保持分离（GL 友好），但需记为已知债务，否则 Metal 落地时要返工。**建议**：v1 保持分离，文档标注；B5 全局收敛时再聚合。
-2. **push constant 在 GL/DX11 的承载**：统一映射到一个约定 slot 的「push block」UBO（std140），还是具名 uniform？**建议**：统一走「push block UBO」，跨后端语义最一致（Vulkan 用真 push constant，GL/DX11 用小 dynamic UBO）。
+1. ~~**`BindShaderProgram` 与 PSO 的关系**~~ → **已定并实现（B5-3b）**：聚合为单一「图形管线对象」`GraphicsPipelineDesc{pso,program}` + `BindPipeline(handle)`（设备级 `GetGraphicsPipeline(pso,program)` 惰性去重缓存，`program==0`=仅 PSO 状态），删 `BindShaderProgram`+`SetPipelineState` 两分离原语。GL 友好性以「program==0 仅设状态」保留（Pass 层 GPU-driven 自绑/渲染器覆盖语义不变）。为 Metal/DX12 铺路。
+2. ~~**push constant 在 GL/DX11 的承载**~~ → **已定并实现（B5-3a）**：统一走「push block UBO」——编译器把 GL/ESSL 的 `layout(push_constant)` 降级为按阶段区分的 std140 块 `DsePush{VS,FS,CS}`，DX11 用 b0 push cbuffer，Vulkan 用真 push constant。`PushConstants(stage,off,data,size)` 字节块 ABI 三后端统一路由。
 3. ~~验证策略 A vs B~~ → **已定：B**（见 §7）。
 
 ---

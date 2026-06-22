@@ -225,10 +225,10 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
     cmd.ClearColor(glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 }
 
-// 测试 打开GL命令缓冲区：无设备当设置管线状态安全
-TEST(OpenGLCommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
+// 测试 打开GL命令缓冲区：无设备当绑定图形管线安全
+TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     OpenGLCommandBuffer cmd;
-    cmd.SetPipelineState(12345);
+    cmd.BindPipeline(12345);
 }
 
 // 测试 打开GL命令缓冲区：无设备当延迟阴影映射安全

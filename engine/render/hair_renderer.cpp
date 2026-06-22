@@ -71,8 +71,7 @@ void HairRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 
     const glm::vec3 camera_pos = glm::vec3(glm::inverse(view)[3]);
 
-    cmd.SetPipelineState(pso_);
-    cmd.BindShaderProgram(program);
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
 
     for (const auto& item : items) {
         if (item.strand_count == 0 || item.total_vertex_count == 0) continue;

@@ -2,7 +2,7 @@
  * @file sprite_renderer.h
  * @brief 后端无关的最小 2D sprite 渲染器（B0：通用绘制原语「活体验证」）
  *
- * 用 B0 新增的通用原语（BindShaderProgram / BindUniformBuffer / BindTexture(2D) /
+ * 用 B0 新增的通用原语（BindPipeline / BindUniformBuffer / BindTexture(2D) /
  * BindVertexBuffer / BindIndexBuffer / DrawIndexed）组合出「带纹理 quad」绘制，
  * 端到端验证 mesh/sprite 类消费者要用的每个新原语在三后端上都正确。
  *

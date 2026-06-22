@@ -171,11 +171,10 @@ public:
     // --- 内部方法（供 OpenGLCommandBuffer 直接调用，委托到子系统） ---
     void RealBeginRenderPass(const RenderPassDesc& render_pass);
     void RealEndRenderPass();
-    void RealSetPipelineState(unsigned int pipeline_state_handle);
     void RealClearColor(const glm::vec4& color);
 
     // --- 通用绘制原语 (A1) ---
-    void RealBindShaderProgram(unsigned int program_handle);
+    void RealBindPipeline(unsigned int graphics_pipeline_handle);
     void RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs);
     void RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void RealDraw(uint32_t vertex_count, uint32_t first_vertex);

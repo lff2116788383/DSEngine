@@ -1684,14 +1684,17 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.cluster_grid = &cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
 
-    render_pass_context_.pipeline_states.sprite    = render_resources_.sprite_pipeline_state;
-    render_pass_context_.pipeline_states.mesh      = render_resources_.mesh_pipeline_state;
-    render_pass_context_.pipeline_states.prez      = render_resources_.prez_pipeline_state;
-    render_pass_context_.pipeline_states.shadow    = render_resources_.shadow_pipeline_state;
-    render_pass_context_.pipeline_states.composite = render_resources_.composite_pipeline_state;
-    render_pass_context_.pipeline_states.decal_blend = render_resources_.decal_blend_pipeline_state;
-    render_pass_context_.pipeline_states.wboit_accum = render_resources_.wboit_accum_pipeline_state;
-    render_pass_context_.pipeline_states.wboit_reveal = render_resources_.wboit_reveal_pipeline_state;
+    // Pass 层图形管线（B5-3b）：聚合为 (pso, program=0) PSO-only 管线句柄——其后绘制经 GPU-driven 自绑 program
+    // 或被渲染器自带 (pso+program) 覆盖，故此处不烘 program，BindPipeline 仅应用 PSO 状态，保留原 SetPipelineState 语义。
+    auto* rhi = runtime_context_.rhi_device.get();
+    render_pass_context_.pipeline_states.sprite    = rhi->GetGraphicsPipeline(render_resources_.sprite_pipeline_state, 0);
+    render_pass_context_.pipeline_states.mesh      = rhi->GetGraphicsPipeline(render_resources_.mesh_pipeline_state, 0);
+    render_pass_context_.pipeline_states.prez      = rhi->GetGraphicsPipeline(render_resources_.prez_pipeline_state, 0);
+    render_pass_context_.pipeline_states.shadow    = rhi->GetGraphicsPipeline(render_resources_.shadow_pipeline_state, 0);
+    render_pass_context_.pipeline_states.composite = rhi->GetGraphicsPipeline(render_resources_.composite_pipeline_state, 0);
+    render_pass_context_.pipeline_states.decal_blend = rhi->GetGraphicsPipeline(render_resources_.decal_blend_pipeline_state, 0);
+    render_pass_context_.pipeline_states.wboit_accum = rhi->GetGraphicsPipeline(render_resources_.wboit_accum_pipeline_state, 0);
+    render_pass_context_.pipeline_states.wboit_reveal = rhi->GetGraphicsPipeline(render_resources_.wboit_reveal_pipeline_state, 0);
 
     render_pass_context_.render_targets.main     = render_resources_.main_render_target;
     render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;

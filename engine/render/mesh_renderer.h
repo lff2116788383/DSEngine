@@ -2,7 +2,7 @@
  * @file mesh_renderer.h
  * @brief 后端无关的静态 forward PBR 网格渲染器（B2b-1）。
  *
- * 用 B0/P0 的通用绘制原语（SetPipelineState / BindShaderProgram / BindUniformBuffer /
+ * 用 B0/P0 的通用绘制原语（BindPipeline / BindUniformBuffer /
  * BindTexture(2D) / BindVertexBuffer / BindIndexBuffer / DrawIndexed）组合出「带材质的
  * 单方向光 PBR 网格」绘制，端到端验证 mesh 类消费者所需的原语在三后端上都正确。
  *

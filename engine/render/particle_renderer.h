@@ -2,7 +2,7 @@
  * @file particle_renderer.h
  * @brief 后端无关的 3D 粒子广告牌渲染器（B3）。
  *
- * 用通用绘制原语（SetPipelineState / BindShaderProgram / BindUniformBuffer /
+ * 用通用绘制原语（BindPipeline / BindUniformBuffer /
  * BindStorageBuffer / BindTexture / BindVertexBuffer / BindIndexBuffer /
  * DrawIndexedInstanced）消费内建程序 BuiltinProgram::Particle3D
  * （particle_instanced.vert + particle.frag）：共享单位 quad VB/IB + PerFrame UBO（vp/view），

@@ -55,7 +55,7 @@
 
 | 原语 | 引入 | 现签名（`CommandBuffer`） | 状态 |
 |---|---|---|---|
-| `BindShaderProgram(program)` | A1 | `(unsigned int)` | ✅ 三后端 |
+| ~~`BindShaderProgram(program)`~~ + ~~`SetPipelineState(pso)`~~ → `BindPipeline(handle)` | A1 | `(unsigned int)` 图形管线句柄 | ✅ **B5-3b 已聚合**：分离的「绑 program」+「设 PSO」收敛为单一图形管线对象 `GraphicsPipelineDesc{pso,program}`（`RhiDevice::GetGraphicsPipeline(pso,program)` 惰性去重缓存）；`BindPipeline` 恒应用 PSO 状态+拓扑、`program!=0` 时再绑 program（Pass 层 program==0 仅设状态，保留 GPU-driven 自绑/渲染器覆盖语义）。删两旧分离原语。为 Metal/DX12「shader 烘进 pipeline」铺路。详见 §8.1 D2 |
 | `BindVertexBuffer(buffer, stride, attrs)` | A1 | 单 slot、无 rate | ✅ 三后端（**未含** slot/PerInstance） |
 | ~~`BindTextureCube(slot, h)`~~ | A1 | — | ✅ **B5-1 已删**：统一走 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿） |
 | ~~`PushConstantsMat4(m)`~~ → `PushConstants(stage,offset,data,size)` | A1 | 字节块（`ShaderStage` 路由） | ✅ **B5-3a 已泛化**：三后端字节块（Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO `DsePush{VS,FS,CS}`）；skybox/PP/compute 三消费点统一经此 ABI（删 `BindUniformBuffer(0)` 参数路径与 DX11 PerFrame-b0 hack）。详见 §8.2 D3 |
@@ -212,7 +212,7 @@
   - **B5-1**：✅ 已完成。去重过渡期重复原语之 cube：删 `BindTextureCube`，统一 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿）。`PushConstantsMat4` 泛化为字节块 `PushConstants` 挪 B5-3（GL push_constant 降级为具名 uniform，泛化需配 GL→UBO 降级，随 program+PSO 聚合一并改）。详见 §5 / §8.2 D3。
   - **B5-2**：✅ 已完成。删 M4 遗留死缓冲路径（`SetGlobalMat4Array`/`SetGlobalFloatArray` + `DispatchPendingLightArrays`，全仓无生产调用方）；`RhiDevice` 阴影/光源全局状态接口收敛为统一 `(index, value)` 签名并按类别分组，删冗余单参重载（语义不变、调用点零改动）。详见 §5。
   - **B5-3a**：✅ 已完成。`PushConstantsMat4` 泛化为字节块 `PushConstants(ShaderStage, offset, data, size)`（三后端：Vulkan 真 push / DX11 push cbuffer b0 / GL push-block UBO）；编译器把 GL/ESSL 的 `layout(push_constant)` 降级为按阶段区分的 std140 块 `DsePush{VS,FS,CS}`（规避同名块跨阶段一致约束）；skybox/PP/compute 三消费点统一经 `PushConstants` ABI，删 `BindUniformBuffer(0)` 参数路径与 DX11 skybox PerFrame-b0 hack。验证：三后端零错 + ctest 全绿 + DX11 像素闸门（skybox + PP tonemapping/bloom 参数）。GL/Vulkan 无驱动靠编译+std140/反射镜像。详见 §8.2 D3。
-  - **B5-3b**（高风险，§8 拍板项，单独立项）：`BindShaderProgram`+PSO 聚合为单一图形管线对象，为 Metal/DX12 铺路。
+  - **B5-3b**：✅ 已完成（高风险，§8 拍板项）。`BindShaderProgram`+`SetPipelineState` 聚合为单一图形管线对象：新增 `GraphicsPipelineDesc{pso_state, program}` + 设备级惰性去重缓存 `RhiDevice::GetGraphicsPipeline(pso,program)→handle`（后端无关，三端共用）+ `CommandBuffer::BindPipeline(handle)`；三后端按句柄解出 (pso,program) 应用（DX11/GL 应用 PSO 状态+拓扑后 `program!=0` 绑 program，Vulkan 设活动 PSO 并在绘制时把 program 惰性烘进 `VkPipeline`）。迁移全部生产调用点（渲染器 mesh/sprite/sprite_batch/hair/particle/skybox/PP 成对 `SetPipelineState+BindShaderProgram` → 单次 `BindPipeline`；Pass 层 builtin_passes/atmosphere/probe + `FramePipeline.pipeline_states.*` → `GetGraphicsPipeline(pso, 0)` PSO-only 管线，保留 GPU-driven 自绑/渲染器覆盖语义），**一次性删** `BindShaderProgram`+`SetPipelineState` 两分离原语（ABI + 三后端 + mock/测试）。验证：三后端零错 + ctest 全绿 + DX11 全量像素闸门（skybox/sprite_batch SDF·VFX/postprocess/instanced/depth-only/indirect 等 D3D11 变体全 OK）。GL/Vulkan 无驱动靠编译+镜像。详见 §8.1 D2。
 
 ---
 
@@ -230,7 +230,7 @@
 | # | 债务 | 影响 | 偿还 |
 |---|---|---|---|
 | D1 | **通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败） | 与历史黑屏同类的隐患：后端漏实现 → 静默不绘制 | 像素闸门兜底；终态可考虑改纯虚 + 显式 Mock |
-| D2 | **`BindShaderProgram` 与 PSO 分离**（契约 §8.1） | Metal/DX12/Vulkan 把 shader 烘进 PSO，未来落 Metal 要返工 | B5 聚合为图形管线对象 |
+| D2 | ~~**`BindShaderProgram` 与 PSO 分离**（契约 §8.1）~~ → **已还**：B5-3b 聚合为单一图形管线对象 `GraphicsPipelineDesc{pso,program}` + `BindPipeline(handle)`（设备级 `GetGraphicsPipeline(pso,program)` 惰性去重缓存，后端无关），删 `BindShaderProgram`+`SetPipelineState` 两分离原语；三后端各按句柄解出 (pso,program) 应用（Vulkan 惰性烘进 `VkPipeline`、DX11/GL 分别应用 PSO 状态+拓扑后按需绑 program）。Pass 层 program==0 仅设状态，保留 GPU-driven 自绑/渲染器覆盖语义 | — | ✅ **已还**（B5-3b）：为 Metal/DX12 铺路 |
 | D3 | ~~**过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`；`PushConstantsMat4` 未泛化~~ → **已还**：cube 重复 B5-1 删；`PushConstantsMat4` B5-3a 泛化为字节块 `PushConstants(stage,off,data,size)`（三后端 + GL push_constant→`DsePush{VS,FS,CS}` UBO 降级），skybox/PP/compute 统一路由 | — | ✅ **已还**（cube B5-1、PushConstants B5-3a） |
 | D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
 | D5 | ~~**每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO）→ 共享 frame-ring 分配器~~ | **复评后降级**：3 系统用不同相机/不同 pass（sprite=world、UI=ortho、particle），本无跨系统合批可言；显存节省也微小。原「优化」收益≈0 | 不单独做；真正问题见 D9 |

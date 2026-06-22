@@ -28,14 +28,13 @@ class DX11CommandBuffer final : public ForwardingCommandBuffer {
 public:
     void BeginRenderPass(const RenderPassDesc& render_pass) override;
     void EndRenderPass() override;
-    void SetPipelineState(unsigned int pipeline_state_handle) override;
     void ClearColor(const glm::vec4& color) override;
     void DispatchComputePass(const ComputeDispatch& dispatch) override;
     void SetViewport(int x, int y, int width, int height) override;
     void ClearDepth(float depth = 1.0f) override;
 
     // --- 通用绘制原语 (A1) ---
-    void BindShaderProgram(unsigned int program_handle) override;
+    void BindPipeline(unsigned int graphics_pipeline_handle) override;
     void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs) override;
     void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) override;

@@ -290,10 +290,10 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     cmd.EndRenderPass();
 }
 
-// 测试 Vulkan命令缓冲区：无设备当设置管线状态安全
-TEST(VulkanCommandBufferTest, WithoutdeviceWhenSetPipelineStateSafety) {
+// 测试 Vulkan命令缓冲区：无设备当绑定图形管线安全
+TEST(VulkanCommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     VulkanCommandBuffer cmd;
-    cmd.SetPipelineState(12345);
+    cmd.BindPipeline(12345);
 }
 
 // 测试 Vulkan命令缓冲区：无设备当清空颜色安全

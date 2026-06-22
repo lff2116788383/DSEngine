@@ -46,11 +46,6 @@ void VulkanCommandBuffer::EndRenderPass() {
     device_->ClearActiveRenderCommandBuffer();
 }
 
-void VulkanCommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
-    if (!device_) return;
-    device_->state_mgr().set_active_pipeline_state(pipeline_state_handle);
-}
-
 void VulkanCommandBuffer::ClearColor(const glm::vec4& color) {
     // Vulkan 中清除在 BeginRenderPass 时通过 VkClearValue 处理
     // 此处为空操作，或在已开启 RenderPass 时用 vkCmdClearAttachments
@@ -65,10 +60,15 @@ void VulkanCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
 
 // --- 通用绘制原语 (A1) ---
 
-void VulkanCommandBuffer::BindShaderProgram(unsigned int program_handle) {
+void VulkanCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
     if (!device_) return;
-    device_->draw_executor().PrimBindShaderProgram(program_handle);
+    const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
+    if (!desc) return;
+    // 设为活动 PSO（绘制时与 program 一起惰性烘进 VkPipeline）；program!=0 时绑 program（PSO-only 管线 program==0）。
+    device_->state_mgr().set_active_pipeline_state(desc->pso_state);
+    if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
 }
+
 
 void VulkanCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                                            const std::vector<VertexAttr>& attrs) {

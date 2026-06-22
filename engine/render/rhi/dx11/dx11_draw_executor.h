@@ -103,8 +103,8 @@ public:
 
     // --- 通用绘制原语 (A1) ---
     // Bind* 仅暂存累积状态；PrimDraw 时组装 shader/cbuffer/纹理/VB 并发出 draw。
-    // 深度/光栅/混合由 SetPipelineState→ApplyPipelineState 设定，PrimDraw 不再 save/restore。
-    /// 设置后续 Prim* 绘制的图元拓扑（由 SetPipelineState 从 PSO desc 推送）。
+    // 深度/光栅/混合由 BindPipeline→ApplyPipelineState 设定，PrimDraw 不再 save/restore。
+    /// 设置后续 Prim* 绘制的图元拓扑（由 BindPipeline 从 PSO desc 推送）。
     /// 默认 TriangleList；毛发等线状几何用 LineStrip/LineList。
     void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
@@ -275,7 +275,7 @@ private:
     std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< slot → constant buffer 句柄
     struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
     std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< slot → SSBO 句柄+子区间
-    D3D11_PRIMITIVE_TOPOLOGY prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  ///< 当前 PSO 拓扑（SetPipelineState 推送）
+    D3D11_PRIMITIVE_TOPOLOGY prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  ///< 当前 PSO 拓扑（BindPipeline 推送）
 
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;

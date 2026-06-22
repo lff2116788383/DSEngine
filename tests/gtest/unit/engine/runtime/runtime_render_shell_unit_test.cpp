@@ -22,7 +22,7 @@ class RuntimeRenderShellCommandBuffer : public CommandBuffer {
 public:
     void BeginRenderPass(const RenderPassDesc&) override {}
     void EndRenderPass() override {}
-    void SetPipelineState(unsigned int) override {}
+    void BindPipeline(unsigned int) override {}
     void SetCamera(const glm::mat4&, const glm::mat4&) override {}
     void ClearColor(const glm::vec4&) override {}
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}

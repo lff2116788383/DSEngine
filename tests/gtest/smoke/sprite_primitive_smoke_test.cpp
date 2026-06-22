@@ -1,7 +1,7 @@
 /**
  * @file sprite_primitive_smoke_test.cpp
  * @brief B0 通用绘制原语「活体」像素冒烟 — 用 SpriteRenderer 在真实 GPU 上画带纹理 quad，
- *        离屏回读像素校验。覆盖新原语全栈：BindShaderProgram / BindUniformBuffer /
+ *        离屏回读像素校验。覆盖新原语全栈：BindPipeline / BindUniformBuffer /
  *        BindTexture(2D) / BindVertexBuffer / BindIndexBuffer / DrawIndexed。
  *
  * 三后端 GPU 上下文样板已抽到 rhi_pixel_harness（B1）；此处只描述「画什么 + 校验什么」。
