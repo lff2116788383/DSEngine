@@ -34,14 +34,6 @@ public:
         pending_mat4_[name] = value;
     }
 
-    void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) override {
-        pending_mat4_array_[name] = values;
-    }
-
-    void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) override {
-        pending_float_array_[name] = values;
-    }
-
     void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override {
         if (base_device_) base_device_->SetGlobalShadowMap(index, texture_handle);
     }
@@ -57,13 +49,9 @@ public:
     // --- pending uniform 访问器 ---
 
     const std::unordered_map<std::string, glm::mat4>& pending_mat4() const { return pending_mat4_; }
-    const std::unordered_map<std::string, std::vector<glm::mat4>>& pending_mat4_array() const { return pending_mat4_array_; }
-    const std::unordered_map<std::string, std::vector<float>>& pending_float_array() const { return pending_float_array_; }
 
     void ClearPendingUniforms() {
         pending_mat4_.clear();
-        pending_mat4_array_.clear();
-        pending_float_array_.clear();
     }
 
     void ResetBase() {
@@ -73,41 +61,11 @@ public:
     }
 
 protected:
-    /// 将 pending 阴影/光源 mat4 array 派发到 Device 全局状态（旧 cmd.SetGlobalMat4Array 缓冲路径）。
-    /// 阶段4-M4 删 DrawMeshBatch ABI 后已无生产调用方；阴影矩阵改由 ShadowPass 直接经
-    /// device.SetGlobalLightSpaceMatrix/SetGlobalCascadeSplit 写入全局状态（builtin_passes.cpp）。保留以兼容缓冲 ABI。
-    void DispatchPendingLightArrays() {
-        if (!base_device_) return;
-        {
-            auto it = pending_mat4_array_.find("u_light_space_matrices");
-            if (it != pending_mat4_array_.end()) {
-                for (size_t i = 0; i < it->second.size() && i < 3; ++i)
-                    base_device_->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
-            }
-        }
-        {
-            auto it = pending_float_array_.find("u_cascade_splits");
-            if (it != pending_float_array_.end()) {
-                for (size_t i = 0; i < it->second.size() && i < 3; ++i)
-                    base_device_->SetGlobalCascadeSplit(static_cast<unsigned int>(i), it->second[i]);
-            }
-        }
-        {
-            auto it = pending_mat4_array_.find("u_spot_light_space_matrices");
-            if (it != pending_mat4_array_.end()) {
-                for (size_t i = 0; i < it->second.size() && i < 4; ++i)
-                    base_device_->SetGlobalSpotLightSpaceMatrix(static_cast<unsigned int>(i), it->second[i]);
-            }
-        }
-    }
-
     RhiDevice* base_device_ = nullptr;
     glm::mat4 view_ = glm::mat4(1.0f);
     glm::mat4 projection_ = glm::mat4(1.0f);
 
     std::unordered_map<std::string, glm::mat4> pending_mat4_;
-    std::unordered_map<std::string, std::vector<glm::mat4>> pending_mat4_array_;
-    std::unordered_map<std::string, std::vector<float>> pending_float_array_;
 };
 
 } // namespace render

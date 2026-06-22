@@ -144,6 +144,11 @@
   - 注：阴影矩阵不再经旧 `cmd.SetGlobalMat4Array` 缓冲 + `DispatchPendingLightArrays`（DrawMeshBatch 入口）路径，改由 `ShadowPass` 直接 `device.SetGlobalLightSpaceMatrix/SetGlobalCascadeSplit` 写全局状态（`builtin_passes.cpp`），MeshRenderer 各路径从 `GetGlobalRenderState()` 读取，与 M1–M3 已迁移系统一致。
   - 验证：三后端编译零错误 + ctest 三套件全绿 + D3D11 GBuffer/SkinnedInstanced/EditorViewMode/DepthOnly 像素闸门绿（GL/Vulkan 无驱动 skip）。
 
+**阶段 5-B5-2 收尾（✅ 已完成）—— 全局绑定收敛 + 清 M4 遗留死代码**：
+- **删死缓冲路径**：M4 删 `DrawMeshBatch` ABI 后，上文的 `cmd.SetGlobalMat4Array`/`SetGlobalFloatArray` 缓冲 + `DispatchPendingLightArrays` 派发已**全仓无生产调用方**（仅单测引用已删 ABI）。本里程碑删除 `CommandBuffer::SetGlobalMat4Array`/`SetGlobalFloatArray` 纯虚 + `ForwardingCommandBuffer` 的 `pending_mat4_array_`/`pending_float_array_` 暂存与访问器 + `DispatchPendingLightArrays`；保留标量 `SetGlobalMat4`/`pending_mat4_`（独立路径）。同步删失效单测/mock 对应 ABI 引用（不改用例逻辑）。
+- **全局绑定收敛**：`RhiDevice` 的阴影/光源全局状态接口统一为 `(index, value)` 签名并按类别分组（阴影贴图 dir/spot/point、光照空间矩阵 dir/spot、CSM 级联分割 / atlas 区域、探针 SH）；删除冗余的单参 `SetGlobalSpotShadowMap(handle)`/`SetGlobalSpotLightSpaceMatrix(mat)`（index=0 重载，全仓无调用方），语义不变、调用点零改动。
+- 验证：三后端编译零错误 + ctest 三套件全绿 + D3D11 像素闸门绿（含 spot/point/CSM 阴影 smoke，覆盖收敛后的绑定路径；GL/Vulkan 无驱动 skip）。
+
 拆解见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 
 ---
@@ -204,6 +209,9 @@
 - **阶段 2b**：✅ 已完成。`PostProcessRenderer` 承接全部 **29** 效果（含末三手写 HLSL 簇）；compute mip 链选 Option A——新增 CommandBuffer 级 `DispatchComputePass` 原语 + `BloomRenderer`（compute/quad 分支）；**已删 `DrawPostProcess` ABI**（三后端 executor + forwarder + 纯虚）。详见 §5B。
 - **阶段 3（B4）**：✅ 已完成。迁 `DrawHairStrands`（SSBO + 多段绘制）至 `HairRenderer` + `BuiltinProgram::HairStrand`；新增 `PrimitiveTopology` 贯穿 PSO（LINE_STRIP）+ vertexless 通用 `Draw`；**已删 `DrawHairStrands` ABI**（三后端 executor + forwarder + 纯虚）。详见 §5C。
 - **B5**：全局绑定收敛（shadow map / global uniforms / `BindShaderProgram`+PSO 聚合，偿还契约 §8.1 债务）。
+  - **B5-1**：✅ 已完成。去重过渡期重复原语之 cube：删 `BindTextureCube`，统一 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿）。`PushConstantsMat4` 泛化为字节块 `PushConstants` 挪 B5-3（GL push_constant 降级为具名 uniform，泛化需配 GL→UBO 降级，随 program+PSO 聚合一并改）。详见 §5 / §8.2 D3。
+  - **B5-2**：✅ 已完成。删 M4 遗留死缓冲路径（`SetGlobalMat4Array`/`SetGlobalFloatArray` + `DispatchPendingLightArrays`，全仓无生产调用方）；`RhiDevice` 阴影/光源全局状态接口收敛为统一 `(index, value)` 签名并按类别分组，删冗余单参重载（语义不变、调用点零改动）。详见 §5。
+  - **B5-3**（高风险，§8 拍板项，单独立项）：`BindShaderProgram`+PSO 聚合为单一图形管线对象（含 `PushConstants` 泛化 + GL push_constant→UBO 降级），为 Metal/DX12 铺路。
 
 ---
 

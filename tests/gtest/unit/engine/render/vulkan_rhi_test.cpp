@@ -274,18 +274,12 @@ TEST(VulkanCommandBufferTest, AlluniformAndClear) {
     VulkanCommandBuffer cmd;
 
     cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-    cmd.SetGlobalMat4Array("u_bones", {glm::mat4(1.0f), glm::mat4(2.0f)});
-    cmd.SetGlobalFloatArray("u_weights", {0.5f, 0.3f, 0.2f});
 
     EXPECT_EQ(cmd.pending_mat4().size(), 1u);
-    EXPECT_EQ(cmd.pending_mat4_array().size(), 1u);
-    EXPECT_EQ(cmd.pending_float_array().size(), 1u);
 
     cmd.ClearPendingUniforms();
 
     EXPECT_TRUE(cmd.pending_mat4().empty());
-    EXPECT_TRUE(cmd.pending_mat4_array().empty());
-    EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
 // 测试 Vulkan命令缓冲区：无设备当开始结束渲染通道安全

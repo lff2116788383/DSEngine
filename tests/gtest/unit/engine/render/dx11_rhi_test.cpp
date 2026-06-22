@@ -246,18 +246,12 @@ TEST(DX11CommandBufferTest, SetCameraStorageMatrixDoesNotCollapse) {
 TEST(DX11CommandBufferTest, AlluniformAndClear) {
     DX11CommandBuffer cmd;
     cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-    cmd.SetGlobalMat4Array("u_bones", {glm::mat4(1.0f), glm::mat4(2.0f)});
-    cmd.SetGlobalFloatArray("u_weights", {0.5f, 0.3f, 0.2f});
 
     EXPECT_EQ(cmd.pending_mat4().size(), 1u);
-    EXPECT_EQ(cmd.pending_mat4_array().size(), 1u);
-    EXPECT_EQ(cmd.pending_float_array().size(), 1u);
 
     cmd.ClearPendingUniforms();
 
     EXPECT_TRUE(cmd.pending_mat4().empty());
-    EXPECT_TRUE(cmd.pending_mat4_array().empty());
-    EXPECT_TRUE(cmd.pending_float_array().empty());
 }
 
 // 测试 DX 11命令缓冲区：Resetresetuniform状态

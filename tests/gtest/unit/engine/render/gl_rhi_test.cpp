@@ -249,8 +249,6 @@ TEST(OpenGLCommandBufferTest, SetCameraStorageMatrixDoesNotCollapse) {
 TEST(OpenGLCommandBufferTest, SetGlobalMat4RecordingCommand) {
     OpenGLCommandBuffer cmd;
     cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-    cmd.SetGlobalMat4Array("u_bones", {glm::mat4(1.0f), glm::mat4(2.0f)});
-    cmd.SetGlobalFloatArray("u_weights", {0.5f, 0.3f, 0.2f});
 }
 
 // 测试 打开GL命令缓冲区：Resetreset状态

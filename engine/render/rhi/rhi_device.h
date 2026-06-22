@@ -46,8 +46,6 @@ public:
     virtual glm::mat4 GetProjectionMatrix() const { return glm::mat4(1.0f); }
     virtual void ClearColor(const glm::vec4& color) = 0;
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
-    virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
-    virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
 
     /// 设置视口区域（用于 shadow atlas 等 viewport-based 渲染）
     virtual void SetViewport(int x, int y, int width, int height) = 0;
@@ -383,15 +381,19 @@ public:
     virtual void PatchLastFrameGPUCulledCount(int culled) { (void)culled; }
 
     // --- 阴影/光源全局状态接口（所有后端统一，直接操作共享 DrawExecutorGlobalState） ---
+    // B5-2 收敛：阴影贴图、光照空间矩阵均统一为 (index, value) 签名并按类别分组，删除冗余的单参 index=0 重载（无调用方）。
+    //
+    // 阴影贴图绑定（方向 / 聚光 / 点光）
     void SetGlobalShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetShadowMap(index, handle); }
-    void SetGlobalSpotShadowMap(unsigned int handle) { global_render_state_.SetSpotShadowMap(0, handle); }
     void SetGlobalSpotShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetSpotShadowMap(index, handle); }
     void SetGlobalPointShadowMap(unsigned int index, unsigned int handle) { global_render_state_.SetPointShadowMap(index, handle); }
+    // 光照空间矩阵（方向 CSM / 聚光）
     void SetGlobalLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetLightSpaceMatrix(index, mat); }
+    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(index, mat); }
+    // CSM 级联分割 / 阴影 atlas 区域
     void SetGlobalCascadeSplit(unsigned int index, float split) { global_render_state_.SetCascadeSplit(index, split); }
     void SetGlobalShadowAtlasRegion(unsigned int index, const glm::vec4& region) { global_render_state_.SetShadowAtlasRegion(index, region); }
-    void SetGlobalSpotLightSpaceMatrix(const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(0, mat); }
-    void SetGlobalSpotLightSpaceMatrix(unsigned int index, const glm::mat4& mat) { global_render_state_.SetSpotLightSpaceMatrix(index, mat); }
+    // 光照探针 SH
     void SetGlobalLightProbeSH(const glm::vec4 sh[9], bool enabled) { global_render_state_.SetLightProbeSH(sh, enabled); }
 
     // --- DDGI 全局状态 ---
