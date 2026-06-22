@@ -404,6 +404,40 @@ public:
                              const ShadedGI& gi = {},
                              const std::vector<ShadedSpotLight>& spot_lights = {});
 
+    /// 记录一次蒙皮 + 硬件实例化 + 高级 shading 网格绘制（阶段4-M1）。融合 DrawSkinnedShaded 的
+    /// 骨骼顶点装配与 DrawInstancedShaded 的每实例 model SSBO，复用 BuiltinProgram::
+    /// ForwardSkinnedInstancedShaded（forward_shaded_skinned_instanced.vert + forward_shaded.frag）。
+    /// 骨骼调色板在 CPU 侧按 bone-palette 去重：多个实例可共享同一份调色板，密排进骨骼 SSBO\@slot1，
+    /// 每实例的 instance SSBO\@slot0 条目记 {world model, bone_offset=该调色板在密排中的起始下标}。
+    /// VS 先骨骼混合（绑定→局部空间，不预乘 model），再施每实例 model 到世界空间，最后 vp。
+    /// material/light/point_lights/gi/spot_lights 语义与 DrawSkinnedShaded / DrawInstancedShaded 完全一致。
+    /// @param vertices            局部/绑定空间顶点 + 骨骼索引/权重（所有实例共享）
+    /// @param indices             16 位索引
+    /// @param instance_models     每实例 world-space model 矩阵（0 基索引；契约 first_instance=0），实例数 = size()
+    /// @param bone_palettes       骨骼调色板列表（每份 = 绑定→局部空间骨骼矩阵，未预乘 model；多实例可共享）
+    /// @param instance_palette_idx 每实例引用的调色板下标（size 须 == instance_models.size()）
+    /// @param view/proj           相机视图 / 投影矩阵（proj 须含 GetProjectionCorrection）
+    /// @param camera_pos          世界空间相机位置
+    /// @param material            高级 shading 材质参数 + 纹理
+    /// @param light               单方向光
+    /// @param point_lights        clustered 点光（≤64；超出截断；空=仅方向光）
+    /// @param gi                  全局光照（默认关 → 退化为平坦环境光）
+    /// @param spot_lights         聚光灯（≤64；超出截断；空=无聚光灯）
+    void DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
+                                    const std::vector<SkinnedMeshVertex>& vertices,
+                                    const std::vector<uint16_t>& indices,
+                                    const std::vector<glm::mat4>& instance_models,
+                                    const std::vector<std::vector<glm::mat4>>& bone_palettes,
+                                    const std::vector<int>& instance_palette_idx,
+                                    const glm::mat4& view,
+                                    const glm::mat4& proj,
+                                    const glm::vec3& camera_pos,
+                                    const ShadedMaterial& material,
+                                    const DirectionalLight& light,
+                                    const std::vector<ShadedPointLight>& point_lights = {},
+                                    const ShadedGI& gi = {},
+                                    const std::vector<ShadedSpotLight>& spot_lights = {});
+
     /// 记录一次 Morph target + 高级 shading 网格绘制（Final-Feat-5）。基顶点在 CPU 侧预变换到世界空间
     /// （同 DrawShaded），每个 morph target 的位置/法线增量亦按 model 预变换为世界空间增量写入 morph
     /// 增量 SSBO\@slot 0（布局 [target*vertex_count+vertex]）；权重/计数写入 morph 权重 UBO\@slot 8；

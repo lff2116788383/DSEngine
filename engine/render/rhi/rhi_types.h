@@ -204,6 +204,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardInstancedDepth = 12,  ///< 实例化仅深度 pass（forward_shaded_instanced.vert + shadow.frag 空片元；每实例 model SSBO\@set7.b0 + 植被风；只写深度、不输出颜色，配 has_color=false RT）
     Particle3D = 13,  ///< 3D 粒子广告牌（particle_instanced.vert + particle.frag；每实例 pos/size/color SSBO\@set7.b0 + u_texture\@set2.b1；加性混合、不写深度，配 ParticleRenderer）
     HairStrand = 14,  ///< 毛发线带（hair.vert + hair.frag；position/tangent SSBO\@set7.b0/b1 + 组合 HairUniforms UBO\@set0.b0；LINE_STRIP 拓扑、逐 strand 绘制，配 HairRenderer）
+    ForwardSkinnedInstancedShaded = 15,  ///< 蒙皮 + 硬件实例化 + 高级 shading 组合（forward_shaded_skinned_instanced.vert + forward_shaded.frag；实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1；bone-palette 去重，配 MeshRenderer::DrawSkinnedInstancedShaded）
 };
 
 /// 渲染通道描述符

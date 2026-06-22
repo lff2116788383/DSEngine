@@ -56,6 +56,15 @@ struct GpuSkinnedVertex {
 };
 static_assert(sizeof(GpuSkinnedVertex) == 92, "GpuSkinnedVertex must be tightly packed (3+4+2+3+3+4+4 floats)");
 
+// 与 forward_shaded_skinned_instanced.vert 的 MeshSkinnedInst（std430）逐位匹配（80 字节）：
+// mat4 model(64) + int bone_offset(64) + 3×int pad(68/72/76)。配 DX11 执行器 SkinnedInstGPU 同布局。
+struct MeshSkinnedInstGPU {
+    glm::mat4 model;        // world-space per-instance model
+    int32_t bone_offset;    // 该实例骨骼调色板在密排骨骼 SSBO 中的起始下标
+    int32_t pad0, pad1, pad2;
+};
+static_assert(sizeof(MeshSkinnedInstGPU) == 80, "MeshSkinnedInstGPU std430 = 80 bytes (mat4 + int + 3 pad)");
+
 // std140 PerFrame 块（176 字节）：mat4 vp + mat4 view + vec4 camera_pos +
 // vec4 foliage_wind + vec4 foliage_push。着色器仅用 vp / camera_pos。
 struct FwdPerFrameUBO {
@@ -1360,6 +1369,228 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     // 每实例 model SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
+    cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
+                             static_cast<uint32_t>(instance_models.size()),
+                             0u, 0, 0u);
+}
+
+void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
+                                              const std::vector<SkinnedMeshVertex>& vertices,
+                                              const std::vector<uint16_t>& indices,
+                                              const std::vector<glm::mat4>& instance_models,
+                                              const std::vector<std::vector<glm::mat4>>& bone_palettes,
+                                              const std::vector<int>& instance_palette_idx,
+                                              const glm::mat4& view,
+                                              const glm::mat4& proj,
+                                              const glm::vec3& camera_pos,
+                                              const ShadedMaterial& material,
+                                              const DirectionalLight& light,
+                                              const std::vector<ShadedPointLight>& point_lights,
+                                              const ShadedGI& gi,
+                                              const std::vector<ShadedSpotLight>& spot_lights) {
+    if (vertices.empty() || indices.empty() || instance_models.empty() ||
+        bone_palettes.empty() || instance_palette_idx.size() != instance_models.size()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardSkinnedInstancedShaded);
+    if (program == 0) return;  // 该后端未提供蒙皮×实例化高级 shading 内建着色器
+
+    EnsureResources(device);
+    EnsureShadedResources(device);
+    if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
+        !per_point_lights_ubo_ || !per_terrain_ubo_) return;
+
+    // --- 顶点打包（局部/绑定空间，VS 施骨骼混合 + 每实例 model + vp，不在 CPU 预变换） ---
+    std::vector<GpuSkinnedVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const SkinnedMeshVertex& v = vertices[i];
+        GpuSkinnedVertex& g = gpu_verts[i];
+        g.px = v.position.x; g.py = v.position.y; g.pz = v.position.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = v.normal.x; g.ny = v.normal.y; g.nz = v.normal.z;
+        g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
+        g.bi0 = v.bone_indices.x; g.bi1 = v.bone_indices.y;
+        g.bi2 = v.bone_indices.z; g.bi3 = v.bone_indices.w;
+        g.bw0 = v.bone_weights.x; g.bw1 = v.bone_weights.y;
+        g.bw2 = v.bone_weights.z; g.bw3 = v.bone_weights.w;
+    }
+
+    // --- 骨骼调色板去重密排（绑定→局部空间，不预乘 model），记每份调色板起始下标 ---
+    std::vector<int> palette_base(bone_palettes.size());
+    std::vector<glm::mat4> packed_bones;
+    for (size_t p = 0; p < bone_palettes.size(); ++p) {
+        palette_base[p] = static_cast<int>(packed_bones.size());
+        packed_bones.insert(packed_bones.end(), bone_palettes[p].begin(), bone_palettes[p].end());
+    }
+    if (packed_bones.empty()) return;
+    const size_t bone_bytes = packed_bones.size() * sizeof(glm::mat4);
+    EnsureBoneCapacity(device, bone_bytes);
+    if (!bone_ssbo_) return;
+    device.UpdateGpuBuffer(bone_ssbo_, 0, bone_bytes, packed_bones.data());
+
+    // --- 每实例 {model, bone_offset}（80B MeshSkinnedInst）写入实例 SSBO（0 基索引） ---
+    std::vector<MeshSkinnedInstGPU> insts(instance_models.size());
+    for (size_t j = 0; j < instance_models.size(); ++j) {
+        const int pi = instance_palette_idx[j];
+        if (pi < 0 || pi >= static_cast<int>(palette_base.size())) return;  // 调色板下标越界，整批放弃
+        insts[j].model = instance_models[j];
+        insts[j].bone_offset = palette_base[pi];
+        insts[j].pad0 = insts[j].pad1 = insts[j].pad2 = 0;
+    }
+    const size_t inst_bytes = insts.size() * sizeof(MeshSkinnedInstGPU);
+    EnsureInstanceCapacity(device, inst_bytes);
+    if (!instance_ssbo_) return;
+    device.UpdateGpuBuffer(instance_ssbo_, 0, inst_bytes, insts.data());
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuSkinnedVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // --- UBO 填充（与 DrawShaded / DrawInstancedShaded 同构） ---
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(camera_pos, 1.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    FwdPerSceneUBO scene{};
+    const glm::vec3 to_light = glm::normalize(-light.direction);
+    scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
+    scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
+    const auto& grs = device.GetGlobalRenderState();
+    scene.light_params = glm::vec4(light.intensity,
+                                   material.shadow_strength,
+                                   material.receive_shadow ? 1.0f : 0.0f, 0.0f);
+    scene.cascade_splits = glm::vec4(grs.cascade_splits[0], grs.cascade_splits[1],
+                                     grs.cascade_splits[2], 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        scene.light_space_matrices[i] = grs.light_space_matrix[i];
+        scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
+    }
+    for (int i = 0; i < 4; ++i)
+        scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
+    device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
+
+    FwdShadedMaterialUBO mat{};
+    mat.albedo = glm::vec4(material.albedo, material.metallic);
+    mat.roughness_ao = glm::vec4(material.roughness, material.ao,
+                                 material.normal_strength, material.alpha_cutoff);
+    mat.emissive = glm::vec4(material.emissive, material.alpha_test ? 1.0f : 0.0f);
+    mat.flags = glm::vec4(material.normal_tex ? 1.0f : 0.0f,
+                          material.metallic_roughness_tex ? 1.0f : 0.0f,
+                          material.emissive_tex ? 1.0f : 0.0f,
+                          material.occlusion_tex ? 1.0f : 0.0f);
+    mat.mode_params = glm::vec4(static_cast<float>(material.shading_mode),
+                                material.double_sided ? 1.0f : 0.0f,
+                                material.anisotropy, material.pom_height_scale);
+    mat.sss = glm::vec4(material.sss_tint, material.sss_strength);
+    mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness,
+                              static_cast<float>(material.wboit_mode), 0.0f);
+    mat.toon_shadow = glm::vec4(material.toon_shadow_color, material.toon_shadow_threshold);
+    mat.toon_params = glm::vec4(material.toon_shadow_softness, material.toon_specular_size,
+                                material.toon_specular_strength, material.toon_rim_strength);
+    mat.watercolor = glm::vec4(material.watercolor_paper_strength, material.watercolor_edge_darkening,
+                               material.watercolor_color_bleed, material.watercolor_pigment_density);
+    device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
+
+    PointLightsUBO plights{};
+    const int pl_count = static_cast<int>(
+        (std::min)(point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
+    plights.u_point_light_count = pl_count;
+    for (int i = 0; i < pl_count; ++i) {
+        const ShadedPointLight& pl = point_lights[i];
+        plights.u_point_lights[i].color = pl.color;
+        plights.u_point_lights[i].intensity = pl.intensity;
+        plights.u_point_lights[i].position = pl.position;
+        plights.u_point_lights[i].radius = pl.radius;
+        plights.u_point_lights[i].cast_shadow = pl.cast_shadow ? 1 : 0;
+        plights.u_point_lights[i].shadow_index = pl.shadow_index;
+    }
+    device.UpdateGpuBuffer(per_point_lights_ubo_, 0, sizeof(plights), &plights);
+
+    TerrainParamsUBO terrain{};
+    terrain.u_splat_enabled = material.splat_enabled ? 1.0f : 0.0f;
+    terrain.u_snow_coverage = material.snow_coverage;
+    terrain.u_snow_normal_threshold = material.snow_normal_threshold;
+    terrain.u_snow_edge_sharpness = material.snow_edge_sharpness;
+    terrain.u_splat_tiling = material.splat_tiling;
+    terrain.u_snow_params = glm::vec4(material.snow_albedo, material.snow_roughness);
+    device.UpdateGpuBuffer(per_terrain_ubo_, 0, sizeof(terrain), &terrain);
+
+    LightProbeDataUBO probe{};
+    for (int i = 0; i < 9; ++i) probe.sh_coefficients[i] = gi.sh_coefficients[i];
+    probe.probe_params = glm::vec4(gi.sh_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_light_probe_ubo_, 0, sizeof(probe), &probe);
+
+    const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas != 0;
+    FwdDDGIParamsUBO ddgi{};
+    ddgi.origin = glm::vec4(gi.ddgi_grid_origin, ddgi_on ? 1.0f : 0.0f);
+    ddgi.spacing = glm::vec4(gi.ddgi_grid_spacing, gi.ddgi_gi_intensity);
+    ddgi.resolution = glm::ivec4(gi.ddgi_grid_resolution, gi.ddgi_irradiance_texels);
+    ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
+    device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
+
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
+    SpotLightsUBO slights{};
+    FillSpotLightsUBO(spot_lights, slights);
+    device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
+
+    auto tex_or_white = [&](unsigned int h) { return h ? h : white_tex_; };
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+        VertexAttr{5u, 4u, 60u},   // bone indices
+        VertexAttr{6u, 4u, 76u},   // bone weights
+    };
+
+    // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
+    unsigned int pso = material.double_sided ? pso_no_cull_ : pso_;
+    if (material.wboit_mode == 1) pso = pso_wboit_accum_;
+    else if (material.wboit_mode == 2) pso = pso_wboit_reveal_;
+    cmd.SetPipelineState(pso);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
+    cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0
+    cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0
+    cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0
+    cmd.BindUniformBuffer(6u, per_ddgi_ubo_.raw());             // FwdDDGI      @ set6.b0
+    cmd.BindTexture(0u, tex_or_white(material.albedo_tex), TextureDim::Tex2D);
+    cmd.BindTexture(1u, tex_or_white(material.normal_tex), TextureDim::Tex2D);
+    cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
+    cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
+    cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
+    cmd.BindTexture(5u, tex_or_white(material.splat_weight_map), TextureDim::Tex2D);
+    cmd.BindTexture(6u, tex_or_white(material.splat_layers[0]), TextureDim::Tex2D);
+    cmd.BindTexture(7u, tex_or_white(material.splat_layers[1]), TextureDim::Tex2D);
+    cmd.BindTexture(8u, tex_or_white(material.splat_layers[2]), TextureDim::Tex2D);
+    cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
+    cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
+    cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
+    cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(15u, grs.spot_shadow_map[3] ? grs.spot_shadow_map[3] : white_tex_, TextureDim::Tex2D);
+    cmd.BindTexture(16u, grs.point_shadow_map[0] ? grs.point_shadow_map[0] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
+    cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
+    // 实例 SSBO\@slot0（set8.b0）+ 骨骼 SSBO\@slot1（set8.b1）；三后端 @SSBO_LOW_REGISTERS → DX11 t0/t1、GL binding0/1、Vulkan rank0/1。
+    cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
+    cmd.BindStorageBuffer(1u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
