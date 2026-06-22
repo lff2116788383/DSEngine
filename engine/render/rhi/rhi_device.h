@@ -49,7 +49,6 @@ public:
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
     virtual void SetGlobalMat4Array(const std::string& name, const std::vector<glm::mat4>& values) = 0;
     virtual void SetGlobalFloatArray(const std::string& name, const std::vector<float>& values) = 0;
-    virtual void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) = 0;
 
     /// 设置视口区域（用于 shadow atlas 等 viewport-based 渲染）
     virtual void SetViewport(int x, int y, int width, int height) = 0;

@@ -77,12 +77,9 @@ public:
                          GLResourceManager& resource_mgr,
                          UBOManager& ubo_mgr);
 
-    void DrawHairStrands(const std::vector<HairDrawItem>& items,
-                          const glm::mat4& view,
-                          const glm::mat4& projection,
-                          GLShaderManager& shader_mgr);
-
     // --- 通用绘制原语 (A1) ---
+    /// 设置后续 Prim* 绘制的图元拓扑（由 SetPipelineState 从 PSO desc 推送）。
+    void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
@@ -200,17 +197,7 @@ private:
     VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
     unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
-
-    // 毛发 (Hair strands)
-    VertexArrayHandle hair_vao_handle_;
-    unsigned int hair_shader_handle_ = 0;
-    // 缓存 uniform locations (在 shader 编译后填充)
-    int hair_loc_model_ = -1, hair_loc_view_ = -1, hair_loc_proj_ = -1;
-    int hair_loc_cam_ = -1, hair_loc_ldir_ = -1, hair_loc_lcol_ = -1;
-    int hair_loc_lint_ = -1, hair_loc_ambient_ = -1;
-    int hair_loc_root_ = -1, hair_loc_tip_ = -1, hair_loc_opacity_ = -1;
-    int hair_loc_spec1_ = -1, hair_loc_spec2_ = -1;
-    int hair_loc_sstr1_ = -1, hair_loc_sstr2_ = -1, hair_loc_scol_ = -1;
+    unsigned int prim_topology_ = 0x0004;     ///< GL_TRIANGLES，当前 PSO 拓扑（SetPipelineState 推送）
 
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;

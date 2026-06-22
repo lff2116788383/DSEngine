@@ -27,6 +27,8 @@
 #include "engine/render/shaders/generated/embed/particle_vert.gen.h"
 #include "engine/render/shaders/generated/embed/particle_frag.gen.h"
 #include "engine/render/shaders/generated/embed/particle_instanced_vert.gen.h"
+#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
+#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 #include "engine/render/shaders/generated/embed/postprocess_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_vert.gen.h"
 #include "engine/render/shaders/generated/embed/shadow_frag.gen.h"
@@ -168,6 +170,7 @@ void DX11ShaderManager::Shutdown() {
     pbr_shader_handle_ = 0;
     skybox_shader_handle_ = 0;
     particle3d_shader_handle_ = 0;
+    hair_strand_shader_handle_ = 0;
     sprite_shader_handle_ = 0;
     sprite2d_shader_handle_ = 0;
     text_sdf_shader_handle_ = 0;
@@ -472,6 +475,18 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutFromReflection(kparticle_instanced_vert_reflection, p3d_layout);
         CreateInputLayoutForShader(particle3d_shader_handle_, p3d_layout.data(),
                                    static_cast<int>(p3d_layout.size()));
+    }
+
+    pulse();
+    // ---- 毛发线带着色器 (B4)：hair.vert（position/tangent SSBO\@t0/t1）+ hair.frag（HairUniforms\@b0）----
+    // vertexless（SV_VertexID 取索引值→SSBO），无输入布局。拓扑 LineList 由 HairRenderer 的 PSO 决定。
+    hair_strand_shader_handle_ = CreateProgramFromDXBC(
+        khair_vert_dxbc, khair_vert_dxbc_size,
+        khair_frag_dxbc, khair_frag_dxbc_size);
+    if (hair_strand_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin hair shader created (DXBC): {}", hair_strand_shader_handle_);
+    } else {
+        DEBUG_LOG_ERROR("[D3D11] Builtin hair shader creation failed (DXBC)");
     }
     pulse();
 

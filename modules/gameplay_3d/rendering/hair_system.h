@@ -15,6 +15,7 @@
 
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/hair_renderer.h"
 #include "engine/render/hair/hair_asset.h"
 #include "engine/render/hair/hair_instance.h"
 
@@ -68,6 +69,9 @@ private:
     void SimulateCompute(float dt);
 
     RhiDevice* rhi_ = nullptr;
+
+    /// 后端无关毛发线带渲染器（B4；取代旧 ABI CommandBuffer::DrawHairStrands）
+    render::HairRenderer hair_renderer_;
 
     /// 资产缓存 (path → asset)
     std::unordered_map<std::string, render::HairAsset> asset_cache_;

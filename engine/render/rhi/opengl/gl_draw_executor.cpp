@@ -231,23 +231,6 @@ void GLDrawExecutor::ShutdownGeometryBuffers() {
         else { unsigned int r = prim_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
         prim_vao_handle_ = {};
     }
-    // 毛发渲染资源
-    if (hair_vao_handle_) {
-        if (delete_vao_fn_) { delete_vao_fn_(hair_vao_handle_); }
-        else { unsigned int r = hair_vao_handle_.raw(); glDeleteVertexArrays(1, &r); }
-        hair_vao_handle_ = {};
-    }
-    if (hair_shader_handle_ != 0) {
-        glDeleteProgram(hair_shader_handle_);
-        hair_shader_handle_ = 0;
-        hair_loc_model_ = hair_loc_view_ = hair_loc_proj_ = -1;
-        hair_loc_cam_ = hair_loc_ldir_ = hair_loc_lcol_ = -1;
-        hair_loc_lint_ = hair_loc_ambient_ = -1;
-        hair_loc_root_ = hair_loc_tip_ = hair_loc_opacity_ = -1;
-        hair_loc_spec1_ = hair_loc_spec2_ = -1;
-        hair_loc_sstr1_ = hair_loc_sstr2_ = hair_loc_scol_ = -1;
-    }
-
     active_render_target_ = 0;
 }
 
@@ -446,9 +429,23 @@ void GLDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
     if (loc >= 0) glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(value));
 }
 
+void GLDrawExecutor::PrimSetTopology(PrimitiveTopology topology) {
+    switch (topology) {
+        case PrimitiveTopology::LineStrip: prim_topology_ = GL_LINE_STRIP; break;
+        case PrimitiveTopology::LineList:  prim_topology_ = GL_LINES;      break;
+        case PrimitiveTopology::PointList: prim_topology_ = GL_POINTS;     break;
+        case PrimitiveTopology::TriangleList:
+        default:                           prim_topology_ = GL_TRIANGLES;  break;
+    }
+}
+
 void GLDrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex) {
+    // vertexless（毛发：无 VB/IB，gl_VertexID 取 SSBO）须保证有非零 VAO（core profile 不允许默认 0）。
+    if (!prim_vao_handle_ && create_vao_fn_) {
+        prim_vao_handle_ = create_vao_fn_();
+    }
     glBindVertexArray(prim_vao_handle_.raw());
-    glDrawArrays(GL_TRIANGLES, static_cast<GLint>(first_vertex), static_cast<GLsizei>(vertex_count));
+    glDrawArrays(prim_topology_, static_cast<GLint>(first_vertex), static_cast<GLsizei>(vertex_count));
     glBindVertexArray(0);
     global_state_.current_frame_stats.draw_calls += 1;
 }
@@ -506,10 +503,10 @@ void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index,
     const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
     const void* offset_ptr = reinterpret_cast<const void*>(static_cast<uintptr_t>(first_index) * elem);
     if (base_vertex != 0) {
-        glDrawElementsBaseVertex(GL_TRIANGLES, static_cast<GLsizei>(index_count),
+        glDrawElementsBaseVertex(prim_topology_, static_cast<GLsizei>(index_count),
                                  prim_index_type_, offset_ptr, base_vertex);
     } else {
-        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(index_count),
+        glDrawElements(prim_topology_, static_cast<GLsizei>(index_count),
                        prim_index_type_, offset_ptr);
     }
     glBindVertexArray(0);
@@ -529,12 +526,12 @@ void GLDrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t ins
 #endif
     if (first_instance != 0 && pfn_draw_base_instance) {
         pfn_draw_base_instance(
-            GL_TRIANGLES, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
+            prim_topology_, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
             static_cast<GLsizei>(instance_count), base_vertex, first_instance);
     } else {
         // first_instance==0（或驱动无 baseInstance）：实例数据偏移由 SSBO/instance VB 偏移表达。
         glDrawElementsInstancedBaseVertex(
-            GL_TRIANGLES, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
+            prim_topology_, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
             static_cast<GLsizei>(instance_count), base_vertex);
     }
     glBindVertexArray(0);

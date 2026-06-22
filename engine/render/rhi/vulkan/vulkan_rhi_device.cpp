@@ -159,13 +159,6 @@ void VulkanCommandBuffer::BlitToScreen(unsigned int source_rt) {
         vk_command_buffer_, source_rt, device_->resource_mgr());
 }
 
-void VulkanCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || vk_command_buffer_ == VK_NULL_HANDLE) return;
-    device_->draw_executor().DrawHairStrands(
-        vk_command_buffer_, items, view, projection,
-        device_->state_mgr(), device_->shader_mgr());
-}
-
 void VulkanCommandBuffer::SetViewport(int x, int y, int width, int height) {
     if (vk_command_buffer_ == VK_NULL_HANDLE) return;
     VkViewport vp{};
@@ -782,6 +775,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Particle3D:
             if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
             return shader_mgr_.particle3d_shader_handle();
+        case BuiltinProgram::HairStrand:
+            if (shader_mgr_.hair_strand_shader_handle() == 0) shader_mgr_.InitHairStrandShader();
+            return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();

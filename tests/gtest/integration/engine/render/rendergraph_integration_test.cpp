@@ -47,7 +47,6 @@ public:
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
     MOCK_METHOD(void, SetGlobalMat4Array, (const std::string&, const std::vector<glm::mat4>&), (override));
     MOCK_METHOD(void, SetGlobalFloatArray, (const std::string&, const std::vector<float>&), (override));
-    MOCK_METHOD(void, DrawHairStrands, (const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, DispatchComputePass, (const ComputeDispatch&), (override));
     MOCK_METHOD(void, SetViewport, (int, int, int, int), (override));
     MOCK_METHOD(void, BindGlobalShadowMap, (unsigned int, unsigned int), (override));

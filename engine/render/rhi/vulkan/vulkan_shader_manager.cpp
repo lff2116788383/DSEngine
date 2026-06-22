@@ -22,6 +22,8 @@
 #include "embed/particle_vert.gen.h"
 #include "embed/particle_frag.gen.h"
 #include "embed/particle_instanced_vert.gen.h"
+#include "embed/hair_vert.gen.h"
+#include "embed/hair_frag.gen.h"
 #include "embed/sprite_vert.gen.h"
 #include "embed/sprite_frag.gen.h"
 #include "embed/sprite2d_vert.gen.h"
@@ -780,6 +782,21 @@ void VulkanShaderManager::InitParticle3DShader() {
         DEBUG_LOG_ERROR("Vulkan particle3d shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan particle3d shader created: handle={}", particle3d_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitHairStrandShader() {
+    if (hair_strand_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // vertexless 毛发：hair.vert（position/tangent SSBO\@set7.b0/b1，gl_VertexIndex 取索引）+ hair.frag（HairUniforms\@set0.b0）；
+    // descriptor set layout 由 SPIR-V 反射驱动。拓扑 LINE_LIST 由 HairRenderer 的 PSO 决定。
+    hair_strand_shader_handle_ = CreateProgramFromSpirv(
+        khair_vert_spv, khair_vert_spv_size,
+        khair_frag_spv, khair_frag_spv_size);
+    if (hair_strand_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan hair shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan hair shader created: handle={}", hair_strand_shader_handle_);
     }
 }
 

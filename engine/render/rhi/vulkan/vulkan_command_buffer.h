@@ -32,7 +32,6 @@ public:
     void DrawMeshBatch(const std::vector<MeshDrawItem>& items) override;
     void ClearColor(const glm::vec4& color) override;
     void DispatchComputePass(const ComputeDispatch& dispatch) override;
-    void DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) override;
     void SetViewport(int x, int y, int width, int height) override;
     void ClearDepth(float depth = 1.0f) override;
     void BlitToScreen(unsigned int source_rt) override;

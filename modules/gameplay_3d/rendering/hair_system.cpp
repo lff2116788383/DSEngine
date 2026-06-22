@@ -23,6 +23,7 @@ void HairSystem::Init(RhiDevice* rhi_device) {
 
 void HairSystem::Shutdown(::World& world) {
     ShutdownComputeResources();
+    if (rhi_) hair_renderer_.Shutdown(*rhi_);
 
     // 释放所有 GPU 资源
     for (auto& inst : instances_) {
@@ -181,8 +182,8 @@ void HairSystem::Render(::World& world, CommandBuffer& cmd_buffer,
         items.push_back(item);
     }
 
-    if (!items.empty()) {
-        cmd_buffer.DrawHairStrands(items, view, projection);
+    if (!items.empty() && rhi_) {
+        hair_renderer_.Draw(cmd_buffer, *rhi_, items, view, projection);
     }
 }
 

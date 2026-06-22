@@ -67,6 +67,15 @@ enum class CullFace : unsigned int {
     FrontAndBack = 3,
 };
 
+/// 图元拓扑（管线状态的一部分）。默认三角形列表，发线状几何（如毛发）用线带。
+/// DX11→D3D11_PRIMITIVE_TOPOLOGY_* / GL→glDraw* mode / Vulkan→VkPrimitiveTopology。
+enum class PrimitiveTopology : unsigned int {
+    TriangleList  = 0,   ///< 三角形列表（默认）
+    LineStrip     = 1,   ///< 线带（毛发逐 strand 绘制）
+    LineList      = 2,   ///< 线段列表
+    PointList     = 3,   ///< 点列表
+};
+
 /// 压缩纹理格式（BCn / DXT 系列）
 enum class CompressedTextureFormat : unsigned int {
     BC1_UNORM = 0,   ///< DXT1 (RGB, 4bpp)
@@ -149,6 +158,7 @@ struct PipelineStateDesc {
     CompareFunc depth_func = CompareFunc::Less;
     bool culling_enabled = true;
     CullFace cull_face = CullFace::Back;
+    PrimitiveTopology topology = PrimitiveTopology::TriangleList;  ///< 图元拓扑（毛发用 LineStrip）
 };
 
 /// 顶点属性描述（通用绘制原语 BindVertexBuffer 用，目前仅支持 float 分量）
@@ -193,6 +203,7 @@ enum class BuiltinProgram : uint8_t {
     ForwardMorphShaded = 11,  ///< Morph target + 高级 shading 组合（forward_shaded_morph.vert + forward_shaded.frag；morph 增量 SSBO\@set7.b0 + 权重 UBO\@set7.b3）
     ForwardInstancedDepth = 12,  ///< 实例化仅深度 pass（forward_shaded_instanced.vert + shadow.frag 空片元；每实例 model SSBO\@set7.b0 + 植被风；只写深度、不输出颜色，配 has_color=false RT）
     Particle3D = 13,  ///< 3D 粒子广告牌（particle_instanced.vert + particle.frag；每实例 pos/size/color SSBO\@set7.b0 + u_texture\@set2.b1；加性混合、不写深度，配 ParticleRenderer）
+    HairStrand = 14,  ///< 毛发线带（hair.vert + hair.frag；position/tangent SSBO\@set7.b0/b1 + 组合 HairUniforms UBO\@set0.b0；LINE_STRIP 拓扑、逐 strand 绘制，配 HairRenderer）
 };
 
 /// 渲染通道描述符

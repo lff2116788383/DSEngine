@@ -29,7 +29,6 @@ public:
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
     void SetGlobalMat4Array(const std::string&, const std::vector<glm::mat4>&) override {}
     void SetGlobalFloatArray(const std::string&, const std::vector<float>&) override {}
-    void DrawHairStrands(const std::vector<HairDrawItem>&, const glm::mat4&, const glm::mat4&) override {}
     void SetViewport(int, int, int, int) override {}
     void BindGlobalShadowMap(unsigned int, unsigned int) override {}
     void BindGlobalSpotShadowMap(unsigned int, unsigned int) override {}

@@ -179,9 +179,18 @@ VkPipeline VulkanPipelineStateManager::GetOrCreateVkPipeline(
     vertex_input.pVertexAttributeDescriptions = vertex_attributes.empty() ? nullptr : vertex_attributes.data();
 
     // --- Input Assembly ---
+    // 拓扑烘焙进 pipeline（PSO desc.topology），毛发等线状几何用 LINE_LIST/LINE_STRIP。
+    VkPrimitiveTopology vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    switch (state.desc.topology) {
+        case PrimitiveTopology::LineStrip: vk_topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+        case PrimitiveTopology::LineList:  vk_topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;  break;
+        case PrimitiveTopology::PointList: vk_topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;
+        case PrimitiveTopology::TriangleList:
+        default:                           vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+    }
     VkPipelineInputAssemblyStateCreateInfo input_assembly{};
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly.topology = vk_topology;
     input_assembly.primitiveRestartEnable = VK_FALSE;
 
     // --- Viewport & Scissor ---

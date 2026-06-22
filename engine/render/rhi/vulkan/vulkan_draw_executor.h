@@ -101,14 +101,6 @@ public:
                              const ComputeDispatch& dispatch,
                              VulkanShaderManager& shader_mgr);
 
-
-    void DrawHairStrands(VkCommandBuffer cmd_buf,
-                          const std::vector<HairDrawItem>& items,
-                          const glm::mat4& view,
-                          const glm::mat4& projection,
-                          VulkanPipelineStateManager& pipeline_mgr,
-                          VulkanShaderManager& shader_mgr);
-
     // --- 通用绘制原语 (A1) ---
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride, const std::vector<VertexAttr>& attrs);
@@ -387,11 +379,6 @@ private:
     // GPU-Driven: 缓存当前 GPU-driven shader program（供 Set2/Set4 descriptor 绑定重用）
     const VulkanShaderProgram* cached_gpu_driven_program_ = nullptr;
     bool gpu_driven_instance_set_bound_ = false; ///< Set 4 (instance SSBO) 是否已绑定
-
-    // Hair rendering 缓存
-    unsigned int hair_shader_handle_ = 0;
-    VkPipeline hair_pipeline_ = VK_NULL_HANDLE;
-    VkRenderPass hair_pipeline_rp_ = VK_NULL_HANDLE;
 
     // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装 pipeline/descriptor/draw
     unsigned int prim_program_handle_ = 0;

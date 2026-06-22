@@ -41,6 +41,9 @@ void DX11CommandBuffer::EndRenderPass() {
 void DX11CommandBuffer::SetPipelineState(unsigned int pipeline_state_handle) {
     if (!device_) return;
     device_->state_mgr().ApplyPipelineState(pipeline_state_handle, device_->context().device_context());
+    // 把 PSO 拓扑推送给 executor，供通用 Prim* 绘制采用（默认 TriangleList）。
+    const auto* ps = device_->state_mgr().GetPipelineState(pipeline_state_handle);
+    device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
 }
 
 void DX11CommandBuffer::DrawMeshBatch(const std::vector<MeshDrawItem>& items) {
@@ -64,12 +67,6 @@ void DX11CommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
     if (!device_) return;
     device_->draw_executor().DispatchComputePass(dispatch,
         device_->shader_mgr(), device_->resource_mgr());
-}
-
-void DX11CommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || items.empty()) return;
-    device_->draw_executor().DrawHairStrands(items, view, projection,
-        device_->state_mgr(), device_->shader_mgr(), device_->resource_mgr());
 }
 
 void DX11CommandBuffer::SetViewport(int x, int y, int width, int height) {
@@ -432,6 +429,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardPbrDepth: return shader_mgr_.forward_pbr_depth_shader_handle();
         case BuiltinProgram::ForwardInstancedDepth: return shader_mgr_.forward_instanced_depth_shader_handle();
         case BuiltinProgram::Particle3D: return shader_mgr_.particle3d_shader_handle();
+        case BuiltinProgram::HairStrand: return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded: return shader_mgr_.forward_shaded_shader_handle();
         case BuiltinProgram::ForwardSkinnedShaded: return shader_mgr_.forward_skinned_shaded_shader_handle();
         case BuiltinProgram::ForwardInstancedShaded: return shader_mgr_.forward_instanced_shaded_shader_handle();

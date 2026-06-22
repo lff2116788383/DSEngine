@@ -258,11 +258,6 @@ void OpenGLCommandBuffer::DrawIndexedIndirect(unsigned int indirect_buffer, uint
     device_->RealDrawIndexedIndirect(indirect_buffer, byte_offset);
 }
 
-void OpenGLCommandBuffer::DrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    if (!device_ || items.empty()) return;
-    device_->RealSubmitDrawHairStrands(items, view, projection);
-}
-
 void OpenGLCommandBuffer::SetViewport(int x, int y, int width, int height) {
     glViewport(x, y, width, height);
     glScissor(x, y, width, height);
@@ -887,14 +882,13 @@ void OpenGLRhiDevice::RealEndRenderPass() {
 
 void OpenGLRhiDevice::RealSetPipelineState(unsigned int pipeline_state_handle) {
     state_mgr_.ApplyState(pipeline_state_handle);
+    // 把 PSO 拓扑推给绘制执行器（通用 Prim* 绘制据此选 glDraw* mode，毛发用 LINE_STRIP）。
+    const PipelineStateDesc* ps = state_mgr_.GetPipelineState(pipeline_state_handle);
+    draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
 }
 
 void OpenGLRhiDevice::RealSubmitDrawMeshBatch(const std::vector<MeshDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
     draw_executor_.DrawMeshBatch(items, view, projection, state_mgr_, shader_mgr_, resource_mgr_, ubo_mgr_);
-}
-
-void OpenGLRhiDevice::RealSubmitDrawHairStrands(const std::vector<HairDrawItem>& items, const glm::mat4& view, const glm::mat4& projection) {
-    draw_executor_.DrawHairStrands(items, view, projection, shader_mgr_);
 }
 
 // --- 通用绘制原语 (A1) ---
@@ -1012,6 +1006,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::Particle3D:
             if (shader_mgr_.particle3d_shader_handle() == 0) shader_mgr_.InitParticle3DShader();
             return shader_mgr_.particle3d_shader_handle();
+        case BuiltinProgram::HairStrand:
+            if (shader_mgr_.hair_strand_shader_handle() == 0) shader_mgr_.InitHairStrandShader();
+            return shader_mgr_.hair_strand_shader_handle();
         case BuiltinProgram::ForwardShaded:
             if (shader_mgr_.forward_shaded_shader_handle() == 0) shader_mgr_.InitForwardShadedShader();
             return shader_mgr_.forward_shaded_shader_handle();

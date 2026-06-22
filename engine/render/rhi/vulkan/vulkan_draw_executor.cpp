@@ -18,8 +18,6 @@
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/base/debug.h"
-#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
-#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
@@ -457,12 +455,6 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
     if (white_cubemap_handle_ != 0) {
         resource_mgr_->DeleteTexture(white_cubemap_handle_);
         white_cubemap_handle_ = 0;
-    }
-
-    if (hair_pipeline_ != VK_NULL_HANDLE) {
-        vkDestroyPipeline(device, hair_pipeline_, nullptr);
-        hair_pipeline_ = VK_NULL_HANDLE;
-        hair_pipeline_rp_ = VK_NULL_HANDLE;
     }
 
     DEBUG_LOG_INFO("VulkanDrawExecutor geometry buffers destroyed");
@@ -2358,30 +2350,29 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: shader program not available");
         return;
     }
-    if (prim_vbo_ == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: vertex buffer not bound");
-        return;
-    }
+    // VB 可缺省（vertexless：gl_VertexIndex 取 SSBO，毛发逐 strand 用）。
+    const bool has_vbo = (prim_vbo_ != VK_NULL_HANDLE);
 
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
     // 顶点输入：由 BindVertexBuffer 提供的 VertexAttr 列表翻译为 Vulkan 顶点输入描述
-    std::vector<VkVertexInputBindingDescription> bindings = {
-        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
-    };
+    std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    vk_attrs.reserve(prim_attrs_.size());
-    for (const auto& a : prim_attrs_) {
-        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
-        switch (a.components) {
-            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
-            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
-            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
-            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-            default: break;
+    if (has_vbo) {
+        bindings.push_back(VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX});
+        vk_attrs.reserve(prim_attrs_.size());
+        for (const auto& a : prim_attrs_) {
+            VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+            switch (a.components) {
+                case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+                case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+                case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+                case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+                default: break;
+            }
+            vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
         }
-        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
     }
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
@@ -2403,10 +2394,15 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 
     if (prim_cubemap_ != 0) {
         AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, program, prim_cubemap_, resource_mgr);
+    } else {
+        // 通用 UBO/SSBO/纹理绑定（毛发：组合 HairUniforms UBO\@set0.b0 + position/tangent SSBO\@set7.b0/b1）。
+        AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
     }
 
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    if (has_vbo) {
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    }
     vkCmdDraw(cmd_buf, vertex_count, 1, first_vertex, 0);
 
     global_state_.current_frame_stats.draw_calls++;
@@ -2590,29 +2586,32 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: shader program not available");
         return;
     }
-    if (prim_vbo_ == VK_NULL_HANDLE || prim_index_buffer_ == VK_NULL_HANDLE) {
-        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: vertex/index buffer not bound");
+    // VB 可缺省（vertexless：gl_VertexIndex 取索引值→SSBO，毛发用）；IB 必须存在。
+    if (prim_index_buffer_ == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: index buffer not bound");
         return;
     }
 
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    std::vector<VkVertexInputBindingDescription> bindings = {
-        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
-    };
+    const bool has_vbo = (prim_vbo_ != VK_NULL_HANDLE);
+    std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    vk_attrs.reserve(prim_attrs_.size());
-    for (const auto& a : prim_attrs_) {
-        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
-        switch (a.components) {
-            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
-            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
-            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
-            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-            default: break;
+    if (has_vbo) {
+        bindings.push_back(VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX});
+        vk_attrs.reserve(prim_attrs_.size());
+        for (const auto& a : prim_attrs_) {
+            VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+            switch (a.components) {
+                case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+                case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+                case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+                case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+                default: break;
+            }
+            vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
         }
-        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
     }
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
@@ -2629,8 +2628,10 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
 
     AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
 
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    if (has_vbo) {
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    }
     vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
     vkCmdDrawIndexed(cmd_buf, index_count, instance_count, first_index, base_vertex, first_instance);
 
@@ -2710,249 +2711,6 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
 
     global_state_.current_frame_stats.draw_calls++;
     global_state_.current_frame_stats.indirect_draw_calls++;
-}
-
-// ============================================================================
-// Hair Strand 渲染 (Vulkan)
-// ============================================================================
-
-void VulkanDrawExecutor::DrawHairStrands(
-    VkCommandBuffer cmd_buf,
-    const std::vector<HairDrawItem>& items,
-    const glm::mat4& view,
-    const glm::mat4& projection,
-    VulkanPipelineStateManager& pipeline_mgr,
-    VulkanShaderManager& shader_mgr) {
-
-    if (items.empty()) return;
-
-    // 懒初始化 hair shader program（预编译 SPIR-V）
-    if (hair_shader_handle_ == 0) {
-        using namespace dse::render::generated_shaders;
-        hair_shader_handle_ = shader_mgr.CreateProgramFromSpirv(
-            khair_vert_spv, khair_vert_spv_size,
-            khair_frag_spv, khair_frag_spv_size);
-        if (hair_shader_handle_ == 0) {
-            DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to compile hair shader for Vulkan");
-            return;
-        }
-    }
-
-    const VulkanShaderProgram* hair_program = shader_mgr.GetProgram(hair_shader_handle_);
-    if (!hair_program) return;
-
-    VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
-        ? current_render_pass_ : context_->swapchain_render_pass();
-
-    // 懒创建 LINE_STRIP + alpha blend + depth readonly pipeline
-    if (hair_pipeline_ == VK_NULL_HANDLE || hair_pipeline_rp_ != active_rp) {
-        // 销毁旧管线
-        if (hair_pipeline_ != VK_NULL_HANDLE) {
-            vkDestroyPipeline(context_->device(), hair_pipeline_, nullptr);
-            hair_pipeline_ = VK_NULL_HANDLE;
-        }
-
-        VkPipelineShaderStageCreateInfo stages[2]{};
-        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        stages[0].module = hair_program->vert_module;
-        stages[0].pName = "main";
-        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stages[1].module = hair_program->frag_module;
-        stages[1].pName = "main";
-
-        VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-        input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-        input_assembly.primitiveRestartEnable = VK_FALSE;
-
-        VkExtent2D extent = context_->swapchain_extent();
-        VkViewport viewport{0.f, 0.f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.f, 1.f};
-        VkRect2D scissor{{0,0}, extent};
-        VkPipelineViewportStateCreateInfo viewport_state{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
-        viewport_state.viewportCount = 1; viewport_state.pViewports = &viewport;
-        viewport_state.scissorCount = 1; viewport_state.pScissors = &scissor;
-
-        VkPipelineRasterizationStateCreateInfo rasterizer{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-        rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer.cullMode = VK_CULL_MODE_NONE;
-        rasterizer.frontFace = VulkanPipelineStateManager::ToVkFrontFace();
-        rasterizer.lineWidth = 1.0f;
-
-        VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-        multisample.rasterizationSamples = current_msaa_samples_;
-
-        VkPipelineDepthStencilStateCreateInfo depth_stencil{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-        depth_stencil.depthTestEnable = VK_TRUE;
-        depth_stencil.depthWriteEnable = VK_FALSE; // depth readonly
-        depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-
-        VkPipelineColorBlendAttachmentState blend_att{};
-        blend_att.colorWriteMask = 0xF;
-        blend_att.blendEnable = VK_TRUE;
-        blend_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        blend_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        blend_att.colorBlendOp = VK_BLEND_OP_ADD;
-        blend_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        blend_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        blend_att.alphaBlendOp = VK_BLEND_OP_ADD;
-
-        VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
-        blend.attachmentCount = 1; blend.pAttachments = &blend_att;
-
-        VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-        VkPipelineDynamicStateCreateInfo dynamic_state{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-        dynamic_state.dynamicStateCount = 2; dynamic_state.pDynamicStates = dyn_states;
-
-        VkGraphicsPipelineCreateInfo ci{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
-        ci.stageCount = 2; ci.pStages = stages;
-        ci.pVertexInputState = &vertex_input;
-        ci.pInputAssemblyState = &input_assembly;
-        ci.pViewportState = &viewport_state;
-        ci.pRasterizationState = &rasterizer;
-        ci.pMultisampleState = &multisample;
-        ci.pDepthStencilState = &depth_stencil;
-        ci.pColorBlendState = &blend;
-        ci.pDynamicState = &dynamic_state;
-        ci.layout = hair_program->pipeline_layout;
-        ci.renderPass = active_rp;
-        ci.subpass = 0;
-
-        VkResult result = vkCreateGraphicsPipelines(context_->device(), context_->pipeline_cache(), 1, &ci, nullptr, &hair_pipeline_);
-        if (result != VK_SUCCESS) {
-            DEBUG_LOG_ERROR("[VulkanDrawExecutor] Failed to create hair pipeline: {}", static_cast<int>(result));
-            hair_pipeline_ = VK_NULL_HANDLE;
-            return;
-        }
-        hair_pipeline_rp_ = active_rp;
-    }
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, hair_pipeline_);
-
-    // HairUBO 布局 (std140, 10 x vec4/mat4 = 256B)
-    struct HairUBO {
-        glm::mat4 model;           // 0
-        glm::mat4 view;            // 64
-        glm::mat4 projection;      // 128
-        glm::vec4 camera_pos;      // 192
-        glm::vec4 light_dir_int;   // 208
-        glm::vec4 light_color_amb; // 224
-        glm::vec4 root_color;      // 240
-        glm::vec4 tip_color;       // 256
-        glm::vec4 spec_params;     // 272
-        glm::vec4 spec_color_opa;  // 288
-    }; // = 304 bytes
-
-    glm::mat4 inv_view = glm::inverse(view);
-    glm::vec3 cam_pos(inv_view[3]);
-
-    for (const auto& item : items) {
-        if (item.strand_count == 0 || item.total_vertex_count == 0) continue;
-        if (!item.strand_firsts || !item.strand_counts) continue;
-
-        HairUBO ubo{};
-        ubo.model = item.world_transform;
-        ubo.view = view;
-        ubo.projection = projection;
-        ubo.camera_pos = glm::vec4(cam_pos, 0.0f);
-        ubo.light_dir_int = glm::vec4(item.light_direction, item.light_intensity);
-        ubo.light_color_amb = glm::vec4(item.light_color, item.ambient_intensity);
-        ubo.root_color = item.root_color;
-        ubo.tip_color = item.tip_color;
-        ubo.spec_params = glm::vec4(item.specular_primary, item.specular_secondary,
-                                     item.specular_strength_primary, item.specular_strength_secondary);
-        ubo.spec_color_opa = glm::vec4(item.specular_color, item.opacity);
-
-        // 写入 per-frame UBO slot（复用 VulkanDrawExecutor 的 per_frame_ubo_）
-        uint32_t fi = context_->current_frame();
-        VkDeviceSize slot_offset = per_frame_ubo_offset_;
-        VkDeviceSize aligned_size = (sizeof(HairUBO) + kUboSlotAlignment - 1) & ~(kUboSlotAlignment - 1);
-
-        void* mapped = nullptr;
-        vkMapMemory(context_->device(), per_frame_ubo_mem_[fi], slot_offset, sizeof(HairUBO), 0, &mapped);
-        memcpy(mapped, &ubo, sizeof(HairUBO));
-        vkUnmapMemory(context_->device(), per_frame_ubo_mem_[fi]);
-        per_frame_ubo_offset_ += aligned_size;
-
-        // 分配 descriptor set (set 0 = UBO, set 1 = 2 SSBO)
-        std::vector<VkDescriptorSet> sets;
-
-        // Set 0: HairUBO
-        {
-            VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-            alloc_info.descriptorPool = resource_mgr_->descriptor_pool();
-            alloc_info.descriptorSetCount = 1;
-            alloc_info.pSetLayouts = &hair_program->descriptor_set_layouts[0];
-            VkDescriptorSet ds;
-            if (vkAllocateDescriptorSets(context_->device(), &alloc_info, &ds) != VK_SUCCESS) continue;
-
-            VkDescriptorBufferInfo buf_info{};
-            buf_info.buffer = per_frame_ubo_[fi];
-            buf_info.offset = slot_offset;
-            buf_info.range = sizeof(HairUBO);
-
-            VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-            write.dstSet = ds;
-            write.dstBinding = 0;
-            write.descriptorCount = 1;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            write.pBufferInfo = &buf_info;
-            vkUpdateDescriptorSets(context_->device(), 1, &write, 0, nullptr);
-            sets.push_back(ds);
-        }
-
-        // Set 1: Position SSBO (binding 0) + Tangent SSBO (binding 1)
-        if (hair_program->descriptor_set_layouts.size() > 1) {
-            VkDescriptorSetAllocateInfo alloc_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-            alloc_info.descriptorPool = resource_mgr_->descriptor_pool();
-            alloc_info.descriptorSetCount = 1;
-            alloc_info.pSetLayouts = &hair_program->descriptor_set_layouts[1];
-            VkDescriptorSet ds;
-            if (vkAllocateDescriptorSets(context_->device(), &alloc_info, &ds) != VK_SUCCESS) continue;
-
-            const VulkanBuffer* pos_buf = resource_mgr_->GetSSBO(item.position_ssbo.raw());
-            const VulkanBuffer* tan_buf = resource_mgr_->GetSSBO(item.tangent_ssbo.raw());
-            if (!pos_buf || !tan_buf || !pos_buf->buffer || !tan_buf->buffer) continue;
-
-            VkDescriptorBufferInfo ssbo_infos[2]{};
-            ssbo_infos[0].buffer = pos_buf->buffer;
-            ssbo_infos[0].offset = 0;
-            ssbo_infos[0].range = VK_WHOLE_SIZE;
-            ssbo_infos[1].buffer = tan_buf->buffer;
-            ssbo_infos[1].offset = 0;
-            ssbo_infos[1].range = VK_WHOLE_SIZE;
-
-            VkWriteDescriptorSet writes[2]{};
-            for (int i = 0; i < 2; ++i) {
-                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writes[i].dstSet = ds;
-                writes[i].dstBinding = static_cast<uint32_t>(i);
-                writes[i].descriptorCount = 1;
-                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                writes[i].pBufferInfo = &ssbo_infos[i];
-            }
-            vkUpdateDescriptorSets(context_->device(), 2, writes, 0, nullptr);
-            sets.push_back(ds);
-        }
-
-        vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                hair_program->pipeline_layout,
-                                0, static_cast<uint32_t>(sets.size()), sets.data(),
-                                0, nullptr);
-
-        // 逐 strand 绘制（每个 strand 是一个 LINE_STRIP）
-        for (uint32_t s = 0; s < item.strand_count; ++s) {
-            int first = item.strand_firsts[s];
-            int count = item.strand_counts[s];
-            if (count <= 0) continue;
-            vkCmdDraw(cmd_buf, static_cast<uint32_t>(count), 1,
-                      static_cast<uint32_t>(first), 0);
-        }
-
-        global_state_.current_frame_stats.draw_calls += 1;
-    }
 }
 
 // ============================================================================

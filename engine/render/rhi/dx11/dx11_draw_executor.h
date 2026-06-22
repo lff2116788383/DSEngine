@@ -108,15 +108,12 @@ public:
                              DX11ShaderManager& shader_mgr,
                              DX11ResourceManager& resource_mgr);
 
-    void DrawHairStrands(const std::vector<HairDrawItem>& items,
-                          const glm::mat4& view, const glm::mat4& projection,
-                          DX11PipelineStateManager& pipeline_mgr,
-                          DX11ShaderManager& shader_mgr,
-                          DX11ResourceManager& resource_mgr);
-
     // --- 通用绘制原语 (A1) ---
     // Bind* 仅暂存累积状态；PrimDraw 时组装 shader/cbuffer/纹理/VB 并发出 draw。
     // 深度/光栅/混合由 SetPipelineState→ApplyPipelineState 设定，PrimDraw 不再 save/restore。
+    /// 设置后续 Prim* 绘制的图元拓扑（由 SetPipelineState 从 PSO desc 推送）。
+    /// 默认 TriangleList；毛发等线状几何用 LineStrip/LineList。
+    void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
@@ -283,6 +280,7 @@ private:
     std::unordered_map<uint32_t, unsigned int> prim_ubos_;      ///< slot → constant buffer 句柄
     struct PrimSSBOBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
     std::unordered_map<uint32_t, PrimSSBOBinding> prim_ssbos_;  ///< slot → SSBO 句柄+子区间
+    D3D11_PRIMITIVE_TOPOLOGY prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;  ///< 当前 PSO 拓扑（SetPipelineState 推送）
 
     // 双面材质光栅化状态（CullMode=NONE, 与 OpenGL/Vulkan 的 material_double_sided 对齐）
     ComPtr<ID3D11RasterizerState> no_cull_rasterizer_state_;
@@ -319,39 +317,6 @@ private:
 
     // Light Probe SH 常量缓冲（b9, 160B）
     ComPtr<ID3D11Buffer> light_probe_data_cb_;
-
-    // --- Hair rendering ---
-    struct HairVSCB {
-        glm::mat4 model;
-        glm::mat4 view;
-        glm::mat4 projection;
-        glm::vec3 camera_pos;
-        float _pad0;
-    };
-    static_assert(sizeof(HairVSCB) == 208, "HairVSCB must be 208 bytes");
-
-    struct HairPSCB {
-        glm::vec3 light_dir;
-        float light_intensity;
-        glm::vec3 light_color;
-        float ambient_intensity;
-        glm::vec4 root_color;
-        glm::vec4 tip_color;
-        float opacity;
-        float spec_primary;
-        float spec_secondary;
-        float spec_strength1;
-        float spec_strength2;
-        glm::vec3 spec_color;
-    };
-    static_assert(sizeof(HairPSCB) % 16 == 0, "HairPSCB must be 16B aligned");
-
-    unsigned int hair_shader_handle_ = 0;
-    ComPtr<ID3D11Buffer> hair_vs_cb_;
-    ComPtr<ID3D11Buffer> hair_ps_cb_;
-    ComPtr<ID3D11BlendState> hair_blend_state_;
-    ComPtr<ID3D11DepthStencilState> hair_depth_state_;
-    ComPtr<ID3D11RasterizerState> hair_raster_state_;
 
     bool initialized_ = false;
 };

@@ -10,8 +10,6 @@
 #include "engine/render/rhi/dx11/dx11_shader_manager.h"
 #include "engine/render/rhi/postprocess_common.h"
 #include "engine/base/debug.h"
-#include "engine/render/shaders/generated/embed/hair_vert.gen.h"
-#include "engine/render/shaders/generated/embed/hair_frag.gen.h"
 
 static constexpr int DX11_MAX_BATCH_SPRITES = 4096;
 static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
@@ -1072,6 +1070,16 @@ void DX11DrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
     prim_has_push_ = true;
 }
 
+void DX11DrawExecutor::PrimSetTopology(PrimitiveTopology topology) {
+    switch (topology) {
+        case PrimitiveTopology::LineStrip: prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP; break;
+        case PrimitiveTopology::LineList:  prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;  break;
+        case PrimitiveTopology::PointList: prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_POINTLIST; break;
+        case PrimitiveTopology::TriangleList:
+        default:                           prim_topology_ = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; break;
+    }
+}
+
 void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
                                 DX11ShaderManager& shader_mgr,
                                 DX11ResourceManager& resource_mgr) {
@@ -1079,8 +1087,8 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
 
     const auto* program = shader_mgr.GetProgram(prim_program_handle_);
     if (!program) return;
+    // 顶点缓冲可缺省（vertexless：SV_VertexID 取 SSBO）。prim_vbo_handle_==0 时不绑 VB。
     const auto* buf = resource_mgr.GetBuffer(prim_vbo_handle_);
-    if (!buf || !buf->buffer) return;
 
     // push-constant 风格的 mat4（u_vp）→ PerFrame cbuffer b0。
     // 天空盒 VS 仅读取首个 mat4（PerFrameUBO.vp，offset 0），其余字段无关。
@@ -1095,9 +1103,38 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
     dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
 
+    // UBO（constant buffer）按 slot → b<slot>，VS+PS 同绑（毛发组合 HairUniforms\@b0 跨 VS/FS 共享）。
+    for (const auto& [slot, handle] : prim_ubos_) {
+        const auto* cbuf = resource_mgr.GetBuffer(handle);
+        if (cbuf && cbuf->buffer) {
+            ID3D11Buffer* cb = cbuf->buffer.Get();
+            dc->VSSetConstantBuffers(slot, 1, &cb);
+            dc->PSSetConstantBuffers(slot, 1, &cb);
+        }
+    }
+
+    // 2D 纹理按 slot → t<slot>/s<slot>。
+    for (const auto& [slot, handle] : prim_textures_) {
+        const auto* tex = resource_mgr.GetTexture(handle);
+        if (tex) {
+            dc->PSSetShaderResources(slot, 1, tex->srv.GetAddressOf());
+            if (slot < D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT)
+                dc->PSSetSamplers(slot, 1, tex->sampler.GetAddressOf());
+        }
+    }
+
+    // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS（毛发 position/tangent 是顶点级资源；
+    // @SSBO_LOW_REGISTERS 落低位 t，同绑 PS 会覆盖 PS 纹理槽）。
+    for (const auto& [slot, b] : prim_ssbos_) {
+        ID3D11ShaderResourceView* srv = resource_mgr.GetSSBORangeSRV(b.handle, b.offset, b.size);
+        if (srv) {
+            dc->VSSetShaderResources(slot, 1, &srv);
+        }
+    }
+
     auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
-    if (layout) dc->IASetInputLayout(layout);
-    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    dc->IASetInputLayout((buf && buf->buffer && layout) ? layout : nullptr);
+    dc->IASetPrimitiveTopology(prim_topology_);
 
     if (prim_cubemap_ != 0) {
         const auto* tex = resource_mgr.GetTexture(prim_cubemap_);
@@ -1107,9 +1144,11 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
         }
     }
 
-    UINT stride = prim_stride_;
-    UINT offset = 0;
-    dc->IASetVertexBuffers(0, 1, buf->buffer.GetAddressOf(), &stride, &offset);
+    if (buf && buf->buffer) {
+        UINT stride = prim_stride_;
+        UINT offset = 0;
+        dc->IASetVertexBuffers(0, 1, buf->buffer.GetAddressOf(), &stride, &offset);
+    }
 
     // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定，此处不再 save/restore。
     dc->Draw(vertex_count, first_vertex);
@@ -1155,8 +1194,8 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
 
     const auto* program = shader_mgr.GetProgram(prim_program_handle_);
     if (!program) return;
+    // VB 可缺省（vertexless：SV_VertexID 取索引值→SSBO，毛发用）；IB 必须存在。
     const auto* vb = resource_mgr.GetBuffer(prim_vbo_handle_);
-    if (!vb || !vb->buffer) return;
     const auto* ib = resource_mgr.GetBuffer(prim_index_buffer_handle_);
     if (!ib || !ib->buffer) return;
 
@@ -1186,7 +1225,7 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         }
     }
 
-    // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS：骨骼/实例是顶点级资源，
+    // 图形阶段 SSBO 按 slot → t<slot>，仅绑 VS：骨骼/实例/毛发顶点是顶点级资源，
     // 且离线编译器对 @SSBO_LOW_REGISTERS 着色器把 SSBO 落到低位 t（如 t0），
     // 同绑 PS 会覆盖 PS 纹理槽（如反照率 t0）。VS 无纹理，故仅 VS 安全。
     for (const auto& [slot, b] : prim_ssbos_) {
@@ -1197,12 +1236,14 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
     }
 
     auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
-    if (layout) dc->IASetInputLayout(layout);
-    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    dc->IASetInputLayout((vb && vb->buffer && layout) ? layout : nullptr);
+    dc->IASetPrimitiveTopology(prim_topology_);
 
-    UINT stride = prim_stride_;
-    UINT offset = 0;
-    dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+    if (vb && vb->buffer) {
+        UINT stride = prim_stride_;
+        UINT offset = 0;
+        dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+    }
     dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
 
     // 深度/光栅/混合已由 SetPipelineState→ApplyPipelineState 设定。
@@ -1372,145 +1413,6 @@ void DX11DrawExecutor::DispatchCompute(unsigned int cs_handle,
     dc->CSSetShader(nullptr, nullptr, 0);
 }
 
-// ============================================================================
-// Hair Strand 渲染 (DX11)
-// ============================================================================
-
-void DX11DrawExecutor::DrawHairStrands(const std::vector<HairDrawItem>& items,
-                                         const glm::mat4& view, const glm::mat4& projection,
-                                         DX11PipelineStateManager& pipeline_mgr,
-                                         DX11ShaderManager& shader_mgr,
-                                         DX11ResourceManager& resource_mgr) {
-    if (items.empty()) return;
-
-    auto* dc = context_->device_context();
-    if (!dc) return;
-
-    // 懒初始化 hair shader
-    if (hair_shader_handle_ == 0) {
-        using namespace dse::render::generated_shaders;
-        hair_shader_handle_ = shader_mgr.CreateProgram(
-            std::string(khair_vert_hlsl), std::string(khair_frag_hlsl));
-        if (hair_shader_handle_ == 0) {
-            DEBUG_LOG_ERROR("[DX11DrawExecutor] Failed to compile hair shader");
-            return;
-        }
-    }
-
-    // 懒初始化 hair CB (b0 = VS params, b1 = PS params)
-    if (!hair_vs_cb_) {
-        hair_vs_cb_ = CreateConstantBuffer(sizeof(HairVSCB));
-        hair_ps_cb_ = CreateConstantBuffer(sizeof(HairPSCB));
-    }
-
-    const auto* program = shader_mgr.GetProgram(hair_shader_handle_);
-    if (!program) return;
-
-    // 绑定 shader
-    dc->VSSetShader(program->vertex_shader.Get(), nullptr, 0);
-    dc->PSSetShader(program->pixel_shader.Get(), nullptr, 0);
-
-    // 设置 topology = LINE_STRIP
-    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP);
-    dc->IASetInputLayout(nullptr); // vertexless (SV_VertexID)
-
-    // 混合状态：alpha blend + depth readonly
-    if (!hair_blend_state_) {
-        D3D11_BLEND_DESC bd{};
-        bd.RenderTarget[0].BlendEnable = TRUE;
-        bd.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-        bd.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-        bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-        bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-        bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-        bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        context_->device()->CreateBlendState(&bd, hair_blend_state_.GetAddressOf());
-    }
-    if (!hair_depth_state_) {
-        D3D11_DEPTH_STENCIL_DESC dsd{};
-        dsd.DepthEnable = TRUE;
-        dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-        dsd.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
-        context_->device()->CreateDepthStencilState(&dsd, hair_depth_state_.GetAddressOf());
-    }
-    if (!hair_raster_state_) {
-        D3D11_RASTERIZER_DESC rd{};
-        rd.FillMode = D3D11_FILL_SOLID;
-        rd.CullMode = D3D11_CULL_NONE;
-        rd.AntialiasedLineEnable = TRUE;
-        rd.DepthClipEnable = TRUE;
-        context_->device()->CreateRasterizerState(&rd, hair_raster_state_.GetAddressOf());
-    }
-
-    float blend_factor[4] = {0,0,0,0};
-    dc->OMSetBlendState(hair_blend_state_.Get(), blend_factor, 0xFFFFFFFF);
-    dc->OMSetDepthStencilState(hair_depth_state_.Get(), 0);
-    dc->RSSetState(hair_raster_state_.Get());
-
-    glm::mat4 inv_view = glm::inverse(view);
-    glm::vec3 cam_pos(inv_view[3]);
-
-    for (const auto& item : items) {
-        if (item.strand_count == 0 || item.total_vertex_count == 0) continue;
-        if (!item.strand_firsts || !item.strand_counts) continue;
-
-        // 更新 VS CB (b0)
-        HairVSCB vs_cb{};
-        vs_cb.model = item.world_transform;
-        vs_cb.view = view;
-        vs_cb.projection = projection;
-        vs_cb.camera_pos = cam_pos;
-        vs_cb._pad0 = 0.0f;
-        UpdateConstantBuffer(hair_vs_cb_.Get(), &vs_cb, sizeof(vs_cb));
-        dc->VSSetConstantBuffers(0, 1, hair_vs_cb_.GetAddressOf());
-        dc->PSSetConstantBuffers(0, 1, hair_vs_cb_.GetAddressOf());
-
-        // 更新 PS CB (b1)
-        HairPSCB ps_cb{};
-        ps_cb.light_dir = item.light_direction;
-        ps_cb.light_intensity = item.light_intensity;
-        ps_cb.light_color = item.light_color;
-        ps_cb.ambient_intensity = item.ambient_intensity;
-        ps_cb.root_color = item.root_color;
-        ps_cb.tip_color = item.tip_color;
-        ps_cb.opacity = item.opacity;
-        ps_cb.spec_primary = item.specular_primary;
-        ps_cb.spec_secondary = item.specular_secondary;
-        ps_cb.spec_strength1 = item.specular_strength_primary;
-        ps_cb.spec_strength2 = item.specular_strength_secondary;
-        ps_cb.spec_color = item.specular_color;
-        UpdateConstantBuffer(hair_ps_cb_.Get(), &ps_cb, sizeof(ps_cb));
-        dc->PSSetConstantBuffers(1, 1, hair_ps_cb_.GetAddressOf());
-
-        // 绑定 SSBO SRV 到 VS t0 (position), t1 (tangent)
-        const auto* pos_ssbo = resource_mgr.GetSSBO(item.position_ssbo.raw());
-        const auto* tan_ssbo = resource_mgr.GetSSBO(item.tangent_ssbo.raw());
-        if (!pos_ssbo || !tan_ssbo) continue;
-
-        ID3D11ShaderResourceView* vs_srvs[2] = { pos_ssbo->srv.Get(), tan_ssbo->srv.Get() };
-        dc->VSSetShaderResources(0, 2, vs_srvs);
-
-        // 逐 strand 绘制
-        for (uint32_t s = 0; s < item.strand_count; ++s) {
-            int first = item.strand_firsts[s];
-            int count = item.strand_counts[s];
-            if (count <= 0) continue;
-            dc->Draw(static_cast<UINT>(count), static_cast<UINT>(first));
-        }
-
-        global_state_.current_frame_stats.draw_calls += 1;
-
-        // 解绑 VS SRV
-        ID3D11ShaderResourceView* null_srvs[2] = {nullptr, nullptr};
-        dc->VSSetShaderResources(0, 2, null_srvs);
-    }
-
-    // 恢复状态
-    dc->OMSetBlendState(nullptr, blend_factor, 0xFFFFFFFF);
-    dc->OMSetDepthStencilState(nullptr, 0);
-    dc->RSSetState(nullptr);
-}
 
 // ============================================================
 // GPU-Driven PBR 渲染设置

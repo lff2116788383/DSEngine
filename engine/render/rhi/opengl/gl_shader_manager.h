@@ -204,6 +204,10 @@ public:
     void InitParticle3DShader();
     unsigned int particle3d_shader_handle() const { return particle3d_shader_handle_; }
 
+    // 毛发线带着色器（B4；hair.vert vertexless + hair.frag；position/tangent SSBO\@0/1 + HairUniforms\@0）。
+    void InitHairStrandShader();
+    unsigned int hair_strand_shader_handle() const { return hair_strand_shader_handle_; }
+
     // --- 高级 shading forward 着色器（B2c-1）：forward_pbr.vert + forward_shaded.frag。
     // PerFrame\@0 / PerScene\@1 / PerMaterial(扩展)\@2 UBO + 5 纹理槽（flat unit 0..4）。
     void InitForwardShadedShader();
@@ -300,6 +304,7 @@ private:
     unsigned int forward_pbr_depth_shader_handle_ = 0;
     unsigned int forward_instanced_depth_shader_handle_ = 0;
     unsigned int particle3d_shader_handle_ = 0;
+    unsigned int hair_strand_shader_handle_ = 0;
     unsigned int forward_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_shaded_shader_handle_ = 0;
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
