@@ -1132,6 +1132,56 @@ void GLShaderManager::InitShadowShader() {
 // Post-process shader cache
 // ============================================================
 
+// gen.h post-process fragments declare every sampler with a spirv-cross emitted
+// layout(binding=N); desktop GL therefore defaults each sampler to texture unit N.
+// PostProcessRenderer however binds textures with "GLSL binding -> unit binding-1"
+// (DX11 reserves b0 for the push cbuffer, so texture registers start at t0=binding1).
+// Shift every sampler unit down by one so the generic BindTexture(slot) path lines up,
+// mirroring what the other builtin shaders do via BindSamplersOnce in their Init*.
+static void RebindGenPPSamplerUnits(unsigned int prog) {
+    GLint count = 0;
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORMS, &count);
+    if (count <= 0) return;
+    GLint max_len = 0;
+    glGetProgramiv(prog, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_len);
+    if (max_len < 1) max_len = 256;
+    std::vector<char> name(static_cast<size_t>(max_len) + 1);
+    glUseProgram(prog);
+    auto shift_loc = [&](const char* uname) {
+        int loc = glGetUniformLocation(prog, uname);
+        if (loc < 0) return;
+        GLint unit = 0;
+        glGetUniformiv(prog, loc, &unit);
+        if (unit > 0) glUniform1i(loc, unit - 1);
+    };
+    for (GLint i = 0; i < count; ++i) {
+        GLint asize = 0;
+        GLenum atype = 0;
+        glGetActiveUniform(prog, static_cast<GLuint>(i), max_len, nullptr, &asize, &atype, name.data());
+        switch (atype) {
+            case GL_SAMPLER_2D:
+            case GL_SAMPLER_3D:
+            case GL_SAMPLER_CUBE:
+            case GL_SAMPLER_2D_ARRAY:
+                break;
+            default:
+                continue;
+        }
+        if (asize <= 1) {
+            shift_loc(name.data());
+        } else {
+            std::string base(name.data());
+            size_t br = base.find('[');
+            if (br != std::string::npos) base.resize(br);
+            for (int e = 0; e < asize; ++e) {
+                std::string el = base + "[" + std::to_string(e) + "]";
+                shift_loc(el.c_str());
+            }
+        }
+    }
+    glUseProgram(0);
+}
+
 unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_name) {
     std::string key = "gen_" + effect_name;
     auto it = pp_shaders_.find(key);
@@ -1183,6 +1233,7 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
         return 0;
     }
     programs_created_ += 1;
+    RebindGenPPSamplerUnits(shader);
     pp_shaders_[key] = shader;
     return shader;
 }
