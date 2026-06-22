@@ -674,16 +674,17 @@ void GrassSystem::Update(World& world, float delta_time) {
 // 渲染
 // ============================================================
 
-void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
-                         bool depth_only) {
-    RenderInternal(world, cmd_buffer, depth_only, /*shadow_pass=*/false, camera_offset);
+void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                         const glm::vec3& camera_offset, bool depth_only) {
+    RenderInternal(world, cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
-void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
+void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                               const glm::vec3& camera_offset) {
+    RenderInternal(world, cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
-void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
+void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                                   bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
     if (blade_vertices_.empty()) return;
 
@@ -714,8 +715,8 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
     ExtractFrustumPlanes(vp, frustum_planes);
 
     // 前向 pass 绘制用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正）。
-    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
-    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
     const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
 
     glm::vec3 light_dir(0.0f, -1.0f, 0.0f);

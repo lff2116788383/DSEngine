@@ -22,7 +22,6 @@
  * 3. VulkanCommandBuffer 无 GPU 测试
  *    - 构造后 VkCommandBuffer 为 VK_NULL_HANDLE
  *    - Reset 重置状态
- *    - SetCamera 存储 view/projection
  *    - 全局 uniform 暂存与清除
  *    - 无 device 时所有 Draw/RenderPass 命令安全
  *
@@ -257,16 +256,6 @@ TEST(VulkanCommandBufferTest, ResetresetState) {
     cmd.SetVkCommandBuffer(reinterpret_cast<VkCommandBuffer>(0x1234));
     cmd.Reset();
     EXPECT_EQ(cmd.GetVkCommandBuffer(), VK_NULL_HANDLE);
-}
-
-// 测试 Vulkan命令缓冲区：设置Camerastorage矩阵
-TEST(VulkanCommandBufferTest, SetCamerastorageMatrix) {
-    VulkanCommandBuffer cmd;
-    glm::mat4 view = glm::mat4(2.0f);
-    glm::mat4 proj = glm::mat4(3.0f);
-    cmd.SetCamera(view, proj);
-    // SetCamera 是 void，验证不崩溃即可
-    // 矩阵值会在 Draw 时通过 executor 消费
 }
 
 // 测试 Vulkan命令缓冲区：Alluniform且清空

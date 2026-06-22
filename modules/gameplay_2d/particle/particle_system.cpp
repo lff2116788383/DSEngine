@@ -227,7 +227,7 @@ void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* phy
     }
 }
 
-void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
     auto view = world.registry().view<ParticleEmitterComponent>();
     std::vector<SpriteDrawItem> items;
     
@@ -259,6 +259,6 @@ void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     
     if (rhi_device_ && !items.empty()) {
         sprite_batch_.Draw(cmd_buffer, *rhi_device_, items,
-                           cmd_buffer.GetViewMatrix(), cmd_buffer.GetProjectionMatrix());
+                           frame.view, frame.projection);
     }
 }

@@ -29,7 +29,7 @@ public:
 
     // 2D 场景/UI 渲染贡献。非 IModule 虚函数 —— 由 FramePipeline 经
     // RenderPassContext 钩子调用，待 Phase 2 迁为独立的 IRenderPass。
-    void RenderScene2D(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction = glm::mat4(1.0f));
+    void RenderScene2D(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction = glm::mat4(1.0f));
     void RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f));
 
     TransformSystem& transform_system() { return transform_system_; }

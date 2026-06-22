@@ -34,7 +34,6 @@ public:
     void DispatchComputePass(const ComputeDispatch&) override {}
     void DrawIndexedInstanced(uint32_t, uint32_t, uint32_t, int32_t, uint32_t) override {}
     void DrawIndexedIndirect(unsigned int, uint32_t) override {}
-    void SetCamera(const glm::mat4&, const glm::mat4&) override {}
     void ClearColor(const glm::vec4&) override {}
     void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
     void SetViewport(int, int, int, int) override {}

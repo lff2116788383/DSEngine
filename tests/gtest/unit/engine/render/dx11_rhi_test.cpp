@@ -236,12 +236,6 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
-// 测试 DX 11命令缓冲区：设置相机Storage矩阵不折叠
-TEST(DX11CommandBufferTest, SetCameraStorageMatrixDoesNotCollapse) {
-    DX11CommandBuffer cmd;
-    cmd.SetCamera(glm::mat4(2.0f), glm::mat4(3.0f));
-}
-
 // 测试 DX 11命令缓冲区：Alluniform且清空
 TEST(DX11CommandBufferTest, AlluniformAndClear) {
     DX11CommandBuffer cmd;

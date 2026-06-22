@@ -51,7 +51,6 @@ public:
     MOCK_METHOD(void, DrawIndexed, (uint32_t, uint32_t, int32_t), (override));
     MOCK_METHOD(void, DrawIndexedInstanced, (uint32_t, uint32_t, uint32_t, int32_t, uint32_t), (override));
     MOCK_METHOD(void, DrawIndexedIndirect, (unsigned int, uint32_t), (override));
-    MOCK_METHOD(void, SetCamera, (const glm::mat4&, const glm::mat4&), (override));
     MOCK_METHOD(void, ClearColor, (const glm::vec4&), (override));
     MOCK_METHOD(void, SetGlobalMat4, (const std::string&, const glm::mat4&), (override));
     MOCK_METHOD(void, DispatchComputePass, (const ComputeDispatch&), (override));

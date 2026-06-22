@@ -296,7 +296,7 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
     DEBUG_LOG_TRACE("[spine-update] end this={}", static_cast<void*>(this));
 }
 
-void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
     if (!rhi_device_) return;  // 未注入设备则无法走通用原语路径
 
     auto view = world.registry().view<TransformComponent, SpineRendererComponent>();
@@ -305,8 +305,8 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer) {
     // （pbr.frag 无光照分支 = texColor*vColor），改用 MeshRenderer::DrawUnlit2D（Sprite2D = texColor*vColor），
     // 语义一致。顶点 computeWorldVertices 为骨架空间，按 entity transform.local_to_world 在 CPU 侧
     // 预变换到世界空间（旧路径由 VS 施 model）。按绘制顺序逐 slot 立即绘制，保持 alpha 合成次序。
-    const glm::mat4 vp_view = cmd_buffer.GetViewMatrix();
-    const glm::mat4 vp_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::mat4 vp_view = frame.view;
+    const glm::mat4 vp_proj = frame.projection;
 
     std::vector<dse::render::Unlit2DVertex> verts;
     std::vector<uint16_t> indices;

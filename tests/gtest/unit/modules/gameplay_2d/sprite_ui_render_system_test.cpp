@@ -36,7 +36,8 @@ TEST(SpriteRenderSystemTest, EmptyWorldDoesNotCrash) {
     SpriteRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    sys.Render(world, cmd);
+    dse::render::FrameContext frame;
+    sys.Render(world, cmd, frame);
 }
 
 // ============================================================

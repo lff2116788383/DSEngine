@@ -9,6 +9,7 @@
 #include <entt/entt.hpp>
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/frame_context.h"
 #include "engine/ecs/world.h"
 class AssetManager;
 
@@ -31,7 +32,7 @@ public:
      */
     void Update(entt::registry& registry, float dt);
 
-    void Render(World& world, CommandBuffer& cmd_buffer);
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
 
     void Shutdown(entt::registry& registry);
     void SetAssetManager(AssetManager* asset_manager);

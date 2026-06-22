@@ -50,13 +50,13 @@ void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     physics2d_system_.FixedUpdate(world, fixed_delta_time);
 }
 
-void Gameplay2DModule::RenderScene2D(World& world, CommandBuffer& cmd_buffer, const glm::mat4& clip_correction) {
+void Gameplay2DModule::RenderScene2D(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction) {
     (void)clip_correction;
-    sprite_render_system_.Render(world, cmd_buffer);
+    sprite_render_system_.Render(world, cmd_buffer, frame);
 #ifdef DSE_ENABLE_SPINE
-    spine_system_.Render(world, cmd_buffer);
+    spine_system_.Render(world, cmd_buffer, frame);
 #endif
-    particle_system_.Render(world, cmd_buffer);
+    particle_system_.Render(world, cmd_buffer, frame);
 }
 
 void Gameplay2DModule::RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {

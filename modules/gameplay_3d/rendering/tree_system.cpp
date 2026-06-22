@@ -351,18 +351,19 @@ void TreeSystem::Update(World& world, float /*delta_time*/) {
 // 渲染
 // ============================================================
 
-void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
-                        bool depth_only) {
+void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                        const glm::vec3& camera_offset, bool depth_only) {
     // Opaque 彩色通道：depth_only=false → MeshRenderer::DrawSharedTemplateInstanced；
     // PreZ 深度预通道：depth_only=true → MeshRenderer::DrawDepthOnlySharedTemplateInstanced。
-    RenderInternal(world, cmd_buffer, depth_only, /*shadow_pass=*/false, camera_offset);
+    RenderInternal(world, cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
-void TreeSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
+void TreeSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                              const glm::vec3& camera_offset) {
+    RenderInternal(world, cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
-void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
+void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                                  bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
     if (!rhi_) return;
 
@@ -394,8 +395,8 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer,
 
     // 前向 pass 绘制使用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正），
     // 而非上方仅用于视锥剔除的本地相机矩阵。
-    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
-    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
     const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
 
     // 获取方向光参数

@@ -7,6 +7,7 @@
 #include <glm/glm.hpp>
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/frame_context.h"
 
 class World;
 
@@ -85,23 +86,23 @@ struct RenderScene {
     }
 
     /// 阶段4-M4：取代 cmd.DrawMeshBatch ABI，逐队列经常驻 MeshRenderer::DrawBatch 分发。
-    /// view/proj 取自 cmd（含投影修正，与原执行器同源）；depth-only/gbuffer/编辑器模式
-    /// 由 device.GetGlobalRenderState() 透出，DrawBatch 内部据此路由（见 mesh_renderer.cpp）。
-    void DrawOpaqueCpu(CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer) const {
-        const glm::mat4 view = cmd.GetViewMatrix();
-        const glm::mat4 proj = cmd.GetProjectionMatrix();
+    /// view/proj 取自各 Pass 构造的 FrameContext（含投影修正，与原执行器同源）；
+    /// depth-only/gbuffer/编辑器模式由 device.GetGlobalRenderState() 透出，DrawBatch 内部据此路由。
+    void DrawOpaqueCpu(CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const FrameContext& frame) const {
+        const glm::mat4& view = frame.view;
+        const glm::mat4& proj = frame.projection;
         if (!cpu_meshes.opaque.empty()) renderer.DrawBatch(cmd, device, cpu_meshes.opaque, view, proj);
         if (!cpu_meshes.skinned.empty()) renderer.DrawBatch(cmd, device, cpu_meshes.skinned, view, proj);
         if (!cpu_meshes.static_cpu_fallback.empty()) renderer.DrawBatch(cmd, device, cpu_meshes.static_cpu_fallback, view, proj);
     }
 
-    void DrawTransparent(CommandBuffer& cmd, int wboit_mode, RhiDevice& device, MeshRenderer& renderer) {
+    void DrawTransparent(CommandBuffer& cmd, int wboit_mode, RhiDevice& device, MeshRenderer& renderer, const FrameContext& frame) {
         for (auto& item : cpu_meshes.transparent) {
             item.wboit_mode = wboit_mode;
         }
         if (!cpu_meshes.transparent.empty())
             renderer.DrawBatch(cmd, device, cpu_meshes.transparent,
-                               cmd.GetViewMatrix(), cmd.GetProjectionMatrix());
+                               frame.view, frame.projection);
     }
 
     std::vector<RenderObjectRef> objects;

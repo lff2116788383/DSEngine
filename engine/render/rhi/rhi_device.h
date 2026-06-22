@@ -39,10 +39,6 @@ public:
     virtual ~CommandBuffer() = default;
     virtual void BeginRenderPass(const RenderPassDesc& render_pass) = 0;
     virtual void EndRenderPass() = 0;
-    virtual void SetCamera(const glm::mat4& view, const glm::mat4& projection) = 0;
-    /// 返回 SetCamera 缓存的 view/projection（高层渲染器经通用原语绘制时取用）。
-    virtual glm::mat4 GetViewMatrix() const { return glm::mat4(1.0f); }
-    virtual glm::mat4 GetProjectionMatrix() const { return glm::mat4(1.0f); }
     virtual void ClearColor(const glm::vec4& color) = 0;
     virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
 

@@ -30,6 +30,7 @@ class IRenderPass;
 class MeshRenderer;
 struct RenderPassContext;
 struct RenderScene;
+struct FrameContext;
 } // namespace render
 } // namespace dse
 
@@ -51,14 +52,14 @@ public:
     virtual void UpdateGameplay2D(World& world, float dt) = 0;
     virtual void FixedUpdateGameplay2D(World& world, float dt) = 0;
     virtual void ShutdownGameplay2D(World& world) = 0;
-    virtual void RenderScene2D(World& world, CommandBuffer& cmd) = 0;
+    virtual void RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) = 0;
     virtual void RenderUI2D(World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) = 0;
     virtual dse::gameplay2d::AudioSystem& GetAudioSystem() = 0;
 
     // ---- MeshRenderSystem ----
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;
     virtual void ShutdownMeshSystem() = 0;
-    virtual void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer) = 0;
+    virtual void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) = 0;
     virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene) = 0;
     virtual int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) = 0;
     virtual void ResetGPUSceneState() = 0;

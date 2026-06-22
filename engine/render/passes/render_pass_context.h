@@ -44,6 +44,7 @@ class DDGISystem;
 struct RenderPassContext {
     const RenderThinSnapshot* snapshot = nullptr;  ///< 渲染线程只读快照（Phase 1）
     glm::vec3 camera_offset{0.0f};                ///< Camera-Relative Rendering: model matrix 减去此偏移后传 GPU
+    FrameContext frame_camera;                    ///< 主相机帧上下文（ForwardScenePass 写入，WBOITPass 等跨 Pass 读取）
     World* world = nullptr;
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
@@ -177,9 +178,9 @@ struct RenderPassContext {
     int scene_view_mode = 0;
 
     /// FramePipeline 拥有的子系统回调（避免 Pass 直接依赖 FramePipeline）
-    std::function<void(World&, CommandBuffer&)> render_2d_scene;
+    std::function<void(World&, CommandBuffer&, const FrameContext&)> render_2d_scene;
     std::function<void(World&, CommandBuffer&, int, int, const glm::mat4&)> render_2d_ui;
-    std::function<void(World&, CommandBuffer&)> render_meshes;
+    std::function<void(World&, CommandBuffer&, const FrameContext&)> render_meshes;
 
     /// 全局湿度（由天气系统驱动，影响 PBR 表面）
     float global_wetness = 0.0f;

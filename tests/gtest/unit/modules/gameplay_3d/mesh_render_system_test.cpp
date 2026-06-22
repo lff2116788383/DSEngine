@@ -120,7 +120,8 @@ TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash) {
     MeshRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    EXPECT_THROW(sys.Render(world, cmd), std::runtime_error);
+    dse::render::FrameContext frame;
+    EXPECT_THROW(sys.Render(world, cmd, frame), std::runtime_error);
 }
 
 // 测试 网格渲染系统：空世界不崩溃2
@@ -128,6 +129,7 @@ TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash_2) {
     MeshRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    sys.RenderTransparent(world, cmd, 1);
-    sys.RenderTransparent(world, cmd, 2);
+    dse::render::FrameContext frame;
+    sys.RenderTransparent(world, cmd, frame, 1);
+    sys.RenderTransparent(world, cmd, frame, 2);
 }

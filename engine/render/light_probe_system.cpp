@@ -133,7 +133,7 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
         // 每面独立 CommandBuffer，提交后立即回读
         auto face_cmd = rhi_device->CreateCommandBuffer();
         face_cmd->BeginRenderPass({cubemap_rt, glm::vec4(0.0f), true});
-        face_cmd->SetCamera(view, proj);
+        const dse::render::FrameContext face_frame{view, proj};
 
         // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
         if (skybox_renderer) {
@@ -150,7 +150,7 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
         // 渲染 3D 网格（通过 render_meshes 回调）
         face_cmd->BindPipeline(ctx.pipeline_states.mesh);
         if (ctx.render_meshes) {
-            ctx.render_meshes(*ctx.world, *face_cmd);
+            ctx.render_meshes(*ctx.world, *face_cmd, face_frame);
         }
         face_cmd->EndRenderPass();
 

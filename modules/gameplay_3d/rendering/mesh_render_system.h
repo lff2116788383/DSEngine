@@ -11,6 +11,7 @@
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/hiz_types.h"
 #include "engine/render/static_batch/static_batch_builder.h"
+#include "engine/render/frame_context.h"
 #include <glm/glm.hpp>
 class AssetManager;
 
@@ -34,14 +35,14 @@ public:
      * @param world 实体世界
      * @param cmd_buffer 渲染命令缓冲
      */
-    void Render(World& world, CommandBuffer& cmd_buffer);
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
 
     /**
      * @brief 渲染透明物体 (WBOIT)
      * @param wboit_mode 1=accumulation, 2=revealage
      */
-    void RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode);
+    void RenderTransparent(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, int wboit_mode);
 
     void SetAssetManager(AssetManager* asset_manager);
 

@@ -36,14 +36,14 @@ public:
     void UpdateGameplay2D(World& world, float dt) override;
     void FixedUpdateGameplay2D(World& world, float dt) override;
     void ShutdownGameplay2D(World& world) override;
-    void RenderScene2D(World& world, CommandBuffer& cmd) override;
+    void RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) override;
     void RenderUI2D(World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) override;
     dse::gameplay2d::AudioSystem& GetAudioSystem() override;
 
     // ---- MeshRenderSystem ----
     void InitMeshSystem(AssetManager* asset_mgr) override;
     void ShutdownMeshSystem() override;
-    void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer) override;
+    void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene) override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
     void ResetGPUSceneState() override;

@@ -608,7 +608,7 @@ public:
     /// depth-only 阴影 pass（ortho）按三后端执行器原算法对实例做 shadow-cull 预算 + lightspace 裁剪；
     /// PreZ（透视 depth-only）整体跳过蒙皮实例。morph item 因 MeshDrawItem 不携带形变增量（与执行器
     /// 一致）退化为静态/蒙皮路径。索引按 16 位下发（cpu_mesh 顶点数 < 65536）。
-    /// view/proj 取自 cmd.GetViewMatrix()/GetProjectionMatrix()（须含 GetProjectionCorrection，与执行器同源）。
+    /// view/proj 由调用方从 FrameContext 传入（须含 GetProjectionCorrection，与执行器同源）。
     void DrawBatch(CommandBuffer& cmd, RhiDevice& device,
                    const std::vector<MeshDrawItem>& items,
                    const glm::mat4& view,

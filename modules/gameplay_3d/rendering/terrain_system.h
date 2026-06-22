@@ -4,6 +4,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/frame_context.h"
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include <glm/glm.hpp>
 
@@ -15,7 +16,8 @@ public:
     void Init(RhiDevice* rhi_device);
     void Shutdown(World& world);
     /// depth_only=true（PreZ/Shadow 深度 RT）走 MeshRenderer::DrawDepthOnlySharedTemplateInstanced，false（Opaque 彩色）走 MeshRenderer::DrawSharedTemplateInstanced。
-    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
     /// CPU 侧双线性插值高度查询（世界空间 xz → 高度 y）
@@ -33,8 +35,8 @@ private:
 
     // Tiled terrain
     void UpdateTiles(World& world);
-    void RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
-                     bool depth_only);
+    void RenderTiles(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                     const glm::vec3& camera_offset, bool depth_only);
     void BuildTileMesh(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tile_x, int tile_z);
     void DestroyTileMeshGPU(TerrainTileData& tile);
     void GenerateProceduralTile(TerrainTileData& tile, const TerrainTileManagerComponent& mgr, int tx, int tz);

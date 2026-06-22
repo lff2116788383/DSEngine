@@ -1803,14 +1803,14 @@ void FramePipeline::BuildRenderGraphInternal() {
             render_pass_context_.modules.push_back({mod.instance});
         }
     }
-    render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd) {
-        modules_impl_->RenderScene2D(world, cmd);
+    render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
+        modules_impl_->RenderScene2D(world, cmd, frame);
     };
     render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
         modules_impl_->RenderUI2D(world, cmd, w, h, clip);
     };
-    render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd) {
-        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, cpu_mesh_renderer_);
+    render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
+        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, cpu_mesh_renderer_, frame);
     };
 
     // ---- 澹版槑澶栭儴杈撳嚭 ----

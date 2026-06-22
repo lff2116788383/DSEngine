@@ -5,6 +5,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/frame_context.h"
 #include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
@@ -51,11 +52,11 @@ public:
 
     /// 主渲染：depth_only=true 时（PreZ 深度预通道）走 MeshRenderer 实例化深度路径，
     /// false 时（Opaque 彩色通道）走 MeshRenderer 前向路径。
-    void Render(World& world, CommandBuffer& cmd_buffer,
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                 const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
-    void RenderShadow(World& world, CommandBuffer& cmd_buffer,
+    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                       const glm::vec3& camera_offset = glm::vec3(0.0f));
 
 private:
@@ -74,7 +75,7 @@ private:
 
     /// depth_only：当前 pass 绑定无彩色的深度 RT（PreZ/Shadow）→ 走 MeshRenderer 实例化深度路径；
     /// shadow_pass：光源视角阴影 pass（用 shadow_distance + 跳 billboard）。
-    void RenderInternal(World& world, CommandBuffer& cmd_buffer,
+    void RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                         bool depth_only, bool shadow_pass,
                         const glm::vec3& camera_offset);
 

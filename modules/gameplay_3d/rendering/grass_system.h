@@ -5,6 +5,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/frame_context.h"
 #include <glm/glm.hpp>
 #include <unordered_map>
 #include <vector>
@@ -55,11 +56,13 @@ public:
     void Update(World& world, float delta_time);
 
     /// 主场景渲染：depth_only=true（PreZ 深度预通道）走 MeshRenderer::DrawDepthOnlyInstanced，false（Opaque 彩色）走 MeshRenderer::DrawInstancedShaded。
-    void Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f),
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
     /// 阴影 pass 渲染（仅近距离 LOD 0）
-    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset = glm::vec3(0.0f));
+    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                      const glm::vec3& camera_offset = glm::vec3(0.0f));
 
 private:
     /// 程序化生成草叶三角带 mesh (LOD 0)
@@ -89,7 +92,7 @@ private:
 
     /// 内部渲染辅助（场景 pass 和阴影 pass 共用）
     /// depth_only：当前 pass 绑定无彩色深度 RT（PreZ/Shadow）→ MeshRenderer 实例化深度路径；shadow_pass：光源视角阴影 pass。
-    void RenderInternal(World& world, CommandBuffer& cmd_buffer,
+    void RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                         bool depth_only, bool shadow_pass,
                         const glm::vec3& camera_offset = glm::vec3(0.0f));
 

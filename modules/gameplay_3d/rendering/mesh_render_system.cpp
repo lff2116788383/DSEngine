@@ -612,13 +612,13 @@ struct InstancingKeyHash {
 
 }
 
-void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer) {
+void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
     dse::render::RenderScene scene;
     BuildRenderQueues(world, scene);
     // 阶段4-M4：取代 cmd.DrawMeshBatch，经常驻 MeshRenderer::DrawBatch 分发。
     // 渲染上下文未注入（如单元测试无设备）时跳过绘制（构建队列的副作用/异常仍保留）。
     if (rhi_device_ && mesh_renderer_)
-        scene.DrawOpaqueCpu(cmd_buffer, *rhi_device_, *mesh_renderer_);
+        scene.DrawOpaqueCpu(cmd_buffer, *rhi_device_, *mesh_renderer_, frame);
 }
 
 void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
@@ -1553,7 +1553,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
 
 }
 
-void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer, int wboit_mode) {
+void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, int wboit_mode) {
     if (transparent_items_.empty()) return;
 
     for (auto& item : transparent_items_) {
@@ -1562,7 +1562,7 @@ void MeshRenderSystem::RenderTransparent(World& world, CommandBuffer& cmd_buffer
     // 阶段4-M4：取代 cmd.DrawMeshBatch，经常驻 MeshRenderer::DrawBatch 分发（view/proj 取自 cmd）。
     if (rhi_device_ && mesh_renderer_)
         mesh_renderer_->DrawBatch(cmd_buffer, *rhi_device_, transparent_items_,
-                                  cmd_buffer.GetViewMatrix(), cmd_buffer.GetProjectionMatrix());
+                                  frame.view, frame.projection);
 }
 
 int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {

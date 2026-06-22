@@ -182,7 +182,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             projection[2][1] += ctx_.taa_jitter.y * 2.0f;
         }
 
-        cmd_buffer.SetCamera(snap.camera_3d.view, projection);
+        FrameContext frame{snap.camera_3d.view, projection};
         cmd_buffer.BindPipeline(ctx_.pipeline_states.prez);
 
         // GPU-driven PreZ: eligible 实体 depth-only indirect draw
@@ -201,7 +201,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
         }
         RenderScenePassContext pass_ctx;
         pass_ctx.world = ctx_.world;
@@ -287,7 +287,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
             // 设置 viewport 到 atlas 内对应区域
             cmd_buffer.SetViewport(kAtlasOffsetX[i], kAtlasOffsetY[i], kShadowRes[i], kShadowRes[i]);
-            cmd_buffer.SetCamera(cam.view, cam.projection);
+            FrameContext frame{cam.view, cam.projection};
 
             const bool skip_cpu_shadow = (size > 10000.0f);
 
@@ -304,7 +304,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
             if (!skip_cpu_shadow) {
                 if (ctx_.render_scene) {
-                    ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+                    ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
                 }
                 RenderScenePassContext pass_ctx;
                 pass_ctx.world = ctx_.world;
@@ -375,7 +375,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         const glm::mat4 light_view_mat = glm::lookAt(sl_pos_relative, sl_pos_relative + sl.forward, sl.up);
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
         cmd_buffer.BeginRenderPass({ctx_.render_targets.spot_shadow[i], glm::vec4(1.0f), true});
-        cmd_buffer.SetCamera(light_view_mat, light_proj);
+        FrameContext frame{light_view_mat, light_proj};
         cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 
         if (use_gpu_indirect) {
@@ -390,7 +390,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
         }
         RenderScenePassContext pass_ctx;
         pass_ctx.world = ctx_.world;
@@ -455,7 +455,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
         for (int face = 0; face < 6; ++face) {
             const glm::mat4 light_view_mat = glm::lookAt(pl_pos_relative, pl_pos_relative + face_directions[face], face_ups[face]);
             cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
-            cmd_buffer.SetCamera(light_view_mat, light_proj);
+            FrameContext frame{light_view_mat, light_proj};
             cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 
             if (use_gpu_indirect) {
@@ -470,7 +470,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
             }
 
             if (ctx_.render_scene) {
-                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
             }
             RenderScenePassContext pass_ctx;
             pass_ctx.world = ctx_.world;
@@ -509,25 +509,9 @@ void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
 
     ctx_.rhi_device->SetGBufferRenderingMode(true);
 
-    // 选择相机（与 ForwardScenePass 相同逻辑）
-    const auto& snap = *ctx_.snapshot;
-    bool render_3d = false;
-    if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        render_3d = true;
-        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        cmd_buffer.SetCamera(ctx_.editor_view, clip_correction * ctx_.editor_projection);
-    } else if (snap.camera_3d.valid) {
-        render_3d = true;
-        const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
-                                                static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-                                                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
-        cmd_buffer.SetCamera(snap.camera_3d.view, projection);
-    }
-
     // NOTE: GBuffer module rendering 跳过 — DeferredLightingPass 输出未被任何后续 pass 消费。
     // 保留 RT clear + global texture 注册以维持 API 安全；如未来新增 deferred consumer 需恢复此路径。
-    (void)render_3d;
+    // 相机选择随 cmd.SetCamera 移除一并删除（此 pass 无 draw 消费相机，主渲染走 ForwardScenePass）。
 
     ctx_.rhi_device->SetGBufferRenderingMode(false);
     cmd_buffer.EndRenderPass();
@@ -601,6 +585,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     glm::mat4 gpu_view = glm::mat4(1.0f);
     glm::mat4 gpu_proj = glm::mat4(1.0f);
     glm::vec3 gpu_camera_pos = glm::vec3(0.0f);
+    FrameContext frame;
 
     // Editor camera override: use editor view/proj for Scene render target
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
@@ -610,7 +595,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         gpu_view       = ctx_.editor_view * glm::translate(glm::mat4(1.0f), ctx_.camera_offset);
         gpu_proj       = clip_correction * ctx_.editor_projection;
         gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
-        cmd_buffer.SetCamera(gpu_view, gpu_proj);
+        frame.view = gpu_view; frame.projection = gpu_proj;
 
         if (snap.skybox.valid) {
             skybox_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, snap.skybox.cubemap_handle,
@@ -632,7 +617,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         // Camera-Relative: 相机在原点
         gpu_camera_pos = glm::vec3(0.0f);
         gpu_view = snap.camera_3d.view;
-        cmd_buffer.SetCamera(gpu_view, projection);
+        frame.view = gpu_view; frame.projection = projection;
 
         if (snap.skybox.valid) {
             const glm::mat4 skybox_view = snap.skybox.has_transform
@@ -643,8 +628,9 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         }
     } else if (snap.camera_2d.valid) {
         const glm::mat4 clip_correction_2d = ctx_.rhi_device->GetProjectionCorrection();
-        cmd_buffer.SetCamera(snap.camera_2d.view, clip_correction_2d * snap.camera_2d.projection);
+        frame.view = snap.camera_2d.view; frame.projection = clip_correction_2d * snap.camera_2d.projection;
     }
+    ctx_.frame_camera = frame;
 
     if (render_3d) {
         cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
@@ -741,7 +727,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         scene_pass_ctx.camera_offset = ctx_.camera_offset;
         scene_pass_ctx.clip_correction = &scene_clip_correction;
         if (ctx_.render_scene) {
-            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+            ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
         }
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
 
@@ -759,7 +745,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                 rhi->UnbindVAO();
             }
             if (ctx_.render_scene) {
-                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+                ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
             }
             ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
             ctx_.rhi_device->SetWireframeMode(false);
@@ -780,7 +766,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.sprite);
     if (ctx_.render_2d_scene) {
-        ctx_.render_2d_scene(*ctx_.world, cmd_buffer);
+        ctx_.render_2d_scene(*ctx_.world, cmd_buffer, ctx_.frame_camera);
     }
     cmd_buffer.EndRenderPass();
 }
@@ -1910,7 +1896,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     accum_ctx.world = ctx_.world;
     accum_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawTransparent(cmd_buffer, 1, *ctx_.rhi_device, *ctx_.mesh_renderer);
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 1, *ctx_.rhi_device, *ctx_.mesh_renderer, ctx_.frame_camera);
     }
     cmd_buffer.EndRenderPass();
 
@@ -1922,7 +1908,7 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     reveal_ctx.world = ctx_.world;
     reveal_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawTransparent(cmd_buffer, 2, *ctx_.rhi_device, *ctx_.mesh_renderer);
+        ctx_.render_scene->DrawTransparent(cmd_buffer, 2, *ctx_.rhi_device, *ctx_.mesh_renderer, ctx_.frame_camera);
     }
     cmd_buffer.EndRenderPass();
 
@@ -3108,7 +3094,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.BeginRenderPass({ctx_.rsm_render_target, glm::vec4(0.0f), true});
     ctx_.rhi_device->SetGBufferRenderingMode(true);
-    cmd_buffer.SetCamera(cam.view, cam.projection);
+    FrameContext frame{cam.view, cam.projection};
     cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
 
     RenderScenePassContext pass_ctx;
@@ -3117,7 +3103,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     pass_ctx.projection = &cam.projection;
     pass_ctx.camera_offset = ctx_.camera_offset;
     if (ctx_.render_scene) {
-        ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer);
+        ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
     }
     ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, pass_ctx);
 

@@ -292,11 +292,11 @@ void TerrainSystem::RebuildTerrain(TerrainComponent& terrain) {
 // 渲染
 // ============================================================
 
-void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
-                           bool depth_only) {
+void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                           const glm::vec3& camera_offset, bool depth_only) {
     // Tiled terrain lifecycle update + render
     UpdateTiles(world);
-    RenderTiles(world, cmd_buffer, camera_offset, depth_only);
+    RenderTiles(world, cmd_buffer, frame, camera_offset, depth_only);
 
     // Single-patch terrain (original path)
     auto view = world.registry().view<TerrainComponent, TransformComponent>();
@@ -310,8 +310,8 @@ void TerrainSystem::Render(World& world, CommandBuffer& cmd_buffer, const glm::v
     }
 
     // 前向 pass 绘制矩阵（与 DrawMeshBatch 执行器同源，含投影修正）。
-    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
-    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
     const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
 
     // 方向光（深度/前向 pass 共用）。
@@ -779,8 +779,8 @@ void TerrainSystem::UpdateTiles(World& world) {
 // Tiled Terrain — 渲染
 // ============================================================
 
-void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const glm::vec3& camera_offset,
-                                bool depth_only) {
+void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                                const glm::vec3& camera_offset, bool depth_only) {
     if (!rhi_) return;
 
     auto tile_view = world.registry().view<TerrainTileManagerComponent, TransformComponent>();
@@ -808,8 +808,8 @@ void TerrainSystem::RenderTiles(World& world, CommandBuffer& cmd_buffer, const g
     }
 
     // 前向 pass 绘制矩阵 + 方向光结构（与 DrawMeshBatch 执行器同源）。
-    const glm::mat4 draw_view = cmd_buffer.GetViewMatrix();
-    const glm::mat4 draw_proj = cmd_buffer.GetProjectionMatrix();
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
     const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
     dse::render::DirectionalLight dir_light;
     dir_light.direction = light_dir;

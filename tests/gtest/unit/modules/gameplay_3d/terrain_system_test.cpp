@@ -99,7 +99,8 @@ TEST(TerrainSystemTest, EmptyWorldDoesNotCrash) {
     TerrainSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    sys.Render(world, cmd);
+    dse::render::FrameContext frame;
+    sys.Render(world, cmd, frame);
 }
 
 // 测试 地形系统：禁用不渲染
@@ -112,7 +113,8 @@ TEST(TerrainSystemTest, DisabledDoesNotRender) {
     world.registry().emplace<TransformComponent>(entity);
 
     OpenGLCommandBuffer cmd;
-    sys.Render(world, cmd);
+    dse::render::FrameContext frame;
+    sys.Render(world, cmd, frame);
 }
 
 // ============================================================

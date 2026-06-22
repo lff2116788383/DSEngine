@@ -9,6 +9,7 @@
 #include "engine/ecs/world.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/sprite_batch_renderer.h"
+#include "engine/render/frame_context.h"
 
 class Physics2DSystem;
 
@@ -34,7 +35,7 @@ public:
      * @param world 包含粒子组件的实体世界
      * @param cmd_buffer 目标渲染命令缓冲
      */
-    void Render(World& world, CommandBuffer& cmd_buffer);
+    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
 
     /// 注入 RhiDevice（由所属模块在初始化时调用）。新 SpriteBatchRenderer 路径需要。
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
