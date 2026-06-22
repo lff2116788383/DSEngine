@@ -6,7 +6,7 @@ layout(set = 2, binding = 1) uniform sampler2D screenTexture;
 layout(set = 2, binding = 2) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D u_lut;
 
-layout(std140, set = 2, binding = 0) uniform TonemapParams {
+layout(push_constant) uniform TonemapParams {
     float u_manual_exposure;
     float u_auto_exposure_enabled;
     float u_lut_enabled;

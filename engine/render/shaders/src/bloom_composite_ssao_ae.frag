@@ -9,7 +9,7 @@ layout(set = 2, binding = 4) uniform sampler2D autoExposureTex;
 layout(set = 2, binding = 5) uniform sampler3D u_lut;
 layout(set = 2, binding = 6) uniform sampler2D contactShadowTex;
 
-layout(std140, set = 2, binding = 0) uniform BloomCompositeAeParams {
+layout(push_constant) uniform BloomCompositeAeParams {
     float exposure;
     float bloomIntensity;
     float bloomEnabled;
