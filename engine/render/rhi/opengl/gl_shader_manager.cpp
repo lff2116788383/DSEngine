@@ -601,7 +601,7 @@ void GLShaderManager::InitSkyboxShader() {
     skybox_locations_.vp = glGetUniformLocation(skybox_shader_handle_, "u_vp");
     skybox_locations_.tex = glGetUniformLocation(skybox_shader_handle_, "skybox");
     // A1 fix: bind the cube sampler to texture unit 0 once at init. The generic
-    // BindTextureCube(slot=0) primitive path binds the cubemap to unit 0 but does
+    // BindTexture(slot=0, TexCube) primitive path binds the cubemap to unit 0 but does
     // not set the sampler uniform; without this the sampler keeps its GLSL layout
     // binding (1) and reads an empty unit -> black skybox. (Old DrawSkybox set this
     // every draw via glUniform1i; establishing it once here is the equivalent.)

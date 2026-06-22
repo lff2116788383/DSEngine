@@ -3,7 +3,7 @@
  * @brief 后端无关的天空盒渲染器（A1：用通用绘制原语取代 CommandBuffer::DrawSkybox）
  *
  * 通过 CommandBuffer 的通用原语（SetPipelineState / BindShaderProgram /
- * PushConstantsMat4 / BindTextureCube / BindVertexBuffer / Draw）组合出天空盒绘制。
+ * PushConstantsMat4 / BindTexture(TexCube) / BindVertexBuffer / Draw）组合出天空盒绘制。
  * 着色器与立方体几何为各后端预编译资源，经 RhiDevice 的内建资源访问器获取。
  */
 

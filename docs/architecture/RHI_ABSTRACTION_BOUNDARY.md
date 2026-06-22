@@ -57,8 +57,8 @@
 |---|---|---|---|
 | `BindShaderProgram(program)` | A1 | `(unsigned int)` | ✅ 三后端 |
 | `BindVertexBuffer(buffer, stride, attrs)` | A1 | 单 slot、无 rate | ✅ 三后端（**未含** slot/PerInstance） |
-| `BindTextureCube(slot, h)` | A1 | — | ✅（B0 起由 `BindTexture(…,TexCube)` 归并） |
-| `PushConstantsMat4(m)` | A1 | 仅 mat4 | ✅ 三后端（**未**泛化为字节块 `PushConstants`） |
+| ~~`BindTextureCube(slot, h)`~~ | A1 | — | ✅ **B5-1 已删**：统一走 `BindTexture(…,TexCube)`（三后端 + skybox 像素 smoke 绿） |
+| `PushConstantsMat4(m)` | A1 | 仅 mat4 | ✅ 三后端（泛化为字节块 `PushConstants` **挪 B5-3**：GL push_constant→具名 uniform，泛化需配 GL 降级为 UBO，待 bind-group 一并改） |
 | `Draw(vertex_count, first_vertex)` | A1 | **无** instance 参数 | ✅ 三后端 |
 | `BindIndexBuffer(buffer, IndexType)` | B0 | — | ✅ 三后端 |
 | `BindTexture(slot, h, TextureDim)` | B0 | 2D/Cube/2DArray | ✅ 三后端 |
@@ -222,7 +222,7 @@
 |---|---|---|---|
 | D1 | **通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败） | 与历史黑屏同类的隐患：后端漏实现 → 静默不绘制 | 像素闸门兜底；终态可考虑改纯虚 + 显式 Mock |
 | D2 | **`BindShaderProgram` 与 PSO 分离**（契约 §8.1） | Metal/DX12/Vulkan 把 shader 烘进 PSO，未来落 Metal 要返工 | B5 聚合为图形管线对象 |
-| D3 | **过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`、`PushConstantsMat4` 未泛化为 `PushConstants(stage,off,data,size)` | 两套写法并存，需纪律 | 迁移收尾 / B5 清理 |
+| D3 | **过渡期重复原语**：~~`BindTextureCube` vs `BindTexture(…,TexCube)`~~（B5-1 已删 cube 重复原语）；`PushConstantsMat4` 未泛化为 `PushConstants(stage,off,data,size)` | 两套写法并存，需纪律 | cube 重复 **B5-1 已还**；`PushConstants` 泛化挪 **B5-3**（随 GL push_constant→UBO 降级一并改） |
 | D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
 | D5 | ~~**每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO）→ 共享 frame-ring 分配器~~ | **复评后降级**：3 系统用不同相机/不同 pass（sprite=world、UI=ortho、particle），本无跨系统合批可言；显存节省也微小。原「优化」收益≈0 | 不单独做；真正问题见 D9 |
 | D9 | **sprite 动态缓冲单缓冲，但引擎 2 帧在飞**（`MAX_FRAMES_IN_FLIGHT=2`）：`SpriteBatchRenderer` 每帧 `UpdateGpuBuffer` 覆写同一 `vbo_/ubo_/fx_ubos_`，而 `AcquireNextImage` 的 fence 只保证 N-2 帧完成 → 帧 N+1 可能在帧 N 仍被 GPU 读取时覆写。mesh 执行器已用 `MAX_FRAMES` 双缓冲规避，sprite 没有 | 真机 2 帧在飞下的潜在竞争（软渲掩盖，呼应 D7）；测试走离屏+fence 等待故不暴露 | **建议**：把 mesh 执行器既有的「每在飞帧缓冲」抽成可复用 helper，B2b 的 MeshRenderer 落地时一并做，再回填 sprite。非阻塞 |

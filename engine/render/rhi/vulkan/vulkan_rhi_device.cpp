@@ -78,11 +78,6 @@ void VulkanCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t 
     device_->draw_executor().PrimBindVertexBuffer(vk_buf, stride, attrs);
 }
 
-void VulkanCommandBuffer::BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    if (!device_) return;
-    device_->draw_executor().PrimBindTextureCube(slot, cubemap_handle);
-}
-
 void VulkanCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
     if (!device_) return;
     device_->draw_executor().PrimPushConstantsMat4(value);

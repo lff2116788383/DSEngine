@@ -419,12 +419,6 @@ void GLDrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t s
     }
 }
 
-void GLDrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    glActiveTexture(GL_TEXTURE0 + slot);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap_handle);
-    // GLSL sampler uniform 默认绑定到纹理单元 0；spike 仅用 slot 0，无需显式设置 sampler uniform。
-}
-
 void GLDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
     if (prim_program_ == 0) return;
     // push_constant 块在 GL 后端被 lower 为名为 "u_vp" 的 uniform。

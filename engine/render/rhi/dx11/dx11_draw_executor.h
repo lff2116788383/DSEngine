@@ -110,7 +110,6 @@ public:
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
-    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
     void PrimPushConstantsMat4(const glm::mat4& value);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
                   DX11ShaderManager& shader_mgr,
@@ -261,8 +260,6 @@ private:
     unsigned int prim_vbo_handle_ = 0;       ///< 当前绑定的顶点缓冲句柄
     uint32_t prim_stride_ = 0;               ///< 顶点步长（字节）
     std::vector<VertexAttr> prim_attrs_;     ///< 顶点属性（DX11 输入布局来自 shader 反射，此处仅留作记录）
-    unsigned int prim_cubemap_ = 0;          ///< 当前绑定的 cubemap 句柄（0=无）
-    unsigned int prim_cube_slot_ = 0;        ///< cubemap 绑定槽位
     glm::mat4 prim_push_mat4_ = glm::mat4(1.0f);  ///< push-constant 风格的 mat4（→ PerFrame.vp）
     bool prim_has_push_ = false;             ///< 是否设置过 push constant
 

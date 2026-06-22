@@ -175,7 +175,6 @@ public:
     // --- 通用绘制原语 (A1) ---
     void RealBindShaderProgram(unsigned int program_handle);
     void RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs);
-    void RealBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
     void RealPushConstantsMat4(const glm::mat4& value);
     void RealDraw(uint32_t vertex_count, uint32_t first_vertex);
 

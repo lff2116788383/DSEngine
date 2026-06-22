@@ -94,7 +94,6 @@ public:
     // --- 通用绘制原语 (A1) ---
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride, const std::vector<VertexAttr>& attrs);
-    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
     void PrimPushConstantsMat4(const glm::mat4& value);
     void PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
                   VulkanPipelineStateManager& pipeline_mgr,

@@ -198,11 +198,6 @@ void OpenGLCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t 
     device_->RealBindVertexBuffer(buffer_handle, stride, attrs);
 }
 
-void OpenGLCommandBuffer::BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    if (!device_) return;
-    device_->RealBindTextureCube(slot, cubemap_handle);
-}
-
 void OpenGLCommandBuffer::PushConstantsMat4(const glm::mat4& value) {
     if (!device_) return;
     device_->RealPushConstantsMat4(value);
@@ -889,10 +884,6 @@ void OpenGLRhiDevice::RealBindShaderProgram(unsigned int program_handle) {
 
 void OpenGLRhiDevice::RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs) {
     draw_executor_.PrimBindVertexBuffer(buffer_handle, stride, attrs);
-}
-
-void OpenGLRhiDevice::RealBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    draw_executor_.PrimBindTextureCube(slot, cubemap_handle);
 }
 
 void OpenGLRhiDevice::RealPushConstantsMat4(const glm::mat4& value) {

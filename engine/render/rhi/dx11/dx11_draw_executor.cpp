@@ -495,11 +495,6 @@ void DX11DrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t
     prim_attrs_ = attrs;
 }
 
-void DX11DrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    prim_cube_slot_ = slot;
-    prim_cubemap_ = cubemap_handle;
-}
-
 void DX11DrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
     prim_push_mat4_ = value;
     prim_has_push_ = true;
@@ -570,14 +565,6 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
     auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
     dc->IASetInputLayout((buf && buf->buffer && layout) ? layout : nullptr);
     dc->IASetPrimitiveTopology(prim_topology_);
-
-    if (prim_cubemap_ != 0) {
-        const auto* tex = resource_mgr.GetTexture(prim_cubemap_);
-        if (tex) {
-            dc->PSSetShaderResources(prim_cube_slot_, 1, tex->srv.GetAddressOf());
-            dc->PSSetSamplers(prim_cube_slot_, 1, tex->sampler.GetAddressOf());
-        }
-    }
 
     if (buf && buf->buffer) {
         UINT stride = prim_stride_;

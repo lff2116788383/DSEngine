@@ -105,11 +105,6 @@ void DX11CommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t st
     device_->draw_executor().PrimBindVertexBuffer(buffer_handle, stride, attrs);
 }
 
-void DX11CommandBuffer::BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    if (!device_) return;
-    device_->draw_executor().PrimBindTextureCube(slot, cubemap_handle);
-}
-
 void DX11CommandBuffer::PushConstantsMat4(const glm::mat4& value) {
     if (!device_) return;
     device_->draw_executor().PrimPushConstantsMat4(value);

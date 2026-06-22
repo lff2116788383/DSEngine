@@ -74,7 +74,6 @@ public:
     void PrimBindShaderProgram(unsigned int program_handle);
     void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs);
-    void PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle);
     void PrimPushConstantsMat4(const glm::mat4& value);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex);
 

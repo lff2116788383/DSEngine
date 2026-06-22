@@ -75,10 +75,6 @@ public:
                                   const std::vector<VertexAttr>& attrs) {
         (void)buffer_handle; (void)stride; (void)attrs;
     }
-    /// 绑定 cubemap 纹理到指定 slot
-    virtual void BindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-        (void)slot; (void)cubemap_handle;
-    }
     /// 设置 push-constant 风格的 mat4（GL→uniform / Vulkan→push constant / DX11→CB）
     virtual void PushConstantsMat4(const glm::mat4& value) { (void)value; }
     /// 非索引绘制

@@ -38,7 +38,6 @@ public:
     void BindShaderProgram(unsigned int program_handle) override;
     void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs) override;
-    void BindTextureCube(unsigned int slot, unsigned int cubemap_handle) override;
     void PushConstantsMat4(const glm::mat4& value) override;
     void Draw(uint32_t vertex_count, uint32_t first_vertex) override;
 

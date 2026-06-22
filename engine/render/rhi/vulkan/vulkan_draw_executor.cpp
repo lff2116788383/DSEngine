@@ -1878,11 +1878,6 @@ void VulkanDrawExecutor::PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride,
     prim_attrs_ = attrs;
 }
 
-void VulkanDrawExecutor::PrimBindTextureCube(unsigned int slot, unsigned int cubemap_handle) {
-    (void)slot;  // spike 仅用 set 0 的单 cubemap binding
-    prim_cubemap_ = cubemap_handle;
-}
-
 void VulkanDrawExecutor::PrimPushConstantsMat4(const glm::mat4& value) {
     prim_push_mat4_ = value;
     prim_has_push_ = true;
@@ -1965,8 +1960,13 @@ void VulkanDrawExecutor::PrimBindIndexBuffer(VkBuffer buffer, IndexType type) {
     prim_index_type_ = (type == IndexType::UInt32) ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
 }
 
-void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim /*dim*/) {
+void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
     // Vulkan 的 image view 在纹理创建时已按维度定型；契约 slot 暂存，PrimDrawIndexed 时映射到具体 binding。
+    // cubemap（TexCube）走天空盒专用 descriptor set 路径（set0.b0 samplerCube），与通用 2D 纹理绑定分离。
+    if (dim == TextureDim::TexCube) {
+        prim_cubemap_ = texture_handle;  // slot 固定 set0.b0（spike 仅单 cubemap binding）
+        return;
+    }
     prim_textures_[slot] = texture_handle;
 }
 
