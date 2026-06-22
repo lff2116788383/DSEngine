@@ -500,6 +500,22 @@ public:
                             const ShadedGI& gi = {},
                             const std::vector<ShadedSpotLight>& spot_lights = {});
 
+    /// 记录一次 GBuffer 几何通道绘制（阶段4-M3：取代 DrawMeshBatch 在 gbuffer_rendering_mode 下的延迟几何输出）。
+    /// 复用 BuiltinProgram::GBufferMesh（forward_pbr.vert + gbuffer.frag）：顶点 CPU 预变换到世界空间、VS 仅施 vp，
+    /// 片元向 MRT 输出 gAlbedo(loc0)=texColor×vColor / gNormal(loc1)=normalize(N)×0.5+0.5 / gPosition(loc2)=world pos。
+    /// 供 ShadowRSMPass（DDGI 反射阴影图 RSM）→DDGIUpdatePass 采样生成 VPL（虚拟点光）。
+    /// 须配 color_attachment_count≥3 的 MRT RenderTarget；vertices/indices 为空时直接返回（不绘制）。
+    /// @param model       world-space model 矩阵（CPU 预变换顶点位置/法线/切线，与 DrawShaded 同源）
+    /// @param view/proj   相机视图/投影（vp = proj*view；proj 须含 GetProjectionCorrection）
+    /// @param albedo_tex  反照率纹理句柄（0 → 回退内建 1x1 白纹理，gAlbedo 输出纯顶点色）
+    void DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
+                     const std::vector<MeshVertex>& vertices,
+                     const std::vector<uint16_t>& indices,
+                     const glm::mat4& model,
+                     const glm::mat4& view,
+                     const glm::mat4& proj,
+                     unsigned int albedo_tex = 0);
+
     /// 构建一份**局部空间**模板顶点缓冲（GpuMeshVertex 布局，Final-Feat-7）。与 BuildShadedWorldVertexBuffer
     /// 不同：**不**做 model 预变换（顶点保持局部空间），因为每个实例各有 model 矩阵、由 VS 按实例变换。
     /// 建一份静态 GPU 顶点缓冲（is_dynamic=false）供大量实例共享（shared_vertex_ptr：一份模板顶点 + 每实例

@@ -399,24 +399,34 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     // 记录当前 RT 句柄，供 EndRenderPass MSAA resolve 使用
     current_rt_handle_ = render_pass.render_target;
 
-    ID3D11RenderTargetView* rtv = nullptr;
+    // MRT（color_attachment_count>1）需绑定全部颜色附件 RTV（gbuffer/RSM：gAlbedo/gNormal/gPosition），
+    // 否则 gbuffer.frag 的 location1/2 输出被丢弃。单附件/backbuffer 走 rtvs[0]。
+    ID3D11RenderTargetView* rtvs[8] = {};
+    UINT num_rtvs = 0;
     ID3D11DepthStencilView* dsv = nullptr;
 
     if (render_pass.render_target != 0) {
         const auto* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (rt) {
-            rtv = rt->color_rtv.Get();
+            if (!rt->color_rtvs_mrt.empty()) {
+                num_rtvs = static_cast<UINT>(rt->color_rtvs_mrt.size());
+                if (num_rtvs > 8) num_rtvs = 8;
+                for (UINT i = 0; i < num_rtvs; ++i) rtvs[i] = rt->color_rtvs_mrt[i].Get();
+            } else if (rt->color_rtv.Get()) {
+                rtvs[0] = rt->color_rtv.Get();
+                num_rtvs = 1;
+            }
             dsv = rt->depth_dsv.Get();
         }
     } else {
-        rtv = context_->backbuffer_rtv();
+        rtvs[0] = context_->backbuffer_rtv();
+        num_rtvs = rtvs[0] ? 1 : 0;
         dsv = context_->backbuffer_dsv();
     }
-
     // 检测深度 only pass（shadow pass）
-    is_depth_only_pass_ = (!rtv && dsv);
+    is_depth_only_pass_ = (num_rtvs == 0 && dsv);
 
-    dc->OMSetRenderTargets(rtv ? 1 : 0, rtv ? &rtv : nullptr, dsv);
+    dc->OMSetRenderTargets(num_rtvs, num_rtvs ? rtvs : nullptr, dsv);
 
     // Viewport
     int vp_width = 0, vp_height = 0;
@@ -436,11 +446,11 @@ void DX11DrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
     vp.MaxDepth = 1.0f;
     dc->RSSetViewports(1, &vp);
 
-    // 清除
-    if (render_pass.clear_color_enabled && rtv) {
+    // 清除（MRT 时清全部颜色附件为同一 clear_color）
+    if (render_pass.clear_color_enabled && num_rtvs) {
         float clear[4] = {render_pass.clear_color.r, render_pass.clear_color.g,
                           render_pass.clear_color.b, render_pass.clear_color.a};
-        dc->ClearRenderTargetView(rtv, clear);
+        for (UINT i = 0; i < num_rtvs; ++i) dc->ClearRenderTargetView(rtvs[i], clear);
     }
     if (dsv) {
         dc->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);

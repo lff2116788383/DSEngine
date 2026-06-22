@@ -803,6 +803,22 @@ void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {
         CreateInputLayoutForShader(gbuffer_shader_handle_, gb_layout.data(),
                                    static_cast<int>(gb_layout.size()));
     }
+
+    pulse();
+    // ---- MeshRenderer GBuffer 着色器（阶段4-M3）：复用静态 forward_pbr.vert + gbuffer.frag ----
+    // 与 gbuffer_shader_handle_（über pbr.vert）区别：用 CPU 预变换世界空间顶点的简单顶点布局，
+    // 配 MeshRenderer::DrawGBuffer（MRT 输出 gAlbedo/gNormal/gPosition 给 RSM→DDGI VPL）。
+    gbuffer_mesh_shader_handle_ = CreateProgramFromDXBC(
+        kforward_pbr_vert_dxbc, kforward_pbr_vert_dxbc_size,
+        kgbuffer_frag_dxbc, kgbuffer_frag_dxbc_size);
+    if (gbuffer_mesh_shader_handle_) {
+        DEBUG_LOG_INFO("[D3D11] Builtin GBuffer-mesh shader created (DXBC): {}", gbuffer_mesh_shader_handle_);
+        using namespace generated_shaders::reflect;
+        std::vector<D3D11_INPUT_ELEMENT_DESC> gbm_layout;
+        CreateInputLayoutFromReflection(kforward_pbr_vert_reflection, gbm_layout);
+        CreateInputLayoutForShader(gbuffer_mesh_shader_handle_, gbm_layout.data(),
+                                   static_cast<int>(gbm_layout.size()));
+    }
 }
 
 // ============================================================

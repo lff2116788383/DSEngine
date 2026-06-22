@@ -960,6 +960,18 @@ void VulkanShaderManager::InitPostProcessShader() {
             DEBUG_LOG_WARN("[Vulkan] GBuffer shader creation failed");
     }
 
+    // MeshRenderer GBuffer shader（阶段4-M3）：复用静态 forward_pbr.vert（CPU 预变换世界空间顶点 + vp）
+    // + gbuffer.frag；descriptor set layout 由 SPIR-V 反射驱动。配 MeshRenderer::DrawGBuffer。
+    {
+        gbuffer_mesh_shader_handle_ = CreateProgramFromSpirv(
+            generated_shaders::kforward_pbr_vert_spv, generated_shaders::kforward_pbr_vert_spv_size,
+            generated_shaders::kgbuffer_frag_spv, generated_shaders::kgbuffer_frag_spv_size);
+        if (gbuffer_mesh_shader_handle_)
+            DEBUG_LOG_INFO("[Vulkan] GBuffer-mesh shader created (SPIR-V): handle={}", gbuffer_mesh_shader_handle_);
+        else
+            DEBUG_LOG_WARN("[Vulkan] GBuffer-mesh shader creation failed");
+    }
+
     deferred_lighting_shader_handle_ = create_pp_spv(generated_shaders::kdeferred_lighting_frag_spv, generated_shaders::kdeferred_lighting_frag_spv_size, "Deferred Lighting");
     edge_detect_shader_handle_ = create_pp_spv(generated_shaders::kedge_detect_frag_spv, generated_shaders::kedge_detect_frag_spv_size, "Edge Detect");
     volumetric_fog_shader_handle_ = create_pp_spv(generated_shaders::kvolumetric_fog_frag_spv, generated_shaders::kvolumetric_fog_frag_spv_size, "Volumetric Fog");

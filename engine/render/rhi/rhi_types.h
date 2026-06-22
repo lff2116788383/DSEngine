@@ -206,6 +206,7 @@ enum class BuiltinProgram : uint8_t {
     Particle3D = 13,  ///< 3D 粒子广告牌（particle_instanced.vert + particle.frag；每实例 pos/size/color SSBO\@set7.b0 + u_texture\@set2.b1；加性混合、不写深度，配 ParticleRenderer）
     HairStrand = 14,  ///< 毛发线带（hair.vert + hair.frag；position/tangent SSBO\@set7.b0/b1 + 组合 HairUniforms UBO\@set0.b0；LINE_STRIP 拓扑、逐 strand 绘制，配 HairRenderer）
     ForwardSkinnedInstancedShaded = 15,  ///< 蒙皮 + 硬件实例化 + 高级 shading 组合（forward_shaded_skinned_instanced.vert + forward_shaded.frag；实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1；bone-palette 去重，配 MeshRenderer::DrawSkinnedInstancedShaded）
+    GBufferMesh = 16,  ///< 延迟几何 GBuffer 输出（forward_pbr.vert + gbuffer.frag；CPU 预变换世界空间顶点 + vp，MRT 输出 gAlbedo/gNormal/gPosition，配 MeshRenderer::DrawGBuffer 与 ShadowRSMPass→DDGIUpdatePass，阶段4-M3）
 };
 
 /// 渲染通道描述符

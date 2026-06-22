@@ -24,6 +24,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     instanced_shaded_pixel_smoke_test.cpp
     skinned_instanced_shaded_pixel_smoke_test.cpp
     editor_view_mode_pixel_smoke_test.cpp
+    gbuffer_mesh_pixel_smoke_test.cpp
     spot_shaded_pixel_smoke_test.cpp
     point_spot_shadow_shaded_pixel_smoke_test.cpp
     morph_shaded_pixel_smoke_test.cpp

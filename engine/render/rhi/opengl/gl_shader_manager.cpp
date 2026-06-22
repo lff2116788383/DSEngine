@@ -616,24 +616,34 @@ void GLShaderManager::InitSkyboxShader() {
 // ============================================================
 
 void GLShaderManager::InitGBufferShader() {
-    if (gbuffer_shader_handle_ != 0) return;
     using namespace dse::render::generated_shaders;
-
-    gbuffer_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(kgbuffer_frag));
-    programs_created_ += 1;
-
-    // GBuffer UBO 缁戝畾锛坮eflection 椹卞嫊锛?
     using namespace dse::render::generated_shaders::reflect;
-    BindUBOsFromReflection(gbuffer_shader_handle_, kpbr_vert_reflection);
-    BindUBOsFromReflection(gbuffer_shader_handle_, kgbuffer_frag_reflection);
 
-    // GBuffer 绾圭悊 sampler 涓€娆℃€х粦瀹?
-    {
+    // GBuffer（über pbr.vert + gbuffer.frag，GPU-driven 顶点布局，供执行器延迟几何通道）。
+    if (gbuffer_shader_handle_ == 0) {
+        gbuffer_shader_handle_ = CompileProgram(DSE_SL(kpbr_vert), DSE_SL(kgbuffer_frag));
+        programs_created_ += 1;
+        BindUBOsFromReflection(gbuffer_shader_handle_, kpbr_vert_reflection);
+        BindUBOsFromReflection(gbuffer_shader_handle_, kgbuffer_frag_reflection);
         using namespace dse::render::gl_reflect;
         std::vector<TextureUnitEntry> entries;
         ComputeFlatTextureUnits(kgbuffer_frag_reflection, entries);
         glUseProgram(gbuffer_shader_handle_);
         BindSamplersOnce(gbuffer_shader_handle_, entries, glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
+
+    // MeshRenderer GBuffer 着色器（阶段4-M3）：forward_pbr.vert（CPU 预变换世界空间顶点 + vp）+ gbuffer.frag。
+    if (gbuffer_mesh_shader_handle_ == 0) {
+        gbuffer_mesh_shader_handle_ = CompileProgram(DSE_SL(kforward_pbr_vert), DSE_SL(kgbuffer_frag));
+        programs_created_ += 1;
+        BindUBOsFromReflection(gbuffer_mesh_shader_handle_, kforward_pbr_vert_reflection);
+        BindUBOsFromReflection(gbuffer_mesh_shader_handle_, kgbuffer_frag_reflection);
+        using namespace dse::render::gl_reflect;
+        std::vector<TextureUnitEntry> entries;
+        ComputeFlatTextureUnits(kgbuffer_frag_reflection, entries);
+        glUseProgram(gbuffer_mesh_shader_handle_);
+        BindSamplersOnce(gbuffer_mesh_shader_handle_, entries, glGetUniformLocation, glUniform1i);
         glUseProgram(0);
     }
 }

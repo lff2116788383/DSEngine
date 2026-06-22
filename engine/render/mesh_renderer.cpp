@@ -835,6 +835,76 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.DrawIndexed(index_count, first_index, 0);
 }
 
+void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
+                               const std::vector<MeshVertex>& vertices,
+                               const std::vector<uint16_t>& indices,
+                               const glm::mat4& model,
+                               const glm::mat4& view,
+                               const glm::mat4& proj,
+                               unsigned int albedo_tex) {
+    if (vertices.empty() || indices.empty()) return;
+
+    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::GBufferMesh);
+    if (program == 0) return;  // 该后端未提供 GBuffer-mesh 内建着色器
+
+    EnsureResources(device);
+    if (!per_frame_ubo_ || !per_scene_ubo_) return;
+
+    // --- CPU 侧预变换顶点到世界空间（与 DrawShaded 同源；gPosition 直接取此世界坐标）---
+    const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
+    const glm::mat3 model3 = glm::mat3(model);
+    std::vector<GpuMeshVertex> gpu_verts(vertices.size());
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const MeshVertex& v = vertices[i];
+        const glm::vec3 wp = glm::vec3(model * glm::vec4(v.position, 1.0f));
+        const glm::vec3 wn = glm::normalize(normal_matrix * v.normal);
+        const glm::vec3 wt = model3 * v.tangent;
+        GpuMeshVertex& g = gpu_verts[i];
+        g.px = wp.x; g.py = wp.y; g.pz = wp.z;
+        g.r = v.color.r; g.g = v.color.g; g.b = v.color.b; g.a = v.color.a;
+        g.u = v.uv.x; g.v = v.uv.y;
+        g.nx = wn.x; g.ny = wn.y; g.nz = wn.z;
+        g.tx = wt.x; g.ty = wt.y; g.tz = wt.z;
+    }
+
+    const size_t vbytes = gpu_verts.size() * sizeof(GpuMeshVertex);
+    const size_t ibytes = indices.size() * sizeof(uint16_t);
+    EnsureVertexCapacity(device, vbytes);
+    EnsureIndexCapacity(device, ibytes);
+    if (!vbo_ || !ibo_) return;
+    device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
+    device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
+
+    // PerFrame（set0.b0）：vp = proj*view，gbuffer.frag 不读但须保持 descriptor layout 兼容。
+    FwdPerFrameUBO frame{};
+    frame.vp = proj * view;
+    frame.view = view;
+    frame.camera_pos = glm::vec4(0.0f);
+    device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
+
+    // PerScene（set1.b0）：占位，仅为保持与 PBR 管线 descriptor layout 一致。
+    FwdPerSceneUBO scene{};
+    device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0u, 3u, 0u},    // pos
+        VertexAttr{1u, 4u, 12u},   // color
+        VertexAttr{2u, 2u, 28u},   // uv
+        VertexAttr{3u, 3u, 36u},   // normal
+        VertexAttr{4u, 3u, 48u},   // tangent
+    };
+
+    // 不透明几何 PSO（写/测深度、背面剔除、不混合）：MRT 各 attachment 共用此关混合状态。
+    cmd.SetPipelineState(pso_);
+    cmd.BindShaderProgram(program);
+    cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());  // PerScene @ set1.b0（占位）
+    cmd.BindTexture(0u, albedo_tex ? albedo_tex : white_tex_, TextureDim::Tex2D);  // u_texture @ set2.b1
+    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
+    cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
+}
+
 BufferHandle MeshRenderer::BuildShadedLocalVertexBuffer(RhiDevice& device,
                                                         const std::vector<MeshVertex>& vertices) {
     if (vertices.empty()) return BufferHandle{};

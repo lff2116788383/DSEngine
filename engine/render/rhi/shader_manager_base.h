@@ -53,6 +53,7 @@ public:
     unsigned int ssr_shader_handle() const { return ssr_shader_handle_; }
     unsigned int motion_vector_shader_handle() const { return motion_vector_shader_handle_; }
     unsigned int gbuffer_shader_handle() const { return gbuffer_shader_handle_; }
+    unsigned int gbuffer_mesh_shader_handle() const { return gbuffer_mesh_shader_handle_; }
     unsigned int deferred_lighting_shader_handle() const { return deferred_lighting_shader_handle_; }
     unsigned int edge_detect_shader_handle() const { return edge_detect_shader_handle_; }
     unsigned int volumetric_fog_shader_handle() const { return volumetric_fog_shader_handle_; }
@@ -108,6 +109,7 @@ protected:
     unsigned int ssr_shader_handle_ = 0;
     unsigned int motion_vector_shader_handle_ = 0;
     unsigned int gbuffer_shader_handle_ = 0;
+    unsigned int gbuffer_mesh_shader_handle_ = 0;  ///< forward_pbr.vert + gbuffer.frag（MeshRenderer 简单顶点缓冲 GBuffer 路径，阶段4-M3）
     unsigned int deferred_lighting_shader_handle_ = 0;
     unsigned int edge_detect_shader_handle_ = 0;
     unsigned int volumetric_fog_shader_handle_ = 0;
