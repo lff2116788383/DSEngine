@@ -229,25 +229,25 @@
 ### 8.2 已知技术债（均已登记，非隐藏）
 | # | 债务 | 影响 | 偿还 |
 |---|---|---|---|
-| D1 | **通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败） | 与历史黑屏同类的隐患：后端漏实现 → 静默不绘制 | 像素闸门兜底；终态可考虑改纯虚 + 显式 Mock |
+| D1 | ~~**通用原语是 default no-op 虚函数**（未实现的后端静默空转，非编译失败）~~ → **已还**：12 个通用绘制原语（`BindPipeline`/`BindVertexBuffer`/`PushConstants`/`Draw`/`BindIndexBuffer`/`BindTexture`/`BindUniformBuffer`/`BindStorageBuffer`/`DrawIndexed`/`DispatchComputePass`/`DrawIndexedInstanced`/`DrawIndexedIndirect`）`CommandBuffer` 上由 no-op `{}` 默认改纯虚 `= 0`，强制所有实现显式声明；GL 加显式 no-op `DispatchComputePass`（无 compute，消费者经 `GetBloomComputeShader()==0` 回退 quad），测试 Mock 补齐 `MOCK_METHOD`/override | — | ✅ **已还**：真机 RTX 3070 unit 2272 / integration 544 / smoke 288 全绿 |
 | D2 | ~~**`BindShaderProgram` 与 PSO 分离**（契约 §8.1）~~ → **已还**：B5-3b 聚合为单一图形管线对象 `GraphicsPipelineDesc{pso,program}` + `BindPipeline(handle)`（设备级 `GetGraphicsPipeline(pso,program)` 惰性去重缓存，后端无关），删 `BindShaderProgram`+`SetPipelineState` 两分离原语；三后端各按句柄解出 (pso,program) 应用（Vulkan 惰性烘进 `VkPipeline`、DX11/GL 分别应用 PSO 状态+拓扑后按需绑 program）。Pass 层 program==0 仅设状态，保留 GPU-driven 自绑/渲染器覆盖语义 | — | ✅ **已还**（B5-3b）：为 Metal/DX12 铺路 |
 | D3 | ~~**过渡期重复原语**：`BindTextureCube` vs `BindTexture(…,TexCube)`；`PushConstantsMat4` 未泛化~~ → **已还**：cube 重复 B5-1 删；`PushConstantsMat4` B5-3a 泛化为字节块 `PushConstants(stage,off,data,size)`（三后端 + GL push_constant→`DsePush{VS,FS,CS}` UBO 降级），skybox/PP/compute 统一路由 | — | ✅ **已还**（cube B5-1、PushConstants B5-3a） |
 | D4 | ~~`RhiDevice` 内建资源访问器随效果线性增长~~ → **已还**：归并为单个 `GetBuiltinProgram(BuiltinProgram)`，新增内建程序只加枚举值，不再加虚函数 | — | ✅ 已还（B2b 前置） |
 | D5 | ~~**每系统各持一个 `SpriteBatchRenderer`**（3 套动态 VBO/IBO/UBO）→ 共享 frame-ring 分配器~~ | **复评后降级**：3 系统用不同相机/不同 pass（sprite=world、UI=ortho、particle），本无跨系统合批可言；显存节省也微小。原「优化」收益≈0 | 不单独做；真正问题见 D9 |
-| D9 | **sprite 动态缓冲单缓冲，但引擎 2 帧在飞**（`MAX_FRAMES_IN_FLIGHT=2`）：`SpriteBatchRenderer` 每帧 `UpdateGpuBuffer` 覆写同一 `vbo_/ubo_/fx_ubos_`，而 `AcquireNextImage` 的 fence 只保证 N-2 帧完成 → 帧 N+1 可能在帧 N 仍被 GPU 读取时覆写。mesh 执行器已用 `MAX_FRAMES` 双缓冲规避，sprite 没有 | 真机 2 帧在飞下的潜在竞争（软渲掩盖，呼应 D7）；测试走离屏+fence 等待故不暴露 | **建议**：把 mesh 执行器既有的「每在飞帧缓冲」抽成可复用 helper，B2b 的 MeshRenderer 落地时一并做，再回填 sprite。非阻塞 |
+| D9 | ~~**sprite 动态缓冲单缓冲，但引擎 2 帧在飞**（`MAX_FRAMES_IN_FLIGHT=2`）：`SpriteBatchRenderer` 每帧 `UpdateGpuBuffer` 覆写同一 `vbo_/ubo_/fx_ubos_`，帧 N+1 可能在帧 N 仍被 GPU 读取时覆写~~ → **已还**：抽后端无关 helper `PerInFlightBuffer`（`engine/render/rhi/per_in_flight_buffer.{h,cpp}`），按 `RhiDevice::FramesInFlight()` 个槽位 N 缓冲、每帧仅(重)建/写 `CurrentFrameSlot()` 当前槽位（其 fence 已在 `AcquireNextImage` 等待，安全），其余在飞槽位不触碰；新增 `RhiDevice::FramesInFlight()/CurrentFrameSlot()`（默认 1/0，Vulkan 覆写为 `MAX_FRAMES_IN_FLIGHT`/`context.current_frame()`）。`SpriteBatchRenderer` 的 `vbo_/ubo_/fx_ubos_` 改用之（`ibo_` 静态非每帧写故仍单缓冲）。GL/DX11（N=1）退化为单缓冲，行为不变 | — | ✅ **已还**：真机 RTX 3070 unit 2272 / integration 544 / smoke 288 全绿 |
 | D6 | **`CommandBuffer::GetView/GetProjectionMatrix()`** 把相机状态缓存在命令缓冲上 | 概念上相机属 frame/scene context，轻微耦合泄漏 | 引入 FrameContext 时收敛 |
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
 | D8 | ~~**契约把 SSBO 排 B4，但 B2b(mesh) 先需 SSBO**~~ → **已解**：P0b 把 `BindStorageBuffer` 提前到 B2b 之前落地（`10f3ff2d`），mesh 蒙皮/实例已消费 | — | ✅ 已解 |
 | D10 | ~~**`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**~~ → **已解**：阶段 4（M1–M4）补齐 MeshRenderer 覆盖缺口（蒙皮×实例化 / 编辑器视图模式 / GBuffer-MRT）后，M4 加 `DrawBatch` 分发层、迁 6 调用点、**删 `DrawMeshBatch` ABI**（含 `gl_draw_executor_mesh.cpp` 整文件） | — | ✅ 已解 |
 
 ### 8.3 优化空间（非阻塞，按收益排序）
-1. **可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）：把 mesh 执行器既有的 `MAX_FRAMES` 双缓冲模式抽成小工具，按 `current_frame_index_` 轮转动态顶点/UBO，满足 2 帧在飞的「提交前不覆写」约束。B2b 的 MeshRenderer 必然需要它，落地时一并做，再回填 sprite。
+1. ~~**可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）~~ → **已落地**：抽后端无关 `PerInFlightBuffer`（按 `RhiDevice::FramesInFlight()`/`CurrentFrameSlot()` 轮转槽位，仅(重)建/写当前在飞槽位），已回填 `SpriteBatchRenderer` 的 `vbo_/ubo_/fx_ubos_`。MeshRenderer 后续可复用同一 helper。
 2. ~~**shader 注册表**（解 D4）~~ → **已落地**：`RhiDevice::GetBuiltinProgram(BuiltinProgram)` 取代逐 program 访问器。
 3. **bind group / argument buffer**（契约 §2.3）：把 PerFrame/PerScene/PerMaterial + 多纹理打成一次绑定，减少状态切换；为 Metal/DX12 铺路。
 4. **实例化/间接绘制原语**随 B2b/B3 落地（新增重载，不改现签名）。
 
 ### 8.4 结论
 - **合理**：是；增量、可回归、债务显式。
-- **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；原 D5（共享分配器）经复评收益≈0 已降级，真正问题是 D9（sprite 单缓冲 vs 2 帧在飞），建议随 B2b 抽「每在飞帧缓冲」helper 一并解决。
+- **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；原 D5（共享分配器）经复评收益≈0 已降级；D9（sprite 单缓冲 vs 2 帧在飞）已抽后端无关 `PerInFlightBuffer` helper 还清并回填 sprite。
 - **最佳？**：是「低风险务实最优」，非「理论最优」（后者是 bind group + program/PSO 聚合的一次性大改）。
 - **技术债**：未隐藏，8.2 全部登记并各有偿还阶段；唯一需即时决策的是 D8（B2b 的 SSBO 顺序）。

@@ -370,6 +370,16 @@ void VulkanRhiDevice::BeginFrame() {
     gpu_timer_.ResetGpuTimers();
 }
 
+uint32_t VulkanRhiDevice::FramesInFlight() const {
+    return VulkanContext::MAX_FRAMES_IN_FLIGHT;
+}
+
+uint32_t VulkanRhiDevice::CurrentFrameSlot() const {
+    // BeginFrame…EndFrame 间稳定（AdvanceFrame 在 EndFrame 推进），其 fence 已在
+    // AcquireNextImage 等待 → 该槽位的上一占用帧已完成，可安全覆写/重建。
+    return context_.current_frame();
+}
+
 unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     return resource_mgr_.CreateRenderTarget(desc.width, desc.height, desc.has_color, desc.has_depth,
                                              desc.generate_mipmaps, desc.cube_map,

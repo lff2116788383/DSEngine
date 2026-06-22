@@ -18,6 +18,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+#include "engine/render/rhi/per_in_flight_buffer.h"
 #include "engine/render/rhi/rhi_handle.h"
 #include "engine/render/rhi/rhi_types.h"
 
@@ -51,14 +52,15 @@ private:
     unsigned int pso_multiply_ = 0;
     unsigned int white_tex_ = 0;
 
-    BufferHandle vbo_;   ///< 动态顶点缓冲（按需扩容）
-    BufferHandle ibo_;   ///< 静态 quad 索引（0,1,2,0,2,3 重复）
-    BufferHandle ubo_;   ///< PerFrame（std140，176B；默认 sprite2d 路径仅用 vp）
-    /// SDF/VFX 批的 push-block 参数 UBO 池（SpriteFx 布局，128B/个）。每 fx 批一个独立
-    /// 缓冲（参数互异），跨帧持久复用——满足 Vulkan「提交前不可别名/删除」生命周期约束。
-    std::vector<BufferHandle> fx_ubos_;
+    /// 动态顶点缓冲（按需扩容）。每帧覆写 → 每在飞帧缓冲（规避 2 帧在飞下的覆写竞争，D9）。
+    PerInFlightBuffer vbo_;
+    BufferHandle ibo_;   ///< 静态 quad 索引（0,1,2,0,2,3 重复）；非每帧写，单缓冲即可
+    /// PerFrame（std140，176B；默认 sprite2d 路径仅用 vp）。每帧覆写 → 每在飞帧缓冲。
+    PerInFlightBuffer ubo_;
+    /// SDF/VFX 批的 push-block 参数 UBO 池（SpriteFx 布局，128B/个）。每 fx 批一个独立逻辑
+    /// 缓冲（参数互异），每帧覆写 → 各自每在飞帧缓冲（满足 Vulkan「提交前不可别名/覆写」约束）。
+    std::vector<PerInFlightBuffer> fx_ubos_;
 
-    size_t vbo_cap_quads_ = 0;
     size_t ibo_cap_quads_ = 0;
     bool init_ = false;
 };

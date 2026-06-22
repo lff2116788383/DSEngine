@@ -351,6 +351,17 @@ public:
     /// 默认空实现（OpenGL 由 GLFW SwapBuffers 处理）
     virtual void PresentFrame() {}
 
+    /// 引擎同时在飞的帧数（CPU 可领先 GPU 的帧数）。Vulkan 双缓冲（MAX_FRAMES_IN_FLIGHT=2），
+    /// GL/DX11 立即模式（1）。供高层渲染器的「每在飞帧缓冲」helper（PerInFlightBuffer）据此
+    /// N 缓冲每帧覆写的动态资源，规避「帧提交前覆写仍被 GPU 读取的缓冲」竞争
+    /// （见 docs/architecture/RHI_ABSTRACTION_BOUNDARY.md §8.2 D9）。默认 1（无在飞重叠）。
+    virtual uint32_t FramesInFlight() const { return 1; }
+
+    /// 当前帧在 [0, FramesInFlight()) 中的在飞槽位，在 BeginFrame…EndFrame 间稳定。
+    /// Vulkan 取 VulkanContext::current_frame()——该槽位的 fence 已在 AcquireNextImage 等待，
+    /// 故其上一占用帧（N-FramesInFlight）已完成、可安全覆写/重建。GL/DX11 恒 0。默认 0。
+    virtual uint32_t CurrentFrameSlot() const { return 0; }
+
     virtual const RenderStats& LastFrameStats() const = 0;
 
     /// 编辑器用帧统计概要，从 LastFrameStats() 派生

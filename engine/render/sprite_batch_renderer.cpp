@@ -109,33 +109,18 @@ bool SameState(const SpriteDrawItem& a, const SpriteDrawItem& b) {
 
 void SpriteBatchRenderer::EnsureResources(RhiDevice& device, size_t needed_quads) {
     if (!init_) {
-        // 白纹理：无纹理项（texture_handle==0）的回退采样源。
+        // 白纹理：无纹理项（texture_handle==0）的回退采样源。一次性创建，跨帧复用。
         const unsigned char white[4] = {255, 255, 255, 255};
         white_tex_ = device.CreateTexture2D(1, 1, white, false);
-
-        GpuBufferDesc ub_desc;
-        ub_desc.size = sizeof(SpritePerFrameUBO);
-        ub_desc.usage = GpuBufferUsage::kUniform;
-        ub_desc.is_dynamic = true;
-        ubo_ = device.CreateGpuBuffer(ub_desc, nullptr);
-
         init_ = true;
     }
 
     if (needed_quads == 0) needed_quads = 1;
 
-    // 顶点缓冲按需扩容（动态）。
-    if (!vbo_ || needed_quads > vbo_cap_quads_) {
-        if (vbo_) device.DeleteGpuBuffer(vbo_);
-        GpuBufferDesc vb_desc;
-        vb_desc.size = sizeof(SpriteVertex) * 4 * needed_quads;
-        vb_desc.usage = GpuBufferUsage::kVertex;
-        vb_desc.is_dynamic = true;
-        vbo_ = device.CreateGpuBuffer(vb_desc, nullptr);
-        vbo_cap_quads_ = needed_quads;
-    }
+    // 动态顶点缓冲 vbo_ 与 PerFrame 缓冲 ubo_ 改由 Draw 经 PerInFlightBuffer::Acquire
+    // 取当前在飞槽位（每帧覆写 → 须每在飞帧缓冲，D9）；此处只建非每帧写的静态资源。
 
-    // 索引缓冲（静态，绝对索引 4i+{0,1,2,0,2,3}）按需重建。
+    // 索引缓冲（静态，绝对索引 4i+{0,1,2,0,2,3}）按需重建。非每帧写 → 单缓冲即可。
     if (!ibo_ || needed_quads > ibo_cap_quads_) {
         if (ibo_) device.DeleteGpuBuffer(ibo_);
         std::vector<uint16_t> indices;
@@ -159,14 +144,10 @@ void SpriteBatchRenderer::EnsureResources(RhiDevice& device, size_t needed_quads
 }
 
 void SpriteBatchRenderer::EnsureFxUbos(RhiDevice& device, size_t needed) {
-    // 每 fx 批需独立缓冲（参数互异，且延迟后端提交前不可别名）。池跨帧持久，按需增长。
-    while (fx_ubos_.size() < needed) {
-        GpuBufferDesc desc;
-        desc.size = sizeof(SpriteFxUBO);
-        desc.usage = GpuBufferUsage::kUniform;
-        desc.is_dynamic = true;
-        fx_ubos_.push_back(device.CreateGpuBuffer(desc, nullptr));
-    }
+    // 每 fx 批需独立逻辑缓冲（参数互异，且延迟后端提交前不可覆写）。池跨帧持久、按需增长；
+    // 每个 PerInFlightBuffer 的物理槽位在 Acquire 时按当前在飞帧惰性建。
+    (void)device;
+    if (fx_ubos_.size() < needed) fx_ubos_.resize(needed);
 }
 
 unsigned int SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int blend_mode) {
@@ -216,7 +197,13 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     if (sprite_prog == 0) return;  // 该后端未提供 sprite2d 内建着色器
 
     EnsureResources(device, items.size());
-    if (!vbo_ || !ibo_ || !ubo_ || white_tex_ == 0) return;
+    if (!ibo_ || white_tex_ == 0) return;
+
+    // 取本在飞帧的动态顶点 / PerFrame 缓冲槽位（2 帧在飞下与上一帧不别名，D9）。
+    BufferHandle vbo = vbo_.Acquire(device, sizeof(SpriteVertex) * 4 * items.size(),
+                                    GpuBufferUsage::kVertex);
+    BufferHandle ubo = ubo_.Acquire(device, sizeof(SpritePerFrameUBO), GpuBufferUsage::kUniform);
+    if (!vbo || !ubo) return;
 
     // === 顶点：一次性构建整批（避免延迟后端的 VB 复用别名）===
     std::vector<SpriteVertex> verts;
@@ -262,12 +249,12 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         }
     }
 
-    device.UpdateGpuBuffer(vbo_, 0, verts.size() * sizeof(SpriteVertex), verts.data());
+    device.UpdateGpuBuffer(vbo, 0, verts.size() * sizeof(SpriteVertex), verts.data());
 
     SpritePerFrameUBO uniforms{};
     uniforms.vp = projection * view;
     uniforms.view = view;
-    device.UpdateGpuBuffer(ubo_, 0, sizeof(uniforms), &uniforms);
+    device.UpdateGpuBuffer(ubo, 0, sizeof(uniforms), &uniforms);
 
     static const std::vector<VertexAttr> kAttrs = {
         VertexAttr{0u, 3u, 0u},    // pos
@@ -300,7 +287,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 
         const int path = path_of(b);
         unsigned int prog = sprite_prog;
-        unsigned int ubo_handle = ubo_.raw();
+        unsigned int ubo_handle = ubo.raw();
 
         if (path != 0) {
             const SpriteDrawItem& rep = items[b.start_quad];
@@ -319,7 +306,8 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
                                       ve.corner_radius, ve.gradient_direction);
                     fx.p3 = glm::vec4(ve.blur_radius, ve.blur_intensity, 0.0f, 0.0f);
                 }
-                BufferHandle fx_ubo = fx_ubos_[fx_idx++];
+                BufferHandle fx_ubo = fx_ubos_[fx_idx++].Acquire(
+                    device, sizeof(SpriteFxUBO), GpuBufferUsage::kUniform);
                 device.UpdateGpuBuffer(fx_ubo, 0, sizeof(fx), &fx);
                 prog = fx_prog;
                 ubo_handle = fx_ubo.raw();
@@ -330,7 +318,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         cmd.BindPipeline(device.GetGraphicsPipeline(pso, prog));
         cmd.BindUniformBuffer(0u, ubo_handle);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
-        cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
+        cmd.BindVertexBuffer(vbo.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
         cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
         cmd.DrawIndexed(static_cast<uint32_t>(b.quad_count * 6),
                         static_cast<uint32_t>(b.start_quad * 6), 0);
@@ -338,17 +326,15 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 }
 
 void SpriteBatchRenderer::Shutdown(RhiDevice& device) {
-    if (vbo_) device.DeleteGpuBuffer(vbo_);
-    if (ibo_) device.DeleteGpuBuffer(ibo_);
-    if (ubo_) device.DeleteGpuBuffer(ubo_);
-    for (BufferHandle& h : fx_ubos_) {
-        if (h) device.DeleteGpuBuffer(h);
-    }
+    vbo_.Shutdown(device);
+    ubo_.Shutdown(device);
+    for (PerInFlightBuffer& b : fx_ubos_) b.Shutdown(device);
     fx_ubos_.clear();
+    if (ibo_) device.DeleteGpuBuffer(ibo_);
     if (white_tex_) device.DeleteTexture(white_tex_);
-    vbo_ = ibo_ = ubo_ = BufferHandle{};
+    ibo_ = BufferHandle{};
     white_tex_ = 0;
-    vbo_cap_quads_ = ibo_cap_quads_ = 0;
+    ibo_cap_quads_ = 0;
     init_ = false;
 }
 
