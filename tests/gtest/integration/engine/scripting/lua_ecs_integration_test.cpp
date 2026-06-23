@@ -20,7 +20,10 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/script.h"
 #include "engine/ecs/transform.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/core/service_locator.h"
+#include <glm/gtc/matrix_transform.hpp>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -297,6 +300,58 @@ TEST_F(LuaEcsIntegrationTest, ScriptComponentAndLuaECSCollaboration) {
         EXPECT_FLOAT_EQ(tf.position.x, 100.0f);
         EXPECT_FLOAT_EQ(tf.position.y, 200.0f);
     }
+
+    ShutdownLuaRuntime();
+}
+
+// 测试 Lua ECS 集成：get_world_aabb / get_local_aabb 只读 AABB 查询
+TEST_F(LuaEcsIntegrationTest, LuaGetWorldAndLocalAabb) {
+    LuaTempScript startup("test_ecs_aabb.lua", R"(
+        function Awake() end
+        function Update(dt) end
+    )");
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+
+    // 带 BoundingBox + Transform 的实体：模型空间 AABB [-1,-2,-3]..[1,2,3]，
+    // local_to_world 为平移 (100,0,0)，故世界 AABB 应为 [99,-2,-3]..[101,2,3]。
+    Entity e = world.CreateEntity();
+    auto& tf = world.registry().emplace<TransformComponent>(e);
+    tf.local_to_world = glm::translate(glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, 0.0f));
+    auto& bb = world.registry().emplace<dse::BoundingBoxComponent>(e);
+    bb.min_extents = glm::vec3(-1.0f, -2.0f, -3.0f);
+    bb.max_extents = glm::vec3(1.0f, 2.0f, 3.0f);
+
+    // 无 BoundingBox 的实体：应返回 nil。
+    Entity bare = world.CreateEntity();
+    world.registry().emplace<TransformComponent>(bare);
+
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+    ASSERT_TRUE(BootstrapLuaRuntime());
+
+    // 把多返回值格式化为单一字符串，nil 时返回 "nil"，便于断言。
+    auto fmt = [](const std::string& call) {
+        return std::string(
+            "(function() local a={") + call + "}; if a[1]==nil then return 'nil' end; "
+            "return string.format('%.1f,%.1f,%.1f,%.1f,%.1f,%.1f',"
+            "a[1],a[2],a[3],a[4],a[5],a[6]) end)()";
+    };
+
+    const std::string id = std::to_string(static_cast<std::uint32_t>(e));
+    const std::string bare_id = std::to_string(static_cast<std::uint32_t>(bare));
+
+    std::string out;
+    ASSERT_TRUE(ExecuteLuaString(fmt("dse.ecs.get_world_aabb(" + id + ")").c_str(), &out));
+    EXPECT_EQ(out, "99.0,-2.0,-3.0,101.0,2.0,3.0");
+
+    ASSERT_TRUE(ExecuteLuaString(fmt("dse.ecs.get_local_aabb(" + id + ")").c_str(), &out));
+    EXPECT_EQ(out, "-1.0,-2.0,-3.0,1.0,2.0,3.0");
+
+    ASSERT_TRUE(ExecuteLuaString(fmt("dse.ecs.get_world_aabb(" + bare_id + ")").c_str(), &out));
+    EXPECT_EQ(out, "nil");
 
     ShutdownLuaRuntime();
 }

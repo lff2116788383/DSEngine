@@ -22,6 +22,7 @@
 #include "engine/core/service_locator.h"
 
 #include <glm/glm.hpp>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <unordered_map>
@@ -661,6 +662,69 @@ int L_EcsInstantiatePrefab(lua_State* L) {
     return 1;
 }
 
+// ============================================================
+// BoundingBoxComponent（只读 AABB 查询）
+// ============================================================
+
+// ecs.get_world_aabb(e) -> min_x,min_y,min_z, max_x,max_y,max_z | nil
+//   返回实体的世界空间轴对齐包围盒（AABB）。BoundingBoxComponent 存的是
+//   模型空间包围盒（由渲染/剔除系统从 mesh 顶点计算），此处用实体的
+//   local_to_world 变换到世界空间，算法与 SpatialScene::ComputeWorldAABB 一致。
+//   无 BoundingBoxComponent 时返回 nil；无 TransformComponent 时按单位变换
+//   （世界==模型）返回。该组件由渲染/剔除系统更新，脚本读到的是上一帧结果。
+int L_EcsGetWorldAabb(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* bbox = helper::TryGetComponentConst<dse::BoundingBoxComponent>(*world, e);
+    if (!bbox) { lua_pushnil(L); return 1; }
+
+    glm::vec3 wmin;
+    glm::vec3 wmax;
+    const auto* tc = helper::TryGetComponentConst<TransformComponent>(*world, e);
+    if (tc) {
+        // 中心经矩阵变换；半长用矩阵各列绝对值缩放（保守 OBB->AABB 包覆）。
+        const glm::vec3 center = glm::vec3(tc->local_to_world * glm::vec4(bbox->center(), 1.0f));
+        const glm::vec3 ext = bbox->extents();
+        const glm::mat3 m(tc->local_to_world);
+        const glm::vec3 world_ext(
+            std::abs(m[0][0]) * ext.x + std::abs(m[1][0]) * ext.y + std::abs(m[2][0]) * ext.z,
+            std::abs(m[0][1]) * ext.x + std::abs(m[1][1]) * ext.y + std::abs(m[2][1]) * ext.z,
+            std::abs(m[0][2]) * ext.x + std::abs(m[1][2]) * ext.y + std::abs(m[2][2]) * ext.z);
+        wmin = center - world_ext;
+        wmax = center + world_ext;
+    } else {
+        wmin = bbox->min_extents;
+        wmax = bbox->max_extents;
+    }
+
+    lua_pushnumber(L, static_cast<lua_Number>(wmin.x));
+    lua_pushnumber(L, static_cast<lua_Number>(wmin.y));
+    lua_pushnumber(L, static_cast<lua_Number>(wmin.z));
+    lua_pushnumber(L, static_cast<lua_Number>(wmax.x));
+    lua_pushnumber(L, static_cast<lua_Number>(wmax.y));
+    lua_pushnumber(L, static_cast<lua_Number>(wmax.z));
+    return 6;
+}
+
+// ecs.get_local_aabb(e) -> min_x,min_y,min_z, max_x,max_y,max_z | nil
+//   返回 BoundingBoxComponent 原始的模型空间 AABB（不施加 Transform）。
+//   无 BoundingBoxComponent 时返回 nil。
+int L_EcsGetLocalAabb(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnil(L); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* bbox = helper::TryGetComponentConst<dse::BoundingBoxComponent>(*world, e);
+    if (!bbox) { lua_pushnil(L); return 1; }
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.x));
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.y));
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.z));
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.x));
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.y));
+    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.z));
+    return 6;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
@@ -696,6 +760,9 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"save_scene",                 L_EcsSaveScene},
         {"save_prefab",                L_EcsSavePrefab},
         {"instantiate_prefab",         L_EcsInstantiatePrefab},
+        // BoundingBoxComponent（只读 AABB 查询）
+        {"get_world_aabb",             L_EcsGetWorldAabb},
+        {"get_local_aabb",             L_EcsGetLocalAabb},
         {"add_transform",              L_EcsAddTransform},
         // ParentComponent
         {"add_parent",                 L_EcsAddParent},

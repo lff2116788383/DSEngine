@@ -14,6 +14,8 @@
 #include "apps/editor_cpp/src/editor_console_panel.h"
 #include "apps/editor_cpp/src/editor_toolbar.h"
 #include "apps/editor_cpp/src/editor_context.h"
+#include "apps/editor_cpp/src/editor_project.h"
+#include "apps/editor_cpp/src/editor_asset_db.h"
 
 namespace dse::editor {
 
@@ -22,6 +24,33 @@ UndoRedoManager& GetUndoRedoManager() {
     static UndoRedoManager instance(200);
     return instance;
 }
+
+// Stub: 退出标志（真实实现位于 editor_shell.cpp，测试不链接 ImGui shell）。
+// 由 editor_control_tools.cpp 的 HandleEditorQuit 引用；测试不实际触发退出。
+void RequestExit() {}
+
+// Stub: ProjectManager 单例（真实实现位于 editor_project.cpp，依赖 Win32
+// 文件对话框，测试不链接）。由 editor_control_tools.cpp 的 HandleProjectOpen
+// 引用；当前无测试调用 dsengine_project_open，故为最小可链接桩。
+ProjectManager& ProjectManager::Get() {
+    static ProjectManager instance;
+    return instance;
+}
+std::filesystem::path ProjectManager::GetAssetDir() const {
+    return project_root_ / descriptor_.asset_dir;
+}
+void ProjectManager::ApplyDataRoot() {}
+bool ProjectManager::OpenProject(const std::filesystem::path& /*dseproj_path*/) {
+    return false;
+}
+
+// Stub: AssetDatabase 单例（真实实现位于 editor_asset_db.cpp）。
+// 同样仅由 HandleProjectOpen 引用，测试不调用，故为最小可链接桩。
+AssetDatabase& AssetDatabase::Get() {
+    static AssetDatabase instance;
+    return instance;
+}
+void AssetDatabase::Refresh() {}
 
 // Stub: scene path tracking (same as editor_shell.cpp)
 namespace {

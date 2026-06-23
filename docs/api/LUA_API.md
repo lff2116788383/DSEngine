@@ -283,6 +283,24 @@ if not ok then print("Load failed: " .. err) end
 > dse.ecs.load_scene("save/slot1.dscene")          -- 读档
 > ```
 
+#### 包围盒（BoundingBox，只读 AABB 查询）
+
+`BoundingBoxComponent` 由渲染/剔除系统从 mesh 顶点计算并维护，脚本只读。用于自定义剔除、放置吸附、范围查询等。
+
+| 函数 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `ecs.get_world_aabb(e)` | entity | `min_x,min_y,min_z, max_x,max_y,max_z`（6 个 number）/ nil | 世界空间 AABB：模型空间包围盒经实体 `local_to_world` 变换得到（算法与引擎剔除一致）。无 `BoundingBoxComponent` 时返回 nil；无 `TransformComponent` 时按单位变换返回 |
+| `ecs.get_local_aabb(e)` | entity | `min_x,min_y,min_z, max_x,max_y,max_z`（6 个 number）/ nil | 模型空间 AABB：`BoundingBoxComponent` 原始值，不施加 Transform。无组件时返回 nil |
+
+> **时序语义**：该组件由渲染/剔除系统在每帧更新，脚本读到的是**上一帧**的结果。刚创建/刚改 mesh 的实体可能尚未生成包围盒（返回 nil）。
+>
+> ```lua
+> local minx,miny,minz, maxx,maxy,maxz = dse.ecs.get_world_aabb(e)
+> if minx then
+>     local cx = (minx + maxx) * 0.5  -- 世界空间中心
+> end
+> ```
+
 ### 5.2 Transform
 
 | 函数 | 参数 | 返回值 | 说明 |
