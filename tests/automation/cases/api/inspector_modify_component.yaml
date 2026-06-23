@@ -18,19 +18,32 @@ command:
       expect:
         result.opened: true
 
+    # entt 实体 id 含版本位，registry.clear 后并非 0..n，故不能硬编码；
+    # 用 capture 把 entity_create 返回的真实 id 存进变量供后续调用引用。
     - method: dsengine_entity_create
       params:
         name: "Prop"
+      capture:
+        prop_id: result.entity_id
       expect:
         result.name: "Prop"
 
-    # entity_id 0 = 工程主场景首个实体 MainCamera（registry.clear 后从 0 递增）
+    - method: dsengine_entity_add_component
+      params:
+        entity_id: "${prop_id}"
+        type: "PointLight"
+      expect:
+        result.added: true
+        result.component: "PointLight"
+
     - method: dsengine_entity_get_components
       params:
-        entity_id: 0
+        entity_id: "${prop_id}"
+        detailed: false
       expect:
-        result.entity_id: 0
-        result.name: "MainCamera"
+        result.entity_id: "${prop_id}"
+        result.name: "Prop"
+        result.components: ["Transform", "PointLight"]
 
     - method: dsengine_editor_quit
       expect:

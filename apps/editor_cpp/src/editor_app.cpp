@@ -228,7 +228,9 @@ std::filesystem::path EditorApp::GetEditorBinPath() {
 bool EditorApp::Init(int argc, char* argv[]) {
     test_config_ = dse::editor::test::ParseEditorTestArgs(argc, argv);
     const bool headless = test_config_.headless;
-    frames_remaining_ = headless ? test_config_.max_frames : -1;
+    // 常驻 RPC 模式（--automation-api）不按帧数自退，置 -1 表示无限运行，直到收到 quit。
+    frames_remaining_ = (headless && !test_config_.automation_api)
+                            ? test_config_.max_frames : -1;
 
     // 尽早安装崩溃处理器，覆盖 glfwInit/ImGui/字体加载等引擎 Init 之前的早期阶段。
     dse::editor::InstallEditorCrashHandler();

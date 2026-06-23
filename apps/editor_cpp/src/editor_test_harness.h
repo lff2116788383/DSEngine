@@ -23,6 +23,7 @@ struct EditorTestConfig {
     int screenshot_frame = -1;           ///< --screenshot-frame=<N>: 第 N 帧截图（-1 表示最后一帧）
     int max_frames = 300;               ///< --max-frames=<N>: 自动退出帧数
     int api_port = 9527;                ///< --api-port=<N> / --api-port <N>: ControlServer 监听端口
+    bool automation_api = false;        ///< --automation-api: 常驻 RPC 驱动模式，不按 max_frames 自退，仅由 dsengine_editor_quit 退出
 };
 
 /**

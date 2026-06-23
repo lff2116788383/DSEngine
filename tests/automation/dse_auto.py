@@ -154,6 +154,31 @@ def deep_get(obj: Any, dotted: str) -> Tuple[bool, Any]:
     return True, cur
 
 
+def _coerce_ints(value: Any) -> Any:
+    """把变量展开后纯整数字符串（如 "524288"）转回 int，
+    以便 entity_id / max_frames / api_port 等参数按 JSON 数字下发（工具端要求 IsUint）。"""
+    if isinstance(value, dict):
+        return {k: _coerce_ints(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_ints(v) for v in value]
+    if isinstance(value, str) and re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value
+
+
+def _loose_eq(actual: Any, expected: Any) -> bool:
+    """宽松相等：精确相等优先；否则数值/字符串归一比较。
+    用于 capture/变量展开把值带成字符串（如 "5"）后仍能与响应里的 int 5 匹配。"""
+    if actual == expected:
+        return True
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return False
+    try:
+        return float(actual) == float(expected)
+    except (TypeError, ValueError):
+        return str(actual) == str(expected)
+
+
 def match_expect(actual: Any, expected: Any) -> Tuple[bool, str]:
     """单条 expect 匹配。支持精确 / "> N" / "< N" / ">= N" / "包含元素列表"。"""
     if isinstance(expected, str):
@@ -169,15 +194,15 @@ def match_expect(actual: Any, expected: Any) -> Tuple[bool, str]:
                 "<=": a <= num, "==": a == num, "!=": a != num,
             }[op]
             return ok, "" if ok else f"{a} {op} {num} 不成立"
-        return (actual == expected), ("" if actual == expected
-                                      else f"期望 {expected!r}，实际 {actual!r}")
+        ok = _loose_eq(actual, expected)
+        return ok, ("" if ok else f"期望 {expected!r}，实际 {actual!r}")
     if isinstance(expected, list):
         if not isinstance(actual, list):
             return False, f"期望列表包含 {expected}，实际非列表 {actual!r}"
         missing = [e for e in expected if e not in actual]
         return (not missing), ("" if not missing else f"缺少元素 {missing}")
-    return (actual == expected), ("" if actual == expected
-                                  else f"期望 {expected!r}，实际 {actual!r}")
+    ok = _loose_eq(actual, expected)
+    return ok, ("" if ok else f"期望 {expected!r}，实际 {actual!r}")
 
 
 def evaluate_expect(response: Dict[str, Any], expect: Dict[str, Any]) -> Tuple[bool, List[str]]:
@@ -528,7 +553,7 @@ class ApiSessionRunner:
 
     def _run_call(self, client: RpcClient, call: Dict[str, Any]) -> Dict[str, Any]:
         method = call["method"]
-        params = self.resolver.expand(call.get("params", {}) or {})
+        params = _coerce_ints(self.resolver.expand(call.get("params", {}) or {}))
         try:
             resp = client.call(method, params)
         except Exception as e:  # noqa: BLE001
@@ -538,15 +563,21 @@ class ApiSessionRunner:
             return {"name": method, "status": "failed",
                     "error": f"JSON-RPC error: {resp['error']}"}
 
+        # capture：把响应中的值（点分路径，如 result.entity_id）存入变量，供后续调用 ${name} 引用
+        for var_name, dotted in (call.get("capture", {}) or {}).items():
+            found, val = deep_get(resp, dotted)
+            if found:
+                self.resolver.vars[var_name] = str(val)
+
         # 截图落盘：若 params.path 存在且响应含 base64 data，则解码写文件
         save_path = params.get("path") if isinstance(params, dict) else None
         if method == "dsengine_editor_screenshot" and save_path:
             self._save_screenshot(resp.get("result", {}), save_path)
 
-        # expect 校验
+        # expect 校验（expect 里的 ${var} 先展开，便于引用 capture/env 变量）
         ok, errs = (True, [])
         if "expect" in call:
-            ok, errs = evaluate_expect(resp, call["expect"])
+            ok, errs = evaluate_expect(resp, self.resolver.expand(call["expect"]))
 
         # 截图对比
         sc = call.get("screenshot_compare")
@@ -834,6 +865,10 @@ def load_env(suite: Dict[str, Any], env_override: Optional[str],
 
 def resolve_editor_exe(cli_exe: Optional[str], env_vars: Dict[str, str]) -> str:
     exe = cli_exe or os.environ.get("EDITOR_EXE") or env_vars.get("editor_exe")
+    if exe:
+        # env 文件里通常写成 ${EDITOR_EXE}；若该环境变量未设置会留下未展开占位符，
+        # 按 OS 环境变量再解一遍，解不出则视为缺省。
+        exe = _VAR_RE.sub(lambda m: os.environ.get(m.group(1), ""), exe).strip()
     if not exe:
         # 缺省回退到本仓构建产物
         exe = str(REPO_ROOT / "bin" / "dsengine-editor.exe")

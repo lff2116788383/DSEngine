@@ -23,16 +23,18 @@ command:
         result.opened: true
         result.entity_count: 4
 
+    # 用 capture 记录真实 entity_id（含 entt 版本位），避免硬编码 4。
     - method: dsengine_entity_create
       params:
         name: "Turret"
+      capture:
+        turret_id: result.entity_id
       expect:
         result.name: "Turret"
 
-    # entity_id 4 = 刚创建的 Turret（场景已有 0..3）
     - method: dsengine_prefab_save
       params:
-        entity_id: 4
+        entity_id: "${turret_id}"
         path: "${project_dir}/prefabs/turret.prefab.json"
       expect:
         result.saved: true

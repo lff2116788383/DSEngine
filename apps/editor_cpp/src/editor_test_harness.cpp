@@ -33,7 +33,9 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
             std::strcmp(arg, "--automation-mode") == 0) {
             config.headless = true;
         } else if (std::strcmp(arg, "--automation-api") == 0) {
-            // ControlServer 始终启动，此标志仅作为显式标记，接受但不改变行为
+            // 常驻 RPC 驱动模式：ControlServer 始终启动，且不按 max_frames 自动退出，
+            // 仅由 dsengine_editor_quit 显式结束（供 API 会话 / soak 长稳使用）。
+            config.automation_api = true;
         } else if (std::strcmp(arg, "--api-port") == 0) {
             // 空格分隔形式：--api-port <N>
             if (i + 1 < argc) {
