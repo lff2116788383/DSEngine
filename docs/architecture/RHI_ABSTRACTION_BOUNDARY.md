@@ -73,6 +73,15 @@
 
 > **说明（2c + Final-Feat）**：高级 shading 与几何来源能力均落在 `MeshRenderer` 层（`DrawShaded` 系列 + Final-Feat-6 `DrawShadedExternal`/`BuildShadedWorldVertexBuffer` + Final-Feat-7 `DrawSharedTemplateInstanced`/`BuildShadedLocalVertexBuffer`），**未新增任何 CommandBuffer 原语**——全部复用既有 `DrawIndexed/DrawIndexedInstanced/BindStorageBuffer/BindUniformBuffer/BindVertexBuffer/BindIndexBuffer`，故 §3.1 原语表不变。
 
+**设备级即时原语（P1，编辑器架构 §5.A/§5.B）**：以下两个原语挂在 `RhiDevice` 上（**非** `CommandBuffer` 录制集），自包含、**同步执行**（返回后即可 `ReadRenderTargetColorRgba8WithSize` 回读），用于把编辑器视口拾取/多视口呈现从「直绑 OpenGL」中解耦：
+
+| 原语（`RhiDevice`） | 引入 | 签名 | 状态 |
+|---|---|---|---|
+| `ImmediateDraw(ImmediateDrawDesc)` | P1（§5.A） | 自定义 shader program + 一段交错顶点 + 少量 uniform → 直绘到指定 RT（含 viewport/clear/blend/depth_test、`ImmediateTopology`、按名打包 uniform） | ✅ 三后端：GL 临时 VAO/VBO + `glVertexAttribPointer` + `glGetUniformLocation`；DX11 `GetOrCreatePrimInputLayout`（attr→`TEXCOORD<loc>`）+ cbuffer 反射按名打包；Vulkan 动态 `VkPipeline` 复合键缓存 + 一次性 cmd buffer + push-constant 成员偏移反射。像素闸门 `immediate_draw_pixel_smoke_test`（Fills/ViewportSubregion/ColorIdRoundTrip） |
+| `BlitRenderTarget(src_rt, dst_rt)` | P1（§5.B） | 等尺寸把 src 颜色 0 号附件拷到 dst | ✅ 三后端：GL `glBlitFramebuffer`；DX11 `CopyResource`（MSAA 源先 `ResolveSubresource`）；Vulkan `vkCmdBlitImage` + 前后 layout barrier。像素闸门 `BlitRenderTargetPixelSmokeTest` |
+
+> P1 是编辑器去 GL 化的**地基**；其上的 §5.1 视口拾取 / §5.2 多视口 / §5.3 ImGui 呈现层迁移仍待续做（§5.3 须三后端手动截图验证，GL/Vulkan 真机收尾需真实 GPU）。本机仅 D3D11(WARP) 跑真实像素，GL/Vulkan 无驱动优雅 skip。
+
 ### 3.2 仍存的逐效果 ABI（边界**之上**待下沉）
 
 | 旧 ABI（`CommandBuffer` 纯虚） | 迁移阶段 | 状态 |
@@ -239,6 +248,8 @@
 | D7 | **像素闸门为 VM 软渲（llvmpipe/WARP/lavapipe）** | RMSE 不复现真机；只验解析真值，真机专属 bug 可能漏 | 已知并接受；条件允许时补一次真机基线 |
 | D8 | ~~**契约把 SSBO 排 B4，但 B2b(mesh) 先需 SSBO**~~ → **已解**：P0b 把 `BindStorageBuffer` 提前到 B2b 之前落地（`10f3ff2d`），mesh 蒙皮/实例已消费 | — | ✅ 已解 |
 | D10 | ~~**`MeshRenderer` 与 `DrawMeshBatch` ABI 并存**~~ → **已解**：阶段 4（M1–M4）补齐 MeshRenderer 覆盖缺口（蒙皮×实例化 / 编辑器视图模式 / GBuffer-MRT）后，M4 加 `DrawBatch` 分发层、迁 6 调用点、**删 `DrawMeshBatch` ABI**（含 `gl_draw_executor_mesh.cpp` 整文件） | — | ✅ 已解 |
+| D11 | **`CommandBuffer` 缺多线程录制**：当前「立即转发录制」把 CPU 侧录制开销内联在调用线程（GL/DX11 即时下发、Vulkan 录进 `VkCommandBuffer` submit 时执行）。万级 DrawCall 时 CPU 录制可能成瓶颈 | **远期潜力，不阻塞发版**：当前无可测瓶颈，做了反而毁掉「全绿招牌态」。注意①真正障碍是 `draw_executor_` 为**设备单例**（录制态共享），上多线程须先把它**去单例化 / per-command-buffer 化**；②**GL 物理不可达**（单 context、无 secondary cmd buffer），多线程录制是 Vulkan/(未来)DX12 专属卖点，不强求三后端对齐；③万级 DrawCall 的更高杠杆解是已落地的 **GPU-driven（`DrawIndexedIndirect`）**，优先压它。原语接口已为此预留（签名不变） | 远期；出现实测瓶颈时先压 GPU-driven，再仅在 Vulkan/DX12 上做 |
+| D12 | **Mesa/llvmpipe 等 CI 软渲回归**：CI/VM 上 GL→llvmpipe、Vulkan→lavapipe、DX11→WARP 的软件光栅器与真机驱动存在行为/精度差异（见 D7） | **不影响真机 GPU 硬件跑**：软渲像素「解析真值」正确，但 RMSE 不复现真机；软渲特有的实现差异可能让某些 case 在 CI 抖动而真机正常（反之亦然）。本机仅 D3D11(WARP) 可跑真实像素，GL/Vulkan 无驱动恒 skip | 已知并接受；条件允许时以真机基线为准绳校准，CI 软渲仅作「能跑通+解析真值」级回归 |
 
 ### 8.3 优化空间（非阻塞，按收益排序）
 1. ~~**可复用「每在飞帧缓冲」helper**（解 D9，取代原 D5 设想）~~ → **已落地**：抽后端无关 `PerInFlightBuffer`（按 `RhiDevice::FramesInFlight()`/`CurrentFrameSlot()` 轮转槽位，仅(重)建/写当前在飞槽位），已回填 `SpriteBatchRenderer` 的 `vbo_/ubo_/fx_ubos_`。MeshRenderer 后续可复用同一 helper。

@@ -250,9 +250,11 @@
 
 ---
 
-### §5.A 新增 RHI 原语：通用即时绘制（Immediate Draw）
+### §5.A 新增 RHI 原语：通用即时绘制（Immediate Draw）  ✅ 已实现（三后端 P1）
 
 **目标**：让上层用「自定义 shader program + 一段顶点数据 + 少量 uniform」直接绘制到指定 RT，不经高层 Mesh/Sprite 批。视口拾取（颜色 ID quad）即用此原语重写。
+
+> **落地状态**：`ImmediateDraw(ImmediateDrawDesc)` 已在 GL/DX11/Vulkan 三后端实现（类型见 `rhi_types.h`、接口见 `rhi_device.h`）。Vulkan 走「动态 `VkPipeline` 复合键缓存 + 一次性 cmd buffer 同步提交 + push-constant 成员偏移反射」；DX11 走 `GetOrCreatePrimInputLayout`（attr→`TEXCOORD<location>`）+ cbuffer 反射按名打包 uniform；GL 走临时 VAO/VBO + `glVertexAttribPointer` + `glGetUniformLocation`。离屏像素闸门见 `tests/gtest/smoke/immediate_draw_pixel_smoke_test.cpp`（DX11/WARP 真验，GL/Vulkan 无驱动优雅 skip）。
 
 **建议接口签名**（加到 `rhi_device.h`，类型放 `rhi_types.h` 全局命名空间）：
 
@@ -285,14 +287,18 @@ virtual void ImmediateDraw(const ImmediateDrawDesc& desc) { (void)desc; }
 - **Vulkan**（`vulkan_rhi_device.cpp` + `vulkan_resource_manager`）：最重。需为「自定义 program + 顶点布局 + 目标 RT 的 `render_pass`」动态建一个 `VkPipeline`（建议按 `{shader_program, attribs, topology, blend, depth}` 做 key 缓存，避免每帧建）；录命令到一个一次性 `VkCommandBuffer`：`vkCmdBeginRenderPass`（用 RT 的 `render_pass`/`render_pass_load`，依 `clear`）→ `vkCmdBindPipeline` → `vkCmdSetViewport` → 绑定上传了顶点的 `VkBuffer` → uniform 走 push constant 或小 UBO → `vkCmdDraw` → `vkCmdEndRenderPass` → 提交并等完成（编辑器拾取需同帧 readback，简单起见同步提交）。
 - **D3D11**（`dx11_rhi_device.cpp` + `dx11_resource_manager`）：取 `DX11RenderTarget::color_rtv`（0→交换链 RTV）→ `OMSetRenderTargets`；`clear` 时 `ClearRenderTargetView`；`RSSetViewports`；由 `shader_program` 拿编译好的 VS/PS 与输入布局（`IASetInputLayout`，`attribs`→`D3D11_INPUT_ELEMENT_DESC`）；顶点传 `Map(WRITE_DISCARD)` 的动态 `ID3D11Buffer` + `IASetVertexBuffers`；uniform 打包进常量缓冲（`UpdateSubresource`/`Map`）；`OMSetBlendState/OMSetDepthStencilState`；`IASetPrimitiveTopology` + `Draw`。
 
-**需补测试**（`tests/gtest/integration/render/` 离屏，无窗口）
-- `ImmediateDrawFillsRenderTarget`：建 RT → 用纯色 shader `ImmediateDraw` 一个全屏三角形 → `ReadRenderTargetColorRgba8WithSize` 验中心像素=期望色。
-- `ImmediateDrawViewportSubregion`：带 `viewport` 子区域绘制 → 验区域内/外像素。
-- `ImmediateDrawColorIdRoundTrip`：模拟拾取——画多个不同颜色 quad → 读指定像素 → 颜色↔ID 反解正确（覆盖编辑器拾取的核心数值逻辑，与 GPU 后端无关的那部分也可单测）。
+**测试**（`tests/gtest/smoke/immediate_draw_pixel_smoke_test.cpp` 离屏，无窗口）✅ 已补
+- `ImmediateDrawFillsRenderTarget`：建 RT → 用纯色 shader `ImmediateDraw` 一个全屏三角形 → `ReadRenderTargetColorRgba8WithSize` 验中心像素=期望色。✅
+- `ImmediateDrawViewportSubregion`：带 `viewport` 子区域绘制 → 验区域内/外像素。✅
+- `ImmediateDrawColorIdRoundTrip`：模拟拾取——画多条不同「颜色 ID」竖条 → 读各竖条中心像素 → 颜色↔ID 反解正确（覆盖编辑器拾取的核心数值逻辑）。✅
 
-### §5.B 新增 RHI 原语：RT blit（RT→RT / RT→texture）
+> 注：实际落在 `tests/gtest/smoke/`（与既有 `*_pixel_smoke_test` + 跨后端 `rhi_pixel_harness` 同构），非设计稿设想的 `integration/render/`。
+
+### §5.B 新增 RHI 原语：RT blit（RT→RT / RT→texture）  ✅ 已实现（三后端 P1）
 
 **目标**：等尺寸把一个 RT 的颜色 0 号附件拷到另一个 RT 或一张纹理，替代多视口的 `glBlitFramebuffer`。
+
+> **落地状态**：`BlitRenderTarget(src_rt, dst_rt)` 已在三后端实现——GL `glBlitFramebuffer`、DX11 `CopyResource`（MSAA 源先 `ResolveSubresource`）、Vulkan `vkCmdBlitImage` + 前后 layout barrier。
 
 **建议接口签名**：
 ```cpp
@@ -305,7 +311,7 @@ virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) { (void)
 - **Vulkan**：`vkCmdBlitImage`（已有先例 `vulkan_draw_executor.cpp:2004`）；注意 blit 前后用 `vkCmdPipelineBarrier` 把 src 转 `TRANSFER_SRC`、dst 转 `TRANSFER_DST`，完后转回 `SHADER_READ_ONLY`。
 - **D3D11**：同格式同尺寸首选 `CopyResource(dst.color_texture, src.color_texture)`（已有先例 `dx11_resource_manager.cpp:797`）；若 src 为 MSAA，先 `ResolveSubresource`；格式不同则退化为采样 `color_srv` 的全屏 `ImmediateDraw`。
 
-**需补测试**：`BlitRenderTargetCopiesColor`：填充 src（用 §5.A 画纯色）→ `BlitRenderTarget` → 读 dst 验颜色一致。
+**测试** ✅ 已补：`BlitRenderTargetCopiesColor`（`tests/gtest/smoke/immediate_draw_pixel_smoke_test.cpp`）：用 §5.A `ImmediateDraw` 画纯色填 src → `BlitRenderTarget` → 读 dst 验颜色一致。
 
 ### §5.1 迁移视口拾取（依赖 §5.A）
 
