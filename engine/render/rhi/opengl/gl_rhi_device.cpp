@@ -827,6 +827,111 @@ RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(un
     return readback;
 }
 
+// --- 通用即时绘制 / RT blit（编辑器架构 §5.A/§5.B）---
+
+void OpenGLRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
+    if (!initialized_ || desc.shader_program == 0) return;
+
+    // 解析目标 FBO（0 = 默认帧缓冲）与全尺寸
+    GLuint target_fbo = 0;
+    int rt_w = 0, rt_h = 0;
+    if (desc.render_target != 0) {
+        auto* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+        if (!rt) return;
+        target_fbo = static_cast<GLuint>(rt->fbo_handle);
+        rt_w = rt->desc.width;
+        rt_h = rt->desc.height;
+    }
+
+    // 保存先前状态，结束后恢复
+    GLint prev_fbo = 0;     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+    GLint prev_vp[4] = {0, 0, 0, 0}; glGetIntegerv(GL_VIEWPORT, prev_vp);
+    GLboolean prev_blend = glIsEnabled(GL_BLEND);
+    GLboolean prev_depth = glIsEnabled(GL_DEPTH_TEST);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, target_fbo);
+
+    int vx = desc.viewport.x, vy = desc.viewport.y, vw = desc.viewport.z, vh = desc.viewport.w;
+    if (vw <= 0 || vh <= 0) { vx = 0; vy = 0; vw = rt_w; vh = rt_h; }
+    if (vw > 0 && vh > 0) glViewport(vx, vy, vw, vh);
+
+    if (desc.clear) {
+        glClearColor(desc.clear_color.r, desc.clear_color.g, desc.clear_color.b, desc.clear_color.a);
+        GLbitfield mask = GL_COLOR_BUFFER_BIT;
+        if (desc.depth_test) mask |= GL_DEPTH_BUFFER_BIT;
+        glClear(mask);
+    }
+
+    if (desc.blend) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    } else {
+        glDisable(GL_BLEND);
+    }
+    if (desc.depth_test) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+
+    glUseProgram(static_cast<GLuint>(desc.shader_program));
+    for (const auto& u : desc.uniforms_f) {
+        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        if (loc >= 0) glUniform1f(loc, u.second);
+    }
+    for (const auto& u : desc.uniforms_vec2) {
+        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        if (loc >= 0) glUniform2f(loc, u.second.x, u.second.y);
+    }
+    for (const auto& u : desc.uniforms_vec4) {
+        GLint loc = glGetUniformLocation(desc.shader_program, u.first.c_str());
+        if (loc >= 0) glUniform4f(loc, u.second.x, u.second.y, u.second.z, u.second.w);
+    }
+
+    // 一次性 VAO + VBO 上传顶点（即时绘制非热路径，简单优先）
+    GLuint vao = 0, vbo = 0;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(desc.vertex_bytes), desc.vertices, GL_STREAM_DRAW);
+    for (const auto& a : desc.attribs) {
+        glEnableVertexAttribArray(static_cast<GLuint>(a.location));
+        glVertexAttribPointer(static_cast<GLuint>(a.location), a.components, GL_FLOAT, GL_FALSE,
+                              desc.stride_bytes,
+                              reinterpret_cast<const void*>(static_cast<intptr_t>(a.offset_bytes)));
+    }
+
+    GLenum mode = GL_TRIANGLES;
+    if (desc.topology == ImmediateTopology::Lines) mode = GL_LINES;
+    else if (desc.topology == ImmediateTopology::LineStrip) mode = GL_LINE_STRIP;
+    glDrawArrays(mode, 0, desc.vertex_count);
+
+    glBindVertexArray(0);
+    glDeleteBuffers(1, &vbo);
+    glDeleteVertexArrays(1, &vao);
+    glUseProgram(0);
+
+    // 恢复先前 FBO / viewport / blend / depth
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prev_fbo));
+    glViewport(prev_vp[0], prev_vp[1], prev_vp[2], prev_vp[3]);
+    if (prev_blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (prev_depth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+}
+
+void OpenGLRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+    if (!initialized_) return;
+    auto* src = resource_mgr_.GetRenderTarget(src_rt);
+    auto* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    if (!src || !dst || !src->desc.has_color || !dst->desc.has_color) return;
+
+    GLint prev_fbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(src->fbo_handle));
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(dst->fbo_handle));
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    glBlitFramebuffer(0, 0, src->desc.width, src->desc.height,
+                      0, 0, dst->desc.width, dst->desc.height,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prev_fbo));
+}
+
 // --- 着色器 ---
 
 unsigned int OpenGLRhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {

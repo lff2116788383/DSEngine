@@ -108,6 +108,10 @@ bool ReflectSpirvRuntime(
     std::vector<DescriptorBindingInfo>& out_bindings,
     uint32_t& out_push_constant_size,
     VkShaderStageFlags& out_push_constant_stages);
+void ReflectPushConstantMembersRuntime(
+    const std::vector<uint32_t>& vert_spirv,
+    const std::vector<uint32_t>& frag_spirv,
+    std::map<std::string, uint32_t>& out_name_to_offset);
 }}} // namespace
 #endif
 
@@ -466,6 +470,16 @@ unsigned int VulkanShaderManager::CreateProgram(
     program.frag_module = frag_module;
     program.pipeline_layout = pipeline_layout;
     program.reflection = reflection;
+
+#ifdef DSE_HAS_SPIRV_CROSS
+    // 反射 push constant 成员名→偏移（即时绘制 §5.A 按名打包 uniform）
+    {
+        std::map<std::string, uint32_t> pc_offsets;
+        spirv_reflect_impl::ReflectPushConstantMembersRuntime(vert_spirv, frag_spirv, pc_offsets);
+        for (const auto& [name, offset] : pc_offsets)
+            program.push_constant_member_offsets[name] = offset;
+    }
+#endif
 
     // 收集 descriptor set layouts（填充空洞 set 的空 layout，与 pipeline layout 对齐）
     std::map<uint32_t, std::vector<DescriptorBindingInfo>> sets;

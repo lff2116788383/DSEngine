@@ -67,6 +67,8 @@ struct VulkanShaderProgram {
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
     ShaderReflection reflection;
+    /// push constant 块「成员名 → 字节偏移」（即时绘制 §5.A 按名打包 uniform 用）
+    std::unordered_map<std::string, uint32_t> push_constant_member_offsets;
 };
 
 /**

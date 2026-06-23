@@ -53,6 +53,8 @@ public:
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;
     RenderTargetReadback ReadRenderTargetColorRgba8WithSize(unsigned int render_target_handle) const override;
     RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const override;
+    void ImmediateDraw(const ImmediateDrawDesc& desc) override;
+    void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) override;
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override;
     void DeleteBuffer(unsigned int handle) override;

@@ -310,6 +310,16 @@ void VulkanRhiDevice::Shutdown() {
         hiz_impl_->textures.clear();
     }
 
+    // 销毁即时绘制（§5.A）动态管线缓存（须在 VkDevice 销毁前）
+    {
+        VkDevice device = context_.device();
+        for (auto& [key, pipeline] : immediate_pipelines_) {
+            if (pipeline != VK_NULL_HANDLE)
+                vkDestroyPipeline(device, pipeline, nullptr);
+        }
+        immediate_pipelines_.clear();
+    }
+
     // 按依赖逆序关闭子系统
     gpu_timer_.Shutdown();
     draw_executor_.ShutdownGeometryBuffers();
@@ -1183,6 +1193,388 @@ VkBarrierMapping MapResourceState(ResourceState state) {
 }
 
 } // anonymous namespace
+
+// ============================================================
+// 即时绘制 / RT blit 原语（编辑器架构 §5.A / §5.B）
+// ============================================================
+
+namespace {
+
+/// 顶点属性分量数 → VkFormat（float 分量）。
+VkFormat ImmAttrVkFormat(int components) {
+    switch (components) {
+    case 1:  return VK_FORMAT_R32_SFLOAT;
+    case 2:  return VK_FORMAT_R32G32_SFLOAT;
+    case 3:  return VK_FORMAT_R32G32B32_SFLOAT;
+    case 4:  return VK_FORMAT_R32G32B32A32_SFLOAT;
+    default: return VK_FORMAT_R32G32B32A32_SFLOAT;
+    }
+}
+
+void AppendBytes(std::string& key, const void* data, size_t size) {
+    key.append(reinterpret_cast<const char*>(data), size);
+}
+
+} // anonymous namespace
+
+VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
+    const ImmediateDrawDesc& desc,
+    const VulkanShaderProgram* program,
+    VkRenderPass render_pass,
+    uint32_t color_attachment_count) {
+
+    // --- 复合键：VS/FS module + render_pass + topology + blend/depth + 顶点属性布局 ---
+    std::string key;
+    AppendBytes(key, &program->vert_module, sizeof(program->vert_module));
+    AppendBytes(key, &program->frag_module, sizeof(program->frag_module));
+    AppendBytes(key, &render_pass, sizeof(render_pass));
+    uint8_t topo = static_cast<uint8_t>(desc.topology);
+    AppendBytes(key, &topo, sizeof(topo));
+    uint8_t flags = (desc.blend ? 1u : 0u) | (desc.depth_test ? 2u : 0u);
+    AppendBytes(key, &flags, sizeof(flags));
+    int32_t stride = desc.stride_bytes;
+    AppendBytes(key, &stride, sizeof(stride));
+    AppendBytes(key, &color_attachment_count, sizeof(color_attachment_count));
+    for (const auto& a : desc.attribs) {
+        int32_t loc = a.location, comp = a.components, off = a.offset_bytes;
+        AppendBytes(key, &loc, sizeof(loc));
+        AppendBytes(key, &comp, sizeof(comp));
+        AppendBytes(key, &off, sizeof(off));
+    }
+
+    auto it = immediate_pipelines_.find(key);
+    if (it != immediate_pipelines_.end()) return it->second;
+
+    VkDevice device = context_.device();
+
+    // --- Shader Stages ---
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = program->vert_module;
+    stages[0].pName = "main";
+    stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = program->frag_module;
+    stages[1].pName = "main";
+
+    // --- Vertex Input：单 binding，per-vertex ---
+    VkVertexInputBindingDescription binding{};
+    binding.binding = 0;
+    binding.stride = static_cast<uint32_t>(desc.stride_bytes);
+    binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::vector<VkVertexInputAttributeDescription> attrs;
+    attrs.reserve(desc.attribs.size());
+    for (const auto& a : desc.attribs) {
+        VkVertexInputAttributeDescription va{};
+        va.location = static_cast<uint32_t>(a.location);
+        va.binding = 0;
+        va.format = ImmAttrVkFormat(a.components);
+        va.offset = static_cast<uint32_t>(a.offset_bytes);
+        attrs.push_back(va);
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertex_input{};
+    vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input.vertexBindingDescriptionCount = (desc.stride_bytes > 0) ? 1 : 0;
+    vertex_input.pVertexBindingDescriptions = (desc.stride_bytes > 0) ? &binding : nullptr;
+    vertex_input.vertexAttributeDescriptionCount = static_cast<uint32_t>(attrs.size());
+    vertex_input.pVertexAttributeDescriptions = attrs.empty() ? nullptr : attrs.data();
+
+    // --- Input Assembly ---
+    VkPrimitiveTopology vk_topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    switch (desc.topology) {
+    case ImmediateTopology::Lines:     vk_topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;  break;
+    case ImmediateTopology::LineStrip: vk_topo = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+    case ImmediateTopology::Triangles:
+    default:                           vk_topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+    }
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{};
+    input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly.topology = vk_topo;
+
+    // --- Viewport/Scissor 走 dynamic state（实际值在录制时设置）---
+    VkPipelineViewportStateCreateInfo viewport_state{};
+    viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state.viewportCount = 1;
+    viewport_state.scissorCount = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;  // 即时绘制不剔除（拾取/全屏 quad）
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.lineWidth = 1.0f;
+
+    VkPipelineMultisampleStateCreateInfo multisample{};
+    multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil{};
+    depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_stencil.depthTestEnable = desc.depth_test ? VK_TRUE : VK_FALSE;
+    depth_stencil.depthWriteEnable = desc.depth_test ? VK_TRUE : VK_FALSE;
+    depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+    VkPipelineColorBlendAttachmentState blend_attachment{};
+    blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                      VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_attachment.blendEnable = desc.blend ? VK_TRUE : VK_FALSE;
+    if (desc.blend) {
+        blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+        blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    }
+    const uint32_t blend_count = (color_attachment_count > 0) ? color_attachment_count : 1;
+    std::vector<VkPipelineColorBlendAttachmentState> blend_attachments(blend_count, blend_attachment);
+
+    VkPipelineColorBlendStateCreateInfo blend{};
+    blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend.attachmentCount = blend_count;
+    blend.pAttachments = blend_attachments.data();
+
+    VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamic_state{};
+    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state.dynamicStateCount = 2;
+    dynamic_state.pDynamicStates = dynamic_states;
+
+    VkGraphicsPipelineCreateInfo ci{};
+    ci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    ci.stageCount = 2;
+    ci.pStages = stages;
+    ci.pVertexInputState = &vertex_input;
+    ci.pInputAssemblyState = &input_assembly;
+    ci.pViewportState = &viewport_state;
+    ci.pRasterizationState = &rasterizer;
+    ci.pMultisampleState = &multisample;
+    ci.pDepthStencilState = &depth_stencil;
+    ci.pColorBlendState = &blend;
+    ci.pDynamicState = &dynamic_state;
+    ci.layout = program->pipeline_layout;
+    ci.renderPass = render_pass;
+    ci.subpass = 0;
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    if (vkCreateGraphicsPipelines(device, context_.pipeline_cache(), 1, &ci, nullptr, &pipeline) != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] ImmediateDraw: failed to create pipeline");
+        return VK_NULL_HANDLE;
+    }
+    immediate_pipelines_[key] = pipeline;
+    return pipeline;
+}
+
+void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
+    EnsureInitialized();
+    if (!initialized_ || desc.shader_program == 0) return;
+    if (desc.render_target == 0) {
+        // 即时绘制目标须为离屏 RT；swapchain 直绘走呈现层（§5.3），此处不支持。
+        DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: default framebuffer target unsupported");
+        return;
+    }
+
+    const VulkanShaderProgram* program = shader_mgr_.GetProgram(desc.shader_program);
+    const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+    if (!program || !rt || !rt->has_color ||
+        rt->framebuffer == VK_NULL_HANDLE || rt->color_texture.image == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: invalid program/RT {}", desc.render_target);
+        return;
+    }
+
+    VkDevice device = context_.device();
+    const uint32_t color_count = static_cast<uint32_t>(rt->color_attachment_count > 0 ? rt->color_attachment_count : 1);
+
+    // clear → loadOp=CLEAR render pass；否则 loadOp=LOAD 保留既有内容。
+    VkRenderPass render_pass = desc.clear ? rt->render_pass : rt->render_pass_load;
+    if (render_pass == VK_NULL_HANDLE) render_pass = rt->render_pass;
+
+    VkPipeline pipeline = GetOrCreateImmediatePipeline(desc, program, render_pass, color_count);
+    if (pipeline == VK_NULL_HANDLE) return;
+
+    // 顶点数据上传到临时 GPU 顶点缓冲（同步提交后删除）。
+    unsigned int vbo_handle = 0;
+    const VulkanBuffer* vbuf = nullptr;
+    if (desc.vertices && desc.vertex_bytes > 0) {
+        vbo_handle = resource_mgr_.CreateBuffer(desc.vertex_bytes, desc.vertices, true, false);
+        vbuf = resource_mgr_.GetBuffer(vbo_handle);
+        if (!vbuf || vbuf->buffer == VK_NULL_HANDLE) {
+            if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle);
+            return;
+        }
+    }
+
+    VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+
+    // RT 颜色图像静息态为 SHADER_READ_ONLY（与回读约定一致）→ 转 COLOR_ATTACHMENT_OPTIMAL，
+    // 匹配 render pass 的 initialLayout。
+    VkImageMemoryBarrier to_color{};
+    to_color.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    to_color.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    to_color.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    to_color.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_color.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_color.image = rt->color_texture.image;
+    to_color.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    to_color.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    to_color.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &to_color);
+
+    VkClearValue clear_values[2]{};
+    clear_values[0].color = {{desc.clear_color.r, desc.clear_color.g, desc.clear_color.b, desc.clear_color.a}};
+    clear_values[1].depthStencil = {1.0f, 0};
+
+    VkRenderPassBeginInfo rpbi{};
+    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpbi.renderPass = render_pass;
+    rpbi.framebuffer = rt->framebuffer;
+    rpbi.renderArea.offset = {0, 0};
+    rpbi.renderArea.extent = {static_cast<uint32_t>(rt->width), static_cast<uint32_t>(rt->height)};
+    if (desc.clear) {
+        rpbi.clearValueCount = rt->has_depth ? 2u : 1u;
+        rpbi.pClearValues = clear_values;
+    }
+    vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+
+    // viewport：0,0,0,0 → RT 全尺寸
+    const bool full_vp = (desc.viewport.z == 0 || desc.viewport.w == 0);
+    VkViewport vp{};
+    vp.x = full_vp ? 0.0f : static_cast<float>(desc.viewport.x);
+    vp.y = full_vp ? 0.0f : static_cast<float>(desc.viewport.y);
+    vp.width = full_vp ? static_cast<float>(rt->width) : static_cast<float>(desc.viewport.z);
+    vp.height = full_vp ? static_cast<float>(rt->height) : static_cast<float>(desc.viewport.w);
+    vp.minDepth = 0.0f;
+    vp.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+
+    VkRect2D scissor{};
+    scissor.offset = { static_cast<int32_t>(vp.x), static_cast<int32_t>(vp.y) };
+    scissor.extent = { static_cast<uint32_t>(vp.width), static_cast<uint32_t>(vp.height) };
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    // uniform → push constant：按反射的成员名偏移打包（与 DX11 cbuffer 反射对位）。
+    if (program->reflection.has_push_constant && !program->push_constant_member_offsets.empty()) {
+        std::vector<uint8_t> pc(program->reflection.push_constant_range.size, 0);
+        auto write_uniform = [&](const std::string& name, const void* src, size_t size) {
+            auto off_it = program->push_constant_member_offsets.find(name);
+            if (off_it == program->push_constant_member_offsets.end()) return;
+            uint32_t off = off_it->second;
+            if (off + size <= pc.size()) std::memcpy(pc.data() + off, src, size);
+        };
+        for (const auto& u : desc.uniforms_f)    write_uniform(u.first, &u.second, sizeof(float));
+        for (const auto& u : desc.uniforms_vec2)  write_uniform(u.first, &u.second, sizeof(glm::vec2));
+        for (const auto& u : desc.uniforms_vec4)  write_uniform(u.first, &u.second, sizeof(glm::vec4));
+        vkCmdPushConstants(cmd, program->pipeline_layout,
+                           program->reflection.push_constant_range.stageFlags,
+                           0, static_cast<uint32_t>(pc.size()), pc.data());
+    }
+
+    if (vbuf) {
+        VkBuffer vbs[] = { vbuf->buffer };
+        VkDeviceSize offs[] = { 0 };
+        vkCmdBindVertexBuffers(cmd, 0, 1, vbs, offs);
+    }
+    vkCmdDraw(cmd, static_cast<uint32_t>(desc.vertex_count), 1, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
+
+    // render pass finalLayout=COLOR_ATTACHMENT_OPTIMAL → 转回 SHADER_READ_ONLY（供回读 / 采样）。
+    VkImageMemoryBarrier to_read{};
+    to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    to_read.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    to_read.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_read.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_read.image = rt->color_texture.image;
+    to_read.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    to_read.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    to_read.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         0, 0, nullptr, 0, nullptr, 1, &to_read);
+
+    resource_mgr_.EndSingleTimeCommands(cmd);  // 提交 + 等待完成
+
+    if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle);
+
+    current_frame_stats_.draw_calls++;
+}
+
+void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+    EnsureInitialized();
+    if (!initialized_ || src_rt == dst_rt) return;
+
+    const VulkanRenderTarget* src = resource_mgr_.GetRenderTarget(src_rt);
+    const VulkanRenderTarget* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    if (!src || !dst || !src->has_color || !dst->has_color ||
+        src->color_texture.image == VK_NULL_HANDLE || dst->color_texture.image == VK_NULL_HANDLE) {
+        DEBUG_LOG_WARN("[Vulkan] BlitRenderTarget: invalid src {} / dst {}", src_rt, dst_rt);
+        return;
+    }
+
+    VkImage src_image = src->color_texture.image;
+    VkImage dst_image = dst->color_texture.image;
+
+    VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
+
+    // src/dst 静息态均为 SHADER_READ_ONLY → TRANSFER_SRC / TRANSFER_DST。
+    VkImageMemoryBarrier barriers[2]{};
+    barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barriers[0].image = src_image;
+    barriers[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    barriers[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+    barriers[1] = barriers[0];
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].image = dst_image;
+    barriers[1].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers);
+
+    VkImageBlit region{};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.srcOffsets[0] = {0, 0, 0};
+    region.srcOffsets[1] = {src->width, src->height, 1};
+    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.dstOffsets[0] = {0, 0, 0};
+    region.dstOffsets[1] = {dst->width, dst->height, 1};
+    // 等尺寸优先 NEAREST（§5.B）；尺寸不同时仍正确缩放。
+    VkFilter filter = (src->width == dst->width && src->height == dst->height)
+                          ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+    vkCmdBlitImage(cmd,
+        src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &region, filter);
+
+    // 转回 SHADER_READ_ONLY。
+    barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barriers[1].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barriers[1].srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers);
+
+    resource_mgr_.EndSingleTimeCommands(cmd);
+}
 
 void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
                                               ResourceState from, ResourceState to) {

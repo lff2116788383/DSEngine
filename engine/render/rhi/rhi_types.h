@@ -20,6 +20,7 @@
 #include <cstdint>
 #include "engine/render/rhi/rhi_handle.h"
 #include <string>
+#include <utility>
 
 // ============================================================
 // RHI 无关枚举 — 替代原 OpenGL 硬编码常量
@@ -250,6 +251,32 @@ struct BindGroupDesc {
     std::vector<UniformBufferEntry> uniform_buffers;
     std::vector<TextureEntry> textures;
     std::vector<StorageBufferEntry> storage_buffers;
+};
+
+/// 即时绘制拓扑（兑现编辑器架构 §5.A「通用即时绘制」）。
+enum class ImmediateTopology : uint8_t { Triangles, Lines, LineStrip };
+
+/// 即时绘制的单个顶点属性（location/分量数/字节偏移），按 attribs 顺序映射到 shader_program 的输入。
+struct ImmediateVertexAttrib { int location = 0; int components = 0; int offset_bytes = 0; };
+
+/// 即时绘制描述（编辑器架构 §5.A）：用「自定义 shader program + 一段顶点数据 + 少量 uniform」
+/// 直接绘制到指定 RT，不经高层 Mesh/Sprite 批。供编辑器视口拾取（颜色 ID quad）等使用。
+/// 自包含、同步执行（落地后可紧跟 ReadRenderTargetColorRgba8WithSize 回读），属设备级原语。
+struct ImmediateDrawDesc {
+    unsigned int render_target = 0;        ///< 目标 RT 句柄（0 = 默认帧缓冲/交换链）
+    unsigned int shader_program = 0;       ///< CreateShaderProgram 返回值
+    const void*  vertices = nullptr;       ///< 交错顶点数据
+    size_t       vertex_bytes = 0;
+    int          vertex_count = 0;
+    int          stride_bytes = 0;
+    std::vector<ImmediateVertexAttrib> attribs;
+    ImmediateTopology topology = ImmediateTopology::Triangles;
+    glm::ivec4 viewport = {0, 0, 0, 0};    ///< x,y,w,h（0,0,0,0 = 用 RT 全尺寸）
+    bool clear = false; glm::vec4 clear_color = {0, 0, 0, 0};
+    bool blend = false; bool depth_test = false;
+    std::vector<std::pair<std::string, float>>     uniforms_f;
+    std::vector<std::pair<std::string, glm::vec2>> uniforms_vec2;
+    std::vector<std::pair<std::string, glm::vec4>> uniforms_vec4;
 };
 
 /// 引擎内建着色器程序标识（由各后端懒初始化预编译着色器，经 RhiDevice::GetBuiltinProgram 暴露句柄）。

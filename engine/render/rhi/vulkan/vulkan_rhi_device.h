@@ -87,6 +87,10 @@ public:
     void EndFrame() override;
     const RenderStats& LastFrameStats() const override;
 
+    // --- 即时绘制 / RT blit 原语（编辑器架构 §5.A / §5.B）---
+    void ImmediateDraw(const ImmediateDrawDesc& desc) override;
+    void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) override;
+
     // --- RenderGraph 自动屏障（Vulkan 精确 VkImageMemoryBarrier）---
     void TransitionRenderTarget(unsigned int rt_handle,
                                  ResourceState from, ResourceState to) override;
@@ -237,6 +241,14 @@ public:
 
 private:
     void EnsureInitialized();
+
+    /// 即时绘制（§5.A）动态 VkPipeline 缓存：键 = {VS/FS module + render_pass + topology
+    /// + blend/depth + 顶点属性布局} 序列化字符串，避免每次调用重建管线。
+    VkPipeline GetOrCreateImmediatePipeline(const ImmediateDrawDesc& desc,
+                                            const VulkanShaderProgram* program,
+                                            VkRenderPass render_pass,
+                                            uint32_t color_attachment_count);
+    std::unordered_map<std::string, VkPipeline> immediate_pipelines_;
 
     /// 子系统实例
     VulkanContext context_;

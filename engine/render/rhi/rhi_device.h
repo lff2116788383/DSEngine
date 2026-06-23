@@ -198,6 +198,18 @@ public:
     virtual RenderTargetDepthReadback ReadRenderTargetDepthFloatWithSize(unsigned int render_target_handle) const {
         (void)render_target_handle; return {};
     }
+
+    /// 通用即时绘制（编辑器架构 §5.A）：用「自定义 shader program + 一段顶点数据 + 少量 uniform」
+    /// 直接绘制到 desc.render_target，不经高层 Mesh/Sprite 批。自包含、同步执行（返回后即可
+    /// ReadRenderTargetColorRgba8WithSize 回读），把编辑器视口拾取等从后端直绑 GL 调用中解耦。
+    /// 默认空实现，便于后端逐步落地 / Mock 跳过。
+    virtual void ImmediateDraw(const ImmediateDrawDesc& desc) { (void)desc; }
+
+    /// 渲染目标 blit（编辑器架构 §5.B）：等尺寸把 src_rt 的颜色 0 号附件拷到 dst_rt，
+    /// 替代多视口的 glBlitFramebuffer。dst 需已按相同尺寸创建。默认空实现。
+    virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+        (void)src_rt; (void)dst_rt;
+    }
     virtual unsigned int CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) = 0;
     /// 带采样描述(过滤 + 环绕)的 2D 纹理创建。默认实现退化为旧的 filter-only 行为
     /// (环绕 = Repeat)，后端可覆盖以支持 ClampToEdge / 点采样等。

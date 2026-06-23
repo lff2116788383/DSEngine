@@ -18,6 +18,7 @@
 #include "engine/base/debug.h"
 #include "engine/render/rhi/vulkan/vulkan_shader_manager.h"
 #include <map>
+#include <string>
 
 namespace dse {
 namespace render {
@@ -89,6 +90,39 @@ bool ReflectSpirvRuntime(
     for (auto& [key, info] : binding_map)
         out_bindings.push_back(info);
     return true;
+}
+
+// 反射 push constant 块的「成员名 → 字节偏移」映射（即时绘制 §5.A 按名打包 uniform 用，
+// 与 DX11 的 cbuffer 反射对位）。VS/FS 同名成员偏移一致，后写不覆盖语义。
+void ReflectPushConstantMembersRuntime(
+    const std::vector<uint32_t>& vert_spirv,
+    const std::vector<uint32_t>& frag_spirv,
+    std::map<std::string, uint32_t>& out_name_to_offset) {
+
+    out_name_to_offset.clear();
+
+    auto reflect_stage = [&](const std::vector<uint32_t>& spirv) {
+        if (spirv.empty()) return;
+        try {
+            spirv_cross::CompilerGLSL compiler(spirv);
+            auto resources = compiler.get_shader_resources();
+            for (auto& pc : resources.push_constant_buffers) {
+                auto& type = compiler.get_type(pc.base_type_id);
+                uint32_t member_count = static_cast<uint32_t>(type.member_types.size());
+                for (uint32_t i = 0; i < member_count; ++i) {
+                    std::string name = compiler.get_member_name(pc.base_type_id, i);
+                    if (name.empty()) continue;
+                    uint32_t offset = compiler.type_struct_member_offset(type, i);
+                    out_name_to_offset[name] = offset;
+                }
+            }
+        } catch (const spirv_cross::CompilerError& e) {
+            DEBUG_LOG_ERROR("[Vulkan] spirv-cross push-constant reflection error: {}", e.what());
+        }
+    };
+
+    reflect_stage(vert_spirv);
+    reflect_stage(frag_spirv);
 }
 
 } // namespace spirv_reflect_impl

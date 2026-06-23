@@ -15,6 +15,9 @@
 #include <chrono>
 
 #include <cstdlib>
+#include <cstring>
+#include <d3dcompiler.h>
+#include <d3d11shader.h>
 
 namespace dse {
 namespace render {
@@ -357,6 +360,199 @@ RenderTargetDepthReadback DX11RhiDevice::ReadRenderTargetDepthFloatWithSize(unsi
     readback.height = result.height;
     readback.depth = std::move(result.depth);
     return readback;
+}
+
+// --- 通用即时绘制 / RT blit（编辑器架构 §5.A/§5.B）---
+
+namespace {
+DXGI_FORMAT ImmAttrFormat(int components) {
+    switch (components) {
+        case 1:  return DXGI_FORMAT_R32_FLOAT;
+        case 2:  return DXGI_FORMAT_R32G32_FLOAT;
+        case 3:  return DXGI_FORMAT_R32G32B32_FLOAT;
+        default: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    }
+}
+} // namespace
+
+void DX11RhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
+    if (!initialized_ || desc.shader_program == 0) return;
+    ID3D11Device* dev = context_.device();
+    ID3D11DeviceContext* dc = context_.device_context();
+    if (!dev || !dc) return;
+
+    const DX11ShaderProgram* prog = shader_mgr_.GetProgram(desc.shader_program);
+    if (!prog || !prog->vertex_shader || !prog->pixel_shader || !prog->vs_blob) return;
+
+    // 目标 RTV / DSV / 全尺寸（0 = 交换链后备缓冲）
+    ID3D11RenderTargetView* rtv = nullptr;
+    ID3D11DepthStencilView* dsv = nullptr;
+    int rt_w = context_.width(), rt_h = context_.height();
+    if (desc.render_target == 0) {
+        rtv = context_.backbuffer_rtv();
+        if (desc.depth_test) dsv = context_.backbuffer_dsv();
+    } else {
+        const auto* rt = resource_mgr_.GetRenderTarget(desc.render_target);
+        if (!rt || !rt->color_rtv) return;
+        rtv = rt->color_rtv.Get();
+        if (desc.depth_test && rt->depth_dsv) dsv = rt->depth_dsv.Get();
+        rt_w = rt->width;
+        rt_h = rt->height;
+    }
+    dc->OMSetRenderTargets(1, &rtv, dsv);
+
+    if (desc.clear && rtv) {
+        const float c[4] = {desc.clear_color.r, desc.clear_color.g, desc.clear_color.b, desc.clear_color.a};
+        dc->ClearRenderTargetView(rtv, c);
+        if (dsv) dc->ClearDepthStencilView(dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    }
+
+    D3D11_VIEWPORT vp{};
+    int vx = desc.viewport.x, vy = desc.viewport.y, vw = desc.viewport.z, vh = desc.viewport.w;
+    if (vw <= 0 || vh <= 0) { vx = 0; vy = 0; vw = rt_w; vh = rt_h; }
+    vp.TopLeftX = static_cast<float>(vx);
+    vp.TopLeftY = static_cast<float>(vy);
+    vp.Width = static_cast<float>(vw);
+    vp.Height = static_cast<float>(vh);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    dc->RSSetViewports(1, &vp);
+
+    // InputLayout：attribs → 语义 TEXCOORD<location>（与 DX11DrawExecutor 通用原语布局同约定），slot0/逐顶点
+    std::vector<D3D11_INPUT_ELEMENT_DESC> elems;
+    elems.reserve(desc.attribs.size());
+    for (const auto& a : desc.attribs) {
+        elems.push_back(D3D11_INPUT_ELEMENT_DESC{
+            "TEXCOORD", static_cast<UINT>(a.location), ImmAttrFormat(a.components),
+            0u, static_cast<UINT>(a.offset_bytes), D3D11_INPUT_PER_VERTEX_DATA, 0u});
+    }
+    ID3D11InputLayout* layout = shader_mgr_.GetOrCreatePrimInputLayout(desc.shader_program, elems);
+    if (!layout) return;
+    dc->IASetInputLayout(layout);
+
+    // 动态顶点缓冲（即时绘制非热路径，每次新建）
+    ComPtr<ID3D11Buffer> vb;
+    D3D11_BUFFER_DESC vbd{};
+    vbd.ByteWidth = static_cast<UINT>(desc.vertex_bytes);
+    vbd.Usage = D3D11_USAGE_DEFAULT;
+    vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA vinit{};
+    vinit.pSysMem = desc.vertices;
+    if (FAILED(dev->CreateBuffer(&vbd, &vinit, &vb))) return;
+    UINT stride = static_cast<UINT>(desc.stride_bytes), voffset = 0;
+    ID3D11Buffer* vbs[] = {vb.Get()};
+    dc->IASetVertexBuffers(0, 1, vbs, &stride, &voffset);
+
+    D3D11_PRIMITIVE_TOPOLOGY topo = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+    if (desc.topology == ImmediateTopology::Lines) topo = D3D11_PRIMITIVE_TOPOLOGY_LINELIST;
+    else if (desc.topology == ImmediateTopology::LineStrip) topo = D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP;
+    dc->IASetPrimitiveTopology(topo);
+
+    dc->VSSetShader(prog->vertex_shader.Get(), nullptr, 0);
+    dc->PSSetShader(prog->pixel_shader.Get(), nullptr, 0);
+
+    // uniform → cbuffer：反射 VS/PS 的常量缓冲，按变量名写入对应偏移，整块上传后绑定
+    std::vector<ComPtr<ID3D11Buffer>> cb_keepalive;
+    auto pack_stage = [&](ID3DBlob* blob, bool is_vs) {
+        if (!blob) return;
+        ComPtr<ID3D11ShaderReflection> refl;
+        if (FAILED(D3DReflect(blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&refl)))) return;
+        D3D11_SHADER_DESC sd{};
+        refl->GetDesc(&sd);
+        for (UINT i = 0; i < sd.ConstantBuffers; ++i) {
+            ID3D11ShaderReflectionConstantBuffer* rcb = refl->GetConstantBufferByIndex(i);
+            D3D11_SHADER_BUFFER_DESC bd{};
+            if (FAILED(rcb->GetDesc(&bd)) || bd.Size == 0) continue;
+            D3D11_SHADER_INPUT_BIND_DESC ibd{};
+            if (FAILED(refl->GetResourceBindingDescByName(bd.Name, &ibd))) continue;
+
+            std::vector<uint8_t> staging(bd.Size, 0u);
+            auto write_var = [&](const std::string& name, const float* data, UINT bytes) {
+                ID3D11ShaderReflectionVariable* var = rcb->GetVariableByName(name.c_str());
+                if (!var) return;
+                D3D11_SHADER_VARIABLE_DESC vd{};
+                if (FAILED(var->GetDesc(&vd))) return;
+                if (vd.StartOffset + bytes > bd.Size) return;
+                std::memcpy(staging.data() + vd.StartOffset, data, bytes);
+            };
+            for (const auto& u : desc.uniforms_f)    write_var(u.first, &u.second, 4u);
+            for (const auto& u : desc.uniforms_vec2) write_var(u.first, &u.second.x, 8u);
+            for (const auto& u : desc.uniforms_vec4) write_var(u.first, &u.second.x, 16u);
+
+            UINT padded_size = (bd.Size + 15u) & ~15u;
+            std::vector<uint8_t> padded(padded_size, 0u);
+            std::memcpy(padded.data(), staging.data(), staging.size());
+            D3D11_BUFFER_DESC cbd{};
+            cbd.ByteWidth = padded_size;
+            cbd.Usage = D3D11_USAGE_DEFAULT;
+            cbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            D3D11_SUBRESOURCE_DATA cinit{};
+            cinit.pSysMem = padded.data();
+            ComPtr<ID3D11Buffer> cb;
+            if (FAILED(dev->CreateBuffer(&cbd, &cinit, &cb))) continue;
+            ID3D11Buffer* cbs[] = {cb.Get()};
+            if (is_vs) dc->VSSetConstantBuffers(ibd.BindPoint, 1, cbs);
+            else       dc->PSSetConstantBuffers(ibd.BindPoint, 1, cbs);
+            cb_keepalive.push_back(cb);
+        }
+    };
+    pack_stage(prog->vs_blob.Get(), true);
+    pack_stage(prog->ps_blob.Get(), false);
+
+    // 光栅化：关剔除（全屏三角/任意 quad 绕序不确定），solid，开深度裁剪
+    ComPtr<ID3D11RasterizerState> rs;
+    D3D11_RASTERIZER_DESC rd{};
+    rd.FillMode = D3D11_FILL_SOLID;
+    rd.CullMode = D3D11_CULL_NONE;
+    rd.DepthClipEnable = TRUE;
+    if (SUCCEEDED(dev->CreateRasterizerState(&rd, &rs))) dc->RSSetState(rs.Get());
+
+    ComPtr<ID3D11BlendState> blend_state;
+    D3D11_BLEND_DESC bdsc{};
+    bdsc.RenderTarget[0].BlendEnable = desc.blend ? TRUE : FALSE;
+    if (desc.blend) {
+        bdsc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        bdsc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        bdsc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        bdsc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        bdsc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+        bdsc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    }
+    bdsc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    if (SUCCEEDED(dev->CreateBlendState(&bdsc, &blend_state))) {
+        const float bf[4] = {0, 0, 0, 0};
+        dc->OMSetBlendState(blend_state.Get(), bf, 0xFFFFFFFFu);
+    }
+
+    ComPtr<ID3D11DepthStencilState> depth_state;
+    D3D11_DEPTH_STENCIL_DESC dd{};
+    dd.DepthEnable = desc.depth_test ? TRUE : FALSE;
+    dd.DepthWriteMask = desc.depth_test ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
+    dd.DepthFunc = D3D11_COMPARISON_LESS;
+    if (SUCCEEDED(dev->CreateDepthStencilState(&dd, &depth_state))) dc->OMSetDepthStencilState(depth_state.Get(), 0);
+
+    dc->Draw(static_cast<UINT>(desc.vertex_count), 0);
+}
+
+void DX11RhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) {
+    if (!initialized_) return;
+    ID3D11DeviceContext* dc = context_.device_context();
+    const auto* src = resource_mgr_.GetRenderTarget(src_rt);
+    const auto* dst = resource_mgr_.GetRenderTarget(dst_rt);
+    if (!dc || !src || !dst) return;
+    ID3D11Texture2D* src_tex = src->color_texture.Get();
+    ID3D11Texture2D* dst_tex = dst->color_texture.Get();
+    if (!src_tex || !dst_tex) return;
+
+    D3D11_TEXTURE2D_DESC sd{};
+    src_tex->GetDesc(&sd);
+    if (sd.SampleDesc.Count > 1) {
+        // MSAA 源：先 resolve 到 1x dst
+        dc->ResolveSubresource(dst_tex, 0, src_tex, 0, sd.Format);
+    } else {
+        // 同格式同尺寸直接拷贝（编辑器多视口 RT→RT）
+        dc->CopyResource(dst_tex, src_tex);
+    }
 }
 
 unsigned int DX11RhiDevice::CreateTexture2D(int width, int height, const unsigned char* rgba8_data, bool linear_filter) {
