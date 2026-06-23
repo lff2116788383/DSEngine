@@ -215,7 +215,7 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 - [x] **B1**：跨后端离屏像素 smoke gtest（先补 skybox），作为后续每次迁移的回归闸门（`560fc7d4`）。
 - [~] **B2**：迁 Sprite/Mesh → 抽高层渲染器 + 删其旧 ABI + 像素测试。
   - [x] **B2a** 迁 Sprite（`SpriteBatchRenderer`，默认/SDF/VFX）+ 删 DrawSpriteBatch（`11d61181`..`43240e8e`）。
-  - [~] **B2b** 抽 `MeshRenderer`（后端无关 forward-PBR 能力，与 `DrawMeshBatch` ABI **并存**，ABI 暂不删）：
+  - [x] **B2b** 抽 `MeshRenderer`（后端无关 forward-PBR 能力）→ **`DrawMeshBatch` ABI 已删**（阶段4 M1–M4）：
     - [x] **P0a** `DrawIndexedInstanced` 三后端原语（`f38d0b13`/`e0f061f7`）。
     - [x] **P0b** `BindStorageBuffer` 图形阶段三后端原语（`10f3ff2d`）+ 组合像素 smoke（`68c81b84`）。
     - [x] **B2b-1** forward PBR 静态网格（`ee97d1ab`）。
@@ -224,9 +224,14 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
     - [x] **B2b-4** depth-only / shadow（三后端深度回读，`eaf61c2d`）。
     - [x] **B2b-5** GPU-driven 间接绘制（`DrawIndexedIndirect` 三后端，`25fb30a6`）。
     - [x] **2c-1..5 + Final-Feat-1..7** 高级 shading 全模式（`debcaead`…`db8c320b`）：shading_mode/SSS/clearcoat/POM、地形 splat/积雪、WBOIT、DDGI/LightProbe、CSM、蒙皮/实例化/聚光/morph、外部常驻 VAO/EBO（tiled terrain）、共享网格模板去重（tree）——均复用现有原语，各配跨后端像素 smoke。
-    - [ ] **删 `DrawMeshBatch` ABI**：**推迟**——原「高级 shading 未迁」理由已不成立（上述能力均已落地）；现推迟理由改为**调用点未迁 + spine 2D 蒙皮能力缺口**——需补 spine 2D 蒙皮 → 迁 6 调用点 → 全仓 grep 确认后才删（用户决策：当前保留 ABI 并存）。
+    - [x] **删 `DrawMeshBatch` ABI**：✅ **已删**（阶段4 M1–M4）——先补齐 MeshRenderer 三处覆盖缺口（M1 蒙皮×硬件实例化 / M2 编辑器视图模式 wireframe·overdraw·force_unlit / M3 GBuffer-RSM MRT），M4 加 `MeshRenderer::DrawBatch` 分发层、迁 6 调用点（render_scene DrawOpaqueCpu/DrawTransparent → 常驻 `FramePipeline::cpu_mesh_renderer_`），删纯虚 + 三后端 forwarder + 三执行器实现 + `gl_draw_executor_mesh.cpp` 整文件。全仓已无 `DrawMeshBatch(` 声明/调用（仅残留若干说明性注释）。详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §8.2 D10。
     - 基线：smoke 76 → 92（B2b-2..5）→ **181**（2c-1..5 + Final-Feat-1..7 各增跨后端像素 smoke），详见 [`../plans/B2b_mesh_migration_scoping.md`](../plans/B2b_mesh_migration_scoping.md)。
 - [x] **B3**：✅ 迁 Particles（`ParticleRenderer` + SSBO 实例化），**删 `DrawParticles3D` ABI**。
-- [~] **阶段 2b**：迁 `DrawPostProcess` → `PostProcessRenderer`（全屏 quad/std140 UBO 契约）。**已迁 26 效果**；剩 compute mip 链（bloom_downsample/upsample）+ 手写 HLSL 簇（bloom_composite/atmosphere_sky/ui_overlay）→ 删 ABI。**删 ABI 闸门**：compute 链后端发散（DX11=`DispatchCompute`/UAV，GL=全屏 quad），需决策 (A) 把设备级 `DispatchCompute`（见 §「间接绘制/compute」，已存在于 `IRhiCompute`）提升为 CommandBuffer 级通用原语彻底删 ABI，或 (B) 保留精简 compute-only 路径。详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §5B。
-- [ ] **B4**：迁 Hair（SSBO + 多段绘制）。
-- [ ] **B5**：全局绑定收敛（shadow map / global uniforms / program+PSO 聚合）。
+- [x] **阶段 2b（后处理）**：✅ 迁 `DrawPostProcess` → `PostProcessRenderer`（全屏 quad/std140 UBO 契约）。**全部 29 效果已迁**（含 bloom_composite/atmosphere_sky/ui_overlay 手写 HLSL 簇）；compute mip 链选 **Option A**——新增 CommandBuffer 级 `DispatchComputePass` 原语 + `BloomRenderer`（compute/quad 分支），**已删 `DrawPostProcess` ABI**。详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §2 阶段2b。
+- [x] **B4（毛发）**：✅ 迁 Hair（`HairRenderer`，HairUniforms UBO + position/tangent SSBO + 逐 strand `Draw`，`PrimitiveTopology` 贯穿 PSO），**删 `DrawHairStrands` ABI**。
+- [x] **B5（全局绑定收敛）**：✅ B5-1 删 `BindTextureCube`（归并 `BindTexture(…,TexCube)`）；B5-3a `PushConstantsMat4` 泛化为字节块 `PushConstants(stage,off,data,size)`；B5-3b `BindShaderProgram`+`SetPipelineState` 聚合为单一 `BindPipeline(handle)`（为 Metal/DX12 铺路）。
+- [x] **D6（相机解耦）**：✅ 引入 `engine/render/frame_context.h`，从 `CommandBuffer` 移除 `SetCamera/GetView/GetProjectionMatrix`，相机经 `FrameContext` 由各 Pass 显式下传。
+- [x] **A（终态收尾）**：✅ `BindVertexBuffer` slot 化 + `VertexInputRate`（见 §3 进度 note）。
+- [x] **B（终态收尾）**：✅ `BindGroup` 绑定组（见 §2.3）。
+
+> **尚未兑现的「完整终态」**（非债务，属下一阶段，需真实多后端环境）：① **Metal/DX12 后端**——整个边界重画的终极验收（「加后端=O(1)」需新后端实证，当前为「设计成立、未经新后端验证」）；② **GL/Vulkan 真机逐像素验证（§8.2 D7）**——需真实 GPU 或多后端 CI，VM 软渲（WARP/llvmpipe）只验解析真值。
