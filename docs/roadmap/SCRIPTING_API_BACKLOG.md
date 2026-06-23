@@ -12,6 +12,10 @@
 
 ## 1. 全局 time-scale（慢动作 / 暂停）
 
+> **状态：实现中。** 设计已评审通过，详见 [`docs/design/TIME_SCALE.md`](../design/TIME_SCALE.md)。
+> 采用零债 TimeContext 显式线程化 + 逐实体 `TimeScaleComponent`（全局 × 局部，对标 Unreal `CustomTimeDilation`）。
+> API：`dse.app.set/get_time_scale`（全局）+ `dse.ecs.set/get_time_scale(e, s)`（逐实体）。
+
 - **现状**：`engine/core` 无 `TimeScale`；`dt` 直接来自帧计时器。后处理里有 `post_process_film_grain_time_scale`，但那只影响该特效、不影响游戏逻辑。
 - **收益 / 必要性**：**中高 / 非必须**。面向终端玩家——暂停菜单、命中停顿（hit-stop）、子弹时间。几乎每个游戏都需要"暂停"。
 - **建议 API**（挂在 `dse.app` 下）：
