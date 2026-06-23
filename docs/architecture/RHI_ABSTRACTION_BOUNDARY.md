@@ -262,3 +262,14 @@
 - **有优化空间**：有（8.3）。D4（shader 注册表）已在 B2b 前还清；原 D5（共享分配器）经复评收益≈0 已降级；D9（sprite 单缓冲 vs 2 帧在飞）已抽后端无关 `PerInFlightBuffer` helper 还清并回填 sprite。
 - **最佳？**：是「低风险务实最优」，非「理论最优」（后者是 bind group + program/PSO 聚合的一次性大改）。
 - **技术债**：未隐藏，8.2 全部登记并各有偿还阶段；唯一需即时决策的是 D8（B2b 的 SSBO 顺序）。
+
+### 8.5 演进路线（planned / 触发条件）
+> 以下三项是架构师评审提出的下一阶段演进候选。**当前均不做**——v1 目标架构（slot-based 绑定 + 延迟组装 + PSO/program 聚合 + 高层渲染器）已达成且三后端真机像素全绿。各项仅在「触发条件」满足时启动，避免过早优化。状态分级：`current`=已落地、`planned`=未做但有路径、`done`=完成无后续。
+
+| 项 | 状态 | 现状（current） | 触发条件（何时做） | 预估范围 / 风险 |
+|---|---|---|---|---|
+| **E1. Bindless / 对象级 Descriptor Set / Argument Buffer** | `planned`（地基 `current`） | 已有**有界 bind group**：`BindGroup(BindGroupDesc)` 把多 UBO/纹理/SSBO 打成一次原子绑定（默认转发逐 slot `Bind*` + 后端延迟组装天然汇成一次提交），消费者仅 `SpriteRenderer`，闸门 `bind_group_pixel_smoke_test`。**尚无**真·bindless（descriptor indexing / 无界纹理数组 / GPU 驱动纹理表）与对象级 descriptor set/argument buffer 预创建缓存 | 引入 **DX12 / Metal** 后端时；或出现「海量材质 / 大纹理表 / 每帧大量材质切换」且 profiling 指向绑定开销 | 中-大。GL/DX11 对 bindless 支持本就受限，是 Vulkan/DX12/Metal 专属卖点；需把 `BindGroup` 升级为对象级缓存句柄，并铺到全部渲染器 |
+| **E2. Shader + 光栅状态聚合为 GraphicsPipeline** | `done` | **已完成**（B5-3b / §8.2 D2）：`GraphicsPipelineDesc{pso_state, program}` + `RhiDevice::GetGraphicsPipeline(pso,program)` 惰性去重缓存 + `CommandBuffer::BindPipeline(handle)`，已删分离的 `SetPipelineState`+`BindShaderProgram`；Vulkan 把 program 惰性烘进 `VkPipeline`，已为 Metal/DX12「shader 烘进 PSO」铺平 | —（已是目标态，无后续动作） | — |
+| **E3. JobSystem 多线程录制 CommandBuffer**（即 §8.2 D11） | `planned` | `RenderGraph::Execute` 为**单线程顺序波次提交**（按 `compiled_order_` 在单个 `CommandBuffer` 串行跑 `p.execute`）。无并行录制 / secondary command buffer | 出现**实测 CPU 提交瓶颈**（万级 DrawCall 且 CPU-bound）时——**且先压更高杠杆的 GPU-driven（`DrawIndexedIndirect`）**，仍不够再做 | 大。①须先把 `draw_executor_` 去单例化 / per-command-buffer 化；②**GL 物理不可达**（单 context、无 secondary cmd buffer），属 Vulkan/DX12 专属；并发正确性风险高 |
+
+**一句话**：E2 已是目标态；**E1（真 bindless）与 E3（多线程录制）是面向 DX12/Metal 后端与超大场景的前瞻项**，等真有那个后端或那个量级（且有 profiling 证据）再做最划算。在此之前保持现状即「低风险务实最优」。
