@@ -69,28 +69,6 @@ private:
     RenderPassContext& ctx_;
 };
 
-// ---- GBuffer Pass (deferred geometry) ----
-class GBufferPass : public IRenderPass {
-public:
-    explicit GBufferPass(RenderPassContext& ctx) : ctx_(ctx) {}
-    void Setup(RenderGraph& graph) override;
-    void Execute(CommandBuffer& cmd_buffer) override;
-    const char* GetName() const override { return "gbuffer_pass"; }
-private:
-    RenderPassContext& ctx_;
-};
-
-// ---- Deferred Lighting Pass ----
-class DeferredLightingPass : public IRenderPass {
-public:
-    explicit DeferredLightingPass(RenderPassContext& ctx) : ctx_(ctx) {}
-    void Setup(RenderGraph& graph) override;
-    void Execute(CommandBuffer& cmd_buffer) override;
-    const char* GetName() const override { return "deferred_lighting_pass"; }
-private:
-    RenderPassContext& ctx_;
-};
-
 // ---- Forward Scene Pass ----
 class ForwardScenePass : public IRenderPass {
 public:
@@ -454,16 +432,6 @@ private:
     PostProcessRenderer post_process_renderer_;
 };
 
-// ---- Vegetation / Foliage Pass ----
-class FoliagePass : public IRenderPass {
-public:
-    explicit FoliagePass(RenderPassContext& ctx) : ctx_(ctx) {}
-    void Setup(RenderGraph& graph) override;
-    void Execute(CommandBuffer& cmd_buffer) override;
-    const char* GetName() const override { return "foliage_pass"; }
-private:
-    RenderPassContext& ctx_;
-};
 
 } // namespace render
 } // namespace dse

@@ -7,8 +7,6 @@
  *   CSMShadowPass               ~139
  *   SpotShadowPass              ~200
  *   PointShadowPass             ~252
- *   GBufferPass                 ~310
- *   DeferredLightingPass        ~397
  *   ForwardScenePass            ~451
  *   BloomPass                   ~638
  *   UIPass                      ~707
@@ -484,70 +482,6 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
         cmd_buffer.BindGlobalPointShadowMap(static_cast<unsigned int>(shadow_slot), ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.point_shadow[shadow_slot]));
     }
-}
-
-// ============================================================
-// GBufferPass (deferred geometry)
-// ============================================================
-
-void GBufferPass::Setup(RenderGraph& graph) {
-    auto prez_depth    = graph.DeclareResource("prez_depth");
-    auto gbuffer_color = graph.DeclareResource("gbuffer_color");
-    auto gbuffer_depth = graph.DeclareResource("gbuffer_depth");
-
-    auto pass = graph.AddPass(GetName());
-    graph.PassRead(pass, prez_depth);
-    graph.PassWrite(pass, gbuffer_color);
-    graph.PassWrite(pass, gbuffer_depth);
-    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
-}
-
-void GBufferPass::Execute(CommandBuffer& cmd_buffer) {
-    if (ctx_.render_targets.gbuffer == 0) return;
-
-    cmd_buffer.BeginRenderPass({ctx_.render_targets.gbuffer, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
-
-    ctx_.rhi_device->SetGBufferRenderingMode(true);
-
-    // NOTE: GBuffer module rendering 跳过 — DeferredLightingPass 输出未被任何后续 pass 消费。
-    // 保留 RT clear + global texture 注册以维持 API 安全；如未来新增 deferred consumer 需恢复此路径。
-    // 相机选择随 cmd.SetCamera 移除一并删除（此 pass 无 draw 消费相机，主渲染走 ForwardScenePass）。
-
-    ctx_.rhi_device->SetGBufferRenderingMode(false);
-    cmd_buffer.EndRenderPass();
-
-    // 将 GBuffer MRT 纹理注册为全局 GBuffer 纹理
-    for (int i = 0; i < 3; ++i) {
-        unsigned int tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.gbuffer, i);
-        ctx_.rhi_device->SetGlobalGBufferTexture(static_cast<unsigned int>(i), tex);
-    }
-}
-
-// ============================================================
-// DeferredLightingPass
-// ============================================================
-
-void DeferredLightingPass::Setup(RenderGraph& graph) {
-    auto gbuffer_color      = graph.DeclareResource("gbuffer_color");
-    auto shadow_depth       = graph.DeclareResource("shadow_depth");
-    auto deferred_lit_color = graph.DeclareResource("deferred_lit_color");
-
-    auto pass = graph.AddPass(GetName());
-    graph.PassRead(pass, gbuffer_color);
-    graph.PassRead(pass, shadow_depth);
-    graph.PassWrite(pass, deferred_lit_color);
-    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
-}
-
-void DeferredLightingPass::Execute(CommandBuffer& cmd_buffer) {
-    // NOTE: GBuffer module rendering 已跳过（GBufferPass 仅 clear），且 deferred_lighting 输出
-    // 未被任何后续 pass 消费。跳过此 pass 避免对空 GBuffer 做无用 fullscreen draw。
-    // 如未来新增 deferred consumer，需同步恢复 GBufferPass 渲染与此 pass。
-    if (ctx_.render_targets.deferred_lighting == 0 || ctx_.render_targets.gbuffer == 0) return;
-
-    // 仍然 clear RT 以保持 API 安全（全局纹理注册不会读到上帧残留）
-    cmd_buffer.BeginRenderPass({ctx_.render_targets.deferred_lighting, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f), true});
-    cmd_buffer.EndRenderPass();
 }
 
 // ============================================================
@@ -3285,23 +3219,6 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device,
         PostProcessRequest{"weather_particle", scene_tex, params}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
-}
-
-// ============================================================
-// FoliagePass — Vegetation Wind Bending + Character Interaction
-// ============================================================
-
-void FoliagePass::Setup(RenderGraph& graph) {
-    auto scene_color = graph.DeclareResource("scene_color");
-    auto pass = graph.AddPass(GetName());
-    graph.PassRead(pass, scene_color);
-    graph.PassSetExecute(pass, [this](CommandBuffer& cmd) { Execute(cmd); });
-}
-
-void FoliagePass::Execute(CommandBuffer& cmd_buffer) {
-    // 植被（grass/tree）已通过 Gameplay3D 的 ISceneRenderer 在 PreZ/Shadow/Opaque
-    // 阶段贡献绘制，本 Pass 不再承载任何渲染（历史 foliage_callbacks 已移除）。
-    (void)cmd_buffer;
 }
 
 } // namespace render

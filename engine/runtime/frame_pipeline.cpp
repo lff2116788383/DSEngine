@@ -953,15 +953,6 @@ void FramePipeline::InitResolutionDependentRTs() {
         render_resources_.wboit_reveal_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.pp_sss_temp_rt == 0)
         render_resources_.pp_sss_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
-    if (render_resources_.gbuffer_rt == 0) {
-        RenderTargetDesc gbuf_desc;
-        gbuf_desc.width = render_width; gbuf_desc.height = render_height;
-        gbuf_desc.has_color = true; gbuf_desc.has_depth = true;
-        gbuf_desc.color_attachment_count = 3;
-        render_resources_.gbuffer_rt = runtime_context_.rhi_device->CreateRenderTarget(gbuf_desc);
-    }
-    if (render_resources_.deferred_lighting_rt == 0)
-        render_resources_.deferred_lighting_rt = runtime_context_.rhi_device->CreateRenderTarget({render_width, render_height, true, false, false});
     if (render_resources_.hiz_texture == 0 && runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_texture = runtime_context_.rhi_device->CreateHiZTexture(render_width, render_height);
         if (render_resources_.hiz_texture != 0) {
@@ -1000,8 +991,6 @@ void FramePipeline::FreeResolutionDependentRTs() {
     del(render_resources_.wboit_accum_rt);
     del(render_resources_.wboit_reveal_rt);
     del(render_resources_.pp_sss_temp_rt);
-    del(render_resources_.gbuffer_rt);
-    del(render_resources_.deferred_lighting_rt);
     if (render_resources_.hiz_texture) {
         d.DeleteHiZTexture(render_resources_.hiz_texture);
         render_resources_.hiz_texture = 0;
@@ -1050,8 +1039,6 @@ void FramePipeline::SyncRenderPassContextTargets() {
     render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
-    render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
-    render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
     render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
     render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
@@ -1724,8 +1711,6 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
     render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
     render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
-    render_pass_context_.render_targets.gbuffer = render_resources_.gbuffer_rt;
-    render_pass_context_.render_targets.deferred_lighting = render_resources_.deferred_lighting_rt;
     if (render_resources_.rsm_render_target != 0) {
         render_pass_context_.rsm_render_target = render_resources_.rsm_render_target;
         render_pass_context_.rsm_targets.position = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 0);
@@ -1820,9 +1805,6 @@ void FramePipeline::BuildRenderGraphInternal() {
     auto dof_color   = render_graph_dag_.DeclareResource("dof_color");
     auto ssr_color   = render_graph_dag_.DeclareResource("ssr_color");
     auto mb_color    = render_graph_dag_.DeclareResource("motion_blur_color");
-    auto gbuffer_color = render_graph_dag_.DeclareResource("gbuffer_color");
-    auto gbuffer_depth = render_graph_dag_.DeclareResource("gbuffer_depth");
-    auto deferred_lit  = render_graph_dag_.DeclareResource("deferred_lit_color");
     auto outline_color = render_graph_dag_.DeclareResource("outline_color");
     render_graph_dag_.MarkOutput(main_color);
     render_graph_dag_.MarkOutput(scene_color);
@@ -1830,8 +1812,6 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.MarkOutput(dof_color);
     render_graph_dag_.MarkOutput(ssr_color);
     render_graph_dag_.MarkOutput(mb_color);
-    render_graph_dag_.MarkOutput(gbuffer_color);
-    render_graph_dag_.MarkOutput(deferred_lit);
     render_graph_dag_.MarkOutput(outline_color);
 
     taa_pass_ = nullptr;

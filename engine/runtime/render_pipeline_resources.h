@@ -31,9 +31,6 @@ struct RenderPipelineResources {
 
     unsigned int pp_sss_temp_rt = 0;        // SSS blur intermediate (RGBA16F)
 
-    unsigned int gbuffer_rt = 0;            // GBuffer MRT (3 color + depth)
-    unsigned int deferred_lighting_rt = 0;   // Deferred lighting output
-
     unsigned int pp_lum_temp_rt = 0;     // 64x64 log luminance
     unsigned int pp_lum_adapted_rt[2] = {0, 0}; // 1x1 ping-pong (EMA adapted exposure)
 
@@ -107,8 +104,6 @@ struct RenderPipelineResources {
         wboit_accum_rt = 0;
         wboit_reveal_rt = 0;
         pp_sss_temp_rt = 0;
-        gbuffer_rt = 0;
-        deferred_lighting_rt = 0;
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;
         pp_lum_adapted_rt[1] = 0;

@@ -92,8 +92,6 @@ struct RenderPassContext {
         unsigned int cloud = 0;             // Volumetric Cloud RT
         unsigned int wboit_accum = 0;        // WBOIT accumulation RT (RGBA16F)
         unsigned int wboit_reveal = 0;       // WBOIT revealage RT (RGBA16F)
-        unsigned int gbuffer = 0;           // GBuffer MRT (3 color + depth)
-        unsigned int deferred_lighting = 0; // Deferred lighting output RT
         unsigned int lum_temp = 0;          // 64x64 log luminance
         unsigned int lum_adapted[2] = {0,0}; // 1x1 ping-pong
         unsigned int hiz_texture = 0;       // Hi-Z depth mipmap (R32F, RHI handle)

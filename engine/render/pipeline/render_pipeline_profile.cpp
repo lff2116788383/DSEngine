@@ -57,8 +57,6 @@ std::vector<RenderPipelinePassConfig> DefaultPassList() {
         Pass("gpu_cull"),
         Pass("rsm"),
         Pass("ddgi_update"),
-        Pass("gbuffer"),
-        Pass("deferred_lighting"),
         Pass("forward_scene"),
         Pass("atmosphere_sky"),
         Pass("wboit"),
@@ -287,8 +285,6 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<GPUCullPass>(r, {"gpu_cull", false, false, false, true});
         RegisterBuiltin<RSMRenderPass>(r, {"rsm"});
         RegisterBuiltin<DDGIUpdatePass>(r, {"ddgi_update"});
-        RegisterBuiltin<GBufferPass>(r, {"gbuffer"});
-        RegisterBuiltin<DeferredLightingPass>(r, {"deferred_lighting"});
         RegisterBuiltin<AtmosphereSkyPass>(r, {"atmosphere_sky"});
         RegisterBuiltin<ForwardScenePass>(r, {"forward_scene", true});
         RegisterBuiltin<WBOITPass>(r, {"wboit"});
@@ -306,7 +302,6 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<VolumetricCloudPass>(r, {"volumetric_cloud"});
         RegisterBuiltin<DecalPass>(r, {"decal"});
         RegisterBuiltin<WeatherPass>(r, {"weather_particle"});
-        RegisterBuiltin<FoliagePass>(r, {"foliage"});
         RegisterBuiltin<UIPass>(r, {"ui", true});
         RegisterBuiltin<CompositePass>(r, {"composite", true});
         RegisterBuiltin<DOFPass>(r, {"dof"});

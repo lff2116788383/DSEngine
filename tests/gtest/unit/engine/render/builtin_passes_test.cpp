@@ -72,8 +72,6 @@ TEST(RenderPassContextTest, RenderTargetsDefaultIsZero) {
     EXPECT_EQ(ctx.render_targets.motion_vector, 0u);
     EXPECT_EQ(ctx.render_targets.outline, 0u);
     EXPECT_EQ(ctx.render_targets.fog, 0u);
-    EXPECT_EQ(ctx.render_targets.gbuffer, 0u);
-    EXPECT_EQ(ctx.render_targets.deferred_lighting, 0u);
     for (int i = 0; i < 3; ++i)
         EXPECT_EQ(ctx.render_targets.shadow[i], 0u);
     for (int i = 0; i < 4; ++i) {
@@ -104,8 +102,6 @@ PASS_NAME_TEST(PreZPass,             "prez_pass")
 PASS_NAME_TEST(CSMShadowPass,       "shadow_pass")
 PASS_NAME_TEST(SpotShadowPass,      "spot_shadow_pass")
 PASS_NAME_TEST(PointShadowPass,     "point_shadow_pass")
-PASS_NAME_TEST(GBufferPass,         "gbuffer_pass")
-PASS_NAME_TEST(DeferredLightingPass, "deferred_lighting_pass")
 PASS_NAME_TEST(ForwardScenePass,    "scene_pass")
 PASS_NAME_TEST(BloomPass,           "post_process_pass")
 PASS_NAME_TEST(SSAOPass,            "ssao_pass")
