@@ -29,8 +29,20 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
 
-        if (std::strcmp(arg, "--headless") == 0) {
+        if (std::strcmp(arg, "--headless") == 0 ||
+            std::strcmp(arg, "--automation-mode") == 0) {
             config.headless = true;
+        } else if (std::strcmp(arg, "--automation-api") == 0) {
+            // ControlServer 始终启动，此标志仅作为显式标记，接受但不改变行为
+        } else if (std::strcmp(arg, "--api-port") == 0) {
+            // 空格分隔形式：--api-port <N>
+            if (i + 1 < argc) {
+                int p = std::atoi(argv[++i]);
+                if (p > 0) config.api_port = p;
+            }
+        } else if (StartsWith(arg, "--api-port=")) {
+            int p = std::atoi(ExtractValue(arg, "--api-port="));
+            if (p > 0) config.api_port = p;
         } else if (StartsWith(arg, "--replay=")) {
             config.replay_path = ExtractValue(arg, "--replay=");
         } else if (StartsWith(arg, "--verify=")) {

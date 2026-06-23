@@ -1,0 +1,27 @@
+case_id: soak.resident_edit_session
+title: 驻留长稳——单进程循环建删实体，采样 RSS/指标检测泄漏
+
+# 由 `dse_auto.py soak` 驱动：单进程长时间运行，setup_calls 执行一次，
+# loop_calls 反复执行直到 --duration-seconds 到时，期间周期采样内存与引擎指标。
+command:
+  type: soak
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  sample_interval_seconds: 5
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  setup_calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+  loop_calls:
+    - method: dsengine_entity_create
+      params:
+        name: "SoakTemp"
+    - method: dsengine_editor_undo
+    - method: dsengine_editor_idle
+      params:
+        frames: 2

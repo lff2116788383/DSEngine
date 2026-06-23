@@ -1,0 +1,18 @@
+case_id: cli.scene_load_screenshot
+title: 无头加载场景并在退出前截图，校验退出码与产物文件
+
+# Batch（CLI）模式：加载 simple_2d_game 主场景，渲染若干帧后落盘截图。
+command:
+  type: cli
+  executable: "${editor_exe}"
+  args:
+    - "--headless"
+    - "--scene=${testdata_dir}/projects/simple_2d_game/scenes/main.scene.json"
+    - "--screenshot=${report_root}/cli_scene.png"
+    - "--max-frames=120"
+    - "--api-port=${api_port}"
+
+assert:
+  exit_code: 0
+  files_exist:
+    - "${report_root}/cli_scene.png"

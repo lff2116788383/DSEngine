@@ -1,0 +1,13 @@
+# CI 环境配置（自托管 GPU runner）
+#
+# CI 中通过环境变量注入 EDITOR_EXE / WORK_ROOT，路径自动从 repo_root 推导。
+# L1+（启动编辑器 + 截图）必须跑在带真实 GPU 的自托管 runner 上（见设计文档 §8.1）。
+
+variables:
+  editor_exe: "${EDITOR_EXE}"
+  work_root: "${WORK_ROOT}"
+  report_root: "${work_root}/reports/${run_id}"
+  api_port: 9527
+  project_dir: "${work_root}/projects"
+  testdata_dir: "${repo_root}/tests/automation/testdata"
+  timeout_seconds: 60

@@ -1,0 +1,57 @@
+case_id: api.undo_redo
+title: 打开工程 → 创建实体 → 撤销 → 重做 → 校验历史 → 退出
+
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/undo_redo_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    - method: dsengine_entity_create
+      params:
+        name: "Temp"
+      expect:
+        result.name: "Temp"
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 5
+
+    - method: dsengine_editor_undo
+      expect:
+        result.success: true
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 4
+
+    - method: dsengine_editor_redo
+      expect:
+        result.success: true
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 5
+
+    - method: dsengine_undo_history
+      expect:
+        result.can_undo: true
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

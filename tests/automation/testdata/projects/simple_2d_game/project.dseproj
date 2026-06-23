@@ -1,0 +1,10 @@
+{
+    "format_version": 1,
+    "name": "simple_2d_game",
+    "version": "0.1.0",
+    "description": "自动化测试用最小 2D 工程（4 个实体）",
+    "default_scene": "scenes/main.scene.json",
+    "asset_dir": "assets",
+    "scene_dir": "scenes",
+    "script_dir": "scripts"
+}

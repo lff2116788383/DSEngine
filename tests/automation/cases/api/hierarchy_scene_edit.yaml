@@ -1,0 +1,74 @@
+case_id: api.hierarchy_scene_edit
+title: 打开工程 → 校验场景 → 创建实体 → 保存 → 重载 → 截图 → 退出
+
+setup:
+  - action: create_dir
+    path: "${project_dir}"
+
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/hierarchy_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_ping
+      expect:
+        result.pong: true
+
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 4
+        result.editor_state: "edit"
+
+    - method: dsengine_entity_create
+      params:
+        name: "Enemy"
+      expect:
+        result.name: "Enemy"
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 5
+
+    - method: dsengine_scene_save
+      params:
+        path: "${project_dir}/modified_scene.json"
+      expect:
+        result.saved: true
+
+    - method: dsengine_scene_load
+      params:
+        path: "${project_dir}/modified_scene.json"
+      expect:
+        result.loaded: true
+        result.entity_count: 5
+
+    - method: dsengine_editor_idle
+      params:
+        frames: 5
+
+    - method: dsengine_editor_screenshot
+      params:
+        path: "${report_root}/viewport.png"
+      expect:
+        result.format: "png"
+        result.encoding: "base64"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

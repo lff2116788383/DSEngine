@@ -1,0 +1,43 @@
+case_id: api.screenshot_compare
+title: 打开工程 → 渲染稳定 → 截图并与基准图像素对比 → 退出
+
+# 注意：首次运行需先在 GPU runner 上生成基准图（见 testdata/screenshots/README.md）。
+# 基准图缺失时本用例会失败，故归入 nightly / quarantine，不进 smoke。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/screenshot_compare_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+
+    - method: dsengine_editor_idle
+      params:
+        frames: 10
+
+    - method: dsengine_editor_screenshot
+      params:
+        path: "${report_root}/viewport.png"
+      expect:
+        result.format: "png"
+        result.encoding: "base64"
+      screenshot_compare:
+        baseline: "${testdata_dir}/screenshots/viewport_default.png"
+        tolerance: 0.95
+        diff_output: "${report_root}/viewport_diff.png"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

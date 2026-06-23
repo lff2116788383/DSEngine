@@ -1,0 +1,23 @@
+suite_id: editor-nightly
+description: 夜间全量（回归 + 截图对比等扩展用例）
+
+env: tests/automation/envs/local-dse.yaml
+
+cases:
+  - tests/automation/cases/cli/headless_boot.yaml
+  - tests/automation/cases/cli/scene_load_screenshot.yaml
+  - tests/automation/cases/api/ping_smoke.yaml
+  - tests/automation/cases/api/hierarchy_scene_edit.yaml
+  - tests/automation/cases/api/inspector_modify_component.yaml
+  - tests/automation/cases/api/prefab_instantiate.yaml
+  - tests/automation/cases/api/undo_redo.yaml
+  - tests/automation/cases/api/screenshot_compare.yaml
+
+case_delay_seconds: 1
+case_timeout_seconds: 120
+process_cleanup: true
+
+retry:
+  max_retries: 2
+  retry_delay_seconds: 5
+  retry_on_status: ["failed"]

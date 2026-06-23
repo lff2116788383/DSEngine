@@ -1,0 +1,14 @@
+suite_id: editor-stability
+description: 编辑器稳定性循环（反复启停，检测崩溃/泄漏）
+
+env: tests/automation/envs/local-dse.yaml
+
+cases:
+  - tests/automation/cases/api/ping_smoke.yaml
+  - tests/automation/cases/api/hierarchy_scene_edit.yaml
+
+case_delay_seconds: 2
+case_timeout_seconds: 90
+process_cleanup: true
+
+quarantine: true   # 稳定性套件默认隔离，不进入常规 CI（用 stability 子命令运行）

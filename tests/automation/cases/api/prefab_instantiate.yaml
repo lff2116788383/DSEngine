@@ -1,0 +1,55 @@
+case_id: api.prefab_instantiate
+title: 打开工程 → 创建实体 → 存预制体 → 实例化 → 校验数量 → 退出
+
+setup:
+  - action: create_dir
+    path: "${project_dir}/prefabs"
+
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/prefab_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    - method: dsengine_entity_create
+      params:
+        name: "Turret"
+      expect:
+        result.name: "Turret"
+
+    # entity_id 4 = 刚创建的 Turret（场景已有 0..3）
+    - method: dsengine_prefab_save
+      params:
+        entity_id: 4
+        path: "${project_dir}/prefabs/turret.prefab.json"
+      expect:
+        result.saved: true
+
+    - method: dsengine_prefab_instantiate
+      params:
+        path: "${project_dir}/prefabs/turret.prefab.json"
+      expect:
+        result.source_path: "${project_dir}/prefabs/turret.prefab.json"
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 6
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

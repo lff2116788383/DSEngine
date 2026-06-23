@@ -1,0 +1,13 @@
+suite_id: editor-quarantine
+description: 已知问题隔离套件（不进 CI；修复后再迁回常规套件）
+
+env: tests/automation/envs/local-dse.yaml
+
+cases:
+  - tests/automation/cases/api/screenshot_compare.yaml
+
+case_delay_seconds: 1
+case_timeout_seconds: 120
+process_cleanup: true
+
+quarantine: true

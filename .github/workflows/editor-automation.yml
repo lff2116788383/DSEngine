@@ -1,0 +1,174 @@
+# 编辑器自动化测试（分层：L0 提交检查 / L1 日构建 / L2 夜间 / L3 稳定循环）
+#
+# 分层策略（见 docs/editor/EDITOR_AUTOMATION_TEST_FRAMEWORK.md §8.1）：
+#   L0 提交检查  —— 无头 C++ 测试（ctest），GitHub 托管 runner，无需 GPU，每次 PR
+#   L1 日构建    —— Batch 冒烟（3-5 case），自托管 GPU runner
+#   L2 夜间回归  —— API 全量 suite，自托管 GPU runner
+#   L3 稳定循环  —— Stability 100 次迭代，自托管 GPU runner
+#
+# 重要：L1+ 要「启动编辑器 + 截图」，依赖真实 GPU。GitHub 托管 windows runner 无独立 GPU
+# （GL 上下文起不来或落软渲），故 L1+ 必须自托管带 GPU 的 runner（标签 [self-hosted, windows, gpu]）。
+# 这些 job 仅在 schedule / 手动触发时运行，避免 PR 卡在不存在的自托管 runner 上。
+
+name: Editor Automation Tests
+
+on:
+  push:
+    branches: [master, "feature/**"]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 18 * * *"   # 每天 18:00 UTC 夜间跑 L1/L2/L3
+  workflow_dispatch:
+
+concurrency:
+  group: editor-automation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── L0：无头 C++ 测试（每次 PR，托管 runner，无需 GPU）──────────────────────
+  l0-headless-ctest:
+    name: L0 · headless ctest
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure + Build (editor)
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-debug
+          cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+
+      - name: Run ctest (unit/integration/smoke)
+        shell: pwsh
+        run: ctest --test-dir out/build/windows-x64-debug --output-on-failure
+
+  # ── L1：Batch 冒烟（自托管 GPU runner）──────────────────────────────────────
+  l1-batch-smoke:
+    name: L1 · batch smoke
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, windows, gpu]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Editor
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-debug
+          cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install PyYAML websocket-client psutil pillow numpy
+
+      - name: Run Batch Smoke
+        shell: pwsh
+        env:
+          EDITOR_EXE: ${{ github.workspace }}/bin/dsengine-editor.exe
+          WORK_ROOT: ${{ runner.temp }}/dse-auto
+        run: |
+          python tests/automation/dse_auto.py run `
+            --suite tests/automation/suites/editor-batch-smoke.yaml `
+            --run-id ci_batch_smoke
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l1-batch-smoke-report
+          path: ${{ runner.temp }}/dse-auto/reports/ci_batch_smoke
+
+  # ── L2：API 全量回归（自托管 GPU runner）────────────────────────────────────
+  l2-api-regression:
+    name: L2 · api regression
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, windows, gpu]
+    needs: l1-batch-smoke
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Editor
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-debug
+          cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install PyYAML websocket-client psutil pillow numpy
+
+      - name: Run API Smoke + Regression
+        shell: pwsh
+        env:
+          EDITOR_EXE: ${{ github.workspace }}/bin/dsengine-editor.exe
+          WORK_ROOT: ${{ runner.temp }}/dse-auto
+        run: |
+          python tests/automation/dse_auto.py run `
+            --suite tests/automation/suites/editor-api-smoke.yaml --run-id ci_api_smoke
+          python tests/automation/dse_auto.py run `
+            --suite tests/automation/suites/editor-regression.yaml --run-id ci_regression
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l2-api-regression-report
+          path: ${{ runner.temp }}/dse-auto/reports
+
+  # ── L3：稳定性循环（自托管 GPU runner，仅手动/夜间）─────────────────────────
+  l3-stability:
+    name: L3 · stability loop
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, windows, gpu]
+    needs: l2-api-regression
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build Editor
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-debug
+          cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install PyYAML websocket-client psutil pillow numpy
+
+      - name: Run Stability (100 iterations)
+        shell: pwsh
+        env:
+          EDITOR_EXE: ${{ github.workspace }}/bin/dsengine-editor.exe
+          WORK_ROOT: ${{ runner.temp }}/dse-auto
+        run: |
+          python tests/automation/dse_auto.py stability `
+            --suite tests/automation/suites/editor-stability.yaml `
+            --run-id ci_stability --iterations 100
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l3-stability-report
+          path: ${{ runner.temp }}/dse-auto/reports/ci_stability

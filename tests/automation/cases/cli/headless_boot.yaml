@@ -1,0 +1,15 @@
+case_id: cli.headless_boot
+title: 无头启动编辑器，跑满 max-frames 后正常退出
+
+# Batch（CLI）模式：每 case 启动独立进程，校验退出码。
+# 验证编辑器在无头模式下能完成 引擎初始化 → 主循环 → 优雅退出 全链路。
+command:
+  type: cli
+  executable: "${editor_exe}"
+  args:
+    - "--headless"
+    - "--max-frames=120"
+    - "--api-port=${api_port}"
+
+assert:
+  exit_code: 0

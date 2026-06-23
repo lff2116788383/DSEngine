@@ -13,7 +13,9 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/audio.h"
+#include "engine/base/time.h"
 #include "engine/scripting/lua/lua_runtime.h"
+#include "engine/assets/asset_manager.h"
 #include "editor_toolbar.h"
 #include "editor_scene_io.h"
 #include "editor_shared_components.h"
@@ -23,6 +25,11 @@
 #include "editor_scene_tabs.h"
 #include "editor_prefab.h"
 #include "editor_selection.h"
+#include "editor_project.h"
+#include "editor_asset_db.h"
+
+#include <vector>
+#include <string>
 
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
@@ -1931,6 +1938,159 @@ static JsonRpcResponse HandleSelectionClear(
     return MakeOk(std::move(result));
 }
 
+// ─── Tool: dsengine_project_open ────────────────────────────────────────────
+// 打开工程级（.dseproj）：加载项目描述符 → 同步 data root → 刷新资产库 →
+// 加载项目默认场景。现有 dsengine_scene_load 仅 scene 级，本工具补齐工程级语义。
+
+static JsonRpcResponse HandleProjectOpen(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    if (!params.HasMember("path") || !params["path"].IsString()) {
+        return MakeToolError(-32602, "Missing required param: path");
+    }
+
+    std::filesystem::path dseproj = params["path"].GetString();
+    if (!std::filesystem::exists(dseproj)) {
+        return MakeToolError(-32602, "Project file not found: " + dseproj.string());
+    }
+
+    auto& pm = dse::editor::ProjectManager::Get();
+    if (!pm.OpenProject(dseproj)) {
+        return MakeToolError(-32603, "Failed to open project: " + dseproj.string());
+    }
+    pm.ApplyDataRoot();
+    if (auto* am = engine.asset_manager()) {
+        am->ConfigureDataRoot(pm.GetAssetDir().string());
+    }
+    dse::editor::AssetDatabase::Get().Refresh();
+
+    auto& registry = engine.pipeline()->world().registry();
+    bool scene_loaded = false;
+    std::string scene_path;
+    {
+        std::filesystem::path candidate = pm.GetProjectRoot() / pm.GetDescriptor().default_scene;
+        if (std::filesystem::exists(candidate)) {
+            LoadScene(registry, candidate.string());
+            SetCurrentScenePath(candidate.string());
+            scene_path = candidate.string();
+            scene_loaded = true;
+        }
+    }
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("opened", rapidjson::Value(true), alloc);
+    result.AddMember("entity_count",
+        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("scene_loaded", rapidjson::Value(scene_loaded), alloc);
+    if (scene_loaded) {
+        result.AddMember("scene_path", rapidjson::Value(scene_path.c_str(), alloc), alloc);
+    }
+    rapidjson::Value project(rapidjson::kObjectType);
+    project.AddMember("name", rapidjson::Value(pm.GetDescriptor().name.c_str(), alloc), alloc);
+    project.AddMember("root", rapidjson::Value(pm.GetProjectRoot().string().c_str(), alloc), alloc);
+    project.AddMember("default_scene", rapidjson::Value(pm.GetDescriptor().default_scene.c_str(), alloc), alloc);
+    result.AddMember("project", project, alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_editor_quit ─────────────────────────────────────────────
+// 置退出标志，主循环下一帧返回 false。供自动化会话结束时优雅退出编辑器。
+
+static JsonRpcResponse HandleEditorQuit(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& /*engine*/) {
+
+    dse::editor::RequestExit();
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("ok", rapidjson::Value(true), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_editor_idle ─────────────────────────────────────────────
+// 返回当前帧的状态快照（同步点）。编辑器主循环每帧持续渲染，调用间隔内帧已自然推进，
+// 因此本工具用于"等待渲染稳定后读取状态"，frames 参数记录期望推进帧数（供报告参考）。
+
+static JsonRpcResponse HandleEditorIdle(
+    const rapidjson::Document& params,
+    dse::runtime::EngineInstance& engine) {
+
+    int frames = 1;
+    if (params.HasMember("frames") && params["frames"].IsInt()) {
+        frames = params["frames"].GetInt();
+    }
+
+    auto& registry = engine.pipeline()->world().registry();
+    const float dt = Time::delta_time();
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("frames_requested", frames, alloc);
+    result.AddMember("delta_ms", dt * 1000.0f, alloc);
+    result.AddMember("fps", dt > 0.0f ? (1.0f / dt) : 0.0f, alloc);
+    result.AddMember("time_since_startup", Time::TimeSinceStartup(), alloc);
+    result.AddMember("entity_count",
+        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    const char* state_str =
+        dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
+        dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
+    result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_editor_get_metrics ──────────────────────────────────────
+// 返回 FPS / DrawCall / 实体数等运行时指标，供 soak/性能监控使用。
+
+static JsonRpcResponse HandleEditorGetMetrics(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& engine) {
+
+    auto& registry = engine.pipeline()->world().registry();
+    const float dt = Time::delta_time();
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    result.AddMember("fps", dt > 0.0f ? (1.0f / dt) : 0.0f, alloc);
+    result.AddMember("delta_ms", dt * 1000.0f, alloc);
+    result.AddMember("draw_calls", engine.pipeline()->LastDrawCalls(), alloc);
+    result.AddMember("entity_count",
+        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("time_since_startup", Time::TimeSinceStartup(), alloc);
+    const char* state_str =
+        dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
+        dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
+    result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
+    return MakeOk(std::move(result));
+}
+
+// ─── Tool: dsengine_list_tools ──────────────────────────────────────────────
+// 自省：返回已注册的全部工具名，供用例 schema 校验、杜绝命名漂移。
+
+static std::vector<std::string> g_registered_tool_names;
+
+static JsonRpcResponse HandleListTools(
+    const rapidjson::Document& /*params*/,
+    dse::runtime::EngineInstance& /*engine*/) {
+
+    rapidjson::Document result;
+    result.SetObject();
+    auto& alloc = result.GetAllocator();
+    rapidjson::Value arr(rapidjson::kArrayType);
+    for (const auto& name : g_registered_tool_names) {
+        arr.PushBack(rapidjson::Value(name.c_str(), alloc), alloc);
+    }
+    result.AddMember("tools", arr, alloc);
+    result.AddMember("count", static_cast<int>(g_registered_tool_names.size()), alloc);
+    return MakeOk(std::move(result));
+}
+
 // ─── 注册表 ─────────────────────────────────────────────────────────────────
 
 struct ToolEntry {
@@ -1971,11 +2131,18 @@ static const ToolEntry kBuiltinTools[] = {
     { "dsengine_selection_get",             HandleSelectionGet },
     { "dsengine_selection_set",             HandleSelectionSet },
     { "dsengine_selection_clear",           HandleSelectionClear },
+    { "dsengine_project_open",              HandleProjectOpen },
+    { "dsengine_editor_quit",               HandleEditorQuit },
+    { "dsengine_editor_idle",               HandleEditorIdle },
+    { "dsengine_editor_get_metrics",        HandleEditorGetMetrics },
+    { "dsengine_list_tools",                HandleListTools },
 };
 
 void RegisterBuiltinTools(ControlServer& server) {
+    g_registered_tool_names.clear();
     for (const auto& tool : kBuiltinTools) {
         server.RegisterTool(tool.method, tool.handler);
+        g_registered_tool_names.emplace_back(tool.method);
     }
 }
 

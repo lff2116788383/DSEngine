@@ -1,0 +1,40 @@
+case_id: api.inspector_modify_component
+title: 打开工程 → 创建实体 → 加组件 → 改属性 → 校验组件列表 → 退出
+
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/inspector_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+
+    - method: dsengine_entity_create
+      params:
+        name: "Prop"
+      expect:
+        result.name: "Prop"
+
+    # entity_id 0 = 工程主场景首个实体 MainCamera（registry.clear 后从 0 递增）
+    - method: dsengine_entity_get_components
+      params:
+        entity_id: 0
+      expect:
+        result.entity_id: 0
+        result.name: "MainCamera"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

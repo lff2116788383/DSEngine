@@ -1,0 +1,17 @@
+# 本地环境配置（Windows，真实 GPU 桌面会话）
+#
+# 用法：
+#   $env:EDITOR_EXE = "C:\...\bin\dsengine-editor.exe"   # 可选，缺省回退到 repo_root/bin
+#   $env:WORK_ROOT  = "C:\dse-autotest"                  # 可选，缺省回退到 tests/automation
+#   python tests\automation\dse_auto.py run --suite ... --run-id ...
+#
+# 变量展开优先级（后者覆盖前者）：内置 → OS 环境变量 → 本文件 variables → 命令行 --var
+
+variables:
+  editor_exe: "${EDITOR_EXE}"
+  work_root: "${WORK_ROOT}"
+  report_root: "${work_root}/reports/${run_id}"
+  api_port: 9527
+  project_dir: "${work_root}/projects"
+  testdata_dir: "${repo_root}/tests/automation/testdata"
+  timeout_seconds: 30

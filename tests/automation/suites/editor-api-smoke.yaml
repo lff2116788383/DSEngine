@@ -1,0 +1,18 @@
+suite_id: editor-api-smoke
+description: API 会话冒烟（WebSocket JSON-RPC）
+
+env: tests/automation/envs/local-dse.yaml
+
+cases:
+  - tests/automation/cases/api/ping_smoke.yaml
+  - tests/automation/cases/api/hierarchy_scene_edit.yaml
+  - tests/automation/cases/api/undo_redo.yaml
+
+case_delay_seconds: 1
+case_timeout_seconds: 90
+process_cleanup: true
+
+retry:
+  max_retries: 2
+  retry_delay_seconds: 3
+  retry_on_status: ["failed"]
