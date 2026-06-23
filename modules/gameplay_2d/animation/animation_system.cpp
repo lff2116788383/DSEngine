@@ -5,6 +5,7 @@
 
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/time_scale_component.h"
 #include "engine/assets/asset_manager.h"
 
 void AnimationSystem::Update(World& world, float delta_time) {
@@ -13,6 +14,8 @@ void AnimationSystem::Update(World& world, float delta_time) {
     for (auto entity : view) {
         auto& animator = view.get<AnimatorComponent>(entity);
         auto& sprite = view.get<SpriteRendererComponent>(entity);
+        // 逐实体时间缩放：全局 scaled_dt × 该实体 TimeScaleComponent.scale
+        const float entity_dt = dse::ResolveEntityDt(delta_time, world.registry(), entity);
         
         if (animator.states.empty()) continue;
         
@@ -52,7 +55,7 @@ void AnimationSystem::Update(World& world, float delta_time) {
             animator.current_frame = segment_start;
         }
 
-        animator.current_time += delta_time;
+        animator.current_time += entity_dt;
         float frame_duration = 1.0f / state.frame_rate;
         
         while (animator.current_time >= frame_duration && animator.playing) {

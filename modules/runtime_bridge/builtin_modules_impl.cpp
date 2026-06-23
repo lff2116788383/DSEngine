@@ -19,8 +19,8 @@ bool BuiltinModulesImpl::InitGameplay2D(World& world, RhiDevice* rhi, AssetManag
     return gameplay2d_module_.OnInit(world, rhi, asset_mgr);
 }
 
-void BuiltinModulesImpl::UpdateGameplay2D(World& world, float dt) {
-    gameplay2d_module_.OnUpdate(world, dt);
+void BuiltinModulesImpl::UpdateGameplay2D(World& world, const dse::TimeContext& time) {
+    gameplay2d_module_.OnUpdate(world, time);
 }
 
 void BuiltinModulesImpl::FixedUpdateGameplay2D(World& world, float dt) {
@@ -129,11 +129,11 @@ bool BuiltinModulesImpl::InitGameplay3D(World& world, RhiDevice* rhi, AssetManag
 #endif
 }
 
-void BuiltinModulesImpl::UpdateGameplay3D(World& world, float dt) {
+void BuiltinModulesImpl::UpdateGameplay3D(World& world, const dse::TimeContext& time) {
 #ifdef DSE_ENABLE_3D
-    gameplay3d_module_.OnUpdate(world, dt);
+    gameplay3d_module_.OnUpdate(world, time);
 #else
-    (void)world; (void)dt;
+    (void)world; (void)time;
 #endif
 }
 
@@ -186,13 +186,14 @@ void BuiltinModulesImpl::InitFallback3D(World& world, RhiDevice* rhi, AssetManag
 #endif
 }
 
-void BuiltinModulesImpl::UpdateFallback3D(World& world, float dt) {
+void BuiltinModulesImpl::UpdateFallback3D(World& world, const dse::TimeContext& time) {
 #ifndef DSE_ENABLE_3D
+    const float dt = time.scaled_dt;
     particle3d_system_.Update(world, dt);
     steering_system_.Update(world, dt);
     dse::gameplay3d::AnimatorSystem::Update(world, dt);
 #else
-    (void)world; (void)dt;
+    (void)world; (void)time;
 #endif
 }
 

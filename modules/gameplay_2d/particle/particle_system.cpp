@@ -5,6 +5,7 @@
 
 #include "modules/gameplay_2d/particle/particle_system.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/time_scale_component.h"
 #include "engine/physics/physics2d/physics2d_system.h"
 #include <algorithm>
 #include <cmath>
@@ -94,12 +95,14 @@ void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* phy
     for (auto entity : view) {
         auto& emitter = view.get<ParticleEmitterComponent>(entity);
         auto& transform = view.get<TransformComponent>(entity);
+        // 逐实体时间缩放：全局 scaled_dt × 该实体 TimeScaleComponent.scale
+        const float entity_dt = dse::ResolveEntityDt(delta_time, world.registry(), entity);
         
         // ================================================================
         // Update existing particles
         // ================================================================
         for (auto it = emitter.particles.begin(); it != emitter.particles.end(); ) {
-            it->life_remaining -= delta_time;
+            it->life_remaining -= entity_dt;
             if (it->life_remaining <= 0.0f) {
                 it = emitter.particles.erase(it);
                 continue;
@@ -109,16 +112,16 @@ void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* phy
             const float life_t = 1.0f - (it->life_remaining / std::max(it->life_time, 0.001f));
 
             // Apply gravity
-            it->velocity += emitter.gravity * delta_time;
+            it->velocity += emitter.gravity * entity_dt;
 
             const glm::vec3 previous_position = it->position;
 
             // Apply speed curve
             const float speed_scale = EvaluateSpeedScale(emitter, life_t);
-            it->position += it->velocity * delta_time * speed_scale;
+            it->position += it->velocity * entity_dt * speed_scale;
 
             // Apply rotation
-            it->rotation += it->angular_velocity * delta_time;
+            it->rotation += it->angular_velocity * entity_dt;
 
             // Apply size curve
             if (emitter.size_curve.enabled || emitter.use_size_curve) {
@@ -201,7 +204,7 @@ void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* phy
         };
 
         if (emitter.emitting) {
-            emitter.emit_accumulator += delta_time;
+            emitter.emit_accumulator += entity_dt;
             float actual_emit_rate = emitter.emit_rate * emitter.emit_rate_scale;
             if (actual_emit_rate < 0.01f) {
                 actual_emit_rate = 0.01f;

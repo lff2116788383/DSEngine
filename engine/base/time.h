@@ -48,6 +48,25 @@ public:
     static float delta_time();
 
     /**
+     * @brief 获取缩放后的增量时间（delta_time * time_scale）
+     *
+     * 供 gameplay / 动画 / 粒子 / Tween / 物理累加器使用；UI / 输入 / 统计应使用
+     * delta_time()（真实时间，不受 time-scale 影响）。
+     * @return 缩放后增量时间（秒）
+     */
+    static float scaled_delta_time();
+
+    /**
+     * @brief 获取全局时间缩放（0=暂停, 1=正常, 0.5=半速, >1=快进）
+     */
+    static float time_scale();
+
+    /**
+     * @brief 设置全局时间缩放，负值钳制为 0
+     */
+    static void set_time_scale(float scale);
+
+    /**
      * @brief 获取固定的物理更新步长
      * @return 固定更新时间（秒）
      */
@@ -77,6 +96,10 @@ private:
     //~zh 固定更新时间，一般用于物理模拟
     //~en Fixed update time, usually used for physics simulation
     static float fixed_update_time_;
+
+    //~zh 全局时间缩放（0=暂停, 1=正常）
+    //~en Global time scale (0=paused, 1=normal)
+    static float time_scale_;
 };
 
 

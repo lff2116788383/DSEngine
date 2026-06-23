@@ -33,7 +33,7 @@ class BuiltinModulesImpl final : public IBuiltinModules {
 public:
     // ---- Gameplay2D ----
     bool InitGameplay2D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) override;
-    void UpdateGameplay2D(World& world, float dt) override;
+    void UpdateGameplay2D(World& world, const dse::TimeContext& time) override;
     void FixedUpdateGameplay2D(World& world, float dt) override;
     void ShutdownGameplay2D(World& world) override;
     void RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) override;
@@ -54,7 +54,7 @@ public:
 
     // ---- Gameplay3D ----
     bool InitGameplay3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) override;
-    void UpdateGameplay3D(World& world, float dt) override;
+    void UpdateGameplay3D(World& world, const dse::TimeContext& time) override;
     void FixedUpdateGameplay3D(World& world, float dt) override;
     void ShutdownGameplay3D(World& world) override;
     dse::core::IModule* GetGameplay3DModule() override;
@@ -65,7 +65,7 @@ public:
 
     // ---- Fallback 3D ----
     void InitFallback3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) override;
-    void UpdateFallback3D(World& world, float dt) override;
+    void UpdateFallback3D(World& world, const dse::TimeContext& time) override;
     void ShutdownFallback3D(World& world) override;
 
 private:

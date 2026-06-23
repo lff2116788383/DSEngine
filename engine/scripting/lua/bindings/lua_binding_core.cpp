@@ -185,6 +185,19 @@ int L_AppSetTargetFps(lua_State* L) {
     return 0;
 }
 
+// app.set_time_scale(s)：全局时间缩放（0=暂停, 1=正常, 0.5=半速, >1=快进），s 钳制为 >=0
+int L_AppSetTimeScale(lua_State* L) {
+    float scale = static_cast<float>(luaL_checknumber(L, 1));
+    Time::set_time_scale(scale);
+    return 0;
+}
+
+// app.get_time_scale() -> number：当前全局时间缩放
+int L_AppGetTimeScale(lua_State* L) {
+    lua_pushnumber(L, static_cast<lua_Number>(Time::time_scale()));
+    return 1;
+}
+
 int L_AppGetMouseMiddle(lua_State* L) {
     lua_pushboolean(L, Input::GetMouseButton(MOUSE_BUTTON_MIDDLE));
     return 1;
@@ -326,6 +339,8 @@ void RegisterAppBindings(lua_State* L) {
     set_fn("get_screen_height", L_AppGetScreenHeight);
     set_fn("quit", L_AppQuit);
     set_fn("set_target_fps", L_AppSetTargetFps);
+    set_fn("set_time_scale", L_AppSetTimeScale);
+    set_fn("get_time_scale", L_AppGetTimeScale);
     set_fn("get_mouse_middle", L_AppGetMouseMiddle);
     set_fn("get_mouse_middle_down", L_AppGetMouseMiddleDown);
     set_fn("get_mouse_scroll_dx", L_AppGetMouseScrollDx);

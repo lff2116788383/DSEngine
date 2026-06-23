@@ -1,6 +1,7 @@
 #include "modules/gameplay_3d/particles/particle3d_system.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/time_scale_component.h"
 #include "engine/assets/asset_manager.h"
 #include <glm/gtc/constants.hpp>
 #include <random>
@@ -133,9 +134,12 @@ void Particle3DSystem::Update(World& world, float delta_time) {
             continue;
         }
 
+        // 逐实体时间缩放：全局 scaled_dt × 该实体 TimeScaleComponent.scale
+        const float entity_dt = dse::ResolveEntityDt(delta_time, world.registry(), entity);
+
         // 1. Emission
         // 钳制累加器上限为 max_particles，防止首帧超大 dt 导致 while 循环百万级迭代假死
-        ps.emission_accumulator += delta_time * ps.emission_rate;
+        ps.emission_accumulator += entity_dt * ps.emission_rate;
         if (ps.emission_accumulator > static_cast<float>(ps.max_particles)) {
             ps.emission_accumulator = static_cast<float>(ps.max_particles);
         }
@@ -156,10 +160,10 @@ void Particle3DSystem::Update(World& world, float delta_time) {
         for (int i = 0; i < ps.max_particles; ++i) {
             auto& p = ps.particles[i];
             if (p.life > 0.0f) {
-                p.life -= delta_time;
+                p.life -= entity_dt;
                 if (p.life > 0.0f) {
-                    p.velocity += ps.gravity * delta_time;
-                    p.position += p.velocity * delta_time;
+                    p.velocity += ps.gravity * entity_dt;
+                    p.position += p.velocity * entity_dt;
                     // Optional: Fade out color over time based on start_life vs life
 
                     // std430 布局：pos_size = (pos.xyz, size)，color = (r,g,b,a)。

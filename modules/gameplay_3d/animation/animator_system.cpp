@@ -4,6 +4,7 @@
 #include "modules/gameplay_3d/animation/anim_blend_weights.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/time_scale_component.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
 #include <algorithm>
@@ -162,7 +163,7 @@ bool BuildSkeletalCache(Animator3DComponent& animator, AssetManager& asset_manag
     return true;
 }
 
-void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
+void AnimatorSystem::EvaluateBaseAnim(World& world, float global_scaled_dt) {
     auto view = world.registry().view<Animator3DComponent>();
     if (view.empty()) return;
 
@@ -179,6 +180,9 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float delta_time) {
     for (auto entity : view) {
         auto& animator = view.get<Animator3DComponent>(entity);
         if (!animator.enabled || animator.dskel_path.empty()) continue;
+        // 逐实体时间缩放：全局 scaled_dt × 该实体 TimeScaleComponent.scale（下方所有时间推进及
+        // 内部 lambda 经 [&] 捕获均使用此局部 delta_time）。
+        const float delta_time = dse::ResolveEntityDt(global_scaled_dt, world.registry(), entity);
 
         // Animation LOD: 跳帧更新（保留上一帧的 pose_buffer 和 final_bone_matrices）
         if (animator.anim_lod_skip_ > 0) {

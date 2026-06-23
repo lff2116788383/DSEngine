@@ -30,20 +30,26 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 }
 
 void Gameplay2DModule::OnUpdate(World& world, float delta_time) {
+    OnUpdate(world, dse::TimeContext{delta_time, delta_time, 1.0f});
+}
+
+void Gameplay2DModule::OnUpdate(World& world, const dse::TimeContext& time) {
+    const float scaled = time.scaled_dt;      // gameplay/动画/粒子（逐实体缩放在各系统内部应用）
+    const float unscaled = time.unscaled_dt;  // UI / 音频走真实时间（scale=0 时仍响应）
     tilemap_system_.Update(world.registry());
-    animation_system_.Update(world, delta_time);
-    particle_system_.Update(world, delta_time, &physics2d_system_);
+    animation_system_.Update(world, scaled);
+    particle_system_.Update(world, scaled, &physics2d_system_);
 #ifdef DSE_ENABLE_SPINE
-    spine_system_.Update(world.registry(), delta_time);
+    spine_system_.Update(world.registry(), scaled);
 #endif
     transform_system_.Update(world);
     ui_logic_system_.Update(world.registry(),
-                            delta_time,
+                            unscaled,
                             glm::vec2(Screen::width(), Screen::height()),
                             Input::mousePosition(),
                             Input::GetMouseButton(0));
     camera_system_.Update(world, Screen::aspect_ratio());
-    audio_system_.Update(world.registry(), delta_time);
+    audio_system_.Update(world.registry(), unscaled);
 }
 
 void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {

@@ -29,6 +29,7 @@
 #include "engine/render/font/font_service.h"
 #include <utility>
 #include "engine/base/time.h"
+#include "engine/base/time_context.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
 #include <cstdlib>
@@ -509,14 +510,18 @@ void EngineInstance::Tick() {
     if (!is_initialized_) return;
 
     Time::Update();
-    float dt = Time::delta_time();
-    // 防止初始化/加载导致第一帧 dt 过大（Vulkan 初始化比 OpenGL 慢，首帧 dt 可能数秒）
-    if (dt > 0.1f) dt = 0.1f;
+    // 先对真实 dt 做首帧/卡顿钳制（Vulkan 初始化比 OpenGL 慢，首帧 dt 可能数秒）
+    float unscaled_dt = Time::delta_time();
+    if (unscaled_dt > 0.1f) unscaled_dt = 0.1f;
+    // 再乘全局时间缩放：scale=0 → scaled_dt=0 → gameplay 与物理累加器同时冻结
+    const float time_scale = Time::time_scale();
+    const float scaled_dt = unscaled_dt * time_scale;
 
     // Clamp accumulator to prevent spiral-of-death when dt is very large
     // (e.g. after a loading stall or breakpoint). Allow at most 10 fixed steps per frame.
     constexpr float kMaxAccumulator = 0.2f; // 10 * 0.02s
-    accumulator_ += dt;
+    // 物理固定步长累加器吃缩放后 dt：scale=0 时不再累加 → 物理冻结，无穿透
+    accumulator_ += scaled_dt;
     if (accumulator_ > kMaxAccumulator) {
         accumulator_ = kMaxAccumulator;
     }
@@ -526,7 +531,7 @@ void EngineInstance::Tick() {
         accumulator_ -= fixed_time_step_;
     }
 
-    pipeline_->Update(dt);
+    pipeline_->Update(dse::TimeContext{scaled_dt, unscaled_dt, time_scale});
     pipeline_->Render();
     Input::Update();
 }

@@ -1045,11 +1045,15 @@ void FramePipeline::SyncRenderPassContextTargets() {
     render_pass_context_.hiz_aabb_capacity = render_resources_.hiz_ssbo_capacity;
 }
 
-void FramePipeline::Update(float delta_time) {
+void FramePipeline::Update(const dse::TimeContext& time) {
     if (!initialized_) {
         return;
     }
-    dse::runtime::RunFrameUpdate(*this, delta_time);
+    dse::runtime::RunFrameUpdate(*this, time);
+}
+
+void FramePipeline::Update(float delta_time) {
+    Update(dse::TimeContext{delta_time, delta_time, 1.0f});
 }
 
 void FramePipeline::FlushPhysicsEvents() {
@@ -1084,7 +1088,9 @@ void FramePipeline::Render() {
     }
 }
 
-void FramePipeline::RunUpdateInternal(float delta_time) {
+void FramePipeline::RunUpdateInternal(const dse::TimeContext& time) {
+    // 缩放通道供 gameplay/业务逻辑使用；真实通道供资源流式加载/场景流加载使用（不随暂停冻结）。
+    const float delta_time = time.scaled_dt;
     dse::profiler::ScopedCPUProfile _profile_update(cpu_profiler_, "FramePipeline::Update");
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
@@ -1113,7 +1119,7 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 
     // SceneManager: pump 异步加载完成的子场景
     if (auto* sm = dse::core::ServiceLocator::Instance().Get<scene::SceneManager>()) {
-        sm->Update(delta_time);
+        sm->Update(time.unscaled_dt);
 
         if (runtime_context_.world) {
             auto sub_view = runtime_context_.world->registry().view<dse::SubSceneComponent>();
@@ -1142,10 +1148,10 @@ void FramePipeline::RunUpdateInternal(float delta_time) {
 
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
 
-    dse::runtime::RunRuntimeUpdateGraph(*this, delta_time);
+    dse::runtime::RunRuntimeUpdateGraph(*this, time);
 #ifndef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        modules_impl_->UpdateFallback3D(*runtime_context_.world, delta_time);
+        modules_impl_->UpdateFallback3D(*runtime_context_.world, time);
     }
 #endif
 

@@ -21,6 +21,8 @@
 #include "engine/ecs/script.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/time_scale_component.h"
+#include "engine/base/time.h"
 #include "engine/core/service_locator.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <cstdint>
@@ -353,5 +355,67 @@ TEST_F(LuaEcsIntegrationTest, LuaGetWorldAndLocalAabb) {
     ASSERT_TRUE(ExecuteLuaString(fmt("dse.ecs.get_world_aabb(" + bare_id + ")").c_str(), &out));
     EXPECT_EQ(out, "nil");
 
+    ShutdownLuaRuntime();
+}
+
+// 测试 Lua 时间缩放绑定：全局 app.set/get_time_scale + 逐实体 ecs.set/get_time_scale。
+TEST_F(LuaEcsIntegrationTest, LuaTimeScaleGlobalAndPerEntity) {
+    Time::set_time_scale(1.0f);  // 隔离全局状态（Time 为静态）
+
+    LuaTempScript startup("test_ecs_timescale.lua", R"(
+        function Awake() end
+        function Update(dt) end
+    )");
+    SetStartupLuaScriptPath(startup.Path());
+
+    World world;
+    Entity e = world.CreateEntity();          // 逐实体缩放目标
+    Entity bare = world.CreateEntity();       // 无 TimeScaleComponent
+
+    LuaApiContext ctx;
+    ctx.world = &world;
+    ConfigureLuaApiContext(ctx);
+    ASSERT_TRUE(BootstrapLuaRuntime());
+
+    const std::string id = std::to_string(static_cast<std::uint32_t>(e));
+    const std::string bare_id = std::to_string(static_cast<std::uint32_t>(bare));
+    std::string out;
+
+    // --- 全局 time-scale ---
+    ASSERT_TRUE(ExecuteLuaString("dse.app.set_time_scale(0.5)", nullptr));
+    EXPECT_FLOAT_EQ(Time::time_scale(), 0.5f);
+    ASSERT_TRUE(ExecuteLuaString(
+        "return string.format('%.2f', dse.app.get_time_scale())", &out));
+    EXPECT_EQ(out, "0.50");
+
+    // 负值钳制为 0（暂停）
+    ASSERT_TRUE(ExecuteLuaString("dse.app.set_time_scale(-3)", nullptr));
+    EXPECT_FLOAT_EQ(Time::time_scale(), 0.0f);
+    Time::set_time_scale(1.0f);
+
+    // --- 逐实体 time-scale ---
+    ASSERT_TRUE(ExecuteLuaString(("dse.ecs.set_time_scale(" + id + ", 0.3)").c_str(), nullptr));
+    const auto* ts = world.registry().try_get<dse::TimeScaleComponent>(e);
+    ASSERT_NE(ts, nullptr);
+    EXPECT_FLOAT_EQ(ts->scale, 0.3f);
+
+    // 生效增量时间 = 全局 scaled_dt × 局部 scale
+    EXPECT_FLOAT_EQ(dse::ResolveEntityDt(0.02f, world.registry(), e), 0.02f * 0.3f);
+    EXPECT_FLOAT_EQ(dse::ResolveEntityDt(0.02f, world.registry(), bare), 0.02f);
+
+    ASSERT_TRUE(ExecuteLuaString(
+        ("return string.format('%.2f', dse.ecs.get_time_scale(" + id + "))").c_str(), &out));
+    EXPECT_EQ(out, "0.30");
+
+    // 无组件实体返回 1.0
+    ASSERT_TRUE(ExecuteLuaString(
+        ("return string.format('%.2f', dse.ecs.get_time_scale(" + bare_id + "))").c_str(), &out));
+    EXPECT_EQ(out, "1.00");
+
+    // 负值钳制为 0
+    ASSERT_TRUE(ExecuteLuaString(("dse.ecs.set_time_scale(" + id + ", -1)").c_str(), nullptr));
+    EXPECT_FLOAT_EQ(world.registry().get<dse::TimeScaleComponent>(e).scale, 0.0f);
+
+    Time::set_time_scale(1.0f);
     ShutdownLuaRuntime();
 }

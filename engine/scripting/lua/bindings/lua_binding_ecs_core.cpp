@@ -9,6 +9,7 @@
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/script.h"
+#include "engine/ecs/time_scale_component.h"
 #include "engine/ecs/sprite.h"
 #include "engine/ecs/camera.h"
 #include "engine/ecs/physics_2d.h"
@@ -725,6 +726,32 @@ int L_EcsGetLocalAabb(lua_State* L) {
     return 6;
 }
 
+// ============================================================
+// TimeScaleComponent（逐实体 / 分层时间缩放）
+// ============================================================
+
+// ecs.set_time_scale(e, s)：设置实体局部时间缩放（无组件则自动添加），s 钳制为 >=0。
+//   实体最终生效缩放 = 全局 time-scale × 局部 scale（对标 Unreal CustomTimeDilation）。
+int L_EcsSetTimeScale(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) return 0;
+    Entity e = helper::CheckEntity(L, 1);
+    float scale = helper::CheckFloat(L, 2);
+    if (scale < 0.0f) scale = 0.0f;
+    world->registry().emplace_or_replace<dse::TimeScaleComponent>(e, scale);
+    return 0;
+}
+
+// ecs.get_time_scale(e) -> number：实体局部时间缩放；无 TimeScaleComponent 时返回 1.0。
+int L_EcsGetTimeScale(lua_State* L) {
+    World* world = GetWorld();
+    if (!world) { lua_pushnumber(L, 1.0); return 1; }
+    Entity e = helper::CheckEntity(L, 1);
+    const auto* ts = helper::TryGetComponentConst<dse::TimeScaleComponent>(*world, e);
+    lua_pushnumber(L, ts ? static_cast<lua_Number>(ts->scale) : 1.0);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
@@ -763,6 +790,9 @@ void RegisterEcsCoreBindings(lua_State* L) {
         // BoundingBoxComponent（只读 AABB 查询）
         {"get_world_aabb",             L_EcsGetWorldAabb},
         {"get_local_aabb",             L_EcsGetLocalAabb},
+        // TimeScaleComponent（逐实体 / 分层时间缩放）
+        {"set_time_scale",             L_EcsSetTimeScale},
+        {"get_time_scale",             L_EcsGetTimeScale},
         {"add_transform",              L_EcsAddTransform},
         // ParentComponent
         {"add_parent",                 L_EcsAddParent},

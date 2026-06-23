@@ -19,6 +19,7 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/animation.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/time_scale_component.h"
 
 class AnimationSystem2DTest : public ::testing::Test {
 protected:
@@ -208,4 +209,53 @@ TEST_F(AnimationSystem2DTest, TimeDoesNotAdvanceAfterStopPlayback) {
 
     sys.Update(world, 1.0f);
     EXPECT_EQ(anim->current_frame, 1); // 未推进
+}
+
+namespace {
+AnimationState MakeWalkState() {
+    AnimationState s;
+    s.name = "walk";
+    s.frame_rate = 10.0f; // 每帧 0.1s
+    s.loop = true;
+    s.frame_handles = {1u, 2u, 3u, 4u};
+    return s;
+}
+} // namespace
+
+// 测试 动画系统2D：逐实体时间缩放分层（全局 dt 相同，局部 scale 不同 → 推进速度不同）。
+// 模拟“世界慢动作但 Boss 正常”：scale=1 的实体照常推进，scale=0.5 的实体半速。
+TEST_F(AnimationSystem2DTest, PerEntityTimeScaleLayersAdvanceSpeed) {
+    // 实体 A：无 TimeScaleComponent（默认 local=1）
+    auto [a, anim_a, sprite_a] = CreateAnimatedEntity();
+    anim_a->states["walk"] = MakeWalkState();
+    anim_a->current_state = "walk";
+    anim_a->current_frame = 0;
+    anim_a->current_time = 0.0f;
+
+    // 实体 B：local scale=0.5（半速）
+    auto [b, anim_b, sprite_b] = CreateAnimatedEntity();
+    anim_b->states["walk"] = MakeWalkState();
+    anim_b->current_state = "walk";
+    anim_b->current_frame = 0;
+    anim_b->current_time = 0.0f;
+    world.registry().emplace<dse::TimeScaleComponent>(b, 0.5f);
+
+    // 同一全局 dt=0.15s：A 生效 0.15 >= 0.1 推进一帧；B 生效 0.075 < 0.1 不推进。
+    sys.Update(world, 0.15f);
+    EXPECT_EQ(anim_a->current_frame, 1);
+    EXPECT_EQ(anim_b->current_frame, 0);
+}
+
+// 测试 动画系统2D：逐实体 scale=0 完全冻结（即使全局 dt 很大）。
+TEST_F(AnimationSystem2DTest, PerEntityTimeScaleZeroFreezesEntity) {
+    auto [e, anim, sprite] = CreateAnimatedEntity();
+    anim->states["walk"] = MakeWalkState();
+    anim->current_state = "walk";
+    anim->current_frame = 0;
+    anim->current_time = 0.0f;
+    world.registry().emplace<dse::TimeScaleComponent>(e, 0.0f);
+
+    sys.Update(world, 5.0f); // 巨大 dt，但 local scale=0 → 生效 dt=0
+    EXPECT_EQ(anim->current_frame, 0);
+    EXPECT_FLOAT_EQ(anim->current_time, 0.0f);
 }

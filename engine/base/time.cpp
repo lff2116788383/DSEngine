@@ -13,6 +13,7 @@ std::chrono::steady_clock::time_point Time::startup_time_;
 float Time::delta_time_=0;
 float Time::last_frame_time_=0;
 float Time::fixed_update_time_=1.0/60;
+float Time::time_scale_=1.0f;
 
 Time::Time() {
 }
@@ -22,6 +23,19 @@ Time::~Time() {
 
 float Time::delta_time() {
     return delta_time_;
+}
+
+float Time::scaled_delta_time() {
+    return delta_time_ * time_scale_;
+}
+
+float Time::time_scale() {
+    return time_scale_;
+}
+
+void Time::set_time_scale(float scale) {
+    if (scale < 0.0f) scale = 0.0f;
+    time_scale_ = scale;
 }
 
 float Time::fixed_update_time() {
@@ -37,6 +51,7 @@ void Time::Reset() {
     delta_time_ = 0.0f;
     last_frame_time_ = 0.0f;
     fixed_update_time_ = 1.0f / 60.0f;
+    time_scale_ = 1.0f;
 }
 
 void Time::Init() {
