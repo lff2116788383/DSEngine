@@ -189,6 +189,14 @@ struct GraphicsPipelineDesc {
     }
 };
 
+/// 顶点输入步进频率（BindVertexBuffer 的 slot 级属性，兑现契约 §3 终态签名）。
+/// PerVertex：每顶点取数（默认，旧行为）；PerInstance：每实例取数（slot 化实例顶点流，
+/// GL→glVertexAttribDivisor(loc,1) / DX11→D3D11_INPUT_PER_INSTANCE_DATA / Vulkan→VK_VERTEX_INPUT_RATE_INSTANCE）。
+enum class VertexInputRate : uint8_t {
+    PerVertex   = 0,
+    PerInstance = 1,
+};
+
 /// 顶点属性描述（通用绘制原语 BindVertexBuffer 用，目前仅支持 float 分量）
 struct VertexAttr {
     uint32_t location = 0;    ///< 着色器中的 attribute location
@@ -212,6 +220,36 @@ enum class TextureDim : uint8_t {
     TexCube    = 1,
     Tex2DArray = 2,
     Tex3D      = 3,   ///< 3D 体纹理（如 Color Grading LUT），GL 用 GL_TEXTURE_3D 绑定
+};
+
+/// 绑定组描述（兑现契约 §2.3 「绑定组 / argument buffer」）：把多个 UBO/纹理/SSBO 绑定打包为
+/// 一次原子绑定，落实「更少、更批量的状态变更」。一组对应「同生命周期的一批资源」
+/// （如 PerFrame UBO + 材质 UBO + 多张材质贴图 + 骨骼/实例 SSBO）。
+/// 后端映射：Vulkan→单个 descriptor set（其延迟组装天然把一组绑定汇成一个 set 提交）；
+/// DX11→一段连续 b/t/s 寄存器的批量 set；GL→批量 glBindBufferBase + 纹理单元绑定。
+/// 各 entry 的 slot 语义与逐 slot 的 BindUniformBuffer/BindTexture/BindStorageBuffer 完全一致，
+/// 故默认实现可逐 entry 转发到对应原语（语义等价，非 no-op），后端可覆写为真正的批量绑定。
+struct BindGroupDesc {
+    struct UniformBufferEntry {
+        uint32_t slot = 0;
+        unsigned int buffer_handle = 0;
+        uint32_t offset = 0;   ///< 0 表示整个 buffer
+        uint32_t size = 0;
+    };
+    struct TextureEntry {
+        uint32_t slot = 0;
+        unsigned int texture_handle = 0;
+        TextureDim dim = TextureDim::Tex2D;
+    };
+    struct StorageBufferEntry {
+        uint32_t slot = 0;
+        unsigned int buffer_handle = 0;
+        uint32_t offset = 0;   ///< 0 表示整个 buffer
+        uint32_t size = 0;
+    };
+    std::vector<UniformBufferEntry> uniform_buffers;
+    std::vector<TextureEntry> textures;
+    std::vector<StorageBufferEntry> storage_buffers;
 };
 
 /// 引擎内建着色器程序标识（由各后端懒初始化预编译着色器，经 RhiDevice::GetBuiltinProgram 暴露句柄）。

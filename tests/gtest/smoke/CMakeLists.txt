@@ -16,6 +16,8 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     dx11_rhi_smoke_test.cpp
     sprite_primitive_smoke_test.cpp
     instanced_ssbo_pixel_smoke_test.cpp
+    instanced_vertex_rate_pixel_smoke_test.cpp
+    bind_group_pixel_smoke_test.cpp
     hair_pixel_smoke_test.cpp
     forward_pbr_pixel_smoke_test.cpp
     forward_shaded_pixel_smoke_test.cpp

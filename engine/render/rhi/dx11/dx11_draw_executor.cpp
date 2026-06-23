@@ -490,11 +490,68 @@ void DX11DrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
     prim_program_handle_ = program_handle;
 }
 
-void DX11DrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                            const std::vector<VertexAttr>& attrs) {
-    prim_vbo_handle_ = buffer_handle;
-    prim_stride_ = stride;
-    prim_attrs_ = attrs;
+void DX11DrawExecutor::PrimBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                            const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
+    if (slot == 0) {
+        prim_vbo_handle_ = buffer_handle;
+        prim_stride_ = stride;
+        prim_attrs_ = attrs;
+        prim_slot0_rate_ = rate;
+    } else {
+        prim_extra_vbs_[slot] = PrimVbExtra{buffer_handle, stride, attrs, rate};
+    }
+}
+
+namespace {
+DXGI_FORMAT PrimAttrFormat(uint32_t components) {
+    switch (components) {
+        case 1:  return DXGI_FORMAT_R32_FLOAT;
+        case 2:  return DXGI_FORMAT_R32G32_FLOAT;
+        case 3:  return DXGI_FORMAT_R32G32B32_FLOAT;
+        default: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    }
+}
+}  // namespace
+
+ID3D11InputLayout* DX11DrawExecutor::ResolvePrimInputLayout(DX11ShaderManager& shader_mgr) const {
+    // 旧单流 + per-vertex：沿用反射推导布局（与历史行为字节一致）。
+    if (prim_extra_vbs_.empty() && prim_slot0_rate_ == VertexInputRate::PerVertex) {
+        return shader_mgr.GetInputLayout(prim_program_handle_);
+    }
+    // 出现 slot>0 或 per-instance：据各 slot 属性 + rate 显式组装多 slot 布局。
+    // 反射布局恒落 slot0/per-vertex，无法表达 per-instance，故此处全量自建。
+    std::vector<D3D11_INPUT_ELEMENT_DESC> elems;
+    auto append = [&elems](uint32_t slot, const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
+        const D3D11_INPUT_CLASSIFICATION cls = (rate == VertexInputRate::PerInstance)
+            ? D3D11_INPUT_PER_INSTANCE_DATA : D3D11_INPUT_PER_VERTEX_DATA;
+        const UINT step = (rate == VertexInputRate::PerInstance) ? 1u : 0u;
+        for (const auto& a : attrs) {
+            elems.push_back(D3D11_INPUT_ELEMENT_DESC{
+                "TEXCOORD", a.location, PrimAttrFormat(a.components),
+                slot, a.offset, cls, step});
+        }
+    };
+    append(0, prim_attrs_, prim_slot0_rate_);
+    for (const auto& [slot, b] : prim_extra_vbs_) append(slot, b.attrs, b.rate);
+    return shader_mgr.GetOrCreatePrimInputLayout(prim_program_handle_, elems);
+}
+
+void DX11DrawExecutor::BindPrimVertexBuffers(ID3D11DeviceContext* dc,
+                                             DX11ResourceManager& resource_mgr) const {
+    const auto* vb0 = resource_mgr.GetBuffer(prim_vbo_handle_);
+    if (vb0 && vb0->buffer) {
+        UINT stride = prim_stride_;
+        UINT offset = 0;
+        dc->IASetVertexBuffers(0, 1, vb0->buffer.GetAddressOf(), &stride, &offset);
+    }
+    for (const auto& [slot, b] : prim_extra_vbs_) {
+        const auto* vb = resource_mgr.GetBuffer(b.handle);
+        if (vb && vb->buffer) {
+            UINT stride = b.stride;
+            UINT offset = 0;
+            dc->IASetVertexBuffers(slot, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+        }
+    }
 }
 
 void DX11DrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
@@ -569,18 +626,17 @@ void DX11DrawExecutor::PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
         }
     }
 
-    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    auto* layout = ResolvePrimInputLayout(shader_mgr);
     dc->IASetInputLayout((buf && buf->buffer && layout) ? layout : nullptr);
     dc->IASetPrimitiveTopology(prim_topology_);
 
     if (buf && buf->buffer) {
-        UINT stride = prim_stride_;
-        UINT offset = 0;
-        dc->IASetVertexBuffers(0, 1, buf->buffer.GetAddressOf(), &stride, &offset);
+        BindPrimVertexBuffers(dc, resource_mgr);
     }
 
     // 深度/光栅/混合已由 BindPipeline→ApplyPipelineState 设定，此处不再 save/restore。
     dc->Draw(vertex_count, first_vertex);
+    ClearExtraVertexSlots();
     global_state_.current_frame_stats.draw_calls++;
 
     // push 状态按绘制清零，避免泄漏到后续不写 push 的绘制（其 shader 若有 b0 push 块会读到陈旧字节）。
@@ -679,14 +735,12 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         }
     }
 
-    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    auto* layout = ResolvePrimInputLayout(shader_mgr);
     dc->IASetInputLayout((vb && vb->buffer && layout) ? layout : nullptr);
     dc->IASetPrimitiveTopology(prim_topology_);
 
     if (vb && vb->buffer) {
-        UINT stride = prim_stride_;
-        UINT offset = 0;
-        dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+        BindPrimVertexBuffers(dc, resource_mgr);
     }
     dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
 
@@ -699,6 +753,7 @@ void DX11DrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t i
         dc->DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
         global_state_.current_frame_stats.instanced_draw_calls++;
     }
+    ClearExtraVertexSlots();
     global_state_.current_frame_stats.draw_calls++;
 
     prim_has_push_ = false;
@@ -762,18 +817,17 @@ void DX11DrawExecutor::PrimDrawIndexedIndirect(unsigned int indirect_buffer, uin
         }
     }
 
-    auto* layout = shader_mgr.GetInputLayout(prim_program_handle_);
+    auto* layout = ResolvePrimInputLayout(shader_mgr);
     if (layout) dc->IASetInputLayout(layout);
     dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    UINT stride = prim_stride_;
-    UINT offset = 0;
-    dc->IASetVertexBuffers(0, 1, vb->buffer.GetAddressOf(), &stride, &offset);
+    BindPrimVertexBuffers(dc, resource_mgr);
     dc->IASetIndexBuffer(ib->buffer.Get(), prim_index_format_, 0);
 
     // 间接绘制：从 args buffer 的 byte_offset 处读取 5×uint32 参数。
     // 契约：DX11 SV_InstanceID 仍从 0 起，base_instance 偏移须经 SSBO 偏移表达（§6）。
     dc->DrawIndexedInstancedIndirect(args_buf, byte_offset);
+    ClearExtraVertexSlots();
     global_state_.current_frame_stats.draw_calls++;
     global_state_.current_frame_stats.indirect_draw_calls++;
 

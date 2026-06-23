@@ -23,7 +23,8 @@ public:
     void BeginRenderPass(const RenderPassDesc&) override {}
     void EndRenderPass() override {}
     void BindPipeline(unsigned int) override {}
-    void BindVertexBuffer(unsigned int, uint32_t, const std::vector<VertexAttr>&) override {}
+    void BindVertexBuffer(uint32_t, unsigned int, uint32_t, const std::vector<VertexAttr>&,
+                          VertexInputRate) override {}
     void PushConstants(ShaderStage, uint32_t, const void*, uint32_t) override {}
     void Draw(uint32_t, uint32_t) override {}
     void BindIndexBuffer(unsigned int, IndexType) override {}

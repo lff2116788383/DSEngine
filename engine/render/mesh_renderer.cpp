@@ -796,7 +796,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -985,7 +985,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     // 外部常驻缓冲：绑 caller 持有的 VB/IB，按 index_count_override 子段绘制。
-    cmd.BindVertexBuffer(mesh.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, mesh.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(mesh.index_buffer.raw(), mesh.index_type);
     cmd.DrawIndexed(index_count, first_index, 0);
 }
@@ -1054,7 +1054,7 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());  // PerScene @ set1.b0（占位）
     cmd.BindTexture(0u, albedo_tex ? albedo_tex : white_tex_, TextureDim::Tex2D);  // u_texture @ set2.b1
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -1401,7 +1401,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     // 共享局部空间模板 VB/IB（caller 持有、常驻），按 index_count_override 子段对每实例绘制。
-    cmd.BindVertexBuffer(tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
@@ -1604,7 +1604,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 骨骼矩阵 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -1800,7 +1800,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1（Final-Feat-4）
     // 每实例 model SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
@@ -2021,7 +2021,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     // 实例 SSBO\@slot0（set8.b0）+ 骨骼 SSBO\@slot1（set8.b1）；三后端 @SSBO_LOW_REGISTERS → DX11 t0/t1、GL binding0/1、Vulkan rank0/1。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindStorageBuffer(1u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
@@ -2240,7 +2240,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight    @ set7.b1（Final-Feat-4）
     // morph 合并增量 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan SSBO 第0(set7.b0) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, morph_ssbo_.raw(), 0u, static_cast<uint32_t>(morph_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -2346,7 +2346,7 @@ void MeshRenderer::DrawSkinned(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 骨骼矩阵 SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -2439,7 +2439,7 @@ void MeshRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -2499,7 +2499,7 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }
@@ -2565,7 +2565,7 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 契约：first_instance 恒 0，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
@@ -2615,7 +2615,7 @@ void MeshRenderer::DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiD
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     // 共享局部空间模板 VB/IB（caller 持有、常驻），按子段对每实例绘制。
-    cmd.BindVertexBuffer(tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
                              first_index, 0, 0u);
@@ -2711,7 +2711,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 每实例 model SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
@@ -2821,7 +2821,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
     // 每实例 model SSBO\@slot 0（与 DrawInstanced 同语义）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     // 间接绘制：绘制参数取自 indirect buffer 偏移 0 处的 DrawElementsIndirectCommand。
     cmd.DrawIndexedIndirect(indirect_buffer_.raw(), 0u);
@@ -2880,7 +2880,7 @@ void MeshRenderer::DrawUnlit2D(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());                       // PerFrame @ set0.b0（仅 vp）
     cmd.BindTexture(0u, texture ? texture : white_tex_, TextureDim::Tex2D); // u_texture @ slot 0
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuUnlit2DVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(static_cast<uint32_t>(indices.size()), 0u, 0);
 }

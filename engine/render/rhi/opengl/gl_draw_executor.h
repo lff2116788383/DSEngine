@@ -72,8 +72,9 @@ public:
     /// 设置后续 Prim* 绘制的图元拓扑（由 BindPipeline 从 PSO desc 推送）。
     void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
-    void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                              const std::vector<VertexAttr>& attrs);
+    void PrimBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                              const std::vector<VertexAttr>& attrs,
+                              VertexInputRate rate = VertexInputRate::PerVertex);
     void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex);
 

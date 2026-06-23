@@ -188,10 +188,11 @@ void OpenGLCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
 }
 
 
-void OpenGLCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                           const std::vector<VertexAttr>& attrs) {
+void OpenGLCommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                           const std::vector<VertexAttr>& attrs,
+                                           VertexInputRate rate) {
     if (!device_) return;
-    device_->RealBindVertexBuffer(buffer_handle, stride, attrs);
+    device_->RealBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
 }
 
 void OpenGLCommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
@@ -888,8 +889,9 @@ void OpenGLRhiDevice::RealBindPipeline(unsigned int graphics_pipeline_handle) {
     if (desc->program != 0) draw_executor_.PrimBindShaderProgram(desc->program);
 }
 
-void OpenGLRhiDevice::RealBindVertexBuffer(unsigned int buffer_handle, uint32_t stride, const std::vector<VertexAttr>& attrs) {
-    draw_executor_.PrimBindVertexBuffer(buffer_handle, stride, attrs);
+void OpenGLRhiDevice::RealBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                           const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
+    draw_executor_.PrimBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
 }
 
 void OpenGLRhiDevice::RealPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {

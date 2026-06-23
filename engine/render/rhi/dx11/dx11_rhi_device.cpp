@@ -97,10 +97,10 @@ void DX11CommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
     if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
 }
 
-void DX11CommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                          const std::vector<VertexAttr>& attrs) {
+void DX11CommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                          const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!device_) return;
-    device_->draw_executor().PrimBindVertexBuffer(buffer_handle, stride, attrs);
+    device_->draw_executor().PrimBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
 }
 
 void DX11CommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {

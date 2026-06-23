@@ -105,9 +105,12 @@ void SpriteRenderer::Draw(CommandBuffer& cmd, RhiDevice& device, unsigned int te
     };
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
-    cmd.BindUniformBuffer(0u, ubo_.raw());                       // PerFrame @ set0.b0
-    cmd.BindTexture(0u, texture_handle, TextureDim::Tex2D);      // u_texture @ set2.b1
-    cmd.BindVertexBuffer(vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), attrs);
+    // 绑定组（契约 §2.3）：PerFrame UBO + u_texture 打包为一次原子绑定。
+    BindGroupDesc group;
+    group.uniform_buffers.push_back({0u, ubo_.raw(), 0u, 0u});                     // PerFrame @ set0.b0
+    group.textures.push_back({0u, texture_handle, TextureDim::Tex2D});            // u_texture @ set2.b1
+    cmd.BindGroup(group);
+    cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(6u, 0u, 0);
 }

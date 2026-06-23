@@ -410,18 +410,23 @@ void GLDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
     glUseProgram(program_handle);
 }
 
-void GLDrawExecutor::PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                          const std::vector<VertexAttr>& attrs) {
+void GLDrawExecutor::PrimBindVertexBuffer(uint32_t /*slot*/, unsigned int buffer_handle, uint32_t stride,
+                                          const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!prim_vao_handle_ && create_vao_fn_) {
         prim_vao_handle_ = create_vao_fn_();
     }
     glBindVertexArray(prim_vao_handle_.raw());
     glBindBuffer(GL_ARRAY_BUFFER, buffer_handle);
+    // GL 经典 VAO 模型：属性数据源即当前绑定的 GL_ARRAY_BUFFER，故 slot 仅用于区分「本次调用绑哪个流」，
+    // 多 slot = 多次调用各设各 attr。divisor 按 rate 设：PerInstance→1（每实例步进）/ PerVertex→0（恒重置，
+    // 避免 VAO 内同一 location 残留上次 per-instance 状态）。
+    const GLuint divisor = (rate == VertexInputRate::PerInstance) ? 1u : 0u;
     for (const auto& a : attrs) {
         glEnableVertexAttribArray(a.location);
         glVertexAttribPointer(a.location, static_cast<GLint>(a.components), GL_FLOAT, GL_FALSE,
                               static_cast<GLsizei>(stride),
                               reinterpret_cast<const void*>(static_cast<uintptr_t>(a.offset)));
+        glVertexAttribDivisor(a.location, divisor);
     }
 }
 

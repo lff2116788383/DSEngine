@@ -318,7 +318,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         cmd.BindPipeline(device.GetGraphicsPipeline(pso, prog));
         cmd.BindUniformBuffer(0u, ubo_handle);
         cmd.BindTexture(0u, b.texture, TextureDim::Tex2D);
-        cmd.BindVertexBuffer(vbo.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
+        cmd.BindVertexBuffer(0u, vbo.raw(), static_cast<uint32_t>(sizeof(SpriteVertex)), kAttrs);
         cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
         cmd.DrawIndexed(static_cast<uint32_t>(b.quad_count * 6),
                         static_cast<uint32_t>(b.start_quad * 6), 0);

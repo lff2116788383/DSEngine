@@ -24,6 +24,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <string>
+#include <map>
 #include <unordered_map>
 
 namespace dse {
@@ -93,7 +94,9 @@ public:
 
     // --- 通用绘制原语 (A1) ---
     void PrimBindShaderProgram(unsigned int program_handle);
-    void PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride, const std::vector<VertexAttr>& attrs);
+    void PrimBindVertexBuffer(uint32_t slot, VkBuffer buffer, uint32_t stride,
+                              const std::vector<VertexAttr>& attrs,
+                              VertexInputRate rate = VertexInputRate::PerVertex);
     void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count, uint32_t first_vertex,
                   VulkanPipelineStateManager& pipeline_mgr,
@@ -211,6 +214,21 @@ private:
         VkBuffer inst_ssbo = VK_NULL_HANDLE,
         VkDeviceSize inst_ssbo_size = 0,
         VkDeviceSize inst_ssbo_offset = 0);
+
+    /// 由 prim_vbs_ 各 slot 组装顶点输入描述（binding=slot，inputRate 按 rate，attr.binding=slot）。
+    void BuildPrimVertexInput(std::vector<VkVertexInputBindingDescription>& bindings,
+                              std::vector<VkVertexInputAttributeDescription>& vk_attrs) const;
+    /// 逐 slot 绑定 prim_vbs_ 的顶点缓冲（firstBinding=slot，offset=0）。
+    void BindPrimVertexBuffers(VkCommandBuffer cmd_buf) const;
+    /// 是否有任一 slot 绑定了顶点缓冲（vertexless 绘制时为 false）。
+    bool HasPrimVbo() const { return !prim_vbs_.empty(); }
+    /// 绘制后清除 slot>0 的瞬态顶点流绑定。slot 0 沿用旧的「跨绘制保持」语义不动，
+    /// 仅把新增的多 slot/per-instance 流限定为「每次绘制显式重绑」，避免泄漏到后续 vertexless 绘制。
+    void ClearExtraVertexSlots() {
+        for (auto it = prim_vbs_.begin(); it != prim_vbs_.end();) {
+            if (it->first != 0) it = prim_vbs_.erase(it); else ++it;
+        }
+    }
 
     /// 为通用原语 (B0) 绘制分配并更新 DescriptorSet：反射驱动，按 (set,binding) 升序
     /// 把契约 slot 顺序映射到具体 UBO/纹理 binding，其余 binding 用 dummy 占位。
@@ -371,9 +389,15 @@ private:
 
     // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装 pipeline/descriptor/draw
     unsigned int prim_program_handle_ = 0;
-    VkBuffer prim_vbo_ = VK_NULL_HANDLE;
-    uint32_t prim_stride_ = 0;
-    std::vector<VertexAttr> prim_attrs_;
+    // 各 slot 顶点流绑定（slot 化兑现契约 §3 终态；slot 0 即旧单流）。map 按 slot 有序，
+    // 据此组装 VkVertexInputBindingDescription（含 per-instance rate）并逐 slot 绑定 VB。
+    struct PrimVbBinding {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        uint32_t stride = 0;
+        std::vector<VertexAttr> attrs;
+        VertexInputRate rate = VertexInputRate::PerVertex;
+    };
+    std::map<uint32_t, PrimVbBinding> prim_vbs_;
     unsigned int prim_cubemap_ = 0;
     // 通用 push constant 字节块（→ 真 vkCmdPushConstants，stageFlags 取程序反射 range）。
     static constexpr uint32_t kPrimPushMaxBytes = 256;

@@ -35,8 +35,9 @@ public:
 
     // --- 通用绘制原语 (A1) ---
     void BindPipeline(unsigned int graphics_pipeline_handle) override;
-    void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                          const std::vector<VertexAttr>& attrs) override;
+    void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                          const std::vector<VertexAttr>& attrs,
+                          VertexInputRate rate = VertexInputRate::PerVertex) override;
     void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) override;
     void Draw(uint32_t vertex_count, uint32_t first_vertex) override;
 

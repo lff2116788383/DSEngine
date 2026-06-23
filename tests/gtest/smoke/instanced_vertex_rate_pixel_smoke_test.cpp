@@ -1,19 +1,19 @@
 /**
- * @file instanced_ssbo_pixel_smoke_test.cpp
- * @brief P0a + P0b 组合「活体」像素冒烟 — 用自定义三语言着色器，经通用原语
- *        DrawIndexedInstanced（P0a）+ CommandBuffer::BindStorageBuffer（P0b）
- *        画 N 个实例：每实例从 SSBO（按 gl_InstanceID/SV_InstanceID 索引）取 X 偏移与颜色，
- *        断言三后端各画出 N 个互不重叠、颜色正确的 quad，且跨后端 RMSE 在阈值内。
+ * @file instanced_vertex_rate_pixel_smoke_test.cpp
+ * @brief A「活体」像素冒烟 — 用 slot 化 BindVertexBuffer + VertexInputRate::PerInstance
+ *        画 N 个实例：slot 0 顶点流（per-vertex，quad 角点）+ slot 1 实例流（per-instance，
+ *        每实例 offset.xy + color.rgba），断言三后端各画出 N 个互不重叠、颜色正确的 quad。
  *
- * 这是 RHI_PRIMITIVE_CONTRACT.md §7「每个原语随活体消费者 + 像素测试落地」闸门：
- *  - P0a：DrawIndexedInstanced(index_count, instance_count, ...) 实例化绘制。
- *  - P0b：BindStorageBuffer(slot, handle, offset, size) 图形阶段 SSBO 绑定。
+ * 这是 RHI_PRIMITIVE_CONTRACT.md §7「每个原语随活体消费者 + 像素测试落地」闸门，覆盖契约 §3
+ * BindVertexBuffer 终态签名的两项新能力：
+ *  - 多 slot 顶点流：BindVertexBuffer(slot=0, ...) + BindVertexBuffer(slot=1, ...)。
+ *  - per-instance 步进：slot 1 走 VertexInputRate::PerInstance
+ *    （GL glVertexAttribDivisor(loc,1) / DX11 D3D11_INPUT_PER_INSTANCE_DATA / Vulkan
+ *    VK_VERTEX_INPUT_RATE_INSTANCE），实例顶点流不再靠 SSBO 绕过。
  *
- * 设计要点：
- *  - 顶点拉取（gl_VertexID/SV_VertexID 生成 quad 角点），不依赖顶点属性 → 避免 DX11
- *    自定义着色器无 InputLayout 的限制；仍绑定一个占位 VBO 以满足各后端 null 检查。
- *  - 实例数据为 std430 数组：每实例 32 字节 = vec4 offset + vec4 color（DX11 ByteAddressBuffer
- *    Load2/Load4 按相同字节布局取数）。
+ * 设计要点（与 instanced_ssbo_pixel_smoke_test 同构，便于对照）：
+ *  - slot 0：4 个角点 vec2（已乘半边长），per-vertex；location 0。
+ *  - slot 1：每实例 24 字节 = vec2 offset（location 1）+ vec4 color（location 2），per-instance。
  *  - 场景沿 y=128 对称（quad 居中成一横排），故 DX11 垂直翻转不影响整帧 RMSE 比较。
  */
 
@@ -40,32 +40,38 @@ constexpr int kRtSize = 256;
 constexpr uint32_t kInstanceCount = 3;
 constexpr float kHalf = 0.12f;  // quad 裁剪空间半边长
 
-// std430 / ByteAddressBuffer 共用字节布局：每实例 32 字节。
-struct InstanceGPU {
-    float offset[4];  // xy = 偏移；zw 未用
-    float color[4];   // rgba
+// slot 1 实例顶点流字节布局：每实例 24 字节 = vec2 offset + vec4 color。
+struct InstanceVertex {
+    float offset[2];  // location 1
+    float color[4];   // location 2
+};
+
+// slot 0 顶点流：quad 4 角点（已乘半边长），per-vertex。
+const float kQuadCorners[8] = {
+    -kHalf, -kHalf,
+     kHalf, -kHalf,
+     kHalf,  kHalf,
+    -kHalf,  kHalf,
 };
 
 // 三实例：X 偏移互不重叠（中心 NDC -0.5/0/+0.5 → 像素 64/128/192），Y 居中（横排，y 对称）。
-std::vector<InstanceGPU> MakeInstances() {
+std::vector<InstanceVertex> MakeInstances() {
     return {
-        {{-0.5f, 0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},  // 红
-        {{ 0.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},  // 绿
-        {{ 0.5f, 0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},  // 蓝
+        {{-0.5f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},  // 红
+        {{ 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},  // 绿
+        {{ 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},  // 蓝
     };
 }
 
 // ---- GL GLSL (#version 430) ----
 const char* kGlVert = R"(#version 430
-struct Inst { vec4 offset; vec4 color; };
-layout(std430, binding = 0) readonly buffer InstBuf { Inst items[]; };
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aOffset;
+layout(location = 2) in vec4 aColor;
 out vec4 vColor;
 void main() {
-    vec2 corners[4] = vec2[4](vec2(-1.0,-1.0), vec2(1.0,-1.0), vec2(1.0,1.0), vec2(-1.0,1.0));
-    vec2 p = corners[gl_VertexID] * float(0.12);
-    vec2 off = items[gl_InstanceID].offset.xy;
-    gl_Position = vec4(p + off, 0.0, 1.0);
-    vColor = items[gl_InstanceID].color;
+    gl_Position = vec4(aPos + aOffset, 0.0, 1.0);
+    vColor = aColor;
 }
 )";
 
@@ -77,15 +83,13 @@ void main() { FragColor = vColor; }
 
 // ---- Vulkan GLSL (#version 450 → glslang → SPIR-V) ----
 const char* kVkVert = R"(#version 450
-struct Inst { vec4 offset; vec4 color; };
-layout(std430, set = 0, binding = 0) readonly buffer InstBuf { Inst items[]; };
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aOffset;
+layout(location = 2) in vec4 aColor;
 layout(location = 0) out vec4 vColor;
 void main() {
-    vec2 corners[4] = vec2[4](vec2(-1.0,-1.0), vec2(1.0,-1.0), vec2(1.0,1.0), vec2(-1.0,1.0));
-    vec2 p = corners[gl_VertexIndex] * float(0.12);
-    vec2 off = items[gl_InstanceIndex].offset.xy;
-    gl_Position = vec4(p + off, 0.0, 1.0);
-    vColor = items[gl_InstanceIndex].color;
+    gl_Position = vec4(aPos + aOffset, 0.0, 1.0);
+    vColor = aColor;
 }
 )";
 
@@ -95,27 +99,24 @@ layout(location = 0) out vec4 FragColor;
 void main() { FragColor = vColor; }
 )";
 
-// ---- DX11 HLSL (VSMain/PSMain, ByteAddressBuffer t0) ----
+// ---- DX11 HLSL (VSMain/PSMain) ----
+// 通用原语 attr-derived InputLayout 把 location N 映射为语义 TEXCOORD<N>（见 DX11DrawExecutor::ResolvePrimInputLayout）。
 const char* kDxVert = R"(
-ByteAddressBuffer items : register(t0);
+struct VSIn  { float2 pos : TEXCOORD0; float2 off : TEXCOORD1; float4 col : TEXCOORD2; };
 struct VSOut { float4 pos : SV_Position; float4 color : COLOR0; };
-VSOut VSMain(uint vid : SV_VertexID, uint iid : SV_InstanceID) {
-    float2 corners[4] = { float2(-1.0,-1.0), float2(1.0,-1.0), float2(1.0,1.0), float2(-1.0,1.0) };
-    float2 p = corners[vid] * 0.12;
-    float2 off = asfloat(items.Load2(iid * 32));
-    float4 col = asfloat(items.Load4(iid * 32 + 16));
+VSOut VSMain(VSIn i) {
     VSOut o;
-    o.pos = float4(p + off, 0.0, 1.0);
-    o.color = col;
+    o.pos = float4(i.pos + i.off, 0.0, 1.0);
+    o.color = i.col;
     return o;
 }
 float4 PSMain(VSOut i) : SV_Target { return i.color; }
 )";
 
-// 在已初始化 device 上：建 256² RT → 清黑 → 自定义着色器 + SSBO 实例化画 N 个 quad → 回读。
-RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
-                                         const std::string& vert_src,
-                                         const std::string& frag_src) {
+// 在已初始化 device 上：建 256² RT → 清黑 → slot0 顶点流 + slot1 per-instance 实例流画 N 个 quad → 回读。
+RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
+                                               const std::string& vert_src,
+                                               const std::string& frag_src) {
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -130,19 +131,18 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
         return {};
     }
 
-    // 实例数据 SSBO（kStorage）。
-    std::vector<InstanceGPU> instances = MakeInstances();
-    GpuBufferDesc ssbo_desc;
-    ssbo_desc.size = instances.size() * sizeof(InstanceGPU);
-    ssbo_desc.usage = GpuBufferUsage::kStorage;
-    BufferHandle ssbo = device.CreateGpuBuffer(ssbo_desc, instances.data());
-
-    // 占位 VBO（顶点拉取不读属性，但各后端通用绘制路径要求 VBO 非空）。
-    const float dummy_vtx[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    // slot 0：per-vertex 顶点流（quad 角点）。
     GpuBufferDesc vb_desc;
-    vb_desc.size = sizeof(dummy_vtx);
+    vb_desc.size = sizeof(kQuadCorners);
     vb_desc.usage = GpuBufferUsage::kVertex;
-    BufferHandle vbo = device.CreateGpuBuffer(vb_desc, dummy_vtx);
+    BufferHandle vbo = device.CreateGpuBuffer(vb_desc, kQuadCorners);
+
+    // slot 1：per-instance 实例顶点流（offset + color）。
+    std::vector<InstanceVertex> instances = MakeInstances();
+    GpuBufferDesc inst_desc;
+    inst_desc.size = instances.size() * sizeof(InstanceVertex);
+    inst_desc.usage = GpuBufferUsage::kVertex;
+    BufferHandle inst_vbo = device.CreateGpuBuffer(inst_desc, instances.data());
 
     // 索引缓冲：单 quad（4 角点 → 2 三角）。
     const uint16_t indices[6] = {0, 1, 2, 0, 2, 3};
@@ -158,11 +158,19 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
     pso_desc.culling_enabled = false;
     unsigned int pso = device.CreatePipelineState(pso_desc);
 
-    if (!ssbo || !vbo || !ibo) {
+    if (!vbo || !inst_vbo || !ibo) {
         device.DeleteShaderProgram(program);
         device.DeleteRenderTarget(rt);
         return {};
     }
+
+    // slot 0 顶点布局：location 0 = vec2 pos @ offset 0。
+    const std::vector<VertexAttr> slot0_attrs = { VertexAttr{0u, 2u, 0u} };
+    // slot 1 实例布局：location 1 = vec2 offset @ 0；location 2 = vec4 color @ 8。
+    const std::vector<VertexAttr> slot1_attrs = {
+        VertexAttr{1u, 2u, 0u},
+        VertexAttr{2u, 4u, 8u},
+    };
 
     device.BeginFrame();
     auto cmd = device.CreateCommandBuffer();
@@ -173,10 +181,12 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
         rp.clear_color_enabled = true;
         cmd->BeginRenderPass(rp);
         cmd->BindPipeline(device.GetGraphicsPipeline(pso, program));
-        cmd->BindVertexBuffer(0u, vbo.raw(), sizeof(float) * 2, {});  // 无属性，仅占位
+        // A：slot 0 per-vertex + slot 1 per-instance 实例顶点流。
+        cmd->BindVertexBuffer(0u, vbo.raw(), static_cast<uint32_t>(sizeof(float) * 2), slot0_attrs);
+        cmd->BindVertexBuffer(1u, inst_vbo.raw(), static_cast<uint32_t>(sizeof(InstanceVertex)),
+                              slot1_attrs, VertexInputRate::PerInstance);
         cmd->BindIndexBuffer(ibo.raw(), IndexType::UInt16);
-        cmd->BindStorageBuffer(0, ssbo.raw(), 0, 0);              // P0b：图形阶段 SSBO → slot 0
-        cmd->DrawIndexedInstanced(6, kInstanceCount, 0, 0, 0);   // P0a：实例化绘制
+        cmd->DrawIndexedInstanced(6, kInstanceCount, 0, 0, 0);
         cmd->EndRenderPass();
         device.Submit(cmd);
     }
@@ -184,17 +194,17 @@ RenderTargetReadback RenderInstancedSSBO(RhiDevice& device,
 
     RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
 
-    device.DeleteGpuBuffer(ssbo);
     device.DeleteGpuBuffer(vbo);
+    device.DeleteGpuBuffer(inst_vbo);
     device.DeleteGpuBuffer(ibo);
     device.DeleteShaderProgram(program);
     device.DeleteRenderTarget(rt);
     return rb;
 }
 
-RenderTargetReadback RenderGL(RhiDevice& d) { return RenderInstancedSSBO(d, kGlVert, kGlFrag); }
-RenderTargetReadback RenderVK(RhiDevice& d) { return RenderInstancedSSBO(d, kVkVert, kVkFrag); }
-RenderTargetReadback RenderDX(RhiDevice& d) { return RenderInstancedSSBO(d, kDxVert, kDxVert); }
+RenderTargetReadback RenderGL(RhiDevice& d) { return RenderInstancedVertexRate(d, kGlVert, kGlFrag); }
+RenderTargetReadback RenderVK(RhiDevice& d) { return RenderInstancedVertexRate(d, kVkVert, kVkFrag); }
+RenderTargetReadback RenderDX(RhiDevice& d) { return RenderInstancedVertexRate(d, kDxVert, kDxVert); }
 
 // 断言：三个 quad 中心分别为 红/绿/蓝；quad 间隙与四角为清屏黑。
 void VerifyThreeQuads(const RenderTargetReadback& rb, const char* backend) {
@@ -237,22 +247,22 @@ void VerifyThreeQuads(const RenderTargetReadback& rb, const char* backend) {
 }  // namespace
 
 // ============================================================
-// 三后端单独像素验证（活体消费 P0a + P0b）。
+// 三后端单独像素验证（活体消费 A：slot 化 + PerInstance）。
 // ============================================================
 
-TEST(InstancedSSBOPixelSmokeTest, OpenGLDrawsThreeInstancedQuads) {
+TEST(InstancedVertexRatePixelSmokeTest, OpenGLDrawsThreeInstancedQuads) {
     auto r = dse::test::RunOpenGL(RenderGL);
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyThreeQuads(r.readback, "OpenGL");
 }
 
-TEST(InstancedSSBOPixelSmokeTest, D3D11DrawsThreeInstancedQuads) {
+TEST(InstancedVertexRatePixelSmokeTest, D3D11DrawsThreeInstancedQuads) {
     auto r = dse::test::RunD3D11(RenderDX);
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyThreeQuads(r.readback, "D3D11");
 }
 
-TEST(InstancedSSBOPixelSmokeTest, VulkanDrawsThreeInstancedQuads) {
+TEST(InstancedVertexRatePixelSmokeTest, VulkanDrawsThreeInstancedQuads) {
     auto r = dse::test::RunVulkan(RenderVK);
     if (!r.available) GTEST_SKIP() << r.skip_reason;
     VerifyThreeQuads(r.readback, "Vulkan");
@@ -262,7 +272,7 @@ TEST(InstancedSSBOPixelSmokeTest, VulkanDrawsThreeInstancedQuads) {
 // 跨后端一致性：场景沿 y=128 对称，DX11 垂直翻转不影响整帧 RMSE。
 // ============================================================
 
-TEST(InstancedSSBOPixelSmokeTest, CrossBackendConsistent) {
+TEST(InstancedVertexRatePixelSmokeTest, CrossBackendConsistent) {
     auto gl = dse::test::RunOpenGL(RenderGL);
     auto dx = dse::test::RunD3D11(RenderDX);
     auto vk = dse::test::RunVulkan(RenderVK);
@@ -272,17 +282,17 @@ TEST(InstancedSSBOPixelSmokeTest, CrossBackendConsistent) {
     const double kRmseGate = 8.0;  // 软件光栅器友好（边缘 AA / 翻转 off-by-one）
     if (gl.available && vk.available) {
         double rmse = dse::test::ComputeRmse(gl.readback, vk.readback);
-        fprintf(stderr, "[P0a+P0b] GL-vs-Vulkan RMSE = %.4f\n", rmse);
+        fprintf(stderr, "[A] GL-vs-Vulkan RMSE = %.4f\n", rmse);
         EXPECT_LT(rmse, kRmseGate) << "GL vs Vulkan diverged";
     }
     if (gl.available && dx.available) {
         double rmse = dse::test::ComputeRmse(gl.readback, dx.readback);
-        fprintf(stderr, "[P0a+P0b] GL-vs-D3D11 RMSE = %.4f\n", rmse);
+        fprintf(stderr, "[A] GL-vs-D3D11 RMSE = %.4f\n", rmse);
         EXPECT_LT(rmse, kRmseGate) << "GL vs D3D11 diverged";
     }
     if (dx.available && vk.available) {
         double rmse = dse::test::ComputeRmse(dx.readback, vk.readback);
-        fprintf(stderr, "[P0a+P0b] D3D11-vs-Vulkan RMSE = %.4f\n", rmse);
+        fprintf(stderr, "[A] D3D11-vs-Vulkan RMSE = %.4f\n", rmse);
         EXPECT_LT(rmse, kRmseGate) << "D3D11 vs Vulkan diverged";
     }
 }

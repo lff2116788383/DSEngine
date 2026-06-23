@@ -122,7 +122,7 @@ bool PostProcessRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{0u, 2u, 0u},   // pos
         VertexAttr{1u, 2u, 8u},   // uv
     };
-    cmd.BindVertexBuffer(quad_vbo_.raw(), static_cast<uint32_t>(sizeof(PPVertex)), kAttrs);
+    cmd.BindVertexBuffer(0u, quad_vbo_.raw(), static_cast<uint32_t>(sizeof(PPVertex)), kAttrs);
     cmd.BindIndexBuffer(quad_ibo_.raw(), IndexType::UInt16);
     cmd.DrawIndexed(6, 0, 0);
     return true;

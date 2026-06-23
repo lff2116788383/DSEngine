@@ -166,6 +166,7 @@ void DX11ShaderManager::Init(DX11Context* context) {
 
 void DX11ShaderManager::Shutdown() {
     input_layouts_.clear();
+    prim_input_layouts_.clear();
     programs_.clear();
     programs_created_ = 0;
     programs_destroyed_ = 0;
@@ -363,6 +364,42 @@ void DX11ShaderManager::CreateInputLayoutForShader(unsigned int handle,
 ID3D11InputLayout* DX11ShaderManager::GetInputLayout(unsigned int shader_handle) const {
     auto it = input_layouts_.find(shader_handle);
     return it != input_layouts_.end() ? it->second.Get() : nullptr;
+}
+
+ID3D11InputLayout* DX11ShaderManager::GetOrCreatePrimInputLayout(
+        unsigned int program_handle, const std::vector<D3D11_INPUT_ELEMENT_DESC>& elements) {
+    if (elements.empty()) return nullptr;
+    // key：program 句柄 + 各元素的关键字段哈希（语义索引/格式/输入 slot/步进类别/偏移）。
+    std::size_t key = std::hash<unsigned int>{}(program_handle);
+    auto mix = [&key](std::size_t v) { key ^= v + 0x9e3779b97f4a7c15ull + (key << 6) + (key >> 2); };
+    for (const auto& e : elements) {
+        mix(e.SemanticIndex);
+        mix(static_cast<std::size_t>(e.Format));
+        mix(e.InputSlot);
+        mix(static_cast<std::size_t>(e.InputSlotClass));
+        mix(e.AlignedByteOffset);
+        mix(e.InstanceDataStepRate);
+    }
+    auto cached = prim_input_layouts_.find(key);
+    if (cached != prim_input_layouts_.end()) return cached->second.Get();
+
+    auto it = programs_.find(program_handle);
+    if (it == programs_.end() || !it->second.vs_blob) return nullptr;
+
+    ComPtr<ID3D11InputLayout> layout;
+    HRESULT hr = context_->device()->CreateInputLayout(
+        elements.data(), static_cast<UINT>(elements.size()),
+        it->second.vs_blob->GetBufferPointer(),
+        it->second.vs_blob->GetBufferSize(),
+        layout.GetAddressOf());
+    if (FAILED(hr)) {
+        DEBUG_LOG_ERROR("[D3D11] GetOrCreatePrimInputLayout failed for shader {}: 0x{:08X}",
+                        program_handle, static_cast<unsigned>(hr));
+        return nullptr;
+    }
+    ID3D11InputLayout* raw = layout.Get();
+    prim_input_layouts_[key] = std::move(layout);
+    return raw;
 }
 
 void DX11ShaderManager::InitBuiltinShaders(std::function<void()> keep_alive) {

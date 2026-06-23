@@ -116,6 +116,12 @@ public:
     /// 获取着色器对应的 InputLayout（由 InitBuiltinShaders 创建）
     ID3D11InputLayout* GetInputLayout(unsigned int shader_handle) const;
 
+    /// 由通用原语 BindVertexBuffer 的各 slot 属性显式组装 InputLayout（支持多 slot + per-instance），
+    /// 按 (program, elements 内容哈希) 惰性缓存。供 DX11DrawExecutor 在出现 slot>0/per-instance 顶点流时
+    /// 取代「反射推导（恒 slot0/per-vertex）」的布局。返回 nullptr 表示创建失败或程序无 vs_blob。
+    ID3D11InputLayout* GetOrCreatePrimInputLayout(unsigned int program_handle,
+                                                  const std::vector<D3D11_INPUT_ELEMENT_DESC>& elements);
+
     // 内置着色器句柄访问器继承自 ShaderManagerBase
 
     /// 内建 2D sprite 着色器句柄（B0 通用原语活体验证用，base 未含）
@@ -176,6 +182,9 @@ private:
 
     /// 着色器句柄 → InputLayout 映射
     std::unordered_map<unsigned int, ComPtr<ID3D11InputLayout>> input_layouts_;
+
+    /// 通用原语 attr-derived InputLayout 缓存：key = (program_handle ^ elements 内容哈希)
+    std::unordered_map<std::size_t, ComPtr<ID3D11InputLayout>> prim_input_layouts_;
 
     /// Compute Shader 程序映射
     std::unordered_map<unsigned int, DX11ComputeProgram> compute_programs_;

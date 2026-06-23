@@ -70,12 +70,12 @@ void VulkanCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
 }
 
 
-void VulkanCommandBuffer::BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                           const std::vector<VertexAttr>& attrs) {
+void VulkanCommandBuffer::BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                           const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!device_) return;
     const VulkanBuffer* buf = device_->resource_mgr().GetBuffer(buffer_handle);
     VkBuffer vk_buf = buf ? buf->buffer : VK_NULL_HANDLE;
-    device_->draw_executor().PrimBindVertexBuffer(vk_buf, stride, attrs);
+    device_->draw_executor().PrimBindVertexBuffer(slot, vk_buf, stride, attrs, rate);
 }
 
 void VulkanCommandBuffer::PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {

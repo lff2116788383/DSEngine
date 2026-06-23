@@ -22,6 +22,7 @@
 #include <wrl/client.h>
 #include <glm/glm.hpp>
 #include <vector>
+#include <map>
 #include <string>
 #include <unordered_map>
 
@@ -108,8 +109,9 @@ public:
     /// 默认 TriangleList；毛发等线状几何用 LineStrip/LineList。
     void PrimSetTopology(PrimitiveTopology topology);
     void PrimBindShaderProgram(unsigned int program_handle);
-    void PrimBindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                              const std::vector<VertexAttr>& attrs);
+    void PrimBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                              const std::vector<VertexAttr>& attrs,
+                              VertexInputRate rate = VertexInputRate::PerVertex);
     void PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
     void PrimDraw(uint32_t vertex_count, uint32_t first_vertex,
                   DX11ShaderManager& shader_mgr,
@@ -178,6 +180,14 @@ public:
     const RenderStats& current_frame_stats() const { return global_state_.current_frame_stats; }
 
 private:
+    /// 解析本次绘制的 InputLayout：无 slot>0 且 slot0 为 per-vertex 时沿用反射布局；
+    /// 否则据各 slot 属性 + rate 显式组装多 slot 布局（GetOrCreatePrimInputLayout）。
+    ID3D11InputLayout* ResolvePrimInputLayout(DX11ShaderManager& shader_mgr) const;
+    /// 绑定各 slot 顶点缓冲：slot 0（旧路径）+ prim_extra_vbs_ 各附加 slot。
+    void BindPrimVertexBuffers(ID3D11DeviceContext* dc, DX11ResourceManager& resource_mgr) const;
+    /// 绘制后清除 slot>0 的瞬态顶点流绑定（slot 0 保持旧语义）。
+    void ClearExtraVertexSlots() { prim_extra_vbs_.clear(); }
+
     /// 创建常量缓冲
     ComPtr<ID3D11Buffer> CreateConstantBuffer(UINT size);
 
@@ -258,9 +268,19 @@ private:
 
     // 通用绘制原语 (A1) 累积状态：Bind* 暂存，PrimDraw 时组装并发出 draw
     unsigned int prim_program_handle_ = 0;   ///< 当前绑定的着色器句柄
-    unsigned int prim_vbo_handle_ = 0;       ///< 当前绑定的顶点缓冲句柄
-    uint32_t prim_stride_ = 0;               ///< 顶点步长（字节）
-    std::vector<VertexAttr> prim_attrs_;     ///< 顶点属性（DX11 输入布局来自 shader 反射，此处仅留作记录）
+    unsigned int prim_vbo_handle_ = 0;       ///< slot 0 顶点缓冲句柄（旧单流路径，跨绘制保持）
+    uint32_t prim_stride_ = 0;               ///< slot 0 顶点步长（字节）
+    std::vector<VertexAttr> prim_attrs_;     ///< slot 0 顶点属性（仅 slot>0/per-instance 出现时才据此显式建布局）
+    VertexInputRate prim_slot0_rate_ = VertexInputRate::PerVertex;  ///< slot 0 步进频率
+    /// slot>0 的附加顶点流（slot 化兑现契约 §3 终态：如 per-instance 实例顶点流）。每次绘制后清空，
+    /// 仅 slot 0 沿用旧的「跨绘制保持」语义，避免泄漏到后续 vertexless 绘制。
+    struct PrimVbExtra {
+        unsigned int handle = 0;
+        uint32_t stride = 0;
+        std::vector<VertexAttr> attrs;
+        VertexInputRate rate = VertexInputRate::PerVertex;
+    };
+    std::map<uint32_t, PrimVbExtra> prim_extra_vbs_;
     // 通用 push constant 字节块（→ push cbuffer b0；VS/PS 按 stage 绑定）。
     // 真 UBO 在 HLSL 均显式 register(b1+)，push cbuffer 恒落 b0，故统一绑 b0 安全。
     static constexpr uint32_t kPrimPushMaxBytes = 256;

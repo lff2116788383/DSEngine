@@ -20,7 +20,7 @@
 
 1. **粒度 = pipeline + 资源绑定 + draw/dispatch**，不是「GL 式逐个 glBind」。现代 API（Vulkan/DX12/Metal）要的是更少、更批量的状态变更。
 2. **slot-based 绑定 + 延迟组装（v1）**：高层渲染器按 slot 绑 VB/IB/纹理/UBO/SSBO/push-constant，后端把这些累积到执行器成员，在 `Draw*` 时一次性组装 pipeline + descriptor 并提交。这沿用 skybox spike 已验证的模式，能映射到全部后端。
-3. **绑定组 / argument buffer（未来）**：把多个资源打包成一次绑定（Vulkan descriptor set、DX12 descriptor table、Metal argument buffer）是后续性能优化方向，v1 不做，但契约的 slot 编号需为之预留。
+3. **绑定组 / argument buffer（已落地，有界）**：把多个 UBO/纹理/SSBO 打包成一次原子绑定。已实现 `CommandBuffer::BindGroup(const BindGroupDesc&)`（`BindGroupDesc` 见 `rhi_types.h`，含 `uniform_buffers`/`textures`/`storage_buffers` 三组 entry，slot 语义与逐 slot `Bind*` 完全一致）。基类提供**功能性默认实现**：逐 entry 转发到 `BindUniformBuffer`/`BindTexture`/`BindStorageBuffer`（真实绑定，非 no-op），各后端的延迟组装阶段天然把这批绑定汇成一次提交（Vulkan→单个 descriptor set / DX11→连续 b/t/s 寄存器 / GL→同 VAO 内批量 `glBindBufferBase` + 纹理单元）。活体消费者：`SpriteRenderer` 用它绑 {PerFrame UBO + `u_texture`}（像素闸门 `sprite_primitive_smoke_test`）；另有专项多 UBO 成组闸门 `bind_group_pixel_smoke_test`（DX11 验证 b0/b1 正确分发）。**更深一层**的 descriptor set / argument buffer **对象级**批量（预创建并缓存 descriptor set / DX12 descriptor table / Metal argument buffer）仍是后续性能优化方向；当前默认实现保证语义正确且 slot 编号已为之预留，后端可按需覆写 `BindGroup` 做对象级批量。
 4. **不重造已有能力**：compute dispatch / SSBO compute / 间接绘制已是设备级抽象（`IRhiCompute` / `IRhiStorageBuffer` / `IRhiGpuDriven`），契约**引用**它们，graphics 原语只覆盖图形绘制录制路径。
 5. **可被「最难消费者」表达**：契约以 `MeshDrawItem`（索引 + 实例化 + 材质 UBO + 多贴图 + 骨骼 SSBO）和 `HairDrawItem`（SSBO + multi-draw）为设计基准，而非 skybox。
 
@@ -80,10 +80,14 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 
 > **实现进度（P0 / B2b / 2c / Final-Feat，2026-06）**：契约的实例化与 SSBO 能力已落地——`DrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance)`（P0a 新增重载，**不改** `DrawIndexed` 签名）、`BindStorageBuffer(slot, handle, offset, size)`（P0b，图形阶段读 SSBO）、`DrawIndexedIndirect(indirect_buffer, byte_offset)`（B2b-5，CommandBuffer 级间接绘制）。活体消费者为 `MeshRenderer`（B2b-1..5：静态 / 蒙皮 / 实例化 / depth-only / 间接 forward PBR；2c-1..5：高级 shading 全模式 + 地形 splat/积雪 + WBOIT + DDGI/LightProbe；Final-Feat-1..7：CSM/蒙皮/实例化/聚光/morph 高级 shading + 外部常驻 VAO/EBO + 共享网格模板），各配跨后端像素 smoke（smoke 76→92→**181**）。注：2c / Final-Feat **未新增任何 CommandBuffer 原语**，均复用上述原语，系 `MeshRenderer` 方法而非新原语。进度详见 [`RHI_ABSTRACTION_BOUNDARY.md`](./RHI_ABSTRACTION_BOUNDARY.md) §2–§3。
 
+> **实现进度（A / B 终态收尾，2026-06）**：
+> - **A — `BindVertexBuffer` slot 化 + `VertexInputRate`**：兑现 §3 终态签名 `BindVertexBuffer(uint32_t slot, handle, stride, attrs, VertexInputRate rate=PerVertex)`，**就地改签名**（非新增重载）并一次性迁移全部 22 个调用点为 `slot=0`/`PerVertex`（语义与旧单 slot 一致）。三后端：GL `glVertexAttribDivisor(loc, rate==PerInstance?1:0)`；DX11 多 slot `IASetVertexBuffers` + 据 attr/rate 显式自建多 slot input layout（反射布局恒落 slot0/per-vertex，无法表达 per-instance，故 slot>0 或 PerInstance 时经 `GetOrCreatePrimInputLayout` 全量自建）；Vulkan 多 slot binding（`binding=slot`，`inputRate` 按 rate）烘进 PSO。活体消费者 + 像素闸门 `instanced_vertex_rate_pixel_smoke_test`（slot0 per-vertex quad + slot1 per-instance 实例流画 3 个互不重叠 quad，DX11 验证）。自此实例化实例顶点流不再仅靠 SSBO 绕过。
+> - **B — `BindGroup` 绑定组**：见 §2.3。新增 `BindGroup(const BindGroupDesc&)`，默认转发到逐 slot `Bind*`，`SpriteRenderer` 改用它绑 {PerFrame UBO + 纹理}，专项闸门 `bind_group_pixel_smoke_test`。
+
 ### 旧原语的归并关系（过渡期保留，迁移完再删）
 | 旧（skybox spike） | 新 | 处理 |
 |---|---|---|
-| `BindVertexBuffer(buffer, stride, attrs)` | `BindVertexBuffer(slot=0, …, PerVertex)` | 旧签名转调新签名 |
+| `BindVertexBuffer(buffer, stride, attrs)` | `BindVertexBuffer(slot=0, …, PerVertex)` | **A 已就地改签名**：全部 22 调用点迁移为 `slot=0`/`PerVertex`（无转调封装，slot=0/PerVertex 默认参数保证语义不变） |
 | `BindTextureCube(slot, h)` | `BindTexture(slot, h, TexCube)` | 旧转调新 |
 | `PushConstantsMat4(m)` | `PushConstants(Vertex, 0, &m, 64)` | **B5-3a 已泛化删旧**（无转调；skybox/PP/compute 统一经字节块 ABI） |
 | `Draw(vc, first)` | `Draw(vc, 1, first, 0)` | 旧转调新 |
@@ -185,13 +189,15 @@ void DrawIndexedIndirect(unsigned int indirect_buffer,          // [新增 B2b-5
 ### 延后到「真实消费者」阶段才实现的原语（避免死代码）
 | 原语 | 落地阶段 | 原因 |
 |---|---|---|
-| 实例化（`BindVertexBuffer` +slot/+PerInstance、`DrawInstanced`/`DrawIndexedInstanced`） | B3（particles） | 无消费者前不实现；且 `Draw`/`BindVertexBuffer` 现有签名**不改**（现有 `Draw(36u,0u)` 调用会把 `0` 误读为 instance_count），改为新增 `Draw*Instanced` 重载 |
+| 实例化（`DrawInstanced`/`DrawIndexedInstanced`） | B3（particles） | ✅ 已落地；`Draw` 现有签名**不改**（现有 `Draw(36u,0u)` 调用会把 `0` 误读为 instance_count），改为新增 `Draw*Instanced` 重载 |
+| `BindVertexBuffer` +slot/+PerInstance（实例顶点流） | A（终态收尾） | ✅ 已落地：**就地改签名**（slot=0/PerVertex 默认参数保证旧语义），全部 22 调用点一次性迁移；像素闸门 `instanced_vertex_rate_pixel_smoke_test`。详见 §3 进度note |
+| `BindGroup`（绑定组 / argument buffer） | B（终态收尾） | ✅ 已落地：默认转发 + `SpriteRenderer` 消费 + `bind_group_pixel_smoke_test`。详见 §2.3 |
 | `BindStorageBuffer`（图形阶段读 SSBO） | B4（hair） | 仅 hair 消费 |
 | 多 UBO 槽（PerScene/PerMaterial） | B2（mesh/sprite 生产路径） | sprite2d 仅需 PerFrame |
 
 > 说明：契约（§3）描述的是**完整终态**；§7 是**实现节奏**。终态接口可在 CommandBuffer 上以默认 no-op 虚函数先声明（文档化 surface），但其**后端实现**与消费者同批落地，保证落地即被像素测试覆盖。
 >
-> **不改签名的安全约束**：`Draw(vertex_count, first_vertex=0)` 与 `BindVertexBuffer(buffer, stride, attrs)` 现有签名保持不变；实例化/多槽通过**新增重载/新方法**表达，杜绝静默语义漂移。
+> **签名变更约束**：`Draw(vertex_count, first_vertex=0)` 现有签名保持不变，实例化通过**新增重载** `Draw*Instanced` 表达（避免 `Draw(36u,0u)` 把 `0` 误读为 instance_count）。`BindVertexBuffer` 不同：A 阶段**就地改签名**为 `BindVertexBuffer(slot, …, rate)`，因新增参数（前置 `slot`、后置 `rate`）均有默认值（`rate=PerVertex`）且全部 22 调用点显式补 `slot=0`，旧 `BindVertexBuffer(buffer, …)` 形态不再存在但语义零漂移——无 `Draw` 那种「位置实参被误读」风险，故选就地迁移而非加重载。
 
 ---
 

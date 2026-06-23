@@ -1871,11 +1871,40 @@ void VulkanDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
     prim_program_handle_ = program_handle;
 }
 
-void VulkanDrawExecutor::PrimBindVertexBuffer(VkBuffer buffer, uint32_t stride,
-                                              const std::vector<VertexAttr>& attrs) {
-    prim_vbo_ = buffer;
-    prim_stride_ = stride;
-    prim_attrs_ = attrs;
+void VulkanDrawExecutor::PrimBindVertexBuffer(uint32_t slot, VkBuffer buffer, uint32_t stride,
+                                              const std::vector<VertexAttr>& attrs,
+                                              VertexInputRate rate) {
+    prim_vbs_[slot] = PrimVbBinding{buffer, stride, attrs, rate};
+}
+
+void VulkanDrawExecutor::BuildPrimVertexInput(
+        std::vector<VkVertexInputBindingDescription>& bindings,
+        std::vector<VkVertexInputAttributeDescription>& vk_attrs) const {
+    for (const auto& [slot, b] : prim_vbs_) {
+        bindings.push_back(VkVertexInputBindingDescription{
+            slot, b.stride,
+            b.rate == VertexInputRate::PerInstance ? VK_VERTEX_INPUT_RATE_INSTANCE
+                                                   : VK_VERTEX_INPUT_RATE_VERTEX});
+        for (const auto& a : b.attrs) {
+            VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
+            switch (a.components) {
+                case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
+                case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
+                case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
+                case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
+                default: break;
+            }
+            vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, slot, fmt, a.offset});
+        }
+    }
+}
+
+void VulkanDrawExecutor::BindPrimVertexBuffers(VkCommandBuffer cmd_buf) const {
+    for (const auto& [slot, b] : prim_vbs_) {
+        VkDeviceSize offset = 0;
+        VkBuffer buf = b.buffer;
+        vkCmdBindVertexBuffers(cmd_buf, slot, 1, &buf, &offset);
+    }
 }
 
 void VulkanDrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
@@ -1898,29 +1927,15 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
         return;
     }
     // VB 可缺省（vertexless：gl_VertexIndex 取 SSBO，毛发逐 strand 用）。
-    const bool has_vbo = (prim_vbo_ != VK_NULL_HANDLE);
+    const bool has_vbo = HasPrimVbo();
 
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    // 顶点输入：由 BindVertexBuffer 提供的 VertexAttr 列表翻译为 Vulkan 顶点输入描述
+    // 顶点输入：由各 slot 的 BindVertexBuffer（VertexAttr + rate）翻译为 Vulkan 顶点输入描述
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    if (has_vbo) {
-        bindings.push_back(VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX});
-        vk_attrs.reserve(prim_attrs_.size());
-        for (const auto& a : prim_attrs_) {
-            VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
-            switch (a.components) {
-                case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
-                case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
-                case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
-                case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-                default: break;
-            }
-            vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
-        }
-    }
+    BuildPrimVertexInput(bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
         pipeline_mgr.active_pipeline_state(), program, active_rp,
@@ -1953,10 +1968,10 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
     }
 
     if (has_vbo) {
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+        BindPrimVertexBuffers(cmd_buf);
     }
     vkCmdDraw(cmd_buf, vertex_count, 1, first_vertex, 0);
+    ClearExtraVertexSlots();
 
     global_state_.current_frame_stats.draw_calls++;
 }
@@ -2153,24 +2168,10 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    const bool has_vbo = (prim_vbo_ != VK_NULL_HANDLE);
+    const bool has_vbo = HasPrimVbo();
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    if (has_vbo) {
-        bindings.push_back(VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX});
-        vk_attrs.reserve(prim_attrs_.size());
-        for (const auto& a : prim_attrs_) {
-            VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
-            switch (a.components) {
-                case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
-                case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
-                case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
-                case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-                default: break;
-            }
-            vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
-        }
-    }
+    BuildPrimVertexInput(bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
         pipeline_mgr.active_pipeline_state(), program, active_rp,
@@ -2197,11 +2198,11 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
 
     if (has_vbo) {
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+        BindPrimVertexBuffers(cmd_buf);
     }
     vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
     vkCmdDrawIndexed(cmd_buf, index_count, instance_count, first_index, base_vertex, first_instance);
+    ClearExtraVertexSlots();
 
     global_state_.current_frame_stats.draw_calls++;
     if (instance_count != 1 || first_instance != 0) {
@@ -2220,7 +2221,7 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: shader program not available");
         return;
     }
-    if (prim_vbo_ == VK_NULL_HANDLE || prim_index_buffer_ == VK_NULL_HANDLE) {
+    if (!HasPrimVbo() || prim_index_buffer_ == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedIndirect: vertex/index buffer not bound");
         return;
     }
@@ -2238,22 +2239,9 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    std::vector<VkVertexInputBindingDescription> bindings = {
-        VkVertexInputBindingDescription{0, prim_stride_, VK_VERTEX_INPUT_RATE_VERTEX}
-    };
+    std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
-    vk_attrs.reserve(prim_attrs_.size());
-    for (const auto& a : prim_attrs_) {
-        VkFormat fmt = VK_FORMAT_R32G32B32_SFLOAT;
-        switch (a.components) {
-            case 1: fmt = VK_FORMAT_R32_SFLOAT;          break;
-            case 2: fmt = VK_FORMAT_R32G32_SFLOAT;       break;
-            case 3: fmt = VK_FORMAT_R32G32B32_SFLOAT;    break;
-            case 4: fmt = VK_FORMAT_R32G32B32A32_SFLOAT; break;
-            default: break;
-        }
-        vk_attrs.push_back(VkVertexInputAttributeDescription{a.location, 0, fmt, a.offset});
-    }
+    BuildPrimVertexInput(bindings, vk_attrs);
 
     VkPipeline pipeline = pipeline_mgr.GetOrCreateVkPipeline(
         pipeline_mgr.active_pipeline_state(), program, active_rp,
@@ -2269,13 +2257,13 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
 
     AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
 
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, &prim_vbo_, offsets);
+    BindPrimVertexBuffers(cmd_buf);
     vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
     // draw_count=1：从 byte_offset 处读取一条 VkDrawIndexedIndirectCommand（5×uint32，三端布局一致）。
     // 契约：base_instance 偏移须经 SSBO 偏移表达（§6）。
     vkCmdDrawIndexedIndirect(cmd_buf, arg_buf->buffer, static_cast<VkDeviceSize>(byte_offset),
                              1, static_cast<uint32_t>(sizeof(DrawElementsIndirectCommand)));
+    ClearExtraVertexSlots();
 
     global_state_.current_frame_stats.draw_calls++;
     global_state_.current_frame_stats.indirect_draw_calls++;

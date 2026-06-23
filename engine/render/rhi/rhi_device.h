@@ -65,9 +65,13 @@ public:
     /// 绑定图形管线对象（B5-3b：聚合 PSO 子状态 + program，取代分离的 SetPipelineState+BindShaderProgram）。
     /// 句柄经 RhiDevice::GetGraphicsPipeline 取得；恒应用 PSO 状态，desc.program!=0 时再绑 program。
     virtual void BindPipeline(unsigned int graphics_pipeline_handle) = 0;
-    /// 绑定顶点缓冲 + 顶点布局（float 属性）。布局随 VB 一起提供，后端据此建立输入布局。
-    virtual void BindVertexBuffer(unsigned int buffer_handle, uint32_t stride,
-                                  const std::vector<VertexAttr>& attrs) = 0;
+    /// 绑定顶点缓冲到指定 slot + 顶点布局（float 属性）+ 步进频率（per-vertex/per-instance）。
+    /// 布局随 VB 一起提供，后端据此建立输入布局。slot 化兑现契约 §3 终态签名：多顶点流
+    /// （如 per-instance 实例顶点流走独立 slot + VertexInputRate::PerInstance）。slot=0/PerVertex
+    /// 为默认（与旧单 slot 行为一致）。每次绘制前累积各 slot 绑定，在 Draw* 时一并组装输入布局。
+    virtual void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                  const std::vector<VertexAttr>& attrs,
+                                  VertexInputRate rate = VertexInputRate::PerVertex) = 0;
     /// 通用 push constant 字节块写入（Vulkan→真 push constant / DX11→push cbuffer(b0) /
     /// GL→push-block UBO(DsePush{VS,FS}) 按 offset memcpy）。stage 指定写入哪个阶段的 push 块。
     virtual void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) = 0;
@@ -90,6 +94,21 @@ public:
     /// Vulkan→VK_DESCRIPTOR_TYPE_STORAGE_BUFFER descriptor。
     virtual void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
                                    uint32_t offset = 0, uint32_t size = 0) = 0;
+
+    /// 绑定组（契约 §2.3）：一次性绑定一组 UBO/纹理/SSBO，落实「更少、更批量的状态变更」。
+    /// 默认实现逐 entry 转发到 BindUniformBuffer/BindTexture/BindStorageBuffer（语义与逐 slot 绑定
+    /// 完全等价，是真实绑定而非 no-op）；各后端在延迟组装阶段已天然把这批绑定汇成一次提交
+    /// （Vulkan→单个 descriptor set / DX11→连续 b/t/s 寄存器 / GL→同 VAO 内批量 glBindBufferBase + 纹理单元）。
+    /// 后端可覆写以做进一步的 descriptor set / argument buffer 级批量优化（未来方向）。
+    virtual void BindGroup(const BindGroupDesc& group) {
+        for (const auto& e : group.uniform_buffers)
+            BindUniformBuffer(e.slot, e.buffer_handle, e.offset, e.size);
+        for (const auto& e : group.textures)
+            BindTexture(e.slot, e.texture_handle, e.dim);
+        for (const auto& e : group.storage_buffers)
+            BindStorageBuffer(e.slot, e.buffer_handle, e.offset, e.size);
+    }
+
     /// 索引绘制
     virtual void DrawIndexed(uint32_t index_count, uint32_t first_index = 0,
                              int32_t base_vertex = 0) = 0;

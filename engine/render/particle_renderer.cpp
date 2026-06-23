@@ -110,7 +110,7 @@ void ParticleRenderer::DrawParticles(CommandBuffer& cmd, RhiDevice& device,
 
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindVertexBuffer(quad_vbo_.raw(), static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
+    cmd.BindVertexBuffer(0u, quad_vbo_.raw(), static_cast<uint32_t>(sizeof(QuadVertex)), attrs);
     cmd.BindIndexBuffer(quad_ibo_.raw(), IndexType::UInt16);
 
     for (const auto& item : items) {
