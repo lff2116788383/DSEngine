@@ -307,6 +307,11 @@ void OpenGLRhiDevice::EnsureInitialized() {
     GLint max_color_attachments = 0;
     glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &max_color_attachments);
     if (max_color_attachments > 0) max_color_attachments_ = max_color_attachments;
+    // A6 MSAA：探测 GL_MAX_SAMPLES（GL3.0+ / GLES3.0 / WebGL2 均核心）。
+    // CreateRenderTarget 按此 clamp desc.msaa_samples；为 1 则禁用多重采样路径。
+    GLint max_samples = 0;
+    glGetIntegerv(GL_MAX_SAMPLES, &max_samples);
+    if (max_samples > 1) max_samples_ = max_samples;
     // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
     // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the
     // compute-backed post-process effects, so they use the dedicated
@@ -771,12 +776,87 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
     glBindTexture(GL_TEXTURE_2D, 0);
     glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
+    // --- A6 MSAA：为多重采样目标追加 renderbuffer FBO ---
+    // 上方已创建的纹理 FBO（fbo_handle）将充当“解析目标”，多重采样 FBO 作为渲染目标。
+    // 仅对带颜色、非 cubemap、非 mipmap 的 RT 启用；EndRenderPass 经 glBlitFramebuffer
+    // 把多重采样附件解析到纹理供后续采样/读回。GL3.0+/GLES3.0/WebGL2 均原生支持。
+    unsigned int resolve_fbo_handle = 0;
+    unsigned int msaa_fbo_handle = 0;
+    std::vector<unsigned int> msaa_color_rb_handles;
+    unsigned int msaa_depth_rb_handle = 0;
+    int effective_samples = 1;
+    {
+        const int requested = (std::max)(1, desc.msaa_samples);
+        if (requested > 1 && desc.has_color && !desc.cube_map && !desc.generate_mipmaps) {
+            effective_samples = (std::min)(requested, (std::max)(1, max_samples_));
+        }
+    }
+    if (effective_samples > 1) {
+        msaa_color_rb_handles.assign(static_cast<size_t>(num_color), 0u);
+        glGenFramebuffers(1, &msaa_fbo_handle);
+        resource_mgr_.ledger().framebuffers_created += 1;
+        bool msaa_ok = (msaa_fbo_handle != 0);
+        if (msaa_ok) {
+            glBindFramebuffer(GL_FRAMEBUFFER, msaa_fbo_handle);
+        }
+        for (int ci = 0; ci < num_color && msaa_ok; ++ci) {
+            glGenRenderbuffers(1, &msaa_color_rb_handles[ci]);
+            if (msaa_color_rb_handles[ci] == 0) { msaa_ok = false; break; }
+            glBindRenderbuffer(GL_RENDERBUFFER, msaa_color_rb_handles[ci]);
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, effective_samples, GL_RGBA16F, desc.width, desc.height);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + ci, GL_RENDERBUFFER, msaa_color_rb_handles[ci]);
+        }
+        if (msaa_ok && num_color > 1) {
+            std::vector<GLenum> draw_bufs(static_cast<size_t>(num_color));
+            for (int ci = 0; ci < num_color; ++ci) draw_bufs[ci] = GL_COLOR_ATTACHMENT0 + ci;
+            glDrawBuffers(num_color, draw_bufs.data());
+        }
+        if (msaa_ok && desc.has_depth) {
+            glGenRenderbuffers(1, &msaa_depth_rb_handle);
+            if (msaa_depth_rb_handle == 0) {
+                msaa_ok = false;
+            } else {
+                glBindRenderbuffer(GL_RENDERBUFFER, msaa_depth_rb_handle);
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, effective_samples, GL_DEPTH_COMPONENT24, desc.width, desc.height);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, msaa_depth_rb_handle);
+            }
+        }
+        if (msaa_ok) {
+            const GLenum msaa_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            msaa_ok = (msaa_status == GL_FRAMEBUFFER_COMPLETE);
+            if (!msaa_ok) {
+                DEBUG_LOG_WARN("OpenGL CreateRenderTarget: MSAA FBO incomplete status=0x{:x} ({}x{}, samples={}) → 回退单采样",
+                    static_cast<unsigned int>(msaa_status), desc.width, desc.height, effective_samples);
+            }
+        }
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        if (msaa_ok) {
+            resolve_fbo_handle = fbo_handle;   // 纹理 FBO → 解析目标
+            fbo_handle = msaa_fbo_handle;      // 多重采样 FBO → 渲染目标
+        } else {
+            if (msaa_fbo_handle != 0) {
+                glDeleteFramebuffers(1, &msaa_fbo_handle);
+                resource_mgr_.ledger().framebuffers_destroyed += 1;
+            }
+            for (unsigned int rb : msaa_color_rb_handles) { if (rb != 0) glDeleteRenderbuffers(1, &rb); }
+            if (msaa_depth_rb_handle != 0) glDeleteRenderbuffers(1, &msaa_depth_rb_handle);
+            msaa_color_rb_handles.clear();
+            msaa_depth_rb_handle = 0;
+            effective_samples = 1;
+        }
+    }
+
     RenderTargetResource rt{};
     rt.desc = desc;
     rt.fbo_handle = fbo_handle;
     rt.color_texture_handle = num_color > 0 ? color_handles[0] : 0;
     rt.depth_texture_handle = depth_texture_handle;
     rt.color_texture_handles = std::move(color_handles);
+    rt.resolve_fbo_handle = resolve_fbo_handle;
+    rt.msaa_samples = effective_samples;
+    rt.msaa_color_rb_handles = std::move(msaa_color_rb_handles);
+    rt.msaa_depth_rb_handle = msaa_depth_rb_handle;
     resource_mgr_.StoreRenderTarget(handle, rt);
     return handle;
 }
@@ -799,6 +879,19 @@ void OpenGLRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
     if (rt->depth_texture_handle != 0) {
         glDeleteTextures(1, &rt->depth_texture_handle);
         resource_mgr_.ledger().textures_destroyed += 1;
+    }
+    // A6 MSAA：释放解析 FBO 与多重采样 renderbuffer
+    if (rt->resolve_fbo_handle != 0) {
+        GLuint resolve_fbo = rt->resolve_fbo_handle;
+        glDeleteFramebuffers(1, &resolve_fbo);
+        resource_mgr_.ledger().framebuffers_destroyed += 1;
+    }
+    for (unsigned int rb : rt->msaa_color_rb_handles) {
+        if (rb != 0) glDeleteRenderbuffers(1, &rb);
+    }
+    if (rt->msaa_depth_rb_handle != 0) {
+        GLuint depth_rb = rt->msaa_depth_rb_handle;
+        glDeleteRenderbuffers(1, &depth_rb);
     }
     resource_mgr_.RemoveRenderTarget(render_target_handle);
 }
@@ -837,7 +930,11 @@ RenderTargetReadback OpenGLRhiDevice::ReadRenderTargetColorRgba8WithSize(unsigne
 
     GLint previous_fbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo_handle);
+    // MSAA：多重采样 FBO 不能 glReadPixels，改读已解析的单采样 FBO（EndRenderPass 解析）。
+    const GLuint read_fbo = rt->resolve_fbo_handle != 0
+        ? static_cast<GLuint>(rt->resolve_fbo_handle)
+        : static_cast<GLuint>(rt->fbo_handle);
+    glBindFramebuffer(GL_FRAMEBUFFER, read_fbo);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, rt->desc.width, rt->desc.height, GL_RGBA, GL_UNSIGNED_BYTE, readback.pixels.data());
@@ -859,7 +956,11 @@ RenderTargetDepthReadback OpenGLRhiDevice::ReadRenderTargetDepthFloatWithSize(un
 
     GLint previous_fbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, rt->fbo_handle);
+    // MSAA：从已解析的单采样 FBO 读深度（EndRenderPass 解析）。
+    const GLuint read_fbo = rt->resolve_fbo_handle != 0
+        ? static_cast<GLuint>(rt->resolve_fbo_handle)
+        : static_cast<GLuint>(rt->fbo_handle);
+    glBindFramebuffer(GL_FRAMEBUFFER, read_fbo);
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     // GL 经视口变换后深度落 [0,1]（与 DX/VK 经 GetProjectionCorrection 后一致）。
     glReadPixels(0, 0, rt->desc.width, rt->desc.height, GL_DEPTH_COMPONENT, GL_FLOAT, readback.depth.data());
@@ -964,8 +1065,15 @@ void OpenGLRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
 
     GLint prev_fbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fbo);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(src->fbo_handle));
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(dst->fbo_handle));
+    // MSAA：源若为多重采样，从其已解析的单采样 FBO 读取（多重采样 FBO 不可直接缩放 blit）。
+    const GLuint src_fbo = src->resolve_fbo_handle != 0
+        ? static_cast<GLuint>(src->resolve_fbo_handle)
+        : static_cast<GLuint>(src->fbo_handle);
+    const GLuint dst_fbo = dst->resolve_fbo_handle != 0
+        ? static_cast<GLuint>(dst->resolve_fbo_handle)
+        : static_cast<GLuint>(dst->fbo_handle);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, src_fbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dst_fbo);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
     glBlitFramebuffer(0, 0, src->desc.width, src->desc.height,
                       0, 0, dst->desc.width, dst->desc.height,

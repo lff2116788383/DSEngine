@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 constexpr size_t MAX_SPRITES = 10000;
 constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
@@ -424,6 +425,35 @@ void GLDrawExecutor::EndRenderPass(GLResourceManager& resource_mgr) {
     is_depth_only_pass_ = false;
     global_state_.current_pass_depth_only = false;
     if (active_render_target_ != 0) {
+        // A6 MSAA：本 pass 渲染进多重采样 FBO 后，在解绑前把附件解析到单采样纹理 FBO，
+        // 供下游 pass 采样 / 读回。非 MSAA 目标（resolve_fbo_handle==0）跳过此分支。
+        auto* rt = resource_mgr.GetRenderTarget(active_render_target_);
+        if (rt && rt->resolve_fbo_handle != 0 && rt->msaa_samples > 1) {
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(rt->fbo_handle));
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(rt->resolve_fbo_handle));
+            const int num_color = static_cast<int>(rt->color_texture_handles.size());
+            for (int ci = 0; ci < num_color; ++ci) {
+                const GLenum attachment = static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + ci);
+                glReadBuffer(attachment);
+                glDrawBuffers(1, &attachment);
+                glBlitFramebuffer(0, 0, rt->desc.width, rt->desc.height,
+                                  0, 0, rt->desc.width, rt->desc.height,
+                                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+            }
+            if (rt->desc.has_depth) {
+                glBlitFramebuffer(0, 0, rt->desc.width, rt->desc.height,
+                                  0, 0, rt->desc.width, rt->desc.height,
+                                  GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+            }
+            // 恢复解析 FBO 的 draw buffers（MRT 时设回全附件，单色无需）。
+            if (num_color > 1) {
+                std::vector<GLenum> draw_bufs(static_cast<size_t>(num_color));
+                for (int ci = 0; ci < num_color; ++ci)
+                    draw_bufs[ci] = static_cast<GLenum>(GL_COLOR_ATTACHMENT0 + ci);
+                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(rt->resolve_fbo_handle));
+                glDrawBuffers(num_color, draw_bufs.data());
+            }
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         active_render_target_ = 0;
     }

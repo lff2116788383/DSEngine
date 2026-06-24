@@ -52,10 +52,19 @@ struct ResourceLedger {
  */
 struct RenderTargetResource {
     RenderTargetDesc desc;
-    unsigned int fbo_handle = 0;
+    unsigned int fbo_handle = 0;                ///< 渲染用 FBO（MSAA 时为多重采样 FBO）
     unsigned int color_texture_handle = 0;      ///< 兼容：等于 color_texture_handles[0]
     unsigned int depth_texture_handle = 0;
     std::vector<unsigned int> color_texture_handles; ///< MRT: 所有颜色附件纹理句柄
+
+    // --- MSAA（A6 多重采样）---
+    // msaa_samples > 1 时：fbo_handle 指向多重采样 FBO（color/depth 用 renderbuffer），
+    // 采样/读回所需的单采样纹理挂在 resolve_fbo_handle 上，EndRenderPass 经 glBlitFramebuffer
+    // 把多重采样附件解析到这些纹理。msaa_samples == 1 时全部为 0（保持原行为）。
+    unsigned int resolve_fbo_handle = 0;             ///< 单采样解析 FBO（持有 color/depth 纹理附件）
+    int msaa_samples = 1;                            ///< 有效采样数（已按 GL_MAX_SAMPLES clamp）
+    std::vector<unsigned int> msaa_color_rb_handles; ///< 多重采样颜色 renderbuffer
+    unsigned int msaa_depth_rb_handle = 0;           ///< 多重采样深度 renderbuffer
 };
 
 /**

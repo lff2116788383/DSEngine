@@ -247,6 +247,7 @@ private:
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
     int max_color_attachments_ = 8;  ///< GL_MAX_COLOR_ATTACHMENTS，Init 时探测（MRT 上限）
+    int max_samples_ = 1;            ///< GL_MAX_SAMPLES，Init 时探测（MSAA 采样上限，1=不支持）
 
     // --- Compute push 常量 → DsePushCS UBO 降级支撑（契约 §8.2）---
     // 编译器把 compute 的 layout(push_constant) 降级为 std140 块 DsePushCS（无 binding）。
