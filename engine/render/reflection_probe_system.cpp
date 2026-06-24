@@ -11,7 +11,9 @@
 #include "engine/ecs/transform.h"
 #include "engine/base/debug.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <array>
 #include <cmath>
+#include <cstring>
 #include <algorithm>
 #include <limits>
 #include <fstream>
@@ -101,6 +103,156 @@ static glm::vec2 IntegrateBRDF(float NdotV, float roughness) {
         }
     }
     return glm::vec2(A, B) / static_cast<float>(SAMPLE_COUNT);
+}
+
+// ============================================================================
+// CPU 立方体采样 + 预滤波（IBL prefiltered env，无 GPU 依赖）
+// ============================================================================
+
+// 由 face(0..5,顺序 +X,-X,+Y,-Y,+Z,-Z) 与归一化 uv∈[0,1] 还原采样方向（OpenGL 立方
+// 体约定的逆映射）。
+static glm::vec3 CubeDirFromFaceUV(int face, float u, float v) {
+    float sc = 2.0f * u - 1.0f;
+    float tc = 2.0f * v - 1.0f;
+    glm::vec3 dir;
+    switch (face) {
+        case 0: dir = glm::vec3( 1.0f,  -tc,  -sc); break;  // +X
+        case 1: dir = glm::vec3(-1.0f,  -tc,   sc); break;  // -X
+        case 2: dir = glm::vec3(  sc,  1.0f,   tc); break;  // +Y
+        case 3: dir = glm::vec3(  sc, -1.0f,  -tc); break;  // -Y
+        case 4: dir = glm::vec3(  sc,  -tc,  1.0f); break;  // +Z
+        default:dir = glm::vec3( -sc,  -tc, -1.0f); break;  // -Z
+    }
+    return glm::normalize(dir);
+}
+
+// 方向 → face + uv（OpenGL 立方体约定），用于 CPU 端采样 base 面。
+static void CubeFaceUVFromDir(const glm::vec3& d, int& face, float& u, float& v) {
+    float ax = std::abs(d.x), ay = std::abs(d.y), az = std::abs(d.z);
+    float sc, tc, ma;
+    if (ax >= ay && ax >= az) {
+        ma = ax;
+        if (d.x > 0.0f) { face = 0; sc = -d.z; tc = -d.y; }
+        else            { face = 1; sc =  d.z; tc = -d.y; }
+    } else if (ay >= ax && ay >= az) {
+        ma = ay;
+        if (d.y > 0.0f) { face = 2; sc =  d.x; tc =  d.z; }
+        else            { face = 3; sc =  d.x; tc = -d.z; }
+    } else {
+        ma = az;
+        if (d.z > 0.0f) { face = 4; sc =  d.x; tc = -d.y; }
+        else            { face = 5; sc = -d.x; tc = -d.y; }
+    }
+    ma = std::max(ma, 1e-6f);
+    u = (sc / ma + 1.0f) * 0.5f;
+    v = (tc / ma + 1.0f) * 0.5f;
+}
+
+// 双线性采样 base 立方体的某个方向，返回线性 [0,1] RGB。
+static glm::vec3 SampleCubeBilinear(const unsigned char* const faces[6], int res, const glm::vec3& dir) {
+    int face;
+    float u, v;
+    CubeFaceUVFromDir(dir, face, u, v);
+    float fx = u * static_cast<float>(res) - 0.5f;
+    float fy = v * static_cast<float>(res) - 0.5f;
+    int x0 = static_cast<int>(std::floor(fx));
+    int y0 = static_cast<int>(std::floor(fy));
+    float tx = fx - static_cast<float>(x0);
+    float ty = fy - static_cast<float>(y0);
+    auto clampi = [res](int c) { return std::min(std::max(c, 0), res - 1); };
+    auto texel = [&](int x, int y) -> glm::vec3 {
+        size_t idx = (static_cast<size_t>(clampi(y)) * res + clampi(x)) * 4;
+        const unsigned char* p = faces[face] + idx;
+        return glm::vec3(p[0], p[1], p[2]) * (1.0f / 255.0f);
+    };
+    glm::vec3 c00 = texel(x0, y0), c10 = texel(x0 + 1, y0);
+    glm::vec3 c01 = texel(x0, y0 + 1), c11 = texel(x0 + 1, y0 + 1);
+    return glm::mix(glm::mix(c00, c10, tx), glm::mix(c01, c11, tx), ty);
+}
+
+// 对方向 N 在 base 立方体上做 GGX 重要性采样卷积（split-sum prefilter）。
+static glm::vec3 PrefilterDirection(const unsigned char* const faces[6], int res,
+                                    const glm::vec3& N, float roughness) {
+    if (roughness <= 0.0f) {
+        return SampleCubeBilinear(faces, res, N);
+    }
+    const glm::vec3 R = N;
+    const glm::vec3 V = N;
+    const unsigned int SAMPLE_COUNT = 64u;
+    glm::vec3 prefiltered(0.0f);
+    float total_weight = 0.0f;
+    for (unsigned int i = 0u; i < SAMPLE_COUNT; ++i) {
+        glm::vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+        glm::vec3 H = ImportanceSampleGGX(Xi, N, roughness);
+        glm::vec3 L = glm::normalize(2.0f * glm::dot(V, H) * H - V);
+        float NdotL = std::max(glm::dot(N, L), 0.0f);
+        if (NdotL > 0.0f) {
+            prefiltered += SampleCubeBilinear(faces, res, L) * NdotL;
+            total_weight += NdotL;
+        }
+    }
+    return total_weight > 0.0f ? prefiltered / total_weight : SampleCubeBilinear(faces, res, R);
+}
+
+ReflectionProbeSystem::PrefilteredCube
+ReflectionProbeSystem::ComputePrefilteredCube(const unsigned char* const faces[6], int res) {
+    PrefilteredCube out;
+    if (res <= 0 || !faces) return out;
+    out.base_resolution = res;
+    const int num_mips = 1 + static_cast<int>(std::floor(std::log2(static_cast<double>(res))));
+    out.num_mips = num_mips;
+    out.mips.resize(static_cast<size_t>(num_mips));
+
+    for (int mip = 0; mip < num_mips; ++mip) {
+        const int mres = std::max(1, res >> mip);
+        const float roughness = std::min(1.0f, static_cast<float>(mip) / kMaxReflectionLod);
+        auto& mip_faces = out.mips[static_cast<size_t>(mip)];
+        for (int f = 0; f < 6; ++f) {
+            mip_faces[f].resize(static_cast<size_t>(mres) * mres * 4);
+        }
+        if (mip == 0) {
+            // mip0 = 锐利 base（roughness 0），直接拷贝
+            for (int f = 0; f < 6; ++f) {
+                std::memcpy(mip_faces[f].data(), faces[f], static_cast<size_t>(res) * res * 4);
+            }
+            continue;
+        }
+        for (int f = 0; f < 6; ++f) {
+            for (int y = 0; y < mres; ++y) {
+                for (int x = 0; x < mres; ++x) {
+                    float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(mres);
+                    float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(mres);
+                    glm::vec3 N = CubeDirFromFaceUV(f, u, v);
+                    glm::vec3 c = PrefilterDirection(faces, res, N, roughness);
+                    size_t idx = (static_cast<size_t>(y) * mres + x) * 4;
+                    mip_faces[f][idx + 0] = static_cast<unsigned char>(std::min(c.r, 1.0f) * 255.0f + 0.5f);
+                    mip_faces[f][idx + 1] = static_cast<unsigned char>(std::min(c.g, 1.0f) * 255.0f + 0.5f);
+                    mip_faces[f][idx + 2] = static_cast<unsigned char>(std::min(c.b, 1.0f) * 255.0f + 0.5f);
+                    mip_faces[f][idx + 3] = 255;
+                }
+            }
+        }
+    }
+    return out;
+}
+
+unsigned int ReflectionProbeSystem::PrefilterAndUploadCubemap(RhiDevice* rhi_device,
+                                                              const unsigned char* const faces[6], int res) {
+    if (!rhi_device || res <= 0) return 0;
+    PrefilteredCube data = ComputePrefilteredCube(faces, res);
+    if (data.num_mips <= 0) return 0;
+
+    std::vector<CubeMipLevel> levels(static_cast<size_t>(data.num_mips));
+    for (int mip = 0; mip < data.num_mips; ++mip) {
+        const int mres = std::max(1, res >> mip);
+        CubeMipLevel& lvl = levels[static_cast<size_t>(mip)];
+        lvl.width = mres;
+        lvl.height = mres;
+        for (int f = 0; f < 6; ++f) {
+            lvl.faces[f] = data.mips[static_cast<size_t>(mip)][f].data();
+        }
+    }
+    return rhi_device->CreateTextureCubeWithMips(levels, true);
 }
 
 static constexpr int kBrdfLutSize = 128;
@@ -260,7 +412,13 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
                 face_pixels[2].data(), face_pixels[3].data(),
                 face_pixels[4].data(), face_pixels[5].data()
             };
-            unsigned int cubemap = rhi_device->CreateTextureCube(face_w, face_h, faces, true);
+            // A3：CPU 预滤波 base 6 面 → 上传带 mip 链的 prefiltered env cubemap，运行时
+            // PBR 以 textureLod(roughness*MAX_LOD) 采样。立方体 mip 采样 ES3.0/WebGL2
+            // 原生支持，无 compute/SSBO 需求。
+            unsigned int cubemap = PrefilterAndUploadCubemap(rhi_device, faces, face_w);
+            if (cubemap == 0) {
+                cubemap = rhi_device->CreateTextureCube(face_w, face_h, faces, true);
+            }
             probe.cubemap_handle = cubemap;
             probe.needs_rebake = false;
 

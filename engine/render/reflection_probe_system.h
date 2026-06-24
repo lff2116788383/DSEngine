@@ -12,6 +12,7 @@
 #define DSE_RENDER_REFLECTION_PROBE_SYSTEM_H
 
 #include <glm/glm.hpp>
+#include <array>
 #include <vector>
 
 #include "engine/render/skybox_renderer.h"
@@ -54,13 +55,31 @@ public:
     /// 获取 IBL 是否可用（至少有 1 个 baked probe + BRDF LUT）
     bool IsIBLAvailable() const { return brdf_lut_handle_ != 0 && !baked_cubemaps_.empty(); }
 
+    /// 运行时着色器以 textureLod(roughness * kMaxReflectionLod) 采样预滤波 cubemap，
+    /// 须与 lighting_utils.glsl 中的 MAX_REFLECTION_LOD 保持一致。
+    static constexpr float kMaxReflectionLod = 4.0f;
+
+    /// CPU 端预滤波环境贴图的 mip 链结果（6 面 RGBA8 / 每 mip）。
+    /// mip0 为锐利 base（roughness 0），后续 mip 按 GGX 重要性采样卷积（roughness
+    /// = min(1, mip / kMaxReflectionLod)），供运行时 split-sum IBL 高光采样。
+    struct PrefilteredCube {
+        int base_resolution = 0;
+        int num_mips = 0;
+        /// mips[mip][face] = (res>>mip)^2 * 4 字节 RGBA8
+        std::vector<std::array<std::vector<unsigned char>, 6>> mips;
+    };
+
+    /// 由 6 面 base RGBA8 计算预滤波 mip 链（纯 CPU，无 GPU 依赖，可单测）。
+    /// faces[face] 长度须为 res*res*4；face 顺序为 +X,-X,+Y,-Y,+Z,-Z。
+    static PrefilteredCube ComputePrefilteredCube(const unsigned char* const faces[6], int res);
+
 private:
     /// 生成 BRDF Integration LUT（512×512 RG16F 近似为 RGBA8）
     void GenerateBRDFLUT(RhiDevice* rhi_device);
 
-    /// 对 cubemap 执行预滤波（在 CPU 端逐 mip 降采样 + 粗糙度卷积）
-    unsigned int PrefilterCubemap(RhiDevice* rhi_device, unsigned int src_cubemap_rt,
-                                   int base_resolution);
+    /// 对 base 6 面执行 CPU 预滤波并上传为带 mip 链的 cubemap，返回纹理 handle（0=失败）
+    unsigned int PrefilterAndUploadCubemap(RhiDevice* rhi_device,
+                                           const unsigned char* const faces[6], int res);
 
     unsigned int brdf_lut_handle_ = 0;
     unsigned int bake_rt_ = 0;             ///< 单面渲染 RT

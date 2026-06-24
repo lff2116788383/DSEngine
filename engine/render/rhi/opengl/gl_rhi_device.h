@@ -67,6 +67,8 @@ public:
                                            const std::vector<CompressedMipLevel>& mips,
                                            bool linear_filter) override;
     unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) override;
+    unsigned int CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+                                           bool linear_filter) override;
     unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override;
     void DeleteTexture(unsigned int texture_handle) override;
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;

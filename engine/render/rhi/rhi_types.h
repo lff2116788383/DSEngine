@@ -113,6 +113,13 @@ struct CompressedMipLevel {
     int height = 0;
 };
 
+/// 立方体纹理单 Mip 级别数据（6 面 RGBA8，用于 IBL 预滤波环境贴图 mip 链）
+struct CubeMipLevel {
+    const unsigned char* faces[6] = {nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+    int width = 0;
+    int height = 0;
+};
+
 /// 纹理采样过滤模式
 enum class TextureFilter : uint8_t {
     Nearest = 0,   ///< 点采样：像素画/像素完美渲染，缩放时保持硬边

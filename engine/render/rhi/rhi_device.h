@@ -225,6 +225,15 @@ public:
                                                    const std::vector<CompressedMipLevel>& mips,
                                                    bool linear_filter) { (void)format; (void)mips; (void)linear_filter; return 0; }
     virtual unsigned int CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) = 0;
+    /// 创建带预滤波 mip 链的立方体纹理（IBL prefiltered env）。mips[0] 为 base、
+    /// 其后为按粗糙度卷积的逐 mip 数据，运行时着色器以 textureLod(roughness*MAX_LOD)
+    /// 采样。默认实现仅上传 mip0（回退为无 mip 链立方体）；GL 后端覆盖为逐 mip 上传 +
+    /// LINEAR_MIPMAP_LINEAR（WebGL2/GLES3.0 原生支持立方体 mip 采样，无需 compute/SSBO）。
+    virtual unsigned int CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+                                                   bool linear_filter) {
+        if (mips.empty()) return 0;
+        return CreateTextureCube(mips[0].width, mips[0].height, mips[0].faces, linear_filter);
+    }
     virtual unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) = 0;
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;

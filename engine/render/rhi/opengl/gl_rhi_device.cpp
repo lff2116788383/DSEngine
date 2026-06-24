@@ -561,6 +561,39 @@ unsigned int OpenGLRhiDevice::CreateTextureCube(int width, int height, const uns
     return texture_handle;
 }
 
+unsigned int OpenGLRhiDevice::CreateTextureCubeWithMips(const std::vector<CubeMipLevel>& mips,
+                                                        bool linear_filter) {
+    if (mips.empty() || mips[0].width <= 0 || mips[0].height <= 0) {
+        return 0;
+    }
+    unsigned int texture_handle = 0;
+    glGenTextures(1, &texture_handle);
+    resource_mgr_.ledger().textures_created += 1;
+    if (texture_handle == 0) {
+        return 0;
+    }
+    const bool has_mips = mips.size() > 1;
+    glBindTexture(GL_TEXTURE_CUBE_MAP, texture_handle);
+    // 预滤波 mip 链按粗糙度三线性采样（textureLod 立方体 mip，ES3.0 原生支持）。
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER,
+                    has_mips ? (linear_filter ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST)
+                             : (linear_filter ? GL_LINEAR : GL_NEAREST));
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, linear_filter ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(mips.size() - 1));
+    for (size_t level = 0; level < mips.size(); ++level) {
+        const CubeMipLevel& m = mips[level];
+        for (int face = 0; face < 6; ++face) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, static_cast<GLint>(level), GL_RGBA,
+                         m.width, m.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, m.faces[face]);
+        }
+    }
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    return texture_handle;
+}
+
 unsigned int OpenGLRhiDevice::CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) {
     if (width <= 0 || height <= 0 || depth <= 0) return 0;
     unsigned int texture_handle = 0;
