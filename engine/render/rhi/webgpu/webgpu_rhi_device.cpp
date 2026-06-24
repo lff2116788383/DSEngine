@@ -80,6 +80,90 @@ private:
 
 constexpr uint64_t AlignUp4(uint64_t n) { return (n + 3u) & ~static_cast<uint64_t>(3u); }
 
+/// 解析 WGSL 源中实际声明的 `@group(N) @binding(M)`，填入 out（key=(group<<16)|binding）。
+/// 供 explicit pipeline-layout/BindGroup 过滤：仅纳入着色器真正使用的绑定，避免引擎多绑资源
+/// 超 per-stage 上限 / 与着色器用量不符。render（vs/fs）与 compute 程序共用此解析。
+void ParseWgslBindings(const std::string& src, std::set<uint32_t>& out) {
+    for (size_t pos = src.find("@group("); pos != std::string::npos;
+         pos = src.find("@group(", pos + 1)) {
+        const size_t g0 = pos + 7;
+        const size_t g1 = src.find(')', g0);
+        if (g1 == std::string::npos) break;
+        const size_t bpos = src.find("@binding(", g1);
+        if (bpos == std::string::npos) break;
+        // @binding 须紧随同一声明（其间只允许空白），否则视为不同声明。
+        if (src.find_first_not_of(" \t\r\n", g1 + 1) != bpos) continue;
+        const size_t b0 = bpos + 9;
+        const size_t b1 = src.find(')', b0);
+        if (b1 == std::string::npos) break;
+        const uint32_t group = static_cast<uint32_t>(std::strtoul(src.c_str() + g0, nullptr, 10));
+        const uint32_t binding = static_cast<uint32_t>(std::strtoul(src.c_str() + b0, nullptr, 10));
+        out.insert((group << 16) | binding);
+    }
+}
+
+// --- B3a compute 自检：异步回读校验上下文 ---
+// 自检 compute 着色器把 outbuf[i] = i*2 + base（i<N），并把 indirect DrawCmd 写成
+// {count=36, instance=1, first=0, base_vertex=0, base_instance=0}。两路 copy 到 MapRead
+// 缓冲后各发起一次 wgpuBufferMapAsync，回调里逐元素校验。pending 计数归零后汇总并释放缓冲。
+constexpr uint32_t kCtN = 64;       ///< 输出 SSBO 元素数（= 1 个 workgroup × 64 线程）
+constexpr uint32_t kCtBase = 100u;  ///< 输出值偏置（验证 UBO 参数确实进入 compute）
+constexpr uint32_t kCtDrawWords = 5;///< DrawCmd 字数（count/instance/first/base_vertex/base_instance）
+
+struct ComputeSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+    WGPUBuffer rb_draw = nullptr;
+    int pending = 2;
+    bool out_ok = false;
+    bool draw_ok = false;
+};
+
+void FinalizeComputeSelfTest(ComputeSelfTestCtx* ctx) {
+    if (--ctx->pending > 0) return;
+    if (ctx->out_ok && ctx->draw_ok) {
+        DEBUG_LOG_INFO("WebGPU[B3a] compute 自检 PASS：SSBO 输出（n={}）与 indirect DrawCmd 均符合预期", kCtN);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3a] compute 自检 FAIL：out_ok={} draw_ok={}", ctx->out_ok, ctx->draw_ok);
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    if (ctx->rb_draw) wgpuBufferRelease(ctx->rb_draw);
+    delete ctx;
+}
+
+void OnComputeSelfTestOutMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<ComputeSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* p = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kCtN * sizeof(uint32_t)));
+        if (p) {
+            bool ok = true;
+            for (uint32_t i = 0; i < kCtN; ++i) {
+                if (p[i] != i * 2u + kCtBase) { ok = false; break; }
+            }
+            ctx->out_ok = ok;
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3a] compute 自检：输出 SSBO 回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeComputeSelfTest(ctx);
+}
+
+void OnComputeSelfTestDrawMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<ComputeSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* p = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_draw, 0, kCtDrawWords * sizeof(uint32_t)));
+        if (p) {
+            ctx->draw_ok = (p[0] == 36u && p[1] == 1u && p[2] == 0u && p[3] == 0u && p[4] == 0u);
+        }
+        wgpuBufferUnmap(ctx->rb_draw);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3a] compute 自检：indirect 回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeComputeSelfTest(ctx);
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -321,6 +405,19 @@ void WebGPURhiDevice::Shutdown() {
         for (WGPUBindGroupLayout bgl : e.bgls) if (bgl) wgpuBindGroupLayoutRelease(bgl);
     }
     pipeline_cache_.clear();
+    // B3a compute：着色器 module、compute 管线缓存（pipeline+layout+4×BGL）、未消费的自检回读缓冲。
+    for (auto& [h, e] : compute_shaders_) { (void)h; if (e.module) wgpuShaderModuleRelease(e.module); }
+    compute_shaders_.clear();
+    for (auto& [key, e] : compute_pipeline_cache_) {
+        (void)key;
+        if (e.pipeline) wgpuComputePipelineRelease(e.pipeline);
+        if (e.layout)   wgpuPipelineLayoutRelease(e.layout);
+        for (WGPUBindGroupLayout bgl : e.bgls) if (bgl) wgpuBindGroupLayoutRelease(bgl);
+    }
+    compute_pipeline_cache_.clear();
+    if (cur_compute_pass_) { wgpuComputePassEncoderRelease(cur_compute_pass_); cur_compute_pass_ = nullptr; }
+    if (ct_rb_out_)  { wgpuBufferRelease(ct_rb_out_);  ct_rb_out_ = nullptr; }
+    if (ct_rb_draw_) { wgpuBufferRelease(ct_rb_draw_); ct_rb_draw_ = nullptr; }
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -471,9 +568,19 @@ void WebGPURhiDevice::EndFrame() {
         last_frame_stats_.render_passes += 1;
     }
 
+    // B3a：每会话一次 compute 自检——在本帧 frame_encoder_ 上录制 dispatch + storage→回读拷贝，
+    // 随帧提交后发起异步 map 校验。仅落地原语并自检，不翻转 SupportsCompute()，不影响渲染输出。
+    bool ct_recorded = false;
+    if (!compute_selftest_done_) {
+        compute_selftest_done_ = true;
+        ct_recorded = RecordComputeSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
+
+    if (ct_recorded) KickComputeSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -795,22 +902,7 @@ unsigned int WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, c
                          vert_src.find("fn " + e.fs_entry) != std::string::npos;
         // 解析 WGSL 实际声明的 `@group(N) @binding(M)`，供 explicit layout/BindGroup 过滤
         //（仅纳入着色器真正使用的绑定，避免引擎多绑资源超 per-stage 上限 / 与着色器用量不符）。
-        for (size_t pos = vert_src.find("@group("); pos != std::string::npos;
-             pos = vert_src.find("@group(", pos + 1)) {
-            const size_t g0 = pos + 7;
-            const size_t g1 = vert_src.find(')', g0);
-            if (g1 == std::string::npos) break;
-            const size_t bpos = vert_src.find("@binding(", g1);
-            if (bpos == std::string::npos) break;
-            // @binding 须紧随同一声明（其间只允许空白），否则视为不同声明。
-            if (vert_src.find_first_not_of(" \t\r\n", g1 + 1) != bpos) continue;
-            const size_t b0 = bpos + 9;
-            const size_t b1 = vert_src.find(')', b0);
-            if (b1 == std::string::npos) break;
-            const uint32_t group = static_cast<uint32_t>(std::strtoul(vert_src.c_str() + g0, nullptr, 10));
-            const uint32_t binding = static_cast<uint32_t>(std::strtoul(vert_src.c_str() + b0, nullptr, 10));
-            e.wgsl_bindings.insert((group << 16) | binding);
-        }
+        ParseWgslBindings(vert_src, e.wgsl_bindings);
         if (!e.module) {
             DEBUG_LOG_ERROR("WebGPU: WGSL 着色器编译失败（module 为空），该程序绘制将被跳过");
         }
@@ -1250,18 +1342,10 @@ unsigned int WebGPURhiDevice::GetSkyboxCubeVertexBuffer() {
     return skybox_cube_vbo_;
 }
 
-unsigned int WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
-    if (size == 0 || !EnsureInitialized() || !device_) return 0;
-    (void)is_dynamic;  // WebGPU 缓冲无静/动态区分；动态更新经 wgpuQueueWriteBuffer。
-    const uint64_t alloc = AlignUp4(size);
-    WGPUBufferUsageFlags usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
-    if (is_index) {
-        usage |= WGPUBufferUsage_Index;
-    } else {
-        // 非索引缓冲可能用作顶点流或 uniform，同时授予两种 usage（WebGPU 允许组合）。
-        usage |= WGPUBufferUsage_Vertex | WGPUBufferUsage_Uniform;
-    }
-
+unsigned int WebGPURhiDevice::CreateBufferRaw(size_t logical_size, const void* data,
+                                              WGPUBufferUsageFlags usage, bool is_index) {
+    if (logical_size == 0 || !EnsureInitialized() || !device_) return 0;
+    const uint64_t alloc = AlignUp4(logical_size);
     WGPUBufferDescriptor bd{};
     bd.usage = usage;
     bd.size = alloc;
@@ -1273,19 +1357,79 @@ unsigned int WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool i
     }
     if (data) {
         void* mapped = wgpuBufferGetMappedRange(buf, 0, alloc);
-        if (mapped) std::memcpy(mapped, data, size);
+        if (mapped) std::memcpy(mapped, data, logical_size);
         wgpuBufferUnmap(buf);
     }
 
     BufferEntry e;
     e.buffer = buf;
     e.size = alloc;
-    e.logical_size = size;
+    e.logical_size = logical_size;
     e.usage = usage;
     e.is_index = is_index;
     const unsigned int h = NextHandle();
     buffers_[h] = e;
     return h;
+}
+
+unsigned int WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
+    (void)is_dynamic;  // WebGPU 缓冲无静/动态区分；动态更新经 wgpuQueueWriteBuffer。
+    WGPUBufferUsageFlags usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+    if (is_index) {
+        usage |= WGPUBufferUsage_Index;
+    } else {
+        // 非索引缓冲可能用作顶点流或 uniform，同时授予两种 usage（WebGPU 允许组合）。
+        usage |= WGPUBufferUsage_Vertex | WGPUBufferUsage_Uniform;
+    }
+    return CreateBufferRaw(size, data, usage, is_index);
+}
+
+BufferHandle WebGPURhiDevice::CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) {
+    if (desc.size == 0) return BufferHandle{};
+    // 按 GpuBufferUsage 授予 WGPU usage 位（始终带 CopyDst|CopySrc 以支持更新/回读拷贝）。
+    WGPUBufferUsageFlags usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
+    const bool is_index = has(desc.usage, GpuBufferUsage::kIndex);
+    if (is_index)                                   usage |= WGPUBufferUsage_Index;
+    if (has(desc.usage, GpuBufferUsage::kVertex))   usage |= WGPUBufferUsage_Vertex;
+    if (has(desc.usage, GpuBufferUsage::kUniform))  usage |= WGPUBufferUsage_Uniform;
+    if (has(desc.usage, GpuBufferUsage::kStorage))  usage |= WGPUBufferUsage_Storage;
+    if (has(desc.usage, GpuBufferUsage::kIndirect)) usage |= WGPUBufferUsage_Indirect;
+    // 无任何用途位（仅 CopyDst|CopySrc）：退化为顶点+uniform，兼容默认 GpuBufferDesc。
+    if ((usage & ~static_cast<WGPUBufferUsageFlags>(WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc)) == 0)
+        usage |= WGPUBufferUsage_Vertex | WGPUBufferUsage_Uniform;
+    return BufferHandle{CreateBufferRaw(desc.size, initial_data, usage, is_index)};
+}
+
+void WebGPURhiDevice::UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) {
+    auto it = buffers_.find(handle.raw());
+    if (it == buffers_.end() || !data || size == 0) return;
+    const BufferEntry& e = it->second;
+    // 顶点/索引/uniform 缓冲必须经 UpdateBuffer：引擎前向路径每 draw 全量重写共享 vbo_/ibo_ 与
+    //   逐材质 UBO（offset=0），需 geom/UBO 版本环避免 wgpuQueueWriteBuffer 合并丢失（见 UpdateBuffer）。
+    // 仅 storage/indirect（B3a 新增、设备级生命周期、不逐 draw 重写）走直写，不入版本环。
+    const bool storage_or_indirect =
+        (e.usage & (WGPUBufferUsage_Storage | WGPUBufferUsage_Indirect)) != 0;
+    if (!storage_or_indirect) {
+        UpdateBuffer(handle.raw(), offset, size, data, e.is_index);
+        return;
+    }
+    if (offset % 4 != 0) {
+        DEBUG_LOG_WARN("WebGPU UpdateGpuBuffer: offset {} 非 4 对齐，跳过更新", static_cast<unsigned long long>(offset));
+        return;
+    }
+    const uint64_t write_size = AlignUp4(size);
+    if (offset + write_size > e.size) return;
+    if (write_size == size) {
+        wgpuQueueWriteBuffer(queue_, e.buffer, offset, data, size);
+    } else {
+        std::vector<uint8_t> padded(write_size, 0);
+        std::memcpy(padded.data(), data, size);
+        wgpuQueueWriteBuffer(queue_, e.buffer, offset, padded.data(), write_size);
+    }
+}
+
+void WebGPURhiDevice::DeleteGpuBuffer(BufferHandle handle) {
+    DeleteBuffer(handle.raw());
 }
 
 void WebGPURhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
@@ -1899,6 +2043,293 @@ void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned in
 void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
 void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) { (void)indirect_buffer; (void)byte_offset; }
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
+
+// ============================================================
+// B3a：Compute 基础设施实现（compute 管线 + SSBO + indirect 原语 + WGSL 自检）
+// ============================================================
+
+unsigned int WebGPURhiDevice::CreateComputeShader(const std::string& source) {
+    if (!EnsureInitialized() || !device_) return 0;
+    // 仅接受 WGSL（首非空行 `// dse-wgsl`）：引擎 GLSL/SPIR-V compute 无离线转译，返回 0 跳过。
+    const char* kSentinel = "// dse-wgsl";
+    const size_t first = source.find_first_not_of(" \t\r\n");
+    const bool is_wgsl = first != std::string::npos &&
+                         source.compare(first, std::strlen(kSentinel), kSentinel) == 0;
+    if (!is_wgsl) {
+        DEBUG_LOG_WARN("WebGPU: CreateComputeShader 收到非 WGSL 源（无 // dse-wgsl 标记），跳过（返回 0）");
+        return 0;
+    }
+    ComputeShaderEntry e;
+    e.module = CompileWGSL(source, "dse-wgsl-compute");
+    if (!e.module) {
+        DEBUG_LOG_ERROR("WebGPU: compute WGSL 编译失败（module 为空）");
+        return 0;
+    }
+    // 入口名：默认 cs_main，允许 `fn main` 兜底。
+    if (source.find("fn cs_main") == std::string::npos &&
+        source.find("fn main") != std::string::npos) {
+        e.entry = "main";
+    }
+    ParseWgslBindings(source, e.wgsl_bindings);
+    const unsigned int h = NextHandle();
+    compute_shaders_[h] = std::move(e);
+    return h;
+}
+
+void WebGPURhiDevice::DeleteComputeShader(unsigned int handle) {
+    auto it = compute_shaders_.find(handle);
+    if (it == compute_shaders_.end()) return;
+    if (it->second.module) wgpuShaderModuleRelease(it->second.module);
+    compute_shaders_.erase(it);
+}
+
+void WebGPURhiDevice::BeginComputePass() {
+    // 不可与 render pass 嵌套；同一时刻仅一个 compute pass。
+    if (!frame_encoder_ || cur_compute_pass_ || cur_pass_) return;
+    cur_compute_pass_ = wgpuCommandEncoderBeginComputePass(frame_encoder_, nullptr);
+}
+
+void WebGPURhiDevice::EndComputePass() {
+    if (!cur_compute_pass_) return;
+    wgpuComputePassEncoderEnd(cur_compute_pass_);
+    wgpuComputePassEncoderRelease(cur_compute_pass_);
+    cur_compute_pass_ = nullptr;
+}
+
+std::vector<WebGPURhiDevice::BindingInfo>
+WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShaderEntry& sh) {
+    // 对齐 render 路径的 group 约定，compute 仅接 group1=UBO、group3=SSBO（可见性 Compute）；
+    // group0（push）/group2（texture+sampler）在 B3a 暂不接入（无 compute 纹理用例）。
+    std::vector<BindingInfo> out;
+    const WGPUShaderStageFlags kCs = WGPUShaderStage_Compute;
+    auto declared = [&](uint32_t binding) -> bool {
+        return sh.wgsl_bindings.count((group << 16) | binding) != 0;
+    };
+    switch (group) {
+        case 1: {
+            for (const auto& [slot, u] : cur_ubos_) {
+                if (!declared(slot)) continue;
+                const BufferEntry* be = FindBuffer(u.handle);
+                if (!be || !be->buffer) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::Uniform; b.visibility = kCs;
+                b.buffer = be->buffer; b.buf_offset = u.offset;
+                b.buf_size = u.size ? u.size : be->size;
+                out.push_back(b);
+            }
+            break;
+        }
+        case 3: {
+            for (const auto& [slot, s] : cur_ssbos_) {
+                if (!declared(slot)) continue;
+                const BufferEntry* be = FindBuffer(s.handle);
+                if (!be || !be->buffer) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::Storage; b.visibility = kCs;
+                b.buffer = be->buffer; b.buf_offset = s.offset;
+                b.buf_size = s.size ? s.size : be->size;
+                out.push_back(b);
+            }
+            break;
+        }
+        default: break;
+    }
+    return out;
+}
+
+const WebGPURhiDevice::ComputePipelineCacheEntry*
+WebGPURhiDevice::GetOrCreateComputePipeline(unsigned int shader_handle) {
+    auto sit = compute_shaders_.find(shader_handle);
+    if (sit == compute_shaders_.end() || !sit->second.module) return nullptr;
+    const ComputeShaderEntry& sh = sit->second;
+
+    // 缓存签名 = shader + 绑定签名（binding 号 + 种类）。
+    std::string key = "cs" + std::to_string(shader_handle);
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectComputeGroupBindings(g, sh);
+        key += "g" + std::to_string(g);
+        for (const BindingInfo& b : bs)
+            key += ":" + std::to_string(b.binding) + "-" + std::to_string(static_cast<int>(b.kind));
+    }
+    auto cit = compute_pipeline_cache_.find(key);
+    if (cit != compute_pipeline_cache_.end()) return &cit->second;
+
+    ComputePipelineCacheEntry entry{};
+    // 4 组 explicit BGL（与 BindGroup 共用同序绑定签名）；未用组建空 BGL（与 render 路径一致）。
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectComputeGroupBindings(g, sh);
+        std::vector<WGPUBindGroupLayoutEntry> bgle;
+        bgle.reserve(bs.size());
+        for (const BindingInfo& b : bs) {
+            WGPUBindGroupLayoutEntry e{};
+            e.binding = b.binding;
+            e.visibility = b.visibility;
+            switch (b.kind) {
+                case BindingInfo::Kind::Uniform:
+                    e.buffer.type = WGPUBufferBindingType_Uniform; break;
+                case BindingInfo::Kind::Storage:
+                    // compute SSBO 默认 read_write（自检着色器写 outbuf/draw）；只读 storage 留待按声明细化。
+                    e.buffer.type = WGPUBufferBindingType_Storage; break;
+                case BindingInfo::Kind::Texture:
+                    e.texture.sampleType = b.sample_type;
+                    e.texture.viewDimension = b.view_dim;
+                    e.texture.multisampled = false; break;
+                case BindingInfo::Kind::Sampler:
+                    e.sampler.type = WGPUSamplerBindingType_Filtering; break;
+            }
+            bgle.push_back(e);
+        }
+        WGPUBindGroupLayoutDescriptor bgld{};
+        bgld.entryCount = bgle.size();
+        bgld.entries = bgle.empty() ? nullptr : bgle.data();
+        entry.bgls[g] = wgpuDeviceCreateBindGroupLayout(device_, &bgld);
+    }
+
+    WGPUPipelineLayoutDescriptor pld{};
+    pld.bindGroupLayoutCount = 4;
+    pld.bindGroupLayouts = entry.bgls;
+    entry.layout = wgpuDeviceCreatePipelineLayout(device_, &pld);
+
+    WGPUComputePipelineDescriptor cpd{};
+    cpd.layout = entry.layout;
+    cpd.compute.module = sh.module;
+    cpd.compute.entryPoint = sh.entry.c_str();
+    entry.pipeline = wgpuDeviceCreateComputePipeline(device_, &cpd);
+    if (!entry.pipeline) {
+        DEBUG_LOG_ERROR("WebGPU: wgpuDeviceCreateComputePipeline 失败 (shader={})", shader_handle);
+    }
+
+    auto res = compute_pipeline_cache_.emplace(std::move(key), entry);
+    return &res.first->second;
+}
+
+void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle,
+                                      unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) {
+    if (!cur_compute_pass_ || groups_x == 0 || groups_y == 0 || groups_z == 0) return;
+    auto it = compute_shaders_.find(shader_handle);
+    if (it == compute_shaders_.end() || !it->second.module) return;
+    const ComputePipelineCacheEntry* pe = GetOrCreateComputePipeline(shader_handle);
+    if (!pe || !pe->pipeline) return;
+
+    wgpuComputePassEncoderSetPipeline(cur_compute_pass_, pe->pipeline);
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectComputeGroupBindings(g, it->second);
+        std::vector<WGPUBindGroupEntry> bge;
+        bge.reserve(bs.size());
+        for (const BindingInfo& b : bs) {
+            WGPUBindGroupEntry e{};
+            e.binding = b.binding;
+            switch (b.kind) {
+                case BindingInfo::Kind::Texture: e.textureView = b.view; break;
+                case BindingInfo::Kind::Sampler: e.sampler = b.sampler; break;
+                default: e.buffer = b.buffer; e.offset = b.buf_offset; e.size = b.buf_size; break;
+            }
+            bge.push_back(e);
+        }
+        WGPUBindGroupDescriptor bgd{};
+        bgd.layout = pe->bgls[g];
+        bgd.entryCount = bge.size();
+        bgd.entries = bge.empty() ? nullptr : bge.data();
+        WGPUBindGroup bg = wgpuDeviceCreateBindGroup(device_, &bgd);
+        wgpuComputePassEncoderSetBindGroup(cur_compute_pass_, g, bg, 0, nullptr);
+        frame_bindgroups_.push_back(bg);  // 提交后统一释放
+    }
+    wgpuComputePassEncoderDispatchWorkgroups(cur_compute_pass_, groups_x, groups_y, groups_z);
+}
+
+bool WebGPURhiDevice::RecordComputeSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 自检 compute：每线程写 outbuf[i]=i*2+base；0 号线程额外把 indirect DrawCmd 写为定值。
+    // 同时演练 group1=UBO 参数、group3=两个 read_write storage（普通 SSBO + storage|indirect）。
+    static const char* kComputeSelfTestWGSL = R"WGSL(// dse-wgsl
+struct Params { n : u32, base : u32, pad0 : u32, pad1 : u32, };
+struct DrawCmd { count : u32, instance_count : u32, first_index : u32, base_vertex : u32, base_instance : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(3) @binding(0) var<storage, read_write> outbuf : array<u32>;
+@group(3) @binding(1) var<storage, read_write> draw : DrawCmd;
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i < params.n) { outbuf[i] = i * 2u + params.base; }
+  if (i == 0u) {
+    draw.count = 36u;
+    draw.instance_count = 1u;
+    draw.first_index = 0u;
+    draw.base_vertex = 0u;
+    draw.base_instance = 0u;
+  }
+}
+)WGSL";
+
+    if (!ct_shader_) ct_shader_ = CreateComputeShader(kComputeSelfTestWGSL);
+    if (!ct_params_) {
+        const uint32_t params[4] = {kCtN, kCtBase, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+        ct_params_ = CreateGpuBuffer(d, params).raw();
+    }
+    if (!ct_out_) {
+        GpuBufferDesc d; d.size = kCtN * sizeof(uint32_t); d.usage = GpuBufferUsage::kStorage;
+        ct_out_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!ct_draw_) {
+        GpuBufferDesc d; d.size = kCtDrawWords * sizeof(uint32_t);
+        d.usage = GpuBufferUsage::kStorage | GpuBufferUsage::kIndirect;
+        ct_draw_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!ct_shader_ || !ct_params_ || !ct_out_ || !ct_draw_) {
+        DEBUG_LOG_ERROR("WebGPU[B3a] compute 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经与引擎相同的命令录制状态绑定资源（group1 b0 UBO；group3 b0/b1 SSBO）。
+    ResetDrawState();
+    CmdBindUniformBuffer(0, ct_params_, 0, sizeof(uint32_t) * 4);
+    CmdBindStorageBuffer(0, ct_out_, 0, kCtN * sizeof(uint32_t));
+    CmdBindStorageBuffer(1, ct_draw_, 0, kCtDrawWords * sizeof(uint32_t));
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(ct_shader_, (kCtN + 63u) / 64u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // 回读缓冲（MapRead|CopyDst）+ storage→回读 拷贝（在本帧 frame_encoder_ 上录制，随帧提交）。
+    auto make_rb = [&](uint64_t bytes) -> WGPUBuffer {
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+        bd.size = AlignUp4(bytes);
+        return wgpuDeviceCreateBuffer(device_, &bd);
+    };
+    ct_rb_out_ = make_rb(kCtN * sizeof(uint32_t));
+    ct_rb_draw_ = make_rb(kCtDrawWords * sizeof(uint32_t));
+    const BufferEntry* be_out = FindBuffer(ct_out_);
+    const BufferEntry* be_draw = FindBuffer(ct_draw_);
+    if (!ct_rb_out_ || !ct_rb_draw_ || !be_out || !be_draw) {
+        if (ct_rb_out_) { wgpuBufferRelease(ct_rb_out_); ct_rb_out_ = nullptr; }
+        if (ct_rb_draw_) { wgpuBufferRelease(ct_rb_draw_); ct_rb_draw_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_out->buffer, 0, ct_rb_out_, 0,
+                                         kCtN * sizeof(uint32_t));
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_draw->buffer, 0, ct_rb_draw_, 0,
+                                         kCtDrawWords * sizeof(uint32_t));
+    return true;
+}
+
+void WebGPURhiDevice::KickComputeSelfTestReadback() {
+    if (!ct_rb_out_ || !ct_rb_draw_) return;
+    // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    auto* ctx = new ComputeSelfTestCtx();
+    ctx->rb_out = ct_rb_out_;
+    ctx->rb_draw = ct_rb_draw_;
+    ct_rb_out_ = nullptr;
+    ct_rb_draw_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kCtN * sizeof(uint32_t),
+                       OnComputeSelfTestOutMapped, ctx);
+    wgpuBufferMapAsync(ctx->rb_draw, WGPUMapMode_Read, 0, kCtDrawWords * sizeof(uint32_t),
+                       OnComputeSelfTestDrawMapped, ctx);
+}
 
 // --- 设备级 Cmd*：绑定状态累积 ---
 

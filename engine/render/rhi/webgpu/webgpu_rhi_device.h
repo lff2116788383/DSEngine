@@ -210,6 +210,31 @@ public:
     void CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset);
     void CmdDispatchComputePass(const ComputeDispatch& dispatch);
 
+    // ============================================================
+    // B3a：Compute 基础设施（compute 管线 + SSBO 存储缓冲 + indirect 原语 + WGSL 自检）
+    //   仅落地底层原语并以自检验证（dispatch→SSBO/indirect→回读校验）。不翻转全局
+    //   SupportsCompute()：引擎 compute 入口 CreateComputeShaderEx 尚无 WGSL 源槽，且高层
+    //   GPU-driven/bloom/skinning 路径未手译 WGSL，故保持 false 使现有渲染路径不受影响
+    //   （SSBO 同步读回亦不支持，SupportsSSBOCompute() 保持 false）。后续 B3b 再逐特性接入。
+    // ============================================================
+
+    /// 创建 compute shader。仅接受 WGSL（首非空行须为 `// dse-wgsl` 标记）：引擎 GLSL/SPIR-V
+    /// compute 源无离线转译，返回 0 跳过。返回设备级 compute shader 句柄（0=失败）。
+    unsigned int CreateComputeShader(const std::string& source) override;
+    void DeleteComputeShader(unsigned int handle) override;
+    /// 在当前 compute pass 内 dispatch（须先 BeginComputePass）：组装 explicit-layout compute
+    /// 管线（group1=UBO、group3=SSBO，可见性 Compute），建并设 BindGroup，发 workgroups。
+    void DispatchCompute(unsigned int shader_handle,
+                         unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
+    void BeginComputePass() override;
+    void EndComputePass() override;
+
+    // 统一 GPU Buffer API：覆写以按 GpuBufferUsage 授予正确 WGPU usage 位
+    // （storage/indirect/vertex/index/uniform），不经旧 deprecated CreateSSBO/CreateIndirectBuffer 路由。
+    BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;
+    void UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) override;
+    void DeleteGpuBuffer(BufferHandle handle) override;
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -356,6 +381,42 @@ private:
     unsigned int selftest_vbo_ = 0;
     unsigned int selftest_tex_ = 0;
     unsigned int selftest_ubo_ = 0;
+
+    // --- B3a compute 基础设施 ---
+    /// compute shader 条目：WGSL module + 入口名 + 实际声明的 @group/@binding 集合
+    /// （key=(group<<16)|binding，供 explicit pipeline-layout/BindGroup 过滤）。
+    struct ComputeShaderEntry {
+        WGPUShaderModule module = nullptr;
+        std::string entry = "cs_main";
+        std::set<uint32_t> wgsl_bindings;
+    };
+    /// compute 管线缓存条目：管线 + explicit 布局所用 4 组 BGL。
+    struct ComputePipelineCacheEntry {
+        WGPUComputePipeline pipeline = nullptr;
+        WGPUPipelineLayout layout = nullptr;
+        WGPUBindGroupLayout bgls[4] = {nullptr, nullptr, nullptr, nullptr};
+    };
+    std::unordered_map<unsigned int, ComputeShaderEntry> compute_shaders_;
+    std::unordered_map<std::string, ComputePipelineCacheEntry> compute_pipeline_cache_;
+    WGPUComputePassEncoder cur_compute_pass_ = nullptr;  ///< 当前 compute pass（BeginComputePass 起）
+    /// 收集 compute 当前绑定（group1=UBO、group3=SSBO，可见性 Compute），仅纳入着色器声明项。
+    std::vector<BindingInfo> CollectComputeGroupBindings(uint32_t group, const ComputeShaderEntry& sh);
+    const ComputePipelineCacheEntry* GetOrCreateComputePipeline(unsigned int shader_handle);
+
+    // --- B3a compute 自检（每会话一次：dispatch 写 SSBO + indirect args → copy 到回读缓冲 → 异步回读校验）---
+    bool compute_selftest_done_ = false;
+    bool RecordComputeSelfTest();        ///< 在 frame_encoder_ 上录制 compute dispatch + copy（须在无 render/compute pass 时调用）
+    void KickComputeSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int ct_shader_ = 0;
+    unsigned int ct_params_ = 0;      ///< 参数 UBO（group1 b0）
+    unsigned int ct_out_ = 0;         ///< 输出 SSBO（storage，group3 b0）
+    unsigned int ct_draw_ = 0;        ///< indirect args SSBO（storage|indirect，group3 b1）
+    WGPUBuffer ct_rb_out_ = nullptr;  ///< 输出回读缓冲（MapRead|CopyDst）
+    WGPUBuffer ct_rb_draw_ = nullptr; ///< indirect 回读缓冲
+
+    /// 低层缓冲创建（mappedAtCreation 上传 + 登记 buffers_）；CreateBuffer/CreateGpuBuffer 共用。
+    unsigned int CreateBufferRaw(size_t logical_size, const void* data,
+                                 WGPUBufferUsageFlags usage, bool is_index);
 
     // --- B2b/B2c 内建 WGSL 程序缓存 ---
     /// 按 key 懒创建（经 CreateShaderProgram 编译 WGSL）并缓存内建程序句柄，重复取用零开销。
