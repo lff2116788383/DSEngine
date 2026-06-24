@@ -379,24 +379,30 @@ RenderPipelineProfile MakeForward2DProfile() {
 
 RenderPipelineProfile MakeForward3DProfile() {
     // M5 best-effort 3D forward for capability-limited platforms (Web/WebGL2):
-    // depth pre-pass → 阴影（CSM 方向光 / 聚光 / 点光逐面立方体）→ forward
-    // scene（UBO PBR 着色 + 阴影采样）→ UI → composite → present。
-    // 阴影走 2D 深度纹理 + ESSL300 变体（WebGL2 原生支持，CPU 逐绘制回退，无需
-    // Compute/SSBO/MultiDrawIndirect）。仍不跑 GPU-driven 剔除、延迟着色与 HDR 后处理链。
+    // depth pre-pass → 阴影（CSM 方向光 / 聚光 / 点光逐面立方体）→ forward scene
+    //（UBO PBR 着色 + 阴影采样）→ SSAO/bloom/auto-exposure（全屏片元）→ UI →
+    // composite（tonemap + bloom/ssao/曝光合成）→ FXAA → present。
+    // 阴影与后处理链均走 2D 纹理 + 全屏片元 + ESSL300 变体（WebGL2 原生支持，
+    // bloom 在无 compute 时自动回退到全屏 quad 下/上采样），不需 Compute/SSBO/
+    // MultiDrawIndirect。仍不跑 GPU-driven 剔除与延迟着色。
     RenderPipelineProfile profile;
     profile.name = "Forward3D";
     profile.settings.gpu_driven = false;
     profile.settings.shadows = true;
     profile.settings.shadow_quality = "low";
-    profile.settings.postprocess_quality = "none";
+    profile.settings.postprocess_quality = "low";
     profile.passes = {
         Pass("pre_z"),
         Pass("csm_shadow"),
         Pass("spot_shadow"),
         Pass("point_shadow"),
         Pass("forward_scene"),
+        Pass("ssao"),
+        Pass("bloom"),
+        Pass("auto_exposure"),
         Pass("ui"),
         Pass("composite"),
+        Pass("fxaa"),
         Pass("present"),
     };
     return profile;

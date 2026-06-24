@@ -268,6 +268,11 @@ public:
     /// 预编译所有后处理着色器，消除首帧 stall
     void WarmupAllPostProcessShaders();
 
+    /// 预编译 Forward3D 后处理链所需的非 SSBO 安全子集（WebGL2/GLES 用）：
+    /// SSAO → bloom（全屏 quad 下/上采样）→ auto-exposure → composite(tonemap) → FXAA。
+    /// 不触碰 compute/SSBO 路径，仅全屏片元着色器，故 WebGL2 上也安全可暖。
+    void WarmupForwardPostProcessShaders();
+
     // 着色器句柄访问器、计数器继承自 ShaderManagerBase
 
 private:

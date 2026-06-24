@@ -1262,6 +1262,23 @@ void GLShaderManager::WarmupAllPostProcessShaders() {
     DEBUG_LOG_INFO("[GLShaderManager] Warmed up {} post-process shaders", programs_created_);
 }
 
+void GLShaderManager::WarmupForwardPostProcessShaders() {
+    // Forward3D（WebGL2/GLES）后处理链所需的全屏片元着色器子集，全部非 SSBO/compute。
+    // GetOrCreateGenPPShader 对当前 GL 剖面没有变体的 effect 返回 0（安全跳过）。
+    static const char* kForwardPPEffects[] = {
+        "ssao", "ssao_blur",
+        "bloom_extract", "bloom_downsample", "bloom_upsample",
+        "lum_compute", "lum_adapt",
+        "bloom_composite", "tonemapping", "fxaa",
+        "postprocess_passthrough", "copy",
+    };
+    for (const char* name : kForwardPPEffects) {
+        GetOrCreateGenPPShader(name);
+    }
+    DEBUG_LOG_INFO("[GLShaderManager] Warmed up Forward3D post-process subset ({} programs total)",
+                   programs_created_);
+}
+
 // ============================================================
 // GPU-Driven PBR Shader Variant
 // ============================================================

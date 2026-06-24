@@ -224,3 +224,40 @@ TEST(PipelineCapabilityPruneTest, Forward3DEnablesShadowsAndSurvivesOnWebGL2) {
     EXPECT_FALSE(survivors.count("gpu_cull"));
     EXPECT_FALSE(survivors.count("hiz_build"));
 }
+
+// ============================================================
+// A2 后处理：tonemap(composite) + bloom + auto-exposure + FXAA + (可选)SSAO
+// 全屏片元链。bloom 在无 compute 时回退全屏 quad，故这些 pass 无 compute/ssbo
+// 需求，必须在 WebGL2 能力档下存活（设计 §3 A2）。
+// ============================================================
+
+// 后处理链 pass 不得声明 compute/ssbo/gpu_driven/mrt/hiz 需求，否则会在 WebGL2
+// 上被错误裁掉（全屏片元链 + bloom 全屏 quad 回退本可在 ES3.0 跑）。
+TEST(PipelineCapabilityPruneTest, PostProcessPassesDeclareNoHeavyCapabilities) {
+    const auto& registry = BuiltinRenderPipelineRegistry();
+    for (const char* name : {"bloom", "ssao", "auto_exposure", "fxaa"}) {
+        const RenderPassMetadata* meta = registry.FindMetadata(name);
+        ASSERT_NE(meta, nullptr) << name;
+        EXPECT_FALSE(meta->requires_compute) << name;
+        EXPECT_FALSE(meta->requires_ssbo) << name;
+        EXPECT_FALSE(meta->requires_gpu_driven) << name;
+        EXPECT_FALSE(meta->requires_mrt) << name;
+        EXPECT_FALSE(meta->requires_hiz) << name;
+    }
+}
+
+// Forward3D 接入后处理链且这些 pass 在 WebGL2 存活，composite 仍承担 tonemap。
+TEST(PipelineCapabilityPruneTest, Forward3DEnablesPostProcessAndSurvivesOnWebGL2) {
+    RenderPipelineProfile profile = MakeForward3DProfile();
+    EXPECT_NE(profile.settings.postprocess_quality, "none");
+    auto survivors = SurvivingPasses(profile, WebGL2Context());
+    EXPECT_TRUE(survivors.count("ssao"));
+    EXPECT_TRUE(survivors.count("bloom"));
+    EXPECT_TRUE(survivors.count("auto_exposure"));
+    EXPECT_TRUE(survivors.count("fxaa"));
+    EXPECT_TRUE(survivors.count("composite"));
+    // 后处理接入不得引入 compute/gpu-driven pass
+    EXPECT_FALSE(survivors.count("gpu_cull"));
+    EXPECT_FALSE(survivors.count("hiz_build"));
+    EXPECT_FALSE(survivors.count("hiz_cull"));
+}

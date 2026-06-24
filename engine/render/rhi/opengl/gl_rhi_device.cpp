@@ -308,9 +308,9 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &max_color_attachments);
     if (max_color_attachments > 0) max_color_attachments_ = max_color_attachments;
     // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
-    // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the heavy
-    // post-process warmup, so they use the dedicated ES3.0-compatible 2D batch
-    // program for sprites/UI.
+    // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the
+    // compute-backed post-process effects, so they use the dedicated
+    // ES3.0-compatible 2D batch program for sprites/UI.
     if (!supports_ssbo_) {
         shader_mgr_.InitSprite2DShader();
 #ifdef DSE_ENABLE_3D
@@ -319,6 +319,10 @@ void OpenGLRhiDevice::EnsureInitialized() {
         // path desktop GL<4.3 uses — that lowers to ESSL300. The GPU-driven and
         // compute variants stay gated off inside it (they require SSBO).
         shader_mgr_.InitBuiltinPBRShader();
+        // A2: warm only the non-SSBO full-screen post-process subset that the
+        // Forward3D chain uses (SSAO/bloom/auto-exposure/tonemap/FXAA). The heavy
+        // compute/SSBO effects stay out of the WebGL2 warmup set.
+        shader_mgr_.WarmupForwardPostProcessShaders();
 #endif
     } else {
         shader_mgr_.InitBuiltinPBRShader();
