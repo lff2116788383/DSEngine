@@ -492,6 +492,71 @@ void OnHiZPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-6 Hi-Z storage-image 金字塔 compute 自检：异步回读校验上下文 ---
+// 单张 R32Float mip 链纹理（mip0=8×8 → mip1=4×4 → mip2=2×2 → mip3=1×1）。①生成趟 textureStore
+// 渐变 mip0[x,y]=f32(x)+f32(y)*100；②逐级下采样趟 textureLoad 读 mip[k-1] 单 mip 视图 + 取 2×2 max
+// 写 mip[k] 单 mip storage 视图。各级 mip copy 到单一回读缓冲的 256 对齐分段后单路回读，逐级逐像素
+// 校验 == CPU 预期递归 max。因渐变沿 x/y 单调增，第 k 级 [x,y] 的 max 即所覆 2^k×2^k 块右下角：
+// col=(x+1)*2^k-1，row=(y+1)*2^k-1 → 值 = col + row*100。验证 per-mip 视图绑定 + 多级金字塔构建。
+constexpr uint32_t kHzpBaseDim = 8;       ///< mip0 边长
+constexpr uint32_t kHzpMips = 4;          ///< mip 级数（8,4,2,1）
+constexpr uint32_t kHzpRowBytes = 256;    ///< 每级 copy 行字节（最大 8×4B=32B → 填充至 256 对齐）
+// 各级 mip 在回读缓冲内的 256 对齐分段偏移：mip k 占 kHzpRowBytes × dim_k 字节。
+constexpr uint32_t kHzpMipOffset(uint32_t k) {
+    uint32_t off = 0;
+    for (uint32_t i = 0; i < k; ++i) off += kHzpRowBytes * (kHzpBaseDim >> i);
+    return off;
+}
+constexpr uint32_t kHzpTotalBytes = kHzpMipOffset(kHzpMips);
+
+struct HiZPyramidSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnHiZPyramidPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<HiZPyramidSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const float* px = static_cast<const float*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kHzpTotalBytes));
+        if (px) {
+            ok = true;
+            for (uint32_t k = 0; k < kHzpMips && ok; ++k) {
+                const uint32_t dim = kHzpBaseDim >> k;
+                const uint32_t step = 1u << k;
+                const uint32_t base = kHzpMipOffset(k) / 4u;  // float 索引
+                for (uint32_t y = 0; y < dim && ok; ++y) {
+                    for (uint32_t x = 0; x < dim; ++x) {
+                        const float got = px[base + y * (kHzpRowBytes / 4) + x];
+                        const float col = static_cast<float>((x + 1u) * step - 1u);
+                        const float row = static_cast<float>((y + 1u) * step - 1u);
+                        const float exp = col + row * 100.0f;
+                        if (std::abs(got - exp) > 0.01f) {
+                            DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z 金字塔自检像素失配：mip{} ({},{}) got={} exp={}",
+                                            k, x, y, got, exp);
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z 金字塔自检：像素回读映射失败 status={}",
+                        static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-6] Hi-Z storage-image 金字塔自检 PASS：per-mip 视图绑定 + {} 级逐级 "
+                       "2×2 max 下采样，回读各级 mip 全像素均 == CPU 预期递归 max（mip0..{}）",
+                       kHzpMips, kHzpMips - 1);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z storage-image 金字塔自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -781,6 +846,10 @@ void WebGPURhiDevice::Shutdown() {
     if (si_rb_pixels_)    { wgpuBufferRelease(si_rb_pixels_);        si_rb_pixels_ = nullptr; }
     // B3b-5 Hi-Z 下采样自检瞬态回读缓冲（同上：kick 后所有权转移给 ctx → 这里为 null）。
     if (hz_rb_pixels_)    { wgpuBufferRelease(hz_rb_pixels_);        hz_rb_pixels_ = nullptr; }
+    // B3b-6 Hi-Z 金字塔自检：per-mip 视图与回读缓冲（kick 后回读缓冲所有权转移给 ctx → null）。
+    for (WGPUTextureView v : hzp_mip_views_) if (v) wgpuTextureViewRelease(v);
+    hzp_mip_views_.clear();
+    if (hzp_rb_pixels_)   { wgpuBufferRelease(hzp_rb_pixels_);       hzp_rb_pixels_ = nullptr; }
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -971,6 +1040,14 @@ void WebGPURhiDevice::EndFrame() {
         hz_recorded = RecordHiZDownsampleSelfTest();
     }
 
+    // B3b-6：每会话一次 Hi-Z storage-image 金字塔自检（单张 R32Float mip 链，生成趟写 mip0 + 逐级
+    // per-mip 视图下采样 2×2 max → 各级 mip → copy 回读逐级校验）。仅自检、不翻转能力位、不碰 demo 帧。
+    bool hzp_recorded = false;
+    if (!hizpyr_selftest_done_) {
+        hizpyr_selftest_done_ = true;
+        hzp_recorded = RecordHiZPyramidSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -980,6 +1057,7 @@ void WebGPURhiDevice::EndFrame() {
     if (sk_recorded) KickSkinningSelfTestReadback();
     if (si_recorded) KickStorageImageSelfTestReadback();
     if (hz_recorded) KickHiZDownsampleSelfTestReadback();
+    if (hzp_recorded) KickHiZPyramidSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -1239,6 +1317,16 @@ void WebGPURhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int 
         if (texture_handle) cur_compute_images_[binding] = texture_handle;
         else                cur_compute_images_.erase(binding);
     }
+}
+
+void WebGPURhiDevice::SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view,
+                                                  WGPUTextureFormat format,
+                                                  WGPUTextureViewDimension view_dim, bool read_only) {
+    // B3b-6：直接绑定显式纹理视图（如 Hi-Z 金字塔的单 mip 视图），绕开「句柄→默认全 mip 视图」。
+    // read_only=true→采样读（textureLoad）；false→storage 写（textureStore）。
+    auto& m = read_only ? cur_compute_texture_views_ : cur_compute_image_views_;
+    if (view) m[binding] = ComputeViewBind{view, format, view_dim};
+    else      m.erase(binding);
 }
 
 unsigned int WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
@@ -1945,6 +2033,8 @@ void WebGPURhiDevice::ResetDrawState() {
     cur_ssbos_.clear();
     cur_compute_images_.clear();
     cur_compute_textures_.clear();
+    cur_compute_image_views_.clear();
+    cur_compute_texture_views_.clear();
     cur_vs_push_.clear();
     cur_fs_push_.clear();
 }
@@ -2608,6 +2698,25 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
                 BindingInfo b;
                 b.binding = slot; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
                 b.view = te->view; b.tex_format = te->format; b.view_dim = te->view_dim;
+                out.push_back(b);
+            }
+            // B3b-6：compute 显式视图绑定（per-mip Hi-Z 金字塔）。采样读视图（textureLoad，无 sampler）。
+            for (const auto& [slot, vb] : cur_compute_texture_views_) {
+                if (!declared(slot) || !vb.view) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::Texture; b.visibility = kCs;
+                b.view = vb.view; b.view_dim = vb.view_dim;
+                b.sample_type = (vb.format == WGPUTextureFormat_R32Float)
+                                    ? WGPUTextureSampleType_UnfilterableFloat
+                                    : WGPUTextureSampleType_Float;
+                out.push_back(b);
+            }
+            // B3b-6：storage 写显式视图（texture_storage_2d<...,write>，绑定单 mip 视图）。
+            for (const auto& [slot, vb] : cur_compute_image_views_) {
+                if (!declared(slot) || !vb.view) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
+                b.view = vb.view; b.tex_format = vb.format; b.view_dim = vb.view_dim;
                 out.push_back(b);
             }
             break;
@@ -3544,6 +3653,152 @@ void WebGPURhiDevice::KickHiZDownsampleSelfTestReadback() {
     ctx->rb_pixels = hz_rb_pixels_;
     hz_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kHzDstBytes, OnHiZPixelsMapped, ctx);
+}
+
+// B3b-6：Hi-Z storage-image 金字塔 compute 真链路自检——单张 R32Float mip 链纹理（mip0=8×8 ..
+// mip3=1×1）。①生成趟经 texture_storage_2d<r32float, write> 写已知渐变到 mip0 单 mip 视图；②逐级
+// 下采样趟用 textureLoad 读 mip[k-1] 单 mip 采样视图 + 取 2×2 max 写 mip[k] 单 mip storage 视图
+// （per-mip 显式视图绑定，绕开默认全 mip 视图）。各级 mip copy 到回读缓冲 256 对齐分段后逐级校验
+// == CPU 预期递归 max。验证 per-mip 视图绑定 + 多级 storage 金字塔构建（GPU-driven Hi-Z 遮挡剔除
+// 金字塔核心原语，Task 4 前置）。详见 HiZPyramidSelfTestCtx / OnHiZPyramidPixelsMapped。
+bool WebGPURhiDevice::RecordHiZPyramidSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 生成趟 / 下采样趟 WGSL 与 B3b-5 同形（group2 b0 storage 写；b0 采样读 + b1 storage 写），
+    // 仅此处用显式单 mip 视图绑定到 group2 槽，实现金字塔逐级 in-place 下采样。
+    static const char* kHzpGenWGSL = R"WGSL(// dse-wgsl
+struct Params { dim : u32, pad0 : u32, pad1 : u32, pad2 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(2) @binding(0) var dst_img : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= params.dim || gid.y >= params.dim) { return; }
+  let v = f32(gid.x) + f32(gid.y) * 100.0;
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(v, 0.0, 0.0, 0.0));
+}
+)WGSL";
+    static const char* kHzpDownWGSL = R"WGSL(// dse-wgsl
+struct Params { src_dim : u32, dst_dim : u32, pad0 : u32, pad1 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var dst_img : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= params.dst_dim || gid.y >= params.dst_dim) { return; }
+  let m = i32(params.src_dim) - 1;
+  let sx = i32(gid.x * 2u);
+  let sy = i32(gid.y * 2u);
+  let d00 = textureLoad(src_tex, vec2<i32>(sx, sy), 0).r;
+  let d10 = textureLoad(src_tex, vec2<i32>(min(sx + 1, m), sy), 0).r;
+  let d01 = textureLoad(src_tex, vec2<i32>(sx, min(sy + 1, m)), 0).r;
+  let d11 = textureLoad(src_tex, vec2<i32>(min(sx + 1, m), min(sy + 1, m)), 0).r;
+  let mx = max(max(d00, d10), max(d01, d11));
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(mx, 0.0, 0.0, 0.0));
+}
+)WGSL";
+
+    if (!hzp_gen_shader_)  hzp_gen_shader_  = CreateComputeShaderEx("", "", "", 0, 1, 0, 0, kHzpGenWGSL);
+    if (!hzp_down_shader_) hzp_down_shader_ = CreateComputeShaderEx("", "", "", 0, 1, 1, 0, kHzpDownWGSL);
+    if (!hzp_gen_ubo_) {
+        const uint32_t params[4] = {kHzpBaseDim, 0u, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+        hzp_gen_ubo_ = CreateGpuBuffer(d, params).raw();
+    }
+    if (hzp_down_ubos_.empty()) {
+        for (uint32_t k = 1; k < kHzpMips; ++k) {
+            const uint32_t src_dim = kHzpBaseDim >> (k - 1);
+            const uint32_t dst_dim = kHzpBaseDim >> k;
+            const uint32_t params[4] = {src_dim, dst_dim, 0u, 0u};
+            GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+            hzp_down_ubos_.push_back(CreateGpuBuffer(d, params).raw());
+        }
+    }
+    // 单张 R32Float mip 链纹理：生成趟写 mip0 storage + 逐级下采样写 mip[k] storage + 读 mip[k-1] 采样
+    // + copy 各级 mip 源。usage 覆盖 storage 写 / 采样读 / copy 源。
+    if (!hzp_tex_) {
+        hzp_tex_ = CreateTextureImpl(
+            WGPUTextureDimension_2D, WGPUTextureViewDimension_2D, kHzpBaseDim, kHzpBaseDim, 1,
+            WGPUTextureFormat_R32Float,
+            WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopySrc,
+            kHzpMips, 1, {nullptr}, TextureSamplerDesc::FromLinearFlag(false));
+    }
+    const TextureEntry* pte = FindTexture(hzp_tex_);
+    if (!hzp_gen_shader_ || !hzp_down_shader_ || !hzp_gen_ubo_ ||
+        hzp_down_ubos_.size() != kHzpMips - 1 || !hzp_tex_ || !pte || !pte->texture) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z 金字塔自检资源创建失败，跳过");
+        return false;
+    }
+
+    // per-mip 单层单 mip 视图（采样读/storage 写共用，因 R32Float 单格式且单层）。
+    if (hzp_mip_views_.empty()) {
+        for (uint32_t k = 0; k < kHzpMips; ++k) {
+            WGPUTextureViewDescriptor vd{};
+            vd.format = WGPUTextureFormat_R32Float;
+            vd.dimension = WGPUTextureViewDimension_2D;
+            vd.baseMipLevel = k; vd.mipLevelCount = 1;
+            vd.baseArrayLayer = 0; vd.arrayLayerCount = 1;
+            vd.aspect = WGPUTextureAspect_All;
+            hzp_mip_views_.push_back(wgpuTextureCreateView(pte->texture, &vd));
+        }
+    }
+    for (WGPUTextureView v : hzp_mip_views_) if (!v) { DEBUG_LOG_ERROR("WebGPU[B3b-6] mip 视图创建失败"); return false; }
+
+    // ①生成趟：写 mip0（8×8）渐变。
+    ResetDrawState();
+    CmdBindUniformBuffer(0, hzp_gen_ubo_, 0, sizeof(uint32_t) * 4);
+    SetComputeImageViewExplicit(0, hzp_mip_views_[0], WGPUTextureFormat_R32Float,
+                                WGPUTextureViewDimension_2D, /*read_only=*/false);
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(hzp_gen_shader_, (kHzpBaseDim + 7u) / 8u, (kHzpBaseDim + 7u) / 8u, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // ②逐级下采样趟：读 mip[k-1] 采样视图 + 2×2 max 写 mip[k] storage 视图（独立 pass，pass 间屏障）。
+    for (uint32_t k = 1; k < kHzpMips; ++k) {
+        const uint32_t dst_dim = kHzpBaseDim >> k;
+        CmdBindUniformBuffer(0, hzp_down_ubos_[k - 1], 0, sizeof(uint32_t) * 4);
+        SetComputeImageViewExplicit(0, hzp_mip_views_[k - 1], WGPUTextureFormat_R32Float,
+                                    WGPUTextureViewDimension_2D, /*read_only=*/true);
+        SetComputeImageViewExplicit(1, hzp_mip_views_[k], WGPUTextureFormat_R32Float,
+                                    WGPUTextureViewDimension_2D, /*read_only=*/false);
+        BeginComputePass();
+        if (!cur_compute_pass_) { ResetDrawState(); return false; }
+        DispatchCompute(hzp_down_shader_, (dst_dim + 7u) / 8u, (dst_dim + 7u) / 8u, 1);
+        EndComputePass();
+        ResetDrawState();
+    }
+
+    // copy 各级 mip → 回读缓冲（256 对齐分段；随帧提交）。
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kHzpTotalBytes;
+    hzp_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!hzp_rb_pixels_) return false;
+    for (uint32_t k = 0; k < kHzpMips; ++k) {
+        const uint32_t dim = kHzpBaseDim >> k;
+        WGPUImageCopyTexture src{};
+        src.texture = pte->texture;
+        src.mipLevel = k;
+        src.aspect = WGPUTextureAspect_All;
+        WGPUImageCopyBuffer dst{};
+        dst.buffer = hzp_rb_pixels_;
+        dst.layout.offset = kHzpMipOffset(k);
+        dst.layout.bytesPerRow = kHzpRowBytes;
+        dst.layout.rowsPerImage = dim;
+        WGPUExtent3D ext{dim, dim, 1};
+        wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    }
+    return true;
+}
+
+void WebGPURhiDevice::KickHiZPyramidSelfTestReadback() {
+    if (!hzp_rb_pixels_) return;
+    // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    auto* ctx = new HiZPyramidSelfTestCtx();
+    ctx->rb_pixels = hzp_rb_pixels_;
+    hzp_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kHzpTotalBytes, OnHiZPyramidPixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

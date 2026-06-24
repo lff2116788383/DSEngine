@@ -366,6 +366,15 @@ private:
     std::map<uint32_t, SsboBinding> cur_ssbos_;
     std::map<uint32_t, unsigned int> cur_compute_images_;  ///< B3b-4：compute storage image（binding→纹理句柄）
     std::map<uint32_t, unsigned int> cur_compute_textures_;  ///< B3b-5：compute 只读采样纹理（textureLoad，binding→纹理句柄）
+    // B3b-6：compute 显式纹理视图绑定（per-mip）。Hi-Z 金字塔逐级下采样需把同一纹理的不同 mip
+    //   作采样读/storage 写，故绕开「句柄→默认全 mip 视图」走显式单 mip 视图。
+    struct ComputeViewBind {
+        WGPUTextureView         view     = nullptr;
+        WGPUTextureFormat       format   = WGPUTextureFormat_Undefined;
+        WGPUTextureViewDimension view_dim = WGPUTextureViewDimension_2D;
+    };
+    std::map<uint32_t, ComputeViewBind> cur_compute_image_views_;    ///< storage 写显式视图
+    std::map<uint32_t, ComputeViewBind> cur_compute_texture_views_;  ///< 采样读显式视图
     std::vector<uint8_t> cur_vs_push_;
     std::vector<uint8_t> cur_fs_push_;
 
@@ -535,6 +544,26 @@ private:
     unsigned int hz_src_tex_ = 0;      ///< src r32float 纹理（生成趟 storage 写 / 下采样趟采样读）
     unsigned int hz_dst_tex_ = 0;      ///< dst r32float 纹理（下采样趟 storage 写 / copy 源）
     WGPUBuffer hz_rb_pixels_ = nullptr;///< dst 纹理像素回读缓冲（MapRead|CopyDst）
+
+    // --- B3b-6 Hi-Z storage-image 金字塔 compute 真链路自检（每会话一次：单张 R32Float mip 链纹理，
+    //   ①生成趟 textureStore 已知渐变到 mip0；②逐级下采样趟用 textureLoad 读 mip[k-1] 采样视图 + 取
+    //   2×2 max 写 mip[k] storage 视图（per-mip 显式视图绑定）；copy 各级 mip→回读缓冲，逐级逐像素
+    //   校验 == CPU 预期递归 max。验证 per-mip 视图绑定 + 多级 storage 金字塔构建（GPU-driven Hi-Z
+    //   遮挡剔除金字塔的核心原语，Task 4 前置）。离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool hizpyr_selftest_done_ = false;
+    bool RecordHiZPyramidSelfTest();        ///< 录制 ①生成趟 + ②逐级下采样趟 compute + copy 各级 mip→回读缓冲
+    void KickHiZPyramidSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int hzp_gen_shader_ = 0;       ///< 生成趟 compute shader（textureStore 渐变到 mip0）
+    unsigned int hzp_down_shader_ = 0;      ///< 下采样趟 compute shader（textureLoad mip[k-1] + 2×2 max → mip[k]）
+    unsigned int hzp_gen_ubo_ = 0;          ///< 生成趟参数 UBO（mip0 dim，group1 b0）
+    std::vector<unsigned int> hzp_down_ubos_;  ///< 各下采样级参数 UBO（src_dim/dst_dim，group1 b0）
+    unsigned int hzp_tex_ = 0;              ///< 单张 R32Float mip 链纹理（mip0 生成 + 逐级下采样 + copy 源）
+    std::vector<WGPUTextureView> hzp_mip_views_;  ///< per-mip 单层视图（采样读/storage 写，自检瞬态）
+    WGPUBuffer hzp_rb_pixels_ = nullptr;    ///< 各级 mip 像素回读缓冲（MapRead|CopyDst）
+
+    /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
+    void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
+                                     WGPUTextureViewDimension view_dim, bool read_only);
 
     RenderStats last_frame_stats_{};
 };
