@@ -949,6 +949,231 @@ struct VsOut {
 }
 )WGSL";
 
+// 进阶前向着色（ForwardShaded / DrawShaded）：移植 forward_shaded.frag 的特性子集——
+//   shading_mode（0 PBR Cook-Torrance / 2 半兰伯特皮肤 / 3 半兰伯特静态 / 4 Toon / Unlit）、
+//   SSS、clearcoat、clustered 点光（set3 PointLightUBO ≤64）、CSM 方向光阴影（set1 light_space_matrices
+//   + shadow atlas，flat unit11 → group2 binding22/23）。UBO 逐字段对齐 mesh_renderer.cpp 的
+//   FwdShadedMaterialUBO(160B)/FwdPerSceneUBO(560B)/PointLightsUBO std140 布局。
+// 未纳入子集（白默认纹理/关闭 → 与引擎同结果，留后续）：法线贴图/POM、splatmap/积雪、MR/自发光/AO
+//   贴图、DDGI/SH 间接光、聚光灯、anisotropy、watercolor(5)/faceSDF(6)。
+// 顶点已 CPU 预变换到世界空间（位置/法线/切线，见 BuildShadedWorldVertexBuffer）。前向输出线性 HDR
+//   （不在此 tonemap），由 composite（kWgslComposite）统一 Reinhard + sRGB。
+const char* kWgslForwardShaded = R"WGSL(// dse-wgsl
+const PI : f32 = 3.14159265359;
+struct PerFrame {
+  vp : mat4x4<f32>,
+  view : mat4x4<f32>,
+  camera_pos : vec4<f32>,
+  foliage_wind : vec4<f32>,
+  foliage_push : vec4<f32>,
+};
+struct PerScene {
+  light_dir_and_enabled : vec4<f32>,
+  light_color_and_ambient : vec4<f32>,
+  light_params : vec4<f32>,             // x=intensity, y=shadow_strength, z=receive_shadow
+  cascade_splits : vec4<f32>,
+  light_space_matrices : array<mat4x4<f32>, 3>,
+  shadow_atlas_regions : array<vec4<f32>, 3>,
+  spot_light_space_matrices : array<mat4x4<f32>, 4>,
+};
+struct PerMaterial {
+  albedo : vec4<f32>,        // xyz=base, w=metallic
+  roughness_ao : vec4<f32>,  // x=rough, y=ao, z=normal_strength, w=alpha_cutoff
+  emissive : vec4<f32>,      // xyz=emissive, w=alpha_test_on
+  flags : vec4<f32>,         // x=normal_map, y=mr_map, z=emissive_map, w=occlusion_map
+  mode_params : vec4<f32>,   // x=shading_mode, y=double_sided, z=anisotropy, w=pom
+  sss : vec4<f32>,           // xyz=tint, w=strength
+  clearcoat : vec4<f32>,     // x=coat, y=coat_roughness
+  toon_shadow : vec4<f32>,   // xyz=shadow_color, w=threshold
+  toon_params : vec4<f32>,   // x=softness, y=spec_size, z=spec_strength, w=rim
+  watercolor : vec4<f32>,
+};
+struct PointLight {
+  color : vec3<f32>, intensity : f32,
+  position : vec3<f32>, radius : f32,
+  cast_shadow : i32, shadow_index : i32, pad : vec2<f32>,
+};
+struct PointLights {
+  count : i32, p0 : i32, p1 : i32, p2 : i32,
+  lights : array<PointLight, 64>,
+};
+@group(1) @binding(0) var<uniform> per_frame : PerFrame;
+@group(1) @binding(1) var<uniform> per_scene : PerScene;
+@group(1) @binding(2) var<uniform> per_material : PerMaterial;
+@group(1) @binding(3) var<uniform> point_lights : PointLights;
+@group(2) @binding(0) var albedo_tex : texture_2d<f32>;
+@group(2) @binding(1) var albedo_smp : sampler;
+// 注：CSM shadow atlas（flat unit11）暂不在前向通道采样——引擎的 WebGPU 阴影/前向通道尚未做读写
+//   屏障分离，将其作为采样绑定会与阴影写入产生同一同步作用域的读写冲突（Dawn 校验报错）。故
+//   DirectionalShadow 暂返回 0（demo receive_shadow 关，视觉无差异）；PerScene 的 CSM 字段已按
+//   std140 完整声明，待后续阶段补屏障后即可启用采样（见 SampleCascadeShadow 的占位说明）。
+
+fn DistributionGGX(N : vec3<f32>, H : vec3<f32>, roughness : f32) -> f32 {
+  let a = roughness * roughness;
+  let a2 = a * a;
+  let NdotH = max(dot(N, H), 0.0);
+  let denom = (NdotH * NdotH * (a2 - 1.0) + 1.0);
+  return a2 / max(PI * denom * denom, 1e-7);
+}
+fn GeometrySchlickGGX(NdotV : f32, roughness : f32) -> f32 {
+  let r = roughness + 1.0;
+  let k = (r * r) / 8.0;
+  return NdotV / (NdotV * (1.0 - k) + k);
+}
+fn GeometrySmith(N : vec3<f32>, V : vec3<f32>, L : vec3<f32>, roughness : f32) -> f32 {
+  return GeometrySchlickGGX(max(dot(N, V), 0.0), roughness)
+       * GeometrySchlickGGX(max(dot(N, L), 0.0), roughness);
+}
+fn FresnelSchlick(cosTheta : f32, F0 : vec3<f32>) -> vec3<f32> {
+  return F0 + (vec3<f32>(1.0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// CSM 方向光阴影：占位返回 0（不采样 shadow atlas，原因见上方绑定注释）。
+//   级联选择 / light-space 投影 / atlas 区域 / PCF 逻辑与 forward_shaded.frag 的
+//   DirectionalShadow+SampleCascadeShadow 一致，待补通道屏障后用 textureLoad(texture_depth_2d) 接回。
+fn DirectionalShadow(worldPos : vec3<f32>, N : vec3<f32>, L : vec3<f32>) -> f32 {
+  return 0.0;
+}
+fn PointLightsLo(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
+                 surface_albedo : vec3<f32>, roughness : f32, metallic : f32, F0 : vec3<f32>) -> vec3<f32> {
+  var sum = vec3<f32>(0.0);
+  let n = point_lights.count;
+  for (var i = 0; i < n; i = i + 1) {
+    let pl = point_lights.lights[i];
+    let d = pl.position - world_pos;
+    let dist = length(d);
+    let L = d / max(dist, 1e-4);
+    let atten = clamp(1.0 - (dist * dist) / (pl.radius * pl.radius + 1e-4), 0.0, 1.0);
+    let radiance = pl.color * pl.intensity * atten;
+    let H = normalize(V + L);
+    let NDF = DistributionGGX(N, H, roughness);
+    let G = GeometrySmith(N, V, L, roughness);
+    let F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    let spec = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+    let kD = (vec3<f32>(1.0) - F) * (1.0 - metallic);
+    sum = sum + (kD * surface_albedo / PI + spec) * radiance * max(dot(N, L), 0.0);
+  }
+  return sum;
+}
+fn SubsurfaceScattering(N : vec3<f32>, L : vec3<f32>, alb : vec3<f32>, sss_s : f32,
+                        light_col : vec3<f32>, li : f32, tint : vec3<f32>) -> vec3<f32> {
+  let wrap = 0.5 * sss_s;
+  let wrapped = max(0.0, (dot(N, L) + wrap) / (1.0 + wrap));
+  let diff = wrapped - max(dot(N, L), 0.0);
+  var sss_tint = tint;
+  if (dot(tint, tint) <= 0.0) { sss_tint = vec3<f32>(1.0, 0.35, 0.2); }
+  return alb * sss_tint * diff * light_col * li;
+}
+
+struct VsOut {
+  @builtin(position) clip : vec4<f32>,
+  @location(0) nrm : vec3<f32>,
+  @location(1) uv : vec2<f32>,
+  @location(2) col : vec4<f32>,
+  @location(3) wpos : vec3<f32>,
+};
+@vertex fn vs_main(
+  @location(0) pos : vec3<f32>,
+  @location(1) color : vec4<f32>,
+  @location(2) uv : vec2<f32>,
+  @location(3) normal : vec3<f32>,
+  @location(4) tangent : vec3<f32>,
+) -> VsOut {
+  var o : VsOut;
+  o.clip = per_frame.vp * vec4<f32>(pos, 1.0);
+  o.nrm = normal;
+  o.uv = uv;
+  o.col = color;
+  o.wpos = pos;
+  return o;
+}
+@fragment fn fs_main(i : VsOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f32> {
+  let shading_mode = i32(per_material.mode_params.x + 0.5);
+  let double_sided = per_material.mode_params.y > 0.5;
+  var N = normalize(i.nrm);
+  if (double_sided && !ff) { N = -N; }
+  let V = normalize(per_frame.camera_pos.xyz - i.wpos);
+
+  let texColor = textureSample(albedo_tex, albedo_smp, i.uv) * i.col;
+  // alpha-test（emissive.w = 开关，roughness_ao.w = cutoff）。
+  if (per_material.emissive.w > 0.5 && texColor.a < clamp(per_material.roughness_ao.w, 0.0, 1.0)) { discard; }
+
+  let light_color = per_scene.light_color_and_ambient.xyz;
+  let ambient = per_scene.light_color_and_ambient.w;
+  let light_intensity = per_scene.light_params.x;
+  let lighting_enabled = per_scene.light_dir_and_enabled.w > 0.5;
+  let L = normalize(per_scene.light_dir_and_enabled.xyz);
+  let shadow = DirectionalShadow(i.wpos, N, L);
+
+  var color = vec3<f32>(0.0);
+  var out_alpha = texColor.a;
+
+  if (!lighting_enabled) {
+    color = texColor.rgb * per_material.albedo.xyz;
+  } else if (shading_mode == 2) {
+    let hl = dot(N, L) * 0.5 + 0.5;
+    let base_color = texColor.rgb * per_material.albedo.xyz;
+    color = base_color * light_color * (hl * light_intensity * (1.0 - shadow) + ambient * 0.5);
+    out_alpha = 1.0;
+  } else if (shading_mode == 3) {
+    let R = reflect(-L, N);
+    let hl = dot(N, L) * 0.5 + 0.5;
+    let diffuse = per_material.albedo.xyz * hl * light_color * light_intensity * (1.0 - shadow);
+    let spec_power = max(per_material.roughness_ao.x, 1.0);
+    let specular = vec3<f32>(per_material.albedo.w) * pow(max(dot(R, V), 0.0), spec_power);
+    color = (diffuse + specular + per_material.emissive.xyz) * texColor.rgb;
+  } else if (shading_mode == 4) {
+    let H = normalize(L + V);
+    let NdotL = dot(N, L) * 0.5 + 0.5;
+    let soft = per_material.toon_params.x;
+    let band1 = smoothstep(per_material.toon_shadow.w - soft, per_material.toon_shadow.w + soft, NdotL);
+    let band2 = smoothstep(0.7 - soft, 0.7 + soft, NdotL);
+    let cel = band1 * 0.7 + band2 * 0.3;
+    let baseColor = texColor.rgb * per_material.albedo.xyz;
+    let shadowColor = baseColor * per_material.toon_shadow.xyz;
+    var diffuse = mix(shadowColor, baseColor * light_color, cel);
+    diffuse = mix(shadowColor, diffuse, 1.0 - shadow);
+    let spec = step(per_material.toon_params.y, max(dot(N, H), 0.0)) * per_material.toon_params.z;
+    let rim = pow(1.0 - max(dot(N, V), 0.0), 4.0) * per_material.toon_params.w;
+    color = diffuse + light_color * spec * (1.0 - shadow) + vec3<f32>(rim);
+  } else {
+    // 默认 PBR（Cook-Torrance）+ SSS / clearcoat / clustered 点光。
+    let surface_albedo = pow(texColor.rgb * per_material.albedo.xyz, vec3<f32>(2.2));
+    let metallic = clamp(per_material.albedo.w, 0.0, 1.0);
+    let roughness = clamp(per_material.roughness_ao.x, 0.04, 1.0);
+    let ao = max(per_material.roughness_ao.y, 0.0);
+    let F0 = mix(vec3<f32>(0.04), surface_albedo, vec3<f32>(metallic));
+    let H = normalize(V + L);
+    let NDF = DistributionGGX(N, H, roughness);
+    let G = GeometrySmith(N, V, L, roughness);
+    let F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    let specular = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+    let kD = (vec3<f32>(1.0) - F) * (1.0 - metallic);
+    let NdotL = max(dot(N, L), 0.0);
+    var Lo = (kD * surface_albedo / PI + specular) * light_color * light_intensity * NdotL;
+    if (per_material.sss.w > 0.0) {
+      Lo = Lo + SubsurfaceScattering(N, L, surface_albedo, per_material.sss.w,
+                                     light_color, light_intensity, per_material.sss.xyz);
+    }
+    if (per_material.clearcoat.x > 0.0) {
+      let cc_r = max(per_material.clearcoat.y, 0.04);
+      let NDF_cc = DistributionGGX(N, H, cc_r);
+      let G_cc = GeometrySmith(N, V, L, cc_r);
+      let F_cc = FresnelSchlick(max(dot(H, V), 0.0), vec3<f32>(0.04));
+      let spec_cc = (NDF_cc * G_cc * F_cc) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+      Lo = Lo + spec_cc * per_material.clearcoat.x * NdotL * light_color * light_intensity;
+    }
+    Lo = Lo * (1.0 - shadow);
+    Lo = Lo + PointLightsLo(N, V, i.wpos, surface_albedo, roughness, metallic, F0);
+    color = vec3<f32>(ambient) * surface_albedo * ao + Lo + per_material.emissive.xyz;
+  }
+  // 与 forward_shaded.frag 末尾一致：Reinhard tonemap + gamma（保证三后端 LDR 输出一致）。
+  // 后续 composite（kWgslComposite）再做一次 Reinhard+sRGB，与 WebGL2 参考帧（同样双重处理）对齐。
+  color = color / (color + vec3<f32>(1.0));
+  color = pow(max(color, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2));
+  return vec4<f32>(color, out_alpha);
+}
+)WGSL";
+
 // 天空盒：vp 推送常量（VS push, group0 binding0）；cubemap 在 slot0 → group2 binding0/1。
 // 顶点为 36 顶点立方体（vec3 pos）。z=w 使深度落远平面（配 LEQUAL 深度测试）。
 const char* kWgslSkybox = R"WGSL(// dse-wgsl
@@ -994,10 +1219,12 @@ unsigned int WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) {
     switch (program) {
         case BuiltinProgram::Skybox:
             return GetOrCreateWgslProgram("builtin.skybox", kWgslSkybox);
-        // B2c：静态前向 PBR / 高级 shading（顶点世界空间预变换，共用最小前向 WGSL）。
+        // B2c：静态前向 PBR（最小前向 WGSL，64B PerMaterial）。
         case BuiltinProgram::ForwardPbr:
-        case BuiltinProgram::ForwardShaded:
             return GetOrCreateWgslProgram("builtin.forward", kWgslForward);
+        // B2c 进阶：高级 shading（shading_mode/SSS/clearcoat/点光/CSM，160B PerMaterial）。
+        case BuiltinProgram::ForwardShaded:
+            return GetOrCreateWgslProgram("builtin.forward.shaded", kWgslForwardShaded);
         default:
             // 蒙皮/实例化/morph/粒子/毛发/GBuffer 等需 SSBO 或专用布局，留后续阶段。
             return 0;
