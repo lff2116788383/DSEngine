@@ -330,6 +330,7 @@ void WebGPURhiDevice::Shutdown() {
 
     ReleaseSwapChain();
     if (ubo_ring_) { wgpuBufferRelease(ubo_ring_); ubo_ring_ = nullptr; ubo_ring_size_ = 0; ubo_ring_cursor_ = 0; }
+    if (geom_ring_) { wgpuBufferRelease(geom_ring_); geom_ring_ = nullptr; geom_ring_size_ = 0; geom_ring_cursor_ = 0; }
     if (surface_) { wgpuSurfaceRelease(surface_); surface_ = nullptr; }
     if (queue_)   { wgpuQueueRelease(queue_);     queue_ = nullptr; }
     if (device_)  { wgpuDeviceRelease(device_);   device_ = nullptr; }
@@ -387,11 +388,49 @@ uint64_t WebGPURhiDevice::AllocUboVersion(const void* data, uint64_t size) {
     return off;
 }
 
+uint64_t WebGPURhiDevice::AllocGeomVersion(const void* data, uint64_t size) {
+    if (!device_ || !data || size == 0) return UINT64_MAX;
+    // 顶点缓冲偏移须 4 对齐；索引缓冲偏移须为索引元素字节数（2/4）的倍数。取 4 对齐两者均满足。
+    constexpr uint64_t kAlign = 4;
+    const uint64_t aligned_size = (size + 3) & ~uint64_t(3);
+    const uint64_t off = (geom_ring_cursor_ + kAlign - 1) & ~(kAlign - 1);
+    // 同 UBO 版本环：本帧已录制的绑定/索引绑定仍引用现有环缓冲，不能中途重建；
+    //   故仅在环尚未创建或在帧首（游标为 0）按需扩容，运行中溢出则降级（返回失败，回退原存储）。
+    if (off + aligned_size > geom_ring_size_) {
+        if (geom_ring_cursor_ != 0) {
+            DEBUG_LOG_WARN("WebGPU: 几何版本环本帧溢出（需 {} > 容量 {}），该顶点/索引回退原存储",
+                           static_cast<unsigned long long>(off + aligned_size),
+                           static_cast<unsigned long long>(geom_ring_size_));
+            return UINT64_MAX;
+        }
+        uint64_t new_size = geom_ring_size_ ? geom_ring_size_ : (1u << 22);  // 4MB 起步
+        while (off + aligned_size > new_size) new_size *= 2;
+        if (geom_ring_) wgpuBufferRelease(geom_ring_);
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
+        bd.size = new_size;
+        geom_ring_ = wgpuDeviceCreateBuffer(device_, &bd);
+        geom_ring_size_ = geom_ring_ ? new_size : 0;
+        if (!geom_ring_) return UINT64_MAX;
+    }
+    if (aligned_size == size) {
+        wgpuQueueWriteBuffer(queue_, geom_ring_, off, data, size);
+    } else {
+        std::vector<uint8_t> padded(aligned_size, 0);
+        std::memcpy(padded.data(), data, size);
+        wgpuQueueWriteBuffer(queue_, geom_ring_, off, padded.data(), aligned_size);
+    }
+    geom_ring_cursor_ = off + aligned_size;
+    return off;
+}
+
 void WebGPURhiDevice::BeginFrame() {
     last_frame_stats_ = RenderStats{};
     if (!EnsureInitialized()) return;
     ubo_ring_cursor_ = 0;
     ubo_versions_.clear();
+    geom_ring_cursor_ = 0;
+    geom_versions_.clear();
     if (!swapchain_) return;
     backbuffer_view_ = wgpuSwapChainGetCurrentTextureView(swapchain_);
     if (!backbuffer_view_) return;
@@ -1049,6 +1088,13 @@ void WebGPURhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t si
         const uint64_t voff = AllocUboVersion(data, size);
         if (voff != UINT64_MAX) ubo_versions_[handle] = {ubo_ring_, voff, size};
     }
+    // 几何版本切片：引擎前向路径每 draw 把世界空间顶点/索引重写进共享 vbo_/ibo_（offset=0）。
+    //   同 UBO 合并问题——故全量更新（offset=0）在 geom 环内分配独立切片，绑定时改用当帧最近版本，
+    //   使各 draw 的顶点/索引互不覆盖（见 IssueDraw 的 SetVertexBuffer/SetIndexBuffer）。
+    if (offset == 0) {
+        const uint64_t goff = AllocGeomVersion(data, size);
+        if (goff != UINT64_MAX) geom_versions_[handle] = {geom_ring_, goff, AlignUp4(size)};
+    }
 }
 
 void WebGPURhiDevice::DeleteBuffer(unsigned int handle) {
@@ -1467,6 +1513,13 @@ void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_
     for (size_t i = 0; i < cur_vbs_.size(); ++i) {
         const VbBinding& vb = cur_vbs_[i];
         if (!vb.set) continue;
+        // 当帧若有该顶点缓冲的版本切片（每 draw 重写共享 vbo_），改绑版本切片避免合并覆盖。
+        auto git = geom_versions_.find(vb.handle);
+        if (git != geom_versions_.end() && git->second.buffer) {
+            wgpuRenderPassEncoderSetVertexBuffer(cur_pass_, static_cast<uint32_t>(i),
+                                                 git->second.buffer, git->second.offset, git->second.size);
+            continue;
+        }
         const BufferEntry* be = FindBuffer(vb.handle);
         if (!be || !be->buffer) continue;
         wgpuRenderPassEncoderSetVertexBuffer(cur_pass_, static_cast<uint32_t>(i), be->buffer, 0, be->size);
@@ -1474,9 +1527,16 @@ void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_
     BuildAndSetBindGroups(*pe);
 
     if (indexed) {
-        const BufferEntry* ib = FindBuffer(cur_ib_handle_);
-        if (!ib || !ib->buffer) return;
-        wgpuRenderPassEncoderSetIndexBuffer(cur_pass_, ib->buffer, cur_ib_format_, 0, ib->size);
+        // 同顶点：优先当帧索引版本切片（每 draw 重写共享 ibo_），否则原索引缓冲。
+        auto git = geom_versions_.find(cur_ib_handle_);
+        if (git != geom_versions_.end() && git->second.buffer) {
+            wgpuRenderPassEncoderSetIndexBuffer(cur_pass_, git->second.buffer, cur_ib_format_,
+                                                git->second.offset, git->second.size);
+        } else {
+            const BufferEntry* ib = FindBuffer(cur_ib_handle_);
+            if (!ib || !ib->buffer) return;
+            wgpuRenderPassEncoderSetIndexBuffer(cur_pass_, ib->buffer, cur_ib_format_, 0, ib->size);
+        }
         wgpuRenderPassEncoderDrawIndexed(cur_pass_, count, instance_count, first,
                                          base_vertex, first_instance);
     } else {

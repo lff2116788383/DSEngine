@@ -221,6 +221,8 @@ private:
     /// 在每帧 UBO 版本环内 bump 分配一块 256 对齐切片并写入 data；返回切片在环内的字节偏移
     /// （失败返回 UINT64_MAX）。环按需懒创建、跨帧复用、每帧 BeginFrame 复位游标。
     uint64_t AllocUboVersion(const void* data, uint64_t size);
+    /// 同 AllocUboVersion，但服务顶点/索引缓冲（geom 版本环，usage=Vertex|Index|CopyDst，4 对齐）。
+    uint64_t AllocGeomVersion(const void* data, uint64_t size);
 
     // --- B1 资源创建内部助手 ---
     /// 创建一张 2D/cube/3D 纹理 + 默认视图 + 采样器，登记入 textures_，返回句柄。
@@ -336,6 +338,16 @@ private:
     uint64_t ubo_ring_cursor_ = 0;
     struct UboVersion { WGPUBuffer buffer; uint64_t offset; uint64_t size; };
     std::unordered_map<unsigned int, UboVersion> ubo_versions_;  ///< 句柄 → 当帧最近版本切片（每帧清）
+
+    // --- 每帧几何版本环（同 UBO 版本环，但服务顶点/索引缓冲）---
+    //     引擎前向路径每 draw 把世界空间顶点烘焙后重写进共享 vbo_/ibo_（offset=0），WebGPU 的
+    //     wgpuQueueWriteBuffer 在命令缓冲执行前一律合并，致同一缓冲所有 draw 只见最后一次写入
+    //     （表现为后写入的网格覆盖前者，立方体丢失）。故每次顶点/索引更新在 geom 环内分配独立
+    //     切片并登记版本；SetVertexBuffer/SetIndexBuffer 改绑当帧最近版本切片，各 draw 见各自几何。
+    WGPUBuffer geom_ring_ = nullptr;
+    uint64_t geom_ring_size_ = 0;
+    uint64_t geom_ring_cursor_ = 0;
+    std::unordered_map<unsigned int, UboVersion> geom_versions_;  ///< 顶点/索引句柄 → 当帧最近版本切片（每帧清）
 
     // --- B2 bring-up 自检资源（验证整条录制链路；引擎 WGSL 内容就绪后自动不再触发）---
     bool selftest_init_ = false;
