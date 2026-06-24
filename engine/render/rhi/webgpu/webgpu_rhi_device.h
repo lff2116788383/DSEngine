@@ -162,6 +162,41 @@ public:
     const RenderTargetEntry* FindRenderTarget(unsigned int handle) const;
     const PipelineStateDesc* FindPipelineState(unsigned int handle) const;
 
+    // ============================================================
+    // B2 设备级命令录制 API（WebGPUCommandBuffer 逐调用转发至此）
+    // ============================================================
+    // 录制直接落到本帧 frame_encoder_（BeginFrame 创建、EndFrame 提交），故 CommandBuffer
+    // 端是「立即转发」而非「缓存重放」：Begin/End RenderPass 在 frame_encoder_ 上开关
+    // WGPURenderPassEncoder，Bind*/PushConstants 累积当前绘制状态，Draw* 惰性组装 PSO 并发起。
+    // ClearColor/SetGlobalMat4/三类 ShadowMap/DispatchComputePass/DrawIndexedIndirect 在 B2
+    // 暂保持 no-op（留 B3：clear 经 RenderPassDesc.clear_* 表达，全局矩阵/阴影/compute/indirect 后续落地）。
+
+    void CmdBeginRenderPass(const RenderPassDesc& desc);
+    void CmdEndRenderPass();
+    void CmdClearColor(const glm::vec4& color);
+    void CmdSetGlobalMat4(const std::string& name, const glm::mat4& value);
+    void CmdSetViewport(int x, int y, int width, int height);
+
+    void CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle);
+    void CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle);
+    void CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle);
+
+    void CmdBindPipeline(unsigned int graphics_pipeline_handle);
+    void CmdBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                             const std::vector<VertexAttr>& attrs, VertexInputRate rate);
+    void CmdBindIndexBuffer(unsigned int buffer_handle, IndexType type);
+    void CmdBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim);
+    void CmdBindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
+    void CmdBindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size);
+    void CmdPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size);
+
+    void CmdDraw(uint32_t vertex_count, uint32_t first_vertex);
+    void CmdDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex);
+    void CmdDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                 uint32_t first_index, int32_t base_vertex, uint32_t first_instance);
+    void CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset);
+    void CmdDispatchComputePass(const ComputeDispatch& dispatch);
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -249,6 +284,8 @@ private:
     std::vector<WGPUTextureFormat> cur_color_formats_;
     WGPUTextureFormat cur_depth_format_ = WGPUTextureFormat_Undefined;
     uint32_t cur_sample_count_ = 1;
+    uint32_t cur_rt_width_ = 0;   ///< 当前 pass 渲染目标宽（视口裁剪用）
+    uint32_t cur_rt_height_ = 0;  ///< 当前 pass 渲染目标高
     std::vector<WGPUTextureView> cur_pass_views_;  ///< 本 pass 临时创建的面视图，pass 结束释放
 
     // --- B2 录制：当前绘制绑定（跨 Draw 持续，BeginRenderPass 时重置）---
@@ -276,6 +313,7 @@ private:
     unsigned int selftest_pso_ = 0;
     unsigned int selftest_vbo_ = 0;
     unsigned int selftest_tex_ = 0;
+    unsigned int selftest_ubo_ = 0;
 
     // --- B2 录制内部助手 ---
     void ResetDrawState();

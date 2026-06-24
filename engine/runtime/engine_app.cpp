@@ -309,8 +309,11 @@ bool EngineInstance::Init() {
 
     // 如果未启用编辑器模式，则初始化系统环境
     const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    // WebGPU(Web)：画布只能持有单一上下文，GL context 会占用 #canvas 使 getContext('webgpu')
+    // 失败，故 WebGPU 后端同 D3D11/Vulkan 一样不创建 GL context（不影响 A 阶段 WebGL2 回退）。
     const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
-                                   rhi_backend != RhiBackend::Vulkan);
+                                   rhi_backend != RhiBackend::Vulkan &&
+                                   rhi_backend != RhiBackend::WebGPU);
 
     platform_ = dse::platform::CreateDefaultPlatformApp();
 

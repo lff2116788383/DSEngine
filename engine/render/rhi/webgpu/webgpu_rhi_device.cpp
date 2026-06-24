@@ -10,6 +10,7 @@
 #include "engine/base/debug.h"
 #include "engine/render/rhi/draw_executor_common.h"
 
+#include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
 
 #include <cstring>
@@ -19,55 +20,56 @@ namespace render {
 
 namespace {
 
-/// B0 占位命令缓冲：录制接口为 no-op，由 B1 起接入真实 WebGPU 录制
-/// （RenderPassEncoder / RenderPipeline / BindGroup）。所有接口显式实现，
-/// 不依赖基类静默默认，避免漏实现时无声吞掉绘制。
+/// B2 命令缓冲：把后端无关的录制接口逐调用转发到 WebGPURhiDevice 的设备级 Cmd*，
+/// 由设备直接录制到本帧 frame_encoder_（立即转发，非缓存重放）。所有接口显式实现，
+/// 不依赖基类静默默认，避免漏实现时无声吞掉绘制。ClearColor/SetGlobalMat4/三类 ShadowMap/
+/// DispatchComputePass/DrawIndexedIndirect 转发到 B2 期保持 no-op 的 Cmd*（留 B3）。
 class WebGPUCommandBuffer final : public CommandBuffer {
 public:
-    explicit WebGPUCommandBuffer(WebGPURhiDevice* device) : device_(device) { (void)device_; }
+    explicit WebGPUCommandBuffer(WebGPURhiDevice* device) : device_(device) {}
 
-    void BeginRenderPass(const RenderPassDesc& render_pass) override { (void)render_pass; }
-    void EndRenderPass() override {}
-    void ClearColor(const glm::vec4& color) override { (void)color; }
-    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override { (void)name; (void)value; }
-    void SetViewport(int x, int y, int width, int height) override { (void)x; (void)y; (void)width; (void)height; }
+    void BeginRenderPass(const RenderPassDesc& render_pass) override { device_->CmdBeginRenderPass(render_pass); }
+    void EndRenderPass() override { device_->CmdEndRenderPass(); }
+    void ClearColor(const glm::vec4& color) override { device_->CmdClearColor(color); }
+    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override { device_->CmdSetGlobalMat4(name, value); }
+    void SetViewport(int x, int y, int width, int height) override { device_->CmdSetViewport(x, y, width, height); }
 
-    void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override { (void)index; (void)texture_handle; }
-    void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override { (void)index; (void)texture_handle; }
-    void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override { (void)index; (void)texture_handle; }
+    void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalShadowMap(index, texture_handle); }
+    void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalSpotShadowMap(index, texture_handle); }
+    void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalPointShadowMap(index, texture_handle); }
 
-    void BindPipeline(unsigned int graphics_pipeline_handle) override { (void)graphics_pipeline_handle; }
+    void BindPipeline(unsigned int graphics_pipeline_handle) override { device_->CmdBindPipeline(graphics_pipeline_handle); }
     void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs,
                           VertexInputRate rate) override {
-        (void)slot; (void)buffer_handle; (void)stride; (void)attrs; (void)rate;
+        device_->CmdBindVertexBuffer(slot, buffer_handle, stride, attrs, rate);
     }
     void PushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) override {
-        (void)stage; (void)offset; (void)data; (void)size;
+        device_->CmdPushConstants(stage, offset, data, size);
     }
-    void Draw(uint32_t vertex_count, uint32_t first_vertex) override { (void)vertex_count; (void)first_vertex; }
+    void Draw(uint32_t vertex_count, uint32_t first_vertex) override { device_->CmdDraw(vertex_count, first_vertex); }
 
-    void BindIndexBuffer(unsigned int buffer_handle, IndexType type) override { (void)buffer_handle; (void)type; }
+    void BindIndexBuffer(unsigned int buffer_handle, IndexType type) override { device_->CmdBindIndexBuffer(buffer_handle, type); }
     void BindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) override {
-        (void)slot; (void)texture_handle; (void)dim;
+        device_->CmdBindTexture(slot, texture_handle, dim);
     }
     void BindUniformBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) override {
-        (void)slot; (void)buffer_handle; (void)offset; (void)size;
+        device_->CmdBindUniformBuffer(slot, buffer_handle, offset, size);
     }
     void BindStorageBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t offset, uint32_t size) override {
-        (void)slot; (void)buffer_handle; (void)offset; (void)size;
+        device_->CmdBindStorageBuffer(slot, buffer_handle, offset, size);
     }
     void DrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) override {
-        (void)index_count; (void)first_index; (void)base_vertex;
+        device_->CmdDrawIndexed(index_count, first_index, base_vertex);
     }
-    void DispatchComputePass(const ComputeDispatch& dispatch) override { (void)dispatch; }
+    void DispatchComputePass(const ComputeDispatch& dispatch) override { device_->CmdDispatchComputePass(dispatch); }
     void DrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
                               uint32_t first_index, int32_t base_vertex,
                               uint32_t first_instance) override {
-        (void)index_count; (void)instance_count; (void)first_index; (void)base_vertex; (void)first_instance;
+        device_->CmdDrawIndexedInstanced(index_count, instance_count, first_index, base_vertex, first_instance);
     }
     void DrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) override {
-        (void)indirect_buffer; (void)byte_offset;
+        device_->CmdDrawIndexedIndirect(indirect_buffer, byte_offset);
     }
 
 private:
@@ -77,6 +79,83 @@ private:
 // --- B1 资源映射小工具 ---
 
 constexpr uint64_t AlignUp4(uint64_t n) { return (n + 3u) & ~static_cast<uint64_t>(3u); }
+
+// --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
+
+WGPUVertexFormat ToVertexFormat(uint32_t components) {
+    switch (components) {
+        case 1:  return WGPUVertexFormat_Float32;
+        case 2:  return WGPUVertexFormat_Float32x2;
+        case 3:  return WGPUVertexFormat_Float32x3;
+        default: return WGPUVertexFormat_Float32x4;
+    }
+}
+
+WGPUTextureViewDimension ToViewDimension(TextureDim dim) {
+    switch (dim) {
+        case TextureDim::TexCube:    return WGPUTextureViewDimension_Cube;
+        case TextureDim::Tex2DArray: return WGPUTextureViewDimension_2DArray;
+        case TextureDim::Tex3D:      return WGPUTextureViewDimension_3D;
+        case TextureDim::Tex2D:
+        default:                     return WGPUTextureViewDimension_2D;
+    }
+}
+
+WGPUPrimitiveTopology ToTopology(PrimitiveTopology t) {
+    switch (t) {
+        case PrimitiveTopology::LineStrip: return WGPUPrimitiveTopology_LineStrip;
+        case PrimitiveTopology::LineList:  return WGPUPrimitiveTopology_LineList;
+        case PrimitiveTopology::PointList: return WGPUPrimitiveTopology_PointList;
+        case PrimitiveTopology::TriangleList:
+        default:                           return WGPUPrimitiveTopology_TriangleList;
+    }
+}
+
+WGPUCullMode ToCullMode(CullFace c) {
+    switch (c) {
+        case CullFace::Front: return WGPUCullMode_Front;
+        case CullFace::Back:  return WGPUCullMode_Back;
+        case CullFace::None:
+        case CullFace::FrontAndBack:  // WebGPU 无 FrontAndBack；退化为 None（双面不剔除）
+        default:              return WGPUCullMode_None;
+    }
+}
+
+WGPUCompareFunction ToCompareFunc(CompareFunc f) {
+    switch (f) {
+        case CompareFunc::Never:        return WGPUCompareFunction_Never;
+        case CompareFunc::Less:         return WGPUCompareFunction_Less;
+        case CompareFunc::Equal:        return WGPUCompareFunction_Equal;
+        case CompareFunc::LessEqual:    return WGPUCompareFunction_LessEqual;
+        case CompareFunc::Greater:      return WGPUCompareFunction_Greater;
+        case CompareFunc::NotEqual:     return WGPUCompareFunction_NotEqual;
+        case CompareFunc::GreaterEqual: return WGPUCompareFunction_GreaterEqual;
+        case CompareFunc::Always:
+        default:                        return WGPUCompareFunction_Always;
+    }
+}
+
+WGPUBlendFactor ToBlendFactor(BlendFactor f) {
+    switch (f) {
+        case BlendFactor::Zero:             return WGPUBlendFactor_Zero;
+        case BlendFactor::One:              return WGPUBlendFactor_One;
+        case BlendFactor::SrcAlpha:         return WGPUBlendFactor_SrcAlpha;
+        case BlendFactor::OneMinusSrcAlpha: return WGPUBlendFactor_OneMinusSrcAlpha;
+        case BlendFactor::DstAlpha:         return WGPUBlendFactor_DstAlpha;
+        case BlendFactor::OneMinusDstAlpha: return WGPUBlendFactor_OneMinusDstAlpha;
+        case BlendFactor::SrcColor:         return WGPUBlendFactor_Src;
+        case BlendFactor::OneMinusSrcColor: return WGPUBlendFactor_OneMinusSrc;
+        case BlendFactor::DstColor:         return WGPUBlendFactor_Dst;
+        case BlendFactor::OneMinusDstColor: return WGPUBlendFactor_OneMinusDst;
+        default:                            return WGPUBlendFactor_One;
+    }
+}
+
+bool IsDepthFormat(WGPUTextureFormat f) {
+    return f == WGPUTextureFormat_Depth32Float || f == WGPUTextureFormat_Depth24Plus ||
+           f == WGPUTextureFormat_Depth24PlusStencil8 || f == WGPUTextureFormat_Depth16Unorm ||
+           f == WGPUTextureFormat_Depth32FloatStencil8;
+}
 
 WGPUAddressMode ToAddressMode(TextureWrap w) {
     return w == TextureWrap::ClampToEdge ? WGPUAddressMode_ClampToEdge : WGPUAddressMode_Repeat;
@@ -140,6 +219,14 @@ bool WebGPURhiDevice::AcquireDevice() {
         DEBUG_LOG_ERROR("WebGPU: wgpuDeviceGetQueue 失败");
         return false;
     }
+    // 把 Dawn 未捕获错误（着色器编译 / 管线 / 绑定校验失败等）转出到日志，便于 bring-up 诊断。
+    wgpuDeviceSetUncapturedErrorCallback(
+        device_,
+        [](WGPUErrorType type, char const* message, void*) {
+            DEBUG_LOG_ERROR("WebGPU uncaptured error (type={}): {}",
+                            static_cast<int>(type), message ? message : "(null)");
+        },
+        nullptr);
     return true;
 }
 
@@ -226,6 +313,21 @@ void WebGPURhiDevice::Shutdown() {
     shaders_.clear();
     pipeline_states_.clear();
 
+    // B2 录制缓存 / 池 / 瞬态：管线缓存（pipeline+layout+4×BGL）、push 缓冲池、本帧 BindGroup、临时面视图。
+    for (auto& [key, e] : pipeline_cache_) {
+        (void)key;
+        if (e.pipeline) wgpuRenderPipelineRelease(e.pipeline);
+        if (e.layout)   wgpuPipelineLayoutRelease(e.layout);
+        for (WGPUBindGroupLayout bgl : e.bgls) if (bgl) wgpuBindGroupLayoutRelease(bgl);
+    }
+    pipeline_cache_.clear();
+    for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
+    push_pool_.clear();
+    push_pool_used_ = 0;
+    for (WGPUBindGroup bg : frame_bindgroups_) if (bg) wgpuBindGroupRelease(bg);
+    frame_bindgroups_.clear();
+    ReleasePassViews();
+
     ReleaseSwapChain();
     if (surface_) { wgpuSurfaceRelease(surface_); surface_ = nullptr; }
     if (queue_)   { wgpuQueueRelease(queue_);     queue_ = nullptr; }
@@ -239,10 +341,24 @@ void WebGPURhiDevice::WaitIdle() {
 
 void WebGPURhiDevice::BeginFrame() {
     last_frame_stats_ = RenderStats{};
-    if (!initialized_ || !swapchain_) return;
+    // Web 宿主（Emscripten）以空 native_window_handle 创建设备，FramePipeline 因此不调用
+    // InitDevice（仅 D3D11/有窗口句柄时调用，A 阶段 GL 路径无需 swapchain）。这里据画布尺寸
+    // 惰性完成 WebGPU 设备 + swapchain 初始化，不触碰 A 阶段回退逻辑。
+    if (!initialized_) {
+        int cw = 0, ch = 0;
+        emscripten_get_canvas_element_size("#canvas", &cw, &ch);
+        if (cw <= 0) cw = 1280;
+        if (ch <= 0) ch = 720;
+        if (!InitDevice(nullptr, cw, ch)) return;
+    }
+    if (!swapchain_) return;
     backbuffer_view_ = wgpuSwapChainGetCurrentTextureView(swapchain_);
     if (!backbuffer_view_) return;
     frame_encoder_ = wgpuDeviceCreateCommandEncoder(device_, nullptr);
+    // 每帧复位录制瞬态：push 池游标归零（缓冲跨帧复用）、自检触发标志、当前绘制绑定。
+    backbuffer_drawn_ = false;
+    push_pool_used_ = 0;
+    ResetDrawState();
 }
 
 void WebGPURhiDevice::EndFrame() {
@@ -252,23 +368,28 @@ void WebGPURhiDevice::EndFrame() {
         return;
     }
 
-    // B0：录制一个 clear 渲染 pass（证明设备/交换链/队列贯通）。B1 起在此 pass
-    // 内重放 WebGPUCommandBuffer 录制的真实绘制。
-    WGPURenderPassColorAttachment color_att{};
-    color_att.view = backbuffer_view_;
-    color_att.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
-    color_att.resolveTarget = nullptr;
-    color_att.loadOp = WGPULoadOp_Clear;
-    color_att.storeOp = WGPUStoreOp_Store;
-    color_att.clearValue = WGPUColor{0.05, 0.05, 0.08, 1.0};
-
-    WGPURenderPassDescriptor pass_desc{};
-    pass_desc.colorAttachmentCount = 1;
-    pass_desc.colorAttachments = &color_att;
-
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pass_desc);
-    wgpuRenderPassEncoderEnd(pass);
-    wgpuRenderPassEncoderRelease(pass);
+    // 本帧若无任何真实绘制落到 backbuffer（B2 期引擎 GLSL 程序无 WGSL module，绘制在录制
+    // 期被优雅跳过），跑 bring-up 自检：经 Cmd* 把渐变×棋盘纹理画上屏，验证整条录制链路。
+    // 引擎 WGSL 内容（B2b+）就绪并真正上屏后，backbuffer_drawn_ 置真，自检自动不再触发。
+    if (!backbuffer_drawn_) {
+        RunBringUpSelfTest();
+    }
+    // 兜底：自检也未成形（资源创建失败）时，至少 clear 一次 backbuffer，避免呈现未定义内容。
+    if (!backbuffer_drawn_) {
+        WGPURenderPassColorAttachment color_att{};
+        color_att.view = backbuffer_view_;
+        color_att.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        color_att.loadOp = WGPULoadOp_Clear;
+        color_att.storeOp = WGPUStoreOp_Store;
+        color_att.clearValue = WGPUColor{0.05, 0.05, 0.08, 1.0};
+        WGPURenderPassDescriptor pass_desc{};
+        pass_desc.colorAttachmentCount = 1;
+        pass_desc.colorAttachments = &color_att;
+        WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pass_desc);
+        wgpuRenderPassEncoderEnd(pass);
+        wgpuRenderPassEncoderRelease(pass);
+        last_frame_stats_.render_passes += 1;
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -279,13 +400,16 @@ void WebGPURhiDevice::EndFrame() {
     wgpuTextureViewRelease(backbuffer_view_);
     backbuffer_view_ = nullptr;
 
-    last_frame_stats_.render_passes = 1;
+    // 提交后 GPU 已不再引用录制期创建的 BindGroup，统一释放（push 缓冲跨帧复用，不在此释放）。
+    for (WGPUBindGroup bg : frame_bindgroups_) {
+        if (bg) wgpuBindGroupRelease(bg);
+    }
+    frame_bindgroups_.clear();
 }
 
 void WebGPURhiDevice::PresentFrame() {
-    // Emscripten 下 swapchain present 由浏览器在 rAF 自动呈现，wgpuSwapChainPresent
-    // 为 no-op；保留调用以对齐桌面 Dawn 语义。
-    if (swapchain_) wgpuSwapChainPresent(swapchain_);
+    // Emscripten 下浏览器在 rAF 回调结束后自动呈现 webgpu 画布上下文；wgpuSwapChainPresent
+    // 在 Emscripten 胶水里直接 abort（"unsupported, use requestAnimationFrame"），故不可调用。
 }
 
 // ============================================================
@@ -573,10 +697,27 @@ void WebGPURhiDevice::DeleteTexture(unsigned int texture_handle) {
 // --- 着色器 / 管线状态 ---
 
 unsigned int WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) {
-    // B1：暂存 GLSL 源；WGSL 转译 + WGPUShaderModule 创建在 B2（接 Tint 或 SPIR-V→WGSL）。
+    // B2：以 sentinel 行 `// dse-wgsl`（允许前导空白）区分两类着色器：
+    //   - WGSL（内建/自检程序）：vert_src 即整段 WGSL module（含 vs_main/fs_main），编译出 module。
+    //   - 引擎 GLSL：无离线 GLSL→WGSL 工具，故不转译、module 留空，其绘制在录制期被优雅跳过。
     ShaderEntry e;
     e.vert_src = vert_src;
     e.frag_src = frag_src;
+
+    const char* kSentinel = "// dse-wgsl";
+    const size_t first = vert_src.find_first_not_of(" \t\r\n");
+    const bool is_wgsl = first != std::string::npos &&
+                         vert_src.compare(first, std::strlen(kSentinel), kSentinel) == 0;
+    if (is_wgsl) {
+        e.module = CompileWGSL(vert_src, "dse-wgsl-program");
+        // 单一 module 同时承载 vs/fs 入口；无 fs_main 视为仅深度 pass（无片元阶段）。
+        e.has_fragment = vert_src.find("fn fs_main") != std::string::npos ||
+                         vert_src.find("fn " + e.fs_entry) != std::string::npos;
+        if (!e.module) {
+            DEBUG_LOG_ERROR("WebGPU: WGSL 着色器编译失败（module 为空），该程序绘制将被跳过");
+        }
+    }
+
     const unsigned int h = NextHandle();
     shaders_[h] = std::move(e);
     return h;
@@ -677,12 +818,670 @@ std::shared_ptr<CommandBuffer> WebGPURhiDevice::CreateCommandBuffer() {
 }
 
 void WebGPURhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
-    // B0：录制为 no-op，提交无操作；clear pass 在 EndFrame 统一提交。B1 起重放录制。
+    // B2：WebGPUCommandBuffer 录制即时落到本帧 frame_encoder_（经设备级 Cmd*），故 Submit
+    // 无需重放；整帧命令在 EndFrame 一次 wgpuQueueSubmit 提交。
     (void)cmd_buffer;
 }
 
 const RenderStats& WebGPURhiDevice::LastFrameStats() const {
     return last_frame_stats_;
+}
+
+// ============================================================
+// B2 命令录制引擎：设备级 Cmd* + 录制助手
+// ============================================================
+//
+// WebGPUCommandBuffer 逐调用转发至此。录制立即落到本帧 frame_encoder_：BeginRenderPass 在其上
+// 开 WGPURenderPassEncoder（cur_pass_），Bind*/PushConstants 累积当前绘制状态，Draw* 经
+// GetOrCreateRenderPipeline 惰性组装 explicit-layout PSO 并发起；EndRenderPass 收尾。无 WGSL
+// module 的程序（引擎 GLSL）在 IssueDraw 前优雅跳过，故 B2a 期引擎绘制不上屏、由 EndFrame 自检兜底。
+
+// --- 录制助手 ---
+
+void WebGPURhiDevice::ResetDrawState() {
+    cur_pso_handle_ = 0;
+    cur_program_ = 0;
+    cur_vbs_.clear();
+    cur_ib_handle_ = 0;
+    cur_ib_format_ = WGPUIndexFormat_Uint16;
+    cur_ubos_.clear();
+    cur_texs_.clear();
+    cur_ssbos_.clear();
+    cur_vs_push_.clear();
+    cur_fs_push_.clear();
+}
+
+void WebGPURhiDevice::ReleasePassViews() {
+    for (WGPUTextureView v : cur_pass_views_) {
+        if (v) wgpuTextureViewRelease(v);
+    }
+    cur_pass_views_.clear();
+}
+
+WGPUShaderModule WebGPURhiDevice::CompileWGSL(const std::string& code, const char* label) {
+    if (!device_) return nullptr;
+    WGPUShaderModuleWGSLDescriptor wgsl{};
+    wgsl.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+    wgsl.code = code.c_str();
+    WGPUShaderModuleDescriptor sd{};
+    sd.nextInChain = reinterpret_cast<const WGPUChainedStruct*>(&wgsl);
+    sd.label = label;
+    return wgpuDeviceCreateShaderModule(device_, &sd);
+}
+
+WGPUTextureView WebGPURhiDevice::MakeFaceView(const TextureEntry& e, int face) {
+    WGPUTextureViewDescriptor vd{};
+    vd.format = e.format;
+    vd.dimension = WGPUTextureViewDimension_2D;
+    vd.baseMipLevel = 0;
+    vd.mipLevelCount = 1;
+    vd.baseArrayLayer = static_cast<uint32_t>(face < 0 ? 0 : face);
+    vd.arrayLayerCount = 1;
+    vd.aspect = WGPUTextureAspect_All;
+    return wgpuTextureCreateView(e.texture, &vd);
+}
+
+std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(uint32_t group) {
+    // 各组遍历顺序在 BGL（GetOrCreateRenderPipeline）与 BindGroup（BuildAndSetBindGroups）间共用，
+    // 杜绝二者发散。group0=push（uniform 池）、group1=UBO、group2=texture+sampler、group3=SSBO。
+    // std::map 保证按 binding 升序稳定遍历。
+    std::vector<BindingInfo> out;
+    const WGPUShaderStageFlags kVsFs = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    switch (group) {
+        case 0: {
+            // push 常量经 push 池 uniform 缓冲模拟：binding0=VS、binding1=FS。
+            auto alloc_push = [&](const std::vector<uint8_t>& src) -> WGPUBuffer {
+                constexpr uint32_t kPushBytes = 256;
+                if (push_pool_used_ >= push_pool_.size()) {
+                    WGPUBufferDescriptor bd{};
+                    bd.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+                    bd.size = kPushBytes;
+                    push_pool_.push_back(wgpuDeviceCreateBuffer(device_, &bd));
+                }
+                WGPUBuffer b = push_pool_[push_pool_used_++];
+                std::vector<uint8_t> tmp(kPushBytes, 0);
+                const size_t n = src.size() < kPushBytes ? src.size() : kPushBytes;
+                if (n) std::memcpy(tmp.data(), src.data(), n);
+                wgpuQueueWriteBuffer(queue_, b, 0, tmp.data(), kPushBytes);
+                return b;
+            };
+            if (!cur_vs_push_.empty()) {
+                BindingInfo b;
+                b.binding = 0; b.kind = BindingInfo::Kind::Uniform; b.visibility = WGPUShaderStage_Vertex;
+                b.buffer = alloc_push(cur_vs_push_); b.buf_offset = 0; b.buf_size = 256;
+                out.push_back(b);
+            }
+            if (!cur_fs_push_.empty()) {
+                BindingInfo b;
+                b.binding = 1; b.kind = BindingInfo::Kind::Uniform; b.visibility = WGPUShaderStage_Fragment;
+                b.buffer = alloc_push(cur_fs_push_); b.buf_offset = 0; b.buf_size = 256;
+                out.push_back(b);
+            }
+            break;
+        }
+        case 1: {
+            for (const auto& [slot, u] : cur_ubos_) {
+                const BufferEntry* be = FindBuffer(u.handle);
+                if (!be || !be->buffer) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::Uniform; b.visibility = kVsFs;
+                b.buffer = be->buffer; b.buf_offset = u.offset;
+                b.buf_size = u.size ? u.size : be->size;
+                out.push_back(b);
+            }
+            break;
+        }
+        case 2: {
+            for (const auto& [slot, t] : cur_texs_) {
+                const TextureEntry* te = FindTexture(t.handle);
+                if (!te || !te->view) continue;
+                BindingInfo tb;
+                tb.binding = slot * 2u; tb.kind = BindingInfo::Kind::Texture;
+                tb.visibility = WGPUShaderStage_Fragment;
+                tb.view_dim = ToViewDimension(t.dim);
+                tb.sample_type = IsDepthFormat(te->format) ? WGPUTextureSampleType_Depth
+                                                           : WGPUTextureSampleType_Float;
+                tb.view = te->view;
+                out.push_back(tb);
+                BindingInfo sb;
+                sb.binding = slot * 2u + 1u; sb.kind = BindingInfo::Kind::Sampler;
+                sb.visibility = WGPUShaderStage_Fragment;
+                sb.sampler = te->sampler;
+                out.push_back(sb);
+            }
+            break;
+        }
+        case 3: {
+            for (const auto& [slot, s] : cur_ssbos_) {
+                const BufferEntry* be = FindBuffer(s.handle);
+                if (!be || !be->buffer) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::Storage; b.visibility = kVsFs;
+                b.buffer = be->buffer; b.buf_offset = s.offset;
+                b.buf_size = s.size ? s.size : be->size;
+                out.push_back(b);
+            }
+            break;
+        }
+        default: break;
+    }
+    return out;
+}
+
+const WebGPURhiDevice::PipelineCacheEntry* WebGPURhiDevice::GetOrCreateRenderPipeline() {
+    // 无 WGSL module 的程序（引擎 GLSL，无离线转译）：返回 nullptr，调用方跳过该 draw。
+    auto sit = shaders_.find(cur_program_);
+    if (sit == shaders_.end() || !sit->second.module) return nullptr;
+    const ShaderEntry& sh = sit->second;
+
+    const PipelineStateDesc fallback_pso;
+    const PipelineStateDesc* pso = FindPipelineState(cur_pso_handle_);
+    const PipelineStateDesc& ps = pso ? *pso : fallback_pso;
+
+    // 缓存签名 = program + pso + 顶点布局 + 颜色/深度格式 + 采样数 + 绑定签名。
+    std::string key;
+    key.reserve(256);
+    key += "p" + std::to_string(cur_program_) + "s" + std::to_string(cur_pso_handle_);
+    for (size_t i = 0; i < cur_vbs_.size(); ++i) {
+        const VbBinding& vb = cur_vbs_[i];
+        if (!vb.set) continue;
+        key += "|v" + std::to_string(i) + ":" + std::to_string(vb.stride) + ":" +
+               std::to_string(static_cast<int>(vb.rate));
+        for (const VertexAttr& a : vb.attrs) {
+            key += "," + std::to_string(a.location) + "-" + std::to_string(a.components) +
+                   "-" + std::to_string(a.offset);
+        }
+    }
+    for (WGPUTextureFormat f : cur_color_formats_) key += "c" + std::to_string(static_cast<int>(f));
+    key += "d" + std::to_string(static_cast<int>(cur_depth_format_));
+    key += "m" + std::to_string(cur_sample_count_);
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectGroupBindings(g);
+        key += "g" + std::to_string(g);
+        for (const BindingInfo& b : bs) {
+            key += ":" + std::to_string(b.binding) + "-" + std::to_string(static_cast<int>(b.kind)) +
+                   "-" + std::to_string(static_cast<int>(b.visibility)) +
+                   "-" + std::to_string(static_cast<int>(b.view_dim));
+        }
+    }
+
+    auto cit = pipeline_cache_.find(key);
+    if (cit != pipeline_cache_.end()) return &cit->second;
+
+    PipelineCacheEntry entry{};
+
+    // 4 组 explicit BGL（与 BindGroup 共用同序绑定签名）。
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectGroupBindings(g);
+        std::vector<WGPUBindGroupLayoutEntry> bgle;
+        bgle.reserve(bs.size());
+        for (const BindingInfo& b : bs) {
+            WGPUBindGroupLayoutEntry e{};
+            e.binding = b.binding;
+            e.visibility = b.visibility;
+            switch (b.kind) {
+                case BindingInfo::Kind::Uniform:
+                    e.buffer.type = WGPUBufferBindingType_Uniform; break;
+                case BindingInfo::Kind::Storage:
+                    e.buffer.type = WGPUBufferBindingType_ReadOnlyStorage; break;
+                case BindingInfo::Kind::Texture:
+                    e.texture.sampleType = b.sample_type;
+                    e.texture.viewDimension = b.view_dim;
+                    e.texture.multisampled = false;
+                    break;
+                case BindingInfo::Kind::Sampler:
+                    e.sampler.type = WGPUSamplerBindingType_Filtering; break;
+            }
+            bgle.push_back(e);
+        }
+        WGPUBindGroupLayoutDescriptor bgld{};
+        bgld.entryCount = bgle.size();
+        bgld.entries = bgle.empty() ? nullptr : bgle.data();
+        entry.bgls[g] = wgpuDeviceCreateBindGroupLayout(device_, &bgld);
+    }
+
+    WGPUPipelineLayoutDescriptor pld{};
+    pld.bindGroupLayoutCount = 4;
+    pld.bindGroupLayouts = entry.bgls;
+    entry.layout = wgpuDeviceCreatePipelineLayout(device_, &pld);
+
+    // 顶点缓冲布局（每 set 的 slot 一条），attrs_store/vbls 预留容量以保证内部指针稳定。
+    std::vector<std::vector<WGPUVertexAttribute>> attrs_store;
+    std::vector<WGPUVertexBufferLayout> vbls;
+    attrs_store.reserve(cur_vbs_.size());
+    vbls.reserve(cur_vbs_.size());
+    for (const VbBinding& vb : cur_vbs_) {
+        if (!vb.set) continue;
+        std::vector<WGPUVertexAttribute> va;
+        va.reserve(vb.attrs.size());
+        for (const VertexAttr& a : vb.attrs) {
+            WGPUVertexAttribute at{};
+            at.format = ToVertexFormat(a.components);
+            at.offset = a.offset;
+            at.shaderLocation = a.location;
+            va.push_back(at);
+        }
+        attrs_store.push_back(std::move(va));
+        WGPUVertexBufferLayout l{};
+        l.arrayStride = vb.stride;
+        l.stepMode = vb.rate == VertexInputRate::PerInstance ? WGPUVertexStepMode_Instance
+                                                             : WGPUVertexStepMode_Vertex;
+        l.attributeCount = attrs_store.back().size();
+        l.attributes = attrs_store.back().data();
+        vbls.push_back(l);
+    }
+
+    WGPUVertexState vs{};
+    vs.module = sh.module;
+    vs.entryPoint = sh.vs_entry.c_str();
+    vs.bufferCount = vbls.size();
+    vs.buffers = vbls.empty() ? nullptr : vbls.data();
+
+    // 颜色目标（与 RT/backbuffer 附件格式一一对应）。
+    std::vector<WGPUColorTargetState> targets;
+    std::vector<WGPUBlendState> blends;
+    targets.reserve(cur_color_formats_.size());
+    blends.reserve(cur_color_formats_.size());
+    for (WGPUTextureFormat f : cur_color_formats_) {
+        WGPUColorTargetState t{};
+        t.format = f;
+        t.writeMask = WGPUColorWriteMask_All;
+        if (ps.blend_enabled) {
+            WGPUBlendState bs{};
+            bs.color.operation = WGPUBlendOperation_Add;
+            bs.color.srcFactor = ToBlendFactor(ps.blend_src);
+            bs.color.dstFactor = ToBlendFactor(ps.blend_dst);
+            bs.alpha.operation = WGPUBlendOperation_Add;
+            bs.alpha.srcFactor = ToBlendFactor(ps.alpha_blend_src);
+            bs.alpha.dstFactor = ToBlendFactor(ps.alpha_blend_dst);
+            blends.push_back(bs);
+            t.blend = &blends.back();
+        }
+        targets.push_back(t);
+    }
+
+    WGPUFragmentState fs{};
+    fs.module = sh.module;
+    fs.entryPoint = sh.fs_entry.c_str();
+    fs.targetCount = targets.size();
+    fs.targets = targets.empty() ? nullptr : targets.data();
+
+    WGPURenderPipelineDescriptor rpd{};
+    rpd.layout = entry.layout;
+    rpd.vertex = vs;
+    rpd.primitive.topology = ToTopology(ps.topology);
+    rpd.primitive.stripIndexFormat = WGPUIndexFormat_Undefined;
+    rpd.primitive.frontFace = WGPUFrontFace_CCW;
+    rpd.primitive.cullMode = ps.culling_enabled ? ToCullMode(ps.cull_face) : WGPUCullMode_None;
+
+    WGPUDepthStencilState ds{};
+    if (cur_depth_format_ != WGPUTextureFormat_Undefined) {
+        ds.format = cur_depth_format_;
+        ds.depthWriteEnabled = ps.depth_write_enabled;
+        ds.depthCompare = ps.depth_test_enabled ? ToCompareFunc(ps.depth_func)
+                                                : WGPUCompareFunction_Always;
+        ds.stencilFront.compare = WGPUCompareFunction_Always;
+        ds.stencilBack.compare = WGPUCompareFunction_Always;
+        rpd.depthStencil = &ds;
+    }
+
+    rpd.multisample.count = cur_sample_count_ > 0 ? cur_sample_count_ : 1;
+    rpd.multisample.mask = 0xFFFFFFFFu;
+    rpd.multisample.alphaToCoverageEnabled = false;
+    rpd.fragment = sh.has_fragment ? &fs : nullptr;
+
+    entry.pipeline = wgpuDeviceCreateRenderPipeline(device_, &rpd);
+    if (!entry.pipeline) {
+        DEBUG_LOG_ERROR("WebGPU: wgpuDeviceCreateRenderPipeline 失败 (program={})", cur_program_);
+    }
+
+    auto res = pipeline_cache_.emplace(std::move(key), entry);
+    return &res.first->second;
+}
+
+void WebGPURhiDevice::BuildAndSetBindGroups(const PipelineCacheEntry& entry) {
+    for (uint32_t g = 0; g < 4; ++g) {
+        const std::vector<BindingInfo> bs = CollectGroupBindings(g);
+        std::vector<WGPUBindGroupEntry> bge;
+        bge.reserve(bs.size());
+        for (const BindingInfo& b : bs) {
+            WGPUBindGroupEntry e{};
+            e.binding = b.binding;
+            switch (b.kind) {
+                case BindingInfo::Kind::Texture: e.textureView = b.view; break;
+                case BindingInfo::Kind::Sampler: e.sampler = b.sampler; break;
+                default:
+                    e.buffer = b.buffer; e.offset = b.buf_offset; e.size = b.buf_size; break;
+            }
+            bge.push_back(e);
+        }
+        WGPUBindGroupDescriptor bgd{};
+        bgd.layout = entry.bgls[g];
+        bgd.entryCount = bge.size();
+        bgd.entries = bge.empty() ? nullptr : bge.data();
+        WGPUBindGroup bg = wgpuDeviceCreateBindGroup(device_, &bgd);
+        wgpuRenderPassEncoderSetBindGroup(cur_pass_, g, bg, 0, nullptr);
+        frame_bindgroups_.push_back(bg);  // 提交后统一释放
+    }
+}
+
+void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_count,
+                                uint32_t first, int32_t base_vertex, uint32_t first_instance) {
+    if (!cur_pass_ || count == 0 || instance_count == 0) return;
+    const PipelineCacheEntry* pe = GetOrCreateRenderPipeline();
+    if (!pe || !pe->pipeline) return;  // 无 WGSL module / 组装失败 → 优雅跳过
+
+    wgpuRenderPassEncoderSetPipeline(cur_pass_, pe->pipeline);
+    for (size_t i = 0; i < cur_vbs_.size(); ++i) {
+        const VbBinding& vb = cur_vbs_[i];
+        if (!vb.set) continue;
+        const BufferEntry* be = FindBuffer(vb.handle);
+        if (!be || !be->buffer) continue;
+        wgpuRenderPassEncoderSetVertexBuffer(cur_pass_, static_cast<uint32_t>(i), be->buffer, 0, be->size);
+    }
+    BuildAndSetBindGroups(*pe);
+
+    if (indexed) {
+        const BufferEntry* ib = FindBuffer(cur_ib_handle_);
+        if (!ib || !ib->buffer) return;
+        wgpuRenderPassEncoderSetIndexBuffer(cur_pass_, ib->buffer, cur_ib_format_, 0, ib->size);
+        wgpuRenderPassEncoderDrawIndexed(cur_pass_, count, instance_count, first,
+                                         base_vertex, first_instance);
+    } else {
+        wgpuRenderPassEncoderDraw(cur_pass_, count, instance_count, first, first_instance);
+    }
+
+    if (cur_pass_is_backbuffer_) backbuffer_drawn_ = true;
+    last_frame_stats_.draw_calls += 1;
+}
+
+// --- 设备级 Cmd*：render pass / viewport ---
+
+void WebGPURhiDevice::CmdBeginRenderPass(const RenderPassDesc& desc) {
+    if (!frame_encoder_) { cur_pass_ = nullptr; return; }
+    if (cur_pass_) CmdEndRenderPass();  // 防御：上一 pass 未显式收尾
+    ResetDrawState();
+    ReleasePassViews();
+    cur_color_formats_.clear();
+    cur_depth_format_ = WGPUTextureFormat_Undefined;
+    cur_sample_count_ = 1;
+    cur_pass_is_backbuffer_ = (desc.render_target == 0);
+    cur_rt_width_ = 0;
+    cur_rt_height_ = 0;
+
+    const WGPULoadOp load = desc.clear_color_enabled ? WGPULoadOp_Clear : WGPULoadOp_Load;
+    const WGPUColor clear = WGPUColor{desc.clear_color.r, desc.clear_color.g,
+                                      desc.clear_color.b, desc.clear_color.a};
+
+    std::vector<WGPURenderPassColorAttachment> color_atts;
+    WGPURenderPassDepthStencilAttachment depth_att{};
+    bool has_depth = false;
+
+    if (desc.render_target == 0) {
+        if (!backbuffer_view_) { cur_pass_ = nullptr; return; }
+        cur_rt_width_ = static_cast<uint32_t>(width_ > 0 ? width_ : 1);
+        cur_rt_height_ = static_cast<uint32_t>(height_ > 0 ? height_ : 1);
+        WGPURenderPassColorAttachment ca{};
+        ca.view = backbuffer_view_;
+        ca.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        ca.loadOp = load;
+        ca.storeOp = WGPUStoreOp_Store;
+        ca.clearValue = clear;
+        color_atts.push_back(ca);
+        cur_color_formats_.push_back(swapchain_format_);
+    } else {
+        const RenderTargetEntry* rt = FindRenderTarget(desc.render_target);
+        if (!rt) { cur_pass_ = nullptr; return; }
+        cur_sample_count_ = static_cast<uint32_t>(rt->msaa_samples > 1 ? rt->msaa_samples : 1);
+        cur_rt_width_ = rt->width > 0 ? rt->width : 1;
+        cur_rt_height_ = rt->height > 0 ? rt->height : 1;
+        for (unsigned int th : rt->color_textures) {
+            const TextureEntry* te = FindTexture(th);
+            if (!te) continue;
+            WGPUTextureView v;
+            if (rt->is_cube) {
+                v = MakeFaceView(*te, desc.cube_face >= 0 ? desc.cube_face : 0);
+                cur_pass_views_.push_back(v);
+            } else {
+                v = te->view;
+            }
+            WGPURenderPassColorAttachment ca{};
+            ca.view = v;
+            ca.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+            ca.loadOp = load;
+            ca.storeOp = WGPUStoreOp_Store;
+            ca.clearValue = clear;
+            color_atts.push_back(ca);
+            cur_color_formats_.push_back(te->format);
+        }
+        if (rt->depth_texture) {
+            const TextureEntry* de = FindTexture(rt->depth_texture);
+            if (de) {
+                WGPUTextureView v;
+                if (rt->is_cube) {
+                    v = MakeFaceView(*de, desc.cube_face >= 0 ? desc.cube_face : 0);
+                    cur_pass_views_.push_back(v);
+                } else {
+                    v = de->view;
+                }
+                depth_att.view = v;
+                depth_att.depthLoadOp = WGPULoadOp_Clear;  // B2 简化：深度恒清，B3 据 desc 细化
+                depth_att.depthStoreOp = WGPUStoreOp_Store;
+                depth_att.depthClearValue = 1.0f;
+                depth_att.stencilLoadOp = WGPULoadOp_Undefined;
+                depth_att.stencilStoreOp = WGPUStoreOp_Undefined;
+                cur_depth_format_ = de->format;
+                has_depth = true;
+            }
+        }
+    }
+
+    WGPURenderPassDescriptor pd{};
+    pd.colorAttachmentCount = color_atts.size();
+    pd.colorAttachments = color_atts.empty() ? nullptr : color_atts.data();  // depth-only：0 颜色附件
+    pd.depthStencilAttachment = has_depth ? &depth_att : nullptr;
+
+    cur_pass_ = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pd);
+    last_frame_stats_.render_passes += 1;
+}
+
+void WebGPURhiDevice::CmdEndRenderPass() {
+    if (cur_pass_) {
+        wgpuRenderPassEncoderEnd(cur_pass_);
+        wgpuRenderPassEncoderRelease(cur_pass_);
+        cur_pass_ = nullptr;
+    }
+    ReleasePassViews();
+}
+
+void WebGPURhiDevice::CmdSetViewport(int x, int y, int width, int height) {
+    if (!cur_pass_ || width <= 0 || height <= 0) return;
+    // 裁剪到当前 pass 渲染目标范围：WebGPU 要求视口完全落在目标内，否则整个命令缓冲失效。
+    // 引擎 GLSL pass 的绘制在 B2 期被跳过，但其 SetViewport 仍会录制，故须在此防御性裁剪。
+    int rw = static_cast<int>(cur_rt_width_), rh = static_cast<int>(cur_rt_height_);
+    if (rw <= 0 || rh <= 0) return;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x >= rw || y >= rh) return;
+    if (x + width > rw) width = rw - x;
+    if (y + height > rh) height = rh - y;
+    if (width <= 0 || height <= 0) return;
+    wgpuRenderPassEncoderSetViewport(cur_pass_, static_cast<float>(x), static_cast<float>(y),
+                                     static_cast<float>(width), static_cast<float>(height),
+                                     0.0f, 1.0f);
+}
+
+// --- 设备级 Cmd*：B2 暂保持 no-op（留 B3）---
+
+void WebGPURhiDevice::CmdClearColor(const glm::vec4& color) { (void)color; }
+void WebGPURhiDevice::CmdSetGlobalMat4(const std::string& name, const glm::mat4& value) { (void)name; (void)value; }
+void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
+void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
+void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
+void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) { (void)indirect_buffer; (void)byte_offset; }
+void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
+
+// --- 设备级 Cmd*：绑定状态累积 ---
+
+void WebGPURhiDevice::CmdBindPipeline(unsigned int graphics_pipeline_handle) {
+    const GraphicsPipelineDesc* gp = GetGraphicsPipelineDesc(graphics_pipeline_handle);
+    if (!gp) return;
+    cur_pso_handle_ = gp->pso_state;
+    if (gp->program != 0) cur_program_ = gp->program;  // program==0：仅应用 PSO，保留已绑 program
+}
+
+void WebGPURhiDevice::CmdBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
+                                          const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
+    if (slot >= cur_vbs_.size()) cur_vbs_.resize(slot + 1);
+    VbBinding& vb = cur_vbs_[slot];
+    vb.handle = buffer_handle;
+    vb.stride = stride;
+    vb.attrs = attrs;
+    vb.rate = rate;
+    vb.set = true;
+}
+
+void WebGPURhiDevice::CmdBindIndexBuffer(unsigned int buffer_handle, IndexType type) {
+    cur_ib_handle_ = buffer_handle;
+    cur_ib_format_ = (type == IndexType::UInt32) ? WGPUIndexFormat_Uint32 : WGPUIndexFormat_Uint16;
+}
+
+void WebGPURhiDevice::CmdBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
+    cur_texs_[slot] = TexBinding{texture_handle, dim};
+}
+
+void WebGPURhiDevice::CmdBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
+                                           uint32_t offset, uint32_t size) {
+    cur_ubos_[slot] = UboBinding{buffer_handle, offset, size};
+}
+
+void WebGPURhiDevice::CmdBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
+                                           uint32_t offset, uint32_t size) {
+    cur_ssbos_[slot] = SsboBinding{buffer_handle, offset, size};
+}
+
+void WebGPURhiDevice::CmdPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
+    if (!data || size == 0) return;
+    auto write = [&](std::vector<uint8_t>& buf) {
+        if (buf.size() < static_cast<size_t>(offset) + size) buf.resize(static_cast<size_t>(offset) + size, 0);
+        std::memcpy(buf.data() + offset, data, size);
+    };
+    if (stage & ShaderStage::Vertex)   write(cur_vs_push_);
+    if (stage & ShaderStage::Fragment) write(cur_fs_push_);
+}
+
+// --- 设备级 Cmd*：绘制 ---
+
+void WebGPURhiDevice::CmdDraw(uint32_t vertex_count, uint32_t first_vertex) {
+    IssueDraw(false, vertex_count, 1, first_vertex, 0, 0);
+}
+
+void WebGPURhiDevice::CmdDrawIndexed(uint32_t index_count, uint32_t first_index, int32_t base_vertex) {
+    IssueDraw(true, index_count, 1, first_index, base_vertex, 0);
+}
+
+void WebGPURhiDevice::CmdDrawIndexedInstanced(uint32_t index_count, uint32_t instance_count,
+                                              uint32_t first_index, int32_t base_vertex,
+                                              uint32_t first_instance) {
+    IssueDraw(true, index_count, instance_count, first_index, base_vertex, first_instance);
+}
+
+// --- bring-up 自检：经 Cmd* 把渐变×棋盘纹理画到 backbuffer，验证整条录制链路 ---
+
+void WebGPURhiDevice::EnsureSelfTestResources() {
+    if (selftest_init_) return;
+    selftest_init_ = true;  // 仅尝试一次（失败则后续 EndFrame 走 clear 兜底）
+
+    static const char* kSelfTestWGSL = R"WGSL(// dse-wgsl
+struct VsOut {
+  @builtin(position) pos : vec4<f32>,
+  @location(0) uv : vec2<f32>,
+};
+
+@vertex
+fn vs_main(@location(0) in_pos : vec2<f32>, @location(1) in_uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(in_pos, 0.0, 1.0);
+  o.uv = in_uv;
+  return o;
+}
+
+struct Tint { color : vec4<f32>, };
+@group(1) @binding(0) var<uniform> u_tint : Tint;
+@group(2) @binding(0) var u_tex : texture_2d<f32>;
+@group(2) @binding(1) var u_samp : sampler;
+
+@fragment
+fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+  let tex = textureSample(u_tex, u_samp, in.uv);
+  let grad = vec3<f32>(in.uv.x, in.uv.y, 1.0 - in.uv.x);
+  return vec4<f32>(grad * tex.rgb * u_tint.color.rgb, 1.0);
+}
+)WGSL";
+    selftest_program_ = CreateShaderProgram(kSelfTestWGSL, "");
+
+    PipelineStateDesc d;
+    d.blend_enabled = false;
+    d.depth_test_enabled = false;
+    d.depth_write_enabled = false;
+    d.culling_enabled = false;
+    d.cull_face = CullFace::None;
+    d.topology = PrimitiveTopology::TriangleList;
+    selftest_pso_ = CreatePipelineState(d);
+
+    // 全屏 quad（两三角形，pos.xy + uv.xy，stride 16）。
+    const float quad[] = {
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f, -1.0f,  1.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+         1.0f,  1.0f,  1.0f, 1.0f,
+        -1.0f,  1.0f,  0.0f, 1.0f,
+    };
+    selftest_vbo_ = CreateBuffer(sizeof(quad), quad, false, false);
+
+    const float tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    selftest_ubo_ = CreateBuffer(sizeof(tint), tint, false, false);
+
+    // 8×8 彩色棋盘（多色，保证 distinctColors 充足）。
+    unsigned char checker[8 * 8 * 4];
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            const int i = (y * 8 + x) * 4;
+            const bool c = ((x + y) & 1) != 0;
+            checker[i + 0] = static_cast<unsigned char>(x * 32);
+            checker[i + 1] = static_cast<unsigned char>(y * 32);
+            checker[i + 2] = c ? 255 : 40;
+            checker[i + 3] = 255;
+        }
+    }
+    selftest_tex_ = CreateTexture2D(8, 8, checker, false);
+}
+
+void WebGPURhiDevice::RunBringUpSelfTest() {
+    EnsureSelfTestResources();
+    if (!selftest_program_ || !selftest_pso_ || !selftest_vbo_ || !selftest_ubo_ || !selftest_tex_) return;
+
+    RenderPassDesc rp;
+    rp.render_target = 0;
+    rp.clear_color_enabled = true;
+    rp.clear_color = glm::vec4(0.05f, 0.05f, 0.08f, 1.0f);
+    CmdBeginRenderPass(rp);
+    if (!cur_pass_) return;
+    CmdSetViewport(0, 0, width_, height_);
+
+    const unsigned int pipe = GetGraphicsPipeline(selftest_pso_, selftest_program_);
+    CmdBindPipeline(pipe);
+
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0, 2, 0},  // pos.xy
+        VertexAttr{1, 2, 8},  // uv.xy
+    };
+    CmdBindVertexBuffer(0, selftest_vbo_, 16, attrs, VertexInputRate::PerVertex);
+    CmdBindUniformBuffer(0, selftest_ubo_, 0, 16);
+    CmdBindTexture(0, selftest_tex_, TextureDim::Tex2D);
+    CmdDraw(6, 0);
+    CmdEndRenderPass();
 }
 
 glm::mat4 WebGPURhiDevice::GetProjectionCorrection() const {
