@@ -365,6 +365,7 @@ private:
     std::map<uint32_t, TexBinding>  cur_texs_;
     std::map<uint32_t, SsboBinding> cur_ssbos_;
     std::map<uint32_t, unsigned int> cur_compute_images_;  ///< B3b-4：compute storage image（binding→纹理句柄）
+    std::map<uint32_t, unsigned int> cur_compute_textures_;  ///< B3b-5：compute 只读采样纹理（textureLoad，binding→纹理句柄）
     std::vector<uint8_t> cur_vs_push_;
     std::vector<uint8_t> cur_fs_push_;
 
@@ -518,6 +519,22 @@ private:
     unsigned int si_params_ubo_ = 0;   ///< 参数 UBO（dim，group1 b0）
     unsigned int si_image_ = 0;        ///< compute 写目标 storage 纹理（group2 b0）
     WGPUBuffer si_rb_pixels_ = nullptr;///< storage 纹理像素回读缓冲（MapRead|CopyDst）
+
+    // --- B3b-5 Hi-Z 下采样核心 compute 真链路自检（每会话一次：两趟 r32float compute —— ①生成趟
+    //   经 `texture_storage_2d<r32float, write>` 写已知渐变到 src；②下采样趟用 textureLoad 读 src 采样
+    //   纹理 + 取 2×2 max 写 dst storage 纹理 → copy dst→回读缓冲 → 逐像素校验 == CPU 预期 max。
+    //   验证 compute 读采样纹理(textureLoad) + 写 r32float storage 的读后写链路（Hi-Z 金字塔逐级
+    //   下采样的核心原语）。离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool hiz_selftest_done_ = false;
+    bool RecordHiZDownsampleSelfTest();        ///< 录制 ①生成趟 + ②下采样趟 compute + copy dst→回读缓冲
+    void KickHiZDownsampleSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int hz_gen_shader_ = 0;   ///< 生成趟 compute shader（textureStore 渐变到 src）
+    unsigned int hz_down_shader_ = 0;  ///< 下采样趟 compute shader（textureLoad src + 2×2 max → dst）
+    unsigned int hz_gen_ubo_ = 0;      ///< 生成趟参数 UBO（src_dim，group1 b0）
+    unsigned int hz_down_ubo_ = 0;     ///< 下采样趟参数 UBO（src_dim/dst_dim，group1 b0）
+    unsigned int hz_src_tex_ = 0;      ///< src r32float 纹理（生成趟 storage 写 / 下采样趟采样读）
+    unsigned int hz_dst_tex_ = 0;      ///< dst r32float 纹理（下采样趟 storage 写 / copy 源）
+    WGPUBuffer hz_rb_pixels_ = nullptr;///< dst 纹理像素回读缓冲（MapRead|CopyDst）
 
     RenderStats last_frame_stats_{};
 };
