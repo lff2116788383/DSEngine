@@ -304,6 +304,9 @@ void OpenGLRhiDevice::EnsureInitialized() {
     glGetIntegerv(GL_MINOR_VERSION, &gl_minor);
     supports_ssbo_ = (gl_major > 4) || (gl_major == 4 && gl_minor >= 3);
     shader_mgr_.set_supports_ssbo(supports_ssbo_);
+    GLint max_color_attachments = 0;
+    glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &max_color_attachments);
+    if (max_color_attachments > 0) max_color_attachments_ = max_color_attachments;
     // Capability-driven (not platform #ifdef): contexts without SSBO/compute —
     // notably WebGL2 (GLES 3.0) — cannot run the GPU-driven path or the heavy
     // post-process warmup, so they use the dedicated ES3.0-compatible 2D batch

@@ -43,6 +43,9 @@ struct RenderPassMetadata {
     bool runtime_only = false;
     bool requires_hiz = false;
     bool requires_gpu_driven = false;
+    bool requires_compute = false;
+    bool requires_ssbo = false;
+    bool requires_mrt = false;
 };
 
 class RenderPipelineRegistry {
@@ -75,7 +78,19 @@ struct RenderPipelineValidationContext {
     bool editor_mode = false;
     bool hiz_available = false;
     bool gpu_driven_supported = false;
+    bool compute_supported = true;
+    bool ssbo_supported = true;
+    int max_color_attachments = 8;
 };
+
+// Capability-declarative auto-prune (WEB_3D_BACKEND.md §2): given a pass's
+// declared capability requirements and the runtime device capabilities, decide
+// whether the pass must be pruned. Returns a short reason token (e.g.
+// "no_compute") when the pass should be skipped, or nullptr when it can run.
+// Shared by the pipeline assembly (frame_pipeline) and the diagnostics dump so
+// the prune decision lives in exactly one place.
+const char* RenderPassCapabilityPruneReason(const RenderPassMetadata& metadata,
+                                            const RenderPipelineValidationContext& context);
 
 const RenderPipelineRegistry& BuiltinRenderPipelineRegistry();
 RenderPipelineProfile MakeForwardPlusDefaultProfile();

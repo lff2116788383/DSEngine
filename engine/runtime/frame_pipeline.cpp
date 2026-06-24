@@ -335,6 +335,11 @@ bool FramePipeline::Init() {
         render_pipeline_profile_ = std::move(profile_result.profile);
         dse::render::RenderPipelineValidationContext validation_context{};
         validation_context.editor_mode = runtime_context_.editor_mode;
+        if (const dse::render::RhiDevice* dev = runtime_context_.rhi_device.get()) {
+            validation_context.compute_supported = dev->SupportsCompute();
+            validation_context.ssbo_supported = dev->SupportsSSBO();
+            validation_context.max_color_attachments = dev->GetMaxColorAttachments();
+        }
         std::string validation_error;
         if (!dse::render::ValidateRenderPipelineProfile(
                 render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(),
@@ -1823,6 +1828,15 @@ void FramePipeline::BuildRenderGraphInternal() {
 
     taa_pass_ = nullptr;
     const auto& registry = dse::render::BuiltinRenderPipelineRegistry();
+    dse::render::RenderPipelineValidationContext prune_ctx{};
+    prune_ctx.editor_mode = runtime_context_.editor_mode;
+    prune_ctx.hiz_available = render_resources_.hiz_texture != 0;
+    prune_ctx.gpu_driven_supported = render_resources_.gpu_driven_supported;
+    if (const dse::render::RhiDevice* dev = runtime_context_.rhi_device.get()) {
+        prune_ctx.compute_supported = dev->SupportsCompute();
+        prune_ctx.ssbo_supported = dev->SupportsSSBO();
+        prune_ctx.max_color_attachments = dev->GetMaxColorAttachments();
+    }
     for (const auto& pass_config : render_pipeline_profile_.passes) {
         if (!pass_config.enabled) continue;
         const std::string pass_name = registry.ResolveName(pass_config.name);
@@ -1831,9 +1845,10 @@ void FramePipeline::BuildRenderGraphInternal() {
             DEBUG_LOG_WARN("Render pipeline skipped unknown pass '{}'", pass_config.name);
             continue;
         }
-        if (metadata->runtime_only && runtime_context_.editor_mode) continue;
-        if (metadata->requires_hiz && render_resources_.hiz_texture == 0) continue;
-        if (metadata->requires_gpu_driven && !render_resources_.gpu_driven_supported) continue;
+        if (const char* prune_reason = dse::render::RenderPassCapabilityPruneReason(*metadata, prune_ctx)) {
+            DEBUG_LOG_INFO("Render pipeline pruned pass '{}' ({})", pass_name, prune_reason);
+            continue;
+        }
         if (!render_pipeline_profile_.settings.shadows &&
             (pass_name == "csm_shadow" || pass_name == "spot_shadow" || pass_name == "point_shadow")) {
             continue;

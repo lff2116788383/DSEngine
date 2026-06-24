@@ -94,6 +94,7 @@ public:
     void BindSSBO(unsigned int handle, unsigned int binding_point) override;
     void DeleteSSBO(unsigned int handle) override;
     bool SupportsSSBO() const override { return supports_ssbo_; }
+    int GetMaxColorAttachments() const override { return max_color_attachments_; }
 
     // --- Compute Shader（GL 4.3+）---
     unsigned int CreateComputeShader(const std::string& source) override;
@@ -243,6 +244,7 @@ private:
 
     bool initialized_ = false;
     bool supports_ssbo_ = true;  ///< GL 4.3+ 支持 SSBO；GL 3.3 fallback 为 false
+    int max_color_attachments_ = 8;  ///< GL_MAX_COLOR_ATTACHMENTS，Init 时探测（MRT 上限）
 
     // --- Compute push 常量 → DsePushCS UBO 降级支撑（契约 §8.2）---
     // 编译器把 compute 的 layout(push_constant) 降级为 std140 块 DsePushCS（无 binding）。

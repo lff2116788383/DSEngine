@@ -277,12 +277,12 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
     static const RenderPipelineRegistry registry = [] {
         RenderPipelineRegistry r;
         RegisterBuiltin<PreZPass>(r, {"pre_z", true});
-        RegisterBuiltin<HiZBuildPass>(r, {"hiz_build", false, false, true});
-        RegisterBuiltin<HiZCullPass>(r, {"hiz_cull", false, false, true});
+        RegisterBuiltin<HiZBuildPass>(r, {"hiz_build", false, false, true, false, true});
+        RegisterBuiltin<HiZCullPass>(r, {"hiz_cull", false, false, true, false, true, true});
         RegisterBuiltin<CSMShadowPass>(r, {"csm_shadow"});
         RegisterBuiltin<SpotShadowPass>(r, {"spot_shadow"});
         RegisterBuiltin<PointShadowPass>(r, {"point_shadow"});
-        RegisterBuiltin<GPUCullPass>(r, {"gpu_cull", false, false, false, true});
+        RegisterBuiltin<GPUCullPass>(r, {"gpu_cull", false, false, false, true, true, true});
         RegisterBuiltin<RSMRenderPass>(r, {"rsm"});
         RegisterBuiltin<DDGIUpdatePass>(r, {"ddgi_update"});
         RegisterBuiltin<AtmosphereSkyPass>(r, {"atmosphere_sky"});
@@ -480,6 +480,17 @@ RenderPipelineLoadResult ResolveRenderPipelineProfileFromEnvironment(const std::
     return result;
 }
 
+const char* RenderPassCapabilityPruneReason(const RenderPassMetadata& metadata,
+                                            const RenderPipelineValidationContext& context) {
+    if (metadata.runtime_only && context.editor_mode) return "editor";
+    if (metadata.requires_hiz && !context.hiz_available) return "no_hiz";
+    if (metadata.requires_gpu_driven && !context.gpu_driven_supported) return "no_gpu_driven";
+    if (metadata.requires_compute && !context.compute_supported) return "no_compute";
+    if (metadata.requires_ssbo && !context.ssbo_supported) return "no_ssbo";
+    if (metadata.requires_mrt && context.max_color_attachments < 4) return "no_mrt";
+    return nullptr;
+}
+
 bool ValidateRenderPipelineProfile(const RenderPipelineProfile& profile,
                                    const RenderPipelineRegistry& registry,
                                    const RenderPipelineValidationContext& context,
@@ -561,9 +572,8 @@ std::string DumpRenderPipelineProfile(const RenderPipelineProfile& profile,
         const RenderPassMetadata* metadata = registry.FindMetadata(canonical);
         std::string state = pass.enabled ? "enabled" : "disabled";
         if (pass.enabled && metadata) {
-            if (metadata->runtime_only && context.editor_mode) state = "skipped(editor)";
-            else if (metadata->requires_hiz && !context.hiz_available) state = "skipped(no_hiz)";
-            else if (metadata->requires_gpu_driven && !context.gpu_driven_supported) state = "skipped(no_gpu_driven)";
+            if (const char* reason = RenderPassCapabilityPruneReason(*metadata, context))
+                state = std::string("skipped(") + reason + ")";
         }
         oss << "\n  " << index++ << ": " << canonical << " [" << state << "]";
     }

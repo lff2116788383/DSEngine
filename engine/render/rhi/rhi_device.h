@@ -175,6 +175,10 @@ public:
     /// 返回实际所选适配器名 + 是否软件渲染。默认 unknown/false，各后端覆写。
     virtual RenderDeviceInfo GetDeviceInfo() const { return {}; }
 
+    /// MRT 上限（同时绑定的颜色附件数）。用于能力声明式裁剪 requires_mrt 的 pass。
+    /// 默认 8（桌面 GL/Vulkan/D3D11 常见值）；后端在 Init 时探测覆写。
+    virtual int GetMaxColorAttachments() const { return 8; }
+
     /// 在窗口创建后初始化设备（D3D11/Vulkan 需要 HWND；OpenGL 默认已就绪）
     virtual bool InitDevice(void* window_handle, int width, int height) { (void)window_handle; (void)width; (void)height; return true; }
 
