@@ -1045,15 +1045,15 @@ void FramePipeline::SyncRenderPassContextTargets() {
     render_pass_context_.hiz_aabb_capacity = render_resources_.hiz_ssbo_capacity;
 }
 
-void FramePipeline::Update(const dse::TimeContext& time) {
+void FramePipeline::Update(const dse::FrameUpdateContext& frame) {
     if (!initialized_) {
         return;
     }
-    dse::runtime::RunFrameUpdate(*this, time);
+    dse::runtime::RunFrameUpdate(*this, frame);
 }
 
 void FramePipeline::Update(float delta_time) {
-    Update(dse::TimeContext{delta_time, delta_time, 1.0f});
+    Update(dse::FrameUpdateContext{dse::TimeContext{delta_time, delta_time, 1.0f}, 0});
 }
 
 void FramePipeline::FlushPhysicsEvents() {
@@ -1088,7 +1088,8 @@ void FramePipeline::Render() {
     }
 }
 
-void FramePipeline::RunUpdateInternal(const dse::TimeContext& time) {
+void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
+    const dse::TimeContext& time = frame.time;
     // 缩放通道供 gameplay/业务逻辑使用；真实通道供资源流式加载/场景流加载使用（不随暂停冻结）。
     const float delta_time = time.scaled_dt;
     dse::profiler::ScopedCPUProfile _profile_update(cpu_profiler_, "FramePipeline::Update");
@@ -1148,10 +1149,10 @@ void FramePipeline::RunUpdateInternal(const dse::TimeContext& time) {
 
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
 
-    dse::runtime::RunRuntimeUpdateGraph(*this, time);
+    dse::runtime::RunRuntimeUpdateGraph(*this, frame);
 #ifndef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        modules_impl_->UpdateFallback3D(*runtime_context_.world, time);
+        modules_impl_->UpdateFallback3D(*runtime_context_.world, frame);
     }
 #endif
 

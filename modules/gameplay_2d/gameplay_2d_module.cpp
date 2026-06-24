@@ -30,10 +30,11 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 }
 
 void Gameplay2DModule::OnUpdate(World& world, float delta_time) {
-    OnUpdate(world, dse::TimeContext{delta_time, delta_time, 1.0f});
+    OnUpdate(world, dse::FrameUpdateContext{dse::TimeContext{delta_time, delta_time, 1.0f}, 0});
 }
 
-void Gameplay2DModule::OnUpdate(World& world, const dse::TimeContext& time) {
+void Gameplay2DModule::OnUpdate(World& world, const dse::FrameUpdateContext& frame) {
+    const dse::TimeContext& time = frame.time;
     const float scaled = time.scaled_dt;      // gameplay/动画/粒子（逐实体缩放在各系统内部应用）
     const float unscaled = time.unscaled_dt;  // UI / 音频走真实时间（scale=0 时仍响应）
     tilemap_system_.Update(world.registry());

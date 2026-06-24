@@ -93,10 +93,11 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
 }
 
 void Gameplay3DModule::OnUpdate(World& world, float delta_time) {
-    OnUpdate(world, dse::TimeContext{delta_time, delta_time, 1.0f});
+    OnUpdate(world, dse::FrameUpdateContext{dse::TimeContext{delta_time, delta_time, 1.0f}, 0});
 }
 
-void Gameplay3DModule::OnUpdate(World& world, const dse::TimeContext& time) {
+void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& frame) {
+    const dse::TimeContext& time = frame.time;
     const float delta_time = time.scaled_dt;  // gameplay/动画/粒子（逐实体缩放在各系统内部应用）
     // 自由相机控制走真实时间（调试/取景，不随暂停冻结）
     free_camera_controller_system_.Update(world, time.unscaled_dt);

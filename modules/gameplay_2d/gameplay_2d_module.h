@@ -1,7 +1,7 @@
 #pragma once
 
 #include "engine/core/module.h"
-#include "engine/base/time_context.h"
+#include "engine/base/frame_update_context.h"
 #include "engine/scene/transform_system.h"
 #include "engine/physics/physics2d/physics2d_system.h"
 #include "modules/gameplay_2d/rendering/sprite_render_system.h"
@@ -25,8 +25,8 @@ public:
 
     bool OnInit(World& world, RhiDevice* rhi_device, AssetManager* asset_manager) override;
     void OnUpdate(World& world, float delta_time) override;
-    // 时间缩放感知重载：gameplay 子系统用 scaled_dt，UI 子系统用 unscaled_dt。
-    void OnUpdate(World& world, const dse::TimeContext& time);
+    // 帧上下文感知重载：gameplay 子系统用 scaled_dt，UI 子系统用 unscaled_dt。
+    void OnUpdate(World& world, const dse::FrameUpdateContext& frame);
     void OnFixedUpdate(World& world, float fixed_delta_time) override;
     void OnShutdown(World& world) override;
 

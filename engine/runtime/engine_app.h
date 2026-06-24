@@ -6,6 +6,7 @@
 #ifndef DSE_ENGINE_APP_H
 #define DSE_ENGINE_APP_H
 
+#include <cstdint>
 #include <string>
 #include <memory>
 #include "engine/runtime/frame_pipeline.h"
@@ -125,6 +126,7 @@ private:
     std::unique_ptr<dse::core::JobSystem> default_job_system_;
     std::unique_ptr<FramePipeline> pipeline_;
     float accumulator_ = 0.0f;
+    std::uint64_t frame_index_ = 0;  ///< 单调递增帧序号，注入 FrameUpdateContext
     float fixed_time_step_ = 0.02f;
     float target_fps_ = 0.0f;  ///< 目标帧率（0 = 不限制）
     // 主循环跨帧状态（Run() 与 RunOneFrame() 共用；首次调用 RunOneFrame 惰性初始化）

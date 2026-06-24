@@ -10,21 +10,21 @@
 
 namespace dse::runtime {
 
-void RunRuntimeUpdateGraph(::FramePipeline& pipeline, const dse::TimeContext& time) {
+void RunRuntimeUpdateGraph(::FramePipeline& pipeline, const dse::FrameUpdateContext& frame) {
     auto& world = pipeline.world();
 
     // 2D 模块统一通过 IBuiltinModules 接口调度
-    pipeline.modules_impl_->UpdateGameplay2D(world, time);
+    pipeline.modules_impl_->UpdateGameplay2D(world, frame);
 
     for (auto& mod : pipeline.modules_) {
         if (mod.instance) {
             // 外部插件 IModule::OnUpdate 保持 float 签名，传入缩放后 dt
-            mod.instance->OnUpdate(world, time.scaled_dt);
+            mod.instance->OnUpdate(world, frame.time.scaled_dt);
         }
     }
 #ifdef DSE_ENABLE_3D
     if (pipeline.builtin_gameplay3d_enabled_) {
-        pipeline.modules_impl_->UpdateGameplay3D(world, time);
+        pipeline.modules_impl_->UpdateGameplay3D(world, frame);
     }
 #endif
 }

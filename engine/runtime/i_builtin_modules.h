@@ -15,7 +15,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "engine/render/hiz_types.h"
-#include "engine/base/time_context.h"
+#include "engine/base/frame_update_context.h"
 
 class World;
 class AssetManager;
@@ -50,7 +50,7 @@ public:
 
     // ---- Gameplay2D ----
     virtual bool InitGameplay2D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) = 0;
-    virtual void UpdateGameplay2D(World& world, const dse::TimeContext& time) = 0;
+    virtual void UpdateGameplay2D(World& world, const dse::FrameUpdateContext& frame) = 0;
     virtual void FixedUpdateGameplay2D(World& world, float dt) = 0;
     virtual void ShutdownGameplay2D(World& world) = 0;
     virtual void RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) = 0;
@@ -71,7 +71,7 @@ public:
 
     // ---- Gameplay3D (full build) ----
     virtual bool InitGameplay3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) = 0;
-    virtual void UpdateGameplay3D(World& world, const dse::TimeContext& time) = 0;
+    virtual void UpdateGameplay3D(World& world, const dse::FrameUpdateContext& frame) = 0;
     virtual void FixedUpdateGameplay3D(World& world, float dt) = 0;
     virtual void ShutdownGameplay3D(World& world) = 0;
     virtual dse::core::IModule* GetGameplay3DModule() = 0;
@@ -82,7 +82,7 @@ public:
 
     // ---- Fallback 3D (minimal path when DSE_ENABLE_3D=OFF) ----
     virtual void InitFallback3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) = 0;
-    virtual void UpdateFallback3D(World& world, const dse::TimeContext& time) = 0;
+    virtual void UpdateFallback3D(World& world, const dse::FrameUpdateContext& frame) = 0;
     virtual void ShutdownFallback3D(World& world) = 0;
 };
 

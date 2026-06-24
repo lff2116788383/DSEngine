@@ -531,7 +531,8 @@ void EngineInstance::Tick() {
         accumulator_ -= fixed_time_step_;
     }
 
-    pipeline_->Update(dse::TimeContext{scaled_dt, unscaled_dt, time_scale});
+    pipeline_->Update(dse::FrameUpdateContext{
+        dse::TimeContext{scaled_dt, unscaled_dt, time_scale}, frame_index_++});
     pipeline_->Render();
     Input::Update();
 }

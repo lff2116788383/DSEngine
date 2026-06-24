@@ -4,8 +4,8 @@
 
 namespace dse::runtime {
 
-void RunFrameUpdate(FramePipeline& pipeline, const dse::TimeContext& time) {
-    pipeline.RunUpdateInternal(time);
+void RunFrameUpdate(FramePipeline& pipeline, const dse::FrameUpdateContext& frame) {
+    pipeline.RunUpdateInternal(frame);
 }
 
 void RunFrameFixedUpdate(FramePipeline& pipeline, float fixed_delta_time) {

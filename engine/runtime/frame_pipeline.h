@@ -28,7 +28,7 @@
 #include "engine/audio/audio_system.h"
 #include "engine/core/module.h"
 #include "engine/core/dynamic_library.h"
-#include "engine/base/time_context.h"
+#include "engine/base/frame_update_context.h"
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/runtime/runtime_update_graph.h"
 #include "engine/runtime/runtime_render_shell.h"
@@ -85,9 +85,9 @@ public:
     
     /**
      * @brief 每帧逻辑更新
-     * @param time 时间上下文（scaled / unscaled / time_scale）
+     * @param frame 帧更新上下文（时间通道 + 帧序号等贯穿式逐帧状态）
      */
-    void Update(const dse::TimeContext& time);
+    void Update(const dse::FrameUpdateContext& frame);
 
     /**
      * @brief 每帧逻辑更新（兼容重载，按 time_scale=1 处理）
@@ -301,12 +301,12 @@ public:
     /// 基于 DAG 的渲染图
     dse::render::RenderGraph render_graph_dag_;
 
-    friend void dse::runtime::RunFrameUpdate(FramePipeline& pipeline, const dse::TimeContext& time);
+    friend void dse::runtime::RunFrameUpdate(FramePipeline& pipeline, const dse::FrameUpdateContext& frame);
     friend void dse::runtime::RunFrameFixedUpdate(FramePipeline& pipeline, float fixed_delta_time);
     friend void dse::runtime::RunFrameRender(FramePipeline& pipeline);
     friend void dse::runtime::BuildFrameRenderGraph(FramePipeline& pipeline);
     friend void dse::runtime::ExecuteFrameRenderGraph(FramePipeline& pipeline, CommandBuffer& cmd_buffer);
-    friend void dse::runtime::RunRuntimeUpdateGraph(FramePipeline& pipeline, const dse::TimeContext& time);
+    friend void dse::runtime::RunRuntimeUpdateGraph(FramePipeline& pipeline, const dse::FrameUpdateContext& frame);
     friend void dse::runtime::RunRuntimeFixedUpdateGraph(FramePipeline& pipeline, float fixed_delta_time);
     friend void dse::runtime::BeginRuntimeRenderFrame(FramePipeline& pipeline);
     friend std::shared_ptr<CommandBuffer> dse::runtime::CreateRuntimeRenderCommandBuffer(FramePipeline& pipeline);
@@ -319,7 +319,7 @@ private:
     void FreeResolutionDependentRTs();
     void SyncRenderPassContextTargets();
 
-    void RunUpdateInternal(const dse::TimeContext& time);
+    void RunUpdateInternal(const dse::FrameUpdateContext& frame);
     void RunFixedUpdateInternal(float fixed_delta_time);
     void RunRenderInternal();
     void BuildRenderGraphInternal();
