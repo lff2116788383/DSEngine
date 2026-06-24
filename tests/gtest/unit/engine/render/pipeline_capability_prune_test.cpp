@@ -44,6 +44,21 @@ RenderPipelineValidationContext WebGL2Context() {
     return ctx;
 }
 
+// 模拟 WebGPU(B3a) 能力档（WEB_3D_BACKEND.md §3 B3a/B4）：compute 基础设施已就绪但
+// 尚未翻转 SupportsCompute()（引擎 compute 入口无 WGSL 源槽、高层路径未手译，留 B3b），
+// 故 compute=false → 与 WebGL2 同走前向能力子集；storage buffer 创建已支持（ssbo=true），
+// MRT 上限取 WebGPU 规范默认 8。B3b 翻转 compute 后同一裁剪机制将自动路由到 parity 路径。
+RenderPipelineValidationContext WebGPUB3aContext() {
+    RenderPipelineValidationContext ctx;
+    ctx.editor_mode = false;
+    ctx.hiz_available = false;
+    ctx.gpu_driven_supported = false;
+    ctx.compute_supported = false;  // B3a 不翻转；B3b 起为 true
+    ctx.ssbo_supported = true;       // CreateGpuBuffer(kStorage) 已落地
+    ctx.max_color_attachments = 8;   // wgpuDeviceGetLimits 探测，规范默认 8
+    return ctx;
+}
+
 }  // namespace
 
 // ============================================================
@@ -260,4 +275,44 @@ TEST(PipelineCapabilityPruneTest, Forward3DEnablesPostProcessAndSurvivesOnWebGL2
     EXPECT_FALSE(survivors.count("gpu_cull"));
     EXPECT_FALSE(survivors.count("hiz_build"));
     EXPECT_FALSE(survivors.count("hiz_cull"));
+}
+
+// ============================================================
+// B4 能力探测路由：WebGPU(B3a) 能力档（compute 未翻转）下的裁剪结果
+// ============================================================
+
+// B3a 不变量守护：WebGPU 在 compute 未翻转前，default 管线仍裁掉 compute/gpu-driven pass
+// （与 WebGL2 同走前向子集），但保留前向核心 pass。B3b 翻转 SupportsCompute() 后，同一
+// 裁剪机制将自动放行这些重型 pass（路由到 parity 路径），无需额外接线。
+TEST(PipelineCapabilityPruneTest, WebGPUB3aRoutesLikeWebGL2ForwardSubset) {
+    RenderPipelineProfile profile = MakeForwardPlusDefaultProfile();
+    auto survivors = SurvivingPasses(profile, WebGPUB3aContext());
+
+    // compute/gpu-driven pass 必须被裁剪（B3a 未翻转 compute）
+    EXPECT_FALSE(survivors.count("gpu_cull"));
+    EXPECT_FALSE(survivors.count("hiz_build"));
+    EXPECT_FALSE(survivors.count("hiz_cull"));
+
+    // 前向核心 pass 必须存活
+    EXPECT_TRUE(survivors.count("pre_z"));
+    EXPECT_TRUE(survivors.count("forward_scene"));
+    EXPECT_TRUE(survivors.count("composite"));
+    EXPECT_TRUE(survivors.count("present"));
+}
+
+// B4 路由前瞻：一旦 B3b 翻转 compute（+ gpu_driven/hiz 就绪），同一 default 管线 + 同一
+// 裁剪机制即放行 compute/gpu-driven pass —— 验证裁剪逻辑本身不会因后端是 WebGPU 而误裁。
+TEST(PipelineCapabilityPruneTest, WebGPUParityContextKeepsHeavyPasses) {
+    RenderPipelineValidationContext parity = WebGPUB3aContext();
+    parity.compute_supported = true;       // B3b 起
+    parity.ssbo_supported = true;
+    parity.gpu_driven_supported = true;
+    parity.hiz_available = true;
+
+    RenderPipelineProfile profile = MakeForwardPlusDefaultProfile();
+    auto survivors = SurvivingPasses(profile, parity);
+    EXPECT_TRUE(survivors.count("gpu_cull"));
+    EXPECT_TRUE(survivors.count("hiz_build"));
+    EXPECT_TRUE(survivors.count("hiz_cull"));
+    EXPECT_TRUE(survivors.count("forward_scene"));
 }

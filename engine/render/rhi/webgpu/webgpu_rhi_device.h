@@ -53,6 +53,9 @@ public:
 
     // --- 设备生命周期 ---
     RenderDeviceInfo GetDeviceInfo() const override;
+    /// MRT 上限：B4 能力探测——AcquireDevice 经 wgpuDeviceGetLimits 读取适配器实际
+    /// maxColorAttachments 填充（默认 8）。供能力声明式裁剪 requires_mrt 的 pass 精确判定。
+    int GetMaxColorAttachments() const override { return max_color_attachments_; }
     bool InitDevice(void* window_handle, int width, int height) override;
     void OnWindowResized(int width, int height) override;
     void Shutdown() override;
@@ -277,6 +280,7 @@ private:
     int width_  = 0;
     int height_ = 0;
     bool initialized_ = false;
+    int max_color_attachments_ = 8;  ///< B4：wgpuDeviceGetLimits 探测填充（WebGPU 规范默认 8）
 
     // 单调递增句柄发号器（0 保留为「无效句柄」，各资源表共享同一序号空间）
     unsigned int next_handle_ = 1;

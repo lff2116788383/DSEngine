@@ -311,6 +311,20 @@ bool WebGPURhiDevice::AcquireDevice() {
                             static_cast<int>(type), message ? message : "(null)");
         },
         nullptr);
+
+    // B4 能力探测：读取适配器实际 limits 填充 MRT 上限（供能力声明式裁剪 requires_mrt）。
+    // 探测失败保持默认 8（WebGPU 规范保证的最低 maxColorAttachments）。
+    WGPUSupportedLimits limits{};
+    if (wgpuDeviceGetLimits(device_, &limits) && limits.limits.maxColorAttachments > 0) {
+        max_color_attachments_ = static_cast<int>(limits.limits.maxColorAttachments);
+    }
+    // 一次性输出 WebGPU 能力矩阵（harness/浏览器控制台可见），明示当前裁剪路由依据：
+    //   compute/ssbo-compute 在 B3a 仍为 false（基础设施已就绪，B3b 翻转后同一裁剪机制
+    //   将自动把 WebGPU 路由到 parity 路径）；当前 WebGPU 与 WebGL2 同走前向能力子集。
+    DEBUG_LOG_INFO("WebGPU[B4] 能力矩阵：max_color_attachments={} supports_compute={} "
+                   "supports_ssbo={} supports_ssbo_compute={}（B3a：compute 暂不翻转，"
+                   "裁剪路由同 WebGL2 前向子集）",
+                   max_color_attachments_, SupportsCompute(), SupportsSSBO(), SupportsSSBOCompute());
     return true;
 }
 
