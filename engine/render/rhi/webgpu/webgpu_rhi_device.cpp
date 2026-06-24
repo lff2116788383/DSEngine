@@ -164,6 +164,110 @@ void OnComputeSelfTestDrawMapped(WGPUBufferMapAsyncStatus status, void* userdata
     FinalizeComputeSelfTest(ctx);
 }
 
+// --- B3b-2 GPU-driven 剔除自检：异步回读校验上下文 ---
+// 4 个实例（AABB 已知），WGSL 视锥剔除写 per-instance indirect draw command 的 instance_count
+// （视锥内=1、外=0；预期 [1,0,1,0]）。然后用真 DrawIndexedIndirect 把 4 个不同颜色/象限的 quad
+// 渲到 64×64 离屏 RT（被剔实例 instance_count=0 → 硬件不绘制 → 该象限保持黑）。两路回读：
+//   (1) draw commands SSBO → 校验 instance_count 模式 == 预期剔除结果；
+//   (2) RT 像素 → 校验可见象限有对应颜色、被剔象限为黑。
+// 证明真链路 compute(视锥剔除)→SSBO(indirect cmd)→DrawIndexedIndirect→像素 端到端正确。
+constexpr uint32_t kGcInstances = 4;     ///< 实例数
+constexpr uint32_t kGcDrawWords = 5;     ///< 每条 indirect command 字数
+constexpr uint32_t kGcRtSize = 64;       ///< 离屏 RT 边长（64×4=256B/行，满足 copyTextureToBuffer 256 对齐）
+constexpr uint32_t kGcRtRowBytes = kGcRtSize * 4;
+constexpr uint32_t kGcRtBytes = kGcRtRowBytes * kGcRtSize;
+
+struct GpuCullSelfTestCtx {
+    WGPUBuffer rb_draw = nullptr;
+    WGPUBuffer rb_pixels = nullptr;
+    // 提交后才能安全释放的瞬态渲染资源（被命令缓冲引用至执行完成）。
+    WGPUTexture rt_tex = nullptr;
+    WGPUTextureView rt_view = nullptr;
+    WGPURenderPipeline pipeline = nullptr;
+    WGPUShaderModule module = nullptr;
+    WGPUBuffer vbo = nullptr;
+    WGPUBuffer ibo = nullptr;
+    int pending = 2;
+    bool draw_ok = false;
+    bool pixels_ok = false;
+};
+
+void FinalizeGpuCullSelfTest(GpuCullSelfTestCtx* ctx) {
+    if (--ctx->pending > 0) return;
+    if (ctx->draw_ok && ctx->pixels_ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-2] GPU-driven 剔除自检 PASS：视锥剔除 instance_count 模式 [1,0,1,0] "
+                       "+ DrawIndexedIndirect 离屏像素（可见象限有色、被剔象限为黑）均符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-2] GPU-driven 剔除自检 FAIL：draw_ok={} pixels_ok={}",
+                        ctx->draw_ok, ctx->pixels_ok);
+    }
+    if (ctx->rb_draw)   wgpuBufferRelease(ctx->rb_draw);
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    if (ctx->rt_view)   wgpuTextureViewRelease(ctx->rt_view);
+    if (ctx->rt_tex)    wgpuTextureRelease(ctx->rt_tex);
+    if (ctx->pipeline)  wgpuRenderPipelineRelease(ctx->pipeline);
+    if (ctx->module)    wgpuShaderModuleRelease(ctx->module);
+    if (ctx->vbo)       wgpuBufferRelease(ctx->vbo);
+    if (ctx->ibo)       wgpuBufferRelease(ctx->ibo);
+    delete ctx;
+}
+
+void OnGpuCullDrawMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<GpuCullSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* p = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_draw, 0, kGcInstances * kGcDrawWords * sizeof(uint32_t)));
+        if (p) {
+            // 每条 command 第 2 字（offset 1）= instance_count；预期 [1,0,1,0]。
+            const uint32_t expected[kGcInstances] = {1u, 0u, 1u, 0u};
+            bool ok = true;
+            for (uint32_t i = 0; i < kGcInstances; ++i) {
+                if (p[i * kGcDrawWords + 1] != expected[i]) { ok = false; break; }
+            }
+            ctx->draw_ok = ok;
+        }
+        wgpuBufferUnmap(ctx->rb_draw);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-2] 剔除自检：draw commands 回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeGpuCullSelfTest(ctx);
+}
+
+void OnGpuCullPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<GpuCullSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* px = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kGcRtBytes));
+        if (px) {
+            auto at = [&](uint32_t x, uint32_t y) -> const uint8_t* {
+                return px + (y * kGcRtRowBytes + x * 4);
+            };
+            // 4 象限中心像素（RT 顶左原点）：inst0 TL=(16,16) 红、inst1 TR=(48,16) 绿(被剔→黑)、
+            //   inst2 BL=(16,48) 蓝、inst3 BR=(48,48) 黄(被剔→黑)。
+            const uint8_t* tl = at(16, 16);
+            const uint8_t* tr = at(48, 16);
+            const uint8_t* bl = at(16, 48);
+            const uint8_t* br = at(48, 48);
+            auto bright = [](const uint8_t* c, int ch) { return c[ch] > 100; };
+            auto dark   = [](const uint8_t* c) { return c[0] < 40 && c[1] < 40 && c[2] < 40; };
+            const bool ok = bright(tl, 0) &&  // inst0 可见：红
+                            dark(tr) &&        // inst1 被剔：黑
+                            bright(bl, 2) &&  // inst2 可见：蓝
+                            dark(br);          // inst3 被剔：黑
+            ctx->pixels_ok = ok;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-2] 剔除自检像素：TL({},{},{}) TR({},{},{}) BL({},{},{}) BR({},{},{})",
+                                tl[0], tl[1], tl[2], tr[0], tr[1], tr[2],
+                                bl[0], bl[1], bl[2], br[0], br[1], br[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-2] 剔除自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeGpuCullSelfTest(ctx);
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -432,6 +536,15 @@ void WebGPURhiDevice::Shutdown() {
     if (cur_compute_pass_) { wgpuComputePassEncoderRelease(cur_compute_pass_); cur_compute_pass_ = nullptr; }
     if (ct_rb_out_)  { wgpuBufferRelease(ct_rb_out_);  ct_rb_out_ = nullptr; }
     if (ct_rb_draw_) { wgpuBufferRelease(ct_rb_draw_); ct_rb_draw_ = nullptr; }
+    // B3b-2 GPU-driven 剔除自检瞬态资源（readback 已 kick 时所有权已转移给 ctx → 这里均为 null）。
+    if (gc_rb_draw_)      { wgpuBufferRelease(gc_rb_draw_);          gc_rb_draw_ = nullptr; }
+    if (gc_rb_pixels_)    { wgpuBufferRelease(gc_rb_pixels_);        gc_rb_pixels_ = nullptr; }
+    if (gc_rt_view_)      { wgpuTextureViewRelease(gc_rt_view_);     gc_rt_view_ = nullptr; }
+    if (gc_rt_tex_)       { wgpuTextureRelease(gc_rt_tex_);          gc_rt_tex_ = nullptr; }
+    if (gc_pipeline_)     { wgpuRenderPipelineRelease(gc_pipeline_); gc_pipeline_ = nullptr; }
+    if (gc_render_module_){ wgpuShaderModuleRelease(gc_render_module_); gc_render_module_ = nullptr; }
+    if (gc_vbo_)          { wgpuBufferRelease(gc_vbo_);              gc_vbo_ = nullptr; }
+    if (gc_ibo_)          { wgpuBufferRelease(gc_ibo_);              gc_ibo_ = nullptr; }
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -590,11 +703,20 @@ void WebGPURhiDevice::EndFrame() {
         ct_recorded = RecordComputeSelfTest();
     }
 
+    // B3b-2：每会话一次 GPU-driven 剔除真链路自检（视锥剔除 compute → SSBO indirect cmd →
+    // 真 DrawIndexedIndirect → 离屏 RT → 回读 SSBO+像素校验）。同样仅自检、不翻转能力位、不碰 demo 帧。
+    bool gc_recorded = false;
+    if (!gpu_cull_selftest_done_) {
+        gpu_cull_selftest_done_ = true;
+        gc_recorded = RecordGpuCullSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
 
     if (ct_recorded) KickComputeSelfTestReadback();
+    if (gc_recorded) KickGpuCullSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -1888,11 +2010,9 @@ void WebGPURhiDevice::BuildAndSetBindGroups(const PipelineCacheEntry& entry) {
     }
 }
 
-void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_count,
-                                uint32_t first, int32_t base_vertex, uint32_t first_instance) {
-    if (!cur_pass_ || count == 0 || instance_count == 0) return;
+bool WebGPURhiDevice::BindPassDrawState(bool indexed, const PipelineCacheEntry*& pe_out) {
     const PipelineCacheEntry* pe = GetOrCreateRenderPipeline();
-    if (!pe || !pe->pipeline) return;  // 无 WGSL module / 组装失败 → 优雅跳过
+    if (!pe || !pe->pipeline) return false;  // 无 WGSL module / 组装失败 → 优雅跳过
 
     wgpuRenderPassEncoderSetPipeline(cur_pass_, pe->pipeline);
     for (size_t i = 0; i < cur_vbs_.size(); ++i) {
@@ -1919,9 +2039,21 @@ void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_
                                                 git->second.offset, git->second.size);
         } else {
             const BufferEntry* ib = FindBuffer(cur_ib_handle_);
-            if (!ib || !ib->buffer) return;
+            if (!ib || !ib->buffer) return false;
             wgpuRenderPassEncoderSetIndexBuffer(cur_pass_, ib->buffer, cur_ib_format_, 0, ib->size);
         }
+    }
+    pe_out = pe;
+    return true;
+}
+
+void WebGPURhiDevice::IssueDraw(bool indexed, uint32_t count, uint32_t instance_count,
+                                uint32_t first, int32_t base_vertex, uint32_t first_instance) {
+    if (!cur_pass_ || count == 0 || instance_count == 0) return;
+    const PipelineCacheEntry* pe = nullptr;
+    if (!BindPassDrawState(indexed, pe)) return;
+
+    if (indexed) {
         wgpuRenderPassEncoderDrawIndexed(cur_pass_, count, instance_count, first,
                                          base_vertex, first_instance);
     } else {
@@ -2055,7 +2187,19 @@ void WebGPURhiDevice::CmdSetGlobalMat4(const std::string& name, const glm::mat4&
 void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
 void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
 void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
-void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) { (void)indirect_buffer; (void)byte_offset; }
+// B3b-2：真 indirect 绘制——按当前已绑管线/顶点/索引缓冲，从 indirect buffer（须含 Indirect
+// usage，由 CreateGpuBuffer(kIndirect) 授予）读取 [indexCount, instanceCount, firstIndex,
+// baseVertex, firstInstance] 发 DrawIndexedIndirect。instance_count=0（被剔）时硬件不绘制。
+void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint32_t byte_offset) {
+    if (!cur_pass_) return;
+    const BufferEntry* ind = FindBuffer(indirect_buffer);
+    if (!ind || !ind->buffer) return;
+    const PipelineCacheEntry* pe = nullptr;
+    if (!BindPassDrawState(/*indexed=*/true, pe)) return;
+    wgpuRenderPassEncoderDrawIndexedIndirect(cur_pass_, ind->buffer, byte_offset);
+    if (cur_pass_is_backbuffer_) backbuffer_drawn_ = true;
+    last_frame_stats_.draw_calls += 1;
+}
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
 // ============================================================
@@ -2356,6 +2500,251 @@ void WebGPURhiDevice::KickComputeSelfTestReadback() {
                        OnComputeSelfTestOutMapped, ctx);
     wgpuBufferMapAsync(ctx->rb_draw, WGPUMapMode_Read, 0, kCtDrawWords * sizeof(uint32_t),
                        OnComputeSelfTestDrawMapped, ctx);
+}
+
+// B3b-2：GPU-driven 剔除真链路自检——视锥剔除 compute（手译自 builtin_passes.cpp kGPUCullShaderSource
+// 的 frustum 部分，Hi-Z 遮挡因需 storage-image 金字塔留后续）写 per-instance indirect draw command，
+// 再用真 DrawIndexedIndirect 渲到离屏 RT，回读 SSBO + 像素双重校验。详见 GpuCullSelfTestCtx。
+bool WebGPURhiDevice::RecordGpuCullSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // --- WGSL 视锥剔除 compute（group1 b0 = 6 视锥面 + 实例数；group3 b0 = AABB；group3 b1 = draw cmds）---
+    static const char* kCullWGSL = R"WGSL(// dse-wgsl
+struct AABB { lo : vec4<f32>, hi : vec4<f32>, };
+struct DrawCmd { count : u32, instance_count : u32, first_index : u32, base_vertex : u32, base_instance : u32, };
+struct CullParams { planes : array<vec4<f32>, 6>, object_count : u32, pad0 : u32, pad1 : u32, pad2 : u32, };
+@group(1) @binding(0) var<uniform> params : CullParams;
+@group(3) @binding(0) var<storage, read_write> aabbs : array<AABB>;
+@group(3) @binding(1) var<storage, read_write> draws : array<DrawCmd>;
+fn frustum_in(lo : vec3<f32>, hi : vec3<f32>) -> bool {
+  for (var i = 0u; i < 6u; i = i + 1u) {
+    let p = params.planes[i];
+    let pv = vec3<f32>(select(lo.x, hi.x, p.x >= 0.0),
+                       select(lo.y, hi.y, p.y >= 0.0),
+                       select(lo.z, hi.z, p.z >= 0.0));
+    if (dot(p.xyz, pv) + p.w < 0.0) { return false; }
+  }
+  return true;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let i = gid.x;
+  if (i >= params.object_count) { return; }
+  if (frustum_in(aabbs[i].lo.xyz, aabbs[i].hi.xyz)) { draws[i].instance_count = 1u; }
+  else { draws[i].instance_count = 0u; }
+}
+)WGSL";
+
+    if (!gc_cull_shader_)
+        gc_cull_shader_ = CreateComputeShaderEx("", "", "", 2, 0, 0, 0, kCullWGSL);
+
+    // 剔除参数：保留区域 x∈[-1,1] y∈[-1,1] z∈[-10,10]（6 视锥面），实例数 4。
+    if (!gc_params_ubo_) {
+        struct CullParams { float planes[6][4]; uint32_t object_count; uint32_t pad[3]; } p{};
+        const float planes[6][4] = {
+            { 1, 0, 0, 1}, {-1, 0, 0, 1}, {0,  1, 0, 1},
+            { 0,-1, 0, 1}, { 0, 0, 1,10}, {0,  0,-1,10}};
+        std::memcpy(p.planes, planes, sizeof(planes));
+        p.object_count = kGcInstances;
+        GpuBufferDesc d; d.size = sizeof(p); d.usage = GpuBufferUsage::kUniform;
+        gc_params_ubo_ = CreateGpuBuffer(d, &p).raw();
+    }
+    // 4 实例 AABB：inst0 原点(视锥内) / inst1 x=5(出界) / inst2 z=5(界内) / inst3 y=5(出界)。
+    if (!gc_aabb_ssbo_) {
+        const float aabbs[kGcInstances][8] = {
+            {-0.4f,-0.4f,-0.4f,0, 0.4f,0.4f,0.4f,0},   // inst0 → 可见
+            { 4.6f,-0.4f,-0.4f,0, 5.4f,0.4f,0.4f,0},   // inst1 → 剔除(x>1)
+            {-0.4f,-0.4f, 4.6f,0, 0.4f,0.4f,5.4f,0},   // inst2 → 可见
+            {-0.4f, 4.6f,-0.4f,0, 0.4f,5.4f,0.4f,0}};  // inst3 → 剔除(y>1)
+        GpuBufferDesc d; d.size = sizeof(aabbs); d.usage = GpuBufferUsage::kStorage;
+        gc_aabb_ssbo_ = CreateGpuBuffer(d, aabbs).raw();
+    }
+    // per-instance indirect draw commands（预置 count=6/first_index=i*6；instance_count 由剔除写）。
+    if (!gc_draw_ssbo_) {
+        uint32_t cmds[kGcInstances * kGcDrawWords];
+        for (uint32_t i = 0; i < kGcInstances; ++i) {
+            cmds[i * kGcDrawWords + 0] = 6u;       // index_count
+            cmds[i * kGcDrawWords + 1] = 1u;       // instance_count（剔除覆写）
+            cmds[i * kGcDrawWords + 2] = i * 6u;   // first_index
+            cmds[i * kGcDrawWords + 3] = 0u;       // base_vertex
+            cmds[i * kGcDrawWords + 4] = 0u;       // base_instance
+        }
+        GpuBufferDesc d; d.size = sizeof(cmds);
+        d.usage = GpuBufferUsage::kStorage | GpuBufferUsage::kIndirect;
+        gc_draw_ssbo_ = CreateGpuBuffer(d, cmds).raw();
+    }
+
+    // --- 离屏 RT（64×64 RGBA8）+ 渲染管线 + 4 象限不同色 quad 顶点/索引缓冲 ---
+    if (!gc_rt_tex_) {
+        WGPUTextureDescriptor td{};
+        td.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
+        td.dimension = WGPUTextureDimension_2D;
+        td.size = {kGcRtSize, kGcRtSize, 1};
+        td.format = WGPUTextureFormat_RGBA8Unorm;
+        td.mipLevelCount = 1; td.sampleCount = 1;
+        gc_rt_tex_ = wgpuDeviceCreateTexture(device_, &td);
+        if (gc_rt_tex_) gc_rt_view_ = wgpuTextureCreateView(gc_rt_tex_, nullptr);
+    }
+    if (!gc_render_module_) {
+        static const char* kRenderWGSL = R"WGSL(
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) c : vec3<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.color = c;
+  return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> { return vec4<f32>(i.color, 1.0); }
+)WGSL";
+        gc_render_module_ = CompileWGSL(kRenderWGSL, "dse-gpu-cull-selftest-render");
+    }
+    if (!gc_pipeline_ && gc_render_module_) {
+        WGPUVertexAttribute attrs[2]{};
+        attrs[0].format = WGPUVertexFormat_Float32x2; attrs[0].offset = 0;  attrs[0].shaderLocation = 0;
+        attrs[1].format = WGPUVertexFormat_Float32x3; attrs[1].offset = 8;  attrs[1].shaderLocation = 1;
+        WGPUVertexBufferLayout vbl{};
+        vbl.arrayStride = 5 * sizeof(float);
+        vbl.stepMode = WGPUVertexStepMode_Vertex;
+        vbl.attributeCount = 2; vbl.attributes = attrs;
+        WGPUColorTargetState color{};
+        color.format = WGPUTextureFormat_RGBA8Unorm;
+        color.writeMask = WGPUColorWriteMask_All;
+        WGPUFragmentState fs{};
+        fs.module = gc_render_module_; fs.entryPoint = "fs_main";
+        fs.targetCount = 1; fs.targets = &color;
+        WGPURenderPipelineDescriptor rpd{};
+        rpd.layout = nullptr;  // 无绑定资源 → auto layout
+        rpd.vertex.module = gc_render_module_; rpd.vertex.entryPoint = "vs_main";
+        rpd.vertex.bufferCount = 1; rpd.vertex.buffers = &vbl;
+        rpd.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+        rpd.primitive.cullMode = WGPUCullMode_None;
+        rpd.primitive.frontFace = WGPUFrontFace_CCW;
+        rpd.multisample.count = 1; rpd.multisample.mask = 0xFFFFFFFF;
+        rpd.fragment = &fs;
+        gc_pipeline_ = wgpuDeviceCreateRenderPipeline(device_, &rpd);
+    }
+    if (!gc_vbo_) {
+        // 4 个象限 quad（中心 ±0.5），半边 0.35，各一种颜色。
+        const float h = 0.35f;
+        const float cx[kGcInstances] = {-0.5f, 0.5f, -0.5f, 0.5f};
+        const float cy[kGcInstances] = { 0.5f, 0.5f, -0.5f, -0.5f};
+        const float col[kGcInstances][3] = {{1,0,0},{0,1,0},{0,0,1},{1,1,0}};
+        float verts[kGcInstances * 4 * 5];
+        size_t v = 0;
+        for (uint32_t i = 0; i < kGcInstances; ++i) {
+            const float qx[4] = {cx[i]-h, cx[i]+h, cx[i]+h, cx[i]-h};
+            const float qy[4] = {cy[i]-h, cy[i]-h, cy[i]+h, cy[i]+h};
+            for (int k = 0; k < 4; ++k) {
+                verts[v++] = qx[k]; verts[v++] = qy[k];
+                verts[v++] = col[i][0]; verts[v++] = col[i][1]; verts[v++] = col[i][2];
+            }
+        }
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
+        bd.size = sizeof(verts);
+        gc_vbo_ = wgpuDeviceCreateBuffer(device_, &bd);
+        if (gc_vbo_) wgpuQueueWriteBuffer(queue_, gc_vbo_, 0, verts, sizeof(verts));
+    }
+    if (!gc_ibo_) {
+        uint32_t idx[kGcInstances * 6];
+        for (uint32_t i = 0; i < kGcInstances; ++i) {
+            const uint32_t b = i * 4;
+            idx[i*6+0]=b+0; idx[i*6+1]=b+1; idx[i*6+2]=b+2;
+            idx[i*6+3]=b+0; idx[i*6+4]=b+2; idx[i*6+5]=b+3;
+        }
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
+        bd.size = sizeof(idx);
+        gc_ibo_ = wgpuDeviceCreateBuffer(device_, &bd);
+        if (gc_ibo_) wgpuQueueWriteBuffer(queue_, gc_ibo_, 0, idx, sizeof(idx));
+    }
+
+    if (!gc_cull_shader_ || !gc_params_ubo_ || !gc_aabb_ssbo_ || !gc_draw_ssbo_ ||
+        !gc_rt_view_ || !gc_pipeline_ || !gc_vbo_ || !gc_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-2] GPU-driven 剔除自检资源创建失败，跳过");
+        return false;
+    }
+
+    // --- 录制 1：视锥剔除 compute（写 draw cmds instance_count）---
+    ResetDrawState();
+    CmdBindUniformBuffer(0, gc_params_ubo_, 0, 112);
+    CmdBindStorageBuffer(0, gc_aabb_ssbo_, 0, kGcInstances * 32);
+    CmdBindStorageBuffer(1, gc_draw_ssbo_, 0, kGcInstances * kGcDrawWords * sizeof(uint32_t));
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(gc_cull_shader_, 1, 1, 1);  // 4 实例 < 64 线程 → 1 workgroup
+    EndComputePass();
+    ResetDrawState();
+
+    // --- 录制 2：真 DrawIndexedIndirect 渲到离屏 RT（被剔实例 instance_count=0 → 不绘制）---
+    const BufferEntry* be_draw = FindBuffer(gc_draw_ssbo_);
+    if (!be_draw || !be_draw->buffer) return false;
+    WGPURenderPassColorAttachment att{};
+    att.view = gc_rt_view_;
+    att.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+    att.loadOp = WGPULoadOp_Clear;
+    att.storeOp = WGPUStoreOp_Store;
+    att.clearValue = WGPUColor{0.0, 0.0, 0.0, 1.0};
+    WGPURenderPassDescriptor pd{};
+    pd.colorAttachmentCount = 1; pd.colorAttachments = &att;
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pd);
+    wgpuRenderPassEncoderSetPipeline(pass, gc_pipeline_);
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, gc_vbo_, 0, kGcInstances * 4 * 5 * sizeof(float));
+    wgpuRenderPassEncoderSetIndexBuffer(pass, gc_ibo_, WGPUIndexFormat_Uint32, 0,
+                                        kGcInstances * 6 * sizeof(uint32_t));
+    for (uint32_t i = 0; i < kGcInstances; ++i)
+        wgpuRenderPassEncoderDrawIndexedIndirect(pass, be_draw->buffer,
+                                                 i * kGcDrawWords * sizeof(uint32_t));
+    wgpuRenderPassEncoderEnd(pass);
+    wgpuRenderPassEncoderRelease(pass);
+
+    // --- copy draw cmds + RT 像素到回读缓冲（随帧提交）---
+    auto make_rb = [&](uint64_t bytes) -> WGPUBuffer {
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+        bd.size = AlignUp4(bytes);
+        return wgpuDeviceCreateBuffer(device_, &bd);
+    };
+    gc_rb_draw_ = make_rb(kGcInstances * kGcDrawWords * sizeof(uint32_t));
+    gc_rb_pixels_ = make_rb(kGcRtBytes);
+    if (!gc_rb_draw_ || !gc_rb_pixels_) {
+        if (gc_rb_draw_) { wgpuBufferRelease(gc_rb_draw_); gc_rb_draw_ = nullptr; }
+        if (gc_rb_pixels_) { wgpuBufferRelease(gc_rb_pixels_); gc_rb_pixels_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_draw->buffer, 0, gc_rb_draw_, 0,
+                                         kGcInstances * kGcDrawWords * sizeof(uint32_t));
+    WGPUImageCopyTexture src{};
+    src.texture = gc_rt_tex_;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = gc_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kGcRtRowBytes;
+    dst.layout.rowsPerImage = kGcRtSize;
+    WGPUExtent3D ext{kGcRtSize, kGcRtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickGpuCullSelfTestReadback() {
+    if (!gc_rb_draw_ || !gc_rb_pixels_) return;
+    // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    auto* ctx = new GpuCullSelfTestCtx();
+    ctx->rb_draw = gc_rb_draw_;
+    ctx->rb_pixels = gc_rb_pixels_;
+    ctx->rt_tex = gc_rt_tex_;       gc_rt_tex_ = nullptr;
+    ctx->rt_view = gc_rt_view_;     gc_rt_view_ = nullptr;
+    ctx->pipeline = gc_pipeline_;   gc_pipeline_ = nullptr;
+    ctx->module = gc_render_module_; gc_render_module_ = nullptr;
+    ctx->vbo = gc_vbo_;             gc_vbo_ = nullptr;
+    ctx->ibo = gc_ibo_;             gc_ibo_ = nullptr;
+    gc_rb_draw_ = nullptr;
+    gc_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_draw, WGPUMapMode_Read, 0,
+                       kGcInstances * kGcDrawWords * sizeof(uint32_t), OnGpuCullDrawMapped, ctx);
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kGcRtBytes, OnGpuCullPixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

@@ -445,10 +445,34 @@ private:
     std::vector<BindingInfo> CollectGroupBindings(uint32_t group);
     const PipelineCacheEntry* GetOrCreateRenderPipeline();
     void BuildAndSetBindGroups(const PipelineCacheEntry& entry);
+    /// 在当前 render pass 上绑定绘制状态（pipeline + 顶点缓冲 + BindGroup + 可选索引缓冲），
+    /// 供直接绘制与 indirect 绘制共用。失败（无 WGSL module / 缺索引缓冲）返回 false。
+    bool BindPassDrawState(bool indexed, const PipelineCacheEntry*& pe_out);
     void IssueDraw(bool indexed, uint32_t count, uint32_t instance_count,
                    uint32_t first, int32_t base_vertex, uint32_t first_instance);
     void EnsureSelfTestResources();
     void RunBringUpSelfTest();
+
+    // --- B3b-2 GPU-driven 剔除自检（每会话一次：WGSL 视锥剔除 compute 写 per-instance indirect
+    //   draw command → 真 wgpuRenderPassEncoderDrawIndexedIndirect 渲到离屏 RT → 回读 SSBO+像素
+    //   校验「被剔实例 instance_count=0/无像素，可见实例 instance_count=1/有像素」。离屏隔离，
+    //   不碰 demo backbuffer/golden；不翻转全局能力位。验证真 compute→SSBO→indirect-draw→像素链路）---
+    bool gpu_cull_selftest_done_ = false;
+    bool RecordGpuCullSelfTest();        ///< 在 frame_encoder_ 上录制 cull dispatch + 离屏 indirect 绘制 + copy（须在无 render/compute pass 时调用）
+    void KickGpuCullSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int gc_cull_shader_ = 0;    ///< 视锥剔除 compute shader
+    unsigned int gc_aabb_ssbo_ = 0;      ///< 实例 AABB（storage，group3 b0）
+    unsigned int gc_draw_ssbo_ = 0;      ///< per-instance indirect draw commands（storage|indirect，group3 b1）
+    unsigned int gc_params_ubo_ = 0;     ///< 剔除参数 UBO（6 视锥面 + 实例数，group1 b0）
+    WGPUBuffer gc_rb_draw_ = nullptr;    ///< draw commands 回读缓冲（MapRead|CopyDst）
+    WGPUBuffer gc_rb_pixels_ = nullptr;  ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
+    // 录制期创建、提交后随回读 ctx 释放的瞬态渲染资源（被命令缓冲引用至 GPU 执行完成）。
+    WGPUTexture gc_rt_tex_ = nullptr;
+    WGPUTextureView gc_rt_view_ = nullptr;
+    WGPURenderPipeline gc_pipeline_ = nullptr;
+    WGPUShaderModule gc_render_module_ = nullptr;
+    WGPUBuffer gc_vbo_ = nullptr;
+    WGPUBuffer gc_ibo_ = nullptr;
 
     RenderStats last_frame_stats_{};
 };
