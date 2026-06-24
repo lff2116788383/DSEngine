@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -83,6 +84,13 @@ public:
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     void DeleteShaderProgram(unsigned int program_handle) override;
     unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
+
+    // --- 内建资源（B2b/B2c：手写 WGSL，经通用原语上屏）---
+    // 引擎高层渲染器（MeshRenderer/PostProcessRenderer/SkyboxRenderer）经这些访问器取程序句柄；
+    // WebGPU 无离线 GLSL→WGSL，故各内建程序以手写 WGSL 源懒创建并缓存（见 GetOrCreateWgslProgram）。
+    unsigned int GetBuiltinProgram(BuiltinProgram program) override;
+    unsigned int GetGenPPShaderProgram(const std::string& effect_name) override;
+    unsigned int GetSkyboxCubeVertexBuffer() override;
 
     // --- 缓冲 ---
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
@@ -148,6 +156,11 @@ public:
         std::string vs_entry = "vs_main";
         std::string fs_entry = "fs_main";
         bool has_fragment = true;           ///< 仅深度 pass 等可无片元入口
+        /// WGSL 实际声明的绑定集合（key = (group<<16)|binding），CreateShaderProgram 解析填充。
+        /// explicit pipeline-layout/BindGroup 仅纳入此集合内的绑定：引擎可能绑定多于着色器
+        /// 所需的资源（如 ForwardShaded 绑 20 纹理槽），全量纳入会超 per-stage 采样上限并使
+        /// layout 与着色器用量不符；按此集合过滤即对齐 WebGPU 自动布局语义。
+        std::set<uint32_t> wgsl_bindings;
     };
 
     // --- 内部访问器（供 WebGPUCommandBuffer 录制用，B1+）---
@@ -201,6 +214,13 @@ private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
     void ReleaseSwapChain();
+    /// 惰性初始化设备+swapchain（据画布尺寸）。Web 宿主以空窗口句柄创建设备、不调 InitDevice，
+    /// 而引擎在首帧前即创建渲染目标/纹理等设备资源——故须在任一设备资源创建路径上先行确保初始化，
+    /// 否则 device_ 为空致资源句柄全为 0（后处理链无源纹理 → 黑屏）。
+    bool EnsureInitialized();
+    /// 在每帧 UBO 版本环内 bump 分配一块 256 对齐切片并写入 data；返回切片在环内的字节偏移
+    /// （失败返回 UINT64_MAX）。环按需懒创建、跨帧复用、每帧 BeginFrame 复位游标。
+    uint64_t AllocUboVersion(const void* data, uint64_t size);
 
     // --- B1 资源创建内部助手 ---
     /// 创建一张 2D/cube/3D 纹理 + 默认视图 + 采样器，登记入 textures_，返回句柄。
@@ -307,6 +327,16 @@ private:
     size_t push_pool_used_ = 0;
     std::vector<WGPUBindGroup> frame_bindgroups_;  ///< 本帧创建的 BindGroup，提交后统一释放
 
+    // --- 每帧 UBO 版本环（关键：引擎对单个 dynamic UBO 每 draw 调 UpdateGpuBuffer 后再绑定，
+    //     而 WebGPU 的 wgpuQueueWriteBuffer 在命令缓冲执行前一律合并，致同一缓冲所有 draw 只见
+    //     最后一次写入。故每次 UBO 更新在大环形缓冲内分配独立 256 对齐切片、写入并登记版本；
+    //     建 BindGroup 时该 UBO 句柄改绑当帧最近一次版本切片，从而各 draw 见各自材质数据）---
+    WGPUBuffer ubo_ring_ = nullptr;
+    uint64_t ubo_ring_size_ = 0;
+    uint64_t ubo_ring_cursor_ = 0;
+    struct UboVersion { WGPUBuffer buffer; uint64_t offset; uint64_t size; };
+    std::unordered_map<unsigned int, UboVersion> ubo_versions_;  ///< 句柄 → 当帧最近版本切片（每帧清）
+
     // --- B2 bring-up 自检资源（验证整条录制链路；引擎 WGSL 内容就绪后自动不再触发）---
     bool selftest_init_ = false;
     unsigned int selftest_program_ = 0;
@@ -314,6 +344,13 @@ private:
     unsigned int selftest_vbo_ = 0;
     unsigned int selftest_tex_ = 0;
     unsigned int selftest_ubo_ = 0;
+
+    // --- B2b/B2c 内建 WGSL 程序缓存 ---
+    /// 按 key 懒创建（经 CreateShaderProgram 编译 WGSL）并缓存内建程序句柄，重复取用零开销。
+    unsigned int GetOrCreateWgslProgram(const std::string& key, const std::string& wgsl);
+    std::unordered_map<std::string, unsigned int> wgsl_program_cache_;
+    unsigned int skybox_cube_vbo_ = 0;  ///< 内建天空盒 36 顶点立方体 VBO（懒初始化）
+    std::set<unsigned int> logged_incomplete_programs_;  ///< 已告警过的缺绑定程序（去重日志）
 
     // --- B2 录制内部助手 ---
     void ResetDrawState();

@@ -229,6 +229,8 @@ async function main() {
     } else {
       console.log('[visual] PASS: non-triviality guard (WebGL2 frame has real content)');
     }
+    // 诊断：设 DSE_DUMP_LOGS=1 时无条件转储页面日志（默认仅在非平凡守护失败时打印）。
+    if (process.env.DSE_DUMP_LOGS) console.log('PAGELOGS>>>\n' + logs.join('\n') + '\n<<<PAGELOGS');
 
     // Layer 2: golden-image diff (optional/strict).
     const baselinePath = join(baselineDir, `${opts.name}.png`);

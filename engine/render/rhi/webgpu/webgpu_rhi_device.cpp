@@ -329,6 +329,7 @@ void WebGPURhiDevice::Shutdown() {
     ReleasePassViews();
 
     ReleaseSwapChain();
+    if (ubo_ring_) { wgpuBufferRelease(ubo_ring_); ubo_ring_ = nullptr; ubo_ring_size_ = 0; ubo_ring_cursor_ = 0; }
     if (surface_) { wgpuSurfaceRelease(surface_); surface_ = nullptr; }
     if (queue_)   { wgpuQueueRelease(queue_);     queue_ = nullptr; }
     if (device_)  { wgpuDeviceRelease(device_);   device_ = nullptr; }
@@ -339,18 +340,58 @@ void WebGPURhiDevice::WaitIdle() {
     // WebGPU 无显式 device idle 等待；提交后由浏览器调度。B3 起按需用 onSubmittedWorkDone。
 }
 
-void WebGPURhiDevice::BeginFrame() {
-    last_frame_stats_ = RenderStats{};
+bool WebGPURhiDevice::EnsureInitialized() {
     // Web 宿主（Emscripten）以空 native_window_handle 创建设备，FramePipeline 因此不调用
     // InitDevice（仅 D3D11/有窗口句柄时调用，A 阶段 GL 路径无需 swapchain）。这里据画布尺寸
     // 惰性完成 WebGPU 设备 + swapchain 初始化，不触碰 A 阶段回退逻辑。
-    if (!initialized_) {
-        int cw = 0, ch = 0;
-        emscripten_get_canvas_element_size("#canvas", &cw, &ch);
-        if (cw <= 0) cw = 1280;
-        if (ch <= 0) ch = 720;
-        if (!InitDevice(nullptr, cw, ch)) return;
+    if (initialized_) return true;
+    int cw = 0, ch = 0;
+    emscripten_get_canvas_element_size("#canvas", &cw, &ch);
+    if (cw <= 0) cw = 1280;
+    if (ch <= 0) ch = 720;
+    return InitDevice(nullptr, cw, ch);
+}
+
+uint64_t WebGPURhiDevice::AllocUboVersion(const void* data, uint64_t size) {
+    if (!device_ || !data || size == 0) return UINT64_MAX;
+    constexpr uint64_t kAlign = 256;  // WebGPU minUniformBufferOffsetAlignment 默认 256
+    const uint64_t aligned_size = (size + 3) & ~uint64_t(3);
+    const uint64_t off = (ubo_ring_cursor_ + kAlign - 1) & ~(kAlign - 1);
+    // 环不足以容纳本次分配：本帧已录制的 BindGroup 仍引用现有环缓冲，不能中途重建；
+    //   故仅当环尚未创建或在帧首（游标为 0）时按需扩容，运行中溢出则降级（返回失败，回退原存储）。
+    if (off + aligned_size > ubo_ring_size_) {
+        if (ubo_ring_cursor_ != 0) {
+            DEBUG_LOG_WARN("WebGPU: UBO 版本环本帧溢出（需 {} > 容量 {}），该 UBO 回退原存储",
+                           static_cast<unsigned long long>(off + aligned_size),
+                           static_cast<unsigned long long>(ubo_ring_size_));
+            return UINT64_MAX;
+        }
+        uint64_t new_size = ubo_ring_size_ ? ubo_ring_size_ : (1u << 22);  // 4MB 起步
+        while (off + aligned_size > new_size) new_size *= 2;
+        if (ubo_ring_) wgpuBufferRelease(ubo_ring_);
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_Uniform | WGPUBufferUsage_CopyDst;
+        bd.size = new_size;
+        ubo_ring_ = wgpuDeviceCreateBuffer(device_, &bd);
+        ubo_ring_size_ = ubo_ring_ ? new_size : 0;
+        if (!ubo_ring_) return UINT64_MAX;
     }
+    if (aligned_size == size) {
+        wgpuQueueWriteBuffer(queue_, ubo_ring_, off, data, size);
+    } else {
+        std::vector<uint8_t> padded(aligned_size, 0);
+        std::memcpy(padded.data(), data, size);
+        wgpuQueueWriteBuffer(queue_, ubo_ring_, off, padded.data(), aligned_size);
+    }
+    ubo_ring_cursor_ = off + aligned_size;
+    return off;
+}
+
+void WebGPURhiDevice::BeginFrame() {
+    last_frame_stats_ = RenderStats{};
+    if (!EnsureInitialized()) return;
+    ubo_ring_cursor_ = 0;
+    ubo_versions_.clear();
     if (!swapchain_) return;
     backbuffer_view_ = wgpuSwapChainGetCurrentTextureView(swapchain_);
     if (!backbuffer_view_) return;
@@ -451,7 +492,7 @@ unsigned int WebGPURhiDevice::CreateTextureImpl(
         uint32_t mip_levels, int msaa_samples,
         const std::vector<const unsigned char*>& layer_data,
         const TextureSamplerDesc& sampler) {
-    if (!device_) return 0;
+    if (!EnsureInitialized() || !device_) return 0;
     width = width > 0 ? width : 1;
     height = height > 0 ? height : 1;
     depth_or_layers = depth_or_layers > 0 ? depth_or_layers : 1;
@@ -526,7 +567,7 @@ const PipelineStateDesc* WebGPURhiDevice::FindPipelineState(unsigned int handle)
 // --- 渲染目标 ---
 
 unsigned int WebGPURhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
-    if (!device_) return 0;
+    if (!EnsureInitialized() || !device_) return 0;
     RenderTargetEntry rt;
     rt.width = desc.width > 0 ? desc.width : 1;
     rt.height = desc.height > 0 ? desc.height : 1;
@@ -713,6 +754,24 @@ unsigned int WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, c
         // 单一 module 同时承载 vs/fs 入口；无 fs_main 视为仅深度 pass（无片元阶段）。
         e.has_fragment = vert_src.find("fn fs_main") != std::string::npos ||
                          vert_src.find("fn " + e.fs_entry) != std::string::npos;
+        // 解析 WGSL 实际声明的 `@group(N) @binding(M)`，供 explicit layout/BindGroup 过滤
+        //（仅纳入着色器真正使用的绑定，避免引擎多绑资源超 per-stage 上限 / 与着色器用量不符）。
+        for (size_t pos = vert_src.find("@group("); pos != std::string::npos;
+             pos = vert_src.find("@group(", pos + 1)) {
+            const size_t g0 = pos + 7;
+            const size_t g1 = vert_src.find(')', g0);
+            if (g1 == std::string::npos) break;
+            const size_t bpos = vert_src.find("@binding(", g1);
+            if (bpos == std::string::npos) break;
+            // @binding 须紧随同一声明（其间只允许空白），否则视为不同声明。
+            if (vert_src.find_first_not_of(" \t\r\n", g1 + 1) != bpos) continue;
+            const size_t b0 = bpos + 9;
+            const size_t b1 = vert_src.find(')', b0);
+            if (b1 == std::string::npos) break;
+            const uint32_t group = static_cast<uint32_t>(std::strtoul(vert_src.c_str() + g0, nullptr, 10));
+            const uint32_t binding = static_cast<uint32_t>(std::strtoul(vert_src.c_str() + b0, nullptr, 10));
+            e.wgsl_bindings.insert((group << 16) | binding);
+        }
         if (!e.module) {
             DEBUG_LOG_ERROR("WebGPU: WGSL 着色器编译失败（module 为空），该程序绘制将被跳过");
         }
@@ -738,8 +797,195 @@ unsigned int WebGPURhiDevice::CreatePipelineState(const PipelineStateDesc& desc)
     return h;
 }
 
+// ============================================================
+// B2b/B2c 内建 WGSL 程序（手写；经通用原语上屏）
+// ============================================================
+//
+// 绑定约定（与 CollectGroupBindings 一致）：
+//   group0：push 常量（binding0=VS / binding1=FS）  group1：UBO @binding=slot
+//   group2：纹理 @binding=slot*2、采样器 @binding=slot*2+1  group3：SSBO @binding=slot
+// 着色器只需声明其实际使用的绑定子集；BGL 可含更多条目（WebGPU 允许 layout ⊋ 着色器用量）。
+
+namespace {
+
+// 全屏 quad 直拷（copy/passthrough/fxaa 等）：源纹理在 slot0 → group2 binding0/1。
+// 顶点来自 PostProcessRenderer 的 PPVertex：pos(vec2)@0、uv(vec2)@1（clip-space）。
+const char* kWgslFullscreenBlit = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);  // GL 风格全屏 quad 在 WebGPU(top-left 纹理原点)需翻转 V
+  return o;
+}
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var src_smp : sampler;
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  return textureSample(src_tex, src_smp, i.uv);
+}
+)WGSL";
+
+// 全屏合成（bloom_composite/tonemapping/ssao_apply）：采样 HDR 场景 → Reinhard tonemap + sRGB。
+const char* kWgslComposite = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);  // GL 风格全屏 quad 在 WebGPU(top-left 纹理原点)需翻转 V
+  return o;
+}
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var src_smp : sampler;
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let hdr = textureSample(src_tex, src_smp, i.uv).rgb;
+  let mapped = hdr / (hdr + vec3<f32>(1.0));
+  let srgb = pow(mapped, vec3<f32>(1.0 / 2.2));
+  return vec4<f32>(srgb, 1.0);
+}
+)WGSL";
+
+// 前向着色（ForwardPbr/ForwardShaded）：顶点已 CPU 预变换到世界空间（见 MeshRenderer），
+// 仅需 PerFrame.vp 投影；方向光 Lambert + PerMaterial.albedo + albedo 纹理（slot0）。
+// 进阶特征（CSM/SSS/clearcoat/clustered/DDGI/...）留 B2c+；BGL 含全部 8 UBO/20 纹理槽，
+// 本着色器仅取其用到的子集（WebGPU 允许）。
+const char* kWgslForward = R"WGSL(// dse-wgsl
+struct PerFrame {
+  vp : mat4x4<f32>,
+  view : mat4x4<f32>,
+  camera_pos : vec4<f32>,
+  foliage_wind : vec4<f32>,
+  foliage_push : vec4<f32>,
+};
+struct PerScene {
+  light_dir_and_enabled : vec4<f32>,
+  light_color_and_ambient : vec4<f32>,
+  light_params : vec4<f32>,
+};
+struct PerMaterial {
+  albedo : vec4<f32>,
+  roughness_ao : vec4<f32>,
+  emissive : vec4<f32>,
+  flags : vec4<f32>,
+};
+@group(1) @binding(0) var<uniform> per_frame : PerFrame;
+@group(1) @binding(1) var<uniform> per_scene : PerScene;
+@group(1) @binding(2) var<uniform> per_material : PerMaterial;
+@group(2) @binding(0) var albedo_tex : texture_2d<f32>;
+@group(2) @binding(1) var albedo_smp : sampler;
+
+struct VsOut {
+  @builtin(position) clip : vec4<f32>,
+  @location(0) nrm : vec3<f32>,
+  @location(1) uv : vec2<f32>,
+  @location(2) col : vec4<f32>,
+};
+@vertex fn vs_main(
+  @location(0) pos : vec3<f32>,
+  @location(1) color : vec4<f32>,
+  @location(2) uv : vec2<f32>,
+  @location(3) normal : vec3<f32>,
+  @location(4) tangent : vec3<f32>,
+) -> VsOut {
+  var o : VsOut;
+  o.clip = per_frame.vp * vec4<f32>(pos, 1.0);
+  o.nrm = normal;
+  o.uv = uv;
+  o.col = color;
+  return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let tex = textureSample(albedo_tex, albedo_smp, i.uv);
+  let base = tex.rgb * per_material.albedo.rgb * i.col.rgb;
+  let n = normalize(i.nrm);
+  let l = normalize(per_scene.light_dir_and_enabled.xyz);
+  let ndl = max(dot(n, l), 0.0);
+  let enabled = per_scene.light_dir_and_enabled.w;
+  let ambient = per_scene.light_color_and_ambient.w;
+  let light_col = per_scene.light_color_and_ambient.rgb;
+  let intensity = per_scene.light_params.x;
+  let diffuse = light_col * (ndl * intensity * enabled);
+  let lit = base * (vec3<f32>(ambient) + diffuse);
+  let emissive = per_material.emissive.rgb;
+  return vec4<f32>(lit + emissive, 1.0);
+}
+)WGSL";
+
+// 天空盒：vp 推送常量（VS push, group0 binding0）；cubemap 在 slot0 → group2 binding0/1。
+// 顶点为 36 顶点立方体（vec3 pos）。z=w 使深度落远平面（配 LEQUAL 深度测试）。
+const char* kWgslSkybox = R"WGSL(// dse-wgsl
+struct VsPush { vp : mat4x4<f32> };
+@group(0) @binding(0) var<uniform> vs_push : VsPush;
+@group(2) @binding(0) var sky_tex : texture_cube<f32>;
+@group(2) @binding(1) var sky_smp : sampler;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) dir : vec3<f32> };
+@vertex fn vs_main(@location(0) in_pos : vec3<f32>) -> VsOut {
+  var o : VsOut;
+  let p = vs_push.vp * vec4<f32>(in_pos, 1.0);
+  o.pos = p.xyww;
+  o.dir = in_pos;
+  return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  return textureSample(sky_tex, sky_smp, normalize(i.dir));
+}
+)WGSL";
+
+// 内建天空盒立方体（36 顶点，每顶点 vec3，逆时针外向；与桌面后端一致）。
+const float kSkyboxCubeVerts[] = {
+  -1,  1, -1,  -1, -1, -1,   1, -1, -1,   1, -1, -1,   1,  1, -1,  -1,  1, -1,
+  -1, -1,  1,  -1, -1, -1,  -1,  1, -1,  -1,  1, -1,  -1,  1,  1,  -1, -1,  1,
+   1, -1, -1,   1, -1,  1,   1,  1,  1,   1,  1,  1,   1,  1, -1,   1, -1, -1,
+  -1, -1,  1,  -1,  1,  1,   1,  1,  1,   1,  1,  1,   1, -1,  1,  -1, -1,  1,
+  -1,  1, -1,   1,  1, -1,   1,  1,  1,   1,  1,  1,  -1,  1,  1,  -1,  1, -1,
+  -1, -1, -1,  -1, -1,  1,   1, -1, -1,   1, -1, -1,  -1, -1,  1,   1, -1,  1,
+};
+
+}  // namespace
+
+unsigned int WebGPURhiDevice::GetOrCreateWgslProgram(const std::string& key, const std::string& wgsl) {
+    auto it = wgsl_program_cache_.find(key);
+    if (it != wgsl_program_cache_.end()) return it->second;
+    const unsigned int h = CreateShaderProgram(wgsl, wgsl);
+    wgsl_program_cache_[key] = h;
+    DEBUG_LOG_INFO("WebGPU: 内建 WGSL 程序 '{}' -> handle {}", key, h);
+    return h;
+}
+
+unsigned int WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) {
+    switch (program) {
+        case BuiltinProgram::Skybox:
+            return GetOrCreateWgslProgram("builtin.skybox", kWgslSkybox);
+        // B2c：静态前向 PBR / 高级 shading（顶点世界空间预变换，共用最小前向 WGSL）。
+        case BuiltinProgram::ForwardPbr:
+        case BuiltinProgram::ForwardShaded:
+            return GetOrCreateWgslProgram("builtin.forward", kWgslForward);
+        default:
+            // 蒙皮/实例化/morph/粒子/毛发/GBuffer 等需 SSBO 或专用布局，留后续阶段。
+            return 0;
+    }
+}
+
+unsigned int WebGPURhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
+    // 合成族（HDR→LDR tonemap）与直拷族分流；未迁移效果返回 0（其 pass 优雅跳过）。
+    if (effect_name == "bloom_composite" || effect_name == "tonemapping" ||
+        effect_name == "ssao_apply") {
+        return GetOrCreateWgslProgram("genpp.composite", kWgslComposite);
+    }
+    if (effect_name == "copy" || effect_name == "passthrough" || effect_name == "fxaa") {
+        return GetOrCreateWgslProgram("genpp.blit", kWgslFullscreenBlit);
+    }
+    return 0;
+}
+
+unsigned int WebGPURhiDevice::GetSkyboxCubeVertexBuffer() {
+    if (skybox_cube_vbo_) return skybox_cube_vbo_;
+    skybox_cube_vbo_ = CreateBuffer(sizeof(kSkyboxCubeVerts), kSkyboxCubeVerts,
+                                    /*is_dynamic=*/false, /*is_index=*/false);
+    return skybox_cube_vbo_;
+}
+
 unsigned int WebGPURhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {
-    if (!device_ || size == 0) return 0;
+    if (size == 0 || !EnsureInitialized() || !device_) return 0;
     (void)is_dynamic;  // WebGPU 缓冲无静/动态区分；动态更新经 wgpuQueueWriteBuffer。
     const uint64_t alloc = AlignUp4(size);
     WGPUBufferUsageFlags usage = WGPUBufferUsage_CopyDst | WGPUBufferUsage_CopySrc;
@@ -795,6 +1041,13 @@ void WebGPURhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t si
         std::vector<uint8_t> padded(write_size, 0);
         std::memcpy(padded.data(), data, size);
         wgpuQueueWriteBuffer(queue_, e.buffer, offset, padded.data(), write_size);
+    }
+    // 同时登记 UBO 版本切片：仅全量（offset=0）且 uniform 量级（≤64KB，WebGPU uniform 绑定上限）
+    //   的更新参与——大顶点/存储缓冲不在此列。该缓冲若稍后以 UBO 绑定（group1），将改用此切片，
+    //   使每 draw 的逐材质数据互不覆盖（见 CollectGroupBindings group1）。
+    if (offset == 0 && size <= 65536) {
+        const uint64_t voff = AllocUboVersion(data, size);
+        if (voff != UINT64_MAX) ubo_versions_[handle] = {ubo_ring_, voff, size};
     }
 }
 
@@ -887,6 +1140,16 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
     // std::map 保证按 binding 升序稳定遍历。
     std::vector<BindingInfo> out;
     const WGPUShaderStageFlags kVsFs = WGPUShaderStage_Vertex | WGPUShaderStage_Fragment;
+    // 仅纳入当前 WGSL 程序实际声明的绑定：引擎可能绑定多于着色器所需的资源（如 ForwardShaded
+    // 绑 8 UBO/20 纹理槽），全量纳入会超 per-stage 采样上限并使 layout 与着色器用量不符。
+    const std::set<uint32_t>* used = nullptr;
+    {
+        auto sit = shaders_.find(cur_program_);
+        if (sit != shaders_.end()) used = &sit->second.wgsl_bindings;
+    }
+    auto declared = [&](uint32_t binding) -> bool {
+        return used && used->count((group << 16) | binding) != 0;
+    };
     switch (group) {
         case 0: {
             // push 常量经 push 池 uniform 缓冲模拟：binding0=VS、binding1=FS。
@@ -905,13 +1168,13 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
                 wgpuQueueWriteBuffer(queue_, b, 0, tmp.data(), kPushBytes);
                 return b;
             };
-            if (!cur_vs_push_.empty()) {
+            if (!cur_vs_push_.empty() && declared(0)) {
                 BindingInfo b;
                 b.binding = 0; b.kind = BindingInfo::Kind::Uniform; b.visibility = WGPUShaderStage_Vertex;
                 b.buffer = alloc_push(cur_vs_push_); b.buf_offset = 0; b.buf_size = 256;
                 out.push_back(b);
             }
-            if (!cur_fs_push_.empty()) {
+            if (!cur_fs_push_.empty() && declared(1)) {
                 BindingInfo b;
                 b.binding = 1; b.kind = BindingInfo::Kind::Uniform; b.visibility = WGPUShaderStage_Fragment;
                 b.buffer = alloc_push(cur_fs_push_); b.buf_offset = 0; b.buf_size = 256;
@@ -921,18 +1184,29 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
         }
         case 1: {
             for (const auto& [slot, u] : cur_ubos_) {
+                if (!declared(slot)) continue;
                 const BufferEntry* be = FindBuffer(u.handle);
                 if (!be || !be->buffer) continue;
                 BindingInfo b;
                 b.binding = slot; b.kind = BindingInfo::Kind::Uniform; b.visibility = kVsFs;
-                b.buffer = be->buffer; b.buf_offset = u.offset;
-                b.buf_size = u.size ? u.size : be->size;
+                // 优先用当帧最近一次 UBO 版本切片（无范围偏移绑定时）：使逐 draw 材质数据互不覆盖。
+                auto vit = (u.offset == 0) ? ubo_versions_.find(u.handle) : ubo_versions_.end();
+                if (vit != ubo_versions_.end() && vit->second.buffer) {
+                    b.buffer = vit->second.buffer;
+                    b.buf_offset = vit->second.offset;
+                    b.buf_size = vit->second.size;
+                } else {
+                    b.buffer = be->buffer; b.buf_offset = u.offset;
+                    b.buf_size = u.size ? u.size : be->size;
+                }
                 out.push_back(b);
             }
             break;
         }
         case 2: {
             for (const auto& [slot, t] : cur_texs_) {
+                // 纹理与采样器同声明（slot*2 / slot*2+1）：着色器声明纹理即纳入二者。
+                if (!declared(slot * 2u)) continue;
                 const TextureEntry* te = FindTexture(t.handle);
                 if (!te || !te->view) continue;
                 BindingInfo tb;
@@ -953,6 +1227,7 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
         }
         case 3: {
             for (const auto& [slot, s] : cur_ssbos_) {
+                if (!declared(slot)) continue;
                 const BufferEntry* be = FindBuffer(s.handle);
                 if (!be || !be->buffer) continue;
                 BindingInfo b;
@@ -973,6 +1248,23 @@ const WebGPURhiDevice::PipelineCacheEntry* WebGPURhiDevice::GetOrCreateRenderPip
     auto sit = shaders_.find(cur_program_);
     if (sit == shaders_.end() || !sit->second.module) return nullptr;
     const ShaderEntry& sh = sit->second;
+
+    // 校验：WGSL 声明的每个绑定都须有当前已绑资源满足；否则 explicit BGL 会缺该绑定，
+    // 使 pipeline 创建失败并污染整个命令缓冲。缺失即跳过该 draw（优雅降级）。
+    if (!sh.wgsl_bindings.empty()) {
+        std::set<uint32_t> present;
+        for (uint32_t g = 0; g < 4; ++g) {
+            for (const BindingInfo& b : CollectGroupBindings(g)) present.insert((g << 16) | b.binding);
+        }
+        for (uint32_t key : sh.wgsl_bindings) {
+            if (present.count(key)) continue;
+            if (logged_incomplete_programs_.insert(cur_program_).second) {
+                DEBUG_LOG_WARN("WebGPU: 程序 {} 缺少所需绑定 group={} binding={}（资源未绑定），跳过该 draw",
+                               cur_program_, key >> 16, key & 0xffffu);
+            }
+            return nullptr;
+        }
+    }
 
     const PipelineStateDesc fallback_pso;
     const PipelineStateDesc* pso = FindPipelineState(cur_pso_handle_);
