@@ -344,3 +344,39 @@ jobs:
       - name: Verify web artifacts (index.html / .js / .wasm)
         run: |
           ls -lh bin/index.html bin/index.js bin/index.wasm
+
+      # B5: headless 视觉回归。两后端均跑软件渲染（无需宿主 GPU）：
+      #   WebGL2 → SwiftShader(ANGLE)；WebGPU → Dawn + SwiftShader Vulkan。
+      # 对照已提交 golden（tests/web/baseline/web3d.png, web3d_wgpu.png），超阈值即失败。
+      - name: Setup Node.js (visual-regression harness)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # puppeteer 自带 Chrome-for-Testing，但需系统共享库才能无头启动。
+      - name: Install headless Chrome system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
+            libpango-1.0-0 libcairo2 libatspi2.0-0
+
+      # 仓库 .gitignore 不跟踪 package-lock.json，故用 npm install（非 npm ci）。
+      - name: Install harness deps (puppeteer + pixelmatch + pngjs)
+        working-directory: tests/web
+        run: npm install --no-audit --no-fund
+
+      - name: Visual regression — WebGL2 (SwiftShader)
+        run: node tests/web/visual_regression.mjs --backend webgl2 --name web3d
+
+      - name: Visual regression — WebGPU (Dawn + SwiftShader Vulkan)
+        run: node tests/web/visual_regression.mjs --backend webgpu --name web3d_wgpu
+
+      - name: Upload visual-regression artifacts (actual/diff PNGs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-visual-regression
+          path: tests/web/artifacts/
+          if-no-files-found: ignore
