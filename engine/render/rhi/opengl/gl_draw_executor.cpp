@@ -298,6 +298,14 @@ GLDrawExecutor::StaticMeshEntry GLDrawExecutor::CreateStaticMeshVAO(
 // RenderPass
 // ============================================================
 
+bool GLDrawExecutor::IsActiveRenderTargetAttachment(unsigned int texture_handle) const {
+    if (texture_handle == 0) return false;
+    for (uint32_t i = 0; i < active_rt_attachment_count_; ++i) {
+        if (active_rt_attachments_[i] == texture_handle) return true;
+    }
+    return false;
+}
+
 void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
                                        GLResourceManager& resource_mgr) {
     bool has_depth = false;
@@ -309,6 +317,7 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             }
         }
         active_render_target_ = 0;
+        active_rt_attachment_count_ = 0;  // 默认帧缓冲无可反馈的附件
         glViewport(0, 0, Screen::width(), Screen::height());
     } else {
         auto rt = resource_mgr.GetRenderTarget(render_pass.render_target);
@@ -324,6 +333,23 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             active_render_target_ = render_pass.render_target;
             has_depth = rt->desc.has_depth;
 #if DSE_GL_ES_RUNTIME
+            // 反馈环防护仅在严格 GLES/WebGL2 上需要：桌面 GL（含 llvmpipe）容忍采样仍挂在
+            // 当前 FBO 上的纹理（仅警告），而严格 WebGL2 会丢弃整个 draw → 黑屏。故此逻辑
+            // 门控在 GLES 运行期，桌面行为保持字节级不变。
+            // 解除反馈环：若上一 pass 残留把本 FBO 的某个附件绑在某 texture unit 上，在此解绑。
+            UnbindRenderTargetFeedback(render_pass.render_target, resource_mgr);
+            // 缓存本 FBO 的附件句柄，供 PrimBindTexture 在 pass 内逐次绑定时拒绝反馈环
+            // （如阴影 pass 内 mesh_renderer 仍会把 shadow atlas 绑到单元 11，而它正是渲染目标）。
+            active_rt_attachment_count_ = 0;
+            if (rt->depth_texture_handle != 0 &&
+                active_rt_attachment_count_ < kMaxActiveAttachments) {
+                active_rt_attachments_[active_rt_attachment_count_++] = rt->depth_texture_handle;
+            }
+            for (unsigned int ch : rt->color_texture_handles) {
+                if (ch != 0 && active_rt_attachment_count_ < kMaxActiveAttachments) {
+                    active_rt_attachments_[active_rt_attachment_count_++] = ch;
+                }
+            }
             // GLES/WebGL2 立方体阴影逐面渲染：FBO 创建时只能附着单面（无分层附着 + gl_Layer 路由），
             // 故每次 BeginRenderPass 按 cube_face 重新把对应面附着为深度附件，PointShadowPass 逐面绘制。
             if (render_pass.cube_face >= 0 && rt->desc.cube_map && rt->desc.has_depth &&
@@ -553,10 +579,46 @@ void GLDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle,
         case TextureDim::Tex3D:      target = GL_TEXTURE_3D;             break;
         case TextureDim::Tex2D:      default: target = GL_TEXTURE_2D;     break;
     }
+#if DSE_GL_ES_RUNTIME
+    // 反馈环防护（仅严格 GLES/WebGL2）：若该纹理正是当前 FBO 的颜色/深度附件，严格 WebGL2
+    // 会丢弃使用该单元的整个 draw（GL_INVALID_OPERATION）→ 黑屏。改绑 0：当前 pass 写入此
+    // 附件，自然不应再采样它（如阴影 pass 内 mesh_renderer 仍逐次把 shadow atlas 绑到单元 11，
+    // 而 atlas 正是渲染目标）。桌面 GL 不门控此逻辑，行为保持字节级不变。
+    if (IsActiveRenderTargetAttachment(texture_handle)) {
+        texture_handle = 0;
+    }
+#endif
     glActiveTexture(GL_TEXTURE0 + slot);
     glBindTexture(target, texture_handle);
+    if (slot < kMaxTrackedTexUnits) {
+        bound_tex_handles_[slot] = texture_handle;
+        bound_tex_targets_[slot] = target;
+    }
     // GLSL sampler 须指向该纹理单元。各内建着色器在初始化时把其采样器绑定到约定单元
     // （见 GLShaderManager::InitSprite2DShader / InitSkyboxShader）。
+}
+
+// 解除反馈环：把当前仍绑定到任意 texture unit、且属于即将渲染的 FBO 颜色/深度附件的
+// 纹理解绑（绑 0）。WebGL2 严格禁止在采样某纹理的同时把它作为当前 FBO 附件渲染。
+void GLDrawExecutor::UnbindRenderTargetFeedback(unsigned int rt_handle,
+                                                GLResourceManager& resource_mgr) {
+    auto rt = resource_mgr.GetRenderTarget(rt_handle);
+    if (!rt) return;
+    auto is_attachment = [&](unsigned int h) -> bool {
+        if (h == 0) return false;
+        if (h == rt->depth_texture_handle) return true;
+        for (unsigned int ch : rt->color_texture_handles) {
+            if (h == ch) return true;
+        }
+        return false;
+    };
+    for (uint32_t u = 0; u < kMaxTrackedTexUnits; ++u) {
+        if (is_attachment(bound_tex_handles_[u])) {
+            glActiveTexture(GL_TEXTURE0 + u);
+            glBindTexture(bound_tex_targets_[u] != 0 ? bound_tex_targets_[u] : GL_TEXTURE_2D, 0);
+            bound_tex_handles_[u] = 0;
+        }
+    }
 }
 
 void GLDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,

@@ -24,6 +24,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <array>
 
 namespace dse {
 namespace render {
@@ -224,6 +225,22 @@ private:
     // 活跃渲染目标
     unsigned int active_render_target_ = 0;
     bool is_depth_only_pass_ = false;
+
+    // 每个 texture unit 当前绑定的纹理句柄/目标（仅经 PrimBindTexture 的图形阶段绑定）。
+    // BeginRenderPass 时据此检测并解除反馈环：若某单元仍绑着新 FBO 的颜色/深度附件，
+    // 严格 WebGL2 会丢弃整个 draw（GL_INVALID_OPERATION）→ 黑屏。绑定 0 即可消除。
+    static constexpr uint32_t kMaxTrackedTexUnits = 32;
+    std::array<unsigned int, kMaxTrackedTexUnits> bound_tex_handles_{};
+    std::array<unsigned int, kMaxTrackedTexUnits> bound_tex_targets_{};
+    void UnbindRenderTargetFeedback(unsigned int rt_handle, GLResourceManager& resource_mgr);
+
+    // 当前活跃 FBO 的颜色/深度附件句柄缓存（BeginRenderPass 时填充）。PrimBindTexture
+    // 据此拒绝把这些附件再绑到任何采样单元——例如 mesh_renderer 在阴影 pass 内仍会逐次
+    // 把 shadow atlas 绑到单元 11，而该 atlas 正是当前 FBO 的渲染目标，严格 WebGL2 会丢弃绘制。
+    static constexpr uint32_t kMaxActiveAttachments = 16;
+    std::array<unsigned int, kMaxActiveAttachments> active_rt_attachments_{};
+    uint32_t active_rt_attachment_count_ = 0;
+    bool IsActiveRenderTargetAttachment(unsigned int texture_handle) const;
 
     // 全局渲染状态（引用 RhiDevice::global_render_state_）
     DrawExecutorGlobalState& global_state_;

@@ -1,0 +1,16 @@
+{
+  "name": "dse-web-visual-regression",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless WebGL2 (swiftshader) visual-regression harness for dse_web_host (WEB_3D_BACKEND A4).",
+  "type": "module",
+  "scripts": {
+    "test": "node visual_regression.mjs",
+    "update": "node visual_regression.mjs --update"
+  },
+  "dependencies": {
+    "pixelmatch": "5.3.0",
+    "pngjs": "7.0.0",
+    "puppeteer": "22.15.0"
+  }
+}

@@ -77,6 +77,44 @@
 #include "embed/sprite_fx_sdf_frag.gen.h"
 #include "embed/sprite_fx_vfx_frag.gen.h"
 
+// gen PP frag 反射数据：用于按 (binding-1) 正确分配 sampler texture unit。
+// ESSL300 剥离了 layout(binding=N)，所有 sampler 默认落到 unit 0，导致同一单元
+// 同时绑定 sampler2D 与 sampler3D（WebGL2 严格禁止 -> 丢弃绘制 -> 黑屏）。改为
+// 从反射 binding 显式分配 unit=binding-1，与 PostProcessRenderer 的绑定约定一致。
+#include "embed/fxaa_frag_reflect.gen.h"
+#include "embed/bloom_extract_frag_reflect.gen.h"
+#include "embed/bloom_downsample_frag_reflect.gen.h"
+#include "embed/bloom_upsample_frag_reflect.gen.h"
+#include "embed/bloom_blur_h_frag_reflect.gen.h"
+#include "embed/bloom_blur_v_frag_reflect.gen.h"
+#include "embed/tonemapping_frag_reflect.gen.h"
+#include "embed/color_grading_frag_reflect.gen.h"
+#include "embed/edge_detect_frag_reflect.gen.h"
+#include "embed/postprocess_passthrough_frag_reflect.gen.h"
+#include "embed/bloom_composite_ssao_ae_frag_reflect.gen.h"
+#include "embed/ssao_apply_frag_reflect.gen.h"
+#include "embed/ssao_frag_reflect.gen.h"
+#include "embed/ssao_blur_frag_reflect.gen.h"
+#include "embed/contact_shadow_frag_reflect.gen.h"
+#include "embed/dof_frag_reflect.gen.h"
+#include "embed/motion_vector_frag_reflect.gen.h"
+#include "embed/motion_blur_frag_reflect.gen.h"
+#include "embed/ssr_frag_reflect.gen.h"
+#include "embed/taa_resolve_frag_reflect.gen.h"
+#include "embed/deferred_lighting_frag_reflect.gen.h"
+#include "embed/light_shaft_frag_reflect.gen.h"
+#include "embed/volumetric_fog_frag_reflect.gen.h"
+#include "embed/volumetric_cloud_frag_reflect.gen.h"
+#include "embed/decal_frag_reflect.gen.h"
+#include "embed/water_frag_reflect.gen.h"
+#include "embed/wboit_composite_frag_reflect.gen.h"
+#include "embed/lum_compute_frag_reflect.gen.h"
+#include "embed/lum_adapt_frag_reflect.gen.h"
+#include "embed/atmosphere_transmittance_lut_frag_reflect.gen.h"
+#include "embed/atmosphere_sky_frag_reflect.gen.h"
+#include "embed/sss_blur_frag_reflect.gen.h"
+#include "embed/weather_particle_frag_reflect.gen.h"
+
 // GPU-Driven PBR 变体（预编译，无运行时 string patch）
 #include "embed/pbr_gpu_driven_vert.gen.h"
 #include "embed/pbr_gpu_driven_vert_reflect.gen.h"
@@ -1133,53 +1171,78 @@ void GLShaderManager::InitShadowShader() {
 // ============================================================
 
 // gen.h post-process fragments declare every sampler with a spirv-cross emitted
-// layout(binding=N); desktop GL therefore defaults each sampler to texture unit N.
-// PostProcessRenderer however binds textures with "GLSL binding -> unit binding-1"
-// (DX11 reserves b0 for the push cbuffer, so texture registers start at t0=binding1).
-// Shift every sampler unit down by one so the generic BindTexture(slot) path lines up,
-// mirroring what the other builtin shaders do via BindSamplersOnce in their Init*.
-static void RebindGenPPSamplerUnits(unsigned int prog) {
-    GLint count = 0;
-    glGetProgramiv(prog, GL_ACTIVE_UNIFORMS, &count);
-    if (count <= 0) return;
-    GLint max_len = 0;
-    glGetProgramiv(prog, GL_ACTIVE_UNIFORM_MAX_LENGTH, &max_len);
-    if (max_len < 1) max_len = 256;
-    std::vector<char> name(static_cast<size_t>(max_len) + 1);
+// layout(binding=N). PostProcessRenderer binds textures with "GLSL binding -> unit
+// binding-1" (DX11 reserves b0 for the push cbuffer, so texture registers start at
+// t0=binding1). On desktop GL each sampler defaults to unit N (from layout(binding)),
+// but ESSL300 strips layout(binding=) entirely, so every sampler collapses to unit 0
+// — a shader mixing sampler2D+sampler3D then violates WebGL2 (two sampler types on one
+// unit) and the draw is dropped (black screen). We therefore set each sampler's unit
+// explicitly to binding-1 from the reflection table, matching the renderer's contract
+// on every backend (and reproducing the prior desktop binding exactly).
+static void BindGenPPSamplerUnitsFromReflection(
+    unsigned int prog, const shader_reflect::StageReflection& refl) {
     glUseProgram(prog);
-    auto shift_loc = [&](const char* uname) {
-        int loc = glGetUniformLocation(prog, uname);
-        if (loc < 0) return;
-        GLint unit = 0;
-        glGetUniformiv(prog, loc, &unit);
-        if (unit > 0) glUniform1i(loc, unit - 1);
-    };
-    for (GLint i = 0; i < count; ++i) {
-        GLint asize = 0;
-        GLenum atype = 0;
-        glGetActiveUniform(prog, static_cast<GLuint>(i), max_len, nullptr, &asize, &atype, name.data());
-        switch (atype) {
-            case GL_SAMPLER_2D:
-            case GL_SAMPLER_3D:
-            case GL_SAMPLER_CUBE:
-            case GL_SAMPLER_2D_ARRAY:
-                break;
-            default:
-                continue;
-        }
-        if (asize <= 1) {
-            shift_loc(name.data());
-        } else {
-            std::string base(name.data());
-            size_t br = base.find('[');
-            if (br != std::string::npos) base.resize(br);
-            for (int e = 0; e < asize; ++e) {
-                std::string el = base + "[" + std::to_string(e) + "]";
-                shift_loc(el.c_str());
+    for (uint32_t i = 0; i < refl.sampled_image_count; ++i) {
+        const auto& tex = refl.sampled_images[i];
+        const uint32_t base_unit = (tex.binding > 0) ? tex.binding - 1 : 0;
+        const uint32_t count = (tex.array_count > 0) ? tex.array_count : 1;
+        if (count > 1) {
+            for (uint32_t e = 0; e < count; ++e) {
+                char el[256];
+                std::snprintf(el, sizeof(el), "%s[%u]", tex.name, e);
+                int loc = glGetUniformLocation(prog, el);
+                if (loc >= 0) glUniform1i(loc, static_cast<int>(base_unit + e));
             }
+        } else {
+            int loc = glGetUniformLocation(prog, tex.name);
+            if (loc >= 0) glUniform1i(loc, static_cast<int>(base_unit));
         }
     }
     glUseProgram(0);
+}
+
+// Maps a gen PP effect name to its fragment-stage reflection (matching the fragment
+// shader chosen in GetOrCreateGenPPShader, including aliased effects). Returns nullptr
+// when no reflection is available.
+static const shader_reflect::StageReflection* GenPPFragReflection(
+    const std::string& effect_name) {
+    using namespace dse::render::generated_shaders::reflect;
+    if      (effect_name == "fxaa")              return &kfxaa_frag_reflection;
+    else if (effect_name == "bloom_extract")     return &kbloom_extract_frag_reflection;
+    else if (effect_name == "bloom_downsample")  return &kbloom_downsample_frag_reflection;
+    else if (effect_name == "bloom_upsample")    return &kbloom_upsample_frag_reflection;
+    else if (effect_name == "tonemapping")       return &ktonemapping_frag_reflection;
+    else if (effect_name == "color_grading")     return &kcolor_grading_frag_reflection;
+    else if (effect_name == "edge_detect")       return &kedge_detect_frag_reflection;
+    else if (effect_name == "postprocess_passthrough") return &kpostprocess_passthrough_frag_reflection;
+    else if (effect_name == "bloom_composite")   return &kbloom_composite_ssao_ae_frag_reflection;
+    else if (effect_name == "ssao_apply")        return &kssao_apply_frag_reflection;
+    else if (effect_name == "ssao")              return &kssao_frag_reflection;
+    else if (effect_name == "ssao_blur")         return &kssao_blur_frag_reflection;
+    else if (effect_name == "contact_shadow")    return &kcontact_shadow_frag_reflection;
+    else if (effect_name == "dof")               return &kdof_frag_reflection;
+    else if (effect_name == "motion_vector")     return &kmotion_vector_frag_reflection;
+    else if (effect_name == "motion_blur")       return &kmotion_blur_frag_reflection;
+    else if (effect_name == "ssr")               return &kssr_frag_reflection;
+    else if (effect_name == "taa_resolve")       return &ktaa_resolve_frag_reflection;
+    else if (effect_name == "ui_overlay")        return &kpostprocess_passthrough_frag_reflection;
+    else if (effect_name == "deferred_lighting") return &kdeferred_lighting_frag_reflection;
+    else if (effect_name == "light_shaft")       return &klight_shaft_frag_reflection;
+    else if (effect_name == "volumetric_fog")    return &kvolumetric_fog_frag_reflection;
+    else if (effect_name == "volumetric_cloud")  return &kvolumetric_cloud_frag_reflection;
+    else if (effect_name == "decal")             return &kdecal_frag_reflection;
+    else if (effect_name == "water")             return &kwater_frag_reflection;
+    else if (effect_name == "wboit_composite")   return &kwboit_composite_frag_reflection;
+    else if (effect_name == "lum_compute")       return &klum_compute_frag_reflection;
+    else if (effect_name == "lum_adapt")         return &klum_adapt_frag_reflection;
+    else if (effect_name == "bloom_blur_h")      return &kbloom_blur_h_frag_reflection;
+    else if (effect_name == "bloom_blur_v")      return &kbloom_blur_v_frag_reflection;
+    else if (effect_name == "copy")              return &kpostprocess_passthrough_frag_reflection;
+    else if (effect_name == "atmosphere_transmittance_lut") return &katmosphere_transmittance_lut_frag_reflection;
+    else if (effect_name == "atmosphere_sky")    return &katmosphere_sky_frag_reflection;
+    else if (effect_name == "sss_blur")          return &ksss_blur_frag_reflection;
+    else if (effect_name == "weather_particle")  return &kweather_particle_frag_reflection;
+    return nullptr;
 }
 
 unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_name) {
@@ -1233,7 +1296,9 @@ unsigned int GLShaderManager::GetOrCreateGenPPShader(const std::string& effect_n
         return 0;
     }
     programs_created_ += 1;
-    RebindGenPPSamplerUnits(shader);
+    if (const shader_reflect::StageReflection* refl = GenPPFragReflection(effect_name)) {
+        BindGenPPSamplerUnitsFromReflection(shader, *refl);
+    }
     pp_shaders_[key] = shader;
     return shader;
 }

@@ -60,6 +60,34 @@
     };
     Module.setStatus('Downloading…');
   </script>
+  <script>
+    // 视觉回归 harness 钩子（tests/web/visual_regression.mjs）：包裹全局
+    // requestAnimationFrame，(1) 统计引擎已渲染帧数；(2) 应 headless 端请求，在
+    // 引擎本帧迭代（绘制+呈现）刚结束、同一 rAF tick 内、浏览器尚未合成清空默认
+    // framebuffer 之前，用 canvas.toDataURL 抓取像素。这样无需 preserveDrawingBuffer
+    // 即可拿到非空帧，且完全不侵入引擎代码。emscripten_set_main_loop(fps=0) 走浏览器
+    // rAF，故包裹即可覆盖引擎主循环。
+    (function () {
+      window.__dseFrames = 0;
+      window.__dseCaptureRequested = false;
+      window.__dseLastFrame = null;
+      var raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = function (cb) {
+        return raf(function (t) {
+          window.__dseFrames++;
+          var r = cb(t);
+          if (window.__dseCaptureRequested) {
+            window.__dseCaptureRequested = false;
+            try {
+              var c = document.getElementById('canvas');
+              window.__dseLastFrame = c ? c.toDataURL('image/png') : 'ERR:no-canvas';
+            } catch (e) { window.__dseLastFrame = 'ERR:' + e.message; }
+          }
+          return r;
+        });
+      };
+    })();
+  </script>
   {{{ SCRIPT }}}
 </body>
 </html>
