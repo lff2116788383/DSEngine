@@ -51,6 +51,11 @@ option(DSE_ENABLE_3D "Enable 3D runtime path" ON)
 # Web/Emscripten 默认是 2D-first MVP（见下方 if(EMSCRIPTEN)）；打开此开关后
 # Web 构建保留 3D 前向路径（无 Compute/SSBO，依靠 UBO 版 PBR 着色器 + 能力门控）。
 option(DSE_WEB_ENABLE_3D "Keep the 3D forward path on Web/Emscripten builds (M5 best-effort)" OFF)
+# 多线程里程碑（可选）：打开后 Web 构建启用 Emscripten pthreads（-pthread + 共享内存 +
+# 线程池），JobSystem 按 __EMSCRIPTEN_PTHREADS__ 起真实工作线程（默认 OFF 时 web 仍单线程
+# 同步执行，现有 web-release-3d 构建零改动）。运行需宿主发 COOP/COEP 跨源隔离头以启用
+# SharedArrayBuffer（harness server 已发；静态部署见 docs §7.4）。
+option(DSE_WEB_ENABLE_THREADS "Enable Emscripten pthreads (SharedArrayBuffer + worker pool) on Web builds" OFF)
 # Spine（2D 骨骼动画运行时）与 Assimp（FBX/OBJ 等模型导入）默认关闭以缩小 SDK 包体；
 # 需要时按需开启：-DDSE_ENABLE_SPINE=ON / -DDSE_ENABLE_ASSIMP=ON。
 # 关闭 Spine 时 SpineRendererComponent 与 dse.spine.* 绑定仍在（纯数据/ECS），仅不编译 spine-cpp 运行时与 SpineSystem。
@@ -126,6 +131,12 @@ if(EMSCRIPTEN)
     set(DSE_BUILD_SHARED   OFF CACHE BOOL "" FORCE)
     # GLFW3 由 Emscripten 端口提供（-sUSE_GLFW=3）；GLES3 头文件随工具链。编译期亦需该开关。
     add_compile_options(-sUSE_GLFW=3)
+    # 多线程里程碑：pthreads 采用共享内存模型，**所有** TU 必须以 -pthread 编译（否则 ABI 不一致）。
+    # 故在此全局加入编译选项；链接侧 flag 见 apps/web_host。默认 OFF 时不加，现有构建零改动。
+    if(DSE_WEB_ENABLE_THREADS)
+        add_compile_options(-pthread)
+        message(STATUS "Emscripten build: pthreads ENABLED (DSE_WEB_ENABLE_THREADS=ON) — SharedArrayBuffer + worker pool; host must serve COOP/COEP")
+    endif()
     if(DSE_ENABLE_3D)
         message(STATUS "Emscripten build: 3D forward path KEPT (DSE_WEB_ENABLE_3D=ON); physics/Vulkan/D3D11/NavMesh/Net/HTTP disabled (WebGL2, no Compute)")
     else()

@@ -4,6 +4,7 @@
 */
 
 #include "engine/core/job_system.h"
+#include "engine/base/debug.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/memory/memory.h"
 #include "engine/core/memory/linear_allocator.h"
@@ -21,10 +22,12 @@ JobSystem::~JobSystem() {
 }
 
 void JobSystem::Init() {
-#if defined(__EMSCRIPTEN__)
-    // WebGL2/WASM build links single-threaded (no -pthread): std::thread
-    // construction throws std::system_error and aborts. Leave the pool
-    // uninitialized so Submit/Execute fall back to synchronous execution.
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+    // Single-threaded WASM build (no -pthread): std::thread construction throws
+    // std::system_error and aborts. Leave the pool uninitialized so
+    // Submit/Execute fall back to synchronous execution.
+    // 多线程 web 构建（DSE_WEB_ENABLE_THREADS=ON → 定义 __EMSCRIPTEN_PTHREADS__）则跳过此
+    // 提前返回，走下方真实线程池路径（worker 由 -sPTHREAD_POOL_SIZE 预建，详见 apps/web_host）。
     return;
 #endif
     int num_threads = 0;
@@ -47,6 +50,9 @@ void JobSystem::Init() {
     for (int i = 0; i < num_threads; ++i) {
         workers_.emplace_back(&JobSystem::WorkerThread, this, i);
     }
+    // 一次性输出 worker 线程数：桌面常规；Web 多线程构建（__EMSCRIPTEN_PTHREADS__）下
+    // 为线程池真正起线程的可验证信号（harness/浏览器控制台可见）。
+    DEBUG_LOG_INFO("JobSystem 初始化：worker 线程数={}", num_threads);
 }
 
 void JobSystem::Shutdown() {

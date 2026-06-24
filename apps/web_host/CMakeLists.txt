@@ -43,6 +43,19 @@ if(DSE_ENABLE_WEBGPU)
     list(APPEND _dse_web_link_flags "-sUSE_WEBGPU=1")
 endif()
 
+# 多线程里程碑（DSE_WEB_ENABLE_THREADS=ON）：链接共享内存 + 预建 worker 线程池。
+#  -pthread                 : 链接 pthread 运行时，wasm 内存切换为 SharedArrayBuffer（需宿主 COOP/COEP）。
+#  -sPTHREAD_POOL_SIZE      : 预建 worker，避免运行时同步阻塞主线程创建线程；用 navigator.hardwareConcurrency。
+#  -sPTHREAD_POOL_SIZE_STRICT=0 : 池耗尽时允许按需再建（不直接 abort）。
+#  main() 不代理到 worker（不加 -sPROXY_TO_PTHREAD）：GLFW/WebGPU 设备须在主线程，渲染留主线程，
+#    线程池仅供 JobSystem 跑 CPU 作业（剔除/动画等）。
+if(DSE_WEB_ENABLE_THREADS)
+    list(APPEND _dse_web_link_flags
+        "-pthread"
+        "-sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency"
+        "-sPTHREAD_POOL_SIZE_STRICT=0")
+endif()
+
 foreach(_item IN LISTS DSE_WEB_PRELOAD_ITEMS)
     if(EXISTS "${CMAKE_SOURCE_DIR}/${_item}")
         list(APPEND _dse_web_link_flags
