@@ -99,7 +99,7 @@ struct RenderPassMetadata {
 |--------|------|
 | **B0** ✅ | Dawn/Emscripten WebGPU 工具链集成（`-sUSE_WEBGPU=1`）；`RhiBackend::WebGPU` 枚举 + 工厂分发；`WebGPURhiDevice` 骨架（设备 import + 交换链 + 每帧 clear pass 证明贯通）；shell.html 预创建设备 + `?backend=webgpu` 显式启用 + 失败自动回退 WebGL2。资源/绘制接口为安全占位（句柄发号 / no-op），B1 起替换 |
 | **B1** ✅ | `RhiDevice` 资源接口 WebGPU 映射：句柄表（buffers/textures/render_targets/pipeline_states/shaders）→ 原生 WGPU 对象；`wgpuDeviceCreateBuffer`+`wgpuQueueWriteBuffer`（顶点/索引/uniform）、`wgpuDeviceCreateTexture`+`wgpuQueueWriteTexture`（2D/cube/cube-mips/3D，RGBA8/RGBA16F/Depth32）、`wgpuDeviceCreateSampler`（filter/wrap 映射）、离屏 RT（颜色 RGBA16F + 深度 Depth32，MRT/cube）；着色器源暂存 + PSO 子状态登记（WGPURenderPipeline 组装留 B2）。回读异步留 B5 |
-| **B2** | 着色器路径：WGSL（或 SPIR-V→WGSL via Tint）；接入现有 shader 生成流水 |
+| **B2** 🚧 | 着色器路径：WGSL（无离线 SPIR-V→WGSL 工具，手写 WGSL，sentinel `// dse-wgsl` 区分引擎 GLSL）+ 命令录制引擎（`WGPURenderPassEncoder` / explicit pipeline-layout + BGL 缓存 / push-constant 模拟 / `Draw*`）+ bring-up 自检上屏验证。**进行中**：harness `--backend=webgpu`（Dawn+SwiftShader Vulkan）+ 设备级 `Cmd*` API 声明与录制状态脚手架已落地（commit `aea0698a`），`.cpp` 录制实现下一步 |
 | **B3** | Compute + SSBO 接通 → 复用桌面 **GPU-driven 剔除 / Clustered Forward+ / 延迟** 全链路 |
 | **B4** | 能力探测：WebGPU 可用走 parity 路径，否则回退阶段 A 的 WebGL2 路径 |
 | **B5** | CI：WebGPU headless（Dawn 软件适配器）渲染回归 |
