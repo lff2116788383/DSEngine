@@ -13,6 +13,7 @@
 #include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
 
+#include <cmath>
 #include <cstring>
 
 namespace dse {
@@ -266,6 +267,124 @@ void OnGpuCullPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
         DEBUG_LOG_ERROR("WebGPU[B3b-2] 剔除自检：像素回读映射失败 status={}", static_cast<int>(status));
     }
     FinalizeGpuCullSelfTest(ctx);
+}
+
+// --- B3b-3 GPU 蒙皮自检：异步回读校验上下文 ---
+// 手译自 engine/render/shaders/src/skinning.comp 的 WGSL 蒙皮 compute（骨骼矩阵调色板 + morph
+// 混合），把绑定空间的 quad（4 顶点，全 100% 权重于 bone0=平移(0.4,0.4)）变形写入 dst SSBO。
+// dst SSBO 随即作顶点缓冲被真绘制消费渲到 64×64 离屏 RT。两路回读：
+//   (1) dst SSBO → 逐顶点校验蒙皮后坐标 == 绑定坐标 + (0.4,0.4)（骨骼平移），法线保持 (0,0,1)；
+//   (2) RT 像素 → 校验位移后的红色 quad 落在预期屏幕区域（中心有色、远角为黑）。
+// 证明真链路 compute(蒙皮)→SSBO(变形顶点)→draw(顶点拉取)→像素 端到端正确。
+constexpr uint32_t kSkVertices = 4;      ///< 蒙皮网格顶点数（一个 quad）
+constexpr uint32_t kSkInstances = 1;     ///< 蒙皮实例数
+constexpr uint32_t kSkBones = 2;         ///< 骨骼数（bone0 平移 / bone1 单位，仅 bone0 被引用）
+constexpr uint32_t kSkSrcFloats = 16;    ///< 每源顶点 float 数（4×vec4：pos_bw0/norm_bw1/tan_bw2/joints_bw3）
+constexpr uint32_t kSkDstFloats = 12;    ///< 每蒙皮后顶点 float 数（3×vec4：pos/normal/tangent）
+constexpr uint32_t kSkDstStride = kSkDstFloats * sizeof(float);  ///< 蒙皮后顶点步幅（作顶点缓冲）
+constexpr float kSkBoneTx = 0.4f;        ///< bone0 平移 x（验证可预测）
+constexpr float kSkBoneTy = 0.4f;        ///< bone0 平移 y
+constexpr float kSkHalf = 0.3f;          ///< quad 半边（绑定空间，居中原点）
+constexpr uint32_t kSkRtSize = 64;       ///< 离屏 RT 边长（64×4=256B/行，满足 256 对齐）
+constexpr uint32_t kSkRtRowBytes = kSkRtSize * 4;
+constexpr uint32_t kSkRtBytes = kSkRtRowBytes * kSkRtSize;
+
+struct SkinningSelfTestCtx {
+    WGPUBuffer rb_dst = nullptr;
+    WGPUBuffer rb_pixels = nullptr;
+    // 提交后才能安全释放的瞬态渲染资源（被命令缓冲引用至执行完成）。
+    WGPUTexture rt_tex = nullptr;
+    WGPUTextureView rt_view = nullptr;
+    WGPURenderPipeline pipeline = nullptr;
+    WGPUShaderModule module = nullptr;
+    WGPUBuffer ibo = nullptr;
+    int pending = 2;
+    bool dst_ok = false;
+    bool pixels_ok = false;
+};
+
+void FinalizeSkinningSelfTest(SkinningSelfTestCtx* ctx) {
+    if (--ctx->pending > 0) return;
+    if (ctx->dst_ok && ctx->pixels_ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-3] GPU 蒙皮自检 PASS：骨骼调色板变形顶点（dst SSBO 逐顶点坐标"
+                       "==绑定+平移、法线保持）+ 变形 quad 离屏像素（位移区域有色、远角为黑）均符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-3] GPU 蒙皮自检 FAIL：dst_ok={} pixels_ok={}",
+                        ctx->dst_ok, ctx->pixels_ok);
+    }
+    if (ctx->rb_dst)    wgpuBufferRelease(ctx->rb_dst);
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    if (ctx->rt_view)   wgpuTextureViewRelease(ctx->rt_view);
+    if (ctx->rt_tex)    wgpuTextureRelease(ctx->rt_tex);
+    if (ctx->pipeline)  wgpuRenderPipelineRelease(ctx->pipeline);
+    if (ctx->module)    wgpuShaderModuleRelease(ctx->module);
+    if (ctx->ibo)       wgpuBufferRelease(ctx->ibo);
+    delete ctx;
+}
+
+void OnSkinningDstMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<SkinningSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const float* p = static_cast<const float*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_dst, 0, kSkVertices * kSkDstFloats * sizeof(float)));
+        if (p) {
+            // 绑定空间 quad 顶点（与 RecordSkinningSelfTest 一致），蒙皮后应平移 (kSkBoneTx, kSkBoneTy)。
+            const float bx[kSkVertices] = {-kSkHalf,  kSkHalf, kSkHalf, -kSkHalf};
+            const float by[kSkVertices] = {-kSkHalf, -kSkHalf, kSkHalf,  kSkHalf};
+            bool ok = true;
+            for (uint32_t i = 0; i < kSkVertices && ok; ++i) {
+                const float* v = p + i * kSkDstFloats;  // pos.xyz @0..2、normal.xyz @4..6
+                const float ex = bx[i] + kSkBoneTx, ey = by[i] + kSkBoneTy;
+                if (std::fabs(v[0] - ex) > 0.01f || std::fabs(v[1] - ey) > 0.01f ||
+                    std::fabs(v[2] - 0.0f) > 0.01f) { ok = false; break; }
+                // 平移矩阵 3×3 为单位 → 法线保持 (0,0,1)。
+                if (std::fabs(v[4]) > 0.01f || std::fabs(v[5]) > 0.01f ||
+                    std::fabs(v[6] - 1.0f) > 0.01f) { ok = false; break; }
+            }
+            ctx->dst_ok = ok;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-3] 蒙皮自检 dst 顶点：v0=({},{},{}) v2=({},{},{})",
+                                p[0], p[1], p[2], p[2 * kSkDstFloats], p[2 * kSkDstFloats + 1],
+                                p[2 * kSkDstFloats + 2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_dst);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-3] 蒙皮自检：dst 顶点回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeSkinningSelfTest(ctx);
+}
+
+void OnSkinningPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<SkinningSelfTestCtx*>(userdata);
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* px = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kSkRtBytes));
+        if (px) {
+            auto at = [&](uint32_t x, uint32_t y) -> const uint8_t* {
+                return px + (y * kSkRtRowBytes + x * 4);
+            };
+            // 蒙皮后 quad NDC x∈[0.1,0.7] y∈[0.1,0.7]（绑定 ±0.3 + 平移 0.4）。
+            // RT 顶左原点、NDC y 向上：中心 NDC(0.4,0.4) → 像素约 (44,19)。远角 (6,6)/(6,57)/(57,57) 应为黑。
+            const uint8_t* in  = at(44, 19);
+            const uint8_t* c0  = at(6, 6);
+            const uint8_t* c1  = at(6, 57);
+            const uint8_t* c2  = at(57, 57);
+            auto red  = [](const uint8_t* c) { return c[0] > 100 && c[1] < 60 && c[2] < 60; };
+            auto dark = [](const uint8_t* c) { return c[0] < 40 && c[1] < 40 && c[2] < 40; };
+            const bool ok = red(in) && dark(c0) && dark(c1) && dark(c2);
+            ctx->pixels_ok = ok;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-3] 蒙皮自检像素：in({},{},{}) c0({},{},{}) c1({},{},{}) c2({},{},{})",
+                                in[0], in[1], in[2], c0[0], c0[1], c0[2],
+                                c1[0], c1[1], c1[2], c2[0], c2[1], c2[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-3] 蒙皮自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    FinalizeSkinningSelfTest(ctx);
 }
 
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
@@ -545,6 +664,14 @@ void WebGPURhiDevice::Shutdown() {
     if (gc_render_module_){ wgpuShaderModuleRelease(gc_render_module_); gc_render_module_ = nullptr; }
     if (gc_vbo_)          { wgpuBufferRelease(gc_vbo_);              gc_vbo_ = nullptr; }
     if (gc_ibo_)          { wgpuBufferRelease(gc_ibo_);              gc_ibo_ = nullptr; }
+    // B3b-3 GPU 蒙皮自检瞬态资源（readback 已 kick 时所有权已转移给 ctx → 这里均为 null）。
+    if (sk_rb_dst_)       { wgpuBufferRelease(sk_rb_dst_);           sk_rb_dst_ = nullptr; }
+    if (sk_rb_pixels_)    { wgpuBufferRelease(sk_rb_pixels_);        sk_rb_pixels_ = nullptr; }
+    if (sk_rt_view_)      { wgpuTextureViewRelease(sk_rt_view_);     sk_rt_view_ = nullptr; }
+    if (sk_rt_tex_)       { wgpuTextureRelease(sk_rt_tex_);          sk_rt_tex_ = nullptr; }
+    if (sk_pipeline_)     { wgpuRenderPipelineRelease(sk_pipeline_); sk_pipeline_ = nullptr; }
+    if (sk_render_module_){ wgpuShaderModuleRelease(sk_render_module_); sk_render_module_ = nullptr; }
+    if (sk_ibo_)          { wgpuBufferRelease(sk_ibo_);              sk_ibo_ = nullptr; }
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -711,12 +838,21 @@ void WebGPURhiDevice::EndFrame() {
         gc_recorded = RecordGpuCullSelfTest();
     }
 
+    // B3b-3：每会话一次 GPU 蒙皮真链路自检（蒙皮 compute → dst 顶点 SSBO → 该 SSBO 作顶点缓冲
+    // 真绘制 → 离屏 RT → 回读 dst SSBO+像素校验）。同样仅自检、不翻转能力位、不碰 demo 帧。
+    bool sk_recorded = false;
+    if (!skinning_selftest_done_) {
+        skinning_selftest_done_ = true;
+        sk_recorded = RecordSkinningSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
 
     if (ct_recorded) KickComputeSelfTestReadback();
     if (gc_recorded) KickGpuCullSelfTestReadback();
+    if (sk_recorded) KickSkinningSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -2745,6 +2881,274 @@ void WebGPURhiDevice::KickGpuCullSelfTestReadback() {
     wgpuBufferMapAsync(ctx->rb_draw, WGPUMapMode_Read, 0,
                        kGcInstances * kGcDrawWords * sizeof(uint32_t), OnGpuCullDrawMapped, ctx);
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kGcRtBytes, OnGpuCullPixelsMapped, ctx);
+}
+
+// B3b-3：GPU 蒙皮真链路自检——手译自 builtin skinning.comp 的 WGSL 蒙皮 compute（骨骼矩阵
+// 调色板 + morph 混合，逐位对齐源 GLSL 的 SrcVertex/DstVertex/InstanceInfo 打包与算法）写蒙皮后
+// 顶点 SSBO，该 SSBO 直接作顶点缓冲被真绘制消费渲到离屏 RT，回读 dst SSBO + 像素双重校验。
+bool WebGPURhiDevice::RecordSkinningSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // --- WGSL 蒙皮 compute（group1 b0 = 参数；group3 b0..b4 = src/dst/bone/morph/inst SSBO）---
+    // 注：本后端 compute BGL 统一以 read_write storage 建组，故所有 storage 均声明 read_write。
+    static const char* kSkinningWGSL = R"WGSL(// dse-wgsl
+struct SrcVertex { pos_bw0 : vec4<f32>, norm_bw1 : vec4<f32>, tan_bw2 : vec4<f32>, joints_bw3 : vec4<f32>, };
+struct DstVertex { pos : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+struct InstanceInfo {
+  vertex_start : u32, vertex_count : u32, bone_offset : u32, morph_target_count : u32,
+  morph_weights : vec4<f32>,
+  morph_delta_offset : u32, pad0 : u32, pad1 : u32, pad2 : u32,
+};
+struct Params { total_vertices : u32, instance_count : u32, pad0 : u32, pad1 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(3) @binding(0) var<storage, read_write> src_vertices : array<SrcVertex>;
+@group(3) @binding(1) var<storage, read_write> dst_vertices : array<DstVertex>;
+@group(3) @binding(2) var<storage, read_write> bone_matrices : array<mat4x4<f32>>;
+@group(3) @binding(3) var<storage, read_write> morph_deltas : array<vec4<f32>>;
+@group(3) @binding(4) var<storage, read_write> instances : array<InstanceInfo>;
+fn find_instance(gid : u32) -> u32 {
+  var lo : u32 = 0u; var hi : u32 = params.instance_count;
+  while (lo < hi) {
+    let mid = (lo + hi) / 2u;
+    if (instances[mid].vertex_start + instances[mid].vertex_count <= gid) { lo = mid + 1u; }
+    else { hi = mid; }
+  }
+  return lo;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
+  let gid = gid3.x;
+  if (gid >= params.total_vertices) { return; }
+  let inst_id = find_instance(gid);
+  if (inst_id >= params.instance_count) { return; }
+  let inst = instances[inst_id];
+  let local_vid = gid - inst.vertex_start;
+  let s = src_vertices[gid];
+  var pos = s.pos_bw0.xyz;
+  let normal = s.norm_bw1.xyz;
+  let tangent = s.tan_bw2.xyz;
+  if (inst.morph_target_count > 0u) {
+    let w = array<f32, 4>(inst.morph_weights.x, inst.morph_weights.y,
+                          inst.morph_weights.z, inst.morph_weights.w);
+    let mbase = inst.morph_delta_offset;
+    for (var m = 0u; m < inst.morph_target_count && m < 4u; m = m + 1u) {
+      if (abs(w[m]) > 0.001) {
+        pos = pos + morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
+      }
+    }
+  }
+  let bw0 = s.pos_bw0.w; let bw1 = s.norm_bw1.w; let bw2 = s.tan_bw2.w;
+  let bw3 = 1.0 - bw0 - bw1 - bw2;
+  let bi0 = u32(s.joints_bw3.x); let bi1 = u32(s.joints_bw3.y);
+  let bi2 = u32(s.joints_bw3.z); let bi3 = u32(s.joints_bw3.w);
+  let bb = inst.bone_offset;
+  let sm = bone_matrices[bb + bi0] * bw0 + bone_matrices[bb + bi1] * bw1
+         + bone_matrices[bb + bi2] * bw2 + bone_matrices[bb + bi3] * bw3;
+  let nm = mat3x3<f32>(sm[0].xyz, sm[1].xyz, sm[2].xyz);
+  dst_vertices[gid].pos     = vec4<f32>((sm * vec4<f32>(pos, 1.0)).xyz, 1.0);
+  dst_vertices[gid].normal  = vec4<f32>(normalize(nm * normal), 0.0);
+  dst_vertices[gid].tangent = vec4<f32>(normalize(nm * tangent), 0.0);
+}
+)WGSL";
+
+    if (!sk_shader_)
+        sk_shader_ = CreateComputeShaderEx("", "", "", 5, 0, 0, 0, kSkinningWGSL);
+
+    // 参数 UBO：总顶点数 / 实例数。
+    if (!sk_params_ubo_) {
+        const uint32_t params[4] = {kSkVertices, kSkInstances, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+        sk_params_ubo_ = CreateGpuBuffer(d, params).raw();
+    }
+    // 源顶点：居中原点 quad（半边 kSkHalf），全 100% 权重于 bone0（pos.w=1、其余权重 0、关节全 0），
+    //   法线 (0,0,1)、切线 (1,0,0)。打包逐位对齐 skinning.comp 的 SrcVertex。
+    if (!sk_src_ssbo_) {
+        const float bx[kSkVertices] = {-kSkHalf,  kSkHalf, kSkHalf, -kSkHalf};
+        const float by[kSkVertices] = {-kSkHalf, -kSkHalf, kSkHalf,  kSkHalf};
+        float src[kSkVertices * kSkSrcFloats];
+        for (uint32_t i = 0; i < kSkVertices; ++i) {
+            float* v = src + i * kSkSrcFloats;
+            v[0]=bx[i]; v[1]=by[i]; v[2]=0.0f; v[3]=1.0f;   // pos_bw0：位置 + bone_weight[0]=1
+            v[4]=0.0f;  v[5]=0.0f;  v[6]=1.0f; v[7]=0.0f;   // norm_bw1：法线 + bone_weight[1]=0
+            v[8]=1.0f;  v[9]=0.0f;  v[10]=0.0f;v[11]=0.0f;  // tan_bw2：切线 + bone_weight[2]=0
+            v[12]=0.0f; v[13]=0.0f; v[14]=0.0f;v[15]=0.0f;  // joints_bw3：4 关节索引（全 0）
+        }
+        GpuBufferDesc d; d.size = sizeof(src); d.usage = GpuBufferUsage::kStorage;
+        sk_src_ssbo_ = CreateGpuBuffer(d, src).raw();
+    }
+    // 蒙皮后顶点：compute 写入（storage）+ 作绘制顶点缓冲（vertex）。
+    if (!sk_dst_ssbo_) {
+        GpuBufferDesc d; d.size = kSkVertices * kSkDstFloats * sizeof(float);
+        d.usage = GpuBufferUsage::kStorage | GpuBufferUsage::kVertex;
+        sk_dst_ssbo_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    // 骨骼矩阵调色板（列主序）：bone0 = 平移(kSkBoneTx,kSkBoneTy,0)，bone1 = 单位（未引用）。
+    if (!sk_bone_ssbo_) {
+        float bones[kSkBones * 16] = {
+            1,0,0,0, 0,1,0,0, 0,0,1,0, kSkBoneTx,kSkBoneTy,0,1,   // bone0：平移
+            1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1};                  // bone1：单位
+        GpuBufferDesc d; d.size = sizeof(bones); d.usage = GpuBufferUsage::kStorage;
+        sk_bone_ssbo_ = CreateGpuBuffer(d, bones).raw();
+    }
+    // morph delta（占位，本自检 morph_target_count=0 不访问；仍需存在并绑定以匹配着色器声明）。
+    if (!sk_morph_ssbo_) {
+        float zeros[kSkVertices * 4] = {0};
+        GpuBufferDesc d; d.size = sizeof(zeros); d.usage = GpuBufferUsage::kStorage;
+        sk_morph_ssbo_ = CreateGpuBuffer(d, zeros).raw();
+    }
+    // 实例信息：单实例覆盖全部顶点，bone_offset=0，无 morph。
+    if (!sk_inst_ssbo_) {
+        struct InstanceInfo {
+            uint32_t vertex_start, vertex_count, bone_offset, morph_target_count;
+            float morph_weights[4];
+            uint32_t morph_delta_offset, pad0, pad1, pad2;
+        } inst{};
+        inst.vertex_start = 0; inst.vertex_count = kSkVertices; inst.bone_offset = 0;
+        inst.morph_target_count = 0; inst.morph_delta_offset = 0;
+        GpuBufferDesc d; d.size = sizeof(inst); d.usage = GpuBufferUsage::kStorage;
+        sk_inst_ssbo_ = CreateGpuBuffer(d, &inst).raw();
+    }
+
+    // --- 离屏 RT（64×64 RGBA8）+ 渲染管线（顶点拉取蒙皮后顶点 + 固定红色）+ 索引缓冲 ---
+    if (!sk_rt_tex_) {
+        WGPUTextureDescriptor td{};
+        td.usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc;
+        td.dimension = WGPUTextureDimension_2D;
+        td.size = {kSkRtSize, kSkRtSize, 1};
+        td.format = WGPUTextureFormat_RGBA8Unorm;
+        td.mipLevelCount = 1; td.sampleCount = 1;
+        sk_rt_tex_ = wgpuDeviceCreateTexture(device_, &td);
+        if (sk_rt_tex_) sk_rt_view_ = wgpuTextureCreateView(sk_rt_tex_, nullptr);
+    }
+    if (!sk_render_module_) {
+        static const char* kRenderWGSL = R"WGSL(
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> @builtin(position) vec4<f32> {
+  return vec4<f32>(p, 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(1.0, 0.0, 0.0, 1.0); }
+)WGSL";
+        sk_render_module_ = CompileWGSL(kRenderWGSL, "dse-skinning-selftest-render");
+    }
+    if (!sk_pipeline_ && sk_render_module_) {
+        // 顶点缓冲 = 蒙皮后 DstVertex（步幅 48B），属性 0 = pos.xy（offset 0，float32x2）。
+        WGPUVertexAttribute attr{};
+        attr.format = WGPUVertexFormat_Float32x2; attr.offset = 0; attr.shaderLocation = 0;
+        WGPUVertexBufferLayout vbl{};
+        vbl.arrayStride = kSkDstStride;
+        vbl.stepMode = WGPUVertexStepMode_Vertex;
+        vbl.attributeCount = 1; vbl.attributes = &attr;
+        WGPUColorTargetState color{};
+        color.format = WGPUTextureFormat_RGBA8Unorm;
+        color.writeMask = WGPUColorWriteMask_All;
+        WGPUFragmentState fs{};
+        fs.module = sk_render_module_; fs.entryPoint = "fs_main";
+        fs.targetCount = 1; fs.targets = &color;
+        WGPURenderPipelineDescriptor rpd{};
+        rpd.layout = nullptr;  // 无绑定资源 → auto layout
+        rpd.vertex.module = sk_render_module_; rpd.vertex.entryPoint = "vs_main";
+        rpd.vertex.bufferCount = 1; rpd.vertex.buffers = &vbl;
+        rpd.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+        rpd.primitive.cullMode = WGPUCullMode_None;
+        rpd.primitive.frontFace = WGPUFrontFace_CCW;
+        rpd.multisample.count = 1; rpd.multisample.mask = 0xFFFFFFFF;
+        rpd.fragment = &fs;
+        sk_pipeline_ = wgpuDeviceCreateRenderPipeline(device_, &rpd);
+    }
+    if (!sk_ibo_) {
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
+        bd.size = sizeof(idx);
+        sk_ibo_ = wgpuDeviceCreateBuffer(device_, &bd);
+        if (sk_ibo_) wgpuQueueWriteBuffer(queue_, sk_ibo_, 0, idx, sizeof(idx));
+    }
+
+    if (!sk_shader_ || !sk_params_ubo_ || !sk_src_ssbo_ || !sk_dst_ssbo_ || !sk_bone_ssbo_ ||
+        !sk_morph_ssbo_ || !sk_inst_ssbo_ || !sk_rt_view_ || !sk_pipeline_ || !sk_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-3] GPU 蒙皮自检资源创建失败，跳过");
+        return false;
+    }
+
+    // --- 录制 1：蒙皮 compute（写 dst 蒙皮后顶点）---
+    ResetDrawState();
+    CmdBindUniformBuffer(0, sk_params_ubo_, 0, sizeof(uint32_t) * 4);
+    CmdBindStorageBuffer(0, sk_src_ssbo_,  0, kSkVertices * kSkSrcFloats * sizeof(float));
+    CmdBindStorageBuffer(1, sk_dst_ssbo_,  0, kSkVertices * kSkDstFloats * sizeof(float));
+    CmdBindStorageBuffer(2, sk_bone_ssbo_, 0, kSkBones * 16 * sizeof(float));
+    CmdBindStorageBuffer(3, sk_morph_ssbo_,0, kSkVertices * 4 * sizeof(float));
+    CmdBindStorageBuffer(4, sk_inst_ssbo_, 0, 48);
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(sk_shader_, (kSkVertices + 63u) / 64u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // --- 录制 2：真绘制（顶点缓冲 = 蒙皮后 dst SSBO）渲到离屏 RT ---
+    const BufferEntry* be_dst = FindBuffer(sk_dst_ssbo_);
+    if (!be_dst || !be_dst->buffer) return false;
+    WGPURenderPassColorAttachment att{};
+    att.view = sk_rt_view_;
+    att.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+    att.loadOp = WGPULoadOp_Clear;
+    att.storeOp = WGPUStoreOp_Store;
+    att.clearValue = WGPUColor{0.0, 0.0, 0.0, 1.0};
+    WGPURenderPassDescriptor pd{};
+    pd.colorAttachmentCount = 1; pd.colorAttachments = &att;
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pd);
+    wgpuRenderPassEncoderSetPipeline(pass, sk_pipeline_);
+    wgpuRenderPassEncoderSetVertexBuffer(pass, 0, be_dst->buffer, 0,
+                                         kSkVertices * kSkDstFloats * sizeof(float));
+    wgpuRenderPassEncoderSetIndexBuffer(pass, sk_ibo_, WGPUIndexFormat_Uint32, 0, 6 * sizeof(uint32_t));
+    wgpuRenderPassEncoderDrawIndexed(pass, 6, 1, 0, 0, 0);
+    wgpuRenderPassEncoderEnd(pass);
+    wgpuRenderPassEncoderRelease(pass);
+
+    // --- copy 蒙皮后顶点 SSBO + RT 像素到回读缓冲（随帧提交）---
+    auto make_rb = [&](uint64_t bytes) -> WGPUBuffer {
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+        bd.size = AlignUp4(bytes);
+        return wgpuDeviceCreateBuffer(device_, &bd);
+    };
+    sk_rb_dst_ = make_rb(kSkVertices * kSkDstFloats * sizeof(float));
+    sk_rb_pixels_ = make_rb(kSkRtBytes);
+    if (!sk_rb_dst_ || !sk_rb_pixels_) {
+        if (sk_rb_dst_)    { wgpuBufferRelease(sk_rb_dst_);    sk_rb_dst_ = nullptr; }
+        if (sk_rb_pixels_) { wgpuBufferRelease(sk_rb_pixels_); sk_rb_pixels_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_dst->buffer, 0, sk_rb_dst_, 0,
+                                         kSkVertices * kSkDstFloats * sizeof(float));
+    WGPUImageCopyTexture src{};
+    src.texture = sk_rt_tex_;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = sk_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kSkRtRowBytes;
+    dst.layout.rowsPerImage = kSkRtSize;
+    WGPUExtent3D ext{kSkRtSize, kSkRtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickSkinningSelfTestReadback() {
+    if (!sk_rb_dst_ || !sk_rb_pixels_) return;
+    // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    auto* ctx = new SkinningSelfTestCtx();
+    ctx->rb_dst = sk_rb_dst_;
+    ctx->rb_pixels = sk_rb_pixels_;
+    ctx->rt_tex = sk_rt_tex_;         sk_rt_tex_ = nullptr;
+    ctx->rt_view = sk_rt_view_;       sk_rt_view_ = nullptr;
+    ctx->pipeline = sk_pipeline_;     sk_pipeline_ = nullptr;
+    ctx->module = sk_render_module_;  sk_render_module_ = nullptr;
+    ctx->ibo = sk_ibo_;               sk_ibo_ = nullptr;
+    sk_rb_dst_ = nullptr;
+    sk_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_dst, WGPUMapMode_Read, 0,
+                       kSkVertices * kSkDstFloats * sizeof(float), OnSkinningDstMapped, ctx);
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kSkRtBytes, OnSkinningPixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

@@ -474,6 +474,30 @@ private:
     WGPUBuffer gc_vbo_ = nullptr;
     WGPUBuffer gc_ibo_ = nullptr;
 
+    // --- B3b-3 GPU 蒙皮 compute 真链路自检（每会话一次：手译自 skinning.comp 的 WGSL 蒙皮 compute
+    //   经骨骼矩阵调色板把绑定空间顶点变形写入 dst SSBO → 该 SSBO 直接作顶点缓冲被真绘制消费渲到
+    //   离屏 RT → 回读 dst SSBO（逐顶点校验蒙皮后坐标==CPU 预期）+ 像素（蒙皮位移后的 quad 落在
+    //   预期屏幕区域）双重校验。离屏隔离，不碰 demo backbuffer/golden；不翻转全局能力位。
+    //   验证真 compute(蒙皮)→SSBO(变形顶点)→draw(顶点拉取)→像素 端到端链路）---
+    bool skinning_selftest_done_ = false;
+    bool RecordSkinningSelfTest();        ///< 在 frame_encoder_ 上录制蒙皮 dispatch + 离屏绘制 + copy（须在无 render/compute pass 时调用）
+    void KickSkinningSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int sk_shader_ = 0;       ///< 蒙皮 compute shader
+    unsigned int sk_params_ubo_ = 0;   ///< 参数 UBO（total_vertices/instance_count，group1 b0）
+    unsigned int sk_src_ssbo_ = 0;     ///< 源顶点（绑定空间 + 骨骼权重/索引，group3 b0）
+    unsigned int sk_dst_ssbo_ = 0;     ///< 蒙皮后顶点（storage|vertex，group3 b1 / 绘制顶点缓冲）
+    unsigned int sk_bone_ssbo_ = 0;    ///< 骨骼矩阵调色板（group3 b2）
+    unsigned int sk_morph_ssbo_ = 0;   ///< morph delta（本自检 morph_target_count=0，仅占位，group3 b3）
+    unsigned int sk_inst_ssbo_ = 0;    ///< 实例信息（group3 b4）
+    WGPUBuffer sk_rb_dst_ = nullptr;   ///< 蒙皮后顶点回读缓冲（MapRead|CopyDst）
+    WGPUBuffer sk_rb_pixels_ = nullptr;///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
+    // 录制期创建、提交后随回读 ctx 释放的瞬态渲染资源（被命令缓冲引用至 GPU 执行完成）。
+    WGPUTexture sk_rt_tex_ = nullptr;
+    WGPUTextureView sk_rt_view_ = nullptr;
+    WGPURenderPipeline sk_pipeline_ = nullptr;
+    WGPUShaderModule sk_render_module_ = nullptr;
+    WGPUBuffer sk_ibo_ = nullptr;
+
     RenderStats last_frame_stats_{};
 };
 
