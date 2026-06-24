@@ -323,6 +323,17 @@ void GLDrawExecutor::BeginRenderPass(const RenderPassDesc& render_pass,
             glViewport(0, 0, rt->desc.width, rt->desc.height);
             active_render_target_ = render_pass.render_target;
             has_depth = rt->desc.has_depth;
+#if DSE_GL_ES_RUNTIME
+            // GLES/WebGL2 立方体阴影逐面渲染：FBO 创建时只能附着单面（无分层附着 + gl_Layer 路由），
+            // 故每次 BeginRenderPass 按 cube_face 重新把对应面附着为深度附件，PointShadowPass 逐面绘制。
+            if (render_pass.cube_face >= 0 && rt->desc.cube_map && rt->desc.has_depth &&
+                rt->depth_texture_handle != 0) {
+                glFramebufferTexture2D(
+                    GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                    GL_TEXTURE_CUBE_MAP_POSITIVE_X + static_cast<GLenum>(render_pass.cube_face),
+                    rt->depth_texture_handle, 0);
+            }
+#endif
         }
     }
     global_state_.current_frame_stats.render_passes += 1;

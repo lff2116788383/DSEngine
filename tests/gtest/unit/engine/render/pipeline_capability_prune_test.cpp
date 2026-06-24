@@ -190,3 +190,37 @@ TEST(PipelineCapabilityPruneTest, DefaultProfilePrunesComputePassesOnWebGL2) {
     EXPECT_TRUE(survivors.count("composite"));
     EXPECT_TRUE(survivors.count("present"));
 }
+
+// ============================================================
+// A1 阴影：阴影 pass 走 2D 深度纹理 + CPU 逐绘制回退，无 compute/ssbo 需求，
+// 故必须在 WebGL2 能力档下存活（设计 §3 A1）
+// ============================================================
+
+// csm/spot/point 阴影 pass 不得声明 compute/ssbo/gpu_driven/mrt/hiz 需求，
+// 否则会在 WebGL2 上被错误裁掉（阴影本可走 2D 深度纹理 + CPU 回退）。
+TEST(PipelineCapabilityPruneTest, ShadowPassesDeclareNoHeavyCapabilities) {
+    const auto& registry = BuiltinRenderPipelineRegistry();
+    for (const char* name : {"csm_shadow", "spot_shadow", "point_shadow"}) {
+        const RenderPassMetadata* meta = registry.FindMetadata(name);
+        ASSERT_NE(meta, nullptr) << name;
+        EXPECT_FALSE(meta->requires_compute) << name;
+        EXPECT_FALSE(meta->requires_ssbo) << name;
+        EXPECT_FALSE(meta->requires_gpu_driven) << name;
+        EXPECT_FALSE(meta->requires_mrt) << name;
+        EXPECT_FALSE(meta->requires_hiz) << name;
+    }
+}
+
+// Forward3D（Web/WebGL2 best-effort 3D 剖面）启用阴影且阴影 pass 在 WebGL2 存活。
+TEST(PipelineCapabilityPruneTest, Forward3DEnablesShadowsAndSurvivesOnWebGL2) {
+    RenderPipelineProfile profile = MakeForward3DProfile();
+    EXPECT_TRUE(profile.settings.shadows);
+    auto survivors = SurvivingPasses(profile, WebGL2Context());
+    EXPECT_TRUE(survivors.count("csm_shadow"));
+    EXPECT_TRUE(survivors.count("spot_shadow"));
+    EXPECT_TRUE(survivors.count("point_shadow"));
+    EXPECT_TRUE(survivors.count("forward_scene"));
+    // 仍不得引入 compute/gpu-driven pass
+    EXPECT_FALSE(survivors.count("gpu_cull"));
+    EXPECT_FALSE(survivors.count("hiz_build"));
+}

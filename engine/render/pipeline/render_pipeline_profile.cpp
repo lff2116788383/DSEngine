@@ -379,18 +379,21 @@ RenderPipelineProfile MakeForward2DProfile() {
 
 RenderPipelineProfile MakeForward3DProfile() {
     // M5 best-effort 3D forward for capability-limited platforms (Web/WebGL2):
-    // the same minimal forward pass set as Forward2D — depth pre-pass → forward
-    // scene (now also draws lit 3D meshes via the UBO PBR program) → UI →
-    // composite → present. No GPU-driven culling, shadow maps, deferred shading
-    // or the HDR post chain, all of which require Compute/SSBO absent on WebGL2.
+    // depth pre-pass → 阴影（CSM 方向光 / 聚光 / 点光逐面立方体）→ forward
+    // scene（UBO PBR 着色 + 阴影采样）→ UI → composite → present。
+    // 阴影走 2D 深度纹理 + ESSL300 变体（WebGL2 原生支持，CPU 逐绘制回退，无需
+    // Compute/SSBO/MultiDrawIndirect）。仍不跑 GPU-driven 剔除、延迟着色与 HDR 后处理链。
     RenderPipelineProfile profile;
     profile.name = "Forward3D";
     profile.settings.gpu_driven = false;
-    profile.settings.shadows = false;
-    profile.settings.shadow_quality = "off";
+    profile.settings.shadows = true;
+    profile.settings.shadow_quality = "low";
     profile.settings.postprocess_quality = "none";
     profile.passes = {
         Pass("pre_z"),
+        Pass("csm_shadow"),
+        Pass("spot_shadow"),
+        Pass("point_shadow"),
         Pass("forward_scene"),
         Pass("ui"),
         Pass("composite"),

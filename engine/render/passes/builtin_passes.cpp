@@ -452,7 +452,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
         for (int face = 0; face < 6; ++face) {
             const glm::mat4 light_view_mat = glm::lookAt(pl_pos_relative, pl_pos_relative + face_directions[face], face_ups[face]);
-            cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true});
+            cmd_buffer.BeginRenderPass({ctx_.render_targets.point_shadow[shadow_slot], glm::vec4(1.0f), true, face});
             FrameContext frame{light_view_mat, light_proj};
             cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
 

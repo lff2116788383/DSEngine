@@ -306,6 +306,9 @@ struct RenderPassDesc {
     unsigned int render_target = 0;
     glm::vec4 clear_color = glm::vec4(0.0f);
     bool clear_color_enabled = false;
+    /// 立方体阴影逐面渲染：>=0 时指定要附着的 cubemap 面（0..5 = +X,-X,+Y,-Y,+Z,-Z）。
+    /// 仅对带深度的 cubemap RT 生效；-1（默认）保持后端原有附着方式（桌面分层附着）。
+    int cube_face = -1;
 };
 
 /// 渲染目标像素回读结果

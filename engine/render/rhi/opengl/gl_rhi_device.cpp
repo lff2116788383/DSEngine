@@ -703,8 +703,9 @@ unsigned int OpenGLRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
                 glReadBuffer(GL_NONE);
             }
 #else
-            // GLES3.1 无 glFramebufferTexture(分层 cubemap) 与 glDrawBuffer：
-            // 附 +X 面占位；立方体阴影逐面渲染为移动端后续工作。
+            // GLES/WebGL2 无 glFramebufferTexture(分层 cubemap) 与 glDrawBuffer：
+            // 创建时附 +X 面使 FBO 完整；运行期 PointShadowPass 逐面渲染，
+            // BeginRenderPass 按 cube_face 重附对应面（见 gl_draw_executor.cpp）。
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                    GL_TEXTURE_CUBE_MAP_POSITIVE_X, depth_texture_handle, 0);
             if (num_color == 0) {
