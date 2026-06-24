@@ -410,7 +410,7 @@ void GLDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
     glUseProgram(program_handle);
 }
 
-void GLDrawExecutor::PrimBindVertexBuffer(uint32_t /*slot*/, unsigned int buffer_handle, uint32_t stride,
+void GLDrawExecutor::PrimBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
                                           const std::vector<VertexAttr>& attrs, VertexInputRate rate) {
     if (!prim_vao_handle_ && create_vao_fn_) {
         prim_vao_handle_ = create_vao_fn_();
@@ -427,6 +427,26 @@ void GLDrawExecutor::PrimBindVertexBuffer(uint32_t /*slot*/, unsigned int buffer
                               static_cast<GLsizei>(stride),
                               reinterpret_cast<const void*>(static_cast<uintptr_t>(a.offset)));
         glVertexAttribDivisor(a.location, divisor);
+    }
+    // 记录该 slot 绑定，供 GLES base-vertex 模拟复用。
+    if (prim_vertex_bindings_.size() <= slot) prim_vertex_bindings_.resize(slot + 1);
+    prim_vertex_bindings_[slot] = {buffer_handle, stride, attrs, rate};
+}
+
+void GLDrawExecutor::ApplyPrimBaseVertex(int32_t base_vertex) {
+    // GLES 无 base-vertex 绘制：把 PerVertex 流的属性指针整体偏移 base_vertex*stride 模拟
+    // （索引取出的顶点号 i 实际寻址 attr.offset + (i+base_vertex)*stride）。
+    // PerInstance 流按实例步进，不受 base_vertex 影响，保持原偏移。
+    for (const auto& b : prim_vertex_bindings_) {
+        if (b.buffer == 0 || b.rate != VertexInputRate::PerVertex) continue;
+        glBindBuffer(GL_ARRAY_BUFFER, b.buffer);
+        const int64_t base = static_cast<int64_t>(base_vertex) * static_cast<int64_t>(b.stride);
+        for (const auto& a : b.attrs) {
+            glVertexAttribPointer(
+                a.location, static_cast<GLint>(a.components), GL_FLOAT, GL_FALSE,
+                static_cast<GLsizei>(b.stride),
+                reinterpret_cast<const void*>(static_cast<uintptr_t>(static_cast<int64_t>(a.offset) + base)));
+        }
     }
 }
 
@@ -553,6 +573,7 @@ void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index,
     glBindVertexArray(prim_vao_handle_.raw());
     const size_t elem = (prim_index_type_ == GL_UNSIGNED_SHORT) ? 2u : 4u;
     const void* offset_ptr = reinterpret_cast<const void*>(static_cast<uintptr_t>(first_index) * elem);
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
     if (base_vertex != 0) {
         glDrawElementsBaseVertex(prim_topology_, static_cast<GLsizei>(index_count),
                                  prim_index_type_, offset_ptr, base_vertex);
@@ -560,6 +581,12 @@ void GLDrawExecutor::PrimDrawIndexed(uint32_t index_count, uint32_t first_index,
         glDrawElements(prim_topology_, static_cast<GLsizei>(index_count),
                        prim_index_type_, offset_ptr);
     }
+#else
+    // GLES3.0/WebGL2 与 GLES3.1 无 base-vertex 变体：用属性指针偏移模拟，绘制后复位。
+    if (base_vertex != 0) ApplyPrimBaseVertex(base_vertex);
+    glDrawElements(prim_topology_, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr);
+    if (base_vertex != 0) ApplyPrimBaseVertex(0);
+#endif
     glBindVertexArray(0);
     global_state_.current_frame_stats.draw_calls += 1;
 }
@@ -581,9 +608,17 @@ void GLDrawExecutor::PrimDrawIndexedInstanced(uint32_t index_count, uint32_t ins
             static_cast<GLsizei>(instance_count), base_vertex, first_instance);
     } else {
         // first_instance==0（或驱动无 baseInstance）：实例数据偏移由 SSBO/instance VB 偏移表达。
+#if !defined(__ANDROID__) && !defined(__EMSCRIPTEN__)
         glDrawElementsInstancedBaseVertex(
             prim_topology_, static_cast<GLsizei>(index_count), prim_index_type_, offset_ptr,
             static_cast<GLsizei>(instance_count), base_vertex);
+#else
+        // GLES 无 base-vertex 变体：用属性指针偏移模拟 base_vertex，绘制后复位。
+        if (base_vertex != 0) ApplyPrimBaseVertex(base_vertex);
+        glDrawElementsInstanced(prim_topology_, static_cast<GLsizei>(index_count), prim_index_type_,
+                                offset_ptr, static_cast<GLsizei>(instance_count));
+        if (base_vertex != 0) ApplyPrimBaseVertex(0);
+#endif
     }
     glBindVertexArray(0);
     global_state_.current_frame_stats.draw_calls += 1;

@@ -186,6 +186,18 @@ private:
 
     // 通用绘制原语状态 (A1)
     VertexArrayHandle prim_vao_handle_;       ///< 通用原语复用的 VAO
+
+    // 顶点流绑定记录（按 slot 索引）。GLES3.0/WebGL2 与 GLES3.1 无 base-vertex 绘制变体，
+    // 用「重设 PerVertex 属性指针偏移 base_vertex*stride」模拟，故须记住各流的 buffer/stride/attrs/rate。
+    struct PrimVertexBinding {
+        unsigned int buffer = 0;
+        uint32_t stride = 0;
+        std::vector<VertexAttr> attrs;
+        VertexInputRate rate = VertexInputRate::PerVertex;
+    };
+    std::vector<PrimVertexBinding> prim_vertex_bindings_;
+    /// 把所有 PerVertex 流的属性指针整体偏移 base_vertex*stride（base_vertex=0 复位为原始偏移）。
+    void ApplyPrimBaseVertex(int32_t base_vertex);
     unsigned int prim_program_ = 0;           ///< 当前绑定的着色器程序
     unsigned int prim_index_type_ = 0x1405;   ///< GL_UNSIGNED_INT，当前索引缓冲元素类型 (B0)
     unsigned int prim_topology_ = 0x0004;     ///< GL_TRIANGLES，当前 PSO 拓扑（BindPipeline 推送）
