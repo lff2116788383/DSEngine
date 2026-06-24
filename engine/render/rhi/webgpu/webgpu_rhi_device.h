@@ -239,6 +239,13 @@ public:
                          unsigned int groups_x, unsigned int groups_y, unsigned int groups_z) override;
     void BeginComputePass() override;
     void EndComputePass() override;
+    /// B3b-4：创建可供 compute 写入的 2D 纹理（storage image / UAV）。WebGPU 以
+    /// StorageBinding|CopySrc|TextureBinding 用法位 + rgba8unorm 格式建纹理，供 compute
+    /// `texture_storage_2d<rgba8unorm, write>` 写入 + 随后采样/回读（Hi-Z 金字塔/bloom 基元）。
+    unsigned int CreateComputeWriteTexture2D(int width, int height) override;
+    /// B3b-4：将 storage image 绑定到 compute（group2，binding=unit）。read_only 暂忽略
+    /// （WebGPU rgba8unorm storage 仅 write 访问；只读用例走采样路径）。
+    void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
 
     // 统一 GPU Buffer API：覆写以按 GpuBufferUsage 授予正确 WGPU usage 位
     // （storage/indirect/vertex/index/uniform），不经旧 deprecated CreateSSBO/CreateIndirectBuffer 路由。
@@ -320,10 +327,11 @@ private:
     /// 单个逻辑绑定（用于在 BGL 条目与 BindGroup 条目间共享同一遍历顺序，杜绝二者发散）。
     struct BindingInfo {
         uint32_t binding = 0;
-        enum class Kind { Uniform, Storage, Texture, Sampler } kind = Kind::Uniform;
+        enum class Kind { Uniform, Storage, Texture, Sampler, StorageTexture } kind = Kind::Uniform;
         WGPUShaderStageFlags visibility = 0;
         WGPUTextureViewDimension view_dim = WGPUTextureViewDimension_2D;
         WGPUTextureSampleType sample_type = WGPUTextureSampleType_Float;
+        WGPUTextureFormat tex_format = WGPUTextureFormat_RGBA8Unorm;  ///< storage texture 格式
         // BindGroup 端实际资源（BGL 端忽略）：
         WGPUBuffer buffer = nullptr; uint64_t buf_offset = 0; uint64_t buf_size = 0;
         WGPUSampler sampler = nullptr;
@@ -356,6 +364,7 @@ private:
     std::map<uint32_t, UboBinding>  cur_ubos_;
     std::map<uint32_t, TexBinding>  cur_texs_;
     std::map<uint32_t, SsboBinding> cur_ssbos_;
+    std::map<uint32_t, unsigned int> cur_compute_images_;  ///< B3b-4：compute storage image（binding→纹理句柄）
     std::vector<uint8_t> cur_vs_push_;
     std::vector<uint8_t> cur_fs_push_;
 
@@ -497,6 +506,18 @@ private:
     WGPURenderPipeline sk_pipeline_ = nullptr;
     WGPUShaderModule sk_render_module_ = nullptr;
     WGPUBuffer sk_ibo_ = nullptr;
+
+    // --- B3b-4 storage-image compute 真链路自检（每会话一次：手写 WGSL compute 经
+    //   `texture_storage_2d<rgba8unorm, write>` 把已知渐变（r=x/(N-1), g=y/(N-1)）逐像素 textureStore
+    //   进 storage 纹理 → copy 纹理→回读缓冲 → 逐像素校验。验证 compute 写 storage image 端到端
+    //   原语（Hi-Z 金字塔 / bloom 下采样的前置能力）。离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool storage_image_selftest_done_ = false;
+    bool RecordStorageImageSelfTest();        ///< 录制 storage-image 写 compute + copy 纹理→回读缓冲
+    void KickStorageImageSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int si_shader_ = 0;       ///< storage-image 写 compute shader
+    unsigned int si_params_ubo_ = 0;   ///< 参数 UBO（dim，group1 b0）
+    unsigned int si_image_ = 0;        ///< compute 写目标 storage 纹理（group2 b0）
+    WGPUBuffer si_rb_pixels_ = nullptr;///< storage 纹理像素回读缓冲（MapRead|CopyDst）
 
     RenderStats last_frame_stats_{};
 };

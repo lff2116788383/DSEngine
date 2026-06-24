@@ -387,6 +387,60 @@ void OnSkinningPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     FinalizeSkinningSelfTest(ctx);
 }
 
+// --- B3b-4 storage-image 写 compute 自检：异步回读校验上下文 ---
+// compute 经 `texture_storage_2d<rgba8unorm, write>` 把已知渐变（r=x/(N-1)、g=y/(N-1)、b=0.25）
+// 逐像素 textureStore 进 storage 纹理，随后 copy 纹理→回读缓冲，逐像素校验。验证 compute 写
+// storage image 端到端原语（Hi-Z 金字塔下采样 / bloom 的前置能力）。单路回读。
+constexpr uint32_t kSiDim = 64;                 ///< storage 纹理边长（64×4=256B/行，满足 copy 256 对齐）
+constexpr uint32_t kSiRowBytes = kSiDim * 4;
+constexpr uint32_t kSiBytes = kSiRowBytes * kSiDim;
+
+struct StorageImageSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnStorageImagePixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<StorageImageSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* px = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kSiBytes));
+        if (px) {
+            auto at = [&](uint32_t x, uint32_t y) -> const uint8_t* {
+                return px + (y * kSiRowBytes + x * 4);
+            };
+            // 渐变：r=x/(N-1)*255、g=y/(N-1)*255、b=0.25*255≈64、a=255。校验四角 + 中心。
+            const uint8_t* c00 = at(0, 0);                       // r≈0   g≈0
+            const uint8_t* cx1 = at(kSiDim - 1, 0);              // r≈255 g≈0
+            const uint8_t* cy1 = at(0, kSiDim - 1);              // r≈0   g≈255
+            const uint8_t* cmid = at(kSiDim / 2, kSiDim / 2);    // r≈g≈~129
+            const bool blue_a = c00[2] > 48 && c00[2] < 80 && c00[3] > 240;
+            ok = c00[0] < 12 && c00[1] < 12 && blue_a &&
+                 cx1[0] > 240 && cx1[1] < 12 &&
+                 cy1[0] < 12 && cy1[1] > 240 &&
+                 cmid[0] > 110 && cmid[0] < 150 && cmid[1] > 110 && cmid[1] < 150;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-4] storage-image 自检像素：c00({},{},{},{}) "
+                                "cx1({},{},{}) cy1({},{},{}) cmid({},{})",
+                                c00[0], c00[1], c00[2], c00[3], cx1[0], cx1[1], cx1[2],
+                                cy1[0], cy1[1], cy1[2], cmid[0], cmid[1]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-4] storage-image 自检：像素回读映射失败 status={}",
+                        static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-4] storage-image 写自检 PASS：compute textureStore 渐变"
+                       "（r=x、g=y、b=0.25）写入 rgba8unorm storage 纹理 → 回读四角/中心像素均符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-4] storage-image 写自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -672,6 +726,8 @@ void WebGPURhiDevice::Shutdown() {
     if (sk_pipeline_)     { wgpuRenderPipelineRelease(sk_pipeline_); sk_pipeline_ = nullptr; }
     if (sk_render_module_){ wgpuShaderModuleRelease(sk_render_module_); sk_render_module_ = nullptr; }
     if (sk_ibo_)          { wgpuBufferRelease(sk_ibo_);              sk_ibo_ = nullptr; }
+    // B3b-4 storage-image 自检瞬态回读缓冲（readback 已 kick 时所有权已转移给 ctx → 这里为 null）。
+    if (si_rb_pixels_)    { wgpuBufferRelease(si_rb_pixels_);        si_rb_pixels_ = nullptr; }
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -846,6 +902,14 @@ void WebGPURhiDevice::EndFrame() {
         sk_recorded = RecordSkinningSelfTest();
     }
 
+    // B3b-4：每会话一次 storage-image 写 compute 真链路自检（compute textureStore 写 storage 纹理 →
+    // copy 纹理→回读缓冲 → 逐像素校验渐变）。同样仅自检、不翻转能力位、不碰 demo 帧。
+    bool si_recorded = false;
+    if (!storage_image_selftest_done_) {
+        storage_image_selftest_done_ = true;
+        si_recorded = RecordStorageImageSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -853,6 +917,7 @@ void WebGPURhiDevice::EndFrame() {
     if (ct_recorded) KickComputeSelfTestReadback();
     if (gc_recorded) KickGpuCullSelfTestReadback();
     if (sk_recorded) KickSkinningSelfTestReadback();
+    if (si_recorded) KickStorageImageSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -1085,6 +1150,26 @@ unsigned int WebGPURhiDevice::CreateTexture2D(int width, int height, const unsig
     return CreateTextureImpl(WGPUTextureDimension_2D, WGPUTextureViewDimension_2D,
                              static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1,
                              WGPUTextureFormat_RGBA8Unorm, usage, 1, 1, {rgba8_data}, sampler);
+}
+
+unsigned int WebGPURhiDevice::CreateComputeWriteTexture2D(int width, int height) {
+    // B3b-4：可供 compute 写入的 storage image。usage 含 StorageBinding（compute textureStore）
+    // + CopySrc（回读/拷贝至下一级金字塔）+ TextureBinding（随后采样）。rgba8unorm 为 WebGPU
+    // storage 纹理保证支持的格式。无初始数据。
+    const WGPUTextureUsageFlags usage = WGPUTextureUsage_StorageBinding |
+                                        WGPUTextureUsage_CopySrc |
+                                        WGPUTextureUsage_CopyDst |
+                                        WGPUTextureUsage_TextureBinding;
+    return CreateTextureImpl(WGPUTextureDimension_2D, WGPUTextureViewDimension_2D,
+                             static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1,
+                             WGPUTextureFormat_RGBA8Unorm, usage, 1, 1, {nullptr},
+                             TextureSamplerDesc::FromLinearFlag(false));
+}
+
+void WebGPURhiDevice::SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool /*read_only*/) {
+    // read_only 暂忽略：rgba8unorm storage 仅 WriteOnly 访问；只读用例走采样路径。
+    if (texture_handle) cur_compute_images_[binding] = texture_handle;
+    else                cur_compute_images_.erase(binding);
 }
 
 unsigned int WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
@@ -1789,6 +1874,7 @@ void WebGPURhiDevice::ResetDrawState() {
     cur_ubos_.clear();
     cur_texs_.clear();
     cur_ssbos_.clear();
+    cur_compute_images_.clear();
     cur_vs_push_.clear();
     cur_fs_push_.clear();
 }
@@ -2012,6 +2098,11 @@ const WebGPURhiDevice::PipelineCacheEntry* WebGPURhiDevice::GetOrCreateRenderPip
                     break;
                 case BindingInfo::Kind::Sampler:
                     e.sampler.type = WGPUSamplerBindingType_Filtering; break;
+                case BindingInfo::Kind::StorageTexture:
+                    // render 路径不产生 storage image 绑定；列此分支仅为穷尽枚举（避免 -Wswitch）。
+                    e.storageTexture.access = WGPUStorageTextureAccess_WriteOnly;
+                    e.storageTexture.format = b.tex_format;
+                    e.storageTexture.viewDimension = b.view_dim; break;
             }
             bgle.push_back(e);
         }
@@ -2424,6 +2515,19 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
             }
             break;
         }
+        case 2: {
+            // B3b-4：compute storage image（texture_storage_2d<...,write>）。@binding=unit。
+            for (const auto& [slot, tex_handle] : cur_compute_images_) {
+                if (!declared(slot)) continue;
+                const TextureEntry* te = FindTexture(tex_handle);
+                if (!te || !te->view) continue;
+                BindingInfo b;
+                b.binding = slot; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
+                b.view = te->view; b.tex_format = te->format; b.view_dim = te->view_dim;
+                out.push_back(b);
+            }
+            break;
+        }
         case 3: {
             for (const auto& [slot, s] : cur_ssbos_) {
                 if (!declared(slot)) continue;
@@ -2481,6 +2585,11 @@ WebGPURhiDevice::GetOrCreateComputePipeline(unsigned int shader_handle) {
                     e.texture.multisampled = false; break;
                 case BindingInfo::Kind::Sampler:
                     e.sampler.type = WGPUSamplerBindingType_Filtering; break;
+                case BindingInfo::Kind::StorageTexture:
+                    // B3b-4：compute 写 storage image（rgba8unorm 仅 WriteOnly 访问）。
+                    e.storageTexture.access = WGPUStorageTextureAccess_WriteOnly;
+                    e.storageTexture.format = b.tex_format;
+                    e.storageTexture.viewDimension = b.view_dim; break;
             }
             bgle.push_back(e);
         }
@@ -2525,8 +2634,9 @@ void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle,
             WGPUBindGroupEntry e{};
             e.binding = b.binding;
             switch (b.kind) {
-                case BindingInfo::Kind::Texture: e.textureView = b.view; break;
-                case BindingInfo::Kind::Sampler: e.sampler = b.sampler; break;
+                case BindingInfo::Kind::Texture:        e.textureView = b.view; break;
+                case BindingInfo::Kind::StorageTexture: e.textureView = b.view; break;
+                case BindingInfo::Kind::Sampler:        e.sampler = b.sampler; break;
                 default: e.buffer = b.buffer; e.offset = b.buf_offset; e.size = b.buf_size; break;
             }
             bge.push_back(e);
@@ -3149,6 +3259,81 @@ void WebGPURhiDevice::KickSkinningSelfTestReadback() {
     wgpuBufferMapAsync(ctx->rb_dst, WGPUMapMode_Read, 0,
                        kSkVertices * kSkDstFloats * sizeof(float), OnSkinningDstMapped, ctx);
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kSkRtBytes, OnSkinningPixelsMapped, ctx);
+}
+
+// B3b-4：storage-image 写 compute 真链路自检——compute 经 texture_storage_2d<rgba8unorm, write>
+// 把已知渐变逐像素 textureStore 进 storage 纹理（经 CreateComputeWriteTexture2D + SetComputeTextureImage
+// group2 绑定），随后 copy 纹理→回读缓冲，逐像素校验。详见 StorageImageSelfTestCtx / OnStorageImagePixelsMapped。
+bool WebGPURhiDevice::RecordStorageImageSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // group1 b0 = UBO（dim）；group2 b0 = storage image（write）。
+    static const char* kStorageImageWGSL = R"WGSL(// dse-wgsl
+struct Params { dim : u32, pad0 : u32, pad1 : u32, pad2 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(2) @binding(0) var dst_img : texture_storage_2d<rgba8unorm, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= params.dim || gid.y >= params.dim) { return; }
+  let denom = f32(params.dim - 1u);
+  let r = f32(gid.x) / denom;
+  let g = f32(gid.y) / denom;
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(r, g, 0.25, 1.0));
+}
+)WGSL";
+
+    if (!si_shader_) si_shader_ = CreateComputeShaderEx("", "", "", 0, 1, 0, 0, kStorageImageWGSL);
+    if (!si_params_ubo_) {
+        const uint32_t params[4] = {kSiDim, 0u, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+        si_params_ubo_ = CreateGpuBuffer(d, params).raw();
+    }
+    if (!si_image_) si_image_ = CreateComputeWriteTexture2D(static_cast<int>(kSiDim), static_cast<int>(kSiDim));
+    if (!si_shader_ || !si_params_ubo_ || !si_image_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-4] storage-image 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经与引擎相同的命令录制状态绑定资源（group1 b0 UBO；group2 b0 storage image）。
+    ResetDrawState();
+    CmdBindUniformBuffer(0, si_params_ubo_, 0, sizeof(uint32_t) * 4);
+    SetComputeTextureImage(0, si_image_, /*read_only=*/false);
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(si_shader_, (kSiDim + 7u) / 8u, (kSiDim + 7u) / 8u, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // copy storage 纹理 → 回读缓冲（MapRead|CopyDst；随帧提交）。
+    const TextureEntry* te = FindTexture(si_image_);
+    if (!te || !te->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kSiBytes);
+    si_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!si_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = te->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = si_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kSiRowBytes;
+    dst.layout.rowsPerImage = kSiDim;
+    WGPUExtent3D ext{kSiDim, kSiDim, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickStorageImageSelfTestReadback() {
+    if (!si_rb_pixels_) return;
+    // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    auto* ctx = new StorageImageSelfTestCtx();
+    ctx->rb_pixels = si_rb_pixels_;
+    si_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kSiBytes, OnStorageImagePixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
