@@ -45,6 +45,7 @@ function parseArgs(argv) {
     timeout: 60000,
     update: false,
     query: '', // appended to index.html URL, e.g. "mode=2d" (A5 path override)
+    backend: 'webgl2', // 'webgl2' (SwiftShader GL) | 'webgpu' (Dawn + SwiftShader Vulkan)
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -56,6 +57,7 @@ function parseArgs(argv) {
     else if (a === '--max-mismatch') out.maxMismatchRatio = parseFloat(argv[++i]);
     else if (a === '--timeout') out.timeout = parseInt(argv[++i], 10);
     else if (a === '--query') out.query = argv[++i].replace(/^\?/, '');
+    else if (a === '--backend') out.backend = argv[++i];
     else throw new Error(`Unknown argument: ${a}`);
   }
   return out;
@@ -134,21 +136,34 @@ async function main() {
 
   const server = await startServer(opts.bin);
   const port = server.address().port;
-  const url = `http://127.0.0.1:${port}/index.html${opts.query ? '?' + opts.query : ''}`;
-  console.log(`[visual] serving ${opts.bin} at ${url}`);
+  // For the WebGPU backend, ensure the engine selects it via the shell.html
+  // ?backend=webgpu path (navigator.gpu device pre-created in preRun).
+  const queryParts = [];
+  if (opts.query) queryParts.push(opts.query);
+  if (opts.backend === 'webgpu' && !/(^|&)backend=/.test(opts.query)) queryParts.push('backend=webgpu');
+  const queryStr = queryParts.join('&');
+  const url = `http://127.0.0.1:${port}/index.html${queryStr ? '?' + queryStr : ''}`;
+  console.log(`[visual] serving ${opts.bin} at ${url} (backend=${opts.backend})`);
 
-  const launchArgs = [
+  const commonArgs = [
     '--headless=new',
     '--no-sandbox',
     '--disable-dev-shm-usage',
     '--disable-setuid-sandbox',
-    // Software WebGL2 via ANGLE/SwiftShader — deterministic, GPU-free.
-    '--use-gl=angle',
-    '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader',
     '--ignore-gpu-blocklist',
     '--window-size=1280,720',
   ];
+  // WebGPU (Dawn) over SwiftShader Vulkan vs WebGL2 over ANGLE/SwiftShader.
+  // Both are software, deterministic, and need no host GPU (CI-friendly).
+  const launchArgs = opts.backend === 'webgpu'
+    ? [...commonArgs,
+       '--enable-unsafe-webgpu',
+       '--enable-features=Vulkan',
+       '--use-vulkan=swiftshader']
+    : [...commonArgs,
+       '--use-gl=angle',
+       '--use-angle=swiftshader'];
 
   const browser = await puppeteer.launch({
     headless: 'new',

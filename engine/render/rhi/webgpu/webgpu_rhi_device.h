@@ -27,6 +27,8 @@
 
 #include <webgpu/webgpu.h>
 
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -136,11 +138,16 @@ public:
         bool is_cube = false;
     };
 
-    /// 着色器程序条目：B1 暂存 GLSL 源，B2 经 GLSL→WGSL 转译后惰性创建 WGPUShaderModule。
+    /// 着色器程序条目：引擎 GLSL 源暂存于此（WebGPU 无离线 GLSL→WGSL，故不转译，module 留空，
+    /// 其绘制在录制期被优雅跳过）；内建程序以 WGSL 源创建并编译出 module（vs/fs 同模块，入口
+    /// 名见 vs_entry/fs_entry）。B2：仅内建 WGSL 程序携带 module。
     struct ShaderEntry {
         std::string vert_src;
         std::string frag_src;
-        WGPUShaderModule module = nullptr;  ///< B2 填充
+        WGPUShaderModule module = nullptr;  ///< 仅 WGSL 程序非空
+        std::string vs_entry = "vs_main";
+        std::string fs_entry = "fs_main";
+        bool has_fragment = true;           ///< 仅深度 pass 等可无片元入口
     };
 
     // --- 内部访问器（供 WebGPUCommandBuffer 录制用，B1+）---
@@ -199,6 +206,89 @@ private:
     std::unordered_map<unsigned int, RenderTargetEntry> render_targets_;
     std::unordered_map<unsigned int, PipelineStateDesc> pipeline_states_;
     std::unordered_map<unsigned int, ShaderEntry>       shaders_;
+
+    // ============================================================
+    // B2 命令录制状态与缓存
+    // ============================================================
+
+    /// 每 slot 顶点流绑定（含布局 + 步进频率），Draw* 时组装 WGPUVertexBufferLayout。
+    struct VbBinding {
+        unsigned int handle = 0;
+        uint32_t stride = 0;
+        std::vector<VertexAttr> attrs;
+        VertexInputRate rate = VertexInputRate::PerVertex;
+        bool set = false;
+    };
+    struct UboBinding  { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
+    struct TexBinding  { unsigned int handle = 0; TextureDim dim = TextureDim::Tex2D; };
+    struct SsboBinding { unsigned int handle = 0; uint32_t offset = 0; uint32_t size = 0; };
+
+    /// 单个逻辑绑定（用于在 BGL 条目与 BindGroup 条目间共享同一遍历顺序，杜绝二者发散）。
+    struct BindingInfo {
+        uint32_t binding = 0;
+        enum class Kind { Uniform, Storage, Texture, Sampler } kind = Kind::Uniform;
+        WGPUShaderStageFlags visibility = 0;
+        WGPUTextureViewDimension view_dim = WGPUTextureViewDimension_2D;
+        WGPUTextureSampleType sample_type = WGPUTextureSampleType_Float;
+        // BindGroup 端实际资源（BGL 端忽略）：
+        WGPUBuffer buffer = nullptr; uint64_t buf_offset = 0; uint64_t buf_size = 0;
+        WGPUSampler sampler = nullptr;
+        WGPUTextureView view = nullptr;
+    };
+
+    /// 管线缓存条目：管线 + 其 explicit 布局所用的 4 组 BGL（BindGroup 须用同一 BGL 以保证兼容）。
+    struct PipelineCacheEntry {
+        WGPURenderPipeline pipeline = nullptr;
+        WGPUPipelineLayout layout = nullptr;
+        WGPUBindGroupLayout bgls[4] = {nullptr, nullptr, nullptr, nullptr};
+    };
+
+    // --- B2 录制：当前 pass 状态 ---
+    WGPURenderPassEncoder cur_pass_ = nullptr;
+    bool cur_pass_is_backbuffer_ = false;
+    std::vector<WGPUTextureFormat> cur_color_formats_;
+    WGPUTextureFormat cur_depth_format_ = WGPUTextureFormat_Undefined;
+    uint32_t cur_sample_count_ = 1;
+    std::vector<WGPUTextureView> cur_pass_views_;  ///< 本 pass 临时创建的面视图，pass 结束释放
+
+    // --- B2 录制：当前绘制绑定（跨 Draw 持续，BeginRenderPass 时重置）---
+    unsigned int cur_pso_handle_ = 0;
+    unsigned int cur_program_   = 0;
+    std::vector<VbBinding> cur_vbs_;
+    unsigned int cur_ib_handle_ = 0;
+    WGPUIndexFormat cur_ib_format_ = WGPUIndexFormat_Uint16;
+    std::map<uint32_t, UboBinding>  cur_ubos_;
+    std::map<uint32_t, TexBinding>  cur_texs_;
+    std::map<uint32_t, SsboBinding> cur_ssbos_;
+    std::vector<uint8_t> cur_vs_push_;
+    std::vector<uint8_t> cur_fs_push_;
+
+    bool backbuffer_drawn_ = false;  ///< 本帧是否有真实绘制落到 backbuffer（决定是否跑自检 pass）
+
+    std::unordered_map<std::string, PipelineCacheEntry> pipeline_cache_;
+    std::vector<WGPUBuffer> push_pool_;       ///< push-constant 模拟用 uniform 缓冲池（跨帧复用）
+    size_t push_pool_used_ = 0;
+    std::vector<WGPUBindGroup> frame_bindgroups_;  ///< 本帧创建的 BindGroup，提交后统一释放
+
+    // --- B2 bring-up 自检资源（验证整条录制链路；引擎 WGSL 内容就绪后自动不再触发）---
+    bool selftest_init_ = false;
+    unsigned int selftest_program_ = 0;
+    unsigned int selftest_pso_ = 0;
+    unsigned int selftest_vbo_ = 0;
+    unsigned int selftest_tex_ = 0;
+
+    // --- B2 录制内部助手 ---
+    void ResetDrawState();
+    void ReleasePassViews();
+    WGPUShaderModule CompileWGSL(const std::string& code, const char* label);
+    WGPUTextureView MakeFaceView(const TextureEntry& e, int face);
+    std::vector<BindingInfo> CollectGroupBindings(uint32_t group);
+    const PipelineCacheEntry* GetOrCreateRenderPipeline();
+    void BuildAndSetBindGroups(const PipelineCacheEntry& entry);
+    void IssueDraw(bool indexed, uint32_t count, uint32_t instance_count,
+                   uint32_t first, int32_t base_vertex, uint32_t first_instance);
+    void EnsureSelfTestResources();
+    void RunBringUpSelfTest();
 
     RenderStats last_frame_stats_{};
 };
