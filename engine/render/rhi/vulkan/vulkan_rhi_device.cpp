@@ -1860,7 +1860,7 @@ void VulkanRhiDevice::SetComputeUniformMat4(unsigned int shader, const char* nam
 unsigned int VulkanRhiDevice::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& vk_src, const std::string& /*hlsl_src*/,
     uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
-    uint32_t push_constant_bytes) {
+    uint32_t push_constant_bytes, const std::string& /*wgsl_src*/) {
     if (!initialized_) return 0u;
     if (ssbo_count == 0 && storage_image_count == 0 && sampler_count == 0)
         return shader_mgr_.CreateComputeProgramSSBO(vk_src, 0, push_constant_bytes);

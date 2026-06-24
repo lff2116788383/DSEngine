@@ -146,7 +146,7 @@ public:
     unsigned int CreateComputeShaderEx(
         const std::string& gl_src, const std::string& vk_src, const std::string& hlsl_src,
         uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
-        uint32_t push_constant_bytes) override;
+        uint32_t push_constant_bytes, const std::string& wgsl_src = "") override;
     unsigned int CreateComputeWriteTexture2D(int width, int height) override;
 
     // --- Indirect Draw Buffer ---

@@ -2090,6 +2090,17 @@ unsigned int WebGPURhiDevice::CreateComputeShader(const std::string& source) {
     return h;
 }
 
+unsigned int WebGPURhiDevice::CreateComputeShaderEx(
+    const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& /*hlsl_src*/,
+    uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/, uint32_t /*sampler_count*/,
+    uint32_t /*push_constant_bytes*/, const std::string& wgsl_src) {
+    // B3b：WebGPU 仅消费手写 WGSL 源槽。空槽表示该 compute 特性尚未手译 WGSL（如 GPU-driven
+    // 剔除 / HiZ / skinning / hair / grass）——返回 0，调用方按句柄 0 优雅回退到 CPU/无该特性。
+    // 布局计数（ssbo/img/smp/pc）不需要：compute 管线 layout 由 WGSL @group/@binding 解析驱动。
+    if (wgsl_src.empty()) return 0;
+    return CreateComputeShader(wgsl_src);
+}
+
 void WebGPURhiDevice::DeleteComputeShader(unsigned int handle) {
     auto it = compute_shaders_.find(handle);
     if (it == compute_shaders_.end()) return;
@@ -2276,7 +2287,9 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 }
 )WGSL";
 
-    if (!ct_shader_) ct_shader_ = CreateComputeShader(kComputeSelfTestWGSL);
+    // B3b：经引擎-facing 入口 CreateComputeShaderEx 创建（gl/vk/hlsl 空、仅 WGSL 槽），
+    // 验证整条多源 compute 通路（引擎各 compute 特性即按此签名调用）。
+    if (!ct_shader_) ct_shader_ = CreateComputeShaderEx("", "", "", 1, 0, 0, 0, kComputeSelfTestWGSL);
     if (!ct_params_) {
         const uint32_t params[4] = {kCtN, kCtBase, 0u, 0u};
         GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;

@@ -1289,7 +1289,7 @@ const void* DX11RhiDevice::GetLastReadbackResult(size_t* out_size) const {
 unsigned int DX11RhiDevice::CreateComputeShaderEx(
     const std::string& /*gl_src*/, const std::string& /*vk_src*/, const std::string& hlsl_src,
     uint32_t /*ssbo_count*/, uint32_t /*storage_image_count*/,
-    uint32_t /*sampler_count*/, uint32_t /*push_constant_bytes*/) {
+    uint32_t /*sampler_count*/, uint32_t /*push_constant_bytes*/, const std::string& /*wgsl_src*/) {
     return shader_mgr_.CreateComputeProgram(hlsl_src, "main");
 }
 

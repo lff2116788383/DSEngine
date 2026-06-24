@@ -102,9 +102,11 @@ public:
         (void)shader; (void)name; (void)data;
     }
 
-    /// 三后端分离源的 compute shader 创建（GL/VK/HLSL 分别传入各自语言源码）
+    /// 多后端分离源的 compute shader 创建（GL/VK/HLSL/WGSL 分别传入各自语言源码）
     /// ssbo_count / storage_image_count / sampler_count 供 VK 构建 descriptor set layout
     /// push_constant_bytes 供 VK push constant range 声明
+    /// wgsl_src（B3b 新增）：WebGPU 后端专用的手写 WGSL compute 源（首非空行 `// dse-wgsl`）；
+    ///   引擎无离线 GLSL/SPIR-V→WGSL 工具，故各 compute 特性按需手译并经此槽传入。其余后端忽略。
     /// 默认回退到 CreateComputeShader(gl_src)，各后端 override 以使用正确源
     virtual unsigned int CreateComputeShaderEx(
         const std::string& gl_src,
@@ -113,9 +115,10 @@ public:
         uint32_t ssbo_count            = 0,
         uint32_t storage_image_count   = 0,
         uint32_t sampler_count         = 0,
-        uint32_t push_constant_bytes   = 0)
+        uint32_t push_constant_bytes   = 0,
+        const std::string& wgsl_src    = "")
     {
-        (void)vk_src; (void)hlsl_src;
+        (void)vk_src; (void)hlsl_src; (void)wgsl_src;
         (void)ssbo_count; (void)storage_image_count; (void)sampler_count; (void)push_constant_bytes;
         return CreateComputeShader(gl_src);
     }

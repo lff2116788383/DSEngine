@@ -215,15 +215,23 @@ public:
 
     // ============================================================
     // B3a：Compute 基础设施（compute 管线 + SSBO 存储缓冲 + indirect 原语 + WGSL 自检）
-    //   仅落地底层原语并以自检验证（dispatch→SSBO/indirect→回读校验）。不翻转全局
-    //   SupportsCompute()：引擎 compute 入口 CreateComputeShaderEx 尚无 WGSL 源槽，且高层
-    //   GPU-driven/bloom/skinning 路径未手译 WGSL，故保持 false 使现有渲染路径不受影响
-    //   （SSBO 同步读回亦不支持，SupportsSSBOCompute() 保持 false）。后续 B3b 再逐特性接入。
+    //   落地底层原语并以自检验证（dispatch→SSBO/indirect→回读校验）。
+    // B3b 基础：CreateComputeShaderEx 已加 WGSL 源槽（见下），引擎 compute 入口可经其传入
+    //   手写 WGSL；自检即经此入口验证整条引擎-facing 通路。仍**不翻转**全局 SupportsCompute()：
+    //   高层 GPU-driven/bloom/skinning/hair 等 compute 消费方尚未逐特性手译 WGSL 且需逐消费方
+    //   能力门控审计，贸然翻转会使其以 0 句柄走 compute 路径破坏现有渲染。逐特性接入后再翻转
+    //   （SSBO 同步读回亦不支持，SupportsSSBOCompute() 保持 false）。
     // ============================================================
 
     /// 创建 compute shader。仅接受 WGSL（首非空行须为 `// dse-wgsl` 标记）：引擎 GLSL/SPIR-V
     /// compute 源无离线转译，返回 0 跳过。返回设备级 compute shader 句柄（0=失败）。
     unsigned int CreateComputeShader(const std::string& source) override;
+    /// B3b：多源 compute 创建——WebGPU 仅取 wgsl_src（手写 WGSL）。wgsl_src 为空表示该 compute
+    /// 特性尚未手译 WGSL，返回 0（调用方按句柄 0 优雅回退）。gl/vk/hlsl 源与 VK 布局计数忽略。
+    unsigned int CreateComputeShaderEx(
+        const std::string& gl_src, const std::string& vk_src, const std::string& hlsl_src,
+        uint32_t ssbo_count, uint32_t storage_image_count, uint32_t sampler_count,
+        uint32_t push_constant_bytes, const std::string& wgsl_src = "") override;
     void DeleteComputeShader(unsigned int handle) override;
     /// 在当前 compute pass 内 dispatch（须先 BeginComputePass）：组装 explicit-layout compute
     /// 管线（group1=UBO、group3=SSBO，可见性 Compute），建并设 BindGroup，发 workgroups。
