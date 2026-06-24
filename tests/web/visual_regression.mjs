@@ -44,6 +44,7 @@ function parseArgs(argv) {
     maxMismatchRatio: 0.02, // fail if >2% of pixels differ from baseline
     timeout: 60000,
     update: false,
+    query: '', // appended to index.html URL, e.g. "mode=2d" (A5 path override)
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
@@ -54,6 +55,7 @@ function parseArgs(argv) {
     else if (a === '--threshold') out.threshold = parseFloat(argv[++i]);
     else if (a === '--max-mismatch') out.maxMismatchRatio = parseFloat(argv[++i]);
     else if (a === '--timeout') out.timeout = parseInt(argv[++i], 10);
+    else if (a === '--query') out.query = argv[++i].replace(/^\?/, '');
     else throw new Error(`Unknown argument: ${a}`);
   }
   return out;
@@ -132,7 +134,7 @@ async function main() {
 
   const server = await startServer(opts.bin);
   const port = server.address().port;
-  const url = `http://127.0.0.1:${port}/index.html`;
+  const url = `http://127.0.0.1:${port}/index.html${opts.query ? '?' + opts.query : ''}`;
   console.log(`[visual] serving ${opts.bin} at ${url}`);
 
   const launchArgs = [

@@ -29,6 +29,10 @@ set(_dse_web_link_flags
     "-sALLOW_MEMORY_GROWTH=1"
     "-sEXIT_RUNTIME=0"
     "-sASSERTIONS=1"
+    "-sFORCE_FILESYSTEM=1"
+    # shell.html 的 preRun 大资产懒加载（A5）需从 JS 经 Module.FS 写入 MEMFS，并用
+    # add/removeRunDependency 让运行时等待异步 fetch 完成。导出这些运行时方法。
+    "-sEXPORTED_RUNTIME_METHODS=['FS','callMain','addRunDependency','removeRunDependency']"
     "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
 )
 

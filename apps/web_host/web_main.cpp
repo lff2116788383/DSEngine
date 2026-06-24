@@ -7,6 +7,11 @@
  * 回调。EngineInstance 放在静态指针上以跨越异步回调存活。
  *
  * 资源通过 `--preload-file` 打包进 MEMFS（见 CMakeLists）；存档可走 IDBFS。
+ *
+ * 运行期路径选择（A5 打磨）：渲染剖面/启动脚本不再由编译期宏写死，而是由 shell.html
+ * 依据 URL 参数（?mode=2d|3d、?profile=NAME、?lua=PATH）和 WebGL2 能力探测算好后，
+ * 通过 Module.arguments 以命令行参数传入；编译期宏仅决定缺省值。这样同一份产物可在
+ * 运行时按 URL 或浏览器能力自动选 2D / 3D 路径并允许显式覆盖。
  */
 
 #include "engine/runtime/engine_app.h"
@@ -15,7 +20,10 @@
 #include <emscripten/emscripten.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <memory>
+#include <string>
+#include <string_view>
 
 namespace {
 
@@ -30,22 +38,48 @@ void WebFrame() {
     }
 }
 
+// 解析 "--key=value" 形式参数；命中则返回 value，否则返回 nullptr。
+const char* MatchArg(const char* arg, std::string_view key) {
+    const std::string_view a(arg);
+    if (a.size() > key.size() && a.compare(0, key.size(), key) == 0 &&
+        a[key.size()] == '=') {
+        return arg + key.size() + 1;
+    }
+    return nullptr;
+}
+
 } // namespace
 
-int main(int /*argc*/, char** /*argv*/) {
-    // Web 默认选用最小前向管线，避免在 WebGL2 上运行完整延迟着色 + HDR 后处理链
-    // （其多 RT ping-pong 与 Compute 在 WebGL2 上不成立）。overwrite=0：保留用户
-    // 通过环境变量的显式覆盖。
-    //
-    // DSE_ENABLE_3D（由 DSE_WEB_ENABLE_3D 开启，M5）：默认载入 3D forward 场景；
+int main(int argc, char** argv) {
+    // 编译期缺省：DSE_ENABLE_3D（由 DSE_WEB_ENABLE_3D 开启，M5）默认 3D forward 场景；
     // 否则维持已验证的 2D-first MVP。两条路径都用各自的最小非 Compute profile。
 #ifdef DSE_ENABLE_3D
-    setenv("DSE_RENDER_PIPELINE_PROFILE", "forward_3d", /*overwrite=*/0);
-    const char* startup_lua = "data/main3d.lua";
+    std::string_view mode = "3d";
 #else
-    setenv("DSE_RENDER_PIPELINE_PROFILE", "forward_2d", /*overwrite=*/0);
-    const char* startup_lua = "data/main.lua";
+    std::string_view mode = "2d";
 #endif
+    const char* profile_override = nullptr;  // 显式 --profile= 覆盖
+    const char* lua_override = nullptr;       // 显式 --lua= 覆盖
+
+    for (int i = 1; i < argc && argv[i]; ++i) {
+        if (const char* v = MatchArg(argv[i], "--mode")) {
+            if (std::strcmp(v, "2d") == 0 || std::strcmp(v, "3d") == 0) mode = v;
+        } else if (const char* p = MatchArg(argv[i], "--profile")) {
+            profile_override = p;
+        } else if (const char* l = MatchArg(argv[i], "--lua")) {
+            lua_override = l;
+        }
+    }
+
+    const bool is_3d = (mode == "3d");
+    const char* default_profile = is_3d ? "forward_3d" : "forward_2d";
+    const char* default_lua = is_3d ? "data/main3d.lua" : "data/main.lua";
+    const char* startup_lua = lua_override ? lua_override : default_lua;
+
+    // overwrite=1：运行期解析已是单一真相源（命令行 > 缺省）。引擎深处仍按
+    // getenv("DSE_RENDER_PIPELINE_PROFILE") 解析剖面，故这里写入进程环境。
+    setenv("DSE_RENDER_PIPELINE_PROFILE",
+           profile_override ? profile_override : default_profile, /*overwrite=*/1);
 
     dse::runtime::EngineRunConfig cfg;
     cfg.window_width  = 1280;
