@@ -31,6 +31,7 @@ enum class RhiBackend : unsigned int {
     OpenGL = 0,
     Vulkan = 1,
     D3D11  = 2,
+    WebGPU = 3,       ///< 阶段 B：Web/Emscripten WebGPU(Dawn) 后端，桌面级 parity
     Default = OpenGL  ///< 默认使用 OpenGL 后端
 };
 

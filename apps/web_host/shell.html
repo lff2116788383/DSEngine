@@ -46,6 +46,9 @@
       try { return !!document.createElement('canvas').getContext('webgl2'); }
       catch (e) { return false; }
     }
+    function dseHasWebGPU() {
+      return (typeof navigator !== 'undefined') && !!navigator.gpu;
+    }
     function dseBuildArgs() {
       var p = new URLSearchParams(location.search);
       var hasWebGL2 = dseHasWebGL2();
@@ -59,6 +62,22 @@
       var args = ['--mode=' + mode];
       if (p.get('profile')) args.push('--profile=' + p.get('profile'));
       if (p.get('lua')) args.push('--lua=' + p.get('lua'));
+      // 阶段 B（B0 脚手架）：仅在显式 ?backend=webgpu 且浏览器支持 navigator.gpu 时启用
+      // WebGPU 后端。缺省仍走已验证的 WebGL2 路径（harness/CI 绿）。设备在 preRun 里异步
+      // 预创建并挂到 Module.preinitializedWebGPUDevice，C++ 经 emscripten_webgpu_get_device()
+      // 取得；不可用/失败时上层自动回退 OpenGL(WebGL2)。
+      var wantBackend = p.get('backend');
+      window.__dseWantWebGPU = false;
+      if (wantBackend === 'webgpu' && mode === '3d') {
+        if (dseHasWebGPU()) {
+          window.__dseWantWebGPU = true;
+          args.push('--backend=webgpu');
+        } else {
+          console.warn('[dse] ?backend=webgpu requested but navigator.gpu unavailable; using WebGL2');
+        }
+      } else if (wantBackend === 'webgl2' || wantBackend === 'opengl') {
+        args.push('--backend=webgl2');
+      }
       window.__dseArgs = args;
       return args;
     }
@@ -91,6 +110,26 @@
         }
       },
       preRun: [function () {
+        // 阶段 B（B0）：若请求 WebGPU 且浏览器支持，异步取适配器/设备并挂到
+        // Module.preinitializedWebGPUDevice，供 C++ emscripten_webgpu_get_device() 读取。
+        // 用 addRunDependency 让 main 等待设备就绪；失败/不支持则不挂设备，C++ 取到 0 句柄
+        // → InitDevice 返回 false → 上层自动回退 OpenGL(WebGL2)。
+        if (!window.__dseWantWebGPU || !navigator.gpu) return;
+        Module.addRunDependency('dse-webgpu-device');
+        var wgpuDone = function () { Module.removeRunDependency('dse-webgpu-device'); };
+        navigator.gpu.requestAdapter().then(function (adapter) {
+          if (!adapter) { console.warn('[dse] WebGPU: no adapter; fallback WebGL2'); wgpuDone(); return; }
+          return adapter.requestDevice().then(function (device) {
+            if (!device) { console.warn('[dse] WebGPU: no device; fallback WebGL2'); wgpuDone(); return; }
+            Module.preinitializedWebGPUDevice = device;
+            console.log('[dse] WebGPU device pre-created for backend=webgpu');
+            wgpuDone();
+          });
+        }).catch(function (e) {
+          console.warn('[dse] WebGPU device acquisition failed: ' + (e && e.message) + '; fallback WebGL2');
+          wgpuDone();
+        });
+      }, function () {
         // 大资产 MEMFS→fetch 懒加载（A5）：可选 assets.json 清单列出需在运行时拉取的
         // 文件，逐个 fetch 写入 MEMFS（避免膨胀 .data 预载包）。引擎 VFS 同步读取，
         // 故必须在 main 之前写好——用 addRunDependency 让运行时等待 fetch 完成。

@@ -60,6 +60,7 @@ int main(int argc, char** argv) {
 #endif
     const char* profile_override = nullptr;  // 显式 --profile= 覆盖
     const char* lua_override = nullptr;       // 显式 --lua= 覆盖
+    const char* backend_override = nullptr;   // 显式 --backend= 覆盖（阶段 B：webgpu|webgl2）
 
     for (int i = 1; i < argc && argv[i]; ++i) {
         if (const char* v = MatchArg(argv[i], "--mode")) {
@@ -68,6 +69,8 @@ int main(int argc, char** argv) {
             profile_override = p;
         } else if (const char* l = MatchArg(argv[i], "--lua")) {
             lua_override = l;
+        } else if (const char* b = MatchArg(argv[i], "--backend")) {
+            backend_override = b;
         }
     }
 
@@ -80,6 +83,13 @@ int main(int argc, char** argv) {
     // getenv("DSE_RENDER_PIPELINE_PROFILE") 解析剖面，故这里写入进程环境。
     setenv("DSE_RENDER_PIPELINE_PROFILE",
            profile_override ? profile_override : default_profile, /*overwrite=*/1);
+
+    // 阶段 B：RHI 后端选择。缺省不写入 → 工厂走已验证的 WebGL2(OpenGL) 路径，字节级不变。
+    // shell.html 探测到 navigator.gpu 且请求 webgpu 时才传 --backend=webgpu，并已预创建
+    // WebGPU 设备挂到 Module.preinitializedWebGPUDevice。设备初始化失败时上层自动回退 OpenGL。
+    if (backend_override && *backend_override) {
+        setenv("DSE_RHI_BACKEND", backend_override, /*overwrite=*/1);
+    }
 
     dse::runtime::EngineRunConfig cfg;
     cfg.window_width  = 1280;

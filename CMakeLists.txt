@@ -67,6 +67,9 @@ if(WIN32)
 else()
     option(DSE_ENABLE_D3D11 "Enable Direct3D 11 backend" OFF)
 endif()
+# WebGPU(Dawn/Emscripten) 后端：阶段 B，桌面级 parity。仅 Web/Emscripten 默认开启
+# （见下方 if(EMSCRIPTEN) 强制 ON）；桌面暂无原生 Dawn 集成，默认 OFF。
+option(DSE_ENABLE_WEBGPU "Enable WebGPU RHI backend (Web/Emscripten via Dawn)" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
@@ -107,6 +110,10 @@ if(EMSCRIPTEN)
     # 物理后端在 Web 无 pthreads，始终关闭；3D 渲染前向路径由 DSE_WEB_ENABLE_3D 控制。
     if(NOT DSE_WEB_ENABLE_3D)
         set(DSE_ENABLE_3D  OFF CACHE BOOL "" FORCE)
+        set(DSE_ENABLE_WEBGPU OFF CACHE BOOL "" FORCE)
+    else()
+        # 阶段 B：Web 3D 默认编入 WebGPU 后端（设备初始化失败/不可用时由工厂回退 WebGL2）。
+        set(DSE_ENABLE_WEBGPU ON CACHE BOOL "" FORCE)
     endif()
     set(DSE_ENABLE_NAVMESH OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_NET     OFF CACHE BOOL "" FORCE)
@@ -429,6 +436,11 @@ if(NOT DSE_ENABLE_D3D11)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/dx11/.*\\.cpp$")
 endif()
 
+# WebGPU RHI 后端源文件仅在启用时编译（依赖 Emscripten WebGPU 头文件）
+if(NOT DSE_ENABLE_WEBGPU)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/webgpu/.*\\.cpp$")
+endif()
+
 # Lua 脚本运行时仅在启用时编译
 if(NOT DSE_ENABLE_LUA)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/scripting/lua/.*\\.cpp$")
@@ -658,6 +670,15 @@ if(DSE_ENABLE_D3D11 AND WIN32)
 elseif(DSE_ENABLE_D3D11 AND NOT WIN32)
     message(WARNING "DSE_ENABLE_D3D11=ON but platform is not Windows. D3D11 backend will be disabled.")
     set(DSE_ENABLE_D3D11 OFF)
+endif()
+# --- WebGPU RHI 后端 (Emscripten/Dawn) ---
+if(DSE_ENABLE_WEBGPU AND EMSCRIPTEN)
+    add_definitions(-D DSE_ENABLE_WEBGPU)
+    # -sUSE_WEBGPU=1 的编译/链接 flag 由 apps/web_host 在链接阶段统一加入。
+    message(STATUS "WebGPU RHI backend enabled (Emscripten)")
+elseif(DSE_ENABLE_WEBGPU AND NOT EMSCRIPTEN)
+    message(WARNING "DSE_ENABLE_WEBGPU=ON but platform is not Emscripten. WebGPU backend will be disabled (no native Dawn integration yet).")
+    set(DSE_ENABLE_WEBGPU OFF)
 endif()
 # --- Vulkan RHI 后端 ---
 if(DSE_ENABLE_VULKAN AND DSE_HAS_VULKAN)

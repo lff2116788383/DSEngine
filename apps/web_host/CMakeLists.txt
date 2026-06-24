@@ -36,6 +36,13 @@ set(_dse_web_link_flags
     "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/shell.html"
 )
 
+# 阶段 B：WebGPU 后端启用时加入 Emscripten WebGPU JS 胶水（-sUSE_WEBGPU=1）。
+# 设备由 shell.html 预创建并挂到 Module.preinitializedWebGPUDevice；C++ 经
+# emscripten_webgpu_get_device() 取得。WebGPU 不可用时工厂回退 WebGL2(OpenGL)。
+if(DSE_ENABLE_WEBGPU)
+    list(APPEND _dse_web_link_flags "-sUSE_WEBGPU=1")
+endif()
+
 foreach(_item IN LISTS DSE_WEB_PRELOAD_ITEMS)
     if(EXISTS "${CMAKE_SOURCE_DIR}/${_item}")
         list(APPEND _dse_web_link_flags

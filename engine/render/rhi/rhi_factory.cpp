@@ -15,6 +15,10 @@
 #include "engine/render/rhi/dx11/dx11_rhi_device.h"
 #endif
 
+#ifdef DSE_ENABLE_WEBGPU
+#include "engine/render/rhi/webgpu/webgpu_rhi_device.h"
+#endif
+
 #include <cstdlib>
 #include <algorithm>
 
@@ -26,6 +30,7 @@ std::string RhiBackendToString(RhiBackend backend) {
         case RhiBackend::OpenGL: return "OpenGL";
         case RhiBackend::Vulkan: return "Vulkan";
         case RhiBackend::D3D11:  return "D3D11";
+        case RhiBackend::WebGPU: return "WebGPU";
         default: return "Unknown";
     }
 }
@@ -43,6 +48,9 @@ RhiBackend ResolveRhiBackendFromEnv() {
         }
         if (value == "d3d11" || value == "dx11") {
             return RhiBackend::D3D11;
+        }
+        if (value == "webgpu" || value == "wgpu") {
+            return RhiBackend::WebGPU;
         }
         DEBUG_LOG_WARN("DSE_RHI_BACKEND 环境值 '{}' 无法识别，回退到 OpenGL", env);
     }
@@ -62,6 +70,13 @@ std::unique_ptr<RhiDevice> CreateRhiDevice(RhiBackend backend) {
         case RhiBackend::D3D11: {
             DEBUG_LOG_INFO("RHI Factory: 创建 D3D11 后端");
             auto device = std::make_unique<dse::render::DX11RhiDevice>();
+            return device;
+        }
+#endif
+#ifdef DSE_ENABLE_WEBGPU
+        case RhiBackend::WebGPU: {
+            DEBUG_LOG_INFO("RHI Factory: 创建 WebGPU 后端");
+            auto device = std::make_unique<dse::render::WebGPURhiDevice>();
             return device;
         }
 #endif
@@ -101,6 +116,14 @@ RhiBackend ValidateRhiBackend(RhiBackend requested) {
             return RhiBackend::D3D11;
 #else
             DEBUG_LOG_WARN("D3D11 后端未编译 (DSE_ENABLE_D3D11=OFF)，回退到 OpenGL");
+            return RhiBackend::OpenGL;
+#endif
+
+        case RhiBackend::WebGPU:
+#ifdef DSE_ENABLE_WEBGPU
+            return RhiBackend::WebGPU;
+#else
+            DEBUG_LOG_WARN("WebGPU 后端未编译 (DSE_ENABLE_WEBGPU=OFF)，回退到 OpenGL");
             return RhiBackend::OpenGL;
 #endif
 
