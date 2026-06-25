@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace dse {
 namespace gameplay3d {
@@ -212,6 +213,65 @@ void main(uint3 id : SV_DispatchThreadID) {
 )";
 
 // ============================================================
+// WebGPU WGSL 变体（手译，无离线 GLSL→WGSL 工具；与上方 GLSL 430 逐句一致）
+//   SSBO 走 group3 b0/b1（WebGPU RHI compute 统一 BufferBindingType_Storage → 全声明 read_write，
+//   含只读 instances）；命名 uniform 走 group1 b8 保留 binding，各成员 @align(16)、声明同名同序，
+//   对齐 SetComputeUniform* 调用序（u_wind_dir→speed→strength→turbulence→time→instance_count）的
+//   16B 定位（见 webgpu_rhi_device.cpp kComputeNamedUboBinding=8）。输出列主序 mat4x4<f32>（std430，
+//   每列 vec4）。逐句镜像 CPU BuildWindMatrix（h*fade 折叠 hf、列主序装配）。
+// ============================================================
+static const char* kGrassWindComputeSourceWGSL = R"WGSL(// dse-wgsl
+struct GrassInstance {
+  pos_yaw : vec4<f32>,
+  wh_phase_fade : vec4<f32>,
+};
+@group(3) @binding(0) var<storage, read_write> instances : array<GrassInstance>;
+@group(3) @binding(1) var<storage, read_write> matrices : array<mat4x4<f32>>;
+struct PC {
+  @align(16) u_wind_dir : vec2<f32>,
+  @align(16) u_wind_speed : f32,
+  @align(16) u_wind_strength : f32,
+  @align(16) u_wind_turbulence : f32,
+  @align(16) u_time : f32,
+  @align(16) u_instance_count : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@compute @workgroup_size(64, 1, 1)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_instance_count) { return; }
+  let inst = instances[idx];
+  let pos = inst.pos_yaw.xyz;
+  let yaw = inst.pos_yaw.w;
+  let w = inst.wh_phase_fade.x;
+  let h = inst.wh_phase_fade.y;
+  let wind_phase = inst.wh_phase_fade.z;
+  let fade = inst.wh_phase_fade.w;
+  let phase = wind_phase + pc.u_time * pc.u_wind_speed;
+  let bend = sin(phase) * pc.u_wind_strength;
+  let turb = sin(phase * 3.7 + wind_phase * 2.3) * pc.u_wind_turbulence;
+  let total_bend = clamp(bend + turb, -0.436, 0.436);
+  let rx = -total_bend * pc.u_wind_dir.y;
+  let rz =  total_bend * pc.u_wind_dir.x;
+  let cx = cos(rx); let sx = sin(rx);
+  let cz = cos(rz); let sz = sin(rz);
+  let cy = cos(yaw); let sy = sin(yaw);
+  let a00 = cz * cy; let a01 = -sz; let a02 = cz * sy;
+  let a10 = sz * cy; let a11 = cz;  let a12 = sz * sy;
+  let a20 = -sy;     let a21 = 0.0; let a22 = cy;
+  let r00 = a00;                  let r01 = a01;                  let r02 = a02;
+  let r10 = cx * a10 - sx * a20;  let r11 = cx * a11 - sx * a21;  let r12 = cx * a12 - sx * a22;
+  let r20 = sx * a10 + cx * a20;  let r21 = sx * a11 + cx * a21;  let r22 = sx * a12 + cx * a22;
+  let hf = h * fade;
+  matrices[idx] = mat4x4<f32>(
+    vec4<f32>(r00 * w, r10 * w, r20 * w, 0.0),
+    vec4<f32>(r01 * hf, r11 * hf, r21 * hf, 0.0),
+    vec4<f32>(r02 * w, r12 * w, r22 * w, 0.0),
+    vec4<f32>(pos, 1.0));
+}
+)WGSL";
+
+// ============================================================
 // Halton 低差异序列 + hash
 // ============================================================
 
@@ -332,7 +392,7 @@ void GrassSystem::InitComputeShader() {
         kGrassWindComputeSource,
         kGrassWindComputeSourceVK,
         kGrassWindComputeSourceHLSL,
-        2, 0, 0, 28);
+        2, 0, 0, 28, kGrassWindComputeSourceWGSL);
     gpu_compute_enabled_ = (wind_compute_shader_ != 0);
     if (gpu_compute_enabled_) {
         DEBUG_LOG_INFO("[GrassSystem] GPU wind compute shader created: {}", wind_compute_shader_);
@@ -818,6 +878,27 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
 
         std::vector<glm::mat4> all_matrices(total_count);
 
+        // CPU 风场回退（镜像 GPU 风场公式经 BuildWindMatrix）：非 GPU 路径与「异步回读上帧结果未就绪」
+        // 时复用，保证当帧 all_matrices 正确、无破帧（GPU 风场延迟 1 帧视觉无感）。
+        auto compute_cpu = [&](const std::vector<GrassGPUInstance>& gpu_vec, size_t out_offset) {
+            for (size_t i = 0; i < gpu_vec.size(); ++i) {
+                const auto& inst = gpu_vec[i];
+                GrassInstanceLayout layout;
+                layout.position = glm::vec3(inst.pos_yaw);
+                layout.yaw = inst.pos_yaw.w;
+                layout.width = inst.wh_phase_fade.x;
+                layout.height = inst.wh_phase_fade.y * inst.wh_phase_fade.w;
+                layout.wind_phase = inst.wh_phase_fade.z;
+                all_matrices[out_offset + i] = BuildWindMatrix(
+                    layout, wind_norm, grass.wind_speed,
+                    grass.wind_strength, grass.wind_turbulence, current_time);
+            }
+        };
+        auto compute_cpu_all = [&]() {
+            compute_cpu(lod0_gpu, 0);
+            compute_cpu(lod1_gpu, lod0_count);
+        };
+
         bool use_gpu = gpu_compute_enabled_ && total_count >= 64;
         if (use_gpu) {
             EnsureSSBOCapacity(total_count);
@@ -842,28 +923,27 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
             rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_time", current_time);
             rhi_->SetComputeUniformInt(wind_compute_shader_, "u_instance_count", static_cast<int>(total_count));
 
+            // dispatch 须包裹在 compute pass 内（WebGPU DispatchCompute 在无 pass 时 no-op）。
             unsigned int groups = (static_cast<unsigned int>(total_count) + 63) / 64;
+            rhi_->BeginComputePass();
             rhi_->DispatchCompute(wind_compute_shader_, groups, 1, 1);
             rhi_->ComputeMemoryBarrier();
+            rhi_->EndComputePass();
 
-            rhi_->ReadGpuBuffer(output_ssbo_, 0, total_count * sizeof(glm::mat4), all_matrices.data());
+            // 异步双缓冲延迟回读（须在 pass 外）：本帧发起 src→staging 拷贝并取「上一帧」就绪结果。
+            //   桌面 GL/VK/DX11 用基类默认同步实现 → 当帧即就绪；WebGPU 覆写为延迟 1 帧 → 首帧/尺寸
+            //   不符/未就绪时落 CPU 风场回退，保证当帧 all_matrices 正确。
+            const size_t bytes = total_count * sizeof(glm::mat4);
+            const bool ready = rhi_->BeginGpuReadback(output_ssbo_, 0, bytes);
+            size_t rb_size = 0;
+            const void* rb = ready ? rhi_->GetLastReadbackResult(&rb_size) : nullptr;
+            if (rb && rb_size >= bytes) {
+                std::memcpy(all_matrices.data(), rb, bytes);
+            } else {
+                compute_cpu_all();
+            }
         } else {
-            auto compute_cpu = [&](const std::vector<GrassGPUInstance>& gpu_vec, size_t out_offset) {
-                for (size_t i = 0; i < gpu_vec.size(); ++i) {
-                    const auto& inst = gpu_vec[i];
-                    GrassInstanceLayout layout;
-                    layout.position = glm::vec3(inst.pos_yaw);
-                    layout.yaw = inst.pos_yaw.w;
-                    layout.width = inst.wh_phase_fade.x;
-                    layout.height = inst.wh_phase_fade.y * inst.wh_phase_fade.w;
-                    layout.wind_phase = inst.wh_phase_fade.z;
-                    all_matrices[out_offset + i] = BuildWindMatrix(
-                        layout, wind_norm, grass.wind_speed,
-                        grass.wind_strength, grass.wind_turbulence, current_time);
-                }
-            };
-            compute_cpu(lod0_gpu, 0);
-            compute_cpu(lod1_gpu, lod0_count);
+            compute_cpu_all();
         }
 
         std::vector<glm::mat4> lod0_matrices(
