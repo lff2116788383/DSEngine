@@ -610,6 +610,20 @@ private:
     unsigned int cb_out_ = 0;                ///< 结果 SSBO（group3 b0）
     WGPUBuffer cb_rb_out_ = nullptr;         ///< 结果回读缓冲（MapRead|CopyDst）
 
+    // --- B3b-9 Hi-Z 遮挡剔除真链路自检（每会话一次：手译引擎 HiZCullPass compute 为 WGSL —— AABB
+    //   SSBO（group3 b0）8 角经命名 uniform u_view_projection 投影 → NDC/UV → off-screen 拒绝 →
+    //   屏幕像素跨度选 mip → 5 tab Hi-Z（句柄采样，textureLoad-at-mip）max 深度遮挡判定 → 写可见性
+    //   SSBO（group3 b1）→ copy 回读逐元素校验 == CPU 预期 [1,0,0,1]。证明该消费方着色器 WebGPU 可用。
+    //   离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool hizcull_selftest_done_ = false;
+    bool RecordHiZCullSelfTest();          ///< 录制 Hi-Z 剔除 compute + copy 可见性 SSBO→回读缓冲
+    void KickHiZCullSelfTestReadback();    ///< 提交后发起异步 map 回读校验
+    unsigned int hc_shader_ = 0;           ///< Hi-Z 剔除 compute shader（手译 HiZCullPass）
+    unsigned int hc_aabb_ = 0;             ///< AABB SSBO（group3 b0）
+    unsigned int hc_vis_ = 0;              ///< 可见性 SSBO（group3 b1）
+    unsigned int hc_hiz_tex_ = 0;          ///< Hi-Z r32float 纹理（SetComputeTextureSampler 绑定）
+    WGPUBuffer hc_rb_out_ = nullptr;       ///< 可见性回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);

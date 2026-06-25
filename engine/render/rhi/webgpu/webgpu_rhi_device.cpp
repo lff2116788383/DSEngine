@@ -617,6 +617,51 @@ void OnComputeBindMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-9 Hi-Z 遮挡剔除真链路自检（常量 / ctx / 回读校验回调）---
+//   引擎 HiZCullPass 真实 compute（AABB 投影 8 角 → NDC/UV → off-screen 拒绝 → mip 选择 →
+//   多 tab Hi-Z max 深度遮挡判定）经手译 WGSL 接入。自检布置：单 mip r32float Hi-Z 纹理恒值 0.5、
+//   单位 VP（NDC==世界坐标）、4 个已知 AABB（前/后/出屏/中），dispatch 后回读 4×u32 可见性 ==
+//   CPU 预期 [可见,遮挡,出屏,可见]=[1,0,0,1]。
+constexpr uint32_t kHcObjCount = 4;
+constexpr uint32_t kHcVisBytes = kHcObjCount * 4u;
+constexpr uint32_t kHcHizDim   = 8;        // Hi-Z 纹理边长（单 mip）
+constexpr float    kHcHizDepth = 0.5f;     // Hi-Z 恒值深度
+const uint32_t     kHcExpected[kHcObjCount] = {1u, 0u, 0u, 1u};
+
+struct HiZCullSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnHiZCullMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<HiZCullSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* v = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kHcVisBytes));
+        if (v) {
+            ok = true;
+            for (uint32_t i = 0; i < kHcObjCount; ++i) if (v[i] != kHcExpected[i]) ok = false;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-9] Hi-Z 剔除自检失配：vis=({},{},{},{}) exp=(1,0,0,1)",
+                                v[0], v[1], v[2], v[3]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-9] Hi-Z 剔除自检：结果回读映射失败 status={}",
+                        static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-9] Hi-Z 遮挡剔除自检 PASS：引擎 HiZCullPass 真 compute 逻辑"
+                       "（AABB 8 角投影 + NDC/UV + off-screen 拒绝 + mip 选择 + 多 tab Hi-Z max 深度"
+                       "判定）经手译 WGSL 经 SetComputeUniform*/SetComputeTextureSampler/SSBO 跑出可见性 == CPU 预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-9] Hi-Z 遮挡剔除自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -910,6 +955,8 @@ void WebGPURhiDevice::Shutdown() {
     if (hzp_rb_pixels_)   { wgpuBufferRelease(hzp_rb_pixels_);       hzp_rb_pixels_ = nullptr; }
     // B3b-8 命名 uniform/采样自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (cb_rb_out_)       { wgpuBufferRelease(cb_rb_out_);           cb_rb_out_ = nullptr; }
+    // B3b-9 Hi-Z 剔除自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (hc_rb_out_)       { wgpuBufferRelease(hc_rb_out_);           hc_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1119,6 +1166,14 @@ void WebGPURhiDevice::EndFrame() {
         cb_recorded = RecordComputeBindSelfTest();
     }
 
+    // B3b-9：每会话一次 Hi-Z 遮挡剔除自检（手译 HiZCullPass compute → AABB 投影 + Hi-Z max 深度判定
+    // → 可见性 SSBO → copy 回读逐元素校验）。仅自检、不翻转能力位、不碰 demo 帧。
+    bool hc_recorded = false;
+    if (!hizcull_selftest_done_) {
+        hizcull_selftest_done_ = true;
+        hc_recorded = RecordHiZCullSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1130,6 +1185,7 @@ void WebGPURhiDevice::EndFrame() {
     if (hz_recorded) KickHiZDownsampleSelfTestReadback();
     if (hzp_recorded) KickHiZPyramidSelfTestReadback();
     if (cb_recorded) KickComputeBindSelfTestReadback();
+    if (hc_recorded) KickHiZCullSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -3039,6 +3095,9 @@ void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle,
     cur_compute_named_offset_ = 0;
     cur_compute_named_size_   = 0;
     if (!compute_named_staging_.empty()) {
+        // WGSL uniform struct 尺寸按 16B 向上取整；绑定字节数须 ≥ 该尺寸，否则校验失败
+        //（如末成员 i32@96 → 暂存 100B，而 struct 取整为 112B）。补零至 16B 倍数后整块上传。
+        compute_named_staging_.resize((compute_named_staging_.size() + 15u) & ~size_t(15), 0);
         const uint64_t off = AllocUboVersion(compute_named_staging_.data(), compute_named_staging_.size());
         if (off != UINT64_MAX) {
             cur_compute_named_buffer_ = ubo_ring_;
@@ -4124,6 +4183,161 @@ void WebGPURhiDevice::KickComputeBindSelfTestReadback() {
     ctx->rb_out = cb_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     cb_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kCbOutBytes, OnComputeBindMapped, ctx);
+}
+
+// B3b-9：Hi-Z 遮挡剔除真链路自检。手译引擎 HiZCullPass compute（builtin_passes.cpp
+// kHiZCullShaderSourceVK）为 WGSL：AABB SSBO（group3 b0）→ 8 角经命名 uniform u_view_projection
+// 投影 → NDC/UV → off-screen 拒绝 → 由屏幕像素跨度选 mip → 5 tab Hi-Z 采样取 max 与 AABB 最近深度
+// 比较 → 写可见性 SSBO（group3 b1）。Hi-Z 纹理经 SetComputeTextureSampler（group2 b0）句柄绑定，
+// textureLod 改为 textureLoad-at-mip（点采样 max 金字塔对遮挡判定保守正确；多级采样已由 B3b-6/7 证）。
+// 经引擎真实 compute API 面（命名 uniform + 句柄采样 + 双 SSBO）跑通，证明该消费方着色器 WebGPU 可用。
+bool WebGPURhiDevice::RecordHiZCullSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    static const char* kHiZCullWGSL = R"WGSL(// dse-wgsl
+struct AABB { min_point : vec4<f32>, max_point : vec4<f32>, };
+@group(3) @binding(0) var<storage, read_write> aabbs : array<AABB>;
+@group(3) @binding(1) var<storage, read_write> visibility : array<u32>;
+@group(2) @binding(0) var u_hiz_texture : texture_2d<f32>;
+struct PC {
+  @align(16) u_view_projection : mat4x4<f32>,
+  @align(16) u_screen_size     : vec2<f32>,
+  @align(16) u_mip_count       : i32,
+  @align(16) u_object_count    : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+
+fn sample_hiz(uv : vec2<f32>, mip : i32) -> f32 {
+  // 基础（mip0）尺寸用无 level 形式取（textureDimensions 的运行期 level 形式在部分
+  // D3D12/Tint 组合下会触发设备移除）；按 mip 右移得该级尺寸，coord 钳制后点采样。
+  let base = vec2<f32>(textureDimensions(u_hiz_texture));
+  let dim = max(base / f32(1 << u32(mip)), vec2<f32>(1.0));
+  let coord = vec2<i32>(clamp(uv * dim, vec2<f32>(0.0), dim - vec2<f32>(1.0)));
+  return textureLoad(u_hiz_texture, coord, mip).r;
+}
+
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_object_count) { return; }
+  let aabb_min = aabbs[idx].min_point.xyz;
+  let aabb_max = aabbs[idx].max_point.xyz;
+  var ndc_min = vec2<f32>(1.0);
+  var ndc_max = vec2<f32>(-1.0);
+  var nearest_z = 1.0;
+  for (var i = 0; i < 8; i = i + 1) {
+    let corner = vec3<f32>(
+      select(aabb_min.x, aabb_max.x, (i & 1) != 0),
+      select(aabb_min.y, aabb_max.y, (i & 2) != 0),
+      select(aabb_min.z, aabb_max.z, (i & 4) != 0));
+    let clip = pc.u_view_projection * vec4<f32>(corner, 1.0);
+    if (clip.w <= 0.0) { visibility[idx] = 1u; return; }
+    let ndc = clip.xyz / clip.w;
+    ndc_min = min(ndc_min, ndc.xy);
+    ndc_max = max(ndc_max, ndc.xy);
+    nearest_z = min(nearest_z, ndc.z);
+  }
+  var uv_min = ndc_min * 0.5 + 0.5;
+  var uv_max = ndc_max * 0.5 + 0.5;
+  uv_min = clamp(uv_min, vec2<f32>(0.0), vec2<f32>(1.0));
+  uv_max = clamp(uv_max, vec2<f32>(0.0), vec2<f32>(1.0));
+  if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+    visibility[idx] = 0u; return;
+  }
+  let size_pixels = (uv_max - uv_min) * pc.u_screen_size;
+  let max_dim = max(size_pixels.x, size_pixels.y);
+  var mip_level = select(0.0, ceil(log2(max(max_dim, 1.0))), max_dim > 1.0);
+  mip_level = clamp(mip_level, 0.0, f32(pc.u_mip_count - 1));
+  let mip = i32(mip_level);
+  let test_depth = nearest_z * 0.5 + 0.5 - 0.005;
+  let uv_center = (uv_min + uv_max) * 0.5;
+  let h0 = sample_hiz(uv_center, mip);
+  let h1 = sample_hiz(uv_min, mip);
+  let h2 = sample_hiz(uv_max, mip);
+  let h3 = sample_hiz(vec2<f32>(uv_max.x, uv_min.y), mip);
+  let h4 = sample_hiz(vec2<f32>(uv_min.x, uv_max.y), mip);
+  let max_hiz = max(max(h0, h1), max(max(h2, h3), h4));
+  visibility[idx] = select(1u, 0u, test_depth > max_hiz);
+}
+)WGSL";
+
+    if (!hc_shader_) hc_shader_ = CreateComputeShaderEx("", "", "", 2, 0, 1, 80, kHiZCullWGSL);
+    if (!hc_aabb_) {
+        // 4 个 AABB（min.xyz/max.xyz，各 vec4 占位 w=0）：单位 VP 下 NDC==世界坐标。
+        //  ①前景可见 z[-0.8,-0.6]；②背后遮挡 z[0.6,0.8]；③出屏 xy[1.5,2.0]；④中景可见 z[-0.2,0]。
+        const float aabbs[kHcObjCount * 8] = {
+            -0.5f, -0.5f, -0.8f, 0.0f,   0.5f, 0.5f, -0.6f, 0.0f,
+            -0.5f, -0.5f,  0.6f, 0.0f,   0.5f, 0.5f,  0.8f, 0.0f,
+             1.5f,  1.5f, -0.5f, 0.0f,   2.0f, 2.0f, -0.4f, 0.0f,
+            -0.2f, -0.2f, -0.2f, 0.0f,   0.0f, 0.0f,  0.0f, 0.0f,
+        };
+        GpuBufferDesc d; d.size = sizeof(aabbs); d.usage = GpuBufferUsage::kStorage;
+        hc_aabb_ = CreateGpuBuffer(d, aabbs).raw();
+    }
+    if (!hc_vis_) {
+        GpuBufferDesc d; d.size = kHcVisBytes; d.usage = GpuBufferUsage::kStorage;
+        hc_vis_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!hc_hiz_tex_) {
+        hc_hiz_tex_ = CreateTextureImpl(
+            WGPUTextureDimension_2D, WGPUTextureViewDimension_2D, kHcHizDim, kHcHizDim, 1,
+            WGPUTextureFormat_R32Float,
+            WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+            1, 1, {nullptr}, TextureSamplerDesc::FromLinearFlag(false));
+        const TextureEntry* hte = FindTexture(hc_hiz_tex_);
+        if (hte && hte->texture) {
+            // 恒值 0.5 填充（queue write 无 256 行对齐约束）。
+            std::vector<float> hiz(kHcHizDim * kHcHizDim, kHcHizDepth);
+            WGPUImageCopyTexture dst{};
+            dst.texture = hte->texture; dst.mipLevel = 0; dst.aspect = WGPUTextureAspect_All;
+            WGPUTextureDataLayout layout{};
+            layout.offset = 0; layout.bytesPerRow = kHcHizDim * 4u; layout.rowsPerImage = kHcHizDim;
+            WGPUExtent3D ext{kHcHizDim, kHcHizDim, 1};
+            wgpuQueueWriteTexture(queue_, &dst, hiz.data(), hiz.size() * 4u, &layout, &ext);
+        }
+    }
+    const TextureEntry* hte = FindTexture(hc_hiz_tex_);
+    if (!hc_shader_ || !hc_aabb_ || !hc_vis_ || !hc_hiz_tex_ || !hte || !hte->texture) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-9] Hi-Z 剔除自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经引擎 HiZCullPass 真实绑定面：双 SSBO（slot0 AABB / slot1 可见性）+ 句柄采样 Hi-Z + 命名 uniform。
+    const float kIdentity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    ResetDrawState();
+    CmdBindStorageBuffer(0, hc_aabb_, 0, kHcObjCount * 8u * 4u);
+    CmdBindStorageBuffer(1, hc_vis_, 0, kHcVisBytes);
+    SetComputeTextureSampler(0, hc_hiz_tex_);
+    SetComputeUniformMat4(hc_shader_, "u_view_projection", kIdentity);
+    SetComputeUniformVec2f(hc_shader_, "u_screen_size", 256.0f, 256.0f);
+    SetComputeUniformInt(hc_shader_, "u_mip_count", 1);
+    SetComputeUniformInt(hc_shader_, "u_object_count", static_cast<int>(kHcObjCount));
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(hc_shader_, (kHcObjCount + 63u) / 64u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kHcVisBytes;
+    hc_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_vis = FindBuffer(hc_vis_);
+    if (!hc_rb_out_ || !be_vis || !be_vis->buffer) {
+        if (hc_rb_out_) { wgpuBufferRelease(hc_rb_out_); hc_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_vis->buffer, 0, hc_rb_out_, 0, kHcVisBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickHiZCullSelfTestReadback() {
+    if (!hc_rb_out_) return;
+    auto* ctx = new HiZCullSelfTestCtx();
+    ctx->rb_out = hc_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    hc_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kHcVisBytes, OnHiZCullMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
