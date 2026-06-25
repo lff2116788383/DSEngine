@@ -834,6 +834,25 @@ private:
     BufferHandle t44_vis_{};                      ///< 可见性 SSBO（group3 b1）
     WGPUBuffer   t44_rb_out_ = nullptr;           ///< 可见性回读缓冲（MapRead|CopyDst）
 
+    // --- Task 5 Subtask 1 离屏自检（CSM 方向光阴影深度图采样：①阴影深度趟把中心遮挡 quad(z=0.3)
+    //   渲入 32×32 Depth32 atlas；②前向趟把 atlas 作 texture_depth_2d 经 textureLoad 3×3 PCF 采样比较
+    //   （receiverDepth=0.6）渲到 64×64 RGBA16Float RT → copy 回读校验 中心受遮挡为暗、四角受光为亮。
+    //   证明「阴影 pass 写 atlas → 前向 pass 采样」的跨 pass 深度图采样能力，离屏隔离、不翻能力位）---
+    bool t51_csm_selftest_done_ = false;
+    bool RecordCSMShadowSelfTest();          ///< 录制 阴影深度趟 + 前向采样趟 + copy 颜色→回读缓冲
+    void KickCSMShadowSelfTestReadback();    ///< 提交后发起异步 map 回读校验
+    unsigned int t51_shadow_rt_   = 0;       ///< shadow atlas RT（含 Depth32 深度附件，TextureBinding 可采样）
+    unsigned int t51_color_rt_    = 0;       ///< 离屏 color RT（RGBA16Float + CopySrc）
+    unsigned int t51_occ_program_ = 0;       ///< 遮挡 quad 程序（写深度，pos.xyz@loc0）
+    unsigned int t51_occ_pso_     = 0;       ///< 遮挡 PSO（depth test/write on、cull none）
+    unsigned int t51_recv_program_ = 0;      ///< 前向接收程序（采样 atlas，pos.xy@loc0 + uv@loc1）
+    unsigned int t51_recv_pso_    = 0;       ///< 前向 PSO（无深度/无剔除/blend off）
+    unsigned int t51_occ_vbo_     = 0;       ///< 遮挡 quad 顶点缓冲（pos.xyz，stride 12）
+    unsigned int t51_occ_ibo_     = 0;       ///< 遮挡 quad 索引缓冲（6 索引，UInt32）
+    unsigned int t51_recv_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy + uv，stride 16）
+    unsigned int t51_recv_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t51_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);

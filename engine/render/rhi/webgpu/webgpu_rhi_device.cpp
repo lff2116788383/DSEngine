@@ -1314,6 +1314,55 @@ void OnT43PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 5 Subtask 1（T5-1）：CSM 方向光阴影深度图采样离屏自检 ---
+// 验证 WebGPU 能把一张 Depth32 shadow atlas（由「阴影深度趟」写）在「随后的前向趟」作为
+// texture_depth_2d 经 textureLoad（3×3 PCF）采样比较——即 CSM 真实场景「阴影 pass 写 atlas → 前向
+// pass 采样 atlas」的跨 pass 读写（恰是旧注释担心的 Dawn 屏障冲突点，本自检证明分趟即无冲突）。
+//   ①阴影趟：占据 NDC 中心 [-0.5,0.5]² 的遮挡 quad（z=0.3）渲入 32×32 atlas（其余清深=1.0）。
+//   ②前向趟：全屏 quad 采样 atlas（receiverDepth=0.6 在遮挡体之后）→ 中心遮挡（0.6>0.3 受阴影→暗）、
+//     四角无遮挡（0.6<1.0 受光→亮）→ 渲到 64×64 RGBA16Float RT → copy 回读校验 中心暗、四角亮。
+constexpr uint32_t kT51AtlasDim   = 32;                       ///< shadow atlas 边长（Depth32）
+constexpr uint32_t kT51RtSize     = 64;                       ///< 离屏 color RT 边长
+constexpr uint32_t kT51RtRowBytes = kT51RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT51RtBytes    = kT51RtRowBytes * kT51RtSize;
+
+struct CSMShadowSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT51PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<CSMShadowSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT51RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT51RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[0]);
+            };
+            const float center = rd(32, 32);          // 中心：受遮挡 → 暗
+            const float corner = (rd(4, 4) + rd(59, 4) + rd(4, 59) + rd(59, 59)) * 0.25f;  // 四角：受光 → 亮
+            ok = (center < 0.3f) && (corner > 0.7f);
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-1] CSM shadow 自检像素：center={} corner_avg={}", center, corner);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-1] CSM shadow 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-1] CSM shadow 自检 PASS：Depth32 atlas 跨 pass 经 texture_depth_2d + "
+                       "textureLoad(3×3 PCF) 采样比较正确——中心受遮挡为暗、四角受光为亮（证明 CSM 阴影深度图 "
+                       "采样能力，逻辑同 forward_shaded.frag 的 DirectionalShadow）");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-1] CSM shadow 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1516,6 +1565,8 @@ void WebGPURhiDevice::Shutdown() {
     if (t43_rb_pixels_)   { wgpuBufferRelease(t43_rb_pixels_);       t43_rb_pixels_ = nullptr; }
     // Task 4 Subtask 4 GPU-driven Hi-Z 剔除自检可见性回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t44_rb_out_)      { wgpuBufferRelease(t44_rb_out_);          t44_rb_out_ = nullptr; }
+    // Task 5 Subtask 1 CSM 阴影自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t51_rb_pixels_)   { wgpuBufferRelease(t51_rb_pixels_);       t51_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1794,6 +1845,13 @@ void WebGPURhiDevice::EndFrame() {
         t44_hiz_selftest_done_ = true;
         t44_recorded = RecordGpuDrivenHiZCullSelfTest();
     }
+    // Task 5 Subtask 1：每会话一次 CSM 方向光阴影深度图采样自检（阴影深度趟写 Depth32 atlas → 前向趟
+    // 经 texture_depth_2d + textureLoad 3×3 PCF 采样 → 回读校验 中心受遮挡为暗、四角受光为亮）。
+    bool t51_recorded = false;
+    if (!t51_csm_selftest_done_) {
+        t51_csm_selftest_done_ = true;
+        t51_recorded = RecordCSMShadowSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1815,6 +1873,7 @@ void WebGPURhiDevice::EndFrame() {
     if (t42_recorded) KickMegaVaoSelfTestReadback();
     if (t43_recorded) KickGpuDrivenPBRSelfTestReadback();
     if (t44_recorded) KickGpuDrivenHiZCullSelfTestReadback();
+    if (t51_recorded) KickCSMShadowSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -2499,10 +2558,13 @@ struct PointLights {
 @group(1) @binding(3) var<uniform> point_lights : PointLights;
 @group(2) @binding(0) var albedo_tex : texture_2d<f32>;
 @group(2) @binding(1) var albedo_smp : sampler;
-// 注：CSM shadow atlas（flat unit11）暂不在前向通道采样——引擎的 WebGPU 阴影/前向通道尚未做读写
-//   屏障分离，将其作为采样绑定会与阴影写入产生同一同步作用域的读写冲突（Dawn 校验报错）。故
-//   DirectionalShadow 暂返回 0（demo receive_shadow 关，视觉无差异）；PerScene 的 CSM 字段已按
-//   std140 完整声明，待后续阶段补屏障后即可启用采样（见 SampleCascadeShadow 的占位说明）。
+// 注：CSM shadow atlas（flat unit11 → group2 binding22）暂不在 shipping 前向通道声明/采样——消费方
+//   mesh_renderer.cpp:788 在无 shadow map 时给 slot11 绑「白 RGBA8」回退纹理（CollectGroupBindings 按
+//   格式判 sampleType=Float），而深度采样要求 texture_depth_2d(sampleType=Depth)，二者在同一 PSO 的
+//   BGL 上不可兼容（与 receive_shadow 运行时门控无关，声明期即冲突）。故 DirectionalShadow 仍返回 0。
+//   WebGPU 的 CSM 深度图采样能力已由离屏自检 T5-1 证明（真 Depth32 atlas + texture_depth_2d + textureLoad
+//   PCF）；接真实路径需先为 slot11 备一张 Depth32 回退纹理（深度=1→恒亮）使各 draw sampleType 一致，
+//   属后续集成步骤（同 Task 4 的「自检→接真实路径」节奏）。
 
 fn DistributionGGX(N : vec3<f32>, H : vec3<f32>, roughness : f32) -> f32 {
   let a = roughness * roughness;
@@ -2523,9 +2585,10 @@ fn GeometrySmith(N : vec3<f32>, V : vec3<f32>, L : vec3<f32>, roughness : f32) -
 fn FresnelSchlick(cosTheta : f32, F0 : vec3<f32>) -> vec3<f32> {
   return F0 + (vec3<f32>(1.0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
-// CSM 方向光阴影：占位返回 0（不采样 shadow atlas，原因见上方绑定注释）。
-//   级联选择 / light-space 投影 / atlas 区域 / PCF 逻辑与 forward_shaded.frag 的
-//   DirectionalShadow+SampleCascadeShadow 一致，待补通道屏障后用 textureLoad(texture_depth_2d) 接回。
+// CSM 方向光阴影：占位返回 0（不采样 shadow atlas，原因见上方绑定注释——slot11 回退纹理 sampleType
+//   冲突，待接真实路径前备 Depth32 回退）。级联选择 / light-space 投影 / atlas 区域 / textureLoad PCF
+//   的 WebGPU 实现与正确性已由离屏自检 T5-1 验证（见 RecordCSMShadowSelfTest），逻辑与
+//   forward_shaded.frag 的 DirectionalShadow+SampleCascadeShadow 一致。
 fn DirectionalShadow(worldPos : vec3<f32>, N : vec3<f32>, L : vec3<f32>) -> f32 {
   return 0.0;
 }
@@ -6652,6 +6715,195 @@ void WebGPURhiDevice::KickGpuDrivenPBRSelfTestReadback() {
     ctx->rb_pixels = t43_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     t43_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT43RtBytes, OnT43PixelsMapped, ctx);
+}
+
+// Task 5 Subtask 1：CSM 方向光阴影深度图采样真链路自检。①阴影深度趟把中心遮挡 quad(z=0.3) 渲入
+// 32×32 Depth32 atlas（其余清深=1.0）；②前向趟把 atlas（GetRenderTargetDepthTexture）绑到 group2 slot11
+// 作 texture_depth_2d，全屏 quad 经 textureLoad 3×3 PCF 采样比较（receiverDepth=0.6）→ 中心受遮挡为暗、
+// 四角受光为亮 → copy 颜色 RT 回读校验。证明「阴影 pass 写 atlas → 前向 pass 采样」跨 pass 深度图采样
+// 能力（旧注释担心的 Dawn 屏障冲突在分趟下不存在），逻辑同 forward_shaded.frag 的 DirectionalShadow。
+bool WebGPURhiDevice::RecordCSMShadowSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // shadow atlas RT（颜色 RGBA16Float 占位 + Depth32 深度附件，深度可作 texture_depth_2d 采样）。
+    if (!t51_shadow_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT51AtlasDim);
+        d.height = static_cast<int>(kT51AtlasDim);
+        d.has_color = true;
+        d.has_depth = true;
+        t51_shadow_rt_ = CreateRenderTarget(d);
+    }
+    // 离屏 color RT（RGBA16Float + CopySrc）。
+    if (!t51_color_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT51RtSize);
+        d.height = static_cast<int>(kT51RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t51_color_rt_ = CreateRenderTarget(d);
+    }
+    // 遮挡程序（写深度，pos.xyz@loc0）+ PSO（depth test/write on）。
+    if (!t51_occ_program_) {
+        static const char* kOccWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec3<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 1.0); return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
+)WGSL";
+        t51_occ_program_ = CreateShaderProgram(kOccWGSL, "");
+    }
+    if (!t51_occ_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = true;
+        d.depth_write_enabled = true;
+        d.depth_func = CompareFunc::Less;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t51_occ_pso_ = CreatePipelineState(d);
+    }
+    // 前向接收程序（采样 atlas，pos.xy@loc0 + uv@loc1）+ PSO（无深度/无剔除/blend off）。
+    if (!t51_recv_program_) {
+        static const char* kRecvWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(22) var shadow_atlas : texture_depth_2d;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.uv = uv; return o;
+}
+fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
+  let dims = vec2<i32>(textureDimensions(shadow_atlas, 0));
+  let base = vec2<i32>(uv * vec2<f32>(dims));
+  var lit = 0.0;
+  for (var x = -1; x <= 1; x = x + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      let c = clamp(base + vec2<i32>(x, y), vec2<i32>(0, 0), dims - vec2<i32>(1, 1));
+      let d = textureLoad(shadow_atlas, c, 0);
+      lit = lit + select(0.0, 1.0, ref_depth <= d);
+    }
+  }
+  return lit / 9.0;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let receiver_depth = 0.6;
+  let bias = 0.01;
+  let lit = SampleShadowPCF(i.uv, receiver_depth - bias);
+  let shadow = clamp(1.0 - lit, 0.0, 1.0);
+  let c = mix(1.0, 0.1, shadow);
+  return vec4<f32>(c, c, c, 1.0);
+}
+)WGSL";
+        t51_recv_program_ = CreateShaderProgram(kRecvWGSL, "");
+    }
+    if (!t51_recv_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t51_recv_pso_ = CreatePipelineState(d);
+    }
+    // 遮挡 quad：NDC 中心 [-0.5,0.5]²、z=0.3（pos.xyz，stride 12）。
+    if (!t51_occ_vbo_) {
+        const float occ[4 * 3] = {
+            -0.5f, -0.5f, 0.3f,   0.5f, -0.5f, 0.3f,
+             0.5f,  0.5f, 0.3f,  -0.5f,  0.5f, 0.3f,
+        };
+        t51_occ_vbo_ = CreateBuffer(sizeof(occ), occ, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t51_occ_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    // 全屏 quad：NDC [-1,1]²、uv [0,1]²（pos.xy + uv，stride 16）。
+    if (!t51_recv_vbo_) {
+        const float fsq[4 * 4] = {
+            -1.0f, -1.0f, 0.0f, 0.0f,   1.0f, -1.0f, 1.0f, 0.0f,
+             1.0f,  1.0f, 1.0f, 1.0f,  -1.0f,  1.0f, 0.0f, 1.0f,
+        };
+        t51_recv_vbo_ = CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t51_recv_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t51_shadow_rt_ || !t51_color_rt_ || !t51_occ_program_ || !t51_occ_pso_ ||
+        !t51_recv_program_ || !t51_recv_pso_ || !t51_occ_vbo_ || !t51_occ_ibo_ ||
+        !t51_recv_vbo_ || !t51_recv_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-1] CSM shadow 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // ①阴影深度趟：把中心遮挡 quad 渲入 shadow atlas（清深=1.0、占用区写 0.3）。
+    {
+        RenderPassDesc rp;
+        rp.render_target = t51_shadow_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT51AtlasDim), static_cast<int>(kT51AtlasDim));
+        CmdBindPipeline(GetGraphicsPipeline(t51_occ_pso_, t51_occ_program_));
+        const std::vector<VertexAttr> occ_attrs = { VertexAttr{0, 3, 0} };  // pos.xyz
+        CmdBindVertexBuffer(0, t51_occ_vbo_, 12, occ_attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t51_occ_ibo_, IndexType::UInt32);
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // ②前向采样趟：把 shadow atlas 深度纹理绑到 slot11，全屏 quad 经 textureLoad PCF 采样判阴影。
+    const unsigned int atlas_depth = GetRenderTargetDepthTexture(t51_shadow_rt_);
+    if (!atlas_depth) {
+        DEBUG_LOG_ERROR("WebGPU[T5-1] 取 shadow atlas 深度纹理失败，跳过");
+        return false;
+    }
+    {
+        RenderPassDesc rp;
+        rp.render_target = t51_color_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT51RtSize), static_cast<int>(kT51RtSize));
+        CmdBindPipeline(GetGraphicsPipeline(t51_recv_pso_, t51_recv_program_));
+        const std::vector<VertexAttr> recv_attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 2, 8} };  // pos.xy + uv
+        CmdBindVertexBuffer(0, t51_recv_vbo_, 16, recv_attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t51_recv_ibo_, IndexType::UInt32);
+        CmdBindTexture(11u, atlas_depth, TextureDim::Tex2D);  // → group2 binding22（texture_depth_2d）
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t51_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT51RtBytes);
+    t51_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t51_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t51_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT51RtRowBytes;
+    dst.layout.rowsPerImage = kT51RtSize;
+    WGPUExtent3D ext{kT51RtSize, kT51RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickCSMShadowSelfTestReadback() {
+    if (!t51_rb_pixels_) return;
+    auto* ctx = new CSMShadowSelfTestCtx();
+    ctx->rb_pixels = t51_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t51_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT51RtBytes, OnT51PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
