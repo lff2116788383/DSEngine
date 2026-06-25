@@ -10,6 +10,10 @@
 #include "engine/base/debug.h"
 #include "engine/render/rhi/draw_executor_common.h"
 #include "engine/render/rhi/gpu_scene_types.h"
+// B3b-12 hair 全 4 趟自检直接取引擎真 compute 源（同 engine 层，无层级违规）。
+#include "engine/render/hair/hair_compute_shaders.h"
+
+#include <glm/glm.hpp>
 
 #include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
@@ -835,30 +839,116 @@ void OnDDGIMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
-// --- B3b-12 头发物理（hair Verlet integration）核心真链路自检（常量 / ctx / 回读校验回调）---
-//   引擎 HairInstance::Simulate 真实 compute（hair_compute_shaders.h::kHairIntegrateSource，GLSL 430）
-//   Pass 1 核心：每顶点 Verlet 积分 —— 读 pos_cur/pos_prev/pos_rest（4×SSBO group3 b0..3），根顶点
-//   （rest.w<0.001）固定且 pos_prev←cur；非根顶点 velocity=(cur-prev)·(1-damping) + 重力·dt² + 风力·dt²
-//   → 写回 pos_cur、pos_prev←旧 cur。自检布置：1 strand / 4 顶点（v0 根 + v1..v3）、dt=1、damping=0.2、
-//   重力(0,-1,0)·2、风=0（绕开 hash11 风扰动对校验的影响，仍保留 hash 路径执行）、v1 给非零初速度验阻尼。
-//   回读 pos_cur + pos_prev 共 8×vec4 逐分量校验 == CPU 预期（根固定、阻尼、重力积分均正确）。
-//   证明该消费方核心 compute 逻辑 WebGPU 可用。离屏隔离、不翻能力位。
-constexpr uint32_t kHrVerts    = 4;
-constexpr uint32_t kHrPosBytes = kHrVerts * 16u;            // 每缓冲 4×vec4<f32>
-constexpr uint32_t kHrRbBytes  = kHrPosBytes * 2u;          // pos_cur + pos_prev
-// CPU 预期（见上方布置推导）：pos_cur 与 pos_prev 各 4×vec4。
-const float kHrExpCur[kHrVerts][4] = {
-    {0.0f, 4.0f,  0.0f, 0.0f},   // v0 根：不动
-    {0.0f, 0.92f, 0.0f, 1.0f},   // v1：(0,3,0)+vel(0,-0.08,0)+g(0,-2,0)
-    {0.0f, 0.0f,  0.0f, 1.0f},   // v2：(0,2,0)+g(0,-2,0)
-    {0.0f, -1.0f, 0.0f, 1.0f},   // v3：(0,1,0)+g(0,-2,0)
+// --- B3b-12 头发物理（hair）全 4 趟真链路自检（常量 / CPU 复算参考 / ctx / 回读校验回调）---
+//   引擎 HairInstance::Simulate 真实 compute（hair_compute_shaders.h::kHair*SourceWGSL，本自检直接取
+//   引擎真源 4 个 WGSL，非另写镜像）。按 hair_system.cpp::SimulateCompute 同序在同一 compute pass 内跑
+//   全 4 趟（趟间 WebGPU 自动按 storage 资源依赖串行化）：
+//     ①integrate（4×SSBO b0..3 + 12 uniform）根顶点固定 / velocity·(1-damping)+重力·dt²+风力·dt²；
+//     ②local_shape（cur/rest/strand b0..2 + 3 uniform）向 rest+root_offset / rest 双 mix 拉回；
+//     ③length（cur/rest/strand b0..2 + 1 uniform）逐段长度约束（i==0 仅移子，余对半修正）；
+//     ④tangent（cur/tangent/strand b0..2 + 3 uniform）相邻差分写归一化切线、保留 .w 厚度。
+//   自检布置：1 strand / 4 顶点（v0 根 + v1..v3）、dt=1、damping=0.2、重力(0,-1,0)·2、风=0（绕开
+//   hash11 风扰动对校验的影响，仍保留 hash 路径执行）、st_local=0.5/st_global=0.3、v1 给非零初速度验阻尼。
+//   末趟后回读 pos_cur + tangent 共 8×vec4，逐分量校验 == C++ 同序复算（HairRefChain，逐句镜像 4 趟）。
+//   证明该消费方全 4 趟 compute 链路 WebGPU 可用。离屏隔离、不翻能力位。
+constexpr uint32_t kHrStrands       = 1;
+constexpr uint32_t kHrVerts         = 4;                    // 1 strand × 4 顶点
+constexpr int      kHrVertsPerStr   = 4;
+constexpr uint32_t kHrPosBytes      = kHrVerts * 16u;       // 每缓冲 4×vec4<f32>
+constexpr uint32_t kHrRbBytes       = kHrPosBytes * 2u;     // pos_cur + tangent
+constexpr float    kHrDt            = 1.0f;
+constexpr float    kHrDamping       = 0.2f;
+constexpr float    kHrGw            = 2.0f;                 // 重力幅值（方向 (0,-1,0)）
+constexpr float    kHrStLocal       = 0.5f;
+constexpr float    kHrStGlobal      = 0.3f;
+// 初始缓冲（xyzw）。pos_*.w：根 w=0（判根）、非根 w=1；tangent.w=厚度（4 趟后须保留）。
+const float kHrInitCur[kHrVerts * 4] = {
+    0.0f, 4.0f, 0.0f, 0.0f,   // v0 根
+    0.0f, 3.0f, 0.0f, 1.0f,
+    0.0f, 2.0f, 0.0f, 1.0f,
+    0.0f, 1.0f, 0.0f, 1.0f,
 };
-const float kHrExpPrev[kHrVerts][4] = {
-    {0.0f, 4.0f, 0.0f, 0.0f},    // v0 根：pos_prev←cur
-    {0.0f, 3.0f, 0.0f, 1.0f},    // v1：pos_prev←旧 cur
-    {0.0f, 2.0f, 0.0f, 1.0f},
-    {0.0f, 1.0f, 0.0f, 1.0f},
+const float kHrInitPrev[kHrVerts * 4] = {
+    0.0f, 4.0f, 0.0f, 0.0f,
+    0.0f, 3.1f, 0.0f, 1.0f,   // v1 非零初速度（prev.y=3.1 → vel.y=-0.1）验阻尼
+    0.0f, 2.0f, 0.0f, 1.0f,
+    0.0f, 1.0f, 0.0f, 1.0f,
 };
+const float kHrInitRest[kHrVerts * 4] = {
+    0.0f, 4.0f, 0.0f, 0.0f,   // 段静止长度均 1（相邻 y 差 1）
+    0.0f, 3.0f, 0.0f, 1.0f,
+    0.0f, 2.0f, 0.0f, 1.0f,
+    0.0f, 1.0f, 0.0f, 1.0f,
+};
+const float kHrInitTan[kHrVerts * 4] = {
+    0.0f, 0.0f, 0.0f, 1.00f,  // 仅 .w 厚度须被保留
+    0.0f, 0.0f, 0.0f, 0.75f,
+    0.0f, 0.0f, 0.0f, 0.50f,
+    0.0f, 0.0f, 0.0f, 0.25f,
+};
+
+// C++ 同序复算全 4 趟（逐句镜像 kHair*SourceWGSL）：out_cur/out_tan 各 4×vec4。
+inline void HairRefChain(float out_cur[kHrVerts * 4], float out_tan[kHrVerts * 4]) {
+    glm::vec3 cur[kHrVerts], prev[kHrVerts], rest[kHrVerts];
+    float cur_w[kHrVerts], tan_w[kHrVerts];
+    for (uint32_t i = 0; i < kHrVerts; ++i) {
+        cur[i]  = glm::vec3(kHrInitCur[i*4], kHrInitCur[i*4+1], kHrInitCur[i*4+2]);
+        prev[i] = glm::vec3(kHrInitPrev[i*4], kHrInitPrev[i*4+1], kHrInitPrev[i*4+2]);
+        rest[i] = glm::vec3(kHrInitRest[i*4], kHrInitRest[i*4+1], kHrInitRest[i*4+2]);
+        cur_w[i] = kHrInitCur[i*4+3];
+        tan_w[i] = kHrInitTan[i*4+3];
+    }
+    const glm::vec3 grav = glm::vec3(0.0f, -1.0f, 0.0f) * kHrGw * kHrDt * kHrDt;  // 风=0
+    // ① integrate
+    for (uint32_t i = 0; i < kHrVerts; ++i) {
+        if (kHrInitRest[i*4+3] < 0.001f) continue;  // 根：cur 不动（pos_prev←cur 与 cur 输出无关）
+        glm::vec3 vel = (cur[i] - prev[i]) * (1.0f - kHrDamping);
+        cur[i] = cur[i] + vel + grav;
+    }
+    // ② local_shape（strand 0，root_offset 双 mix）
+    {
+        const uint32_t off = 0u, cnt = kHrVerts;
+        glm::vec3 root_off = cur[off] - rest[off];
+        for (uint32_t i = 1u; i < cnt; ++i) {
+            glm::vec3 n = cur[off+i];
+            n = glm::mix(n, rest[off+i] + root_off, kHrStLocal * 0.1f);
+            n = glm::mix(n, rest[off+i],            kHrStGlobal * 0.02f);
+            cur[off+i] = n;
+        }
+    }
+    // ③ length（strand 0，i==0 仅移子，余对半修正）
+    {
+        const uint32_t off = 0u, cnt = kHrVerts;
+        for (uint32_t i = 0u; i + 1u < cnt; ++i) {
+            glm::vec3 p0 = cur[off+i], p1 = cur[off+i+1u];
+            float rl = glm::length(rest[off+i+1u] - rest[off+i]);
+            glm::vec3 d = p1 - p0;
+            float cl = glm::length(d);
+            if (cl < 1e-7f) continue;
+            glm::vec3 tgt = p0 + d / cl * rl;
+            if (i == 0u) {
+                cur[off+i+1u] = tgt;
+            } else {
+                glm::vec3 c = (tgt - p1) * 0.5f;
+                cur[off+i]    = p0 - c;
+                cur[off+i+1u] = p1 + c;
+            }
+        }
+    }
+    // ④ tangent（相邻差分，保留 .w）
+    glm::vec3 tan[kHrVerts];
+    for (uint32_t vid = 0; vid < kHrVerts; ++vid) {
+        uint32_t li = vid % static_cast<uint32_t>(kHrVertsPerStr);
+        uint32_t cnt = kHrVerts;
+        if (li < cnt - 1u)      tan[vid] = glm::normalize(cur[vid+1u] - cur[vid]);
+        else if (li > 0u)       tan[vid] = glm::normalize(cur[vid] - cur[vid-1u]);
+        else                    tan[vid] = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
+    for (uint32_t i = 0; i < kHrVerts; ++i) {
+        out_cur[i*4]   = cur[i].x; out_cur[i*4+1] = cur[i].y; out_cur[i*4+2] = cur[i].z; out_cur[i*4+3] = cur_w[i];
+        out_tan[i*4]   = tan[i].x; out_tan[i*4+1] = tan[i].y; out_tan[i*4+2] = tan[i].z; out_tan[i*4+3] = tan_w[i];
+    }
+}
 
 struct HairSelfTestCtx {
     WGPUBuffer rb_out = nullptr;
@@ -871,25 +961,28 @@ void OnHairMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
         const float* v = static_cast<const float*>(
             wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kHrRbBytes));
         if (v) {
+            float exp_cur[kHrVerts * 4], exp_tan[kHrVerts * 4];
+            HairRefChain(exp_cur, exp_tan);
             ok = true;
+            const float* c = v;                  // pos_cur 区
             for (uint32_t i = 0; i < kHrVerts && ok; ++i) {
-                for (int c = 0; c < 4; ++c) {
-                    if (std::abs(v[i * 4 + c] - kHrExpCur[i][c]) > 1e-4f) {
+                for (int e = 0; e < 4; ++e) {
+                    if (std::abs(c[i*4+e] - exp_cur[i*4+e]) > 1e-4f) {
                         ok = false;
                         DEBUG_LOG_ERROR("WebGPU[B3b-12] hair 自检 pos_cur[{}] 失配：({},{},{},{}) 期望"
-                                        "({},{},{},{})", i, v[i*4], v[i*4+1], v[i*4+2], v[i*4+3],
-                                        kHrExpCur[i][0], kHrExpCur[i][1], kHrExpCur[i][2], kHrExpCur[i][3]);
+                                        "({},{},{},{})", i, c[i*4], c[i*4+1], c[i*4+2], c[i*4+3],
+                                        exp_cur[i*4], exp_cur[i*4+1], exp_cur[i*4+2], exp_cur[i*4+3]);
                     }
                 }
             }
-            const float* p = v + kHrVerts * 4u;
+            const float* t = v + kHrVerts * 4u;  // tangent 区
             for (uint32_t i = 0; i < kHrVerts && ok; ++i) {
-                for (int c = 0; c < 4; ++c) {
-                    if (std::abs(p[i * 4 + c] - kHrExpPrev[i][c]) > 1e-4f) {
+                for (int e = 0; e < 4; ++e) {
+                    if (std::abs(t[i*4+e] - exp_tan[i*4+e]) > 1e-4f) {
                         ok = false;
-                        DEBUG_LOG_ERROR("WebGPU[B3b-12] hair 自检 pos_prev[{}] 失配：({},{},{},{}) 期望"
-                                        "({},{},{},{})", i, p[i*4], p[i*4+1], p[i*4+2], p[i*4+3],
-                                        kHrExpPrev[i][0], kHrExpPrev[i][1], kHrExpPrev[i][2], kHrExpPrev[i][3]);
+                        DEBUG_LOG_ERROR("WebGPU[B3b-12] hair 自检 tangent[{}] 失配：({},{},{},{}) 期望"
+                                        "({},{},{},{})", i, t[i*4], t[i*4+1], t[i*4+2], t[i*4+3],
+                                        exp_tan[i*4], exp_tan[i*4+1], exp_tan[i*4+2], exp_tan[i*4+3]);
                     }
                 }
             }
@@ -899,11 +992,95 @@ void OnHairMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
         DEBUG_LOG_ERROR("WebGPU[B3b-12] hair 自检：结果回读映射失败 status={}", static_cast<int>(status));
     }
     if (ok) {
-        DEBUG_LOG_INFO("WebGPU[B3b-12] 头发物理自检 PASS：引擎 HairInstance Verlet 积分真 compute 逻辑"
-                       "（根顶点固定 + velocity·(1-damping) + 重力·dt² → 写回 pos_cur/pos_prev）经手译 WGSL"
-                       " 经 12 命名 uniform + 4×SSBO 跑出 pos_cur/pos_prev == CPU 预期");
+        DEBUG_LOG_INFO("WebGPU[B3b-12] 头发物理自检 PASS：引擎 HairInstance 全 4 趟真 compute 链路"
+                       "（integrate→local_shape→length→tangent）经手译 WGSL 同序跑出 pos_cur/tangent == CPU 复算");
     } else {
         DEBUG_LOG_ERROR("WebGPU[B3b-12] 头发物理自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
+// --- B3b-14 草地风场（grass wind）compute 正确性真链路自检（常量 / CPU 复算参考 / ctx / 回读校验回调）---
+//   grass_system.cpp 的风场 WGSL 在 modules 层（engine 层不能 include），故 RecordGrassSelfTest 内
+//   **内联一份镜像**（与 kGrassWindComputeSourceWGSL 逐句一致）。布置：4 个已知实例（pos/yaw/w/h/
+//   wind_phase/fade）+ 已知 uniform（wind_dir/speed/strength/turbulence/time/count）→ 每实例算 h*fade
+//   折叠 hf 的列主序风偏 mat4 → 回读逐元素校验 == C++ 同公式复算（GrassRefMatrix，镜像 CPU BuildWindMatrix）。
+constexpr uint32_t kGrInstances = 4;
+constexpr uint32_t kGrInBytes   = kGrInstances * 32u;       // 每实例 2×vec4（pos_yaw + wh_phase_fade）
+constexpr uint32_t kGrOutBytes  = kGrInstances * 64u;       // 每实例 mat4（列主序，16 float）
+// 已知实例：每行 8 float = pos.x,pos.y,pos.z,yaw, w,h,wind_phase,fade。
+const float kGrInst[kGrInstances * 8] = {
+     1.0f, 0.0f,  2.0f,  0.3f,   0.5f, 2.0f, 0.7f, 0.8f,
+     3.0f, 0.0f,  4.0f,  1.1f,   0.6f, 1.5f, 1.3f, 1.0f,
+    -2.0f, 1.0f,  0.0f, -0.5f,   0.4f, 2.5f, 2.1f, 0.6f,
+     0.0f, 0.0f, -3.0f,  2.0f,   0.7f, 1.0f, 0.2f, 0.9f,
+};
+// 已知 uniform。
+constexpr float kGrWindDirX = 0.6f, kGrWindDirY = 0.8f;
+constexpr float kGrWindSpeed = 1.5f, kGrWindStrength = 0.3f, kGrWindTurb = 0.1f, kGrTime = 2.5f;
+
+// C++ 同公式复算单实例风矩阵（逐句镜像 grass WGSL / CPU BuildWindMatrix）：out 16 float 列主序。
+inline void GrassRefMatrix(const float* inst, float out[16]) {
+    const float px = inst[0], py = inst[1], pz = inst[2], yaw = inst[3];
+    const float w = inst[4], h = inst[5], wind_phase = inst[6], fade = inst[7];
+    const float phase = wind_phase + kGrTime * kGrWindSpeed;
+    const float bend = std::sin(phase) * kGrWindStrength;
+    const float turb = std::sin(phase * 3.7f + wind_phase * 2.3f) * kGrWindTurb;
+    float total_bend = bend + turb;
+    total_bend = std::max(-0.436f, std::min(0.436f, total_bend));
+    const float rx = -total_bend * kGrWindDirY;
+    const float rz =  total_bend * kGrWindDirX;
+    const float cx = std::cos(rx), sx = std::sin(rx);
+    const float cz = std::cos(rz), sz = std::sin(rz);
+    const float cy = std::cos(yaw), sy = std::sin(yaw);
+    const float a00 = cz * cy, a01 = -sz, a02 = cz * sy;
+    const float a10 = sz * cy, a11 =  cz, a12 = sz * sy;
+    const float a20 = -sy,     a21 = 0.0f, a22 = cy;
+    const float r00 = a00,                 r01 = a01,                 r02 = a02;
+    const float r10 = cx * a10 - sx * a20, r11 = cx * a11 - sx * a21, r12 = cx * a12 - sx * a22;
+    const float r20 = sx * a10 + cx * a20, r21 = sx * a11 + cx * a21, r22 = sx * a12 + cx * a22;
+    const float hf = h * fade;
+    out[0]  = r00 * w;  out[1]  = r10 * w;  out[2]  = r20 * w;  out[3]  = 0.0f;  // col0
+    out[4]  = r01 * hf; out[5]  = r11 * hf; out[6]  = r21 * hf; out[7]  = 0.0f;  // col1
+    out[8]  = r02 * w;  out[9]  = r12 * w;  out[10] = r22 * w;  out[11] = 0.0f;  // col2
+    out[12] = px;       out[13] = py;       out[14] = pz;       out[15] = 1.0f;  // col3
+}
+
+struct GrassSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnGrassMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<GrassSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const float* v = static_cast<const float*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kGrOutBytes));
+        if (v) {
+            ok = true;
+            for (uint32_t i = 0; i < kGrInstances && ok; ++i) {
+                float exp[16];
+                GrassRefMatrix(&kGrInst[i * 8], exp);
+                for (int e = 0; e < 16 && ok; ++e) {
+                    if (std::abs(v[i * 16 + e] - exp[e]) > 1e-4f) {
+                        ok = false;
+                        DEBUG_LOG_ERROR("WebGPU[B3b-14] grass 自检 inst{} elem{} 失配：{} 期望 {}",
+                                        i, e, v[i * 16 + e], exp[e]);
+                    }
+                }
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-14] grass 自检：结果回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-14] grass 风场自检 PASS：grass_system 风场真 compute 逻辑"
+                       "（每实例 h*fade 折叠风偏 → 列主序 mat4）经内联镜像 WGSL 经 6 命名 uniform + 2×SSBO"
+                       " 跑出风矩阵 == CPU BuildWindMatrix 复算");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-14] grass 风场自检 FAIL");
     }
     if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
     delete ctx;
@@ -1860,6 +2037,12 @@ void WebGPURhiDevice::Shutdown() {
     if (hr_rb_out_)       { wgpuBufferRelease(hr_rb_out_);           hr_rb_out_ = nullptr; }
     // B3b-13 bloom 自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (bl_rb_out_)       { wgpuBufferRelease(bl_rb_out_);           bl_rb_out_ = nullptr; }
+    // B3b-14 grass 自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (gr_rb_out_)       { wgpuBufferRelease(gr_rb_out_);           gr_rb_out_ = nullptr; }
+    // GPU→CPU 异步双缓冲延迟回读 staging（map 飞行中的所有权仍由本设备持有；这里随设备销毁一并释放）。
+    for (int i = 0; i < 2; ++i) {
+        if (async_rb_staging_[i]) { wgpuBufferRelease(async_rb_staging_[i]); async_rb_staging_[i] = nullptr; }
+    }
     // Task 4 Subtask 1 MDI 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t41_rb_pixels_)   { wgpuBufferRelease(t41_rb_pixels_);       t41_rb_pixels_ = nullptr; }
     // Task 4 Subtask 2 Mega VAO 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
@@ -2147,8 +2330,8 @@ void WebGPURhiDevice::EndFrame() {
         dg_recorded = RecordDDGISelfTest();
     }
 
-    // B3b-12：每会话一次 hair 物理核心自检（手译 HairInstance Verlet 积分 compute → 根顶点固定 +
-    // velocity·(1-damping) + 重力·dt² → 写回 pos_cur/pos_prev → copy 回读逐分量校验）。
+    // B3b-12：每会话一次 hair 物理全 4 趟自检（取引擎真 WGSL，同序跑 integrate→local_shape→length→
+    // tangent 于单 compute pass → copy 输出 pos_cur+tangent → 回读逐分量校验 == C++ 同序复算）。
     bool hr_recorded = false;
     if (!hair_selftest_done_) {
         hair_selftest_done_ = true;
@@ -2161,6 +2344,14 @@ void WebGPURhiDevice::EndFrame() {
     if (!bloom_selftest_done_) {
         bloom_selftest_done_ = true;
         bl_recorded = RecordBloomSelfTest();
+    }
+
+    // B3b-14：每会话一次 grass 风场 compute 正确性自检（内联镜像 grass_system.cpp 风场 WGSL → 造已知
+    // 实例 → BeginComputePass/DispatchCompute/EndComputePass → copy 输出 mat4 → 回读 C++ 复算逐元素校验）。
+    bool gr_recorded = false;
+    if (!grass_selftest_done_) {
+        grass_selftest_done_ = true;
+        gr_recorded = RecordGrassSelfTest();
     }
 
     // Task 4 Subtask 1：每会话一次 MultiDrawIndexedIndirect 真链路自检（引擎-facing CmdBeginRenderPass +
@@ -2244,6 +2435,8 @@ void WebGPURhiDevice::EndFrame() {
     if (dg_recorded) KickDDGISelfTestReadback();
     if (hr_recorded) KickHairSelfTestReadback();
     if (bl_recorded) KickBloomSelfTestReadback();
+    if (gr_recorded) KickGrassSelfTestReadback();
+    KickDeferredReadback();  // GPU→CPU 异步双缓冲延迟回读：提交后对 pending staging 发 mapAsync
     if (t41_recorded) KickMultiDrawIndirectSelfTestReadback();
     if (t42_recorded) KickMegaVaoSelfTestReadback();
     if (t43_recorded) KickGpuDrivenPBRSelfTestReadback();
@@ -3311,6 +3504,76 @@ void WebGPURhiDevice::BindGpuBuffer(BufferHandle handle, uint32_t binding_point,
 
 void WebGPURhiDevice::DeleteGpuBuffer(BufferHandle handle) {
     DeleteBuffer(handle.raw());
+}
+
+// --- GPU→CPU 异步双缓冲延迟回读覆写（见头文件注释）---
+//   BeginGpuReadback：在 frame_encoder_（须不在任何 pass 内）上把源缓冲 CopyBufferToBuffer 到
+//   本帧写 staging[write]，记 pending、write^=1，返回「上一帧结果是否就绪」。EndFrame 提交后由
+//   KickDeferredReadback 对 pending staging 发 mapAsync，回调拷进 async_rb_result_ 并置 ready。
+bool WebGPURhiDevice::BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_ || size == 0) {
+        return async_rb_ready_;  // 无法在本帧录制拷贝（pass 内/无 encoder）→ 仅返回既有就绪态
+    }
+    const BufferEntry* be = FindBuffer(handle.raw());
+    if (!be || !be->buffer) return async_rb_ready_;
+
+    const int w = async_rb_write_idx_;
+    if (async_rb_mapped_[w]) {
+        // 目标 staging 仍在上一轮 map 飞行中（罕见，map 慢于 2 帧）→ 本帧跳过拷贝，避免写入已映射缓冲
+        return async_rb_ready_;
+    }
+    // 按需扩容 staging[w]（MapRead|CopyDst）。WGPU copy size 须 4 对齐（mat4 自然满足）。
+    const size_t need = (size + 3u) & ~size_t(3);
+    if (async_rb_capacity_[w] < need) {
+        if (async_rb_staging_[w]) { wgpuBufferRelease(async_rb_staging_[w]); async_rb_staging_[w] = nullptr; }
+        WGPUBufferDescriptor bd{};
+        bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+        bd.size  = need;
+        async_rb_staging_[w] = wgpuDeviceCreateBuffer(device_, &bd);
+        async_rb_capacity_[w] = async_rb_staging_[w] ? need : 0;
+    }
+    if (!async_rb_staging_[w]) return async_rb_ready_;
+
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be->buffer, offset, async_rb_staging_[w], 0, need);
+    async_rb_has_pending_  = true;
+    async_rb_pending_idx_  = w;
+    async_rb_pending_size_ = size;
+    async_rb_write_idx_    = 1 - w;
+    return async_rb_ready_;
+}
+
+const void* WebGPURhiDevice::GetLastReadbackResult(size_t* out_size) const {
+    if (out_size) *out_size = async_rb_ready_ ? async_rb_result_.size() : 0;
+    return async_rb_ready_ ? async_rb_result_.data() : nullptr;
+}
+
+void WebGPURhiDevice::OnDeferredReadbackMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<DeferredReadbackCtx*>(userdata);
+    WebGPURhiDevice* dev = ctx->dev;
+    const int idx = ctx->idx;
+    WGPUBuffer buf = dev->async_rb_staging_[idx];
+    if (status == WGPUBufferMapAsyncStatus_Success && buf) {
+        const void* m = wgpuBufferGetConstMappedRange(buf, 0, ctx->size);
+        if (m) {
+            dev->async_rb_result_.resize(ctx->size);
+            std::memcpy(dev->async_rb_result_.data(), m, ctx->size);
+            dev->async_rb_ready_ = true;
+        }
+        wgpuBufferUnmap(buf);
+    }
+    dev->async_rb_mapped_[idx] = false;
+    delete ctx;
+}
+
+void WebGPURhiDevice::KickDeferredReadback() {
+    if (!async_rb_has_pending_) return;
+    async_rb_has_pending_ = false;
+    const int p = async_rb_pending_idx_;
+    if (!async_rb_staging_[p]) return;
+    async_rb_mapped_[p] = true;
+    auto* ctx = new DeferredReadbackCtx{this, p, async_rb_pending_size_};
+    wgpuBufferMapAsync(async_rb_staging_[p], WGPUMapMode_Read, 0, async_rb_pending_size_,
+                       OnDeferredReadbackMapped, ctx);
 }
 
 void WebGPURhiDevice::UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) {
@@ -6405,123 +6668,99 @@ void WebGPURhiDevice::KickDDGISelfTestReadback() {
 bool WebGPURhiDevice::RecordHairSelfTest() {
     if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
 
-    // 手译 hair_compute_shaders.h::kHairIntegrateSource（GLSL 430）→ WGSL：每顶点 Verlet 积分。
-    // 4×SSBO（group3 b0..3）pos_cur/pos_prev/pos_rest/strand_info；12 命名 uniform（group1 b8）。
-    static const char* kHairWGSL = R"WGSL(// dse-wgsl
-@group(3) @binding(0) var<storage, read_write> pos_cur : array<vec4<f32>>;
-@group(3) @binding(1) var<storage, read_write> pos_prev : array<vec4<f32>>;
-@group(3) @binding(2) var<storage, read_write> pos_rest : array<vec4<f32>>;
-@group(3) @binding(3) var<storage, read_write> strand_info : array<vec2<u32>>;
-struct PC {
-  @align(16) u_num_vertices : i32,
-  @align(16) u_dt : f32,
-  @align(16) u_damping : f32,
-  @align(16) u_gx : f32,
-  @align(16) u_gy : f32,
-  @align(16) u_gz : f32,
-  @align(16) u_gw : f32,
-  @align(16) u_wx : f32,
-  @align(16) u_wy : f32,
-  @align(16) u_wz : f32,
-  @align(16) u_ww : f32,
-  @align(16) u_time : f32,
-};
-@group(1) @binding(8) var<uniform> pc : PC;
+    // 4 个着色器直接取引擎真源（hair_compute_shaders.h::kHair*SourceWGSL），与消费方
+    // hair_system.cpp::InitComputeShaders 同 push_constant_bytes（48/4/12/12）。
+    if (!hr_shader_)  hr_shader_  = CreateComputeShaderEx("", "", "", 4, 0, 0, 48, render::kHairIntegrateSourceWGSL);
+    if (!hr_local_)   hr_local_   = CreateComputeShaderEx("", "", "", 3, 0, 0, 12, render::kHairLocalShapeSourceWGSL);
+    if (!hr_length_)  hr_length_  = CreateComputeShaderEx("", "", "", 3, 0, 0, 4,  render::kHairLengthConstraintSourceWGSL);
+    if (!hr_tangent_) hr_tangent_ = CreateComputeShaderEx("", "", "", 3, 0, 0, 12, render::kHairUpdateTangentSourceWGSL);
 
-fn hash11(p_in : f32) -> f32 {
-  var p = fract(p_in * 0.1031);
-  p = p * (p + 33.33);
-  p = p * (p + p);
-  return fract(p);
-}
-
-@compute @workgroup_size(64, 1, 1)
-fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
-  let vid = gid.x;
-  if (i32(vid) >= pc.u_num_vertices) { return; }
-  let cur = pos_cur[vid];
-  let prev = pos_prev[vid];
-  let rest = pos_rest[vid];
-  let is_root = rest.w < 0.001;
-  if (is_root) {
-    pos_prev[vid] = cur;
-    return;
-  }
-  let velocity = (cur.xyz - prev.xyz) * (1.0 - pc.u_damping);
-  let gravity_force = vec3<f32>(pc.u_gx, pc.u_gy, pc.u_gz) * pc.u_gw * pc.u_dt * pc.u_dt;
-  let wind_var = hash11(f32(vid) * 0.37 + pc.u_time * 1.7) * 2.0 - 1.0;
-  let wind_force = vec3<f32>(pc.u_wx, pc.u_wy, pc.u_wz) * pc.u_dt * pc.u_dt * (1.0 + wind_var * pc.u_ww);
-  let new_pos = cur.xyz + velocity + gravity_force + wind_force;
-  pos_prev[vid] = cur;
-  pos_cur[vid] = vec4<f32>(new_pos, cur.w);
-}
-)WGSL";
-
-    if (!hr_shader_) hr_shader_ = CreateComputeShaderEx("", "", "", 4, 0, 0, 192, kHairWGSL);
     if (!hr_cur_) {
-        const float cur[kHrVerts * 4] = {
-            0.0f, 4.0f, 0.0f, 0.0f,   // v0 根
-            0.0f, 3.0f, 0.0f, 1.0f,   // v1
-            0.0f, 2.0f, 0.0f, 1.0f,   // v2
-            0.0f, 1.0f, 0.0f, 1.0f,   // v3
-        };
-        GpuBufferDesc d; d.size = sizeof(cur); d.usage = GpuBufferUsage::kStorage;
-        hr_cur_ = CreateGpuBuffer(d, cur).raw();
+        GpuBufferDesc d; d.size = sizeof(kHrInitCur); d.usage = GpuBufferUsage::kStorage;
+        hr_cur_ = CreateGpuBuffer(d, kHrInitCur).raw();
     }
     if (!hr_prev_) {
-        // v1 给非零初速度（prev.y=3.1 → velocity.y=-0.1）以验阻尼路径。
-        const float prev[kHrVerts * 4] = {
-            0.0f, 4.0f, 0.0f, 0.0f,
-            0.0f, 3.1f, 0.0f, 1.0f,
-            0.0f, 2.0f, 0.0f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f,
-        };
-        GpuBufferDesc d; d.size = sizeof(prev); d.usage = GpuBufferUsage::kStorage;
-        hr_prev_ = CreateGpuBuffer(d, prev).raw();
+        GpuBufferDesc d; d.size = sizeof(kHrInitPrev); d.usage = GpuBufferUsage::kStorage;
+        hr_prev_ = CreateGpuBuffer(d, kHrInitPrev).raw();
     }
     if (!hr_rest_) {
-        // 仅 .w 用于判根：v0 w=0（根），余 w=1（非根）。
-        const float rest[kHrVerts * 4] = {
-            0.0f, 4.0f, 0.0f, 0.0f,
-            0.0f, 3.0f, 0.0f, 1.0f,
-            0.0f, 2.0f, 0.0f, 1.0f,
-            0.0f, 1.0f, 0.0f, 1.0f,
-        };
-        GpuBufferDesc d; d.size = sizeof(rest); d.usage = GpuBufferUsage::kStorage;
-        hr_rest_ = CreateGpuBuffer(d, rest).raw();
+        GpuBufferDesc d; d.size = sizeof(kHrInitRest); d.usage = GpuBufferUsage::kStorage;
+        hr_rest_ = CreateGpuBuffer(d, kHrInitRest).raw();
+    }
+    if (!hr_tan_) {
+        GpuBufferDesc d; d.size = sizeof(kHrInitTan); d.usage = GpuBufferUsage::kStorage;
+        hr_tan_ = CreateGpuBuffer(d, kHrInitTan).raw();
     }
     if (!hr_strand_) {
-        const uint32_t si[2] = {0u, kHrVerts};  // strand 0：offset=0, count=4（pass1 不用，绑定齐全以匹配消费方）
+        const uint32_t si[2] = {0u, kHrVerts};  // strand 0：offset=0, count=4
         GpuBufferDesc d; d.size = sizeof(si); d.usage = GpuBufferUsage::kStorage;
         hr_strand_ = CreateGpuBuffer(d, si).raw();
     }
 
-    if (!hr_shader_ || !hr_cur_ || !hr_prev_ || !hr_rest_ || !hr_strand_) {
+    if (!hr_shader_ || !hr_local_ || !hr_length_ || !hr_tangent_ ||
+        !hr_cur_ || !hr_prev_ || !hr_rest_ || !hr_tan_ || !hr_strand_) {
         DEBUG_LOG_ERROR("WebGPU[B3b-12] hair 自检资源创建失败，跳过");
         return false;
     }
 
+    // 全 4 趟同序跑在同一 compute pass 内（趟间 WebGPU 自动按 storage 资源依赖串行化），
+    // 与 hair_system.cpp::SimulateCompute 的绑定/uniform/dispatch 顺序逐一对齐。
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    const unsigned int groups_v = (kHrVerts + 63u) / 64u;
+    const unsigned int groups_s = (kHrStrands + 63u) / 64u;
+
+    // ① integrate：b0=cur b1=prev b2=rest b3=strand + 12 uniform
     ResetDrawState();
-    CmdBindStorageBuffer(0, hr_cur_, 0, kHrPosBytes);
+    CmdBindStorageBuffer(0, hr_cur_,  0, kHrPosBytes);
     CmdBindStorageBuffer(1, hr_prev_, 0, kHrPosBytes);
     CmdBindStorageBuffer(2, hr_rest_, 0, kHrPosBytes);
     CmdBindStorageBuffer(3, hr_strand_, 0, 8u);
     SetComputeUniformInt(hr_shader_,   "u_num_vertices", static_cast<int>(kHrVerts));
-    SetComputeUniformFloat(hr_shader_, "u_dt",           1.0f);
-    SetComputeUniformFloat(hr_shader_, "u_damping",      0.2f);
+    SetComputeUniformFloat(hr_shader_, "u_dt",           kHrDt);
+    SetComputeUniformFloat(hr_shader_, "u_damping",      kHrDamping);
     SetComputeUniformFloat(hr_shader_, "u_gx",           0.0f);
     SetComputeUniformFloat(hr_shader_, "u_gy",          -1.0f);
     SetComputeUniformFloat(hr_shader_, "u_gz",           0.0f);
-    SetComputeUniformFloat(hr_shader_, "u_gw",           2.0f);
+    SetComputeUniformFloat(hr_shader_, "u_gw",           kHrGw);
     SetComputeUniformFloat(hr_shader_, "u_wx",           0.0f);
     SetComputeUniformFloat(hr_shader_, "u_wy",           0.0f);
     SetComputeUniformFloat(hr_shader_, "u_wz",           0.0f);
     SetComputeUniformFloat(hr_shader_, "u_ww",           0.0f);
     SetComputeUniformFloat(hr_shader_, "u_time",         0.0f);
+    DispatchCompute(hr_shader_, groups_v, 1, 1);
+    ComputeMemoryBarrier();
 
-    BeginComputePass();
-    if (!cur_compute_pass_) { ResetDrawState(); return false; }
-    DispatchCompute(hr_shader_, (kHrVerts + 63u) / 64u, 1, 1);
+    // ② local_shape：b0=cur b1=rest b2=strand + 3 uniform
+    ResetDrawState();
+    CmdBindStorageBuffer(0, hr_cur_,  0, kHrPosBytes);
+    CmdBindStorageBuffer(1, hr_rest_, 0, kHrPosBytes);
+    CmdBindStorageBuffer(2, hr_strand_, 0, 8u);
+    SetComputeUniformInt(hr_local_,   "u_num_strands",      static_cast<int>(kHrStrands));
+    SetComputeUniformFloat(hr_local_, "u_stiffness_local",  kHrStLocal);
+    SetComputeUniformFloat(hr_local_, "u_stiffness_global", kHrStGlobal);
+    DispatchCompute(hr_local_, groups_s, 1, 1);
+    ComputeMemoryBarrier();
+
+    // ③ length：b0=cur b1=rest b2=strand + 1 uniform
+    ResetDrawState();
+    CmdBindStorageBuffer(0, hr_cur_,  0, kHrPosBytes);
+    CmdBindStorageBuffer(1, hr_rest_, 0, kHrPosBytes);
+    CmdBindStorageBuffer(2, hr_strand_, 0, 8u);
+    SetComputeUniformInt(hr_length_, "u_num_strands", static_cast<int>(kHrStrands));
+    DispatchCompute(hr_length_, groups_s, 1, 1);
+    ComputeMemoryBarrier();
+
+    // ④ tangent：b0=cur b1=tangent b2=strand + 3 uniform
+    ResetDrawState();
+    CmdBindStorageBuffer(0, hr_cur_, 0, kHrPosBytes);
+    CmdBindStorageBuffer(1, hr_tan_, 0, kHrPosBytes);
+    CmdBindStorageBuffer(2, hr_strand_, 0, 8u);
+    SetComputeUniformInt(hr_tangent_, "u_num_vertices",     static_cast<int>(kHrVerts));
+    SetComputeUniformInt(hr_tangent_, "u_num_strands",      static_cast<int>(kHrStrands));
+    SetComputeUniformInt(hr_tangent_, "u_verts_per_strand", kHrVertsPerStr);
+    DispatchCompute(hr_tangent_, groups_v, 1, 1);
+
     EndComputePass();
     ResetDrawState();
 
@@ -6529,14 +6768,14 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kHrRbBytes;
     hr_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
-    const BufferEntry* be_cur  = FindBuffer(hr_cur_);
-    const BufferEntry* be_prev = FindBuffer(hr_prev_);
-    if (!hr_rb_out_ || !be_cur || !be_cur->buffer || !be_prev || !be_prev->buffer) {
+    const BufferEntry* be_cur = FindBuffer(hr_cur_);
+    const BufferEntry* be_tan = FindBuffer(hr_tan_);
+    if (!hr_rb_out_ || !be_cur || !be_cur->buffer || !be_tan || !be_tan->buffer) {
         if (hr_rb_out_) { wgpuBufferRelease(hr_rb_out_); hr_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_cur->buffer,  0, hr_rb_out_, 0,          kHrPosBytes);
-    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_prev->buffer, 0, hr_rb_out_, kHrPosBytes, kHrPosBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_cur->buffer, 0, hr_rb_out_, 0,           kHrPosBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_tan->buffer, 0, hr_rb_out_, kHrPosBytes, kHrPosBytes);
     return true;
 }
 
@@ -6546,6 +6785,114 @@ void WebGPURhiDevice::KickHairSelfTestReadback() {
     ctx->rb_out = hr_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     hr_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kHrRbBytes, OnHairMapped, ctx);
+}
+
+// B3b-14 grass 风场 compute 正确性自检：内联镜像 grass_system.cpp 风场 WGSL（engine 层不能 include
+//   modules 层头）→ 造已知实例 → BeginComputePass/DispatchCompute/EndComputePass → copy 输出 mat4 回读校验。
+bool WebGPURhiDevice::RecordGrassSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 内联镜像（与 grass_system.cpp::kGrassWindComputeSourceWGSL 逐句一致）。
+    static const char* kGrassWGSL = R"WGSL(// dse-wgsl
+struct GrassInstance {
+  pos_yaw : vec4<f32>,
+  wh_phase_fade : vec4<f32>,
+};
+@group(3) @binding(0) var<storage, read_write> instances : array<GrassInstance>;
+@group(3) @binding(1) var<storage, read_write> matrices : array<mat4x4<f32>>;
+struct PC {
+  @align(16) u_wind_dir : vec2<f32>,
+  @align(16) u_wind_speed : f32,
+  @align(16) u_wind_strength : f32,
+  @align(16) u_wind_turbulence : f32,
+  @align(16) u_time : f32,
+  @align(16) u_instance_count : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@compute @workgroup_size(64, 1, 1)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_instance_count) { return; }
+  let inst = instances[idx];
+  let pos = inst.pos_yaw.xyz;
+  let yaw = inst.pos_yaw.w;
+  let w = inst.wh_phase_fade.x;
+  let h = inst.wh_phase_fade.y;
+  let wind_phase = inst.wh_phase_fade.z;
+  let fade = inst.wh_phase_fade.w;
+  let phase = wind_phase + pc.u_time * pc.u_wind_speed;
+  let bend = sin(phase) * pc.u_wind_strength;
+  let turb = sin(phase * 3.7 + wind_phase * 2.3) * pc.u_wind_turbulence;
+  let total_bend = clamp(bend + turb, -0.436, 0.436);
+  let rx = -total_bend * pc.u_wind_dir.y;
+  let rz =  total_bend * pc.u_wind_dir.x;
+  let cx = cos(rx); let sx = sin(rx);
+  let cz = cos(rz); let sz = sin(rz);
+  let cy = cos(yaw); let sy = sin(yaw);
+  let a00 = cz * cy; let a01 = -sz; let a02 = cz * sy;
+  let a10 = sz * cy; let a11 = cz;  let a12 = sz * sy;
+  let a20 = -sy;     let a21 = 0.0; let a22 = cy;
+  let r00 = a00;                  let r01 = a01;                  let r02 = a02;
+  let r10 = cx * a10 - sx * a20;  let r11 = cx * a11 - sx * a21;  let r12 = cx * a12 - sx * a22;
+  let r20 = sx * a10 + cx * a20;  let r21 = sx * a11 + cx * a21;  let r22 = sx * a12 + cx * a22;
+  let hf = h * fade;
+  matrices[idx] = mat4x4<f32>(
+    vec4<f32>(r00 * w, r10 * w, r20 * w, 0.0),
+    vec4<f32>(r01 * hf, r11 * hf, r21 * hf, 0.0),
+    vec4<f32>(r02 * w, r12 * w, r22 * w, 0.0),
+    vec4<f32>(pos, 1.0));
+}
+)WGSL";
+
+    if (!gr_shader_) gr_shader_ = CreateComputeShaderEx("", "", "", 2, 0, 0, 28, kGrassWGSL);
+    if (!gr_in_) {
+        GpuBufferDesc d; d.size = kGrInBytes; d.usage = GpuBufferUsage::kStorage;
+        gr_in_ = CreateGpuBuffer(d, kGrInst).raw();
+    }
+    if (!gr_out_) {
+        GpuBufferDesc d; d.size = kGrOutBytes; d.usage = GpuBufferUsage::kStorage;
+        gr_out_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!gr_shader_ || !gr_in_ || !gr_out_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-14] grass 自检资源创建失败，跳过");
+        return false;
+    }
+
+    ResetDrawState();
+    CmdBindStorageBuffer(0, gr_in_,  0, kGrInBytes);
+    CmdBindStorageBuffer(1, gr_out_, 0, kGrOutBytes);
+    SetComputeUniformVec2f(gr_shader_, "u_wind_dir",        kGrWindDirX, kGrWindDirY);
+    SetComputeUniformFloat(gr_shader_, "u_wind_speed",      kGrWindSpeed);
+    SetComputeUniformFloat(gr_shader_, "u_wind_strength",   kGrWindStrength);
+    SetComputeUniformFloat(gr_shader_, "u_wind_turbulence", kGrWindTurb);
+    SetComputeUniformFloat(gr_shader_, "u_time",            kGrTime);
+    SetComputeUniformInt(gr_shader_,   "u_instance_count",  static_cast<int>(kGrInstances));
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(gr_shader_, (kGrInstances + 63u) / 64u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kGrOutBytes;
+    gr_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_out = FindBuffer(gr_out_);
+    if (!gr_rb_out_ || !be_out || !be_out->buffer) {
+        if (gr_rb_out_) { wgpuBufferRelease(gr_rb_out_); gr_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_out->buffer, 0, gr_rb_out_, 0, kGrOutBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickGrassSelfTestReadback() {
+    if (!gr_rb_out_) return;
+    auto* ctx = new GrassSelfTestCtx();
+    ctx->rb_out = gr_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    gr_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kGrOutBytes, OnGrassMapped, ctx);
 }
 
 // B3b-13 bloom 双滤波 compute 真链路自检：手译 bloom_downsample.comp / bloom_upsample.comp 核心为 WGSL，

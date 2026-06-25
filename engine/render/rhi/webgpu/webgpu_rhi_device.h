@@ -306,6 +306,16 @@ public:
     void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) override;
     void DeleteGpuBuffer(BufferHandle handle) override;
 
+    // Task 5/B：WebGPU GPU→CPU 异步「双缓冲延迟回读」覆写。基类默认=同步 ReadGpuBuffer+返回 true
+    //   （桌面 GL/VK/DX11 由此保持原语义，不覆写）；但 WebGPU 无同步 buffer 回读（map 异步），
+    //   ReadGpuBuffer 在 WebGPU 是 no-op，同步回读读不到数据。本覆写：BeginGpuReadback 在
+    //   frame_encoder_（须不在任何 pass 内）上 CopyBufferToBuffer(src→staging[write])、记 pending、
+    //   write^=1，并**返回上一帧结果是否就绪**；EndFrame 在 wgpuQueueSubmit 后对 pending staging 发
+    //   wgpuBufferMapAsync，回调把数据拷进 async_rb_result_ 并置 ready；GetLastReadbackResult 返回它。
+    //   消费方（grass 风场）据 ready 用上帧结果、否则当帧 CPU 回退（1 帧延迟视觉无感）。
+    bool BeginGpuReadback(BufferHandle handle, size_t offset, size_t size) override;
+    const void* GetLastReadbackResult(size_t* out_size = nullptr) const override;
+
     // --- Task 4 GPU-Driven 执行器（按已绑引擎 draw state 逐子项落地，先离屏自检不翻能力位）---
     // Subtask 1：WebGPU 无 glMultiDrawElementsIndirect，按当前已绑管线/顶点/索引缓冲循环逐条
     //   wgpuRenderPassEncoderDrawIndexedIndirect，第 i 条从 byte_offset + i*stride 读取
@@ -389,6 +399,22 @@ private:
     // 每帧瞬态：当前交换链后备缓冲视图（BeginFrame 取得，EndFrame 提交后释放）
     WGPUTextureView backbuffer_view_ = nullptr;
     WGPUCommandEncoder frame_encoder_ = nullptr;
+
+    // --- GPU→CPU 异步双缓冲延迟回读状态（BeginGpuReadback/GetLastReadbackResult 覆写用）---
+    //   两个 MapRead|CopyDst staging 轮换：本帧 CopyBufferToBuffer 写 staging[write]，下帧把
+    //   上帧的 staging map 回读 → 避免「同帧写后立即 map」的栅栏停顿；EndFrame 提交后 kick map。
+    WGPUBuffer async_rb_staging_[2] = {nullptr, nullptr};  ///< 轮换 staging 缓冲
+    size_t     async_rb_capacity_[2] = {0, 0};             ///< 各 staging 当前容量（按需扩容）
+    int        async_rb_write_idx_ = 0;                    ///< 本帧写入的 staging 下标（0/1 轮换）
+    bool       async_rb_has_pending_ = false;              ///< 是否有一帧拷贝待 map 回读
+    size_t     async_rb_pending_size_ = 0;                 ///< 待 map 的字节数
+    int        async_rb_pending_idx_ = 0;                  ///< 待 map 的 staging 下标
+    bool       async_rb_mapped_[2] = {false, false};       ///< 各 staging 是否正处于异步 map 飞行中
+    bool       async_rb_ready_ = false;                    ///< async_rb_result_ 是否含有效（上帧）数据
+    std::vector<uint8_t> async_rb_result_;                 ///< 最近一次成功 map 的回读数据
+    void KickDeferredReadback();                           ///< EndFrame 提交后对 pending staging 发 mapAsync
+    struct DeferredReadbackCtx { WebGPURhiDevice* dev; int idx; size_t size; };
+    static void OnDeferredReadbackMapped(WGPUBufferMapAsyncStatus status, void* userdata);
 
     int width_  = 0;
     int height_ = 0;
@@ -753,19 +779,26 @@ private:
     unsigned int dg_rsm_flux_ = 0;         ///< RSM 通量采样纹理（group2 b4）
     WGPUBuffer dg_rb_out_ = nullptr;       ///< 调试输出回读缓冲（MapRead|CopyDst）
 
-    // --- B3b-12 头发物理 hair Verlet 积分核心真链路自检（每会话一次：手译引擎 HairInstance::Simulate
-    //   真 compute（hair_compute_shaders.h::kHairIntegrateSource）Pass 1 为 WGSL —— 4×SSBO（group3 b0..3）
-    //   pos_cur/pos_prev/pos_rest/strand_info + 12 命名 uniform（group1 b8）→ 根顶点固定、velocity·(1-damping)
-    //   + 重力·dt² → 写回 pos_cur/pos_prev → copy 回读逐分量校验 == CPU 预期。离屏隔离、不翻能力位。---
+    // --- B3b-12 头发物理 hair 全 4 趟真链路自检（每会话一次：直接取引擎真 compute 源
+    //   hair_compute_shaders.h::kHair*SourceWGSL，按 HairInstance::Simulate 同序跑全 4 趟
+    //   integrate→local_shape→length→tangent（同一 compute pass 内逐趟 dispatch，趟间隐式同步）：
+    //   ①integrate（4×SSBO group3 b0..3 + 12 命名 uniform）根顶点固定 + velocity·(1-damping)+重力·dt²；
+    //   ②local_shape（cur/rest/strand + 3 uniform）按 local/global stiffness 拉回 rest；③length（cur/rest/
+    //   strand + 1 uniform）逐段长度约束；④tangent（cur/tangent/strand + 3 uniform）相邻差分写切线。
+    //   末趟后 copy pos_cur+tangent 回读，逐分量校验 == C++ 同序复算预期。离屏隔离、不翻能力位。---
     bool hair_selftest_done_ = false;
-    bool RecordHairSelfTest();             ///< 录制 hair Verlet 积分 compute + copy pos_cur/pos_prev→回读缓冲
+    bool RecordHairSelfTest();             ///< 录制 hair 全 4 趟 compute + copy pos_cur/tangent→回读缓冲
     void KickHairSelfTestReadback();       ///< 提交后发起异步 map 回读校验
-    unsigned int hr_shader_ = 0;           ///< hair Verlet 积分 compute shader（手译 kHairIntegrateSource）
+    unsigned int hr_shader_ = 0;           ///< pass1 integrate compute（kHairIntegrateSourceWGSL）
+    unsigned int hr_local_ = 0;            ///< pass2 local_shape compute（kHairLocalShapeSourceWGSL）
+    unsigned int hr_length_ = 0;           ///< pass3 length compute（kHairLengthConstraintSourceWGSL）
+    unsigned int hr_tangent_ = 0;          ///< pass4 tangent compute（kHairUpdateTangentSourceWGSL）
     unsigned int hr_cur_ = 0;              ///< pos_cur SSBO（group3 b0，读写）
-    unsigned int hr_prev_ = 0;             ///< pos_prev SSBO（group3 b1，读写）
-    unsigned int hr_rest_ = 0;             ///< pos_rest SSBO（group3 b2，仅 .w 判根）
-    unsigned int hr_strand_ = 0;           ///< strand_info SSBO（group3 b3，pass1 不用，绑定齐全）
-    WGPUBuffer hr_rb_out_ = nullptr;       ///< pos_cur+pos_prev 回读缓冲（MapRead|CopyDst）
+    unsigned int hr_prev_ = 0;             ///< pos_prev SSBO（integrate b1，读写）
+    unsigned int hr_rest_ = 0;             ///< pos_rest SSBO（integrate b2 / local·length b1）
+    unsigned int hr_tan_ = 0;              ///< tangent SSBO（tangent b1，读写）
+    unsigned int hr_strand_ = 0;           ///< strand_info SSBO（{offset,count}）
+    WGPUBuffer hr_rb_out_ = nullptr;       ///< pos_cur+tangent 回读缓冲（MapRead|CopyDst）
 
     // --- B3b-13 bloom 双滤波 compute 真链路自检（每会话一次：手译引擎 BloomRenderer 真 compute
     //   （bloom_downsample.comp / bloom_upsample.comp，GLSL 450）核心为 WGSL —— ①gen compute 写已知
@@ -784,6 +817,20 @@ private:
     unsigned int bl_ubase4_ = 0;           ///< 上采样 base rgba16f 4×4（gen 写 + 采样读，替代 in-place imageLoad）
     unsigned int bl_up4_    = 0;           ///< 上采样输出 rgba16f 4×4（storage 写 + copy 源）
     WGPUBuffer bl_rb_out_ = nullptr;       ///< down4+up4 回读缓冲（MapRead|CopyDst）
+
+    // --- B3b-14 草地风场（grass wind）compute 正确性真链路自检（每会话一次：grass_system.cpp 的
+    //   grass 风场 WGSL 在 modules 层，engine 层不能 include modules 头，故此处**内联一份镜像**
+    //   （与 grass_system.cpp::kGrassWindComputeSourceWGSL 逐句一致，注释标明）—— 造已知实例 SSBO
+    //   （group3 b0：pos.xy + phase + height）+ 命名 uniform（time/wind_dir/strength/...）→ 每实例算
+    //   h*fade 折叠风偏 → 写列主序 mat4 输出 SSBO（group3 b1）→ pass 后 copy 回读，C++ 复算同公式
+    //   （镜像 CPU BuildWindMatrix）逐元素 abs(diff)<1e-4 校验。离屏隔离、每会话一次、不翻能力位。---
+    bool grass_selftest_done_ = false;
+    bool RecordGrassSelfTest();            ///< 录制 grass 风场 compute + copy 输出 mat4 SSBO→回读缓冲
+    void KickGrassSelfTestReadback();      ///< 提交后发起异步 map 回读校验
+    unsigned int gr_shader_ = 0;           ///< grass 风场 compute（内联镜像 kGrassWindComputeSourceWGSL）
+    unsigned int gr_in_ = 0;               ///< 实例输入 SSBO（group3 b0：vec4 pos.xy/phase/height）
+    unsigned int gr_out_ = 0;              ///< 风矩阵输出 SSBO（group3 b1：每实例 mat4）
+    WGPUBuffer gr_rb_out_ = nullptr;       ///< 风矩阵回读缓冲（MapRead|CopyDst）
 
     // --- Task 4 Subtask 1 离屏自检（MultiDrawIndexedIndirect 真链路：预置 [1,0,1,0] indirect cmds →
     //   经引擎-facing CmdBeginRenderPass + CmdBind* + MultiDrawIndexedIndirect 渲到 64×64 离屏 RT →
