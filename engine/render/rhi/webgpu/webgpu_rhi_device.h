@@ -872,6 +872,63 @@ private:
     unsigned int t52_light_ibo_   = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
     WGPUBuffer   t52_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
 
+    // --- Task 5 Subtask 3 离屏自检（HDR auto-exposure 亮度归约 + ACES tonemap：①渲已知 HDR(4,2,1)
+    //   到 8×8 场景 RT；②归约趟 textureLoad 整张算平均 log 亮度写 1×1 lum RT；③lum_adapt 趟 0.18/avgLum
+    //   曝光写 1×1 exposure RT；④tonemap 趟 ACES(hdr*exposure)+gamma 渲 64×64 RT → 回读 C++ 同公式复算
+    //   逐通道校验。逻辑同 lum_compute/lum_adapt/tonemapping.frag，离屏隔离、不翻能力位）---
+    bool t53_hdr_selftest_done_ = false;
+    bool RecordHDRSelfTest();                ///< 录制 场景趟 + 归约趟 + lum_adapt 趟 + tonemap 趟 + copy
+    void KickHDRSelfTestReadback();          ///< 提交后发起异步 map 回读校验
+    unsigned int t53_scene_rt_    = 0;       ///< HDR 场景 RT（8×8 RGBA16Float）
+    unsigned int t53_lum_rt_      = 0;       ///< 平均 log 亮度 RT（1×1 RGBA16Float）
+    unsigned int t53_exposure_rt_ = 0;       ///< 自动曝光 RT（1×1 RGBA16Float）
+    unsigned int t53_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
+    unsigned int t53_pso_         = 0;       ///< 共享 PSO（无深度/无剔除/blend off）
+    unsigned int t53_scene_program_  = 0;    ///< HDR 场景程序（输出常量 (4,2,1)）
+    unsigned int t53_reduce_program_ = 0;    ///< 亮度归约程序（textureLoad 整张算平均 log 亮度）
+    unsigned int t53_adapt_program_  = 0;    ///< lum_adapt 程序（0.18/avgLum 曝光）
+    unsigned int t53_tonemap_program_ = 0;   ///< tonemap 程序（ACES(hdr*exposure)+gamma）
+    unsigned int t53_quad_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
+    unsigned int t53_quad_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t53_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 5 Subtask 4 离屏自检（IBL：①BRDF LUT 趟 GGX split-sum 积分渲 64×64 LUT RT；②irradiance
+    //   趟渲常量辐照度到 1×1 RT；③prefilter 趟渲常量预滤波镜面到 1×1 RT；④PBR 环境项趟绑 LUT/irr/pref
+    //   三纹理按 split-sum 合成 ambient 渲 64×64 RT → 回读 C++ 同算法复算逐通道校验。逻辑同 LearnOpenGL
+    //   IBL，离屏隔离、不翻能力位）---
+    bool t54_ibl_selftest_done_ = false;
+    bool RecordIBLSelfTest();                ///< 录制 BRDF LUT 趟 + irradiance 趟 + prefilter 趟 + PBR 趟 + copy
+    void KickIBLSelfTestReadback();          ///< 提交后发起异步 map 回读校验
+    unsigned int t54_brdf_rt_     = 0;       ///< BRDF LUT RT（64×64 RGBA16Float）
+    unsigned int t54_irr_rt_      = 0;       ///< 辐照度 RT（1×1 RGBA16Float）
+    unsigned int t54_pref_rt_     = 0;       ///< 预滤波镜面 RT（1×1 RGBA16Float）
+    unsigned int t54_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
+    unsigned int t54_pso_         = 0;       ///< 共享 PSO（无深度/无剔除/blend off）
+    unsigned int t54_brdf_program_ = 0;      ///< BRDF LUT 程序（GGX split-sum 积分）
+    unsigned int t54_irr_program_  = 0;      ///< 辐照度程序（输出常量辐照度）
+    unsigned int t54_pref_program_ = 0;      ///< 预滤波镜面程序（输出常量预滤波色）
+    unsigned int t54_pbr_program_  = 0;      ///< PBR 环境项程序（split-sum 合成）
+    unsigned int t54_quad_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy + uv，stride 16）
+    unsigned int t54_quad_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t54_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 5 Subtask 5 离屏自检（WBOIT：①几何趟把两层半透明片元按 WBOIT 权重 shader 内解析累加写
+    //   accum/reveal 2 附件 MRT；②resolve 趟绑 accum/reveal 两纹理做 accum.rgb/max(accum.a,eps)、1-reveal
+    //   合成渲 64×64 RT → 回读 C++ 同公式复算逐通道校验。证明 accum/reveal MRT + resolve OIT 混合能力，
+    //   离屏隔离、不翻能力位）---
+    bool t55_wboit_selftest_done_ = false;
+    bool RecordWBOITSelfTest();              ///< 录制 几何趟（accum/reveal MRT）+ resolve 趟 + copy
+    void KickWBOITSelfTestReadback();        ///< 提交后发起异步 map 回读校验
+    unsigned int t55_mrt_rt_      = 0;       ///< accum/reveal MRT（2 个 RGBA16Float 颜色附件）
+    unsigned int t55_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
+    unsigned int t55_geom_pso_    = 0;       ///< 几何 PSO（无深度/无剔除/blend off）
+    unsigned int t55_resolve_pso_ = 0;       ///< resolve PSO（无深度/无剔除/blend off）
+    unsigned int t55_geom_program_    = 0;   ///< 几何程序（WBOIT 权重解析累加写 MRT）
+    unsigned int t55_resolve_program_ = 0;   ///< resolve 程序（accum/reveal 合成）
+    unsigned int t55_quad_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
+    unsigned int t55_quad_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t55_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);

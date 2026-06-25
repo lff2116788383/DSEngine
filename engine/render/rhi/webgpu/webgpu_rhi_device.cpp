@@ -1412,6 +1412,259 @@ void OnT52PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// ============================================================================
+// Task 5 Subtask 3/4/5 离屏自检共享 C++ 复算数学（与各自 WGSL 同公式，回调内复算期望值）。
+// ============================================================================
+
+// ACES filmic 色调映射（与 tonemapping.frag / T5-3 tonemap WGSL 同系数）。
+inline float T5AcesFilmic(float x) {
+    const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    float v = (x * (a * x + b)) / (x * (c * x + d) + e);
+    if (v < 0.0f) v = 0.0f;
+    if (v > 1.0f) v = 1.0f;
+    return v;
+}
+
+// Van der Corput 位反演（与 T5-4 BRDF LUT WGSL RadicalInverse_VdC 同位运算）。
+inline float T5RadicalInverseVdC(uint32_t bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return static_cast<float>(bits) * 2.3283064365386963e-10f;
+}
+
+// GGX split-sum BRDF 积分（N=(0,0,1)、256 采样，与 T5-4 IntegrateBRDF WGSL 逐行同算法）。
+inline void T5IntegrateBRDF(float NdotV, float roughness, float& outA, float& outB) {
+    const float PI = 3.14159265358979323846f;
+    const float Vx = std::sqrt(1.0f - NdotV * NdotV), Vy = 0.0f, Vz = NdotV;  // V（N=(0,0,1)）
+    const uint32_t kN = 256u;
+    float A = 0.0f, B = 0.0f;
+    for (uint32_t i = 0; i < kN; ++i) {
+        const float xi_x = static_cast<float>(i) / static_cast<float>(kN);
+        const float xi_y = T5RadicalInverseVdC(i);
+        // ImportanceSampleGGX（N=(0,0,1) → 切空间 H 即世界 H）。
+        const float a = roughness * roughness;
+        const float phi = 2.0f * PI * xi_x;
+        const float cosTheta = std::sqrt((1.0f - xi_y) / (1.0f + (a * a - 1.0f) * xi_y));
+        const float sinTheta = std::sqrt(1.0f - cosTheta * cosTheta);
+        const float Hx = std::cos(phi) * sinTheta, Hy = std::sin(phi) * sinTheta, Hz = cosTheta;
+        const float VdotH = Vx * Hx + Vy * Hy + Vz * Hz;
+        const float Lz = 2.0f * VdotH * Hz - Vz;  // L = 2*dot(V,H)*H - V，取 .z 即 NdotL
+        const float NdotL = Lz > 0.0f ? Lz : 0.0f;
+        const float NdotH = Hz > 0.0f ? Hz : 0.0f;
+        const float vh = VdotH > 0.0f ? VdotH : 0.0f;
+        if (NdotL > 0.0f) {
+            const float k = (roughness * roughness) / 2.0f;  // IBL 几何项 k
+            const float gV = NdotV / (NdotV * (1.0f - k) + k);
+            const float gL = NdotL / (NdotL * (1.0f - k) + k);
+            const float G_Vis = (gV * gL * vh) / (NdotH * NdotV);
+            const float Fc = std::pow(1.0f - vh, 5.0f);
+            A += (1.0f - Fc) * G_Vis;
+            B += Fc * G_Vis;
+        }
+    }
+    outA = A / static_cast<float>(kN);
+    outB = B / static_cast<float>(kN);
+}
+
+// --- Task 5 Subtask 3（T5-3）：HDR auto-exposure 亮度归约 + ACES tonemap 离屏自检 ---
+// 链路：①渲已知 HDR 值(4,2,1) 到 8×8 RGBA16Float 场景 RT；②亮度归约趟 textureLoad 8×8 采样点算平均
+// log 亮度（dot(rgb,(0.2126,0.7152,0.0722))，逻辑同 lum_compute.frag）写 1×1 lum RT；③lum_adapt 趟
+// avgLum=exp(avgLogLum)→targetExposure=0.18/avgLum→clamp 写 1×1 exposure RT（逻辑同 lum_adapt.frag）；
+// ④tonemap 趟 ACES(hdr*exposure)+gamma(1/2.2) 渲到 64×64 RGBA16Float RT（逻辑同 tonemapping.frag）→
+// copy 回读，在回调里以同公式 C++ 复算期望逐通道比对（容差 0.04、且 r>g>b、非全白非全黑）。
+constexpr uint32_t kT53SceneDim   = 8;                        ///< 场景 RT 边长（归约趟 8×8 采样整张）
+constexpr uint32_t kT53RtSize     = 64;                       ///< 最终 tonemap color RT 边长
+constexpr uint32_t kT53RtRowBytes = kT53RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT53RtBytes    = kT53RtRowBytes * kT53RtSize;
+constexpr float    kT53HdrR = 4.0f, kT53HdrG = 2.0f, kT53HdrB = 1.0f;  ///< 已知 HDR 场景色
+
+struct HDRSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT53PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<HDRSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT53RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, uint32_t ch) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT53RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[ch]);
+            };
+            // C++ 同公式复算期望（场景色恒定 → avgLogLum=log(lum)）。
+            const float lum = kT53HdrR * 0.2126f + kT53HdrG * 0.7152f + kT53HdrB * 0.0722f;
+            const float avgLum = std::exp(std::log(lum > 0.0001f ? lum : 0.0001f));
+            float exposure = 0.18f / (avgLum > 0.001f ? avgLum : 0.001f);
+            if (exposure < 0.01f) exposure = 0.01f;
+            if (exposure > 10.0f) exposure = 10.0f;
+            const float er = std::pow(T5AcesFilmic(kT53HdrR * exposure), 1.0f / 2.2f);
+            const float eg = std::pow(T5AcesFilmic(kT53HdrG * exposure), 1.0f / 2.2f);
+            const float eb = std::pow(T5AcesFilmic(kT53HdrB * exposure), 1.0f / 2.2f);
+            const float cr = rd(32, 32, 0), cg = rd(32, 32, 1), cb = rd(32, 32, 2);
+            const float tol = 0.04f;
+            ok = std::fabs(cr - er) < tol && std::fabs(cg - eg) < tol && std::fabs(cb - eb) < tol &&
+                 (cr > cg) && (cg > cb) &&                              // (4,2,1) tonemap 后保序
+                 (cr < 0.999f) && (cb > 0.001f);                       // 非全白非全黑
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-3] HDR tonemap 自检像素：got=({},{},{}) exp=({},{},{}) exposure={}",
+                                cr, cg, cb, er, eg, eb, exposure);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-3] HDR tonemap 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-3] HDR tonemap 自检 PASS：HDR 场景 RT → 亮度归约(log 平均)→ lum_adapt(0.18/avgLum "
+                       "曝光)→ ACES(hdr*exposure)+gamma 四趟链路正确（逻辑同 lum_compute/lum_adapt/tonemapping.frag），"
+                       "回读像素与 C++ 同公式复算逐通道吻合、r>g>b 保序、非全白非全黑");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-3] HDR tonemap 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
+// --- Task 5 Subtask 4（T5-4）：IBL（BRDF LUT + irradiance + prefilter env + PBR 环境项）离屏自检 ---
+// 链路：①BRDF LUT 趟 GGX split-sum 积分（256 采样 Hammersley/ImportanceSampleGGX/Smith，uv.x=NdotV、
+// uv.y=roughness）渲到 64×64 RGBA16Float LUT RT；②irradiance 趟把常量辐照度色渲到 1×1 RT（常量环境的
+// 半球辐照积分即常量，离屏可控）；③prefilter 趟把常量预滤波镜面色渲到 1×1 RT；④PBR 环境项趟绑 LUT/irr/
+// pref 三纹理，固定材质(albedo=(0.8,0.2,0.2)/metallic=0/roughness)按 split-sum 合成 ambient = kD*irr*albedo
+// + pref*(F*brdf.x+brdf.y)（逻辑同 LearnOpenGL IBL）渲到 64×64 RT → copy 回读，回调里 C++ 同算法复算
+// IntegrateBRDF + 合成逐通道比对（容差 0.04、可见 IBL 贡献、非全黑非饱和）。
+constexpr uint32_t kT54LutDim     = 64;                       ///< BRDF LUT RT 边长
+constexpr uint32_t kT54RtSize     = 64;                       ///< 最终 color RT 边长
+constexpr uint32_t kT54RtRowBytes = kT54RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT54RtBytes    = kT54RtRowBytes * kT54RtSize;
+constexpr uint32_t kT54BrdfCx     = 63u, kT54BrdfCy = 31u;    ///< PBR 趟采样 LUT 的 texel（NdotV≈1、roughness≈0.5）
+constexpr float    kT54AlbedoR = 0.8f, kT54AlbedoG = 0.2f, kT54AlbedoB = 0.2f;  ///< 材质反照率
+constexpr float    kT54IrrR = 0.4f, kT54IrrG = 0.5f, kT54IrrB = 0.6f;          ///< 常量辐照度
+constexpr float    kT54PrefR = 0.5f, kT54PrefG = 0.5f, kT54PrefB = 0.5f;       ///< 常量预滤波镜面
+
+struct IBLSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT54PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<IBLSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT54RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, uint32_t ch) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT54RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[ch]);
+            };
+            // C++ 同算法复算：LUT 在采样 texel 的 uv 处积分；PBR split-sum 合成。
+            const float lut_u = (static_cast<float>(kT54BrdfCx) + 0.5f) / static_cast<float>(kT54LutDim);
+            const float lut_v = (static_cast<float>(kT54BrdfCy) + 0.5f) / static_cast<float>(kT54LutDim);
+            float A = 0.0f, B = 0.0f;
+            T5IntegrateBRDF(lut_u, lut_v, A, B);
+            const float F0 = 0.04f, metallic = 0.0f;
+            const float NdotV = 1.0f;                                  // V=N=(0,0,1)
+            const float F = F0 + (((1.0f - lut_v) > F0 ? (1.0f - lut_v) : F0) - F0) * std::pow(1.0f - NdotV, 5.0f);
+            const float kS = F, kD = (1.0f - kS) * (1.0f - metallic);
+            const float dr = kT54IrrR * kT54AlbedoR, dg = kT54IrrG * kT54AlbedoG, db = kT54IrrB * kT54AlbedoB;
+            const float spec = (F * A + B);                            // 灰度 F0 → 三通道同
+            const float er = kD * dr + kT54PrefR * spec;
+            const float eg = kD * dg + kT54PrefG * spec;
+            const float eb = kD * db + kT54PrefB * spec;
+            const float cr = rd(32, 32, 0), cg = rd(32, 32, 1), cb = rd(32, 32, 2);
+            const float tol = 0.04f;
+            ok = std::fabs(cr - er) < tol && std::fabs(cg - eg) < tol && std::fabs(cb - eb) < tol &&
+                 (cr > 0.1f) && (cr > cg) &&                           // 可见 IBL、反照率红主导
+                 (cr < 1.0f) && (cg < 1.0f) && (cb < 1.0f);            // 非饱和
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-4] IBL 自检像素：got=({},{},{}) exp=({},{},{}) brdf=({},{})",
+                                cr, cg, cb, er, eg, eb, A, B);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-4] IBL 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-4] IBL 自检 PASS：BRDF LUT（GGX split-sum 256 采样）+ irradiance/prefilter "
+                       "纹理 + PBR 环境项 split-sum 合成（kD*irr*albedo + pref*(F*brdf.x+brdf.y)）四趟链路正确，"
+                       "回读像素与 C++ 同算法复算逐通道吻合、可见 IBL 贡献、非全黑非饱和");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-4] IBL 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
+// --- Task 5 Subtask 5（T5-5）：WBOIT（accum/reveal MRT + resolve）离屏自检 ---
+// 链路：①几何趟把两层半透明片元（layer0 红 α0.5 z0.2、layer1 蓝 α0.5 z0.6）按 WBOIT 权重在 shader 内
+// 解析累加，写 2 附件 MRT（accum=Σ(c*a)*w 与 Σa*w 合成 RGBA16Float、reveal=Π(1-a) 存 .r）；②resolve 趟
+// 绑 accum/reveal 两纹理，avgColor=accum.rgb/max(accum.a,eps)、finalAlpha=1-reveal、over 黑背景合成渲到
+// 64×64 RGBA16Float RT → copy 回读，回调里 C++ 同公式复算逐通道比对（容差 0.04、红蓝双层均有贡献）。
+constexpr uint32_t kT55RtSize     = 64;                       ///< accum/reveal/最终 color RT 边长
+constexpr uint32_t kT55RtRowBytes = kT55RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT55RtBytes    = kT55RtRowBytes * kT55RtSize;
+// 两层片元（与 T5-5 几何趟 WGSL 同值）。
+constexpr float kT55C0r = 1.0f, kT55C0g = 0.0f, kT55C0b = 0.0f, kT55A0 = 0.5f, kT55Z0 = 0.2f;
+constexpr float kT55C1r = 0.0f, kT55C1g = 0.0f, kT55C1b = 1.0f, kT55A1 = 0.5f, kT55Z1 = 0.6f;
+
+struct WBOITSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT55PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<WBOITSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT55RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, uint32_t ch) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT55RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[ch]);
+            };
+            // C++ 同公式复算：weightFn(z)=max(0.01,3*(1-z))，w=alpha*weightFn(z)。
+            auto wfn = [](float z) -> float { const float v = 3.0f * (1.0f - z); return v > 0.01f ? v : 0.01f; };
+            const float w0 = kT55A0 * wfn(kT55Z0), w1 = kT55A1 * wfn(kT55Z1);
+            const float ar = (kT55C0r * kT55A0) * w0 + (kT55C1r * kT55A1) * w1;
+            const float ag = (kT55C0g * kT55A0) * w0 + (kT55C1g * kT55A1) * w1;
+            const float ab = (kT55C0b * kT55A0) * w0 + (kT55C1b * kT55A1) * w1;
+            const float aa = kT55A0 * w0 + kT55A1 * w1;
+            const float reveal = (1.0f - kT55A0) * (1.0f - kT55A1);
+            const float denom = aa > 1e-5f ? aa : 1e-5f;
+            const float finalAlpha = 1.0f - reveal;
+            const float er = (ar / denom) * finalAlpha;                // over 黑背景
+            const float eg = (ag / denom) * finalAlpha;
+            const float eb = (ab / denom) * finalAlpha;
+            const float cr = rd(32, 32, 0), cg = rd(32, 32, 1), cb = rd(32, 32, 2);
+            const float tol = 0.04f;
+            ok = std::fabs(cr - er) < tol && std::fabs(cg - eg) < tol && std::fabs(cb - eb) < tol &&
+                 (cr > 0.1f) && (cb > 0.1f) &&                         // 红蓝双层均有贡献（确证 OIT 混合）
+                 (cg < 0.1f);                                          // 无绿层
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-5] WBOIT 自检像素：got=({},{},{}) exp=({},{},{}) reveal={}",
+                                cr, cg, cb, er, eg, eb, reveal);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-5] WBOIT 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-5] WBOIT 自检 PASS：accum/reveal 2 附件 MRT（Σ(c*a)*w 与 Π(1-a)）+ resolve "
+                       "（accum.rgb/max(accum.a,eps)、1-reveal 合成）链路正确，回读像素与 C++ 同公式复算逐通道吻合、"
+                       "红蓝双层均有贡献（确证 OIT 混合非单层覆盖）");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-5] WBOIT 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1618,6 +1871,12 @@ void WebGPURhiDevice::Shutdown() {
     if (t51_rb_pixels_)   { wgpuBufferRelease(t51_rb_pixels_);       t51_rb_pixels_ = nullptr; }
     // Task 5 Subtask 2 延迟着色自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t52_rb_pixels_)   { wgpuBufferRelease(t52_rb_pixels_);       t52_rb_pixels_ = nullptr; }
+    // Task 5 Subtask 3 HDR tonemap 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t53_rb_pixels_)   { wgpuBufferRelease(t53_rb_pixels_);       t53_rb_pixels_ = nullptr; }
+    // Task 5 Subtask 4 IBL 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t54_rb_pixels_)   { wgpuBufferRelease(t54_rb_pixels_);       t54_rb_pixels_ = nullptr; }
+    // Task 5 Subtask 5 WBOIT 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t55_rb_pixels_)   { wgpuBufferRelease(t55_rb_pixels_);       t55_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1910,6 +2169,27 @@ void WebGPURhiDevice::EndFrame() {
         t52_deferred_selftest_done_ = true;
         t52_recorded = RecordDeferredSelfTest();
     }
+    // Task 5 Subtask 3：每会话一次 HDR auto-exposure + ACES tonemap 自检（场景→亮度归约→lum_adapt→
+    // tonemap 四趟 → 回读 C++ 同公式复算逐通道校验 r>g>b、非全白非全黑）。
+    bool t53_recorded = false;
+    if (!t53_hdr_selftest_done_) {
+        t53_hdr_selftest_done_ = true;
+        t53_recorded = RecordHDRSelfTest();
+    }
+    // Task 5 Subtask 4：每会话一次 IBL 自检（BRDF LUT 积分 + irradiance/prefilter 纹理 + PBR 环境项
+    // split-sum 合成 → 回读 C++ 同算法复算逐通道校验 可见 IBL、非全黑非饱和）。
+    bool t54_recorded = false;
+    if (!t54_ibl_selftest_done_) {
+        t54_ibl_selftest_done_ = true;
+        t54_recorded = RecordIBLSelfTest();
+    }
+    // Task 5 Subtask 5：每会话一次 WBOIT 自检（两层半透明 accum/reveal MRT + resolve 合成 → 回读 C++
+    // 同公式复算逐通道校验 红蓝双层均有贡献）。
+    bool t55_recorded = false;
+    if (!t55_wboit_selftest_done_) {
+        t55_wboit_selftest_done_ = true;
+        t55_recorded = RecordWBOITSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1933,6 +2213,9 @@ void WebGPURhiDevice::EndFrame() {
     if (t44_recorded) KickGpuDrivenHiZCullSelfTestReadback();
     if (t51_recorded) KickCSMShadowSelfTestReadback();
     if (t52_recorded) KickDeferredSelfTestReadback();
+    if (t53_recorded) KickHDRSelfTestReadback();
+    if (t54_recorded) KickIBLSelfTestReadback();
+    if (t55_recorded) KickWBOITSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -7162,6 +7445,643 @@ void WebGPURhiDevice::KickDeferredSelfTestReadback() {
     ctx->rb_pixels = t52_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     t52_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT52RtBytes, OnT52PixelsMapped, ctx);
+}
+
+// ============================================================================
+// Task 5 Subtask 3（T5-3）：HDR auto-exposure 亮度归约 + ACES tonemap parity 离屏自检。
+// ============================================================================
+bool WebGPURhiDevice::RecordHDRSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // RT：HDR 场景（8×8）、平均 log 亮度（1×1）、自动曝光（1×1）、tonemap color（64×64，CopySrc）。
+    auto make_rt = [&](unsigned int& rt, uint32_t dim) {
+        if (rt) return;
+        RenderTargetDesc d;
+        d.width = static_cast<int>(dim);
+        d.height = static_cast<int>(dim);
+        d.has_color = true;
+        d.has_depth = false;
+        rt = CreateRenderTarget(d);
+    };
+    make_rt(t53_scene_rt_, kT53SceneDim);
+    make_rt(t53_lum_rt_, 1);
+    make_rt(t53_exposure_rt_, 1);
+    make_rt(t53_color_rt_, kT53RtSize);
+
+    // 共享 PSO（无深度/无剔除/blend off）。
+    if (!t53_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t53_pso_ = CreatePipelineState(d);
+    }
+    // ①HDR 场景程序：输出常量 (4,2,1)。
+    if (!t53_scene_program_) {
+        static const char* kSceneWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  return vec4<f32>(4.0, 2.0, 1.0, 1.0);
+}
+)WGSL";
+        t53_scene_program_ = CreateShaderProgram(kSceneWGSL, "");
+    }
+    // ②亮度归约程序：textureLoad 8×8 采样点算平均 log 亮度（逻辑同 lum_compute.frag）。
+    if (!t53_reduce_program_) {
+        static const char* kReduceWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var scene_tex : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let dims = vec2<i32>(textureDimensions(scene_tex, 0));
+  var logSum = 0.0;
+  for (var x = 0; x < 8; x = x + 1) {
+    for (var y = 0; y < 8; y = y + 1) {
+      let uv = (vec2<f32>(f32(x), f32(y)) + vec2<f32>(0.5, 0.5)) / 8.0;
+      let c = vec2<i32>(uv * vec2<f32>(dims));
+      let rgb = textureLoad(scene_tex, c, 0).rgb;
+      let lum = dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+      logSum = logSum + log(max(lum, 0.0001));
+    }
+  }
+  let avgLogLum = logSum / 64.0;
+  return vec4<f32>(avgLogLum, 0.0, 0.0, 1.0);
+}
+)WGSL";
+        t53_reduce_program_ = CreateShaderProgram(kReduceWGSL, "");
+    }
+    // ③lum_adapt 程序：avgLum=exp(avgLogLum)→0.18/avgLum 曝光→clamp（逻辑同 lum_adapt.frag，补偿=0）。
+    if (!t53_adapt_program_) {
+        static const char* kAdaptWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var lum_tex : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let avgLogLum = textureLoad(lum_tex, vec2<i32>(0, 0), 0).r;
+  let avgLum = exp(avgLogLum);
+  var targetExposure = 0.18 / max(avgLum, 0.001);
+  targetExposure = clamp(targetExposure, 0.01, 10.0);
+  return vec4<f32>(targetExposure, 0.0, 0.0, 1.0);
+}
+)WGSL";
+        t53_adapt_program_ = CreateShaderProgram(kAdaptWGSL, "");
+    }
+    // ④tonemap 程序：ACES(hdr*exposure)+gamma(1/2.2)（逻辑同 tonemapping.frag）。
+    if (!t53_tonemap_program_) {
+        static const char* kTonemapWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var scene_tex : texture_2d<f32>;
+@group(2) @binding(2) var exposure_tex : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+fn AcesFilmic(x : vec3<f32>) -> vec3<f32> {
+  let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let hdr = textureLoad(scene_tex, vec2<i32>(0, 0), 0).rgb;
+  let exposure = textureLoad(exposure_tex, vec2<i32>(0, 0), 0).r;
+  var result = AcesFilmic(hdr * exposure);
+  result = pow(result, vec3<f32>(1.0 / 2.2));
+  return vec4<f32>(result, 1.0);
+}
+)WGSL";
+        t53_tonemap_program_ = CreateShaderProgram(kTonemapWGSL, "");
+    }
+    // 全屏 quad（pos.xy，stride 8；各趟按 textureLoad 固定坐标取值，无需 uv）。
+    if (!t53_quad_vbo_) {
+        const float fsq[4 * 2] = {
+            -1.0f, -1.0f,   1.0f, -1.0f,
+             1.0f,  1.0f,  -1.0f,  1.0f,
+        };
+        t53_quad_vbo_ = CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t53_quad_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t53_scene_rt_ || !t53_lum_rt_ || !t53_exposure_rt_ || !t53_color_rt_ || !t53_pso_ ||
+        !t53_scene_program_ || !t53_reduce_program_ || !t53_adapt_program_ || !t53_tonemap_program_ ||
+        !t53_quad_vbo_ || !t53_quad_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-3] HDR 自检资源创建失败，跳过");
+        return false;
+    }
+
+    const std::vector<VertexAttr> attrs = { VertexAttr{0, 2, 0} };  // pos.xy
+    auto draw_quad = [&](unsigned int rt, uint32_t dim, unsigned int program,
+                         const glm::vec4& clear) -> bool {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color_enabled = true;
+        rp.clear_color = clear;
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
+        CmdBindPipeline(GetGraphicsPipeline(t53_pso_, program));
+        CmdBindVertexBuffer(0, t53_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t53_quad_ibo_, IndexType::UInt32);
+        return true;
+    };
+
+    // ①场景趟：渲已知 HDR (4,2,1) 到 8×8 场景 RT。
+    if (!draw_quad(t53_scene_rt_, kT53SceneDim, t53_scene_program_, glm::vec4(0.0f))) return false;
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // ②归约趟：绑场景纹理 slot0，算平均 log 亮度写 1×1 lum RT。
+    const unsigned int scene_tex = GetRenderTargetColorTexture(t53_scene_rt_, 0);
+    if (!scene_tex) { DEBUG_LOG_ERROR("WebGPU[T5-3] 取场景纹理失败，跳过"); return false; }
+    if (!draw_quad(t53_lum_rt_, 1, t53_reduce_program_, glm::vec4(0.0f))) return false;
+    CmdBindTexture(0u, scene_tex, TextureDim::Tex2D);  // → group2 binding0
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // ③lum_adapt 趟：绑 lum 纹理 slot0，算曝光写 1×1 exposure RT。
+    const unsigned int lum_tex = GetRenderTargetColorTexture(t53_lum_rt_, 0);
+    if (!lum_tex) { DEBUG_LOG_ERROR("WebGPU[T5-3] 取亮度纹理失败，跳过"); return false; }
+    if (!draw_quad(t53_exposure_rt_, 1, t53_adapt_program_, glm::vec4(0.0f))) return false;
+    CmdBindTexture(0u, lum_tex, TextureDim::Tex2D);  // → group2 binding0
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // ④tonemap 趟：绑场景纹理 slot0 + 曝光纹理 slot1，ACES+gamma 渲到 64×64 color RT。
+    const unsigned int exposure_tex = GetRenderTargetColorTexture(t53_exposure_rt_, 0);
+    if (!exposure_tex) { DEBUG_LOG_ERROR("WebGPU[T5-3] 取曝光纹理失败，跳过"); return false; }
+    if (!draw_quad(t53_color_rt_, kT53RtSize, t53_tonemap_program_, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f))) return false;
+    CmdBindTexture(0u, scene_tex, TextureDim::Tex2D);     // → group2 binding0
+    CmdBindTexture(1u, exposure_tex, TextureDim::Tex2D);  // → group2 binding2
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t53_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT53RtBytes);
+    t53_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t53_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t53_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT53RtRowBytes;
+    dst.layout.rowsPerImage = kT53RtSize;
+    WGPUExtent3D ext{kT53RtSize, kT53RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickHDRSelfTestReadback() {
+    if (!t53_rb_pixels_) return;
+    auto* ctx = new HDRSelfTestCtx();
+    ctx->rb_pixels = t53_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t53_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT53RtBytes, OnT53PixelsMapped, ctx);
+}
+
+// ============================================================================
+// Task 5 Subtask 4（T5-4）：IBL（BRDF LUT + irradiance + prefilter env + PBR 环境项）离屏自检。
+// ============================================================================
+bool WebGPURhiDevice::RecordIBLSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // RT：BRDF LUT（64×64）、irradiance（1×1）、prefilter（1×1）、PBR color（64×64，CopySrc）。
+    auto make_rt = [&](unsigned int& rt, uint32_t dim) {
+        if (rt) return;
+        RenderTargetDesc d;
+        d.width = static_cast<int>(dim);
+        d.height = static_cast<int>(dim);
+        d.has_color = true;
+        d.has_depth = false;
+        rt = CreateRenderTarget(d);
+    };
+    make_rt(t54_brdf_rt_, kT54LutDim);
+    make_rt(t54_irr_rt_, 1);
+    make_rt(t54_pref_rt_, 1);
+    make_rt(t54_color_rt_, kT54RtSize);
+
+    if (!t54_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t54_pso_ = CreatePipelineState(d);
+    }
+    // ①BRDF LUT 程序：GGX split-sum 积分（256 采样 Hammersley/ImportanceSampleGGX/Smith，uv.x=NdotV、
+    //   uv.y=roughness）。与 C++ T5IntegrateBRDF 逐行同算法。
+    if (!t54_brdf_program_) {
+        static const char* kBrdfWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.uv = uv; return o;
+}
+const PI : f32 = 3.14159265358979;
+fn RadicalInverse_VdC(bitsIn : u32) -> f32 {
+  var bits = bitsIn;
+  bits = (bits << 16u) | (bits >> 16u);
+  bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+  bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+  bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+  bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+  return f32(bits) * 2.3283064365386963e-10;
+}
+fn Hammersley(i : u32, n : u32) -> vec2<f32> {
+  return vec2<f32>(f32(i) / f32(n), RadicalInverse_VdC(i));
+}
+fn ImportanceSampleGGX(Xi : vec2<f32>, roughness : f32) -> vec3<f32> {
+  let a = roughness * roughness;
+  let phi = 2.0 * PI * Xi.x;
+  let cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+  let sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+  return vec3<f32>(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+fn GeometrySmith(NdotV : f32, NdotL : f32, roughness : f32) -> f32 {
+  let k = (roughness * roughness) / 2.0;
+  let gV = NdotV / (NdotV * (1.0 - k) + k);
+  let gL = NdotL / (NdotL * (1.0 - k) + k);
+  return gV * gL;
+}
+fn IntegrateBRDF(NdotV : f32, roughness : f32) -> vec2<f32> {
+  let V = vec3<f32>(sqrt(1.0 - NdotV * NdotV), 0.0, NdotV);
+  var A = 0.0;
+  var B = 0.0;
+  let N = 256u;
+  for (var i = 0u; i < N; i = i + 1u) {
+    let Xi = Hammersley(i, N);
+    let H = ImportanceSampleGGX(Xi, roughness);
+    let VdotH = dot(V, H);
+    let L = 2.0 * VdotH * H - V;
+    let NdotL = max(L.z, 0.0);
+    let NdotH = max(H.z, 0.0);
+    let vh = max(VdotH, 0.0);
+    if (NdotL > 0.0) {
+      let G = GeometrySmith(NdotV, NdotL, roughness);
+      let G_Vis = (G * vh) / (NdotH * NdotV);
+      let Fc = pow(1.0 - vh, 5.0);
+      A = A + (1.0 - Fc) * G_Vis;
+      B = B + Fc * G_Vis;
+    }
+  }
+  return vec2<f32>(A / f32(N), B / f32(N));
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let res = IntegrateBRDF(max(i.uv.x, 0.001), i.uv.y);
+  return vec4<f32>(res.x, res.y, 0.0, 1.0);
+}
+)WGSL";
+        t54_brdf_program_ = CreateShaderProgram(kBrdfWGSL, "");
+    }
+    // ②irradiance 程序：输出常量辐照度（常量环境半球辐照积分即常量）。
+    if (!t54_irr_program_) {
+        static const char* kIrrWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.uv = uv; return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  return vec4<f32>(0.4, 0.5, 0.6, 1.0);
+}
+)WGSL";
+        t54_irr_program_ = CreateShaderProgram(kIrrWGSL, "");
+    }
+    // ③prefilter 程序：输出常量预滤波镜面色。
+    if (!t54_pref_program_) {
+        static const char* kPrefWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.uv = uv; return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  return vec4<f32>(0.5, 0.5, 0.5, 1.0);
+}
+)WGSL";
+        t54_pref_program_ = CreateShaderProgram(kPrefWGSL, "");
+    }
+    // ④PBR 环境项程序：绑 LUT/irr/pref 三纹理，split-sum 合成 ambient = kD*irr*albedo + pref*(F*brdf.x+brdf.y)。
+    if (!t54_pbr_program_) {
+        static const char* kPbrWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var brdf_tex : texture_2d<f32>;
+@group(2) @binding(2) var irr_tex  : texture_2d<f32>;
+@group(2) @binding(4) var pref_tex : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.uv = uv; return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let albedo = vec3<f32>(0.8, 0.2, 0.2);
+  let metallic = 0.0;
+  let roughness = 0.4921875;  // = (31.5)/64，与采样的 LUT texel 行对应
+  let NdotV = 1.0;
+  let F0 = vec3<f32>(0.04, 0.04, 0.04);
+  let Fr = F0 + (max(vec3<f32>(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+  let kS = Fr;
+  let kD = (vec3<f32>(1.0, 1.0, 1.0) - kS) * (1.0 - metallic);
+  let irradiance = textureLoad(irr_tex, vec2<i32>(0, 0), 0).rgb;
+  let diffuse = irradiance * albedo;
+  let prefiltered = textureLoad(pref_tex, vec2<i32>(0, 0), 0).rgb;
+  let brdf = textureLoad(brdf_tex, vec2<i32>(63, 31), 0).rg;
+  let specular = prefiltered * (Fr * brdf.x + vec3<f32>(brdf.y, brdf.y, brdf.y));
+  let ambient = kD * diffuse + specular;
+  return vec4<f32>(ambient, 1.0);
+}
+)WGSL";
+        t54_pbr_program_ = CreateShaderProgram(kPbrWGSL, "");
+    }
+    // 全屏 quad（pos.xy + uv，stride 16；BRDF LUT 趟用 uv，其余趟接收但不读）。
+    if (!t54_quad_vbo_) {
+        const float fsq[4 * 4] = {
+            -1.0f, -1.0f, 0.0f, 0.0f,   1.0f, -1.0f, 1.0f, 0.0f,
+             1.0f,  1.0f, 1.0f, 1.0f,  -1.0f,  1.0f, 0.0f, 1.0f,
+        };
+        t54_quad_vbo_ = CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t54_quad_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t54_brdf_rt_ || !t54_irr_rt_ || !t54_pref_rt_ || !t54_color_rt_ || !t54_pso_ ||
+        !t54_brdf_program_ || !t54_irr_program_ || !t54_pref_program_ || !t54_pbr_program_ ||
+        !t54_quad_vbo_ || !t54_quad_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-4] IBL 自检资源创建失败，跳过");
+        return false;
+    }
+
+    const std::vector<VertexAttr> attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 2, 8} };  // pos.xy + uv
+    auto begin_quad = [&](unsigned int rt, uint32_t dim, unsigned int program) -> bool {
+        RenderPassDesc rp;
+        rp.render_target = rt;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
+        CmdBindPipeline(GetGraphicsPipeline(t54_pso_, program));
+        CmdBindVertexBuffer(0, t54_quad_vbo_, 16, attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t54_quad_ibo_, IndexType::UInt32);
+        return true;
+    };
+
+    // ①BRDF LUT 趟。
+    if (!begin_quad(t54_brdf_rt_, kT54LutDim, t54_brdf_program_)) return false;
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+    // ②irradiance 趟。
+    if (!begin_quad(t54_irr_rt_, 1, t54_irr_program_)) return false;
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+    // ③prefilter 趟。
+    if (!begin_quad(t54_pref_rt_, 1, t54_pref_program_)) return false;
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // ④PBR 环境项趟：绑 LUT/irr/pref 三纹理，split-sum 合成渲到 64×64 color RT。
+    const unsigned int brdf_tex = GetRenderTargetColorTexture(t54_brdf_rt_, 0);
+    const unsigned int irr_tex  = GetRenderTargetColorTexture(t54_irr_rt_, 0);
+    const unsigned int pref_tex = GetRenderTargetColorTexture(t54_pref_rt_, 0);
+    if (!brdf_tex || !irr_tex || !pref_tex) {
+        DEBUG_LOG_ERROR("WebGPU[T5-4] 取 LUT/irr/pref 纹理失败，跳过");
+        return false;
+    }
+    if (!begin_quad(t54_color_rt_, kT54RtSize, t54_pbr_program_)) return false;
+    CmdBindTexture(0u, brdf_tex, TextureDim::Tex2D);  // → group2 binding0
+    CmdBindTexture(1u, irr_tex,  TextureDim::Tex2D);  // → group2 binding2
+    CmdBindTexture(2u, pref_tex, TextureDim::Tex2D);  // → group2 binding4
+    CmdDrawIndexed(6, 0, 0);
+    CmdEndRenderPass();
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t54_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT54RtBytes);
+    t54_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t54_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t54_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT54RtRowBytes;
+    dst.layout.rowsPerImage = kT54RtSize;
+    WGPUExtent3D ext{kT54RtSize, kT54RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickIBLSelfTestReadback() {
+    if (!t54_rb_pixels_) return;
+    auto* ctx = new IBLSelfTestCtx();
+    ctx->rb_pixels = t54_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t54_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT54RtBytes, OnT54PixelsMapped, ctx);
+}
+
+// ============================================================================
+// Task 5 Subtask 5（T5-5）：WBOIT（accum/reveal MRT + resolve）离屏自检。
+// ============================================================================
+bool WebGPURhiDevice::RecordWBOITSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // accum/reveal MRT（2 个 RGBA16Float 颜色附件，均 TextureBinding 可采样）。
+    if (!t55_mrt_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT55RtSize);
+        d.height = static_cast<int>(kT55RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        d.color_attachment_count = 2;
+        t55_mrt_rt_ = CreateRenderTarget(d);
+    }
+    // 离屏 color RT（RGBA16Float + CopySrc）。
+    if (!t55_color_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT55RtSize);
+        d.height = static_cast<int>(kT55RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t55_color_rt_ = CreateRenderTarget(d);
+    }
+    // 几何程序：两层半透明片元按 WBOIT 权重 shader 内解析累加，写 accum/reveal 2 附件 MRT。
+    if (!t55_geom_program_) {
+        static const char* kGeomWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+struct MRT {
+  @location(0) accum : vec4<f32>,
+  @location(1) reveal : vec4<f32>,
+};
+fn weightFn(z : f32) -> f32 {
+  return max(0.01, 3.0 * (1.0 - z));
+}
+@fragment fn fs_main(i : VsOut) -> MRT {
+  let c0 = vec3<f32>(1.0, 0.0, 0.0); let a0 = 0.5; let z0 = 0.2;  // layer0 红
+  let c1 = vec3<f32>(0.0, 0.0, 1.0); let a1 = 0.5; let z1 = 0.6;  // layer1 蓝
+  let w0 = a0 * weightFn(z0);
+  let w1 = a1 * weightFn(z1);
+  var accum = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  accum = accum + vec4<f32>(c0 * a0, a0) * w0;
+  accum = accum + vec4<f32>(c1 * a1, a1) * w1;
+  let reveal = (1.0 - a0) * (1.0 - a1);
+  var o : MRT;
+  o.accum = accum;
+  o.reveal = vec4<f32>(reveal, 0.0, 0.0, 1.0);
+  return o;
+}
+)WGSL";
+        t55_geom_program_ = CreateShaderProgram(kGeomWGSL, "");
+    }
+    if (!t55_geom_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t55_geom_pso_ = CreatePipelineState(d);
+    }
+    // resolve 程序：绑 accum/reveal 两纹理，avgColor=accum.rgb/max(accum.a,eps)、1-reveal 合成 over 黑背景。
+    if (!t55_resolve_program_) {
+        static const char* kResolveWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var accum_tex  : texture_2d<f32>;
+@group(2) @binding(2) var reveal_tex : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+@fragment fn fs_main(@builtin(position) frag : vec4<f32>) -> @location(0) vec4<f32> {
+  let c = vec2<i32>(i32(frag.x), i32(frag.y));
+  let accum = textureLoad(accum_tex, c, 0);
+  let reveal = textureLoad(reveal_tex, c, 0).r;
+  let avgColor = accum.rgb / max(accum.a, 1e-5);
+  let finalAlpha = 1.0 - reveal;
+  let outColor = avgColor * finalAlpha;  // over 黑背景
+  return vec4<f32>(outColor, 1.0);
+}
+)WGSL";
+        t55_resolve_program_ = CreateShaderProgram(kResolveWGSL, "");
+    }
+    if (!t55_resolve_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t55_resolve_pso_ = CreatePipelineState(d);
+    }
+    // 全屏 quad（pos.xy，stride 8）。
+    if (!t55_quad_vbo_) {
+        const float fsq[4 * 2] = {
+            -1.0f, -1.0f,   1.0f, -1.0f,
+             1.0f,  1.0f,  -1.0f,  1.0f,
+        };
+        t55_quad_vbo_ = CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t55_quad_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t55_mrt_rt_ || !t55_color_rt_ || !t55_geom_program_ || !t55_geom_pso_ ||
+        !t55_resolve_program_ || !t55_resolve_pso_ || !t55_quad_vbo_ || !t55_quad_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-5] WBOIT 自检资源创建失败，跳过");
+        return false;
+    }
+
+    const std::vector<VertexAttr> attrs = { VertexAttr{0, 2, 0} };  // pos.xy
+
+    // ①几何趟：全屏 quad 把两层 WBOIT 累加结果写 accum/reveal 2 附件 MRT。
+    {
+        RenderPassDesc rp;
+        rp.render_target = t55_mrt_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
+        CmdBindPipeline(GetGraphicsPipeline(t55_geom_pso_, t55_geom_program_));
+        CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t55_quad_ibo_, IndexType::UInt32);
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // ②resolve 趟：绑 accum slot0 + reveal slot1，合成渲到 64×64 color RT。
+    const unsigned int accum_tex  = GetRenderTargetColorTexture(t55_mrt_rt_, 0);
+    const unsigned int reveal_tex = GetRenderTargetColorTexture(t55_mrt_rt_, 1);
+    if (!accum_tex || !reveal_tex) {
+        DEBUG_LOG_ERROR("WebGPU[T5-5] 取 accum/reveal 纹理失败，跳过");
+        return false;
+    }
+    {
+        RenderPassDesc rp;
+        rp.render_target = t55_color_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
+        CmdBindPipeline(GetGraphicsPipeline(t55_resolve_pso_, t55_resolve_program_));
+        CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t55_quad_ibo_, IndexType::UInt32);
+        CmdBindTexture(0u, accum_tex,  TextureDim::Tex2D);  // → group2 binding0
+        CmdBindTexture(1u, reveal_tex, TextureDim::Tex2D);  // → group2 binding2
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t55_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT55RtBytes);
+    t55_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t55_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t55_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT55RtRowBytes;
+    dst.layout.rowsPerImage = kT55RtSize;
+    WGPUExtent3D ext{kT55RtSize, kT55RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickWBOITSelfTestReadback() {
+    if (!t55_rb_pixels_) return;
+    auto* ctx = new WBOITSelfTestCtx();
+    ctx->rb_pixels = t55_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t55_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT55RtBytes, OnT55PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
