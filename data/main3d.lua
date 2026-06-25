@@ -94,6 +94,29 @@ local function setup_ground()
     dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, false)
 end
 
+-- Deterministic dark "shadow" marker quad on the ground beneath the cube.
+-- The engine's forward CSM path does not produce a camera-visible ground
+-- projection (this holds on every desktop backend too -- see
+-- samples/lua/3d/3d_shadow_showcase.lua, whose canonical shadow demo uses the
+-- same fixed dark fallback marker). This quad stands in for the caster's cast
+-- shadow and, being static, keeps the dual-backend golden deterministic.
+local function setup_shadow_marker()
+    local marker = dse.ecs.create_entity()
+    -- A flat quad on the ground just below the cube, offset toward the camera so
+    -- it reads clearly in front of the cube's base. Lifted ~0.01 above the ground
+    -- (ground y=-0.6) so it wins the depth test against the coplanar ground quad.
+    dse.ecs.add_transform(marker, 0.0, -0.59, 0.7, 1.0, 1.0, 1.0)
+    local sx, sz = 1.25, 0.95
+    local v = { -sx, 0.0, -sz,   sx, 0.0, -sz,   sx, 0.0,  sz,  -sx, 0.0,  sz }
+    local idx = { 0, 2, 1, 0, 3, 2 }
+    -- MESH_UNLIT renders the vertex colour directly (no lighting, no PBR
+    -- dielectric specular floor), so the near-black colour reads as an opaque
+    -- dark shadow patch independent of scene lighting and backend.
+    dse.ecs.add_mesh_renderer(marker, 0.0015, 0.0015, 0.002, 1.0, v, idx)
+    dse.ecs.set_mesh_shader_variant(marker, "MESH_UNLIT")
+    dse.ecs.set_mesh_material(marker, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, false)
+end
+
 -- Explicit tone-mapping control. Forward3D has no HDR post chain, so the
 -- composite pass tone-maps with whatever exposure this component carries;
 -- pinning it (plus a soft vignette) keeps the framing tidy and the midtones
@@ -114,6 +137,7 @@ function Awake()
     setup_light()
     setup_post_process()
     setup_ground()
+    setup_shadow_marker()
     setup_cube()
     if dse.audio and dse.audio.play_bgm then
         dse.audio.play_bgm(AUDIO_CLIP, 0.2, true)
