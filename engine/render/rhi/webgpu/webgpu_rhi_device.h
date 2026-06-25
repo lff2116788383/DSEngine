@@ -246,6 +246,11 @@ public:
     /// B3b-4：将 storage image 绑定到 compute（group2，binding=unit）。read_only 暂忽略
     /// （WebGPU rgba8unorm storage 仅 write 访问；只读用例走采样路径）。
     void SetComputeTextureImage(unsigned int binding, unsigned int texture_handle, bool read_only) override;
+    /// B3b-7：按句柄 + mip 级绑定单 mip 视图到 compute group2 槽（引擎 Hi-Z build 真实 API 面）。
+    /// read_only=true→采样读（texture_2d<f32>，textureLoad）；false→storage 写（texture_storage_2d）。
+    /// 内部对 (句柄,mip) 缓存单层单 mip 视图后经 SetComputeImageViewExplicit 路由（绕开默认全 mip 视图）。
+    void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                   int mip_level, bool read_only, bool r32f = false) override;
 
     // 统一 GPU Buffer API：覆写以按 GpuBufferUsage 授予正确 WGPU usage 位
     // （storage/indirect/vertex/index/uniform），不经旧 deprecated CreateSSBO/CreateIndirectBuffer 路由。
@@ -375,6 +380,10 @@ private:
     };
     std::map<uint32_t, ComputeViewBind> cur_compute_image_views_;    ///< storage 写显式视图
     std::map<uint32_t, ComputeViewBind> cur_compute_texture_views_;  ///< 采样读显式视图
+    // B3b-7：(纹理句柄<<16 | mip) → 该纹理单层单 mip 视图缓存（SetComputeTextureImageMip 复用，
+    //   随纹理删除/Shutdown 释放）。避免每次 dispatch 重建视图。
+    std::map<uint64_t, WGPUTextureView> compute_mip_views_;
+    void InvalidateComputeMipViews(unsigned int texture_handle);  ///< 删纹理时清该句柄全部 mip 视图
     std::vector<uint8_t> cur_vs_push_;
     std::vector<uint8_t> cur_fs_push_;
 
@@ -558,7 +567,6 @@ private:
     unsigned int hzp_gen_ubo_ = 0;          ///< 生成趟参数 UBO（mip0 dim，group1 b0）
     std::vector<unsigned int> hzp_down_ubos_;  ///< 各下采样级参数 UBO（src_dim/dst_dim，group1 b0）
     unsigned int hzp_tex_ = 0;              ///< 单张 R32Float mip 链纹理（mip0 生成 + 逐级下采样 + copy 源）
-    std::vector<WGPUTextureView> hzp_mip_views_;  ///< per-mip 单层视图（采样读/storage 写，自检瞬态）
     WGPUBuffer hzp_rb_pixels_ = nullptr;    ///< 各级 mip 像素回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。

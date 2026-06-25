@@ -547,8 +547,9 @@ void OnHiZPyramidPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
                         static_cast<int>(status));
     }
     if (ok) {
-        DEBUG_LOG_INFO("WebGPU[B3b-6] Hi-Z storage-image 金字塔自检 PASS：per-mip 视图绑定 + {} 级逐级 "
-                       "2×2 max 下采样，回读各级 mip 全像素均 == CPU 预期递归 max（mip0..{}）",
+        DEBUG_LOG_INFO("WebGPU[B3b-7] Hi-Z storage-image 金字塔自检 PASS：句柄 SetComputeTextureImageMip "
+                       "（按 mip 级单层视图绑定）+ {} 级逐级 2×2 max 下采样，回读各级 mip 全像素均 == "
+                       "CPU 预期递归 max（mip0..{}）",
                        kHzpMips, kHzpMips - 1);
     } else {
         DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z storage-image 金字塔自检 FAIL");
@@ -846,10 +847,11 @@ void WebGPURhiDevice::Shutdown() {
     if (si_rb_pixels_)    { wgpuBufferRelease(si_rb_pixels_);        si_rb_pixels_ = nullptr; }
     // B3b-5 Hi-Z 下采样自检瞬态回读缓冲（同上：kick 后所有权转移给 ctx → 这里为 null）。
     if (hz_rb_pixels_)    { wgpuBufferRelease(hz_rb_pixels_);        hz_rb_pixels_ = nullptr; }
-    // B3b-6 Hi-Z 金字塔自检：per-mip 视图与回读缓冲（kick 后回读缓冲所有权转移给 ctx → null）。
-    for (WGPUTextureView v : hzp_mip_views_) if (v) wgpuTextureViewRelease(v);
-    hzp_mip_views_.clear();
+    // B3b-6 Hi-Z 金字塔自检回读缓冲（kick 后回读缓冲所有权转移给 ctx → null）。
     if (hzp_rb_pixels_)   { wgpuBufferRelease(hzp_rb_pixels_);       hzp_rb_pixels_ = nullptr; }
+    // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
+    for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
+    compute_mip_views_.clear();
     for (WGPUBuffer b : push_pool_) if (b) wgpuBufferRelease(b);
     push_pool_.clear();
     push_pool_used_ = 0;
@@ -1329,6 +1331,58 @@ void WebGPURhiDevice::SetComputeImageViewExplicit(uint32_t binding, WGPUTextureV
     else      m.erase(binding);
 }
 
+void WebGPURhiDevice::InvalidateComputeMipViews(unsigned int texture_handle) {
+    // 删纹理时清该句柄下全部缓存的单 mip 视图（key 高 32 位为句柄）。
+    const uint64_t lo = static_cast<uint64_t>(texture_handle) << 16;
+    const uint64_t hi = lo + 0xFFFF;
+    for (auto it = compute_mip_views_.begin(); it != compute_mip_views_.end();) {
+        if (it->first >= lo && it->first <= hi) {
+            if (it->second) wgpuTextureViewRelease(it->second);
+            it = compute_mip_views_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void WebGPURhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
+                                                int mip_level, bool read_only, bool r32f) {
+    // B3b-7：引擎 Hi-Z build 真实绑定面——按句柄 + mip 级绑定单层单 mip 视图到 compute group2 槽。
+    // 同一槽可在相邻 dispatch 间在「采样读 / storage 写」间切换（Hi-Z：先写 mip0，再逐级读 mip[k-1]
+    // 写 mip[k]），且无 DispatchCompute 间自动 ResetDrawState，故先从「读/写」两映射均擦除该槽，
+    // 再按本次 read_only 路由，避免上一次 dispatch 的陈旧绑定残留同槽。
+    cur_compute_texture_views_.erase(binding);
+    cur_compute_image_views_.erase(binding);
+    if (!texture_handle) return;
+
+    const TextureEntry* e = FindTexture(texture_handle);
+    if (!e || !e->texture) return;
+    if (mip_level < 0) mip_level = 0;
+    if (static_cast<uint32_t>(mip_level) >= e->mip_levels) return;
+
+    const WGPUTextureFormat fmt = r32f ? WGPUTextureFormat_R32Float : e->format;
+    const uint64_t key = (static_cast<uint64_t>(texture_handle) << 16) |
+                         static_cast<uint64_t>(static_cast<uint32_t>(mip_level));
+    WGPUTextureView view = nullptr;
+    auto cit = compute_mip_views_.find(key);
+    if (cit != compute_mip_views_.end()) {
+        view = cit->second;
+    } else {
+        WGPUTextureViewDescriptor vd{};
+        vd.format          = fmt;
+        vd.dimension       = WGPUTextureViewDimension_2D;
+        vd.baseMipLevel    = static_cast<uint32_t>(mip_level);
+        vd.mipLevelCount   = 1;
+        vd.baseArrayLayer  = 0;
+        vd.arrayLayerCount = 1;
+        vd.aspect          = WGPUTextureAspect_All;
+        view = wgpuTextureCreateView(e->texture, &vd);
+        if (!view) return;
+        compute_mip_views_[key] = view;
+    }
+    SetComputeImageViewExplicit(binding, view, fmt, WGPUTextureViewDimension_2D, read_only);
+}
+
 unsigned int WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
     const WGPUTextureUsageFlags usage = WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst;
     std::vector<const unsigned char*> faces(6, nullptr);
@@ -1391,6 +1445,7 @@ unsigned int WebGPURhiDevice::CreateTexture3D(int width, int height, int depth, 
 void WebGPURhiDevice::DeleteTexture(unsigned int texture_handle) {
     auto it = textures_.find(texture_handle);
     if (it == textures_.end()) return;
+    InvalidateComputeMipViews(texture_handle);  // B3b-7：先释放该句柄缓存的单 mip 视图
     DestroyTextureEntry(it->second);
     textures_.erase(it);
 }
@@ -3729,25 +3784,14 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         return false;
     }
 
-    // per-mip 单层单 mip 视图（采样读/storage 写共用，因 R32Float 单格式且单层）。
-    if (hzp_mip_views_.empty()) {
-        for (uint32_t k = 0; k < kHzpMips; ++k) {
-            WGPUTextureViewDescriptor vd{};
-            vd.format = WGPUTextureFormat_R32Float;
-            vd.dimension = WGPUTextureViewDimension_2D;
-            vd.baseMipLevel = k; vd.mipLevelCount = 1;
-            vd.baseArrayLayer = 0; vd.arrayLayerCount = 1;
-            vd.aspect = WGPUTextureAspect_All;
-            hzp_mip_views_.push_back(wgpuTextureCreateView(pte->texture, &vd));
-        }
-    }
-    for (WGPUTextureView v : hzp_mip_views_) if (!v) { DEBUG_LOG_ERROR("WebGPU[B3b-6] mip 视图创建失败"); return false; }
+    // B3b-7：改走引擎 Hi-Z build 真实绑定面 SetComputeTextureImageMip（句柄 + mip 级 + read_only +
+    // r32f），其内部对 (句柄,mip) 缓存单层单 mip 视图并经 SetComputeImageViewExplicit 路由，
+    // 故此自检同时验证「句柄→单 mip 视图」整条通路（不再手建 hzp_mip_views_）。
 
     // ①生成趟：写 mip0（8×8）渐变。
     ResetDrawState();
     CmdBindUniformBuffer(0, hzp_gen_ubo_, 0, sizeof(uint32_t) * 4);
-    SetComputeImageViewExplicit(0, hzp_mip_views_[0], WGPUTextureFormat_R32Float,
-                                WGPUTextureViewDimension_2D, /*read_only=*/false);
+    SetComputeTextureImageMip(0, hzp_tex_, 0, /*read_only=*/false, /*r32f=*/true);
     BeginComputePass();
     if (!cur_compute_pass_) { ResetDrawState(); return false; }
     DispatchCompute(hzp_gen_shader_, (kHzpBaseDim + 7u) / 8u, (kHzpBaseDim + 7u) / 8u, 1);
@@ -3758,10 +3802,8 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     for (uint32_t k = 1; k < kHzpMips; ++k) {
         const uint32_t dst_dim = kHzpBaseDim >> k;
         CmdBindUniformBuffer(0, hzp_down_ubos_[k - 1], 0, sizeof(uint32_t) * 4);
-        SetComputeImageViewExplicit(0, hzp_mip_views_[k - 1], WGPUTextureFormat_R32Float,
-                                    WGPUTextureViewDimension_2D, /*read_only=*/true);
-        SetComputeImageViewExplicit(1, hzp_mip_views_[k], WGPUTextureFormat_R32Float,
-                                    WGPUTextureViewDimension_2D, /*read_only=*/false);
+        SetComputeTextureImageMip(0, hzp_tex_, static_cast<int>(k - 1), /*read_only=*/true,  /*r32f=*/true);
+        SetComputeTextureImageMip(1, hzp_tex_, static_cast<int>(k),     /*read_only=*/false, /*r32f=*/true);
         BeginComputePass();
         if (!cur_compute_pass_) { ResetDrawState(); return false; }
         DispatchCompute(hzp_down_shader_, (dst_dim + 7u) / 8u, (dst_dim + 7u) / 8u, 1);
