@@ -1363,6 +1363,55 @@ void OnT51PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 5 Subtask 2 离屏自检常量 / 上下文 / 回读回调（延迟着色：MRT gbuffer + 延迟光照）---
+// 验证 WebGPU 能在一趟里把几何渲入「多渲染目标（MRT）gbuffer」（albedo/normal/position 3 个颜色附件），
+// 再在「随后的全屏光照趟」把这 3 张 gbuffer 纹理一并采样做延迟光照——即延迟管线「几何趟写 gbuffer →
+// 光照趟采样 gbuffer」的核心能力，逻辑同 deferred_lighting.frag（albedo·NdotL + ambient，法线长度<阈视为空像素）。
+//   ①几何趟：占据 NDC 中心 [-0.6,0.6]² 的 quad 渲入 64×64×3 gbuffer（albedo=(0.8,0.2,0.2)、normal 编码(0,0,1)、
+//     position=0；其余清 0 → normal 长度 0 视为空像素）。
+//   ②光照趟：全屏 quad 按 @builtin(position) 整数坐标 textureLoad 3 张 gbuffer → 中心几何受光为红、四角空像素为黑
+//     → 渲到 64×64 RGBA16Float RT → copy 回读校验 中心红（r 高、g/b 低）、四角黑。
+constexpr uint32_t kT52RtSize     = 64;                       ///< gbuffer / 离屏 color RT 边长
+constexpr uint32_t kT52RtRowBytes = kT52RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT52RtBytes    = kT52RtRowBytes * kT52RtSize;
+
+struct DeferredSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT52PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<DeferredSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT52RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, uint32_t ch) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT52RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[ch]);
+            };
+            const float cr = rd(32, 32, 0), cg = rd(32, 32, 1), cb = rd(32, 32, 2);  // 中心：受光红
+            const float corner = (rd(4, 4, 0) + rd(59, 4, 0) + rd(4, 59, 0) + rd(59, 59, 0)) * 0.25f;  // 四角：空像素黑
+            ok = (cr > 0.6f) && (cg < 0.4f) && (cb < 0.4f) && (corner < 0.1f);
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-2] 延迟着色自检像素：center=({},{},{}) corner_r_avg={}", cr, cg, cb, corner);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-2] 延迟着色自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-2] 延迟着色自检 PASS：MRT gbuffer（albedo/normal/position 3 附件一趟写）+ 光照趟"
+                       " textureLoad 3 张 gbuffer 做延迟光照正确——中心几何受光为红、四角空像素为黑（证明 MRT gbuffer "
+                       "+ 延迟光照采样能力，逻辑同 deferred_lighting.frag）");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-2] 延迟着色自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1567,6 +1616,8 @@ void WebGPURhiDevice::Shutdown() {
     if (t44_rb_out_)      { wgpuBufferRelease(t44_rb_out_);          t44_rb_out_ = nullptr; }
     // Task 5 Subtask 1 CSM 阴影自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t51_rb_pixels_)   { wgpuBufferRelease(t51_rb_pixels_);       t51_rb_pixels_ = nullptr; }
+    // Task 5 Subtask 2 延迟着色自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t52_rb_pixels_)   { wgpuBufferRelease(t52_rb_pixels_);       t52_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1852,6 +1903,13 @@ void WebGPURhiDevice::EndFrame() {
         t51_csm_selftest_done_ = true;
         t51_recorded = RecordCSMShadowSelfTest();
     }
+    // Task 5 Subtask 2：每会话一次延迟着色自检（几何趟写 MRT gbuffer → 全屏光照趟 textureLoad 3 张
+    // gbuffer 做延迟光照 → 回读校验 中心几何受光为红、四角空像素为黑）。
+    bool t52_recorded = false;
+    if (!t52_deferred_selftest_done_) {
+        t52_deferred_selftest_done_ = true;
+        t52_recorded = RecordDeferredSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1874,6 +1932,7 @@ void WebGPURhiDevice::EndFrame() {
     if (t43_recorded) KickGpuDrivenPBRSelfTestReadback();
     if (t44_recorded) KickGpuDrivenHiZCullSelfTestReadback();
     if (t51_recorded) KickCSMShadowSelfTestReadback();
+    if (t52_recorded) KickDeferredSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -6904,6 +6963,205 @@ void WebGPURhiDevice::KickCSMShadowSelfTestReadback() {
     ctx->rb_pixels = t51_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     t51_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT51RtBytes, OnT51PixelsMapped, ctx);
+}
+
+// Task 5 Subtask 2：延迟着色真链路自检。①几何趟把中心 quad 渲入 64×64×3 MRT gbuffer（albedo/normal/
+// position 一趟三附件）；②全屏光照趟把 3 张 gbuffer 纹理（GetRenderTargetColorTexture 0/1/2）绑到 group2
+// slot0/1/2，按 @builtin(position) 整数坐标 textureLoad 做延迟光照（NdotL·albedo + ambient，法线长度<阈
+// 视为空像素）→ 中心几何受光为红、四角空像素为黑 → copy 颜色 RT 回读校验。证明「几何趟写 MRT gbuffer →
+// 光照趟采样 gbuffer」延迟着色能力，逻辑同 deferred_lighting.frag。
+bool WebGPURhiDevice::RecordDeferredSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // gbuffer RT（3 个 RGBA16Float 颜色附件 albedo/normal/position，无深度；附件均 TextureBinding 可采样）。
+    if (!t52_gbuffer_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT52RtSize);
+        d.height = static_cast<int>(kT52RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        d.color_attachment_count = 3;
+        t52_gbuffer_rt_ = CreateRenderTarget(d);
+    }
+    // 离屏 color RT（RGBA16Float + CopySrc）。
+    if (!t52_color_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT52RtSize);
+        d.height = static_cast<int>(kT52RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t52_color_rt_ = CreateRenderTarget(d);
+    }
+    // 几何程序（写 MRT 3 附件，pos.xy@loc0）+ PSO（无深度/无剔除/blend off）。
+    if (!t52_geom_program_) {
+        static const char* kGeomWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+struct GBuf {
+  @location(0) albedo : vec4<f32>,
+  @location(1) normal : vec4<f32>,
+  @location(2) position : vec4<f32>,
+};
+@fragment fn fs_main(i : VsOut) -> GBuf {
+  var o : GBuf;
+  o.albedo   = vec4<f32>(0.8, 0.2, 0.2, 1.0);
+  o.normal   = vec4<f32>(0.5, 0.5, 1.0, 1.0);  // 编码法线(0,0,1)：*0.5+0.5
+  o.position = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+  return o;
+}
+)WGSL";
+        t52_geom_program_ = CreateShaderProgram(kGeomWGSL, "");
+    }
+    if (!t52_geom_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t52_geom_pso_ = CreatePipelineState(d);
+    }
+    // 延迟光照程序（textureLoad 3 张 gbuffer，pos.xy@loc0）+ PSO（无深度/无剔除/blend off）。
+    if (!t52_light_program_) {
+        static const char* kLightWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(0) var g_albedo   : texture_2d<f32>;
+@group(2) @binding(2) var g_normal   : texture_2d<f32>;
+@group(2) @binding(4) var g_position : texture_2d<f32>;
+struct VsOut { @builtin(position) pos : vec4<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); return o;
+}
+@fragment fn fs_main(@builtin(position) frag : vec4<f32>) -> @location(0) vec4<f32> {
+  let c = vec2<i32>(i32(frag.x), i32(frag.y));
+  let albedo = textureLoad(g_albedo, c, 0).rgb;
+  let nraw   = textureLoad(g_normal, c, 0).rgb;
+  let nv     = nraw * 2.0 - vec3<f32>(1.0, 1.0, 1.0);
+  if (length(nv) < 0.01) { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }  // 空像素（gbuffer 清 0）→ 黑
+  let N = normalize(nv);
+  let L = normalize(-vec3<f32>(0.0, 0.0, -1.0));  // 方向光朝 -z → 受光方向 +z
+  let ndl = max(dot(N, L), 0.0);
+  let light_color = vec3<f32>(1.0, 1.0, 1.0);
+  let diffuse = albedo * light_color * 1.0 * ndl;
+  let ambient = albedo * 0.2;
+  return vec4<f32>(diffuse + ambient, 1.0);
+}
+)WGSL";
+        t52_light_program_ = CreateShaderProgram(kLightWGSL, "");
+    }
+    if (!t52_light_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t52_light_pso_ = CreatePipelineState(d);
+    }
+    // 几何 quad：NDC 中心 [-0.6,0.6]²（pos.xy，stride 8）。
+    if (!t52_geom_vbo_) {
+        const float geo[4 * 2] = {
+            -0.6f, -0.6f,   0.6f, -0.6f,
+             0.6f,  0.6f,  -0.6f,  0.6f,
+        };
+        t52_geom_vbo_ = CreateBuffer(sizeof(geo), geo, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t52_geom_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    // 全屏 quad：NDC [-1,1]²（pos.xy，stride 8；光照趟按 @builtin(position) 取坐标，无需 uv）。
+    if (!t52_light_vbo_) {
+        const float fsq[4 * 2] = {
+            -1.0f, -1.0f,   1.0f, -1.0f,
+             1.0f,  1.0f,  -1.0f,  1.0f,
+        };
+        t52_light_vbo_ = CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t52_light_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t52_gbuffer_rt_ || !t52_color_rt_ || !t52_geom_program_ || !t52_geom_pso_ ||
+        !t52_light_program_ || !t52_light_pso_ || !t52_geom_vbo_ || !t52_geom_ibo_ ||
+        !t52_light_vbo_ || !t52_light_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-2] 延迟着色自检资源创建失败，跳过");
+        return false;
+    }
+
+    // ①几何趟：把中心 quad 渲入 MRT gbuffer（3 附件均清 0 → 空区 normal 长度 0；占用区写 albedo/normal/position）。
+    {
+        RenderPassDesc rp;
+        rp.render_target = t52_gbuffer_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
+        CmdBindPipeline(GetGraphicsPipeline(t52_geom_pso_, t52_geom_program_));
+        const std::vector<VertexAttr> geo_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
+        CmdBindVertexBuffer(0, t52_geom_vbo_, 8, geo_attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t52_geom_ibo_, IndexType::UInt32);
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // ②光照趟：把 3 张 gbuffer 颜色纹理绑到 slot0/1/2，全屏 quad 经 textureLoad 做延迟光照。
+    const unsigned int g_albedo   = GetRenderTargetColorTexture(t52_gbuffer_rt_, 0);
+    const unsigned int g_normal   = GetRenderTargetColorTexture(t52_gbuffer_rt_, 1);
+    const unsigned int g_position = GetRenderTargetColorTexture(t52_gbuffer_rt_, 2);
+    if (!g_albedo || !g_normal || !g_position) {
+        DEBUG_LOG_ERROR("WebGPU[T5-2] 取 gbuffer 颜色纹理失败，跳过");
+        return false;
+    }
+    {
+        RenderPassDesc rp;
+        rp.render_target = t52_color_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        CmdBeginRenderPass(rp);
+        if (!cur_pass_) return false;
+        CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
+        CmdBindPipeline(GetGraphicsPipeline(t52_light_pso_, t52_light_program_));
+        const std::vector<VertexAttr> light_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
+        CmdBindVertexBuffer(0, t52_light_vbo_, 8, light_attrs, VertexInputRate::PerVertex);
+        CmdBindIndexBuffer(t52_light_ibo_, IndexType::UInt32);
+        CmdBindTexture(0u, g_albedo,   TextureDim::Tex2D);  // → group2 binding0
+        CmdBindTexture(1u, g_normal,   TextureDim::Tex2D);  // → group2 binding2
+        CmdBindTexture(2u, g_position, TextureDim::Tex2D);  // → group2 binding4
+        CmdDrawIndexed(6, 0, 0);
+        CmdEndRenderPass();
+    }
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t52_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT52RtBytes);
+    t52_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t52_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t52_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT52RtRowBytes;
+    dst.layout.rowsPerImage = kT52RtSize;
+    WGPUExtent3D ext{kT52RtSize, kT52RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickDeferredSelfTestReadback() {
+    if (!t52_rb_pixels_) return;
+    auto* ctx = new DeferredSelfTestCtx();
+    ctx->rb_pixels = t52_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t52_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT52RtBytes, OnT52PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

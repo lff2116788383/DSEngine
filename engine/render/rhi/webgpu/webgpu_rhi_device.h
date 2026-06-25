@@ -853,6 +853,25 @@ private:
     unsigned int t51_recv_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
     WGPUBuffer   t51_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
 
+    // --- Task 5 Subtask 2 离屏自检（延迟着色：①几何趟把中心 quad 渲入 64×64×3 MRT gbuffer
+    //   （albedo/normal/position 三附件）；②全屏光照趟 textureLoad 3 张 gbuffer 做延迟光照渲到 64×64
+    //   RGBA16Float RT → copy 回读校验 中心几何受光为红、四角空像素为黑。证明「几何趟写 MRT gbuffer →
+    //   光照趟采样 gbuffer」的延迟着色能力，离屏隔离、不翻能力位，逻辑同 deferred_lighting.frag）---
+    bool t52_deferred_selftest_done_ = false;
+    bool RecordDeferredSelfTest();           ///< 录制 几何趟（MRT gbuffer）+ 光照趟 + copy 颜色→回读缓冲
+    void KickDeferredSelfTestReadback();     ///< 提交后发起异步 map 回读校验
+    unsigned int t52_gbuffer_rt_  = 0;       ///< gbuffer RT（3 个 RGBA16Float 颜色附件 albedo/normal/position）
+    unsigned int t52_color_rt_    = 0;       ///< 离屏 color RT（RGBA16Float + CopySrc）
+    unsigned int t52_geom_program_ = 0;      ///< 几何程序（写 MRT 3 附件，pos.xy@loc0）
+    unsigned int t52_geom_pso_    = 0;       ///< 几何 PSO（无深度/无剔除/blend off）
+    unsigned int t52_light_program_ = 0;     ///< 延迟光照程序（textureLoad 3 张 gbuffer，pos.xy@loc0）
+    unsigned int t52_light_pso_   = 0;       ///< 光照 PSO（无深度/无剔除/blend off）
+    unsigned int t52_geom_vbo_    = 0;       ///< 几何 quad 顶点缓冲（pos.xy，stride 8）
+    unsigned int t52_geom_ibo_    = 0;       ///< 几何 quad 索引缓冲（6 索引，UInt32）
+    unsigned int t52_light_vbo_   = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
+    unsigned int t52_light_ibo_   = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t52_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);
