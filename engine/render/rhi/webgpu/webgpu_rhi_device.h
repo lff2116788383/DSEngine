@@ -217,11 +217,22 @@ public:
     // B3a：Compute 基础设施（compute 管线 + SSBO 存储缓冲 + indirect 原语 + WGSL 自检）
     //   落地底层原语并以自检验证（dispatch→SSBO/indirect→回读校验）。
     // B3b 基础：CreateComputeShaderEx 已加 WGSL 源槽（见下），引擎 compute 入口可经其传入
-    //   手写 WGSL；自检即经此入口验证整条引擎-facing 通路。仍**不翻转**全局 SupportsCompute()：
-    //   高层 GPU-driven/bloom/skinning/hair 等 compute 消费方尚未逐特性手译 WGSL 且需逐消费方
-    //   能力门控审计，贸然翻转会使其以 0 句柄走 compute 路径破坏现有渲染。逐特性接入后再翻转
-    //   （SSBO 同步读回亦不支持，SupportsSSBOCompute() 保持 false）。
+    //   手写 WGSL；自检即经此入口验证整条引擎-facing 通路（B3a + B3b-2..13 离屏自检全 PASS）。
+    // Task 3：逐消费方门控审计通过后翻转 SupportsCompute()=true。审计结论（仅翻 SupportsCompute()，
+    //   保持 SupportsSSBOCompute()=false / SupportsIndirectDraw()=false / CreateHiZTexture()=0）：
+    //   - morph：已注入手译 WGSL（kMorphTargetCompWGSL，B3b-10 自检证实算法 + 调度命名 uniform/SSBO
+    //     绑定布局），翻转后真消费方路径可用。
+    //   - skinning/grass：门控 SupportsSSBOCompute()（仍 false）→ 维持 CPU 回退，不激活。
+    //   - GPU-driven cull/Hi-Z：门控 SupportsIndirectDraw()（false）/ hiz_texture==0（CreateHiZTexture
+    //     未覆写返回 0）→ 不激活。
+    //   - DDGI：CreateComputeShader(GLSL) 无 WGSL → 返回 0 → Init 优雅失败禁用（仅一次告警）。
+    //   - hair：未提供手译 WGSL → CreateComputeShaderEx 返回 0；HairInstance 首次失败置 compute_unavailable_
+    //     latch 永久跳过（不再每帧重试刷屏）。
+    //   - 管线裁剪：无任何 pass 置 requires_compute=true → 翻转对渲染图为中性（harness 双后端不回归）。
+    //   SSBO 同步读回仍不支持，SupportsSSBOCompute() 保持 false。
     // ============================================================
+    bool SupportsCompute() const override { return true; }
+
 
     /// 创建 compute shader。仅接受 WGSL（首非空行须为 `// dse-wgsl` 标记）：引擎 GLSL/SPIR-V
     /// compute 源无离线转译，返回 0 跳过。返回设备级 compute shader 句柄（0=失败）。
@@ -271,6 +282,12 @@ public:
     // （storage/indirect/vertex/index/uniform），不经旧 deprecated CreateSSBO/CreateIndirectBuffer 路由。
     BufferHandle CreateGpuBuffer(const GpuBufferDesc& desc, const void* initial_data) override;
     void UpdateGpuBuffer(BufferHandle handle, size_t offset, size_t size, const void* data) override;
+    // Task 3：compute/graphics SSBO 消费方（morph 等）经 BindGpuBuffer 绑定。路由到 cur_ssbos_
+    //   （与 CmdBindStorageBuffer 同槽位图，group3，size=0 表整缓冲）。基类默认走 deprecated BindSSBO
+    //   （no-op），翻转 SupportsCompute() 后若不覆写则消费方 SSBO 绑定全丢失。writable 在 WebGPU
+    //   compute 下无意义（storage 统一 read_write）。
+    void BindGpuBuffer(BufferHandle handle, uint32_t binding_point) override;
+    void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) override;
     void DeleteGpuBuffer(BufferHandle handle) override;
 
 private:

@@ -90,6 +90,10 @@ struct HairInstance {
 
     bool gpu_resources_valid = false;
 
+    /// Compute shader 懒编译失败后置位，后续帧直接跳过（避免每帧重试 + 错误刷屏）。
+    /// 桌面后端不会触发；仅当某后端 SupportsCompute()=true 但未提供该特性手译 WGSL（返回 0 句柄）时生效。
+    bool compute_unavailable_ = false;
+
     /// Compute shader 句柄（懒加载，首次 Simulate 时编译）
     unsigned int cs_integrate_   = 0;
     unsigned int cs_length_      = 0;

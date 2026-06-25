@@ -143,32 +143,34 @@ void HairInstance::DestroyComputeShaders(RhiDevice* rhi) {
 
 void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     if (!rhi || !gpu_resources_valid || current_lod >= 3) return;
-    if (!rhi->SupportsCompute()) return;
+    if (!rhi->SupportsCompute() || compute_unavailable_) return;
 
     // --- 懒加载 shader ---
+    // 任一编译失败即置位 compute_unavailable_：该后端虽报 SupportsCompute()=true 但未提供头发
+    // 物理手译 WGSL（返回 0 句柄），后续帧直接跳过，避免每帧重试 + 错误刷屏。
     if (cs_integrate_ == 0) {
         cs_integrate_ = rhi->CreateComputeShaderEx(
             kHairIntegrateSource, kHairIntegrateSourceVK, kHairIntegrateSourceHLSL,
             4, 0, 0, 48);
-        if (cs_integrate_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile integrate CS"); return; }
+        if (cs_integrate_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile integrate CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_length_ == 0) {
         cs_length_ = rhi->CreateComputeShaderEx(
             kHairLengthConstraintSource, kHairLengthConstraintSourceVK, kHairLengthConstraintSourceHLSL,
             3, 0, 0, 4);
-        if (cs_length_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile length CS"); return; }
+        if (cs_length_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile length CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_local_shape_ == 0) {
         cs_local_shape_ = rhi->CreateComputeShaderEx(
             kHairLocalShapeSource, kHairLocalShapeSourceVK, kHairLocalShapeSourceHLSL,
             3, 0, 0, 12);
-        if (cs_local_shape_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile local shape CS"); return; }
+        if (cs_local_shape_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile local shape CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_tangent_ == 0) {
         cs_tangent_ = rhi->CreateComputeShaderEx(
             kHairUpdateTangentSource, kHairUpdateTangentSourceVK, kHairUpdateTangentSourceHLSL,
             3, 0, 0, 12);
-        if (cs_tangent_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile tangent CS"); return; }
+        if (cs_tangent_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile tangent CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
 
     const int nv = static_cast<int>(total_vertex_count);
