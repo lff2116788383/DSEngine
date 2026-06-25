@@ -43,6 +43,42 @@ void main() {
 }
 )";
 
+// WebGPU 手译 WGSL（无离线 GLSL→WGSL 工具）：与上方 GLSL 450 逐句对应。命名 uniform 块经
+// group1 保留 binding；成员按 SetComputeUniformInt 调用序 16B 对齐（u_vertex_count@0、
+// u_target_count@16），与 WebGPU RHI 命名 uniform 定位方案一致。SSBO group3 b0..3。
+static const char* kMorphTargetCompWGSL = R"(// dse-wgsl
+struct BaseVertex { position : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+// 输入 SSBO 声明 read_write 以匹配 WebGPU RHI compute 绑定布局（统一 BufferBindingType_Storage，
+// 见 webgpu_rhi_device.cpp::BeginComputePass 布局生成）；着色器仅读取这些缓冲。
+@group(3) @binding(0) var<storage, read_write> base_vertices : array<BaseVertex>;
+struct MorphDelta { delta_pos : vec4<f32>, delta_normal : vec4<f32>, };
+@group(3) @binding(1) var<storage, read_write> morph_deltas : array<MorphDelta>;
+@group(3) @binding(2) var<storage, read_write> morph_weights : array<f32>;
+struct DeformedVertex { position : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+@group(3) @binding(3) var<storage, read_write> deformed_vertices : array<DeformedVertex>;
+struct PC { @align(16) u_vertex_count : i32, @align(16) u_target_count : i32, };
+@group(1) @binding(8) var<uniform> pc : PC;
+@compute @workgroup_size(256)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let vid = gid.x;
+  if (i32(vid) >= pc.u_vertex_count) { return; }
+  var pos = base_vertices[vid].position.xyz;
+  var nrm = base_vertices[vid].normal.xyz;
+  let tan = base_vertices[vid].tangent;
+  for (var t = 0; t < pc.u_target_count; t = t + 1) {
+    let w = morph_weights[t];
+    if (abs(w) < 0.0001) { continue; }
+    let delta_idx = u32(t) * u32(pc.u_vertex_count) + vid;
+    pos = pos + morph_deltas[delta_idx].delta_pos.xyz * w;
+    nrm = nrm + morph_deltas[delta_idx].delta_normal.xyz * w;
+  }
+  nrm = normalize(nrm);
+  deformed_vertices[vid].position = vec4<f32>(pos, 1.0);
+  deformed_vertices[vid].normal = vec4<f32>(nrm, 0.0);
+  deformed_vertices[vid].tangent = tan;
+}
+)";
+
 bool MorphTargetSystem::Init(RhiDevice* device) {
     if (!device) return false;
     device_ = device;
@@ -60,7 +96,8 @@ bool MorphTargetSystem::Init(RhiDevice* device) {
         4,   // ssbo_count: base, deltas, weights, output
         0,   // storage_image_count
         0,   // sampler_count
-        8);  // push_constant_bytes: 2 × int = 8 bytes
+        8,   // push_constant_bytes: 2 × int = 8 bytes
+        kMorphTargetCompWGSL);  // WebGPU 手译 WGSL 源
     if (compute_program_ == 0) {
         DEBUG_LOG_WARN("[MorphTargetSystem] Compute shader compilation failed; morph targets disabled");
         return false;

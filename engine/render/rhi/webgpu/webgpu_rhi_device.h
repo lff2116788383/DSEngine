@@ -624,6 +624,20 @@ private:
     unsigned int hc_hiz_tex_ = 0;          ///< Hi-Z r32float 纹理（SetComputeTextureSampler 绑定）
     WGPUBuffer hc_rb_out_ = nullptr;       ///< 可见性回读缓冲（MapRead|CopyDst）
 
+    // --- B3b-10 形变目标（morph）真链路自检（每会话一次：手译引擎 MorphTargetSystem compute 为 WGSL ——
+    //   base 顶点 SSBO（group3 b0）+ delta SSBO（b1）+ weights SSBO（b2）经命名 uniform 顶点/目标数 →
+    //   Σ weight·delta → normalize 法线 → 写形变顶点 SSBO（b3）→ copy 回读逐顶点校验 == CPU 预期。
+    //   离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool morph_selftest_done_ = false;
+    bool RecordMorphSelfTest();            ///< 录制 morph compute + copy 形变顶点 SSBO→回读缓冲
+    void KickMorphSelfTestReadback();      ///< 提交后发起异步 map 回读校验
+    unsigned int mf_shader_ = 0;           ///< morph compute shader（手译 MorphTargetSystem）
+    unsigned int mf_base_ = 0;             ///< base 顶点 SSBO（group3 b0）
+    unsigned int mf_delta_ = 0;            ///< morph delta SSBO（group3 b1）
+    unsigned int mf_weight_ = 0;           ///< weights SSBO（group3 b2）
+    unsigned int mf_out_ = 0;              ///< 形变顶点输出 SSBO（group3 b3）
+    WGPUBuffer mf_rb_out_ = nullptr;       ///< 形变顶点回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);

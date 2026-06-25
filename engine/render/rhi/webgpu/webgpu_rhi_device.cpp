@@ -662,6 +662,58 @@ void OnHiZCullMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-10 形变目标（morph target）真链路自检（常量 / ctx / 回读校验回调）---
+//   引擎 MorphTargetSystem 真实 compute（base 顶点 + Σ weight·delta → normalize 法线 → 写形变顶点）
+//   经手译 WGSL 接入（morph_target_system.cpp::kMorphTargetCompWGSL）。自检布置：4 顶点、2 形变目标，
+//   weights=[0.5,1.0]，dispatch 后回读 4×DeformedVertex（每 48B）逐顶点校验 pos==base+Σw·Δpos、
+//   法线归一化、w==1、tangent 透传。证明该消费方着色器 WebGPU 可用。离屏隔离，不翻能力位。
+constexpr uint32_t kMfVtxCount = 4;
+constexpr uint32_t kMfTgtCount = 2;
+constexpr uint32_t kMfOutBytes = kMfVtxCount * 48u;   // DeformedVertex = 3×vec4 = 48B
+// CPU 预期形变后位置：base_i + 0.5·(1,0,0) + 1.0·(0,2,0) = base_i + (0.5, 2.0, 0)
+const float kMfExpectedPos[kMfVtxCount][3] = {
+    {1.5f, 2.0f, 0.0f}, {0.5f, 3.0f, 0.0f}, {0.5f, 2.0f, 1.0f}, {1.5f, 3.0f, 1.0f},
+};
+
+struct MorphSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnMorphMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<MorphSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const float* v = static_cast<const float*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kMfOutBytes));
+        if (v) {
+            ok = true;
+            for (uint32_t i = 0; i < kMfVtxCount && ok; ++i) {
+                const float* p = v + i * 12u;            // pos.xyzw(0..3) normal.xyzw(4..7) tan(8..11)
+                for (int c = 0; c < 3; ++c) if (std::abs(p[c] - kMfExpectedPos[i][c]) > 0.01f) ok = false;
+                if (std::abs(p[3] - 1.0f) > 0.01f) ok = false;                 // position.w==1
+                if (std::abs(p[6] - 1.0f) > 0.01f) ok = false;                 // normal==(0,0,1)
+                if (!ok) {
+                    DEBUG_LOG_ERROR("WebGPU[B3b-10] morph 自检顶点{} 失配：pos=({},{},{},{}) nrm.z={} "
+                                    "exp_pos=({},{},{})", i, p[0], p[1], p[2], p[3], p[6],
+                                    kMfExpectedPos[i][0], kMfExpectedPos[i][1], kMfExpectedPos[i][2]);
+                }
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-10] morph 自检：结果回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-10] 形变目标自检 PASS：引擎 MorphTargetSystem 真 compute 逻辑"
+                       "（base + Σ weight·delta → normalize 法线 → 写形变顶点）经手译 WGSL 经"
+                       " SetComputeUniformInt + 4×SSBO 跑出形变顶点 == CPU 预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-10] 形变目标自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -957,6 +1009,8 @@ void WebGPURhiDevice::Shutdown() {
     if (cb_rb_out_)       { wgpuBufferRelease(cb_rb_out_);           cb_rb_out_ = nullptr; }
     // B3b-9 Hi-Z 剔除自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (hc_rb_out_)       { wgpuBufferRelease(hc_rb_out_);           hc_rb_out_ = nullptr; }
+    // B3b-10 morph 自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (mf_rb_out_)       { wgpuBufferRelease(mf_rb_out_);           mf_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1174,6 +1228,14 @@ void WebGPURhiDevice::EndFrame() {
         hc_recorded = RecordHiZCullSelfTest();
     }
 
+    // B3b-10：每会话一次形变目标（morph）自检（手译 MorphTargetSystem compute → base + Σ weight·delta
+    // → normalize 法线 → 写形变顶点 SSBO → copy 回读逐顶点校验）。仅自检、不翻转能力位、不碰 demo 帧。
+    bool mf_recorded = false;
+    if (!morph_selftest_done_) {
+        morph_selftest_done_ = true;
+        mf_recorded = RecordMorphSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1186,6 +1248,7 @@ void WebGPURhiDevice::EndFrame() {
     if (hzp_recorded) KickHiZPyramidSelfTestReadback();
     if (cb_recorded) KickComputeBindSelfTestReadback();
     if (hc_recorded) KickHiZCullSelfTestReadback();
+    if (mf_recorded) KickMorphSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -4338,6 +4401,117 @@ void WebGPURhiDevice::KickHiZCullSelfTestReadback() {
     ctx->rb_out = hc_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     hc_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kHcVisBytes, OnHiZCullMapped, ctx);
+}
+
+// B3b-10：形变目标真链路自检。手译引擎 MorphTargetSystem compute（morph_target_system.cpp
+// kMorphTargetCompWGSL，与上方 GLSL 450 逐句对应）：base 顶点 + Σ weight·delta（按目标）→
+// normalize 法线 → 写形变顶点。自检布置：4 顶点、2 目标、weights=[0.5,1.0]、delta 目标0 全 (1,0,0)、
+// 目标1 全 (0,2,0)（法线 delta 为 0，输出法线 == normalize(base.nrm)=(0,0,1)）。经引擎真实 compute API 面
+//（命名 uniform 顶点/目标数 + 4×SSBO）跑通，dispatch 后回读形变顶点逐顶点校验 == CPU 预期。
+bool WebGPURhiDevice::RecordMorphSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 与 morph_target_system.cpp::kMorphTargetCompWGSL 一致（离屏自检内联副本）。
+    static const char* kMorphWGSL = R"WGSL(// dse-wgsl
+struct BaseVertex { position : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+@group(3) @binding(0) var<storage, read_write> base_vertices : array<BaseVertex>;
+struct MorphDelta { delta_pos : vec4<f32>, delta_normal : vec4<f32>, };
+@group(3) @binding(1) var<storage, read_write> morph_deltas : array<MorphDelta>;
+@group(3) @binding(2) var<storage, read_write> morph_weights : array<f32>;
+struct DeformedVertex { position : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+@group(3) @binding(3) var<storage, read_write> deformed_vertices : array<DeformedVertex>;
+struct PC { @align(16) u_vertex_count : i32, @align(16) u_target_count : i32, };
+@group(1) @binding(8) var<uniform> pc : PC;
+@compute @workgroup_size(256)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let vid = gid.x;
+  if (i32(vid) >= pc.u_vertex_count) { return; }
+  var pos = base_vertices[vid].position.xyz;
+  var nrm = base_vertices[vid].normal.xyz;
+  let tan = base_vertices[vid].tangent;
+  for (var t = 0; t < pc.u_target_count; t = t + 1) {
+    let w = morph_weights[t];
+    if (abs(w) < 0.0001) { continue; }
+    let delta_idx = u32(t) * u32(pc.u_vertex_count) + vid;
+    pos = pos + morph_deltas[delta_idx].delta_pos.xyz * w;
+    nrm = nrm + morph_deltas[delta_idx].delta_normal.xyz * w;
+  }
+  nrm = normalize(nrm);
+  deformed_vertices[vid].position = vec4<f32>(pos, 1.0);
+  deformed_vertices[vid].normal = vec4<f32>(nrm, 0.0);
+  deformed_vertices[vid].tangent = tan;
+}
+)WGSL";
+
+    if (!mf_shader_) mf_shader_ = CreateComputeShaderEx("", "", "", 4, 0, 0, 8, kMorphWGSL);
+    if (!mf_base_) {
+        // 4 个 BaseVertex（pos.xyzw / normal.xyzw / tangent.xyzw）：法线统一 (0,0,1)，切线 (1,0,0,1)。
+        const float base[kMfVtxCount * 12] = {
+            1,0,0,1,  0,0,1,0,  1,0,0,1,
+            0,1,0,1,  0,0,1,0,  1,0,0,1,
+            0,0,1,1,  0,0,1,0,  1,0,0,1,
+            1,1,1,1,  0,0,1,0,  1,0,0,1,
+        };
+        GpuBufferDesc d; d.size = sizeof(base); d.usage = GpuBufferUsage::kStorage;
+        mf_base_ = CreateGpuBuffer(d, base).raw();
+    }
+    if (!mf_delta_) {
+        // delta 排布 [target][vertex]：目标0 各顶点 Δpos=(1,0,0)、目标1 各顶点 Δpos=(0,2,0)，Δnrm=0。
+        const float deltas[kMfTgtCount * kMfVtxCount * 8] = {
+            1,0,0,0, 0,0,0,0,  1,0,0,0, 0,0,0,0,  1,0,0,0, 0,0,0,0,  1,0,0,0, 0,0,0,0,
+            0,2,0,0, 0,0,0,0,  0,2,0,0, 0,0,0,0,  0,2,0,0, 0,0,0,0,  0,2,0,0, 0,0,0,0,
+        };
+        GpuBufferDesc d; d.size = sizeof(deltas); d.usage = GpuBufferUsage::kStorage;
+        mf_delta_ = CreateGpuBuffer(d, deltas).raw();
+    }
+    if (!mf_weight_) {
+        const float weights[kMfTgtCount] = {0.5f, 1.0f};
+        GpuBufferDesc d; d.size = sizeof(weights); d.usage = GpuBufferUsage::kStorage;
+        mf_weight_ = CreateGpuBuffer(d, weights).raw();
+    }
+    if (!mf_out_) {
+        GpuBufferDesc d; d.size = kMfOutBytes; d.usage = GpuBufferUsage::kStorage;
+        mf_out_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!mf_shader_ || !mf_base_ || !mf_delta_ || !mf_weight_ || !mf_out_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-10] morph 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经引擎 MorphTargetSystem 真实绑定面：4×SSBO（slot0..3）+ 命名 uniform（同消费方调用序/名）。
+    ResetDrawState();
+    CmdBindStorageBuffer(0, mf_base_, 0, kMfVtxCount * 12u * 4u);
+    CmdBindStorageBuffer(1, mf_delta_, 0, kMfTgtCount * kMfVtxCount * 8u * 4u);
+    CmdBindStorageBuffer(2, mf_weight_, 0, kMfTgtCount * 4u);
+    CmdBindStorageBuffer(3, mf_out_, 0, kMfOutBytes);
+    SetComputeUniformInt(mf_shader_, "_20.u_vertex_count", static_cast<int>(kMfVtxCount));
+    SetComputeUniformInt(mf_shader_, "_20.u_target_count", static_cast<int>(kMfTgtCount));
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(mf_shader_, (kMfVtxCount + 255u) / 256u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kMfOutBytes;
+    mf_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_out = FindBuffer(mf_out_);
+    if (!mf_rb_out_ || !be_out || !be_out->buffer) {
+        if (mf_rb_out_) { wgpuBufferRelease(mf_rb_out_); mf_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_out->buffer, 0, mf_rb_out_, 0, kMfOutBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickMorphSelfTestReadback() {
+    if (!mf_rb_out_) return;
+    auto* ctx = new MorphSelfTestCtx();
+    ctx->rb_out = mf_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    mf_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kMfOutBytes, OnMorphMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
