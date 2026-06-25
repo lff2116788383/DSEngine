@@ -663,6 +663,54 @@ void OnHiZCullMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 4 Subtask 4 Hi-Z 遮挡剔除真资源链路自检（常量 / ctx / 回读校验回调）---
+//   经 CreateHiZTexture 真资源建 8×8 R32Float 完整 mip 链（4 级）→ 引擎 HiZBuildPass 真实绑定面
+//   SetComputeTextureImageMip 写 mip0（texel(0,0)=0.9 占位遮挡深度、其余 0.1）+ 逐级 2×2 max 下采样
+//   （0.9 经 3 级金字塔传到 1×1 顶 mip）→ HiZCullPass 手译 WGSL 经 SetComputeTextureSampler
+//   (GetHiZGpuTexture) + GetHiZMipCount 采样金字塔判遮挡。3 个 AABB：①近物 z[-0.05,0]（test_depth≈
+//   0.47 < 顶 mip 0.9 → 可见）；②远物 z[0.85,0.9]（test_depth≈0.92 > 0.9 → 被金字塔遮挡剔除）；
+//   ③出屏。回读 3×u32 可见性 == [1,0,0]。近物可见恰证下采样把 0.9 传至顶 mip（否则误剔→失配可检）。
+constexpr uint32_t kT44HizDim   = 8;
+constexpr uint32_t kT44Mips     = 4;          // 8,4,2,1
+constexpr uint32_t kT44ObjCount = 3;
+constexpr uint32_t kT44VisBytes = kT44ObjCount * 4u;
+const uint32_t     kT44Expected[kT44ObjCount] = {1u, 0u, 0u};
+
+struct GpuDrivenHiZCullSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnT44HiZCullMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<GpuDrivenHiZCullSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* v = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kT44VisBytes));
+        if (v) {
+            ok = true;
+            for (uint32_t i = 0; i < kT44ObjCount; ++i) if (v[i] != kT44Expected[i]) ok = false;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T4-4] Hi-Z 剔除自检失配：vis=({},{},{}) exp=(1,0,0)",
+                                v[0], v[1], v[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-4] Hi-Z 剔除自检：结果回读映射失败 status={}",
+                        static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T4-4] GPU-driven Hi-Z 遮挡剔除自检 PASS：CreateHiZTexture 真资源建 "
+                       "R32Float mip 链 + SetComputeTextureImageMip 写 mip0 + 逐级 2×2 max 下采样建金字塔 "
+                       "+ HiZCullPass WGSL 经 GetHiZGpuTexture/GetHiZMipCount 采样判遮挡（近物可见/远物剔除）"
+                       "符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-4] GPU-driven Hi-Z 遮挡剔除自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B3b-10 形变目标（morph target）真链路自检（常量 / ctx / 回读校验回调）---
 //   引擎 MorphTargetSystem 真实 compute（base 顶点 + Σ weight·delta → normalize 法线 → 写形变顶点）
 //   经手译 WGSL 接入（morph_target_system.cpp::kMorphTargetCompWGSL）。自检布置：4 顶点、2 形变目标，
@@ -1466,6 +1514,8 @@ void WebGPURhiDevice::Shutdown() {
     if (t42_rb_pixels_)   { wgpuBufferRelease(t42_rb_pixels_);       t42_rb_pixels_ = nullptr; }
     // Task 4 Subtask 3 GPU-driven PBR 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t43_rb_pixels_)   { wgpuBufferRelease(t43_rb_pixels_);       t43_rb_pixels_ = nullptr; }
+    // Task 4 Subtask 4 GPU-driven Hi-Z 剔除自检可见性回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t44_rb_out_)      { wgpuBufferRelease(t44_rb_out_);          t44_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1737,6 +1787,13 @@ void WebGPURhiDevice::EndFrame() {
         t43_pbr_selftest_done_ = true;
         t43_recorded = RecordGpuDrivenPBRSelfTest();
     }
+    // Task 4 Subtask 4：每会话一次 GPU-driven Hi-Z 遮挡剔除真资源自检（CreateHiZTexture 建 mip 链 +
+    // SetComputeTextureImageMip 写 mip0 + 逐级 2×2 max 下采样 + HiZCullPass 采样判遮挡 → 回读校验近可见/远剔除）。
+    bool t44_recorded = false;
+    if (!t44_hiz_selftest_done_) {
+        t44_hiz_selftest_done_ = true;
+        t44_recorded = RecordGpuDrivenHiZCullSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1757,6 +1814,7 @@ void WebGPURhiDevice::EndFrame() {
     if (t41_recorded) KickMultiDrawIndirectSelfTestReadback();
     if (t42_recorded) KickMegaVaoSelfTestReadback();
     if (t43_recorded) KickGpuDrivenPBRSelfTestReadback();
+    if (t44_recorded) KickGpuDrivenHiZCullSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -3735,6 +3793,59 @@ void WebGPURhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
     CmdBindTexture(4, occlusion          ? occlusion          : w, TextureDim::Tex2D);
 }
 
+// Subtask 4：Hi-Z 遮挡剔除资源——WebGPU 无 GL 的 glTexImage2D-per-mip，改经 CreateTextureImpl 建
+//   R32Float 完整 mip 链纹理（usage=storage 写 + 采样读 + copy 源），nearest 过滤。hiz 句柄经独立
+//   发号，登记 hiz_textures_[hiz]=引擎纹理句柄；GetHiZGpuTexture 返回该引擎句柄供消费方传给
+//   SetComputeTextureImageMip（逐级下采样写）/ SetComputeTextureSampler（剔除采样读）。
+unsigned int WebGPURhiDevice::CreateHiZTexture(int width, int height) {
+    if (!EnsureInitialized() || !device_ || width <= 0 || height <= 0) return 0;
+
+    int mip_count = 1;
+    {
+        int w = width, h = height;
+        while (w > 1 || h > 1) {
+            w = std::max(1, w / 2);
+            h = std::max(1, h / 2);
+            ++mip_count;
+        }
+    }
+
+    const unsigned int tex = CreateTextureImpl(
+        WGPUTextureDimension_2D, WGPUTextureViewDimension_2D,
+        static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1,
+        WGPUTextureFormat_R32Float,
+        WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding |
+            WGPUTextureUsage_CopySrc | WGPUTextureUsage_CopyDst,
+        static_cast<uint32_t>(mip_count), 1, {nullptr},
+        TextureSamplerDesc::FromLinearFlag(false));
+    if (!tex) return 0;
+
+    const unsigned int handle = NextHandle();
+    hiz_textures_[handle] = tex;
+    DEBUG_LOG_INFO("WebGPU Hi-Z texture created: handle={} tex={} {}x{} mips={}",
+                   handle, tex, width, height, mip_count);
+    return handle;
+}
+
+void WebGPURhiDevice::DeleteHiZTexture(unsigned int handle) {
+    auto it = hiz_textures_.find(handle);
+    if (it == hiz_textures_.end()) return;
+    DeleteTexture(it->second);
+    hiz_textures_.erase(it);
+}
+
+int WebGPURhiDevice::GetHiZMipCount(unsigned int handle) const {
+    auto it = hiz_textures_.find(handle);
+    if (it == hiz_textures_.end()) return 0;
+    const TextureEntry* e = FindTexture(it->second);
+    return e ? static_cast<int>(e->mip_levels) : 0;
+}
+
+unsigned int WebGPURhiDevice::GetHiZGpuTexture(unsigned int handle) const {
+    auto it = hiz_textures_.find(handle);
+    return it != hiz_textures_.end() ? it->second : 0;
+}
+
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
 // ============================================================
@@ -5225,6 +5336,220 @@ void WebGPURhiDevice::KickHiZCullSelfTestReadback() {
     ctx->rb_out = hc_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     hc_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kHcVisBytes, OnHiZCullMapped, ctx);
+}
+
+// Task 4 Subtask 4：GPU-driven Hi-Z 遮挡剔除真资源链路自检。区别于 B3b-9（手建单 mip 恒值 Hi-Z 纹理
+// 仅验剔除 compute 逻辑），本自检走 CreateHiZTexture 真资源（R32Float 完整 mip 链）+ 引擎 HiZBuildPass
+// 真实绑定面（SetComputeTextureImageMip 写 mip0 占位深度 + 逐级 2×2 max 下采样建金字塔）+ HiZCullPass
+// 经 GetHiZGpuTexture/GetHiZMipCount 采样金字塔判遮挡，端到端串起资源 API 与既有原语。详见
+// GpuDrivenHiZCullSelfTestCtx / OnT44HiZCullMapped。离屏隔离、不翻 SupportsIndirectDraw()、不碰 demo 帧。
+bool WebGPURhiDevice::RecordGpuDrivenHiZCullSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 生成趟：写 mip0 占位遮挡深度——texel(0,0)=0.9（最近遮挡）、其余 0.1。group2 b0 storage 写。
+    static const char* kT44GenWGSL = R"WGSL(// dse-wgsl
+struct Params { dim : u32, pad0 : u32, pad1 : u32, pad2 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(2) @binding(0) var dst_img : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= params.dim || gid.y >= params.dim) { return; }
+  let occ = (gid.x == 0u) && (gid.y == 0u);
+  let v = select(0.1, 0.9, occ);
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(v, 0.0, 0.0, 0.0));
+}
+)WGSL";
+    // 下采样趟：读 mip[k-1] 采样视图 + 2×2 max 写 mip[k] storage 视图（与 B3b-6 同形）。
+    static const char* kT44DownWGSL = R"WGSL(// dse-wgsl
+struct Params { src_dim : u32, dst_dim : u32, pad0 : u32, pad1 : u32, };
+@group(1) @binding(0) var<uniform> params : Params;
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var dst_img : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (gid.x >= params.dst_dim || gid.y >= params.dst_dim) { return; }
+  let m = i32(params.src_dim) - 1;
+  let sx = i32(gid.x * 2u);
+  let sy = i32(gid.y * 2u);
+  let d00 = textureLoad(src_tex, vec2<i32>(sx, sy), 0).r;
+  let d10 = textureLoad(src_tex, vec2<i32>(min(sx + 1, m), sy), 0).r;
+  let d01 = textureLoad(src_tex, vec2<i32>(sx, min(sy + 1, m)), 0).r;
+  let d11 = textureLoad(src_tex, vec2<i32>(min(sx + 1, m), min(sy + 1, m)), 0).r;
+  let mx = max(max(d00, d10), max(d01, d11));
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(mx, 0.0, 0.0, 0.0));
+}
+)WGSL";
+    // 剔除趟：HiZCullPass 手译 WGSL（与 B3b-9 同源），采样金字塔（textureLoad-at-mip）判遮挡。
+    static const char* kT44CullWGSL = R"WGSL(// dse-wgsl
+struct AABB { min_point : vec4<f32>, max_point : vec4<f32>, };
+@group(3) @binding(0) var<storage, read_write> aabbs : array<AABB>;
+@group(3) @binding(1) var<storage, read_write> visibility : array<u32>;
+@group(2) @binding(0) var u_hiz_texture : texture_2d<f32>;
+struct PC {
+  @align(16) u_view_projection : mat4x4<f32>,
+  @align(16) u_screen_size     : vec2<f32>,
+  @align(16) u_mip_count       : i32,
+  @align(16) u_object_count    : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+
+fn sample_hiz(uv : vec2<f32>, mip : i32) -> f32 {
+  let base = vec2<f32>(textureDimensions(u_hiz_texture));
+  let dim = max(base / f32(1 << u32(mip)), vec2<f32>(1.0));
+  let coord = vec2<i32>(clamp(uv * dim, vec2<f32>(0.0), dim - vec2<f32>(1.0)));
+  return textureLoad(u_hiz_texture, coord, mip).r;
+}
+
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_object_count) { return; }
+  let aabb_min = aabbs[idx].min_point.xyz;
+  let aabb_max = aabbs[idx].max_point.xyz;
+  var ndc_min = vec2<f32>(1.0);
+  var ndc_max = vec2<f32>(-1.0);
+  var nearest_z = 1.0;
+  for (var i = 0; i < 8; i = i + 1) {
+    let corner = vec3<f32>(
+      select(aabb_min.x, aabb_max.x, (i & 1) != 0),
+      select(aabb_min.y, aabb_max.y, (i & 2) != 0),
+      select(aabb_min.z, aabb_max.z, (i & 4) != 0));
+    let clip = pc.u_view_projection * vec4<f32>(corner, 1.0);
+    if (clip.w <= 0.0) { visibility[idx] = 1u; return; }
+    let ndc = clip.xyz / clip.w;
+    ndc_min = min(ndc_min, ndc.xy);
+    ndc_max = max(ndc_max, ndc.xy);
+    nearest_z = min(nearest_z, ndc.z);
+  }
+  var uv_min = ndc_min * 0.5 + 0.5;
+  var uv_max = ndc_max * 0.5 + 0.5;
+  uv_min = clamp(uv_min, vec2<f32>(0.0), vec2<f32>(1.0));
+  uv_max = clamp(uv_max, vec2<f32>(0.0), vec2<f32>(1.0));
+  if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+    visibility[idx] = 0u; return;
+  }
+  let size_pixels = (uv_max - uv_min) * pc.u_screen_size;
+  let max_dim = max(size_pixels.x, size_pixels.y);
+  var mip_level = select(0.0, ceil(log2(max(max_dim, 1.0))), max_dim > 1.0);
+  mip_level = clamp(mip_level, 0.0, f32(pc.u_mip_count - 1));
+  let mip = i32(mip_level);
+  let test_depth = nearest_z * 0.5 + 0.5 - 0.005;
+  let uv_center = (uv_min + uv_max) * 0.5;
+  let h0 = sample_hiz(uv_center, mip);
+  let h1 = sample_hiz(uv_min, mip);
+  let h2 = sample_hiz(uv_max, mip);
+  let h3 = sample_hiz(vec2<f32>(uv_max.x, uv_min.y), mip);
+  let h4 = sample_hiz(vec2<f32>(uv_min.x, uv_max.y), mip);
+  let max_hiz = max(max(h0, h1), max(max(h2, h3), h4));
+  visibility[idx] = select(1u, 0u, test_depth > max_hiz);
+}
+)WGSL";
+
+    if (!t44_gen_shader_)  t44_gen_shader_  = CreateComputeShaderEx("", "", "", 0, 1, 0, 0,  kT44GenWGSL);
+    if (!t44_down_shader_) t44_down_shader_ = CreateComputeShaderEx("", "", "", 0, 1, 1, 0,  kT44DownWGSL);
+    if (!t44_cull_shader_) t44_cull_shader_ = CreateComputeShaderEx("", "", "", 2, 0, 1, 80, kT44CullWGSL);
+    if (!t44_gen_ubo_.raw()) {
+        const uint32_t params[4] = {kT44HizDim, 0u, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+        t44_gen_ubo_ = CreateGpuBuffer(d, params);
+    }
+    if (t44_down_ubos_.empty()) {
+        for (uint32_t k = 1; k < kT44Mips; ++k) {
+            const uint32_t src_dim = kT44HizDim >> (k - 1);
+            const uint32_t dst_dim = kT44HizDim >> k;
+            const uint32_t params[4] = {src_dim, dst_dim, 0u, 0u};
+            GpuBufferDesc d; d.size = sizeof(params); d.usage = GpuBufferUsage::kUniform;
+            t44_down_ubos_.push_back(CreateGpuBuffer(d, params).raw());
+        }
+    }
+    if (!t44_aabb_.raw()) {
+        // 3 个 AABB（min.xyzw/max.xyzw，w 占位 0）：单位 VP 下 NDC==世界坐标。
+        //  ①近物可见 z[-0.05,0]；②远物被金字塔遮挡 z[0.85,0.9]；③出屏 xy[1.5,2.0]。
+        const float aabbs[kT44ObjCount * 8] = {
+            -1.0f, -1.0f, -0.05f, 0.0f,   1.0f, 1.0f, 0.00f, 0.0f,
+            -1.0f, -1.0f,  0.85f, 0.0f,   1.0f, 1.0f, 0.90f, 0.0f,
+             1.5f,  1.5f, -0.50f, 0.0f,   2.0f, 2.0f, -0.40f, 0.0f,
+        };
+        GpuBufferDesc d; d.size = sizeof(aabbs); d.usage = GpuBufferUsage::kStorage;
+        t44_aabb_ = CreateGpuBuffer(d, aabbs);
+    }
+    if (!t44_vis_.raw()) {
+        GpuBufferDesc d; d.size = kT44VisBytes; d.usage = GpuBufferUsage::kStorage;
+        t44_vis_ = CreateGpuBuffer(d, nullptr);
+    }
+    if (!t44_hiz_handle_) t44_hiz_handle_ = CreateHiZTexture(kT44HizDim, kT44HizDim);
+
+    const unsigned int hiz_tex = GetHiZGpuTexture(t44_hiz_handle_);
+    const int mip_count = GetHiZMipCount(t44_hiz_handle_);
+    const TextureEntry* pte = FindTexture(hiz_tex);
+    if (!t44_gen_shader_ || !t44_down_shader_ || !t44_cull_shader_ || !t44_gen_ubo_.raw() ||
+        t44_down_ubos_.size() != kT44Mips - 1 || !t44_aabb_.raw() || !t44_vis_.raw() ||
+        !t44_hiz_handle_ || !hiz_tex || !pte || !pte->texture ||
+        mip_count != static_cast<int>(kT44Mips)) {
+        DEBUG_LOG_ERROR("WebGPU[T4-4] Hi-Z 剔除自检资源创建失败，跳过（mip_count={}）", mip_count);
+        return false;
+    }
+
+    // ①生成趟：写 mip0（8×8）占位遮挡深度。经引擎 HiZBuildPass 真实绑定面 SetComputeTextureImageMip。
+    ResetDrawState();
+    CmdBindUniformBuffer(0, t44_gen_ubo_.raw(), 0, sizeof(uint32_t) * 4);
+    SetComputeTextureImageMip(0, hiz_tex, 0, /*read_only=*/false, /*r32f=*/true);
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(t44_gen_shader_, (kT44HizDim + 7u) / 8u, (kT44HizDim + 7u) / 8u, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // ②逐级下采样趟：读 mip[k-1] + 2×2 max 写 mip[k]（独立 pass，pass 间屏障保证可见性）。
+    for (uint32_t k = 1; k < kT44Mips; ++k) {
+        const uint32_t dst_dim = kT44HizDim >> k;
+        CmdBindUniformBuffer(0, t44_down_ubos_[k - 1], 0, sizeof(uint32_t) * 4);
+        SetComputeTextureImageMip(0, hiz_tex, static_cast<int>(k - 1), /*read_only=*/true,  /*r32f=*/true);
+        SetComputeTextureImageMip(1, hiz_tex, static_cast<int>(k),     /*read_only=*/false, /*r32f=*/true);
+        BeginComputePass();
+        if (!cur_compute_pass_) { ResetDrawState(); return false; }
+        DispatchCompute(t44_down_shader_, (dst_dim + 7u) / 8u, (dst_dim + 7u) / 8u, 1);
+        EndComputePass();
+        ResetDrawState();
+    }
+
+    // ③剔除趟：经 HiZCullPass 真实绑定面——双 SSBO + 句柄采样金字塔（GetHiZGpuTexture）+ 命名 uniform。
+    const float kIdentity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    ResetDrawState();
+    CmdBindStorageBuffer(0, t44_aabb_.raw(), 0, kT44ObjCount * 8u * 4u);
+    CmdBindStorageBuffer(1, t44_vis_.raw(), 0, kT44VisBytes);
+    SetComputeTextureSampler(0, hiz_tex);
+    SetComputeUniformMat4(t44_cull_shader_, "u_view_projection", kIdentity);
+    SetComputeUniformVec2f(t44_cull_shader_, "u_screen_size", static_cast<float>(kT44HizDim),
+                           static_cast<float>(kT44HizDim));
+    SetComputeUniformInt(t44_cull_shader_, "u_mip_count", mip_count);
+    SetComputeUniformInt(t44_cull_shader_, "u_object_count", static_cast<int>(kT44ObjCount));
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(t44_cull_shader_, (kT44ObjCount + 63u) / 64u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kT44VisBytes;
+    t44_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_vis = FindBuffer(t44_vis_.raw());
+    if (!t44_rb_out_ || !be_vis || !be_vis->buffer) {
+        if (t44_rb_out_) { wgpuBufferRelease(t44_rb_out_); t44_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_vis->buffer, 0, t44_rb_out_, 0, kT44VisBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickGpuDrivenHiZCullSelfTestReadback() {
+    if (!t44_rb_out_) return;
+    auto* ctx = new GpuDrivenHiZCullSelfTestCtx();
+    ctx->rb_out = t44_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t44_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kT44VisBytes, OnT44HiZCullMapped, ctx);
 }
 
 // B3b-10：形变目标真链路自检。手译引擎 MorphTargetSystem compute（morph_target_system.cpp

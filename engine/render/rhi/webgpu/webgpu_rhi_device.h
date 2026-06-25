@@ -320,6 +320,14 @@ public:
                                unsigned int metallic_roughness,
                                unsigned int emissive, unsigned int occlusion) override;
 
+    // Subtask 4：Hi-Z 遮挡剔除资源——CreateHiZTexture 建 R32Float 完整 mip 链纹理（nearest 过滤，
+    //   usage=storage 写 + 采样读 + copy），供 HiZBuildPass 逐级 2×2 max 下采样填充、HiZCullPass 采样判遮挡。
+    //   GetHiZGpuTexture 返回引擎纹理句柄（消费方传给 SetComputeTextureImageMip/SetComputeTextureSampler）。
+    unsigned int CreateHiZTexture(int width, int height) override;
+    void DeleteHiZTexture(unsigned int handle) override;
+    int GetHiZMipCount(unsigned int handle) const override;
+    unsigned int GetHiZGpuTexture(unsigned int handle) const override;
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -793,6 +801,26 @@ private:
     BufferHandle t43_indirect_{};             ///< 1 条 indirect cmd（instanceCount=2）
     unsigned int t43_albedo_tex_ = 0;         ///< 白 albedo 纹理（验证纹理采样链路）
     WGPUBuffer   t43_rb_pixels_ = nullptr;    ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 4 Subtask 4：Hi-Z 纹理登记表（hiz 句柄 → 引擎纹理句柄，R32Float 完整 mip 链）---
+    std::unordered_map<unsigned int, unsigned int> hiz_textures_;  ///< hiz_handle → 引擎纹理句柄
+
+    // --- Task 4 Subtask 4 离屏自检（经 CreateHiZTexture 真资源建 mip 链 → 引擎-facing
+    //   SetComputeTextureImageMip 写 mip0 占位深度 + 逐级 2×2 max 下采样建金字塔 → HiZCullPass WGSL
+    //   经 SetComputeTextureSampler(GetHiZGpuTexture) + GetHiZMipCount 采样判遮挡 → 回读可见性 SSBO
+    //   校验近物可见/远物（被金字塔最大深度遮挡）剔除。离屏隔离、不翻 SupportsIndirectDraw()）---
+    bool t44_hiz_selftest_done_ = false;
+    bool RecordGpuDrivenHiZCullSelfTest();        ///< 录制 Hi-Z 资源建链 + 下采样 + 遮挡剔除 dispatch + copy
+    void KickGpuDrivenHiZCullSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int t44_hiz_handle_ = 0;             ///< CreateHiZTexture 返回的 hiz 句柄
+    unsigned int t44_gen_shader_ = 0;             ///< 写 mip0 占位深度的 compute
+    unsigned int t44_down_shader_ = 0;            ///< 逐级 2×2 max 下采样 compute
+    unsigned int t44_cull_shader_ = 0;            ///< HiZCullPass 手译 WGSL（采样金字塔判遮挡）
+    BufferHandle t44_gen_ubo_{};                  ///< 生成趟 params（dim）
+    std::vector<unsigned int> t44_down_ubos_;     ///< 各级下采样 params（src_dim/dst_dim）
+    BufferHandle t44_aabb_{};                     ///< AABB SSBO（group3 b0）
+    BufferHandle t44_vis_{};                      ///< 可见性 SSBO（group3 b1）
+    WGPUBuffer   t44_rb_out_ = nullptr;           ///< 可见性回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
