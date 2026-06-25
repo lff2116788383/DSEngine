@@ -14,6 +14,7 @@
 #include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -1983,6 +1984,40 @@ uint64_t WebGPURhiDevice::AllocGeomVersion(const void* data, uint64_t size) {
     return off;
 }
 
+void WebGPURhiDevice::EnsureShadowDepthFallback() {
+    // 懒建 1×1 Depth32 回退纹理，并在无活动 pass 时一次性清深=1.0（恒无遮挡）。
+    if (!device_) return;
+    if (!shadow_fallback_rt_) {
+        RenderTargetDesc d{};
+        d.width = 1; d.height = 1;
+        d.has_color = false;
+        d.has_depth = true;
+        shadow_fallback_rt_ = CreateRenderTarget(d);
+        shadow_fallback_depth_tex_ = GetRenderTargetDepthTexture(shadow_fallback_rt_);
+        shadow_fallback_cleared_ = false;
+    }
+    if (shadow_fallback_cleared_ || !frame_encoder_ || cur_pass_) return;
+    const TextureEntry* fb = FindTexture(shadow_fallback_depth_tex_);
+    if (!fb || !fb->view) return;
+    WGPURenderPassDepthStencilAttachment ds{};
+    ds.view = fb->view;
+    ds.depthLoadOp = WGPULoadOp_Clear;
+    ds.depthStoreOp = WGPUStoreOp_Store;
+    ds.depthClearValue = 1.0f;           // 深度=1 → SampleCascadeShadow 恒判无遮挡
+    ds.stencilLoadOp = WGPULoadOp_Undefined;
+    ds.stencilStoreOp = WGPUStoreOp_Undefined;
+    WGPURenderPassDescriptor pd{};
+    pd.colorAttachmentCount = 0;
+    pd.colorAttachments = nullptr;
+    pd.depthStencilAttachment = &ds;
+    WGPURenderPassEncoder p = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pd);
+    if (p) {
+        wgpuRenderPassEncoderEnd(p);
+        wgpuRenderPassEncoderRelease(p);
+        shadow_fallback_cleared_ = true;
+    }
+}
+
 void WebGPURhiDevice::BeginFrame() {
     last_frame_stats_ = RenderStats{};
     if (!EnsureInitialized()) return;
@@ -1998,6 +2033,8 @@ void WebGPURhiDevice::BeginFrame() {
     backbuffer_drawn_ = false;
     push_pool_used_ = 0;
     ResetDrawState();
+    // 5.1b：在任何前向 draw（采样 slot11 shadow atlas）之前，确保恒亮 Depth32 回退纹理就绪并已清深=1。
+    EnsureShadowDepthFallback();
 }
 
 void WebGPURhiDevice::EndFrame() {
@@ -2900,13 +2937,12 @@ struct PointLights {
 @group(1) @binding(3) var<uniform> point_lights : PointLights;
 @group(2) @binding(0) var albedo_tex : texture_2d<f32>;
 @group(2) @binding(1) var albedo_smp : sampler;
-// 注：CSM shadow atlas（flat unit11 → group2 binding22）暂不在 shipping 前向通道声明/采样——消费方
-//   mesh_renderer.cpp:788 在无 shadow map 时给 slot11 绑「白 RGBA8」回退纹理（CollectGroupBindings 按
-//   格式判 sampleType=Float），而深度采样要求 texture_depth_2d(sampleType=Depth)，二者在同一 PSO 的
-//   BGL 上不可兼容（与 receive_shadow 运行时门控无关，声明期即冲突）。故 DirectionalShadow 仍返回 0。
-//   WebGPU 的 CSM 深度图采样能力已由离屏自检 T5-1 证明（真 Depth32 atlas + texture_depth_2d + textureLoad
-//   PCF）；接真实路径需先为 slot11 备一张 Depth32 回退纹理（深度=1→恒亮）使各 draw sampleType 一致，
-//   属后续集成步骤（同 Task 4 的「自检→接真实路径」节奏）。
+// 5.1b：CSM shadow atlas（flat unit11 → group2 binding22）以 texture_depth_2d 采样（textureLoad 手动
+//   3×3 PCF，无需采样器）。消费方 mesh_renderer 在无 shadow map 时给 slot11 绑「白 RGBA8」回退（Float），
+//   WebGPU 后端在 CollectGroupBindings 处把该回退替换为恒亮 Depth32 回退纹理（深度=1→无遮挡），使本
+//   binding 的 sampleType 在所有 draw 上恒为 Depth、与此处声明一致（消除 BGL sampleType 冲突）。真实
+//   遮挡逻辑见下方 DirectionalShadow / SampleCascadeShadow（移植 forward_shaded.frag，离屏自检 T5-1 已验证）。
+@group(2) @binding(22) var shadow_atlas : texture_depth_2d;
 
 fn DistributionGGX(N : vec3<f32>, H : vec3<f32>, roughness : f32) -> f32 {
   let a = roughness * roughness;
@@ -2927,12 +2963,38 @@ fn GeometrySmith(N : vec3<f32>, V : vec3<f32>, L : vec3<f32>, roughness : f32) -
 fn FresnelSchlick(cosTheta : f32, F0 : vec3<f32>) -> vec3<f32> {
   return F0 + (vec3<f32>(1.0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
-// CSM 方向光阴影：占位返回 0（不采样 shadow atlas，原因见上方绑定注释——slot11 回退纹理 sampleType
-//   冲突，待接真实路径前备 Depth32 回退）。级联选择 / light-space 投影 / atlas 区域 / textureLoad PCF
-//   的 WebGPU 实现与正确性已由离屏自检 T5-1 验证（见 RecordCSMShadowSelfTest），逻辑与
-//   forward_shaded.frag 的 DirectionalShadow+SampleCascadeShadow 一致。
+// CSM 方向光阴影：移植 forward_shaded.frag 的 SampleCascadeShadow + DirectionalShadow（textureLoad 版
+//   手动 3×3 PCF，逻辑同离屏自检 T5-1）。slot11 由后端保证恒为 Depth32（真 atlas 或恒亮回退纹理）。
+fn SampleCascadeShadow(idx : i32, worldPos : vec3<f32>, bias : f32) -> f32 {
+  let lp = per_scene.light_space_matrices[idx] * vec4<f32>(worldPos, 1.0);
+  if (lp.w <= 1e-5) { return 0.0; }
+  var pc = lp.xyz / lp.w;
+  pc = pc * 0.5 + 0.5;
+  if (pc.z > 1.0) { return 0.0; }
+  if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0) { return 0.0; }
+  let region = per_scene.shadow_atlas_regions[idx];
+  let uv = pc.xy * region.xy + region.zw;
+  let dims = vec2<i32>(textureDimensions(shadow_atlas, 0));
+  let base = vec2<i32>(uv * vec2<f32>(dims));
+  var occ = 0.0;
+  for (var x = -1; x <= 1; x = x + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      let c = clamp(base + vec2<i32>(x, y), vec2<i32>(0, 0), dims - vec2<i32>(1, 1));
+      let d = textureLoad(shadow_atlas, c, 0);
+      occ = occ + select(0.0, 1.0, (pc.z - bias) > d);
+    }
+  }
+  return occ / 9.0;
+}
 fn DirectionalShadow(worldPos : vec3<f32>, N : vec3<f32>, L : vec3<f32>) -> f32 {
-  return 0.0;
+  if (per_scene.light_params.z < 0.5) { return 0.0; }   // receive_shadow 关
+  let viewDepth = abs((per_frame.view * vec4<f32>(worldPos, 1.0)).z);
+  var idx : i32 = 2;                                     // CSM_CASCADES - 1
+  if (viewDepth < per_scene.cascade_splits.x) { idx = 0; }
+  else if (viewDepth < per_scene.cascade_splits.y) { idx = 1; }
+  let bias = max(0.0025 * (1.0 - dot(N, L)), 0.0004);
+  let shadow = SampleCascadeShadow(idx, worldPos, bias);
+  return clamp(shadow * per_scene.light_params.y, 0.0, 1.0);  // y = shadow_strength
 }
 fn PointLightsLo(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
                  surface_albedo : vec3<f32>, roughness : f32, metallic : f32, F0 : vec3<f32>) -> vec3<f32> {
@@ -3449,18 +3511,46 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
                 if (!declared(slot * 2u)) continue;
                 const TextureEntry* te = FindTexture(t.handle);
                 if (!te || !te->view) continue;
+                WGPUTextureView      use_view = te->view;
+                WGPUSampler          use_smp  = te->sampler;
+                WGPUTextureSampleType use_st   = IsDepthFormat(te->format)
+                                                     ? WGPUTextureSampleType_Depth
+                                                     : WGPUTextureSampleType_Float;
+                TextureDim           use_dim  = t.dim;
+                // 5.1b：slot11（CSM shadow atlas → binding22，前向 WGSL 声明 texture_depth_2d）须恒以
+                //   Depth 采样。两种情形换用恒亮 Depth32 回退纹理：
+                //   (a) 消费方在无 shadow map 时绑「白 RGBA8」回退（Float）→ 统一 binding sampleType 为 Depth；
+                //   (b) 读写危险：当前 pass 把真 atlas 作可写附件（depth-only 阴影 atlas pass 仍复用 forward
+                //       PSO，逐 draw 绑 slot11=atlas），WebGPU 不允许同一同步作用域内既可写附件又被采样 → 用
+                //       只读回退纹理替代（阴影/prez 等 depth-only pass 本就不需要采样阴影，恒无遮挡安全）。
+                if (slot == 11u) {
+                    const bool not_depth = (use_st != WGPUTextureSampleType_Depth);
+                    const bool rw_hazard =
+                        std::find(cur_pass_attachment_texs_.begin(),
+                                  cur_pass_attachment_texs_.end(), t.handle)
+                        != cur_pass_attachment_texs_.end();
+                    if (not_depth || rw_hazard) {
+                        const TextureEntry* fb = shadow_fallback_depth_tex_
+                                                     ? FindTexture(shadow_fallback_depth_tex_) : nullptr;
+                        if (fb && fb->view) {
+                            use_view = fb->view;
+                            use_smp  = fb->sampler;
+                            use_st   = WGPUTextureSampleType_Depth;
+                            use_dim  = TextureDim::Tex2D;
+                        }
+                    }
+                }
                 BindingInfo tb;
                 tb.binding = slot * 2u; tb.kind = BindingInfo::Kind::Texture;
                 tb.visibility = WGPUShaderStage_Fragment;
-                tb.view_dim = ToViewDimension(t.dim);
-                tb.sample_type = IsDepthFormat(te->format) ? WGPUTextureSampleType_Depth
-                                                           : WGPUTextureSampleType_Float;
-                tb.view = te->view;
+                tb.view_dim = ToViewDimension(use_dim);
+                tb.sample_type = use_st;
+                tb.view = use_view;
                 out.push_back(tb);
                 BindingInfo sb;
                 sb.binding = slot * 2u + 1u; sb.kind = BindingInfo::Kind::Sampler;
                 sb.visibility = WGPUShaderStage_Fragment;
-                sb.sampler = te->sampler;
+                sb.sampler = use_smp;
                 out.push_back(sb);
             }
             break;
@@ -3764,6 +3854,7 @@ void WebGPURhiDevice::CmdBeginRenderPass(const RenderPassDesc& desc) {
     ResetDrawState();
     ReleasePassViews();
     cur_color_formats_.clear();
+    cur_pass_attachment_texs_.clear();
     cur_depth_format_ = WGPUTextureFormat_Undefined;
     cur_sample_count_ = 1;
     cur_pass_is_backbuffer_ = (desc.render_target == 0);
@@ -3799,6 +3890,7 @@ void WebGPURhiDevice::CmdBeginRenderPass(const RenderPassDesc& desc) {
         for (unsigned int th : rt->color_textures) {
             const TextureEntry* te = FindTexture(th);
             if (!te) continue;
+            cur_pass_attachment_texs_.push_back(th);
             WGPUTextureView v;
             if (rt->is_cube) {
                 v = MakeFaceView(*te, desc.cube_face >= 0 ? desc.cube_face : 0);
@@ -3818,6 +3910,7 @@ void WebGPURhiDevice::CmdBeginRenderPass(const RenderPassDesc& desc) {
         if (rt->depth_texture) {
             const TextureEntry* de = FindTexture(rt->depth_texture);
             if (de) {
+                cur_pass_attachment_texs_.push_back(rt->depth_texture);
                 WGPUTextureView v;
                 if (rt->is_cube) {
                     v = MakeFaceView(*de, desc.cube_face >= 0 ? desc.cube_face : 0);

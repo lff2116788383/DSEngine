@@ -436,6 +436,10 @@ private:
     uint32_t cur_rt_width_ = 0;   ///< 当前 pass 渲染目标宽（视口裁剪用）
     uint32_t cur_rt_height_ = 0;  ///< 当前 pass 渲染目标高
     std::vector<WGPUTextureView> cur_pass_views_;  ///< 本 pass 临时创建的面视图，pass 结束释放
+    // 当前 pass 的附件纹理句柄（颜色+深度）。用于 CollectGroupBindings 检测读写危险：若某采样 slot
+    // 绑定的纹理同时是本 pass 的可写附件（如 shadow atlas 的 Depth32 既作深度附件又被 slot11 采样），
+    // 则替换为只读回退纹理，规避 WebGPU「同一同步作用域内同时可写与被采样」校验失败。
+    std::vector<unsigned int> cur_pass_attachment_texs_;
 
     // --- B2 录制：当前绘制绑定（跨 Draw 持续，BeginRenderPass 时重置）---
     unsigned int cur_pso_handle_ = 0;
@@ -559,6 +563,16 @@ private:
     std::unordered_map<std::string, unsigned int> wgsl_program_cache_;
     unsigned int skybox_cube_vbo_ = 0;  ///< 内建天空盒 36 顶点立方体 VBO（懒初始化）
     std::set<unsigned int> logged_incomplete_programs_;  ///< 已告警过的缺绑定程序（去重日志）
+
+    // --- 5.1b：CSM shadow atlas（slot11）恒亮 Depth32 回退纹理 ---
+    //   消费方 mesh_renderer 在无 shadow map 时给 slot11 绑「白 RGBA8」（sampleType=Float），与前向
+    //   WGSL 的 texture_depth_2d（sampleType=Depth）声明在同一 PSO 的 BGL 上不可兼容。这里备一张 1×1
+    //   Depth32 纹理并清深=1.0（恒无遮挡），在 CollectGroupBindings 处把 slot11 的非深度回退替换为它，
+    //   使该 binding 的 sampleType 在所有 draw 上恒为 Depth。真 atlas 已是 Depth32，不受影响。
+    unsigned int shadow_fallback_rt_ = 0;          ///< 1×1 depth-only RT（懒建）
+    unsigned int shadow_fallback_depth_tex_ = 0;   ///< 其 Depth32 纹理句柄（slot11 回退）
+    bool shadow_fallback_cleared_ = false;         ///< 是否已清深=1.0（一次性）
+    void EnsureShadowDepthFallback();              ///< 懒建并一次性清深=1.0（须在无活动 pass 时调用）
 
     // --- B2 录制内部助手 ---
     void ResetDrawState();
