@@ -1162,6 +1162,59 @@ void OnT41PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 4 Subtask 2：Mega VAO 离屏自检常量 / 上下文 / 回读回调 ---
+// 经 CreateMegaVAO/UpdateMegaVBO/UpdateMegaIBO/BindMegaVAO 把 4 象限 BatchVertex(92B) 几何渲到 64×64 RT，
+// 4 象限各一种颜色（红/绿/蓝/黄）全部可见，回读校验各象限颜色就位——即 92B 布局 pos@0/color@12 解析正确、
+// BindMegaVAO 正确设置引擎 draw state。RT 同为 RGBA16Float（8B/texel，行 512B 满足 256 对齐）。
+constexpr uint32_t kT42Quads    = 4;      ///< 象限数
+constexpr uint32_t kT42RtSize   = 64;     ///< 离屏 RT 边长
+constexpr uint32_t kT42RtRowBytes = kT42RtSize * 8u;  ///< RGBA16Float 8B/texel
+constexpr uint32_t kT42RtBytes    = kT42RtRowBytes * kT42RtSize;
+
+struct MegaVaoSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT42PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<MegaVaoSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT42RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, float* o) {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT42RtRowBytes + x * 8u);
+                o[0] = BlHalfToFloat(p[0]); o[1] = BlHalfToFloat(p[1]); o[2] = BlHalfToFloat(p[2]);
+            };
+            float tl[3], tr[3], bl[3], br[3];
+            rd(16, 16, tl); rd(48, 16, tr); rd(16, 48, bl); rd(48, 48, br);
+            auto hi = [](float v) { return v > 0.4f; };
+            auto lo = [](float v) { return v < 0.15f; };
+            ok = (hi(tl[0]) && lo(tl[1]) && lo(tl[2])) &&  // TL 红
+                 (lo(tr[0]) && hi(tr[1]) && lo(tr[2])) &&  // TR 绿
+                 (lo(bl[0]) && lo(bl[1]) && hi(bl[2])) &&  // BL 蓝
+                 (hi(br[0]) && hi(br[1]) && lo(br[2]));     // BR 黄
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T4-2] MegaVAO 自检像素：TL({},{},{}) TR({},{},{}) "
+                                "BL({},{},{}) BR({},{},{})",
+                                tl[0], tl[1], tl[2], tr[0], tr[1], tr[2],
+                                bl[0], bl[1], bl[2], br[0], br[1], br[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-2] MegaVAO 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T4-2] Mega VAO 自检 PASS：CreateMegaVAO/UpdateMegaVBO/IBO + BindMegaVAO "
+                       "（BatchVertex 92B 布局 pos@0/color@12）+ 索引绘制 4 象限离屏像素（红/绿/蓝/黄各就位）符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-2] Mega VAO 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1358,6 +1411,8 @@ void WebGPURhiDevice::Shutdown() {
     if (bl_rb_out_)       { wgpuBufferRelease(bl_rb_out_);           bl_rb_out_ = nullptr; }
     // Task 4 Subtask 1 MDI 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t41_rb_pixels_)   { wgpuBufferRelease(t41_rb_pixels_);       t41_rb_pixels_ = nullptr; }
+    // Task 4 Subtask 2 Mega VAO 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t42_rb_pixels_)   { wgpuBufferRelease(t42_rb_pixels_);       t42_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1615,6 +1670,13 @@ void WebGPURhiDevice::EndFrame() {
         t41_mdi_selftest_done_ = true;
         t41_recorded = RecordMultiDrawIndirectSelfTest();
     }
+    // Task 4 Subtask 2：每会话一次 Mega VAO 真链路自检（CreateMegaVAO/UpdateMegaVBO/IBO + BindMegaVAO
+    // 设 BatchVertex 92B draw state + CmdDrawIndexed 渲到离屏 RT → copy 回读校验各象限颜色就位）。
+    bool t42_recorded = false;
+    if (!t42_mega_selftest_done_) {
+        t42_mega_selftest_done_ = true;
+        t42_recorded = RecordMegaVaoSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1633,6 +1695,7 @@ void WebGPURhiDevice::EndFrame() {
     if (hr_recorded) KickHairSelfTestReadback();
     if (bl_recorded) KickBloomSelfTestReadback();
     if (t41_recorded) KickMultiDrawIndirectSelfTestReadback();
+    if (t42_recorded) KickMegaVaoSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -3324,6 +3387,72 @@ void WebGPURhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int
     }
     if (cur_pass_is_backbuffer_) backbuffer_drawn_ = true;
     last_frame_stats_.draw_calls += static_cast<uint32_t>(draw_count);
+}
+
+// Task 4 Subtask 2：Mega VAO——WebGPU 无 VAO 对象，仅创建并记录 VBO/IBO 句柄（BatchVertex 92B 布局
+// 在 BindMegaVAO 时经引擎-facing CmdBindVertexBuffer 设置）。VBO 含 Vertex usage、IBO 含 Index usage，
+// 经 CreateGpuBuffer 授予 WGPU usage 位（始终附带 CopyDst|CopySrc 以支持 UpdateMegaVBO/IBO 子区更新）。
+VertexArrayHandle WebGPURhiDevice::CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                                 BufferHandle& out_vbo, BufferHandle& out_ibo) {
+    if (vbo_size_bytes == 0 || ibo_size_bytes == 0) { out_vbo = {}; out_ibo = {}; return {}; }
+    GpuBufferDesc vd; vd.size = vbo_size_bytes; vd.usage = GpuBufferUsage::kVertex;
+    GpuBufferDesc id; id.size = ibo_size_bytes; id.usage = GpuBufferUsage::kIndex;
+    BufferHandle vbo = CreateGpuBuffer(vd, nullptr);
+    BufferHandle ibo = CreateGpuBuffer(id, nullptr);
+    if (!vbo || !ibo) {
+        if (vbo) DeleteGpuBuffer(vbo);
+        if (ibo) DeleteGpuBuffer(ibo);
+        out_vbo = {}; out_ibo = {};
+        return {};
+    }
+    const unsigned int vao_id = next_mega_vao_id_++;
+    mega_vaos_[vao_id] = MegaVaoEntry{vbo.raw(), ibo.raw()};
+    out_vbo = vbo;
+    out_ibo = ibo;
+    return VertexArrayHandle{vao_id};
+}
+
+void WebGPURhiDevice::UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) {
+    if (!vbo || size == 0 || !data) return;
+    UpdateGpuBuffer(vbo, offset, size, data);
+}
+
+void WebGPURhiDevice::UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) {
+    if (!ibo || size == 0 || !data) return;
+    UpdateGpuBuffer(ibo, offset, size, data);
+}
+
+void WebGPURhiDevice::DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) {
+    if (vao) mega_vaos_.erase(vao.raw());
+    if (vbo) DeleteGpuBuffer(vbo);
+    if (ibo) DeleteGpuBuffer(ibo);
+}
+
+// BindMegaVAO：据 VAO 句柄查 VBO/IBO，经引擎-facing CmdBindVertexBuffer（BatchVertex 92B 7 属性布局）+
+// CmdBindIndexBuffer 设引擎 draw state，供后续（Multi）DrawIndexed(Indirect) 使用。
+void WebGPURhiDevice::BindMegaVAO(VertexArrayHandle vao) {
+    if (!vao) return;
+    auto it = mega_vaos_.find(vao.raw());
+    if (it == mega_vaos_.end()) return;
+    // BatchVertex 92B 布局：pos(loc0,vec3,@0) color(loc1,vec4,@12) uv(loc2,vec2,@28)
+    //   normal(loc3,vec3,@36) tangent(loc4,vec3,@48) weights(loc5,vec4,@60) joints(loc6,vec4,@76)。
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0, 3, 0},
+        VertexAttr{1, 4, 12},
+        VertexAttr{2, 2, 28},
+        VertexAttr{3, 3, 36},
+        VertexAttr{4, 3, 48},
+        VertexAttr{5, 4, 60},
+        VertexAttr{6, 4, 76},
+    };
+    CmdBindVertexBuffer(0, it->second.vbo, 92, attrs, VertexInputRate::PerVertex);
+    CmdBindIndexBuffer(it->second.ibo, IndexType::UInt32);
+}
+
+void WebGPURhiDevice::UnbindVAO() {
+    // WebGPU 无 VAO 对象——清除已绑顶点/索引 draw state（等价 glBindVertexArray(0)）。
+    cur_ib_handle_ = 0;
+    if (!cur_vbs_.empty()) cur_vbs_[0].set = false;
 }
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
@@ -5637,6 +5766,132 @@ void WebGPURhiDevice::KickMultiDrawIndirectSelfTestReadback() {
     ctx->rb_pixels = t41_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     t41_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT41RtBytes, OnT41PixelsMapped, ctx);
+}
+
+// --- Task 4 Subtask 2：Mega VAO 离屏自检 ---
+// 经引擎-facing Mega VAO API（CreateMegaVAO → UpdateMegaVBO/IBO 上传 4 象限 BatchVertex(92B) 几何 →
+// BindMegaVAO 设 92B draw state → CmdDrawIndexed）把 4 象限 quad 渲到 64×64 离屏 RT，4 象限各一种颜色
+// 全部可见，随帧 copyTextureToBuffer，提交后异步回读半精解码校验各象限颜色就位——验证 BatchVertex 92B
+// 布局（pos@0/color@12）解析与 BindMegaVAO 设状态正确。
+bool WebGPURhiDevice::RecordMegaVaoSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    if (!t42_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT42RtSize);
+        d.height = static_cast<int>(kT42RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t42_rt_ = CreateRenderTarget(d);
+    }
+    // WGSL 程序：完整声明 BatchVertex 7 个 @location（与 BindMegaVAO 设的 92B 布局逐一对应），
+    //   顶点取 pos.xy/color.rgb 输出纯色（其余属性声明但未用，验证 92B 布局可被正确解析）。
+    if (!t42_program_) {
+        static const char* kWGSL = R"WGSL(// dse-wgsl
+struct VsIn {
+  @location(0) pos : vec3<f32>,
+  @location(1) color : vec4<f32>,
+  @location(2) uv : vec2<f32>,
+  @location(3) normal : vec3<f32>,
+  @location(4) tangent : vec3<f32>,
+  @location(5) weights : vec4<f32>,
+  @location(6) joints : vec4<f32>,
+};
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32>, };
+@vertex fn vs_main(i : VsIn) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(i.pos.xy, 0.0, 1.0); o.color = i.color.rgb; return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> { return vec4<f32>(i.color, 1.0); }
+)WGSL";
+        t42_program_ = CreateShaderProgram(kWGSL, "");
+    }
+    if (!t42_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t42_pso_ = CreatePipelineState(d);
+    }
+    // 经被测 Mega VAO API 建缓冲并上传 4 象限 BatchVertex(92B) 几何（pos/color，余属性默认）。
+    if (!t42_vao_) {
+        const float h = 0.35f;
+        const float cx[kT42Quads] = {-0.5f, 0.5f, -0.5f, 0.5f};
+        const float cy[kT42Quads] = { 0.5f, 0.5f, -0.5f, -0.5f};
+        const float col[kT42Quads][3] = {{1,0,0},{0,1,0},{0,0,1},{1,1,0}};
+        std::vector<BatchVertex> verts(kT42Quads * 4);
+        size_t vi = 0;
+        for (uint32_t i = 0; i < kT42Quads; ++i) {
+            const float qx[4] = {cx[i]-h, cx[i]+h, cx[i]+h, cx[i]-h};
+            const float qy[4] = {cy[i]-h, cy[i]-h, cy[i]+h, cy[i]+h};
+            for (int k = 0; k < 4; ++k) {
+                BatchVertex& bv = verts[vi++];
+                bv.pos = glm::vec3(qx[k], qy[k], 0.0f);
+                bv.color = glm::vec4(col[i][0], col[i][1], col[i][2], 1.0f);
+                bv.uv = glm::vec2(0.0f);
+            }
+        }
+        std::vector<uint32_t> idx(kT42Quads * 6);
+        for (uint32_t i = 0; i < kT42Quads; ++i) {
+            const uint32_t b = i * 4;
+            idx[i*6+0]=b+0; idx[i*6+1]=b+1; idx[i*6+2]=b+2;
+            idx[i*6+3]=b+0; idx[i*6+4]=b+2; idx[i*6+5]=b+3;
+        }
+        const size_t vbytes = verts.size() * sizeof(BatchVertex);
+        const size_t ibytes = idx.size() * sizeof(uint32_t);
+        t42_vao_ = CreateMegaVAO(vbytes, ibytes, t42_vbo_, t42_ibo_);
+        UpdateMegaVBO(t42_vbo_, 0, vbytes, verts.data());
+        UpdateMegaIBO(t42_ibo_, 0, ibytes, idx.data());
+    }
+    if (!t42_rt_ || !t42_program_ || !t42_pso_ || !t42_vao_ || !t42_vbo_ || !t42_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T4-2] Mega VAO 自检资源创建失败，跳过");
+        return false;
+    }
+
+    RenderPassDesc rp;
+    rp.render_target = t42_rt_;
+    rp.clear_color_enabled = true;
+    rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    CmdBeginRenderPass(rp);
+    if (!cur_pass_) return false;
+    CmdSetViewport(0, 0, static_cast<int>(kT42RtSize), static_cast<int>(kT42RtSize));
+    const unsigned int pipe = GetGraphicsPipeline(t42_pso_, t42_program_);
+    CmdBindPipeline(pipe);
+    BindMegaVAO(t42_vao_);  // 被测：据记录的 VBO/IBO 设 BatchVertex 92B 引擎 draw state。
+    CmdDrawIndexed(kT42Quads * 6, 0, 0);
+    CmdEndRenderPass();
+
+    const RenderTargetEntry* rt = FindRenderTarget(t42_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT42RtBytes);
+    t42_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t42_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t42_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT42RtRowBytes;
+    dst.layout.rowsPerImage = kT42RtSize;
+    WGPUExtent3D ext{kT42RtSize, kT42RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickMegaVaoSelfTestReadback() {
+    if (!t42_rb_pixels_) return;
+    auto* ctx = new MegaVaoSelfTestCtx();
+    ctx->rb_pixels = t42_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t42_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT42RtBytes, OnT42PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

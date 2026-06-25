@@ -297,6 +297,16 @@ public:
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride,
                                   size_t byte_offset = 0) override;
 
+    // Subtask 2：Mega VAO——WebGPU 无 VAO 对象，记录 VBO/IBO 句柄 + BatchVertex 92B 布局；
+    //   BindMegaVAO 据记录经引擎-facing CmdBindVertexBuffer(92B 7 属性)/CmdBindIndexBuffer 设 draw state。
+    VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
+                                    BufferHandle& out_vbo, BufferHandle& out_ibo) override;
+    void UpdateMegaVBO(BufferHandle vbo, size_t offset, size_t size, const void* data) override;
+    void UpdateMegaIBO(BufferHandle ibo, size_t offset, size_t size, const void* data) override;
+    void DeleteMegaVAO(VertexArrayHandle vao, BufferHandle vbo, BufferHandle ibo) override;
+    void BindMegaVAO(VertexArrayHandle vao) override;
+    void UnbindVAO() override;
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -725,6 +735,25 @@ private:
     unsigned int t41_ibo_     = 0;          ///< 4 象限索引缓冲（每象限 6 索引，UInt32）
     unsigned int t41_indirect_ = 0;         ///< 预置 4 条 indirect cmd（instance_count=[1,0,1,0]）
     WGPUBuffer   t41_rb_pixels_ = nullptr;  ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 4 Subtask 2：Mega VAO 句柄记录（WebGPU 无 VAO 对象，仅记 VBO/IBO 句柄）---
+    struct MegaVaoEntry { unsigned int vbo = 0; unsigned int ibo = 0; };
+    std::unordered_map<unsigned int, MegaVaoEntry> mega_vaos_;  ///< VAO 句柄 → {vbo,ibo}
+    unsigned int next_mega_vao_id_ = 1;                         ///< VAO 句柄发号器（0 表无效）
+
+    // --- Task 4 Subtask 2 离屏自检（CreateMegaVAO → UpdateMegaVBO/IBO 上传 4 象限 BatchVertex(92B) 几何 →
+    //   BindMegaVAO 设 92B draw state → CmdDrawIndexed 渲到 64×64 离屏 RT → copy 回读半精解码校验
+    //   4 象限各自颜色就位（即 92B 布局 pos@0/color@12 解析正确）。离屏隔离、不翻能力位）---
+    bool t42_mega_selftest_done_ = false;
+    bool RecordMegaVaoSelfTest();          ///< 录制引擎-facing Mega VAO 绑定 + 索引绘制 + copy
+    void KickMegaVaoSelfTestReadback();    ///< 提交后发起异步 map 回读校验
+    unsigned int t42_rt_      = 0;         ///< 离屏 RT（RGBA16Float + CopySrc）
+    unsigned int t42_program_ = 0;         ///< BatchVertex 92B 布局 WGSL 程序（pos@loc0 + color@loc1）
+    unsigned int t42_pso_     = 0;         ///< PSO（无深度/无剔除/三角列表）
+    VertexArrayHandle t42_vao_{};          ///< 被测 Mega VAO 句柄
+    BufferHandle t42_vbo_{};               ///< Mega VBO 句柄
+    BufferHandle t42_ibo_{};               ///< Mega IBO 句柄
+    WGPUBuffer   t42_rb_pixels_ = nullptr; ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
