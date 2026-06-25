@@ -307,6 +307,19 @@ public:
     void BindMegaVAO(VertexArrayHandle vao) override;
     void UnbindVAO() override;
 
+    // Subtask 3：GPU-driven PBR——手译 PBR WGSL（PerFrame/PerScene UBO + 实例 SSBO(binding5) 取 model
+    //   + 材质 SSBO(binding9) + albedo 纹理桶）。SetupGPUDrivenPBRShader 激活程序/PSO + 上传并绑 UBO；
+    //   BindGPUDrivenTextures 绑 albedo（handle=0 → 默认白）；HasGPUDrivenPBRShader 报告编译可用性。
+    bool HasGPUDrivenPBRShader() const override;
+    void SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                 const glm::vec3& camera_pos,
+                                 const glm::vec3& light_dir, const glm::vec3& light_color,
+                                 float light_intensity, float ambient_intensity,
+                                 float shadow_strength = 0.0f) override;
+    void BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                               unsigned int metallic_roughness,
+                               unsigned int emissive, unsigned int occlusion) override;
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -754,6 +767,32 @@ private:
     BufferHandle t42_vbo_{};               ///< Mega VBO 句柄
     BufferHandle t42_ibo_{};               ///< Mega IBO 句柄
     WGPUBuffer   t42_rb_pixels_ = nullptr; ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 4 Subtask 3：GPU-driven PBR 程序/PSO/默认白纹理/PerFrame·PerScene UBO（惰性创建，跨帧复用）---
+    bool EnsureGpuDrivenPBRShader();             ///< 惰性编译手译 PBR WGSL 程序 + 建 PSO + 默认白纹理 + UBO
+    unsigned int gpu_driven_pbr_program_  = 0;   ///< 手译 PBR WGSL 程序（vs+fs 同源）
+    unsigned int gpu_driven_pbr_pso_      = 0;   ///< PBR PSO（depth test/write on、cull none、blend off）
+    bool         gpu_driven_pbr_failed_   = false;  ///< 程序编译失败标记（避免每帧重试）
+    BufferHandle gpu_driven_perframe_ubo_{};     ///< PerFrame UBO（group1 b0：vp/view/camera_pos）
+    BufferHandle gpu_driven_perscene_ubo_{};     ///< PerScene UBO（group1 b1：light_dir/color/params）
+    unsigned int white_texture_ = 0;             ///< 1×1 默认白纹理（BindGPUDrivenTextures handle=0 回退）
+
+    // --- Task 4 Subtask 3 离屏自检（SetupGPUDrivenPBRShader 激活 PBR 程序+绑 PerFrame/PerScene UBO →
+    //   BindGpuBuffer 实例 SSBO(b5,2 个 model 平移左右)+材质 SSBO(b9,红/绿 albedo) → BindMegaVAO 设 92B
+    //   draw state → BindGPUDrivenTextures(白 albedo) → MultiDrawIndexedIndirect(1 cmd,instanceCount=2)
+    //   渲到 64×64 离屏 RT → copy 回读半精解码校验左半红、右半绿。离屏隔离、不翻能力位）---
+    bool t43_pbr_selftest_done_ = false;
+    bool RecordGpuDrivenPBRSelfTest();        ///< 录制引擎-facing GPU-driven PBR indirect 绘制 + copy
+    void KickGpuDrivenPBRSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int t43_rt_      = 0;            ///< 离屏 RT（RGBA16Float + 深度，CopySrc）
+    VertexArrayHandle t43_vao_{};             ///< 单 quad Mega VAO
+    BufferHandle t43_vbo_{};                  ///< Mega VBO
+    BufferHandle t43_ibo_{};                  ///< Mega IBO
+    BufferHandle t43_inst_ssbo_{};            ///< 实例 SSBO（2×GPUInstanceData，b5）
+    BufferHandle t43_mat_ssbo_{};             ///< 材质 SSBO（2×GPUMaterialData，b9）
+    BufferHandle t43_indirect_{};             ///< 1 条 indirect cmd（instanceCount=2）
+    unsigned int t43_albedo_tex_ = 0;         ///< 白 albedo 纹理（验证纹理采样链路）
+    WGPUBuffer   t43_rb_pixels_ = nullptr;    ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,

@@ -9,6 +9,7 @@
 
 #include "engine/base/debug.h"
 #include "engine/render/rhi/draw_executor_common.h"
+#include "engine/render/rhi/gpu_scene_types.h"
 
 #include <emscripten/html5.h>
 #include <emscripten/html5_webgpu.h>
@@ -1215,6 +1216,56 @@ void OnT42PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 4 Subtask 3：GPU-driven PBR 离屏自检常量 / 上下文 / 回读回调 ---
+// 经引擎-facing SetupGPUDrivenPBRShader（绑 PerFrame/PerScene UBO）+ 实例 SSBO(b5,2 个 model 平移到左/右半)
+// + 材质 SSBO(b9,红/绿 albedo) + BindMegaVAO(92B) + BindGPUDrivenTextures(白 albedo) + MultiDrawIndexedIndirect
+// (1 条 cmd、instanceCount=2、instance_index 取 0/1)把两实例渲到 64×64 RT，回读校验左半红、右半绿——即
+// 手译 PBR WGSL 经实例 SSBO 取 model、经材质 SSBO 取 albedo、纹理采样链路全部正确。RT 同为 RGBA16Float。
+constexpr uint32_t kT43RtSize     = 64;
+constexpr uint32_t kT43RtRowBytes = kT43RtSize * 8u;   ///< RGBA16Float 8B/texel
+constexpr uint32_t kT43RtBytes    = kT43RtRowBytes * kT43RtSize;
+
+struct GpuDrivenPBRSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT43PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<GpuDrivenPBRSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT43RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y, float* o) {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT43RtRowBytes + x * 8u);
+                o[0] = BlHalfToFloat(p[0]); o[1] = BlHalfToFloat(p[1]); o[2] = BlHalfToFloat(p[2]);
+            };
+            float l[3], r[3];
+            rd(16, 32, l); rd(48, 32, r);   // 左半中心 / 右半中心
+            auto hi = [](float v) { return v > 0.4f; };
+            auto lo = [](float v) { return v < 0.15f; };
+            ok = (hi(l[0]) && lo(l[1]) && lo(l[2])) &&   // 实例0：红 albedo（左半）
+                 (lo(r[0]) && hi(r[1]) && lo(r[2]));      // 实例1：绿 albedo（右半）
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 自检像素：L({},{},{}) R({},{},{})",
+                                l[0], l[1], l[2], r[0], r[1], r[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T4-3] GPU-driven PBR 自检 PASS：SetupGPUDrivenPBRShader(PerFrame/PerScene UBO) "
+                       "+ 实例 SSBO(b5) 取 model + 材质 SSBO(b9) 取 albedo + 白纹理桶 + MultiDrawIndexedIndirect "
+                       "(instanceCount=2) 离屏像素（左半红/右半绿）符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1413,6 +1464,8 @@ void WebGPURhiDevice::Shutdown() {
     if (t41_rb_pixels_)   { wgpuBufferRelease(t41_rb_pixels_);       t41_rb_pixels_ = nullptr; }
     // Task 4 Subtask 2 Mega VAO 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t42_rb_pixels_)   { wgpuBufferRelease(t42_rb_pixels_);       t42_rb_pixels_ = nullptr; }
+    // Task 4 Subtask 3 GPU-driven PBR 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t43_rb_pixels_)   { wgpuBufferRelease(t43_rb_pixels_);       t43_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1677,6 +1730,13 @@ void WebGPURhiDevice::EndFrame() {
         t42_mega_selftest_done_ = true;
         t42_recorded = RecordMegaVaoSelfTest();
     }
+    // Task 4 Subtask 3：每会话一次 GPU-driven PBR 真链路自检（SetupGPUDrivenPBRShader + 实例/材质 SSBO +
+    // BindMegaVAO + BindGPUDrivenTextures + MultiDrawIndexedIndirect 渲到离屏 RT → copy 回读校验左红右绿）。
+    bool t43_recorded = false;
+    if (!t43_pbr_selftest_done_) {
+        t43_pbr_selftest_done_ = true;
+        t43_recorded = RecordGpuDrivenPBRSelfTest();
+    }
 
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
@@ -1696,6 +1756,7 @@ void WebGPURhiDevice::EndFrame() {
     if (bl_recorded) KickBloomSelfTestReadback();
     if (t41_recorded) KickMultiDrawIndirectSelfTestReadback();
     if (t42_recorded) KickMegaVaoSelfTestReadback();
+    if (t43_recorded) KickGpuDrivenPBRSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -3454,6 +3515,226 @@ void WebGPURhiDevice::UnbindVAO() {
     cur_ib_handle_ = 0;
     if (!cur_vbs_.empty()) cur_vbs_[0].set = false;
 }
+
+// ============================================================
+// Task 4 Subtask 3：GPU-driven PBR 着色器（手译 PBR WGSL）+ 纹理桶绑定 + 可用性查询
+// ============================================================
+
+// 手译 PBR WGSL：顶点经实例 SSBO(group3 b5) 取 model 变换 BatchVertex 几何，片元经材质 SSBO(group3 b9)
+// 按实例 material_id 取 albedo/metallic/roughness、采样 albedo 纹理(group2 b0/b1)，Cook-Torrance 直接光
+// + 环境项 + Reinhard/gamma。绑定约定：group1 b0=PerFrame、b1=PerScene；group3 b5=实例、b9=材质。
+// 仅声明 albedo 纹理桶（其余 normal/MR/emissive/occlusion 桶由 BindGPUDrivenTextures 绑入但本着色器未声明，
+// CollectGroupBindings 过滤未声明绑定）。
+namespace {
+const char* kGpuDrivenPBRWGSL = R"WGSL(// dse-wgsl
+struct PerFrame {
+  vp : mat4x4<f32>,
+  view : mat4x4<f32>,
+  camera_pos : vec4<f32>,
+};
+struct PerScene {
+  light_dir : vec4<f32>,      // xyz=光行进方向, w=enabled
+  light_color : vec4<f32>,    // rgb=颜色, w=ambient 强度
+  light_params : vec4<f32>,   // x=intensity, y=shadow_strength, z=receive_shadow, w=0
+};
+struct Inst {
+  model : mat4x4<f32>,
+  material_id : u32,
+  draw_cmd_id : u32,
+  pad0 : u32,
+  pad1 : u32,
+};
+struct Mat {
+  albedo : vec4<f32>,         // rgb + metallic
+  roughness_ao : vec4<f32>,   // roughness, ao, normal_strength, alpha_cutoff
+  emissive : vec4<f32>,       // rgb + alpha_test
+  flags : vec4<f32>,
+  extra : vec4<f32>,
+  extra2 : vec4<f32>,
+  toon_shadow : vec4<f32>,
+  toon_params : vec4<f32>,
+};
+@group(1) @binding(0) var<uniform> per_frame : PerFrame;
+@group(1) @binding(1) var<uniform> per_scene : PerScene;
+@group(3) @binding(5) var<storage, read> instances : array<Inst>;
+@group(3) @binding(9) var<storage, read> materials : array<Mat>;
+@group(2) @binding(0) var albedo_tex : texture_2d<f32>;
+@group(2) @binding(1) var albedo_smp : sampler;
+
+struct VsIn {
+  @location(0) pos : vec3<f32>,
+  @location(1) color : vec4<f32>,
+  @location(2) uv : vec2<f32>,
+  @location(3) normal : vec3<f32>,
+  @location(4) tangent : vec3<f32>,
+  @location(5) weights : vec4<f32>,
+  @location(6) joints : vec4<f32>,
+};
+struct VsOut {
+  @builtin(position) clip : vec4<f32>,
+  @location(0) world_pos : vec3<f32>,
+  @location(1) world_normal : vec3<f32>,
+  @location(2) uv : vec2<f32>,
+  @location(3) @interpolate(flat) material_id : u32,
+};
+
+@vertex fn vs_main(i : VsIn, @builtin(instance_index) inst : u32) -> VsOut {
+  let model = instances[inst].model;
+  let wp = model * vec4<f32>(i.pos, 1.0);
+  var o : VsOut;
+  o.clip = per_frame.vp * wp;
+  o.world_pos = wp.xyz;
+  o.world_normal = normalize((model * vec4<f32>(i.normal, 0.0)).xyz);
+  o.uv = i.uv;
+  o.material_id = instances[inst].material_id;
+  return o;
+}
+
+const PI = 3.14159265359;
+fn distributionGGX(ndh : f32, rough : f32) -> f32 {
+  let a = rough * rough;
+  let a2 = a * a;
+  let d = ndh * ndh * (a2 - 1.0) + 1.0;
+  return a2 / max(PI * d * d, 1e-4);
+}
+fn geometrySchlickGGX(ndv : f32, rough : f32) -> f32 {
+  let r = rough + 1.0;
+  let k = (r * r) / 8.0;
+  return ndv / (ndv * (1.0 - k) + k);
+}
+fn fresnelSchlick(ct : f32, f0 : vec3<f32>) -> vec3<f32> {
+  return f0 + (vec3<f32>(1.0) - f0) * pow(clamp(1.0 - ct, 0.0, 1.0), 5.0);
+}
+
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let m = materials[i.material_id];
+  let tex = textureSample(albedo_tex, albedo_smp, i.uv);
+  let base = m.albedo.rgb * tex.rgb;
+  let metallic = m.albedo.a;
+  let rough = max(m.roughness_ao.x, 0.04);
+  let ao = m.roughness_ao.y;
+
+  let n = normalize(i.world_normal);
+  let v = normalize(per_frame.camera_pos.xyz - i.world_pos);
+  let l = normalize(-per_scene.light_dir.xyz);
+  let h = normalize(v + l);
+  let ndl = max(dot(n, l), 0.0);
+  let ndv = max(dot(n, v), 0.0);
+  let ndh = max(dot(n, h), 0.0);
+  let hdv = max(dot(h, v), 0.0);
+
+  let f0 = mix(vec3<f32>(0.04), base, metallic);
+  let ndf = distributionGGX(ndh, rough);
+  let g = geometrySchlickGGX(ndv, rough) * geometrySchlickGGX(ndl, rough);
+  let f = fresnelSchlick(hdv, f0);
+  let spec = (ndf * g * f) / max(4.0 * ndv * ndl, 1e-4);
+  let kd = (vec3<f32>(1.0) - f) * (1.0 - metallic);
+  let intensity = per_scene.light_params.x;
+  let radiance = per_scene.light_color.rgb * intensity;
+  let diffuse = kd * base / PI;
+  var color = (diffuse + spec) * radiance * ndl;
+  color += per_scene.light_color.a * base * ao;   // 环境项
+  color += m.emissive.rgb;
+  color = color / (color + vec3<f32>(1.0));        // Reinhard
+  color = pow(color, vec3<f32>(1.0 / 2.2));        // gamma
+  return vec4<f32>(color, 1.0);
+}
+)WGSL";
+}  // namespace
+
+// 惰性编译 GPU-driven PBR 程序 + 建 PSO（depth on、cull none、blend off）+ 默认白纹理 + PerFrame/PerScene UBO。
+// 跨帧复用；编译失败置 failed 标记避免每帧重试。
+bool WebGPURhiDevice::EnsureGpuDrivenPBRShader() {
+    if (gpu_driven_pbr_failed_) return false;
+    if (gpu_driven_pbr_program_ && gpu_driven_pbr_pso_ && white_texture_ &&
+        gpu_driven_perframe_ubo_ && gpu_driven_perscene_ubo_) {
+        return true;
+    }
+    if (!EnsureInitialized() || !device_) return false;
+    if (!gpu_driven_pbr_program_) {
+        gpu_driven_pbr_program_ = CreateShaderProgram(kGpuDrivenPBRWGSL, "");
+        if (!gpu_driven_pbr_program_) {
+            gpu_driven_pbr_failed_ = true;
+            DEBUG_LOG_ERROR("WebGPU: GPU-driven PBR WGSL 编译失败，HasGPUDrivenPBRShader 将返回 false");
+            return false;
+        }
+    }
+    if (!gpu_driven_pbr_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = true;
+        d.depth_write_enabled = true;
+        d.depth_func = CompareFunc::Less;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        gpu_driven_pbr_pso_ = CreatePipelineState(d);
+    }
+    if (!white_texture_) {
+        const unsigned char white[4] = {255, 255, 255, 255};
+        white_texture_ = CreateTexture2D(1, 1, white, /*linear_filter=*/true);
+    }
+    if (!gpu_driven_perframe_ubo_) {
+        GpuBufferDesc d; d.size = sizeof(PerFrameUBO); d.usage = GpuBufferUsage::kUniform;
+        gpu_driven_perframe_ubo_ = CreateGpuBuffer(d, nullptr);
+    }
+    if (!gpu_driven_perscene_ubo_) {
+        GpuBufferDesc d; d.size = sizeof(PerSceneUBO); d.usage = GpuBufferUsage::kUniform;
+        gpu_driven_perscene_ubo_ = CreateGpuBuffer(d, nullptr);
+    }
+    return gpu_driven_pbr_program_ && gpu_driven_pbr_pso_ && white_texture_ &&
+           gpu_driven_perframe_ubo_ && gpu_driven_perscene_ubo_;
+}
+
+bool WebGPURhiDevice::HasGPUDrivenPBRShader() const {
+    // 惰性编译缓存查询（与 GL「init 时编译，运行时查句柄」语义对齐）。const 方法经 const_cast
+    // 触发一次性惰性编译，后续直接返回缓存句柄状态。
+    return const_cast<WebGPURhiDevice*>(this)->EnsureGpuDrivenPBRShader();
+}
+
+// 激活 GPU-driven PBR 程序 + PSO（设引擎 draw state，等价 glUseProgram + 深度/混合状态），上传 PerFrame
+// (vp/view/camera_pos) + PerScene(light_dir/color/params) 并经引擎-facing CmdBindUniformBuffer 绑到 group1
+// b0/b1。CSM 阴影矩阵/级联（PerScene 余字段）本子项离屏自检不涉及，置零。
+void WebGPURhiDevice::SetupGPUDrivenPBRShader(const glm::mat4& view, const glm::mat4& proj,
+                                              const glm::vec3& camera_pos,
+                                              const glm::vec3& light_dir, const glm::vec3& light_color,
+                                              float light_intensity, float ambient_intensity,
+                                              float shadow_strength) {
+    if (!EnsureGpuDrivenPBRShader()) return;
+    cur_program_    = gpu_driven_pbr_program_;
+    cur_pso_handle_ = gpu_driven_pbr_pso_;
+
+    PerFrameUBO per_frame{};
+    per_frame.vp = proj * view;
+    per_frame.view = view;
+    per_frame.camera_pos = glm::vec4(camera_pos, 0.0f);
+    UpdateGpuBuffer(gpu_driven_perframe_ubo_, 0, sizeof(per_frame), &per_frame);
+
+    PerSceneUBO per_scene{};
+    per_scene.light_dir_and_enabled   = glm::vec4(light_dir, 1.0f);
+    per_scene.light_color_and_ambient = glm::vec4(light_color, ambient_intensity);
+    const float receive_shadow = (shadow_strength > 0.0f) ? 1.0f : 0.0f;
+    per_scene.light_params = glm::vec4(light_intensity, shadow_strength, receive_shadow, 0.0f);
+    UpdateGpuBuffer(gpu_driven_perscene_ubo_, 0, sizeof(per_scene), &per_scene);
+
+    CmdBindUniformBuffer(0, gpu_driven_perframe_ubo_.raw(), 0, sizeof(per_frame));
+    CmdBindUniformBuffer(1, gpu_driven_perscene_ubo_.raw(), 0, sizeof(per_scene));
+}
+
+// 绑定 GPU-driven PBR 纹理桶：albedo→group2 slot0，余 normal/MR/emissive/occlusion→slot1..4（PBR WGSL 当前
+// 仅声明 albedo，未声明者 CollectGroupBindings 过滤）。handle=0 → 默认白纹理回退（与 GL 一致）。
+void WebGPURhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int normal,
+                                            unsigned int metallic_roughness,
+                                            unsigned int emissive, unsigned int occlusion) {
+    if (!white_texture_) EnsureGpuDrivenPBRShader();
+    const unsigned int w = white_texture_;
+    CmdBindTexture(0, albedo             ? albedo             : w, TextureDim::Tex2D);
+    CmdBindTexture(1, normal             ? normal             : w, TextureDim::Tex2D);
+    CmdBindTexture(2, metallic_roughness ? metallic_roughness : w, TextureDim::Tex2D);
+    CmdBindTexture(3, emissive           ? emissive           : w, TextureDim::Tex2D);
+    CmdBindTexture(4, occlusion          ? occlusion          : w, TextureDim::Tex2D);
+}
+
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
 // ============================================================
@@ -5892,6 +6173,143 @@ void WebGPURhiDevice::KickMegaVaoSelfTestReadback() {
     ctx->rb_pixels = t42_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     t42_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT42RtBytes, OnT42PixelsMapped, ctx);
+}
+
+// --- Task 4 Subtask 3：GPU-driven PBR 离屏自检 ---
+// 经引擎-facing GPU-driven 消费方调用序（与 ForwardScenePass 同序：SetupGPUDrivenPBRShader → BindGpuBuffer
+// 实例/材质 SSBO → BindMegaVAO → BindGPUDrivenTextures → MultiDrawIndexedIndirect）把两个实例（model 分别
+// 平移到左/右半，材质分别红/绿 albedo）渲到 64×64 离屏 RT（颜色 RGBA16Float + 深度），随帧 copyTextureToBuffer，
+// 提交后异步回读半精解码校验左半红、右半绿——验证手译 PBR WGSL 经实例 SSBO(b5) 取 model、材质 SSBO(b9) 取
+// albedo、albedo 纹理采样链路全部正确。离屏隔离、不翻 SupportsIndirectDraw()、不碰 demo 帧。
+bool WebGPURhiDevice::RecordGpuDrivenPBRSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+    if (!EnsureGpuDrivenPBRShader()) {
+        DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 程序/资源未就绪，跳过自检");
+        return false;
+    }
+    // 离屏 RT（颜色 RGBA16Float + 深度，CopySrc）。带深度以匹配 PBR PSO 的 depth test/write 状态。
+    if (!t43_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT43RtSize);
+        d.height = static_cast<int>(kT43RtSize);
+        d.has_color = true;
+        d.has_depth = true;
+        t43_rt_ = CreateRenderTarget(d);
+    }
+    // 单 quad（中心原点、半边 0.4、法线 +Z、UV 全 0）经被测 Mega VAO API 上传 BatchVertex(92B)。
+    if (!t43_vao_) {
+        const float hh = 0.4f;
+        const float qx[4] = {-hh, hh, hh, -hh};
+        const float qy[4] = {-hh, -hh, hh, hh};
+        std::vector<BatchVertex> verts(4);
+        for (int k = 0; k < 4; ++k) {
+            BatchVertex& bv = verts[k];
+            bv.pos = glm::vec3(qx[k], qy[k], 0.0f);
+            bv.color = glm::vec4(1.0f);
+            bv.uv = glm::vec2(0.0f);
+            bv.normal = glm::vec3(0.0f, 0.0f, 1.0f);
+        }
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        const size_t vbytes = verts.size() * sizeof(BatchVertex);
+        const size_t ibytes = sizeof(idx);
+        t43_vao_ = CreateMegaVAO(vbytes, ibytes, t43_vbo_, t43_ibo_);
+        UpdateMegaVBO(t43_vbo_, 0, vbytes, verts.data());
+        UpdateMegaIBO(t43_ibo_, 0, ibytes, idx);
+    }
+    // 实例 SSBO（b5）：2 个 GPUInstanceData，model 分别平移到左/右半，material_id = 0/1。
+    if (!t43_inst_ssbo_) {
+        GPUInstanceData inst[2]{};
+        // 列主序 mat4：第 3 列为平移。左实例平移 -0.5x、右实例 +0.5x。
+        inst[0].model = glm::mat4(1.0f); inst[0].model[3] = glm::vec4(-0.5f, 0.0f, 0.0f, 1.0f);
+        inst[0].material_id = 0;
+        inst[1].model = glm::mat4(1.0f); inst[1].model[3] = glm::vec4( 0.5f, 0.0f, 0.0f, 1.0f);
+        inst[1].material_id = 1;
+        GpuBufferDesc d; d.size = sizeof(inst); d.usage = GpuBufferUsage::kStorage;
+        t43_inst_ssbo_ = CreateGpuBuffer(d, inst);
+    }
+    // 材质 SSBO（b9）：material0 红 albedo、material1 绿 albedo（metallic=0、roughness=0.9、ao=1）。
+    if (!t43_mat_ssbo_) {
+        GPUMaterialData mat[2]{};
+        mat[0].albedo = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
+        mat[0].roughness_ao = glm::vec4(0.9f, 1.0f, 1.0f, 0.0f);
+        mat[1].albedo = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+        mat[1].roughness_ao = glm::vec4(0.9f, 1.0f, 1.0f, 0.0f);
+        GpuBufferDesc d; d.size = sizeof(mat); d.usage = GpuBufferUsage::kStorage;
+        t43_mat_ssbo_ = CreateGpuBuffer(d, mat);
+    }
+    // indirect：单条 [indexCount=6, instanceCount=2, firstIndex=0, baseVertex=0, firstInstance=0]，
+    // instance_index 取 0/1 → 两实例分别读 instances[0]/[1] 的 model 与材质。
+    if (!t43_indirect_) {
+        const uint32_t cmd[5] = {6u, 2u, 0u, 0u, 0u};
+        GpuBufferDesc d; d.size = sizeof(cmd);
+        d.usage = GpuBufferUsage::kIndirect | GpuBufferUsage::kStorage;
+        t43_indirect_ = CreateGpuBuffer(d, cmd);
+    }
+    // 白 albedo 纹理（验证纹理采样链路；base = material.albedo × white = material.albedo）。
+    if (!t43_albedo_tex_) {
+        const unsigned char white[4] = {255, 255, 255, 255};
+        t43_albedo_tex_ = CreateTexture2D(1, 1, white, /*linear_filter=*/true);
+    }
+    if (!t43_rt_ || !t43_vao_ || !t43_inst_ssbo_ || !t43_mat_ssbo_ || !t43_indirect_ || !t43_albedo_tex_) {
+        DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 引擎-facing 录制（与 ForwardScenePass GPU-driven 路径同序）。vp 用单位矩阵（NDC 直通）：
+    //   实例 model 平移 ±0.5、quad 半边 0.4 → 左实例覆 x∈[-0.9,-0.1]、右实例覆 x∈[0.1,0.9]，各占一半。
+    //   光行进方向 (0,0,-1) → L=+Z 朝相机、法线 +Z → ndl=1 受光；相机置 +Z。
+    RenderPassDesc rp;
+    rp.render_target = t43_rt_;
+    rp.clear_color_enabled = true;
+    rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    CmdBeginRenderPass(rp);
+    if (!cur_pass_) return false;
+    CmdSetViewport(0, 0, static_cast<int>(kT43RtSize), static_cast<int>(kT43RtSize));
+
+    const glm::mat4 ident(1.0f);
+    SetupGPUDrivenPBRShader(/*view=*/ident, /*proj=*/ident,
+                            /*camera_pos=*/glm::vec3(0.0f, 0.0f, 1.0f),
+                            /*light_dir=*/glm::vec3(0.0f, 0.0f, -1.0f),
+                            /*light_color=*/glm::vec3(1.0f, 1.0f, 1.0f),
+                            /*light_intensity=*/1.0f, /*ambient_intensity=*/0.3f,
+                            /*shadow_strength=*/0.0f);
+    BindGpuBuffer(t43_inst_ssbo_, gpu_driven::kSSBOBindingInstances);  // b5
+    BindGpuBuffer(t43_mat_ssbo_,  gpu_driven::kSSBOBindingMaterials);  // b9
+    BindMegaVAO(t43_vao_);
+    BindGPUDrivenTextures(t43_albedo_tex_, 0, 0, 0, 0);
+    MultiDrawIndexedIndirect(t43_indirect_.raw(), 1, 5 * sizeof(uint32_t), 0);
+    CmdEndRenderPass();
+    UnbindVAO();
+
+    const RenderTargetEntry* rt = FindRenderTarget(t43_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT43RtBytes);
+    t43_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t43_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t43_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT43RtRowBytes;
+    dst.layout.rowsPerImage = kT43RtSize;
+    WGPUExtent3D ext{kT43RtSize, kT43RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickGpuDrivenPBRSelfTestReadback() {
+    if (!t43_rb_pixels_) return;
+    auto* ctx = new GpuDrivenPBRSelfTestCtx();
+    ctx->rb_pixels = t43_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t43_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT43RtBytes, OnT43PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
