@@ -236,16 +236,16 @@ void HairSystem::InitComputeShaders() {
     }
     cs_integrate_ = rhi_->CreateComputeShaderEx(
         render::kHairIntegrateSource, render::kHairIntegrateSourceVK, render::kHairIntegrateSourceHLSL,
-        4, 0, 0, 48);
+        4, 0, 0, 48, render::kHairIntegrateSourceWGSL);
     cs_length_ = rhi_->CreateComputeShaderEx(
         render::kHairLengthConstraintSource, render::kHairLengthConstraintSourceVK, render::kHairLengthConstraintSourceHLSL,
-        3, 0, 0, 4);
+        3, 0, 0, 4, render::kHairLengthConstraintSourceWGSL);
     cs_local_shape_ = rhi_->CreateComputeShaderEx(
         render::kHairLocalShapeSource, render::kHairLocalShapeSourceVK, render::kHairLocalShapeSourceHLSL,
-        3, 0, 0, 12);
+        3, 0, 0, 12, render::kHairLocalShapeSourceWGSL);
     cs_update_tangent_ = rhi_->CreateComputeShaderEx(
         render::kHairUpdateTangentSource, render::kHairUpdateTangentSourceVK, render::kHairUpdateTangentSourceHLSL,
-        3, 0, 0, 12);
+        3, 0, 0, 12, render::kHairUpdateTangentSourceWGSL);
 
     gpu_compute_enabled_ = (cs_integrate_ != 0 && cs_length_ != 0 &&
                             cs_local_shape_ != 0 && cs_update_tangent_ != 0);
