@@ -656,6 +656,20 @@ private:
     unsigned int dg_rsm_flux_ = 0;         ///< RSM 通量采样纹理（group2 b4）
     WGPUBuffer dg_rb_out_ = nullptr;       ///< 调试输出回读缓冲（MapRead|CopyDst）
 
+    // --- B3b-12 头发物理 hair Verlet 积分核心真链路自检（每会话一次：手译引擎 HairInstance::Simulate
+    //   真 compute（hair_compute_shaders.h::kHairIntegrateSource）Pass 1 为 WGSL —— 4×SSBO（group3 b0..3）
+    //   pos_cur/pos_prev/pos_rest/strand_info + 12 命名 uniform（group1 b8）→ 根顶点固定、velocity·(1-damping)
+    //   + 重力·dt² → 写回 pos_cur/pos_prev → copy 回读逐分量校验 == CPU 预期。离屏隔离、不翻能力位。---
+    bool hair_selftest_done_ = false;
+    bool RecordHairSelfTest();             ///< 录制 hair Verlet 积分 compute + copy pos_cur/pos_prev→回读缓冲
+    void KickHairSelfTestReadback();       ///< 提交后发起异步 map 回读校验
+    unsigned int hr_shader_ = 0;           ///< hair Verlet 积分 compute shader（手译 kHairIntegrateSource）
+    unsigned int hr_cur_ = 0;              ///< pos_cur SSBO（group3 b0，读写）
+    unsigned int hr_prev_ = 0;             ///< pos_prev SSBO（group3 b1，读写）
+    unsigned int hr_rest_ = 0;             ///< pos_rest SSBO（group3 b2，仅 .w 判根）
+    unsigned int hr_strand_ = 0;           ///< strand_info SSBO（group3 b3，pass1 不用，绑定齐全）
+    WGPUBuffer hr_rb_out_ = nullptr;       ///< pos_cur+pos_prev 回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);
