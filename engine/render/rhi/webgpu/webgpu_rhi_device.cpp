@@ -859,6 +859,143 @@ void OnHairMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-13 bloom 双滤波（dual-filter）compute 真链路自检（常量 / 半精解码 / ctx / 回读校验回调）---
+//   引擎 BloomRenderer 真实 compute（bloom_downsample.comp / bloom_upsample.comp，GLSL 450）核心：
+//   ①下采样 13-tap 加权滤波（Call of Duty: AW 演讲的双线性 box）；②上采样 3×3 tent 滤波 + 按权累加。
+//   两核心 src 经采样纹理（此处 textureLoad 整数 tap，等价采样路径已 B3b-8 验证），结果写 rgba16f
+//   storage（bloom 真实输出格式）。布置：先经一支 gen compute 把已知公式渐变写进 src8（8×8）/ usrc4 /
+//   ubase4（4×4）rgba16f；②下采样 src8（中心 c=(2·dst+1) ±{1,2} 整数 tap，13-tap 权重）→ down4；
+//   ③上采样 usrc4（3×3 tent）+ ubase4 按 blend=0.5 累加 → up4。回读 down4 + up4 各 4×4 rgba16f，逐
+//   texel 逐通道半精解码后校验 == CPU 同公式预期（容差含 rgba16f 存储半精舍入）。证明 bloom 双滤波核心
+//   compute（多 tap 加权 + rgba16f storage 写 + 滤波链）WebGPU 可用。离屏隔离、不翻能力位、不碰 demo。
+//   注：bloom 上采样真正翻能力位前另需消费方适配——bloom_upsample.comp 用 imageLoad(u_dst) 读回自身
+//   累加（read-write rgba16f storage 在核心 WebGPU 不支持），需 ping-pong 双缓冲；此自检以独立 base 采样
+//   纹理替代 in-place imageLoad 验证 tent + 累加数学（与 DDGI temporal 同类前置项）。
+constexpr uint32_t kBlSrcDim   = 8;
+constexpr uint32_t kBlDownDim  = 4;                         // src/2
+constexpr uint32_t kBlUpDim    = 4;
+constexpr uint32_t kBlRowBytes = 256;                       // rgba16f 4×8B=32B/行 → 填充至 copy 256 对齐
+constexpr uint32_t kBlDownOff  = 0;
+constexpr uint32_t kBlUpOff    = kBlRowBytes * kBlDownDim;   // 1024
+constexpr uint32_t kBlTotalBytes = kBlUpOff + kBlRowBytes * kBlUpDim;  // 2048
+constexpr float    kBlBlend    = 0.5f;
+constexpr float    kBlTol      = 0.05f;                     // 含 rgba16f 半精存储舍入
+
+// 已知公式渐变（gen compute 与 CPU 预期共用，避免 CPU 侧 float→half 编码）。
+inline void BlSrcTexel(int x, int y, float* o)    { o[0] = float(x + y * 8); o[1] = float(x) * 0.5f; o[2] = float(y) * 0.25f; }
+inline void BlUpSrcTexel(int x, int y, float* o)  { o[0] = float(x + y * 4); o[1] = float(x) * 0.5f; o[2] = float(y) * 0.25f; }
+inline void BlUpBaseTexel(int x, int y, float* o) { o[0] = float(x + y * 4) * 0.25f; o[1] = 1.0f; o[2] = 0.5f; }
+
+// IEEE 754 half(binary16) → float，用于解码 rgba16f 回读缓冲。
+inline float BlHalfToFloat(uint16_t h) {
+    const uint32_t sign = static_cast<uint32_t>(h & 0x8000u) << 16;
+    uint32_t exp = (h >> 10) & 0x1Fu;
+    uint32_t man = h & 0x3FFu;
+    uint32_t f;
+    if (exp == 0u) {
+        if (man == 0u) {
+            f = sign;
+        } else {
+            exp = 127u - 15u + 1u;
+            while ((man & 0x400u) == 0u) { man <<= 1; --exp; }
+            man &= 0x3FFu;
+            f = sign | (exp << 23) | (man << 13);
+        }
+    } else if (exp == 0x1Fu) {
+        f = sign | 0x7F800000u | (man << 13);
+    } else {
+        f = sign | ((exp - 15u + 127u) << 23) | (man << 13);
+    }
+    float r;
+    std::memcpy(&r, &f, sizeof(r));
+    return r;
+}
+
+struct BloomSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnBloomMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<BloomSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kBlTotalBytes));
+        if (base) {
+            ok = true;
+            auto clampi = [](int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); };
+            auto rd = [&](uint32_t off, int x, int y, float* o) {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + off + y * kBlRowBytes + x * 8u);
+                o[0] = BlHalfToFloat(p[0]); o[1] = BlHalfToFloat(p[1]); o[2] = BlHalfToFloat(p[2]);
+            };
+            // ① 下采样 13-tap 校验（src8 8×8 → down4 4×4）。
+            const int sm = static_cast<int>(kBlSrcDim) - 1;
+            auto sl = [&](int x, int y, float* o) { BlSrcTexel(clampi(x, 0, sm), clampi(y, 0, sm), o); };
+            for (uint32_t dy = 0; dy < kBlDownDim && ok; ++dy) {
+                for (uint32_t dx = 0; dx < kBlDownDim; ++dx) {
+                    const int cx = static_cast<int>(dx) * 2 + 1;
+                    const int cy = static_cast<int>(dy) * 2 + 1;
+                    float a[3], b[3], c[3], d[3], e[3], f[3], g[3], hh[3], i[3], j[3], k[3], l[3], mm[3];
+                    sl(cx - 2, cy + 2, a); sl(cx,     cy + 2, b); sl(cx + 2, cy + 2, c);
+                    sl(cx - 2, cy,     d); sl(cx,     cy,     e); sl(cx + 2, cy,     f);
+                    sl(cx - 2, cy - 2, g); sl(cx,     cy - 2, hh); sl(cx + 2, cy - 2, i);
+                    sl(cx - 1, cy + 1, j); sl(cx + 1, cy + 1, k);
+                    sl(cx - 1, cy - 1, l); sl(cx + 1, cy - 1, mm);
+                    float got[3]; rd(kBlDownOff, static_cast<int>(dx), static_cast<int>(dy), got);
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const float exp = e[ch] * 0.125f
+                            + (a[ch] + c[ch] + g[ch] + i[ch]) * 0.03125f
+                            + (b[ch] + d[ch] + f[ch] + hh[ch]) * 0.0625f
+                            + (j[ch] + k[ch] + l[ch] + mm[ch]) * 0.125f;
+                        if (std::abs(got[ch] - exp) > kBlTol) {
+                            ok = false;
+                            DEBUG_LOG_ERROR("WebGPU[B3b-13] bloom 下采样 down4[{},{}].{} 失配：{} 期望 {}",
+                                            dx, dy, ch, got[ch], exp);
+                        }
+                    }
+                }
+            }
+            // ② 上采样 3×3 tent + 累加校验（usrc4 4×4 + ubase4 → up4 4×4）。
+            const int um = static_cast<int>(kBlUpDim) - 1;
+            auto ul = [&](int x, int y, float* o) { BlUpSrcTexel(clampi(x, 0, um), clampi(y, 0, um), o); };
+            for (uint32_t y = 0; y < kBlUpDim && ok; ++y) {
+                for (uint32_t x = 0; x < kBlUpDim; ++x) {
+                    const int cx = static_cast<int>(x);
+                    const int cy = static_cast<int>(y);
+                    float a[3], b[3], c[3], d[3], e[3], f[3], g[3], hh[3], i[3];
+                    ul(cx - 1, cy + 1, a); ul(cx,     cy + 1, b); ul(cx + 1, cy + 1, c);
+                    ul(cx - 1, cy,     d); ul(cx,     cy,     e); ul(cx + 1, cy,     f);
+                    ul(cx - 1, cy - 1, g); ul(cx,     cy - 1, hh); ul(cx + 1, cy - 1, i);
+                    float bs[3]; BlUpBaseTexel(cx, cy, bs);
+                    float got[3]; rd(kBlUpOff, cx, cy, got);
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const float up = (e[ch] * 4.0f + (b[ch] + d[ch] + f[ch] + hh[ch]) * 2.0f
+                                          + (a[ch] + c[ch] + g[ch] + i[ch])) * (1.0f / 16.0f);
+                        const float exp = bs[ch] + up * kBlBlend;
+                        if (std::abs(got[ch] - exp) > kBlTol) {
+                            ok = false;
+                            DEBUG_LOG_ERROR("WebGPU[B3b-13] bloom 上采样 up4[{},{}].{} 失配：{} 期望 {}",
+                                            x, y, ch, got[ch], exp);
+                        }
+                    }
+                }
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-13] bloom 自检：结果回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-13] bloom 双滤波自检 PASS：引擎 BloomRenderer 真 compute"
+                       "（下采样 13-tap 加权 + 上采样 3×3 tent 累加 → rgba16f storage 写）经手译 WGSL"
+                       " 跑出 down4/up4 == CPU 同公式预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-13] bloom 双滤波自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -1160,6 +1297,8 @@ void WebGPURhiDevice::Shutdown() {
     if (dg_rb_out_)       { wgpuBufferRelease(dg_rb_out_);           dg_rb_out_ = nullptr; }
     // B3b-12 hair 自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (hr_rb_out_)       { wgpuBufferRelease(hr_rb_out_);           hr_rb_out_ = nullptr; }
+    // B3b-13 bloom 自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (bl_rb_out_)       { wgpuBufferRelease(bl_rb_out_);           bl_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1401,6 +1540,14 @@ void WebGPURhiDevice::EndFrame() {
         hr_recorded = RecordHairSelfTest();
     }
 
+    // B3b-13：每会话一次 bloom 双滤波核心自检（手译 bloom_downsample/upsample compute → 下采样 13-tap +
+    // 上采样 3×3 tent + base 累加 → copy down4/up4 回读半精解码逐 texel 逐通道校验）。
+    bool bl_recorded = false;
+    if (!bloom_selftest_done_) {
+        bloom_selftest_done_ = true;
+        bl_recorded = RecordBloomSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1416,6 +1563,7 @@ void WebGPURhiDevice::EndFrame() {
     if (mf_recorded) KickMorphSelfTestReadback();
     if (dg_recorded) KickDDGISelfTestReadback();
     if (hr_recorded) KickHairSelfTestReadback();
+    if (bl_recorded) KickBloomSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -5048,6 +5196,208 @@ void WebGPURhiDevice::KickHairSelfTestReadback() {
     ctx->rb_out = hr_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     hr_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kHrRbBytes, OnHairMapped, ctx);
+}
+
+// B3b-13 bloom 双滤波 compute 真链路自检：手译 bloom_downsample.comp / bloom_upsample.comp 核心为 WGSL，
+//   经 gen compute 造已知 rgba16f 渐变 → 下采样 13-tap → 上采样 3×3 tent + base 累加 → copy 回读校验。
+bool WebGPURhiDevice::RecordBloomSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // gen：按 u_kind 选公式写 rgba16f storage（避免 CPU float→half 编码，与 CPU 预期共用公式）。
+    static const char* kBloomGenWGSL = R"WGSL(// dse-wgsl
+struct GP {
+  @align(16) u_dim : i32,
+  @align(16) u_kind : i32,
+};
+@group(1) @binding(8) var<uniform> gp : GP;
+@group(2) @binding(0) var dst_img : texture_storage_2d<rgba16float, write>;
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (i32(gid.x) >= gp.u_dim || i32(gid.y) >= gp.u_dim) { return; }
+  let x = f32(gid.x);
+  let y = f32(gid.y);
+  var c : vec3<f32>;
+  if (gp.u_kind == 0) {
+    c = vec3<f32>(x + y * 8.0, x * 0.5, y * 0.25);
+  } else if (gp.u_kind == 1) {
+    c = vec3<f32>(x + y * 4.0, x * 0.5, y * 0.25);
+  } else {
+    c = vec3<f32>((x + y * 4.0) * 0.25, 1.0, 0.5);
+  }
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(c, 1.0));
+}
+)WGSL";
+
+    // 下采样：bloom_downsample.comp 13-tap 加权（此处整数 tap，等价采样路径；中心 c=(2·dst+1)）。
+    static const char* kBloomDownWGSL = R"WGSL(// dse-wgsl
+struct DP {
+  @align(16) u_src_dim : i32,
+  @align(16) u_dst_dim : i32,
+};
+@group(1) @binding(8) var<uniform> dp : DP;
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var dst_img : texture_storage_2d<rgba16float, write>;
+fn ld(p : vec2<i32>, m : i32) -> vec3<f32> {
+  let c = clamp(p, vec2<i32>(0, 0), vec2<i32>(m, m));
+  return textureLoad(src_tex, c, 0).rgb;
+}
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (i32(gid.x) >= dp.u_dst_dim || i32(gid.y) >= dp.u_dst_dim) { return; }
+  let m = dp.u_src_dim - 1;
+  let cx = i32(gid.x) * 2 + 1;
+  let cy = i32(gid.y) * 2 + 1;
+  let a = ld(vec2<i32>(cx - 2, cy + 2), m);
+  let b = ld(vec2<i32>(cx,     cy + 2), m);
+  let c = ld(vec2<i32>(cx + 2, cy + 2), m);
+  let d = ld(vec2<i32>(cx - 2, cy),     m);
+  let e = ld(vec2<i32>(cx,     cy),     m);
+  let f = ld(vec2<i32>(cx + 2, cy),     m);
+  let g = ld(vec2<i32>(cx - 2, cy - 2), m);
+  let h = ld(vec2<i32>(cx,     cy - 2), m);
+  let i = ld(vec2<i32>(cx + 2, cy - 2), m);
+  let j = ld(vec2<i32>(cx - 1, cy + 1), m);
+  let k = ld(vec2<i32>(cx + 1, cy + 1), m);
+  let l = ld(vec2<i32>(cx - 1, cy - 1), m);
+  let mm = ld(vec2<i32>(cx + 1, cy - 1), m);
+  let result = e * 0.125
+    + (a + c + g + i) * 0.03125
+    + (b + d + f + h) * 0.0625
+    + (j + k + l + mm) * 0.125;
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(result, 1.0));
+}
+)WGSL";
+
+    // 上采样：bloom_upsample.comp 3×3 tent + 按 blend 累加。消费方原 imageLoad(u_dst) 读回自身（in-place
+    //   read-write rgba16f storage 核心 WebGPU 不支持），此自检以独立 base 采样纹理替代验证 tent + 累加数学。
+    static const char* kBloomUpWGSL = R"WGSL(// dse-wgsl
+struct UPp {
+  @align(16) u_dim : i32,
+  @align(16) u_blend : f32,
+};
+@group(1) @binding(8) var<uniform> up : UPp;
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var base_tex : texture_2d<f32>;
+@group(2) @binding(2) var dst_img : texture_storage_2d<rgba16float, write>;
+fn lu(p : vec2<i32>, m : i32) -> vec3<f32> {
+  let c = clamp(p, vec2<i32>(0, 0), vec2<i32>(m, m));
+  return textureLoad(src_tex, c, 0).rgb;
+}
+@compute @workgroup_size(8, 8)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  if (i32(gid.x) >= up.u_dim || i32(gid.y) >= up.u_dim) { return; }
+  let m = up.u_dim - 1;
+  let cx = i32(gid.x);
+  let cy = i32(gid.y);
+  let a = lu(vec2<i32>(cx - 1, cy + 1), m);
+  let b = lu(vec2<i32>(cx,     cy + 1), m);
+  let c = lu(vec2<i32>(cx + 1, cy + 1), m);
+  let d = lu(vec2<i32>(cx - 1, cy),     m);
+  let e = lu(vec2<i32>(cx,     cy),     m);
+  let f = lu(vec2<i32>(cx + 1, cy),     m);
+  let g = lu(vec2<i32>(cx - 1, cy - 1), m);
+  let h = lu(vec2<i32>(cx,     cy - 1), m);
+  let i = lu(vec2<i32>(cx + 1, cy - 1), m);
+  let ups = (e * 4.0 + (b + d + f + h) * 2.0 + (a + c + g + i)) * (1.0 / 16.0);
+  let base = textureLoad(base_tex, vec2<i32>(cx, cy), 0).rgb;
+  let result = base + ups * up.u_blend;
+  textureStore(dst_img, vec2<i32>(i32(gid.x), i32(gid.y)), vec4<f32>(result, 1.0));
+}
+)WGSL";
+
+    if (!bl_gen_shader_)  bl_gen_shader_  = CreateComputeShaderEx("", "", "", 0, 1, 0, 0, kBloomGenWGSL);
+    if (!bl_down_shader_) bl_down_shader_ = CreateComputeShaderEx("", "", "", 0, 1, 0, 0, kBloomDownWGSL);
+    if (!bl_up_shader_)   bl_up_shader_   = CreateComputeShaderEx("", "", "", 0, 1, 0, 0, kBloomUpWGSL);
+
+    auto make_tex = [&](uint32_t dim, WGPUTextureUsageFlags usage) -> unsigned int {
+        return CreateTextureImpl(WGPUTextureDimension_2D, WGPUTextureViewDimension_2D, dim, dim, 1,
+                                 WGPUTextureFormat_RGBA16Float, usage, 1, 1, {nullptr},
+                                 TextureSamplerDesc::FromLinearFlag(false));
+    };
+    if (!bl_src8_)   bl_src8_   = make_tex(kBlSrcDim,  WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding);
+    if (!bl_down4_)  bl_down4_  = make_tex(kBlDownDim, WGPUTextureUsage_StorageBinding | WGPUTextureUsage_CopySrc);
+    if (!bl_usrc4_)  bl_usrc4_  = make_tex(kBlUpDim,   WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding);
+    if (!bl_ubase4_) bl_ubase4_ = make_tex(kBlUpDim,   WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding);
+    if (!bl_up4_)    bl_up4_    = make_tex(kBlUpDim,   WGPUTextureUsage_StorageBinding | WGPUTextureUsage_CopySrc);
+
+    if (!bl_gen_shader_ || !bl_down_shader_ || !bl_up_shader_ ||
+        !bl_src8_ || !bl_down4_ || !bl_usrc4_ || !bl_ubase4_ || !bl_up4_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-13] bloom 自检资源创建失败，跳过");
+        return false;
+    }
+
+    auto gen = [&](unsigned int tex, uint32_t dim, int kind) -> bool {
+        ResetDrawState();
+        SetComputeUniformInt(bl_gen_shader_, "u_dim",  static_cast<int>(dim));
+        SetComputeUniformInt(bl_gen_shader_, "u_kind", kind);
+        SetComputeTextureImage(0, tex, /*read_only=*/false);
+        BeginComputePass();
+        if (!cur_compute_pass_) { ResetDrawState(); return false; }
+        DispatchCompute(bl_gen_shader_, (dim + 7u) / 8u, (dim + 7u) / 8u, 1);
+        EndComputePass();
+        ResetDrawState();
+        return true;
+    };
+    // ① 三趟生成（src8 / usrc4 / ubase4），各独立 compute pass（pass 间自动屏障）。
+    if (!gen(bl_src8_,   kBlSrcDim, 0)) return false;
+    if (!gen(bl_usrc4_,  kBlUpDim,  1)) return false;
+    if (!gen(bl_ubase4_, kBlUpDim,  2)) return false;
+
+    // ② 下采样 src8（8×8）→ down4（4×4）。
+    ResetDrawState();
+    SetComputeUniformInt(bl_down_shader_, "u_src_dim", static_cast<int>(kBlSrcDim));
+    SetComputeUniformInt(bl_down_shader_, "u_dst_dim", static_cast<int>(kBlDownDim));
+    SetComputeTextureImage(0, bl_src8_,  /*read_only=*/true);
+    SetComputeTextureImage(1, bl_down4_, /*read_only=*/false);
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(bl_down_shader_, (kBlDownDim + 7u) / 8u, (kBlDownDim + 7u) / 8u, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // ③ 上采样 usrc4（4×4）+ ubase4 按 blend 累加 → up4（4×4）。
+    SetComputeUniformInt(bl_up_shader_,   "u_dim",   static_cast<int>(kBlUpDim));
+    SetComputeUniformFloat(bl_up_shader_, "u_blend", kBlBlend);
+    SetComputeTextureImage(0, bl_usrc4_,  /*read_only=*/true);
+    SetComputeTextureImage(1, bl_ubase4_, /*read_only=*/true);
+    SetComputeTextureImage(2, bl_up4_,    /*read_only=*/false);
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(bl_up_shader_, (kBlUpDim + 7u) / 8u, (kBlUpDim + 7u) / 8u, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    // copy down4 + up4 storage 纹理 → 回读缓冲（各占 256 对齐分段）。
+    const TextureEntry* te_down = FindTexture(bl_down4_);
+    const TextureEntry* te_up   = FindTexture(bl_up4_);
+    if (!te_down || !te_down->texture || !te_up || !te_up->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kBlTotalBytes;
+    bl_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!bl_rb_out_) return false;
+    auto copy_tex = [&](const TextureEntry* te, uint32_t dim, uint32_t off) {
+        WGPUImageCopyTexture src{};
+        src.texture = te->texture; src.mipLevel = 0; src.aspect = WGPUTextureAspect_All;
+        WGPUImageCopyBuffer dst{};
+        dst.buffer = bl_rb_out_;
+        dst.layout.offset = off;
+        dst.layout.bytesPerRow = kBlRowBytes;
+        dst.layout.rowsPerImage = dim;
+        WGPUExtent3D ext{dim, dim, 1};
+        wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    };
+    copy_tex(te_down, kBlDownDim, kBlDownOff);
+    copy_tex(te_up,   kBlUpDim,   kBlUpOff);
+    return true;
+}
+
+void WebGPURhiDevice::KickBloomSelfTestReadback() {
+    if (!bl_rb_out_) return;
+    auto* ctx = new BloomSelfTestCtx();
+    ctx->rb_out = bl_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    bl_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kBlTotalBytes, OnBloomMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

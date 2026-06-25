@@ -670,6 +670,24 @@ private:
     unsigned int hr_strand_ = 0;           ///< strand_info SSBO（group3 b3，pass1 不用，绑定齐全）
     WGPUBuffer hr_rb_out_ = nullptr;       ///< pos_cur+pos_prev 回读缓冲（MapRead|CopyDst）
 
+    // --- B3b-13 bloom 双滤波 compute 真链路自检（每会话一次：手译引擎 BloomRenderer 真 compute
+    //   （bloom_downsample.comp / bloom_upsample.comp，GLSL 450）核心为 WGSL —— ①gen compute 写已知
+    //   公式渐变进 src8/usrc4/ubase4 rgba16f；②下采样 13-tap 加权（src8→down4）；③上采样 3×3 tent +
+    //   按 blend 累加（usrc4+ubase4→up4）→ copy down4/up4 回读半精解码逐 texel 逐通道校验 == CPU 预期。
+    //   离屏隔离、不翻能力位。注：上采样消费方真翻转前需 ping-pong（in-place imageLoad rgba16f 不支持））---
+    bool bloom_selftest_done_ = false;
+    bool RecordBloomSelfTest();            ///< 录制 gen + 下采样 + 上采样 compute + copy down4/up4→回读缓冲
+    void KickBloomSelfTestReadback();      ///< 提交后发起异步 map 回读校验
+    unsigned int bl_gen_shader_  = 0;      ///< 公式渐变生成 compute（kind 选公式，写 rgba16f storage）
+    unsigned int bl_down_shader_ = 0;      ///< 下采样 13-tap compute（手译 bloom_downsample.comp）
+    unsigned int bl_up_shader_   = 0;      ///< 上采样 3×3 tent + 累加 compute（手译 bloom_upsample.comp）
+    unsigned int bl_src8_   = 0;           ///< 下采样源 rgba16f 8×8（gen 写 + 采样读）
+    unsigned int bl_down4_  = 0;           ///< 下采样输出 rgba16f 4×4（storage 写 + copy 源）
+    unsigned int bl_usrc4_  = 0;           ///< 上采样源 rgba16f 4×4（gen 写 + 采样读）
+    unsigned int bl_ubase4_ = 0;           ///< 上采样 base rgba16f 4×4（gen 写 + 采样读，替代 in-place imageLoad）
+    unsigned int bl_up4_    = 0;           ///< 上采样输出 rgba16f 4×4（storage 写 + copy 源）
+    WGPUBuffer bl_rb_out_ = nullptr;       ///< down4+up4 回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);
