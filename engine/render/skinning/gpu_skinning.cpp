@@ -189,6 +189,76 @@ void main(uint3 dtid : SV_DispatchThreadID) {
 }
 )";
 
+// WebGPU 手译 WGSL（无离线 GLSL→WGSL 工具）：与上方 VK GLSL 450 / B3b-3 蒙皮离屏自检
+//   （webgpu_rhi_device.cpp::kSkinningWGSL）算法逐句一致——单次 Dispatch、InstanceInfo 二分定位、
+//   morph delta 叠加、4 骨权重混合。差异仅在参数传递：自检用真实 UBO(group1/b0)，真实消费方走命名
+//   uniform（SetComputeUniformInt，见下方 Dispatch）→ 经 group1 保留 binding 8、成员按调用序 16B 对齐
+//   （u_total_vertices@0、u_instance_count@16），与 morph_target_system.cpp::kMorphTargetCompWGSL 同方案。
+//   i32 成员匹配 SetComputeUniformInt，算法内 cast u32。输入 SSBO 声明 read_write 以匹配 WebGPU RHI
+//   compute 统一 BufferBindingType_Storage 布局（见 webgpu_rhi_device.cpp::BeginComputePass）；
+//   着色器仅写 dst、只读其余缓冲。
+static const char* kSkinningComputeWGSL = R"(// dse-wgsl
+struct SrcVertex { pos_bw0 : vec4<f32>, norm_bw1 : vec4<f32>, tan_bw2 : vec4<f32>, joints_bw3 : vec4<f32>, };
+struct DstVertex { pos : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
+struct InstanceInfo {
+  vertex_start : u32, vertex_count : u32, bone_offset : u32, morph_target_count : u32,
+  morph_weights : vec4<f32>,
+  morph_delta_offset : u32, pad0 : u32, pad1 : u32, pad2 : u32,
+};
+struct Params { @align(16) total_vertices : i32, @align(16) instance_count : i32, };
+@group(1) @binding(8) var<uniform> params : Params;
+@group(3) @binding(0) var<storage, read_write> src_vertices : array<SrcVertex>;
+@group(3) @binding(1) var<storage, read_write> dst_vertices : array<DstVertex>;
+@group(3) @binding(2) var<storage, read_write> bone_matrices : array<mat4x4<f32>>;
+@group(3) @binding(3) var<storage, read_write> morph_deltas : array<vec4<f32>>;
+@group(3) @binding(4) var<storage, read_write> instances : array<InstanceInfo>;
+fn find_instance(gid : u32, inst_count : u32) -> u32 {
+  var lo : u32 = 0u; var hi : u32 = inst_count;
+  while (lo < hi) {
+    let mid = (lo + hi) / 2u;
+    if (instances[mid].vertex_start + instances[mid].vertex_count <= gid) { lo = mid + 1u; }
+    else { hi = mid; }
+  }
+  return lo;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
+  let gid = gid3.x;
+  let total = u32(params.total_vertices);
+  let inst_count = u32(params.instance_count);
+  if (gid >= total) { return; }
+  let inst_id = find_instance(gid, inst_count);
+  if (inst_id >= inst_count) { return; }
+  let inst = instances[inst_id];
+  let local_vid = gid - inst.vertex_start;
+  let s = src_vertices[gid];
+  var pos = s.pos_bw0.xyz;
+  let normal = s.norm_bw1.xyz;
+  let tangent = s.tan_bw2.xyz;
+  if (inst.morph_target_count > 0u) {
+    let w = array<f32, 4>(inst.morph_weights.x, inst.morph_weights.y,
+                          inst.morph_weights.z, inst.morph_weights.w);
+    let mbase = inst.morph_delta_offset;
+    for (var m = 0u; m < inst.morph_target_count && m < 4u; m = m + 1u) {
+      if (abs(w[m]) > 0.001) {
+        pos = pos + morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
+      }
+    }
+  }
+  let bw0 = s.pos_bw0.w; let bw1 = s.norm_bw1.w; let bw2 = s.tan_bw2.w;
+  let bw3 = 1.0 - bw0 - bw1 - bw2;
+  let bi0 = u32(s.joints_bw3.x); let bi1 = u32(s.joints_bw3.y);
+  let bi2 = u32(s.joints_bw3.z); let bi3 = u32(s.joints_bw3.w);
+  let bb = inst.bone_offset;
+  let sm = bone_matrices[bb + bi0] * bw0 + bone_matrices[bb + bi1] * bw1
+         + bone_matrices[bb + bi2] * bw2 + bone_matrices[bb + bi3] * bw3;
+  let nm = mat3x3<f32>(sm[0].xyz, sm[1].xyz, sm[2].xyz);
+  dst_vertices[gid].pos     = vec4<f32>((sm * vec4<f32>(pos, 1.0)).xyz, 1.0);
+  dst_vertices[gid].normal  = vec4<f32>(normalize(nm * normal), 0.0);
+  dst_vertices[gid].tangent = vec4<f32>(normalize(nm * tangent), 0.0);
+}
+)";
+
 // SrcVertex 内存布局：4 × vec4 = 64 bytes
 static constexpr size_t kSrcVertexSize = 64;
 // DstVertex 内存布局：3 × vec4 = 48 bytes
@@ -218,7 +288,8 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
         5,   // ssbo_count: src, dst, bones, morph, instances
         0,   // storage_image_count
         0,   // sampler_count
-        8    // push_constant_bytes (2 × uint)
+        8,   // push_constant_bytes (2 × uint)
+        kSkinningComputeWGSL        // WebGPU: 手译 WGSL 源（命名 uniform group1/b8）
     );
 
     if (skinning_shader_ == 0) {

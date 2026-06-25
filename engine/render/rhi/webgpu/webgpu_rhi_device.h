@@ -222,16 +222,32 @@ public:
     //   保持 SupportsSSBOCompute()=false / SupportsIndirectDraw()=false / CreateHiZTexture()=0）：
     //   - morph：已注入手译 WGSL（kMorphTargetCompWGSL，B3b-10 自检证实算法 + 调度命名 uniform/SSBO
     //     绑定布局），翻转后真消费方路径可用。
-    //   - skinning/grass：门控 SupportsSSBOCompute()（仍 false）→ 维持 CPU 回退，不激活。
     //   - GPU-driven cull/Hi-Z：门控 SupportsIndirectDraw()（false）/ hiz_texture==0（CreateHiZTexture
     //     未覆写返回 0）→ 不激活。
     //   - DDGI：CreateComputeShader(GLSL) 无 WGSL → 返回 0 → Init 优雅失败禁用（仅一次告警）。
-    //   - hair：未提供手译 WGSL → CreateComputeShaderEx 返回 0；HairInstance 首次失败置 compute_unavailable_
-    //     latch 永久跳过（不再每帧重试刷屏）。
     //   - 管线裁剪：无任何 pass 置 requires_compute=true → 翻转对渲染图为中性（harness 双后端不回归）。
-    //   SSBO 同步读回仍不支持，SupportsSSBOCompute() 保持 false。
+    //
+    // Task 5（SupportsSSBOCompute 激活）：GPU skinning 已注入手译 WGSL
+    //   （gpu_skinning.cpp::kSkinningComputeWGSL，B3b-3 蒙皮离屏自检证实算法 + 命名 uniform group1/b8
+    //   + SSBO group3/b0..4），据此如实翻 SupportsSSBOCompute()=true：WebGPU 确实支持 SSBO compute，
+    //   且蒙皮渲染数据流是 GPU→GPU（compute 写 dst SSBO → draw 在 GPU 读），靠 WebGPU pass 间自动
+    //   usage 转换屏障保证顺序，不需 CPU 回读机制；可选的 GetSkinnedOutput CPU 回读 API（ReadBackPrevFrame）
+    //   仍按既有异步 map 走，不阻塞渲染主路径。句柄 0 优雅回退已审计安全——grass/hair/skinning 三消费方
+    //   均门控本位：
+    //   - grass：CreateComputeShaderEx 未传 WGSL（第 8 槽默认 ""）→ 返回 0 → gpu_compute_enabled_=false
+    //     → CPU 风场回退（grass_system.cpp）。
+    //   - hair：同未传 WGSL → 返回 0；HairInstance 首次失败置 compute_unavailable_ latch 永久跳过
+    //     （不再每帧重试刷屏）。
+    //   - skinning：已传 WGSL → Init 可成功，但整套系统当前为休眠态。
+    //   CAVEAT（如实标注，非可见激活）：GPUSkinningSystem 休眠——Submit() 全仓库零调用 → pending_requests_
+    //   恒空 → Dispatch() 被 GetTotalSkinnedVertices()>0 门控挡住永不执行；WGSL 渲染端无 u_skinned==3 /
+    //   ComputeSkinBuf(binding20) 消费路径（仅 GLSL pbr.vert/shadow.vert 有）；demo 无蒙皮网格。故本翻位
+    //   属能力声明（如实暴露 WebGPU SSBO compute 能力 + 接好 skinning WGSL 通路），当前帧像素零变化、
+    //   harness 双后端不回归。真实可见激活留待接入生产者（mesh_render_system→Submit）+ WGSL u_skinned==3
+    //   渲染路径，超出本能力位翻转范围。
     // ============================================================
     bool SupportsCompute() const override { return true; }
+    bool SupportsSSBOCompute() const override { return true; }
 
 
     /// 创建 compute shader。仅接受 WGSL（首非空行须为 `// dse-wgsl` 标记）：引擎 GLSL/SPIR-V
