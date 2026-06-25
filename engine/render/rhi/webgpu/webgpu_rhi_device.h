@@ -290,6 +290,13 @@ public:
     void BindGpuBuffer(BufferHandle handle, uint32_t binding_point, bool writable) override;
     void DeleteGpuBuffer(BufferHandle handle) override;
 
+    // --- Task 4 GPU-Driven 执行器（按已绑引擎 draw state 逐子项落地，先离屏自检不翻能力位）---
+    // Subtask 1：WebGPU 无 glMultiDrawElementsIndirect，按当前已绑管线/顶点/索引缓冲循环逐条
+    //   wgpuRenderPassEncoderDrawIndexedIndirect，第 i 条从 byte_offset + i*stride 读取
+    //   [indexCount,instanceCount,firstIndex,baseVertex,baseInstance]。instance_count=0（被剔）→ 硬件不绘制。
+    void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride,
+                                  size_t byte_offset = 0) override;
+
 private:
     bool AcquireDevice();
     bool CreateSwapChain(int width, int height);
@@ -704,6 +711,20 @@ private:
     unsigned int bl_ubase4_ = 0;           ///< 上采样 base rgba16f 4×4（gen 写 + 采样读，替代 in-place imageLoad）
     unsigned int bl_up4_    = 0;           ///< 上采样输出 rgba16f 4×4（storage 写 + copy 源）
     WGPUBuffer bl_rb_out_ = nullptr;       ///< down4+up4 回读缓冲（MapRead|CopyDst）
+
+    // --- Task 4 Subtask 1 离屏自检（MultiDrawIndexedIndirect 真链路：预置 [1,0,1,0] indirect cmds →
+    //   经引擎-facing CmdBeginRenderPass + CmdBind* + MultiDrawIndexedIndirect 渲到 64×64 离屏 RT →
+    //   copyTextureToBuffer → 异步回读半精解码校验「可见象限有色、被剔象限为黑」。离屏隔离、不翻能力位）---
+    bool t41_mdi_selftest_done_ = false;
+    bool RecordMultiDrawIndirectSelfTest();        ///< 在 frame_encoder_ 上录制引擎-facing 间接绘制 + copy（须在无 render/compute pass 时调用）
+    void KickMultiDrawIndirectSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int t41_rt_      = 0;          ///< 离屏 RT（引擎 CreateRenderTarget，RGBA16Float + CopySrc）
+    unsigned int t41_program_ = 0;          ///< 内建 WGSL 程序（pos.xy@loc0 + color.rgb@loc1）
+    unsigned int t41_pso_     = 0;          ///< PSO（无深度/无剔除/三角列表）
+    unsigned int t41_vbo_     = 0;          ///< 4 象限 quad 顶点缓冲（pos.xy + color.rgb，stride 20）
+    unsigned int t41_ibo_     = 0;          ///< 4 象限索引缓冲（每象限 6 索引，UInt32）
+    unsigned int t41_indirect_ = 0;         ///< 预置 4 条 indirect cmd（instance_count=[1,0,1,0]）
+    WGPUBuffer   t41_rb_pixels_ = nullptr;  ///< 离屏 RT 像素回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,

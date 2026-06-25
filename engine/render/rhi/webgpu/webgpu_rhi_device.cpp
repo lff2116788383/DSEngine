@@ -1106,6 +1106,62 @@ void WriteTextureLayerRGBA8(WGPUQueue queue, WGPUTexture tex, uint32_t mip_level
     wgpuQueueWriteTexture(queue, &dst, rgba8, static_cast<size_t>(width) * height * 4u, &layout, &extent);
 }
 
+// --- Task 4 Subtask 1：MultiDrawIndexedIndirect 离屏自检常量 / 上下文 / 回读回调 ---
+// 离屏 RT 用引擎 CreateRenderTarget（场景色统一 RGBA16Float，8B/texel）；64×8=512B/行满足
+// copyTextureToBuffer 的 256 字节对齐。预置 indirect cmds instance_count=[1,0,1,0]，校验
+// 「可见象限（红/蓝）有色、被剔象限为黑」——即被测 MultiDrawIndexedIndirect 按 byte_offset+i*stride
+// 循环 DrawIndexedIndirect、且 instance_count=0 条目硬件不绘制。
+constexpr uint32_t kT41Instances = 4;     ///< 象限/draw 条数
+constexpr uint32_t kT41DrawWords = 5;     ///< 每条 indirect command 字数
+constexpr uint32_t kT41RtSize    = 64;    ///< 离屏 RT 边长
+constexpr uint32_t kT41RtRowBytes = kT41RtSize * 8u;   ///< RGBA16Float 8B/texel
+constexpr uint32_t kT41RtBytes    = kT41RtRowBytes * kT41RtSize;
+
+struct MultiDrawIndirectSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT41PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<MultiDrawIndirectSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT41RtBytes));
+        if (base) {
+            // rgba16f：每 texel 8 字节（4×half）。取 4 象限中心像素（RT 顶左原点）。
+            auto rd = [&](uint32_t x, uint32_t y, float* o) {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT41RtRowBytes + x * 8u);
+                o[0] = BlHalfToFloat(p[0]); o[1] = BlHalfToFloat(p[1]); o[2] = BlHalfToFloat(p[2]);
+            };
+            float tl[3], tr[3], bl[3], br[3];
+            rd(16, 16, tl); rd(48, 16, tr); rd(16, 48, bl); rd(48, 48, br);
+            auto bright = [](const float* c, int ch) { return c[ch] > 0.4f; };
+            auto dark   = [](const float* c) { return c[0] < 0.15f && c[1] < 0.15f && c[2] < 0.15f; };
+            ok = bright(tl, 0) &&  // inst0 可见：红
+                 dark(tr)      &&  // inst1 被剔：黑
+                 bright(bl, 2) &&  // inst2 可见：蓝
+                 dark(br);         // inst3 被剔：黑
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T4-1] MDI 自检像素：TL({},{},{}) TR({},{},{}) "
+                                "BL({},{},{}) BR({},{},{})",
+                                tl[0], tl[1], tl[2], tr[0], tr[1], tr[2],
+                                bl[0], bl[1], bl[2], br[0], br[1], br[2]);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-1] MDI 自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T4-1] MultiDrawIndexedIndirect 自检 PASS：引擎-facing 循环 DrawIndexedIndirect "
+                       "（byte_offset+i*stride）+ instance_count=[1,0,1,0] 离屏像素（红/蓝象限有色、被剔象限为黑）符合预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T4-1] MultiDrawIndexedIndirect 自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 } // namespace
 
 WebGPURhiDevice::WebGPURhiDevice() = default;
@@ -1300,6 +1356,8 @@ void WebGPURhiDevice::Shutdown() {
     if (hr_rb_out_)       { wgpuBufferRelease(hr_rb_out_);           hr_rb_out_ = nullptr; }
     // B3b-13 bloom 自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (bl_rb_out_)       { wgpuBufferRelease(bl_rb_out_);           bl_rb_out_ = nullptr; }
+    // Task 4 Subtask 1 MDI 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t41_rb_pixels_)   { wgpuBufferRelease(t41_rb_pixels_);       t41_rb_pixels_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1549,6 +1607,15 @@ void WebGPURhiDevice::EndFrame() {
         bl_recorded = RecordBloomSelfTest();
     }
 
+    // Task 4 Subtask 1：每会话一次 MultiDrawIndexedIndirect 真链路自检（引擎-facing CmdBeginRenderPass +
+    // CmdBind* + MultiDrawIndexedIndirect 循环 DrawIndexedIndirect 渲到离屏 RT → copy 回读校验
+    // 「可见象限有色、被剔象限为黑」）。仅自检、不翻转 SupportsIndirectDraw()、不碰 demo 帧。
+    bool t41_recorded = false;
+    if (!t41_mdi_selftest_done_) {
+        t41_mdi_selftest_done_ = true;
+        t41_recorded = RecordMultiDrawIndirectSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1565,6 +1632,7 @@ void WebGPURhiDevice::EndFrame() {
     if (dg_recorded) KickDDGISelfTestReadback();
     if (hr_recorded) KickHairSelfTestReadback();
     if (bl_recorded) KickBloomSelfTestReadback();
+    if (t41_recorded) KickMultiDrawIndirectSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -3236,6 +3304,26 @@ void WebGPURhiDevice::CmdDrawIndexedIndirect(unsigned int indirect_buffer, uint3
     wgpuRenderPassEncoderDrawIndexedIndirect(cur_pass_, ind->buffer, byte_offset);
     if (cur_pass_is_backbuffer_) backbuffer_drawn_ = true;
     last_frame_stats_.draw_calls += 1;
+}
+
+// Task 4 Subtask 1：MultiDrawIndexedIndirect——WebGPU 无 glMultiDrawElementsIndirect，按已绑引擎
+// draw state（管线/顶点/索引缓冲，经一次 BindPassDrawState 建立）循环逐条发
+// wgpuRenderPassEncoderDrawIndexedIndirect，第 i 条从 byte_offset + i*stride 读取
+// [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]。instance_count=0（被剔）时硬件不绘制。
+void WebGPURhiDevice::MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count,
+                                               size_t stride, size_t byte_offset) {
+    if (!cur_pass_ || draw_count <= 0) return;
+    const BufferEntry* ind = FindBuffer(indirect_buffer);
+    if (!ind || !ind->buffer) return;
+    const PipelineCacheEntry* pe = nullptr;
+    if (!BindPassDrawState(/*indexed=*/true, pe)) return;
+    for (int i = 0; i < draw_count; ++i) {
+        const uint64_t off = static_cast<uint64_t>(byte_offset) +
+                             static_cast<uint64_t>(i) * static_cast<uint64_t>(stride);
+        wgpuRenderPassEncoderDrawIndexedIndirect(cur_pass_, ind->buffer, off);
+    }
+    if (cur_pass_is_backbuffer_) backbuffer_drawn_ = true;
+    last_frame_stats_.draw_calls += static_cast<uint32_t>(draw_count);
 }
 void WebGPURhiDevice::CmdDispatchComputePass(const ComputeDispatch& dispatch) { (void)dispatch; }
 
@@ -5410,6 +5498,145 @@ void WebGPURhiDevice::KickBloomSelfTestReadback() {
     ctx->rb_out = bl_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     bl_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kBlTotalBytes, OnBloomMapped, ctx);
+}
+
+// --- Task 4 Subtask 1：MultiDrawIndexedIndirect 离屏自检 ---
+// 经引擎-facing API（CmdBeginRenderPass + CmdBindPipeline + CmdBindVertexBuffer + CmdBindIndexBuffer +
+// MultiDrawIndexedIndirect）把 4 象限 quad 渲到 64×64 离屏 RT，预置 indirect cmds instance_count=[1,0,1,0]
+// 模拟「可见/被剔」，随帧 copyTextureToBuffer，提交后异步回读半精解码校验可见象限有色、被剔象限为黑。
+// 不经裸 wgpu 绘制，专为验证 MultiDrawIndexedIndirect 覆写（按 byte_offset+i*stride 循环）。
+bool WebGPURhiDevice::RecordMultiDrawIndirectSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 离屏 RT（引擎 CreateRenderTarget：RGBA16Float 颜色 + CopySrc，无深度）。
+    if (!t41_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT41RtSize);
+        d.height = static_cast<int>(kT41RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t41_rt_ = CreateRenderTarget(d);
+    }
+    // 内建 WGSL 程序：pos.xy@loc0 + color.rgb@loc1 → 输出纯色。
+    if (!t41_program_) {
+        static const char* kWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) c : vec3<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.color = c; return o;
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> { return vec4<f32>(i.color, 1.0); }
+)WGSL";
+        t41_program_ = CreateShaderProgram(kWGSL, "");
+    }
+    if (!t41_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t41_pso_ = CreatePipelineState(d);
+    }
+    // 4 象限 quad（中心 ±0.5，半边 0.35），各一种颜色（pos.xy + color.rgb，stride 20）。
+    if (!t41_vbo_) {
+        const float h = 0.35f;
+        const float cx[kT41Instances] = {-0.5f, 0.5f, -0.5f, 0.5f};
+        const float cy[kT41Instances] = { 0.5f, 0.5f, -0.5f, -0.5f};
+        const float col[kT41Instances][3] = {{1,0,0},{0,1,0},{0,0,1},{1,1,0}};
+        float verts[kT41Instances * 4 * 5];
+        size_t v = 0;
+        for (uint32_t i = 0; i < kT41Instances; ++i) {
+            const float qx[4] = {cx[i]-h, cx[i]+h, cx[i]+h, cx[i]-h};
+            const float qy[4] = {cy[i]-h, cy[i]-h, cy[i]+h, cy[i]+h};
+            for (int k = 0; k < 4; ++k) {
+                verts[v++] = qx[k]; verts[v++] = qy[k];
+                verts[v++] = col[i][0]; verts[v++] = col[i][1]; verts[v++] = col[i][2];
+            }
+        }
+        t41_vbo_ = CreateBuffer(sizeof(verts), verts, false, false);
+    }
+    if (!t41_ibo_) {
+        uint32_t idx[kT41Instances * 6];
+        for (uint32_t i = 0; i < kT41Instances; ++i) {
+            const uint32_t b = i * 4;
+            idx[i*6+0]=b+0; idx[i*6+1]=b+1; idx[i*6+2]=b+2;
+            idx[i*6+3]=b+0; idx[i*6+4]=b+2; idx[i*6+5]=b+3;
+        }
+        t41_ibo_ = CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    // indirect 缓冲：预置 4 条 [indexCount=6, instanceCount, firstIndex=i*6, baseVertex=0, firstInstance=0]，
+    // instance_count=[1,0,1,0] 直接模拟剔除结果（本子项专测 MDI 覆写，不含 compute 剔除）。
+    if (!t41_indirect_) {
+        uint32_t cmds[kT41Instances * kT41DrawWords];
+        const uint32_t inst_counts[kT41Instances] = {1u, 0u, 1u, 0u};
+        for (uint32_t i = 0; i < kT41Instances; ++i) {
+            cmds[i*kT41DrawWords+0] = 6u;            // indexCount
+            cmds[i*kT41DrawWords+1] = inst_counts[i];// instanceCount
+            cmds[i*kT41DrawWords+2] = i * 6u;        // firstIndex
+            cmds[i*kT41DrawWords+3] = 0u;            // baseVertex
+            cmds[i*kT41DrawWords+4] = 0u;            // firstInstance
+        }
+        GpuBufferDesc d;
+        d.size = sizeof(cmds);
+        d.usage = GpuBufferUsage::kIndirect | GpuBufferUsage::kStorage;
+        t41_indirect_ = CreateGpuBuffer(d, cmds).raw();
+    }
+    if (!t41_rt_ || !t41_program_ || !t41_pso_ || !t41_vbo_ || !t41_ibo_ || !t41_indirect_) {
+        DEBUG_LOG_ERROR("WebGPU[T4-1] MultiDrawIndexedIndirect 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 引擎-facing 录制：开离屏 RT pass → 绑管线/顶点/索引 → MultiDrawIndexedIndirect（被测）。
+    RenderPassDesc rp;
+    rp.render_target = t41_rt_;
+    rp.clear_color_enabled = true;
+    rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    CmdBeginRenderPass(rp);
+    if (!cur_pass_) return false;
+    CmdSetViewport(0, 0, static_cast<int>(kT41RtSize), static_cast<int>(kT41RtSize));
+    const unsigned int pipe = GetGraphicsPipeline(t41_pso_, t41_program_);
+    CmdBindPipeline(pipe);
+    const std::vector<VertexAttr> attrs = {
+        VertexAttr{0, 2, 0},  // pos.xy
+        VertexAttr{1, 3, 8},  // color.rgb
+    };
+    CmdBindVertexBuffer(0, t41_vbo_, 20, attrs, VertexInputRate::PerVertex);
+    CmdBindIndexBuffer(t41_ibo_, IndexType::UInt32);
+    MultiDrawIndexedIndirect(t41_indirect_, static_cast<int>(kT41Instances),
+                             kT41DrawWords * sizeof(uint32_t), 0);
+    CmdEndRenderPass();
+
+    // copy 离屏 RT 颜色纹理 → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = FindRenderTarget(t41_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT41RtBytes);
+    t41_rb_pixels_ = wgpuDeviceCreateBuffer(device_, &bd);
+    if (!t41_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t41_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT41RtRowBytes;
+    dst.layout.rowsPerImage = kT41RtSize;
+    WGPUExtent3D ext{kT41RtSize, kT41RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(frame_encoder_, &src, &dst, &ext);
+    return true;
+}
+
+void WebGPURhiDevice::KickMultiDrawIndirectSelfTestReadback() {
+    if (!t41_rb_pixels_) return;
+    auto* ctx = new MultiDrawIndirectSelfTestCtx();
+    ctx->rb_pixels = t41_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t41_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT41RtBytes, OnT41PixelsMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---
