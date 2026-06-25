@@ -714,6 +714,77 @@ void OnMorphMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-11 DDGI 探针更新（probe update）核心真链路自检（常量 / ctx / 回读校验回调）---
+//   引擎 DDGISystem 真实 compute（ddgi_system.cpp::kDDGIUpdateComputeSource）核心：probe SSBO 读探针位
+//   → 每 texel 经 octahedral 解码方向 → 从 RSM（位置/法线/通量，句柄采样 textureLoad）随机采样 VPL 累积
+//   间接辐照度（cos·cos·平方衰减加权）→ 归一化 ×RSM 面积因子×0.01 → 写 irradiance/visibility storage image。
+//   自检布置：1 探针、grid(1,1,1)、irradiance/visibility texels=4、RSM 2×2（4 样本，全同 VPL）、hysteresis=0
+//   （绕开 temporal imageLoad 需 read-write storage 的限制）。除写 storage image 外另写一份 float SSBO（每
+//   texel irr.rgb + total_weight）精校验：全同样本下权重在归一化中抵消 → 命中 texel 的 irr == flux×0.01，
+//   其余（octahedral z≤0 不接收）== 0。证明该消费方核心 compute 逻辑 WebGPU 可用。离屏隔离，不翻能力位。
+//   注：DDGI 真正翻转能力位前另需消费方两处适配——(1) storage image 与 RSM sampler 在 group2 的绑定槽错开
+//   （现状同号 0/1/2 在 WebGPU 撞槽）；(2) temporal 混合的 imageLoad 需 ping-pong 或 read-write storage。
+constexpr uint32_t kDgIrrTexels  = 4;                          // 每探针 irradiance texel 边长
+constexpr uint32_t kDgVisTexels  = 4;
+constexpr uint32_t kDgRsmDim     = 2;                          // RSM 2×2
+constexpr uint32_t kDgTexelCount = kDgIrrTexels * kDgIrrTexels; // 16 texel
+constexpr uint32_t kDgDbgBytes   = kDgTexelCount * 16u;        // 每 texel vec4<f32>（irr.rgb + total_weight）
+// 自检 RSM 单像素值（rgba8unorm 字节）：通量 (200,100,50)/255。命中 texel 的预期 irr = 通量×0.01。
+const float kDgFluxDequant[3] = {200.0f / 255.0f, 100.0f / 255.0f, 50.0f / 255.0f};
+
+struct DDGISelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnDDGIMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<DDGISelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const float* v = static_cast<const float*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kDgDbgBytes));
+        if (v) {
+            ok = true;
+            int receiving = 0;
+            for (uint32_t ty = 0; ty < kDgIrrTexels && ok; ++ty) {
+                for (uint32_t tx = 0; tx < kDgIrrTexels && ok; ++tx) {
+                    // octahedral 解码前的 n.z = 1-|fx|-|fy|；>0 即该方向接收来自探针方向的 VPL 贡献。
+                    const float fx = (static_cast<float>(tx) + 0.5f) / float(kDgIrrTexels) * 2.0f - 1.0f;
+                    const float fy = (static_cast<float>(ty) + 0.5f) / float(kDgIrrTexels) * 2.0f - 1.0f;
+                    const bool receives = (1.0f - std::abs(fx) - std::abs(fy)) > 1e-5f;
+                    const float* p = v + (ty * kDgIrrTexels + tx) * 4u;  // irr.rgb(0..2) total_weight(3)
+                    if (receives) ++receiving;
+                    for (int c = 0; c < 3; ++c) {
+                        const float exp = receives ? kDgFluxDequant[c] * 0.01f : 0.0f;
+                        if (std::abs(p[c] - exp) > 5e-4f) ok = false;
+                    }
+                    if (!ok) {
+                        DEBUG_LOG_ERROR("WebGPU[B3b-11] DDGI 自检 texel({},{}) 失配：irr=({},{},{}) w={} "
+                                        "receives={}", tx, ty, p[0], p[1], p[2], p[3],
+                                        static_cast<int>(receives));
+                    }
+                }
+            }
+            if (ok && receiving != 4) {  // 内 2×2 共 4 个 texel 应接收 VPL
+                ok = false;
+                DEBUG_LOG_ERROR("WebGPU[B3b-11] DDGI 自检接收 texel 数 {} != 4", receiving);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-11] DDGI 自检：结果回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-11] DDGI 探针更新自检 PASS：引擎 DDGISystem 核心 compute 逻辑"
+                       "（probe SSBO + octahedral 方向 + RSM 句柄采样 VPL 累积间接辐照度 → 归一化×0.01 →"
+                       " 写 storage image）经手译 WGSL 经 14 命名 uniform + 3×RSM 采样 + 2×storage image 跑出"
+                       " irr == CPU 预期（命中 texel == flux×0.01，余 0）");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-11] DDGI 探针更新自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -1011,6 +1082,8 @@ void WebGPURhiDevice::Shutdown() {
     if (hc_rb_out_)       { wgpuBufferRelease(hc_rb_out_);           hc_rb_out_ = nullptr; }
     // B3b-10 morph 自检回读缓冲（kick 后所有权转移给 ctx → null）。
     if (mf_rb_out_)       { wgpuBufferRelease(mf_rb_out_);           mf_rb_out_ = nullptr; }
+    // B3b-11 DDGI 自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (dg_rb_out_)       { wgpuBufferRelease(dg_rb_out_);           dg_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1236,6 +1309,14 @@ void WebGPURhiDevice::EndFrame() {
         mf_recorded = RecordMorphSelfTest();
     }
 
+    // B3b-11：每会话一次 DDGI 探针更新核心自检（手译 DDGISystem probe-update compute → probe SSBO +
+    // octahedral 方向 + RSM 采样 VPL 累积 → 写 storage image + 调试 SSBO → copy 回读逐 texel 校验）。
+    bool dg_recorded = false;
+    if (!ddgi_selftest_done_) {
+        ddgi_selftest_done_ = true;
+        dg_recorded = RecordDDGISelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1249,6 +1330,7 @@ void WebGPURhiDevice::EndFrame() {
     if (cb_recorded) KickComputeBindSelfTestReadback();
     if (hc_recorded) KickHiZCullSelfTestReadback();
     if (mf_recorded) KickMorphSelfTestReadback();
+    if (dg_recorded) KickDDGISelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -4512,6 +4594,229 @@ void WebGPURhiDevice::KickMorphSelfTestReadback() {
     ctx->rb_out = mf_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
     mf_rb_out_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kMfOutBytes, OnMorphMapped, ctx);
+}
+
+// B3b-11：DDGI 探针更新核心真链路自检。手译引擎 DDGISystem probe-update compute（ddgi_system.cpp
+// kDDGIUpdateComputeSource）核心为 WGSL —— 与 GLSL 430 逐句对应：probe SSBO 读探针位 → 每 texel
+// octahedral 解码方向 → 从 RSM（位置/法线/通量句柄采样，textureLoad 替 texture()，整数 texel 中心采样
+// 等价点采样）随机采样 VPL 累积间接辐照度（cos·cos·平方衰减加权）→ 归一化×RSM 面积因子×0.01 → 写
+// irradiance/visibility storage image。自检 hysteresis=0 绕开 temporal imageLoad（核心 WebGPU storage 仅写）。
+// 除写 storage image 外另写 float SSBO（每 texel irr.rgb+总权重）精校验。
+bool WebGPURhiDevice::RecordDDGISelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    static const char* kDDGIWGSL = R"WGSL(// dse-wgsl
+@group(3) @binding(0) var<storage, read_write> probe_states : array<vec4<f32>>;
+@group(3) @binding(1) var<storage, read_write> debug_out : array<vec4<f32>>;
+@group(2) @binding(0) var u_irradiance_atlas : texture_storage_2d<rgba8unorm, write>;
+@group(2) @binding(1) var u_visibility_atlas : texture_storage_2d<rgba8unorm, write>;
+@group(2) @binding(2) var u_rsm_position : texture_2d<f32>;
+@group(2) @binding(3) var u_rsm_normal : texture_2d<f32>;
+@group(2) @binding(4) var u_rsm_flux : texture_2d<f32>;
+struct PC {
+  @align(16) u_probe_count : i32,
+  @align(16) u_probe_start : i32,
+  @align(16) u_probes_to_update : i32,
+  @align(16) u_irradiance_texels : i32,
+  @align(16) u_visibility_texels : i32,
+  @align(16) u_rsm_width : i32,
+  @align(16) u_rsm_height : i32,
+  @align(16) u_frame_index : i32,
+  @align(16) u_hysteresis : f32,
+  @align(16) u_grid_resolution : vec3<i32>,
+  @align(16) u_grid_origin : vec3<f32>,
+  @align(16) u_grid_spacing : vec3<f32>,
+  @align(16) u_light_dir : vec3<f32>,
+  @align(16) u_light_color : vec3<f32>,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+
+fn oct_decode(uv : vec2<f32>) -> vec3<f32> {
+  let f = uv * 2.0 - 1.0;
+  var n = vec3<f32>(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
+  if (n.z < 0.0) {
+    let xy = (vec2<f32>(1.0) - abs(vec2<f32>(n.y, n.x))) * sign(vec2<f32>(n.x, n.y));
+    n.x = xy.x; n.y = xy.y;
+  }
+  return normalize(n);
+}
+
+fn hash(seed_in : u32) -> f32 {
+  var seed = seed_in;
+  seed = seed * 747796405u + 2891336453u;
+  seed = ((seed >> 16u) ^ seed) * 0x45d9f3bu;
+  seed = ((seed >> 16u) ^ seed) * 0x45d9f3bu;
+  seed = (seed >> 16u) ^ seed;
+  return f32(seed) / 4294967295.0;
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let texel_x = i32(gid.x);
+  let probe_local = i32(gid.y);
+  if (texel_x >= pc.u_irradiance_texels) { return; }
+  if (probe_local >= pc.u_probes_to_update) { return; }
+  let probe_index = (pc.u_probe_start + probe_local) % pc.u_probe_count;
+  let probe_data = probe_states[probe_index];
+  let probe_pos = probe_data.xyz;
+  if (probe_data.w < 0.5) { return; }
+
+  let grid_x = probe_index % pc.u_grid_resolution.x;
+  let grid_y = (probe_index / pc.u_grid_resolution.x) % pc.u_grid_resolution.y;
+  let grid_z = probe_index / (pc.u_grid_resolution.x * pc.u_grid_resolution.y);
+  let atlas_col = grid_x + grid_z * pc.u_grid_resolution.x;
+  let atlas_row = grid_y;
+
+  for (var texel_y = 0; texel_y < pc.u_irradiance_texels; texel_y = texel_y + 1) {
+    let texel_uv = (vec2<f32>(f32(texel_x), f32(texel_y)) + 0.5) / f32(pc.u_irradiance_texels);
+    let texel_dir = oct_decode(texel_uv);
+
+    var irradiance = vec3<f32>(0.0);
+    var total_weight = 0.0;
+    var visibility_depth = 0.0;
+    var visibility_depth2 = 0.0;
+
+    let rng_seed = u32(probe_index * 1031 + pc.u_frame_index * 7919 + texel_x * 113 + texel_y * 37);
+    let num_samples = min(64, pc.u_rsm_width * pc.u_rsm_height);
+
+    for (var s = 0; s < num_samples; s = s + 1) {
+      let r1 = hash(rng_seed + u32(s * 2));
+      let r2 = hash(rng_seed + u32(s * 2 + 1));
+      var rsm_coord = vec2<i32>(i32(r1 * f32(pc.u_rsm_width)), i32(r2 * f32(pc.u_rsm_height)));
+      rsm_coord = clamp(rsm_coord, vec2<i32>(0), vec2<i32>(pc.u_rsm_width - 1, pc.u_rsm_height - 1));
+
+      let vpl_pos = textureLoad(u_rsm_position, rsm_coord, 0).xyz;
+      let vpl_normal = normalize(textureLoad(u_rsm_normal, rsm_coord, 0).xyz * 2.0 - 1.0);
+      let vpl_flux = textureLoad(u_rsm_flux, rsm_coord, 0).rgb;
+
+      if (dot(vpl_flux, vpl_flux) < 1e-6) { continue; }
+      let to_probe = probe_pos - vpl_pos;
+      let dist = length(to_probe);
+      if (dist < 0.01) { continue; }
+      let dir_to_probe = to_probe / dist;
+      let vpl_cos = max(0.0, dot(vpl_normal, dir_to_probe));
+      if (vpl_cos < 1e-4) { continue; }
+      let receive_cos = max(0.0, dot(texel_dir, -dir_to_probe));
+      if (receive_cos < 1e-4) { continue; }
+      let attenuation = 1.0 / (dist * dist + 1.0);
+      let weight = vpl_cos * receive_cos * attenuation;
+      irradiance = irradiance + vpl_flux * weight;
+      total_weight = total_weight + weight;
+      visibility_depth = visibility_depth + dist * weight;
+      visibility_depth2 = visibility_depth2 + dist * dist * weight;
+    }
+
+    if (total_weight > 1e-6) {
+      irradiance = irradiance / total_weight;
+      visibility_depth = visibility_depth / total_weight;
+      visibility_depth2 = visibility_depth2 / total_weight;
+    }
+    let rsm_area_factor = f32(pc.u_rsm_width * pc.u_rsm_height) / f32(num_samples);
+    irradiance = irradiance * (rsm_area_factor * 0.01);
+
+    debug_out[texel_y * pc.u_irradiance_texels + texel_x] = vec4<f32>(irradiance, total_weight);
+
+    let atlas_texel = vec2<i32>(atlas_col * pc.u_irradiance_texels + texel_x,
+                                atlas_row * pc.u_irradiance_texels + texel_y);
+    // hysteresis=0 → mix(irradiance, prev, 0) == irradiance（绕开 temporal imageLoad；核心 WebGPU storage 仅写）。
+    textureStore(u_irradiance_atlas, atlas_texel, vec4<f32>(irradiance, 1.0));
+
+    if (texel_x >= pc.u_visibility_texels || texel_y >= pc.u_visibility_texels) { continue; }
+    let vis_texel = vec2<i32>(atlas_col * pc.u_visibility_texels + texel_x,
+                              atlas_row * pc.u_visibility_texels + texel_y);
+    let new_vis = vec2<f32>(visibility_depth, visibility_depth2);
+    textureStore(u_visibility_atlas, vis_texel, vec4<f32>(new_vis, 0.0, 0.0));
+  }
+}
+)WGSL";
+
+    if (!dg_shader_) dg_shader_ = CreateComputeShaderEx("", "", "", 2, 2, 3, 224, kDDGIWGSL);
+    if (!dg_probe_) {
+        // 1 探针：位置 xy 对齐 RSM VPL（128/255），z=-2（探针在 VPL 背面 z 负向）、w=1 激活。
+        const float vx = 128.0f / 255.0f;
+        const float probe[4] = {vx, vx, -2.0f, 1.0f};
+        GpuBufferDesc d; d.size = sizeof(probe); d.usage = GpuBufferUsage::kStorage;
+        dg_probe_ = CreateGpuBuffer(d, probe).raw();
+    }
+    if (!dg_dbg_) {
+        GpuBufferDesc d; d.size = kDgDbgBytes; d.usage = GpuBufferUsage::kStorage;
+        dg_dbg_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    if (!dg_irr_tex_) dg_irr_tex_ = CreateComputeWriteTexture2D(static_cast<int>(kDgIrrTexels),
+                                                                static_cast<int>(kDgIrrTexels));
+    if (!dg_vis_tex_) dg_vis_tex_ = CreateComputeWriteTexture2D(static_cast<int>(kDgVisTexels),
+                                                                static_cast<int>(kDgVisTexels));
+    auto make_rsm = [&](uint8_t r, uint8_t g, uint8_t b) -> unsigned int {
+        std::vector<uint8_t> px(kDgRsmDim * kDgRsmDim * 4u);
+        for (uint32_t i = 0; i < kDgRsmDim * kDgRsmDim; ++i) {
+            px[i * 4 + 0] = r; px[i * 4 + 1] = g; px[i * 4 + 2] = b; px[i * 4 + 3] = 255;
+        }
+        return CreateTextureImpl(
+            WGPUTextureDimension_2D, WGPUTextureViewDimension_2D, kDgRsmDim, kDgRsmDim, 1,
+            WGPUTextureFormat_RGBA8Unorm, WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+            1, 1, {px.data()}, TextureSamplerDesc::FromLinearFlag(false));
+    };
+    // RSM 位置 (0.5,0.5,0)；法线 (0,0,-1)（128,128,0 → ×2-1 → 归一化(0,0,-1)）；通量 (200,100,50)/255。
+    if (!dg_rsm_pos_)  dg_rsm_pos_  = make_rsm(128, 128, 0);
+    if (!dg_rsm_nrm_)  dg_rsm_nrm_  = make_rsm(128, 128, 0);
+    if (!dg_rsm_flux_) dg_rsm_flux_ = make_rsm(200, 100, 50);
+
+    if (!dg_shader_ || !dg_probe_ || !dg_dbg_ || !dg_irr_tex_ || !dg_vis_tex_ ||
+        !dg_rsm_pos_ || !dg_rsm_nrm_ || !dg_rsm_flux_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-11] DDGI 自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经引擎 DDGISystem::UpdateProbes 真实绑定面（命名 uniform 同名/同调用序）：storage image 0/1、
+    // RSM sampler 2/3/4（与消费方现状 0/1/2 错开以避开 WebGPU group2 撞槽）、probe/debug SSBO 0/1。
+    ResetDrawState();
+    SetComputeTextureImage(0, dg_irr_tex_, /*read_only=*/false);
+    SetComputeTextureImage(1, dg_vis_tex_, /*read_only=*/false);
+    SetComputeTextureSampler(2, dg_rsm_pos_);
+    SetComputeTextureSampler(3, dg_rsm_nrm_);
+    SetComputeTextureSampler(4, dg_rsm_flux_);
+    CmdBindStorageBuffer(0, dg_probe_, 0, 16u);
+    CmdBindStorageBuffer(1, dg_dbg_, 0, kDgDbgBytes);
+    SetComputeUniformInt(dg_shader_, "u_probe_count", 1);
+    SetComputeUniformInt(dg_shader_, "u_probe_start", 0);
+    SetComputeUniformInt(dg_shader_, "u_probes_to_update", 1);
+    SetComputeUniformInt(dg_shader_, "u_irradiance_texels", static_cast<int>(kDgIrrTexels));
+    SetComputeUniformInt(dg_shader_, "u_visibility_texels", static_cast<int>(kDgVisTexels));
+    SetComputeUniformInt(dg_shader_, "u_rsm_width", static_cast<int>(kDgRsmDim));
+    SetComputeUniformInt(dg_shader_, "u_rsm_height", static_cast<int>(kDgRsmDim));
+    SetComputeUniformInt(dg_shader_, "u_frame_index", 0);
+    SetComputeUniformFloat(dg_shader_, "u_hysteresis", 0.0f);
+    SetComputeUniformIVec3(dg_shader_, "u_grid_resolution", 1, 1, 1);
+    SetComputeUniformVec3(dg_shader_, "u_grid_origin", 0.0f, 0.0f, 0.0f);
+    SetComputeUniformVec3(dg_shader_, "u_grid_spacing", 1.0f, 1.0f, 1.0f);
+    SetComputeUniformVec3(dg_shader_, "u_light_dir", 0.0f, 0.0f, 1.0f);
+    SetComputeUniformVec3(dg_shader_, "u_light_color", 1.0f, 1.0f, 1.0f);
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(dg_shader_, (kDgIrrTexels + 7u) / 8u, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kDgDbgBytes;
+    dg_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_dbg = FindBuffer(dg_dbg_);
+    if (!dg_rb_out_ || !be_dbg || !be_dbg->buffer) {
+        if (dg_rb_out_) { wgpuBufferRelease(dg_rb_out_); dg_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_dbg->buffer, 0, dg_rb_out_, 0, kDgDbgBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickDDGISelfTestReadback() {
+    if (!dg_rb_out_) return;
+    auto* ctx = new DDGISelfTestCtx();
+    ctx->rb_out = dg_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    dg_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kDgDbgBytes, OnDDGIMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

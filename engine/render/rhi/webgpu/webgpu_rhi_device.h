@@ -638,6 +638,24 @@ private:
     unsigned int mf_out_ = 0;              ///< 形变顶点输出 SSBO（group3 b3）
     WGPUBuffer mf_rb_out_ = nullptr;       ///< 形变顶点回读缓冲（MapRead|CopyDst）
 
+    // --- B3b-11 DDGI 探针更新核心真链路自检（每会话一次：手译引擎 DDGISystem probe-update compute 核心为
+    //   WGSL —— probe SSBO（group3 b0）+ 3×RSM 句柄采样（group2 b2/b3/b4，textureLoad）+ 14 命名 uniform →
+    //   octahedral 方向 + VPL 累积间接辐照度 → 归一化×0.01 → 写 irradiance/visibility storage image（group2
+    //   b0/b1）+ float SSBO 调试输出（group3 b1）→ copy 回读逐 texel 校验 == CPU 预期。离屏隔离、不翻能力位。
+    //   注：DDGI 翻转前另需消费方适配 storage/sampler 绑定槽错开 + temporal imageLoad 的 read-write storage）---
+    bool ddgi_selftest_done_ = false;
+    bool RecordDDGISelfTest();             ///< 录制 DDGI probe-update compute + copy 调试 SSBO→回读缓冲
+    void KickDDGISelfTestReadback();       ///< 提交后发起异步 map 回读校验
+    unsigned int dg_shader_ = 0;           ///< DDGI probe-update compute shader（手译 DDGISystem 核心）
+    unsigned int dg_probe_ = 0;            ///< 探针状态 SSBO（group3 b0）
+    unsigned int dg_dbg_ = 0;              ///< 每 texel 调试输出 SSBO（group3 b1，irr.rgb+权重）
+    unsigned int dg_irr_tex_ = 0;          ///< irradiance storage image（group2 b0）
+    unsigned int dg_vis_tex_ = 0;          ///< visibility storage image（group2 b1）
+    unsigned int dg_rsm_pos_ = 0;          ///< RSM 位置采样纹理（group2 b2）
+    unsigned int dg_rsm_nrm_ = 0;          ///< RSM 法线采样纹理（group2 b3）
+    unsigned int dg_rsm_flux_ = 0;         ///< RSM 通量采样纹理（group2 b4）
+    WGPUBuffer dg_rb_out_ = nullptr;       ///< 调试输出回读缓冲（MapRead|CopyDst）
+
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
                                      WGPUTextureViewDimension view_dim, bool read_only);
