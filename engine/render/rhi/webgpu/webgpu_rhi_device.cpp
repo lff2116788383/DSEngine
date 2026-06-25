@@ -558,6 +558,65 @@ void OnHiZPyramidPixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- B3b-8 命名 uniform + compute 采样器绑定 自检（常量 / ctx / 回读校验回调）---
+//   采样纹理：kCbTexDim×kCbTexDim rgba8unorm 已知渐变 texel(x,y)=(x*40,y*60,(x+y)*20,255)；
+//   命名 uniform：a_int=12345 / b_float=3.5 / c_coord=(2,1) / d_vec4=(1,2,3,4) / e_mat=单位阵。
+//   compute 取 c_coord 处 texel + 单位阵×d_vec4 写 9×u32 结果 SSBO。
+constexpr uint32_t kCbTexDim   = 4;
+constexpr uint32_t kCbOutCount = 9;                 // u32：[0]a_int [1]bits(b_float) [2..4]texel rgb [5..8]bits(mat*vec)
+constexpr uint32_t kCbOutBytes = kCbOutCount * 4u;
+constexpr int      kCbAInt     = 12345;
+constexpr float    kCbBFloat   = 3.5f;
+constexpr int      kCbCX = 2, kCbCY = 1;            // c_coord：采样纹理坐标
+inline uint8_t CbTexR(uint32_t x) { return static_cast<uint8_t>(x * 40u); }
+inline uint8_t CbTexG(uint32_t y) { return static_cast<uint8_t>(y * 60u); }
+inline uint8_t CbTexB(uint32_t x, uint32_t y) { return static_cast<uint8_t>((x + y) * 20u); }
+
+struct ComputeBindSelfTestCtx {
+    WGPUBuffer rb_out = nullptr;
+};
+
+void OnComputeBindMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<ComputeBindSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint32_t* o = static_cast<const uint32_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_out, 0, kCbOutBytes));
+        if (o) {
+            auto bits2f = [](uint32_t u) { float f; std::memcpy(&f, &u, 4); return f; };
+            const float b_float = bits2f(o[1]);
+            const float vx = bits2f(o[5]), vy = bits2f(o[6]), vz = bits2f(o[7]), vw = bits2f(o[8]);
+            const bool int_ok   = (static_cast<int>(o[0]) == kCbAInt);
+            const bool float_ok = (std::abs(b_float - kCbBFloat) < 1e-4f);
+            const bool tex_ok   = (o[2] == CbTexR(kCbCX)) && (o[3] == CbTexG(kCbCY)) &&
+                                  (o[4] == CbTexB(kCbCX, kCbCY));
+            const bool mat_ok   = (std::abs(vx - 1.0f) < 1e-4f) && (std::abs(vy - 2.0f) < 1e-4f) &&
+                                  (std::abs(vz - 3.0f) < 1e-4f) && (std::abs(vw - 4.0f) < 1e-4f);
+            ok = int_ok && float_ok && tex_ok && mat_ok;
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[B3b-8] 命名 uniform/采样自检失配：int={}(exp {}) float={}(exp {}) "
+                                "texel=({},{},{})(exp {},{},{}) mat*vec=({},{},{},{})(exp 1,2,3,4)",
+                                static_cast<int>(o[0]), kCbAInt, b_float, kCbBFloat,
+                                o[2], o[3], o[4], CbTexR(kCbCX), CbTexG(kCbCY), CbTexB(kCbCX, kCbCY),
+                                vx, vy, vz, vw);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_out);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-8] 命名 uniform/采样自检：结果回读映射失败 status={}",
+                        static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[B3b-8] 命名 uniform + compute 采样器绑定自检 PASS：SetComputeUniform* "
+                       "（i32/f32/vec2i/vec4/mat4 命名块经 group1 保留 binding）+ SetComputeTextureSampler "
+                       "（句柄绑定 group2，textureLoad 采样）均经 compute 读出且 == CPU 预期");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[B3b-8] 命名 uniform + compute 采样器绑定自检 FAIL");
+    }
+    if (ctx->rb_out) wgpuBufferRelease(ctx->rb_out);
+    delete ctx;
+}
+
 // --- B2 PSO/顶点格式 → WebGPU 枚举映射 ---
 
 WGPUVertexFormat ToVertexFormat(uint32_t components) {
@@ -849,6 +908,8 @@ void WebGPURhiDevice::Shutdown() {
     if (hz_rb_pixels_)    { wgpuBufferRelease(hz_rb_pixels_);        hz_rb_pixels_ = nullptr; }
     // B3b-6 Hi-Z 金字塔自检回读缓冲（kick 后回读缓冲所有权转移给 ctx → null）。
     if (hzp_rb_pixels_)   { wgpuBufferRelease(hzp_rb_pixels_);       hzp_rb_pixels_ = nullptr; }
+    // B3b-8 命名 uniform/采样自检回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (cb_rb_out_)       { wgpuBufferRelease(cb_rb_out_);           cb_rb_out_ = nullptr; }
     // B3b-7：SetComputeTextureImageMip 缓存的单 mip 视图统一释放（含金字塔自检各级 mip 视图）。
     for (auto& [k, v] : compute_mip_views_) if (v) wgpuTextureViewRelease(v);
     compute_mip_views_.clear();
@@ -1050,6 +1111,14 @@ void WebGPURhiDevice::EndFrame() {
         hzp_recorded = RecordHiZPyramidSelfTest();
     }
 
+    // B3b-8：每会话一次 命名 uniform + compute 采样器绑定自检（SetComputeUniform* 命名块 +
+    // SetComputeTextureSampler 句柄采样 → 结果 SSBO → copy 回读逐元素校验）。仅自检、不翻转能力位。
+    bool cb_recorded = false;
+    if (!compute_bind_selftest_done_) {
+        compute_bind_selftest_done_ = true;
+        cb_recorded = RecordComputeBindSelfTest();
+    }
+
     WGPUCommandBuffer cmd = wgpuCommandEncoderFinish(frame_encoder_, nullptr);
     wgpuQueueSubmit(queue_, 1, &cmd);
     wgpuCommandBufferRelease(cmd);
@@ -1060,6 +1129,7 @@ void WebGPURhiDevice::EndFrame() {
     if (si_recorded) KickStorageImageSelfTestReadback();
     if (hz_recorded) KickHiZDownsampleSelfTestReadback();
     if (hzp_recorded) KickHiZPyramidSelfTestReadback();
+    if (cb_recorded) KickComputeBindSelfTestReadback();
 
     wgpuCommandEncoderRelease(frame_encoder_);
     frame_encoder_ = nullptr;
@@ -1381,6 +1451,86 @@ void WebGPURhiDevice::SetComputeTextureImageMip(unsigned int binding, unsigned i
         compute_mip_views_[key] = view;
     }
     SetComputeImageViewExplicit(binding, view, fmt, WGPUTextureViewDimension_2D, read_only);
+}
+
+void WebGPURhiDevice::SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) {
+    // B3b-8：引擎 compute 采样面（Hi-Z/GPU-driven 剔除读 Hi-Z/深度纹理）。WebGPU 路由到只读采样
+    //   绑定（group2 binding=unit，texture_2d<f32>，手译 WGSL 用 textureLoad 取代 textureLod）。
+    //   同槽先清显式视图 / storage image 绑定，避免上一次 dispatch 的陈旧绑定残留同槽。
+    cur_compute_image_views_.erase(unit);
+    cur_compute_texture_views_.erase(unit);
+    cur_compute_images_.erase(unit);
+    if (!texture_handle) { cur_compute_textures_.erase(unit); return; }
+    cur_compute_textures_[unit] = texture_handle;
+}
+
+// B3b-8 命名 compute uniform：按调用序 16B 对齐定位（与 GL/DX11/Vulkan 同方案）。名字首见时分配下
+//   一个 16B 对齐偏移并按 data_size 推进游标；整块经 UBO 版本环上传到 group1 保留 binding。
+size_t WebGPURhiDevice::GetOrCreateComputeNamedOffset(const char* name, size_t data_size) {
+    auto it = compute_named_offsets_.find(name);
+    if (it != compute_named_offsets_.end()) return it->second;
+    const size_t offset = (compute_named_next_ + 15) & ~size_t(15);
+    compute_named_offsets_[name] = offset;
+    compute_named_next_ = offset + data_size;
+    return offset;
+}
+
+void WebGPURhiDevice::WriteComputeNamedStaging(size_t offset, const void* data, size_t size) {
+    if (compute_named_staging_.size() < offset + size) compute_named_staging_.resize(offset + size, 0);
+    std::memcpy(compute_named_staging_.data() + offset, data, size);
+}
+
+void WebGPURhiDevice::SetComputeUniformInt(unsigned int shader, const char* name, int value) {
+    (void)shader;
+    if (!name) return;
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(int)), &value, sizeof(int));
+}
+
+void WebGPURhiDevice::SetComputeUniformFloat(unsigned int shader, const char* name, float value) {
+    (void)shader;
+    if (!name) return;
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(float)), &value, sizeof(float));
+}
+
+void WebGPURhiDevice::SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) {
+    (void)shader;
+    if (!name) return;
+    const int d[2]{x, y};
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(d)), d, sizeof(d));
+}
+
+void WebGPURhiDevice::SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) {
+    (void)shader;
+    if (!name) return;
+    const float d[2]{x, y};
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(d)), d, sizeof(d));
+}
+
+void WebGPURhiDevice::SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) {
+    (void)shader;
+    if (!name) return;
+    const float d[3]{x, y, z};
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(d)), d, sizeof(d));
+}
+
+void WebGPURhiDevice::SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) {
+    (void)shader;
+    if (!name) return;
+    const int d[3]{x, y, z};
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(d)), d, sizeof(d));
+}
+
+void WebGPURhiDevice::SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) {
+    (void)shader;
+    if (!name) return;
+    const float d[4]{x, y, z, w};
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, sizeof(d)), d, sizeof(d));
+}
+
+void WebGPURhiDevice::SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) {
+    (void)shader;
+    if (!name || !data) return;
+    WriteComputeNamedStaging(GetOrCreateComputeNamedOffset(name, 64), data, 64);
 }
 
 unsigned int WebGPURhiDevice::CreateTextureCube(int width, int height, const unsigned char* const rgba8_faces[6], bool linear_filter) {
@@ -2728,6 +2878,16 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
                 b.buf_size = u.size ? u.size : be->size;
                 out.push_back(b);
             }
+            // B3b-8：命名 uniform 块（SetComputeUniform* 累积）→ group1 保留 binding。仅当着色器
+            //   声明该 binding 且本次 dispatch 有命名 uniform 切片时纳入。
+            if (cur_compute_named_buffer_ && declared(kComputeNamedUboBinding)) {
+                BindingInfo b;
+                b.binding = kComputeNamedUboBinding; b.kind = BindingInfo::Kind::Uniform; b.visibility = kCs;
+                b.buffer = cur_compute_named_buffer_;
+                b.buf_offset = cur_compute_named_offset_;
+                b.buf_size = cur_compute_named_size_;
+                out.push_back(b);
+            }
             break;
         }
         case 2: {
@@ -2870,6 +3030,23 @@ void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle,
     if (!cur_compute_pass_ || groups_x == 0 || groups_y == 0 || groups_z == 0) return;
     auto it = compute_shaders_.find(shader_handle);
     if (it == compute_shaders_.end() || !it->second.module) return;
+
+    // B3b-8：命名 uniform 暂存（SetComputeUniform* 按调用序 16B 对齐累积）→ 经 UBO 版本环分配独立
+    //   256 对齐切片并上传，供 group1 保留 binding 绑定。版本环切片避免同一帧多 dispatch 写同一缓冲
+    //   被 wgpuQueueWriteBuffer 合并致仅见最后一次写入（与 UBO dynamic 版本同隐患）。须在管线/BindGroup
+    //   组装前完成，使 CollectComputeGroupBindings 见到一致绑定签名。
+    cur_compute_named_buffer_ = nullptr;
+    cur_compute_named_offset_ = 0;
+    cur_compute_named_size_   = 0;
+    if (!compute_named_staging_.empty()) {
+        const uint64_t off = AllocUboVersion(compute_named_staging_.data(), compute_named_staging_.size());
+        if (off != UINT64_MAX) {
+            cur_compute_named_buffer_ = ubo_ring_;
+            cur_compute_named_offset_ = off;
+            cur_compute_named_size_   = compute_named_staging_.size();
+        }
+    }
+
     const ComputePipelineCacheEntry* pe = GetOrCreateComputePipeline(shader_handle);
     if (!pe || !pe->pipeline) return;
 
@@ -2898,6 +3075,11 @@ void WebGPURhiDevice::DispatchCompute(unsigned int shader_handle,
         frame_bindgroups_.push_back(bg);  // 提交后统一释放
     }
     wgpuComputePassEncoderDispatchWorkgroups(cur_compute_pass_, groups_x, groups_y, groups_z);
+
+    // B3b-8：每次 dispatch 自带一组命名 uniform——上传后清空暂存与定位表（与 GL/DX11 同义）。
+    compute_named_staging_.clear();
+    compute_named_offsets_.clear();
+    compute_named_next_ = 0;
 }
 
 bool WebGPURhiDevice::RecordComputeSelfTest() {
@@ -3841,6 +4023,107 @@ void WebGPURhiDevice::KickHiZPyramidSelfTestReadback() {
     ctx->rb_pixels = hzp_rb_pixels_;
     hzp_rb_pixels_ = nullptr;
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kHzpTotalBytes, OnHiZPyramidPixelsMapped, ctx);
+}
+
+// B3b-8：命名 uniform + compute 采样器绑定 真链路自检。手写 WGSL compute 经 SetComputeUniform*
+// （命名 i32/f32/vec2i/vec4/mat4 → group1 保留 binding 命名块，各成员 @align(16)）读入参数、经
+// SetComputeTextureSampler（句柄 → group2 b0，textureLoad）采样已知渐变纹理，结果写 group3 SSBO，
+// 再 copy SSBO→回读缓冲逐元素校验。覆盖引擎 Hi-Z/GPU-driven 剔除真实 compute API 面（命名 uniform
+// 块布局 + 句柄采样绑定）。详见 ComputeBindSelfTestCtx / OnComputeBindMapped。
+bool WebGPURhiDevice::RecordComputeBindSelfTest() {
+    if (!device_ || !frame_encoder_ || cur_pass_ || cur_compute_pass_) return false;
+
+    // 命名 uniform 块：成员声明序 + @align(16) 须与 SetComputeUniform* 调用序的 16B 对齐定位一致
+    // （a_int@0 / b_float@16 / c_coord@32 / d_vec4@48 / e_mat@64，块 128B）。
+    static const char* kBindSelfTestWGSL = R"WGSL(// dse-wgsl
+struct NamedBlock {
+  @align(16) a_int   : i32,
+  @align(16) b_float : f32,
+  @align(16) c_coord : vec2<i32>,
+  @align(16) d_vec4  : vec4<f32>,
+  @align(16) e_mat   : mat4x4<f32>,
+};
+@group(1) @binding(8) var<uniform> u : NamedBlock;
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(3) @binding(0) var<storage, read_write> outbuf : array<u32>;
+@compute @workgroup_size(1)
+fn cs_main() {
+  outbuf[0] = u32(u.a_int);
+  outbuf[1] = bitcast<u32>(u.b_float);
+  let texel = textureLoad(src_tex, u.c_coord, 0);
+  outbuf[2] = u32(round(texel.r * 255.0));
+  outbuf[3] = u32(round(texel.g * 255.0));
+  outbuf[4] = u32(round(texel.b * 255.0));
+  let v = u.e_mat * u.d_vec4;
+  outbuf[5] = bitcast<u32>(v.x);
+  outbuf[6] = bitcast<u32>(v.y);
+  outbuf[7] = bitcast<u32>(v.z);
+  outbuf[8] = bitcast<u32>(v.w);
+}
+)WGSL";
+
+    if (!cb_shader_) cb_shader_ = CreateComputeShaderEx("", "", "", 1, 0, 1, 0, kBindSelfTestWGSL);
+    if (!cb_tex_) {
+        // 已知渐变 rgba8unorm：texel(x,y)=(x*40, y*60, (x+y)*20, 255)。
+        std::vector<uint8_t> texdata(kCbTexDim * kCbTexDim * 4u);
+        for (uint32_t y = 0; y < kCbTexDim; ++y) {
+            for (uint32_t x = 0; x < kCbTexDim; ++x) {
+                uint8_t* p = &texdata[(y * kCbTexDim + x) * 4u];
+                p[0] = CbTexR(x); p[1] = CbTexG(y); p[2] = CbTexB(x, y); p[3] = 255;
+            }
+        }
+        cb_tex_ = CreateTextureImpl(
+            WGPUTextureDimension_2D, WGPUTextureViewDimension_2D, kCbTexDim, kCbTexDim, 1,
+            WGPUTextureFormat_RGBA8Unorm,
+            WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
+            1, 1, {texdata.data()}, TextureSamplerDesc::FromLinearFlag(false));
+    }
+    if (!cb_out_) {
+        GpuBufferDesc d; d.size = kCbOutBytes; d.usage = GpuBufferUsage::kStorage;
+        cb_out_ = CreateGpuBuffer(d, nullptr).raw();
+    }
+    const TextureEntry* cte = FindTexture(cb_tex_);
+    if (!cb_shader_ || !cb_tex_ || !cte || !cte->texture || !cb_out_) {
+        DEBUG_LOG_ERROR("WebGPU[B3b-8] 命名 uniform/采样自检资源创建失败，跳过");
+        return false;
+    }
+
+    // 经引擎真实 compute API 面绑定：命名 uniform（调用序定位）+ 句柄采样器 + 结果 SSBO。
+    const float kIdentity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    ResetDrawState();
+    SetComputeUniformInt(cb_shader_, "a_int", kCbAInt);
+    SetComputeUniformFloat(cb_shader_, "b_float", kCbBFloat);
+    SetComputeUniformVec2i(cb_shader_, "c_coord", kCbCX, kCbCY);
+    SetComputeUniformVec4(cb_shader_, "d_vec4", 1.0f, 2.0f, 3.0f, 4.0f);
+    SetComputeUniformMat4(cb_shader_, "e_mat", kIdentity);
+    SetComputeTextureSampler(0, cb_tex_);
+    CmdBindStorageBuffer(0, cb_out_, 0, kCbOutBytes);
+
+    BeginComputePass();
+    if (!cur_compute_pass_) { ResetDrawState(); return false; }
+    DispatchCompute(cb_shader_, 1, 1, 1);
+    EndComputePass();
+    ResetDrawState();
+
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = kCbOutBytes;
+    cb_rb_out_ = wgpuDeviceCreateBuffer(device_, &bd);
+    const BufferEntry* be_out = FindBuffer(cb_out_);
+    if (!cb_rb_out_ || !be_out || !be_out->buffer) {
+        if (cb_rb_out_) { wgpuBufferRelease(cb_rb_out_); cb_rb_out_ = nullptr; }
+        return false;
+    }
+    wgpuCommandEncoderCopyBufferToBuffer(frame_encoder_, be_out->buffer, 0, cb_rb_out_, 0, kCbOutBytes);
+    return true;
+}
+
+void WebGPURhiDevice::KickComputeBindSelfTestReadback() {
+    if (!cb_rb_out_) return;
+    auto* ctx = new ComputeBindSelfTestCtx();
+    ctx->rb_out = cb_rb_out_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    cb_rb_out_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kCbOutBytes, OnComputeBindMapped, ctx);
 }
 
 // --- 设备级 Cmd*：绑定状态累积 ---

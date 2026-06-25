@@ -251,6 +251,21 @@ public:
     /// 内部对 (句柄,mip) 缓存单层单 mip 视图后经 SetComputeImageViewExplicit 路由（绕开默认全 mip 视图）。
     void SetComputeTextureImageMip(unsigned int binding, unsigned int texture_handle,
                                    int mip_level, bool read_only, bool r32f = false) override;
+    /// B3b-8：按句柄绑定纹理到 compute 采样单元（group2 binding=unit，texture_2d<f32>，textureLoad）。
+    /// 引擎 Hi-Z / GPU-driven 剔除经此面读 Hi-Z/深度纹理（手译 WGSL 用 textureLoad 取代 textureLod）。
+    void SetComputeTextureSampler(unsigned int unit, unsigned int texture_handle) override;
+    /// B3b-8：命名 compute uniform 设置面（引擎 Hi-Z/GPU cull 经名字设 compute 标量/向量/矩阵参数）。
+    /// 按调用序 16B 对齐累积到 CPU 暂存，DispatchCompute 时整块经 UBO 版本环上传到 group1 保留
+    /// binding（kComputeNamedUboBinding），dispatch 后清空。手译 WGSL 须把这些参数声明为同名同序、
+    /// 各成员 @align(16) 的 uniform 块（与 GL/DX11/Vulkan 的 16B 对齐定位方案一致）。
+    void SetComputeUniformInt(unsigned int shader, const char* name, int value) override;
+    void SetComputeUniformFloat(unsigned int shader, const char* name, float value) override;
+    void SetComputeUniformVec2i(unsigned int shader, const char* name, int x, int y) override;
+    void SetComputeUniformVec2f(unsigned int shader, const char* name, float x, float y) override;
+    void SetComputeUniformVec3(unsigned int shader, const char* name, float x, float y, float z) override;
+    void SetComputeUniformIVec3(unsigned int shader, const char* name, int x, int y, int z) override;
+    void SetComputeUniformVec4(unsigned int shader, const char* name, float x, float y, float z, float w) override;
+    void SetComputeUniformMat4(unsigned int shader, const char* name, const float* data) override;
 
     // 统一 GPU Buffer API：覆写以按 GpuBufferUsage 授予正确 WGPU usage 位
     // （storage/indirect/vertex/index/uniform），不经旧 deprecated CreateSSBO/CreateIndirectBuffer 路由。
@@ -384,6 +399,19 @@ private:
     //   随纹理删除/Shutdown 释放）。避免每次 dispatch 重建视图。
     std::map<uint64_t, WGPUTextureView> compute_mip_views_;
     void InvalidateComputeMipViews(unsigned int texture_handle);  ///< 删纹理时清该句柄全部 mip 视图
+    // B3b-8：SetComputeUniform* 命名 uniform 累积（按调用序 16B 对齐定位，整块经 UBO 版本环上传到
+    //   group1 保留 binding；每次 DispatchCompute 后清空，与 GL/DX11/Vulkan 同语义）。手译 WGSL 须
+    //   声明同名同序、各成员 @align(16) 的 uniform 块到该保留 binding。
+    static constexpr uint32_t kComputeNamedUboBinding = 8;
+    std::vector<uint8_t> compute_named_staging_;
+    std::unordered_map<std::string, size_t> compute_named_offsets_;
+    size_t compute_named_next_ = 0;
+    size_t GetOrCreateComputeNamedOffset(const char* name, size_t data_size);  ///< 名字→16B 对齐偏移（按调用序）
+    void WriteComputeNamedStaging(size_t offset, const void* data, size_t size);
+    // 当前 dispatch 命名 uniform 块在 UBO 版本环内的切片（DispatchCompute 内填，CollectComputeGroupBindings 读）。
+    WGPUBuffer cur_compute_named_buffer_ = nullptr;
+    uint64_t cur_compute_named_offset_ = 0;
+    uint64_t cur_compute_named_size_ = 0;
     std::vector<uint8_t> cur_vs_push_;
     std::vector<uint8_t> cur_fs_push_;
 
@@ -568,6 +596,19 @@ private:
     std::vector<unsigned int> hzp_down_ubos_;  ///< 各下采样级参数 UBO（src_dim/dst_dim，group1 b0）
     unsigned int hzp_tex_ = 0;              ///< 单张 R32Float mip 链纹理（mip0 生成 + 逐级下采样 + copy 源）
     WGPUBuffer hzp_rb_pixels_ = nullptr;    ///< 各级 mip 像素回读缓冲（MapRead|CopyDst）
+
+    // --- B3b-8 命名 uniform + compute 采样器绑定 真链路自检（每会话一次：手写 WGSL compute 经
+    //   SetComputeUniform*（命名 i32/f32/vec2i/vec4/mat4，group1 保留 binding 命名块）+
+    //   SetComputeTextureSampler（group2 b0，textureLoad 读已知渐变纹理）读入参数与纹理 →
+    //   结果写 SSBO → copy SSBO→回读缓冲 → 逐元素校验。验证引擎 Hi-Z/GPU cull 真实 compute API 面
+    //   （命名 uniform 块布局 + 句柄采样绑定）。离屏隔离，不翻转能力位、不碰 demo golden）---
+    bool compute_bind_selftest_done_ = false;
+    bool RecordComputeBindSelfTest();        ///< 录制 命名 uniform + 采样器绑定 compute + copy SSBO→回读缓冲
+    void KickComputeBindSelfTestReadback();  ///< 提交后发起异步 map 回读校验
+    unsigned int cb_shader_ = 0;             ///< compute shader（读命名 uniform 块 + textureLoad 采样纹理）
+    unsigned int cb_tex_ = 0;                ///< 已知渐变 rgba8unorm 采样纹理（SetComputeTextureSampler 绑定）
+    unsigned int cb_out_ = 0;                ///< 结果 SSBO（group3 b0）
+    WGPUBuffer cb_rb_out_ = nullptr;         ///< 结果回读缓冲（MapRead|CopyDst）
 
     /// B3b-6：把显式纹理视图绑到 compute group2 槽（read_only=true→采样读；false→storage 写）。
     void SetComputeImageViewExplicit(uint32_t binding, WGPUTextureView view, WGPUTextureFormat format,
