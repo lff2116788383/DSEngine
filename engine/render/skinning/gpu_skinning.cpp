@@ -561,11 +561,14 @@ void GPUSkinningSystem::Dispatch() {
                                 static_cast<int>(pending_requests_.size()));
 
     // 单次 Dispatch: ceil(total_vertices / 64) workgroups
+    // dispatch 须包裹在 compute pass 内（WebGPU DispatchCompute 在无 pass 时 no-op；
+    // 桌面 GL/VK/DX 的 Begin/EndComputePass 为安全空操作或状态作用域）。与 grass/hair 一致。
     const uint32_t groups_x = (total_dst_vertices_ + 63) / 64;
+    rhi_->BeginComputePass();
     rhi_->DispatchCompute(skinning_shader_, groups_x, 1, 1);
-
     // Memory barrier: 确保 compute 写入对后续读操作可见
     rhi_->ComputeMemoryBarrier();
+    rhi_->EndComputePass();
 
     // P4: 记录本帧总顶点数（用于下一帧 readback）
     prev_total_vertices_ = total_dst_vertices_;
@@ -589,10 +592,18 @@ void GPUSkinningSystem::ReadBackPrevFrame() {
     const uint32_t read_idx = 1 - dst_write_idx_;
     if (!dst_buffer_[read_idx]) return;
 
-    // 读回上一帧 compute 输出（双缓冲保证此 buffer 不被当前帧写入，消除 GPU sync stall）
+    // 读回上一帧 compute 输出（双缓冲保证此 buffer 不被当前帧写入，消除 GPU sync stall）。
+    // 经异步双缓冲延迟回读 API：桌面 GL/VK/DX 用基类默认同步实现（当帧即就绪、语义不变）；
+    // WebGPU 覆写为延迟 1 帧（frame_encoder_ 上 CopyBufferToBuffer → staging → mapAsync）。
+    // 未就绪（WebGPU 暖机首帧 / map 飞行中）则 readback_results_ 留空 → 消费方落 CPU 蒙皮回退。
     const size_t readback_bytes = static_cast<size_t>(prev_total_vertices_) * kDstVertexSize;
     readback_raw_.resize(readback_bytes);
-    rhi_->ReadGpuBuffer(dst_buffer_[read_idx], 0, readback_bytes, readback_raw_.data());
+    const bool ready = rhi_->BeginGpuReadback(dst_buffer_[read_idx], 0, readback_bytes);
+    if (!ready) return;
+    size_t mapped_size = 0;
+    const void* mapped = rhi_->GetLastReadbackResult(&mapped_size);
+    if (!mapped || mapped_size < readback_bytes) return;
+    std::memcpy(readback_raw_.data(), mapped, readback_bytes);
 
     // 解析为 per-entity SkinnedOutput
     for (const auto& [eid, slot] : prev_entity_slots_) {

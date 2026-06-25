@@ -1462,6 +1462,115 @@ void FramePipeline::RunRenderInternal() {
 
     BuildRenderSceneQueues();
 
+    // ===== B-1（方案 B）：web 蒙皮可见激活 — GPU compute + 复用异步回读 → 世界烘焙静态网格 =====
+    // 在缺 ForwardSkinnedShaded 内建程序的后端（WebGPU 无 per-draw 蒙皮；WebGL2/GLES3.0 无法编译
+    // SSBO 蒙皮 VS）上，DrawSkinnedShaded 为 no-op、蒙皮网格不可见。此处把蒙皮项喂 GPU compute
+    // 蒙皮系统（WebGPU 上 GPU 真做蒙皮），消费「上一帧」异步回读结果（grass 之外第 2 个真实回读
+    // 消费方），未就绪/WebGL2 则 CPU 蒙皮回退（同公式，结果一致），烘焙为对象空间顶点的非蒙皮项，
+    // 走现有 ForwardShaded 路径（零着色器/管线改动）。桌面（程序可用）不触发，行为不变。
+    // 注意：mesh_render_system 把蒙皮项（item.skinned=true）放进 cpu_meshes.opaque/transparent 队列，
+    // 而非独立的 skinned 队列（后者从未被填充）。故此处就地扫描这两个队列里的蒙皮项处理。
+    if (!skinning_bake_checked_) {
+        skinning_bake_for_web_ = (runtime_context_.rhi_device->GetBuiltinProgram(
+            BuiltinProgram::ForwardSkinnedShaded) == 0);
+        skinning_bake_checked_ = true;
+    }
+    if (skinning_bake_for_web_) {
+        const bool gpu_skin = gpu_skinning_system_.IsAvailable();
+        // CPU 蒙皮回退：逐句镜像 compute 蒙皮（4 权重，第 4 权重 = 1 - w0 - w1 - w2；
+        // 法线/切线用 mat3(skin)），保证与 GPU 回读路径数值一致 → 暖机/WebGL2 无破帧。
+        auto skin_like_compute = [](const BatchVertex& bv,
+                                    const std::vector<glm::mat4>& bones,
+                                    glm::vec3& out_pos, glm::vec3& out_nrm, glm::vec3& out_tan) {
+            const float bw0 = bv.weights[0], bw1 = bv.weights[1], bw2 = bv.weights[2];
+            const float bw3 = 1.0f - bw0 - bw1 - bw2;
+            const int n = static_cast<int>(bones.size());
+            auto B = [&](int i) -> glm::mat4 {
+                return (i >= 0 && i < n) ? bones[i] : glm::mat4(1.0f);
+            };
+            const glm::mat4 sm = B(static_cast<int>(bv.joints[0])) * bw0
+                               + B(static_cast<int>(bv.joints[1])) * bw1
+                               + B(static_cast<int>(bv.joints[2])) * bw2
+                               + B(static_cast<int>(bv.joints[3])) * bw3;
+            const glm::mat3 nm = glm::mat3(sm);
+            out_pos = glm::vec3(sm * glm::vec4(bv.pos, 1.0f));
+            out_nrm = glm::normalize(nm * bv.normal);
+            out_tan = glm::normalize(nm * bv.tangent);
+        };
+        auto bake_skinned_in_queue = [&](std::vector<MeshDrawItem>& queue) {
+            for (auto& item : queue) {
+                // 仅处理单实例蒙皮项（实例化蒙皮的 web 烘焙暂不覆盖：本 demo 用单实例）。
+                if (!item.skinned || item.bone_matrices.empty()) continue;
+                if (item.instance_transforms.size() > 1) continue;
+                const BatchVertex* src =
+                    item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
+                const uint32_t vcount = item.shared_vertex_ptr
+                    ? item.shared_vertex_count
+                    : static_cast<uint32_t>(item.vertices.size());
+                if (vcount == 0) continue;
+
+                // 生产者：本帧请求喂 GPU compute（WebGPU 真蒙皮；WebGL2 无 compute 跳过，纯 CPU）。
+                if (gpu_skin) {
+                    dse::render::SkinningRequest req;
+                    req.entity_id = item.entity_id;
+                    req.vertex_count = vcount;
+                    req.bone_matrices = item.bone_matrices;
+                    req.src_vertex_data.resize(static_cast<size_t>(vcount) * 16);
+                    for (uint32_t i = 0; i < vcount; ++i) {
+                        const BatchVertex& bv = src[i];
+                        float* d = req.src_vertex_data.data() + static_cast<size_t>(i) * 16;
+                        d[0]  = bv.pos.x;     d[1]  = bv.pos.y;     d[2]  = bv.pos.z;     d[3]  = bv.weights[0];
+                        d[4]  = bv.normal.x;  d[5]  = bv.normal.y;  d[6]  = bv.normal.z;  d[7]  = bv.weights[1];
+                        d[8]  = bv.tangent.x; d[9]  = bv.tangent.y; d[10] = bv.tangent.z; d[11] = bv.weights[2];
+                        d[12] = bv.joints[0]; d[13] = bv.joints[1]; d[14] = bv.joints[2]; d[15] = bv.joints[3];
+                    }
+                    gpu_skinning_system_.Submit(std::move(req));
+                }
+
+                // 消费：上一帧 GPU 回读（世界空间——骨骼矩阵已预乘 model）；未就绪/WebGL2 → CPU 蒙皮回退。
+                const dse::render::SkinnedOutput* out =
+                    gpu_skin ? gpu_skinning_system_.GetSkinnedOutput(item.entity_id) : nullptr;
+                const bool use_gpu = out && out->vertex_count == vcount;
+
+                std::vector<BatchVertex> baked(vcount);
+                for (uint32_t i = 0; i < vcount; ++i) {
+                    BatchVertex ov = src[i];
+                    if (use_gpu) {
+                        ov.pos     = out->positions[i];
+                        ov.normal  = out->normals[i];
+                        ov.tangent = out->tangents[i];
+                    } else {
+                        skin_like_compute(src[i], item.bone_matrices, ov.pos, ov.normal, ov.tangent);
+                    }
+                    ov.weights = glm::vec4(0.0f);
+                    ov.joints  = glm::vec4(0.0f);
+                    baked[i] = ov;
+                }
+
+                // 就地转为非蒙皮静态项：蒙皮矩阵是「对象空间」蒙皮（bind-local → 姿态后的模型空间），
+                // 顶点仍在模型空间 → 保留原 model 矩阵不变，由 ForwardShaded 的 CPU 世界烘焙
+                // （BuildShadedWorldVertexBuffer 乘 model + 法线矩阵）把姿态后的模型空间顶点变到世界，
+                // 与普通静态网格完全一致；仅清掉蒙皮标志/骨骼数据，避免走 DrawSkinnedShaded（web 上 no-op）。
+                if (item.indices.empty() && item.shared_index_ptr && item.shared_index_count) {
+                    item.indices.assign(item.shared_index_ptr,
+                                        item.shared_index_ptr + item.shared_index_count);
+                }
+                item.vertices = std::move(baked);
+                item.shared_vertex_ptr = nullptr;
+                item.shared_vertex_count = 0;
+                item.shared_index_ptr = nullptr;
+                item.shared_index_count = 0;
+                item.skinned = false;
+                item.bone_matrices.clear();
+                item.instance_transforms.clear();
+                item.bone_palette.clear();
+                item.instance_bone_palette_idx.clear();
+            }
+        };
+        bake_skinned_in_queue(render_scene_.cpu_meshes.opaque);
+        bake_skinned_in_queue(render_scene_.cpu_meshes.transparent);
+    }
+
     // GPU Compute Skinning: Dispatch 所有蒙皮请求，绑定输出 SSBO
     if (gpu_skinning_system_.IsAvailable() && gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
         gpu_skinning_system_.Dispatch();

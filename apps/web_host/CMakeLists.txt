@@ -19,6 +19,8 @@ set(DSE_WEB_PRELOAD_ITEMS
     "data/icon"
     "data/font"
     "data/audio"
+    # B-1 蒙皮可见激活：最小双骨 rig（dmesh/dskel/danim/dmat，合计 ~1.8KB），main3d.lua 加载。
+    "data/animation/minimal_rig"
     # GPU-driven 等渲染剖面（?profile=NAME 经 FindProfilePath 命中 samples/lua/pipelines/<name>.lua）。
     "samples/lua/pipelines"
     CACHE STRING "Repo-relative paths preloaded into the Emscripten MEMFS")

@@ -18,6 +18,11 @@ local KEY_M = 77
 
 local AUDIO_CLIP = "audio/spatial/spatial_ping.wav"
 
+-- B-1: minimal two-bone skinned rig (real data/ asset, web-preloaded).
+local SKIN_MESH  = "animation/minimal_rig/two_bone.dmesh"
+local SKIN_DANIM = "animation/minimal_rig/two_bone_idle_walk.danim"
+local SKIN_DSKEL = "animation/minimal_rig/two_bone.dskel"
+
 local camera
 local cube
 local t = 0.0
@@ -117,6 +122,33 @@ local function setup_shadow_marker()
     dse.ecs.set_mesh_material(marker, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, false)
 end
 
+-- A visible GPU-compute-skinned mesh (B-1 "skinning visible activation").
+-- On web the forward *skinned* shaded program is unavailable (WebGPU has no
+-- per-draw skinning; WebGL2/GLES3.0 can't compile the SSBO skinned VS), so the
+-- engine skins this two-bone rig on the GPU compute path (WebGPU, consumed via
+-- the async double-buffer readback) or on the CPU (WebGL2 / warmup), bakes the
+-- object-space result into a static mesh and draws it through the ordinary
+-- forward-shaded path. The pose is frozen (speed 0 -> clip time pinned at 0) so
+-- the dual-backend golden stays bit-stable.
+local function setup_skinned()
+    local skinned = dse.ecs.create_entity()
+    dse.ecs.add_transform(skinned, -3.1, 0.25, 0.0, 1.7, 1.7, 1.7)
+    dse.ecs.add_mesh_renderer(skinned, 1.0, 0.52, 0.16, 1.0)
+    dse.ecs.set_mesh_path(skinned, SKIN_MESH)
+    dse.ecs.set_mesh_shader_variant(skinned, "MESH_LIT")
+    -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
+    dse.ecs.set_mesh_material(skinned, 0.05, 0.45, 1.0, 0.04, 0.02, 0.0, 1.0, false)
+    dse.ecs.add_animator_3d(skinned, SKIN_DANIM, SKIN_DSKEL)
+    if dse.ecs.init_animator_3d_fsm then dse.ecs.init_animator_3d_fsm(skinned) end
+    if dse.ecs.add_animator_3d_state then
+        -- state playback speed 0 -> the FSM never advances the clip clock
+        -- (AdvanceClipTime: current += dt * speed), so the sampled pose is
+        -- identical every frame and across backends (deterministic golden).
+        dse.ecs.add_animator_3d_state(skinned, "idle", SKIN_DANIM, true, 0.0)
+    end
+    dse.ecs.set_animator_3d_state(skinned, "idle", 0.0, true)
+end
+
 -- Explicit tone-mapping control. Forward3D has no HDR post chain, so the
 -- composite pass tone-maps with whatever exposure this component carries;
 -- pinning it (plus a soft vignette) keeps the framing tidy and the midtones
@@ -139,6 +171,7 @@ function Awake()
     setup_ground()
     setup_shadow_marker()
     setup_cube()
+    setup_skinned()
     if dse.audio and dse.audio.play_bgm then
         dse.audio.play_bgm(AUDIO_CLIP, 0.2, true)
     end

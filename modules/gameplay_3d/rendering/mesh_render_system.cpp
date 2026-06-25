@@ -877,6 +877,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         item.debug_label = ClassifyVse1522MeshForDiagnostics(mesh_renderer);
 #endif // DSE_VSE_1522_DIAG
         item.model = mesh_model;
+        item.entity_id = static_cast<uint32_t>(entity);
         item.blend_mode = static_cast<unsigned int>(resolved_blend_mode);
         item.sorting_layer = mesh_renderer.sorting_layer;
         item.order_in_layer = mesh_renderer.order_in_layer;

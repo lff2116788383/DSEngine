@@ -481,6 +481,7 @@ struct MeshDrawItem {
 
     bool skinned = false;
     std::vector<glm::mat4> bone_matrices;
+    uint32_t entity_id = 0;  ///< 源 ECS 实体 ID（GPU compute 蒙皮回读按此 key 查找；web 烘焙路径用）
 
     bool morph_enabled = false;
     std::vector<float> morph_weights;

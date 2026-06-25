@@ -406,6 +406,12 @@ private:
     /// GPU Compute Skinning 系统
     dse::render::GPUSkinningSystem gpu_skinning_system_;
 
+    /// B-1 web 蒙皮可见激活：当后端缺 ForwardSkinnedShaded 内建程序（WebGPU 无 per-draw 蒙皮、
+    /// WebGL2/GLES3.0 无法编译 SSBO 蒙皮 VS）时，将蒙皮项经 GPU compute（WebGPU，异步回读）或
+    /// CPU（WebGL2/暖机）烘焙为世界静态网格走 ForwardShaded 路径。桌面（程序可用）不触发。
+    bool skinning_bake_for_web_ = false;
+    bool skinning_bake_checked_ = false;
+
     /// Floating Origin 系统（大世界坐标 Phase 2）
     dse::FloatingOriginSystem floating_origin_system_;
     dse::core::SubscriptionHandle origin_rebase_handle_;
