@@ -78,6 +78,11 @@ namespace dse::render {
     extern const char* kGPUCullShaderSource;
     extern const char* kGPUCullShaderSourceVK;
     extern const char* kGPUCullShaderSourceHLSL;
+    // WebGPU 手译 WGSL（CreateComputeShaderEx 第 8 参；其余后端忽略）。
+    extern const char* kHiZCopyShaderSourceWGSL;
+    extern const char* kHiZDownsampleShaderSourceWGSL;
+    extern const char* kHiZCullShaderSourceWGSL;
+    extern const char* kGPUCullShaderSourceWGSL;
 }
 
 namespace {
@@ -390,17 +395,17 @@ bool FramePipeline::Init() {
             dse::render::kHiZCopyShaderSource,
             dse::render::kHiZCopyShaderSourceVK,
             dse::render::kHiZCopyShaderSourceHLSL,
-            0, 1, 1, 8);
+            0, 1, 1, 8, dse::render::kHiZCopyShaderSourceWGSL);
         render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
             dse::render::kHiZDownsampleShaderSource,
             dse::render::kHiZDownsampleShaderSourceVK,
             dse::render::kHiZDownsampleShaderSourceHLSL,
-            0, 2, 0, 16);
+            0, 2, 0, 16, dse::render::kHiZDownsampleShaderSourceWGSL);
         render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
             dse::render::kHiZCullShaderSource,
             dse::render::kHiZCullShaderSourceVK,
             dse::render::kHiZCullShaderSourceHLSL,
-            2, 0, 1, 80);
+            2, 0, 1, 80, dse::render::kHiZCullShaderSourceWGSL);
         DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
                        render_resources_.hiz_texture,
                        render_resources_.hiz_visibility_ssbo.raw(),
@@ -452,7 +457,7 @@ bool FramePipeline::Init() {
             dse::render::kGPUCullShaderSource,
             dse::render::kGPUCullShaderSourceVK,
             dse::render::kGPUCullShaderSourceHLSL,
-            2, 0, 1, 176);
+            2, 0, 1, 176, dse::render::kGPUCullShaderSourceWGSL);
         render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
         // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
         if (render_resources_.gpu_driven_supported &&

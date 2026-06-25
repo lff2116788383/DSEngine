@@ -19,6 +19,8 @@ set(DSE_WEB_PRELOAD_ITEMS
     "data/icon"
     "data/font"
     "data/audio"
+    # GPU-driven 等渲染剖面（?profile=NAME 经 FindProfilePath 命中 samples/lua/pipelines/<name>.lua）。
+    "samples/lua/pipelines"
     CACHE STRING "Repo-relative paths preloaded into the Emscripten MEMFS")
 
 set(_dse_web_link_flags

@@ -119,7 +119,14 @@
         var wgpuDone = function () { Module.removeRunDependency('dse-webgpu-device'); };
         navigator.gpu.requestAdapter().then(function (adapter) {
           if (!adapter) { console.warn('[dse] WebGPU: no adapter; fallback WebGL2'); wgpuDone(); return; }
-          return adapter.requestDevice().then(function (device) {
+          // GPU-driven 间接绘制按 base_instance 索引实例 SSBO（等价 GL gl_BaseInstance）；
+          // WebGPU 下 @builtin(instance_index) 仅在启用 'indirect-first-instance' 特性时含 firstInstance。
+          // 适配器支持则请求之，否则非零 firstInstance 间接绘制行为未定义（多实例索引错乱）。
+          var feats = [];
+          if (adapter.features && adapter.features.has('indirect-first-instance')) {
+            feats.push('indirect-first-instance');
+          }
+          return adapter.requestDevice({ requiredFeatures: feats }).then(function (device) {
             if (!device) { console.warn('[dse] WebGPU: no device; fallback WebGL2'); wgpuDone(); return; }
             Module.preinitializedWebGPUDevice = device;
             console.log('[dse] WebGPU device pre-created for backend=webgpu');

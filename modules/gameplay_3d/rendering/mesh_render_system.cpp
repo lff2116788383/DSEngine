@@ -1640,6 +1640,30 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
             entry.index_count = static_cast<uint32_t>(mesh_renderer.temp_indices.size());
             entry.vertex_count = static_cast<uint32_t>(vertex_count);
 
+            // 非 dmesh inline mesh 顶点无逐顶点法线 → 与 forward CPU 路径（local_normals 面法线累加）同法
+            // 算局部空间几何法线，shader 端经 model 变换；否则 gpu-driven 用恒定 (0,0,1) 会平坦化着色，
+            // 与 CPU 回退路径渲染不一致。
+            std::vector<glm::vec3> local_normals;
+            if (!is_dmesh) {
+                local_normals.assign(vertex_count, glm::vec3(0.0f));
+                const auto& nidx = mesh_renderer.temp_indices;
+                for (size_t t = 0; t + 2 < nidx.size(); t += 3) {
+                    const uint32_t a = nidx[t], b = nidx[t + 1], c = nidx[t + 2];
+                    if (a >= vertex_count || b >= vertex_count || c >= vertex_count) continue;
+                    const glm::vec3 pa(mesh_renderer.temp_vertices[a * stride],
+                                       mesh_renderer.temp_vertices[a * stride + 1],
+                                       mesh_renderer.temp_vertices[a * stride + 2]);
+                    const glm::vec3 pb(mesh_renderer.temp_vertices[b * stride],
+                                       mesh_renderer.temp_vertices[b * stride + 1],
+                                       mesh_renderer.temp_vertices[b * stride + 2]);
+                    const glm::vec3 pc(mesh_renderer.temp_vertices[c * stride],
+                                       mesh_renderer.temp_vertices[c * stride + 1],
+                                       mesh_renderer.temp_vertices[c * stride + 2]);
+                    const glm::vec3 fn = glm::cross(pb - pa, pc - pa);
+                    local_normals[a] += fn; local_normals[b] += fn; local_normals[c] += fn;
+                }
+            }
+
             // 追加顶点数据（BatchVertex 格式：23 floats per vertex）
             for (size_t i = 0; i < vertex_count; ++i) {
                 glm::vec3 pos(mesh_renderer.temp_vertices[i * stride],
@@ -1657,6 +1681,9 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
                                        mesh_renderer.temp_vertices[i * stride + 5]);
                     uv = glm::vec2(mesh_renderer.temp_vertices[i * stride + 6],
                                    mesh_renderer.temp_vertices[i * stride + 7]);
+                } else if (!is_dmesh && i < local_normals.size()) {
+                    const glm::vec3 n = local_normals[i];
+                    normal = (glm::length(n) > 1e-6f) ? glm::normalize(n) : glm::vec3(0.0f, 0.0f, 1.0f);
                 }
                 if (is_dmesh && stride >= 16) {
                     weights = glm::vec4(mesh_renderer.temp_vertices[i * stride + 8],
@@ -1882,7 +1909,10 @@ int MeshRenderSystem::PrepareGPUScene(World& world, dse::render::RenderPassConte
         }
         if (!ctx.gpu_draw_cmd_ssbo) {
             const size_t alloc_count = std::max(required_count, static_cast<size_t>(128));
-            dse::render::GpuBufferDesc desc{alloc_count * sizeof(DrawElementsIndirectCommand), dse::render::GpuBufferUsage::kStorage, true, "gpu_draw_cmd"};
+            // compute（gpu_cull）写 instance_count + DrawIndexedIndirect 读取 → 须 kStorage|kIndirect。
+            //   GL 对 indirect usage 宽松（任意缓冲可绑 GL_DRAW_INDIRECT_BUFFER），WebGPU 严格校验 usage。
+            dse::render::GpuBufferDesc desc{alloc_count * sizeof(DrawElementsIndirectCommand),
+                dse::render::GpuBufferUsage::kStorage | dse::render::GpuBufferUsage::kIndirect, true, "gpu_draw_cmd"};
             ctx.gpu_draw_cmd_ssbo = rhi->CreateGpuBuffer(desc, nullptr);
             gpu_draw_cmd_capacity_ = alloc_count;
         }

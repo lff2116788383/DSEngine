@@ -297,6 +297,13 @@ public:
     void MultiDrawIndexedIndirect(unsigned int indirect_buffer, int draw_count, size_t stride,
                                   size_t byte_offset = 0) override;
 
+    // Subtask 6：四子项离屏自检全 PASS（MultiDrawIndexedIndirect / Mega VAO / GPU-driven PBR WGSL /
+    //   Hi-Z 资源建链+遮挡剔除）+ 4 个引擎 compute shader 已注入手译 WGSL（kHiZCopy/Downsample/Cull/
+    //   GPUCull WGSL，含深度纹理 compute 采样 texture_depth_2d + storage/sampler 错位 binding）+ 接入
+    //   真实 frame_pipeline CreateComputeShaderEx 调用点后翻转。门控 gpu_driven profile（如 CustomLiteLua）
+    //   方激活；默认 Forward3D（gpu_driven=false）中性不回归。
+    bool SupportsIndirectDraw() const override { return true; }
+
     // Subtask 2：Mega VAO——WebGPU 无 VAO 对象，记录 VBO/IBO 句柄 + BatchVertex 92B 布局；
     //   BindMegaVAO 据记录经引擎-facing CmdBindVertexBuffer(92B 7 属性)/CmdBindIndexBuffer 设 draw state。
     VertexArrayHandle CreateMegaVAO(size_t vbo_size_bytes, size_t ibo_size_bytes,
@@ -458,6 +465,11 @@ private:
     //   group1 保留 binding；每次 DispatchCompute 后清空，与 GL/DX11/Vulkan 同语义）。手译 WGSL 须
     //   声明同名同序、各成员 @align(16) 的 uniform 块到该保留 binding。
     static constexpr uint32_t kComputeNamedUboBinding = 8;
+    // GL 分「采样器」「图像」两套 binding 命名空间，同 binding 号（如 Hi-Z copy 的 sampler2D 深度 @0
+    //   与 image2D hiz_mip0 @0）不冲突；WebGPU group2 为单一命名空间，须错开。仅当某 storage image 槽
+    //   与某采样纹理槽冲突时，把该 storage image 挪到 slot + kComputeStorageBindingBase（手译 WGSL 须
+    //   把对应 texture_storage_2d 声明到该错开 binding）；无冲突的 storage 仍按原 slot，既有自检不受影响。
+    static constexpr uint32_t kComputeStorageBindingBase = 8;
     std::vector<uint8_t> compute_named_staging_;
     std::unordered_map<std::string, size_t> compute_named_offsets_;
     size_t compute_named_next_ = 0;

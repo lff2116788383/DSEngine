@@ -3634,6 +3634,7 @@ struct VsOut {
   @location(1) world_normal : vec3<f32>,
   @location(2) uv : vec2<f32>,
   @location(3) @interpolate(flat) material_id : u32,
+  @location(4) vcolor : vec4<f32>,
 };
 
 @vertex fn vs_main(i : VsIn, @builtin(instance_index) inst : u32) -> VsOut {
@@ -3645,6 +3646,7 @@ struct VsOut {
   o.world_normal = normalize((model * vec4<f32>(i.normal, 0.0)).xyz);
   o.uv = i.uv;
   o.material_id = instances[inst].material_id;
+  o.vcolor = i.color;
   return o;
 }
 
@@ -3667,7 +3669,8 @@ fn fresnelSchlick(ct : f32, f0 : vec3<f32>) -> vec3<f32> {
 @fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
   let m = materials[i.material_id];
   let tex = textureSample(albedo_tex, albedo_smp, i.uv);
-  let base = m.albedo.rgb * tex.rgb;
+  // inline mesh 把实色烘进顶点色（材质 albedo=白）；file mesh 反之（顶点色=白）。两路均为 albedo×tex×vcolor。
+  let base = m.albedo.rgb * tex.rgb * i.vcolor.rgb;
   let metallic = m.albedo.a;
   let rough = max(m.roughness_ao.x, 0.04);
   let ao = m.roughness_ao.y;
@@ -3945,8 +3948,18 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
             break;
         }
         case 2: {
-            // B3b-5：compute 只读采样纹理（texture_2d<f32>，textureLoad，无 sampler）。r32float 为
-            // unfilterable-float，sampleType 需相应声明。@binding=slot。
+            // 采样纹理占用的槽集合：storage image 若与之同槽（GL sampler/image 分命名空间但 WebGPU 合一），
+            //   挪到 slot + kComputeStorageBindingBase 错开（仅 Hi-Z copy 命中：深度采样 @0 + hiz_mip0 storage @0）。
+            std::set<unsigned int> sampled_slots;
+            for (const auto& [slot, h] : cur_compute_textures_) sampled_slots.insert(slot);
+            for (const auto& [slot, vb] : cur_compute_texture_views_) sampled_slots.insert(slot);
+            auto storage_binding = [&](unsigned int slot) -> uint32_t {
+                return sampled_slots.count(slot)
+                           ? slot + kComputeStorageBindingBase
+                           : static_cast<uint32_t>(slot);
+            };
+            // B3b-5：compute 只读采样纹理（texture_2d<f32>/texture_depth_2d，textureLoad，无 sampler）。
+            // r32float 为 unfilterable-float，深度格式为 depth sampleType，需相应声明。@binding=slot。
             for (const auto& [slot, tex_handle] : cur_compute_textures_) {
                 if (!declared(slot)) continue;
                 const TextureEntry* te = FindTexture(tex_handle);
@@ -3954,18 +3967,21 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
                 BindingInfo b;
                 b.binding = slot; b.kind = BindingInfo::Kind::Texture; b.visibility = kCs;
                 b.view = te->view; b.view_dim = te->view_dim;
-                b.sample_type = (te->format == WGPUTextureFormat_R32Float)
-                                    ? WGPUTextureSampleType_UnfilterableFloat
-                                    : WGPUTextureSampleType_Float;
+                b.sample_type = IsDepthFormat(te->format)
+                                    ? WGPUTextureSampleType_Depth
+                                    : (te->format == WGPUTextureFormat_R32Float
+                                           ? WGPUTextureSampleType_UnfilterableFloat
+                                           : WGPUTextureSampleType_Float);
                 out.push_back(b);
             }
-            // B3b-4：compute storage image（texture_storage_2d<...,write>）。@binding=slot。
+            // B3b-4：compute storage image（texture_storage_2d<...,write>）。@binding=slot（冲突时错开）。
             for (const auto& [slot, tex_handle] : cur_compute_images_) {
-                if (!declared(slot)) continue;
+                const uint32_t bnd = storage_binding(slot);
+                if (!declared(bnd)) continue;
                 const TextureEntry* te = FindTexture(tex_handle);
                 if (!te || !te->view) continue;
                 BindingInfo b;
-                b.binding = slot; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
+                b.binding = bnd; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
                 b.view = te->view; b.tex_format = te->format; b.view_dim = te->view_dim;
                 out.push_back(b);
             }
@@ -3980,11 +3996,12 @@ WebGPURhiDevice::CollectComputeGroupBindings(uint32_t group, const ComputeShader
                                     : WGPUTextureSampleType_Float;
                 out.push_back(b);
             }
-            // B3b-6：storage 写显式视图（texture_storage_2d<...,write>，绑定单 mip 视图）。
+            // B3b-6：storage 写显式视图（texture_storage_2d<...,write>，绑定单 mip 视图）。冲突时错开。
             for (const auto& [slot, vb] : cur_compute_image_views_) {
-                if (!declared(slot) || !vb.view) continue;
+                const uint32_t bnd = storage_binding(slot);
+                if (!declared(bnd) || !vb.view) continue;
                 BindingInfo b;
-                b.binding = slot; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
+                b.binding = bnd; b.kind = BindingInfo::Kind::StorageTexture; b.visibility = kCs;
                 b.view = vb.view; b.tex_format = vb.format; b.view_dim = vb.view_dim;
                 out.push_back(b);
             }

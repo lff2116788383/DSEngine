@@ -2908,6 +2908,182 @@ void main(uint3 id : SV_DispatchThreadID) {
 }
 )";
 
+// ---------------- WebGPU WGSL 版本（手译；引擎无 GLSL/SPIR-V→WGSL 工具） ----------------
+// 绑定约定（与 WebGPU RHI compute 绑定面一致）：
+//   group1 b8 = 命名 uniform 块（SetComputeUniform* 按调用序 16B 对齐累积；各成员 @align(16)）。
+//   group2    = 纹理/storage image；采样纹理 @slot；storage image 与采样纹理同槽时挪到 slot+8（仅 Hi-Z copy）。
+//   group3    = SSBO（BindGpuBuffer slot → binding；compute 统一 read_write storage）。
+// Hi-Z 深度约定：WebGPU NDC z∈[0,1]（投影含 GetProjectionCorrection），故剔除 test_depth 不做 GL 的
+//   *0.5+0.5 重映射，直接用 nearest_z（与深度缓冲一致）。R32Float Hi-Z 为 unfilterable-float，采样改
+//   textureLoad（uv→texel）取代 textureLod。
+const char* kHiZCopyShaderSourceWGSL = R"WGSL(// dse-wgsl
+struct PC { u_dst_size : vec2<i32>, };
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(2) @binding(0) var u_depth_texture : texture_depth_2d;
+@group(2) @binding(8) var u_hiz_mip0 : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(16, 16, 1)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let coord = vec2<i32>(gid.xy);
+  if (coord.x >= pc.u_dst_size.x || coord.y >= pc.u_dst_size.y) { return; }
+  let depth = textureLoad(u_depth_texture, coord, 0);
+  textureStore(u_hiz_mip0, coord, vec4<f32>(depth, 0.0, 0.0, 0.0));
+}
+)WGSL";
+
+const char* kHiZDownsampleShaderSourceWGSL = R"WGSL(// dse-wgsl
+struct PC { u_src_size : vec2<i32>, @align(16) u_dst_size : vec2<i32>, };
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(2) @binding(0) var u_src_mip : texture_2d<f32>;
+@group(2) @binding(1) var u_dst_mip : texture_storage_2d<r32float, write>;
+@compute @workgroup_size(16, 16, 1)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let dst = vec2<i32>(gid.xy);
+  if (dst.x >= pc.u_dst_size.x || dst.y >= pc.u_dst_size.y) { return; }
+  let sc = dst * 2;
+  let smax = pc.u_src_size - vec2<i32>(1, 1);
+  let d00 = textureLoad(u_src_mip, sc, 0).r;
+  let d10 = textureLoad(u_src_mip, min(sc + vec2<i32>(1, 0), smax), 0).r;
+  let d01 = textureLoad(u_src_mip, min(sc + vec2<i32>(0, 1), smax), 0).r;
+  let d11 = textureLoad(u_src_mip, min(sc + vec2<i32>(1, 1), smax), 0).r;
+  let m = max(max(d00, d10), max(d01, d11));
+  textureStore(u_dst_mip, dst, vec4<f32>(m, 0.0, 0.0, 0.0));
+}
+)WGSL";
+
+const char* kHiZCullShaderSourceWGSL = R"WGSL(// dse-wgsl
+struct AABB { min_point : vec4<f32>, max_point : vec4<f32>, };
+struct PC {
+  u_view_projection : mat4x4<f32>,
+  @align(16) u_screen_size : vec2<f32>,
+  @align(16) u_mip_count : i32,
+  @align(16) u_object_count : i32,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(2) @binding(0) var u_hiz_texture : texture_2d<f32>;
+@group(3) @binding(0) var<storage, read_write> aabbs : array<AABB>;
+@group(3) @binding(1) var<storage, read_write> visibility : array<u32>;
+fn sample_hiz(uv : vec2<f32>, mip : i32) -> f32 {
+  let dim = vec2<i32>(textureDimensions(u_hiz_texture, mip));
+  let c = clamp(vec2<i32>(uv * vec2<f32>(dim)), vec2<i32>(0, 0), dim - vec2<i32>(1, 1));
+  return textureLoad(u_hiz_texture, c, mip).r;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_object_count) { return; }
+  let amin = aabbs[idx].min_point.xyz;
+  let amax = aabbs[idx].max_point.xyz;
+  var ndc_min = vec2<f32>(1.0, 1.0);
+  var ndc_max = vec2<f32>(-1.0, -1.0);
+  var nearest_z = 1.0;
+  for (var i = 0; i < 8; i = i + 1) {
+    let corner = vec3<f32>(
+      select(amin.x, amax.x, (i & 1) != 0),
+      select(amin.y, amax.y, (i & 2) != 0),
+      select(amin.z, amax.z, (i & 4) != 0));
+    let clip = pc.u_view_projection * vec4<f32>(corner, 1.0);
+    if (clip.w <= 0.0) { visibility[idx] = 1u; return; }
+    let ndc = clip.xyz / clip.w;
+    ndc_min = min(ndc_min, ndc.xy);
+    ndc_max = max(ndc_max, ndc.xy);
+    nearest_z = min(nearest_z, ndc.z);
+  }
+  let uv_min = clamp(ndc_min * 0.5 + 0.5, vec2<f32>(0.0), vec2<f32>(1.0));
+  let uv_max = clamp(ndc_max * 0.5 + 0.5, vec2<f32>(0.0), vec2<f32>(1.0));
+  if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+    visibility[idx] = 0u; return;
+  }
+  let size_pixels = (uv_max - uv_min) * pc.u_screen_size;
+  let max_dim = max(size_pixels.x, size_pixels.y);
+  var mipf = select(0.0, ceil(log2(max_dim)), max_dim > 0.0);
+  mipf = clamp(mipf, 0.0, f32(pc.u_mip_count - 1));
+  let mip = i32(mipf);
+  let test_depth = nearest_z - 0.005;
+  let uv_center = (uv_min + uv_max) * 0.5;
+  let h0 = sample_hiz(uv_center, mip);
+  let h1 = sample_hiz(uv_min, mip);
+  let h2 = sample_hiz(uv_max, mip);
+  let h3 = sample_hiz(vec2<f32>(uv_max.x, uv_min.y), mip);
+  let h4 = sample_hiz(vec2<f32>(uv_min.x, uv_max.y), mip);
+  let max_hiz = max(max(h0, h1), max(max(h2, h3), h4));
+  if (test_depth > max_hiz) { visibility[idx] = 0u; } else { visibility[idx] = 1u; }
+}
+)WGSL";
+
+const char* kGPUCullShaderSourceWGSL = R"WGSL(// dse-wgsl
+struct AABB { min_point : vec4<f32>, max_point : vec4<f32>, };
+struct DrawCmd { count : u32, instance_count : u32, first_index : u32, base_vertex : i32, base_instance : u32, };
+struct PC {
+  u_view_projection : mat4x4<f32>,
+  @align(16) u_screen_size : vec2<f32>,
+  @align(16) u_mip_count : i32,
+  @align(16) u_object_count : i32,
+  @align(16) u_frustum_planes : array<vec4<f32>, 6>,
+};
+@group(1) @binding(8) var<uniform> pc : PC;
+@group(2) @binding(0) var u_hiz_texture : texture_2d<f32>;
+@group(3) @binding(0) var<storage, read_write> aabbs : array<AABB>;
+@group(3) @binding(1) var<storage, read_write> draw_cmds : array<DrawCmd>;
+fn frustum_test(amin : vec3<f32>, amax : vec3<f32>) -> bool {
+  for (var i = 0; i < 6; i = i + 1) {
+    let p = pc.u_frustum_planes[i];
+    let pv = vec3<f32>(
+      select(amin.x, amax.x, p.x >= 0.0),
+      select(amin.y, amax.y, p.y >= 0.0),
+      select(amin.z, amax.z, p.z >= 0.0));
+    if (dot(p.xyz, pv) + p.w < 0.0) { return false; }
+  }
+  return true;
+}
+fn sample_hiz(uv : vec2<f32>, mip : i32) -> f32 {
+  let dim = vec2<i32>(textureDimensions(u_hiz_texture, mip));
+  let c = clamp(vec2<i32>(uv * vec2<f32>(dim)), vec2<i32>(0, 0), dim - vec2<i32>(1, 1));
+  return textureLoad(u_hiz_texture, c, mip).r;
+}
+@compute @workgroup_size(64)
+fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
+  let idx = gid.x;
+  if (i32(idx) >= pc.u_object_count) { return; }
+  let amin = aabbs[idx].min_point.xyz;
+  let amax = aabbs[idx].max_point.xyz;
+  if (!frustum_test(amin, amax)) { draw_cmds[idx].instance_count = 0u; return; }
+  var ndc_min = vec2<f32>(1.0, 1.0);
+  var ndc_max = vec2<f32>(-1.0, -1.0);
+  var nearest_z = 1.0;
+  for (var i = 0; i < 8; i = i + 1) {
+    let corner = vec3<f32>(
+      select(amin.x, amax.x, (i & 1) != 0),
+      select(amin.y, amax.y, (i & 2) != 0),
+      select(amin.z, amax.z, (i & 4) != 0));
+    let clip = pc.u_view_projection * vec4<f32>(corner, 1.0);
+    if (clip.w <= 0.0) { draw_cmds[idx].instance_count = 1u; return; }
+    let ndc = clip.xyz / clip.w;
+    ndc_min = min(ndc_min, ndc.xy);
+    ndc_max = max(ndc_max, ndc.xy);
+    nearest_z = min(nearest_z, ndc.z);
+  }
+  let uv_min = clamp(ndc_min * 0.5 + 0.5, vec2<f32>(0.0), vec2<f32>(1.0));
+  let uv_max = clamp(ndc_max * 0.5 + 0.5, vec2<f32>(0.0), vec2<f32>(1.0));
+  if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+    draw_cmds[idx].instance_count = 0u; return;
+  }
+  let size_pixels = (uv_max - uv_min) * pc.u_screen_size;
+  let max_dim = max(size_pixels.x, size_pixels.y);
+  var mipf = select(0.0, ceil(log2(max_dim)), max_dim > 0.0);
+  mipf = clamp(mipf, 0.0, f32(pc.u_mip_count - 1));
+  let mip = i32(mipf);
+  let test_depth = nearest_z - 0.005;
+  let uv_center = (uv_min + uv_max) * 0.5;
+  let h0 = sample_hiz(uv_center, mip);
+  let h1 = sample_hiz(uv_min, mip);
+  let h2 = sample_hiz(uv_max, mip);
+  let h3 = sample_hiz(vec2<f32>(uv_max.x, uv_min.y), mip);
+  let h4 = sample_hiz(vec2<f32>(uv_min.x, uv_max.y), mip);
+  let max_hiz = max(max(h0, h1), max(max(h2, h3), h4));
+  if (test_depth > max_hiz) { draw_cmds[idx].instance_count = 0u; } else { draw_cmds[idx].instance_count = 1u; }
+}
+)WGSL";
+
 void GPUCullPass::Setup(RenderGraph& graph) {
     auto hiz_mips = graph.DeclareResource("hiz_mips");
     auto gpu_draw_cmds = graph.DeclareResource("gpu_draw_commands");
