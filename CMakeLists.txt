@@ -75,6 +75,7 @@ endif()
 # WebGPU(Dawn/Emscripten) 后端：阶段 B，桌面级 parity。仅 Web/Emscripten 默认开启
 # （见下方 if(EMSCRIPTEN) 强制 ON）；桌面暂无原生 Dawn 集成，默认 OFF。
 option(DSE_ENABLE_WEBGPU "Enable WebGPU RHI backend (Web/Emscripten via Dawn)" OFF)
+option(DSE_WEBGPU_SELFTEST "Compile WebGPU bring-up self-test harness (diagnostic, off in shipping builds)" OFF)
 option(DSE_BUILD_EDITOR "Build editor via npm/node-gyp" OFF)
 option(DSE_BUILD_LAUNCHER "Build launcher target" OFF)
 option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
@@ -687,6 +688,10 @@ if(DSE_ENABLE_WEBGPU AND EMSCRIPTEN)
     add_definitions(-D DSE_ENABLE_WEBGPU)
     # -sUSE_WEBGPU=1 的编译/链接 flag 由 apps/web_host 在链接阶段统一加入。
     message(STATUS "WebGPU RHI backend enabled (Emscripten)")
+    if(DSE_WEBGPU_SELFTEST)
+        add_definitions(-D DSE_WEBGPU_SELFTEST)
+        message(STATUS "WebGPU self-test harness enabled (diagnostic build)")
+    endif()
 elseif(DSE_ENABLE_WEBGPU AND NOT EMSCRIPTEN)
     message(WARNING "DSE_ENABLE_WEBGPU=ON but platform is not Emscripten. WebGPU backend will be disabled (no native Dawn integration yet).")
     set(DSE_ENABLE_WEBGPU OFF)
