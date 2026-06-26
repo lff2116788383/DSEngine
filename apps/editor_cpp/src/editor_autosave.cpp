@@ -1,4 +1,5 @@
 #include "editor_autosave.h"
+#include "editor_autosave_core.h"
 
 #include <chrono>
 #include <ctime>
@@ -47,17 +48,10 @@ std::string AutoSaveManager::GetAutoSaveDir() const {
 
 std::string AutoSaveManager::GetAutoSavePath() const {
     auto& tab_mgr = SceneTabManager::Get();
-    std::string scene_name = tab_mgr.GetActiveDisplayName();
-    if (scene_name.empty()) scene_name = "Untitled";
-
-    // Sanitize filename
-    for (char& c : scene_name) {
-        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
-            c = '_';
-    }
+    std::string file_name = MakeAutoSaveFileName(tab_mgr.GetActiveDisplayName());
 
     std::filesystem::path dir(GetAutoSaveDir());
-    return (dir / (scene_name + ".autosave.dscene")).string();
+    return (dir / file_name).string();
 }
 
 bool AutoSaveManager::CheckRecovery() {
@@ -73,8 +67,7 @@ bool AutoSaveManager::CheckRecovery() {
     for (std::filesystem::directory_iterator it(autosave_dir, ec), end; it != end; it.increment(ec)) {
         if (ec) break;
         const auto& entry = *it;
-        if (entry.path().extension() == ".dscene" &&
-            entry.path().stem().string().find(".autosave") != std::string::npos) {
+        if (IsAutoSaveRecoveryFile(entry.path().string())) {
             recovery_path_ = entry.path().string();
             recovery_pending_ = true;
             EditorLog(LogLevel::Warning, "Auto-save recovery file found: " + recovery_path_);
@@ -150,24 +143,23 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
 }
 
 void AutoSaveManager::Tick(entt::registry& registry) {
-    if (IsEditorInPlayMode()) return;
-
     EditorSettings settings = LoadEditorSettings();
-    if (!settings.auto_save_enabled) return;
-
     auto& tab_mgr = SceneTabManager::Get();
-    if (!tab_mgr.GetActiveTab().dirty) return;
-
     double now = ImGui::GetTime();
-    double interval = static_cast<double>(settings.auto_save_interval_sec);
-    if (interval < 10.0) interval = 10.0;
 
-    if (last_save_time_ == 0.0) {
+    AutoSaveDecision decision = DecideAutoSave(
+        IsEditorInPlayMode(),
+        settings.auto_save_enabled,
+        tab_mgr.GetActiveTab().dirty,
+        last_save_time_,
+        now,
+        static_cast<double>(settings.auto_save_interval_sec));
+
+    if (decision == AutoSaveDecision::Skip) return;
+    if (decision == AutoSaveDecision::InitTimer) {
         last_save_time_ = now;
         return;
     }
-
-    if ((now - last_save_time_) < interval) return;
 
     // Perform auto-save
     std::string path = GetAutoSavePath();

@@ -32,6 +32,9 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_curve_editor_core.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_prefab_override_core.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_asset_db_core.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_terrain_panel_core.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_tilemap_panel_core.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_autosave_core.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}
