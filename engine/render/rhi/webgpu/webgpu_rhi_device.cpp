@@ -4402,7 +4402,13 @@ void WebGPURhiDevice::CmdSetViewport(int x, int y, int width, int height) {
 
 void WebGPURhiDevice::CmdClearColor(const glm::vec4& color) { (void)color; }
 void WebGPURhiDevice::CmdSetGlobalMat4(const std::string& name, const glm::mat4& value) { (void)name; (void)value; }
-void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
+// B-3 CSM 可见激活：把 CSMShadowPass 渲出的 shadow atlas 深度纹理记入 global_render_state_，
+// 供 mesh_renderer DrawShaded 取 grs.shadow_map[0] 绑 slot11（前向采样真 atlas）。前向 pass 中
+// atlas 非附件且为 Depth32 → slot11 危险检测（~3959）放行真纹理；CSM atlas pass 自身复用前向 PSO
+// 渲 caster 时 atlas 是可写附件 → 读写危险触发，换恒亮 Depth32 回退（安全，深度 pass 本不采样阴影）。
+void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
+    SetGlobalShadowMap(index, texture_handle);
+}
 void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
 void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
 // B3b-2：真 indirect 绘制——按当前已绑管线/顶点/索引缓冲，从 indirect buffer（须含 Indirect

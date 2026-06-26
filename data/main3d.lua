@@ -58,7 +58,10 @@ local function setup_light()
     -- dir(x,y,z), color(r,g,b), intensity, ambient, shadow_strength.
     -- Keep the key light strong but the flat ambient low so the cube faces read
     -- as distinct planes (a high flat ambient washes the scene out to flat grey).
-    dse.ecs.add_directional_light_3d(light, -0.5, -1.0, -0.4, 1.0, 0.96, 0.88, 2.4, 0.10, 0.35)
+    -- Light travels down-and-toward +Z so the caster's CSM shadow lands on the
+    -- camera-facing ground (in front of the cube) where it reads clearly; a
+    -- stronger shadow_strength makes the real cascaded shadow unmistakable.
+    dse.ecs.add_directional_light_3d(light, -0.45, -1.0, 0.55, 1.0, 0.96, 0.88, 2.4, 0.10, 0.6)
     -- Hemisphere ambient: cool sky from above, warm-dark bounce from below. This
     -- replaces the flat grey ambient with a directional tint so the form pops.
     local sky = dse.ecs.create_entity()
@@ -84,7 +87,7 @@ local function setup_cube()
     dse.ecs.add_mesh_renderer(cube, 0.30, 0.62, 1.0, 1.0, v, idx)
     dse.ecs.set_mesh_shader_variant(cube, "MESH_LIT")
     -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
-    dse.ecs.set_mesh_material(cube, 0.05, 0.38, 1.0, 0.02, 0.02, 0.06, 1.0, false)
+    dse.ecs.set_mesh_material(cube, 0.05, 0.38, 1.0, 0.02, 0.02, 0.06, 1.0, true)
 end
 
 -- A large flat quad under the cube for depth/parallax context.
@@ -96,30 +99,7 @@ local function setup_ground()
     local idx = { 0, 2, 1, 0, 3, 2 }
     dse.ecs.add_mesh_renderer(ground, 0.16, 0.17, 0.20, 1.0, v, idx)
     dse.ecs.set_mesh_shader_variant(ground, "MESH_LIT")
-    dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, false)
-end
-
--- Deterministic dark "shadow" marker quad on the ground beneath the cube.
--- The engine's forward CSM path does not produce a camera-visible ground
--- projection (this holds on every desktop backend too -- see
--- samples/lua/3d/3d_shadow_showcase.lua, whose canonical shadow demo uses the
--- same fixed dark fallback marker). This quad stands in for the caster's cast
--- shadow and, being static, keeps the dual-backend golden deterministic.
-local function setup_shadow_marker()
-    local marker = dse.ecs.create_entity()
-    -- A flat quad on the ground just below the cube, offset toward the camera so
-    -- it reads clearly in front of the cube's base. Lifted ~0.01 above the ground
-    -- (ground y=-0.6) so it wins the depth test against the coplanar ground quad.
-    dse.ecs.add_transform(marker, 0.0, -0.59, 0.7, 1.0, 1.0, 1.0)
-    local sx, sz = 1.25, 0.95
-    local v = { -sx, 0.0, -sz,   sx, 0.0, -sz,   sx, 0.0,  sz,  -sx, 0.0,  sz }
-    local idx = { 0, 2, 1, 0, 3, 2 }
-    -- MESH_UNLIT renders the vertex colour directly (no lighting, no PBR
-    -- dielectric specular floor), so the near-black colour reads as an opaque
-    -- dark shadow patch independent of scene lighting and backend.
-    dse.ecs.add_mesh_renderer(marker, 0.0015, 0.0015, 0.002, 1.0, v, idx)
-    dse.ecs.set_mesh_shader_variant(marker, "MESH_UNLIT")
-    dse.ecs.set_mesh_material(marker, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, false)
+    dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, true)
 end
 
 -- A visible GPU-compute-skinned mesh (B-1 "skinning visible activation").
@@ -137,7 +117,7 @@ local function setup_skinned()
     dse.ecs.set_mesh_path(skinned, SKIN_MESH)
     dse.ecs.set_mesh_shader_variant(skinned, "MESH_LIT")
     -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
-    dse.ecs.set_mesh_material(skinned, 0.05, 0.45, 1.0, 0.04, 0.02, 0.0, 1.0, false)
+    dse.ecs.set_mesh_material(skinned, 0.05, 0.45, 1.0, 0.04, 0.02, 0.0, 1.0, true)
     dse.ecs.add_animator_3d(skinned, SKIN_DANIM, SKIN_DSKEL)
     if dse.ecs.init_animator_3d_fsm then dse.ecs.init_animator_3d_fsm(skinned) end
     if dse.ecs.add_animator_3d_state then
@@ -170,7 +150,6 @@ function Awake()
     setup_light()
     setup_post_process()
     setup_ground()
-    setup_shadow_marker()
     setup_cube()
     setup_skinned()
     if dse.audio and dse.audio.play_bgm then

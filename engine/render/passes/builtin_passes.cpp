@@ -70,8 +70,14 @@ struct DirectionalLightCamera {
     glm::mat4 projection;
 };
 
-/// 计算级联视锥切片在光源空间的正交半宽（用于 PSSM 阴影盒拟合）
-float ComputeCascadeOrthoSize(
+/// 级联视锥切片的光源空间正交盒拟合结果：半宽 + 切片质心（世界空间，相机相对）
+struct CascadeFit {
+    float size;          ///< 正交半宽（PSSM 阴影盒）
+    glm::vec3 center;    ///< 该级联视锥切片质心，作为该级联光源相机的对焦点
+};
+
+/// 计算级联视锥切片在光源空间的正交半宽与质心（用于 PSSM 阴影盒逐级联拟合）
+CascadeFit ComputeCascadeFit(
         const glm::mat4& inv_view,
         const glm::vec3& light_direction,
         float split_near,
@@ -80,6 +86,7 @@ float ComputeCascadeOrthoSize(
         float tan_half_fov) {
     const glm::mat4 light_view = glm::lookAt(
         glm::vec3(0.0f), -glm::normalize(light_direction), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 inv_light_view = glm::inverse(light_view);
 
     glm::vec3 min_ls(1e9f);
     glm::vec3 max_ls(-1e9f);
@@ -104,7 +111,10 @@ float ComputeCascadeOrthoSize(
 
     const float extent_x = (max_ls.x - min_ls.x) * 0.5f;
     const float extent_y = (max_ls.y - min_ls.y) * 0.5f;
-    return std::max(extent_x, extent_y) * 1.05f;
+    // 切片质心在光源空间取 AABB 中心（x,y），再变换回世界空间作为对焦点。
+    const glm::vec3 center_ls = (min_ls + max_ls) * 0.5f;
+    const glm::vec3 center_world = glm::vec3(inv_light_view * glm::vec4(center_ls, 1.0f));
+    return { std::max(extent_x, extent_y) * 1.05f, center_world };
 }
 
 DirectionalLightCamera ComputeDirectionalLightCamera(
@@ -271,11 +281,16 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         float prev_split = cam_near;
         for (int i = 0; i < CSM_CASCADES; ++i) {
             const float split_far_plane = cascade_splits[i];
-            float size = ComputeCascadeOrthoSize(
+            CascadeFit fit = ComputeCascadeFit(
                 inv_view, dl.direction, prev_split, split_far_plane, aspect, tan_half_fov);
             prev_split = split_far_plane;
+            const float size = fit.size;
+            // 逐级联以其视锥切片质心为对焦点（标准 CSM），近级联盒不再被远焦点漏掉。
+            // 退化场景（无有效相机切片）回退到全局 shadow_center。
+            const glm::vec3 cascade_center =
+                (snap.camera_3d.valid) ? fit.center : shadow_center;
             auto cam = ComputeDirectionalLightCamera(
-                shadow_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
+                cascade_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
 
             float far_dist = size * 4.0f;
             glm::mat4 sample_proj = shadow_sample_correction *
@@ -3196,9 +3211,9 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     const float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
     const float tan_half_fov = std::tan(glm::radians(snap.camera_3d.valid ? snap.camera_3d.fov * 0.5f : 30.0f));
     const glm::mat4 inv_view = snap.camera_3d.valid ? glm::inverse(snap.camera_3d.view) : glm::mat4(1.0f);
-    const float ortho_size = ComputeCascadeOrthoSize(
+    const float ortho_size = ComputeCascadeFit(
         inv_view, snap.directional_light.direction, cam_near,
-        snap.directional_light.cascade_splits[0], aspect, tan_half_fov);
+        snap.directional_light.cascade_splits[0], aspect, tan_half_fov).size;
     auto cam = ComputeDirectionalLightCamera(
         shadow_center, snap.directional_light.direction, ortho_size, clip_correction);
 
