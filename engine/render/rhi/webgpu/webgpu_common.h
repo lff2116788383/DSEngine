@@ -104,6 +104,11 @@ struct BindingInfo {
     WGPUTextureView view = nullptr;
 };
 
+/// UBO/几何版本环切片：句柄 → 当帧最近一次写入在环形缓冲内的字节切片（buffer/offset/size）。
+/// res 写（UpdateBuffer 登记版本）、draw 读（建 BindGroup / 设顶点·索引缓冲时改绑当帧版本切片），
+/// 故提升到 common 作用域供跨 manager 共享（见 WEBGPU_MANAGER_SPLIT_PLAN「版本环跨界」）。
+struct UboVersion { WGPUBuffer buffer; uint64_t offset; uint64_t size; };
+
 // ============================================================
 // 枚举/格式映射 + 资源小工具（inline：跨多个 webgpu TU 共享单一定义）
 // ============================================================
@@ -238,6 +243,22 @@ inline void WriteTextureLayerRGBA8(WGPUQueue queue, WGPUTexture tex, uint32_t mi
     layout.rowsPerImage = height;
     WGPUExtent3D extent{width, height, 1u};
     wgpuQueueWriteTexture(queue, &dst, rgba8, static_cast<size_t>(width) * height * 4u, &layout, &extent);
+}
+
+/// 为纹理条目创建「单层单 mip」2D 视图（face<0 视为第 0 层）：cube/2D-array 的逐面附件用。
+/// 自由函数版（device 参数为与其它创建助手保持一致的签名约定，wgpuTextureCreateView 本身不需）；
+/// 各 manager 加 2 参同名内联 shim `MakeFaceView(e, face)` 转发至此，使迁移方法体文本不变。
+inline WGPUTextureView MakeFaceViewImpl(WGPUDevice device, const TextureEntry& e, int face) {
+    (void)device;
+    WGPUTextureViewDescriptor vd{};
+    vd.format = e.format;
+    vd.dimension = WGPUTextureViewDimension_2D;
+    vd.baseMipLevel = 0;
+    vd.mipLevelCount = 1;
+    vd.baseArrayLayer = static_cast<uint32_t>(face < 0 ? 0 : face);
+    vd.arrayLayerCount = 1;
+    vd.aspect = WGPUTextureAspect_All;
+    return wgpuTextureCreateView(e.texture, &vd);
 }
 
 }  // namespace render

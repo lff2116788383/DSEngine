@@ -30,7 +30,6 @@ namespace dse {
 namespace render {
 
 namespace {
-constexpr uint64_t AlignUp4(uint64_t n) { return (n + 3u) & ~static_cast<uint64_t>(3u); }  // 镜像 device 私有助手
 
 // --- B3a compute 自检：异步回读校验上下文 ---
 // 自检 compute 着色器把 outbuf[i] = i*2 + base（i<N），并把 indirect DrawCmd 写成
@@ -1660,7 +1659,7 @@ void OnT55PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
 } // namespace
 
 bool WebGpuSelfTestHarness::RecordComputeSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 自检 compute：每线程写 outbuf[i]=i*2+base；0 号线程额外把 indirect DrawCmd 写为定值。
     // 同时演练 group1=UBO 参数、group3=两个 read_write storage（普通 SSBO + storage|indirect）。
@@ -1713,7 +1712,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->CmdBindStorageBuffer(1, ct_draw_, 0, kCtDrawWords * sizeof(uint32_t));
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(ct_shader_, (kCtN + 63u) / 64u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -1723,20 +1722,20 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
         bd.size = AlignUp4(bytes);
-        return wgpuDeviceCreateBuffer(dev_->device_, &bd);
+        return wgpuDeviceCreateBuffer(dev_->device(), &bd);
     };
     ct_rb_out_ = make_rb(kCtN * sizeof(uint32_t));
     ct_rb_draw_ = make_rb(kCtDrawWords * sizeof(uint32_t));
-    const WebGPURhiDevice::BufferEntry* be_out = dev_->FindBuffer(ct_out_);
-    const WebGPURhiDevice::BufferEntry* be_draw = dev_->FindBuffer(ct_draw_);
+    const BufferEntry* be_out = dev_->FindBuffer(ct_out_);
+    const BufferEntry* be_draw = dev_->FindBuffer(ct_draw_);
     if (!ct_rb_out_ || !ct_rb_draw_ || !be_out || !be_draw) {
         if (ct_rb_out_) { wgpuBufferRelease(ct_rb_out_); ct_rb_out_ = nullptr; }
         if (ct_rb_draw_) { wgpuBufferRelease(ct_rb_draw_); ct_rb_draw_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_out->buffer, 0, ct_rb_out_, 0,
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_out->buffer, 0, ct_rb_out_, 0,
                                          kCtN * sizeof(uint32_t));
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_draw->buffer, 0, ct_rb_draw_, 0,
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_draw->buffer, 0, ct_rb_draw_, 0,
                                          kCtDrawWords * sizeof(uint32_t));
     return true;
 }
@@ -1759,7 +1758,7 @@ void WebGpuSelfTestHarness::KickComputeSelfTestReadback() {
 // 的 frustum 部分，Hi-Z 遮挡因需 storage-image 金字塔留后续）写 per-instance indirect draw command，
 // 再用真 DrawIndexedIndirect 渲到离屏 RT，回读 SSBO + 像素双重校验。详见 GpuCullSelfTestCtx。
 bool WebGpuSelfTestHarness::RecordGpuCullSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // --- WGSL 视锥剔除 compute（group1 b0 = 6 视锥面 + 实例数；group3 b0 = AABB；group3 b1 = draw cmds）---
     static const char* kCullWGSL = R"WGSL(// dse-wgsl
@@ -1835,7 +1834,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         td.size = {kGcRtSize, kGcRtSize, 1};
         td.format = WGPUTextureFormat_RGBA8Unorm;
         td.mipLevelCount = 1; td.sampleCount = 1;
-        gc_rt_tex_ = wgpuDeviceCreateTexture(dev_->device_, &td);
+        gc_rt_tex_ = wgpuDeviceCreateTexture(dev_->device(), &td);
         if (gc_rt_tex_) gc_rt_view_ = wgpuTextureCreateView(gc_rt_tex_, nullptr);
     }
     if (!gc_render_module_) {
@@ -1874,7 +1873,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         rpd.primitive.frontFace = WGPUFrontFace_CCW;
         rpd.multisample.count = 1; rpd.multisample.mask = 0xFFFFFFFF;
         rpd.fragment = &fs;
-        gc_pipeline_ = wgpuDeviceCreateRenderPipeline(dev_->device_, &rpd);
+        gc_pipeline_ = wgpuDeviceCreateRenderPipeline(dev_->device(), &rpd);
     }
     if (!gc_vbo_) {
         // 4 个象限 quad（中心 ±0.5），半边 0.35，各一种颜色。
@@ -1895,8 +1894,8 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst;
         bd.size = sizeof(verts);
-        gc_vbo_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-        if (gc_vbo_) wgpuQueueWriteBuffer(dev_->queue_, gc_vbo_, 0, verts, sizeof(verts));
+        gc_vbo_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+        if (gc_vbo_) wgpuQueueWriteBuffer(dev_->queue(), gc_vbo_, 0, verts, sizeof(verts));
     }
     if (!gc_ibo_) {
         uint32_t idx[kGcInstances * 6];
@@ -1908,8 +1907,8 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
         bd.size = sizeof(idx);
-        gc_ibo_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-        if (gc_ibo_) wgpuQueueWriteBuffer(dev_->queue_, gc_ibo_, 0, idx, sizeof(idx));
+        gc_ibo_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+        if (gc_ibo_) wgpuQueueWriteBuffer(dev_->queue(), gc_ibo_, 0, idx, sizeof(idx));
     }
 
     if (!gc_cull_shader_ || !gc_params_ubo_ || !gc_aabb_ssbo_ || !gc_draw_ssbo_ ||
@@ -1924,13 +1923,13 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dev_->CmdBindStorageBuffer(0, gc_aabb_ssbo_, 0, kGcInstances * 32);
     dev_->CmdBindStorageBuffer(1, gc_draw_ssbo_, 0, kGcInstances * kGcDrawWords * sizeof(uint32_t));
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(gc_cull_shader_, 1, 1, 1);  // 4 实例 < 64 线程 → 1 workgroup
     dev_->EndComputePass();
     dev_->ResetDrawState();
 
     // --- 录制 2：真 DrawIndexedIndirect 渲到离屏 RT（被剔实例 instance_count=0 → 不绘制）---
-    const WebGPURhiDevice::BufferEntry* be_draw = dev_->FindBuffer(gc_draw_ssbo_);
+    const BufferEntry* be_draw = dev_->FindBuffer(gc_draw_ssbo_);
     if (!be_draw || !be_draw->buffer) return false;
     WGPURenderPassColorAttachment att{};
     att.view = gc_rt_view_;
@@ -1940,7 +1939,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     att.clearValue = WGPUColor{0.0, 0.0, 0.0, 1.0};
     WGPURenderPassDescriptor pd{};
     pd.colorAttachmentCount = 1; pd.colorAttachments = &att;
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(dev_->frame_encoder_, &pd);
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(dev_->frame_encoder(), &pd);
     wgpuRenderPassEncoderSetPipeline(pass, gc_pipeline_);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, gc_vbo_, 0, kGcInstances * 4 * 5 * sizeof(float));
     wgpuRenderPassEncoderSetIndexBuffer(pass, gc_ibo_, WGPUIndexFormat_Uint32, 0,
@@ -1956,7 +1955,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
         bd.size = AlignUp4(bytes);
-        return wgpuDeviceCreateBuffer(dev_->device_, &bd);
+        return wgpuDeviceCreateBuffer(dev_->device(), &bd);
     };
     gc_rb_draw_ = make_rb(kGcInstances * kGcDrawWords * sizeof(uint32_t));
     gc_rb_pixels_ = make_rb(kGcRtBytes);
@@ -1965,7 +1964,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
         if (gc_rb_pixels_) { wgpuBufferRelease(gc_rb_pixels_); gc_rb_pixels_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_draw->buffer, 0, gc_rb_draw_, 0,
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_draw->buffer, 0, gc_rb_draw_, 0,
                                          kGcInstances * kGcDrawWords * sizeof(uint32_t));
     WGPUImageCopyTexture src{};
     src.texture = gc_rt_tex_;
@@ -1977,7 +1976,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dst.layout.bytesPerRow = kGcRtRowBytes;
     dst.layout.rowsPerImage = kGcRtSize;
     WGPUExtent3D ext{kGcRtSize, kGcRtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -2004,7 +2003,7 @@ void WebGpuSelfTestHarness::KickGpuCullSelfTestReadback() {
 // 调色板 + morph 混合，逐位对齐源 GLSL 的 SrcVertex/DstVertex/InstanceInfo 打包与算法）写蒙皮后
 // 顶点 SSBO，该 SSBO 直接作顶点缓冲被真绘制消费渲到离屏 RT，回读 dst SSBO + 像素双重校验。
 bool WebGpuSelfTestHarness::RecordSkinningSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // --- WGSL 蒙皮 compute（group1 b0 = 参数；group3 b0..b4 = src/dst/bone/morph/inst SSBO）---
     // 注：本后端 compute BGL 统一以 read_write storage 建组，故所有 storage 均声明 read_write。
@@ -2134,7 +2133,7 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
         td.size = {kSkRtSize, kSkRtSize, 1};
         td.format = WGPUTextureFormat_RGBA8Unorm;
         td.mipLevelCount = 1; td.sampleCount = 1;
-        sk_rt_tex_ = wgpuDeviceCreateTexture(dev_->device_, &td);
+        sk_rt_tex_ = wgpuDeviceCreateTexture(dev_->device(), &td);
         if (sk_rt_tex_) sk_rt_view_ = wgpuTextureCreateView(sk_rt_tex_, nullptr);
     }
     if (!sk_render_module_) {
@@ -2169,15 +2168,15 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
         rpd.primitive.frontFace = WGPUFrontFace_CCW;
         rpd.multisample.count = 1; rpd.multisample.mask = 0xFFFFFFFF;
         rpd.fragment = &fs;
-        sk_pipeline_ = wgpuDeviceCreateRenderPipeline(dev_->device_, &rpd);
+        sk_pipeline_ = wgpuDeviceCreateRenderPipeline(dev_->device(), &rpd);
     }
     if (!sk_ibo_) {
         const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst;
         bd.size = sizeof(idx);
-        sk_ibo_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-        if (sk_ibo_) wgpuQueueWriteBuffer(dev_->queue_, sk_ibo_, 0, idx, sizeof(idx));
+        sk_ibo_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+        if (sk_ibo_) wgpuQueueWriteBuffer(dev_->queue(), sk_ibo_, 0, idx, sizeof(idx));
     }
 
     if (!sk_shader_ || !sk_params_ubo_ || !sk_src_ssbo_ || !sk_dst_ssbo_ || !sk_bone_ssbo_ ||
@@ -2195,13 +2194,13 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
     dev_->CmdBindStorageBuffer(3, sk_morph_ssbo_,0, kSkVertices * 4 * sizeof(float));
     dev_->CmdBindStorageBuffer(4, sk_inst_ssbo_, 0, 48);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(sk_shader_, (kSkVertices + 63u) / 64u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
 
     // --- 录制 2：真绘制（顶点缓冲 = 蒙皮后 dst SSBO）渲到离屏 RT ---
-    const WebGPURhiDevice::BufferEntry* be_dst = dev_->FindBuffer(sk_dst_ssbo_);
+    const BufferEntry* be_dst = dev_->FindBuffer(sk_dst_ssbo_);
     if (!be_dst || !be_dst->buffer) return false;
     WGPURenderPassColorAttachment att{};
     att.view = sk_rt_view_;
@@ -2211,7 +2210,7 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
     att.clearValue = WGPUColor{0.0, 0.0, 0.0, 1.0};
     WGPURenderPassDescriptor pd{};
     pd.colorAttachmentCount = 1; pd.colorAttachments = &att;
-    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(dev_->frame_encoder_, &pd);
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(dev_->frame_encoder(), &pd);
     wgpuRenderPassEncoderSetPipeline(pass, sk_pipeline_);
     wgpuRenderPassEncoderSetVertexBuffer(pass, 0, be_dst->buffer, 0,
                                          kSkVertices * kSkDstFloats * sizeof(float));
@@ -2225,7 +2224,7 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
         WGPUBufferDescriptor bd{};
         bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
         bd.size = AlignUp4(bytes);
-        return wgpuDeviceCreateBuffer(dev_->device_, &bd);
+        return wgpuDeviceCreateBuffer(dev_->device(), &bd);
     };
     sk_rb_dst_ = make_rb(kSkVertices * kSkDstFloats * sizeof(float));
     sk_rb_pixels_ = make_rb(kSkRtBytes);
@@ -2234,7 +2233,7 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
         if (sk_rb_pixels_) { wgpuBufferRelease(sk_rb_pixels_); sk_rb_pixels_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_dst->buffer, 0, sk_rb_dst_, 0,
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_dst->buffer, 0, sk_rb_dst_, 0,
                                          kSkVertices * kSkDstFloats * sizeof(float));
     WGPUImageCopyTexture src{};
     src.texture = sk_rt_tex_;
@@ -2246,7 +2245,7 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
     dst.layout.bytesPerRow = kSkRtRowBytes;
     dst.layout.rowsPerImage = kSkRtSize;
     WGPUExtent3D ext{kSkRtSize, kSkRtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -2272,7 +2271,7 @@ void WebGpuSelfTestHarness::KickSkinningSelfTestReadback() {
 // 把已知渐变逐像素 textureStore 进 storage 纹理（经 CreateComputeWriteTexture2D + SetComputeTextureImage
 // group2 绑定），随后 copy 纹理→回读缓冲，逐像素校验。详见 StorageImageSelfTestCtx / OnStorageImagePixelsMapped。
 bool WebGpuSelfTestHarness::RecordStorageImageSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // group1 b0 = UBO（dim）；group2 b0 = storage image（write）。
     static const char* kStorageImageWGSL = R"WGSL(// dse-wgsl
@@ -2307,18 +2306,18 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeTextureImage(0, si_image_, /*read_only=*/false);
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(si_shader_, (kSiDim + 7u) / 8u, (kSiDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
 
     // copy storage 纹理 → 回读缓冲（MapRead|CopyDst；随帧提交）。
-    const WebGPURhiDevice::TextureEntry* te = dev_->FindTexture(si_image_);
+    const TextureEntry* te = dev_->FindTexture(si_image_);
     if (!te || !te->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kSiBytes);
-    si_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    si_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!si_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = te->texture;
@@ -2330,7 +2329,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dst.layout.bytesPerRow = kSiRowBytes;
     dst.layout.rowsPerImage = kSiDim;
     WGPUExtent3D ext{kSiDim, kSiDim, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -2349,7 +2348,7 @@ void WebGpuSelfTestHarness::KickStorageImageSelfTestReadback() {
 // 逐像素校验 == CPU 预期 max。验证 compute 采样读 + r32float storage 写的读后写链路（Hi-Z 金字塔逐级
 // 下采样核心原语）。详见 HiZSelfTestCtx / OnHiZPixelsMapped。
 bool WebGpuSelfTestHarness::RecordHiZDownsampleSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // ①生成趟：group1 b0 = UBO（dim）；group2 b0 = storage image（r32float 写）。
     static const char* kHzGenWGSL = R"WGSL(// dse-wgsl
@@ -2424,7 +2423,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->CmdBindUniformBuffer(0, hz_gen_ubo_, 0, sizeof(uint32_t) * 4);
     dev_->SetComputeTextureImage(0, hz_src_tex_, /*read_only=*/false);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(hz_gen_shader_, (kHzSrcDim + 7u) / 8u, (kHzSrcDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -2434,18 +2433,18 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeTextureImage(0, hz_src_tex_, /*read_only=*/true);
     dev_->SetComputeTextureImage(1, hz_dst_tex_, /*read_only=*/false);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(hz_down_shader_, (kHzDstDim + 7u) / 8u, (kHzDstDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
 
     // copy dst storage 纹理 → 回读缓冲（MapRead|CopyDst；随帧提交）。
-    const WebGPURhiDevice::TextureEntry* te = dev_->FindTexture(hz_dst_tex_);
+    const TextureEntry* te = dev_->FindTexture(hz_dst_tex_);
     if (!te || !te->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kHzDstBytes;
-    hz_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    hz_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!hz_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = te->texture;
@@ -2457,7 +2456,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dst.layout.bytesPerRow = kHzDstRowBytes;
     dst.layout.rowsPerImage = kHzDstDim;
     WGPUExtent3D ext{kHzDstDim, kHzDstDim, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -2476,7 +2475,7 @@ void WebGpuSelfTestHarness::KickHiZDownsampleSelfTestReadback() {
 // == CPU 预期递归 max。验证 per-mip 视图绑定 + 多级 storage 金字塔构建（GPU-driven Hi-Z 遮挡剔除
 // 金字塔核心原语，Task 4 前置）。详见 HiZPyramidSelfTestCtx / OnHiZPyramidPixelsMapped。
 bool WebGpuSelfTestHarness::RecordHiZPyramidSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 生成趟 / 下采样趟 WGSL 与 B3b-5 同形（group2 b0 storage 写；b0 采样读 + b1 storage 写），
     // 仅此处用显式单 mip 视图绑定到 group2 槽，实现金字塔逐级 in-place 下采样。
@@ -2536,7 +2535,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
             WGPUTextureUsage_StorageBinding | WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopySrc,
             kHzpMips, 1, {nullptr}, TextureSamplerDesc::FromLinearFlag(false));
     }
-    const WebGPURhiDevice::TextureEntry* pte = dev_->FindTexture(hzp_tex_);
+    const TextureEntry* pte = dev_->FindTexture(hzp_tex_);
     if (!hzp_gen_shader_ || !hzp_down_shader_ || !hzp_gen_ubo_ ||
         hzp_down_ubos_.size() != kHzpMips - 1 || !hzp_tex_ || !pte || !pte->texture) {
         DEBUG_LOG_ERROR("WebGPU[B3b-6] Hi-Z 金字塔自检资源创建失败，跳过");
@@ -2552,7 +2551,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->CmdBindUniformBuffer(0, hzp_gen_ubo_, 0, sizeof(uint32_t) * 4);
     dev_->SetComputeTextureImageMip(0, hzp_tex_, 0, /*read_only=*/false, /*r32f=*/true);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(hzp_gen_shader_, (kHzpBaseDim + 7u) / 8u, (kHzpBaseDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -2564,7 +2563,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         dev_->SetComputeTextureImageMip(0, hzp_tex_, static_cast<int>(k - 1), /*read_only=*/true,  /*r32f=*/true);
         dev_->SetComputeTextureImageMip(1, hzp_tex_, static_cast<int>(k),     /*read_only=*/false, /*r32f=*/true);
         dev_->BeginComputePass();
-        if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+        if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
         dev_->DispatchCompute(hzp_down_shader_, (dst_dim + 7u) / 8u, (dst_dim + 7u) / 8u, 1);
         dev_->EndComputePass();
         dev_->ResetDrawState();
@@ -2574,7 +2573,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kHzpTotalBytes;
-    hzp_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    hzp_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!hzp_rb_pixels_) return false;
     for (uint32_t k = 0; k < kHzpMips; ++k) {
         const uint32_t dim = kHzpBaseDim >> k;
@@ -2588,7 +2587,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         dst.layout.bytesPerRow = kHzpRowBytes;
         dst.layout.rowsPerImage = dim;
         WGPUExtent3D ext{dim, dim, 1};
-        wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+        wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     }
     return true;
 }
@@ -2608,7 +2607,7 @@ void WebGpuSelfTestHarness::KickHiZPyramidSelfTestReadback() {
 // 再 copy SSBO→回读缓冲逐元素校验。覆盖引擎 Hi-Z/GPU-driven 剔除真实 compute API 面（命名 uniform
 // 块布局 + 句柄采样绑定）。详见 ComputeBindSelfTestCtx / OnComputeBindMapped。
 bool WebGpuSelfTestHarness::RecordComputeBindSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 命名 uniform 块：成员声明序 + @align(16) 须与 SetComputeUniform* 调用序的 16B 对齐定位一致
     // （a_int@0 / b_float@16 / c_coord@32 / d_vec4@48 / e_mat@64，块 128B）。
@@ -2659,7 +2658,7 @@ fn cs_main() {
         GpuBufferDesc d; d.size = kCbOutBytes; d.usage = GpuBufferUsage::kStorage;
         cb_out_ = dev_->CreateGpuBuffer(d, nullptr).raw();
     }
-    const WebGPURhiDevice::TextureEntry* cte = dev_->FindTexture(cb_tex_);
+    const TextureEntry* cte = dev_->FindTexture(cb_tex_);
     if (!cb_shader_ || !cb_tex_ || !cte || !cte->texture || !cb_out_) {
         DEBUG_LOG_ERROR("WebGPU[B3b-8] 命名 uniform/采样自检资源创建失败，跳过");
         return false;
@@ -2677,7 +2676,7 @@ fn cs_main() {
     dev_->CmdBindStorageBuffer(0, cb_out_, 0, kCbOutBytes);
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(cb_shader_, 1, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -2685,13 +2684,13 @@ fn cs_main() {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kCbOutBytes;
-    cb_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_out = dev_->FindBuffer(cb_out_);
+    cb_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_out = dev_->FindBuffer(cb_out_);
     if (!cb_rb_out_ || !be_out || !be_out->buffer) {
         if (cb_rb_out_) { wgpuBufferRelease(cb_rb_out_); cb_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_out->buffer, 0, cb_rb_out_, 0, kCbOutBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_out->buffer, 0, cb_rb_out_, 0, kCbOutBytes);
     return true;
 }
 
@@ -2710,7 +2709,7 @@ void WebGpuSelfTestHarness::KickComputeBindSelfTestReadback() {
 // textureLod 改为 textureLoad-at-mip（点采样 max 金字塔对遮挡判定保守正确；多级采样已由 B3b-6/7 证）。
 // 经引擎真实 compute API 面（命名 uniform + 句柄采样 + 双 SSBO）跑通，证明该消费方着色器 WebGPU 可用。
 bool WebGpuSelfTestHarness::RecordHiZCullSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     static const char* kHiZCullWGSL = R"WGSL(// dse-wgsl
 struct AABB { min_point : vec4<f32>, max_point : vec4<f32>, };
@@ -2802,7 +2801,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
             WGPUTextureFormat_R32Float,
             WGPUTextureUsage_TextureBinding | WGPUTextureUsage_CopyDst,
             1, 1, {nullptr}, TextureSamplerDesc::FromLinearFlag(false));
-        const WebGPURhiDevice::TextureEntry* hte = dev_->FindTexture(hc_hiz_tex_);
+        const TextureEntry* hte = dev_->FindTexture(hc_hiz_tex_);
         if (hte && hte->texture) {
             // 恒值 0.5 填充（queue write 无 256 行对齐约束）。
             std::vector<float> hiz(kHcHizDim * kHcHizDim, kHcHizDepth);
@@ -2811,10 +2810,10 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
             WGPUTextureDataLayout layout{};
             layout.offset = 0; layout.bytesPerRow = kHcHizDim * 4u; layout.rowsPerImage = kHcHizDim;
             WGPUExtent3D ext{kHcHizDim, kHcHizDim, 1};
-            wgpuQueueWriteTexture(dev_->queue_, &dst, hiz.data(), hiz.size() * 4u, &layout, &ext);
+            wgpuQueueWriteTexture(dev_->queue(), &dst, hiz.data(), hiz.size() * 4u, &layout, &ext);
         }
     }
-    const WebGPURhiDevice::TextureEntry* hte = dev_->FindTexture(hc_hiz_tex_);
+    const TextureEntry* hte = dev_->FindTexture(hc_hiz_tex_);
     if (!hc_shader_ || !hc_aabb_ || !hc_vis_ || !hc_hiz_tex_ || !hte || !hte->texture) {
         DEBUG_LOG_ERROR("WebGPU[B3b-9] Hi-Z 剔除自检资源创建失败，跳过");
         return false;
@@ -2832,7 +2831,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeUniformInt(hc_shader_, "u_object_count", static_cast<int>(kHcObjCount));
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(hc_shader_, (kHcObjCount + 63u) / 64u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -2840,13 +2839,13 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kHcVisBytes;
-    hc_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_vis = dev_->FindBuffer(hc_vis_);
+    hc_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_vis = dev_->FindBuffer(hc_vis_);
     if (!hc_rb_out_ || !be_vis || !be_vis->buffer) {
         if (hc_rb_out_) { wgpuBufferRelease(hc_rb_out_); hc_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_vis->buffer, 0, hc_rb_out_, 0, kHcVisBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_vis->buffer, 0, hc_rb_out_, 0, kHcVisBytes);
     return true;
 }
 
@@ -2864,7 +2863,7 @@ void WebGpuSelfTestHarness::KickHiZCullSelfTestReadback() {
 // 经 GetHiZGpuTexture/GetHiZMipCount 采样金字塔判遮挡，端到端串起资源 API 与既有原语。详见
 // GpuDrivenHiZCullSelfTestCtx / OnT44HiZCullMapped。离屏隔离、不翻 SupportsIndirectDraw()、不碰 demo 帧。
 bool WebGpuSelfTestHarness::RecordGpuDrivenHiZCullSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 生成趟：写 mip0 占位遮挡深度——texel(0,0)=0.9（最近遮挡）、其余 0.1。group2 b0 storage 写。
     static const char* kT44GenWGSL = R"WGSL(// dse-wgsl
@@ -3001,7 +3000,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 
     const unsigned int hiz_tex = dev_->GetHiZGpuTexture(t44_hiz_handle_);
     const int mip_count = dev_->GetHiZMipCount(t44_hiz_handle_);
-    const WebGPURhiDevice::TextureEntry* pte = dev_->FindTexture(hiz_tex);
+    const TextureEntry* pte = dev_->FindTexture(hiz_tex);
     if (!t44_gen_shader_ || !t44_down_shader_ || !t44_cull_shader_ || !t44_gen_ubo_.raw() ||
         t44_down_ubos_.size() != kT44Mips - 1 || !t44_aabb_.raw() || !t44_vis_.raw() ||
         !t44_hiz_handle_ || !hiz_tex || !pte || !pte->texture ||
@@ -3015,7 +3014,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->CmdBindUniformBuffer(0, t44_gen_ubo_.raw(), 0, sizeof(uint32_t) * 4);
     dev_->SetComputeTextureImageMip(0, hiz_tex, 0, /*read_only=*/false, /*r32f=*/true);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(t44_gen_shader_, (kT44HizDim + 7u) / 8u, (kT44HizDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3027,7 +3026,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         dev_->SetComputeTextureImageMip(0, hiz_tex, static_cast<int>(k - 1), /*read_only=*/true,  /*r32f=*/true);
         dev_->SetComputeTextureImageMip(1, hiz_tex, static_cast<int>(k),     /*read_only=*/false, /*r32f=*/true);
         dev_->BeginComputePass();
-        if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+        if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
         dev_->DispatchCompute(t44_down_shader_, (dst_dim + 7u) / 8u, (dst_dim + 7u) / 8u, 1);
         dev_->EndComputePass();
         dev_->ResetDrawState();
@@ -3046,7 +3045,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeUniformInt(t44_cull_shader_, "u_object_count", static_cast<int>(kT44ObjCount));
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(t44_cull_shader_, (kT44ObjCount + 63u) / 64u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3054,13 +3053,13 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kT44VisBytes;
-    t44_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_vis = dev_->FindBuffer(t44_vis_.raw());
+    t44_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_vis = dev_->FindBuffer(t44_vis_.raw());
     if (!t44_rb_out_ || !be_vis || !be_vis->buffer) {
         if (t44_rb_out_) { wgpuBufferRelease(t44_rb_out_); t44_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_vis->buffer, 0, t44_rb_out_, 0, kT44VisBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_vis->buffer, 0, t44_rb_out_, 0, kT44VisBytes);
     return true;
 }
 
@@ -3078,7 +3077,7 @@ void WebGpuSelfTestHarness::KickGpuDrivenHiZCullSelfTestReadback() {
 // 目标1 全 (0,2,0)（法线 delta 为 0，输出法线 == normalize(base.nrm)=(0,0,1)）。经引擎真实 compute API 面
 //（命名 uniform 顶点/目标数 + 4×SSBO）跑通，dispatch 后回读形变顶点逐顶点校验 == CPU 预期。
 bool WebGpuSelfTestHarness::RecordMorphSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 与 morph_target_system.cpp::kMorphTargetCompWGSL 一致（离屏自检内联副本）。
     static const char* kMorphWGSL = R"WGSL(// dse-wgsl
@@ -3158,7 +3157,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeUniformInt(mf_shader_, "_20.u_target_count", static_cast<int>(kMfTgtCount));
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(mf_shader_, (kMfVtxCount + 255u) / 256u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3166,13 +3165,13 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kMfOutBytes;
-    mf_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_out = dev_->FindBuffer(mf_out_);
+    mf_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_out = dev_->FindBuffer(mf_out_);
     if (!mf_rb_out_ || !be_out || !be_out->buffer) {
         if (mf_rb_out_) { wgpuBufferRelease(mf_rb_out_); mf_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_out->buffer, 0, mf_rb_out_, 0, kMfOutBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_out->buffer, 0, mf_rb_out_, 0, kMfOutBytes);
     return true;
 }
 
@@ -3191,7 +3190,7 @@ void WebGpuSelfTestHarness::KickMorphSelfTestReadback() {
 // irradiance/visibility storage image。自检 hysteresis=0 绕开 temporal imageLoad（核心 WebGPU storage 仅写）。
 // 除写 storage image 外另写 float SSBO（每 texel irr.rgb+总权重）精校验。
 bool WebGpuSelfTestHarness::RecordDDGISelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     static const char* kDDGIWGSL = R"WGSL(// dse-wgsl
 @group(3) @binding(0) var<storage, read_write> probe_states : array<vec4<f32>>;
@@ -3381,7 +3380,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeUniformVec3(dg_shader_, "u_light_color", 1.0f, 1.0f, 1.0f);
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(dg_shader_, (kDgIrrTexels + 7u) / 8u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3389,13 +3388,13 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kDgDbgBytes;
-    dg_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_dbg = dev_->FindBuffer(dg_dbg_);
+    dg_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_dbg = dev_->FindBuffer(dg_dbg_);
     if (!dg_rb_out_ || !be_dbg || !be_dbg->buffer) {
         if (dg_rb_out_) { wgpuBufferRelease(dg_rb_out_); dg_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_dbg->buffer, 0, dg_rb_out_, 0, kDgDbgBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_dbg->buffer, 0, dg_rb_out_, 0, kDgDbgBytes);
     return true;
 }
 
@@ -3408,7 +3407,7 @@ void WebGpuSelfTestHarness::KickDDGISelfTestReadback() {
 }
 
 bool WebGpuSelfTestHarness::RecordHairSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 4 个着色器直接取引擎真源（hair_compute_shaders.h::kHair*SourceWGSL），与消费方
     // hair_system.cpp::InitComputeShaders 同 push_constant_bytes（48/4/12/12）。
@@ -3448,7 +3447,7 @@ bool WebGpuSelfTestHarness::RecordHairSelfTest() {
     // 全 4 趟同序跑在同一 compute pass 内（趟间 WebGPU 自动按 storage 资源依赖串行化），
     // 与 hair_system.cpp::SimulateCompute 的绑定/uniform/dispatch 顺序逐一对齐。
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     const unsigned int groups_v = (kHrVerts + 63u) / 64u;
     const unsigned int groups_s = (kHrStrands + 63u) / 64u;
 
@@ -3509,15 +3508,15 @@ bool WebGpuSelfTestHarness::RecordHairSelfTest() {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kHrRbBytes;
-    hr_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_cur = dev_->FindBuffer(hr_cur_);
-    const WebGPURhiDevice::BufferEntry* be_tan = dev_->FindBuffer(hr_tan_);
+    hr_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_cur = dev_->FindBuffer(hr_cur_);
+    const BufferEntry* be_tan = dev_->FindBuffer(hr_tan_);
     if (!hr_rb_out_ || !be_cur || !be_cur->buffer || !be_tan || !be_tan->buffer) {
         if (hr_rb_out_) { wgpuBufferRelease(hr_rb_out_); hr_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_cur->buffer, 0, hr_rb_out_, 0,           kHrPosBytes);
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_tan->buffer, 0, hr_rb_out_, kHrPosBytes, kHrPosBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_cur->buffer, 0, hr_rb_out_, 0,           kHrPosBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_tan->buffer, 0, hr_rb_out_, kHrPosBytes, kHrPosBytes);
     return true;
 }
 
@@ -3532,7 +3531,7 @@ void WebGpuSelfTestHarness::KickHairSelfTestReadback() {
 // B3b-14 grass 风场 compute 正确性自检：内联镜像 grass_system.cpp 风场 WGSL（engine 层不能 include
 //   modules 层头）→ 造已知实例 → BeginComputePass/DispatchCompute/EndComputePass → copy 输出 mat4 回读校验。
 bool WebGpuSelfTestHarness::RecordGrassSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 内联镜像（与 grass_system.cpp::kGrassWindComputeSourceWGSL 逐句一致）。
     static const char* kGrassWGSL = R"WGSL(// dse-wgsl
@@ -3611,7 +3610,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeUniformInt(gr_shader_,   "u_instance_count",  static_cast<int>(kGrInstances));
 
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(gr_shader_, (kGrInstances + 63u) / 64u, 1, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3619,13 +3618,13 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kGrOutBytes;
-    gr_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
-    const WebGPURhiDevice::BufferEntry* be_out = dev_->FindBuffer(gr_out_);
+    gr_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    const BufferEntry* be_out = dev_->FindBuffer(gr_out_);
     if (!gr_rb_out_ || !be_out || !be_out->buffer) {
         if (gr_rb_out_) { wgpuBufferRelease(gr_rb_out_); gr_rb_out_ = nullptr; }
         return false;
     }
-    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder_, be_out->buffer, 0, gr_rb_out_, 0, kGrOutBytes);
+    wgpuCommandEncoderCopyBufferToBuffer(dev_->frame_encoder(), be_out->buffer, 0, gr_rb_out_, 0, kGrOutBytes);
     return true;
 }
 
@@ -3640,7 +3639,7 @@ void WebGpuSelfTestHarness::KickGrassSelfTestReadback() {
 // B3b-13 bloom 双滤波 compute 真链路自检：手译 bloom_downsample.comp / bloom_upsample.comp 核心为 WGSL，
 //   经 gen compute 造已知 rgba16f 渐变 → 下采样 13-tap → 上采样 3×3 tent + base 累加 → copy 回读校验。
 bool WebGpuSelfTestHarness::RecordBloomSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // gen：按 u_kind 选公式写 rgba16f storage（避免 CPU float→half 编码，与 CPU 预期共用公式）。
     static const char* kBloomGenWGSL = R"WGSL(// dse-wgsl
@@ -3771,7 +3770,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         dev_->SetComputeUniformInt(bl_gen_shader_, "u_kind", kind);
         dev_->SetComputeTextureImage(0, tex, /*read_only=*/false);
         dev_->BeginComputePass();
-        if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+        if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
         dev_->DispatchCompute(bl_gen_shader_, (dim + 7u) / 8u, (dim + 7u) / 8u, 1);
         dev_->EndComputePass();
         dev_->ResetDrawState();
@@ -3789,7 +3788,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeTextureImage(0, bl_src8_,  /*read_only=*/true);
     dev_->SetComputeTextureImage(1, bl_down4_, /*read_only=*/false);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(bl_down_shader_, (kBlDownDim + 7u) / 8u, (kBlDownDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
@@ -3801,21 +3800,21 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
     dev_->SetComputeTextureImage(1, bl_ubase4_, /*read_only=*/true);
     dev_->SetComputeTextureImage(2, bl_up4_,    /*read_only=*/false);
     dev_->BeginComputePass();
-    if (!dev_->cur_compute_pass_) { dev_->ResetDrawState(); return false; }
+    if (!dev_->cur_compute_pass()) { dev_->ResetDrawState(); return false; }
     dev_->DispatchCompute(bl_up_shader_, (kBlUpDim + 7u) / 8u, (kBlUpDim + 7u) / 8u, 1);
     dev_->EndComputePass();
     dev_->ResetDrawState();
 
     // copy down4 + up4 storage 纹理 → 回读缓冲（各占 256 对齐分段）。
-    const WebGPURhiDevice::TextureEntry* te_down = dev_->FindTexture(bl_down4_);
-    const WebGPURhiDevice::TextureEntry* te_up   = dev_->FindTexture(bl_up4_);
+    const TextureEntry* te_down = dev_->FindTexture(bl_down4_);
+    const TextureEntry* te_up   = dev_->FindTexture(bl_up4_);
     if (!te_down || !te_down->texture || !te_up || !te_up->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = kBlTotalBytes;
-    bl_rb_out_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    bl_rb_out_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!bl_rb_out_) return false;
-    auto copy_tex = [&](const WebGPURhiDevice::TextureEntry* te, uint32_t dim, uint32_t off) {
+    auto copy_tex = [&](const TextureEntry* te, uint32_t dim, uint32_t off) {
         WGPUImageCopyTexture src{};
         src.texture = te->texture; src.mipLevel = 0; src.aspect = WGPUTextureAspect_All;
         WGPUImageCopyBuffer dst{};
@@ -3824,7 +3823,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         dst.layout.bytesPerRow = kBlRowBytes;
         dst.layout.rowsPerImage = dim;
         WGPUExtent3D ext{dim, dim, 1};
-        wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+        wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     };
     copy_tex(te_down, kBlDownDim, kBlDownOff);
     copy_tex(te_up,   kBlUpDim,   kBlUpOff);
@@ -3845,7 +3844,7 @@ void WebGpuSelfTestHarness::KickBloomSelfTestReadback() {
 // 模拟「可见/被剔」，随帧 copyTextureToBuffer，提交后异步回读半精解码校验可见象限有色、被剔象限为黑。
 // 不经裸 wgpu 绘制，专为验证 MultiDrawIndexedIndirect 覆写（按 byte_offset+i*stride 循环）。
 bool WebGpuSelfTestHarness::RecordMultiDrawIndirectSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // 离屏 RT（引擎 CreateRenderTarget：RGBA16Float 颜色 + CopySrc，无深度）。
     if (!t41_rt_) {
@@ -3932,7 +3931,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     rp.clear_color_enabled = true;
     rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
     dev_->CmdBeginRenderPass(rp);
-    if (!dev_->cur_pass_) return false;
+    if (!dev_->cur_pass()) return false;
     dev_->CmdSetViewport(0, 0, static_cast<int>(kT41RtSize), static_cast<int>(kT41RtSize));
     const unsigned int pipe = dev_->GetGraphicsPipeline(t41_pso_, t41_program_);
     dev_->CmdBindPipeline(pipe);
@@ -3947,14 +3946,14 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dev_->CmdEndRenderPass();
 
     // copy 离屏 RT 颜色纹理 → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t41_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t41_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT41RtBytes);
-    t41_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t41_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t41_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -3966,7 +3965,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dst.layout.bytesPerRow = kT41RtRowBytes;
     dst.layout.rowsPerImage = kT41RtSize;
     WGPUExtent3D ext{kT41RtSize, kT41RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -3984,7 +3983,7 @@ void WebGpuSelfTestHarness::KickMultiDrawIndirectSelfTestReadback() {
 // 全部可见，随帧 copyTextureToBuffer，提交后异步回读半精解码校验各象限颜色就位——验证 BatchVertex 92B
 // 布局（pos@0/color@12）解析与 BindMegaVAO 设状态正确。
 bool WebGpuSelfTestHarness::RecordMegaVaoSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     if (!t42_rt_) {
         RenderTargetDesc d;
@@ -4065,7 +4064,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     rp.clear_color_enabled = true;
     rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
     dev_->CmdBeginRenderPass(rp);
-    if (!dev_->cur_pass_) return false;
+    if (!dev_->cur_pass()) return false;
     dev_->CmdSetViewport(0, 0, static_cast<int>(kT42RtSize), static_cast<int>(kT42RtSize));
     const unsigned int pipe = dev_->GetGraphicsPipeline(t42_pso_, t42_program_);
     dev_->CmdBindPipeline(pipe);
@@ -4073,14 +4072,14 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dev_->CmdDrawIndexed(kT42Quads * 6, 0, 0);
     dev_->CmdEndRenderPass();
 
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t42_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t42_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT42RtBytes);
-    t42_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t42_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t42_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -4092,7 +4091,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dst.layout.bytesPerRow = kT42RtRowBytes;
     dst.layout.rowsPerImage = kT42RtSize;
     WGPUExtent3D ext{kT42RtSize, kT42RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -4111,7 +4110,7 @@ void WebGpuSelfTestHarness::KickMegaVaoSelfTestReadback() {
 // 提交后异步回读半精解码校验左半红、右半绿——验证手译 PBR WGSL 经实例 SSBO(b5) 取 model、材质 SSBO(b9) 取
 // albedo、albedo 纹理采样链路全部正确。离屏隔离、不翻 SupportsIndirectDraw()、不碰 demo 帧。
 bool WebGpuSelfTestHarness::RecordGpuDrivenPBRSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
     if (!dev_->EnsureGpuDrivenPBRShader()) {
         DEBUG_LOG_ERROR("WebGPU[T4-3] GPU-driven PBR 程序/资源未就绪，跳过自检");
         return false;
@@ -4192,7 +4191,7 @@ bool WebGpuSelfTestHarness::RecordGpuDrivenPBRSelfTest() {
     rp.clear_color_enabled = true;
     rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
     dev_->CmdBeginRenderPass(rp);
-    if (!dev_->cur_pass_) return false;
+    if (!dev_->cur_pass()) return false;
     dev_->CmdSetViewport(0, 0, static_cast<int>(kT43RtSize), static_cast<int>(kT43RtSize));
 
     const glm::mat4 ident(1.0f);
@@ -4210,14 +4209,14 @@ bool WebGpuSelfTestHarness::RecordGpuDrivenPBRSelfTest() {
     dev_->CmdEndRenderPass();
     dev_->UnbindVAO();
 
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t43_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t43_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT43RtBytes);
-    t43_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t43_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t43_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -4229,7 +4228,7 @@ bool WebGpuSelfTestHarness::RecordGpuDrivenPBRSelfTest() {
     dst.layout.bytesPerRow = kT43RtRowBytes;
     dst.layout.rowsPerImage = kT43RtSize;
     WGPUExtent3D ext{kT43RtSize, kT43RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -4247,7 +4246,7 @@ void WebGpuSelfTestHarness::KickGpuDrivenPBRSelfTestReadback() {
 // 四角受光为亮 → copy 颜色 RT 回读校验。证明「阴影 pass 写 atlas → 前向 pass 采样」跨 pass 深度图采样
 // 能力（旧注释担心的 Dawn 屏障冲突在分趟下不存在），逻辑同 forward_shaded.frag 的 DirectionalShadow。
 bool WebGpuSelfTestHarness::RecordCSMShadowSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // shadow atlas RT（颜色 RGBA16Float 占位 + Depth32 深度附件，深度可作 texture_depth_2d 采样）。
     if (!t51_shadow_rt_) {
@@ -4365,7 +4364,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT51AtlasDim), static_cast<int>(kT51AtlasDim));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_occ_pso_, t51_occ_program_));
         const std::vector<VertexAttr> occ_attrs = { VertexAttr{0, 3, 0} };  // pos.xyz
@@ -4387,7 +4386,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT51RtSize), static_cast<int>(kT51RtSize));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_recv_pso_, t51_recv_program_));
         const std::vector<VertexAttr> recv_attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 2, 8} };  // pos.xy + uv
@@ -4399,14 +4398,14 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
     }
 
     // copy color RT → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t51_color_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t51_color_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT51RtBytes);
-    t51_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t51_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t51_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -4418,7 +4417,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
     dst.layout.bytesPerRow = kT51RtRowBytes;
     dst.layout.rowsPerImage = kT51RtSize;
     WGPUExtent3D ext{kT51RtSize, kT51RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -4436,7 +4435,7 @@ void WebGpuSelfTestHarness::KickCSMShadowSelfTestReadback() {
 // 视为空像素）→ 中心几何受光为红、四角空像素为黑 → copy 颜色 RT 回读校验。证明「几何趟写 MRT gbuffer →
 // 光照趟采样 gbuffer」延迟着色能力，逻辑同 deferred_lighting.frag。
 bool WebGpuSelfTestHarness::RecordDeferredSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // gbuffer RT（3 个 RGBA16Float 颜色附件 albedo/normal/position，无深度；附件均 TextureBinding 可采样）。
     if (!t52_gbuffer_rt_) {
@@ -4560,7 +4559,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_geom_pso_, t52_geom_program_));
         const std::vector<VertexAttr> geo_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
@@ -4584,7 +4583,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_light_pso_, t52_light_program_));
         const std::vector<VertexAttr> light_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
@@ -4598,14 +4597,14 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
     }
 
     // copy color RT → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t52_color_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t52_color_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT52RtBytes);
-    t52_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t52_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t52_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -4617,7 +4616,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
     dst.layout.bytesPerRow = kT52RtRowBytes;
     dst.layout.rowsPerImage = kT52RtSize;
     WGPUExtent3D ext{kT52RtSize, kT52RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -4633,7 +4632,7 @@ void WebGpuSelfTestHarness::KickDeferredSelfTestReadback() {
 // Task 5 Subtask 3（T5-3）：HDR auto-exposure 亮度归约 + ACES tonemap parity 离屏自检。
 // ============================================================================
 bool WebGpuSelfTestHarness::RecordHDRSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // RT：HDR 场景（8×8）、平均 log 亮度（1×1）、自动曝光（1×1）、tonemap color（64×64，CopySrc）。
     auto make_rt = [&](unsigned int& rt, uint32_t dim) {
@@ -4766,7 +4765,7 @@ fn AcesFilmic(x : vec3<f32>) -> vec3<f32> {
         rp.clear_color_enabled = true;
         rp.clear_color = clear;
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t53_pso_, program));
         dev_->CmdBindVertexBuffer(0, t53_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
@@ -4805,14 +4804,14 @@ fn AcesFilmic(x : vec3<f32>) -> vec3<f32> {
     dev_->CmdEndRenderPass();
 
     // copy color RT → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t53_color_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t53_color_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT53RtBytes);
-    t53_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t53_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t53_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -4824,7 +4823,7 @@ fn AcesFilmic(x : vec3<f32>) -> vec3<f32> {
     dst.layout.bytesPerRow = kT53RtRowBytes;
     dst.layout.rowsPerImage = kT53RtSize;
     WGPUExtent3D ext{kT53RtSize, kT53RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -4840,7 +4839,7 @@ void WebGpuSelfTestHarness::KickHDRSelfTestReadback() {
 // Task 5 Subtask 4（T5-4）：IBL（BRDF LUT + irradiance + prefilter env + PBR 环境项）离屏自检。
 // ============================================================================
 bool WebGpuSelfTestHarness::RecordIBLSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // RT：BRDF LUT（64×64）、irradiance（1×1）、prefilter（1×1）、PBR color（64×64，CopySrc）。
     auto make_rt = [&](unsigned int& rt, uint32_t dim) {
@@ -5011,7 +5010,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, 
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t54_pso_, program));
         dev_->CmdBindVertexBuffer(0, t54_quad_vbo_, 16, attrs, VertexInputRate::PerVertex);
@@ -5048,14 +5047,14 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, 
     dev_->CmdEndRenderPass();
 
     // copy color RT → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t54_color_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t54_color_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT54RtBytes);
-    t54_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t54_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t54_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -5067,7 +5066,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, 
     dst.layout.bytesPerRow = kT54RtRowBytes;
     dst.layout.rowsPerImage = kT54RtSize;
     WGPUExtent3D ext{kT54RtSize, kT54RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -5083,7 +5082,7 @@ void WebGpuSelfTestHarness::KickIBLSelfTestReadback() {
 // Task 5 Subtask 5（T5-5）：WBOIT（accum/reveal MRT + resolve）离屏自检。
 // ============================================================================
 bool WebGpuSelfTestHarness::RecordWBOITSelfTest() {
-    if (!dev_->device_ || !dev_->frame_encoder_ || dev_->cur_pass_ || dev_->cur_compute_pass_) return false;
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
     // accum/reveal MRT（2 个 RGBA16Float 颜色附件，均 TextureBinding 可采样）。
     if (!t55_mrt_rt_) {
@@ -5201,7 +5200,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_geom_pso_, t55_geom_program_));
         dev_->CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
@@ -5223,7 +5222,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         rp.clear_color_enabled = true;
         rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
         dev_->CmdBeginRenderPass(rp);
-        if (!dev_->cur_pass_) return false;
+        if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
         dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_resolve_pso_, t55_resolve_program_));
         dev_->CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
@@ -5235,14 +5234,14 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
     }
 
     // copy color RT → 回读缓冲（随帧提交）。
-    const WebGPURhiDevice::RenderTargetEntry* rt = dev_->FindRenderTarget(t55_color_rt_);
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t55_color_rt_);
     if (!rt || rt->color_textures.empty()) return false;
-    const WebGPURhiDevice::TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
     if (!color || !color->texture) return false;
     WGPUBufferDescriptor bd{};
     bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
     bd.size = AlignUp4(kT55RtBytes);
-    t55_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device_, &bd);
+    t55_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
     if (!t55_rb_pixels_) return false;
     WGPUImageCopyTexture src{};
     src.texture = color->texture;
@@ -5254,7 +5253,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
     dst.layout.bytesPerRow = kT55RtRowBytes;
     dst.layout.rowsPerImage = kT55RtSize;
     WGPUExtent3D ext{kT55RtSize, kT55RtSize, 1};
-    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder_, &src, &dst, &ext);
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
     return true;
 }
 
@@ -5345,8 +5344,8 @@ void WebGpuSelfTestHarness::RunBringUpSelfTest() {
     rp.clear_color_enabled = true;
     rp.clear_color = glm::vec4(0.05f, 0.05f, 0.08f, 1.0f);
     dev_->CmdBeginRenderPass(rp);
-    if (!dev_->cur_pass_) return;
-    dev_->CmdSetViewport(0, 0, dev_->width_, dev_->height_);
+    if (!dev_->cur_pass()) return;
+    dev_->CmdSetViewport(0, 0, dev_->width(), dev_->height());
 
     const unsigned int pipe = dev_->GetGraphicsPipeline(selftest_pso_, selftest_program_);
     dev_->CmdBindPipeline(pipe);
