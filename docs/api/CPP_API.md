@@ -489,7 +489,6 @@ am->PumpMainThreadCallbacks();  // 每帧主线程调用
 | `BindPipeline(handle)` | 绑定图形管线对象（聚合 PSO 子状态 + program，经 `RhiDevice::GetGraphicsPipeline(pso, program)` 取句柄；`program==0` 表示仅 PSO 状态。取代旧 `SetPipelineState`+`BindShaderProgram`） |
 | `SetCamera(view, proj)` | 设置相机矩阵 |
 | `ClearColor(color)` | 清屏 |
-| `SetGlobalMat4(name, mat)` | 设置全局 mat4 |
 
 ### 5.3 RenderGraph（渲染图）
 

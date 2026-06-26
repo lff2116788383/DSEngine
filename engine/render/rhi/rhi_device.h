@@ -40,7 +40,6 @@ public:
     virtual void BeginRenderPass(const RenderPassDesc& render_pass) = 0;
     virtual void EndRenderPass() = 0;
     virtual void ClearColor(const glm::vec4& color) = 0;
-    virtual void SetGlobalMat4(const std::string& name, const glm::mat4& value) = 0;
 
     /// 设置视口区域（用于 shadow atlas 等 viewport-based 渲染）
     virtual void SetViewport(int x, int y, int width, int height) = 0;

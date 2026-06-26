@@ -36,7 +36,6 @@ public:
     void DrawIndexedInstanced(uint32_t, uint32_t, uint32_t, int32_t, uint32_t) override {}
     void DrawIndexedIndirect(unsigned int, uint32_t) override {}
     void ClearColor(const glm::vec4&) override {}
-    void SetGlobalMat4(const std::string&, const glm::mat4&) override {}
     void SetViewport(int, int, int, int) override {}
     void BindGlobalShadowMap(unsigned int, unsigned int) override {}
     void BindGlobalSpotShadowMap(unsigned int, unsigned int) override {}

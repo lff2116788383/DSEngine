@@ -29,7 +29,7 @@ namespace {
 
 /// B2 命令缓冲：把后端无关的录制接口逐调用转发到 WebGPURhiDevice 的设备级 Cmd*，
 /// 由设备直接录制到本帧 frame_encoder_（立即转发，非缓存重放）。所有接口显式实现，
-/// 不依赖基类静默默认，避免漏实现时无声吞掉绘制。ClearColor/SetGlobalMat4/三类 ShadowMap/
+/// 不依赖基类静默默认，避免漏实现时无声吞掉绘制。ClearColor/三类 ShadowMap/
 /// DispatchComputePass/DrawIndexedIndirect 转发到 B2 期保持 no-op 的 Cmd*（留 B3）。
 class WebGPUCommandBuffer final : public CommandBuffer {
 public:
@@ -38,7 +38,6 @@ public:
     void BeginRenderPass(const RenderPassDesc& render_pass) override { device_->CmdBeginRenderPass(render_pass); }
     void EndRenderPass() override { device_->CmdEndRenderPass(); }
     void ClearColor(const glm::vec4& color) override { device_->CmdClearColor(color); }
-    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override { device_->CmdSetGlobalMat4(name, value); }
     void SetViewport(int x, int y, int width, int height) override { device_->CmdSetViewport(x, y, width, height); }
 
     void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalShadowMap(index, texture_handle); }
@@ -2201,6 +2200,67 @@ void WebGPURhiDevice::EnsureShadowDepthFallback() {
     }
 }
 
+void WebGPURhiDevice::EnsurePointShadowFallback() {
+    // Final-Feat-8：点光源 cube 阴影回退。懒建 1×1×6 Depth32 cube 纹理 + 非过滤采样器，并在无活动
+    //   pass 时逐面一次性清深=1.0（恒无遮挡）。前向 WGSL 把 slot16-19 声明为 texture_depth_cube，缺图
+    //   或读写危险时换用此 cube 回退；其采样器须为 NonFiltering（Filtering 采样深度纹理会被 WebGPU 拒绝）。
+    if (!device_) return;
+    if (!nonfilter_sampler_) {
+        WGPUSamplerDescriptor sd{};
+        sd.addressModeU = WGPUAddressMode_ClampToEdge;
+        sd.addressModeV = WGPUAddressMode_ClampToEdge;
+        sd.addressModeW = WGPUAddressMode_ClampToEdge;
+        sd.magFilter = WGPUFilterMode_Nearest;
+        sd.minFilter = WGPUFilterMode_Nearest;
+        sd.mipmapFilter = WGPUMipmapFilterMode_Nearest;
+        sd.lodMinClamp = 0.0f;
+        sd.lodMaxClamp = 32.0f;
+        sd.maxAnisotropy = 1;
+        sd.compare = WGPUCompareFunction_Undefined;
+        nonfilter_sampler_ = wgpuDeviceCreateSampler(device_, &sd);
+    }
+    if (!point_shadow_fallback_rt_) {
+        RenderTargetDesc d{};
+        d.width = 1; d.height = 1;
+        d.has_color = false;
+        d.has_depth = true;
+        d.cube_map = true;
+        point_shadow_fallback_rt_ = CreateRenderTarget(d);
+        point_shadow_fallback_tex_ = GetRenderTargetDepthTexture(point_shadow_fallback_rt_);
+        point_shadow_fallback_cleared_ = false;
+    }
+    if (point_shadow_fallback_cleared_ || !frame_encoder_ || cur_pass_) return;
+    const TextureEntry* fb = FindTexture(point_shadow_fallback_tex_);
+    if (!fb || !fb->texture) return;
+    // 逐面建 2D depth 视图并清深=1.0（cube 默认视图为 Cube，不能作深度附件）。
+    bool all_ok = true;
+    for (int face = 0; face < 6; ++face) {
+        WGPUTextureView fv = MakeFaceView(*fb, face);
+        if (!fv) { all_ok = false; break; }
+        WGPURenderPassDepthStencilAttachment ds{};
+        ds.view = fv;
+        ds.depthLoadOp = WGPULoadOp_Clear;
+        ds.depthStoreOp = WGPUStoreOp_Store;
+        ds.depthClearValue = 1.0f;           // 深度=1 → PointShadow 恒判无遮挡
+        ds.stencilLoadOp = WGPULoadOp_Undefined;
+        ds.stencilStoreOp = WGPUStoreOp_Undefined;
+        WGPURenderPassDescriptor pd{};
+        pd.colorAttachmentCount = 0;
+        pd.colorAttachments = nullptr;
+        pd.depthStencilAttachment = &ds;
+        WGPURenderPassEncoder p = wgpuCommandEncoderBeginRenderPass(frame_encoder_, &pd);
+        if (p) {
+            wgpuRenderPassEncoderEnd(p);
+            wgpuRenderPassEncoderRelease(p);
+        } else {
+            all_ok = false;
+        }
+        wgpuTextureViewRelease(fv);
+        if (!all_ok) break;
+    }
+    if (all_ok) point_shadow_fallback_cleared_ = true;
+}
+
 void WebGPURhiDevice::BeginFrame() {
     last_frame_stats_ = RenderStats{};
     if (!EnsureInitialized()) return;
@@ -2218,6 +2278,8 @@ void WebGPURhiDevice::BeginFrame() {
     ResetDrawState();
     // 5.1b：在任何前向 draw（采样 slot11 shadow atlas）之前，确保恒亮 Depth32 回退纹理就绪并已清深=1。
     EnsureShadowDepthFallback();
+    // Final-Feat-8：聚光灯用 2D 回退（复用 shadow_fallback_depth_tex_），点光源用 cube 回退。
+    EnsurePointShadowFallback();
 }
 
 void WebGPURhiDevice::EndFrame() {
@@ -3280,10 +3342,22 @@ struct PointLights {
   count : i32, p0 : i32, p1 : i32, p2 : i32,
   lights : array<PointLight, 64>,
 };
+// Final-Feat-8：聚光灯（std140 64B/项，与 ubo_types.h SpotLightEntry 同布局）。
+struct SpotLight {
+  color : vec3<f32>, intensity : f32,
+  position : vec3<f32>, radius : f32,
+  direction : vec3<f32>, inner_cone : f32,
+  outer_cone : f32, cast_shadow : i32, shadow_index : i32, pad : f32,
+};
+struct SpotLights {
+  count : i32, p0 : i32, p1 : i32, p2 : i32,
+  lights : array<SpotLight, 64>,
+};
 @group(1) @binding(0) var<uniform> per_frame : PerFrame;
 @group(1) @binding(1) var<uniform> per_scene : PerScene;
 @group(1) @binding(2) var<uniform> per_material : PerMaterial;
 @group(1) @binding(3) var<uniform> point_lights : PointLights;
+@group(1) @binding(7) var<uniform> spot_lights : SpotLights;
 @group(2) @binding(0) var albedo_tex : texture_2d<f32>;
 @group(2) @binding(1) var albedo_smp : sampler;
 // 5.1b：CSM shadow atlas（flat unit11 → group2 binding22）以 texture_depth_2d 采样（textureLoad 手动
@@ -3292,6 +3366,23 @@ struct PointLights {
 //   binding 的 sampleType 在所有 draw 上恒为 Depth、与此处声明一致（消除 BGL sampleType 冲突）。真实
 //   遮挡逻辑见下方 DirectionalShadow / SampleCascadeShadow（移植 forward_shaded.frag，离屏自检 T5-1 已验证）。
 @group(2) @binding(22) var shadow_atlas : texture_depth_2d;
+// Final-Feat-8：聚光灯 2D 阴影（flat slot12-15 → group2 binding24/26/28/30，texture_depth_2d，textureLoad
+//   手动 3×3 PCF，无需采样器）。点光源 cube 阴影（flat slot16-19 → binding32/34/36/38，texture_depth_cube
+//   + 非过滤采样器 binding33/35/37/39）。消费方 mesh_renderer 无 shadow map 时分别绑「白 RGBA8/白 cube」
+//   回退（Float），后端 CollectGroupBindings 把这些回退替换为恒亮 Depth32（2D / cube）回退纹理（深度=1→
+//   无遮挡），使各 binding 的 sampleType 在所有 draw 上恒为 Depth、与此处声明一致（消除 BGL sampleType 冲突）。
+@group(2) @binding(24) var spot_shadow_0 : texture_depth_2d;
+@group(2) @binding(26) var spot_shadow_1 : texture_depth_2d;
+@group(2) @binding(28) var spot_shadow_2 : texture_depth_2d;
+@group(2) @binding(30) var spot_shadow_3 : texture_depth_2d;
+@group(2) @binding(32) var point_shadow_0 : texture_depth_cube;
+@group(2) @binding(33) var point_shadow_smp_0 : sampler;
+@group(2) @binding(34) var point_shadow_1 : texture_depth_cube;
+@group(2) @binding(35) var point_shadow_smp_1 : sampler;
+@group(2) @binding(36) var point_shadow_2 : texture_depth_cube;
+@group(2) @binding(37) var point_shadow_smp_2 : sampler;
+@group(2) @binding(38) var point_shadow_3 : texture_depth_cube;
+@group(2) @binding(39) var point_shadow_smp_3 : sampler;
 
 fn DistributionGGX(N : vec3<f32>, H : vec3<f32>, roughness : f32) -> f32 {
   let a = roughness * roughness;
@@ -3345,6 +3436,58 @@ fn DirectionalShadow(worldPos : vec3<f32>, N : vec3<f32>, L : vec3<f32>) -> f32 
   let shadow = SampleCascadeShadow(idx, worldPos, bias);
   return clamp(shadow * per_scene.light_params.y, 0.0, 1.0);  // y = shadow_strength
 }
+// Final-Feat-8：聚光灯 2D 阴影（移植 forward_shaded.frag SpotShadow）。light-space 投影 → 手动 3×3 PCF
+//   深度比较，返 0（无遮挡）~1（全遮挡）×shadow_strength。slot12-15 由后端保证恒为 Depth32。
+fn SpotShadowDims(idx : i32) -> vec2<i32> {
+  if (idx == 0) { return vec2<i32>(textureDimensions(spot_shadow_0, 0)); }
+  if (idx == 1) { return vec2<i32>(textureDimensions(spot_shadow_1, 0)); }
+  if (idx == 2) { return vec2<i32>(textureDimensions(spot_shadow_2, 0)); }
+  return vec2<i32>(textureDimensions(spot_shadow_3, 0));
+}
+fn SpotShadowTexel(idx : i32, c : vec2<i32>) -> f32 {
+  if (idx == 0) { return textureLoad(spot_shadow_0, c, 0); }
+  if (idx == 1) { return textureLoad(spot_shadow_1, c, 0); }
+  if (idx == 2) { return textureLoad(spot_shadow_2, c, 0); }
+  return textureLoad(spot_shadow_3, c, 0);
+}
+fn SpotShadow(idx : i32, worldPos : vec3<f32>, N : vec3<f32>, L : vec3<f32>) -> f32 {
+  if (idx < 0 || idx >= 4) { return 0.0; }
+  let lp = per_scene.spot_light_space_matrices[idx] * vec4<f32>(worldPos, 1.0);
+  if (lp.w <= 1e-5) { return 0.0; }
+  var pc = lp.xyz / lp.w;
+  pc = pc * 0.5 + 0.5;
+  if (pc.z > 1.0) { return 0.0; }
+  if (pc.x < 0.0 || pc.x > 1.0 || pc.y < 0.0 || pc.y > 1.0) { return 0.0; }
+  let bias = max(0.003 * (1.0 - dot(N, L)), 0.0005);
+  let dims = SpotShadowDims(idx);
+  let base = vec2<i32>(pc.xy * vec2<f32>(dims));
+  var occ = 0.0;
+  for (var x = -1; x <= 1; x = x + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      let c = clamp(base + vec2<i32>(x, y), vec2<i32>(0, 0), dims - vec2<i32>(1, 1));
+      let d = SpotShadowTexel(idx, c);
+      occ = occ + select(0.0, 1.0, (pc.z - bias) > d);
+    }
+  }
+  return clamp(occ / 9.0 * per_scene.light_params.y, 0.0, 1.0);
+}
+// Final-Feat-8：点光源 cube 阴影（移植 forward_shaded.frag PointShadow）。cube 存归一化距离
+//   distance/radius；采样取回乘 radius 与当前片到灯距离比较。返 0（无遮挡）或 shadow_strength。
+fn PointShadowDepth(idx : i32, dir : vec3<f32>) -> f32 {
+  if (idx == 0) { return textureSampleLevel(point_shadow_0, point_shadow_smp_0, dir, 0); }
+  if (idx == 1) { return textureSampleLevel(point_shadow_1, point_shadow_smp_1, dir, 0); }
+  if (idx == 2) { return textureSampleLevel(point_shadow_2, point_shadow_smp_2, dir, 0); }
+  return textureSampleLevel(point_shadow_3, point_shadow_smp_3, dir, 0);
+}
+fn PointShadow(idx : i32, worldPos : vec3<f32>, lightPos : vec3<f32>, radius : f32) -> f32 {
+  if (idx < 0 || idx >= 4) { return 0.0; }
+  let toFrag = worldPos - lightPos;
+  let cur = length(toFrag);
+  if (cur >= radius) { return 0.0; }
+  let closest = PointShadowDepth(idx, toFrag) * radius;
+  let bias = 0.05;
+  return select(0.0, per_scene.light_params.y, (cur - bias) > closest);
+}
 fn PointLightsLo(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
                  surface_albedo : vec3<f32>, roughness : f32, metallic : f32, F0 : vec3<f32>) -> vec3<f32> {
   var sum = vec3<f32>(0.0);
@@ -3355,7 +3498,41 @@ fn PointLightsLo(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
     let dist = length(d);
     let L = d / max(dist, 1e-4);
     let atten = clamp(1.0 - (dist * dist) / (pl.radius * pl.radius + 1e-4), 0.0, 1.0);
-    let radiance = pl.color * pl.intensity * atten;
+    var psh = 0.0;
+    if (pl.cast_shadow != 0) { psh = PointShadow(pl.shadow_index, world_pos, pl.position, pl.radius); }
+    let radiance = pl.color * pl.intensity * atten * (1.0 - psh);
+    let H = normalize(V + L);
+    let NDF = DistributionGGX(N, H, roughness);
+    let G = GeometrySmith(N, V, L, roughness);
+    let F = FresnelSchlick(max(dot(H, V), 0.0), F0);
+    let spec = (NDF * G * F) / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+    let kD = (vec3<f32>(1.0) - F) * (1.0 - metallic);
+    sum = sum + (kD * surface_albedo / PI + spec) * radiance * max(dot(N, L), 0.0);
+  }
+  return sum;
+}
+// Final-Feat-8：聚光灯光照（移植 forward_shaded.frag）。距离衰减×内/外锥角平滑×(1-聚光阴影)。
+//   count=0 时不进循环（无贡献，与原输出一致）。
+fn SpotLightsLo(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
+                surface_albedo : vec3<f32>, roughness : f32, metallic : f32, F0 : vec3<f32>) -> vec3<f32> {
+  var sum = vec3<f32>(0.0);
+  let n = spot_lights.count;
+  for (var i = 0; i < n; i = i + 1) {
+    let sl = spot_lights.lights[i];
+    let d = sl.position - world_pos;
+    let dist = length(d);
+    let L = d / max(dist, 1e-4);
+    let atten0 = clamp(1.0 - (dist * dist) / (sl.radius * sl.radius + 1e-4), 0.0, 1.0);
+    let atten = atten0 * atten0;
+    let spotDir = normalize(-sl.direction);
+    let theta = dot(L, spotDir);
+    let innerCos = cos(radians(sl.inner_cone));
+    let outerCos = cos(radians(sl.outer_cone));
+    let cone = clamp((theta - outerCos) / max(innerCos - outerCos, 1e-4), 0.0, 1.0);
+    if (cone <= 0.0) { continue; }
+    var ssh = 0.0;
+    if (sl.cast_shadow != 0) { ssh = SpotShadow(sl.shadow_index, world_pos, N, L); }
+    let radiance = sl.color * sl.intensity * atten * cone * (1.0 - ssh);
     let H = normalize(V + L);
     let NDF = DistributionGGX(N, H, roughness);
     let G = GeometrySmith(N, V, L, roughness);
@@ -3476,6 +3653,7 @@ struct VsOut {
     }
     Lo = Lo * (1.0 - shadow);
     Lo = Lo + PointLightsLo(N, V, i.wpos, surface_albedo, roughness, metallic, F0);
+    Lo = Lo + SpotLightsLo(N, V, i.wpos, surface_albedo, roughness, metallic, F0);
     color = vec3<f32>(ambient) * surface_albedo * ao + Lo + per_material.emissive.xyz;
   }
   // 与 forward_shaded.frag 末尾一致：Reinhard tonemap + gamma（保证三后端 LDR 输出一致）。
@@ -3950,28 +4128,34 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
                                                      ? WGPUTextureSampleType_Depth
                                                      : WGPUTextureSampleType_Float;
                 TextureDim           use_dim  = t.dim;
-                // 5.1b：slot11（CSM shadow atlas → binding22，前向 WGSL 声明 texture_depth_2d）须恒以
-                //   Depth 采样。两种情形换用恒亮 Depth32 回退纹理：
-                //   (a) 消费方在无 shadow map 时绑「白 RGBA8」回退（Float）→ 统一 binding sampleType 为 Depth；
-                //   (b) 读写危险：当前 pass 把真 atlas 作可写附件（depth-only 阴影 atlas pass 仍复用 forward
-                //       PSO，逐 draw 绑 slot11=atlas），WebGPU 不允许同一同步作用域内既可写附件又被采样 → 用
-                //       只读回退纹理替代（阴影/prez 等 depth-only pass 本就不需要采样阴影，恒无遮挡安全）。
-                if (slot == 11u) {
+                // 5.1b / Final-Feat-8：阴影深度槽须恒以 Depth 采样。前向 WGSL 把
+                //   slot11=CSM atlas、slot12-15=聚光灯、slot16-19=点光源 分别声明为 texture_depth_2d /
+                //   texture_depth_cube。两种情形换用恒亮 Depth32 回退纹理（2D / cube）：
+                //   (a) 消费方在无 shadow map 时绑「白 RGBA8/白 cube」回退（Float）→ 统一 sampleType 为 Depth；
+                //   (b) 读写危险：当前 pass 把真深度图作可写附件（depth-only 阴影 pass 仍复用 forward PSO，
+                //       逐 draw 绑该槽），WebGPU 不允许同一同步作用域内既可写附件又被采样 → 换只读回退纹理。
+                //   点光 cube 深度还须配「非过滤」采样器：RT 自带 Filtering 采样器采样深度纹理会触发 WebGPU
+                //   校验错误（TextureSampleType::Depth 配 Filtering），故无论真假纹理都改用 nonfilter_sampler_。
+                const bool is_shadow_2d   = (slot == 11u) || (slot >= 12u && slot <= 15u);
+                const bool is_shadow_cube = (slot >= 16u && slot <= 19u);
+                if (is_shadow_2d || is_shadow_cube) {
                     const bool not_depth = (use_st != WGPUTextureSampleType_Depth);
                     const bool rw_hazard =
                         std::find(cur_pass_attachment_texs_.begin(),
                                   cur_pass_attachment_texs_.end(), t.handle)
                         != cur_pass_attachment_texs_.end();
                     if (not_depth || rw_hazard) {
-                        const TextureEntry* fb = shadow_fallback_depth_tex_
-                                                     ? FindTexture(shadow_fallback_depth_tex_) : nullptr;
+                        const unsigned int fbh = is_shadow_cube ? point_shadow_fallback_tex_
+                                                                : shadow_fallback_depth_tex_;
+                        const TextureEntry* fb = fbh ? FindTexture(fbh) : nullptr;
                         if (fb && fb->view) {
                             use_view = fb->view;
                             use_smp  = fb->sampler;
                             use_st   = WGPUTextureSampleType_Depth;
-                            use_dim  = TextureDim::Tex2D;
+                            use_dim  = is_shadow_cube ? TextureDim::TexCube : TextureDim::Tex2D;
                         }
                     }
+                    if (is_shadow_cube && nonfilter_sampler_) use_smp = nonfilter_sampler_;
                 }
                 BindingInfo tb;
                 tb.binding = slot * 2u; tb.kind = BindingInfo::Kind::Texture;
@@ -3984,6 +4168,7 @@ std::vector<WebGPURhiDevice::BindingInfo> WebGPURhiDevice::CollectGroupBindings(
                 sb.binding = slot * 2u + 1u; sb.kind = BindingInfo::Kind::Sampler;
                 sb.visibility = WGPUShaderStage_Fragment;
                 sb.sampler = use_smp;
+                sb.sampler_nonfiltering = is_shadow_cube;  // 深度 cube 阴影：BGL 端声明 NonFiltering
                 out.push_back(sb);
             }
             break;
@@ -4085,7 +4270,10 @@ const WebGPURhiDevice::PipelineCacheEntry* WebGPURhiDevice::GetOrCreateRenderPip
                     e.texture.multisampled = false;
                     break;
                 case BindingInfo::Kind::Sampler:
-                    e.sampler.type = WGPUSamplerBindingType_Filtering; break;
+                    // Final-Feat-8：深度纹理（点光 cube 阴影）须配非过滤采样器，否则 WebGPU 校验报
+                    //   「TextureSampleType::Depth 配 Filtering 采样器」。普通纹理仍用 Filtering。
+                    e.sampler.type = b.sampler_nonfiltering ? WGPUSamplerBindingType_NonFiltering
+                                                            : WGPUSamplerBindingType_Filtering; break;
                 case BindingInfo::Kind::StorageTexture:
                     // render 路径不产生 storage image 绑定；列此分支仅为穷尽枚举（避免 -Wswitch）。
                     e.storageTexture.access = WGPUStorageTextureAccess_WriteOnly;
@@ -4401,7 +4589,6 @@ void WebGPURhiDevice::CmdSetViewport(int x, int y, int width, int height) {
 // --- 设备级 Cmd*：B2 暂保持 no-op（留 B3）---
 
 void WebGPURhiDevice::CmdClearColor(const glm::vec4& color) { (void)color; }
-void WebGPURhiDevice::CmdSetGlobalMat4(const std::string& name, const glm::mat4& value) { (void)name; (void)value; }
 // B-3 CSM 可见激活：把 CSMShadowPass 渲出的 shadow atlas 深度纹理记入 global_render_state_，
 // 供 mesh_renderer DrawShaded 取 grs.shadow_map[0] 绑 slot11（前向采样真 atlas）。前向 pass 中
 // atlas 非附件且为 Depth32 → slot11 危险检测（~3959）放行真纹理；CSM atlas pass 自身复用前向 PSO
@@ -4409,8 +4596,15 @@ void WebGPURhiDevice::CmdSetGlobalMat4(const std::string& name, const glm::mat4&
 void WebGPURhiDevice::CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle) {
     SetGlobalShadowMap(index, texture_handle);
 }
-void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
-void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) { (void)index; (void)texture_handle; }
+// Final-Feat-8：聚光灯/点光源阴影图绑定（对齐 CmdBindGlobalShadowMap）。把 spot_shadow/point_shadow
+//   pass 渲出的深度纹理记入 global_render_state_，供 mesh_renderer DrawShaded 取 grs.spot_shadow_map[i]/
+//   grs.point_shadow_map[i] 绑 slot12-15 / slot16-19（前向 WGSL 采样真深度图）。
+void WebGPURhiDevice::CmdBindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) {
+    SetGlobalSpotShadowMap(index, texture_handle);
+}
+void WebGPURhiDevice::CmdBindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) {
+    SetGlobalPointShadowMap(index, texture_handle);
+}
 // B3b-2：真 indirect 绘制——按当前已绑管线/顶点/索引缓冲，从 indirect buffer（须含 Indirect
 // usage，由 CreateGpuBuffer(kIndirect) 授予）读取 [indexCount, instanceCount, firstIndex,
 // baseVertex, firstInstance] 发 DrawIndexedIndirect。instance_count=0（被剔）时硬件不绘制。

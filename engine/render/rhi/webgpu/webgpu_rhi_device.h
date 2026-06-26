@@ -184,13 +184,12 @@ public:
     // 录制直接落到本帧 frame_encoder_（BeginFrame 创建、EndFrame 提交），故 CommandBuffer
     // 端是「立即转发」而非「缓存重放」：Begin/End RenderPass 在 frame_encoder_ 上开关
     // WGPURenderPassEncoder，Bind*/PushConstants 累积当前绘制状态，Draw* 惰性组装 PSO 并发起。
-    // ClearColor/SetGlobalMat4/三类 ShadowMap/DispatchComputePass/DrawIndexedIndirect 在 B2
-    // 暂保持 no-op（留 B3：clear 经 RenderPassDesc.clear_* 表达，全局矩阵/阴影/compute/indirect 后续落地）。
+    // ClearColor/DispatchComputePass/DrawIndexedIndirect 在 B2
+    // 暂保持 no-op（留 B3：clear 经 RenderPassDesc.clear_* 表达，compute/indirect 后续落地）。
 
     void CmdBeginRenderPass(const RenderPassDesc& desc);
     void CmdEndRenderPass();
     void CmdClearColor(const glm::vec4& color);
-    void CmdSetGlobalMat4(const std::string& name, const glm::mat4& value);
     void CmdSetViewport(int x, int y, int width, int height);
 
     void CmdBindGlobalShadowMap(unsigned int index, unsigned int texture_handle);
@@ -456,6 +455,7 @@ private:
         WGPUTextureViewDimension view_dim = WGPUTextureViewDimension_2D;
         WGPUTextureSampleType sample_type = WGPUTextureSampleType_Float;
         WGPUTextureFormat tex_format = WGPUTextureFormat_RGBA8Unorm;  ///< storage texture 格式
+        bool sampler_nonfiltering = false;  ///< 该采样器须为 NonFiltering（深度纹理配非过滤采样器，如点光 cube 阴影）
         // BindGroup 端实际资源（BGL 端忽略）：
         WGPUBuffer buffer = nullptr; uint64_t buf_offset = 0; uint64_t buf_size = 0;
         WGPUSampler sampler = nullptr;
@@ -615,6 +615,13 @@ private:
     unsigned int shadow_fallback_depth_tex_ = 0;   ///< 其 Depth32 纹理句柄（slot11 回退）
     bool shadow_fallback_cleared_ = false;         ///< 是否已清深=1.0（一次性）
     void EnsureShadowDepthFallback();              ///< 懒建并一次性清深=1.0（须在无活动 pass 时调用）
+    // Final-Feat-8：点光源 cube 阴影 1×1 Depth32 回退（恒亮，距离=1→无遮挡）。聚光灯 2D 阴影复用上面的
+    //   shadow_fallback_depth_tex_（同为 Depth32 2D）。点光为 cube 维度，须单独建 6 面 Depth32 cube。
+    unsigned int point_shadow_fallback_rt_ = 0;        ///< 1×1×6 depth-only cube RT（懒建）
+    unsigned int point_shadow_fallback_tex_ = 0;       ///< 其 Depth32 cube 纹理句柄（slot16-19 回退）
+    bool point_shadow_fallback_cleared_ = false;       ///< 6 面是否已清深=1.0（一次性）
+    WGPUSampler nonfilter_sampler_ = nullptr;          ///< 非过滤采样器（深度 cube 阴影采样所需）
+    void EnsurePointShadowFallback();                  ///< 懒建 cube 回退并一次性清 6 面深=1.0（须在无活动 pass 时调用）
 
     // --- B2 录制内部助手 ---
     void ResetDrawState();

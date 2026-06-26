@@ -5,14 +5,12 @@
  * DX11、Vulkan、OpenGL 三端的 CommandBuffer 均继承此类。
  * 提取的共享逻辑：
  * - BindGlobal*ShadowMap()：阴影贴图绑定直接委托 RhiDevice 基类指针
- * - pending uniform 暂存与清理
  */
 
 #ifndef DSE_FORWARDING_COMMAND_BUFFER_H
 #define DSE_FORWARDING_COMMAND_BUFFER_H
 
 #include "engine/render/rhi/rhi_device.h"
-#include <unordered_map>
 
 namespace dse {
 namespace render {
@@ -20,10 +18,6 @@ namespace render {
 class ForwardingCommandBuffer : public CommandBuffer {
 public:
     // --- 共享实现（三端完全一致） ---
-
-    void SetGlobalMat4(const std::string& name, const glm::mat4& value) override {
-        pending_mat4_[name] = value;
-    }
 
     void BindGlobalShadowMap(unsigned int index, unsigned int texture_handle) override {
         if (base_device_) base_device_->SetGlobalShadowMap(index, texture_handle);
@@ -37,22 +31,10 @@ public:
         if (base_device_) base_device_->SetGlobalPointShadowMap(index, texture_handle);
     }
 
-    // --- pending uniform 访问器 ---
-
-    const std::unordered_map<std::string, glm::mat4>& pending_mat4() const { return pending_mat4_; }
-
-    void ClearPendingUniforms() {
-        pending_mat4_.clear();
-    }
-
-    void ResetBase() {
-        ClearPendingUniforms();
-    }
+    void ResetBase() {}
 
 protected:
     RhiDevice* base_device_ = nullptr;
-
-    std::unordered_map<std::string, glm::mat4> pending_mat4_;
 };
 
 } // namespace render

@@ -239,21 +239,6 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
-// 测试 打开GL命令缓冲区：设置全局Mat 4录制命令
-TEST(OpenGLCommandBufferTest, SetGlobalMat4RecordingCommand) {
-    OpenGLCommandBuffer cmd;
-    cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-}
-
-// 测试 打开GL命令缓冲区：Resetreset状态
-TEST(OpenGLCommandBufferTest, ResetresetState) {
-    OpenGLCommandBuffer cmd;
-    cmd.SetGlobalMat4("u_view", glm::mat4(2.0f));
-    cmd.Reset();
-    // After Reset, pending uniforms cleared
-    cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-}
-
 // ============================================================
 // 4. GLDrawExecutor 全局状态边界检查
 // ============================================================

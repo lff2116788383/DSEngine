@@ -258,19 +258,6 @@ TEST(VulkanCommandBufferTest, ResetresetState) {
     EXPECT_EQ(cmd.GetVkCommandBuffer(), VK_NULL_HANDLE);
 }
 
-// 测试 Vulkan命令缓冲区：Alluniform且清空
-TEST(VulkanCommandBufferTest, AlluniformAndClear) {
-    VulkanCommandBuffer cmd;
-
-    cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-
-    EXPECT_EQ(cmd.pending_mat4().size(), 1u);
-
-    cmd.ClearPendingUniforms();
-
-    EXPECT_TRUE(cmd.pending_mat4().empty());
-}
-
 // 测试 Vulkan命令缓冲区：无设备当开始结束渲染通道安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
     VulkanCommandBuffer cmd;

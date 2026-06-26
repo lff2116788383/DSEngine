@@ -236,26 +236,6 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenDeferShadowMapSafety) {
     cmd.BindGlobalPointShadowMap(0, 300);
 }
 
-// 测试 DX 11命令缓冲区：Alluniform且清空
-TEST(DX11CommandBufferTest, AlluniformAndClear) {
-    DX11CommandBuffer cmd;
-    cmd.SetGlobalMat4("u_view", glm::mat4(1.0f));
-
-    EXPECT_EQ(cmd.pending_mat4().size(), 1u);
-
-    cmd.ClearPendingUniforms();
-
-    EXPECT_TRUE(cmd.pending_mat4().empty());
-}
-
-// 测试 DX 11命令缓冲区：Resetresetuniform状态
-TEST(DX11CommandBufferTest, ResetresetuniformState) {
-    DX11CommandBuffer cmd;
-    cmd.SetGlobalMat4("test", glm::mat4(1.0f));
-    cmd.Reset();
-    EXPECT_TRUE(cmd.pending_mat4().empty());
-}
-
 // ============================================================
 // DX11DrawExecutor 全局状态边界检查
 // ============================================================
