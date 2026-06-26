@@ -1220,6 +1220,7 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
                                         const std::string& essl310,
                                         const std::string& essl300,
                                         const std::string& hlsl,
+                                        const std::string& glsl450_source,
                                         const std::vector<uint8_t>& dxbc = {}) {
     std::ostringstream ss;
     std::string id = SanitizeIdentifier(shader_name);
@@ -1245,6 +1246,12 @@ static std::string GenerateEmbedHeader(const std::string& shader_name,
     ss << "\n};\n";
     ss << "static const size_t k" << id << "_" << stage_suffix << "_spv_size = "
        << spirv.size() << ";\n\n";
+
+    // GLSL 450 verbatim source (Vulkan) — the canonical hand-authored src/*.comp
+    // text, embedded so the Vulkan backend compiles the exact single source
+    // (retains layout(push_constant), unlike the cross-compiled GL430 uniform-block form).
+    ss << "// Vulkan GLSL 450 (verbatim source of truth)\n";
+    EmitStringConstant(ss, "k" + id + "_" + stage_suffix + "_glsl450", glsl450_source);
 
     // GLSL 430 (OpenGL desktop) — split into chunks to avoid MSVC C2026
     ss << "// OpenGL GLSL 430\n";
@@ -1438,7 +1445,7 @@ int main(int argc, char* argv[]) {
             }
 #endif
 
-            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl430, essl310, essl300, hlsl, dxbc);
+            std::string header = GenerateEmbedHeader(shader_name, stage_suffix, spirv, glsl430, essl310, essl300, hlsl, source, dxbc);
             fs::path header_path = opts.output_dir / "embed" / (shader_name + "_" + stage_suffix + ".gen.h");
             WriteFile(header_path, header);
 
@@ -1553,7 +1560,8 @@ int main(int argc, char* argv[]) {
 #endif
                         std::string v_header = GenerateEmbedHeader(
                             variant_name, stage_suffix, v_spirv,
-                            v_glsl430, v_essl310, v_essl300, v_hlsl, v_dxbc);
+                            v_glsl430, v_essl310, v_essl300, v_hlsl,
+                            variant_preamble + source, v_dxbc);
                         fs::path v_hdr_path = opts.output_dir / "embed" /
                             (variant_name + "_" + stage_suffix + ".gen.h");
                         WriteFile(v_hdr_path, v_header);

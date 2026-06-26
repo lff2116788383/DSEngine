@@ -32,9 +32,15 @@ layout(std430, binding = 2) readonly buffer BoneBuf { mat4 bone_matrices[]; };
 layout(std430, binding = 3) readonly buffer MorphBuf { vec4 morph_deltas[]; };
 layout(std430, binding = 4) readonly buffer InstBuf { InstanceInfo instances[]; };
 
+// 16B-aligned push block: each scalar member explicitly padded to a 16-byte
+// slot so the layout matches the native staging convention (SetComputeUniformInt
+// accumulates at 16B-per-call offsets: total@0, instance@16) AND the hand-written
+// WGSL `@align(16)` struct. Keeps GL/VK/DX11/WebGPU in lockstep — see
+// gpu_skinning.cpp kSkinningComputeWGSL.
 layout(push_constant) uniform PC {
-    uint total_vertices;    // 所有实例的总顶点数
-    uint instance_count;    // 实例数
+    uint total_vertices;    // offset 0  : 所有实例的总顶点数
+    uint _pad0; uint _pad1; uint _pad2;
+    uint instance_count;    // offset 16 : 实例数
 } params;
 
 // 二分查找当前顶点所属的实例

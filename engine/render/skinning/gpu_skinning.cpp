@@ -5,189 +5,16 @@
 #include <cstring>
 #include <algorithm>
 
-// 尝试包含生成的 shader 数据（若已编译则可用）
-#if __has_include("engine/render/shaders/generated/embed/skinning_comp.gen.h")
+// 着色器单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450(Vulkan) 三种形态
+// 全部由 src/skinning.comp 经离线编译链（glslang + spirv-cross）自动生成、嵌入此
+// gen.h，消费方不再内联任何 GLSL/HLSL 字符串。WGSL 无离线 GLSL→WGSL 工具，集中手写
+// 单份保留在本文件（见 kSkinningComputeWGSL）。
 #include "engine/render/shaders/generated/embed/skinning_comp.gen.h"
-#define DSE_HAS_SKINNING_SHADER_GEN 1
-#else
-#define DSE_HAS_SKINNING_SHADER_GEN 0
-#endif
 
 namespace dse {
 namespace render {
 
-// P3: 统一 GLSL 源 — 使用 InstanceInfo SSBO 实现单次 Dispatch（P2）
-// Vulkan 使用 push_constant，GL 430 通过运行时字符串替换生成 uniform 版本
-static const char* kSkinningComputeVK = R"(
-#version 450
-layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-
-struct SrcVertex { vec4 pos_bw0; vec4 norm_bw1; vec4 tan_bw2; vec4 joints_bw3; };
-struct DstVertex { vec4 pos; vec4 normal; vec4 tangent; };
-struct InstanceInfo {
-    uint vertex_start;
-    uint vertex_count;
-    uint bone_offset;
-    uint morph_target_count;
-    vec4 morph_weights;
-    uint morph_delta_offset;
-    uint _pad0; uint _pad1; uint _pad2;
-};
-
-layout(std430, binding = 0) readonly buffer SrcBuf { SrcVertex src_vertices[]; };
-layout(std430, binding = 1) writeonly buffer DstBuf { DstVertex dst_vertices[]; };
-layout(std430, binding = 2) readonly buffer BoneBuf { mat4 bone_matrices[]; };
-layout(std430, binding = 3) readonly buffer MorphBuf { vec4 morph_deltas[]; };
-layout(std430, binding = 4) readonly buffer InstBuf { InstanceInfo instances[]; };
-
-layout(push_constant) uniform PC { uint total_vertices; uint instance_count; } params;
-
-uint findInstance(uint gid) {
-    uint lo = 0u, hi = params.instance_count;
-    while (lo < hi) {
-        uint mid = (lo + hi) / 2u;
-        if (instances[mid].vertex_start + instances[mid].vertex_count <= gid) lo = mid + 1u;
-        else hi = mid;
-    }
-    return lo;
-}
-
-void main() {
-    uint gid = gl_GlobalInvocationID.x;
-    if (gid >= params.total_vertices) return;
-
-    uint inst_id = findInstance(gid);
-    if (inst_id >= params.instance_count) return;
-    InstanceInfo inst = instances[inst_id];
-    uint local_vid = gid - inst.vertex_start;
-
-    SrcVertex src = src_vertices[gid];
-    vec3 pos = src.pos_bw0.xyz;
-    vec3 normal = src.norm_bw1.xyz;
-    vec3 tangent = src.tan_bw2.xyz;
-
-    if (inst.morph_target_count > 0u) {
-        float w[4] = float[4](inst.morph_weights.x, inst.morph_weights.y,
-                              inst.morph_weights.z, inst.morph_weights.w);
-        uint mbase = inst.morph_delta_offset;
-        for (uint m = 0u; m < inst.morph_target_count && m < 4u; ++m) {
-            if (abs(w[m]) > 0.001) {
-                pos += morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
-            }
-        }
-    }
-
-    float bw0 = src.pos_bw0.w, bw1 = src.norm_bw1.w, bw2 = src.tan_bw2.w;
-    float bw3 = 1.0 - bw0 - bw1 - bw2;
-    int bi0 = int(src.joints_bw3.x), bi1 = int(src.joints_bw3.y);
-    int bi2 = int(src.joints_bw3.z), bi3 = int(src.joints_bw3.w);
-    uint bb = inst.bone_offset;
-
-    mat4 sm = bone_matrices[bb + bi0] * bw0 + bone_matrices[bb + bi1] * bw1
-            + bone_matrices[bb + bi2] * bw2 + bone_matrices[bb + bi3] * bw3;
-
-    dst_vertices[gid].pos     = vec4((sm * vec4(pos, 1.0)).xyz, 1.0);
-    mat3 nm = mat3(sm);
-    dst_vertices[gid].normal  = vec4(normalize(nm * normal), 0.0);
-    dst_vertices[gid].tangent = vec4(normalize(nm * tangent), 0.0);
-}
-)";
-
-// P3: 从 VK 源生成 GL 430 版本（替换 push_constant → uniform）
-static std::string GenerateGL430Source() {
-    std::string src = kSkinningComputeVK;
-    // #version
-    { auto p = src.find("#version 450"); if (p != std::string::npos) src.replace(p, 12, "#version 430"); }
-    // push_constant block → uniform (用 int 而非 uint，因为 glUniform1i 不适用于 uint 类型)
-    {
-        auto p = src.find("layout(push_constant)");
-        if (p != std::string::npos) {
-            auto end = src.find("} params;", p);
-            if (end != std::string::npos) {
-                src.replace(p, end + 9 - p,
-                    "uniform int u_total_vertices;\nuniform int u_instance_count;");
-            }
-        }
-    }
-    // params.xxx → u_xxx
-    { size_t p = 0; while ((p = src.find("params.total_vertices", p)) != std::string::npos) src.replace(p, 21, "u_total_vertices"); }
-    { size_t p = 0; while ((p = src.find("params.instance_count", p)) != std::string::npos) src.replace(p, 21, "u_instance_count"); }
-    return src;
-}
-
-// HLSL CS 5.0 — P2: 与 GLSL 逻辑一致的单次 Dispatch 版本
-static const char* kSkinningComputeHLSL = R"(
-struct SrcVertex { float4 pos_bw0; float4 norm_bw1; float4 tan_bw2; float4 joints_bw3; };
-struct DstVertex { float4 pos; float4 normal; float4 tangent; };
-struct InstanceInfo { uint vertex_start; uint vertex_count; uint bone_offset; uint morph_target_count; float4 morph_weights; uint morph_delta_offset; uint _pad0; uint _pad1; uint _pad2; };
-
-ByteAddressBuffer src_vertices : register(t16);
-RWByteAddressBuffer dst_vertices : register(u1);
-ByteAddressBuffer bone_matrices : register(t18);
-ByteAddressBuffer morph_deltas : register(t19);
-StructuredBuffer<InstanceInfo> instances : register(t20);
-
-cbuffer SkinningParams : register(b0) { uint u_total_vertices; uint u_instance_count; };
-
-float4x4 LoadBoneMatrix(uint idx) {
-    uint b = idx * 64;
-    return float4x4(asfloat(bone_matrices.Load4(b)), asfloat(bone_matrices.Load4(b+16)),
-                    asfloat(bone_matrices.Load4(b+32)), asfloat(bone_matrices.Load4(b+48)));
-}
-SrcVertex LoadSrc(uint idx) {
-    uint b = idx * 64;
-    SrcVertex v; v.pos_bw0 = asfloat(src_vertices.Load4(b));
-    v.norm_bw1 = asfloat(src_vertices.Load4(b+16));
-    v.tan_bw2 = asfloat(src_vertices.Load4(b+32));
-    v.joints_bw3 = asfloat(src_vertices.Load4(b+48)); return v;
-}
-void StoreDst(uint idx, DstVertex v) {
-    uint b = idx * 48;
-    dst_vertices.Store4(b, asuint(v.pos));
-    dst_vertices.Store4(b+16, asuint(v.normal));
-    dst_vertices.Store4(b+32, asuint(v.tangent));
-}
-
-uint findInstance(uint gid) {
-    uint lo = 0, hi = u_instance_count;
-    while (lo < hi) { uint mid = (lo+hi)/2;
-        if (instances[mid].vertex_start + instances[mid].vertex_count <= gid) lo = mid+1; else hi = mid;
-    } return lo;
-}
-
-[numthreads(64, 1, 1)]
-void main(uint3 dtid : SV_DispatchThreadID) {
-    uint gid = dtid.x;
-    if (gid >= u_total_vertices) return;
-    uint inst_id = findInstance(gid);
-    if (inst_id >= u_instance_count) return;
-    InstanceInfo inst = instances[inst_id];
-    uint local_vid = gid - inst.vertex_start;
-
-    SrcVertex src = LoadSrc(gid);
-    float3 pos = src.pos_bw0.xyz, nrm = src.norm_bw1.xyz, tan_ = src.tan_bw2.xyz;
-
-    if (inst.morph_target_count > 0) {
-        float w[4] = {inst.morph_weights.x, inst.morph_weights.y, inst.morph_weights.z, inst.morph_weights.w};
-        uint mbase = inst.morph_delta_offset;
-        for (uint m = 0; m < inst.morph_target_count && m < 4; ++m) {
-            if (abs(w[m]) > 0.001) { pos += asfloat(morph_deltas.Load4((mbase + m*inst.vertex_count+local_vid)*16)).xyz * w[m]; }
-        }
-    }
-
-    float bw0 = src.pos_bw0.w, bw1 = src.norm_bw1.w, bw2 = src.tan_bw2.w, bw3 = 1.0-bw0-bw1-bw2;
-    uint bb = inst.bone_offset;
-    float4x4 sm = LoadBoneMatrix(bb+(int)src.joints_bw3.x)*bw0 + LoadBoneMatrix(bb+(int)src.joints_bw3.y)*bw1
-                + LoadBoneMatrix(bb+(int)src.joints_bw3.z)*bw2 + LoadBoneMatrix(bb+(int)src.joints_bw3.w)*bw3;
-
-    DstVertex d;
-    d.pos = float4(mul(float4(pos,1.0), sm).xyz, 1.0);
-    float3x3 nm_ = (float3x3)sm;
-    d.normal = float4(normalize(mul(nrm, nm_)), 0.0);
-    d.tangent = float4(normalize(mul(tan_, nm_)), 0.0);
-    StoreDst(gid, d);
-}
-)";
+using namespace generated_shaders;
 
 // WebGPU 手译 WGSL（无离线 GLSL→WGSL 工具）：与上方 VK GLSL 450 / B3b-3 蒙皮离屏自检
 //   （webgpu_rhi_device.cpp::kSkinningWGSL）算法逐句一致——单次 Dispatch、InstanceInfo 二分定位、
@@ -278,17 +105,18 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
         return false;
     }
 
-    // P3: 从统一源生成 GL 430 版本
-    static std::string gl_src = GenerateGL430Source();
-    // push_constant_bytes: 2 uint = 8 bytes
+    // 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 skinning_comp.gen.h（src/skinning.comp
+    // 自动交叉编译）。push 块在 src 中已显式 16B 对齐（total@0、instance@16），DsePushCS/cbuffer
+    // 偏移与原生 SetComputeUniformInt 的 16B-per-call staging 一致；push_constant_bytes 取 32
+    // （= WGSL std140 结构尺寸），VK 据此推送足量覆盖 instance@16（range 恒 ≥160B，放大安全）。
     skinning_shader_ = rhi_->CreateComputeShaderEx(
-        gl_src,                     // GL: uniform 版本（自动生成）
-        kSkinningComputeVK,         // VK: push_constant 版本
-        kSkinningComputeHLSL,       // DX11: cbuffer 版本
+        kskinning_comp_glsl430,     // GL: 交叉编译 GL430（DsePushCS UBO）
+        kskinning_comp_glsl450,     // VK: 逐字 GLSL450 源（保留 push_constant）
+        kskinning_comp_hlsl,        // DX11: 交叉编译 HLSL（cbuffer PC）
         5,   // ssbo_count: src, dst, bones, morph, instances
         0,   // storage_image_count
         0,   // sampler_count
-        8,   // push_constant_bytes (2 × uint)
+        32,  // push_constant_bytes (16B-aligned: total@0, instance@16)
         kSkinningComputeWGSL        // WebGPU: 手译 WGSL 源（命名 uniform group1/b8）
     );
 
