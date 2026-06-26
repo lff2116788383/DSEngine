@@ -8,41 +8,6 @@
 namespace dse {
 namespace render {
 
-// Vulkan 需要原始 GLSL 450 源（保留 layout(push_constant)），
-// 而 gen.h 中的 GL430 交叉编译版本已将 push_constant 转为 uniform block，
-// 导致 CPU push constant 写入无法到达 shader。
-static const char* kMorphTargetCompVulkan = R"(
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-layout(local_size_x = 256) in;
-struct BaseVertex { vec4 position; vec4 normal; vec4 tangent; };
-layout(std430, binding = 0) readonly buffer BaseVertices { BaseVertex base_vertices[]; };
-struct MorphDelta { vec4 delta_pos; vec4 delta_normal; };
-layout(std430, binding = 1) readonly buffer MorphDeltas { MorphDelta morph_deltas[]; };
-layout(std430, binding = 2) readonly buffer MorphWeights { float morph_weights[]; };
-struct DeformedVertex { vec4 position; vec4 normal; vec4 tangent; };
-layout(std430, binding = 3) writeonly buffer DeformedVertices { DeformedVertex deformed_vertices[]; };
-layout(push_constant) uniform MorphParams { int u_vertex_count; int u_target_count; };
-void main() {
-    uint vid = gl_GlobalInvocationID.x;
-    if (vid >= uint(u_vertex_count)) return;
-    vec3 pos = base_vertices[vid].position.xyz;
-    vec3 nrm = base_vertices[vid].normal.xyz;
-    vec4 tan = base_vertices[vid].tangent;
-    for (int t = 0; t < u_target_count; ++t) {
-        float w = morph_weights[t];
-        if (abs(w) < 0.0001) continue;
-        uint delta_idx = uint(t) * uint(u_vertex_count) + vid;
-        pos += morph_deltas[delta_idx].delta_pos.xyz * w;
-        nrm += morph_deltas[delta_idx].delta_normal.xyz * w;
-    }
-    nrm = normalize(nrm);
-    deformed_vertices[vid].position = vec4(pos, 1.0);
-    deformed_vertices[vid].normal = vec4(nrm, 0.0);
-    deformed_vertices[vid].tangent = tan;
-}
-)";
-
 // WebGPU 手译 WGSL（无离线 GLSL→WGSL 工具）：与上方 GLSL 450 逐句对应。命名 uniform 块经
 // group1 保留 binding；成员按 SetComputeUniformInt 调用序 16B 对齐（u_vertex_count@0、
 // u_target_count@16），与 WebGPU RHI 命名 uniform 定位方案一致。SSBO group3 b0..3。
@@ -91,7 +56,7 @@ bool MorphTargetSystem::Init(RhiDevice* device) {
     using namespace generated_shaders;
     compute_program_ = device_->CreateComputeShaderEx(
         kmorph_target_comp_glsl430,   // GL 430 (push_constant → uniform block _20)
-        kMorphTargetCompVulkan,       // Vulkan GLSL 450 (保留 push_constant)
+        kmorph_target_comp_glsl450,   // Vulkan GLSL 450 (保留 push_constant，离线生成单源)
         kmorph_target_comp_hlsl,      // DX11 HLSL
         4,   // ssbo_count: base, deltas, weights, output
         0,   // storage_image_count

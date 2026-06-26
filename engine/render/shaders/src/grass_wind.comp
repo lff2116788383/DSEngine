@@ -1,0 +1,88 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，嵌入
+// grass_wind_comp.gen.h；WGSL 手写单份保留在消费方（grass_system.cpp）。
+//
+// @DX11_SSBO_SPLIT：DX11 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}：
+//   instances(读)→t16、matrices(写)→u1（匹配 BindGpuBuffer(input,0,false)/BindGpuBuffer(output,1,true)）。
+//   无 sampled/storage image，故不需要 @COMPUTE_RESOURCE_REMAP。
+//
+// 资源（CreateComputeShaderEx: ssbo=2, img=0, smp=0, push=96）：
+//   binding 0 = SSBO InputBuffer  (readonly,   GL ssbo0 / HLSL SRV t16)
+//   binding 1 = SSBO OutputBuffer (read_write, GL ssbo1 / HLSL UAV u1)
+//
+// 风场逐句镜像原 inline GL/VK/HLSL 与 CPU BuildWindMatrix（h*fade 折叠 hf、列主序装配）；语义零改动。
+
+struct GrassInstance {
+    vec4 pos_yaw;       // xyz = world pos, w = yaw
+    vec4 wh_phase_fade; // x = width, y = height, z = wind_phase, w = fade
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer InputBuffer {
+    GrassInstance instances[];
+};
+
+layout(set = 0, binding = 1, std430) buffer OutputBuffer {
+    mat4 matrices[];
+};
+
+// 16B 对齐 push 块：消费方调用序 SetComputeUniformVec2f/Float×4/Int →
+//   wind_dir@0、speed@16、strength@32、turbulence@48、time@64、instance_count@80
+//   （每次 SetComputeUniform* 对齐到 16B 边界，见 *RhiDevice::GetOrCreateUniformOffset）。
+layout(push_constant) uniform PC {
+    vec2  u_wind_dir;        // offset 0  (8B)
+    float _pad0; float _pad1;
+    float u_wind_speed;      // offset 16
+    float _pad2; float _pad3; float _pad4;
+    float u_wind_strength;   // offset 32
+    float _pad5; float _pad6; float _pad7;
+    float u_wind_turbulence; // offset 48
+    float _pad8; float _pad9; float _pad10;
+    float u_time;            // offset 64
+    float _pad11; float _pad12; float _pad13;
+    int   u_instance_count;  // offset 80
+    int   _pad14; int _pad15; int _pad16;
+} pc; // 96 B
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_instance_count) return;
+
+    GrassInstance inst = instances[idx];
+    vec3 pos = inst.pos_yaw.xyz;
+    float yaw = inst.pos_yaw.w;
+    float w = inst.wh_phase_fade.x;
+    float h = inst.wh_phase_fade.y;
+    float wind_phase = inst.wh_phase_fade.z;
+    float fade = inst.wh_phase_fade.w;
+
+    float phase = wind_phase + pc.u_time * pc.u_wind_speed;
+    float bend = sin(phase) * pc.u_wind_strength;
+    float turb = sin(phase * 3.7 + wind_phase * 2.3) * pc.u_wind_turbulence;
+    float total_bend = clamp(bend + turb, -0.436, 0.436);
+
+    float rx = -total_bend * pc.u_wind_dir.y;
+    float rz =  total_bend * pc.u_wind_dir.x;
+
+    float cx = cos(rx), sx = sin(rx);
+    float cz = cos(rz), sz = sin(rz);
+    float cy = cos(yaw), sy = sin(yaw);
+
+    float a00 = cz * cy;   float a01 = -sz;  float a02 = cz * sy;
+    float a10 = sz * cy;   float a11 = cz;   float a12 = sz * sy;
+    float a20 = -sy;       float a21 = 0.0;  float a22 = cy;
+
+    float r00 = a00;                     float r01 = a01;                    float r02 = a02;
+    float r10 = cx * a10 - sx * a20;     float r11 = cx * a11 - sx * a21;   float r12 = cx * a12 - sx * a22;
+    float r20 = sx * a10 + cx * a20;     float r21 = sx * a11 + cx * a21;   float r22 = sx * a12 + cx * a22;
+
+    float hf = h * fade;
+    mat4 m;
+    m[0] = vec4(r00 * w, r10 * w, r20 * w, 0.0);
+    m[1] = vec4(r01 * hf, r11 * hf, r21 * hf, 0.0);
+    m[2] = vec4(r02 * w, r12 * w, r22 * w, 0.0);
+    m[3] = vec4(pos, 1.0);
+
+    matrices[idx] = m;
+}
