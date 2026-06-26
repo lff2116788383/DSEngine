@@ -373,6 +373,27 @@ jobs:
       - name: Visual regression — WebGPU (Dawn + SwiftShader Vulkan)
         run: node tests/web/visual_regression.mjs --backend webgpu --name web3d_wgpu
 
+      # B6: WebGPU self-test harness. The single-scene golden regression above does
+      # NOT cover the web-only hot paths (compute async readback, mega-VAO, GPU-driven
+      # indirect, CSM / point-light cube shadow occlusion, …). The harness — gated by
+      # -DDSE_WEBGPU_SELFTEST=ON, off in shipping builds — records a battery of isolated
+      # offscreen self-tests on first idle frame and logs PASS/FAIL per test. This
+      # diagnostic build reuses the host shader compiler + embed headers already
+      # generated above; it overwrites bin/index.* (the regression already ran), then
+      # the runner boots it under Dawn + SwiftShader and fails CI on any FAIL / missing
+      # T5-6 point-light cube true-shadow occlusion result.
+      - name: Configure (emcmake) + build self-test harness (DSE_WEBGPU_SELFTEST=ON)
+        run: |
+          emcmake cmake -S . -B build_web_selftest -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DDSE_WEBGPU_SELFTEST=ON \
+            -DDSE_HOST_SHADER_COMPILER="$PWD/bin/dse_shader_compiler"
+          cmake --build build_web_selftest --target dse_web_host -j "$(nproc)"
+
+      - name: Run WebGPU self-test harness (Dawn + SwiftShader Vulkan)
+        run: node tests/web/selftest_harness.mjs --frames 241
+
       - name: Upload visual-regression artifacts (actual/diff PNGs)
         if: always()
         uses: actions/upload-artifact@v4

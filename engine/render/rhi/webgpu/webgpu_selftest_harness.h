@@ -65,6 +65,7 @@ private:
     bool t53_recorded_ = false;
     bool t54_recorded_ = false;
     bool t55_recorded_ = false;
+    bool t56_recorded_ = false;
 
     // --- B2 bring-up 自检资源（验证整条录制链路；引擎 WGSL 内容就绪后自动不再触发）---
     bool selftest_init_ = false;
@@ -444,6 +445,27 @@ private:
     unsigned int t55_quad_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
     unsigned int t55_quad_ibo_    = 0;       ///< 全屏 quad 索引缓冲（6 索引，UInt32）
     WGPUBuffer   t55_rb_pixels_   = nullptr; ///< color RT 像素回读缓冲（MapRead|CopyDst）
+
+    // --- Task 5 Subtask 6 离屏自检（点光源 cube 真阴影 occlusion：①逐面阴影深度趟把中心遮挡 quad
+    //   按归一化距离 distance/radius 写入 64×64×6 Depth32 cube（仅 +Z 面渲遮挡物、余面清 1.0=无遮挡）；
+    //   ②前向接收趟把该 cube 经 slot16（→group2 binding32 texture_depth_cube + binding33 非过滤采样器，
+    //   即真前向绑定路径）以 textureSampleLevel 采样比较（移植 forward WGSL PointShadow）渲到 64×64 RT →
+    //   copy 回读校验 中心方向受遮挡为暗、四角方向（偏离遮挡物）受光为亮。证明「点光逐面 cube 深度趟 →
+    //   前向 texture_depth_cube 采样」真遮挡链路（非 1×1×6 恒亮回退），离屏隔离、不翻能力位）---
+    bool t56_pointshadow_selftest_done_ = false;
+    bool RecordPointShadowSelfTest();          ///< 录制 逐面 cube 深度趟 + 前向 cube 采样趟 + copy 颜色→回读缓冲
+    void KickPointShadowSelfTestReadback();    ///< 提交后发起异步 map 回读校验
+    unsigned int t56_cube_rt_      = 0;        ///< 点光 cube 阴影 RT（64×64×6，含 Depth32 cube 深度附件）
+    unsigned int t56_color_rt_     = 0;        ///< 离屏 color RT（RGBA16Float + CopySrc）
+    unsigned int t56_occ_program_  = 0;        ///< 遮挡 quad 程序（frag_depth=归一化距离，pos.xy@loc0 + nd@loc1）
+    unsigned int t56_occ_pso_      = 0;        ///< 遮挡 PSO（depth test/write on、cull none）
+    unsigned int t56_recv_program_ = 0;        ///< 前向接收程序（texture_depth_cube 采样，pos.xy@loc0）
+    unsigned int t56_recv_pso_     = 0;        ///< 前向 PSO（无深度/无剔除/blend off）
+    unsigned int t56_occ_vbo_      = 0;        ///< 遮挡 quad 顶点缓冲（pos.xy + nd，stride 12）
+    unsigned int t56_occ_ibo_      = 0;        ///< 遮挡 quad 索引缓冲（6 索引，UInt32）
+    unsigned int t56_recv_vbo_     = 0;        ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
+    unsigned int t56_recv_ibo_     = 0;        ///< 全屏 quad 索引缓冲（6 索引，UInt32）
+    WGPUBuffer   t56_rb_pixels_    = nullptr;  ///< color RT 像素回读缓冲（MapRead|CopyDst）
 };
 
 } // namespace render

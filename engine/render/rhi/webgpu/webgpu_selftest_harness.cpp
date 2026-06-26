@@ -1403,6 +1403,58 @@ void OnT52PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
     delete ctx;
 }
 
+// --- Task 5 Subtask 6（T5-6）：点光源 cube 真阴影 occlusion 离屏自检常量 / 上下文 / 回读回调 ---
+// 验证 WebGPU 点光源「逐面 cube 深度趟 → 前向 texture_depth_cube 采样」真遮挡链路（非 1×1×6 恒亮回退）：
+//   ①逐面阴影深度趟：每面 BeginRenderPass(cube_face) 清深=1.0；仅 +Z 面(face 4)把中心遮挡 quad 按归一化
+//     距离 distance/radius（radius=4）写入 frag_depth → 该面中心 NDC[-0.4,0.4]² 存遮挡深度、余区/余面=1.0(无遮挡)。
+//   ②前向接收趟：把该 cube 深度纹理经 slot16（→group2 binding32 texture_depth_cube + binding33 非过滤采样器，
+//     即真前向绑定路径）以 textureSampleLevel 采样比较（移植 forward WGSL PointShadow：closest=sample·radius，
+//     (cur-bias)>closest 判遮挡）→ 全屏 quad 按 ndc 构造方向 normalize(ndc·0.6,1)（z 主导恒采 +Z 面）→
+//     中心方向(0,0,1)落遮挡区为暗、四角方向落 cleared 区为亮 → 渲到 64×64 RGBA16Float RT。
+//   ③copy 回读校验 中心<0.3（受遮挡暗）、四角>0.7（受光亮）。离屏隔离、不翻能力位、不碰 demo backbuffer/golden。
+constexpr uint32_t kT56CubeDim    = 64;                       ///< cube 各面边长（Depth32）
+constexpr uint32_t kT56RtSize     = 64;                       ///< 离屏 color RT 边长
+constexpr uint32_t kT56RtRowBytes = kT56RtSize * 8u;          ///< RGBA16Float 8B/texel（512B 满足 256 对齐）
+constexpr uint32_t kT56RtBytes    = kT56RtRowBytes * kT56RtSize;
+
+struct PointShadowSelfTestCtx {
+    WGPUBuffer rb_pixels = nullptr;
+};
+
+void OnT56PixelsMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
+    auto* ctx = static_cast<PointShadowSelfTestCtx*>(userdata);
+    bool ok = false;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        const uint8_t* base = static_cast<const uint8_t*>(
+            wgpuBufferGetConstMappedRange(ctx->rb_pixels, 0, kT56RtBytes));
+        if (base) {
+            auto rd = [&](uint32_t x, uint32_t y) -> float {
+                const uint16_t* p = reinterpret_cast<const uint16_t*>(base + y * kT56RtRowBytes + x * 8u);
+                return BlHalfToFloat(p[0]);  // R 通道（灰度 ramp）
+            };
+            const float center = rd(32, 32);          // 中心方向(+Z)：落遮挡区 → 暗
+            const float corner = (rd(4, 4) + rd(59, 4) + rd(4, 59) + rd(59, 59)) * 0.25f;  // 四角方向：落 cleared 区 → 亮
+            ok = (center < 0.3f) && (corner > 0.7f);
+            if (!ok) {
+                DEBUG_LOG_ERROR("WebGPU[T5-6] 点光 cube 阴影自检像素：center={} corner_avg={}", center, corner);
+            }
+        }
+        wgpuBufferUnmap(ctx->rb_pixels);
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-6] 点光 cube 阴影自检：像素回读映射失败 status={}", static_cast<int>(status));
+    }
+    if (ok) {
+        DEBUG_LOG_INFO("WebGPU[T5-6] 点光 cube 阴影自检 PASS：逐面 Depth32 cube（仅 +Z 面写遮挡物归一化距离、余面清 1.0）"
+                       "经 slot16→texture_depth_cube + 非过滤采样器 textureSampleLevel 采样比较正确——中心方向受遮挡为暗、"
+                       "四角方向受光为亮（证明点光逐面 cube 深度→前向 cube 采样真遮挡链路，逻辑同 forward WGSL PointShadow，"
+                       "非 1×1×6 恒亮回退）");
+    } else {
+        DEBUG_LOG_ERROR("WebGPU[T5-6] 点光 cube 阴影自检 FAIL");
+    }
+    if (ctx->rb_pixels) wgpuBufferRelease(ctx->rb_pixels);
+    delete ctx;
+}
+
 // ============================================================================
 // Task 5 Subtask 3/4/5 离屏自检共享 C++ 复算数学（与各自 WGSL 同公式，回调内复算期望值）。
 // ============================================================================
@@ -4429,6 +4481,196 @@ void WebGpuSelfTestHarness::KickCSMShadowSelfTestReadback() {
     wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT51RtBytes, OnT51PixelsMapped, ctx);
 }
 
+// Task 5 Subtask 6（T5-6）：点光源 cube 真阴影 occlusion 自检。①逐面阴影深度趟把中心遮挡 quad 按归一化
+// 距离 distance/radius 写入 64×64×6 Depth32 cube（仅 +Z 面 face 4 渲遮挡物、余面清深=1.0=无遮挡）；②前向
+// 接收趟把该 cube 深度纹理经 slot16（→group2 binding32 texture_depth_cube + binding33 非过滤采样器，即引擎
+// 真前向点光阴影绑定路径）以 textureSampleLevel 采样比较（移植 forward WGSL PointShadow）→ 全屏 quad 按 ndc
+// 构造方向 normalize(ndc·0.6,1)（z 主导恒采 +Z 面）→ 中心方向落遮挡区为暗、四角方向落 cleared 区为亮 → 渲到
+// 64×64 RGBA16Float RT → copy 回读校验。证明点光「逐面 cube 深度趟 → 前向 cube 采样」真遮挡链路（非恒亮回退）。
+bool WebGpuSelfTestHarness::RecordPointShadowSelfTest() {
+    if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
+
+    // 点光 cube 阴影 RT（颜色 RGBA16Float cube 占位 + Depth32 cube 深度附件，逐面可附着/可作 texture_depth_cube 采样）。
+    if (!t56_cube_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT56CubeDim);
+        d.height = static_cast<int>(kT56CubeDim);
+        d.has_color = true;
+        d.has_depth = true;
+        d.cube_map = true;
+        t56_cube_rt_ = dev_->CreateRenderTarget(d);
+    }
+    // 离屏 color RT（RGBA16Float + CopySrc）。
+    if (!t56_color_rt_) {
+        RenderTargetDesc d;
+        d.width = static_cast<int>(kT56RtSize);
+        d.height = static_cast<int>(kT56RtSize);
+        d.has_color = true;
+        d.has_depth = false;
+        t56_color_rt_ = dev_->CreateRenderTarget(d);
+    }
+    // 遮挡程序（frag_depth 写归一化距离 distance/radius，pos.xy@loc0 + nd@loc1）+ PSO（depth test/write on）。
+    if (!t56_occ_program_) {
+        static const char* kOccWGSL = R"WGSL(// dse-wgsl
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) nd : f32, };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) nd : f32) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.nd = nd; return o;
+}
+struct FsOut { @location(0) color : vec4<f32>, @builtin(frag_depth) depth : f32, };
+@fragment fn fs_main(i : VsOut) -> FsOut {
+  var o : FsOut; o.color = vec4<f32>(0.0, 0.0, 0.0, 1.0); o.depth = i.nd; return o;
+}
+)WGSL";
+        t56_occ_program_ = dev_->CreateShaderProgram(kOccWGSL, "");
+    }
+    if (!t56_occ_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = true;
+        d.depth_write_enabled = true;
+        d.depth_func = CompareFunc::Less;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t56_occ_pso_ = dev_->CreatePipelineState(d);
+    }
+    // 前向接收程序（slot16→group2 binding32 texture_depth_cube + binding33 采样器，移植 forward PointShadow）。
+    if (!t56_recv_program_) {
+        static const char* kRecvWGSL = R"WGSL(// dse-wgsl
+@group(2) @binding(32) var point_shadow_cube : texture_depth_cube;
+@group(2) @binding(33) var point_shadow_smp : sampler;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) ndc : vec2<f32>, };
+@vertex fn vs_main(@location(0) p : vec2<f32>) -> VsOut {
+  var o : VsOut; o.pos = vec4<f32>(p, 0.0, 1.0); o.ndc = p; return o;
+}
+fn PointShadow(dir : vec3<f32>, cur : f32, radius : f32) -> f32 {
+  let closest = textureSampleLevel(point_shadow_cube, point_shadow_smp, dir, 0) * radius;
+  let bias = 0.05;
+  return select(0.0, 1.0, (cur - bias) > closest);
+}
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let dir = normalize(vec3<f32>(i.ndc * 0.6, 1.0));
+  let shadow = PointShadow(dir, 2.5, 4.0);
+  let c = mix(1.0, 0.1, shadow);
+  return vec4<f32>(c, c, c, 1.0);
+}
+)WGSL";
+        t56_recv_program_ = dev_->CreateShaderProgram(kRecvWGSL, "");
+    }
+    if (!t56_recv_pso_) {
+        PipelineStateDesc d;
+        d.blend_enabled = false;
+        d.depth_test_enabled = false;
+        d.depth_write_enabled = false;
+        d.culling_enabled = false;
+        d.cull_face = CullFace::None;
+        d.topology = PrimitiveTopology::TriangleList;
+        t56_recv_pso_ = dev_->CreatePipelineState(d);
+    }
+    // 遮挡 quad：+Z 面中心 NDC[-0.4,0.4]²（90° FOV、occluder 在 z=1 → NDC=world.xy），归一化距离
+    // nd=length(±0.4,±0.4,1)/radius=sqrt(1.32)/4≈0.2872（radius=4，四角对称恒等）。
+    if (!t56_occ_vbo_) {
+        const float nd = 0.2872f;  // sqrt(0.4²+0.4²+1²)/4
+        const float occ[4 * 3] = {
+            -0.4f, -0.4f, nd,   0.4f, -0.4f, nd,
+             0.4f,  0.4f, nd,  -0.4f,  0.4f, nd,
+        };
+        t56_occ_vbo_ = dev_->CreateBuffer(sizeof(occ), occ, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t56_occ_ibo_ = dev_->CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    // 全屏 quad：NDC[-1,1]²（pos.xy，stride 8）。
+    if (!t56_recv_vbo_) {
+        const float fsq[4 * 2] = {
+            -1.0f, -1.0f,   1.0f, -1.0f,
+             1.0f,  1.0f,  -1.0f,  1.0f,
+        };
+        t56_recv_vbo_ = dev_->CreateBuffer(sizeof(fsq), fsq, false, false);
+        const uint32_t idx[6] = {0, 1, 2, 0, 2, 3};
+        t56_recv_ibo_ = dev_->CreateBuffer(sizeof(idx), idx, false, true);
+    }
+    if (!t56_cube_rt_ || !t56_color_rt_ || !t56_occ_program_ || !t56_occ_pso_ ||
+        !t56_recv_program_ || !t56_recv_pso_ || !t56_occ_vbo_ || !t56_occ_ibo_ ||
+        !t56_recv_vbo_ || !t56_recv_ibo_) {
+        DEBUG_LOG_ERROR("WebGPU[T5-6] 点光 cube 阴影自检资源创建失败，跳过");
+        return false;
+    }
+
+    // ①逐面阴影深度趟：每面 BeginRenderPass(cube_face) 清深=1.0；仅 +Z 面(face 4)渲遮挡物写归一化距离。
+    for (int face = 0; face < 6; ++face) {
+        RenderPassDesc rp;
+        rp.render_target = t56_cube_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        rp.cube_face = face;
+        dev_->CmdBeginRenderPass(rp);
+        if (!dev_->cur_pass()) return false;
+        dev_->CmdSetViewport(0, 0, static_cast<int>(kT56CubeDim), static_cast<int>(kT56CubeDim));
+        if (face == 4) {  // +Z 面：附遮挡物
+            dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_occ_pso_, t56_occ_program_));
+            const std::vector<VertexAttr> occ_attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 1, 8} };  // pos.xy + nd
+            dev_->CmdBindVertexBuffer(0, t56_occ_vbo_, 12, occ_attrs, VertexInputRate::PerVertex);
+            dev_->CmdBindIndexBuffer(t56_occ_ibo_, IndexType::UInt32);
+            dev_->CmdDrawIndexed(6, 0, 0);
+        }
+        dev_->CmdEndRenderPass();
+    }
+
+    // ②前向采样趟：把 cube 深度纹理绑到 slot16，全屏 quad 经 texture_depth_cube 采样判阴影。
+    const unsigned int cube_depth = dev_->GetRenderTargetDepthTexture(t56_cube_rt_);
+    if (!cube_depth) {
+        DEBUG_LOG_ERROR("WebGPU[T5-6] 取点光 cube 深度纹理失败，跳过");
+        return false;
+    }
+    {
+        RenderPassDesc rp;
+        rp.render_target = t56_color_rt_;
+        rp.clear_color_enabled = true;
+        rp.clear_color = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+        dev_->CmdBeginRenderPass(rp);
+        if (!dev_->cur_pass()) return false;
+        dev_->CmdSetViewport(0, 0, static_cast<int>(kT56RtSize), static_cast<int>(kT56RtSize));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_recv_pso_, t56_recv_program_));
+        const std::vector<VertexAttr> recv_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
+        dev_->CmdBindVertexBuffer(0, t56_recv_vbo_, 8, recv_attrs, VertexInputRate::PerVertex);
+        dev_->CmdBindIndexBuffer(t56_recv_ibo_, IndexType::UInt32);
+        dev_->CmdBindTexture(16u, cube_depth, TextureDim::TexCube);  // → group2 binding32/33（texture_depth_cube + 非过滤采样器）
+        dev_->CmdDrawIndexed(6, 0, 0);
+        dev_->CmdEndRenderPass();
+    }
+
+    // copy color RT → 回读缓冲（随帧提交）。
+    const RenderTargetEntry* rt = dev_->FindRenderTarget(t56_color_rt_);
+    if (!rt || rt->color_textures.empty()) return false;
+    const TextureEntry* color = dev_->FindTexture(rt->color_textures[0]);
+    if (!color || !color->texture) return false;
+    WGPUBufferDescriptor bd{};
+    bd.usage = WGPUBufferUsage_MapRead | WGPUBufferUsage_CopyDst;
+    bd.size = AlignUp4(kT56RtBytes);
+    t56_rb_pixels_ = wgpuDeviceCreateBuffer(dev_->device(), &bd);
+    if (!t56_rb_pixels_) return false;
+    WGPUImageCopyTexture src{};
+    src.texture = color->texture;
+    src.mipLevel = 0;
+    src.aspect = WGPUTextureAspect_All;
+    WGPUImageCopyBuffer dst{};
+    dst.buffer = t56_rb_pixels_;
+    dst.layout.offset = 0;
+    dst.layout.bytesPerRow = kT56RtRowBytes;
+    dst.layout.rowsPerImage = kT56RtSize;
+    WGPUExtent3D ext{kT56RtSize, kT56RtSize, 1};
+    wgpuCommandEncoderCopyTextureToBuffer(dev_->frame_encoder(), &src, &dst, &ext);
+    return true;
+}
+
+void WebGpuSelfTestHarness::KickPointShadowSelfTestReadback() {
+    if (!t56_rb_pixels_) return;
+    auto* ctx = new PointShadowSelfTestCtx();
+    ctx->rb_pixels = t56_rb_pixels_;  // 所有权转移给 ctx（回调内释放），避免 Shutdown 二次释放。
+    t56_rb_pixels_ = nullptr;
+    wgpuBufferMapAsync(ctx->rb_pixels, WGPUMapMode_Read, 0, kT56RtBytes, OnT56PixelsMapped, ctx);
+}
+
 // Task 5 Subtask 2：延迟着色真链路自检。①几何趟把中心 quad 渲入 64×64×3 MRT gbuffer（albedo/normal/
 // position 一趟三附件）；②全屏光照趟把 3 张 gbuffer 纹理（GetRenderTargetColorTexture 0/1/2）绑到 group2
 // slot0/1/2，按 @builtin(position) 整数坐标 textureLoad 做延迟光照（NdotL·albedo + ambient，法线长度<阈
@@ -5385,6 +5627,7 @@ void WebGpuSelfTestHarness::RecordPending() {
     if (!t53_hdr_selftest_done_) { t53_hdr_selftest_done_ = true; t53_recorded_ = RecordHDRSelfTest(); }
     if (!t54_ibl_selftest_done_) { t54_ibl_selftest_done_ = true; t54_recorded_ = RecordIBLSelfTest(); }
     if (!t55_wboit_selftest_done_) { t55_wboit_selftest_done_ = true; t55_recorded_ = RecordWBOITSelfTest(); }
+    if (!t56_pointshadow_selftest_done_) { t56_pointshadow_selftest_done_ = true; t56_recorded_ = RecordPointShadowSelfTest(); }
 }
 
 void WebGpuSelfTestHarness::KickPendingReadbacks() {
@@ -5411,6 +5654,7 @@ void WebGpuSelfTestHarness::KickPendingReadbacks() {
     if (t53_recorded_) KickHDRSelfTestReadback();
     if (t54_recorded_) KickIBLSelfTestReadback();
     if (t55_recorded_) KickWBOITSelfTestReadback();
+    if (t56_recorded_) KickPointShadowSelfTestReadback();
 }
 
 void WebGpuSelfTestHarness::RunBringUp() { RunBringUpSelfTest(); }
@@ -5474,6 +5718,8 @@ WebGpuSelfTestHarness::~WebGpuSelfTestHarness() {
     if (t54_rb_pixels_)   { wgpuBufferRelease(t54_rb_pixels_);       t54_rb_pixels_ = nullptr; }
     // Task 5 Subtask 5 WBOIT 自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
     if (t55_rb_pixels_)   { wgpuBufferRelease(t55_rb_pixels_);       t55_rb_pixels_ = nullptr; }
+    // Task 5 Subtask 6 点光 cube 阴影自检像素回读缓冲（kick 后所有权转移给 ctx → null）。
+    if (t56_rb_pixels_)   { wgpuBufferRelease(t56_rb_pixels_);       t56_rb_pixels_ = nullptr; }
 }
 
 } // namespace render
