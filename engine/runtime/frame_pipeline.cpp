@@ -65,19 +65,14 @@ std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 } // anonymous namespace
 #endif // DSE_ENABLE_3D
 
+// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/*.comp 离线交叉编译）。
+// WGSL 仍由 builtin_passes.cpp 手写单份保留（下方 extern）。
+#include "engine/render/shaders/generated/embed/hi_z_copy_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hi_z_downsample_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hi_z_cull_comp.gen.h"
+#include "engine/render/shaders/generated/embed/gpu_cull_comp.gen.h"
+
 namespace dse::render {
-    extern const char* kHiZCopyShaderSource;
-    extern const char* kHiZDownsampleShaderSource;
-    extern const char* kHiZCullShaderSource;
-    extern const char* kHiZCopyShaderSourceVK;
-    extern const char* kHiZDownsampleShaderSourceVK;
-    extern const char* kHiZCullShaderSourceVK;
-    extern const char* kHiZCopyShaderSourceHLSL;
-    extern const char* kHiZDownsampleShaderSourceHLSL;
-    extern const char* kHiZCullShaderSourceHLSL;
-    extern const char* kGPUCullShaderSource;
-    extern const char* kGPUCullShaderSourceVK;
-    extern const char* kGPUCullShaderSourceHLSL;
     // WebGPU 手译 WGSL（CreateComputeShaderEx 第 8 参；其余后端忽略）。
     extern const char* kHiZCopyShaderSourceWGSL;
     extern const char* kHiZDownsampleShaderSourceWGSL;
@@ -392,20 +387,20 @@ bool FramePipeline::Init() {
         render_resources_.hiz_copy_shader == 0 &&
         runtime_context_.rhi_device->SupportsCompute()) {
         render_resources_.hiz_copy_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-            dse::render::kHiZCopyShaderSource,
-            dse::render::kHiZCopyShaderSourceVK,
-            dse::render::kHiZCopyShaderSourceHLSL,
-            0, 1, 1, 8, dse::render::kHiZCopyShaderSourceWGSL);
+            dse::render::generated_shaders::khi_z_copy_comp_glsl430,
+            dse::render::generated_shaders::khi_z_copy_comp_glsl450,
+            dse::render::generated_shaders::khi_z_copy_comp_hlsl,
+            0, 1, 1, 16, dse::render::kHiZCopyShaderSourceWGSL);
         render_resources_.hiz_downsample_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-            dse::render::kHiZDownsampleShaderSource,
-            dse::render::kHiZDownsampleShaderSourceVK,
-            dse::render::kHiZDownsampleShaderSourceHLSL,
-            0, 2, 0, 16, dse::render::kHiZDownsampleShaderSourceWGSL);
+            dse::render::generated_shaders::khi_z_downsample_comp_glsl430,
+            dse::render::generated_shaders::khi_z_downsample_comp_glsl450,
+            dse::render::generated_shaders::khi_z_downsample_comp_hlsl,
+            0, 2, 0, 32, dse::render::kHiZDownsampleShaderSourceWGSL);
         render_resources_.hiz_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-            dse::render::kHiZCullShaderSource,
-            dse::render::kHiZCullShaderSourceVK,
-            dse::render::kHiZCullShaderSourceHLSL,
-            2, 0, 1, 80, dse::render::kHiZCullShaderSourceWGSL);
+            dse::render::generated_shaders::khi_z_cull_comp_glsl430,
+            dse::render::generated_shaders::khi_z_cull_comp_glsl450,
+            dse::render::generated_shaders::khi_z_cull_comp_hlsl,
+            2, 0, 1, 112, dse::render::kHiZCullShaderSourceWGSL);
         DEBUG_LOG_INFO("Hi-Z Occlusion Culling initialized: texture={} vis_ssbo={} aabb_ssbo={} capacity={} shaders=({},{},{})",
                        render_resources_.hiz_texture,
                        render_resources_.hiz_visibility_ssbo.raw(),
@@ -454,10 +449,10 @@ bool FramePipeline::Init() {
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
         runtime_context_.rhi_device->SupportsSSBO()) {
         render_resources_.gpu_cull_shader = runtime_context_.rhi_device->CreateComputeShaderEx(
-            dse::render::kGPUCullShaderSource,
-            dse::render::kGPUCullShaderSourceVK,
-            dse::render::kGPUCullShaderSourceHLSL,
-            2, 0, 1, 176, dse::render::kGPUCullShaderSourceWGSL);
+            dse::render::generated_shaders::kgpu_cull_comp_glsl430,
+            dse::render::generated_shaders::kgpu_cull_comp_glsl450,
+            dse::render::generated_shaders::kgpu_cull_comp_hlsl,
+            2, 0, 1, 208, dse::render::kGPUCullShaderSourceWGSL);
         render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
         // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
         if (render_resources_.gpu_driven_supported &&

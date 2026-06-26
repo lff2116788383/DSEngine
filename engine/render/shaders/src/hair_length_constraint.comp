@@ -1,0 +1,56 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 hair_length_constraint_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：pos_cur(rw)→u0、pos_rest(r)→t17、strand_info(r)→t18
+//   （匹配 BindGpuBuffer(pos_cur,0,true)/(pos_rest,1,false)/(strand_info,2,false)）。
+//
+// 资源（CreateComputeShaderEx: ssbo=3, img=0, smp=0, push=16）：
+//   binding 0 = pos_cur     (read_write)
+//   binding 1 = pos_rest    (readonly)
+//   binding 2 = strand_info (readonly)
+
+layout(set = 0, binding = 0, std430) buffer PositionCurrent { vec4 pos_cur[]; };
+layout(set = 0, binding = 1, std430) readonly buffer PositionRest { vec4 pos_rest[]; };
+layout(set = 0, binding = 2, std430) readonly buffer StrandInfo   { uvec2 strand_info[]; };
+
+// 16B 对齐 push 块：消费方单次 SetComputeUniformInt("u_num_strands") @0。
+layout(push_constant) uniform PC {
+    int u_num_strands; int _p0; int _p1; int _p2;
+} pc; // 16 B
+
+void main() {
+    uint sid = gl_GlobalInvocationID.x;
+    if (int(sid) >= pc.u_num_strands) return;
+
+    uint offset = strand_info[sid].x;
+    uint count  = strand_info[sid].y;
+    if (count < 2u) return;
+
+    // Forward pass: enforce edge lengths from root to tip
+    for (uint i = 0u; i < count - 1u; ++i) {
+        uint i0 = offset + i;
+        uint i1 = offset + i + 1u;
+
+        vec3 p0 = pos_cur[i0].xyz;
+        vec3 p1 = pos_cur[i1].xyz;
+
+        float rest_length = length(pos_rest[i1].xyz - pos_rest[i0].xyz);
+        vec3 delta = p1 - p0;
+        float cur_length = length(delta);
+        if (cur_length < 1e-7) continue;
+
+        vec3 dir = delta / cur_length;
+        vec3 target = p0 + dir * rest_length;
+
+        if (i == 0u) {
+            pos_cur[i1] = vec4(target, pos_cur[i1].w);
+        } else {
+            vec3 correction = (target - p1) * 0.5;
+            pos_cur[i0] = vec4(p0 - correction, pos_cur[i0].w);
+            pos_cur[i1] = vec4(p1 + correction, pos_cur[i1].w);
+        }
+    }
+}

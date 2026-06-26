@@ -1,0 +1,134 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，嵌入
+// gpu_cull_comp.gen.h；WGSL 手写单份保留在消费方。
+//
+// @COMPUTE_RESOURCE_REMAP：GL/ESSL sampled image 0-based → u_hiz_texture 落 texture unit 0
+//   （匹配 SetComputeTextureSampler(0,...)）。SSBO 在 GL 直接用 binding 0/1。
+// @DX11_SSBO_SPLIT：DX11 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}：
+//   aabbs(读)→t16、draw_cmds(写)→u1（匹配 BindGpuBuffer(aabb,0,false)/BindGpuBuffer(cmd,1,true)）。
+//
+// 资源（CreateComputeShaderEx: ssbo=2, img=0, smp=1, push=208）：
+//   binding 0 = SSBO AABBBuffer        (readonly,  GL ssbo0 / HLSL SRV t16)
+//   binding 1 = SSBO DrawCommandBuffer (read_write, GL ssbo1 / HLSL UAV u1)
+//   binding 2 = sampler2D u_hiz_texture (GL tex unit0 / HLSL t0,s0)
+//
+// 深度约定：单源统一假定 ndc.z∈[0,1]（test_depth = nearest_z - 0.005，无 remap）。
+// GL 约定后端（ndc.z∈[-1,1]）由消费方对上传矩阵补 z'=0.5z+0.5，使四后端 ndc.z 同为 [0,1]。
+// frustum planes 仍由消费方从未折叠 VP 提取（剔除语义零改动）。
+
+struct AABB {
+    vec4 min_point; // xyz = world min, w = padding
+    vec4 max_point; // xyz = world max, w = padding
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer AABBBuffer {
+    AABB aabbs[];
+};
+
+layout(set = 0, binding = 1, std430) buffer DrawCommandBuffer {
+    DrawCommand draw_cmds[];
+};
+
+layout(set = 0, binding = 2) uniform sampler2D u_hiz_texture;
+
+// 16B 对齐 push 块：消费方调用序 SetComputeUniformMat4/Vec2f/Int/Int + 6×Vec4 →
+//   vp@0、screen@64、mip@80、obj@96、frustum_planes@112..192（每次调用对齐到 16B 边界）。
+layout(push_constant) uniform PC {
+    mat4  u_view_projection;     // offset 0   (64B)
+    float u_screen_size_x;       // offset 64
+    float u_screen_size_y;       // offset 68
+    float _pad0; float _pad1;
+    int   u_mip_count;           // offset 80
+    int   _pad2; int _pad3; int _pad4;
+    int   u_object_count;        // offset 96
+    int   _pad5; int _pad6; int _pad7;
+    vec4  u_frustum_planes[6];   // offset 112 (16B stride) .. 207
+} pc; // 208 B
+
+bool FrustumTestAABB(vec3 aabb_min, vec3 aabb_max) {
+    for (int i = 0; i < 6; ++i) {
+        vec3 positive_vertex = vec3(
+            (pc.u_frustum_planes[i].x >= 0.0) ? aabb_max.x : aabb_min.x,
+            (pc.u_frustum_planes[i].y >= 0.0) ? aabb_max.y : aabb_min.y,
+            (pc.u_frustum_planes[i].z >= 0.0) ? aabb_max.z : aabb_min.z
+        );
+        float d = dot(pc.u_frustum_planes[i].xyz, positive_vertex) + pc.u_frustum_planes[i].w;
+        if (d < 0.0) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_object_count) return;
+
+    vec3 aabb_min = aabbs[idx].min_point.xyz;
+    vec3 aabb_max = aabbs[idx].max_point.xyz;
+
+    // 1. Frustum culling
+    if (!FrustumTestAABB(aabb_min, aabb_max)) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    // 2. Hi-Z occlusion culling
+    vec2 ndc_min = vec2(1.0);
+    vec2 ndc_max = vec2(-1.0);
+    float nearest_z = 1.0;
+
+    for (int i = 0; i < 8; ++i) {
+        vec3 corner = vec3(
+            ((i & 1) != 0) ? aabb_max.x : aabb_min.x,
+            ((i & 2) != 0) ? aabb_max.y : aabb_min.y,
+            ((i & 4) != 0) ? aabb_max.z : aabb_min.z
+        );
+        vec4 clip = pc.u_view_projection * vec4(corner, 1.0);
+        if (clip.w <= 0.0) {
+            // Behind camera — conservatively mark visible
+            draw_cmds[idx].instance_count = 1u;
+            return;
+        }
+        vec3 ndc = clip.xyz / clip.w;
+        ndc_min = min(ndc_min, ndc.xy);
+        ndc_max = max(ndc_max, ndc.xy);
+        nearest_z = min(nearest_z, ndc.z);
+    }
+
+    vec2 uv_min = clamp(ndc_min * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+    vec2 uv_max = clamp(ndc_max * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+
+    // Fully outside screen
+    if (uv_max.x <= 0.0 || uv_min.x >= 1.0 || uv_max.y <= 0.0 || uv_min.y >= 1.0) {
+        draw_cmds[idx].instance_count = 0u;
+        return;
+    }
+
+    // Determine mip level
+    vec2 size_pixels = (uv_max - uv_min) * vec2(pc.u_screen_size_x, pc.u_screen_size_y);
+    float max_dim = max(size_pixels.x, size_pixels.y);
+    float mip_level = max_dim > 0.0 ? ceil(log2(max_dim)) : 0.0;
+    mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+    float test_depth = nearest_z - 0.005;
+
+    // Sample Hi-Z (5-tap conservative)
+    vec2 uv_center = (uv_min + uv_max) * 0.5;
+    float hiz_c  = textureLod(u_hiz_texture, uv_center, mip_level).r;
+    float hiz_tl = textureLod(u_hiz_texture, uv_min, mip_level).r;
+    float hiz_br = textureLod(u_hiz_texture, uv_max, mip_level).r;
+    float hiz_tr = textureLod(u_hiz_texture, vec2(uv_max.x, uv_min.y), mip_level).r;
+    float hiz_bl = textureLod(u_hiz_texture, vec2(uv_min.x, uv_max.y), mip_level).r;
+    float max_hiz = max(max(hiz_c, hiz_tl), max(max(hiz_br, hiz_tr), hiz_bl));
+
+    draw_cmds[idx].instance_count = (test_depth > max_hiz) ? 0u : 1u;
+}

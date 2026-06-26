@@ -4,12 +4,20 @@
  */
 
 #include "engine/render/hair/hair_instance.h"
-#include "engine/render/hair/hair_compute_shaders.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 
+// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/hair_*.comp 离线交叉编译）。
+// 头发物理无手译 WGSL → WebGPU 返回 0 句柄，Simulate 优雅跳过（compute_unavailable_）。
+#include "engine/render/shaders/generated/embed/hair_integrate_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_length_constraint_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_local_shape_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_update_tangent_comp.gen.h"
+
 namespace dse {
 namespace render {
+
+using namespace generated_shaders;
 
 bool HairInstance::CreateGPUResources(RhiDevice* rhi, const HairAsset& hair_asset) {
     if (!rhi || !hair_asset.IsValid()) return false;
@@ -150,26 +158,26 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     // 物理手译 WGSL（返回 0 句柄），后续帧直接跳过，避免每帧重试 + 错误刷屏。
     if (cs_integrate_ == 0) {
         cs_integrate_ = rhi->CreateComputeShaderEx(
-            kHairIntegrateSource, kHairIntegrateSourceVK, kHairIntegrateSourceHLSL,
-            4, 0, 0, 48);
+            khair_integrate_comp_glsl430, khair_integrate_comp_glsl450, khair_integrate_comp_hlsl,
+            4, 0, 0, 192);
         if (cs_integrate_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile integrate CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_length_ == 0) {
         cs_length_ = rhi->CreateComputeShaderEx(
-            kHairLengthConstraintSource, kHairLengthConstraintSourceVK, kHairLengthConstraintSourceHLSL,
-            3, 0, 0, 4);
+            khair_length_constraint_comp_glsl430, khair_length_constraint_comp_glsl450, khair_length_constraint_comp_hlsl,
+            3, 0, 0, 16);
         if (cs_length_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile length CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_local_shape_ == 0) {
         cs_local_shape_ = rhi->CreateComputeShaderEx(
-            kHairLocalShapeSource, kHairLocalShapeSourceVK, kHairLocalShapeSourceHLSL,
-            3, 0, 0, 12);
+            khair_local_shape_comp_glsl430, khair_local_shape_comp_glsl450, khair_local_shape_comp_hlsl,
+            3, 0, 0, 48);
         if (cs_local_shape_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile local shape CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_tangent_ == 0) {
         cs_tangent_ = rhi->CreateComputeShaderEx(
-            kHairUpdateTangentSource, kHairUpdateTangentSourceVK, kHairUpdateTangentSourceHLSL,
-            3, 0, 0, 12);
+            khair_update_tangent_comp_glsl430, khair_update_tangent_comp_glsl450, khair_update_tangent_comp_hlsl,
+            3, 0, 0, 48);
         if (cs_tangent_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile tangent CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
 
@@ -180,11 +188,12 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     rhi->BeginComputePass();
 
     // --- Pass 1: Verlet Integration ---
-    // All backends: binding 0=pos_cur, 1=pos_prev, 2=pos_rest, 3=strand_info
-    rhi->BindGpuBuffer(position_ssbo,      0);
-    rhi->BindGpuBuffer(position_prev_ssbo, 1);
-    rhi->BindGpuBuffer(position_rest_ssbo, 2);
-    rhi->BindGpuBuffer(strand_info_ssbo,   3);
+    // binding 0=pos_cur(rw), 1=pos_prev(rw), 2=pos_rest(r), 3=strand_info(r)
+    // DX11 按 writable 分流 UAV/SRV（@DX11_SSBO_SPLIT）；GL/VK 忽略 writable。
+    rhi->BindGpuBuffer(position_ssbo,      0, true);
+    rhi->BindGpuBuffer(position_prev_ssbo, 1, true);
+    rhi->BindGpuBuffer(position_rest_ssbo, 2, false);
+    rhi->BindGpuBuffer(strand_info_ssbo,   3, false);
     rhi->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", nv);
     rhi->SetComputeUniformFloat(cs_integrate_, "u_dt",           dt);
     rhi->SetComputeUniformFloat(cs_integrate_, "u_damping",      sim_params.damping);
@@ -201,10 +210,10 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     rhi->ComputeMemoryBarrier();
 
     // --- Pass 2 & 3: Constraints (多次迭代) ---
-    // All backends: binding 0=pos_cur, 1=pos_rest, 2=strand_info
-    rhi->BindGpuBuffer(position_ssbo,      0);
-    rhi->BindGpuBuffer(position_rest_ssbo, 1);
-    rhi->BindGpuBuffer(strand_info_ssbo,   2);
+    // binding 0=pos_cur(rw), 1=pos_rest(r), 2=strand_info(r)
+    rhi->BindGpuBuffer(position_ssbo,      0, true);
+    rhi->BindGpuBuffer(position_rest_ssbo, 1, false);
+    rhi->BindGpuBuffer(strand_info_ssbo,   2, false);
     for (int i = 0; i < sim_params.length_constraint_iterations; ++i) {
         rhi->SetComputeUniformInt(cs_length_, "u_num_strands", ns);
         rhi->DispatchCompute(cs_length_, static_cast<unsigned int>((ns + 63) / 64), 1, 1);
@@ -219,10 +228,10 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     }
 
     // --- Pass 4: Tangent Update ---
-    // All backends: binding 0=pos_cur, 1=tangent, 2=strand_info
-    rhi->BindGpuBuffer(position_ssbo,  0);
-    rhi->BindGpuBuffer(tangent_ssbo,   1);
-    rhi->BindGpuBuffer(strand_info_ssbo, 2);
+    // binding 0=pos_cur(r), 1=tangent(rw), 2=strand_info(r)
+    rhi->BindGpuBuffer(position_ssbo,  0, false);
+    rhi->BindGpuBuffer(tangent_ssbo,   1, true);
+    rhi->BindGpuBuffer(strand_info_ssbo, 2, false);
     rhi->SetComputeUniformInt(cs_tangent_, "u_num_vertices",  nv);
     rhi->SetComputeUniformInt(cs_tangent_, "u_num_strands",   ns);
     rhi->SetComputeUniformInt(cs_tangent_, "u_verts_per_strand", vps);

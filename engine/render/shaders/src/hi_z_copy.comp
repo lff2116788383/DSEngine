@@ -1,0 +1,32 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450(Vulkan) 三态由本文件经离线
+// 链（glslang + spirv-cross）生成、嵌入 hi_z_copy_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @COMPUTE_RESOURCE_REMAP：GL/ESSL compute 资源按类型 0-based 重映射
+//   （storage image → image unit 0、sampled image → texture unit 0），匹配消费方
+//   HiZBuildPass::Execute 的 SetComputeTextureImageMip(0,...) + SetComputeTextureSampler(0,...)。
+//
+// 资源（CreateComputeShaderEx: ssbo=0, img=1, smp=1, push=16）：
+//   binding 0 = storage image  u_hiz_mip0   (GL img unit0 / HLSL u0)
+//   binding 1 = sampler2D       u_depth_texture (GL tex unit0 / HLSL t0,s0)
+
+layout(set = 0, binding = 0, r32f) writeonly uniform image2D u_hiz_mip0;
+layout(set = 0, binding = 1) uniform sampler2D u_depth_texture;
+
+// 16B 对齐 push 块：消费方单次 SetComputeUniformVec2i("u_dst_size") 落在调用序 @0。
+layout(push_constant) uniform PC {
+    int u_dst_size_x;   // offset 0
+    int u_dst_size_y;   // offset 4
+    int _pad0; int _pad1;
+} pc; // 16 B
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= pc.u_dst_size_x || coord.y >= pc.u_dst_size_y) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(pc.u_dst_size_x, pc.u_dst_size_y);
+    float depth = texture(u_depth_texture, uv).r;
+    imageStore(u_hiz_mip0, coord, vec4(depth, 0.0, 0.0, 0.0));
+}

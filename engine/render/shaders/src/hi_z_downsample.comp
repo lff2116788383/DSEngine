@@ -1,0 +1,41 @@
+#version 450
+layout(local_size_x = 16, local_size_y = 16) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，嵌入
+// hi_z_downsample_comp.gen.h；WGSL 手写单份保留在消费方。
+//
+// @COMPUTE_RESOURCE_REMAP：GL/ESSL storage image 按 binding 0-based 重映射 → unit 0,1，
+//   匹配消费方 SetComputeTextureImageMip(0,...src) + SetComputeTextureImageMip(1,...dst)。
+//
+// 资源（CreateComputeShaderEx: ssbo=0, img=2, smp=0, push=32）：
+//   binding 0 = storage image u_src_mip (readonly,  GL img unit0 / HLSL u0)
+//   binding 1 = storage image u_dst_mip (writeonly, GL img unit1 / HLSL u1)
+
+layout(set = 0, binding = 0, r32f) readonly  uniform image2D u_src_mip;
+layout(set = 0, binding = 1, r32f) writeonly uniform image2D u_dst_mip;
+
+// 16B 对齐 push 块：消费方两次 SetComputeUniformVec2i 按调用序落 u_src_size@0、u_dst_size@16。
+layout(push_constant) uniform PC {
+    int u_src_size_x;   // offset 0
+    int u_src_size_y;   // offset 4
+    int _pad0; int _pad1;
+    int u_dst_size_x;   // offset 16
+    int u_dst_size_y;   // offset 20
+    int _pad2; int _pad3;
+} pc; // 32 B
+
+void main() {
+    ivec2 dst_coord = ivec2(gl_GlobalInvocationID.xy);
+    if (dst_coord.x >= pc.u_dst_size_x || dst_coord.y >= pc.u_dst_size_y) return;
+
+    ivec2 src_coord = dst_coord * 2;
+    ivec2 src_max = ivec2(pc.u_src_size_x - 1, pc.u_src_size_y - 1);
+    float d00 = imageLoad(u_src_mip, src_coord).r;
+    float d10 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 0), src_max)).r;
+    float d01 = imageLoad(u_src_mip, min(src_coord + ivec2(0, 1), src_max)).r;
+    float d11 = imageLoad(u_src_mip, min(src_coord + ivec2(1, 1), src_max)).r;
+
+    // Conservative: take MAX depth (farthest), so occluder test is pessimistic.
+    float max_depth = max(max(d00, d10), max(d01, d11));
+    imageStore(u_dst_mip, dst_coord, vec4(max_depth, 0.0, 0.0, 0.0));
+}

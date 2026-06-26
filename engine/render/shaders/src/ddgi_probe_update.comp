@@ -1,0 +1,114 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 ddgi_probe_update_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @COMPUTE_RESOURCE_REMAP：GL/ESSL + HLSL 资源按类型 0-based 重映射：
+//   storage image: irradiance(binding1)→unit0/u0、visibility(binding2)→unit1/u1
+//   sampled image: rsm_position(3)→unit0/t0、rsm_normal(4)→unit1/t1、rsm_flux(5)→unit2/t2
+//   （匹配 SetComputeTextureImage(0/1,...) + SetComputeTextureSampler(0/1/2,...)）。
+// SSBO 仅 ProbeStates(readonly)：GL ssbo binding0 / HLSL SRV t16（默认，无需 split）。
+//
+// 资源（CreateComputeShaderEx: ssbo=1, img=2, smp=3, push=224）：
+//   binding 0 = SSBO ProbeStates        (readonly)
+//   binding 1 = storage image irradiance (rgba16f, read_write)
+//   binding 2 = storage image visibility (rg16f,   read_write)
+//   binding 3/4/5 = sampler rsm_position/normal/flux
+
+layout(set = 0, binding = 0, std430) readonly buffer ProbeStates {
+    vec4 probe_position_status[];
+};
+layout(set = 0, binding = 1, rgba16f) uniform image2D u_irradiance_atlas;
+layout(set = 0, binding = 2, rg16f)   uniform image2D u_visibility_atlas;
+layout(set = 0, binding = 3) uniform sampler2D u_rsm_position;
+layout(set = 0, binding = 4) uniform sampler2D u_rsm_normal;
+layout(set = 0, binding = 5) uniform sampler2D u_rsm_flux;
+
+// 16B 对齐 push 块：消费方调用序 8×Int / Float / IVec3 / 4×Vec3
+//   → @0,16,32,48,64,80,96,112(int), 128(hysteresis), 144(grid_res),
+//     160(grid_origin),176(grid_spacing),192(light_dir),208(light_color)。
+layout(push_constant) uniform PC {
+    int   u_probe_count;       int _p0;  int _p1;  int _p2;     // @0
+    int   u_probe_start;       int _p3;  int _p4;  int _p5;     // @16
+    int   u_probes_to_update;  int _p6;  int _p7;  int _p8;     // @32
+    int   u_irradiance_texels; int _p9;  int _p10; int _p11;    // @48
+    int   u_visibility_texels; int _p12; int _p13; int _p14;    // @64
+    int   u_rsm_width;         int _p15; int _p16; int _p17;    // @80
+    int   u_rsm_height;        int _p18; int _p19; int _p20;    // @96
+    int   u_frame_index;       int _p21; int _p22; int _p23;    // @112
+    float u_hysteresis;        float _p24; float _p25; float _p26; // @128
+    ivec3 u_grid_resolution;   int _p27;                          // @144
+    vec3  u_grid_origin;       float _p28;                        // @160
+    vec3  u_grid_spacing;      float _p29;                        // @176
+    vec3  u_light_dir;         float _p30;                        // @192
+    vec3  u_light_color;       float _p31;                        // @208
+} pc; // 224 B
+
+vec3 oct_decode(vec2 uv) {
+    vec2 f = uv * 2.0 - 1.0;
+    vec3 n = vec3(f.xy, 1.0 - abs(f.x) - abs(f.y));
+    if (n.z < 0.0) n.xy = (1.0 - abs(n.yx)) * sign(n.xy);
+    return normalize(n);
+}
+float hash_u(uint seed) {
+    seed = seed * 747796405u + 2891336453u;
+    seed = ((seed >> 16u) ^ seed) * 0x45d9f3bu;
+    seed = ((seed >> 16u) ^ seed) * 0x45d9f3bu;
+    return float((seed >> 16u) ^ seed) / 4294967295.0;
+}
+
+void main() {
+    int texel_x     = int(gl_GlobalInvocationID.x);
+    int probe_local = int(gl_GlobalInvocationID.y);
+    ivec3 grid_res  = pc.u_grid_resolution;
+    if (texel_x >= pc.u_irradiance_texels) return;
+    if (probe_local >= pc.u_probes_to_update) return;
+    int probe_index = (pc.u_probe_start + probe_local) % pc.u_probe_count;
+    vec4 probe_data = probe_position_status[probe_index];
+    if (probe_data.w < 0.5) return;
+    vec3 probe_pos = probe_data.xyz;
+    int grid_x = probe_index % grid_res.x;
+    int grid_y = (probe_index / grid_res.x) % grid_res.y;
+    int grid_z = probe_index / (grid_res.x * grid_res.y);
+    int atlas_col = grid_x + grid_z * grid_res.x;
+    int atlas_row = grid_y;
+    int num_samples = min(64, pc.u_rsm_width * pc.u_rsm_height);
+    for (int texel_y = 0; texel_y < pc.u_irradiance_texels; ++texel_y) {
+        vec3 texel_dir = oct_decode((vec2(texel_x, texel_y) + 0.5) / float(pc.u_irradiance_texels));
+        vec3 irradiance = vec3(0.0);
+        float total_w = 0.0, vd = 0.0, vd2 = 0.0;
+        uint seed = uint(probe_index * 1031 + pc.u_frame_index * 7919 + texel_x * 113 + texel_y * 37);
+        for (int s = 0; s < num_samples; ++s) {
+            vec2 rsm_uv = vec2(hash_u(seed + uint(s*2)), hash_u(seed + uint(s*2+1)));
+            vec3 vpl_pos    = texture(u_rsm_position, rsm_uv).xyz;
+            vec3 vpl_normal = normalize(texture(u_rsm_normal, rsm_uv).xyz * 2.0 - 1.0);
+            vec3 vpl_flux   = texture(u_rsm_flux, rsm_uv).rgb;
+            if (dot(vpl_flux, vpl_flux) < 1e-6) continue;
+            vec3 to_probe = probe_pos - vpl_pos;
+            float dist = length(to_probe);
+            if (dist < 0.01) continue;
+            vec3 dir = to_probe / dist;
+            float cos_vpl = max(0.0, dot(vpl_normal, dir));
+            float cos_rcv = max(0.0, dot(texel_dir, -dir));
+            if (cos_vpl < 1e-4 || cos_rcv < 1e-4) continue;
+            float att = 1.0 / (dist * dist + 1.0);
+            float w = cos_vpl * cos_rcv * att;
+            irradiance += vpl_flux * w;
+            total_w += w; vd += dist * w; vd2 += dist * dist * w;
+        }
+        if (total_w > 1e-6) { irradiance /= total_w; vd /= total_w; vd2 /= total_w; }
+        irradiance *= float(pc.u_rsm_width * pc.u_rsm_height) / float(num_samples) * 0.01;
+        ivec2 at = ivec2(atlas_col * pc.u_irradiance_texels + texel_x,
+                         atlas_row * pc.u_irradiance_texels + texel_y);
+        vec4 prev = imageLoad(u_irradiance_atlas, at);
+        imageStore(u_irradiance_atlas, at, vec4(mix(irradiance, prev.rgb, pc.u_hysteresis), 1.0));
+        if (texel_x < pc.u_visibility_texels && texel_y < pc.u_visibility_texels) {
+            ivec2 vt = ivec2(atlas_col * pc.u_visibility_texels + texel_x,
+                             atlas_row * pc.u_visibility_texels + texel_y);
+            vec2 pv = imageLoad(u_visibility_atlas, vt).rg;
+            imageStore(u_visibility_atlas, vt,
+                vec4(mix(vec2(vd, vd2), pv, pc.u_hysteresis), 0.0, 0.0));
+        }
+    }
+}

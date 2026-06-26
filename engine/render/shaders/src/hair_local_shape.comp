@@ -1,0 +1,52 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 hair_local_shape_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：pos_cur(rw)→u0、pos_rest(r)→t17、strand_info(r)→t18
+//   （匹配 BindGpuBuffer(pos_cur,0,true)/(pos_rest,1,false)/(strand_info,2,false)）。
+//
+// 资源（CreateComputeShaderEx: ssbo=3, img=0, smp=0, push=48）：
+//   binding 0 = pos_cur     (read_write)
+//   binding 1 = pos_rest    (readonly)
+//   binding 2 = strand_info (readonly)
+
+layout(set = 0, binding = 0, std430) buffer PositionCurrent { vec4 pos_cur[]; };
+layout(set = 0, binding = 1, std430) readonly buffer PositionRest { vec4 pos_rest[]; };
+layout(set = 0, binding = 2, std430) readonly buffer StrandInfo   { uvec2 strand_info[]; };
+
+// 16B 对齐 push 块：消费方调用序 Int/Float/Float → @0/@16/@32。
+layout(push_constant) uniform PC {
+    int   u_num_strands;     int _p0; int _p1; int _p2;        // @0
+    float u_stiffness_local; float _p3; float _p4; float _p5;  // @16
+    float u_stiffness_global;float _p6; float _p7; float _p8;  // @32
+} pc; // 48 B
+
+void main() {
+    uint sid = gl_GlobalInvocationID.x;
+    if (int(sid) >= pc.u_num_strands) return;
+
+    uint offset = strand_info[sid].x;
+    uint count  = strand_info[sid].y;
+    if (count < 2u) return;
+
+    vec3 root_cur  = pos_cur[offset].xyz;
+    vec3 root_rest = pos_rest[offset].xyz;
+    vec3 root_offset = root_cur - root_rest;
+
+    for (uint i = 1u; i < count; ++i) {
+        uint idx = offset + i;
+        vec3 cur = pos_cur[idx].xyz;
+        vec3 rest = pos_rest[idx].xyz;
+
+        vec3 local_target = rest + root_offset;
+        vec3 global_target = rest;
+
+        vec3 new_pos = cur;
+        new_pos = mix(new_pos, local_target, pc.u_stiffness_local * 0.1);
+        new_pos = mix(new_pos, global_target, pc.u_stiffness_global * 0.02);
+
+        pos_cur[idx] = vec4(new_pos, pos_cur[idx].w);
+    }
+}

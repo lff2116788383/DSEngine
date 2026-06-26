@@ -1,0 +1,72 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 hair_integrate_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：DX11 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}：
+//   pos_cur(rw)→u0、pos_prev(rw)→u1、pos_rest(r)→t18、strand_info(r)→t19
+//   （匹配 BindGpuBuffer(pos_cur,0,true)/(pos_prev,1,true)/(pos_rest,2,false)/(strand_info,3,false)）。
+// 无 image/sampler，故不需 @COMPUTE_RESOURCE_REMAP；GL SSBO 直接用 binding 0..3。
+//
+// 资源（CreateComputeShaderEx: ssbo=4, img=0, smp=0, push=192）：
+//   binding 0 = pos_cur     (read_write)
+//   binding 1 = pos_prev    (read_write)
+//   binding 2 = pos_rest    (readonly)
+//   binding 3 = strand_info (readonly, uvec2 = offset,count)
+
+layout(set = 0, binding = 0, std430) buffer PositionCurrent { vec4 pos_cur[]; };
+layout(set = 0, binding = 1, std430) buffer PositionPrev    { vec4 pos_prev[]; };
+layout(set = 0, binding = 2, std430) readonly buffer PositionRest { vec4 pos_rest[]; };
+layout(set = 0, binding = 3, std430) readonly buffer StrandInfo   { uvec2 strand_info[]; };
+
+// 16B 对齐 push 块：消费方按调用序 12 次 SetComputeUniform*（int + 11 float），
+// 每次对齐到 16B 边界 → 12 个 16B 槽 = 192B。
+layout(push_constant) uniform PC {
+    int   u_num_vertices;  int _p0; int _p1; int _p2;        // @0
+    float u_dt;            float _p3; float _p4; float _p5;  // @16
+    float u_damping;       float _p6; float _p7; float _p8;  // @32
+    float u_gx;            float _p9; float _p10; float _p11;  // @48
+    float u_gy;            float _p12; float _p13; float _p14; // @64
+    float u_gz;            float _p15; float _p16; float _p17; // @80
+    float u_gw;            float _p18; float _p19; float _p20; // @96
+    float u_wx;            float _p21; float _p22; float _p23; // @112
+    float u_wy;            float _p24; float _p25; float _p26; // @128
+    float u_wz;            float _p27; float _p28; float _p29; // @144
+    float u_ww;            float _p30; float _p31; float _p32; // @160
+    float u_time;          float _p33; float _p34; float _p35; // @176
+} pc; // 192 B
+
+// Simple hash for per-vertex wind variation
+float hash11(float p) {
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+}
+
+void main() {
+    uint vid = gl_GlobalInvocationID.x;
+    if (int(vid) >= pc.u_num_vertices) return;
+
+    vec4 cur = pos_cur[vid];
+    vec4 prev = pos_prev[vid];
+    vec4 rest = pos_rest[vid];
+
+    // Root vertex (rest.w==0) is fixed to its rest position.
+    bool is_root = (rest.w < 0.001);
+    if (is_root) {
+        pos_prev[vid] = cur;
+        return;
+    }
+
+    vec3 velocity = (cur.xyz - prev.xyz) * (1.0 - pc.u_damping);
+    vec3 gravity_force = vec3(pc.u_gx, pc.u_gy, pc.u_gz) * pc.u_gw * pc.u_dt * pc.u_dt;
+    float wind_var = hash11(float(vid) * 0.37 + pc.u_time * 1.7) * 2.0 - 1.0;
+    vec3 wind_force = vec3(pc.u_wx, pc.u_wy, pc.u_wz) * pc.u_dt * pc.u_dt * (1.0 + wind_var * pc.u_ww);
+
+    vec3 new_pos = cur.xyz + velocity + gravity_force + wind_force;
+
+    pos_prev[vid] = cur;
+    pos_cur[vid] = vec4(new_pos, cur.w);
+}

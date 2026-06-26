@@ -1,0 +1,48 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 hair_update_tangent_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：pos_cur(r)→t16、tangent(rw)→u1、strand_info(r)→t18
+//   （匹配 BindGpuBuffer(pos_cur,0,false)/(tangent,1,true)/(strand_info,2,false)）。
+//
+// 资源（CreateComputeShaderEx: ssbo=3, img=0, smp=0, push=48）：
+//   binding 0 = pos_cur     (readonly)
+//   binding 1 = tangent     (read_write)
+//   binding 2 = strand_info (readonly)
+
+layout(set = 0, binding = 0, std430) readonly buffer PositionCurrent { vec4 pos_cur[]; };
+layout(set = 0, binding = 1, std430) buffer Tangent { vec4 tangent[]; };
+layout(set = 0, binding = 2, std430) readonly buffer StrandInfo { uvec2 strand_info[]; };
+
+// 16B 对齐 push 块：消费方调用序 3×Int → @0/@16/@32。
+layout(push_constant) uniform PC {
+    int u_num_vertices;     int _p0; int _p1; int _p2;  // @0
+    int u_num_strands;      int _p3; int _p4; int _p5;  // @16
+    int u_verts_per_strand; int _p6; int _p7; int _p8;  // @32
+} pc; // 48 B
+
+void main() {
+    uint vid = gl_GlobalInvocationID.x;
+    if (int(vid) >= pc.u_num_vertices) return;
+
+    // O(1) strand lookup: all strands have equal vertex count
+    uint strand_idx = vid / uint(pc.u_verts_per_strand);
+    uint local_idx  = vid % uint(pc.u_verts_per_strand);
+    if (int(strand_idx) >= pc.u_num_strands) return;
+
+    uint count = strand_info[strand_idx].y;
+
+    vec3 t;
+    if (local_idx < count - 1u) {
+        t = normalize(pos_cur[vid + 1u].xyz - pos_cur[vid].xyz);
+    } else if (local_idx > 0u) {
+        t = normalize(pos_cur[vid].xyz - pos_cur[vid - 1u].xyz);
+    } else {
+        t = vec3(0.0, 1.0, 0.0);
+    }
+
+    float thickness = tangent[vid].w; // preserve thickness
+    tangent[vid] = vec4(t, thickness);
+}

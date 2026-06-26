@@ -8,6 +8,13 @@
 #include "engine/render/hair/hair_compute_shaders.h"
 #include "engine/base/debug.h"
 
+// 单一来源消费：GL430 / VK GLSL450 / HLSL 取自 *_comp.gen.h（src/hair_*.comp 离线交叉编译）；
+// WGSL 仍由 hair_compute_shaders.h 手译单份承载（WebGPU 路径）。
+#include "engine/render/shaders/generated/embed/hair_integrate_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_length_constraint_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_local_shape_comp.gen.h"
+#include "engine/render/shaders/generated/embed/hair_update_tangent_comp.gen.h"
+
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -234,18 +241,19 @@ void HairSystem::InitComputeShaders() {
         gpu_compute_enabled_ = false;
         return;
     }
+    using namespace render::generated_shaders;
     cs_integrate_ = rhi_->CreateComputeShaderEx(
-        render::kHairIntegrateSource, render::kHairIntegrateSourceVK, render::kHairIntegrateSourceHLSL,
-        4, 0, 0, 48, render::kHairIntegrateSourceWGSL);
+        khair_integrate_comp_glsl430, khair_integrate_comp_glsl450, khair_integrate_comp_hlsl,
+        4, 0, 0, 192, render::kHairIntegrateSourceWGSL);
     cs_length_ = rhi_->CreateComputeShaderEx(
-        render::kHairLengthConstraintSource, render::kHairLengthConstraintSourceVK, render::kHairLengthConstraintSourceHLSL,
-        3, 0, 0, 4, render::kHairLengthConstraintSourceWGSL);
+        khair_length_constraint_comp_glsl430, khair_length_constraint_comp_glsl450, khair_length_constraint_comp_hlsl,
+        3, 0, 0, 16, render::kHairLengthConstraintSourceWGSL);
     cs_local_shape_ = rhi_->CreateComputeShaderEx(
-        render::kHairLocalShapeSource, render::kHairLocalShapeSourceVK, render::kHairLocalShapeSourceHLSL,
-        3, 0, 0, 12, render::kHairLocalShapeSourceWGSL);
+        khair_local_shape_comp_glsl430, khair_local_shape_comp_glsl450, khair_local_shape_comp_hlsl,
+        3, 0, 0, 48, render::kHairLocalShapeSourceWGSL);
     cs_update_tangent_ = rhi_->CreateComputeShaderEx(
-        render::kHairUpdateTangentSource, render::kHairUpdateTangentSourceVK, render::kHairUpdateTangentSourceHLSL,
-        3, 0, 0, 12, render::kHairUpdateTangentSourceWGSL);
+        khair_update_tangent_comp_glsl430, khair_update_tangent_comp_glsl450, khair_update_tangent_comp_hlsl,
+        3, 0, 0, 48, render::kHairUpdateTangentSourceWGSL);
 
     gpu_compute_enabled_ = (cs_integrate_ != 0 && cs_length_ != 0 &&
                             cs_local_shape_ != 0 && cs_update_tangent_ != 0);
@@ -289,10 +297,12 @@ void HairSystem::SimulateCompute(float dt) {
         const auto& sim = inst.sim_params;
 
         // --- Pass 1: Integration ---
-        rhi_->BindGpuBuffer(inst.position_ssbo,      0);
-        rhi_->BindGpuBuffer(inst.position_prev_ssbo, 1);
-        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 2);
-        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   3);
+        // binding 0=pos_cur(rw), 1=pos_prev(rw), 2=pos_rest(r), 3=strand_info(r)
+        // DX11 按 writable 分流 UAV/SRV（@DX11_SSBO_SPLIT）；GL/VK 忽略 writable。
+        rhi_->BindGpuBuffer(inst.position_ssbo,      0, true);
+        rhi_->BindGpuBuffer(inst.position_prev_ssbo, 1, true);
+        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 2, false);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   3, false);
         rhi_->SetComputeUniformInt(cs_integrate_,   "u_num_vertices", static_cast<int>(num_verts));
         rhi_->SetComputeUniformFloat(cs_integrate_, "u_dt",           dt);
         rhi_->SetComputeUniformFloat(cs_integrate_, "u_damping",      sim.damping);
@@ -313,9 +323,10 @@ void HairSystem::SimulateCompute(float dt) {
         unsigned int groups_s = (num_strands + 63) / 64;
 
         // --- Pass 2 & 3: Constraints (iterated) ---
-        rhi_->BindGpuBuffer(inst.position_ssbo,      0);
-        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 1);
-        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   2);
+        // binding 0=pos_cur(rw), 1=pos_rest(r), 2=strand_info(r)
+        rhi_->BindGpuBuffer(inst.position_ssbo,      0, true);
+        rhi_->BindGpuBuffer(inst.position_rest_ssbo, 1, false);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo,   2, false);
         for (int iter = 0; iter < sim.local_constraint_iterations; ++iter) {
             // Local shape
             rhi_->SetComputeUniformInt(cs_local_shape_,   "u_num_strands",     static_cast<int>(num_strands));
@@ -333,9 +344,10 @@ void HairSystem::SimulateCompute(float dt) {
         }
 
         // --- Pass 4: Update tangents ---
-        rhi_->BindGpuBuffer(inst.position_ssbo,  0);
-        rhi_->BindGpuBuffer(inst.tangent_ssbo,   1);
-        rhi_->BindGpuBuffer(inst.strand_info_ssbo, 2);
+        // binding 0=pos_cur(r), 1=tangent(rw), 2=strand_info(r)
+        rhi_->BindGpuBuffer(inst.position_ssbo,  0, false);
+        rhi_->BindGpuBuffer(inst.tangent_ssbo,   1, true);
+        rhi_->BindGpuBuffer(inst.strand_info_ssbo, 2, false);
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_num_vertices", static_cast<int>(num_verts));
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_num_strands",  static_cast<int>(num_strands));
         rhi_->SetComputeUniformInt(cs_update_tangent_, "u_verts_per_strand",

@@ -256,8 +256,35 @@ static std::string PushUBOStageSuffix(EShLanguage stage) {
     }
 }
 
+// @COMPUTE_RESOURCE_REMAP：GL compute 资源按类型 0-based 重映射。
+// spirv-cross 默认沿用 VK binding，但 GL compute 消费方
+// SetComputeTextureSampler(unit)=glActiveTexture 裸 unit、
+// SetComputeTextureImageMip(binding)=glBindImageTexture 裸 binding 都是按类型 0-based。
+// 纹理单元与 image 单元是分开的命名空间，故 sampled_images 与 storage_images
+// 各自独立按 binding 排序重编 0,1,2…。仅作用于带注解的新 compute shader。
+static void RemapComputeResources0Based(spirv_cross::CompilerGLSL& compiler) {
+    auto resources = compiler.get_shader_resources();
+    auto remap = [&](auto& list) {
+        std::vector<spirv_cross::Resource*> sorted;
+        for (auto& r : list) sorted.push_back(&r);
+        std::sort(sorted.begin(), sorted.end(),
+            [&](const spirv_cross::Resource* a, const spirv_cross::Resource* b) {
+                return compiler.get_decoration(a->id, spv::DecorationBinding)
+                     < compiler.get_decoration(b->id, spv::DecorationBinding);
+            });
+        uint32_t unit = 0;
+        for (auto* r : sorted) {
+            compiler.set_decoration(r->id, spv::DecorationBinding, unit++);
+            compiler.unset_decoration(r->id, spv::DecorationDescriptorSet);
+        }
+    };
+    remap(resources.sampled_images);
+    remap(resources.storage_images);
+}
+
 static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
-                                          EShLanguage stage) {
+                                          EShLanguage stage,
+                                          bool compute_resource_remap = false) {
     try {
         spirv_cross::CompilerGLSL compiler(spirv);
         spirv_cross::CompilerGLSL::Options options;
@@ -273,6 +300,8 @@ static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
         for (auto& pc : resources.push_constant_buffers) {
             compiler.set_decoration(pc.id, spv::DecorationBinding, 0);
         }
+
+        if (compute_resource_remap) RemapComputeResources0Based(compiler);
 
         // BoneMatrices / MorphWeights / PointLights / SpotLights 保持为 UBO 块
         // OpenGL 后端将通过 glBindBufferBase 绑定（与 PerFrame/PerScene/PerMaterial 一致）
@@ -294,7 +323,8 @@ static std::string CrossCompileToGLSL430(const std::vector<uint32_t>& spirv,
 // ============================================================================
 
 static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
-                                          EShLanguage stage) {
+                                          EShLanguage stage,
+                                          bool compute_resource_remap = false) {
     try {
         spirv_cross::CompilerGLSL compiler(spirv);
         spirv_cross::CompilerGLSL::Options options;
@@ -308,6 +338,8 @@ static std::string CrossCompileToESSL310(const std::vector<uint32_t>& spirv,
         for (auto& pc : resources.push_constant_buffers) {
             compiler.set_decoration(pc.id, spv::DecorationBinding, 0);
         }
+
+        if (compute_resource_remap) RemapComputeResources0Based(compiler);
 
         std::string essl = compiler.compile();
         essl = ConvertPushConstantToUBO(essl, PushUBOStageSuffix(stage));
@@ -705,7 +737,9 @@ static std::string OptimizeSkinnedVertexHLSLStorageBuffers(std::string hlsl, ESh
 
 static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
                                        EShLanguage stage,
-                                       uint32_t ssbo_hlsl_base = 16) {
+                                       uint32_t ssbo_hlsl_base = 16,
+                                       bool dx11_ssbo_split = false,
+                                       bool compute_resource_remap = false) {
     try {
         spirv_cross::CompilerHLSL compiler(spirv);
         spirv_cross::CompilerHLSL::Options options;
@@ -771,6 +805,30 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
             }
         }
 
+        // ---- Storage images → sequential u0, u1, ... (gated by @COMPUTE_RESOURCE_REMAP) ----
+        // DX11 compute 消费方 SetComputeTextureImage(slot)=CSSetUnorderedAccessViews(slot) 是按类型 0-based。
+        // spirv-cross 默认用 VK binding 作 u-register，若 storage image binding 不从 0 起（如 DDGI
+        // image 在 binding 1/2，binding 0 被 SSBO 占）会与消费方 u0/u1 不符。仅作用于带注解的 shader。
+        if (compute_resource_remap) {
+            std::vector<std::pair<std::pair<uint32_t,uint32_t>, spirv_cross::Resource*>> sorted;
+            for (auto& r : resources.storage_images) sorted.push_back({get_set_binding(r.id), &r});
+            std::sort(sorted.begin(), sorted.end(),
+                [](const auto& a, const auto& b){ return a.first < b.first; });
+            uint32_t uav_slot = 0;
+            for (auto& [sb, res] : sorted) {
+                spirv_cross::HLSLResourceBinding hlsl_binding{};
+                hlsl_binding.stage = exec_model;
+                hlsl_binding.desc_set = sb.first;
+                hlsl_binding.binding = sb.second;
+                hlsl_binding.uav.register_space = 0;
+                hlsl_binding.uav.register_binding = uav_slot++;
+                hlsl_binding.srv = {};
+                hlsl_binding.cbv = {};
+                hlsl_binding.sampler = {};
+                compiler.add_hlsl_resource_binding(hlsl_binding);
+            }
+        }
+
         // ---- Uniform buffers → sequential b0, b1, ... ----
         // push_constant occupies b0 if present; UBOs start after
         {
@@ -797,6 +855,8 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
         // ---- SSBO (storage buffers) → SRV t-register ----
         // 默认 t16+（避开纹理 t 槽）；标注 @SSBO_LOW_REGISTERS 的着色器用低位 t{binding}，
         // 使其与通用原语 BindStorageBuffer(slot) 在三后端对齐（仅顶点级 VS SSBO 安全，VS 无纹理）。
+        // @DX11_SSBO_SPLIT：DX11 compute 消费方约定 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}（裸 b，无 +16）
+        // （见 dx11_rhi_device.cpp DispatchCompute：readonly→CSSetShaderResources(16+slot)、writable→CSSetUnorderedAccessViews(slot)）。
         {
             uint32_t ssbo_base = ssbo_hlsl_base;
             if (ssbo_base >= 16 && tex_slot > ssbo_base) ssbo_base = tex_slot; // 高位默认仍避让纹理
@@ -809,7 +869,7 @@ static std::string CrossCompileToHLSL(const std::vector<uint32_t>& spirv,
                 hlsl_binding.srv.register_space = 0;
                 hlsl_binding.srv.register_binding = ssbo_base + b;
                 hlsl_binding.uav.register_space = 0;
-                hlsl_binding.uav.register_binding = ssbo_base + b;
+                hlsl_binding.uav.register_binding = dx11_ssbo_split ? b : (ssbo_base + b);
                 hlsl_binding.cbv = {};
                 hlsl_binding.sampler = {};
                 compiler.add_hlsl_resource_binding(hlsl_binding);
@@ -1370,6 +1430,12 @@ int main(int argc, char* argv[]) {
         // @SSBO_LOW_REGISTERS：HLSL SSBO 落到低位 t{binding}（与通用原语 BindStorageBuffer slot 对齐）。
         const uint32_t ssbo_hlsl_base =
             (source.find("@SSBO_LOW_REGISTERS") != std::string::npos) ? 0u : 16u;
+        // @COMPUTE_RESOURCE_REMAP：GL/ESSL compute sampled_images + storage_images 各自 0-based 重映射。
+        const bool compute_remap =
+            (source.find("@COMPUTE_RESOURCE_REMAP") != std::string::npos);
+        // @DX11_SSBO_SPLIT：HLSL 写 SSBO→UAV u{slot}（裸 b），读 SSBO→SRV t{16+slot}。
+        const bool dx11_ssbo_split =
+            (source.find("@DX11_SSBO_SPLIT") != std::string::npos);
 
         // Compile to SPIR-V
         std::vector<uint32_t> spirv;
@@ -1393,7 +1459,7 @@ int main(int argc, char* argv[]) {
         // Cross-compile to GLSL 430
         std::string glsl430;
         if (do_glsl) {
-            glsl430 = CrossCompileToGLSL430(spirv, stage);
+            glsl430 = CrossCompileToGLSL430(spirv, stage, compute_remap);
             if (glsl430.empty()) {
                 std::cerr << "FAILED (glsl430)\n";
                 error_count++;
@@ -1408,7 +1474,7 @@ int main(int argc, char* argv[]) {
         // Cross-compile to HLSL
         std::string hlsl;
         if (do_hlsl) {
-            hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base);
+            hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base, dx11_ssbo_split, compute_remap);
             if (hlsl.empty()) {
                 std::cerr << "FAILED (hlsl)\n";
                 error_count++;
@@ -1424,10 +1490,10 @@ int main(int argc, char* argv[]) {
         std::string essl310;
         std::string essl300;
         if (opts.embed) {
-            if (glsl430.empty()) glsl430 = CrossCompileToGLSL430(spirv, stage);
-            essl310 = CrossCompileToESSL310(spirv, stage);
+            if (glsl430.empty()) glsl430 = CrossCompileToGLSL430(spirv, stage, compute_remap);
+            essl310 = CrossCompileToESSL310(spirv, stage, compute_remap);
             essl300 = CrossCompileToESSL300(spirv, stage);
-            if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base);
+            if (hlsl.empty()) hlsl = CrossCompileToHLSL(spirv, stage, ssbo_hlsl_base, dx11_ssbo_split, compute_remap);
 
             // Compile HLSL to DXBC bytecode (Windows only)
             std::vector<uint8_t> dxbc;
