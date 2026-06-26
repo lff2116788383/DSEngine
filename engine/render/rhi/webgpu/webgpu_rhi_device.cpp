@@ -3010,6 +3010,162 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> }
 }
 )WGSL";
 
+// ============================================================
+// B-2 HDR-bloom 链（WebGPU 全屏 quad，镜像 engine/render/shaders/src/bloom_*.frag）
+// ============================================================
+// 渲染器（PostProcessRenderer/BloomRenderer）在无 compute 后端走全屏 quad：
+//   bloom_extract → bloom_downsample×N → bloom_upsample×N → bloom_composite。
+// 源纹理一律在 slot0 → group2 binding0/1；标量参数经 FS push（cmd.PushConstants Fragment）
+//   → group0 binding1 的 uniform。各 PP 程序逐句镜像对应 .frag。V 翻转与 kWgslComposite 一致：
+//   每趟均为「翻转 = 保向拷贝」，故整链方向一致、bloom 与场景在 composite 对齐。
+
+// Bloom 亮度提取（镜像 bloom_extract.frag）：软膝阈值仅保留高光。参数 {threshold, knee}。
+const char* kWgslBloomExtract = R"WGSL(// dse-wgsl
+struct PC { p : vec4<f32> };  // p.x=threshold, p.y=knee
+@group(0) @binding(1) var<uniform> pc : PC;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);
+  return o;
+}
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var src_smp : sampler;
+@fragment fn fs_main(i : VsOut) -> @location(0) vec4<f32> {
+  let color = textureSample(src_tex, src_smp, i.uv).rgb;
+  let brightness = dot(color, vec3<f32>(0.2126, 0.7152, 0.0722));
+  var soft = brightness - (pc.p.x - pc.p.y);
+  soft = clamp(soft / (2.0 * pc.p.y + 0.0001), 0.0, 1.0);
+  soft = soft * soft;
+  let contribution = max(soft, step(pc.p.x, brightness));
+  return vec4<f32>(color * contribution, 1.0);
+}
+)WGSL";
+
+// Bloom 13-tap 降采样（镜像 bloom_downsample.frag）。参数 {srcResX, srcResY}。
+const char* kWgslBloomDownsample = R"WGSL(// dse-wgsl
+struct PC { p : vec4<f32> };  // p.x=srcResX, p.y=srcResY
+@group(0) @binding(1) var<uniform> pc : PC;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);
+  return o;
+}
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var src_smp : sampler;
+fn S(uv : vec2<f32>) -> vec3<f32> { return textureSample(src_tex, src_smp, uv).rgb; }
+@fragment fn fs_main(inp : VsOut) -> @location(0) vec4<f32> {
+  let x = 1.0 / pc.p.x;
+  let y = 1.0 / pc.p.y;
+  let uv = inp.uv;
+  let a = S(vec2<f32>(uv.x - 2.0*x, uv.y + 2.0*y));
+  let b = S(vec2<f32>(uv.x,         uv.y + 2.0*y));
+  let c = S(vec2<f32>(uv.x + 2.0*x, uv.y + 2.0*y));
+  let d = S(vec2<f32>(uv.x - 2.0*x, uv.y));
+  let e = S(vec2<f32>(uv.x,         uv.y));
+  let f = S(vec2<f32>(uv.x + 2.0*x, uv.y));
+  let g = S(vec2<f32>(uv.x - 2.0*x, uv.y - 2.0*y));
+  let h = S(vec2<f32>(uv.x,         uv.y - 2.0*y));
+  let ii = S(vec2<f32>(uv.x + 2.0*x, uv.y - 2.0*y));
+  let j = S(vec2<f32>(uv.x - x, uv.y + y));
+  let k = S(vec2<f32>(uv.x + x, uv.y + y));
+  let l = S(vec2<f32>(uv.x - x, uv.y - y));
+  let m = S(vec2<f32>(uv.x + x, uv.y - y));
+  var ds = e * 0.125;
+  ds = ds + (a + c + g + ii) * 0.03125;
+  ds = ds + (b + d + f + h) * 0.0625;
+  ds = ds + (j + k + l + m) * 0.125;
+  return vec4<f32>(ds, 1.0);
+}
+)WGSL";
+
+// Bloom 3x3 帐篷升采样（镜像 bloom_upsample.frag）。参数 {filterRadius, blendWeight}；
+// 由调用方（BloomRenderer::Upsample）开 alpha 混合累加。
+const char* kWgslBloomUpsample = R"WGSL(// dse-wgsl
+struct PC { p : vec4<f32> };  // p.x=filterRadius, p.y=blendWeight
+@group(0) @binding(1) var<uniform> pc : PC;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);
+  return o;
+}
+@group(2) @binding(0) var src_tex : texture_2d<f32>;
+@group(2) @binding(1) var src_smp : sampler;
+fn S(uv : vec2<f32>) -> vec3<f32> { return textureSample(src_tex, src_smp, uv).rgb; }
+@fragment fn fs_main(inp : VsOut) -> @location(0) vec4<f32> {
+  let x = pc.p.x;
+  let y = pc.p.x;
+  let uv = inp.uv;
+  let a = S(vec2<f32>(uv.x - x, uv.y + y));
+  let b = S(vec2<f32>(uv.x,     uv.y + y));
+  let c = S(vec2<f32>(uv.x + x, uv.y + y));
+  let d = S(vec2<f32>(uv.x - x, uv.y));
+  let e = S(vec2<f32>(uv.x,     uv.y));
+  let f = S(vec2<f32>(uv.x + x, uv.y));
+  let g = S(vec2<f32>(uv.x - x, uv.y - y));
+  let h = S(vec2<f32>(uv.x,     uv.y - y));
+  let ii = S(vec2<f32>(uv.x + x, uv.y - y));
+  var us = e * 4.0;
+  us = us + (b + d + f + h) * 2.0;
+  us = us + (a + c + g + ii);
+  us = us * (1.0 / 16.0);
+  return vec4<f32>(us * pc.p.y, pc.p.y);
+}
+)WGSL";
+
+// Bloom 合成（镜像 bloom_composite_ssao_ae.frag 的 demo 子集）：场景 + bloom*intensity →
+// ACES(色*exposure) → gamma → 可选 vignette → IGN dither。SSAO/AE/LUT/CS/film-grain 在 demo
+// 全关，故不声明其纹理绑定（声明未绑定纹理会被 GetOrCreateRenderPipeline 判缺而跳过 draw）。
+// 场景在 slot0 → group2 binding0/1；bloom 经 req.Tex(2) → slot1 → group2 binding2/3。
+const char* kWgslBloomComposite = R"WGSL(// dse-wgsl
+struct PC {
+  p0 : vec4<f32>,  // exposure, bloomIntensity, bloomEnabled, ssaoEnabled
+  p1 : vec4<f32>,  // autoExposureEnabled, lutEnabled, lutIntensity, csEnabled
+  p2 : vec4<f32>,  // csStrength, vignetteEnabled, vignetteIntensity, vignetteRadius
+  p3 : vec4<f32>,  // vignetteSoftness, filmGrainEnabled, filmGrainIntensity, filmGrainTime
+};
+@group(0) @binding(1) var<uniform> pc : PC;
+struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32> };
+@vertex fn vs_main(@location(0) p : vec2<f32>, @location(1) uv : vec2<f32>) -> VsOut {
+  var o : VsOut;
+  o.pos = vec4<f32>(p, 0.0, 1.0);
+  o.uv = vec2<f32>(uv.x, 1.0 - uv.y);
+  return o;
+}
+@group(2) @binding(0) var scene_tex : texture_2d<f32>;
+@group(2) @binding(1) var scene_smp : sampler;
+@group(2) @binding(2) var bloom_tex : texture_2d<f32>;
+@group(2) @binding(3) var bloom_smp : sampler;
+fn AcesFilmic(v : vec3<f32>) -> vec3<f32> {
+  let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+  return clamp((v * (a * v + b)) / (v * (c * v + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+@fragment fn fs_main(inp : VsOut) -> @location(0) vec4<f32> {
+  var color = textureSample(scene_tex, scene_smp, inp.uv).rgb;
+  if (pc.p0.z != 0.0) {
+    let bloomColor = textureSample(bloom_tex, bloom_smp, inp.uv).rgb;
+    color = color + bloomColor * pc.p0.y;
+  }
+  color = AcesFilmic(color * pc.p0.x);
+  color = pow(color, vec3<f32>(1.0 / 2.2));
+  if (pc.p2.y != 0.0) {
+    let dist = length(inp.uv - vec2<f32>(0.5));
+    let radius = clamp(pc.p2.w, 0.001, 1.5);
+    let softness = max(pc.p3.x, 0.0001);
+    let vig = 1.0 - smoothstep(radius, radius + softness, dist);
+    color = color * mix(1.0, vig, clamp(pc.p2.z, 0.0, 1.0));
+  }
+  let ign = fract(52.9829189 * fract(0.06711056 * inp.pos.x + 0.00583715 * inp.pos.y));
+  color = color + vec3<f32>((ign - 0.5) / 255.0);
+  return vec4<f32>(color, 1.0);
+}
+)WGSL";
+
 // 前向着色（ForwardPbr/ForwardShaded）：顶点已 CPU 预变换到世界空间（见 MeshRenderer），
 // 仅需 PerFrame.vp 投影；方向光 Lambert + PerMaterial.albedo + albedo 纹理（slot0）。
 // 进阶特征（CSM/SSS/clearcoat/clustered/DDGI/...）留 B2c+；BGL 含全部 8 UBO/20 纹理槽，
@@ -3389,9 +3545,23 @@ unsigned int WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) {
 
 unsigned int WebGPURhiDevice::GetGenPPShaderProgram(const std::string& effect_name) {
     // 合成族（HDR→LDR tonemap）与直拷族分流；未迁移效果返回 0（其 pass 优雅跳过）。
-    if (effect_name == "bloom_composite" || effect_name == "tonemapping" ||
-        effect_name == "ssao_apply") {
+    // B-2：bloom 合成走 ACES + bloom/vignette（kWgslBloomComposite），独立于无 bloom 时的
+    //   tonemapping/ssao_apply 直合成（kWgslComposite，Reinhard）。
+    if (effect_name == "bloom_composite") {
+        return GetOrCreateWgslProgram("genpp.bloom_composite", kWgslBloomComposite);
+    }
+    if (effect_name == "tonemapping" || effect_name == "ssao_apply") {
         return GetOrCreateWgslProgram("genpp.composite", kWgslComposite);
+    }
+    // B-2：bloom 链各趟（亮度提取 / 13-tap 降采样 / 3x3 帐篷升采样），全屏 quad WGSL。
+    if (effect_name == "bloom_extract") {
+        return GetOrCreateWgslProgram("genpp.bloom_extract", kWgslBloomExtract);
+    }
+    if (effect_name == "bloom_downsample") {
+        return GetOrCreateWgslProgram("genpp.bloom_downsample", kWgslBloomDownsample);
+    }
+    if (effect_name == "bloom_upsample") {
+        return GetOrCreateWgslProgram("genpp.bloom_upsample", kWgslBloomUpsample);
     }
     if (effect_name == "copy" || effect_name == "passthrough" || effect_name == "fxaa") {
         return GetOrCreateWgslProgram("genpp.blit", kWgslFullscreenBlit);

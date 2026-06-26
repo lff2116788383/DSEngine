@@ -149,14 +149,15 @@ local function setup_skinned()
     dse.ecs.set_animator_3d_state(skinned, "idle", 0.0, true)
 end
 
--- Explicit tone-mapping control. Forward3D has no HDR post chain, so the
--- composite pass tone-maps with whatever exposure this component carries;
--- pinning it (plus a soft vignette) keeps the framing tidy and the midtones
--- from lifting to flat grey.
+-- HDR post chain. Forward3D runs the bloom → auto-exposure → composite passes;
+-- enabling bloom here lights the extract→down/up-sample→ACES-composite chain on
+-- both backends (WebGPU full-screen quad WGSL, WebGL2 ESSL300 quad fallback).
+-- Threshold sits below the bright skinned mesh's luminance (~0.59) so its
+-- highlights glow; the soft vignette plus pinned exposure keep framing tidy.
 local function setup_post_process()
     local pp = dse.ecs.create_entity()
     -- entity, bloom_enabled, bloom_threshold, bloom_intensity, exposure
-    dse.ecs.add_post_process(pp, false, 1.0, 1.0, 0.9)
+    dse.ecs.add_post_process(pp, true, 0.4, 1.5, 0.9)
     if dse.ecs.set_post_process_vignette then
         -- enabled, intensity, radius, softness
         dse.ecs.set_post_process_vignette(pp, true, 0.35, 0.85, 0.45)
