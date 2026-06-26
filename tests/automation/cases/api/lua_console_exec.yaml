@@ -1,0 +1,52 @@
+case_id: api.lua_console_exec
+title: Lua 控制台 → 无头/未初始化 VM 下优雅报错（结构化 success=false）→ 退出
+
+# 覆盖 dsengine_lua_execute（Lua 控制台面板后端）。
+# 无头编辑模式（--headless，未进入 Play、工程无 startup lua 脚本）下 Lua VM
+# 不会初始化（lua_runtime.cpp: state.state == nullptr）。本用例验证该工具在
+# 此情形下不崩溃，而是返回结构化错误：success=false + 明确 output。
+# 这是确定性可断言的负路径覆盖；真·求值路径需 Play 模式 + startup 脚本，不在
+# 当前无头 testdata 工程能力内。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/lua_console_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_ping
+      expect:
+        result.pong: true
+
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+
+    # 表达式：VM 未初始化 → 优雅失败，output 为确定性错误串
+    - method: dsengine_lua_execute
+      params:
+        code: "7 * 6"
+      expect:
+        result.success: false
+        result.output: "[error] Lua VM not initialized"
+
+    # 语句同样优雅失败（同一前置门校验在 pcall 之前）
+    - method: dsengine_lua_execute
+      params:
+        code: "print('hello')"
+      expect:
+        result.success: false
+        result.output: "[error] Lua VM not initialized"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

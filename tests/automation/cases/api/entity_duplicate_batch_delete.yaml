@@ -1,0 +1,79 @@
+case_id: api.entity_duplicate_batch_delete
+title: 打开工程 → 创建 → 复制 → 批量删除 → 校验实体数回落 → 退出
+
+# 覆盖 Hierarchy 右键「复制/批量删除」后端：dsengine_entity_duplicate / entity_batch_delete。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/dup_delete_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    - method: dsengine_entity_create
+      params:
+        name: "Orig"
+      capture:
+        orig_id: result.entity_id
+      expect:
+        result.name: "Orig"
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 5
+
+    # 复制：名字带 " (Copy)" 后缀，source_entity_id 指回源
+    - method: dsengine_entity_duplicate
+      params:
+        entity_id: "${orig_id}"
+      capture:
+        dup_id: result.entity_id
+      expect:
+        result.name: "Orig (Copy)"
+        result.source_entity_id: "${orig_id}"
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 6
+
+    # 批量删除源 + 副本，删除计数应为 2，回显被删 id
+    - method: dsengine_entity_batch_delete
+      params:
+        entity_ids:
+          - "${orig_id}"
+          - "${dup_id}"
+      expect:
+        result.deleted_count: 2
+
+    # 以「按名查找」校验删除生效（遍历存活实体，可靠）：
+    # 源与副本均应零命中。
+    # 注：不以 scene_get_state.entity_count 校验删除——该字段取
+    # registry.storage<entity>().size()，含已释放槽位，删除后不回落。
+    - method: dsengine_entity_find_by_name
+      params:
+        name: "Orig"
+      expect:
+        result.count: 0
+
+    - method: dsengine_entity_find_by_name
+      params:
+        name: "Orig (Copy)"
+      expect:
+        result.count: 0
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

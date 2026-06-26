@@ -1,16 +1,9 @@
-suite_id: editor-regression
-description: 回归套件（batch + api 混合）
+suite_id: editor-api-extended
+description: API 会话扩展覆盖（Lua 控制台 / Play-Stop 生命周期 / 选择 / 材质 / 复制+批删 / 新建+查找+重父级）
 
 env: tests/automation/envs/local-dse.yaml
 
 cases:
-  - tests/automation/cases/cli/headless_boot.yaml
-  - tests/automation/cases/cli/scene_load_screenshot.yaml
-  - tests/automation/cases/api/ping_smoke.yaml
-  - tests/automation/cases/api/hierarchy_scene_edit.yaml
-  - tests/automation/cases/api/inspector_modify_component.yaml
-  - tests/automation/cases/api/prefab_instantiate.yaml
-  - tests/automation/cases/api/undo_redo.yaml
   - tests/automation/cases/api/lua_console_exec.yaml
   - tests/automation/cases/api/play_stop_lifecycle.yaml
   - tests/automation/cases/api/entity_selection.yaml

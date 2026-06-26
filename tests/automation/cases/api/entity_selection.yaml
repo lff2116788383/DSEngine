@@ -1,0 +1,76 @@
+case_id: api.entity_selection
+title: 打开工程 → 创建两实体 → 多选 → 校验选择集 → 清空 → 校验空 → 退出
+
+# 覆盖选择系统（Hierarchy/Viewport 共享 SelectionManager）：
+# dsengine_selection_set / selection_get / selection_clear。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/selection_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+
+    # 初始选择集应为空
+    - method: dsengine_selection_get
+      expect:
+        result.count: 0
+
+    - method: dsengine_entity_create
+      params:
+        name: "SelA"
+      capture:
+        sel_a: result.entity_id
+      expect:
+        result.name: "SelA"
+
+    - method: dsengine_entity_create
+      params:
+        name: "SelB"
+      capture:
+        sel_b: result.entity_id
+      expect:
+        result.name: "SelB"
+
+    # 多选两个实体；捕获 primary 以便回查一致性
+    - method: dsengine_selection_set
+      params:
+        entity_ids:
+          - "${sel_a}"
+          - "${sel_b}"
+      capture:
+        primary: result.primary_id
+      expect:
+        result.count: 2
+
+    # 回查选择集：数量一致、primary 与 set 返回一致
+    # （不校验 entity_ids 列表本身——框架对 uint 列表成员做严格相等，
+    #  捕获变量经字符串化后与 JSON 整数比较会误判，故以 count+primary 断言。）
+    - method: dsengine_selection_get
+      expect:
+        result.count: 2
+        result.primary_id: "${primary}"
+
+    - method: dsengine_selection_clear
+      expect:
+        result.cleared: true
+
+    - method: dsengine_selection_get
+      expect:
+        result.count: 0
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

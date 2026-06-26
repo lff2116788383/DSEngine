@@ -1,0 +1,55 @@
+case_id: api.play_stop_lifecycle
+title: 打开工程 → 进入 Play → 校验状态/指标 → Stop → 校验回到 Edit → 退出
+
+# 覆盖工具栏 Play/Stop 生命周期（dsengine_editor_play / editor_stop）+ Profiler 指标
+# （dsengine_editor_get_metrics）。仅走合法状态转移：edit→play→edit。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/play_stop_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+
+    - method: dsengine_editor_get_state
+      expect:
+        result.editor_state: "edit"
+
+    - method: dsengine_editor_play
+      expect:
+        result.editor_state: "play"
+
+    - method: dsengine_editor_get_state
+      expect:
+        result.editor_state: "play"
+
+    # 指标面板后端：Play 态下 editor_state 与 metrics 一致，字段齐备
+    - method: dsengine_editor_get_metrics
+      expect:
+        result.editor_state: "play"
+        result.entity_count: ">= 0"
+        result.draw_calls: ">= 0"
+
+    - method: dsengine_editor_stop
+      expect:
+        result.editor_state: "edit"
+
+    - method: dsengine_editor_get_state
+      expect:
+        result.editor_state: "edit"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

@@ -7,6 +7,8 @@ cases:
   - tests/automation/cases/api/ping_smoke.yaml
   - tests/automation/cases/api/hierarchy_scene_edit.yaml
   - tests/automation/cases/api/undo_redo.yaml
+  - tests/automation/cases/api/play_stop_lifecycle.yaml
+  - tests/automation/cases/api/entity_selection.yaml
 
 case_delay_seconds: 1
 case_timeout_seconds: 90
