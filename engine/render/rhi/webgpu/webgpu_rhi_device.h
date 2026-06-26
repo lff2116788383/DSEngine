@@ -215,14 +215,23 @@ public:
     // ============================================================
     // Compute 能力：SupportsCompute()/SupportsSSBOCompute() 均为 true。WebGPU 经
     //   CreateComputeShaderEx 接受手写 WGSL（见下），DispatchCompute 走 explicit-layout 管线
-    //   （group1=UBO、group3=SSBO）。消费方按 compute shader 句柄 0 优雅回退：
-    //   - morph：已注入手译 WGSL（kMorphTargetCompWGSL）。
-    //   - GPU-driven cull/Hi-Z：门控 SupportsIndirectDraw()/hiz_texture，按 gpu_driven profile 激活。
-    //   - DDGI：仅 GLSL 源 → 句柄 0 → Init 优雅禁用（一次告警）。
-    //   - grass/hair：未传 WGSL → 句柄 0 → CPU 回退（hair 首次失败置 latch 永久跳过）。
-    //   skinning 已接好 WGSL compute 通路（GPU→GPU，靠 pass 间 usage 转换屏障保证顺序），但
-    //   GPUSkinningSystem 当前休眠：无生产者 Submit、WGSL 渲染端无 u_skinned==3 消费路径、demo 无
-    //   蒙皮网格 → 当前帧像素零变化；真实可见激活留待接入生产者 + WGSL 渲染路径。
+    //   （group1=UBO、group3=SSBO；storage image 仅 WriteOnly 访问，无 read/read_write）。
+    //   各 compute 消费方现状（已据实核对，2024 单源化收尾后）：
+    //   - morph：已注入手译 WGSL（kMorphTargetCompWGSL），WebGPU 上 GPU 激活。
+    //   - grass/hair：已接手写 WGSL（kGrassWindComputeSourceWGSL / kHair*SourceWGSL），由
+    //     grass_system.cpp / hair_system.cpp 驱动，WebGPU 上 GPU compute 激活（非回退）。
+    //     注：engine/render/hair/hair_instance.cpp 的 per-instance 路径当前无生产调用方
+    //     （线上头发由 hair_system 驱动），属遗留/自检用，但已补齐 WGSL 保持四后端一致。
+    //   - GPU-driven cull / Hi-Z：已接 WGSL；按 gpu_driven profile + SupportsIndirectDraw()/
+    //     hiz_texture 门控激活（非回退，demo profile 默认未开 → dispatch 关闭）。
+    //   - skinning：WGSL compute 通路 + 生产/消费均已接好（方案 B，frame_pipeline.cpp:1460）：
+    //     蒙皮项喂 GPU compute（生产者 Submit）→ 复用上一帧异步回读（消费）→ 世界烘焙为静态项
+    //     走 ForwardShaded（刻意不用 u_skinned==3 的 GPU→GPU 渲染路径）。故非“休眠”；仅当 demo
+    //     含蒙皮网格（Animator3DComponent + final_bone_matrices）时才产生可见像素，否则零像素变化。
+    //   - DDGI：唯一真回退项。probe update 对 irradiance/visibility atlas 做 imageLoad+imageStore
+    //     （rgba16f/rg16f 读-改-写），而本 RHI storage image 仅 WriteOnly、且浏览器 WebGPU 不支持
+    //     rgba16f/rg16f 的 read_write storage texture → 无法直译 WGSL；句柄 0 → Init 优雅禁用
+    //     （一次告警）。上 web 需 ping-pong 双缓冲 atlas（采样读 + WriteOnly 写）重构，非纯翻译。
     // ============================================================
     bool SupportsCompute() const override { return true; }
     bool SupportsSSBOCompute() const override { return true; }

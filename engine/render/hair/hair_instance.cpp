@@ -7,12 +7,16 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 
-// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/hair_*.comp 离线交叉编译）。
-// 头发物理无手译 WGSL → WebGPU 返回 0 句柄，Simulate 优雅跳过（compute_unavailable_）。
+// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/hair_*.comp 离线交叉编译）；
+// WGSL 取自 hair_compute_shaders.h 的 kHair*SourceWGSL 手写单份（四趟 SSBO-only，WebGPU 支持）。
+// 注：HairInstance::Simulate 当前无生产调用方（线上头发由 modules/.../hair_system.cpp 驱动，
+//     见 hair_system.cpp:245 自带 compute 通路）；此 per-instance 路径为遗留/自检用，但仍补齐
+//     WGSL 以保持四后端一致、避免“漏传 WGSL→句柄 0→回退”的误导。
 #include "engine/render/shaders/generated/embed/hair_integrate_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hair_length_constraint_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hair_local_shape_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hair_update_tangent_comp.gen.h"
+#include "engine/render/hair/hair_compute_shaders.h"
 
 namespace dse {
 namespace render {
@@ -154,30 +158,30 @@ void HairInstance::Simulate(RhiDevice* rhi, float dt, float time) {
     if (!rhi->SupportsCompute() || compute_unavailable_) return;
 
     // --- 懒加载 shader ---
-    // 任一编译失败即置位 compute_unavailable_：该后端虽报 SupportsCompute()=true 但未提供头发
-    // 物理手译 WGSL（返回 0 句柄），后续帧直接跳过，避免每帧重试 + 错误刷屏。
+    // 四趟均传手写 WGSL（kHair*SourceWGSL）；任一编译失败仍置位 compute_unavailable_
+    // 后续帧直接跳过，避免每帧重试 + 错误刷屏。
     if (cs_integrate_ == 0) {
         cs_integrate_ = rhi->CreateComputeShaderEx(
             khair_integrate_comp_glsl430, khair_integrate_comp_glsl450, khair_integrate_comp_hlsl,
-            4, 0, 0, 192);
+            4, 0, 0, 192, kHairIntegrateSourceWGSL);
         if (cs_integrate_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile integrate CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_length_ == 0) {
         cs_length_ = rhi->CreateComputeShaderEx(
             khair_length_constraint_comp_glsl430, khair_length_constraint_comp_glsl450, khair_length_constraint_comp_hlsl,
-            3, 0, 0, 16);
+            3, 0, 0, 16, kHairLengthConstraintSourceWGSL);
         if (cs_length_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile length CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_local_shape_ == 0) {
         cs_local_shape_ = rhi->CreateComputeShaderEx(
             khair_local_shape_comp_glsl430, khair_local_shape_comp_glsl450, khair_local_shape_comp_hlsl,
-            3, 0, 0, 48);
+            3, 0, 0, 48, kHairLocalShapeSourceWGSL);
         if (cs_local_shape_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile local shape CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
     if (cs_tangent_ == 0) {
         cs_tangent_ = rhi->CreateComputeShaderEx(
             khair_update_tangent_comp_glsl430, khair_update_tangent_comp_glsl450, khair_update_tangent_comp_hlsl,
-            3, 0, 0, 48);
+            3, 0, 0, 48, kHairUpdateTangentSourceWGSL);
         if (cs_tangent_ == 0) { DEBUG_LOG_ERROR("[Hair] Failed to compile tangent CS; hair GPU sim disabled"); compute_unavailable_ = true; return; }
     }
 
