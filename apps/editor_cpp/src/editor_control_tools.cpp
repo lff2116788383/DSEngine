@@ -112,9 +112,11 @@ static JsonRpcResponse HandleSceneGetState(
 
     rapidjson::Value entities_arr(rapidjson::kArrayType);
 
+    int valid_entity_count = 0;
     auto& entity_view = registry.storage<entt::entity>();
     for (auto entity : entity_view) {
         if (!registry.valid(entity)) continue;
+        ++valid_entity_count;
 
         rapidjson::Value entity_obj(rapidjson::kObjectType);
         entity_obj.AddMember("id", static_cast<uint32_t>(entity), alloc);
@@ -136,8 +138,7 @@ static JsonRpcResponse HandleSceneGetState(
     }
 
     result.AddMember("entities", entities_arr, alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("entity_count", valid_entity_count, alloc);
     return MakeOk(std::move(result));
 }
 

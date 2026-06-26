@@ -1,0 +1,104 @@
+case_id: api.component_lifecycle_delete
+title: 打开工程 → 创建 → 改名+改 transform → 取实体状态 → 加/删组件 → 单删 → 校验实体数回落 → 退出
+
+# 覆盖 Inspector 改属性 + 组件增删 + 单实体删除后端：
+# dsengine_entity_modify / entity_get_state / entity_remove_component / entity_delete。
+# 同时校验 entity_count 删除后回落（遍历 valid() 计数，不含已释放槽位）。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/component_lifecycle_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    # entt 实体 id 含版本位，registry.clear 后并非 0..n，故用 capture 取真实 id。
+    - method: dsengine_entity_create
+      params:
+        name: "Gadget"
+      capture:
+        gid: result.entity_id
+      expect:
+        result.name: "Gadget"
+
+    # 改名 + 设 transform 位置，校验回显
+    - method: dsengine_entity_modify
+      params:
+        entity_id: "${gid}"
+        name: "GadgetX"
+        position: [3, 4, 5]
+      expect:
+        result.entity_id: "${gid}"
+        result.modified: true
+
+    # 取单实体状态：改名与 transform 应已生效（数值列表用 float 宽松比较）
+    - method: dsengine_entity_get_state
+      params:
+        entity_id: "${gid}"
+      expect:
+        result.entity_id: "${gid}"
+        result.name: "GadgetX"
+        result.transform.position: [3, 4, 5]
+
+    # 加组件
+    - method: dsengine_entity_add_component
+      params:
+        entity_id: "${gid}"
+        type: "PointLight"
+      expect:
+        result.added: true
+        result.component: "PointLight"
+
+    # 列表应同时含 Transform 与 PointLight（contains 语义）
+    - method: dsengine_entity_get_components
+      params:
+        entity_id: "${gid}"
+        detailed: false
+      expect:
+        result.components: ["Transform", "PointLight"]
+
+    # 删组件：removed:true 仅当组件确实存在并被移除（RemoveComponentByType 语义），
+    # 以此可靠校验移除生效（列表 contains 无法断言「不含」）。
+    - method: dsengine_entity_remove_component
+      params:
+        entity_id: "${gid}"
+        type: "PointLight"
+      expect:
+        result.removed: true
+        result.component: "PointLight"
+
+    # 单实体删除
+    - method: dsengine_entity_delete
+      params:
+        entity_id: "${gid}"
+      expect:
+        result.deleted: true
+
+    # 删除后实体数回落到初始 4（entity_count 遍历 valid() 计数，不含已释放槽位）
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 4
+
+    # 再以「按名查找」校验删除生效：零命中
+    - method: dsengine_entity_find_by_name
+      params:
+        name: "GadgetX"
+      expect:
+        result.count: 0
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0
