@@ -98,6 +98,10 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
             }
             IM_CHECK(reg.all_of<ParentComponent>(b) && reg.get<ParentComponent>(b).parent == a);
 
+            // 等若干帧让 Hierarchy 据更新后的 ParentComponent 重绘：A 这一帧才从“叶子”变成
+            // 带折叠箭头的父节点，否则紧接着 ItemOpen 会因目标仍是叶子而报“Unable to Open”。
+            ctx->Yield(4);
+
             // 展开 A 让其子 B 的节点可见（折叠时子节点不绘制）。
             ctx->ItemOpen(a_ref);
             ctx->Yield(2);
