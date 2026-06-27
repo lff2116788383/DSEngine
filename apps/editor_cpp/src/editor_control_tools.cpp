@@ -128,6 +128,21 @@ static JsonRpcResponse HandleSceneGetState(
                 rapidjson::Value(name.name.c_str(), alloc), alloc);
         }
 
+        // Hierarchy: parent_id (null at root) + sibling_index, so read-side
+        // consumers can reconstruct the tree without touching the registry.
+        entt::entity parent = entt::null;
+        if (registry.all_of<ParentComponent>(entity))
+            parent = registry.get<ParentComponent>(entity).parent;
+        if (parent != entt::null && registry.valid(parent)) {
+            entity_obj.AddMember("parent_id",
+                rapidjson::Value(static_cast<uint32_t>(parent)), alloc);
+        } else {
+            entity_obj.AddMember("parent_id", rapidjson::Value(rapidjson::kNullType), alloc);
+        }
+        int sibling_index = registry.all_of<SiblingIndexComponent>(entity)
+            ? registry.get<SiblingIndexComponent>(entity).index : 0;
+        entity_obj.AddMember("sibling_index", rapidjson::Value(sibling_index), alloc);
+
         if (include_components) {
             rapidjson::Value components(rapidjson::kArrayType);
             CollectEntityComponents(registry, entity, components, alloc, true);
