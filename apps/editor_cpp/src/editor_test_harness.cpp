@@ -32,6 +32,12 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
         if (std::strcmp(arg, "--headless") == 0 ||
             std::strcmp(arg, "--automation-mode") == 0) {
             config.headless = true;
+        } else if (std::strcmp(arg, "--run-ui-tests") == 0) {
+            // 内嵌 Dear ImGui Test Engine 跑真实控件级 UI 测试（headless 友好）。
+            config.run_ui_tests = true;
+        } else if (StartsWith(arg, "--run-ui-tests=")) {
+            config.run_ui_tests = true;
+            config.ui_test_filter = ExtractValue(arg, "--run-ui-tests=");
         } else if (std::strcmp(arg, "--automation-api") == 0) {
             // 常驻 RPC 驱动模式：ControlServer 始终启动，且不按 max_frames 自动退出，
             // 仅由 dsengine_editor_quit 显式结束（供 API 会话 / soak 长稳使用）。

@@ -24,6 +24,8 @@ struct EditorTestConfig {
     int max_frames = 300;               ///< --max-frames=<N>: 自动退出帧数
     int api_port = 9527;                ///< --api-port=<N> / --api-port <N>: ControlServer 监听端口
     bool automation_api = false;        ///< --automation-api: 常驻 RPC 驱动模式，不按 max_frames 自退，仅由 dsengine_editor_quit 退出
+    bool run_ui_tests = false;          ///< --run-ui-tests[=filter]: 内嵌 Dear ImGui Test Engine 跑真实控件级 UI 测试（仅 DSE_EDITOR_UI_TESTS 构建生效）
+    std::string ui_test_filter;         ///< --run-ui-tests=<filter>: UI 测试过滤串（空=全跑）
 };
 
 /**

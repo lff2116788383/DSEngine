@@ -5,5 +5,5 @@ int main(int argc, char* argv[]) {
     if (!app.Init(argc, argv)) return -1;
     app.Run();
     app.Shutdown();
-    return 0;
+    return app.ExitCode();
 }

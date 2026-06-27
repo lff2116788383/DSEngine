@@ -24,6 +24,10 @@
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
 
+#ifdef DSE_EDITOR_UI_TESTS
+#include "ui_tests/ui_test_harness.h"
+#endif
+
 #include "engine/runtime/engine_app.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/world.h"
@@ -236,6 +240,13 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // 常驻 RPC 模式（--automation-api）不按帧数自退，置 -1 表示无限运行，直到收到 quit。
     frames_remaining_ = (headless && !test_config_.automation_api)
                             ? test_config_.max_frames : -1;
+
+#ifdef DSE_EDITOR_UI_TESTS
+    // UI 测试模式：不按 max_frames 自退，跑到测试队列清空（看门狗在 Run 里兜底）。
+    if (test_config_.run_ui_tests) {
+        frames_remaining_ = -1;
+    }
+#endif
 
     // 尽早安装崩溃处理器，覆盖 glfwInit/ImGui/字体加载等引擎 Init 之前的早期阶段。
     dse::editor::InstallEditorCrashHandler();
@@ -459,6 +470,21 @@ bool EditorApp::Init(int argc, char* argv[]) {
             dse::editor::ProjectManager::Get().OpenProject(dseproj);
         }
     }
+
+#ifdef DSE_EDITOR_UI_TESTS
+    // UI 测试模式需要有项目打开，Hierarchy 等面板才会绘制（否则只显示 Project Hub）。
+    // 无上次项目时回退到仓内自动化空工程，保证 CI 无头跑可复现。
+    if (test_config_.run_ui_tests && !dse::editor::ProjectManager::Get().HasOpenProject()) {
+        std::filesystem::path ui_test_proj = GetProjectRootPath() /
+            "tests" / "automation" / "testdata" / "projects" / "empty_project" / "project.dseproj";
+        if (std::filesystem::exists(ui_test_proj)) {
+            dse::editor::ProjectManager::Get().OpenProject(ui_test_proj);
+        } else {
+            std::cerr << "[Editor][ui-tests] 测试工程缺失: " << ui_test_proj << std::endl;
+        }
+    }
+#endif
+
     // 项目打开后同步 data root 到 AssetManager
     if (dse::editor::ProjectManager::Get().HasOpenProject()) {
         dse::editor::ProjectManager::Get().ApplyDataRoot();
@@ -588,6 +614,21 @@ bool EditorApp::Init(int argc, char* argv[]) {
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
 
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
+
+#ifdef DSE_EDITOR_UI_TESTS
+    if (test_config_.run_ui_tests) {
+        dse::editor::uitest::Init(
+            ImGui::GetCurrentContext(),
+            {engine_instance_, command_bus_.get()},
+            test_config_.ui_test_filter);
+        std::cout << "[Editor][ui-tests] Test engine started"
+                  << (test_config_.ui_test_filter.empty()
+                          ? " (all tests)"
+                          : (" (filter=" + test_config_.ui_test_filter + ")"))
+                  << std::endl;
+    }
+#endif
+
     return true;
 }
 
@@ -771,6 +812,25 @@ void EditorApp::Run() {
 
         glfwSwapBuffers(window_);
 
+#ifdef DSE_EDITOR_UI_TESTS
+        if (test_config_.run_ui_tests) {
+            dse::editor::uitest::PostFrame();
+            if (dse::editor::uitest::IsFinished()) {
+                exit_code_ = dse::editor::uitest::ResultExitCode();
+                dse::editor::uitest::Stop();
+                break;
+            }
+            // 看门狗：测试卡死时兜底退出，避免无头 CI 永久挂起。
+            if (frame_counter > 20000) {
+                std::cerr << "[Editor][ui-tests] Watchdog tripped at frame "
+                          << frame_counter << " — aborting as failure." << std::endl;
+                exit_code_ = 1;
+                dse::editor::uitest::Stop();
+                break;
+            }
+        }
+#endif
+
         // 首帧已上屏：显示主窗口并淡出 splash（满足最短显示时长后才真正消失）。
         if (!first_frame_shown_) {
             first_frame_shown_ = true;
@@ -910,7 +970,21 @@ void EditorApp::Shutdown() {
     }
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
+
+#ifdef DSE_EDITOR_UI_TESTS
+    // 测试引擎须在 DestroyContext 之前 Stop（解绑协程），之后 Destroy（落 ini 等）。
+    if (test_config_.run_ui_tests) {
+        dse::editor::uitest::Stop();
+    }
+#endif
+
     ImGui::DestroyContext();
+
+#ifdef DSE_EDITOR_UI_TESTS
+    if (test_config_.run_ui_tests) {
+        dse::editor::uitest::Destroy();
+    }
+#endif
 
     if (window_) {
         glfwDestroyWindow(window_);

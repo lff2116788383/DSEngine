@@ -78,3 +78,6 @@
 [submodule "depends/mimalloc"]
 	path = depends/mimalloc
 	url = https://github.com/microsoft/mimalloc.git
+[submodule "depends/imgui_test_engine"]
+	path = depends/imgui_test_engine
+	url = https://github.com/ocornut/imgui_test_engine.git

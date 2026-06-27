@@ -45,6 +45,9 @@ public:
     /// 关闭并释放所有资源。
     void Shutdown();
 
+    /// 进程退出码：常规运行恒为 0；`--run-ui-tests` 时为 UI 测试结果（全过 0 / 有失败 1）。
+    int ExitCode() const { return exit_code_; }
+
 
     /// 获取项目根目录
     static std::filesystem::path GetProjectRootPath();
@@ -83,6 +86,7 @@ private:
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};
     int frames_remaining_ = -1;
+    int exit_code_ = 0;  // 进程退出码（UI 测试模式下承载测试结果）
 
     // DrawEditorUI 状态（替代原 static 变量）
     entt::entity selected_entity_{entt::null};

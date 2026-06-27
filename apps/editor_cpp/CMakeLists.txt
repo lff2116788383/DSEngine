@@ -1,3 +1,9 @@
+# ─── 可选：内嵌 Dear ImGui Test Engine 的真实控件级 UI 测试 ──────────────────
+# 默认 OFF → 生产二进制零影响（不编入测试引擎、不改默认产物名）。
+# ON 时把 test engine 源码编进编辑器，产出独立的 dsengine-editor-uitest，与常规
+# dsengine-editor（供 editor-api 套件用）并存，互不覆盖。
+option(DSE_EDITOR_UI_TESTS "Build editor with embedded Dear ImGui Test Engine (--run-ui-tests)" OFF)
+
 # ─── IXWebSocket (WebSocket server for Control Server / MCP) ────────────────
 set(USE_TLS OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
@@ -57,6 +63,33 @@ target_include_directories(dse_editor_cpp PRIVATE
 
 target_link_libraries(dse_editor_cpp PRIVATE dse_engine dse_editor_core ixwebsocket opengl32 comdlg32 crypt32)
 
+# ─── Dear ImGui Test Engine 接线（仅 DSE_EDITOR_UI_TESTS=ON） ─────────────────
+if(DSE_EDITOR_UI_TESTS)
+    set(DSE_IMGUI_TE_DIR ${CMAKE_SOURCE_DIR}/depends/imgui_test_engine/imgui_test_engine)
+    # 测试引擎 8 个源文件（与 src/ 内的用例一起编进 dse_editor_cpp）。
+    target_sources(dse_editor_cpp PRIVATE
+        ${DSE_IMGUI_TE_DIR}/imgui_te_engine.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_context.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_coroutine.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_exporters.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_perftool.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_ui.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_te_utils.cpp
+        ${DSE_IMGUI_TE_DIR}/imgui_capture_tool.cpp
+    )
+    target_include_directories(dse_editor_cpp PRIVATE
+        ${CMAKE_SOURCE_DIR}/depends/imgui_test_engine
+        ${DSE_IMGUI_TE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/ui_tests
+    )
+    # DSE_EDITOR_UI_TESTS 打开用例代码；IMGUI_USER_CONFIG 必须对整个 target 生效
+    # （含 imgui.cpp / ImGuizmo），否则 ImGuiContext/ImGuiIO 的 ABI 在两侧不一致。
+    target_compile_definitions(dse_editor_cpp PRIVATE
+        DSE_EDITOR_UI_TESTS
+        IMGUI_USER_CONFIG="dse_imconfig.h"
+    )
+endif()
+
 # Animation Retargeting 面板需要在编辑器内导入 gltf/fbx 骨架并烘焙 .danim，
 # 复用资源编译核心 importer.cpp（默认仅编进 AssetBuilder）。需要 assimp 与 tinygltf。
 if(DSE_HAS_ASSIMP)
@@ -66,10 +99,15 @@ if(DSE_HAS_ASSIMP)
     target_compile_definitions(dse_editor_cpp PRIVATE DSE_HAS_ASSIMP=1 DSE_EDITOR_HAS_IMPORTER=1)
 endif()
 
-# 将编译产物放到 bin 目录下
+# 将编译产物放到 bin 目录下。UI 测试构建用独立产物名，与常规编辑器并存不覆盖。
+if(DSE_EDITOR_UI_TESTS)
+    set(DSE_EDITOR_OUTPUT_NAME "dsengine-editor-uitest")
+else()
+    set(DSE_EDITOR_OUTPUT_NAME "dsengine-editor")
+endif()
 set_target_properties(dse_editor_cpp PROPERTIES 
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
-    OUTPUT_NAME "dsengine-editor"
+    OUTPUT_NAME "${DSE_EDITOR_OUTPUT_NAME}"
 )
 
 # 确保构建编辑器时同步构建 AssetBuilder 和 standalone runtime，
