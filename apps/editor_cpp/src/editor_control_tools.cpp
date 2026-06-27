@@ -21,6 +21,7 @@
 #include "editor_shared_components.h"
 #include "editor_shortcuts.h"
 #include "editor_undo.h"
+#include "editor_entity_snapshot.h"
 #include "editor_shell.h"
 #include "editor_scene_tabs.h"
 #include "editor_prefab.h"
@@ -199,6 +200,10 @@ static void AddComponentByType(entt::registry& registry, entt::entity entity,
             mr.roughness = getF("roughness", 0.5f);
             if (props && props->HasMember("color"))
                 mr.color = ParseVec4((*props)["color"]);
+        }
+    } else if (type == "UIRenderer" || type == "UIRendererComponent") {
+        if (!registry.all_of<UIRendererComponent>(entity)) {
+            registry.emplace<UIRendererComponent>(entity);
         }
     } else if (type == "Camera3D" || type == "Camera3DComponent") {
         if (!registry.all_of<Camera3DComponent>(entity)) {
@@ -445,14 +450,26 @@ static JsonRpcResponse HandleEntityCreate(
     if (registry.all_of<PostProcessComponent>(entity))       added_comps.PushBack("PostProcess", alloc);
     result.AddMember("components", added_comps, alloc);
 
-    // Undo: destroy the created entity
+    // Undo/Redo（全组件保真，与层级面板 Create 收敛后一致）：
+    // do/redo —— 首次入栈实体已存在则跳过，撤销后重做用快照重建（新 handle）；
+    // undo —— 销毁当前实体。用 shared 状态跨重建跟踪 handle。
     {
-        entt::entity created = entity;
+        auto& w = world;
         auto& reg = registry;
+        auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg, entity));
+        auto tracked = std::make_shared<entt::entity>(entity);
         GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
             "Create Entity (RPC)",
-            []() {},
-            [created, &reg]() { if (reg.valid(created)) reg.destroy(created); }
+            [tracked, snapshot, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) return;
+                *tracked = snapshot->Restore(w, reg);
+            },
+            [tracked, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) {
+                    w.DestroyEntity(*tracked);
+                    *tracked = entt::null;
+                }
+            }
         ));
     }
 
@@ -476,30 +493,23 @@ static JsonRpcResponse HandleEntityDelete(
         return MakeToolError(-32602, "Invalid entity_id");
     }
 
-    // Snapshot name + transform for undo reconstruction
-    std::string saved_name;
-    TransformComponent saved_tf;
-    bool has_tf = false;
-    if (registry.all_of<EditorNameComponent>(entity))
-        saved_name = registry.get<EditorNameComponent>(entity).name;
-    if (registry.all_of<TransformComponent>(entity)) {
-        saved_tf = registry.get<TransformComponent>(entity);
-        has_tf = true;
-    }
-
-    registry.destroy(entity);
-
-    // Undo: recreate entity with name + transform
+    // 全组件快照（撤销可完整还原，含 parent/sibling）；do/redo 销毁、undo 还原。
+    // 不在此处直接 destroy：交由命令 do-lambda 在入栈时执行（统一一条销毁路径）。
     {
         auto& w = engine.pipeline()->world();
         auto& reg = registry;
+        auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg, entity));
+        auto tracked = std::make_shared<entt::entity>(entity);
         GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
             "Delete Entity (RPC)",
-            []() {},
-            [saved_name, saved_tf, has_tf, &w, &reg]() {
-                auto e = w.CreateEntity();
-                if (!saved_name.empty()) reg.emplace<EditorNameComponent>(e, saved_name);
-                if (has_tf) reg.emplace<TransformComponent>(e, saved_tf);
+            [tracked, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) {
+                    w.DestroyEntity(*tracked);
+                    *tracked = entt::null;
+                }
+            },
+            [tracked, snapshot, &w, &reg]() {
+                *tracked = snapshot->Restore(w, reg);
             }
         ));
     }
@@ -524,12 +534,6 @@ static JsonRpcResponse HandleEntityBatchDelete(
     auto& registry = engine.pipeline()->world().registry();
     auto& w = engine.pipeline()->world();
 
-    struct EntitySnapshot {
-        std::string name;
-        TransformComponent tf;
-        bool has_tf = false;
-    };
-
     auto compound = std::make_unique<CompoundCommand>("Batch Delete");
     std::vector<uint32_t> deleted_ids;
 
@@ -538,25 +542,22 @@ static JsonRpcResponse HandleEntityBatchDelete(
         auto entity = static_cast<entt::entity>(v.GetUint());
         if (!registry.valid(entity)) continue;
 
-        EntitySnapshot snap;
-        if (registry.all_of<EditorNameComponent>(entity))
-            snap.name = registry.get<EditorNameComponent>(entity).name;
-        if (registry.all_of<TransformComponent>(entity)) {
-            snap.tf = registry.get<TransformComponent>(entity);
-            snap.has_tf = true;
-        }
-
         deleted_ids.push_back(static_cast<uint32_t>(entity));
-        registry.destroy(entity);
 
+        // 全组件快照；do/redo 销毁、undo 还原。销毁交由 compound 入栈时的 do 执行。
         auto& reg = registry;
+        auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg, entity));
+        auto tracked = std::make_shared<entt::entity>(entity);
         compound->AddCommand(std::make_unique<LambdaCommand>(
             "Delete Entity",
-            []() {},
-            [snap, &w, &reg]() {
-                auto e = w.CreateEntity();
-                if (!snap.name.empty()) reg.emplace<EditorNameComponent>(e, snap.name);
-                if (snap.has_tf) reg.emplace<TransformComponent>(e, snap.tf);
+            [tracked, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) {
+                    w.DestroyEntity(*tracked);
+                    *tracked = entt::null;
+                }
+            },
+            [tracked, snapshot, &w, &reg]() {
+                *tracked = snapshot->Restore(w, reg);
             }
         ));
     }
@@ -1541,55 +1542,48 @@ static JsonRpcResponse HandleEntityDuplicate(
         return MakeToolError(-32602, "Invalid entity_id");
     }
 
-    auto dst = world.CreateEntity();
+    // 全组件复制（与层级面板 Duplicate 收敛后一致）：用快照捕获 src 的所有组件，
+    // 还原为新实体（运行时状态自动重置）。挂到根（清除 parent/sibling）、改名 + 偏移，
+    // 与既有行为保持一致。
+    EntitySnapshot copy_snap = EntitySnapshot::Capture(registry, src);
+    copy_snap.parent.reset();
+    copy_snap.sibling_index.reset();
+    auto dst = copy_snap.Restore(world, registry);
 
     std::string new_name = "Copy";
-    if (registry.all_of<EditorNameComponent>(src))
-        new_name = registry.get<EditorNameComponent>(src).name + " (Copy)";
-    registry.emplace<EditorNameComponent>(dst, new_name);
+    if (registry.all_of<EditorNameComponent>(dst)) {
+        new_name = registry.get<EditorNameComponent>(dst).name + " (Copy)";
+        registry.get<EditorNameComponent>(dst).name = new_name;
+    } else {
+        registry.emplace<EditorNameComponent>(dst, new_name);
+    }
 
-    if (registry.all_of<TransformComponent>(src)) {
-        auto tf = registry.get<TransformComponent>(src);
+    if (registry.all_of<TransformComponent>(dst)) {
+        auto& tf = registry.get<TransformComponent>(dst);
         tf.position += glm::vec3(0.5f, 0.0f, 0.5f);
         tf.dirty = true;
-        registry.emplace<TransformComponent>(dst, tf);
     } else {
         registry.emplace<TransformComponent>(dst);
     }
 
-    if (registry.all_of<MeshRendererComponent>(src))
-        registry.emplace<MeshRendererComponent>(dst, registry.get<MeshRendererComponent>(src));
-    if (registry.all_of<Camera3DComponent>(src))
-        registry.emplace<Camera3DComponent>(dst, registry.get<Camera3DComponent>(src));
-    if (registry.all_of<DirectionalLight3DComponent>(src))
-        registry.emplace<DirectionalLight3DComponent>(dst, registry.get<DirectionalLight3DComponent>(src));
-    if (registry.all_of<PointLightComponent>(src))
-        registry.emplace<PointLightComponent>(dst, registry.get<PointLightComponent>(src));
-    if (registry.all_of<SpotLightComponent>(src))
-        registry.emplace<SpotLightComponent>(dst, registry.get<SpotLightComponent>(src));
-    if (registry.all_of<RigidBody3DComponent>(src))
-        registry.emplace<RigidBody3DComponent>(dst, registry.get<RigidBody3DComponent>(src));
-    if (registry.all_of<BoxCollider3DComponent>(src))
-        registry.emplace<BoxCollider3DComponent>(dst, registry.get<BoxCollider3DComponent>(src));
-    if (registry.all_of<SphereCollider3DComponent>(src))
-        registry.emplace<SphereCollider3DComponent>(dst, registry.get<SphereCollider3DComponent>(src));
-    if (registry.all_of<AudioSourceComponent>(src))
-        registry.emplace<AudioSourceComponent>(dst, registry.get<AudioSourceComponent>(src));
-    if (registry.all_of<SkyLightComponent>(src))
-        registry.emplace<SkyLightComponent>(dst, registry.get<SkyLightComponent>(src));
-    if (registry.all_of<PostProcessComponent>(src))
-        registry.emplace<PostProcessComponent>(dst, registry.get<PostProcessComponent>(src));
-    if (registry.all_of<dse::Animator3DComponent>(src))
-        registry.emplace<dse::Animator3DComponent>(dst, registry.get<dse::Animator3DComponent>(src));
-
-    // Undo: destroy the duplicate
+    // Undo/Redo（全组件保真）：do/redo 重建副本快照、undo 销毁副本。
     {
-        entt::entity dup = dst;
+        auto& w = world;
         auto& reg = registry;
+        auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg, dst));
+        auto tracked = std::make_shared<entt::entity>(dst);
         GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
             "Duplicate Entity (RPC)",
-            []() {},
-            [dup, &reg]() { if (reg.valid(dup)) reg.destroy(dup); }
+            [tracked, snapshot, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) return;
+                *tracked = snapshot->Restore(w, reg);
+            },
+            [tracked, &w, &reg]() {
+                if (*tracked != entt::null && reg.valid(*tracked)) {
+                    w.DestroyEntity(*tracked);
+                    *tracked = entt::null;
+                }
+            }
         ));
     }
 

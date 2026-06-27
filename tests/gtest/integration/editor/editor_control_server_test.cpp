@@ -1720,3 +1720,138 @@ TEST_F(ControlServerTest, EntityModify_RenameUndo) {
     Dispatch("dsengine_editor_undo", "{}");
     EXPECT_EQ(registry.get<dse::editor::EditorNameComponent>(ent).name, "OrigName");
 }
+
+// ─── Test 102: entity_create undo→redo 重建实体（redo 非空，全组件保真）────────
+
+// 测试 控制服务器：实体创建撤销后重做重新创建
+TEST_F(ControlServerTest, EntityCreate_UndoThenRedoRecreates) {
+    Dispatch("dsengine_scene_new", "{}");
+    int base = CountAliveEntities();
+
+    ASSERT_FALSE(Dispatch("dsengine_entity_create", R"({"name":"ReCreate"})").is_error);
+    EXPECT_EQ(CountAliveEntities(), base + 1);
+
+    // Undo → 实体被销毁
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), base);
+
+    // Redo → 实体被重建（修复前 redo 为空操作，不重建）
+    ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), base + 1);
+
+    auto fr = Dispatch("dsengine_entity_find_by_name", R"({"name":"ReCreate"})");
+    ASSERT_FALSE(fr.is_error);
+    EXPECT_EQ(fr.result["count"].GetInt(), 1);
+}
+
+// ─── Test 103: entity_delete undo 全组件还原（不止 name+transform）────────────
+
+// 测试 控制服务器：实体删除撤销还原全部组件
+TEST_F(ControlServerTest, EntityDelete_UndoRestoresAllComponents) {
+    Dispatch("dsengine_scene_new", "{}");
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"FullDel"})");
+    ASSERT_FALSE(cr.is_error);
+    uint32_t eid = cr.result["entity_id"].GetUint();
+
+    std::string ap = R"({"entity_id":)" + std::to_string(eid) +
+        R"(,"type":"UIRenderer"})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", ap.c_str()).is_error);
+
+    std::string dp = R"({"entity_id":)" + std::to_string(eid) + "}";
+    ASSERT_FALSE(Dispatch("dsengine_entity_delete", dp.c_str()).is_error);
+
+    // Undo → 实体连同 UIRenderer 一并还原（修复前只还原 name+transform）
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+
+    auto fr = Dispatch("dsengine_entity_find_by_name", R"({"name":"FullDel"})");
+    ASSERT_FALSE(fr.is_error);
+    ASSERT_EQ(fr.result["count"].GetInt(), 1);
+    auto restored = static_cast<entt::entity>(fr.result["entity_id"].GetUint());
+    auto& registry = world_.registry();
+    ASSERT_TRUE(registry.valid(restored));
+    EXPECT_TRUE(registry.all_of<UIRendererComponent>(restored));
+    EXPECT_TRUE(registry.all_of<dse::editor::EditorNameComponent>(restored));
+}
+
+// ─── Test 104: entity_delete undo→redo 再次删除 ──────────────────────────────
+
+// 测试 控制服务器：实体删除撤销后重做再次删除
+TEST_F(ControlServerTest, EntityDelete_UndoThenRedoReDeletes) {
+    Dispatch("dsengine_scene_new", "{}");
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"ReDelete"})");
+    uint32_t eid = cr.result["entity_id"].GetUint();
+    int after_create = CountAliveEntities();
+
+    std::string dp = R"({"entity_id":)" + std::to_string(eid) + "}";
+    ASSERT_FALSE(Dispatch("dsengine_entity_delete", dp.c_str()).is_error);
+    EXPECT_EQ(CountAliveEntities(), after_create - 1);
+
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), after_create);
+
+    // Redo → 再次删除（修复前 redo 为空操作）
+    ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), after_create - 1);
+}
+
+// ─── Test 105: entity_duplicate 全组件复制（含 UI 组件）+ undo/redo ───────────
+
+// 测试 控制服务器：实体复制全组件保真并支持重做
+TEST_F(ControlServerTest, EntityDuplicate_CopiesAllComponentsAndRedo) {
+    Dispatch("dsengine_scene_new", "{}");
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"DupSrc"})");
+    uint32_t src = cr.result["entity_id"].GetUint();
+
+    std::string ap = R"({"entity_id":)" + std::to_string(src) +
+        R"(,"type":"UIRenderer"})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_add_component", ap.c_str()).is_error);
+
+    std::string dp = R"({"entity_id":)" + std::to_string(src) + "}";
+    auto dr = Dispatch("dsengine_entity_duplicate", dp.c_str());
+    ASSERT_FALSE(dr.is_error) << dr.error_message;
+    auto dup = static_cast<entt::entity>(dr.result["entity_id"].GetUint());
+    EXPECT_STREQ(dr.result["name"].GetString(), "DupSrc (Copy)");
+
+    auto& registry = world_.registry();
+    // 修复前工具的 duplicate 不复制 UIRenderer，现在全组件保真
+    EXPECT_TRUE(registry.all_of<UIRendererComponent>(dup));
+
+    int after_dup = CountAliveEntities();
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), after_dup - 1);
+    // Redo → 副本重建（修复前 redo 为空操作）
+    ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
+    EXPECT_EQ(CountAliveEntities(), after_dup);
+}
+
+// ─── Test 106: entity_reparent detach（unparent）undo→redo ────────────────────
+
+// 测试 控制服务器：实体脱离父级撤销后重做再次脱离
+TEST_F(ControlServerTest, EntityReparent_DetachUndoThenRedo) {
+    auto pr = Dispatch("dsengine_entity_create", R"({"name":"DetParent"})");
+    uint32_t parent_id = pr.result["entity_id"].GetUint();
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"DetChild"})");
+    uint32_t child_id = cr.result["entity_id"].GetUint();
+
+    auto& registry = world_.registry();
+    auto child = static_cast<entt::entity>(child_id);
+
+    std::string attach = R"({"entity_id":)" + std::to_string(child_id) +
+        R"(,"parent_id":)" + std::to_string(parent_id) + R"(})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_reparent", attach.c_str()).is_error);
+    ASSERT_TRUE(registry.all_of<ParentComponent>(child));
+
+    // Detach：reparent 不带 parent_id（对应面板"拖到场景根"unparent）
+    std::string detach = R"({"entity_id":)" + std::to_string(child_id) + "}";
+    ASSERT_FALSE(Dispatch("dsengine_entity_reparent", detach.c_str()).is_error);
+    EXPECT_FALSE(registry.all_of<ParentComponent>(child));
+
+    // Undo → 回到 parent 之下
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+    ASSERT_TRUE(registry.all_of<ParentComponent>(child));
+    EXPECT_EQ(static_cast<uint32_t>(registry.get<ParentComponent>(child).parent), parent_id);
+
+    // Redo → 再次脱离（验证 detach 的 redo 非空）
+    ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
+    EXPECT_FALSE(registry.all_of<ParentComponent>(child));
+}

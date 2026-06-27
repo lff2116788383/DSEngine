@@ -156,6 +156,127 @@ void ReparentViaBus(EditorContext& context, entt::entity dragged,
         }), false);
 }
 
+// 把 create / delete / duplicate 写操作收敛到 CommandBus（复用 dsengine_entity_*
+// 工具与统一撤销栈），消除"面板直接改 registry + 自挂 LambdaCommand"的双写。
+// command_bus 缺失（理论上仅非 GUI 装配）时退回与工具等价的全组件快照直写兜底。
+
+// 创建实体：name + 额外组件类型（如 "UIRenderer"）。返回新实体（失败为 entt::null）。
+entt::entity CreateEntityViaBus(EditorContext& context, const std::string& name,
+                                const std::vector<std::string>& components) {
+    if (context.command_bus) {
+        core::CreateEntityCmd cmd;
+        cmd.name = name;
+        cmd.components = components;
+        auto res = context.command_bus->dispatch(cmd, context.engine);
+        if (res.ok && res.data.IsObject() && res.data.HasMember("entity_id") &&
+            res.data["entity_id"].IsUint()) {
+            return static_cast<entt::entity>(res.data["entity_id"].GetUint());
+        }
+        return entt::null;
+    }
+
+    // ── Fallback：等价复刻工具行为（创建 + 完整 undo/redo）──
+    auto& world_ref = context.world;
+    auto& reg_ref = context.registry;
+    auto new_ent = world_ref.CreateEntity();
+    reg_ref.emplace<EditorNameComponent>(new_ent, name);
+    reg_ref.emplace<TransformComponent>(new_ent);
+    for (const auto& t : components) {
+        if ((t == "UIRenderer" || t == "UIRendererComponent") &&
+            !reg_ref.all_of<UIRendererComponent>(new_ent)) {
+            reg_ref.emplace<UIRendererComponent>(new_ent);
+        }
+    }
+    auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg_ref, new_ent));
+    auto tracked = std::make_shared<entt::entity>(new_ent);
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Create Entity",
+        [&world_ref, &reg_ref, snapshot, tracked]() {
+            if (*tracked != entt::null && reg_ref.valid(*tracked)) return;
+            *tracked = snapshot->Restore(world_ref, reg_ref);
+        },
+        [&world_ref, &reg_ref, tracked]() {
+            if (*tracked != entt::null && reg_ref.valid(*tracked)) {
+                world_ref.DestroyEntity(*tracked);
+                *tracked = entt::null;
+            }
+        }), false);
+    return new_ent;
+}
+
+// 删除实体（全组件快照，撤销可完整还原）。
+void DeleteEntityViaBus(EditorContext& context, entt::entity target) {
+    if (!context.registry.valid(target)) return;
+    if (context.command_bus) {
+        core::DeleteEntityCmd cmd;
+        cmd.entity_id = static_cast<uint32_t>(target);
+        context.command_bus->dispatch(cmd, context.engine);
+        return;
+    }
+
+    // ── Fallback：全组件快照 + 完整 undo/redo（do 销毁、undo 还原）──
+    auto& world_ref = context.world;
+    auto& reg_ref = context.registry;
+    auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg_ref, target));
+    auto tracked = std::make_shared<entt::entity>(target);
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Delete Entity",
+        [&world_ref, &reg_ref, tracked]() {
+            if (*tracked != entt::null && reg_ref.valid(*tracked)) {
+                world_ref.DestroyEntity(*tracked);
+                *tracked = entt::null;
+            }
+        },
+        [&world_ref, &reg_ref, snapshot, tracked]() {
+            *tracked = snapshot->Restore(world_ref, reg_ref);
+        }), false);
+}
+
+// 复制实体（全组件快照复制，挂根 + 改名 + 偏移）。返回副本（失败为 entt::null）。
+entt::entity DuplicateEntityViaBus(EditorContext& context, entt::entity source) {
+    if (!context.registry.valid(source)) return entt::null;
+    if (context.command_bus) {
+        core::DuplicateEntityCmd cmd;
+        cmd.entity_id = static_cast<uint32_t>(source);
+        auto res = context.command_bus->dispatch(cmd, context.engine);
+        if (res.ok && res.data.IsObject() && res.data.HasMember("entity_id") &&
+            res.data["entity_id"].IsUint()) {
+            return static_cast<entt::entity>(res.data["entity_id"].GetUint());
+        }
+        return entt::null;
+    }
+
+    // ── Fallback：全组件快照复制 + 完整 undo/redo ──
+    auto& world_ref = context.world;
+    auto& reg_ref = context.registry;
+    EntitySnapshot copy_snap = EntitySnapshot::Capture(reg_ref, source);
+    copy_snap.parent.reset();
+    copy_snap.sibling_index.reset();
+    auto dst = copy_snap.Restore(world_ref, reg_ref);
+    if (reg_ref.all_of<EditorNameComponent>(dst))
+        reg_ref.get<EditorNameComponent>(dst).name += " (Copy)";
+    if (reg_ref.all_of<TransformComponent>(dst)) {
+        auto& tf = reg_ref.get<TransformComponent>(dst);
+        tf.position += glm::vec3(0.5f, 0.0f, 0.5f);
+        tf.dirty = true;
+    }
+    auto snapshot = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(reg_ref, dst));
+    auto tracked = std::make_shared<entt::entity>(dst);
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Duplicate Entity",
+        [&world_ref, &reg_ref, snapshot, tracked]() {
+            if (*tracked != entt::null && reg_ref.valid(*tracked)) return;
+            *tracked = snapshot->Restore(world_ref, reg_ref);
+        },
+        [&world_ref, &reg_ref, tracked]() {
+            if (*tracked != entt::null && reg_ref.valid(*tracked)) {
+                world_ref.DestroyEntity(*tracked);
+                *tracked = entt::null;
+            }
+        }), false);
+    return dst;
+}
+
 // Pre-computed set of entities visible under current search filter (includes ancestors of matches)
 static std::unordered_set<entt::entity> s_visible_entities;
 static std::string s_last_computed_filter;
@@ -431,20 +552,9 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
                 entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
                 if (context.registry.valid(dragged) && context.registry.all_of<ParentComponent>(dragged)) {
-                    entt::entity old_parent = context.registry.get<ParentComponent>(dragged).parent;
-                    context.registry.remove<ParentComponent>(dragged);
-                    auto& reg = context.registry;
-                    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                        "Unparent Entity",
-                        []{},
-                        [&reg, dragged, old_parent]() {
-                            if (!reg.valid(dragged)) return;
-                            if (reg.all_of<ParentComponent>(dragged)) {
-                                reg.get<ParentComponent>(dragged).parent = old_parent;
-                            } else {
-                                reg.emplace<ParentComponent>(dragged, old_parent);
-                            }
-                        }), false);
+                    // 收敛到 CommandBus：detach（parent=null）走 dsengine_entity_reparent，
+                    // 与自动化/无头共用同一撤销栈与完整 undo/redo。
+                    ReparentViaBus(context, dragged, std::nullopt, std::nullopt);
                     EditorLog(LogLevel::Info, "Unparented entity");
                 }
             }
@@ -481,60 +591,18 @@ void DrawHierarchyPanel(EditorContext& context) {
 
     if (ImGui::BeginPopupContextWindow()) {
         if (ImGui::MenuItem("Create Empty Entity", nullptr, false, !context.read_only)) {
-            auto new_ent = context.world.CreateEntity();
-            context.registry.emplace<EditorNameComponent>(new_ent, "New Entity");
-            context.registry.emplace<TransformComponent>(new_ent);
-            context.selected_entity = new_ent;
-            EditorLog(LogLevel::Info, "Created entity: New Entity");
-            auto& world_ref = context.world;
-            auto& reg_ref = context.registry;
-            auto& sel_ref = context.selected_entity;
-            auto tracked = std::make_shared<entt::entity>(new_ent);
-            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                "Create Empty Entity",
-                [&world_ref, &reg_ref, &sel_ref, tracked]() {
-                    auto ent = world_ref.CreateEntity();
-                    reg_ref.emplace<EditorNameComponent>(ent, "New Entity");
-                    reg_ref.emplace<TransformComponent>(ent);
-                    sel_ref = ent;
-                    *tracked = ent;
-                },
-                [&world_ref, &sel_ref, tracked]() {
-                    if (*tracked != entt::null) {
-                        world_ref.DestroyEntity(*tracked);
-                        if (sel_ref == *tracked) sel_ref = entt::null;
-                        *tracked = entt::null;
-                    }
-                }), false);
+            entt::entity created = CreateEntityViaBus(context, "New Entity", {});
+            if (created != entt::null) {
+                context.selected_entity = created;
+                EditorLog(LogLevel::Info, "Created entity: New Entity");
+            }
         }
         if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
-            auto new_ent = context.world.CreateEntity();
-            context.registry.emplace<EditorNameComponent>(new_ent, "New UI Element");
-            context.registry.emplace<TransformComponent>(new_ent);
-            context.registry.emplace<UIRendererComponent>(new_ent);
-            context.selected_entity = new_ent;
-            EditorLog(LogLevel::Info, "Created entity: New UI Element");
-            auto& world_ref = context.world;
-            auto& reg_ref = context.registry;
-            auto& sel_ref = context.selected_entity;
-            auto tracked = std::make_shared<entt::entity>(new_ent);
-            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                "Create UI Entity",
-                [&world_ref, &reg_ref, &sel_ref, tracked]() {
-                    auto ent = world_ref.CreateEntity();
-                    reg_ref.emplace<EditorNameComponent>(ent, "New UI Element");
-                    reg_ref.emplace<TransformComponent>(ent);
-                    reg_ref.emplace<UIRendererComponent>(ent);
-                    sel_ref = ent;
-                    *tracked = ent;
-                },
-                [&world_ref, &sel_ref, tracked]() {
-                    if (*tracked != entt::null) {
-                        world_ref.DestroyEntity(*tracked);
-                        if (sel_ref == *tracked) sel_ref = entt::null;
-                        *tracked = entt::null;
-                    }
-                }), false);
+            entt::entity created = CreateEntityViaBus(context, "New UI Element", {"UIRenderer"});
+            if (created != entt::null) {
+                context.selected_entity = created;
+                EditorLog(LogLevel::Info, "Created entity: New UI Element");
+            }
         }
         if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
             if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only))  CreateEntity3DCube(context);
@@ -581,148 +649,16 @@ void DrawHierarchyPanel(EditorContext& context) {
             if (context.registry.all_of<EditorNameComponent>(to_delete)) {
                 deleted_name = context.registry.get<EditorNameComponent>(to_delete).name;
             }
-            // Full component snapshot for complete Undo restoration
-            auto snapshot = std::make_shared<EntitySnapshot>(
-                EntitySnapshot::Capture(context.registry, to_delete));
-
-            context.world.DestroyEntity(to_delete);
+            DeleteEntityViaBus(context, to_delete);
             context.selected_entity = entt::null;
             EditorLog(LogLevel::Info, "Deleted entity: " + deleted_name);
-            auto& world_ref = context.world;
-            auto& reg_ref = context.registry;
-            auto& sel_ref = context.selected_entity;
-            auto tracked = std::make_shared<entt::entity>(entt::null);
-            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                "Delete Entity: " + deleted_name,
-                [&world_ref, &reg_ref, &sel_ref, tracked]() {
-                    if (*tracked != entt::null && reg_ref.valid(*tracked)) {
-                        world_ref.DestroyEntity(*tracked);
-                        if (sel_ref == *tracked) sel_ref = entt::null;
-                        *tracked = entt::null;
-                    }
-                },
-                [&world_ref, &reg_ref, &sel_ref, tracked, snapshot]() {
-                    auto restored = snapshot->Restore(world_ref, reg_ref);
-                    sel_ref = restored;
-                    *tracked = restored;
-                }), false);
         }
         if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
-            const entt::entity source = context.selected_entity;
-            auto new_ent = context.world.CreateEntity();
-            auto copy_component = [&](auto type_tag) {
-                using Component = decltype(type_tag);
-                if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
-                    context.registry.emplace<Component>(new_ent, context.registry.get<Component>(source));
-                }
-            };
-            auto copy_runtime_reset_component = [&](auto type_tag, auto reset_runtime) {
-                using Component = decltype(type_tag);
-                if (context.registry.all_of<Component>(source) && !context.registry.all_of<Component>(new_ent)) {
-                    auto component = context.registry.get<Component>(source);
-                    reset_runtime(component);
-                    context.registry.emplace<Component>(new_ent, std::move(component));
-                }
-            };
-
-            copy_component(EditorNameComponent{});
-            if (context.registry.all_of<EditorNameComponent>(new_ent)) {
-                context.registry.get<EditorNameComponent>(new_ent).name += " (Copy)";
+            entt::entity dup = DuplicateEntityViaBus(context, context.selected_entity);
+            if (dup != entt::null) {
+                context.selected_entity = dup;
+                EditorLog(LogLevel::Info, "Duplicated entity");
             }
-
-            copy_component(TransformComponent{});
-            copy_component(SpriteRendererComponent{});
-            copy_runtime_reset_component(UIRendererComponent{}, [](UIRendererComponent& ui) {
-                ui.is_hovered = false;
-                ui.is_pressed = false;
-                ui.runtime_model = glm::mat4(1.0f);
-            });
-            copy_runtime_reset_component(UILabelComponent{}, [](UILabelComponent& label) {
-                label.runtime_glyph_entities.clear();
-                label.dirty = true;
-            });
-            copy_component(UIAnchorComponent{});
-            copy_component(UIGridLayoutComponent{});
-            copy_component(UICanvasScalerComponent{});
-            copy_component(UIAnimationComponent{});
-            copy_runtime_reset_component(UIRichTextComponent{}, [](UIRichTextComponent& rich) {
-                rich.dirty = true;
-            });
-            copy_runtime_reset_component(RigidBody2DComponent{}, [](RigidBody2DComponent& rigidbody) {
-                rigidbody.runtime_body = nullptr;
-            });
-            copy_runtime_reset_component(ParticleEmitterComponent{}, [](ParticleEmitterComponent& emitter) {
-                emitter.particles.clear();
-                emitter.emit_accumulator = 0.0f;
-                emitter.pending_burst = 0;
-            });
-            copy_component(dse::Camera3DComponent{});
-            copy_component(dse::DirectionalLight3DComponent{});
-            copy_component(dse::PointLightComponent{});
-            copy_component(dse::SpotLightComponent{});
-            copy_component(dse::MeshRendererComponent{});
-            copy_component(dse::Animator3DComponent{});
-            copy_component(dse::FreeCameraControllerComponent{});
-            copy_component(dse::TerrainComponent{});
-            copy_component(ScriptComponent{});
-            copy_component(dse::SubSceneComponent{});
-            copy_runtime_reset_component(dse::RigidBody3DComponent{}, [](dse::RigidBody3DComponent& rigidbody) {
-                rigidbody.runtime_body = nullptr;
-            });
-            copy_runtime_reset_component(dse::BoxCollider3DComponent{}, [](dse::BoxCollider3DComponent& collider) {
-                collider.runtime_shape = nullptr;
-            });
-            copy_runtime_reset_component(dse::SphereCollider3DComponent{}, [](dse::SphereCollider3DComponent& collider) {
-                collider.runtime_shape = nullptr;
-            });
-            copy_runtime_reset_component(dse::CapsuleCollider3DComponent{}, [](dse::CapsuleCollider3DComponent& collider) {
-                collider.runtime_shape = nullptr;
-            });
-            copy_runtime_reset_component(dse::MeshCollider3DComponent{}, [](dse::MeshCollider3DComponent& collider) {
-                collider.runtime_shape = nullptr;
-            });
-            copy_runtime_reset_component(AudioSourceComponent{}, [](AudioSourceComponent& audio) {
-                audio.runtime_handle = 0;
-                audio.is_playing = false;
-                audio.restart_requested = false;
-            });
-            copy_component(AudioListenerComponent{});
-            copy_runtime_reset_component(dse::ParticleSystem3DComponent{}, [](dse::ParticleSystem3DComponent& particle_system) {
-                particle_system.particles.clear();
-                particle_system.emission_accumulator = 0.0f;
-                particle_system.active_particle_count = 0;
-                particle_system.instance_vbo = 0;
-                particle_system.texture_handle = 0;
-                particle_system.initialized = false;
-            });
-            copy_component(dse::PostProcessComponent{});
-
-            if (context.registry.all_of<TransformComponent>(new_ent)) {
-                context.registry.get<TransformComponent>(new_ent).dirty = true;
-            }
-            context.selected_entity = new_ent;
-            EditorLog(LogLevel::Info, "Duplicated entity");
-            // Capture snapshot of the duplicate for reliable Redo
-            auto dup_snapshot = std::make_shared<EntitySnapshot>(
-                EntitySnapshot::Capture(context.registry, new_ent));
-            auto& world_ref = context.world;
-            auto& reg_ref = context.registry;
-            auto& sel_ref = context.selected_entity;
-            auto tracked = std::make_shared<entt::entity>(new_ent);
-            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                "Duplicate Entity",
-                [&world_ref, &reg_ref, &sel_ref, tracked, dup_snapshot]() {
-                    auto ent = dup_snapshot->Restore(world_ref, reg_ref);
-                    sel_ref = ent;
-                    *tracked = ent;
-                },
-                [&world_ref, &sel_ref, tracked]() {
-                    if (*tracked != entt::null) {
-                        world_ref.DestroyEntity(*tracked);
-                        if (sel_ref == *tracked) sel_ref = entt::null;
-                        *tracked = entt::null;
-                    }
-                }), false);
         }
         if (context.read_only) {
             ImGui::Separator();

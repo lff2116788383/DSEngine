@@ -55,6 +55,14 @@ CommandResult CommandBus::dispatch(const EditorCommand& cmd,
         [&](const CreateEntityCmd& c) {
             method = "dsengine_entity_create";
             if (!c.name.empty()) AddString(params, "name", c.name);
+            if (!c.components.empty()) {
+                auto& a = params.GetAllocator();
+                rapidjson::Value arr(rapidjson::kArrayType);
+                for (const auto& t : c.components)
+                    arr.PushBack(rapidjson::Value(
+                        t.c_str(), static_cast<rapidjson::SizeType>(t.size()), a), a);
+                params.AddMember("components", arr, a);
+            }
         },
         [&](const DeleteEntityCmd& c) {
             method = "dsengine_entity_delete";

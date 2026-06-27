@@ -36,7 +36,8 @@ using Vec3 = std::array<float, 3>;
 
 /// 创建实体 → dsengine_entity_create
 struct CreateEntityCmd {
-    std::string name;                  ///< 可空；空则由工具取默认名
+    std::string name;                      ///< 可空；空则由工具取默认名
+    std::vector<std::string> components;   ///< 额外组件类型（如 "UIRenderer"），由工具 AddComponentByType 解析
 };
 
 /// 删除实体 → dsengine_entity_delete

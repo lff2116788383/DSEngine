@@ -1841,8 +1841,15 @@ void AssetManager::StartFileWatcher() {
     // skip the background hot-reload watcher thread.
     return;
 #endif
+    // 已在运行则忽略（幂等）。
     if (file_watcher_running_.load()) {
         return;
+    }
+    // 监听线程可能已自行退出（如上次 data root 打开失败）却尚未 join，此时
+    // file_watcher_thread_ 仍 joinable。对 joinable 的 std::thread 做移动赋值会
+    // 触发 std::terminate，故先停掉并 join 任何残留线程再启动新线程。
+    if (file_watcher_thread_.joinable()) {
+        file_watcher_thread_.join();
     }
     file_watcher_running_.store(true);
     file_watcher_thread_ = std::thread(&AssetManager::FileWatcherLoop, this);
