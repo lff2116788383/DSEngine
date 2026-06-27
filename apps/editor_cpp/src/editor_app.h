@@ -22,14 +22,16 @@ class EngineInstance;
 struct EngineRunConfig;
 }
 
+namespace dse::editor::core { class CommandBus; }
+
 namespace dse::editor {
 
 /// 编辑器应用类：管理窗口、ImGui、引擎实例、主循环生命周期。
 /// 替代原 main.cpp 中的大量 static 全局状态。
 class EditorApp {
 public:
-    EditorApp() = default;
-    ~EditorApp() = default;
+    EditorApp();   // out-of-line：command_bus_ 持有不完整类型 unique_ptr
+    ~EditorApp();  // out-of-line：同上
 
     EditorApp(const EditorApp&) = delete;
     EditorApp& operator=(const EditorApp&) = delete;
@@ -66,6 +68,9 @@ private:
 
     // Control Server (WebSocket JSON-RPC)
     std::unique_ptr<ControlServer> control_server_;
+
+    // 写路径门面：把面板结构性写操作经类型化命令发往现有工具（复用撤销栈）。
+    std::unique_ptr<dse::editor::core::CommandBus> command_bus_;
 
     // Plugin Manager
     PluginManager plugin_manager_;

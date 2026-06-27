@@ -1461,6 +1461,33 @@ TEST_F(ControlServerTest, EntityReparent_CircularParent_ReturnsError) {
     EXPECT_TRUE(resp.is_error);
 }
 
+// ─── Test 87b: entity_reparent undo 解绑后 redo 重新挂回（redo 保真） ─────────
+
+// 测试 控制服务器：实体重设父级撤销后重做恢复父级
+TEST_F(ControlServerTest, EntityReparent_UndoThenRedoRestoresParent) {
+    auto pr = Dispatch("dsengine_entity_create", R"({"name":"Parent"})");
+    uint32_t parent_id = pr.result["entity_id"].GetUint();
+    auto cr = Dispatch("dsengine_entity_create", R"({"name":"Child"})");
+    uint32_t child_id = cr.result["entity_id"].GetUint();
+
+    std::string p = R"({"entity_id":)" + std::to_string(child_id) +
+        R"(,"parent_id":)" + std::to_string(parent_id) + R"(})";
+    ASSERT_FALSE(Dispatch("dsengine_entity_reparent", p.c_str()).is_error);
+
+    auto& registry = world_.registry();
+    auto child = static_cast<entt::entity>(child_id);
+    ASSERT_TRUE(registry.all_of<ParentComponent>(child));
+
+    // Undo → child 回到根（原 old_parent 为 null）
+    ASSERT_FALSE(Dispatch("dsengine_editor_undo", "{}").is_error);
+    EXPECT_FALSE(registry.all_of<ParentComponent>(child));
+
+    // Redo → 重新挂回 parent（验证非空 redo lambda）
+    ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
+    ASSERT_TRUE(registry.all_of<ParentComponent>(child));
+    EXPECT_EQ(static_cast<uint32_t>(registry.get<ParentComponent>(child).parent), parent_id);
+}
+
 // ─── Test 88: selection_get 空选择返回 count=0 ───────────────────────────────
 
 // 测试 控制服务器：选择获取空返回零

@@ -11,6 +11,8 @@ class World;
 
 namespace dse::runtime { class EngineInstance; }
 
+namespace dse::editor::core { class CommandBus; }
+
 namespace dse::editor {
 
 /// 编辑器统一上下文：所有面板 / 快捷键 / 工具栏共享的核心状态。
@@ -40,6 +42,11 @@ struct EditorContext {
     // Language preview
     std::vector<std::string>& editor_languages;
     int& editor_language_index;
+
+    // 写路径门面（绑定到 ControlServer::DispatchTool）。面板把结构性写操作
+    // 经此发往现有工具，统一撤销栈、消除"面板直接改 registry"的双写。
+    // 可空：自动化/测试等无门面场景退回原有直写路径。
+    core::CommandBus* command_bus = nullptr;
 };
 
 } // namespace dse::editor

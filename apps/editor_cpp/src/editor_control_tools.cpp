@@ -1758,24 +1758,45 @@ static JsonRpcResponse HandleEntityReparent(
     }
 
     // Apply sibling_index if provided
+    bool has_new_sibling = false;
+    int new_sibling = 0;
     if (params.HasMember("sibling_index") && params["sibling_index"].IsInt()) {
-        int si = params["sibling_index"].GetInt();
+        has_new_sibling = true;
+        new_sibling = params["sibling_index"].GetInt();
         if (registry.all_of<SiblingIndexComponent>(entity))
-            registry.get<SiblingIndexComponent>(entity).index = si;
+            registry.get<SiblingIndexComponent>(entity).index = new_sibling;
         else
-            registry.emplace<SiblingIndexComponent>(entity, si);
+            registry.emplace<SiblingIndexComponent>(entity, new_sibling);
     }
 
     // Dirty transform
     if (registry.all_of<TransformComponent>(entity))
         registry.get<TransformComponent>(entity).dirty = true;
 
-    // Undo
+    // Undo / Redo（redo 与面板拖拽 reparent 行为一致：重新施加 new_parent 及
+    // 显式给定的 sibling_index；redo lambda 即时执行一次为幂等再应用）。
     {
         auto& reg = registry;
         GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
             "Reparent Entity (RPC)",
-            []() {},
+            [&reg, entity, new_parent, has_new_sibling, new_sibling]() {
+                if (!reg.valid(entity)) return;
+                if (new_parent == entt::null) {
+                    reg.remove<ParentComponent>(entity);
+                } else if (reg.all_of<ParentComponent>(entity)) {
+                    reg.get<ParentComponent>(entity).parent = new_parent;
+                } else {
+                    reg.emplace<ParentComponent>(entity, new_parent);
+                }
+                if (has_new_sibling) {
+                    if (reg.all_of<SiblingIndexComponent>(entity))
+                        reg.get<SiblingIndexComponent>(entity).index = new_sibling;
+                    else
+                        reg.emplace<SiblingIndexComponent>(entity, new_sibling);
+                }
+                if (reg.all_of<TransformComponent>(entity))
+                    reg.get<TransformComponent>(entity).dirty = true;
+            },
             [&reg, entity, old_parent, old_sibling]() {
                 if (!reg.valid(entity)) return;
                 if (old_parent == entt::null) {

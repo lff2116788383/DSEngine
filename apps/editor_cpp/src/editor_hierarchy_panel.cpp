@@ -16,6 +16,7 @@
 #include "editor_selection.h"
 #include "editor_prefab.h"
 #include "editor_project.h"
+#include "apps/editor_cpp/core/command_bus.h"
 
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
@@ -89,6 +90,70 @@ std::vector<entt::entity> GetChildren(entt::registry& registry, entt::entity par
         return ia < ib;
     });
     return children;
+}
+
+// 把层级面板的 reparent/reorder 写操作收敛到 CommandBus（复用
+// dsengine_entity_reparent 工具与统一撤销栈），消除"面板直接改 registry"双写。
+//   parent == std::nullopt → 挂到根（detach）；否则挂到给定父实体。
+//   sibling == std::nullopt → 不显式设置兄弟序；否则写入 sibling_index。
+// command_bus 缺失（理论上仅非 GUI 装配）时退回与工具等价的直写 + LambdaCommand 兜底。
+void ReparentViaBus(EditorContext& context, entt::entity dragged,
+                    std::optional<entt::entity> parent,
+                    std::optional<int> sibling) {
+    if (context.command_bus) {
+        core::ReparentEntityCmd cmd;
+        cmd.entity_id = static_cast<uint32_t>(dragged);
+        if (parent.has_value())
+            cmd.parent = static_cast<uint32_t>(*parent);
+        if (sibling.has_value())
+            cmd.sibling_index = *sibling;
+        context.command_bus->dispatch(cmd, context.engine);
+        return;
+    }
+
+    // ── Fallback：command_bus 不可用时，等价复刻工具行为（应用 + 完整 undo/redo）──
+    auto& reg = context.registry;
+    if (!reg.valid(dragged)) return;
+    entt::entity new_parent = parent.value_or(entt::null);
+    bool has_sibling = sibling.has_value();
+    int new_sibling = sibling.value_or(0);
+
+    entt::entity old_parent = entt::null;
+    int old_sibling = 0;
+    if (reg.all_of<ParentComponent>(dragged)) old_parent = reg.get<ParentComponent>(dragged).parent;
+    if (reg.all_of<SiblingIndexComponent>(dragged)) old_sibling = reg.get<SiblingIndexComponent>(dragged).index;
+
+    auto apply = [&reg, dragged, new_parent, has_sibling, new_sibling]() {
+        if (!reg.valid(dragged)) return;
+        if (new_parent == entt::null) {
+            if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
+        } else if (reg.all_of<ParentComponent>(dragged)) {
+            reg.get<ParentComponent>(dragged).parent = new_parent;
+        } else {
+            reg.emplace<ParentComponent>(dragged, new_parent);
+        }
+        if (has_sibling) {
+            if (reg.all_of<SiblingIndexComponent>(dragged)) reg.get<SiblingIndexComponent>(dragged).index = new_sibling;
+            else reg.emplace<SiblingIndexComponent>(dragged, new_sibling);
+        }
+        if (reg.all_of<TransformComponent>(dragged)) reg.get<TransformComponent>(dragged).dirty = true;
+    };
+    apply();
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Reparent Entity",
+        apply,
+        [&reg, dragged, old_parent, old_sibling]() {
+            if (!reg.valid(dragged)) return;
+            if (old_parent == entt::null) {
+                if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
+            } else if (reg.all_of<ParentComponent>(dragged)) {
+                reg.get<ParentComponent>(dragged).parent = old_parent;
+            } else {
+                reg.emplace<ParentComponent>(dragged, old_parent);
+            }
+            if (reg.all_of<SiblingIndexComponent>(dragged)) reg.get<SiblingIndexComponent>(dragged).index = old_sibling;
+            if (reg.all_of<TransformComponent>(dragged)) reg.get<TransformComponent>(dragged).dirty = true;
+        }), false);
 }
 
 // Pre-computed set of entities visible under current search filter (includes ancestors of matches)
@@ -261,50 +326,9 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_ENTITY")) {
                 entt::entity dragged = *static_cast<const entt::entity*>(payload->Data);
                 if (dragged != entity && context.registry.valid(dragged)) {
-                    entt::entity old_parent = entt::null;
-                    int old_sibling = 0;
-                    if (context.registry.all_of<ParentComponent>(dragged)) {
-                        old_parent = context.registry.get<ParentComponent>(dragged).parent;
-                    }
-                    if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
-                        old_sibling = context.registry.get<SiblingIndexComponent>(dragged).index;
-                    }
-                    // Set new parent
-                    if (context.registry.all_of<ParentComponent>(dragged)) {
-                        context.registry.get<ParentComponent>(dragged).parent = entity;
-                    } else {
-                        context.registry.emplace<ParentComponent>(dragged, entity);
-                    }
-                    // Undo/Redo support
-                    auto& reg = context.registry;
-                    entt::entity new_parent = entity;
-                    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                        "Reparent Entity",
-                        [&reg, dragged, new_parent]() {
-                            if (!reg.valid(dragged)) return;
-                            if (reg.all_of<ParentComponent>(dragged)) {
-                                reg.get<ParentComponent>(dragged).parent = new_parent;
-                            } else {
-                                reg.emplace<ParentComponent>(dragged, new_parent);
-                            }
-                        },
-                        [&reg, dragged, old_parent, old_sibling]() {
-                            if (!reg.valid(dragged)) return;
-                            if (old_parent == entt::null) {
-                                if (reg.all_of<ParentComponent>(dragged)) {
-                                    reg.remove<ParentComponent>(dragged);
-                                }
-                            } else {
-                                if (reg.all_of<ParentComponent>(dragged)) {
-                                    reg.get<ParentComponent>(dragged).parent = old_parent;
-                                } else {
-                                    reg.emplace<ParentComponent>(dragged, old_parent);
-                                }
-                            }
-                            if (reg.all_of<SiblingIndexComponent>(dragged)) {
-                                reg.get<SiblingIndexComponent>(dragged).index = old_sibling;
-                            }
-                        }), false);
+                    // 收敛写路径：经 CommandBus 调 dsengine_entity_reparent（含环检测、
+                    // 统一撤销栈），不再直接改 registry。挂到目标实体下，不动兄弟序。
+                    ReparentViaBus(context, dragged, /*parent=*/entity, /*sibling=*/std::nullopt);
                     EditorLog(LogLevel::Info, "Reparented entity under " + entity_name);
                 }
             }
@@ -338,69 +362,12 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
                             target_sibling = context.registry.get<SiblingIndexComponent>(entity).index + 1;
                         }
 
-                        int old_sibling = 0;
-                        entt::entity old_parent = entt::null;
-                        if (context.registry.all_of<ParentComponent>(dragged)) {
-                            old_parent = context.registry.get<ParentComponent>(dragged).parent;
-                        }
-                        if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
-                            old_sibling = context.registry.get<SiblingIndexComponent>(dragged).index;
-                        }
-
-                        // Set parent
-                        if (target_parent != entt::null) {
-                            if (context.registry.all_of<ParentComponent>(dragged)) {
-                                context.registry.get<ParentComponent>(dragged).parent = target_parent;
-                            } else {
-                                context.registry.emplace<ParentComponent>(dragged, target_parent);
-                            }
-                        } else {
-                            if (context.registry.all_of<ParentComponent>(dragged)) {
-                                context.registry.remove<ParentComponent>(dragged);
-                            }
-                        }
-                        // Set sibling index
-                        if (context.registry.all_of<SiblingIndexComponent>(dragged)) {
-                            context.registry.get<SiblingIndexComponent>(dragged).index = target_sibling;
-                        } else {
-                            context.registry.emplace<SiblingIndexComponent>(dragged, target_sibling);
-                        }
-
-                        auto& reg = context.registry;
-                        GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
-                            "Reorder Entity",
-                            [&reg, dragged, target_parent, target_sibling]() {
-                                if (!reg.valid(dragged)) return;
-                                if (target_parent != entt::null) {
-                                    if (reg.all_of<ParentComponent>(dragged)) {
-                                        reg.get<ParentComponent>(dragged).parent = target_parent;
-                                    } else {
-                                        reg.emplace<ParentComponent>(dragged, target_parent);
-                                    }
-                                } else {
-                                    if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
-                                }
-                                if (reg.all_of<SiblingIndexComponent>(dragged)) {
-                                    reg.get<SiblingIndexComponent>(dragged).index = target_sibling;
-                                } else {
-                                    reg.emplace<SiblingIndexComponent>(dragged, target_sibling);
-                                }
-                            },
-                            [&reg, dragged, old_parent, old_sibling]() {
-                                if (!reg.valid(dragged)) return;
-                                if (old_parent == entt::null) {
-                                    if (reg.all_of<ParentComponent>(dragged)) reg.remove<ParentComponent>(dragged);
-                                } else {
-                                    if (reg.all_of<ParentComponent>(dragged)) {
-                                        reg.get<ParentComponent>(dragged).parent = old_parent;
-                                    } else {
-                                        reg.emplace<ParentComponent>(dragged, old_parent);
-                                    }
-                                }
-                                if (reg.all_of<SiblingIndexComponent>(dragged)) {
-                                    reg.get<SiblingIndexComponent>(dragged).index = old_sibling;
-                                }
-                            }), false);
+                        // 收敛写路径：经 CommandBus 调 dsengine_entity_reparent，挂到与
+                        // 目标同父（root 时 detach）并显式写入 sibling_index，统一撤销栈。
+                        std::optional<entt::entity> new_parent =
+                            (target_parent == entt::null) ? std::nullopt
+                                                          : std::optional<entt::entity>(target_parent);
+                        ReparentViaBus(context, dragged, new_parent, target_sibling);
                     }
                 }
                 ImGui::EndDragDropTarget();

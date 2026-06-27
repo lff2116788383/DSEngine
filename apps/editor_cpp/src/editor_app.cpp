@@ -57,6 +57,7 @@
 #include "editor_profiler_panel.h"
 #include "editor_scene_io.h"
 #include "editor_context.h"
+#include "apps/editor_cpp/core/command_bus.h"
 #include "editor_shell.h"
 #include "editor_toolbar.h"
 #include "editor_viewport_panel.h"
@@ -222,6 +223,10 @@ std::filesystem::path EditorApp::GetEditorBinPath() {
     std::filesystem::create_directories(path);
     return path;
 }
+
+// command_bus_ 持有 core::CommandBus（前向声明），构造/析构需在完整类型可见处定义。
+EditorApp::EditorApp() = default;
+EditorApp::~EditorApp() = default;
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 
@@ -496,6 +501,15 @@ bool EditorApp::Init(int argc, char* argv[]) {
     if (!control_server_->Start(test_config_.api_port)) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
+
+    // 写路径门面：sink 直调 ControlServer::DispatchTool（与自动化/无头共用同一条
+    // 工具路径与撤销栈）。面板经此发结构性写命令，消除"面板直接改 registry"双写。
+    command_bus_ = std::make_unique<dse::editor::core::CommandBus>(
+        [srv = control_server_.get()](const std::string& method,
+                                      const rapidjson::Document& params,
+                                      dse::runtime::EngineInstance& engine) {
+            return srv->DispatchTool(method, params, engine);
+        });
 
     // 初始化 AI Chat Panel bridge 路径 + 历史记录路径
     chat_panel_.SetBridgePath(
@@ -979,6 +993,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         current_gizmo_operation_, current_gizmo_mode_,
         editor_languages_, editor_language_index_
     };
+    ctx.command_bus = command_bus_.get();
 
     dse::editor::BeginEditorShell();
     dse::editor::PanelVisibility panel_vis{
