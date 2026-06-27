@@ -34,6 +34,10 @@ int CountValidEntities();
 /// 把全部面板可见性开关置真，让被隐藏的面板下一帧起被绘制（覆盖全部面板的前提）。
 void EnsureAllPanelsVisible();
 
+/// 关掉全部“可选/开关”面板（与 EnsureAllPanelsVisible 互逆）：dse-panels 用例会把它们全开，
+/// 这些面板首帧以浮动窗形式出现并压在 Hierarchy 等常驻面板上，干扰后续依赖屏幕坐标的拖拽用例。
+void HideOptionalPanels();
+
 /// 在 g.Windows 中查找“上一帧仍在绘制”的窗口：先精确匹配窗口名，再回退到包含子串。
 /// 用于按面板窗口名（含图标前缀/本地化标题时用子串）断言面板已打开。
 ImGuiWindow* FindActiveWindow(const char* name_or_substr);
@@ -49,6 +53,11 @@ void RegisterInspectorTests(ImGuiTestEngine* engine);
 void RegisterConsoleTests(ImGuiTestEngine* engine);
 void RegisterMenuBarTests(ImGuiTestEngine* engine);
 void RegisterAssetBrowserTests(ImGuiTestEngine* engine);
+void RegisterSceneTests(ImGuiTestEngine* engine);
+void RegisterUndoTests(ImGuiTestEngine* engine);
+void RegisterPlayTests(ImGuiTestEngine* engine);
+void RegisterShortcutTests(ImGuiTestEngine* engine);
+void RegisterDragDropTests(ImGuiTestEngine* engine);
 void RegisterProjectTests(ImGuiTestEngine* engine);
 
 } // namespace dse::editor::uitest

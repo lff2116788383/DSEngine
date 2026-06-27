@@ -49,6 +49,21 @@ void EnsureAllPanelsVisible() {
         if (p) *p = true;
 }
 
+void HideOptionalPanels() {
+    const UiTestServices& s = Services();
+    bool* const toggles[] = {
+        s.show_localization_preview, s.show_profiler, s.show_animation,
+        s.show_tile_palette, s.show_terrain_editor, s.show_lua_console,
+        s.show_undo_history, s.show_asset_browser, s.show_animation_timeline,
+        s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
+        s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
+        s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
+        s.show_preferences, s.show_plugins, s.show_chat,
+    };
+    for (bool* p : toggles)
+        if (p) *p = false;
+}
+
 ImGuiWindow* FindActiveWindow(const char* name_or_substr) {
     ImGuiContext& g = *ImGui::GetCurrentContext();
     ImGuiWindow* substr_hit = nullptr;
@@ -63,15 +78,12 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr) {
 }
 
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
-    // 用绝对引用 "//Hierarchy"：避免按当前 ref（上一轮可能停在 "//$FOCUSED" 弹窗）
-    // 做相对哈希而解析到错误 ID，导致第二次打开菜单时窗口查不到。
-    ImGuiWindow* window = ctx->GetWindowByRef("//Hierarchy");
-    IM_CHECK_SILENT(window != nullptr);
-    ctx->MouseSetViewport(window);
-    // 移到窗口底部留白（避开搜索框/树节点），确保命中“窗口空白”而非某个 item。
-    const ImVec2 pos(window->Pos.x + window->Size.x * 0.5f,
-                     window->Pos.y + window->Size.y - 10.0f);
-    ctx->MouseMoveToPos(pos);
+    // 在常驻、必定存在的 "Scene" 根节点上右键打开窗口上下文菜单（BeginPopupContextWindow
+    // 不设 NoOpenOverItems，故在节点上右键同样会弹出窗口菜单）。相比“点窗口底部留白”，
+    // 这条在实体数增多、树撑满窗口时仍稳定——空白处会被树节点占满导致点不中。
+    // 用绝对引用 "//Hierarchy/Scene"：避免按当前 ref（上一轮可能停在 "//$FOCUSED" 弹窗）解析错误。
+    ctx->WindowFocus("//Hierarchy");
+    ctx->MouseMove("//Hierarchy/Scene");
     ctx->MouseClick(ImGuiMouseButton_Right);
     ctx->SetRef("//$FOCUSED");
 }
@@ -84,6 +96,13 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterConsoleTests(engine);
     RegisterMenuBarTests(engine);
     RegisterAssetBrowserTests(engine);
+    // 编辑器主链路基础操作（撤销/播放/场景/快捷键/拖拽）：这些会改场景页签/实体/播放态，
+    // 各用例自足、互不依赖，统一排在面板基线之后。
+    RegisterUndoTests(engine);
+    RegisterPlayTests(engine);
+    RegisterSceneTests(engine);
+    RegisterShortcutTests(engine);
+    RegisterDragDropTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
 }
