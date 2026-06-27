@@ -29,7 +29,30 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"  // TransformComponent / ParentComponent（全局命名空间）
 
+#include "../editor_shared_components.h"  // SiblingIndexComponent（dse::editor）
+
 namespace dse::editor::uitest {
+
+namespace {
+
+// 在 Hierarchy 里建一个新的根实体（右键 → Create Empty Entity），返回新建实体。
+entt::entity CreateRootEntity(ImGuiTestContext* ctx, entt::registry& reg) {
+    std::vector<entt::entity> before;
+    for (auto en : reg.storage<entt::entity>())
+        if (reg.valid(en)) before.push_back(en);
+    OpenHierarchyContextMenu(ctx);
+    ctx->ItemClick("Create Empty Entity");
+    ctx->Yield();
+    for (auto en : reg.storage<entt::entity>()) {
+        if (!reg.valid(en)) continue;
+        bool seen = false;
+        for (auto b : before) if (b == en) { seen = true; break; }
+        if (!seen) return en;
+    }
+    return entt::null;
+}
+
+} // namespace
 
 void RegisterDragDropTests(ImGuiTestEngine* e) {
     // dse-dragdrop/hierarchy_reparent：建 A、B 两个根实体，把 A 拖到 B 上 → A 成为 B 的子节点。
@@ -101,30 +124,66 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
         ctx->KeyPress(ImGuiKey_Escape);
         ctx->Yield();
 
-        // 手动拖拽（不走 ItemDragAndDrop）：后者会调 _MakeAimingSpaceOverPos 试图“挪开挡住落点的
-        // 窗口”，而 ImGuizmo 每帧 BeginFrame 建的全屏 "gizmo" 窗（NoTitleBar 不可拖动）挪不开，落点
-        // 坐标会漂移。改用 MouseMoveToPos 直接定位到目标节点矩形并分步移动：ImGui 拖拽投递需要
-        // “源激活→跨帧拖动→落点悬停一帧→释放”，分步并逐帧 Yield 比单帧瞬移更可靠。
-        ctx->MouseMoveToPos(src_pos);
-        ctx->Yield();
-        ctx->MouseDown(ImGuiMouseButton_Left);
-        ctx->Yield();
-        ctx->MouseLiftDragThreshold();
-        ctx->Yield();
-        const ImVec2 mid((src_pos.x + dst_pos.x) * 0.5f, (src_pos.y + dst_pos.y) * 0.5f);
-        ctx->MouseMoveToPos(mid);
-        ctx->Yield();
-        ctx->MouseMoveToPos(dst_pos);
-        ctx->Yield();
-        ctx->MouseMoveToPos(dst_pos);  // 在落点多停一帧，确保目标 BeginDragDropTarget 命中
-        ctx->Yield(2);
-        ctx->MouseUp(ImGuiMouseButton_Left);
-        ctx->Yield(2);
+        ManualMouseDrag(ctx, src_pos, dst_pos);
 
         IM_CHECK(reg.valid(a) && reg.valid(b));
         IM_CHECK(reg.all_of<ParentComponent>(a));
         IM_CHECK(reg.get<ParentComponent>(a).parent == b);
     };
+
+    // dse-dragdrop/hierarchy_reorder：把 A 拖到 B 节点正下方那条“插入兄弟”落区（##insert_<B>），
+    // A 应与 B 同父（此处皆为根，故 A 保持根：无 ParentComponent），并写入 sibling_index = B.index+1。
+    // 先把 B 的 SiblingIndexComponent.index 置为已知值，便于断言落区计算出的“目标之后”序号。
+    {
+        ImGuiTest* t2 = IM_REGISTER_TEST(e, "dse-dragdrop", "hierarchy_reorder");
+        t2->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = Services().engine->pipeline()->world().registry();
+
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            const entt::entity a = CreateRootEntity(ctx, reg);
+            const entt::entity b = CreateRootEntity(ctx, reg);
+            IM_CHECK(a != entt::null && b != entt::null && a != b);
+
+            // 给 B 一个已知兄弟序，使“插入到 B 之后”= B.index+1 有确定预期值。
+            reg.emplace_or_replace<SiblingIndexComponent>(b).index = 5;
+            // A 起始不应带兄弟序（验证 reorder 落区确实写入了它）。
+            if (reg.all_of<SiblingIndexComponent>(a)) reg.remove<SiblingIndexComponent>(a);
+
+            // 清空选择移除 ImGuizmo 全屏覆盖窗，避免挡住拖拽落点。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+
+            char src_ref[96], ins_ref[96];
+            std::snprintf(src_ref, sizeof(src_ref), "//Hierarchy/Scene/$$(ptr)0x%llx",
+                          static_cast<unsigned long long>(static_cast<std::uint32_t>(a)));
+            // 插入落区是 InvisibleButton，id = "##insert_<uint32(entity)>"（见 editor_hierarchy_panel）。
+            std::snprintf(ins_ref, sizeof(ins_ref), "//Hierarchy/Scene/##insert_%u",
+                          static_cast<unsigned>(static_cast<std::uint32_t>(b)));
+
+            ctx->WindowFocus("//Hierarchy");
+            const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
+            const ImGuiTestItemInfo ii = ctx->ItemInfo(ins_ref);
+            IM_CHECK(si.ID != 0 && ii.ID != 0);
+            const ImVec2 src_pos(si.RectFull.GetCenter().x, si.RectFull.Min.y + si.RectFull.GetHeight() * 0.5f);
+            const ImVec2 dst_pos = ii.RectFull.GetCenter();
+
+            ctx->KeyPress(ImGuiKey_Escape);
+            ctx->Yield();
+
+            ManualMouseDrag(ctx, src_pos, dst_pos);
+
+            IM_CHECK(reg.valid(a) && reg.valid(b));
+            // 同根：A 仍为根（detach），不应获得 ParentComponent 指向某父。
+            IM_CHECK(!reg.all_of<ParentComponent>(a) ||
+                     reg.get<ParentComponent>(a).parent == entt::null);
+            // reorder 落区显式写入兄弟序 = 目标之后。
+            IM_CHECK(reg.all_of<SiblingIndexComponent>(a));
+            IM_CHECK_EQ(reg.get<SiblingIndexComponent>(a).index, 6);
+        };
+    }
 }
 
 } // namespace dse::editor::uitest

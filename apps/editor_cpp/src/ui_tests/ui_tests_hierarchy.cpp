@@ -10,9 +10,23 @@
 
 #ifdef DSE_EDITOR_UI_TESTS
 
+#include <cstdint>
+#include <cstdio>
+#include <vector>
+
+#include <entt/entt.hpp>
+
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
+
+#include "../editor_selection.h"          // SelectionManager
+#include "../editor_shared_components.h"  // EditorNameComponent
+
+#include "engine/runtime/engine_app.h"
+#include "engine/runtime/frame_pipeline.h"
+#include "engine/ecs/world.h"
 
 namespace dse::editor::uitest {
 
@@ -22,6 +36,31 @@ namespace {
 struct SanityVars {
     int click_count = 0;
 };
+
+entt::registry& HReg() { return Services().engine->pipeline()->world().registry(); }
+
+// 建一个新实体（右键 → Create Empty Entity，创建即选中），返回新建实体。
+entt::entity HCreateEntity(ImGuiTestContext* ctx) {
+    entt::registry& reg = HReg();
+    std::vector<entt::entity> before;
+    for (auto en : reg.storage<entt::entity>())
+        if (reg.valid(en)) before.push_back(en);
+    OpenHierarchyContextMenu(ctx);
+    ctx->ItemClick("Create Empty Entity");
+    ctx->Yield();
+    for (auto en : reg.storage<entt::entity>()) {
+        if (!reg.valid(en)) continue;
+        bool seen = false;
+        for (auto b : before) if (b == en) { seen = true; break; }
+        if (!seen) return en;
+    }
+    return entt::null;
+}
+
+void NodeRef(char* buf, size_t n, entt::entity ent) {
+    std::snprintf(buf, n, "//Hierarchy/Scene/$$(ptr)0x%llx",
+                  static_cast<unsigned long long>(static_cast<std::uint32_t>(ent)));
+}
 
 } // namespace
 
@@ -100,6 +139,78 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             OpenHierarchyContextMenu(ctx);
             ctx->ItemClick("Delete Entity");
             IM_CHECK_EQ(CountValidEntities(), before - 1);
+        };
+    }
+
+    // dse-hierarchy/inline_rename：双击节点进入内联重命名（出现 "##rename" 输入框），
+    // 键入新名 + 回车提交，断言该实体 EditorNameComponent.name 被改写。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-hierarchy", "inline_rename");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            const entt::entity ent = HCreateEntity(ctx);
+            IM_CHECK(ent != entt::null);
+
+            // 清空选择移除 ImGuizmo 全屏覆盖窗，避免遮挡 Hierarchy 节点上的双击。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+
+            char node_ref[96];
+            NodeRef(node_ref, sizeof(node_ref), ent);
+
+            ctx->WindowFocus("//Hierarchy");
+            ctx->ItemDoubleClick(node_ref);   // 触发内联重命名（s_renaming_entity = ent）
+            ctx->Yield(2);
+
+            // 重命名输入框直接画在 Hierarchy 窗口（非节点子作用域），id "##rename"，回车提交。
+            ctx->ItemInputValue("//Hierarchy/##rename", "DSEInlineRenamed");
+            ctx->Yield(2);
+
+            entt::registry& reg = HReg();
+            IM_CHECK(reg.valid(ent) && reg.all_of<EditorNameComponent>(ent));
+            IM_CHECK_STR_EQ(reg.get<EditorNameComponent>(ent).name.c_str(), "DSEInlineRenamed");
+        };
+    }
+
+    // dse-hierarchy/search_filter：建 A、B 两实体并赋特征名，向搜索框键入 A 的子串后，
+    // A 的节点应仍被绘制（ItemInfo 命中）而 B 的节点应被过滤掉（ItemInfo 取不到）。
+    // 末尾清空搜索框，避免静态过滤态泄漏影响后续用例对节点的定位。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-hierarchy", "search_filter");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            const entt::entity a = HCreateEntity(ctx);
+            const entt::entity b = HCreateEntity(ctx);
+            IM_CHECK(a != entt::null && b != entt::null && a != b);
+
+            entt::registry& reg = HReg();
+            reg.emplace_or_replace<EditorNameComponent>(a).name = "DSEFilterMatchAAA";
+            reg.emplace_or_replace<EditorNameComponent>(b).name = "DSEFilterOtherBBB";
+
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+
+            ctx->WindowFocus("//Hierarchy");
+            ctx->ItemInputValue("//Hierarchy/##hierarchy_search", "MatchAAA");
+            ctx->Yield(3);  // ComputeVisibleEntities 据过滤重算可见集
+
+            char a_ref[96], b_ref[96];
+            NodeRef(a_ref, sizeof(a_ref), a);
+            NodeRef(b_ref, sizeof(b_ref), b);
+            const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref, ImGuiTestOpFlags_NoError);
+            const ImGuiTestItemInfo bi = ctx->ItemInfo(b_ref, ImGuiTestOpFlags_NoError);
+            IM_CHECK(ai.ID != 0);   // 匹配项仍绘制
+            IM_CHECK(bi.ID == 0);   // 非匹配项被过滤（节点不绘制）
+
+            // 还原：清空搜索框，避免静态 s_search_filter 残留影响后续用例。
+            ctx->ItemInputValue("//Hierarchy/##hierarchy_search", "");
+            ctx->Yield(3);
         };
     }
 }

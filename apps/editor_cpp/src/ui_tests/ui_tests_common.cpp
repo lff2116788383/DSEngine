@@ -88,6 +88,25 @@ void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
     ctx->SetRef("//$FOCUSED");
 }
 
+void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst) {
+    // ImGui 拖拽投递需要“源激活→跨帧拖动→落点悬停一帧→释放”，分步并逐帧 Yield 比单帧瞬移更可靠。
+    ctx->MouseMoveToPos(src);
+    ctx->Yield();
+    ctx->MouseDown(ImGuiMouseButton_Left);
+    ctx->Yield();
+    ctx->MouseLiftDragThreshold();
+    ctx->Yield();
+    const ImVec2 mid((src.x + dst.x) * 0.5f, (src.y + dst.y) * 0.5f);
+    ctx->MouseMoveToPos(mid);
+    ctx->Yield();
+    ctx->MouseMoveToPos(dst);
+    ctx->Yield();
+    ctx->MouseMoveToPos(dst);  // 落点多停一帧，确保目标 BeginDragDropTarget 命中
+    ctx->Yield(2);
+    ctx->MouseUp(ImGuiMouseButton_Left);
+    ctx->Yield(2);
+}
+
 void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterHarnessSanityTests(engine);
     RegisterPanelRenderTests(engine);
@@ -103,6 +122,9 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterSceneTests(engine);
     RegisterShortcutTests(engine);
     RegisterDragDropTests(engine);
+    RegisterSceneTabTests(engine);
+    // 负向/边界用例（循环父子化被拒、空栈撤销、删根节点不崩）。
+    RegisterNegativeTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
 }

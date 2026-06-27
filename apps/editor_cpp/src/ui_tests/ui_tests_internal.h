@@ -14,6 +14,7 @@
 struct ImGuiTestEngine;
 struct ImGuiTestContext;
 struct ImGuiWindow;
+struct ImVec2;
 
 namespace dse::editor::uitest {
 
@@ -45,6 +46,11 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr);
 /// 在 Hierarchy 窗口体空白处右键打开上下文菜单，并把 ref 指向弹窗（"//$FOCUSED"）。
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
 
+/// 手动分步投递一次鼠标拖拽（不走 ItemDragAndDrop）：源激活→跨帧拖动→落点悬停→释放。
+/// ItemDragAndDrop 会调 _MakeAimingSpaceOverPos 试图挪开挡住落点的窗口，而 ImGuizmo 每帧建的
+/// 全屏 "gizmo" 覆盖窗（NoTitleBar 不可拖动）挪不开会致落点漂移；手动逐帧 Yield 更可靠。
+void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst);
+
 // ─── 各用例文件的注册入口（在各自 .cpp 中实现） ───────────────────────────────
 void RegisterHarnessSanityTests(ImGuiTestEngine* engine);
 void RegisterHierarchyTests(ImGuiTestEngine* engine);
@@ -59,6 +65,8 @@ void RegisterPlayTests(ImGuiTestEngine* engine);
 void RegisterShortcutTests(ImGuiTestEngine* engine);
 void RegisterDragDropTests(ImGuiTestEngine* engine);
 void RegisterProjectTests(ImGuiTestEngine* engine);
+void RegisterNegativeTests(ImGuiTestEngine* engine);
+void RegisterSceneTabTests(ImGuiTestEngine* engine);
 
 } // namespace dse::editor::uitest
 
