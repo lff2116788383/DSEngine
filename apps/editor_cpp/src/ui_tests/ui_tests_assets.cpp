@@ -60,33 +60,43 @@ void RegisterAssetBrowserTests(ImGuiTestEngine* e) {
             HideOptionalPanels();
             ctx->Yield(6);
 
-            // 列表视图里每个文件是一个 Selectable，label = "<icon>  <filename>"（见 editor_aux_panels.cpp:627）。
-            const std::string asset_ref =
-                std::string("//Project/") + MDI_ICON_IMAGE_MULTIPLE "  " + "ui_test_drop.dscene";
-            const char* scene_ref = "//Hierarchy/Scene";
-
-            ctx->WindowFocus("//Project");
+            // 默认 dock 布局里 Project 停靠在底部，占视口约 15%（1280x720 下列表可视高度≈0），
+            // 资源行被裁剪、不可命中。把 Project 浮动出来并放大，确保资源行完整可见、可拖拽；
+            // 放在右侧空白处，避免压住左侧 Hierarchy 的落点。
+            ctx->UndockWindow("Project");
+            ctx->Yield(2);
+            ctx->WindowMove("//Project", ImVec2(420.0f, 80.0f));
+            ctx->WindowResize("//Project", ImVec2(520.0f, 520.0f));
             ctx->Yield(2);
 
-            const ImGuiTestItemInfo ai = ctx->ItemInfo(asset_ref.c_str());
-            IM_CHECK(ai.ID != 0);  // 资源项确实被列出且可寻址
+            // 列表视图里文件项：Table("project_list") -> PushID(filename) -> Selectable(label)，
+            // label = "<icon>  <filename>"（见 editor_aux_panels.cpp:585-627）。ref 须含 table 与
+            // PushID 两层，否则定位不到（FindByLabel "**/" 对此项不生效）。
+            const std::string asset_ref =
+                std::string("//Project/project_list/ui_test_drop.dscene/") +
+                MDI_ICON_IMAGE_MULTIPLE "  " + "ui_test_drop.dscene";
+            const char* scene_ref = "//Hierarchy/Scene";
 
-            ctx->WindowFocus("//Hierarchy");
-            ctx->Yield();
             const ImGuiTestItemInfo si = ctx->ItemInfo(scene_ref);
             IM_CHECK(si.ID != 0);
+            const ImGuiTestItemInfo ai = ctx->ItemInfo(asset_ref.c_str());
+            IM_CHECK(ai.ID != 0);
 
             const int before = CountValidEntities();
 
-            // 手动分步投递拖拽（绕开 ImGuizmo 全屏窗导致 ItemDragAndDrop 落点漂移）。
-            const ImVec2 src = ai.RectFull.GetCenter();
-            const ImVec2 dst = si.RectFull.GetCenter();
-            ManualMouseDrag(ctx, src, dst);
+            // 用测试引擎内建拖拽：按 item ID 移动（每帧重定位、自动滚动入视口），稳健触发拖拽源。
+            ctx->ItemDragAndDrop(asset_ref.c_str(), scene_ref);
             ctx->Yield(2);
 
             IM_CHECK_EQ(CountValidEntities(), before + 1);
 
             fs::remove(asset, ec);
+
+            // 还原布局：上面把 Project 浮动出来改了全局停靠状态，会污染后续依赖默认布局的用例
+            //（实测会让 Hierarchy 拖拽落空）。把 Project 重新作为标签页停回 Console 所在停靠节点，
+            // 恢复默认布局（Project/Console 同节点）。
+            ctx->DockInto("Project", "Console");
+            ctx->Yield(2);
         };
     }
 }

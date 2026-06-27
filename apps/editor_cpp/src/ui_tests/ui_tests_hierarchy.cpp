@@ -165,8 +165,8 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             ctx->ItemDoubleClick(node_ref);   // 触发内联重命名（s_renaming_entity = ent）
             ctx->Yield(2);
 
-            // 重命名输入框直接画在 Hierarchy 窗口（非节点子作用域），id "##rename"，回车提交。
-            ctx->ItemInputValue("//Hierarchy/##rename", "DSEInlineRenamed");
+            // 重命名输入框画在 "Scene" 树节点作用域下（与实体节点同级），id "##rename"，回车提交。
+            ctx->ItemInputValue("//Hierarchy/Scene/##rename", "DSEInlineRenamed");
             ctx->Yield(2);
 
             entt::registry& reg = HReg();

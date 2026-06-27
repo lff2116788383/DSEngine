@@ -99,8 +99,13 @@ bool IsExitRequested() {
 void BeginEditorShell() {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
     ImGuiViewport* viewport = ImGui::GetMainViewport();
+    // 底部留出状态栏高度（与 editor_status_bar.cpp 的 status_bar_height 一致）：状态栏是覆盖在
+    // 主视口底部的独立窗口，若 dockspace 占满整个视口，停靠在底部的面板（Project/Console）下沿
+    // 会被状态栏盖住、那一条内容点不到。把根窗口高度收缩同样高度即可让底部面板完整可见。
+    const float kStatusBarHeight = 24.0f;
+    const ImVec2 shell_size(viewport->Size.x, viewport->Size.y - kStatusBarHeight);
     ImGui::SetNextWindowPos(viewport->Pos);
-    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowSize(shell_size);
     ImGui::SetNextWindowViewport(viewport->ID);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -116,7 +121,7 @@ void BeginEditorShell() {
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
         const ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-        BuildDefaultDockLayout(dockspace_id, viewport->Size);
+        BuildDefaultDockLayout(dockspace_id, shell_size);
     }
 }
 

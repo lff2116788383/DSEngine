@@ -125,9 +125,11 @@ void RegisterUndoTests(ImGuiTestEngine* e) {
             IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 7.5f) < 0.01f);
 
             PressUndo(ctx);
+            IM_CHECK(reg.valid(ent) && reg.all_of<TransformComponent>(ent));
             IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 0.0f) < 0.01f);
 
             PressRedo(ctx);
+            IM_CHECK(reg.valid(ent) && reg.all_of<TransformComponent>(ent));
             IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 7.5f) < 0.01f);
         };
     }
@@ -183,6 +185,9 @@ void RegisterUndoTests(ImGuiTestEngine* e) {
                           static_cast<unsigned long long>(static_cast<std::uint32_t>(b)));
 
             ctx->WindowFocus("//Hierarchy");
+            // 累积实体可能令 A/B 节点被裁剪/滚出可视区；先滚动目标节点入视口再读屏幕矩形。
+            ctx->ScrollToItemY(dst_ref);
+            ctx->Yield(2);
             const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
             const ImGuiTestItemInfo di = ctx->ItemInfo(dst_ref);
             IM_CHECK(si.ID != 0 && di.ID != 0);

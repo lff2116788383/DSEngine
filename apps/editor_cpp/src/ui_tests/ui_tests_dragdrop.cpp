@@ -111,6 +111,11 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
                       static_cast<unsigned long long>(static_cast<std::uint32_t>(b)));
 
         ctx->WindowFocus("//Hierarchy");
+        // 前序用例会持续往场景里累积实体，Hierarchy 树可能超出面板高度，导致刚新建的 A/B 节点
+        // 被裁剪/滚出可视区——按屏幕坐标投递拖拽就会落空。先把目标节点滚动入视口（A/B 相邻，
+        // 滚到下面那个即可让两者同时可见），再读其屏幕矩形。
+        ctx->ScrollToItemY(dst_ref);
+        ctx->Yield(2);
         const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
         const ImGuiTestItemInfo di = ctx->ItemInfo(dst_ref);
         IM_CHECK(si.ID != 0 && di.ID != 0);
@@ -164,6 +169,9 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
                           static_cast<unsigned>(static_cast<std::uint32_t>(b)));
 
             ctx->WindowFocus("//Hierarchy");
+            // 累积实体可能令 A/插入落区被裁剪/滚出可视区；先滚动插入落区入视口再读屏幕矩形。
+            ctx->ScrollToItemY(ins_ref);
+            ctx->Yield(2);
             const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
             const ImGuiTestItemInfo ii = ctx->ItemInfo(ins_ref);
             IM_CHECK(si.ID != 0 && ii.ID != 0);

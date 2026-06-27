@@ -103,8 +103,20 @@ void DrawColoredAxisLabel(const char* label, const ImVec4& color) {
 }
 
 // Draw Vec3 property with colored X/Y/Z labels
-bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
+// out_activated / out_deactivated_after_edit 聚合三个分量(X/Y/Z)子控件的激活/编辑结束态：
+// 否则调用方在本 helper 之后查 IsItemActivated()/IsItemDeactivatedAfterEdit() 只会命中最后一个
+// (Z) 子控件，导致改 X/Y 时漏记 undo。
+bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f,
+                             bool* out_activated = nullptr,
+                             bool* out_deactivated_after_edit = nullptr) {
     bool changed = false;
+    if (out_activated) *out_activated = false;
+    if (out_deactivated_after_edit) *out_deactivated_after_edit = false;
+    auto track_item_state = [&]() {
+        if (out_activated && ImGui::IsItemActivated()) *out_activated = true;
+        if (out_deactivated_after_edit && ImGui::IsItemDeactivatedAfterEdit())
+            *out_deactivated_after_edit = true;
+    };
     float line_width = ImGui::GetContentRegionAvail().x;
     float field_width = (line_width - 3 * (ImGui::GetFrameHeight() + 4.0f + ImGui::CalcTextSize("X").x + 8.0f)) / 3.0f;
     if (field_width < 30.0f) field_width = 30.0f;
@@ -116,6 +128,7 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(field_width);
     if (ImGui::DragFloat("##x", &v[0], speed)) changed = true;
+    track_item_state();
     ImGui::SameLine();
 
     // Y (green)
@@ -123,6 +136,7 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(field_width);
     if (ImGui::DragFloat("##y", &v[1], speed)) changed = true;
+    track_item_state();
     ImGui::SameLine();
 
     // Z (blue)
@@ -130,6 +144,7 @@ bool DrawVec3WithColorLabels(const char* id, float v[3], float speed = 0.1f) {
     ImGui::SameLine();
     ImGui::SetNextItemWidth(field_width);
     if (ImGui::DragFloat("##z", &v[2], speed)) changed = true;
+    track_item_state();
 
     ImGui::PopID();
     return changed;
@@ -225,15 +240,16 @@ void DrawTransformSection(EditorContext& context) {
     ImGui::Text("Position");
     float pos[3] = {transform.position.x, transform.position.y, transform.position.z};
     ImGui::PushID("##pos_undo");
-    if (DrawVec3WithColorLabels("##pos", pos)) {
+    bool pos_activated = false, pos_deactivated = false;
+    if (DrawVec3WithColorLabels("##pos", pos, 0.1f, &pos_activated, &pos_deactivated)) {
         transform.position = glm::vec3(pos[0], pos[1], pos[2]);
         transform.dirty = true;
     }
-    if (ImGui::IsItemActivated()) {
+    if (pos_activated) {
         s_edit_start_pos = transform.position;
         s_edit_entity = current_entity;
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+    if (pos_deactivated && s_edit_entity == current_entity) {
         glm::vec3 old_val = s_edit_start_pos;
         glm::vec3 new_val = transform.position;
         entt::entity ent = current_entity;
@@ -285,16 +301,17 @@ void DrawTransformSection(EditorContext& context) {
     } else {
         ImGui::Text("Rotation");
         ImGui::PushID("##rot_undo");
-        if (DrawVec3WithColorLabels("##rot", rot)) {
+        bool rot_activated = false, rot_deactivated = false;
+        if (DrawVec3WithColorLabels("##rot", rot, 0.1f, &rot_activated, &rot_deactivated)) {
             euler = glm::vec3(rot[0], rot[1], rot[2]);
             transform.rotation = glm::quat(glm::radians(euler));
             transform.dirty = true;
         }
-        if (ImGui::IsItemActivated()) {
+        if (rot_activated) {
             s_edit_start_rot = glm::degrees(glm::eulerAngles(transform.rotation));
             s_edit_entity = current_entity;
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+        if (rot_deactivated && s_edit_entity == current_entity) {
             glm::vec3 old_euler = s_edit_start_rot;
             glm::vec3 new_euler = glm::vec3(rot[0], rot[1], rot[2]);
             entt::entity ent = current_entity;
@@ -317,15 +334,16 @@ void DrawTransformSection(EditorContext& context) {
     ImGui::Text("Scale");
     ImGui::PushID("##scale_undo");
     float scale[3] = {transform.scale.x, transform.scale.y, transform.scale.z};
-    if (DrawVec3WithColorLabels("##scale", scale)) {
+    bool scale_activated = false, scale_deactivated = false;
+    if (DrawVec3WithColorLabels("##scale", scale, 0.1f, &scale_activated, &scale_deactivated)) {
         transform.scale = glm::vec3(scale[0], scale[1], scale[2]);
         transform.dirty = true;
     }
-    if (ImGui::IsItemActivated()) {
+    if (scale_activated) {
         s_edit_start_scale = transform.scale;
         s_edit_entity = current_entity;
     }
-    if (ImGui::IsItemDeactivatedAfterEdit() && s_edit_entity == current_entity) {
+    if (scale_deactivated && s_edit_entity == current_entity) {
         glm::vec3 old_val = s_edit_start_scale;
         glm::vec3 new_val = transform.scale;
         entt::entity ent = current_entity;

@@ -87,6 +87,9 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
 
             // Step 1：把 B 拖到 A 上 → B.parent == A。
             ctx->WindowFocus("//Hierarchy");
+            // 累积实体可能令 A/B 节点被裁剪/滚出可视区；先滚动入视口再按屏幕坐标投递拖拽。
+            ctx->ScrollToItemY(b_ref);
+            ctx->Yield(2);
             {
                 const ImGuiTestItemInfo bi = ctx->ItemInfo(b_ref);
                 const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref);
@@ -102,8 +105,24 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
             // 带折叠箭头的父节点，否则紧接着 ItemOpen 会因目标仍是叶子而报“Unable to Open”。
             ctx->Yield(4);
 
+            // reparent 落点会把被拖实体重新选中并拉起 ImGuizmo 全屏覆盖窗，挡住紧接着对 A 折叠
+            // 箭头的点击（ItemOpen 走真实鼠标），故先清空选择移除覆盖窗。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+            ctx->WindowFocus("//Hierarchy");
+
             // 展开 A 让其子 B 的节点可见（折叠时子节点不绘制）。
-            ctx->ItemOpen(a_ref);
+            // 实体节点用 ImGuiTreeNodeFlags_OpenOnArrow，且双击被内联重命名占用，所以 ItemOpen
+            // （点节点本体/双击）都无法展开——必须点最左侧的折叠箭头。直接对 A 节点矩形最左侧投点击。
+            {
+                const ImGuiTestItemInfo aii = ctx->ItemInfo(a_ref);
+                IM_CHECK(aii.ID != 0);
+                const ImVec2 arrow(aii.RectFull.Min.x + aii.RectFull.GetHeight() * 0.5f,
+                                   aii.RectFull.GetCenter().y);
+                ctx->MouseMoveToPos(arrow);
+                ctx->MouseClick(0);
+            }
             ctx->Yield(2);
 
             // B 现在是 A 的子，绝对路径含父前缀。
@@ -114,6 +133,8 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
                           static_cast<unsigned long long>(static_cast<std::uint32_t>(b)));
 
             // Step 2：把 A 拖到其子孙 B 上 → 形成环，应被 dsengine_entity_reparent 的环检测拒绝。
+            ctx->ScrollToItemY(a_ref);
+            ctx->Yield(2);
             {
                 const ImGuiTestItemInfo ai = ctx->ItemInfo(a_ref);
                 const ImGuiTestItemInfo bci = ctx->ItemInfo(b_child_ref, ImGuiTestOpFlags_NoError);
