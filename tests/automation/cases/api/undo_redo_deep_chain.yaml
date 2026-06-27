@@ -1,0 +1,89 @@
+case_id: api.undo_redo_deep_chain
+title: 打开工程 → 连续创建 3 实体 → 多步连撤 → 校验实体数回落 + 历史栈 → 退出
+
+# 覆盖 undo/redo 深链（dsengine_editor_undo / editor_redo / undo_history）。
+# RPC entity_create 会压入「Create Entity (RPC)」撤销命令（其 undo 销毁该实体），
+# 故连续创建后多步连撤可确定性地把实体数逐步回落。
+# 注：RPC-create 的 redo 是空操作（lambda 为空），重做不会重建实体——这是引擎现状，
+# 因此本用例只断言 redo RPC 可达（success），不假设其恢复实体数。
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/undo_deep_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    - method: dsengine_entity_create
+      params:
+        name: "U1"
+      expect:
+        result.name: "U1"
+
+    - method: dsengine_entity_create
+      params:
+        name: "U2"
+      expect:
+        result.name: "U2"
+
+    - method: dsengine_entity_create
+      params:
+        name: "U3"
+      expect:
+        result.name: "U3"
+
+    # 3 次创建后实体数 7
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 7
+
+    # 撤销栈至少含 3 条 create 命令
+    - method: dsengine_undo_history
+      expect:
+        result.can_undo: true
+        result.undo_count: ">= 3"
+
+    # 多步连撤：逐条撤销 3 次（U3 → U2 → U1）
+    - method: dsengine_editor_undo
+      expect:
+        result.success: true
+    - method: dsengine_editor_undo
+      expect:
+        result.success: true
+    - method: dsengine_editor_undo
+      expect:
+        result.success: true
+
+    # 连撤后实体数回落到初始 4（每条 create 命令的 undo 销毁对应实体；
+    # entity_count 以遍历 valid() 计数，删除即回落）
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 4
+
+    # 撤销后重做栈应累积，3 条命令可重做
+    - method: dsengine_undo_history
+      expect:
+        result.can_redo: true
+        result.redo_count: ">= 3"
+
+    # 重做 RPC 可达（RPC-create 的 redo 为空操作，不重建实体，仅验证调用成功）
+    - method: dsengine_editor_redo
+      expect:
+        result.success: true
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

@@ -1,5 +1,5 @@
 suite_id: editor-api-extended
-description: API 会话扩展覆盖（Lua 控制台 / Play-Stop 生命周期 / 选择 / 材质 / 复制+批删 / 新建+查找+重父级 / 组件增删+单删生命周期）
+description: API 会话扩展覆盖（Lua 控制台 / Play-Stop 生命周期 / 选择 / 材质 / 复制+批删 / 新建+查找+重父级 / 组件增删+单删生命周期 / 脚本写盘 / 存读盘闭环 / undo 深链 / prefab 闭环）
 
 env: tests/automation/envs/local-dse.yaml
 
@@ -11,6 +11,10 @@ cases:
   - tests/automation/cases/api/entity_duplicate_batch_delete.yaml
   - tests/automation/cases/api/scene_new_find_reparent.yaml
   - tests/automation/cases/api/component_lifecycle_delete.yaml
+  - tests/automation/cases/api/script_create.yaml
+  - tests/automation/cases/api/scene_save_load_roundtrip.yaml
+  - tests/automation/cases/api/undo_redo_deep_chain.yaml
+  - tests/automation/cases/api/prefab_save_instantiate_loop.yaml
 
 case_delay_seconds: 1
 case_timeout_seconds: 90

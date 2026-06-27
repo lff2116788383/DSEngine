@@ -1,0 +1,81 @@
+case_id: api.prefab_save_instantiate_loop
+title: 打开工程 → 存预制体 → 新建清空 → 跨空场景实例化 → 校验落地 → 退出
+
+# 覆盖 prefab 闭环（dsengine_prefab_save → scene_new → prefab_instantiate）。
+# 与 prefab_instantiate.yaml（同场景内即存即用）不同：本用例在 save 后 scene_new
+# 清空 registry，再从磁盘文件实例化，证明预制体真正持久化到盘且可在全新空场景重建。
+setup:
+  - action: create_dir
+    path: "${project_dir}/prefabs"
+
+command:
+  type: api_session
+  executable: "${editor_exe}"
+  api_port: ${api_port}
+  failure_screenshot_path: "${report_root}/prefab_loop_failure.png"
+  startup_args:
+    - "--headless"
+    - "--automation-api"
+    - "--api-port"
+    - "${api_port}"
+  calls:
+    - method: dsengine_project_open
+      params:
+        path: "${testdata_dir}/projects/simple_2d_game/project.dseproj"
+      expect:
+        result.opened: true
+        result.entity_count: 4
+
+    # 创建一个具名实体并存为预制体
+    - method: dsengine_entity_create
+      params:
+        name: "Crate"
+      capture:
+        crate_id: result.entity_id
+      expect:
+        result.name: "Crate"
+
+    - method: dsengine_prefab_save
+      params:
+        entity_id: "${crate_id}"
+        path: "${project_dir}/prefabs/crate.prefab.json"
+      expect:
+        result.saved: true
+        result.path: "${project_dir}/prefabs/crate.prefab.json"
+
+    # 新建场景清空 registry（预制体已落盘，应不受影响）
+    - method: dsengine_scene_new
+      expect:
+        result.cleared: true
+
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 0
+
+    # 从磁盘预制体在全新空场景中实例化
+    - method: dsengine_prefab_instantiate
+      params:
+        path: "${project_dir}/prefabs/crate.prefab.json"
+      capture:
+        inst_id: result.entity_id
+      expect:
+        result.source_path: "${project_dir}/prefabs/crate.prefab.json"
+
+    # 空场景实例化后实体数应为 1
+    - method: dsengine_scene_get_state
+      expect:
+        result.entity_count: 1
+
+    # 实例化得到的实体应有效且可取状态（校验真正落地到 registry）
+    - method: dsengine_entity_get_state
+      params:
+        entity_id: "${inst_id}"
+      expect:
+        result.entity_id: "${inst_id}"
+
+    - method: dsengine_editor_quit
+      expect:
+        result.ok: true
+
+assert:
+  exit_code: 0

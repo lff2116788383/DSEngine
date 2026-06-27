@@ -608,8 +608,12 @@ static JsonRpcResponse HandleEditorGetState(
         dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
         dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
     result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+
+    int valid_entity_count = 0;
+    for (auto entity : registry.storage<entt::entity>()) {
+        if (registry.valid(entity)) ++valid_entity_count;
+    }
+    result.AddMember("entity_count", valid_entity_count, alloc);
 
     auto* am = engine.asset_manager();
     if (am) {
