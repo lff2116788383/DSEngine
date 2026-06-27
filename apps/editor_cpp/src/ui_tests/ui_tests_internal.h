@@ -12,6 +12,8 @@
 #include "ui_test_harness.h"
 
 struct ImGuiTestEngine;
+struct ImGuiTestContext;
+struct ImGuiWindow;
 
 namespace dse::editor::uitest {
 
@@ -21,8 +23,32 @@ const UiTestServices& Services();
 /// 由 harness 在 Init 时写入服务句柄。
 void SetServices(const UiTestServices& services);
 
-/// 注册全部 UI 用例到测试引擎（在各用例 .cpp 中实现并汇聚）。
+/// 注册全部 UI 用例到测试引擎（在 ui_tests_common.cpp 汇聚分发到各用例文件）。
 void RegisterAllUiTests(ImGuiTestEngine* engine);
+
+// ─── 跨用例共享的工具（无捕获 lambda 用例体经此自由函数调用） ──────────────────
+
+/// 当前被测世界中 valid 的实体数（断言基准）；引擎不可用时返回 -1。
+int CountValidEntities();
+
+/// 把全部面板可见性开关置真，让被隐藏的面板下一帧起被绘制（覆盖全部面板的前提）。
+void EnsureAllPanelsVisible();
+
+/// 在 g.Windows 中查找“上一帧仍在绘制”的窗口：先精确匹配窗口名，再回退到包含子串。
+/// 用于按面板窗口名（含图标前缀/本地化标题时用子串）断言面板已打开。
+ImGuiWindow* FindActiveWindow(const char* name_or_substr);
+
+/// 在 Hierarchy 窗口体空白处右键打开上下文菜单，并把 ref 指向弹窗（"//$FOCUSED"）。
+void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
+
+// ─── 各用例文件的注册入口（在各自 .cpp 中实现） ───────────────────────────────
+void RegisterHarnessSanityTests(ImGuiTestEngine* engine);
+void RegisterHierarchyTests(ImGuiTestEngine* engine);
+void RegisterPanelRenderTests(ImGuiTestEngine* engine);
+void RegisterInspectorTests(ImGuiTestEngine* engine);
+void RegisterConsoleTests(ImGuiTestEngine* engine);
+void RegisterMenuBarTests(ImGuiTestEngine* engine);
+void RegisterAssetBrowserTests(ImGuiTestEngine* engine);
 
 } // namespace dse::editor::uitest
 

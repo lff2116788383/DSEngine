@@ -1,0 +1,17 @@
+case_id: ui.run_all_ui_tests
+title: 内嵌 Dear ImGui Test Engine 跑全部真实 UI 控件级用例（无头）
+
+# 运行以 -DDSE_EDITOR_UI_TESTS=ON 构建的 dsengine-editor-uitest，无头入队全部用例，
+# 跑完按结果摘要返回进程退出码（0=全过）。结果另落 bin/ui_test_results.xml(JUnit)
+# 与 bin/ui_test_summary.txt（WIN32 GUI 子系统无可用 stdout，故文件化导出）。
+command:
+  type: cli
+  executable: "${uitest_exe}"
+  args:
+    - "--headless"
+    - "--run-ui-tests"
+
+assert:
+  exit_code: 0
+  files_exist:
+    - "${repo_root}/bin/ui_test_results.xml"

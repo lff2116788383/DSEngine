@@ -617,9 +617,34 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
 #ifdef DSE_EDITOR_UI_TESTS
     if (test_config_.run_ui_tests) {
+        dse::editor::uitest::UiTestServices ui_services{};
+        ui_services.engine = engine_instance_;
+        ui_services.bus    = command_bus_.get();
+        ui_services.show_localization_preview = &show_localization_preview_;
+        ui_services.show_profiler             = &show_profiler_;
+        ui_services.show_animation            = &show_animation_;
+        ui_services.show_tile_palette         = &show_tile_palette_;
+        ui_services.show_terrain_editor       = &show_terrain_editor_;
+        ui_services.show_lua_console          = &show_lua_console_;
+        ui_services.show_undo_history         = &show_undo_history_;
+        ui_services.show_asset_browser        = &show_asset_browser_;
+        ui_services.show_animation_timeline   = &show_animation_timeline_;
+        ui_services.show_navmesh              = &show_navmesh_;
+        ui_services.show_shader_graph         = &show_shader_graph_;
+        ui_services.show_git                  = &show_git_;
+        ui_services.show_multi_viewport       = &show_multi_viewport_;
+        ui_services.show_anim_state_machine   = &show_anim_state_machine_;
+        ui_services.show_lua_debugger         = &show_lua_debugger_;
+        ui_services.show_streaming_debug      = &show_streaming_debug_;
+        ui_services.show_curve_editor         = &show_curve_editor_;
+        ui_services.show_visual_script        = &show_visual_script_;
+        ui_services.show_anim_retarget        = &show_anim_retarget_;
+        ui_services.show_preferences          = &show_preferences_;
+        ui_services.show_plugins              = &show_plugins_panel_;
+        ui_services.show_chat                 = &show_chat_panel_;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
-            {engine_instance_, command_bus_.get()},
+            ui_services,
             test_config_.ui_test_filter);
         std::cout << "[Editor][ui-tests] Test engine started"
                   << (test_config_.ui_test_filter.empty()

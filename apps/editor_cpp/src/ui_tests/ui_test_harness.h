@@ -28,9 +28,37 @@ namespace dse::editor::core { class CommandBus; }
 namespace dse::editor::uitest {
 
 /// 测试用例可访问的编辑器服务（用例体是无捕获 lambda，经全局只读句柄取用）。
+///
+/// 面板可见性开关均指向 EditorApp 的 show_* 成员（指针在进程生命周期内稳定）。
+/// 多数面板默认隐藏，靠菜单勾选开启；UI 测试要覆盖全部面板，需先把这些开关置真
+/// （见 EnsureAllPanelsVisible），再断言对应窗口已绘制。
 struct UiTestServices {
     dse::runtime::EngineInstance* engine = nullptr;  ///< 引擎实例（取 world / registry）
     dse::editor::core::CommandBus* bus = nullptr;     ///< 写路径门面（保留，结构写经现有工具）
+
+    // ─── 面板可见性开关（指向 EditorApp 成员） ───────────────────────────────
+    bool* show_localization_preview = nullptr;
+    bool* show_profiler = nullptr;
+    bool* show_animation = nullptr;
+    bool* show_tile_palette = nullptr;
+    bool* show_terrain_editor = nullptr;
+    bool* show_lua_console = nullptr;
+    bool* show_undo_history = nullptr;
+    bool* show_asset_browser = nullptr;
+    bool* show_animation_timeline = nullptr;
+    bool* show_navmesh = nullptr;
+    bool* show_shader_graph = nullptr;
+    bool* show_git = nullptr;
+    bool* show_multi_viewport = nullptr;
+    bool* show_anim_state_machine = nullptr;
+    bool* show_lua_debugger = nullptr;
+    bool* show_streaming_debug = nullptr;
+    bool* show_curve_editor = nullptr;
+    bool* show_visual_script = nullptr;
+    bool* show_anim_retarget = nullptr;
+    bool* show_preferences = nullptr;
+    bool* show_plugins = nullptr;
+    bool* show_chat = nullptr;
 };
 
 /// 建测试引擎并绑定到 ui_ctx；配置无头快跑 IO；注册全部用例；Start 并按 filter 入队。

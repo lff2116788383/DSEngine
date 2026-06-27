@@ -1,0 +1,18 @@
+suite_id: editor-ui
+description: 编辑器真实 UI 控件级测试（内嵌 Dear ImGui Test Engine，无头 llvmpipe）
+
+env: tests/automation/envs/local-dse.yaml
+
+# 单条 cli 用例驱动 dsengine-editor-uitest --headless --run-ui-tests，
+# 内部入队 dse-harness / dse-panels / dse-hierarchy / dse-inspector /
+# dse-console / dse-menubar / dse-assets 全部用例。
+cases:
+  - tests/automation/cases/ui/run_all_ui_tests.yaml
+
+case_timeout_seconds: 180
+process_cleanup: true
+
+retry:
+  max_retries: 1
+  retry_delay_seconds: 3
+  retry_on_status: ["failed"]

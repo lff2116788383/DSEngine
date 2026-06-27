@@ -9,6 +9,9 @@
 
 variables:
   editor_exe: "${EDITOR_EXE}"
+  # 内嵌 Dear ImGui Test Engine 的编辑器（-DDSE_EDITOR_UI_TESTS=ON 构建）。
+  # editor-ui 套件用；可经 --var uitest_exe=... 覆盖到自定义构建目录。
+  uitest_exe: "${repo_root}/bin/dsengine-editor-uitest.exe"
   work_root: "${WORK_ROOT}"
   report_root: "${work_root}/reports/${run_id}"
   api_port: 9527
