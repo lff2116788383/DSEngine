@@ -96,6 +96,19 @@ command:
         result.editor_state: "edit"
         result.entity_count: 4
 
+    # editor_idle 回显的 entity_count 亦应回落到 4（此前取 storage.size() 含已释放槽位，
+    # 现统一走 CountValidEntities 遍历 valid()）。
+    - method: dsengine_editor_idle
+      params:
+        frames: 1
+      expect:
+        result.entity_count: 4
+
+    # editor_get_metrics 回显的 entity_count 同样应回落到 4（同源修复）。
+    - method: dsengine_editor_get_metrics
+      expect:
+        result.entity_count: 4
+
     # 再以「按名查找」校验删除生效：零命中
     - method: dsengine_entity_find_by_name
       params:

@@ -1855,3 +1855,41 @@ TEST_F(ControlServerTest, EntityReparent_DetachUndoThenRedo) {
     ASSERT_FALSE(Dispatch("dsengine_editor_redo", "{}").is_error);
     EXPECT_FALSE(registry.all_of<ParentComponent>(child));
 }
+
+// ─── entity_count 一致性：所有回显 entity_count 的工具均以 valid() 计数 ──────────
+// 删除留下"已释放但未回收"的槽位；storage<entt::entity>().size() 含此类槽位会虚高。
+// 修复后 scene_get_state / editor_get_state / editor_idle / editor_get_metrics 应一致回落。
+TEST_F(ControlServerTest, EntityCount_AllToolsReportValidCountAfterDelete) {
+    Dispatch("dsengine_scene_new", "{}");
+    const int base = CountAliveEntities();
+
+    // 建 3 个再删 2 个：留下已释放槽位，足以暴露 storage.size() 虚高。
+    auto c1 = Dispatch("dsengine_entity_create", R"({"name":"C1"})");
+    auto c2 = Dispatch("dsengine_entity_create", R"({"name":"C2"})");
+    ASSERT_FALSE(Dispatch("dsengine_entity_create", R"({"name":"C3"})").is_error);
+    ASSERT_FALSE(c1.is_error);
+    ASSERT_FALSE(c2.is_error);
+    const uint32_t id1 = c1.result["entity_id"].GetUint();
+    const uint32_t id2 = c2.result["entity_id"].GetUint();
+    ASSERT_FALSE(Dispatch("dsengine_entity_delete",
+        (std::string(R"({"entity_id":)") + std::to_string(id1) + "}").c_str()).is_error);
+    ASSERT_FALSE(Dispatch("dsengine_entity_delete",
+        (std::string(R"({"entity_id":)") + std::to_string(id2) + "}").c_str()).is_error);
+
+    const int expected = base + 1;  // 3 created - 2 deleted
+    ASSERT_EQ(CountAliveEntities(), expected);
+
+    auto scene = Dispatch("dsengine_scene_get_state", R"({"include_components":false})");
+    auto editor = Dispatch("dsengine_editor_get_state", "{}");
+    auto idle = Dispatch("dsengine_editor_idle", R"({"frames":1})");
+    auto metrics = Dispatch("dsengine_editor_get_metrics", "{}");
+    ASSERT_FALSE(scene.is_error);
+    ASSERT_FALSE(editor.is_error);
+    ASSERT_FALSE(idle.is_error);
+    ASSERT_FALSE(metrics.is_error);
+
+    EXPECT_EQ(scene.result["entity_count"].GetInt(), expected);
+    EXPECT_EQ(editor.result["entity_count"].GetInt(), expected);
+    EXPECT_EQ(idle.result["entity_count"].GetInt(), expected);
+    EXPECT_EQ(metrics.result["entity_count"].GetInt(), expected);
+}

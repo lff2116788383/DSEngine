@@ -4,8 +4,8 @@ title: 打开工程 → 改场景 → 存盘 → 新建清空 → 回载 → 校
 # 覆盖 save/load 闭环（dsengine_scene_save / scene_new / scene_load）：
 # 改动场景后存盘，scene_new 清空 registry，再 scene_load 回载，校验改动被持久化
 # 并完整还原（实体数 + 改名后的实体可按名命中）。
-# 实体数一律以 scene_get_state.entity_count 校验（已修为遍历 valid() 计数），
-# 不依赖 scene_load 自带的 entity_count 字段（仍取 storage.size()）。
+# 实体数以 scene_get_state.entity_count 校验（遍历 valid() 计数）；scene_load 自带的
+# entity_count 字段现亦统一走 CountValidEntities，故一并直接断言其回显正确。
 setup:
   - action: create_dir
     path: "${project_dir}"
@@ -67,13 +67,15 @@ command:
       expect:
         result.entity_count: 0
 
-    # 回载存盘文件
+    # 回载存盘文件：scene_load 自带 entity_count 现以 valid() 计数，应精确为 5
+    # （此前取 storage.size()，scene_new 清空后的已释放槽位会使其虚高）。
     - method: dsengine_scene_load
       params:
         path: "${project_dir}/roundtrip_scene.json"
       expect:
         result.loaded: true
         result.path: "${project_dir}/roundtrip_scene.json"
+        result.entity_count: 5
 
     # 实体数完整还原为 5（以 valid() 计数的 scene_get_state 为准）
     - method: dsengine_scene_get_state

@@ -63,6 +63,16 @@ static void CollectEntityComponents(entt::registry& registry, entt::entity entit
 static bool RemoveComponentByType(entt::registry& registry, entt::entity entity,
                                    const std::string& type);
 
+// 实体计数：必须遍历 valid() 而非 storage<entt::entity>().size()——后者含已释放
+// 但未回收的槽位，删除/scene_new 后不回落。所有对外回显 entity_count 的工具统一走此处。
+static int CountValidEntities(entt::registry& registry) {
+    int count = 0;
+    for (auto entity : registry.storage<entt::entity>()) {
+        if (registry.valid(entity)) ++count;
+    }
+    return count;
+}
+
 // ─── Tool: dsengine_lua_execute ─────────────────────────────────────────────
 
 static JsonRpcResponse HandleLuaExecute(
@@ -625,11 +635,7 @@ static JsonRpcResponse HandleEditorGetState(
         dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
     result.AddMember("editor_state", rapidjson::Value(state_str, alloc), alloc);
 
-    int valid_entity_count = 0;
-    for (auto entity : registry.storage<entt::entity>()) {
-        if (registry.valid(entity)) ++valid_entity_count;
-    }
-    result.AddMember("entity_count", valid_entity_count, alloc);
+    result.AddMember("entity_count", CountValidEntities(registry), alloc);
 
     auto* am = engine.asset_manager();
     if (am) {
@@ -1174,8 +1180,7 @@ static JsonRpcResponse HandleSceneLoad(
     auto& alloc = result.GetAllocator();
     result.AddMember("path", rapidjson::Value(path.c_str(), alloc), alloc);
     result.AddMember("loaded", rapidjson::Value(true), alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("entity_count", CountValidEntities(registry), alloc);
     return MakeOk(std::move(result));
 }
 
@@ -2017,8 +2022,7 @@ static JsonRpcResponse HandleProjectOpen(
     result.SetObject();
     auto& alloc = result.GetAllocator();
     result.AddMember("opened", rapidjson::Value(true), alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("entity_count", CountValidEntities(registry), alloc);
     result.AddMember("scene_loaded", rapidjson::Value(scene_loaded), alloc);
     if (scene_loaded) {
         result.AddMember("scene_path", rapidjson::Value(scene_path.c_str(), alloc), alloc);
@@ -2070,8 +2074,7 @@ static JsonRpcResponse HandleEditorIdle(
     result.AddMember("delta_ms", dt * 1000.0f, alloc);
     result.AddMember("fps", dt > 0.0f ? (1.0f / dt) : 0.0f, alloc);
     result.AddMember("time_since_startup", Time::TimeSinceStartup(), alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("entity_count", CountValidEntities(registry), alloc);
     const char* state_str =
         dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
         dse::editor::GetEditorState() == dse::editor::EditorState::Pause ? "pause" : "edit";
@@ -2095,8 +2098,7 @@ static JsonRpcResponse HandleEditorGetMetrics(
     result.AddMember("fps", dt > 0.0f ? (1.0f / dt) : 0.0f, alloc);
     result.AddMember("delta_ms", dt * 1000.0f, alloc);
     result.AddMember("draw_calls", engine.pipeline()->LastDrawCalls(), alloc);
-    result.AddMember("entity_count",
-        static_cast<int>(registry.storage<entt::entity>().size()), alloc);
+    result.AddMember("entity_count", CountValidEntities(registry), alloc);
     result.AddMember("time_since_startup", Time::TimeSinceStartup(), alloc);
     const char* state_str =
         dse::editor::GetEditorState() == dse::editor::EditorState::Play ? "play" :
