@@ -32,11 +32,13 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr const char* kProjName    = "DSEUiTestProject";
-constexpr const char* kScratchName = "DSEUiTestScratch";
+constexpr const char* kProjName     = "DSEUiTestProject";
+constexpr const char* kProjNameMenu = "DSEUiTestProjectMenu";
+constexpr const char* kScratchName  = "DSEUiTestScratch";
 
 // 带图标前缀的控件标签需与源处完全一致。
-// File 菜单 Save Project（editor_shell.cpp:248）；Project Hub 新建按钮（editor_project_hub.cpp:189，注意三个空格）。
+// File 菜单 New/Save Project（editor_shell.cpp，两个空格）；Project Hub 新建按钮（editor_project_hub.cpp:189，三个空格）。
+#define DSE_MENU_NEW_PROJECT  "File/" MDI_ICON_PLUS         "  New Project..."
 #define DSE_MENU_SAVE_PROJECT "File/" MDI_ICON_CONTENT_SAVE "  Save Project"
 #define DSE_HUB_NEW_PROJECT   MDI_ICON_PLUS "   New Project..."
 
@@ -88,6 +90,38 @@ void RegisterProjectTests(ImGuiTestEngine* e) {
 
             IM_CHECK(pm.HasOpenProject());
             IM_CHECK_STR_EQ(pm.GetDescriptor().name.c_str(), kProjName);
+            IM_CHECK(fs::exists(root / "project.dseproj"));
+        };
+    }
+
+    // dse-project/new_project_via_menu：回归守护 File→New Project... 菜单弹窗（已修复 ID 作用域 bug）。
+    // 需有项目打开（菜单栏可见）→ 点菜单 → 模态弹窗 → 真实填表 → Create。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-project", "new_project_via_menu");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const fs::path parent = TestParent();
+            const fs::path root   = parent / kProjNameMenu;
+            std::error_code ec;
+            fs::remove_all(root, ec);
+
+            auto& pm = ProjectManager::Get();
+            if (!pm.HasOpenProject()) {  // 确保菜单栏可见
+                fs::remove_all(parent / kProjName, ec);
+                pm.CreateProject(parent, kProjName, ProjectTemplate::Empty);
+            }
+
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick(DSE_MENU_NEW_PROJECT);  // 修复后此弹窗应真正打开
+            ctx->Yield(2);
+
+            ctx->SetRef("//NewProjectPopup");
+            ctx->ItemInputValue("Project Name", kProjNameMenu);
+            ctx->ItemInputValue("Location", parent.generic_string().c_str());
+            ctx->ItemClick("Create");
+            ctx->Yield(2);
+
+            IM_CHECK(pm.HasOpenProject());
+            IM_CHECK_STR_EQ(pm.GetDescriptor().name.c_str(), kProjNameMenu);
             IM_CHECK(fs::exists(root / "project.dseproj"));
         };
     }

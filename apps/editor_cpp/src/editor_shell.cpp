@@ -138,6 +138,10 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     
     auto& ai_config = AIConfigManager::Instance();
 
+    // NewProjectPopup 必须在菜单栏(DSEngineRoot)作用域 OpenPopup，才能与下方
+    // BeginPopupModal 的 ID 栈一致；故在 File 菜单内只置标志，菜单结束后再真正打开。
+    bool open_new_project_popup = false;
+
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("File"))) {
         ImGui::TextDisabled("Scene");
@@ -204,7 +208,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::Separator();
         ImGui::TextDisabled("Project");
         if (ImGui::MenuItem(MDI_ICON_PLUS "  New Project...", nullptr, false, editable)) {
-            ImGui::OpenPopup("NewProjectPopup");
+            open_new_project_popup = true;
         }
         if (ImGui::MenuItem(MDI_ICON_FOLDER_OPEN "  Open Project...", nullptr, false, editable)) {
             std::string path = OpenProjectFileDialog();
@@ -521,6 +525,10 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ── New Project popup ────────────────────────────────────────────────────
     {
+        if (open_new_project_popup) {
+            ImGui::OpenPopup("NewProjectPopup");
+        }
+
         static char s_new_proj_name[128] = "MyGame";
         static char s_new_proj_location[512] = "";
         static int s_new_proj_template = 0;
