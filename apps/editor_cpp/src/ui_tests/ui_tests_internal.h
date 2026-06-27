@@ -49,6 +49,7 @@ void RegisterInspectorTests(ImGuiTestEngine* engine);
 void RegisterConsoleTests(ImGuiTestEngine* engine);
 void RegisterMenuBarTests(ImGuiTestEngine* engine);
 void RegisterAssetBrowserTests(ImGuiTestEngine* engine);
+void RegisterProjectTests(ImGuiTestEngine* engine);
 
 } // namespace dse::editor::uitest
 
