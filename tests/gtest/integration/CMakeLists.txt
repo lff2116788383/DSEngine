@@ -70,7 +70,14 @@ target_link_libraries(${DSE_GTEST_INTEGRATION_TARGET}
         GTest::gtest_main
         GTest::gmock
         dse_engine
+        dse_editor_core
         ixwebsocket
+)
+
+# EditorCore 隔离守卫（editor_core_isolation_test.cpp）需要 core 目录绝对路径。
+target_compile_definitions(${DSE_GTEST_INTEGRATION_TARGET}
+    PRIVATE
+        DSE_EDITOR_CORE_DIR="${CMAKE_SOURCE_DIR}/apps/editor_cpp/core"
 )
 
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）

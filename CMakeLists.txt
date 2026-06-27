@@ -905,6 +905,10 @@ endif()
 # 包含运行时宿主入口
 add_subdirectory(apps/runtime)
 
+# 编辑器核心门面层（命令/查询，无 UI 框架依赖）。无条件构建，
+# 以便编辑器 app 与 gtest 集成测试（通常在 editor 未构建的配置下运行）都能链接。
+add_subdirectory(apps/editor_cpp/core)
+
 if(DSE_BUILD_EDITOR)
     add_subdirectory(apps/editor_cpp)
 endif()
