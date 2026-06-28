@@ -466,4 +466,21 @@ void DrawAnimationTimelinePanel(EditorContext& ctx) {
     ImGui::End();
 }
 
+#ifdef DSE_EDITOR_UI_TESTS
+int TimelineTrackCount() { return static_cast<int>(GetState().clip.tracks.size()); }
+int TimelineKeyframeCount(int track) {
+    auto& tracks = GetState().clip.tracks;
+    if (track < 0 || track >= static_cast<int>(tracks.size())) return -1;
+    return static_cast<int>(tracks[track].keyframes.size());
+}
+bool  TimelinePlaying()       { return GetState().playing; }
+float TimelinePlayhead()      { return GetState().playhead; }
+int   TimelineSelectedTrack() { return GetState().selected_track; }
+void  TimelineSelectForTest(int track, int keyframe) {
+    auto& s = GetState();
+    s.selected_track = track;
+    s.selected_keyframe = keyframe;
+}
+#endif
+
 } // namespace dse::editor

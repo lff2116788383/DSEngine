@@ -156,6 +156,32 @@ void DragProjectAssetOntoScene(ImGuiTestContext* ctx, const char* filename, cons
     ctx->Yield(2);
 }
 
+void ShowFloatingPanel(ImGuiTestContext* ctx, bool* show, const char* window_ref) {
+    HideOptionalPanels();
+    ctx->Yield(4);
+    if (show) *show = true;
+    ctx->Yield(4);
+    // 这些可选面板首帧以浮动窗出现；移到中部空白并放大，避免内部控件被裁剪/遮挡。
+    ctx->WindowMove(window_ref, ImVec2(180.0f, 70.0f));
+    ctx->WindowResize(window_ref, ImVec2(940.0f, 580.0f));
+    // 置顶到最前：否则 ImGuizmo 每帧建的全屏覆盖窗会盖住面板、截走点击（见 ManualMouseDrag 注释）。
+    ctx->WindowFocus(window_ref);
+    ctx->Yield(2);
+}
+
+void DeselectAll(ImGuiTestContext* ctx) {
+    // Hierarchy 面板里“点空白处”会把 selected_entity 置空并清 SelectionManager（见 editor_hierarchy_panel）。
+    ctx->WindowFocus("//Hierarchy");
+    ctx->Yield();
+    ImGuiWindow* h = FindActiveWindow("Hierarchy");
+    if (!h) return;
+    // 点窗口底部靠下的空白区域：那里位于树节点之下，满足“窗口悬停且无任何 item 悬停”。
+    const ImVec2 pos(h->Pos.x + h->Size.x * 0.5f, h->Pos.y + h->Size.y - 10.0f);
+    ctx->MouseMoveToPos(pos);
+    ctx->MouseClick(ImGuiMouseButton_Left);
+    ctx->Yield(2);
+}
+
 void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterHarnessSanityTests(engine);
     RegisterPanelRenderTests(engine);

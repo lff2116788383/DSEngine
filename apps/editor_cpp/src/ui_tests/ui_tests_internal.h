@@ -65,6 +65,15 @@ void RestoreProjectPanelDock(ImGuiTestContext* ctx);
 /// 需先 MakeProjectPanelFloating；调用方负责落/删文件与断言场景变化。
 void DragProjectAssetOntoScene(ImGuiTestContext* ctx, const char* filename, const char* type_icon);
 
+/// 把某个“可选/开关”面板单独打开并浮动放大到屏幕中部空白处，便于点击其内部控件。
+/// 先 HideOptionalPanels 收敛布局，再置 show=true，按窗口名移动并放大。window_ref 形如 "//Animation Timeline"。
+void ShowFloatingPanel(ImGuiTestContext* ctx, bool* show, const char* window_ref);
+
+/// 取消所有选中（点 Hierarchy 空白处）：清掉 ctx.selected_entity 与 SelectionManager。
+/// 选中态会让视口绘制 ImGuizmo 变换 gizmo，它在视口区域用全局鼠标“截走”左键点击，
+/// 干扰落在视口之上的浮动面板按钮——左键类用例开场应先反选。
+void DeselectAll(ImGuiTestContext* ctx);
+
 // ─── 各用例文件的注册入口（在各自 .cpp 中实现） ───────────────────────────────
 void RegisterHarnessSanityTests(ImGuiTestEngine* engine);
 void RegisterHierarchyTests(ImGuiTestEngine* engine);
