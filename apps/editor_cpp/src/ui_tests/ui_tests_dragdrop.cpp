@@ -257,9 +257,26 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
 
             // 第二步：展开 parent 露出嵌套 child，把它拖到 "Scene" 根节点 → detach（卸 ParentComponent）。
             // 多 Yield 几帧让 Hierarchy 以「parent 现有子节点」重绘——刚 reparent 完只过 1 帧时，
-            // ImGui 测试引擎缓存的 parent 节点标志仍是上一帧的 Leaf，ItemOpen 会误判为叶子无法展开。
+            // parent 节点标志仍是上一帧的 Leaf。
             ctx->Yield(4);
-            ctx->ItemOpen(parent_ref);
+            // 实体节点用 ImGuiTreeNodeFlags_OpenOnArrow，且双击被内联重命名占用，故 ItemOpen
+            // （点节点本体/双击）无法展开会报 "Unable to Open"——必须点最左侧折叠箭头（与
+            // ui_tests_negative.cpp 同法）。先清掉第一步 reparent 重新选中 child 拉起的 ImGuizmo
+            // 全屏覆盖窗，避免它挡住对箭头的点击。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+            ctx->WindowFocus("//Hierarchy");
+            ctx->ScrollToItemY(parent_ref);
+            ctx->Yield(2);
+            {
+                const ImGuiTestItemInfo pii = ctx->ItemInfo(parent_ref);
+                IM_CHECK(pii.ID != 0);
+                const ImVec2 arrow(pii.RectFull.Min.x + pii.RectFull.GetHeight() * 0.5f,
+                                   pii.RectFull.GetCenter().y);
+                ctx->MouseMoveToPos(arrow);
+                ctx->MouseClick(0);
+            }
             ctx->Yield(2);
             // child 现在嵌套在 parent 下：路径多一层 parent 的指针 ID。
             std::snprintf(nested_ref, sizeof(nested_ref), "//Hierarchy/Scene/$$(ptr)0x%llx/$$(ptr)0x%llx",
