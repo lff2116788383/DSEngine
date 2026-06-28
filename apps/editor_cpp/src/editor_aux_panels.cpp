@@ -661,6 +661,12 @@ void DrawProjectPanel() {
                     }
                 }
 
+                // Per-item context menu trigger — bound to the row Selectable (spans all
+                // columns) so a right-click anywhere on the row opens it. The actual popup body
+                // is drawn after the remaining columns; using an explicit id keeps it row-scoped.
+                const std::string row_ctx_id = "##asset_detail_ctx_" + filename;
+                ImGui::OpenPopupOnItemClick(row_ctx_id.c_str(), ImGuiPopupFlags_MouseButtonRight);
+
                 // Type column
                 ImGui::TableSetColumnIndex(1);
                 ImGui::TextDisabled("%s", type_str);
@@ -677,8 +683,8 @@ void DrawProjectPanel() {
                     }
                 }
 
-                // Per-item context menu — 必须传显式 ID，因为上方 TextDisabled 无 item ID
-                if (ImGui::BeginPopupContextItem(("##asset_detail_ctx_" + filename).c_str())) {
+                // Per-item context menu body (opened by OpenPopupOnItemClick above on the row).
+                if (ImGui::BeginPopup(row_ctx_id.c_str())) {
                     if (ImGui::MenuItem("Rename")) {
                         s_rename_target = path;
                         std::strncpy(s_rename_buf, filename.c_str(), sizeof(s_rename_buf) - 1);

@@ -136,6 +136,10 @@ void MakeProjectPanelFloating(ImGuiTestContext* ctx) {
 
 void RestoreProjectPanelDock(ImGuiTestContext* ctx) {
     // 把 Project 作为标签页停回 Console 所在停靠节点，恢复默认布局，避免污染后续依赖布局的用例。
+    // DockInto 的窗口名按当前 ref 解析；若调用方遗留了非根 ref（如 "//Project"），"Project"
+    // 会被解析成 "//Project/Project" 而找不到窗口，触发 imgui_te_context 的 docking 断言。
+    // 这里先把 ref 复位到根，保证窗口名按绝对窗口解析。
+    ctx->SetRef("");
     ctx->DockInto("Project", "Console");
     ctx->Yield(2);
 }
