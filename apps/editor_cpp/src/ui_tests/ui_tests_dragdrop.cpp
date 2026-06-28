@@ -37,6 +37,7 @@
 #include "../editor_shared_components.h"  // SiblingIndexComponent（dse::editor）
 #include "../editor_selection.h"          // SelectionManager
 #include "../editor_icons.h"              // MDI_ICON_FILE_OUTLINE
+#include "../editor_scene_tabs.h"         // SceneTabManager（新建/关闭空场景页签做隔离）
 
 namespace dse::editor::uitest {
 
@@ -197,6 +198,101 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
             // reorder 落区显式写入兄弟序 = 目标之后。
             IM_CHECK(reg.all_of<SiblingIndexComponent>(a));
             IM_CHECK_EQ(reg.get<SiblingIndexComponent>(a).index, 6);
+        };
+    }
+
+    // dse-dragdrop/hierarchy_unparent_to_root：把已是子节点的实体拖回 "Scene" 根 → 卸掉 ParentComponent。
+    // 与 hierarchy_reparent（拖成子节点）互为对偶，覆盖 un-parent 落区（Scene 根节点上接 HIERARCHY_ENTITY
+    // 的 BeginDragDropTarget → ReparentViaBus(parent=nullopt) → reg.remove<ParentComponent>）。
+    {
+        ImGuiTest* t4 = IM_REGISTER_TEST(e, "dse-dragdrop", "hierarchy_unparent_to_root");
+        t4->TestFunc = [](ImGuiTestContext* ctx) {
+            auto& tabs = SceneTabManager::Get();
+            entt::registry& reg = Services().engine->pipeline()->world().registry();
+
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            // 新建空场景页签做隔离：拖拽按屏幕坐标投递，要求“被拖的嵌套子节点”与落区“Scene 根节点”
+            // 同屏可见。全套运行时前序用例会往场景累积大量实体，长列表会把 Scene 根（列表首行）与
+            // 嵌套子节点（列表末尾）错开到视口上下两端而无法同屏。清空场景后列表仅 Scene>parent>child
+            // 三行，二者必然同屏。结尾关掉该页签即恢复原场景快照，无污染。
+            const int n0 = tabs.GetTabCount();
+            ctx->ItemClick("//DSEngineRoot/##SceneTabs/+");
+            ctx->Yield(2);
+            IM_CHECK_EQ(tabs.GetTabCount(), n0 + 1);
+
+            const entt::entity parent = CreateRootEntity(ctx, reg);
+            const entt::entity child = CreateRootEntity(ctx, reg);
+            IM_CHECK(parent != entt::null && child != entt::null && parent != child);
+
+            // 清选择移除 ImGuizmo 全屏覆盖窗，避免挡住拖拽落点。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Edit/Deselect All");
+            ctx->Yield(2);
+
+            char parent_ref[96], child_ref[96], nested_ref[160];
+            std::snprintf(parent_ref, sizeof(parent_ref), "//Hierarchy/Scene/$$(ptr)0x%llx",
+                          static_cast<unsigned long long>(static_cast<std::uint32_t>(parent)));
+            std::snprintf(child_ref, sizeof(child_ref), "//Hierarchy/Scene/$$(ptr)0x%llx",
+                          static_cast<unsigned long long>(static_cast<std::uint32_t>(child)));
+
+            // 第一步：把 child 拖到 parent 节点上 → 经 ReparentViaBus 真正成为子节点（与 hierarchy_reparent
+            // 同一产品路径，确保 parent 节点产生可展开的子项，再做后续 un-parent）。
+            ctx->WindowFocus("//Hierarchy");
+            ctx->ScrollToItemY(child_ref);
+            ctx->Yield(2);
+            {
+                const ImGuiTestItemInfo pi = ctx->ItemInfo(parent_ref);
+                const ImGuiTestItemInfo ci = ctx->ItemInfo(child_ref);
+                IM_CHECK(pi.ID != 0 && ci.ID != 0);
+                const ImVec2 src(ci.RectFull.GetCenter().x, ci.RectFull.Min.y + ci.RectFull.GetHeight() * 0.5f);
+                const ImVec2 dst(pi.RectFull.GetCenter().x, pi.RectFull.Min.y + pi.RectFull.GetHeight() * 0.25f);
+                ctx->KeyPress(ImGuiKey_Escape);
+                ctx->Yield();
+                ManualMouseDrag(ctx, src, dst);
+            }
+            IM_CHECK(reg.all_of<ParentComponent>(child));
+            IM_CHECK(reg.get<ParentComponent>(child).parent == parent);
+
+            // 第二步：展开 parent 露出嵌套 child，把它拖到 "Scene" 根节点 → detach（卸 ParentComponent）。
+            // 多 Yield 几帧让 Hierarchy 以「parent 现有子节点」重绘——刚 reparent 完只过 1 帧时，
+            // ImGui 测试引擎缓存的 parent 节点标志仍是上一帧的 Leaf，ItemOpen 会误判为叶子无法展开。
+            ctx->Yield(4);
+            ctx->ItemOpen(parent_ref);
+            ctx->Yield(2);
+            // child 现在嵌套在 parent 下：路径多一层 parent 的指针 ID。
+            std::snprintf(nested_ref, sizeof(nested_ref), "//Hierarchy/Scene/$$(ptr)0x%llx/$$(ptr)0x%llx",
+                          static_cast<unsigned long long>(static_cast<std::uint32_t>(parent)),
+                          static_cast<unsigned long long>(static_cast<std::uint32_t>(child)));
+            ctx->ScrollToItemY(nested_ref);
+            ctx->Yield(2);
+            {
+                const ImGuiTestItemInfo ni = ctx->ItemInfo(nested_ref);
+                const ImGuiTestItemInfo si = ctx->ItemInfo("//Hierarchy/Scene");
+                IM_CHECK(ni.ID != 0 && si.ID != 0);
+                const ImVec2 src(ni.RectFull.GetCenter().x, ni.RectFull.Min.y + ni.RectFull.GetHeight() * 0.5f);
+                // 落点取 "Scene" 根节点（其 BeginDragDropTarget 接 HIERARCHY_ENTITY → ReparentViaBus(nullopt)）。
+                const ImVec2 dst = si.RectFull.GetCenter();
+                ctx->KeyPress(ImGuiKey_Escape);
+                ctx->Yield();
+                ManualMouseDrag(ctx, src, dst);
+            }
+
+            IM_CHECK(reg.valid(child));
+            // un-parent 后 ParentComponent 被卸掉（detach 回根）。
+            IM_CHECK(!reg.all_of<ParentComponent>(child));
+
+            // 复位：右键关掉新场景页签 → 恢复原场景快照（parent/child 随该页签一并丢弃）。
+            const int last = tabs.GetTabCount() - 1;
+            char tabref[80];
+            std::snprintf(tabref, sizeof(tabref), "//DSEngineRoot/##SceneTabs/SceneTab%d", last);
+            ctx->ItemClick(tabref, ImGuiMouseButton_Right);
+            ctx->Yield();
+            ctx->SetRef("//$FOCUSED");
+            ctx->ItemClick("Close");
+            ctx->Yield(2);
+            IM_CHECK_EQ(tabs.GetTabCount(), n0);
         };
     }
 
