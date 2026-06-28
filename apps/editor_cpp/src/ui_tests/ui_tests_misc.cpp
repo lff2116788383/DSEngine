@@ -15,6 +15,11 @@
 #ifdef DSE_EDITOR_UI_TESTS
 
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <system_error>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -26,6 +31,12 @@
 
 #include "../editor_selection.h"        // SelectionManager
 #include "../editor_scene_camera.h"     // EditorCamera / GetEditorCamera / FocusEditorCamera
+#include "../editor_settings.h"         // Load/SaveEditorSettings（autosave 开关/间隔）
+#include "../editor_scene_tabs.h"       // SceneTabManager（New Scene / MarkDirty / 活动页签名）
+#include "../editor_project.h"          // ProjectManager（autosave 目录 / Build 资产目录）
+#include "../editor_autosave_core.h"    // MakeAutoSaveFileName
+#include "../editor_shared_components.h" // EditorNameComponent
+#include "../editor_icons.h"            // MDI_ICON_PLUS / MDI_ICON_EXPORT
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -130,6 +141,129 @@ void RegisterMiscEditorTests(ImGuiTestEngine* e) {
             IM_CHECK(col.is_trigger != trig_before);
 
             DeleteSelectedEntity(ctx, ent);
+        };
+    }
+
+    // ── ⑥-a autosave 真触发：置脏 + 推进模拟时钟跨过间隔 → .editor/autosave/<scene> 落盘且含场景数据 ─
+    // AutoSaveManager::Tick 每帧由 editor_app 调用：从盘读设置、读活动页签 dirty、以 ImGui::GetTime()
+    // 为时钟。靠 ctx->SleepNoSkip 注入模拟 DeltaTime 推进 g.Time 跨过间隔（下限 10s）触发一次自动保存。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-misc", "autosave_triggers_and_writes_scene");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            namespace fs = std::filesystem;
+            auto& proj = ProjectManager::Get();
+            IM_CHECK(proj.HasOpenProject());  // UI 测试模式下总有空工程打开
+            auto& tabs = SceneTabManager::Get();
+
+            // 起个干净空场景页签，造一个特征命名实体（用于验证 autosave 文件“含场景数据”）。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("File/" MDI_ICON_PLUS "  New Scene");
+            ctx->Yield(2);
+            entt::registry& reg = Reg();
+            const entt::entity probe = reg.create();
+            reg.emplace<EditorNameComponent>(probe, std::string("DSEAutoSaveProbe"));
+            reg.emplace<TransformComponent>(probe);
+
+            // 期望落盘路径：<project>/.editor/autosave/<sceneName>.autosave.dscene（与管理器同法推导）。
+            const fs::path expected = fs::path(proj.GetProjectRoot()) / ".editor" / "autosave" /
+                                      MakeAutoSaveFileName(tabs.GetActiveDisplayName());
+            std::error_code ec;
+            fs::remove(expected, ec);  // 清旧产物，确保断言的是这次触发
+
+            // 开 autosave 并把间隔设到下限（Tick 每帧从盘 LoadEditorSettings）。
+            const EditorSettings orig = LoadEditorSettings();
+            EditorSettings st = orig;
+            st.auto_save_enabled = true;
+            st.auto_save_interval_sec = 10;  // ClampAutoSaveInterval 下限
+            SaveEditorSettings(st);
+
+            // 置脏 → 过一帧让计时器 InitTimer → 注入约 12s 模拟时钟跨过 10s 间隔 → Tick 落盘。
+            tabs.MarkDirty();
+            ctx->Yield(2);
+            ctx->SleepNoSkip(12.0f, 1.0f);
+            ctx->Yield(2);
+
+            // 断言：autosave 文件落盘且含场景数据（特征实体名出现在序列化内容里）。
+            IM_CHECK(fs::exists(expected, ec));
+            std::string content;
+            {
+                std::ifstream f(expected, std::ios::binary);
+                std::stringstream ss; ss << f.rdbuf(); content = ss.str();
+            }
+            IM_CHECK(!content.empty());
+            IM_CHECK(content.find("DSEAutoSaveProbe") != std::string::npos);
+
+            // 收尾：复原设置、删 autosave 文件（含 .bin 旁车）、新建空场景复位。
+            SaveEditorSettings(orig);
+            fs::remove(expected, ec);
+            fs::remove(fs::path(expected.string() + ".bin"), ec);
+            ctx->MenuClick("File/" MDI_ICON_PLUS "  New Scene");
+            ctx->Yield(2);
+        };
+    }
+
+    // ── ⑥-b Build Game 对话框出包：设标题/输出目录 → Build → 轮询完成 → 断言产物落盘 ──────
+    // DoBuild 是“拷贝现成 runtime exe”（非编译），在 cwd（仓库根）找 dsengine_game*.exe 拷为
+    // <title>.exe。测试环境未构建 dse_standalone，故放一个最小桩 exe 供拷贝（不执行它，只验
+    // 编辑器出包编排：找 exe→拷为<title>.exe→写 manifest→打包/拷 data）；另在项目资产目录放
+    // 一个探针资产，使 data 打包有可断言内容。构建在后台线程跑，以产物落盘为完成信号。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-misc", "build_game_dialog_produces_artifacts");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            namespace fs = std::filesystem;
+            auto& proj = ProjectManager::Get();
+            IM_CHECK(proj.HasOpenProject());
+
+            const fs::path asset_dir   = proj.GetAssetDir();
+            const fs::path probe_asset = asset_dir / "dse_buildtest_probe.txt";
+            const fs::path stub_exe    = fs::current_path() / "dsengine_game.exe";
+            const fs::path out_dir     = fs::temp_directory_path() / "dse_ui_tests" / "build_out";
+
+            std::error_code ec;
+            // 预清（自愈上次可能中途中断的残留）。
+            fs::remove_all(out_dir, ec);
+            fs::create_directories(asset_dir, ec);
+            { std::ofstream(probe_asset, std::ios::binary) << "DSE_BUILD_PROBE"; }
+            { std::ofstream(stub_exe, std::ios::binary) << "MZ"; }  // 最小桩，仅供拷贝
+            ctx->Yield();
+
+            // 开 Build Game 对话框（File 菜单，editable && has_project 才可点）。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("File/" MDI_ICON_EXPORT "  Build Game...");
+            ctx->Yield(2);
+            // 模态弹窗用 //$FOCUSED 定位（与本文件 AddComponent 同法）；确认窗口已开。
+            IM_CHECK(FindActiveWindow("Build Game") != nullptr);
+            ctx->SetRef("//$FOCUSED");
+            ctx->ItemInputValue("##title", "TestGame");
+            ctx->ItemInputValue("##outdir", out_dir.string().c_str());
+            ctx->Yield(2);
+            ctx->ItemClick("Build");
+
+            // 轮询完成：构建在后台线程，以编辑器产物（含晚写的 data/）落盘为准。
+            const fs::path exe_out  = out_dir / "TestGame.exe";
+            const fs::path manifest = out_dir / "game.dsmanifest";
+            const fs::path data_out = out_dir / "data";
+            bool done = false;
+            for (int i = 0; i < 600 && !done; ++i) {
+                ctx->Yield();
+                done = fs::exists(exe_out, ec) && fs::exists(manifest, ec) && fs::exists(data_out, ec);
+            }
+
+            IM_CHECK(fs::exists(exe_out, ec));   // <title>.exe 落盘（由桩拷贝而来）
+            IM_CHECK(fs::exists(manifest, ec));  // game.dsmanifest 落盘
+            IM_CHECK(fs::exists(data_out, ec));  // data/ 落盘
+            IM_CHECK(fs::exists(data_out / "dse_buildtest_probe.txt", ec));  // 资产进了 data
+            IM_CHECK(fs::exists(out_dir / "game.dpak", ec));                 // 非空资产 → 写出 pak
+
+            // build_done 后出现 Close 按钮，点它关对话框。
+            ctx->ItemClick("Close");
+            ctx->Yield(2);
+
+            // 清理：探针资产（含 .meta 旁车）、桩 exe、输出目录。
+            fs::remove(probe_asset, ec);
+            fs::remove(fs::path(probe_asset.string() + ".meta"), ec);
+            fs::remove(stub_exe, ec);
+            fs::remove_all(out_dir, ec);
         };
     }
 

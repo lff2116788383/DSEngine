@@ -58,6 +58,7 @@ struct BuildState {
     std::string last_launch_args;      // 加密构建时通过 launch 参数传 --bundle/--key/--script
 
     bool dialog_open = false;
+    bool pending_open = false;  // 菜单作用域置位，DrawBuildGameDialog 内再 OpenPopup（与 BeginPopupModal 同 ID 栈）
     bool launch_after_build = false;
     float spinner_angle = 0.0f;
 };
@@ -420,13 +421,21 @@ void OpenBuildGameDialog() {
     state.build_done = false;
     state.build_log.clear();
     state.launch_after_build = false;
-    ImGui::OpenPopup("Build Game");
+    // OpenPopup 必须与 BeginPopupModal 处于同一 ID 作用域，而本对话框的 BeginPopupModal
+    // 在 DrawBuildGameDialog（顶层）里；若在 File 菜单作用域直接 OpenPopup，ID 栈不一致弹窗打不开。
+    // 故此处仅置标志，真正的 OpenPopup 延后到 DrawBuildGameDialog 中执行。
+    state.pending_open = true;
 }
 
 void DrawBuildGameDialog() {
     auto& state = GetState();
 
     if (!state.dialog_open) return;
+
+    if (state.pending_open) {
+        state.pending_open = false;
+        ImGui::OpenPopup("Build Game");
+    }
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
