@@ -127,7 +127,13 @@ void MakeProjectPanelFloating(ImGuiTestContext* ctx) {
     // 关掉浮动可选面板（避免压住落点），让 Project 刷新目录列表后浮动放大到右侧空白处。
     HideOptionalPanels();
     ctx->Yield(6);
-    ctx->UndockWindow("Project");
+    // UndockWindow 内部用 GetWindowByRef(window_name) 解析窗口，且该名字按“当前 ref”解析。
+    // 若调用方先做过别的交互（如右键 Hierarchy 建实体）遗留了非根 ref，"Project" 会被解析成
+    // "//<上次ref>/Project" 而找不到窗口 → GetWindowByRef 返回 null → UndockWindow 解引用空指针崩溃
+    // （imgui_test_engine 的 UndockWindow 缺少 UndockNode 那样的 null 兜底）。这里把 ref 复位到根、
+    // 并用绝对窗口名 "//Project"，保证无论调用顺序如何都按绝对窗口解析，规避该空指针崩溃。
+    ctx->SetRef("");
+    ctx->UndockWindow("//Project");
     ctx->Yield(2);
     ctx->WindowMove("//Project", ImVec2(420.0f, 80.0f));
     ctx->WindowResize("//Project", ImVec2(520.0f, 520.0f));

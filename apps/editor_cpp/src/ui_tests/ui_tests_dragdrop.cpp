@@ -217,18 +217,20 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
                 ofs << "# ui test drag asset\n";
             }
 
-            // 先把 Project 列表浮动起来再造实体：UndockWindow("Project") 必须在“场景内尚无用户实体”时进行——
-            // 实测“先建实体、再 UndockWindow”会在进程收尾期触发堆破坏崩溃（与 dse-prefab 安全路径同序：先浮动后建体）。
-            MakeProjectPanelFloating(ctx);
-            ctx->WindowMove("//Project", ImVec2(10.0f, 360.0f));
-            ctx->WindowResize("//Project", ImVec2(380.0f, 340.0f));
-            ctx->Yield(2);
-
             // 造一个带 MeshRenderer 的实体并单选它（创建即选中 → Inspector 渲染 Mesh Renderer 区）。
+            // 注意：这里“先建实体（经右键 Hierarchy 菜单，会遗留非根 ref）再浮动 Project”正是此前
+            // 触发 UndockWindow 空指针崩溃的复现序——MakeProjectPanelFloating 已修为先复位 ref+绝对名解析，
+            // 故本用例同时充当该崩溃的回归（修复前此序必崩 0xC0000005，修复后稳定通过）。
             const entt::entity ent = CreateRootEntity(ctx, reg);
             IM_CHECK(ent != entt::null);
             reg.emplace_or_replace<dse::MeshRendererComponent>(ent).mesh_path = "";
             SelectionManager::Get().Clear();  // 单选 Inspector 分支（context.selected_entity 仍为 ent）
+            ctx->Yield(2);
+
+            // 浮动 Project 列表并挪到左下，避免压住右侧停靠的 Inspector（拖放落点须可命中 Inspector 字段）。
+            MakeProjectPanelFloating(ctx);
+            ctx->WindowMove("//Project", ImVec2(10.0f, 360.0f));
+            ctx->WindowResize("//Project", ImVec2(380.0f, 340.0f));
             ctx->Yield(2);
 
             // 源：Project 列表项（Table("project_list") -> PushID(filename) -> Selectable("<icon>  <filename>")）。
