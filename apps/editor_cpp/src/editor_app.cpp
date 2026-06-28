@@ -620,6 +620,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
         dse::editor::uitest::UiTestServices ui_services{};
         ui_services.engine = engine_instance_;
         ui_services.bus    = command_bus_.get();
+        ui_services.current_gizmo_operation = &current_gizmo_operation_;
+        ui_services.current_gizmo_mode      = &current_gizmo_mode_;
         ui_services.show_localization_preview = &show_localization_preview_;
         ui_services.show_profiler             = &show_profiler_;
         ui_services.show_animation            = &show_animation_;

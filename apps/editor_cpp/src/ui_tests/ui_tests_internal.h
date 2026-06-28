@@ -51,6 +51,20 @@ void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
 /// 全屏 "gizmo" 覆盖窗（NoTitleBar 不可拖动）挪不开会致落点漂移；手动逐帧 Yield 更可靠。
 void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst);
 
+/// 当前项目资产根目录（无项目时回退 <cwd>/samples/lua/data，与 Project 面板列目录一致）。
+/// 用例在拖拽/列出资源前把测试文件落到这里。
+std::string ProjectAssetBaseDir();
+
+/// Project 面板默认停靠底部、列表可视高度≈0，资源行被裁剪不可命中。把它浮动放大到右侧空白处，
+/// 让资源行完整可见可拖。结束须调 RestoreProjectPanelDock 复位，否则污染后续依赖默认布局的用例。
+void MakeProjectPanelFloating(ImGuiTestContext* ctx);
+void RestoreProjectPanelDock(ImGuiTestContext* ctx);
+
+/// 把已落在项目资产目录里的资源文件，从 Project 列表（列表视图）拖到 Hierarchy 的 "Scene" 根。
+/// type_icon 为该扩展名在列表里的图标前缀（见 editor_aux_panels 的类型→图标映射）。
+/// 需先 MakeProjectPanelFloating；调用方负责落/删文件与断言场景变化。
+void DragProjectAssetOntoScene(ImGuiTestContext* ctx, const char* filename, const char* type_icon);
+
 // ─── 各用例文件的注册入口（在各自 .cpp 中实现） ───────────────────────────────
 void RegisterHarnessSanityTests(ImGuiTestEngine* engine);
 void RegisterHierarchyTests(ImGuiTestEngine* engine);
@@ -67,6 +81,17 @@ void RegisterDragDropTests(ImGuiTestEngine* engine);
 void RegisterProjectTests(ImGuiTestEngine* engine);
 void RegisterNegativeTests(ImGuiTestEngine* engine);
 void RegisterSceneTabTests(ImGuiTestEngine* engine);
+// ─── 第二批补测分组（10 块缺口） ──────────────────────────────────────────────
+void RegisterPrefabTests(ImGuiTestEngine* engine);          // ① Prefab 保存/实例化/override
+void RegisterGizmoTests(ImGuiTestEngine* engine);           // ② ImGuizmo 视口变换
+void RegisterAnimationTests(ImGuiTestEngine* engine);       // ③ 动画体系
+void RegisterComponentFieldTests(ImGuiTestEngine* engine);  // ④ Inspector 各组件字段
+void RegisterAssetMgmtTests(ImGuiTestEngine* engine);       // ⑤ 资源浏览器深度
+void RegisterGraphTests(ImGuiTestEngine* engine);           // ⑥ Shader Graph / Visual Script
+void RegisterTerrainTilemapTests(ImGuiTestEngine* engine);  // ⑦ Terrain/Tilemap/Material
+void RegisterLayoutSettingsTests(ImGuiTestEngine* engine);  // ⑧ 布局/设置持久化
+void RegisterMiscEditorTests(ImGuiTestEngine* engine);      // ⑨ autosave/build/outline/camera/physics
+void RegisterMultiSelectTests(ImGuiTestEngine* engine);     // ⑩ 多选/框选/跨场景复制粘贴
 
 } // namespace dse::editor::uitest
 

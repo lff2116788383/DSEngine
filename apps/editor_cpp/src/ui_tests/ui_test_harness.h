@@ -36,6 +36,10 @@ struct UiTestServices {
     dse::runtime::EngineInstance* engine = nullptr;  ///< 引擎实例（取 world / registry）
     dse::editor::core::CommandBus* bus = nullptr;     ///< 写路径门面（保留，结构写经现有工具）
 
+    // Gizmo 操作/坐标系（指向 EditorApp 的 int 成员）：0/1/2=Translate/Rotate/Scale，mode 0/1=Local/World。
+    int* current_gizmo_operation = nullptr;
+    int* current_gizmo_mode = nullptr;
+
     // ─── 面板可见性开关（指向 EditorApp 成员） ───────────────────────────────
     bool* show_localization_preview = nullptr;
     bool* show_profiler = nullptr;

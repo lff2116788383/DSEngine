@@ -10,12 +10,17 @@
 #ifdef DSE_EDITOR_UI_TESTS
 
 #include <cstring>
+#include <filesystem>
+#include <string>
+#include <system_error>
 
 #include <entt/entt.hpp>
 
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_te_context.h"
+
+#include "../editor_project.h"  // ProjectManager
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -107,6 +112,50 @@ void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst
     ctx->Yield(2);
 }
 
+std::string ProjectAssetBaseDir() {
+    namespace fs = std::filesystem;
+    auto& pm = ProjectManager::Get();
+    fs::path base = pm.HasOpenProject()
+        ? fs::path(pm.GetAssetDir())
+        : (fs::current_path() / "samples" / "lua" / "data");
+    std::error_code ec;
+    fs::create_directories(base, ec);
+    return base.string();
+}
+
+void MakeProjectPanelFloating(ImGuiTestContext* ctx) {
+    // 关掉浮动可选面板（避免压住落点），让 Project 刷新目录列表后浮动放大到右侧空白处。
+    HideOptionalPanels();
+    ctx->Yield(6);
+    ctx->UndockWindow("Project");
+    ctx->Yield(2);
+    ctx->WindowMove("//Project", ImVec2(420.0f, 80.0f));
+    ctx->WindowResize("//Project", ImVec2(520.0f, 520.0f));
+    ctx->Yield(2);
+}
+
+void RestoreProjectPanelDock(ImGuiTestContext* ctx) {
+    // 把 Project 作为标签页停回 Console 所在停靠节点，恢复默认布局，避免污染后续依赖布局的用例。
+    ctx->DockInto("Project", "Console");
+    ctx->Yield(2);
+}
+
+void DragProjectAssetOntoScene(ImGuiTestContext* ctx, const char* filename, const char* type_icon) {
+    // 列表视图文件项：Table("project_list") -> PushID(filename) -> Selectable("<icon>  <filename>")。
+    // ref 须含 table 与 PushID 两层。
+    const std::string asset_ref =
+        std::string("//Project/project_list/") + filename + "/" + type_icon + "  " + filename;
+    const char* scene_ref = "//Hierarchy/Scene";
+
+    const ImGuiTestItemInfo si = ctx->ItemInfo(scene_ref);
+    IM_CHECK_SILENT(si.ID != 0);
+    const ImGuiTestItemInfo ai = ctx->ItemInfo(asset_ref.c_str());
+    IM_CHECK_SILENT(ai.ID != 0);
+
+    ctx->ItemDragAndDrop(asset_ref.c_str(), scene_ref);
+    ctx->Yield(2);
+}
+
 void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterHarnessSanityTests(engine);
     RegisterPanelRenderTests(engine);
@@ -125,6 +174,18 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterSceneTabTests(engine);
     // 负向/边界用例（循环父子化被拒、空栈撤销、删根节点不崩）。
     RegisterNegativeTests(engine);
+    // 第二批补测分组（10 块缺口）。这些用例多依赖 Hierarchy 右键创建实体 + Inspector，
+    // 自足且会自行清理浮动布局/磁盘文件，排在主链路之后、项目级操作之前。
+    RegisterPrefabTests(engine);
+    RegisterGizmoTests(engine);
+    RegisterAnimationTests(engine);
+    RegisterComponentFieldTests(engine);
+    RegisterAssetMgmtTests(engine);
+    RegisterGraphTests(engine);
+    RegisterTerrainTilemapTests(engine);
+    RegisterLayoutSettingsTests(engine);
+    RegisterMiscEditorTests(engine);
+    RegisterMultiSelectTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
 }
