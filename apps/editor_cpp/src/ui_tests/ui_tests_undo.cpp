@@ -16,7 +16,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -29,6 +31,9 @@
 #include "../editor_shortcuts.h"        // GetUndoRedoManager
 #include "../editor_selection.h"        // SelectionManager
 #include "../editor_shared_components.h"  // EditorNameComponent
+#include "../editor_scene_tabs.h"       // SceneTabManager（New Scene 清栈 / 设当前路径）
+#include "../editor_scene_io.h"         // SaveScene / LoadScene
+#include "../editor_icons.h"            // MDI_ICON_PLUS / MDI_ICON_CONTENT_SAVE
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -76,6 +81,87 @@ void PressRedo(ImGuiTestContext* ctx) {
 } // namespace
 
 void RegisterUndoTests(ImGuiTestEngine* e) {
+    // dse-undo/undo_count_resets_across_save_load：建实体 + 改 Transform.X 压入撤销栈（GetUndoCount>0）
+    // → Save Scene 落盘 → New Scene（清空撤销栈）→ LoadScene 读回 → 断言 GetUndoCount()==0：读回是
+    // “全新起点”，旧编辑历史不随场景内容回流（LoadScene 仅还原 registry，不向撤销栈压项）；并验证探针
+    // 实体被如实还原，证明确实加载了刚保存的场景内容。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-undo", "undo_count_resets_across_save_load");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            namespace fs = std::filesystem;
+            const fs::path dir   = fs::temp_directory_path() / "dse_ui_tests";
+            const fs::path scene = dir / "ui_test_undo_save_load.json";
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+            fs::remove(scene, ec);
+            fs::remove(fs::path(scene.string() + ".bin"), ec);  // 清掉二进制旁路缓存，强制走 JSON 往返
+
+            auto& tabs = SceneTabManager::Get();
+            auto& mgr  = GetUndoRedoManager();
+
+            // 干净起点：File → New Scene（同时清空撤销栈）。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("File/" MDI_ICON_PLUS "  New Scene");
+            ctx->Yield(2);
+            mgr.Clear();
+            IM_CHECK_EQ(mgr.GetUndoCount(), 0);
+
+            // 建实体并改 Transform.X → 经撤销栈记录，GetUndoCount()>0。
+            const entt::entity ent = CreateSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            SelectionManager::Get().Clear();  // 走单选 Inspector 分支
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 3.5f);
+            ctx->Yield(2);
+            entt::registry& reg = Reg();
+            IM_CHECK(reg.valid(ent) && reg.all_of<TransformComponent>(ent));
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 3.5f) < 0.01f);
+            // 给探针一个特征名，便于读回后定位。
+            reg.emplace_or_replace<EditorNameComponent>(ent, std::string("DSEUndoSaveLoadProbe"));
+            IM_CHECK(mgr.GetUndoCount() > 0);
+
+            // 存盘（设当前页签路径 → Save Scene 直接落盘，不弹原生对话框）。
+            tabs.SetCurrentPath(scene.string());
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("File/" MDI_ICON_CONTENT_SAVE "  Save Scene");
+            ctx->Yield(2);
+            IM_CHECK(fs::exists(scene));
+
+            // New Scene → 清空撤销栈 + 清场。
+            ctx->MenuClick("File/" MDI_ICON_PLUS "  New Scene");
+            ctx->Yield(2);
+            IM_CHECK_EQ(mgr.GetUndoCount(), 0);
+
+            // 读回刚存的场景（LoadScene 仅还原 registry，不向撤销栈压入任何项）。
+            entt::registry& r2 = Reg();
+            LoadScene(r2, scene.string());
+            ctx->Yield(2);
+
+            // 关键断言：读回为“全新起点”——撤销栈仍空（旧编辑历史未随场景内容回流）。
+            IM_CHECK_EQ(mgr.GetUndoCount(), 0);
+            IM_CHECK(!mgr.CanUndo());
+
+            // 且探针被如实还原（证明确实加载了刚保存的场景内容）。
+            bool restored = false;
+            for (auto en : r2.view<EditorNameComponent, TransformComponent>()) {
+                if (r2.get<EditorNameComponent>(en).name == "DSEUndoSaveLoadProbe" &&
+                    std::abs(r2.get<TransformComponent>(en).position.x - 3.5f) < 0.01f) {
+                    restored = true;
+                    break;
+                }
+            }
+            IM_CHECK(restored);
+
+            // 收尾：清磁盘文件 + New Scene 复位、清栈。
+            fs::remove(scene, ec);
+            fs::remove(fs::path(scene.string() + ".bin"), ec);
+            ctx->MenuClick("File/" MDI_ICON_PLUS "  New Scene");
+            ctx->Yield(2);
+            mgr.Clear();
+        };
+    }
+
     // dse-undo/undo_redo_via_menu：创建实体(+1) → Edit/Undo(回到原数) → Edit/Redo(再+1)。
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-undo", "undo_redo_via_menu");
