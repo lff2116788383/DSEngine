@@ -25,10 +25,11 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 
-#include "../editor_prefab.h"          // IsPrefabInstance
-#include "../editor_prefab_marker.h"   // PrefabMarkerComponent
-#include "../editor_selection.h"       // SelectionManager
-#include "../editor_icons.h"           // MDI_ICON_CUBE_OUTLINE
+#include "../editor_prefab.h"            // IsPrefabInstance
+#include "../editor_prefab_marker.h"     // PrefabMarkerComponent
+#include "../editor_prefab_override.h"   // ComputePrefabOverrides
+#include "../editor_selection.h"         // SelectionManager
+#include "../editor_icons.h"             // MDI_ICON_CUBE_OUTLINE
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -156,6 +157,54 @@ void RegisterPrefabTests(ImGuiTestEngine* e) {
 
             std::error_code ec;
             fs::remove(fs::path(ProjectAssetBaseDir()) / fname, ec);
+        };
+    }
+
+    // dse-prefab/apply_to_prefab：实例化 → 改 Transform.X 制造 override → 点「Apply to Prefab」把实例
+    // 当前值写回源 .dprefab → 断言①override 归零（实例已与源一致）②源文件磁盘内容确实更新到新值。
+    // 这是 override_revert 的对偶闭环：Revert 拉回源值，Apply 把改动推回源文件。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-prefab", "apply_to_prefab");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const char* fname = "ui_test_apply.dprefab";
+            WriteTestPrefab(fname, 5.0f, 0.0f, 0.0f);  // 源 position.x = 5
+            const fs::path file = fs::path(ProjectAssetBaseDir()) / fname;
+
+            MakeProjectPanelFloating(ctx);
+            DragProjectAssetOntoScene(ctx, fname, MDI_ICON_CUBE_OUTLINE);
+            RestoreProjectPanelDock(ctx);
+
+            entt::entity inst = FindPrefabInstance("ui_test_apply");
+            IM_CHECK(inst != entt::null);
+            SelectionManager::Get().Clear();  // 单选 Inspector 分支
+            ctx->Yield(2);
+
+            // 改 position.x = 77 → 与源值 5 产生 override。
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 77.0f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<TransformComponent>(inst).position.x - 77.0f) < 0.01f);
+            // 此刻应存在 override（实例偏离源）。
+            IM_CHECK(!ComputePrefabOverrides(Reg(), inst).overrides.empty());
+
+            // 点「Apply to Prefab」：把实例当前值写回源 .dprefab（DrawPrefabOverrideSection 内按钮）。
+            ctx->ItemClick("//Inspector/Apply to Prefab");
+            ctx->Yield(2);
+
+            // ① 应用后实例与源一致 → override 归零。
+            IM_CHECK(ComputePrefabOverrides(Reg(), inst).overrides.empty());
+
+            // ② 源文件磁盘内容已更新到新 X（写回是真落盘，不只是内存）。
+            {
+                std::ifstream ifs(file.string());
+                std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                IM_CHECK(content.find("77") != std::string::npos);
+                IM_CHECK(content.find("\"dprefab\"") != std::string::npos);
+            }
+
+            std::error_code ec;
+            fs::remove(file, ec);
         };
     }
 }
