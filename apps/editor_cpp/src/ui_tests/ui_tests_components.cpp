@@ -23,12 +23,14 @@
 
 #include "../editor_selection.h"   // SelectionManager
 #include "../editor_shortcuts.h"   // GetUndoRedoManager
+#include "../editor_toolbar.h"     // EnterPlayMode / ExitPlayMode / IsEditorInPlayMode
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
-#include "engine/ecs/components_3d_render.h"   // Camera3D/DirectionalLight3D/PointLight/MeshRenderer
-#include "engine/ecs/particle_2d.h"            // ParticleEmitterComponent（全局命名空间）
+#include "engine/ecs/components_3d_render.h"    // Camera3D/DirectionalLight3D/PointLight/MeshRenderer
+#include "engine/ecs/components_3d_physics.h"   // dse::RigidBody3DComponent
+#include "engine/ecs/particle_2d.h"             // ParticleEmitterComponent（全局命名空间）
 
 namespace dse::editor::uitest {
 
@@ -155,9 +157,74 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
         };
     }
 
-    // 注：物理刚体（RigidBody3D）字段编辑测试暂缺。实测发现这是一个引擎侧内存破坏 bug——
-    // 在「进入过 Play 模式」之后再新建带 RigidBody3D 的实体，会在销毁/退出阶段触发堆破坏崩溃
-    // （崩溃点随堆布局漂移，需 ASan/调试器才能精确定位）。详见交付说明，待修复后再补该用例。
+    // ── ④-6 物理刚体：改 Mass/Drag/Gravity Scale/Use Gravity 字段；并跑「进出 Play
+    //        模式 → 再建带 RigidBody3D 的实体并删除」回归路径 ──────────────────────
+    //
+    // 这条路径曾触发引擎侧堆破坏崩溃：Jolt 后端在 Init 时 on_destroy<RigidBody3D>
+    // 连了个处理器（destroy_connections_），但 Shutdown 里用 std::vector<entt::connection>
+    // 的 clear() 并不会断开 sink（entt::connection 析构是空操作，只有 scoped_connection 才断）。
+    // 于是 ExitPlayMode→ResetPhysics3D 销毁物理系统后，registry 仍持悬空 this，下次销毁任一
+    // RigidBody3D 实体（还原快照清空 registry / 删实体 / 退出）即在已释放对象上调成员函数 → 堆破坏。
+    // 已改 destroy_connections_ 为 scoped_connection（Shutdown.clear() 真正断开），此用例即回归守卫。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "rigidbody3d_edit_and_play_cycle");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            AddComponent(ctx, "RigidBody 3D");
+            IM_CHECK(Reg().all_of<dse::RigidBody3DComponent>(ent));
+
+            ctx->ItemInputValue("//Inspector/##rb3d_mass", 7.5f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).mass - 7.5f) < 0.01f);
+
+            ctx->ItemInputValue("//Inspector/##rb3d_drag", 1.25f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).drag - 1.25f) < 0.01f);
+
+            ctx->ItemInputValue("//Inspector/##rb3d_gscale", 2.0f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).gravity_scale - 2.0f) < 0.01f);
+
+            const bool grav0 = Reg().get<dse::RigidBody3DComponent>(ent).use_gravity;
+            ctx->ItemClick("//Inspector/##rb3d_grav");
+            ctx->Yield(2);
+            IM_CHECK(Reg().get<dse::RigidBody3DComponent>(ent).use_gravity == !grav0);
+
+            // 回归：进出 Play 模式（Stop 即 ExitPlayMode→ResetPhysics3D），场景内存在
+            // RigidBody3D 实体；旧 bug 会在 Stop 还原快照销毁该实体时堆破坏崩溃。
+            // 直接调编辑器 Enter/ExitPlayMode（工具栏 Play/Stop 按钮内部就是调它俩）——
+            // 选中态会拉起 ImGuizmo 浮层盖住 Toolbar 致按钮点不中，故走函数级真实播放路径。
+            SelectionManager::Get().Clear();
+            ctx->Yield();
+            entt::registry& reg = Reg();
+            entt::entity sel = entt::null;
+            if (IsEditorInPlayMode()) { ExitPlayMode(reg, sel, Services().engine); ctx->Yield(2); }
+            IM_CHECK(!IsEditorInPlayMode());
+
+            EnterPlayMode(reg);
+            ctx->Yield(4);   // 跑几帧物理：为 RigidBody3D 实体建 Jolt body
+            IM_CHECK(IsEditorInPlayMode());
+
+            ExitPlayMode(reg, sel, Services().engine);
+            ctx->Yield(4);   // ResetPhysics3D + 还原快照（销毁 RigidBody3D 实体）
+            IM_CHECK(!IsEditorInPlayMode());
+
+            // 进出 Play 后再建一个带 RigidBody3D 的实体并删除——旧 bug 的第二种触发点。
+            const entt::entity ent2 = NewSelectedEntity(ctx);
+            IM_CHECK(ent2 != entt::null);
+            AddComponent(ctx, "RigidBody 3D");
+            IM_CHECK(Reg().all_of<dse::RigidBody3DComponent>(ent2));
+            DeleteSelectedEntity(ctx, ent2);
+
+            // 还原快照后 ent 以同一 id 复活但未选中；直接走世界删除清理，避免污染后续用例。
+            if (Reg().valid(ent)) {
+                Services().engine->pipeline()->world().DestroyEntity(ent);
+                ctx->Yield();
+            }
+            IM_CHECK(!Reg().valid(ent));
+        };
+    }
 
     // ── ④-5 粒子发射器：改 Emit Rate ─────────────────────────────────────────
     {

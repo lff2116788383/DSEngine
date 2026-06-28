@@ -85,7 +85,10 @@ private:
 
     JoltPhysicsConfig config_;
     World* world_cache_ = nullptr;
-    std::vector<entt::connection> destroy_connections_;
+    // scoped_connection（非 plain connection）：clear()/析构会真正断开 on_destroy sink。
+    // 用 plain entt::connection 时 clear() 只析构句柄、sink 仍持悬空 this，
+    // ResetPhysics3D 销毁本系统后再销毁任一 RigidBody3D 实体即堆破坏崩溃。
+    std::vector<entt::scoped_connection> destroy_connections_;
 
     std::vector<CollisionEvent> collision_events_;
     std::vector<TriggerEvent> trigger_events_;
