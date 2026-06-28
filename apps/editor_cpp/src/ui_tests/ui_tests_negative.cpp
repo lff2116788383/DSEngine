@@ -11,6 +11,7 @@
 
 #ifdef DSE_EDITOR_UI_TESTS
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <vector>
@@ -22,13 +23,14 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 
-#include "../editor_shortcuts.h"   // GetUndoRedoManager
-#include "../editor_selection.h"   // SelectionManager
+#include "../editor_shortcuts.h"          // GetUndoRedoManager
+#include "../editor_selection.h"          // SelectionManager
+#include "../editor_shared_components.h"  // EditorNameComponent
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
-#include "engine/ecs/transform.h"  // ParentComponent（全局命名空间）
+#include "engine/ecs/transform.h"  // TransformComponent / ParentComponent（全局命名空间）
 
 namespace dse::editor::uitest {
 
@@ -195,6 +197,113 @@ void RegisterNegativeTests(ImGuiTestEngine* e) {
             ctx->KeyPress(ImGuiKey_Delete);
             ctx->Yield(2);
             IM_CHECK_EQ(CountValidEntities(), before - 1);
+        };
+    }
+
+    // dse-negative/delete_referenced_parent_safe：C 挂到 P 下（P 被 C 的 ParentComponent 引用）→ 删除 P
+    // → Hierarchy 连续重绘多帧（GetChildren 会遍历到引用了已删 P 的 C）。断言：P 已删、不崩；C 若仍在，
+    // 则不再是“指向某个仍有效实体”的悬挂子（要么随父级联删除，要么 parent 指向已失效 id）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-negative", "delete_referenced_parent_safe");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = NReg();
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            // 先建 C 再建 P：NCreate 会把最后创建者设为 context.selected_entity，于是 P 成为单选目标，
+            // 后续 Delete 键即删 P（与 delete_without_selection 同一条已验证的删除路径）。
+            const entt::entity c = NCreate(ctx);
+            const entt::entity p = NCreate(ctx);
+            IM_CHECK(p != entt::null && c != entt::null && p != c);
+
+            // 直接建立引用关系：C.parent = P（reparent 拖拽本身已由 dragdrop 组覆盖，这里聚焦“删被引用者”）。
+            reg.emplace_or_replace<ParentComponent>(c, p);
+            ctx->Yield(2);
+            IM_CHECK(reg.all_of<ParentComponent>(c) && reg.get<ParentComponent>(c).parent == p);
+
+            // P 即当前单选目标（context.selected_entity）→ 按 Delete 删 P（被 C 引用）。
+            SelectionManager::Get().Clear();  // 走单选删除分支（DeleteSelectedEntity）
+            ctx->SetRef("//DSEngineRoot");
+            ctx->KeyPress(ImGuiKey_Delete);
+            ctx->Yield(6);  // 多帧重绘：Hierarchy 反复 GetChildren，验证不会因悬挂引用崩溃
+
+            // P 已删、进程仍在。
+            IM_CHECK(!reg.valid(p));
+            IM_CHECK(CountValidEntities() >= 0);
+
+            // C 的归宿：要么被级联删除，要么沦为悬挂子（parent 指向已失效 id）——都不应是“指向有效实体”的状态。
+            if (reg.valid(c) && reg.all_of<ParentComponent>(c)) {
+                IM_CHECK(!reg.valid(reg.get<ParentComponent>(c).parent));
+            }
+
+            if (reg.valid(c)) Services().engine->pipeline()->world().DestroyEntity(c);
+            ctx->Yield();
+            SelectionManager::Get().Clear();
+        };
+    }
+
+    // dse-negative/extreme_field_input_safe：往 Inspector 的 Position.X 灌入极端大值 → 不崩、字段如实接收
+    // （DragFloat 无 min/max，编辑器不应崩）。验证越界/极端数值输入的兜底。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-negative", "extreme_field_input_safe");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = NReg();
+            const entt::entity ent = NCreate(ctx);
+            IM_CHECK(ent != entt::null);
+            IM_CHECK(reg.all_of<TransformComponent>(ent));
+            SelectionManager::Get().Clear();  // 单选 Inspector 分支
+            ctx->Yield(2);
+
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 1.0e18f);  // 极端大值
+            ctx->Yield(2);
+
+            // 不崩、实体仍有效，字段如实接收（无 NaN、确为大值）。
+            IM_CHECK(reg.valid(ent));
+            const float x = reg.get<TransformComponent>(ent).position.x;
+            IM_CHECK(!std::isnan(x));
+            IM_CHECK(x > 1.0e17f);
+
+            Services().engine->pipeline()->world().DestroyEntity(ent);
+            ctx->Yield();
+            GetUndoRedoManager().Clear();
+        };
+    }
+
+    // dse-negative/duplicate_entity_names_safe：两个实体取同名 → Hierarchy 用指针级 ID 绘制，重名不应导致
+    // 节点 ID 冲突/崩溃。断言两者都仍有效、互不相同、且都叫该同名。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-negative", "duplicate_entity_names_safe");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = NReg();
+            const entt::entity a = NCreate(ctx);  // 创建即选中 a
+            ctx->Yield();
+            const entt::entity b = NCreate(ctx);  // 创建即选中 b
+            IM_CHECK(a != entt::null && b != entt::null && a != b);
+
+            // 经 Inspector 把当前选中的 b 改名为 "DupName"。
+            SelectionManager::Get().Clear();
+            ctx->Yield();
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##Name", "DupName");
+            ctx->Yield(2);
+            IM_CHECK(reg.all_of<EditorNameComponent>(b));
+            IM_CHECK(reg.get<EditorNameComponent>(b).name == "DupName");
+
+            // 让 a 取同名（模拟第二个重名对象），多帧重绘 Hierarchy 不应崩。
+            reg.emplace_or_replace<EditorNameComponent>(a, std::string("DupName"));
+            ctx->Yield(6);
+
+            IM_CHECK(reg.valid(a) && reg.valid(b) && a != b);
+            IM_CHECK(reg.get<EditorNameComponent>(a).name == "DupName");
+            IM_CHECK(reg.get<EditorNameComponent>(b).name == "DupName");
+
+            Services().engine->pipeline()->world().DestroyEntity(a);
+            Services().engine->pipeline()->world().DestroyEntity(b);
+            ctx->Yield();
+            GetUndoRedoManager().Clear();
         };
     }
 }
