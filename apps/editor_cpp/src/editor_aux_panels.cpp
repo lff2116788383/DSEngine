@@ -312,6 +312,10 @@ unsigned int LoadThumbnailTexture(const std::filesystem::path& path) {
 
 namespace dse::editor {
 
+const std::filesystem::path& ProjectPanelCurrentPath() { return GetCurrentProjectPanelPath(); }
+void SetProjectPanelCurrentPath(const std::filesystem::path& path) { GetCurrentProjectPanelPath() = path; }
+std::filesystem::path ProjectPanelBaseDataPath() { return GetProjectBaseDataPath(); }
+
 void DrawProjectPanel() {
     static char s_search_filter[128] = "";
     static bool s_grid_view = false;

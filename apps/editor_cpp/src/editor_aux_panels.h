@@ -9,6 +9,11 @@ struct UILabelComponent;
 namespace dse::editor {
 
 void DrawProjectPanel();
+
+// Project 面板导航状态访问器（供 UI 测试断言/复位浏览目录；普通运行不需要）。
+const std::filesystem::path& ProjectPanelCurrentPath();
+void SetProjectPanelCurrentPath(const std::filesystem::path& path);
+std::filesystem::path ProjectPanelBaseDataPath();
 void DrawConsolePanel();
 void DrawLocalizationPreviewPanel(EditorContext& ctx,
                                   char* key_buf, std::size_t key_size,
