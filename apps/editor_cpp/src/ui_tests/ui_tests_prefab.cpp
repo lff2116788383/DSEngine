@@ -207,6 +207,137 @@ void RegisterPrefabTests(ImGuiTestEngine* e) {
             fs::remove(file, ec);
         };
     }
+
+    // dse-prefab/override_revert_per_field：逐项 Revert（区别于 override_revert 的「Revert All」）。
+    // 制造两个 Transform override（Position.x、Scale.x），只点 Scale 行的小「Revert」按钮 →
+    // 断言①Scale 回退到源值②Position 覆写仍保留③override 数从 2 → 1。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-prefab", "override_revert_per_field");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const char* fname = "ui_test_ovrf.dprefab";
+            WriteTestPrefab(fname, 5.0f, 0.0f, 0.0f);  // 源 position.x=5, scale=(1,1,1)
+
+            MakeProjectPanelFloating(ctx);
+            DragProjectAssetOntoScene(ctx, fname, MDI_ICON_CUBE_OUTLINE);
+            RestoreProjectPanelDock(ctx);
+
+            entt::entity inst = FindPrefabInstance("ui_test_ovrf");
+            IM_CHECK(inst != entt::null);
+            SelectionManager::Get().Clear();  // 单选 Inspector 分支
+            ctx->Yield(2);
+
+            // Inspector 默认停靠右侧仅约 20% 宽（dock_id_right，见 editor_shell.cpp），override 表
+            // 三列（Property 140 + Original 100 + Current）后留给 Current 列的宽度不足，每行末尾的小
+            // 「Revert」按钮被列裁剪掉、不可命中。这里临时把 Inspector 浮动放大，确保该按钮完整可点；
+            // 结尾再把 Inspector 作为标签页停回右侧节点（与 Material 同节点）复位布局。
+            // UndockWindow/DockInto 的窗口名按当前 ref 解析，先 SetRef("") 复位到根并用绝对名 "//Inspector"，
+            // 规避遗留非根 ref 导致的空指针崩溃（与 MakeProjectPanelFloating 同理）。
+            ctx->SetRef("");
+            ctx->UndockWindow("//Inspector");
+            ctx->Yield(2);
+            ctx->WindowMove("//Inspector", ImVec2(300.0f, 80.0f));
+            ctx->WindowResize("//Inspector", ImVec2(700.0f, 600.0f));
+            ctx->Yield(2);
+
+            // 两个 Transform 字段各产生一个 override 行。ComputePrefabOverrides 固定顺序：
+            // Position 在前（行 PushID(0)）、Scale 在后（行 PushID(1)）。
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 33.0f);
+            ctx->Yield();
+            ctx->ItemInputValue("##scale_undo/##scale/##x", 2.0f);
+            ctx->Yield(2);
+
+            {
+                auto info = ComputePrefabOverrides(Reg(), inst);
+                IM_CHECK_EQ(static_cast<int>(info.overrides.size()), 2);
+                IM_CHECK(info.overrides[0].property_name == "Position");
+                IM_CHECK(info.overrides[1].property_name == "Scale");
+            }
+
+            // 只点第 2 行（Scale，PushID(1)）的小「Revert」按钮：仅回退该字段。
+            ctx->ItemClick("//Inspector/$$1/Revert");
+            ctx->Yield(2);
+
+            const auto& tf = Reg().get<TransformComponent>(inst);
+            IM_CHECK(std::abs(tf.scale.x - 1.0f) < 0.01f);     // Scale 回退到源值 1
+            IM_CHECK(std::abs(tf.position.x - 33.0f) < 0.01f); // Position 覆写保留
+
+            {
+                auto info = ComputePrefabOverrides(Reg(), inst);
+                IM_CHECK_EQ(static_cast<int>(info.overrides.size()), 1);
+                IM_CHECK(info.overrides[0].property_name == "Position");
+            }
+
+            // 复位：把 Inspector 停回右侧停靠节点（Material 在该节点），避免污染后续布局相关用例。
+            ctx->SetRef("");
+            ctx->DockInto("Inspector", "Material");
+            ctx->Yield(2);
+
+            std::error_code ec;
+            fs::remove(fs::path(ProjectAssetBaseDir()) / fname, ec);
+        };
+    }
+
+    // dse-prefab/apply_then_reinstantiate_reflects_source：编辑器无「活实例联动」特性，源 .dprefab
+    // 文件是唯一真相。改实例 #1 → Apply 回源（源文件落盘新值）→ 再实例化 #2 应从更新后的源读出新值。
+    // 断言：实例 #2 的 position.x = 应用后的新值，且无 override（与新源一致）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-prefab", "apply_then_reinstantiate_reflects_source");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const char* fname = "ui_test_reinst.dprefab";
+            WriteTestPrefab(fname, 5.0f, 0.0f, 0.0f);  // 源 position.x=5
+
+            // 实例 #1。
+            MakeProjectPanelFloating(ctx);
+            DragProjectAssetOntoScene(ctx, fname, MDI_ICON_CUBE_OUTLINE);
+            RestoreProjectPanelDock(ctx);
+            entt::entity inst1 = FindPrefabInstance("ui_test_reinst");
+            IM_CHECK(inst1 != entt::null);
+
+            // 改 position.x=88 → Apply 回源 → override 归零（源文件已更新到 88）。
+            SelectionManager::Get().Clear();
+            ctx->Yield(2);
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 88.0f);
+            ctx->Yield(2);
+            ctx->ItemClick("//Inspector/Apply to Prefab");
+            ctx->Yield(2);
+            IM_CHECK(ComputePrefabOverrides(Reg(), inst1).overrides.empty());
+
+            // 记录现有 prefab 实例集合，再实例化 #2（从已更新的源文件）。
+            std::vector<entt::entity> before;
+            {
+                auto view = Reg().view<dse::editor::PrefabMarkerComponent>();
+                for (auto en : view) before.push_back(en);
+            }
+
+            MakeProjectPanelFloating(ctx);
+            DragProjectAssetOntoScene(ctx, fname, MDI_ICON_CUBE_OUTLINE);
+            RestoreProjectPanelDock(ctx);
+
+            entt::entity inst2 = entt::null;
+            {
+                auto view = Reg().view<dse::editor::PrefabMarkerComponent>();
+                for (auto en : view) {
+                    const auto& m = Reg().get<dse::editor::PrefabMarkerComponent>(en);
+                    if (m.source_path.find("ui_test_reinst") == std::string::npos) continue;
+                    bool seen = false;
+                    for (auto b : before) if (b == en) { seen = true; break; }
+                    if (!seen) { inst2 = en; break; }
+                }
+            }
+            IM_CHECK(inst2 != entt::null && inst2 != inst1);
+
+            // 新实例从更新后的源读出新值（源是唯一真相）→ position.x=88 且无 override。
+            IM_CHECK(std::abs(Reg().get<TransformComponent>(inst2).position.x - 88.0f) < 0.01f);
+            IM_CHECK(ComputePrefabOverrides(Reg(), inst2).overrides.empty());
+
+            std::error_code ec;
+            fs::remove(fs::path(ProjectAssetBaseDir()) / fname, ec);
+        };
+    }
 }
 
 } // namespace dse::editor::uitest
