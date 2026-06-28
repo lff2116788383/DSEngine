@@ -211,6 +211,153 @@ void RegisterUndoTests(ImGuiTestEngine* e) {
             IM_CHECK(reg.get<ParentComponent>(a).parent == b);
         };
     }
+
+    // dse-undo/undo_redo_multistep_stack：连建 3 个实体压满撤销栈 → 连撤 3 次回到起点 → 连重做 3 次复原。
+    // 逐级断言实体计数 + UndoRedoManager 的 GetUndoCount/GetRedoCount（验证撤销栈“深度”而非单步）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-undo", "undo_redo_multistep_stack");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = Reg();
+            auto& mgr = GetUndoRedoManager();
+            mgr.Clear();
+
+            // 起点快照：用于收尾时只清理本用例新建的实体。
+            std::vector<entt::entity> base;
+            for (auto en : reg.storage<entt::entity>())
+                if (reg.valid(en)) base.push_back(en);
+            const int before = static_cast<int>(base.size());
+
+            for (int i = 1; i <= 3; ++i) {
+                OpenHierarchyContextMenu(ctx);
+                ctx->ItemClick("Create Empty Entity");
+                ctx->Yield();
+                IM_CHECK_EQ(CountValidEntities(), before + i);
+                IM_CHECK_EQ(mgr.GetUndoCount(), i);
+            }
+            IM_CHECK(!mgr.CanRedo());
+            IM_CHECK_EQ(mgr.GetRedoCount(), 0);
+
+            // 连撤 3 次：每撤一次计数 -1、撤销栈 -1、重做栈 +1。
+            for (int i = 2; i >= 0; --i) {
+                PressUndo(ctx);
+                IM_CHECK_EQ(CountValidEntities(), before + i);
+                IM_CHECK_EQ(mgr.GetUndoCount(), i);
+                IM_CHECK_EQ(mgr.GetRedoCount(), 3 - i);
+            }
+
+            // 连重做 3 次：精确回到 before+3。
+            for (int i = 1; i <= 3; ++i) {
+                PressRedo(ctx);
+                IM_CHECK_EQ(CountValidEntities(), before + i);
+                IM_CHECK_EQ(mgr.GetUndoCount(), i);
+                IM_CHECK_EQ(mgr.GetRedoCount(), 3 - i);
+            }
+
+            // 收尾：删掉本用例新建出来的实体（按差集），避免污染后续用例计数。
+            std::vector<entt::entity> extra;
+            for (auto en : reg.storage<entt::entity>()) {
+                if (!reg.valid(en)) continue;
+                bool seen = false;
+                for (auto b : base) if (b == en) { seen = true; break; }
+                if (!seen) extra.push_back(en);
+            }
+            for (auto en : extra) Services().engine->pipeline()->world().DestroyEntity(en);
+            ctx->Yield();
+            mgr.Clear();
+        };
+    }
+
+    // dse-undo/undo_redo_invalidation：建实体 → 撤销（重做栈出现 1 项）→ 再做一个“新操作”（再建实体）
+    // → 重做栈应被清空（CanRedo()==false、GetRedoCount()==0）。验证“撤销后做新操作会截断重做分支”。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-undo", "undo_redo_invalidation");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            auto& mgr = GetUndoRedoManager();
+            mgr.Clear();
+
+            const int before = CountValidEntities();
+
+            OpenHierarchyContextMenu(ctx);
+            ctx->ItemClick("Create Empty Entity");
+            ctx->Yield();
+            IM_CHECK_EQ(CountValidEntities(), before + 1);
+            IM_CHECK(mgr.CanUndo());
+
+            PressUndo(ctx);
+            IM_CHECK_EQ(CountValidEntities(), before);
+            IM_CHECK(mgr.CanRedo());
+            IM_CHECK_EQ(mgr.GetRedoCount(), 1);
+
+            // 撤销后做新操作 → Execute 内部 redo_stack_.clear()，重做分支被截断。
+            const entt::entity y = CreateSelectedEntity(ctx);
+            IM_CHECK(y != entt::null);
+            IM_CHECK(!mgr.CanRedo());
+            IM_CHECK_EQ(mgr.GetRedoCount(), 0);
+
+            // Ctrl+Y 此时应无效（栈空），实体数不变。
+            PressRedo(ctx);
+            IM_CHECK_EQ(CountValidEntities(), before + 1);
+
+            Services().engine->pipeline()->world().DestroyEntity(y);
+            ctx->Yield();
+            mgr.Clear();
+        };
+    }
+
+    // dse-undo/undo_redo_mixed_ops：对同一实体连做三种不同类型操作（改 Position.X / 改 Name / 改 Position.Y）
+    // 压入混合栈 → 逆序连撤每一类都回弹 → 顺序连重做每一类都复原。验证跨操作类型的栈顺序正确。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-undo", "undo_redo_mixed_ops");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = CreateSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            SelectionManager::Get().Clear();  // 单选 Inspector 分支
+
+            auto& mgr = GetUndoRedoManager();
+            mgr.Clear();  // 把“创建”移出栈，只测三步编辑的混合撤销栈
+            entt::registry& reg = Reg();
+
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##pos_undo/##pos/##x", 5.0f);   // op1
+            ctx->Yield(2);
+            ctx->ItemInputValue("##Name", "DSEMixedOps");          // op2
+            ctx->Yield(2);
+            ctx->ItemInputValue("##pos_undo/##pos/##y", 9.0f);   // op3
+            ctx->Yield(2);
+
+            IM_CHECK_EQ(mgr.GetUndoCount(), 3);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 5.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.y - 9.0f) < 0.01f);
+            IM_CHECK_STR_EQ(reg.get<EditorNameComponent>(ent).name.c_str(), "DSEMixedOps");
+
+            // 逆序撤销：op3(Position.Y) → op2(Name) → op1(Position.X)。
+            PressUndo(ctx);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.y - 0.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 5.0f) < 0.01f);  // 未被波及
+
+            PressUndo(ctx);  // 撤销 op2(Name)：名字回退，不再是 "DSEMixedOps"
+            IM_CHECK(reg.get<EditorNameComponent>(ent).name != "DSEMixedOps");
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 5.0f) < 0.01f);  // X 仍在
+
+            PressUndo(ctx);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 0.0f) < 0.01f);
+            IM_CHECK_EQ(mgr.GetUndoCount(), 0);
+            IM_CHECK_EQ(mgr.GetRedoCount(), 3);
+
+            // 顺序重做：op1(X=5) → op2(Name) → op3(Y=9)。
+            PressRedo(ctx);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.x - 5.0f) < 0.01f);
+            PressRedo(ctx);
+            IM_CHECK_STR_EQ(reg.get<EditorNameComponent>(ent).name.c_str(), "DSEMixedOps");
+            PressRedo(ctx);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(ent).position.y - 9.0f) < 0.01f);
+
+            Services().engine->pipeline()->world().DestroyEntity(ent);
+            ctx->Yield();
+            mgr.Clear();
+        };
+    }
 }
 
 } // namespace dse::editor::uitest

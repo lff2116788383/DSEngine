@@ -24,14 +24,17 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 
+#include <cmath>
+
 #include "../editor_selection.h"          // SelectionManager
-#include "../editor_shortcuts.h"          // HasEntityClipboard
+#include "../editor_shortcuts.h"          // HasEntityClipboard / GetUndoRedoManager
 #include "../editor_scene_tabs.h"         // SceneTabManager
 #include "../editor_shared_components.h"  // EditorNameComponent
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
+#include "engine/ecs/transform.h"         // TransformComponent（全局命名空间）
 
 namespace dse::editor::uitest {
 
@@ -189,6 +192,82 @@ void RegisterMultiSelectTests(ImGuiTestEngine* e) {
             GetWorld().DestroyEntity(a);
             ctx->Yield();
             IM_CHECK(!Reg().valid(a));
+        };
+    }
+
+    // ── ⑩-4 多选批量编辑：选中 A、B（不含 C）→ Inspector「Batch Move」改 Delta.X 并 Apply →
+    //        断言只有 A、B 的 position.x 被加上 delta，C 保持不变；Ctrl+Z 回退、Ctrl+Y 复原。
+    //        验证“多选状态下改一个字段会批量写穿到所有被选实体（且仅限被选实体）”。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-multiselect", "batch_edit_selected");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            entt::registry& reg = Reg();
+            auto& mgr = GetUndoRedoManager();
+
+            HideOptionalPanels();
+            ctx->Yield(4);
+
+            const entt::entity a = NewSelectedEntity(ctx);
+            const entt::entity b = NewSelectedEntity(ctx);
+            const entt::entity c = NewSelectedEntity(ctx);
+            IM_CHECK(a != entt::null && b != entt::null && c != entt::null);
+            IM_CHECK(reg.all_of<TransformComponent>(a) &&
+                     reg.all_of<TransformComponent>(b) &&
+                     reg.all_of<TransformComponent>(c));
+
+            // 已知初值，便于断言“加 delta”后的逐实体结果，并区分被选/未选。
+            reg.get<TransformComponent>(a).position.x = 1.0f;
+            reg.get<TransformComponent>(b).position.x = 2.0f;
+            reg.get<TransformComponent>(c).position.x = 3.0f;
+
+            // 精确多选 A、B（排除 C）。多选机制本身已由 edit_select_all_multi 覆盖，这里复用
+            // SelectionManager 直接构造选择集，聚焦被测对象＝Inspector 的批量写穿逻辑。
+            auto& sel = SelectionManager::Get();
+            sel.Clear();
+            sel.Add(a);
+            sel.Add(b);
+            ctx->Yield(2);
+            IM_CHECK(sel.IsMultiSelect());
+
+            mgr.Clear();  // 清栈，确保下面这步批量编辑是撤销栈里唯一一项
+
+            // Inspector 多选区「Batch Move」默认展开：改 Move Delta.X = 10，点 Apply Move。
+            ctx->WindowFocus("//Inspector");
+            ctx->SetRef("//Inspector");
+            ctx->ItemInputValue("##ms_pd/##x", 10.0f);
+            ctx->Yield();
+            ctx->ItemClick("Apply Move##ms");
+            ctx->Yield(2);
+
+            // 仅 A、B 被加上 delta；C 未被选中，保持不变。
+            IM_CHECK(std::abs(reg.get<TransformComponent>(a).position.x - 11.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(b).position.x - 12.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(c).position.x - 3.0f) < 0.01f);
+            IM_CHECK_EQ(mgr.GetUndoCount(), 1);  // 整批是一个 CompoundCommand
+
+            // Ctrl+Z：一次撤销回退整批。
+            ctx->KeyPress(ImGuiKey_Escape);
+            ctx->Yield();
+            ctx->SetRef("//DSEngineRoot");
+            ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Z);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(a).position.x - 1.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(b).position.x - 2.0f) < 0.01f);
+
+            // Ctrl+Y：一次重做复原整批。
+            ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_Y);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(a).position.x - 11.0f) < 0.01f);
+            IM_CHECK(std::abs(reg.get<TransformComponent>(b).position.x - 12.0f) < 0.01f);
+
+            // 复位。
+            sel.Clear();
+            GetWorld().DestroyEntity(a);
+            GetWorld().DestroyEntity(b);
+            GetWorld().DestroyEntity(c);
+            ctx->Yield();
+            mgr.Clear();
+            IM_CHECK(!Reg().valid(a) && !Reg().valid(b) && !Reg().valid(c));
         };
     }
 }

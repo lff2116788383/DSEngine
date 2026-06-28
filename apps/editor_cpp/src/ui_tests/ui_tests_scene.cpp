@@ -32,6 +32,7 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"  // TransformComponent（全局命名空间）
+#include "engine/ecs/components_3d_render.h"  // dse::MeshRendererComponent / dse::PointLightComponent
 
 namespace dse::editor::uitest {
 
@@ -141,6 +142,93 @@ void RegisterSceneTests(ImGuiTestEngine* e) {
                 }
             }
             IM_CHECK(restored);
+        };
+    }
+
+    // dse-scene/persistence_multi_component_roundtrip：在一个干净场景里造两个实体、各带不同组件类型
+    // （A=Transform+Name+MeshRenderer.metallic；B=Transform+Name+PointLight.intensity）→ Save Scene 落盘
+    // → New Scene 清空 → LoadScene 重开 → 断言两个实体的名字/坐标/各自组件字段都被如实还原。
+    // 比 persistence_roundtrip（单实体、单字段）更进一步：多实体 + 多组件类型一起序列化往返。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-scene", "persistence_multi_component_roundtrip");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const fs::path dir   = fs::temp_directory_path() / "dse_ui_tests";
+            const fs::path scene = dir / "ui_test_multi_roundtrip.json";
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+            fs::remove(scene, ec);
+            fs::remove(fs::path(scene.string() + ".bin"), ec);  // 清掉二进制旁路缓存，强制走 JSON 往返
+
+            auto& tabs = SceneTabManager::Get();
+
+            // 干净起点。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick(DSE_MENU_NEW_SCENE);
+            ctx->Yield(2);
+
+            // 探针 A：Name + Transform + MeshRenderer（metallic 是会被序列化的字段）。
+            entt::registry& reg = SReg();
+            const entt::entity a = reg.create();
+            reg.emplace<EditorNameComponent>(a, std::string("DSEMultiA"));
+            auto& ta = reg.emplace<TransformComponent>(a);
+            ta.position = glm::vec3(1.0f, 2.0f, 3.0f);
+            auto& mr = reg.emplace<dse::MeshRendererComponent>(a);
+            mr.metallic = 0.66f;
+
+            // 探针 B：Name + Transform + PointLight（intensity 会被序列化）。
+            const entt::entity b = reg.create();
+            reg.emplace<EditorNameComponent>(b, std::string("DSEMultiB"));
+            auto& tb = reg.emplace<TransformComponent>(b);
+            tb.position = glm::vec3(4.0f, 5.0f, 6.0f);
+            auto& pl = reg.emplace<dse::PointLightComponent>(b);
+            pl.intensity = 3.5f;
+            ctx->Yield();
+
+            // 落盘。
+            tabs.SetCurrentPath(scene.string());
+            ctx->MenuClick(DSE_MENU_SAVE_SCENE);
+            ctx->Yield(2);
+            IM_CHECK(fs::exists(scene));
+
+            // 清场：New Scene，确认两个探针都不在当前 registry。
+            ctx->MenuClick(DSE_MENU_NEW_SCENE);
+            ctx->Yield(2);
+            {
+                entt::registry& r2 = SReg();
+                bool any = false;
+                for (auto en : r2.view<EditorNameComponent>()) {
+                    const std::string& n = r2.get<EditorNameComponent>(en).name;
+                    if (n == "DSEMultiA" || n == "DSEMultiB") { any = true; break; }
+                }
+                IM_CHECK(!any);
+            }
+
+            // 重开并断言：A 的坐标 + metallic、B 的坐标 + intensity 都如实还原。
+            entt::registry& r3 = SReg();
+            LoadScene(r3, scene.string());
+            ctx->Yield(2);
+
+            bool a_ok = false, b_ok = false;
+            for (auto en : r3.view<EditorNameComponent, TransformComponent>()) {
+                const std::string& n = r3.get<EditorNameComponent>(en).name;
+                const auto& tf = r3.get<TransformComponent>(en);
+                if (n == "DSEMultiA" &&
+                    std::abs(tf.position.x - 1.0f) < 0.01f &&
+                    std::abs(tf.position.z - 3.0f) < 0.01f &&
+                    r3.all_of<dse::MeshRendererComponent>(en) &&
+                    std::abs(r3.get<dse::MeshRendererComponent>(en).metallic - 0.66f) < 0.01f) {
+                    a_ok = true;
+                }
+                if (n == "DSEMultiB" &&
+                    std::abs(tf.position.x - 4.0f) < 0.01f &&
+                    std::abs(tf.position.y - 5.0f) < 0.01f &&
+                    r3.all_of<dse::PointLightComponent>(en) &&
+                    std::abs(r3.get<dse::PointLightComponent>(en).intensity - 3.5f) < 0.01f) {
+                    b_ok = true;
+                }
+            }
+            IM_CHECK(a_ok);
+            IM_CHECK(b_ok);
         };
     }
 }
