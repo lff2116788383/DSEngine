@@ -15,6 +15,10 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <system_error>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -28,8 +32,11 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"  // TransformComponent / ParentComponent（全局命名空间）
+#include "engine/ecs/components_3d_render.h"  // dse::MeshRendererComponent
 
 #include "../editor_shared_components.h"  // SiblingIndexComponent（dse::editor）
+#include "../editor_selection.h"          // SelectionManager
+#include "../editor_icons.h"              // MDI_ICON_FILE_OUTLINE
 
 namespace dse::editor::uitest {
 
@@ -190,6 +197,69 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
             // reorder 落区显式写入兄弟序 = 目标之后。
             IM_CHECK(reg.all_of<SiblingIndexComponent>(a));
             IM_CHECK_EQ(reg.get<SiblingIndexComponent>(a).index, 6);
+        };
+    }
+
+    // dse-dragdrop/asset_drop_on_inspector_field：把 Project 列表里的 .obj 资源拖到 Inspector 的
+    // MeshRenderer 组件「Mesh Path」字段（ASSET_PATH 投放目标）→ 断言 MeshRendererComponent.mesh_path 被写为该资源路径。
+    // 覆盖“资源 → Inspector 字段”这条拖放链路（此前只覆盖了资源 → Hierarchy/Scene）。
+    {
+        ImGuiTest* t3 = IM_REGISTER_TEST(e, "dse-dragdrop", "asset_drop_on_inspector_field");
+        t3->TestFunc = [](ImGuiTestContext* ctx) {
+            namespace fs = std::filesystem;
+            entt::registry& reg = Services().engine->pipeline()->world().registry();
+
+            // 在项目资产根目录放一个 .obj 资源（Mesh Path 字段接受 .obj/.fbx/.gltf/.glb/.dae）。
+            const char* fname = "ui_test_drag.obj";
+            const fs::path asset = fs::path(ProjectAssetBaseDir()) / fname;
+            {
+                std::ofstream ofs(asset.string(), std::ios::trunc);
+                ofs << "# ui test drag asset\n";
+            }
+
+            // 先把 Project 列表浮动起来再造实体：UndockWindow("Project") 必须在“场景内尚无用户实体”时进行——
+            // 实测“先建实体、再 UndockWindow”会在进程收尾期触发堆破坏崩溃（与 dse-prefab 安全路径同序：先浮动后建体）。
+            MakeProjectPanelFloating(ctx);
+            ctx->WindowMove("//Project", ImVec2(10.0f, 360.0f));
+            ctx->WindowResize("//Project", ImVec2(380.0f, 340.0f));
+            ctx->Yield(2);
+
+            // 造一个带 MeshRenderer 的实体并单选它（创建即选中 → Inspector 渲染 Mesh Renderer 区）。
+            const entt::entity ent = CreateRootEntity(ctx, reg);
+            IM_CHECK(ent != entt::null);
+            reg.emplace_or_replace<dse::MeshRendererComponent>(ent).mesh_path = "";
+            SelectionManager::Get().Clear();  // 单选 Inspector 分支（context.selected_entity 仍为 ent）
+            ctx->Yield(2);
+
+            // 源：Project 列表项（Table("project_list") -> PushID(filename) -> Selectable("<icon>  <filename>")）。
+            const std::string asset_ref =
+                std::string("//Project/project_list/") + fname + "/" +
+                MDI_ICON_FILE_OUTLINE + "  " + fname;
+            // 目标：Inspector 里 Mesh Renderer 组件的「Mesh Path」输入框（其上挂 ASSET_PATH 投放目标）。
+            const char* field_ref = "//Inspector/##mesh_path";
+
+            const ImGuiTestItemInfo ai = ctx->ItemInfo(asset_ref.c_str());
+            const ImGuiTestItemInfo fi = ctx->ItemInfo(field_ref);
+            IM_CHECK(ai.ID != 0);
+            IM_CHECK(fi.ID != 0);
+
+            ctx->ItemDragAndDrop(asset_ref.c_str(), field_ref);
+            ctx->Yield(2);
+
+            // 落放后：mesh_path 被写为该资源的相对路径（Project 投放 payload 携带相对 base 的路径），且以 .obj 结尾。
+            IM_CHECK(reg.valid(ent) && reg.all_of<dse::MeshRendererComponent>(ent));
+            const std::string& mp = reg.get<dse::MeshRendererComponent>(ent).mesh_path;
+            IM_CHECK(!mp.empty());
+            IM_CHECK(mp.find(fname) != std::string::npos);
+
+            RestoreProjectPanelDock(ctx);
+            std::error_code ec;
+            fs::remove(asset, ec);
+            // 经编辑器正规删除路径清掉实体（会把 selected_entity 置空，避免悬挂选择残留到收尾）。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->KeyPress(ImGuiKey_Delete);
+            ctx->Yield(2);
+            IM_CHECK(!reg.valid(ent));
         };
     }
 }
