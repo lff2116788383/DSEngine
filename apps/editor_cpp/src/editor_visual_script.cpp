@@ -423,7 +423,9 @@ void DrawLinks(ImDrawList* dl, const ImVec2& offset) {
 void DrawCreateNodeMenu() {
     if (!s_state.show_create_menu) return;
 
-    ImGui::SetNextWindowPos(ImGui::GetMousePosOnOpeningCurrentPopup());
+    // 不再每帧 SetNextWindowPos：GetMousePosOnOpeningCurrentPopup 在 BeginPopup 之外取不到
+    // 当前弹窗、会退化成跟随光标，使菜单逐帧漂移（子菜单项无法命中）。BeginPopup 本身会把弹窗
+    // 定位到 OpenPopup 时的鼠标处（即右键位置），无需手动重定位。
     if (ImGui::BeginPopup("vs_create_menu")) {
         if (ImGui::BeginMenu("Event")) {
             if (ImGui::MenuItem("On Init")) { AddEventOnInit(); s_state.graph_dirty = true; }
@@ -469,6 +471,10 @@ void DrawCreateNodeMenu() {
 const std::string& GetVisualScriptLuaOutput() {
     return s_state.generated_lua;
 }
+
+int VisualScriptNodeCount() { return static_cast<int>(s_state.nodes.size()); }
+int VisualScriptLinkCount() { return static_cast<int>(s_state.links.size()); }
+void VisualScriptResetGraph() { s_state = VsState{}; }
 
 void DrawVisualScriptEditor(EditorContext& /*ctx*/) {
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);

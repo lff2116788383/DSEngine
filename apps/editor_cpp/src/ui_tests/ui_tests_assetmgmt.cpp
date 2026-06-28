@@ -47,6 +47,15 @@ void ResetProjectNav() {
     SetProjectPanelCurrentPath(ProjectPanelBaseDataPath());
 }
 
+// 按“是否指向同一目录”比较，规避 fs::path 字符串相等对尾分隔符/分隔风格敏感的问题：
+// 打开项目时资产根 = GetAssetDir() 带尾分隔符（".../assets/"），而 "<- Back" 后 current_path
+// 取 parent_path() 不带尾分隔符（".../assets"），二者 operator== 不相等但实为同一目录。
+bool SamePath(const fs::path& a, const fs::path& b) {
+    std::error_code ec;
+    if (fs::equivalent(a, b, ec) && !ec) return true;
+    return a.lexically_normal() == b.lexically_normal();
+}
+
 // 列表视图某项的绝对 ref：Table("project_list") -> PushID(filename) -> Selectable("<icon>  <filename>")。
 std::string ListItemRef(const char* filename, const char* type_icon) {
     return std::string("//Project/project_list/") + filename + "/" + type_icon + "  " + filename;
@@ -76,14 +85,14 @@ void RegisterAssetMgmtTests(ImGuiTestEngine* e) {
             MakeProjectPanelFloating(ctx);
             ClearProjectSearch(ctx);
             ctx->Yield(4);
-            IM_CHECK(ProjectPanelCurrentPath() == base);  // 起点在资产根
+            IM_CHECK(SamePath(ProjectPanelCurrentPath(), base));  // 起点在资产根
 
             // 双击文件夹进入子目录。
             const std::string dir_ref = ListItemRef("uitest_nav", MDI_ICON_PACKAGE_VARIANT);
             IM_CHECK(ctx->ItemInfo(dir_ref.c_str()).ID != 0);
             ctx->ItemDoubleClick(dir_ref.c_str());
             ctx->Yield(4);
-            IM_CHECK(ProjectPanelCurrentPath() == dir);
+            IM_CHECK(SamePath(ProjectPanelCurrentPath(), dir));
 
             // 子目录里的 marker.txt 被列出；面包屑出现 "<- Back"。
             const std::string marker_ref = ListItemRef("marker.txt", MDI_ICON_FILE_OUTLINE);
@@ -93,7 +102,7 @@ void RegisterAssetMgmtTests(ImGuiTestEngine* e) {
             // 点 "<- Back" 返回根目录。
             ctx->ItemClick("//Project/<- Back");
             ctx->Yield(4);
-            IM_CHECK(ProjectPanelCurrentPath() == base);
+            IM_CHECK(SamePath(ProjectPanelCurrentPath(), base));
 
             fs::remove_all(dir, ec);
             RestoreProjectPanelDock(ctx);
@@ -120,7 +129,7 @@ void RegisterAssetMgmtTests(ImGuiTestEngine* e) {
             IM_CHECK(ctx->ItemInfo(ws_ref.c_str()).ID != 0);
             ctx->ItemDoubleClick(ws_ref.c_str());
             ctx->Yield(4);
-            IM_CHECK(ProjectPanelCurrentPath() == ws);
+            IM_CHECK(SamePath(ProjectPanelCurrentPath(), ws));
 
             // 资源列表用带 ScrollY 的内嵌 Table（独立子窗口）；在列表区域右键命中的是该子窗口，
             // 不会触发挂在 Project 窗口上的 ProjectContextMenu。改在面包屑行（"<- Back" 右侧的

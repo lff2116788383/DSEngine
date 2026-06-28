@@ -687,6 +687,14 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
 
 } // namespace
 
+int ShaderGraphNodeCount() { return static_cast<int>(GetState().nodes.size()); }
+int ShaderGraphLinkCount() { return static_cast<int>(GetState().links.size()); }
+void ShaderGraphResetGraph() {
+    auto& s = GetState();
+    s = ShaderGraphState{};
+    InitDefaultGraph(s);
+}
+
 void DrawShaderGraphPanel(EditorContext& ctx) {
     ImGui::Begin("Shader Graph");
 
