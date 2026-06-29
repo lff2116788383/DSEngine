@@ -93,6 +93,16 @@ void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
     ctx->SetRef("//$FOCUSED");
 }
 
+void UndockPanel(ImGuiTestContext* ctx, const char* window_name) {
+    // 见声明处注释：上游 UndockWindow 解析窗口后无 null 兜底，会空指针崩溃。
+    // 先复位 ref 到根（使绝对名 "//Xxx" 稳定解析），再用与上游同样的 GetWindowByRef
+    // 确认窗口确实存在后才调用；不存在则跳过，杜绝该崩溃。
+    ctx->SetRef("");
+    if (ctx->GetWindowByRef(window_name) != nullptr)
+        ctx->UndockWindow(window_name);
+    ctx->Yield(2);
+}
+
 void DiscardSceneCloseConfirmIfOpen(ImGuiTestContext* ctx) {
     // 关闭脏页签后会弹出标题为 "Unsaved Changes###SceneCloseConfirm" 的确认框并取得焦点；
     // 把 ref 指向当前焦点窗口，若其中存在 "Don't Save" 则点击丢弃改动完成关闭。无确认框时为 no-op。
@@ -137,14 +147,8 @@ void MakeProjectPanelFloating(ImGuiTestContext* ctx) {
     // 关掉浮动可选面板（避免压住落点），让 Project 刷新目录列表后浮动放大到右侧空白处。
     HideOptionalPanels();
     ctx->Yield(6);
-    // UndockWindow 内部用 GetWindowByRef(window_name) 解析窗口，且该名字按“当前 ref”解析。
-    // 若调用方先做过别的交互（如右键 Hierarchy 建实体）遗留了非根 ref，"Project" 会被解析成
-    // "//<上次ref>/Project" 而找不到窗口 → GetWindowByRef 返回 null → UndockWindow 解引用空指针崩溃
-    // （imgui_test_engine 的 UndockWindow 缺少 UndockNode 那样的 null 兜底）。这里把 ref 复位到根、
-    // 并用绝对窗口名 "//Project"，保证无论调用顺序如何都按绝对窗口解析，规避该空指针崩溃。
-    ctx->SetRef("");
-    ctx->UndockWindow("//Project");
-    ctx->Yield(2);
+    // 经统一的安全封装浮动 Project（内部复位 ref 到根 + null 兜底，规避上游 UndockWindow 空指针崩溃）。
+    UndockPanel(ctx, "//Project");
     ctx->WindowMove("//Project", ImVec2(420.0f, 80.0f));
     ctx->WindowResize("//Project", ImVec2(520.0f, 520.0f));
     ctx->Yield(2);

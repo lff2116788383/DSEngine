@@ -51,6 +51,13 @@ void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
 /// 无确认框时为 no-op，故可无条件在 Close 后调用。
 void DiscardSceneCloseConfirmIfOpen(ImGuiTestContext* ctx);
 
+/// 安全地把某面板从停靠中浮动出来。上游 ImGuiTestContext::UndockWindow 用 GetWindowByRef 解析
+/// 窗口后直接 `window->DockIsActive`，未做 null 兜底（imgui_te_context.cpp:4431）；若 window_name
+/// 按「当前 ref」解析不到窗口（如此前交互遗留了非根 ref），会解引用空指针崩溃（0xC0000005）。
+/// 本封装统一规避该上游 bug：先把 ref 复位到根，再用同样的 GetWindowByRef 确认窗口确实存在后
+/// 才调用 UndockWindow，否则跳过。window_name 须为绝对名（如 "//Project"）。
+void UndockPanel(ImGuiTestContext* ctx, const char* window_name);
+
 /// 手动分步投递一次鼠标拖拽（不走 ItemDragAndDrop）：源激活→跨帧拖动→落点悬停→释放。
 /// ItemDragAndDrop 会调 _MakeAimingSpaceOverPos 试图挪开挡住落点的窗口，而 ImGuizmo 每帧建的
 /// 全屏 "gizmo" 覆盖窗（NoTitleBar 不可拖动）挪不开会致落点漂移；手动逐帧 Yield 更可靠。

@@ -62,9 +62,9 @@ void RegisterAssetBrowserTests(ImGuiTestEngine* e) {
 
             // 默认 dock 布局里 Project 停靠在底部，占视口约 15%（1280x720 下列表可视高度≈0），
             // 资源行被裁剪、不可命中。把 Project 浮动出来并放大，确保资源行完整可见、可拖拽；
-            // 放在右侧空白处，避免压住左侧 Hierarchy 的落点。
-            ctx->UndockWindow("Project");
-            ctx->Yield(2);
+            // 放在右侧空白处，避免压住左侧 Hierarchy 的落点。经统一安全封装（复位 ref 到根 + null
+            // 兜底）浮动，规避上游 UndockWindow 在遗留非根 ref 时按相对名解析不到窗口的空指针崩溃。
+            UndockPanel(ctx, "//Project");
             ctx->WindowMove("//Project", ImVec2(420.0f, 80.0f));
             ctx->WindowResize("//Project", ImVec2(520.0f, 520.0f));
             ctx->Yield(2);

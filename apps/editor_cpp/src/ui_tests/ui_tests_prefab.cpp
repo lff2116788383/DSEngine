@@ -230,11 +230,8 @@ void RegisterPrefabTests(ImGuiTestEngine* e) {
             // 三列（Property 140 + Original 100 + Current）后留给 Current 列的宽度不足，每行末尾的小
             // 「Revert」按钮被列裁剪掉、不可命中。这里临时把 Inspector 浮动放大，确保该按钮完整可点；
             // 结尾再把 Inspector 作为标签页停回右侧节点（与 Material 同节点）复位布局。
-            // UndockWindow/DockInto 的窗口名按当前 ref 解析，先 SetRef("") 复位到根并用绝对名 "//Inspector"，
-            // 规避遗留非根 ref 导致的空指针崩溃（与 MakeProjectPanelFloating 同理）。
-            ctx->SetRef("");
-            ctx->UndockWindow("//Inspector");
-            ctx->Yield(2);
+            // 经统一安全封装浮动 Inspector（内部复位 ref 到根 + null 兜底，规避上游 UndockWindow 空指针崩溃）。
+            UndockPanel(ctx, "//Inspector");
             ctx->WindowMove("//Inspector", ImVec2(300.0f, 80.0f));
             ctx->WindowResize("//Inspector", ImVec2(700.0f, 600.0f));
             ctx->Yield(2);
