@@ -13,6 +13,7 @@
 // resolver（标准、无 UB），codegen 后端同样可以发出等价 resolver 或 offset。
 // ─────────────────────────────────────────────────────────────────────────────
 
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <string>
@@ -37,6 +38,7 @@ enum class FieldType {
     String,
     Enum,    ///< 枚举：底层按整数存储，配 EnumInfo 提供名值对（序列化用名字、Inspector 用下拉）。
     Struct,  ///< 嵌套已注册类型：配 TypeInfo* 递归处理。
+    Array,   ///< 容器（std::vector / C 数组 / std::array）：见 FieldInfo 的 element_* 与 container_*。
 };
 
 /// 枚举的一个名值对。value 统一以 long long 存放，覆盖任意底层整型。
@@ -82,6 +84,20 @@ struct FieldInfo {
 
     // type == Struct 时有效：嵌套类型信息（递归遍历），get/cget 返回嵌套实例指针。
     const TypeInfo* struct_info = nullptr;
+
+    // ── type == Array 时有效：容器自省 ──────────────────────────────────────────
+    // 容器对象指针 = get/cget(instance)。下列 container_* 全部接受"容器对象指针"，
+    // 元素访问基于"元素指针"（与嵌套 struct 一致），从而 vector/数组/std::array 统一。
+    bool container_fixed = false;          ///< true=固定容量（C 数组 / std::array），反序列化不 resize
+    FieldType element_type = FieldType::Float;
+    const TypeInfo* element_struct_info = nullptr;  ///< element_type==Struct 时的元素类型
+    const EnumInfo* element_enum_info = nullptr;    ///< element_type==Enum 时的元素枚举
+    std::function<long long(const void*)> elem_get_enum;  ///< 参数：元素指针
+    std::function<void(void*, long long)> elem_set_enum;  ///< 参数：元素指针
+    std::function<std::size_t(const void*)> container_size;        ///< 参数：容器对象指针
+    std::function<void(void*, std::size_t)> container_resize;      ///< 参数：容器对象指针（仅动态容器有意义）
+    std::function<void*(void*, std::size_t)> container_elem;       ///< 参数：容器指针,下标 → 元素指针
+    std::function<const void*(const void*, std::size_t)> container_celem;
 };
 
 /// 一个反射类型（组件）的信息：名字 + 字段列表。
@@ -108,6 +124,15 @@ template <> struct FieldTypeOf<std::string>   { static constexpr FieldType value
 /// 检测某类型是否为内建标量/向量（即上面有 FieldTypeOf 特化）。
 template <class T, class = void> struct HasFieldType : std::false_type {};
 template <class T> struct HasFieldType<T, std::void_t<decltype(FieldTypeOf<T>::value)>> : std::true_type {};
+
+// ─── 容器特征 ──────────────────────────────────────────────────────────────────
+template <class T> struct IsStdVector : std::false_type {};
+template <class T, class A> struct IsStdVector<std::vector<T, A>> : std::true_type { using elem = T; };
+
+template <class T> struct IsStdArray : std::false_type {};
+template <class T, std::size_t N> struct IsStdArray<std::array<T, N>> : std::true_type {
+    using elem = T; static constexpr std::size_t extent = N;
+};
 
 /// 链式特性设置器（field() 返回，用于就地附加 range/tooltip 等）。
 class FieldRef {
@@ -172,6 +197,25 @@ public:
     template <class E> static const EnumInfo* FindEnum() { return FindEnum(std::type_index(typeid(E))); }
 };
 
+// 配置容器元素的类型元数据（标量/向量/字符串 → element_type；枚举 → Enum + 元素枚举存取；
+// 其它 → 视为嵌套已注册类型 Struct）。元素存取一律基于"元素指针"。
+template <class E>
+inline void ConfigureElement(FieldInfo& fi) {
+    if constexpr (std::is_enum_v<E>) {
+        fi.element_type = FieldType::Enum;
+        fi.element_enum_info = Reflection::FindEnum(std::type_index(typeid(E)));
+        fi.elem_get_enum = [](const void* e) -> long long {
+            return static_cast<long long>(*static_cast<const E*>(e));
+        };
+        fi.elem_set_enum = [](void* e, long long v) { *static_cast<E*>(e) = static_cast<E>(v); };
+    } else if constexpr (HasFieldType<E>::value) {
+        fi.element_type = FieldTypeOf<E>::value;
+    } else {
+        fi.element_type = FieldType::Struct;
+        fi.element_struct_info = Reflection::Find(std::type_index(typeid(E)));
+    }
+}
+
 // ─── TypeBuilder::field 的离线定义（此处 Reflection 已完整可见） ────────────────
 template <class C, class M>
 inline FieldRef TypeBuilder::field(const char* name, M C::* mp) {
@@ -188,8 +232,38 @@ inline FieldRef TypeBuilder::field(const char* name, M C::* mp) {
         };
     } else if constexpr (HasFieldType<M>::value) {
         fi.type = FieldTypeOf<M>::value;
+    } else if constexpr (IsStdVector<M>::value) {
+        using E = typename IsStdVector<M>::elem;
+        static_assert(!std::is_same_v<E, bool>, "std::vector<bool> 不支持反射（无元素指针）");
+        fi.type = FieldType::Array;
+        fi.container_fixed = false;
+        ConfigureElement<E>(fi);
+        fi.container_size   = [](const void* c) { return static_cast<const std::vector<E>*>(c)->size(); };
+        fi.container_resize = [](void* c, std::size_t n) { static_cast<std::vector<E>*>(c)->resize(n); };
+        fi.container_elem   = [](void* c, std::size_t i) -> void* { return &(*static_cast<std::vector<E>*>(c))[i]; };
+        fi.container_celem  = [](const void* c, std::size_t i) -> const void* { return &(*static_cast<const std::vector<E>*>(c))[i]; };
+    } else if constexpr (std::is_array_v<M>) {
+        using E = std::remove_extent_t<M>;
+        constexpr std::size_t N = std::extent_v<M>;
+        fi.type = FieldType::Array;
+        fi.container_fixed = true;
+        ConfigureElement<E>(fi);
+        fi.container_size   = [](const void*) { return N; };
+        fi.container_resize = [](void*, std::size_t) {};
+        fi.container_elem   = [](void* c, std::size_t i) -> void* { return static_cast<E*>(c) + i; };
+        fi.container_celem  = [](const void* c, std::size_t i) -> const void* { return static_cast<const E*>(c) + i; };
+    } else if constexpr (IsStdArray<M>::value) {
+        using E = typename IsStdArray<M>::elem;
+        constexpr std::size_t N = IsStdArray<M>::extent;
+        fi.type = FieldType::Array;
+        fi.container_fixed = true;
+        ConfigureElement<E>(fi);
+        fi.container_size   = [](const void*) { return N; };
+        fi.container_resize = [](void*, std::size_t) {};
+        fi.container_elem   = [](void* c, std::size_t i) -> void* { return &(*static_cast<std::array<E, N>*>(c))[i]; };
+        fi.container_celem  = [](const void* c, std::size_t i) -> const void* { return &(*static_cast<const std::array<E, N>*>(c))[i]; };
     } else {
-        // 既非标量也非枚举 → 视为嵌套的已注册类型（须先于本类型注册）。
+        // 既非标量也非枚举/容器 → 视为嵌套的已注册类型（须先于本类型注册）。
         fi.type = FieldType::Struct;
         fi.struct_info = Reflection::Find(std::type_index(typeid(M)));
     }

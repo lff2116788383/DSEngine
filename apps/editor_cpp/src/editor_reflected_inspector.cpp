@@ -41,6 +41,7 @@ FieldValue ReadField(const FieldInfo& f, void* inst) {
         case FieldType::String: return *static_cast<std::string*>(p);
         case FieldType::Enum:   return f.get_enum ? f.get_enum(inst) : 0LL;
         case FieldType::Struct: break;  // 嵌套结构按子字段单独快照，不在此整体处理
+        case FieldType::Array:  break;  // 容器按元素单独处理
     }
     return FieldValue{};
 }
@@ -59,6 +60,52 @@ void WriteField(const FieldInfo& f, void* inst, const FieldValue& v) {
         case FieldType::String: *static_cast<std::string*>(p) = std::get<std::string>(v); break;
         case FieldType::Enum:   if (f.set_enum) f.set_enum(inst, std::get<long long>(v)); break;
         case FieldType::Struct: break;
+        case FieldType::Array:  break;
+    }
+}
+
+// 为容器元素 i 合成一个"元素视角"的 FieldInfo：其 get/cget/get_enum/set_enum 接受组件实例，
+// 内部先取容器再偏移到第 i 个元素。复用 DrawWidget/ReadField/WriteField，无需为元素另写控件。
+FieldInfo MakeElemField(const FieldInfo& f, std::size_t i) {
+    FieldInfo ef;
+    ef.name = f.name + "[" + std::to_string(i) + "]";
+    ef.type = f.element_type;
+    ef.attr = f.attr;
+    ef.attr.label = nullptr;  // 元素用合成名字
+    ef.struct_info = f.element_struct_info;
+    ef.enum_info = f.element_enum_info;
+    const FieldInfo* fp = &f;
+    ef.get  = [fp, i](void* inst) -> void* { return fp->container_elem(fp->get(inst), i); };
+    ef.cget = [fp, i](const void* inst) -> const void* { return fp->container_celem(fp->cget(inst), i); };
+    if (f.element_type == FieldType::Enum) {
+        ef.get_enum = [fp, i](const void* inst) -> long long {
+            return fp->elem_get_enum(fp->container_celem(fp->cget(inst), i));
+        };
+        ef.set_enum = [fp, i](void* inst, long long v) {
+            fp->elem_set_enum(fp->container_elem(fp->get(inst), i), v);
+        };
+    }
+    return ef;
+}
+
+// 把整个叶子容器快照为 FieldValue 列表（用于结构性增删的完整撤销）。
+void SnapshotLeafArray(const FieldInfo& f, void* inst, std::vector<FieldValue>& out) {
+    const std::size_t n = f.container_size ? f.container_size(f.cget(inst)) : 0;
+    out.clear();
+    out.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        FieldInfo ef = MakeElemField(f, i);
+        out.push_back(ReadField(ef, inst));
+    }
+}
+
+void RestoreLeafArray(const FieldInfo& f, void* inst, const std::vector<FieldValue>& in) {
+    if (f.container_resize) f.container_resize(f.get(inst), in.size());
+    const std::size_t cap = f.container_size ? f.container_size(f.cget(inst)) : 0;
+    const std::size_t n = std::min<std::size_t>(in.size(), cap);
+    for (std::size_t i = 0; i < n; ++i) {
+        FieldInfo ef = MakeElemField(f, i);
+        WriteField(ef, inst, in[i]);
     }
 }
 
@@ -66,6 +113,11 @@ void WriteField(const FieldInfo& f, void* inst, const FieldValue& v) {
 FieldValue       s_undo_old;
 const TypeInfo*  s_undo_type = nullptr;
 std::size_t      s_undo_field = static_cast<std::size_t>(-1);
+
+// 容器元素编辑的撤销快照（独立一组，按"字段指针 + 下标"判定身份）。
+FieldValue       s_eundo_old;
+const FieldInfo* s_eundo_field = nullptr;
+std::size_t      s_eundo_index = static_cast<std::size_t>(-1);
 
 bool DrawWidget(const char* id, const FieldInfo& f, void* inst) {
     void* p = f.get(inst);
@@ -165,6 +217,124 @@ bool DrawWidget(const char* id, const FieldInfo& f, void* inst) {
 void DrawFields(EditorContext& context, const TypeInfo& ti, void* inst,
                 const std::function<void*()>& resolve);
 
+// 对叶子容器的整体替换压入撤销命令（结构性增删用）。
+void PushArrayCmd(const std::function<void*()>& resolve, const FieldInfo* fp,
+                  std::string desc, std::vector<FieldValue> before, std::vector<FieldValue> after) {
+    auto apply = [resolve, fp](const std::vector<FieldValue>& vals) {
+        if (void* live = resolve()) RestoreLeafArray(*fp, live, vals);
+    };
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        std::move(desc),
+        [apply, after]() { apply(after); },
+        [apply, before]() { apply(before); }), false);
+}
+
+// 绘制单个叶子元素的控件 + 元素级撤销。
+void DrawElemLeaf(EditorContext& context, const TypeInfo& ti, const FieldInfo* fp,
+                  std::size_t i, const FieldInfo& ef, void* inst,
+                  const std::function<void*()>& resolve) {
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted(ef.name.c_str());
+    ImGui::NextColumn();
+    ImGui::SetNextItemWidth(-1);
+
+    const bool disabled = ef.attr.read_only || context.read_only;
+    if (disabled) ImGui::BeginDisabled(true);
+
+    const std::string widget_id = "##" + ti.name + "." + ef.name;
+    DrawWidget(widget_id.c_str(), ef, inst);
+
+    if (!disabled) {
+        if (ImGui::IsItemActivated()) {
+            s_eundo_old = ReadField(ef, inst);
+            s_eundo_field = fp;
+            s_eundo_index = i;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && s_eundo_field == fp && s_eundo_index == i) {
+            FieldValue old_v = s_eundo_old;
+            FieldValue new_v = ReadField(ef, inst);
+            s_eundo_field = nullptr;
+            s_eundo_index = static_cast<std::size_t>(-1);
+            auto apply = [resolve, fp, i](const FieldValue& val) {
+                if (void* live = resolve()) {
+                    FieldInfo e = MakeElemField(*fp, i);
+                    WriteField(e, live, val);
+                }
+            };
+            std::string desc = ti.name + "." + ef.name;
+            GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+                desc,
+                [apply, new_v]() { apply(new_v); },
+                [apply, old_v]() { apply(old_v); }), false);
+        }
+    }
+
+    if (disabled) ImGui::EndDisabled();
+    ImGui::NextColumn();
+}
+
+void DrawArrayField(EditorContext& context, const TypeInfo& ti, const FieldInfo& f,
+                    void* inst, const std::function<void*()>& resolve) {
+    const char* label = f.attr.label ? f.attr.label : f.name.c_str();
+    const FieldInfo* fp = &f;
+    void* cptr = f.get(inst);
+    const std::size_t n = f.container_size ? f.container_size(cptr) : 0;
+    const bool disabled = f.attr.read_only || context.read_only;
+    const bool leaf_elem = (f.element_type != FieldType::Struct);
+
+    ImGui::AlignTextToFramePadding();
+    const std::string node_id = label + std::string("##") + ti.name + "." + f.name;
+    const bool open = ImGui::TreeNodeEx(node_id.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
+    ImGui::NextColumn();
+    ImGui::Text("%zu", n);
+
+    // 动态叶子容器：提供增/删（完整快照撤销）。固定容量 / struct 元素不在此结构编辑。
+    if (!f.container_fixed && !disabled && leaf_elem && f.container_resize) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton(("+##add." + ti.name + "." + f.name).c_str())) {
+            std::vector<FieldValue> before; SnapshotLeafArray(f, inst, before);
+            f.container_resize(cptr, n + 1);
+            std::vector<FieldValue> after; SnapshotLeafArray(f, inst, after);
+            PushArrayCmd(resolve, fp, ti.name + "." + f.name + " +", before, after);
+        }
+        if (n > 0) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton(("-##rem." + ti.name + "." + f.name).c_str())) {
+                std::vector<FieldValue> before; SnapshotLeafArray(f, inst, before);
+                f.container_resize(cptr, n - 1);
+                std::vector<FieldValue> after; SnapshotLeafArray(f, inst, after);
+                PushArrayCmd(resolve, fp, ti.name + "." + f.name + " -", before, after);
+            }
+        }
+    }
+    ImGui::NextColumn();
+
+    if (open) {
+        for (std::size_t i = 0; i < n; ++i) {
+            if (!leaf_elem && f.element_struct_info) {
+                ImGui::AlignTextToFramePadding();
+                const std::string en = "[" + std::to_string(i) + "]##" + ti.name + "." + f.name + "." + std::to_string(i);
+                const bool eopen = ImGui::TreeNodeEx(en.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
+                ImGui::NextColumn();
+                ImGui::NextColumn();
+                if (eopen) {
+                    std::function<void*()> nested = [resolve, fp, i]() -> void* {
+                        void* outer = resolve();
+                        return outer ? fp->container_elem(fp->get(outer), i) : nullptr;
+                    };
+                    if (void* elem_inst = nested())
+                        DrawFields(context, *f.element_struct_info, elem_inst, nested);
+                    ImGui::TreePop();
+                }
+            } else {
+                FieldInfo ef = MakeElemField(f, i);
+                DrawElemLeaf(context, ti, fp, i, ef, inst, resolve);
+            }
+        }
+        ImGui::TreePop();
+    }
+}
+
 void DrawField(EditorContext& context, const TypeInfo& ti, std::size_t idx,
                void* inst, const std::function<void*()>& resolve) {
     const FieldInfo& f = ti.fields[idx];
@@ -189,6 +359,12 @@ void DrawField(EditorContext& context, const TypeInfo& ti, std::size_t idx,
             }
             ImGui::TreePop();
         }
+        return;
+    }
+
+    // 容器：折叠子树 + 元素控件（动态叶子容器可增删，含撤销）。
+    if (f.type == FieldType::Array) {
+        DrawArrayField(context, ti, f, inst, resolve);
         return;
     }
 

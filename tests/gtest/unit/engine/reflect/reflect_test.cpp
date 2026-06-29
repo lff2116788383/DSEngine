@@ -2,6 +2,10 @@
 
 #include <rapidjson/document.h>
 
+#include <array>
+#include <string>
+#include <vector>
+
 #include "engine/reflect/component_reflection.h"
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/reflect_json.h"
@@ -445,4 +449,273 @@ TEST_F(ReflectionEnumStructTest, NestedStructSerializesAsObjectAndRoundTrips) {
     EXPECT_FLOAT_EQ(dst.inner.a, 4.5f);
     EXPECT_EQ(dst.inner.b, 17);
     EXPECT_EQ(dst.mode, TestColorMode::Off);
+}
+
+// ─── 容器（std::vector / C 数组 / std::array） ────────────────────────────────
+
+namespace {
+
+struct TestVecItem {
+    float x = 0.0f;
+    int   y = 0;
+};
+
+struct TestContainers {
+    std::vector<int>           ints;
+    std::vector<float>         floats;
+    std::vector<std::string>   names;
+    std::vector<glm::vec3>     points;
+    std::vector<TestColorMode> modes;
+    std::vector<TestVecItem>   items;
+    float                      carr[3] = {1.0f, 2.0f, 3.0f};
+    std::array<int, 4>         sarr = {0, 0, 0, 0};
+    float                      clamped = 0.0f;
+};
+
+void RegisterContainerTypes() {
+    RegisterTestTypes();  // 注册 TestColorMode 枚举（幂等）
+    {
+        auto t = DSE_REFLECT_TYPE(TestVecItem);
+        t.field("x", &TestVecItem::x);
+        t.field("y", &TestVecItem::y);
+    }
+    {
+        auto t = DSE_REFLECT_TYPE(TestContainers);
+        t.field("ints", &TestContainers::ints);
+        t.field("floats", &TestContainers::floats);
+        t.field("names", &TestContainers::names);
+        t.field("points", &TestContainers::points);
+        t.field("modes", &TestContainers::modes);
+        t.field("items", &TestContainers::items);
+        t.field("carr", &TestContainers::carr);
+        t.field("sarr", &TestContainers::sarr);
+        t.field("clamped", &TestContainers::clamped).range(0.0, 1.0);
+    }
+}
+
+}  // namespace
+
+class ReflectionContainerTest : public ::testing::Test {
+protected:
+    void SetUp() override { RegisterContainerTypes(); }
+};
+
+TEST_F(ReflectionContainerTest, ContainerFieldsCarryElementMetadata) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    const FieldInfo* ints = FindField(*ti, "ints");
+    ASSERT_NE(ints, nullptr);
+    EXPECT_EQ(ints->type, FieldType::Array);
+    EXPECT_FALSE(ints->container_fixed);
+    EXPECT_EQ(ints->element_type, FieldType::Int);
+
+    const FieldInfo* names = FindField(*ti, "names");
+    ASSERT_NE(names, nullptr);
+    EXPECT_EQ(names->element_type, FieldType::String);
+
+    const FieldInfo* modes = FindField(*ti, "modes");
+    ASSERT_NE(modes, nullptr);
+    EXPECT_EQ(modes->element_type, FieldType::Enum);
+    ASSERT_NE(modes->element_enum_info, nullptr);
+
+    const FieldInfo* items = FindField(*ti, "items");
+    ASSERT_NE(items, nullptr);
+    EXPECT_EQ(items->element_type, FieldType::Struct);
+    ASSERT_NE(items->element_struct_info, nullptr);
+    EXPECT_EQ(items->element_struct_info->name, "TestVecItem");
+
+    const FieldInfo* carr = FindField(*ti, "carr");
+    ASSERT_NE(carr, nullptr);
+    EXPECT_EQ(carr->type, FieldType::Array);
+    EXPECT_TRUE(carr->container_fixed);
+    EXPECT_EQ(carr->element_type, FieldType::Float);
+    EXPECT_EQ(carr->container_size(nullptr), 3u);  // 固定数组容量与实例无关
+}
+
+TEST_F(ReflectionContainerTest, ScalarVectorRoundTrip) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.ints = {1, 2, 3, 4};
+    src.floats = {0.5f, 1.5f, 2.5f};
+    src.names = {"alpha", "beta"};
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj.HasMember("ints"));
+    ASSERT_TRUE(obj["ints"].IsArray());
+    EXPECT_EQ(obj["ints"].Size(), 4u);
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_EQ(dst.ints, src.ints);
+    EXPECT_EQ(dst.floats, src.floats);
+    EXPECT_EQ(dst.names, src.names);
+}
+
+TEST_F(ReflectionContainerTest, VectorOfVec3RoundTrip) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.points = {{1.0f, 2.0f, 3.0f}, {-4.0f, 5.0f, -6.0f}};
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    ASSERT_EQ(dst.points.size(), 2u);
+    EXPECT_FLOAT_EQ(dst.points[1].x, -4.0f);
+    EXPECT_FLOAT_EQ(dst.points[1].z, -6.0f);
+}
+
+TEST_F(ReflectionContainerTest, VectorOfEnumSerializesByName) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.modes = {TestColorMode::Off, TestColorMode::SRGB};
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj["modes"].IsArray());
+    ASSERT_TRUE(obj["modes"][1].IsString());
+    EXPECT_STREQ(obj["modes"][1].GetString(), "SRGB");
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    ASSERT_EQ(dst.modes.size(), 2u);
+    EXPECT_EQ(dst.modes[0], TestColorMode::Off);
+    EXPECT_EQ(dst.modes[1], TestColorMode::SRGB);
+}
+
+TEST_F(ReflectionContainerTest, VectorOfStructRoundTrip) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.items = {{1.5f, 10}, {2.5f, 20}, {3.5f, 30}};
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj["items"].IsArray());
+    ASSERT_TRUE(obj["items"][0].IsObject());
+    EXPECT_FLOAT_EQ(obj["items"][0]["x"].GetFloat(), 1.5f);
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    ASSERT_EQ(dst.items.size(), 3u);
+    EXPECT_FLOAT_EQ(dst.items[2].x, 3.5f);
+    EXPECT_EQ(dst.items[2].y, 30);
+}
+
+TEST_F(ReflectionContainerTest, FixedCArrayRoundTripAndTruncation) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.carr[0] = 10.0f; src.carr[1] = 20.0f; src.carr[2] = 30.0f;
+
+    const FieldInfo* carr = FindField(*ti, "carr");
+    ASSERT_NE(carr, nullptr);
+    EXPECT_EQ(carr->container_size(carr->cget(&src)), 3u);
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+    ASSERT_TRUE(obj["carr"].IsArray());
+    EXPECT_EQ(obj["carr"].Size(), 3u);
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_FLOAT_EQ(dst.carr[0], 10.0f);
+    EXPECT_FLOAT_EQ(dst.carr[2], 30.0f);
+
+    // 固定数组：输入元素过多时只写满容量，不越界。
+    rapidjson::Document over;
+    over.SetObject();
+    rapidjson::Value arr(rapidjson::kArrayType);
+    for (int i = 0; i < 8; ++i) arr.PushBack(static_cast<float>(i), over.GetAllocator());
+    over.AddMember("carr", arr, over.GetAllocator());
+    TestContainers dst2;
+    DeserializeReflected(*ti, &dst2, over);
+    EXPECT_FLOAT_EQ(dst2.carr[0], 0.0f);
+    EXPECT_FLOAT_EQ(dst2.carr[2], 2.0f);  // 第 3 个之后被忽略
+}
+
+TEST_F(ReflectionContainerTest, StdArrayRoundTrip) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;
+    src.sarr = {5, 6, 7, 8};
+
+    const FieldInfo* sarr = FindField(*ti, "sarr");
+    ASSERT_NE(sarr, nullptr);
+    EXPECT_TRUE(sarr->container_fixed);
+    EXPECT_EQ(sarr->container_size(sarr->cget(&src)), 4u);
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    TestContainers dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_EQ(dst.sarr[0], 5);
+    EXPECT_EQ(dst.sarr[3], 8);
+}
+
+TEST_F(ReflectionContainerTest, EmptyVectorRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    TestContainers src;  // 所有 vector 为空
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+    ASSERT_TRUE(obj["ints"].IsArray());
+    EXPECT_EQ(obj["ints"].Size(), 0u);
+
+    TestContainers dst;
+    dst.ints = {99};  // 应被清空
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_TRUE(dst.ints.empty());
+}
+
+// ─── 反序列化数值校验（按 range 钳制） ─────────────────────────────────────────
+
+TEST_F(ReflectionContainerTest, OutOfRangeValueIsClamped) {
+    const TypeInfo* ti = Reflection::Find<TestContainers>();
+    ASSERT_NE(ti, nullptr);
+
+    rapidjson::Document hi;
+    hi.SetObject();
+    hi.AddMember("clamped", 5.0, hi.GetAllocator());  // range [0,1]
+    TestContainers dst_hi;
+    DeserializeReflected(*ti, &dst_hi, hi);
+    EXPECT_FLOAT_EQ(dst_hi.clamped, 1.0f);
+
+    rapidjson::Document lo;
+    lo.SetObject();
+    lo.AddMember("clamped", -3.0, lo.GetAllocator());
+    TestContainers dst_lo;
+    DeserializeReflected(*ti, &dst_lo, lo);
+    EXPECT_FLOAT_EQ(dst_lo.clamped, 0.0f);
 }
