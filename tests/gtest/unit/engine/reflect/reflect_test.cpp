@@ -77,8 +77,12 @@ TEST_F(ReflectionTest, FindsRegisteredTypesByTemplateAndName) {
     EXPECT_EQ(by_tpl, by_name);
 }
 
+namespace {
+struct NeverRegisteredType { int x = 0; };  // 永不注册，用于反向用例
+}  // namespace
+
 TEST_F(ReflectionTest, UnregisteredTypeReturnsNull) {
-    EXPECT_EQ(Reflection::Find<dse::WaterComponent>(), nullptr);
+    EXPECT_EQ(Reflection::Find<NeverRegisteredType>(), nullptr);
     EXPECT_EQ(Reflection::Find("NoSuchComponent"), nullptr);
 }
 
@@ -718,4 +722,86 @@ TEST_F(ReflectionContainerTest, OutOfRangeValueIsClamped) {
     TestContainers dst_lo;
     DeserializeReflected(*ti, &dst_lo, lo);
     EXPECT_FLOAT_EQ(dst_lo.clamped, 0.0f);
+}
+
+// ─── 真实组件上的容器/数组字段 ────────────────────────────────────────────────
+
+TEST_F(ReflectionTest, DirectionalLightCascadeSplitsArrayRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<dse::DirectionalLight3DComponent>();
+    ASSERT_NE(ti, nullptr);
+    const FieldInfo* cs = FindField(*ti, "cascade_splits");
+    ASSERT_NE(cs, nullptr);
+    EXPECT_EQ(cs->type, FieldType::Array);
+    EXPECT_TRUE(cs->container_fixed);
+    EXPECT_EQ(cs->element_type, FieldType::Float);
+
+    dse::DirectionalLight3DComponent src;
+    src.cascade_splits[0] = 11.0f;
+    src.cascade_splits[1] = 55.0f;
+    src.cascade_splits[2] = 222.0f;
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+    ASSERT_TRUE(obj["cascade_splits"].IsArray());
+    EXPECT_EQ(obj["cascade_splits"].Size(), 3u);
+
+    dse::DirectionalLight3DComponent dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_FLOAT_EQ(dst.cascade_splits[0], 11.0f);
+    EXPECT_FLOAT_EQ(dst.cascade_splits[2], 222.0f);
+}
+
+TEST_F(ReflectionTest, LightProbeShCoefficientsVec3ArrayRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<dse::LightProbeComponent>();
+    ASSERT_NE(ti, nullptr);
+    const FieldInfo* sh = FindField(*ti, "sh_coefficients");
+    ASSERT_NE(sh, nullptr);
+    EXPECT_EQ(sh->type, FieldType::Array);
+    EXPECT_TRUE(sh->container_fixed);
+    EXPECT_EQ(sh->element_type, FieldType::Vec3);
+    EXPECT_EQ(sh->container_size(nullptr), 9u);
+
+    dse::LightProbeComponent src;
+    src.sh_coefficients[0] = glm::vec3(1.0f, 2.0f, 3.0f);
+    src.sh_coefficients[8] = glm::vec3(-9.0f, 0.5f, 4.0f);
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    dse::LightProbeComponent dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_FLOAT_EQ(dst.sh_coefficients[0].y, 2.0f);
+    EXPECT_FLOAT_EQ(dst.sh_coefficients[8].x, -9.0f);
+}
+
+TEST_F(ReflectionTest, LODGroupVectorOfStructRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<dse::LODGroupComponent>();
+    ASSERT_NE(ti, nullptr);
+    const FieldInfo* levels = FindField(*ti, "levels");
+    ASSERT_NE(levels, nullptr);
+    EXPECT_EQ(levels->type, FieldType::Array);
+    EXPECT_FALSE(levels->container_fixed);
+    EXPECT_EQ(levels->element_type, FieldType::Struct);
+    ASSERT_NE(levels->element_struct_info, nullptr);
+
+    dse::LODGroupComponent src;
+    src.levels.push_back({"lod0.dmesh", 0.8f, 0u, false});
+    src.levels.push_back({"lod1.dmesh", 0.3f, 0u, false});
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+    ASSERT_TRUE(obj["levels"].IsArray());
+    EXPECT_EQ(obj["levels"].Size(), 2u);
+
+    dse::LODGroupComponent dst;
+    DeserializeReflected(*ti, &dst, obj);
+    ASSERT_EQ(dst.levels.size(), 2u);
+    EXPECT_EQ(dst.levels[0].mesh_path, "lod0.dmesh");
+    EXPECT_FLOAT_EQ(dst.levels[1].screen_size_threshold, 0.3f);
 }

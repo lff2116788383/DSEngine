@@ -246,7 +246,7 @@ void RegisterDirectionalLight() {
     t.field("shadow_strength", &DirectionalLight3DComponent::shadow_strength).range(0.0, 1.0);
     t.field("cast_shadow", &DirectionalLight3DComponent::cast_shadow);
     t.field("cascade_split_lambda", &DirectionalLight3DComponent::cascade_split_lambda).range(0.0, 1.0);
-    // cascade_splits[CSM_CASCADES] 为 C 数组，反射核心暂不支持，跳过。
+    t.field("cascade_splits", &DirectionalLight3DComponent::cascade_splits);  // 固定 C 数组
 }
 
 void RegisterSkyLight() {
@@ -282,6 +282,100 @@ void RegisterSubScene() {
     t.field("scene_path", &SubSceneComponent::scene_path);
 }
 
+void RegisterLODGroup() {
+    using dse::LODLevelConfig;
+    using dse::LODGroupComponent;
+    {
+        auto c = DSE_REFLECT_TYPE(LODLevelConfig);  // 须先于引用它的容器字段注册
+        c.field("mesh_path", &LODLevelConfig::mesh_path);
+        c.field("screen_size_threshold", &LODLevelConfig::screen_size_threshold).range(0.0, 1.0);
+        // mesh_handle / loaded 为运行时状态，跳过。
+    }
+    auto t = DSE_REFLECT_TYPE(LODGroupComponent);
+    t.field("enabled", &LODGroupComponent::enabled);
+    t.field("levels", &LODGroupComponent::levels);  // std::vector<LODLevelConfig>
+    t.field("global_scale", &LODGroupComponent::global_scale).range(0.0, 100.0);
+    t.field("hysteresis", &LODGroupComponent::hysteresis).range(0.0, 1.0);
+    t.field("min_screen_size", &LODGroupComponent::min_screen_size).range(0.0, 1.0);
+    t.field("original_mesh_path", &LODGroupComponent::original_mesh_path);
+    // current_lod / lod_culled 为运行时状态，跳过。
+}
+
+void RegisterBoundingBox() {
+    using dse::BoundingBoxComponent;
+    auto t = DSE_REFLECT_TYPE(BoundingBoxComponent);
+    t.field("min_extents", &BoundingBoxComponent::min_extents);
+    t.field("max_extents", &BoundingBoxComponent::max_extents);
+}
+
+void RegisterWater() {
+    using dse::WaterComponent;
+    auto t = DSE_REFLECT_TYPE(WaterComponent);
+    t.field("enabled", &WaterComponent::enabled);
+    t.field("water_level", &WaterComponent::water_level);
+    t.field("deep_color", &WaterComponent::deep_color).color();
+    t.field("shallow_color", &WaterComponent::shallow_color).color();
+    t.field("max_depth", &WaterComponent::max_depth).range(0.0, 1000.0);
+    t.field("transparency", &WaterComponent::transparency).range(0.0, 1.0);
+    t.field("wave_amplitude", &WaterComponent::wave_amplitude).range(0.0, 10.0);
+    t.field("wave_frequency", &WaterComponent::wave_frequency).range(0.0, 16.0);
+    t.field("wave_speed", &WaterComponent::wave_speed).range(0.0, 16.0);
+    t.field("wave_direction", &WaterComponent::wave_direction);
+    t.field("refraction_strength", &WaterComponent::refraction_strength).range(0.0, 1.0);
+    t.field("reflection_strength", &WaterComponent::reflection_strength).range(0.0, 1.0);
+    t.field("specular_power", &WaterComponent::specular_power).range(1.0, 512.0);
+    t.field("caustic_intensity", &WaterComponent::caustic_intensity).range(0.0, 4.0);
+    t.field("caustic_scale", &WaterComponent::caustic_scale).range(0.0, 64.0);
+    t.field("foam_intensity", &WaterComponent::foam_intensity).range(0.0, 4.0);
+    t.field("foam_depth_threshold", &WaterComponent::foam_depth_threshold).range(0.0, 100.0);
+    t.field("underwater_fog_density", &WaterComponent::underwater_fog_density).range(0.0, 1.0);
+    t.field("underwater_fog_color", &WaterComponent::underwater_fog_color).color();
+}
+
+void RegisterLightProbe() {
+    using dse::LightProbeComponent;
+    auto t = DSE_REFLECT_TYPE(LightProbeComponent);
+    t.field("enabled", &LightProbeComponent::enabled);
+    t.field("influence_radius", &LightProbeComponent::influence_radius).range(0.0, 1000.0);
+    t.field("sh_coefficients", &LightProbeComponent::sh_coefficients);  // glm::vec3[9] 固定数组
+    t.field("show_debug", &LightProbeComponent::show_debug);
+    // needs_rebake 为运行时标志，跳过。
+}
+
+void RegisterReflectionProbe() {
+    using dse::ReflectionProbeComponent;
+    auto t = DSE_REFLECT_TYPE(ReflectionProbeComponent);
+    t.field("enabled", &ReflectionProbeComponent::enabled);
+    t.field("influence_radius", &ReflectionProbeComponent::influence_radius).range(0.0, 1000.0);
+    t.field("box_size_x", &ReflectionProbeComponent::box_size_x).range(0.0, 1000.0);
+    t.field("box_size_y", &ReflectionProbeComponent::box_size_y).range(0.0, 1000.0);
+    t.field("box_size_z", &ReflectionProbeComponent::box_size_z).range(0.0, 1000.0);
+    t.field("use_box_projection", &ReflectionProbeComponent::use_box_projection);
+    t.field("resolution", &ReflectionProbeComponent::resolution).range(16.0, 2048.0);
+    t.field("show_debug", &ReflectionProbeComponent::show_debug);
+    // cubemap_handle / needs_rebake 为运行时状态，跳过。
+}
+
+void RegisterGIProbeVolume() {
+    using dse::GIProbeVolumeComponent;
+    auto t = DSE_REFLECT_TYPE(GIProbeVolumeComponent);
+    t.field("enabled", &GIProbeVolumeComponent::enabled);
+    t.field("origin", &GIProbeVolumeComponent::origin);
+    t.field("extent", &GIProbeVolumeComponent::extent);
+    t.field("resolution_x", &GIProbeVolumeComponent::resolution_x).range(1.0, 256.0);
+    t.field("resolution_y", &GIProbeVolumeComponent::resolution_y).range(1.0, 256.0);
+    t.field("resolution_z", &GIProbeVolumeComponent::resolution_z).range(1.0, 256.0);
+    t.field("irradiance_texels", &GIProbeVolumeComponent::irradiance_texels).range(1.0, 64.0);
+    t.field("visibility_texels", &GIProbeVolumeComponent::visibility_texels).range(1.0, 64.0);
+    t.field("rays_per_probe", &GIProbeVolumeComponent::rays_per_probe).range(1.0, 4096.0);
+    t.field("hysteresis", &GIProbeVolumeComponent::hysteresis).range(0.0, 1.0);
+    t.field("gi_intensity", &GIProbeVolumeComponent::gi_intensity).range(0.0, 16.0);
+    t.field("normal_bias", &GIProbeVolumeComponent::normal_bias).range(0.0, 4.0);
+    t.field("view_bias", &GIProbeVolumeComponent::view_bias).range(0.0, 4.0);
+    t.field("show_debug_probes", &GIProbeVolumeComponent::show_debug_probes);
+    // needs_reinit_ 为运行时状态，跳过。
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -301,6 +395,12 @@ void EnsureCoreReflectionRegistered() {
     RegisterSkybox();
     RegisterFreeCameraController();
     RegisterSubScene();
+    RegisterLODGroup();
+    RegisterBoundingBox();
+    RegisterWater();
+    RegisterLightProbe();
+    RegisterReflectionProbe();
+    RegisterGIProbeVolume();
 }
 
 }  // namespace dse::reflect
