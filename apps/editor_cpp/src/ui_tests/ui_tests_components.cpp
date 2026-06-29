@@ -106,11 +106,11 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
             const float before = Reg().get<dse::Camera3DComponent>(ent).fov;  // 默认 60
 
-            ctx->ItemInputValue("//Inspector/##cam3d_fov", 95.0f);
+            ctx->ItemInputValue("//Inspector/##Camera3DComponent.fov", 95.0f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 95.0f) < 0.01f);
 
-            // Edit 菜单 Undo 标签运行期动态拼为 "Undo (<描述>)"，描述即 "Camera3D.FOV"。
+            // Edit 菜单 Undo 标签运行期动态拼为 "Undo (<描述>)"，描述即 "Camera3DComponent.fov"。
             auto& mgr = GetUndoRedoManager();
             IM_CHECK(mgr.CanUndo());
             const std::string undo_label = std::string("Edit/Undo (") + mgr.GetUndoDescription() + ")";
@@ -131,7 +131,7 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "Directional Light");
             IM_CHECK(Reg().all_of<dse::DirectionalLight3DComponent>(ent));
 
-            ctx->ItemInputValue("//Inspector/##dirlight_int", 4.5f);
+            ctx->ItemInputValue("//Inspector/##DirectionalLight3DComponent.intensity", 4.5f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::DirectionalLight3DComponent>(ent).intensity - 4.5f) < 0.01f);
             DeleteSelectedEntity(ctx, ent);
@@ -147,7 +147,7 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "Point Light");
             IM_CHECK(Reg().all_of<dse::PointLightComponent>(ent));
 
-            ctx->ItemInputValue("//Inspector/##ptlight_rad", 25.0f);
+            ctx->ItemInputValue("//Inspector/##PointLightComponent.radius", 25.0f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::PointLightComponent>(ent).radius - 25.0f) < 0.01f);
             DeleteSelectedEntity(ctx, ent);
@@ -163,7 +163,7 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "Spot Light");
             IM_CHECK(Reg().all_of<dse::SpotLightComponent>(ent));
 
-            ctx->ItemInputValue("//Inspector/##spotlight_int", 4.5f);
+            ctx->ItemInputValue("//Inspector/##SpotLightComponent.intensity", 4.5f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::SpotLightComponent>(ent).intensity - 4.5f) < 0.01f);
             DeleteSelectedEntity(ctx, ent);
@@ -179,7 +179,7 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "Sky Light");
             IM_CHECK(Reg().all_of<dse::SkyLightComponent>(ent));
 
-            ctx->ItemInputValue("//Inspector/##skylight_int", 3.0f);
+            ctx->ItemInputValue("//Inspector/##SkyLightComponent.intensity", 3.0f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::SkyLightComponent>(ent).intensity - 3.0f) < 0.01f);
             DeleteSelectedEntity(ctx, ent);
@@ -305,7 +305,7 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Add Camera 3D");
 
             // 改 FOV 到特征值（便于稍后验证 Remove 的撤销恢复了数据，而非默认值）。
-            ctx->ItemInputValue("//Inspector/##cam3d_fov", 77.0f);
+            ctx->ItemInputValue("//Inspector/##Camera3DComponent.fov", 77.0f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
 

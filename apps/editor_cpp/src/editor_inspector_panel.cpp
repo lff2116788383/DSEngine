@@ -499,166 +499,62 @@ void DrawMeshRendererSection(EditorContext& context) {
     ImGui::Columns(1);
 }
 
+// 通用反射 Inspector：辅助构造"取得组件实例指针"的回调，组件被移除时返回 nullptr。
+template <typename Comp>
+std::function<void*()> MakeReflectResolver(EditorContext& context) {
+    return [&context]() -> void* {
+        entt::entity e = context.selected_entity;
+        if (context.registry.valid(e) && context.registry.all_of<Comp>(e))
+            return &context.registry.get<Comp>(e);
+        return nullptr;
+    };
+}
+
+// Camera3D / 各类光照 / Free Camera Controller 改由通用反射驱动渲染（纯标量/向量字段，
+// 无拖拽或非反射字段）。字段集合来自反射注册（单一事实来源）；A->C 切换后端时此处不变。
 void DrawCamera3DSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::Camera3DComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& camera = context.registry.get<dse::Camera3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_VIDEO "  Camera 3D", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "cam3d_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##cam3d_enabled", &camera.enabled));
-    INSPECTOR_PROPERTY_U("Priority", ImGui::DragInt("##cam3d_priority", &camera.priority, 1),
-        "Camera3D.Priority", camera.priority, context.selected_entity,
-        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::priority));
-    INSPECTOR_PROPERTY_U("FOV", ImGui::DragFloat("##cam3d_fov", &camera.fov, 1.0f, 10.0f, 170.0f),
-        "Camera3D.FOV", camera.fov, context.selected_entity,
-        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::fov));
-    INSPECTOR_PROPERTY_U("Near Clip", ImGui::DragFloat("##cam3d_near", &camera.near_clip, 0.05f, 0.01f, 10.0f),
-        "Camera3D.NearClip", camera.near_clip, context.selected_entity,
-        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::near_clip));
-    INSPECTOR_PROPERTY_U("Far Clip", ImGui::DragFloat("##cam3d_far", &camera.far_clip, 10.0f, 10.0f, 10000.0f),
-        "Camera3D.FarClip", camera.far_clip, context.selected_entity,
-        MakeCompSetter<dse::Camera3DComponent>(context.registry, context.selected_entity, &dse::Camera3DComponent::far_clip));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::Camera3DComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::Camera3DComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_VIDEO "  Camera 3D", *ti,
+                         MakeReflectResolver<dse::Camera3DComponent>(context));
 }
 
 void DrawDirectionalLightSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::DirectionalLight3DComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& light = context.registry.get<dse::DirectionalLight3DComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_WEATHER_SUNNY "  Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "dirlight_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##dirlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY_U("Direction", ImGui::DragFloat3("##dirlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f),
-        "DirLight.Direction", light.direction, context.selected_entity,
-        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::direction));
-    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##dirlight_color", glm::value_ptr(light.color)),
-        "DirLight.Color", light.color, context.selected_entity,
-        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::color));
-    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##dirlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
-        "DirLight.Intensity", light.intensity, context.selected_entity,
-        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::intensity));
-    INSPECTOR_PROPERTY_U("Ambient", ImGui::DragFloat("##dirlight_amb", &light.ambient_intensity, 0.05f, 0.0f, 1.0f),
-        "DirLight.Ambient", light.ambient_intensity, context.selected_entity,
-        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::ambient_intensity));
-    INSPECTOR_PROPERTY_U("Cascade Lambda", ImGui::DragFloat("##dirlight_csl", &light.cascade_split_lambda, 0.01f, 0.0f, 1.0f),
-        "DirLight.CascadeLambda", light.cascade_split_lambda, context.selected_entity,
-        MakeCompSetter<dse::DirectionalLight3DComponent>(context.registry, context.selected_entity, &dse::DirectionalLight3DComponent::cascade_split_lambda));
-    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##dirlight_shadow", &light.cast_shadow));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::DirectionalLight3DComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::DirectionalLight3DComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_WEATHER_SUNNY "  Directional Light", *ti,
+                         MakeReflectResolver<dse::DirectionalLight3DComponent>(context));
 }
 
 void DrawPointLightSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::PointLightComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& light = context.registry.get<dse::PointLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Point Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "ptlight_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##ptlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##ptlight_color", glm::value_ptr(light.color)),
-        "PointLight.Color", light.color, context.selected_entity,
-        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::color));
-    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##ptlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
-        "PointLight.Intensity", light.intensity, context.selected_entity,
-        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::intensity));
-    INSPECTOR_PROPERTY_U("Radius", ImGui::DragFloat("##ptlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f),
-        "PointLight.Radius", light.radius, context.selected_entity,
-        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::radius));
-    INSPECTOR_PROPERTY_U("Falloff", ImGui::DragFloat("##ptlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f),
-        "PointLight.Falloff", light.falloff, context.selected_entity,
-        MakeCompSetter<dse::PointLightComponent>(context.registry, context.selected_entity, &dse::PointLightComponent::falloff));
-    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##ptlight_shadow", &light.cast_shadow));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::PointLightComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::PointLightComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LIGHTBULB "  Point Light", *ti,
+                         MakeReflectResolver<dse::PointLightComponent>(context));
 }
 
 void DrawSpotLightSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::SpotLightComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& light = context.registry.get<dse::SpotLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Spot Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "spotlight_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##spotlight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY_U("Direction", ImGui::DragFloat3("##spotlight_dir", glm::value_ptr(light.direction), 0.05f, -1.0f, 1.0f),
-        "SpotLight.Direction", light.direction, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::direction));
-    INSPECTOR_PROPERTY_U("Color", ImGui::ColorEdit3("##spotlight_color", glm::value_ptr(light.color)),
-        "SpotLight.Color", light.color, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::color));
-    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##spotlight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
-        "SpotLight.Intensity", light.intensity, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::intensity));
-    INSPECTOR_PROPERTY_U("Radius", ImGui::DragFloat("##spotlight_rad", &light.radius, 0.5f, 0.1f, 1000.0f),
-        "SpotLight.Radius", light.radius, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::radius));
-    INSPECTOR_PROPERTY_U("Falloff", ImGui::DragFloat("##spotlight_falloff", &light.falloff, 0.05f, 0.0f, 16.0f),
-        "SpotLight.Falloff", light.falloff, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::falloff));
-    INSPECTOR_PROPERTY_U("Inner Cone", ImGui::DragFloat("##spotlight_inner", &light.inner_cone_angle, 0.25f, 0.0f, 89.0f),
-        "SpotLight.InnerCone", light.inner_cone_angle, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::inner_cone_angle));
-    INSPECTOR_PROPERTY_U("Outer Cone", ImGui::DragFloat("##spotlight_outer", &light.outer_cone_angle, 0.25f, 0.0f, 89.0f),
-        "SpotLight.OuterCone", light.outer_cone_angle, context.selected_entity,
-        MakeCompSetter<dse::SpotLightComponent>(context.registry, context.selected_entity, &dse::SpotLightComponent::outer_cone_angle));
-    INSPECTOR_PROPERTY("Cast Shadow", ImGui::Checkbox("##spotlight_shadow", &light.cast_shadow));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::SpotLightComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::SpotLightComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LIGHTBULB "  Spot Light", *ti,
+                         MakeReflectResolver<dse::SpotLightComponent>(context));
 }
 
 void DrawSkyLightSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::SkyLightComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& light = context.registry.get<dse::SkyLightComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_WEATHER_SUNNY "  Sky Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "skylight_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##skylight_enabled", &light.enabled));
-    INSPECTOR_PROPERTY_U("Up Color", ImGui::ColorEdit3("##skylight_up", glm::value_ptr(light.up_color)),
-        "SkyLight.UpColor", light.up_color, context.selected_entity,
-        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::up_color));
-    INSPECTOR_PROPERTY_U("Down Color", ImGui::ColorEdit3("##skylight_down", glm::value_ptr(light.down_color)),
-        "SkyLight.DownColor", light.down_color, context.selected_entity,
-        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::down_color));
-    INSPECTOR_PROPERTY_U("Intensity", ImGui::DragFloat("##skylight_int", &light.intensity, 0.05f, 0.0f, 10.0f),
-        "SkyLight.Intensity", light.intensity, context.selected_entity,
-        MakeCompSetter<dse::SkyLightComponent>(context.registry, context.selected_entity, &dse::SkyLightComponent::intensity));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::SkyLightComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::SkyLightComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_WEATHER_SUNNY "  Sky Light", *ti,
+                         MakeReflectResolver<dse::SkyLightComponent>(context));
 }
 
 void DrawSkyboxSection(EditorContext& context) {
@@ -857,25 +753,12 @@ void DrawAnimator3DSection(EditorContext& context) {
 }
 
 void DrawFreeCameraControllerSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::FreeCameraControllerComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& controller = context.registry.get<dse::FreeCameraControllerComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_VIDEO "  Free Camera Controller", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "freecam_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##freecam_enabled", &controller.enabled));
-    INSPECTOR_PROPERTY("Move Speed", ImGui::DragFloat("##freecam_speed", &controller.move_speed, 0.1f, 0.1f, 100.0f));
-    INSPECTOR_PROPERTY("Sensitivity", ImGui::DragFloat("##freecam_sens", &controller.mouse_sensitivity, 0.01f, 0.01f, 2.0f));
-    INSPECTOR_PROPERTY("Pitch", ImGui::DragFloat("##freecam_pitch", &controller.pitch, 1.0f, -89.0f, 89.0f));
-    INSPECTOR_PROPERTY("Yaw", ImGui::DragFloat("##freecam_yaw", &controller.yaw, 1.0f));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::FreeCameraControllerComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::FreeCameraControllerComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_VIDEO "  Free Camera Controller", *ti,
+                         MakeReflectResolver<dse::FreeCameraControllerComponent>(context));
 }
 
 void DrawTerrainSection(EditorContext& context) {
@@ -1865,17 +1748,6 @@ void DrawParticleSystem3DSection(EditorContext& context) {
     INSPECTOR_PROPERTY("Gravity", ImGui::DragFloat3("##ps3d_grav", glm::value_ptr(ps.gravity), 0.1f));
     EndInspectorReadOnlyScope(context);
     ImGui::Columns(1);
-}
-
-// 通用反射 Inspector：辅助构造"取得组件实例指针"的回调，组件被移除时返回 nullptr。
-template <typename Comp>
-std::function<void*()> MakeReflectResolver(EditorContext& context) {
-    return [&context]() -> void* {
-        entt::entity e = context.selected_entity;
-        if (context.registry.valid(e) && context.registry.all_of<Comp>(e))
-            return &context.registry.get<Comp>(e);
-        return nullptr;
-    };
 }
 
 // PostProcess / Tree / Grass 改由通用反射驱动渲染：字段集合来自反射注册（单一

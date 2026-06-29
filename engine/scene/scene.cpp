@@ -5,6 +5,9 @@
 
 #include "engine/scene/scene.h"
 #include "engine/scene/scene_component_serialization.h"
+#include "engine/reflect/reflect.h"
+#include "engine/reflect/reflect_json.h"
+#include "engine/reflect/component_reflection.h"
 #include "engine/ecs/script.h"
 #include "engine/ecs/sprite.h"
 #include "engine/ecs/transform.h"
@@ -51,6 +54,7 @@ const World& Scene::ActiveWorld() const {
 
 bool Scene::Serialize(const std::string& filepath) {
     DEBUG_LOG_INFO("Serializing scene {} to {}", name_, filepath);
+    dse::reflect::EnsureCoreReflectionRegistered();
     auto& world = ActiveWorld();
 
     rapidjson::Document doc;
@@ -168,14 +172,11 @@ bool Scene::Serialize(const std::string& filepath) {
         }
 
         if (world.registry().all_of<dse::Camera3DComponent>(entity)) {
+            // 通用反射驱动：字段集合 == 反射注册（单一事实来源），JSON 键/格式与原手写一致。
             const auto& camera = world.registry().get<dse::Camera3DComponent>(entity);
             rapidjson::Value camera_json(rapidjson::kObjectType);
-            camera_json.AddMember("enabled", camera.enabled, allocator);
-            camera_json.AddMember("priority", camera.priority, allocator);
-            camera_json.AddMember("fov", camera.fov, allocator);
-            camera_json.AddMember("aspect_ratio", camera.aspect_ratio, allocator);
-            camera_json.AddMember("near_clip", camera.near_clip, allocator);
-            camera_json.AddMember("far_clip", camera.far_clip, allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::Camera3DComponent>())
+                dse::reflect::SerializeReflected(*ti, &camera, camera_json, allocator);
             components.AddMember("Camera3DComponent", camera_json, allocator);
         }
 
@@ -214,47 +215,24 @@ bool Scene::Serialize(const std::string& filepath) {
         if (world.registry().all_of<dse::PointLightComponent>(entity)) {
             const auto& light = world.registry().get<dse::PointLightComponent>(entity);
             rapidjson::Value light_json(rapidjson::kObjectType);
-            light_json.AddMember("enabled", light.enabled, allocator);
-            rapidjson::Value color(rapidjson::kArrayType);
-            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
-            light_json.AddMember("color", color, allocator);
-            light_json.AddMember("intensity", light.intensity, allocator);
-            light_json.AddMember("radius", light.radius, allocator);
-            light_json.AddMember("falloff", light.falloff, allocator);
-            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::PointLightComponent>())
+                dse::reflect::SerializeReflected(*ti, &light, light_json, allocator);
             components.AddMember("PointLightComponent", light_json, allocator);
         }
 
         if (world.registry().all_of<dse::SpotLightComponent>(entity)) {
             const auto& light = world.registry().get<dse::SpotLightComponent>(entity);
             rapidjson::Value light_json(rapidjson::kObjectType);
-            light_json.AddMember("enabled", light.enabled, allocator);
-            rapidjson::Value direction(rapidjson::kArrayType);
-            direction.PushBack(light.direction.x, allocator).PushBack(light.direction.y, allocator).PushBack(light.direction.z, allocator);
-            light_json.AddMember("direction", direction, allocator);
-            rapidjson::Value color(rapidjson::kArrayType);
-            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
-            light_json.AddMember("color", color, allocator);
-            light_json.AddMember("intensity", light.intensity, allocator);
-            light_json.AddMember("radius", light.radius, allocator);
-            light_json.AddMember("falloff", light.falloff, allocator);
-            light_json.AddMember("inner_cone_angle", light.inner_cone_angle, allocator);
-            light_json.AddMember("outer_cone_angle", light.outer_cone_angle, allocator);
-            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SpotLightComponent>())
+                dse::reflect::SerializeReflected(*ti, &light, light_json, allocator);
             components.AddMember("SpotLightComponent", light_json, allocator);
         }
 
         if (world.registry().all_of<dse::SkyLightComponent>(entity)) {
             const auto& light = world.registry().get<dse::SkyLightComponent>(entity);
             rapidjson::Value light_json(rapidjson::kObjectType);
-            light_json.AddMember("enabled", light.enabled, allocator);
-            rapidjson::Value up_color(rapidjson::kArrayType);
-            up_color.PushBack(light.up_color.x, allocator).PushBack(light.up_color.y, allocator).PushBack(light.up_color.z, allocator);
-            light_json.AddMember("up_color", up_color, allocator);
-            rapidjson::Value down_color(rapidjson::kArrayType);
-            down_color.PushBack(light.down_color.x, allocator).PushBack(light.down_color.y, allocator).PushBack(light.down_color.z, allocator);
-            light_json.AddMember("down_color", down_color, allocator);
-            light_json.AddMember("intensity", light.intensity, allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SkyLightComponent>())
+                dse::reflect::SerializeReflected(*ti, &light, light_json, allocator);
             components.AddMember("SkyLightComponent", light_json, allocator);
         }
 
@@ -324,6 +302,7 @@ bool Scene::Serialize(const std::string& filepath) {
 
 bool Scene::Deserialize(const std::string& filepath) {
     DEBUG_LOG_INFO("Deserializing scene {} from {}", name_, filepath);
+    dse::reflect::EnsureCoreReflectionRegistered();
     auto& world = ActiveWorld();
     std::ifstream in(filepath);
     if (!in.is_open()) return false;
@@ -550,26 +529,10 @@ bool Scene::Deserialize(const std::string& filepath) {
         }
 
         if (components.HasMember("Camera3DComponent") && components["Camera3DComponent"].IsObject()) {
-            const auto& camera_json = components["Camera3DComponent"];
+            // 通用反射驱动：键名与原手写一致，对旧 .scene 向后兼容（缺失字段保留默认值）。
             dse::Camera3DComponent camera;
-            if (camera_json.HasMember("enabled") && camera_json["enabled"].IsBool()) {
-                camera.enabled = camera_json["enabled"].GetBool();
-            }
-            if (camera_json.HasMember("priority") && camera_json["priority"].IsInt()) {
-                camera.priority = camera_json["priority"].GetInt();
-            }
-            if (camera_json.HasMember("fov") && camera_json["fov"].IsNumber()) {
-                camera.fov = camera_json["fov"].GetFloat();
-            }
-            if (camera_json.HasMember("aspect_ratio") && camera_json["aspect_ratio"].IsNumber()) {
-                camera.aspect_ratio = camera_json["aspect_ratio"].GetFloat();
-            }
-            if (camera_json.HasMember("near_clip") && camera_json["near_clip"].IsNumber()) {
-                camera.near_clip = camera_json["near_clip"].GetFloat();
-            }
-            if (camera_json.HasMember("far_clip") && camera_json["far_clip"].IsNumber()) {
-                camera.far_clip = camera_json["far_clip"].GetFloat();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::Camera3DComponent>())
+                dse::reflect::DeserializeReflected(*ti, &camera, components["Camera3DComponent"]);
             world.registry().emplace<dse::Camera3DComponent>(entity, camera);
         }
 
@@ -627,82 +590,23 @@ bool Scene::Deserialize(const std::string& filepath) {
         }
 
         if (components.HasMember("PointLightComponent") && components["PointLightComponent"].IsObject()) {
-            const auto& light_json = components["PointLightComponent"];
             dse::PointLightComponent light;
-            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
-                light.enabled = light_json["enabled"].GetBool();
-            }
-            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
-                const auto& c = light_json["color"].GetArray();
-                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
-            }
-            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
-                light.intensity = light_json["intensity"].GetFloat();
-            }
-            if (light_json.HasMember("radius") && light_json["radius"].IsNumber()) {
-                light.radius = light_json["radius"].GetFloat();
-            }
-            if (light_json.HasMember("falloff") && light_json["falloff"].IsNumber()) {
-                light.falloff = light_json["falloff"].GetFloat();
-            }
-            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
-                light.cast_shadow = light_json["cast_shadow"].GetBool();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::PointLightComponent>())
+                dse::reflect::DeserializeReflected(*ti, &light, components["PointLightComponent"]);
             world.registry().emplace<dse::PointLightComponent>(entity, light);
         }
 
         if (components.HasMember("SpotLightComponent") && components["SpotLightComponent"].IsObject()) {
-            const auto& light_json = components["SpotLightComponent"];
             dse::SpotLightComponent light;
-            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
-                light.enabled = light_json["enabled"].GetBool();
-            }
-            if (light_json.HasMember("direction") && light_json["direction"].IsArray() && light_json["direction"].Size() == 3) {
-                const auto& d = light_json["direction"].GetArray();
-                light.direction = glm::vec3(d[0].GetFloat(), d[1].GetFloat(), d[2].GetFloat());
-            }
-            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
-                const auto& c = light_json["color"].GetArray();
-                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
-            }
-            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
-                light.intensity = light_json["intensity"].GetFloat();
-            }
-            if (light_json.HasMember("radius") && light_json["radius"].IsNumber()) {
-                light.radius = light_json["radius"].GetFloat();
-            }
-            if (light_json.HasMember("falloff") && light_json["falloff"].IsNumber()) {
-                light.falloff = light_json["falloff"].GetFloat();
-            }
-            if (light_json.HasMember("inner_cone_angle") && light_json["inner_cone_angle"].IsNumber()) {
-                light.inner_cone_angle = light_json["inner_cone_angle"].GetFloat();
-            }
-            if (light_json.HasMember("outer_cone_angle") && light_json["outer_cone_angle"].IsNumber()) {
-                light.outer_cone_angle = light_json["outer_cone_angle"].GetFloat();
-            }
-            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
-                light.cast_shadow = light_json["cast_shadow"].GetBool();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SpotLightComponent>())
+                dse::reflect::DeserializeReflected(*ti, &light, components["SpotLightComponent"]);
             world.registry().emplace<dse::SpotLightComponent>(entity, light);
         }
 
         if (components.HasMember("SkyLightComponent") && components["SkyLightComponent"].IsObject()) {
-            const auto& light_json = components["SkyLightComponent"];
             dse::SkyLightComponent light;
-            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
-                light.enabled = light_json["enabled"].GetBool();
-            }
-            if (light_json.HasMember("up_color") && light_json["up_color"].IsArray() && light_json["up_color"].Size() == 3) {
-                const auto& c = light_json["up_color"].GetArray();
-                light.up_color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
-            }
-            if (light_json.HasMember("down_color") && light_json["down_color"].IsArray() && light_json["down_color"].Size() == 3) {
-                const auto& c = light_json["down_color"].GetArray();
-                light.down_color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
-            }
-            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
-                light.intensity = light_json["intensity"].GetFloat();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SkyLightComponent>())
+                dse::reflect::DeserializeReflected(*ti, &light, components["SkyLightComponent"]);
             world.registry().emplace<dse::SkyLightComponent>(entity, light);
         }
 
