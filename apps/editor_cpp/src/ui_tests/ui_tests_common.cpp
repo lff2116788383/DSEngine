@@ -93,6 +93,16 @@ void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
     ctx->SetRef("//$FOCUSED");
 }
 
+void DiscardSceneCloseConfirmIfOpen(ImGuiTestContext* ctx) {
+    // 关闭脏页签后会弹出标题为 "Unsaved Changes###SceneCloseConfirm" 的确认框并取得焦点；
+    // 把 ref 指向当前焦点窗口，若其中存在 "Don't Save" 则点击丢弃改动完成关闭。无确认框时为 no-op。
+    ctx->SetRef("//$FOCUSED");
+    if (ctx->ItemExists("Don't Save")) {
+        ctx->ItemClick("Don't Save");
+        ctx->Yield(2);
+    }
+}
+
 void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst) {
     // ImGui 拖拽投递需要“源激活→跨帧拖动→落点悬停一帧→释放”，分步并逐帧 Yield 比单帧瞬移更可靠。
     ctx->MouseMoveToPos(src);

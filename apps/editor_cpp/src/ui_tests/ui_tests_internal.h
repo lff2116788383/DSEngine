@@ -46,6 +46,11 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr);
 /// 在 Hierarchy 窗口体空白处右键打开上下文菜单，并把 ref 指向弹窗（"//$FOCUSED"）。
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx);
 
+/// 关闭脏页签时会弹「Unsaved Changes」确认框（feature A 脏场景关闭确认）；用例收尾用页签右键
+/// 「Close」关闭可能为脏的新建页签时，调用本函数：若确认框已弹出则点「Don't Save」丢弃改动完成关闭。
+/// 无确认框时为 no-op，故可无条件在 Close 后调用。
+void DiscardSceneCloseConfirmIfOpen(ImGuiTestContext* ctx);
+
 /// 手动分步投递一次鼠标拖拽（不走 ItemDragAndDrop）：源激活→跨帧拖动→落点悬停→释放。
 /// ItemDragAndDrop 会调 _MakeAimingSpaceOverPos 试图挪开挡住落点的窗口，而 ImGuizmo 每帧建的
 /// 全屏 "gizmo" 覆盖窗（NoTitleBar 不可拖动）挪不开会致落点漂移；手动逐帧 Yield 更可靠。

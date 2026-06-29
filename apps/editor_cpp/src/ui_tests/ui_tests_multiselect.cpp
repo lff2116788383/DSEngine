@@ -180,12 +180,13 @@ void RegisterMultiSelectTests(ImGuiTestEngine* e) {
 
             const int last = tabs.GetTabCount() - 1;
             char ref[80];
-            std::snprintf(ref, sizeof(ref), "//DSEngineRoot/##SceneTabs/SceneTab%d", last);
+            std::snprintf(ref, sizeof(ref), "//DSEngineRoot/##SceneTabs/SceneTab%d", tabs.GetTabId(last));
             ctx->ItemClick(ref, ImGuiMouseButton_Right);
             ctx->Yield();
             ctx->SetRef("//$FOCUSED");
             ctx->ItemClick("Close");
             ctx->Yield(2);
+            DiscardSceneCloseConfirmIfOpen(ctx);
             IM_CHECK_EQ(tabs.GetTabCount(), n0);
             IM_CHECK(Reg().valid(a));    // 原场景快照还原回来
 

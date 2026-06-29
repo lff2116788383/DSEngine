@@ -14,6 +14,8 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <string>
 #include <variant>
 
@@ -25,6 +27,7 @@
 #include "editor_particle_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_prefab_override.h"
+#include "editor_entity_snapshot.h"   // EntitySnapshot（单实体组件抓取/补回）
 
 namespace dse::editor {
 
@@ -2266,6 +2269,35 @@ void InspectorRegistry::DrawAll(EditorContext& context) {
     }
 }
 
+namespace {
+// 把「添加组件」包成可撤销命令：Execute=add，Undo=remove（仅触及该组件类型，
+// 不影响实体上其它组件）。
+void ExecuteAddComponent(entt::registry& registry, entt::entity entity,
+                         const std::string& name,
+                         ComponentAddFunc add_fn, ComponentRemoveFunc remove_fn) {
+    entt::registry* reg = &registry;
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Add " + name,
+        [reg, entity, add_fn]()    { if (add_fn) add_fn(*reg, entity); },
+        [reg, entity, remove_fn]() { if (remove_fn) remove_fn(*reg, entity); }
+    ), false);
+}
+
+// 把「移除组件」包成可撤销命令：移除前用 EntitySnapshot 抓取整实体组件数据，
+// Undo 时仅补回「当前缺失」的组件（即被移除的那个），连同其数据一并恢复，
+// 而其它组件（可能在此期间被改过）保持不动。
+void ExecuteRemoveComponent(entt::registry& registry, entt::entity entity,
+                            const std::string& name, ComponentRemoveFunc remove_fn) {
+    auto snap = std::make_shared<EntitySnapshot>(EntitySnapshot::Capture(registry, entity));
+    entt::registry* reg = &registry;
+    GetUndoRedoManager().Execute(std::make_unique<LambdaCommand>(
+        "Remove " + name,
+        [reg, entity, remove_fn]() { if (remove_fn) remove_fn(*reg, entity); },
+        [reg, entity, snap]()      { snap->RestoreMissingInPlace(*reg, entity); }
+    ), false);
+}
+} // namespace
+
 void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
     const bool read_only = IsInspectorStructuralReadOnly();
     ImGui::Separator();
@@ -2295,7 +2327,8 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
         last_category = entry.category;
 
         if (ImGui::MenuItem(entry.component_name.c_str())) {
-            entry.add(context.registry, context.selected_entity);
+            ExecuteAddComponent(context.registry, context.selected_entity,
+                                entry.component_name, entry.add, entry.remove);
         }
     }
     ImGui::EndPopup();
@@ -2325,7 +2358,8 @@ void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.5f, 1.0f));
         if (ImGui::MenuItem(entry.component_name.c_str())) {
-            entry.remove(context.registry, context.selected_entity);
+            ExecuteRemoveComponent(context.registry, context.selected_entity,
+                                   entry.component_name, entry.remove);
         }
         ImGui::PopStyleColor();
     }

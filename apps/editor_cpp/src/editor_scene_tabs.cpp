@@ -24,7 +24,9 @@ std::string SceneTabManager::ExtractDisplayName(const std::string& path) {
 
 void SceneTabManager::Init(const std::string& scene_path) {
     tabs_.clear();
+    next_tab_id_ = 0;
     SceneTab tab;
+    tab.id = next_tab_id_++;
     tab.file_path = scene_path;
     tab.display_name = ExtractDisplayName(scene_path);
     tab.dirty = false;
@@ -35,12 +37,18 @@ void SceneTabManager::Init(const std::string& scene_path) {
     pending_switch_ = -1;
 }
 
+int SceneTabManager::GetTabId(int index) const {
+    if (index < 0 || index >= static_cast<int>(tabs_.size())) return -1;
+    return tabs_[index].id;
+}
+
 int SceneTabManager::NewScene(entt::registry& registry) {
     // Snapshot current tab before switching away
     SnapshotActiveTab(registry);
 
     // Create new empty tab
     SceneTab tab;
+    tab.id = next_tab_id_++;
     tab.file_path = "";
     tab.display_name = "Untitled";
     tab.dirty = false;
@@ -81,6 +89,7 @@ int SceneTabManager::OpenScene(entt::registry& registry, const std::string& path
 
     // Create new tab and load the scene
     SceneTab tab;
+    tab.id = next_tab_id_++;
     tab.file_path = path;
     tab.display_name = ExtractDisplayName(path);
     tab.dirty = false;
@@ -109,6 +118,7 @@ bool SceneTabManager::CloseTab(int index, entt::registry& registry) {
 
     // If closing the last remaining tab, reset it to empty Untitled
     if (tabs_.size() == 1) {
+        tabs_[0].id = next_tab_id_++;
         tabs_[0].file_path = "";
         tabs_[0].display_name = "Untitled";
         tabs_[0].dirty = false;
@@ -255,10 +265,12 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
                 pending_switch_ = -1;
             }
 
-            // Build label: "filename *###SceneTabN"
+            // Build label: "filename *###SceneTab<stableId>"
+            // 用稳定 id 而非循环索引作为 ImGui ID，页签增删后其余页签 ID 不漂移，
+            // 避免 ImGui 选中态错乱（多页签下打开/切换场景内容串台）。
             std::string label = tabs_[i].display_name;
             if (tabs_[i].dirty) label += " *";
-            label += "###SceneTab" + std::to_string(i);
+            label += "###SceneTab" + std::to_string(tabs_[i].id);
 
             bool open = true;
             if (ImGui::BeginTabItem(label.c_str(), &open, flags)) {
@@ -308,10 +320,67 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
         ImGui::EndTabBar();
     }
 
-    // Process deferred close request
+    // Process deferred close request：脏页签关闭前弹确认，干净页签直接关。
     if (close_request >= 0) {
-        CloseTab(close_request, registry);
-        tab_changed = true;
+        if (close_request < static_cast<int>(tabs_.size()) && tabs_[close_request].dirty) {
+            // 先切到待关页签，使其内容成为当前编辑现场（便于 Save / 让用户看清将丢失的内容）。
+            if (close_request != active_index_) {
+                SwitchTo(close_request, registry);
+                tab_changed = true;
+            }
+            pending_close_ = active_index_;
+            open_close_confirm_ = true;
+        } else {
+            CloseTab(close_request, registry);
+            tab_changed = true;
+        }
+    }
+
+    // 脏场景关闭确认弹窗：OpenPopup 与 BeginPopupModal 同处 DrawTabBar 顶层（DSEngineRoot 窗口）作用域，
+    // ID 栈一致——避免与之前 About/Build Game 同类的「菜单作用域 OpenPopup、顶层 BeginPopupModal」打不开的坑。
+    if (open_close_confirm_) {
+        ImGui::OpenPopup("Unsaved Changes###SceneCloseConfirm");
+        open_close_confirm_ = false;
+    }
+    if (ImGui::BeginPopupModal("Unsaved Changes###SceneCloseConfirm", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("The current scene has unsaved changes.");
+        ImGui::TextUnformatted("Save your changes before closing?");
+        ImGui::Separator();
+
+        const bool valid = (pending_close_ >= 0 && pending_close_ < static_cast<int>(tabs_.size()));
+        const bool has_path = valid && !tabs_[pending_close_].file_path.empty() &&
+                              tabs_[pending_close_].file_path != "Untitled";
+
+        // 未命名场景需 Save As（原生对话框），此处不内联；Save 仅对已有路径的场景生效。
+        if (!has_path) ImGui::BeginDisabled();
+        if (ImGui::Button("Save")) {
+            if (has_path) {
+                SaveScene(registry, tabs_[pending_close_].file_path);
+                tabs_[pending_close_].dirty = false;
+                CloseTab(pending_close_, registry);
+                tab_changed = true;
+            }
+            pending_close_ = -1;
+            ImGui::CloseCurrentPopup();
+        }
+        if (!has_path) ImGui::EndDisabled();
+        ImGui::SameLine();
+        if (ImGui::Button("Don't Save")) {
+            if (valid) {
+                tabs_[pending_close_].dirty = false;
+                CloseTab(pending_close_, registry);
+                tab_changed = true;
+            }
+            pending_close_ = -1;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            pending_close_ = -1;  // 放弃关闭，页签与内容保持不变
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     return tab_changed;

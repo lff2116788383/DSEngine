@@ -303,12 +303,13 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
             // 复位：右键关掉新场景页签 → 恢复原场景快照（parent/child 随该页签一并丢弃）。
             const int last = tabs.GetTabCount() - 1;
             char tabref[80];
-            std::snprintf(tabref, sizeof(tabref), "//DSEngineRoot/##SceneTabs/SceneTab%d", last);
+            std::snprintf(tabref, sizeof(tabref), "//DSEngineRoot/##SceneTabs/SceneTab%d", tabs.GetTabId(last));
             ctx->ItemClick(tabref, ImGuiMouseButton_Right);
             ctx->Yield();
             ctx->SetRef("//$FOCUSED");
             ctx->ItemClick("Close");
             ctx->Yield(2);
+            DiscardSceneCloseConfirmIfOpen(ctx);
             IM_CHECK_EQ(tabs.GetTabCount(), n0);
         };
     }

@@ -7,6 +7,7 @@
 namespace dse::editor {
 
 struct SceneTab {
+    int id = 0;                   // Stable per-tab id (used for ImGui tab ID; survives index shifts)
     std::string file_path;        // empty for "Untitled" new scenes
     std::string display_name;     // Display name (filename or "Untitled")
     bool dirty = false;           // Has unsaved changes since last save
@@ -50,6 +51,8 @@ public:
 
     int GetActiveIndex() const { return active_index_; }
     int GetTabCount() const { return static_cast<int>(tabs_.size()); }
+    /// Stable ImGui id of the tab at index (matches the "###SceneTab<id>" label suffix); -1 if out of range
+    int GetTabId(int index) const;
     const SceneTab& GetActiveTab() const { return tabs_[active_index_]; }
     SceneTab& GetActiveTab() { return tabs_[active_index_]; }
     std::string GetActiveDisplayName() const;
@@ -69,6 +72,9 @@ private:
     int active_index_ = -1;
     int last_undo_count_ = 0;       // For dirty detection
     int pending_switch_ = -1;       // Programmatic tab switch (menu-driven)
+    int next_tab_id_ = 0;           // Monotonic source of stable per-tab ids
+    int pending_close_ = -1;        // Tab index awaiting unsaved-changes confirmation
+    bool open_close_confirm_ = false; // Deferred OpenPopup flag for the close-confirm modal
 };
 
 } // namespace dse::editor

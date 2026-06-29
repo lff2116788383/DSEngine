@@ -70,6 +70,18 @@ void AddComponent(ImGuiTestContext* ctx, const char* component_name) {
     ctx->SetRef("//Inspector");
 }
 
+// Inspector「Remove Component」按钮 → 弹窗里点对应 MenuItem（label 即组件注册名）。
+void RemoveComponent(ImGuiTestContext* ctx, const char* component_name) {
+    ctx->WindowFocus("//Inspector");
+    ctx->SetRef("//Inspector");
+    ctx->ItemClick("Remove Component");
+    ctx->Yield();
+    ctx->SetRef("//$FOCUSED");
+    ctx->ItemClick(component_name);
+    ctx->Yield(2);
+    ctx->SetRef("//Inspector");
+}
+
 // 用例收尾：经 Hierarchy 右键「Delete Entity」删掉当前选中实体（编辑器正规删除路径，
 // 各系统随之清理）。否则这些挂了相机/光/刚体/粒子的实体会长期驻留场景，被后续每帧渲染，
 // 跨大量用例累积后可能拖崩进程——用例应自清理，避免污染整套运行。
@@ -239,6 +251,63 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<ParticleEmitterComponent>(ent).emit_rate - 50.0f) < 0.01f);
             DeleteSelectedEntity(ctx, ent);
+        };
+    }
+
+    // ── ④-6 增删组件的 Undo/Redo（Add: 可逆 add/remove；Remove: 撤销须连数据一并恢复）──────────
+    // 通过 UndoRedoManager 直接驱动 Undo/Redo（验证命令可逆性本身，避开 Edit 菜单动态标签的脆弱）；
+    // Edit 菜单 → mgr.Undo/Redo 的接线已由 dse-undo / camera3d_fov_edit_undo 等用例覆盖。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "add_remove_component_undo_redo");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            auto& mgr = GetUndoRedoManager();
+
+            // Add 组件 → 入撤销栈，组件出现，描述为 "Add Camera 3D"。
+            const int u0 = mgr.GetUndoCount();
+            AddComponent(ctx, "Camera 3D");
+            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
+            IM_CHECK_EQ(mgr.GetUndoCount(), u0 + 1);
+            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Add Camera 3D");
+
+            // 改 FOV 到特征值（便于稍后验证 Remove 的撤销恢复了数据，而非默认值）。
+            ctx->ItemInputValue("//Inspector/##cam3d_fov", 77.0f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
+
+            // 撤销 FOV、再撤销 Add → 组件消失；连做两次 Redo → 组件与 FOV 恢复（验证 Add 可逆）。
+            mgr.Undo(); ctx->Yield(2);   // 撤销 FOV
+            mgr.Undo(); ctx->Yield(2);   // 撤销 Add
+            IM_CHECK(Reg().valid(ent));
+            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
+            mgr.Redo(); ctx->Yield(2);   // 重做 Add
+            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
+            mgr.Redo(); ctx->Yield(2);   // 重做 FOV
+            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
+
+            // Remove 组件 → 入撤销栈，组件消失，描述为 "Remove Camera 3D"。
+            RemoveComponent(ctx, "Camera 3D");
+            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
+            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Remove Camera 3D");
+
+            // Undo（撤销 Remove）→ 组件连同 FOV=77 一并恢复（移除前 EntitySnapshot 抓取了实体组件，
+            // Undo 只补回当前缺失的 Camera3D 并带回其数据；实体本身未删，故 ent 句柄仍有效）。
+            mgr.Undo(); ctx->Yield(2);
+            IM_CHECK(Reg().valid(ent));
+            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
+            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
+
+            // Redo（重做 Remove）→ 组件再次消失（验证 Remove 可逆）。
+            mgr.Redo(); ctx->Yield(2);
+            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
+
+            // 收尾：删掉实体（此时无相机组件，直接走世界删除即可）。
+            if (Reg().valid(ent)) {
+                Services().engine->pipeline()->world().DestroyEntity(ent);
+                ctx->Yield();
+            }
+            IM_CHECK(!Reg().valid(ent));
         };
     }
 }

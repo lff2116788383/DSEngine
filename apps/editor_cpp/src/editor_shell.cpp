@@ -147,6 +147,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     // BeginPopupModal 的 ID 栈一致；故在菜单内只置标志，菜单结束后再真正打开。
     bool open_new_project_popup = false;
     bool open_about_popup = false;
+    bool open_exit_confirm = false;
 
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("File"))) {
@@ -274,7 +275,9 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Alt+F4")) {
-            RequestExit();
+            // 有未保存改动时先弹确认，避免直接退出丢数据。
+            if (tab_mgr.IsAnyTabDirty()) open_exit_confirm = true;
+            else RequestExit();
         }
         ImGui::EndMenu();
     }
@@ -527,6 +530,26 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(c) 2024-2026 DSEngine Contributors");
         ImGui::Separator();
         if (ImGui::Button("Close", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // ── Exit confirmation popup ──────────────────────────────────────────────
+    // 与 About 同样的延后 OpenPopup 模式：菜单内只置标志，菜单栏顶层作用域再 OpenPopup/BeginPopupModal。
+    if (open_exit_confirm) {
+        ImGui::OpenPopup("Unsaved Changes###ExitConfirm");
+    }
+    if (ImGui::BeginPopupModal("Unsaved Changes###ExitConfirm", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("There are scenes with unsaved changes.");
+        ImGui::TextUnformatted("Exit anyway? Unsaved changes will be lost.");
+        ImGui::Separator();
+        if (ImGui::Button("Exit Anyway", ImVec2(120, 0))) {
+            RequestExit();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();

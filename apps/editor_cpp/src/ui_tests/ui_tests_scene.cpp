@@ -287,16 +287,25 @@ void RegisterSceneTests(ImGuiTestEngine* e) {
                 std::string("File/Recent Scenes/") + scene.filename().string();
             ctx->SetRef("//DSEngineRoot");
             ctx->MenuClick(recent_item.c_str());
-            ctx->Yield(4);
 
-            // 断言 Recent 菜单的接线行为：点击该项触发 OpenScene(path) —— 该场景文件被打开为页签
-            // 且成为当前活动页签。这是 Recent Scenes 菜单的契约。
-            // 注：本用例只验证「菜单→OpenScene(正确路径)→打开并激活该页签」这一接线；磁盘场景内容的
-            // 序列化/反序列化正确性已由 persistence_roundtrip / persistence_multi_component_roundtrip 覆盖。
-            // （另：当已打开页签很多时，OpenScene 新建页签后的活动页签内容可能因 TabBar 基于索引 ID 的
-            //  切换时序而不稳定——这是产品侧已知脆弱点，已单独反馈，不在本用例断言范围内。）
+            // 断言：Recent 菜单触发 OpenScene(path)，场景被打开、激活并从磁盘加载出探针。
+            // 页签 ID 已稳定化（###SceneTab<stableId>），多页签下打开场景内容不再串台；轮询数帧让
+            // 打开/激活落定后即应稳定见到探针。
+            bool restored = false;
+            for (int i = 0; i < 12 && !restored; ++i) {
+                ctx->Yield();
+                entt::registry& r = SReg();
+                for (auto en : r.view<EditorNameComponent, TransformComponent>()) {
+                    if (r.get<EditorNameComponent>(en).name == "DSERecentProbe" &&
+                        std::abs(r.get<TransformComponent>(en).position.x - 8.75f) < 0.01f) {
+                        restored = true;
+                        break;
+                    }
+                }
+            }
             IM_CHECK(tabs.FindTabByPath(scene.string()) >= 0);
             IM_CHECK(fs::path(tabs.GetActiveFilePath()).filename() == scene.filename());
+            IM_CHECK(restored);
 
             // 收尾：关掉本用例新增的页签恢复起始页签数（从末尾关，不动前面索引），
             // 否则会抬高全套页签总数、触发依赖绝对页签索引的 dse-tabs 用例在多页签下的切换不稳。

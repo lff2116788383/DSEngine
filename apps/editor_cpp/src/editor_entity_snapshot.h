@@ -168,6 +168,70 @@ struct EntitySnapshot {
         restore(sibling_index, noop);
         return entity;
     }
+
+    /// Re-apply, onto an EXISTING entity, only those captured components that are
+    /// currently missing. Used to undo a single component removal: the removed type
+    /// is the only one absent, so it is restored with its captured data while every
+    /// other component (possibly edited since) is left untouched.
+    void RestoreMissingInPlace(entt::registry& reg, entt::entity entity) const {
+        auto restore = [&](const auto& field, auto reset_fn) {
+            using Opt = std::decay_t<decltype(field)>;
+            using C = typename Opt::value_type;
+            if (field.has_value() && !reg.all_of<C>(entity)) {
+                auto comp = field.value();
+                reset_fn(comp);
+                reg.emplace<C>(entity, std::move(comp));
+            }
+        };
+        auto noop = [](auto&) {};
+
+        restore(name, noop);
+        restore(transform, [](TransformComponent& t) { t.dirty = true; });
+        restore(script, noop);
+        restore(sprite_renderer, noop);
+        restore(ui_renderer, [](UIRendererComponent& u) {
+            u.is_hovered = false; u.is_pressed = false;
+            u.runtime_model = glm::mat4(1.0f);
+        });
+        restore(ui_label, [](UILabelComponent& l) {
+            l.runtime_glyph_entities.clear(); l.dirty = true;
+        });
+        restore(ui_anchor, noop);
+        restore(ui_grid_layout, noop);
+        restore(ui_canvas_scaler, noop);
+        restore(ui_animation, noop);
+        restore(ui_rich_text, [](UIRichTextComponent& r) { r.dirty = true; });
+        restore(rigidbody_2d, [](RigidBody2DComponent& r) { r.runtime_body = nullptr; });
+        restore(particle_emitter, [](ParticleEmitterComponent& p) {
+            p.particles.clear(); p.emit_accumulator = 0.0f; p.pending_burst = 0;
+        });
+        restore(camera_3d, noop);
+        restore(directional_light, noop);
+        restore(point_light, noop);
+        restore(spot_light, noop);
+        restore(mesh_renderer, noop);
+        restore(animator_3d, noop);
+        restore(free_camera, noop);
+        restore(terrain, noop);
+        restore(sub_scene, noop);
+        restore(post_process, noop);
+        restore(rigidbody_3d, [](dse::RigidBody3DComponent& r) { r.runtime_body = nullptr; });
+        restore(box_collider_3d, [](dse::BoxCollider3DComponent& c) { c.runtime_shape = nullptr; });
+        restore(sphere_collider_3d, [](dse::SphereCollider3DComponent& c) { c.runtime_shape = nullptr; });
+        restore(capsule_collider_3d, [](dse::CapsuleCollider3DComponent& c) { c.runtime_shape = nullptr; });
+        restore(mesh_collider_3d, [](dse::MeshCollider3DComponent& c) { c.runtime_shape = nullptr; });
+        restore(audio_source, [](AudioSourceComponent& a) {
+            a.runtime_handle = 0; a.is_playing = false; a.restart_requested = false;
+        });
+        restore(audio_listener, noop);
+        restore(particle_system_3d, [](dse::ParticleSystem3DComponent& p) {
+            p.particles.clear(); p.emission_accumulator = 0.0f;
+            p.active_particle_count = 0; p.instance_vbo = 0;
+            p.texture_handle = 0; p.initialized = false;
+        });
+        restore(parent, noop);
+        restore(sibling_index, noop);
+    }
 };
 
 } // namespace dse::editor
