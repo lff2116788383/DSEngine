@@ -21,6 +21,9 @@ void PrintUsage() {
         << "  AssetBuilder <input.gltf/glb/fbx> <output.dmesh>\n"
         << "  AssetBuilder <input.gltf/glb/fbx> --out-dir <output_dir>\n"
         << "  AssetBuilder --texture <input.png/jpg/...> <output.dtex> [options]\n\n"
+        << "Mesh/animation options:\n"
+        << "  --no-anim-compress   write raw v2 .danim (default: v3 quantized)\n"
+        << "  --no-anim-reduce     keep all keyframes (default: error-threshold decimation)\n\n"
         << "Texture options:\n"
         << "  --format <bc1|bc1srgb|bc3|bc3srgb|bc4|bc5>   target BCn format (default bc3)\n"
         << "  --no-mips                                    do not generate a mip chain\n"
@@ -141,12 +144,22 @@ int main(int argc, char** argv) {
         return RunTextureCook(argc, argv);
     }
 
-    if (argc != 3 && argc != 4) {
+    // Strip recognized animation-compression flags so the remaining args are positional.
+    AnimCompressOptions anim_opts;  // quantize + reduce on by default
+    std::vector<std::string> pos_args;
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--no-anim-compress") { anim_opts.quantize = false; continue; }
+        if (a == "--no-anim-reduce")   { anim_opts.reduce_keyframes = false; continue; }
+        pos_args.push_back(a);
+    }
+
+    if (pos_args.size() != 2 && pos_args.size() != 3) {
         std::cerr << "[AssetBuilder] Invalid arguments. Use --help for usage." << std::endl;
         return 1;
     }
 
-    const std::filesystem::path input_path = argv[1];
+    const std::filesystem::path input_path = pos_args[0];
     if (!HasSupportedInputExtension(input_path)) {
         std::cerr << "[AssetBuilder] Unsupported input extension: " << input_path.extension().string()
                   << ". Only .gltf/.glb/.fbx are supported." << std::endl;
@@ -159,17 +172,17 @@ int main(int argc, char** argv) {
     std::filesystem::path output_dir;
     std::string base_name;
 
-    if (argc == 3) {
-        output_dmesh_path = argv[2];
+    if (pos_args.size() == 2) {
+        output_dmesh_path = pos_args[1];
         output_dir = output_dmesh_path.parent_path().empty() ? std::filesystem::path(".") : output_dmesh_path.parent_path();
         base_name = output_dmesh_path.stem().string();
     } else {
-        const std::string option = argv[2];
+        const std::string option = pos_args[1];
         if (option != "--out-dir") {
             std::cerr << "[AssetBuilder] Unknown option: " << option << ". Use --help for usage." << std::endl;
             return 1;
         }
-        output_dir = argv[3];
+        output_dir = pos_args[2];
         base_name = input_path.stem().string();
         output_dmesh_path = output_dir / (base_name + ".dmesh");
     }
@@ -231,8 +244,11 @@ int main(int argc, char** argv) {
     if (scene.animations.empty()) {
         std::cout << "[AssetBuilder] Skip danim: no animation data in source." << std::endl;
     } else {
-        std::cout << "[AssetBuilder] Cooking danim: " << danim_path.string() << std::endl;
-        if (!cooker.CookToDanim(scene, output_dir.string(), base_name)) {
+        std::cout << "[AssetBuilder] Cooking danim: " << danim_path.string()
+                  << (anim_opts.quantize ? " (v3 quantized" : " (v2 raw")
+                  << (anim_opts.quantize && anim_opts.reduce_keyframes ? "+reduced)" : ")")
+                  << std::endl;
+        if (!cooker.CookToDanim(scene, output_dir.string(), base_name, anim_opts)) {
             std::cerr << "[AssetBuilder] Failed to cook danim: " << danim_path.string() << std::endl;
             return 1;
         }

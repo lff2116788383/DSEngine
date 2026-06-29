@@ -3,6 +3,7 @@
 
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/assets/compiler/anim_compress.h"
 #include "engine/ecs/components_3d.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -103,6 +104,67 @@ struct AnimSampleBuffer {
     }
 };
 
+// Parse the channel name table (shared v2/v3 layout). descs_bytes is the total
+// size of the per-channel descriptor array between the header and the name table.
+inline void ParseChannelNameTable(
+    const uint8_t* data, size_t data_size, uint32_t channel_count, size_t descs_bytes,
+    std::vector<std::string>& out_names)
+{
+    const uint8_t* nt_ptr = data + sizeof(asset::compiler::AnimHeader) + descs_bytes;
+    if (nt_ptr + sizeof(uint32_t) > data + data_size) return;
+    uint32_t nt_total = 0;
+    std::memcpy(&nt_total, nt_ptr, sizeof(uint32_t));
+    const uint8_t* np = nt_ptr + sizeof(uint32_t);
+    const uint8_t* ne = nt_ptr + nt_total;
+    if (ne > data + data_size) ne = data + data_size;
+    out_names.reserve(channel_count);
+    for (uint32_t ci = 0; ci < channel_count && np + 2 <= ne; ++ci) {
+        uint16_t nl = static_cast<uint16_t>(np[0] | (np[1] << 8));
+        np += 2;
+        if (np + nl > ne) break;
+        out_names.emplace_back(reinterpret_cast<const char*>(np), nl);
+        np += nl;
+    }
+}
+
+// v3 (quantized + keyframe-reduced) decode path.
+inline bool EvaluateClipV3(
+    const uint8_t* data, size_t data_size,
+    const asset::compiler::AnimHeader* header,
+    float current_time,
+    const std::unordered_map<std::string, int>& bone_name_to_index,
+    uint32_t bone_count,
+    AnimSampleBuffer& sample)
+{
+    const size_t descs_bytes = static_cast<size_t>(header->channel_count)
+        * sizeof(asset::compiler::AnimChannelDescV3);
+    if (sizeof(asset::compiler::AnimHeader) + descs_bytes > data_size) return false;
+    const auto* channels = reinterpret_cast<const asset::compiler::AnimChannelDescV3*>(
+        data + sizeof(asset::compiler::AnimHeader));
+
+    std::vector<std::string> channel_names;
+    if (!bone_name_to_index.empty())
+        ParseChannelNameTable(data, data_size, header->channel_count, descs_bytes, channel_names);
+
+    for (uint32_t i = 0; i < header->channel_count; ++i) {
+        const auto& ch = channels[i];
+        int target_bone = ch.target_node_index;
+        if (i < static_cast<uint32_t>(channel_names.size()) && !channel_names[i].empty()) {
+            auto it = bone_name_to_index.find(channel_names[i]);
+            if (it != bone_name_to_index.end()) target_bone = it->second;
+            else continue;
+        }
+        if (target_bone < 0 || target_bone >= static_cast<int>(bone_count)) continue;
+
+        asset::compiler::ChannelSampleV3 s =
+            asset::compiler::SampleChannelV3(data, data_size, ch, current_time);
+        if (s.has_position) { sample.positions[target_bone] = s.position; sample.touched[target_bone] = true; }
+        if (s.has_rotation) { sample.rotations[target_bone] = s.rotation; sample.touched[target_bone] = true; }
+        if (s.has_scale)    { sample.scales[target_bone] = s.scale;       sample.touched[target_bone] = true; }
+    }
+    return true;
+}
+
 inline bool EvaluateClip(
     AssetManager& am,
     const std::string& anim_path,
@@ -121,6 +183,12 @@ inline bool EvaluateClip(
     const auto* header = reinterpret_cast<const asset::compiler::AnimHeader*>(data);
     if (!IsValidAnimHeader(header)) return false;
     out_duration = header->duration;
+
+    if (header->version == asset::compiler::kDanimVersionQuantized) {
+        return EvaluateClipV3(data, data_size, header, current_time,
+                              bone_name_to_index, bone_count, sample);
+    }
+
     const auto* channels = reinterpret_cast<const asset::compiler::AnimChannelDesc*>(
         data + sizeof(asset::compiler::AnimHeader));
 

@@ -919,7 +919,8 @@ bool MeshCooker::CookToDmat(const RawSceneData& scene, const std::string& output
     return true;
 }
 
-bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& output_dir, const std::string& base_name) {
+bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& output_dir, const std::string& base_name,
+                             const AnimCompressOptions& anim_opts) {
     if (scene.animations.empty()) return false;
     
     // 我们目前只烘焙第一个动画作为示例
@@ -927,7 +928,15 @@ bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& outpu
     std::string danim_path = output_dir + "/" + base_name + ".danim";
     std::ofstream out(danim_path, std::ios::binary);
     if (!out) return false;
-    
+
+    // v3：量化 + 关键帧抽取（运行时向后兼容 v2，旧文件继续走 v2 路径）
+    if (anim_opts.quantize) {
+        std::vector<uint8_t> blob = BuildDanimV3(anim, anim_opts);
+        out.write(reinterpret_cast<const char*>(blob.data()),
+                  static_cast<std::streamsize>(blob.size()));
+        return static_cast<bool>(out);
+    }
+
     AnimHeader header;
     header.version = 2;
     header.duration = anim.duration;
