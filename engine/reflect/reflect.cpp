@@ -7,11 +7,14 @@ namespace dse::reflect {
 
 namespace {
 
-// TypeInfo 存放在 deque 中以保证指针稳定（map 仅存指针）。
+// TypeInfo / EnumInfo 存放在 deque 中以保证指针稳定（map 仅存指针）。
 struct Registry {
     std::deque<TypeInfo> storage;
     std::unordered_map<std::string, TypeInfo*> by_name;
     std::unordered_map<std::type_index, TypeInfo*> by_type;
+
+    std::deque<EnumInfo> enum_storage;
+    std::unordered_map<std::type_index, EnumInfo*> enum_by_type;
 };
 
 Registry& registry() {
@@ -58,6 +61,29 @@ std::vector<const TypeInfo*> Reflection::All() {
     out.reserve(r.storage.size());
     for (const TypeInfo& ti : r.storage) out.push_back(&ti);
     return out;
+}
+
+EnumBuilder Reflection::AddEnum(const char* name, std::type_index type) {
+    Registry& r = registry();
+    auto it = r.enum_by_type.find(type);
+    EnumInfo* ei = nullptr;
+    if (it != r.enum_by_type.end()) {
+        ei = it->second;
+        ei->entries.clear();  // 重复注册：重建名值对
+    } else {
+        r.enum_storage.emplace_back();
+        ei = &r.enum_storage.back();
+        r.enum_by_type.emplace(type, ei);
+    }
+    ei->name = name;
+    ei->type = type;
+    return EnumBuilder(ei);
+}
+
+const EnumInfo* Reflection::FindEnum(std::type_index type) {
+    Registry& r = registry();
+    auto it = r.enum_by_type.find(type);
+    return it != r.enum_by_type.end() ? it->second : nullptr;
 }
 
 }  // namespace dse::reflect

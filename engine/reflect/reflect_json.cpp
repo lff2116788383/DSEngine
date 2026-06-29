@@ -57,6 +57,24 @@ void SerializeReflected(const TypeInfo& type, const void* instance,
                 v.SetString(s.c_str(), static_cast<rapidjson::SizeType>(s.size()), allocator);
                 break;
             }
+            case FieldType::Enum: {
+                // 优先写出枚举名（对重排序/数值变更稳健）；未知值回退为整数。
+                const long long iv = f.get_enum(instance);
+                const char* name = nullptr;
+                if (f.enum_info) {
+                    for (const EnumEntry& e : f.enum_info->entries) {
+                        if (e.value == iv) { name = e.name.c_str(); break; }
+                    }
+                }
+                if (name) v.SetString(name, allocator);
+                else      v.SetInt64(iv);
+                break;
+            }
+            case FieldType::Struct: {
+                v.SetObject();
+                if (f.struct_info) SerializeReflected(*f.struct_info, p, v, allocator);
+                break;
+            }
         }
         out.AddMember(rapidjson::Value(f.name.c_str(), allocator), v, allocator);
     }
@@ -82,6 +100,21 @@ void DeserializeReflected(const TypeInfo& type, void* instance,
             case FieldType::Vec3:   ReadFloatArray(v, &static_cast<glm::vec3*>(p)->x, 3); break;
             case FieldType::Vec4:   ReadFloatArray(v, &static_cast<glm::vec4*>(p)->x, 4); break;
             case FieldType::String: if (v.IsString()) *static_cast<std::string*>(p) = v.GetString(); break;
+            case FieldType::Enum: {
+                if (v.IsString()) {
+                    if (f.enum_info) {
+                        for (const EnumEntry& e : f.enum_info->entries) {
+                            if (e.name == v.GetString()) { f.set_enum(instance, e.value); break; }
+                        }
+                    }
+                } else if (v.IsInt64() || v.IsInt()) {
+                    f.set_enum(instance, v.GetInt64());
+                }
+                break;
+            }
+            case FieldType::Struct:
+                if (v.IsObject() && f.struct_info) DeserializeReflected(*f.struct_info, p, v);
+                break;
         }
     }
 }

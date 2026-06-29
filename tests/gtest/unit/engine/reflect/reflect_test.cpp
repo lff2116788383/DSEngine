@@ -20,6 +20,41 @@ const FieldInfo* FindField(const TypeInfo& ti, const std::string& name) {
     return nullptr;
 }
 
+// ─── 枚举/嵌套结构测试类型（自包含，不依赖具体组件） ──────────────────────────
+enum class TestColorMode { Off = 0, Linear = 1, SRGB = 2 };
+
+struct TestInner {
+    float a = 1.0f;
+    int   b = 2;
+};
+
+struct TestOuter {
+    bool          on = true;
+    TestColorMode mode = TestColorMode::Linear;
+    TestInner     inner;
+    glm::vec3     tint{0.0f, 0.0f, 0.0f};
+};
+
+// 注册顺序：枚举与嵌套类型须先于引用它们的外层类型注册。
+void RegisterTestTypes() {
+    DSE_REFLECT_ENUM(TestColorMode)
+        .value("Off", TestColorMode::Off)
+        .value("Linear", TestColorMode::Linear)
+        .value("SRGB", TestColorMode::SRGB);
+    {
+        auto t = DSE_REFLECT_TYPE(TestInner);
+        t.field("a", &TestInner::a);
+        t.field("b", &TestInner::b);
+    }
+    {
+        auto t = DSE_REFLECT_TYPE(TestOuter);
+        t.field("on", &TestOuter::on);
+        t.field("mode", &TestOuter::mode);
+        t.field("inner", &TestOuter::inner);
+        t.field("tint", &TestOuter::tint).color();
+    }
+}
+
 }  // namespace
 
 class ReflectionTest : public ::testing::Test {
@@ -234,4 +269,113 @@ TEST_F(ReflectionTest, DeserializeIgnoresNonObject) {
     const float default_density = dst.density;
     DeserializeReflected(*ti, &dst, doc);  // 非 object，应安全无操作
     EXPECT_FLOAT_EQ(dst.density, default_density);
+}
+
+// ─── 枚举支持 ─────────────────────────────────────────────────────────────────
+
+class ReflectionEnumStructTest : public ::testing::Test {
+protected:
+    void SetUp() override { RegisterTestTypes(); }
+};
+
+TEST_F(ReflectionEnumStructTest, EnumFieldCarriesEnumInfo) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+    const FieldInfo* mode = FindField(*ti, "mode");
+    ASSERT_NE(mode, nullptr);
+    EXPECT_EQ(mode->type, FieldType::Enum);
+    ASSERT_NE(mode->enum_info, nullptr);
+    ASSERT_EQ(mode->enum_info->entries.size(), 3u);
+    EXPECT_EQ(mode->enum_info->entries[0].name, "Off");
+    EXPECT_EQ(mode->enum_info->entries[2].name, "SRGB");
+    EXPECT_EQ(mode->enum_info->entries[2].value, 2);
+
+    const EnumInfo* by_tpl = Reflection::FindEnum<TestColorMode>();
+    EXPECT_EQ(by_tpl, mode->enum_info);
+}
+
+TEST_F(ReflectionEnumStructTest, EnumSerializesAsNameAndRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+
+    TestOuter src;
+    src.mode = TestColorMode::SRGB;
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj.HasMember("mode"));
+    ASSERT_TRUE(obj["mode"].IsString());           // 写出枚举名而非整数
+    EXPECT_STREQ(obj["mode"].GetString(), "SRGB");
+
+    TestOuter dst;  // 默认 Linear
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_EQ(dst.mode, TestColorMode::SRGB);
+}
+
+TEST_F(ReflectionEnumStructTest, EnumDeserializesFromInteger) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    doc.AddMember("mode", 2, doc.GetAllocator());   // 整数回退路径
+
+    TestOuter dst;
+    DeserializeReflected(*ti, &dst, doc);
+    EXPECT_EQ(dst.mode, TestColorMode::SRGB);
+}
+
+TEST_F(ReflectionEnumStructTest, UnknownEnumNameKeepsDefault) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    doc.AddMember("mode", "Bogus", doc.GetAllocator());
+
+    TestOuter dst;  // 默认 Linear
+    DeserializeReflected(*ti, &dst, doc);
+    EXPECT_EQ(dst.mode, TestColorMode::Linear);
+}
+
+// ─── 嵌套结构支持 ─────────────────────────────────────────────────────────────
+
+TEST_F(ReflectionEnumStructTest, NestedStructFieldCarriesStructInfo) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+    const FieldInfo* inner = FindField(*ti, "inner");
+    ASSERT_NE(inner, nullptr);
+    EXPECT_EQ(inner->type, FieldType::Struct);
+    ASSERT_NE(inner->struct_info, nullptr);
+    EXPECT_EQ(inner->struct_info->name, "TestInner");
+    EXPECT_EQ(inner->struct_info->fields.size(), 2u);
+}
+
+TEST_F(ReflectionEnumStructTest, NestedStructSerializesAsObjectAndRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<TestOuter>();
+    ASSERT_NE(ti, nullptr);
+
+    TestOuter src;
+    src.inner.a = 4.5f;
+    src.inner.b = 17;
+    src.mode = TestColorMode::Off;
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj.HasMember("inner"));
+    ASSERT_TRUE(obj["inner"].IsObject());           // 嵌套写出为对象
+    ASSERT_TRUE(obj["inner"].HasMember("a"));
+    EXPECT_FLOAT_EQ(obj["inner"]["a"].GetFloat(), 4.5f);
+
+    TestOuter dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_FLOAT_EQ(dst.inner.a, 4.5f);
+    EXPECT_EQ(dst.inner.b, 17);
+    EXPECT_EQ(dst.mode, TestColorMode::Off);
 }

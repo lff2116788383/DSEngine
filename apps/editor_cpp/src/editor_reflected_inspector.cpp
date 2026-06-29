@@ -23,9 +23,9 @@ using dse::reflect::FieldInfo;
 using dse::reflect::FieldType;
 using dse::reflect::TypeInfo;
 
-/// 字段值快照（用于撤销）。覆盖反射核心支持的全部 FieldType。
+/// 字段值快照（用于撤销）。覆盖反射核心支持的全部 FieldType（枚举以 long long 存底层整数）。
 using FieldValue = std::variant<bool, int, unsigned int, float, double,
-                                glm::vec2, glm::vec3, glm::vec4, std::string>;
+                                glm::vec2, glm::vec3, glm::vec4, std::string, long long>;
 
 FieldValue ReadField(const FieldInfo& f, void* inst) {
     void* p = f.get(inst);
@@ -39,6 +39,8 @@ FieldValue ReadField(const FieldInfo& f, void* inst) {
         case FieldType::Vec3:   return *static_cast<glm::vec3*>(p);
         case FieldType::Vec4:   return *static_cast<glm::vec4*>(p);
         case FieldType::String: return *static_cast<std::string*>(p);
+        case FieldType::Enum:   return f.get_enum ? f.get_enum(inst) : 0LL;
+        case FieldType::Struct: break;  // 嵌套结构按子字段单独快照，不在此整体处理
     }
     return FieldValue{};
 }
@@ -55,6 +57,8 @@ void WriteField(const FieldInfo& f, void* inst, const FieldValue& v) {
         case FieldType::Vec3:   *static_cast<glm::vec3*>(p) = std::get<glm::vec3>(v); break;
         case FieldType::Vec4:   *static_cast<glm::vec4*>(p) = std::get<glm::vec4>(v); break;
         case FieldType::String: *static_cast<std::string*>(p) = std::get<std::string>(v); break;
+        case FieldType::Enum:   if (f.set_enum) f.set_enum(inst, std::get<long long>(v)); break;
+        case FieldType::Struct: break;
     }
 }
 
@@ -130,14 +134,63 @@ bool DrawWidget(const char* id, const FieldInfo& f, void* inst) {
             if (ImGui::InputText(id, buf, sizeof(buf))) { *s = buf; changed = true; }
             break;
         }
+        case FieldType::Enum: {
+            const long long cur = f.get_enum ? f.get_enum(inst) : 0LL;
+            const char* preview = "<?>";
+            if (f.enum_info) {
+                for (const auto& e : f.enum_info->entries)
+                    if (e.value == cur) { preview = e.name.c_str(); break; }
+            }
+            if (ImGui::BeginCombo(id, preview)) {
+                if (f.enum_info) {
+                    for (const auto& e : f.enum_info->entries) {
+                        const bool sel = (e.value == cur);
+                        if (ImGui::Selectable(e.name.c_str(), sel)) {
+                            if (f.set_enum) f.set_enum(inst, e.value);
+                            changed = true;
+                        }
+                        if (sel) ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            break;
+        }
+        case FieldType::Struct:
+            break;  // 结构体由 DrawField 以子树递归绘制，不走单控件路径
     }
     return changed;
 }
+
+void DrawFields(EditorContext& context, const TypeInfo& ti, void* inst,
+                const std::function<void*()>& resolve);
 
 void DrawField(EditorContext& context, const TypeInfo& ti, std::size_t idx,
                void* inst, const std::function<void*()>& resolve) {
     const FieldInfo& f = ti.fields[idx];
     const char* label = f.attr.label ? f.attr.label : f.name.c_str();
+
+    // 嵌套结构：渲染为可折叠子树，对其子字段递归（resolve 组合：先解析外层再偏移到该字段）。
+    if (f.type == FieldType::Struct) {
+        if (!f.struct_info) return;
+        ImGui::AlignTextToFramePadding();
+        const std::string node_id = label + std::string("##") + ti.name + "." + f.name;
+        const bool open = ImGui::TreeNodeEx(node_id.c_str(), ImGuiTreeNodeFlags_SpanAvailWidth);
+        ImGui::NextColumn();
+        ImGui::NextColumn();
+        if (open) {
+            const FieldInfo* fp = &f;
+            std::function<void*()> nested = [resolve, fp]() -> void* {
+                void* outer = resolve();
+                return outer ? fp->get(outer) : nullptr;
+            };
+            if (void* nested_inst = nested()) {
+                DrawFields(context, *f.struct_info, nested_inst, nested);
+            }
+            ImGui::TreePop();
+        }
+        return;
+    }
 
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted(label);
@@ -184,6 +237,14 @@ void DrawField(EditorContext& context, const TypeInfo& ti, std::size_t idx,
     ImGui::NextColumn();
 }
 
+void DrawFields(EditorContext& context, const TypeInfo& ti, void* inst,
+                const std::function<void*()>& resolve) {
+    for (std::size_t i = 0; i < ti.fields.size(); ++i) {
+        if (ti.fields[i].attr.hidden) continue;
+        DrawField(context, ti, i, inst, resolve);
+    }
+}
+
 } // namespace
 
 bool DrawReflectedSection(EditorContext& context,
@@ -196,10 +257,7 @@ bool DrawReflectedSection(EditorContext& context,
 
     ImGui::Columns(2, "refl_cols", false);
     ImGui::SetColumnWidth(0, 130.0f);
-    for (std::size_t i = 0; i < type_info.fields.size(); ++i) {
-        if (type_info.fields[i].attr.hidden) continue;
-        DrawField(context, type_info, i, inst, resolve_instance);
-    }
+    DrawFields(context, type_info, inst, resolve_instance);
     ImGui::Columns(1);
     return true;
 }
