@@ -181,25 +181,11 @@ bool Scene::Serialize(const std::string& filepath) {
         }
 
         if (world.registry().all_of<dse::DirectionalLight3DComponent>(entity)) {
+            // 通用反射驱动：cascade_splits 现已作为固定数组反射，JSON 键/格式与原手写一致。
             const auto& light = world.registry().get<dse::DirectionalLight3DComponent>(entity);
             rapidjson::Value light_json(rapidjson::kObjectType);
-            light_json.AddMember("enabled", light.enabled, allocator);
-            rapidjson::Value direction(rapidjson::kArrayType);
-            direction.PushBack(light.direction.x, allocator).PushBack(light.direction.y, allocator).PushBack(light.direction.z, allocator);
-            light_json.AddMember("direction", direction, allocator);
-            rapidjson::Value color(rapidjson::kArrayType);
-            color.PushBack(light.color.x, allocator).PushBack(light.color.y, allocator).PushBack(light.color.z, allocator);
-            light_json.AddMember("color", color, allocator);
-            light_json.AddMember("intensity", light.intensity, allocator);
-            light_json.AddMember("ambient_intensity", light.ambient_intensity, allocator);
-            light_json.AddMember("shadow_strength", light.shadow_strength, allocator);
-            light_json.AddMember("cast_shadow", light.cast_shadow, allocator);
-            rapidjson::Value cascade_splits(rapidjson::kArrayType);
-            for (int i = 0; i < CSM_CASCADES; ++i) {
-                cascade_splits.PushBack(light.cascade_splits[i], allocator);
-            }
-            light_json.AddMember("cascade_splits", cascade_splits, allocator);
-            light_json.AddMember("cascade_split_lambda", light.cascade_split_lambda, allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::DirectionalLight3DComponent>())
+                dse::reflect::SerializeReflected(*ti, &light, light_json, allocator);
             components.AddMember("DirectionalLight3DComponent", light_json, allocator);
         }
 
@@ -537,40 +523,10 @@ bool Scene::Deserialize(const std::string& filepath) {
         }
 
         if (components.HasMember("DirectionalLight3DComponent") && components["DirectionalLight3DComponent"].IsObject()) {
-            const auto& light_json = components["DirectionalLight3DComponent"];
+            // 通用反射驱动：键名/格式与原手写一致，对旧 .scene 向后兼容（缺失字段保留默认值）。
             dse::DirectionalLight3DComponent light;
-            if (light_json.HasMember("enabled") && light_json["enabled"].IsBool()) {
-                light.enabled = light_json["enabled"].GetBool();
-            }
-            if (light_json.HasMember("direction") && light_json["direction"].IsArray() && light_json["direction"].Size() == 3) {
-                const auto& d = light_json["direction"].GetArray();
-                light.direction = glm::vec3(d[0].GetFloat(), d[1].GetFloat(), d[2].GetFloat());
-            }
-            if (light_json.HasMember("color") && light_json["color"].IsArray() && light_json["color"].Size() == 3) {
-                const auto& c = light_json["color"].GetArray();
-                light.color = glm::vec3(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat());
-            }
-            if (light_json.HasMember("intensity") && light_json["intensity"].IsNumber()) {
-                light.intensity = light_json["intensity"].GetFloat();
-            }
-            if (light_json.HasMember("ambient_intensity") && light_json["ambient_intensity"].IsNumber()) {
-                light.ambient_intensity = light_json["ambient_intensity"].GetFloat();
-            }
-            if (light_json.HasMember("shadow_strength") && light_json["shadow_strength"].IsNumber()) {
-                light.shadow_strength = light_json["shadow_strength"].GetFloat();
-            }
-            if (light_json.HasMember("cast_shadow") && light_json["cast_shadow"].IsBool()) {
-                light.cast_shadow = light_json["cast_shadow"].GetBool();
-            }
-            if (light_json.HasMember("cascade_splits") && light_json["cascade_splits"].IsArray()) {
-                const auto& splits = light_json["cascade_splits"].GetArray();
-                for (rapidjson::SizeType i = 0; i < splits.Size() && i < CSM_CASCADES; ++i) {
-                    light.cascade_splits[i] = splits[i].GetFloat();
-                }
-            }
-            if (light_json.HasMember("cascade_split_lambda") && light_json["cascade_split_lambda"].IsNumber()) {
-                light.cascade_split_lambda = light_json["cascade_split_lambda"].GetFloat();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::DirectionalLight3DComponent>())
+                dse::reflect::DeserializeReflected(*ti, &light, components["DirectionalLight3DComponent"]);
             world.registry().emplace<dse::DirectionalLight3DComponent>(entity, light);
         }
 
