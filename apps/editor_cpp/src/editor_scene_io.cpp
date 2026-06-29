@@ -542,6 +542,7 @@ static bool LoadSceneBinary(entt::registry& registry,
             if (!RPod(f, a.speed)||!RPod(f, a.loop)||!RPod(f, a.use_anim_tree)) return false;
             if (!RStr(f, a.blend_parameter)||!RPod(f, a.blend_parameter_value)) return false;
             uint32_t nc = 0; if (!RPod(f, nc)) return false;
+            if (nc > 65536u) return false;  // 损坏场景可能给出近 4G 的 nc → resize 超大分配触发 bad_alloc
             a.blend_nodes.resize(nc);
             for (auto& nd : a.blend_nodes) {
                 if (!RStr(f, nd.name)||!RStr(f, nd.danim_path)) return false;

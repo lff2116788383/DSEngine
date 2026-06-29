@@ -220,7 +220,9 @@ void AssetDatabase::LoadDbCache(const std::filesystem::path& cache_path,
     if (!DbR32(f, magic) || magic != kDbCacheMagic) return;
     if (!DbR32(f, version) || version != kDbCacheVersion) return;
     if (!DbR32(f, count)) return;
-    out.reserve(count);
+    // count 来自磁盘缓存，畸形/损坏文件可能给出近 4G 的值；reserve(count) 会立即超大分配触发 bad_alloc。
+    // 逐条读取在 EOF 处会 fail-fast 返回，故只需把预留上限夹到合理值，超量部分按需增长即可。
+    out.reserve(count < 1000000u ? count : 1000000u);
     for (uint32_t i = 0; i < count; ++i) {
         std::string rel_path;
         CachedDbEntry e;

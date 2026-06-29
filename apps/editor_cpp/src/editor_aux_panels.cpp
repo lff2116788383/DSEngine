@@ -794,6 +794,11 @@ const AnimClipCache* GetOrLoadAnimClipCache(const std::string& anim_path, AssetM
     const auto* header = reinterpret_cast<const dse::asset::compiler::AnimHeader*>(data);
     if (header->magic[0]!='D'||header->magic[1]!='S'||header->magic[2]!='E'||header->magic[3]!='A') return nullptr;
     if (header->duration < 0.0f) return nullptr;
+    // channel_count 来自资源文件头，未校验时下方 channels[i]（i<channel_count）会越界读堆、
+    // 且 reserve(channel_count) 可能超大分配。要求整个 channel 描述数组落在文件内，否则判损坏。
+    if (header->channel_count > (data_size - sizeof(dse::asset::compiler::AnimHeader))
+                                   / sizeof(dse::asset::compiler::AnimChannelDesc))
+        return nullptr;
 
     AnimClipCache cache;
     cache.duration = header->duration > 0.0f ? header->duration : 2.0f;
