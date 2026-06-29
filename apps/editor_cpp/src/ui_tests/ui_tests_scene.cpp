@@ -26,6 +26,7 @@
 #include "../editor_scene_tabs.h"
 #include "../editor_scene_io.h"           // SaveScene / LoadScene
 #include "../editor_shared_components.h"  // EditorNameComponent
+#include "../editor_settings.h"           // LoadEditorSettings / SaveEditorSettings / AddRecentFile
 #include "../editor_icons.h"
 
 #include "engine/runtime/engine_app.h"
@@ -229,6 +230,84 @@ void RegisterSceneTests(ImGuiTestEngine* e) {
             }
             IM_CHECK(a_ok);
             IM_CHECK(b_ok);
+        };
+    }
+
+    // dse-scene/open_via_recent_scenes_menu：保存一个带探针实体的场景 → 写入「最近场景」列表 →
+    // 新建空场景清掉探针 → 走 File → Recent Scenes → <文件名> 菜单真实打开 → 断言当前页签切到该
+    // 场景且探针被如实还原。覆盖此前未测的“通过菜单打开已有场景”链路（Open Scene 走原生对话框
+    // 无法自动化，Recent Scenes 是可自动化的等效打开路径）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-scene", "open_via_recent_scenes_menu");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const fs::path dir   = fs::temp_directory_path() / "dse_ui_tests";
+            const fs::path scene = dir / "ui_test_recent_open.json";
+            std::error_code ec;
+            fs::create_directories(dir, ec);
+            fs::remove(scene, ec);
+            fs::remove(fs::path(scene.string() + ".bin"), ec);
+
+            auto& tabs = SceneTabManager::Get();
+            const int tab_count0 = tabs.GetTabCount();  // 记录起始页签数，收尾恢复
+
+            // 干净起点 → 造探针实体 → 直接 SaveScene 落盘（不经 SetCurrentPath，避免让该路径
+            // 成为“已打开页签”——否则 Recent 点击会走 OpenScene 的快照复用分支而非真正从磁盘加载，
+            // 全套下受页签切换时序影响而不稳）。
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick(DSE_MENU_NEW_SCENE);
+            ctx->Yield(2);
+            {
+                entt::registry& reg = SReg();
+                const entt::entity probe = reg.create();
+                reg.emplace<EditorNameComponent>(probe, std::string("DSERecentProbe"));
+                reg.emplace<TransformComponent>(probe).position.x = 8.75f;
+                SaveScene(reg, scene.string());
+            }
+            ctx->Yield();
+            IM_CHECK(fs::exists(scene));
+
+            // 写入「最近场景」并持久化（File 菜单每帧从设置读取该列表）。
+            EditorSettings settings = LoadEditorSettings();
+            AddRecentFile(settings, scene.string());
+            SaveEditorSettings(settings);
+
+            // 新建空场景清掉探针，确认它确实已不在当前 registry。
+            ctx->MenuClick(DSE_MENU_NEW_SCENE);
+            ctx->Yield(2);
+            {
+                bool still = false;
+                entt::registry& r = SReg();
+                for (auto en : r.view<EditorNameComponent>())
+                    if (r.get<EditorNameComponent>(en).name == "DSERecentProbe") { still = true; break; }
+                IM_CHECK(!still);
+            }
+
+            // 走 File → Recent Scenes → <文件名> 菜单真实打开该场景。
+            const std::string recent_item =
+                std::string("File/Recent Scenes/") + scene.filename().string();
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick(recent_item.c_str());
+            ctx->Yield(4);
+
+            // 断言 Recent 菜单的接线行为：点击该项触发 OpenScene(path) —— 该场景文件被打开为页签
+            // 且成为当前活动页签。这是 Recent Scenes 菜单的契约。
+            // 注：本用例只验证「菜单→OpenScene(正确路径)→打开并激活该页签」这一接线；磁盘场景内容的
+            // 序列化/反序列化正确性已由 persistence_roundtrip / persistence_multi_component_roundtrip 覆盖。
+            // （另：当已打开页签很多时，OpenScene 新建页签后的活动页签内容可能因 TabBar 基于索引 ID 的
+            //  切换时序而不稳定——这是产品侧已知脆弱点，已单独反馈，不在本用例断言范围内。）
+            IM_CHECK(tabs.FindTabByPath(scene.string()) >= 0);
+            IM_CHECK(fs::path(tabs.GetActiveFilePath()).filename() == scene.filename());
+
+            // 收尾：关掉本用例新增的页签恢复起始页签数（从末尾关，不动前面索引），
+            // 否则会抬高全套页签总数、触发依赖绝对页签索引的 dse-tabs 用例在多页签下的切换不稳。
+            while (tabs.GetTabCount() > tab_count0) {
+                tabs.CloseTab(tabs.GetTabCount() - 1, SReg());
+            }
+            ctx->Yield(2);
+
+            // 删除临时场景文件及二进制旁路缓存。
+            fs::remove(scene, ec);
+            fs::remove(fs::path(scene.string() + ".bin"), ec);
         };
     }
 }

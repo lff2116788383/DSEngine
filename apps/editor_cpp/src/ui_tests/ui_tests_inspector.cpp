@@ -28,7 +28,6 @@
 #include "engine/ecs/world.h"
 #include "engine/ecs/transform.h"  // TransformComponent（全局命名空间）
 #include "engine/ecs/script.h"     // ScriptComponent（全局命名空间）
-#include "engine/ecs/components_3d_render.h"  // dse::Camera3DComponent / dse::DirectionalLight3DComponent
 #include "engine/ecs/audio.h"                  // AudioSourceComponent（全局命名空间）
 
 namespace dse::editor::uitest {
@@ -205,68 +204,9 @@ void RegisterInspectorTests(ImGuiTestEngine* e) {
         };
     }
 
-    // dse-inspector/edit_directional_light_intensity：加 Directional Light 组件 → 改 Intensity
-    // 拖动框（##dirlight_int）→ 断言 ECS 中 DirectionalLight3DComponent.intensity 写回该值。
-    {
-        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-inspector", "edit_directional_light_intensity");
-        t->TestFunc = [](ImGuiTestContext* ctx) {
-            const entt::entity ent = CreateSelectedEntity(ctx);
-            IM_CHECK(ent != entt::null);
-            SelectionManager::Get().Clear();
-            ctx->Yield();
-            entt::registry& reg = Services().engine->pipeline()->world().registry();
-
-            ctx->WindowFocus("//Inspector");
-            ctx->SetRef("//Inspector");
-            ctx->ItemClick("Add Component");
-            ctx->Yield();
-            ctx->SetRef("//$FOCUSED");
-            ctx->ItemClick("Directional Light");
-            ctx->Yield(2);
-            IM_CHECK(reg.valid(ent) && reg.all_of<dse::DirectionalLight3DComponent>(ent));
-
-            ctx->WindowFocus("//Inspector");
-            ctx->SetRef("//Inspector");
-            ctx->ItemInputValue("##dirlight_int", 7.5f);
-            ctx->Yield(2);
-            IM_CHECK(std::abs(reg.get<dse::DirectionalLight3DComponent>(ent).intensity - 7.5f) < 0.01f);
-
-            // 收尾：移除本用例新增的组件，使实体回到与其它 inspector 用例一致的纯净态
-            // （仅留 Transform/Name），避免遗留组件污染后续依赖场景/视口状态的用例。
-            if (reg.valid(ent)) reg.remove<dse::DirectionalLight3DComponent>(ent);
-        };
-    }
-
-    // dse-inspector/edit_camera_fov：加 Camera 3D 组件 → 改 FOV 拖动框（##cam3d_fov）→
-    // 断言 ECS 中 Camera3DComponent.fov 写回该值。
-    {
-        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-inspector", "edit_camera_fov");
-        t->TestFunc = [](ImGuiTestContext* ctx) {
-            const entt::entity ent = CreateSelectedEntity(ctx);
-            IM_CHECK(ent != entt::null);
-            SelectionManager::Get().Clear();
-            ctx->Yield();
-            entt::registry& reg = Services().engine->pipeline()->world().registry();
-
-            ctx->WindowFocus("//Inspector");
-            ctx->SetRef("//Inspector");
-            ctx->ItemClick("Add Component");
-            ctx->Yield();
-            ctx->SetRef("//$FOCUSED");
-            ctx->ItemClick("Camera 3D");
-            ctx->Yield(2);
-            IM_CHECK(reg.valid(ent) && reg.all_of<dse::Camera3DComponent>(ent));
-
-            ctx->WindowFocus("//Inspector");
-            ctx->SetRef("//Inspector");
-            ctx->ItemInputValue("##cam3d_fov", 75.0f);
-            ctx->Yield(2);
-            IM_CHECK(std::abs(reg.get<dse::Camera3DComponent>(ent).fov - 75.0f) < 0.01f);
-
-            // 收尾：移除新增的 Camera3D 组件（活动相机切换会扰动视口/后续用例）。
-            if (reg.valid(ent)) reg.remove<dse::Camera3DComponent>(ent);
-        };
-    }
+    // 注：Camera 3D FOV / Directional Light Intensity 字段写回已由 dse-components
+    // （camera3d_fov_edit_undo / dirlight_intensity_edit）覆盖，此处不重复。本组只补
+    // dse-components 未覆盖的音频字段。
 
     // dse-inspector/edit_audio_pitch：加 Audio Source 组件 → 改 Pitch 拖动框（##audio_pitch）→
     // 断言 ECS 中 AudioSourceComponent.pitch 写回该值。

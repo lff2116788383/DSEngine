@@ -19,8 +19,10 @@
 
 namespace dse::editor::uitest {
 
-#define DSE_BTN_PLAY "//Toolbar/" MDI_ICON_PLAY "##play"
-#define DSE_BTN_STOP "//Toolbar/" MDI_ICON_STOP "##stop"
+#define DSE_BTN_PLAY  "//Toolbar/" MDI_ICON_PLAY      "##play"
+#define DSE_BTN_STOP  "//Toolbar/" MDI_ICON_STOP      "##stop"
+#define DSE_BTN_PAUSE "//Toolbar/" MDI_ICON_PAUSE     "##pause"
+#define DSE_BTN_STEP  "//Toolbar/" MDI_ICON_SKIP_NEXT "##step"
 
 void RegisterPlayTests(ImGuiTestEngine* e) {
     // dse-play/play_stop_toolbar：点 Play 进入播放态，点 Stop 回到编辑态。
@@ -83,6 +85,53 @@ void RegisterPlayTests(ImGuiTestEngine* e) {
             ctx->KeyPress(ImGuiMod_Ctrl | ImGuiKey_N);
             ctx->Yield(2);
             IM_CHECK_EQ(tabs.GetTabCount(), tabs_edit + 1);
+        };
+    }
+
+    // dse-play/pause_step_toolbar：Play → Pause（暂停）→ Step（单步）→ 再 Pause（恢复）→ Stop。
+    // 断言编辑器状态在 Play / Pause 间正确切换，单步按钮仅在 Pause 态可用且点击不崩。
+    // 注意：暂停态 state==Pause，故 IsEditorInPlayMode()（==Play）为 false，须用 IsEditorPaused() 判定。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-play", "pause_step_toolbar");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            ctx->WindowFocus("//Toolbar");
+
+            // 前置：回到编辑态（清掉上一用例可能残留的 Play/Pause）。
+            if (GetEditorState() != EditorState::Edit) {
+                ctx->ItemClick(DSE_BTN_STOP);
+                ctx->Yield(3);
+            }
+            IM_CHECK(GetEditorState() == EditorState::Edit);
+            IM_CHECK(!IsEditorPaused());
+
+            // 进入 Play。
+            ctx->ItemClick(DSE_BTN_PLAY);
+            ctx->Yield(4);
+            IM_CHECK(IsEditorInPlayMode());
+            IM_CHECK(!IsEditorPaused());
+
+            // 暂停：点 Pause → state 切到 Pause。
+            ctx->ItemClick(DSE_BTN_PAUSE);
+            ctx->Yield(2);
+            IM_CHECK(IsEditorPaused());
+            IM_CHECK(!IsEditorInPlayMode());
+
+            // 单步：Pause 态下 Step 可用，点一下不崩、仍保持 Pause。
+            ctx->ItemClick(DSE_BTN_STEP);
+            ctx->Yield(2);
+            IM_CHECK(IsEditorPaused());
+
+            // 恢复：再点 Pause → 回到 Play。
+            ctx->ItemClick(DSE_BTN_PAUSE);
+            ctx->Yield(2);
+            IM_CHECK(IsEditorInPlayMode());
+            IM_CHECK(!IsEditorPaused());
+
+            // 收尾：Stop 回编辑态。
+            ctx->ItemClick(DSE_BTN_STOP);
+            ctx->Yield(4);
+            IM_CHECK(GetEditorState() == EditorState::Edit);
+            IM_CHECK(!IsEditorPaused());
         };
     }
 }
