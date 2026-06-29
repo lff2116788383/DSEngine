@@ -152,6 +152,136 @@ void RegisterPostProcess() {
     t.field("fog_sun_scatter", &PostProcessComponent::fog_sun_scatter).range(0.0, 4.0);
 }
 
+// ─── 扩展注册：更多可序列化组件（元数据 + 通用 JSON 驱动可消费；不改既有场景手写路径） ──
+// 仅注册标量/向量/字符串/枚举字段；std::vector / C 数组 / GPU 句柄 / 运行时内部状态不反射。
+
+void RegisterMeshRenderer() {
+    using dse::MeshRendererComponent;
+    // 真实组件上的枚举：演示 Enum 支持端到端可用（须先于引用它的类型注册）。
+    DSE_REFLECT_ENUM(MeshRendererComponent::MaterialDataSource)
+        .value("ComponentFallback", MeshRendererComponent::MaterialDataSource::ComponentFallback)
+        .value("MaterialInstance", MeshRendererComponent::MaterialDataSource::MaterialInstance);
+
+    auto t = DSE_REFLECT_TYPE(MeshRendererComponent);
+    t.field("mesh_path", &MeshRendererComponent::mesh_path);
+    t.field("shader_variant", &MeshRendererComponent::shader_variant);
+    t.field("color", &MeshRendererComponent::color).color();
+    t.field("emissive", &MeshRendererComponent::emissive).color();
+    t.field("metallic", &MeshRendererComponent::metallic).range(0.0, 1.0);
+    t.field("roughness", &MeshRendererComponent::roughness).range(0.0, 1.0);
+    t.field("ao", &MeshRendererComponent::ao).range(0.0, 1.0);
+    t.field("normal_strength", &MeshRendererComponent::normal_strength).range(0.0, 4.0);
+    t.field("material_alpha_cutoff", &MeshRendererComponent::material_alpha_cutoff).range(0.0, 1.0);
+    t.field("material_alpha_test", &MeshRendererComponent::material_alpha_test);
+    t.field("material_double_sided", &MeshRendererComponent::material_double_sided);
+    t.field("sss_strength", &MeshRendererComponent::sss_strength).range(0.0, 1.0);
+    t.field("sss_tint", &MeshRendererComponent::sss_tint).color();
+    t.field("clear_coat", &MeshRendererComponent::clear_coat).range(0.0, 1.0);
+    t.field("clear_coat_roughness", &MeshRendererComponent::clear_coat_roughness).range(0.0, 1.0);
+    t.field("anisotropy", &MeshRendererComponent::anisotropy).range(-1.0, 1.0);
+    t.field("pom_height_scale", &MeshRendererComponent::pom_height_scale).range(0.0, 1.0);
+    t.field("receive_shadow", &MeshRendererComponent::receive_shadow);
+    t.field("depth_test_enabled", &MeshRendererComponent::depth_test_enabled);
+    t.field("depth_write_enabled", &MeshRendererComponent::depth_write_enabled);
+    t.field("visible", &MeshRendererComponent::visible);
+    t.field("is_static", &MeshRendererComponent::is_static);
+    t.field("sorting_layer", &MeshRendererComponent::sorting_layer);
+    t.field("order_in_layer", &MeshRendererComponent::order_in_layer);
+    t.field("material_data_source", &MeshRendererComponent::material_data_source);
+}
+
+void RegisterCamera3D() {
+    using dse::Camera3DComponent;
+    auto t = DSE_REFLECT_TYPE(Camera3DComponent);
+    t.field("enabled", &Camera3DComponent::enabled);
+    t.field("priority", &Camera3DComponent::priority);
+    t.field("fov", &Camera3DComponent::fov).range(1.0, 179.0);
+    t.field("aspect_ratio", &Camera3DComponent::aspect_ratio).range(0.1, 10.0);
+    t.field("near_clip", &Camera3DComponent::near_clip).range(0.001, 100.0);
+    t.field("far_clip", &Camera3DComponent::far_clip).range(1.0, 100000.0);
+    // view/projection 为运行时矩阵，不反射。
+}
+
+void RegisterDecal() {
+    using dse::DecalComponent;
+    auto t = DSE_REFLECT_TYPE(DecalComponent);
+    t.field("enabled", &DecalComponent::enabled);
+    t.field("color", &DecalComponent::color).color();
+    t.field("angle_fade", &DecalComponent::angle_fade).range(0.0, 1.0);
+}
+
+void RegisterPointLight() {
+    using dse::PointLightComponent;
+    auto t = DSE_REFLECT_TYPE(PointLightComponent);
+    t.field("enabled", &PointLightComponent::enabled);
+    t.field("color", &PointLightComponent::color).color();
+    t.field("intensity", &PointLightComponent::intensity).range(0.0, 100.0);
+    t.field("radius", &PointLightComponent::radius).range(0.0, 1000.0);
+    t.field("falloff", &PointLightComponent::falloff).range(0.0, 8.0);
+    t.field("cast_shadow", &PointLightComponent::cast_shadow);
+}
+
+void RegisterSpotLight() {
+    using dse::SpotLightComponent;
+    auto t = DSE_REFLECT_TYPE(SpotLightComponent);
+    t.field("enabled", &SpotLightComponent::enabled);
+    t.field("color", &SpotLightComponent::color).color();
+    t.field("direction", &SpotLightComponent::direction);
+    t.field("intensity", &SpotLightComponent::intensity).range(0.0, 100.0);
+    t.field("radius", &SpotLightComponent::radius).range(0.0, 1000.0);
+    t.field("falloff", &SpotLightComponent::falloff).range(0.0, 8.0);
+    t.field("inner_cone_angle", &SpotLightComponent::inner_cone_angle).range(0.0, 90.0);
+    t.field("outer_cone_angle", &SpotLightComponent::outer_cone_angle).range(0.0, 90.0);
+    t.field("cast_shadow", &SpotLightComponent::cast_shadow);
+}
+
+void RegisterDirectionalLight() {
+    using dse::DirectionalLight3DComponent;
+    auto t = DSE_REFLECT_TYPE(DirectionalLight3DComponent);
+    t.field("enabled", &DirectionalLight3DComponent::enabled);
+    t.field("direction", &DirectionalLight3DComponent::direction);
+    t.field("color", &DirectionalLight3DComponent::color).color();
+    t.field("intensity", &DirectionalLight3DComponent::intensity).range(0.0, 100.0);
+    t.field("ambient_intensity", &DirectionalLight3DComponent::ambient_intensity).range(0.0, 4.0);
+    t.field("shadow_strength", &DirectionalLight3DComponent::shadow_strength).range(0.0, 1.0);
+    t.field("cast_shadow", &DirectionalLight3DComponent::cast_shadow);
+    t.field("cascade_split_lambda", &DirectionalLight3DComponent::cascade_split_lambda).range(0.0, 1.0);
+    // cascade_splits[CSM_CASCADES] 为 C 数组，反射核心暂不支持，跳过。
+}
+
+void RegisterSkyLight() {
+    using dse::SkyLightComponent;
+    auto t = DSE_REFLECT_TYPE(SkyLightComponent);
+    t.field("enabled", &SkyLightComponent::enabled);
+    t.field("up_color", &SkyLightComponent::up_color).color();
+    t.field("down_color", &SkyLightComponent::down_color).color();
+    t.field("intensity", &SkyLightComponent::intensity).range(0.0, 16.0);
+}
+
+void RegisterSkybox() {
+    using dse::SkyboxComponent;
+    auto t = DSE_REFLECT_TYPE(SkyboxComponent);
+    t.field("enabled", &SkyboxComponent::enabled);
+    t.field("cubemap_path", &SkyboxComponent::cubemap_path);
+}
+
+void RegisterFreeCameraController() {
+    using dse::FreeCameraControllerComponent;
+    auto t = DSE_REFLECT_TYPE(FreeCameraControllerComponent);
+    t.field("enabled", &FreeCameraControllerComponent::enabled);
+    t.field("move_speed", &FreeCameraControllerComponent::move_speed).range(0.0, 100.0);
+    t.field("mouse_sensitivity", &FreeCameraControllerComponent::mouse_sensitivity).range(0.0, 4.0);
+    t.field("pitch", &FreeCameraControllerComponent::pitch);
+    t.field("yaw", &FreeCameraControllerComponent::yaw);
+}
+
+void RegisterSubScene() {
+    using dse::SubSceneComponent;
+    auto t = DSE_REFLECT_TYPE(SubSceneComponent);
+    t.field("enabled", &SubSceneComponent::enabled);
+    t.field("scene_path", &SubSceneComponent::scene_path);
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -161,6 +291,16 @@ void EnsureCoreReflectionRegistered() {
     RegisterGrass();
     RegisterTree();
     RegisterPostProcess();
+    RegisterMeshRenderer();
+    RegisterCamera3D();
+    RegisterDecal();
+    RegisterPointLight();
+    RegisterSpotLight();
+    RegisterDirectionalLight();
+    RegisterSkyLight();
+    RegisterSkybox();
+    RegisterFreeCameraController();
+    RegisterSubScene();
 }
 
 }  // namespace dse::reflect

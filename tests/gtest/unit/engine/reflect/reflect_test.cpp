@@ -271,6 +271,73 @@ TEST_F(ReflectionTest, DeserializeIgnoresNonObject) {
     EXPECT_FLOAT_EQ(dst.density, default_density);
 }
 
+// ─── 扩展注册组件 round-trip ──────────────────────────────────────────────────
+
+TEST_F(ReflectionTest, MeshRendererEnumFieldRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<dse::MeshRendererComponent>();
+    ASSERT_NE(ti, nullptr);
+
+    const FieldInfo* src_field = FindField(*ti, "material_data_source");
+    ASSERT_NE(src_field, nullptr);
+    EXPECT_EQ(src_field->type, FieldType::Enum);
+    ASSERT_NE(src_field->enum_info, nullptr);
+    EXPECT_EQ(src_field->enum_info->entries.size(), 2u);
+
+    dse::MeshRendererComponent src;
+    src.mesh_path = "assets/box.dmesh";
+    src.metallic = 0.8f;
+    src.roughness = 0.3f;
+    src.color = glm::vec4(0.5f, 0.6f, 0.7f, 1.0f);
+    src.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    ASSERT_TRUE(obj.HasMember("material_data_source"));
+    ASSERT_TRUE(obj["material_data_source"].IsString());
+    EXPECT_STREQ(obj["material_data_source"].GetString(), "MaterialInstance");
+
+    dse::MeshRendererComponent dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_EQ(dst.mesh_path, src.mesh_path);
+    EXPECT_FLOAT_EQ(dst.metallic, src.metallic);
+    EXPECT_FLOAT_EQ(dst.roughness, src.roughness);
+    EXPECT_FLOAT_EQ(dst.color.r, src.color.r);
+    EXPECT_EQ(dst.material_data_source,
+              dse::MeshRendererComponent::MaterialDataSource::MaterialInstance);
+}
+
+TEST_F(ReflectionTest, SpotLightRoundTrips) {
+    const TypeInfo* ti = Reflection::Find<dse::SpotLightComponent>();
+    ASSERT_NE(ti, nullptr);
+
+    dse::SpotLightComponent src;
+    src.enabled = false;
+    src.color = glm::vec3(0.1f, 0.2f, 0.9f);
+    src.direction = glm::vec3(0.0f, -0.7f, 0.7f);
+    src.intensity = 3.5f;
+    src.inner_cone_angle = 10.0f;
+    src.outer_cone_angle = 25.0f;
+    src.cast_shadow = true;
+
+    rapidjson::Document doc;
+    doc.SetObject();
+    rapidjson::Value obj(rapidjson::kObjectType);
+    SerializeReflected(*ti, &src, obj, doc.GetAllocator());
+
+    dse::SpotLightComponent dst;
+    DeserializeReflected(*ti, &dst, obj);
+    EXPECT_EQ(dst.enabled, src.enabled);
+    EXPECT_FLOAT_EQ(dst.color.b, src.color.b);
+    EXPECT_FLOAT_EQ(dst.direction.y, src.direction.y);
+    EXPECT_FLOAT_EQ(dst.intensity, src.intensity);
+    EXPECT_FLOAT_EQ(dst.inner_cone_angle, src.inner_cone_angle);
+    EXPECT_FLOAT_EQ(dst.outer_cone_angle, src.outer_cone_angle);
+    EXPECT_EQ(dst.cast_shadow, src.cast_shadow);
+}
+
 // ─── 枚举支持 ─────────────────────────────────────────────────────────────────
 
 class ReflectionEnumStructTest : public ::testing::Test {
