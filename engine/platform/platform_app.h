@@ -63,6 +63,23 @@ public:
     virtual void SetInputCallbacks(KeyCallback, MouseButtonCallback,
                                    ScrollCallback, CursorPosCallback) = 0;
 
+    // --- 手柄回调（事件驱动平台无原生手柄事件，需每帧 PollGamepads 主动轮询） ---
+    // button 为 engine/input 的 GAMEPAD_BUTTON_* 键码；action 为 KeyAction（0 松 / 1 按）。
+    using GamepadButtonCallback = void(*)(int gamepad_id, int button, int action);
+    // axis 为 GamepadAxis；value 为原始 [-1,1]（死区由 Input 层过滤）。
+    using GamepadAxisCallback = void(*)(int gamepad_id, int axis, float value);
+    using GamepadConnectionCallback = void(*)(int gamepad_id, bool connected);
+    virtual void SetGamepadCallbacks(GamepadButtonCallback, GamepadAxisCallback,
+                                     GamepadConnectionCallback) {}
+    /// 轮询所有手柄并通过回调上报状态变化；无手柄能力的平台为 no-op。
+    virtual void PollGamepads() {}
+
+    // --- 触摸回调 ---
+    // finger_id 为触点标识；phase 取值对应 dse::input::TouchPhase 整型
+    // (1=Began 2=Moved 3=Stationary 4=Ended 5=Cancelled)。
+    using TouchCallback = void(*)(int finger_id, float x, float y, int phase);
+    virtual void SetTouchCallback(TouchCallback) {}
+
     // --- 编辑器外部窗口注入 ---
     virtual bool AttachExternal(void* existing_window) = 0;
 };

@@ -56,6 +56,8 @@ public:
     void SetInputCallbacks(KeyCallback, MouseButtonCallback,
                            ScrollCallback, CursorPosCallback) override;
 
+    void SetTouchCallback(TouchCallback) override;
+
     bool AttachExternal(void* existing_window) override;
 
 private:
@@ -77,6 +79,7 @@ private:
     MouseButtonCallback mouse_btn_cb_ = nullptr;
     ScrollCallback      scroll_cb_    = nullptr;
     CursorPosCallback   cursor_pos_cb_= nullptr;
+    TouchCallback       touch_cb_     = nullptr;
 
     bool InitEGL(const WindowConfig& config);
     void DestroyEGL();

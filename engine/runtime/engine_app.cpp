@@ -32,6 +32,8 @@
 #include "engine/base/time_context.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+#include "engine/input/key_code.h"
+#include "engine/input/touch.h"
 #include <cstdlib>
 #include <vector>
 #include <filesystem>
@@ -46,6 +48,9 @@
 
 namespace dse::runtime {
 namespace {
+
+// 桌面端用鼠标左键模拟单点触摸，便于在无触屏设备上验证 Touch 抽象层。
+bool g_mouse_touch_down = false;
 
 std::string ReadNonEmptyEnv(const char* name) {
     if (const char* value = std::getenv(name)) {
@@ -380,9 +385,43 @@ bool EngineInstance::Init() {
     if (!config_.enable_editor) {
         platform_->SetInputCallbacks(
             [](int key, int action) { Input::RecordKey(static_cast<unsigned short>(key), static_cast<unsigned short>(action)); },
-            [](int btn, int action) { Input::RecordKey(static_cast<unsigned short>(btn), static_cast<unsigned short>(action)); },
+            [](int btn, int action) {
+                Input::RecordKey(static_cast<unsigned short>(btn), static_cast<unsigned short>(action));
+                // 桌面：鼠标左键 → 单点触摸（finger 0）模拟，便于验证 Touch 抽象层。
+                if (btn == MOUSE_BUTTON_LEFT) {
+                    const glm::vec2 p = Input::mousePosition();
+                    if (action == KEY_ACTION_UP) {
+                        g_mouse_touch_down = false;
+                        dse::input::Touch::RecordTouch(0, p.x, p.y, dse::input::TouchPhase::Ended);
+                    } else {
+                        g_mouse_touch_down = true;
+                        dse::input::Touch::RecordTouch(0, p.x, p.y, dse::input::TouchPhase::Began);
+                    }
+                }
+            },
             [](float y) { Input::RecordMouseScroll(y); },
-            [](float x, float y) { Input::RecordMousePosition(x, y); }
+            [](float x, float y) {
+                Input::RecordMousePosition(x, y);
+                if (g_mouse_touch_down) {
+                    dse::input::Touch::RecordTouch(0, x, y, dse::input::TouchPhase::Moved);
+                }
+            }
+        );
+
+        // 手柄数据源：GLFW 每帧 PollGamepads 后经此回调喂入 Input。
+        platform_->SetGamepadCallbacks(
+            [](int /*gamepad_id*/, int button, int action) {
+                Input::RecordKey(static_cast<unsigned short>(button), static_cast<unsigned short>(action));
+            },
+            [](int gamepad_id, int axis, float value) { Input::RecordGamepadAxis(gamepad_id, axis, value); },
+            [](int gamepad_id, bool connected) { Input::SetGamepadConnected(gamepad_id, connected); }
+        );
+
+        // 触摸数据源（Android 触屏等）：平台层喂入触点事件。
+        platform_->SetTouchCallback(
+            [](int finger_id, float x, float y, int phase) {
+                dse::input::Touch::RecordTouch(finger_id, x, y, static_cast<dse::input::TouchPhase>(phase));
+            }
         );
 
         pipeline_->SetWindowTitleSetter([this](const std::string& title) {
@@ -538,6 +577,7 @@ void EngineInstance::Tick() {
         dse::TimeContext{scaled_dt, unscaled_dt, time_scale}, frame_index_++});
     pipeline_->Render();
     Input::Update();
+    dse::input::Touch::Update();
 }
 
 void EngineInstance::Shutdown() {
@@ -609,6 +649,7 @@ bool EngineInstance::RunOneFrame() {
 
     const double frame_start = platform_->GetTime();
     platform_->PollEvents();
+    platform_->PollGamepads();
 
     int width = 0;
     int height = 0;

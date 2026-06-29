@@ -187,6 +187,74 @@ TEST(PlatformAppTest, SetUpDoesNotCrash) {
 }
 
 // ============================================================
+// 手柄轮询测试
+// ============================================================
+
+// 测试 平台应用：设置手柄回调不崩溃
+TEST(PlatformAppTest, SetGamepadCallbacksDoesNotCrash) {
+    auto app = CreateDefaultPlatformApp();
+    WindowConfig config;
+    config.no_graphics_api = true;
+
+    if (!app->Init(config)) {
+        GTEST_SKIP() << "Init 失败，跳过测试";
+    }
+
+    app->SetGamepadCallbacks(
+        [](int, int, int) {},
+        [](int, int, float) {},
+        [](int, bool) {}
+    );
+    SUCCEED();
+
+    app->Shutdown();
+}
+
+// 测试 平台应用：无手柄时轮询不崩溃且不误报回调
+TEST(PlatformAppTest, PollGamepadsWithoutDeviceDoesNotFire) {
+    auto app = CreateDefaultPlatformApp();
+    WindowConfig config;
+    config.no_graphics_api = true;
+
+    if (!app->Init(config)) {
+        GTEST_SKIP() << "Init 失败，跳过测试";
+    }
+
+    static int btn_calls = 0, axis_calls = 0;
+    btn_calls = axis_calls = 0;
+    app->SetGamepadCallbacks(
+        [](int, int, int) { btn_calls++; },
+        [](int, int, float) { axis_calls++; },
+        [](int, bool) {}
+    );
+
+    // 测试环境通常无实体手柄：轮询应安全，且不应产生按钮/摇杆回调。
+    app->PollGamepads();
+    app->PollGamepads();
+
+    EXPECT_EQ(btn_calls, 0);
+    EXPECT_EQ(axis_calls, 0);
+
+    app->Shutdown();
+}
+
+// 测试 平台应用：未设置手柄回调时轮询安全
+TEST(PlatformAppTest, PollGamepadsWithoutCallbacksSafe) {
+    auto app = CreateDefaultPlatformApp();
+    WindowConfig config;
+    config.no_graphics_api = true;
+
+    if (!app->Init(config)) {
+        GTEST_SKIP() << "Init 失败，跳过测试";
+    }
+
+    app->PollGamepads();  // 回调全为空，应为安全 no-op
+    SUCCEED();
+
+    app->Shutdown();
+}
+
+// ============================================================
 // 时间函数测试
 // ============================================================
 

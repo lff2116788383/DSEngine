@@ -8,6 +8,8 @@
 
 #include "engine/platform/platform_app.h"
 
+#include <array>
+
 struct GLFWwindow;
 
 namespace dse::platform {
@@ -45,6 +47,11 @@ public:
     void SetInputCallbacks(KeyCallback, MouseButtonCallback,
                            ScrollCallback, CursorPosCallback) override;
 
+    // --- 手柄 ---
+    void SetGamepadCallbacks(GamepadButtonCallback, GamepadAxisCallback,
+                             GamepadConnectionCallback) override;
+    void PollGamepads() override;
+
     // --- 编辑器外部窗口注入 ---
     bool AttachExternal(void* existing_window) override;
 
@@ -68,6 +75,15 @@ private:
     static void GlfwMouseButtonCallback(GLFWwindow* w, int button, int action, int mods);
     static void GlfwScrollCallback(GLFWwindow* w, double xoffset, double yoffset);
     static void GlfwCursorPosCallback(GLFWwindow* w, double xpos, double ypos);
+
+    // 手柄轮询（GLFW 手柄是状态轮询而非事件，状态缓存用于做边沿检测）
+    static constexpr int kMaxGamepads = 4;
+    static constexpr int kGamepadButtonCount = 15;  // GLFW_GAMEPAD_BUTTON_LAST + 1
+    GamepadButtonCallback gamepad_btn_cb_ = nullptr;
+    GamepadAxisCallback gamepad_axis_cb_ = nullptr;
+    GamepadConnectionCallback gamepad_conn_cb_ = nullptr;
+    std::array<std::array<unsigned char, kGamepadButtonCount>, kMaxGamepads> gamepad_prev_buttons_{};
+    std::array<bool, kMaxGamepads> gamepad_prev_connected_{};
 };
 
 } // namespace dse::platform

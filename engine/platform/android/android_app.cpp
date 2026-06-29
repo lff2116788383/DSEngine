@@ -159,16 +159,27 @@ void AndroidApp::PollEvents() {
     }
 }
 
+// dse::input::TouchPhase 整型约定（与 platform_app.h / touch.h 保持一致）
+namespace {
+constexpr int kTouchPhaseBegan     = 1;
+constexpr int kTouchPhaseMoved     = 2;
+constexpr int kTouchPhaseEnded     = 4;
+constexpr int kTouchPhaseCancelled = 5;
+}
+
 void AndroidApp::ProcessInputEvent(AInputEvent* event) {
     const int32_t type = AInputEvent_getType(event);
 
     if (type == AINPUT_EVENT_TYPE_MOTION) {
-        const int32_t action = AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK;
-        const float x = AMotionEvent_getX(event, 0);
-        const float y = AMotionEvent_getY(event, 0);
+        const int32_t raw_action = AMotionEvent_getAction(event);
+        const int32_t action     = raw_action & AMOTION_EVENT_ACTION_MASK;
+        const int32_t ptr_index  = (raw_action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+                                   >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
 
-        if (cursor_pos_cb_) cursor_pos_cb_(x, y);
-
+        // 主指针仍驱动鼠标兼容接口（保留既有单点行为）。
+        const float x0 = AMotionEvent_getX(event, 0);
+        const float y0 = AMotionEvent_getY(event, 0);
+        if (cursor_pos_cb_) cursor_pos_cb_(x0, y0);
         if (mouse_btn_cb_) {
             int btn_action = 0;
             if (action == AMOTION_EVENT_ACTION_DOWN || action == AMOTION_EVENT_ACTION_MOVE)
@@ -176,6 +187,45 @@ void AndroidApp::ProcessInputEvent(AInputEvent* event) {
             else if (action == AMOTION_EVENT_ACTION_UP)
                 btn_action = 0;
             mouse_btn_cb_(0, btn_action);  // 左键 = touch
+        }
+
+        // 多点触摸：喂入触摸抽象层。
+        if (touch_cb_) {
+            const size_t ptr_count = AMotionEvent_getPointerCount(event);
+            switch (action) {
+                case AMOTION_EVENT_ACTION_DOWN:
+                case AMOTION_EVENT_ACTION_POINTER_DOWN: {
+                    const int32_t id = AMotionEvent_getPointerId(event, ptr_index);
+                    touch_cb_(id, AMotionEvent_getX(event, ptr_index),
+                              AMotionEvent_getY(event, ptr_index), kTouchPhaseBegan);
+                    break;
+                }
+                case AMOTION_EVENT_ACTION_MOVE: {
+                    for (size_t i = 0; i < ptr_count; ++i) {
+                        touch_cb_(AMotionEvent_getPointerId(event, i),
+                                  AMotionEvent_getX(event, i),
+                                  AMotionEvent_getY(event, i), kTouchPhaseMoved);
+                    }
+                    break;
+                }
+                case AMOTION_EVENT_ACTION_UP:
+                case AMOTION_EVENT_ACTION_POINTER_UP: {
+                    const int32_t id = AMotionEvent_getPointerId(event, ptr_index);
+                    touch_cb_(id, AMotionEvent_getX(event, ptr_index),
+                              AMotionEvent_getY(event, ptr_index), kTouchPhaseEnded);
+                    break;
+                }
+                case AMOTION_EVENT_ACTION_CANCEL: {
+                    for (size_t i = 0; i < ptr_count; ++i) {
+                        touch_cb_(AMotionEvent_getPointerId(event, i),
+                                  AMotionEvent_getX(event, i),
+                                  AMotionEvent_getY(event, i), kTouchPhaseCancelled);
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
         }
     } else if (type == AINPUT_EVENT_TYPE_KEY) {
         const int32_t action  = AKeyEvent_getAction(event);
@@ -261,6 +311,10 @@ void AndroidApp::SetInputCallbacks(KeyCallback key, MouseButtonCallback mouse,
     mouse_btn_cb_  = mouse;
     scroll_cb_     = scroll;
     cursor_pos_cb_ = cursor;
+}
+
+void AndroidApp::SetTouchCallback(TouchCallback touch) {
+    touch_cb_ = touch;
 }
 
 bool AndroidApp::AttachExternal(void* existing_window) {

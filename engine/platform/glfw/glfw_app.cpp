@@ -6,6 +6,7 @@
 #define GLFW_INCLUDE_NONE
 #include "engine/platform/glfw/glfw_app.h"
 #include "engine/base/debug.h"
+#include "engine/input/key_code.h"        // GAMEPAD_BUTTON_* / GamepadAxis / KeyAction
 #include "engine/render/rhi/ubo_types.h"  // kMaxUBOLights
 
 #ifdef DSE_ENABLE_VULKAN
@@ -272,6 +273,82 @@ void GlfwApp::SetInputCallbacks(KeyCallback key_cb, MouseButtonCallback mouse_bt
         glfwSetMouseButtonCallback(window_, GlfwMouseButtonCallback);
         glfwSetScrollCallback(window_, GlfwScrollCallback);
         glfwSetCursorPosCallback(window_, GlfwCursorPosCallback);
+    }
+}
+
+// GLFW 标准手柄按钮索引 → engine/input 键码。
+// 引擎枚举把 GUIDE 排在最后 (414)，与 GLFW 的索引 8 不同，故需显式映射表而非加偏移。
+static constexpr unsigned short kGlfwButtonToKeyCode[15] = {  // GLFW_GAMEPAD_BUTTON_LAST + 1
+    GAMEPAD_BUTTON_A,             // 0  GLFW_GAMEPAD_BUTTON_A
+    GAMEPAD_BUTTON_B,             // 1  B
+    GAMEPAD_BUTTON_X,             // 2  X
+    GAMEPAD_BUTTON_Y,             // 3  Y
+    GAMEPAD_BUTTON_LEFT_BUMPER,   // 4  LEFT_BUMPER
+    GAMEPAD_BUTTON_RIGHT_BUMPER,  // 5  RIGHT_BUMPER
+    GAMEPAD_BUTTON_BACK,          // 6  BACK
+    GAMEPAD_BUTTON_START,         // 7  START
+    GAMEPAD_BUTTON_GUIDE,         // 8  GUIDE
+    GAMEPAD_BUTTON_LEFT_THUMB,    // 9  LEFT_THUMB
+    GAMEPAD_BUTTON_RIGHT_THUMB,   // 10 RIGHT_THUMB
+    GAMEPAD_BUTTON_DPAD_UP,       // 11 DPAD_UP
+    GAMEPAD_BUTTON_DPAD_RIGHT,    // 12 DPAD_RIGHT
+    GAMEPAD_BUTTON_DPAD_DOWN,     // 13 DPAD_DOWN
+    GAMEPAD_BUTTON_DPAD_LEFT,     // 14 DPAD_LEFT
+};
+
+void GlfwApp::SetGamepadCallbacks(GamepadButtonCallback btn_cb, GamepadAxisCallback axis_cb,
+                                  GamepadConnectionCallback conn_cb) {
+    gamepad_btn_cb_  = btn_cb;
+    gamepad_axis_cb_ = axis_cb;
+    gamepad_conn_cb_ = conn_cb;
+}
+
+void GlfwApp::PollGamepads() {
+    static_assert(sizeof(kGlfwButtonToKeyCode) / sizeof(kGlfwButtonToKeyCode[0]) ==
+                      kGamepadButtonCount,
+                  "GLFW 手柄按钮映射表长度须与 kGamepadButtonCount 一致");
+    for (int gid = 0; gid < kMaxGamepads; ++gid) {
+        const int jid = GLFW_JOYSTICK_1 + gid;
+        const bool is_gamepad = glfwJoystickIsGamepad(jid) == GLFW_TRUE;
+
+        if (is_gamepad != gamepad_prev_connected_[gid]) {
+            gamepad_prev_connected_[gid] = is_gamepad;
+            if (gamepad_conn_cb_) gamepad_conn_cb_(gid, is_gamepad);
+            // 断开瞬间清零摇杆并释放仍按住的按钮，避免状态卡死。
+            if (!is_gamepad) {
+                if (gamepad_axis_cb_) {
+                    for (int a = 0; a <= GAMEPAD_AXIS_LAST; ++a) gamepad_axis_cb_(gid, a, 0.0f);
+                }
+                for (int b = 0; b < kGamepadButtonCount; ++b) {
+                    if (gamepad_prev_buttons_[gid][b]) {
+                        gamepad_prev_buttons_[gid][b] = 0;
+                        if (gamepad_btn_cb_) gamepad_btn_cb_(gid, kGlfwButtonToKeyCode[b], KEY_ACTION_UP);
+                    }
+                }
+            }
+        }
+
+        if (!is_gamepad) continue;
+
+        GLFWgamepadstate state;
+        if (!glfwGetGamepadState(jid, &state)) continue;
+
+        if (gamepad_axis_cb_) {
+            for (int a = 0; a <= GAMEPAD_AXIS_LAST; ++a) {
+                gamepad_axis_cb_(gid, a, state.axes[a]);
+            }
+        }
+        // 仅在跳变沿上报，保持与键盘事件一致的 Down/Up 语义。
+        for (int b = 0; b < kGamepadButtonCount; ++b) {
+            const unsigned char pressed = state.buttons[b];
+            if (pressed != gamepad_prev_buttons_[gid][b]) {
+                gamepad_prev_buttons_[gid][b] = pressed;
+                if (gamepad_btn_cb_) {
+                    gamepad_btn_cb_(gid, kGlfwButtonToKeyCode[b],
+                                    pressed ? KEY_ACTION_DOWN : KEY_ACTION_UP);
+                }
+            }
+        }
     }
 }
 
