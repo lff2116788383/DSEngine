@@ -87,6 +87,34 @@ TEST_F(LutLoaderTest, LoadCubeLutInvalidPath) {
     EXPECT_FALSE(dse::assets::LoadCubeLut("nonexistent.cube", data));
 }
 
+// 损坏样本：超大 LUT_3D_SIZE 会使 size^3*3 的 int 乘法溢出/超大分配，必须拒绝
+TEST_F(LutLoaderTest, LoadCubeLutHugeSizeRejected) {
+    namespace fs = std::filesystem;
+    auto tmp = fs::temp_directory_path() / "dse_lut_huge.cube";
+    {
+        std::ofstream out(tmp.string());
+        out << "LUT_3D_SIZE 100000\n";
+        out << "0.0 0.0 0.0\n";
+    }
+    dse::assets::LutData data;
+    EXPECT_FALSE(dse::assets::LoadCubeLut(tmp.string(), data)); // 不崩溃
+    fs::remove(tmp);
+}
+
+// 损坏样本：负 LUT_3D_SIZE 必须拒绝
+TEST_F(LutLoaderTest, LoadCubeLutNegativeSizeRejected) {
+    namespace fs = std::filesystem;
+    auto tmp = fs::temp_directory_path() / "dse_lut_neg.cube";
+    {
+        std::ofstream out(tmp.string());
+        out << "LUT_3D_SIZE -5\n";
+        out << "0.0 0.0 0.0\n";
+    }
+    dse::assets::LutData data;
+    EXPECT_FALSE(dse::assets::LoadCubeLut(tmp.string(), data));
+    fs::remove(tmp);
+}
+
 // 测试 LUT加载器：加载立方体LUT Malformed
 TEST_F(LutLoaderTest, LoadCubeLutMalformed) {
     namespace fs = std::filesystem;

@@ -15,6 +15,11 @@
 #include "engine/render/hair/hair_instance.h"
 #include <glm/glm.hpp>
 #include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <vector>
+#include <string>
 
 using namespace dse::render;
 
@@ -95,6 +100,63 @@ TEST(HairAssetTest, Valid) {
     EXPECT_TRUE(asset.IsValid());
     EXPECT_EQ(asset.num_guide_strands(), 3u);
     EXPECT_EQ(asset.num_vertices(), 48u);
+}
+
+// ============================================================
+// LoadHairAsset 损坏样本（畸形 .dhair 必须安全拒绝）
+// ============================================================
+
+namespace {
+std::string WriteTmpDhair(const std::string& name, const std::vector<uint8_t>& bytes) {
+    auto p = (std::filesystem::temp_directory_path() / name).string();
+    std::ofstream out(p, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+    return p;
+}
+void AppendU32(std::vector<uint8_t>& v, uint32_t x) {
+    for (int i = 0; i < 4; ++i) v.push_back(static_cast<uint8_t>(x >> (i * 8)));
+}
+} // namespace
+
+// num_strands/vps 近 4G：旧实现 resize(num_strands*vps) 触发 bad_alloc；现按文件大小拒绝
+TEST(HairAssetTest, LoadCorruptHugeCountsRejected) {
+    std::vector<uint8_t> bytes = {'D','H','F','X'};
+    AppendU32(bytes, 1);            // version
+    AppendU32(bytes, 0xFFFFFFFFu);  // num_strands
+    AppendU32(bytes, 0xFFFFu);      // vertices_per_strand
+    AppendU32(bytes, 4);            // num_follow_per_guide
+    AppendU32(bytes, 0);            // offset_range (float bits)
+    // 没有实际顶点数据
+    auto path = WriteTmpDhair("dse_hair_huge.dhair", bytes);
+
+    HairAsset asset;
+    EXPECT_FALSE(LoadHairAsset(path, asset)); // 必须返回 false 而非崩溃
+    std::filesystem::remove(path);
+}
+
+// 头部之后被截断：顶点数据读取应失败
+TEST(HairAssetTest, LoadTruncatedVertexDataRejected) {
+    std::vector<uint8_t> bytes = {'D','H','F','X'};
+    AppendU32(bytes, 1);    // version
+    AppendU32(bytes, 100);  // num_strands
+    AppendU32(bytes, 16);   // vps  → 需要 1600 顶点的数据，但文件没有
+    AppendU32(bytes, 4);
+    AppendU32(bytes, 0);
+    auto path = WriteTmpDhair("dse_hair_trunc.dhair", bytes);
+
+    HairAsset asset;
+    EXPECT_FALSE(LoadHairAsset(path, asset));
+    std::filesystem::remove(path);
+}
+
+// 错误 magic：拒绝
+TEST(HairAssetTest, LoadBadMagicRejected) {
+    std::vector<uint8_t> bytes = {'X','X','X','X', 1,0,0,0};
+    auto path = WriteTmpDhair("dse_hair_magic.dhair", bytes);
+    HairAsset asset;
+    EXPECT_FALSE(LoadHairAsset(path, asset));
+    std::filesystem::remove(path);
 }
 
 // ============================================================

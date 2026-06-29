@@ -28,6 +28,8 @@ bool LoadCubeLut(const std::string& path, LutData& data) {
         if (line.rfind("LUT_3D_SIZE", 0) == 0) {
             std::istringstream iss(line.substr(11));
             iss >> lut_size;
+            // .cube 规范上限 256；夹住防止下方 lut_size^3*3 的 int 乘法溢出 (UB) 与超大分配。
+            if (lut_size < 0 || lut_size > 256) return false;
             continue;
         }
 

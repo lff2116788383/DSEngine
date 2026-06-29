@@ -42,6 +42,7 @@ public:
 private:
     std::string pak_path_;
     FILE* file_ = nullptr;
+    uint64_t file_size_ = 0; // 用于数据块偏移+长度的区间校验，防越界/超大分配
     std::vector<PakEntry> entries_;
     std::unordered_map<std::string, size_t> index_; // path -> entries_ index
 };

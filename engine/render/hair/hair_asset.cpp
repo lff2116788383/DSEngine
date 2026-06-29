@@ -56,16 +56,40 @@ bool LoadHairAsset(const std::string& file_path, HairAsset& out_asset) {
     file.read(reinterpret_cast<char*>(&vps), 4);
     file.read(reinterpret_cast<char*>(&npg), 4);
     file.read(reinterpret_cast<char*>(&offset_range), 4);
+    if (!file) {
+        DEBUG_LOG_ERROR("[HairAsset] Truncated header in: {}", file_path);
+        return false;
+    }
 
     out_asset.name = file_path;
     out_asset.vertices_per_strand = vps;
     out_asset.num_follow_per_guide = npg;
     out_asset.follow_root_offset_range = offset_range;
 
-    uint32_t total_verts = num_strands * vps;
-    out_asset.vertices.resize(total_verts);
+    // num_strands / vps 直接来自文件，未校验时 num_strands*vps 会整数溢出或给出近 4G 的顶点数，
+    // 触发 resize 超大分配 / 越界读。用「剩余文件字节 / 顶点大小」反推上限，确保顶点数据完整落在文件内。
+    const std::streampos data_start = file.tellg();
+    file.seekg(0, std::ios::end);
+    const std::streampos file_end = file.tellg();
+    file.seekg(data_start);
+    const uint64_t avail = (file_end > data_start)
+                               ? static_cast<uint64_t>(file_end - data_start) : 0;
+    const uint64_t max_verts = avail / sizeof(HairStrandVertex);
+    if (vps == 0 || num_strands == 0 ||
+        static_cast<uint64_t>(num_strands) > max_verts / vps) {
+        DEBUG_LOG_ERROR("[HairAsset] Corrupt strand/vertex counts ({} x {}) in: {}",
+                        num_strands, vps, file_path);
+        return false;
+    }
+
+    const uint64_t total_verts = static_cast<uint64_t>(num_strands) * vps;
+    out_asset.vertices.resize(static_cast<size_t>(total_verts));
     file.read(reinterpret_cast<char*>(out_asset.vertices.data()),
-              total_verts * sizeof(HairStrandVertex));
+              static_cast<std::streamsize>(total_verts * sizeof(HairStrandVertex)));
+    if (!file) {
+        DEBUG_LOG_ERROR("[HairAsset] Truncated vertex data in: {}", file_path);
+        return false;
+    }
 
     out_asset.strands.resize(num_strands);
     for (uint32_t i = 0; i < num_strands; ++i) {

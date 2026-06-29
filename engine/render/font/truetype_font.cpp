@@ -64,6 +64,10 @@ bool TrueTypeFont::LoadFromFile(const std::string& ttf_path, const FontAtlasConf
         return false;
     }
     auto size = file.tellg();
+    if (size <= 0) {  // tellg 失败 (-1) 时 static_cast<size_t> 会请求约 SIZE_MAX 字节触发 bad_alloc
+        DEBUG_LOG_ERROR("TrueTypeFont: 文件大小无效 {}", ttf_path);
+        return false;
+    }
     file.seekg(0, std::ios::beg);
     std::vector<uint8_t> data(static_cast<size_t>(size));
     file.read(reinterpret_cast<char*>(data.data()), size);
@@ -96,6 +100,12 @@ bool TrueTypeFont::LoadFromMemory(const std::vector<uint8_t>& ttf_data, const Fo
     font_size_ = config.font_size;
     atlas_width_ = config.atlas_width;
     atlas_height_ = config.atlas_height;
+    // 图集尺寸须为正且乘积不溢出 int，否则下方 resize(atlas_width_*atlas_height_) 会因有符号溢出 UB / 超大分配。
+    if (atlas_width_ <= 0 || atlas_height_ <= 0 ||
+        static_cast<int64_t>(atlas_width_) * atlas_height_ > (64 * 1024 * 1024)) {
+        DEBUG_LOG_ERROR("TrueTypeFont: 非法图集尺寸 {}x{}", atlas_width_, atlas_height_);
+        return false;
+    }
 
     float scale = stbtt_ScaleForPixelHeight(&font_info, font_size_);
 

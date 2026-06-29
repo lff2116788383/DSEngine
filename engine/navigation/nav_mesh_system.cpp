@@ -441,6 +441,18 @@ bool NavMeshSystem::LoadNavMesh(const std::string& path) {
         return false;
     }
 
+    // data_size 来自文件头，畸形文件可声称近 2G 触发巨额预分配；先按实际剩余字节核对。
+    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return false; }
+    const long file_end = ftell(fp);
+    if (file_end < 0 ||
+        static_cast<long long>(hdr.data_size) > file_end - static_cast<long>(sizeof(hdr))) {
+        fclose(fp);
+        DEBUG_LOG_ERROR("[NavMesh] LoadNavMesh: data_size {} exceeds file {} in {}",
+                        hdr.data_size, file_end, path);
+        return false;
+    }
+    fseek(fp, static_cast<long>(sizeof(hdr)), SEEK_SET);
+
     unsigned char* data = static_cast<unsigned char*>(dtAlloc(hdr.data_size, DT_ALLOC_PERM));
     if (!data) { fclose(fp); return false; }
     if ((int)fread(data, 1, hdr.data_size, fp) != hdr.data_size) {

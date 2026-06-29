@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "engine/render/font/truetype_font.h"
+#include <filesystem>
+#include <fstream>
 
 using namespace dse::render;
 
@@ -37,6 +39,17 @@ TEST(TrueTypeFontTest, LoadFromFile_NonExistent) {
     TrueTypeFont font;
     EXPECT_FALSE(font.LoadFromFile("non_existent_file.ttf"));
     EXPECT_FALSE(font.IsValid());
+}
+
+// 损坏样本：空文件 tellg 返回 0，旧实现 static_cast<size_t>(-1) 风险路径必须安全拒绝
+TEST(TrueTypeFontTest, LoadFromFile_EmptyFileRejected) {
+    namespace fs = std::filesystem;
+    auto tmp = (fs::temp_directory_path() / "dse_empty_font.ttf").string();
+    { std::ofstream out(tmp, std::ios::binary); } // 0 字节
+    TrueTypeFont font;
+    EXPECT_FALSE(font.LoadFromFile(tmp)); // 不崩溃
+    EXPECT_FALSE(font.IsValid());
+    fs::remove(tmp);
 }
 
 // 测试 真类型字体：获取Glyph无效Codepoint

@@ -9,6 +9,8 @@
 #include "engine/navigation/nav_mesh_system.h"
 #include <glm/glm.hpp>
 #include <cstdio>
+#include <cstdint>
+#include <fstream>
 #include <vector>
 
 using namespace dse::navigation;
@@ -392,6 +394,29 @@ TEST(NavMeshSystemTest, LoadNavMeshFileDoesNotExistReturnfalse) {
     EXPECT_FALSE(success) << "文件不存在时应返回 false";
 
     nav.Shutdown();
+}
+
+// 损坏样本：文件头声称的 data_size 远超实际文件大小，必须拒绝（不触发巨额预分配/越界）
+TEST(NavMeshSystemTest, LoadNavMeshHugeDataSizeRejected) {
+    NavMeshSystem nav;
+    if (!nav.Init()) {
+        GTEST_SKIP() << "Init 失败，跳过测试";
+    }
+    const char* tmp_file = "test_nav_corrupt_huge.bin";
+    {
+        std::ofstream out(tmp_file, std::ios::binary);
+        uint32_t magic = 0x444E4D58u; // 'DNMX'
+        uint32_t version = 1u;
+        int32_t  data_size = 2000000000; // ~2GB，但文件只有几字节
+        out.write(reinterpret_cast<const char*>(&magic), 4);
+        out.write(reinterpret_cast<const char*>(&version), 4);
+        out.write(reinterpret_cast<const char*>(&data_size), 4);
+        const char body[8] = {0};
+        out.write(body, sizeof(body));
+    }
+    EXPECT_FALSE(nav.LoadNavMesh(tmp_file)); // 不崩溃、不 OOM
+    nav.Shutdown();
+    std::remove(tmp_file);
 }
 
 // 测试 导航网格系统：保存加载导航Meshcycle
