@@ -50,6 +50,80 @@ jobs:
         shell: pwsh
         run: ctest --test-dir out/build/windows-x64-debug --output-on-failure
 
+  # ── L0b：ImGui Test Engine 真实控件级 UI 套件（每次 PR/push，托管 runner，无需 GPU）──
+  # 与 L1+ 的「启动编辑器 + 截图」不同：本套件是无头、确定性的控件级用例（--run-ui-tests），
+  # 跑软件 OpenGL（Mesa llvmpipe）即可，故无需自托管 GPU runner——与本地 _run_uitest.ps1
+  # 完全一致（GALLIUM_DRIVER=llvmpipe）。托管 windows runner 无 GPU、系统 opengl32.dll 只到
+  # GL 1.1，编辑器需 GL 4.6 Core，故先部署 Mesa 软件 opengl32.dll 到 exe 旁。
+  # 注：本 job 首次真实运行待 CI 额度恢复后验证；构建/运行命令对齐本地已通过的 _build_uitest.bat
+  # 与 _run_uitest.ps1。Mesa 版本固定，便于复现。
+  l0b-ui-tests:
+    name: L0b · imgui-te ui tests (llvmpipe)
+    runs-on: windows-2022
+    env:
+      MESA_VERSION: "24.3.4"   # pal1000/mesa-dist-win release-msvc（llvmpipe 软件 GL）
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure + Build (editor + ImGui Test Engine)
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-debug -DDSE_EDITOR_UI_TESTS=ON
+          cmake --build out/build/windows-x64-debug --target dse_editor_cpp
+
+      # 部署 Mesa 软件 OpenGL（llvmpipe）：把 x64 下的全部 DLL 拷到 uitest exe 旁，
+      # 使无 GPU 的托管 runner 也能起 GL 4.6 Core 上下文。
+      - name: Deploy Mesa software OpenGL (llvmpipe) next to test exe
+        shell: pwsh
+        run: |
+          $ver = $env:MESA_VERSION
+          $archive = "$env:RUNNER_TEMP\mesa.7z"
+          $url = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/mesa3d-$ver-release-msvc.7z"
+          Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
+          $extract = "$env:RUNNER_TEMP\mesa"
+          & 7z x $archive "-o$extract" -y | Out-Null
+          $exe = Get-ChildItem "bin" -Recurse -Filter "dsengine-editor-uitest.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if(-not $exe){ Write-Error "dsengine-editor-uitest.exe not found under bin\"; exit 1 }
+          $dest = $exe.DirectoryName
+          $x64 = Join-Path $extract "x64"
+          if(-not (Test-Path $x64)){ $x64 = $extract }
+          Copy-Item (Join-Path $x64 "*.dll") $dest -Force
+          Write-Host "Deployed Mesa DLLs to $dest"
+
+      - name: Run UI test suite (headless, llvmpipe)
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+        run: |
+          $exe = Get-ChildItem "bin" -Recurse -Filter "dsengine-editor-uitest.exe" | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList @("--headless","--run-ui-tests") -PassThru -NoNewWindow
+          $p.WaitForExit(900000) | Out-Null
+          $summary = Join-Path $exe.DirectoryName "ui_test_summary.txt"
+          if(Test-Path $summary){ Write-Host "----- ui_test_summary.txt -----"; Get-Content $summary }
+          $results = Join-Path $exe.DirectoryName "ui_test_results.xml"
+          if(Test-Path $results){ $fails = Select-String -Path $results -Pattern "<failure message"; if($fails){ Write-Host "----- failures -----"; $fails | ForEach-Object { $_.Line } } }
+          if($p.ExitCode -ne 0){ Write-Error "UI test suite failed (exit $($p.ExitCode))"; exit 1 }
+          if(-not (Test-Path $summary) -or -not (Select-String -Path $summary -Pattern "result=PASS" -Quiet)){ Write-Error "UI test summary missing or not PASS"; exit 1 }
+
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l0b-ui-test-results
+          path: |
+            bin/**/ui_test_summary.txt
+            bin/**/ui_test_results.xml
+          if-no-files-found: ignore
+
   # ── L1：Batch 冒烟（自托管 GPU runner）──────────────────────────────────────
   l1-batch-smoke:
     name: L1 · batch smoke
