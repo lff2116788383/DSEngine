@@ -5,6 +5,7 @@
 
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/dds_parser.h"
+#include "engine/assets/dtex.h"
 #include "engine/assets/bundle_packer.h"
 #include "engine/assets/pak_reader.h"
 #include "engine/assets/native_file_system.h"
@@ -541,12 +542,17 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
         return nullptr;
     }
 
-    if (dse::assets::HasDdsExtension(path)) {
+    const bool is_dds = dse::assets::HasDdsExtension(path);
+    const bool is_dtex = dse::assets::HasDtexExtension(path);
+    if (is_dds || is_dtex) {
         CompressedTextureFormat fmt;
         std::vector<CompressedMipLevel> mips;
-        int dds_w, dds_h;
-        if (!dse::assets::ParseDds(file_data, fmt, mips, dds_w, dds_h)) {
-            DEBUG_LOG_ERROR("Failed to parse DDS file: {}", path);
+        int comp_w, comp_h;
+        const bool parsed = is_dds
+            ? dse::assets::ParseDds(file_data, fmt, mips, comp_w, comp_h)
+            : dse::assets::ParseDtex(file_data, fmt, mips, comp_w, comp_h);
+        if (!parsed) {
+            DEBUG_LOG_ERROR("Failed to parse compressed texture file: {}", path);
             return nullptr;
         }
 
@@ -562,7 +568,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
             return nullptr;
         }
 
-        auto tex = std::make_shared<TextureAsset>(path, handle, dds_w, dds_h, 4);
+        auto tex = std::make_shared<TextureAsset>(path, handle, comp_w, comp_h, 4);
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             textures_[cache_key] = tex;

@@ -927,6 +927,8 @@ dse_enable_lto(dse_cli)
 add_executable(AssetBuilder 
     apps/tools/asset_builder/main.cpp
     engine/assets/compiler/importer.cpp
+    engine/assets/texture_compressor.cpp
+    engine/assets/dtex.cpp
 )
 target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
 if(DSE_HAS_ASSIMP)

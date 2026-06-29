@@ -1,7 +1,15 @@
 #include "engine/assets/compiler/importer.h"
+#include "engine/assets/texture_compressor.h"
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
+
+// importer.cpp 用 TINYGLTF_NO_STB_IMAGE，未编译 stb_image 实现；此处提供之。
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 
 using namespace dse::asset::compiler;
 
@@ -11,14 +19,95 @@ void PrintUsage() {
     std::cout
         << "Usage:\n"
         << "  AssetBuilder <input.gltf/glb/fbx> <output.dmesh>\n"
-        << "  AssetBuilder <input.gltf/glb/fbx> --out-dir <output_dir>\n\n"
+        << "  AssetBuilder <input.gltf/glb/fbx> --out-dir <output_dir>\n"
+        << "  AssetBuilder --texture <input.png/jpg/...> <output.dtex> [options]\n\n"
+        << "Texture options:\n"
+        << "  --format <bc1|bc1srgb|bc3|bc3srgb|bc4|bc5>   target BCn format (default bc3)\n"
+        << "  --no-mips                                    do not generate a mip chain\n"
+        << "  --hq                                         high-quality encode (slower)\n\n"
         << "Examples:\n"
         << "  AssetBuilder assets/model.glb cooked/model.dmesh\n"
-        << "  AssetBuilder assets/model.fbx --out-dir cooked\n\n"
+        << "  AssetBuilder assets/model.fbx --out-dir cooked\n"
+        << "  AssetBuilder --texture assets/albedo.png cooked/albedo.dtex --format bc1srgb\n"
+        << "  AssetBuilder --texture assets/normal.png cooked/normal.dtex --format bc5\n\n"
         << "Notes:\n"
         << "  - The tool imports glTF/GLB/FBX and cooks .dmesh/.dmat/.danim/.dskel in one pass.\n"
         << "  - FBX is imported offline through the asset compiler path; runtime does not read FBX directly.\n"
-        << "  - When --out-dir is used, the base file name is derived from the input file stem.\n";
+        << "  - When --out-dir is used, the base file name is derived from the input file stem.\n"
+        << "  - --texture encodes source images to BCn .dtex (BC7/ASTC not yet supported).\n";
+}
+
+bool ParseTextureFormat(const std::string& s, CompressedTextureFormat& out) {
+    using F = CompressedTextureFormat;
+    if (s == "bc1")      { out = F::BC1_UNORM; return true; }
+    if (s == "bc1srgb")  { out = F::BC1_SRGB;  return true; }
+    if (s == "bc3")      { out = F::BC3_UNORM; return true; }
+    if (s == "bc3srgb")  { out = F::BC3_SRGB;  return true; }
+    if (s == "bc4")      { out = F::BC4_UNORM; return true; }
+    if (s == "bc5")      { out = F::BC5_UNORM; return true; }
+    return false;
+}
+
+int RunTextureCook(int argc, char** argv) {
+    // argv[1] == "--texture"; expect input, output, then options.
+    if (argc < 4) {
+        std::cerr << "[AssetBuilder] --texture requires <input> <output.dtex>. Use --help." << std::endl;
+        return 1;
+    }
+    const std::filesystem::path input_path = argv[2];
+    const std::filesystem::path output_path = argv[3];
+
+    CompressedTextureFormat format = CompressedTextureFormat::BC3_UNORM;
+    bool generate_mips = true;
+    bool high_quality = false;
+    for (int i = 4; i < argc; ++i) {
+        const std::string opt = argv[i];
+        if (opt == "--no-mips") {
+            generate_mips = false;
+        } else if (opt == "--hq") {
+            high_quality = true;
+        } else if (opt == "--format") {
+            if (i + 1 >= argc || !ParseTextureFormat(argv[i + 1], format)) {
+                std::cerr << "[AssetBuilder] Invalid/missing --format value." << std::endl;
+                return 1;
+            }
+            ++i;
+        } else {
+            std::cerr << "[AssetBuilder] Unknown texture option: " << opt << std::endl;
+            return 1;
+        }
+    }
+
+    int w = 0, h = 0, channels = 0;
+    stbi_set_flip_vertically_on_load(0);
+    unsigned char* pixels = stbi_load(input_path.string().c_str(), &w, &h, &channels, 4);
+    if (!pixels || w <= 0 || h <= 0) {
+        if (pixels) stbi_image_free(pixels);
+        std::cerr << "[AssetBuilder] Failed to load image: " << input_path.string() << std::endl;
+        return 1;
+    }
+
+    std::vector<uint8_t> dtex;
+    const bool ok = dse::assets::EncodeTextureToDtex(pixels, w, h, format, generate_mips,
+                                                     high_quality, dtex);
+    stbi_image_free(pixels);
+    if (!ok) {
+        std::cerr << "[AssetBuilder] Texture encode failed (unsupported format?)." << std::endl;
+        return 1;
+    }
+
+    std::error_code ec;
+    const std::filesystem::path out_dir = output_path.parent_path();
+    if (!out_dir.empty()) std::filesystem::create_directories(out_dir, ec);
+    std::ofstream out(output_path, std::ios::binary);
+    if (!out) {
+        std::cerr << "[AssetBuilder] Failed to open output: " << output_path.string() << std::endl;
+        return 1;
+    }
+    out.write(reinterpret_cast<const char*>(dtex.data()), static_cast<std::streamsize>(dtex.size()));
+    std::cout << "[AssetBuilder] Cooked dtex: " << output_path.string()
+              << " (" << w << "x" << h << ", " << dtex.size() << " bytes)" << std::endl;
+    return 0;
 }
 
 bool HasSupportedInputExtension(const std::filesystem::path& path) {
@@ -46,6 +135,10 @@ int main(int argc, char** argv) {
     if (first_arg == "--help" || first_arg == "-h") {
         PrintUsage();
         return 0;
+    }
+
+    if (first_arg == "--texture") {
+        return RunTextureCook(argc, argv);
     }
 
     if (argc != 3 && argc != 4) {

@@ -27,6 +27,13 @@ bool s_open = false;
 enum class ImportType { Mesh3D, Texture, Audio };
 const char* kImportTypeNames[] = { "3D Model (.gltf/.glb/.fbx)", "Texture (.png/.jpg/.hdr/.tga)", "Audio (.wav/.ogg/.mp3)" };
 
+// 压缩格式下拉项；与 AssetBuilder --texture 的 --format 取值一一对应。
+const char* kCompressFormatNames[] = {
+    "BC1 (RGB, 4bpp)", "BC3 (RGBA, 8bpp)", "BC1 sRGB (color)", "BC3 sRGB (color+alpha)",
+    "BC4 (single channel)", "BC5 (normal map)"
+};
+const char* kCompressFormatArgs[] = { "bc1", "bc3", "bc1srgb", "bc3srgb", "bc4", "bc5" };
+
 struct ImportState {
     ImportType type = ImportType::Mesh3D;
     char source_path[512] = "";
@@ -36,6 +43,8 @@ struct ImportState {
     bool import_materials = true;
     bool generate_mipmaps = true;
     bool compress_texture = false;
+    int compress_format = 1;        // index into kCompressFormatNames (default BC3)
+    bool compress_high_quality = false;
     // Results
     bool importing = false;
     bool import_done = false;
@@ -90,6 +99,41 @@ fs::path FindAssetBuilder() {
     if (fs::exists(candidate)) return candidate;
     // fallback: rely on PATH
     return fs::path("AssetBuilder");
+}
+
+// 运行 AssetBuilder 命令行；返回 true 表示退出码为 0。out_err 填充失败描述。
+bool RunAssetBuilder(const std::string& cmd, std::string& out_err) {
+#ifdef _WIN32
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi{};
+    std::vector<char> cmd_buf(cmd.begin(), cmd.end());
+    cmd_buf.push_back('\0');
+    BOOL ok = CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
+    if (!ok) {
+        out_err = "Failed to launch AssetBuilder: " + cmd;
+        return false;
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    if (exit_code != 0) {
+        out_err = "AssetBuilder failed (exit code " + std::to_string(exit_code) + ")";
+        return false;
+    }
+    return true;
+#else
+    int ret = std::system(cmd.c_str());
+    if (ret != 0) {
+        out_err = "AssetBuilder failed (exit code " + std::to_string(ret) + ")";
+        return false;
+    }
+    return true;
+#endif
 }
 
 // ─── Import Logic ──────────────────────────────────────────────────────────
@@ -159,6 +203,31 @@ void DoImportTexture(ImportState& state, const std::string& project_asset_dir) {
     fs::path src(state.source_path);
     fs::path out_dir = fs::path(project_asset_dir) / state.output_dir;
     fs::create_directories(out_dir);
+
+    if (state.compress_texture) {
+        // 走 AssetBuilder --texture 编码为 .dtex（BCn + 可选 mip 链）。
+        fs::path dest = out_dir / (src.stem().string() + ".dtex");
+        fs::path asset_builder = FindAssetBuilder();
+        int fmt_idx = state.compress_format;
+        if (fmt_idx < 0 || fmt_idx >= static_cast<int>(IM_ARRAYSIZE(kCompressFormatArgs))) fmt_idx = 1;
+        std::string cmd = "\"" + asset_builder.string() + "\" --texture "
+                        + "\"" + std::string(state.source_path) + "\" "
+                        + "\"" + dest.string() + "\" "
+                        + "--format " + kCompressFormatArgs[fmt_idx];
+        if (!state.generate_mipmaps) cmd += " --no-mips";
+        if (state.compress_high_quality) cmd += " --hq";
+
+        std::string err;
+        if (!RunAssetBuilder(cmd, err) || !fs::exists(dest)) {
+            state.import_success = false;
+            state.import_message = err.empty() ? "Texture compression produced no output." : err;
+            return;
+        }
+        state.import_success = true;
+        state.imported_files.push_back(dest.string());
+        state.import_message = "Texture compressed to: " + dest.string();
+        return;
+    }
 
     fs::path dest = out_dir / src.filename();
     std::error_code ec;
@@ -269,10 +338,14 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
     } else if (state.type == ImportType::Texture) {
         ImGui::Text("Texture Import Options:");
         ImGui::Checkbox("Generate Mipmaps", &state.generate_mipmaps);
-        ImGui::BeginDisabled();
-        ImGui::Checkbox("Compress (BCn)", &state.compress_texture);
-        ImGui::EndDisabled();
-        ImGui::TextDisabled("Note: Compression is not yet implemented.");
+        ImGui::Checkbox("Compress (BCn -> .dtex)", &state.compress_texture);
+        if (state.compress_texture) {
+            ImGui::Indent();
+            ImGui::Combo("Format", &state.compress_format, kCompressFormatNames, IM_ARRAYSIZE(kCompressFormatNames));
+            ImGui::Checkbox("High Quality (slower)", &state.compress_high_quality);
+            ImGui::TextDisabled("Encodes to GPU-ready BCn blocks (BC7/ASTC not yet supported).");
+            ImGui::Unindent();
+        }
     } else if (state.type == ImportType::Audio) {
         ImGui::Text("Audio Import Options:");
         ImGui::TextDisabled("Audio files are copied as-is to the project.");
