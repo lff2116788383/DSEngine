@@ -302,6 +302,32 @@ void RegisterMiscEditorTests(ImGuiTestEngine* e) {
             IM_CHECK(*Services().current_gizmo_operation == 0);
         };
     }
+
+    // ── 菜单模态弹窗回归：Help → About DSEngine 真正打开（防 OpenPopup/BeginPopupModal ID 作用域回归）─
+    // 与 New Project / Build Game 同类坑：OpenPopup 若在菜单作用域调用、BeginPopupModal 在顶层，
+    // 弹窗打不开。About 之前未修，此用例守护其修复（菜单内只置标志、顶层再 OpenPopup）。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-misc", "help_about_dialog_opens");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            // 前置：确保无残留同名弹窗。
+            if (FindActiveWindow("AboutDSEngine") != nullptr) {
+                ctx->SetRef("//$FOCUSED");
+                ctx->ItemClick("Close");
+                ctx->Yield(2);
+            }
+
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick("Help/About DSEngine");
+            ctx->Yield(2);
+            IM_CHECK(FindActiveWindow("AboutDSEngine") != nullptr);  // 修复后弹窗真正打开
+
+            // 点 Close 关闭，断言弹窗消失（收尾不污染后续用例）。
+            ctx->SetRef("//$FOCUSED");
+            ctx->ItemClick("Close");
+            ctx->Yield(2);
+            IM_CHECK(FindActiveWindow("AboutDSEngine") == nullptr);
+        };
+    }
 }
 
 } // namespace dse::editor::uitest

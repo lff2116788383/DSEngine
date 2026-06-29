@@ -143,9 +143,10 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     
     auto& ai_config = AIConfigManager::Instance();
 
-    // NewProjectPopup 必须在菜单栏(DSEngineRoot)作用域 OpenPopup，才能与下方
-    // BeginPopupModal 的 ID 栈一致；故在 File 菜单内只置标志，菜单结束后再真正打开。
+    // NewProjectPopup / AboutDSEngine 必须在菜单栏(DSEngineRoot)作用域 OpenPopup，才能与下方
+    // BeginPopupModal 的 ID 栈一致；故在菜单内只置标志，菜单结束后再真正打开。
     bool open_new_project_popup = false;
+    bool open_about_popup = false;
 
     // ─── File ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("File"))) {
@@ -485,7 +486,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     // ─── Help ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Help"))) {
         if (ImGui::MenuItem("About DSEngine")) {
-            ImGui::OpenPopup("AboutDSEngine");
+            open_about_popup = true;
         }
         ImGui::Separator();
 #if defined(_WIN32)
@@ -510,6 +511,9 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ── About popup ──────────────────────────────────────────────────────────
+    if (open_about_popup) {
+        ImGui::OpenPopup("AboutDSEngine");
+    }
     if (ImGui::BeginPopupModal("AboutDSEngine", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : nullptr);
         ImGui::Text("DSEngine Editor");
