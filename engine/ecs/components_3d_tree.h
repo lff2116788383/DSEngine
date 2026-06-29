@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <string>
 
+#include "engine/ecs/vegetation_mask.h"
+
 namespace dse {
 
 struct TreeComponent {
@@ -38,6 +40,9 @@ struct TreeComponent {
     // Shadow
     bool cast_shadow = true;
     float shadow_distance = 80.0f;
+
+    // 植被密度遮罩（编辑器植被刷绘制；空=全图均匀满密度，向后兼容）
+    VegetationDensityMask density_mask;
 
     // Runtime (managed by TreeSystem)
     int cached_instance_count_ = 0;

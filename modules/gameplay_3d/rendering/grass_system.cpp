@@ -419,6 +419,10 @@ void GrassSystem::GenerateChunkInstances(const GrassComponent& grass,
         float wx = world_min_x + hx * cs;
         float wz = world_min_z + hz * cs;
 
+        // 植被密度遮罩：按权重概率剔除（遮罩 inactive 时恒返回 1.0，不剔除）
+        float mask_w = SampleVegetationMask(grass.density_mask, wx, wz);
+        if (mask_w < 0.999f && Halton(seq, 11) > mask_w) continue;
+
         float wy = 0.0f;
         if (terrain && terrain_transform) {
             wy = dse::SampleTerrainHeight(*terrain, *terrain_transform, wx, wz);

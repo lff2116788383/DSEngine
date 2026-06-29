@@ -108,6 +108,7 @@ private:
     bool show_animation_ = false;
     bool show_tile_palette_ = false;
     bool show_terrain_editor_ = false;
+    bool show_vegetation_brush_ = false;
     bool show_lua_console_ = false;
     bool show_undo_history_ = false;
     bool show_asset_browser_ = false;

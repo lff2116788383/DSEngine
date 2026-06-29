@@ -78,6 +78,7 @@
 #include "editor_selection.h"
 #include "editor_preferences_panel.h"
 #include "editor_terrain_panel.h"
+#include "editor_vegetation_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
@@ -1099,7 +1100,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::BeginEditorShell();
     dse::editor::PanelVisibility panel_vis{
         &show_localization_preview_, &show_profiler_, &show_animation_,
-        &show_tile_palette_, &show_terrain_editor_, &show_lua_console_,
+        &show_tile_palette_, &show_terrain_editor_, &show_vegetation_brush_,
+        &show_lua_console_,
         &show_undo_history_,
         &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
         &show_shader_graph_, &show_git_, &show_multi_viewport_,
@@ -1136,6 +1138,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::DrawMaterialPanel(ctx);
     if (show_tile_palette_)   dse::editor::DrawTilePalettePanel(ctx);
     if (show_terrain_editor_) dse::editor::DrawTerrainEditorPanel(ctx);
+    if (show_vegetation_brush_) dse::editor::DrawVegetationEditorPanel(ctx);
     if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
     if (show_lua_debugger_)   dse::editor::DrawLuaDebuggerPanel(ctx);
     dse::editor::DrawBuildGameDialog();

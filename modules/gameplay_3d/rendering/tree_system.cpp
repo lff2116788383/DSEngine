@@ -237,6 +237,15 @@ void TreeSystem::GenerateChunkInstances(const TreeComponent& tree,
 
         float wx = x0 + rx * chunk + tree_tf.position.x;
         float wz = z0 + rz * chunk + tree_tf.position.z;
+
+        // 植被密度遮罩：按权重概率剔除（遮罩 inactive 时恒返回 1.0，不剔除）
+        float mask_w = SampleVegetationMask(tree.density_mask, wx, wz);
+        if (mask_w < 0.999f) {
+            h ^= (h << 13); h ^= (h >> 17); h ^= (h << 5);
+            float r_mask = static_cast<float>(h & 0xFFFF) / 65535.0f;
+            if (r_mask > mask_w) continue;
+        }
+
         float wy = tree_tf.position.y;
 
         if (terrain && terrain_tf) {

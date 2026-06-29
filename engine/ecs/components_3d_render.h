@@ -7,6 +7,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "engine/ecs/transform.h"
+#include "engine/ecs/vegetation_mask.h"
 #include "engine/render/rhi/rhi_handle.h"
 
 #ifndef CSM_CASCADES
@@ -456,6 +457,9 @@ struct GrassComponent {
     // 阴影
     bool  cast_shadow = false;
     float shadow_distance = 20.0f;    ///< 仅近距离投射阴影
+
+    // 植被密度遮罩（编辑器植被刷绘制；空=全图均匀满密度，向后兼容）
+    VegetationDensityMask density_mask;
 
     // 运行时（GrassSystem 管理，用户不应手动写入）
     int cached_instance_count_ = 0;

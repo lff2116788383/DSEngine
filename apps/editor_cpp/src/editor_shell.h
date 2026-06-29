@@ -11,6 +11,7 @@ struct PanelVisibility {
     bool* animation = nullptr;
     bool* tile_palette = nullptr;
     bool* terrain_editor = nullptr;
+    bool* vegetation_brush = nullptr;
     bool* lua_console = nullptr;
     bool* undo_history = nullptr;
     bool* asset_browser = nullptr;

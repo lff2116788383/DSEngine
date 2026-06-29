@@ -428,6 +428,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 ImGui::MenuItem("Tile Palette", nullptr, panels->tile_palette);
             if (panels->terrain_editor)
                 ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, panels->terrain_editor);
+            if (panels->vegetation_brush)
+                ImGui::MenuItem(MDI_ICON_TERRAIN "  Vegetation Brush", nullptr, panels->vegetation_brush);
             if (panels->lua_console)
                 ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, panels->lua_console);
             if (panels->localization_preview)

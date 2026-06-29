@@ -16,6 +16,7 @@
 #include "editor_asset_importer.h"
 #include "editor_tilemap_panel.h"
 #include "editor_terrain_panel.h"
+#include "editor_vegetation_panel.h"
 #include "editor_audio_panel.h"
 #include "editor_preferences_panel.h"
 #include "editor_selection_outline.h"
@@ -648,6 +649,14 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 tm_view, tm_proj,
                 ImGui::GetIO().DeltaTime);
         }
+        if (!paint_consumed) {
+            paint_consumed = HandleVegetationViewportPaint(
+                context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                tm_view, tm_proj,
+                ImGui::GetIO().DeltaTime);
+        }
     }
 
     // --- Marquee Selection + Point Picking ---
@@ -905,6 +914,11 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
                 ov_view, ov_proj);
             DrawTerrainBrushOverlay(
+                context.registry,
+                glm::vec2(window_pos.x, window_pos.y),
+                glm::vec2(scene_panel_size.x, scene_panel_size.y),
+                ov_view, ov_proj);
+            DrawVegetationBrushOverlay(
                 context.registry,
                 glm::vec2(window_pos.x, window_pos.y),
                 glm::vec2(scene_panel_size.x, scene_panel_size.y),
