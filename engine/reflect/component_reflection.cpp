@@ -108,6 +108,38 @@ void RegisterPostProcess() {
     t.field("contact_shadow_strength", &PostProcessComponent::contact_shadow_strength).range(0.0, 1.0);
     t.field("contact_shadow_steps", &PostProcessComponent::contact_shadow_steps).range(1.0, 128.0);
     t.field("contact_shadow_step_size", &PostProcessComponent::contact_shadow_step_size).range(0.0, 4.0);
+    // DOF
+    t.field("dof_enabled", &PostProcessComponent::dof_enabled);
+    t.field("dof_focus_distance", &PostProcessComponent::dof_focus_distance).range(0.0, 10000.0);
+    t.field("dof_focus_range", &PostProcessComponent::dof_focus_range).range(0.0, 10000.0);
+    t.field("dof_bokeh_radius", &PostProcessComponent::dof_bokeh_radius).range(0.0, 32.0);
+    // Motion Blur
+    t.field("motion_blur_enabled", &PostProcessComponent::motion_blur_enabled);
+    t.field("motion_blur_intensity", &PostProcessComponent::motion_blur_intensity).range(0.0, 4.0);
+    t.field("motion_blur_samples", &PostProcessComponent::motion_blur_samples).range(1.0, 64.0);
+    // SSR
+    t.field("ssr_enabled", &PostProcessComponent::ssr_enabled);
+    t.field("ssr_max_distance", &PostProcessComponent::ssr_max_distance).range(0.0, 10000.0);
+    t.field("ssr_thickness", &PostProcessComponent::ssr_thickness).range(0.0, 16.0);
+    t.field("ssr_step_size", &PostProcessComponent::ssr_step_size).range(0.0, 16.0);
+    t.field("ssr_max_steps", &PostProcessComponent::ssr_max_steps).range(1.0, 256.0);
+    t.field("ssr_fade_distance", &PostProcessComponent::ssr_fade_distance).range(0.0, 1.0);
+    t.field("ssr_max_roughness", &PostProcessComponent::ssr_max_roughness).range(0.0, 1.0);
+    // Outline
+    t.field("outline_enabled", &PostProcessComponent::outline_enabled);
+    t.field("outline_color", &PostProcessComponent::outline_color);
+    t.field("outline_thickness", &PostProcessComponent::outline_thickness).range(0.0, 16.0);
+    t.field("outline_depth_threshold", &PostProcessComponent::outline_depth_threshold).range(0.0, 4.0);
+    t.field("outline_normal_threshold", &PostProcessComponent::outline_normal_threshold).range(0.0, 4.0);
+    // Light Shaft
+    t.field("light_shaft_enabled", &PostProcessComponent::light_shaft_enabled);
+    t.field("light_shaft_color", &PostProcessComponent::light_shaft_color);
+    t.field("light_shaft_density", &PostProcessComponent::light_shaft_density).range(0.0, 4.0);
+    t.field("light_shaft_weight", &PostProcessComponent::light_shaft_weight).range(0.0, 4.0);
+    t.field("light_shaft_decay", &PostProcessComponent::light_shaft_decay).range(0.0, 1.0);
+    t.field("light_shaft_exposure", &PostProcessComponent::light_shaft_exposure).range(0.0, 4.0);
+    t.field("light_shaft_intensity", &PostProcessComponent::light_shaft_intensity).range(0.0, 4.0);
+    t.field("light_shaft_samples", &PostProcessComponent::light_shaft_samples).range(1.0, 256.0);
     // Volumetric Fog
     t.field("fog_enabled", &PostProcessComponent::fog_enabled);
     t.field("fog_color", &PostProcessComponent::fog_color);

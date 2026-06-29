@@ -294,9 +294,12 @@ TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
 
     dse::TreeComponent expected_tree;
     expected_tree.mesh_path = "trees/pine.dmesh";
+    expected_tree.lod1_mesh_path = "trees/pine_lod1.dmesh";
     expected_tree.density = 0.05f;
     expected_tree.seed = 42;
     expected_tree.billboard_distance = 180.0f;
+    expected_tree.random_rotation = false;
+    expected_tree.min_scale = 0.55f;
 
     dse::TerrainTileManagerComponent expected_ttm;
     expected_ttm.tile_world_size = 64.0f;
@@ -327,6 +330,13 @@ TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     expected_pp.bloom_knee = 0.2f;
     expected_pp.ssr_enabled = true;
     expected_pp.ssr_fade_distance = 0.35f;
+    expected_pp.fog_enabled = true;
+    expected_pp.fog_color = glm::vec3(0.11f, 0.22f, 0.33f);
+    expected_pp.fog_steps = 21;
+    expected_pp.outline_enabled = true;
+    expected_pp.outline_color = glm::vec3(0.9f, 0.1f, 0.2f);
+    expected_pp.dof_focus_distance = 137.0f;
+    expected_pp.light_shaft_samples = 48;
 
     {
         Scene src("extended_components");
@@ -366,9 +376,12 @@ TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     const auto& pp = view.get<dse::PostProcessComponent>(loaded);
 
     EXPECT_EQ(tree.mesh_path, expected_tree.mesh_path);
+    EXPECT_EQ(tree.lod1_mesh_path, expected_tree.lod1_mesh_path);
     EXPECT_NEAR(tree.density, expected_tree.density, kEpsilon);
     EXPECT_EQ(tree.seed, expected_tree.seed);
     EXPECT_NEAR(tree.billboard_distance, expected_tree.billboard_distance, kEpsilon);
+    EXPECT_EQ(tree.random_rotation, expected_tree.random_rotation);
+    EXPECT_NEAR(tree.min_scale, expected_tree.min_scale, kEpsilon);
 
     EXPECT_NEAR(ttm.tile_world_size, expected_ttm.tile_world_size, kEpsilon);
     EXPECT_NEAR(ttm.load_radius, expected_ttm.load_radius, kEpsilon);
@@ -397,6 +410,17 @@ TEST(SceneSerializationTest, AndAfterComponentroundTrip) {
     EXPECT_NEAR(pp.bloom_knee, expected_pp.bloom_knee, kEpsilon);
     EXPECT_TRUE(pp.ssr_enabled);
     EXPECT_NEAR(pp.ssr_fade_distance, expected_pp.ssr_fade_distance, kEpsilon);
+    EXPECT_TRUE(pp.fog_enabled);
+    EXPECT_NEAR(pp.fog_color.r, expected_pp.fog_color.r, kEpsilon);
+    EXPECT_NEAR(pp.fog_color.g, expected_pp.fog_color.g, kEpsilon);
+    EXPECT_NEAR(pp.fog_color.b, expected_pp.fog_color.b, kEpsilon);
+    EXPECT_EQ(pp.fog_steps, expected_pp.fog_steps);
+    EXPECT_TRUE(pp.outline_enabled);
+    EXPECT_NEAR(pp.outline_color.r, expected_pp.outline_color.r, kEpsilon);
+    EXPECT_NEAR(pp.outline_color.g, expected_pp.outline_color.g, kEpsilon);
+    EXPECT_NEAR(pp.outline_color.b, expected_pp.outline_color.b, kEpsilon);
+    EXPECT_NEAR(pp.dof_focus_distance, expected_pp.dof_focus_distance, kEpsilon);
+    EXPECT_EQ(pp.light_shaft_samples, expected_pp.light_shaft_samples);
 }
 
 // 测试 场景序列化：朝向之后Regression示例Passed
