@@ -68,6 +68,7 @@ void LoadLayoutPreset(const std::string& name) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f.is_open()) return;
     auto size = f.tellg();
+    if (size <= 0) return;  // tellg 失败(-1)时若不兜底，static_cast<size_t> 会请求约 SIZE_MAX 字节 → bad_alloc
     f.seekg(0);
     std::string content(static_cast<size_t>(size), '\0');
     f.read(content.data(), size);
