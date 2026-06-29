@@ -22,8 +22,8 @@ void RegisterGrass() {
     t.field("blade_width", &GrassComponent::blade_width).range(0.0, 2.0);
     t.field("blade_height", &GrassComponent::blade_height).range(0.0, 8.0);
     t.field("blade_height_variation", &GrassComponent::blade_height_variation).range(0.0, 1.0);
-    t.field("base_color", &GrassComponent::base_color);
-    t.field("tip_color", &GrassComponent::tip_color);
+    t.field("base_color", &GrassComponent::base_color).color();
+    t.field("tip_color", &GrassComponent::tip_color).color();
     t.field("wind_direction", &GrassComponent::wind_direction);
     t.field("wind_speed", &GrassComponent::wind_speed).range(0.0, 10.0);
     t.field("wind_strength", &GrassComponent::wind_strength).range(0.0, 4.0);
@@ -127,13 +127,13 @@ void RegisterPostProcess() {
     t.field("ssr_max_roughness", &PostProcessComponent::ssr_max_roughness).range(0.0, 1.0);
     // Outline
     t.field("outline_enabled", &PostProcessComponent::outline_enabled);
-    t.field("outline_color", &PostProcessComponent::outline_color);
+    t.field("outline_color", &PostProcessComponent::outline_color).color();
     t.field("outline_thickness", &PostProcessComponent::outline_thickness).range(0.0, 16.0);
     t.field("outline_depth_threshold", &PostProcessComponent::outline_depth_threshold).range(0.0, 4.0);
     t.field("outline_normal_threshold", &PostProcessComponent::outline_normal_threshold).range(0.0, 4.0);
     // Light Shaft
     t.field("light_shaft_enabled", &PostProcessComponent::light_shaft_enabled);
-    t.field("light_shaft_color", &PostProcessComponent::light_shaft_color);
+    t.field("light_shaft_color", &PostProcessComponent::light_shaft_color).color();
     t.field("light_shaft_density", &PostProcessComponent::light_shaft_density).range(0.0, 4.0);
     t.field("light_shaft_weight", &PostProcessComponent::light_shaft_weight).range(0.0, 4.0);
     t.field("light_shaft_decay", &PostProcessComponent::light_shaft_decay).range(0.0, 1.0);
@@ -142,7 +142,7 @@ void RegisterPostProcess() {
     t.field("light_shaft_samples", &PostProcessComponent::light_shaft_samples).range(1.0, 256.0);
     // Volumetric Fog
     t.field("fog_enabled", &PostProcessComponent::fog_enabled);
-    t.field("fog_color", &PostProcessComponent::fog_color);
+    t.field("fog_color", &PostProcessComponent::fog_color).color();
     t.field("fog_density", &PostProcessComponent::fog_density).range(0.0, 1.0);
     t.field("fog_height_falloff", &PostProcessComponent::fog_height_falloff).range(0.0, 4.0);
     t.field("fog_height_offset", &PostProcessComponent::fog_height_offset);

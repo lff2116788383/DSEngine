@@ -19,6 +19,12 @@
 #include <string>
 #include <variant>
 
+#include "engine/ecs/components_3d_render.h"   // GrassComponent
+#include "engine/ecs/components_3d_tree.h"     // TreeComponent
+#include "engine/reflect/reflect.h"
+#include "engine/reflect/component_reflection.h"
+#include "editor_reflected_inspector.h"
+
 #include "editor_shared_components.h"
 #include "editor_toolbar.h"
 #include "editor_shortcuts.h"
@@ -1861,50 +1867,44 @@ void DrawParticleSystem3DSection(EditorContext& context) {
     ImGui::Columns(1);
 }
 
+// 通用反射 Inspector：辅助构造"取得组件实例指针"的回调，组件被移除时返回 nullptr。
+template <typename Comp>
+std::function<void*()> MakeReflectResolver(EditorContext& context) {
+    return [&context]() -> void* {
+        entt::entity e = context.selected_entity;
+        if (context.registry.valid(e) && context.registry.all_of<Comp>(e))
+            return &context.registry.get<Comp>(e);
+        return nullptr;
+    };
+}
+
+// PostProcess / Tree / Grass 改由通用反射驱动渲染：字段集合来自反射注册（单一
+// 事实来源）。给组件加字段不再需要改这里——A->C 切换后端时本入口同样不动。
 void DrawPostProcessSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::PostProcessComponent>(context.selected_entity)) {
-        return;
-    }
+    if (!context.registry.all_of<dse::PostProcessComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::PostProcessComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_POST_PROCESS "  Post Processing", *ti,
+                         MakeReflectResolver<dse::PostProcessComponent>(context));
+}
 
-    auto& pp = context.registry.get<dse::PostProcessComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_POST_PROCESS "  Post Processing", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
+void DrawTreeSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::TreeComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::TreeComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_TERRAIN "  Tree", *ti,
+                         MakeReflectResolver<dse::TreeComponent>(context));
+}
 
-    ImGui::Columns(2, "pp_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##pp_enabled", &pp.enabled));
-    INSPECTOR_PROPERTY("Exposure", ImGui::DragFloat("##pp_exp", &pp.exposure, 0.05f, 0.0f, 10.0f));
-    ImGui::Separator();
-    ImGui::Text("Bloom");
-    ImGui::NextColumn(); ImGui::NextColumn();
-    INSPECTOR_PROPERTY("Bloom Enabled", ImGui::Checkbox("##pp_bloom_en", &pp.bloom_enabled));
-    INSPECTOR_PROPERTY("Threshold", ImGui::DragFloat("##pp_bloom_thresh", &pp.bloom_threshold, 0.05f, 0.0f, 10.0f));
-    INSPECTOR_PROPERTY("Intensity", ImGui::DragFloat("##pp_bloom_int", &pp.bloom_intensity, 0.05f, 0.0f, 10.0f));
-    INSPECTOR_PROPERTY("Knee", ImGui::DragFloat("##pp_bloom_knee", &pp.bloom_knee, 0.01f, 0.0f, 1.0f));
-    INSPECTOR_PROPERTY("Mip Weight", ImGui::DragFloat("##pp_bloom_mipw", &pp.bloom_mip_weight, 0.001f, 0.0f, 0.1f));
-    ImGui::Separator();
-    ImGui::Text("SSAO");
-    ImGui::NextColumn(); ImGui::NextColumn();
-    INSPECTOR_PROPERTY("SSAO Enabled", ImGui::Checkbox("##pp_ssao_en", &pp.ssao_enabled));
-    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##pp_ssao_rad", &pp.ssao_radius, 0.01f, 0.01f, 5.0f));
-    INSPECTOR_PROPERTY("Bias", ImGui::DragFloat("##pp_ssao_bias", &pp.ssao_bias, 0.001f, 0.0f, 0.5f));
-    { int sc = pp.ssao_sample_count; INSPECTOR_PROPERTY("Samples", ImGui::DragInt("##pp_ssao_sc", &sc, 1, 4, 32)); pp.ssao_sample_count = sc; }
-    INSPECTOR_PROPERTY("Power", ImGui::DragFloat("##pp_ssao_pow", &pp.ssao_power, 0.1f, 0.1f, 8.0f));
-    INSPECTOR_PROPERTY("AO Intensity", ImGui::DragFloat("##pp_ssao_int", &pp.ssao_intensity, 0.05f, 0.0f, 5.0f));
-    ImGui::Separator();
-    ImGui::Text("SSR");
-    ImGui::NextColumn(); ImGui::NextColumn();
-    INSPECTOR_PROPERTY("SSR Enabled", ImGui::Checkbox("##pp_ssr_en", &pp.ssr_enabled));
-    INSPECTOR_PROPERTY("Fade Distance", ImGui::DragFloat("##pp_ssr_fade", &pp.ssr_fade_distance, 0.01f, 0.0f, 1.0f));
-    INSPECTOR_PROPERTY("Max Roughness", ImGui::DragFloat("##pp_ssr_rough", &pp.ssr_max_roughness, 0.01f, 0.0f, 1.0f));
-    ImGui::Separator();
-    ImGui::Text("FXAA");
-    ImGui::NextColumn(); ImGui::NextColumn();
-    INSPECTOR_PROPERTY("FXAA Enabled", ImGui::Checkbox("##pp_fxaa_en", &pp.fxaa_enabled));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+void DrawGrassSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::GrassComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::GrassComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_TERRAIN "  Grass", *ti,
+                         MakeReflectResolver<dse::GrassComponent>(context));
 }
 
 void DrawLightProbeSection(EditorContext& context) {
@@ -2094,6 +2094,16 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::PostProcessComponent>(e)) r.emplace<dse::PostProcessComponent>(e); },
         50,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::PostProcessComponent>(e)) r.erase<dse::PostProcessComponent>(e); }});
+    reg.Register({"Tree", "3D", DrawTreeSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::TreeComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::TreeComponent>(e)) r.emplace<dse::TreeComponent>(e); },
+        51,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::TreeComponent>(e)) r.erase<dse::TreeComponent>(e); }});
+    reg.Register({"Grass", "3D", DrawGrassSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::GrassComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::GrassComponent>(e)) r.emplace<dse::GrassComponent>(e); },
+        52,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::GrassComponent>(e)) r.erase<dse::GrassComponent>(e); }});
 
     // --- Physics 3D ---
     reg.Register({"RigidBody 3D", "Physics", DrawRigidBody3DSection,

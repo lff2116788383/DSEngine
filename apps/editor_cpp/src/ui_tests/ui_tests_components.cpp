@@ -28,7 +28,8 @@
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
-#include "engine/ecs/components_3d_render.h"    // Camera3D/DirectionalLight3D/PointLight/MeshRenderer
+#include "engine/ecs/components_3d_render.h"    // Camera3D/DirectionalLight3D/PointLight/MeshRenderer/PostProcess/Grass
+#include "engine/ecs/components_3d_tree.h"      // dse::TreeComponent
 #include "engine/ecs/components_3d_physics.h"   // dse::RigidBody3DComponent
 #include "engine/ecs/particle_2d.h"             // ParticleEmitterComponent（全局命名空间）
 
@@ -340,6 +341,58 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
                 ctx->Yield();
             }
             IM_CHECK(!Reg().valid(ent));
+        };
+    }
+
+    // ── ④-7 反射驱动 Inspector：PostProcess 浮点字段改值 + Edit/Undo 回退 ──────
+    // 验证 DrawReflectedSection 通用驱动渲染出可寻址控件、写回 ECS、并接入撤销栈。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "reflected_postprocess_edit_undo");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            AddComponent(ctx, "Post Process");
+            IM_CHECK(Reg().all_of<dse::PostProcessComponent>(ent));
+            const float before = Reg().get<dse::PostProcessComponent>(ent).bloom_threshold;
+
+            // 控件 id 由通用驱动按 "##<Type>.<field>" 生成。
+            ctx->ItemInputValue("//Inspector/##PostProcessComponent.bloom_threshold", 3.5f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::PostProcessComponent>(ent).bloom_threshold - 3.5f) < 0.01f);
+
+            auto& mgr = GetUndoRedoManager();
+            IM_CHECK(mgr.CanUndo());
+            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "PostProcessComponent.bloom_threshold");
+            mgr.Undo(); ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::PostProcessComponent>(ent).bloom_threshold - before) < 0.01f);
+            mgr.Redo(); ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::PostProcessComponent>(ent).bloom_threshold - 3.5f) < 0.01f);
+
+            DeleteSelectedEntity(ctx, ent);
+        };
+    }
+
+    // ── ④-8 反射驱动 Inspector：Tree 字符串/布尔字段改值 ─────────────────────
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "reflected_tree_edit");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            AddComponent(ctx, "Tree");
+            IM_CHECK(Reg().all_of<dse::TreeComponent>(ent));
+
+            // bool（Checkbox）
+            const bool before_shadow = Reg().get<dse::TreeComponent>(ent).cast_shadow;
+            ctx->ItemClick("//Inspector/##TreeComponent.cast_shadow");
+            ctx->Yield(2);
+            IM_CHECK(Reg().get<dse::TreeComponent>(ent).cast_shadow != before_shadow);
+
+            // float（DragFloat，range 钳制）
+            ctx->ItemInputValue("//Inspector/##TreeComponent.density", 0.5f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::TreeComponent>(ent).density - 0.5f) < 0.01f);
+
+            DeleteSelectedEntity(ctx, ent);
         };
     }
 }

@@ -43,8 +43,10 @@ struct FieldAttributes {
     double max_value = 0.0;
     double step = 0.0;          ///< 0 = 由消费方决定默认步进
     const char* tooltip = nullptr;
+    const char* label = nullptr; ///< Inspector 显示名（nullptr = 用字段名）
     bool   hidden = false;      ///< 序列化与 Inspector 均跳过
     bool   read_only = false;   ///< Inspector 只读（序列化仍写出）
+    bool   is_color = false;    ///< vec3/vec4 作为颜色编辑（Inspector 用 ColorEdit）
 };
 
 /// 单个字段的反射信息。get/cget 返回指向实例内该字段的指针。
@@ -84,8 +86,10 @@ public:
     FieldRef& range(double mn, double mx) { f_->attr.has_range = true; f_->attr.min_value = mn; f_->attr.max_value = mx; return *this; }
     FieldRef& step(double s)              { f_->attr.step = s; return *this; }
     FieldRef& tooltip(const char* t)      { f_->attr.tooltip = t; return *this; }
+    FieldRef& label(const char* l)        { f_->attr.label = l; return *this; }
     FieldRef& hidden()                    { f_->attr.hidden = true; return *this; }
     FieldRef& read_only()                 { f_->attr.read_only = true; return *this; }
+    FieldRef& color()                     { f_->attr.is_color = true; return *this; }
 private:
     FieldInfo* f_;
 };
