@@ -31,7 +31,9 @@
 
 #include "../editor_selection.h"        // SelectionManager
 #include "../editor_scene_camera.h"     // EditorCamera / GetEditorCamera / FocusEditorCamera
-#include "../editor_settings.h"         // Load/SaveEditorSettings（autosave 开关/间隔）
+#include "../editor_settings.h"         // Load/SaveEditorSettings（autosave 开关/间隔 / editor_ui_locale）
+#include "../editor_preferences_panel.h" // GetCurrentThemeIndex
+#include "../editor_locale.h"           // GetEditorLocale
 #include "../editor_scene_tabs.h"       // SceneTabManager（New Scene / MarkDirty / 活动页签名）
 #include "../editor_project.h"          // ProjectManager（autosave 目录 / Build 资产目录）
 #include "../editor_autosave_core.h"    // MakeAutoSaveFileName
@@ -326,6 +328,65 @@ void RegisterMiscEditorTests(ImGuiTestEngine* e) {
             ctx->ItemClick("Close");
             ctx->Yield(2);
             IM_CHECK(FindActiveWindow("AboutDSEngine") == nullptr);
+        };
+    }
+
+    // ── 主题切换：Preferences 面板 Appearance/Theme 下拉切 Light/Dark → 断言 GetCurrentThemeIndex 真改变 ─
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-misc", "theme_switch_via_preferences");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            bool* show = Services().show_preferences;
+            IM_CHECK(show != nullptr);
+            const int orig = GetCurrentThemeIndex();
+
+            *show = true;
+            ctx->Yield(2);
+            IM_CHECK(FindActiveWindow("Preferences") != nullptr);
+            ctx->SetRef("//Preferences");
+
+            ctx->ComboClick("Theme/Light");
+            ctx->Yield(2);
+            IM_CHECK_EQ(GetCurrentThemeIndex(), 1);
+            ctx->ComboClick("Theme/Dark (Default)");
+            ctx->Yield(2);
+            IM_CHECK_EQ(GetCurrentThemeIndex(), 0);
+
+            // 复原主题为初始值，避免改动跨用例/跨运行残留。
+            if (orig == 1) { ctx->ComboClick("Theme/Light"); ctx->Yield(2); }
+            *show = false;
+            ctx->Yield(2);
+        };
+    }
+
+    // ── 语言切换：Preferences 面板 Editor Language 下拉切换 → 断言落盘的 editor_ui_locale 真改变 ──
+    // 语言「重启后生效」，故切换只改设置文件、不影响本次运行的英文 item 引用；收尾必复原设置，杜绝污染。
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-misc", "language_switch_via_preferences");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            bool* show = Services().show_preferences;
+            IM_CHECK(show != nullptr);
+            const std::string orig = LoadEditorSettings().editor_ui_locale;
+            const bool was_zh = (orig == "zh-CN");
+            const char* other_label = was_zh ? "English" : "Chinese Simplified";
+            const char* orig_label  = was_zh ? "Chinese Simplified" : "English";
+            const char* other_code  = was_zh ? "en" : "zh-CN";
+
+            *show = true;
+            ctx->Yield(2);
+            IM_CHECK(FindActiveWindow("Preferences") != nullptr);
+            ctx->SetRef("//Preferences");
+
+            ctx->ComboClick((std::string("##EditorLocale/") + other_label).c_str());
+            ctx->Yield(2);
+            IM_CHECK_STR_EQ(LoadEditorSettings().editor_ui_locale.c_str(), other_code);
+
+            // 复原到初始语言，断言设置文件被还原（净零改动）。
+            ctx->ComboClick((std::string("##EditorLocale/") + orig_label).c_str());
+            ctx->Yield(2);
+            IM_CHECK_STR_EQ(LoadEditorSettings().editor_ui_locale.c_str(), orig.c_str());
+
+            *show = false;
+            ctx->Yield(2);
         };
     }
 }

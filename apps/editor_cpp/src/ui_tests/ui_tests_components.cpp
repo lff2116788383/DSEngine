@@ -153,6 +153,38 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
         };
     }
 
+    // ── 聚光灯：改 Intensity（DragFloat） ────────────────────────────────────
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "spotlight_intensity_edit");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            AddComponent(ctx, "Spot Light");
+            IM_CHECK(Reg().all_of<dse::SpotLightComponent>(ent));
+
+            ctx->ItemInputValue("//Inspector/##spotlight_int", 4.5f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::SpotLightComponent>(ent).intensity - 4.5f) < 0.01f);
+            DeleteSelectedEntity(ctx, ent);
+        };
+    }
+
+    // ── 天空光：改 Intensity（DragFloat） ────────────────────────────────────
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "skylight_intensity_edit");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            const entt::entity ent = NewSelectedEntity(ctx);
+            IM_CHECK(ent != entt::null);
+            AddComponent(ctx, "Sky Light");
+            IM_CHECK(Reg().all_of<dse::SkyLightComponent>(ent));
+
+            ctx->ItemInputValue("//Inspector/##skylight_int", 3.0f);
+            ctx->Yield(2);
+            IM_CHECK(std::abs(Reg().get<dse::SkyLightComponent>(ent).intensity - 3.0f) < 0.01f);
+            DeleteSelectedEntity(ctx, ent);
+        };
+    }
+
     // ── ④-4 Mesh 材质：改 Metallic（SliderFloat 0..1） ───────────────────────
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-components", "mesh_metallic_edit");
