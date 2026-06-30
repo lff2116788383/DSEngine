@@ -2303,6 +2303,212 @@ print("Visible: " .. stats.visible .. "/" .. stats.total)
 
 ---
 
+## 23. dse.spline — 样条系统（道路/河流）
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+Catmull-Rom 样条核心 + 道路/河流网格生成。支持浮动原点。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.spline.init()` | → void | 初始化样条系统 |
+| `dse.spline.shutdown()` | → void | 关闭样条系统 |
+| `dse.spline.create(name)` | → spline_id | 创建样条 |
+| `dse.spline.destroy(id)` | → void | 删除样条 |
+| `dse.spline.add_point(id, x, y, z [, width])` | → void | 添加控制点 |
+| `dse.spline.remove_point(id, index)` | → void | 删除控制点 |
+| `dse.spline.get_point_count(id)` | → int | 获取控制点数量 |
+| `dse.spline.evaluate(id, t)` | → x, y, z | 按参数 t∈[0,1] 采样位置 |
+| `dse.spline.get_length(id)` | → float | 获取样条总长度 |
+| `dse.spline.find_nearest(id, x, y, z)` | → t | 查找最近参数 |
+| `dse.spline.generate_road(id [, seg_len, width_seg, uv])` | → {verts, indices} | 生成道路网格 |
+| `dse.spline.generate_river(id [, seg_len, width_seg, depth])` | → {verts, indices} | 生成河流网格 |
+| `dse.spline.get_count()` | → int | 获取当前样条总数 |
+| `dse.spline.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+
+```lua
+-- 创建道路样条
+dse.spline.init()
+local road = dse.spline.create("main_road")
+dse.spline.add_point(road, 0, 0, 0, 8.0)
+dse.spline.add_point(road, 50, 0, 50, 8.0)
+dse.spline.add_point(road, 100, 5, 100, 6.0)
+local mesh = dse.spline.generate_road(road, 2.0, 4, 0.1)
+print("Road length: " .. dse.spline.get_length(road))
+```
+
+---
+
+## 24. dse.ocean — 大规模海洋系统
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+Tile-based FFT 海洋模拟，支持 Phillips/JONSWAP 波谱、LOD、泡沫/焦散。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.ocean.init(config_table)` | → void | 初始化海洋（config: fft_resolution, tile_size, wind_speed, choppiness） |
+| `dse.ocean.shutdown()` | → void | 关闭海洋系统 |
+| `dse.ocean.update(time, cam_x, cam_y, cam_z)` | → void | 每帧驱动 FFT 模拟 |
+| `dse.ocean.get_height(x, z)` | → float | 获取海面高度 |
+| `dse.ocean.get_normal(x, z)` | → nx, ny, nz | 获取海面法线 |
+| `dse.ocean.get_foam(x, z)` | → float | 获取泡沫强度 [0,1] |
+| `dse.ocean.set_wind(speed, dir_x, dir_z)` | → void | 设置风参数 |
+| `dse.ocean.set_choppiness(c)` | → void | 设置横向位移系数 |
+| `dse.ocean.get_stats()` | → table | 返回 {total_tiles, visible_tiles, fft_resolution, max_height} |
+| `dse.ocean.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+
+```lua
+dse.ocean.init({fft_resolution = 256, tile_size = 100, wind_speed = 15, choppiness = 1.5})
+dse.ocean.update(game_time, cam.x, cam.y, cam.z)
+local h = dse.ocean.get_height(player.x, player.z)
+local foam = dse.ocean.get_foam(player.x, player.z)
+```
+
+---
+
+## 25. dse.editor — 编辑器世界编辑工具
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+地形笔刷/植被画刷/道路绘制/World Partition 可视化，完整 Undo/Redo。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.editor.init()` | → void | 初始化编辑器工具 |
+| `dse.editor.shutdown()` | → void | 关闭编辑器工具 |
+| `dse.editor.terrain_brush(op, cx, cy, cz, radius, strength, falloff)` | → op_id | 应用地形笔刷 |
+| `dse.editor.brush_preview(cx, cy, cz, radius)` | → min_x, min_z, max_x, max_z | 笔刷预览 AABB |
+| `dse.editor.brush_weight(px, py, pz, cx, cy, cz, radius, falloff)` | → float | 计算笔刷权重 |
+| `dse.editor.place_foliage(cx, cy, cz, radius, density, mesh)` | → count | 散布放置植被 |
+| `dse.editor.erase_foliage(cx, cy, cz, radius)` | → count | 擦除范围内植被 |
+| `dse.editor.get_foliage_count()` | → int | 获取植被实例总数 |
+| `dse.editor.begin_road(width)` | → session_id | 开始道路绘制会话 |
+| `dse.editor.add_road_point(session_id, x, y, z)` | → void | 添加道路点 |
+| `dse.editor.end_road(session_id)` | → void | 完成道路绘制 |
+| `dse.editor.undo()` | → bool | 撤销 |
+| `dse.editor.redo()` | → bool | 重做 |
+| `dse.editor.update_partition_vis(cam_x, cam_y, cam_z, cell_size)` | → int | 更新 Partition 可视化，返回可见 Cell 数 |
+
+```lua
+dse.editor.init()
+-- 抬升地形
+dse.editor.terrain_brush(0, 100, 0, 100, 20, 0.8, 0.5)
+-- 放置植被
+local n = dse.editor.place_foliage(100, 0, 100, 30, 0.3, "meshes/tree_oak.dmesh")
+-- 撤销
+dse.editor.undo()
+```
+
+---
+
+## 26. dse.vsm — 虚拟阴影贴图
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+自适应精度页表 + 缓存失效 + Clipmap 分级，替代远距离 CSM 闪烁。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.vsm.init(config_table)` | → void | 初始化 VSM（config: virtual_resolution, page_size, pool_pages, clipmap_levels） |
+| `dse.vsm.shutdown()` | → void | 关闭 VSM |
+| `dse.vsm.register_light(light_id, is_directional [, dx, dy, dz])` | → uint | 注册光源 |
+| `dse.vsm.unregister_light(light_id)` | → void | 注销光源 |
+| `dse.vsm.begin_frame(frame_num, cam_x, cam_y, cam_z)` | → void | 帧开始：收集反馈 + 分配页 |
+| `dse.vsm.end_frame()` | → void | 帧结束：更新页表 |
+| `dse.vsm.get_pages_to_render()` | → int | 获取本帧待渲染页数 |
+| `dse.vsm.invalidate_region(light_id, min_x, min_y, min_z, max_x, max_y, max_z)` | → void | 标记脏区域 |
+| `dse.vsm.lookup_page(vx, vy, mip, light_id)` | → px, py \| nil | 查询页映射 |
+| `dse.vsm.get_stats()` | → table | 返回 {total, mapped, dirty, rendered, hit_rate, pool_usage} |
+| `dse.vsm.get_clipmap_levels()` | → int | 获取 Clipmap 层数 |
+| `dse.vsm.submit_feedback(pages_table)` | → void | 提交屏幕空间反馈 |
+
+```lua
+dse.vsm.init({virtual_resolution = 16384, page_size = 128, pool_pages = 1024, clipmap_levels = 6})
+dse.vsm.register_light(1, true, 0, -1, 0.5) -- 平行光
+dse.vsm.begin_frame(frame, cam.x, cam.y, cam.z)
+local stats = dse.vsm.get_stats()
+print("VSM hit rate: " .. stats.hit_rate .. "%")
+dse.vsm.end_frame()
+```
+
+---
+
+## 27. dse.eqs — 环境查询系统
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+查询模板 + 生成器(Grid/Ring/Cone/NavMesh/Random) + 评分器(Distance/Visibility/DotProduct/Height)。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.eqs.init()` | → void | 初始化 EQS |
+| `dse.eqs.shutdown()` | → void | 关闭 EQS |
+| `dse.eqs.create_template(name)` | → template_id | 创建查询模板 |
+| `dse.eqs.destroy_template(id)` | → void | 删除查询模板 |
+| `dse.eqs.set_generator(tid, type [, radius, spacing, max_points])` | → void | 设置生成器 |
+| `dse.eqs.add_scorer(tid, type [, weight, invert, max_value])` | → void | 添加评分器 |
+| `dse.eqs.set_combine_mode(tid, mode)` | → void | 设置组合模式(0=WeightedSum,1=Multiply,2=Minimum) |
+| `dse.eqs.set_max_results(tid, n)` | → void | 设置最大结果数 |
+| `dse.eqs.execute(tid, qx, qy, qz)` | → table | 执行查询，返回 {best_x/y/z, best_score, count, time_ms} |
+| `dse.eqs.execute_at(tid, qx, qy, qz, cx, cy, cz)` | → table | 指定中心执行查询 |
+| `dse.eqs.get_template_count()` | → int | 获取模板总数 |
+| `dse.eqs.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+
+**生成器类型**：0=Grid, 1=Ring, 2=Cone, 3=NavMesh, 4=Random, 5=PathPoints
+
+**评分器类型**：0=Distance, 1=Visibility, 2=DotProduct, 3=Height, 4=Reachable, 5=Custom
+
+```lua
+dse.eqs.init()
+local cover = dse.eqs.create_template("find_cover")
+dse.eqs.set_generator(cover, 0, 20.0, 2.0, 200)  -- Grid, radius=20, spacing=2
+dse.eqs.add_scorer(cover, 0, 1.0, true)           -- Distance (invert=closer is better)
+dse.eqs.add_scorer(cover, 1, 2.0, false)          -- Visibility (hidden is better)
+dse.eqs.set_combine_mode(cover, 0)                -- WeightedSum
+local r = dse.eqs.execute(cover, ai.x, ai.y, ai.z)
+print("Best cover at: " .. r.best_x .. ", " .. r.best_z .. " score=" .. r.best_score)
+```
+
+---
+
+## 28. dse.distribution — 打包分发管线
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_world_systems.cpp`
+
+Cell 分包 + 增量更新 + 下载管理 + Manifest 序列化。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.distribution.init()` | → void | 初始化分发系统 |
+| `dse.distribution.shutdown()` | → void | 关闭分发系统 |
+| `dse.distribution.package_cell(cx, cy [, lod, assets_table])` | → pkg_index | 打包 Cell |
+| `dse.distribution.start_download(pkg_index)` | → void | 开始下载 |
+| `dse.distribution.cancel_download(pkg_index)` | → void | 取消下载 |
+| `dse.distribution.tick(dt)` | → void | 每帧驱动下载进度 |
+| `dse.distribution.update_priorities(px, py, pz)` | → void | 根据玩家位置更新优先级 |
+| `dse.distribution.get_required(px, py, pz, radius)` | → table | 获取需要的包列表 |
+| `dse.distribution.get_missing(px, py, pz, radius)` | → table | 获取未下载的包列表 |
+| `dse.distribution.get_stats()` | → table | 返回 {total, downloaded, downloading, speed, disk_usage} |
+| `dse.distribution.get_disk_usage()` | → int | 获取磁盘占用(bytes) |
+| `dse.distribution.save_manifest(path)` | → bool | 保存 Manifest |
+| `dse.distribution.load_manifest(path)` | → bool | 加载 Manifest |
+| `dse.distribution.rebase_origin(ox, oy, oz)` | → void | 浮动原点重定位 |
+
+```lua
+dse.distribution.init()
+dse.distribution.package_cell(0, 0, 0, {"terrain_0_0.dmesh", "foliage_0_0.dfoliage"})
+dse.distribution.package_cell(1, 0, 0, {"terrain_1_0.dmesh"})
+dse.distribution.start_download(0)
+-- 每帧
+dse.distribution.tick(dt)
+dse.distribution.update_priorities(player.x, player.y, player.z)
+local stats = dse.distribution.get_stats()
+print("Download speed: " .. stats.speed .. " bytes/s")
+```
+
+---
+
 ## 附录：绑定源文件索引
 
 > 注册函数数为实测精确值（由 `tools/audit/lua_api_audit.py` 统计，截至 2026-06-12）。
@@ -2345,7 +2551,8 @@ print("Visible: " .. stats.visible .. "/" .. stats.total)
 | AI 行为树 + GOAP | `lua_binding_ai.cpp` | 26 |
 | 过场/导演系统 | `lua_binding_cutscene.cpp` | 20 |
 | Meshlet/Cluster | `lua_binding_meshlet.cpp` | 14 |
-| **合计** | **33 个手写文件 + 13 个 gen** | **991 绑定函数** |
+| World Systems (Spline/Ocean/Editor/VSM/EQS/Distribution) | `lua_binding_world_systems.cpp` | 76 |
+| **合计** | **34 个手写文件 + 13 个 gen** | **1067 绑定函数** |
 
 > **关于 LuaSocket（已移除）**：旧的可选 `socket.core` / `mime.core`（LuaSocket）已从引擎移除
 > （子模块 + `DSE_ENABLE_LUASOCKET` 开关 + 门控代码）。其能力已被 `dse.net`（游戏 UDP 传输）

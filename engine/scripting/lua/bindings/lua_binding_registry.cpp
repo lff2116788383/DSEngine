@@ -91,6 +91,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_getglobal(L, "dse");
     RegisterOpenWorldP2P5Bindings(L);
     lua_setglobal(L, "dse");
+
+    // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
+    RegisterWorldSystemsBindings(L);
 }
 
 }
