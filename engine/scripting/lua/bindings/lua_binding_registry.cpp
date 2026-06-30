@@ -86,6 +86,11 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
     RegisterMeshletBindings(L);
+
+    // P2-P5 大世界系统 — 注册到 dse 表下
+    lua_getglobal(L, "dse");
+    RegisterOpenWorldP2P5Bindings(L);
+    lua_setglobal(L, "dse");
 }
 
 }

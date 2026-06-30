@@ -83,6 +83,9 @@ void RegisterCutsceneBindings(lua_State* L);
 // Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
 void RegisterMeshletBindings(lua_State* L);
 
+// P2-P5 大世界系统（Mesh Streaming / Physics LOD / Terrain Deform / Audio LOD）
+void RegisterOpenWorldP2P5Bindings(lua_State* L);
+
 }
 
 #endif
