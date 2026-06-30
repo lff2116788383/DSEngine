@@ -9,6 +9,8 @@
 #include "engine/ecs/components_3d_foliage.h"
 #include "engine/ecs/components_3d_navmesh.h"
 #include "engine/ecs/components_3d_terrain_tile.h"
+#include "engine/ecs/components_3d_physics.h"
+#include "engine/ecs/components_3d_sky.h"
 
 namespace dse::reflect {
 
@@ -441,6 +443,289 @@ void RegisterTerrainTileManager() {
     // tiles / GPU handles / statistics 为运行时状态，不反射。
 }
 
+// ─── Physics Components ─────────────────────────────────────────────────────
+
+void RegisterRigidBody3D() {
+    using dse::RigidBody3DComponent;
+    DSE_REFLECT_ENUM(dse::RigidBody3DType)
+        .value("Static", dse::RigidBody3DType::Static)
+        .value("Kinematic", dse::RigidBody3DType::Kinematic)
+        .value("Dynamic", dse::RigidBody3DType::Dynamic);
+    auto t = DSE_REFLECT_TYPE(RigidBody3DComponent);
+    t.field("type", &RigidBody3DComponent::type);
+    t.field("mass", &RigidBody3DComponent::mass).range(0.0, 10000.0);
+    t.field("drag", &RigidBody3DComponent::drag).range(0.0, 100.0);
+    t.field("angular_drag", &RigidBody3DComponent::angular_drag).range(0.0, 100.0);
+    t.field("use_gravity", &RigidBody3DComponent::use_gravity);
+    t.field("gravity_scale", &RigidBody3DComponent::gravity_scale).range(-10.0, 10.0);
+    t.field("is_kinematic", &RigidBody3DComponent::is_kinematic);
+    t.field("collision_layer", &RigidBody3DComponent::collision_layer);
+    t.field("collision_mask", &RigidBody3DComponent::collision_mask);
+    // velocity, angular_velocity, pending_impulse, runtime_body 为运行时状态，不反射。
+}
+
+void RegisterBoxCollider3D() {
+    using dse::BoxCollider3DComponent;
+    auto t = DSE_REFLECT_TYPE(BoxCollider3DComponent);
+    t.field("size", &BoxCollider3DComponent::size);
+    t.field("center", &BoxCollider3DComponent::center);
+    t.field("is_trigger", &BoxCollider3DComponent::is_trigger);
+    t.field("bounciness", &BoxCollider3DComponent::bounciness).range(0.0, 1.0);
+    t.field("friction", &BoxCollider3DComponent::friction).range(0.0, 2.0);
+    // prev_*, runtime_shape 为运行时状态，不反射。
+}
+
+void RegisterSphereCollider3D() {
+    using dse::SphereCollider3DComponent;
+    auto t = DSE_REFLECT_TYPE(SphereCollider3DComponent);
+    t.field("radius", &SphereCollider3DComponent::radius).range(0.01, 1000.0);
+    t.field("center", &SphereCollider3DComponent::center);
+    t.field("is_trigger", &SphereCollider3DComponent::is_trigger);
+    t.field("bounciness", &SphereCollider3DComponent::bounciness).range(0.0, 1.0);
+    t.field("friction", &SphereCollider3DComponent::friction).range(0.0, 2.0);
+}
+
+void RegisterCapsuleCollider3D() {
+    using dse::CapsuleCollider3DComponent;
+    auto t = DSE_REFLECT_TYPE(CapsuleCollider3DComponent);
+    t.field("radius", &CapsuleCollider3DComponent::radius).range(0.01, 100.0);
+    t.field("height", &CapsuleCollider3DComponent::height).range(0.01, 100.0);
+    t.field("center", &CapsuleCollider3DComponent::center);
+    t.field("direction", &CapsuleCollider3DComponent::direction).range(0.0, 2.0).tooltip("0=X, 1=Y, 2=Z");
+    t.field("is_trigger", &CapsuleCollider3DComponent::is_trigger);
+    t.field("bounciness", &CapsuleCollider3DComponent::bounciness).range(0.0, 1.0);
+    t.field("friction", &CapsuleCollider3DComponent::friction).range(0.0, 2.0);
+}
+
+void RegisterMeshCollider3D() {
+    using dse::MeshCollider3DComponent;
+    auto t = DSE_REFLECT_TYPE(MeshCollider3DComponent);
+    t.field("convex", &MeshCollider3DComponent::convex);
+    t.field("is_trigger", &MeshCollider3DComponent::is_trigger);
+    t.field("bounciness", &MeshCollider3DComponent::bounciness).range(0.0, 1.0);
+    t.field("friction", &MeshCollider3DComponent::friction).range(0.0, 2.0);
+}
+
+void RegisterCharacterController3D() {
+    using dse::CharacterController3DComponent;
+    auto t = DSE_REFLECT_TYPE(CharacterController3DComponent);
+    t.field("radius", &CharacterController3DComponent::radius).range(0.01, 10.0);
+    t.field("height", &CharacterController3DComponent::height).range(0.01, 10.0);
+    t.field("slope_limit", &CharacterController3DComponent::slope_limit).range(0.0, 90.0);
+    t.field("step_offset", &CharacterController3DComponent::step_offset).range(0.0, 5.0);
+    t.field("skin_width", &CharacterController3DComponent::skin_width).range(0.0, 1.0);
+    t.field("min_move_distance", &CharacterController3DComponent::min_move_distance).range(0.0, 1.0);
+    // is_grounded, velocity, collision_flags, runtime_controller 为运行时状态，不反射。
+}
+
+void RegisterJoint3D() {
+    using dse::Joint3DComponent;
+    DSE_REFLECT_ENUM(dse::Joint3DType)
+        .value("Fixed", dse::Joint3DType::Fixed)
+        .value("Hinge", dse::Joint3DType::Hinge)
+        .value("Spring", dse::Joint3DType::Spring)
+        .value("Distance", dse::Joint3DType::Distance);
+    auto t = DSE_REFLECT_TYPE(Joint3DComponent);
+    t.field("type", &Joint3DComponent::type);
+    t.field("connected_entity_id", &Joint3DComponent::connected_entity_id);
+    t.field("anchor", &Joint3DComponent::anchor);
+    t.field("connected_anchor", &Joint3DComponent::connected_anchor);
+    t.field("axis", &Joint3DComponent::axis);
+    t.field("use_limits", &Joint3DComponent::use_limits);
+    t.field("lower_limit", &Joint3DComponent::lower_limit).range(-180.0, 0.0);
+    t.field("upper_limit", &Joint3DComponent::upper_limit).range(0.0, 180.0);
+    t.field("min_distance", &Joint3DComponent::min_distance).range(0.0, 1000.0);
+    t.field("max_distance", &Joint3DComponent::max_distance).range(0.0, 1000.0);
+    t.field("spring_stiffness", &Joint3DComponent::spring_stiffness).range(0.0, 100000.0);
+    t.field("spring_damping", &Joint3DComponent::spring_damping).range(0.0, 10000.0);
+    t.field("break_force", &Joint3DComponent::break_force).range(0.0, 3.4e+38);
+    t.field("break_torque", &Joint3DComponent::break_torque).range(0.0, 3.4e+38);
+    // is_broken, runtime_joint 为运行时状态，不反射。
+}
+
+// ─── Advanced Physics ────────────────────────────────────────────────────────
+
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+void RegisterRagdoll() {
+    using dse::RagdollComponent;
+    auto t = DSE_REFLECT_TYPE(RagdollComponent);
+    t.field("active", &RagdollComponent::active);
+    t.field("auto_setup", &RagdollComponent::auto_setup);
+    t.field("total_mass", &RagdollComponent::total_mass).range(0.1, 1000.0);
+    t.field("joint_stiffness", &RagdollComponent::joint_stiffness).range(0.0, 10000.0);
+    t.field("joint_damping", &RagdollComponent::joint_damping).range(0.0, 10000.0);
+    t.field("collision_layer", &RagdollComponent::collision_layer);
+    t.field("collision_mask", &RagdollComponent::collision_mask);
+    // bone_setups, runtime_bones 为复杂运行时数据，不反射。
+}
+#endif
+
+void RegisterSoftBody() {
+    using dse::SoftBodyComponent;
+    auto t = DSE_REFLECT_TYPE(SoftBodyComponent);
+    t.field("enabled", &SoftBodyComponent::enabled);
+    t.field("stiffness", &SoftBodyComponent::stiffness).range(0.0, 1.0);
+    t.field("solver_iterations", &SoftBodyComponent::solver_iterations).range(1.0, 32.0);
+    t.field("damping", &SoftBodyComponent::damping).range(0.0, 1.0);
+    t.field("use_gravity", &SoftBodyComponent::use_gravity);
+    t.field("gravity_scale", &SoftBodyComponent::gravity_scale).range(-10.0, 10.0);
+    t.field("volume_stiffness", &SoftBodyComponent::volume_stiffness).range(0.0, 1.0);
+    // positions, prev_positions, velocities, inv_masses, constraints 为运行时粒子数据，不反射。
+}
+
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+void RegisterVehicle() {
+    using dse::VehicleComponent;
+    auto t = DSE_REFLECT_TYPE(VehicleComponent);
+    t.field("enabled", &VehicleComponent::enabled);
+    t.field("max_engine_force", &VehicleComponent::max_engine_force).range(0.0, 100000.0);
+    t.field("max_brake_force", &VehicleComponent::max_brake_force).range(0.0, 100000.0);
+    t.field("max_steer_angle", &VehicleComponent::max_steer_angle).range(0.0, 90.0);
+    // throttle, brake, steering 为输入状态；wheels, wheel_states 为运行时；不反射。
+}
+#endif
+
+void RegisterRope() {
+    using dse::RopeComponent;
+    auto t = DSE_REFLECT_TYPE(RopeComponent);
+    t.field("enabled", &RopeComponent::enabled);
+    t.field("segment_count", &RopeComponent::segment_count).range(2.0, 200.0);
+    t.field("segment_length", &RopeComponent::segment_length).range(0.01, 10.0);
+    t.field("radius", &RopeComponent::radius).range(0.001, 1.0);
+    t.field("damping", &RopeComponent::damping).range(0.0, 1.0);
+    t.field("solver_iterations", &RopeComponent::solver_iterations).range(1.0, 32.0);
+    t.field("use_gravity", &RopeComponent::use_gravity);
+    t.field("gravity_scale", &RopeComponent::gravity_scale).range(-10.0, 10.0);
+    t.field("anchor_entity_a", &RopeComponent::anchor_entity_a);
+    t.field("anchor_entity_b", &RopeComponent::anchor_entity_b);
+    t.field("anchor_offset_a", &RopeComponent::anchor_offset_a);
+    t.field("anchor_offset_b", &RopeComponent::anchor_offset_b);
+    t.field("start_position", &RopeComponent::start_position);
+    // positions, prev_positions 为 Verlet 运行时数据，不反射。
+}
+
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+void RegisterBuoyancy() {
+    using dse::BuoyancyComponent;
+    auto t = DSE_REFLECT_TYPE(BuoyancyComponent);
+    t.field("enabled", &BuoyancyComponent::enabled);
+    t.field("water_level", &BuoyancyComponent::water_level).range(-1000.0, 1000.0);
+    t.field("use_fluid_system", &BuoyancyComponent::use_fluid_system);
+    t.field("buoyancy_force", &BuoyancyComponent::buoyancy_force).range(0.0, 1000.0);
+    t.field("water_drag", &BuoyancyComponent::water_drag).range(0.0, 100.0);
+    t.field("water_angular_drag", &BuoyancyComponent::water_angular_drag).range(0.0, 100.0);
+    t.field("submerge_depth", &BuoyancyComponent::submerge_depth).range(0.01, 100.0);
+    // sample_points 为复杂结构数组，submerge_ratio 为运行时，不反射。
+}
+#endif
+
+// ─── Sky Components ──────────────────────────────────────────────────────────
+
+void RegisterAtmosphere() {
+    using dse::AtmosphereComponent;
+    auto t = DSE_REFLECT_TYPE(AtmosphereComponent);
+    t.field("enabled", &AtmosphereComponent::enabled);
+    t.field("planet_radius", &AtmosphereComponent::planet_radius).range(100000.0, 100000000.0);
+    t.field("atmosphere_height", &AtmosphereComponent::atmosphere_height).range(1000.0, 1000000.0);
+    t.field("rayleigh_coeff", &AtmosphereComponent::rayleigh_coeff);
+    t.field("rayleigh_scale_height", &AtmosphereComponent::rayleigh_scale_height).range(100.0, 100000.0);
+    t.field("mie_coeff", &AtmosphereComponent::mie_coeff).range(0.0, 0.001);
+    t.field("mie_scale_height", &AtmosphereComponent::mie_scale_height).range(100.0, 10000.0);
+    t.field("mie_g", &AtmosphereComponent::mie_g).range(-1.0, 1.0);
+    t.field("mie_albedo", &AtmosphereComponent::mie_albedo);
+    t.field("ozone_coeff", &AtmosphereComponent::ozone_coeff);
+    t.field("ozone_center_h", &AtmosphereComponent::ozone_center_h).range(0.0, 100000.0);
+    t.field("ozone_width", &AtmosphereComponent::ozone_width).range(0.0, 100000.0);
+    t.field("sun_intensity", &AtmosphereComponent::sun_intensity);
+    t.field("sun_disk_angle", &AtmosphereComponent::sun_disk_angle).range(0.0, 5.0);
+    t.field("transmittance_lut_width", &AtmosphereComponent::transmittance_lut_width).range(32.0, 1024.0);
+    t.field("transmittance_lut_height", &AtmosphereComponent::transmittance_lut_height).range(16.0, 256.0);
+    t.field("sky_view_steps", &AtmosphereComponent::sky_view_steps).range(8.0, 128.0);
+    t.field("aerial_perspective_enabled", &AtmosphereComponent::aerial_perspective_enabled);
+}
+
+void RegisterVolumetricCloud() {
+    using dse::VolumetricCloudComponent;
+    auto t = DSE_REFLECT_TYPE(VolumetricCloudComponent);
+    t.field("enabled", &VolumetricCloudComponent::enabled);
+    t.field("cloud_bottom", &VolumetricCloudComponent::cloud_bottom).range(0.0, 20000.0);
+    t.field("cloud_top", &VolumetricCloudComponent::cloud_top).range(0.0, 20000.0);
+    t.field("coverage", &VolumetricCloudComponent::coverage).range(0.0, 1.0);
+    t.field("density", &VolumetricCloudComponent::density).range(0.0, 1.0);
+    t.field("shape_scale", &VolumetricCloudComponent::shape_scale).range(0.0, 0.01);
+    t.field("detail_scale", &VolumetricCloudComponent::detail_scale).range(0.0, 0.01);
+    t.field("detail_strength", &VolumetricCloudComponent::detail_strength).range(0.0, 1.0);
+    t.field("erosion", &VolumetricCloudComponent::erosion).range(0.0, 1.0);
+    t.field("wind_direction", &VolumetricCloudComponent::wind_direction);
+    t.field("wind_speed", &VolumetricCloudComponent::wind_speed).range(0.0, 200.0);
+    t.field("silver_intensity", &VolumetricCloudComponent::silver_intensity).range(0.0, 2.0);
+    t.field("silver_spread", &VolumetricCloudComponent::silver_spread).range(0.0, 1.0);
+    t.field("powder_strength", &VolumetricCloudComponent::powder_strength).range(0.0, 10.0);
+    t.field("ambient_strength", &VolumetricCloudComponent::ambient_strength).range(0.0, 2.0);
+    t.field("march_steps", &VolumetricCloudComponent::march_steps).range(8.0, 256.0);
+    t.field("light_march_steps", &VolumetricCloudComponent::light_march_steps).range(1.0, 32.0);
+    t.field("half_resolution", &VolumetricCloudComponent::half_resolution);
+    t.field("temporal_reprojection", &VolumetricCloudComponent::temporal_reprojection);
+    t.field("weather_map_path", &VolumetricCloudComponent::weather_map_path);
+    t.field("weather_map_scale", &VolumetricCloudComponent::weather_map_scale).range(0.0, 0.001);
+    t.field("cloud_shadow_enabled", &VolumetricCloudComponent::cloud_shadow_enabled);
+    t.field("cloud_shadow_resolution", &VolumetricCloudComponent::cloud_shadow_resolution).range(64.0, 4096.0);
+}
+
+void RegisterDayNightCycle() {
+    using dse::DayNightCycleComponent;
+    auto t = DSE_REFLECT_TYPE(DayNightCycleComponent);
+    t.field("enabled", &DayNightCycleComponent::enabled);
+    t.field("time_of_day", &DayNightCycleComponent::time_of_day).range(0.0, 24.0);
+    t.field("time_speed", &DayNightCycleComponent::time_speed).range(0.0, 100.0);
+    t.field("auto_advance", &DayNightCycleComponent::auto_advance);
+    t.field("latitude", &DayNightCycleComponent::latitude).range(-90.0, 90.0);
+    t.field("longitude", &DayNightCycleComponent::longitude).range(-180.0, 180.0);
+    t.field("day_of_year", &DayNightCycleComponent::day_of_year).range(1.0, 365.0);
+    // sun_direction_, sun_elevation_, sun_color_ 为系统每帧输出，不反射。
+}
+
+// ─── Hair / MorphTarget ─────────────────────────────────────────────────────
+
+void RegisterHair() {
+    using dse::HairComponent;
+    auto t = DSE_REFLECT_TYPE(HairComponent);
+    t.field("enabled", &HairComponent::enabled);
+    t.field("hair_asset_path", &HairComponent::hair_asset_path);
+    t.field("damping", &HairComponent::damping).range(0.0, 1.0);
+    t.field("stiffness_local", &HairComponent::stiffness_local).range(0.0, 1.0);
+    t.field("stiffness_global", &HairComponent::stiffness_global).range(0.0, 1.0);
+    t.field("gravity", &HairComponent::gravity).range(0.0, 100.0);
+    t.field("wind", &HairComponent::wind);
+    t.field("wind_turbulence", &HairComponent::wind_turbulence).range(0.0, 2.0);
+    t.field("root_color", &HairComponent::root_color).color();
+    t.field("tip_color", &HairComponent::tip_color).color();
+    t.field("fiber_radius", &HairComponent::fiber_radius).range(0.001, 0.5);
+    t.field("opacity", &HairComponent::opacity).range(0.0, 1.0);
+    t.field("specular_power_primary", &HairComponent::specular_power_primary).range(1.0, 500.0);
+    t.field("specular_power_secondary", &HairComponent::specular_power_secondary).range(1.0, 500.0);
+    t.field("specular_strength_primary", &HairComponent::specular_strength_primary).range(0.0, 2.0);
+    t.field("specular_strength_secondary", &HairComponent::specular_strength_secondary).range(0.0, 2.0);
+    t.field("specular_color", &HairComponent::specular_color).color();
+    t.field("lod0_distance", &HairComponent::lod0_distance).range(0.0, 500.0);
+    t.field("lod1_distance", &HairComponent::lod1_distance).range(0.0, 500.0);
+    t.field("lod2_distance", &HairComponent::lod2_distance).range(0.0, 500.0);
+    t.field("cull_distance", &HairComponent::cull_distance).range(0.0, 1000.0);
+    t.field("num_follow_per_guide", &HairComponent::num_follow_per_guide).range(0.0, 16.0);
+    t.field("follow_root_offset", &HairComponent::follow_root_offset).range(0.0, 10.0);
+    t.field("cast_shadow", &HairComponent::cast_shadow);
+    t.field("receive_shadow", &HairComponent::receive_shadow);
+    // hair_instance_index_ 为运行时状态，不反射。
+}
+
+void RegisterMorphTarget() {
+    using dse::MorphTargetComponent;
+    auto t = DSE_REFLECT_TYPE(MorphTargetComponent);
+    t.field("enabled", &MorphTargetComponent::enabled);
+    // targets, weights, vertex_count, gpu_* 为运行时/复杂数据，不反射。
+    // 权重通过 SetWeight/SetWeightByIndex API 驱动，不适合简单反射编辑。
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -470,6 +755,28 @@ void EnsureCoreReflectionRegistered() {
     RegisterDynamicObstacle();
     RegisterNavMeshAutoRebake();
     RegisterTerrainTileManager();
+    // Physics
+    RegisterRigidBody3D();
+    RegisterBoxCollider3D();
+    RegisterSphereCollider3D();
+    RegisterCapsuleCollider3D();
+    RegisterMeshCollider3D();
+    RegisterCharacterController3D();
+    RegisterJoint3D();
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
+    RegisterRagdoll();
+    RegisterVehicle();
+    RegisterBuoyancy();
+#endif
+    RegisterSoftBody();
+    RegisterRope();
+    // Sky
+    RegisterAtmosphere();
+    RegisterVolumetricCloud();
+    RegisterDayNightCycle();
+    // Hair / MorphTarget
+    RegisterHair();
+    RegisterMorphTarget();
 }
 
 }  // namespace dse::reflect
