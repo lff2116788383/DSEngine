@@ -399,20 +399,49 @@ Nanite 软件光栅化（处理小三角形时高效）：
 极远物体 → Billboard Impostor
 ```
 
-### 8.5 Visibility Buffer 与 NPR 材质的矛盾
+### 8.5 Visibility Buffer 与 NPR 材质的关系
 
 传统渲染每条几何 Draw Call 可以绑定独立的材质 shader。而 Nanite 把所有几何无差别光栅化到 Visibility Buffer（存三角形 ID），再用全屏 resolve 着色。**resolve shader 必须统一所有材质类型**，通过分支切换。
 
-UE5 的解决方案：双路径——静态环境走 Nanite（受限材质），角色/动态物体走传统管线（任意材质）。
+**UE5 的做法——双路径并行：**
 
-**DSE 的两个选择：**
+UE5 并非让 Nanite 管线本身兼容所有材质，而是用两套渲染路径各司其职：
+- **静态环境/地形** → 走 Nanite（VisBuffer + 软光栅，受限材质子集：Opaque PBR，不支持 WPO/Masked 自定义裁剪）
+- **角色/动态物体/特殊材质/NPR** → 走传统管线（任意 shader，完整材质能力）
+
+这意味着 UE5 的"多风格渲染"能力来自传统管线路径，而非 Nanite 本身。Nanite 只负责把静态几何的吞吐量拉到亿级，其余物体仍走 per-object draw call。
+
+**DSE 的三个选择：**
 
 | 路线 | 面数能力 | 材质支持 | 说明 |
 |:-----|:--------:|:--------:|:------|
 | **A: Cluster + Indirect Draw（不做 VisBuffer）** | 500-1000 万 | ✅ 任意 PBR + 9 NPR | 每个 Cluster 独立 Draw Call，材质不限 |
-| **B: 完整 Nanite（含 VisBuffer + 软光栅）** | 亿级 | ⚠️ 受限 | NPR 9 种风格塞一个 resolve shader 极难维护 |
+| **B: 完整 Nanite（含 VisBuffer + 软光栅）** | 亿级 | ⚠️ 受限（仅 Opaque PBR） | 需限制材质类型，NPR 不走此路径 |
+| **C: 双路径混合（推荐）** | 亿级静态 + 百万级动态 | ✅ 两者兼得 | 静态环境走 VisBuffer，动态/NPR 走传统 Cluster Indirect |
 
-**结论**：如果 DSE 定位是 NPR 风格化引擎，路线 A 更合适。
+**结论——推荐路线 C（双路径混合），分阶段实施：**
+
+```
+阶段 1（近期）：路线 A — Cluster + Indirect Draw
+  • 在现有 GPU-Driven 基础上加 meshlet 离线切分 + per-cluster GPU 剔除
+  • 面数吞吐 500-1000 万，材质零限制
+  • 工期：4-6 周
+  • 所有物体（静态/动态/NPR）统一走此路径
+
+阶段 2（远期）：叠加 VisBuffer 路径 → 形成双路径
+  • 仅对标记为"Nanite Static"的静态环境启用 VisBuffer + 软光栅
+  • 动态物体 / NPR 材质 / WPO 材质仍走阶段 1 的 Cluster Indirect 路径
+  • 渲染调度器根据物体标记自动分流
+  • 工期：12-18 个月（软光栅调试为主要时间消耗）
+
+最终效果：
+  静态环境 → VisBuffer 路径（亿级面数，限 Opaque PBR）
+  动态物体 → Cluster Indirect 路径（百万级，任意材质）
+  NPR 物体 → Cluster Indirect 路径（9 种风格不受限）
+  透明物体 → 传统 Forward 路径（OIT / 排序混合）
+```
+
+这与 UE5 的架构设计一致：Nanite 不是替代传统管线，而是并行补充——把静态世界的几何瓶颈解决，其余保持灵活性。
 
 ### 8.6 代码量估算
 
@@ -441,17 +470,35 @@ UE5 的解决方案：双路径——静态环境走 Nanite（受限材质），
 
 > 核心难点不在代码量，而在 GPU shader 调试（无 printf，只能 RenderDoc 逐帧分析）、LOD popping 边界裂缝、z-fighting 精度问题。AI 可辅助框架代码，但调试密集型工作帮助有限。
 
-### 8.8 建议路线（修正后）
+### 8.8 建议路线（修正后 — 双路径混合）
 
 ```
 第 1 步：GPU Driven 突破                      ✅ 已完成
   GPU Driven 三端对齐 + 渲染线程分离
+  Mega Buffer + Indirect Draw + Hi-Z Occlusion 三后端就绪
 
-第 2 步（可选，12-18 个月）：完整 Nanite 虚拟几何体
-  → 理论上可追平 UE5 面数能力
-  → 核心难点是软件光栅化调试和与现有 31 Pass 的兼容集成
-  → 建议：除非明确需要亿级面数，否则优先做其他更高 ROI 的工作
+第 2 步：Cluster Indirect（阶段 1）           ⬜ 待实施（4-6 周）
+  • 离线工具：Mesh → Meshlet 聚类（64-128 tri/cluster）→ .dmeshlet 格式
+  • 运行时 Compute Shader：per-meshlet 视锥 + Hi-Z 遮挡剔除
+  • 替换现有 per-object indirect 为 per-cluster indirect
+  • 面数能力：500-1000 万，材质零限制（PBR + 9 NPR 全兼容）
+  • 所有物体类型统一走此路径
+
+第 3 步：VisBuffer 双路径（阶段 2）           ⬜ 远期（12-18 个月）
+  • 仅对标记为 "Nanite Static" 的静态环境启用
+  • 新增 VisBuffer Pass：软件光栅化（<32px 三角形）+ 硬件光栅化（≥32px）
+  • 新增 Resolve Pass：MaterialID 分支着色（限 Opaque PBR）
+  • 渲染调度器根据物体 NaniteStaticFlag 自动分流：
+      静态环境 → VisBuffer 路径（亿级面数，限 Opaque PBR）
+      动态物体 → Cluster Indirect 路径（百万级，任意材质）
+      NPR 物体 → Cluster Indirect 路径（9 种风格不受限）
+      透明物体 → 传统 Forward 路径（OIT / 排序混合）
+  • 与 UE5 架构一致：Nanite 并行补充传统管线，而非替代
 ```
+
+> **关键决策**：双路径是最合理的架构。Nanite/VisBuffer 天然不支持任意材质变种，
+> UE5 也是用传统管线处理 NPR/动态/透明物体。DSE 分阶段实施可以在阶段 1 完成后
+> 即获得显著性能收益（per-cluster 剔除），阶段 2 仅在确认需要亿级静态面数时再投入。
 
 ---
 
