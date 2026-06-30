@@ -35,6 +35,7 @@ struct ClipmapLevel {
     /// 顶点/索引数据（CPU 侧，需要时上传 GPU）
     std::vector<float> height_data;  ///< grid_size * grid_size 的高度值
     bool gpu_dirty = true;           ///< 需要重新上传 GPU
+    bool needs_fill = true;          ///< 首次需要完整填充
 };
 
 /// Geometry Clipmap 配置

@@ -56,10 +56,10 @@ void GeometryClipmapSystem::UpdateLevel(int level, const glm::vec3& viewer_pos) 
     int dx = new_origin_x - lv.origin_x;
     int dz = new_origin_z - lv.origin_z;
 
-    if (dx == 0 && dz == 0) return;
+    if (dx == 0 && dz == 0 && !lv.needs_fill) return;
 
-    // 如果移动超过半个网格，完全重填
-    if (std::abs(dx) > half || std::abs(dz) > half) {
+    // 如果移动超过半个网格，或首次需要填充，完全重填
+    if (std::abs(dx) > half || std::abs(dz) > half || lv.needs_fill) {
         lv.origin_x = new_origin_x;
         lv.origin_z = new_origin_z;
         // 完全重新采样
@@ -71,6 +71,7 @@ void GeometryClipmapSystem::UpdateLevel(int level, const glm::vec3& viewer_pos) 
             }
         }
         lv.gpu_dirty = true;
+        lv.needs_fill = false;
         return;
     }
 
