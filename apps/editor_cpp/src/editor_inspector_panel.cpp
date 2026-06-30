@@ -25,6 +25,7 @@
 #include "engine/ecs/components_3d_navmesh.h"  // DynamicObstacleComponent, NavMeshAutoRebakeComponent
 #include "engine/ecs/components_3d_terrain_tile.h"  // TerrainTileManagerComponent
 #include "engine/ecs/components_3d_sky.h"      // AtmosphereComponent, VolumetricCloudComponent, DayNightCycleComponent
+#include "engine/ecs/components_3d_impostor.h" // ImpostorComponent
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/component_reflection.h"
 #include "editor_reflected_inspector.h"
@@ -1756,6 +1757,15 @@ void DrawMorphTargetSection(EditorContext& context) {
                          MakeReflectResolver<dse::MorphTargetComponent>(context));
 }
 
+void DrawImpostorSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::ImpostorComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::ImpostorComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_IMAGE "  Impostor LOD", *ti,
+                         MakeReflectResolver<dse::ImpostorComponent>(context));
+}
+
 // ─── 注册所有 Inspector Section 到注册表 ────────────────────────────────────
 
 void RegisterAllInspectorSections() {
@@ -2045,6 +2055,12 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::MorphTargetComponent>(e)) r.emplace<dse::MorphTargetComponent>(e); },
         89,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::MorphTargetComponent>(e)) r.erase<dse::MorphTargetComponent>(e); }});
+    // --- Impostor LOD ---
+    reg.Register({"Impostor LOD", "3D", DrawImpostorSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::ImpostorComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ImpostorComponent>(e)) r.emplace<dse::ImpostorComponent>(e); },
+        90,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ImpostorComponent>(e)) r.erase<dse::ImpostorComponent>(e); }});
 
     // --- Audio (使用 editor_audio_panel.h 的 DrawAudioSection 适配) ---
     reg.Register({"Name", "Core", nullptr,

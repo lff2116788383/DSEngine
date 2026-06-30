@@ -1270,6 +1270,9 @@ unsigned int OpenGLRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::GBufferMesh:
             if (shader_mgr_.gbuffer_mesh_shader_handle() == 0) shader_mgr_.InitGBufferShader();
             return shader_mgr_.gbuffer_mesh_shader_handle();
+        case BuiltinProgram::Impostor:
+            if (shader_mgr_.impostor_shader_handle() == 0) shader_mgr_.InitImpostorShader();
+            return shader_mgr_.impostor_shader_handle();
     }
     return 0;
 }

@@ -164,6 +164,20 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
 
     frustum_culling_system_.Update(world);
     lod_system_.Update(world);
+    // Impostor: 在 LOD 之后更新，利用同一帧相机位置收集远景实例
+    if (rhi_device_) {
+        glm::vec3 imp_cam_pos(0.0f);
+        auto imp_cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : imp_cam_v) {
+            auto& cam = imp_cam_v.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            imp_cam_pos = glm::vec3(imp_cam_v.get<TransformComponent>(e).local_to_world[3]);
+            break;
+        }
+        impostor_system_.SetRenderContext(rhi_device_, glm::mat4(1.0f), glm::mat4(1.0f),
+                                          imp_cam_pos, glm::vec3(0, -1, 0), glm::vec3(0.15f));
+        impostor_system_.Update(world, imp_cam_pos, *rhi_device_);
+    }
     mesh_render_system_.MarkBatchDirty();
 }
 
@@ -183,6 +197,8 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
     // 各渲染阶段（prez/shadow/opaque）的贡献统一通过 ISceneRenderer 注册，
     // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。
     scene.scene_renderers.push_back(this);
+    // Impostor LOD: 远景 billboard 作为独立 ISceneRenderer 贡献 Opaque 阶段
+    scene.scene_renderers.push_back(impostor_system_.AsSceneRenderer());
 }
 
 void Gameplay3DModule::RenderPreZ(dse::render::CommandBuffer& cmd,
@@ -274,6 +290,7 @@ void Gameplay3DModule::OnShutdown(World& world) {
     snow_cover_system_.Shutdown(world);
     particle3d_system_.Shutdown(world);
     if (rhi_device_ != nullptr) particle_renderer_.Shutdown(*rhi_device_);
+    if (rhi_device_ != nullptr) impostor_system_.Shutdown(*rhi_device_);
     mesh_render_system_.SetAssetManager(nullptr);
     lod_system_.SetAssetManager(nullptr);
     animator_system_.SetAssetManager(nullptr);

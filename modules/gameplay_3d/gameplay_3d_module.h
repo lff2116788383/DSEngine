@@ -13,6 +13,7 @@
 #include "modules/gameplay_3d/rendering/tree_system.h"
 #include "modules/gameplay_3d/rendering/hair_system.h"
 #include "engine/render/particle_renderer.h"
+#include "engine/render/impostor/impostor_system.h"
 #include "modules/gameplay_3d/rendering/frustum_culling_system.h"
 #include "modules/gameplay_3d/rendering/lod_system.h"
 #include "modules/gameplay_3d/animation/animator_system.h"
@@ -82,6 +83,7 @@ private:
     GrassSystem grass_system_;
     TreeSystem tree_system_;
     HairSystem hair_system_;
+    dse::render::ImpostorSystem impostor_system_;
     FrustumCullingSystem frustum_culling_system_;
     LODSystem lod_system_;
     AnimatorSystem animator_system_;

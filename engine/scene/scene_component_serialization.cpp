@@ -10,6 +10,7 @@
 #include "engine/ecs/components_3d_navmesh.h"
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_tree.h"
+#include "engine/ecs/components_3d_impostor.h"
 #include "engine/reflect/component_reflection.h"
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/reflect_json.h"
@@ -158,6 +159,16 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
             components.AddMember("NavMeshAutoRebakeComponent", json, allocator);
         }
     }
+
+    if (registry.all_of<dse::ImpostorComponent>(entity)) {
+        const auto& impostor = registry.get<dse::ImpostorComponent>(entity);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::ImpostorComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &impostor, json, allocator);
+            components.AddMember("ImpostorComponent", json, allocator);
+        }
+    }
 }
 
 void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
@@ -216,6 +227,19 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
         nav.needs_full_rebake_ = true;
         nav.baked_tile_count_ = 0;
         registry.emplace<dse::NavMeshAutoRebakeComponent>(entity, std::move(nav));
+    }
+
+    if (components.HasMember("ImpostorComponent") &&
+        components["ImpostorComponent"].IsObject()) {
+        dse::ImpostorComponent impostor;
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::ImpostorComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &impostor, components["ImpostorComponent"]);
+        // 运行时状态重置
+        impostor.atlas_texture_handle_ = 0;
+        impostor.normal_texture_handle_ = 0;
+        impostor.atlas_loaded_ = false;
+        impostor.cached_bounds_radius_ = 0.0f;
+        registry.emplace<dse::ImpostorComponent>(entity, std::move(impostor));
     }
 }
 

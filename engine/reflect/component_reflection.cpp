@@ -11,6 +11,7 @@
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_sky.h"
+#include "engine/ecs/components_3d_impostor.h"
 
 namespace dse::reflect {
 
@@ -726,6 +727,26 @@ void RegisterMorphTarget() {
     // 权重通过 SetWeight/SetWeightByIndex API 驱动，不适合简单反射编辑。
 }
 
+void RegisterImpostor() {
+    using dse::ImpostorComponent;
+    auto t = DSE_REFLECT_TYPE(ImpostorComponent);
+    t.field("enabled", &ImpostorComponent::enabled);
+    t.field("atlas_path", &ImpostorComponent::atlas_path).tooltip("烘焙生成的 .dimpostor atlas 文件路径");
+    t.field("frame_mode", &ImpostorComponent::frame_mode).tooltip("帧布局模式: HemiOctahedron/FullOctahedron/Billboard");
+    t.field("frames_x", &ImpostorComponent::frames_x).range(1, 32).tooltip("Atlas 水平帧数");
+    t.field("frames_y", &ImpostorComponent::frames_y).range(1, 16).tooltip("Atlas 垂直帧数");
+    t.field("transition_distance", &ImpostorComponent::transition_distance).range(1.0, 10000.0).tooltip("开始切换到 impostor 的距离");
+    t.field("fade_range", &ImpostorComponent::fade_range).range(0.1, 200.0).tooltip("几何→impostor 交叉渐变距离");
+    t.field("cull_distance", &ImpostorComponent::cull_distance).range(10.0, 50000.0).tooltip("超过此距离完全剪裁");
+    t.field("impostor_size", &ImpostorComponent::impostor_size).range(0.1, 10.0).tooltip("Billboard 缩放因子");
+    t.field("pivot_offset", &ImpostorComponent::pivot_offset).tooltip("Billboard 锚点偏移");
+    t.field("cast_shadow", &ImpostorComponent::cast_shadow);
+    t.field("use_frame_interpolation", &ImpostorComponent::use_frame_interpolation).tooltip("帧间双线性插值");
+    t.field("normal_strength", &ImpostorComponent::normal_strength).range(0.0, 2.0).tooltip("Atlas 法线图强度");
+    t.field("auto_from_lod_group", &ImpostorComponent::auto_from_lod_group).tooltip("自动从 LODGroup 最远级别取距离");
+    // 运行时状态不反射：atlas_texture_handle_, normal_texture_handle_, atlas_loaded_, cached_bounds_radius_
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -777,6 +798,8 @@ void EnsureCoreReflectionRegistered() {
     // Hair / MorphTarget
     RegisterHair();
     RegisterMorphTarget();
+    // Impostor LOD
+    RegisterImpostor();
 }
 
 }  // namespace dse::reflect

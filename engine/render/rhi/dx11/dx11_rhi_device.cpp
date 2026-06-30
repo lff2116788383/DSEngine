@@ -618,6 +618,7 @@ unsigned int DX11RhiDevice::GetBuiltinProgram(BuiltinProgram program) {
         case BuiltinProgram::ForwardSkinnedInstancedShaded: return shader_mgr_.forward_skinned_instanced_shaded_shader_handle();
         case BuiltinProgram::ForwardMorphShaded: return shader_mgr_.forward_morph_shaded_shader_handle();
         case BuiltinProgram::GBufferMesh: return shader_mgr_.gbuffer_mesh_shader_handle();
+        case BuiltinProgram::Impostor: return shader_mgr_.impostor_shader_handle();
     }
     return 0;
 }

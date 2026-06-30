@@ -307,6 +307,7 @@ enum class BuiltinProgram : uint8_t {
     HairStrand = 14,  ///< 毛发线带（hair.vert + hair.frag；position/tangent SSBO\@set7.b0/b1 + 组合 HairUniforms UBO\@set0.b0；LINE_STRIP 拓扑、逐 strand 绘制，配 HairRenderer）
     ForwardSkinnedInstancedShaded = 15,  ///< 蒙皮 + 硬件实例化 + 高级 shading 组合（forward_shaded_skinned_instanced.vert + forward_shaded.frag；实例 SSBO\@set8.b0 + 骨骼 SSBO\@set8.b1；bone-palette 去重，配 MeshRenderer::DrawSkinnedInstancedShaded）
     GBufferMesh = 16,  ///< 延迟几何 GBuffer 输出（forward_pbr.vert + gbuffer.frag；CPU 预变换世界空间顶点 + vp，MRT 输出 gAlbedo/gNormal/gPosition，配 MeshRenderer::DrawGBuffer 与 ShadowRSMPass→DDGIUpdatePass，阶段4-M3）
+    Impostor = 17,  ///< Impostor LOD billboard（impostor.vert + impostor.frag；per-instance pos/frame SSBO\@set7.b0 + atlas u_atlas\@set2.b1 + u_normal_atlas\@set2.b2 + ImpostorParams UBO\@set1.b0；alpha 混合、测深度不写深度，配 ImpostorRenderer）
 };
 
 /// 渲染通道描述符

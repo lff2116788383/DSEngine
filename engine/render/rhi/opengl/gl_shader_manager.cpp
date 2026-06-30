@@ -76,6 +76,8 @@
 #include "embed/sprite_fx_vert.gen.h"
 #include "embed/sprite_fx_sdf_frag.gen.h"
 #include "embed/sprite_fx_vfx_frag.gen.h"
+#include "embed/impostor_vert.gen.h"
+#include "embed/impostor_frag.gen.h"
 
 // gen PP frag 反射数据：用于按 (binding-1) 正确分配 sampler texture unit。
 // ESSL300 剥离了 layout(binding=N)，所有 sampler 默认落到 unit 0，导致同一单元
@@ -142,6 +144,8 @@
 #include "embed/forward_shaded_morph_vert_reflect.gen.h"
 #include "embed/particle_instanced_vert_reflect.gen.h"
 #include "embed/particle_frag_reflect.gen.h"
+#include "embed/impostor_vert_reflect.gen.h"
+#include "embed/impostor_frag_reflect.gen.h"
 #include "embed/hair_vert_reflect.gen.h"
 #include "embed/forward_pbr_instanced_vert_reflect.gen.h"
 #include "embed/forward_shaded_frag_reflect.gen.h"
@@ -1049,6 +1053,32 @@ void GLShaderManager::InitHairStrandShader() {
     using namespace dse::render::generated_shaders::reflect;
     // 组合 HairUniforms UBO\@binding0（VS+FS 共享）；SSBO position\@0/tangent\@1 由 BindStorageBuffer(0/1) 命中。
     BindUBOsFromReflection(hair_strand_shader_handle_, khair_vert_reflection);
+}
+
+void GLShaderManager::InitImpostorShader() {
+    if (impostor_shader_handle_ != 0) return;
+    if (!supports_ssbo_) {
+        DEBUG_LOG_WARN("GLShaderManager: impostor 需要 SSBO 支持，当前上下文不可用");
+        return;
+    }
+    using namespace dse::render::generated_shaders;
+    // SSBO 驱动的 impostor billboard VS + atlas 采样 FS。
+    impostor_shader_handle_ = CompileProgram(DSE_SL(kimpostor_vert), DSE_SL(kimpostor_frag));
+    if (impostor_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("GLShaderManager: impostor shader compile failed");
+        return;
+    }
+    programs_created_ += 1;
+    using namespace dse::render::generated_shaders::reflect;
+    BindUBOsFromReflection(impostor_shader_handle_, kimpostor_vert_reflection);
+    {
+        std::vector<gl_reflect::TextureUnitEntry> tex_entries;
+        gl_reflect::ComputeFlatTextureUnits(kimpostor_frag_reflection, tex_entries);
+        glUseProgram(impostor_shader_handle_);
+        gl_reflect::BindSamplersOnce(impostor_shader_handle_, tex_entries,
+                                     glGetUniformLocation, glUniform1i);
+        glUseProgram(0);
+    }
 }
 
 void GLShaderManager::InitSpriteFxSdfShader() {

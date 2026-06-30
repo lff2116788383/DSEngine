@@ -258,6 +258,10 @@ public:
     // --- 阴影深度着色器 ---
     void InitShadowShader();
 
+    // --- Impostor LOD billboard 着色器（impostor.vert + impostor.frag；per-instance SSBO）---
+    void InitImpostorShader();
+    unsigned int impostor_shader_handle() const { return impostor_shader_handle_; }
+
     // --- GBuffer 着色器（延迟渲染几何通道） ---
     void InitGBufferShader();
 
@@ -320,6 +324,7 @@ private:
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_morph_shaded_shader_handle_ = 0;
+    unsigned int impostor_shader_handle_ = 0;
 };
 
 } // namespace render

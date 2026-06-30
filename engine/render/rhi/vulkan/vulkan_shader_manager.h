@@ -173,6 +173,10 @@ public:
     void InitForwardMorphShadedShader();
     unsigned int forward_morph_shaded_shader_handle() const { return forward_morph_shaded_shader_handle_; }
 
+    /// 初始化 Impostor LOD billboard 着色器（impostor.vert + impostor.frag；per-instance SSBO）
+    void InitImpostorShader();
+    unsigned int impostor_shader_handle() const { return impostor_shader_handle_; }
+
     /// 初始化 SDF 文本着色器
     void InitTextSdfShader();
 
@@ -284,6 +288,7 @@ private:
     unsigned int forward_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_skinned_instanced_shaded_shader_handle_ = 0;
     unsigned int forward_morph_shaded_shader_handle_ = 0;
+    unsigned int impostor_shader_handle_ = 0;
 };
 
 } // namespace render

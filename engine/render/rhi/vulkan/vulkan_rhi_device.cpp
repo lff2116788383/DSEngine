@@ -801,6 +801,9 @@ unsigned int VulkanRhiDevice::GetBuiltinProgram(BuiltinProgram program) {
             return shader_mgr_.forward_morph_shaded_shader_handle();
         case BuiltinProgram::GBufferMesh:
             return shader_mgr_.gbuffer_mesh_shader_handle();  // InitBuiltinShaders 阶段已预编译
+        case BuiltinProgram::Impostor:
+            if (shader_mgr_.impostor_shader_handle() == 0) shader_mgr_.InitImpostorShader();
+            return shader_mgr_.impostor_shader_handle();
     }
     return 0;
 }

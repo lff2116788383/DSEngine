@@ -83,6 +83,8 @@
 #include "embed/shadow_gpu_driven_vert.gen.h"
 #include "embed/text_sdf_frag.gen.h"
 #include "embed/ui_effects_frag.gen.h"
+#include "embed/impostor_vert.gen.h"
+#include "embed/impostor_frag.gen.h"
 
 // Reflection metadata for automated descriptor layout
 #include "embed/pbr_vert_reflect.gen.h"
@@ -826,6 +828,21 @@ void VulkanShaderManager::InitHairStrandShader() {
         DEBUG_LOG_ERROR("Vulkan hair shader creation failed (pre-compiled SPIR-V)");
     } else {
         DEBUG_LOG_INFO("Vulkan hair shader created: handle={}", hair_strand_shader_handle_);
+    }
+}
+
+void VulkanShaderManager::InitImpostorShader() {
+    if (impostor_shader_handle_ != 0) return;
+    using namespace dse::render::generated_shaders;
+    // SSBO 驱动的 Impostor billboard：impostor.vert（每实例 pos/frame SSBO\@set7.b0）+ impostor.frag（u_atlas\@set2.b1 + u_normal_atlas\@set2.b2 + ImpostorParams UBO\@set1.b0）；
+    // descriptor set layout 由 SPIR-V 反射驱动。
+    impostor_shader_handle_ = CreateProgramFromSpirv(
+        kimpostor_vert_spv, kimpostor_vert_spv_size,
+        kimpostor_frag_spv, kimpostor_frag_spv_size);
+    if (impostor_shader_handle_ == 0) {
+        DEBUG_LOG_ERROR("Vulkan impostor shader creation failed (pre-compiled SPIR-V)");
+    } else {
+        DEBUG_LOG_INFO("Vulkan impostor shader created: handle={}", impostor_shader_handle_);
     }
 }
 
