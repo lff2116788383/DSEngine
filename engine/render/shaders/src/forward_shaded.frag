@@ -138,6 +138,18 @@ layout(set = 2, binding = 26) uniform samplerCube u_point_shadow_cube_1;    // f
 layout(set = 2, binding = 27) uniform samplerCube u_point_shadow_cube_2;    // flat unit 18
 layout(set = 2, binding = 28) uniform samplerCube u_point_shadow_cube_3;    // flat unit 19
 
+// Lightmap: binding 29 -> flat unit 20. Baked irradiance (RGB HDR) sampled with UV * st_offset.
+layout(set = 2, binding = 29) uniform sampler2D u_lightmap;                 // flat unit 20
+
+// Lightmap parameters encoded in toon_params.w (unused by toon shading when mode != 3):
+//   watercolor.w reused as lightmap_enabled flag (>0.5 = use lightmap)
+//   mode_params.w reused as pom_height_scale (not conflicting — lightmap uses st_offset in TerrainParams)
+// Lightmap ST is encoded in u_splat_tiling.zw (when splat not enabled, these are free).
+// To avoid excessive UBO changes, lightmap_enabled = (flags.w > 1.5) means:
+//   flags.w == 0: no occlusion map, no lightmap
+//   flags.w == 1: has occlusion map, no lightmap
+//   flags.w == 2: has lightmap (replaces ambient)
+
 const float PI = 3.14159265359;
 const int CSM_CASCADES = 3;
 
@@ -616,11 +628,16 @@ void main() {
         // 聚光灯（≤64，Final-Feat-4）：锥角衰减后附加 Cook-Torrance 贡献（空=不影响）。
         Lo += SpotLightsLo(N, V, vWorldPos, surface_albedo, roughness, metallic, F0);
 
-        // 间接漫反射：DDGI（探针体）优先，其次 LightProbe SH，否则退化为平坦环境光。
-        // 两者皆关时结果与 B2c-4 一致（不回归）。
+        // 间接漫反射：Lightmap > DDGI > SH > 平坦环境光（优先级递减）。
         vec3 indirect = vec3(ambient);
         if (probe_params.x > 0.5) indirect = EvaluateSH(N);
         if (u_ddgi_origin.w > 0.5) indirect = SampleDDGI(vWorldPos, N) * u_ddgi_spacing.w;
+        // Lightmap: flags.w > 1.5 表示有光照贴图，使用 UV * st_offset 采样烘焙辐照度替换 ambient
+        if (flags.w > 1.5) {
+            vec2 lm_uv = vTexCoord * u_splat_tiling.zw + u_snow_params.xy;
+            vec3 lm_irradiance = texture(u_lightmap, lm_uv).rgb;
+            indirect = lm_irradiance;
+        }
         vec3 ambient_term = indirect * surface_albedo * ao;
         color = ambient_term + Lo + surface_emissive;
     }

@@ -7,6 +7,8 @@
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/scene/scene_manager.h"
+#include "engine/ai/behavior_tree.h"
+#include "engine/cutscene/cutscene_player.h"
 
 namespace dse::gameplay3d {
 
@@ -99,6 +101,9 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     // GPU Particle Manager: 初始化 compute shader
     gpu_particle_manager_.Init(rhi_device);
 
+    // Lightmap System: 初始化（加载 .dlightmap → GPU 纹理）
+    lightmap_system_.Init(rhi_device);
+
     // World State Persistence: 初始化存档目录
     world_state_persistence_.Init("save/world_state");
 
@@ -120,6 +125,8 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
             std::shared_ptr<dse::ai::AILodScheduler>(&ai_lod_scheduler_, noop_del));
         sl.Register<dse::WorldStatePersistence, dse::WorldStatePersistence>(
             std::shared_ptr<dse::WorldStatePersistence>(&world_state_persistence_, noop_del));
+        sl.Register<dse::cutscene::CutscenePlayer, dse::cutscene::CutscenePlayer>(
+            std::shared_ptr<dse::cutscene::CutscenePlayer>(&cutscene_player_, noop_del));
     }
 
     // Floating Origin: 订阅 rebase 事件，偏移各子系统持有的世界空间坐标
@@ -216,6 +223,39 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     snow_cover_system_.Update(world, delta_time);
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
+
+    // ── Behavior Tree: tick all entities with BehaviorTreeComponent ──
+    {
+        auto bt_view = world.registry().view<dse::BehaviorTreeComponent>();
+        for (auto e : bt_view) {
+            auto& btc = bt_view.get<dse::BehaviorTreeComponent>(e);
+            if (!btc.enabled || !btc.tree) continue;
+            auto status = btc.tree->Tick(delta_time);
+            if (status != dse::ai::BTStatus::Running && btc.auto_restart) {
+                btc.tree->Reset();
+            }
+        }
+    }
+
+    // ── Cutscene Player: tick the global cutscene player ──
+    cutscene_player_.Update(delta_time);
+
+    // Auto-play CutsceneComponents that haven't started yet
+    {
+        auto cs_view = world.registry().view<dse::CutsceneComponent>();
+        for (auto e : cs_view) {
+            auto& csc = cs_view.get<dse::CutsceneComponent>(e);
+            if (!csc.enabled) continue;
+            if (csc.auto_play && !csc.playing) {
+                if (cutscene_player_.GetSequence(csc.sequence_name)) {
+                    cutscene_player_.Play(csc.sequence_name);
+                    csc.playing = true;
+                    csc.auto_play = false;
+                }
+            }
+        }
+    }
+
 #ifdef DSE_ENABLE_NAVMESH
     nav_agent_system_.Update(world, delta_time);
 #endif
@@ -239,6 +279,9 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
         }
         hair_system_.Update(world, cam_pos, delta_time);
     }
+
+    // ── Lightmap: 按需加载 LightmapComponent 引用的 .dlightmap 纹理 ──
+    lightmap_system_.Update(world);
 
     // ── Open-world systems 更新 ──────────────────────────────────────────
 
@@ -410,9 +453,14 @@ void Gameplay3DModule::OnShutdown(World& world) {
     }
     world_cache_ = nullptr;
 
+    // Cutscene Player: 停止并清空
+    cutscene_player_.Stop();
+    cutscene_player_.ClearTriggers();
+
     // Open-world systems: ServiceLocator 注销
     {
         auto& sl = dse::core::ServiceLocator::Instance();
+        sl.Reset<dse::cutscene::CutscenePlayer>();
         sl.Reset<dse::WorldPartitionSystem>();
         sl.Reset<dse::render::HLODSystem>();
         sl.Reset<dse::vt::VirtualTextureSystem>();
@@ -421,6 +469,9 @@ void Gameplay3DModule::OnShutdown(World& world) {
         sl.Reset<dse::ai::AILodScheduler>();
         sl.Reset<dse::WorldStatePersistence>();
     }
+
+    // Lightmap system shutdown
+    lightmap_system_.Shutdown();
 
     // Open-world systems shutdown
     world_partition_system_.Shutdown();

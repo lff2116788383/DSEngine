@@ -1,10 +1,31 @@
 #ifndef DSE_COMPONENTS_3D_AI_H
 #define DSE_COMPONENTS_3D_AI_H
 
+#include <memory>
+#include <string>
 #include <vector>
 #include <glm/glm.hpp>
 
 namespace dse {
+namespace ai {
+class BehaviorTree;
+} // namespace ai
+
+/// 行为树 ECS 组件 —— 挂载到 AI 实体，由 BehaviorTreeSystem 每帧 tick
+struct BehaviorTreeComponent {
+    bool enabled = true;
+    std::string tree_name;                              ///< 树名称（用于调试/日志）
+    std::shared_ptr<dse::ai::BehaviorTree> tree;        ///< 行为树实例（含根节点 + 黑板）
+    bool auto_restart = true;                           ///< 树完成（Success/Failure）后是否自动 Reset 并重新执行
+};
+
+/// 过场组件 —— 标记实体关联过场序列，由 CutsceneSystem 驱动
+struct CutsceneComponent {
+    bool enabled = true;
+    std::string sequence_name;      ///< 关联的 CutsceneSequence 名称
+    bool auto_play = false;         ///< 场景加载后是否自动播放
+    bool playing = false;           ///< 运行时状态：是否正在播放
+};
 
 struct SteeringComponent {
     bool enabled = true;

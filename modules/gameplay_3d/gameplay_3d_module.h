@@ -41,6 +41,14 @@
 #include "modules/gameplay_3d/weather/weather_system.h"
 #include "modules/gameplay_3d/snow/snow_cover_system.h"
 
+// AI / Cutscene systems
+#include "engine/ai/behavior_tree.h"
+#include "engine/cutscene/cutscene_player.h"
+#include "engine/ecs/components_3d_ai.h"
+
+// Lightmap runtime
+#include "engine/render/gi/lightmap_system.h"
+
 // Open-world systems
 #include "engine/scene/world_partition.h"
 #include "engine/render/hlod/hlod_system.h"
@@ -130,6 +138,12 @@ private:
     dse::render::GpuParticleManager gpu_particle_manager_;
     dse::WorldStatePersistence world_state_persistence_;
     uint64_t frame_number_ = 0;
+
+    // AI / Cutscene runtime
+    dse::cutscene::CutscenePlayer cutscene_player_;
+
+    // Lightmap runtime
+    dse::render::LightmapSystem lightmap_system_;
 
     World* world_cache_ = nullptr;
     dse::core::SubscriptionHandle origin_rebase_handle_;
