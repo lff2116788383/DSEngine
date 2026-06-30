@@ -6,6 +6,9 @@
 
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_tree.h"
+#include "engine/ecs/components_3d_foliage.h"
+#include "engine/ecs/components_3d_navmesh.h"
+#include "engine/ecs/components_3d_terrain_tile.h"
 
 namespace dse::reflect {
 
@@ -376,6 +379,68 @@ void RegisterGIProbeVolume() {
     // needs_reinit_ 为运行时状态，跳过。
 }
 
+void RegisterFoliage() {
+    using dse::FoliageComponent;
+    auto t = DSE_REFLECT_TYPE(FoliageComponent);
+    t.field("enabled", &FoliageComponent::enabled);
+    t.field("wind_strength", &FoliageComponent::wind_strength).range(0.0, 10.0);
+    t.field("stiffness", &FoliageComponent::stiffness).range(0.0, 1.0);
+    t.field("phase_offset", &FoliageComponent::phase_offset);
+    t.field("push_response", &FoliageComponent::push_response).range(0.0, 4.0);
+}
+
+void RegisterDynamicObstacle() {
+    using dse::DynamicObstacleComponent;
+    DSE_REFLECT_ENUM(DynamicObstacleComponent::Shape)
+        .value("Box", DynamicObstacleComponent::Shape::Box)
+        .value("Cylinder", DynamicObstacleComponent::Shape::Cylinder);
+
+    auto t = DSE_REFLECT_TYPE(DynamicObstacleComponent);
+    t.field("enabled", &DynamicObstacleComponent::enabled);
+    t.field("shape", &DynamicObstacleComponent::shape);
+    t.field("box_extents", &DynamicObstacleComponent::box_extents);
+    t.field("cylinder_radius", &DynamicObstacleComponent::cylinder_radius).range(0.0, 100.0);
+    t.field("cylinder_height", &DynamicObstacleComponent::cylinder_height).range(0.0, 100.0);
+    // obstacle_ref_ / dirty_ 为运行时状态，不反射。
+}
+
+void RegisterNavMeshAutoRebake() {
+    using dse::NavMeshAutoRebakeComponent;
+    auto t = DSE_REFLECT_TYPE(NavMeshAutoRebakeComponent);
+    t.field("enabled", &NavMeshAutoRebakeComponent::enabled);
+    t.field("tile_size", &NavMeshAutoRebakeComponent::tile_size).range(1.0, 256.0);
+    t.field("rebake_cooldown", &NavMeshAutoRebakeComponent::rebake_cooldown).range(0.0, 60.0);
+    t.field("collect_terrain", &NavMeshAutoRebakeComponent::collect_terrain);
+    t.field("collect_mesh_renderers", &NavMeshAutoRebakeComponent::collect_mesh_renderers);
+    t.field("agent_height", &NavMeshAutoRebakeComponent::agent_height).range(0.1, 10.0);
+    t.field("agent_radius", &NavMeshAutoRebakeComponent::agent_radius).range(0.1, 10.0);
+    t.field("agent_max_climb", &NavMeshAutoRebakeComponent::agent_max_climb).range(0.0, 10.0);
+    t.field("agent_max_slope", &NavMeshAutoRebakeComponent::agent_max_slope).range(0.0, 90.0);
+    t.field("cell_size", &NavMeshAutoRebakeComponent::cell_size).range(0.01, 10.0);
+    t.field("cell_height", &NavMeshAutoRebakeComponent::cell_height).range(0.01, 10.0);
+    // cooldown_timer_ / needs_full_rebake_ / baked_tile_count_ 为运行时状态，不反射。
+}
+
+void RegisterTerrainTileManager() {
+    using dse::TerrainTileManagerComponent;
+    auto t = DSE_REFLECT_TYPE(TerrainTileManagerComponent);
+    t.field("enabled", &TerrainTileManagerComponent::enabled);
+    t.field("tile_world_size", &TerrainTileManagerComponent::tile_world_size).range(1.0, 1024.0);
+    t.field("tile_resolution", &TerrainTileManagerComponent::tile_resolution).range(8.0, 512.0);
+    t.field("max_height", &TerrainTileManagerComponent::max_height).range(0.0, 10000.0);
+    t.field("max_lod_levels", &TerrainTileManagerComponent::max_lod_levels).range(1.0, 8.0);
+    t.field("lod_distance_factor", &TerrainTileManagerComponent::lod_distance_factor).range(1.0, 1000.0);
+    t.field("load_radius", &TerrainTileManagerComponent::load_radius).range(1.0, 10000.0);
+    t.field("unload_radius", &TerrainTileManagerComponent::unload_radius).range(1.0, 10000.0);
+    t.field("heightmap_pattern", &TerrainTileManagerComponent::heightmap_pattern);
+    t.field("splat_texture_paths", &TerrainTileManagerComponent::splat_texture_paths);  // std::string[4]
+    t.field("splat_tiling", &TerrainTileManagerComponent::splat_tiling);
+    t.field("base_texture_path", &TerrainTileManagerComponent::base_texture_path);
+    t.field("use_procedural", &TerrainTileManagerComponent::use_procedural);
+    t.field("procedural_base_height", &TerrainTileManagerComponent::procedural_base_height);
+    // tiles / GPU handles / statistics 为运行时状态，不反射。
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -401,6 +466,10 @@ void EnsureCoreReflectionRegistered() {
     RegisterLightProbe();
     RegisterReflectionProbe();
     RegisterGIProbeVolume();
+    RegisterFoliage();
+    RegisterDynamicObstacle();
+    RegisterNavMeshAutoRebake();
+    RegisterTerrainTileManager();
 }
 
 }  // namespace dse::reflect

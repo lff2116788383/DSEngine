@@ -101,21 +101,22 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
 
     if (registry.all_of<dse::SubSceneComponent>(entity)) {
         const auto& sub = registry.get<dse::SubSceneComponent>(entity);
-        rapidjson::Value json(rapidjson::kObjectType);
-        json.AddMember("enabled", sub.enabled, allocator);
-        json.AddMember("scene_path", rapidjson::Value(sub.scene_path.c_str(), allocator), allocator);
-        components.AddMember("SubSceneComponent", json, allocator);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::SubSceneComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &sub, json, allocator);
+            components.AddMember("SubSceneComponent", json, allocator);
+        }
     }
 
     if (registry.all_of<dse::FoliageComponent>(entity)) {
         const auto& foliage = registry.get<dse::FoliageComponent>(entity);
-        rapidjson::Value json(rapidjson::kObjectType);
-        json.AddMember("enabled", foliage.enabled, allocator);
-        json.AddMember("wind_strength", foliage.wind_strength, allocator);
-        json.AddMember("stiffness", foliage.stiffness, allocator);
-        json.AddMember("phase_offset", foliage.phase_offset, allocator);
-        json.AddMember("push_response", foliage.push_response, allocator);
-        components.AddMember("FoliageComponent", json, allocator);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::FoliageComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &foliage, json, allocator);
+            components.AddMember("FoliageComponent", json, allocator);
+        }
     }
 
     if (registry.all_of<dse::TreeComponent>(entity)) {
@@ -130,50 +131,32 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
 
     if (registry.all_of<dse::TerrainTileManagerComponent>(entity)) {
         const auto& ttm = registry.get<dse::TerrainTileManagerComponent>(entity);
-        rapidjson::Value json(rapidjson::kObjectType);
-        json.AddMember("enabled", ttm.enabled, allocator);
-        json.AddMember("tile_world_size", ttm.tile_world_size, allocator);
-        json.AddMember("tile_resolution", ttm.tile_resolution, allocator);
-        json.AddMember("max_height", ttm.max_height, allocator);
-        json.AddMember("max_lod_levels", ttm.max_lod_levels, allocator);
-        json.AddMember("lod_distance_factor", ttm.lod_distance_factor, allocator);
-        json.AddMember("load_radius", ttm.load_radius, allocator);
-        json.AddMember("unload_radius", ttm.unload_radius, allocator);
-        json.AddMember("heightmap_pattern", rapidjson::Value(ttm.heightmap_pattern.c_str(), allocator), allocator);
-        AddStringArray(json, "splat_texture_paths", ttm.splat_texture_paths, 4, allocator);
-        json.AddMember("splat_tiling", MakeVec4Array(ttm.splat_tiling, allocator), allocator);
-        json.AddMember("base_texture_path", rapidjson::Value(ttm.base_texture_path.c_str(), allocator), allocator);
-        json.AddMember("use_procedural", ttm.use_procedural, allocator);
-        json.AddMember("procedural_base_height", ttm.procedural_base_height, allocator);
-        components.AddMember("TerrainTileManagerComponent", json, allocator);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::TerrainTileManagerComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &ttm, json, allocator);
+            components.AddMember("TerrainTileManagerComponent", json, allocator);
+        }
     }
 
     if (registry.all_of<dse::DynamicObstacleComponent>(entity)) {
         const auto& obstacle = registry.get<dse::DynamicObstacleComponent>(entity);
-        rapidjson::Value json(rapidjson::kObjectType);
-        json.AddMember("enabled", obstacle.enabled, allocator);
-        json.AddMember("shape", static_cast<int>(obstacle.shape), allocator);
-        json.AddMember("box_extents", MakeVec3Array(obstacle.box_extents, allocator), allocator);
-        json.AddMember("cylinder_radius", obstacle.cylinder_radius, allocator);
-        json.AddMember("cylinder_height", obstacle.cylinder_height, allocator);
-        components.AddMember("DynamicObstacleComponent", json, allocator);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::DynamicObstacleComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &obstacle, json, allocator);
+            components.AddMember("DynamicObstacleComponent", json, allocator);
+        }
     }
 
     if (registry.all_of<dse::NavMeshAutoRebakeComponent>(entity)) {
         const auto& nav = registry.get<dse::NavMeshAutoRebakeComponent>(entity);
-        rapidjson::Value json(rapidjson::kObjectType);
-        json.AddMember("enabled", nav.enabled, allocator);
-        json.AddMember("tile_size", nav.tile_size, allocator);
-        json.AddMember("rebake_cooldown", nav.rebake_cooldown, allocator);
-        json.AddMember("collect_terrain", nav.collect_terrain, allocator);
-        json.AddMember("collect_mesh_renderers", nav.collect_mesh_renderers, allocator);
-        json.AddMember("agent_height", nav.agent_height, allocator);
-        json.AddMember("agent_radius", nav.agent_radius, allocator);
-        json.AddMember("agent_max_climb", nav.agent_max_climb, allocator);
-        json.AddMember("agent_max_slope", nav.agent_max_slope, allocator);
-        json.AddMember("cell_size", nav.cell_size, allocator);
-        json.AddMember("cell_height", nav.cell_height, allocator);
-        components.AddMember("NavMeshAutoRebakeComponent", json, allocator);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::NavMeshAutoRebakeComponent>();
+        if (ti) {
+            rapidjson::Value json(rapidjson::kObjectType);
+            dse::reflect::SerializeReflected(*ti, &nav, json, allocator);
+            components.AddMember("NavMeshAutoRebakeComponent", json, allocator);
+        }
     }
 }
 
@@ -186,35 +169,16 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
     }
 
     if (components.HasMember("SubSceneComponent") && components["SubSceneComponent"].IsObject()) {
-        const auto& json = components["SubSceneComponent"];
         dse::SubSceneComponent sub;
-        if (json.HasMember("enabled") && json["enabled"].IsBool()) {
-            sub.enabled = json["enabled"].GetBool();
-        }
-        if (json.HasMember("scene_path") && json["scene_path"].IsString()) {
-            sub.scene_path = json["scene_path"].GetString();
-        }
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::SubSceneComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &sub, components["SubSceneComponent"]);
         registry.emplace<dse::SubSceneComponent>(entity, std::move(sub));
     }
 
     if (components.HasMember("FoliageComponent") && components["FoliageComponent"].IsObject()) {
-        const auto& json = components["FoliageComponent"];
         dse::FoliageComponent foliage;
-        if (json.HasMember("enabled") && json["enabled"].IsBool()) {
-            foliage.enabled = json["enabled"].GetBool();
-        }
-        if (json.HasMember("wind_strength") && json["wind_strength"].IsNumber()) {
-            foliage.wind_strength = json["wind_strength"].GetFloat();
-        }
-        if (json.HasMember("stiffness") && json["stiffness"].IsNumber()) {
-            foliage.stiffness = json["stiffness"].GetFloat();
-        }
-        if (json.HasMember("phase_offset") && json["phase_offset"].IsNumber()) {
-            foliage.phase_offset = json["phase_offset"].GetFloat();
-        }
-        if (json.HasMember("push_response") && json["push_response"].IsNumber()) {
-            foliage.push_response = json["push_response"].GetFloat();
-        }
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::FoliageComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &foliage, components["FoliageComponent"]);
         registry.emplace<dse::FoliageComponent>(entity, foliage);
     }
 
@@ -227,70 +191,17 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
 
     if (components.HasMember("TerrainTileManagerComponent") &&
         components["TerrainTileManagerComponent"].IsObject()) {
-        const auto& json = components["TerrainTileManagerComponent"];
         dse::TerrainTileManagerComponent ttm;
-        if (json.HasMember("enabled") && json["enabled"].IsBool()) {
-            ttm.enabled = json["enabled"].GetBool();
-        }
-        if (json.HasMember("tile_world_size") && json["tile_world_size"].IsNumber()) {
-            ttm.tile_world_size = json["tile_world_size"].GetFloat();
-        }
-        if (json.HasMember("tile_resolution") && json["tile_resolution"].IsInt()) {
-            ttm.tile_resolution = json["tile_resolution"].GetInt();
-        }
-        if (json.HasMember("max_height") && json["max_height"].IsNumber()) {
-            ttm.max_height = json["max_height"].GetFloat();
-        }
-        if (json.HasMember("max_lod_levels") && json["max_lod_levels"].IsInt()) {
-            ttm.max_lod_levels = json["max_lod_levels"].GetInt();
-        }
-        if (json.HasMember("lod_distance_factor") && json["lod_distance_factor"].IsNumber()) {
-            ttm.lod_distance_factor = json["lod_distance_factor"].GetFloat();
-        }
-        if (json.HasMember("load_radius") && json["load_radius"].IsNumber()) {
-            ttm.load_radius = json["load_radius"].GetFloat();
-        }
-        if (json.HasMember("unload_radius") && json["unload_radius"].IsNumber()) {
-            ttm.unload_radius = json["unload_radius"].GetFloat();
-        }
-        if (json.HasMember("heightmap_pattern") && json["heightmap_pattern"].IsString()) {
-            ttm.heightmap_pattern = json["heightmap_pattern"].GetString();
-        }
-        ReadStringArray(json, "splat_texture_paths", ttm.splat_texture_paths, 4);
-        if (json.HasMember("splat_tiling")) {
-            ReadVec4(json["splat_tiling"], ttm.splat_tiling);
-        }
-        if (json.HasMember("base_texture_path") && json["base_texture_path"].IsString()) {
-            ttm.base_texture_path = json["base_texture_path"].GetString();
-        }
-        if (json.HasMember("use_procedural") && json["use_procedural"].IsBool()) {
-            ttm.use_procedural = json["use_procedural"].GetBool();
-        }
-        if (json.HasMember("procedural_base_height") && json["procedural_base_height"].IsNumber()) {
-            ttm.procedural_base_height = json["procedural_base_height"].GetFloat();
-        }
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::TerrainTileManagerComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &ttm, components["TerrainTileManagerComponent"]);
         registry.emplace<dse::TerrainTileManagerComponent>(entity, std::move(ttm));
     }
 
     if (components.HasMember("DynamicObstacleComponent") &&
         components["DynamicObstacleComponent"].IsObject()) {
-        const auto& json = components["DynamicObstacleComponent"];
         dse::DynamicObstacleComponent obstacle;
-        if (json.HasMember("enabled") && json["enabled"].IsBool()) {
-            obstacle.enabled = json["enabled"].GetBool();
-        }
-        if (json.HasMember("shape") && json["shape"].IsInt()) {
-            obstacle.shape = static_cast<dse::DynamicObstacleComponent::Shape>(json["shape"].GetInt());
-        }
-        if (json.HasMember("box_extents")) {
-            ReadVec3(json["box_extents"], obstacle.box_extents);
-        }
-        if (json.HasMember("cylinder_radius") && json["cylinder_radius"].IsNumber()) {
-            obstacle.cylinder_radius = json["cylinder_radius"].GetFloat();
-        }
-        if (json.HasMember("cylinder_height") && json["cylinder_height"].IsNumber()) {
-            obstacle.cylinder_height = json["cylinder_height"].GetFloat();
-        }
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::DynamicObstacleComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &obstacle, components["DynamicObstacleComponent"]);
         obstacle.obstacle_ref_ = 0;
         obstacle.dirty_ = true;
         registry.emplace<dse::DynamicObstacleComponent>(entity, std::move(obstacle));
@@ -298,41 +209,9 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
 
     if (components.HasMember("NavMeshAutoRebakeComponent") &&
         components["NavMeshAutoRebakeComponent"].IsObject()) {
-        const auto& json = components["NavMeshAutoRebakeComponent"];
         dse::NavMeshAutoRebakeComponent nav;
-        if (json.HasMember("enabled") && json["enabled"].IsBool()) {
-            nav.enabled = json["enabled"].GetBool();
-        }
-        if (json.HasMember("tile_size") && json["tile_size"].IsNumber()) {
-            nav.tile_size = json["tile_size"].GetFloat();
-        }
-        if (json.HasMember("rebake_cooldown") && json["rebake_cooldown"].IsNumber()) {
-            nav.rebake_cooldown = json["rebake_cooldown"].GetFloat();
-        }
-        if (json.HasMember("collect_terrain") && json["collect_terrain"].IsBool()) {
-            nav.collect_terrain = json["collect_terrain"].GetBool();
-        }
-        if (json.HasMember("collect_mesh_renderers") && json["collect_mesh_renderers"].IsBool()) {
-            nav.collect_mesh_renderers = json["collect_mesh_renderers"].GetBool();
-        }
-        if (json.HasMember("agent_height") && json["agent_height"].IsNumber()) {
-            nav.agent_height = json["agent_height"].GetFloat();
-        }
-        if (json.HasMember("agent_radius") && json["agent_radius"].IsNumber()) {
-            nav.agent_radius = json["agent_radius"].GetFloat();
-        }
-        if (json.HasMember("agent_max_climb") && json["agent_max_climb"].IsNumber()) {
-            nav.agent_max_climb = json["agent_max_climb"].GetFloat();
-        }
-        if (json.HasMember("agent_max_slope") && json["agent_max_slope"].IsNumber()) {
-            nav.agent_max_slope = json["agent_max_slope"].GetFloat();
-        }
-        if (json.HasMember("cell_size") && json["cell_size"].IsNumber()) {
-            nav.cell_size = json["cell_size"].GetFloat();
-        }
-        if (json.HasMember("cell_height") && json["cell_height"].IsNumber()) {
-            nav.cell_height = json["cell_height"].GetFloat();
-        }
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::NavMeshAutoRebakeComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &nav, components["NavMeshAutoRebakeComponent"]);
         nav.cooldown_timer_ = 0.0f;
         nav.needs_full_rebake_ = true;
         nav.baked_tile_count_ = 0;

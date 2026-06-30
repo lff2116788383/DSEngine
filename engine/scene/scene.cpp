@@ -147,27 +147,10 @@ bool Scene::Serialize(const std::string& filepath) {
         if (world.registry().all_of<dse::MeshRendererComponent>(entity)) {
             const auto& mesh = world.registry().get<dse::MeshRendererComponent>(entity);
             rapidjson::Value mesh_json(rapidjson::kObjectType);
-            mesh_json.AddMember("mesh_path", rapidjson::Value(mesh.mesh_path.c_str(), allocator), allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::MeshRendererComponent>())
+                dse::reflect::SerializeReflected(*ti, &mesh, mesh_json, allocator);
+            // material_instance_id 未反射（运行时关联），手动补写以兼容旧格式。
             mesh_json.AddMember("material_instance_id", mesh.material_instance_id, allocator);
-            mesh_json.AddMember("shader_variant", rapidjson::Value(mesh.shader_variant.c_str(), allocator), allocator);
-            mesh_json.AddMember("material_alpha_cutoff", mesh.material_alpha_cutoff, allocator);
-            mesh_json.AddMember("material_alpha_test", mesh.material_alpha_test, allocator);
-            mesh_json.AddMember("material_double_sided", mesh.material_double_sided, allocator);
-            mesh_json.AddMember("sorting_layer", mesh.sorting_layer, allocator);
-            mesh_json.AddMember("order_in_layer", mesh.order_in_layer, allocator);
-            mesh_json.AddMember("material_data_source", static_cast<int>(mesh.material_data_source), allocator);
-            rapidjson::Value color(rapidjson::kArrayType);
-            color.PushBack(mesh.color.r, allocator).PushBack(mesh.color.g, allocator).PushBack(mesh.color.b, allocator).PushBack(mesh.color.a, allocator);
-            mesh_json.AddMember("color", color, allocator);
-            rapidjson::Value emissive(rapidjson::kArrayType);
-            emissive.PushBack(mesh.emissive.x, allocator).PushBack(mesh.emissive.y, allocator).PushBack(mesh.emissive.z, allocator);
-            mesh_json.AddMember("emissive", emissive, allocator);
-            mesh_json.AddMember("metallic", mesh.metallic, allocator);
-            mesh_json.AddMember("roughness", mesh.roughness, allocator);
-            mesh_json.AddMember("ao", mesh.ao, allocator);
-            mesh_json.AddMember("normal_strength", mesh.normal_strength, allocator);
-            mesh_json.AddMember("receive_shadow", mesh.receive_shadow, allocator);
-            mesh_json.AddMember("visible", mesh.visible, allocator);
             components.AddMember("MeshRendererComponent", mesh_json, allocator);
         }
 
@@ -192,9 +175,8 @@ bool Scene::Serialize(const std::string& filepath) {
         if (world.registry().all_of<dse::SkyboxComponent>(entity)) {
             const auto& skybox = world.registry().get<dse::SkyboxComponent>(entity);
             rapidjson::Value skybox_json(rapidjson::kObjectType);
-            skybox_json.AddMember("enabled", skybox.enabled, allocator);
-            skybox_json.AddMember("cubemap_handle", skybox.cubemap_handle, allocator);
-            skybox_json.AddMember("cubemap_path", rapidjson::Value(skybox.cubemap_path.c_str(), allocator), allocator);
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SkyboxComponent>())
+                dse::reflect::SerializeReflected(*ti, &skybox, skybox_json, allocator);
             components.AddMember("SkyboxComponent", skybox_json, allocator);
         }
 
@@ -456,61 +438,14 @@ bool Scene::Deserialize(const std::string& filepath) {
         if (components.HasMember("MeshRendererComponent") && components["MeshRendererComponent"].IsObject()) {
             const auto& mesh_json = components["MeshRendererComponent"];
             dse::MeshRendererComponent mesh;
-            if (mesh_json.HasMember("mesh_path") && mesh_json["mesh_path"].IsString()) {
-                mesh.mesh_path = mesh_json["mesh_path"].GetString();
-            }
-            if (mesh_json.HasMember("material_instance_id") && mesh_json["material_instance_id"].IsUint()) {
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::MeshRendererComponent>())
+                dse::reflect::DeserializeReflected(*ti, &mesh, mesh_json);
+            // material_instance_id 未反射，手动读取以兼容旧场景文件。
+            if (mesh_json.HasMember("material_instance_id") && mesh_json["material_instance_id"].IsUint())
                 mesh.material_instance_id = mesh_json["material_instance_id"].GetUint();
-            }
-            if (mesh_json.HasMember("shader_variant") && mesh_json["shader_variant"].IsString()) {
-                mesh.shader_variant = mesh_json["shader_variant"].GetString();
-            }
-            if (mesh_json.HasMember("color") && mesh_json["color"].IsArray() && mesh_json["color"].Size() == 4) {
-                const auto& c = mesh_json["color"].GetArray();
-                mesh.color = glm::vec4(c[0].GetFloat(), c[1].GetFloat(), c[2].GetFloat(), c[3].GetFloat());
-            }
-            if (mesh_json.HasMember("emissive") && mesh_json["emissive"].IsArray() && mesh_json["emissive"].Size() == 3) {
-                const auto& e = mesh_json["emissive"].GetArray();
-                mesh.emissive = glm::vec3(e[0].GetFloat(), e[1].GetFloat(), e[2].GetFloat());
-            }
-            if (mesh_json.HasMember("metallic") && mesh_json["metallic"].IsNumber()) {
-                mesh.metallic = mesh_json["metallic"].GetFloat();
-            }
-            if (mesh_json.HasMember("roughness") && mesh_json["roughness"].IsNumber()) {
-                mesh.roughness = mesh_json["roughness"].GetFloat();
-            }
-            if (mesh_json.HasMember("ao") && mesh_json["ao"].IsNumber()) {
-                mesh.ao = mesh_json["ao"].GetFloat();
-            }
-            if (mesh_json.HasMember("normal_strength") && mesh_json["normal_strength"].IsNumber()) {
-                mesh.normal_strength = mesh_json["normal_strength"].GetFloat();
-            }
-            if (mesh_json.HasMember("material_alpha_cutoff") && mesh_json["material_alpha_cutoff"].IsNumber()) {
-                mesh.material_alpha_cutoff = mesh_json["material_alpha_cutoff"].GetFloat();
-            }
-            if (mesh_json.HasMember("material_alpha_test") && mesh_json["material_alpha_test"].IsBool()) {
-                mesh.material_alpha_test = mesh_json["material_alpha_test"].GetBool();
-            }
-            if (mesh_json.HasMember("material_double_sided") && mesh_json["material_double_sided"].IsBool()) {
-                mesh.material_double_sided = mesh_json["material_double_sided"].GetBool();
-            }
-            if (mesh_json.HasMember("receive_shadow") && mesh_json["receive_shadow"].IsBool()) {
-                mesh.receive_shadow = mesh_json["receive_shadow"].GetBool();
-            }
-            if (mesh_json.HasMember("visible") && mesh_json["visible"].IsBool()) {
-                mesh.visible = mesh_json["visible"].GetBool();
-            }
-            if (mesh_json.HasMember("sorting_layer") && mesh_json["sorting_layer"].IsInt()) {
-                mesh.sorting_layer = mesh_json["sorting_layer"].GetInt();
-            }
-            if (mesh_json.HasMember("order_in_layer") && mesh_json["order_in_layer"].IsInt()) {
-                mesh.order_in_layer = mesh_json["order_in_layer"].GetInt();
-            }
-            if (mesh_json.HasMember("material_data_source") && mesh_json["material_data_source"].IsInt()) {
-                mesh.material_data_source = static_cast<dse::MeshRendererComponent::MaterialDataSource>(mesh_json["material_data_source"].GetInt());
-            } else if (mesh.material_instance_id != 0) {
+            // 旧格式兼容：无 material_data_source 键时按 instance_id 推断。
+            if (!mesh_json.HasMember("material_data_source") && mesh.material_instance_id != 0)
                 mesh.material_data_source = dse::MeshRendererComponent::MaterialDataSource::MaterialInstance;
-            }
             world.registry().emplace<dse::MeshRendererComponent>(entity, mesh);
         }
 
@@ -531,17 +466,9 @@ bool Scene::Deserialize(const std::string& filepath) {
         }
 
         if (components.HasMember("SkyboxComponent") && components["SkyboxComponent"].IsObject()) {
-            const auto& skybox_json = components["SkyboxComponent"];
             dse::SkyboxComponent skybox;
-            if (skybox_json.HasMember("enabled") && skybox_json["enabled"].IsBool()) {
-                skybox.enabled = skybox_json["enabled"].GetBool();
-            }
-            if (skybox_json.HasMember("cubemap_handle") && skybox_json["cubemap_handle"].IsUint()) {
-                skybox.cubemap_handle = skybox_json["cubemap_handle"].GetUint();
-            }
-            if (skybox_json.HasMember("cubemap_path") && skybox_json["cubemap_path"].IsString()) {
-                skybox.cubemap_path = skybox_json["cubemap_path"].GetString();
-            }
+            if (const auto* ti = dse::reflect::Reflection::Find<dse::SkyboxComponent>())
+                dse::reflect::DeserializeReflected(*ti, &skybox, components["SkyboxComponent"]);
             world.registry().emplace<dse::SkyboxComponent>(entity, skybox);
         }
 

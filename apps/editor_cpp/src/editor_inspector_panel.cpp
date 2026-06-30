@@ -19,8 +19,11 @@
 #include <string>
 #include <variant>
 
-#include "engine/ecs/components_3d_render.h"   // GrassComponent
+#include "engine/ecs/components_3d_render.h"   // GrassComponent, DecalComponent, WaterComponent, GIProbeVolumeComponent, LODGroupComponent
 #include "engine/ecs/components_3d_tree.h"     // TreeComponent
+#include "engine/ecs/components_3d_foliage.h"  // FoliageComponent
+#include "engine/ecs/components_3d_navmesh.h"  // DynamicObstacleComponent, NavMeshAutoRebakeComponent
+#include "engine/ecs/components_3d_terrain_tile.h"  // TerrainTileManagerComponent
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/component_reflection.h"
 #include "editor_reflected_inspector.h"
@@ -1780,63 +1783,95 @@ void DrawGrassSection(EditorContext& context) {
 }
 
 void DrawLightProbeSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::LightProbeComponent>(context.selected_entity)) {
-        return;
-    }
-
-    auto& probe = context.registry.get<dse::LightProbeComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Light Probe", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
-
-    ImGui::Columns(2, "lprobe_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##lprobe_en", &probe.enabled));
-    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##lprobe_rad", &probe.influence_radius, 0.5f, 0.5f, 200.0f));
-    INSPECTOR_PROPERTY("Show Debug", ImGui::Checkbox("##lprobe_debug", &probe.show_debug));
-    INSPECTOR_PROPERTY("Needs Rebake", ImGui::Checkbox("##lprobe_rebake", &probe.needs_rebake));
-
-    // SH coefficient preview (read-only display of first 3 bands)
-    ImGui::Separator();
-    ImGui::Text("SH Coefficients"); ImGui::NextColumn(); ImGui::NextColumn();
-    for (int i = 0; i < 9; ++i) {
-        char label[32];
-        std::snprintf(label, sizeof(label), "SH[%d]", i);
-        INSPECTOR_PROPERTY(label, ImGui::Text("(%.2f, %.2f, %.2f)",
-            probe.sh_coefficients[i].x, probe.sh_coefficients[i].y, probe.sh_coefficients[i].z));
-    }
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+    if (!context.registry.all_of<dse::LightProbeComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::LightProbeComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LIGHTBULB "  Light Probe", *ti,
+                         MakeReflectResolver<dse::LightProbeComponent>(context));
 }
 
 void DrawReflectionProbeSection(EditorContext& context) {
-    if (!context.registry.all_of<dse::ReflectionProbeComponent>(context.selected_entity)) {
-        return;
-    }
+    if (!context.registry.all_of<dse::ReflectionProbeComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::ReflectionProbeComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_CUBE_OUTLINE "  Reflection Probe", *ti,
+                         MakeReflectResolver<dse::ReflectionProbeComponent>(context));
+}
 
-    auto& probe = context.registry.get<dse::ReflectionProbeComponent>(context.selected_entity);
-    if (!ImGui::CollapsingHeader(MDI_ICON_CUBE_OUTLINE "  Reflection Probe", ImGuiTreeNodeFlags_DefaultOpen)) {
-        return;
-    }
+// ─── 反射驱动的 Inspector Section（Decal / Water / GIProbeVolume / LODGroup / Foliage / NavMesh 等） ───
 
-    ImGui::Columns(2, "rprobe_cols", false);
-    ImGui::SetColumnWidth(0, 110.0f);
-    BeginInspectorReadOnlyScope(context);
-    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##rprobe_en", &probe.enabled));
-    INSPECTOR_PROPERTY("Radius", ImGui::DragFloat("##rprobe_rad", &probe.influence_radius, 0.5f, 0.5f, 200.0f));
-    INSPECTOR_PROPERTY("Box Projection", ImGui::Checkbox("##rprobe_box", &probe.use_box_projection));
-    if (probe.use_box_projection) {
-        INSPECTOR_PROPERTY("Box Size X", ImGui::DragFloat("##rprobe_bx", &probe.box_size_x, 0.5f, 0.5f, 200.0f));
-        INSPECTOR_PROPERTY("Box Size Y", ImGui::DragFloat("##rprobe_by", &probe.box_size_y, 0.5f, 0.5f, 200.0f));
-        INSPECTOR_PROPERTY("Box Size Z", ImGui::DragFloat("##rprobe_bz", &probe.box_size_z, 0.5f, 0.5f, 200.0f));
-    }
-    INSPECTOR_PROPERTY("Resolution", ImGui::DragInt("##rprobe_res", &probe.resolution, 1.0f, 32, 2048));
-    INSPECTOR_PROPERTY("Show Debug", ImGui::Checkbox("##rprobe_debug", &probe.show_debug));
-    INSPECTOR_PROPERTY("Needs Rebake", ImGui::Checkbox("##rprobe_rebake", &probe.needs_rebake));
-    INSPECTOR_PROPERTY("Cubemap", ImGui::Text("Handle: %u", probe.cubemap_handle));
-    EndInspectorReadOnlyScope(context);
-    ImGui::Columns(1);
+void DrawDecalSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::DecalComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::DecalComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LAYERS "  Decal", *ti,
+                         MakeReflectResolver<dse::DecalComponent>(context));
+}
+
+void DrawWaterSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::WaterComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::WaterComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_WATER "  Water", *ti,
+                         MakeReflectResolver<dse::WaterComponent>(context));
+}
+
+void DrawGIProbeVolumeSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::GIProbeVolumeComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::GIProbeVolumeComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LIGHTBULB "  GI Probe Volume", *ti,
+                         MakeReflectResolver<dse::GIProbeVolumeComponent>(context));
+}
+
+void DrawLODGroupSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::LODGroupComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::LODGroupComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_LAYERS "  LOD Group", *ti,
+                         MakeReflectResolver<dse::LODGroupComponent>(context));
+}
+
+void DrawFoliageSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::FoliageComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::FoliageComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_TERRAIN "  Foliage", *ti,
+                         MakeReflectResolver<dse::FoliageComponent>(context));
+}
+
+void DrawDynamicObstacleSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::DynamicObstacleComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::DynamicObstacleComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_CUBE_OUTLINE "  Dynamic Obstacle", *ti,
+                         MakeReflectResolver<dse::DynamicObstacleComponent>(context));
+}
+
+void DrawNavMeshAutoRebakeSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::NavMeshAutoRebakeComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::NavMeshAutoRebakeComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_MAP "  NavMesh Auto Rebake", *ti,
+                         MakeReflectResolver<dse::NavMeshAutoRebakeComponent>(context));
+}
+
+void DrawTerrainTileManagerSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::TerrainTileManagerComponent>(context.selected_entity)) return;
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::TerrainTileManagerComponent>();
+    if (!ti) return;
+    DrawReflectedSection(context, MDI_ICON_TERRAIN "  Terrain Tile Manager", *ti,
+                         MakeReflectResolver<dse::TerrainTileManagerComponent>(context));
 }
 
 // ─── 注册所有 Inspector Section 到注册表 ────────────────────────────────────
@@ -2030,6 +2065,46 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ReflectionProbeComponent>(e)) r.emplace<dse::ReflectionProbeComponent>(e); },
         71,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ReflectionProbeComponent>(e)) r.erase<dse::ReflectionProbeComponent>(e); }});
+    reg.Register({"Decal", "3D", DrawDecalSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::DecalComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::DecalComponent>(e)) r.emplace<dse::DecalComponent>(e); },
+        72,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::DecalComponent>(e)) r.erase<dse::DecalComponent>(e); }});
+    reg.Register({"Water", "3D", DrawWaterSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::WaterComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::WaterComponent>(e)) r.emplace<dse::WaterComponent>(e); },
+        73,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::WaterComponent>(e)) r.erase<dse::WaterComponent>(e); }});
+    reg.Register({"GI Probe Volume", "3D", DrawGIProbeVolumeSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::GIProbeVolumeComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::GIProbeVolumeComponent>(e)) r.emplace<dse::GIProbeVolumeComponent>(e); },
+        74,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::GIProbeVolumeComponent>(e)) r.erase<dse::GIProbeVolumeComponent>(e); }});
+    reg.Register({"LOD Group", "3D", DrawLODGroupSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::LODGroupComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::LODGroupComponent>(e)) r.emplace<dse::LODGroupComponent>(e); },
+        75,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::LODGroupComponent>(e)) r.erase<dse::LODGroupComponent>(e); }});
+    reg.Register({"Foliage", "3D", DrawFoliageSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::FoliageComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::FoliageComponent>(e)) r.emplace<dse::FoliageComponent>(e); },
+        76,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::FoliageComponent>(e)) r.erase<dse::FoliageComponent>(e); }});
+    reg.Register({"Dynamic Obstacle", "3D", DrawDynamicObstacleSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::DynamicObstacleComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::DynamicObstacleComponent>(e)) r.emplace<dse::DynamicObstacleComponent>(e); },
+        77,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::DynamicObstacleComponent>(e)) r.erase<dse::DynamicObstacleComponent>(e); }});
+    reg.Register({"NavMesh Auto Rebake", "3D", DrawNavMeshAutoRebakeSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::NavMeshAutoRebakeComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::NavMeshAutoRebakeComponent>(e)) r.emplace<dse::NavMeshAutoRebakeComponent>(e); },
+        78,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::NavMeshAutoRebakeComponent>(e)) r.erase<dse::NavMeshAutoRebakeComponent>(e); }});
+    reg.Register({"Terrain Tile Manager", "3D", DrawTerrainTileManagerSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::TerrainTileManagerComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::TerrainTileManagerComponent>(e)) r.emplace<dse::TerrainTileManagerComponent>(e); },
+        79,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::TerrainTileManagerComponent>(e)) r.erase<dse::TerrainTileManagerComponent>(e); }});
 
     // --- Audio (使用 editor_audio_panel.h 的 DrawAudioSection 适配) ---
     reg.Register({"Name", "Core", nullptr,

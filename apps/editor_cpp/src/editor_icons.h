@@ -98,3 +98,6 @@
 #define MDI_ICON_CLOUD_DOWNLOAD         "\xef\x83\xad" // U+F0ED fa-cloud-arrow-down
 #define MDI_ICON_CHART_LINE             "\xef\x88\x81" // U+F201 fa-chart-line
 #define MDI_ICON_SITEMAP                "\xef\x83\xa8" // U+F0E8 fa-sitemap
+#define MDI_ICON_WATER                  "\xef\x9d\xb3" // U+F773 fa-water
+#define MDI_ICON_MAP                    "\xef\x89\xb9" // U+F279 fa-map
+#define MDI_ICON_LAYERS                 "\xef\x97\xbd" // U+F5FD fa-layer-group
