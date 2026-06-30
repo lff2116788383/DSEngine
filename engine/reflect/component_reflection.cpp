@@ -12,6 +12,8 @@
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_sky.h"
 #include "engine/ecs/components_3d_impostor.h"
+#include "engine/render/particles/gpu_particle_system.h"
+#include "engine/render/gi/lightmap_baker.h"
 
 namespace dse::reflect {
 
@@ -747,6 +749,21 @@ void RegisterImpostor() {
     // 运行时状态不反射：atlas_texture_handle_, normal_texture_handle_, atlas_loaded_, cached_bounds_radius_
 }
 
+void RegisterGpuParticle() {
+    // GpuParticleComponent 的 config 为嵌套结构体，Inspector 由编辑器手动绘制。
+    // 仅注册类型标识供序列化/组件面板识别。
+}
+
+
+void RegisterLightmap() {
+    using dse::render::LightmapComponent;
+    auto t = DSE_REFLECT_TYPE(LightmapComponent);
+    t.field("lightmap_path", &LightmapComponent::lightmap_path).tooltip(".dlightmap 文件路径");
+    t.field("intensity", &LightmapComponent::intensity).range(0.0, 5.0).tooltip("光照贴图强度");
+    t.field("st_offset", &LightmapComponent::st_offset).tooltip("UV scale(xy) + offset(zw)");
+    t.field("use_ao", &LightmapComponent::use_ao).tooltip("是否应用 AO 通道");
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -800,6 +817,10 @@ void EnsureCoreReflectionRegistered() {
     RegisterMorphTarget();
     // Impostor LOD
     RegisterImpostor();
+    // GPU Particles
+    RegisterGpuParticle();
+    // Lightmap
+    RegisterLightmap();
 }
 
 }  // namespace dse::reflect

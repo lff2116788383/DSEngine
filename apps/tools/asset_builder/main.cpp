@@ -1,6 +1,7 @@
 #include "engine/assets/compiler/importer.h"
 #include "engine/assets/texture_compressor.h"
 #include "engine/mesh/mesh_decimator.h"
+#include "engine/render/gi/lightmap_baker.h"
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -27,6 +28,13 @@ void PrintUsage() {
         << "  --no-anim-reduce     keep all keyframes (default: error-threshold decimation)\n"
         << "  --decimate <ratio>   decimate mesh to target ratio (e.g. 0.5 = 50%%)\n"
         << "  --lod-levels <n>     auto-generate n LOD levels (e.g. 3 => LOD1=50%%, LOD2=25%%, LOD3=12.5%%)\n\n"
+        << "Lightmap baking:\n"
+        << "  AssetBuilder --bake-lightmap <scene.gltf/glb> <output.dlightmap> [options]\n"
+        << "  --lm-resolution <n>   lightmap resolution (default 512)\n"
+        << "  --lm-samples <n>      samples per texel (default 64)\n"
+        << "  --lm-bounces <n>      indirect bounces (default 2)\n"
+        << "  --lm-no-ao            disable AO baking\n"
+        << "  --lm-no-denoise       disable denoising\n\n"
         << "Texture options:\n"
         << "  --format <bc1|bc1srgb|bc3|bc3srgb|bc4|bc5>   target BCn format (default bc3)\n"
         << "  --no-mips                                    do not generate a mip chain\n"
@@ -128,6 +136,114 @@ bool IsLikelyFbxInput(const std::filesystem::path& path) {
     return ext == ".fbx" || ext == ".FBX";
 }
 
+int RunLightmapBake(int argc, char** argv) {
+    // argv[1] == "--bake-lightmap"; expect <scene> <output.dlightmap> [options]
+    if (argc < 4) {
+        std::cerr << "[AssetBuilder] --bake-lightmap requires <scene.gltf/glb> <output.dlightmap>." << std::endl;
+        return 1;
+    }
+    const std::filesystem::path scene_path = argv[2];
+    const std::filesystem::path output_path = argv[3];
+
+    dse::render::LightmapBakeConfig config;
+    for (int i = 4; i < argc; ++i) {
+        const std::string opt = argv[i];
+        if (opt == "--lm-resolution" && i + 1 < argc) {
+            config.resolution = static_cast<uint32_t>(std::stoi(argv[++i]));
+        } else if (opt == "--lm-samples" && i + 1 < argc) {
+            config.samples_per_texel = static_cast<uint32_t>(std::stoi(argv[++i]));
+        } else if (opt == "--lm-bounces" && i + 1 < argc) {
+            config.bounces = static_cast<uint32_t>(std::stoi(argv[++i]));
+        } else if (opt == "--lm-no-ao") {
+            config.bake_ao = false;
+        } else if (opt == "--lm-no-denoise") {
+            config.denoise = false;
+        }
+    }
+
+    // Import scene using GltfImporter or FbxImporter
+    RawSceneData raw_scene;
+    bool import_ok = false;
+    if (IsLikelyFbxInput(scene_path)) {
+        FbxImporter fbx;
+        import_ok = fbx.Import(scene_path.string(), raw_scene);
+    } else {
+        GltfImporter gltf;
+        import_ok = gltf.Import(scene_path.string(), raw_scene);
+    }
+    if (!import_ok) {
+        std::cerr << "[AssetBuilder] Failed to import scene: " << scene_path.string() << std::endl;
+        return 1;
+    }
+
+    // Build bake scene from imported meshes
+    dse::render::BakeScene bake_scene;
+    for (const auto& submesh : raw_scene.meshes) {
+        if (submesh.indices.empty() || submesh.positions.empty()) continue;
+        for (size_t i = 0; i + 2 < submesh.indices.size(); i += 3) {
+            uint32_t i0 = submesh.indices[i];
+            uint32_t i1 = submesh.indices[i + 1];
+            uint32_t i2 = submesh.indices[i + 2];
+
+            dse::render::BakeTriangle tri;
+            tri.v0 = submesh.positions[i0];
+            tri.v1 = submesh.positions[i1];
+            tri.v2 = submesh.positions[i2];
+
+            if (!submesh.normals.empty()) {
+                tri.n0 = submesh.normals[i0];
+                tri.n1 = submesh.normals[i1];
+                tri.n2 = submesh.normals[i2];
+            } else {
+                glm::vec3 face_n = glm::normalize(glm::cross(tri.v1 - tri.v0, tri.v2 - tri.v0));
+                tri.n0 = tri.n1 = tri.n2 = face_n;
+            }
+
+            if (!submesh.texcoords.empty()) {
+                tri.uv0 = submesh.texcoords[i0];
+                tri.uv1 = submesh.texcoords[i1];
+                tri.uv2 = submesh.texcoords[i2];
+            }
+
+            bake_scene.triangles.push_back(tri);
+        }
+    }
+
+    // Default directional light if none in scene
+    if (bake_scene.lights.empty()) {
+        dse::render::BakeLight sun;
+        sun.type = dse::render::BakeLight::Type::Directional;
+        sun.direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f));
+        sun.color = glm::vec3(1.0f, 0.95f, 0.85f);
+        sun.intensity = 2.0f;
+        bake_scene.lights.push_back(sun);
+    }
+
+    std::cout << "[AssetBuilder] Baking lightmap: " << bake_scene.triangles.size() << " triangles, "
+              << config.resolution << "x" << config.resolution << ", "
+              << config.samples_per_texel << " spp, " << config.bounces << " bounces..." << std::endl;
+
+    dse::render::LightmapBaker baker;
+    auto result = baker.Bake(bake_scene, config, [](float p) {
+        if (static_cast<int>(p * 100) % 10 == 0) {
+            std::cout << "  " << static_cast<int>(p * 100) << "%" << std::endl;
+        }
+    });
+
+    if (!result.success) {
+        std::cerr << "[AssetBuilder] Lightmap bake failed." << std::endl;
+        return 1;
+    }
+
+    if (!dse::render::LightmapBaker::SaveToFile(result, output_path.string())) {
+        std::cerr << "[AssetBuilder] Failed to save lightmap: " << output_path.string() << std::endl;
+        return 1;
+    }
+
+    std::cout << "[AssetBuilder] Lightmap saved: " << output_path.string()
+              << " (" << result.width << "x" << result.height << ")" << std::endl;
+    return 0;
+}
 
 } // namespace
 
@@ -145,6 +261,10 @@ int main(int argc, char** argv) {
 
     if (first_arg == "--texture") {
         return RunTextureCook(argc, argv);
+    }
+
+    if (first_arg == "--bake-lightmap") {
+        return RunLightmapBake(argc, argv);
     }
 
     // Strip recognized flags so the remaining args are positional.

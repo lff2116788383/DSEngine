@@ -26,6 +26,8 @@
 #include "engine/ecs/components_3d_terrain_tile.h"  // TerrainTileManagerComponent
 #include "engine/ecs/components_3d_sky.h"      // AtmosphereComponent, VolumetricCloudComponent, DayNightCycleComponent
 #include "engine/ecs/components_3d_impostor.h" // ImpostorComponent
+#include "engine/render/particles/gpu_particle_system.h" // GpuParticleComponent
+#include "engine/render/gi/lightmap_baker.h" // LightmapComponent
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/component_reflection.h"
 #include "editor_reflected_inspector.h"
@@ -1766,6 +1768,95 @@ void DrawImpostorSection(EditorContext& context) {
                          MakeReflectResolver<dse::ImpostorComponent>(context));
 }
 
+// ─── GPU Particle Emitter (手动 Inspector) ──────────────────────────────
+
+void DrawGpuParticleSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::render::GpuParticleComponent>(context.selected_entity)) return;
+    auto& comp = context.registry.get<dse::render::GpuParticleComponent>(context.selected_entity);
+    auto& cfg = comp.config;
+
+    if (!ImGui::CollapsingHeader(MDI_ICON_CREATION "  GPU Particle Emitter", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    ImGui::Indent();
+
+    ImGui::Checkbox("Enabled", &cfg.enabled);
+    int max_p = static_cast<int>(cfg.max_particles);
+    if (ImGui::DragInt("Max Particles", &max_p, 100, 100, 1000000)) cfg.max_particles = static_cast<uint32_t>(max_p);
+    ImGui::DragFloat("Emission Rate", &cfg.emission_rate, 10.0f, 1.0f, 100000.0f, "%.0f /s");
+
+    // Emission shape
+    const char* shapes[] = {"Point", "Sphere", "Cone", "Ring", "Box"};
+    int shape_idx = static_cast<int>(cfg.shape);
+    if (ImGui::Combo("Shape", &shape_idx, shapes, 5)) cfg.shape = static_cast<dse::render::EmitterShape>(shape_idx);
+    if (cfg.shape != dse::render::EmitterShape::Point) {
+        ImGui::DragFloat("Shape Radius", &cfg.shape_radius, 0.1f, 0.0f, 100.0f);
+    }
+    if (cfg.shape == dse::render::EmitterShape::Cone) {
+        ImGui::SliderFloat("Cone Angle", &cfg.cone_angle, 1.0f, 90.0f, "%.0f deg");
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Lifetime & Speed:");
+    ImGui::DragFloatRange2("Life", &cfg.life_min, &cfg.life_max, 0.05f, 0.01f, 60.0f, "%.2f s");
+    ImGui::DragFloatRange2("Speed", &cfg.speed_min, &cfg.speed_max, 0.1f, 0.0f, 100.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Size:");
+    ImGui::DragFloat("Start Size", &cfg.size_start, 0.01f, 0.001f, 10.0f);
+    ImGui::DragFloat("End Size", &cfg.size_end, 0.01f, 0.0f, 10.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Color:");
+    ImGui::ColorEdit4("Start Color", &cfg.color_start.x);
+    ImGui::ColorEdit4("End Color", &cfg.color_end.x);
+
+    ImGui::Separator();
+    ImGui::Text("Forces:");
+    ImGui::DragFloat3("Gravity", &cfg.gravity.x, 0.1f);
+    ImGui::DragFloat3("Wind", &cfg.wind.x, 0.1f);
+    ImGui::DragFloat("Turbulence", &cfg.turbulence, 0.1f, 0.0f, 50.0f);
+    ImGui::DragFloat("Vortex", &cfg.vortex_strength, 0.1f, 0.0f, 50.0f);
+
+    ImGui::Separator();
+    ImGui::Text("Collision:");
+    ImGui::Checkbox("Enable Collision", &cfg.collision_enabled);
+    if (cfg.collision_enabled) {
+        ImGui::DragFloat("Plane Y", &cfg.collision_plane_y, 0.1f);
+        ImGui::SliderFloat("Bounce", &cfg.collision_bounce, 0.0f, 1.0f);
+        ImGui::SliderFloat("Friction", &cfg.collision_friction, 0.0f, 1.0f);
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Rendering:");
+    ImGui::Checkbox("Additive Blend", &cfg.additive_blend);
+
+    ImGui::Unindent();
+}
+
+// ─── Lightmap Inspector ───────────────────────────────────────────
+
+void DrawLightmapSection(EditorContext& context) {
+    if (!context.registry.all_of<dse::render::LightmapComponent>(context.selected_entity)) return;
+    auto& comp = context.registry.get<dse::render::LightmapComponent>(context.selected_entity);
+
+    dse::reflect::EnsureCoreReflectionRegistered();
+    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::render::LightmapComponent>();
+    if (ti) {
+        DrawReflectedSection(context, MDI_ICON_LIGHTBULB "  Lightmap", *ti,
+                             MakeReflectResolver<dse::render::LightmapComponent>(context));
+    } else {
+        if (!ImGui::CollapsingHeader(MDI_ICON_LIGHTBULB "  Lightmap", ImGuiTreeNodeFlags_DefaultOpen)) return;
+        ImGui::Indent();
+        char buf[256];
+        strncpy(buf, comp.lightmap_path.c_str(), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        if (ImGui::InputText("Path", buf, sizeof(buf))) comp.lightmap_path = buf;
+        ImGui::DragFloat("Intensity", &comp.intensity, 0.01f, 0.0f, 5.0f);
+        ImGui::DragFloat4("ST Offset", &comp.st_offset.x, 0.01f);
+        ImGui::Checkbox("Use AO", &comp.use_ao);
+        ImGui::Unindent();
+    }
+}
+
 // ─── 注册所有 Inspector Section 到注册表 ────────────────────────────────────
 
 void RegisterAllInspectorSections() {
@@ -2061,6 +2152,18 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::ImpostorComponent>(e)) r.emplace<dse::ImpostorComponent>(e); },
         90,
         [](entt::registry& r, entt::entity e) { if (r.all_of<dse::ImpostorComponent>(e)) r.erase<dse::ImpostorComponent>(e); }});
+    // --- GPU Particles ---
+    reg.Register({"GPU Particle Emitter", "3D", DrawGpuParticleSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::render::GpuParticleComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::render::GpuParticleComponent>(e)) r.emplace<dse::render::GpuParticleComponent>(e); },
+        91,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::render::GpuParticleComponent>(e)) r.erase<dse::render::GpuParticleComponent>(e); }});
+    // --- Lightmap ---
+    reg.Register({"Lightmap", "3D", DrawLightmapSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<dse::render::LightmapComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<dse::render::LightmapComponent>(e)) r.emplace<dse::render::LightmapComponent>(e); },
+        92,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<dse::render::LightmapComponent>(e)) r.erase<dse::render::LightmapComponent>(e); }});
 
     // --- Audio (使用 editor_audio_panel.h 的 DrawAudioSection 适配) ---
     reg.Register({"Name", "Core", nullptr,
