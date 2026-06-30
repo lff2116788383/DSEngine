@@ -108,6 +108,7 @@
 #include "editor_anim_state_machine.h"
 #include "editor_ai_config.h"
 #include "editor_streaming_panel.h"
+#include "editor_terrain_tools.h"
 #include "editor_curve_editor.h"
 #include "editor_visual_script.h"
 #include "editor_anim_retarget.h"
@@ -1154,6 +1155,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_asset_browser_)        dse::editor::DrawAssetBrowserPanel();
     if (show_animation_timeline_)   dse::editor::DrawAnimationTimelinePanel(ctx);
     if (show_navmesh_)              dse::editor::DrawNavMeshPanel(ctx);
+    if (show_terrain_editor_)       dse::editor::DrawTerrainToolsPanel(ctx);
     if (show_shader_graph_)         dse::editor::DrawShaderGraphPanel(ctx);
     if (show_multi_viewport_)       dse::editor::DrawMultiViewportConfigPanel();
     if (show_anim_state_machine_)   dse::editor::DrawAnimStateMachinePanel(ctx);
