@@ -41,6 +41,16 @@
 #include "modules/gameplay_3d/weather/weather_system.h"
 #include "modules/gameplay_3d/snow/snow_cover_system.h"
 
+// Open-world systems
+#include "engine/scene/world_partition.h"
+#include "engine/render/hlod/hlod_system.h"
+#include "engine/render/virtual_texture/virtual_texture.h"
+#include "engine/terrain/geometry_clipmap.h"
+#include "engine/render/sdf/global_sdf.h"
+#include "engine/ai/ai_lod_scheduler.h"
+#include "engine/render/particles/gpu_particle_system.h"
+#include "engine/scene/world_state_persistence.h"
+
 namespace dse {
 namespace render {
 struct RenderScene;
@@ -109,6 +119,17 @@ private:
     DayNightCycleSystem day_night_cycle_system_;
     WeatherSystem weather_system_;
     SnowCoverSystem snow_cover_system_;
+
+    // Open-world systems
+    dse::WorldPartitionSystem world_partition_system_;
+    dse::render::HLODSystem hlod_system_;
+    dse::vt::VirtualTextureSystem virtual_texture_system_;
+    dse::terrain::GeometryClipmapSystem geometry_clipmap_system_;
+    dse::render::GlobalSDFSystem global_sdf_system_;
+    dse::ai::AILodScheduler ai_lod_scheduler_;
+    dse::render::GpuParticleManager gpu_particle_manager_;
+    dse::WorldStatePersistence world_state_persistence_;
+    uint64_t frame_number_ = 0;
 
     World* world_cache_ = nullptr;
     dse::core::SubscriptionHandle origin_rebase_handle_;

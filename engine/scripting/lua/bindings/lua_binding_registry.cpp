@@ -72,6 +72,11 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // 资源流式加载 — 独立全局表 "streaming"
     RegisterStreamingBindings(L);
+
+    // Open-world systems — 注册到 dse 表下
+    lua_getglobal(L, "dse");
+    RegisterOpenWorldBindings(L);
+    lua_setglobal(L, "dse");
 }
 
 }

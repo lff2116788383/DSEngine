@@ -71,6 +71,9 @@ void RegisterEcsAnimationBindings(lua_State* L);
 void RegisterEcsParticlesBindings(lua_State* L);
 void RegisterEcsGameplay3DBindings(lua_State* L);
 
+// Open-world systems (world_partition, hlod, vt, clipmap, sdf, ai_lod, gpu_particles, world_state, procedural)
+void RegisterOpenWorldBindings(lua_State* L);
+
 }
 
 #endif

@@ -6,6 +6,7 @@
 #include "engine/ecs/components_3d_cloth.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/scene/scene_manager.h"
 
 namespace dse::gameplay3d {
 
@@ -43,6 +44,83 @@ bool Gameplay3DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     vehicle_system_.SetPhysics3D(physics3d);
     buoyancy_system_.SetPhysics3D(physics3d);
 #endif
+
+    // ── Open-world systems 初始化 ──────────────────────────────────────────
+
+    // World Partition: 通过 ServiceLocator 获取 SceneManager 依赖
+    auto* scene_mgr = dse::core::ServiceLocator::Instance().Get<::scene::SceneManager>();
+    world_partition_system_.Init(scene_mgr);
+
+    // HLOD: 检查场景根是否有 HLODConfigComponent
+    {
+        auto hlod_v = world.registry().view<dse::render::HLODConfigComponent>();
+        for (auto e : hlod_v) {
+            auto& cfg = hlod_v.get<dse::render::HLODConfigComponent>(e);
+            if (cfg.enabled && !cfg.hlod_data_path.empty()) {
+                hlod_system_.Init(world, cfg.hlod_data_path);
+                break;
+            }
+        }
+    }
+
+    // Virtual Texture: 检查场景中是否有 VirtualTextureComponent
+    {
+        auto vt_v = world.registry().view<dse::vt::VirtualTextureComponent>();
+        for (auto e : vt_v) {
+            auto& vtc = vt_v.get<dse::vt::VirtualTextureComponent>(e);
+            if (vtc.enabled) {
+                dse::vt::VirtualTextureConfig vt_config;
+                vt_config.virtual_size = vtc.virtual_width;
+                vt_config.tile_data_path = vtc.tile_data_path;
+                virtual_texture_system_.Init(vt_config, rhi_device);
+                break;
+            }
+        }
+    }
+
+    // Geometry Clipmap: 默认配置初始化
+    {
+        dse::terrain::GeometryClipmapConfig clipmap_config;
+        geometry_clipmap_system_.Init(clipmap_config);
+    }
+
+    // Global SDF: 默认配置初始化
+    {
+        dse::render::GlobalSDFConfig sdf_config;
+        global_sdf_system_.Init(sdf_config);
+    }
+
+    // AI LOD Scheduler: 默认配置初始化
+    {
+        dse::ai::AILodConfig ai_config;
+        ai_lod_scheduler_.Init(ai_config);
+    }
+
+    // GPU Particle Manager: 初始化 compute shader
+    gpu_particle_manager_.Init(rhi_device);
+
+    // World State Persistence: 初始化存档目录
+    world_state_persistence_.Init("save/world_state");
+
+    // 注册到 ServiceLocator（Lua 绑定通过此访问系统，no-op deleter 因为是成员变量）
+    {
+        auto noop_del = [](void*) {};
+        auto& sl = dse::core::ServiceLocator::Instance();
+        sl.Register<dse::WorldPartitionSystem, dse::WorldPartitionSystem>(
+            std::shared_ptr<dse::WorldPartitionSystem>(&world_partition_system_, noop_del));
+        sl.Register<dse::render::HLODSystem, dse::render::HLODSystem>(
+            std::shared_ptr<dse::render::HLODSystem>(&hlod_system_, noop_del));
+        sl.Register<dse::vt::VirtualTextureSystem, dse::vt::VirtualTextureSystem>(
+            std::shared_ptr<dse::vt::VirtualTextureSystem>(&virtual_texture_system_, noop_del));
+        sl.Register<dse::terrain::GeometryClipmapSystem, dse::terrain::GeometryClipmapSystem>(
+            std::shared_ptr<dse::terrain::GeometryClipmapSystem>(&geometry_clipmap_system_, noop_del));
+        sl.Register<dse::render::GlobalSDFSystem, dse::render::GlobalSDFSystem>(
+            std::shared_ptr<dse::render::GlobalSDFSystem>(&global_sdf_system_, noop_del));
+        sl.Register<dse::ai::AILodScheduler, dse::ai::AILodScheduler>(
+            std::shared_ptr<dse::ai::AILodScheduler>(&ai_lod_scheduler_, noop_del));
+        sl.Register<dse::WorldStatePersistence, dse::WorldStatePersistence>(
+            std::shared_ptr<dse::WorldStatePersistence>(&world_state_persistence_, noop_del));
+    }
 
     // Floating Origin: 订阅 rebase 事件，偏移各子系统持有的世界空间坐标
     world_cache_ = &world;
@@ -162,8 +240,58 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
         hair_system_.Update(world, cam_pos, delta_time);
     }
 
+    // ── Open-world systems 更新 ──────────────────────────────────────────
+
+    // World Partition: 基于 StreamingOriginComponent 异步加载/卸载 Cell
+    world_partition_system_.Update(world);
+
+    // Virtual Texture: feedback 驱动流式页加载
+    virtual_texture_system_.Update(++frame_number_);
+
+    // Geometry Clipmap: 基于相机位置更新地形 LOD
+    {
+        glm::vec3 clipmap_cam_pos(0.0f);
+        auto clipmap_cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : clipmap_cam_v) {
+            auto& cam = clipmap_cam_v.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            clipmap_cam_pos = clipmap_cam_v.get<TransformComponent>(e).position;
+            break;
+        }
+        geometry_clipmap_system_.Update(clipmap_cam_pos);
+        global_sdf_system_.Update(clipmap_cam_pos);
+    }
+
+    // GPU Particles: compute dispatch for each GpuParticleComponent
+    if (rhi_device_) {
+        auto gpu_p_view = world.registry().view<dse::render::GpuParticleComponent, TransformComponent>();
+        for (auto e : gpu_p_view) {
+            auto& comp = gpu_p_view.get<dse::render::GpuParticleComponent>(e);
+            if (!comp.config.enabled) continue;
+            if (!comp.initialized) {
+                gpu_particle_manager_.InitComponent(comp, rhi_device_);
+            }
+            auto& tf = gpu_p_view.get<TransformComponent>(e);
+            gpu_particle_manager_.Update(comp, rhi_device_, tf.position, delta_time);
+        }
+    }
+
     frustum_culling_system_.Update(world);
     lod_system_.Update(world);
+
+    // HLOD: 在 LOD 之后更新，基于相机距离切换 proxy
+    {
+        glm::vec3 hlod_cam_pos(0.0f);
+        auto hlod_cam_v = world.registry().view<dse::Camera3DComponent, TransformComponent>();
+        for (auto e : hlod_cam_v) {
+            auto& cam = hlod_cam_v.get<dse::Camera3DComponent>(e);
+            if (!cam.enabled) continue;
+            hlod_cam_pos = hlod_cam_v.get<TransformComponent>(e).position;
+            break;
+        }
+        hlod_system_.Update(world, hlod_cam_pos);
+    }
+
     // Impostor: 在 LOD 之后更新，利用同一帧相机位置收集远景实例
     if (rhi_device_) {
         glm::vec3 imp_cam_pos(0.0f);
@@ -281,6 +409,36 @@ void Gameplay3DModule::OnShutdown(World& world) {
         origin_rebase_handle_ = {};
     }
     world_cache_ = nullptr;
+
+    // Open-world systems: ServiceLocator 注销
+    {
+        auto& sl = dse::core::ServiceLocator::Instance();
+        sl.Reset<dse::WorldPartitionSystem>();
+        sl.Reset<dse::render::HLODSystem>();
+        sl.Reset<dse::vt::VirtualTextureSystem>();
+        sl.Reset<dse::terrain::GeometryClipmapSystem>();
+        sl.Reset<dse::render::GlobalSDFSystem>();
+        sl.Reset<dse::ai::AILodScheduler>();
+        sl.Reset<dse::WorldStatePersistence>();
+    }
+
+    // Open-world systems shutdown
+    world_partition_system_.Shutdown();
+    hlod_system_.Shutdown(world);
+    virtual_texture_system_.Shutdown();
+    geometry_clipmap_system_.Shutdown();
+    global_sdf_system_.Shutdown();
+    ai_lod_scheduler_.Shutdown();
+    if (rhi_device_ != nullptr) {
+        // GPU Particle: 释放各组件 GPU 资源
+        auto gpu_p_view = world.registry().view<dse::render::GpuParticleComponent>();
+        for (auto e : gpu_p_view) {
+            auto& comp = gpu_p_view.get<dse::render::GpuParticleComponent>(e);
+            gpu_particle_manager_.ShutdownComponent(comp, rhi_device_);
+        }
+        gpu_particle_manager_.Shutdown(rhi_device_);
+    }
+    world_state_persistence_.SaveAll();
 
     terrain_system_.Shutdown(world);
     grass_system_.Shutdown(world);
