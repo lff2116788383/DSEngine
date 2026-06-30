@@ -1,6 +1,7 @@
 #include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/passes/atmosphere_sky_pass.h"
+#include "engine/render/meshlet/meshlet_render_pass.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -55,9 +56,11 @@ std::vector<RenderPipelinePassConfig> DefaultPassList() {
         Pass("spot_shadow"),
         Pass("point_shadow"),
         Pass("gpu_cull"),
+        Pass("meshlet_cull"),
         Pass("rsm"),
         Pass("ddgi_update"),
         Pass("forward_scene"),
+        Pass("meshlet_draw"),
         Pass("atmosphere_sky"),
         Pass("wboit"),
         Pass("water"),
@@ -283,6 +286,8 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<SpotShadowPass>(r, {"spot_shadow"});
         RegisterBuiltin<PointShadowPass>(r, {"point_shadow"});
         RegisterBuiltin<GPUCullPass>(r, {"gpu_cull", false, false, false, true, true, true});
+        RegisterBuiltin<MeshletCullRenderPass>(r, {"meshlet_cull", false, false, true, false, true, true});
+        RegisterBuiltin<MeshletDrawRenderPass>(r, {"meshlet_draw"});
         RegisterBuiltin<RSMRenderPass>(r, {"rsm"});
         RegisterBuiltin<DDGIUpdatePass>(r, {"ddgi_update"});
         RegisterBuiltin<AtmosphereSkyPass>(r, {"atmosphere_sky"});

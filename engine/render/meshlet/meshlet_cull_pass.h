@@ -95,6 +95,9 @@ public:
     uint32_t GetRegisteredMeshCount() const { return static_cast<uint32_t>(mesh_registry_.size()); }
     uint32_t GetInstanceCount() const { return static_cast<uint32_t>(instances_.size()); }
 
+    /// 访问已注册的 mesh 注册表（供 MeshletRenderPass 查询 meshlet 数量等）
+    const std::unordered_map<uint32_t, MeshletRegistryEntry>& GetMeshRegistry() const { return mesh_registry_; }
+
 private:
     void ExtractFrustumPlanes(const glm::mat4& view_proj, glm::vec4 planes[6]);
     bool FrustumTestSphere(const glm::vec4 planes[6], const glm::vec3& center, float radius);

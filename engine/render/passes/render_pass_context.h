@@ -203,6 +203,20 @@ struct RenderPassContext {
     bool ddgi_active = false;
     float ddgi_gi_intensity = 1.0f;
     float ddgi_normal_bias = 0.2f;
+
+    // === Meshlet Cluster Rendering ===
+    bool meshlet_enabled = false;                    ///< Meshlet 管线是否激活
+    bool meshlet_active_this_frame = false;          ///< 本帧是否有 meshlet draw
+    BufferHandle meshlet_gpu_data_ssbo;              ///< MeshletGPUData[] SSBO（sphere+cone）
+    BufferHandle meshlet_draw_cmd_ssbo;              ///< MeshletDrawCommand[] 间接绘制参数 SSBO
+    VertexArrayHandle meshlet_mega_vao;              ///< Meshlet 专用 Mega VAO
+    BufferHandle meshlet_mega_vbo;                   ///< Meshlet Mega VBO
+    BufferHandle meshlet_mega_ibo;                   ///< Meshlet Mega IBO
+    unsigned int meshlet_cull_shader = 0;            ///< Meshlet culling compute shader
+    int meshlet_draw_count = 0;                      ///< 本帧 meshlet indirect draw 数
+    int meshlet_total_clusters = 0;                  ///< 本帧总 cluster 数
+    int meshlet_visible_clusters = 0;                ///< 本帧可见 cluster 数
+    BufferHandle meshlet_material_ssbo;              ///< per-meshlet 材质索引 SSBO
 };
 
 } // namespace render
