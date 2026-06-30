@@ -74,6 +74,12 @@ void RegisterEcsGameplay3DBindings(lua_State* L);
 // Open-world systems (world_partition, hlod, vt, clipmap, sdf, ai_lod, gpu_particles, world_state, procedural)
 void RegisterOpenWorldBindings(lua_State* L);
 
+// AI 行为树 + GOAP 规划器 — 独立全局表 "ai"
+void RegisterAIBindings(lua_State* L);
+
+// 过场/导演系统 — 独立全局表 "cutscene"
+void RegisterCutsceneBindings(lua_State* L);
+
 }
 
 #endif

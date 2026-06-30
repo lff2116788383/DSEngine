@@ -77,6 +77,12 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_getglobal(L, "dse");
     RegisterOpenWorldBindings(L);
     lua_setglobal(L, "dse");
+
+    // AI 行为树 + GOAP 规划器 — 独立全局表 "ai"
+    RegisterAIBindings(L);
+
+    // 过场/导演系统 — 独立全局表 "cutscene"
+    RegisterCutsceneBindings(L);
 }
 
 }
