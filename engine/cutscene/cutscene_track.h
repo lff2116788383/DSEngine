@@ -42,6 +42,7 @@ enum class TrackType : uint8_t {
     Property,
     Event,
     Audio,
+    Video,
 };
 
 /// 轨道基类
@@ -178,6 +179,44 @@ private:
     std::vector<AudioCue> cues_;
     AudioPlayFunc play_func_;
     float last_time_ = -1.0f;
+};
+
+// ============================================================
+// Video Track
+// ============================================================
+
+struct VideoCue {
+    float time = 0.0f;           ///< 时间线上开始播放的时间点
+    std::string video_path;      ///< 视频文件路径
+    bool fullscreen = true;      ///< 全屏渲染（覆盖 3D 场景）
+    float opacity = 1.0f;        ///< 混合不透明度
+    float fade_in = 0.0f;        ///< 淡入时长（秒）
+    float fade_out = 0.0f;       ///< 淡出时长（秒）
+};
+
+/// 视频播放回调（开始/停止/更新不透明度）
+using VideoPlayFunc = std::function<void(const std::string& path, bool fullscreen, float opacity)>;
+using VideoStopFunc = std::function<void()>;
+
+class DSE_EXPORT VideoTrack : public CutsceneTrack {
+public:
+    explicit VideoTrack(const std::string& name = "VideoTrack")
+        : CutsceneTrack(name, TrackType::Video) {}
+
+    void AddCue(const VideoCue& cue) { cues_.push_back(cue); }
+    void SetPlayCallback(VideoPlayFunc func) { play_func_ = std::move(func); }
+    void SetStopCallback(VideoStopFunc func) { stop_func_ = std::move(func); }
+    void Evaluate(float time) override;
+    void Reset() override;
+
+    const std::vector<VideoCue>& GetCues() const { return cues_; }
+
+private:
+    std::vector<VideoCue> cues_;
+    VideoPlayFunc play_func_;
+    VideoStopFunc stop_func_;
+    float last_time_ = -1.0f;
+    int active_cue_idx_ = -1;
 };
 
 } // namespace cutscene

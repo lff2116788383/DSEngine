@@ -4,7 +4,7 @@
 > 更新日期：2026-06-30
 > 绑定文件：`engine/scripting/lua/bindings/` 下约 33 个手写 C++ 源文件 + 13 个 `*.gen.cpp`，
 > 涵盖 21 个顶层模块（其中 `http` / `net` 为条件编译）。
-> 实测共注册 **991** 个 Lua 可见函数（含 §18 的 330 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数）。
+> 实测共注册 **1082** 个 Lua 可见函数（含 §18 的 330 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数 + §23-29 的 91 个世界/视频系统函数）。
 > 说明：ECS 高层封装函数见 §5；逐字段底层 getter/setter 见 §18（由 `tools/codegen/binding_defs.json` 自动派生）。
 > 完整覆盖率与差距分析见 `docs/api/API_GAP_ANALYSIS.md`。
 
@@ -2509,6 +2509,46 @@ print("Download speed: " .. stats.speed .. " bytes/s")
 
 ---
 
+## 29. dse.video — 视频播放系统
+
+> 源文件：`engine/scripting/lua/bindings/lua_binding_video.cpp`
+
+完整视频播放 API。支持 MPEG-1（pl_mpeg 零依赖回退）和 H.264/H.265/VP9/AV1（FFmpeg 动态加载）。
+输出为 GPU 纹理句柄，可直接用于 UI 或 3D 世界屏幕。
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `dse.video.create_player()` | → player_id | 创建播放器实例 |
+| `dse.video.destroy_player(id)` | → void | 销毁播放器 |
+| `dse.video.play(id, path [, config])` | → void | 播放视频。config: `{loop, playback_rate, decode_audio, backend, prefetch_frames}` |
+| `dse.video.pause(id)` | → void | 暂停 |
+| `dse.video.resume(id)` | → void | 恢复 |
+| `dse.video.stop(id)` | → void | 停止 |
+| `dse.video.seek(id, time_sec)` | → void | 跳转到指定时间 |
+| `dse.video.set_loop(id, bool)` | → void | 设置循环 |
+| `dse.video.set_playback_rate(id, rate)` | → void | 设置播放速率 (0.1-10.0) |
+| `dse.video.update(id, dt)` | → texture_id | 每帧更新，返回当前帧纹理 |
+| `dse.video.get_state(id)` | → string | 返回 "stopped"/"playing"/"paused"/"finished"/"error" |
+| `dse.video.get_time(id)` | → number | 当前播放时间（秒） |
+| `dse.video.get_duration(id)` | → number | 视频总时长（秒） |
+| `dse.video.get_info(id)` | → table | 返回 {width, height, fps, duration, total_frames, has_audio, audio_sample_rate, audio_channels, codec} |
+| `dse.video.get_texture(id)` | → texture_id | 获取当前纹理句柄 |
+
+```lua
+local player = dse.video.create_player()
+dse.video.play(player, "cutscenes/intro.mpg", { loop = false, playback_rate = 1.0 })
+
+-- 每帧更新
+function on_update(dt)
+    local tex = dse.video.update(player, dt)
+    if dse.video.get_state(player) == "finished" then
+        dse.video.destroy_player(player)
+    end
+end
+```
+
+---
+
 ## 附录：绑定源文件索引
 
 > 注册函数数为实测精确值（由 `tools/audit/lua_api_audit.py` 统计，截至 2026-06-12）。
@@ -2552,7 +2592,8 @@ print("Download speed: " .. stats.speed .. " bytes/s")
 | 过场/导演系统 | `lua_binding_cutscene.cpp` | 20 |
 | Meshlet/Cluster | `lua_binding_meshlet.cpp` | 14 |
 | World Systems (Spline/Ocean/Editor/VSM/EQS/Distribution) | `lua_binding_world_systems.cpp` | 76 |
-| **合计** | **34 个手写文件 + 13 个 gen** | **1067 绑定函数** |
+| 视频播放系统 | `lua_binding_video.cpp` | 15 |
+| **合计** | **35 个手写文件 + 13 个 gen** | **1082 绑定函数** |
 
 > **关于 LuaSocket（已移除）**：旧的可选 `socket.core` / `mime.core`（LuaSocket）已从引擎移除
 > （子模块 + `DSE_ENABLE_LUASOCKET` 开关 + 门控代码）。其能力已被 `dse.net`（游戏 UDP 传输）

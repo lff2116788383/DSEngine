@@ -142,5 +142,53 @@ void AudioTrack::Reset() {
     last_time_ = -1.0f;
 }
 
+// ============================================================
+// VideoTrack
+// ============================================================
+
+void VideoTrack::Evaluate(float time) {
+    if (cues_.empty()) return;
+
+    // Check if we should start a new video cue
+    for (int i = 0; i < static_cast<int>(cues_.size()); ++i) {
+        const auto& cue = cues_[static_cast<size_t>(i)];
+        if (cue.time > last_time_ && cue.time <= time) {
+            // Start this cue
+            active_cue_idx_ = i;
+            if (play_func_) {
+                play_func_(cue.video_path, cue.fullscreen, cue.opacity);
+            }
+        }
+    }
+
+    // Update opacity for fade in/out on active cue
+    if (active_cue_idx_ >= 0 && play_func_) {
+        const auto& cue = cues_[static_cast<size_t>(active_cue_idx_)];
+        float elapsed = time - cue.time;
+        float opacity = cue.opacity;
+
+        // Fade in
+        if (cue.fade_in > 0.0f && elapsed < cue.fade_in) {
+            opacity *= (elapsed / cue.fade_in);
+        }
+
+        // Fade out (need video duration info - for now use opacity as-is)
+        if (cue.fade_out > 0.0f && elapsed > 0.0f) {
+            // Fade out is applied relative to expected end time
+            // Without duration info, this is handled by the player's on_finished callback
+        }
+
+        (void)opacity; // Would update render opacity
+    }
+
+    last_time_ = time;
+}
+
+void VideoTrack::Reset() {
+    last_time_ = -1.0f;
+    active_cue_idx_ = -1;
+    if (stop_func_) stop_func_();
+}
+
 } // namespace cutscene
 } // namespace dse
