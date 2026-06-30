@@ -1,0 +1,124 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// Per-meshlet GPU 剔除 Compute Shader
+// 对每个 meshlet cluster 执行视锥 + 法线锥 + Hi-Z 遮挡剔除，
+// 输出 indirect draw command 的 instance_count = 0/1
+//
+// 资源布局：
+//   binding 0 = SSBO MeshletDataBuffer (readonly): MeshletGPUData[]
+//   binding 1 = SSBO DrawCommandBuffer (read_write): MeshletDrawCommand[]
+//   binding 2 = sampler2D u_hiz_texture
+//
+// push_constant: view_projection, camera_pos, screen_size, mip_count, meshlet_count, flags
+
+struct MeshletData {
+    vec4 sphere;    // xyz = center(world), w = radius
+    vec4 cone;      // xyz = cone_axis(world), w = cone_cutoff
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer MeshletDataBuffer {
+    MeshletData meshlets[];
+};
+
+layout(set = 0, binding = 1, std430) buffer DrawCommandBuffer {
+    DrawCommand draw_cmds[];
+};
+
+layout(set = 0, binding = 2) uniform sampler2D u_hiz_texture;
+
+layout(push_constant) uniform PC {
+    mat4  u_view_projection;        // offset 0   (64B)
+    vec4  u_camera_pos;             // offset 64  (16B) xyz=pos, w=unused
+    float u_screen_size_x;          // offset 80
+    float u_screen_size_y;          // offset 84
+    int   u_mip_count;              // offset 88
+    int   u_meshlet_count;          // offset 92
+    vec4  u_frustum_planes[6];      // offset 96  (96B) .. 191
+    uint  u_flags;                  // offset 192 (bit0=frustum, bit1=occlusion, bit2=cone)
+    float u_cone_threshold;         // offset 196
+    float _pad0; float _pad1;       // offset 200..207
+} pc; // 208 B
+
+bool FrustumTestSphere(vec3 center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        float dist = dot(pc.u_frustum_planes[i].xyz, center) + pc.u_frustum_planes[i].w;
+        if (dist < -radius) return false;
+    }
+    return true;
+}
+
+bool ConeCullTest(vec3 cone_axis, float cone_cutoff, vec3 center) {
+    vec3 to_camera = normalize(pc.u_camera_pos.xyz - center);
+    float d = dot(to_camera, cone_axis);
+    return d <= -cone_cutoff;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_meshlet_count) return;
+
+    vec3 center = meshlets[idx].sphere.xyz;
+    float radius = meshlets[idx].sphere.w;
+
+    // 1. Frustum culling
+    if ((pc.u_flags & 1u) != 0u) {
+        if (!FrustumTestSphere(center, radius)) {
+            draw_cmds[idx].instance_count = 0u;
+            return;
+        }
+    }
+
+    // 2. Normal cone culling
+    if ((pc.u_flags & 4u) != 0u) {
+        vec3 cone_axis = meshlets[idx].cone.xyz;
+        float cone_cutoff = meshlets[idx].cone.w;
+        if (cone_cutoff > pc.u_cone_threshold) {
+            if (ConeCullTest(cone_axis, cone_cutoff, center)) {
+                draw_cmds[idx].instance_count = 0u;
+                return;
+            }
+        }
+    }
+
+    // 3. Hi-Z occlusion culling (sphere-based)
+    if ((pc.u_flags & 2u) != 0u) {
+        // Project sphere center to clip space
+        vec4 clip = pc.u_view_projection * vec4(center, 1.0);
+        if (clip.w > 0.0) {
+            vec3 ndc = clip.xyz / clip.w;
+
+            // Estimate screen-space radius
+            float proj_radius = radius * pc.u_view_projection[1][1] / clip.w;
+            float screen_radius = proj_radius * pc.u_screen_size_y * 0.5;
+
+            vec2 uv_center = ndc.xy * 0.5 + 0.5;
+            float nearest_z = ndc.z - 0.005;
+
+            // Determine mip level from screen-space size
+            float mip_level = screen_radius > 0.0 ? ceil(log2(screen_radius * 2.0)) : 0.0;
+            mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+            // Only test if on screen
+            if (uv_center.x >= 0.0 && uv_center.x <= 1.0 &&
+                uv_center.y >= 0.0 && uv_center.y <= 1.0) {
+                float hiz = textureLod(u_hiz_texture, uv_center, mip_level).r;
+                if (nearest_z > hiz) {
+                    draw_cmds[idx].instance_count = 0u;
+                    return;
+                }
+            }
+        }
+        // Behind camera: conservatively keep visible
+    }
+
+    draw_cmds[idx].instance_count = 1u;
+}

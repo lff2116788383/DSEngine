@@ -83,6 +83,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // 过场/导演系统 — 独立全局表 "cutscene"
     RegisterCutsceneBindings(L);
+
+    // Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
+    RegisterMeshletBindings(L);
 }
 
 }

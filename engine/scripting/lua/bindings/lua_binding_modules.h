@@ -80,6 +80,9 @@ void RegisterAIBindings(lua_State* L);
 // 过场/导演系统 — 独立全局表 "cutscene"
 void RegisterCutsceneBindings(lua_State* L);
 
+// Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
+void RegisterMeshletBindings(lua_State* L);
+
 }
 
 #endif
