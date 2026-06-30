@@ -14,6 +14,9 @@
 #include "engine/ecs/components_3d_impostor.h"
 #include "engine/render/particles/gpu_particle_system.h"
 #include "engine/render/gi/lightmap_baker.h"
+#include "engine/scene/world_partition.h"
+#include "engine/render/hlod/hlod_system.h"
+#include "engine/render/virtual_texture/virtual_texture.h"
 
 namespace dse::reflect {
 
@@ -764,6 +767,54 @@ void RegisterLightmap() {
     t.field("use_ao", &LightmapComponent::use_ao).tooltip("是否应用 AO 通道");
 }
 
+void RegisterStreamingOrigin() {
+    using dse::StreamingOriginComponent;
+    auto t = DSE_REFLECT_TYPE(StreamingOriginComponent);
+    t.field("enabled", &StreamingOriginComponent::enabled);
+    t.field("load_radius", &StreamingOriginComponent::load_radius).range(32.0, 2048.0).tooltip("加载半径");
+    t.field("unload_radius", &StreamingOriginComponent::unload_radius).range(64.0, 4096.0).tooltip("卸载半径（应 > 加载半径）");
+}
+
+void RegisterWorldPartitionConfig() {
+    using dse::WorldPartitionConfigComponent;
+    auto t = DSE_REFLECT_TYPE(WorldPartitionConfigComponent);
+    t.field("enabled", &WorldPartitionConfigComponent::enabled);
+    t.field("cell_size", &WorldPartitionConfigComponent::cell_size).range(32.0, 1024.0).tooltip("Cell 边长");
+    t.field("cells_directory", &WorldPartitionConfigComponent::cells_directory).tooltip("Cell .dscene 文件目录");
+    t.field("grid_min_x", &WorldPartitionConfigComponent::grid_min_x);
+    t.field("grid_max_x", &WorldPartitionConfigComponent::grid_max_x);
+    t.field("grid_min_y", &WorldPartitionConfigComponent::grid_min_y);
+    t.field("grid_max_y", &WorldPartitionConfigComponent::grid_max_y);
+    t.field("max_loads_per_frame", &WorldPartitionConfigComponent::max_loads_per_frame).range(1, 16);
+}
+
+void RegisterHLODConfig() {
+    using dse::render::HLODConfigComponent;
+    auto t = DSE_REFLECT_TYPE(HLODConfigComponent);
+    t.field("enabled", &HLODConfigComponent::enabled);
+    t.field("hlod_data_path", &HLODConfigComponent::hlod_data_path).tooltip(".dhlod 数据文件路径");
+    t.field("distance_scale", &HLODConfigComponent::distance_scale).range(0.1, 10.0).tooltip("全局距离缩放");
+    t.field("hysteresis", &HLODConfigComponent::hysteresis).range(0.0, 0.5).tooltip("切换死区");
+}
+
+void RegisterHLODMember() {
+    using dse::render::HLODMemberComponent;
+    auto t = DSE_REFLECT_TYPE(HLODMemberComponent);
+    t.field("cluster_index", &HLODMemberComponent::cluster_index);
+    t.field("hidden_by_hlod", &HLODMemberComponent::hidden_by_hlod);
+}
+
+void RegisterVirtualTexture() {
+    using dse::vt::VirtualTextureComponent;
+    auto t = DSE_REFLECT_TYPE(VirtualTextureComponent);
+    t.field("enabled", &VirtualTextureComponent::enabled);
+    t.field("vt_id", &VirtualTextureComponent::vt_id);
+    t.field("tile_data_path", &VirtualTextureComponent::tile_data_path).tooltip("虚拟纹理瓦片数据目录");
+    t.field("virtual_width", &VirtualTextureComponent::virtual_width);
+    t.field("virtual_height", &VirtualTextureComponent::virtual_height);
+    t.field("mip_bias", &VirtualTextureComponent::mip_bias).range(-4.0, 4.0);
+}
+
 }  // namespace
 
 void EnsureCoreReflectionRegistered() {
@@ -821,6 +872,14 @@ void EnsureCoreReflectionRegistered() {
     RegisterGpuParticle();
     // Lightmap
     RegisterLightmap();
+    // World Partition Streaming
+    RegisterStreamingOrigin();
+    RegisterWorldPartitionConfig();
+    // HLOD
+    RegisterHLODConfig();
+    RegisterHLODMember();
+    // Virtual Texture
+    RegisterVirtualTexture();
 }
 
 }  // namespace dse::reflect
