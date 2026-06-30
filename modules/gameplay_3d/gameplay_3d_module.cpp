@@ -9,6 +9,7 @@
 #include "engine/scene/scene_manager.h"
 #include "engine/ai/behavior_tree.h"
 #include "engine/cutscene/cutscene_player.h"
+#include "engine/ecs/parallel_each.h"
 
 namespace dse::gameplay3d {
 
@@ -198,15 +199,14 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
                 break;
             }
         }
-        auto anim_v = world.registry().view<Animator3DComponent, TransformComponent>();
-        for (auto e : anim_v) {
-            auto& animator = anim_v.get<Animator3DComponent>(e);
-            const auto& tf = anim_v.get<TransformComponent>(e);
-            float dist_sq = glm::dot(tf.position - cam_pos, tf.position - cam_pos);
-            if (dist_sq > 2500.0f)       animator.anim_lod_skip_ = 3; // >50m: 每4帧
-            else if (dist_sq > 400.0f)   animator.anim_lod_skip_ = 1; // >20m: 每2帧
-            else                          animator.anim_lod_skip_ = 0; // <=20m: 每帧
-        }
+        // ParallelEach: Animation LOD —— 每实体独立读写自己的组件，无写冲突
+        dse::ecs::ParallelEach<Animator3DComponent, TransformComponent>(world,
+            [cam_pos](Entity /*e*/, Animator3DComponent& animator, TransformComponent& tf) {
+                float dist_sq = glm::dot(tf.position - cam_pos, tf.position - cam_pos);
+                if (dist_sq > 2500.0f)       animator.anim_lod_skip_ = 3;
+                else if (dist_sq > 400.0f)   animator.anim_lod_skip_ = 1;
+                else                          animator.anim_lod_skip_ = 0;
+            }, 128);
     }
 
     // 昼夜循环（驱动太阳方向 → DirectionalLight）
@@ -224,18 +224,15 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
 
-    // ── Behavior Tree: tick all entities with BehaviorTreeComponent ──
-    {
-        auto bt_view = world.registry().view<dse::BehaviorTreeComponent>();
-        for (auto e : bt_view) {
-            auto& btc = bt_view.get<dse::BehaviorTreeComponent>(e);
-            if (!btc.enabled || !btc.tree) continue;
+    // ── Behavior Tree: tick all entities with BehaviorTreeComponent (parallel) ──
+    dse::ecs::ParallelEach<dse::BehaviorTreeComponent>(world,
+        [delta_time](Entity /*e*/, dse::BehaviorTreeComponent& btc) {
+            if (!btc.enabled || !btc.tree) return;
             auto status = btc.tree->Tick(delta_time);
             if (status != dse::ai::BTStatus::Running && btc.auto_restart) {
                 btc.tree->Reset();
             }
-        }
-    }
+        }, 32);
 
     // ── Cutscene Player: tick the global cutscene player ──
     cutscene_player_.Update(delta_time);

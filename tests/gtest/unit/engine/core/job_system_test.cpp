@@ -401,3 +401,76 @@ TEST_F(JobSystemInstanceTest, ChainCan) {
 
     js.Shutdown();
 }
+
+// ============================================================
+// ParallelFor 测试
+// ============================================================
+
+TEST(JobSystemParallelForTest, BasicParallelFor) {
+    JobSystem js;
+    js.Init();
+
+    constexpr size_t N = 1000;
+    std::vector<std::atomic<int>> results(N);
+    for (auto& r : results) r.store(0);
+
+    js.ParallelFor(0, N, 64, [&results](size_t i) {
+        results[i].store(static_cast<int>(i * 2));
+    });
+
+    for (size_t i = 0; i < N; ++i) {
+        EXPECT_EQ(results[i].load(), static_cast<int>(i * 2));
+    }
+
+    js.Shutdown();
+}
+
+TEST(JobSystemParallelForTest, EmptyRange) {
+    JobSystem js;
+    js.Init();
+
+    int called = 0;
+    js.ParallelFor(5, 5, 32, [&called](size_t) { ++called; });
+    EXPECT_EQ(called, 0);
+
+    js.ParallelFor(10, 3, 32, [&called](size_t) { ++called; });
+    EXPECT_EQ(called, 0);
+
+    js.Shutdown();
+}
+
+TEST(JobSystemParallelForTest, SerialFallbackWithoutInit) {
+    JobSystem js;
+    // No Init() call — should fall back to serial
+
+    constexpr size_t N = 100;
+    std::vector<int> results(N, 0);
+
+    js.ParallelFor(0, N, 16, [&results](size_t i) {
+        results[i] = static_cast<int>(i + 1);
+    });
+
+    for (size_t i = 0; i < N; ++i) {
+        EXPECT_EQ(results[i], static_cast<int>(i + 1));
+    }
+}
+
+TEST(JobSystemParallelForTest, LargeBatchSingleJob) {
+    JobSystem js;
+    js.Init();
+
+    constexpr size_t N = 50;
+    std::vector<std::atomic<int>> results(N);
+    for (auto& r : results) r.store(0);
+
+    // batch_size > N means single batch
+    js.ParallelFor(0, N, 10000, [&results](size_t i) {
+        results[i].store(1);
+    });
+
+    for (size_t i = 0; i < N; ++i) {
+        EXPECT_EQ(results[i].load(), 1);
+    }
+
+    js.Shutdown();
+}

@@ -403,5 +403,47 @@ void JobSystem::WorkerThread(int index) {
     }
 }
 
+// ============================================================
+// ParallelFor
+// ============================================================
+
+void JobSystem::ParallelFor(size_t begin, size_t end, size_t batch_size,
+                            const std::function<void(size_t)>& func,
+                            JobPriority priority) {
+    if (begin >= end) return;
+    if (batch_size == 0) batch_size = 1;
+
+    const size_t count = end - begin;
+
+    // Fallback to serial if pool not initialized
+    if (!is_initialized_ || workers_.empty()) {
+        for (size_t i = begin; i < end; ++i) {
+            func(i);
+        }
+        return;
+    }
+
+    // Submit batched tasks
+    std::vector<JobHandle> handles;
+    handles.reserve((count + batch_size - 1) / batch_size);
+
+    for (size_t batch_begin = begin; batch_begin < end; batch_begin += batch_size) {
+        const size_t batch_end = std::min(batch_begin + batch_size, end);
+        auto handle = Submit([&func, batch_begin, batch_end]() {
+            for (size_t i = batch_begin; i < batch_end; ++i) {
+                func(i);
+            }
+        }, priority);
+        if (handle.is_valid()) {
+            handles.push_back(handle);
+        }
+    }
+
+    // Wait for all batches
+    for (auto& h : handles) {
+        Wait(h);
+    }
+}
+
 } // namespace core
 } // namespace dse

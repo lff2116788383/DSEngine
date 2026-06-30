@@ -145,6 +145,20 @@ public:
     */
     void Wait(JobHandle handle);
 
+    /**
+    * @brief 并行 for 循环：将 [begin, end) 范围按 batch_size 分片提交到线程池
+    * @param begin 起始索引
+    * @param end 终止索引（不含）
+    * @param batch_size 每个任务处理的元素数量
+    * @param func 回调 func(size_t index)，对每个元素调用
+    * @param priority 任务优先级
+    *
+    * @note 阻塞直到所有分片完成。若线程池未初始化，退化为串行执行。
+    */
+    void ParallelFor(size_t begin, size_t end, size_t batch_size,
+                     const std::function<void(size_t)>& func,
+                     JobPriority priority = JobPriority::High);
+
 private:
     /// 内部任务描述
     struct JobEntry {
