@@ -41,6 +41,8 @@ struct ImportState {
     bool import_animations = true;
     bool import_skeleton = true;
     bool import_materials = true;
+    bool anim_compress = true;        // 量化压缩 (v3 smallest-three + 定点)
+    bool anim_reduce = true;          // 关键帧精简 (RDP 误差阈值)
     bool generate_mipmaps = true;
     bool compress_texture = false;
     int compress_format = 1;        // index into kCompressFormatNames (default BC3)
@@ -146,6 +148,8 @@ void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
     std::string cmd = "\"" + asset_builder.string() + "\" "
                     + "\"" + std::string(state.source_path) + "\" "
                     + "--out-dir \"" + out_dir.string() + "\"";
+    if (!state.anim_compress) cmd += " --no-anim-compress";
+    if (!state.anim_reduce)   cmd += " --no-anim-reduce";
 
 #ifdef _WIN32
     STARTUPINFOA si{};
@@ -333,6 +337,18 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
     if (state.type == ImportType::Mesh3D) {
         ImGui::Text("Mesh Import Options:");
         ImGui::Checkbox("Import Animations (.danim)", &state.import_animations);
+        if (state.import_animations) {
+            ImGui::Indent();
+            ImGui::Checkbox("Compress (quantized .danim v3)", &state.anim_compress);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Rotation: smallest-three 48-bit; Position/Scale: 16-bit fixed-point per-track AABB.");
+            }
+            ImGui::Checkbox("Keyframe Reduction", &state.anim_reduce);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("RDP error-threshold decimation; static tracks collapse to single keyframe.");
+            }
+            ImGui::Unindent();
+        }
         ImGui::Checkbox("Import Skeleton (.dskel)", &state.import_skeleton);
         ImGui::Checkbox("Import Materials (.dmat)", &state.import_materials);
     } else if (state.type == ImportType::Texture) {
