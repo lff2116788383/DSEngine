@@ -1,5 +1,6 @@
 #include "engine/assets/compiler/importer.h"
 #include "engine/assets/texture_compressor.h"
+#include "engine/mesh/mesh_decimator.h"
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -23,7 +24,9 @@ void PrintUsage() {
         << "  AssetBuilder --texture <input.png/jpg/...> <output.dtex> [options]\n\n"
         << "Mesh/animation options:\n"
         << "  --no-anim-compress   write raw v2 .danim (default: v3 quantized)\n"
-        << "  --no-anim-reduce     keep all keyframes (default: error-threshold decimation)\n\n"
+        << "  --no-anim-reduce     keep all keyframes (default: error-threshold decimation)\n"
+        << "  --decimate <ratio>   decimate mesh to target ratio (e.g. 0.5 = 50%%)\n"
+        << "  --lod-levels <n>     auto-generate n LOD levels (e.g. 3 => LOD1=50%%, LOD2=25%%, LOD3=12.5%%)\n\n"
         << "Texture options:\n"
         << "  --format <bc1|bc1srgb|bc3|bc3srgb|bc4|bc5>   target BCn format (default bc3)\n"
         << "  --no-mips                                    do not generate a mip chain\n"
@@ -144,13 +147,23 @@ int main(int argc, char** argv) {
         return RunTextureCook(argc, argv);
     }
 
-    // Strip recognized animation-compression flags so the remaining args are positional.
+    // Strip recognized flags so the remaining args are positional.
     AnimCompressOptions anim_opts;  // quantize + reduce on by default
+    float decimate_ratio = 0.0f;   // 0 = no decimation
+    int lod_levels = 0;            // 0 = no LOD generation
     std::vector<std::string> pos_args;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--no-anim-compress") { anim_opts.quantize = false; continue; }
         if (a == "--no-anim-reduce")   { anim_opts.reduce_keyframes = false; continue; }
+        if (a == "--decimate") {
+            if (i + 1 < argc) { decimate_ratio = std::stof(argv[++i]); }
+            continue;
+        }
+        if (a == "--lod-levels") {
+            if (i + 1 < argc) { lod_levels = std::stoi(argv[++i]); }
+            continue;
+        }
         pos_args.push_back(a);
     }
 
@@ -220,6 +233,90 @@ int main(int argc, char** argv) {
               << ", Materials=" << scene.materials.size()
               << ", SkeletonBones=" << scene.skeleton.size()
               << ", Animations=" << scene.animations.size() << std::endl;
+
+    // ─── Mesh Decimation ───────────────────────────────────────────────
+    if (decimate_ratio > 0.0f && decimate_ratio < 1.0f && !scene.meshes.empty()) {
+        std::cout << "[AssetBuilder] Decimating meshes to " << (decimate_ratio * 100.0f)
+                  << "% triangles..." << std::endl;
+        dse::mesh::MeshDecimator decimator;
+        dse::mesh::DecimationConfig dec_cfg;
+        dec_cfg.target_ratio = decimate_ratio;
+
+        for (auto& submesh : scene.meshes) {
+            uint32_t orig_tris = static_cast<uint32_t>(submesh.indices.size() / 3);
+            if (orig_tris < 4) continue;  // 太少不值得减
+
+            dse::mesh::DecimationInput input;
+            input.positions = submesh.positions.data();
+            input.normals = submesh.normals.empty() ? nullptr : submesh.normals.data();
+            input.texcoords = submesh.texcoords.empty() ? nullptr : submesh.texcoords.data();
+            input.vertex_count = static_cast<uint32_t>(submesh.positions.size());
+            input.indices = submesh.indices.data();
+            input.index_count = static_cast<uint32_t>(submesh.indices.size());
+
+            auto result = decimator.Decimate(input, dec_cfg);
+            if (result.success) {
+                submesh.positions = std::move(result.positions);
+                submesh.normals = std::move(result.normals);
+                submesh.texcoords = std::move(result.texcoords);
+                submesh.indices = std::move(result.indices);
+                // tangents/colors/joints 被丢弃（需要后续重新生成 tangent）
+                submesh.tangents.clear();
+                submesh.colors.clear();
+                std::cout << "  [" << submesh.name << "] " << orig_tris << " -> "
+                          << result.result_triangle_count << " tris" << std::endl;
+            }
+        }
+    }
+
+    // ─── LOD Generation ────────────────────────────────────────────────
+    if (lod_levels > 0 && !scene.meshes.empty()) {
+        std::cout << "[AssetBuilder] Generating " << lod_levels << " LOD levels..." << std::endl;
+        dse::mesh::MeshDecimator decimator;
+
+        // 对原始 scene（未 decimate 的）的第一个 submesh 生成 LOD
+        // 各 LOD 单独输出为 base_name_lod1.dmesh, base_name_lod2.dmesh, ...
+        for (int lod = 1; lod <= lod_levels; ++lod) {
+            float ratio = 1.0f / static_cast<float>(1 << lod);  // 0.5, 0.25, 0.125...
+            RawSceneData lod_scene = scene;  // 拷贝
+
+            dse::mesh::DecimationConfig dec_cfg;
+            dec_cfg.target_ratio = ratio;
+
+            for (auto& submesh : lod_scene.meshes) {
+                uint32_t orig_tris = static_cast<uint32_t>(submesh.indices.size() / 3);
+                if (orig_tris < 4) continue;
+
+                dse::mesh::DecimationInput input;
+                input.positions = submesh.positions.data();
+                input.normals = submesh.normals.empty() ? nullptr : submesh.normals.data();
+                input.texcoords = submesh.texcoords.empty() ? nullptr : submesh.texcoords.data();
+                input.vertex_count = static_cast<uint32_t>(submesh.positions.size());
+                input.indices = submesh.indices.data();
+                input.index_count = static_cast<uint32_t>(submesh.indices.size());
+
+                auto result = decimator.Decimate(input, dec_cfg);
+                if (result.success) {
+                    submesh.positions = std::move(result.positions);
+                    submesh.normals = std::move(result.normals);
+                    submesh.texcoords = std::move(result.texcoords);
+                    submesh.indices = std::move(result.indices);
+                    submesh.tangents.clear();
+                    submesh.colors.clear();
+                }
+            }
+
+            std::string lod_name = base_name + "_lod" + std::to_string(lod);
+            std::filesystem::path lod_path = output_dir / (lod_name + ".dmesh");
+            MeshCooker lod_cooker;
+            if (lod_cooker.CookToDmesh(lod_scene, lod_path.string())) {
+                uint32_t total_tris = 0;
+                for (auto& m : lod_scene.meshes) total_tris += static_cast<uint32_t>(m.indices.size() / 3);
+                std::cout << "  LOD" << lod << ": " << lod_path.filename().string()
+                          << " (" << total_tris << " tris, " << (ratio * 100.0f) << "%)" << std::endl;
+            }
+        }
+    }
 
     MeshCooker cooker;
 

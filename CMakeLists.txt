@@ -929,6 +929,7 @@ add_executable(AssetBuilder
     engine/assets/compiler/importer.cpp
     engine/assets/texture_compressor.cpp
     engine/assets/dtex.cpp
+    engine/mesh/mesh_decimator.cpp
 )
 target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
 if(DSE_HAS_ASSIMP)

@@ -43,6 +43,9 @@ struct ImportState {
     bool import_materials = true;
     bool anim_compress = true;        // 量化压缩 (v3 smallest-three + 定点)
     bool anim_reduce = true;          // 关键帧精简 (RDP 误差阈值)
+    bool mesh_decimate = false;       // 网格减面
+    float mesh_decimate_ratio = 0.5f; // 减面目标比例
+    int mesh_lod_levels = 0;          // 自动 LOD 生成级数 (0=不生成)
     bool generate_mipmaps = true;
     bool compress_texture = false;
     int compress_format = 1;        // index into kCompressFormatNames (default BC3)
@@ -150,6 +153,12 @@ void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
                     + "--out-dir \"" + out_dir.string() + "\"";
     if (!state.anim_compress) cmd += " --no-anim-compress";
     if (!state.anim_reduce)   cmd += " --no-anim-reduce";
+    if (state.mesh_decimate) {
+        cmd += " --decimate " + std::to_string(state.mesh_decimate_ratio);
+    }
+    if (state.mesh_lod_levels > 0) {
+        cmd += " --lod-levels " + std::to_string(state.mesh_lod_levels);
+    }
 
 #ifdef _WIN32
     STARTUPINFOA si{};
@@ -351,6 +360,26 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
         }
         ImGui::Checkbox("Import Skeleton (.dskel)", &state.import_skeleton);
         ImGui::Checkbox("Import Materials (.dmat)", &state.import_materials);
+
+        ImGui::Separator();
+        ImGui::Text("Mesh Decimation:");
+        ImGui::Checkbox("Decimate Mesh (QEM)", &state.mesh_decimate);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Quadric Error Metrics mesh simplification; reduces triangle count while preserving shape.");
+        }
+        if (state.mesh_decimate) {
+            ImGui::Indent();
+            ImGui::SliderFloat("Target Ratio", &state.mesh_decimate_ratio, 0.05f, 0.95f, "%.0f%%");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Fraction of original triangles to keep (e.g. 0.5 = 50%%).");
+            }
+            ImGui::Unindent();
+        }
+        ImGui::Text("LOD Generation:");
+        ImGui::SliderInt("LOD Levels", &state.mesh_lod_levels, 0, 5);
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Auto-generate N LOD meshes (50%%, 25%%, 12.5%%...). Output: base_lodN.dmesh");
+        }
     } else if (state.type == ImportType::Texture) {
         ImGui::Text("Texture Import Options:");
         ImGui::Checkbox("Generate Mipmaps", &state.generate_mipmaps);
