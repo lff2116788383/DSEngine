@@ -87,9 +87,11 @@ void RegisterMeshletBindings(lua_State* L);
 
 // P2-P5 大世界系统（Mesh Streaming / Physics LOD / Terrain Deform / Audio LOD）
 void RegisterOpenWorldP2P5Bindings(lua_State* L);
+void ShutdownOpenWorldP2P5Bindings();
 
 // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
 void RegisterWorldSystemsBindings(lua_State* L);
+void ShutdownWorldSystemsBindings();
 
 }
 

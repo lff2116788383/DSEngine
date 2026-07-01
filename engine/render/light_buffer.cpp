@@ -44,7 +44,7 @@ void LightBuffer::Init(RhiDevice* device) {
     spot_lights_.reserve(initial_spot);
 }
 
-void LightBuffer::CollectLights(World& world, const glm::vec3& camera_offset) {
+void LightBuffer::CollectLights(const World& world, const glm::vec3& camera_offset) {
     point_lights_.clear();
     spot_lights_.clear();
 

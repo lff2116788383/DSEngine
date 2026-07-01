@@ -7,9 +7,7 @@
 #include "engine/scripting/lua/lua_debugger.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
-#if defined(DSE_ENABLE_HTTP) || defined(DSE_NET_ENABLED)
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
-#endif
 #include "engine/ecs/script.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
@@ -473,6 +471,12 @@ void ShutdownLuaRuntime() {
                    state.lua_memory_usage,
                    state.awake_called ? 1 : 0);
     state.shutting_down = true;
+
+    // Release static singletons held by Lua binding modules BEFORE lua_close.
+    // These unique_ptr were previously leaked across hot-reload / scene transitions.
+    dse::runtime::lua_binding::ShutdownOpenWorldP2P5Bindings();
+    dse::runtime::lua_binding::ShutdownWorldSystemsBindings();
+
     if (state.state) {
         for (auto& pair : state.script_instances) {
             DestroyScriptInstance(state.state, static_cast<int>(pair.first), pair.second, false);

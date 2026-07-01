@@ -1,10 +1,16 @@
 #include "engine/runtime/runtime_update_graph.h"
 
 #include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/i_builtin_modules.h"
+#include "engine/core/module.h"
 #include "engine/core/service_locator.h"
 #include "engine/core/event_bus.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+
+#ifdef DSE_ENABLE_3D
+  #include "engine/physics/physics3d/i_physics3d_system.h"
+#endif
 
 #include <glm/vec2.hpp>
 

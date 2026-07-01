@@ -309,6 +309,13 @@ static const luaL_Reg audio_lod_funcs[] = {
 
 } // anonymous namespace
 
+void ShutdownOpenWorldP2P5Bindings() {
+    s_mesh_streaming.reset();
+    s_physics_lod.reset();
+    s_terrain_deform.reset();
+    s_audio_lod.reset();
+}
+
 void RegisterOpenWorldP2P5Bindings(lua_State* L) {
     // Expects dse table on top of stack
     lua_newtable(L);

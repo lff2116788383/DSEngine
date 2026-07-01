@@ -5,6 +5,14 @@
 
 #include "engine/runtime/frame_pipeline.h"
 
+// Full definitions for types forward-declared in frame_pipeline.h
+#include "engine/runtime/i_builtin_modules.h"
+#include "engine/core/module.h"
+#include "engine/core/dynamic_library.h"
+#include "engine/render/passes/render_pass_interface.h"
+#include "engine/render/passes/builtin_passes.h"
+#include "engine/render/hiz_types.h"
+
 FramePipeline::FramePipeline() : modules_impl_(CreateBuiltinModules()) {}
 FramePipeline::~FramePipeline() = default;
 

@@ -99,6 +99,12 @@ public:
      */
     entt::registry& registry();
 
+    /**
+     * @brief 获取底层的 EnTT registry 只读引用（供渲染等只读系统使用）
+     * @return const entt::registry 引用
+     */
+    const entt::registry& registry() const { return registry_; }
+
 private:
     entt::registry registry_;
     size_t entity_count_ = 0;

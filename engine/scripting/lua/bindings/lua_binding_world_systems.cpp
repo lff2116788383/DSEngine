@@ -875,4 +875,13 @@ namespace dse::runtime::lua_binding {
 void RegisterWorldSystemsBindings(lua_State* L) {
     luaopen_dse_world_systems(L);
 }
+
+void ShutdownWorldSystemsBindings() {
+    s_spline.reset();
+    s_ocean.reset();
+    s_editor.reset();
+    s_vsm.reset();
+    s_eqs.reset();
+    s_distribution.reset();
+}
 }

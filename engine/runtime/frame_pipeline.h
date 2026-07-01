@@ -6,6 +6,7 @@
 #ifndef DSE_FRAME_PIPELINE_H
 #define DSE_FRAME_PIPELINE_H
 
+// ── Minimal includes (only what the PUBLIC interface + value members require) ─
 #include <memory>
 #include <functional>
 #include <vector>
@@ -15,33 +16,15 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
-#include "engine/ecs/world.h"
+
+// Value-type members that must remain fully defined in this header:
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/scene/transform_system.h"
-#include "engine/physics/physics2d/physics2d_system.h"
-#ifdef DSE_ENABLE_3D
-  #include "engine/physics/physics3d/i_physics3d_system.h"
-#endif
-#ifdef DSE_ENABLE_NAVMESH
-#include "engine/navigation/nav_mesh_system.h"
-#endif
-#include "engine/audio/audio_system.h"
-#include "engine/core/module.h"
-#include "engine/core/dynamic_library.h"
-#include "engine/base/frame_update_context.h"
-#include "engine/runtime/runtime_frame_ops.h"
-#include "engine/runtime/runtime_update_graph.h"
-#include "engine/runtime/runtime_render_shell.h"
-#include "engine/runtime/render_pipeline_resources.h"
-#include "engine/runtime/runtime_context.h"
-#include "engine/runtime/business_runtime_bridge.h"
 #include "engine/render/render_graph.h"
 #include "engine/render/mesh_renderer.h"
 #include "engine/render/pipeline/render_pipeline_profile.h"
-#include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/render/render_snapshot.h"
-#include "engine/render/passes/builtin_passes.h"
 #include "engine/render/light_buffer.h"
 #include "engine/render/cluster_grid.h"
 #include "engine/render/light_probe_system.h"
@@ -50,14 +33,43 @@
 #include "engine/render/skinning/gpu_skinning.h"
 #include "engine/assets/streaming_manager.h"
 #include "engine/ecs/floating_origin_system.h"
+#include "engine/runtime/runtime_frame_ops.h"
+#include "engine/runtime/runtime_context.h"
+#include "engine/runtime/render_pipeline_resources.h"
+#include "engine/runtime/business_runtime_bridge.h"
+#include "engine/runtime/runtime_render_shell.h"
+#include "engine/base/frame_update_context.h"
 #include "engine/core/event_bus.h"
-#include "engine/runtime/i_builtin_modules.h"
 #include "engine/core/dse_export.h"
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/render_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 
+// ── Forward declarations (formerly heavy #includes) ──────────────────────────
+// These types are used only as pointers, references, or in unique_ptr members
+// whose destructors are defined in .cpp. Moving their includes to .cpp avoids
+// a massive transitive inclusion cascade (builtin_passes.h alone pulled 40+ passes).
+class World;
 class AssetManager;
+
+namespace dse::core {
+    class IModule;
+    class DynamicLibrary;
+}
+
+namespace dse::render {
+    class IRenderPass;
+    class TAAPass;
+}
+
+class IBuiltinModules;
+
+#ifdef DSE_ENABLE_3D
+namespace dse::physics3d { class IPhysics3DSystem; }
+#endif
+#ifdef DSE_ENABLE_NAVMESH
+#include "engine/navigation/nav_mesh_system.h"
+#endif
 
 /**
  * @class FramePipeline
