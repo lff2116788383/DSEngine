@@ -1,0 +1,152 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// Virtual Geometry per-cluster culling compute shader
+// Runs after LOD selection.  For each selected cluster, performs:
+//   1. Frustum culling (6 planes vs bounding sphere)
+//   2. Normal cone backface culling
+//   3. Hi-Z occlusion culling
+//   4. Screen-space size classification (HW vs SW raster bucket)
+//
+// Outputs:
+//   DrawCommandBuffer — instance_count set to 0 (culled) or 1 (visible)
+//   RasterClassBuffer — per-cluster: 0=HW, 1=SW
+
+struct ClusterData {
+    vec4  sphere;       // xyz = center(world), w = radius
+    vec4  cone;         // xyz = cone_axis(world), w = cone_cutoff
+    uint  vertex_offset;
+    uint  vertex_count;
+    uint  index_offset;
+    uint  index_count;
+    uint  material_id;
+    uint  instance_id;
+    uint  pad0, pad1;
+};
+
+struct DrawCommand {
+    uint count;
+    uint instance_count;
+    uint first_index;
+    int  base_vertex;
+    uint base_instance;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer ClusterDataBuffer {
+    ClusterData clusters[];
+};
+
+layout(set = 0, binding = 1, std430) buffer DrawCommandBuffer {
+    DrawCommand draw_cmds[];
+};
+
+layout(set = 0, binding = 2, std430) buffer RasterClassBuffer {
+    uint raster_class[];  // 0 = HW, 1 = SW
+};
+
+layout(set = 0, binding = 3) uniform sampler2D u_hiz_texture;
+
+layout(push_constant) uniform PC {
+    mat4  u_view_projection;
+    vec4  u_camera_pos;
+    float u_screen_width;
+    float u_screen_height;
+    int   u_mip_count;
+    uint  u_cluster_count;
+    vec4  u_frustum_planes[6];
+    uint  u_flags;              // bit0=frustum, bit1=occlusion, bit2=cone
+    float u_cone_threshold;
+    float u_sw_raster_threshold;
+    float u_pad;
+} pc;
+
+bool FrustumTestSphere(vec3 center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        float dist = dot(pc.u_frustum_planes[i].xyz, center) + pc.u_frustum_planes[i].w;
+        if (dist < -radius) return false;
+    }
+    return true;
+}
+
+bool ConeCullTest(vec3 cone_axis, float cone_cutoff, vec3 center) {
+    vec3 to_camera = normalize(pc.u_camera_pos.xyz - center);
+    float d = dot(to_camera, cone_axis);
+    return d <= -cone_cutoff;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.u_cluster_count) return;
+
+    ClusterData cluster = clusters[idx];
+    vec3 center = cluster.sphere.xyz;
+    float radius = cluster.sphere.w;
+
+    // 1. Frustum culling
+    if ((pc.u_flags & 1u) != 0u) {
+        if (!FrustumTestSphere(center, radius)) {
+            draw_cmds[idx].instance_count = 0u;
+            raster_class[idx] = 0u;
+            return;
+        }
+    }
+
+    // 2. Normal cone culling
+    if ((pc.u_flags & 4u) != 0u) {
+        vec3 cone_axis = cluster.cone.xyz;
+        float cone_cutoff = cluster.cone.w;
+        if (cone_cutoff > pc.u_cone_threshold) {
+            if (ConeCullTest(cone_axis, cone_cutoff, center)) {
+                draw_cmds[idx].instance_count = 0u;
+                raster_class[idx] = 0u;
+                return;
+            }
+        }
+    }
+
+    // 3. Hi-Z occlusion culling
+    if ((pc.u_flags & 2u) != 0u) {
+        vec4 clip = pc.u_view_projection * vec4(center, 1.0);
+        if (clip.w > 0.0) {
+            vec3 ndc = clip.xyz / clip.w;
+            float proj_radius = radius * pc.u_view_projection[1][1] / clip.w;
+            float screen_radius = proj_radius * pc.u_screen_height * 0.5;
+
+            vec2 uv_center = ndc.xy * 0.5 + 0.5;
+            float nearest_z = ndc.z - 0.005;
+
+            float mip_level = screen_radius > 0.0 ? ceil(log2(screen_radius * 2.0)) : 0.0;
+            mip_level = clamp(mip_level, 0.0, float(pc.u_mip_count - 1));
+
+            if (uv_center.x >= 0.0 && uv_center.x <= 1.0 &&
+                uv_center.y >= 0.0 && uv_center.y <= 1.0) {
+                float hiz = textureLod(u_hiz_texture, uv_center, mip_level).r;
+                if (nearest_z > hiz) {
+                    draw_cmds[idx].instance_count = 0u;
+                    raster_class[idx] = 0u;
+                    return;
+                }
+            }
+        }
+    }
+
+    // Visible — classify rasterization mode
+    draw_cmds[idx].instance_count = 1u;
+
+    // Compute average triangle screen-space size
+    vec4 clip = pc.u_view_projection * vec4(center, 1.0);
+    float screen_size = 0.0;
+    if (clip.w > 0.0) {
+        float proj_radius = radius * pc.u_view_projection[1][1] / clip.w;
+        screen_size = proj_radius * pc.u_screen_height;
+    }
+
+    float tri_count = float(cluster.index_count) / 3.0;
+    float avg_tri_pixels = (screen_size * screen_size * 3.14159) / max(tri_count, 1.0);
+
+    if (avg_tri_pixels < pc.u_sw_raster_threshold) {
+        raster_class[idx] = 1u;  // Software rasterization
+    } else {
+        raster_class[idx] = 0u;  // Hardware rasterization
+    }
+}

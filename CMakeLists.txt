@@ -87,6 +87,7 @@ option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 option(DSE_ENABLE_CSHARP "Enable C# scripting via .NET 8 CoreCLR (hostfxr)" OFF)
+option(DSE_ENABLE_VIRTUAL_GEOMETRY "Enable experimental virtual geometry (Nanite-style) pipeline" OFF)
 
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
@@ -470,6 +471,10 @@ if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
 endif()
 
+if(NOT DSE_ENABLE_VIRTUAL_GEOMETRY)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/virtual_geometry/.*\\.cpp$")
+endif()
+
 # PhysX 排除逻辑移至 gameplay_3d append 之后（见下方）
 
 if(NOT DSE_ENABLE_3D)
@@ -753,6 +758,13 @@ endif()
 # Spine 运行时启用标记：PUBLIC 以便头文件（gameplay_2d_module.h）与消费端口径一致。
 if(DSE_ENABLE_SPINE)
     target_compile_definitions(dse_engine PUBLIC DSE_ENABLE_SPINE)
+endif()
+
+# Virtual Geometry (Nanite-style) 实验性管线：OFF by default, 完全隔离
+# 源文件由 engine/*.cpp glob 自动收集，NOT DSE_ENABLE_VIRTUAL_GEOMETRY 时排除（见上方 list FILTER）。
+if(DSE_ENABLE_VIRTUAL_GEOMETRY)
+    target_compile_definitions(dse_engine PUBLIC DSE_ENABLE_VIRTUAL_GEOMETRY)
+    message(STATUS "Virtual Geometry (experimental): ENABLED")
 endif()
 
 # 内存追踪：在 Debug 与 RelWithDebInfo 配置生效（带调试信息的诊断构建），

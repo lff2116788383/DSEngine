@@ -1,0 +1,135 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// Virtual Geometry Software Rasterizer
+// Each thread processes one small triangle (screen area < threshold).
+// Computes edge equations, iterates bounding rect, writes to VisBuffer
+// via atomic depth test.
+//
+// Bindings:
+//   0 = TriangleBuffer (readonly): SWRasterTriangle[]
+//   1 = VisBuffer (read_write): uvec2[] (depth_bits, payload)
+//   2 = AtomicCounters: pixels_written
+//
+// Push constants: screen_width, screen_height, triangle_count
+
+struct Triangle {
+    vec4  v0;   // xyz = NDC, w = 1/w
+    vec4  v1;
+    vec4  v2;
+    uint  cluster_id;
+    uint  triangle_id;
+    uint  material_id;
+    uint  instance_id;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer TriangleBuffer {
+    Triangle triangles[];
+};
+
+layout(set = 0, binding = 1, std430) buffer VisBuffer {
+    uvec2 vis_buffer[];  // .x = depth_bits, .y = payload
+};
+
+layout(set = 0, binding = 2, std430) buffer Counters {
+    uint pixels_written;
+    uint triangles_processed;
+};
+
+layout(push_constant) uniform PC {
+    uint  u_screen_width;
+    uint  u_screen_height;
+    uint  u_triangle_count;
+    uint  u_pad;
+} pc;
+
+uint floatToSortableUint(float f) {
+    uint bits = floatBitsToUint(f);
+    // IEEE 754 sortable conversion
+    if ((bits & 0x80000000u) != 0u) {
+        bits = ~bits;
+    } else {
+        bits ^= 0x80000000u;
+    }
+    return bits;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.u_triangle_count) return;
+
+    Triangle tri = triangles[idx];
+
+    float w = float(pc.u_screen_width);
+    float h = float(pc.u_screen_height);
+
+    // NDC → screen space
+    float x0 = (tri.v0.x * 0.5 + 0.5) * w;
+    float y0 = (tri.v0.y * 0.5 + 0.5) * h;
+    float z0 =  tri.v0.z * 0.5 + 0.5;
+
+    float x1 = (tri.v1.x * 0.5 + 0.5) * w;
+    float y1 = (tri.v1.y * 0.5 + 0.5) * h;
+    float z1 =  tri.v1.z * 0.5 + 0.5;
+
+    float x2 = (tri.v2.x * 0.5 + 0.5) * w;
+    float y2 = (tri.v2.y * 0.5 + 0.5) * h;
+    float z2 =  tri.v2.z * 0.5 + 0.5;
+
+    // Bounding rect
+    int min_x = max(0, int(floor(min(min(x0, x1), x2))));
+    int max_x = min(int(w) - 1, int(ceil(max(max(x0, x1), x2))));
+    int min_y = max(0, int(floor(min(min(y0, y1), y2))));
+    int max_y = min(int(h) - 1, int(ceil(max(max(y0, y1), y2))));
+
+    if (min_x > max_x || min_y > max_y) return;
+
+    // Edge equation (2x signed area)
+    float area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if (abs(area) < 1e-6) return;
+    float inv_area = 1.0 / area;
+    bool ccw = area > 0.0;
+
+    uint payload = ((tri.cluster_id & 0xFFFFu) << 16u) |
+                   ((tri.triangle_id & 0xFFu) << 8u) |
+                   (tri.material_id & 0xFFu);
+
+    atomicAdd(triangles_processed, 1u);
+
+    for (int py = min_y; py <= max_y; ++py) {
+        for (int px = min_x; px <= max_x; ++px) {
+            float cx = float(px) + 0.5;
+            float cy = float(py) + 0.5;
+
+            float w0 = ((x1 - cx) * (y2 - cy) - (x2 - cx) * (y1 - cy)) * inv_area;
+            float w1 = ((x2 - cx) * (y0 - cy) - (x0 - cx) * (y2 - cy)) * inv_area;
+            float w2 = 1.0 - w0 - w1;
+
+            bool inside;
+            if (ccw) {
+                inside = (w0 >= 0.0) && (w1 >= 0.0) && (w2 >= 0.0);
+            } else {
+                inside = (w0 <= 0.0) && (w1 <= 0.0) && (w2 <= 0.0);
+                w0 = -w0; w1 = -w1; w2 = -w2;
+            }
+            if (!inside) continue;
+
+            float z = w0 * z0 + w1 * z1 + w2 * z2;
+            uint z_bits = floatToSortableUint(z);
+
+            uint buf_idx = uint(py) * pc.u_screen_width + uint(px);
+
+            // Atomic depth test: compare-and-swap loop
+            uint old_depth = vis_buffer[buf_idx].x;
+            while (z_bits < old_depth) {
+                uint prev = atomicCompSwap(vis_buffer[buf_idx].x, old_depth, z_bits);
+                if (prev == old_depth) {
+                    vis_buffer[buf_idx].y = payload;
+                    atomicAdd(pixels_written, 1u);
+                    break;
+                }
+                old_depth = prev;
+            }
+        }
+    }
+}

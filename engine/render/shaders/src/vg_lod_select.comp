@@ -1,0 +1,130 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// Virtual Geometry LOD selection compute shader
+// Walks DAG nodes top-down: if screen-space error < threshold, select this
+// node's cluster; otherwise mark children for processing in next dispatch.
+//
+// Two-phase dispatch:
+//   Phase 1: process root nodes → output selected clusters + child expansions
+//   Phase 2: process expanded children (repeat until no more expansions)
+//
+// Bindings:
+//   0 = DAGNodeBuffer (readonly)
+//   1 = ClusterDataBuffer (readonly)
+//   2 = SelectedClusterBuffer (writeonly, append)
+//   3 = ExpansionBuffer (read_write, for next phase)
+//   4 = AtomicCounters (selected_count, expansion_count)
+
+struct DAGNode {
+    vec4  sphere;       // xyz = center(world), w = radius
+    float lod_error;
+    uint  parent;
+    uint  first_child;
+    uint  child_count;
+};
+
+struct ClusterData {
+    vec4  sphere;
+    vec4  cone;
+    uint  vertex_offset;
+    uint  vertex_count;
+    uint  index_offset;
+    uint  index_count;
+    uint  material_id;
+    uint  instance_id;
+    uint  pad0, pad1;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer DAGNodeBuffer {
+    DAGNode dag_nodes[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer ClusterDataBuffer {
+    ClusterData clusters[];
+};
+
+layout(set = 0, binding = 2, std430) buffer SelectedClusterBuffer {
+    uint selected_clusters[];
+};
+
+layout(set = 0, binding = 3, std430) buffer ExpansionBuffer {
+    uint expansion_list[];
+};
+
+layout(set = 0, binding = 4, std430) buffer AtomicCounters {
+    uint selected_count;
+    uint expansion_count;
+    uint phase;
+    uint pad;
+};
+
+layout(push_constant) uniform PC {
+    mat4  u_view_projection;
+    vec4  u_camera_pos;
+    float u_screen_height;
+    float u_fov_y;
+    float u_lod_error_threshold;
+    uint  u_node_count;
+    vec4  u_frustum_planes[6];
+} pc;
+
+float ComputeScreenError(vec3 center, float radius, float lod_error) {
+    float dist = length(pc.u_camera_pos.xyz - center);
+    dist = max(dist, 0.001);
+    float proj_factor = pc.u_screen_height / (2.0 * tan(pc.u_fov_y * 0.5));
+    return (lod_error / dist) * proj_factor;
+}
+
+bool FrustumTest(vec3 center, float radius) {
+    for (int i = 0; i < 6; ++i) {
+        float d = dot(pc.u_frustum_planes[i].xyz, center) + pc.u_frustum_planes[i].w;
+        if (d < -radius) return false;
+    }
+    return true;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.u_node_count) return;
+
+    // Read from expansion list (phase > 0) or process all roots (phase 0)
+    uint node_idx;
+    if (phase == 0u) {
+        node_idx = idx;
+        if (dag_nodes[node_idx].parent != 0xFFFFFFFFu) return;
+    } else {
+        if (idx >= expansion_count) return;
+        node_idx = expansion_list[idx];
+    }
+
+    DAGNode node = dag_nodes[node_idx];
+    vec3 center = node.sphere.xyz;
+    float radius = node.sphere.w;
+
+    // Frustum cull
+    if (!FrustumTest(center, radius)) return;
+
+    // Leaf node: always select
+    if (node.first_child == 0xFFFFFFFFu || node.child_count == 0u) {
+        uint slot = atomicAdd(selected_count, 1u);
+        selected_clusters[slot] = node_idx;
+        return;
+    }
+
+    // Interior: check screen-space error
+    float screen_error = ComputeScreenError(center, radius, node.lod_error);
+
+    if (screen_error <= pc.u_lod_error_threshold) {
+        // Acceptable error: select this coarser level
+        uint slot = atomicAdd(selected_count, 1u);
+        selected_clusters[slot] = node_idx;
+    } else {
+        // Need finer detail: expand children
+        for (uint c = 0u; c < node.child_count; ++c) {
+            uint child = node.first_child + c;
+            uint slot = atomicAdd(expansion_count, 1u);
+            expansion_list[slot] = child;
+        }
+    }
+}
