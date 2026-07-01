@@ -551,6 +551,152 @@ void NodeRegistry::RegisterDefaults() {
         {MkPin("Array", BpPinType::Array)},
         {MkPin("Length", BpPinType::Int)},
         "{output0} = #{input0}", "Get array length"});
+
+    // ── Network / Authority ─────────────────────────────────────────────
+    Register({"Has Authority", "Network", "Authority", IM_COL32(50, 200, 150, 255),
+        {},
+        {MkPin("Result", BpPinType::Bool)},
+        "{output0} = dse.net.is_server()", "True if this instance is the server (authority)"});
+
+    Register({"Is Server", "Network", "Authority", IM_COL32(50, 200, 150, 255),
+        {},
+        {MkPin("Result", BpPinType::Bool)},
+        "{output0} = dse.net.is_server()", "True if running as dedicated/listen server"});
+
+    Register({"Is Client", "Network", "Authority", IM_COL32(50, 200, 150, 255),
+        {},
+        {MkPin("Result", BpPinType::Bool)},
+        "{output0} = dse.net.is_client()", "True if running as network client"});
+
+    Register({"Is Local Player", "Network", "Authority", IM_COL32(50, 200, 150, 255),
+        {MkPin("Entity", BpPinType::Entity)},
+        {MkPin("Result", BpPinType::Bool)},
+        "{output0} = dse.net.is_local_player({input0})", "True if entity is owned by local player"});
+
+    Register({"Get Net Role", "Network", "Authority", IM_COL32(50, 200, 150, 255),
+        {MkPin("Entity", BpPinType::Entity)},
+        {MkPin("Role", BpPinType::String)},
+        "{output0} = dse.net.get_role({input0})", "Get replication role: 'authority'/'simulated'/'autonomous'"});
+
+    // ── Network / Connection ────────────────────────────────────────────
+    Register({"Net Init", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow)},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Success", BpPinType::Bool)},
+        "{output1} = dse.net.init()", "Initialize network subsystem"});
+
+    Register({"Net Listen", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Port", BpPinType::Int)},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Success", BpPinType::Bool)},
+        "{output1} = dse.net.listen({input1})", "Start listening as server on port"});
+
+    Register({"Net Connect", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Host", BpPinType::String), MkPin("Port", BpPinType::Int)},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Connection", BpPinType::Int)},
+        "{output1} = dse.net.connect({input1}, {input2})", "Connect to server (returns connection handle)"});
+
+    Register({"Net Disconnect", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Connection", BpPinType::Int)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.net.close({input1})", "Close a network connection"});
+
+    Register({"Is Connected", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {},
+        {MkPin("Result", BpPinType::Bool)},
+        "{output0} = dse.repl.client_connected(__dse_repl_client)", "True if client is connected to server"});
+
+    Register({"Get Client Count", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {},
+        {MkPin("Count", BpPinType::Int)},
+        "{output0} = dse.repl.server_client_count(__dse_repl_server)", "Number of connected clients (server only)"});
+
+    Register({"Get Ping", "Network", "Connection", IM_COL32(50, 200, 150, 255),
+        {MkPin("Connection", BpPinType::Int)},
+        {MkPin("PingMs", BpPinType::Float)},
+        "{output0} = (dse.net.get_quality({input0}) or {}).ping_ms or 0", "Get connection ping in milliseconds"});
+
+    // ── Network / Replication ───────────────────────────────────────────
+    Register({"Spawn Replicated", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Entity", BpPinType::Entity), MkPin("Owner", BpPinType::Int)},
+        {MkPin("Exec", BpPinType::Flow), MkPin("NetId", BpPinType::Int)},
+        "{output1} = dse.repl.server_mark(__dse_repl_server, {input1}, {input2})",
+        "Register entity for network replication (server only). Returns NetId."});
+
+    Register({"Unreplicate", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Entity", BpPinType::Entity)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.server_unreplicate(__dse_repl_server, {input1})",
+        "Remove entity from replication (server only)"});
+
+    Register({"Set Net Owner", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Entity", BpPinType::Entity), MkPin("OwnerConn", BpPinType::Int)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.server_set_owner(__dse_repl_server, {input1}, {input2})",
+        "Transfer ownership of replicated entity (server only)"});
+
+    Register({"Server Replication Tick", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.server_tick(__dse_repl_server)",
+        "Send replication snapshot/delta to all clients (call once per server tick)"});
+
+    Register({"Set AOI Policy", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("Policy", BpPinType::String), MkPin("Radius", BpPinType::Float)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.server_set_aoi(__dse_repl_server, {input1}, {input2})",
+        "Set Area-of-Interest policy ('always' or 'distance') and radius"});
+
+    Register({"Net Entity To Local", "Network", "Replication", IM_COL32(50, 200, 150, 255),
+        {MkPin("NetId", BpPinType::Int)},
+        {MkPin("Entity", BpPinType::Entity)},
+        "{output0} = dse.repl.client_to_entity(__dse_repl_client, {input0})",
+        "Convert NetId to local entity (client side)"});
+
+    // ── Network / RPC ───────────────────────────────────────────────────
+    Register({"Call Server RPC", "Network", "RPC", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("RpcName", BpPinType::String), MkPin("TargetNetId", BpPinType::Int), MkPin("Payload", BpPinType::String)},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Success", BpPinType::Bool)},
+        "{output1} = dse.repl.rpc_client_send(__dse_repl_client, {input1}, {input2}, {input3})",
+        "Send RPC from client to server"});
+
+    Register({"Call Client RPC", "Network", "RPC", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("RpcName", BpPinType::String), MkPin("TargetNetId", BpPinType::Int), MkPin("Payload", BpPinType::String)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.rpc_server_broadcast(__dse_repl_server, {input1}, {input2}, {input3})",
+        "Send RPC from server to owning client"});
+
+    Register({"Broadcast RPC", "Network", "RPC", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("RpcName", BpPinType::String), MkPin("TargetNetId", BpPinType::Int), MkPin("Payload", BpPinType::String)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.rpc_server_broadcast(__dse_repl_server, {input1}, {input2}, {input3})",
+        "Broadcast RPC from server to all clients (multicast)"});
+
+    // ── Network / Movement ──────────────────────────────────────────────
+    Register({"Send Move Input", "Network", "Movement", IM_COL32(50, 200, 150, 255),
+        {MkPin("Exec", BpPinType::Flow), MkPin("NetId", BpPinType::Int), MkPin("DX", BpPinType::Float), MkPin("DY", BpPinType::Float), MkPin("DZ", BpPinType::Float)},
+        {MkPin("Exec", BpPinType::Flow)},
+        "dse.repl.client_send_move(__dse_repl_client, {input1}, {input2}, {input3}, {input4})",
+        "Send movement input to server (client only)"});
+
+    // ── Network / Events ────────────────────────────────────────────────
+    Register({"On Net Connected", "Network", "Events", IM_COL32(200, 50, 50, 255),
+        {},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Connection", BpPinType::Int)},
+        "", "Fired when a network connection is established"});
+
+    Register({"On Net Disconnected", "Network", "Events", IM_COL32(200, 50, 50, 255),
+        {},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Connection", BpPinType::Int), MkPin("Reason", BpPinType::Int)},
+        "", "Fired when a network connection is lost"});
+
+    Register({"On Net Message", "Network", "Events", IM_COL32(200, 50, 50, 255),
+        {},
+        {MkPin("Exec", BpPinType::Flow), MkPin("Connection", BpPinType::Int), MkPin("Data", BpPinType::String)},
+        "", "Fired when raw network message is received"});
+
+    Register({"On RPC Received", "Network", "Events", IM_COL32(200, 50, 50, 255),
+        {},
+        {MkPin("Exec", BpPinType::Flow), MkPin("RpcName", BpPinType::String), MkPin("SenderNetId", BpPinType::Int), MkPin("Payload", BpPinType::String)},
+        "", "Fired when an RPC call is received"});
 }
 
 // ─── Blueprint Editor State ────────────────────────────────────────────────

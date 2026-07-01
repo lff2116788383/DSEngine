@@ -484,7 +484,7 @@ private:
         if (graph.name == "EventGraph") {
             // Event graphs produce on_init / on_update methods
             for (const auto& node : graph.nodes) {
-                if (node.category == "Event") {
+                if (node.category == "Event" || node.category == "Network") {
                     if (node.name == "On Init") {
                         out << "function BP:on_init()\n";
                         indent_ = 1;
@@ -492,6 +492,26 @@ private:
                         out << "end\n\n";
                     } else if (node.name == "On Update") {
                         out << "function BP:on_update(dt)\n";
+                        indent_ = 1;
+                        CompileFlowFrom(out, graph, node);
+                        out << "end\n\n";
+                    } else if (node.name == "On Net Connected") {
+                        out << "function BP:on_net_connected(connection)\n";
+                        indent_ = 1;
+                        CompileFlowFrom(out, graph, node);
+                        out << "end\n\n";
+                    } else if (node.name == "On Net Disconnected") {
+                        out << "function BP:on_net_disconnected(connection, reason)\n";
+                        indent_ = 1;
+                        CompileFlowFrom(out, graph, node);
+                        out << "end\n\n";
+                    } else if (node.name == "On Net Message") {
+                        out << "function BP:on_net_message(connection, data)\n";
+                        indent_ = 1;
+                        CompileFlowFrom(out, graph, node);
+                        out << "end\n\n";
+                    } else if (node.name == "On RPC Received") {
+                        out << "function BP:on_rpc_received(rpc_name, sender_net_id, payload)\n";
                         indent_ = 1;
                         CompileFlowFrom(out, graph, node);
                         out << "end\n\n";
@@ -586,14 +606,37 @@ private:
             // Generic: use code_template
             if (!node.code_template.empty()) {
                 std::string line = node.code_template;
+                // Replace {inputN} placeholders
                 for (size_t i = 0; i < node.inputs.size(); ++i) {
                     std::string placeholder = "{input" + std::to_string(i) + "}";
                     size_t pos = line.find(placeholder);
-                    if (pos != std::string::npos) {
+                    while (pos != std::string::npos) {
                         line.replace(pos, placeholder.size(), InlineExpr(graph, node, static_cast<int>(i)));
+                        pos = line.find(placeholder, pos);
                     }
                 }
-                out << Indent() << line << "\n";
+                // Replace {outputN} with local variable names
+                bool has_output_var = false;
+                std::string out_var;
+                for (size_t i = 0; i < node.outputs.size(); ++i) {
+                    if (node.outputs[i].type != BpPinType::Flow) {
+                        std::string placeholder = "{output" + std::to_string(i) + "}";
+                        size_t pos = line.find(placeholder);
+                        if (pos != std::string::npos) {
+                            out_var = FreshVar();
+                            has_output_var = true;
+                            while (pos != std::string::npos) {
+                                line.replace(pos, placeholder.size(), out_var);
+                                pos = line.find(placeholder, pos);
+                            }
+                        }
+                    }
+                }
+                if (has_output_var) {
+                    out << Indent() << "local " << line << "\n";
+                } else {
+                    out << Indent() << line << "\n";
+                }
             }
         }
 
@@ -652,6 +695,37 @@ private:
         }
         if (node.name == "Random Float") return "math.random()";
         if (node.name == "Delta Time") return "dt";
+
+        // Network pure data nodes
+        if (node.name == "Has Authority") return "dse.net.is_server()";
+        if (node.name == "Is Server") return "dse.net.is_server()";
+        if (node.name == "Is Client") return "dse.net.is_client()";
+        if (node.name == "Is Local Player") return "dse.net.is_local_player(" + InlineExpr(graph, node, 0) + ")";
+        if (node.name == "Get Net Role") return "dse.net.get_role(" + InlineExpr(graph, node, 0) + ")";
+        if (node.name == "Is Connected") return "dse.repl.client_connected(__dse_repl_client)";
+        if (node.name == "Get Client Count") return "dse.repl.server_client_count(__dse_repl_server)";
+        if (node.name == "Get Ping") return "((dse.net.get_quality(" + InlineExpr(graph, node, 0) + ") or {}).ping_ms or 0)";
+        if (node.name == "Net Entity To Local") return "dse.repl.client_to_entity(__dse_repl_client, " + InlineExpr(graph, node, 0) + ")";
+
+        // Generic: use code_template for data nodes
+        if (!node.code_template.empty()) {
+            std::string tmpl = node.code_template;
+            // Check if template has {output0} = expr pattern
+            std::string out_prefix = "{output0} = ";
+            if (tmpl.rfind(out_prefix, 0) == 0) {
+                std::string expr = tmpl.substr(out_prefix.size());
+                for (size_t i = 0; i < node.inputs.size(); ++i) {
+                    std::string ph = "{input" + std::to_string(i) + "}";
+                    size_t pos = expr.find(ph);
+                    while (pos != std::string::npos) {
+                        expr.replace(pos, ph.size(), InlineExpr(graph, node, static_cast<int>(i)));
+                        pos = expr.find(ph, pos);
+                    }
+                }
+                return expr;
+            }
+        }
+
         return "nil";
     }
 };
