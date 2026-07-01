@@ -2,6 +2,7 @@
 #include "editor_asset_db.h"
 #include "editor_icons.h"
 #include "editor_project.h"
+#include "editor_external_editor.h"
 
 #include "engine/assets/asset_manager.h"
 #include "engine/core/service_locator.h"
@@ -226,10 +227,12 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
         ImGui::EndTooltip();
     }
 
-    // Double click to open (scenes) — copies path; host loop handles actual open
+    // Double click to open (scenes → load; scripts → external editor)
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
         if (asset.type == AssetType::Scene) {
             GetPendingAssetOpenPath() = asset.absolute_path;
+        } else if (asset.type == AssetType::Script || IsScriptExtension(asset.extension)) {
+            OpenInExternalEditor(asset.absolute_path, 1);
         }
     }
 }

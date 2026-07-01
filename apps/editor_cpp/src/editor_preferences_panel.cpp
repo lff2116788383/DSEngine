@@ -201,6 +201,74 @@ void DrawPreferencesPanel(bool* p_open) {
     }
     } // keyboard shortcuts block
 
+    {
+        char hdr_ext[80]; snprintf(hdr_ext, sizeof(hdr_ext), MDI_ICON_FILE "  %s", T("External Script Editor"));
+    if (ImGui::CollapsingHeader(hdr_ext, ImGuiTreeNodeFlags_DefaultOpen)) {
+        EditorSettings ext = LoadEditorSettings();
+        bool ext_changed = false;
+
+        // Preset selector
+        static int s_preset = 0; // 0=Custom, 1=VS Code, 2=Rider, 3=Sublime, 4=Vim
+        const char* presets[] = { "Custom", "VS Code", "JetBrains Rider", "Sublime Text", "Vim (terminal)" };
+        if (ImGui::Combo(T("Preset"), &s_preset, presets, 5)) {
+            switch (s_preset) {
+                case 1: // VS Code
+                    ext.external_editor_path = "code";
+                    ext.external_editor_args = "--goto \"{file}:{line}\"";
+                    break;
+                case 2: // Rider
+                    ext.external_editor_path = "rider64.exe";
+                    ext.external_editor_args = "--line {line} \"{file}\"";
+                    break;
+                case 3: // Sublime
+                    ext.external_editor_path = "subl";
+                    ext.external_editor_args = "\"{file}:{line}\"";
+                    break;
+                case 4: // Vim
+                    ext.external_editor_path = "vim";
+                    ext.external_editor_args = "+{line} \"{file}\"";
+                    break;
+                default: break;
+            }
+            ext_changed = true;
+        }
+
+        // Editor path
+        static char s_editor_path[256] = "";
+        if (s_editor_path[0] == '\0' && !ext.external_editor_path.empty()) {
+            snprintf(s_editor_path, sizeof(s_editor_path), "%s", ext.external_editor_path.c_str());
+        }
+        if (ImGui::InputText(T("Editor Path"), s_editor_path, sizeof(s_editor_path))) {
+            ext.external_editor_path = s_editor_path;
+            ext_changed = true;
+            s_preset = 0;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("%s", "Executable name or full path.\nExamples: code, rider64.exe, subl, vim");
+
+        // Args template
+        static char s_editor_args[256] = "";
+        if (s_editor_args[0] == '\0' && !ext.external_editor_args.empty()) {
+            snprintf(s_editor_args, sizeof(s_editor_args), "%s", ext.external_editor_args.c_str());
+        }
+        if (ImGui::InputText(T("Arguments"), s_editor_args, sizeof(s_editor_args))) {
+            ext.external_editor_args = s_editor_args;
+            ext_changed = true;
+            s_preset = 0;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("{file} = absolute file path\n{line} = line number (default 1)");
+
+        if (ext_changed) {
+            SaveEditorSettings(ext);
+        }
+    }
+    } // external editor block
+
     if (changed) {
         MarkPreferencesDirty();
     }

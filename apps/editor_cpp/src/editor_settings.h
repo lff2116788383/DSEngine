@@ -32,6 +32,10 @@ struct EditorSettings {
     // Editor UI locale: "en" or "zh-CN" (takes effect after restart)
     std::string editor_ui_locale = "en";
 
+    // External Script Editor
+    std::string external_editor_path = "code";  // default: VS Code ("code" on PATH)
+    std::string external_editor_args = "--goto \"{file}:{line}\""; // {file} and {line} are replaced
+
     // Scene camera state (persisted)
     float cam_focal_x = 0.0f, cam_focal_y = 0.0f, cam_focal_z = 0.0f;
     float cam_distance = 10.0f;

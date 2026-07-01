@@ -4,6 +4,7 @@
 #include "imgui_internal.h"
 #include "editor_icons.h"
 #include "editor_locale.h"
+#include "editor_external_editor.h"
 
 #include <deque>
 #include <mutex>
@@ -176,20 +177,10 @@ bool TryOpenSourceFromLog(const std::string& message) {
         }
     }
 
-    // Try to open with VS Code (non-blocking via ShellExecuteW)
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, nullptr, 0);
-    std::wstring wide_file(wlen > 0 ? wlen - 1 : 0, L'\0');
-    if (wlen > 0) MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, wide_file.data(), wlen);
-    std::wstring goto_arg = L"--goto \"" + wide_file + L":" +
-        std::wstring(line_str.begin(), line_str.end()) + L"\"";
-    HINSTANCE hr = ShellExecuteW(nullptr, L"open", L"code", goto_arg.c_str(), nullptr, SW_HIDE);
-    if (reinterpret_cast<intptr_t>(hr) > 32) {
-        return true;
-    }
-
-    // Fallback: open file with default associated application (also non-blocking)
-    ShellExecuteW(nullptr, L"open", wide_file.c_str(), nullptr, nullptr, SW_SHOW);
-    return true;
+    // Open in user-configured external editor (Preferences → External Script Editor)
+    int line_num = 0;
+    try { line_num = std::stoi(line_str); } catch (...) {}
+    return OpenInExternalEditor(file_path, line_num);
 }
 
 } // namespace
