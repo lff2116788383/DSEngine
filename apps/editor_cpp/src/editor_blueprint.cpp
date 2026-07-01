@@ -743,6 +743,9 @@ void DrawNodeCanvas() {
         draw_list->AddLine(ImVec2(canvas_pos.x, canvas_pos.y + y),
                            ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + y), IM_COL32(50, 50, 50, 255));
 
+    // Draw comments & groups (#4) behind nodes
+    DrawBpComments(draw_list, canvas_pos);
+
     // Draw links
     for (const auto& link : graph.links) {
         ImVec2 p1{0,0}, p2{0,0};
@@ -780,9 +783,20 @@ void DrawNodeCanvas() {
         draw_list->AddRectFilled(node_pos, ImVec2(node_end.x, node_pos.y + 24), node.header_color, 4.0f, ImDrawFlags_RoundCornersTop);
         // Title
         draw_list->AddText(ImVec2(node_pos.x + 6, node_pos.y + 4), IM_COL32(255, 255, 255, 255), node.name.c_str());
-        // Border
+        // Border (with debugger highlighting)
         bool is_selected = (node.id == s_state.selected_node);
-        draw_list->AddRect(node_pos, node_end, is_selected ? IM_COL32(255, 200, 50, 255) : IM_COL32(80, 80, 80, 255), 4.0f);
+        bool is_executing = (s_state.debug.active && node.id == s_state.debug.current_node_id);
+        bool has_breakpoint = s_state.debug.HasBreakpoint(node.id);
+        ImU32 border_color = is_executing ? IM_COL32(50, 255, 50, 255) :
+                             is_selected  ? IM_COL32(255, 200, 50, 255) :
+                             has_breakpoint ? IM_COL32(255, 60, 60, 255) :
+                             IM_COL32(80, 80, 80, 255);
+        float border_thick = (is_executing || has_breakpoint) ? 3.0f : 1.0f;
+        draw_list->AddRect(node_pos, node_end, border_color, 4.0f, 0, border_thick);
+        // Breakpoint indicator
+        if (has_breakpoint) {
+            draw_list->AddCircleFilled(ImVec2(node_pos.x - 8, node_pos.y + 12), 5, IM_COL32(255, 40, 40, 255));
+        }
 
         // Input pins
         for (size_t pi = 0; pi < node.inputs.size(); ++pi) {
@@ -819,35 +833,28 @@ void DrawNodeCanvas() {
         s_state.scroll_offset.y += ImGui::GetIO().MouseDelta.y;
     }
 
-    // Create node context menu
+    // Create node context menu (enhanced with search #3 and Add Comment #4)
     if (ImGui::BeginPopup("bp_create_menu")) {
-        static char search_buf[64] = "";
-        ImGui::InputText("##search", search_buf, sizeof(search_buf));
-        ImGui::Separator();
-
-        const auto& reg = NodeRegistry::Get();
-        for (const auto& cat : reg.Categories()) {
-            if (ImGui::BeginMenu(cat.c_str())) {
-                for (const auto& tmpl : reg.All()) {
-                    if (tmpl.category != cat) continue;
-                    if (search_buf[0] != '\0') {
-                        std::string lower_name = tmpl.name;
-                        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
-                        std::string lower_search = search_buf;
-                        std::transform(lower_search.begin(), lower_search.end(), lower_search.begin(), ::tolower);
-                        if (lower_name.find(lower_search) == std::string::npos) continue;
-                    }
-                    if (ImGui::MenuItem(tmpl.name.c_str())) {
-                        graph.nodes.push_back(CreateNodeFromTemplate(graph, tmpl, s_state.create_menu_pos));
-                        s_state.dirty = true;
-                    }
-                    if (!tmpl.description.empty() && ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("%s", tmpl.description.c_str());
-                    }
-                }
-                ImGui::EndMenu();
+        // Add Comment / Add Group options at top
+        if (ImGui::MenuItem(MDI_ICON_COMMENT_TEXT_OUTLINE " Add Comment")) {
+            BpAddComment(s_state.create_menu_pos);
+        }
+        if (s_state.selected_node >= 0) {
+            if (ImGui::MenuItem(MDI_ICON_GROUP " Group Selected")) {
+                BpAddNodeGroup("Group", {s_state.selected_node});
             }
         }
+        // Toggle breakpoint on selected node
+        if (s_state.selected_node >= 0) {
+            bool has_bp = s_state.debug.HasBreakpoint(s_state.selected_node);
+            if (ImGui::MenuItem(has_bp ? "Remove Breakpoint" : "Add Breakpoint")) {
+                s_state.debug.ToggleBreakpoint(s_state.selected_node);
+            }
+        }
+        ImGui::Separator();
+
+        // Enhanced node search popup (#3)
+        DrawNodeSearchPopup();
         ImGui::EndPopup();
     }
 }
@@ -872,11 +879,19 @@ void DrawLuaPreview() {
 // ─── Main Draw ─────────────────────────────────────────────────────────────
 
 void DrawBlueprintEditor(EditorContext& /*ctx*/) {
+    // Keyboard shortcuts: Undo/Redo
+    if (ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !ImGui::GetIO().KeyShift) {
+        BpUndo();
+    }
+    if (ImGui::GetIO().KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Y) ||
+        (ImGui::IsKeyPressed(ImGuiKey_Z) && ImGui::GetIO().KeyShift))) {
+        BpRedo();
+    }
+
     // Toolbar
     if (ImGui::Button("Compile")) {
         s_state.generated_lua = CompileToLua(s_state.asset);
         s_state.compilation_errors.clear();
-        // Also validate
         if (!s_state.asset.graphs.empty()) {
             auto result = ValidateGraph(s_state.asset.graphs[s_state.active_graph_index]);
             if (!result.valid) {
@@ -884,6 +899,10 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
             }
         }
     }
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_UNDO " Undo")) BpUndo();
+    ImGui::SameLine();
+    if (ImGui::Button(MDI_ICON_REDO " Redo")) BpRedo();
     ImGui::SameLine();
     ImGui::Checkbox("Auto Compile", &s_state.auto_compile);
     ImGui::SameLine();
@@ -895,14 +914,25 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
     // Graph tabs
     DrawGraphTabs();
 
-    // Main layout: variables panel left, canvas center
+    // Main layout: templates left, variables, canvas center, debug bottom
+    static bool show_templates = false;
+    if (show_templates) {
+        DrawBpTemplatePanel();
+        ImGui::SameLine();
+    }
+
     DrawVariablePanel();
     ImGui::SameLine();
 
     ImGui::BeginGroup();
     DrawNodeCanvas();
     DrawLuaPreview();
+    DrawBlueprintDebugPanel();
     ImGui::EndGroup();
+
+    // Template toggle (in menu bar area)
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+    ImGui::Checkbox("Templates", &show_templates);
 
     // Auto compile
     if (s_state.auto_compile && s_state.dirty) {

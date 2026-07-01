@@ -165,6 +165,62 @@ struct BlueprintAsset {
     std::string author;
 };
 
+// ─── Comment Box / Node Group ──────────────────────────────────────────────
+
+struct BpComment {
+    int id = 0;
+    std::string text;
+    ImVec2 position{0, 0};
+    ImVec2 size{300, 200};
+    ImU32 color = IM_COL32(60, 60, 60, 180);
+};
+
+struct BpNodeGroup {
+    int id = 0;
+    std::string name;
+    std::vector<int> node_ids;  // nodes in this group
+    ImU32 color = IM_COL32(80, 120, 80, 100);
+};
+
+// ─── Blueprint Debugger State ──────────────────────────────────────────────
+
+struct BpDebugState {
+    bool active = false;
+    bool paused = false;
+    int current_node_id = -1;           // node being executed (highlight)
+    int current_instruction = 0;
+    std::vector<int> breakpoint_nodes;  // node IDs with breakpoints
+    std::vector<std::pair<std::string, std::string>> watch_values; // name → value
+    std::vector<std::string> execution_log;
+    int max_log_lines = 200;
+
+    bool HasBreakpoint(int node_id) const;
+    void ToggleBreakpoint(int node_id);
+    void ClearBreakpoints();
+    void Reset();
+};
+
+// ─── Blueprint Template ────────────────────────────────────────────────────
+
+struct BpTemplate {
+    std::string name;
+    std::string category;     // "Movement", "AI", "Interaction", etc.
+    std::string description;
+    BlueprintAsset asset;     // pre-built graph
+};
+
+class BpTemplateRegistry {
+public:
+    static BpTemplateRegistry& Get();
+    void RegisterDefaults();
+    const std::vector<BpTemplate>& All() const { return templates_; }
+    const BpTemplate* Find(const std::string& name) const;
+    const std::vector<std::string>& Categories() const { return categories_; }
+private:
+    std::vector<BpTemplate> templates_;
+    std::vector<std::string> categories_;
+};
+
 // ─── Blueprint Editor State ────────────────────────────────────────────────
 
 struct BlueprintEditorState {
@@ -191,6 +247,18 @@ struct BlueprintEditorState {
     // Canvas state
     float zoom = 1.0f;
     ImVec2 scroll_offset{0, 0};
+
+    // Comments & Groups (#4)
+    std::vector<BpComment> comments;
+    std::vector<BpNodeGroup> groups;
+    int selected_comment = -1;
+
+    // Debugger (#1)
+    BpDebugState debug;
+
+    // Search (#3)
+    char node_search_buf[128] = "";
+    bool search_focus_requested = false;
 };
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -204,6 +272,34 @@ BlueprintEditorState& GetBlueprintEditorState();
 bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path);
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path);
 
+// Debugger (#1)
+void DrawBlueprintDebugPanel();
+void BpDebugStep();
+void BpDebugContinue();
+void BpDebugStop();
+
+// Undo/Redo (#2)
+void BpUndo();
+void BpRedo();
+bool BpCanUndo();
+bool BpCanRedo();
+void BpPushUndoState(const char* description);
+
+// Node Search (#3)
+void DrawNodeSearchPopup();
+
+// Comments/Groups (#4)
+void DrawBpComments(ImDrawList* draw_list, ImVec2 canvas_pos);
+void BpAddComment(ImVec2 pos);
+void BpAddNodeGroup(const std::string& name, const std::vector<int>& node_ids);
+
+// Asset Thumbnail (#5)
+void DrawBpThumbnail(const BlueprintAsset& asset, ImVec2 pos, ImVec2 size);
+
+// Templates (#6)
+void DrawBpTemplatePanel();
+bool ApplyBpTemplate(const std::string& template_name);
+
 // Helpers
 inline BpPin MkPin(const char* name, BpPinType type) {
     BpPin p; p.name = name; p.type = type; return p;
@@ -214,6 +310,10 @@ int BpNodeCount();
 int BpLinkCount();
 int BpVariableCount();
 int BpFunctionGraphCount();
+int BpCommentCount();
+int BpGroupCount();
+int BpTemplateCount();
+bool BpDebuggerActive();
 void BpResetState();
 
 }  // namespace dse::editor::bp

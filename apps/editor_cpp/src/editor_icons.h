@@ -128,3 +128,10 @@
 #define MDI_ICON_RELOAD_ALERT           "\xef\x80\x9e" // U+F01E fa-arrow-rotate-right (same)
 #define MDI_ICON_TRANSIT_CONNECTION_VARIANT "\xef\x84\xa6" // U+F126 fa-code-branch (approx)
 #define MDI_ICON_VARIABLE               "\xef\x84\xa1" // U+F121 fa-code (approx)
+
+// Blueprint editor extras
+#define MDI_ICON_UNDO                   "\xef\x83\xa2" // U+F0E2 fa-rotate-left
+#define MDI_ICON_REDO                   "\xef\x80\x9e" // U+F01E fa-rotate-right
+#define MDI_ICON_COMMENT_TEXT_OUTLINE   "\xef\x81\xb5" // U+F075 fa-comment
+#define MDI_ICON_GROUP                  "\xef\x89\x87" // U+F247 fa-object-group
+#define MDI_ICON_FILE_DOCUMENT_OUTLINE  "\xef\x85\x9b" // U+F15B fa-file
