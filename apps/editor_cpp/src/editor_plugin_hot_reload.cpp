@@ -339,4 +339,30 @@ void DrawPluginHotReloadPanel(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static PluginHotReloadTestState s_test_state;
+
+PluginHotReloadTestState& GetPluginHotReloadState() {
+    InitHotReload();
+    s_test_state.plugins.clear();
+    for (auto& p : s_state.plugins) {
+        PluginTestInfo ti;
+        ti.name = p.name;
+        ti.state = static_cast<HotReloadPluginState>(static_cast<int>(p.state));
+        ti.auto_reload = p.auto_reload;
+        s_test_state.plugins.push_back(ti);
+    }
+    s_test_state.global_auto_reload = s_state.global_auto_reload;
+    s_test_state.selected_plugin = -1;
+    return s_test_state;
+}
+
+void PluginHotReloadTriggerBuild(int plugin_index) {
+    InitHotReload();
+    if (plugin_index >= 0 && plugin_index < static_cast<int>(s_state.plugins.size())) {
+        s_state.plugins[plugin_index].state =
+            static_cast<PluginState>(static_cast<int>(HotReloadPluginState::Compiling));
+    }
+}
+
 } // namespace dse::editor

@@ -70,4 +70,11 @@ void VsDebugContinue();
 /// Add a watch expression
 void VsDebugAddWatch(const std::string& expr);
 
+// Test accessor (alias for GetVsDebugSession for consistent naming)
+struct VsDebuggerTestState {
+    VsDebugState debug_state = VsDebugState::Idle;
+    std::vector<VsBreakpoint> breakpoints;
+};
+VsDebuggerTestState& GetVsDebuggerState();
+
 } // namespace dse::editor

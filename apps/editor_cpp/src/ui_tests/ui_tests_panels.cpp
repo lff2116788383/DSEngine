@@ -64,6 +64,14 @@ constexpr PanelEntry kPanels[] = {
     {"preferences",         "Preferences"},
     {"plugins",             "Plugins"},
     {"ai_chat",             "AI Chat"},
+    // New editor feature panels (#2-#9)
+    {"vs_debugger",         "Visual Script Debugger"},
+    {"animation_clip",      "Animation Clip Editor"},
+    {"sequencer",           "Cinematic Sequencer"},
+    {"terrain_sculpt",      "Terrain Sculpt Preview"},
+    {"world_partition",     "World Partition Editor"},
+    {"plugin_hot_reload",   "Plugin Hot Reload"},
+    {"version_control",     "Version Control"},
 };
 
 } // namespace

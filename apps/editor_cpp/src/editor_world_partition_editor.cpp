@@ -381,4 +381,23 @@ void DrawWorldPartitionEditor(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static WorldPartitionTestState s_test_state;
+
+WorldPartitionTestState& GetWorldPartitionState() {
+    InitWorldPartition();
+    s_test_state.cells.clear();
+    for (auto& c : s_state.grid.cells) {
+        WpTestCell tc;
+        tc.grid_x = c.grid_x;
+        tc.grid_z = c.grid_z;
+        s_test_state.cells.push_back(tc);
+    }
+    s_test_state.grid_cols = s_state.grid.grid_width;
+    s_test_state.grid_rows = s_state.grid.grid_height;
+    s_test_state.selected_cell = s_state.selected_cell;
+    s_test_state.overlay_mode = static_cast<WpOverlayMode>(static_cast<int>(s_state.overlay));
+    return s_test_state;
+}
+
 } // namespace dse::editor

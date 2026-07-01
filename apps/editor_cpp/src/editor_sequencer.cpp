@@ -515,4 +515,35 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static SequencerTestState s_test_state;
+
+SequencerTestState& GetSequencerState() {
+    InitDemoSequencer();
+    s_test_state.tracks.clear();
+    for (auto& t : s_state.tracks) {
+        SeqTestTrack tt;
+        tt.name = t.name;
+        s_test_state.tracks.push_back(tt);
+    }
+    s_test_state.sequence_duration = s_state.duration;
+    s_test_state.playhead_time = s_state.current_time;
+    s_test_state.playing = s_state.playing;
+    return s_test_state;
+}
+
+void SequencerPlay() {
+    InitDemoSequencer();
+    s_state.playing = true;
+}
+
+void SequencerPause() {
+    s_state.playing = false;
+}
+
+void SequencerStop() {
+    s_state.playing = false;
+    s_state.current_time = 0.0f;
+}
+
 } // namespace dse::editor

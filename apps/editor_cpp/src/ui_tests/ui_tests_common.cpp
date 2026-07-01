@@ -236,6 +236,7 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterLayoutSettingsTests(engine);
     RegisterMiscEditorTests(engine);
     RegisterMultiSelectTests(engine);
+    RegisterEditorFeatureTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
 }

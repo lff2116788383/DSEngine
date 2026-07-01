@@ -404,4 +404,22 @@ void DrawTerrainSculptPreview(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static TerrainSculptTestState s_test_state;
+
+TerrainSculptTestState& GetTerrainSculptState() {
+    InitTerrainPreview();
+    s_test_state.brush.mode = static_cast<TerrainSculptBrushMode>(static_cast<int>(s_state.brush.mode));
+    s_test_state.brush.radius = s_state.brush.radius;
+    s_test_state.brush.strength = s_state.brush.strength;
+    s_test_state.brush.opacity = s_state.brush.opacity;
+    s_test_state.heightmap_size = TerrainPreviewState::kGridSize;
+    s_test_state.heightmap.resize(
+        static_cast<size_t>(TerrainPreviewState::kGridSize * TerrainPreviewState::kGridSize));
+    for (int z = 0; z < TerrainPreviewState::kGridSize; z++)
+        for (int x = 0; x < TerrainPreviewState::kGridSize; x++)
+            s_test_state.heightmap[z * TerrainPreviewState::kGridSize + x] = s_state.heightmap[z][x];
+    return s_test_state;
+}
+
 } // namespace dse::editor

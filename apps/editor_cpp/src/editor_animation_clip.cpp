@@ -525,4 +525,33 @@ void DrawAnimationClipEditor(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static AnimClipTestState s_test_state;
+
+AnimClipTestState& GetAnimClipEditorState() {
+    InitDemoSkeleton();
+    s_test_state.bones.clear();
+    for (auto& b : s_state.bones) {
+        AnimClipTestBone tb;
+        tb.name = b.name;
+        tb.parent_index = b.parent_index;
+        s_test_state.bones.push_back(tb);
+    }
+    s_test_state.selected_bone = s_state.selected_bone;
+    s_test_state.current_time = s_state.current_time;
+    s_test_state.clip_duration = s_state.clip_duration;
+    s_test_state.playing = s_state.playing;
+    return s_test_state;
+}
+
+void AnimClipPlay() {
+    InitDemoSkeleton();
+    s_state.playing = true;
+}
+
+void AnimClipStop() {
+    s_state.playing = false;
+    s_state.current_time = 0.0f;
+}
+
 } // namespace dse::editor

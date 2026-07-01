@@ -334,4 +334,13 @@ void DrawVisualScriptDebugger(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessor ──────────────────────────────────────────────────────
+static VsDebuggerTestState s_test_state;
+
+VsDebuggerTestState& GetVsDebuggerState() {
+    s_test_state.debug_state = s_debug_session.state;
+    s_test_state.breakpoints = s_debug_session.breakpoints;
+    return s_test_state;
+}
+
 } // namespace dse::editor

@@ -533,4 +533,27 @@ void DrawVersionControlPanel(EditorContext& /*ctx*/) {
     ImGui::End();
 }
 
+// ─── Test accessors ─────────────────────────────────────────────────────
+static VersionControlTestState s_test_state;
+
+VersionControlTestState& GetVersionControlState() {
+    InitVersionControl();
+    s_test_state.files.clear();
+    for (auto& f : s_state.files) {
+        VcTestFile tf;
+        tf.path = f.path;
+        tf.staged = f.staged;
+        s_test_state.files.push_back(tf);
+    }
+    s_test_state.branches.clear();
+    for (auto& b : s_state.branches) {
+        VcTestBranch tb;
+        tb.name = b.name;
+        tb.is_current = b.is_current;
+        s_test_state.branches.push_back(tb);
+    }
+    s_test_state.active_tab = static_cast<VcTab>(s_state.active_tab);
+    return s_test_state;
+}
+
 } // namespace dse::editor
