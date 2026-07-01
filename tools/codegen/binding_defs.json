@@ -285,6 +285,22 @@
                     "type": "int",
                     "script": false
                 }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "material_data_source",
+                    "type": "enum",
+                    "script": false
+                }
+            ],
+            "enums": [
+                {
+                    "qualified": "dse::MeshRendererComponent::MaterialDataSource",
+                    "entries": [
+                        {"name": "ComponentFallback", "value": "ComponentFallback"},
+                        {"name": "MaterialInstance", "value": "MaterialInstance"}
+                    ]
+                }
             ]
         },
         {
@@ -356,6 +372,11 @@
                 }
             ],
             "reflect_extra_fields": [
+                {
+                    "name": "cascade_splits",
+                    "type": "c_array_float_3",
+                    "script": false
+                },
                 {
                     "name": "cascade_split_lambda",
                     "type": "float",
@@ -1931,6 +1952,13 @@
                     "lua_setter": "set_light_probe_show_debug"
                 }
             ],
+            "reflect_extra_fields": [
+                {
+                    "name": "sh_coefficients",
+                    "type": "c_array_vec3_9",
+                    "script": false
+                }
+            ],
             "lua_table": "ecs"
         },
         {
@@ -2733,7 +2761,7 @@
             "prefix": "ragdoll",
             "include": "engine/ecs/components_3d_physics.h",
             "namespace": "dse",
-            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "conditional": "defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)",
             "fields": [
                 {
                     "name": "active",
@@ -2870,7 +2898,7 @@
             "prefix": "vehicle",
             "include": "engine/ecs/components_3d_physics.h",
             "namespace": "dse",
-            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "conditional": "defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)",
             "fields": [
                 {
                     "name": "enabled",
@@ -3030,7 +3058,7 @@
             "prefix": "buoyancy",
             "include": "engine/ecs/components_3d_physics.h",
             "namespace": "dse",
-            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "conditional": "defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)",
             "fields": [
                 {
                     "name": "enabled",
@@ -4181,7 +4209,7 @@
         {
             "name": "GpuParticleComponent",
             "include": "engine/render/particles/gpu_particle_system.h",
-            "namespace": "dse",
+            "namespace": "dse::render",
             "fields": []
         },
         {

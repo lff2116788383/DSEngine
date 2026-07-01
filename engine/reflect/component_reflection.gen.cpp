@@ -46,9 +46,11 @@ void RegisterCamera3D() {
 
 void RegisterMeshRenderer() {
     using dse::MeshRendererComponent;
-    DSE_REFLECT_ENUM(MeshRendererComponent::MaterialDataSource)
-        .value("ComponentFallback", MeshRendererComponent::MaterialDataSource::ComponentFallback)
-        .value("MaterialInstance", MeshRendererComponent::MaterialDataSource::MaterialInstance);
+    DSE_REFLECT_ENUM(dse::MeshRendererComponent::MaterialDataSource)
+        .value("ComponentFallback", dse::MeshRendererComponent::MaterialDataSource::ComponentFallback)
+        .value("MaterialInstance", dse::MeshRendererComponent::MaterialDataSource::MaterialInstance)
+        ;
+
     auto t = DSE_REFLECT_TYPE(MeshRendererComponent);
     t.field("color", &MeshRendererComponent::color).color();
     t.field("visible", &MeshRendererComponent::visible);
@@ -58,22 +60,6 @@ void RegisterMeshRenderer() {
     t.field("receive_shadow", &MeshRendererComponent::receive_shadow);
     t.field("mesh_path", &MeshRendererComponent::mesh_path);
     t.field("shader_variant", &MeshRendererComponent::shader_variant);
-    t.field("ao", &MeshRendererComponent::ao).range(0.0, 1.0);
-    t.field("normal_strength", &MeshRendererComponent::normal_strength).range(0.0, 4.0);
-    t.field("material_alpha_cutoff", &MeshRendererComponent::material_alpha_cutoff).range(0.0, 1.0);
-    t.field("material_alpha_test", &MeshRendererComponent::material_alpha_test);
-    t.field("material_double_sided", &MeshRendererComponent::material_double_sided);
-    t.field("sss_strength", &MeshRendererComponent::sss_strength).range(0.0, 1.0);
-    t.field("sss_tint", &MeshRendererComponent::sss_tint).color();
-    t.field("clear_coat", &MeshRendererComponent::clear_coat).range(0.0, 1.0);
-    t.field("clear_coat_roughness", &MeshRendererComponent::clear_coat_roughness).range(0.0, 1.0);
-    t.field("anisotropy", &MeshRendererComponent::anisotropy).range(-1.0, 1.0);
-    t.field("pom_height_scale", &MeshRendererComponent::pom_height_scale).range(0.0, 1.0);
-    t.field("depth_test_enabled", &MeshRendererComponent::depth_test_enabled);
-    t.field("depth_write_enabled", &MeshRendererComponent::depth_write_enabled);
-    t.field("is_static", &MeshRendererComponent::is_static);
-    t.field("sorting_layer", &MeshRendererComponent::sorting_layer);
-    t.field("order_in_layer", &MeshRendererComponent::order_in_layer);
     t.field("material_data_source", &MeshRendererComponent::material_data_source);
 }
 
@@ -87,8 +73,8 @@ void RegisterDirectionalLight3D() {
     t.field("cast_shadow", &DirectionalLight3DComponent::cast_shadow);
     t.field("shadow_strength", &DirectionalLight3DComponent::shadow_strength).range(0.0, 1.0);
     t.field("enabled", &DirectionalLight3DComponent::enabled);
-    t.field("cascade_split_lambda", &DirectionalLight3DComponent::cascade_split_lambda).range(0.0, 1.0);
     t.field("cascade_splits", &DirectionalLight3DComponent::cascade_splits);
+    t.field("cascade_split_lambda", &DirectionalLight3DComponent::cascade_split_lambda).range(0.0, 1.0);
 }
 
 void RegisterPointLight() {
@@ -399,7 +385,8 @@ void RegisterRigidBody3D() {
     DSE_REFLECT_ENUM(dse::RigidBody3DType)
         .value("Static", dse::RigidBody3DType::Static)
         .value("Kinematic", dse::RigidBody3DType::Kinematic)
-        .value("Dynamic", dse::RigidBody3DType::Dynamic);
+        .value("Dynamic", dse::RigidBody3DType::Dynamic)
+        ;
 
     auto t = DSE_REFLECT_TYPE(RigidBody3DComponent);
     t.field("type", &RigidBody3DComponent::type);
@@ -471,7 +458,8 @@ void RegisterJoint3D() {
         .value("Fixed", dse::Joint3DType::Fixed)
         .value("Hinge", dse::Joint3DType::Hinge)
         .value("Spring", dse::Joint3DType::Spring)
-        .value("Distance", dse::Joint3DType::Distance);
+        .value("Distance", dse::Joint3DType::Distance)
+        ;
 
     auto t = DSE_REFLECT_TYPE(Joint3DComponent);
     t.field("type", &Joint3DComponent::type);

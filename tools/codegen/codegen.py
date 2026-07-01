@@ -286,6 +286,22 @@ def main():
         includes=seen_includes,
     )
 
+    # ── scene_json_codec.gen.h ──────────────────────────────────────────────
+    # 统一场景 JSON 序列化分发 — 消除手写 per-component JSON 代码，
+    # 所有组件序列化均由 binding_defs.json 驱动。
+    scene_codec_components = preprocess_reflect_components(all_reflect)
+    scene_codec_includes = []
+    for c in scene_codec_components:
+        inc = c.get("include", "")
+        if inc and inc not in scene_codec_includes:
+            scene_codec_includes.append(inc)
+    render(
+        "scene_json_codec.gen.h.j2",
+        "engine/scene/scene_json_codec.gen.h",
+        components=scene_codec_components,
+        includes=scene_codec_includes,
+    )
+
     # ── Components.gen.cs ────────────────────────────────────────────────────
     # C# 高级封装类 — 自动生成 get/set 属性包装，替代手写 Transform.cs 等。
     wrapper_components = preprocess_wrapper_components(components)

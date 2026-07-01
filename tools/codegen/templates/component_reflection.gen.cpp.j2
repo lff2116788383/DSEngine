@@ -15,13 +15,13 @@ namespace {
 
 {% for comp in components %}
 {% if comp.conditional is defined %}
-#if defined({{ comp.conditional }})
+#if {{ comp.conditional }}
 {% endif %}
 void Register{{ comp.name | replace("Component", "") }}() {
 {% if comp.namespace %}
     using {{ comp.namespace }}::{{ comp.name }};
 {% else %}
-    using dse::{{ comp.name }};
+    using ::{{ comp.name }};
 {% endif %}
 {% if comp.enums is defined %}
 {% for enum in comp.enums %}
@@ -29,7 +29,7 @@ void Register{{ comp.name | replace("Component", "") }}() {
 {% for v in enum.entries %}
         .value("{{ v.name }}", {{ enum.qualified }}::{{ v.value }})
 {% endfor %}
-        .end();
+        ;
 {% endfor %}
 
 {% endif %}
@@ -68,7 +68,7 @@ void EnsureCoreReflectionRegistered() {
     registered = true;
 {% for comp in components %}
 {% if comp.conditional is defined %}
-#if defined({{ comp.conditional }})
+#if {{ comp.conditional }}
 {% endif %}
     Register{{ comp.name | replace("Component", "") }}();
 {% if comp.conditional is defined %}
