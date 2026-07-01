@@ -150,7 +150,9 @@ static int L_DsslApplyMaterial(lua_State* L) {
     auto* mesh = helper::TryGetComponent<dse::MeshRendererComponent>(*world, e);
     if (!mesh) return 0;
 
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(mat_id);
+    auto* loader = GetDSSL();
+    if (!loader) return 0;
+    auto inst = loader->GetInstance(mat_id);
     if (!inst) return 0;
 
     // 映射 DSSL 材质到 MeshRendererComponent 字段

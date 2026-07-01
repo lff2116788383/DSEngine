@@ -9,6 +9,7 @@
 #endif
 #include "engine/render/material/dssl_material_loader.h"
 #include "engine/scripting/lua/lua_debugger.h"
+#include "engine/diagnostics/crash_handler.h"
 
 namespace dse {
 namespace core {
@@ -30,6 +31,10 @@ void RegisterEngineSingletons() {
     auto dbg_ptr = std::shared_ptr<scripting::LuaDebugger>(
         &scripting::LuaDebugger::Instance(), [](scripting::LuaDebugger*) {});
     sl.Register<scripting::LuaDebugger, scripting::LuaDebugger>(dbg_ptr);
+
+    auto crash_ptr = std::shared_ptr<diagnostics::CrashReporter>(
+        &diagnostics::CrashReporter::Instance(), [](diagnostics::CrashReporter*) {});
+    sl.Register<diagnostics::CrashReporter, diagnostics::CrashReporter>(crash_ptr);
 }
 
 void UnregisterEngineSingletons() {
@@ -39,6 +44,7 @@ void UnregisterEngineSingletons() {
 #endif
     sl.Reset<render::DSSLMaterialLoader>();
     sl.Reset<scripting::LuaDebugger>();
+    sl.Reset<diagnostics::CrashReporter>();
 }
 
 } // namespace core
