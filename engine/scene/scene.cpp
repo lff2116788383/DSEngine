@@ -144,6 +144,14 @@ bool Scene::Serialize(const std::string& filepath) {
             components.AddMember("ScriptComponent", script_json, allocator);
         }
 
+        if (world.registry().all_of<CSharpScriptComponent>(entity)) {
+            const auto& cs = world.registry().get<CSharpScriptComponent>(entity);
+            rapidjson::Value cs_json(rapidjson::kObjectType);
+            cs_json.AddMember("class_name", rapidjson::Value(cs.class_name.c_str(), allocator), allocator);
+            cs_json.AddMember("enabled", cs.enabled, allocator);
+            components.AddMember("CSharpScriptComponent", cs_json, allocator);
+        }
+
         if (world.registry().all_of<dse::MeshRendererComponent>(entity)) {
             const auto& mesh = world.registry().get<dse::MeshRendererComponent>(entity);
             rapidjson::Value mesh_json(rapidjson::kObjectType);
@@ -433,6 +441,18 @@ bool Scene::Deserialize(const std::string& filepath) {
                 script.enabled = script_json["enabled"].GetBool();
             }
             world.registry().emplace<ScriptComponent>(entity, script);
+        }
+
+        if (components.HasMember("CSharpScriptComponent") && components["CSharpScriptComponent"].IsObject()) {
+            const auto& cs_json = components["CSharpScriptComponent"];
+            CSharpScriptComponent cs;
+            if (cs_json.HasMember("class_name") && cs_json["class_name"].IsString()) {
+                cs.class_name = cs_json["class_name"].GetString();
+            }
+            if (cs_json.HasMember("enabled") && cs_json["enabled"].IsBool()) {
+                cs.enabled = cs_json["enabled"].GetBool();
+            }
+            world.registry().emplace<CSharpScriptComponent>(entity, cs);
         }
 
         if (components.HasMember("MeshRendererComponent") && components["MeshRendererComponent"].IsObject()) {
@@ -946,6 +966,14 @@ bool SaveEntityAsPrefab(World& world, Entity entity, const std::string& filepath
             components.AddMember("ScriptComponent", script_json, allocator);
         }
 
+        if (world.registry().all_of<CSharpScriptComponent>(current)) {
+            const auto& cs = world.registry().get<CSharpScriptComponent>(current);
+            rapidjson::Value cs_json(rapidjson::kObjectType);
+            cs_json.AddMember("class_name", rapidjson::Value(cs.class_name.c_str(), allocator), allocator);
+            cs_json.AddMember("enabled", cs.enabled, allocator);
+            components.AddMember("CSharpScriptComponent", cs_json, allocator);
+        }
+
         if (world.registry().all_of<SpineRendererComponent>(current)) {
             const auto& spine = world.registry().get<SpineRendererComponent>(current);
             rapidjson::Value spine_json(rapidjson::kObjectType);
@@ -1051,6 +1079,19 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
         }
         return true;
     };
+    auto parse_csharp = [](const rapidjson::Value& components, CSharpScriptComponent& cs) {
+        if (!components.HasMember("CSharpScriptComponent") || !components["CSharpScriptComponent"].IsObject()) {
+            return false;
+        }
+        const auto& cs_json = components["CSharpScriptComponent"];
+        if (cs_json.HasMember("class_name") && cs_json["class_name"].IsString()) {
+            cs.class_name = cs_json["class_name"].GetString();
+        }
+        if (cs_json.HasMember("enabled") && cs_json["enabled"].IsBool()) {
+            cs.enabled = cs_json["enabled"].GetBool();
+        }
+        return true;
+    };
     auto parse_spine = [](const rapidjson::Value& components, SpineRendererComponent& spine) {
         if (!components.HasMember("SpineRendererComponent") || !components["SpineRendererComponent"].IsObject()) {
             return false;
@@ -1124,6 +1165,10 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
                 if (parse_script(components, script)) {
                     world.registry().emplace<ScriptComponent>(instance, script);
                 }
+                CSharpScriptComponent csharp;
+                if (parse_csharp(components, csharp)) {
+                    world.registry().emplace<CSharpScriptComponent>(instance, csharp);
+                }
                 SpineRendererComponent spine;
                 if (parse_spine(components, spine)) {
                     world.registry().emplace<SpineRendererComponent>(instance, spine);
@@ -1186,6 +1231,10 @@ Entity InstantiatePrefab(World& world, const std::string& filepath, const Prefab
     ScriptComponent script;
     if (parse_script(components, script)) {
         world.registry().emplace<ScriptComponent>(entity, script);
+    }
+    CSharpScriptComponent csharp;
+    if (parse_csharp(components, csharp)) {
+        world.registry().emplace<CSharpScriptComponent>(entity, csharp);
     }
     SpineRendererComponent spine;
     if (parse_spine(components, spine)) {

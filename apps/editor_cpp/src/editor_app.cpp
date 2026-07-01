@@ -82,6 +82,7 @@
 #include "editor_audio_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_lua_console.h"
+#include "editor_csharp_panel.h"
 #include "editor_lua_debugger.h"
 #include "editor_build_game.h"
 #include "editor_project.h"
@@ -1122,7 +1123,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_anim_state_machine_,
         &show_lua_debugger_,
         &show_streaming_debug_, &show_curve_editor_, &show_visual_script_,
-        &show_anim_retarget_
+        &show_anim_retarget_, &show_csharp_panel_
     };
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
 
@@ -1155,6 +1156,13 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     if (show_vegetation_brush_) dse::editor::DrawVegetationEditorPanel(ctx);
     if (show_lua_console_)    dse::editor::DrawLuaConsolePanel();
     if (show_lua_debugger_)   dse::editor::DrawLuaDebuggerPanel(ctx);
+    if (show_csharp_panel_) {
+        ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("C# Scripts", &show_csharp_panel_)) {
+            dse::editor::DrawCSharpPanel(ctx);
+        }
+        ImGui::End();
+    }
     dse::editor::DrawBuildGameDialog();
     dse::editor::DrawAssetImporterDialog(ctx);
 

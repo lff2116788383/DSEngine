@@ -41,6 +41,7 @@
 #include "editor_audio_panel.h"
 #include "editor_prefab_override.h"
 #include "editor_entity_snapshot.h"   // EntitySnapshot（单实体组件抓取/补回）
+#include "editor_csharp_panel.h"
 
 namespace dse::editor {
 
@@ -1915,6 +1916,11 @@ void RegisterAllInspectorSections() {
         [](entt::registry& r, entt::entity e) { if (!r.all_of<ScriptComponent>(e)) r.emplace<ScriptComponent>(e); },
         15,
         [](entt::registry& r, entt::entity e) { if (r.all_of<ScriptComponent>(e)) r.erase<ScriptComponent>(e); }});
+    reg.Register({"C# Script", "Script", DrawCSharpScriptSection,
+        [](entt::registry& r, entt::entity e) { return r.all_of<CSharpScriptComponent>(e); },
+        [](entt::registry& r, entt::entity e) { if (!r.all_of<CSharpScriptComponent>(e)) r.emplace<CSharpScriptComponent>(e); },
+        16,
+        [](entt::registry& r, entt::entity e) { if (r.all_of<CSharpScriptComponent>(e)) r.erase<CSharpScriptComponent>(e); }});
 
     // --- UI ---
     reg.Register({"UI Label", "UI", DrawUILabelSection,
