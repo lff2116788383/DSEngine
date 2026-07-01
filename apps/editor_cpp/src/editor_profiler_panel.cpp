@@ -261,6 +261,36 @@ void DrawProfilerPanel(EditorContext& context) {
         }
     }
 
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    if (ImGui::CollapsingHeader("Virtual Geometry (Experimental)")) {
+        auto* vg_cfg = context.vg_config;
+        if (vg_cfg) {
+            ImGui::Checkbox("Enabled", &vg_cfg->enabled);
+            if (vg_cfg->enabled) {
+                ImGui::Indent();
+                ImGui::Checkbox("Software Rasterizer", &vg_cfg->enable_software_rasterizer);
+                ImGui::SliderFloat("SW Raster Threshold (px)", &vg_cfg->software_raster_threshold, 1.0f, 128.0f);
+                ImGui::Checkbox("Visibility Buffer", &vg_cfg->enable_visibility_buffer);
+                ImGui::Checkbox("Cluster Streaming", &vg_cfg->enable_cluster_streaming);
+                int vram_mb = static_cast<int>(vg_cfg->vram_budget_mb);
+                if (ImGui::SliderInt("VRAM Budget (MB)", &vram_mb, 64, 4096)) {
+                    vg_cfg->vram_budget_mb = static_cast<uint32_t>(vram_mb);
+                }
+                ImGui::SliderFloat("LOD Error Threshold", &vg_cfg->lod_error_threshold, 0.1f, 8.0f);
+                ImGui::Separator();
+                ImGui::Text("Debug");
+                ImGui::Checkbox("Draw Clusters", &vg_cfg->debug_draw_clusters);
+                ImGui::Checkbox("Freeze LOD", &vg_cfg->debug_freeze_lod);
+                ImGui::Checkbox("Force SW Raster", &vg_cfg->debug_force_software_raster);
+                ImGui::Checkbox("Show VisBuffer", &vg_cfg->debug_show_visibility_buffer);
+                ImGui::Unindent();
+            }
+        } else {
+            ImGui::TextDisabled("VG renderer not initialized");
+        }
+    }
+#endif
+
     ImGui::End();
 }
 

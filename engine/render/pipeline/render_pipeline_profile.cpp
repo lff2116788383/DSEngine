@@ -2,6 +2,9 @@
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/passes/atmosphere_sky_pass.h"
 #include "engine/render/meshlet/meshlet_render_pass.h"
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+#include "engine/render/virtual_geometry/virtual_geometry_pass.h"
+#endif
 
 #include <algorithm>
 #include <cstdlib>
@@ -57,10 +60,17 @@ std::vector<RenderPipelinePassConfig> DefaultPassList() {
         Pass("point_shadow"),
         Pass("gpu_cull"),
         Pass("meshlet_cull"),
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+        Pass("vg_cull"),
+        Pass("vg_sw_raster"),
+#endif
         Pass("rsm"),
         Pass("ddgi_update"),
         Pass("forward_scene"),
         Pass("meshlet_draw"),
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+        Pass("vg_resolve"),
+#endif
         Pass("atmosphere_sky"),
         Pass("wboit"),
         Pass("water"),
@@ -288,6 +298,11 @@ const RenderPipelineRegistry& BuiltinRenderPipelineRegistry() {
         RegisterBuiltin<GPUCullPass>(r, {"gpu_cull", false, false, false, true, true, true});
         RegisterBuiltin<MeshletCullRenderPass>(r, {"meshlet_cull", false, false, true, false, true, true});
         RegisterBuiltin<MeshletDrawRenderPass>(r, {"meshlet_draw"});
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+        RegisterBuiltin<vg::VGCullPass>(r, {"vg_cull", false, false, true, false, true, true});
+        RegisterBuiltin<vg::VGRasterPass>(r, {"vg_sw_raster", false, false, false, false, true});
+        RegisterBuiltin<vg::VGResolvePass>(r, {"vg_resolve"});
+#endif
         RegisterBuiltin<RSMRenderPass>(r, {"rsm"});
         RegisterBuiltin<DDGIUpdatePass>(r, {"ddgi_update"});
         RegisterBuiltin<AtmosphereSkyPass>(r, {"atmosphere_sky"});

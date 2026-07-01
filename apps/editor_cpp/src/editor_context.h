@@ -6,6 +6,9 @@
 #include "engine/profiler/cpu_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 #include "engine/profiler/render_profiler.h"
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+#include "engine/render/virtual_geometry/virtual_geometry_config.h"
+#endif
 
 class World;
 
@@ -47,6 +50,10 @@ struct EditorContext {
     // 经此发往现有工具，统一撤销栈、消除"面板直接改 registry"的双写。
     // 可空：自动化/测试等无门面场景退回原有直写路径。
     core::CommandBus* command_bus = nullptr;
+
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    dse::render::vg::VirtualGeometryConfig* vg_config = nullptr;
+#endif
 };
 
 } // namespace dse::editor

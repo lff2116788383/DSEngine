@@ -19,7 +19,6 @@
 
 #include "engine/render/passes/render_pass_interface.h"
 #include "engine/render/passes/render_pass_context.h"
-#include "engine/render/virtual_geometry/virtual_geometry_renderer.h"
 #include <memory>
 
 namespace dse {
@@ -27,54 +26,60 @@ namespace render {
 
 class RenderGraph;
 class CommandBuffer;
+class RhiDevice;
 
 namespace vg {
+
+class VirtualGeometryRenderer;
 
 /// Compute pass: LOD selection + cluster frustum/occlusion culling
 class VGCullPass : public IRenderPass {
 public:
-    explicit VGCullPass(RenderPassContext& ctx, VirtualGeometryRenderer& renderer)
-        : ctx_(ctx), renderer_(renderer) {}
+    explicit VGCullPass(RenderPassContext& ctx)
+        : ctx_(ctx) {}
 
     void Setup(RenderGraph& graph) override;
     void Execute(CommandBuffer& cmd_buffer) override;
     const char* GetName() const override { return "vg_cull"; }
+    void InitShaders(RhiDevice* rhi);
 
 private:
+    VirtualGeometryRenderer* GetRenderer() const;
     RenderPassContext& ctx_;
-    VirtualGeometryRenderer& renderer_;
     bool shader_compiled_ = false;
 };
 
 /// Compute pass: software rasterization → VisBuffer
 class VGRasterPass : public IRenderPass {
 public:
-    explicit VGRasterPass(RenderPassContext& ctx, VirtualGeometryRenderer& renderer)
-        : ctx_(ctx), renderer_(renderer) {}
+    explicit VGRasterPass(RenderPassContext& ctx)
+        : ctx_(ctx) {}
 
     void Setup(RenderGraph& graph) override;
     void Execute(CommandBuffer& cmd_buffer) override;
     const char* GetName() const override { return "vg_sw_raster"; }
+    void InitShaders(RhiDevice* rhi);
 
 private:
+    VirtualGeometryRenderer* GetRenderer() const;
     RenderPassContext& ctx_;
-    VirtualGeometryRenderer& renderer_;
     bool shader_compiled_ = false;
 };
 
 /// Full-screen pass: VisBuffer resolve → GBuffer output
 class VGResolvePass : public IRenderPass {
 public:
-    explicit VGResolvePass(RenderPassContext& ctx, VirtualGeometryRenderer& renderer)
-        : ctx_(ctx), renderer_(renderer) {}
+    explicit VGResolvePass(RenderPassContext& ctx)
+        : ctx_(ctx) {}
 
     void Setup(RenderGraph& graph) override;
     void Execute(CommandBuffer& cmd_buffer) override;
     const char* GetName() const override { return "vg_resolve"; }
+    void InitShaders(RhiDevice* rhi);
 
 private:
+    VirtualGeometryRenderer* GetRenderer() const;
     RenderPassContext& ctx_;
-    VirtualGeometryRenderer& renderer_;
     bool shader_compiled_ = false;
 };
 

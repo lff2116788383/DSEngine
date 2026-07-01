@@ -219,6 +219,38 @@ struct RenderPassContext {
     int meshlet_total_clusters = 0;                  ///< 本帧总 cluster 数
     int meshlet_visible_clusters = 0;                ///< 本帧可见 cluster 数
     BufferHandle meshlet_material_ssbo;              ///< per-meshlet 材质索引 SSBO
+
+#ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
+    // === Virtual Geometry (Nanite-style) ===
+    void* vg_renderer = nullptr;                      ///< VirtualGeometryRenderer* (type-erased to avoid header dep)
+    bool vg_enabled = false;                          ///< VG 管线是否激活（运行时开关）
+    bool vg_active_this_frame = false;                ///< 本帧是否有 VG draw
+    BufferHandle vg_dag_node_ssbo;                    ///< DAGNodeGPU[] SSBO
+    BufferHandle vg_cluster_data_ssbo;                ///< ClusterGPU[] SSBO
+    BufferHandle vg_draw_cmd_ssbo;                    ///< MeshletDrawCommand[] indirect draw SSBO
+    BufferHandle vg_selected_cluster_ssbo;            ///< Selected cluster indices SSBO
+    BufferHandle vg_expansion_ssbo;                   ///< DAG expansion list SSBO
+    BufferHandle vg_atomic_counter_ssbo;              ///< Atomic counters (selected_count, expansion_count)
+    BufferHandle vg_raster_class_ssbo;                ///< Per-cluster raster class (0=HW, 1=SW)
+    BufferHandle vg_sw_triangle_ssbo;                 ///< SWRasterTriangle[] SSBO
+    BufferHandle vg_visbuf_ssbo;                      ///< VisBuffer uvec2[] SSBO
+    BufferHandle vg_vertex_data_ssbo;                 ///< VGVertexData[] for resolve
+    BufferHandle vg_index_data_ssbo;                  ///< Index buffer for resolve
+    BufferHandle vg_material_ssbo;                    ///< VGMaterialEntry[] for resolve
+    unsigned int vg_lod_select_shader = 0;            ///< vg_lod_select.comp
+    unsigned int vg_cluster_cull_shader = 0;          ///< vg_cluster_cull.comp
+    unsigned int vg_sw_raster_shader = 0;             ///< vg_sw_raster.comp
+    unsigned int vg_resolve_program = 0;              ///< vg_resolve.vert + vg_resolve.frag
+    unsigned int vg_resolve_pso = 0;                  ///< PSO for resolve pass
+    int vg_dag_node_count = 0;
+    int vg_cluster_count = 0;
+    int vg_selected_count = 0;
+    int vg_hw_draw_count = 0;
+    int vg_sw_triangle_count = 0;
+    VertexArrayHandle vg_mega_vao;
+    BufferHandle vg_mega_vbo;
+    BufferHandle vg_mega_ibo;
+#endif
 };
 
 } // namespace render
