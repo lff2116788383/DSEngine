@@ -1,10 +1,12 @@
 /**
  * @file byte_stream.h
- * @brief 网络复制用的最小字节级读写器（MVP）。
+ * @brief 网络复制用的最小字节级读写器。
  *
  * 字节对齐、小端序的 POD 序列化，区别于场景存档的 rapidjson（可读但体积大）。
- * MVP 阶段不做位级量化/压缩（见 NETWORK_LAYER_DESIGN.md §4.10、§8 Phase 进阶）；
  * 当前所有目标平台（x86/ARM 桌面与 Android）均为小端，故直接按内存布局写读。
+ *
+ * [B4 优化] 内部缓冲区使用 DseVector<uint8_t, MemoryTag::Net>，分配计入网络子系统
+ * 内存标签追踪与预算视图，与内存管理子系统对齐。
  */
 #ifndef DSE_NET_SERIALIZE_BYTE_STREAM_H
 #define DSE_NET_SERIALIZE_BYTE_STREAM_H
@@ -12,11 +14,12 @@
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
-#include <vector>
+
+#include "engine/core/memory/stl_allocator.h"
 
 namespace dse::net {
 
-/** 追加式字节写入器。 */
+/** 追加式字节写入器（分配归入 MemoryTag::Net）。 */
 class ByteWriter {
 public:
     void WriteU8(uint8_t v)   { buf_.push_back(v); }
@@ -30,12 +33,15 @@ public:
     size_t         size() const { return buf_.size(); }
     void           clear()      { buf_.clear(); }
 
+    /// 预留容量，减少重分配（如已知快照上限大小时使用）。
+    void Reserve(size_t n)      { buf_.reserve(n); }
+
 private:
     void Append(const void* p, size_t n) {
         const uint8_t* b = static_cast<const uint8_t*>(p);
         buf_.insert(buf_.end(), b, b + n);
     }
-    std::vector<uint8_t> buf_;
+    core::DseVector<uint8_t, core::MemoryTag::Net> buf_;
 };
 
 /** 只读字节读取器，越界时置 ok=false（调用方应在解析后检查）。 */

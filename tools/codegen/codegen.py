@@ -22,6 +22,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from copy import deepcopy
 
 # 控制台可能为非 UTF-8 编码（如 Windows cp1252），统一输出编码避免摘要打印崩溃。
 for _stream in (sys.stdout, sys.stderr):
@@ -48,6 +49,108 @@ def write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
     if not dry_run:
         path.write_text(content, encoding="utf-8")
     return True
+
+
+# ── Replication Codec preprocessing ──────────────────────────────────────────
+
+# 可复制的字段类型（字符串不走高频复制路径）
+_REPL_TYPES = {"float", "int", "bool", "vec3", "vec4", "euler_quat"}
+
+
+def _field_write_code(f: dict) -> str:
+    """生成 ByteWriter 写入代码（缩进 4 空格）。"""
+    n = f["name"]
+    t = f["type"]
+    if t == "float":
+        return f"    w.WriteF32(c.{n});"
+    elif t == "int":
+        return f"    w.WriteU32(static_cast<uint32_t>(c.{n}));"
+    elif t == "bool":
+        return f"    w.WriteU8(c.{n} ? 1 : 0);"
+    elif t == "vec3":
+        return f"    w.WriteF32(c.{n}.x); w.WriteF32(c.{n}.y); w.WriteF32(c.{n}.z);"
+    elif t in ("vec4", "euler_quat"):
+        return f"    w.WriteF32(c.{n}.x); w.WriteF32(c.{n}.y); w.WriteF32(c.{n}.z); w.WriteF32(c.{n}.w);"
+    return ""
+
+
+def _field_write_inline(f: dict) -> str:
+    """单行写入（用于 delta 分支内）。"""
+    return _field_write_code(f).strip()
+
+
+def _field_read_code(f: dict) -> str:
+    """生成 ByteReader 读取代码（缩进 4 空格）。"""
+    n = f["name"]
+    t = f["type"]
+    if t == "float":
+        return f"    c.{n} = r.ReadF32();"
+    elif t == "int":
+        return f"    c.{n} = static_cast<int>(r.ReadU32());"
+    elif t == "bool":
+        return f"    c.{n} = r.ReadU8() != 0;"
+    elif t == "vec3":
+        return f"    c.{n}.x = r.ReadF32(); c.{n}.y = r.ReadF32(); c.{n}.z = r.ReadF32();"
+    elif t in ("vec4", "euler_quat"):
+        return f"    c.{n}.x = r.ReadF32(); c.{n}.y = r.ReadF32(); c.{n}.z = r.ReadF32(); c.{n}.w = r.ReadF32();"
+    return ""
+
+
+def _field_read_inline(f: dict) -> str:
+    """单行读取。"""
+    return _field_read_code(f).strip()
+
+
+def _field_diff_expr(f: dict) -> str:
+    """生成比较表达式。"""
+    n = f["name"]
+    t = f["type"]
+    if t in ("float", "int", "bool"):
+        return f"cur.{n} != base.{n}"
+    elif t == "vec3":
+        return f"cur.{n}.x != base.{n}.x || cur.{n}.y != base.{n}.y || cur.{n}.z != base.{n}.z"
+    elif t in ("vec4", "euler_quat"):
+        return (f"cur.{n}.x != base.{n}.x || cur.{n}.y != base.{n}.y || "
+                f"cur.{n}.z != base.{n}.z || cur.{n}.w != base.{n}.w")
+    return "false"
+
+
+def preprocess_repl_components(components: list) -> list:
+    """为复制层模板预处理组件数据，添加 repl_fields / qualified_name 等字段。"""
+    result = []
+    for comp in components:
+        c = deepcopy(comp)
+        # 过滤出可复制字段
+        repl_fields = []
+        for f in c.get("fields", []):
+            if f["type"] in _REPL_TYPES:
+                repl_fields.append({
+                    "name": f["name"],
+                    "type": f["type"],
+                    "write_code": _field_write_code(f),
+                    "write_code_inline": _field_write_inline(f),
+                    "read_code": _field_read_code(f),
+                    "read_code_inline": _field_read_inline(f),
+                    "diff_expr": _field_diff_expr(f),
+                })
+        c["repl_fields"] = repl_fields
+        # All mask
+        if repl_fields:
+            c["repl_all_mask"] = hex((1 << len(repl_fields)) - 1)
+        else:
+            c["repl_all_mask"] = "0x0"
+        # Qualified C++ name
+        ns = c.get("namespace", "")
+        c["qualified_name"] = f"{ns}::{c['name']}" if ns else c["name"]
+        # dirty flag
+        dirty = None
+        for f in c.get("fields", []):
+            if "dirty_flag" in f:
+                dirty = f["dirty_flag"]
+                break
+        c["dirty_flag"] = dirty
+        result.append(c)
+    return result
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -121,6 +224,15 @@ def main():
         "csharp_native.cs.j2",
         "GameScripts/DSEngine.Runtime/Generated/Native.gen.cs",
         components=components,
+    )
+
+    # ── repl_codec.gen.h ─────────────────────────────────────────────────────
+    # 复制层统一编解码 — 由 binding_defs.json 单一数据源驱动，消除双序列化漂移。
+    repl_components = preprocess_repl_components(components)
+    render(
+        "repl_codec.gen.h.j2",
+        "engine/net/replication/repl_codec.gen.h",
+        components=repl_components,
     )
 
     # ── 输出摘要 ──────────────────────────────────────────────────────────────

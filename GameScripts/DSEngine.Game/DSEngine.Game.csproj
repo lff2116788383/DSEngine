@@ -9,5 +9,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DSEngine.Runtime\DSEngine.Runtime.csproj" />
+    <ProjectReference Include="..\DSEngine.SourceGenerators\DSEngine.SourceGenerators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

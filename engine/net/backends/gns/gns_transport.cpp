@@ -1,11 +1,16 @@
 // DSEngine 网络层 — GameNetworkingSockets 后端实现。
 // 本文件是整个引擎中**唯一** include <steam/...> 的位置。
+//
+// [A3 架构优化] 实例级回调路由：通过静态连接注册表将 GNS 进程级回调派发到
+// 正确的 GnsTransport 实例，支持同进程多 transport 并存（多世界/并行测试）。
 #include "engine/net/net_transport.h"
 
 #include <steam/steamnetworkingsockets.h>
 #include <steam/isteamnetworkingutils.h>
 
 #include <cstring>
+#include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace dse::net {
@@ -19,37 +24,70 @@ CloseReason MapCloseState(int eState) {
     }
 }
 
-// GNS 的 SteamNetworkingIPAddr → 与后端无关的 Address。
 Address MapAddr(const SteamNetworkingIPAddr& a) {
     char buf[64] = {0};
-    a.ToString(buf, sizeof(buf), false);  // 仅主机，不拼端口
+    a.ToString(buf, sizeof(buf), false);
     return Address{std::string(buf), a.m_port};
+}
+
+// ── Instance Registry ────────────────────────────────────────────────────────
+// 替代旧的 s_active 全局指针。每个 GnsTransport 实例在 Init 时注册，Shutdown 时移除。
+// 通过连接句柄或监听 socket 反查所属实例，支持多 transport 并存。
+
+class GnsTransport;
+
+struct GnsRegistry {
+    std::mutex                                          mtx;
+    std::unordered_map<HSteamListenSocket, GnsTransport*> listen_map;
+    std::unordered_map<HSteamNetConnection, GnsTransport*> conn_map;
+    int                                                 ref_count = 0;  // GNS init 引用计数
+};
+
+static GnsRegistry& Registry() {
+    static GnsRegistry reg;
+    return reg;
 }
 
 } // namespace
 
-// 单实例后端：GNS 的连接状态回调是进程级的，这里用 s_active 路由到当前实例。
 class GnsTransport final : public INetTransport {
 public:
     bool Init(const NetConfig& cfg) override {
-        SteamNetworkingErrMsg errMsg;
-        if (!GameNetworkingSockets_Init(nullptr, errMsg)) {
-            return false;
+        auto& reg = Registry();
+        std::lock_guard lock(reg.mtx);
+
+        // 引用计数式 GNS 初始化（多实例共享同一底层库）
+        if (reg.ref_count == 0) {
+            SteamNetworkingErrMsg errMsg;
+            if (!GameNetworkingSockets_Init(nullptr, errMsg)) {
+                return false;
+            }
+            SteamNetworkingUtils()->SetGlobalCallback_SteamNetConnectionStatusChanged(
+                &GnsTransport::OnStatusChangedStatic);
         }
+        ++reg.ref_count;
+
         m_iface = SteamNetworkingSockets();
         if (!m_iface) return false;
         m_pollGroup = m_iface->CreatePollGroup();
-        s_active = this;
-        SteamNetworkingUtils()->SetGlobalCallback_SteamNetConnectionStatusChanged(&GnsTransport::OnStatusChangedStatic);
         (void)cfg;
         return true;
     }
 
     void Shutdown() override {
         if (!m_iface) return;
-        for (auto c : m_conns) m_iface->CloseConnection(c, 0, "shutdown", false);
+
+        auto& reg = Registry();
+        std::lock_guard lock(reg.mtx);
+
+        for (auto c : m_conns) {
+            m_iface->CloseConnection(c, 0, "shutdown", false);
+            reg.conn_map.erase(c);
+        }
         m_conns.clear();
+
         if (m_listenSocket != k_HSteamListenSocket_Invalid) {
+            reg.listen_map.erase(m_listenSocket);
             m_iface->CloseListenSocket(m_listenSocket);
             m_listenSocket = k_HSteamListenSocket_Invalid;
         }
@@ -57,17 +95,26 @@ public:
             m_iface->DestroyPollGroup(m_pollGroup);
             m_pollGroup = k_HSteamNetPollGroup_Invalid;
         }
-        s_active = nullptr;
+
+        --reg.ref_count;
+        if (reg.ref_count <= 0) {
+            reg.ref_count = 0;
+            GameNetworkingSockets_Kill();
+        }
         m_iface = nullptr;
-        GameNetworkingSockets_Kill();
     }
 
     bool Listen(uint16_t port) override {
         SteamNetworkingIPAddr addr;
         addr.Clear();
-        addr.m_port = port;  // 监听所有接口的该端口
+        addr.m_port = port;
         m_listenSocket = m_iface->CreateListenSocketIP(addr, 0, nullptr);
-        return m_listenSocket != k_HSteamListenSocket_Invalid;
+        if (m_listenSocket == k_HSteamListenSocket_Invalid) return false;
+
+        auto& reg = Registry();
+        std::lock_guard lock(reg.mtx);
+        reg.listen_map[m_listenSocket] = this;
+        return true;
     }
 
     ConnectionId Connect(const Address& a) override {
@@ -78,14 +125,22 @@ public:
         HSteamNetConnection c = m_iface->ConnectByIPAddress(addr, 0, nullptr);
         if (c == k_HSteamNetConnection_Invalid) return kInvalidConnection;
         m_iface->SetConnectionPollGroup(c, m_pollGroup);
+
+        auto& reg = Registry();
+        std::lock_guard lock(reg.mtx);
         m_conns.insert(c);
+        reg.conn_map[c] = this;
         return static_cast<ConnectionId>(c);
     }
 
     void Close(ConnectionId conn, CloseReason /*reason*/) override {
         auto c = static_cast<HSteamNetConnection>(conn);
         m_iface->CloseConnection(c, 0, "close", false);
+
+        auto& reg = Registry();
+        std::lock_guard lock(reg.mtx);
         m_conns.erase(c);
+        reg.conn_map.erase(c);
     }
 
     bool ConfigureLanes(ConnectionId conn, const LaneConfig& cfg) override {
@@ -107,7 +162,6 @@ public:
                 static_cast<HSteamNetConnection>(conn), data, static_cast<uint32>(len), flags, nullptr);
             return r == k_EResultOK;
         }
-        // 非 0 通道：SendMessageToConnection 不接受 lane，需走 AllocateMessage + SendMessages。
         SteamNetworkingMessage_t* msg = SteamNetworkingUtils()->AllocateMessage(static_cast<int>(len));
         if (!msg) return false;
         std::memcpy(msg->m_pData, data, len);
@@ -116,7 +170,7 @@ public:
         msg->m_idxLane = lane;
         int64 result = 0;
         m_iface->SendMessages(1, &msg, &result, /*bDeleteFailedMessages=*/true);
-        return result > 0;  // 正数=消息编号（成功）；负数=EResult 错误
+        return result > 0;
     }
 
     void Flush(ConnectionId conn) override {
@@ -125,9 +179,8 @@ public:
 
     void Poll(INetListener& listener) override {
         m_listener = &listener;
-        m_iface->RunCallbacks();  // 触发连接状态回调（经 s_active 路由）
+        m_iface->RunCallbacks();
 
-        // 收消息（服务端与客户端连接统一加入同一 poll group）
         for (;;) {
             ISteamNetworkingMessage* msgs[16];
             int n = m_iface->ReceiveMessagesOnPollGroup(m_pollGroup, msgs, 16);
@@ -163,11 +216,13 @@ private:
         HSteamNetConnection c = info->m_hConn;
         switch (info->m_info.m_eState) {
             case k_ESteamNetworkingConnectionState_Connecting:
-                // 服务端：来自监听 socket 的入站连接 → 接受并入 poll group
                 if (info->m_info.m_hListenSocket != k_HSteamListenSocket_Invalid) {
                     m_iface->AcceptConnection(c);
                     m_iface->SetConnectionPollGroup(c, m_pollGroup);
+                    auto& reg = Registry();
+                    std::lock_guard lock(reg.mtx);
                     m_conns.insert(c);
+                    reg.conn_map[c] = this;
                 }
                 if (m_listener) m_listener->OnConnecting(static_cast<ConnectionId>(c),
                                                          MapAddr(info->m_info.m_addrRemote));
@@ -180,27 +235,45 @@ private:
                 if (m_listener) m_listener->OnClosed(static_cast<ConnectionId>(c),
                                                      MapCloseState(info->m_info.m_eState));
                 m_iface->CloseConnection(c, 0, nullptr, false);
-                m_conns.erase(c);
+                {
+                    auto& reg = Registry();
+                    std::lock_guard lock(reg.mtx);
+                    m_conns.erase(c);
+                    reg.conn_map.erase(c);
+                }
                 break;
             default:
                 break;
         }
     }
 
+    // 全局回调入口 — 通过注册表路由到正确的实例。
     static void OnStatusChangedStatic(SteamNetConnectionStatusChangedCallback_t* info) {
-        if (s_active) s_active->HandleStatus(info);
+        auto& reg = Registry();
+        GnsTransport* target = nullptr;
+        {
+            std::lock_guard lock(reg.mtx);
+            // 优先通过连接句柄查找（outgoing + 已注册 incoming）
+            auto it = reg.conn_map.find(info->m_hConn);
+            if (it != reg.conn_map.end()) {
+                target = it->second;
+            } else if (info->m_info.m_hListenSocket != k_HSteamListenSocket_Invalid) {
+                // 新入站连接：通过监听 socket 查找所属实例
+                auto lit = reg.listen_map.find(info->m_info.m_hListenSocket);
+                if (lit != reg.listen_map.end()) {
+                    target = lit->second;
+                }
+            }
+        }
+        if (target) target->HandleStatus(info);
     }
 
     ISteamNetworkingSockets* m_iface = nullptr;
     HSteamListenSocket  m_listenSocket = k_HSteamListenSocket_Invalid;
     HSteamNetPollGroup  m_pollGroup = k_HSteamNetPollGroup_Invalid;
     std::unordered_set<HSteamNetConnection> m_conns;
-    INetListener* m_listener = nullptr;  // 仅在 Poll() 期间有效
-
-    static GnsTransport* s_active;
+    INetListener* m_listener = nullptr;
 };
-
-GnsTransport* GnsTransport::s_active = nullptr;
 
 INetTransport* CreateGnsTransport() { return new GnsTransport(); }
 

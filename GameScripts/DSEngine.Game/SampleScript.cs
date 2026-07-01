@@ -4,8 +4,23 @@ namespace DSEngine.Game;
 
 /// <summary>
 /// Sample script demonstrating C# scripting in DSEngine.
+/// Must be declared partial for the source generator to emit Inspector metadata.
 /// </summary>
-public class SampleScript : DseScript {
+public partial class SampleScript : DseScript {
+    // ── Inspector-visible fields (auto-discovered by source generator) ────────
+    public float RotationSpeed = 45.0f;
+
+    [Range(0.1f, 10.0f)]
+    public float SpeedMultiplier = 1.0f;
+
+    public bool EnableRotation = true;
+
+    public Vector3 RotationAxis = new(0, 1, 0);
+
+    [HideInInspector]
+    public int InternalCounter;
+
+    // ── Private state ─────────────────────────────────────────────────────────
     private float _elapsed;
 
     public override void OnStart() {
@@ -17,10 +32,11 @@ public class SampleScript : DseScript {
     public override void OnUpdate(float dt) {
         _elapsed += dt;
 
-        // Rotate entity slowly around Y axis
+        if (!EnableRotation) return;
+
         var transform = Entity.Transform;
         var rotation = transform.Rotation;
-        rotation.Y += 45.0f * dt;
+        rotation.Y += RotationSpeed * SpeedMultiplier * dt;
         transform.Rotation = rotation;
     }
 
