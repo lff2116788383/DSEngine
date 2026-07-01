@@ -5,6 +5,7 @@
 
 #include "engine/scripting/lua/lua_runtime.h"
 #include "engine/scripting/lua/lua_debugger.h"
+#include "engine/core/service_locator.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
@@ -488,13 +489,13 @@ void ShutdownLuaRuntime() {
         state.script_instances.clear();
         // 必须在 lua_close 之前 detach：Detach() 会对 lua_State 调用 lua_sethook，
         // 若先 close 再 detach 则是对已释放的 lua_State 解引用（偶发访问越界）。
-        dse::scripting::LuaDebugger::Instance().Detach();
+        if (auto* dbg = dse::core::ServiceLocator::Instance().Get<dse::scripting::LuaDebugger>()) dbg->Detach();
         DEBUG_LOG_INFO("[LuaRuntime] lua_close state={}", static_cast<void*>(state.state));
         lua_close(state.state);
         state.state = nullptr;
         DEBUG_LOG_INFO("[LuaRuntime] lua_close complete");
     } else {
-        dse::scripting::LuaDebugger::Instance().Detach();
+        if (auto* dbg = dse::core::ServiceLocator::Instance().Get<dse::scripting::LuaDebugger>()) dbg->Detach();
     }
     state.lua_memory_usage = 0;
     state.awake_called = false;
@@ -578,7 +579,7 @@ bool BootstrapLuaRuntime() {
         lua_pop(state.state, 1);
     }
     DEBUG_LOG_INFO("Lua startup script loaded: {}", state.startup_script_path);
-    dse::scripting::LuaDebugger::Instance().Attach(state.state);
+    if (auto* dbg = dse::core::ServiceLocator::Instance().Get<dse::scripting::LuaDebugger>()) dbg->Attach(state.state);
     return true;
 }
 

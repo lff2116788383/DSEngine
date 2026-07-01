@@ -5,6 +5,7 @@
 #include "engine/render/material/dssl_material_instance.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/core/service_locator.h"
 
 extern "C" {
 #include "depends/lua/lua.h"
@@ -13,6 +14,10 @@ extern "C" {
 
 using namespace dse::render;
 using namespace dse::runtime::lua_binding;
+
+static DSSLMaterialLoader* GetDSSL() {
+    return dse::core::ServiceLocator::Instance().Get<DSSLMaterialLoader>();
+}
 
 // ============================================================================
 // dssl.load_material(path) → material_id
@@ -26,7 +31,9 @@ static int L_DsslLoadMaterial(lua_State* L) {
     std::string full_path = asset_mgr.ResolveAssetPath(resolved_path);
     if (full_path.empty()) full_path = resolved_path;
 
-    auto inst = DSSLMaterialLoader::Instance().LoadFromFile(full_path, &asset_mgr);
+    auto* dssl = GetDSSL();
+    if (!dssl) { lua_pushnil(L); return 1; }
+    auto inst = dssl->LoadFromFile(full_path, &asset_mgr);
     if (!inst) {
         lua_pushnil(L);
         return 1;
@@ -45,7 +52,9 @@ static int L_DsslCreateInstance(lua_State* L) {
     std::string full_path = asset_mgr.ResolveAssetPath(resolved_path);
     if (full_path.empty()) full_path = resolved_path;
 
-    auto inst = DSSLMaterialLoader::Instance().CreateInstance(full_path, &asset_mgr);
+    auto* dssl = GetDSSL();
+    if (!dssl) { lua_pushnil(L); return 1; }
+    auto inst = dssl->CreateInstance(full_path, &asset_mgr);
     if (!inst) {
         lua_pushnil(L);
         return 1;
@@ -61,7 +70,7 @@ static int L_DsslSetFloat(lua_State* L) {
     unsigned int id = static_cast<unsigned int>(luaL_checkinteger(L, 1));
     const char* name = luaL_checkstring(L, 2);
     float value = static_cast<float>(luaL_checknumber(L, 3));
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (inst) inst->SetFloat(name, value);
     return 0;
 }
@@ -76,7 +85,7 @@ static int L_DsslSetColor(lua_State* L) {
     float g = static_cast<float>(luaL_checknumber(L, 4));
     float b = static_cast<float>(luaL_checknumber(L, 5));
     float a = lua_gettop(L) >= 6 ? static_cast<float>(luaL_checknumber(L, 6)) : 1.0f;
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (inst) inst->SetVec4(name, glm::vec4(r, g, b, a));
     return 0;
 }
@@ -90,7 +99,7 @@ static int L_DsslSetVec3(lua_State* L) {
     float x = static_cast<float>(luaL_checknumber(L, 3));
     float y = static_cast<float>(luaL_checknumber(L, 4));
     float z = static_cast<float>(luaL_checknumber(L, 5));
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (inst) inst->SetVec3(name, glm::vec3(x, y, z));
     return 0;
 }
@@ -103,7 +112,7 @@ static int L_DsslSetTexture(lua_State* L) {
     const char* name = luaL_checkstring(L, 2);
     const char* tex_path = luaL_checkstring(L, 3);
 
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (!inst) return 0;
 
     auto& asset_mgr = GetAssetManager();
@@ -122,7 +131,7 @@ static int L_DsslSetTextureHandle(lua_State* L) {
     const char* name = luaL_checkstring(L, 2);
     unsigned int handle = static_cast<unsigned int>(luaL_checkinteger(L, 3));
 
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (inst) inst->SetTexture(name, handle);
     return 0;
 }
@@ -218,7 +227,7 @@ static int L_DsslApplyMaterial(lua_State* L) {
 static int L_DsslGetFloat(lua_State* L) {
     unsigned int id = static_cast<unsigned int>(luaL_checkinteger(L, 1));
     const char* name = luaL_checkstring(L, 2);
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     if (!inst) { lua_pushnumber(L, 0.0); return 1; }
     lua_pushnumber(L, inst->GetFloat(name));
     return 1;
@@ -230,7 +239,7 @@ static int L_DsslGetFloat(lua_State* L) {
 static int L_DsslGetColor(lua_State* L) {
     unsigned int id = static_cast<unsigned int>(luaL_checkinteger(L, 1));
     const char* name = luaL_checkstring(L, 2);
-    auto inst = DSSLMaterialLoader::Instance().GetInstance(id);
+    auto inst = GetDSSL() ? GetDSSL()->GetInstance(id) : nullptr;
     glm::vec4 v(0.0f);
     if (inst) v = inst->GetVec4(name);
     lua_pushnumber(L, v.r);

@@ -28,6 +28,7 @@
 #ifdef DSE_ENABLE_HTTP
 
 #include "engine/http/http_client.h"
+#include "engine/core/service_locator.h"
 
 #include <cstdio>
 #include <string>
@@ -64,8 +65,9 @@ dse::http::RequestId Submit(lua_State* L, const dse::http::Request& req, int cb_
         ref = luaL_ref(L, LUA_REGISTRYINDEX);       // 弹出并取得引用
     }
 
-    auto& client = dse::http::HttpClient::Instance();
-    return client.Send(req, [ref](const dse::http::Response& resp) {
+    auto* client = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>();
+    if (!client) return dse::http::kInvalidRequest;
+    return client->Send(req, [ref](const dse::http::Response& resp) {
         // 在主线程（Poll）上下文执行
         lua_State* L2 = g_lua;
         if (!L2) return;
@@ -181,7 +183,8 @@ int L_HttpPost(lua_State* L) {
 }
 
 int L_HttpUpdate(lua_State* L) {
-    int n = dse::http::HttpClient::Instance().Poll();
+    auto* client = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>();
+    int n = client ? client->Poll() : 0;
     lua_pushinteger(L, n);
     return 1;
 }
@@ -208,7 +211,9 @@ void RegisterHttpBindings(lua_State* L) {
 }
 
 void PumpHttp(lua_State* /*L*/) {
-    dse::http::HttpClient::Instance().Poll();
+    if (auto* client = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>()) {
+        client->Poll();
+    }
 }
 
 } // namespace dse::runtime::lua_binding

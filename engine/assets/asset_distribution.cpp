@@ -8,6 +8,7 @@
 #include "engine/assets/binary_patch.h"
 #ifdef DSE_ENABLE_HTTP
 #include "engine/http/http_client.h"
+#include "engine/core/service_locator.h"
 #endif
 
 #include <rapidjson/document.h>
@@ -367,7 +368,9 @@ void AssetDistribution::RequestDownload(const std::string& package_id) {
         bool is_patch = !patch_url.empty();
         std::string pkg_id = package_id;
 
-        dse::http::HttpClient::Instance().Get(download_url, {},
+        auto* http_client = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>();
+        if (!http_client) return;
+        http_client->Get(download_url, {},
             [this, pkg_id, is_patch](const dse::http::Response& resp) {
                 auto idx_it = package_index_.find(pkg_id);
                 if (idx_it == package_index_.end()) return;
@@ -463,7 +466,8 @@ void AssetDistribution::Tick(float dt) {
     bool http_active = false;
 #ifdef DSE_ENABLE_HTTP
     if (dse::http::HttpClient::Available()) {
-        dse::http::HttpClient::Instance().Poll();
+        if (auto* hc = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>())
+            hc->Poll();
         http_active = true;
     }
 #endif

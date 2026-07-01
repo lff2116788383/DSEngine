@@ -25,6 +25,7 @@
 #include "engine/core/job_system.h"
 #include "engine/core/memory/memory.h"
 #include "engine/core/service_locator.h"
+#include "engine/core/service_registration.h"
 #include "engine/core/event_bus.h"
 #include "engine/render/font/font_service.h"
 #include <utility>
@@ -274,6 +275,8 @@ void EngineInstance::RegisterRuntimeServices() {
     service_locator().BridgeTo<scene::SceneManager>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<dse::assets::LocalizationManager>(core::ServiceLocator::Instance());
     service_locator().BridgeTo<dse::render::FontService>(core::ServiceLocator::Instance());
+
+    core::RegisterEngineSingletons();
 }
 
 void EngineInstance::ResetRuntimeServices() {
@@ -294,6 +297,7 @@ void EngineInstance::ResetRuntimeServices() {
     core::ServiceLocator::Instance().Reset<FramePipeline>();
     core::ServiceLocator::Instance().Reset<World>();
     core::ServiceLocator::Instance().Reset<core::EventBus>();
+    core::UnregisterEngineSingletons();
     core::ServiceLocator::Instance().Reset<scene::SceneManager>();
 }
 
