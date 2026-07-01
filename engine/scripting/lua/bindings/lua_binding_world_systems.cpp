@@ -873,6 +873,11 @@ extern "C" int luaopen_dse_world_systems(lua_State* L) {
 // Namespace wrapper for DSE registry integration
 namespace dse::runtime::lua_binding {
 void RegisterWorldSystemsBindings(lua_State* L) {
+    static bool registered = false;
+    if (!registered) {
+        BindingCleanupRegistry::Instance().Register(ShutdownWorldSystemsBindings);
+        registered = true;
+    }
     luaopen_dse_world_systems(L);
 }
 

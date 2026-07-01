@@ -12,7 +12,27 @@ extern "C" {
 
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
 
+#include <vector>
+#include <functional>
+
 namespace dse::runtime::lua_binding {
+
+/// Centralized cleanup registry for Lua binding modules.
+/// Each binding with static state registers its cleanup callback here
+/// so LuaRuntime::Shutdown() can clear all state in one pass.
+class BindingCleanupRegistry {
+public:
+    static BindingCleanupRegistry& Instance() {
+        static BindingCleanupRegistry inst;
+        return inst;
+    }
+    void Register(std::function<void()> fn) { callbacks_.push_back(std::move(fn)); }
+    void RunAll() { for (auto& fn : callbacks_) fn(); }
+    void Clear()  { callbacks_.clear(); }
+private:
+    BindingCleanupRegistry() = default;
+    std::vector<std::function<void()>> callbacks_;
+};
 
 // 顶层模块注册
 void RegisterEcsBindings(lua_State* L);

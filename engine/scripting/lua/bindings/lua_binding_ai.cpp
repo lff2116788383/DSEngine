@@ -471,6 +471,11 @@ void ShutdownAIBindings() {
 }
 
 void RegisterAIBindings(lua_State* L) {
+    static bool registered = false;
+    if (!registered) {
+        BindingCleanupRegistry::Instance().Register(ShutdownAIBindings);
+        registered = true;
+    }
     lua_newtable(L);
 
     // Tree management

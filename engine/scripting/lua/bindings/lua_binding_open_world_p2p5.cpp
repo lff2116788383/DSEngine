@@ -317,6 +317,11 @@ void ShutdownOpenWorldP2P5Bindings() {
 }
 
 void RegisterOpenWorldP2P5Bindings(lua_State* L) {
+    static bool registered = false;
+    if (!registered) {
+        BindingCleanupRegistry::Instance().Register(ShutdownOpenWorldP2P5Bindings);
+        registered = true;
+    }
     // Expects dse table on top of stack
     lua_newtable(L);
     luaL_setfuncs(L, mesh_streaming_funcs, 0);

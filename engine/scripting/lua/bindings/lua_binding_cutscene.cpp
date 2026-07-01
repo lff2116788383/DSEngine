@@ -357,6 +357,11 @@ void ShutdownCutsceneBindings() {
 }
 
 void RegisterCutsceneBindings(lua_State* L) {
+    static bool registered = false;
+    if (!registered) {
+        BindingCleanupRegistry::Instance().Register(ShutdownCutsceneBindings);
+        registered = true;
+    }
     lua_newtable(L);
 
     // Player management

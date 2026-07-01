@@ -474,13 +474,8 @@ void ShutdownLuaRuntime() {
     state.shutting_down = true;
 
     // Release static singletons held by Lua binding modules BEFORE lua_close.
-    // These unique_ptr were previously leaked across hot-reload / scene transitions.
-    dse::runtime::lua_binding::ShutdownOpenWorldP2P5Bindings();
-    dse::runtime::lua_binding::ShutdownWorldSystemsBindings();
-    dse::runtime::lua_binding::ShutdownAIBindings();
-    dse::runtime::lua_binding::ShutdownCutsceneBindings();
-    dse::runtime::lua_binding::ShutdownVideoBindings();
-    dse::runtime::lua_binding::ShutdownMeshletBindings();
+    // Each binding registers its cleanup via BindingCleanupRegistry on first use.
+    dse::runtime::lua_binding::BindingCleanupRegistry::Instance().RunAll();
 
     if (state.state) {
         for (auto& pair : state.script_instances) {

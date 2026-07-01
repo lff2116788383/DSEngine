@@ -323,6 +323,11 @@ static const luaL_Reg meshlet_funcs[] = {
 } // anonymous namespace
 
 void RegisterMeshletBindings(lua_State* L) {
+    static bool registered = false;
+    if (!registered) {
+        BindingCleanupRegistry::Instance().Register(ShutdownMeshletBindings);
+        registered = true;
+    }
     lua_newtable(L);
     luaL_setfuncs(L, meshlet_funcs, 0);
     lua_setglobal(L, "meshlet");

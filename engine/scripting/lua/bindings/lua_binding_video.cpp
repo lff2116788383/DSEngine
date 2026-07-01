@@ -26,6 +26,7 @@ extern "C" {
 }
 
 #include "engine/video/video_player.h"
+#include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include <unordered_map>
 #include <cstdint>
 
@@ -218,6 +219,14 @@ static const luaL_Reg video_funcs[] = {
 } // anonymous namespace
 
 extern "C" int luaopen_dse_video(lua_State* L) {
+    {
+        static bool registered = false;
+        if (!registered) {
+            dse::runtime::lua_binding::BindingCleanupRegistry::Instance().Register(
+                dse::runtime::lua_binding::ShutdownVideoBindings);
+            registered = true;
+        }
+    }
     // Create dse table if not exists
     lua_getglobal(L, "dse");
     if (lua_isnil(L, -1)) {
