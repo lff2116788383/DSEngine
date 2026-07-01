@@ -14,6 +14,7 @@
 ```
 DSEngine.Runtime (net8.0)
 ├── Native              (internal) — 自动生成的 P/Invoke 声明层
+├── NativeRepl          (internal) — 网络复制层 P/Invoke 声明
 ├── Core/
 │   ├── Entity          — 实体句柄（轻量 struct，uint ID）
 │   ├── DseScript       — 用户脚本基类（类 MonoBehaviour）
@@ -22,10 +23,15 @@ DSEngine.Runtime (net8.0)
 ├── Math/
 │   ├── Vector3         — 三维向量（StructLayout.Sequential）
 │   └── Vector4         — 四维向量（StructLayout.Sequential）
-└── Components/
-    ├── Transform       — 位移/旋转/缩放
-    ├── Camera3D        — 摄像机参数
-    └── MeshRenderer    — 网格渲染材质属性
+├── Components/
+│   ├── Transform       — 位移/旋转/缩放
+│   ├── Camera3D        — 摄像机参数
+│   └── MeshRenderer    — 网格渲染材质属性
+└── Network/
+    ├── ReplicationServer — 服务器权威复制（delta/AOI/RPC）
+    ├── ReplicationClient — 客户端镜像（握手/快照/RPC）
+    ├── AoiPolicy        — AOI 策略枚举（Always/Distance）
+    └── RpcTarget        — RPC 目标枚举（Server/Client/Multicast）
 
 DSEngine.Game (net8.0) — 用户游戏脚本项目
 └── [用户 DseScript 子类]
@@ -46,6 +52,7 @@ DSEngine.Game (net8.0) — 用户游戏脚本项目
 9. [Callbacks / ScriptRegistry — 运行时管理](#9-callbacks--scriptregistry--运行时管理)
 10. [生命周期流程](#10-生命周期流程)
 11. [热重载机制](#11-热重载机制)
+12. [Network — 网络复制层](#12-network--网络复制层)
 
 ---
 
@@ -525,3 +532,171 @@ cmake --build out/build/windows-x64-debug --target dse_csharp_build
 
 > **设计哲学**：Lua 和 C# 共享同一套 C ABI 底层（400+ 导出函数），高层封装风格不同：
 > Lua 为函数式（`get_xxx(e)` / `set_xxx(e, v)`），C# 为面向对象（`entity.Component.Property`）。
+
+---
+
+## 12. Network — 网络复制层
+
+> 对应文件：`GameScripts/DSEngine.Runtime/Network/`
+> P/Invoke 声明：`NativeRepl.cs`（对应 C ABI `engine/net/repl_c_api.h`）
+> 需要 `DSE_ENABLE_NET=ON` 构建引擎
+
+### 12.1 AoiPolicy 枚举
+
+```csharp
+public enum AoiPolicy {
+    Always = 0,     // 所有实体对所有客户端可见
+    Distance = 1,   // 仅距离内的实体可见
+}
+```
+
+### 12.2 RpcTarget 枚举
+
+```csharp
+public enum RpcTarget {
+    Server = 0,     // Client → Server（服务器校验）
+    Client = 1,     // Server → 特定 Client
+    Multicast = 2,  // Server → 所有相关 Client（广播）
+}
+```
+
+### 12.3 ReplicationServer
+
+服务器权威复制管理器：协议握手、delta 压缩、AOI 裁剪、RPC 派发。
+
+```csharp
+public sealed class ReplicationServer : IDisposable
+```
+
+| 成员 | 类型 | 说明 |
+|------|------|------|
+| `ReplicationServer()` | ctor | 创建实例 |
+| `Init(nint transport, nint registry)` | `bool` | 绑定传输与 ECS registry |
+| `MarkReplicated(uint entityId, uint ownerConn)` | `uint` | 将实体纳入复制，返回 NetId（0=失败） |
+| `SetOwner(uint entityId, uint ownerConn)` | `void` | 变更实体属主 |
+| `Unreplicate(uint entityId)` | `void` | 移出复制（广播 despawn） |
+| `Tick()` | `void` | 每帧调用：发送快照/delta + AOI |
+| `SetAoi(AoiPolicy policy, float radius)` | `void` | 设置 AOI 策略 |
+| `ClientCount` | `uint` | 已连接客户端数（只读） |
+| `CurrentSeq` | `uint` | 当前快照序号（只读） |
+| `BroadcastRpc(ushort rpcId, uint targetNetId, ReadOnlySpan<byte> payload)` | `void` | 广播 RPC |
+| `Handle` | `nint` | 原生句柄（高级互操作用） |
+| `Dispose()` | `void` | 销毁原生资源 |
+
+### 12.4 ReplicationClient
+
+客户端复制管理器：协议握手、快照/delta 接收、输入发送、RPC。
+
+```csharp
+public sealed class ReplicationClient : IDisposable
+```
+
+| 成员 | 类型 | 说明 |
+|------|------|------|
+| `ReplicationClient()` | ctor | 创建实例 |
+| `Init(nint transport, nint registry)` | `bool` | 绑定传输与 ECS registry |
+| `SendMove(uint netId, float dx, float dy, float dz)` | `void` | 发送移动输入 |
+| `SendMove(uint netId, Vector3 delta)` | `void` | 发送移动输入（Vector3 重载） |
+| `IsConnected` | `bool` | 协议握手是否完成（只读） |
+| `MirrorCount` | `uint` | 镜像实体数量（只读） |
+| `ToEntity(uint netId)` | `uint` | NetId → 本地实体 ID（0xFFFFFFFF=未知） |
+| `SendRpc(ushort rpcId, uint targetNetId, ReadOnlySpan<byte> payload)` | `bool` | 发送 RPC 到服务器 |
+| `Handle` | `nint` | 原生句柄（高级互操作用） |
+| `Dispose()` | `void` | 销毁原生资源 |
+
+### 12.5 NativeRepl（内部 P/Invoke 声明）
+
+> 用户不直接调用；通过高级封装类访问。
+
+```csharp
+internal static partial class NativeRepl {
+    // Server
+    [LibraryImport("dse_engine")] internal static partial nint dse_repl_server_create();
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_server_destroy(nint srv);
+    [LibraryImport("dse_engine")] internal static partial int dse_repl_server_init(nint srv, nint transport, nint registry);
+    [LibraryImport("dse_engine")] internal static partial uint dse_repl_server_mark(nint srv, uint entity, uint ownerConn);
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_server_set_owner(nint srv, uint entity, uint ownerConn);
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_server_unreplicate(nint srv, uint entity);
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_server_tick(nint srv);
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_server_set_aoi(nint srv, int policy, float radius);
+    [LibraryImport("dse_engine")] internal static partial uint dse_repl_server_client_count(nint srv);
+    [LibraryImport("dse_engine")] internal static partial uint dse_repl_server_seq(nint srv);
+    // Client
+    [LibraryImport("dse_engine")] internal static partial nint dse_repl_client_create();
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_client_destroy(nint cli);
+    [LibraryImport("dse_engine")] internal static partial int dse_repl_client_init(nint cli, nint transport, nint registry);
+    [LibraryImport("dse_engine")] internal static partial void dse_repl_client_send_move(nint cli, uint netId, float dx, float dy, float dz);
+    [LibraryImport("dse_engine")] internal static partial int dse_repl_client_connected(nint cli);
+    [LibraryImport("dse_engine")] internal static partial uint dse_repl_client_mirror_count(nint cli);
+    [LibraryImport("dse_engine")] internal static partial uint dse_repl_client_to_entity(nint cli, uint netId);
+    // RPC
+    [LibraryImport("dse_engine")] internal static partial ushort dse_rpc_server_register(nint srv, string name, int target, nint handler, nint validator, nint userdata);
+    [LibraryImport("dse_engine")] internal static partial ushort dse_rpc_client_register(nint cli, string name, int target, nint handler, nint userdata);
+    [LibraryImport("dse_engine")] internal static partial int dse_rpc_client_send(nint cli, ushort rpcId, uint targetNetId, nint payload, nuint payloadSize);
+    [LibraryImport("dse_engine")] internal static partial void dse_rpc_server_broadcast(nint srv, ushort rpcId, uint targetNetId, nint payload, nuint payloadSize);
+}
+```
+
+### 12.6 使用示例
+
+```csharp
+using DSEngine;
+
+public class NetworkGameScript : DseScript {
+    private ReplicationServer? _server;
+
+    public override void OnStart() {
+        _server = new ReplicationServer();
+        // transport 和 registry 从引擎内部获取（通常通过回调注入）
+        // _server.Init(transportHandle, registryHandle);
+        _server.SetAoi(AoiPolicy.Distance, 50.0f);
+    }
+
+    public override void OnUpdate(float dt) {
+        _server?.Tick();
+    }
+
+    public void ReplicateEntity(uint entityId, uint ownerConn) {
+        uint netId = _server!.MarkReplicated(entityId, ownerConn);
+        if (netId == 0) {
+            // 失败处理
+        }
+    }
+
+    public override void OnDestroy() {
+        _server?.Dispose();
+    }
+}
+```
+
+```csharp
+using DSEngine;
+
+public class ClientScript : DseScript {
+    private ReplicationClient? _client;
+
+    public override void OnStart() {
+        _client = new ReplicationClient();
+        // _client.Init(transportHandle, registryHandle);
+    }
+
+    public override void OnUpdate(float dt) {
+        if (_client != null && _client.IsConnected) {
+            // 发送移动输入
+            _client.SendMove(myNetId, new Vector3(1.0f, 0, 0));
+
+            // 发送 RPC
+            byte[] payload = System.Text.Encoding.UTF8.GetBytes("interact");
+            _client.SendRpc(rpcId, targetNetId, payload);
+
+            // 查询镜像
+            uint mirrorCount = _client.MirrorCount;
+            uint localEntity = _client.ToEntity(someNetId);
+        }
+    }
+
+    public override void OnDestroy() {
+        _client?.Dispose();
+    }
+}
+```
