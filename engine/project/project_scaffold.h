@@ -18,6 +18,7 @@ enum class ProjectTemplate {
     Game3D,
     Lua,
     Cpp,           ///< C++ 宿主工程（src/main.cpp + CMakeLists.txt，链接 dse_engine）
+    CSharp,        ///< C# 脚本工程（GameScripts/ + .sln + DseScript 示例）
     Platformer2D,  ///< 品类模板：2D 平台跳跃（重力/跳跃/平台 AABB 碰撞，相机跟随）
     TopDownRPG,    ///< 品类模板：俯视 RPG（8 向移动、障碍碰撞、可拾取金币，相机跟随）
     ThirdPerson3D, ///< 品类模板：3D 第三人称（地面+角色方块，跟随相机）

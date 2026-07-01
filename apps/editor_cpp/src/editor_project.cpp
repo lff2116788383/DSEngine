@@ -308,7 +308,8 @@ void ProjectManager::GenerateTemplate(const std::filesystem::path& project_root,
     case ProjectTemplate::Empty:        scaffold_tmpl = dse::project::ProjectTemplate::Empty;  break;
     case ProjectTemplate::Game2D:       scaffold_tmpl = dse::project::ProjectTemplate::Game2D; break;
     case ProjectTemplate::Game3D:       scaffold_tmpl = dse::project::ProjectTemplate::Game3D; break;
-    case ProjectTemplate::LuaScripting: scaffold_tmpl = dse::project::ProjectTemplate::Lua;    break;
+    case ProjectTemplate::LuaScripting:   scaffold_tmpl = dse::project::ProjectTemplate::Lua;    break;
+    case ProjectTemplate::CSharpScripting: scaffold_tmpl = dse::project::ProjectTemplate::CSharp; break;
     }
 
     std::ostringstream ver_ss;

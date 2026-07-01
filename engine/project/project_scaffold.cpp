@@ -34,6 +34,10 @@ bool HasCppHost(ProjectTemplate tmpl) {
     return tmpl == ProjectTemplate::Cpp;
 }
 
+bool HasCSharpScripting(ProjectTemplate tmpl) {
+    return tmpl == ProjectTemplate::CSharp;
+}
+
 std::string JsonEscape(const std::string& in) {
     std::string out;
     out.reserve(in.size() + 8);
@@ -69,7 +73,8 @@ std::string BuildProjectDescriptor(const std::string& name,
                                    const std::string& engine_version) {
     const bool lua = HasLuaScripting(tmpl);
     const bool cpp = HasCppHost(tmpl);
-    const char* features = lua ? "\"lua_scripting\"" : (cpp ? "\"cpp_business\"" : "");
+    const bool csharp = HasCSharpScripting(tmpl);
+    const char* features = lua ? "\"lua_scripting\"" : (cpp ? "\"cpp_business\"" : (csharp ? "\"csharp_scripting\"" : ""));
     std::ostringstream ss;
     ss << "{\n";
     ss << "    \"format_version\": 1,\n";
@@ -559,6 +564,129 @@ std::string BuildCppCMake(const std::string& name) {
     return ss.str();
 }
 
+std::string BuildCSharpSln(const std::string& name) {
+    // Deterministic GUIDs for the two projects
+    const char* runtime_guid = "{A1B2C3D4-1234-5678-9ABC-DEF012345678}";
+    const char* game_guid    = "{B2C3D4E5-2345-6789-ABCD-EF0123456789}";
+    const char* sln_guid     = "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}";
+    std::ostringstream ss;
+    ss << "\xEF\xBB\xBF\n"  // UTF-8 BOM
+       << "Microsoft Visual Studio Solution File, Format Version 12.00\n"
+       << "# Visual Studio Version 17\n"
+       << "VisualStudioVersion = 17.0.31903.59\n"
+       << "MinimumVisualStudioVersion = 10.0.40219.1\n"
+       << "Project(\"" << sln_guid << "\") = \"DSEngine.Runtime\", "
+       << "\"DSEngine.Runtime\\DSEngine.Runtime.csproj\", \"" << runtime_guid << "\"\n"
+       << "EndProject\n"
+       << "Project(\"" << sln_guid << "\") = \"DSEngine.Game\", "
+       << "\"DSEngine.Game\\DSEngine.Game.csproj\", \"" << game_guid << "\"\n"
+       << "EndProject\n"
+       << "Global\n"
+       << "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\n"
+       << "\t\tDebug|Any CPU = Debug|Any CPU\n"
+       << "\t\tRelease|Any CPU = Release|Any CPU\n"
+       << "\tEndGlobalSection\n"
+       << "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\n"
+       << "\t\t" << runtime_guid << ".Debug|Any CPU.ActiveCfg = Debug|Any CPU\n"
+       << "\t\t" << runtime_guid << ".Debug|Any CPU.Build.0 = Debug|Any CPU\n"
+       << "\t\t" << runtime_guid << ".Release|Any CPU.ActiveCfg = Release|Any CPU\n"
+       << "\t\t" << runtime_guid << ".Release|Any CPU.Build.0 = Release|Any CPU\n"
+       << "\t\t" << game_guid << ".Debug|Any CPU.ActiveCfg = Debug|Any CPU\n"
+       << "\t\t" << game_guid << ".Debug|Any CPU.Build.0 = Debug|Any CPU\n"
+       << "\t\t" << game_guid << ".Release|Any CPU.ActiveCfg = Release|Any CPU\n"
+       << "\t\t" << game_guid << ".Release|Any CPU.Build.0 = Release|Any CPU\n"
+       << "\tEndGlobalSection\n"
+       << "EndGlobal\n";
+    return ss.str();
+}
+
+std::string BuildCSharpRuntimeCsproj() {
+    return R"(<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+</Project>
+)";
+}
+
+std::string BuildCSharpGameCsproj() {
+    return R"(<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DSEngine.Runtime\DSEngine.Runtime.csproj" />
+  </ItemGroup>
+</Project>
+)";
+}
+
+std::string BuildCSharpEntity() {
+    return R"(using System.Runtime.InteropServices;
+
+namespace DSEngine;
+
+public readonly struct Entity : IEquatable<Entity> {
+    public readonly uint Id;
+    public Entity(uint id) => Id = id;
+    public bool IsValid => Id != 0;
+    public bool Equals(Entity other) => Id == other.Id;
+    public override bool Equals(object? obj) => obj is Entity e && Equals(e);
+    public override int GetHashCode() => (int)Id;
+    public static bool operator ==(Entity a, Entity b) => a.Id == b.Id;
+    public static bool operator !=(Entity a, Entity b) => a.Id != b.Id;
+}
+)";
+}
+
+std::string BuildCSharpDseScript() {
+    return R"(namespace DSEngine;
+
+/// <summary>
+/// Base class for all C# game scripts. Attach to entities via CSharpScriptComponent.
+/// </summary>
+public abstract class DseScript {
+    /// <summary>The entity this script is attached to.</summary>
+    public Entity Entity { get; internal set; }
+
+    /// <summary>Called once when the script is first activated.</summary>
+    public virtual void OnStart() {}
+
+    /// <summary>Called every frame.</summary>
+    public virtual void OnUpdate(float dt) {}
+
+    /// <summary>Called at fixed physics timestep.</summary>
+    public virtual void OnFixedUpdate(float dt) {}
+
+    /// <summary>Called when the script or entity is destroyed.</summary>
+    public virtual void OnDestroy() {}
+}
+)";
+}
+
+std::string BuildCSharpSampleScript(const std::string& name) {
+    std::ostringstream ss;
+    ss << "using DSEngine;\n\n"
+       << "/// <summary>\n"
+       << "/// Sample script for " << name << " project.\n"
+       << "/// </summary>\n"
+       << "public class SampleScript : DseScript {\n"
+       << "    public override void OnStart() {\n"
+       << "        // Initialize your script here\n"
+       << "    }\n\n"
+       << "    public override void OnUpdate(float dt) {\n"
+       << "        // Update logic runs every frame\n"
+       << "    }\n"
+       << "}\n";
+    return ss.str();
+}
+
 } // namespace
 
 bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
@@ -567,6 +695,7 @@ bool ParseTemplateToken(const std::string& token, ProjectTemplate& out) {
     if (token == "3d")           { out = ProjectTemplate::Game3D;        return true; }
     if (token == "lua")          { out = ProjectTemplate::Lua;           return true; }
     if (token == "cpp")          { out = ProjectTemplate::Cpp;           return true; }
+    if (token == "csharp")       { out = ProjectTemplate::CSharp;        return true; }
     if (token == "platformer")   { out = ProjectTemplate::Platformer2D;  return true; }
     if (token == "topdown")      { out = ProjectTemplate::TopDownRPG;    return true; }
     if (token == "thirdperson")  { out = ProjectTemplate::ThirdPerson3D; return true; }
@@ -580,6 +709,7 @@ const char* TemplateDisplayName(ProjectTemplate tmpl) {
         case ProjectTemplate::Game3D: return "3D";
         case ProjectTemplate::Lua:    return "Lua";
         case ProjectTemplate::Cpp:    return "C++";
+        case ProjectTemplate::CSharp: return "C#";
         case ProjectTemplate::Platformer2D:  return "2D Platformer";
         case ProjectTemplate::TopDownRPG:    return "Top-Down RPG";
         case ProjectTemplate::ThirdPerson3D: return "3D Third-Person";
@@ -628,6 +758,38 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
             return result;
         }
         if (!WriteTextFile(root / "CMakeLists.txt", BuildCppCMake(name), result.error)) {
+            return result;
+        }
+    }
+    if (HasCSharpScripting(tmpl)) {
+        fs::path cs_root = root / "GameScripts";
+        fs::create_directories(cs_root / "DSEngine.Runtime" / "Core", ec);
+        fs::create_directories(cs_root / "DSEngine.Game", ec);
+        if (ec) {
+            result.error = "创建 GameScripts 目录失败: " + ec.message();
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.sln", BuildCSharpSln(name), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "DSEngine.Runtime.csproj",
+                           BuildCSharpRuntimeCsproj(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "Core" / "Entity.cs",
+                           BuildCSharpEntity(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "Core" / "DseScript.cs",
+                           BuildCSharpDseScript(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Game" / "DSEngine.Game.csproj",
+                           BuildCSharpGameCsproj(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Game" / "SampleScript.cs",
+                           BuildCSharpSampleScript(name), result.error)) {
             return result;
         }
     }

@@ -83,8 +83,8 @@ void DrawNewProjectPanel(float content_width) {
     ImGui::SetNextItemWidth(field_width);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
-    const char* templates[] = { "Empty", "2D Game", "3D Game", "Lua Scripting" };
-    ImGui::Combo("##proj_tpl", &s_new_template, templates, 4);
+    const char* templates[] = { "Empty", "2D Game", "3D Game", "Lua Scripting", "C# Scripting" };
+    ImGui::Combo("##proj_tpl", &s_new_template, templates, 5);
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
 

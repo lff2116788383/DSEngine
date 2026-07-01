@@ -32,6 +32,7 @@ enum class ProjectTemplate {
     Game2D,
     Game3D,
     LuaScripting,
+    CSharpScripting,
 };
 
 /// 项目管理器 — 管理当前项目的生命周期
