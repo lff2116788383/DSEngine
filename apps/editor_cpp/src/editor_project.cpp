@@ -322,6 +322,53 @@ void ProjectManager::GenerateTemplate(const std::filesystem::path& project_root,
     }
 }
 
+bool ProjectManager::CreateProject(const std::filesystem::path& parent_dir,
+                                    const std::string& name,
+                                    GameType game_type,
+                                    ScriptingLanguage scripting) {
+    std::filesystem::path project_root = parent_dir / name;
+
+    if (std::filesystem::exists(project_root) && !std::filesystem::is_empty(project_root)) {
+        EditorLog(LogLevel::Error, "Directory is not empty: " + project_root.string());
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(project_root, ec);
+    if (ec) {
+        EditorLog(LogLevel::Error, "Failed to create project directory: " + ec.message());
+        return false;
+    }
+
+    // 映射到引擎层枚举
+    dse::project::GameType engine_gt = dse::project::GameType::Empty;
+    switch (game_type) {
+    case GameType::Empty:  engine_gt = dse::project::GameType::Empty;  break;
+    case GameType::Game2D: engine_gt = dse::project::GameType::Game2D; break;
+    case GameType::Game3D: engine_gt = dse::project::GameType::Game3D; break;
+    }
+
+    dse::project::ScriptingLanguage engine_sl = dse::project::ScriptingLanguage::None;
+    switch (scripting) {
+    case ScriptingLanguage::None:   engine_sl = dse::project::ScriptingLanguage::None;   break;
+    case ScriptingLanguage::Lua:    engine_sl = dse::project::ScriptingLanguage::Lua;    break;
+    case ScriptingLanguage::CSharp: engine_sl = dse::project::ScriptingLanguage::CSharp; break;
+    case ScriptingLanguage::Cpp:    engine_sl = dse::project::ScriptingLanguage::Cpp;    break;
+    }
+
+    std::ostringstream ver_ss;
+    ver_ss << DSE_VERSION_MAJOR << "." << DSE_VERSION_MINOR << "." << DSE_VERSION_PATCH;
+
+    dse::project::ScaffoldResult res =
+        dse::project::ScaffoldProject(project_root.string(), name, engine_gt, engine_sl, ver_ss.str());
+    if (!res.ok) {
+        EditorLog(LogLevel::Error, "Failed to scaffold project: " + res.error);
+        return false;
+    }
+
+    return OpenProject(project_root / "project.dseproj");
+}
+
 // ============================================================
 // 文件对话框
 // ============================================================

@@ -801,4 +801,150 @@ ScaffoldResult ScaffoldProject(const std::string& project_root,
     return result;
 }
 
+// ============================================================
+// 两轴式 ScaffoldProject（GameType × ScriptingLanguage）
+// ============================================================
+
+ScaffoldResult ScaffoldProject(const std::string& project_root,
+                               const std::string& name,
+                               GameType game_type,
+                               ScriptingLanguage scripting,
+                               const std::string& engine_version) {
+    ScaffoldResult result;
+    const fs::path root(project_root);
+
+    std::error_code ec;
+    fs::create_directories(root / "scenes", ec);
+    fs::create_directories(root / "scripts", ec);
+    fs::create_directories(root / "assets" / "textures", ec);
+    fs::create_directories(root / "assets" / "models", ec);
+    fs::create_directories(root / "assets" / "audio", ec);
+    fs::create_directories(root / "assets" / "font", ec);
+    if (ec) {
+        result.error = "创建项目目录失败: " + ec.message();
+        return result;
+    }
+
+    // Build features list
+    const bool lua    = (scripting == ScriptingLanguage::Lua);
+    const bool csharp = (scripting == ScriptingLanguage::CSharp);
+    const bool cpp    = (scripting == ScriptingLanguage::Cpp);
+
+    std::string features;
+    if (lua)    features = "\"lua_scripting\"";
+    if (csharp) features = "\"csharp_scripting\"";
+    if (cpp)    features = "\"cpp_business\"";
+
+    // project.dseproj
+    {
+        std::ostringstream ss;
+        ss << "{\n";
+        ss << "    \"format_version\": 1,\n";
+        ss << "    \"name\": \"" << JsonEscape(name) << "\",\n";
+        ss << "    \"version\": \"1.0.0\",\n";
+        ss << "    \"engine_version\": \"" << JsonEscape(engine_version) << "\",\n";
+        ss << "    \"description\": \"\",\n";
+        ss << "    \"features\": [" << features << "],\n";
+        ss << "    \"entry_script\": \"" << (lua ? "scripts/main.lua" : "") << "\",\n";
+        ss << "    \"default_scene\": \"scenes/main.json\",\n";
+        ss << "    \"asset_dir\": \"assets/\",\n";
+        ss << "    \"scene_dir\": \"scenes/\",\n";
+        ss << "    \"script_dir\": \"" << (csharp ? "GameScripts/DSEngine.Game/" : "scripts/") << "\",\n";
+        ss << "    \"build\": {\n";
+        ss << "        \"output_dir\": \"build/\",\n";
+        ss << "        \"target\": \"standalone\"\n";
+        ss << "    },\n";
+        ss << "    \"window\": {\n";
+        ss << "        \"title\": \"" << JsonEscape(name) << "\",\n";
+        ss << "        \"width\": 1280,\n";
+        ss << "        \"height\": 720\n";
+        ss << "    },\n";
+        ss << "    \"rendering\": {\n";
+        ss << "        \"vsync\": true,\n";
+        ss << "        \"msaa\": 4\n";
+        ss << "    }\n";
+        ss << "}\n";
+        if (!WriteTextFile(root / "project.dseproj", ss.str(), result.error)) {
+            return result;
+        }
+    }
+
+    // scenes/main.json — use GameType to determine scene content
+    {
+        ProjectTemplate scene_tmpl = ProjectTemplate::Empty;
+        if (game_type == GameType::Game2D) scene_tmpl = ProjectTemplate::Game2D;
+        if (game_type == GameType::Game3D) scene_tmpl = ProjectTemplate::Game3D;
+        if (!WriteTextFile(root / "scenes" / "main.json", BuildSceneJson(scene_tmpl), result.error)) {
+            return result;
+        }
+    }
+
+    // Lua scripting
+    if (lua) {
+        ProjectTemplate lua_tmpl = ProjectTemplate::Lua;
+        if (game_type == GameType::Game2D) lua_tmpl = ProjectTemplate::Game2D;
+        if (game_type == GameType::Game3D) lua_tmpl = ProjectTemplate::Game3D;
+        if (!WriteTextFile(root / "scripts" / "main.lua", BuildMainLua(name, lua_tmpl), result.error)) {
+            return result;
+        }
+    }
+
+    // C++ host
+    if (cpp) {
+        fs::create_directories(root / "src", ec);
+        if (ec) {
+            result.error = "创建 src 目录失败: " + ec.message();
+            return result;
+        }
+        if (!WriteTextFile(root / "src" / "main.cpp", BuildCppMain(name), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(root / "CMakeLists.txt", BuildCppCMake(name), result.error)) {
+            return result;
+        }
+    }
+
+    // C# scripting
+    if (csharp) {
+        fs::path cs_root = root / "GameScripts";
+        fs::create_directories(cs_root / "DSEngine.Runtime" / "Core", ec);
+        fs::create_directories(cs_root / "DSEngine.Game", ec);
+        if (ec) {
+            result.error = "创建 GameScripts 目录失败: " + ec.message();
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.sln", BuildCSharpSln(name), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "DSEngine.Runtime.csproj",
+                           BuildCSharpRuntimeCsproj(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "Core" / "Entity.cs",
+                           BuildCSharpEntity(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Runtime" / "Core" / "DseScript.cs",
+                           BuildCSharpDseScript(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Game" / "DSEngine.Game.csproj",
+                           BuildCSharpGameCsproj(), result.error)) {
+            return result;
+        }
+        if (!WriteTextFile(cs_root / "DSEngine.Game" / "SampleScript.cs",
+                           BuildCSharpSampleScript(name), result.error)) {
+            return result;
+        }
+    }
+
+    // .gitignore
+    if (!WriteTextFile(root / ".gitignore", "build/\n.lock\n*.log\n", result.error)) {
+        return result;
+    }
+
+    result.ok = true;
+    return result;
+}
+
 } // namespace dse::project

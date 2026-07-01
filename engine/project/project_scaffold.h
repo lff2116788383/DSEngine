@@ -11,7 +11,7 @@
 
 namespace dse::project {
 
-/// 项目模板类型（与编辑器 dse::editor::ProjectTemplate 一一对应）。
+/// 项目模板类型（CLI / 旧接口兼容）。
 enum class ProjectTemplate {
     Empty,
     Game2D,
@@ -22,6 +22,21 @@ enum class ProjectTemplate {
     Platformer2D,  ///< 品类模板：2D 平台跳跃（重力/跳跃/平台 AABB 碰撞，相机跟随）
     TopDownRPG,    ///< 品类模板：俯视 RPG（8 向移动、障碍碰撞、可拾取金币，相机跟随）
     ThirdPerson3D, ///< 品类模板：3D 第三人称（地面+角色方块，跟随相机）
+};
+
+/// 游戏类型（正交轴 1）
+enum class GameType {
+    Empty,   ///< 空场景
+    Game2D,  ///< 2D 预置（正交相机 + 精灵示例）
+    Game3D,  ///< 3D 预置（透视相机 + 平行光）
+};
+
+/// 脚本语言（正交轴 2，可与任意 GameType 组合）
+enum class ScriptingLanguage {
+    None,    ///< 无脚本
+    Lua,     ///< Lua 脚本（scripts/main.lua）
+    CSharp,  ///< C# .NET 8（GameScripts/ + .sln）
+    Cpp,     ///< C++ 宿主（src/main.cpp + CMakeLists.txt）
 };
 
 struct ScaffoldResult {
@@ -51,7 +66,18 @@ DSE_EXPORT ScaffoldResult ScaffoldProject(const std::string& project_root,
                                           ProjectTemplate tmpl,
                                           const std::string& engine_version = "");
 
-/// 将 CLI 模板 token（empty / 2d / 3d / lua / cpp）解析为枚举，未知返回 false。
+/**
+ * @brief 两轴式项目生成（游戏类型 × 脚本语言，自由组合）。
+ *
+ * 编辑器 New Project UI 使用此重载，允许用户独立选择游戏类型和脚本语言。
+ */
+DSE_EXPORT ScaffoldResult ScaffoldProject(const std::string& project_root,
+                                          const std::string& name,
+                                          GameType game_type,
+                                          ScriptingLanguage scripting,
+                                          const std::string& engine_version = "");
+
+/// 将 CLI 模板 token（empty / 2d / 3d / lua / cpp / csharp）解析为枚举，未知返回 false。
 DSE_EXPORT bool ParseTemplateToken(const std::string& token, ProjectTemplate& out);
 
 /// 模板可读名称（用于日志/提示）。

@@ -17,7 +17,8 @@ namespace {
 static bool s_show_new_project = false;
 static char s_new_name[128] = "MyGame";
 static char s_new_location[512] = "";
-static int  s_new_template = 0;
+static int  s_new_game_type = 0;   // GameType: Empty=0, Game2D=1, Game3D=2
+static int  s_new_scripting = 0;   // ScriptingLanguage: None=0, Lua=1, CSharp=2, Cpp=3
 
 // ─── Helper: accent-colored button ─────────────────────────────────────────
 bool AccentButton(const char* label, const ImVec2& size) {
@@ -79,12 +80,22 @@ void DrawNewProjectPanel(float content_width) {
     }
     ImGui::Spacing();
 
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "TEMPLATE");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "GAME TYPE");
     ImGui::SetNextItemWidth(field_width);
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
-    const char* templates[] = { "Empty", "2D Game", "3D Game", "Lua Scripting", "C# Scripting" };
-    ImGui::Combo("##proj_tpl", &s_new_template, templates, 5);
+    const char* game_types[] = { "Empty", "2D Game", "3D Game" };
+    ImGui::Combo("##proj_game_type", &s_new_game_type, game_types, 3);
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+    ImGui::Spacing();
+
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "SCRIPTING");
+    ImGui::SetNextItemWidth(field_width);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.15f, 0.15f, 0.18f, 1.0f));
+    const char* scripting_opts[] = { "None", "Lua", "C#", "C++" };
+    ImGui::Combo("##proj_scripting", &s_new_scripting, scripting_opts, 4);
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
 
@@ -96,7 +107,8 @@ void DrawNewProjectPanel(float content_width) {
     if (AccentButton("  Create Project  ", ImVec2(content_width * 0.5f - 4, 36))) {
         auto& mgr = ProjectManager::Get();
         if (mgr.CreateProject(s_new_location, s_new_name,
-                              static_cast<ProjectTemplate>(s_new_template))) {
+                              static_cast<GameType>(s_new_game_type),
+                              static_cast<ScriptingLanguage>(s_new_scripting))) {
             EditorSettings settings = LoadEditorSettings();
             settings.last_project_path = mgr.GetProjectRoot().string();
             AddRecentProject(settings, mgr.GetProjectRoot().string());

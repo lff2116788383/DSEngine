@@ -26,13 +26,28 @@ struct ProjectDescriptor {
     } build;
 };
 
-/// 项目模板类型
+/// 项目模板类型（旧接口兼容）
 enum class ProjectTemplate {
     Empty,
     Game2D,
     Game3D,
     LuaScripting,
     CSharpScripting,
+};
+
+/// 游戏类型（正交轴 1）
+enum class GameType {
+    Empty,   ///< 空场景
+    Game2D,  ///< 2D 预置
+    Game3D,  ///< 3D 预置
+};
+
+/// 脚本语言（正交轴 2）
+enum class ScriptingLanguage {
+    None,    ///< 无脚本
+    Lua,     ///< Lua
+    CSharp,  ///< C#
+    Cpp,     ///< C++
 };
 
 /// 项目管理器 — 管理当前项目的生命周期
@@ -71,10 +86,16 @@ public:
     /// 关闭当前项目（释放 .lock）
     void CloseProject();
 
-    /// 创建新项目目录结构 + project.dseproj，成功后自动打开
+    /// 创建新项目目录结构 + project.dseproj，成功后自动打开（旧接口）
     bool CreateProject(const std::filesystem::path& parent_dir,
                        const std::string& name,
                        ProjectTemplate tmpl);
+
+    /// 两轴式创建（游戏类型 × 脚本语言，自由组合）
+    bool CreateProject(const std::filesystem::path& parent_dir,
+                       const std::string& name,
+                       GameType game_type,
+                       ScriptingLanguage scripting);
 
     /// 尝试获取项目锁，失败说明已有编辑器实例打开此项目
     bool TryAcquireLock(const std::filesystem::path& project_root);
