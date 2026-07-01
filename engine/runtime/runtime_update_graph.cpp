@@ -1,6 +1,6 @@
 #include "engine/runtime/runtime_update_graph.h"
 
-#include "engine/runtime/frame_pipeline.h"
+#include "engine/runtime/frame_pipeline_impl.h"
 #include "engine/runtime/i_builtin_modules.h"
 #include "engine/core/module.h"
 #include "engine/core/service_locator.h"
@@ -57,7 +57,7 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
     {
         dse::physics3d::IPhysics3DSystem* phys = pipeline.physics3d_system_.get();
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
-        pipeline.floating_origin_system_.Tick(world, phys, event_bus);
+        pipeline.rs_->floating_origin_system_.Tick(world, phys, event_bus);
     }
 
     if (pipeline.physics3d_system_) {

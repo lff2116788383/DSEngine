@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file frame_pipeline.cpp
  * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
  */
@@ -13,8 +13,19 @@
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/hiz_types.h"
 
-FramePipeline::FramePipeline() : modules_impl_(CreateBuiltinModules()) {}
+// Pimpl: RenderState definition + heavy headers
+#include "engine/runtime/frame_pipeline_impl.h"
+
+FramePipeline::FramePipeline()
+    : modules_impl_(CreateBuiltinModules()),
+      rs_(std::make_unique<RenderState>()) {}
 FramePipeline::~FramePipeline() = default;
+
+dse::profiler::CPUProfiler& FramePipeline::GetCPUProfiler() { return rs_->cpu_profiler_; }
+dse::profiler::RenderProfiler& FramePipeline::GetRenderProfiler() { return rs_->render_profiler_; }
+dse::profiler::MemoryProfiler& FramePipeline::GetMemoryProfiler() { return rs_->memory_profiler_; }
+dse::render::RenderThinSnapshot& FramePipeline::write_snapshot() { return rs_->snapshot_pool_[snapshot_write_idx_]; }
+const dse::render::RenderThinSnapshot& FramePipeline::read_snapshot() const { return rs_->snapshot_pool_[1 - snapshot_write_idx_]; }
 
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/base/debug.h"
@@ -340,7 +351,7 @@ bool FramePipeline::Init() {
     {
         auto profile_result = dse::render::ResolveRenderPipelineProfileFromEnvironment(
             dse::render::RhiBackendToString(rhi_backend), data_root);
-        render_pipeline_profile_ = std::move(profile_result.profile);
+        rs_->render_pipeline_profile_ = std::move(profile_result.profile);
         dse::render::RenderPipelineValidationContext validation_context{};
         validation_context.editor_mode = runtime_context_.editor_mode;
         if (const dse::render::RhiDevice* dev = runtime_context_.rhi_device.get()) {
@@ -350,11 +361,11 @@ bool FramePipeline::Init() {
         }
         std::string validation_error;
         if (!dse::render::ValidateRenderPipelineProfile(
-                render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(),
+                rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(),
                 validation_context, validation_error)) {
             DEBUG_LOG_ERROR("Render pipeline profile '{}' invalid: {}; using ForwardPlusDefault",
-                            render_pipeline_profile_.name, validation_error);
-            render_pipeline_profile_ = dse::render::MakeForwardPlusDefaultProfile();
+                            rs_->render_pipeline_profile_.name, validation_error);
+            rs_->render_pipeline_profile_ = dse::render::MakeForwardPlusDefaultProfile();
             profile_result.used_fallback = true;
         }
         if (profile_result.used_fallback) {
@@ -363,7 +374,7 @@ bool FramePipeline::Init() {
             DEBUG_LOG_INFO("Render pipeline profile: {}", profile_result.message);
         }
         DEBUG_LOG_INFO("{}", dse::render::DumpRenderPipelineProfile(
-            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), validation_context));
+            rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), validation_context));
     }
     if (const char* env_budget = std::getenv("DSE_ASYNC_UPLOAD_BUDGET")) {
         int budget = std::atoi(env_budget);
@@ -445,7 +456,7 @@ bool FramePipeline::Init() {
 
     gpu_driven_policy_ = ResolveGpuDrivenPolicy();
     gpu_driven_requested_ = (gpu_driven_policy_ != GpuDrivenPolicy::Off) &&
-        render_pipeline_profile_.settings.gpu_driven;
+        rs_->render_pipeline_profile_.settings.gpu_driven;
     gpu_driven_diag_ = [] {
         const char* diag = std::getenv("DSE_GPU_DRIVEN_DIAG");
         return diag && diag[0] != '\0' && diag[0] != '0';
@@ -640,14 +651,14 @@ bool FramePipeline::Init() {
     {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
         if (event_bus) {
-            origin_rebase_handle_ = event_bus->Subscribe<dse::core::OriginRebasedEvent>(
+            rs_->origin_rebase_handle_ = event_bus->Subscribe<dse::core::OriginRebasedEvent>(
                 [this](const dse::core::OriginRebasedEvent& evt) {
 #ifdef DSE_ENABLE_NAVMESH
                     if (nav_mesh_system_initialized_) {
                         nav_mesh_system_.RebaseOrigin(evt.offset);
                     }
 #endif
-                    streaming_manager_.RebaseOrigin(evt.offset);
+                    rs_->streaming_manager_.RebaseOrigin(evt.offset);
                 });
         }
     }
@@ -657,7 +668,7 @@ bool FramePipeline::Init() {
     DEBUG_LOG_INFO("FramePipeline init: business bootstrap begin");
 
     runtime_context_.audio_system = &modules_impl_->GetAudioSystem();
-    runtime_context_.floating_origin = &floating_origin_system_;
+    runtime_context_.floating_origin = &rs_->floating_origin_system_;
 
     const bool business_bootstrap_ok = dse::runtime::BootstrapBusinessRuntime(runtime_context_, {
         [this]() { return LastDrawCalls(); },
@@ -683,30 +694,30 @@ bool FramePipeline::Init() {
     lap("BuildRenderGraph");
 
     // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
-    light_buffer_.Init(runtime_context_.rhi_device.get());
-    cluster_grid_.Init(runtime_context_.rhi_device.get());
+    rs_->light_buffer_.Init(runtime_context_.rhi_device.get());
+    rs_->cluster_grid_.Init(runtime_context_.rhi_device.get());
     lap("light buffer + cluster grid");
 
     // Light Probe SH Bake 系统初始化
-    light_probe_system_.Init(runtime_context_.rhi_device.get());
+    rs_->light_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("LightProbeSystem");
 
     // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
-    reflection_probe_system_.Init(runtime_context_.rhi_device.get());
+    rs_->reflection_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("ReflectionProbeSystem");
 
     // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
 
     // 资源流式加载管理器初始化
-    streaming_manager_.Init(&asset_manager);
+    rs_->streaming_manager_.Init(&asset_manager);
     {
-        auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&streaming_manager_, [](auto*) {});
+        auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&rs_->streaming_manager_, [](auto*) {});
         dse::core::ServiceLocator::Instance().Register<dse::streaming::StreamingManager, dse::streaming::StreamingManager>(streaming_shared);
     }
     lap("StreamingManager");
 
     // GPU Compute Skinning 初始化（Compute Shader 可用时启用）
-    if (gpu_skinning_system_.Init(runtime_context_.rhi_device.get())) {
+    if (rs_->gpu_skinning_system_.Init(runtime_context_.rhi_device.get())) {
         DEBUG_LOG_INFO("FramePipeline init: GPUSkinningSystem initialized (compute skinning available)");
     }
     lap("GPUSkinning");
@@ -736,7 +747,7 @@ void FramePipeline::Shutdown() {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
     // 资源流式加载管理器关闭
-    streaming_manager_.Shutdown();
+    rs_->streaming_manager_.Shutdown();
     dse::core::ServiceLocator::Instance().Reset<dse::streaming::StreamingManager>();
 
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
@@ -782,10 +793,10 @@ void FramePipeline::Shutdown() {
     }
 
     // Floating Origin: 取消订阅
-    if (origin_rebase_handle_.valid) {
+    if (rs_->origin_rebase_handle_.valid) {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
-        if (event_bus) event_bus->Unsubscribe(origin_rebase_handle_);
-        origin_rebase_handle_ = {};
+        if (event_bus) event_bus->Unsubscribe(rs_->origin_rebase_handle_);
+        rs_->origin_rebase_handle_ = {};
     }
 
     modules_impl_->ShutdownMeshSystem();
@@ -803,12 +814,12 @@ void FramePipeline::Shutdown() {
         nav_mesh_system_initialized_ = false;
     }
 #endif
-    gpu_skinning_system_.Shutdown();
-    cluster_grid_.Shutdown();
-    light_buffer_.Shutdown();
-    light_probe_system_.Shutdown();
-    reflection_probe_system_.Shutdown(runtime_context_.rhi_device.get());
-    ddgi_system_.Shutdown(runtime_context_.rhi_device.get());
+    rs_->gpu_skinning_system_.Shutdown();
+    rs_->cluster_grid_.Shutdown();
+    rs_->light_buffer_.Shutdown();
+    rs_->light_probe_system_.Shutdown();
+    rs_->reflection_probe_system_.Shutdown(runtime_context_.rhi_device.get());
+    rs_->ddgi_system_.Shutdown(runtime_context_.rhi_device.get());
     taa_pass_ = nullptr;
 
     asset_manager.ReleaseGpuResources();
@@ -1105,11 +1116,11 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     const dse::TimeContext& time = frame.time;
     // 缩放通道供 gameplay/业务逻辑使用；真实通道供资源流式加载/场景流加载使用（不随暂停冻结）。
     const float delta_time = time.scaled_dt;
-    dse::profiler::ScopedCPUProfile _profile_update(cpu_profiler_, "FramePipeline::Update");
+    dse::profiler::ScopedCPUProfile _profile_update(rs_->cpu_profiler_, "FramePipeline::Update");
     auto update_begin = std::chrono::high_resolution_clock::now();
     auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
     {
-        dse::profiler::ScopedCPUProfile _p(cpu_profiler_, "AssetManager::PumpCallbacks");
+        dse::profiler::ScopedCPUProfile _p(rs_->cpu_profiler_, "AssetManager::PumpCallbacks");
         asset_manager.PumpMainThreadCallbacks(callback_budget_per_frame_);
     }
     asset_manager.PumpHotReloads();
@@ -1126,8 +1137,8 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
             }
         }
         {
-            dse::profiler::ScopedCPUProfile _p(cpu_profiler_, "StreamingManager::Tick");
-            streaming_manager_.Tick(streaming_cam_pos);
+            dse::profiler::ScopedCPUProfile _p(rs_->cpu_profiler_, "StreamingManager::Tick");
+            rs_->streaming_manager_.Tick(streaming_cam_pos);
         }
     }
 
@@ -1153,9 +1164,9 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     if (runtime_context_.asset_manager) {
         std::size_t current = runtime_context_.asset_manager->EstimatedMemoryUsage();
         if (current > last_reported_asset_memory_) {
-            memory_profiler_.RecordAlloc("AssetManager", current - last_reported_asset_memory_);
+            rs_->memory_profiler_.RecordAlloc("AssetManager", current - last_reported_asset_memory_);
         } else if (current < last_reported_asset_memory_) {
-            memory_profiler_.RecordFree("AssetManager", last_reported_asset_memory_ - current);
+            rs_->memory_profiler_.RecordFree("AssetManager", last_reported_asset_memory_ - current);
         }
         last_reported_asset_memory_ = current;
     }
@@ -1175,7 +1186,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
 }
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
-    dse::profiler::ScopedCPUProfile _profile_fixed(cpu_profiler_, "FramePipeline::FixedUpdate");
+    dse::profiler::ScopedCPUProfile _profile_fixed(rs_->cpu_profiler_, "FramePipeline::FixedUpdate");
     auto fixed_begin = std::chrono::high_resolution_clock::now();
     dse::runtime::RunRuntimeFixedUpdateGraph(*this, fixed_delta_time);
     
@@ -1185,13 +1196,13 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
 }
 
 void FramePipeline::RunRenderInternal() {
-    dse::profiler::ScopedCPUProfile _profile_render(cpu_profiler_, "FramePipeline::Render");
-    render_profiler_.BeginFrame();
+    dse::profiler::ScopedCPUProfile _profile_render(rs_->cpu_profiler_, "FramePipeline::Render");
+    rs_->render_profiler_.BeginFrame();
     auto render_begin = std::chrono::high_resolution_clock::now();
 
     // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
     if (runtime_context_.world) {
-        transform_system_.Update(*runtime_context_.world);
+        rs_->transform_system_.Update(*runtime_context_.world);
     }
 
     dse::runtime::BeginRuntimeRenderFrame(*this);
@@ -1219,8 +1230,8 @@ void FramePipeline::RunRenderInternal() {
             early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
         }
 
-        light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
-        light_buffer_.Upload();
+        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+        rs_->light_buffer_.Upload();
 
         // 获取主相机参数用于 cluster 构建
         if (cam_entity != entt::null) {
@@ -1238,9 +1249,9 @@ void FramePipeline::RunRenderInternal() {
                 glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                 view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
             }
-            cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
-                                light_buffer_.point_lights(), light_buffer_.spot_lights());
-            cluster_grid_.Upload();
+            rs_->cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
+                                rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
+            rs_->cluster_grid_.Upload();
         }
     }
 
@@ -1255,7 +1266,7 @@ void FramePipeline::RunRenderInternal() {
                 break;
             }
         }
-        light_probe_system_.UpdateGlobalSH(*runtime_context_.world,
+        rs_->light_probe_system_.UpdateGlobalSH(*runtime_context_.world,
                                             runtime_context_.rhi_device.get(), cam_pos);
     } else {
         glm::vec4 sh_coeffs[9] = {};
@@ -1344,7 +1355,7 @@ void FramePipeline::RunRenderInternal() {
             if (!gi.enabled) continue;
 
             // 按需初始化或重配置
-            if (gi.needs_reinit_ || !ddgi_system_.IsInitialized()) {
+            if (gi.needs_reinit_ || !rs_->ddgi_system_.IsInitialized()) {
                 dse::render::gi::DDGIVolumeConfig cfg;
                 cfg.origin = gi.origin;
                 cfg.extent = gi.extent;
@@ -1353,20 +1364,20 @@ void FramePipeline::RunRenderInternal() {
                 cfg.visibility_texels = gi.visibility_texels;
                 cfg.rays_per_probe = gi.rays_per_probe;
                 cfg.hysteresis = gi.hysteresis;
-                if (ddgi_system_.IsInitialized()) {
-                    ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
+                if (rs_->ddgi_system_.IsInitialized()) {
+                    rs_->ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
                 } else {
-                    ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
+                    rs_->ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
                 }
                 gi.needs_reinit_ = false;
             }
 
-            if (ddgi_system_.IsInitialized()) {
-                render_pass_context_.ddgi_system = &ddgi_system_;
+            if (rs_->ddgi_system_.IsInitialized()) {
+                render_pass_context_.ddgi_system = &rs_->ddgi_system_;
                 render_pass_context_.ddgi_active = true;
                 render_pass_context_.ddgi_gi_intensity = gi.gi_intensity;
                 render_pass_context_.ddgi_normal_bias = gi.normal_bias;
-                const auto& res = ddgi_system_.GetResources();
+                const auto& res = rs_->ddgi_system_.GetResources();
                 render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
                 render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
             }
@@ -1375,7 +1386,7 @@ void FramePipeline::RunRenderInternal() {
     }
     // 同步 DDGI 状态到 RHI 全局渲染状态
     if (render_pass_context_.ddgi_active) {
-        const auto& cfg = ddgi_system_.GetConfig();
+        const auto& cfg = rs_->ddgi_system_.GetConfig();
         runtime_context_.rhi_device->SetGlobalDDGI(
             true, render_pass_context_.ddgi_irradiance_atlas,
             cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
@@ -1459,8 +1470,8 @@ void FramePipeline::RunRenderInternal() {
     }
 
     // GPU Compute Skinning: 帧开始（清空上一帧请求，读回上一帧结果）
-    if (gpu_skinning_system_.IsAvailable()) {
-        gpu_skinning_system_.BeginFrame();
+    if (rs_->gpu_skinning_system_.IsAvailable()) {
+        rs_->gpu_skinning_system_.BeginFrame();
     }
 
     BuildRenderSceneQueues();
@@ -1479,7 +1490,7 @@ void FramePipeline::RunRenderInternal() {
         skinning_bake_checked_ = true;
     }
     if (skinning_bake_for_web_) {
-        const bool gpu_skin = gpu_skinning_system_.IsAvailable();
+        const bool gpu_skin = rs_->gpu_skinning_system_.IsAvailable();
         // CPU 蒙皮回退：逐句镜像 compute 蒙皮（4 权重，第 4 权重 = 1 - w0 - w1 - w2；
         // 法线/切线用 mat3(skin)），保证与 GPU 回读路径数值一致 → 暖机/WebGL2 无破帧。
         auto skin_like_compute = [](const BatchVertex& bv,
@@ -1527,12 +1538,12 @@ void FramePipeline::RunRenderInternal() {
                         d[8]  = bv.tangent.x; d[9]  = bv.tangent.y; d[10] = bv.tangent.z; d[11] = bv.weights[2];
                         d[12] = bv.joints[0]; d[13] = bv.joints[1]; d[14] = bv.joints[2]; d[15] = bv.joints[3];
                     }
-                    gpu_skinning_system_.Submit(std::move(req));
+                    rs_->gpu_skinning_system_.Submit(std::move(req));
                 }
 
                 // 消费：上一帧 GPU 回读（世界空间——骨骼矩阵已预乘 model）；未就绪/WebGL2 → CPU 蒙皮回退。
                 const dse::render::SkinnedOutput* out =
-                    gpu_skin ? gpu_skinning_system_.GetSkinnedOutput(item.entity_id) : nullptr;
+                    gpu_skin ? rs_->gpu_skinning_system_.GetSkinnedOutput(item.entity_id) : nullptr;
                 const bool use_gpu = out && out->vertex_count == vcount;
 
                 std::vector<BatchVertex> baked(vcount);
@@ -1570,15 +1581,15 @@ void FramePipeline::RunRenderInternal() {
                 item.instance_bone_palette_idx.clear();
             }
         };
-        bake_skinned_in_queue(render_scene_.cpu_meshes.opaque);
-        bake_skinned_in_queue(render_scene_.cpu_meshes.transparent);
+        bake_skinned_in_queue(rs_->render_scene_.cpu_meshes.opaque);
+        bake_skinned_in_queue(rs_->render_scene_.cpu_meshes.transparent);
     }
 
     // GPU Compute Skinning: Dispatch 所有蒙皮请求，绑定输出 SSBO
-    if (gpu_skinning_system_.IsAvailable() && gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
-        gpu_skinning_system_.Dispatch();
+    if (rs_->gpu_skinning_system_.IsAvailable() && rs_->gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
+        rs_->gpu_skinning_system_.Dispatch();
         runtime_context_.rhi_device->BindGpuBuffer(
-            gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
+            rs_->gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
     }
 
     CaptureThinSnapshot();
@@ -1587,7 +1598,7 @@ void FramePipeline::RunRenderInternal() {
     render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
 
     // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
-    render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
+    rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
     ExecuteRenderGraph(*cmd_buffer);
 
@@ -1602,7 +1613,7 @@ void FramePipeline::RunRenderInternal() {
             for (const auto& entry : gpu_results) {
                 timings.push_back({entry.name, entry.ms});
             }
-            render_profiler_.UpdateGpuTimers(timings);
+            rs_->render_profiler_.UpdateGpuTimers(timings);
         }
     }
 
@@ -1662,7 +1673,7 @@ void FramePipeline::RunRenderInternal() {
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
     if (runtime_context_.rhi_device) {
         const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
-        render_profiler_.UpdateFromRhi(
+        rs_->render_profiler_.UpdateFromRhi(
             rhi_stats.draw_calls,
             0,
             rhi_stats.triangle_count,
@@ -1670,7 +1681,7 @@ void FramePipeline::RunRenderInternal() {
             rhi_stats.texture_binds,
             rhi_stats.shader_switches);
     }
-    render_profiler_.EndFrame();
+    rs_->render_profiler_.EndFrame();
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
         if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
             static int readback_diag_frame = 0;
@@ -1767,18 +1778,18 @@ void FramePipeline::BuildRenderGraph() {
 }
 
 void FramePipeline::BuildRenderSceneQueues() {
-    render_scene_.Clear();
-    render_pass_context_.render_scene = &render_scene_;
+    rs_->render_scene_.Clear();
+    render_pass_context_.render_scene = &rs_->render_scene_;
     if (!runtime_context_.world) return;
 
     World* world = runtime_context_.world;
 
 #ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
-        modules_impl_->BuildRenderQueues(*world, render_scene_);
+        modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
     }
 #else
-    modules_impl_->BuildRenderQueues(*world, render_scene_);
+    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
 #endif
 
     // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
@@ -1794,10 +1805,10 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.world = runtime_context_.world;
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
-    render_pass_context_.render_scene = &render_scene_;
-    render_pass_context_.mesh_renderer = &cpu_mesh_renderer_;
-    render_pass_context_.light_buffer = &light_buffer_;
-    render_pass_context_.cluster_grid = &cluster_grid_;
+    render_pass_context_.render_scene = &rs_->render_scene_;
+    render_pass_context_.mesh_renderer = &rs_->cpu_mesh_renderer_;
+    render_pass_context_.light_buffer = &rs_->light_buffer_;
+    render_pass_context_.cluster_grid = &rs_->cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
 
     // Pass 层图形管线（B5-3b）：聚合为 (pso, program=0) PSO-only 管线句柄——其后绘制经 GPU-driven 自绑 program
@@ -1883,32 +1894,32 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.taa_active = false;
     render_pass_context_.auto_exposure_active = false;
     render_pass_context_.pipeline_features.bloom =
-        IsProfilePassEnabled(render_pipeline_profile_, "bloom");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "bloom");
     render_pass_context_.pipeline_features.ssao =
-        IsProfilePassEnabled(render_pipeline_profile_, "ssao");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "ssao");
     render_pass_context_.pipeline_features.contact_shadow =
-        IsProfilePassEnabled(render_pipeline_profile_, "contact_shadow");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "contact_shadow");
     render_pass_context_.pipeline_features.auto_exposure =
-        IsProfilePassEnabled(render_pipeline_profile_, "auto_exposure");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "auto_exposure");
     render_pass_context_.pipeline_features.fxaa =
-        IsProfilePassEnabled(render_pipeline_profile_, "fxaa");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "fxaa");
     render_pass_context_.pipeline_features.taa =
-        IsProfilePassEnabled(render_pipeline_profile_, "taa");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "taa");
     render_pass_context_.pipeline_features.ui =
-        IsProfilePassEnabled(render_pipeline_profile_, "ui");
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "ui");
     render_pass_context_.pipeline_features.gpu_cull =
-        IsProfilePassEnabled(render_pipeline_profile_, "gpu_cull");
-    render_pass_context_.pipeline_features.shadows = render_pipeline_profile_.settings.shadows &&
-        (IsProfilePassEnabled(render_pipeline_profile_, "csm_shadow") ||
-         IsProfilePassEnabled(render_pipeline_profile_, "spot_shadow") ||
-         IsProfilePassEnabled(render_pipeline_profile_, "point_shadow"));
+        IsProfilePassEnabled(rs_->render_pipeline_profile_, "gpu_cull");
+    render_pass_context_.pipeline_features.shadows = rs_->render_pipeline_profile_.settings.shadows &&
+        (IsProfilePassEnabled(rs_->render_pipeline_profile_, "csm_shadow") ||
+         IsProfilePassEnabled(rs_->render_pipeline_profile_, "spot_shadow") ||
+         IsProfilePassEnabled(rs_->render_pipeline_profile_, "point_shadow"));
     render_pass_context_.pipeline_overrides.bloom_intensity = PipelineValueToFloat(
         dse::render::FindRenderPipelinePassParam(
-            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "intensity"),
+            rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "intensity"),
         -1.0f);
     render_pass_context_.pipeline_overrides.bloom_threshold = PipelineValueToFloat(
         dse::render::FindRenderPipelinePassParam(
-            render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "threshold"),
+            rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "threshold"),
         -1.0f);
 
     render_pass_context_.modules.clear();
@@ -1924,7 +1935,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RenderUI2D(world, cmd, w, h, clip);
     };
     render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, cpu_mesh_renderer_, frame);
+        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
     };
 
     // ---- 澹版槑澶栭儴杈撳嚭 ----
@@ -1954,7 +1965,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         prune_ctx.ssbo_supported = dev->SupportsSSBO();
         prune_ctx.max_color_attachments = dev->GetMaxColorAttachments();
     }
-    for (const auto& pass_config : render_pipeline_profile_.passes) {
+    for (const auto& pass_config : rs_->render_pipeline_profile_.passes) {
         if (!pass_config.enabled) continue;
         const std::string pass_name = registry.ResolveName(pass_config.name);
         const dse::render::RenderPassMetadata* metadata = registry.FindMetadata(pass_name);
@@ -1966,7 +1977,7 @@ void FramePipeline::BuildRenderGraphInternal() {
             DEBUG_LOG_INFO("Render pipeline pruned pass '{}' ({})", pass_name, prune_reason);
             continue;
         }
-        if (!render_pipeline_profile_.settings.shadows &&
+        if (!rs_->render_pipeline_profile_.settings.shadows &&
             (pass_name == "csm_shadow" || pass_name == "spot_shadow" || pass_name == "point_shadow")) {
             continue;
         }
@@ -2826,7 +2837,7 @@ void FramePipeline::PrepareRenderFrame() {
 
     // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
     if (runtime_context_.world) {
-        transform_system_.Update(*runtime_context_.world);
+        rs_->transform_system_.Update(*runtime_context_.world);
     }
 
     if (runtime_context_.world) {
@@ -2847,7 +2858,7 @@ void FramePipeline::PrepareRenderFrame() {
         }
 
         // Clustered Forward+: 收集光源（CPU）— 光源位置减去 camera_offset
-        light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
 
         // 获取主相机参数构建 cluster
         if (cam_entity != entt::null) {
@@ -2865,8 +2876,8 @@ void FramePipeline::PrepareRenderFrame() {
                 glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                 view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
             }
-            cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
-                                light_buffer_.point_lights(), light_buffer_.spot_lights());
+            rs_->cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
+                                rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
         }
     }
 
@@ -2945,7 +2956,7 @@ void FramePipeline::PrepareRenderFrame() {
 }
 
 void FramePipeline::ExecuteRenderFrame() {
-    render_profiler_.BeginFrame();
+    rs_->render_profiler_.BeginFrame();
     auto render_begin = std::chrono::high_resolution_clock::now();
 
     dse::runtime::BeginRuntimeRenderFrame(*this);
@@ -2953,10 +2964,10 @@ void FramePipeline::ExecuteRenderFrame() {
     dse::runtime::BindRuntimeShadowMaps(*this);
 
     // GPU 上传：光源 SSBO
-    light_buffer_.Upload();
+    rs_->light_buffer_.Upload();
 
     // GPU 上传：cluster SSBO
-    cluster_grid_.Upload();
+    rs_->cluster_grid_.Upload();
 
     // Light Probe SH：从快照上传到 RHI 全局状态
     const auto& snap = *render_pass_context_.snapshot;
@@ -2976,7 +2987,7 @@ void FramePipeline::ExecuteRenderFrame() {
     render_pass_context_.ddgi_system = nullptr;
     if (snap.ddgi_config.enabled && runtime_context_.rhi_device->SupportsCompute()) {
         const auto& dcfg = snap.ddgi_config;
-        if (dcfg.needs_reinit || !ddgi_system_.IsInitialized()) {
+        if (dcfg.needs_reinit || !rs_->ddgi_system_.IsInitialized()) {
             dse::render::gi::DDGIVolumeConfig cfg;
             cfg.origin = dcfg.origin;
             cfg.extent = dcfg.extent;
@@ -2985,24 +2996,24 @@ void FramePipeline::ExecuteRenderFrame() {
             cfg.visibility_texels = dcfg.visibility_texels;
             cfg.rays_per_probe = dcfg.rays_per_probe;
             cfg.hysteresis = dcfg.hysteresis;
-            if (ddgi_system_.IsInitialized()) {
-                ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
+            if (rs_->ddgi_system_.IsInitialized()) {
+                rs_->ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
             } else {
-                ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
+                rs_->ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
             }
         }
-        if (ddgi_system_.IsInitialized()) {
-            render_pass_context_.ddgi_system = &ddgi_system_;
+        if (rs_->ddgi_system_.IsInitialized()) {
+            render_pass_context_.ddgi_system = &rs_->ddgi_system_;
             render_pass_context_.ddgi_active = true;
             render_pass_context_.ddgi_gi_intensity = dcfg.gi_intensity;
             render_pass_context_.ddgi_normal_bias = dcfg.normal_bias;
-            const auto& res = ddgi_system_.GetResources();
+            const auto& res = rs_->ddgi_system_.GetResources();
             render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
             render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
         }
     }
     if (render_pass_context_.ddgi_active) {
-        const auto& cfg = ddgi_system_.GetConfig();
+        const auto& cfg = rs_->ddgi_system_.GetConfig();
         runtime_context_.rhi_device->SetGlobalDDGI(
             true, render_pass_context_.ddgi_irradiance_atlas,
             cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
@@ -3050,7 +3061,7 @@ void FramePipeline::ExecuteRenderFrame() {
     BuildRenderSceneQueues();
 
     // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
-    render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
+    rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
     // ── 执行渲染图 ──
     ExecuteRenderGraph(*cmd_buffer);
@@ -3066,7 +3077,7 @@ void FramePipeline::ExecuteRenderFrame() {
             for (const auto& entry : gpu_results) {
                 timings.push_back({entry.name, entry.ms});
             }
-            render_profiler_.UpdateGpuTimers(timings);
+            rs_->render_profiler_.UpdateGpuTimers(timings);
         }
     }
 
@@ -3113,7 +3124,7 @@ void FramePipeline::ExecuteRenderFrame() {
     dse::runtime::FinalizeRuntimeRenderFrame(*this);
     if (runtime_context_.rhi_device) {
         const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
-        render_profiler_.UpdateFromRhi(
+        rs_->render_profiler_.UpdateFromRhi(
             rhi_stats.draw_calls,
             0,
             rhi_stats.triangle_count,
@@ -3121,7 +3132,7 @@ void FramePipeline::ExecuteRenderFrame() {
             rhi_stats.texture_binds,
             rhi_stats.shader_switches);
     }
-    render_profiler_.EndFrame();
+    rs_->render_profiler_.EndFrame();
 
     // Render diagnostics
     if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {

@@ -17,33 +17,17 @@
 #include <condition_variable>
 #include <atomic>
 
-// Value-type members that must remain fully defined in this header:
+// Value-type / public-interface types that must be fully defined here:
 #include "engine/render/rhi/rhi_device.h"
-#include "engine/scene/transform_system.h"
 #include "engine/render/render_graph.h"
-#include "engine/render/mesh_renderer.h"
-#include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/passes/render_pass_context.h"
-#include "engine/render/render_snapshot.h"
-#include "engine/render/light_buffer.h"
-#include "engine/render/cluster_grid.h"
-#include "engine/render/light_probe_system.h"
-#include "engine/render/reflection_probe_system.h"
-#include "engine/render/gi/ddgi_system.h"
-#include "engine/render/skinning/gpu_skinning.h"
-#include "engine/assets/streaming_manager.h"
-#include "engine/ecs/floating_origin_system.h"
 #include "engine/runtime/runtime_frame_ops.h"
 #include "engine/runtime/runtime_context.h"
 #include "engine/runtime/render_pipeline_resources.h"
 #include "engine/runtime/business_runtime_bridge.h"
 #include "engine/runtime/runtime_render_shell.h"
 #include "engine/base/frame_update_context.h"
-#include "engine/core/event_bus.h"
 #include "engine/core/dse_export.h"
-#include "engine/profiler/cpu_profiler.h"
-#include "engine/profiler/render_profiler.h"
-#include "engine/profiler/memory_profiler.h"
 
 // ── Forward declarations (formerly heavy #includes) ──────────────────────────
 // These types are used only as pointers, references, or in unique_ptr members
@@ -60,7 +44,26 @@ namespace dse::core {
 namespace dse::render {
     class IRenderPass;
     class TAAPass;
+    class MeshRenderer;
+    class RenderPipelineProfile;
+    struct RenderThinSnapshot;
+    class LightBuffer;
+    class ClusterGrid;
+    class LightProbeSystem;
+    class ReflectionProbeSystem;
+    struct RenderScene;
+    class GPUSkinningSystem;
 }
+namespace dse::render::gi { class DDGISystem; }
+namespace dse::streaming { class StreamingManager; }
+namespace dse { class FloatingOriginSystem; }
+namespace dse::profiler {
+    class CPUProfiler;
+    class RenderProfiler;
+    class MemoryProfiler;
+}
+namespace dse::core { struct SubscriptionHandle; }
+class TransformSystem;
 
 class IBuiltinModules;
 
@@ -178,9 +181,9 @@ public:
     dse::render::RhiDevice::RhiFrameStats GetRhiFrameStats() const;
 
     /// 内置性能剖析器（供编辑器 / 外部工具读取）
-    dse::profiler::CPUProfiler& GetCPUProfiler() { return cpu_profiler_; }
-    dse::profiler::RenderProfiler& GetRenderProfiler() { return render_profiler_; }
-    dse::profiler::MemoryProfiler& GetMemoryProfiler() { return memory_profiler_; }
+    dse::profiler::CPUProfiler& GetCPUProfiler();
+    dse::profiler::RenderProfiler& GetRenderProfiler();
+    dse::profiler::MemoryProfiler& GetMemoryProfiler();
 
     /**
      * @brief 获取上一帧中的材质切换次数
@@ -396,37 +399,12 @@ private:
     int fixed_samples_ = 0;
     int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
-    dse::render::RenderPipelineProfile render_pipeline_profile_;
-    dse::render::RenderScene render_scene_;
 
-    /// Transform 系统：每帧渲染前更新 dirty 的 local_to_world
-    TransformSystem transform_system_;
+    /// 渲染 Pass 共享上下文
+    dse::render::RenderPassContext render_pass_context_;
 
-    /// Clustered Forward+ 光源缓冲（SSBO）
-    dse::render::LightBuffer light_buffer_;
-    dse::render::ClusterGrid cluster_grid_;
-
-    /// Light Probe SH Bake 系统
-    dse::render::LightProbeSystem light_probe_system_;
-
-    /// Reflection Probe + IBL 系统
-    dse::render::ReflectionProbeSystem reflection_probe_system_;
-
-    /// DDGI Irradiance Probe 系统
-    dse::render::gi::DDGISystem ddgi_system_;
-
-    /// GPU Compute Skinning 系统
-    dse::render::GPUSkinningSystem gpu_skinning_system_;
-
-    /// B-1 web 蒙皮可见激活：当后端缺 ForwardSkinnedShaded 内建程序（WebGPU 无 per-draw 蒙皮、
-    /// WebGL2/GLES3.0 无法编译 SSBO 蒙皮 VS）时，将蒙皮项经 GPU compute（WebGPU，异步回读）或
-    /// CPU（WebGL2/暖机）烘焙为世界静态网格走 ForwardShaded 路径。桌面（程序可用）不触发。
     bool skinning_bake_for_web_ = false;
     bool skinning_bake_checked_ = false;
-
-    /// Floating Origin 系统（大世界坐标 Phase 2）
-    dse::FloatingOriginSystem floating_origin_system_;
-    dse::core::SubscriptionHandle origin_rebase_handle_;
 
     /// TAA 帧计数器（跨帧 jitter 序列）
     int taa_frame_index_ = 0;
@@ -434,22 +412,10 @@ private:
     /// TAA Pass 弱引用（注册后从 registered_passes_ 中查找）
     dse::render::TAAPass* taa_pass_ = nullptr;
 
-    /// 资源流式加载管理器
-    dse::streaming::StreamingManager streaming_manager_;
-
-    /// 渲染 Pass 共享上下文
-    dse::render::RenderPassContext render_pass_context_;
-
-    /// 阶段4-M4：CPU mesh 队列（RenderScene::DrawOpaqueCpu/DrawTransparent）的常驻渲染器，
-    /// 取代旧 cmd.DrawMeshBatch ABI；常驻以跨帧复用内部 VBO/SSBO 缓冲。
-    dse::render::MeshRenderer cpu_mesh_renderer_;
-
-    /// 双缓冲薄快照池（Phase 1 流水线并行基础设施）
-    dse::render::RenderThinSnapshot snapshot_pool_[2];
     int snapshot_write_idx_ = 0;
 
-    dse::render::RenderThinSnapshot& write_snapshot() { return snapshot_pool_[snapshot_write_idx_]; }
-    const dse::render::RenderThinSnapshot& read_snapshot() const { return snapshot_pool_[1 - snapshot_write_idx_]; }
+    dse::render::RenderThinSnapshot& write_snapshot();
+    const dse::render::RenderThinSnapshot& read_snapshot() const;
     void CaptureThinSnapshot();
     void FlipSnapshotIndex() { snapshot_write_idx_ = 1 - snapshot_write_idx_; }
 
@@ -466,11 +432,11 @@ private:
     /// 已注册的渲染 Pass（按注册顺序，DAG 排序由 RenderGraph 决定）
     std::vector<std::unique_ptr<dse::render::IRenderPass>> registered_passes_;
 
-    /// 内置性能剖析器
-    dse::profiler::CPUProfiler cpu_profiler_;
-    dse::profiler::RenderProfiler render_profiler_;
-    dse::profiler::MemoryProfiler memory_profiler_;
     std::size_t last_reported_asset_memory_ = 0;
+
+    /// Pimpl: heavy render subsystem members (definitions in frame_pipeline.cpp)
+    struct RenderState;
+    std::unique_ptr<RenderState> rs_;
 };
 
 #endif
