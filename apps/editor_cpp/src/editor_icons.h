@@ -101,3 +101,30 @@
 #define MDI_ICON_WATER                  "\xef\x9d\xb3" // U+F773 fa-water
 #define MDI_ICON_MAP                    "\xef\x89\xb9" // U+F279 fa-map
 #define MDI_ICON_LAYERS                 "\xef\x97\xbd" // U+F5FD fa-layer-group
+
+// Editor feature panel icons
+#define MDI_ICON_BUG                    "\xef\x86\x88" // U+F188 fa-bug
+#define MDI_ICON_BRUSH                  "\xef\x87\xbc" // U+F1FC fa-paintbrush
+#define MDI_ICON_CHECK                  "\xef\x80\x8c" // U+F00C fa-check
+#define MDI_ICON_CIRCLE_MEDIUM          "\xef\x84\x91" // U+F111 fa-circle
+#define MDI_ICON_CIRCLE_OUTLINE         "\xef\x84\x91" // U+F111 fa-circle (same glyph)
+#define MDI_ICON_CIRCLE_SLICE_8         "\xef\x84\x91" // U+F111 fa-circle (approx)
+#define MDI_ICON_CLOUD                  "\xef\x83\x82" // U+F0C2 fa-cloud
+#define MDI_ICON_CLOUD_UPLOAD           "\xef\x83\xae" // U+F0EE fa-cloud-arrow-up
+#define MDI_ICON_CONSOLE                "\xef\x84\xa0" // U+F120 fa-terminal
+#define MDI_ICON_DEBUG_STEP_INTO        "\xef\x81\xa3" // U+F063 fa-arrow-down (approx)
+#define MDI_ICON_DEBUG_STEP_OVER        "\xef\x81\xa1" // U+F061 fa-arrow-right (approx)
+#define MDI_ICON_FILE_ALERT             "\xef\x85\x9b" // U+F15B fa-file (approx)
+#define MDI_ICON_FILE_DOCUMENT_EDIT     "\xef\x85\x9c" // U+F15C fa-file-lines
+#define MDI_ICON_FLASH                  "\xef\x83\xa7" // U+F0E7 fa-bolt
+#define MDI_ICON_FORMAT_LIST_NUMBERED   "\xef\x83\xa2" // U+F0E2 fa-list-ol (approx)
+#define MDI_ICON_GRADIENT_HORIZONTAL    "\xef\x94\xbf" // U+F53F fa-palette (approx)
+#define MDI_ICON_GRID                   "\xef\x83\x8e" // U+F0CE fa-table
+#define MDI_ICON_HISTORY                "\xef\x87\x9a" // U+F1DA fa-clock-rotate-left
+#define MDI_ICON_MOVIE                  "\xef\x80\x88" // U+F008 fa-film
+#define MDI_ICON_MOVIE_OPEN             "\xef\x80\x88" // U+F008 fa-film (same)
+#define MDI_ICON_REFRESH                "\xef\x80\xa1" // U+F021 fa-arrows-rotate
+#define MDI_ICON_RELOAD                 "\xef\x80\x9e" // U+F01E fa-arrow-rotate-right
+#define MDI_ICON_RELOAD_ALERT           "\xef\x80\x9e" // U+F01E fa-arrow-rotate-right (same)
+#define MDI_ICON_TRANSIT_CONNECTION_VARIANT "\xef\x84\xa6" // U+F126 fa-code-branch (approx)
+#define MDI_ICON_VARIABLE               "\xef\x84\xa1" // U+F121 fa-code (approx)

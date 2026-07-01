@@ -106,6 +106,12 @@ struct ShaderGraphState {
     bool graph_dirty = false;
     float compile_timer = 0.0f;
     static constexpr float kCompileDelay = 0.3f; // debounce 300ms
+    // 3D Preview sphere
+    bool show_3d_preview = true;
+    float preview_rotation_y = 0.0f;
+    float preview_rotation_x = 0.3f;
+    bool preview_auto_rotate = true;
+    float preview_light_dir[3] = {0.5f, 0.7f, 0.5f};
 };
 
 ShaderGraphState& GetState() {
@@ -292,6 +298,181 @@ std::vector<NodeTemplate>& GetTemplates() {
          {{0, "Time", PinType::Float, PinKind::Output, {}},
           {0, "Sin", PinType::Float, PinKind::Output, {}},
           {0, "Cos", PinType::Float, PinKind::Output, {}}}},
+        // ─── Extended Math nodes ─────────────────────────────────────────
+        {"Subtract", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Float, PinKind::Input, {}},
+          {0, "B", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Divide", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Float, PinKind::Input, {1}},
+          {0, "B", PinType::Float, PinKind::Input, {1}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Power", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "Base", PinType::Float, PinKind::Input, {2}},
+          {0, "Exp", PinType::Float, PinKind::Input, {2}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Abs", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Negate", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Saturate", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"One Minus", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Clamp", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}},
+          {0, "Min", PinType::Float, PinKind::Input, {0}},
+          {0, "Max", PinType::Float, PinKind::Input, {1}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Step", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "Edge", PinType::Float, PinKind::Input, {0.5f}},
+          {0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Smoothstep", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "Edge0", PinType::Float, PinKind::Input, {0}},
+          {0, "Edge1", PinType::Float, PinKind::Input, {1}},
+          {0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Sin", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Cos", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Floor", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Fract", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Min", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Float, PinKind::Input, {}},
+          {0, "B", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Max", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Float, PinKind::Input, {}},
+          {0, "B", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Dot", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Vec3, PinKind::Input, {}},
+          {0, "B", PinType::Vec3, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Cross", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "A", PinType::Vec3, PinKind::Input, {}},
+          {0, "B", PinType::Vec3, PinKind::Input, {}}},
+         {{0, "Result", PinType::Vec3, PinKind::Output, {}}}},
+        {"Normalize", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Vec3, PinKind::Input, {}}},
+         {{0, "Result", PinType::Vec3, PinKind::Output, {}}}},
+        {"Length", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Vec3, PinKind::Input, {}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Remap", "Math", IM_COL32(80, 180, 80, 255),
+         {{0, "In", PinType::Float, PinKind::Input, {}},
+          {0, "InMin", PinType::Float, PinKind::Input, {0}},
+          {0, "InMax", PinType::Float, PinKind::Input, {1}},
+          {0, "OutMin", PinType::Float, PinKind::Input, {0}},
+          {0, "OutMax", PinType::Float, PinKind::Input, {1}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        // ─── Vector operations ───────────────────────────────────────────
+        {"Split", "Vector", IM_COL32(160, 120, 200, 255),
+         {{0, "In", PinType::Vec4, PinKind::Input, {}}},
+         {{0, "R", PinType::Float, PinKind::Output, {}},
+          {0, "G", PinType::Float, PinKind::Output, {}},
+          {0, "B", PinType::Float, PinKind::Output, {}},
+          {0, "A", PinType::Float, PinKind::Output, {}}}},
+        {"Combine", "Vector", IM_COL32(160, 120, 200, 255),
+         {{0, "R", PinType::Float, PinKind::Input, {}},
+          {0, "G", PinType::Float, PinKind::Input, {}},
+          {0, "B", PinType::Float, PinKind::Input, {}},
+          {0, "A", PinType::Float, PinKind::Input, {1}}},
+         {{0, "RGBA", PinType::Vec4, PinKind::Output, {}},
+          {0, "RGB", PinType::Vec3, PinKind::Output, {}}}},
+        {"Swizzle XY", "Vector", IM_COL32(160, 120, 200, 255),
+         {{0, "In", PinType::Vec3, PinKind::Input, {}}},
+         {{0, "XY", PinType::Vec2, PinKind::Output, {}}}},
+        {"Make Vec3", "Vector", IM_COL32(160, 120, 200, 255),
+         {{0, "X", PinType::Float, PinKind::Input, {}},
+          {0, "Y", PinType::Float, PinKind::Input, {}},
+          {0, "Z", PinType::Float, PinKind::Input, {}}},
+         {{0, "Result", PinType::Vec3, PinKind::Output, {}}}},
+        // ─── UV operations ───────────────────────────────────────────────
+        {"Tiling Offset", "UV", IM_COL32(180, 160, 60, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Tiling", PinType::Vec2, PinKind::Input, {1, 1, 0, 0}},
+          {0, "Offset", PinType::Vec2, PinKind::Input, {0, 0, 0, 0}}},
+         {{0, "Out", PinType::Vec2, PinKind::Output, {}}}},
+        {"Rotate UV", "UV", IM_COL32(180, 160, 60, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Center", PinType::Vec2, PinKind::Input, {0.5f, 0.5f, 0, 0}},
+          {0, "Angle", PinType::Float, PinKind::Input, {}}},
+         {{0, "Out", PinType::Vec2, PinKind::Output, {}}}},
+        {"Polar UV", "UV", IM_COL32(180, 160, 60, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Center", PinType::Vec2, PinKind::Input, {0.5f, 0.5f, 0, 0}}},
+         {{0, "Out", PinType::Vec2, PinKind::Output, {}}}},
+        {"Parallax Mapping", "UV", IM_COL32(180, 160, 60, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Height", PinType::Float, PinKind::Input, {}},
+          {0, "Scale", PinType::Float, PinKind::Input, {0.04f}}},
+         {{0, "UV", PinType::Vec2, PinKind::Output, {}}}},
+        // ─── Procedural / Noise ──────────────────────────────────────────
+        {"Noise Perlin", "Procedural", IM_COL32(60, 160, 120, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Scale", PinType::Float, PinKind::Input, {10}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Noise Voronoi", "Procedural", IM_COL32(60, 160, 120, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Scale", PinType::Float, PinKind::Input, {5}}},
+         {{0, "Distance", PinType::Float, PinKind::Output, {}},
+          {0, "Cell ID", PinType::Float, PinKind::Output, {}}}},
+        {"Gradient Noise", "Procedural", IM_COL32(60, 160, 120, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Scale", PinType::Float, PinKind::Input, {8}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        {"Checkerboard", "Procedural", IM_COL32(60, 160, 120, 255),
+         {{0, "UV", PinType::Vec2, PinKind::Input, {}},
+          {0, "Scale", PinType::Float, PinKind::Input, {4}}},
+         {{0, "Result", PinType::Float, PinKind::Output, {}}}},
+        // ─── Effect nodes ────────────────────────────────────────────────
+        {"Dissolve", "Effect", IM_COL32(200, 80, 60, 255),
+         {{0, "Noise", PinType::Float, PinKind::Input, {}},
+          {0, "Threshold", PinType::Float, PinKind::Input, {0.5f}},
+          {0, "Edge Width", PinType::Float, PinKind::Input, {0.05f}},
+          {0, "Edge Color", PinType::Color, PinKind::Input, {1, 0.5f, 0, 1}}},
+         {{0, "Alpha", PinType::Float, PinKind::Output, {}},
+          {0, "Edge Mask", PinType::Float, PinKind::Output, {}}}},
+        {"Rim Light", "Effect", IM_COL32(200, 80, 60, 255),
+         {{0, "Power", PinType::Float, PinKind::Input, {3}},
+          {0, "Color", PinType::Color, PinKind::Input, {1, 1, 1, 1}}},
+         {{0, "Result", PinType::Vec3, PinKind::Output, {}}}},
+        {"Triplanar", "Effect", IM_COL32(200, 80, 60, 255),
+         {{0, "Texture", PinType::Texture2D, PinKind::Input, {}},
+          {0, "Sharpness", PinType::Float, PinKind::Input, {1}}},
+         {{0, "Color", PinType::Vec4, PinKind::Output, {}}}},
+        // ─── Input/Geometry ──────────────────────────────────────────────
+        {"World Position", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "Position", PinType::Vec3, PinKind::Output, {}}}},
+        {"World Normal", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "Normal", PinType::Vec3, PinKind::Output, {}}}},
+        {"View Direction", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "Dir", PinType::Vec3, PinKind::Output, {}}}},
+        {"Screen Position", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "ScreenUV", PinType::Vec2, PinKind::Output, {}}}},
+        {"Vertex Color", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "Color", PinType::Vec4, PinKind::Output, {}}}},
+        {"Camera Distance", "Input", IM_COL32(180, 180, 60, 255),
+         {},
+         {{0, "Distance", PinType::Float, PinKind::Output, {}}}},
     };
     return templates;
 }
@@ -600,14 +781,17 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
             if (n.outputs.size() > 2) pin_vars[n.outputs[2].id] = var + ".g";
             if (n.outputs.size() > 3) pin_vars[n.outputs[3].id] = var + ".b";
             if (n.outputs.size() > 4) pin_vars[n.outputs[4].id] = var + ".a";
-        } else if (n.name == "Add" || n.name == "Multiply") {
+        } else if (n.name == "Add" || n.name == "Multiply" || n.name == "Subtract" || n.name == "Divide") {
             std::string a_expr = std::to_string(n.inputs[0].default_value[0]);
             std::string b_expr = std::to_string(n.inputs[1].default_value[0]);
             auto sa = input_source.find(n.inputs[0].id);
             if (sa != input_source.end() && pin_vars.count(sa->second)) a_expr = pin_vars[sa->second];
             auto sb = input_source.find(n.inputs[1].id);
             if (sb != input_source.end() && pin_vars.count(sb->second)) b_expr = pin_vars[sb->second];
-            std::string op = (n.name == "Add") ? " + " : " * ";
+            std::string op = " + ";
+            if (n.name == "Multiply") op = " * ";
+            else if (n.name == "Subtract") op = " - ";
+            else if (n.name == "Divide") op = " / ";
             std::string var = prefix + "out";
             o << "    float " << var << " = " << a_expr << op << b_expr << ";\n";
             if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
@@ -659,6 +843,294 @@ std::string CompileGraphToGLSL(const ShaderGraphState& s) {
             o << "    " << prefix << "raw.xy *= " << strength << ";\n";
             o << "    mat3 " << prefix << "TBN = mat3(normalize(v_tangent), normalize(v_bitangent), normalize(v_normal));\n";
             o << "    vec3 " << var << " = normalize(" << prefix << "TBN * " << prefix << "raw);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Power") {
+            std::string a_expr = std::to_string(n.inputs[0].default_value[0]);
+            std::string b_expr = std::to_string(n.inputs[1].default_value[0]);
+            auto sa = input_source.find(n.inputs[0].id);
+            if (sa != input_source.end() && pin_vars.count(sa->second)) a_expr = pin_vars[sa->second];
+            auto sb = input_source.find(n.inputs[1].id);
+            if (sb != input_source.end() && pin_vars.count(sb->second)) b_expr = pin_vars[sb->second];
+            std::string var = prefix + "out";
+            o << "    float " << var << " = pow(" << a_expr << ", " << b_expr << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Abs" || n.name == "Saturate" || n.name == "Sin" ||
+                   n.name == "Cos" || n.name == "Floor" || n.name == "Fract" ||
+                   n.name == "Negate" || n.name == "One Minus" || n.name == "Normalize" ||
+                   n.name == "Length") {
+            std::string in_expr = std::to_string(n.inputs[0].default_value[0]);
+            auto si = input_source.find(n.inputs[0].id);
+            if (si != input_source.end() && pin_vars.count(si->second)) in_expr = pin_vars[si->second];
+            std::string var = prefix + "out";
+            std::string fn;
+            if (n.name == "Abs") fn = "abs(" + in_expr + ")";
+            else if (n.name == "Saturate") fn = "clamp(" + in_expr + ", 0.0, 1.0)";
+            else if (n.name == "Sin") fn = "sin(" + in_expr + ")";
+            else if (n.name == "Cos") fn = "cos(" + in_expr + ")";
+            else if (n.name == "Floor") fn = "floor(" + in_expr + ")";
+            else if (n.name == "Fract") fn = "fract(" + in_expr + ")";
+            else if (n.name == "Negate") fn = "-(" + in_expr + ")";
+            else if (n.name == "One Minus") fn = "(1.0 - " + in_expr + ")";
+            else if (n.name == "Normalize") fn = "normalize(" + in_expr + ")";
+            else if (n.name == "Length") fn = "length(" + in_expr + ")";
+            bool is_vec = (n.name == "Normalize");
+            o << "    " << (is_vec ? "vec3 " : "float ") << var << " = " << fn << ";\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Clamp") {
+            std::string in_e = "0.0", mn_e = "0.0", mx_e = "1.0";
+            if (n.inputs.size() >= 3) {
+                auto si = input_source.find(n.inputs[0].id);
+                if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+                auto sm = input_source.find(n.inputs[1].id);
+                if (sm != input_source.end() && pin_vars.count(sm->second)) mn_e = pin_vars[sm->second];
+                else mn_e = std::to_string(n.inputs[1].default_value[0]);
+                auto sx = input_source.find(n.inputs[2].id);
+                if (sx != input_source.end() && pin_vars.count(sx->second)) mx_e = pin_vars[sx->second];
+                else mx_e = std::to_string(n.inputs[2].default_value[0]);
+            }
+            std::string var = prefix + "out";
+            o << "    float " << var << " = clamp(" << in_e << ", " << mn_e << ", " << mx_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Step") {
+            std::string edge_e = "0.5", in_e = "0.0";
+            auto se = input_source.find(n.inputs[0].id);
+            if (se != input_source.end() && pin_vars.count(se->second)) edge_e = pin_vars[se->second];
+            else edge_e = std::to_string(n.inputs[0].default_value[0]);
+            auto si = input_source.find(n.inputs[1].id);
+            if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+            std::string var = prefix + "out";
+            o << "    float " << var << " = step(" << edge_e << ", " << in_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Smoothstep") {
+            std::string e0 = "0.0", e1 = "1.0", in_e = "0.5";
+            if (n.inputs.size() >= 3) {
+                auto s0 = input_source.find(n.inputs[0].id);
+                if (s0 != input_source.end() && pin_vars.count(s0->second)) e0 = pin_vars[s0->second];
+                else e0 = std::to_string(n.inputs[0].default_value[0]);
+                auto s1 = input_source.find(n.inputs[1].id);
+                if (s1 != input_source.end() && pin_vars.count(s1->second)) e1 = pin_vars[s1->second];
+                else e1 = std::to_string(n.inputs[1].default_value[0]);
+                auto si = input_source.find(n.inputs[2].id);
+                if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+            }
+            std::string var = prefix + "out";
+            o << "    float " << var << " = smoothstep(" << e0 << ", " << e1 << ", " << in_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Min" || n.name == "Max" || n.name == "Dot") {
+            std::string a_e = "0.0", b_e = "0.0";
+            auto sa = input_source.find(n.inputs[0].id);
+            if (sa != input_source.end() && pin_vars.count(sa->second)) a_e = pin_vars[sa->second];
+            auto sb = input_source.find(n.inputs[1].id);
+            if (sb != input_source.end() && pin_vars.count(sb->second)) b_e = pin_vars[sb->second];
+            std::string fn_name = (n.name == "Min") ? "min" : (n.name == "Max") ? "max" : "dot";
+            std::string var = prefix + "out";
+            o << "    float " << var << " = " << fn_name << "(" << a_e << ", " << b_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Cross") {
+            std::string a_e = "vec3(0)", b_e = "vec3(0)";
+            auto sa = input_source.find(n.inputs[0].id);
+            if (sa != input_source.end() && pin_vars.count(sa->second)) a_e = pin_vars[sa->second];
+            auto sb = input_source.find(n.inputs[1].id);
+            if (sb != input_source.end() && pin_vars.count(sb->second)) b_e = pin_vars[sb->second];
+            std::string var = prefix + "out";
+            o << "    vec3 " << var << " = cross(" << a_e << ", " << b_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Remap") {
+            std::string in_e = "0.0", imn = "0.0", imx = "1.0", omn = "0.0", omx = "1.0";
+            if (n.inputs.size() >= 5) {
+                auto si = input_source.find(n.inputs[0].id);
+                if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+                imn = std::to_string(n.inputs[1].default_value[0]);
+                imx = std::to_string(n.inputs[2].default_value[0]);
+                omn = std::to_string(n.inputs[3].default_value[0]);
+                omx = std::to_string(n.inputs[4].default_value[0]);
+                auto s1 = input_source.find(n.inputs[1].id);
+                if (s1 != input_source.end() && pin_vars.count(s1->second)) imn = pin_vars[s1->second];
+                auto s2 = input_source.find(n.inputs[2].id);
+                if (s2 != input_source.end() && pin_vars.count(s2->second)) imx = pin_vars[s2->second];
+                auto s3 = input_source.find(n.inputs[3].id);
+                if (s3 != input_source.end() && pin_vars.count(s3->second)) omn = pin_vars[s3->second];
+                auto s4 = input_source.find(n.inputs[4].id);
+                if (s4 != input_source.end() && pin_vars.count(s4->second)) omx = pin_vars[s4->second];
+            }
+            std::string var = prefix + "out";
+            o << "    float " << var << " = " << omn << " + (" << in_e << " - " << imn << ") / (" << imx << " - " << imn << ") * (" << omx << " - " << omn << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Split") {
+            std::string in_e = "vec4(0)";
+            auto si = input_source.find(n.inputs[0].id);
+            if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+            std::string var = prefix + "v";
+            o << "    vec4 " << var << " = " << in_e << ";\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = var + ".r";
+            if (n.outputs.size() > 1) pin_vars[n.outputs[1].id] = var + ".g";
+            if (n.outputs.size() > 2) pin_vars[n.outputs[2].id] = var + ".b";
+            if (n.outputs.size() > 3) pin_vars[n.outputs[3].id] = var + ".a";
+        } else if (n.name == "Combine") {
+            auto get_in = [&](int idx, const char* def) -> std::string {
+                auto s = input_source.find(n.inputs[idx].id);
+                if (s != input_source.end() && pin_vars.count(s->second)) return pin_vars[s->second];
+                return def;
+            };
+            std::string r = get_in(0, "0.0"), g = get_in(1, "0.0"), b = get_in(2, "0.0"), a = get_in(3, "1.0");
+            std::string var4 = prefix + "rgba";
+            o << "    vec4 " << var4 << " = vec4(" << r << ", " << g << ", " << b << ", " << a << ");\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = var4;
+            if (n.outputs.size() > 1) pin_vars[n.outputs[1].id] = var4 + ".rgb";
+        } else if (n.name == "Make Vec3") {
+            auto get_in = [&](int idx) -> std::string {
+                auto s = input_source.find(n.inputs[idx].id);
+                if (s != input_source.end() && pin_vars.count(s->second)) return pin_vars[s->second];
+                return "0.0";
+            };
+            std::string var = prefix + "out";
+            o << "    vec3 " << var << " = vec3(" << get_in(0) << ", " << get_in(1) << ", " << get_in(2) << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Tiling Offset") {
+            std::string uv_e = "v_uv";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            std::string var = prefix + "out";
+            o << "    vec2 " << var << " = " << uv_e << " * vec2("
+              << n.inputs[1].default_value[0] << ", " << n.inputs[1].default_value[1]
+              << ") + vec2(" << n.inputs[2].default_value[0] << ", " << n.inputs[2].default_value[1] << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Noise Perlin" || n.name == "Gradient Noise") {
+            std::string uv_e = "v_uv", scale_e = "10.0";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            auto ss = input_source.find(n.inputs[1].id);
+            if (ss != input_source.end() && pin_vars.count(ss->second)) scale_e = pin_vars[ss->second];
+            else scale_e = std::to_string(n.inputs[1].default_value[0]);
+            std::string var = prefix + "out";
+            o << "    vec2 " << prefix << "p = " << uv_e << " * " << scale_e << ";\n";
+            o << "    float " << var << " = fract(sin(dot(" << prefix << "p, vec2(12.9898, 78.233))) * 43758.5453);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Noise Voronoi") {
+            std::string uv_e = "v_uv", scale_e = "5.0";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            auto ss = input_source.find(n.inputs[1].id);
+            if (ss != input_source.end() && pin_vars.count(ss->second)) scale_e = pin_vars[ss->second];
+            else scale_e = std::to_string(n.inputs[1].default_value[0]);
+            std::string var = prefix + "dist";
+            o << "    vec2 " << prefix << "p = " << uv_e << " * " << scale_e << ";\n";
+            o << "    vec2 " << prefix << "i = floor(" << prefix << "p);\n";
+            o << "    vec2 " << prefix << "f = fract(" << prefix << "p);\n";
+            o << "    float " << var << " = 1.0;\n";
+            o << "    float " << prefix << "cell = 0.0;\n";
+            o << "    for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++) {\n";
+            o << "        vec2 nb = vec2(float(x),float(y));\n";
+            o << "        vec2 pt = nb + fract(sin(dot(" << prefix << "i+nb, vec2(127.1,311.7)))*43758.5453) - " << prefix << "f;\n";
+            o << "        float d = dot(pt,pt);\n";
+            o << "        if(d<" << var << "){" << var << "=d; " << prefix << "cell=dot(" << prefix << "i+nb,vec2(7.0,157.0));}\n";
+            o << "    }\n";
+            o << "    " << var << " = sqrt(" << var << ");\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = var;
+            if (n.outputs.size() > 1) pin_vars[n.outputs[1].id] = prefix + "cell";
+        } else if (n.name == "Checkerboard") {
+            std::string uv_e = "v_uv", scale_e = "4.0";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            auto ss = input_source.find(n.inputs[1].id);
+            if (ss != input_source.end() && pin_vars.count(ss->second)) scale_e = pin_vars[ss->second];
+            else scale_e = std::to_string(n.inputs[1].default_value[0]);
+            std::string var = prefix + "out";
+            o << "    float " << var << " = mod(floor(" << uv_e << ".x * " << scale_e << ") + floor(" << uv_e << ".y * " << scale_e << "), 2.0);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Dissolve") {
+            std::string noise_e = "0.5", thresh_e = "0.5", edge_w = "0.05";
+            auto sn = input_source.find(n.inputs[0].id);
+            if (sn != input_source.end() && pin_vars.count(sn->second)) noise_e = pin_vars[sn->second];
+            auto st = input_source.find(n.inputs[1].id);
+            if (st != input_source.end() && pin_vars.count(st->second)) thresh_e = pin_vars[st->second];
+            else thresh_e = std::to_string(n.inputs[1].default_value[0]);
+            auto sw = input_source.find(n.inputs[2].id);
+            if (sw != input_source.end() && pin_vars.count(sw->second)) edge_w = pin_vars[sw->second];
+            else edge_w = std::to_string(n.inputs[2].default_value[0]);
+            std::string alpha_var = prefix + "alpha";
+            std::string edge_var = prefix + "edge";
+            o << "    float " << alpha_var << " = step(" << thresh_e << ", " << noise_e << ");\n";
+            o << "    float " << edge_var << " = smoothstep(" << thresh_e << " - " << edge_w << ", " << thresh_e << ", " << noise_e << ") - " << alpha_var << ";\n";
+            if (n.outputs.size() > 0) pin_vars[n.outputs[0].id] = alpha_var;
+            if (n.outputs.size() > 1) pin_vars[n.outputs[1].id] = edge_var;
+        } else if (n.name == "Rim Light") {
+            std::string power_e = "3.0";
+            auto sp = input_source.find(n.inputs[0].id);
+            if (sp != input_source.end() && pin_vars.count(sp->second)) power_e = pin_vars[sp->second];
+            else power_e = std::to_string(n.inputs[0].default_value[0]);
+            std::string var = prefix + "out";
+            o << "    float " << prefix << "ndv = 1.0 - max(dot(normalize(v_normal), normalize(-v_world_pos)), 0.0);\n";
+            o << "    vec3 " << var << " = vec3(pow(" << prefix << "ndv, " << power_e << "));\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "World Position") {
+            std::string var = prefix + "wp";
+            o << "    vec3 " << var << " = v_world_pos;\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "World Normal") {
+            std::string var = prefix + "wn";
+            o << "    vec3 " << var << " = normalize(v_normal);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "View Direction") {
+            std::string var = prefix + "vd";
+            o << "    vec3 " << var << " = normalize(-v_world_pos);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Screen Position") {
+            std::string var = prefix + "sp";
+            o << "    vec2 " << var << " = gl_FragCoord.xy / vec2(textureSize(u_tex0, 0));\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Vertex Color") {
+            std::string var = prefix + "vc";
+            o << "    vec4 " << var << " = vec4(1.0);\n"; // placeholder
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Camera Distance") {
+            std::string var = prefix + "cd";
+            o << "    float " << var << " = length(v_world_pos);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Swizzle XY") {
+            std::string in_e = "vec3(0)";
+            auto si = input_source.find(n.inputs[0].id);
+            if (si != input_source.end() && pin_vars.count(si->second)) in_e = pin_vars[si->second];
+            std::string var = prefix + "xy";
+            o << "    vec2 " << var << " = " << in_e << ".xy;\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Rotate UV") {
+            std::string uv_e = "v_uv", angle_e = "0.0";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            auto sa = input_source.find(n.inputs[2].id);
+            if (sa != input_source.end() && pin_vars.count(sa->second)) angle_e = pin_vars[sa->second];
+            std::string var = prefix + "out";
+            o << "    vec2 " << prefix << "c = vec2(" << n.inputs[1].default_value[0] << ", " << n.inputs[1].default_value[1] << ");\n";
+            o << "    float " << prefix << "ca = cos(" << angle_e << "), " << prefix << "sa = sin(" << angle_e << ");\n";
+            o << "    vec2 " << var << " = " << prefix << "c + mat2(" << prefix << "ca, -" << prefix << "sa, " << prefix << "sa, " << prefix << "ca) * (" << uv_e << " - " << prefix << "c);\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Polar UV") {
+            std::string uv_e = "v_uv";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            std::string var = prefix + "out";
+            o << "    vec2 " << prefix << "d = " << uv_e << " - vec2(" << n.inputs[1].default_value[0] << ", " << n.inputs[1].default_value[1] << ");\n";
+            o << "    vec2 " << var << " = vec2(atan(" << prefix << "d.y, " << prefix << "d.x) / 6.2832 + 0.5, length(" << prefix << "d));\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Parallax Mapping") {
+            std::string uv_e = "v_uv", h_e = "0.0", scale_e = "0.04";
+            auto su = input_source.find(n.inputs[0].id);
+            if (su != input_source.end() && pin_vars.count(su->second)) uv_e = pin_vars[su->second];
+            auto sh = input_source.find(n.inputs[1].id);
+            if (sh != input_source.end() && pin_vars.count(sh->second)) h_e = pin_vars[sh->second];
+            auto ss = input_source.find(n.inputs[2].id);
+            if (ss != input_source.end() && pin_vars.count(ss->second)) scale_e = pin_vars[ss->second];
+            else scale_e = std::to_string(n.inputs[2].default_value[0]);
+            std::string var = prefix + "out";
+            o << "    vec3 " << prefix << "vts = normalize(mat3(v_tangent, v_bitangent, v_normal) * normalize(-v_world_pos));\n";
+            o << "    vec2 " << var << " = " << uv_e << " + " << prefix << "vts.xy * (" << h_e << " * " << scale_e << ");\n";
+            if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
+        } else if (n.name == "Triplanar") {
+            std::string var = prefix + "out";
+            o << "    vec3 " << prefix << "bl = pow(abs(normalize(v_normal)), vec3(1.0));\n";
+            o << "    " << prefix << "bl /= (" << prefix << "bl.x + " << prefix << "bl.y + " << prefix << "bl.z);\n";
+            o << "    vec4 " << var << " = vec4(" << prefix << "bl.x + " << prefix << "bl.y + " << prefix << "bl.z);\n";
             if (!n.outputs.empty()) pin_vars[n.outputs[0].id] = var;
         } else if (n.name == "PBR Output") {
             // 收集各输入
@@ -1248,6 +1720,100 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         snprintf(zoom_txt, sizeof(zoom_txt), "Zoom: %.0f%%", state.zoom * 100.0f);
         dl->AddText(ImVec2(canvas_pos.x + 8, canvas_pos.y + canvas_size.y - 18),
                     IM_COL32(150, 150, 150, 200), zoom_txt);
+    }
+
+    // ─── 3D PBR Preview Sphere ──────────────────────────────────────────────
+    if (state.show_3d_preview) {
+        ImGui::SetNextWindowSize(ImVec2(220, 280), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Shader Preview", &state.show_3d_preview)) {
+            if (state.preview_auto_rotate) {
+                state.preview_rotation_y += ImGui::GetIO().DeltaTime * 0.5f;
+            }
+            ImGui::Checkbox("Auto Rotate", &state.preview_auto_rotate);
+            ImGui::SliderFloat("Rot Y", &state.preview_rotation_y, -3.14159f, 3.14159f);
+            ImGui::SliderFloat("Rot X", &state.preview_rotation_x, -1.5f, 1.5f);
+            ImGui::SliderFloat3("Light", state.preview_light_dir, -1.0f, 1.0f);
+            ImGui::Separator();
+
+            // Software-rendered PBR sphere preview
+            ImVec2 preview_pos = ImGui::GetCursorScreenPos();
+            const float radius = 64.0f;
+            ImVec2 center(preview_pos.x + radius + 8, preview_pos.y + radius + 4);
+            ImDrawList* pdl = ImGui::GetWindowDrawList();
+
+            // Gather material properties from PBR Output node defaults
+            float base_r = 0.8f, base_g = 0.8f, base_b = 0.8f;
+            float metallic_val = 0.0f, roughness_val = 0.5f;
+            for (auto& nd : state.nodes) {
+                if (nd.name == "PBR Output") {
+                    if (nd.inputs.size() > 0) { base_r = nd.inputs[0].default_value[0]; base_g = nd.inputs[0].default_value[1]; base_b = nd.inputs[0].default_value[2]; }
+                    if (nd.inputs.size() > 1) metallic_val = nd.inputs[1].default_value[0];
+                    if (nd.inputs.size() > 2) roughness_val = nd.inputs[2].default_value[0];
+                    break;
+                }
+            }
+
+            // Light direction (normalized)
+            float lx = state.preview_light_dir[0], ly = state.preview_light_dir[1], lz = state.preview_light_dir[2];
+            float llen = std::sqrt(lx*lx + ly*ly + lz*lz);
+            if (llen > 0.001f) { lx /= llen; ly /= llen; lz /= llen; }
+
+            // Render sphere pixel by pixel (low-res for performance)
+            const int res = 32;
+            float pixel_size = radius * 2.0f / static_cast<float>(res);
+            float cos_ry = std::cos(state.preview_rotation_y), sin_ry = std::sin(state.preview_rotation_y);
+            float cos_rx = std::cos(state.preview_rotation_x), sin_rx = std::sin(state.preview_rotation_x);
+
+            for (int py_i = 0; py_i < res; py_i++) {
+                for (int px_i = 0; px_i < res; px_i++) {
+                    float u = (static_cast<float>(px_i) + 0.5f) / static_cast<float>(res) * 2.0f - 1.0f;
+                    float v = (static_cast<float>(py_i) + 0.5f) / static_cast<float>(res) * 2.0f - 1.0f;
+                    float r2 = u * u + v * v;
+                    if (r2 > 1.0f) continue;
+                    float nz_local = std::sqrt(1.0f - r2);
+                    float nx = u, ny = -v, nz = nz_local;
+                    // Rotate normal
+                    float nx2 = nx * cos_ry + nz * sin_ry;
+                    float nz2 = -nx * sin_ry + nz * cos_ry;
+                    nx = nx2; nz = nz2;
+                    float ny2 = ny * cos_rx - nz * sin_rx;
+                    float nz3 = ny * sin_rx + nz * cos_rx;
+                    ny = ny2; nz = nz3;
+                    // Lambertian diffuse
+                    float ndl = std::max(0.0f, nx * lx + ny * ly + nz * lz);
+                    // Specular (Blinn-Phong approx for preview)
+                    float vx = 0, vy = 0, vz = 1; // view dir
+                    float hx = lx + vx, hy = ly + vy, hz = lz + vz;
+                    float hlen = std::sqrt(hx*hx + hy*hy + hz*hz);
+                    if (hlen > 0.001f) { hx /= hlen; hy /= hlen; hz /= hlen; }
+                    float ndh = std::max(0.0f, nx * hx + ny * hy + nz * hz);
+                    float spec_power = 2.0f / (roughness_val * roughness_val + 0.001f);
+                    float spec = std::pow(ndh, spec_power) * (1.0f - roughness_val);
+                    // Mix based on metallic
+                    float diff_r = base_r * ndl * (1.0f - metallic_val);
+                    float diff_g = base_g * ndl * (1.0f - metallic_val);
+                    float diff_b = base_b * ndl * (1.0f - metallic_val);
+                    float spec_r = (metallic_val * base_r + (1.0f - metallic_val) * 0.04f) * spec;
+                    float spec_g = (metallic_val * base_g + (1.0f - metallic_val) * 0.04f) * spec;
+                    float spec_b = (metallic_val * base_b + (1.0f - metallic_val) * 0.04f) * spec;
+                    // Ambient
+                    float amb = 0.03f;
+                    float cr = std::min(1.0f, diff_r + spec_r + amb * base_r);
+                    float cg = std::min(1.0f, diff_g + spec_g + amb * base_g);
+                    float cb = std::min(1.0f, diff_b + spec_b + amb * base_b);
+                    // Gamma
+                    cr = std::pow(cr, 1.0f / 2.2f);
+                    cg = std::pow(cg, 1.0f / 2.2f);
+                    cb = std::pow(cb, 1.0f / 2.2f);
+                    ImU32 col = IM_COL32(static_cast<int>(cr * 255), static_cast<int>(cg * 255), static_cast<int>(cb * 255), 255);
+                    ImVec2 pmin(center.x + u * radius - pixel_size * 0.5f, center.y + v * radius - pixel_size * 0.5f);
+                    ImVec2 pmax(pmin.x + pixel_size, pmin.y + pixel_size);
+                    pdl->AddRectFilled(pmin, pmax, col);
+                }
+            }
+            ImGui::Dummy(ImVec2(radius * 2 + 16, radius * 2 + 8));
+        }
+        ImGui::End();
     }
 
     ImGui::End();

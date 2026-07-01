@@ -35,28 +35,122 @@ void DrawMaterialPanel(EditorContext& ctx) {
 
     auto& mesh = registry.get<dse::MeshRendererComponent>(selected_entity);
 
-    // Material preview sphere (approximate with ImDrawList)
+    // ─── Real-time PBR Preview Sphere (software-rendered per-pixel) ─────
     {
+        static float s_preview_rot_y = 0.0f;
+        static float s_preview_rot_x = 0.3f;
+        static bool s_auto_rotate = true;
+        static float s_light_dir[3] = {0.5f, 0.7f, 0.5f};
+        static float s_env_intensity = 0.3f;
+
+        ImGui::Text(MDI_ICON_SPHERE "  Material Preview");
+        if (s_auto_rotate) s_preview_rot_y += ImGui::GetIO().DeltaTime * 0.4f;
+        ImGui::Checkbox("Auto Rotate##mat", &s_auto_rotate);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        ImGui::SliderFloat("##rot_y_mat", &s_preview_rot_y, -3.14159f, 3.14159f, "Y:%.2f");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        ImGui::SliderFloat("##env_int", &s_env_intensity, 0.0f, 1.0f, "Env:%.2f");
+
         ImVec2 preview_pos = ImGui::GetCursorScreenPos();
-        const float sphere_radius = 32.0f;
+        const float sphere_radius = 56.0f;
         ImVec2 center(preview_pos.x + sphere_radius + 8, preview_pos.y + sphere_radius + 4);
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
-        // Draw a shaded circle to approximate PBR sphere preview
-        ImU32 base_color = ImGui::ColorConvertFloat4ToU32(
-            ImVec4(mesh.color.r, mesh.color.g, mesh.color.b, mesh.color.a));
-        dl->AddCircleFilled(center, sphere_radius, base_color, 48);
+        // Material parameters
+        float base_r = mesh.color.r, base_g = mesh.color.g, base_b = mesh.color.b;
+        float metallic_val = mesh.metallic;
+        float roughness_val = mesh.roughness;
+        float emissive_r = mesh.emissive.r;
+        float emissive_g = mesh.emissive.g;
+        float emissive_b = mesh.emissive.b;
 
-        // Specular highlight (approximation based on roughness)
-        float highlight_size = sphere_radius * (1.0f - mesh.roughness) * 0.4f;
-        if (highlight_size > 2.0f) {
-            ImVec2 highlight_center(center.x - sphere_radius * 0.25f, center.y - sphere_radius * 0.25f);
-            ImU32 highlight_color = IM_COL32(255, 255, 255, static_cast<int>((1.0f - mesh.roughness) * 180));
-            dl->AddCircleFilled(highlight_center, highlight_size, highlight_color, 24);
+        // Normalized light direction
+        float lx = s_light_dir[0], ly = s_light_dir[1], lz = s_light_dir[2];
+        float llen = std::sqrt(lx*lx + ly*ly + lz*lz);
+        if (llen > 0.001f) { lx /= llen; ly /= llen; lz /= llen; }
+
+        // Render sphere pixel-by-pixel (low-res for performance)
+        const int res = 28;
+        float pixel_size = sphere_radius * 2.0f / static_cast<float>(res);
+        float cos_ry = std::cos(s_preview_rot_y), sin_ry = std::sin(s_preview_rot_y);
+        float cos_rx = std::cos(s_preview_rot_x), sin_rx = std::sin(s_preview_rot_x);
+
+        for (int py = 0; py < res; py++) {
+            for (int px = 0; px < res; px++) {
+                float u = (static_cast<float>(px) + 0.5f) / res * 2.0f - 1.0f;
+                float v = (static_cast<float>(py) + 0.5f) / res * 2.0f - 1.0f;
+                float r2 = u * u + v * v;
+                if (r2 > 1.0f) continue;
+
+                float nz_local = std::sqrt(1.0f - r2);
+                float nx_local = u, ny_local = -v;
+
+                // Rotate normal
+                float nx1 = nx_local * cos_ry + nz_local * sin_ry;
+                float nz1 = -nx_local * sin_ry + nz_local * cos_ry;
+                float ny1 = ny_local * cos_rx + nz1 * sin_rx;
+                float nz2 = -ny_local * sin_rx + nz1 * cos_rx;
+                (void)nz2;
+
+                // Lambertian diffuse
+                float ndotl = std::max(0.0f, nx1 * lx + ny1 * ly + nz1 * lz);
+
+                // View direction (camera at z=inf, so V = (0,0,1) in local space)
+                float vx = 0, vy = 0, vz = 1.0f;
+                // Halfway vector
+                float hx = lx + vx, hy = ly + vy, hz = lz + vz;
+                float hlen = std::sqrt(hx*hx + hy*hy + hz*hz);
+                if (hlen > 0.001f) { hx /= hlen; hy /= hlen; hz /= hlen; }
+                float ndoth = std::max(0.0f, nx_local * hx + ny_local * hy + nz_local * hz);
+
+                // Specular (Blinn-Phong approximation of GGX)
+                float alpha = roughness_val * roughness_val;
+                float spec_power = 2.0f / (alpha * alpha + 0.001f) - 2.0f;
+                spec_power = std::max(1.0f, std::min(2048.0f, spec_power));
+                float spec = std::pow(ndoth, spec_power) * (spec_power + 2.0f) / 8.0f;
+
+                // Fresnel (Schlick)
+                float f0_val = 0.04f + metallic_val * 0.96f;
+                float fresnel = f0_val + (1.0f - f0_val) * std::pow(1.0f - std::max(0.0f, ndoth), 5.0f);
+
+                // Combine: metallic uses base color as specular color
+                float diff_r = base_r * (1.0f - metallic_val) * ndotl;
+                float diff_g = base_g * (1.0f - metallic_val) * ndotl;
+                float diff_b = base_b * (1.0f - metallic_val) * ndotl;
+
+                float spec_r = (metallic_val * base_r + (1.0f - metallic_val) * f0_val) * spec * fresnel;
+                float spec_g = (metallic_val * base_g + (1.0f - metallic_val) * f0_val) * spec * fresnel;
+                float spec_b = (metallic_val * base_b + (1.0f - metallic_val) * f0_val) * spec * fresnel;
+
+                // Ambient / environment
+                float amb_r = base_r * s_env_intensity * (0.5f + 0.5f * ny1);
+                float amb_g = base_g * s_env_intensity * (0.5f + 0.5f * ny1);
+                float amb_b = base_b * s_env_intensity * (0.5f + 0.5f * ny1);
+
+                float final_r = diff_r + spec_r + amb_r + emissive_r;
+                float final_g = diff_g + spec_g + amb_g + emissive_g;
+                float final_b = diff_b + spec_b + amb_b + emissive_b;
+
+                // Tone mapping + gamma
+                final_r = final_r / (final_r + 1.0f);
+                final_g = final_g / (final_g + 1.0f);
+                final_b = final_b / (final_b + 1.0f);
+                final_r = std::pow(final_r, 1.0f / 2.2f);
+                final_g = std::pow(final_g, 1.0f / 2.2f);
+                final_b = std::pow(final_b, 1.0f / 2.2f);
+
+                int ir = std::min(255, static_cast<int>(final_r * 255));
+                int ig = std::min(255, static_cast<int>(final_g * 255));
+                int ib = std::min(255, static_cast<int>(final_b * 255));
+
+                ImVec2 pmin(center.x + (u - 1.0f / res) * sphere_radius,
+                            center.y + (v - 1.0f / res) * sphere_radius);
+                ImVec2 pmax(pmin.x + pixel_size, pmin.y + pixel_size);
+                dl->AddRectFilled(pmin, pmax, IM_COL32(ir, ig, ib, 255));
+            }
         }
-
-        // Metallic rim darkening
-        dl->AddCircle(center, sphere_radius, IM_COL32(0, 0, 0, static_cast<int>(mesh.metallic * 120)), 48, 2.0f);
 
         ImGui::Dummy(ImVec2(sphere_radius * 2 + 16, sphere_radius * 2 + 8));
     }

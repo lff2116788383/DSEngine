@@ -111,7 +111,14 @@
 #include "editor_terrain_tools.h"
 #include "editor_curve_editor.h"
 #include "editor_visual_script.h"
+#include "editor_visual_script_debugger.h"
 #include "editor_anim_retarget.h"
+#include "editor_animation_clip.h"
+#include "editor_sequencer.h"
+#include "editor_terrain_sculpt_preview.h"
+#include "editor_world_partition_editor.h"
+#include "editor_plugin_hot_reload.h"
+#include "editor_version_control.h"
 #include "editor_crash.h"
 
 
@@ -1206,17 +1213,33 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     }
 
     if (show_git_) {
-        ImGui::SetNextWindowSize(ImVec2(360, 260), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Git", &show_git_)) {
-            ImGui::TextDisabled("Git integration is not yet available.");
-            ImGui::Spacing();
-            ImGui::Text("Planned features:");
-            ImGui::BulletText("Repository status");
-            ImGui::BulletText("Commit / push / pull");
-            ImGui::BulletText("Branch management");
-            ImGui::BulletText("Diff viewer");
-        }
-        ImGui::End();
+        dse::editor::DrawVersionControlPanel(ctx);
+    }
+
+    // Visual Script Debugger (shown alongside Visual Script editor)
+    if (show_visual_script_) {
+        dse::editor::DrawVisualScriptDebugger(ctx);
+    }
+
+    // Animation Clip Editor (bone pose + curve fine-tuning + additive layers)
+    if (show_animation_) {
+        dse::editor::DrawAnimationClipEditor(ctx);
+    }
+
+    // Cinematic Sequencer (multi-track timeline editor)
+    {
+        static bool show_sequencer = true;
+        if (show_sequencer) dse::editor::DrawSequencerPanel(ctx);
+    }
+
+    // Terrain Sculpt Preview (real-time brush visualization)
+    if (show_terrain_editor_) {
+        dse::editor::DrawTerrainSculptPreview(ctx);
+    }
+
+    // World Partition Editor (cell boundary editing tool)
+    if (show_streaming_debug_) {
+        dse::editor::DrawWorldPartitionEditor(ctx);
     }
 
     // Plugin Manager 面板
@@ -1226,6 +1249,8 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
             dse::editor::DrawPluginManagerPanel(plugin_manager_);
         }
         ImGui::End();
+        // Plugin Hot Reload panel (alongside plugin manager)
+        dse::editor::DrawPluginHotReloadPanel(ctx);
     }
 
     // Plugin API: update and draw custom panels
