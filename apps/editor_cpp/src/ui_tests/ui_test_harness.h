@@ -63,6 +63,7 @@ struct UiTestServices {
     bool* show_preferences = nullptr;
     bool* show_plugins = nullptr;
     bool* show_chat = nullptr;
+    bool* show_blueprint = nullptr;
 };
 
 /// 建测试引擎并绑定到 ui_ctx；配置无头快跑 IO；注册全部用例；Start 并按 filter 入队。

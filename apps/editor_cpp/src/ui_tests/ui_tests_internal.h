@@ -114,6 +114,7 @@ void RegisterLayoutSettingsTests(ImGuiTestEngine* engine);  // ⑧ 布局/设置
 void RegisterMiscEditorTests(ImGuiTestEngine* engine);      // ⑨ autosave/build/outline/camera/physics
 void RegisterMultiSelectTests(ImGuiTestEngine* engine);     // ⑩ 多选/框选/跨场景复制粘贴
 void RegisterEditorFeatureTests(ImGuiTestEngine* engine);   // ⑪ Editor feature panels #2-#9
+void RegisterBlueprintTests(ImGuiTestEngine* engine);       // ⑫ Blueprint system
 
 } // namespace dse::editor::uitest
 

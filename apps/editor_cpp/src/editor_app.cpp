@@ -119,6 +119,7 @@
 #include "editor_world_partition_editor.h"
 #include "editor_plugin_hot_reload.h"
 #include "editor_version_control.h"
+#include "editor_blueprint.h"
 #include "editor_crash.h"
 
 
@@ -622,6 +623,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // 扫描插件目录
     plugin_manager_.ScanPlugins(GetProjectRootPath() / "plugins");
 
+    // Initialize Blueprint system (node registry + default event graph)
+    dse::editor::bp::InitBlueprintSystem();
+
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
 #ifdef DSE_EDITOR_UI_TESTS
@@ -653,6 +657,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_preferences          = &show_preferences_;
         ui_services.show_plugins              = &show_plugins_panel_;
         ui_services.show_chat                 = &show_chat_panel_;
+        ui_services.show_blueprint            = &show_blueprint_;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
             ui_services,
@@ -1219,6 +1224,15 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     // Visual Script Debugger (shown alongside Visual Script editor)
     if (show_visual_script_) {
         dse::editor::DrawVisualScriptDebugger(ctx);
+    }
+
+    // Blueprint Editor (complete blueprint system)
+    if (show_blueprint_) {
+        ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Blueprint Editor", &show_blueprint_)) {
+            dse::editor::bp::DrawBlueprintEditor(ctx);
+        }
+        ImGui::End();
     }
 
     // Animation Clip Editor (bone pose + curve fine-tuning + additive layers)

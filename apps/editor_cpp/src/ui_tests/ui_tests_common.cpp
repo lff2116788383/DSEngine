@@ -48,7 +48,7 @@ void EnsureAllPanelsVisible() {
         s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
         s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
-        s.show_preferences, s.show_plugins, s.show_chat,
+        s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
     };
     for (bool* p : toggles)
         if (p) *p = true;
@@ -63,7 +63,7 @@ void HideOptionalPanels() {
         s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
         s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
-        s.show_preferences, s.show_plugins, s.show_chat,
+        s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
     };
     for (bool* p : toggles)
         if (p) *p = false;
@@ -237,6 +237,7 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterMiscEditorTests(engine);
     RegisterMultiSelectTests(engine);
     RegisterEditorFeatureTests(engine);
+    RegisterBlueprintTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
 }
