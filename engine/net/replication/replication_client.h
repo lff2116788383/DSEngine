@@ -1,39 +1,49 @@
 /**
  * @file replication_client.h
- * @brief 客户端镜像复制（MVP）：把服务器发来的 spawn/despawn/快照应用到本地镜像 registry。
+ * @brief 客户端镜像复制：协议握手、spawn/despawn、全量/增量快照、RPC、ACK。
  *
  * 用法（纯客户端进程）：
  *   ReplicationClient cli;
  *   cli.Init(transport, &mirror.registry());
- *   ConnectionId s = transport->Connect(addr);   // cli 在 OnConnected 里记录 server 连接
- *   每帧：transport->Poll(cli); （需要时）cli.SendMove(...)
+ *   ConnectionId s = transport->Connect(addr);
+ *   每帧：transport->Poll(cli);
  *
- * 客户端不拥有权威：本地修改不直接生效，只能经 SendMove 请求服务器，由服务器回传快照。
+ * 客户端不拥有权威：本地修改不直接生效，只能经 SendMove/RPC 请求服务器。
  */
 #ifndef DSE_NET_REPLICATION_REPLICATION_CLIENT_H
 #define DSE_NET_REPLICATION_REPLICATION_CLIENT_H
 
 #include <cstdint>
+#include <functional>
 #include <unordered_map>
 
 #include <entt/entt.hpp>
 
 #include "engine/net/net_transport.h"
 #include "engine/net/replication/repl_protocol.h"
+#include "engine/net/rpc/rpc_registry.h"
 
 namespace dse::net::repl {
 
 class ReplicationClient final : public INetListener {
 public:
-    /// 绑定传输与本地镜像 registry。两者生命周期需覆盖本对象。
     void Init(INetTransport* transport, entt::registry* mirror);
 
-    /// 向服务器发送一次移动输入请求（可靠，C→S）。target 为要移动的实体 NetId。
+    /// 向服务器发送一次移动输入请求。
     void SendMove(NetId target, float dx, float dy, float dz);
 
+    /// 发送 RPC 到服务器。
+    bool SendRpc(RpcId rpc_id, NetId target, const void* payload = nullptr, size_t len = 0);
+    bool SendRpcByName(const std::string& name, NetId target, const void* payload = nullptr, size_t len = 0);
+
+    /// 获取 RPC 注册表（用于注册 Client RPC handler）。
+    dse::net::rpc::RpcRegistry& Rpc() { return rpc_; }
+
     ConnectionId  ServerConn() const { return server_conn_; }
-    entt::entity  ToEntity(NetId id) const;        ///< 未知返回 entt::null
+    entt::entity  ToEntity(NetId id) const;
     size_t        MirrorCount() const { return net2ent_.size(); }
+    bool          IsConnected() const { return handshake_done_; }
+    uint32_t      LastReceivedSeq() const { return last_received_seq_; }
 
     // ── INetListener ──
     void OnConnected(ConnectionId c) override;
@@ -41,10 +51,23 @@ public:
     void OnMessage(ConnectionId c, const MessageView& m, LaneId lane) override;
 
 private:
+    void SendHandshake();
+    void SendSnapshotAck();
+    void HandleHandshakeAck(const uint8_t* data, size_t size);
+    void HandleSpawn(const uint8_t* data, size_t size);
+    void HandleDespawn(const uint8_t* data, size_t size);
+    void HandleSnapshot(const uint8_t* data, size_t size);
+    void HandleDeltaSnapshot(const uint8_t* data, size_t size);
+    void HandleRpcCall(const uint8_t* data, size_t size);
+
     INetTransport*  transport_   = nullptr;
     entt::registry* mirror_      = nullptr;
     ConnectionId    server_conn_ = kInvalidConnection;
+    bool            handshake_done_ = false;
+    uint32_t        last_received_seq_ = 0;
     std::unordered_map<NetId, entt::entity> net2ent_;
+
+    dse::net::rpc::RpcRegistry rpc_;
 };
 
 } // namespace dse::net::repl

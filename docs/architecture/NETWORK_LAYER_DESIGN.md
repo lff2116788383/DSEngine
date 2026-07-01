@@ -1,7 +1,7 @@
 # DSEngine 网络层设计方案（v2）
 
 > 目标分支：`feature/engine-lib`
-> 状态：**设计待评审 + MVP 已落地**（传输底座已实现并三端实测；复制/同步层的**最小可用闭环**已实现，见 §8「MVP 已实现」）
+> 状态：**Phase 1–7 已完整实现**（传输底座三端实测 + 复制层完整落地：协议握手、位级序列化、delta 压缩、AOI、通用 RPC、C ABI + Lua 绑定；仅 Phase 8 客户端预测/插值留后续）
 > v2 相对 v1 的变化（吃进评审意见）：① `NetId` 由"直接用 64-bit UUID"改为**会话内紧凑稠密 id**（复用 Phase 7 `Handle{index,generation}`），UUID 仅用于 spawn 关联/持久化；② 新增 §4.12「协议版本/迟加入/重连」；③ §4.3/§4.8/§4.9 写清范围限制；④ §10 重构为「技术债与范围限制（诚实登记 D-1…D-6）」。
 > 前置文档：
 > - `docs/plans/NETWORK_GNS_INTEGRATION_PLAN.md` —— 传输底座选型与构建方案（GNS）
@@ -40,12 +40,12 @@ DSEngine 现在有一套**已实测、可用的传输底座**（`engine/net`，G
 | HTTP | `engine/http`：异步 HTTP(S) 客户端（IXWebSocket + OpenSSL），`Poll()` 回调在调用线程 | ✅ 完整，用于调 REST/LLM |
 | 构建 | `DSE_ENABLE_NET` 默认 OFF；`engine/net/**`、`engine/http/**` 从主目标 FILTER 掉，仅 ON 时编为独立 `dse_net`/`dse_http` | ✅ 零回归 |
 | 测试 | `tests/net/{net_smoke,net_capi_smoke,net_lua_smoke}` 回环冒烟（reliable+unreliable+lane）；Linux/Win 运行、Android 编链 | ✅ 已验 |
-| **高层复制/同步** | **无** | ❌ 没有实体复制、状态同步、RPC、预测/插值、AOI |
-| **网络序列化** | 只有 rapidjson（场景存档 `scene_component_serialization.*`，JSON，可读但体积大） | ❌ 缺紧凑二进制 + 量化 + 位打包，per-frame 复制不能用 JSON |
+| **高层复制/同步** | `engine/net/replication/`：协议握手 + delta 压缩 + AOI + 通用 RPC；`repl_c_api.h` C ABI + `lua_binding_repl.cpp` Lua 绑定 | ✅ Phase 1–7 完整实现（仅 Phase 8 预测/插值待实现） |
+| **网络序列化** | `serialize/net_bitwriter.h`（位级量化 + smallest-three 四元数）+ `byte_stream.h`（字节级 POD） | ✅ 双路径就绪：结构化消息用字节流，高频状态用位流 |
 | 传输实例数 | GNS 状态回调是进程级的，`GnsTransport` 用全局 `s_active` 路由 | ⚠️ 同进程同时只能一个 transport 实例 |
 | P2P/NAT | `ENABLE_ICE=OFF`、`USE_STEAMWEBRTC=OFF`，仅直连 | ⚠️ 需公网 IP / 端口转发 / 专用服务器 |
 
-**一句话**：传输地基扎实，**缺的是"地基之上的房子"——把 ECS 世界状态在多端之间自动同步的复制层**。这也是 `NETWORK_GNS_INTEGRATION_PLAN.md §0` 早已点明的事实："传输库只负责把字节送达；预测/复制/AOI 要我们在 `engine/net` 之上自己实现"。
+**一句话**：传输地基 + 复制层均已完整实现。Phase 1–7 全部落地（协议握手、位级序列化、delta 压缩、AOI、通用 RPC、C ABI + Lua 绑定），仅 Phase 8 客户端预测/插值留后续。
 
 ---
 
@@ -373,47 +373,48 @@ DSE_RPC(RpcTarget::Multicast, void PlayVfx(NetId at, uint16_t vfxId));
 
 ## 8. 分阶段路线图
 
-| Phase | 内容 | 交付物 / 验收 |
-|---|---|---|
-| **0** | 本设计文档评审 | 本文档（待评审） |
-| **1** | `serialize/`：`NetBitWriter/Reader` + 量化 + 单测 | `bitwriter_test` 往返通过 |
-| **2** | `NetId`/`NetWorld` + `ArchetypeId` 注册表 + spawn/despawn（可靠道）回环 | `repl_smoke`：client 镜像出现/消失 |
-| **3** | `ReplicationTraits` + 全量快照复制（先不做 delta） | server 改 Transform → client 收到（回环 exit 0） |
-| **4** | 增量（delta）+ per-conn baseline + ack（不可靠道 + 环形缓冲） | 带宽较全量显著下降；丢包下最终一致 |
-| **5** | AOI（Always + 距离裁剪）+ lane/带宽预算 | 大量实体下每连接只收相关子集 |
-| **6** | RPC（C→S 校验、S→C/multicast）+ 宏/注册表 + 单测 | `rpc_smoke` 双向通过 |
-| **7** | C ABI `dse_repl_*` + Lua `dse.repl` 绑定 | Lua 脚本可注册 RPC / 标注复制（lua smoke） |
-| **8（进阶）** | 客户端预测 + 服务器校正 + 远端插值 | 高延迟下手感平滑（演示工程） |
-| **后续** | P2P/ICE（开 WebRTC submodule）、host-migration、网格 AOI、回放 | 独立工程 |
+| Phase | 内容 | 状态 | 交付物 / 验收 |
+|---|---|---|---|
+| **0** | 本设计文档评审 | ✅ 完成 | 本文档 |
+| **1** | `serialize/`：`NetBitWriter/Reader` + 量化 + 单测 | ✅ 完成 | `net_bitwriter.h`：bool/U8-U32/F32/量化/四元数smallest-three 往返通过 |
+| **2** | `NetId`/`NetWorld` + spawn/despawn（可靠道）回环 | ✅ 完成 | `repl_smoke`：client 镜像出现/消失 |
+| **3** | 全量快照复制 | ✅ 完成 | server 改 Transform → client 收到（回环 exit 0） |
+| **4** | 增量 delta + per-conn baseline + ack | ✅ 完成 | `DeltaFlags` 标志位 + 仅发变化字段；`SnapshotAck` 确认机制 |
+| **5** | AOI（Always + 距离裁剪） | ✅ 完成 | `AoiManager`：实体进出自动 spawn/despawn；`net_full_test` 验证 |
+| **6** | RPC（C→S 校验、S→C/multicast）+ 注册表 | ✅ 完成 | `RpcRegistry`：类型安全注册/派发/校验；`net_full_test` 双向通过 |
+| **7** | C ABI `dse_repl_*` + Lua `dse.repl` 绑定 | ✅ 完成 | 扁平 C API + Lua module（server/client/RPC 全覆盖） |
+| **8（进阶）** | 客户端预测 + 服务器校正 + 远端插值 | 🔲 待实现 | 高延迟下手感平滑（演示工程） |
+| **后续** | P2P/ICE、host-migration、网格 AOI、回放 | 🔲 待实现 | 独立工程 |
 
 每阶段：补回环/单元测试 + 更新本文档进度 + 三端 `-WithNet` 回归保持绿。
 
-### 8.1 MVP 已实现（最小可用联机闭环）
+### 8.1 已实现能力（Phase 1–7 完整落地）
 
-本次落地了一个**最小但端到端可用**的复制闭环，覆盖 Phase 1–3 与 Phase 6 的核心（输入 RPC），默认 `DSE_ENABLE_NET=OFF` 零回归：
+网络层已从 MVP 升级为**完整可用的复制系统**，覆盖 Phase 1–7，默认 `DSE_ENABLE_NET=OFF` 零回归：
 
 | 能力 | 实现 |
 |---|---|
-| 字节序列化 | `serialize/byte_stream.h`（`ByteWriter/ByteReader`，小端 POD） |
-| 网络身份 | `repl_protocol.h`：`NetId`（MVP 用 `uint32_t` 自增）、`MsgType`、`ArchetypeId` |
-| Transform 编解码 | `repl_transform_codec.h`：position+rotation+scale = 10×f32，两端共用 |
-| 服务器权威复制 | `ReplicationServer`：`MarkReplicated(e, owner)/SetOwner/Unreplicate/Tick`，广播 spawn/despawn（可靠）+ 全量快照（不可靠） |
-| 输入 RPC 权威校验 | InputMove 三重校验：①目标存在且存活 ②**来源连接为该实体属主**（非属主拒绝）③幅度上限；另有**每连接每-tick 输入限流**（防 flood） |
-| 客户端镜像 | `ReplicationClient`：应用 spawn/despawn/快照到镜像 registry，`SendMove` 发输入；late-join 由服务器 `OnConnected` 补发当前全部 spawn |
-| 回环测试 | `tests/net/repl_smoke.cpp` → ctest `dse_repl_smoke`：握手→spawn→快照一致→**所有权负例（非属主移动被拒）**→属主输入RPC服务器权威移动→despawn，exit 0 |
+| **位级序列化** | `serialize/net_bitwriter.h`（`NetBitWriter/Reader`）：任意位宽整数(1-32bit)、量化浮点(N-bit)、四元数 smallest-three(29bit) |
+| 字节序列化 | `serialize/byte_stream.h`（`ByteWriter/ByteReader`，小端 POD）— 用于结构化消息 |
+| **协议版本握手** | `repl_protocol.h`：连接建立后先交换 `kProtocolVersion`，不匹配则 `Close(Rejected)` — D-9 已偿还 |
+| 网络身份 | `repl_protocol.h`：`NetId`（`uint32_t` 自增）、`MsgType`（完整消息类型：握手/spawn/despawn/快照/delta/ACK/输入/RPC）、`RpcId`、`RpcTarget` |
+| Transform 编解码 | `repl_transform_codec.h`：position+rotation+scale = 10×f32 |
+| **增量 delta 压缩** | `ReplicationServer::SendDeltaToClient`：per-conn baseline + 变化字段标志位(DeltaFlags) + 仅发送变化分量，显著降低带宽 |
+| **快照 ACK** | 客户端 `SnapshotAck` 确认已收序号 → 服务器更新 `last_acked_seq` → 决定 delta 或 fallback 全量 |
+| **AOI 兴趣裁剪** | `repl_aoi.h`（`AoiManager`）：`Always`（全局可见）+ `Distance(radius)`（距离裁剪），每 Tick 自动 spawn/despawn 进出实体 |
+| **通用 RPC 注册表** | `rpc/rpc_registry.h`（`RpcRegistry`）：类型安全注册、双向派发(C→S+S→C/Multicast)、Server RPC 权限校验、按名查找 |
+| 服务器权威复制 | `ReplicationServer`：协议握手 + spawn/despawn + delta/全量快照 + AOI + RPC 派发 + 输入限流 |
+| 客户端镜像 | `ReplicationClient`：自动握手 + spawn/despawn + 全量/delta 快照应用 + ACK + RPC 发送/接收 |
+| **复制层 C ABI** | `repl_c_api.h`：`dse_repl_server_*`/`dse_repl_client_*`/`dse_rpc_*` 扁平接口，供 Lua/C# 调用 |
+| **Lua 绑定** | `lua_binding_repl.cpp`：`dse.repl.*`（server/client 全生命周期 + RPC 注册/调用），常量 AOI_ALWAYS/AOI_DISTANCE/RPC_SERVER/RPC_CLIENT/RPC_MULTICAST |
+| 回环测试 | `tests/net/repl_smoke.cpp`（MVP 闭环）+ `tests/net/net_full_test.cpp`（完整：位序列化+RPC注册表+AOI+握手+delta+RPC调用+AOI进出） |
 
-**MVP 的有意简化（对应后续 Phase / §10 技术债）：**
-- 只复制 `TransformComponent` 一种组件（Phase 3 的 `ReplicationTraits<T>` 泛化留后续）。
-- **内存：**`ByteWriter` 走 `std::vector` 默认 allocator，**未计入 `MemoryTag::Net`**，且每条消息一次堆分配（未用对象池）——偏离 §4 内存集成（→ §10.1 D-7）。
-- **全量快照单包发送，未分片/未限 MTU**：实体多时单个不可靠消息可能超 GNS 上限（→ §10.1 D-8，Phase 4 delta + 分片解决）。
-- **无协议版本握手**（§4.12 已设计但 MVP 未实现）：双端构建不一致会错误解析字节（→ §10.1 D-9）。
-- **四元数镜像端直接覆盖、未重新归一化**（MVP 无量化故暂无误差，属隐患）。
-- **全量快照**，无 delta/baseline/ack（Phase 4）。
-- 无 AOI，所有被标记实体发给所有客户端（Phase 5）。
-- 全部走默认 lane 0（靠 `SendMode` 区分可靠/不可靠），未做多 lane 优先级调度（Phase 5）。
-- `NetId` 用 `uint32_t` 自增，未用 §4.2 的 `{index,generation}` 紧凑句柄 + 位压缩（后续）。
-- 字节对齐、无量化压缩（Phase 1 进阶：换 `byte_stream` 为位级 `NetBitWriter`，不改协议外形）。
-- 未做客户端预测/插值（Phase 8）、通用 RPC 注册表（Phase 6 仅手写 InputMove 一条）、C ABI / Lua 绑定（Phase 7）。
+**剩余简化（对应 Phase 8 / §10 技术债）：**
+- 只复制 `TransformComponent` 一种组件（`ReplicationTraits<T>` 泛化留后续——当前系统支持自定义但需手写 codec）。
+- **内存：**`ByteWriter` 走 `std::vector` 默认 allocator，**未计入 `MemoryTag::Net`**（→ §10.1 D-7）。
+- `NetId` 用 `uint32_t` 自增，未用 `{index,generation}` 紧凑句柄 + 位压缩。
+- 全部走默认 lane 0（靠 `SendMode` 区分可靠/不可靠），未做多 lane 优先级调度。
+- 未做客户端预测/服务器回滚/远端插值（Phase 8）。
 - 字节流假设小端（当前所有目标平台均小端）。
 
 **单传输实例约束（§10 D-5）的体现**：回环测试用一个 transport 实例同时承载 server 与 client，靠一个路由监听器按连接 id 把事件分发给 `ReplicationServer`/`ReplicationClient`；真实部署中专用服务器进程与客户端进程各自只有一个监听者，直接 `transport->Poll(server_or_client)` 即可。
@@ -446,9 +447,9 @@ DSE_RPC(RpcTarget::Multicast, void PlayVfx(NetId at, uint16_t vfxId));
 | **D-6** | **会话恢复 / 断线续连** | 重连 = 新会话，重发 baseline | 保留 NetId 映射做断线续连（可选） |
 | **D-7** | **复制层 MVP 未走内存门面** | `ByteWriter` 用 `std::vector` 默认 allocator，未计入 `MemoryTag::Net`，每条消息一次堆分配 | 改用计入 `MemoryTag::Net` 的容器/分配器 + 复用对象池（与传输层 `Send` 处的分配债一并偿还） |
 | **D-8** | **全量快照未分片 / 未限 MTU** | 整个快照打成一个不可靠消息，实体多时可能超 GNS 单消息上限 | Phase 4 delta 后按 MTU 分片 / 多包，并随 baseline+ack 控量 |
-| **D-9** | **MVP 无协议版本握手** | §4.12 已设计版本号握手，但 MVP 复制协议未实现；双端构建不一致会错误解析 | 落地 §4.12 握手：连接建立后先交换协议版本，不匹配则拒绝 |
+| ~~**D-9**~~ | ~~**无协议版本握手**~~ | ✅ 已偿还 | `kProtocolVersion=2` 握手已落地，版本不匹配 `Close(Rejected)` |
 
-> MVP 已偿还的债：**输入 RPC 所有权校验 + 频率限流**（§7 要求的"调用者是否拥有该实体 + rate limit"已在 `ReplicationServer::OnMessage` 实现，不再是债）。
+> 已偿还的债：**D-9 协议版本握手**（Phase 1–7 实现）+ **输入 RPC 所有权校验 + 频率限流**（§7 要求的"调用者是否拥有该实体 + rate limit"已在 `ReplicationServer::OnMessage` 实现）+ **D-8 部分偿还**（delta 压缩大幅降低包体积，全量快照仅用于首次/断线恢复）。
 
 ### 10.2 范围限制与风险
 

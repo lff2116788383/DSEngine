@@ -181,5 +181,11 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/repl_smoke.cpp")
     target_link_libraries(dse_repl_smoke PRIVATE dse_net)
 endif()
 
+# ── 4d) 网络层完整测试（协议握手 + delta + AOI + RPC + 位级序列化）──
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_full_test.cpp")
+    add_executable(dse_net_full_test "${CMAKE_SOURCE_DIR}/tests/net/net_full_test.cpp")
+    target_link_libraries(dse_net_full_test PRIVATE dse_net)
+endif()
+
 set(DSE_HAS_NET TRUE)
 message(STATUS "[net] GameNetworkingSockets 已接入 (crypto=${USE_CRYPTO})")
