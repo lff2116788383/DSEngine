@@ -11,6 +11,12 @@
 #include "modules/gameplay_2d/tilemap/tilemap_system.h"
 #include "modules/gameplay_2d/animation/animation_system.h"
 #include "modules/gameplay_2d/particle/particle_system.h"
+#include "modules/gameplay_2d/parallax/parallax_system.h"
+#include "modules/gameplay_2d/lighting/light_2d_system.h"
+#include "modules/gameplay_2d/trail/trail_system.h"
+#include "modules/gameplay_2d/line_renderer/line_renderer_system.h"
+#include "modules/gameplay_2d/camera/camera_controller_system.h"
+#include "modules/gameplay_2d/audio/audio_spatial_2d_system.h"
 #ifdef DSE_ENABLE_SPINE
 #include "modules/gameplay_2d/spine/spine_system.h"
 #endif
@@ -48,6 +54,12 @@ public:
     UISystem& ui_logic_system() { return ui_logic_system_; }
     AudioSystem& audio_system() { return audio_system_; }
     TilemapSystem& tilemap_system() { return tilemap_system_; }
+    ParallaxSystem& parallax_system() { return parallax_system_; }
+    Light2DSystem& light_2d_system() { return light_2d_system_; }
+    TrailSystem& trail_system() { return trail_system_; }
+    LineRendererSystem& line_renderer_system() { return line_renderer_system_; }
+    CameraControllerSystem& camera_controller_system() { return camera_controller_system_; }
+    AudioSpatial2DSystem& audio_spatial_2d_system() { return audio_spatial_2d_system_; }
 
 private:
     AssetManager* asset_manager_ = nullptr;
@@ -66,6 +78,12 @@ private:
     UISystem ui_logic_system_;
     AudioSystem audio_system_;
     TilemapSystem tilemap_system_;
+    ParallaxSystem parallax_system_;
+    Light2DSystem light_2d_system_;
+    TrailSystem trail_system_;
+    LineRendererSystem line_renderer_system_;
+    CameraControllerSystem camera_controller_system_;
+    AudioSpatial2DSystem audio_spatial_2d_system_;
 };
 
 } // namespace dse::gameplay2d

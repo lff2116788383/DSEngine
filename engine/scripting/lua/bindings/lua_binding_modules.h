@@ -70,6 +70,7 @@ void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);
 void RegisterEcsParticlesBindings(lua_State* L);
 void RegisterEcsGameplay3DBindings(lua_State* L);
+void Register2DSystemsBindings(lua_State* L);  // Parallax/Light2D/Trail/Line/CameraCtrl/AudioSpatial/SpriteSheet/Atlas
 
 // Open-world systems (world_partition, hlod, vt, clipmap, sdf, ai_lod, gpu_particles, world_state, procedural)
 void RegisterOpenWorldBindings(lua_State* L);

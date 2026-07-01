@@ -26,6 +26,10 @@ bool Gameplay2DModule::OnInit(World& world, RhiDevice* rhi_device, AssetManager*
     spine_system_.SetRhiDevice(rhi_device_);
 #endif
     audio_system_.Initialize(asset_manager_);
+    parallax_system_.SetRhiDevice(rhi_device_);
+    light_2d_system_.SetRhiDevice(rhi_device_);
+    trail_system_.SetRhiDevice(rhi_device_);
+    line_renderer_system_.SetRhiDevice(rhi_device_);
     return true;
 }
 
@@ -50,7 +54,13 @@ void Gameplay2DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
                             Input::mousePosition(),
                             Input::GetMouseButton(0));
     camera_system_.Update(world, Screen::aspect_ratio());
+    camera_controller_system_.Update(world, scaled);
+    parallax_system_.Update(world, scaled);
+    trail_system_.Update(world, scaled);
+    line_renderer_system_.Update(world, scaled);
+    light_2d_system_.Update(world, scaled);
     audio_system_.Update(world.registry(), unscaled);
+    audio_spatial_2d_system_.Update(world, unscaled);
 }
 
 void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
@@ -64,6 +74,10 @@ void Gameplay2DModule::RenderScene2D(World& world, CommandBuffer& cmd_buffer, co
     spine_system_.Render(world, cmd_buffer, frame);
 #endif
     particle_system_.Render(world, cmd_buffer, frame);
+    parallax_system_.Render(world, cmd_buffer, frame);
+    trail_system_.Render(world, cmd_buffer, frame);
+    line_renderer_system_.Render(world, cmd_buffer, frame);
+    light_2d_system_.Render(world, cmd_buffer, frame);
 }
 
 void Gameplay2DModule::RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
@@ -75,6 +89,10 @@ void Gameplay2DModule::OnShutdown(World& world) {
     sprite_render_system_.Shutdown();
     ui_render_system_.Shutdown();
     particle_system_.Shutdown();
+    parallax_system_.Shutdown();
+    light_2d_system_.Shutdown();
+    trail_system_.Shutdown();
+    line_renderer_system_.Shutdown();
     audio_system_.Shutdown();
     physics2d_system_.Shutdown();
 #ifdef DSE_ENABLE_SPINE

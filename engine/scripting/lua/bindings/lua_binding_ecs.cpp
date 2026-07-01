@@ -29,6 +29,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterEcsAnimationBindings(L);
     RegisterEcsParticlesBindings(L);
     RegisterEcsGameplay3DBindings(L);
+    Register2DSystemsBindings(L);
 
     // Codegen 生成的组件属性绑定
     RegisterTransformComponentGenBindings(L);
