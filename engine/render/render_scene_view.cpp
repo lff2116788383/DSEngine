@@ -25,6 +25,7 @@ void ExtractRenderSceneView(const World& world, RenderSceneView& out) {
         rpl.color = pl.color;
         rpl.intensity = pl.intensity;
         rpl.radius = pl.radius;
+        rpl.falloff = pl.falloff;
         rpl.cast_shadow = pl.cast_shadow;
         rpl.shadow_map_handle = pl.shadow_map_handle;
         out.point_lights.push_back(rpl);
@@ -38,10 +39,11 @@ void ExtractRenderSceneView(const World& world, RenderSceneView& out) {
         if (!sl.enabled) continue;
         RenderSpotLight rsl;
         rsl.position = tf.position;
-        rsl.direction = sl.direction;
+        rsl.direction = glm::normalize(tf.rotation * sl.direction);
         rsl.color = sl.color;
         rsl.intensity = sl.intensity;
         rsl.range = sl.radius;
+        rsl.falloff = sl.falloff;
         rsl.inner_cone = sl.inner_cone_angle;
         rsl.outer_cone = sl.outer_cone_angle;
         rsl.cast_shadow = sl.cast_shadow;

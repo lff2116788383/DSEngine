@@ -140,7 +140,10 @@ void FramePipeline::PrepareRenderFrame() {
         }
 
         // Clustered Forward+: æ”¶é›†å…‰æºï¼ˆCPUï¼‰â€” å…‰æºä½ç½®å‡åŽ» camera_offset
-        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+        dse::render::ExtractRenderSceneView(*runtime_context_.world, rs_->scene_view_);
+        render_pass_context_.scene_view = &rs_->scene_view_;
+
+        rs_->light_buffer_.CollectLightsFromView(rs_->scene_view_, early_camera_offset);
 
         // èŽ·å–ä¸»ç›¸æœºå‚æ•°æž„å»º cluster
         if (cam_entity != entt::null) {

@@ -70,7 +70,10 @@ void FramePipeline::RunRenderInternal() {
             early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
         }
 
-        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
+        dse::render::ExtractRenderSceneView(*runtime_context_.world, rs_->scene_view_);
+        render_pass_context_.scene_view = &rs_->scene_view_;
+
+        rs_->light_buffer_.CollectLightsFromView(rs_->scene_view_, early_camera_offset);
         rs_->light_buffer_.Upload();
 
         // èŽ·å–ä¸»ç›¸æœºå‚æ•°ç”¨äºŽ cluster æž„å»º

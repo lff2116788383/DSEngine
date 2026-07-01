@@ -4,6 +4,7 @@
  */
 
 #include "engine/render/light_buffer.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/ubo_types.h"
 #include "engine/ecs/world.h"
@@ -105,6 +106,54 @@ void LightBuffer::CollectLights(const World& world, const glm::vec3& camera_offs
             gpu.shadow_index = -1;
         }
 
+        spot_lights_.push_back(gpu);
+    }
+}
+
+void LightBuffer::CollectLightsFromView(const RenderSceneView& view, const glm::vec3& camera_offset) {
+    point_lights_.clear();
+    spot_lights_.clear();
+
+    const bool ubo_mode = device_ && !device_->SupportsSSBO();
+    const int max_point = ubo_mode ? kMaxUBOLights : kMaxClusteredPointLights;
+    const int max_spot  = ubo_mode ? kMaxUBOLights : kMaxClusteredSpotLights;
+
+    int next_point_shadow = 0;
+    for (const auto& pl : view.point_lights) {
+        if (static_cast<int>(point_lights_.size()) >= max_point) break;
+        GPUPointLight gpu{};
+        gpu.color     = pl.color;
+        gpu.intensity = pl.intensity;
+        gpu.position  = pl.position - camera_offset;
+        gpu.radius    = pl.radius * std::max(0.1f, pl.falloff);
+        if (pl.cast_shadow && next_point_shadow < 4) {
+            gpu.cast_shadow  = 1;
+            gpu.shadow_index = next_point_shadow++;
+        } else {
+            gpu.cast_shadow  = 0;
+            gpu.shadow_index = -1;
+        }
+        point_lights_.push_back(gpu);
+    }
+
+    int next_spot_shadow = 0;
+    for (const auto& sl : view.spot_lights) {
+        if (static_cast<int>(spot_lights_.size()) >= max_spot) break;
+        GPUSpotLight gpu{};
+        gpu.color      = sl.color;
+        gpu.intensity  = sl.intensity;
+        gpu.position   = sl.position - camera_offset;
+        gpu.radius     = sl.range * std::max(0.1f, sl.falloff);
+        gpu.direction  = sl.direction;  // already world-space
+        gpu.inner_cone = sl.inner_cone;
+        gpu.outer_cone = sl.outer_cone;
+        if (sl.cast_shadow && next_spot_shadow < 4) {
+            gpu.cast_shadow  = 1;
+            gpu.shadow_index = next_spot_shadow++;
+        } else {
+            gpu.cast_shadow  = 0;
+            gpu.shadow_index = -1;
+        }
         spot_lights_.push_back(gpu);
     }
 }

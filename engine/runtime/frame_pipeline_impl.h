@@ -11,6 +11,7 @@
 
 #include "engine/scene/transform_system.h"
 #include "engine/render/mesh_renderer.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/render/pipeline/render_pipeline_profile.h"
 #include "engine/render/render_snapshot.h"
 #include "engine/render/light_buffer.h"
@@ -40,6 +41,7 @@ struct FramePipeline::RenderState {
     dse::render::RenderPipelineProfile render_pipeline_profile_;
     dse::render::RenderScene render_scene_;
     TransformSystem transform_system_;
+    dse::render::RenderSceneView scene_view_;
     dse::render::LightBuffer light_buffer_;
     dse::render::ClusterGrid cluster_grid_;
     dse::render::LightProbeSystem light_probe_system_;

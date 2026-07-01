@@ -29,6 +29,7 @@ namespace render {
 class RhiDevice;
 class CommandBuffer;
 class MeshRenderer;
+struct RenderSceneView;
 
 class LightBuffer;
 class ClusterGrid;
@@ -46,6 +47,7 @@ struct RenderPassContext {
     glm::vec3 camera_offset{0.0f};                ///< Camera-Relative Rendering: model matrix 减去此偏移后传 GPU
     FrameContext frame_camera;                    ///< 主相机帧上下文（ForwardScenePass 写入，WBOITPass 等跨 Pass 读取）
     World* world = nullptr;
+    const RenderSceneView* scene_view = nullptr;  ///< ECS-free scene snapshot (lights/probes/skybox)
     AssetManager* asset_manager = nullptr;
     RhiDevice* rhi_device = nullptr;
     RenderScene* render_scene = nullptr;

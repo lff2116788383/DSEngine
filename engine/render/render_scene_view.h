@@ -25,16 +25,18 @@ struct RenderPointLight {
     glm::vec3 color{1.0f};
     float intensity = 1.0f;
     float radius    = 10.0f;
+    float falloff   = 1.0f;
     bool  cast_shadow = false;
     uint32_t shadow_map_handle = 0;
 };
 
 struct RenderSpotLight {
     glm::vec3 position{0.0f};
-    glm::vec3 direction{0.0f, -1.0f, 0.0f};
+    glm::vec3 direction{0.0f, -1.0f, 0.0f};  ///< World-space direction (pre-rotated by transform)
     glm::vec3 color{1.0f};
     float intensity = 1.0f;
     float range     = 10.0f;
+    float falloff   = 1.0f;
     float inner_cone = 0.9f;
     float outer_cone = 0.8f;
     bool  cast_shadow = false;

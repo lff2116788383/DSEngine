@@ -25,6 +25,7 @@ class World;
 namespace dse {
 namespace render {
 
+struct RenderSceneView;
 class RhiDevice;
 
 /// 最大支持光源数（SSBO 容量上限）
@@ -80,6 +81,9 @@ public:
     /// 从 ECS World 收集所有光源到 CPU 端缓冲
     /// @param camera_offset Camera-Relative: 光源位置减去此偏移后上传 GPU
     void CollectLights(const World& world, const glm::vec3& camera_offset = glm::vec3(0.0f));
+
+    /// 从 RenderSceneView 收集光源（ECS-free）
+    void CollectLightsFromView(const RenderSceneView& view, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     /// 将 CPU 端数据上传到 SSBO
     void Upload();

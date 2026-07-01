@@ -8,6 +8,7 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_gpu_driven.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/transform.h"
@@ -327,16 +328,11 @@ void MeshletDrawRenderPass::Execute(CommandBuffer& /*cmd_buffer*/) {
         float light_intensity = 1.0f;
         float ambient = 0.3f;
 
-        if (ctx_.world) {
-            auto& reg = ctx_.world->registry();
-            auto dl_view = reg.view<DirectionalLight3DComponent>();
-            for (auto entity : dl_view) {
-                auto& dl = dl_view.get<DirectionalLight3DComponent>(entity);
-                light_dir = dl.direction;
-                light_color = dl.color;
-                light_intensity = dl.intensity;
-                break;
-            }
+        if (ctx_.scene_view && !ctx_.scene_view->directional_lights.empty()) {
+            const auto& dl = ctx_.scene_view->directional_lights[0];
+            light_dir = dl.direction;
+            light_color = dl.color;
+            light_intensity = dl.intensity;
         }
 
         if (rhi->HasGPUDrivenPBRShader()) {
