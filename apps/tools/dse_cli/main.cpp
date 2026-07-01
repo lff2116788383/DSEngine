@@ -3,7 +3,7 @@
  * @brief DSEngine headless CLI（OUTPUT 名 `dse`）。脱离编辑器完成：建项目模板 / 打包加密 / 完整 build。
  *
  * 用法：
- *   dse new <empty|2d|3d|lua|cpp|platformer|topdown|thirdperson> <dir>  # 生成项目模板
+ *   dse new <empty|2d|3d|lua|cpp|csharp|platformer|topdown|thirdperson> <dir>  # 生成项目模板
  *   dse pack <dir> <out.bun> [--key=KEY]   # 把目录打包成（可加密）资源包
  *   dse build <project> [--out=DIR] [--key=KEY]
  *                                          # 定位运行时、拷贝 exe+dll、打包加密、生成 launch.bat
@@ -63,6 +63,7 @@ int PrintUsage(int rc = 1) {
         "  3d      3D 演示场景(相机+平行光) + Lua 入口脚本\n"
         "  lua     Lua 玩法 + 入口脚本\n"
         "  cpp     C++ 宿主工程(src/main.cpp + CMakeLists.txt, 链接 dse_engine, 需自行 cmake 编译)\n"
+        "  csharp  C# .NET 8 脚本工程(GameScripts/ + .sln + DseScript 示例, 需 .NET 8 SDK)\n"
         "  platformer   品类模板: 2D 平台跳跃(重力/跳跃/平台 AABB 碰撞, 相机跟随)\n"
         "  topdown      品类模板: 俯视 RPG(8 向移动/障碍碰撞/可拾取金币, 相机跟随)\n"
         "  thirdperson  品类模板: 3D 第三人称(地面+角色方块, 固定偏移跟随相机)\n"
@@ -169,7 +170,7 @@ int CmdNew(const std::vector<std::string>& args) {
     dse::project::ProjectTemplate tmpl;
     if (!dse::project::ParseTemplateToken(tmpl_token, tmpl)) {
         std::cerr << "错误: 未知模板 '" << tmpl_token
-                  << "' (可选: empty|2d|3d|lua|cpp|platformer|topdown|thirdperson)\n";
+                  << "' (可选: empty|2d|3d|lua|cpp|csharp|platformer|topdown|thirdperson)\n";
         return 1;
     }
     const fs::path dir(dir_token);
@@ -188,6 +189,9 @@ int CmdNew(const std::vector<std::string>& args) {
               << " 项目: " << fs::absolute(dir).string() << "\n";
     if (tmpl == dse::project::ProjectTemplate::Cpp) {
         std::cout << "提示: C++ 模板需自行编译 -> cmake -B build -DCMAKE_PREFIX_PATH=<dsengine_install_dir> && cmake --build build\n";
+    }
+    if (tmpl == dse::project::ProjectTemplate::CSharp) {
+        std::cout << "提示: C# 模板需要 .NET 8 SDK -> cd GameScripts && dotnet build\n";
     }
     return 0;
 }
