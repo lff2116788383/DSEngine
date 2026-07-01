@@ -120,6 +120,7 @@
 #include "editor_plugin_hot_reload.h"
 #include "editor_version_control.h"
 #include "editor_blueprint.h"
+#include "editor_2d_tools.h"
 #include "editor_crash.h"
 
 
@@ -1266,6 +1267,16 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         // Plugin Hot Reload panel (alongside plugin manager)
         dse::editor::DrawPluginHotReloadPanel(ctx);
     }
+
+    // 2D Tools panels
+    dse::editor::tools2d::DrawSpriteSlicerPanel();
+    dse::editor::tools2d::DrawAtlasPackerPanel();
+    dse::editor::tools2d::DrawAnim2DEditorPanel();
+    dse::editor::tools2d::DrawNineSliceEditorPanel();
+    dse::editor::tools2d::DrawCollisionEditor2DPanel();
+    dse::editor::tools2d::DrawParticle2DEditorPanel();
+    dse::editor::tools2d::DrawParallaxEditorPanel();
+    dse::editor::tools2d::DrawLight2DEditorPanel();
 
     // Plugin API: update and draw custom panels
     dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);

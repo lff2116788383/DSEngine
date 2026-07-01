@@ -115,6 +115,7 @@ void RegisterMiscEditorTests(ImGuiTestEngine* engine);      // ⑨ autosave/buil
 void RegisterMultiSelectTests(ImGuiTestEngine* engine);     // ⑩ 多选/框选/跨场景复制粘贴
 void RegisterEditorFeatureTests(ImGuiTestEngine* engine);   // ⑪ Editor feature panels #2-#9
 void RegisterBlueprintTests(ImGuiTestEngine* engine);       // ⑫ Blueprint system
+void Register2DToolsTests(ImGuiTestEngine* engine);         // ⑬ 2D Tools (Slicer/Atlas/Anim/9Slice/Collision/Particle/Parallax/Light)
 
 } // namespace dse::editor::uitest
 
