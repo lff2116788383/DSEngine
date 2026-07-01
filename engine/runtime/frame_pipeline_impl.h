@@ -26,6 +26,16 @@
 #include "engine/profiler/render_profiler.h"
 #include "engine/profiler/memory_profiler.h"
 
+// Shared helpers used by frame_pipeline*.cpp split files
+class AssetManager;
+struct RenderTargetReadback;
+
+void LogReadbackStats(const char* label, const RenderTargetReadback& readback);
+void LogDefaultFramebufferStats();
+AssetManager& RequireAssetManager(AssetManager* asset_manager);
+bool IsProfilePassEnabled(const dse::render::RenderPipelineProfile& profile, const std::string& name);
+float PipelineValueToFloat(const dse::render::PipelineValue* value, float fallback);
+
 struct FramePipeline::RenderState {
     dse::render::RenderPipelineProfile render_pipeline_profile_;
     dse::render::RenderScene render_scene_;

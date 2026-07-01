@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @file frame_pipeline.cpp
- * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
+ * @brief å¼•æ“Žä¸»å¾ªçŽ¯ä¸Žå¸§æµæ°´çº¿ï¼Œåè°ƒæ›´æ–°ã€ç‰©ç†å’Œæ¸²æŸ“çš„æ‰§è¡Œé¡ºåº
  */
 
 #include "engine/runtime/frame_pipeline.h"
@@ -84,22 +84,21 @@ std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 } // anonymous namespace
 #endif // DSE_ENABLE_3D
 
-// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/*.comp 离线交叉编译）。
-// WGSL 仍由 builtin_passes.cpp 手写单份保留（下方 extern）。
+// å•ä¸€æ¥æºæ¶ˆè´¹ï¼šGL430 / VK GLSL450 / HLSL å‡å–è‡ª *_comp.gen.hï¼ˆsrc/*.comp ç¦»çº¿äº¤å‰ç¼–è¯‘ï¼‰ã€‚
+// WGSL ä»ç”± builtin_passes.cpp æ‰‹å†™å•ä»½ä¿ç•™ï¼ˆä¸‹æ–¹ externï¼‰ã€‚
 #include "engine/render/shaders/generated/embed/hi_z_copy_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_downsample_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_cull_comp.gen.h"
 #include "engine/render/shaders/generated/embed/gpu_cull_comp.gen.h"
 
 namespace dse::render {
-    // WebGPU 手译 WGSL（CreateComputeShaderEx 第 8 参；其余后端忽略）。
+    // WebGPU æ‰‹è¯‘ WGSLï¼ˆCreateComputeShaderEx ç¬¬ 8 å‚ï¼›å…¶ä½™åŽç«¯å¿½ç•¥ï¼‰ã€‚
     extern const char* kHiZCopyShaderSourceWGSL;
     extern const char* kHiZDownsampleShaderSourceWGSL;
     extern const char* kHiZCullShaderSourceWGSL;
     extern const char* kGPUCullShaderSourceWGSL;
 }
 
-namespace {
 struct ReadbackStats {
     int width = 0;
     int height = 0;
@@ -135,7 +134,7 @@ ReadbackStats AnalyzeReadback(const RenderTargetReadback& readback) {
 
 void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
     const auto stats = AnalyzeReadback(readback);
-    // 计算黑色区域的边界矩形
+    // è®¡ç®—é»‘è‰²åŒºåŸŸçš„è¾¹ç•ŒçŸ©å½¢
     int black_min_x = readback.width, black_max_x = -1;
     int black_min_y = readback.height, black_max_y = -1;
     int black_count = 0;
@@ -154,7 +153,7 @@ void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
             }
         }
     }
-    // 9 点网格采样
+    // 9 ç‚¹ç½‘æ ¼é‡‡æ ·
     std::string grid;
     const int W = readback.width, H = readback.height;
     struct Pt { int x, y; const char* tag; };
@@ -181,7 +180,7 @@ void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
 }
 
 void LogDefaultFramebufferStats() {
-    if (!glGetIntegerv) return;  // 非 OpenGL 后端无 GL 函数
+    if (!glGetIntegerv) return;  // éž OpenGL åŽç«¯æ—  GL å‡½æ•°
     const int width = Screen::width();
     const int height = Screen::height();
     if (width <= 0 || height <= 0) {
@@ -258,7 +257,6 @@ float PipelineValueToFloat(const dse::render::PipelineValue* value, float fallba
     if (const auto* v = std::get_if<int>(value)) return static_cast<float>(*v);
     return fallback;
 }
-}
 
 bool FramePipeline::Init() {
     if (initialized_) {
@@ -278,9 +276,9 @@ bool FramePipeline::Init() {
     };
     auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
-    DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
+    DEBUG_LOG_INFO("FramePipeline RHI åŽç«¯: {}", dse::render::RhiBackendToString(rhi_backend));
 
-    // D3D11 / Vulkan 后端需要用平台窗口句柄完成设备初始化
+    // D3D11 / Vulkan åŽç«¯éœ€è¦ç”¨å¹³å°çª—å£å¥æŸ„å®Œæˆè®¾å¤‡åˆå§‹åŒ–
     runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
     if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
         const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
@@ -299,19 +297,19 @@ bool FramePipeline::Init() {
         if (!init_ok) {
             DEBUG_LOG_ERROR("FramePipeline init failed: [{}] InitDevice returned false",
                 dse::render::RhiBackendToString(rhi_backend));
-            // 自动回退到 OpenGL
+            // è‡ªåŠ¨å›žé€€åˆ° OpenGL
             if (rhi_backend != RhiBackend::OpenGL) {
-                DEBUG_LOG_WARN("FramePipeline: {} 后端初始化失败，自动回退到 OpenGL",
+                DEBUG_LOG_WARN("FramePipeline: {} åŽç«¯åˆå§‹åŒ–å¤±è´¥ï¼Œè‡ªåŠ¨å›žé€€åˆ° OpenGL",
                     dse::render::RhiBackendToString(rhi_backend));
                 rhi_backend = RhiBackend::OpenGL;
                 runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
                 runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
-                DEBUG_LOG_INFO("FramePipeline RHI 后端 (fallback): OpenGL");
+                DEBUG_LOG_INFO("FramePipeline RHI åŽç«¯ (fallback): OpenGL");
             } else {
                 return false;
             }
         } else {
-            // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
+            // ç«‹å³ present ä¸€å¸§é»‘å±ï¼Œæ¶ˆé™¤çª—å£åˆ›å»ºåŽåˆ°é¦–å¸§æ¸²æŸ“å‰çš„ç™½å±
             runtime_context_.rhi_device->BeginFrame();
             runtime_context_.rhi_device->EndFrame();
         }
@@ -319,8 +317,8 @@ bool FramePipeline::Init() {
 
     lap("RHI device init");
     KeepAlive();
-    // 输出实际渲染设备 + 软渲标志（机器可解析），供性能基准区分硬件/软渲，
-    // 避免把 WARP/Basic Render Driver/llvmpipe 等软渲数据误当硬件数据。
+    // è¾“å‡ºå®žé™…æ¸²æŸ“è®¾å¤‡ + è½¯æ¸²æ ‡å¿—ï¼ˆæœºå™¨å¯è§£æžï¼‰ï¼Œä¾›æ€§èƒ½åŸºå‡†åŒºåˆ†ç¡¬ä»¶/è½¯æ¸²ï¼Œ
+    // é¿å…æŠŠ WARP/Basic Render Driver/llvmpipe ç­‰è½¯æ¸²æ•°æ®è¯¯å½“ç¡¬ä»¶æ•°æ®ã€‚
     {
         const auto device_info = runtime_context_.rhi_device->GetDeviceInfo();
         DEBUG_LOG_INFO("DSE_RENDER_DEVICE backend={} adapter=\"{}\" software={}",
@@ -393,7 +391,7 @@ bool FramePipeline::Init() {
     }
     InitResolutionDependentRTs();
 
-    // 固定尺寸 RT（不随窗口缩放，Init 时创建一次）
+    // å›ºå®šå°ºå¯¸ RTï¼ˆä¸éšçª—å£ç¼©æ”¾ï¼ŒInit æ—¶åˆ›å»ºä¸€æ¬¡ï¼‰
     if (render_resources_.pp_lum_temp_rt == 0)
         render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({64, 64, true, false, false});
     for (int i = 0; i < 2; ++i) {
@@ -401,7 +399,7 @@ bool FramePipeline::Init() {
             render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget({1, 1, true, false, false});
     }
 
-    // Hi-Z Occlusion Culling shaders（不依赖分辨率，Init 时创建一次）
+    // Hi-Z Occlusion Culling shadersï¼ˆä¸ä¾èµ–åˆ†è¾¨çŽ‡ï¼ŒInit æ—¶åˆ›å»ºä¸€æ¬¡ï¼‰
     if (render_resources_.hiz_texture != 0 &&
         render_resources_.hiz_copy_shader == 0 &&
         runtime_context_.rhi_device->SupportsCompute()) {
@@ -430,8 +428,8 @@ bool FramePipeline::Init() {
                        render_resources_.hiz_cull_shader);
     }
 
-    // CSM Shadow Atlas: single 4096×2048 depth texture, cascades rendered via viewport
-    // Layout: cascade 0 (2048×2048) at (0,0); cascade 1 (1024×1024) at (2048,0); cascade 2 (512×512) at (3072,0)
+    // CSM Shadow Atlas: single 4096Ã—2048 depth texture, cascades rendered via viewport
+    // Layout: cascade 0 (2048Ã—2048) at (0,0); cascade 1 (1024Ã—1024) at (2048,0); cascade 2 (512Ã—512) at (3072,0)
     render_resources_.shadow_atlas_render_target = runtime_context_.rhi_device->CreateRenderTarget({4096, 2048, false, true});
     // Legacy per-cascade RTs kept for compatibility (spot/point shadow code paths)
     constexpr int kShadowResolutions[CSM_CASCADES] = {2048, 1024, 512};
@@ -462,7 +460,7 @@ bool FramePipeline::Init() {
         return diag && diag[0] != '\0' && diag[0] != '0';
     }();
 
-    // GPU Driven Rendering 能力检测
+    // GPU Driven Rendering èƒ½åŠ›æ£€æµ‹
     if (gpu_driven_requested_ &&
         runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
@@ -473,11 +471,11 @@ bool FramePipeline::Init() {
             dse::render::generated_shaders::kgpu_cull_comp_hlsl,
             2, 0, 1, 208, dse::render::kGPUCullShaderSourceWGSL);
         render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
-        // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
+        // äºŒæ¬¡éªŒè¯ï¼šGPU-driven PBR shader ç¼–è¯‘å¯èƒ½å¤±è´¥ï¼ˆå¦‚ HLSL patch ä¸åŒ¹é…ï¼‰
         if (render_resources_.gpu_driven_supported &&
             !runtime_context_.rhi_device->HasGPUDrivenPBRShader()) {
             render_resources_.gpu_driven_supported = false;
-            DEBUG_LOG_WARN("GPU Driven Rendering: disabled — GPU-driven PBR shader unavailable");
+            DEBUG_LOG_WARN("GPU Driven Rendering: disabled â€” GPU-driven PBR shader unavailable");
         }
         DEBUG_LOG_INFO("GPU Driven Rendering: supported={}, cull_shader={}",
                        render_resources_.gpu_driven_supported, render_resources_.gpu_cull_shader);
@@ -647,7 +645,7 @@ bool FramePipeline::Init() {
     }
 #endif
 
-    // Floating Origin: 订阅 rebase 事件，转发给 NavMesh / StreamingManager
+    // Floating Origin: è®¢é˜… rebase äº‹ä»¶ï¼Œè½¬å‘ç»™ NavMesh / StreamingManager
     {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
         if (event_bus) {
@@ -693,22 +691,22 @@ bool FramePipeline::Init() {
     BuildRenderGraph();
     lap("BuildRenderGraph");
 
-    // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
+    // Clustered Forward+ å…‰æº SSBO + Cluster ç½‘æ ¼åˆå§‹åŒ–
     rs_->light_buffer_.Init(runtime_context_.rhi_device.get());
     rs_->cluster_grid_.Init(runtime_context_.rhi_device.get());
     lap("light buffer + cluster grid");
 
-    // Light Probe SH Bake 系统初始化
+    // Light Probe SH Bake ç³»ç»Ÿåˆå§‹åŒ–
     rs_->light_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("LightProbeSystem");
 
-    // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
+    // Reflection Probe + IBL ç³»ç»Ÿåˆå§‹åŒ–ï¼ˆç”Ÿæˆ BRDF LUTï¼‰
     rs_->reflection_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("ReflectionProbeSystem");
 
-    // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
+    // DDGI ç³»ç»Ÿå»¶è¿Ÿåˆå§‹åŒ–ï¼ˆé¦–å¸§æ£€æµ‹ GIProbeVolumeComponent åŽæŒ‰éœ€åˆå§‹åŒ–ï¼‰
 
-    // 资源流式加载管理器初始化
+    // èµ„æºæµå¼åŠ è½½ç®¡ç†å™¨åˆå§‹åŒ–
     rs_->streaming_manager_.Init(&asset_manager);
     {
         auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&rs_->streaming_manager_, [](auto*) {});
@@ -716,7 +714,7 @@ bool FramePipeline::Init() {
     }
     lap("StreamingManager");
 
-    // GPU Compute Skinning 初始化（Compute Shader 可用时启用）
+    // GPU Compute Skinning åˆå§‹åŒ–ï¼ˆCompute Shader å¯ç”¨æ—¶å¯ç”¨ï¼‰
     if (rs_->gpu_skinning_system_.Init(runtime_context_.rhi_device.get())) {
         DEBUG_LOG_INFO("FramePipeline init: GPUSkinningSystem initialized (compute skinning available)");
     }
@@ -727,7 +725,7 @@ bool FramePipeline::Init() {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
     }
 
-    // Phase 2: 渲染线程分离（DSE_RENDER_THREAD=1 启用，编辑器模式下禁用）
+    // Phase 2: æ¸²æŸ“çº¿ç¨‹åˆ†ç¦»ï¼ˆDSE_RENDER_THREAD=1 å¯ç”¨ï¼Œç¼–è¾‘å™¨æ¨¡å¼ä¸‹ç¦ç”¨ï¼‰
     if (!runtime_context_.editor_mode) {
         if (const char* env = std::getenv("DSE_RENDER_THREAD")) {
             if (env[0] == '1') {
@@ -746,7 +744,7 @@ void FramePipeline::Shutdown() {
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
-    // 资源流式加载管理器关闭
+    // èµ„æºæµå¼åŠ è½½ç®¡ç†å™¨å…³é—­
     rs_->streaming_manager_.Shutdown();
     dse::core::ServiceLocator::Instance().Reset<dse::streaming::StreamingManager>();
 
@@ -792,7 +790,7 @@ void FramePipeline::Shutdown() {
         runtime_context_.rhi_device->WaitIdle();
     }
 
-    // Floating Origin: 取消订阅
+    // Floating Origin: å–æ¶ˆè®¢é˜…
     if (rs_->origin_rebase_handle_.valid) {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
         if (event_bus) event_bus->Unsubscribe(rs_->origin_rebase_handle_);
@@ -824,7 +822,7 @@ void FramePipeline::Shutdown() {
 
     asset_manager.ReleaseGpuResources();
 
-    // Hi-Z: 释放 GPU 资源
+    // Hi-Z: é‡Šæ”¾ GPU èµ„æº
     if (runtime_context_.rhi_device) {
         if (render_resources_.hiz_copy_shader != 0) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_copy_shader);
@@ -852,7 +850,7 @@ void FramePipeline::Shutdown() {
         }
     }
 
-    // GPU Driven 资源清理
+    // GPU Driven èµ„æºæ¸…ç†
     if (runtime_context_.rhi_device) {
         modules_impl_->CleanupGPUResources(runtime_context_.rhi_device.get());
         if (render_resources_.gpu_draw_cmd_ssbo) {
@@ -1101,12 +1099,12 @@ void FramePipeline::Render() {
     }
     if (render_thread_active_.load()) {
         WaitForRenderComplete();
-        // 渲染线程已消费完上一帧快照（含其帧分配器缓冲），此处推进+复位才安全（见设计文档 §3.5）。
+        // æ¸²æŸ“çº¿ç¨‹å·²æ¶ˆè´¹å®Œä¸Šä¸€å¸§å¿«ç…§ï¼ˆå«å…¶å¸§åˆ†é…å™¨ç¼“å†²ï¼‰ï¼Œæ­¤å¤„æŽ¨è¿›+å¤ä½æ‰å®‰å…¨ï¼ˆè§è®¾è®¡æ–‡æ¡£ Â§3.5ï¼‰ã€‚
         dse::core::Memory::Frame().BeginFrame();
         PrepareRenderFrame();
         SignalRenderThread();
     } else {
-        // 单线程：本帧同步消费，帧首复位即可。
+        // å•çº¿ç¨‹ï¼šæœ¬å¸§åŒæ­¥æ¶ˆè´¹ï¼Œå¸§é¦–å¤ä½å³å¯ã€‚
         dse::core::Memory::Frame().BeginFrame();
         dse::runtime::RunFrameRender(*this);
     }
@@ -1114,7 +1112,7 @@ void FramePipeline::Render() {
 
 void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     const dse::TimeContext& time = frame.time;
-    // 缩放通道供 gameplay/业务逻辑使用；真实通道供资源流式加载/场景流加载使用（不随暂停冻结）。
+    // ç¼©æ”¾é€šé“ä¾› gameplay/ä¸šåŠ¡é€»è¾‘ä½¿ç”¨ï¼›çœŸå®žé€šé“ä¾›èµ„æºæµå¼åŠ è½½/åœºæ™¯æµåŠ è½½ä½¿ç”¨ï¼ˆä¸éšæš‚åœå†»ç»“ï¼‰ã€‚
     const float delta_time = time.scaled_dt;
     dse::profiler::ScopedCPUProfile _profile_update(rs_->cpu_profiler_, "FramePipeline::Update");
     auto update_begin = std::chrono::high_resolution_clock::now();
@@ -1125,7 +1123,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     }
     asset_manager.PumpHotReloads();
 
-    // 资源流式加载：获取摄像机位置并 tick
+    // èµ„æºæµå¼åŠ è½½ï¼šèŽ·å–æ‘„åƒæœºä½ç½®å¹¶ tick
     if (runtime_context_.world) {
         glm::vec3 streaming_cam_pos(0.0f);
         auto streaming_cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
@@ -1142,7 +1140,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
         }
     }
 
-    // SceneManager: pump 异步加载完成的子场景
+    // SceneManager: pump å¼‚æ­¥åŠ è½½å®Œæˆçš„å­åœºæ™¯
     if (auto* sm = dse::core::ServiceLocator::Instance().Get<scene::SceneManager>()) {
         sm->Update(time.unscaled_dt);
 
@@ -1160,7 +1158,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
         }
     }
 
-    // AssetManager 内存 → MemoryProfiler（每帧追踪 delta）
+    // AssetManager å†…å­˜ â†’ MemoryProfilerï¼ˆæ¯å¸§è¿½è¸ª deltaï¼‰
     if (runtime_context_.asset_manager) {
         std::size_t current = runtime_context_.asset_manager->EstimatedMemoryUsage();
         if (current > last_reported_asset_memory_) {
@@ -1195,888 +1193,6 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
     fixed_samples_ += 1;
 }
 
-void FramePipeline::RunRenderInternal() {
-    dse::profiler::ScopedCPUProfile _profile_render(rs_->cpu_profiler_, "FramePipeline::Render");
-    rs_->render_profiler_.BeginFrame();
-    auto render_begin = std::chrono::high_resolution_clock::now();
-
-    // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
-    if (runtime_context_.world) {
-        rs_->transform_system_.Update(*runtime_context_.world);
-    }
-
-    dse::runtime::BeginRuntimeRenderFrame(*this);
-    
-    auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
-    
-    dse::runtime::BindRuntimeShadowMaps(*this);
-
-    // Camera-Relative: 提前获取相机位置作为 camera_offset（light_buffer / cluster / GPU Driven 共用）
-    glm::vec3 early_camera_offset(0.0f);
-
-    // Clustered Forward+: 每帧收集光源 → 构建 Cluster → 上传 SSBO
-    if (runtime_context_.world) {
-        auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
-        entt::entity cam_entity = entt::null;
-        int cam_priority = std::numeric_limits<int>::min();
-        for (auto e : cam_view_3d) {
-            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(e);
-            if (cam.enabled && cam.priority > cam_priority) {
-                cam_entity = e;
-                cam_priority = cam.priority;
-            }
-        }
-        if (cam_entity != entt::null && runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
-            early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
-        }
-
-        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
-        rs_->light_buffer_.Upload();
-
-        // 获取主相机参数用于 cluster 构建
-        if (cam_entity != entt::null) {
-            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
-            const int sw = Screen::width();
-            const int sh = Screen::height();
-            glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
-                static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
-                cam.near_clip, cam.far_clip);
-            // Camera-Relative: 光源位置已减去 camera_offset，cluster view 也用 camera-at-origin
-            glm::mat4 view_mat = glm::mat4(1.0f);
-            if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
-                auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
-                glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
-            }
-            rs_->cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
-                                rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
-            rs_->cluster_grid_.Upload();
-        }
-    }
-
-    // Light Probe SH: 查询最近 probe，传给 GPU UBO（无 probe 时 fallback 到 ambient_intensity）
-    if (runtime_context_.world) {
-        glm::vec3 cam_pos(0.0f);
-        auto cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
-        for (auto e : cam_view) {
-            auto& cam = cam_view.get<dse::Camera3DComponent>(e);
-            if (cam.enabled) {
-                cam_pos = cam_view.get<TransformComponent>(e).position;
-                break;
-            }
-        }
-        rs_->light_probe_system_.UpdateGlobalSH(*runtime_context_.world,
-                                            runtime_context_.rhi_device.get(), cam_pos);
-    } else {
-        glm::vec4 sh_coeffs[9] = {};
-        runtime_context_.rhi_device->SetGlobalLightProbeSH(sh_coeffs, false);
-    }
-
-    // 全局湿度同步到 RHI
-    runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
-
-    // 植被风参数：从 WeatherComponent 读取风速，合成 foliage_wind
-    {
-        float wind_x = 0.0f, wind_z = 0.0f, wind_strength = 0.0f;
-        if (runtime_context_.world) {
-            auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
-            for (auto e : wv) {
-                auto& wc = wv.get<dse::WeatherComponent>(e);
-                if (wc.enabled) {
-                    wind_x = wc.wind_x;
-                    wind_z = wc.wind_z;
-                    wind_strength = glm::length(glm::vec2(wc.wind_x, wc.wind_z));
-                    break;
-                }
-            }
-        }
-        if (wind_strength < 0.001f) wind_strength = 0.3f;  // 默认微风
-        glm::vec2 wind_dir = wind_strength > 0.001f
-            ? glm::normalize(glm::vec2(wind_x, wind_z))
-            : glm::vec2(1.0f, 0.0f);
-        runtime_context_.rhi_device->SetGlobalFoliageWind(
-            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
-    }
-
-    // 植被推力场：从 global_render_state 的 view 逆矩阵获取相机位置
-    {
-        glm::vec3 push_pos(0.0f);
-        if (runtime_context_.world) {
-            auto cv = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
-            for (auto e : cv) {
-                if (cv.get<dse::Camera3DComponent>(e).enabled) {
-                    push_pos = cv.get<TransformComponent>(e).position;
-                    break;
-                }
-            }
-        }
-        runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
-    }
-
-    // TAA: 预检测 ECS 组件，提前设置 taa_active，ForwardScenePass 需要在场景渲染前知道是否应用 jitter
-    render_pass_context_.taa_active = false;
-    if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
-        auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
-        for (auto entity : pp_view) {
-            auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-            if (pp.enabled && pp.taa_enabled) {
-                render_pass_context_.taa_active = (render_pass_context_.render_targets.taa != 0);
-                break;
-            }
-        }
-        taa_pass_->UpdateJitter(taa_frame_index_++);
-        render_pass_context_.taa_jitter = taa_pass_->GetCurrentJitter();
-    }
-
-    // 每帧更新 Auto Exposure 所需的 delta_time
-    render_pass_context_.delta_time = Time::delta_time();
-
-    // 全局湿度：从 ECS WeatherComponent 直接读取（雨 → wetness = intensity）
-    render_pass_context_.global_wetness = 0.0f;
-    if (runtime_context_.world) {
-        auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
-        for (auto e : wv) {
-            auto& wc = wv.get<dse::WeatherComponent>(e);
-            if (wc.enabled && wc.type == dse::WeatherType::Rain) {
-                render_pass_context_.global_wetness = wc.intensity;
-                break;
-            }
-        }
-    }
-
-    // DDGI: 检测 GIProbeVolumeComponent，按需初始化/更新系统
-    render_pass_context_.ddgi_active = false;
-    render_pass_context_.ddgi_system = nullptr;
-    if (runtime_context_.world && runtime_context_.rhi_device->SupportsCompute()) {
-        auto gi_view = runtime_context_.world->registry().view<dse::GIProbeVolumeComponent>();
-        for (auto entity : gi_view) {
-            auto& gi = gi_view.get<dse::GIProbeVolumeComponent>(entity);
-            if (!gi.enabled) continue;
-
-            // 按需初始化或重配置
-            if (gi.needs_reinit_ || !rs_->ddgi_system_.IsInitialized()) {
-                dse::render::gi::DDGIVolumeConfig cfg;
-                cfg.origin = gi.origin;
-                cfg.extent = gi.extent;
-                cfg.resolution = glm::ivec3(gi.resolution_x, gi.resolution_y, gi.resolution_z);
-                cfg.irradiance_texels = gi.irradiance_texels;
-                cfg.visibility_texels = gi.visibility_texels;
-                cfg.rays_per_probe = gi.rays_per_probe;
-                cfg.hysteresis = gi.hysteresis;
-                if (rs_->ddgi_system_.IsInitialized()) {
-                    rs_->ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
-                } else {
-                    rs_->ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
-                }
-                gi.needs_reinit_ = false;
-            }
-
-            if (rs_->ddgi_system_.IsInitialized()) {
-                render_pass_context_.ddgi_system = &rs_->ddgi_system_;
-                render_pass_context_.ddgi_active = true;
-                render_pass_context_.ddgi_gi_intensity = gi.gi_intensity;
-                render_pass_context_.ddgi_normal_bias = gi.normal_bias;
-                const auto& res = rs_->ddgi_system_.GetResources();
-                render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
-                render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
-            }
-            break;  // 仅支持单个 GI Volume
-        }
-    }
-    // 同步 DDGI 状态到 RHI 全局渲染状态
-    if (render_pass_context_.ddgi_active) {
-        const auto& cfg = rs_->ddgi_system_.GetConfig();
-        runtime_context_.rhi_device->SetGlobalDDGI(
-            true, render_pass_context_.ddgi_irradiance_atlas,
-            cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
-            cfg.irradiance_texels,
-            render_pass_context_.ddgi_gi_intensity,
-            render_pass_context_.ddgi_normal_bias);
-    } else {
-        runtime_context_.rhi_device->SetGlobalDDGI(
-            false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
-    }
-
-    // Hi-Z: 上传上一帧收集的 AABB 到 GPU SSBO（供 HiZCullPass 使用）
-    if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
-        const auto& aabbs = modules_impl_->CachedAABBs();
-        const int count = modules_impl_->CachedAABBCount();
-        if (count > 0) {
-            // 动态扩容：对象数超出当前 SSBO 容量时重建
-            if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
-                const size_t new_cap = static_cast<size_t>(count) * 2;
-                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
-                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
-                {
-                    dse::render::GpuBufferDesc d{new_cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
-                    render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-                }
-                {
-                    dse::render::GpuBufferDesc d{new_cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
-                    render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-                }
-                render_resources_.hiz_ssbo_capacity = new_cap;
-                render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
-                render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
-                render_pass_context_.hiz_aabb_capacity = new_cap;
-                DEBUG_LOG_INFO("[Hi-Z] SSBO resized: new_capacity={}", new_cap);
-            }
-            runtime_context_.rhi_device->UpdateGpuBuffer(
-                render_resources_.hiz_aabb_ssbo, 0,
-                count * sizeof(dse::gameplay3d::HiZAABB),
-                aabbs.data());
-            render_pass_context_.hiz_object_count = count;
-        } else {
-            render_pass_context_.hiz_object_count = 0;
-        }
-    }
-
-    render_pass_context_.gpu_driven_scene_prepared = false;
-    render_pass_context_.gpu_driven_active_this_frame = false;
-    modules_impl_->ResetGPUSceneState();
-
-    // Camera-Relative: GPU Driven 需要 camera_offset，提前从 ECS 获取
-    render_pass_context_.camera_offset = early_camera_offset;
-
-    const bool allow_external_modules =
-        gpu_driven_policy_ == GpuDrivenPolicy::WithModules ||
-        gpu_driven_policy_ == GpuDrivenPolicy::Force;
-    const bool gpu_scene_provider_available = modules_.empty() || allow_external_modules;
-    const bool can_prepare_gpu_scene = render_resources_.gpu_driven_supported
-        && gpu_driven_requested_ && gpu_scene_provider_available;
-    if (can_prepare_gpu_scene) {
-        const int prepared = modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
-        render_pass_context_.gpu_driven_scene_prepared = prepared > 0;
-        render_pass_context_.gpu_driven_active_this_frame =
-            prepared > 0 && render_pass_context_.gpu_mega_vao && render_pass_context_.gpu_draw_cmd_ssbo;
-        render_resources_.gpu_draw_cmd_ssbo = render_pass_context_.gpu_draw_cmd_ssbo;
-        render_resources_.gpu_instance_ssbo = render_pass_context_.gpu_instance_ssbo;
-        render_resources_.gpu_material_ssbo = render_pass_context_.gpu_material_ssbo;
-        render_resources_.gpu_aabb_ssbo = render_pass_context_.gpu_aabb_ssbo;
-        render_resources_.gpu_aabb_capacity = render_pass_context_.gpu_aabb_capacity;
-    }
-    if (gpu_driven_diag_) {
-        DEBUG_LOG_INFO("[GpuDriven] requested={} supported={} provider={} prepared={} active={} draws={} instances={} modules={} builtin_gameplay3d={}",
-                       render_pass_context_.gpu_driven_requested,
-                       render_pass_context_.gpu_driven_supported,
-                       gpu_scene_provider_available,
-                       render_pass_context_.gpu_driven_scene_prepared,
-                       render_pass_context_.gpu_driven_active_this_frame,
-                       render_pass_context_.gpu_indirect_draw_count,
-                       render_pass_context_.gpu_total_instances,
-                       modules_.size(),
-                       builtin_gameplay3d_enabled_);
-    }
-
-    // GPU Compute Skinning: 帧开始（清空上一帧请求，读回上一帧结果）
-    if (rs_->gpu_skinning_system_.IsAvailable()) {
-        rs_->gpu_skinning_system_.BeginFrame();
-    }
-
-    BuildRenderSceneQueues();
-
-    // ===== B-1（方案 B）：web 蒙皮可见激活 — GPU compute + 复用异步回读 → 世界烘焙静态网格 =====
-    // 在缺 ForwardSkinnedShaded 内建程序的后端（WebGPU 无 per-draw 蒙皮；WebGL2/GLES3.0 无法编译
-    // SSBO 蒙皮 VS）上，DrawSkinnedShaded 为 no-op、蒙皮网格不可见。此处把蒙皮项喂 GPU compute
-    // 蒙皮系统（WebGPU 上 GPU 真做蒙皮），消费「上一帧」异步回读结果（grass 之外第 2 个真实回读
-    // 消费方），未就绪/WebGL2 则 CPU 蒙皮回退（同公式，结果一致），烘焙为对象空间顶点的非蒙皮项，
-    // 走现有 ForwardShaded 路径（零着色器/管线改动）。桌面（程序可用）不触发，行为不变。
-    // 注意：mesh_render_system 把蒙皮项（item.skinned=true）放进 cpu_meshes.opaque/transparent 队列，
-    // 而非独立的 skinned 队列（后者从未被填充）。故此处就地扫描这两个队列里的蒙皮项处理。
-    if (!skinning_bake_checked_) {
-        skinning_bake_for_web_ = (runtime_context_.rhi_device->GetBuiltinProgram(
-            BuiltinProgram::ForwardSkinnedShaded) == 0);
-        skinning_bake_checked_ = true;
-    }
-    if (skinning_bake_for_web_) {
-        const bool gpu_skin = rs_->gpu_skinning_system_.IsAvailable();
-        // CPU 蒙皮回退：逐句镜像 compute 蒙皮（4 权重，第 4 权重 = 1 - w0 - w1 - w2；
-        // 法线/切线用 mat3(skin)），保证与 GPU 回读路径数值一致 → 暖机/WebGL2 无破帧。
-        auto skin_like_compute = [](const BatchVertex& bv,
-                                    const std::vector<glm::mat4>& bones,
-                                    glm::vec3& out_pos, glm::vec3& out_nrm, glm::vec3& out_tan) {
-            const float bw0 = bv.weights[0], bw1 = bv.weights[1], bw2 = bv.weights[2];
-            const float bw3 = 1.0f - bw0 - bw1 - bw2;
-            const int n = static_cast<int>(bones.size());
-            auto B = [&](int i) -> glm::mat4 {
-                return (i >= 0 && i < n) ? bones[i] : glm::mat4(1.0f);
-            };
-            const glm::mat4 sm = B(static_cast<int>(bv.joints[0])) * bw0
-                               + B(static_cast<int>(bv.joints[1])) * bw1
-                               + B(static_cast<int>(bv.joints[2])) * bw2
-                               + B(static_cast<int>(bv.joints[3])) * bw3;
-            const glm::mat3 nm = glm::mat3(sm);
-            out_pos = glm::vec3(sm * glm::vec4(bv.pos, 1.0f));
-            out_nrm = glm::normalize(nm * bv.normal);
-            out_tan = glm::normalize(nm * bv.tangent);
-        };
-        auto bake_skinned_in_queue = [&](std::vector<MeshDrawItem>& queue) {
-            for (auto& item : queue) {
-                // 仅处理单实例蒙皮项（实例化蒙皮的 web 烘焙暂不覆盖：本 demo 用单实例）。
-                if (!item.skinned || item.bone_matrices.empty()) continue;
-                if (item.instance_transforms.size() > 1) continue;
-                const BatchVertex* src =
-                    item.shared_vertex_ptr ? item.shared_vertex_ptr : item.vertices.data();
-                const uint32_t vcount = item.shared_vertex_ptr
-                    ? item.shared_vertex_count
-                    : static_cast<uint32_t>(item.vertices.size());
-                if (vcount == 0) continue;
-
-                // 生产者：本帧请求喂 GPU compute（WebGPU 真蒙皮；WebGL2 无 compute 跳过，纯 CPU）。
-                if (gpu_skin) {
-                    dse::render::SkinningRequest req;
-                    req.entity_id = item.entity_id;
-                    req.vertex_count = vcount;
-                    req.bone_matrices = item.bone_matrices;
-                    req.src_vertex_data.resize(static_cast<size_t>(vcount) * 16);
-                    for (uint32_t i = 0; i < vcount; ++i) {
-                        const BatchVertex& bv = src[i];
-                        float* d = req.src_vertex_data.data() + static_cast<size_t>(i) * 16;
-                        d[0]  = bv.pos.x;     d[1]  = bv.pos.y;     d[2]  = bv.pos.z;     d[3]  = bv.weights[0];
-                        d[4]  = bv.normal.x;  d[5]  = bv.normal.y;  d[6]  = bv.normal.z;  d[7]  = bv.weights[1];
-                        d[8]  = bv.tangent.x; d[9]  = bv.tangent.y; d[10] = bv.tangent.z; d[11] = bv.weights[2];
-                        d[12] = bv.joints[0]; d[13] = bv.joints[1]; d[14] = bv.joints[2]; d[15] = bv.joints[3];
-                    }
-                    rs_->gpu_skinning_system_.Submit(std::move(req));
-                }
-
-                // 消费：上一帧 GPU 回读（世界空间——骨骼矩阵已预乘 model）；未就绪/WebGL2 → CPU 蒙皮回退。
-                const dse::render::SkinnedOutput* out =
-                    gpu_skin ? rs_->gpu_skinning_system_.GetSkinnedOutput(item.entity_id) : nullptr;
-                const bool use_gpu = out && out->vertex_count == vcount;
-
-                std::vector<BatchVertex> baked(vcount);
-                for (uint32_t i = 0; i < vcount; ++i) {
-                    BatchVertex ov = src[i];
-                    if (use_gpu) {
-                        ov.pos     = out->positions[i];
-                        ov.normal  = out->normals[i];
-                        ov.tangent = out->tangents[i];
-                    } else {
-                        skin_like_compute(src[i], item.bone_matrices, ov.pos, ov.normal, ov.tangent);
-                    }
-                    ov.weights = glm::vec4(0.0f);
-                    ov.joints  = glm::vec4(0.0f);
-                    baked[i] = ov;
-                }
-
-                // 就地转为非蒙皮静态项：蒙皮矩阵是「对象空间」蒙皮（bind-local → 姿态后的模型空间），
-                // 顶点仍在模型空间 → 保留原 model 矩阵不变，由 ForwardShaded 的 CPU 世界烘焙
-                // （BuildShadedWorldVertexBuffer 乘 model + 法线矩阵）把姿态后的模型空间顶点变到世界，
-                // 与普通静态网格完全一致；仅清掉蒙皮标志/骨骼数据，避免走 DrawSkinnedShaded（web 上 no-op）。
-                if (item.indices.empty() && item.shared_index_ptr && item.shared_index_count) {
-                    item.indices.assign(item.shared_index_ptr,
-                                        item.shared_index_ptr + item.shared_index_count);
-                }
-                item.vertices = std::move(baked);
-                item.shared_vertex_ptr = nullptr;
-                item.shared_vertex_count = 0;
-                item.shared_index_ptr = nullptr;
-                item.shared_index_count = 0;
-                item.skinned = false;
-                item.bone_matrices.clear();
-                item.instance_transforms.clear();
-                item.bone_palette.clear();
-                item.instance_bone_palette_idx.clear();
-            }
-        };
-        bake_skinned_in_queue(rs_->render_scene_.cpu_meshes.opaque);
-        bake_skinned_in_queue(rs_->render_scene_.cpu_meshes.transparent);
-    }
-
-    // GPU Compute Skinning: Dispatch 所有蒙皮请求，绑定输出 SSBO
-    if (rs_->gpu_skinning_system_.IsAvailable() && rs_->gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
-        rs_->gpu_skinning_system_.Dispatch();
-        runtime_context_.rhi_device->BindGpuBuffer(
-            rs_->gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
-    }
-
-    CaptureThinSnapshot();
-    FlipSnapshotIndex();
-    render_pass_context_.snapshot = &read_snapshot();
-    render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
-
-    // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
-    rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
-
-    ExecuteRenderGraph(*cmd_buffer);
-
-    dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
-
-    // GPU Timer → RenderProfiler 桥接
-    {
-        auto gpu_results = runtime_context_.rhi_device->GetAllGpuTimerResults();
-        if (!gpu_results.empty()) {
-            std::vector<dse::profiler::GpuPassTiming> timings;
-            timings.reserve(gpu_results.size());
-            for (const auto& entry : gpu_results) {
-                timings.push_back({entry.name, entry.ms});
-            }
-            rs_->render_profiler_.UpdateGpuTimers(timings);
-        }
-    }
-
-    // Hi-Z / GPU Driven: 异步读回可见性供下一帧 MeshRenderSystem 使用
-    // 使用 BeginGpuReadback（双缓冲 staging），数据延迟 1 帧但不阻塞 GPU pipeline
-    if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
-        && render_pass_context_.hiz_culling_enabled) {
-        // 传统 Hi-Z 路径：异步读回 visibility SSBO
-        const int count = render_pass_context_.hiz_object_count;
-        const size_t read_size = count * sizeof(uint32_t);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_resources_.hiz_visibility_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* vis = static_cast<const uint32_t*>(raw);
-                std::vector<uint32_t> visibility(vis, vis + count);
-                static const bool hiz_diag = std::getenv("DSE_HIZ_DIAG") && std::getenv("DSE_HIZ_DIAG")[0] != '0';
-                if (hiz_diag) {
-                    int culled = 0;
-                    for (int i = 0; i < count; ++i) { if (visibility[i] == 0) ++culled; }
-                    static int hiz_diag_counter = 0;
-                    if (hiz_diag_counter < 10 || (hiz_diag_counter % 30) == 0)
-                        DEBUG_LOG_INFO("[HiZDiag] path=main count={} visible={} culled={}", count, count - culled, culled);
-                    ++hiz_diag_counter;
-                }
-                modules_impl_->SetHiZVisibility(visibility);
-            }
-        }
-    } else if (!render_pass_context_.hiz_culling_enabled
-        && render_pass_context_.gpu_driven_active_this_frame && render_pass_context_.gpu_indirect_draw_count > 0
-        && render_pass_context_.gpu_draw_cmd_ssbo) {
-        // GPU-driven readback 仅在 Hi-Z culling 未激活时执行，
-        // 避免与 Hi-Z readback 共用 async_readback_ 单槽位导致 staging 数据污染
-        const int count = render_pass_context_.gpu_indirect_draw_count;
-        const size_t read_size = count * sizeof(DrawElementsIndirectCommand);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_pass_context_.gpu_draw_cmd_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* cmds = static_cast<const DrawElementsIndirectCommand*>(raw);
-                std::vector<uint32_t> visibility(count);
-                int culled = 0;
-                for (int i = 0; i < count; ++i) {
-                    visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
-                    if (visibility[i] == 0) ++culled;
-                }
-                gpu_culled_last_frame_ = culled;
-                runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-            }
-        }
-    }
-
-    dse::runtime::FinalizeRuntimeRenderFrame(*this);
-    if (runtime_context_.rhi_device) {
-        const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
-        rs_->render_profiler_.UpdateFromRhi(
-            rhi_stats.draw_calls,
-            0,
-            rhi_stats.triangle_count,
-            rhi_stats.sprite_count,
-            rhi_stats.texture_binds,
-            rhi_stats.shader_switches);
-    }
-    rs_->render_profiler_.EndFrame();
-    if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
-        if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
-            static int readback_diag_frame = 0;
-            if (readback_diag_frame < 5 || (readback_diag_frame % 60) == 0) {
-                LogReadbackStats("scene", ReadSceneColorRgba8WithSize());
-                LogReadbackStats("main", ReadMainColorRgba8WithSize());
-                LogDefaultFramebufferStats();
-            }
-            ++readback_diag_frame;
-        }
-    }
-    const auto& frame_stats = runtime_context_.rhi_device->LastFrameStats();
-    auto render_end = std::chrono::high_resolution_clock::now();
-    render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
-    render_samples_ += 1;
-
-    stats_accumulator_ += Time::delta_time();
-    if (stats_accumulator_ >= 1.0f) {
-        stats_accumulator_ = 0.0f;
-        const auto& stats = frame_stats;
-        size_t entity_count = runtime_context_.world->EntityCount();
-        size_t physics_bodies = 0;
-        auto physics_view = runtime_context_.world->registry().view<RigidBody2DComponent>();
-        for (auto entity : physics_view) {
-            (void)entity;
-            ++physics_bodies;
-        }
-#if defined(DSE_ENABLE_3D) && (defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT))
-        auto physics3d_view = runtime_context_.world->registry().view<dse::RigidBody3DComponent>();
-        for (auto entity : physics3d_view) {
-            (void)entity;
-            ++physics_bodies;
-        }
-#endif
-        size_t particle_emitters = 0;
-        size_t active_particles = 0;
-        auto particle2d_view = runtime_context_.world->registry().view<ParticleEmitterComponent>();
-        for (auto emitter_entity : particle2d_view) {
-            auto& emitter = particle2d_view.get<ParticleEmitterComponent>(emitter_entity);
-            (void)emitter_entity;
-            ++particle_emitters;
-            active_particles += emitter.particles.size();
-        }
-        auto particle3d_view = runtime_context_.world->registry().view<dse::ParticleSystem3DComponent>();
-        for (auto particle_entity : particle3d_view) {
-            const auto& particle_system = particle3d_view.get<dse::ParticleSystem3DComponent>(particle_entity);
-            (void)particle_entity;
-            ++particle_emitters;
-            const int active_particle_count = particle_system.active_particle_count;
-            active_particles += static_cast<size_t>(active_particle_count > 0 ? active_particle_count : 0);
-        }
-        float avg_update_ms = update_samples_ > 0 ? update_time_accumulator_ms_ / static_cast<float>(update_samples_) : 0.0f;
-        float avg_fixed_ms = fixed_samples_ > 0 ? fixed_time_accumulator_ms_ / static_cast<float>(fixed_samples_) : 0.0f;
-        float avg_render_ms = render_samples_ > 0 ? render_time_accumulator_ms_ / static_cast<float>(render_samples_) : 0.0f;
-        auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
-        std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
-        std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
-        DEBUG_LOG_INFO("Runtime stats: entities={}, sprites={}, meshes={}, draw_calls={}, material_switches={}, shadow_passes={}, max_batch_sprites={}, render_passes={}, physics_bodies={}, particle_emitters={}, active_particles={}, avg_update_ms={}, avg_fixed_ms={}, avg_render_ms={}, instanced_meshes={}, gpu_driven_requested={}, gpu_driven_supported={}, gpu_driven_prepared={}, gpu_driven_active={}, gpu_indirect_draws={}, gpu_instances={}, pending_upload_callbacks={}, pending_upload_callbacks_hwm={}, upload_budget={}",
-                       entity_count,
-                       stats.sprite_count,
-                       stats.mesh_count,
-                       stats.draw_calls,
-                       stats.material_switches,
-                       stats.shadow_passes,
-                       stats.max_batch_sprites,
-                       stats.render_passes,
-                       physics_bodies,
-                       particle_emitters,
-                       active_particles,
-                       avg_update_ms,
-                       avg_fixed_ms,
-                       avg_render_ms,
-                       stats.instanced_mesh_count,
-                       render_pass_context_.gpu_driven_requested,
-                       render_pass_context_.gpu_driven_supported,
-                       render_pass_context_.gpu_driven_scene_prepared,
-                       render_pass_context_.gpu_driven_active_this_frame,
-                       render_pass_context_.gpu_indirect_draw_count,
-                       render_pass_context_.gpu_total_instances,
-                       pending_callbacks,
-                       pending_callbacks_hwm,
-                       callback_budget_per_frame_);
-        update_time_accumulator_ms_ = 0.0f;
-        fixed_time_accumulator_ms_ = 0.0f;
-        render_time_accumulator_ms_ = 0.0f;
-        update_samples_ = 0;
-        fixed_samples_ = 0;
-        render_samples_ = 0;
-    }
-}
-
-void FramePipeline::BuildRenderGraph() {
-    dse::runtime::BuildFrameRenderGraph(*this);
-}
-
-void FramePipeline::BuildRenderSceneQueues() {
-    rs_->render_scene_.Clear();
-    render_pass_context_.render_scene = &rs_->render_scene_;
-    if (!runtime_context_.world) return;
-
-    World* world = runtime_context_.world;
-
-#ifdef DSE_ENABLE_3D
-    if (builtin_gameplay3d_enabled_) {
-        modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
-    }
-#else
-    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
-#endif
-
-    // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
-    // 不再经由 IModule 的固定阶段回调包装进 RenderScene 回调桶。
-    (void)world;
-}
-
-void FramePipeline::BuildRenderGraphInternal() {
-    render_graph_dag_.Reset();
-    registered_passes_.clear();
-
-    // ---- 填充 RenderPassContext ----
-    render_pass_context_.world = runtime_context_.world;
-    render_pass_context_.asset_manager = runtime_context_.asset_manager;
-    render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
-    render_pass_context_.render_scene = &rs_->render_scene_;
-    render_pass_context_.mesh_renderer = &rs_->cpu_mesh_renderer_;
-    render_pass_context_.light_buffer = &rs_->light_buffer_;
-    render_pass_context_.cluster_grid = &rs_->cluster_grid_;
-    render_pass_context_.editor_mode = runtime_context_.editor_mode;
-
-    // Pass 层图形管线（B5-3b）：聚合为 (pso, program=0) PSO-only 管线句柄——其后绘制经 GPU-driven 自绑 program
-    // 或被渲染器自带 (pso+program) 覆盖，故此处不烘 program，BindPipeline 仅应用 PSO 状态，保留原 SetPipelineState 语义。
-    auto* rhi = runtime_context_.rhi_device.get();
-    render_pass_context_.pipeline_states.sprite    = rhi->GetGraphicsPipeline(render_resources_.sprite_pipeline_state, 0);
-    render_pass_context_.pipeline_states.mesh      = rhi->GetGraphicsPipeline(render_resources_.mesh_pipeline_state, 0);
-    render_pass_context_.pipeline_states.prez      = rhi->GetGraphicsPipeline(render_resources_.prez_pipeline_state, 0);
-    render_pass_context_.pipeline_states.shadow    = rhi->GetGraphicsPipeline(render_resources_.shadow_pipeline_state, 0);
-    render_pass_context_.pipeline_states.composite = rhi->GetGraphicsPipeline(render_resources_.composite_pipeline_state, 0);
-    render_pass_context_.pipeline_states.decal_blend = rhi->GetGraphicsPipeline(render_resources_.decal_blend_pipeline_state, 0);
-    render_pass_context_.pipeline_states.wboit_accum = rhi->GetGraphicsPipeline(render_resources_.wboit_accum_pipeline_state, 0);
-    render_pass_context_.pipeline_states.wboit_reveal = rhi->GetGraphicsPipeline(render_resources_.wboit_reveal_pipeline_state, 0);
-
-    render_pass_context_.render_targets.main     = render_resources_.main_render_target;
-    render_pass_context_.render_targets.scene    = render_resources_.scene_render_target;
-    render_pass_context_.render_targets.ui       = render_resources_.ui_render_target;
-    render_pass_context_.render_targets.prez     = render_resources_.prez_render_target;
-    for (int i = 0; i < CSM_CASCADES; ++i) {
-        render_pass_context_.render_targets.shadow[i] = render_resources_.shadow_render_target[i];
-    }
-    render_pass_context_.render_targets.shadow_atlas = render_resources_.shadow_atlas_render_target;
-    for (int i = 0; i < 4; ++i) {
-        render_pass_context_.render_targets.spot_shadow[i]  = render_resources_.spot_shadow_render_target[i];
-        render_pass_context_.render_targets.point_shadow[i] = render_resources_.point_shadow_render_target[i];
-    }
-    render_pass_context_.render_targets.bloom_extract = render_resources_.pp_bloom_extract_rt;
-    render_pass_context_.render_targets.bloom_mips    = render_resources_.pp_bloom_mip_rts;
-    render_pass_context_.render_targets.ssao      = render_resources_.pp_ssao_rt;
-    render_pass_context_.render_targets.ssao_blur = render_resources_.pp_ssao_blur_rt;
-    render_pass_context_.render_targets.contact_shadow = render_resources_.pp_contact_shadow_rt;
-    render_pass_context_.render_targets.fxaa      = render_resources_.pp_fxaa_rt;
-    render_pass_context_.render_targets.taa       = render_resources_.pp_taa_rt;
-    render_pass_context_.render_targets.dof       = render_resources_.pp_dof_rt;
-    render_pass_context_.render_targets.ssr       = render_resources_.pp_ssr_rt;
-    render_pass_context_.render_targets.motion_vector = render_resources_.pp_motion_vector_rt;
-    render_pass_context_.render_targets.outline = render_resources_.pp_outline_rt;
-    render_pass_context_.render_targets.fog    = render_resources_.pp_fog_rt;
-    render_pass_context_.render_targets.cloud  = render_resources_.pp_cloud_rt;
-    render_pass_context_.render_targets.wboit_accum = render_resources_.wboit_accum_rt;
-    render_pass_context_.render_targets.wboit_reveal = render_resources_.wboit_reveal_rt;
-    render_pass_context_.render_targets.sss_temp = render_resources_.pp_sss_temp_rt;
-    if (render_resources_.rsm_render_target != 0) {
-        render_pass_context_.rsm_render_target = render_resources_.rsm_render_target;
-        render_pass_context_.rsm_targets.position = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 0);
-        render_pass_context_.rsm_targets.normal   = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 1);
-        render_pass_context_.rsm_targets.flux     = runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.rsm_render_target, 2);
-        render_pass_context_.rsm_targets.width = 512;
-        render_pass_context_.rsm_targets.height = 512;
-    }
-    render_pass_context_.render_targets.lum_temp  = render_resources_.pp_lum_temp_rt;
-    render_pass_context_.render_targets.lum_adapted[0] = render_resources_.pp_lum_adapted_rt[0];
-    render_pass_context_.render_targets.lum_adapted[1] = render_resources_.pp_lum_adapted_rt[1];
-    render_pass_context_.render_targets.hiz_texture = render_resources_.hiz_texture;
-    render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
-    render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
-    render_pass_context_.hiz_aabb_capacity = render_resources_.hiz_ssbo_capacity;
-    render_pass_context_.hiz_culling_enabled = false;
-    render_pass_context_.hiz_object_count = 0;
-    render_pass_context_.hiz_copy_shader = render_resources_.hiz_copy_shader;
-    render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
-    render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
-
-    // GPU Driven 鐘舵€?
-    render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
-    render_pass_context_.gpu_driven_supported = render_resources_.gpu_driven_supported;
-    render_pass_context_.gpu_driven_requested = gpu_driven_requested_;
-    render_pass_context_.gpu_driven_scene_prepared = false;
-    render_pass_context_.gpu_driven_active_this_frame = false;
-    render_pass_context_.gpu_indirect_buffer = render_resources_.gpu_indirect_buffer;
-    render_pass_context_.gpu_instance_ssbo = render_resources_.gpu_instance_ssbo;
-    render_pass_context_.gpu_material_ssbo = render_resources_.gpu_material_ssbo;
-    render_pass_context_.gpu_draw_cmd_ssbo = render_resources_.gpu_draw_cmd_ssbo;
-    render_pass_context_.gpu_aabb_ssbo = render_resources_.gpu_aabb_ssbo;
-    render_pass_context_.gpu_aabb_capacity = render_resources_.gpu_aabb_capacity;
-    render_pass_context_.gpu_visible_indices_ssbo = render_resources_.gpu_visible_indices_ssbo;
-    render_pass_context_.gpu_atomic_counter_ssbo = render_resources_.gpu_atomic_counter_ssbo;
-    render_pass_context_.gpu_mega_vao = render_resources_.gpu_mega_vao;
-    render_pass_context_.gpu_cull_shader = render_resources_.gpu_cull_shader;
-    render_pass_context_.gpu_indirect_draw_count = 0;
-    render_pass_context_.gpu_total_instances = 0;
-    render_pass_context_.fxaa_active = false;
-    render_pass_context_.taa_active = false;
-    render_pass_context_.auto_exposure_active = false;
-    render_pass_context_.pipeline_features.bloom =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "bloom");
-    render_pass_context_.pipeline_features.ssao =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "ssao");
-    render_pass_context_.pipeline_features.contact_shadow =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "contact_shadow");
-    render_pass_context_.pipeline_features.auto_exposure =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "auto_exposure");
-    render_pass_context_.pipeline_features.fxaa =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "fxaa");
-    render_pass_context_.pipeline_features.taa =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "taa");
-    render_pass_context_.pipeline_features.ui =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "ui");
-    render_pass_context_.pipeline_features.gpu_cull =
-        IsProfilePassEnabled(rs_->render_pipeline_profile_, "gpu_cull");
-    render_pass_context_.pipeline_features.shadows = rs_->render_pipeline_profile_.settings.shadows &&
-        (IsProfilePassEnabled(rs_->render_pipeline_profile_, "csm_shadow") ||
-         IsProfilePassEnabled(rs_->render_pipeline_profile_, "spot_shadow") ||
-         IsProfilePassEnabled(rs_->render_pipeline_profile_, "point_shadow"));
-    render_pass_context_.pipeline_overrides.bloom_intensity = PipelineValueToFloat(
-        dse::render::FindRenderPipelinePassParam(
-            rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "intensity"),
-        -1.0f);
-    render_pass_context_.pipeline_overrides.bloom_threshold = PipelineValueToFloat(
-        dse::render::FindRenderPipelinePassParam(
-            rs_->render_pipeline_profile_, dse::render::BuiltinRenderPipelineRegistry(), "bloom", "threshold"),
-        -1.0f);
-
-    render_pass_context_.modules.clear();
-    for (auto& mod : modules_) {
-        if (mod.instance) {
-            render_pass_context_.modules.push_back({mod.instance});
-        }
-    }
-    render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-        modules_impl_->RenderScene2D(world, cmd, frame);
-    };
-    render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
-        modules_impl_->RenderUI2D(world, cmd, w, h, clip);
-    };
-    render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
-    };
-
-    // ---- 澹版槑澶栭儴杈撳嚭 ----
-    auto main_color  = render_graph_dag_.DeclareResource("main_color");
-    auto scene_color = render_graph_dag_.DeclareResource("scene_color");
-    auto taa_color   = render_graph_dag_.DeclareResource("taa_color");
-    auto dof_color   = render_graph_dag_.DeclareResource("dof_color");
-    auto ssr_color   = render_graph_dag_.DeclareResource("ssr_color");
-    auto mb_color    = render_graph_dag_.DeclareResource("motion_blur_color");
-    auto outline_color = render_graph_dag_.DeclareResource("outline_color");
-    render_graph_dag_.MarkOutput(main_color);
-    render_graph_dag_.MarkOutput(scene_color);
-    render_graph_dag_.MarkOutput(taa_color);
-    render_graph_dag_.MarkOutput(dof_color);
-    render_graph_dag_.MarkOutput(ssr_color);
-    render_graph_dag_.MarkOutput(mb_color);
-    render_graph_dag_.MarkOutput(outline_color);
-
-    taa_pass_ = nullptr;
-    const auto& registry = dse::render::BuiltinRenderPipelineRegistry();
-    dse::render::RenderPipelineValidationContext prune_ctx{};
-    prune_ctx.editor_mode = runtime_context_.editor_mode;
-    prune_ctx.hiz_available = render_resources_.hiz_texture != 0;
-    prune_ctx.gpu_driven_supported = render_resources_.gpu_driven_supported;
-    if (const dse::render::RhiDevice* dev = runtime_context_.rhi_device.get()) {
-        prune_ctx.compute_supported = dev->SupportsCompute();
-        prune_ctx.ssbo_supported = dev->SupportsSSBO();
-        prune_ctx.max_color_attachments = dev->GetMaxColorAttachments();
-    }
-    for (const auto& pass_config : rs_->render_pipeline_profile_.passes) {
-        if (!pass_config.enabled) continue;
-        const std::string pass_name = registry.ResolveName(pass_config.name);
-        const dse::render::RenderPassMetadata* metadata = registry.FindMetadata(pass_name);
-        if (!metadata) {
-            DEBUG_LOG_WARN("Render pipeline skipped unknown pass '{}'", pass_config.name);
-            continue;
-        }
-        if (const char* prune_reason = dse::render::RenderPassCapabilityPruneReason(*metadata, prune_ctx)) {
-            DEBUG_LOG_INFO("Render pipeline pruned pass '{}' ({})", pass_name, prune_reason);
-            continue;
-        }
-        if (!rs_->render_pipeline_profile_.settings.shadows &&
-            (pass_name == "csm_shadow" || pass_name == "spot_shadow" || pass_name == "point_shadow")) {
-            continue;
-        }
-        auto pass = registry.Create(pass_name, render_pass_context_);
-        if (!pass) {
-            DEBUG_LOG_WARN("Render pipeline failed to create pass '{}'", pass_name);
-            continue;
-        }
-        if (pass_name == "taa") {
-            taa_pass_ = static_cast<dse::render::TAAPass*>(pass.get());
-        }
-        registered_passes_.push_back(std::move(pass));
-    }
-
-    // ---- 妯″潡鍔ㄦ€佹敞鍐岃嚜瀹氫箟 Pass ----
-    for (auto& mod : modules_) {
-        if (mod.instance) {
-            mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
-        }
-    }
-#ifdef DSE_ENABLE_3D
-    if (builtin_gameplay3d_enabled_) {
-        modules_impl_->RegisterGameplay3DPasses(render_graph_dag_, render_pass_context_, registered_passes_);
-    }
-#endif
-
-    // ---- 鎵€鏈?Pass 鍦?RenderGraph 涓婂０鏄庝緷璧?----
-    for (auto& pass : registered_passes_) {
-        pass->Setup(render_graph_dag_);
-    }
-
-    // 缂栬瘧 DAG锛堟嫇鎵戞帓搴?+ 鏃犵敤 Pass 鍓旈櫎锛?
-    if (!render_graph_dag_.Compile()) {
-        DEBUG_LOG_ERROR("RenderGraph 缂栬瘧澶辫触锛氭娴嬪埌寰幆渚濊禆");
-    }
-}
-
-
-void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
-    dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
-}
-
-/// 棰勭儹 builtin Pass 鍦?Execute() 涓敤鍒扮殑鎵€鏈?ECS 缁勪欢姹犮€?
-/// 鏂板 Pass 鑻ヤ娇鐢ㄦ柊缁勪欢绫诲瀷锛屽繀椤诲湪姝ゅ琛ュ厖瀵瑰簲 view 璋冪敤銆?
-/// Debug 妯″紡涓?ExecuteRenderGraphInternal 浼氬湪骞惰鎵ц鍚庢柇瑷€姹犳暟閲忔湭澧為暱锛?
-/// 浠ユ娴嬮仐婕忕殑缁勪欢绫诲瀷銆?
-static void WarmUpRenderECSPools(entt::registry& reg) {
-    // --- builtin Pass 鐩存帴浣跨敤 ---
-    (void)reg.view<TransformComponent>();
-    (void)reg.view<CameraComponent>();
-    (void)reg.view<dse::Camera3DComponent>();
-    (void)reg.view<dse::DirectionalLight3DComponent>();
-    (void)reg.view<TransformComponent, dse::SpotLightComponent>();
-    (void)reg.view<TransformComponent, dse::PointLightComponent>();
-    (void)reg.view<dse::PostProcessComponent>();
-    (void)reg.view<dse::SkyboxComponent>();
-    (void)reg.view<dse::DecalComponent, TransformComponent>();
-    (void)reg.view<dse::WaterComponent>();
-    // --- 模块渲染（BuildRenderQueues / RenderPassContext 钩子）间接使用 ---
-    (void)reg.view<TransformComponent, dse::MeshRendererComponent>();
-    (void)reg.view<dse::SkyLightComponent>();
-    (void)reg.view<dse::TerrainComponent, TransformComponent>();
-    (void)reg.view<dse::GrassComponent, TransformComponent>();
-    (void)reg.view<dse::HairComponent, TransformComponent>();
-    (void)reg.view<dse::ParticleSystem3DComponent>();
-    (void)reg.view<dse::FluidEmitterComponent>();
-    (void)reg.view<dse::GIProbeVolumeComponent>();
-}
-
-void FramePipeline::ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer) {
-    static int diag_pass_frame = 0;
-    const char* pass_diag = std::getenv("DSE_PASS_DIAG");
-    const bool pass_diag_enabled = pass_diag && pass_diag[0] != '\0' && pass_diag[0] != '0';
-    const unsigned int scene_rt = render_resources_.scene_render_target;
-    if (pass_diag_enabled && diag_pass_frame < 4 && scene_rt != 0 && runtime_context_.rhi_device) {
-        dse::render::RhiDevice* rhi = runtime_context_.rhi_device.get();
-        render_graph_dag_.ExecuteWithCallback(cmd_buffer, [&](const std::string& pass_name) {
-            auto rb = rhi->ReadRenderTargetColorRgba8WithSize(scene_rt);
-            if (rb.width > 0 && rb.height > 0) {
-                int cx = rb.width / 2, cy = rb.height / 2;
-                int bx = rb.width / 4, by = rb.height / 4;
-                std::size_t ci = (static_cast<std::size_t>(cy) * rb.width + cx) * 4;
-                std::size_t bi = (static_cast<std::size_t>(by) * rb.width + bx) * 4;
-                int black_count = 0;
-                for (std::size_t i = 0; i + 3 < rb.pixels.size(); i += 4) {
-                    if (static_cast<int>(rb.pixels[i]) + static_cast<int>(rb.pixels[i+1]) + static_cast<int>(rb.pixels[i+2]) <= 8)
-                        ++black_count;
-                }
-                DEBUG_LOG_INFO("[PassDiag] frame={} after={} black={} center=({},{},{}) bbox_tl=({},{},{})",
-                    diag_pass_frame, pass_name, black_count,
-                    static_cast<int>(rb.pixels[ci]), static_cast<int>(rb.pixels[ci+1]), static_cast<int>(rb.pixels[ci+2]),
-                    static_cast<int>(rb.pixels[bi]), static_cast<int>(rb.pixels[bi+1]), static_cast<int>(rb.pixels[bi+2]));
-            }
-        });
-        ++diag_pass_frame;
-    } else {
-        render_graph_dag_.Execute(cmd_buffer);
-    }
-}
 
 void FramePipeline::SetRenderContextCallbacks(
         std::function<void()> make_current,
@@ -2252,17 +1368,17 @@ void FramePipeline::SetSceneViewMode(int mode) {
 unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection) {
     if (!initialized_ || !runtime_context_.rhi_device) return 0;
 
-    // 保存当前编辑器相机状态
+    // ä¿å­˜å½“å‰ç¼–è¾‘å™¨ç›¸æœºçŠ¶æ€
     const bool saved_use = render_pass_context_.use_editor_camera;
     const glm::mat4 saved_view = render_pass_context_.editor_view;
     const glm::mat4 saved_proj = render_pass_context_.editor_projection;
 
-    // 设置临时相机
+    // è®¾ç½®ä¸´æ—¶ç›¸æœº
     render_pass_context_.use_editor_camera = true;
     render_pass_context_.editor_view = view;
     render_pass_context_.editor_projection = projection;
 
-    // 创建命令缓冲，执行 shadow pass + scene pass
+    // åˆ›å»ºå‘½ä»¤ç¼“å†²ï¼Œæ‰§è¡Œ shadow pass + scene pass
     auto cmd = runtime_context_.rhi_device->CreateCommandBuffer();
     for (auto& pass : registered_passes_) {
         const char* name = pass->GetName();
@@ -2275,7 +1391,7 @@ unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const g
     }
     runtime_context_.rhi_device->Submit(cmd);
 
-    // 恢复相机
+    // æ¢å¤ç›¸æœº
     render_pass_context_.use_editor_camera = saved_use;
     render_pass_context_.editor_view = saved_view;
     render_pass_context_.editor_projection = saved_proj;
@@ -2291,868 +1407,7 @@ void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
 }
 
 // ============================================================
-// Phase 1 薄快照：一次性提取渲染线程所需的全部 ECS 数据
+// Phase 1 è–„å¿«ç…§ï¼šä¸€æ¬¡æ€§æå–æ¸²æŸ“çº¿ç¨‹æ‰€éœ€çš„å…¨éƒ¨ ECS æ•°æ®
 // ============================================================
 
-void FramePipeline::CaptureThinSnapshot() {
-    auto& snap = write_snapshot();
-    snap.Reset();
 
-    auto* world = runtime_context_.world;
-    if (!world) return;
-    auto& reg = world->registry();
-
-    // ── 1. 3D Camera（priority + entity id 确定唯一主相机）──
-    {
-        auto view = reg.view<dse::Camera3DComponent>();
-        entt::entity best = entt::null;
-        int best_priority = std::numeric_limits<int>::min();
-        std::uint32_t best_id = std::numeric_limits<std::uint32_t>::max();
-        for (auto e : view) {
-            auto& cam = view.get<dse::Camera3DComponent>(e);
-            if (!cam.enabled) continue;
-            auto eid = static_cast<std::uint32_t>(e);
-            if (best == entt::null ||
-                cam.priority > best_priority ||
-                (cam.priority == best_priority && eid < best_id)) {
-                best = e;
-                best_priority = cam.priority;
-                best_id = eid;
-            }
-        }
-        if (best != entt::null) {
-            auto& cam = view.get<dse::Camera3DComponent>(best);
-            auto& c = snap.camera_3d;
-            c.valid = true;
-            c.fov = cam.fov;
-            c.near_clip = cam.near_clip;
-            c.far_clip = cam.far_clip;
-            if (reg.all_of<TransformComponent>(best)) {
-                auto& tf = reg.get<TransformComponent>(best);
-                c.position = tf.position;
-                c.forward = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                c.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                c.right = tf.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-                // Camera-Relative Rendering: view matrix 以原点为相机位置
-                c.view = glm::lookAt(glm::vec3(0.0f), c.forward, c.up);
-                c.shadow_center = c.position + c.forward * 50.0f;
-                snap.camera_offset = c.position;
-            }
-        }
-    }
-
-    // ── 2. 2D Camera fallback ──
-    {
-        auto view = reg.view<CameraComponent>();
-        entt::entity best = entt::null;
-        int best_priority = std::numeric_limits<int>::min();
-        std::uint32_t best_id = std::numeric_limits<std::uint32_t>::max();
-        for (auto e : view) {
-            auto& cam = view.get<CameraComponent>(e);
-            if (!cam.enabled) continue;
-            auto eid = static_cast<std::uint32_t>(e);
-            if (best == entt::null ||
-                cam.priority > best_priority ||
-                (cam.priority == best_priority && eid < best_id)) {
-                best = e;
-                best_priority = cam.priority;
-                best_id = eid;
-            }
-        }
-        if (best != entt::null) {
-            auto& cam = view.get<CameraComponent>(best);
-            snap.camera_2d.valid = true;
-            snap.camera_2d.view = cam.view;
-            snap.camera_2d.projection = cam.projection;
-        }
-    }
-
-    // ── 3. Skybox（含 lazy load 写回，主线程安全）──
-    {
-        auto view = reg.view<dse::SkyboxComponent>();
-        for (auto e : view) {
-            auto& sb = view.get<dse::SkyboxComponent>(e);
-            if (!sb.enabled) continue;
-            if (sb.cubemap_handle == 0 && !sb.cubemap_path.empty()) {
-                if (auto cubemap = runtime_context_.asset_manager->LoadCubemap(sb.cubemap_path)) {
-                    sb.cubemap_handle = cubemap->GetHandle();
-                }
-            }
-            if (sb.cubemap_handle != 0) {
-                snap.skybox.valid = true;
-                snap.skybox.cubemap_handle = sb.cubemap_handle;
-                if (reg.all_of<TransformComponent>(e)) {
-                    snap.skybox.has_transform = true;
-                    snap.skybox.rotation = reg.get<TransformComponent>(e).rotation;
-                }
-            }
-            break;
-        }
-    }
-
-    // ── 3b. Atmosphere Sky（程序化大气散射天空，优先于 cubemap skybox）──
-    {
-        auto view = reg.view<dse::AtmosphereComponent>();
-        for (auto e : view) {
-            auto& atm = view.get<dse::AtmosphereComponent>(e);
-            if (!atm.enabled) continue;
-            auto& s = snap.atmosphere_sky;
-            s.valid = true;
-            s.planet_radius     = atm.planet_radius;
-            s.atmosphere_height = atm.atmosphere_height;
-            s.rayleigh_coeff    = atm.rayleigh_coeff;
-            s.rayleigh_scale_height = atm.rayleigh_scale_height;
-            s.mie_coeff         = atm.mie_coeff;
-            s.mie_scale_height  = atm.mie_scale_height;
-            s.mie_g             = atm.mie_g;
-            s.mie_albedo        = atm.mie_albedo;
-            s.ozone_coeff       = atm.ozone_coeff;
-            s.ozone_center_h    = atm.ozone_center_h;
-            s.ozone_width       = atm.ozone_width;
-            s.sun_intensity     = atm.sun_intensity;
-            s.sun_disk_angle    = atm.sun_disk_angle;
-            s.transmittance_lut_width  = atm.transmittance_lut_width;
-            s.transmittance_lut_height = atm.transmittance_lut_height;
-            s.sky_view_steps    = atm.sky_view_steps;
-            break;
-        }
-    }
-
-    // ── 4. Directional Light ──
-    {
-        auto view = reg.view<dse::DirectionalLight3DComponent>();
-        for (auto e : view) {
-            auto& dl = view.get<dse::DirectionalLight3DComponent>(e);
-            if (!dl.enabled) continue;
-            auto& s = snap.directional_light;
-            s.valid = true;
-            s.cast_shadow = dl.cast_shadow;
-            s.direction = dl.direction;
-            s.color = dl.color;
-            s.intensity = dl.intensity;
-            s.ambient_intensity = dl.ambient_intensity;
-            s.shadow_strength = dl.shadow_strength;
-            for (int i = 0; i < CSM_CASCADES; ++i)
-                s.cascade_splits[i] = dl.cascade_splits[i];
-            s.cascade_split_lambda = dl.cascade_split_lambda;
-            break;
-        }
-    }
-
-    // 大气天空需要太阳方向（从方向光取反）
-    if (snap.atmosphere_sky.valid && snap.directional_light.valid) {
-        const float dir_len2 = glm::dot(snap.directional_light.direction, snap.directional_light.direction);
-        if (dir_len2 > 1e-8f) {
-            snap.atmosphere_sky.sun_direction = -glm::normalize(snap.directional_light.direction);
-        }
-    }
-
-    // ── 5. Spot Lights（shadow-casting, max 4）──
-    {
-        auto view = reg.view<TransformComponent, dse::SpotLightComponent>();
-        snap.spot_shadow_count = 0;
-        for (auto e : view) {
-            if (snap.spot_shadow_count >= dse::render::RenderThinSnapshot::kMaxSpotShadowLights) break;
-            auto& light = view.get<dse::SpotLightComponent>(e);
-            if (!light.enabled || !light.cast_shadow) continue;
-            auto& tf = view.get<TransformComponent>(e);
-            auto& sl = snap.spot_lights[snap.spot_shadow_count];
-            sl.position = tf.position;
-            sl.forward = glm::normalize(tf.rotation * light.direction);
-            sl.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-            if (std::abs(glm::dot(sl.forward, sl.up)) > 0.98f) {
-                sl.up = glm::vec3(0.0f, 0.0f, 1.0f);
-            }
-            sl.outer_cone_angle = light.outer_cone_angle;
-            sl.radius = light.radius;
-            ++snap.spot_shadow_count;
-        }
-    }
-
-    // ── 6. Point Lights（shadow-casting, max 4）──
-    {
-        auto view = reg.view<TransformComponent, dse::PointLightComponent>();
-        snap.point_shadow_count = 0;
-        for (auto e : view) {
-            if (snap.point_shadow_count >= dse::render::RenderThinSnapshot::kMaxPointShadowLights) break;
-            auto& light = view.get<dse::PointLightComponent>(e);
-            if (!light.enabled || !light.cast_shadow) continue;
-            auto& tf = view.get<TransformComponent>(e);
-            auto& pl = snap.point_lights[snap.point_shadow_count];
-            pl.position = tf.position;
-            pl.radius = light.radius;
-            ++snap.point_shadow_count;
-        }
-    }
-
-    // ── 7. PostProcess（合并 13 个 Pass 的重复查询）──
-    {
-        auto view = reg.view<dse::PostProcessComponent>();
-        for (auto e : view) {
-            auto& pp = view.get<dse::PostProcessComponent>(e);
-            if (!pp.enabled) continue;
-            auto& s = snap.post_process;
-            s.valid = true;
-            s.enabled = pp.enabled;
-            s.bloom_enabled = pp.bloom_enabled;
-            s.bloom_threshold = pp.bloom_threshold;
-            s.bloom_intensity = pp.bloom_intensity;
-            s.bloom_knee = pp.bloom_knee;
-            s.bloom_mip_weight = pp.bloom_mip_weight;
-            s.color_grading_enabled = pp.color_grading_enabled;
-            s.exposure = pp.exposure;
-            s.gamma = pp.gamma;
-            s.ssao_enabled = pp.ssao_enabled;
-            s.ssao_radius = pp.ssao_radius;
-            s.ssao_bias = pp.ssao_bias;
-            s.ssao_sample_count = pp.ssao_sample_count;
-            s.ssao_power = pp.ssao_power;
-            s.ssao_intensity = pp.ssao_intensity;
-            s.auto_exposure_enabled = pp.auto_exposure_enabled;
-            s.exposure_min = pp.exposure_min;
-            s.exposure_max = pp.exposure_max;
-            s.adaptation_speed_up = pp.adaptation_speed_up;
-            s.adaptation_speed_down = pp.adaptation_speed_down;
-            s.exposure_compensation = pp.exposure_compensation;
-            s.color_lut_handle = pp.color_lut_handle;
-            s.color_lut_intensity = pp.color_lut_intensity;
-            s.vignette_enabled = pp.vignette_enabled;
-            s.vignette_intensity = pp.vignette_intensity;
-            s.vignette_radius = pp.vignette_radius;
-            s.vignette_softness = pp.vignette_softness;
-            s.film_grain_enabled = pp.film_grain_enabled;
-            s.film_grain_intensity = pp.film_grain_intensity;
-            s.film_grain_time_scale = pp.film_grain_time_scale;
-            s.fxaa_enabled = pp.fxaa_enabled;
-            s.taa_enabled = pp.taa_enabled;
-            s.taa_blend_factor = pp.taa_blend_factor;
-            s.contact_shadow_enabled = pp.contact_shadow_enabled;
-            s.contact_shadow_strength = pp.contact_shadow_strength;
-            s.contact_shadow_steps = pp.contact_shadow_steps;
-            s.contact_shadow_step_size = pp.contact_shadow_step_size;
-            s.dof_enabled = pp.dof_enabled;
-            s.dof_focus_distance = pp.dof_focus_distance;
-            s.dof_focus_range = pp.dof_focus_range;
-            s.dof_bokeh_radius = pp.dof_bokeh_radius;
-            s.motion_blur_enabled = pp.motion_blur_enabled;
-            s.motion_blur_intensity = pp.motion_blur_intensity;
-            s.motion_blur_samples = pp.motion_blur_samples;
-            s.ssr_enabled = pp.ssr_enabled;
-            s.ssr_max_distance = pp.ssr_max_distance;
-            s.ssr_thickness = pp.ssr_thickness;
-            s.ssr_step_size = pp.ssr_step_size;
-            s.ssr_max_steps = pp.ssr_max_steps;
-            s.ssr_fade_distance = pp.ssr_fade_distance;
-            s.ssr_max_roughness = pp.ssr_max_roughness;
-            s.outline_enabled = pp.outline_enabled;
-            s.outline_color = pp.outline_color;
-            s.outline_thickness = pp.outline_thickness;
-            s.outline_depth_threshold = pp.outline_depth_threshold;
-            s.outline_normal_threshold = pp.outline_normal_threshold;
-            s.light_shaft_enabled = pp.light_shaft_enabled;
-            s.light_shaft_color = pp.light_shaft_color;
-            s.light_shaft_density = pp.light_shaft_density;
-            s.light_shaft_weight = pp.light_shaft_weight;
-            s.light_shaft_decay = pp.light_shaft_decay;
-            s.light_shaft_exposure = pp.light_shaft_exposure;
-            s.light_shaft_intensity = pp.light_shaft_intensity;
-            s.light_shaft_samples = pp.light_shaft_samples;
-            s.fog_enabled = pp.fog_enabled;
-            s.fog_color = pp.fog_color;
-            s.fog_density = pp.fog_density;
-            s.fog_height_falloff = pp.fog_height_falloff;
-            s.fog_height_offset = pp.fog_height_offset;
-            s.fog_start = pp.fog_start;
-            s.fog_end = pp.fog_end;
-            s.fog_steps = pp.fog_steps;
-            s.fog_sun_scatter = pp.fog_sun_scatter;
-            break;
-        }
-    }
-
-    // ── 7b. Volumetric Cloud ──
-    {
-        auto view = reg.view<dse::VolumetricCloudComponent>();
-        for (auto e : view) {
-            auto& cloud = view.get<dse::VolumetricCloudComponent>(e);
-            if (!cloud.enabled) continue;
-            auto& vc = snap.volumetric_cloud;
-            vc.valid = true;
-            vc.half_resolution = cloud.half_resolution;
-            vc.cloud_bottom = cloud.cloud_bottom;
-            vc.cloud_top = cloud.cloud_top;
-            vc.coverage = cloud.coverage;
-            vc.density = cloud.density;
-            vc.shape_scale = cloud.shape_scale;
-            vc.detail_scale = cloud.detail_scale;
-            vc.detail_strength = cloud.detail_strength;
-            vc.erosion = cloud.erosion;
-            vc.wind_offset_x = cloud.wind_direction.x * cloud.wind_speed * Time::TimeSinceStartup();
-            vc.wind_offset_z = cloud.wind_direction.y * cloud.wind_speed * Time::TimeSinceStartup();
-            vc.silver_intensity = cloud.silver_intensity;
-            vc.powder_strength = cloud.powder_strength;
-            vc.ambient_strength = cloud.ambient_strength;
-            break;
-        }
-    }
-
-    // ── 8. Water surfaces ──
-    {
-        auto view = reg.view<dse::WaterComponent>();
-        snap.water_count = 0;
-        for (auto e : view) {
-            if (snap.water_count >= dse::render::RenderThinSnapshot::kMaxWaterSurfaces) break;
-            auto& w = view.get<dse::WaterComponent>(e);
-            if (!w.enabled) continue;
-            auto& ws = snap.waters[snap.water_count];
-            ws.water_level = w.water_level;
-            ws.deep_color = w.deep_color;
-            ws.shallow_color = w.shallow_color;
-            ws.max_depth = w.max_depth;
-            ws.transparency = w.transparency;
-            ws.wave_amplitude = w.wave_amplitude;
-            ws.wave_frequency = w.wave_frequency;
-            ws.wave_speed = w.wave_speed;
-            ws.wave_direction = w.wave_direction;
-            ws.refraction_strength = w.refraction_strength;
-            ws.reflection_strength = w.reflection_strength;
-            ws.specular_power = w.specular_power;
-            ws.caustic_intensity = w.caustic_intensity;
-            ws.caustic_scale = w.caustic_scale;
-            ws.foam_intensity = w.foam_intensity;
-            ws.foam_depth_threshold = w.foam_depth_threshold;
-            ws.underwater_fog_density = w.underwater_fog_density;
-            ws.underwater_fog_color = w.underwater_fog_color;
-            ++snap.water_count;
-        }
-    }
-
-    // ── 9. Decals ──
-    {
-        auto view = reg.view<TransformComponent, dse::DecalComponent>();
-        snap.decal_count = 0;
-        for (auto e : view) {
-            if (snap.decal_count >= dse::render::RenderThinSnapshot::kMaxDecals) break;
-            auto& dc = view.get<dse::DecalComponent>(e);
-            if (!dc.enabled || dc.albedo_texture == 0) continue;
-            auto& tf = view.get<TransformComponent>(e);
-            auto& d = snap.decals[snap.decal_count];
-            d.albedo_texture = dc.albedo_texture;
-            d.color = dc.color;
-            d.angle_fade = dc.angle_fade;
-            d.position = tf.position;
-            d.rotation = tf.rotation;
-            d.scale = tf.scale;
-            ++snap.decal_count;
-        }
-    }
-
-    // ── 9b. Weather ──
-    {
-        auto view = reg.view<dse::WeatherComponent>();
-        for (auto e : view) {
-            auto& wc = view.get<dse::WeatherComponent>(e);
-            if (!wc.enabled) continue;
-            auto& w = snap.weather;
-            w.valid = true;
-            w.type = static_cast<int>(wc.type);
-            w.intensity = wc.intensity;
-            w.wind_x = wc.wind_x;
-            w.wind_z = wc.wind_z;
-            w.spawn_radius = wc.spawn_radius;
-            w.spawn_height = wc.spawn_height;
-            w.max_particles = wc.max_particles;
-            w.color = (wc.type == dse::WeatherType::Rain) ? wc.rain_color : wc.snow_color;
-            break;
-        }
-    }
-
-    // ── 10. Light Probe SH（距离加权混合最近两个 probe）──
-    {
-        glm::vec3 cam_pos = snap.camera_3d.position;
-        auto probe_view = reg.view<TransformComponent, dse::LightProbeComponent>();
-        float best_dist = std::numeric_limits<float>::max();
-        float second_dist = std::numeric_limits<float>::max();
-        const dse::LightProbeComponent* best_probe = nullptr;
-        const dse::LightProbeComponent* second_probe = nullptr;
-
-        for (auto e : probe_view) {
-            auto& probe = probe_view.get<dse::LightProbeComponent>(e);
-            if (!probe.enabled) continue;
-            auto& tf = probe_view.get<TransformComponent>(e);
-            float dist = glm::distance(tf.position, cam_pos);
-            if (dist < best_dist) {
-                second_dist = best_dist;
-                second_probe = best_probe;
-                best_dist = dist;
-                best_probe = &probe;
-            } else if (dist < second_dist) {
-                second_dist = dist;
-                second_probe = &probe;
-            }
-        }
-
-        if (best_probe) {
-            snap.light_probe_sh.valid = true;
-            if (second_probe && best_dist < best_probe->influence_radius &&
-                second_dist < second_probe->influence_radius) {
-                float total = best_dist + second_dist;
-                if (total < 0.001f) total = 0.001f;
-                float w1 = 1.0f - best_dist / total;
-                float w2 = 1.0f - second_dist / total;
-                float wsum = w1 + w2;
-                w1 /= wsum; w2 /= wsum;
-                for (int i = 0; i < 9; ++i) {
-                    glm::vec3 blended = best_probe->sh_coefficients[i] * w1 +
-                                        second_probe->sh_coefficients[i] * w2;
-                    snap.light_probe_sh.coefficients[i] = glm::vec4(blended, 0.0f);
-                }
-            } else {
-                for (int i = 0; i < 9; ++i) {
-                    snap.light_probe_sh.coefficients[i] = glm::vec4(best_probe->sh_coefficients[i], 0.0f);
-                }
-            }
-        }
-    }
-
-    // ── 11. DDGI Config ──
-    {
-        auto gi_view = reg.view<dse::GIProbeVolumeComponent>();
-        for (auto e : gi_view) {
-            auto& gi = gi_view.get<dse::GIProbeVolumeComponent>(e);
-            if (!gi.enabled) continue;
-            auto& cfg = snap.ddgi_config;
-            cfg.enabled = true;
-            cfg.needs_reinit = gi.needs_reinit_;
-            cfg.origin = gi.origin;
-            cfg.extent = gi.extent;
-            cfg.resolution_x = gi.resolution_x;
-            cfg.resolution_y = gi.resolution_y;
-            cfg.resolution_z = gi.resolution_z;
-            cfg.irradiance_texels = gi.irradiance_texels;
-            cfg.visibility_texels = gi.visibility_texels;
-            cfg.rays_per_probe = gi.rays_per_probe;
-            cfg.hysteresis = gi.hysteresis;
-            cfg.gi_intensity = gi.gi_intensity;
-            cfg.normal_bias = gi.normal_bias;
-            gi.needs_reinit_ = false;
-            break;
-        }
-    }
-}
-
-// ============================================================
-// Phase 2: 渲染线程分离
-// ============================================================
-
-void FramePipeline::StartRenderThread() {
-    if (render_thread_active_.load()) return;
-
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_thread_exit_ = false;
-        render_frame_pending_ = false;
-        render_frame_done_ = true;
-    }
-
-    // 主线程释放 GL context，由渲染线程接管
-    if (runtime_context_.release_render_context) {
-        runtime_context_.release_render_context();
-    }
-
-    render_thread_ = std::thread(&FramePipeline::RenderThreadFunc, this);
-    render_thread_active_.store(true);
-    DEBUG_LOG_INFO("[RenderThread] Started");
-}
-
-void FramePipeline::StopRenderThread() {
-    if (!render_thread_active_.load()) return;
-
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_thread_exit_ = true;
-        render_frame_pending_ = true;  // 唤醒线程使其检查 exit 标志
-    }
-    render_cv_.notify_one();
-
-    if (render_thread_.joinable()) {
-        render_thread_.join();
-    }
-    render_thread_active_.store(false);
-
-    // 主线程重新获取 GL context
-    if (runtime_context_.make_render_context_current) {
-        runtime_context_.make_render_context_current();
-    }
-    DEBUG_LOG_INFO("[RenderThread] Stopped");
-}
-
-void FramePipeline::RenderThreadFunc() {
-    // 渲染线程获取 GL/Vulkan/DX11 context
-    if (runtime_context_.make_render_context_current) {
-        runtime_context_.make_render_context_current();
-    }
-
-    while (true) {
-        // 等待主线程发出渲染信号
-        {
-            std::unique_lock<std::mutex> lock(render_mutex_);
-            render_cv_.wait(lock, [this] { return render_frame_pending_ || render_thread_exit_; });
-            if (render_thread_exit_) break;
-            render_frame_pending_ = false;
-        }
-
-        ExecuteRenderFrame();
-
-        // 通知主线程渲染完成
-        {
-            std::lock_guard<std::mutex> lock(render_mutex_);
-            render_frame_done_ = true;
-        }
-        main_cv_.notify_one();
-    }
-
-    // 释放 context
-    if (runtime_context_.release_render_context) {
-        runtime_context_.release_render_context();
-    }
-}
-
-void FramePipeline::WaitForRenderComplete() {
-    std::unique_lock<std::mutex> lock(render_mutex_);
-    main_cv_.wait(lock, [this] { return render_frame_done_; });
-}
-
-void FramePipeline::SignalRenderThread() {
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_frame_pending_ = true;
-        render_frame_done_ = false;
-    }
-    render_cv_.notify_one();
-}
-
-void FramePipeline::PrepareRenderFrame() {
-    // ── 主线程：纯 CPU 工作 + ECS 读取 ──
-
-    // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
-    if (runtime_context_.world) {
-        rs_->transform_system_.Update(*runtime_context_.world);
-    }
-
-    if (runtime_context_.world) {
-        // Camera-Relative: 提前获取相机位置作为 camera_offset
-        glm::vec3 early_camera_offset(0.0f);
-        auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
-        entt::entity cam_entity = entt::null;
-        int cam_priority = std::numeric_limits<int>::min();
-        for (auto e : cam_view_3d) {
-            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(e);
-            if (cam.enabled && cam.priority > cam_priority) {
-                cam_entity = e;
-                cam_priority = cam.priority;
-            }
-        }
-        if (cam_entity != entt::null && runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
-            early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
-        }
-
-        // Clustered Forward+: 收集光源（CPU）— 光源位置减去 camera_offset
-        rs_->light_buffer_.CollectLights(*runtime_context_.world, early_camera_offset);
-
-        // 获取主相机参数构建 cluster
-        if (cam_entity != entt::null) {
-            auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
-            const int sw = Screen::width();
-            const int sh = Screen::height();
-            glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
-                static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
-                cam.near_clip, cam.far_clip);
-            // Camera-Relative: 光源已减去 camera_offset，cluster view 也用 camera-at-origin
-            glm::mat4 view_mat = glm::mat4(1.0f);
-            if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
-                auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
-                glm::vec3 front = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 up    = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
-                view_mat = glm::lookAt(glm::vec3(0.0f), front, up);
-            }
-            rs_->cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
-                                rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
-        }
-    }
-
-    // TAA: 预检测 ECS 组件
-    render_pass_context_.taa_active = false;
-    if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
-        auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
-        for (auto entity : pp_view) {
-            auto& pp = pp_view.get<dse::PostProcessComponent>(entity);
-            if (pp.enabled && pp.taa_enabled) {
-                render_pass_context_.taa_active = (render_pass_context_.render_targets.taa != 0);
-                break;
-            }
-        }
-        taa_pass_->UpdateJitter(taa_frame_index_++);
-        render_pass_context_.taa_jitter = taa_pass_->GetCurrentJitter();
-    }
-
-    render_pass_context_.delta_time = Time::delta_time();
-
-    // 全局湿度：从 ECS WeatherComponent 直接读取（雨 → wetness = intensity）
-    render_pass_context_.global_wetness = 0.0f;
-    if (runtime_context_.world) {
-        auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
-        for (auto e : wv) {
-            auto& wc = wv.get<dse::WeatherComponent>(e);
-            if (wc.enabled && wc.type == dse::WeatherType::Rain) {
-                render_pass_context_.global_wetness = wc.intensity;
-                break;
-            }
-        }
-    }
-
-    // 植被风参数（渲染线程路径）
-    {
-        float wind_x = 0.0f, wind_z = 0.0f, wind_strength = 0.0f;
-        if (runtime_context_.world) {
-            auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
-            for (auto e : wv) {
-                auto& wc = wv.get<dse::WeatherComponent>(e);
-                if (wc.enabled) {
-                    wind_x = wc.wind_x;
-                    wind_z = wc.wind_z;
-                    wind_strength = glm::length(glm::vec2(wc.wind_x, wc.wind_z));
-                    break;
-                }
-            }
-        }
-        if (wind_strength < 0.001f) wind_strength = 0.3f;
-        glm::vec2 wind_dir = wind_strength > 0.001f
-            ? glm::normalize(glm::vec2(wind_x, wind_z))
-            : glm::vec2(1.0f, 0.0f);
-        runtime_context_.rhi_device->SetGlobalFoliageWind(
-            glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
-    }
-    // 植被推力场
-    {
-        glm::vec3 push_pos(0.0f);
-        if (runtime_context_.world) {
-            auto cv = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
-            for (auto e : cv) {
-                if (cv.get<dse::Camera3DComponent>(e).enabled) {
-                    push_pos = cv.get<TransformComponent>(e).position;
-                    break;
-                }
-            }
-        }
-        runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
-    }
-
-    // 捕获快照 + 翻转双缓冲
-    CaptureThinSnapshot();
-    FlipSnapshotIndex();
-    render_pass_context_.snapshot = &read_snapshot();
-    render_pass_context_.camera_offset = render_pass_context_.snapshot->camera_offset;
-}
-
-void FramePipeline::ExecuteRenderFrame() {
-    rs_->render_profiler_.BeginFrame();
-    auto render_begin = std::chrono::high_resolution_clock::now();
-
-    dse::runtime::BeginRuntimeRenderFrame(*this);
-    auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
-    dse::runtime::BindRuntimeShadowMaps(*this);
-
-    // GPU 上传：光源 SSBO
-    rs_->light_buffer_.Upload();
-
-    // GPU 上传：cluster SSBO
-    rs_->cluster_grid_.Upload();
-
-    // Light Probe SH：从快照上传到 RHI 全局状态
-    const auto& snap = *render_pass_context_.snapshot;
-    if (snap.light_probe_sh.valid) {
-        runtime_context_.rhi_device->SetGlobalLightProbeSH(
-            snap.light_probe_sh.coefficients, true);
-    } else {
-        glm::vec4 zero_sh[9] = {};
-        runtime_context_.rhi_device->SetGlobalLightProbeSH(zero_sh, false);
-    }
-
-    // 全局湿度同步到 RHI（渲染线程路径）
-    runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
-
-    // DDGI: 从快照配置初始化/重配置 + 同步到 RHI 全局状态
-    render_pass_context_.ddgi_active = false;
-    render_pass_context_.ddgi_system = nullptr;
-    if (snap.ddgi_config.enabled && runtime_context_.rhi_device->SupportsCompute()) {
-        const auto& dcfg = snap.ddgi_config;
-        if (dcfg.needs_reinit || !rs_->ddgi_system_.IsInitialized()) {
-            dse::render::gi::DDGIVolumeConfig cfg;
-            cfg.origin = dcfg.origin;
-            cfg.extent = dcfg.extent;
-            cfg.resolution = glm::ivec3(dcfg.resolution_x, dcfg.resolution_y, dcfg.resolution_z);
-            cfg.irradiance_texels = dcfg.irradiance_texels;
-            cfg.visibility_texels = dcfg.visibility_texels;
-            cfg.rays_per_probe = dcfg.rays_per_probe;
-            cfg.hysteresis = dcfg.hysteresis;
-            if (rs_->ddgi_system_.IsInitialized()) {
-                rs_->ddgi_system_.Reconfigure(runtime_context_.rhi_device.get(), cfg);
-            } else {
-                rs_->ddgi_system_.Init(runtime_context_.rhi_device.get(), cfg);
-            }
-        }
-        if (rs_->ddgi_system_.IsInitialized()) {
-            render_pass_context_.ddgi_system = &rs_->ddgi_system_;
-            render_pass_context_.ddgi_active = true;
-            render_pass_context_.ddgi_gi_intensity = dcfg.gi_intensity;
-            render_pass_context_.ddgi_normal_bias = dcfg.normal_bias;
-            const auto& res = rs_->ddgi_system_.GetResources();
-            render_pass_context_.ddgi_irradiance_atlas = res.irradiance_atlas;
-            render_pass_context_.ddgi_visibility_atlas = res.visibility_atlas;
-        }
-    }
-    if (render_pass_context_.ddgi_active) {
-        const auto& cfg = rs_->ddgi_system_.GetConfig();
-        runtime_context_.rhi_device->SetGlobalDDGI(
-            true, render_pass_context_.ddgi_irradiance_atlas,
-            cfg.origin, cfg.ProbeSpacing(), cfg.resolution,
-            cfg.irradiance_texels,
-            render_pass_context_.ddgi_gi_intensity,
-            render_pass_context_.ddgi_normal_bias);
-    } else {
-        runtime_context_.rhi_device->SetGlobalDDGI(
-            false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
-    }
-
-    // Hi-Z AABB 上传
-    if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
-        const auto& aabbs = modules_impl_->CachedAABBs();
-        const int count = modules_impl_->CachedAABBCount();
-        if (count > 0) {
-            if (static_cast<size_t>(count) > render_resources_.hiz_ssbo_capacity) {
-                const size_t new_cap = static_cast<size_t>(count) * 2;
-                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_aabb_ssbo);
-                runtime_context_.rhi_device->DeleteGpuBuffer(render_resources_.hiz_visibility_ssbo);
-                {
-                    dse::render::GpuBufferDesc d{new_cap * sizeof(uint32_t), dse::render::GpuBufferUsage::kStorage, true, "hiz_visibility"};
-                    render_resources_.hiz_visibility_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-                }
-                {
-                    dse::render::GpuBufferDesc d{new_cap * 8 * sizeof(float), dse::render::GpuBufferUsage::kStorage, true, "hiz_aabb"};
-                    render_resources_.hiz_aabb_ssbo = runtime_context_.rhi_device->CreateGpuBuffer(d, nullptr);
-                }
-                render_resources_.hiz_ssbo_capacity = new_cap;
-                render_pass_context_.hiz_aabb_ssbo = render_resources_.hiz_aabb_ssbo;
-                render_pass_context_.hiz_visibility_ssbo = render_resources_.hiz_visibility_ssbo;
-                render_pass_context_.hiz_aabb_capacity = new_cap;
-                DEBUG_LOG_INFO("[Hi-Z] SSBO resized (render thread): new_capacity={}", new_cap);
-            }
-            runtime_context_.rhi_device->UpdateGpuBuffer(
-                render_resources_.hiz_aabb_ssbo, 0,
-                count * sizeof(dse::gameplay3d::HiZAABB),
-                aabbs.data());
-            render_pass_context_.hiz_object_count = count;
-        } else {
-            render_pass_context_.hiz_object_count = 0;
-        }
-    }
-
-    BuildRenderSceneQueues();
-
-    // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
-    rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
-
-    // ── 执行渲染图 ──
-    ExecuteRenderGraph(*cmd_buffer);
-
-    dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
-
-    // GPU Timer → RenderProfiler 桥接（渲染线程路径）
-    {
-        auto gpu_results = runtime_context_.rhi_device->GetAllGpuTimerResults();
-        if (!gpu_results.empty()) {
-            std::vector<dse::profiler::GpuPassTiming> timings;
-            timings.reserve(gpu_results.size());
-            for (const auto& entry : gpu_results) {
-                timings.push_back({entry.name, entry.ms});
-            }
-            rs_->render_profiler_.UpdateGpuTimers(timings);
-        }
-    }
-
-    // Hi-Z / GPU Driven: 异步读回（双缓冲 staging，延迟 1 帧）
-    if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
-        && render_pass_context_.hiz_culling_enabled) {
-        const int count = render_pass_context_.hiz_object_count;
-        const size_t read_size = count * sizeof(uint32_t);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_resources_.hiz_visibility_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* vis = static_cast<const uint32_t*>(raw);
-                std::vector<uint32_t> visibility(vis, vis + count);
-                modules_impl_->SetHiZVisibility(visibility);
-            }
-        }
-    } else if (!render_pass_context_.hiz_culling_enabled
-        && render_pass_context_.gpu_driven_active_this_frame && render_pass_context_.gpu_indirect_draw_count > 0
-        && render_pass_context_.gpu_draw_cmd_ssbo) {
-        const int count = render_pass_context_.gpu_indirect_draw_count;
-        const size_t read_size = count * sizeof(DrawElementsIndirectCommand);
-        bool has_data = runtime_context_.rhi_device->BeginGpuReadback(
-            render_pass_context_.gpu_draw_cmd_ssbo, 0, read_size);
-        if (has_data) {
-            size_t result_size = 0;
-            const auto* raw = runtime_context_.rhi_device->GetLastReadbackResult(&result_size);
-            if (raw && result_size >= read_size) {
-                const auto* cmds = static_cast<const DrawElementsIndirectCommand*>(raw);
-                std::vector<uint32_t> visibility(count);
-                int culled = 0;
-                for (int i = 0; i < count; ++i) {
-                    visibility[i] = cmds[i].instance_count > 0 ? 1u : 0u;
-                    if (visibility[i] == 0) ++culled;
-                }
-                gpu_culled_last_frame_ = culled;
-                runtime_context_.rhi_device->PatchLastFrameGPUCulledCount(culled);
-            }
-        }
-    }
-
-    dse::runtime::FinalizeRuntimeRenderFrame(*this);
-    if (runtime_context_.rhi_device) {
-        const auto rhi_stats = runtime_context_.rhi_device->GetFrameStats();
-        rs_->render_profiler_.UpdateFromRhi(
-            rhi_stats.draw_calls,
-            0,
-            rhi_stats.triangle_count,
-            rhi_stats.sprite_count,
-            rhi_stats.texture_binds,
-            rhi_stats.shader_switches);
-    }
-    rs_->render_profiler_.EndFrame();
-
-    // Render diagnostics
-    if (const char* readback_diag = std::getenv("DSE_RENDER_READBACK_DIAG")) {
-        if (readback_diag[0] != '\0' && readback_diag[0] != '0') {
-            static int readback_diag_frame = 0;
-            if (readback_diag_frame < 5 || (readback_diag_frame % 60) == 0) {
-                LogReadbackStats("scene", ReadSceneColorRgba8WithSize());
-                LogReadbackStats("main", ReadMainColorRgba8WithSize());
-                LogDefaultFramebufferStats();
-            }
-            ++readback_diag_frame;
-        }
-    }
-
-    auto render_end = std::chrono::high_resolution_clock::now();
-    render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
-    render_samples_ += 1;
-
-    // Present (SwapBuffers) — 在 render 计时之外，避免 Present 延迟污染 avg_render_ms
-    if (runtime_context_.present_frame) {
-        runtime_context_.present_frame();
-    }
-}
