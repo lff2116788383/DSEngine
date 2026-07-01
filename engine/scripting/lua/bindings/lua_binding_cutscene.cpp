@@ -351,6 +351,11 @@ int L_CSSetFinishCallback(lua_State* L) {
 
 } // namespace
 
+void ShutdownCutsceneBindings() {
+    s_cs_instances.clear();
+    s_next_cs_id = 1;
+}
+
 void RegisterCutsceneBindings(lua_State* L) {
     lua_newtable(L);
 

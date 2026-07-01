@@ -463,6 +463,13 @@ int L_GOAPPlan(lua_State* L) {
 
 } // namespace
 
+void ShutdownAIBindings() {
+    s_bt_instances.clear();
+    s_next_bt_id = 1;
+    s_goap_instances.clear();
+    s_next_goap_id = 1;
+}
+
 void RegisterAIBindings(lua_State* L) {
     lua_newtable(L);
 

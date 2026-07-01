@@ -241,3 +241,9 @@ void dse_video_lua_shutdown() {
     s_players.clear();
     s_next_player_id = 1;
 }
+
+namespace dse::runtime::lua_binding {
+void ShutdownVideoBindings() {
+    dse_video_lua_shutdown();
+}
+} // namespace dse::runtime::lua_binding

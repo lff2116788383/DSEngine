@@ -476,6 +476,10 @@ void ShutdownLuaRuntime() {
     // These unique_ptr were previously leaked across hot-reload / scene transitions.
     dse::runtime::lua_binding::ShutdownOpenWorldP2P5Bindings();
     dse::runtime::lua_binding::ShutdownWorldSystemsBindings();
+    dse::runtime::lua_binding::ShutdownAIBindings();
+    dse::runtime::lua_binding::ShutdownCutsceneBindings();
+    dse::runtime::lua_binding::ShutdownVideoBindings();
+    dse::runtime::lua_binding::ShutdownMeshletBindings();
 
     if (state.state) {
         for (auto& pair : state.script_instances) {

@@ -291,6 +291,17 @@ int L_CullStats(lua_State* L) {
     return 1;
 }
 
+} // anonymous namespace
+
+void ShutdownMeshletBindings() {
+    s_meshes.clear();
+    s_next_mesh_id = 1;
+    s_culls.clear();
+    s_next_cull_id = 1;
+}
+
+namespace {
+
 static const luaL_Reg meshlet_funcs[] = {
     {"build",              L_Build},
     {"serialize",          L_Serialize},

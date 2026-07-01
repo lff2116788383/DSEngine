@@ -78,12 +78,18 @@ void RegisterOpenWorldBindings(lua_State* L);
 
 // AI 行为树 + GOAP 规划器 — 独立全局表 "ai"
 void RegisterAIBindings(lua_State* L);
+void ShutdownAIBindings();
 
 // 过场/导演系统 — 独立全局表 "cutscene"
 void RegisterCutsceneBindings(lua_State* L);
+void ShutdownCutsceneBindings();
 
 // Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
 void RegisterMeshletBindings(lua_State* L);
+void ShutdownMeshletBindings();
+
+// 视频播放系统 — 独立全局表 "dse.video"
+void ShutdownVideoBindings();
 
 // P2-P5 大世界系统（Mesh Streaming / Physics LOD / Terrain Deform / Audio LOD）
 void RegisterOpenWorldP2P5Bindings(lua_State* L);
