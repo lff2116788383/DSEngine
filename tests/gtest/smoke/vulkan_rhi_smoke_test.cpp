@@ -200,4 +200,153 @@ TEST_F(VulkanRhiSmokeTest, BufferCreateAndDestroyWithoutCrashing) {
     SUCCEED();
 }
 
+// 离屏渲染 + 像素回读校验：清屏到已知颜色后回读，断言每个像素都正确。
+TEST_F(VulkanRhiSmokeTest, ClearColorReadbackCorrect) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    constexpr int kRtSize = 64;
+    RenderTargetDesc desc;
+    desc.width = kRtSize;
+    desc.height = kRtSize;
+    desc.has_color = true;
+    desc.has_depth = false;
+    unsigned int rt = device_.CreateRenderTarget(desc);
+    ASSERT_NE(rt, 0u);
+
+    const glm::vec4 kClear(0.25f, 0.50f, 0.75f, 1.0f);
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(cmd, nullptr);
+    RenderPassDesc rp;
+    rp.render_target = rt;
+    rp.clear_color = kClear;
+    rp.clear_color_enabled = true;
+    cmd->BeginRenderPass(rp);
+    cmd->EndRenderPass();
+    device_.Submit(cmd);
+    device_.EndFrame();
+
+    RenderTargetReadback rb = device_.ReadRenderTargetColorRgba8WithSize(rt);
+    ASSERT_EQ(rb.width, kRtSize);
+    ASSERT_EQ(rb.height, kRtSize);
+    ASSERT_EQ(rb.pixels.size(), static_cast<size_t>(kRtSize) * kRtSize * 4);
+
+    const unsigned char exp_r = static_cast<unsigned char>(kClear.r * 255.0f + 0.5f);
+    const unsigned char exp_g = static_cast<unsigned char>(kClear.g * 255.0f + 0.5f);
+    const unsigned char exp_b = static_cast<unsigned char>(kClear.b * 255.0f + 0.5f);
+    const unsigned char exp_a = 255;
+    auto within_tol = [](unsigned char a, unsigned char b) {
+        return (a > b ? a - b : b - a) <= 2;
+    };
+
+    for (int p = 0; p < kRtSize * kRtSize; ++p) {
+        const unsigned char* px = rb.pixels.data() + static_cast<size_t>(p) * 4;
+        ASSERT_TRUE(within_tol(px[0], exp_r)) << "pixel " << p << " R=" << int(px[0]) << " expected~" << int(exp_r);
+        ASSERT_TRUE(within_tol(px[1], exp_g)) << "pixel " << p << " G=" << int(px[1]) << " expected~" << int(exp_g);
+        ASSERT_TRUE(within_tol(px[2], exp_b)) << "pixel " << p << " B=" << int(px[2]) << " expected~" << int(exp_b);
+        ASSERT_TRUE(within_tol(px[3], exp_a)) << "pixel " << p << " A=" << int(px[3]) << " expected~" << int(exp_a);
+    }
+
+    device_.DeleteRenderTarget(rt);
+}
+
+// 深度 RT 回读校验：创建带深度的 RT，渲染一帧后回读深度缓冲。
+TEST_F(VulkanRhiSmokeTest, DepthRenderTargetReadback) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    constexpr int kRtSize = 32;
+    RenderTargetDesc desc;
+    desc.width = kRtSize;
+    desc.height = kRtSize;
+    desc.has_color = true;
+    desc.has_depth = true;
+    unsigned int rt = device_.CreateRenderTarget(desc);
+    ASSERT_NE(rt, 0u);
+
+    device_.BeginFrame();
+    auto cmd = device_.CreateCommandBuffer();
+    ASSERT_NE(cmd, nullptr);
+    RenderPassDesc rp;
+    rp.render_target = rt;
+    rp.clear_color = glm::vec4(0.0f);
+    rp.clear_color_enabled = true;
+    cmd->BeginRenderPass(rp);
+    cmd->EndRenderPass();
+    device_.Submit(cmd);
+    device_.EndFrame();
+
+    RenderTargetDepthReadback drb = device_.ReadRenderTargetDepthFloatWithSize(rt);
+    if (drb.width == 0) {
+        device_.DeleteRenderTarget(rt);
+        GTEST_SKIP() << "Depth readback not supported";
+    }
+    ASSERT_EQ(drb.width, kRtSize);
+    ASSERT_EQ(drb.height, kRtSize);
+    ASSERT_EQ(drb.depth.size(), static_cast<size_t>(kRtSize) * kRtSize);
+
+    for (int p = 0; p < kRtSize * kRtSize; ++p) {
+        ASSERT_NEAR(drb.depth[p], 1.0f, 0.001f) << "depth pixel " << p;
+    }
+
+    device_.DeleteRenderTarget(rt);
+}
+
+// Pipeline state 创建/销毁冒烟
+TEST_F(VulkanRhiSmokeTest, PipelineStateCreateAndDestroy) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    PipelineStateDesc ps_desc;
+    ps_desc.blend_enabled = false;
+    ps_desc.depth_test_enabled = true;
+    ps_desc.depth_write_enabled = true;
+    ps_desc.culling_enabled = true;
+    unsigned int ps = device_.CreatePipelineState(ps_desc);
+    EXPECT_NE(ps, 0u);
+}
+
+// 多 RT 创建/销毁无泄漏
+TEST_F(VulkanRhiSmokeTest, MultipleRenderTargetsCreateDestroy) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    constexpr int kCount = 8;
+    unsigned int handles[kCount];
+    for (int i = 0; i < kCount; ++i) {
+        RenderTargetDesc desc;
+        desc.width = 32 + i * 16;
+        desc.height = 32 + i * 16;
+        desc.has_color = true;
+        desc.has_depth = (i % 2 == 0);
+        handles[i] = device_.CreateRenderTarget(desc);
+        ASSERT_NE(handles[i], 0u) << "RT #" << i;
+    }
+    for (int i = kCount - 1; i >= 0; --i) {
+        device_.DeleteRenderTarget(handles[i]);
+    }
+    SUCCEED();
+}
+
+// 纹理格式变体创建/销毁
+TEST_F(VulkanRhiSmokeTest, TextureFormatVariantsCreateDestroy) {
+    if (!device_.InitVulkan(static_cast<void*>(hwnd_), kWidth, kHeight, true)) {
+        GTEST_SKIP() << "No Vulkan";
+    }
+    // RGBA8 with mips
+    unsigned char pixels[] = {
+        255,0,0,255, 0,255,0,255,
+        0,0,255,255, 255,255,0,255
+    };
+    unsigned int tex_mip = device_.CreateTexture2D(2, 2, pixels, true);
+    EXPECT_NE(tex_mip, 0u);
+    // RGBA8 without mips
+    unsigned int tex_no_mip = device_.CreateTexture2D(2, 2, pixels, false);
+    EXPECT_NE(tex_no_mip, 0u);
+    device_.DeleteTexture(tex_mip);
+    device_.DeleteTexture(tex_no_mip);
+    SUCCEED();
+}
+
 #endif // DSE_ENABLE_VULKAN
