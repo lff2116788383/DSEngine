@@ -26,7 +26,7 @@ namespace dse::reflect {
 namespace {
 
 void RegisterTransform() {
-    using dse::TransformComponent;
+    using ::TransformComponent;
     auto t = DSE_REFLECT_TYPE(TransformComponent);
     t.field("position", &TransformComponent::position);
     t.field("rotation", &TransformComponent::rotation);
@@ -46,6 +46,9 @@ void RegisterCamera3D() {
 
 void RegisterMeshRenderer() {
     using dse::MeshRendererComponent;
+    DSE_REFLECT_ENUM(MeshRendererComponent::MaterialDataSource)
+        .value("ComponentFallback", MeshRendererComponent::MaterialDataSource::ComponentFallback)
+        .value("MaterialInstance", MeshRendererComponent::MaterialDataSource::MaterialInstance);
     auto t = DSE_REFLECT_TYPE(MeshRendererComponent);
     t.field("color", &MeshRendererComponent::color).color();
     t.field("visible", &MeshRendererComponent::visible);
@@ -71,6 +74,7 @@ void RegisterMeshRenderer() {
     t.field("is_static", &MeshRendererComponent::is_static);
     t.field("sorting_layer", &MeshRendererComponent::sorting_layer);
     t.field("order_in_layer", &MeshRendererComponent::order_in_layer);
+    t.field("material_data_source", &MeshRendererComponent::material_data_source);
 }
 
 void RegisterDirectionalLight3D() {
@@ -84,6 +88,7 @@ void RegisterDirectionalLight3D() {
     t.field("shadow_strength", &DirectionalLight3DComponent::shadow_strength).range(0.0, 1.0);
     t.field("enabled", &DirectionalLight3DComponent::enabled);
     t.field("cascade_split_lambda", &DirectionalLight3DComponent::cascade_split_lambda).range(0.0, 1.0);
+    t.field("cascade_splits", &DirectionalLight3DComponent::cascade_splits);
 }
 
 void RegisterPointLight() {
@@ -344,6 +349,7 @@ void RegisterLightProbe() {
     t.field("enabled", &LightProbeComponent::enabled);
     t.field("influence_radius", &LightProbeComponent::influence_radius).range(0.0, 1000.0);
     t.field("show_debug", &LightProbeComponent::show_debug);
+    t.field("sh_coefficients", &LightProbeComponent::sh_coefficients);
 }
 
 void RegisterReflectionProbe() {
@@ -393,8 +399,7 @@ void RegisterRigidBody3D() {
     DSE_REFLECT_ENUM(dse::RigidBody3DType)
         .value("Static", dse::RigidBody3DType::Static)
         .value("Kinematic", dse::RigidBody3DType::Kinematic)
-        .value("Dynamic", dse::RigidBody3DType::Dynamic)
-        .end();
+        .value("Dynamic", dse::RigidBody3DType::Dynamic);
 
     auto t = DSE_REFLECT_TYPE(RigidBody3DComponent);
     t.field("type", &RigidBody3DComponent::type);
@@ -466,8 +471,7 @@ void RegisterJoint3D() {
         .value("Fixed", dse::Joint3DType::Fixed)
         .value("Hinge", dse::Joint3DType::Hinge)
         .value("Spring", dse::Joint3DType::Spring)
-        .value("Distance", dse::Joint3DType::Distance)
-        .end();
+        .value("Distance", dse::Joint3DType::Distance);
 
     auto t = DSE_REFLECT_TYPE(Joint3DComponent);
     t.field("type", &Joint3DComponent::type);
@@ -486,7 +490,7 @@ void RegisterJoint3D() {
     t.field("break_torque", &Joint3DComponent::break_torque).range(0.0, 3.4e+38);
 }
 
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 void RegisterRagdoll() {
     using dse::RagdollComponent;
     auto t = DSE_REFLECT_TYPE(RagdollComponent);
@@ -512,7 +516,7 @@ void RegisterSoftBody() {
     t.field("volume_stiffness", &SoftBodyComponent::volume_stiffness).range(0.0, 1.0);
 }
 
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 void RegisterVehicle() {
     using dse::VehicleComponent;
     auto t = DSE_REFLECT_TYPE(VehicleComponent);
@@ -541,7 +545,7 @@ void RegisterRope() {
     t.field("start_position", &RopeComponent::start_position);
 }
 
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 void RegisterBuoyancy() {
     using dse::BuoyancyComponent;
     auto t = DSE_REFLECT_TYPE(BuoyancyComponent);
@@ -745,7 +749,7 @@ void RegisterMorphTarget() {
 }
 
 void RegisterGpuParticle() {
-    using dse::GpuParticleComponent;
+    using dse::render::GpuParticleComponent;
     auto t = DSE_REFLECT_TYPE(GpuParticleComponent);
 }
 
@@ -792,15 +796,15 @@ void EnsureCoreReflectionRegistered() {
     RegisterMeshCollider3D();
     RegisterCharacterController3D();
     RegisterJoint3D();
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     RegisterRagdoll();
 #endif
     RegisterSoftBody();
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     RegisterVehicle();
 #endif
     RegisterRope();
-#if defined(DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT)
+#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
     RegisterBuoyancy();
 #endif
     RegisterAtmosphere();

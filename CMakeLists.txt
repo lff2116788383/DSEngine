@@ -421,6 +421,7 @@ list(APPEND engine_cpp
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_navmesh_rebake.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_post_process.gen.cpp"
     "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_animator3d.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/reflect/component_reflection.gen.cpp"
 )
 
 # Vulkan RHI 后端源文件仅在启用时编译
