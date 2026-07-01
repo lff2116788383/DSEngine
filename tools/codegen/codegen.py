@@ -41,6 +41,38 @@ except ImportError:
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
+def capitalize_field(name: str) -> str:
+    """Convert snake_case to PascalCase for C# property names."""
+    return "".join(w.capitalize() for w in name.split("_"))
+
+
+def preprocess_reflect_components(components: list) -> list:
+    """Merge fields + reflect_extra_fields into all_reflect_fields for reflection template."""
+    result = []
+    for comp in deepcopy(components):
+        all_fields = list(comp.get("fields", []))
+        all_fields.extend(comp.get("reflect_extra_fields", []))
+        comp["all_reflect_fields"] = all_fields
+        # Qualified C++ name
+        ns = comp.get("namespace", "")
+        comp["qualified_name"] = f"{ns}::{comp['name']}" if ns else comp["name"]
+        result.append(comp)
+    return result
+
+
+def preprocess_wrapper_components(components: list) -> list:
+    """Filter to components with script-accessible fields for C# wrapper generation."""
+    result = []
+    for comp in deepcopy(components):
+        script_fields = [f for f in comp.get("fields", [])
+                         if f.get("script", True) is not False
+                         and f.get("type") != "enum"]
+        if script_fields:
+            comp["script_fields"] = script_fields
+            result.append(comp)
+    return result
+
+
 def write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
     """内容变化时才写文件，返回是否实际写入。"""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +215,7 @@ def main():
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    env.filters["capitalize_field"] = capitalize_field
 
     written = []
     skipped = []
@@ -233,6 +266,33 @@ def main():
         "repl_codec.gen.h.j2",
         "engine/net/replication/repl_codec.gen.h",
         components=repl_components,
+    )
+
+    # ── component_reflection.gen.cpp ─────────────────────────────────────────
+    # 反射注册 — 自动生成所有 Register*() 函数，替代手写 885 行。
+    # Include both scripting components AND reflect-only components.
+    reflect_only = defs.get("reflect_only_components", [])
+    all_reflect = components + reflect_only
+    reflect_components = preprocess_reflect_components(all_reflect)
+    seen_includes = []
+    for c in reflect_components:
+        inc = c.get("include", "")
+        if inc and inc not in seen_includes:
+            seen_includes.append(inc)
+    render(
+        "component_reflection.gen.cpp.j2",
+        "engine/reflect/component_reflection.gen.cpp",
+        components=reflect_components,
+        includes=seen_includes,
+    )
+
+    # ── Components.gen.cs ────────────────────────────────────────────────────
+    # C# 高级封装类 — 自动生成 get/set 属性包装，替代手写 Transform.cs 等。
+    wrapper_components = preprocess_wrapper_components(components)
+    render(
+        "csharp_wrapper.cs.j2",
+        "GameScripts/DSEngine.Runtime/Generated/Components.gen.cs",
+        components=wrapper_components,
     )
 
     # ── 输出摘要 ──────────────────────────────────────────────────────────────

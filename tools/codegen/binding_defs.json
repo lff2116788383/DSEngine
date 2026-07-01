@@ -43,21 +43,33 @@
                     "type": "float",
                     "default": "60.0f",
                     "lua_getter": "get_camera3d_fov",
-                    "lua_setter": "set_camera3d_fov"
+                    "lua_setter": "set_camera3d_fov",
+                    "range": [
+                        1.0,
+                        179.0
+                    ]
                 },
                 {
                     "name": "near_clip",
                     "type": "float",
                     "default": "0.1f",
                     "lua_getter": "get_camera3d_near_clip",
-                    "lua_setter": "set_camera3d_near_clip"
+                    "lua_setter": "set_camera3d_near_clip",
+                    "range": [
+                        0.001,
+                        100.0
+                    ]
                 },
                 {
                     "name": "far_clip",
                     "type": "float",
                     "default": "1000.0f",
                     "lua_getter": "get_camera3d_far_clip",
-                    "lua_setter": "set_camera3d_far_clip"
+                    "lua_setter": "set_camera3d_far_clip",
+                    "range": [
+                        1.0,
+                        100000.0
+                    ]
                 },
                 {
                     "name": "enabled",
@@ -73,6 +85,17 @@
                     "lua_getter": "get_camera3d_priority",
                     "lua_setter": "set_camera3d_priority"
                 }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "aspect_ratio",
+                    "type": "float",
+                    "range": [
+                        0.1,
+                        10.0
+                    ],
+                    "script": false
+                }
             ]
         },
         {
@@ -86,7 +109,8 @@
                     "name": "color",
                     "type": "vec4",
                     "lua_getter": "get_mesh_color",
-                    "lua_setter": "set_mesh_color"
+                    "lua_setter": "set_mesh_color",
+                    "color": true
                 },
                 {
                     "name": "visible",
@@ -100,20 +124,29 @@
                     "type": "float",
                     "default": "0.0f",
                     "lua_getter": "get_mesh_metallic",
-                    "lua_setter": "set_mesh_metallic"
+                    "lua_setter": "set_mesh_metallic",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "roughness",
                     "type": "float",
                     "default": "0.5f",
                     "lua_getter": "get_mesh_roughness",
-                    "lua_setter": "set_mesh_roughness"
+                    "lua_setter": "set_mesh_roughness",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "emissive",
                     "type": "vec3",
                     "lua_getter": "get_mesh_emissive",
-                    "lua_setter": "set_mesh_emissive"
+                    "lua_setter": "set_mesh_emissive",
+                    "color": true
                 },
                 {
                     "name": "receive_shadow",
@@ -137,6 +170,121 @@
                     "lua_getter": "get_mesh_shader_variant",
                     "lua_setter": "set_mesh_shader_variant"
                 }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "ao",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "normal_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "material_alpha_cutoff",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "material_alpha_test",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "material_double_sided",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "sss_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "sss_tint",
+                    "type": "vec4",
+                    "color": true,
+                    "script": false
+                },
+                {
+                    "name": "clear_coat",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "clear_coat_roughness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "anisotropy",
+                    "type": "float",
+                    "range": [
+                        -1.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "pom_height_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
+                },
+                {
+                    "name": "depth_test_enabled",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "depth_write_enabled",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "is_static",
+                    "type": "bool",
+                    "script": false
+                },
+                {
+                    "name": "sorting_layer",
+                    "type": "int",
+                    "script": false
+                },
+                {
+                    "name": "order_in_layer",
+                    "type": "int",
+                    "script": false
+                }
             ]
         },
         {
@@ -156,21 +304,30 @@
                     "name": "color",
                     "type": "vec3",
                     "lua_getter": "get_dir_light_color",
-                    "lua_setter": "set_dir_light_color"
+                    "lua_setter": "set_dir_light_color",
+                    "color": true
                 },
                 {
                     "name": "intensity",
                     "type": "float",
                     "default": "1.0f",
                     "lua_getter": "get_dir_light_intensity",
-                    "lua_setter": "set_dir_light_intensity"
+                    "lua_setter": "set_dir_light_intensity",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "ambient_intensity",
                     "type": "float",
                     "default": "0.2f",
                     "lua_getter": "get_dir_light_ambient",
-                    "lua_setter": "set_dir_light_ambient"
+                    "lua_setter": "set_dir_light_ambient",
+                    "range": [
+                        0.0,
+                        4.0
+                    ]
                 },
                 {
                     "name": "cast_shadow",
@@ -184,7 +341,11 @@
                     "type": "float",
                     "default": "0.35f",
                     "lua_getter": "get_dir_light_shadow_strength",
-                    "lua_setter": "set_dir_light_shadow_strength"
+                    "lua_setter": "set_dir_light_shadow_strength",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "enabled",
@@ -192,6 +353,17 @@
                     "default": "true",
                     "lua_getter": "get_dir_light_enabled",
                     "lua_setter": "set_dir_light_enabled"
+                }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "cascade_split_lambda",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "script": false
                 }
             ]
         },
@@ -206,21 +378,30 @@
                     "name": "color",
                     "type": "vec3",
                     "lua_getter": "get_point_light_color",
-                    "lua_setter": "set_point_light_color"
+                    "lua_setter": "set_point_light_color",
+                    "color": true
                 },
                 {
                     "name": "intensity",
                     "type": "float",
                     "default": "1.0f",
                     "lua_getter": "get_point_light_intensity",
-                    "lua_setter": "set_point_light_intensity"
+                    "lua_setter": "set_point_light_intensity",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "radius",
                     "type": "float",
                     "default": "10.0f",
                     "lua_getter": "get_point_light_radius",
-                    "lua_setter": "set_point_light_radius"
+                    "lua_setter": "set_point_light_radius",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ]
                 },
                 {
                     "name": "enabled",
@@ -236,6 +417,17 @@
                     "lua_getter": "get_point_light_cast_shadow",
                     "lua_setter": "set_point_light_cast_shadow"
                 }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "falloff",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        8.0
+                    ],
+                    "script": false
+                }
             ]
         },
         {
@@ -249,35 +441,52 @@
                     "name": "color",
                     "type": "vec3",
                     "lua_getter": "get_spot_light_color",
-                    "lua_setter": "set_spot_light_color"
+                    "lua_setter": "set_spot_light_color",
+                    "color": true
                 },
                 {
                     "name": "intensity",
                     "type": "float",
                     "default": "1.0f",
                     "lua_getter": "get_spot_light_intensity",
-                    "lua_setter": "set_spot_light_intensity"
+                    "lua_setter": "set_spot_light_intensity",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "radius",
                     "type": "float",
                     "default": "20.0f",
                     "lua_getter": "get_spot_light_radius",
-                    "lua_setter": "set_spot_light_radius"
+                    "lua_setter": "set_spot_light_radius",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ]
                 },
                 {
                     "name": "inner_cone_angle",
                     "type": "float",
                     "default": "12.5f",
                     "lua_getter": "get_spot_light_inner_cone_angle",
-                    "lua_setter": "set_spot_light_inner_cone_angle"
+                    "lua_setter": "set_spot_light_inner_cone_angle",
+                    "range": [
+                        0.0,
+                        90.0
+                    ]
                 },
                 {
                     "name": "outer_cone_angle",
                     "type": "float",
                     "default": "17.5f",
                     "lua_getter": "get_spot_light_outer_cone_angle",
-                    "lua_setter": "set_spot_light_outer_cone_angle"
+                    "lua_setter": "set_spot_light_outer_cone_angle",
+                    "range": [
+                        0.0,
+                        90.0
+                    ]
                 },
                 {
                     "name": "direction",
@@ -299,6 +508,17 @@
                     "lua_getter": "get_spot_light_cast_shadow",
                     "lua_setter": "set_spot_light_cast_shadow"
                 }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "falloff",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        8.0
+                    ],
+                    "script": false
+                }
             ]
         },
         {
@@ -312,20 +532,26 @@
                     "name": "up_color",
                     "type": "vec3",
                     "lua_getter": "get_sky_light_up_color",
-                    "lua_setter": "set_sky_light_up_color"
+                    "lua_setter": "set_sky_light_up_color",
+                    "color": true
                 },
                 {
                     "name": "down_color",
                     "type": "vec3",
                     "lua_getter": "get_sky_light_down_color",
-                    "lua_setter": "set_sky_light_down_color"
+                    "lua_setter": "set_sky_light_down_color",
+                    "color": true
                 },
                 {
                     "name": "intensity",
                     "type": "float",
                     "default": "1.0f",
                     "lua_getter": "get_sky_light_intensity",
-                    "lua_setter": "set_sky_light_intensity"
+                    "lua_setter": "set_sky_light_intensity",
+                    "range": [
+                        0.0,
+                        16.0
+                    ]
                 },
                 {
                     "name": "enabled",
@@ -355,21 +581,34 @@
                     "type": "float",
                     "default": "0.02f",
                     "lua_getter": "get_tree_density",
-                    "lua_setter": "set_tree_density"
+                    "lua_setter": "set_tree_density",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "tooltip": "Trees per square meter"
                 },
                 {
                     "name": "spawn_radius",
                     "type": "float",
                     "default": "120.0f",
                     "lua_getter": "get_tree_spawn_radius",
-                    "lua_setter": "set_tree_spawn_radius"
+                    "lua_setter": "set_tree_spawn_radius",
+                    "range": [
+                        1.0,
+                        1000.0
+                    ]
                 },
                 {
                     "name": "chunk_size",
                     "type": "float",
                     "default": "32.0f",
                     "lua_getter": "get_tree_chunk_size",
-                    "lua_setter": "set_tree_chunk_size"
+                    "lua_setter": "set_tree_chunk_size",
+                    "range": [
+                        1.0,
+                        256.0
+                    ]
                 },
                 {
                     "name": "min_scale",
@@ -497,35 +736,55 @@
                     "type": "float",
                     "default": "64.0f",
                     "lua_getter": "get_terrain_tile_world_size",
-                    "lua_setter": "set_terrain_tile_world_size"
+                    "lua_setter": "set_terrain_tile_world_size",
+                    "range": [
+                        1.0,
+                        1024.0
+                    ]
                 },
                 {
                     "name": "tile_resolution",
                     "type": "int",
                     "default": "64",
                     "lua_getter": "get_terrain_tile_resolution",
-                    "lua_setter": "set_terrain_tile_resolution"
+                    "lua_setter": "set_terrain_tile_resolution",
+                    "range": [
+                        8.0,
+                        512.0
+                    ]
                 },
                 {
                     "name": "max_height",
                     "type": "float",
                     "default": "20.0f",
                     "lua_getter": "get_terrain_tile_max_height",
-                    "lua_setter": "set_terrain_tile_max_height"
+                    "lua_setter": "set_terrain_tile_max_height",
+                    "range": [
+                        0.0,
+                        10000.0
+                    ]
                 },
                 {
                     "name": "load_radius",
                     "type": "float",
                     "default": "200.0f",
                     "lua_getter": "get_terrain_tile_load_radius",
-                    "lua_setter": "set_terrain_tile_load_radius"
+                    "lua_setter": "set_terrain_tile_load_radius",
+                    "range": [
+                        1.0,
+                        10000.0
+                    ]
                 },
                 {
                     "name": "unload_radius",
                     "type": "float",
                     "default": "250.0f",
                     "lua_getter": "get_terrain_tile_unload_radius",
-                    "lua_setter": "set_terrain_tile_unload_radius"
+                    "lua_setter": "set_terrain_tile_unload_radius",
+                    "range": [
+                        1.0,
+                        10000.0
+                    ]
                 },
                 {
                     "name": "use_procedural",
@@ -546,14 +805,22 @@
                     "type": "int",
                     "default": "4",
                     "lua_getter": "get_terrain_tile_max_lod_levels",
-                    "lua_setter": "set_terrain_tile_max_lod_levels"
+                    "lua_setter": "set_terrain_tile_max_lod_levels",
+                    "range": [
+                        1.0,
+                        8.0
+                    ]
                 },
                 {
                     "name": "lod_distance_factor",
                     "type": "float",
                     "default": "50.0f",
                     "lua_getter": "get_terrain_tile_lod_distance_factor",
-                    "lua_setter": "set_terrain_tile_lod_distance_factor"
+                    "lua_setter": "set_terrain_tile_lod_distance_factor",
+                    "range": [
+                        1.0,
+                        1000.0
+                    ]
                 }
             ]
         },
@@ -594,7 +861,11 @@
                     "default": "1.0f",
                     "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_cylinder_radius",
-                    "lua_setter": "set_dyn_obstacle_cylinder_radius"
+                    "lua_setter": "set_dyn_obstacle_cylinder_radius",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "cylinder_height",
@@ -602,7 +873,11 @@
                     "default": "2.0f",
                     "dirty_flag": "dirty_",
                     "lua_getter": "get_dyn_obstacle_cylinder_height",
-                    "lua_setter": "set_dyn_obstacle_cylinder_height"
+                    "lua_setter": "set_dyn_obstacle_cylinder_height",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 }
             ]
         },
@@ -625,14 +900,22 @@
                     "type": "float",
                     "default": "48.0f",
                     "lua_getter": "get_navmesh_auto_rebake_tile_size",
-                    "lua_setter": "set_navmesh_auto_rebake_tile_size"
+                    "lua_setter": "set_navmesh_auto_rebake_tile_size",
+                    "range": [
+                        1.0,
+                        256.0
+                    ]
                 },
                 {
                     "name": "rebake_cooldown",
                     "type": "float",
                     "default": "1.0f",
                     "lua_getter": "get_navmesh_auto_rebake_cooldown",
-                    "lua_setter": "set_navmesh_auto_rebake_cooldown"
+                    "lua_setter": "set_navmesh_auto_rebake_cooldown",
+                    "range": [
+                        0.0,
+                        60.0
+                    ]
                 },
                 {
                     "name": "collect_terrain",
@@ -653,42 +936,66 @@
                     "type": "float",
                     "default": "2.0f",
                     "lua_getter": "get_navmesh_auto_rebake_agent_height",
-                    "lua_setter": "set_navmesh_auto_rebake_agent_height"
+                    "lua_setter": "set_navmesh_auto_rebake_agent_height",
+                    "range": [
+                        0.1,
+                        10.0
+                    ]
                 },
                 {
                     "name": "agent_radius",
                     "type": "float",
                     "default": "0.6f",
                     "lua_getter": "get_navmesh_auto_rebake_agent_radius",
-                    "lua_setter": "set_navmesh_auto_rebake_agent_radius"
+                    "lua_setter": "set_navmesh_auto_rebake_agent_radius",
+                    "range": [
+                        0.1,
+                        10.0
+                    ]
                 },
                 {
                     "name": "agent_max_climb",
                     "type": "float",
                     "default": "0.9f",
                     "lua_getter": "get_navmesh_auto_rebake_agent_max_climb",
-                    "lua_setter": "set_navmesh_auto_rebake_agent_max_climb"
+                    "lua_setter": "set_navmesh_auto_rebake_agent_max_climb",
+                    "range": [
+                        0.0,
+                        10.0
+                    ]
                 },
                 {
                     "name": "agent_max_slope",
                     "type": "float",
                     "default": "45.0f",
                     "lua_getter": "get_navmesh_auto_rebake_agent_max_slope",
-                    "lua_setter": "set_navmesh_auto_rebake_agent_max_slope"
+                    "lua_setter": "set_navmesh_auto_rebake_agent_max_slope",
+                    "range": [
+                        0.0,
+                        90.0
+                    ]
                 },
                 {
                     "name": "cell_size",
                     "type": "float",
                     "default": "0.3f",
                     "lua_getter": "get_navmesh_auto_rebake_cell_size",
-                    "lua_setter": "set_navmesh_auto_rebake_cell_size"
+                    "lua_setter": "set_navmesh_auto_rebake_cell_size",
+                    "range": [
+                        0.01,
+                        10.0
+                    ]
                 },
                 {
                     "name": "cell_height",
                     "type": "float",
                     "default": "0.2f",
                     "lua_getter": "get_navmesh_auto_rebake_cell_height",
-                    "lua_setter": "set_navmesh_auto_rebake_cell_height"
+                    "lua_setter": "set_navmesh_auto_rebake_cell_height",
+                    "range": [
+                        0.01,
+                        10.0
+                    ]
                 }
             ]
         },
@@ -1264,6 +1571,2631 @@
                     "default": "0.0f",
                     "lua_getter": "get_animator3d_blend_parameter_value",
                     "lua_setter": "set_animator3d_blend_parameter_value"
+                }
+            ]
+        },
+        {
+            "name": "DecalComponent",
+            "prefix": "decal",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_decal_enabled",
+                    "lua_setter": "set_decal_enabled"
+                },
+                {
+                    "name": "color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_decal_color",
+                    "lua_setter": "set_decal_color"
+                },
+                {
+                    "name": "angle_fade",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_decal_angle_fade",
+                    "lua_setter": "set_decal_angle_fade"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "SkyboxComponent",
+            "prefix": "skybox",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_skybox_enabled",
+                    "lua_setter": "set_skybox_enabled"
+                },
+                {
+                    "name": "cubemap_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_skybox_cubemap_path",
+                    "lua_setter": "set_skybox_cubemap_path"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "FreeCameraControllerComponent",
+            "prefix": "free_camera",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_free_camera_enabled",
+                    "lua_setter": "set_free_camera_enabled"
+                },
+                {
+                    "name": "move_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_free_camera_move_speed",
+                    "lua_setter": "set_free_camera_move_speed"
+                },
+                {
+                    "name": "mouse_sensitivity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_free_camera_mouse_sensitivity",
+                    "lua_setter": "set_free_camera_mouse_sensitivity"
+                },
+                {
+                    "name": "pitch",
+                    "type": "float",
+                    "lua_getter": "get_free_camera_pitch",
+                    "lua_setter": "set_free_camera_pitch"
+                },
+                {
+                    "name": "yaw",
+                    "type": "float",
+                    "lua_getter": "get_free_camera_yaw",
+                    "lua_setter": "set_free_camera_yaw"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "SubSceneComponent",
+            "prefix": "sub_scene",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_sub_scene_enabled",
+                    "lua_setter": "set_sub_scene_enabled"
+                },
+                {
+                    "name": "scene_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_sub_scene_scene_path",
+                    "lua_setter": "set_sub_scene_scene_path"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "BoundingBoxComponent",
+            "prefix": "bounding_box",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "min_extents",
+                    "type": "vec3",
+                    "lua_getter": "get_bounding_box_min_extents",
+                    "lua_setter": "set_bounding_box_min_extents"
+                },
+                {
+                    "name": "max_extents",
+                    "type": "vec3",
+                    "lua_getter": "get_bounding_box_max_extents",
+                    "lua_setter": "set_bounding_box_max_extents"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "WaterComponent",
+            "prefix": "water",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_water_enabled",
+                    "lua_setter": "set_water_enabled"
+                },
+                {
+                    "name": "water_level",
+                    "type": "float",
+                    "lua_getter": "get_water_water_level",
+                    "lua_setter": "set_water_water_level"
+                },
+                {
+                    "name": "deep_color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_water_deep_color",
+                    "lua_setter": "set_water_deep_color"
+                },
+                {
+                    "name": "shallow_color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_water_shallow_color",
+                    "lua_setter": "set_water_shallow_color"
+                },
+                {
+                    "name": "max_depth",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_water_max_depth",
+                    "lua_setter": "set_water_max_depth"
+                },
+                {
+                    "name": "transparency",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_water_transparency",
+                    "lua_setter": "set_water_transparency"
+                },
+                {
+                    "name": "wave_amplitude",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_water_wave_amplitude",
+                    "lua_setter": "set_water_wave_amplitude"
+                },
+                {
+                    "name": "wave_frequency",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        16.0
+                    ],
+                    "lua_getter": "get_water_wave_frequency",
+                    "lua_setter": "set_water_wave_frequency"
+                },
+                {
+                    "name": "wave_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        16.0
+                    ],
+                    "lua_getter": "get_water_wave_speed",
+                    "lua_setter": "set_water_wave_speed"
+                },
+                {
+                    "name": "wave_direction",
+                    "type": "vec3",
+                    "lua_getter": "get_water_wave_direction",
+                    "lua_setter": "set_water_wave_direction"
+                },
+                {
+                    "name": "refraction_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_water_refraction_strength",
+                    "lua_setter": "set_water_refraction_strength"
+                },
+                {
+                    "name": "reflection_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_water_reflection_strength",
+                    "lua_setter": "set_water_reflection_strength"
+                },
+                {
+                    "name": "specular_power",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        512.0
+                    ],
+                    "lua_getter": "get_water_specular_power",
+                    "lua_setter": "set_water_specular_power"
+                },
+                {
+                    "name": "caustic_intensity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_water_caustic_intensity",
+                    "lua_setter": "set_water_caustic_intensity"
+                },
+                {
+                    "name": "caustic_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        64.0
+                    ],
+                    "lua_getter": "get_water_caustic_scale",
+                    "lua_setter": "set_water_caustic_scale"
+                },
+                {
+                    "name": "foam_intensity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_water_foam_intensity",
+                    "lua_setter": "set_water_foam_intensity"
+                },
+                {
+                    "name": "foam_depth_threshold",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_water_foam_depth_threshold",
+                    "lua_setter": "set_water_foam_depth_threshold"
+                },
+                {
+                    "name": "underwater_fog_density",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_water_underwater_fog_density",
+                    "lua_setter": "set_water_underwater_fog_density"
+                },
+                {
+                    "name": "underwater_fog_color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_water_underwater_fog_color",
+                    "lua_setter": "set_water_underwater_fog_color"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "LightProbeComponent",
+            "prefix": "light_probe",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_light_probe_enabled",
+                    "lua_setter": "set_light_probe_enabled"
+                },
+                {
+                    "name": "influence_radius",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_light_probe_influence_radius",
+                    "lua_setter": "set_light_probe_influence_radius"
+                },
+                {
+                    "name": "show_debug",
+                    "type": "bool",
+                    "lua_getter": "get_light_probe_show_debug",
+                    "lua_setter": "set_light_probe_show_debug"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "ReflectionProbeComponent",
+            "prefix": "reflection_probe",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_reflection_probe_enabled",
+                    "lua_setter": "set_reflection_probe_enabled"
+                },
+                {
+                    "name": "influence_radius",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_reflection_probe_influence_radius",
+                    "lua_setter": "set_reflection_probe_influence_radius"
+                },
+                {
+                    "name": "box_size_x",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_reflection_probe_box_size_x",
+                    "lua_setter": "set_reflection_probe_box_size_x"
+                },
+                {
+                    "name": "box_size_y",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_reflection_probe_box_size_y",
+                    "lua_setter": "set_reflection_probe_box_size_y"
+                },
+                {
+                    "name": "box_size_z",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_reflection_probe_box_size_z",
+                    "lua_setter": "set_reflection_probe_box_size_z"
+                },
+                {
+                    "name": "use_box_projection",
+                    "type": "bool",
+                    "lua_getter": "get_reflection_probe_use_box_projection",
+                    "lua_setter": "set_reflection_probe_use_box_projection"
+                },
+                {
+                    "name": "resolution",
+                    "type": "int",
+                    "range": [
+                        16.0,
+                        2048.0
+                    ],
+                    "lua_getter": "get_reflection_probe_resolution",
+                    "lua_setter": "set_reflection_probe_resolution"
+                },
+                {
+                    "name": "show_debug",
+                    "type": "bool",
+                    "lua_getter": "get_reflection_probe_show_debug",
+                    "lua_setter": "set_reflection_probe_show_debug"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "GIProbeVolumeComponent",
+            "prefix": "gi_probe",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_gi_probe_enabled",
+                    "lua_setter": "set_gi_probe_enabled"
+                },
+                {
+                    "name": "origin",
+                    "type": "vec3",
+                    "lua_getter": "get_gi_probe_origin",
+                    "lua_setter": "set_gi_probe_origin"
+                },
+                {
+                    "name": "extent",
+                    "type": "vec3",
+                    "lua_getter": "get_gi_probe_extent",
+                    "lua_setter": "set_gi_probe_extent"
+                },
+                {
+                    "name": "resolution_x",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        256.0
+                    ],
+                    "lua_getter": "get_gi_probe_resolution_x",
+                    "lua_setter": "set_gi_probe_resolution_x"
+                },
+                {
+                    "name": "resolution_y",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        256.0
+                    ],
+                    "lua_getter": "get_gi_probe_resolution_y",
+                    "lua_setter": "set_gi_probe_resolution_y"
+                },
+                {
+                    "name": "resolution_z",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        256.0
+                    ],
+                    "lua_getter": "get_gi_probe_resolution_z",
+                    "lua_setter": "set_gi_probe_resolution_z"
+                },
+                {
+                    "name": "irradiance_texels",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        64.0
+                    ],
+                    "lua_getter": "get_gi_probe_irradiance_texels",
+                    "lua_setter": "set_gi_probe_irradiance_texels"
+                },
+                {
+                    "name": "visibility_texels",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        64.0
+                    ],
+                    "lua_getter": "get_gi_probe_visibility_texels",
+                    "lua_setter": "set_gi_probe_visibility_texels"
+                },
+                {
+                    "name": "rays_per_probe",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        4096.0
+                    ],
+                    "lua_getter": "get_gi_probe_rays_per_probe",
+                    "lua_setter": "set_gi_probe_rays_per_probe"
+                },
+                {
+                    "name": "hysteresis",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_gi_probe_hysteresis",
+                    "lua_setter": "set_gi_probe_hysteresis"
+                },
+                {
+                    "name": "gi_intensity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        16.0
+                    ],
+                    "lua_getter": "get_gi_probe_gi_intensity",
+                    "lua_setter": "set_gi_probe_gi_intensity"
+                },
+                {
+                    "name": "normal_bias",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_gi_probe_normal_bias",
+                    "lua_setter": "set_gi_probe_normal_bias"
+                },
+                {
+                    "name": "view_bias",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_gi_probe_view_bias",
+                    "lua_setter": "set_gi_probe_view_bias"
+                },
+                {
+                    "name": "show_debug_probes",
+                    "type": "bool",
+                    "lua_getter": "get_gi_probe_show_debug_probes",
+                    "lua_setter": "set_gi_probe_show_debug_probes"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "FoliageComponent",
+            "prefix": "foliage",
+            "include": "engine/ecs/components_3d_foliage.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_foliage_enabled",
+                    "lua_setter": "set_foliage_enabled"
+                },
+                {
+                    "name": "wind_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_foliage_wind_strength",
+                    "lua_setter": "set_foliage_wind_strength"
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_foliage_stiffness",
+                    "lua_setter": "set_foliage_stiffness"
+                },
+                {
+                    "name": "phase_offset",
+                    "type": "float",
+                    "lua_getter": "get_foliage_phase_offset",
+                    "lua_setter": "set_foliage_phase_offset"
+                },
+                {
+                    "name": "push_response",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_foliage_push_response",
+                    "lua_setter": "set_foliage_push_response"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "RigidBody3DComponent",
+            "prefix": "rigidbody3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "enums": [
+                {
+                    "name": "RigidBody3DType",
+                    "qualified": "dse::RigidBody3DType",
+                    "entries": [
+                        {
+                            "name": "Static",
+                            "value": "Static"
+                        },
+                        {
+                            "name": "Kinematic",
+                            "value": "Kinematic"
+                        },
+                        {
+                            "name": "Dynamic",
+                            "value": "Dynamic"
+                        }
+                    ]
+                }
+            ],
+            "fields": [
+                {
+                    "name": "type",
+                    "type": "int",
+                    "enum_name": "RigidBody3DType",
+                    "lua_getter": "get_rigidbody3d_type",
+                    "lua_setter": "set_rigidbody3d_type"
+                },
+                {
+                    "name": "mass",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_rigidbody3d_mass",
+                    "lua_setter": "set_rigidbody3d_mass"
+                },
+                {
+                    "name": "drag",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_rigidbody3d_drag",
+                    "lua_setter": "set_rigidbody3d_drag"
+                },
+                {
+                    "name": "angular_drag",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_rigidbody3d_angular_drag",
+                    "lua_setter": "set_rigidbody3d_angular_drag"
+                },
+                {
+                    "name": "use_gravity",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_rigidbody3d_use_gravity",
+                    "lua_setter": "set_rigidbody3d_use_gravity"
+                },
+                {
+                    "name": "gravity_scale",
+                    "type": "float",
+                    "range": [
+                        -10.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_rigidbody3d_gravity_scale",
+                    "lua_setter": "set_rigidbody3d_gravity_scale"
+                },
+                {
+                    "name": "is_kinematic",
+                    "type": "bool",
+                    "lua_getter": "get_rigidbody3d_is_kinematic",
+                    "lua_setter": "set_rigidbody3d_is_kinematic"
+                },
+                {
+                    "name": "collision_layer",
+                    "type": "int",
+                    "lua_getter": "get_rigidbody3d_collision_layer",
+                    "lua_setter": "set_rigidbody3d_collision_layer"
+                },
+                {
+                    "name": "collision_mask",
+                    "type": "int",
+                    "lua_getter": "get_rigidbody3d_collision_mask",
+                    "lua_setter": "set_rigidbody3d_collision_mask"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "BoxCollider3DComponent",
+            "prefix": "box_collider3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "size",
+                    "type": "vec3",
+                    "lua_getter": "get_box_collider3d_size",
+                    "lua_setter": "set_box_collider3d_size"
+                },
+                {
+                    "name": "center",
+                    "type": "vec3",
+                    "lua_getter": "get_box_collider3d_center",
+                    "lua_setter": "set_box_collider3d_center"
+                },
+                {
+                    "name": "is_trigger",
+                    "type": "bool",
+                    "lua_getter": "get_box_collider3d_is_trigger",
+                    "lua_setter": "set_box_collider3d_is_trigger"
+                },
+                {
+                    "name": "bounciness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_box_collider3d_bounciness",
+                    "lua_setter": "set_box_collider3d_bounciness"
+                },
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_box_collider3d_friction",
+                    "lua_setter": "set_box_collider3d_friction"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "SphereCollider3DComponent",
+            "prefix": "sphere_collider3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        1000.0
+                    ],
+                    "lua_getter": "get_sphere_collider3d_radius",
+                    "lua_setter": "set_sphere_collider3d_radius"
+                },
+                {
+                    "name": "center",
+                    "type": "vec3",
+                    "lua_getter": "get_sphere_collider3d_center",
+                    "lua_setter": "set_sphere_collider3d_center"
+                },
+                {
+                    "name": "is_trigger",
+                    "type": "bool",
+                    "lua_getter": "get_sphere_collider3d_is_trigger",
+                    "lua_setter": "set_sphere_collider3d_is_trigger"
+                },
+                {
+                    "name": "bounciness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_sphere_collider3d_bounciness",
+                    "lua_setter": "set_sphere_collider3d_bounciness"
+                },
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_sphere_collider3d_friction",
+                    "lua_setter": "set_sphere_collider3d_friction"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "CapsuleCollider3DComponent",
+            "prefix": "capsule_collider3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        100.0
+                    ],
+                    "lua_getter": "get_capsule_collider3d_radius",
+                    "lua_setter": "set_capsule_collider3d_radius"
+                },
+                {
+                    "name": "height",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        100.0
+                    ],
+                    "lua_getter": "get_capsule_collider3d_height",
+                    "lua_setter": "set_capsule_collider3d_height"
+                },
+                {
+                    "name": "center",
+                    "type": "vec3",
+                    "lua_getter": "get_capsule_collider3d_center",
+                    "lua_setter": "set_capsule_collider3d_center"
+                },
+                {
+                    "name": "direction",
+                    "type": "int",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "tooltip": "0=X, 1=Y, 2=Z",
+                    "lua_getter": "get_capsule_collider3d_direction",
+                    "lua_setter": "set_capsule_collider3d_direction"
+                },
+                {
+                    "name": "is_trigger",
+                    "type": "bool",
+                    "lua_getter": "get_capsule_collider3d_is_trigger",
+                    "lua_setter": "set_capsule_collider3d_is_trigger"
+                },
+                {
+                    "name": "bounciness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_capsule_collider3d_bounciness",
+                    "lua_setter": "set_capsule_collider3d_bounciness"
+                },
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_capsule_collider3d_friction",
+                    "lua_setter": "set_capsule_collider3d_friction"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "MeshCollider3DComponent",
+            "prefix": "mesh_collider3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "convex",
+                    "type": "bool",
+                    "lua_getter": "get_mesh_collider3d_convex",
+                    "lua_setter": "set_mesh_collider3d_convex"
+                },
+                {
+                    "name": "is_trigger",
+                    "type": "bool",
+                    "lua_getter": "get_mesh_collider3d_is_trigger",
+                    "lua_setter": "set_mesh_collider3d_is_trigger"
+                },
+                {
+                    "name": "bounciness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_mesh_collider3d_bounciness",
+                    "lua_setter": "set_mesh_collider3d_bounciness"
+                },
+                {
+                    "name": "friction",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_mesh_collider3d_friction",
+                    "lua_setter": "set_mesh_collider3d_friction"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "CharacterController3DComponent",
+            "prefix": "character_ctrl3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        10.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_radius",
+                    "lua_setter": "set_character_ctrl3d_radius"
+                },
+                {
+                    "name": "height",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        10.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_height",
+                    "lua_setter": "set_character_ctrl3d_height"
+                },
+                {
+                    "name": "slope_limit",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        90.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_slope_limit",
+                    "lua_setter": "set_character_ctrl3d_slope_limit"
+                },
+                {
+                    "name": "step_offset",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        5.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_step_offset",
+                    "lua_setter": "set_character_ctrl3d_step_offset"
+                },
+                {
+                    "name": "skin_width",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_skin_width",
+                    "lua_setter": "set_character_ctrl3d_skin_width"
+                },
+                {
+                    "name": "min_move_distance",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_character_ctrl3d_min_move_distance",
+                    "lua_setter": "set_character_ctrl3d_min_move_distance"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "Joint3DComponent",
+            "prefix": "joint3d",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "enums": [
+                {
+                    "name": "Joint3DType",
+                    "qualified": "dse::Joint3DType",
+                    "entries": [
+                        {
+                            "name": "Fixed",
+                            "value": "Fixed"
+                        },
+                        {
+                            "name": "Hinge",
+                            "value": "Hinge"
+                        },
+                        {
+                            "name": "Spring",
+                            "value": "Spring"
+                        },
+                        {
+                            "name": "Distance",
+                            "value": "Distance"
+                        }
+                    ]
+                }
+            ],
+            "fields": [
+                {
+                    "name": "type",
+                    "type": "int",
+                    "enum_name": "Joint3DType",
+                    "lua_getter": "get_joint3d_type",
+                    "lua_setter": "set_joint3d_type"
+                },
+                {
+                    "name": "connected_entity_id",
+                    "type": "int",
+                    "lua_getter": "get_joint3d_connected_entity_id",
+                    "lua_setter": "set_joint3d_connected_entity_id"
+                },
+                {
+                    "name": "anchor",
+                    "type": "vec3",
+                    "lua_getter": "get_joint3d_anchor",
+                    "lua_setter": "set_joint3d_anchor"
+                },
+                {
+                    "name": "connected_anchor",
+                    "type": "vec3",
+                    "lua_getter": "get_joint3d_connected_anchor",
+                    "lua_setter": "set_joint3d_connected_anchor"
+                },
+                {
+                    "name": "axis",
+                    "type": "vec3",
+                    "lua_getter": "get_joint3d_axis",
+                    "lua_setter": "set_joint3d_axis"
+                },
+                {
+                    "name": "use_limits",
+                    "type": "bool",
+                    "lua_getter": "get_joint3d_use_limits",
+                    "lua_setter": "set_joint3d_use_limits"
+                },
+                {
+                    "name": "lower_limit",
+                    "type": "float",
+                    "range": [
+                        -180.0,
+                        0.0
+                    ],
+                    "lua_getter": "get_joint3d_lower_limit",
+                    "lua_setter": "set_joint3d_lower_limit"
+                },
+                {
+                    "name": "upper_limit",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        180.0
+                    ],
+                    "lua_getter": "get_joint3d_upper_limit",
+                    "lua_setter": "set_joint3d_upper_limit"
+                },
+                {
+                    "name": "min_distance",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_joint3d_min_distance",
+                    "lua_setter": "set_joint3d_min_distance"
+                },
+                {
+                    "name": "max_distance",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_joint3d_max_distance",
+                    "lua_setter": "set_joint3d_max_distance"
+                },
+                {
+                    "name": "spring_stiffness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_joint3d_spring_stiffness",
+                    "lua_setter": "set_joint3d_spring_stiffness"
+                },
+                {
+                    "name": "spring_damping",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_joint3d_spring_damping",
+                    "lua_setter": "set_joint3d_spring_damping"
+                },
+                {
+                    "name": "break_force",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        3.4e+38
+                    ],
+                    "lua_getter": "get_joint3d_break_force",
+                    "lua_setter": "set_joint3d_break_force"
+                },
+                {
+                    "name": "break_torque",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        3.4e+38
+                    ],
+                    "lua_getter": "get_joint3d_break_torque",
+                    "lua_setter": "set_joint3d_break_torque"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "RagdollComponent",
+            "prefix": "ragdoll",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "fields": [
+                {
+                    "name": "active",
+                    "type": "bool",
+                    "lua_getter": "get_ragdoll_active",
+                    "lua_setter": "set_ragdoll_active"
+                },
+                {
+                    "name": "auto_setup",
+                    "type": "bool",
+                    "lua_getter": "get_ragdoll_auto_setup",
+                    "lua_setter": "set_ragdoll_auto_setup"
+                },
+                {
+                    "name": "total_mass",
+                    "type": "float",
+                    "range": [
+                        0.1,
+                        1000.0
+                    ],
+                    "lua_getter": "get_ragdoll_total_mass",
+                    "lua_setter": "set_ragdoll_total_mass"
+                },
+                {
+                    "name": "joint_stiffness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_ragdoll_joint_stiffness",
+                    "lua_setter": "set_ragdoll_joint_stiffness"
+                },
+                {
+                    "name": "joint_damping",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_ragdoll_joint_damping",
+                    "lua_setter": "set_ragdoll_joint_damping"
+                },
+                {
+                    "name": "collision_layer",
+                    "type": "int",
+                    "lua_getter": "get_ragdoll_collision_layer",
+                    "lua_setter": "set_ragdoll_collision_layer"
+                },
+                {
+                    "name": "collision_mask",
+                    "type": "int",
+                    "lua_getter": "get_ragdoll_collision_mask",
+                    "lua_setter": "set_ragdoll_collision_mask"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "SoftBodyComponent",
+            "prefix": "soft_body",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_soft_body_enabled",
+                    "lua_setter": "set_soft_body_enabled"
+                },
+                {
+                    "name": "stiffness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_soft_body_stiffness",
+                    "lua_setter": "set_soft_body_stiffness"
+                },
+                {
+                    "name": "solver_iterations",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        32.0
+                    ],
+                    "lua_getter": "get_soft_body_solver_iterations",
+                    "lua_setter": "set_soft_body_solver_iterations"
+                },
+                {
+                    "name": "damping",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_soft_body_damping",
+                    "lua_setter": "set_soft_body_damping"
+                },
+                {
+                    "name": "use_gravity",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_soft_body_use_gravity",
+                    "lua_setter": "set_soft_body_use_gravity"
+                },
+                {
+                    "name": "gravity_scale",
+                    "type": "float",
+                    "range": [
+                        -10.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_soft_body_gravity_scale",
+                    "lua_setter": "set_soft_body_gravity_scale"
+                },
+                {
+                    "name": "volume_stiffness",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_soft_body_volume_stiffness",
+                    "lua_setter": "set_soft_body_volume_stiffness"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "VehicleComponent",
+            "prefix": "vehicle",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_vehicle_enabled",
+                    "lua_setter": "set_vehicle_enabled"
+                },
+                {
+                    "name": "max_engine_force",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_vehicle_max_engine_force",
+                    "lua_setter": "set_vehicle_max_engine_force"
+                },
+                {
+                    "name": "max_brake_force",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_vehicle_max_brake_force",
+                    "lua_setter": "set_vehicle_max_brake_force"
+                },
+                {
+                    "name": "max_steer_angle",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        90.0
+                    ],
+                    "lua_getter": "get_vehicle_max_steer_angle",
+                    "lua_setter": "set_vehicle_max_steer_angle"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "RopeComponent",
+            "prefix": "rope",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_rope_enabled",
+                    "lua_setter": "set_rope_enabled"
+                },
+                {
+                    "name": "segment_count",
+                    "type": "int",
+                    "range": [
+                        2.0,
+                        200.0
+                    ],
+                    "lua_getter": "get_rope_segment_count",
+                    "lua_setter": "set_rope_segment_count"
+                },
+                {
+                    "name": "segment_length",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        10.0
+                    ],
+                    "lua_getter": "get_rope_segment_length",
+                    "lua_setter": "set_rope_segment_length"
+                },
+                {
+                    "name": "radius",
+                    "type": "float",
+                    "range": [
+                        0.001,
+                        1.0
+                    ],
+                    "lua_getter": "get_rope_radius",
+                    "lua_setter": "set_rope_radius"
+                },
+                {
+                    "name": "damping",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_rope_damping",
+                    "lua_setter": "set_rope_damping"
+                },
+                {
+                    "name": "solver_iterations",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        32.0
+                    ],
+                    "lua_getter": "get_rope_solver_iterations",
+                    "lua_setter": "set_rope_solver_iterations"
+                },
+                {
+                    "name": "use_gravity",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_rope_use_gravity",
+                    "lua_setter": "set_rope_use_gravity"
+                },
+                {
+                    "name": "gravity_scale",
+                    "type": "float",
+                    "range": [
+                        -10.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_rope_gravity_scale",
+                    "lua_setter": "set_rope_gravity_scale"
+                },
+                {
+                    "name": "anchor_entity_a",
+                    "type": "int",
+                    "lua_getter": "get_rope_anchor_entity_a",
+                    "lua_setter": "set_rope_anchor_entity_a"
+                },
+                {
+                    "name": "anchor_entity_b",
+                    "type": "int",
+                    "lua_getter": "get_rope_anchor_entity_b",
+                    "lua_setter": "set_rope_anchor_entity_b"
+                },
+                {
+                    "name": "anchor_offset_a",
+                    "type": "vec3",
+                    "lua_getter": "get_rope_anchor_offset_a",
+                    "lua_setter": "set_rope_anchor_offset_a"
+                },
+                {
+                    "name": "anchor_offset_b",
+                    "type": "vec3",
+                    "lua_getter": "get_rope_anchor_offset_b",
+                    "lua_setter": "set_rope_anchor_offset_b"
+                },
+                {
+                    "name": "start_position",
+                    "type": "vec3",
+                    "lua_getter": "get_rope_start_position",
+                    "lua_setter": "set_rope_start_position"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "BuoyancyComponent",
+            "prefix": "buoyancy",
+            "include": "engine/ecs/components_3d_physics.h",
+            "namespace": "dse",
+            "conditional": "DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_buoyancy_enabled",
+                    "lua_setter": "set_buoyancy_enabled"
+                },
+                {
+                    "name": "water_level",
+                    "type": "float",
+                    "range": [
+                        -1000.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_buoyancy_water_level",
+                    "lua_setter": "set_buoyancy_water_level"
+                },
+                {
+                    "name": "use_fluid_system",
+                    "type": "bool",
+                    "lua_getter": "get_buoyancy_use_fluid_system",
+                    "lua_setter": "set_buoyancy_use_fluid_system"
+                },
+                {
+                    "name": "buoyancy_force",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1000.0
+                    ],
+                    "lua_getter": "get_buoyancy_buoyancy_force",
+                    "lua_setter": "set_buoyancy_buoyancy_force"
+                },
+                {
+                    "name": "water_drag",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_buoyancy_water_drag",
+                    "lua_setter": "set_buoyancy_water_drag"
+                },
+                {
+                    "name": "water_angular_drag",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_buoyancy_water_angular_drag",
+                    "lua_setter": "set_buoyancy_water_angular_drag"
+                },
+                {
+                    "name": "submerge_depth",
+                    "type": "float",
+                    "range": [
+                        0.01,
+                        100.0
+                    ],
+                    "lua_getter": "get_buoyancy_submerge_depth",
+                    "lua_setter": "set_buoyancy_submerge_depth"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "AtmosphereComponent",
+            "prefix": "atmosphere",
+            "include": "engine/ecs/components_3d_sky.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_atmosphere_enabled",
+                    "lua_setter": "set_atmosphere_enabled"
+                },
+                {
+                    "name": "planet_radius",
+                    "type": "float",
+                    "range": [
+                        100000.0,
+                        100000000.0
+                    ],
+                    "lua_getter": "get_atmosphere_planet_radius",
+                    "lua_setter": "set_atmosphere_planet_radius"
+                },
+                {
+                    "name": "atmosphere_height",
+                    "type": "float",
+                    "range": [
+                        1000.0,
+                        1000000.0
+                    ],
+                    "lua_getter": "get_atmosphere_atmosphere_height",
+                    "lua_setter": "set_atmosphere_atmosphere_height"
+                },
+                {
+                    "name": "rayleigh_coeff",
+                    "type": "vec3",
+                    "lua_getter": "get_atmosphere_rayleigh_coeff",
+                    "lua_setter": "set_atmosphere_rayleigh_coeff"
+                },
+                {
+                    "name": "rayleigh_scale_height",
+                    "type": "float",
+                    "range": [
+                        100.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_atmosphere_rayleigh_scale_height",
+                    "lua_setter": "set_atmosphere_rayleigh_scale_height"
+                },
+                {
+                    "name": "mie_coeff",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        0.001
+                    ],
+                    "lua_getter": "get_atmosphere_mie_coeff",
+                    "lua_setter": "set_atmosphere_mie_coeff"
+                },
+                {
+                    "name": "mie_scale_height",
+                    "type": "float",
+                    "range": [
+                        100.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_atmosphere_mie_scale_height",
+                    "lua_setter": "set_atmosphere_mie_scale_height"
+                },
+                {
+                    "name": "mie_g",
+                    "type": "float",
+                    "range": [
+                        -1.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_atmosphere_mie_g",
+                    "lua_setter": "set_atmosphere_mie_g"
+                },
+                {
+                    "name": "mie_albedo",
+                    "type": "vec3",
+                    "lua_getter": "get_atmosphere_mie_albedo",
+                    "lua_setter": "set_atmosphere_mie_albedo"
+                },
+                {
+                    "name": "ozone_coeff",
+                    "type": "vec3",
+                    "lua_getter": "get_atmosphere_ozone_coeff",
+                    "lua_setter": "set_atmosphere_ozone_coeff"
+                },
+                {
+                    "name": "ozone_center_h",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_atmosphere_ozone_center_h",
+                    "lua_setter": "set_atmosphere_ozone_center_h"
+                },
+                {
+                    "name": "ozone_width",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100000.0
+                    ],
+                    "lua_getter": "get_atmosphere_ozone_width",
+                    "lua_setter": "set_atmosphere_ozone_width"
+                },
+                {
+                    "name": "sun_intensity",
+                    "type": "float",
+                    "lua_getter": "get_atmosphere_sun_intensity",
+                    "lua_setter": "set_atmosphere_sun_intensity"
+                },
+                {
+                    "name": "sun_disk_angle",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        5.0
+                    ],
+                    "lua_getter": "get_atmosphere_sun_disk_angle",
+                    "lua_setter": "set_atmosphere_sun_disk_angle"
+                },
+                {
+                    "name": "aerial_perspective_enabled",
+                    "type": "bool",
+                    "lua_getter": "get_atmosphere_aerial_perspective_enabled",
+                    "lua_setter": "set_atmosphere_aerial_perspective_enabled"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "VolumetricCloudComponent",
+            "prefix": "volumetric_cloud",
+            "include": "engine/ecs/components_3d_sky.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_volumetric_cloud_enabled",
+                    "lua_setter": "set_volumetric_cloud_enabled"
+                },
+                {
+                    "name": "cloud_bottom",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        20000.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_cloud_bottom",
+                    "lua_setter": "set_volumetric_cloud_cloud_bottom"
+                },
+                {
+                    "name": "cloud_top",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        20000.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_cloud_top",
+                    "lua_setter": "set_volumetric_cloud_cloud_top"
+                },
+                {
+                    "name": "coverage",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_coverage",
+                    "lua_setter": "set_volumetric_cloud_coverage"
+                },
+                {
+                    "name": "density",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_density",
+                    "lua_setter": "set_volumetric_cloud_density"
+                },
+                {
+                    "name": "shape_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        0.01
+                    ],
+                    "lua_getter": "get_volumetric_cloud_shape_scale",
+                    "lua_setter": "set_volumetric_cloud_shape_scale"
+                },
+                {
+                    "name": "detail_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        0.01
+                    ],
+                    "lua_getter": "get_volumetric_cloud_detail_scale",
+                    "lua_setter": "set_volumetric_cloud_detail_scale"
+                },
+                {
+                    "name": "detail_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_detail_strength",
+                    "lua_setter": "set_volumetric_cloud_detail_strength"
+                },
+                {
+                    "name": "erosion",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_erosion",
+                    "lua_setter": "set_volumetric_cloud_erosion"
+                },
+                {
+                    "name": "wind_direction",
+                    "type": "vec3",
+                    "lua_getter": "get_volumetric_cloud_wind_direction",
+                    "lua_setter": "set_volumetric_cloud_wind_direction"
+                },
+                {
+                    "name": "wind_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        200.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_wind_speed",
+                    "lua_setter": "set_volumetric_cloud_wind_speed"
+                },
+                {
+                    "name": "silver_intensity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_silver_intensity",
+                    "lua_setter": "set_volumetric_cloud_silver_intensity"
+                },
+                {
+                    "name": "silver_spread",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_silver_spread",
+                    "lua_setter": "set_volumetric_cloud_silver_spread"
+                },
+                {
+                    "name": "powder_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_powder_strength",
+                    "lua_setter": "set_volumetric_cloud_powder_strength"
+                },
+                {
+                    "name": "ambient_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_volumetric_cloud_ambient_strength",
+                    "lua_setter": "set_volumetric_cloud_ambient_strength"
+                },
+                {
+                    "name": "half_resolution",
+                    "type": "bool",
+                    "lua_getter": "get_volumetric_cloud_half_resolution",
+                    "lua_setter": "set_volumetric_cloud_half_resolution"
+                },
+                {
+                    "name": "temporal_reprojection",
+                    "type": "bool",
+                    "lua_getter": "get_volumetric_cloud_temporal_reprojection",
+                    "lua_setter": "set_volumetric_cloud_temporal_reprojection"
+                },
+                {
+                    "name": "cloud_shadow_enabled",
+                    "type": "bool",
+                    "lua_getter": "get_volumetric_cloud_cloud_shadow_enabled",
+                    "lua_setter": "set_volumetric_cloud_cloud_shadow_enabled"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "DayNightCycleComponent",
+            "prefix": "day_night",
+            "include": "engine/ecs/components_3d_sky.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_day_night_enabled",
+                    "lua_setter": "set_day_night_enabled"
+                },
+                {
+                    "name": "time_of_day",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        24.0
+                    ],
+                    "lua_getter": "get_day_night_time_of_day",
+                    "lua_setter": "set_day_night_time_of_day"
+                },
+                {
+                    "name": "time_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_day_night_time_speed",
+                    "lua_setter": "set_day_night_time_speed"
+                },
+                {
+                    "name": "auto_advance",
+                    "type": "bool",
+                    "lua_getter": "get_day_night_auto_advance",
+                    "lua_setter": "set_day_night_auto_advance"
+                },
+                {
+                    "name": "latitude",
+                    "type": "float",
+                    "range": [
+                        -90.0,
+                        90.0
+                    ],
+                    "lua_getter": "get_day_night_latitude",
+                    "lua_setter": "set_day_night_latitude"
+                },
+                {
+                    "name": "longitude",
+                    "type": "float",
+                    "range": [
+                        -180.0,
+                        180.0
+                    ],
+                    "lua_getter": "get_day_night_longitude",
+                    "lua_setter": "set_day_night_longitude"
+                },
+                {
+                    "name": "day_of_year",
+                    "type": "int",
+                    "range": [
+                        1.0,
+                        365.0
+                    ],
+                    "lua_getter": "get_day_night_day_of_year",
+                    "lua_setter": "set_day_night_day_of_year"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "HairComponent",
+            "prefix": "hair",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_hair_enabled",
+                    "lua_setter": "set_hair_enabled"
+                },
+                {
+                    "name": "hair_asset_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_hair_hair_asset_path",
+                    "lua_setter": "set_hair_hair_asset_path"
+                },
+                {
+                    "name": "damping",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_hair_damping",
+                    "lua_setter": "set_hair_damping"
+                },
+                {
+                    "name": "stiffness_local",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_hair_stiffness_local",
+                    "lua_setter": "set_hair_stiffness_local"
+                },
+                {
+                    "name": "stiffness_global",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_hair_stiffness_global",
+                    "lua_setter": "set_hair_stiffness_global"
+                },
+                {
+                    "name": "gravity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
+                    "lua_getter": "get_hair_gravity",
+                    "lua_setter": "set_hair_gravity"
+                },
+                {
+                    "name": "wind",
+                    "type": "vec3",
+                    "lua_getter": "get_hair_wind",
+                    "lua_setter": "set_hair_wind"
+                },
+                {
+                    "name": "wind_turbulence",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_hair_wind_turbulence",
+                    "lua_setter": "set_hair_wind_turbulence"
+                },
+                {
+                    "name": "root_color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_hair_root_color",
+                    "lua_setter": "set_hair_root_color"
+                },
+                {
+                    "name": "tip_color",
+                    "type": "vec4",
+                    "color": true,
+                    "lua_getter": "get_hair_tip_color",
+                    "lua_setter": "set_hair_tip_color"
+                },
+                {
+                    "name": "fiber_radius",
+                    "type": "float",
+                    "range": [
+                        0.001,
+                        0.5
+                    ],
+                    "lua_getter": "get_hair_fiber_radius",
+                    "lua_setter": "set_hair_fiber_radius"
+                },
+                {
+                    "name": "opacity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ],
+                    "lua_getter": "get_hair_opacity",
+                    "lua_setter": "set_hair_opacity"
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool",
+                    "lua_getter": "get_hair_cast_shadow",
+                    "lua_setter": "set_hair_cast_shadow"
+                },
+                {
+                    "name": "receive_shadow",
+                    "type": "bool",
+                    "lua_getter": "get_hair_receive_shadow",
+                    "lua_setter": "set_hair_receive_shadow"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "ImpostorComponent",
+            "prefix": "impostor",
+            "include": "engine/ecs/components_3d_impostor.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_impostor_enabled",
+                    "lua_setter": "set_impostor_enabled"
+                },
+                {
+                    "name": "atlas_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "tooltip": "Baked .dimpostor atlas file",
+                    "lua_getter": "get_impostor_atlas_path",
+                    "lua_setter": "set_impostor_atlas_path"
+                },
+                {
+                    "name": "frames_x",
+                    "type": "int",
+                    "range": [
+                        1,
+                        32
+                    ],
+                    "tooltip": "Atlas horizontal frames",
+                    "lua_getter": "get_impostor_frames_x",
+                    "lua_setter": "set_impostor_frames_x"
+                },
+                {
+                    "name": "frames_y",
+                    "type": "int",
+                    "range": [
+                        1,
+                        16
+                    ],
+                    "tooltip": "Atlas vertical frames",
+                    "lua_getter": "get_impostor_frames_y",
+                    "lua_setter": "set_impostor_frames_y"
+                },
+                {
+                    "name": "transition_distance",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        10000.0
+                    ],
+                    "lua_getter": "get_impostor_transition_distance",
+                    "lua_setter": "set_impostor_transition_distance"
+                },
+                {
+                    "name": "fade_range",
+                    "type": "float",
+                    "range": [
+                        0.1,
+                        200.0
+                    ],
+                    "lua_getter": "get_impostor_fade_range",
+                    "lua_setter": "set_impostor_fade_range"
+                },
+                {
+                    "name": "cull_distance",
+                    "type": "float",
+                    "range": [
+                        10.0,
+                        50000.0
+                    ],
+                    "lua_getter": "get_impostor_cull_distance",
+                    "lua_setter": "set_impostor_cull_distance"
+                },
+                {
+                    "name": "impostor_size",
+                    "type": "float",
+                    "range": [
+                        0.1,
+                        10.0
+                    ],
+                    "lua_getter": "get_impostor_impostor_size",
+                    "lua_setter": "set_impostor_impostor_size"
+                },
+                {
+                    "name": "pivot_offset",
+                    "type": "vec3",
+                    "lua_getter": "get_impostor_pivot_offset",
+                    "lua_setter": "set_impostor_pivot_offset"
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool",
+                    "lua_getter": "get_impostor_cast_shadow",
+                    "lua_setter": "set_impostor_cast_shadow"
+                },
+                {
+                    "name": "use_frame_interpolation",
+                    "type": "bool",
+                    "lua_getter": "get_impostor_use_frame_interpolation",
+                    "lua_setter": "set_impostor_use_frame_interpolation"
+                },
+                {
+                    "name": "normal_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
+                    "lua_getter": "get_impostor_normal_strength",
+                    "lua_setter": "set_impostor_normal_strength"
+                },
+                {
+                    "name": "auto_from_lod_group",
+                    "type": "bool",
+                    "lua_getter": "get_impostor_auto_from_lod_group",
+                    "lua_setter": "set_impostor_auto_from_lod_group"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "StreamingOriginComponent",
+            "prefix": "streaming_origin",
+            "include": "engine/scene/world_partition.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_streaming_origin_enabled",
+                    "lua_setter": "set_streaming_origin_enabled"
+                },
+                {
+                    "name": "load_radius",
+                    "type": "float",
+                    "range": [
+                        32.0,
+                        2048.0
+                    ],
+                    "tooltip": "Load radius",
+                    "lua_getter": "get_streaming_origin_load_radius",
+                    "lua_setter": "set_streaming_origin_load_radius"
+                },
+                {
+                    "name": "unload_radius",
+                    "type": "float",
+                    "range": [
+                        64.0,
+                        4096.0
+                    ],
+                    "tooltip": "Unload radius (should > load)",
+                    "lua_getter": "get_streaming_origin_unload_radius",
+                    "lua_setter": "set_streaming_origin_unload_radius"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "WorldPartitionConfigComponent",
+            "prefix": "world_partition",
+            "include": "engine/scene/world_partition.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_world_partition_enabled",
+                    "lua_setter": "set_world_partition_enabled"
+                },
+                {
+                    "name": "cell_size",
+                    "type": "float",
+                    "range": [
+                        32.0,
+                        1024.0
+                    ],
+                    "tooltip": "Cell edge length",
+                    "lua_getter": "get_world_partition_cell_size",
+                    "lua_setter": "set_world_partition_cell_size"
+                },
+                {
+                    "name": "cells_directory",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "lua_getter": "get_world_partition_cells_directory",
+                    "lua_setter": "set_world_partition_cells_directory"
+                },
+                {
+                    "name": "grid_min_x",
+                    "type": "int",
+                    "lua_getter": "get_world_partition_grid_min_x",
+                    "lua_setter": "set_world_partition_grid_min_x"
+                },
+                {
+                    "name": "grid_max_x",
+                    "type": "int",
+                    "lua_getter": "get_world_partition_grid_max_x",
+                    "lua_setter": "set_world_partition_grid_max_x"
+                },
+                {
+                    "name": "grid_min_y",
+                    "type": "int",
+                    "lua_getter": "get_world_partition_grid_min_y",
+                    "lua_setter": "set_world_partition_grid_min_y"
+                },
+                {
+                    "name": "grid_max_y",
+                    "type": "int",
+                    "lua_getter": "get_world_partition_grid_max_y",
+                    "lua_setter": "set_world_partition_grid_max_y"
+                },
+                {
+                    "name": "max_loads_per_frame",
+                    "type": "int",
+                    "range": [
+                        1,
+                        16
+                    ],
+                    "lua_getter": "get_world_partition_max_loads_per_frame",
+                    "lua_setter": "set_world_partition_max_loads_per_frame"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "HLODConfigComponent",
+            "prefix": "hlod_config",
+            "include": "engine/render/hlod/hlod_system.h",
+            "namespace": "dse::render",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_hlod_config_enabled",
+                    "lua_setter": "set_hlod_config_enabled"
+                },
+                {
+                    "name": "hlod_data_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "tooltip": ".dhlod data file",
+                    "lua_getter": "get_hlod_config_hlod_data_path",
+                    "lua_setter": "set_hlod_config_hlod_data_path"
+                },
+                {
+                    "name": "distance_scale",
+                    "type": "float",
+                    "range": [
+                        0.1,
+                        10.0
+                    ],
+                    "lua_getter": "get_hlod_config_distance_scale",
+                    "lua_setter": "set_hlod_config_distance_scale"
+                },
+                {
+                    "name": "hysteresis",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        0.5
+                    ],
+                    "lua_getter": "get_hlod_config_hysteresis",
+                    "lua_setter": "set_hlod_config_hysteresis"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "VirtualTextureComponent",
+            "prefix": "virtual_texture",
+            "include": "engine/render/virtual_texture/virtual_texture.h",
+            "namespace": "dse::vt",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_virtual_texture_enabled",
+                    "lua_setter": "set_virtual_texture_enabled"
+                },
+                {
+                    "name": "vt_id",
+                    "type": "int",
+                    "lua_getter": "get_virtual_texture_vt_id",
+                    "lua_setter": "set_virtual_texture_vt_id"
+                },
+                {
+                    "name": "tile_data_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "tooltip": "VT tile data directory",
+                    "lua_getter": "get_virtual_texture_tile_data_path",
+                    "lua_setter": "set_virtual_texture_tile_data_path"
+                },
+                {
+                    "name": "virtual_width",
+                    "type": "int",
+                    "lua_getter": "get_virtual_texture_virtual_width",
+                    "lua_setter": "set_virtual_texture_virtual_width"
+                },
+                {
+                    "name": "virtual_height",
+                    "type": "int",
+                    "lua_getter": "get_virtual_texture_virtual_height",
+                    "lua_setter": "set_virtual_texture_virtual_height"
+                },
+                {
+                    "name": "mip_bias",
+                    "type": "float",
+                    "range": [
+                        -4.0,
+                        4.0
+                    ],
+                    "lua_getter": "get_virtual_texture_mip_bias",
+                    "lua_setter": "set_virtual_texture_mip_bias"
+                }
+            ],
+            "lua_table": "ecs"
+        },
+        {
+            "name": "LightmapComponent",
+            "prefix": "lightmap",
+            "include": "engine/render/gi/lightmap_baker.h",
+            "namespace": "dse::render",
+            "fields": [
+                {
+                    "name": "lightmap_path",
+                    "type": "string",
+                    "buffer_size": 512,
+                    "tooltip": ".dlightmap file path",
+                    "lua_getter": "get_lightmap_lightmap_path",
+                    "lua_setter": "set_lightmap_lightmap_path"
+                },
+                {
+                    "name": "intensity",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        5.0
+                    ],
+                    "lua_getter": "get_lightmap_intensity",
+                    "lua_setter": "set_lightmap_intensity"
+                },
+                {
+                    "name": "st_offset",
+                    "type": "vec4",
+                    "tooltip": "UV scale(xy) + offset(zw)",
+                    "lua_getter": "get_lightmap_st_offset",
+                    "lua_setter": "set_lightmap_st_offset"
+                },
+                {
+                    "name": "use_ao",
+                    "type": "bool",
+                    "tooltip": "Apply AO channel",
+                    "lua_getter": "get_lightmap_use_ao",
+                    "lua_setter": "set_lightmap_use_ao"
+                }
+            ],
+            "lua_table": "ecs"
+        }
+    ],
+    "reflect_only_components": [
+        {
+            "name": "GrassComponent",
+            "include": "engine/ecs/components_3d_foliage.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "density",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        16.0
+                    ],
+                    "tooltip": "Grass blades per unit area"
+                },
+                {
+                    "name": "spawn_radius",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "seed",
+                    "type": "int"
+                },
+                {
+                    "name": "chunk_size",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        64.0
+                    ]
+                },
+                {
+                    "name": "blade_width",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ]
+                },
+                {
+                    "name": "blade_height",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        8.0
+                    ]
+                },
+                {
+                    "name": "blade_height_variation",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "base_color",
+                    "type": "vec4",
+                    "color": true
+                },
+                {
+                    "name": "tip_color",
+                    "type": "vec4",
+                    "color": true
+                },
+                {
+                    "name": "wind_direction",
+                    "type": "vec3"
+                },
+                {
+                    "name": "wind_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10.0
+                    ]
+                },
+                {
+                    "name": "wind_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ]
+                },
+                {
+                    "name": "wind_turbulence",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ]
+                },
+                {
+                    "name": "lod_near",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "lod_far",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "fade_range",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool"
+                },
+                {
+                    "name": "shadow_distance",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        200.0
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "LODGroupComponent",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "nested_types": [
+                {
+                    "name": "LODLevelConfig",
+                    "qualified": "dse::LODLevelConfig",
+                    "fields": [
+                        {
+                            "name": "mesh_path",
+                            "type": "string"
+                        },
+                        {
+                            "name": "screen_size_threshold",
+                            "type": "float",
+                            "range": [
+                                0.0,
+                                1.0
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "levels",
+                    "type": "custom"
+                },
+                {
+                    "name": "global_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
+                },
+                {
+                    "name": "hysteresis",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "min_screen_size",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "original_mesh_path",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "MorphTargetComponent",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "GpuParticleComponent",
+            "include": "engine/render/particles/gpu_particle_system.h",
+            "namespace": "dse",
+            "fields": []
+        },
+        {
+            "name": "HLODMemberComponent",
+            "include": "engine/render/hlod/hlod_system.h",
+            "namespace": "dse::render",
+            "fields": [
+                {
+                    "name": "cluster_index",
+                    "type": "int"
+                },
+                {
+                    "name": "hidden_by_hlod",
+                    "type": "bool"
                 }
             ]
         }

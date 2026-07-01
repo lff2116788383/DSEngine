@@ -380,6 +380,556 @@ DSE_CAPI_GEN int  dse_animator3d_get_blend_parameter(uint32_t e, char* buf, int 
 DSE_CAPI_GEN float dse_animator3d_get_blend_parameter_value(uint32_t e);
 DSE_CAPI_GEN void  dse_animator3d_set_blend_parameter_value(uint32_t e, float v);
 
+/* ---- DecalComponent ---- */
+DSE_CAPI_GEN int  dse_decal_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_decal_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_decal_get_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_decal_set_color(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN float dse_decal_get_angle_fade(uint32_t e);
+DSE_CAPI_GEN void  dse_decal_set_angle_fade(uint32_t e, float v);
+
+/* ---- SkyboxComponent ---- */
+DSE_CAPI_GEN int  dse_skybox_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_skybox_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_skybox_set_cubemap_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_skybox_get_cubemap_path(uint32_t e, char* buf, int buf_size);
+
+/* ---- FreeCameraControllerComponent ---- */
+DSE_CAPI_GEN int  dse_free_camera_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_free_camera_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_free_camera_get_move_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_free_camera_set_move_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_free_camera_get_mouse_sensitivity(uint32_t e);
+DSE_CAPI_GEN void  dse_free_camera_set_mouse_sensitivity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_free_camera_get_pitch(uint32_t e);
+DSE_CAPI_GEN void  dse_free_camera_set_pitch(uint32_t e, float v);
+DSE_CAPI_GEN float dse_free_camera_get_yaw(uint32_t e);
+DSE_CAPI_GEN void  dse_free_camera_set_yaw(uint32_t e, float v);
+
+/* ---- SubSceneComponent ---- */
+DSE_CAPI_GEN int  dse_sub_scene_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_sub_scene_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_sub_scene_set_scene_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_sub_scene_get_scene_path(uint32_t e, char* buf, int buf_size);
+
+/* ---- BoundingBoxComponent ---- */
+DSE_CAPI_GEN void dse_bounding_box_get_min_extents(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_bounding_box_set_min_extents(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_bounding_box_get_max_extents(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_bounding_box_set_max_extents(uint32_t e, float x, float y, float z);
+
+/* ---- WaterComponent ---- */
+DSE_CAPI_GEN int  dse_water_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_water_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_water_get_water_level(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_water_level(uint32_t e, float v);
+DSE_CAPI_GEN void dse_water_get_deep_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_water_set_deep_color(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN void dse_water_get_shallow_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_water_set_shallow_color(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN float dse_water_get_max_depth(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_max_depth(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_transparency(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_transparency(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_wave_amplitude(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_wave_amplitude(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_wave_frequency(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_wave_frequency(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_wave_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_wave_speed(uint32_t e, float v);
+DSE_CAPI_GEN void dse_water_get_wave_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_water_set_wave_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_water_get_refraction_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_refraction_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_reflection_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_reflection_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_specular_power(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_specular_power(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_caustic_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_caustic_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_caustic_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_caustic_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_foam_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_foam_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_foam_depth_threshold(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_foam_depth_threshold(uint32_t e, float v);
+DSE_CAPI_GEN float dse_water_get_underwater_fog_density(uint32_t e);
+DSE_CAPI_GEN void  dse_water_set_underwater_fog_density(uint32_t e, float v);
+DSE_CAPI_GEN void dse_water_get_underwater_fog_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_water_set_underwater_fog_color(uint32_t e, float x, float y, float z, float w);
+
+/* ---- LightProbeComponent ---- */
+DSE_CAPI_GEN int  dse_light_probe_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_light_probe_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_light_probe_get_influence_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_light_probe_set_influence_radius(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_light_probe_get_show_debug(uint32_t e);
+DSE_CAPI_GEN void dse_light_probe_set_show_debug(uint32_t e, int v);
+
+/* ---- ReflectionProbeComponent ---- */
+DSE_CAPI_GEN int  dse_reflection_probe_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_reflection_probe_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_reflection_probe_get_influence_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_reflection_probe_set_influence_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_reflection_probe_get_box_size_x(uint32_t e);
+DSE_CAPI_GEN void  dse_reflection_probe_set_box_size_x(uint32_t e, float v);
+DSE_CAPI_GEN float dse_reflection_probe_get_box_size_y(uint32_t e);
+DSE_CAPI_GEN void  dse_reflection_probe_set_box_size_y(uint32_t e, float v);
+DSE_CAPI_GEN float dse_reflection_probe_get_box_size_z(uint32_t e);
+DSE_CAPI_GEN void  dse_reflection_probe_set_box_size_z(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_reflection_probe_get_use_box_projection(uint32_t e);
+DSE_CAPI_GEN void dse_reflection_probe_set_use_box_projection(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_reflection_probe_get_resolution(uint32_t e);
+DSE_CAPI_GEN void dse_reflection_probe_set_resolution(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_reflection_probe_get_show_debug(uint32_t e);
+DSE_CAPI_GEN void dse_reflection_probe_set_show_debug(uint32_t e, int v);
+
+/* ---- GIProbeVolumeComponent ---- */
+DSE_CAPI_GEN int  dse_gi_probe_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_gi_probe_get_origin(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_gi_probe_set_origin(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_gi_probe_get_extent(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_gi_probe_set_extent(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_gi_probe_get_resolution_x(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_resolution_x(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_gi_probe_get_resolution_y(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_resolution_y(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_gi_probe_get_resolution_z(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_resolution_z(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_gi_probe_get_irradiance_texels(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_irradiance_texels(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_gi_probe_get_visibility_texels(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_visibility_texels(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_gi_probe_get_rays_per_probe(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_rays_per_probe(uint32_t e, int v);
+DSE_CAPI_GEN float dse_gi_probe_get_hysteresis(uint32_t e);
+DSE_CAPI_GEN void  dse_gi_probe_set_hysteresis(uint32_t e, float v);
+DSE_CAPI_GEN float dse_gi_probe_get_gi_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_gi_probe_set_gi_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_gi_probe_get_normal_bias(uint32_t e);
+DSE_CAPI_GEN void  dse_gi_probe_set_normal_bias(uint32_t e, float v);
+DSE_CAPI_GEN float dse_gi_probe_get_view_bias(uint32_t e);
+DSE_CAPI_GEN void  dse_gi_probe_set_view_bias(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_gi_probe_get_show_debug_probes(uint32_t e);
+DSE_CAPI_GEN void dse_gi_probe_set_show_debug_probes(uint32_t e, int v);
+
+/* ---- FoliageComponent ---- */
+DSE_CAPI_GEN int  dse_foliage_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_foliage_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_foliage_get_wind_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_foliage_set_wind_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_foliage_get_stiffness(uint32_t e);
+DSE_CAPI_GEN void  dse_foliage_set_stiffness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_foliage_get_phase_offset(uint32_t e);
+DSE_CAPI_GEN void  dse_foliage_set_phase_offset(uint32_t e, float v);
+DSE_CAPI_GEN float dse_foliage_get_push_response(uint32_t e);
+DSE_CAPI_GEN void  dse_foliage_set_push_response(uint32_t e, float v);
+
+/* ---- RigidBody3DComponent ---- */
+DSE_CAPI_GEN int  dse_rigidbody3d_get_type(uint32_t e);
+DSE_CAPI_GEN void dse_rigidbody3d_set_type(uint32_t e, int v);
+DSE_CAPI_GEN float dse_rigidbody3d_get_mass(uint32_t e);
+DSE_CAPI_GEN void  dse_rigidbody3d_set_mass(uint32_t e, float v);
+DSE_CAPI_GEN float dse_rigidbody3d_get_drag(uint32_t e);
+DSE_CAPI_GEN void  dse_rigidbody3d_set_drag(uint32_t e, float v);
+DSE_CAPI_GEN float dse_rigidbody3d_get_angular_drag(uint32_t e);
+DSE_CAPI_GEN void  dse_rigidbody3d_set_angular_drag(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_rigidbody3d_get_use_gravity(uint32_t e);
+DSE_CAPI_GEN void dse_rigidbody3d_set_use_gravity(uint32_t e, int v);
+DSE_CAPI_GEN float dse_rigidbody3d_get_gravity_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_rigidbody3d_set_gravity_scale(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_rigidbody3d_get_is_kinematic(uint32_t e);
+DSE_CAPI_GEN void dse_rigidbody3d_set_is_kinematic(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_rigidbody3d_get_collision_layer(uint32_t e);
+DSE_CAPI_GEN void dse_rigidbody3d_set_collision_layer(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_rigidbody3d_get_collision_mask(uint32_t e);
+DSE_CAPI_GEN void dse_rigidbody3d_set_collision_mask(uint32_t e, int v);
+
+/* ---- BoxCollider3DComponent ---- */
+DSE_CAPI_GEN void dse_box_collider3d_get_size(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_box_collider3d_set_size(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_box_collider3d_get_center(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_box_collider3d_set_center(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_box_collider3d_get_is_trigger(uint32_t e);
+DSE_CAPI_GEN void dse_box_collider3d_set_is_trigger(uint32_t e, int v);
+DSE_CAPI_GEN float dse_box_collider3d_get_bounciness(uint32_t e);
+DSE_CAPI_GEN void  dse_box_collider3d_set_bounciness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_box_collider3d_get_friction(uint32_t e);
+DSE_CAPI_GEN void  dse_box_collider3d_set_friction(uint32_t e, float v);
+
+/* ---- SphereCollider3DComponent ---- */
+DSE_CAPI_GEN float dse_sphere_collider3d_get_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_sphere_collider3d_set_radius(uint32_t e, float v);
+DSE_CAPI_GEN void dse_sphere_collider3d_get_center(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_sphere_collider3d_set_center(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_sphere_collider3d_get_is_trigger(uint32_t e);
+DSE_CAPI_GEN void dse_sphere_collider3d_set_is_trigger(uint32_t e, int v);
+DSE_CAPI_GEN float dse_sphere_collider3d_get_bounciness(uint32_t e);
+DSE_CAPI_GEN void  dse_sphere_collider3d_set_bounciness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_sphere_collider3d_get_friction(uint32_t e);
+DSE_CAPI_GEN void  dse_sphere_collider3d_set_friction(uint32_t e, float v);
+
+/* ---- CapsuleCollider3DComponent ---- */
+DSE_CAPI_GEN float dse_capsule_collider3d_get_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_capsule_collider3d_set_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_capsule_collider3d_get_height(uint32_t e);
+DSE_CAPI_GEN void  dse_capsule_collider3d_set_height(uint32_t e, float v);
+DSE_CAPI_GEN void dse_capsule_collider3d_get_center(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_capsule_collider3d_set_center(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_capsule_collider3d_get_direction(uint32_t e);
+DSE_CAPI_GEN void dse_capsule_collider3d_set_direction(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_capsule_collider3d_get_is_trigger(uint32_t e);
+DSE_CAPI_GEN void dse_capsule_collider3d_set_is_trigger(uint32_t e, int v);
+DSE_CAPI_GEN float dse_capsule_collider3d_get_bounciness(uint32_t e);
+DSE_CAPI_GEN void  dse_capsule_collider3d_set_bounciness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_capsule_collider3d_get_friction(uint32_t e);
+DSE_CAPI_GEN void  dse_capsule_collider3d_set_friction(uint32_t e, float v);
+
+/* ---- MeshCollider3DComponent ---- */
+DSE_CAPI_GEN int  dse_mesh_collider3d_get_convex(uint32_t e);
+DSE_CAPI_GEN void dse_mesh_collider3d_set_convex(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_mesh_collider3d_get_is_trigger(uint32_t e);
+DSE_CAPI_GEN void dse_mesh_collider3d_set_is_trigger(uint32_t e, int v);
+DSE_CAPI_GEN float dse_mesh_collider3d_get_bounciness(uint32_t e);
+DSE_CAPI_GEN void  dse_mesh_collider3d_set_bounciness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_mesh_collider3d_get_friction(uint32_t e);
+DSE_CAPI_GEN void  dse_mesh_collider3d_set_friction(uint32_t e, float v);
+
+/* ---- CharacterController3DComponent ---- */
+DSE_CAPI_GEN float dse_character_ctrl3d_get_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_ctrl3d_get_height(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_height(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_ctrl3d_get_slope_limit(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_slope_limit(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_ctrl3d_get_step_offset(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_step_offset(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_ctrl3d_get_skin_width(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_skin_width(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_ctrl3d_get_min_move_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_character_ctrl3d_set_min_move_distance(uint32_t e, float v);
+
+/* ---- Joint3DComponent ---- */
+DSE_CAPI_GEN int  dse_joint3d_get_type(uint32_t e);
+DSE_CAPI_GEN void dse_joint3d_set_type(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_joint3d_get_connected_entity_id(uint32_t e);
+DSE_CAPI_GEN void dse_joint3d_set_connected_entity_id(uint32_t e, int v);
+DSE_CAPI_GEN void dse_joint3d_get_anchor(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_joint3d_set_anchor(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_joint3d_get_connected_anchor(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_joint3d_set_connected_anchor(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_joint3d_get_axis(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_joint3d_set_axis(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_joint3d_get_use_limits(uint32_t e);
+DSE_CAPI_GEN void dse_joint3d_set_use_limits(uint32_t e, int v);
+DSE_CAPI_GEN float dse_joint3d_get_lower_limit(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_lower_limit(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_upper_limit(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_upper_limit(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_min_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_min_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_max_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_max_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_spring_stiffness(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_spring_stiffness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_spring_damping(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_spring_damping(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_break_force(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_break_force(uint32_t e, float v);
+DSE_CAPI_GEN float dse_joint3d_get_break_torque(uint32_t e);
+DSE_CAPI_GEN void  dse_joint3d_set_break_torque(uint32_t e, float v);
+
+/* ---- RagdollComponent ---- */
+DSE_CAPI_GEN int  dse_ragdoll_get_active(uint32_t e);
+DSE_CAPI_GEN void dse_ragdoll_set_active(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_ragdoll_get_auto_setup(uint32_t e);
+DSE_CAPI_GEN void dse_ragdoll_set_auto_setup(uint32_t e, int v);
+DSE_CAPI_GEN float dse_ragdoll_get_total_mass(uint32_t e);
+DSE_CAPI_GEN void  dse_ragdoll_set_total_mass(uint32_t e, float v);
+DSE_CAPI_GEN float dse_ragdoll_get_joint_stiffness(uint32_t e);
+DSE_CAPI_GEN void  dse_ragdoll_set_joint_stiffness(uint32_t e, float v);
+DSE_CAPI_GEN float dse_ragdoll_get_joint_damping(uint32_t e);
+DSE_CAPI_GEN void  dse_ragdoll_set_joint_damping(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_ragdoll_get_collision_layer(uint32_t e);
+DSE_CAPI_GEN void dse_ragdoll_set_collision_layer(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_ragdoll_get_collision_mask(uint32_t e);
+DSE_CAPI_GEN void dse_ragdoll_set_collision_mask(uint32_t e, int v);
+
+/* ---- SoftBodyComponent ---- */
+DSE_CAPI_GEN int  dse_soft_body_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_soft_body_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_soft_body_get_stiffness(uint32_t e);
+DSE_CAPI_GEN void  dse_soft_body_set_stiffness(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_soft_body_get_solver_iterations(uint32_t e);
+DSE_CAPI_GEN void dse_soft_body_set_solver_iterations(uint32_t e, int v);
+DSE_CAPI_GEN float dse_soft_body_get_damping(uint32_t e);
+DSE_CAPI_GEN void  dse_soft_body_set_damping(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_soft_body_get_use_gravity(uint32_t e);
+DSE_CAPI_GEN void dse_soft_body_set_use_gravity(uint32_t e, int v);
+DSE_CAPI_GEN float dse_soft_body_get_gravity_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_soft_body_set_gravity_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_soft_body_get_volume_stiffness(uint32_t e);
+DSE_CAPI_GEN void  dse_soft_body_set_volume_stiffness(uint32_t e, float v);
+
+/* ---- VehicleComponent ---- */
+DSE_CAPI_GEN int  dse_vehicle_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_vehicle_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_vehicle_get_max_engine_force(uint32_t e);
+DSE_CAPI_GEN void  dse_vehicle_set_max_engine_force(uint32_t e, float v);
+DSE_CAPI_GEN float dse_vehicle_get_max_brake_force(uint32_t e);
+DSE_CAPI_GEN void  dse_vehicle_set_max_brake_force(uint32_t e, float v);
+DSE_CAPI_GEN float dse_vehicle_get_max_steer_angle(uint32_t e);
+DSE_CAPI_GEN void  dse_vehicle_set_max_steer_angle(uint32_t e, float v);
+
+/* ---- RopeComponent ---- */
+DSE_CAPI_GEN int  dse_rope_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_rope_get_segment_count(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_segment_count(uint32_t e, int v);
+DSE_CAPI_GEN float dse_rope_get_segment_length(uint32_t e);
+DSE_CAPI_GEN void  dse_rope_set_segment_length(uint32_t e, float v);
+DSE_CAPI_GEN float dse_rope_get_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_rope_set_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_rope_get_damping(uint32_t e);
+DSE_CAPI_GEN void  dse_rope_set_damping(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_rope_get_solver_iterations(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_solver_iterations(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_rope_get_use_gravity(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_use_gravity(uint32_t e, int v);
+DSE_CAPI_GEN float dse_rope_get_gravity_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_rope_set_gravity_scale(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_rope_get_anchor_entity_a(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_anchor_entity_a(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_rope_get_anchor_entity_b(uint32_t e);
+DSE_CAPI_GEN void dse_rope_set_anchor_entity_b(uint32_t e, int v);
+DSE_CAPI_GEN void dse_rope_get_anchor_offset_a(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_rope_set_anchor_offset_a(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_rope_get_anchor_offset_b(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_rope_set_anchor_offset_b(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_rope_get_start_position(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_rope_set_start_position(uint32_t e, float x, float y, float z);
+
+/* ---- BuoyancyComponent ---- */
+DSE_CAPI_GEN int  dse_buoyancy_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_buoyancy_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_buoyancy_get_water_level(uint32_t e);
+DSE_CAPI_GEN void  dse_buoyancy_set_water_level(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_buoyancy_get_use_fluid_system(uint32_t e);
+DSE_CAPI_GEN void dse_buoyancy_set_use_fluid_system(uint32_t e, int v);
+DSE_CAPI_GEN float dse_buoyancy_get_buoyancy_force(uint32_t e);
+DSE_CAPI_GEN void  dse_buoyancy_set_buoyancy_force(uint32_t e, float v);
+DSE_CAPI_GEN float dse_buoyancy_get_water_drag(uint32_t e);
+DSE_CAPI_GEN void  dse_buoyancy_set_water_drag(uint32_t e, float v);
+DSE_CAPI_GEN float dse_buoyancy_get_water_angular_drag(uint32_t e);
+DSE_CAPI_GEN void  dse_buoyancy_set_water_angular_drag(uint32_t e, float v);
+DSE_CAPI_GEN float dse_buoyancy_get_submerge_depth(uint32_t e);
+DSE_CAPI_GEN void  dse_buoyancy_set_submerge_depth(uint32_t e, float v);
+
+/* ---- AtmosphereComponent ---- */
+DSE_CAPI_GEN int  dse_atmosphere_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_atmosphere_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_atmosphere_get_planet_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_planet_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_atmosphere_height(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_atmosphere_height(uint32_t e, float v);
+DSE_CAPI_GEN void dse_atmosphere_get_rayleigh_coeff(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_atmosphere_set_rayleigh_coeff(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_atmosphere_get_rayleigh_scale_height(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_rayleigh_scale_height(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_mie_coeff(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_mie_coeff(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_mie_scale_height(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_mie_scale_height(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_mie_g(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_mie_g(uint32_t e, float v);
+DSE_CAPI_GEN void dse_atmosphere_get_mie_albedo(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_atmosphere_set_mie_albedo(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN void dse_atmosphere_get_ozone_coeff(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_atmosphere_set_ozone_coeff(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_atmosphere_get_ozone_center_h(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_ozone_center_h(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_ozone_width(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_ozone_width(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_sun_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_sun_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_atmosphere_get_sun_disk_angle(uint32_t e);
+DSE_CAPI_GEN void  dse_atmosphere_set_sun_disk_angle(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_atmosphere_get_aerial_perspective_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_atmosphere_set_aerial_perspective_enabled(uint32_t e, int v);
+
+/* ---- VolumetricCloudComponent ---- */
+DSE_CAPI_GEN int  dse_volumetric_cloud_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_volumetric_cloud_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_cloud_bottom(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_cloud_bottom(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_cloud_top(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_cloud_top(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_coverage(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_coverage(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_density(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_density(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_shape_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_shape_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_detail_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_detail_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_detail_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_detail_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_erosion(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_erosion(uint32_t e, float v);
+DSE_CAPI_GEN void dse_volumetric_cloud_get_wind_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_volumetric_cloud_set_wind_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_wind_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_wind_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_silver_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_silver_intensity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_silver_spread(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_silver_spread(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_powder_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_powder_strength(uint32_t e, float v);
+DSE_CAPI_GEN float dse_volumetric_cloud_get_ambient_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_volumetric_cloud_set_ambient_strength(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_volumetric_cloud_get_half_resolution(uint32_t e);
+DSE_CAPI_GEN void dse_volumetric_cloud_set_half_resolution(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_volumetric_cloud_get_temporal_reprojection(uint32_t e);
+DSE_CAPI_GEN void dse_volumetric_cloud_set_temporal_reprojection(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_volumetric_cloud_get_cloud_shadow_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_volumetric_cloud_set_cloud_shadow_enabled(uint32_t e, int v);
+
+/* ---- DayNightCycleComponent ---- */
+DSE_CAPI_GEN int  dse_day_night_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_day_night_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_day_night_get_time_of_day(uint32_t e);
+DSE_CAPI_GEN void  dse_day_night_set_time_of_day(uint32_t e, float v);
+DSE_CAPI_GEN float dse_day_night_get_time_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_day_night_set_time_speed(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_day_night_get_auto_advance(uint32_t e);
+DSE_CAPI_GEN void dse_day_night_set_auto_advance(uint32_t e, int v);
+DSE_CAPI_GEN float dse_day_night_get_latitude(uint32_t e);
+DSE_CAPI_GEN void  dse_day_night_set_latitude(uint32_t e, float v);
+DSE_CAPI_GEN float dse_day_night_get_longitude(uint32_t e);
+DSE_CAPI_GEN void  dse_day_night_set_longitude(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_day_night_get_day_of_year(uint32_t e);
+DSE_CAPI_GEN void dse_day_night_set_day_of_year(uint32_t e, int v);
+
+/* ---- HairComponent ---- */
+DSE_CAPI_GEN int  dse_hair_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_hair_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_hair_set_hair_asset_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_hair_get_hair_asset_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN float dse_hair_get_damping(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_damping(uint32_t e, float v);
+DSE_CAPI_GEN float dse_hair_get_stiffness_local(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_stiffness_local(uint32_t e, float v);
+DSE_CAPI_GEN float dse_hair_get_stiffness_global(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_stiffness_global(uint32_t e, float v);
+DSE_CAPI_GEN float dse_hair_get_gravity(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_gravity(uint32_t e, float v);
+DSE_CAPI_GEN void dse_hair_get_wind(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_hair_set_wind(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_hair_get_wind_turbulence(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_wind_turbulence(uint32_t e, float v);
+DSE_CAPI_GEN void dse_hair_get_root_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_hair_set_root_color(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN void dse_hair_get_tip_color(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_hair_set_tip_color(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN float dse_hair_get_fiber_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_fiber_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_hair_get_opacity(uint32_t e);
+DSE_CAPI_GEN void  dse_hair_set_opacity(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_hair_get_cast_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_hair_set_cast_shadow(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_hair_get_receive_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_hair_set_receive_shadow(uint32_t e, int v);
+
+/* ---- ImpostorComponent ---- */
+DSE_CAPI_GEN int  dse_impostor_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_impostor_set_atlas_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_impostor_get_atlas_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN int  dse_impostor_get_frames_x(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_frames_x(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_impostor_get_frames_y(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_frames_y(uint32_t e, int v);
+DSE_CAPI_GEN float dse_impostor_get_transition_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_impostor_set_transition_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_impostor_get_fade_range(uint32_t e);
+DSE_CAPI_GEN void  dse_impostor_set_fade_range(uint32_t e, float v);
+DSE_CAPI_GEN float dse_impostor_get_cull_distance(uint32_t e);
+DSE_CAPI_GEN void  dse_impostor_set_cull_distance(uint32_t e, float v);
+DSE_CAPI_GEN float dse_impostor_get_impostor_size(uint32_t e);
+DSE_CAPI_GEN void  dse_impostor_set_impostor_size(uint32_t e, float v);
+DSE_CAPI_GEN void dse_impostor_get_pivot_offset(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_impostor_set_pivot_offset(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_impostor_get_cast_shadow(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_cast_shadow(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_impostor_get_use_frame_interpolation(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_use_frame_interpolation(uint32_t e, int v);
+DSE_CAPI_GEN float dse_impostor_get_normal_strength(uint32_t e);
+DSE_CAPI_GEN void  dse_impostor_set_normal_strength(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_impostor_get_auto_from_lod_group(uint32_t e);
+DSE_CAPI_GEN void dse_impostor_set_auto_from_lod_group(uint32_t e, int v);
+
+/* ---- StreamingOriginComponent ---- */
+DSE_CAPI_GEN int  dse_streaming_origin_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_streaming_origin_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_streaming_origin_get_load_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_streaming_origin_set_load_radius(uint32_t e, float v);
+DSE_CAPI_GEN float dse_streaming_origin_get_unload_radius(uint32_t e);
+DSE_CAPI_GEN void  dse_streaming_origin_set_unload_radius(uint32_t e, float v);
+
+/* ---- WorldPartitionConfigComponent ---- */
+DSE_CAPI_GEN int  dse_world_partition_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_world_partition_get_cell_size(uint32_t e);
+DSE_CAPI_GEN void  dse_world_partition_set_cell_size(uint32_t e, float v);
+DSE_CAPI_GEN void dse_world_partition_set_cells_directory(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_world_partition_get_cells_directory(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN int  dse_world_partition_get_grid_min_x(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_grid_min_x(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_world_partition_get_grid_max_x(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_grid_max_x(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_world_partition_get_grid_min_y(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_grid_min_y(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_world_partition_get_grid_max_y(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_grid_max_y(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_world_partition_get_max_loads_per_frame(uint32_t e);
+DSE_CAPI_GEN void dse_world_partition_set_max_loads_per_frame(uint32_t e, int v);
+
+/* ---- HLODConfigComponent ---- */
+DSE_CAPI_GEN int  dse_hlod_config_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_hlod_config_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_hlod_config_set_hlod_data_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_hlod_config_get_hlod_data_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN float dse_hlod_config_get_distance_scale(uint32_t e);
+DSE_CAPI_GEN void  dse_hlod_config_set_distance_scale(uint32_t e, float v);
+DSE_CAPI_GEN float dse_hlod_config_get_hysteresis(uint32_t e);
+DSE_CAPI_GEN void  dse_hlod_config_set_hysteresis(uint32_t e, float v);
+
+/* ---- VirtualTextureComponent ---- */
+DSE_CAPI_GEN int  dse_virtual_texture_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_virtual_texture_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_virtual_texture_get_vt_id(uint32_t e);
+DSE_CAPI_GEN void dse_virtual_texture_set_vt_id(uint32_t e, int v);
+DSE_CAPI_GEN void dse_virtual_texture_set_tile_data_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_virtual_texture_get_tile_data_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN int  dse_virtual_texture_get_virtual_width(uint32_t e);
+DSE_CAPI_GEN void dse_virtual_texture_set_virtual_width(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_virtual_texture_get_virtual_height(uint32_t e);
+DSE_CAPI_GEN void dse_virtual_texture_set_virtual_height(uint32_t e, int v);
+DSE_CAPI_GEN float dse_virtual_texture_get_mip_bias(uint32_t e);
+DSE_CAPI_GEN void  dse_virtual_texture_set_mip_bias(uint32_t e, float v);
+
+/* ---- LightmapComponent ---- */
+DSE_CAPI_GEN void dse_lightmap_set_lightmap_path(uint32_t e, const char* v);
+DSE_CAPI_GEN int  dse_lightmap_get_lightmap_path(uint32_t e, char* buf, int buf_size);
+DSE_CAPI_GEN float dse_lightmap_get_intensity(uint32_t e);
+DSE_CAPI_GEN void  dse_lightmap_set_intensity(uint32_t e, float v);
+DSE_CAPI_GEN void dse_lightmap_get_st_offset(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI_GEN void dse_lightmap_set_st_offset(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI_GEN int  dse_lightmap_get_use_ao(uint32_t e);
+DSE_CAPI_GEN void dse_lightmap_set_use_ao(uint32_t e, int v);
+
 #ifdef __cplusplus
 }
 #endif
