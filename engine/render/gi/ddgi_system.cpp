@@ -1,11 +1,12 @@
 #include "engine/render/gi/ddgi_system.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
+#include "engine/render/shaders/wgsl/postprocess_wgsl.h"
 #include <cstring>
 #include <cmath>
 
 // 单一来源消费：GL430 / VK GLSL450 / HLSL 取自 *_comp.gen.h（src/ddgi_probe_update.comp 离线交叉编译）。
-// DDGI 无手译 WGSL（生产路径 WebGPU 由进阶前向 WGSL 承载），故 7 参创建。
+// WGSL 手写版本在 postprocess_wgsl.h::kWgslDdgiProbeUpdate。
 #include "engine/render/shaders/generated/embed/ddgi_probe_update_comp.gen.h"
 
 namespace dse {
@@ -176,7 +177,7 @@ bool DDGISystem::CreateAtlasTextures(RhiDevice* rhi) {
 }
 
 bool DDGISystem::CreateComputeShader(RhiDevice* rhi) {
-    // ssbo=1(ProbeStates), img=2(irradiance+visibility), smp=3(RSM×3), pc=96B
+    // ssbo=1(ProbeStates), img=2(irradiance+visibility), smp=3(RSM×3), pc=224B
     resources_.update_compute_shader = rhi->CreateComputeShaderEx(
         generated_shaders::kddgi_probe_update_comp_glsl430,
         generated_shaders::kddgi_probe_update_comp_glsl450,
@@ -184,7 +185,8 @@ bool DDGISystem::CreateComputeShader(RhiDevice* rhi) {
         /*ssbo_count=*/1,
         /*storage_image_count=*/2,
         /*sampler_count=*/3,
-        /*push_constant_bytes=*/224);
+        /*push_constant_bytes=*/224,
+        wgsl::kWgslDdgiProbeUpdate);  // WebGPU 手译 WGSL 源
     if (resources_.update_compute_shader == 0) {
         DEBUG_LOG_ERROR("[DDGI] Failed to compile probe update compute shader");
         return false;

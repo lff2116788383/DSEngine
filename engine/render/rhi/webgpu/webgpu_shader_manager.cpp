@@ -11,6 +11,7 @@
 #include "engine/render/rhi/webgpu/webgpu_shader_manager.h"
 
 #include "engine/base/debug.h"
+#include "engine/render/shaders/wgsl/postprocess_wgsl.h"
 
 #include <cstring>
 
@@ -860,6 +861,10 @@ unsigned int WebGPUShaderManager::GetBuiltinProgram(BuiltinProgram program) {
         // 进阶：高级 shading（shading_mode/SSS/clearcoat/点光/CSM，160B PerMaterial）。
         case BuiltinProgram::ForwardShaded:
             return GetOrCreateWgslProgram("builtin.forward.shaded", kWgslForwardShaded);
+        // 仅深度 pass（阴影贴图 / pre-Z；GPU-driven 路径）。
+        case BuiltinProgram::ForwardPbrDepth:
+        case BuiltinProgram::ForwardInstancedDepth:
+            return GetOrCreateWgslProgram("builtin.shadow_depth", wgsl::kWgslShadowDepth);
         default:
             // 蒙皮/实例化/morph/粒子/毛发/GBuffer 等需 SSBO 或专用布局，留后续阶段。
             return 0;
@@ -886,8 +891,29 @@ unsigned int WebGPUShaderManager::GetGenPPShaderProgram(const std::string& effec
     if (effect_name == "bloom_upsample") {
         return GetOrCreateWgslProgram("genpp.bloom_upsample", kWgslBloomUpsample);
     }
-    if (effect_name == "copy" || effect_name == "passthrough" || effect_name == "fxaa") {
+    if (effect_name == "copy" || effect_name == "passthrough") {
         return GetOrCreateWgslProgram("genpp.blit", kWgslFullscreenBlit);
+    }
+    if (effect_name == "fxaa") {
+        return GetOrCreateWgslProgram("genpp.fxaa", wgsl::kWgslFxaa);
+    }
+    if (effect_name == "ssao") {
+        return GetOrCreateWgslProgram("genpp.ssao", wgsl::kWgslSsao);
+    }
+    if (effect_name == "taa_resolve" || effect_name == "taa") {
+        return GetOrCreateWgslProgram("genpp.taa", wgsl::kWgslTaaResolve);
+    }
+    if (effect_name == "motion_blur") {
+        return GetOrCreateWgslProgram("genpp.motion_blur", wgsl::kWgslMotionBlur);
+    }
+    if (effect_name == "dof" || effect_name == "depth_of_field") {
+        return GetOrCreateWgslProgram("genpp.dof", wgsl::kWgslDof);
+    }
+    if (effect_name == "ssr" || effect_name == "screen_space_reflections") {
+        return GetOrCreateWgslProgram("genpp.ssr", wgsl::kWgslSsr);
+    }
+    if (effect_name == "contact_shadow" || effect_name == "contact_shadows") {
+        return GetOrCreateWgslProgram("genpp.contact_shadow", wgsl::kWgslContactShadow);
     }
     return 0;
 }
