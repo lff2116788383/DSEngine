@@ -9,6 +9,7 @@
 
 #include "engine/platform/android/android_app.h"
 #include "engine/base/debug.h"
+#include "engine/input/touch.h"
 
 #include <android/log.h>
 #include <android/native_window.h>
@@ -61,72 +62,16 @@ bool AndroidApp::Init(const WindowConfig& config) {
 }
 
 bool AndroidApp::InitEGL(const WindowConfig& /*config*/) {
-    egl_display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (egl_display_ == EGL_NO_DISPLAY) {
-        ALOGE("eglGetDisplay failed");
+    if (!dse::platform::InitEGL(egl_, native_window_)) {
+        ALOGE("EGL initialization failed");
         return false;
     }
-
-    EGLint major, minor;
-    if (!eglInitialize(egl_display_, &major, &minor)) {
-        ALOGE("eglInitialize failed");
-        return false;
-    }
-
-    const EGLint attribs[] = {
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
-        EGL_RED_SIZE,   8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE,  8,
-        EGL_DEPTH_SIZE, 24,
-        EGL_NONE
-    };
-    EGLConfig cfg;
-    EGLint num_cfg = 0;
-    if (!eglChooseConfig(egl_display_, attribs, &cfg, 1, &num_cfg) || num_cfg == 0) {
-        ALOGE("eglChooseConfig failed");
-        return false;
-    }
-
-    // 窗口格式与 EGL config 对齐
-    EGLint format;
-    eglGetConfigAttrib(egl_display_, cfg, EGL_NATIVE_VISUAL_ID, &format);
-    ANativeWindow_setBuffersGeometry(native_window_, 0, 0, format);
-
-    egl_surface_ = eglCreateWindowSurface(egl_display_, cfg,
-                                          static_cast<EGLNativeWindowType>(native_window_),
-                                          nullptr);
-    if (egl_surface_ == EGL_NO_SURFACE) {
-        ALOGE("eglCreateWindowSurface failed");
-        return false;
-    }
-
-    const EGLint ctx_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-    egl_context_ = eglCreateContext(egl_display_, cfg, EGL_NO_CONTEXT, ctx_attribs);
-    if (egl_context_ == EGL_NO_CONTEXT) {
-        ALOGE("eglCreateContext failed");
-        return false;
-    }
-
-    if (!eglMakeCurrent(egl_display_, egl_surface_, egl_surface_, egl_context_)) {
-        ALOGE("eglMakeCurrent failed");
-        return false;
-    }
-
-    has_gl_context_ = true;
     ALOGI("EGL context created (OpenGL ES 3)");
     return true;
 }
 
 void AndroidApp::DestroyEGL() {
-    if (egl_display_ == EGL_NO_DISPLAY) return;
-    eglMakeCurrent(egl_display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-    if (egl_context_ != EGL_NO_CONTEXT) { eglDestroyContext(egl_display_, egl_context_); egl_context_ = EGL_NO_CONTEXT; }
-    if (egl_surface_ != EGL_NO_SURFACE) { eglDestroySurface(egl_display_, egl_surface_); egl_surface_ = EGL_NO_SURFACE; }
-    eglTerminate(egl_display_);
-    egl_display_ = EGL_NO_DISPLAY;
-    has_gl_context_ = false;
+    dse::platform::DestroyEGL(egl_);
 }
 
 // ─── Shutdown ──────────────────────────────────────────────────
@@ -159,14 +104,6 @@ void AndroidApp::PollEvents() {
     }
 }
 
-// dse::input::TouchPhase 整型约定（与 platform_app.h / touch.h 保持一致）
-namespace {
-constexpr int kTouchPhaseBegan     = 1;
-constexpr int kTouchPhaseMoved     = 2;
-constexpr int kTouchPhaseEnded     = 4;
-constexpr int kTouchPhaseCancelled = 5;
-}
-
 void AndroidApp::ProcessInputEvent(AInputEvent* event) {
     const int32_t type = AInputEvent_getType(event);
 
@@ -197,14 +134,16 @@ void AndroidApp::ProcessInputEvent(AInputEvent* event) {
                 case AMOTION_EVENT_ACTION_POINTER_DOWN: {
                     const int32_t id = AMotionEvent_getPointerId(event, ptr_index);
                     touch_cb_(id, AMotionEvent_getX(event, ptr_index),
-                              AMotionEvent_getY(event, ptr_index), kTouchPhaseBegan);
+                              AMotionEvent_getY(event, ptr_index),
+                              static_cast<int>(dse::input::TouchPhase::Began));
                     break;
                 }
                 case AMOTION_EVENT_ACTION_MOVE: {
                     for (size_t i = 0; i < ptr_count; ++i) {
                         touch_cb_(AMotionEvent_getPointerId(event, i),
                                   AMotionEvent_getX(event, i),
-                                  AMotionEvent_getY(event, i), kTouchPhaseMoved);
+                                  AMotionEvent_getY(event, i),
+                                  static_cast<int>(dse::input::TouchPhase::Moved));
                     }
                     break;
                 }
@@ -212,14 +151,16 @@ void AndroidApp::ProcessInputEvent(AInputEvent* event) {
                 case AMOTION_EVENT_ACTION_POINTER_UP: {
                     const int32_t id = AMotionEvent_getPointerId(event, ptr_index);
                     touch_cb_(id, AMotionEvent_getX(event, ptr_index),
-                              AMotionEvent_getY(event, ptr_index), kTouchPhaseEnded);
+                              AMotionEvent_getY(event, ptr_index),
+                              static_cast<int>(dse::input::TouchPhase::Ended));
                     break;
                 }
                 case AMOTION_EVENT_ACTION_CANCEL: {
                     for (size_t i = 0; i < ptr_count; ++i) {
                         touch_cb_(AMotionEvent_getPointerId(event, i),
                                   AMotionEvent_getX(event, i),
-                                  AMotionEvent_getY(event, i), kTouchPhaseCancelled);
+                                  AMotionEvent_getY(event, i),
+                                  static_cast<int>(dse::input::TouchPhase::Cancelled));
                     }
                     break;
                 }
@@ -235,8 +176,8 @@ void AndroidApp::ProcessInputEvent(AInputEvent* event) {
 }
 
 void AndroidApp::SwapBuffers() {
-    if (egl_display_ != EGL_NO_DISPLAY && egl_surface_ != EGL_NO_SURFACE) {
-        eglSwapBuffers(egl_display_, egl_surface_);
+    if (egl_.display != EGL_NO_DISPLAY && egl_.surface != EGL_NO_SURFACE) {
+        eglSwapBuffers(egl_.display, egl_.surface);
     }
 }
 
@@ -271,7 +212,7 @@ void* AndroidApp::GetNativeWindowHandle() const {
 }
 
 bool AndroidApp::HasGLContext() const {
-    return has_gl_context_;
+    return egl_.has_context;
 }
 
 bool AndroidApp::LoadGLFunctions() {

@@ -39,6 +39,13 @@
   #endif
 #endif
 
+#ifdef DSE_ENABLE_HARMONY_PLATFORM
+  #if defined(__OHOS__)
+    #define VK_USE_PLATFORM_OHOS_OPENHARMONY
+    #include <vulkan/vulkan_ohos.h>
+  #endif
+#endif
+
 namespace dse {
 namespace render {
 
@@ -297,6 +304,12 @@ std::vector<const char*> VulkanContext::GetRequiredExtensions(bool enable_valida
   #endif
 #endif
 
+#ifdef DSE_ENABLE_HARMONY_PLATFORM
+  #if defined(__OHOS__)
+    extensions.push_back("VK_OHOS_surface");
+  #endif
+#endif
+
     if (enable_validation) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
@@ -359,6 +372,16 @@ bool VulkanContext::CreateSurface(void* window_handle) {
     VkResult result = vkCreateIOSSurfaceMVK(instance_, &create_info, nullptr, &surface_);
     if (result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create iOS surface: {}", static_cast<int>(result));
+        return false;
+    }
+#elif defined(DSE_ENABLE_HARMONY_PLATFORM) && defined(__OHOS__)
+    VkOHOSSurfaceCreateInfoOpenHarmony create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_OHOS_SURFACE_CREATE_INFO_OPENHARMONY;
+    create_info.window = static_cast<OHNativeWindow*>(window_handle);
+
+    VkResult result = vkCreateOHOSSurfaceOpenHarmony(instance_, &create_info, nullptr, &surface_);
+    if (result != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create OHOS surface: {}", static_cast<int>(result));
         return false;
     }
 #else

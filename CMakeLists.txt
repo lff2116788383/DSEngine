@@ -94,6 +94,11 @@ option(DSE_ENABLE_VIRTUAL_GEOMETRY "Enable experimental virtual geometry (Nanite
 option(DSE_ENABLE_APPLE_PLATFORM
     "Enable Apple platform support (macOS/iOS via MoltenVK, experimental)" OFF)
 
+# HarmonyOS / OpenHarmony 平台后端：实验性，默认 OFF。
+# Vulkan (VK_OHOS_surface) + GLES3 (EGL on OHOS) 双 RHI 后端
+option(DSE_ENABLE_HARMONY_PLATFORM
+    "Enable HarmonyOS/OpenHarmony platform support (experimental)" OFF)
+
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
 option(DSE_MEM_TRACK_POINTERS "Register every allocation by pointer for precise leak location (slower)" OFF)
@@ -121,6 +126,17 @@ if(DSE_ENABLE_APPLE_PLATFORM AND IOS)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
     message(STATUS "iOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest disabled")
+endif()
+
+# --- OHOS (HarmonyOS) 交叉编译默认值 ---
+if(DSE_ENABLE_HARMONY_PLATFORM AND OHOS)
+    set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
+    message(STATUS "OHOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest disabled")
 endif()
 
 # --- Emscripten (Web/WASM) 交叉编译默认值 ---
@@ -447,8 +463,8 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
-# Android / Web(Emscripten) / iOS: 排除桌面 GLFW platform 实现（各自有专用后端）
-if(ANDROID OR EMSCRIPTEN OR (DSE_ENABLE_APPLE_PLATFORM AND IOS))
+# Android / Web(Emscripten) / iOS / OHOS: 排除桌面 GLFW platform 实现（各自有专用后端）
+if(ANDROID OR EMSCRIPTEN OR (DSE_ENABLE_APPLE_PLATFORM AND IOS) OR (DSE_ENABLE_HARMONY_PLATFORM AND OHOS))
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
 endif()
 
@@ -468,6 +484,17 @@ endif()
 if(DSE_ENABLE_APPLE_PLATFORM AND IOS)
     file(GLOB ios_platform_mm CONFIGURE_DEPENDS "engine/platform/ios/*.mm")
     list(APPEND engine_cpp ${ios_platform_mm})
+endif()
+
+# 非 OHOS: 排除 HarmonyOS 专用实现（依赖 OHOS NDK 头文件）
+if(NOT (DSE_ENABLE_HARMONY_PLATFORM AND OHOS))
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/harmony/.*\\.cpp$")
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/assets/harmony_rawfile_fs\\.cpp$")
+endif()
+
+# 共享平台工具（egl_helper）：仅在 Android 或 OHOS 构建时编译
+if(NOT ANDROID AND NOT (DSE_ENABLE_HARMONY_PLATFORM AND OHOS))
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/shared/.*\\.cpp$")
 endif()
 
 # D3D11 RHI 后端源文件仅在启用时编译
@@ -871,8 +898,8 @@ endif()
 target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
-if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT (DSE_ENABLE_APPLE_PLATFORM AND IOS))
-    # glad 仅桌面端使用；Android/Web 用静态链接的 GLES3 符号；iOS 用 MoltenVK（Vulkan）。
+if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT (DSE_ENABLE_APPLE_PLATFORM AND IOS) AND NOT (DSE_ENABLE_HARMONY_PLATFORM AND OHOS))
+    # glad 仅桌面端使用；Android/Web/OHOS 用静态链接的 GLES3 符号；iOS 用 MoltenVK。
     target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/glad/include)
 endif()
 
@@ -916,6 +943,21 @@ if(DSE_ENABLE_APPLE_PLATFORM AND APPLE)
         target_compile_definitions(dse_engine PRIVATE DSE_ENABLE_APPLE_PLATFORM)
         message(STATUS "Apple macOS build: Cocoa/IOKit/QuartzCore linked (MoltenVK via Vulkan Loader)")
     endif()
+endif()
+
+# --- OHOS (HarmonyOS) 链接库 ---
+if(DSE_ENABLE_HARMONY_PLATFORM AND OHOS)
+    target_link_libraries(dse_engine PRIVATE
+        ace_napi          # NAPI 运行时
+        ace_ndk.z         # XComponent NDK
+        native_window     # OHNativeWindow
+        hilog_ndk.z       # 日志 (OH_LOG_Print)
+        EGL GLESv3        # GLES3（兼容路径）
+        rawfile.z         # rawfile 资产访问
+        native_media_core # OHAudio
+    )
+    target_compile_definitions(dse_engine PRIVATE DSE_ENABLE_HARMONY_PLATFORM)
+    message(STATUS "HarmonyOS build: NAPI/XComponent/OHNativeWindow/rawfile/OHAudio linked")
 endif()
 
 if(DSE_ENABLE_LUA)

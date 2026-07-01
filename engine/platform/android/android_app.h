@@ -10,11 +10,11 @@
 #ifdef __ANDROID__
 
 #include "engine/platform/platform_app.h"
+#include "engine/platform/shared/egl_helper.h"
 
 #include <android/native_window.h>
 #include <android/input.h>
 #include <android/looper.h>
-#include <EGL/egl.h>
 
 #include <atomic>
 #include <chrono>
@@ -65,12 +65,8 @@ private:
     AAssetManager* asset_manager_        = nullptr;
     AInputQueue*   input_queue_          = nullptr;
 
-    // EGL state（GLES 模式）
-    EGLDisplay egl_display_ = EGL_NO_DISPLAY;
-    EGLContext egl_context_ = EGL_NO_CONTEXT;
-    EGLSurface egl_surface_ = EGL_NO_SURFACE;
-
-    bool has_gl_context_  = false;
+    // EGL state（GLES 模式）— 使用共享 EGLState 结构
+    EGLState egl_{};
     bool initialized_     = false;
     std::atomic<bool> should_close_{false};
     std::chrono::steady_clock::time_point start_time_;
