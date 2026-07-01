@@ -884,7 +884,28 @@ void SplashScreen::Finish() {
 
 } // namespace dse::platform
 
-#else // 其它平台（mac / android）：安全 no-op。
+#elif defined(DSE_ENABLE_APPLE_PLATFORM) && defined(__APPLE__)
+// =============================================================================
+// Apple 平台（macOS / iOS）：安全 no-op。
+// macOS/iOS 的 splash 由系统 LaunchScreen.storyboard 处理，
+// 引擎不自绘 splash 窗口，Show() 返回 false 使引擎跳过自绘 splash 流程。
+// =============================================================================
+
+namespace dse::platform {
+
+struct SplashScreen::Impl {};
+
+SplashScreen::SplashScreen() = default;
+SplashScreen::~SplashScreen() = default;
+bool SplashScreen::Show(const SplashConfig&) { return false; }
+void SplashScreen::SetStatus(const std::string&) {}
+bool SplashScreen::SkipRequested() const { return false; }
+bool SplashScreen::IsActive() const { return false; }
+void SplashScreen::Finish() {}
+
+} // namespace dse::platform
+
+#else // 其它平台（android 等）：安全 no-op。
 
 namespace dse::platform {
 

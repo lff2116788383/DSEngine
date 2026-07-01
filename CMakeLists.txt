@@ -88,6 +88,11 @@ option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
 option(DSE_ENABLE_CSHARP "Enable C# scripting via .NET 8 CoreCLR (hostfxr)" OFF)
 option(DSE_ENABLE_VIRTUAL_GEOMETRY "Enable experimental virtual geometry (Nanite-style) pipeline" OFF)
+# Apple 平台后端（macOS/iOS via MoltenVK）：实验性，默认 OFF。
+# macOS: GLFW + MoltenVK（复用桌面 Vulkan RHI）
+# iOS: UIKit + MTKView + MoltenVK（新增 UIKitApp 平台层）
+option(DSE_ENABLE_APPLE_PLATFORM
+    "Enable Apple platform support (macOS/iOS via MoltenVK, experimental)" OFF)
 
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
@@ -105,6 +110,17 @@ if(ANDROID)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
     add_definitions(-D __ANDROID__)
     message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
+endif()
+
+# --- iOS (Apple) 交叉编译默认值 ---
+if(DSE_ENABLE_APPLE_PLATFORM AND IOS)
+    set(DSE_ENABLE_PHYSX OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_D3D11 OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
+    set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
+    message(STATUS "iOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest disabled")
 endif()
 
 # --- Emscripten (Web/WASM) 交叉编译默认值 ---
@@ -240,8 +256,9 @@ if (MSVC)
     add_compile_definitions(_CRT_NONSTDC_NO_WARNINGS=1)
     add_compile_definitions(_CRT_DECLARE_NONSTDC_NAMES=1)
 endif ()
-if(ANDROID OR EMSCRIPTEN)
-    # Android: 使用 AndroidApp；Emscripten: GLFW3 由 -sUSE_GLFW=3 端口提供。均不在 in-tree 编 GLFW。
+if(ANDROID OR EMSCRIPTEN OR (DSE_ENABLE_APPLE_PLATFORM AND IOS))
+    # Android: 使用 AndroidApp；Emscripten: GLFW3 由 -sUSE_GLFW=3 端口提供；
+    # iOS: 使用 UIKitApp（无 GLFW）。均不在 in-tree 编 GLFW。
     set(glfw_sources "")
 else()
     include(cmake/CMakeLists.txt.glfw)
@@ -430,8 +447,8 @@ if(NOT DSE_ENABLE_VULKAN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/render/rhi/vulkan/.*\\.cpp$")
 endif()
 
-# Android / Web(Emscripten): 排除桌面 GLFW platform 实现（各自有专用后端）
-if(ANDROID OR EMSCRIPTEN)
+# Android / Web(Emscripten) / iOS: 排除桌面 GLFW platform 实现（各自有专用后端）
+if(ANDROID OR EMSCRIPTEN OR (DSE_ENABLE_APPLE_PLATFORM AND IOS))
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/glfw/.*\\.cpp$")
 endif()
 
@@ -444,6 +461,13 @@ endif()
 # 非 Emscripten: 排除 Web 专用实现（依赖 emscripten 头文件）
 if(NOT EMSCRIPTEN)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/platform/web/.*\\.cpp$")
+endif()
+
+# iOS 平台：.mm 文件仅在 iOS + DSE_ENABLE_APPLE_PLATFORM 时编译
+# engine_cpp glob 不收集 .mm 文件，需显式追加
+if(DSE_ENABLE_APPLE_PLATFORM AND IOS)
+    file(GLOB ios_platform_mm CONFIGURE_DEPENDS "engine/platform/ios/*.mm")
+    list(APPEND engine_cpp ${ios_platform_mm})
 endif()
 
 # D3D11 RHI 后端源文件仅在启用时编译
@@ -847,8 +871,8 @@ endif()
 target_include_directories(dse_engine PRIVATE
     ${CMAKE_SOURCE_DIR}/engine/render/shaders/generated
 )
-if(NOT ANDROID AND NOT EMSCRIPTEN)
-    # glad 仅桌面端使用；Android/Web 用静态链接的 GLES3 符号。
+if(NOT ANDROID AND NOT EMSCRIPTEN AND NOT (DSE_ENABLE_APPLE_PLATFORM AND IOS))
+    # glad 仅桌面端使用；Android/Web 用静态链接的 GLES3 符号；iOS 用 MoltenVK（Vulkan）。
     target_include_directories(dse_engine PRIVATE ${CMAKE_SOURCE_DIR}/depends/glad/include)
 endif()
 
@@ -866,6 +890,34 @@ if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
         X11 Xrandr Xinerama Xcursor Xi
         GL ${CMAKE_DL_LIBS} Threads::Threads rt m)
 endif()
+
+# --- Apple 平台链接库 (macOS / iOS) ---
+if(DSE_ENABLE_APPLE_PLATFORM AND APPLE)
+    if(IOS)
+        # iOS: UIKit + Metal + MetalKit + QuartzCore + AVFoundation
+        find_library(UIKIT_LIB UIKit)
+        find_library(METAL_LIB Metal)
+        find_library(METALKIT_LIB MetalKit)
+        find_library(QUARTZCORE_LIB QuartzCore)
+        find_library(AVFOUNDATION_LIB AVFoundation)
+        find_library(FOUNDATION_LIB Foundation)
+        target_link_libraries(dse_engine PRIVATE
+            ${UIKIT_LIB} ${METAL_LIB} ${METALKIT_LIB}
+            ${QUARTZCORE_LIB} ${AVFOUNDATION_LIB} ${FOUNDATION_LIB})
+        target_compile_definitions(dse_engine PRIVATE DSE_ENABLE_APPLE_PLATFORM)
+        message(STATUS "Apple iOS build: UIKit/Metal/MetalKit/QuartzCore/AVFoundation linked")
+    else()
+        # macOS: Cocoa + IOKit + QuartzCore（GLFW 复用桌面窗口，MoltenVK 通过 Vulkan Loader 加载）
+        find_library(COCOA_LIB Cocoa)
+        find_library(IOKIT_LIB IOKit)
+        find_library(QUARTZCORE_LIB QuartzCore)
+        target_link_libraries(dse_engine PRIVATE
+            ${COCOA_LIB} ${IOKIT_LIB} ${QUARTZCORE_LIB})
+        target_compile_definitions(dse_engine PRIVATE DSE_ENABLE_APPLE_PLATFORM)
+        message(STATUS "Apple macOS build: Cocoa/IOKit/QuartzCore linked (MoltenVK via Vulkan Loader)")
+    endif()
+endif()
+
 if(DSE_ENABLE_LUA)
     target_include_directories(dse_engine PRIVATE
         ${CMAKE_SOURCE_DIR}/depends/lua

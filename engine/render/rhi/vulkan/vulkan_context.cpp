@@ -26,6 +26,19 @@
 #include <vulkan/vulkan_android.h>
 #endif
 
+#ifdef DSE_ENABLE_APPLE_PLATFORM
+  #if defined(__APPLE__)
+    #include <TargetConditionals.h>
+    #if TARGET_OS_IOS
+      #define VK_USE_PLATFORM_IOS_MVK
+      #include <vulkan/vulkan_ios.h>
+    #else
+      #define VK_USE_PLATFORM_MACOS_MVK
+      #include <vulkan/vulkan_macos.h>
+    #endif
+  #endif
+#endif
+
 namespace dse {
 namespace render {
 
@@ -34,7 +47,12 @@ const std::vector<const char*> VulkanContext::kValidationLayers = {
 };
 
 const std::vector<const char*> VulkanContext::kDeviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+#ifdef DSE_ENABLE_APPLE_PLATFORM
+  #if defined(__APPLE__)
+    "VK_KHR_portability_subset",
+  #endif
+#endif
 };
 
 // ============================================================
@@ -202,6 +220,12 @@ bool VulkanContext::CreateInstance(bool enable_validation) {
     create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     create_info.ppEnabledExtensionNames = extensions.data();
 
+#ifdef DSE_ENABLE_APPLE_PLATFORM
+  #if defined(__APPLE__)
+    create_info.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+  #endif
+#endif
+
     VkDebugUtilsMessengerCreateInfoEXT debug_create_info{};
     if (enable_validation) {
         if (!CheckValidationLayerSupport()) {
@@ -261,6 +285,18 @@ std::vector<const char*> VulkanContext::GetRequiredExtensions(bool enable_valida
 #elif defined(__ANDROID__)
     extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
 #endif
+
+#ifdef DSE_ENABLE_APPLE_PLATFORM
+  #if defined(__APPLE__)
+    #if TARGET_OS_IOS
+    extensions.push_back("VK_MVK_ios_surface");
+    #else
+    extensions.push_back("VK_MVK_macos_surface");
+    #endif
+    extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+  #endif
+#endif
+
     if (enable_validation) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
@@ -313,6 +349,16 @@ bool VulkanContext::CreateSurface(void* window_handle) {
     VkResult result = vkCreateAndroidSurfaceKHR(instance_, &create_info, nullptr, &surface_);
     if (result != VK_SUCCESS) {
         DEBUG_LOG_ERROR("[Vulkan] Failed to create Android surface: {}", static_cast<int>(result));
+        return false;
+    }
+#elif defined(DSE_ENABLE_APPLE_PLATFORM) && defined(__APPLE__) && TARGET_OS_IOS
+    VkIOSSurfaceCreateInfoMVK create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK;
+    create_info.pView = window_handle; // CAMetalLayer*
+
+    VkResult result = vkCreateIOSSurfaceMVK(instance_, &create_info, nullptr, &surface_);
+    if (result != VK_SUCCESS) {
+        DEBUG_LOG_ERROR("[Vulkan] Failed to create iOS surface: {}", static_cast<int>(result));
         return false;
     }
 #else

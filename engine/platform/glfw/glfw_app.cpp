@@ -20,6 +20,16 @@
 #include <GLFW/glfw3native.h>
 #endif
 
+#ifdef DSE_ENABLE_APPLE_PLATFORM
+  #if defined(__APPLE__)
+    #include <TargetConditionals.h>
+    #if !TARGET_OS_IOS
+      #define GLFW_EXPOSE_NATIVE_COCOA
+      #include <GLFW/glfw3native.h>
+    #endif
+  #endif
+#endif
+
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
@@ -207,6 +217,8 @@ void GlfwApp::Show() {
 void* GlfwApp::GetNativeWindowHandle() const {
 #ifdef _WIN32
     return window_ ? (void*)glfwGetWin32Window(window_) : nullptr;
+#elif defined(DSE_ENABLE_APPLE_PLATFORM) && defined(__APPLE__) && !TARGET_OS_IOS
+    return window_ ? (void*)glfwGetCocoaWindow(window_) : nullptr;
 #else
     return nullptr;
 #endif

@@ -56,13 +56,13 @@ static BufferHandle EnsureSSBOIndirect(RhiDevice* rhi, BufferHandle existing,
 // ============================================================================
 
 VirtualGeometryRenderer* VGCullPass::GetRenderer() const {
-    return static_cast<VirtualGeometryRenderer*>(ctx_.vg_renderer);
+    return ctx_.vg_renderer;
 }
 VirtualGeometryRenderer* VGRasterPass::GetRenderer() const {
-    return static_cast<VirtualGeometryRenderer*>(ctx_.vg_renderer);
+    return ctx_.vg_renderer;
 }
 VirtualGeometryRenderer* VGResolvePass::GetRenderer() const {
-    return static_cast<VirtualGeometryRenderer*>(ctx_.vg_renderer);
+    return ctx_.vg_renderer;
 }
 
 // ============================================================================

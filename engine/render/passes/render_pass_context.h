@@ -38,6 +38,10 @@ namespace gi {
 class DDGISystem;
 } // namespace gi
 
+namespace vg {
+class VirtualGeometryRenderer;
+} // namespace vg
+
 /**
  * @struct RenderPassContext
  * @brief 所有 Pass 共享的运行时上下文（非拥有型指针）
@@ -222,7 +226,7 @@ struct RenderPassContext {
 
 #ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
     // === Virtual Geometry (Nanite-style) ===
-    void* vg_renderer = nullptr;                      ///< VirtualGeometryRenderer* (type-erased to avoid header dep)
+    vg::VirtualGeometryRenderer* vg_renderer = nullptr; ///< VirtualGeometryRenderer*（强类型前向声明指针）
     bool vg_enabled = false;                          ///< VG 管线是否激活（运行时开关）
     bool vg_active_this_frame = false;                ///< 本帧是否有 VG draw
     BufferHandle vg_dag_node_ssbo;                    ///< DAGNodeGPU[] SSBO
