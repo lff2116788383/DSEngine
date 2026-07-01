@@ -86,6 +86,7 @@ option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" 
 option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
+option(DSE_ENABLE_CSHARP "Enable C# scripting via .NET 8 CoreCLR (hostfxr)" OFF)
 
 # --- 内存子系统 (engine/core/memory) ---
 option(DSE_ENABLE_MEM_TRACKING "Enable per-tag memory tracking + leak reporting (Debug config only)" ON)
@@ -458,6 +459,11 @@ if(NOT DSE_ENABLE_LUA)
     list(FILTER engine_cpp EXCLUDE REGEX ".*engine/scripting/lua/.*\\.cpp$")
 endif()
 
+# C# 脚本运行时仅在启用时编译
+if(NOT DSE_ENABLE_CSHARP)
+    list(FILTER engine_cpp EXCLUDE REGEX ".*engine/scripting/csharp/.*\\.cpp$")
+endif()
+
 
 if(NOT DSE_ENABLE_SPINE)
     list(FILTER engine_cpp EXCLUDE REGEX ".*modules/gameplay_2d/spine/.*\\.cpp$")
@@ -784,6 +790,45 @@ endif()
 
 if(MSVC)
     target_compile_options(dse_engine PRIVATE /utf-8 /wd5033 /wd4834)
+endif()
+
+# --- C# 脚本运行时 (.NET 8 CoreCLR via hostfxr) ---
+if(DSE_ENABLE_CSHARP)
+    target_compile_definitions(dse_engine PRIVATE DSE_CSHARP=1)
+    # nethost: 提供 get_hostfxr_path() 用于定位 hostfxr.dll
+    # .NET SDK 安装后 nethost 头文件和库位于 packs/Microsoft.NETCore.App.Host.*/
+    find_path(NETHOST_INCLUDE_DIR nethost.h
+        PATHS "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
+        PATH_SUFFIXES "runtimes/win-x64/native"
+    )
+    find_library(NETHOST_LIBRARY nethost
+        PATHS "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
+        PATH_SUFFIXES "runtimes/win-x64/native"
+    )
+    if(NETHOST_INCLUDE_DIR AND NETHOST_LIBRARY)
+        target_include_directories(dse_engine PRIVATE ${NETHOST_INCLUDE_DIR})
+        target_link_libraries(dse_engine PRIVATE ${NETHOST_LIBRARY})
+        message(STATUS "C# scripting: .NET 8 hostfxr (nethost found at ${NETHOST_INCLUDE_DIR})")
+    else()
+        message(STATUS "C# scripting: nethost not found, will search at runtime")
+        # 回退: CSharpHost 在运行时通过 PATH 搜索 hostfxr
+        target_compile_definitions(dse_engine PRIVATE DSE_CSHARP_NO_NETHOST=1)
+    endif()
+    # Codegen target: 重新生成 C# P/Invoke 声明 + C ABI 头
+    add_custom_target(dse_codegen
+        COMMAND ${CMAKE_COMMAND} -E env python "${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py"
+                --out "${CMAKE_SOURCE_DIR}"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/tools/codegen"
+        COMMENT "Running DSEngine binding codegen (C ABI + Lua + C#)"
+    )
+    # C# 项目构建 (requires dotnet CLI)
+    add_custom_target(dse_csharp_build
+        COMMAND dotnet build "${CMAKE_SOURCE_DIR}/GameScripts/DSEngine.sln"
+                -c $<IF:$<CONFIG:Debug>,Debug,Release>
+                -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/GameScripts"
+        COMMENT "Building C# scripts -> managed/*.dll"
+    )
 endif()
 
 target_include_directories(dse_engine PRIVATE

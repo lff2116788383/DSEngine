@@ -2,64 +2,70 @@
 //   来源：tools/codegen/binding_defs.json — 勿手动修改
 // </auto-generated>
 
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace DSEngine {
+namespace DSEngine;
 
-/// <summary>Mono InternalCall 声明 — 对应 dse_api.h C ABI</summary>
-internal static class Native {
+/// <summary>.NET 8 LibraryImport P/Invoke 声明 — 对应 dse_api.h C ABI</summary>
+internal static partial class Native {
+    const string Lib = "dse_engine";
+
+    // ---- Entity (手写, 非 codegen 字段) ----
+    [LibraryImport(Lib, EntryPoint = "dse_entity_create")]
+    internal static partial uint dse_entity_create();
+
+    [LibraryImport(Lib, EntryPoint = "dse_entity_destroy")]
+    internal static partial void dse_entity_destroy(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_entity_valid")]
+    internal static partial int dse_entity_valid(uint e);
 
 {% for comp in components %}
     // ---- {{ comp.name }} ----
 {% for field in comp.fields %}
 {% if field.type == "float" %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern float dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial float dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float v);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float v);
 
 {% elif field.type in ("int", "enum_int") %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
 
 {% elif field.type == "bool" %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
 
 {% elif field.type in ("vec3", "euler_quat") %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z);
 
 {% elif field.type == "vec4" %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z, out float w);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z, out float w);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z, float w);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z, float w);
 
 {% elif field.type == "string" %}
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e,
-        [MarshalAs(UnmanagedType.LPUTF8Str)] string v);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, string v);
 
-    [MethodImpl(MethodImplOptions.InternalCall)]
-    internal static extern int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, byte[] buf, int buf_size);
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, [Out] byte[] buf, int bufSize);
 
 {% endif %}
 {% endfor %}
-
 {% endfor %}
 } // class Native
-
-} // namespace DSEngine

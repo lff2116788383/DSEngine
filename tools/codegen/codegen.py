@@ -119,7 +119,7 @@ def main():
     # 通过 `cmake --build <build> --target dse_codegen` 按需生成。
     render(
         "csharp_native.cs.j2",
-        "GameScripts/DSEngine/Native.gen.cs",
+        "GameScripts/DSEngine.Runtime/Generated/Native.gen.cs",
         components=components,
     )
 
