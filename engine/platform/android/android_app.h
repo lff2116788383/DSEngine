@@ -4,6 +4,7 @@
  *
  * 仅在 __ANDROID__ 下编译。
  * 生命周期由 ANativeActivity 回调驱动，调用方须在 Init() 前注入 ANativeWindow*。
+ * 支持 AppState 生命周期状态机（与 HarmonyApp 对齐）。
  */
 
 #pragma once
@@ -25,6 +26,15 @@ namespace dse::platform {
 
 class AndroidApp final : public PlatformApp {
 public:
+    /// 应用生命周期状态（前后台 + Surface 有效性）
+    enum class AppState {
+        Active,            // Surface 有效，前台渲染中
+        Paused,            // Surface 有效，后台暂停帧循环
+        SurfaceLost,       // Surface 已销毁，等待重建
+        PausedNoSurface,   // 后台 + Surface 已销毁
+        Destroyed          // 已关闭
+    };
+
     AndroidApp() = default;
     ~AndroidApp() override;
 
@@ -33,6 +43,16 @@ public:
     void SetNativeWindow(ANativeWindow* window) { native_window_ = window; }
     void SetAssetManager(AAssetManager* mgr)    { asset_manager_ = mgr; }
     void SetInputQueue(AInputQueue* queue);
+
+    // ─── 生命周期回调（ANativeActivity 回调层调用）────────
+    void OnPause();                                   // Activity::onPause
+    void OnResume();                                  // Activity::onResume
+    void OnSurfaceLost();                             // SurfaceHolder::surfaceDestroyed
+    void OnSurfaceRegained(ANativeWindow* window);    // SurfaceHolder::surfaceCreated
+    void OnSurfaceChanged(int width, int height);     // SurfaceHolder::surfaceChanged
+
+    AppState GetAppState() const;
+    bool IsRenderable() const;
 
     // ─── PlatformApp 接口 ───────────────────────────────────────
 
@@ -67,7 +87,8 @@ private:
 
     // EGL state（GLES 模式）— 使用共享 EGLState 结构
     EGLState egl_{};
-    bool initialized_     = false;
+
+    std::atomic<AppState> state_{AppState::Destroyed};
     std::atomic<bool> should_close_{false};
     std::chrono::steady_clock::time_point start_time_;
 

@@ -1,0 +1,55 @@
+/**
+ * DSEngine HarmonyOS 模块构建配置
+ *
+ * 此文件由 hvigor 构建系统读取，定义模块级别的构建参数。
+ * 等价于 Android 的 build.gradle (module-level)。
+ */
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "externalNativeOptions": {
+      // 原生 C++ 模块构建配置
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "",
+      "cppFlags": "-std=c++20",
+      "abiFilters": [
+        "arm64-v8a"
+      ]
+    }
+  },
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": false
+          }
+        }
+      },
+      "nativeOptions": {
+        "cmake": {
+          "buildType": "Release"
+        }
+      }
+    },
+    {
+      "name": "debug",
+      "nativeOptions": {
+        "cmake": {
+          "buildType": "Debug"
+        }
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "default",
+      "runtimeOS": "HarmonyOS"
+    },
+    {
+      "name": "ohosTarget",
+      "runtimeOS": "OpenHarmony"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "DSEngine Game Module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "DSEngine Game"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DSEngine"
+    }
+  ]
+}

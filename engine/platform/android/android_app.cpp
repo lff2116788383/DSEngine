@@ -55,7 +55,7 @@ bool AndroidApp::Init(const WindowConfig& config) {
         if (!InitEGL(config)) return false;
     }
 
-    initialized_ = true;
+    state_.store(AppState::Active, std::memory_order_release);
     ALOGI("AndroidApp initialized (%dx%d)", ANativeWindow_getWidth(native_window_),
           ANativeWindow_getHeight(native_window_));
     return true;
@@ -74,16 +74,70 @@ void AndroidApp::DestroyEGL() {
     dse::platform::DestroyEGL(egl_);
 }
 
+// ─── 生命周期状态机 ──────────────────────────────────────────────
+
+void AndroidApp::OnPause() {
+    auto cur = state_.load(std::memory_order_acquire);
+    if (cur == AppState::Active)
+        state_.store(AppState::Paused, std::memory_order_release);
+    else if (cur == AppState::SurfaceLost)
+        state_.store(AppState::PausedNoSurface, std::memory_order_release);
+    ALOGI("AndroidApp paused (state=%d)", static_cast<int>(state_.load()));
+}
+
+void AndroidApp::OnResume() {
+    auto cur = state_.load(std::memory_order_acquire);
+    if (cur == AppState::Paused)
+        state_.store(AppState::Active, std::memory_order_release);
+    else if (cur == AppState::PausedNoSurface)
+        state_.store(AppState::SurfaceLost, std::memory_order_release);
+    ALOGI("AndroidApp resumed (state=%d)", static_cast<int>(state_.load()));
+}
+
+void AndroidApp::OnSurfaceLost() {
+    DestroyEGL();
+    native_window_ = nullptr;
+    auto cur = state_.load(std::memory_order_acquire);
+    if (cur == AppState::Paused)
+        state_.store(AppState::PausedNoSurface, std::memory_order_release);
+    else
+        state_.store(AppState::SurfaceLost, std::memory_order_release);
+    ALOGI("AndroidApp surface lost (state=%d)", static_cast<int>(state_.load()));
+}
+
+void AndroidApp::OnSurfaceRegained(ANativeWindow* window) {
+    native_window_ = window;
+    dse::platform::InitEGL(egl_, native_window_);
+    auto cur = state_.load(std::memory_order_acquire);
+    if (cur == AppState::PausedNoSurface)
+        state_.store(AppState::Paused, std::memory_order_release);
+    else
+        state_.store(AppState::Active, std::memory_order_release);
+    ALOGI("AndroidApp surface regained (state=%d)", static_cast<int>(state_.load()));
+}
+
+void AndroidApp::OnSurfaceChanged(int width, int height) {
+    ALOGI("AndroidApp surface changed: %dx%d", width, height);
+}
+
+AndroidApp::AppState AndroidApp::GetAppState() const {
+    return state_.load(std::memory_order_acquire);
+}
+
+bool AndroidApp::IsRenderable() const {
+    return state_.load(std::memory_order_acquire) == AppState::Active;
+}
+
 // ─── Shutdown ──────────────────────────────────────────────────
 
 void AndroidApp::Shutdown() {
-    if (!initialized_) return;
+    if (state_.load() == AppState::Destroyed) return;
     DestroyEGL();
     if (input_queue_) {
         AInputQueue_detachLooper(input_queue_);
         input_queue_ = nullptr;
     }
-    initialized_ = false;
+    state_.store(AppState::Destroyed, std::memory_order_release);
     ALOGI("AndroidApp shutdown");
 }
 

@@ -1,0 +1,9 @@
+{
+  "modelVersion": "5.0.0",
+  "description": "DSEngine HarmonyOS Application",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hvigor-ohos-plugin": "4.0.0",
+    "@ohos/hvigor": "4.0.0"
+  }
+}
