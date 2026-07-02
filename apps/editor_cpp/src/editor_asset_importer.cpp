@@ -5,10 +5,14 @@
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
+#include <chrono>
+#include <ctime>
+#include <limits>
 
 #include "imgui.h"
 #include "editor_file_dialog.h"
 #include "engine/assets/asset_manager.h"
+#include "engine/assets/compiler/importer.h"
 #include "engine/runtime/engine_app.h"
 
 #ifdef _WIN32
@@ -35,6 +39,115 @@ const char* kCompressFormatNames[] = {
 };
 const char* kCompressFormatArgs[] = { "bc1", "bc3", "bc1srgb", "bc3srgb", "bc4", "bc5", "bc7", "bc7srgb" };
 
+// ─── Preview Info (#9) ─────────────────────────────────────────────────────
+struct PreviewInfo {
+    bool valid = false;
+    uint32_t vertex_count = 0;
+    uint32_t face_count = 0;
+    uint32_t submesh_count = 0;
+    uint32_t material_count = 0;
+    uint32_t animation_count = 0;
+    uint32_t bone_count = 0;
+    glm::vec3 bbox_min{0.0f};
+    glm::vec3 bbox_max{0.0f};
+    std::string error;
+};
+
+PreviewInfo QuickParseSourceFile(const std::string& path) {
+    PreviewInfo info;
+    if (path.empty()) return info;
+
+    fs::path p(path);
+    std::string ext = p.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    dse::asset::compiler::RawSceneData scene;
+    bool loaded = false;
+
+    if (ext == ".gltf" || ext == ".glb") {
+        dse::asset::compiler::GltfImporter importer;
+        loaded = importer.Import(path, scene);
+    }
+#ifdef DSE_HAS_ASSIMP
+    else if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".dae"
+             || ext == ".3ds" || ext == ".stl" || ext == ".ply") {
+        dse::asset::compiler::FbxImporter importer;
+        loaded = importer.Import(path, scene);
+    }
+#endif
+    else {
+        info.error = "Unsupported format: " + ext;
+        return info;
+    }
+
+    if (!loaded) {
+        info.error = "Failed to parse file";
+        return info;
+    }
+
+    info.valid = true;
+    info.submesh_count = static_cast<uint32_t>(scene.meshes.size());
+    info.material_count = static_cast<uint32_t>(scene.materials.size());
+    info.animation_count = static_cast<uint32_t>(scene.animations.size());
+    info.bone_count = static_cast<uint32_t>(scene.skeleton.size());
+
+    constexpr float kFloatMax = 3.402823466e+38f;
+    glm::vec3 bmin(kFloatMax);
+    glm::vec3 bmax(-kFloatMax);
+    for (const auto& mesh : scene.meshes) {
+        info.vertex_count += static_cast<uint32_t>(mesh.positions.size());
+        info.face_count += static_cast<uint32_t>(mesh.indices.size() / 3);
+        for (const auto& pos : mesh.positions) {
+            bmin.x = (pos.x < bmin.x) ? pos.x : bmin.x;
+            bmin.y = (pos.y < bmin.y) ? pos.y : bmin.y;
+            bmin.z = (pos.z < bmin.z) ? pos.z : bmin.z;
+            bmax.x = (pos.x > bmax.x) ? pos.x : bmax.x;
+            bmax.y = (pos.y > bmax.y) ? pos.y : bmax.y;
+            bmax.z = (pos.z > bmax.z) ? pos.z : bmax.z;
+        }
+    }
+    if (info.vertex_count > 0) {
+        info.bbox_min = bmin;
+        info.bbox_max = bmax;
+    }
+    return info;
+}
+
+// ─── Import History (#10) ──────────────────────────────────────────────────
+struct ImportHistoryEntry {
+    std::string source_path;
+    std::vector<std::string> output_files;
+    std::string timestamp;
+    bool undone = false;
+};
+
+std::vector<ImportHistoryEntry> s_import_history;
+
+void RecordImport(const std::string& source, const std::vector<std::string>& outputs) {
+    ImportHistoryEntry entry;
+    entry.source_path = source;
+    entry.output_files = outputs;
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&time_t));
+    entry.timestamp = buf;
+    s_import_history.push_back(entry);
+}
+
+bool UndoImport(ImportHistoryEntry& entry) {
+    bool any_deleted = false;
+    for (const auto& f : entry.output_files) {
+        std::error_code ec;
+        if (fs::exists(f, ec)) {
+            fs::remove(f, ec);
+            if (!ec) any_deleted = true;
+        }
+    }
+    entry.undone = true;
+    return any_deleted;
+}
+
 struct ImportState {
     ImportType type = ImportType::Mesh3D;
     char source_path[512] = "";
@@ -51,6 +164,10 @@ struct ImportState {
     bool compress_texture = false;
     int compress_format = 1;        // index into kCompressFormatNames (default BC3)
     bool compress_high_quality = false;
+    // Preview
+    PreviewInfo preview;
+    bool preview_requested = false;
+    char last_previewed_path[512] = "";
     // Results
     bool importing = false;
     bool import_done = false;
@@ -208,6 +325,7 @@ void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
     state.import_success = !state.imported_files.empty();
     if (state.import_success) {
         state.import_message = "Successfully imported " + std::to_string(state.imported_files.size()) + " file(s)";
+        RecordImport(state.source_path, state.imported_files);
     } else {
         state.import_message = "Import produced no output files. Check AssetBuilder output.";
     }
@@ -240,6 +358,7 @@ void DoImportTexture(ImportState& state, const std::string& project_asset_dir) {
         state.import_success = true;
         state.imported_files.push_back(dest.string());
         state.import_message = "Texture compressed to: " + dest.string();
+        RecordImport(state.source_path, state.imported_files);
         return;
     }
 
@@ -253,6 +372,7 @@ void DoImportTexture(ImportState& state, const std::string& project_asset_dir) {
         state.import_success = true;
         state.imported_files.push_back(dest.string());
         state.import_message = "Texture copied to: " + dest.string();
+        RecordImport(state.source_path, state.imported_files);
     }
 }
 
@@ -271,6 +391,7 @@ void DoImportAudio(ImportState& state, const std::string& project_asset_dir) {
         state.import_success = true;
         state.imported_files.push_back(dest.string());
         state.import_message = "Audio file copied to: " + dest.string();
+        RecordImport(state.source_path, state.imported_files);
     }
 }
 
@@ -329,6 +450,41 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
         if (!result.empty()) {
             strncpy(state.source_path, result.c_str(), sizeof(state.source_path) - 1);
             state.source_path[sizeof(state.source_path) - 1] = '\0';
+            state.preview_requested = true;
+        }
+    }
+
+    // ─── Preview (#9) ───────────────────────────────────────────────────────
+    if (state.type == ImportType::Mesh3D && strlen(state.source_path) > 0) {
+        if (state.preview_requested || strcmp(state.source_path, state.last_previewed_path) != 0) {
+            state.preview = QuickParseSourceFile(state.source_path);
+            strncpy(state.last_previewed_path, state.source_path, sizeof(state.last_previewed_path) - 1);
+            state.last_previewed_path[sizeof(state.last_previewed_path) - 1] = '\0';
+            state.preview_requested = false;
+        }
+        if (state.preview.valid) {
+            ImGui::Separator();
+            ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Preview:");
+            ImGui::Columns(2, "##preview_cols", false);
+            ImGui::SetColumnWidth(0, 140);
+            ImGui::Text("Vertices:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.vertex_count); ImGui::NextColumn();
+            ImGui::Text("Triangles:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.face_count); ImGui::NextColumn();
+            ImGui::Text("Submeshes:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.submesh_count); ImGui::NextColumn();
+            ImGui::Text("Materials:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.material_count); ImGui::NextColumn();
+            if (state.preview.bone_count > 0) {
+                ImGui::Text("Bones:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.bone_count); ImGui::NextColumn();
+            }
+            if (state.preview.animation_count > 0) {
+                ImGui::Text("Animations:"); ImGui::NextColumn(); ImGui::Text("%u", state.preview.animation_count); ImGui::NextColumn();
+            }
+            if (state.preview.vertex_count > 0) {
+                glm::vec3 size = state.preview.bbox_max - state.preview.bbox_min;
+                ImGui::Text("Bounding Box:"); ImGui::NextColumn();
+                ImGui::Text("%.2f x %.2f x %.2f", size.x, size.y, size.z); ImGui::NextColumn();
+            }
+            ImGui::Columns(1);
+        } else if (!state.preview.error.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "Preview: %s", state.preview.error.c_str());
         }
     }
 
@@ -389,7 +545,7 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
             ImGui::Indent();
             ImGui::Combo("Format", &state.compress_format, kCompressFormatNames, IM_ARRAYSIZE(kCompressFormatNames));
             ImGui::Checkbox("High Quality (slower)", &state.compress_high_quality);
-            ImGui::TextDisabled("Encodes to GPU-ready BCn blocks (BC7/ASTC not yet supported).");
+            ImGui::TextDisabled("Encodes to GPU-ready BCn/ASTC blocks. KTX2 input also accepted.");
             ImGui::Unindent();
         }
     } else if (state.type == ImportType::Audio) {
@@ -438,6 +594,39 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
             ImGui::Text("Imported Files:");
             for (auto& f : state.imported_files) {
                 ImGui::BulletText("%s", f.c_str());
+            }
+        }
+    }
+
+    // ─── Import History (#10) ───────────────────────────────────────────────
+    if (!s_import_history.empty()) {
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Import History")) {
+            for (int i = static_cast<int>(s_import_history.size()) - 1; i >= 0; --i) {
+                auto& entry = s_import_history[i];
+                ImGui::PushID(i);
+                if (entry.undone) {
+                    ImGui::TextDisabled("[Undone] %s", fs::path(entry.source_path).filename().string().c_str());
+                } else {
+                    ImGui::Text("%s", entry.timestamp.c_str());
+                    ImGui::SameLine();
+                    ImGui::Text("%s (%zu files)",
+                        fs::path(entry.source_path).filename().string().c_str(),
+                        entry.output_files.size());
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Undo")) {
+                        UndoImport(entry);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::BeginTooltip();
+                        ImGui::Text("Delete generated files:");
+                        for (const auto& f : entry.output_files) {
+                            ImGui::BulletText("%s", fs::path(f).filename().string().c_str());
+                        }
+                        ImGui::EndTooltip();
+                    }
+                }
+                ImGui::PopID();
             }
         }
     }

@@ -1,5 +1,6 @@
 #include "engine/assets/compiler/importer.h"
 #include "engine/assets/texture_compressor.h"
+#include "engine/assets/ktx2_parser.h"
 #include "engine/mesh/mesh_decimator.h"
 #include "engine/render/gi/lightmap_baker.h"
 #include <cstring>
@@ -98,6 +99,40 @@ int RunTextureCook(int argc, char** argv) {
             std::cerr << "[AssetBuilder] Unknown texture option: " << opt << std::endl;
             return 1;
         }
+    }
+
+    // KTX2 input: parse and convert directly to .dtex (#12)
+    if (dse::assets::HasKtx2Extension(input_path.string())) {
+        std::ifstream ktx_in(input_path, std::ios::binary);
+        if (!ktx_in) {
+            std::cerr << "[AssetBuilder] Failed to open KTX2 file: " << input_path.string() << std::endl;
+            return 1;
+        }
+        std::vector<uint8_t> ktx_data((std::istreambuf_iterator<char>(ktx_in)),
+                                       std::istreambuf_iterator<char>());
+        auto result = dse::assets::ParseKtx2(ktx_data);
+        if (!result.success) {
+            std::cerr << "[AssetBuilder] KTX2 parse failed: " << result.error << std::endl;
+            return 1;
+        }
+        std::vector<uint8_t> dtex;
+        if (!dse::assets::ConvertKtx2ToDtex(result, dtex)) {
+            std::cerr << "[AssetBuilder] KTX2 -> dtex conversion failed." << std::endl;
+            return 1;
+        }
+        std::error_code ec;
+        const std::filesystem::path out_dir = output_path.parent_path();
+        if (!out_dir.empty()) std::filesystem::create_directories(out_dir, ec);
+        std::ofstream out(output_path, std::ios::binary);
+        if (!out) {
+            std::cerr << "[AssetBuilder] Failed to open output: " << output_path.string() << std::endl;
+            return 1;
+        }
+        out.write(reinterpret_cast<const char*>(dtex.data()), static_cast<std::streamsize>(dtex.size()));
+        std::cout << "[AssetBuilder] Converted KTX2 -> dtex: " << output_path.string()
+                  << " (" << result.width << "x" << result.height << ", "
+                  << result.level_count << " mips, " << dtex.size() << " bytes)" << std::endl;
+        return 0;
     }
 
     int w = 0, h = 0, channels = 0;

@@ -275,9 +275,42 @@ bool GltfImporter::Import(const std::string& file_path, RawSceneData& out_scene)
         out_scene.materials.push_back(raw_mat);
     }
     
+    // Detect KHR_draco_mesh_compression (#13)
+    bool has_draco = false;
+    for (const auto& ext_used : model.extensionsUsed) {
+        if (ext_used == "KHR_draco_mesh_compression") {
+            has_draco = true;
+            break;
+        }
+    }
+    if (has_draco) {
+#ifdef TINYGLTF_ENABLE_DRACO
+        std::cout << "[importer] KHR_draco_mesh_compression detected — Draco decoding enabled." << std::endl;
+#else
+        std::cerr << "[importer] WARNING: KHR_draco_mesh_compression detected but Draco decoder is not available. "
+                     "Mesh data may be incomplete. Rebuild with -DDSE_ENABLE_DRACO=ON to enable Draco support." << std::endl;
+#endif
+    }
+
     // 提取 Meshes
     for (const auto& mesh : model.meshes) {
         for (const auto& primitive : mesh.primitives) {
+            // Skip Draco-compressed primitives when decoder is unavailable
+            if (!has_draco || primitive.extensions.find("KHR_draco_mesh_compression") == primitive.extensions.end()) {
+                // Normal path — proceed below
+            } else {
+#ifndef TINYGLTF_ENABLE_DRACO
+                // Draco-compressed primitive without decoder: check if tinygltf already decoded it
+                if (!primitive.attributes.empty() && primitive.attributes.find("POSITION") != primitive.attributes.end()) {
+                    // tinygltf may have decoded it if TINYGLTF_ENABLE_DRACO was set at compile time
+                } else {
+                    std::cerr << "[importer] Skipping Draco-compressed primitive in mesh '" << mesh.name
+                              << "' — no Draco decoder available." << std::endl;
+                    continue;
+                }
+#endif
+            }
+
             RawSubMesh raw_submesh;
             raw_submesh.name = mesh.name;
             raw_submesh.material_index = primitive.material >= 0 ? primitive.material : 0;
@@ -550,6 +583,63 @@ struct RuntimeVertex {
 };
 
 #ifdef DSE_HAS_ASSIMP
+
+// Extract embedded texture from Assimp scene to disk (#14).
+// Returns the written file path, or empty string on failure.
+std::string ExtractEmbeddedTexture(const aiScene* scene, const std::string& tex_ref,
+                                   const std::filesystem::path& output_dir,
+                                   const std::string& base_name) {
+    if (!scene || tex_ref.empty() || tex_ref[0] != '*') return {};
+
+    int tex_index = -1;
+    try { tex_index = std::stoi(tex_ref.substr(1)); } catch (...) { return {}; }
+
+    if (tex_index < 0 || static_cast<unsigned int>(tex_index) >= scene->mNumTextures) return {};
+    const aiTexture* tex = scene->mTextures[tex_index];
+    if (!tex) return {};
+
+    // Determine extension from format hint
+    std::string ext = ".png";
+    if (tex->achFormatHint[0] != '\0') {
+        ext = std::string(".") + tex->achFormatHint;
+    }
+
+    std::string filename = base_name + "_embedded_" + std::to_string(tex_index) + ext;
+    std::filesystem::path out_path = output_dir / filename;
+
+    std::ofstream out(out_path, std::ios::binary);
+    if (!out) return {};
+
+    if (tex->mHeight == 0) {
+        // Compressed texture (e.g., PNG/JPG stored as raw bytes)
+        out.write(reinterpret_cast<const char*>(tex->pcData), tex->mWidth);
+    } else {
+        // Uncompressed ARGB8888 data — write as raw RGBA for now
+        size_t pixel_count = static_cast<size_t>(tex->mWidth) * tex->mHeight;
+        out.write(reinterpret_cast<const char*>(tex->pcData), pixel_count * 4);
+    }
+
+    return out_path.generic_string();
+}
+
+// Resolve texture path: if it's an embedded reference (*N), extract to disk.
+std::string ResolveAssimpTexturePathWithEmbedded(const std::filesystem::path& source_file,
+                                                  const aiScene* scene,
+                                                  const aiMaterial* material,
+                                                  aiTextureType type,
+                                                  const std::filesystem::path& output_dir,
+                                                  const std::string& base_name) {
+    std::string path = ResolveAssimpTexturePath(source_file, material, type);
+    if (!path.empty() && path[0] == '*') {
+        std::string extracted = ExtractEmbeddedTexture(scene, path, output_dir, base_name);
+        if (!extracted.empty()) {
+            std::cout << "[importer] Extracted embedded texture: " << extracted << std::endl;
+            return extracted;
+        }
+    }
+    return path;
+}
+
 bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) {
     Assimp::Importer importer;
 
@@ -561,6 +651,7 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
         aiProcess_CalcTangentSpace |
         aiProcess_LimitBoneWeights |
         aiProcess_ImproveCacheLocality |
+        aiProcess_EmbedTextures |
         aiProcess_SortByPType
     );
     if (!scene || !scene->mRootNode) {
@@ -569,7 +660,14 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
     }
 
     const std::filesystem::path source_path(file_path);
+    const std::filesystem::path output_dir = source_path.parent_path();
+    const std::string base_name = source_path.stem().string();
     out_scene = RawSceneData{};
+
+    // Report embedded textures found
+    if (scene->mNumTextures > 0) {
+        std::cout << "[importer] Found " << scene->mNumTextures << " embedded texture(s) in " << file_path << std::endl;
+    }
 
     out_scene.materials.reserve(scene->mNumMaterials);
     for (unsigned int material_index = 0; material_index < scene->mNumMaterials; ++material_index) {
@@ -598,14 +696,21 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
             raw_material.emissive_factor = glm::vec3(emissive_color.r, emissive_color.g, emissive_color.b);
         }
 
-        raw_material.base_color_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_BASE_COLOR);
+        // Use embedded-texture-aware resolver (#14)
+        raw_material.base_color_texture = ResolveAssimpTexturePathWithEmbedded(
+            source_path, scene, material, aiTextureType_BASE_COLOR, output_dir, base_name);
         if (raw_material.base_color_texture.empty()) {
-            raw_material.base_color_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_DIFFUSE);
+            raw_material.base_color_texture = ResolveAssimpTexturePathWithEmbedded(
+                source_path, scene, material, aiTextureType_DIFFUSE, output_dir, base_name);
         }
-        raw_material.normal_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_NORMALS);
-        raw_material.metallic_roughness_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_UNKNOWN);
-        raw_material.emissive_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_EMISSIVE);
-        raw_material.occlusion_texture = ResolveAssimpTexturePath(source_path, material, aiTextureType_LIGHTMAP);
+        raw_material.normal_texture = ResolveAssimpTexturePathWithEmbedded(
+            source_path, scene, material, aiTextureType_NORMALS, output_dir, base_name);
+        raw_material.metallic_roughness_texture = ResolveAssimpTexturePathWithEmbedded(
+            source_path, scene, material, aiTextureType_UNKNOWN, output_dir, base_name);
+        raw_material.emissive_texture = ResolveAssimpTexturePathWithEmbedded(
+            source_path, scene, material, aiTextureType_EMISSIVE, output_dir, base_name);
+        raw_material.occlusion_texture = ResolveAssimpTexturePathWithEmbedded(
+            source_path, scene, material, aiTextureType_LIGHTMAP, output_dir, base_name);
         out_scene.materials.push_back(raw_material);
     }
 

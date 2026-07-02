@@ -1083,6 +1083,7 @@ add_executable(AssetBuilder
     engine/assets/compiler/importer.cpp
     engine/assets/texture_compressor.cpp
     engine/assets/dtex.cpp
+    engine/assets/ktx2_parser.cpp
     engine/mesh/mesh_decimator.cpp
     engine/render/gi/lightmap_baker.cpp
 )

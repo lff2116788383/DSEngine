@@ -90,13 +90,16 @@ if(DSE_EDITOR_UI_TESTS)
     )
 endif()
 
-# Animation Retargeting 面板需要在编辑器内导入 gltf/fbx 骨架并烘焙 .danim，
-# 复用资源编译核心 importer.cpp（默认仅编进 AssetBuilder）。需要 assimp 与 tinygltf。
+# 资源编译核心 importer.cpp（默认仅编进 AssetBuilder）。
+# GltfImporter 只需 tinygltf（始终可用）；FbxImporter 需要 Assimp。
+# 编辑器的 Import Preview (#9) 和 Asset Importer 面板始终需要 GltfImporter，
+# 因此 importer.cpp + tinygltf 无条件编入；Assimp 仅在可用时链接。
+target_sources(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/engine/assets/compiler/importer.cpp)
+target_include_directories(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/depends/tinygltf)
+target_compile_definitions(dse_editor_cpp PRIVATE DSE_EDITOR_HAS_IMPORTER=1)
 if(DSE_HAS_ASSIMP)
-    target_sources(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/engine/assets/compiler/importer.cpp)
-    target_include_directories(dse_editor_cpp PRIVATE ${CMAKE_SOURCE_DIR}/depends/tinygltf)
     target_link_libraries(dse_editor_cpp PRIVATE assimp)
-    target_compile_definitions(dse_editor_cpp PRIVATE DSE_HAS_ASSIMP=1 DSE_EDITOR_HAS_IMPORTER=1)
+    target_compile_definitions(dse_editor_cpp PRIVATE DSE_HAS_ASSIMP=1)
 endif()
 
 # 将编译产物放到 bin 目录下。UI 测试构建用独立产物名，与常规编辑器并存不覆盖。
