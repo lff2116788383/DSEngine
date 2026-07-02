@@ -83,11 +83,14 @@ void RegisterPanelRenderTests(ImGuiTestEngine* e) {
         t->TestFunc = [](ImGuiTestContext* ctx) {
             const char* window_name = static_cast<const char*>(ctx->Test->UserData);
             EnsureAllPanelsVisible();
-            // 等若干帧：开关刚置真，面板需要至少一帧才会进入绘制并完成布局。
-            ctx->Yield(4);
-            ImGuiWindow* w = FindActiveWindow(window_name);
+            // 后台/远程环境下面板初始化可能较慢，用重试循环代替固定帧等待。
+            ImGuiWindow* w = nullptr;
+            for (int attempt = 0; attempt < 8 && w == nullptr; ++attempt) {
+                ctx->Yield(4);
+                w = FindActiveWindow(window_name);
+            }
             if (w == nullptr)
-                ctx->LogError("panel window not found or not active: '%s'", window_name);
+                ctx->LogError("panel window not found or not active after retries: '%s'", window_name);
             IM_CHECK(w != nullptr);
         };
     }

@@ -219,6 +219,20 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "RigidBody 3D");
             IM_CHECK(Reg().all_of<dse::RigidBody3DComponent>(ent));
 
+            // 后台/远程环境下 Inspector 渲染组件控件可能较慢，聚焦 Inspector 并多等几帧
+            // 确保 RigidBody3D section 的 TreeNode 已展开、控件 ID 已注册。
+            ctx->WindowFocus("//Inspector");
+            ctx->Yield(4);
+
+            // 若控件尚未出现，尝试滚动 Inspector 到底部并再等几帧。
+            for (int retry = 0; retry < 3; ++retry) {
+                if (ctx->ItemExists("//Inspector/##rb3d_mass"))
+                    break;
+                ctx->WindowFocus("//Inspector");
+                ctx->ScrollToBottom("//Inspector");
+                ctx->Yield(4);
+            }
+
             ctx->ItemInputValue("//Inspector/##rb3d_mass", 7.5f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).mass - 7.5f) < 0.01f);
