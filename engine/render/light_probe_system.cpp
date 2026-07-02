@@ -6,6 +6,7 @@
 #include "engine/render/light_probe_system.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
@@ -136,15 +137,10 @@ SHL2 LightProbeSystem::BakeSHAtPosition(const glm::vec3& position, int face_reso
         const dse::render::FrameContext face_frame{view, proj};
 
         // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
-        if (skybox_renderer) {
-            auto skybox_view = ctx.world->registry().view<dse::SkyboxComponent>();
-            for (auto sky_entity : skybox_view) {
-                auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-                if (skybox.enabled && skybox.cubemap_handle != 0) {
-                    skybox_renderer->Draw(*face_cmd, *rhi_device, skybox.cubemap_handle, view, proj);
-                }
-                break;
-            }
+        if (skybox_renderer && ctx.scene_view && ctx.scene_view->skybox.present &&
+            ctx.scene_view->skybox.cubemap_handle != 0) {
+            skybox_renderer->Draw(*face_cmd, *rhi_device,
+                                  ctx.scene_view->skybox.cubemap_handle, view, proj);
         }
 
         // 渲染 3D 网格（通过 render_meshes 回调）
@@ -221,23 +217,18 @@ void LightProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_device,
 // ============================================================================
 // 运行时 SH 查询
 // ============================================================================
-void LightProbeSystem::UpdateGlobalSH(World& world, RhiDevice* rhi_device,
+void LightProbeSystem::UpdateGlobalSH(const RenderSceneView& scene_view, RhiDevice* rhi_device,
                                        const glm::vec3& camera_position) {
     if (!rhi_device) return;
 
-    // 收集所有 enabled 的 probe
-    auto probe_view = world.registry().view<TransformComponent, dse::LightProbeComponent>();
+    // 在已提取的 probe 快照中选择最近的两个
     float best_dist = std::numeric_limits<float>::max();
     float second_dist = std::numeric_limits<float>::max();
-    const dse::LightProbeComponent* best_probe = nullptr;
-    const dse::LightProbeComponent* second_probe = nullptr;
+    const RenderLightProbe* best_probe = nullptr;
+    const RenderLightProbe* second_probe = nullptr;
 
-    for (auto entity : probe_view) {
-        auto& probe = probe_view.get<dse::LightProbeComponent>(entity);
-        if (!probe.enabled) continue;
-
-        auto& transform = probe_view.get<TransformComponent>(entity);
-        float dist = glm::distance(transform.position, camera_position);
+    for (const auto& probe : scene_view.light_probes) {
+        float dist = glm::distance(probe.position, camera_position);
 
         if (dist < best_dist) {
             second_dist = best_dist;
@@ -260,8 +251,14 @@ void LightProbeSystem::UpdateGlobalSH(World& world, RhiDevice* rhi_device,
     // 计算最终 SH（可选距离混合）
     glm::vec4 final_sh[9] = {};
 
-    if (second_probe && best_dist < best_probe->influence_radius &&
-        second_dist < second_probe->influence_radius) {
+    auto sh_vec3 = [](const RenderLightProbe& p, int i) {
+        return glm::vec3(p.sh_coefficients[i * 3 + 0],
+                         p.sh_coefficients[i * 3 + 1],
+                         p.sh_coefficients[i * 3 + 2]);
+    };
+
+    if (second_probe && best_dist < best_probe->radius &&
+        second_dist < second_probe->radius) {
         // 两个 probe 距离加权混合
         float total = best_dist + second_dist;
         if (total < 0.001f) total = 0.001f;
@@ -272,14 +269,14 @@ void LightProbeSystem::UpdateGlobalSH(World& world, RhiDevice* rhi_device,
         w2 /= wsum;
 
         for (int i = 0; i < 9; ++i) {
-            glm::vec3 blended = best_probe->sh_coefficients[i] * w1 +
-                                second_probe->sh_coefficients[i] * w2;
+            glm::vec3 blended = sh_vec3(*best_probe, i) * w1 +
+                                sh_vec3(*second_probe, i) * w2;
             final_sh[i] = glm::vec4(blended, 0.0f);
         }
     } else {
         // 单 probe
         for (int i = 0; i < 9; ++i) {
-            final_sh[i] = glm::vec4(best_probe->sh_coefficients[i], 0.0f);
+            final_sh[i] = glm::vec4(sh_vec3(*best_probe, i), 0.0f);
         }
     }
 

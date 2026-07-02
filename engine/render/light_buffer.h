@@ -20,8 +20,6 @@
 #include <cstring>
 #include "engine/render/rhi/rhi_handle.h"
 
-class World;
-
 namespace dse {
 namespace render {
 
@@ -78,11 +76,8 @@ public:
     /// 初始化 SSBO（在 RHI 设备就绪后调用）
     void Init(RhiDevice* device);
 
-    /// 从 ECS World 收集所有光源到 CPU 端缓冲
-    /// @param camera_offset Camera-Relative: 光源位置减去此偏移后上传 GPU
-    void CollectLights(const World& world, const glm::vec3& camera_offset = glm::vec3(0.0f));
-
     /// 从 RenderSceneView 收集光源（ECS-free）
+    /// @param camera_offset Camera-Relative: 光源位置减去此偏移后上传 GPU
     void CollectLightsFromView(const RenderSceneView& view, const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     /// 将 CPU 端数据上传到 SSBO

@@ -5,32 +5,12 @@
 
 #include "engine/render/gi/lightmap_system.h"
 #include "engine/render/gi/lightmap_baker.h"
-#include "engine/ecs/world.h"
 
 namespace dse {
 namespace render {
 
 void LightmapSystem::Init(RhiDevice* device) {
     device_ = device;
-}
-
-void LightmapSystem::Update(::World& world) {
-    (void)world;
-    if (!device_) return;
-
-    // Scan all entities with LightmapComponent, ensure textures are loaded
-    auto view = world.registry().view<LightmapComponent>();
-    for (auto entity : view) {
-        auto& lmc = view.get<LightmapComponent>(entity);
-        if (lmc.lightmap_path.empty()) continue;
-
-        // Already loaded - update handle reference
-        if (lmc.lightmap_handle != 0) continue;
-
-        // Try to load
-        uint32_t handle = LoadLightmap(lmc.lightmap_path);
-        lmc.lightmap_handle = handle;
-    }
 }
 
 uint32_t LightmapSystem::GetTextureHandle(const std::string& path) const {

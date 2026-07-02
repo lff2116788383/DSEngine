@@ -16,8 +16,6 @@
 #include <vector>
 #include "engine/render/gi/lightmap_baker.h"
 
-class World;
-
 namespace dse {
 namespace render {
 
@@ -44,9 +42,6 @@ public:
 
     /// 初始化（传入 RHI 设备用于纹理创建）
     void Init(RhiDevice* device);
-
-    /// 每帧更新：扫描 LightmapComponent，加载/卸载纹理
-    void Update(::World& world);
 
     /// 获取指定路径的 lightmap 纹理句柄（已加载时返回有效值）
     uint32_t GetTextureHandle(const std::string& path) const;

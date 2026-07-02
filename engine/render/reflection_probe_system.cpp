@@ -6,6 +6,7 @@
 #include "engine/render/reflection_probe_system.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/passes/render_pass_context.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
@@ -383,13 +384,10 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
             const dse::render::FrameContext face_frame{view, proj};
 
             // 渲染天空盒（通用绘制原语，自带天空盒 PSO）
-            auto skybox_view = ctx.world->registry().view<dse::SkyboxComponent>();
-            for (auto sky_entity : skybox_view) {
-                auto& skybox = skybox_view.get<dse::SkyboxComponent>(sky_entity);
-                if (skybox.enabled && skybox.cubemap_handle != 0) {
-                    skybox_renderer_.Draw(*face_cmd, *rhi_device, skybox.cubemap_handle, view, proj);
-                }
-                break;
+            if (ctx.scene_view && ctx.scene_view->skybox.present &&
+                ctx.scene_view->skybox.cubemap_handle != 0) {
+                skybox_renderer_.Draw(*face_cmd, *rhi_device,
+                                      ctx.scene_view->skybox.cubemap_handle, view, proj);
             }
 
             face_cmd->BindPipeline(ctx.pipeline_states.mesh);
@@ -449,18 +447,15 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
 // 运行时查询
 // ============================================================================
 
-unsigned int ReflectionProbeSystem::QueryNearestProbeCubemap(World& world,
+unsigned int ReflectionProbeSystem::QueryNearestProbeCubemap(const RenderSceneView& scene_view,
                                                               const glm::vec3& position) const {
-    auto probe_view = world.registry().view<TransformComponent, dse::ReflectionProbeComponent>();
     float best_dist = std::numeric_limits<float>::max();
     unsigned int best_cubemap = 0;
 
-    for (auto entity : probe_view) {
-        auto& probe = probe_view.get<dse::ReflectionProbeComponent>(entity);
-        if (!probe.enabled || probe.cubemap_handle == 0) continue;
+    for (const auto& probe : scene_view.reflection_probes) {
+        if (probe.cubemap_handle == 0) continue;
 
-        auto& transform = probe_view.get<TransformComponent>(entity);
-        float dist = glm::distance(transform.position, position);
+        float dist = glm::distance(probe.position, position);
         if (dist < probe.influence_radius && dist < best_dist) {
             best_dist = dist;
             best_cubemap = probe.cubemap_handle;

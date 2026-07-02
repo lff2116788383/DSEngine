@@ -9,10 +9,6 @@
 #include "engine/render/rhi/rhi_gpu_driven.h"
 #include "engine/render/rhi/rhi_gpu_buffer.h"
 #include "engine/render/render_scene_view.h"
-#include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_3d_render.h"
-#include "engine/ecs/transform.h"
-#include "engine/ecs/world.h"
 #include "engine/platform/screen.h"
 
 #include <glm/glm.hpp>
@@ -158,28 +154,19 @@ void MeshletCullRenderPass::CollectInstances() {
     cull_pass_.BeginFrame();
     material_entries_.clear();
 
-    // Collect from ECS: entities with MeshletMeshComponent
-    if (!ctx_.world) return;
-    auto& reg = ctx_.world->registry();
+    // Collect from the pre-extracted scene view (ECS-free)
+    if (!ctx_.scene_view) return;
 
-    // Look for entities that have registered meshlet mesh IDs
-    // In production this would use a dedicated MeshletMeshComponent;
-    // for now we use the existing MeshRendererComponent with meshlet data attached
-    auto view = reg.view<TransformComponent, MeshRendererComponent>();
-    for (auto entity : view) {
-        auto& mesh_comp = view.get<MeshRendererComponent>(entity);
-        if (mesh_comp.meshlet_mesh_id == 0) continue; // No meshlet data
-
-        auto& tf = view.get<TransformComponent>(entity);
-        cull_pass_.AddInstance(mesh_comp.meshlet_mesh_id, tf.local_to_world);
+    for (const auto& inst : ctx_.scene_view->meshlet_instances) {
+        cull_pass_.AddInstance(inst.mesh_id, inst.local_to_world);
 
         // Material mapping (one entry per meshlet of this instance)
-        auto it = cull_pass_.GetMeshRegistry().find(mesh_comp.meshlet_mesh_id);
+        auto it = cull_pass_.GetMeshRegistry().find(inst.mesh_id);
         if (it != cull_pass_.GetMeshRegistry().end()) {
             uint32_t count = static_cast<uint32_t>(it->second.mesh_data.meshlets.size());
             for (uint32_t i = 0; i < count; ++i) {
                 MeshletMaterialEntry entry{};
-                entry.material_index = mesh_comp.material_index;
+                entry.material_index = inst.material_index;
                 material_entries_.push_back(entry);
             }
         }

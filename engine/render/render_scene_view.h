@@ -58,6 +58,7 @@ struct RenderReflectionProbe {
     glm::vec3 box_max{1.0f};
     uint32_t  cubemap_handle = 0;
     float     intensity = 1.0f;
+    float     influence_radius = 10.0f;
     bool      box_projection = false;
 };
 
@@ -73,6 +74,12 @@ struct RenderSkybox {
     float    intensity = 1.0f;
     float    rotation  = 0.0f;
     bool     present   = false;
+};
+
+struct RenderMeshletInstance {
+    uint32_t  mesh_id = 0;
+    int       material_index = 0;
+    glm::mat4 local_to_world{1.0f};
 };
 
 struct RenderLightmap {
@@ -97,6 +104,7 @@ struct DSE_EXPORT RenderSceneView {
     std::vector<RenderReflectionProbe>  reflection_probes;
     std::vector<RenderLightProbe>       light_probes;
     std::vector<RenderLightmap>         lightmaps;
+    std::vector<RenderMeshletInstance>  meshlet_instances;
     RenderSkybox                        skybox;
 
     void Clear() {
@@ -106,6 +114,7 @@ struct DSE_EXPORT RenderSceneView {
         reflection_probes.clear();
         light_probes.clear();
         lightmaps.clear();
+        meshlet_instances.clear();
         skybox = {};
     }
 };

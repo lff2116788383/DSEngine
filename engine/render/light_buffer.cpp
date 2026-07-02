@@ -7,8 +7,6 @@
 #include "engine/render/render_scene_view.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/ubo_types.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/components_3d.h"
 #include "engine/base/debug.h"
 #include <algorithm>
 
@@ -43,71 +41,6 @@ void LightBuffer::Init(RhiDevice* device) {
 
     point_lights_.reserve(initial_point);
     spot_lights_.reserve(initial_spot);
-}
-
-void LightBuffer::CollectLights(const World& world, const glm::vec3& camera_offset) {
-    point_lights_.clear();
-    spot_lights_.clear();
-
-    // UBO fallback 模式（GL 3.3）最多 64 个光源（固定大小 UBO 限制）
-    const bool ubo_mode = device_ && !device_->SupportsSSBO();
-    const int max_point = ubo_mode ? kMaxUBOLights : kMaxClusteredPointLights;
-    const int max_spot  = ubo_mode ? kMaxUBOLights : kMaxClusteredSpotLights;
-
-    // 收集点光源
-    int next_point_shadow = 0;
-    auto point_view = world.registry().view<TransformComponent, PointLightComponent>();
-    for (auto entity : point_view) {
-        if (static_cast<int>(point_lights_.size()) >= max_point) break;
-        auto& transform = point_view.get<TransformComponent>(entity);
-        auto& light     = point_view.get<PointLightComponent>(entity);
-        if (!light.enabled) continue;
-
-        GPUPointLight gpu{};
-        gpu.color     = light.color;
-        gpu.intensity = light.intensity;
-        gpu.position  = transform.position - camera_offset;
-        gpu.radius    = light.radius * std::max(0.1f, light.falloff);
-
-        if (light.cast_shadow && next_point_shadow < 4) {
-            gpu.cast_shadow  = 1;
-            gpu.shadow_index = next_point_shadow++;
-        } else {
-            gpu.cast_shadow  = 0;
-            gpu.shadow_index = -1;
-        }
-
-        point_lights_.push_back(gpu);
-    }
-
-    // 收集聚光灯
-    int next_spot_shadow = 0;
-    auto spot_view = world.registry().view<TransformComponent, SpotLightComponent>();
-    for (auto entity : spot_view) {
-        if (static_cast<int>(spot_lights_.size()) >= max_spot) break;
-        auto& transform = spot_view.get<TransformComponent>(entity);
-        auto& light     = spot_view.get<SpotLightComponent>(entity);
-        if (!light.enabled) continue;
-
-        GPUSpotLight gpu{};
-        gpu.color      = light.color;
-        gpu.intensity  = light.intensity;
-        gpu.position   = transform.position - camera_offset;
-        gpu.radius     = light.radius * std::max(0.1f, light.falloff);
-        gpu.direction  = glm::normalize(transform.rotation * light.direction);
-        gpu.inner_cone = light.inner_cone_angle;
-        gpu.outer_cone = light.outer_cone_angle;
-
-        if (light.cast_shadow && next_spot_shadow < 4) {
-            gpu.cast_shadow  = 1;
-            gpu.shadow_index = next_spot_shadow++;
-        } else {
-            gpu.cast_shadow  = 0;
-            gpu.shadow_index = -1;
-        }
-
-        spot_lights_.push_back(gpu);
-    }
 }
 
 void LightBuffer::CollectLightsFromView(const RenderSceneView& view, const glm::vec3& camera_offset) {

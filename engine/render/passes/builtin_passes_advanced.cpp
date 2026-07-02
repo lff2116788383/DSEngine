@@ -10,7 +10,6 @@
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/gi/ddgi_system.h"
 #include "engine/base/debug.h"
-#include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"

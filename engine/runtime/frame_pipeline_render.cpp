@@ -109,7 +109,7 @@ void FramePipeline::RunRenderInternal() {
                 break;
             }
         }
-        rs_->light_probe_system_.UpdateGlobalSH(*runtime_context_.world,
+        rs_->light_probe_system_.UpdateGlobalSH(rs_->scene_view_,
                                             runtime_context_.rhi_device.get(), cam_pos);
     } else {
         glm::vec4 sh_coeffs[9] = {};

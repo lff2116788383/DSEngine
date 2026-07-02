@@ -26,6 +26,7 @@ class RhiDevice;
 class CommandBuffer;
 
 struct RenderPassContext;
+struct RenderSceneView;
 
 /**
  * @class ReflectionProbeSystem
@@ -46,8 +47,9 @@ public:
     void BakePendingProbes(World& world, RhiDevice* rhi_device,
                            RenderPassContext& ctx);
 
-    /// 运行时查询：选择最近 probe 的预滤波 cubemap，返回 handle（0 = 无可用 probe）
-    unsigned int QueryNearestProbeCubemap(World& world, const glm::vec3& position) const;
+    /// 运行时查询：选择最近 probe 的预滤波 cubemap，返回 handle（0 = 无可用 probe，ECS-free）
+    unsigned int QueryNearestProbeCubemap(const RenderSceneView& scene_view,
+                                          const glm::vec3& position) const;
 
     /// 获取 BRDF LUT 纹理句柄
     unsigned int brdf_lut_handle() const { return brdf_lut_handle_; }

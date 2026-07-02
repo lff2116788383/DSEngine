@@ -278,7 +278,14 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     }
 
     // ── Lightmap: 按需加载 LightmapComponent 引用的 .dlightmap 纹理 ──
-    lightmap_system_.Update(world);
+    {
+        auto lm_view = world.registry().view<dse::render::LightmapComponent>();
+        for (auto e : lm_view) {
+            auto& lmc = lm_view.get<dse::render::LightmapComponent>(e);
+            if (lmc.lightmap_path.empty() || lmc.lightmap_handle != 0) continue;
+            lmc.lightmap_handle = lightmap_system_.LoadLightmap(lmc.lightmap_path);
+        }
+    }
 
     // ── Open-world systems 更新 ──────────────────────────────────────────
 

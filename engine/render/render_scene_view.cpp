@@ -78,6 +78,7 @@ void ExtractRenderSceneView(const World& world, RenderSceneView& out) {
         rrp.box_max = tf.position + glm::vec3(rp.box_size_x, rp.box_size_y, rp.box_size_z) * 0.5f;
         rrp.cubemap_handle = rp.cubemap_handle;
         rrp.intensity = 1.0f;
+        rrp.influence_radius = rp.influence_radius;
         rrp.box_projection = rp.use_box_projection;
         out.reflection_probes.push_back(rrp);
     }
@@ -120,6 +121,19 @@ void ExtractRenderSceneView(const World& world, RenderSceneView& out) {
         rlm.st_offset = lm.st_offset;
         rlm.use_ao = lm.use_ao;
         out.lightmaps.push_back(rlm);
+    }
+
+    // Meshlet instances (entities with meshlet data attached)
+    auto meshlet_view = reg.view<TransformComponent, MeshRendererComponent>();
+    for (auto entity : meshlet_view) {
+        const auto& mrc = meshlet_view.get<MeshRendererComponent>(entity);
+        if (mrc.meshlet_mesh_id == 0) continue;
+        const auto& tf = meshlet_view.get<TransformComponent>(entity);
+        RenderMeshletInstance rmi;
+        rmi.mesh_id = mrc.meshlet_mesh_id;
+        rmi.material_index = mrc.material_index;
+        rmi.local_to_world = tf.local_to_world;
+        out.meshlet_instances.push_back(rmi);
     }
 }
 

@@ -1,10 +1,11 @@
 /**
  * @file light_buffer_test.cpp
- * @brief LightBuffer CPU 侧 CollectLights + GPU 结构体布局测试（无 GPU 依赖）
+ * @brief LightBuffer CPU 侧 CollectLightsFromView + GPU 结构体布局测试（无 GPU 依赖）
  */
 
 #include <gtest/gtest.h>
 #include "engine/render/light_buffer.h"
+#include "engine/render/render_scene_view.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d.h"
 
@@ -23,7 +24,14 @@ protected:
         world_.reset();
     }
 
+    void Collect() {
+        view_.Clear();
+        ExtractRenderSceneView(*world_, view_);
+        buf_.CollectLightsFromView(view_);
+    }
+
     std::unique_ptr<World> world_;
+    RenderSceneView view_;
     LightBuffer buf_;
 };
 
@@ -46,7 +54,7 @@ TEST_F(LightBufferCollectTest, LightBufferHeaderLayout) {
 // 验证空场景收集无光源
 // 测试 灯光缓冲区收集：收集空世界
 TEST_F(LightBufferCollectTest, CollectEmptyWorld) {
-    buf_.CollectLights(*world_);
+    Collect();
     EXPECT_EQ(buf_.point_light_count(), 0);
     EXPECT_EQ(buf_.spot_light_count(), 0);
 }
@@ -68,7 +76,7 @@ TEST_F(LightBufferCollectTest, CollectPointLights) {
         light.cast_shadow = (i == 0);
     }
 
-    buf_.CollectLights(*world_);
+    Collect();
 
     EXPECT_EQ(buf_.point_light_count(), 3);
     EXPECT_EQ(buf_.spot_light_count(), 0);
@@ -95,7 +103,7 @@ TEST_F(LightBufferCollectTest, CollectSpotLights) {
     light.outer_cone_angle = 0.8f;
     light.enabled = true;
 
-    buf_.CollectLights(*world_);
+    Collect();
 
     EXPECT_EQ(buf_.point_light_count(), 0);
     EXPECT_EQ(buf_.spot_light_count(), 1);
@@ -121,7 +129,7 @@ TEST_F(LightBufferCollectTest, SkipDisabledLights) {
     auto& l2 = reg.emplace<PointLightComponent>(e2);
     l2.enabled = true;
 
-    buf_.CollectLights(*world_);
+    Collect();
 
     EXPECT_EQ(buf_.point_light_count(), 1);
 }
@@ -140,7 +148,7 @@ TEST_F(LightBufferCollectTest, ShadowIndexLimit) {
         light.radius = 10.0f;
     }
 
-    buf_.CollectLights(*world_);
+    Collect();
 
     EXPECT_EQ(buf_.point_light_count(), 6);
     int shadow_count = 0;
@@ -150,7 +158,7 @@ TEST_F(LightBufferCollectTest, ShadowIndexLimit) {
     EXPECT_EQ(shadow_count, 4);
 }
 
-// CollectLights 每帧清空重新收集
+// CollectLightsFromView 每帧清空重新收集
 // 测试 灯光缓冲区收集：收集清空先前帧
 TEST_F(LightBufferCollectTest, CollectClearsPreviousFrame) {
     auto& reg = world_->registry();
@@ -159,10 +167,10 @@ TEST_F(LightBufferCollectTest, CollectClearsPreviousFrame) {
     reg.emplace<TransformComponent>(entity);
     reg.emplace<PointLightComponent>(entity).enabled = true;
 
-    buf_.CollectLights(*world_);
+    Collect();
     EXPECT_EQ(buf_.point_light_count(), 1);
 
     reg.destroy(entity);
-    buf_.CollectLights(*world_);
+    Collect();
     EXPECT_EQ(buf_.point_light_count(), 0);
 }

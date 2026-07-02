@@ -26,6 +26,7 @@ namespace render {
 class RhiDevice;
 class CommandBuffer;
 struct RenderPassContext;
+struct RenderSceneView;
 
 /// SH L2 系数（9 个 vec3，RGB 通道）
 struct SHL2 {
@@ -59,8 +60,8 @@ public:
     void BakePendingProbes(World& world, RhiDevice* rhi_device,
                            RenderPassContext& ctx);
 
-    /// 运行时查询：根据相机位置选择最近 probe 的 SH，写入 RHI 全局状态
-    void UpdateGlobalSH(World& world, RhiDevice* rhi_device,
+    /// 运行时查询：根据相机位置选择最近 probe 的 SH，写入 RHI 全局状态（ECS-free）
+    void UpdateGlobalSH(const RenderSceneView& scene_view, RhiDevice* rhi_device,
                         const glm::vec3& camera_position);
 
     /// 获取已烘焙的 probe 列表（调试用）
