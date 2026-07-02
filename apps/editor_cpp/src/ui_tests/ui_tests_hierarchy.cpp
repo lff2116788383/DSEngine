@@ -161,16 +161,23 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             char node_ref[96];
             NodeRef(node_ref, sizeof(node_ref), ent);
 
+            // 先单击节点确保实体被选中且节点可见，再双击触发重命名。
+            // 后台/远程环境下，直接双击可能因窗口未获得焦点而导致 IsItemHovered
+            // 返回 false，从而不触发重命名模式。先通过单击把焦点带到节点上。
+            ctx->WindowFocus("//Hierarchy");
+            ctx->ItemClick(node_ref);
+            ctx->Yield(4);
+
             ctx->WindowFocus("//Hierarchy");
             ctx->ItemDoubleClick(node_ref);   // 触发内联重命名（s_renaming_entity = ent）
             ctx->Yield(4);
 
             // 重命名输入框画在 "Scene" 树节点作用域下（与实体节点同级），id "##rename"，回车提交。
-            // 后台/远程环境下双击可能未及时触发重命名模式，重试双击并等待输入框出现。
-            for (int retry = 0; retry < 3; ++retry) {
-                if (ctx->ItemExists("//Hierarchy/Scene/##rename"))
-                    break;
+            // 若双击仍未触发重命名，重试一次。
+            if (!ctx->ItemExists("//Hierarchy/Scene/##rename")) {
                 ctx->WindowFocus("//Hierarchy");
+                ctx->ItemClick(node_ref);
+                ctx->Yield(2);
                 ctx->ItemDoubleClick(node_ref);
                 ctx->Yield(4);
             }

@@ -219,34 +219,25 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             AddComponent(ctx, "RigidBody 3D");
             IM_CHECK(Reg().all_of<dse::RigidBody3DComponent>(ent));
 
-            // 后台/远程环境下 Inspector 渲染组件控件可能较慢，聚焦 Inspector 并多等几帧
-            // 确保 RigidBody3D section 的 TreeNode 已展开、控件 ID 已注册。
+            // DrawReflectedSection 生成的控件 ID 格式为 "##<TypeName>.<fieldName>"，
+            // 与反射注册的字段名一致。
             ctx->WindowFocus("//Inspector");
             ctx->Yield(4);
 
-            // 若控件尚未出现，尝试滚动 Inspector 到底部并再等几帧。
-            for (int retry = 0; retry < 3; ++retry) {
-                if (ctx->ItemExists("//Inspector/##rb3d_mass"))
-                    break;
-                ctx->WindowFocus("//Inspector");
-                ctx->ScrollToBottom("//Inspector");
-                ctx->Yield(4);
-            }
-
-            ctx->ItemInputValue("//Inspector/##rb3d_mass", 7.5f);
+            ctx->ItemInputValue("//Inspector/##RigidBody3DComponent.mass", 7.5f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).mass - 7.5f) < 0.01f);
 
-            ctx->ItemInputValue("//Inspector/##rb3d_drag", 1.25f);
+            ctx->ItemInputValue("//Inspector/##RigidBody3DComponent.drag", 1.25f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).drag - 1.25f) < 0.01f);
 
-            ctx->ItemInputValue("//Inspector/##rb3d_gscale", 2.0f);
+            ctx->ItemInputValue("//Inspector/##RigidBody3DComponent.gravity_scale", 2.0f);
             ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::RigidBody3DComponent>(ent).gravity_scale - 2.0f) < 0.01f);
 
             const bool grav0 = Reg().get<dse::RigidBody3DComponent>(ent).use_gravity;
-            ctx->ItemClick("//Inspector/##rb3d_grav");
+            ctx->ItemClick("//Inspector/##RigidBody3DComponent.use_gravity");
             ctx->Yield(2);
             IM_CHECK(Reg().get<dse::RigidBody3DComponent>(ent).use_gravity == !grav0);
 

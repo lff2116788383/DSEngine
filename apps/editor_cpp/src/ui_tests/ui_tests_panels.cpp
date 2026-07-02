@@ -14,6 +14,8 @@
 
 #ifdef DSE_EDITOR_UI_TESTS
 
+#include <string>
+
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_te_engine.h"
@@ -83,14 +85,16 @@ void RegisterPanelRenderTests(ImGuiTestEngine* e) {
         t->TestFunc = [](ImGuiTestContext* ctx) {
             const char* window_name = static_cast<const char*>(ctx->Test->UserData);
             EnsureAllPanelsVisible();
-            // 后台/远程环境下面板初始化可能较慢，用重试循环代替固定帧等待。
-            ImGuiWindow* w = nullptr;
-            for (int attempt = 0; attempt < 8 && w == nullptr; ++attempt) {
-                ctx->Yield(4);
-                w = FindActiveWindow(window_name);
-            }
+            ctx->Yield(4);
+            // EnsureAllPanelsVisible 打开大量可选面板，它们可能以页签停靠到常驻面板同一 dock
+            // 节点，导致常驻面板被压在后面、WasActive=false。先聚焦目标窗口把它
+            // 带到前台，再 yield 让它绘制一帧后再检查 WasActive。
+            const std::string win_ref = std::string("//") + window_name;
+            ctx->WindowFocus(win_ref.c_str());
+            ctx->Yield(4);
+            ImGuiWindow* w = FindActiveWindow(window_name);
             if (w == nullptr)
-                ctx->LogError("panel window not found or not active after retries: '%s'", window_name);
+                ctx->LogError("panel window not found or not active: '%s'", window_name);
             IM_CHECK(w != nullptr);
         };
     }
