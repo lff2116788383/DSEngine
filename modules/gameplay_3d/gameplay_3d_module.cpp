@@ -224,6 +224,14 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     particle3d_system_.Update(world, delta_time);
     steering_system_.Update(world, delta_time);
 
+    // ── 3C Systems: Input → Movement → Camera ──
+    // PlayerController 读取 Input，写入 CharacterMovementState（用 unscaled_dt 保证暂停时仍可操控）
+    player_controller_system_.Update(world, time.unscaled_dt);
+    // CharacterMovement 读取 State，驱动物理移动（用 scaled_dt，暂停时冻结角色）
+    character_movement_system_.Update(world, time.scaled_dt);
+    // CameraArm 跟随角色，碰撞避让（用 unscaled_dt，暂停时相机仍可旋转）
+    camera_arm_3d_system_.Update(world, time.unscaled_dt);
+
     // ── Behavior Tree: tick all entities with BehaviorTreeComponent (parallel) ──
     dse::ecs::ParallelEach<dse::BehaviorTreeComponent>(world,
         [delta_time](Entity /*e*/, dse::BehaviorTreeComponent& btc) {

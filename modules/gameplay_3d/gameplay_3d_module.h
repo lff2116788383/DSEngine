@@ -41,6 +41,11 @@
 #include "modules/gameplay_3d/weather/weather_system.h"
 #include "modules/gameplay_3d/snow/snow_cover_system.h"
 
+// 3C (Character-Camera-Control) systems
+#include "modules/gameplay_3d/character/character_movement_system.h"
+#include "modules/gameplay_3d/camera/camera_arm_3d_system.h"
+#include "modules/gameplay_3d/player/player_controller_system.h"
+
 // AI / Cutscene systems
 #include "engine/ai/behavior_tree.h"
 #include "engine/cutscene/cutscene_player.h"
@@ -127,6 +132,11 @@ private:
     DayNightCycleSystem day_night_cycle_system_;
     WeatherSystem weather_system_;
     SnowCoverSystem snow_cover_system_;
+
+    // 3C systems
+    CharacterMovementSystem character_movement_system_;
+    CameraArm3DSystem camera_arm_3d_system_;
+    PlayerControllerSystem player_controller_system_;
 
     // Open-world systems
     dse::WorldPartitionSystem world_partition_system_;

@@ -4226,6 +4226,429 @@
                     "type": "bool"
                 }
             ]
+        },
+        {
+            "_comment": "3C (Character-Camera-Control) 组件",
+            "name": "CharacterMovementConfig",
+            "prefix": "character_movement_cfg",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_character.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_character_movement_cfg_enabled",
+                    "lua_setter": "set_character_movement_cfg_enabled"
+                },
+                {
+                    "name": "max_walk_speed",
+                    "type": "float",
+                    "default": "6.0f",
+                    "lua_getter": "get_character_movement_cfg_max_walk_speed",
+                    "lua_setter": "set_character_movement_cfg_max_walk_speed",
+                    "range": [0.0, 100.0]
+                },
+                {
+                    "name": "max_sprint_speed",
+                    "type": "float",
+                    "default": "10.0f",
+                    "lua_getter": "get_character_movement_cfg_max_sprint_speed",
+                    "lua_setter": "set_character_movement_cfg_max_sprint_speed",
+                    "range": [0.0, 100.0]
+                },
+                {
+                    "name": "max_crouch_speed",
+                    "type": "float",
+                    "default": "3.0f",
+                    "lua_getter": "get_character_movement_cfg_max_crouch_speed",
+                    "lua_setter": "set_character_movement_cfg_max_crouch_speed",
+                    "range": [0.0, 50.0]
+                },
+                {
+                    "name": "ground_acceleration",
+                    "type": "float",
+                    "default": "20.0f",
+                    "lua_getter": "get_character_movement_cfg_ground_acceleration",
+                    "lua_setter": "set_character_movement_cfg_ground_acceleration",
+                    "range": [0.0, 200.0]
+                },
+                {
+                    "name": "ground_deceleration",
+                    "type": "float",
+                    "default": "12.0f",
+                    "lua_getter": "get_character_movement_cfg_ground_deceleration",
+                    "lua_setter": "set_character_movement_cfg_ground_deceleration",
+                    "range": [0.0, 200.0]
+                },
+                {
+                    "name": "ground_friction",
+                    "type": "float",
+                    "default": "8.0f",
+                    "lua_getter": "get_character_movement_cfg_ground_friction",
+                    "lua_setter": "set_character_movement_cfg_ground_friction",
+                    "range": [0.0, 50.0]
+                },
+                {
+                    "name": "gravity",
+                    "type": "float",
+                    "default": "-19.62f",
+                    "lua_getter": "get_character_movement_cfg_gravity",
+                    "lua_setter": "set_character_movement_cfg_gravity",
+                    "range": [-100.0, 0.0]
+                },
+                {
+                    "name": "jump_velocity",
+                    "type": "float",
+                    "default": "8.0f",
+                    "lua_getter": "get_character_movement_cfg_jump_velocity",
+                    "lua_setter": "set_character_movement_cfg_jump_velocity",
+                    "range": [0.0, 50.0]
+                },
+                {
+                    "name": "max_jump_count",
+                    "type": "int",
+                    "default": "2",
+                    "lua_getter": "get_character_movement_cfg_max_jump_count",
+                    "lua_setter": "set_character_movement_cfg_max_jump_count"
+                },
+                {
+                    "name": "coyote_time",
+                    "type": "float",
+                    "default": "0.1f",
+                    "lua_getter": "get_character_movement_cfg_coyote_time",
+                    "lua_setter": "set_character_movement_cfg_coyote_time",
+                    "range": [0.0, 1.0]
+                },
+                {
+                    "name": "jump_buffer_time",
+                    "type": "float",
+                    "default": "0.15f",
+                    "lua_getter": "get_character_movement_cfg_jump_buffer_time",
+                    "lua_setter": "set_character_movement_cfg_jump_buffer_time",
+                    "range": [0.0, 1.0]
+                },
+                {
+                    "name": "air_control",
+                    "type": "float",
+                    "default": "0.3f",
+                    "lua_getter": "get_character_movement_cfg_air_control",
+                    "lua_setter": "set_character_movement_cfg_air_control",
+                    "range": [0.0, 1.0]
+                },
+                {
+                    "name": "rotation_rate",
+                    "type": "float",
+                    "default": "720.0f",
+                    "lua_getter": "get_character_movement_cfg_rotation_rate",
+                    "lua_setter": "set_character_movement_cfg_rotation_rate",
+                    "range": [0.0, 3600.0]
+                },
+                {
+                    "name": "publish_events",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_character_movement_cfg_publish_events",
+                    "lua_setter": "set_character_movement_cfg_publish_events"
+                }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "crouch_height",
+                    "type": "float",
+                    "range": [0.1, 2.0],
+                    "script": false
+                },
+                {
+                    "name": "stand_height",
+                    "type": "float",
+                    "range": [0.1, 3.0],
+                    "script": false
+                },
+                {
+                    "name": "max_fall_speed",
+                    "type": "float",
+                    "range": [-100.0, 0.0],
+                    "script": false
+                },
+                {
+                    "name": "swim_speed",
+                    "type": "float",
+                    "range": [0.0, 50.0],
+                    "script": false
+                },
+                {
+                    "name": "fly_speed",
+                    "type": "float",
+                    "range": [0.0, 50.0],
+                    "script": false
+                }
+            ]
+        },
+        {
+            "name": "CharacterMovementState",
+            "prefix": "character_movement",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_character.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "input_direction",
+                    "type": "vec3",
+                    "lua_getter": "get_character_movement_input_direction",
+                    "lua_setter": "set_character_movement_input_direction"
+                },
+                {
+                    "name": "input_jump",
+                    "type": "bool",
+                    "lua_getter": "get_character_movement_input_jump",
+                    "lua_setter": "set_character_movement_input_jump"
+                },
+                {
+                    "name": "input_sprint",
+                    "type": "bool",
+                    "lua_getter": "get_character_movement_input_sprint",
+                    "lua_setter": "set_character_movement_input_sprint"
+                },
+                {
+                    "name": "input_crouch",
+                    "type": "bool",
+                    "lua_getter": "get_character_movement_input_crouch",
+                    "lua_setter": "set_character_movement_input_crouch"
+                },
+                {
+                    "name": "velocity",
+                    "type": "vec3",
+                    "readonly": true,
+                    "lua_getter": "get_character_movement_velocity"
+                },
+                {
+                    "name": "is_grounded",
+                    "type": "bool",
+                    "readonly": true,
+                    "lua_getter": "get_character_movement_is_grounded"
+                },
+                {
+                    "name": "is_jumping",
+                    "type": "bool",
+                    "readonly": true,
+                    "lua_getter": "get_character_movement_is_jumping"
+                },
+                {
+                    "name": "jump_count",
+                    "type": "int",
+                    "readonly": true,
+                    "lua_getter": "get_character_movement_jump_count"
+                }
+            ]
+        },
+        {
+            "name": "SpringArm3DComponent",
+            "prefix": "spring_arm",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_character.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_spring_arm_enabled",
+                    "lua_setter": "set_spring_arm_enabled"
+                },
+                {
+                    "name": "target_offset",
+                    "type": "vec3",
+                    "lua_getter": "get_spring_arm_target_offset",
+                    "lua_setter": "set_spring_arm_target_offset"
+                },
+                {
+                    "name": "arm_length",
+                    "type": "float",
+                    "default": "4.0f",
+                    "lua_getter": "get_spring_arm_arm_length",
+                    "lua_setter": "set_spring_arm_arm_length",
+                    "range": [0.0, 50.0]
+                },
+                {
+                    "name": "collision_test",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_spring_arm_collision_test",
+                    "lua_setter": "set_spring_arm_collision_test"
+                },
+                {
+                    "name": "pitch",
+                    "type": "float",
+                    "default": "-20.0f",
+                    "lua_getter": "get_spring_arm_pitch",
+                    "lua_setter": "set_spring_arm_pitch",
+                    "range": [-90.0, 90.0]
+                },
+                {
+                    "name": "yaw",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_spring_arm_yaw",
+                    "lua_setter": "set_spring_arm_yaw"
+                },
+                {
+                    "name": "position_lag_speed",
+                    "type": "float",
+                    "default": "10.0f",
+                    "lua_getter": "get_spring_arm_position_lag_speed",
+                    "lua_setter": "set_spring_arm_position_lag_speed",
+                    "range": [0.0, 100.0]
+                },
+                {
+                    "name": "shake_trauma",
+                    "type": "float",
+                    "default": "0.0f",
+                    "lua_getter": "get_spring_arm_shake_trauma",
+                    "lua_setter": "set_spring_arm_shake_trauma",
+                    "range": [0.0, 1.0]
+                }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "min_arm_length",
+                    "type": "float",
+                    "range": [0.0, 10.0],
+                    "script": false
+                },
+                {
+                    "name": "max_arm_length",
+                    "type": "float",
+                    "range": [0.0, 100.0],
+                    "script": false
+                },
+                {
+                    "name": "probe_radius",
+                    "type": "float",
+                    "range": [0.0, 2.0],
+                    "script": false
+                },
+                {
+                    "name": "min_pitch",
+                    "type": "float",
+                    "range": [-90.0, 0.0],
+                    "script": false
+                },
+                {
+                    "name": "max_pitch",
+                    "type": "float",
+                    "range": [0.0, 90.0],
+                    "script": false
+                },
+                {
+                    "name": "rotation_lag_speed",
+                    "type": "float",
+                    "range": [0.0, 100.0],
+                    "script": false
+                },
+                {
+                    "name": "first_person_fov",
+                    "type": "float",
+                    "range": [30.0, 120.0],
+                    "script": false
+                },
+                {
+                    "name": "third_person_fov",
+                    "type": "float",
+                    "range": [30.0, 120.0],
+                    "script": false
+                },
+                {
+                    "name": "shake_decay_rate",
+                    "type": "float",
+                    "range": [0.0, 10.0],
+                    "script": false
+                },
+                {
+                    "name": "shake_max_offset",
+                    "type": "float",
+                    "range": [0.0, 2.0],
+                    "script": false
+                },
+                {
+                    "name": "shake_frequency",
+                    "type": "float",
+                    "range": [0.0, 50.0],
+                    "script": false
+                }
+            ]
+        },
+        {
+            "name": "PlayerControllerComponent",
+            "prefix": "player_controller",
+            "lua_table": "ecs",
+            "include": "engine/ecs/components_3d_character.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool",
+                    "default": "true",
+                    "lua_getter": "get_player_controller_enabled",
+                    "lua_setter": "set_player_controller_enabled"
+                },
+                {
+                    "name": "mouse_sensitivity",
+                    "type": "float",
+                    "default": "0.15f",
+                    "lua_getter": "get_player_controller_mouse_sensitivity",
+                    "lua_setter": "set_player_controller_mouse_sensitivity",
+                    "range": [0.01, 5.0]
+                },
+                {
+                    "name": "gamepad_sensitivity",
+                    "type": "float",
+                    "default": "2.0f",
+                    "lua_getter": "get_player_controller_gamepad_sensitivity",
+                    "lua_setter": "set_player_controller_gamepad_sensitivity",
+                    "range": [0.1, 10.0]
+                },
+                {
+                    "name": "invert_y",
+                    "type": "bool",
+                    "default": "false",
+                    "lua_getter": "get_player_controller_invert_y",
+                    "lua_setter": "set_player_controller_invert_y"
+                },
+                {
+                    "name": "stick_dead_zone",
+                    "type": "float",
+                    "default": "0.15f",
+                    "lua_getter": "get_player_controller_stick_dead_zone",
+                    "lua_setter": "set_player_controller_stick_dead_zone",
+                    "range": [0.0, 0.5]
+                },
+                {
+                    "name": "move_response_curve",
+                    "type": "float",
+                    "default": "1.5f",
+                    "lua_getter": "get_player_controller_move_response_curve",
+                    "lua_setter": "set_player_controller_move_response_curve",
+                    "range": [0.5, 5.0]
+                },
+                {
+                    "name": "look_response_curve",
+                    "type": "float",
+                    "default": "1.0f",
+                    "lua_getter": "get_player_controller_look_response_curve",
+                    "lua_setter": "set_player_controller_look_response_curve",
+                    "range": [0.5, 5.0]
+                }
+            ],
+            "reflect_extra_fields": [
+                {
+                    "name": "stick_outer_dead_zone",
+                    "type": "float",
+                    "range": [0.5, 1.0],
+                    "script": false
+                }
+            ]
         }
     ]
 }

@@ -16,5 +16,6 @@
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_navmesh.h"
 #include "engine/ecs/components_3d_tree.h"
+#include "engine/ecs/components_3d_character.h"
 
 #endif // DSE_COMPONENTS_3D_H

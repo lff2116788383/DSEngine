@@ -107,6 +107,11 @@ namespace events {
 
     // --- 大世界坐标事件 ---
     constexpr EventId kOriginRebased    = MakeEventId("OriginRebased");
+
+    // --- 3C 角色移动事件 ---
+    constexpr EventId kCharacterLanded         = MakeEventId("CharacterLanded");
+    constexpr EventId kCharacterJumped         = MakeEventId("CharacterJumped");
+    constexpr EventId kMovementModeChanged     = MakeEventId("MovementModeChanged");
 } // namespace events
 
 } // namespace core
