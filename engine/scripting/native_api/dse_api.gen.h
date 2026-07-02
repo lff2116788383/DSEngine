@@ -930,6 +930,86 @@ DSE_CAPI_GEN void dse_lightmap_set_st_offset(uint32_t e, float x, float y, float
 DSE_CAPI_GEN int  dse_lightmap_get_use_ao(uint32_t e);
 DSE_CAPI_GEN void dse_lightmap_set_use_ao(uint32_t e, int v);
 
+/* ---- CharacterMovementConfig ---- */
+DSE_CAPI_GEN int  dse_character_movement_cfg_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_cfg_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_max_walk_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_max_walk_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_max_sprint_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_max_sprint_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_max_crouch_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_max_crouch_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_ground_acceleration(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_ground_acceleration(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_ground_deceleration(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_ground_deceleration(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_ground_friction(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_ground_friction(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_gravity(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_gravity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_jump_velocity(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_jump_velocity(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_character_movement_cfg_get_max_jump_count(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_cfg_set_max_jump_count(uint32_t e, int v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_coyote_time(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_coyote_time(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_jump_buffer_time(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_jump_buffer_time(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_air_control(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_air_control(uint32_t e, float v);
+DSE_CAPI_GEN float dse_character_movement_cfg_get_rotation_rate(uint32_t e);
+DSE_CAPI_GEN void  dse_character_movement_cfg_set_rotation_rate(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_character_movement_cfg_get_publish_events(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_cfg_set_publish_events(uint32_t e, int v);
+
+/* ---- CharacterMovementState ---- */
+DSE_CAPI_GEN void dse_character_movement_get_input_direction(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_character_movement_set_input_direction(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN int  dse_character_movement_get_input_jump(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_set_input_jump(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_character_movement_get_input_sprint(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_set_input_sprint(uint32_t e, int v);
+DSE_CAPI_GEN int  dse_character_movement_get_input_crouch(uint32_t e);
+DSE_CAPI_GEN void dse_character_movement_set_input_crouch(uint32_t e, int v);
+DSE_CAPI_GEN void dse_character_movement_get_velocity(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN int  dse_character_movement_get_is_grounded(uint32_t e);
+DSE_CAPI_GEN int  dse_character_movement_get_is_jumping(uint32_t e);
+DSE_CAPI_GEN int  dse_character_movement_get_jump_count(uint32_t e);
+
+/* ---- SpringArm3DComponent ---- */
+DSE_CAPI_GEN int  dse_spring_arm_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_spring_arm_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN void dse_spring_arm_get_target_offset(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI_GEN void dse_spring_arm_set_target_offset(uint32_t e, float x, float y, float z);
+DSE_CAPI_GEN float dse_spring_arm_get_arm_length(uint32_t e);
+DSE_CAPI_GEN void  dse_spring_arm_set_arm_length(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_spring_arm_get_collision_test(uint32_t e);
+DSE_CAPI_GEN void dse_spring_arm_set_collision_test(uint32_t e, int v);
+DSE_CAPI_GEN float dse_spring_arm_get_pitch(uint32_t e);
+DSE_CAPI_GEN void  dse_spring_arm_set_pitch(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spring_arm_get_yaw(uint32_t e);
+DSE_CAPI_GEN void  dse_spring_arm_set_yaw(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spring_arm_get_position_lag_speed(uint32_t e);
+DSE_CAPI_GEN void  dse_spring_arm_set_position_lag_speed(uint32_t e, float v);
+DSE_CAPI_GEN float dse_spring_arm_get_shake_trauma(uint32_t e);
+DSE_CAPI_GEN void  dse_spring_arm_set_shake_trauma(uint32_t e, float v);
+
+/* ---- PlayerControllerComponent ---- */
+DSE_CAPI_GEN int  dse_player_controller_get_enabled(uint32_t e);
+DSE_CAPI_GEN void dse_player_controller_set_enabled(uint32_t e, int v);
+DSE_CAPI_GEN float dse_player_controller_get_mouse_sensitivity(uint32_t e);
+DSE_CAPI_GEN void  dse_player_controller_set_mouse_sensitivity(uint32_t e, float v);
+DSE_CAPI_GEN float dse_player_controller_get_gamepad_sensitivity(uint32_t e);
+DSE_CAPI_GEN void  dse_player_controller_set_gamepad_sensitivity(uint32_t e, float v);
+DSE_CAPI_GEN int  dse_player_controller_get_invert_y(uint32_t e);
+DSE_CAPI_GEN void dse_player_controller_set_invert_y(uint32_t e, int v);
+DSE_CAPI_GEN float dse_player_controller_get_stick_dead_zone(uint32_t e);
+DSE_CAPI_GEN void  dse_player_controller_set_stick_dead_zone(uint32_t e, float v);
+DSE_CAPI_GEN float dse_player_controller_get_move_response_curve(uint32_t e);
+DSE_CAPI_GEN void  dse_player_controller_set_move_response_curve(uint32_t e, float v);
+DSE_CAPI_GEN float dse_player_controller_get_look_response_curve(uint32_t e);
+DSE_CAPI_GEN void  dse_player_controller_set_look_response_curve(uint32_t e, float v);
+
 #ifdef __cplusplus
 }
 #endif

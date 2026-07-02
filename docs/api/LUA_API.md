@@ -1,10 +1,10 @@
 # DSEngine Lua API 参考文档
 
 > 严格对齐 `engine/scripting/lua/bindings/` 源码
-> 更新日期：2026-06-30
+> 更新日期：2026-07-02
 > 绑定文件：`engine/scripting/lua/bindings/` 下约 33 个手写 C++ 源文件 + 13 个 `*.gen.cpp`，
 > 涵盖 21 个顶层模块（其中 `http` / `net` 为条件编译）。
-> 实测共注册 **1119** 个 Lua 可见函数（含 §18 的 330 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数 + §23-29 的 91 个世界/视频系统函数 + §30 的 37 个 2D 扩展系统函数）。
+> 实测共注册 **1169** 个 Lua 可见函数（含 §18 的 380 个 Codegen 字段访问器 + §19 的 69 个开放世界系统函数 + §20-22 的 60 个 AI/过场/Meshlet 函数 + §23-29 的 91 个世界/视频系统函数 + §30 的 37 个 2D 扩展系统函数）。
 > 说明：ECS 高层封装函数见 §5；逐字段底层 getter/setter 见 §18（由 `tools/codegen/binding_defs.json` 自动派生）。
 > 完整覆盖率与差距分析见 `docs/api/API_GAP_ANALYSIS.md`。
 
@@ -2406,6 +2406,72 @@ local local_entity = dse.repl.client_to_entity(cli, some_net_id)
 | `intensity` | float | `ecs.get_lightmap_intensity(e)` ΓåÆ number | `ecs.set_lightmap_intensity(e, value:number)` | `ΓÇö` |
 | `st_offset` | vec4 | `ecs.get_lightmap_st_offset(e)` ΓåÆ x, y, z, w | `ecs.set_lightmap_st_offset(e, x, y, z, w)` | `ΓÇö` |
 | `use_ao` | bool | `ecs.get_lightmap_use_ao(e)` ΓåÆ boolean | `ecs.set_lightmap_use_ao(e, value:bool)` | `ΓÇö` |
+
+### 18.46 CharacterMovementConfig — 前缀 `character_movement_cfg`
+
+> 3C 系统：角色移动配置组件（走/跑/蹲/跳/飞/游泳参数）
+
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
+|------|------|--------------|--------------|--------|
+| `enabled` | bool | `ecs.get_character_movement_cfg_enabled(e)` → boolean | `ecs.set_character_movement_cfg_enabled(e, value:bool)` | `true` |
+| `max_walk_speed` | float | `ecs.get_character_movement_cfg_max_walk_speed(e)` → number | `ecs.set_character_movement_cfg_max_walk_speed(e, value:number)` | `6.0` |
+| `max_sprint_speed` | float | `ecs.get_character_movement_cfg_max_sprint_speed(e)` → number | `ecs.set_character_movement_cfg_max_sprint_speed(e, value:number)` | `10.0` |
+| `max_crouch_speed` | float | `ecs.get_character_movement_cfg_max_crouch_speed(e)` → number | `ecs.set_character_movement_cfg_max_crouch_speed(e, value:number)` | `3.0` |
+| `ground_acceleration` | float | `ecs.get_character_movement_cfg_ground_acceleration(e)` → number | `ecs.set_character_movement_cfg_ground_acceleration(e, value:number)` | `20.0` |
+| `ground_deceleration` | float | `ecs.get_character_movement_cfg_ground_deceleration(e)` → number | `ecs.set_character_movement_cfg_ground_deceleration(e, value:number)` | `12.0` |
+| `ground_friction` | float | `ecs.get_character_movement_cfg_ground_friction(e)` → number | `ecs.set_character_movement_cfg_ground_friction(e, value:number)` | `8.0` |
+| `gravity` | float | `ecs.get_character_movement_cfg_gravity(e)` → number | `ecs.set_character_movement_cfg_gravity(e, value:number)` | `-19.62` |
+| `jump_velocity` | float | `ecs.get_character_movement_cfg_jump_velocity(e)` → number | `ecs.set_character_movement_cfg_jump_velocity(e, value:number)` | `8.0` |
+| `max_jump_count` | int | `ecs.get_character_movement_cfg_max_jump_count(e)` → integer | `ecs.set_character_movement_cfg_max_jump_count(e, value:int)` | `2` |
+| `coyote_time` | float | `ecs.get_character_movement_cfg_coyote_time(e)` → number | `ecs.set_character_movement_cfg_coyote_time(e, value:number)` | `0.1` |
+| `jump_buffer_time` | float | `ecs.get_character_movement_cfg_jump_buffer_time(e)` → number | `ecs.set_character_movement_cfg_jump_buffer_time(e, value:number)` | `0.15` |
+| `air_control` | float | `ecs.get_character_movement_cfg_air_control(e)` → number | `ecs.set_character_movement_cfg_air_control(e, value:number)` | `0.3` |
+| `rotation_rate` | float | `ecs.get_character_movement_cfg_rotation_rate(e)` → number | `ecs.set_character_movement_cfg_rotation_rate(e, value:number)` | `720.0` |
+| `publish_events` | bool | `ecs.get_character_movement_cfg_publish_events(e)` → boolean | `ecs.set_character_movement_cfg_publish_events(e, value:bool)` | `true` |
+
+### 18.47 CharacterMovementState — 前缀 `character_movement`
+
+> 3C 系统：角色移动运行时状态（输入驱动 + 只读运行时输出）
+
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 备注 |
+|------|------|--------------|--------------|------|
+| `input_direction` | vec3 | `ecs.get_character_movement_input_direction(e)` → x, y, z | `ecs.set_character_movement_input_direction(e, x, y, z)` | 输入移动方向 |
+| `input_jump` | bool | `ecs.get_character_movement_input_jump(e)` → boolean | `ecs.set_character_movement_input_jump(e, value:bool)` | 跳跃输入 |
+| `input_sprint` | bool | `ecs.get_character_movement_input_sprint(e)` → boolean | `ecs.set_character_movement_input_sprint(e, value:bool)` | 冲刺输入 |
+| `input_crouch` | bool | `ecs.get_character_movement_input_crouch(e)` → boolean | `ecs.set_character_movement_input_crouch(e, value:bool)` | 蹲伏输入 |
+| `velocity` | vec3 | `ecs.get_character_movement_velocity(e)` → x, y, z | *(readonly)* | 当前速度 |
+| `is_grounded` | bool | `ecs.get_character_movement_is_grounded(e)` → boolean | *(readonly)* | 是否着地 |
+| `is_jumping` | bool | `ecs.get_character_movement_is_jumping(e)` → boolean | *(readonly)* | 是否跳跃中 |
+| `jump_count` | int | `ecs.get_character_movement_jump_count(e)` → integer | *(readonly)* | 当前跳跃次数 |
+
+### 18.48 SpringArm3DComponent — 前缀 `spring_arm`
+
+> 3C 系统：弹簧臂相机组件（碰撞避让、延迟跟随、第一/第三人称切换）
+
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
+|------|------|--------------|--------------|--------|
+| `enabled` | bool | `ecs.get_spring_arm_enabled(e)` → boolean | `ecs.set_spring_arm_enabled(e, value:bool)` | `true` |
+| `target_offset` | vec3 | `ecs.get_spring_arm_target_offset(e)` → x, y, z | `ecs.set_spring_arm_target_offset(e, x, y, z)` | `(0,0,0)` |
+| `arm_length` | float | `ecs.get_spring_arm_arm_length(e)` → number | `ecs.set_spring_arm_arm_length(e, value:number)` | `4.0` |
+| `collision_test` | bool | `ecs.get_spring_arm_collision_test(e)` → boolean | `ecs.set_spring_arm_collision_test(e, value:bool)` | `true` |
+| `pitch` | float | `ecs.get_spring_arm_pitch(e)` → number | `ecs.set_spring_arm_pitch(e, value:number)` | `-20.0` |
+| `yaw` | float | `ecs.get_spring_arm_yaw(e)` → number | `ecs.set_spring_arm_yaw(e, value:number)` | `0.0` |
+| `position_lag_speed` | float | `ecs.get_spring_arm_position_lag_speed(e)` → number | `ecs.set_spring_arm_position_lag_speed(e, value:number)` | `10.0` |
+| `shake_trauma` | float | `ecs.get_spring_arm_shake_trauma(e)` → number | `ecs.set_spring_arm_shake_trauma(e, value:number)` | `0.0` |
+
+### 18.49 PlayerControllerComponent — 前缀 `player_controller`
+
+> 3C 系统：玩家控制器组件（输入灵敏度、死区、响应曲线）
+
+| 字段 | 类型 | Getter → 返回 | Setter(参数) | 默认值 |
+|------|------|--------------|--------------|--------|
+| `enabled` | bool | `ecs.get_player_controller_enabled(e)` → boolean | `ecs.set_player_controller_enabled(e, value:bool)` | `true` |
+| `mouse_sensitivity` | float | `ecs.get_player_controller_mouse_sensitivity(e)` → number | `ecs.set_player_controller_mouse_sensitivity(e, value:number)` | `0.15` |
+| `gamepad_sensitivity` | float | `ecs.get_player_controller_gamepad_sensitivity(e)` → number | `ecs.set_player_controller_gamepad_sensitivity(e, value:number)` | `2.0` |
+| `invert_y` | bool | `ecs.get_player_controller_invert_y(e)` → boolean | `ecs.set_player_controller_invert_y(e, value:bool)` | `false` |
+| `stick_dead_zone` | float | `ecs.get_player_controller_stick_dead_zone(e)` → number | `ecs.set_player_controller_stick_dead_zone(e, value:number)` | `0.15` |
+| `move_response_curve` | float | `ecs.get_player_controller_move_response_curve(e)` → number | `ecs.set_player_controller_move_response_curve(e, value:number)` | `1.5` |
+| `look_response_curve` | float | `ecs.get_player_controller_look_response_curve(e)` → number | `ecs.set_player_controller_look_response_curve(e, value:number)` | `1.0` |
 
 ## 19. dse.* — 开放世界系统
 

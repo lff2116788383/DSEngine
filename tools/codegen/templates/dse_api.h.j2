@@ -30,19 +30,29 @@ extern "C" {
 {% for field in comp.fields %}
 {% if field.type == "float" %}
 DSE_CAPI_GEN float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+{% if not field.get("readonly", false) %}
 DSE_CAPI_GEN void  dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v);
+{% endif %}
 {% elif field.type in ("int", "enum_int") %}
 DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+{% if not field.get("readonly", false) %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+{% endif %}
 {% elif field.type == "bool" %}
 DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+{% if not field.get("readonly", false) %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+{% endif %}
 {% elif field.type in ("vec3", "euler_quat") %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z);
+{% if not field.get("readonly", false) %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z);
+{% endif %}
 {% elif field.type == "vec4" %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w);
+{% if not field.get("readonly", false) %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w);
+{% endif %}
 {% elif field.type == "string" %}
 {% if field.get("capi_setter") != "manual" %}
 DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v);

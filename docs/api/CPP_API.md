@@ -765,6 +765,68 @@ pipeline->Shutdown();
 
 ---
 
+## 11. 3C 系统（Character-Camera-Control）
+
+**头文件：** `engine/ecs/components_3d_character.h`
+**System 文件：** `modules/gameplay_3d/character/`、`modules/gameplay_3d/camera/`、`modules/gameplay_3d/player/`
+
+3C 系统提供完整的角色控制管线：Input → PlayerController → CharacterMovement → CameraArm3D。
+
+### 组件
+
+| 组件 | 说明 |
+|------|------|
+| `CharacterMovementConfig` | 移动参数配置（速度、加速度、重力、跳跃、摩擦等） |
+| `CharacterMovementState` | 运行时状态（velocity、is_grounded、movement_mode 等） |
+| `SpringArm3DComponent` | 弹簧臂相机（碰撞避让、延迟跟随、屏幕震动、第一/第三人称切换） |
+| `PlayerControllerComponent` | 输入管线（灵敏度、死区、响应曲线、Action Mapping 绑定） |
+
+### System
+
+| System | 方法 | dt 类型 | 说明 |
+|--------|------|---------|------|
+| `CharacterMovementSystem` | `Update(World&, float scaled_dt)` | scaled_dt | 移动状态机：Walking→Sprinting→Crouching→Falling→Swimming→Flying→Custom |
+| `CameraArm3DSystem` | `Update(World&, float unscaled_dt)` | unscaled_dt | 弹簧臂位置计算 + 射线碰撞避让 + 震动衰减 |
+| `PlayerControllerSystem` | `Update(World&, float unscaled_dt)` | unscaled_dt | 输入采集 → 死区/响应曲线处理 → 写入 CharacterMovementState + SpringArm3D |
+
+### 关键枚举
+
+```cpp
+enum class MovementMode : uint8_t {
+    Walking, Sprinting, Crouching, Falling,
+    Swimming, Flying, Custom
+};
+
+enum class RotationMode : uint8_t {
+    OrientToMovement,  // 面向移动方向
+    OrientToCamera     // 面向相机方向（瞄准/射击）
+};
+
+enum class ViewMode : uint8_t {
+    ThirdPerson, FirstPerson
+};
+```
+
+### 事件
+
+| 事件 ID | 触发条件 |
+|---------|---------|
+| `kEventCharacterJumped` | 角色跳跃时（publish_events=true） |
+| `kEventCharacterLanded` | 角色着地时（publish_events=true） |
+| `kEventCharacterModeChanged` | MovementMode 切换时（publish_events=true） |
+| `kEventCameraViewModeChanged` | ViewMode 切换时 |
+| `kEventPlayerPossess` | 控制器附着角色时 |
+
+### 集成顺序（Gameplay3DModule::OnUpdate）
+
+```
+PlayerControllerSystem.Update(world, unscaled_dt)  // 输入采集
+CharacterMovementSystem.Update(world, scaled_dt)    // 移动计算
+CameraArm3DSystem.Update(world, unscaled_dt)        // 相机跟随
+```
+
+---
+
 ## 附录：源文件索引
 
 | 模块 | 头文件 |
@@ -790,3 +852,4 @@ pipeline->Shutdown();
 | UI 组件 | `engine/ecs/ui.h` |
 | 物理 3D 组件 | `engine/ecs/components_3d_physics.h` |
 | 粒子 3D 组件 | `engine/ecs/components_3d_particle.h` |
+| 3C 角色组件 | `engine/ecs/components_3d_character.h` |

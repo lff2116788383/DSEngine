@@ -36,55 +36,65 @@ extern "C" float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
     const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
     return c ? c->{{ field.name }} : {{ field.get("default", "0.0f") }};
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = v;
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "enum_int" %}
 extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
     const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
     return c ? static_cast<int>(c->{{ field.name }}) : {{ field.get("default", "0") }};
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = static_cast<{{ field.enum_type }}>(v);
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "int" %}
 extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
     const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
     return c ? static_cast<int>(c->{{ field.name }}) : {{ field.get("default", "0") }};
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = v;
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "bool" %}
 extern "C" int dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e) {
     const auto* c = GCC<{{ ns }}{{ comp.name }}>(e);
     return (c && c->{{ field.name }}) ? 1 : 0;
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = (v != 0);
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "vec3" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; }
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = glm::vec3(x, y, z);
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "euler_quat" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) {
@@ -92,19 +102,23 @@ extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x,
         *x = euler.x; *y = euler.y; *z = euler.z;
     }
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) {
         c->{{ field.name }} = glm::quat(glm::vec3(glm::radians(x), glm::radians(y), glm::radians(z)));
 {% if field.get("dirty_flag") %}        c->{{ field.dirty_flag }} = true;
 {% endif %}    }
 }
+{% endif %}
 {% elif field.type == "vec4" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w) {
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; *w = c->{{ field.name }}.w; }
 }
+{% if not field.get("readonly", false) %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w) {
     if (auto* c = GC<{{ ns }}{{ comp.name }}>(e)) c->{{ field.name }} = glm::vec4(x, y, z, w);
 }
+{% endif %}
 {% elif field.type == "string" %}
 {% if field.get("capi_setter") != "manual" %}
 extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v) {

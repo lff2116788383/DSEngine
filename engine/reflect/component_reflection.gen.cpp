@@ -19,6 +19,7 @@
 #include "engine/render/hlod/hlod_system.h"
 #include "engine/render/virtual_texture/virtual_texture.h"
 #include "engine/render/gi/lightmap_baker.h"
+#include "engine/ecs/components_3d_character.h"
 #include "engine/render/particles/gpu_particle_system.h"
 
 namespace dse::reflect {
@@ -689,6 +690,81 @@ void RegisterLightmap() {
     t.field("use_ao", &LightmapComponent::use_ao).tooltip("Apply AO channel");
 }
 
+void RegisterCharacterMovementConfig() {
+    using dse::CharacterMovementConfig;
+    auto t = DSE_REFLECT_TYPE(CharacterMovementConfig);
+    t.field("enabled", &CharacterMovementConfig::enabled);
+    t.field("max_walk_speed", &CharacterMovementConfig::max_walk_speed).range(0.0, 100.0);
+    t.field("max_sprint_speed", &CharacterMovementConfig::max_sprint_speed).range(0.0, 100.0);
+    t.field("max_crouch_speed", &CharacterMovementConfig::max_crouch_speed).range(0.0, 50.0);
+    t.field("ground_acceleration", &CharacterMovementConfig::ground_acceleration).range(0.0, 200.0);
+    t.field("ground_deceleration", &CharacterMovementConfig::ground_deceleration).range(0.0, 200.0);
+    t.field("ground_friction", &CharacterMovementConfig::ground_friction).range(0.0, 50.0);
+    t.field("gravity", &CharacterMovementConfig::gravity).range(-100.0, 0.0);
+    t.field("jump_velocity", &CharacterMovementConfig::jump_velocity).range(0.0, 50.0);
+    t.field("max_jump_count", &CharacterMovementConfig::max_jump_count);
+    t.field("coyote_time", &CharacterMovementConfig::coyote_time).range(0.0, 1.0);
+    t.field("jump_buffer_time", &CharacterMovementConfig::jump_buffer_time).range(0.0, 1.0);
+    t.field("air_control", &CharacterMovementConfig::air_control).range(0.0, 1.0);
+    t.field("rotation_rate", &CharacterMovementConfig::rotation_rate).range(0.0, 3600.0);
+    t.field("publish_events", &CharacterMovementConfig::publish_events);
+    t.field("crouch_height", &CharacterMovementConfig::crouch_height).range(0.1, 2.0);
+    t.field("stand_height", &CharacterMovementConfig::stand_height).range(0.1, 3.0);
+    t.field("max_fall_speed", &CharacterMovementConfig::max_fall_speed).range(-100.0, 0.0);
+    t.field("swim_speed", &CharacterMovementConfig::swim_speed).range(0.0, 50.0);
+    t.field("fly_speed", &CharacterMovementConfig::fly_speed).range(0.0, 50.0);
+}
+
+void RegisterCharacterMovementState() {
+    using dse::CharacterMovementState;
+    auto t = DSE_REFLECT_TYPE(CharacterMovementState);
+    t.field("input_direction", &CharacterMovementState::input_direction);
+    t.field("input_jump", &CharacterMovementState::input_jump);
+    t.field("input_sprint", &CharacterMovementState::input_sprint);
+    t.field("input_crouch", &CharacterMovementState::input_crouch);
+    t.field("velocity", &CharacterMovementState::velocity);
+    t.field("is_grounded", &CharacterMovementState::is_grounded);
+    t.field("is_jumping", &CharacterMovementState::is_jumping);
+    t.field("jump_count", &CharacterMovementState::jump_count);
+}
+
+void RegisterSpringArm3D() {
+    using dse::SpringArm3DComponent;
+    auto t = DSE_REFLECT_TYPE(SpringArm3DComponent);
+    t.field("enabled", &SpringArm3DComponent::enabled);
+    t.field("target_offset", &SpringArm3DComponent::target_offset);
+    t.field("arm_length", &SpringArm3DComponent::arm_length).range(0.0, 50.0);
+    t.field("collision_test", &SpringArm3DComponent::collision_test);
+    t.field("pitch", &SpringArm3DComponent::pitch).range(-90.0, 90.0);
+    t.field("yaw", &SpringArm3DComponent::yaw);
+    t.field("position_lag_speed", &SpringArm3DComponent::position_lag_speed).range(0.0, 100.0);
+    t.field("shake_trauma", &SpringArm3DComponent::shake_trauma).range(0.0, 1.0);
+    t.field("min_arm_length", &SpringArm3DComponent::min_arm_length).range(0.0, 10.0);
+    t.field("max_arm_length", &SpringArm3DComponent::max_arm_length).range(0.0, 100.0);
+    t.field("probe_radius", &SpringArm3DComponent::probe_radius).range(0.0, 2.0);
+    t.field("min_pitch", &SpringArm3DComponent::min_pitch).range(-90.0, 0.0);
+    t.field("max_pitch", &SpringArm3DComponent::max_pitch).range(0.0, 90.0);
+    t.field("rotation_lag_speed", &SpringArm3DComponent::rotation_lag_speed).range(0.0, 100.0);
+    t.field("first_person_fov", &SpringArm3DComponent::first_person_fov).range(30.0, 120.0);
+    t.field("third_person_fov", &SpringArm3DComponent::third_person_fov).range(30.0, 120.0);
+    t.field("shake_decay_rate", &SpringArm3DComponent::shake_decay_rate).range(0.0, 10.0);
+    t.field("shake_max_offset", &SpringArm3DComponent::shake_max_offset).range(0.0, 2.0);
+    t.field("shake_frequency", &SpringArm3DComponent::shake_frequency).range(0.0, 50.0);
+}
+
+void RegisterPlayerController() {
+    using dse::PlayerControllerComponent;
+    auto t = DSE_REFLECT_TYPE(PlayerControllerComponent);
+    t.field("enabled", &PlayerControllerComponent::enabled);
+    t.field("mouse_sensitivity", &PlayerControllerComponent::mouse_sensitivity).range(0.01, 5.0);
+    t.field("gamepad_sensitivity", &PlayerControllerComponent::gamepad_sensitivity).range(0.1, 10.0);
+    t.field("invert_y", &PlayerControllerComponent::invert_y);
+    t.field("stick_dead_zone", &PlayerControllerComponent::stick_dead_zone).range(0.0, 0.5);
+    t.field("move_response_curve", &PlayerControllerComponent::move_response_curve).range(0.5, 5.0);
+    t.field("look_response_curve", &PlayerControllerComponent::look_response_curve).range(0.5, 5.0);
+    t.field("stick_outer_dead_zone", &PlayerControllerComponent::stick_outer_dead_zone).range(0.5, 1.0);
+}
+
 void RegisterGrass() {
     using dse::GrassComponent;
     auto t = DSE_REFLECT_TYPE(GrassComponent);
@@ -805,6 +881,10 @@ void EnsureCoreReflectionRegistered() {
     RegisterHLODConfig();
     RegisterVirtualTexture();
     RegisterLightmap();
+    RegisterCharacterMovementConfig();
+    RegisterCharacterMovementState();
+    RegisterSpringArm3D();
+    RegisterPlayerController();
     RegisterGrass();
     RegisterLODGroup();
     RegisterMorphTarget();

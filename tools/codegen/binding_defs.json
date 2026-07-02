@@ -3991,241 +3991,6 @@
                 }
             ],
             "lua_table": "ecs"
-        }
-    ],
-    "reflect_only_components": [
-        {
-            "name": "GrassComponent",
-            "include": "engine/ecs/components_3d_foliage.h",
-            "namespace": "dse",
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "bool"
-                },
-                {
-                    "name": "density",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        16.0
-                    ],
-                    "tooltip": "Grass blades per unit area"
-                },
-                {
-                    "name": "spawn_radius",
-                    "type": "float",
-                    "range": [
-                        1.0,
-                        500.0
-                    ]
-                },
-                {
-                    "name": "seed",
-                    "type": "int"
-                },
-                {
-                    "name": "chunk_size",
-                    "type": "float",
-                    "range": [
-                        1.0,
-                        64.0
-                    ]
-                },
-                {
-                    "name": "blade_width",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        2.0
-                    ]
-                },
-                {
-                    "name": "blade_height",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        8.0
-                    ]
-                },
-                {
-                    "name": "blade_height_variation",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ]
-                },
-                {
-                    "name": "base_color",
-                    "type": "vec4",
-                    "color": true
-                },
-                {
-                    "name": "tip_color",
-                    "type": "vec4",
-                    "color": true
-                },
-                {
-                    "name": "wind_direction",
-                    "type": "vec3"
-                },
-                {
-                    "name": "wind_speed",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        10.0
-                    ]
-                },
-                {
-                    "name": "wind_strength",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        4.0
-                    ]
-                },
-                {
-                    "name": "wind_turbulence",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        4.0
-                    ]
-                },
-                {
-                    "name": "lod_near",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        500.0
-                    ]
-                },
-                {
-                    "name": "lod_far",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        500.0
-                    ]
-                },
-                {
-                    "name": "fade_range",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        50.0
-                    ]
-                },
-                {
-                    "name": "cast_shadow",
-                    "type": "bool"
-                },
-                {
-                    "name": "shadow_distance",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        200.0
-                    ]
-                }
-            ]
-        },
-        {
-            "name": "LODGroupComponent",
-            "include": "engine/ecs/components_3d_render.h",
-            "namespace": "dse",
-            "nested_types": [
-                {
-                    "name": "LODLevelConfig",
-                    "qualified": "dse::LODLevelConfig",
-                    "fields": [
-                        {
-                            "name": "mesh_path",
-                            "type": "string"
-                        },
-                        {
-                            "name": "screen_size_threshold",
-                            "type": "float",
-                            "range": [
-                                0.0,
-                                1.0
-                            ]
-                        }
-                    ]
-                }
-            ],
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "bool"
-                },
-                {
-                    "name": "levels",
-                    "type": "custom"
-                },
-                {
-                    "name": "global_scale",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        100.0
-                    ]
-                },
-                {
-                    "name": "hysteresis",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ]
-                },
-                {
-                    "name": "min_screen_size",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ]
-                },
-                {
-                    "name": "original_mesh_path",
-                    "type": "string"
-                }
-            ]
-        },
-        {
-            "name": "MorphTargetComponent",
-            "include": "engine/ecs/components_3d_render.h",
-            "namespace": "dse",
-            "fields": [
-                {
-                    "name": "enabled",
-                    "type": "bool"
-                }
-            ]
-        },
-        {
-            "name": "GpuParticleComponent",
-            "include": "engine/render/particles/gpu_particle_system.h",
-            "namespace": "dse::render",
-            "fields": []
-        },
-        {
-            "name": "HLODMemberComponent",
-            "include": "engine/render/hlod/hlod_system.h",
-            "namespace": "dse::render",
-            "fields": [
-                {
-                    "name": "cluster_index",
-                    "type": "int"
-                },
-                {
-                    "name": "hidden_by_hlod",
-                    "type": "bool"
-                }
-            ]
         },
         {
             "_comment": "3C (Character-Camera-Control) 组件",
@@ -4647,6 +4412,241 @@
                     "type": "float",
                     "range": [0.5, 1.0],
                     "script": false
+                }
+            ]
+        }
+    ],
+    "reflect_only_components": [
+        {
+            "name": "GrassComponent",
+            "include": "engine/ecs/components_3d_foliage.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "density",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        16.0
+                    ],
+                    "tooltip": "Grass blades per unit area"
+                },
+                {
+                    "name": "spawn_radius",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "seed",
+                    "type": "int"
+                },
+                {
+                    "name": "chunk_size",
+                    "type": "float",
+                    "range": [
+                        1.0,
+                        64.0
+                    ]
+                },
+                {
+                    "name": "blade_width",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        2.0
+                    ]
+                },
+                {
+                    "name": "blade_height",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        8.0
+                    ]
+                },
+                {
+                    "name": "blade_height_variation",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "base_color",
+                    "type": "vec4",
+                    "color": true
+                },
+                {
+                    "name": "tip_color",
+                    "type": "vec4",
+                    "color": true
+                },
+                {
+                    "name": "wind_direction",
+                    "type": "vec3"
+                },
+                {
+                    "name": "wind_speed",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        10.0
+                    ]
+                },
+                {
+                    "name": "wind_strength",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ]
+                },
+                {
+                    "name": "wind_turbulence",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        4.0
+                    ]
+                },
+                {
+                    "name": "lod_near",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "lod_far",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        500.0
+                    ]
+                },
+                {
+                    "name": "fade_range",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
+                },
+                {
+                    "name": "cast_shadow",
+                    "type": "bool"
+                },
+                {
+                    "name": "shadow_distance",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        200.0
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "LODGroupComponent",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "nested_types": [
+                {
+                    "name": "LODLevelConfig",
+                    "qualified": "dse::LODLevelConfig",
+                    "fields": [
+                        {
+                            "name": "mesh_path",
+                            "type": "string"
+                        },
+                        {
+                            "name": "screen_size_threshold",
+                            "type": "float",
+                            "range": [
+                                0.0,
+                                1.0
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                },
+                {
+                    "name": "levels",
+                    "type": "custom"
+                },
+                {
+                    "name": "global_scale",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
+                },
+                {
+                    "name": "hysteresis",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "min_screen_size",
+                    "type": "float",
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
+                },
+                {
+                    "name": "original_mesh_path",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "MorphTargetComponent",
+            "include": "engine/ecs/components_3d_render.h",
+            "namespace": "dse",
+            "fields": [
+                {
+                    "name": "enabled",
+                    "type": "bool"
+                }
+            ]
+        },
+        {
+            "name": "GpuParticleComponent",
+            "include": "engine/render/particles/gpu_particle_system.h",
+            "namespace": "dse::render",
+            "fields": []
+        },
+        {
+            "name": "HLODMemberComponent",
+            "include": "engine/render/hlod/hlod_system.h",
+            "namespace": "dse::render",
+            "fields": [
+                {
+                    "name": "cluster_index",
+                    "type": "int"
+                },
+                {
+                    "name": "hidden_by_hlod",
+                    "type": "bool"
                 }
             ]
         }

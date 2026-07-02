@@ -2513,4 +2513,236 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_lightmap_set_use_ao")]
     internal static partial void dse_lightmap_set_use_ao(uint e, int v);
 
+    // ---- CharacterMovementConfig ----
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_enabled")]
+    internal static partial int dse_character_movement_cfg_get_enabled(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_enabled")]
+    internal static partial void dse_character_movement_cfg_set_enabled(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_max_walk_speed")]
+    internal static partial float dse_character_movement_cfg_get_max_walk_speed(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_max_walk_speed")]
+    internal static partial void dse_character_movement_cfg_set_max_walk_speed(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_max_sprint_speed")]
+    internal static partial float dse_character_movement_cfg_get_max_sprint_speed(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_max_sprint_speed")]
+    internal static partial void dse_character_movement_cfg_set_max_sprint_speed(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_max_crouch_speed")]
+    internal static partial float dse_character_movement_cfg_get_max_crouch_speed(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_max_crouch_speed")]
+    internal static partial void dse_character_movement_cfg_set_max_crouch_speed(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_ground_acceleration")]
+    internal static partial float dse_character_movement_cfg_get_ground_acceleration(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_ground_acceleration")]
+    internal static partial void dse_character_movement_cfg_set_ground_acceleration(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_ground_deceleration")]
+    internal static partial float dse_character_movement_cfg_get_ground_deceleration(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_ground_deceleration")]
+    internal static partial void dse_character_movement_cfg_set_ground_deceleration(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_ground_friction")]
+    internal static partial float dse_character_movement_cfg_get_ground_friction(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_ground_friction")]
+    internal static partial void dse_character_movement_cfg_set_ground_friction(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_gravity")]
+    internal static partial float dse_character_movement_cfg_get_gravity(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_gravity")]
+    internal static partial void dse_character_movement_cfg_set_gravity(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_jump_velocity")]
+    internal static partial float dse_character_movement_cfg_get_jump_velocity(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_jump_velocity")]
+    internal static partial void dse_character_movement_cfg_set_jump_velocity(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_max_jump_count")]
+    internal static partial int dse_character_movement_cfg_get_max_jump_count(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_max_jump_count")]
+    internal static partial void dse_character_movement_cfg_set_max_jump_count(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_coyote_time")]
+    internal static partial float dse_character_movement_cfg_get_coyote_time(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_coyote_time")]
+    internal static partial void dse_character_movement_cfg_set_coyote_time(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_jump_buffer_time")]
+    internal static partial float dse_character_movement_cfg_get_jump_buffer_time(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_jump_buffer_time")]
+    internal static partial void dse_character_movement_cfg_set_jump_buffer_time(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_air_control")]
+    internal static partial float dse_character_movement_cfg_get_air_control(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_air_control")]
+    internal static partial void dse_character_movement_cfg_set_air_control(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_rotation_rate")]
+    internal static partial float dse_character_movement_cfg_get_rotation_rate(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_rotation_rate")]
+    internal static partial void dse_character_movement_cfg_set_rotation_rate(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_get_publish_events")]
+    internal static partial int dse_character_movement_cfg_get_publish_events(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_cfg_set_publish_events")]
+    internal static partial void dse_character_movement_cfg_set_publish_events(uint e, int v);
+
+    // ---- CharacterMovementState ----
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_input_direction")]
+    internal static partial void dse_character_movement_get_input_direction(uint e, out float x, out float y, out float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_input_direction")]
+    internal static partial void dse_character_movement_set_input_direction(uint e, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_input_jump")]
+    internal static partial int dse_character_movement_get_input_jump(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_input_jump")]
+    internal static partial void dse_character_movement_set_input_jump(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_input_sprint")]
+    internal static partial int dse_character_movement_get_input_sprint(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_input_sprint")]
+    internal static partial void dse_character_movement_set_input_sprint(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_input_crouch")]
+    internal static partial int dse_character_movement_get_input_crouch(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_input_crouch")]
+    internal static partial void dse_character_movement_set_input_crouch(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_velocity")]
+    internal static partial void dse_character_movement_get_velocity(uint e, out float x, out float y, out float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_velocity")]
+    internal static partial void dse_character_movement_set_velocity(uint e, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_is_grounded")]
+    internal static partial int dse_character_movement_get_is_grounded(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_is_grounded")]
+    internal static partial void dse_character_movement_set_is_grounded(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_is_jumping")]
+    internal static partial int dse_character_movement_get_is_jumping(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_is_jumping")]
+    internal static partial void dse_character_movement_set_is_jumping(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_jump_count")]
+    internal static partial int dse_character_movement_get_jump_count(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_jump_count")]
+    internal static partial void dse_character_movement_set_jump_count(uint e, int v);
+
+    // ---- SpringArm3DComponent ----
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_enabled")]
+    internal static partial int dse_spring_arm_get_enabled(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_enabled")]
+    internal static partial void dse_spring_arm_set_enabled(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_target_offset")]
+    internal static partial void dse_spring_arm_get_target_offset(uint e, out float x, out float y, out float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_target_offset")]
+    internal static partial void dse_spring_arm_set_target_offset(uint e, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_arm_length")]
+    internal static partial float dse_spring_arm_get_arm_length(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_arm_length")]
+    internal static partial void dse_spring_arm_set_arm_length(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_collision_test")]
+    internal static partial int dse_spring_arm_get_collision_test(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_collision_test")]
+    internal static partial void dse_spring_arm_set_collision_test(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_pitch")]
+    internal static partial float dse_spring_arm_get_pitch(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_pitch")]
+    internal static partial void dse_spring_arm_set_pitch(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_yaw")]
+    internal static partial float dse_spring_arm_get_yaw(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_yaw")]
+    internal static partial void dse_spring_arm_set_yaw(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_position_lag_speed")]
+    internal static partial float dse_spring_arm_get_position_lag_speed(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_position_lag_speed")]
+    internal static partial void dse_spring_arm_set_position_lag_speed(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_shake_trauma")]
+    internal static partial float dse_spring_arm_get_shake_trauma(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spring_arm_set_shake_trauma")]
+    internal static partial void dse_spring_arm_set_shake_trauma(uint e, float v);
+
+    // ---- PlayerControllerComponent ----
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_enabled")]
+    internal static partial int dse_player_controller_get_enabled(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_enabled")]
+    internal static partial void dse_player_controller_set_enabled(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_mouse_sensitivity")]
+    internal static partial float dse_player_controller_get_mouse_sensitivity(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_mouse_sensitivity")]
+    internal static partial void dse_player_controller_set_mouse_sensitivity(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_gamepad_sensitivity")]
+    internal static partial float dse_player_controller_get_gamepad_sensitivity(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_gamepad_sensitivity")]
+    internal static partial void dse_player_controller_set_gamepad_sensitivity(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_invert_y")]
+    internal static partial int dse_player_controller_get_invert_y(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_invert_y")]
+    internal static partial void dse_player_controller_set_invert_y(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_stick_dead_zone")]
+    internal static partial float dse_player_controller_get_stick_dead_zone(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_stick_dead_zone")]
+    internal static partial void dse_player_controller_set_stick_dead_zone(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_move_response_curve")]
+    internal static partial float dse_player_controller_get_move_response_curve(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_move_response_curve")]
+    internal static partial void dse_player_controller_set_move_response_curve(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_get_look_response_curve")]
+    internal static partial float dse_player_controller_get_look_response_curve(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_look_response_curve")]
+    internal static partial void dse_player_controller_set_look_response_curve(uint e, float v);
+
 } // class Native

@@ -2646,6 +2646,241 @@ namespace DSEngine.Runtime
 
     }
 
+    /// <summary>CharacterMovementConfig component wrapper.</summary>
+    public class CharacterMovementConfig
+    {
+        private readonly uint _entity;
+
+        internal CharacterMovementConfig(uint entity) => _entity = entity;
+
+        public bool Enabled {
+            get => Native.dse_character_movement_cfg_get_enabled(_entity) != 0;
+            set => Native.dse_character_movement_cfg_set_enabled(_entity, value ? 1 : 0);
+        }
+
+        public float MaxWalkSpeed {
+            get => Native.dse_character_movement_cfg_get_max_walk_speed(_entity);
+            set => Native.dse_character_movement_cfg_set_max_walk_speed(_entity, value);
+        }
+
+        public float MaxSprintSpeed {
+            get => Native.dse_character_movement_cfg_get_max_sprint_speed(_entity);
+            set => Native.dse_character_movement_cfg_set_max_sprint_speed(_entity, value);
+        }
+
+        public float MaxCrouchSpeed {
+            get => Native.dse_character_movement_cfg_get_max_crouch_speed(_entity);
+            set => Native.dse_character_movement_cfg_set_max_crouch_speed(_entity, value);
+        }
+
+        public float GroundAcceleration {
+            get => Native.dse_character_movement_cfg_get_ground_acceleration(_entity);
+            set => Native.dse_character_movement_cfg_set_ground_acceleration(_entity, value);
+        }
+
+        public float GroundDeceleration {
+            get => Native.dse_character_movement_cfg_get_ground_deceleration(_entity);
+            set => Native.dse_character_movement_cfg_set_ground_deceleration(_entity, value);
+        }
+
+        public float GroundFriction {
+            get => Native.dse_character_movement_cfg_get_ground_friction(_entity);
+            set => Native.dse_character_movement_cfg_set_ground_friction(_entity, value);
+        }
+
+        public float Gravity {
+            get => Native.dse_character_movement_cfg_get_gravity(_entity);
+            set => Native.dse_character_movement_cfg_set_gravity(_entity, value);
+        }
+
+        public float JumpVelocity {
+            get => Native.dse_character_movement_cfg_get_jump_velocity(_entity);
+            set => Native.dse_character_movement_cfg_set_jump_velocity(_entity, value);
+        }
+
+        public int MaxJumpCount {
+            get => Native.dse_character_movement_cfg_get_max_jump_count(_entity);
+            set => Native.dse_character_movement_cfg_set_max_jump_count(_entity, value);
+        }
+
+        public float CoyoteTime {
+            get => Native.dse_character_movement_cfg_get_coyote_time(_entity);
+            set => Native.dse_character_movement_cfg_set_coyote_time(_entity, value);
+        }
+
+        public float JumpBufferTime {
+            get => Native.dse_character_movement_cfg_get_jump_buffer_time(_entity);
+            set => Native.dse_character_movement_cfg_set_jump_buffer_time(_entity, value);
+        }
+
+        public float AirControl {
+            get => Native.dse_character_movement_cfg_get_air_control(_entity);
+            set => Native.dse_character_movement_cfg_set_air_control(_entity, value);
+        }
+
+        public float RotationRate {
+            get => Native.dse_character_movement_cfg_get_rotation_rate(_entity);
+            set => Native.dse_character_movement_cfg_set_rotation_rate(_entity, value);
+        }
+
+        public bool PublishEvents {
+            get => Native.dse_character_movement_cfg_get_publish_events(_entity) != 0;
+            set => Native.dse_character_movement_cfg_set_publish_events(_entity, value ? 1 : 0);
+        }
+
+    }
+
+    /// <summary>CharacterMovementState component wrapper.</summary>
+    public class CharacterMovementState
+    {
+        private readonly uint _entity;
+
+        internal CharacterMovementState(uint entity) => _entity = entity;
+
+        public Vector3 InputDirection {
+            get {
+                Native.dse_character_movement_get_input_direction(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
+            }
+            set => Native.dse_character_movement_set_input_direction(_entity, value.X, value.Y, value.Z);
+        }
+
+        public bool InputJump {
+            get => Native.dse_character_movement_get_input_jump(_entity) != 0;
+            set => Native.dse_character_movement_set_input_jump(_entity, value ? 1 : 0);
+        }
+
+        public bool InputSprint {
+            get => Native.dse_character_movement_get_input_sprint(_entity) != 0;
+            set => Native.dse_character_movement_set_input_sprint(_entity, value ? 1 : 0);
+        }
+
+        public bool InputCrouch {
+            get => Native.dse_character_movement_get_input_crouch(_entity) != 0;
+            set => Native.dse_character_movement_set_input_crouch(_entity, value ? 1 : 0);
+        }
+
+        public Vector3 Velocity {
+            get {
+                Native.dse_character_movement_get_velocity(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
+            }
+            set => Native.dse_character_movement_set_velocity(_entity, value.X, value.Y, value.Z);
+        }
+
+        public bool IsGrounded {
+            get => Native.dse_character_movement_get_is_grounded(_entity) != 0;
+            set => Native.dse_character_movement_set_is_grounded(_entity, value ? 1 : 0);
+        }
+
+        public bool IsJumping {
+            get => Native.dse_character_movement_get_is_jumping(_entity) != 0;
+            set => Native.dse_character_movement_set_is_jumping(_entity, value ? 1 : 0);
+        }
+
+        public int JumpCount {
+            get => Native.dse_character_movement_get_jump_count(_entity);
+            set => Native.dse_character_movement_set_jump_count(_entity, value);
+        }
+
+    }
+
+    /// <summary>SpringArm3D component wrapper.</summary>
+    public class SpringArm3D
+    {
+        private readonly uint _entity;
+
+        internal SpringArm3D(uint entity) => _entity = entity;
+
+        public bool Enabled {
+            get => Native.dse_spring_arm_get_enabled(_entity) != 0;
+            set => Native.dse_spring_arm_set_enabled(_entity, value ? 1 : 0);
+        }
+
+        public Vector3 TargetOffset {
+            get {
+                Native.dse_spring_arm_get_target_offset(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
+            }
+            set => Native.dse_spring_arm_set_target_offset(_entity, value.X, value.Y, value.Z);
+        }
+
+        public float ArmLength {
+            get => Native.dse_spring_arm_get_arm_length(_entity);
+            set => Native.dse_spring_arm_set_arm_length(_entity, value);
+        }
+
+        public bool CollisionTest {
+            get => Native.dse_spring_arm_get_collision_test(_entity) != 0;
+            set => Native.dse_spring_arm_set_collision_test(_entity, value ? 1 : 0);
+        }
+
+        public float Pitch {
+            get => Native.dse_spring_arm_get_pitch(_entity);
+            set => Native.dse_spring_arm_set_pitch(_entity, value);
+        }
+
+        public float Yaw {
+            get => Native.dse_spring_arm_get_yaw(_entity);
+            set => Native.dse_spring_arm_set_yaw(_entity, value);
+        }
+
+        public float PositionLagSpeed {
+            get => Native.dse_spring_arm_get_position_lag_speed(_entity);
+            set => Native.dse_spring_arm_set_position_lag_speed(_entity, value);
+        }
+
+        public float ShakeTrauma {
+            get => Native.dse_spring_arm_get_shake_trauma(_entity);
+            set => Native.dse_spring_arm_set_shake_trauma(_entity, value);
+        }
+
+    }
+
+    /// <summary>PlayerController component wrapper.</summary>
+    public class PlayerController
+    {
+        private readonly uint _entity;
+
+        internal PlayerController(uint entity) => _entity = entity;
+
+        public bool Enabled {
+            get => Native.dse_player_controller_get_enabled(_entity) != 0;
+            set => Native.dse_player_controller_set_enabled(_entity, value ? 1 : 0);
+        }
+
+        public float MouseSensitivity {
+            get => Native.dse_player_controller_get_mouse_sensitivity(_entity);
+            set => Native.dse_player_controller_set_mouse_sensitivity(_entity, value);
+        }
+
+        public float GamepadSensitivity {
+            get => Native.dse_player_controller_get_gamepad_sensitivity(_entity);
+            set => Native.dse_player_controller_set_gamepad_sensitivity(_entity, value);
+        }
+
+        public bool InvertY {
+            get => Native.dse_player_controller_get_invert_y(_entity) != 0;
+            set => Native.dse_player_controller_set_invert_y(_entity, value ? 1 : 0);
+        }
+
+        public float StickDeadZone {
+            get => Native.dse_player_controller_get_stick_dead_zone(_entity);
+            set => Native.dse_player_controller_set_stick_dead_zone(_entity, value);
+        }
+
+        public float MoveResponseCurve {
+            get => Native.dse_player_controller_get_move_response_curve(_entity);
+            set => Native.dse_player_controller_set_move_response_curve(_entity, value);
+        }
+
+        public float LookResponseCurve {
+            get => Native.dse_player_controller_get_look_response_curve(_entity);
+            set => Native.dse_player_controller_set_look_response_curve(_entity, value);
+        }
+
+    }
+
     /// <summary>Extension methods to get components from Entity.</summary>
     public static class ComponentExtensions
     {
@@ -2694,5 +2929,9 @@ namespace DSEngine.Runtime
         public static HLODConfig GetHLODConfig(this Entity entity) => new HLODConfig(entity.Id);
         public static VirtualTexture GetVirtualTexture(this Entity entity) => new VirtualTexture(entity.Id);
         public static Lightmap GetLightmap(this Entity entity) => new Lightmap(entity.Id);
+        public static CharacterMovementConfig GetCharacterMovementConfig(this Entity entity) => new CharacterMovementConfig(entity.Id);
+        public static CharacterMovementState GetCharacterMovementState(this Entity entity) => new CharacterMovementState(entity.Id);
+        public static SpringArm3D GetSpringArm3D(this Entity entity) => new SpringArm3D(entity.Id);
+        public static PlayerController GetPlayerController(this Entity entity) => new PlayerController(entity.Id);
     }
 }

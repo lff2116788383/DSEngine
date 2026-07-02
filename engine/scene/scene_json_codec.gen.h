@@ -22,6 +22,7 @@
 #include "engine/render/hlod/hlod_system.h"
 #include "engine/render/virtual_texture/virtual_texture.h"
 #include "engine/render/gi/lightmap_baker.h"
+#include "engine/ecs/components_3d_character.h"
 #include "engine/render/particles/gpu_particle_system.h"
 
 #include <rapidjson/document.h>
@@ -987,6 +988,90 @@ inline void Deserialize_lightmap(entt::registry& reg, entt::entity e,
     reflect::DeserializeReflected(*ti, &c, json);
 }
 
+inline bool Serialize_character_movement_cfg(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::CharacterMovementConfig>(e)) return false;
+    const auto& c = reg.get<dse::CharacterMovementConfig>(e);
+    const auto* ti = reflect::Reflection::Find<dse::CharacterMovementConfig>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("CharacterMovementConfig", json, alloc);
+    return true;
+}
+
+inline void Deserialize_character_movement_cfg(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::CharacterMovementConfig>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::CharacterMovementConfig>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_character_movement(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::CharacterMovementState>(e)) return false;
+    const auto& c = reg.get<dse::CharacterMovementState>(e);
+    const auto* ti = reflect::Reflection::Find<dse::CharacterMovementState>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("CharacterMovementState", json, alloc);
+    return true;
+}
+
+inline void Deserialize_character_movement(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::CharacterMovementState>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::CharacterMovementState>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_spring_arm(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::SpringArm3DComponent>(e)) return false;
+    const auto& c = reg.get<dse::SpringArm3DComponent>(e);
+    const auto* ti = reflect::Reflection::Find<dse::SpringArm3DComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("SpringArm3DComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_spring_arm(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::SpringArm3DComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::SpringArm3DComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
+inline bool Serialize_player_controller(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::PlayerControllerComponent>(e)) return false;
+    const auto& c = reg.get<dse::PlayerControllerComponent>(e);
+    const auto* ti = reflect::Reflection::Find<dse::PlayerControllerComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("PlayerControllerComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_player_controller(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::PlayerControllerComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::PlayerControllerComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
 inline bool Serialize_GrassComponent(const entt::registry& reg, entt::entity e,
                                     rapidjson::Value& components,
                                     rapidjson::Document::AllocatorType& alloc) {
@@ -1140,6 +1225,10 @@ inline const std::unordered_map<std::string, ComponentCodec>& GetCodecTable() {
         {"HLODConfigComponent", {Serialize_hlod_config, Deserialize_hlod_config}},
         {"VirtualTextureComponent", {Serialize_virtual_texture, Deserialize_virtual_texture}},
         {"LightmapComponent", {Serialize_lightmap, Deserialize_lightmap}},
+        {"CharacterMovementConfig", {Serialize_character_movement_cfg, Deserialize_character_movement_cfg}},
+        {"CharacterMovementState", {Serialize_character_movement, Deserialize_character_movement}},
+        {"SpringArm3DComponent", {Serialize_spring_arm, Deserialize_spring_arm}},
+        {"PlayerControllerComponent", {Serialize_player_controller, Deserialize_player_controller}},
         {"GrassComponent", {Serialize_GrassComponent, Deserialize_GrassComponent}},
         {"LODGroupComponent", {Serialize_LODGroupComponent, Deserialize_LODGroupComponent}},
         {"MorphTargetComponent", {Serialize_MorphTargetComponent, Deserialize_MorphTargetComponent}},

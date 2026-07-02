@@ -780,3 +780,97 @@ public class CarController : DseScript {
 python tools/codegen/codegen.py           # 一并生成 NativeManual.gen.cs + ApiManual.gen.cs
 # 或单独：python tools/codegen/gen_csharp_manual.py
 ```
+
+---
+
+## 14. 3C 系统 — 角色控制管线
+
+> 生成文件：`Generated/Native.gen.cs`、`Generated/Components.gen.cs`
+> 头文件：`engine/ecs/components_3d_character.h`
+> Codegen 数据源：`tools/codegen/binding_defs.json`（组件 46-49）
+
+3C 系统通过 Codegen 自动生成 C# P/Invoke 绑定，提供以下组件访问：
+
+### CharacterMovementConfig（前缀 `character_movement_cfg`）
+
+角色移动参数配置：
+
+```csharp
+// 设置最大行走速度
+Native.dse_character_movement_cfg_set_max_walk_speed(entityId, 8.0f);
+// 读取当前重力
+float g = Native.dse_character_movement_cfg_get_gravity(entityId);
+// 设置二段跳
+Native.dse_character_movement_cfg_set_max_jump_count(entityId, 2);
+```
+
+| 字段 | 类型 | 可写 | 默认值 |
+|------|------|:----:|--------|
+| `enabled` | bool | ✓ | `true` |
+| `max_walk_speed` | float | ✓ | `6.0` |
+| `max_sprint_speed` | float | ✓ | `10.0` |
+| `max_crouch_speed` | float | ✓ | `3.0` |
+| `ground_acceleration` | float | ✓ | `20.0` |
+| `ground_deceleration` | float | ✓ | `12.0` |
+| `ground_friction` | float | ✓ | `8.0` |
+| `gravity` | float | ✓ | `-19.62` |
+| `jump_velocity` | float | ✓ | `8.0` |
+| `max_jump_count` | int | ✓ | `2` |
+| `coyote_time` | float | ✓ | `0.1` |
+| `jump_buffer_time` | float | ✓ | `0.15` |
+| `air_control` | float | ✓ | `0.3` |
+| `rotation_rate` | float | ✓ | `720.0` |
+| `publish_events` | bool | ✓ | `true` |
+
+### CharacterMovementState（前缀 `character_movement`）
+
+运行时状态（输入可写，输出只读）：
+
+```csharp
+// 设置移动输入
+Native.dse_character_movement_set_input_direction(entityId, 0f, 0f, -1f);
+Native.dse_character_movement_set_input_jump(entityId, 1);
+// 读取速度（只读）
+float vx, vy, vz;
+Native.dse_character_movement_get_velocity(entityId, out vx, out vy, out vz);
+```
+
+| 字段 | 类型 | 可写 |
+|------|------|:----:|
+| `input_direction` | vec3 | ✓ |
+| `input_jump` | bool | ✓ |
+| `input_sprint` | bool | ✓ |
+| `input_crouch` | bool | ✓ |
+| `velocity` | vec3 | ✗ |
+| `is_grounded` | bool | ✗ |
+| `is_jumping` | bool | ✗ |
+| `jump_count` | int | ✗ |
+
+### SpringArm3DComponent（前缀 `spring_arm`）
+
+弹簧臂相机（碰撞避让 + 延迟跟随 + 震动）：
+
+| 字段 | 类型 | 可写 | 默认值 |
+|------|------|:----:|--------|
+| `enabled` | bool | ✓ | `true` |
+| `target_offset` | vec3 | ✓ | `(0,0,0)` |
+| `arm_length` | float | ✓ | `4.0` |
+| `collision_test` | bool | ✓ | `true` |
+| `pitch` | float | ✓ | `-20.0` |
+| `yaw` | float | ✓ | `0.0` |
+| `position_lag_speed` | float | ✓ | `10.0` |
+| `shake_trauma` | float | ✓ | `0.0` |
+
+### PlayerControllerComponent（前缀 `player_controller`）
+
+输入管线配置：
+
+| 字段 | 类型 | 可写 | 默认值 |
+|------|------|:----:|--------|
+| `enabled` | bool | ✓ | `true` |
+| `mouse_sensitivity` | float | ✓ | `0.15` |
+| `gamepad_sensitivity` | float | ✓ | `2.0` |
+| `invert_y` | bool | ✓ | `false` |
+| `stick_dead_zone` | float | ✓ | `0.15` |
+| `move_response_curve` | float | ✓ | `1.5` |
+| `look_response_curve` | float | ✓ | `1.0` |

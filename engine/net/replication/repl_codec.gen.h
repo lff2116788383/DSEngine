@@ -51,6 +51,10 @@
 #include "engine/render/hlod/hlod_system.h"
 #include "engine/render/virtual_texture/virtual_texture.h"
 #include "engine/render/gi/lightmap_baker.h"
+#include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_character.h"
 #include <cstdint>
 
 namespace dse::net::repl {
@@ -4295,6 +4299,402 @@ inline void ReadDelta_lightmap(ByteReader& r, dse::render::LightmapComponent& c)
     if (HasFlag(flags, lightmap_DeltaFlags::f_st_offset)) { c.st_offset.x = r.ReadF32(); c.st_offset.y = r.ReadF32(); c.st_offset.z = r.ReadF32(); c.st_offset.w = r.ReadF32(); }
     if (HasFlag(flags, lightmap_DeltaFlags::f_use_ao)) { c.use_ao = r.ReadU8() != 0; }
 }
+// ═══════════════════════════════════════════════════════════════════════════════
+// CharacterMovementConfig (prefix: character_movement_cfg)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Delta flags — one bit per replicable field.
+enum class character_movement_cfg_DeltaFlags : uint32_t {
+    None = 0,
+    f_enabled = (1u << 0),
+    f_max_walk_speed = (1u << 1),
+    f_max_sprint_speed = (1u << 2),
+    f_max_crouch_speed = (1u << 3),
+    f_ground_acceleration = (1u << 4),
+    f_ground_deceleration = (1u << 5),
+    f_ground_friction = (1u << 6),
+    f_gravity = (1u << 7),
+    f_jump_velocity = (1u << 8),
+    f_max_jump_count = (1u << 9),
+    f_coyote_time = (1u << 10),
+    f_jump_buffer_time = (1u << 11),
+    f_air_control = (1u << 12),
+    f_rotation_rate = (1u << 13),
+    f_publish_events = (1u << 14),
+    All = 0x7fffu
+};
+
+inline character_movement_cfg_DeltaFlags operator|(character_movement_cfg_DeltaFlags a, character_movement_cfg_DeltaFlags b) {
+    return static_cast<character_movement_cfg_DeltaFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline bool HasFlag(character_movement_cfg_DeltaFlags flags, character_movement_cfg_DeltaFlags bit) {
+    return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
+}
+
+/// Full snapshot write.
+inline void WriteSnapshot_character_movement_cfg(ByteWriter& w, const dse::CharacterMovementConfig& c) {
+    w.WriteU8(c.enabled ? 1 : 0);
+    w.WriteF32(c.max_walk_speed);
+    w.WriteF32(c.max_sprint_speed);
+    w.WriteF32(c.max_crouch_speed);
+    w.WriteF32(c.ground_acceleration);
+    w.WriteF32(c.ground_deceleration);
+    w.WriteF32(c.ground_friction);
+    w.WriteF32(c.gravity);
+    w.WriteF32(c.jump_velocity);
+    w.WriteU32(static_cast<uint32_t>(c.max_jump_count));
+    w.WriteF32(c.coyote_time);
+    w.WriteF32(c.jump_buffer_time);
+    w.WriteF32(c.air_control);
+    w.WriteF32(c.rotation_rate);
+    w.WriteU8(c.publish_events ? 1 : 0);
+}
+
+/// Full snapshot read.
+inline void ReadSnapshot_character_movement_cfg(ByteReader& r, dse::CharacterMovementConfig& c) {
+    c.enabled = r.ReadU8() != 0;
+    c.max_walk_speed = r.ReadF32();
+    c.max_sprint_speed = r.ReadF32();
+    c.max_crouch_speed = r.ReadF32();
+    c.ground_acceleration = r.ReadF32();
+    c.ground_deceleration = r.ReadF32();
+    c.ground_friction = r.ReadF32();
+    c.gravity = r.ReadF32();
+    c.jump_velocity = r.ReadF32();
+    c.max_jump_count = static_cast<int>(r.ReadU32());
+    c.coyote_time = r.ReadF32();
+    c.jump_buffer_time = r.ReadF32();
+    c.air_control = r.ReadF32();
+    c.rotation_rate = r.ReadF32();
+    c.publish_events = r.ReadU8() != 0;
+}
+
+/// Compute delta between current and baseline.
+inline character_movement_cfg_DeltaFlags ComputeDelta_character_movement_cfg(
+        const dse::CharacterMovementConfig& cur,
+        const dse::CharacterMovementConfig& base) {
+    character_movement_cfg_DeltaFlags flags = character_movement_cfg_DeltaFlags::None;
+    if (cur.enabled != base.enabled) flags = flags | character_movement_cfg_DeltaFlags::f_enabled;
+    if (cur.max_walk_speed != base.max_walk_speed) flags = flags | character_movement_cfg_DeltaFlags::f_max_walk_speed;
+    if (cur.max_sprint_speed != base.max_sprint_speed) flags = flags | character_movement_cfg_DeltaFlags::f_max_sprint_speed;
+    if (cur.max_crouch_speed != base.max_crouch_speed) flags = flags | character_movement_cfg_DeltaFlags::f_max_crouch_speed;
+    if (cur.ground_acceleration != base.ground_acceleration) flags = flags | character_movement_cfg_DeltaFlags::f_ground_acceleration;
+    if (cur.ground_deceleration != base.ground_deceleration) flags = flags | character_movement_cfg_DeltaFlags::f_ground_deceleration;
+    if (cur.ground_friction != base.ground_friction) flags = flags | character_movement_cfg_DeltaFlags::f_ground_friction;
+    if (cur.gravity != base.gravity) flags = flags | character_movement_cfg_DeltaFlags::f_gravity;
+    if (cur.jump_velocity != base.jump_velocity) flags = flags | character_movement_cfg_DeltaFlags::f_jump_velocity;
+    if (cur.max_jump_count != base.max_jump_count) flags = flags | character_movement_cfg_DeltaFlags::f_max_jump_count;
+    if (cur.coyote_time != base.coyote_time) flags = flags | character_movement_cfg_DeltaFlags::f_coyote_time;
+    if (cur.jump_buffer_time != base.jump_buffer_time) flags = flags | character_movement_cfg_DeltaFlags::f_jump_buffer_time;
+    if (cur.air_control != base.air_control) flags = flags | character_movement_cfg_DeltaFlags::f_air_control;
+    if (cur.rotation_rate != base.rotation_rate) flags = flags | character_movement_cfg_DeltaFlags::f_rotation_rate;
+    if (cur.publish_events != base.publish_events) flags = flags | character_movement_cfg_DeltaFlags::f_publish_events;
+    return flags;
+}
+
+/// Write only changed fields (delta).
+inline void WriteDelta_character_movement_cfg(ByteWriter& w, const dse::CharacterMovementConfig& c, character_movement_cfg_DeltaFlags flags) {
+    w.WriteU32(static_cast<uint32_t>(flags));
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_enabled)) { w.WriteU8(c.enabled ? 1 : 0); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_walk_speed)) { w.WriteF32(c.max_walk_speed); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_sprint_speed)) { w.WriteF32(c.max_sprint_speed); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_crouch_speed)) { w.WriteF32(c.max_crouch_speed); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_acceleration)) { w.WriteF32(c.ground_acceleration); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_deceleration)) { w.WriteF32(c.ground_deceleration); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_friction)) { w.WriteF32(c.ground_friction); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_gravity)) { w.WriteF32(c.gravity); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_jump_velocity)) { w.WriteF32(c.jump_velocity); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_jump_count)) { w.WriteU32(static_cast<uint32_t>(c.max_jump_count)); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_coyote_time)) { w.WriteF32(c.coyote_time); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_jump_buffer_time)) { w.WriteF32(c.jump_buffer_time); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_air_control)) { w.WriteF32(c.air_control); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_rotation_rate)) { w.WriteF32(c.rotation_rate); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_publish_events)) { w.WriteU8(c.publish_events ? 1 : 0); }
+}
+
+/// Read delta and apply to component.
+inline void ReadDelta_character_movement_cfg(ByteReader& r, dse::CharacterMovementConfig& c) {
+    auto flags = static_cast<character_movement_cfg_DeltaFlags>(r.ReadU32());
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_enabled)) { c.enabled = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_walk_speed)) { c.max_walk_speed = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_sprint_speed)) { c.max_sprint_speed = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_crouch_speed)) { c.max_crouch_speed = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_acceleration)) { c.ground_acceleration = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_deceleration)) { c.ground_deceleration = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_ground_friction)) { c.ground_friction = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_gravity)) { c.gravity = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_jump_velocity)) { c.jump_velocity = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_max_jump_count)) { c.max_jump_count = static_cast<int>(r.ReadU32()); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_coyote_time)) { c.coyote_time = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_jump_buffer_time)) { c.jump_buffer_time = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_air_control)) { c.air_control = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_rotation_rate)) { c.rotation_rate = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_cfg_DeltaFlags::f_publish_events)) { c.publish_events = r.ReadU8() != 0; }
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+// CharacterMovementState (prefix: character_movement)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Delta flags — one bit per replicable field.
+enum class character_movement_DeltaFlags : uint32_t {
+    None = 0,
+    f_input_direction = (1u << 0),
+    f_input_jump = (1u << 1),
+    f_input_sprint = (1u << 2),
+    f_input_crouch = (1u << 3),
+    f_velocity = (1u << 4),
+    f_is_grounded = (1u << 5),
+    f_is_jumping = (1u << 6),
+    f_jump_count = (1u << 7),
+    All = 0xffu
+};
+
+inline character_movement_DeltaFlags operator|(character_movement_DeltaFlags a, character_movement_DeltaFlags b) {
+    return static_cast<character_movement_DeltaFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline bool HasFlag(character_movement_DeltaFlags flags, character_movement_DeltaFlags bit) {
+    return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
+}
+
+/// Full snapshot write.
+inline void WriteSnapshot_character_movement(ByteWriter& w, const dse::CharacterMovementState& c) {
+    w.WriteF32(c.input_direction.x); w.WriteF32(c.input_direction.y); w.WriteF32(c.input_direction.z);
+    w.WriteU8(c.input_jump ? 1 : 0);
+    w.WriteU8(c.input_sprint ? 1 : 0);
+    w.WriteU8(c.input_crouch ? 1 : 0);
+    w.WriteF32(c.velocity.x); w.WriteF32(c.velocity.y); w.WriteF32(c.velocity.z);
+    w.WriteU8(c.is_grounded ? 1 : 0);
+    w.WriteU8(c.is_jumping ? 1 : 0);
+    w.WriteU32(static_cast<uint32_t>(c.jump_count));
+}
+
+/// Full snapshot read.
+inline void ReadSnapshot_character_movement(ByteReader& r, dse::CharacterMovementState& c) {
+    c.input_direction.x = r.ReadF32(); c.input_direction.y = r.ReadF32(); c.input_direction.z = r.ReadF32();
+    c.input_jump = r.ReadU8() != 0;
+    c.input_sprint = r.ReadU8() != 0;
+    c.input_crouch = r.ReadU8() != 0;
+    c.velocity.x = r.ReadF32(); c.velocity.y = r.ReadF32(); c.velocity.z = r.ReadF32();
+    c.is_grounded = r.ReadU8() != 0;
+    c.is_jumping = r.ReadU8() != 0;
+    c.jump_count = static_cast<int>(r.ReadU32());
+}
+
+/// Compute delta between current and baseline.
+inline character_movement_DeltaFlags ComputeDelta_character_movement(
+        const dse::CharacterMovementState& cur,
+        const dse::CharacterMovementState& base) {
+    character_movement_DeltaFlags flags = character_movement_DeltaFlags::None;
+    if (cur.input_direction.x != base.input_direction.x || cur.input_direction.y != base.input_direction.y || cur.input_direction.z != base.input_direction.z) flags = flags | character_movement_DeltaFlags::f_input_direction;
+    if (cur.input_jump != base.input_jump) flags = flags | character_movement_DeltaFlags::f_input_jump;
+    if (cur.input_sprint != base.input_sprint) flags = flags | character_movement_DeltaFlags::f_input_sprint;
+    if (cur.input_crouch != base.input_crouch) flags = flags | character_movement_DeltaFlags::f_input_crouch;
+    if (cur.velocity.x != base.velocity.x || cur.velocity.y != base.velocity.y || cur.velocity.z != base.velocity.z) flags = flags | character_movement_DeltaFlags::f_velocity;
+    if (cur.is_grounded != base.is_grounded) flags = flags | character_movement_DeltaFlags::f_is_grounded;
+    if (cur.is_jumping != base.is_jumping) flags = flags | character_movement_DeltaFlags::f_is_jumping;
+    if (cur.jump_count != base.jump_count) flags = flags | character_movement_DeltaFlags::f_jump_count;
+    return flags;
+}
+
+/// Write only changed fields (delta).
+inline void WriteDelta_character_movement(ByteWriter& w, const dse::CharacterMovementState& c, character_movement_DeltaFlags flags) {
+    w.WriteU32(static_cast<uint32_t>(flags));
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_direction)) { w.WriteF32(c.input_direction.x); w.WriteF32(c.input_direction.y); w.WriteF32(c.input_direction.z); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_jump)) { w.WriteU8(c.input_jump ? 1 : 0); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_sprint)) { w.WriteU8(c.input_sprint ? 1 : 0); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_crouch)) { w.WriteU8(c.input_crouch ? 1 : 0); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_velocity)) { w.WriteF32(c.velocity.x); w.WriteF32(c.velocity.y); w.WriteF32(c.velocity.z); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_is_grounded)) { w.WriteU8(c.is_grounded ? 1 : 0); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_is_jumping)) { w.WriteU8(c.is_jumping ? 1 : 0); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_jump_count)) { w.WriteU32(static_cast<uint32_t>(c.jump_count)); }
+}
+
+/// Read delta and apply to component.
+inline void ReadDelta_character_movement(ByteReader& r, dse::CharacterMovementState& c) {
+    auto flags = static_cast<character_movement_DeltaFlags>(r.ReadU32());
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_direction)) { c.input_direction.x = r.ReadF32(); c.input_direction.y = r.ReadF32(); c.input_direction.z = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_jump)) { c.input_jump = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_sprint)) { c.input_sprint = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_input_crouch)) { c.input_crouch = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_velocity)) { c.velocity.x = r.ReadF32(); c.velocity.y = r.ReadF32(); c.velocity.z = r.ReadF32(); }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_is_grounded)) { c.is_grounded = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_is_jumping)) { c.is_jumping = r.ReadU8() != 0; }
+    if (HasFlag(flags, character_movement_DeltaFlags::f_jump_count)) { c.jump_count = static_cast<int>(r.ReadU32()); }
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+// SpringArm3DComponent (prefix: spring_arm)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Delta flags — one bit per replicable field.
+enum class spring_arm_DeltaFlags : uint32_t {
+    None = 0,
+    f_enabled = (1u << 0),
+    f_target_offset = (1u << 1),
+    f_arm_length = (1u << 2),
+    f_collision_test = (1u << 3),
+    f_pitch = (1u << 4),
+    f_yaw = (1u << 5),
+    f_position_lag_speed = (1u << 6),
+    f_shake_trauma = (1u << 7),
+    All = 0xffu
+};
+
+inline spring_arm_DeltaFlags operator|(spring_arm_DeltaFlags a, spring_arm_DeltaFlags b) {
+    return static_cast<spring_arm_DeltaFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline bool HasFlag(spring_arm_DeltaFlags flags, spring_arm_DeltaFlags bit) {
+    return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
+}
+
+/// Full snapshot write.
+inline void WriteSnapshot_spring_arm(ByteWriter& w, const dse::SpringArm3DComponent& c) {
+    w.WriteU8(c.enabled ? 1 : 0);
+    w.WriteF32(c.target_offset.x); w.WriteF32(c.target_offset.y); w.WriteF32(c.target_offset.z);
+    w.WriteF32(c.arm_length);
+    w.WriteU8(c.collision_test ? 1 : 0);
+    w.WriteF32(c.pitch);
+    w.WriteF32(c.yaw);
+    w.WriteF32(c.position_lag_speed);
+    w.WriteF32(c.shake_trauma);
+}
+
+/// Full snapshot read.
+inline void ReadSnapshot_spring_arm(ByteReader& r, dse::SpringArm3DComponent& c) {
+    c.enabled = r.ReadU8() != 0;
+    c.target_offset.x = r.ReadF32(); c.target_offset.y = r.ReadF32(); c.target_offset.z = r.ReadF32();
+    c.arm_length = r.ReadF32();
+    c.collision_test = r.ReadU8() != 0;
+    c.pitch = r.ReadF32();
+    c.yaw = r.ReadF32();
+    c.position_lag_speed = r.ReadF32();
+    c.shake_trauma = r.ReadF32();
+}
+
+/// Compute delta between current and baseline.
+inline spring_arm_DeltaFlags ComputeDelta_spring_arm(
+        const dse::SpringArm3DComponent& cur,
+        const dse::SpringArm3DComponent& base) {
+    spring_arm_DeltaFlags flags = spring_arm_DeltaFlags::None;
+    if (cur.enabled != base.enabled) flags = flags | spring_arm_DeltaFlags::f_enabled;
+    if (cur.target_offset.x != base.target_offset.x || cur.target_offset.y != base.target_offset.y || cur.target_offset.z != base.target_offset.z) flags = flags | spring_arm_DeltaFlags::f_target_offset;
+    if (cur.arm_length != base.arm_length) flags = flags | spring_arm_DeltaFlags::f_arm_length;
+    if (cur.collision_test != base.collision_test) flags = flags | spring_arm_DeltaFlags::f_collision_test;
+    if (cur.pitch != base.pitch) flags = flags | spring_arm_DeltaFlags::f_pitch;
+    if (cur.yaw != base.yaw) flags = flags | spring_arm_DeltaFlags::f_yaw;
+    if (cur.position_lag_speed != base.position_lag_speed) flags = flags | spring_arm_DeltaFlags::f_position_lag_speed;
+    if (cur.shake_trauma != base.shake_trauma) flags = flags | spring_arm_DeltaFlags::f_shake_trauma;
+    return flags;
+}
+
+/// Write only changed fields (delta).
+inline void WriteDelta_spring_arm(ByteWriter& w, const dse::SpringArm3DComponent& c, spring_arm_DeltaFlags flags) {
+    w.WriteU32(static_cast<uint32_t>(flags));
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_enabled)) { w.WriteU8(c.enabled ? 1 : 0); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_target_offset)) { w.WriteF32(c.target_offset.x); w.WriteF32(c.target_offset.y); w.WriteF32(c.target_offset.z); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_arm_length)) { w.WriteF32(c.arm_length); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_collision_test)) { w.WriteU8(c.collision_test ? 1 : 0); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_pitch)) { w.WriteF32(c.pitch); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_yaw)) { w.WriteF32(c.yaw); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_position_lag_speed)) { w.WriteF32(c.position_lag_speed); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_shake_trauma)) { w.WriteF32(c.shake_trauma); }
+}
+
+/// Read delta and apply to component.
+inline void ReadDelta_spring_arm(ByteReader& r, dse::SpringArm3DComponent& c) {
+    auto flags = static_cast<spring_arm_DeltaFlags>(r.ReadU32());
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_enabled)) { c.enabled = r.ReadU8() != 0; }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_target_offset)) { c.target_offset.x = r.ReadF32(); c.target_offset.y = r.ReadF32(); c.target_offset.z = r.ReadF32(); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_arm_length)) { c.arm_length = r.ReadF32(); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_collision_test)) { c.collision_test = r.ReadU8() != 0; }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_pitch)) { c.pitch = r.ReadF32(); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_yaw)) { c.yaw = r.ReadF32(); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_position_lag_speed)) { c.position_lag_speed = r.ReadF32(); }
+    if (HasFlag(flags, spring_arm_DeltaFlags::f_shake_trauma)) { c.shake_trauma = r.ReadF32(); }
+}
+// ═══════════════════════════════════════════════════════════════════════════════
+// PlayerControllerComponent (prefix: player_controller)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Delta flags — one bit per replicable field.
+enum class player_controller_DeltaFlags : uint32_t {
+    None = 0,
+    f_enabled = (1u << 0),
+    f_mouse_sensitivity = (1u << 1),
+    f_gamepad_sensitivity = (1u << 2),
+    f_invert_y = (1u << 3),
+    f_stick_dead_zone = (1u << 4),
+    f_move_response_curve = (1u << 5),
+    f_look_response_curve = (1u << 6),
+    All = 0x7fu
+};
+
+inline player_controller_DeltaFlags operator|(player_controller_DeltaFlags a, player_controller_DeltaFlags b) {
+    return static_cast<player_controller_DeltaFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline bool HasFlag(player_controller_DeltaFlags flags, player_controller_DeltaFlags bit) {
+    return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
+}
+
+/// Full snapshot write.
+inline void WriteSnapshot_player_controller(ByteWriter& w, const dse::PlayerControllerComponent& c) {
+    w.WriteU8(c.enabled ? 1 : 0);
+    w.WriteF32(c.mouse_sensitivity);
+    w.WriteF32(c.gamepad_sensitivity);
+    w.WriteU8(c.invert_y ? 1 : 0);
+    w.WriteF32(c.stick_dead_zone);
+    w.WriteF32(c.move_response_curve);
+    w.WriteF32(c.look_response_curve);
+}
+
+/// Full snapshot read.
+inline void ReadSnapshot_player_controller(ByteReader& r, dse::PlayerControllerComponent& c) {
+    c.enabled = r.ReadU8() != 0;
+    c.mouse_sensitivity = r.ReadF32();
+    c.gamepad_sensitivity = r.ReadF32();
+    c.invert_y = r.ReadU8() != 0;
+    c.stick_dead_zone = r.ReadF32();
+    c.move_response_curve = r.ReadF32();
+    c.look_response_curve = r.ReadF32();
+}
+
+/// Compute delta between current and baseline.
+inline player_controller_DeltaFlags ComputeDelta_player_controller(
+        const dse::PlayerControllerComponent& cur,
+        const dse::PlayerControllerComponent& base) {
+    player_controller_DeltaFlags flags = player_controller_DeltaFlags::None;
+    if (cur.enabled != base.enabled) flags = flags | player_controller_DeltaFlags::f_enabled;
+    if (cur.mouse_sensitivity != base.mouse_sensitivity) flags = flags | player_controller_DeltaFlags::f_mouse_sensitivity;
+    if (cur.gamepad_sensitivity != base.gamepad_sensitivity) flags = flags | player_controller_DeltaFlags::f_gamepad_sensitivity;
+    if (cur.invert_y != base.invert_y) flags = flags | player_controller_DeltaFlags::f_invert_y;
+    if (cur.stick_dead_zone != base.stick_dead_zone) flags = flags | player_controller_DeltaFlags::f_stick_dead_zone;
+    if (cur.move_response_curve != base.move_response_curve) flags = flags | player_controller_DeltaFlags::f_move_response_curve;
+    if (cur.look_response_curve != base.look_response_curve) flags = flags | player_controller_DeltaFlags::f_look_response_curve;
+    return flags;
+}
+
+/// Write only changed fields (delta).
+inline void WriteDelta_player_controller(ByteWriter& w, const dse::PlayerControllerComponent& c, player_controller_DeltaFlags flags) {
+    w.WriteU32(static_cast<uint32_t>(flags));
+    if (HasFlag(flags, player_controller_DeltaFlags::f_enabled)) { w.WriteU8(c.enabled ? 1 : 0); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_mouse_sensitivity)) { w.WriteF32(c.mouse_sensitivity); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_gamepad_sensitivity)) { w.WriteF32(c.gamepad_sensitivity); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_invert_y)) { w.WriteU8(c.invert_y ? 1 : 0); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_stick_dead_zone)) { w.WriteF32(c.stick_dead_zone); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_move_response_curve)) { w.WriteF32(c.move_response_curve); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_look_response_curve)) { w.WriteF32(c.look_response_curve); }
+}
+
+/// Read delta and apply to component.
+inline void ReadDelta_player_controller(ByteReader& r, dse::PlayerControllerComponent& c) {
+    auto flags = static_cast<player_controller_DeltaFlags>(r.ReadU32());
+    if (HasFlag(flags, player_controller_DeltaFlags::f_enabled)) { c.enabled = r.ReadU8() != 0; }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_mouse_sensitivity)) { c.mouse_sensitivity = r.ReadF32(); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_gamepad_sensitivity)) { c.gamepad_sensitivity = r.ReadF32(); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_invert_y)) { c.invert_y = r.ReadU8() != 0; }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_stick_dead_zone)) { c.stick_dead_zone = r.ReadF32(); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_move_response_curve)) { c.move_response_curve = r.ReadF32(); }
+    if (HasFlag(flags, player_controller_DeltaFlags::f_look_response_curve)) { c.look_response_curve = r.ReadF32(); }
+}
 
 // ─── Archetype Registry ──────────────────────────────────────────────────────
 
@@ -4344,6 +4744,10 @@ enum class ReplArchetypeId : uint16_t {
     hlod_config = 42,
     virtual_texture = 43,
     lightmap = 44,
+    character_movement_cfg = 45,
+    character_movement = 46,
+    spring_arm = 47,
+    player_controller = 48,
     Count
 };
 
