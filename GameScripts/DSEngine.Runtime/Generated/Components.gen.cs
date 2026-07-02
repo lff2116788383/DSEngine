@@ -61,8 +61,8 @@ namespace DSEngine.Runtime
         }
 
         public bool Enabled {
-            get => Native.dse_camera3d_get_enabled(_entity);
-            set => Native.dse_camera3d_set_enabled(_entity, value);
+            get => Native.dse_camera3d_get_enabled(_entity) != 0;
+            set => Native.dse_camera3d_set_enabled(_entity, value ? 1 : 0);
         }
 
         public int Priority {
@@ -88,8 +88,8 @@ namespace DSEngine.Runtime
         }
 
         public bool Visible {
-            get => Native.dse_mesh_renderer_get_visible(_entity);
-            set => Native.dse_mesh_renderer_set_visible(_entity, value);
+            get => Native.dse_mesh_renderer_get_visible(_entity) != 0;
+            set => Native.dse_mesh_renderer_set_visible(_entity, value ? 1 : 0);
         }
 
         public float Metallic {
@@ -111,17 +111,25 @@ namespace DSEngine.Runtime
         }
 
         public bool ReceiveShadow {
-            get => Native.dse_mesh_renderer_get_receive_shadow(_entity);
-            set => Native.dse_mesh_renderer_set_receive_shadow(_entity, value);
+            get => Native.dse_mesh_renderer_get_receive_shadow(_entity) != 0;
+            set => Native.dse_mesh_renderer_set_receive_shadow(_entity, value ? 1 : 0);
         }
 
         public string MeshPath {
-            get => Native.dse_mesh_renderer_get_mesh_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_mesh_renderer_get_mesh_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_mesh_renderer_set_mesh_path(_entity, value);
         }
 
         public string ShaderVariant {
-            get => Native.dse_mesh_renderer_get_shader_variant(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_mesh_renderer_get_shader_variant(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_mesh_renderer_set_shader_variant(_entity, value);
         }
 
@@ -161,8 +169,8 @@ namespace DSEngine.Runtime
         }
 
         public bool CastShadow {
-            get => Native.dse_dir_light_get_cast_shadow(_entity);
-            set => Native.dse_dir_light_set_cast_shadow(_entity, value);
+            get => Native.dse_dir_light_get_cast_shadow(_entity) != 0;
+            set => Native.dse_dir_light_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
         public float ShadowStrength {
@@ -171,8 +179,8 @@ namespace DSEngine.Runtime
         }
 
         public bool Enabled {
-            get => Native.dse_dir_light_get_enabled(_entity);
-            set => Native.dse_dir_light_set_enabled(_entity, value);
+            get => Native.dse_dir_light_get_enabled(_entity) != 0;
+            set => Native.dse_dir_light_set_enabled(_entity, value ? 1 : 0);
         }
 
     }
@@ -203,13 +211,13 @@ namespace DSEngine.Runtime
         }
 
         public bool Enabled {
-            get => Native.dse_point_light_get_enabled(_entity);
-            set => Native.dse_point_light_set_enabled(_entity, value);
+            get => Native.dse_point_light_get_enabled(_entity) != 0;
+            set => Native.dse_point_light_set_enabled(_entity, value ? 1 : 0);
         }
 
         public bool CastShadow {
-            get => Native.dse_point_light_get_cast_shadow(_entity);
-            set => Native.dse_point_light_set_cast_shadow(_entity, value);
+            get => Native.dse_point_light_get_cast_shadow(_entity) != 0;
+            set => Native.dse_point_light_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
     }
@@ -258,13 +266,13 @@ namespace DSEngine.Runtime
         }
 
         public bool Enabled {
-            get => Native.dse_spot_light_get_enabled(_entity);
-            set => Native.dse_spot_light_set_enabled(_entity, value);
+            get => Native.dse_spot_light_get_enabled(_entity) != 0;
+            set => Native.dse_spot_light_set_enabled(_entity, value ? 1 : 0);
         }
 
         public bool CastShadow {
-            get => Native.dse_spot_light_get_cast_shadow(_entity);
-            set => Native.dse_spot_light_set_cast_shadow(_entity, value);
+            get => Native.dse_spot_light_get_cast_shadow(_entity) != 0;
+            set => Native.dse_spot_light_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
     }
@@ -298,8 +306,8 @@ namespace DSEngine.Runtime
         }
 
         public bool Enabled {
-            get => Native.dse_sky_light_get_enabled(_entity);
-            set => Native.dse_sky_light_set_enabled(_entity, value);
+            get => Native.dse_sky_light_get_enabled(_entity) != 0;
+            set => Native.dse_sky_light_set_enabled(_entity, value ? 1 : 0);
         }
 
     }
@@ -312,8 +320,8 @@ namespace DSEngine.Runtime
         internal Tree(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_tree_get_enabled(_entity);
-            set => Native.dse_tree_set_enabled(_entity, value);
+            get => Native.dse_tree_get_enabled(_entity) != 0;
+            set => Native.dse_tree_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float Density {
@@ -362,8 +370,8 @@ namespace DSEngine.Runtime
         }
 
         public bool CastShadow {
-            get => Native.dse_tree_get_cast_shadow(_entity);
-            set => Native.dse_tree_set_cast_shadow(_entity, value);
+            get => Native.dse_tree_get_cast_shadow(_entity) != 0;
+            set => Native.dse_tree_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
         public float ShadowDistance {
@@ -382,8 +390,8 @@ namespace DSEngine.Runtime
         }
 
         public bool RandomRotation {
-            get => Native.dse_tree_get_random_rotation(_entity);
-            set => Native.dse_tree_set_random_rotation(_entity, value);
+            get => Native.dse_tree_get_random_rotation(_entity) != 0;
+            set => Native.dse_tree_set_random_rotation(_entity, value ? 1 : 0);
         }
 
         public float BillboardDistance {
@@ -392,17 +400,29 @@ namespace DSEngine.Runtime
         }
 
         public string MeshPath {
-            get => Native.dse_tree_get_mesh_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_tree_get_mesh_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_tree_set_mesh_path(_entity, value);
         }
 
         public string Lod1MeshPath {
-            get => Native.dse_tree_get_lod1_mesh_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_tree_get_lod1_mesh_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_tree_set_lod1_mesh_path(_entity, value);
         }
 
         public string BillboardTexturePath {
-            get => Native.dse_tree_get_billboard_texture_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_tree_get_billboard_texture_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_tree_set_billboard_texture_path(_entity, value);
         }
 
@@ -416,8 +436,8 @@ namespace DSEngine.Runtime
         internal TerrainTileManager(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_terrain_tile_get_enabled(_entity);
-            set => Native.dse_terrain_tile_set_enabled(_entity, value);
+            get => Native.dse_terrain_tile_get_enabled(_entity) != 0;
+            set => Native.dse_terrain_tile_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float TileWorldSize {
@@ -446,8 +466,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseProcedural {
-            get => Native.dse_terrain_tile_get_use_procedural(_entity);
-            set => Native.dse_terrain_tile_set_use_procedural(_entity, value);
+            get => Native.dse_terrain_tile_get_use_procedural(_entity) != 0;
+            set => Native.dse_terrain_tile_set_use_procedural(_entity, value ? 1 : 0);
         }
 
         public float ProceduralBaseHeight {
@@ -475,10 +495,14 @@ namespace DSEngine.Runtime
         internal DynamicObstacle(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_dyn_obstacle_get_enabled(_entity);
-            set => Native.dse_dyn_obstacle_set_enabled(_entity, value);
+            get => Native.dse_dyn_obstacle_get_enabled(_entity) != 0;
+            set => Native.dse_dyn_obstacle_set_enabled(_entity, value ? 1 : 0);
         }
 
+        public int Shape {
+            get => Native.dse_dyn_obstacle_get_shape(_entity);
+            set => Native.dse_dyn_obstacle_set_shape(_entity, value);
+        }
 
         public Vector3 BoxExtents {
             get {
@@ -508,8 +532,8 @@ namespace DSEngine.Runtime
         internal NavMeshAutoRebake(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_navmesh_rebake_get_enabled(_entity);
-            set => Native.dse_navmesh_rebake_set_enabled(_entity, value);
+            get => Native.dse_navmesh_rebake_get_enabled(_entity) != 0;
+            set => Native.dse_navmesh_rebake_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float TileSize {
@@ -523,13 +547,13 @@ namespace DSEngine.Runtime
         }
 
         public bool CollectTerrain {
-            get => Native.dse_navmesh_rebake_get_collect_terrain(_entity);
-            set => Native.dse_navmesh_rebake_set_collect_terrain(_entity, value);
+            get => Native.dse_navmesh_rebake_get_collect_terrain(_entity) != 0;
+            set => Native.dse_navmesh_rebake_set_collect_terrain(_entity, value ? 1 : 0);
         }
 
         public bool CollectMeshRenderers {
-            get => Native.dse_navmesh_rebake_get_collect_mesh_renderers(_entity);
-            set => Native.dse_navmesh_rebake_set_collect_mesh_renderers(_entity, value);
+            get => Native.dse_navmesh_rebake_get_collect_mesh_renderers(_entity) != 0;
+            set => Native.dse_navmesh_rebake_set_collect_mesh_renderers(_entity, value ? 1 : 0);
         }
 
         public float AgentHeight {
@@ -572,13 +596,13 @@ namespace DSEngine.Runtime
         internal PostProcess(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_post_process_get_enabled(_entity);
-            set => Native.dse_post_process_set_enabled(_entity, value);
+            get => Native.dse_post_process_get_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_enabled(_entity, value ? 1 : 0);
         }
 
         public bool BloomEnabled {
-            get => Native.dse_post_process_get_bloom_enabled(_entity);
-            set => Native.dse_post_process_set_bloom_enabled(_entity, value);
+            get => Native.dse_post_process_get_bloom_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_bloom_enabled(_entity, value ? 1 : 0);
         }
 
         public float BloomThreshold {
@@ -602,8 +626,8 @@ namespace DSEngine.Runtime
         }
 
         public bool ColorGradingEnabled {
-            get => Native.dse_post_process_get_color_grading_enabled(_entity);
-            set => Native.dse_post_process_set_color_grading_enabled(_entity, value);
+            get => Native.dse_post_process_get_color_grading_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_color_grading_enabled(_entity, value ? 1 : 0);
         }
 
         public float Exposure {
@@ -617,8 +641,8 @@ namespace DSEngine.Runtime
         }
 
         public bool SsaoEnabled {
-            get => Native.dse_post_process_get_ssao_enabled(_entity);
-            set => Native.dse_post_process_set_ssao_enabled(_entity, value);
+            get => Native.dse_post_process_get_ssao_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_ssao_enabled(_entity, value ? 1 : 0);
         }
 
         public float SsaoRadius {
@@ -647,8 +671,8 @@ namespace DSEngine.Runtime
         }
 
         public bool AutoExposureEnabled {
-            get => Native.dse_post_process_get_auto_exposure_enabled(_entity);
-            set => Native.dse_post_process_set_auto_exposure_enabled(_entity, value);
+            get => Native.dse_post_process_get_auto_exposure_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_auto_exposure_enabled(_entity, value ? 1 : 0);
         }
 
         public float ExposureMin {
@@ -682,8 +706,8 @@ namespace DSEngine.Runtime
         }
 
         public bool VignetteEnabled {
-            get => Native.dse_post_process_get_vignette_enabled(_entity);
-            set => Native.dse_post_process_set_vignette_enabled(_entity, value);
+            get => Native.dse_post_process_get_vignette_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_vignette_enabled(_entity, value ? 1 : 0);
         }
 
         public float VignetteIntensity {
@@ -702,8 +726,8 @@ namespace DSEngine.Runtime
         }
 
         public bool FilmGrainEnabled {
-            get => Native.dse_post_process_get_film_grain_enabled(_entity);
-            set => Native.dse_post_process_set_film_grain_enabled(_entity, value);
+            get => Native.dse_post_process_get_film_grain_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_film_grain_enabled(_entity, value ? 1 : 0);
         }
 
         public float FilmGrainIntensity {
@@ -717,13 +741,13 @@ namespace DSEngine.Runtime
         }
 
         public bool FxaaEnabled {
-            get => Native.dse_post_process_get_fxaa_enabled(_entity);
-            set => Native.dse_post_process_set_fxaa_enabled(_entity, value);
+            get => Native.dse_post_process_get_fxaa_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_fxaa_enabled(_entity, value ? 1 : 0);
         }
 
         public bool TaaEnabled {
-            get => Native.dse_post_process_get_taa_enabled(_entity);
-            set => Native.dse_post_process_set_taa_enabled(_entity, value);
+            get => Native.dse_post_process_get_taa_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_taa_enabled(_entity, value ? 1 : 0);
         }
 
         public float TaaBlendFactor {
@@ -732,8 +756,8 @@ namespace DSEngine.Runtime
         }
 
         public bool ContactShadowEnabled {
-            get => Native.dse_post_process_get_contact_shadow_enabled(_entity);
-            set => Native.dse_post_process_set_contact_shadow_enabled(_entity, value);
+            get => Native.dse_post_process_get_contact_shadow_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_contact_shadow_enabled(_entity, value ? 1 : 0);
         }
 
         public float ContactShadowStrength {
@@ -752,8 +776,8 @@ namespace DSEngine.Runtime
         }
 
         public bool DofEnabled {
-            get => Native.dse_post_process_get_dof_enabled(_entity);
-            set => Native.dse_post_process_set_dof_enabled(_entity, value);
+            get => Native.dse_post_process_get_dof_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_dof_enabled(_entity, value ? 1 : 0);
         }
 
         public float DofFocusDistance {
@@ -772,8 +796,8 @@ namespace DSEngine.Runtime
         }
 
         public bool MotionBlurEnabled {
-            get => Native.dse_post_process_get_motion_blur_enabled(_entity);
-            set => Native.dse_post_process_set_motion_blur_enabled(_entity, value);
+            get => Native.dse_post_process_get_motion_blur_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_motion_blur_enabled(_entity, value ? 1 : 0);
         }
 
         public float MotionBlurIntensity {
@@ -787,8 +811,8 @@ namespace DSEngine.Runtime
         }
 
         public bool SsrEnabled {
-            get => Native.dse_post_process_get_ssr_enabled(_entity);
-            set => Native.dse_post_process_set_ssr_enabled(_entity, value);
+            get => Native.dse_post_process_get_ssr_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_ssr_enabled(_entity, value ? 1 : 0);
         }
 
         public float SsrMaxDistance {
@@ -822,8 +846,8 @@ namespace DSEngine.Runtime
         }
 
         public bool OutlineEnabled {
-            get => Native.dse_post_process_get_outline_enabled(_entity);
-            set => Native.dse_post_process_set_outline_enabled(_entity, value);
+            get => Native.dse_post_process_get_outline_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_outline_enabled(_entity, value ? 1 : 0);
         }
 
         public Vector3 OutlineColor {
@@ -850,8 +874,8 @@ namespace DSEngine.Runtime
         }
 
         public bool LightShaftEnabled {
-            get => Native.dse_post_process_get_light_shaft_enabled(_entity);
-            set => Native.dse_post_process_set_light_shaft_enabled(_entity, value);
+            get => Native.dse_post_process_get_light_shaft_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_light_shaft_enabled(_entity, value ? 1 : 0);
         }
 
         public Vector3 LightShaftColor {
@@ -893,8 +917,8 @@ namespace DSEngine.Runtime
         }
 
         public bool FogEnabled {
-            get => Native.dse_post_process_get_fog_enabled(_entity);
-            set => Native.dse_post_process_set_fog_enabled(_entity, value);
+            get => Native.dse_post_process_get_fog_enabled(_entity) != 0;
+            set => Native.dse_post_process_set_fog_enabled(_entity, value ? 1 : 0);
         }
 
         public Vector3 FogColor {
@@ -950,17 +974,25 @@ namespace DSEngine.Runtime
         internal Animator3D(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_animator3d_get_enabled(_entity);
-            set => Native.dse_animator3d_set_enabled(_entity, value);
+            get => Native.dse_animator3d_get_enabled(_entity) != 0;
+            set => Native.dse_animator3d_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string DanimPath {
-            get => Native.dse_animator3d_get_danim_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_animator3d_get_danim_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_animator3d_set_danim_path(_entity, value);
         }
 
         public string DskelPath {
-            get => Native.dse_animator3d_get_dskel_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_animator3d_get_dskel_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_animator3d_set_dskel_path(_entity, value);
         }
 
@@ -970,17 +1002,21 @@ namespace DSEngine.Runtime
         }
 
         public bool Loop {
-            get => Native.dse_animator3d_get_loop(_entity);
-            set => Native.dse_animator3d_set_loop(_entity, value);
+            get => Native.dse_animator3d_get_loop(_entity) != 0;
+            set => Native.dse_animator3d_set_loop(_entity, value ? 1 : 0);
         }
 
         public bool UseAnimTree {
-            get => Native.dse_animator3d_get_use_anim_tree(_entity);
-            set => Native.dse_animator3d_set_use_anim_tree(_entity, value);
+            get => Native.dse_animator3d_get_use_anim_tree(_entity) != 0;
+            set => Native.dse_animator3d_set_use_anim_tree(_entity, value ? 1 : 0);
         }
 
         public string BlendParameter {
-            get => Native.dse_animator3d_get_blend_parameter(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_animator3d_get_blend_parameter(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_animator3d_set_blend_parameter(_entity, value);
         }
 
@@ -999,8 +1035,8 @@ namespace DSEngine.Runtime
         internal Decal(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_decal_get_enabled(_entity);
-            set => Native.dse_decal_set_enabled(_entity, value);
+            get => Native.dse_decal_get_enabled(_entity) != 0;
+            set => Native.dse_decal_set_enabled(_entity, value ? 1 : 0);
         }
 
         public Vector4 Color {
@@ -1026,12 +1062,16 @@ namespace DSEngine.Runtime
         internal Skybox(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_skybox_get_enabled(_entity);
-            set => Native.dse_skybox_set_enabled(_entity, value);
+            get => Native.dse_skybox_get_enabled(_entity) != 0;
+            set => Native.dse_skybox_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string CubemapPath {
-            get => Native.dse_skybox_get_cubemap_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_skybox_get_cubemap_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_skybox_set_cubemap_path(_entity, value);
         }
 
@@ -1045,8 +1085,8 @@ namespace DSEngine.Runtime
         internal FreeCameraController(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_free_camera_get_enabled(_entity);
-            set => Native.dse_free_camera_set_enabled(_entity, value);
+            get => Native.dse_free_camera_get_enabled(_entity) != 0;
+            set => Native.dse_free_camera_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float MoveSpeed {
@@ -1079,12 +1119,16 @@ namespace DSEngine.Runtime
         internal SubScene(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_sub_scene_get_enabled(_entity);
-            set => Native.dse_sub_scene_set_enabled(_entity, value);
+            get => Native.dse_sub_scene_get_enabled(_entity) != 0;
+            set => Native.dse_sub_scene_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string ScenePath {
-            get => Native.dse_sub_scene_get_scene_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_sub_scene_get_scene_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_sub_scene_set_scene_path(_entity, value);
         }
 
@@ -1123,8 +1167,8 @@ namespace DSEngine.Runtime
         internal Water(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_water_get_enabled(_entity);
-            set => Native.dse_water_set_enabled(_entity, value);
+            get => Native.dse_water_get_enabled(_entity) != 0;
+            set => Native.dse_water_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float WaterLevel {
@@ -1239,8 +1283,8 @@ namespace DSEngine.Runtime
         internal LightProbe(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_light_probe_get_enabled(_entity);
-            set => Native.dse_light_probe_set_enabled(_entity, value);
+            get => Native.dse_light_probe_get_enabled(_entity) != 0;
+            set => Native.dse_light_probe_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float InfluenceRadius {
@@ -1249,8 +1293,8 @@ namespace DSEngine.Runtime
         }
 
         public bool ShowDebug {
-            get => Native.dse_light_probe_get_show_debug(_entity);
-            set => Native.dse_light_probe_set_show_debug(_entity, value);
+            get => Native.dse_light_probe_get_show_debug(_entity) != 0;
+            set => Native.dse_light_probe_set_show_debug(_entity, value ? 1 : 0);
         }
 
     }
@@ -1263,8 +1307,8 @@ namespace DSEngine.Runtime
         internal ReflectionProbe(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_reflection_probe_get_enabled(_entity);
-            set => Native.dse_reflection_probe_set_enabled(_entity, value);
+            get => Native.dse_reflection_probe_get_enabled(_entity) != 0;
+            set => Native.dse_reflection_probe_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float InfluenceRadius {
@@ -1288,8 +1332,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseBoxProjection {
-            get => Native.dse_reflection_probe_get_use_box_projection(_entity);
-            set => Native.dse_reflection_probe_set_use_box_projection(_entity, value);
+            get => Native.dse_reflection_probe_get_use_box_projection(_entity) != 0;
+            set => Native.dse_reflection_probe_set_use_box_projection(_entity, value ? 1 : 0);
         }
 
         public int Resolution {
@@ -1298,8 +1342,8 @@ namespace DSEngine.Runtime
         }
 
         public bool ShowDebug {
-            get => Native.dse_reflection_probe_get_show_debug(_entity);
-            set => Native.dse_reflection_probe_set_show_debug(_entity, value);
+            get => Native.dse_reflection_probe_get_show_debug(_entity) != 0;
+            set => Native.dse_reflection_probe_set_show_debug(_entity, value ? 1 : 0);
         }
 
     }
@@ -1312,8 +1356,8 @@ namespace DSEngine.Runtime
         internal GIProbeVolume(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_gi_probe_get_enabled(_entity);
-            set => Native.dse_gi_probe_set_enabled(_entity, value);
+            get => Native.dse_gi_probe_get_enabled(_entity) != 0;
+            set => Native.dse_gi_probe_set_enabled(_entity, value ? 1 : 0);
         }
 
         public Vector3 Origin {
@@ -1383,8 +1427,8 @@ namespace DSEngine.Runtime
         }
 
         public bool ShowDebugProbes {
-            get => Native.dse_gi_probe_get_show_debug_probes(_entity);
-            set => Native.dse_gi_probe_set_show_debug_probes(_entity, value);
+            get => Native.dse_gi_probe_get_show_debug_probes(_entity) != 0;
+            set => Native.dse_gi_probe_set_show_debug_probes(_entity, value ? 1 : 0);
         }
 
     }
@@ -1397,8 +1441,8 @@ namespace DSEngine.Runtime
         internal Foliage(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_foliage_get_enabled(_entity);
-            set => Native.dse_foliage_set_enabled(_entity, value);
+            get => Native.dse_foliage_get_enabled(_entity) != 0;
+            set => Native.dse_foliage_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float WindStrength {
@@ -1451,8 +1495,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseGravity {
-            get => Native.dse_rigidbody3d_get_use_gravity(_entity);
-            set => Native.dse_rigidbody3d_set_use_gravity(_entity, value);
+            get => Native.dse_rigidbody3d_get_use_gravity(_entity) != 0;
+            set => Native.dse_rigidbody3d_set_use_gravity(_entity, value ? 1 : 0);
         }
 
         public float GravityScale {
@@ -1461,8 +1505,8 @@ namespace DSEngine.Runtime
         }
 
         public bool IsKinematic {
-            get => Native.dse_rigidbody3d_get_is_kinematic(_entity);
-            set => Native.dse_rigidbody3d_set_is_kinematic(_entity, value);
+            get => Native.dse_rigidbody3d_get_is_kinematic(_entity) != 0;
+            set => Native.dse_rigidbody3d_set_is_kinematic(_entity, value ? 1 : 0);
         }
 
         public int CollisionLayer {
@@ -1501,8 +1545,8 @@ namespace DSEngine.Runtime
         }
 
         public bool IsTrigger {
-            get => Native.dse_box_collider3d_get_is_trigger(_entity);
-            set => Native.dse_box_collider3d_set_is_trigger(_entity, value);
+            get => Native.dse_box_collider3d_get_is_trigger(_entity) != 0;
+            set => Native.dse_box_collider3d_set_is_trigger(_entity, value ? 1 : 0);
         }
 
         public float Bounciness {
@@ -1538,8 +1582,8 @@ namespace DSEngine.Runtime
         }
 
         public bool IsTrigger {
-            get => Native.dse_sphere_collider3d_get_is_trigger(_entity);
-            set => Native.dse_sphere_collider3d_set_is_trigger(_entity, value);
+            get => Native.dse_sphere_collider3d_get_is_trigger(_entity) != 0;
+            set => Native.dse_sphere_collider3d_set_is_trigger(_entity, value ? 1 : 0);
         }
 
         public float Bounciness {
@@ -1585,8 +1629,8 @@ namespace DSEngine.Runtime
         }
 
         public bool IsTrigger {
-            get => Native.dse_capsule_collider3d_get_is_trigger(_entity);
-            set => Native.dse_capsule_collider3d_set_is_trigger(_entity, value);
+            get => Native.dse_capsule_collider3d_get_is_trigger(_entity) != 0;
+            set => Native.dse_capsule_collider3d_set_is_trigger(_entity, value ? 1 : 0);
         }
 
         public float Bounciness {
@@ -1609,13 +1653,13 @@ namespace DSEngine.Runtime
         internal MeshCollider3D(uint entity) => _entity = entity;
 
         public bool Convex {
-            get => Native.dse_mesh_collider3d_get_convex(_entity);
-            set => Native.dse_mesh_collider3d_set_convex(_entity, value);
+            get => Native.dse_mesh_collider3d_get_convex(_entity) != 0;
+            set => Native.dse_mesh_collider3d_set_convex(_entity, value ? 1 : 0);
         }
 
         public bool IsTrigger {
-            get => Native.dse_mesh_collider3d_get_is_trigger(_entity);
-            set => Native.dse_mesh_collider3d_set_is_trigger(_entity, value);
+            get => Native.dse_mesh_collider3d_get_is_trigger(_entity) != 0;
+            set => Native.dse_mesh_collider3d_set_is_trigger(_entity, value ? 1 : 0);
         }
 
         public float Bounciness {
@@ -1711,8 +1755,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseLimits {
-            get => Native.dse_joint3d_get_use_limits(_entity);
-            set => Native.dse_joint3d_set_use_limits(_entity, value);
+            get => Native.dse_joint3d_get_use_limits(_entity) != 0;
+            set => Native.dse_joint3d_set_use_limits(_entity, value ? 1 : 0);
         }
 
         public float LowerLimit {
@@ -1765,13 +1809,13 @@ namespace DSEngine.Runtime
         internal Ragdoll(uint entity) => _entity = entity;
 
         public bool Active {
-            get => Native.dse_ragdoll_get_active(_entity);
-            set => Native.dse_ragdoll_set_active(_entity, value);
+            get => Native.dse_ragdoll_get_active(_entity) != 0;
+            set => Native.dse_ragdoll_set_active(_entity, value ? 1 : 0);
         }
 
         public bool AutoSetup {
-            get => Native.dse_ragdoll_get_auto_setup(_entity);
-            set => Native.dse_ragdoll_set_auto_setup(_entity, value);
+            get => Native.dse_ragdoll_get_auto_setup(_entity) != 0;
+            set => Native.dse_ragdoll_set_auto_setup(_entity, value ? 1 : 0);
         }
 
         public float TotalMass {
@@ -1809,8 +1853,8 @@ namespace DSEngine.Runtime
         internal SoftBody(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_soft_body_get_enabled(_entity);
-            set => Native.dse_soft_body_set_enabled(_entity, value);
+            get => Native.dse_soft_body_get_enabled(_entity) != 0;
+            set => Native.dse_soft_body_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float Stiffness {
@@ -1829,8 +1873,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseGravity {
-            get => Native.dse_soft_body_get_use_gravity(_entity);
-            set => Native.dse_soft_body_set_use_gravity(_entity, value);
+            get => Native.dse_soft_body_get_use_gravity(_entity) != 0;
+            set => Native.dse_soft_body_set_use_gravity(_entity, value ? 1 : 0);
         }
 
         public float GravityScale {
@@ -1853,8 +1897,8 @@ namespace DSEngine.Runtime
         internal Vehicle(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_vehicle_get_enabled(_entity);
-            set => Native.dse_vehicle_set_enabled(_entity, value);
+            get => Native.dse_vehicle_get_enabled(_entity) != 0;
+            set => Native.dse_vehicle_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float MaxEngineForce {
@@ -1882,8 +1926,8 @@ namespace DSEngine.Runtime
         internal Rope(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_rope_get_enabled(_entity);
-            set => Native.dse_rope_set_enabled(_entity, value);
+            get => Native.dse_rope_get_enabled(_entity) != 0;
+            set => Native.dse_rope_set_enabled(_entity, value ? 1 : 0);
         }
 
         public int SegmentCount {
@@ -1912,8 +1956,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseGravity {
-            get => Native.dse_rope_get_use_gravity(_entity);
-            set => Native.dse_rope_set_use_gravity(_entity, value);
+            get => Native.dse_rope_get_use_gravity(_entity) != 0;
+            set => Native.dse_rope_set_use_gravity(_entity, value ? 1 : 0);
         }
 
         public float GravityScale {
@@ -1965,8 +2009,8 @@ namespace DSEngine.Runtime
         internal Buoyancy(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_buoyancy_get_enabled(_entity);
-            set => Native.dse_buoyancy_set_enabled(_entity, value);
+            get => Native.dse_buoyancy_get_enabled(_entity) != 0;
+            set => Native.dse_buoyancy_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float WaterLevel {
@@ -1975,8 +2019,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseFluidSystem {
-            get => Native.dse_buoyancy_get_use_fluid_system(_entity);
-            set => Native.dse_buoyancy_set_use_fluid_system(_entity, value);
+            get => Native.dse_buoyancy_get_use_fluid_system(_entity) != 0;
+            set => Native.dse_buoyancy_set_use_fluid_system(_entity, value ? 1 : 0);
         }
 
         public float BuoyancyForce {
@@ -2009,8 +2053,8 @@ namespace DSEngine.Runtime
         internal Atmosphere(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_atmosphere_get_enabled(_entity);
-            set => Native.dse_atmosphere_set_enabled(_entity, value);
+            get => Native.dse_atmosphere_get_enabled(_entity) != 0;
+            set => Native.dse_atmosphere_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float PlanetRadius {
@@ -2088,8 +2132,8 @@ namespace DSEngine.Runtime
         }
 
         public bool AerialPerspectiveEnabled {
-            get => Native.dse_atmosphere_get_aerial_perspective_enabled(_entity);
-            set => Native.dse_atmosphere_set_aerial_perspective_enabled(_entity, value);
+            get => Native.dse_atmosphere_get_aerial_perspective_enabled(_entity) != 0;
+            set => Native.dse_atmosphere_set_aerial_perspective_enabled(_entity, value ? 1 : 0);
         }
 
     }
@@ -2102,8 +2146,8 @@ namespace DSEngine.Runtime
         internal VolumetricCloud(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_volumetric_cloud_get_enabled(_entity);
-            set => Native.dse_volumetric_cloud_set_enabled(_entity, value);
+            get => Native.dse_volumetric_cloud_get_enabled(_entity) != 0;
+            set => Native.dse_volumetric_cloud_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float CloudBottom {
@@ -2180,18 +2224,18 @@ namespace DSEngine.Runtime
         }
 
         public bool HalfResolution {
-            get => Native.dse_volumetric_cloud_get_half_resolution(_entity);
-            set => Native.dse_volumetric_cloud_set_half_resolution(_entity, value);
+            get => Native.dse_volumetric_cloud_get_half_resolution(_entity) != 0;
+            set => Native.dse_volumetric_cloud_set_half_resolution(_entity, value ? 1 : 0);
         }
 
         public bool TemporalReprojection {
-            get => Native.dse_volumetric_cloud_get_temporal_reprojection(_entity);
-            set => Native.dse_volumetric_cloud_set_temporal_reprojection(_entity, value);
+            get => Native.dse_volumetric_cloud_get_temporal_reprojection(_entity) != 0;
+            set => Native.dse_volumetric_cloud_set_temporal_reprojection(_entity, value ? 1 : 0);
         }
 
         public bool CloudShadowEnabled {
-            get => Native.dse_volumetric_cloud_get_cloud_shadow_enabled(_entity);
-            set => Native.dse_volumetric_cloud_set_cloud_shadow_enabled(_entity, value);
+            get => Native.dse_volumetric_cloud_get_cloud_shadow_enabled(_entity) != 0;
+            set => Native.dse_volumetric_cloud_set_cloud_shadow_enabled(_entity, value ? 1 : 0);
         }
 
     }
@@ -2204,8 +2248,8 @@ namespace DSEngine.Runtime
         internal DayNightCycle(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_day_night_get_enabled(_entity);
-            set => Native.dse_day_night_set_enabled(_entity, value);
+            get => Native.dse_day_night_get_enabled(_entity) != 0;
+            set => Native.dse_day_night_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float TimeOfDay {
@@ -2219,8 +2263,8 @@ namespace DSEngine.Runtime
         }
 
         public bool AutoAdvance {
-            get => Native.dse_day_night_get_auto_advance(_entity);
-            set => Native.dse_day_night_set_auto_advance(_entity, value);
+            get => Native.dse_day_night_get_auto_advance(_entity) != 0;
+            set => Native.dse_day_night_set_auto_advance(_entity, value ? 1 : 0);
         }
 
         public float Latitude {
@@ -2248,12 +2292,16 @@ namespace DSEngine.Runtime
         internal Hair(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_hair_get_enabled(_entity);
-            set => Native.dse_hair_set_enabled(_entity, value);
+            get => Native.dse_hair_get_enabled(_entity) != 0;
+            set => Native.dse_hair_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string HairAssetPath {
-            get => Native.dse_hair_get_hair_asset_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_hair_get_hair_asset_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_hair_set_hair_asset_path(_entity, value);
         }
 
@@ -2317,13 +2365,13 @@ namespace DSEngine.Runtime
         }
 
         public bool CastShadow {
-            get => Native.dse_hair_get_cast_shadow(_entity);
-            set => Native.dse_hair_set_cast_shadow(_entity, value);
+            get => Native.dse_hair_get_cast_shadow(_entity) != 0;
+            set => Native.dse_hair_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
         public bool ReceiveShadow {
-            get => Native.dse_hair_get_receive_shadow(_entity);
-            set => Native.dse_hair_set_receive_shadow(_entity, value);
+            get => Native.dse_hair_get_receive_shadow(_entity) != 0;
+            set => Native.dse_hair_set_receive_shadow(_entity, value ? 1 : 0);
         }
 
     }
@@ -2336,12 +2384,16 @@ namespace DSEngine.Runtime
         internal Impostor(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_impostor_get_enabled(_entity);
-            set => Native.dse_impostor_set_enabled(_entity, value);
+            get => Native.dse_impostor_get_enabled(_entity) != 0;
+            set => Native.dse_impostor_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string AtlasPath {
-            get => Native.dse_impostor_get_atlas_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_impostor_get_atlas_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_impostor_set_atlas_path(_entity, value);
         }
 
@@ -2384,13 +2436,13 @@ namespace DSEngine.Runtime
         }
 
         public bool CastShadow {
-            get => Native.dse_impostor_get_cast_shadow(_entity);
-            set => Native.dse_impostor_set_cast_shadow(_entity, value);
+            get => Native.dse_impostor_get_cast_shadow(_entity) != 0;
+            set => Native.dse_impostor_set_cast_shadow(_entity, value ? 1 : 0);
         }
 
         public bool UseFrameInterpolation {
-            get => Native.dse_impostor_get_use_frame_interpolation(_entity);
-            set => Native.dse_impostor_set_use_frame_interpolation(_entity, value);
+            get => Native.dse_impostor_get_use_frame_interpolation(_entity) != 0;
+            set => Native.dse_impostor_set_use_frame_interpolation(_entity, value ? 1 : 0);
         }
 
         public float NormalStrength {
@@ -2399,8 +2451,8 @@ namespace DSEngine.Runtime
         }
 
         public bool AutoFromLodGroup {
-            get => Native.dse_impostor_get_auto_from_lod_group(_entity);
-            set => Native.dse_impostor_set_auto_from_lod_group(_entity, value);
+            get => Native.dse_impostor_get_auto_from_lod_group(_entity) != 0;
+            set => Native.dse_impostor_set_auto_from_lod_group(_entity, value ? 1 : 0);
         }
 
     }
@@ -2413,8 +2465,8 @@ namespace DSEngine.Runtime
         internal StreamingOrigin(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_streaming_origin_get_enabled(_entity);
-            set => Native.dse_streaming_origin_set_enabled(_entity, value);
+            get => Native.dse_streaming_origin_get_enabled(_entity) != 0;
+            set => Native.dse_streaming_origin_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float LoadRadius {
@@ -2437,8 +2489,8 @@ namespace DSEngine.Runtime
         internal WorldPartitionConfig(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_world_partition_get_enabled(_entity);
-            set => Native.dse_world_partition_set_enabled(_entity, value);
+            get => Native.dse_world_partition_get_enabled(_entity) != 0;
+            set => Native.dse_world_partition_set_enabled(_entity, value ? 1 : 0);
         }
 
         public float CellSize {
@@ -2447,7 +2499,11 @@ namespace DSEngine.Runtime
         }
 
         public string CellsDirectory {
-            get => Native.dse_world_partition_get_cells_directory(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_world_partition_get_cells_directory(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_world_partition_set_cells_directory(_entity, value);
         }
 
@@ -2486,12 +2542,16 @@ namespace DSEngine.Runtime
         internal HLODConfig(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_hlod_config_get_enabled(_entity);
-            set => Native.dse_hlod_config_set_enabled(_entity, value);
+            get => Native.dse_hlod_config_get_enabled(_entity) != 0;
+            set => Native.dse_hlod_config_set_enabled(_entity, value ? 1 : 0);
         }
 
         public string HlodDataPath {
-            get => Native.dse_hlod_config_get_hlod_data_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_hlod_config_get_hlod_data_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_hlod_config_set_hlod_data_path(_entity, value);
         }
 
@@ -2515,8 +2575,8 @@ namespace DSEngine.Runtime
         internal VirtualTexture(uint entity) => _entity = entity;
 
         public bool Enabled {
-            get => Native.dse_virtual_texture_get_enabled(_entity);
-            set => Native.dse_virtual_texture_set_enabled(_entity, value);
+            get => Native.dse_virtual_texture_get_enabled(_entity) != 0;
+            set => Native.dse_virtual_texture_set_enabled(_entity, value ? 1 : 0);
         }
 
         public int VtId {
@@ -2525,7 +2585,11 @@ namespace DSEngine.Runtime
         }
 
         public string TileDataPath {
-            get => Native.dse_virtual_texture_get_tile_data_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_virtual_texture_get_tile_data_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_virtual_texture_set_tile_data_path(_entity, value);
         }
 
@@ -2554,7 +2618,11 @@ namespace DSEngine.Runtime
         internal Lightmap(uint entity) => _entity = entity;
 
         public string LightmapPath {
-            get => Native.dse_lightmap_get_lightmap_path(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_lightmap_get_lightmap_path(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_lightmap_set_lightmap_path(_entity, value);
         }
 
@@ -2572,8 +2640,8 @@ namespace DSEngine.Runtime
         }
 
         public bool UseAo {
-            get => Native.dse_lightmap_get_use_ao(_entity);
-            set => Native.dse_lightmap_set_use_ao(_entity, value);
+            get => Native.dse_lightmap_get_use_ao(_entity) != 0;
+            set => Native.dse_lightmap_set_use_ao(_entity, value ? 1 : 0);
         }
 
     }

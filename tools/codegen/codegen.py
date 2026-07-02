@@ -311,6 +311,13 @@ def main():
         components=wrapper_components,
     )
 
+    # ── NativeManual.gen.cs / ApiManual.gen.cs ───────────────────────────────
+    # 手写 C ABI（dse_api.h）的 C# P/Invoke 声明与公开门面，与 codegen 产物互补。
+    if not args.dry_run:
+        sys.path.insert(0, str(script_dir))
+        import gen_csharp_manual
+        gen_csharp_manual.main()
+
     # ── 输出摘要 ──────────────────────────────────────────────────────────────
     tag = "[DRY-RUN] " if args.dry_run else ""
     print(f"[codegen] {tag}完成")

@@ -36,19 +36,23 @@ namespace DSEngine.Runtime
             get => Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity);
             set => Native.dse_{{ comp.prefix }}_set_{{ field.name }}(_entity, value);
         }
-{% elif field.type == "int" %}
+{% elif field.type in ("int", "enum_int") %}
         public int {{ field.name | capitalize_field }} {
             get => Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity);
             set => Native.dse_{{ comp.prefix }}_set_{{ field.name }}(_entity, value);
         }
 {% elif field.type == "bool" %}
         public bool {{ field.name | capitalize_field }} {
-            get => Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity);
-            set => Native.dse_{{ comp.prefix }}_set_{{ field.name }}(_entity, value);
+            get => Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity) != 0;
+            set => Native.dse_{{ comp.prefix }}_set_{{ field.name }}(_entity, value ? 1 : 0);
         }
 {% elif field.type == "string" %}
         public string {{ field.name | capitalize_field }} {
-            get => Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity);
+            get {
+                byte[] buf = new byte[512];
+                int len = Native.dse_{{ comp.prefix }}_get_{{ field.name }}(_entity, buf, buf.Length);
+                return len > 0 ? System.Text.Encoding.UTF8.GetString(buf, 0, len) : string.Empty;
+            }
             set => Native.dse_{{ comp.prefix }}_set_{{ field.name }}(_entity, value);
         }
 {% elif field.type == "euler_quat" %}
