@@ -840,6 +840,142 @@ DSE_CAPI float dse_app_get_target_fps(void);
 
 DSE_CAPI int dse_metrics_get_draw_calls(void);
 
+// ============================================================
+// Audio（全局 AudioSystem + ECS AudioSource，手写 dse_api_services.cpp）
+// ============================================================
+// 全局函数依赖 dse_native_api_init 注入的 AudioSystem*，为 null 时安全返回 0/无操作。
+// bool 参数/返回值使用 int(0/1)。
+
+DSE_CAPI int  dse_audio_play_bgm(const char* path, float volume, int loop);
+DSE_CAPI void dse_audio_pause_bgm(void);
+DSE_CAPI void dse_audio_resume_bgm(void);
+DSE_CAPI void dse_audio_stop_bgm(void);
+DSE_CAPI int  dse_audio_crossfade_bgm(const char* path, float fade_sec, float volume, int loop);
+DSE_CAPI void dse_audio_play_sfx(const char* path, float volume, int loop);
+DSE_CAPI void dse_audio_stop_all_sfx(void);
+DSE_CAPI void dse_audio_fade_out_all_sfx(float duration_sec);
+DSE_CAPI int  dse_audio_preload(const char* path);
+DSE_CAPI void dse_audio_set_master_volume(float volume);
+DSE_CAPI void dse_audio_set_bgm_volume(float volume);
+DSE_CAPI void dse_audio_set_sfx_volume(float volume);
+
+// ECS AudioSource / AudioListener（纯组件操作）。
+DSE_CAPI void dse_audio_source_add(uint32_t e, const char* path, int play_on_awake,
+                                   int loop, float volume);
+DSE_CAPI void dse_audio_source_set_playing(uint32_t e, int playing);
+DSE_CAPI void dse_audio_source_restart(uint32_t e);
+DSE_CAPI void dse_audio_source_set_loop(uint32_t e, int loop);
+DSE_CAPI void dse_audio_source_set_volume(uint32_t e, float volume);
+DSE_CAPI void dse_audio_source_set_pitch(uint32_t e, float pitch);
+DSE_CAPI void dse_audio_source_set_3d_mode(uint32_t e, int enabled);
+DSE_CAPI void dse_audio_source_set_3d_distance(uint32_t e, float min_distance,
+                                               float max_distance, float rolloff);
+DSE_CAPI void dse_audio_source_set_bus(uint32_t e, const char* bus_name);
+DSE_CAPI int  dse_audio_source_is_playing(uint32_t e);
+DSE_CAPI void dse_audio_listener_add(uint32_t e, int enabled);
+
+// ============================================================
+// Navigation（NavMeshSystem via ServiceLocator + NavMeshAgentComponent）
+// ============================================================
+// DSE_ENABLE_NAVMESH 关闭时所有函数为安全空实现（返回 0）。
+// find_path：路径点写入 out_xyz（最多 max_points 点×3 float），返回实际点数；
+// out_xyz=null 时仅返回点数。
+
+DSE_CAPI int  dse_nav_is_ready(void);
+DSE_CAPI int  dse_nav_load(const char* path);
+DSE_CAPI int  dse_nav_save(const char* path);
+DSE_CAPI int  dse_nav_find_nearest(float x, float y, float z, float* out_xyz);
+DSE_CAPI int  dse_nav_raycast(float sx, float sy, float sz,
+                              float ex, float ey, float ez, float* out_hit_xyz);
+DSE_CAPI int  dse_nav_find_path(float sx, float sy, float sz,
+                                float ex, float ey, float ez,
+                                float* out_xyz, int max_points);
+
+// NavMeshAgent（ECS）。set_agent: 浮点 NaN=保持当前/默认值。
+DSE_CAPI void dse_nav_agent_set(uint32_t e, float speed, float acceleration,
+                                float stopping_dist, float radius, float height);
+DSE_CAPI void dse_nav_agent_set_destination(uint32_t e, float x, float y, float z);
+DSE_CAPI void dse_nav_agent_get_destination(uint32_t e, float* out_xyz);
+DSE_CAPI int  dse_nav_agent_has_path(uint32_t e);
+DSE_CAPI int  dse_nav_agent_arrived(uint32_t e);
+
+// ============================================================
+// Localization（LocalizationManager via ServiceLocator）
+// ============================================================
+// 字符串输出走 out 缓冲（null 结尾，按 cap 截断），返回写入长度（不含 null）。
+
+DSE_CAPI int  dse_l10n_load(const char* path, const char* locale);
+DSE_CAPI void dse_l10n_set_locale(const char* locale);
+DSE_CAPI int  dse_l10n_get_locale(char* out, int cap);
+DSE_CAPI int  dse_l10n_get(const char* key, char* out, int cap);
+DSE_CAPI int  dse_l10n_has_key(const char* key);
+
+// ============================================================
+// Scene / Prefab 序列化
+// ============================================================
+// load/save：路径按字面使用（不做 data root 拼接）。返回 1=成功/0=失败。
+// instantiate_prefab：use_pos!=0 时用 (x,y,z) 覆盖预制体内置 Transform；
+// 返回新实体 id，失败返回 UINT32_MAX 语义的无效 id（dse_entity_valid 判 0）。
+
+DSE_CAPI int      dse_scene_load(const char* path);
+DSE_CAPI int      dse_scene_save(const char* path);
+DSE_CAPI int      dse_scene_save_prefab(uint32_t e, const char* path);
+DSE_CAPI uint32_t dse_scene_instantiate_prefab(const char* path, float x, float y, float z,
+                                               int use_pos);
+
+// ============================================================
+// UI（核心控件，纯 ECS 组件操作）
+// ============================================================
+// bool 参数/返回值使用 int(0/1)。
+
+DSE_CAPI void  dse_ui_add_renderer(uint32_t e, uint32_t texture_handle,
+                                   float r, float g, float b, float a,
+                                   int order, float w, float h);
+DSE_CAPI void  dse_ui_add_panel(uint32_t e, int blocks_input);
+DSE_CAPI void  dse_ui_add_button(uint32_t e, float r, float g, float b, float a);
+DSE_CAPI void  dse_ui_add_ttf_label(uint32_t e, const char* text, const char* font_id,
+                                    float font_size, float r, float g, float b, float a);
+DSE_CAPI void  dse_ui_set_label_text(uint32_t e, const char* text);
+DSE_CAPI void  dse_ui_set_label_font(uint32_t e, const char* font_id, float font_size);
+DSE_CAPI void  dse_ui_set_position(uint32_t e, float x, float y);
+DSE_CAPI void  dse_ui_set_size(uint32_t e, float w, float h);
+DSE_CAPI void  dse_ui_set_anchor(uint32_t e, float ax, float ay);
+DSE_CAPI void  dse_ui_set_color(uint32_t e, float r, float g, float b, float a);
+DSE_CAPI void  dse_ui_set_visible(uint32_t e, int visible);
+DSE_CAPI int   dse_ui_is_hovered(uint32_t e);
+DSE_CAPI int   dse_ui_is_pressed(uint32_t e);
+
+DSE_CAPI void  dse_ui_add_joystick(uint32_t e, float max_radius, int follow_pointer,
+                                   int reset_on_release);
+DSE_CAPI float dse_ui_get_joystick_x(uint32_t e);
+DSE_CAPI float dse_ui_get_joystick_y(uint32_t e);
+
+DSE_CAPI void  dse_ui_add_slider(uint32_t e, float min_value, float max_value,
+                                 float value, int whole_numbers);
+DSE_CAPI void  dse_ui_set_slider_value(uint32_t e, float value);
+DSE_CAPI float dse_ui_get_slider_value(uint32_t e);
+
+DSE_CAPI void  dse_ui_add_toggle(uint32_t e, int is_on, int group);
+DSE_CAPI void  dse_ui_set_toggle(uint32_t e, int is_on);
+DSE_CAPI int   dse_ui_get_toggle(uint32_t e);
+
+DSE_CAPI void  dse_ui_add_progress_bar(uint32_t e, float value, float max_value);
+DSE_CAPI void  dse_ui_set_progress(uint32_t e, float value);
+DSE_CAPI float dse_ui_get_progress(uint32_t e);
+
+DSE_CAPI void  dse_ui_add_text_input(uint32_t e, const char* placeholder,
+                                     int max_length, int is_password);
+DSE_CAPI void  dse_ui_set_text_input_text(uint32_t e, const char* text);
+DSE_CAPI int   dse_ui_get_text_input_text(uint32_t e, char* out, int cap);
+DSE_CAPI void  dse_ui_set_text_input_focus(uint32_t e, int focused);
+
+// UI 布局文件加载（UISerializer）。返回创建的实体数（写入 out_entities，最多 cap 个）。
+DSE_CAPI int   dse_ui_load_from_file(const char* path, uint32_t* out_entities, int cap);
+DSE_CAPI int   dse_ui_load_from_json(const char* json, uint32_t* out_entities, int cap);
+
+// 供手写实现访问内部 AudioSystem 指针
+DSE_CAPI void* dse_get_audio_system_ptr(void);
+
 #ifdef __cplusplus
 }
 #endif

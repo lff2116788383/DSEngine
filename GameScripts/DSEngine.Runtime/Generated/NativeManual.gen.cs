@@ -542,4 +542,226 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_metrics_get_draw_calls")]
     internal static partial int dse_metrics_get_draw_calls();
 
+    [LibraryImport(Lib, EntryPoint = "dse_audio_play_bgm", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_play_bgm(string path, float volume, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_pause_bgm")]
+    internal static partial void dse_audio_pause_bgm();
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_resume_bgm")]
+    internal static partial void dse_audio_resume_bgm();
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_stop_bgm")]
+    internal static partial void dse_audio_stop_bgm();
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_crossfade_bgm", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_crossfade_bgm(string path, float fadeSec, float volume, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_play_sfx", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_audio_play_sfx(string path, float volume, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_stop_all_sfx")]
+    internal static partial void dse_audio_stop_all_sfx();
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_fade_out_all_sfx")]
+    internal static partial void dse_audio_fade_out_all_sfx(float durationSec);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_preload", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_preload(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_set_master_volume")]
+    internal static partial void dse_audio_set_master_volume(float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_set_bgm_volume")]
+    internal static partial void dse_audio_set_bgm_volume(float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_set_sfx_volume")]
+    internal static partial void dse_audio_set_sfx_volume(float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_audio_source_add(uint e, string path, int playOnAwake, int loop, float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_playing")]
+    internal static partial void dse_audio_source_set_playing(uint e, int playing);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_restart")]
+    internal static partial void dse_audio_source_restart(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_loop")]
+    internal static partial void dse_audio_source_set_loop(uint e, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_volume")]
+    internal static partial void dse_audio_source_set_volume(uint e, float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_pitch")]
+    internal static partial void dse_audio_source_set_pitch(uint e, float pitch);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_3d_mode")]
+    internal static partial void dse_audio_source_set_3d_mode(uint e, int enabled);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_3d_distance")]
+    internal static partial void dse_audio_source_set_3d_distance(uint e, float minDistance, float maxDistance, float rolloff);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_set_bus", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_audio_source_set_bus(uint e, string busName);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_is_playing")]
+    internal static partial int dse_audio_source_is_playing(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_listener_add")]
+    internal static partial void dse_audio_listener_add(uint e, int enabled);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_is_ready")]
+    internal static partial int dse_nav_is_ready();
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_nav_load(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_save", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_nav_save(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_find_nearest")]
+    internal static partial int dse_nav_find_nearest(float x, float y, float z, [Out] float[] outXyz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_raycast")]
+    internal static partial int dse_nav_raycast(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outHitXyz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_find_path")]
+    internal static partial int dse_nav_find_path(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outXyz, int maxPoints);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_set")]
+    internal static partial void dse_nav_agent_set(uint e, float speed, float acceleration, float stoppingDist, float radius, float height);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_set_destination")]
+    internal static partial void dse_nav_agent_set_destination(uint e, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_get_destination")]
+    internal static partial void dse_nav_agent_get_destination(uint e, [Out] float[] outXyz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_has_path")]
+    internal static partial int dse_nav_agent_has_path(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_arrived")]
+    internal static partial int dse_nav_agent_arrived(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_l10n_load(string path, string locale);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_set_locale", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_l10n_set_locale(string locale);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_get_locale")]
+    internal static partial int dse_l10n_get_locale([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_get", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_l10n_get(string key, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_has_key", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_l10n_has_key(string key);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_load(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_save", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_save(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_save_prefab", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_save_prefab(uint e, string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_instantiate_prefab", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_scene_instantiate_prefab(string path, float x, float y, float z, int usePos);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_renderer")]
+    internal static partial void dse_ui_add_renderer(uint e, uint textureHandle, float r, float g, float b, float a, int order, float w, float h);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_panel")]
+    internal static partial void dse_ui_add_panel(uint e, int blocksInput);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_button")]
+    internal static partial void dse_ui_add_button(uint e, float r, float g, float b, float a);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_ttf_label", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_add_ttf_label(uint e, string text, string fontId, float fontSize, float r, float g, float b, float a);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_label_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_set_label_text(uint e, string text);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_label_font", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_set_label_font(uint e, string fontId, float fontSize);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_position")]
+    internal static partial void dse_ui_set_position(uint e, float x, float y);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_size")]
+    internal static partial void dse_ui_set_size(uint e, float w, float h);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_anchor")]
+    internal static partial void dse_ui_set_anchor(uint e, float ax, float ay);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_color")]
+    internal static partial void dse_ui_set_color(uint e, float r, float g, float b, float a);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_visible")]
+    internal static partial void dse_ui_set_visible(uint e, int visible);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_is_hovered")]
+    internal static partial int dse_ui_is_hovered(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_is_pressed")]
+    internal static partial int dse_ui_is_pressed(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_joystick")]
+    internal static partial void dse_ui_add_joystick(uint e, float maxRadius, int followPointer, int resetOnRelease);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_joystick_x")]
+    internal static partial float dse_ui_get_joystick_x(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_joystick_y")]
+    internal static partial float dse_ui_get_joystick_y(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_slider")]
+    internal static partial void dse_ui_add_slider(uint e, float minValue, float maxValue, float value, int wholeNumbers);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_slider_value")]
+    internal static partial void dse_ui_set_slider_value(uint e, float value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_slider_value")]
+    internal static partial float dse_ui_get_slider_value(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_toggle")]
+    internal static partial void dse_ui_add_toggle(uint e, int isOn, int group);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_toggle")]
+    internal static partial void dse_ui_set_toggle(uint e, int isOn);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_toggle")]
+    internal static partial int dse_ui_get_toggle(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_progress_bar")]
+    internal static partial void dse_ui_add_progress_bar(uint e, float value, float maxValue);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_progress")]
+    internal static partial void dse_ui_set_progress(uint e, float value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_progress")]
+    internal static partial float dse_ui_get_progress(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_text_input", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_add_text_input(uint e, string placeholder, int maxLength, int isPassword);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_text_input_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_set_text_input_text(uint e, string text);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_text_input_text")]
+    internal static partial int dse_ui_get_text_input_text(uint e, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_text_input_focus")]
+    internal static partial void dse_ui_set_text_input_focus(uint e, int focused);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_load_from_file", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ui_load_from_file(string path, [Out] uint[] outEntities, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_load_from_json", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ui_load_from_json(string json, [Out] uint[] outEntities, int cap);
+
 }

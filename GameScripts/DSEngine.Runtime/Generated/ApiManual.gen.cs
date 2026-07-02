@@ -64,6 +64,38 @@ public static class Atmosphere {
     public static void SetMie(uint e, float coeff, float scaleHeight, float g) { Native.dse_atmosphere_set_mie(e, coeff, scaleHeight, g); }
 }
 
+public static class Audio {
+    public static int PlayBgm(string path, float volume, int loop) { return Native.dse_audio_play_bgm(path, volume, loop); }
+    public static void PauseBgm() { Native.dse_audio_pause_bgm(); }
+    public static void ResumeBgm() { Native.dse_audio_resume_bgm(); }
+    public static void StopBgm() { Native.dse_audio_stop_bgm(); }
+    public static int CrossfadeBgm(string path, float fadeSec, float volume, int loop) { return Native.dse_audio_crossfade_bgm(path, fadeSec, volume, loop); }
+    public static void PlaySfx(string path, float volume, int loop) { Native.dse_audio_play_sfx(path, volume, loop); }
+    public static void StopAllSfx() { Native.dse_audio_stop_all_sfx(); }
+    public static void FadeOutAllSfx(float durationSec) { Native.dse_audio_fade_out_all_sfx(durationSec); }
+    public static int Preload(string path) { return Native.dse_audio_preload(path); }
+    public static void SetMasterVolume(float volume) { Native.dse_audio_set_master_volume(volume); }
+    public static void SetBgmVolume(float volume) { Native.dse_audio_set_bgm_volume(volume); }
+    public static void SetSfxVolume(float volume) { Native.dse_audio_set_sfx_volume(volume); }
+}
+
+public static class AudioListener {
+    public static void Add(uint e, int enabled) { Native.dse_audio_listener_add(e, enabled); }
+}
+
+public static class AudioSource {
+    public static void Add(uint e, string path, int playOnAwake, int loop, float volume) { Native.dse_audio_source_add(e, path, playOnAwake, loop, volume); }
+    public static void SetPlaying(uint e, int playing) { Native.dse_audio_source_set_playing(e, playing); }
+    public static void Restart(uint e) { Native.dse_audio_source_restart(e); }
+    public static void SetLoop(uint e, int loop) { Native.dse_audio_source_set_loop(e, loop); }
+    public static void SetVolume(uint e, float volume) { Native.dse_audio_source_set_volume(e, volume); }
+    public static void SetPitch(uint e, float pitch) { Native.dse_audio_source_set_pitch(e, pitch); }
+    public static void Set3dMode(uint e, int enabled) { Native.dse_audio_source_set_3d_mode(e, enabled); }
+    public static void Set3dDistance(uint e, float minDistance, float maxDistance, float rolloff) { Native.dse_audio_source_set_3d_distance(e, minDistance, maxDistance, rolloff); }
+    public static void SetBus(uint e, string busName) { Native.dse_audio_source_set_bus(e, busName); }
+    public static int IsPlaying(uint e) { return Native.dse_audio_source_is_playing(e); }
+}
+
 public static class BoneAttachment {
     public static void Add(uint e, uint target, string boneName) { Native.dse_bone_attach_add(e, target, boneName); }
     public static void SetOffset(uint e, float px, float py, float pz, float qx, float qy, float qz, float qw, float sx, float sy, float sz) { Native.dse_bone_attach_set_offset(e, px, py, pz, qx, qy, qz, qw, sx, sy, sz); }
@@ -200,6 +232,14 @@ public static class Joint3D {
     public static int IsBroken(uint e) { return Native.dse_joint3d_is_broken(e); }
 }
 
+public static class Localization {
+    public static int Load(string path, string locale) { return Native.dse_l10n_load(path, locale); }
+    public static void SetLocale(string locale) { Native.dse_l10n_set_locale(locale); }
+    public static int GetLocale([Out] byte[] @out, int cap) { return Native.dse_l10n_get_locale(@out, cap); }
+    public static int Get(string key, [Out] byte[] @out, int cap) { return Native.dse_l10n_get(key, @out, cap); }
+    public static int HasKey(string key) { return Native.dse_l10n_has_key(key); }
+}
+
 public static class MeshCollider3D {
     public static void Add(uint e, int convex, int isTrigger) { Native.dse_mesh_collider3d_add(e, convex, isTrigger); }
 }
@@ -215,6 +255,23 @@ public static class MorphTarget {
     public static void SetWeightIndex(uint e, int idx, float w) { Native.dse_morph_set_weight_index(e, idx, w); }
     public static float GetWeight(uint e, string name) { return Native.dse_morph_get_weight(e, name); }
     public static int GetTargetCount(uint e) { return Native.dse_morph_get_target_count(e); }
+}
+
+public static class Nav {
+    public static int IsReady() { return Native.dse_nav_is_ready(); }
+    public static int Load(string path) { return Native.dse_nav_load(path); }
+    public static int Save(string path) { return Native.dse_nav_save(path); }
+    public static int FindNearest(float x, float y, float z, [Out] float[] outXyz) { return Native.dse_nav_find_nearest(x, y, z, outXyz); }
+    public static int Raycast(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outHitXyz) { return Native.dse_nav_raycast(sx, sy, sz, ex, ey, ez, outHitXyz); }
+    public static int FindPath(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outXyz, int maxPoints) { return Native.dse_nav_find_path(sx, sy, sz, ex, ey, ez, outXyz, maxPoints); }
+}
+
+public static class NavAgent {
+    public static void Set(uint e, float speed, float acceleration, float stoppingDist, float radius, float height) { Native.dse_nav_agent_set(e, speed, acceleration, stoppingDist, radius, height); }
+    public static void SetDestination(uint e, float x, float y, float z) { Native.dse_nav_agent_set_destination(e, x, y, z); }
+    public static void GetDestination(uint e, [Out] float[] outXyz) { Native.dse_nav_agent_get_destination(e, outXyz); }
+    public static int HasPath(uint e) { return Native.dse_nav_agent_has_path(e); }
+    public static int Arrived(uint e) { return Native.dse_nav_agent_arrived(e); }
 }
 
 public static class Physics3D {
@@ -254,6 +311,13 @@ public static class Rope {
     public static void SetGravity(uint e, int useGravity, float gravityScale) { Native.dse_rope_set_gravity(e, useGravity, gravityScale); }
 }
 
+public static class Scene {
+    public static int Load(string path) { return Native.dse_scene_load(path); }
+    public static int Save(string path) { return Native.dse_scene_save(path); }
+    public static int SavePrefab(uint e, string path) { return Native.dse_scene_save_prefab(e, path); }
+    public static uint InstantiatePrefab(string path, float x, float y, float z, int usePos) { return Native.dse_scene_instantiate_prefab(path, x, y, z, usePos); }
+}
+
 public static class Snow {
     public static void Add(uint e) { Native.dse_snow_cover_add(e); }
     public static void Set(uint e, float targetCoverage, float accumulationRate, float meltRate) { Native.dse_snow_cover_set(e, targetCoverage, accumulationRate, meltRate); }
@@ -280,6 +344,40 @@ public static class Terrain {
     public static void Add(uint e, float originX, float originZ, float blockSize, int cols, int rows, float scale, int flipZ) { Native.dse_terrain_heightmap_add(e, originX, originZ, blockSize, cols, rows, scale, flipZ); }
     public static void SetData(uint e, float[] heights, int count) { Native.dse_terrain_heightmap_set_data(e, heights, count); }
     public static int GetHeight(float worldX, float worldZ, out float outY) { return Native.dse_terrain_get_height(worldX, worldZ, out outY); }
+}
+
+public static class Ui {
+    public static void AddRenderer(uint e, uint textureHandle, float r, float g, float b, float a, int order, float w, float h) { Native.dse_ui_add_renderer(e, textureHandle, r, g, b, a, order, w, h); }
+    public static void AddPanel(uint e, int blocksInput) { Native.dse_ui_add_panel(e, blocksInput); }
+    public static void AddButton(uint e, float r, float g, float b, float a) { Native.dse_ui_add_button(e, r, g, b, a); }
+    public static void AddTtfLabel(uint e, string text, string fontId, float fontSize, float r, float g, float b, float a) { Native.dse_ui_add_ttf_label(e, text, fontId, fontSize, r, g, b, a); }
+    public static void SetLabelText(uint e, string text) { Native.dse_ui_set_label_text(e, text); }
+    public static void SetLabelFont(uint e, string fontId, float fontSize) { Native.dse_ui_set_label_font(e, fontId, fontSize); }
+    public static void SetPosition(uint e, float x, float y) { Native.dse_ui_set_position(e, x, y); }
+    public static void SetSize(uint e, float w, float h) { Native.dse_ui_set_size(e, w, h); }
+    public static void SetAnchor(uint e, float ax, float ay) { Native.dse_ui_set_anchor(e, ax, ay); }
+    public static void SetColor(uint e, float r, float g, float b, float a) { Native.dse_ui_set_color(e, r, g, b, a); }
+    public static void SetVisible(uint e, int visible) { Native.dse_ui_set_visible(e, visible); }
+    public static int IsHovered(uint e) { return Native.dse_ui_is_hovered(e); }
+    public static int IsPressed(uint e) { return Native.dse_ui_is_pressed(e); }
+    public static void AddJoystick(uint e, float maxRadius, int followPointer, int resetOnRelease) { Native.dse_ui_add_joystick(e, maxRadius, followPointer, resetOnRelease); }
+    public static float GetJoystickX(uint e) { return Native.dse_ui_get_joystick_x(e); }
+    public static float GetJoystickY(uint e) { return Native.dse_ui_get_joystick_y(e); }
+    public static void AddSlider(uint e, float minValue, float maxValue, float value, int wholeNumbers) { Native.dse_ui_add_slider(e, minValue, maxValue, value, wholeNumbers); }
+    public static void SetSliderValue(uint e, float value) { Native.dse_ui_set_slider_value(e, value); }
+    public static float GetSliderValue(uint e) { return Native.dse_ui_get_slider_value(e); }
+    public static void AddToggle(uint e, int isOn, int group) { Native.dse_ui_add_toggle(e, isOn, group); }
+    public static void SetToggle(uint e, int isOn) { Native.dse_ui_set_toggle(e, isOn); }
+    public static int GetToggle(uint e) { return Native.dse_ui_get_toggle(e); }
+    public static void AddProgressBar(uint e, float value, float maxValue) { Native.dse_ui_add_progress_bar(e, value, maxValue); }
+    public static void SetProgress(uint e, float value) { Native.dse_ui_set_progress(e, value); }
+    public static float GetProgress(uint e) { return Native.dse_ui_get_progress(e); }
+    public static void AddTextInput(uint e, string placeholder, int maxLength, int isPassword) { Native.dse_ui_add_text_input(e, placeholder, maxLength, isPassword); }
+    public static void SetTextInputText(uint e, string text) { Native.dse_ui_set_text_input_text(e, text); }
+    public static int GetTextInputText(uint e, [Out] byte[] @out, int cap) { return Native.dse_ui_get_text_input_text(e, @out, cap); }
+    public static void SetTextInputFocus(uint e, int focused) { Native.dse_ui_set_text_input_focus(e, focused); }
+    public static int LoadFromFile(string path, [Out] uint[] outEntities, int cap) { return Native.dse_ui_load_from_file(path, outEntities, cap); }
+    public static int LoadFromJson(string json, [Out] uint[] outEntities, int cap) { return Native.dse_ui_load_from_json(json, outEntities, cap); }
 }
 
 public static class Vehicle {

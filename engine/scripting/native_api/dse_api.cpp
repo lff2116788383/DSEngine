@@ -83,6 +83,8 @@ extern "C" void* dse_get_world_ptr(void) { return g_ctx.world; }
 
 extern "C" void* dse_get_asset_manager_ptr(void) { return g_ctx.asset_manager; }
 
+extern "C" void* dse_get_audio_system_ptr(void) { return g_ctx.audio_system; }
+
 // ============================================================
 // Entity
 // ============================================================

@@ -16,14 +16,15 @@ HEADER = os.path.join(ROOT, "engine", "scripting", "native_api", "dse_api.h")
 EXISTING = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "Native.gen.cs")
 OUT = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "NativeManual.gen.cs")
 
-SKIP = {"dse_native_api_init", "dse_get_world_ptr", "dse_get_asset_manager_ptr"}
+SKIP = {"dse_native_api_init", "dse_get_world_ptr", "dse_get_asset_manager_ptr",
+        "dse_get_audio_system_ptr"}
 
 RET_MAP = {"void": "void", "int": "int", "float": "float", "uint32_t": "uint"}
 
 # out-pointer params that are arrays (not scalar out) — matched by parameter name
 ARRAY_OUT_NAMES = {
     "out_xyz", "out_vel", "out_origin", "out_dir", "out_point", "out_normal",
-    "out_velocity", "out", "buf",
+    "out_velocity", "out", "buf", "out_hit_xyz", "out_entities",
 }
 
 
@@ -137,6 +138,14 @@ GROUPS = [
     ("day_night_", "DayNight"),
     ("volumetric_cloud_", "Cloud"),
     ("cloud_", "Cloud"),
+    ("audio_source_", "AudioSource"),
+    ("audio_listener_", "AudioListener"),
+    ("audio_", "Audio"),
+    ("nav_agent_", "NavAgent"),
+    ("nav_", "Nav"),
+    ("l10n_", "Localization"),
+    ("scene_", "Scene"),
+    ("ui_", "Ui"),
 ]
 
 FACADE_OUT = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "ApiManual.gen.cs")

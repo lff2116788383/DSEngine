@@ -6,9 +6,9 @@
 > 组件字段访问器由 `tools/codegen/codegen.py` 从 `binding_defs.json` 自动生成至
 > `GameScripts/DSEngine.Runtime/Generated/Native.gen.cs`（45 组件 / 816 访问器）；
 > 组件高级封装类自动生成至 `Generated/Components.gen.cs`。
-> 手写 C ABI（`dse_api.h`，动画 FSM/输入/物理动力学/载具/天气等 178 函数）由
+> 手写 C ABI（`dse_api.h`，动画 FSM/输入/物理动力学/载具/天气/音频/导航/UI/场景/本地化等 252 函数）由
 > `tools/codegen/gen_csharp_manual.py` 生成 `Generated/NativeManual.gen.cs`（P/Invoke）
-> 与 `Generated/ApiManual.gen.cs`（`DSEngine.Api` 公开门面，37 个静态类）。
+> 与 `Generated/ApiManual.gen.cs`（`DSEngine.Api` 公开门面，45 个静态类）。
 > 其余高级封装位于 `Core/`、`Math/`、`Components/`、`Network/` 子目录。
 
 ---
@@ -19,8 +19,8 @@
 DSEngine.Runtime (net8.0)
 ├── Native              (internal) — 自动生成的 P/Invoke 声明层
 │                          Native.gen.cs (codegen 组件访问器 816)
-│                          NativeManual.gen.cs (手写 C ABI 178)
-├── DSEngine.Api        (public)   — 手写 C ABI 门面（Input/Anim3D/RigidBody3D/Vehicle/Weather 等 37 类）
+│                          NativeManual.gen.cs (手写 C ABI 252)
+├── DSEngine.Api        (public)   — 手写 C ABI 门面（Input/Anim3D/RigidBody3D/Vehicle/Audio/Nav/Ui 等 45 类）
 ├── NativeRepl          (internal) — 网络复制层 P/Invoke 声明
 ├── Core/
 │   ├── Entity          — 实体句柄（轻量 struct，uint ID）
@@ -497,7 +497,7 @@ GameScripts/
 │   │   ├── Native.gen.cs            — [LibraryImport] 声明（codegen 组件访问器）
 │   │   ├── Components.gen.cs        — 组件高级封装类（codegen 产物）
 │   │   ├── NativeManual.gen.cs      — 手写 C ABI 的 [LibraryImport] 声明
-│   │   └── ApiManual.gen.cs         — DSEngine.Api 公开门面（37 个静态类）
+│   │   └── ApiManual.gen.cs         — DSEngine.Api 公开门面（45 个静态类）
 │   ├── Core/
 │   │   ├── Entity.cs
 │   │   ├── DseScript.cs
@@ -727,7 +727,7 @@ public class ClientScript : DseScript {
 `namespace DSEngine.Api` 下的公开静态类，按子系统分组转发到手写 C ABI（与 Lua 手写绑定同一底层）。
 方法签名与 C ABI 一一对应（`int` 作布尔、`out float` 作输出参数、`float[]` 作向量/数组缓冲）。
 
-### 类与函数数（共 37 类 / 178 函数）
+### 类与函数数（共 45 类 / 252 函数）
 
 | 类 | 函数数 | 覆盖 C ABI 前缀 | 说明 |
 |------|:---:|------|------|
@@ -749,6 +749,13 @@ public class ClientScript : DseScript {
 | `Cloth` / `Rope` / `SoftBody` / `Fluid` / `Buoyancy` / `Ragdoll` / `Fracture` | 5/4/4/6/4/4/5 | 对应前缀 | 布料/绳索/软体/流体/浮力/布娃娃/破碎 |
 | `Weather` / `Snow` / `Atmosphere` / `DayNight` / `Cloud` | 3/8/4/7/3 | 对应前缀 | 天气/积雪/大气/昼夜/体积云 |
 | `Components` | 10 | 其余 `dse_*_add` 等 | Transform/相机/灯光/MeshRenderer 挂载 |
+| `Audio` | 12 | `dse_audio_*` | BGM/SFX 播放、Crossfade、音量、预加载 |
+| `AudioSource` / `AudioListener` | 10/1 | `dse_audio_source_* / audio_listener_*` | ECS 音源组件（3D 空间音频/总线）与监听器 |
+| `Nav` | 6 | `dse_nav_*` | NavMesh 加载/保存/寻路/最近点/射线 |
+| `NavAgent` | 5 | `dse_nav_agent_*` | NavMeshAgent 参数/目的地/状态查询 |
+| `Localization` | 5 | `dse_l10n_*` | 语言包加载、locale 切换、键值查询 |
+| `Scene` | 4 | `dse_scene_*` | 场景加载/保存、Prefab 保存/实例化 |
+| `Ui` | 31 | `dse_ui_*` | 渲染器/按钮/标签/摇杆/滑条/开关/进度条/输入框/布局文件加载 |
 
 ### 示例
 
