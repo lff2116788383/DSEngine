@@ -69,6 +69,11 @@
                     "default": true,
                     "description": "Automatically register MCP configuration when a project is detected."
                 },
+                "dsengine.editorPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Explicit path to dse_editor_cpp executable. If empty, auto-detected from SDK build output."
+                },
                 "dsengine.suppressStartPrompt": {
                     "type": "boolean",
                     "default": false,
@@ -95,11 +100,17 @@
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
         "lint": "tsc --noEmit -p ./",
+        "test": "node ./out/test/runTest.js",
         "package": "vsce package"
     },
     "devDependencies": {
+        "@types/glob": "^8.1.0",
+        "@types/mocha": "^10.0.6",
         "@types/node": "^20.11.0",
         "@types/vscode": "^1.85.0",
+        "@vscode/test-electron": "^2.3.8",
+        "glob": "^10.3.10",
+        "mocha": "^10.2.0",
         "typescript": "^5.3.3",
         "@vscode/vsce": "^2.22.0"
     }

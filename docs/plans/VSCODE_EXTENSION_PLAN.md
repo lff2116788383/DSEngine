@@ -1,8 +1,8 @@
 # DSEngine VS Code Extension — 完整设计方案
 
-> **版本**: v1.0  
+> **版本**: v1.1  
 > **日期**: 2026-07-01  
-> **状态**: 待实现  
+> **状态**: 已实现  
 > **位置**: `tools/vscode-extension/`（主仓子目录，非独立仓库）
 
 ---
@@ -149,7 +149,7 @@ VS Code / Cursor / Trae
 │   │
 │   ├── EditorProcessManager
 │   │   ├── start(projectPath, port)  → spawn dse_editor_cpp.exe
-│   │   ├── stop()                    → dsengine_editor_quit via MCP
+│   │   ├── stop()                    → process.kill('SIGTERM') 直接终止
 │   │   ├── isRunning()               → process alive check
 │   │   └── onExit(callback)          → 进程退出回调
 │   │
@@ -164,9 +164,9 @@ VS Code / Cursor / Trae
 │   │   └── refresh()                 → 进程存活检测
 │   │
 │   └── DependencyChecker
-│       ├── checkPython()             → python --version
-│       ├── checkWebsocketClient()    → python -c "import websocket"
-│       └── installDeps()             → pip install websocket-client
+│       ├── findPythonCommand()       → 过滤 MS Store stub，python3 > python > py -3
+│       ├── checkAll()                → Python + websocket-client 检查
+│       └── showInstallPrompt()       → --user / venv / 手动 三种安装方式
 │
 ├── dsengine_mcp.py  ← 现有，不改
 │   ↓ WebSocket
@@ -193,8 +193,13 @@ tools/vscode-extension/
 │   ├── status-bar.ts            — StatusBarManager
 │   ├── commands.ts              — 命令注册与实现
 │   ├── config.ts                — SDK 发现 + 配置读取
-│   ├── dependency-checker.ts    — Python / pip 依赖检查
-│   └── constants.ts             — 常量定义
+│   ├── dependency-checker.ts    — Python / pip 依赖检查（MS Store 过滤）
+│   ├── constants.ts             — 常量定义
+│   └── test/
+│       ├── runTest.ts           — @vscode/test-electron 启动器
+│       └── suite/
+│           ├── index.ts         — Mocha 测试加载器
+│           └── extension.test.ts — 命令注册 + 配置属性测试
 └── README.md                    — Marketplace 页面内容
 ```
 
@@ -1103,12 +1108,22 @@ export const MCP_SERVER_NAME = 'dsengine';
 
 | # | 项目 | 类型 | 说明 | 处理 |
 |---|------|------|------|------|
-| 1 | `ws` npm 依赖 | 技术债 | 仅用于 `stop()` 时发一条 quit 命令，引入整个 `ws` 库不划算 | v0.2 改为 HTTP REST endpoint 或直接 `process.kill()` |
+| 1 | ~~`ws` npm 依赖~~ | ~~技术债~~ | ~~仅用于 `stop()` 时发一条 quit 命令~~ | **v1.1 已修复**: `stop()` 改为 `process.kill('SIGTERM')` 直接终止，移除 `ws` 依赖 |
 | 2 | 进程发现靠 `ChildProcess` 对象 | 限制 | 无法检测非扩展启动的编辑器实例 | v0.2 添加 PID 文件机制（编辑器启动时写 `.dse_editor.pid`） |
 | 3 | 无 Lua 语法支持 | 功能缺口 | 对 DSEngine Lua 脚本开发者有价值 | v0.2 可以集成 `sumneko.lua` 扩展推荐 |
 | 4 | 无 Scene TreeView | 功能缺口 | 在 VS Code 侧栏显示场景实体树会很方便 | v0.2 通过 MCP 定期拉取 `scene_get_state` |
 
-所有技术债都是 **有意识的 v0.1 范围控制**，不影响核心功能。
+### v1.1 已修复的问题
+
+| # | 问题 | 修复 |
+|---|------|------|
+| A | Python MS Store stub 检测 | `findPythonCommand()` 验证 `import sys` 过滤 stub，优先 `python3` > `python` > `py -3` |
+| B | 编辑器路径硬编码 | `findEditorExecutable()` 动态扫描 `out/build/*/` 所有 CMake preset，支持 `dsengine.editorPath` 用户自定义 |
+| C | pip 离线安装 | 提供三种安装方式：`--user`（离线友好）、`venv`（隔离）、手动 |
+| D | `stop()` 路径过于复杂 | 改为 `process.kill('SIGTERM')` 直接终止，移除 WS roundtrip |
+| E | 缺少测试框架 | 添加 `@vscode/test-electron` + Mocha 测试，验证命令注册和配置属性 |
+
+剩余技术债都是 **有意识的 v0.1 范围控制**，不影响核心功能。
 
 ---
 
@@ -1128,18 +1143,21 @@ export const MCP_SERVER_NAME = 'dsengine';
 | 文件 | 行数 | 说明 |
 |------|------|------|
 | `src/extension.ts` | ~70 | 入口 |
-| `src/editor-manager.ts` | ~140 | 进程管理 |
+| `src/editor-manager.ts` | ~197 | 进程管理（动态扫描 CMake preset） |
 | `src/mcp-registrar.ts` | ~120 | MCP 配置 |
 | `src/status-bar.ts` | ~70 | 状态栏 |
 | `src/commands.ts` | ~100 | 命令 |
 | `src/config.ts` | ~50 | 配置 |
-| `src/dependency-checker.ts` | ~60 | 依赖检查 |
+| `src/dependency-checker.ts` | ~140 | 依赖检查（MS Store 过滤 + venv 安装） |
 | `src/constants.ts` | ~5 | 常量 |
 | `package.json` | ~120 | 清单 |
 | `tsconfig.json` | ~15 | TS 配置 |
 | `schemas/dseproj.schema.json` | ~60 | JSON Schema |
 | `.vscodeignore` | ~10 | 打包排除 |
-| **总计** | **~820** | |
+| `src/test/runTest.ts` | ~20 | 测试启动器 |
+| `src/test/suite/index.ts` | ~25 | Mocha 加载器 |
+| `src/test/suite/extension.test.ts` | ~45 | 命令 + 配置测试 |
+| **总计** | **~1020** | |
 
 ---
 

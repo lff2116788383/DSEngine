@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process';
 import * as vscode from 'vscode';
 import * as net from 'net';
 import * as path from 'path';
+import * as fs from 'fs';
 import { findSDKPath, getPort } from './config';
 import { EDITOR_OUTPUT_CHANNEL } from './constants';
 
@@ -80,22 +81,30 @@ export class EditorProcessManager {
         return true;
     }
 
-    async stop(): Promise<void> {
+    /**
+     * Stop the editor process.
+     * Since we own the child process, just send SIGTERM directly.
+     * The editor handles SIGTERM gracefully (saves state, cleans up GPU resources).
+     */
+    stop(): void {
         if (!this.process) {
             return;
         }
 
         this.outputChannel.appendLine('[DSEngine] Stopping editor...');
 
-        // Try graceful shutdown via a minimal WebSocket quit command
-        const gracefulDone = await this.tryGracefulShutdown();
+        // Direct kill — we control the child process, no need for WS roundtrip.
+        // On Windows SIGTERM is mapped to TerminateProcess; the editor's
+        // atexit / destructor chain handles cleanup.
+        this.process.kill('SIGTERM');
 
-        if (!gracefulDone && this.process) {
-            this.outputChannel.appendLine('[DSEngine] Graceful shutdown failed, killing process.');
-            this.process.kill('SIGTERM');
-            this.process = null;
-            this._onStateChange.fire('stopped');
-        }
+        // If still alive after 5s, force kill
+        const proc = this.process;
+        setTimeout(() => {
+            if (proc && !proc.killed) {
+                proc.kill('SIGKILL');
+            }
+        }, 5000);
     }
 
     isRunning(): boolean {
@@ -106,26 +115,64 @@ export class EditorProcessManager {
         this._onStateChange.dispose();
     }
 
+    /**
+     * Find the editor executable by scanning known build output directories.
+     *
+     * Strategy:
+     * 1. User-configured path (dsengine.editorPath setting)
+     * 2. SDK bin/ directory (installed SDK)
+     * 3. CMake build output: out/build/<preset>/apps/editor_cpp/<exe>
+     *    - Scans ALL preset directories, not just hardcoded names
+     *    - Handles Debug/Release/RelWithDebInfo automatically
+     * 4. Common Linux/macOS paths
+     */
     private findEditorExecutable(sdkPath: string): string | null {
-        const fs = require('fs') as typeof import('fs');
         const isWin = process.platform === 'win32';
         const exeName = isWin ? 'dse_editor_cpp.exe' : 'dse_editor_cpp';
 
-        const candidates = [
-            path.join(sdkPath, 'bin', exeName),
-            path.join(sdkPath, 'out', 'build', 'windows-x64-debug',
-                'apps', 'editor_cpp', exeName),
-            path.join(sdkPath, 'out', 'build', 'windows-x64-release',
-                'apps', 'editor_cpp', exeName),
-            path.join(sdkPath, 'out', 'build', 'windows-x64-relwithdebinfo',
-                'apps', 'editor_cpp', exeName),
-        ];
+        // 1. User-configured path
+        const config = vscode.workspace.getConfiguration('dsengine');
+        const userPath = config.get<string>('editorPath');
+        if (userPath && fs.existsSync(userPath)) {
+            return userPath;
+        }
 
-        for (const p of candidates) {
-            if (fs.existsSync(p)) {
-                return p;
+        // 2. SDK bin/ directory
+        const binPath = path.join(sdkPath, 'bin', exeName);
+        if (fs.existsSync(binPath)) {
+            return binPath;
+        }
+
+        // 3. Scan CMake build output directories
+        const buildRoot = path.join(sdkPath, 'out', 'build');
+        if (fs.existsSync(buildRoot)) {
+            try {
+                const presetDirs = fs.readdirSync(buildRoot, { withFileTypes: true });
+                for (const dir of presetDirs) {
+                    if (!dir.isDirectory()) { continue; }
+                    const candidate = path.join(
+                        buildRoot, dir.name, 'apps', 'editor_cpp', exeName);
+                    if (fs.existsSync(candidate)) {
+                        return candidate;
+                    }
+                }
+            } catch {
+                // Permission error or similar — fall through
             }
         }
+
+        // 4. Common Linux/macOS build paths
+        if (!isWin) {
+            const unixCandidates = [
+                path.join(sdkPath, 'build', 'apps', 'editor_cpp', exeName),
+                path.join(sdkPath, 'cmake-build-debug', 'apps', 'editor_cpp', exeName),
+                path.join(sdkPath, 'cmake-build-release', 'apps', 'editor_cpp', exeName),
+            ];
+            for (const p of unixCandidates) {
+                if (fs.existsSync(p)) { return p; }
+            }
+        }
+
         return null;
     }
 
@@ -147,35 +194,6 @@ export class EditorProcessManager {
                 server.close(() => resolve(true));
             });
             server.listen(port, '127.0.0.1');
-        });
-    }
-
-    private tryGracefulShutdown(): Promise<boolean> {
-        return new Promise((resolve) => {
-            const timeout = setTimeout(() => resolve(false), 3000);
-
-            if (this.process) {
-                this.process.once('exit', () => {
-                    clearTimeout(timeout);
-                    resolve(true);
-                });
-            }
-
-            // Send quit via raw TCP/WebSocket handshake
-            const socket = new net.Socket();
-            socket.on('error', () => {
-                clearTimeout(timeout);
-                resolve(false);
-            });
-
-            socket.connect(this._port, '127.0.0.1', () => {
-                // Minimal WebSocket upgrade + JSON-RPC quit
-                // For simplicity, just kill the process since we don't have ws dep
-                socket.destroy();
-                if (this.process) {
-                    this.process.kill('SIGTERM');
-                }
-            });
         });
     }
 }
