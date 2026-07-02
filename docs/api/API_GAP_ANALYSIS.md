@@ -1,6 +1,6 @@
 # DSEngine Lua 绑定缺口分析
 
-> 生成日期：2026-06-12
+> 生成日期：2026-06-12（§七为 2026-07-02 增补，含 Lua/C# 双侧最新覆盖数）
 > 对比来源：`engine/scripting/lua/bindings/*.cpp`（实际注册） vs `docs/api/LUA_API.md`（现有文档）
 > 审计工具：`tools/audit/lua_api_audit.py`（函数名提取/对比）、`tools/audit/gen_accessor_doc.py`（Codegen 访问器文档生成）
 > 复核方式：在 `docs/api/` 下运行 `python ../../tools/audit/lua_api_audit.py`
@@ -144,3 +144,37 @@
 2. **覆盖率回归**：新增手写绑定后，在 `docs/api/` 运行 `python ../../tools/audit/lua_api_audit.py`，
    确认 “BOUND but NOT in doc” 计数为 0。
 3. 审计脚本与中间产物位于 `tools/audit/`（不参与构建）。
+
+---
+
+## 七、2026-07-02 全量审计与 C# 侧补齐
+
+> 范围扩展：本轮同时审计 Lua **与 C#** 两套绑定及三份 API 文档，并完成三项修复。
+
+### 7.1 最新覆盖数
+
+| 类别 | 数值 |
+|------|:----:|
+| 注册 Lua 函数总数 | 1531 |
+| 其中 Codegen 字段访问器（45 组件 / 408 字段） | 816 |
+| C# Codegen 访问器（Native.gen.cs，与 Lua 同源） | 816 |
+| C# 手写 C ABI 绑定（NativeManual.gen.cs / DSEngine.Api 45 类） | 252 |
+| 审计后 Lua 未文档化函数 | 0 |
+
+### 7.2 本轮修复项
+
+1. **LUA_API.md §18 重新生成**：由 13 组件/330 访问器扩至 45 组件/816 访问器（`gen_accessor_doc.py`）。
+2. **C# 补齐手写 C ABI**：`dse_api.h` 手写函数此前 181 个无 C# 绑定；新增 `gen_csharp_manual.py`
+   自动解析生成 `NativeManual.gen.cs`（P/Invoke）+ `ApiManual.gen.cs`（`DSEngine.Api` 门面），随 codegen 自动更新。
+3. **子系统级 C ABI 补齐**（`dse_api_services.cpp`，74 函数）：音频（全局 BGM/SFX + AudioSource/Listener ECS）、
+   导航（NavMesh 寻路 + NavAgent）、本地化、场景/预制体序列化、UI 核心控件（渲染器/按钮/标签/摇杆/
+   滑条/开关/进度条/输入框/布局加载）此前为 Lua-only，现 Lua/C# 共享同一 C ABI，语义与 Lua 绑定一一对应。
+
+### 7.3 剩余已知缺口（非阻塞，按需立项）
+
+| 能力 | 现状 |
+|------|------|
+| UI 高级控件（下拉/滚动视图/虚拟列表/盒布局/视觉效果） | 仅 Lua；C 核心控件已够常规 HUD/菜单，复杂 UI 建议走 `dse_ui_load_from_file` JSON 布局 |
+| Spine / 2D 粒子高级接口 / DSSL 材质参数 | 仅 Lua |
+| HTTP / 存档加密 Archive | 仅 Lua；C# 侧可直接用 .NET BCL（HttpClient/File IO），非真实缺口 |
+| 音频总线 DSP / 混音快照 | 仅 Lua（`audio.bus_*`） |
