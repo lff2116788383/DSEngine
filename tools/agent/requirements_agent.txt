@@ -1,0 +1,9 @@
+# DSEngine Agent dependencies
+# Install in isolated venv: tools/agent/.venv/bin/pip install -r requirements_agent.txt
+# C++ launches bridge via: tools/agent/.venv/bin/python tools/agent/agent_bridge.py
+
+langgraph==0.2.60
+langchain-openai==0.2.14
+langchain-core==0.3.30
+langgraph-checkpoint-sqlite==2.0.6
+openai>=1.30.0,<2.0.0
