@@ -1,7 +1,10 @@
 # DSEngine Editor Agent 架构设计方案
 
-> 版本: 1.0 | 日期: 2026-07-01
-> 目标: 让 AI 能自主规划、调度、执行完整的游戏开发任务，而非逐条指令的 request-response 模式
+> 版本: 2.0 | 日期: 2026-07-01
+> 目标: 统一 AI 交互入口，让 AI 能自主规划、调度、执行完整的游戏开发任务
+> 
+> **v2.0 变更 (2026-07-01)**: 合并 AI Chat 进 Agent 架构（统一面板，消除双系统），
+> 修复 7 项架构/设计/安全问题（工具调用路径、验证策略、安全沙箱等）
 
 ---
 
@@ -32,15 +35,37 @@ dsengine_mcp.py → ControlServer → 引擎
 | 人机协作 | 关键决策点无法暂停等待用户确认 |
 | 上下文管理 | 长任务 token 超限后对话断裂 |
 
+**额外问题**: 现有 ChatPanel + ai_chat_bridge.py 与 Agent 系统形成两套并行系统——两套工具调用路径、两套消息协议、双倍维护成本。Agent 实现后 Chat 应被合并而非共存。
+
 ### 1.2 目标
 
-实现一个 **Agent 层**，使 AI 能够：
-1. 将高层目标分解为可执行子任务（TaskPlan）
-2. 按依赖顺序自动调度执行（TaskScheduler）
-3. 每步执行后感知状态变化（截图 + 场景 diff）
-4. 关键节点暂停等待用户审批（Human-in-the-loop）
-5. 完整记录执行过程（AuditLog）
-6. 多个专业 Agent 协作完成复杂任务（Orchestrator）
+实现一个 **统一 Agent 层**，取代现有 ChatPanel + ai_chat_bridge.py，使 AI 能够：
+1. **统一入口**: 简单操作（直接执行）和复杂任务（规划执行）走同一个面板
+2. 将高层目标分解为可执行子任务（TaskPlan）
+3. 按依赖顺序自动调度执行（TaskScheduler）
+4. 每步执行后感知状态变化（截图 + 场景 diff）
+5. 关键节点暂停等待用户审批（Human-in-the-loop）
+6. 完整记录执行过程（AuditLog）
+7. 多个专业 Agent 协作完成复杂任务（Orchestrator）
+
+### 1.3 AI Chat 合并策略
+
+**不是删除 Chat，而是将 Chat 能力吸收进 Agent 架构。**
+
+| 场景 | 旧方案 (双系统) | 新方案 (统一) |
+|------|----------------|---------------|
+| "创建一个红方块" | ChatPanel → ai_chat_bridge.py | Agent 直接执行模式 (跳过 plan/approve) |
+| "做一个平台跳跃游戏" | 无法处理 | Agent 完整模式 (plan → approve → execute) |
+| 对话问答 ("场景里有什么?") | ChatPanel | Agent 对话模式 (无工具调用) |
+
+**合并后可移除的文件**（Phase 2 完成后）：
+- `apps/editor_cpp/src/editor_chat_panel.h/cpp` → 被 `editor_agent_panel.h/cpp` 取代
+- `tools/ai_chat_bridge.py` → 被 `tools/agent/agent_bridge.py` 取代
+- `apps/editor_cpp/src/editor_chat_protocol.h` → 协议合入 `editor_agent_protocol.h`
+
+**保留不动的文件**：
+- `apps/editor_cpp/src/editor_ai_config.h/cpp` → Agent 复用（Provider/API Key/代理配置）
+- `tools/mcp_adapter/dsengine_mcp.py` → 外部 AI 客户端继续使用
 
 ---
 
@@ -86,15 +111,27 @@ dsengine_mcp.py → ControlServer → 引擎
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    C++ Editor UI                         │
-│  ChatPanel (现有) + AgentPanel (新增)                     │
-│  - 任务列表 UI (子任务状态、进度条)                        │
+│  AgentPanel (统一面板，取代 ChatPanel)                     │
+│  - 对话区 (流式输出、Markdown、@mention)                  │
+│  - 任务列表 (子任务状态、进度条)                          │
 │  - 审批按钮 (Approve / Reject / Modify)                  │
 │  - 审计日志查看器                                        │
+│  - 配置入口 (复用 AIConfigManager)                       │
 └────────────────────┬────────────────────────────────────┘
                      │ JSON-lines (stdin/stdout)
+                     │ 工具调用: tool_call → C++ DispatchTool (同进程直调)
                      │
 ┌────────────────────┴────────────────────────────────────┐
-│              Python Agent Layer (新增)                    │
+│          Python Agent Layer (agent_bridge.py 统一入口)    │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │     agent_bridge.py (取代 ai_chat_bridge.py)      │   │
+│  │  - 统一消息入口                                    │   │
+│  │  - 复杂度分类: 规则匹配 (非 LLM 调用)             │   │
+│  │  - 简单请求 → 直接执行 (跳过 plan/approve)        │   │
+│  │  - 复杂任务 → agent_orchestrator                  │   │
+│  │  - 工具调用走 JSON-lines tool_call (非 MCP)       │   │
+│  └──────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │          agent_orchestrator.py (~300 行)           │   │
@@ -125,6 +162,12 @@ dsengine_mcp.py → ControlServer → 引擎
 │  └──────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
+│  │     agent_safety.py (~80 行)                      │   │
+│  │  - 安全策略 (禁用危险操作、频率限制、代码长度限制) │   │
+│  │  - 工具调用拦截与审计                             │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
 │  │          agent_audit.py (~100 行)                 │   │
 │  │  - 执行日志 (每步: 输入/输出/耗时/token)          │   │
 │  │  - 汇总报告生成                                   │   │
@@ -132,18 +175,27 @@ dsengine_mcp.py → ControlServer → 引擎
 │  └──────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │     ai_chat_bridge.py (现有, 改造为路由层)        │   │
-│  │  - 简单对话 → 现有逻辑 (不走 Agent)               │   │
-│  │  - 复杂任务 → 转发给 agent_orchestrator           │   │
-│  │  - 判断依据: LLM classification                   │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
 │  │     dsengine_mcp.py (现有, 不改)                  │   │
 │  │  - 23 个 MCP Tool 定义                            │   │
-│  │  - WebSocket → ControlServer 桥接                 │   │
+│  │  - 仅供外部 AI 客户端 (Cursor/Claude Desktop)     │   │
+│  │  - Agent 内部不走此路径                           │   │
 │  └──────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────┘
+```
+
+### 2.4 工具调用路径对比 (v2.0 优化)
+
+```
+v1.0 (有问题):
+  Agent → MCP stdio subprocess → WebSocket → ControlServer → 引擎
+  (多一次子进程 + WebSocket 往返，延迟 ~100ms/次)
+
+v2.0 (修正):
+  Agent → JSON-lines tool_call → C++ ExecuteToolCall() → DispatchTool() → 引擎
+  (同进程直调，延迟 <1ms/次，复用现有 ChatPanel 的成熟路径)
+
+外部客户端 (不变):
+  Cursor/Claude → MCP stdio → dsengine_mcp.py → WebSocket → ControlServer
 ```
 
 ---
@@ -177,14 +229,16 @@ class AgentState(TypedDict):
     # ── 用户输入 ──
     user_goal: str                    # 原始高层目标
     user_constraints: list[str]       # 用户约束 ("不要用物理引擎", "像素风格")
+    execution_mode: str               # "direct" | "full" (由 classify 节点设置)
 
     # ── 任务规划 ──
     task_plan: list[TaskItem]         # 子任务列表 (DAG)
     current_task_index: int           # 当前执行到第几个任务
 
     # ── 执行状态 ──
-    scene_snapshot_before: str        # 执行前场景 JSON 摘要
-    scene_snapshot_after: str         # 执行后场景 JSON 摘要
+    scene_checkpoint_path: str        # Agent 执行前的场景快照路径 (一键回滚用)
+    scene_snapshot_before: str        # 单步执行前场景 JSON 摘要
+    scene_snapshot_after: str         # 单步执行后场景 JSON 摘要
     screenshot_before: str            # 执行前截图 (base64)
     screenshot_after: str             # 执行后截图 (base64)
 
@@ -204,13 +258,24 @@ class AgentState(TypedDict):
 
 graph = StateGraph(AgentState)
 
+graph.add_node("classify",  classify_node)   # 复杂度分类 (规则匹配, 无 LLM 调用)
+graph.add_node("direct",    direct_node)     # 简单请求: 直接 LLM + tool call (原 Chat 能力)
+graph.add_node("checkpoint",checkpoint_node) # 保存场景快照 (用于一键回滚)
 graph.add_node("plan",      plan_node)       # 任务分解
 graph.add_node("approve",   approve_node)    # 人机审批
 graph.add_node("execute",   execute_node)    # 执行当前子任务
-graph.add_node("verify",    verify_node)     # 验证执行结果
+graph.add_node("verify",    verify_node)     # 验证执行结果 (确定性优先, LLM 可选)
 graph.add_node("summarize", summarize_node)  # 生成最终报告
 
-graph.add_edge(START, "plan")
+graph.add_edge(START, "classify")
+
+graph.add_conditional_edges("classify", route_by_complexity, {
+    "direct":     "direct",       # 简单请求 → 直接执行 (跳过规划)
+    "checkpoint": "checkpoint",   # 复杂任务 → 先保存场景快照
+})
+
+graph.add_edge("direct", END)               # 简单请求执行完即结束
+graph.add_edge("checkpoint", "plan")
 graph.add_edge("plan", "approve")
 
 graph.add_conditional_edges("approve", route_after_approve, {
@@ -232,7 +297,9 @@ graph.add_edge("summarize", END)
 
 # 关键: 在 approve 节点前中断，等待用户输入
 agent = graph.compile(
-    checkpointer=SqliteSaver("agent_state.db"),
+    checkpointer=SqliteSaver(
+        os.path.join(project_dir, ".dse", "agent_state.db")
+    ),
     interrupt_before=["approve"],
 )
 ```
@@ -244,37 +311,169 @@ agent = graph.compile(
                     │  START   │
                     └────┬────┘
                          │
-                    ┌────▼────┐
-              ┌─────│  plan   │◄────────────────┐
-              │     └────┬────┘                  │
-              │          │                       │
-              │     ┌────▼─────┐    user_modify  │
-              │     │ approve  │─────────────────┘
-              │     │ (HITL)   │
-              │     └────┬─────┘
-              │          │ user_approved
-              │          │
-              │     ┌────▼─────┐
-              │     │ execute  │◄────────┐
-              │     └────┬─────┘         │
-              │          │               │
-              │     ┌────▼─────┐  retry  │
-              │     │  verify  │─────────┘
-              │     └────┬─────┘
-              │          │ all_done
-              │          │
-              │     ┌────▼──────┐
-              │     │ summarize │
-              │     └────┬──────┘
-              │          │
-     cancel   │     ┌────▼────┐
-              └─────►│  END   │
-                    └─────────┘
+                    ┌────▼──────┐
+                    │ classify  │ (规则匹配, 零延迟, 无 LLM)
+                    └────┬──────┘
+                         │
+              ┌──────────┴──────────┐
+              │ simple              │ complex
+              │                     │
+         ┌────▼────┐         ┌─────▼──────┐
+         │ direct  │         │ checkpoint │ (场景快照, 一键回滚)
+         │ (原Chat)│         └─────┬──────┘
+         └────┬────┘               │
+              │              ┌─────▼────┐
+              │        ┌─────│   plan   │◄────────────────┐
+              │        │     └────┬─────┘                  │
+              │        │          │                        │
+              │        │     ┌────▼──────┐    user_modify  │
+              │        │     │  approve  │─────────────────┘
+              │        │     │  (HITL)   │
+              │        │     └────┬──────┘
+              │        │          │ user_approved
+              │        │          │
+              │        │     ┌────▼──────┐
+              │        │     │  execute  │◄────────┐
+              │        │     └────┬──────┘         │
+              │        │          │                │
+              │        │     ┌────▼──────┐  retry  │
+              │        │     │  verify   │─────────┘
+              │        │     └────┬──────┘
+              │        │          │ all_done
+              │        │          │
+              │        │     ┌────▼───────┐
+              │        │     │ summarize  │
+              │        │     └────┬───────┘
+              │        │          │
+     cancel   │   cancel│    ┌────▼────┐
+              └────────┴────►│  END   │
+                            └─────────┘
 ```
 
 ---
 
 ## 四、节点实现详解
+
+### 4.0 Classify 节点 — 复杂度分类 (v2.0 新增)
+
+```python
+# agent_bridge.py
+
+import re
+
+# 规则匹配，零延迟，不调用 LLM
+COMPLEX_TASK_PATTERNS = [
+    r"做一个.+游戏",
+    r"创建完整.+场景",
+    r"实现.+功能",
+    r"(make|create|build)\s+a\s+.+(game|level|scene|system)",
+    r"(完整|完全|全部)(实现|创建|搭建)",
+    r"(设计|构建).+(关卡|世界|环境)",
+]
+
+def classify_node(state: AgentState) -> dict:
+    """规则匹配分类，不调用 LLM，零延迟。
+    
+    v2.0 优化: 取代 v1.0 的 should_use_agent() LLM 分类，
+    避免每条消息额外 500ms-2s 的 API 往返。
+    """
+    goal = state["user_goal"]
+
+    # 规则匹配: 包含复杂任务关键词 → full 模式
+    for pattern in COMPLEX_TASK_PATTERNS:
+        if re.search(pattern, goal, re.IGNORECASE):
+            return {"execution_mode": "full"}
+
+    # 用户通过 UI 显式选择 Agent 模式
+    if state.get("force_agent_mode", False):
+        return {"execution_mode": "full"}
+
+    # 默认: 简单请求 → 直接执行
+    return {"execution_mode": "direct"}
+
+
+def route_by_complexity(state: AgentState) -> str:
+    if state["execution_mode"] == "full":
+        return "checkpoint"
+    return "direct"
+```
+
+### 4.0b Direct 节点 — 简单请求直接执行 (取代原 AI Chat)
+
+```python
+# agent_bridge.py
+
+async def direct_node(state: AgentState) -> dict:
+    """简单请求直接执行，等同于原 ai_chat_bridge.py 的行为。
+    
+    流程: LLM 生成回复 → 如需工具调用 → 通过 JSON-lines 发给 C++ 执行 → 返回结果。
+    不经过 plan/approve/verify，响应速度与原 Chat 一致。
+    """
+    llm = ChatOpenAI(
+        model=os.environ.get("OPENAI_MODEL", "gpt-4o"),
+        base_url=os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+        api_key=os.environ.get("OPENAI_API_KEY", ""),
+        temperature=0.7,
+        streaming=True,
+    )
+
+    tools = get_tool_definitions()
+    llm_with_tools = llm.bind_tools(tools)
+
+    messages = state.get("messages", [])
+    messages.append(HumanMessage(content=state["user_goal"]))
+
+    total_tokens = 0
+
+    # 与原 ai_chat_bridge.py 一致的工具调用循环
+    for _ in range(10):  # max tool call rounds
+        response = await llm_with_tools.ainvoke(messages)
+        total_tokens += response.usage_metadata.get("total_tokens", 0)
+        messages.append(response)
+
+        if not response.tool_calls:
+            # 流式输出文本回复
+            emit({"type": "content", "text": response.content})
+            break
+
+        for tc in response.tool_calls:
+            # 通过 JSON-lines 发给 C++ 执行 (同进程直调, 不走 MCP)
+            result = await call_tool_via_jsonlines(tc["name"], tc["args"])
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+
+    return {
+        "messages": messages,
+        "total_tokens": state.get("total_tokens", 0) + total_tokens,
+    }
+```
+
+### 4.0c Checkpoint 节点 — 场景快照 (v2.0 新增)
+
+```python
+# agent_orchestrator.py
+
+async def checkpoint_node(state: AgentState) -> dict:
+    """在 Agent 正式执行前保存场景快照，用于一键回滚。
+    
+    v2.0 优化: 解决 "Agent 执行 24 次工具调用后需要 undo 24 次" 的问题。
+    用户点击 "回滚" → dsengine_scene_load(checkpoint_path) → 恢复到 Agent 执行前状态。
+    """
+    checkpoint_path = "_agent_checkpoint_" + state.get("session_id", "default") + ".dscene"
+
+    await call_tool_via_jsonlines("dsengine_scene_save", {"path": checkpoint_path})
+
+    emit({
+        "type": "agent_checkpoint_created",
+        "path": checkpoint_path,
+        "message": "场景快照已保存，可随时一键回滚",
+    })
+
+    return {"scene_checkpoint_path": checkpoint_path}
+```
 
 ### 4.1 Plan 节点 — 任务分解
 
@@ -327,8 +526,8 @@ async def plan_node(state: AgentState) -> dict:
         temperature=0.3,  # 规划需要更低温度以保证结构化输出
     )
 
-    # 获取当前场景状态作为规划上下文
-    scene_state = await call_mcp_tool("dsengine_scene_get_state", {})
+    # 获取当前场景状态作为规划上下文 (通过 JSON-lines 同进程直调, 不走 MCP)
+    scene_state = await call_tool_via_jsonlines("dsengine_scene_get_state", {})
 
     messages = [
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
@@ -460,9 +659,9 @@ async def execute_node(state: AgentState) -> dict:
     task["status"] = "running"
     emit({"type": "agent_task_status", "task_id": task["id"], "status": "running"})
 
-    # 执行前快照
-    scene_before = await call_mcp_tool("dsengine_scene_get_state", {})
-    screenshot_before = await call_mcp_tool("dsengine_editor_screenshot", {"target": "scene"})
+    # 执行前快照 (通过 JSON-lines 同进程直调)
+    scene_before = await call_tool_via_jsonlines("dsengine_scene_get_state", {})
+    screenshot_before = await call_tool_via_jsonlines("dsengine_editor_screenshot", {"target": "scene"})
 
     # 获取 specialist 的 system prompt
     specialist = task.get("specialist", "scene_architect")
@@ -476,8 +675,8 @@ async def execute_node(state: AgentState) -> dict:
         temperature=0.2,
     )
 
-    # 绑定 MCP 工具 (从现有 dsengine_mcp.py 自动发现)
-    tools = get_mcp_tool_definitions()
+    # 绑定工具 (从 agent_safety.py 过滤后的工具定义)
+    tools = get_safe_tool_definitions()
     llm_with_tools = llm.bind_tools(tools)
 
     # 构建上下文消息
@@ -523,7 +722,12 @@ async def execute_node(state: AgentState) -> dict:
                 "iteration": iteration,
             })
 
-            result = await call_mcp_tool(tool_name, tool_args)
+            # 安全检查 + 执行 (通过 JSON-lines 同进程直调, 不走 MCP)
+            safety_check = agent_safety.check_tool_call(tool_name, tool_args)
+            if not safety_check.allowed:
+                result = {"error": f"Safety blocked: {safety_check.reason}"}
+            else:
+                result = await call_tool_via_jsonlines(tool_name, tool_args)
 
             messages.append({
                 "role": "tool",
@@ -532,8 +736,8 @@ async def execute_node(state: AgentState) -> dict:
             })
 
     # 执行后快照
-    scene_after = await call_mcp_tool("dsengine_scene_get_state", {})
-    screenshot_after = await call_mcp_tool("dsengine_editor_screenshot", {"target": "scene"})
+    scene_after = await call_tool_via_jsonlines("dsengine_scene_get_state", {})
+    screenshot_after = await call_tool_via_jsonlines("dsengine_editor_screenshot", {"target": "scene"})
 
     # 更新任务状态
     task["tools_used"] = tools_used
@@ -550,47 +754,77 @@ async def execute_node(state: AgentState) -> dict:
     }
 ```
 
-### 4.4 Verify 节点 — 结果验证
+### 4.4 Verify 节点 — 二级验证 (v2.0 优化)
 
 ```python
 # agent_orchestrator.py
 
 async def verify_node(state: AgentState) -> dict:
-    """验证子任务执行结果，决定下一步。"""
+    """二级验证策略，减少 ~40% token 消耗。
+    
+    v2.0 优化: 不再每步都用 LLM 验证。
+    
+    Level 1 (确定性验证, 默认): 
+      - 工具调用全部无报错 → 通过
+      - 场景 diff 显示预期变化 (有新实体/修改) → 通过
+      - 无需 LLM 调用, 零 token 消耗
+      
+    Level 2 (LLM 验证, 仅失败/可疑时触发):
+      - Level 1 失败 (工具报错或场景无变化)
+      - 用户开启 "严格验证" 模式
+      - 任务类型为 qa_tester (需要主观判断)
+    """
     idx = state["current_task_index"]
     task = state["task_plan"][idx]
+    total_tokens = 0
 
-    # 对比执行前后场景变化
+    # ── Level 1: 确定性验证 ──
+    tools_had_errors = any(
+        "error" in t_name.lower() for t_name in task.get("tools_used", [])
+    )
+    scene_diff = compute_scene_diff(
+        json.loads(state.get("scene_snapshot_before", "{}")),
+        json.loads(state.get("scene_snapshot_after", "{}")),
+    )
+    scene_changed = scene_diff != "无变化"
+
+    # 确定性通过: 工具无错 + 场景有变化
+    if not tools_had_errors and scene_changed and task.get("specialist") != "qa_tester":
+        task["status"] = "done"
+        emit({"type": "agent_task_status", "task_id": task["id"],
+              "status": "done", "result": task.get("result", ""),
+              "verification": "deterministic"})
+        return {
+            "task_plan": state["task_plan"],
+            "current_task_index": idx + 1,
+        }
+
+    # ── Level 2: LLM 验证 (仅在 Level 1 失败或 qa_tester 时) ──
     llm = ChatOpenAI(model=os.environ.get("OPENAI_MODEL", "gpt-4o"), temperature=0)
 
     verification_prompt = f"""验证以下任务是否成功完成:
 
 任务: {task['title']}
 描述: {task['description']}
-
-执行前场景: {state.get('scene_snapshot_before', 'N/A')}
-执行后场景: {state.get('scene_snapshot_after', 'N/A')}
-
+场景变化: {scene_diff}
 执行结果: {task.get('result', 'N/A')}
-使用工具: {task.get('tools_used', [])}
-
-请判断:
-1. 任务是否完成? (yes/no)
-2. 如果未完成，具体缺少什么?
-3. 是否需要重试?
+工具报错: {tools_had_errors}
 
 输出 JSON: {{"completed": true/false, "reason": "...", "should_retry": true/false}}"""
 
     response = await llm.ainvoke([HumanMessage(content=verification_prompt)])
+    total_tokens = response.usage_metadata.get("total_tokens", 0)
     verdict = parse_json(response.content)
 
     if verdict.get("completed", False):
         task["status"] = "done"
         emit({"type": "agent_task_status", "task_id": task["id"],
-              "status": "done", "result": task.get("result", "")})
+              "status": "done", "result": task.get("result", ""),
+              "verification": "llm"})
         return {
             "task_plan": state["task_plan"],
             "current_task_index": idx + 1,
+            "total_tokens": state.get("total_tokens", 0) + total_tokens,
         }
     else:
         task["retry_count"] = task.get("retry_count", 0) + 1
@@ -602,13 +836,17 @@ async def verify_node(state: AgentState) -> dict:
             return {
                 "task_plan": state["task_plan"],
                 "error_count": state.get("error_count", 0) + 1,
+                "total_tokens": state.get("total_tokens", 0) + total_tokens,
             }
         else:
             emit({"type": "agent_task_status", "task_id": task["id"],
                   "status": "retrying",
                   "retry": task["retry_count"],
                   "reason": verdict.get("reason", "")})
-            return {"task_plan": state["task_plan"]}
+            return {
+                "task_plan": state["task_plan"],
+                "total_tokens": state.get("total_tokens", 0) + total_tokens,
+            }
 
 
 def route_after_verify(state: AgentState) -> str:
@@ -672,7 +910,7 @@ async def summarize_node(state: AgentState) -> dict:
     }
 
     # 最终截图
-    final_screenshot = await call_mcp_tool(
+    final_screenshot = await call_tool_via_jsonlines(
         "dsengine_editor_screenshot", {"target": "scene"})
     report["final_screenshot"] = final_screenshot
 
@@ -713,7 +951,9 @@ class AuditEntry:
 class AuditLog:
     """SQLite 持久化的审计日志。"""
 
-    def __init__(self, db_path: str = "agent_audit.db"):
+    def __init__(self, db_path: str = None):
+        if db_path is None:
+            db_path = os.path.join(project_dir, ".dse", "agent_audit.db")
         self.conn = sqlite3.connect(db_path)
         self._create_tables()
 
@@ -803,6 +1043,84 @@ class AuditLog:
 
 ---
 
+## 5b、安全沙箱 (v2.0 新增)
+
+### 5b.1 AgentSafetyPolicy
+
+```python
+# agent_safety.py
+
+from dataclasses import dataclass
+from typing import Optional
+import time
+
+@dataclass
+class SafetyCheckResult:
+    allowed: bool
+    reason: Optional[str] = None
+
+class AgentSafetyPolicy:
+    """Agent 模式下的安全策略，防止 LLM 幻觉导致破坏性操作。
+    
+    v2.0 新增: 解决原方案缺少安全边界的问题。
+    """
+
+    # Agent 模式下禁用的危险工具
+    BLOCKED_TOOLS = {
+        "dsengine_entity_batch_delete",  # 批量删除风险太高
+    }
+
+    # Lua 代码长度限制 (字符数)
+    MAX_LUA_CODE_LENGTH = 2000
+
+    # 工具调用频率限制
+    MAX_CALLS_PER_SECOND = 5
+    _call_timestamps: list[float] = []
+
+    @classmethod
+    def check_tool_call(cls, tool_name: str, args: dict) -> SafetyCheckResult:
+        """在执行工具调用前进行安全检查。"""
+
+        # 1. 工具黑名单
+        if tool_name in cls.BLOCKED_TOOLS:
+            return SafetyCheckResult(
+                allowed=False,
+                reason=f"Tool '{tool_name}' is blocked in Agent mode. "
+                       f"Use individual entity_delete instead."
+            )
+
+        # 2. Lua 代码长度限制
+        if tool_name == "dsengine_lua_execute":
+            code = args.get("code", "")
+            if len(code) > cls.MAX_LUA_CODE_LENGTH:
+                return SafetyCheckResult(
+                    allowed=False,
+                    reason=f"Lua code too long ({len(code)} chars, "
+                           f"max {cls.MAX_LUA_CODE_LENGTH}). "
+                           f"Use dsengine_script_create for large scripts."
+                )
+
+        # 3. 频率限制
+        now = time.time()
+        cls._call_timestamps = [t for t in cls._call_timestamps if now - t < 1.0]
+        if len(cls._call_timestamps) >= cls.MAX_CALLS_PER_SECOND:
+            return SafetyCheckResult(
+                allowed=False,
+                reason=f"Rate limit: max {cls.MAX_CALLS_PER_SECOND} calls/second"
+            )
+        cls._call_timestamps.append(now)
+
+        return SafetyCheckResult(allowed=True)
+
+
+def get_safe_tool_definitions() -> list[dict]:
+    """返回过滤后的工具定义列表 (排除黑名单工具)。"""
+    all_tools = get_all_tool_definitions()
+    return [t for t in all_tools if t["name"] not in AgentSafetyPolicy.BLOCKED_TOOLS]
+```
+
+---
+
 ## 六、协议扩展
 
 ### 6.1 Agent 专用消息类型
@@ -866,7 +1184,29 @@ class AuditLog:
     "final_screenshot": "base64..."
 }
 
-// ── C++ → Bridge (新增) ──
+// 场景快照已创建 (用于一键回滚)
+{
+    "type": "agent_checkpoint_created",
+    "path": "_agent_checkpoint_xxx.dscene",
+    "message": "场景快照已保存，可随时一键回滚"
+}
+
+// 安全策略拦截通知
+{
+    "type": "agent_safety_blocked",
+    "tool": "dsengine_entity_batch_delete",
+    "reason": "Tool blocked in Agent mode"
+}
+
+// ── C++ → Bridge ──
+
+// 用户发送消息 (统一入口, classify 节点自动分流)
+{
+    "type": "user_message",
+    "content": "做一个平台跳跃游戏",
+    "force_agent_mode": false,
+    "constraints": ["像素风格"]
+}
 
 // 用户审批 Agent 计划
 {
@@ -875,75 +1215,48 @@ class AuditLog:
     "feedback": "第三步改成蓝色天空"
 }
 
-// 用户启动 Agent 任务 (而非普通对话)
+// 用户一键回滚
 {
-    "type": "agent_task",
-    "goal": "做一个平台跳跃游戏",
-    "constraints": ["像素风格", "不要物理引擎"]
+    "type": "agent_rollback"
 }
 ```
 
-### 6.2 消息路由
+### 6.2 消息路由 (v2.0 统一入口)
 
 ```python
-# ai_chat_bridge.py (改造)
+# agent_bridge.py (取代 ai_chat_bridge.py)
 
-async def route_message(msg: dict, stdin_queue: asyncio.Queue):
-    """路由消息到普通对话或 Agent 模式。"""
+async def route_message(msg: dict):
+    """统一消息入口 — 所有消息都走 Agent 状态机。
+    
+    v2.0: 取消了 should_use_agent() LLM 分类调用。
+    改为 classify 节点的规则匹配 (零延迟)，在状态机内部分流。
+    """
     msg_type = msg.get("type", "")
 
-    # 显式 Agent 任务
-    if msg_type == "agent_task":
-        await run_agent(msg["goal"], msg.get("constraints", []), stdin_queue)
-        return
-
-    # Agent 审批响应
-    if msg_type == "agent_approve":
-        await handle_agent_approve(msg)
-        return
-
-    # 普通对话 (现有逻辑不变)
     if msg_type == "user_message":
-        content = msg.get("content", "")
+        # 所有用户消息统一走 Agent 状态机
+        # classify 节点会自动判断走 direct (简单) 还是 full (复杂)
+        await run_agent_graph({
+            "user_goal": msg["content"],
+            "user_constraints": msg.get("constraints", []),
+            "force_agent_mode": msg.get("force_agent_mode", False),
+        })
 
-        # 自动检测: 是否应该走 Agent 模式?
-        if should_use_agent(content):
-            emit({
-                "type": "agent_suggest",
-                "message": "检测到复杂任务，建议使用 Agent 模式自动执行。",
-                "suggested_goal": content,
-            })
-            # 用户可以选择 "使用 Agent" 或 "普通对话"
-            return
+    elif msg_type == "agent_approve":
+        # 用户审批 → update_state 恢复状态机
+        await handle_agent_approve(msg)
 
-        # 走现有的普通对话流程
-        await handle_user_message(msg, stdin_queue)
-
-
-async def should_use_agent(content: str) -> bool:
-    """用 LLM 分类判断是否应该走 Agent 模式。
-
-    判断依据:
-    - 需要多个步骤才能完成
-    - 涉及多种类型的工作 (场景 + 脚本 + 资产)
-    - 描述的是一个完整功能而非单个操作
-    """
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    response = await llm.ainvoke([
-        SystemMessage(content="""判断用户请求是否需要 Agent 模式(多步骤自动执行)。
-简单操作(创建一个实体、执行一段代码)回复 NO。
-复杂任务(做一个游戏、创建完整场景、实现完整功能)回复 YES。
-只回复 YES 或 NO。"""),
-        HumanMessage(content=content),
-    ])
-    return response.content.strip().upper() == "YES"
+    elif msg_type == "agent_rollback":
+        # 一键回滚 → 加载快照
+        await handle_agent_rollback()
 ```
 
 ---
 
 ## 七、C++ 侧扩展
 
-### 7.1 AgentPanel (新增 ImGui 面板)
+### 7.1 AgentPanel (统一面板，取代 ChatPanel)
 
 ```cpp
 // editor_agent_panel.h
@@ -975,35 +1288,62 @@ struct AgentSession {
     std::vector<AgentTask> tasks;
     int total_tokens = 0;
     float total_duration_ms = 0;
-    std::string status;         // "planning" | "awaiting_approval" | "executing" | "done"
+    std::string status;         // "idle" | "direct" | "planning" | "awaiting_approval" | "executing" | "done"
+    std::string checkpoint_path; // 场景快照路径 (一键回滚用)
 };
 
-/// 编辑器 Agent 面板 — 展示任务规划、执行进度、审计日志。
+/// 编辑器统一 AI 面板 — 取代原 ChatPanel，同时支持对话和 Agent 任务。
+/// 
+/// 功能继承自 ChatPanel:
+///   - 对话输入/输出 (流式 Markdown 渲染)
+///   - @mention 上下文注入 (@scene/@entity/@selection)
+///   - Token 统计、响应时间
+///   - 对话历史持久化 (JSON)
+///   - AI Provider 配置 (复用 AIConfigManager)
+///
+/// 新增 Agent 功能:
+///   - 任务规划展示 + 审批按钮
+///   - 子任务进度追踪
+///   - 一键回滚 (场景快照)
+///   - 审计日志查看器
 class AgentPanel {
 public:
     void Draw();
 
-    // 从 bridge 消息更新状态
+    // ── 对话功能 (继承自 ChatPanel) ──
+    void OnStreamingContent(const std::string& chunk);
+    void OnToolCallResult(const std::string& tool_name, const std::string& result);
+
+    // ── Agent 功能 (新增) ──
     void OnAgentPlan(const std::vector<AgentTask>& tasks);
     void OnTaskStatusUpdate(const std::string& task_id, const std::string& status,
                             const std::string& result, const std::string& error);
+    void OnCheckpointCreated(const std::string& path);
     void OnAgentComplete(int total_tokens, float duration_ms, const std::string& screenshot);
 
     // 用户操作
     void SetApproveCallback(std::function<void(const std::string& status,
                                                const std::string& feedback)> cb);
+    void SetRollbackCallback(std::function<void()> cb);
 
-    bool HasActiveSession() const { return !session_.tasks.empty(); }
+    bool HasActiveSession() const { return session_.status != "idle"; }
 
 private:
-    void DrawTaskList();
-    void DrawProgressBar();
-    void DrawApprovalButtons();
-    void DrawAuditLog();
+    void DrawChatArea();          // 对话区 (流式输出 + Markdown)
+    void DrawInputBar();          // 输入栏 (含 @mention)
+    void DrawTaskList();          // 任务列表 (Agent 模式)
+    void DrawProgressBar();       // 进度条
+    void DrawApprovalButtons();   // 审批按钮
+    void DrawRollbackButton();    // 一键回滚
+    void DrawAuditLog();          // 审计日志
+    void DrawStatusBar();         // 底部状态 (token/耗时)
 
     AgentSession session_;
+    std::vector<ChatMessage> messages_;  // 对话历史
     std::function<void(const std::string&, const std::string&)> approve_cb_;
+    std::function<void()> rollback_cb_;
     bool show_audit_log_ = false;
+    char input_buf_[1024] = {};
     char feedback_buf_[512] = {};
 };
 
@@ -1035,7 +1375,7 @@ private:
 │ 当前: T3 - 创建平台关卡                                     │
 │ 工具调用: dsengine_entity_create (iteration 2)              │
 │                                                            │
-│ [查看审计日志]  [暂停]  [取消]                                │
+│ [查看审计日志]  [暂停]  [一键回滚]  [取消]                      │
 └────────────────────────────────────────────────────────────┘
 
 // 审批模式 (awaiting_approval)
@@ -1114,13 +1454,16 @@ class ContextManager:
 
         return messages
 
-    def compress_history(self, messages: list[dict], max_tokens: int) -> list[dict]:
+    async def compress_history(self, messages: list[dict], max_tokens: int) -> list[dict]:
         """压缩对话历史到指定 token 数内。
 
         策略:
         - 保留最近 3 轮完整对话
         - 之前的对话用 LLM 生成摘要替代
         - 工具调用结果截断到 500 字符
+        
+        v2.0 修复: 改为 async def + await，
+        v1.0 使用 asyncio.run() 在已有事件循环内会抛 RuntimeError。
         """
         if estimate_tokens_list(messages) <= max_tokens:
             return messages
@@ -1129,8 +1472,8 @@ class ContextManager:
         recent = messages[-6:]
         older = messages[:-6]
 
-        # 对 older 生成摘要
-        summary = asyncio.run(generate_summary(older))
+        # 对 older 生成摘要 (v2.0: await 而非 asyncio.run)
+        summary = await generate_summary(older)
 
         return [
             {"role": "system", "content": f"[之前的对话摘要]\n{summary}"},
@@ -1248,11 +1591,11 @@ class ErrorRecovery:
             return {"action": "retry"}
 
         if action == "undo_and_retry":
-            await call_mcp_tool("dsengine_editor_undo", {})
+            await call_tool_via_jsonlines("dsengine_editor_undo", {})
             return {"action": "retry"}
 
         if action == "refresh_scene_state":
-            scene = await call_mcp_tool("dsengine_scene_get_state", {})
+            scene = await call_tool_via_jsonlines("dsengine_scene_get_state", {})
             return {"action": "retry", "updated_context": scene}
 
         return {"action": "escalate_to_user", "error": context.get("error", "")}
@@ -1302,6 +1645,11 @@ llm = ChatOpenAI(
 
 ```
 用户: "做一个平台跳跃游戏，像素风格，有跳跃和收集金币功能"
+
+==== Phase 0: 分类 + 快照 (classify + checkpoint 节点) ====
+
+classify: 规则匹配命中 "做一个.+游戏" → execution_mode = "full"
+checkpoint: 保存 _agent_checkpoint_abc123.dscene → 可一键回滚
 
 ==== Phase 1: 任务分解 (plan 节点) ====
 
@@ -1390,79 +1738,107 @@ T8 验证通过 ✓
 
 ---
 
-## 十二、与现有架构的兼容性
+## 十二、与现有架构的关系 (v2.0 合并方案)
 
-### 12.1 零破坏性集成
+### 12.1 组件变更总览
 
-| 现有组件 | 是否修改 | 说明 |
-|---------|---------|------|
-| `dsengine_mcp.py` | **不改** | Agent 层通过 MCP 协议调用工具，与外部 AI 客户端完全一致 |
-| `editor_control_server.cpp` | **不改** | Agent 的工具调用最终走 ControlServer，与 ChatPanel 一致 |
+| 组件 | 处理方式 | 说明 |
+|------|---------|------|
+| `editor_control_server.cpp` | **不改** | ControlServer + DispatchTool 是工具执行核心，Agent 和 MCP 都调用它 |
 | `editor_control_tools.cpp` | **不改** | 23 个 Tool handler 不变 |
-| `editor_chat_panel.h/cpp` | **小改** | 新增 `agent_plan` / `agent_task_status` / `agent_complete` 消息处理 |
-| `editor_chat_protocol.h` | **小改** | 新增 Agent 相关 `BridgeMessageType` 枚举值 |
-| `ai_chat_bridge.py` | **改造** | 新增消息路由：普通对话 vs Agent 任务 |
-| `CMakeLists.txt` | **小改** | 新增 `editor_agent_panel.cpp` 源文件 |
+| `editor_ai_config.h/cpp` | **不改** | Provider/Key/代理配置直接被 Agent 复用 |
+| `dsengine_mcp.py` | **不改** | 仅供外部 AI 客户端 (Cursor/Claude Desktop)，Agent 内部不走此路径 |
+| `editor_chat_panel.h/cpp` | **Phase 2 后移除** | 被 `editor_agent_panel.h/cpp` 完整取代 |
+| `editor_chat_protocol.h` | **Phase 2 后移除** | 协议合入 `editor_agent_protocol.h` |
+| `ai_chat_bridge.py` | **Phase 1 后移除** | 被 `tools/agent/agent_bridge.py` 完整取代 |
+| `CMakeLists.txt` | **修改** | 替换 chat_panel 源文件为 agent_panel |
 
 ### 12.2 新增组件
 
 | 文件 | 语言 | 行数 | 说明 |
 |------|------|------|------|
-| `tools/agent/agent_orchestrator.py` | Python | ~300 | LangGraph 状态机定义 + 节点实现 |
+| `tools/agent/agent_bridge.py` | Python | ~350 | 统一入口 (取代 ai_chat_bridge.py) |
+| `tools/agent/agent_orchestrator.py` | Python | ~300 | LangGraph 状态机 + 节点 |
 | `tools/agent/agent_planner.py` | Python | ~200 | 任务分解 + specialist prompt |
-| `tools/agent/agent_executor.py` | Python | ~250 | 子任务执行 + ReAct 循环 |
-| `tools/agent/agent_specialists.py` | Python | ~150 | specialist 角色定义 + 工具集 |
-| `tools/agent/agent_audit.py` | Python | ~100 | 审计日志 SQLite 持久化 |
+| `tools/agent/agent_executor.py` | Python | ~250 | 子任务 ReAct 循环 |
+| `tools/agent/agent_specialists.py` | Python | ~150 | 5 个 specialist 角色定义 |
+| `tools/agent/agent_safety.py` | Python | ~80 | 安全沙箱 (工具黑名单/频率限制) |
+| `tools/agent/agent_audit.py` | Python | ~100 | 审计日志 SQLite |
 | `tools/agent/agent_context.py` | Python | ~150 | 上下文管理 + token 预算 |
 | `tools/agent/agent_recovery.py` | Python | ~100 | 错误分类 + 恢复策略 |
-| `tools/requirements_agent.txt` | text | ~5 | LangGraph 依赖 |
-| `apps/editor_cpp/src/editor_agent_panel.h` | C++ | ~60 | AgentPanel 面板声明 |
-| `apps/editor_cpp/src/editor_agent_panel.cpp` | C++ | ~250 | AgentPanel ImGui 实现 |
-| **合计** | | **~1565** | |
+| `tools/requirements_agent.txt` | text | ~10 | LangGraph 依赖 (pinned 版本) |
+| `apps/editor_cpp/src/editor_agent_panel.h` | C++ | ~100 | 统一面板声明 |
+| `apps/editor_cpp/src/editor_agent_panel.cpp` | C++ | ~450 | 统一面板实现 (对话+任务+审计) |
+| `apps/editor_cpp/src/editor_agent_protocol.h` | C++ | ~60 | Agent 协议定义 |
+| **合计** | | **~2300** | |
 
-### 12.3 双模式共存
+### 12.3 统一面板模式 (v2.0)
 
 ```
-┌─ Chat Panel (现有) ─────────┐  ┌─ Agent Panel (新增) ────────┐
-│ 简单对话模式                  │  │ 自主任务模式                  │
-│ "创建一个红色方块在 0,5,0"    │  │ "做一个平台跳跃游戏"          │
-│                              │  │                              │
-│ → 单轮 tool call             │  │ → 任务分解 → 审批 → 执行      │
-│ → 即时响应                    │  │ → 多步自动执行                │
-│ → 无需规划                    │  │ → 进度追踪 + 审计             │
-└──────────────────────────────┘  └──────────────────────────────┘
+┌─ Agent Panel (统一, 取代 ChatPanel) ────────────────────────┐
+│                                                              │
+│  ┌─ 对话区 ──────────────────────────────────────────────┐  │
+│  │ 用户: "创建一个红方块在 0,5,0"                          │  │
+│  │ AI: 已创建实体 RedCube [pos=0,5,0]  (classify→direct)  │  │
+│  │                                                        │  │
+│  │ 用户: "做一个平台跳跃游戏"                              │  │
+│  │ AI: 已生成 8 步任务计划，请审批    (classify→full)      │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌─ 任务区 (仅 full 模式显示) ────────────────────────────┐  │
+│  │ T1 创建基础场景   done    T5 玩家控制器  pending       │  │
+│  │ T2 创建玩家角色   done    T6 相机跟随    pending       │  │
+│  │ T3 创建平台关卡   running T7 计分系统    pending       │  │
+│  │ T4 放置金币       pending T8 测试运行    pending       │  │
+│  │ [=========>                              ] 25%          │  │
+│  └────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  输入: [________________________] [@scene] [发送]             │
+│  Token: 12,345  耗时: 23.4s  [审计日志] [一键回滚] [取消]    │
+└──────────────────────────────────────────────────────────────┘
 
-用户可以随时在两种模式之间切换。
-简单操作走 Chat，复杂任务走 Agent。
+统一面板根据 classify 节点结果自动切换:
+- direct 模式: 只显示对话区 (与原 ChatPanel 体验一致)
+- full 模式: 对话区 + 任务区 + 进度条 + 审批按钮 + 回滚按钮
 ```
 
 ---
 
 ## 十三、实施计划
 
-### Phase 1: 核心 Agent 循环 (3-5 天)
+### Phase 1: Agent 核心 + 直接模式 (4-5 天)
+
+**目标: Agent 统一入口可用，简单请求走 direct 模式（等同于原 Chat 功能）**
 
 - [ ] 安装 LangGraph + langchain-openai 依赖
-- [ ] 实现 `agent_orchestrator.py` (StateGraph + 节点)
+- [ ] 实现 `agent_bridge.py` (统一入口 + classify 分类 + direct 直接执行)
+- [ ] 实现 `agent_orchestrator.py` (StateGraph 状态机)
 - [ ] 实现 `agent_planner.py` (任务分解)
-- [ ] 实现 `agent_executor.py` (ReAct 执行)
-- [ ] 改造 `ai_chat_bridge.py` (消息路由)
-- [ ] 协议扩展 (`editor_chat_protocol.h`)
-- [ ] 端到端测试: "创建一个包含 3 个实体的场景"
+- [ ] 实现 `agent_executor.py` (ReAct 执行循环)
+- [ ] 实现 `agent_safety.py` (安全策略)
+- [ ] 实现 `editor_agent_protocol.h` (协议定义)
+- [ ] 端到端测试: direct 模式 "创建一个红方块"
+- [ ] 端到端测试: full 模式 "创建一个包含 3 个实体的场景"
 
-### Phase 2: 人机协作 + 审计 (2-3 天)
+### Phase 2: 统一面板 + HITL + 审计 (3-4 天)
 
+**目标: C++ 统一面板取代 ChatPanel，支持审批、回滚、审计**
+
+- [ ] 实现 `editor_agent_panel.h/cpp` (统一面板: 对话 + 任务 + 审计)
 - [ ] 实现 `agent_audit.py` (SQLite 日志)
-- [ ] 实现 C++ `editor_agent_panel.h/cpp` (任务列表 + 审批 UI)
-- [ ] 集成 LangGraph `interrupt_before` HITL 机制
-- [ ] 实现审批消息双向通信
+- [ ] 实现 checkpoint 节点 + 一键回滚
+- [ ] 集成 LangGraph `interrupt_before` HITL 审批
+- [ ] 移除 `editor_chat_panel.h/cpp` + `ai_chat_bridge.py`
+- [ ] 更新 `CMakeLists.txt`
 - [ ] 测试: 用户修改计划后重新规划
+- [ ] 测试: 一键回滚到 Agent 执行前
 
 ### Phase 3: 鲁棒性 + 上下文管理 (2-3 天)
 
 - [ ] 实现 `agent_recovery.py` (错误恢复)
-- [ ] 实现 `agent_context.py` (token 预算)
-- [ ] 检查点持久化 (SqliteSaver)
+- [ ] 实现 `agent_context.py` (token 预算 + 上下文压缩)
+- [ ] 实现二级验证 (确定性优先, LLM 可选)
+- [ ] 检查点持久化 (`SqliteSaver` 到 `.dse/` 目录)
 - [ ] 长任务测试: "做一个完整游戏 Demo"
 
 ### Phase 4: 高级功能 (可选)
@@ -1471,7 +1847,7 @@ T8 验证通过 ✓
 - [ ] 多 Agent 协作 (Handoff 机制)
 - [ ] 审计日志可视化 UI
 - [ ] Agent 模板 (预设常见任务规划)
-- [ ] 对话历史上下文压缩
+- [ ] DeepSeek tool_calling 降级方案 (prompt-based JSON 输出解析)
 - [ ] 用户自定义 Specialist Agent
 
 ---
@@ -1480,11 +1856,13 @@ T8 验证通过 ✓
 
 | 风险 | 概率 | 影响 | 缓解措施 |
 |------|------|------|---------|
-| DeepSeek tool_calling 兼容性不完美 | 中 | 高 | 降级为 prompt-based 工具调用 (JSON 输出解析) |
-| 任务分解质量差 (LLM 幻觉) | 中 | 中 | HITL 审批 + 低温度 + few-shot 示例 |
+| DeepSeek tool_calling 兼容性不完美 | 中 | 高 | Phase 4 实现降级: prompt 中要求输出 JSON → 解析为 tool call |
+| LLM 幻觉导致破坏性操作 | 中 | 高 | AgentSafetyPolicy 拦截 + 场景快照一键回滚 |
+| 任务分解质量差 | 中 | 中 | HITL 审批 + 低温度 + few-shot 示例 |
 | 长任务 token 超限 | 高 | 中 | 上下文管理器 + 滑动窗口 + 摘要压缩 |
-| 子任务间状态不一致 | 低 | 高 | 每步后场景快照 + diff 验证 |
-| Agent 循环不收敛 | 中 | 中 | max_iterations 硬限制 + 重试上限 |
+| 子任务间状态不一致 | 低 | 高 | 每步后场景 diff 验证 + 确定性验证优先 |
+| Agent 循环不收敛 | 中 | 中 | max_iterations 硬限制 + 重试上限 + 频率限制 |
+| LangGraph 依赖链过重 | 低 | 低 | pin 版本 + venv 隔离；极端情况退化为 ~300 行自研状态机 |
 | Python 子进程内存泄漏 | 低 | 中 | 定期重启 bridge + 内存监控 |
 
 ---
@@ -1496,25 +1874,72 @@ T8 验证通过 ✓
 **LangGraph** 作为 Agent 编排框架，因为：
 - 状态机模型精确映射游戏开发工作流
 - 内置检查点持久化 + Human-in-the-loop
-- 与现有 MCP 工具链零冲突集成
+- 与现有 ControlServer 零冲突集成
 - LLM 无关（OpenAI/DeepSeek/Ollama 均支持）
 
-### 架构原则
+### 架构原则 (v2.0)
 
-1. **双模式共存**: Chat（简单）+ Agent（复杂），用户按需选择
-2. **增量集成**: 现有 23 个 MCP 工具不动，Agent 层纯新增
-3. **人机协作**: 关键节点自动暂停等待审批，不是完全放飞
-4. **可审计**: 每步执行完整记录，可回溯可追责
-5. **渐进式**: Phase 1 就可以用，后续功能按需迭代
+1. **统一入口**: 一个面板、一个 Python bridge，classify 节点按复杂度自动分流
+2. **同进程直调**: 工具调用走 JSON-lines → C++ DispatchTool（<1ms），不走 MCP（~100ms）
+3. **安全优先**: AgentSafetyPolicy 拦截危险操作 + 场景快照一键回滚
+4. **按需验证**: 确定性验证优先（零 token），LLM 验证仅在失败/可疑时触发
+5. **人机协作**: 关键节点自动暂停等待审批，不是完全放飞
+6. **可审计**: 每步执行完整记录到 SQLite，可回溯可追责
+7. **渐进替换**: Phase 1 Agent 与 Chat 并存，Phase 2 完成后安全移除 Chat
+
+### v2.0 优化总结
+
+| # | 优化项 | 效果 |
+|---|--------|------|
+| 1 | 工具调用同进程直调 (取代 MCP) | 延迟从 ~100ms/次降到 <1ms/次 |
+| 2 | 规则匹配分类 (取代 LLM 分类) | 每条消息延迟减少 500ms-2s |
+| 3 | 二级验证策略 (确定性优先) | token 消耗减少 ~40% |
+| 4 | 场景快照一键回滚 | 用户安全感，无需 undo 24 次 |
+| 5 | 安全沙箱 (工具黑名单/频率限制) | 防止 LLM 幻觉破坏 |
+| 6 | 依赖版本锁定 + venv 隔离 | 可维护性 |
+| 7 | asyncio.run → await 修复 | 消除运行时崩溃 |
+| 8 | Chat 合并进 Agent (统一面板) | 消除双系统维护成本 |
 
 ### 工作量估计
 
-| 阶段 | 工作量 | 新增代码 |
+| 阶段 | 工作量 | 代码变更 |
 |------|--------|---------|
-| Phase 1 核心循环 | 3-5 天 | ~900 行 Python |
-| Phase 2 人机协作 | 2-3 天 | ~400 行 C++ + ~200 行 Python |
-| Phase 3 鲁棒性 | 2-3 天 | ~350 行 Python |
-| **合计** | **7-11 天** | **~1850 行** |
+| Phase 1 Agent 核心 + 直接模式 | 4-5 天 | ~1130 行 Python 新增 |
+| Phase 2 统一面板 + HITL + 审计 | 3-4 天 | ~610 行 C++ 新增 + ~900 行旧 Chat 移除 |
+| Phase 3 鲁棒性 | 2-3 天 | ~350 行 Python 新增 |
+| **合计** | **9-12 天** | **~2300 行新增, ~900 行移除** |
+
+---
+
+## 十六、依赖管理 (v2.0 新增)
+
+### 16.1 版本锁定
+
+```
+# tools/requirements_agent.txt
+# 所有依赖 pin 精确版本，避免升级导致兼容问题
+# 发布 >= 7 天的版本 (供应链安全)
+
+langgraph==0.2.60
+langchain-openai==0.2.14
+langchain-core==0.3.30
+langgraph-checkpoint-sqlite==2.0.6
+
+# 已有依赖 (requirements_ai.txt 中, 不重复)
+# openai>=1.0.0
+# mcp
+```
+
+### 16.2 隔离安装
+
+```bash
+# 使用 venv 隔离，避免与用户系统 Python 冲突
+python -m venv tools/agent/.venv
+tools/agent/.venv/bin/pip install -r tools/requirements_agent.txt
+
+# C++ 启动 bridge 时使用 venv 的 Python:
+# tools/agent/.venv/bin/python tools/agent/agent_bridge.py
+```
 
 ---
 
