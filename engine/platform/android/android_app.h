@@ -44,6 +44,10 @@ public:
     void SetAssetManager(AAssetManager* mgr)    { asset_manager_ = mgr; }
     void SetInputQueue(AInputQueue* queue);
 
+    /// 处理一条由外部事件泵（如 native_app_glue 的 onInputEvent）分发的输入事件。
+    /// 返回 1 表示事件已消费。
+    int32_t HandleInputEvent(AInputEvent* event);
+
     // ─── 生命周期回调（ANativeActivity 回调层调用）────────
     void OnPause();                                   // Activity::onPause
     void OnResume();                                  // Activity::onResume
@@ -102,6 +106,14 @@ private:
     void DestroyEGL();
     void ProcessInputEvent(AInputEvent* event);
 };
+
+/// 在 EngineInstance::Init()（内部调用 CreateDefaultPlatformApp）之前注入
+/// ANativeActivity 提供的窗口与资产管理器，使完整引擎运行时可在
+/// NativeActivity 宿主内启动（宿主无法直接构造 AndroidApp 并交给 EngineInstance）。
+void SetAndroidPendingContext(ANativeWindow* window, AAssetManager* assets);
+
+/// 获取当前存活的 AndroidApp 实例（宿主用于转发生命周期/输入事件）；无则返回 nullptr。
+AndroidApp* GetCurrentAndroidApp();
 
 } // namespace dse::platform
 

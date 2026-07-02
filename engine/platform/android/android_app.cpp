@@ -27,8 +27,27 @@
 
 namespace dse::platform {
 
+namespace {
+// 宿主（native_app_glue）在 EngineInstance::Init 之前注入的窗口/资产上下文，
+// CreateDefaultPlatformApp 构造 AndroidApp 时自动吸收。
+ANativeWindow* g_pending_window = nullptr;
+AAssetManager* g_pending_assets = nullptr;
+// 当前存活实例（单窗口应用，同时至多一个），宿主用于转发生命周期/输入。
+AndroidApp* g_current_app = nullptr;
+} // namespace
+
+void SetAndroidPendingContext(ANativeWindow* window, AAssetManager* assets) {
+    g_pending_window = window;
+    g_pending_assets = assets;
+}
+
+AndroidApp* GetCurrentAndroidApp() {
+    return g_current_app;
+}
+
 AndroidApp::~AndroidApp() {
     Shutdown();
+    if (g_current_app == this) g_current_app = nullptr;
 }
 
 // ─── 注入 ───────────────────────────────────────────────────────
@@ -156,6 +175,11 @@ void AndroidApp::PollEvents() {
         ProcessInputEvent(event);
         AInputQueue_finishEvent(input_queue_, event, 1);
     }
+}
+
+int32_t AndroidApp::HandleInputEvent(AInputEvent* event) {
+    ProcessInputEvent(event);
+    return 1;
 }
 
 void AndroidApp::ProcessInputEvent(AInputEvent* event) {
@@ -320,7 +344,11 @@ bool AndroidApp::AttachExternal(void* existing_window) {
 // ─── 工厂函数（Android 版） ────────────────────────────────────
 
 std::unique_ptr<PlatformApp> CreateDefaultPlatformApp() {
-    return std::make_unique<AndroidApp>();
+    auto app = std::make_unique<AndroidApp>();
+    if (g_pending_window) app->SetNativeWindow(g_pending_window);
+    if (g_pending_assets) app->SetAssetManager(g_pending_assets);
+    g_current_app = app.get();
+    return app;
 }
 
 } // namespace dse::platform

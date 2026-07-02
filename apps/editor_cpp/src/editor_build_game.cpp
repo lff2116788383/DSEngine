@@ -13,6 +13,7 @@
 #include "engine/runtime/app_manifest.h"
 #include "engine/base/debug.h"
 
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -30,7 +31,7 @@ namespace dse::editor {
 
 namespace {
 
-enum class BuildPlatform { Windows, Linux, Web };
+enum class BuildPlatform { Windows, Linux, Web, Android };
 enum class BuildConfig { Release, Debug };
 
 struct BuildState {
@@ -44,6 +45,13 @@ struct BuildState {
     bool encrypt = false;              // 加密为 game.bun（AES-128-CTR）而非明文 game.dpak
     char encrypt_key[65] = {};         // >=16 字符的 AES 密钥
     char icon_path[512] = {};
+
+    // Android 导出选项（platform == Android 时生效）
+    char android_package_id[128] = "com.dsengine.mygame";
+    int  android_api_level = 24;       // minSdkVersion
+    char android_keystore[512] = {};   // 缺省用自动生成的调试 keystore
+    char android_keystore_pass[128] = {};
+    char android_key_alias[64] = {};
 
     // Build progress
     std::atomic<bool> building{false};
@@ -132,8 +140,179 @@ void WriteGameManifest(BuildState& state, const std::filesystem::path& out_dir) 
     }
 }
 
+// 从编辑器工作目录向上查找仓库内的 Android 导出脚本。
+std::filesystem::path FindAndroidExportScript() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path dir = fs::current_path(ec);
+    for (int i = 0; i < 8 && !dir.empty(); ++i) {
+        fs::path candidate = dir / "scripts" / "export_android_apk.ps1";
+        if (fs::exists(candidate, ec)) return candidate;
+        fs::path parent = dir.parent_path();
+        if (parent == dir) break;
+        dir = parent;
+    }
+    return {};
+}
+
+// 执行外部命令并把 stdout/stderr 逐行转入构建日志；返回退出码是否为 0。
+bool RunLoggedCommand(BuildState& state, const std::string& cmd) {
+#if defined(_WIN32)
+    FILE* pipe = _popen((cmd + " 2>&1").c_str(), "r");
+#else
+    FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
+#endif
+    if (!pipe) {
+        AppendLog(state, "ERROR: Failed to start command");
+        return false;
+    }
+    char line[2048];
+    while (fgets(line, sizeof(line), pipe)) {
+        std::string s(line);
+        while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+        if (!s.empty()) AppendLog(state, s);
+    }
+#if defined(_WIN32)
+    return _pclose(pipe) == 0;
+#else
+    return pclose(pipe) == 0;
+#endif
+}
+
+void FinishBuild(BuildState& state, bool success) {
+    state.build_success = success;
+    state.build_done = true;
+    state.building = false;
+}
+
+// Android 导出：暂存游戏资源（清单 + pak/bun）后调用 scripts/export_android_apk.ps1
+// 完成交叉编译 + aapt2/zipalign/apksigner 打包签名，产出 <Title>.apk。
+// APK assets/ 内容由 apps/android_host 宿主在首次启动时提取到内部存储并挂载。
+void DoBuildAndroid(BuildState& state) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    AppendLog(state, "=== Build Game Started (Android) ===");
+
+    fs::path out_dir(state.output_dir);
+    fs::create_directories(out_dir, ec);
+    if (ec) {
+        AppendLog(state, "ERROR: Cannot create output directory: " + ec.message());
+        FinishBuild(state, false);
+        return;
+    }
+    state.last_output_dir = out_dir.string();
+    state.last_exe_name   = std::string(state.game_title) + ".apk";
+    state.last_launch_args.clear();
+
+    auto& proj = ProjectManager::Get();
+    if (!proj.HasOpenProject()) {
+        AppendLog(state, "ERROR: Android build requires an open project");
+        FinishBuild(state, false);
+        return;
+    }
+    std::string key(state.encrypt_key);
+    if (state.encrypt && key.size() < 16) {
+        AppendLog(state, "ERROR: Encryption key must be at least 16 characters");
+        FinishBuild(state, false);
+        return;
+    }
+
+    fs::path script = FindAndroidExportScript();
+    if (script.empty()) {
+        AppendLog(state, "ERROR: Cannot find scripts/export_android_apk.ps1");
+        AppendLog(state, "  Run the editor from the engine repository (or a checkout containing scripts/).");
+        FinishBuild(state, false);
+        return;
+    }
+
+    // 1) 把项目 scripts/scenes/assets + project.dseproj 暂存后打包，布局与加密
+    //    桌面构建的 .bun 一致（入口 scripts/main.lua 可直接从挂载包解析）。
+    fs::path assets_stage = out_dir / ".dse_android_assets";
+    fs::remove_all(assets_stage, ec);
+    fs::create_directories(assets_stage, ec);
+
+    WriteGameManifest(state, assets_stage);
+
+    fs::path project_root = proj.GetProjectRoot();
+    fs::path pack_stage = out_dir / ".dse_stage";
+    fs::remove_all(pack_stage, ec);
+    fs::create_directories(pack_stage, ec);
+    for (const char* sub : {"scripts", "scenes", "assets"}) {
+        fs::path src = project_root / sub;
+        if (fs::exists(src, ec)) {
+            fs::copy(src, pack_stage / sub,
+                     fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+        }
+    }
+    if (fs::exists(project_root / "project.dseproj", ec)) {
+        fs::copy_file(project_root / "project.dseproj", pack_stage / "project.dseproj",
+                      fs::copy_options::overwrite_existing, ec);
+    }
+
+    std::string entry = proj.GetDescriptor().entry_script;
+    if (entry.empty()) entry = "scripts/main.lua";
+
+    bool packed = false;
+    if (state.encrypt) {
+        fs::path bundle_path = assets_stage / "game.bun";
+        AppendLog(state, "Packing encrypted bundle game.bun ...");
+        packed = dse::assets::PackDirectoryToBundle(pack_stage.string(), bundle_path.string(), key);
+        if (packed) {
+            std::ofstream cfg(assets_stage / "launch.cfg", std::ios::trunc);
+            cfg << "bundle=game.bun\n" << "key=" << key << "\n" << "script=" << entry << "\n";
+        }
+    } else {
+        auto files = dse::pak::CollectDirectoryFiles(pack_stage.string());
+        AppendLog(state, "Packing game.dpak: " + std::to_string(files.size()) + " files");
+        packed = !files.empty() &&
+                 dse::pak::WriteDpak((assets_stage / "game.dpak").string(),
+                                     pack_stage.string(), files);
+    }
+    fs::remove_all(pack_stage, ec);
+    if (!packed) {
+        AppendLog(state, "ERROR: Failed to pack game assets");
+        FinishBuild(state, false);
+        return;
+    }
+
+    // 2) 调用导出脚本：交叉编译 + APK 打包签名（日志逐行回显）
+    fs::path out_apk = out_dir / (std::string(state.game_title) + ".apk");
+    std::string cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File \"" + script.string() + "\"";
+    cmd += " -GameTitle \"" + std::string(state.game_title) + "\"";
+    cmd += " -PackageId \"" + std::string(state.android_package_id) + "\"";
+    cmd += " -OutApk \"" + out_apk.string() + "\"";
+    cmd += " -AssetsDir \"" + assets_stage.string() + "\"";
+    cmd += " -ApiLevel " + std::to_string(state.android_api_level);
+    cmd += " -Config " + std::string(state.config == BuildConfig::Release ? "Release" : "Debug");
+    if (state.android_keystore[0] != '\0') {
+        cmd += " -Keystore \"" + std::string(state.android_keystore) + "\"";
+        cmd += " -KeystorePass \"" + std::string(state.android_keystore_pass) + "\"";
+        cmd += " -KeyAlias \"" + std::string(state.android_key_alias) + "\"";
+    }
+
+    AppendLog(state, "Running export script (first run cross-compiles the engine; this can take a while)...");
+    const bool ok = RunLoggedCommand(state, cmd);
+    fs::remove_all(assets_stage, ec);
+
+    if (!ok) {
+        AppendLog(state, "ERROR: Android export failed (see log above)");
+        FinishBuild(state, false);
+        return;
+    }
+    AppendLog(state, "=== Build Complete (Android) ===");
+    AppendLog(state, "Output: " + out_apk.string());
+    AppendLog(state, "Install: adb install -r \"" + out_apk.string() + "\"");
+    FinishBuild(state, true);
+}
+
 void DoBuild(BuildState& state) {
     namespace fs = std::filesystem;
+
+    if (state.platform == BuildPlatform::Android) {
+        DoBuildAndroid(state);
+        return;
+    }
 
     AppendLog(state, "=== Build Game Started ===");
 
@@ -467,10 +646,10 @@ void DrawBuildGameDialog() {
         // Platform
         ImGui::Text("Platform:  ");
         ImGui::SameLine();
-        const char* platform_names[] = {"Windows", "Linux", "Web (Emscripten)"};
+        const char* platform_names[] = {"Windows", "Linux", "Web (Emscripten)", "Android"};
         int plat_idx = static_cast<int>(state.platform);
         ImGui::SetNextItemWidth(160);
-        if (ImGui::Combo("##platform", &plat_idx, platform_names, 3)) {
+        if (ImGui::Combo("##platform", &plat_idx, platform_names, 4)) {
             state.platform = static_cast<BuildPlatform>(plat_idx);
         }
 
@@ -497,6 +676,40 @@ void DrawBuildGameDialog() {
                              ImGuiInputTextFlags_Password);
             ImGui::SameLine();
             ImGui::TextDisabled("(key >= 16 chars)");
+        }
+
+        // Android 导出选项：包名 + minSdk + 可选发布签名
+        if (state.platform == BuildPlatform::Android) {
+            ImGui::Text("Package Id:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(240);
+            ImGui::InputText("##pkgid", state.android_package_id, sizeof(state.android_package_id));
+            ImGui::SameLine();
+            ImGui::TextDisabled("(e.g. com.studio.game)");
+
+            ImGui::Text("Min API:   ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            ImGui::InputInt("##apilevel", &state.android_api_level);
+            if (state.android_api_level < 24) state.android_api_level = 24;
+            if (state.android_api_level > 34) state.android_api_level = 34;
+
+            ImGui::Text("Keystore:  ");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(280);
+            ImGui::InputText("##keystore", state.android_keystore, sizeof(state.android_keystore));
+            ImGui::SameLine();
+            ImGui::TextDisabled("(optional, debug key if empty)");
+            if (state.android_keystore[0] != '\0') {
+                ImGui::Text("  Pass/Alias:");
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(140);
+                ImGui::InputText("##kspass", state.android_keystore_pass,
+                                 sizeof(state.android_keystore_pass), ImGuiInputTextFlags_Password);
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(120);
+                ImGui::InputText("##ksalias", state.android_key_alias, sizeof(state.android_key_alias));
+            }
         }
 
         // Icon (Windows only)
@@ -533,7 +746,10 @@ void DrawBuildGameDialog() {
             const char* build_label = state.build_done.load() ? "Rebuild" : "Build";
             if (ImGui::Button(build_label, ImVec2(100, 0))) { do_build(false); }
             ImGui::SameLine();
+            // Android 产出 APK，无法在本机直接运行（需 adb install）
+            ImGui::BeginDisabled(state.platform == BuildPlatform::Android);
             if (ImGui::Button("Build & Run", ImVec2(100, 0))) { do_build(true); }
+            ImGui::EndDisabled();
             ImGui::EndDisabled();
 
             if (state.build_done.load()) {
@@ -544,9 +760,11 @@ void DrawBuildGameDialog() {
                     if (ImGui::SmallButton(MDI_ICON_FOLDER_OPEN " Open Folder")) {
                         OpenInExplorer(state.last_output_dir);
                     }
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton(MDI_ICON_PLAY " Run")) {
-                        LaunchExe(state.last_output_dir, state.last_exe_name, state.last_launch_args);
+                    if (state.platform != BuildPlatform::Android) {
+                        ImGui::SameLine();
+                        if (ImGui::SmallButton(MDI_ICON_PLAY " Run")) {
+                            LaunchExe(state.last_output_dir, state.last_exe_name, state.last_launch_args);
+                        }
                     }
                 } else {
                     ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "  Build Failed");
