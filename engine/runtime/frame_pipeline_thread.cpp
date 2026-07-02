@@ -115,6 +115,7 @@ void FramePipeline::SignalRenderThread() {
 }
 
 void FramePipeline::PrepareRenderFrame() {
+    glm::vec3 early_camera_offset(0.0f);
     // â”€â”€ ä¸»çº¿ç¨‹ï¼šçº¯ CPU å·¥ä½œ + ECS è¯»å– â”€â”€
 
     // ç¡®ä¿æ‰€æœ‰ dirty çš„ TransformComponent åœ¨æ¸²æŸ“å‰æ›´æ–° local_to_world
@@ -124,7 +125,6 @@ void FramePipeline::PrepareRenderFrame() {
 
     if (runtime_context_.world) {
         // Camera-Relative: æå‰èŽ·å–ç›¸æœºä½ç½®ä½œä¸º camera_offset
-        glm::vec3 early_camera_offset(0.0f);
         auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
         entt::entity cam_entity = entt::null;
         int cam_priority = std::numeric_limits<int>::min();
@@ -234,6 +234,12 @@ void FramePipeline::PrepareRenderFrame() {
     }
 
     // æ•èŽ·å¿«ç…§ + ç¿»è½¬åŒç¼“å†²
+    // Camera-Relative: GPU Driven / 队列构建需要 camera_offset
+    render_pass_context_.camera_offset = early_camera_offset;
+
+    // GPU 场景准备 + 渲染队列构建 + web 蒙皮烘焙（均读取 ECS，须在 Update 阶段完成）
+    PrepareGPUSceneAndQueues();
+
     CaptureThinSnapshot();
     FlipSnapshotIndex();
     render_pass_context_.snapshot = &read_snapshot();
@@ -247,6 +253,13 @@ void FramePipeline::ExecuteRenderFrame() {
     dse::runtime::BeginRuntimeRenderFrame(*this);
     auto cmd_buffer = dse::runtime::CreateRuntimeRenderCommandBuffer(*this);
     dse::runtime::BindRuntimeShadowMaps(*this);
+
+    // GPU Compute Skinning: dispatch Update 阶段收集的请求，绑定输出 SSBO
+    if (rs_->gpu_skinning_system_.IsAvailable() && rs_->gpu_skinning_system_.GetTotalSkinnedVertices() > 0) {
+        rs_->gpu_skinning_system_.Dispatch();
+        runtime_context_.rhi_device->BindGpuBuffer(
+            rs_->gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
+    }
 
     // GPU ä¸Šä¼ ï¼šå…‰æº SSBO
     rs_->light_buffer_.Upload();
@@ -343,8 +356,6 @@ void FramePipeline::ExecuteRenderFrame() {
         }
     }
 
-    BuildRenderSceneQueues();
-
     // Camera-Relative Rendering: CPU mesh model matrix å‡åŽ» camera_offset
     rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
@@ -437,7 +448,7 @@ void FramePipeline::ExecuteRenderFrame() {
     render_samples_ += 1;
 
     // Present (SwapBuffers) â€” åœ¨ render è®¡æ—¶ä¹‹å¤–ï¼Œé¿å… Present å»¶è¿Ÿæ±¡æŸ“ avg_render_ms
-    if (runtime_context_.present_frame) {
+    if (render_thread_active_.load() && runtime_context_.present_frame) {
         runtime_context_.present_frame();
     }
 }

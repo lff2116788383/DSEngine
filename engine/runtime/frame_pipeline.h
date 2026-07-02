@@ -341,9 +341,11 @@ private:
     void ExecuteRenderGraphInternal(CommandBuffer& cmd_buffer);
     void BuildRenderSceneQueues();
 
-    /// Phase 2: 渲染线程分离
-    void PrepareRenderFrame();           ///< 主线程：收集光源/构建 cluster/捕获快照 (纯 CPU)
-    void ExecuteRenderFrame();           ///< 渲染线程：上传/执行 render graph/提交 (全 GPU)
+    /// Update / Render 两阶段分离（快照 = 阶段间契约）
+    void PrepareRenderFrame();           ///< Update 阶段（主线程）：ECS 读取 → scene_view/快照/光源/cluster/渲染队列
+    void PrepareGPUSceneAndQueues();     ///< Update 阶段（主线程）：GPU 场景准备 + 渲染队列构建 + web 蒙皮烘焙
+    void CollectRuntimeStats();          ///< 主线程：每秒运行时统计日志（读 World，仅同步路径）
+    void ExecuteRenderFrame();           ///< Render 阶段（渲染线程或同步）：仅消费快照与已提取数据，不触碰 World
     void StartRenderThread();            ///< Init 末尾启动渲染线程
     void StopRenderThread();             ///< Shutdown 时停止渲染线程
     void RenderThreadFunc();             ///< 渲染线程主循环
