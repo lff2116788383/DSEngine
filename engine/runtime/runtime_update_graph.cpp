@@ -28,11 +28,9 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, const dse::FrameUpdateCont
             mod.instance->OnUpdate(world, frame.time.scaled_dt);
         }
     }
-#ifdef DSE_ENABLE_3D
     if (pipeline.builtin_gameplay3d_enabled_) {
         pipeline.modules_impl_->UpdateGameplay3D(world, frame);
     }
-#endif
 }
 
 void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_time) {
@@ -46,11 +44,9 @@ void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_tim
             mod.instance->OnFixedUpdate(world, fixed_delta_time);
         }
     }
-#ifdef DSE_ENABLE_3D
     if (pipeline.builtin_gameplay3d_enabled_) {
         pipeline.modules_impl_->FixedUpdateGameplay3D(world, fixed_delta_time);
     }
-#endif
 
 #ifdef DSE_ENABLE_3D
     // Floating Origin: 物理更新前检查是否需要 rebase

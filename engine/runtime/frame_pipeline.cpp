@@ -628,7 +628,7 @@ bool FramePipeline::Init() {
     }
 #endif
 
-#ifdef DSE_ENABLE_3D
+    // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内（3D 完整模块或最小 fallback）
     if (enable_gameplay3d) {
         if (!modules_impl_->InitGameplay3D(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager)) {
             DEBUG_LOG_ERROR("FramePipeline init failed: Gameplay3D module OnInit returned false");
@@ -637,13 +637,6 @@ bool FramePipeline::Init() {
             builtin_gameplay3d_enabled_ = true;
         }
     }
-#else
-    if (enable_gameplay3d) {
-        DEBUG_LOG_INFO("FramePipeline init: Gameplay3D built-in fallback enabled (particle/steering/animator)");
-        modules_impl_->InitFallback3D(*runtime_context_.world, runtime_context_.rhi_device.get(), &asset_manager);
-        builtin_gameplay3d_enabled_ = true;
-    }
-#endif
 
     // Floating Origin: è®¢é˜… rebase äº‹ä»¶ï¼Œè½¬å‘ç»™ NavMesh / StreamingManager
     {
@@ -752,17 +745,10 @@ void FramePipeline::Shutdown() {
     render_graph_dag_.Reset();
     dse::runtime::ShutdownBusinessRuntime(runtime_context_);
     modules_impl_->ShutdownGameplay2D(*runtime_context_.world);
-#ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
         modules_impl_->ShutdownGameplay3D(*runtime_context_.world);
         builtin_gameplay3d_enabled_ = false;
     }
-#else
-    if (builtin_gameplay3d_enabled_) {
-        modules_impl_->ShutdownFallback3D(*runtime_context_.world);
-        builtin_gameplay3d_enabled_ = false;
-    }
-#endif
 
     // Dynamic modules own 3D render-side systems and may still reference asset/RHI resources.
     // Shut them down before global GPU resource release and before unloading their DLLs.
@@ -1172,11 +1158,6 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     dse::runtime::TickBusinessRuntime(runtime_context_, delta_time);
 
     dse::runtime::RunRuntimeUpdateGraph(*this, frame);
-#ifndef DSE_ENABLE_3D
-    if (builtin_gameplay3d_enabled_) {
-        modules_impl_->UpdateFallback3D(*runtime_context_.world, frame);
-    }
-#endif
 
     auto update_end = std::chrono::high_resolution_clock::now();
     update_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(update_end - update_begin).count();

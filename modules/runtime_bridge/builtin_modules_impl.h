@@ -44,7 +44,7 @@ public:
     void InitMeshSystem(AssetManager* asset_mgr) override;
     void ShutdownMeshSystem() override;
     void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) override;
-    void BuildRenderQueues(World& world, dse::render::RenderScene& scene) override;
+    void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
     void ResetGPUSceneState() override;
     const std::vector<dse::gameplay3d::HiZAABB>& CachedAABBs() const override;
@@ -62,11 +62,6 @@ public:
         dse::render::RenderGraph& graph,
         dse::render::RenderPassContext& ctx,
         std::vector<std::unique_ptr<dse::render::IRenderPass>>& out_passes) override;
-
-    // ---- Fallback 3D ----
-    void InitFallback3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) override;
-    void UpdateFallback3D(World& world, const dse::FrameUpdateContext& frame) override;
-    void ShutdownFallback3D(World& world) override;
 
 private:
     dse::gameplay2d::Gameplay2DModule gameplay2d_module_;

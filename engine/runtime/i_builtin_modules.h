@@ -61,7 +61,7 @@ public:
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;
     virtual void ShutdownMeshSystem() = 0;
     virtual void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) = 0;
-    virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene) = 0;
+    virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) = 0;
     virtual int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) = 0;
     virtual void ResetGPUSceneState() = 0;
     virtual const std::vector<dse::gameplay3d::HiZAABB>& CachedAABBs() const = 0;
@@ -69,7 +69,10 @@ public:
     virtual void SetHiZVisibility(const std::vector<uint32_t>& visibility) = 0;
     virtual void CleanupGPUResources(RhiDevice* rhi) = 0;
 
-    // ---- Gameplay3D (full build) ----
+    // ---- Gameplay3D ----
+    // 2D/3D 双路径的选择完全封装在 modules 层实现内：
+    // DSE_ENABLE_3D=ON 时转发 Gameplay3DModule，OFF 时转发最小 fallback
+    // （particle/steering/animator）。engine 侧管线主流程零 #ifdef。
     virtual bool InitGameplay3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) = 0;
     virtual void UpdateGameplay3D(World& world, const dse::FrameUpdateContext& frame) = 0;
     virtual void FixedUpdateGameplay3D(World& world, float dt) = 0;
@@ -80,10 +83,6 @@ public:
         dse::render::RenderPassContext& ctx,
         std::vector<std::unique_ptr<dse::render::IRenderPass>>& out_passes) = 0;
 
-    // ---- Fallback 3D (minimal path when DSE_ENABLE_3D=OFF) ----
-    virtual void InitFallback3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) = 0;
-    virtual void UpdateFallback3D(World& world, const dse::FrameUpdateContext& frame) = 0;
-    virtual void ShutdownFallback3D(World& world) = 0;
 };
 
 /// 工厂函数 — 声明在 engine/，实现在 modules/runtime_bridge/builtin_modules_impl.cpp

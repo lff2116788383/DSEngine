@@ -287,13 +287,8 @@ void FramePipeline::BuildRenderSceneQueues() {
 
     World* world = runtime_context_.world;
 
-#ifdef DSE_ENABLE_3D
-    if (builtin_gameplay3d_enabled_) {
-        modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
-    }
-#else
-    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_);
-#endif
+    // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内
+    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_);
 
     // åŠ¨æ€æ¨¡å—çš„æ¸²æŸ“è´¡çŒ®ç»Ÿä¸€é€šè¿‡ RegisterRenderPasses æ³¨å†Œåˆ° RenderGraphï¼Œ
     // ä¸å†ç»ç”± IModule çš„å›ºå®šé˜¶æ®µå›žè°ƒåŒ…è£…è¿› RenderScene å›žè°ƒæ¡¶ã€‚
@@ -501,11 +496,9 @@ void FramePipeline::BuildRenderGraphInternal() {
             mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
         }
     }
-#ifdef DSE_ENABLE_3D
     if (builtin_gameplay3d_enabled_) {
         modules_impl_->RegisterGameplay3DPasses(render_graph_dag_, render_pass_context_, registered_passes_);
     }
-#endif
 
     // ---- éŽµâ‚¬éˆ?Pass é¦?RenderGraph æ¶“å©‚ï¼é„åºç··ç’§?----
     for (auto& pass : registered_passes_) {

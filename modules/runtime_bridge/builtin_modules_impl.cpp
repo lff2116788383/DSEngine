@@ -61,10 +61,13 @@ void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd, RhiDevic
     mesh_render_system_.Render(world, cmd, frame);
 }
 
-void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
+void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) {
 #ifdef DSE_ENABLE_3D
-    gameplay3d_module_.BuildRenderQueues(world, scene);
+    if (gameplay3d_enabled) {
+        gameplay3d_module_.BuildRenderQueues(world, scene);
+    }
 #else
+    (void)gameplay3d_enabled;
     mesh_render_system_.BuildRenderQueues(world, scene);
 #endif
 }
@@ -124,8 +127,10 @@ bool BuiltinModulesImpl::InitGameplay3D(World& world, RhiDevice* rhi, AssetManag
 #ifdef DSE_ENABLE_3D
     return gameplay3d_module_.OnInit(world, rhi, asset_mgr);
 #else
-    (void)world; (void)rhi; (void)asset_mgr;
-    return false;
+    particle3d_system_.SetAssetManager(asset_mgr);
+    particle3d_system_.Init(world, rhi);
+    dse::gameplay3d::AnimatorSystem::SetAssetManager(asset_mgr);
+    return true;
 #endif
 }
 
@@ -133,7 +138,10 @@ void BuiltinModulesImpl::UpdateGameplay3D(World& world, const dse::FrameUpdateCo
 #ifdef DSE_ENABLE_3D
     gameplay3d_module_.OnUpdate(world, frame);
 #else
-    (void)world; (void)frame;
+    const float dt = frame.time.scaled_dt;
+    particle3d_system_.Update(world, dt);
+    steering_system_.Update(world, dt);
+    dse::gameplay3d::AnimatorSystem::Update(world, dt);
 #endif
 }
 
@@ -149,7 +157,9 @@ void BuiltinModulesImpl::ShutdownGameplay3D(World& world) {
 #ifdef DSE_ENABLE_3D
     gameplay3d_module_.OnShutdown(world);
 #else
-    (void)world;
+    particle3d_system_.Shutdown(world);
+    particle3d_system_.SetAssetManager(nullptr);
+    dse::gameplay3d::AnimatorSystem::SetAssetManager(nullptr);
 #endif
 }
 
@@ -172,37 +182,3 @@ void BuiltinModulesImpl::RegisterGameplay3DPasses(
 #endif
 }
 
-// ============================================================
-// Fallback 3D (minimal path when DSE_ENABLE_3D=OFF)
-// ============================================================
-
-void BuiltinModulesImpl::InitFallback3D(World& world, RhiDevice* rhi, AssetManager* asset_mgr) {
-#ifndef DSE_ENABLE_3D
-    particle3d_system_.SetAssetManager(asset_mgr);
-    particle3d_system_.Init(world, rhi);
-    dse::gameplay3d::AnimatorSystem::SetAssetManager(asset_mgr);
-#else
-    (void)world; (void)rhi; (void)asset_mgr;
-#endif
-}
-
-void BuiltinModulesImpl::UpdateFallback3D(World& world, const dse::FrameUpdateContext& frame) {
-#ifndef DSE_ENABLE_3D
-    const float dt = frame.time.scaled_dt;
-    particle3d_system_.Update(world, dt);
-    steering_system_.Update(world, dt);
-    dse::gameplay3d::AnimatorSystem::Update(world, dt);
-#else
-    (void)world; (void)frame;
-#endif
-}
-
-void BuiltinModulesImpl::ShutdownFallback3D(World& world) {
-#ifndef DSE_ENABLE_3D
-    particle3d_system_.Shutdown(world);
-    particle3d_system_.SetAssetManager(nullptr);
-    dse::gameplay3d::AnimatorSystem::SetAssetManager(nullptr);
-#else
-    (void)world;
-#endif
-}
