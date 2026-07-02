@@ -13,7 +13,7 @@
 #include "editor_test_harness.h"
 #include "editor_control_server.h"
 #include "editor_plugin_manager.h"
-#include "editor_chat_panel.h"
+#include "editor_agent_panel.h"
 
 struct GLFWwindow;
 
@@ -79,9 +79,9 @@ private:
     PluginManager plugin_manager_;
     bool show_plugins_ = false;
 
-    // AI Chat Panel
-    ChatPanel chat_panel_;
-    bool show_chat_panel_ = false;
+    // AI Agent Panel (unified, replaces old ChatPanel)
+    AgentPanel agent_panel_;
+    bool show_agent_panel_ = false;
 
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};

@@ -549,13 +549,13 @@ bool EditorApp::Init(int argc, char* argv[]) {
             return srv->DispatchTool(method, params, engine);
         });
 
-    // 初始化 AI Chat Panel bridge 路径 + 历史记录路径
-    chat_panel_.SetBridgePath(
-        (GetProjectRootPath() / "tools" / "ai_chat_bridge.py").string());
-    chat_panel_.LoadHistory("bin/ai_chat_history.json");
+    // 初始化 AI Agent Panel bridge 路径 + 历史记录路径
+    agent_panel_.SetBridgePath(
+        (GetProjectRootPath() / "tools" / "agent" / "agent_bridge.py").string());
+    agent_panel_.LoadHistory("bin/ai_chat_history.json");
 
     // 注册 @mention 上下文解析器
-    chat_panel_.SetMentionResolver([this](const std::string& token) -> std::string {
+    agent_panel_.SetMentionResolver([this](const std::string& token) -> std::string {
         if (!engine_instance_ || !engine_instance_->pipeline()) return {};
         entt::registry& registry = engine_instance_->pipeline()->world().registry();
 
@@ -658,7 +658,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_anim_retarget        = &show_anim_retarget_;
         ui_services.show_preferences          = &show_preferences_;
         ui_services.show_plugins              = &show_plugins_panel_;
-        ui_services.show_chat                 = &show_chat_panel_;
+        ui_services.show_chat                 = &show_agent_panel_;
         ui_services.show_blueprint            = &show_blueprint_;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
@@ -1125,7 +1125,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         &show_streaming_debug_, &show_curve_editor_, &show_visual_script_,
         &show_anim_retarget_, &show_csharp_panel_
     };
-    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_chat_panel_, &panel_vis);
+    dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_agent_panel_, &panel_vis);
 
     if (!is_play) {
         dse::editor::DrawSceneTabBar(ctx);
@@ -1291,10 +1291,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
 
     // AI Chat 面板
-    if (show_chat_panel_) {
+    if (show_agent_panel_) {
         ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("AI Chat", &show_chat_panel_)) {
-            chat_panel_.Draw(*control_server_, *engine_instance_);
+        if (ImGui::Begin("AI Agent", &show_agent_panel_)) {
+            agent_panel_.Draw(*control_server_, *engine_instance_);
         }
         ImGui::End();
     }
