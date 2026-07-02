@@ -23,6 +23,7 @@ struct MeshRendererComponent {
     };
 
     std::string mesh_path;
+    std::string material_path;  // .dmat file path (auto-populated on import)
     unsigned int material_instance_id = 0;
     std::string shader_variant = "MESH_UNLIT";
     glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);

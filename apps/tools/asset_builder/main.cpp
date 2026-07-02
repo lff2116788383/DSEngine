@@ -48,17 +48,25 @@ void PrintUsage() {
         << "  - The tool imports glTF/GLB/FBX and cooks .dmesh/.dmat/.danim/.dskel in one pass.\n"
         << "  - FBX is imported offline through the asset compiler path; runtime does not read FBX directly.\n"
         << "  - When --out-dir is used, the base file name is derived from the input file stem.\n"
-        << "  - --texture encodes source images to BCn .dtex (BC7/ASTC not yet supported).\n";
+        << "  - --texture encodes source images to .dtex: bc1/bc3/bc4/bc5/bc7/astc4x4/astc6x6/astc8x8 (+srgb).\n";
 }
 
 bool ParseTextureFormat(const std::string& s, CompressedTextureFormat& out) {
     using F = CompressedTextureFormat;
-    if (s == "bc1")      { out = F::BC1_UNORM; return true; }
-    if (s == "bc1srgb")  { out = F::BC1_SRGB;  return true; }
-    if (s == "bc3")      { out = F::BC3_UNORM; return true; }
-    if (s == "bc3srgb")  { out = F::BC3_SRGB;  return true; }
-    if (s == "bc4")      { out = F::BC4_UNORM; return true; }
-    if (s == "bc5")      { out = F::BC5_UNORM; return true; }
+    if (s == "bc1")         { out = F::BC1_UNORM;       return true; }
+    if (s == "bc1srgb")     { out = F::BC1_SRGB;        return true; }
+    if (s == "bc3")         { out = F::BC3_UNORM;       return true; }
+    if (s == "bc3srgb")     { out = F::BC3_SRGB;        return true; }
+    if (s == "bc4")         { out = F::BC4_UNORM;       return true; }
+    if (s == "bc5")         { out = F::BC5_UNORM;       return true; }
+    if (s == "bc7")         { out = F::BC7_UNORM;       return true; }
+    if (s == "bc7srgb")     { out = F::BC7_SRGB;        return true; }
+    if (s == "astc4x4")     { out = F::ASTC_4x4_UNORM;  return true; }
+    if (s == "astc4x4srgb") { out = F::ASTC_4x4_SRGB;   return true; }
+    if (s == "astc6x6")     { out = F::ASTC_6x6_UNORM;  return true; }
+    if (s == "astc6x6srgb") { out = F::ASTC_6x6_SRGB;   return true; }
+    if (s == "astc8x8")     { out = F::ASTC_8x8_UNORM;  return true; }
+    if (s == "astc8x8srgb") { out = F::ASTC_8x8_SRGB;   return true; }
     return false;
 }
 
@@ -125,15 +133,21 @@ int RunTextureCook(int argc, char** argv) {
 }
 
 bool HasSupportedInputExtension(const std::filesystem::path& path) {
-    const std::string ext = path.extension().string();
+    std::string ext = path.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return ext == ".gltf" || ext == ".glb" || ext == ".fbx"
-        || ext == ".GLTF" || ext == ".GLB" || ext == ".FBX";
+        || ext == ".obj" || ext == ".dae" || ext == ".blend"
+        || ext == ".3ds" || ext == ".stl" || ext == ".ply";
 }
 
+bool IsGltfInput(const std::filesystem::path& path) {
+    std::string ext = path.extension().string();
+    for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext == ".gltf" || ext == ".glb";
+}
 
-bool IsLikelyFbxInput(const std::filesystem::path& path) {
-    const std::string ext = path.extension().string();
-    return ext == ".fbx" || ext == ".FBX";
+bool NeedsAssimpImporter(const std::filesystem::path& path) {
+    return HasSupportedInputExtension(path) && !IsGltfInput(path);
 }
 
 int RunLightmapBake(int argc, char** argv) {
@@ -161,10 +175,10 @@ int RunLightmapBake(int argc, char** argv) {
         }
     }
 
-    // Import scene using GltfImporter or FbxImporter
+    // Import scene using GltfImporter (glTF/GLB) or FbxImporter (FBX/OBJ/Blend/DAE/...)
     RawSceneData raw_scene;
     bool import_ok = false;
-    if (IsLikelyFbxInput(scene_path)) {
+    if (NeedsAssimpImporter(scene_path)) {
         FbxImporter fbx;
         import_ok = fbx.Import(scene_path.string(), raw_scene);
     } else {
@@ -295,7 +309,7 @@ int main(int argc, char** argv) {
     const std::filesystem::path input_path = pos_args[0];
     if (!HasSupportedInputExtension(input_path)) {
         std::cerr << "[AssetBuilder] Unsupported input extension: " << input_path.extension().string()
-                  << ". Only .gltf/.glb/.fbx are supported." << std::endl;
+                  << ". Supported: .gltf/.glb/.fbx/.obj/.dae/.blend/.3ds/.stl/.ply" << std::endl;
         return 1;
     }
 
@@ -336,7 +350,7 @@ int main(int argc, char** argv) {
 
     std::cout << "[AssetBuilder] Importing: " << input_path.string() << std::endl;
     bool import_ok = false;
-    if (IsLikelyFbxInput(input_path)) {
+    if (NeedsAssimpImporter(input_path)) {
         FbxImporter importer;
         import_ok = importer.Import(input_path.string(), scene);
     } else {
@@ -461,12 +475,17 @@ int main(int argc, char** argv) {
     if (scene.animations.empty()) {
         std::cout << "[AssetBuilder] Skip danim: no animation data in source." << std::endl;
     } else {
-        std::cout << "[AssetBuilder] Cooking danim: " << danim_path.string()
+        std::cout << "[AssetBuilder] Cooking " << scene.animations.size() << " animation(s)"
                   << (anim_opts.quantize ? " (v3 quantized" : " (v2 raw")
                   << (anim_opts.quantize && anim_opts.reduce_keyframes ? "+reduced)" : ")")
                   << std::endl;
+        for (size_t i = 0; i < scene.animations.size(); ++i) {
+            std::cout << "  [" << i << "] " << (scene.animations[i].name.empty() ? "(unnamed)" : scene.animations[i].name)
+                      << " (" << scene.animations[i].channels.size() << " channels, "
+                      << scene.animations[i].duration << "s)" << std::endl;
+        }
         if (!cooker.CookToDanim(scene, output_dir.string(), base_name, anim_opts)) {
-            std::cerr << "[AssetBuilder] Failed to cook danim: " << danim_path.string() << std::endl;
+            std::cerr << "[AssetBuilder] Failed to cook danim(s)." << std::endl;
             return 1;
         }
     }

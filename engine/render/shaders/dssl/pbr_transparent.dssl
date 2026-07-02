@@ -1,0 +1,22 @@
+shader_type surface;
+render_mode blend_mix, cull_disabled, specular_schlick_ggx;
+
+uniform vec4 albedo_color : color = vec4(1.0);
+uniform sampler2D albedo_tex : filter_linear_mipmap, white_default;
+uniform sampler2D normal_tex : normal_map, filter_linear_mipmap;
+uniform sampler2D orm_tex : filter_linear_mipmap;
+uniform float roughness : range(0.04, 1.0) = 0.5;
+uniform float metallic : range(0.0, 1.0) = 0.0;
+
+void surface() {
+    vec4 tex = sample(albedo_tex, UV);
+    ALBEDO = tex.rgb * albedo_color.rgb * COLOR.rgb;
+    ALPHA = tex.a * albedo_color.a;
+
+    NORMAL_MAP = sample(normal_tex, UV).rgb;
+
+    vec3 orm = sample(orm_tex, UV).rgb;
+    AO = orm.r;
+    ROUGHNESS = orm.g * roughness;
+    METALLIC = orm.b * metallic;
+}

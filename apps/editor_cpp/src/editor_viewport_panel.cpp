@@ -43,12 +43,44 @@
 #include <glad/gl.h>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
+#include <thread>
+#include <queue>
+#include <atomic>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace dse::editor {
 
 static float s_cached_scene_aspect = 16.0f / 9.0f;
+
+// ─── Async Import State ────────────────────────────────────────────────────
+struct AsyncImportJob {
+    std::string source_path;
+    std::string output_dir;
+    std::string base_name;
+    std::string builder_path;
+    float position_offset_x = 0.0f;
+};
+
+struct AsyncImportResult {
+    bool success = false;
+    std::string base_name;
+    std::string dmesh_rel_path;
+    std::string dmat_rel_path;
+    std::string error_msg;
+    float position_offset_x = 0.0f;
+};
+
+static struct {
+    std::mutex mtx;
+    std::atomic<bool> running{false};
+    std::atomic<int> total_jobs{0};
+    std::atomic<int> completed_jobs{0};
+    std::string current_file;
+    std::queue<AsyncImportResult> results;
+    std::thread worker;
+} s_async_import;
 
 float GetCachedSceneViewportAspect() { return s_cached_scene_aspect; }
 void  SetCachedSceneViewportAspect(float aspect) { s_cached_scene_aspect = aspect; }
@@ -1293,76 +1325,174 @@ void DrawSceneViewportPanel(EditorContext& ctx,
         ImGui::EndDragDropTarget();
     }
 
+    // ─── Process completed async import results ─────────────────────────────
+    {
+        std::lock_guard<std::mutex> lock(s_async_import.mtx);
+        while (!s_async_import.results.empty()) {
+            auto result = std::move(s_async_import.results.front());
+            s_async_import.results.pop();
+            if (result.success) {
+                auto ent = ctx.world.CreateEntity();
+                ctx.registry.emplace<EditorNameComponent>(ent, result.base_name);
+                auto& tf = ctx.registry.emplace<TransformComponent>(ent);
+                tf.position = GetEditorCamera().focal_point;
+                tf.position.x += result.position_offset_x;
+                tf.dirty = true;
+                auto& mesh_comp = ctx.registry.emplace<MeshRendererComponent>(ent);
+                mesh_comp.mesh_path = result.dmesh_rel_path;
+                mesh_comp.shader_variant = "MESH_LIT";
+                if (!result.dmat_rel_path.empty()) {
+                    mesh_comp.material_path = result.dmat_rel_path;
+                }
+                SelectionManager::Get().SetSingle(ent);
+                ctx.selected_entity = ent;
+                EditorLog(LogLevel::Info, "Imported & created: " + result.dmesh_rel_path);
+            } else {
+                EditorLog(LogLevel::Error, result.error_msg);
+            }
+        }
+        if (!s_async_import.running && s_async_import.completed_jobs > 0
+            && s_async_import.completed_jobs == s_async_import.total_jobs) {
+            if (s_async_import.worker.joinable()) s_async_import.worker.join();
+            if (s_async_import.total_jobs > 1) {
+                EditorLog(LogLevel::Info, "Batch imported " + std::to_string(s_async_import.total_jobs.load()) + " model(s)");
+            }
+            s_async_import.total_jobs = 0;
+            s_async_import.completed_jobs = 0;
+        }
+    }
+
+    // ─── Async import progress overlay ─────────────────────────────────────
+    if (s_async_import.running) {
+        ImVec2 overlay_pos(ImGui::GetWindowPos().x + 10, ImGui::GetWindowPos().y + ImGui::GetWindowSize().y - 60);
+        ImGui::SetNextWindowPos(overlay_pos);
+        ImGui::SetNextWindowBgAlpha(0.8f);
+        ImGui::BeginTooltip();
+        int done = s_async_import.completed_jobs.load();
+        int total = s_async_import.total_jobs.load();
+        float progress = total > 0 ? static_cast<float>(done) / static_cast<float>(total) : 0.0f;
+        ImGui::Text("Importing assets... (%d/%d)", done, total);
+        ImGui::ProgressBar(progress, ImVec2(250, 0));
+        {
+            std::lock_guard<std::mutex> lock(s_async_import.mtx);
+            if (!s_async_import.current_file.empty()) {
+                ImGui::TextWrapped("%s", s_async_import.current_file.c_str());
+            }
+        }
+        ImGui::EndTooltip();
+    }
+
     // ─── OS file drop: auto-import external assets and create entities ────────
     if (!ctx.read_only && HasPendingOsDrop()) {
         ImVec2 wp = ImGui::GetWindowPos();
         ImVec2 ws = ImGui::GetWindowSize();
         OsDropEvent drop_evt;
-        // Peek at mouse position from ImGui (OS drop already set it)
         ImVec2 mpos = ImGui::GetIO().MousePos;
         if (mpos.x >= wp.x && mpos.x <= wp.x + ws.x &&
             mpos.y >= wp.y && mpos.y <= wp.y + ws.y) {
             if (ConsumeOsDropEvent(drop_evt)) {
+                std::string builder_path = "AssetBuilder";
+#ifdef _WIN32
+                {
+                    char module_path[MAX_PATH];
+                    if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
+                        namespace fs = std::filesystem;
+                        fs::path exe_dir = fs::path(module_path).parent_path();
+                        fs::path candidate = exe_dir / "AssetBuilder.exe";
+                        if (fs::exists(candidate)) builder_path = candidate.string();
+                    }
+                }
+#endif
+                // Collect mesh import jobs
+                std::vector<AsyncImportJob> jobs;
+                int mesh_count = 0;
                 for (const auto& file_path : drop_evt.paths) {
                     namespace fs = std::filesystem;
                     fs::path src(file_path);
                     std::string ext = src.extension().string();
                     for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-                    bool is_importable_mesh = (ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".obj");
+                    bool is_importable_mesh = (ext == ".fbx" || ext == ".gltf" || ext == ".glb" || ext == ".obj"
+                                               || ext == ".blend" || ext == ".dae" || ext == ".3ds"
+                                               || ext == ".stl" || ext == ".ply");
                     if (is_importable_mesh) {
-                        // Auto-import: run AssetBuilder to produce .dmesh
                         AssetManager* am = ctx.engine.asset_manager();
                         std::string asset_dir = am ? am->GetDataRoot() : "data";
+                        namespace fs = std::filesystem;
                         fs::path out_dir = fs::path(asset_dir) / "models";
                         fs::create_directories(out_dir);
 
-                        SetAssetImporterSourcePath(file_path.c_str());
-                        // Synchronous import via AssetBuilder
-                        std::string builder_path = "AssetBuilder";
-#ifdef _WIN32
-                        {
-                            char module_path[MAX_PATH];
-                            if (GetModuleFileNameA(nullptr, module_path, MAX_PATH)) {
-                                fs::path exe_dir = fs::path(module_path).parent_path();
-                                fs::path candidate = exe_dir / "AssetBuilder.exe";
-                                if (fs::exists(candidate)) builder_path = candidate.string();
-                            }
-                        }
-#endif
-                        std::string cmd = "\"" + builder_path + "\" \"" + file_path + "\" --out-dir \"" + out_dir.string() + "\"";
-                        int ret = std::system(cmd.c_str());
-                        if (ret == 0) {
-                            std::string base_name = src.stem().string();
-                            fs::path dmesh_path = out_dir / (base_name + ".dmesh");
-                            if (fs::exists(dmesh_path)) {
-                                // Compute relative asset path
-                                std::string rel = fs::relative(dmesh_path, fs::current_path()).string();
-                                std::replace(rel.begin(), rel.end(), '\\', '/');
-                                // Create entity at camera focal point
-                                auto ent = ctx.world.CreateEntity();
-                                ctx.registry.emplace<EditorNameComponent>(ent, base_name);
-                                auto& tf = ctx.registry.emplace<TransformComponent>(ent);
-                                tf.position = GetEditorCamera().focal_point;
-                                tf.dirty = true;
-                                auto& mesh = ctx.registry.emplace<MeshRendererComponent>(ent);
-                                mesh.mesh_path = rel;
-                                mesh.shader_variant = "MESH_LIT";
-                                SelectionManager::Get().SetSingle(ent);
-                                ctx.selected_entity = ent;
-                                EditorLog(LogLevel::Info, "Imported & created: " + rel);
-                            }
-                        } else {
-                            EditorLog(LogLevel::Error, "AssetBuilder failed for: " + file_path);
-                            OpenAssetImporter();
-                            SetAssetImporterSourcePath(file_path.c_str());
-                        }
+                        AsyncImportJob job;
+                        job.source_path = file_path;
+                        job.output_dir = out_dir.string();
+                        job.base_name = src.stem().string();
+                        job.builder_path = builder_path;
+                        job.position_offset_x = static_cast<float>(mesh_count) * 2.0f;
+                        jobs.push_back(std::move(job));
+                        ++mesh_count;
                     } else {
-                        // Non-mesh: open importer dialog
                         OpenAssetImporter();
                         SetAssetImporterSourcePath(file_path.c_str());
-                        break;
                     }
+                }
+
+                // Launch async import worker thread
+                if (!jobs.empty()) {
+                    if (s_async_import.worker.joinable()) s_async_import.worker.join();
+                    s_async_import.total_jobs = static_cast<int>(jobs.size());
+                    s_async_import.completed_jobs = 0;
+                    s_async_import.running = true;
+
+                    std::string cwd = std::filesystem::current_path().string();
+                    s_async_import.worker = std::thread([jobs = std::move(jobs), cwd]() {
+                        for (const auto& job : jobs) {
+                            {
+                                std::lock_guard<std::mutex> lock(s_async_import.mtx);
+                                s_async_import.current_file = std::filesystem::path(job.source_path).filename().string();
+                            }
+
+                            std::string cmd = "\"" + job.builder_path + "\" \"" + job.source_path
+                                            + "\" --out-dir \"" + job.output_dir + "\"";
+                            int ret = std::system(cmd.c_str());
+
+                            AsyncImportResult result;
+                            result.position_offset_x = job.position_offset_x;
+                            result.base_name = job.base_name;
+
+                            if (ret == 0) {
+                                namespace fs = std::filesystem;
+                                fs::path dmesh_path = fs::path(job.output_dir) / (job.base_name + ".dmesh");
+                                if (fs::exists(dmesh_path)) {
+                                    result.success = true;
+                                    std::string rel = fs::relative(dmesh_path, fs::path(cwd)).string();
+                                    std::replace(rel.begin(), rel.end(), '\\', '/');
+                                    result.dmesh_rel_path = rel;
+
+                                    fs::path dmat_path = fs::path(job.output_dir) / (job.base_name + ".dmat");
+                                    if (fs::exists(dmat_path)) {
+                                        std::string mat_rel = fs::relative(dmat_path, fs::path(cwd)).string();
+                                        std::replace(mat_rel.begin(), mat_rel.end(), '\\', '/');
+                                        result.dmat_rel_path = mat_rel;
+                                    }
+                                } else {
+                                    result.error_msg = "AssetBuilder produced no .dmesh for: " + job.source_path;
+                                }
+                            } else {
+                                result.error_msg = "AssetBuilder failed for: " + job.source_path;
+                            }
+
+                            {
+                                std::lock_guard<std::mutex> lock(s_async_import.mtx);
+                                s_async_import.results.push(std::move(result));
+                            }
+                            ++s_async_import.completed_jobs;
+                        }
+                        {
+                            std::lock_guard<std::mutex> lock(s_async_import.mtx);
+                            s_async_import.current_file.clear();
+                        }
+                        s_async_import.running = false;
+                    });
                 }
             }
         }

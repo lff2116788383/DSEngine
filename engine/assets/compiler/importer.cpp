@@ -878,22 +878,36 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
     return true;
 }
 
+// Auto-select DSSL template based on material properties
+static std::string SelectDSSLTemplate(const RawMaterial& mat) {
+    bool has_emissive = (mat.emissive_factor.r > 0.01f || mat.emissive_factor.g > 0.01f
+                         || mat.emissive_factor.b > 0.01f || !mat.emissive_texture.empty());
+    bool has_transparency = (mat.base_color_factor.a < 0.99f);
+    bool has_alpha_test = mat.alpha_test;
+
+    if (has_alpha_test) return "pbr_alpha_test";
+    if (has_transparency) return "pbr_transparent";
+    if (has_emissive) return "pbr_emissive";
+    return "pbr_default";
+}
+
 bool MeshCooker::CookToDmat(const RawSceneData& scene, const std::string& output_dir, const std::string& base_name) {
     if (scene.materials.empty()) return false;
-    
-    // We'll write a simple JSON array of materials for runtime
+
     std::string dmat_path = output_dir + "/" + base_name + ".dmat";
     std::ofstream out(dmat_path);
     if (!out) return false;
-    
+
     out << "{\n  \"materials\": [\n";
     for (size_t i = 0; i < scene.materials.size(); ++i) {
         const auto& mat = scene.materials[i];
+        std::string dssl_template = SelectDSSLTemplate(mat);
         out << "    {\n";
         out << "      \"name\": \"" << mat.name << "\",\n";
-        out << "      \"base_color\": [" << mat.base_color_factor.r << ", " 
-                                       << mat.base_color_factor.g << ", " 
-                                       << mat.base_color_factor.b << ", " 
+        out << "      \"dssl_template\": \"" << dssl_template << "\",\n";
+        out << "      \"base_color\": [" << mat.base_color_factor.r << ", "
+                                       << mat.base_color_factor.g << ", "
+                                       << mat.base_color_factor.b << ", "
                                        << mat.base_color_factor.a << "],\n";
         out << "      \"metallic\": " << mat.metallic_factor << ",\n";
         out << "      \"roughness\": " << mat.roughness_factor << ",\n";
@@ -915,115 +929,109 @@ bool MeshCooker::CookToDmat(const RawSceneData& scene, const std::string& output
         out << "\n";
     }
     out << "  ]\n}\n";
-    
+
     return true;
 }
 
 bool MeshCooker::CookToDanim(const RawSceneData& scene, const std::string& output_dir, const std::string& base_name,
                              const AnimCompressOptions& anim_opts) {
     if (scene.animations.empty()) return false;
-    
-    // 我们目前只烘焙第一个动画作为示例
-    const auto& anim = scene.animations[0];
-    std::string danim_path = output_dir + "/" + base_name + ".danim";
-    std::ofstream out(danim_path, std::ios::binary);
-    if (!out) return false;
 
-    // v3：量化 + 关键帧抽取（运行时向后兼容 v2，旧文件继续走 v2 路径）
-    if (anim_opts.quantize) {
-        std::vector<uint8_t> blob = BuildDanimV3(anim, anim_opts);
-        out.write(reinterpret_cast<const char*>(blob.data()),
-                  static_cast<std::streamsize>(blob.size()));
-        return static_cast<bool>(out);
-    }
+    // Export all animations: first → base_name.danim, others → base_name_animname.danim
+    bool any_success = false;
+    for (size_t anim_index = 0; anim_index < scene.animations.size(); ++anim_index) {
+        const auto& anim = scene.animations[anim_index];
 
-    AnimHeader header;
-    header.version = 2;
-    header.duration = anim.duration;
-    header.channel_count = static_cast<uint32_t>(anim.channels.size());
-    
-    std::vector<AnimChannelDesc> channel_descs;
-    std::vector<float> all_times;
-    std::vector<glm::vec3> all_positions;
-    std::vector<glm::quat> all_rotations;
-    std::vector<glm::vec3> all_scales;
-    
-    // Build channel name table blob: uint32_t total_size + per-channel (uint16_t len + chars)
-    std::vector<uint8_t> name_table_blob;
-    {
-        // Reserve space for uint32_t total_size header
-        name_table_blob.resize(sizeof(uint32_t), 0);
+        // Build output filename: base_name.danim for first, base_name_animname.danim for rest
+        std::string anim_suffix;
+        if (anim_index > 0 || scene.animations.size() > 1) {
+            std::string safe_name = anim.name;
+            if (safe_name.empty()) safe_name = std::to_string(anim_index);
+            for (auto& c : safe_name) {
+                if (c == ' ' || c == '/' || c == '\\' || c == ':') c = '_';
+            }
+            anim_suffix = "_" + safe_name;
+        }
+        std::string danim_path = output_dir + "/" + base_name + anim_suffix + ".danim";
+        std::ofstream out(danim_path, std::ios::binary);
+        if (!out) continue;
+
+        // v3: quantized + keyframe reduction
+        if (anim_opts.quantize) {
+            std::vector<uint8_t> blob = BuildDanimV3(anim, anim_opts);
+            out.write(reinterpret_cast<const char*>(blob.data()),
+                      static_cast<std::streamsize>(blob.size()));
+            if (out) any_success = true;
+            continue;
+        }
+
+        AnimHeader header;
+        header.version = 2;
+        header.duration = anim.duration;
+        header.channel_count = static_cast<uint32_t>(anim.channels.size());
+
+        std::vector<AnimChannelDesc> channel_descs;
+        std::vector<float> all_times;
+        std::vector<glm::vec3> all_positions;
+        std::vector<glm::quat> all_rotations;
+        std::vector<glm::vec3> all_scales;
+
+        // Build channel name table blob: uint32_t total_size + per-channel (uint16_t len + chars)
+        std::vector<uint8_t> name_table_blob;
+        {
+            name_table_blob.resize(sizeof(uint32_t), 0);
+            for (const auto& ch : anim.channels) {
+                const std::string& name = ch.target_node_name;
+                uint16_t name_len = static_cast<uint16_t>(name.size());
+                name_table_blob.push_back(static_cast<uint8_t>(name_len & 0xFF));
+                name_table_blob.push_back(static_cast<uint8_t>((name_len >> 8) & 0xFF));
+                name_table_blob.insert(name_table_blob.end(), name.begin(), name.end());
+            }
+            while (name_table_blob.size() % 8 != 0) {
+                name_table_blob.push_back(0);
+            }
+            uint32_t total_size = static_cast<uint32_t>(name_table_blob.size());
+            std::memcpy(name_table_blob.data(), &total_size, sizeof(uint32_t));
+        }
+
         for (const auto& ch : anim.channels) {
-            const std::string& name = ch.target_node_name;
-            uint16_t name_len = static_cast<uint16_t>(name.size());
-            name_table_blob.push_back(static_cast<uint8_t>(name_len & 0xFF));
-            name_table_blob.push_back(static_cast<uint8_t>((name_len >> 8) & 0xFF));
-            name_table_blob.insert(name_table_blob.end(), name.begin(), name.end());
+            AnimChannelDesc desc_item;
+            desc_item.target_node_index = ch.target_node_index;
+            desc_item.position_key_count = static_cast<uint32_t>(ch.position_keys.size());
+            desc_item.rotation_key_count = static_cast<uint32_t>(ch.rotation_keys.size());
+            desc_item.scale_key_count = static_cast<uint32_t>(ch.scale_keys.size());
+            desc_item.time_offset = all_times.size() * sizeof(float);
+            for (float t : ch.time_keys) all_times.push_back(t);
+            desc_item.position_offset = all_positions.size() * sizeof(glm::vec3);
+            for (const auto& p : ch.position_keys) all_positions.push_back(p);
+            desc_item.rotation_offset = all_rotations.size() * sizeof(glm::quat);
+            for (const auto& r : ch.rotation_keys) all_rotations.push_back(r);
+            desc_item.scale_offset = all_scales.size() * sizeof(glm::vec3);
+            for (const auto& s : ch.scale_keys) all_scales.push_back(s);
+            channel_descs.push_back(desc_item);
         }
-        // Pad to 8-byte alignment so keyframe data after this blob is SIMD-safe
-        while (name_table_blob.size() % 8 != 0) {
-            name_table_blob.push_back(0);
-        }
-        uint32_t total_size = static_cast<uint32_t>(name_table_blob.size());
-        std::memcpy(name_table_blob.data(), &total_size, sizeof(uint32_t));
+
+        uint64_t data_base = sizeof(AnimHeader) + channel_descs.size() * sizeof(AnimChannelDesc) + name_table_blob.size();
+        uint64_t current_offset = data_base;
+        for (auto& d : channel_descs) { if (d.time_offset > 0 || !all_times.empty()) d.time_offset += current_offset; }
+        current_offset += all_times.size() * sizeof(float);
+        for (auto& d : channel_descs) { if (d.position_offset > 0 || !all_positions.empty()) d.position_offset += current_offset; }
+        current_offset += all_positions.size() * sizeof(glm::vec3);
+        for (auto& d : channel_descs) { if (d.rotation_offset > 0 || !all_rotations.empty()) d.rotation_offset += current_offset; }
+        current_offset += all_rotations.size() * sizeof(glm::quat);
+        for (auto& d : channel_descs) { if (d.scale_offset > 0 || !all_scales.empty()) d.scale_offset += current_offset; }
+
+        out.write(reinterpret_cast<const char*>(&header), sizeof(AnimHeader));
+        out.write(reinterpret_cast<const char*>(channel_descs.data()), channel_descs.size() * sizeof(AnimChannelDesc));
+        out.write(reinterpret_cast<const char*>(name_table_blob.data()), name_table_blob.size());
+        if (!all_times.empty()) out.write(reinterpret_cast<const char*>(all_times.data()), all_times.size() * sizeof(float));
+        if (!all_positions.empty()) out.write(reinterpret_cast<const char*>(all_positions.data()), all_positions.size() * sizeof(glm::vec3));
+        if (!all_rotations.empty()) out.write(reinterpret_cast<const char*>(all_rotations.data()), all_rotations.size() * sizeof(glm::quat));
+        if (!all_scales.empty()) out.write(reinterpret_cast<const char*>(all_scales.data()), all_scales.size() * sizeof(glm::vec3));
+
+        if (out) any_success = true;
     }
-    
-    for (const auto& ch : anim.channels) {
-        AnimChannelDesc desc_item;
-        desc_item.target_node_index = ch.target_node_index;
-        
-        desc_item.position_key_count = static_cast<uint32_t>(ch.position_keys.size());
-        desc_item.rotation_key_count = static_cast<uint32_t>(ch.rotation_keys.size());
-        desc_item.scale_key_count = static_cast<uint32_t>(ch.scale_keys.size());
-        
-        desc_item.time_offset = all_times.size() * sizeof(float);
-        for (float t : ch.time_keys) all_times.push_back(t);
-        
-        desc_item.position_offset = all_positions.size() * sizeof(glm::vec3);
-        for (const auto& p : ch.position_keys) all_positions.push_back(p);
-        
-        desc_item.rotation_offset = all_rotations.size() * sizeof(glm::quat);
-        for (const auto& r : ch.rotation_keys) all_rotations.push_back(r);
-        
-        desc_item.scale_offset = all_scales.size() * sizeof(glm::vec3);
-        for (const auto& s : ch.scale_keys) all_scales.push_back(s);
-        
-        channel_descs.push_back(desc_item);
-    }
-    
-    // 修正偏移量，加上前面的 Header + Descs + NameTable 大小
-    uint64_t base_offset = sizeof(AnimHeader) + channel_descs.size() * sizeof(AnimChannelDesc) + name_table_blob.size();
-    uint64_t current_offset = base_offset;
-    
-    for (auto& desc_item : channel_descs) {
-        if (desc_item.time_offset > 0 || !all_times.empty()) desc_item.time_offset += current_offset;
-    }
-    current_offset += all_times.size() * sizeof(float);
-    
-    for (auto& desc_item : channel_descs) {
-        if (desc_item.position_offset > 0 || !all_positions.empty()) desc_item.position_offset += current_offset;
-    }
-    current_offset += all_positions.size() * sizeof(glm::vec3);
-    
-    for (auto& desc_item : channel_descs) {
-        if (desc_item.rotation_offset > 0 || !all_rotations.empty()) desc_item.rotation_offset += current_offset;
-    }
-    current_offset += all_rotations.size() * sizeof(glm::quat);
-    
-    for (auto& desc_item : channel_descs) {
-        if (desc_item.scale_offset > 0 || !all_scales.empty()) desc_item.scale_offset += current_offset;
-    }
-    
-    // Write: Header + ChannelDescs + NameTable + Keyframe data
-    out.write(reinterpret_cast<const char*>(&header), sizeof(AnimHeader));
-    out.write(reinterpret_cast<const char*>(channel_descs.data()), channel_descs.size() * sizeof(AnimChannelDesc));
-    out.write(reinterpret_cast<const char*>(name_table_blob.data()), name_table_blob.size());
-    if (!all_times.empty()) out.write(reinterpret_cast<const char*>(all_times.data()), all_times.size() * sizeof(float));
-    if (!all_positions.empty()) out.write(reinterpret_cast<const char*>(all_positions.data()), all_positions.size() * sizeof(glm::vec3));
-    if (!all_rotations.empty()) out.write(reinterpret_cast<const char*>(all_rotations.data()), all_rotations.size() * sizeof(glm::quat));
-    if (!all_scales.empty()) out.write(reinterpret_cast<const char*>(all_scales.data()), all_scales.size() * sizeof(glm::vec3));
-    
-    return true;
+    return any_success;
 }
 
 bool MeshCooker::CookToDskel(const RawSceneData& scene, const std::string& output_dir, const std::string& base_name) {

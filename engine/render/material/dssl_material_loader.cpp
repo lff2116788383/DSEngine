@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <filesystem>
 
 namespace dse {
 namespace render {
@@ -239,6 +240,221 @@ std::shared_ptr<DSSLMaterialInstance> DSSLMaterialLoader::GetInstance(unsigned i
 void DSSLMaterialLoader::Clear() {
     instances_.clear();
     template_cache_.clear();
+}
+
+// ============================================================================
+// .dmat JSON → DSSLMaterialInstance binding
+// ============================================================================
+
+// Minimal JSON value parser (no external dependency)
+namespace {
+
+struct JsonValue {
+    enum Type { Null, Bool, Number, String, Array, Object };
+    Type type = Null;
+    bool bool_val = false;
+    double num_val = 0.0;
+    std::string str_val;
+    std::vector<JsonValue> arr;
+    std::vector<std::pair<std::string, JsonValue>> obj;
+
+    double AsNumber(double fallback = 0.0) const { return type == Number ? num_val : fallback; }
+    const std::string& AsString() const { return str_val; }
+    bool AsBool() const { return type == Bool ? bool_val : false; }
+    const JsonValue* Get(const std::string& key) const {
+        if (type != Object) return nullptr;
+        for (auto& [k, v] : obj) { if (k == key) return &v; }
+        return nullptr;
+    }
+    const JsonValue* At(size_t i) const { return (type == Array && i < arr.size()) ? &arr[i] : nullptr; }
+    size_t Size() const { return type == Array ? arr.size() : 0; }
+};
+
+static void SkipWS(const std::string& s, size_t& i) {
+    while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\n')) ++i;
+}
+
+static JsonValue ParseJsonValue(const std::string& s, size_t& i);
+
+static std::string ParseJsonString(const std::string& s, size_t& i) {
+    if (i >= s.size() || s[i] != '"') return "";
+    ++i;
+    std::string result;
+    while (i < s.size() && s[i] != '"') {
+        if (s[i] == '\\' && i + 1 < s.size()) { result += s[i + 1]; i += 2; }
+        else { result += s[i]; ++i; }
+    }
+    if (i < s.size()) ++i; // skip closing "
+    return result;
+}
+
+static JsonValue ParseJsonValue(const std::string& s, size_t& i) {
+    SkipWS(s, i);
+    if (i >= s.size()) return {};
+
+    JsonValue val;
+    if (s[i] == '"') {
+        val.type = JsonValue::String;
+        val.str_val = ParseJsonString(s, i);
+    } else if (s[i] == '{') {
+        val.type = JsonValue::Object;
+        ++i;
+        SkipWS(s, i);
+        while (i < s.size() && s[i] != '}') {
+            SkipWS(s, i);
+            std::string key = ParseJsonString(s, i);
+            SkipWS(s, i);
+            if (i < s.size() && s[i] == ':') ++i;
+            val.obj.push_back({key, ParseJsonValue(s, i)});
+            SkipWS(s, i);
+            if (i < s.size() && s[i] == ',') ++i;
+        }
+        if (i < s.size()) ++i;
+    } else if (s[i] == '[') {
+        val.type = JsonValue::Array;
+        ++i;
+        SkipWS(s, i);
+        while (i < s.size() && s[i] != ']') {
+            val.arr.push_back(ParseJsonValue(s, i));
+            SkipWS(s, i);
+            if (i < s.size() && s[i] == ',') ++i;
+        }
+        if (i < s.size()) ++i;
+    } else if (s[i] == 't') {
+        val.type = JsonValue::Bool; val.bool_val = true; i += 4;
+    } else if (s[i] == 'f') {
+        val.type = JsonValue::Bool; val.bool_val = false; i += 5;
+    } else if (s[i] == 'n') {
+        i += 4;
+    } else {
+        val.type = JsonValue::Number;
+        size_t start = i;
+        while (i < s.size() && (s[i] == '-' || s[i] == '+' || s[i] == '.' || s[i] == 'e' || s[i] == 'E'
+               || (s[i] >= '0' && s[i] <= '9'))) ++i;
+        try { val.num_val = std::stod(s.substr(start, i - start)); } catch (...) {}
+    }
+    return val;
+}
+
+} // anonymous namespace
+
+std::vector<std::shared_ptr<DSSLMaterialInstance>> DSSLMaterialLoader::LoadFromDmat(
+    const std::string& dmat_path, const std::string& dssl_search_dir, AssetManager* asset_mgr) {
+
+    std::vector<std::shared_ptr<DSSLMaterialInstance>> results;
+
+    std::ifstream f(dmat_path);
+    if (!f.is_open()) return results;
+    std::ostringstream ss;
+    ss << f.rdbuf();
+    std::string json_str = ss.str();
+
+    size_t pos = 0;
+    JsonValue root = ParseJsonValue(json_str, pos);
+    const JsonValue* materials = root.Get("materials");
+    if (!materials || materials->type != JsonValue::Array) return results;
+
+    // Resolve DSSL template search path
+    std::string search_dir = dssl_search_dir;
+    if (search_dir.empty()) {
+        // Default: look for dssl files relative to the dmat file's directory
+        std::filesystem::path p(dmat_path);
+        search_dir = p.parent_path().string();
+    }
+
+    for (size_t mi = 0; mi < materials->Size(); ++mi) {
+        const JsonValue* mat = materials->At(mi);
+        if (!mat || mat->type != JsonValue::Object) continue;
+
+        // Get DSSL template name
+        const JsonValue* tmpl_val = mat->Get("dssl_template");
+        std::string tmpl_name = tmpl_val ? tmpl_val->AsString() : "pbr_default";
+
+        // Find .dssl file: search in dssl_search_dir, then engine shaders dir
+        std::string dssl_path;
+        std::vector<std::string> search_paths = {
+            search_dir + "/" + tmpl_name + ".dssl",
+            search_dir + "/shaders/dssl/" + tmpl_name + ".dssl",
+        };
+        // Also try engine built-in shaders path
+        std::filesystem::path engine_dssl = std::filesystem::path(dmat_path).parent_path();
+        // Walk up to find engine/render/shaders/dssl
+        for (int depth = 0; depth < 6; ++depth) {
+            std::filesystem::path candidate = engine_dssl / "engine" / "render" / "shaders" / "dssl" / (tmpl_name + ".dssl");
+            if (std::filesystem::exists(candidate)) {
+                search_paths.push_back(candidate.string());
+                break;
+            }
+            engine_dssl = engine_dssl.parent_path();
+        }
+
+        for (auto& sp : search_paths) {
+            if (std::filesystem::exists(sp)) { dssl_path = sp; break; }
+        }
+
+        if (dssl_path.empty()) {
+            // Fallback: create instance with default PBR settings (no .dssl file needed)
+            unsigned int id = next_id_++;
+            auto inst = std::make_shared<DSSLMaterialInstance>(id, tmpl_name);
+            inst->SetShaderType(DSSLShaderType::Surface);
+            instances_[id] = inst;
+            // Still bind parameters below
+            results.push_back(inst);
+        } else {
+            auto inst = CreateInstance(dssl_path, asset_mgr);
+            if (!inst) continue;
+            results.push_back(inst);
+        }
+
+        auto& inst = results.back();
+
+        // Bind PBR parameters from .dmat JSON to DSSLMaterialInstance uniforms
+        const JsonValue* bc = mat->Get("base_color");
+        if (bc && bc->Size() >= 4) {
+            inst->SetVec4("albedo_color", glm::vec4(
+                static_cast<float>(bc->At(0)->AsNumber(1.0)),
+                static_cast<float>(bc->At(1)->AsNumber(1.0)),
+                static_cast<float>(bc->At(2)->AsNumber(1.0)),
+                static_cast<float>(bc->At(3)->AsNumber(1.0))));
+        }
+
+        const JsonValue* met = mat->Get("metallic");
+        if (met) inst->SetFloat("metallic", static_cast<float>(met->AsNumber(0.0)));
+
+        const JsonValue* rough = mat->Get("roughness");
+        if (rough) inst->SetFloat("roughness", static_cast<float>(rough->AsNumber(0.5)));
+
+        const JsonValue* em = mat->Get("emissive");
+        if (em && em->Size() >= 3) {
+            float er = static_cast<float>(em->At(0)->AsNumber());
+            float eg = static_cast<float>(em->At(1)->AsNumber());
+            float eb = static_cast<float>(em->At(2)->AsNumber());
+            float strength = std::max({er, eg, eb});
+            if (strength > 0.01f) {
+                inst->SetVec4("emission_color", glm::vec4(er, eg, eb, 1.0f));
+                inst->SetFloat("emission_strength", strength);
+            }
+        }
+
+        const JsonValue* ac = mat->Get("alpha_cutoff");
+        if (ac) inst->SetFloat("alpha_cutoff", static_cast<float>(ac->AsNumber(0.5)));
+
+        // Set render modes based on material properties
+        const JsonValue* ds = mat->Get("double_sided");
+        const JsonValue* at = mat->Get("alpha_test");
+        if (ds && ds->AsBool()) {
+            DSSLMaterialInstance::RenderModes modes = inst->GetRenderModes();
+            modes.cull = "disabled";
+            inst->SetRenderModes(modes);
+        }
+        if (at && at->AsBool()) {
+            DSSLMaterialInstance::RenderModes modes = inst->GetRenderModes();
+            modes.alpha_test = true;
+            inst->SetRenderModes(modes);
+        }
+    }
+
+    return results;
 }
 
 } // namespace render

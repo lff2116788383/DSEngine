@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class AssetManager;
 
@@ -15,16 +16,17 @@ public:
     static DSSLMaterialLoader& Instance();
 
     // 从 .dssl 文件创建材质实例
-    // 1. 读取 .dssl 源文件
-    // 2. 解析 uniform 声明
-    // 3. 设置默认值
-    // 4. 返回新的 DSSLMaterialInstance
     std::shared_ptr<DSSLMaterialInstance> LoadFromFile(const std::string& dssl_path,
                                                         AssetManager* asset_mgr = nullptr);
 
     // 从已有模板克隆一个实例（共享 uniform 信息，独立值）
     std::shared_ptr<DSSLMaterialInstance> CreateInstance(const std::string& dssl_path,
                                                           AssetManager* asset_mgr = nullptr);
+
+    // 从 .dmat JSON 文件加载所有材质实例（自动选择 DSSL 模板并绑定 PBR 参数）
+    std::vector<std::shared_ptr<DSSLMaterialInstance>> LoadFromDmat(
+        const std::string& dmat_path, const std::string& dssl_search_dir = "",
+        AssetManager* asset_mgr = nullptr);
 
     // 根据 ID 查找
     std::shared_ptr<DSSLMaterialInstance> GetInstance(unsigned int id);

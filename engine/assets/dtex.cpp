@@ -11,9 +11,33 @@ uint32_t DtexBlockBytes(CompressedTextureFormat format) {
         case CompressedTextureFormat::BC1_SRGB:
         case CompressedTextureFormat::BC4_UNORM:
             return 8u;
+        case CompressedTextureFormat::ASTC_4x4_UNORM:
+        case CompressedTextureFormat::ASTC_4x4_SRGB:
+        case CompressedTextureFormat::ASTC_6x6_UNORM:
+        case CompressedTextureFormat::ASTC_6x6_SRGB:
+        case CompressedTextureFormat::ASTC_8x8_UNORM:
+        case CompressedTextureFormat::ASTC_8x8_SRGB:
+            return 16u;  // ASTC blocks are always 128 bits
         default:
             return 16u;  // BC2/BC3/BC5/BC7
     }
+}
+
+int DtexBlockWidth(CompressedTextureFormat format) {
+    switch (format) {
+        case CompressedTextureFormat::ASTC_6x6_UNORM:
+        case CompressedTextureFormat::ASTC_6x6_SRGB:
+            return 6;
+        case CompressedTextureFormat::ASTC_8x8_UNORM:
+        case CompressedTextureFormat::ASTC_8x8_SRGB:
+            return 8;
+        default:
+            return 4;  // BCn and ASTC 4x4
+    }
+}
+
+int DtexBlockHeight(CompressedTextureFormat format) {
+    return DtexBlockWidth(format);  // all supported formats use square blocks
 }
 
 bool ParseDtex(const std::vector<uint8_t>& file_data,
@@ -28,7 +52,7 @@ bool ParseDtex(const std::vector<uint8_t>& file_data,
     if (header.magic != kDtexMagic) return false;
     if (header.version != kDtexVersion) return false;
     if (header.mip_count == 0) return false;
-    if (header.format > static_cast<uint32_t>(CompressedTextureFormat::BC7_SRGB)) return false;
+    if (header.format > static_cast<uint32_t>(CompressedTextureFormat::ASTC_8x8_SRGB)) return false;
 
     out_format = static_cast<CompressedTextureFormat>(header.format);
     out_width = static_cast<int>(header.width);

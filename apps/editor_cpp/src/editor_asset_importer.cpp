@@ -25,14 +25,15 @@ namespace {
 bool s_open = false;
 
 enum class ImportType { Mesh3D, Texture, Audio };
-const char* kImportTypeNames[] = { "3D Model (.gltf/.glb/.fbx)", "Texture (.png/.jpg/.hdr/.tga)", "Audio (.wav/.ogg/.mp3)" };
+const char* kImportTypeNames[] = { "3D Model (.gltf/.glb/.fbx/.obj/.blend/.dae)", "Texture (.png/.jpg/.hdr/.tga)", "Audio (.wav/.ogg/.mp3)" };
 
 // 压缩格式下拉项；与 AssetBuilder --texture 的 --format 取值一一对应。
 const char* kCompressFormatNames[] = {
     "BC1 (RGB, 4bpp)", "BC3 (RGBA, 8bpp)", "BC1 sRGB (color)", "BC3 sRGB (color+alpha)",
-    "BC4 (single channel)", "BC5 (normal map)"
+    "BC4 (single channel)", "BC5 (normal map)",
+    "BC7 (high quality RGBA, 8bpp)", "BC7 sRGB (high quality color)"
 };
-const char* kCompressFormatArgs[] = { "bc1", "bc3", "bc1srgb", "bc3srgb", "bc4", "bc5" };
+const char* kCompressFormatArgs[] = { "bc1", "bc3", "bc1srgb", "bc3srgb", "bc4", "bc5", "bc7", "bc7srgb" };
 
 struct ImportState {
     ImportType type = ImportType::Mesh3D;
@@ -79,7 +80,7 @@ std::string OpenFileDialogWithFilter(const char* title, const char* filter) {
 const char* GetFilterForType(ImportType type) {
     switch (type) {
     case ImportType::Mesh3D:
-        return "3D Models\0*.gltf;*.glb;*.fbx;*.obj\0All Files\0*.*\0";
+        return "3D Models\0*.gltf;*.glb;*.fbx;*.obj;*.blend;*.dae;*.3ds;*.stl;*.ply\0All Files\0*.*\0";
     case ImportType::Texture:
         return "Images\0*.png;*.jpg;*.jpeg;*.hdr;*.tga;*.bmp\0All Files\0*.*\0";
     case ImportType::Audio:

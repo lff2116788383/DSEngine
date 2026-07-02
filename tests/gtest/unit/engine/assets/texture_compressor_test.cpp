@@ -38,9 +38,14 @@ TEST(TextureCompressor, SupportMatrix) {
     EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC3_SRGB));
     EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC4_UNORM));
     EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC5_UNORM));
-    // BC2 / BC7 不在 stb_dxt MVP 范围。
+    // BC7 now supported via Mode 6 encoder; ASTC supported via built-in encoder.
+    EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC7_UNORM));
+    EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC7_SRGB));
+    EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::ASTC_4x4_UNORM));
+    EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::ASTC_6x6_UNORM));
+    EXPECT_TRUE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::ASTC_8x8_UNORM));
+    // BC2 still unsupported.
     EXPECT_FALSE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC2_UNORM));
-    EXPECT_FALSE(dse::assets::IsBCnEncodeSupported(CompressedTextureFormat::BC7_UNORM));
 }
 
 TEST(TextureCompressor, EncodeLevelBlockCount) {
@@ -64,9 +69,14 @@ TEST(TextureCompressor, EncodeLevelNonMultipleOf4PadsBlocks) {
 TEST(TextureCompressor, EncodeRejectsUnsupportedAndBadInput) {
     auto px = SolidRgba(4, 4, 0, 0, 0, 255);
     std::vector<uint8_t> out;
-    EXPECT_FALSE(dse::assets::EncodeBCnLevel(px.data(), 4, 4, CompressedTextureFormat::BC7_UNORM, false, out));
+    // BC7 is now supported, so it should succeed.
+    EXPECT_TRUE(dse::assets::EncodeBCnLevel(px.data(), 4, 4, CompressedTextureFormat::BC7_UNORM, false, out));
+    EXPECT_EQ(out.size(), 16u); // 1 block * 16 bytes
+    // Null/zero-size inputs still rejected.
+    out.clear();
     EXPECT_FALSE(dse::assets::EncodeBCnLevel(nullptr, 4, 4, CompressedTextureFormat::BC1_UNORM, false, out));
     EXPECT_FALSE(dse::assets::EncodeBCnLevel(px.data(), 0, 4, CompressedTextureFormat::BC1_UNORM, false, out));
+    // BC2 still unsupported.
     std::vector<uint8_t> dtex;
     EXPECT_FALSE(dse::assets::EncodeTextureToDtex(px.data(), 4, 4, CompressedTextureFormat::BC2_UNORM, true, false, dtex));
 }

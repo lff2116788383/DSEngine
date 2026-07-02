@@ -93,7 +93,7 @@ enum class PrimitiveTopology : unsigned int {
     PointList     = 3,   ///< 点列表
 };
 
-/// 压缩纹理格式（BCn / DXT 系列）
+/// 压缩纹理格式（BCn / ASTC 系列）
 enum class CompressedTextureFormat : unsigned int {
     BC1_UNORM = 0,   ///< DXT1 (RGB, 4bpp)
     BC1_SRGB  = 1,   ///< DXT1 sRGB
@@ -104,6 +104,13 @@ enum class CompressedTextureFormat : unsigned int {
     BC5_UNORM = 6,   ///< 双通道 (8bpp, 法线贴图)
     BC7_UNORM = 7,   ///< 高质量 RGBA (8bpp)
     BC7_SRGB  = 8,   ///< 高质量 RGBA sRGB
+    // ASTC (mobile/cross-platform)
+    ASTC_4x4_UNORM  = 9,   ///< ASTC 4x4 (8bpp)
+    ASTC_4x4_SRGB   = 10,  ///< ASTC 4x4 sRGB
+    ASTC_6x6_UNORM  = 11,  ///< ASTC 6x6 (~3.56bpp)
+    ASTC_6x6_SRGB   = 12,  ///< ASTC 6x6 sRGB
+    ASTC_8x8_UNORM  = 13,  ///< ASTC 8x8 (2bpp)
+    ASTC_8x8_SRGB   = 14,  ///< ASTC 8x8 sRGB
 };
 
 /// 压缩纹理 Mip 级别数据

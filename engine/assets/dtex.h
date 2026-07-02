@@ -47,8 +47,12 @@ struct DtexMipDesc {
 };
 #pragma pack(pop)
 
-/// 给定压缩格式，返回每 4x4 块的字节数（BC1/BC4 = 8，其余 = 16）。
+/// 给定压缩格式，返回每块的字节数（BC1/BC4 = 8，其余 = 16）。
 uint32_t DtexBlockBytes(CompressedTextureFormat format);
+
+/// 返回压缩块的像素宽度（BCn = 4，ASTC 4x4/6x6/8x8）。
+int DtexBlockWidth(CompressedTextureFormat format);
+int DtexBlockHeight(CompressedTextureFormat format);
 
 /**
  * @brief 解析 .dtex 字节流，输出压缩格式与各 mip 视图。

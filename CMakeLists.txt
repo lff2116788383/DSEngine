@@ -60,8 +60,10 @@ option(DSE_WEB_ENABLE_THREADS "Enable Emscripten pthreads (SharedArrayBuffer + w
 # 需要时按需开启：-DDSE_ENABLE_SPINE=ON / -DDSE_ENABLE_ASSIMP=ON。
 # 关闭 Spine 时 SpineRendererComponent 与 dse.spine.* 绑定仍在（纯数据/ECS），仅不编译 spine-cpp 运行时与 SpineSystem。
 # 关闭 Assimp 时 glTF 导入（tinygltf）不受影响，仅 FBX/OBJ 等 Assimp 格式不可用。
+# 编辑器构建默认开启 Assimp 以支持 FBX/OBJ/Blender 等格式导入；
+# 纯运行时/SDK 构建可 -DDSE_ENABLE_ASSIMP=OFF 缩小包体。
 option(DSE_ENABLE_SPINE "Enable Spine runtime path (2D skeletal animation)" OFF)
-option(DSE_ENABLE_ASSIMP "Build with Assimp model importer (FBX/OBJ/...); off keeps glTF-only and shrinks the package" OFF)
+option(DSE_ENABLE_ASSIMP "Build with Assimp model importer (FBX/OBJ/...); off keeps glTF-only and shrinks the package" ON)
 if(ANDROID)
     option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
 else()
