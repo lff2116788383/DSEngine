@@ -1,0 +1,106 @@
+{
+    "name": "dsengine-tools",
+    "displayName": "DSEngine Tools",
+    "description": "AI-powered game development with DSEngine. Auto MCP integration for Cursor, Trae, and VS Code Copilot.",
+    "version": "0.1.0",
+    "publisher": "dsengine",
+    "license": "MIT",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": ["Other"],
+    "keywords": ["dsengine", "game-engine", "mcp", "ai", "cursor", "trae"],
+    "icon": "resources/icon.png",
+    "activationEvents": [
+        "workspaceContains:**/*.dseproj"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "dsengine.startEditor",
+                "title": "DSEngine: Start Editor"
+            },
+            {
+                "command": "dsengine.stopEditor",
+                "title": "DSEngine: Stop Editor"
+            },
+            {
+                "command": "dsengine.openProject",
+                "title": "DSEngine: Open Project"
+            },
+            {
+                "command": "dsengine.configureMcp",
+                "title": "DSEngine: Configure MCP"
+            },
+            {
+                "command": "dsengine.copyMcpConfig",
+                "title": "DSEngine: Copy MCP Config"
+            },
+            {
+                "command": "dsengine.showOutput",
+                "title": "DSEngine: Show Editor Output"
+            },
+            {
+                "command": "dsengine.showQuickPick",
+                "title": "DSEngine: Quick Actions"
+            }
+        ],
+        "configuration": {
+            "title": "DSEngine",
+            "properties": {
+                "dsengine.sdkPath": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Path to DSEngine SDK root directory. Auto-detected if the workspace is an engine source tree."
+                },
+                "dsengine.port": {
+                    "type": "number",
+                    "default": 9527,
+                    "description": "WebSocket port for editor Control Server."
+                },
+                "dsengine.autoStart": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Automatically start the editor when a .dseproj is detected."
+                },
+                "dsengine.autoRegisterMcp": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically register MCP configuration when a project is detected."
+                },
+                "dsengine.suppressStartPrompt": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Suppress the 'Start editor?' notification."
+                }
+            }
+        },
+        "languages": [
+            {
+                "id": "json",
+                "extensions": [".dseproj"],
+                "aliases": ["DSEngine Project"]
+            }
+        ],
+        "jsonValidation": [
+            {
+                "fileMatch": "*.dseproj",
+                "url": "./schemas/dseproj.schema.json"
+            }
+        ]
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "lint": "tsc --noEmit -p ./",
+        "package": "vsce package"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.3.3",
+        "@vscode/vsce": "^2.22.0"
+    }
+}

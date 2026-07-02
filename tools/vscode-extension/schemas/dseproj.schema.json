@@ -1,0 +1,80 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "DSEngine Project",
+    "description": "DSEngine project descriptor (.dseproj)",
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+        "format_version": {
+            "type": "integer",
+            "default": 1,
+            "description": "Project file format version"
+        },
+        "name": {
+            "type": "string",
+            "description": "Project name"
+        },
+        "version": {
+            "type": "string",
+            "default": "1.0.0",
+            "description": "Project version (semver)"
+        },
+        "engine_version": {
+            "type": "string",
+            "description": "Required DSEngine version"
+        },
+        "description": {
+            "type": "string",
+            "description": "Project description"
+        },
+        "features": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": ["lua_scripting", "cpp_plugins", "csharp_scripting", "blueprint"]
+            },
+            "description": "Enabled engine features"
+        },
+        "entry_script": {
+            "type": "string",
+            "description": "Entry script path relative to project root"
+        },
+        "default_scene": {
+            "type": "string",
+            "default": "scenes/main.json",
+            "description": "Default scene to load on startup"
+        },
+        "asset_dir": {
+            "type": "string",
+            "default": "assets/",
+            "description": "Asset directory relative to project root"
+        },
+        "scene_dir": {
+            "type": "string",
+            "default": "scenes/",
+            "description": "Scene directory relative to project root"
+        },
+        "script_dir": {
+            "type": "string",
+            "default": "scripts/",
+            "description": "Script directory relative to project root"
+        },
+        "build": {
+            "type": "object",
+            "description": "Build configuration",
+            "properties": {
+                "output_dir": {
+                    "type": "string",
+                    "default": "build/",
+                    "description": "Build output directory"
+                },
+                "target": {
+                    "type": "string",
+                    "default": "standalone",
+                    "enum": ["standalone", "web", "android", "ios", "harmony"],
+                    "description": "Build target platform"
+                }
+            }
+        }
+    }
+}
