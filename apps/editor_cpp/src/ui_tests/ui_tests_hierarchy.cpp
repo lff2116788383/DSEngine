@@ -154,18 +154,15 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             const entt::entity ent = HCreateEntity(ctx);
             IM_CHECK(ent != entt::null);
 
-            // 清空选择移除 ImGuizmo 全屏覆盖窗，避免遮挡 Hierarchy 节点上的双击。
-            ctx->SetRef("//DSEngineRoot");
-            ctx->MenuClick("Edit/Deselect All");
             ctx->Yield(2);
 
-            char node_ref[96];
-            NodeRef(node_ref, sizeof(node_ref), ent);
+            // 确保 Scene 树节点展开（被前面的测试折叠时 ##rename 不会被绘制）
+            ctx->ItemOpen("//Hierarchy/Scene");
+            ctx->Yield(2);
 
             // 直接调用 BeginHierarchyRename 触发重命名模式。
-            // 双击和 F2 快捷键在后台/远程环境下可能因 ImGuizmo gizmo 覆盖窗口或
-            // IsItemHovered 返回 false 而失败。此测试重点验证重命名机制本身
-            // （输入→提交→名称更新），而非双击触发方式。
+            // 双击和 F2 快捷键在后台/远程环境下可能因 ImGuizmo gizmo 覆盖窗口
+            // 阻挡点击而失败。此测试重点验证重命名机制本身。
             {
                 entt::registry& reg = HReg();
                 std::string current_name = "New Entity";
@@ -173,15 +170,21 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
                     current_name = reg.get<EditorNameComponent>(ent).name;
                 dse::editor::BeginHierarchyRename(ent, current_name);
             }
+            // SetKeyboardFocusHere 在下一帧生效；第 2 帧 InputText 激活并绘制。
             ctx->Yield(4);
 
-            // 重命名输入框画在 "Scene" 树节点作用域下（与实体节点同级），id "##rename"，回车提交。
+            // 重命名输入框画在 "Scene" 树节点作用域下，id "##rename"，回车提交。
             if (!ctx->ItemExists("//Hierarchy/Scene/##rename")) {
-                ctx->LogError("inline rename input not found after BeginHierarchyRename");
-                IM_CHECK(false);
-                return;
+                // 回退：尝试不带 Scene 前缀定位（树结构可能因其它实体变化而不同）。
+                if (!ctx->ItemExists("//Hierarchy/##rename")) {
+                    ctx->LogError("inline rename input not found after BeginHierarchyRename");
+                    IM_CHECK(false);
+                    return;
+                }
+                ctx->ItemInputValue("//Hierarchy/##rename", "DSEInlineRenamed");
+            } else {
+                ctx->ItemInputValue("//Hierarchy/Scene/##rename", "DSEInlineRenamed");
             }
-            ctx->ItemInputValue("//Hierarchy/Scene/##rename", "DSEInlineRenamed");
             ctx->Yield(2);
 
             entt::registry& reg = HReg();

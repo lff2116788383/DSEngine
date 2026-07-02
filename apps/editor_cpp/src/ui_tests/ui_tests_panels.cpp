@@ -56,7 +56,7 @@ constexpr PanelEntry kPanels[] = {
     {"animation_timeline",  "Animation Timeline"},
     {"navmesh",             "NavMesh"},
     {"shader_graph",        "Shader Graph"},
-    {"git",                 "Git"},
+    {"git",                 "Version Control"},
     {"multi_viewport",      "Multi-Viewport"},
     {"anim_state_machine",  "Anim State Machine"},
     {"lua_debugger",        "Lua Debugger"},
