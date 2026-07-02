@@ -1,11 +1,15 @@
 # DSEngine C# API 参考文档
 
 > 严格对齐 `GameScripts/DSEngine.Runtime/` 源码与 `tools/codegen/binding_defs.json` 数据源
-> 更新日期：2026-07-01
+> 更新日期：2026-07-02
 > 运行时：.NET 8 CoreCLR (hostfxr)，P/Invoke 通过 `[LibraryImport("dse_engine")]` 源生成器
 > 组件字段访问器由 `tools/codegen/codegen.py` 从 `binding_defs.json` 自动生成至
-> `GameScripts/DSEngine.Runtime/Generated/Native.gen.cs`（约 400+ 声明）。
-> 高级封装类位于 `GameScripts/DSEngine.Runtime/` 下 `Core/`、`Math/`、`Components/` 子目录。
+> `GameScripts/DSEngine.Runtime/Generated/Native.gen.cs`（45 组件 / 816 访问器）；
+> 组件高级封装类自动生成至 `Generated/Components.gen.cs`。
+> 手写 C ABI（`dse_api.h`，动画 FSM/输入/物理动力学/载具/天气等 178 函数）由
+> `tools/codegen/gen_csharp_manual.py` 生成 `Generated/NativeManual.gen.cs`（P/Invoke）
+> 与 `Generated/ApiManual.gen.cs`（`DSEngine.Api` 公开门面，37 个静态类）。
+> 其余高级封装位于 `Core/`、`Math/`、`Components/`、`Network/` 子目录。
 
 ---
 
@@ -14,6 +18,9 @@
 ```
 DSEngine.Runtime (net8.0)
 ├── Native              (internal) — 自动生成的 P/Invoke 声明层
+│                          Native.gen.cs (codegen 组件访问器 816)
+│                          NativeManual.gen.cs (手写 C ABI 178)
+├── DSEngine.Api        (public)   — 手写 C ABI 门面（Input/Anim3D/RigidBody3D/Vehicle/Weather 等 37 类）
 ├── NativeRepl          (internal) — 网络复制层 P/Invoke 声明
 ├── Core/
 │   ├── Entity          — 实体句柄（轻量 struct，uint ID）
@@ -53,6 +60,7 @@ DSEngine.Game (net8.0) — 用户游戏脚本项目
 10. [生命周期流程](#10-生命周期流程)
 11. [热重载机制](#11-热重载机制)
 12. [Network — 网络复制层](#12-network--网络复制层)
+13. [DSEngine.Api — 手写 C ABI 门面](#13-dsengineapi--手写-c-abi-门面)
 
 ---
 
@@ -348,7 +356,11 @@ internal static partial class Native
 | NavMeshAutoRebakeComponent | `navmesh_rebake` | 11 | 22 |
 | PostProcessComponent | `post_process` | 72 | 144 |
 | Animator3DComponent | `animator3d` | 8 | 16 |
-| **合计** | — | **165 字段** | **330 函数** |
+| …（共 45 个组件，完整列表见 `binding_defs.json` 与 `LUA_API.md` §18，两侧共享同一数据源） | | | |
+| **合计** | — | **45 组件** | **816 函数** |
+
+另有 `Generated/Components.gen.cs`（同一 codegen 生成）为全部 45 个组件提供
+面向对象的属性封装类（`entity.GetTransform().Position` 风格，见 `ComponentExtensions`）。
 
 ### 额外手写声明（Entity 操作）
 
@@ -482,7 +494,10 @@ GameScripts/
 ├── DSEngine.Runtime/
 │   ├── DSEngine.Runtime.csproj      — net8.0, AllowUnsafeBlocks
 │   ├── Generated/
-│   │   └── Native.gen.cs            — [LibraryImport] 声明（codegen 产物，不入库）
+│   │   ├── Native.gen.cs            — [LibraryImport] 声明（codegen 组件访问器）
+│   │   ├── Components.gen.cs        — 组件高级封装类（codegen 产物）
+│   │   ├── NativeManual.gen.cs      — 手写 C ABI 的 [LibraryImport] 声明
+│   │   └── ApiManual.gen.cs         — DSEngine.Api 公开门面（37 个静态类）
 │   ├── Core/
 │   │   ├── Entity.cs
 │   │   ├── DseScript.cs
@@ -699,4 +714,62 @@ public class ClientScript : DseScript {
         _client?.Dispose();
     }
 }
+```
+
+---
+
+## 13. DSEngine.Api — 手写 C ABI 门面
+
+> 文件：`GameScripts/DSEngine.Runtime/Generated/ApiManual.gen.cs`
+> P/Invoke 声明：`Generated/NativeManual.gen.cs`
+> 生成脚本：`tools/codegen/gen_csharp_manual.py`（解析 `engine/scripting/native_api/dse_api.h`；随 `codegen.py` 自动运行）
+
+`namespace DSEngine.Api` 下的公开静态类，按子系统分组转发到手写 C ABI（与 Lua 手写绑定同一底层）。
+方法签名与 C ABI 一一对应（`int` 作布尔、`out float` 作输出参数、`float[]` 作向量/数组缓冲）。
+
+### 类与函数数（共 37 类 / 178 函数）
+
+| 类 | 函数数 | 覆盖 C ABI 前缀 | 说明 |
+|------|:---:|------|------|
+| `Input` | 10 | `dse_input_*` | 键盘/鼠标/手柄查询 |
+| `App` | 6 | `dse_app_*` | quit / set_title / target_fps / draw_calls |
+| `Assets` | 2 | `dse_assets_*` | 资产根路径 / 预加载 |
+| `Metrics` | 1 | `dse_metrics_*` | 帧统计 |
+| `Render` | 2 | `dse_render_*` | world_to_screen / screen_to_world_ray |
+| `Anim2D` / `Anim3D` / `AnimLayer` | 6/13/8 | `dse_anim2d_* / anim3d_* / animlayer_*` | 动画剪辑、FSM、动画层/混合树 |
+| `Ik` / `FootIk` / `BoneAttachment` / `MorphTarget` | 8/6/6/6 | `dse_ik_* / foot_ik_* / bone_attach_* / morph_*` | IK、足部 IK、骨骼挂点、形态目标 |
+| `Physics3D` | 3 | `dse_physics3d_*` | raycast / overlap 查询 |
+| `RigidBody3D` | 9 | `dse_rigidbody3d_*` | 力/冲量/速度/重力 |
+| `BoxCollider3D` / `SphereCollider3D` / `CapsuleCollider3D` / `MeshCollider3D` | 各 1 | `dse_*_collider3d_add` | 碰撞体挂载 |
+| `Collider` / `Collision` | 2/1 | `dse_collider_* / collision_*` | trigger/材质/碰撞层 |
+| `Joint3D` | 5 | `dse_joint3d_*` | 关节、铰链限制、弹簧 |
+| `CharacterController3D` | 5 | `dse_character_controller3d_*` | 角色控制器移动/跳跃/贴地 |
+| `Terrain` | 3 | `dse_terrain_*` | 高度图碰撞/采样 |
+| `Vehicle` | 5 | `dse_vehicle_*` | 载具输入/状态 |
+| `Cloth` / `Rope` / `SoftBody` / `Fluid` / `Buoyancy` / `Ragdoll` / `Fracture` | 5/4/4/6/4/4/5 | 对应前缀 | 布料/绳索/软体/流体/浮力/布娃娃/破碎 |
+| `Weather` / `Snow` / `Atmosphere` / `DayNight` / `Cloud` | 3/8/4/7/3 | 对应前缀 | 天气/积雪/大气/昼夜/体积云 |
+| `Components` | 10 | 其余 `dse_*_add` 等 | Transform/相机/灯光/MeshRenderer 挂载 |
+
+### 示例
+
+```csharp
+using DSEngine.Api;
+
+public class CarController : DseScript {
+    public override void OnUpdate(float dt) {
+        float throttle = Input.GetKey(87) != 0 ? 1f : 0f;   // W
+        float steer = Input.GetGamepadAxis(0, 0);
+        Vehicle.SetInput(Entity.Id, throttle, 0f, steer);
+
+        if (Input.GetKeyDown(32) != 0)                       // Space
+            RigidBody3D.AddImpulse(Entity.Id, 0f, 500f, 0f);
+    }
+}
+```
+
+### 重新生成
+
+```bash
+python tools/codegen/codegen.py           # 一并生成 NativeManual.gen.cs + ApiManual.gen.cs
+# 或单独：python tools/codegen/gen_csharp_manual.py
 ```
