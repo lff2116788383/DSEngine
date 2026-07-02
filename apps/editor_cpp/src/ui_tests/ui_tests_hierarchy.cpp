@@ -161,28 +161,20 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             char node_ref[96];
             NodeRef(node_ref, sizeof(node_ref), ent);
 
-            // 先单击节点确保实体被选中且节点可见，再双击触发重命名。
-            // 后台/远程环境下，直接双击可能因窗口未获得焦点而导致 IsItemHovered
-            // 返回 false，从而不触发重命名模式。先通过单击把焦点带到节点上。
+            // 单击节点选中实体，然后用 F2 快捷键触发重命名。
+            // 双击触发重命名依赖 IsItemHovered()，在后台/远程环境下可能因
+            // 窗口焦点不稳定而失败；F2 快捷键走 ImGuiInputFlags_RouteGlobal，
+            // 不依赖 hover 状态，更可靠。
             ctx->WindowFocus("//Hierarchy");
-            ctx->ItemClick(node_ref);
+            ctx->ItemClick(node_ref);   // 选中实体
             ctx->Yield(4);
 
-            ctx->WindowFocus("//Hierarchy");
-            ctx->ItemDoubleClick(node_ref);   // 触发内联重命名（s_renaming_entity = ent）
+            ctx->KeyPress(ImGuiKey_F2);   // 触发内联重命名
             ctx->Yield(4);
 
             // 重命名输入框画在 "Scene" 树节点作用域下（与实体节点同级），id "##rename"，回车提交。
-            // 若双击仍未触发重命名，重试一次。
             if (!ctx->ItemExists("//Hierarchy/Scene/##rename")) {
-                ctx->WindowFocus("//Hierarchy");
-                ctx->ItemClick(node_ref);
-                ctx->Yield(2);
-                ctx->ItemDoubleClick(node_ref);
-                ctx->Yield(4);
-            }
-            if (!ctx->ItemExists("//Hierarchy/Scene/##rename")) {
-                ctx->LogError("inline rename input not found after retries");
+                ctx->LogError("inline rename input not found after F2");
                 IM_CHECK(false);
                 return;
             }
