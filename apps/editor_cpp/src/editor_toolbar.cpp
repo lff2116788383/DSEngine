@@ -111,6 +111,13 @@ bool IsEditorPaused() {
     return s_editor_state == EditorState::Pause;
 }
 
+void ToggleEditorPause() {
+    if (s_editor_state == EditorState::Play)
+        s_editor_state = EditorState::Pause;
+    else if (s_editor_state == EditorState::Pause)
+        s_editor_state = EditorState::Play;
+}
+
 bool ConsumeStepFrame() {
     if (!s_step_pending) return false;
     s_step_pending = false;

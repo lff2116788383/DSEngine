@@ -24,6 +24,7 @@ void ExitPlayMode(entt::registry& registry, entt::entity& selected_entity,
                   dse::runtime::EngineInstance* engine = nullptr);
 
 bool IsEditorPaused();
+void ToggleEditorPause();
 bool ConsumeStepFrame();
 
 void DrawEditorToolbar(EditorContext& ctx);

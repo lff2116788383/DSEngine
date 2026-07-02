@@ -92,8 +92,39 @@ void ExitPlayMode(entt::registry& /*registry*/, entt::entity& /*selected*/,
     g_editor_state_stub = EditorState::Edit;
 }
 
+bool IsEditorPaused() { return g_editor_state_stub == EditorState::Pause; }
+
+void ToggleEditorPause() {
+    if (g_editor_state_stub == EditorState::Play)
+        g_editor_state_stub = EditorState::Pause;
+    else if (g_editor_state_stub == EditorState::Pause)
+        g_editor_state_stub = EditorState::Play;
+}
+
 void DrawEditorToolbar(EditorContext& /*ctx*/) {}
 
 void ResetEditorStateStub() { g_editor_state_stub = EditorState::Edit; }
+
+// ─── ProjectManager additional stubs ─────────────────────────────────────────
+
+std::filesystem::path ProjectManager::GetSceneDir() const {
+    return project_root_ / descriptor_.scene_dir;
+}
+
+std::filesystem::path ProjectManager::GetScriptDir() const {
+    return project_root_ / descriptor_.script_dir;
+}
+
+bool ProjectManager::SaveProject() { return false; }
+void ProjectManager::CloseProject() {}
+bool ProjectManager::CreateProject(const std::filesystem::path&, const std::string&, ProjectTemplate) { return false; }
+bool ProjectManager::CreateProject(const std::filesystem::path&, const std::string&, GameType, ScriptingLanguage) { return false; }
+bool ProjectManager::TryAcquireLock(const std::filesystem::path&) { return false; }
+void ProjectManager::ReleaseLock() {}
+bool ProjectManager::LoadDescriptor(const std::filesystem::path&) { return false; }
+bool ProjectManager::SaveDescriptor(const std::filesystem::path&) { return false; }
+void ProjectManager::GenerateTemplate(const std::filesystem::path&, const std::string&, ProjectTemplate) {}
+std::string OpenProjectFileDialog() { return ""; }
+std::string BrowseNewProjectLocationDialog() { return ""; }
 
 } // namespace dse::editor

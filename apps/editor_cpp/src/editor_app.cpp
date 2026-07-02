@@ -536,6 +536,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // 启动 Control Server (WebSocket JSON-RPC)
     control_server_ = std::make_unique<ControlServer>();
     RegisterBuiltinTools(*control_server_);
+    SetGizmoPointers(&current_gizmo_operation_, &current_gizmo_mode_);
     if (!control_server_->Start(test_config_.api_port)) {
         std::cerr << "[Editor] Warning: Control Server failed to start" << std::endl;
     }
