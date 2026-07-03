@@ -245,10 +245,12 @@ void RegisterMiscEditorTests(ImGuiTestEngine* e) {
             const fs::path exe_out  = out_dir / "TestGame.exe";
             const fs::path manifest = out_dir / "game.dsmanifest";
             const fs::path data_out = out_dir / "data";
+            const fs::path probe_out = data_out / "dse_buildtest_probe.txt";
             bool done = false;
             for (int i = 0; i < 600 && !done; ++i) {
                 ctx->Yield();
-                done = fs::exists(exe_out, ec) && fs::exists(manifest, ec) && fs::exists(data_out, ec);
+                done = fs::exists(exe_out, ec) && fs::exists(manifest, ec)
+                    && fs::exists(data_out, ec) && fs::exists(probe_out, ec);
             }
 
             IM_CHECK(fs::exists(exe_out, ec));   // <title>.exe 落盘（由桩拷贝而来）
