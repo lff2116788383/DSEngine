@@ -39,6 +39,7 @@ namespace {
 static char s_search_filter[128] = "";
 static entt::entity s_renaming_entity = entt::null;
 static char s_rename_buf[64] = "";
+static int s_rename_grace_frames = 0;  // frames since rename started; cancel-on-click disabled until > 2
 static entt::entity s_last_clicked_entity = entt::null;
 
 const char* GetEntityTypeIcon(entt::registry& registry, entt::entity entity) {
@@ -361,6 +362,7 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
     }
 
     if (is_renaming) {
+        ++s_rename_grace_frames;
         ImGui::TextUnformatted(type_icon);
         ImGui::SameLine();
         ImGui::SetNextItemWidth(-1);
@@ -393,7 +395,7 @@ void DrawEntityNode(EditorContext& context, entt::entity entity) {
             commit_rename(entity);
         } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             s_renaming_entity = entt::null;
-        } else if (!ImGui::IsItemActive() && s_renaming_entity == entity &&
+        } else if (s_rename_grace_frames > 2 && !ImGui::IsItemActive() && s_renaming_entity == entity &&
                    ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered()) {
             commit_rename(entity);
         }
@@ -672,6 +674,7 @@ void DrawHierarchyPanel(EditorContext& context) {
 
 void BeginHierarchyRename(entt::entity entity, const std::string& current_name) {
     s_renaming_entity = entity;
+    s_rename_grace_frames = 0;
     std::strncpy(s_rename_buf, current_name.c_str(), sizeof(s_rename_buf) - 1);
     s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
 }

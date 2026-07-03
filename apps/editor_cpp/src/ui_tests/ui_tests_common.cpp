@@ -114,22 +114,32 @@ void DiscardSceneCloseConfirmIfOpen(ImGuiTestContext* ctx) {
 }
 
 void ManualMouseDrag(ImGuiTestContext* ctx, const ImVec2& src, const ImVec2& dst) {
-    // ImGui 拖拽投递需要“源激活→跨帧拖动→落点悬停一帧→释放”，分步并逐帧 Yield 比单帧瞬移更可靠。
+    // ImGui 拖拽投递需要"源激活→跨帧拖动→落点悬停→释放"。
+    // 用物理偏移代替 MouseLiftDragThreshold，在后台/无头环境下更可靠。
     ctx->MouseMoveToPos(src);
-    ctx->Yield();
+    ctx->Yield(2);
     ctx->MouseDown(ImGuiMouseButton_Left);
-    ctx->Yield();
-    ctx->MouseLiftDragThreshold();
-    ctx->Yield();
+    ctx->Yield(2);
+
+    // 物理偏移 8 像素超越拖拽阈值（默认 ~6px），不依赖 MouseLiftDragThreshold。
+    const float nudge = 8.0f;
+    const ImVec2 dir(dst.x - src.x, dst.y - src.y);
+    const float len = ImSqrt(dir.x * dir.x + dir.y * dir.y);
+    const ImVec2 nudge_pos = (len > 0.01f)
+        ? ImVec2(src.x + dir.x / len * nudge, src.y + dir.y / len * nudge)
+        : ImVec2(src.x + nudge, src.y);
+    ctx->MouseMoveToPos(nudge_pos);
+    ctx->Yield(2);
+
     const ImVec2 mid((src.x + dst.x) * 0.5f, (src.y + dst.y) * 0.5f);
     ctx->MouseMoveToPos(mid);
-    ctx->Yield();
+    ctx->Yield(2);
     ctx->MouseMoveToPos(dst);
-    ctx->Yield();
-    ctx->MouseMoveToPos(dst);  // 落点多停一帧，确保目标 BeginDragDropTarget 命中
     ctx->Yield(2);
+    ctx->MouseMoveToPos(dst);  // 落点多停两帧，确保目标 BeginDragDropTarget 命中
+    ctx->Yield(3);
     ctx->MouseUp(ImGuiMouseButton_Left);
-    ctx->Yield(2);
+    ctx->Yield(3);
 }
 
 std::string ProjectAssetBaseDir() {

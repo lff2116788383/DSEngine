@@ -173,18 +173,10 @@ void RegisterHierarchyTests(ImGuiTestEngine* e) {
             // SetKeyboardFocusHere 在下一帧生效；第 2 帧 InputText 激活并绘制。
             ctx->Yield(4);
 
-            // 重命名输入框画在 "Scene" 树节点作用域下，id "##rename"，回车提交。
-            if (!ctx->ItemExists("//Hierarchy/Scene/##rename")) {
-                // 回退：尝试不带 Scene 前缀定位（树结构可能因其它实体变化而不同）。
-                if (!ctx->ItemExists("//Hierarchy/##rename")) {
-                    ctx->LogError("inline rename input not found after BeginHierarchyRename");
-                    IM_CHECK(false);
-                    return;
-                }
-                ctx->ItemInputValue("//Hierarchy/##rename", "DSEInlineRenamed");
-            } else {
-                ctx->ItemInputValue("//Hierarchy/Scene/##rename", "DSEInlineRenamed");
-            }
+            // SetKeyboardFocusHere 已把焦点设给 ##rename InputText；
+            // 直接用键盘输入绕过 gizmo 覆盖窗阻挡鼠标点击的问题。
+            ctx->KeyCharsReplace("DSEInlineRenamed");
+            ctx->KeyPress(ImGuiKey_Enter);
             ctx->Yield(2);
 
             entt::registry& reg = HReg();

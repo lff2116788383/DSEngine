@@ -271,18 +271,10 @@ void RegisterUndoTests(ImGuiTestEngine* e) {
                           static_cast<unsigned long long>(static_cast<std::uint32_t>(b)));
 
             ctx->WindowFocus("//Hierarchy");
-            // 累积实体可能令 A/B 节点被裁剪/滚出可视区；先滚动目标节点入视口再读屏幕矩形。
-            ctx->ScrollToItemY(dst_ref);
-            ctx->Yield(2);
-            const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
-            const ImGuiTestItemInfo di = ctx->ItemInfo(dst_ref);
-            IM_CHECK(si.ID != 0 && di.ID != 0);
-            const ImVec2 src_pos(si.RectFull.GetCenter().x, si.RectFull.Min.y + si.RectFull.GetHeight() * 0.5f);
-            const ImVec2 dst_pos(di.RectFull.GetCenter().x, di.RectFull.Min.y + di.RectFull.GetHeight() * 0.25f);
+            ctx->Yield(4);
 
-            ctx->KeyPress(ImGuiKey_Escape);
-            ctx->Yield();
-            ManualMouseDrag(ctx, src_pos, dst_pos);
+            // Deselect All 已清除 gizmo 覆盖窗，可直接用 ItemDragAndDrop。
+            ctx->ItemDragAndDrop(src_ref, dst_ref);
 
             IM_CHECK(reg.all_of<ParentComponent>(a));
             IM_CHECK(reg.get<ParentComponent>(a).parent == b);

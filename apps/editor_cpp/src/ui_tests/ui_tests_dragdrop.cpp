@@ -119,25 +119,10 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
                       static_cast<unsigned long long>(static_cast<std::uint32_t>(b)));
 
         ctx->WindowFocus("//Hierarchy");
-        // 前序用例会持续往场景里累积实体，Hierarchy 树可能超出面板高度，导致刚新建的 A/B 节点
-        // 被裁剪/滚出可视区——按屏幕坐标投递拖拽就会落空。先把目标节点滚动入视口（A/B 相邻，
-        // 滚到下面那个即可让两者同时可见），再读其屏幕矩形。
-        ctx->ScrollToItemY(dst_ref);
-        ctx->Yield(2);
-        const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
-        const ImGuiTestItemInfo di = ctx->ItemInfo(dst_ref);
-        IM_CHECK(si.ID != 0 && di.ID != 0);
-        // 落点取目标节点矩形“上四分之一”而非正中：节点正下方紧贴一条 InvisibleButton 的
-        // “插入兄弟”落区（reorder，对根实体相当于 detach → 不产生 ParentComponent），偏上
-        // 可稳稳命中节点本体的 reparent 落区。
-        const ImVec2 src_pos(si.RectFull.GetCenter().x, si.RectFull.Min.y + si.RectFull.GetHeight() * 0.5f);
-        const ImVec2 dst_pos(di.RectFull.GetCenter().x, di.RectFull.Min.y + di.RectFull.GetHeight() * 0.25f);
+        ctx->Yield(4);
 
-        // 清掉可能残留的 ActiveID（前序用例的输入框可能留下黏滞 active id，会吃掉本次 MouseDown）。
-        ctx->KeyPress(ImGuiKey_Escape);
-        ctx->Yield();
-
-        ManualMouseDrag(ctx, src_pos, dst_pos);
+        // Deselect All 已清除 gizmo 覆盖窗，可直接用 ItemDragAndDrop。
+        ctx->ItemDragAndDrop(src_ref, dst_ref);
 
         IM_CHECK(reg.valid(a) && reg.valid(b));
         IM_CHECK(reg.all_of<ParentComponent>(a));
@@ -177,19 +162,10 @@ void RegisterDragDropTests(ImGuiTestEngine* e) {
                           static_cast<unsigned>(static_cast<std::uint32_t>(b)));
 
             ctx->WindowFocus("//Hierarchy");
-            // 累积实体可能令 A/插入落区被裁剪/滚出可视区；先滚动插入落区入视口再读屏幕矩形。
-            ctx->ScrollToItemY(ins_ref);
-            ctx->Yield(2);
-            const ImGuiTestItemInfo si = ctx->ItemInfo(src_ref);
-            const ImGuiTestItemInfo ii = ctx->ItemInfo(ins_ref);
-            IM_CHECK(si.ID != 0 && ii.ID != 0);
-            const ImVec2 src_pos(si.RectFull.GetCenter().x, si.RectFull.Min.y + si.RectFull.GetHeight() * 0.5f);
-            const ImVec2 dst_pos = ii.RectFull.GetCenter();
+            ctx->Yield(4);
 
-            ctx->KeyPress(ImGuiKey_Escape);
-            ctx->Yield();
-
-            ManualMouseDrag(ctx, src_pos, dst_pos);
+            // Deselect All 已清除 gizmo 覆盖窗，可直接用 ItemDragAndDrop。
+            ctx->ItemDragAndDrop(src_ref, ins_ref);
 
             IM_CHECK(reg.valid(a) && reg.valid(b));
             // 同根：A 仍为根（detach），不应获得 ParentComponent 指向某父。
