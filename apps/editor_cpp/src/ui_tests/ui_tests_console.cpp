@@ -1,9 +1,9 @@
 /**
  * @file ui_tests_console.cpp
- * @brief Console（控制台）面板真实控件级用例（仅 DSE_EDITOR_UI_TESTS 编入）。
+ * @brief Console panel UI tests (requires DSE_EDITOR_UI_TESTS).
  *
- * 点击控制台里始终可见的真实控件（Clear 按钮、Auto-scroll 勾选框）。控件查不到时
- * ItemClick 会让用例失败——以此覆盖控制台工具栏控件可被驱动且不触发断言/崩溃。
+ * Tests console panel features: Clear button, Auto-scroll toggle,
+ * Export button, Category filter, Level filter toggles.
  */
 #include "ui_tests_internal.h"
 
@@ -12,12 +12,12 @@
 #include "imgui.h"
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
+#include "../editor_icons.h"
 
 namespace dse::editor::uitest {
 
 void RegisterConsoleTests(ImGuiTestEngine* e) {
-    // dse-console/clear_button_click：点击控制台 Clear 按钮（真实控件）。
-    // 面板停靠为 tab，非激活 tab 不绘制其内容，故先 WindowFocus 把 Console tab 提到前台。
+    // dse-console/clear_button_click
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "clear_button_click");
         t->TestFunc = [](ImGuiTestContext* ctx) {
@@ -27,13 +27,55 @@ void RegisterConsoleTests(ImGuiTestEngine* e) {
         };
     }
 
-    // dse-console/toggle_autoscroll：切换 Auto-scroll 勾选框（真实控件）。
+    // dse-console/toggle_autoscroll
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "toggle_autoscroll");
         t->TestFunc = [](ImGuiTestContext* ctx) {
             ctx->WindowFocus("//Console");
             ctx->SetRef("//Console");
             ctx->ItemClick("Auto-scroll");
+        };
+    }
+
+    // dse-console/export_button_click
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "export_button_click");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            ctx->WindowFocus("//Console");
+            ctx->SetRef("//Console");
+            ctx->ItemClick(MDI_ICON_EXPORT " Export");
+        };
+    }
+
+    // dse-console/category_filter_combo
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "category_filter_combo");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            ctx->WindowFocus("//Console");
+            ctx->SetRef("//Console");
+            ctx->ItemClick("##cat_filter");
+            ctx->Yield(2);
+        };
+    }
+
+    // dse-console/level_filter_toggle_info
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "level_filter_toggle_info");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            ctx->WindowFocus("//Console");
+            ctx->SetRef("//Console");
+            ctx->ItemClick("###info_toggle");
+        };
+    }
+
+    // dse-console/level_filter_toggle_warn_error
+    {
+        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-console", "level_filter_toggle_warn_error");
+        t->TestFunc = [](ImGuiTestContext* ctx) {
+            ctx->WindowFocus("//Console");
+            ctx->SetRef("//Console");
+            ctx->ItemClick("###warn_toggle");
+            ctx->ItemClick("###error_toggle");
         };
     }
 }

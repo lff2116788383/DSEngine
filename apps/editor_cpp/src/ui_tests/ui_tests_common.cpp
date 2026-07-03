@@ -49,6 +49,7 @@ void EnsureAllPanelsVisible() {
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
         s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
         s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
+        s.show_vegetation_brush,
     };
     for (bool* p : toggles)
         if (p) *p = true;
@@ -251,6 +252,9 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     Register2DToolsTests(engine);
     // 项目级基础操作（新建/打开/保存）放最后：会切换当前打开项目，避免影响前面的用例。
     RegisterProjectTests(engine);
+    RegisterInspectorSectionTests(engine);
+    RegisterToolPanelTests(engine);
+    RegisterPanelDeepTests(engine);
 }
 
 } // namespace dse::editor::uitest

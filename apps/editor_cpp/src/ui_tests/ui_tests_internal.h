@@ -116,6 +116,9 @@ void RegisterMultiSelectTests(ImGuiTestEngine* engine);     // ⑩ 多选/框选
 void RegisterEditorFeatureTests(ImGuiTestEngine* engine);   // ⑪ Editor feature panels #2-#9
 void RegisterBlueprintTests(ImGuiTestEngine* engine);       // ⑫ Blueprint system
 void Register2DToolsTests(ImGuiTestEngine* engine);         // ⑬ 2D Tools (Slicer/Atlas/Anim/9Slice/Collision/Particle/Parallax/Light)
+void RegisterInspectorSectionTests(ImGuiTestEngine* engine);  // Inspector section interaction
+void RegisterToolPanelTests(ImGuiTestEngine* engine);         // Tool panel interaction
+void RegisterPanelDeepTests(ImGuiTestEngine* engine);         // Panel deep tests
 
 } // namespace dse::editor::uitest
 
