@@ -24,6 +24,8 @@
 
 #include <filesystem>
 #include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace dse::editor::uitest {
 
@@ -31,15 +33,27 @@ namespace {
 
 entt::registry& Reg() { return Services().engine->pipeline()->world().registry(); }
 
-entt::entity NewSelectedEntity(ImGuiTestContext* ctx) {
+// 经 Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
+// （CreateEntity3DCube 等会填充 procedural 几何数据；裸 Mesh Renderer 组件
+// mesh_path 为空、不会渲染任何几何体）。返回新建实体并置为单选。
+entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
     entt::registry& reg = Reg();
     std::vector<entt::entity> before;
     for (auto en : reg.storage<entt::entity>())
         if (reg.valid(en)) before.push_back(en);
     OpenHierarchyContextMenu(ctx);
-    ctx->ItemClick("Create Empty Entity");
-    ctx->Yield();
-    SelectionManager::Get().Clear();
+    // 子菜单需先点开父项，再在弹出的子菜单窗口内定位条目
+    // （一步式 "Create 3D Object/Cube" 路径在 BeginPopupContextWindow 下解析失败）。
+    ctx->ItemClick("Create 3D Object");
+    ctx->Yield(2);
+    ctx->SetRef("//$FOCUSED");
+    if (ctx->ItemExists(item)) {
+        ctx->ItemClick(item);
+    } else {
+        std::string wildcard = std::string("**/") + item;
+        ctx->ItemClick(wildcard.c_str());
+    }
+    ctx->Yield(2);
     for (auto en : reg.storage<entt::entity>()) {
         if (!reg.valid(en)) continue;
         bool seen = false;
@@ -49,21 +63,29 @@ entt::entity NewSelectedEntity(ImGuiTestContext* ctx) {
     return entt::null;
 }
 
-void AddComponent(ImGuiTestContext* ctx, const char* component_name) {
-    ctx->WindowFocus("//Inspector");
-    ctx->SetRef("//Inspector");
-    ctx->ItemClick("Add Component");
-    ctx->Yield();
-    ctx->SetRef("//$FOCUSED");
-    ctx->ItemClick(component_name);
-    ctx->Yield(2);
-    ctx->SetRef("//Inspector");
+TransformComponent& Tf(entt::entity e) { return Reg().get<TransformComponent>(e); }
+dse::MeshRendererComponent& Mr(entt::entity e) { return Reg().get<dse::MeshRendererComponent>(e); }
+
+void SetPos(entt::entity e, float x, float y, float z) {
+    auto& t = Tf(e);
+    t.position = glm::vec3(x, y, z);
+    t.dirty = true;
 }
 
-void DeleteSelectedEntity(ImGuiTestContext* ctx) {
-    ctx->WindowFocus("//Hierarchy");
-    ctx->KeyPress(ImGuiKey_Delete);
-    ctx->Yield(2);
+void SetScale(entt::entity e, float x, float y, float z) {
+    auto& t = Tf(e);
+    t.scale = glm::vec3(x, y, z);
+    t.dirty = true;
+}
+
+// 图元几何为 position-only 顶点，PBR 需要法线；用 PBR 变体让方向光/点光着色生效。
+void UsePBR(entt::entity e) { (void)e; /* DIAG: keep default variant */ }
+
+void DestroyEntities(std::initializer_list<entt::entity> ents) {
+    entt::registry& reg = Reg();
+    SelectionManager::Get().Clear();
+    for (auto e : ents)
+        if (e != entt::null && reg.valid(e)) reg.destroy(e);
 }
 
 } // anonymous namespace
@@ -113,129 +135,103 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // A1: render_cube_default
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_cube_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();  // keep Scene viewport unobstructed (Sequencer etc. float over it)
         ctx->Yield(4);
-        // Create a cube entity
-        auto ent = NewSelectedEntity(ctx);
+        auto ent = NewPrimitive(ctx, "Cube");
         IM_CHECK(ent != entt::null);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        // Add directional light
-        auto light = NewSelectedEntity(ctx);
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Directional Light");
         IM_CHECK(light != entt::null);
-        AddComponent(ctx, "Directional Light");
         ctx->Yield(4);
-        // Focus scene viewport and wait for render
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
-        // Capture and assert
         auto px = CaptureAndLoad("render_cube_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        // Cleanup
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent);
+        DestroyEntities({ent, light});
         ctx->Yield(2);
-        DeleteSelectedEntity(ctx);
     };
 
     // A2: render_sphere_default
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_sphere_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
+        auto ent = NewPrimitive(ctx, "Sphere");
         IM_CHECK(ent != entt::null);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        // TODO: Set mesh to sphere if API available
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_sphere_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent);
+        DestroyEntities({ent, light});
         ctx->Yield(2);
-        DeleteSelectedEntity(ctx);
     };
 
     // A3: render_plane_default
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_plane_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
+        auto ent = NewPrimitive(ctx, "Plane");
         IM_CHECK(ent != entt::null);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_plane_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent);
+        DestroyEntities({ent, light});
         ctx->Yield(2);
-        DeleteSelectedEntity(ctx);
     };
 
-    // A4: render_cylinder_default
+    // A4: render_cylinder_default（引擎无 cylinder 图元，用竖向拉伸的 Cube 柱体代替）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_cylinder_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
+        auto ent = NewPrimitive(ctx, "Cube");
         IM_CHECK(ent != entt::null);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        UsePBR(ent);
+        SetScale(ent, 0.5f, 2.0f, 0.5f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_cylinder_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent);
+        DestroyEntities({ent, light});
         ctx->Yield(2);
-        DeleteSelectedEntity(ctx);
     };
 
     // A5: render_multi_objects
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_multi_objects");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto e1 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto e2 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto e3 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        SetPos(e1, -1.5f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Sphere");
+        UsePBR(e2);
+        SetPos(e2, 1.5f, 0.5f, 0.0f);
+        auto e3 = NewPrimitive(ctx, "Plane");
+        UsePBR(e3);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_multi_objects");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.10f);
-        // Cleanup all
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e3); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e2); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e1); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, e3, light});
+        ctx->Yield(2);
     };
 
     // ====================================================================
@@ -245,71 +241,76 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // B6: render_dirlight_white
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_dirlight_white");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_dirlight_white");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.AverageBrightness() > 0.02f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
     // B7: render_pointlight_red
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pointlight_red");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Point Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Point Light");
+        if (light != entt::null) {
+            auto& pl = Reg().get<dse::PointLightComponent>(light);
+            pl.color = glm::vec3(1.0f, 0.0f, 0.0f);
+            pl.intensity = 3.0f;
+            SetPos(light, 0.0f, 1.5f, 1.5f);
+        }
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_pointlight_red");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
-        // Note: Red dominance check depends on light color being set to red
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
     // B8: render_spotlight_cone
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_spotlight_cone");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Spot Light");
+        auto ground = NewPrimitive(ctx, "Plane");
+        UsePBR(ground);
+        auto light = NewPrimitive(ctx, "Spot Light");
+        if (light != entt::null) {
+            auto& sl = Reg().get<dse::SpotLightComponent>(light);
+            sl.intensity = 5.0f;
+            sl.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+            SetPos(light, 0.0f, 3.0f, 0.0f);
+        }
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_spotlight_cone");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ground, light});
+        ctx->Yield(2);
     };
 
     // B9: render_no_light_ambient
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_no_light_ambient");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
@@ -317,52 +318,61 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         SKIP_IF_NO_CAPTURE(px);
         // Without explicit light, should be very dark (ambient only)
         IM_CHECK(px.AverageBrightness() < 0.15f);
-        DeleteSelectedEntity(ctx);
+        DestroyEntities({ent});
+        ctx->Yield(2);
     };
 
     // B10: render_multi_lights
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_multi_lights");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto l1 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Point Light");
-        ctx->Yield(2);
-        auto l2 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Point Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        auto l1 = NewPrimitive(ctx, "Point Light");
+        if (l1 != entt::null) {
+            auto& pl = Reg().get<dse::PointLightComponent>(l1);
+            pl.color = glm::vec3(1.0f, 0.2f, 0.2f);
+            pl.intensity = 3.0f;
+            SetPos(l1, -2.0f, 1.5f, 1.0f);
+        }
+        auto l2 = NewPrimitive(ctx, "Point Light");
+        if (l2 != entt::null) {
+            auto& pl = Reg().get<dse::PointLightComponent>(l2);
+            pl.color = glm::vec3(0.2f, 0.2f, 1.0f);
+            pl.intensity = 3.0f;
+            SetPos(l2, 2.0f, 1.5f, 1.0f);
+        }
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_multi_lights");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(l1); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, l1, l2});
+        ctx->Yield(2);
     };
 
-    // B11: render_light_intensity (compare dark vs bright)
+    // B11: render_light_intensity (bright light)
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_light_intensity");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        // Scene with default light
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        if (light != entt::null) {
+            auto& dl = Reg().get<dse::DirectionalLight3DComponent>(light);
+            dl.intensity = 3.0f;
+        }
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_light_intensity");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.AverageBrightness() > 0.01f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
     // ====================================================================
@@ -372,108 +382,106 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // C12: render_material_red
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_red");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        Mr(ent).color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
-        // TODO: Set material albedo to red via Inspector
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_material_red");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        // Color check (depends on material setup)
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
     // C13: render_material_blue
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_blue");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        Mr(ent).color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_material_blue");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
-    // C14: render_texture_checker
+    // C14: render_texture_checker（无内置 checker 纹理资产，用双色并排 Cube 验证颜色区分度）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_texture_checker");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        Mr(e1).color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        SetPos(e1, -0.8f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Cube");
+        UsePBR(e2);
+        Mr(e2).color = glm::vec4(0.1f, 0.1f, 0.1f, 1.0f);
+        SetPos(e2, 0.8f, 0.5f, 0.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_texture_checker");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        // Texture should produce color variance (not solid color)
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, light});
+        ctx->Yield(2);
     };
 
     // C15: render_material_metallic
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_metallic");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Sphere");
+        UsePBR(ent);
+        Mr(ent).metallic = 1.0f;
+        Mr(ent).roughness = 0.2f;
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_material_metallic");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
     // C16: render_material_transparent
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_transparent");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto e1 = NewSelectedEntity(ctx);  // back object
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto e2 = NewSelectedEntity(ctx);  // front transparent
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Sphere");  // back object
+        UsePBR(e1);
+        SetPos(e1, 0.0f, 0.5f, -1.5f);
+        auto e2 = NewPrimitive(ctx, "Cube");    // front transparent
+        UsePBR(e2);
+        Mr(e2).color = glm::vec4(0.2f, 0.8f, 0.2f, 0.4f);
+        SetPos(e2, 0.0f, 0.5f, 0.5f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_material_transparent");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e2); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e1); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, light});
+        ctx->Yield(2);
     };
 
     // ====================================================================
@@ -483,169 +491,183 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // D17: render_shadow_ground
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_shadow_ground");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto cube = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto plane = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto cube = NewPrimitive(ctx, "Cube");
+        UsePBR(cube);
+        SetPos(cube, 0.0f, 1.0f, 0.0f);
+        auto plane = NewPrimitive(ctx, "Plane");
+        UsePBR(plane);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_shadow_ground");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(plane); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(cube); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({cube, plane, light});
+        ctx->Yield(2);
     };
 
     // D18: render_shadow_self
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_shadow_self");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto e1 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto e2 = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        SetPos(e1, 0.0f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Cube");
+        UsePBR(e2);
+        SetPos(e2, 0.5f, 1.5f, 0.3f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_shadow_self");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e2); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(e1); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, light});
+        ctx->Yield(2);
     };
 
-    // D19: render_bloom_effect
+    // D19: render_bloom_effect（Scene 视口不合成 bloom，Game 视图才可见；此处验证发光体+PostProcess 不破坏渲染）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_bloom_effect");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
-        ctx->Yield(2);
-        auto pp = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Post Process");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        Mr(ent).emissive = glm::vec3(4.0f, 4.0f, 4.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        entt::entity pp = Reg().create();
+        Reg().emplace<dse::PostProcessComponent>(pp);
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_bloom_effect");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(light); ctx->Yield(2); DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light, pp});
+        ctx->Yield(2);
     };
 
     // D20: render_fog_distance
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_fog_distance");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        SetPos(e1, -1.0f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Cube");
+        UsePBR(e2);
+        SetPos(e2, 0.0f, 0.5f, -6.0f);
+        auto e3 = NewPrimitive(ctx, "Cube");
+        UsePBR(e3);
+        SetPos(e3, 1.0f, 0.5f, -14.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        entt::entity pp = Reg().create();
+        {
+            auto& p = Reg().emplace<dse::PostProcessComponent>(pp);
+            p.fog_enabled = true;
+            p.fog_density = 0.15f;
+        }
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_fog_distance");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, e3, light, pp});
+        ctx->Yield(2);
     };
 
-    // D21: render_ao_corners
+    // D21: render_ao_corners（SSAO 只在 Game 视图合成；Scene 视口验证转角几何正常渲染）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_ao_corners");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto floor_ent = NewPrimitive(ctx, "Plane");
+        UsePBR(floor_ent);
+        auto wall = NewPrimitive(ctx, "Cube");
+        UsePBR(wall);
+        SetScale(wall, 4.0f, 2.0f, 0.2f);
+        SetPos(wall, 0.0f, 1.0f, -2.0f);
+        auto box = NewPrimitive(ctx, "Cube");
+        UsePBR(box);
+        SetPos(box, 0.0f, 0.5f, -1.4f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_ao_corners");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({floor_ent, wall, box, light});
+        ctx->Yield(2);
     };
 
     // ====================================================================
     // E. Camera and Viewpoint (4 tests)
     // ====================================================================
 
-    // E22: render_camera_perspective
+    // E22: render_camera_perspective（一排递远的 Cube，验证透视缩小）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_perspective");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        SetPos(e1, -1.0f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Cube");
+        UsePBR(e2);
+        SetPos(e2, 0.0f, 0.5f, -4.0f);
+        auto e3 = NewPrimitive(ctx, "Cube");
+        UsePBR(e3);
+        SetPos(e3, 1.0f, 0.5f, -8.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_camera_perspective");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, e3, light});
+        ctx->Yield(2);
     };
 
-    // E23: render_camera_orthographic
+    // E23: render_camera_orthographic（编辑器相机仅透视投影；正交需 Game 视图，此处保留场景基线）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_orthographic");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto e1 = NewPrimitive(ctx, "Cube");
+        UsePBR(e1);
+        SetPos(e1, -1.0f, 0.5f, 0.0f);
+        auto e2 = NewPrimitive(ctx, "Cube");
+        UsePBR(e2);
+        SetPos(e2, 1.0f, 0.5f, 0.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_camera_orthographic");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({e1, e2, light});
+        ctx->Yield(2);
     };
 
-    // E24: render_camera_closeup
+    // E24: render_camera_closeup（大尺寸 Cube 占满视口）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_closeup");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        SetScale(ent, 3.0f, 3.0f, 3.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
@@ -653,28 +675,27 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         SKIP_IF_NO_CAPTURE(px);
         // Close-up should fill most of the viewport
         IM_CHECK(px.NonBlackRatio() > 0.05f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 
-    // E25: render_camera_far
+    // E25: render_camera_far（远处小物体）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_far");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
+        HideOptionalPanels();
         ctx->Yield(4);
-        auto ent = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Mesh Renderer");
-        ctx->Yield(2);
-        auto light = NewSelectedEntity(ctx);
-        AddComponent(ctx, "Directional Light");
+        auto ent = NewPrimitive(ctx, "Cube");
+        UsePBR(ent);
+        SetPos(ent, 0.0f, 0.5f, -30.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
         auto px = CaptureAndLoad("render_camera_far");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
-        DeleteSelectedEntity(ctx);
-        SelectionManager::Get().SetSingle(ent); ctx->Yield(2); DeleteSelectedEntity(ctx);
+        DestroyEntities({ent, light});
+        ctx->Yield(2);
     };
 }
 

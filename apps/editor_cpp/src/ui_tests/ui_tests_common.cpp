@@ -65,6 +65,7 @@ void HideOptionalPanels() {
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
         s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
         s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
+        s.show_sequencer,
     };
     for (bool* p : toggles)
         if (p) *p = false;

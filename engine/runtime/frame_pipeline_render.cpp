@@ -292,6 +292,13 @@ void FramePipeline::BuildRenderSceneQueues() {
 
     World* world = runtime_context_.world;
 
+    // 编辑器模式：Edit 状态下不运行 Update 图（Gameplay3DModule::OnUpdate 不执行，
+    // 无人调用 MarkBatchDirty），mesh 批次缓存会永久停留在启动时的空结果，
+    // 导致编辑时创建/修改的实体不渲染。此处每帧标脏以强制重建。
+    if (runtime_context_.editor_mode) {
+        modules_impl_->MarkMeshBatchesDirty();
+    }
+
     // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内
     modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_);
 

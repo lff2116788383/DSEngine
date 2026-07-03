@@ -668,6 +668,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_chat                 = &show_agent_panel_;
         ui_services.show_blueprint            = &show_blueprint_;
         ui_services.show_vegetation_brush     = &show_vegetation_brush_;
+        ui_services.show_sequencer            = &show_sequencer_;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
             ui_services,

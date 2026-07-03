@@ -18,6 +18,28 @@
 
 namespace dse::editor::uitest {
 
+#ifdef _WIN32
+namespace {
+// system() 会弹出可见控制台窗口遮挡编辑器画面，导致截图被自己污染；
+// 改用 CREATE_NO_WINDOW 静默执行。
+bool RunHidden(char* cmd) {
+    STARTUPINFOA si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    if (!CreateProcessA(nullptr, cmd, nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        return false;
+    }
+    WaitForSingleObject(pi.hProcess, 15000);
+    DWORD exit_code = 1;
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return exit_code == 0;
+}
+} // namespace
+#endif
+
 bool CaptureEditorWindow(const std::string& output_path, int delay_ms) {
 #ifdef _WIN32
     char cmd[512];
@@ -25,8 +47,7 @@ bool CaptureEditorWindow(const std::string& output_path, int delay_ms) {
         "powershell -ExecutionPolicy Bypass -File tools/capture_viewport.ps1 "
         "-OutputPath \"%s\" -Mode window -WindowTitle DSEngine -DelayMs %d",
         output_path.c_str(), delay_ms);
-    int ret = system(cmd);
-    return ret == 0;
+    return RunHidden(cmd);
 #else
     (void)output_path; (void)delay_ms;
     return false;
@@ -42,8 +63,7 @@ bool CaptureScreenRegion(const std::string& output_path, int x, int y, int w, in
         "powershell -ExecutionPolicy Bypass -File tools/capture_viewport.ps1 "
         "-OutputPath \"%s\" -Mode region -CoordsFile \"%s\" -DelayMs 100",
         output_path.c_str(), coords);
-    int ret = system(cmd);
-    return ret == 0;
+    return RunHidden(cmd);
 #else
     (void)output_path; (void)x; (void)y; (void)w; (void)h;
     return false;
@@ -57,8 +77,7 @@ bool CaptureSceneViewport(const std::string& output_path, int delay_ms) {
         "powershell -ExecutionPolicy Bypass -File tools/capture_viewport.ps1 "
         "-OutputPath \"%s\" -Mode viewport -DelayMs %d",
         output_path.c_str(), delay_ms);
-    int ret = system(cmd);
-    return ret == 0;
+    return RunHidden(cmd);
 #else
     (void)output_path; (void)delay_ms;
     return false;
