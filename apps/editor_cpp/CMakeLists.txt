@@ -87,6 +87,7 @@ if(DSE_EDITOR_UI_TESTS)
     # （含 imgui.cpp / ImGuizmo），否则 ImGuiContext/ImGuiIO 的 ABI 在两侧不一致。
     target_compile_definitions(dse_editor_cpp PRIVATE
         DSE_EDITOR_UI_TESTS
+        DSE_RENDER_TESTS
         IMGUI_USER_CONFIG="dse_imconfig.h"
     )
 endif()

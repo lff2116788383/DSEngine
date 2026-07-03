@@ -120,6 +120,10 @@ void RegisterInspectorSectionTests(ImGuiTestEngine* engine);  // Inspector secti
 void RegisterToolPanelTests(ImGuiTestEngine* engine);         // Tool panel interaction
 void RegisterPanelDeepTests(ImGuiTestEngine* engine);         // Panel deep tests
 
+#ifdef DSE_RENDER_TESTS
+void RegisterRenderValidationTests(ImGuiTestEngine* engine);  // Viewport render validation
+#endif
+
 } // namespace dse::editor::uitest
 
 #endif // DSE_EDITOR_UI_TESTS

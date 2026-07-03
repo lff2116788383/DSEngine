@@ -255,6 +255,9 @@ void RegisterAllUiTests(ImGuiTestEngine* engine) {
     RegisterInspectorSectionTests(engine);
     RegisterToolPanelTests(engine);
     RegisterPanelDeepTests(engine);
+#ifdef DSE_RENDER_TESTS
+    RegisterRenderValidationTests(engine);
+#endif
 }
 
 } // namespace dse::editor::uitest
