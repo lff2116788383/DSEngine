@@ -4,6 +4,11 @@
 # dsengine-editor（供 editor-api 套件用）并存，互不覆盖。
 option(DSE_EDITOR_UI_TESTS "Build editor with embedded Dear ImGui Test Engine (--run-ui-tests)" OFF)
 
+
+# ─── 可选：一键发布功能（Web 构建产物上传到 DSE 服务器）─────────────────────────
+# 默认 OFF → 离线模式（仅导出 zip，不上传）。ON 时链接 libcurl，启用在线上传功能。
+option(DSE_PUBLISH_ENABLED "Enable online publish feature (requires libcurl)" OFF)
+
 # ─── IXWebSocket (WebSocket server for Control Server / MCP) ────────────────
 set(USE_TLS OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
@@ -102,6 +107,39 @@ target_compile_definitions(dse_editor_cpp PRIVATE DSE_EDITOR_HAS_IMPORTER=1)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(dse_editor_cpp PRIVATE assimp)
     target_compile_definitions(dse_editor_cpp PRIVATE DSE_HAS_ASSIMP=1)
+endif()
+
+
+# ─── Minizip (ZIP compression for Web export, always available) ────────────────
+set(DSE_MINIZIP_DIR ${CMAKE_SOURCE_DIR}/depends/assimp/contrib/zlib/contrib/minizip)
+target_sources(dse_editor_cpp PRIVATE
+    ${DSE_MINIZIP_DIR}/zip.c
+    ${DSE_MINIZIP_DIR}/ioapi.c
+    $<$<PLATFORM_ID:Windows>:${DSE_MINIZIP_DIR}/iowin32.c>
+)
+target_include_directories(dse_editor_cpp PRIVATE
+    ${CMAKE_SOURCE_DIR}/depends/assimp/contrib/zlib
+    ${CMAKE_BINARY_DIR}/depends/assimp/contrib/zlib
+    ${DSE_MINIZIP_DIR}
+)
+# Link zlib from assimp's internal build (zlibstatic target)
+if(TARGET zlibstatic)
+    target_link_libraries(dse_editor_cpp PRIVATE zlibstatic)
+elseif(TARGET zlib)
+    target_link_libraries(dse_editor_cpp PRIVATE zlib)
+else()
+    # Fallback: find system zlib
+    find_package(ZLIB QUIET)
+    if(ZLIB_FOUND)
+        target_link_libraries(dse_editor_cpp PRIVATE ZLIB::ZLIB)
+    endif()
+endif()
+
+# ─── Online publish (libcurl, only when DSE_PUBLISH_ENABLED=ON) ────────────────
+if(DSE_PUBLISH_ENABLED)
+    find_package(CURL REQUIRED)
+    target_compile_definitions(dse_editor_cpp PRIVATE DSE_PUBLISH_ENABLED=1)
+    target_link_libraries(dse_editor_cpp PRIVATE CURL::libcurl)
 endif()
 
 # 将编译产物放到 bin 目录下。UI 测试构建用独立产物名，与常规编辑器并存不覆盖。

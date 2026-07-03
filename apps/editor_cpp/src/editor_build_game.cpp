@@ -6,6 +6,7 @@
 #include "editor_console_panel.h"
 #include "editor_scene_tabs.h"
 #include "editor_project.h"
+#include "editor_build_game_publish.h"
 
 #include "engine/assets/pak_writer.h"
 #include "engine/assets/asset_scanner.h"
@@ -64,6 +65,9 @@ struct BuildState {
     std::string last_exe_name;
 
     std::string last_launch_args;      // 加密构建时通过 launch 参数传 --bundle/--key/--script
+
+    // Web publish state
+    PublishState publish_state;
 
     bool dialog_open = false;
     bool pending_open = false;  // 菜单作用域置位，DrawBuildGameDialog 内再 OpenPopup（与 BeginPopupModal 同 ID 栈）
@@ -311,6 +315,53 @@ void DoBuild(BuildState& state) {
 
     if (state.platform == BuildPlatform::Android) {
         DoBuildAndroid(state);
+        return;
+    }
+
+    // Web platform: use publish workflow (minizip + optional upload)
+    if (state.platform == BuildPlatform::Web) {
+        AppendLog(state, "=== Web Build Started ===");
+
+        fs::path out_dir(state.output_dir);
+        std::error_code ec;
+        fs::create_directories(out_dir, ec);
+        if (ec) {
+            AppendLog(state, "ERROR: Cannot create output directory: " + ec.message());
+            FinishBuild(state, false);
+            return;
+        }
+        state.last_output_dir = out_dir.string();
+
+        // TODO: Call Emscripten build here (emcc/emmake)
+        // For now, if the output dir already has index.html (pre-built), just zip it.
+        if (!fs::exists(out_dir / "index.html", ec)) {
+            AppendLog(state, "ERROR: Web build output not found. Run Emscripten build first.");
+            AppendLog(state, "  Expected index.html in: " + out_dir.string());
+            FinishBuild(state, false);
+            return;
+        }
+
+        AppendLog(state, "Web build output found, compressing...");
+        std::string zip_path = ZipDirectory(out_dir.string());
+        if (zip_path.empty()) {
+            AppendLog(state, "ERROR: Failed to compress Web build output");
+            FinishBuild(state, false);
+            return;
+        }
+
+        state.publish_state.local_zip_path = zip_path;
+        state.publish_state.publish_success = true;
+        state.publish_state.publish_done = true;
+
+        auto zip_sz = fs::file_size(zip_path, ec);
+        if (!ec) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Zip size: %.1f MB", (double)zip_sz / (1024.0 * 1024.0));
+            AppendLog(state, buf);
+        }
+        AppendLog(state, "=== Web Export Complete ===");
+        AppendLog(state, "Output: " + zip_path);
+        FinishBuild(state, true);
         return;
     }
 
@@ -720,6 +771,11 @@ void DrawBuildGameDialog() {
             ImGui::InputText("##icon", state.icon_path, sizeof(state.icon_path));
             ImGui::SameLine();
             ImGui::TextDisabled("(optional)");
+        }
+
+        // Web publish section
+        if (state.platform == BuildPlatform::Web) {
+            DrawWebPublishSection(state.publish_state, busy);
         }
 
         ImGui::EndDisabled();
