@@ -369,9 +369,14 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             auto& mgr = GetUndoRedoManager();
             IM_CHECK(mgr.CanUndo());
             IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "PostProcessComponent.bloom_threshold");
-            mgr.Undo(); ctx->Yield(2);
+            const std::string pp_undo = std::string("Edit/Undo (") + mgr.GetUndoDescription() + ")";
+            ctx->SetRef("//DSEngineRoot");
+            ctx->MenuClick(pp_undo.c_str());
+            ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::PostProcessComponent>(ent).bloom_threshold - before) < 0.01f);
-            mgr.Redo(); ctx->Yield(2);
+            const std::string pp_redo = std::string("Edit/Redo (") + mgr.GetRedoDescription() + ")";
+            ctx->MenuClick(pp_redo.c_str());
+            ctx->Yield(2);
             IM_CHECK(std::abs(Reg().get<dse::PostProcessComponent>(ent).bloom_threshold - 3.5f) < 0.01f);
 
             DeleteSelectedEntity(ctx, ent);

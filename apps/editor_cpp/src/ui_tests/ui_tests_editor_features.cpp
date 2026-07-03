@@ -46,18 +46,17 @@ void RegisterEditorFeatureTests(ImGuiTestEngine* e) {
             IM_CHECK(w != nullptr);
 
             // Verify debugger state is accessible
-            auto& state = GetVsDebuggerState();
-            int bp_count_before = static_cast<int>(state.breakpoints.size());
+            int bp_count_before = static_cast<int>(GetVsDebuggerState().breakpoints.size());
 
             // Toggle a breakpoint via helper
             VsToggleBreakpoint(1);
             ctx->Yield(2);
-            IM_CHECK(static_cast<int>(state.breakpoints.size()) == bp_count_before + 1);
+            IM_CHECK(static_cast<int>(GetVsDebuggerState().breakpoints.size()) == bp_count_before + 1);
 
             // Toggle again to remove
             VsToggleBreakpoint(1);
             ctx->Yield(2);
-            IM_CHECK(static_cast<int>(state.breakpoints.size()) == bp_count_before);
+            IM_CHECK(static_cast<int>(GetVsDebuggerState().breakpoints.size()) == bp_count_before);
 
             HideOptionalPanels();
             ctx->Yield(2);
@@ -71,16 +70,15 @@ void RegisterEditorFeatureTests(ImGuiTestEngine* e) {
             *Services().show_visual_script = true;
             ctx->Yield(4);
 
-            auto& state = GetVsDebuggerState();
-            IM_CHECK(state.debug_state == VsDebugState::Idle);
+            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Idle);
 
             VsDebugStart();
             ctx->Yield(2);
-            IM_CHECK(state.debug_state == VsDebugState::Running);
+            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Running);
 
             VsDebugStop();
             ctx->Yield(2);
-            IM_CHECK(state.debug_state == VsDebugState::Idle);
+            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Idle);
 
             HideOptionalPanels();
             ctx->Yield(2);
@@ -97,20 +95,20 @@ void RegisterEditorFeatureTests(ImGuiTestEngine* e) {
             ImGuiWindow* w = FindActiveWindow("Animation Clip Editor");
             IM_CHECK(w != nullptr);
 
-            auto& state = GetAnimClipEditorState();
+            // Reset state before test
+            AnimClipStop();
+            ctx->Yield(2);
 
             // Start playing
-            state.playing = false;
-            state.current_time = 0.0f;
             AnimClipPlay();
             ctx->Yield(2);
-            IM_CHECK(state.playing == true);
+            IM_CHECK(GetAnimClipEditorState().playing == true);
 
             // Stop
             AnimClipStop();
             ctx->Yield(2);
-            IM_CHECK(state.playing == false);
-            IM_CHECK(state.current_time == 0.0f);
+            IM_CHECK(GetAnimClipEditorState().playing == false);
+            IM_CHECK(GetAnimClipEditorState().current_time == 0.0f);
 
             HideOptionalPanels();
             ctx->Yield(2);
@@ -147,26 +145,26 @@ void RegisterEditorFeatureTests(ImGuiTestEngine* e) {
             // Sequencer is always shown (static bool show_sequencer = true)
             ctx->Yield(4);
 
-            ImGuiWindow* w = FindActiveWindow("Cinematic Sequencer");
+            ImGuiWindow* w = FindActiveWindow("Sequencer");
             IM_CHECK(w != nullptr);
 
-            auto& state = GetSequencerState();
+            // Reset state before test
+            SequencerStop();
+            ctx->Yield(2);
 
             // Play/Pause
-            state.playing = false;
-            state.playhead_time = 0.0f;
             SequencerPlay();
             ctx->Yield(2);
-            IM_CHECK(state.playing == true);
+            IM_CHECK(GetSequencerState().playing == true);
 
             SequencerPause();
             ctx->Yield(2);
-            IM_CHECK(state.playing == false);
+            IM_CHECK(GetSequencerState().playing == false);
 
             // Stop resets playhead
             SequencerStop();
             ctx->Yield(2);
-            IM_CHECK(state.playhead_time == 0.0f);
+            IM_CHECK(GetSequencerState().playhead_time == 0.0f);
 
             ctx->Yield(2);
         };

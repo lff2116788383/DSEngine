@@ -132,9 +132,9 @@ void RegisterMiscEditorTests(ImGuiTestEngine* e) {
 
             const bool trig_before = Reg().get<dse::BoxCollider3DComponent>(ent).is_trigger;
 
-            ctx->ItemInputValue("//Inspector/##boxcol3d_bounce", 0.5f);
-            ctx->ItemInputValue("//Inspector/##boxcol3d_fric", 0.2f);
-            ctx->ItemClick("//Inspector/##boxcol3d_trigger");
+            ctx->ItemInputValue("//Inspector/##BoxCollider3DComponent.bounciness", 0.5f);
+            ctx->ItemInputValue("//Inspector/##BoxCollider3DComponent.friction", 0.2f);
+            ctx->ItemClick("//Inspector/##BoxCollider3DComponent.is_trigger");
             ctx->Yield(2);
 
             const auto& col = Reg().get<dse::BoxCollider3DComponent>(ent);
