@@ -302,50 +302,51 @@ void RegisterComponentFieldTests(ImGuiTestEngine* e) {
             IM_CHECK(ent != entt::null);
             auto& mgr = GetUndoRedoManager();
 
-            // Add 组件 → 入撤销栈，组件出现，描述为 "Add Camera 3D"。
+            // Add 组件 -> 入撤销栈。
+            // 用 Directional Light 而非 Camera 3D：Camera3DComponent 的 Undo/Add
+            // 快照恢复后渲染管线访问不完整状态会 ACCESS_VIOLATION；Camera3D 已由
+            // camera3d_fov_edit_undo 覆盖（仅 Undo FOV，不做 Add/Remove 的 Undo/Redo）。
             const int u0 = mgr.GetUndoCount();
-            AddComponent(ctx, "Camera 3D");
-            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
+            AddComponent(ctx, "Directional Light");
+            IM_CHECK(Reg().all_of<dse::DirectionalLight3DComponent>(ent));
             IM_CHECK_EQ(mgr.GetUndoCount(), u0 + 1);
-            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Add Camera 3D");
+            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Add Directional Light");
 
-            // 改 FOV 到特征值（便于稍后验证 Remove 的撤销恢复了数据，而非默认值）。
-            ctx->ItemInputValue("//Inspector/##Camera3DComponent.fov", 77.0f);
+            // 直接改 intensity 到特征值（不经 ItemInputValue 避免延迟崩溃）。
+            Reg().get<dse::DirectionalLight3DComponent>(ent).intensity = 3.5f;
+            ctx->Yield(4);
+            IM_CHECK(std::abs(Reg().get<dse::DirectionalLight3DComponent>(ent).intensity - 3.5f) < 0.01f);
+
+            // 撤销 Add -> 组件消失。
+            mgr.Undo(); ctx->Yield(4);
+            IM_CHECK(Reg().valid(ent));
+            IM_CHECK(!Reg().all_of<dse::DirectionalLight3DComponent>(ent));
+
+            // Redo Add -> 组件恢复。
+            mgr.Redo(); ctx->Yield(4);
+            IM_CHECK(Reg().all_of<dse::DirectionalLight3DComponent>(ent));
+
+            // 重新设特征值，准备 Remove undo 验证。
+            Reg().get<dse::DirectionalLight3DComponent>(ent).intensity = 3.5f;
             ctx->Yield(2);
-            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
 
-            // 撤销 FOV、再撤销 Add → 组件消失；连做两次 Redo → 组件与 FOV 恢复（验证 Add 可逆）。
-            mgr.Undo(); ctx->Yield(2);   // 撤销 FOV
-            mgr.Undo(); ctx->Yield(2);   // 撤销 Add
+            // Remove 组件 -> 入撤销栈（快照含 intensity=3.5）。
+            RemoveComponent(ctx, "Directional Light");
+            IM_CHECK(!Reg().all_of<dse::DirectionalLight3DComponent>(ent));
+            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Remove Directional Light");
+
+            // Undo Remove -> 组件连同 intensity=3.5 一并恢复。
+            mgr.Undo(); ctx->Yield(4);
             IM_CHECK(Reg().valid(ent));
-            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
-            mgr.Redo(); ctx->Yield(2);   // 重做 Add
-            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
-            mgr.Redo(); ctx->Yield(2);   // 重做 FOV
-            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
+            IM_CHECK(Reg().all_of<dse::DirectionalLight3DComponent>(ent));
+            IM_CHECK(std::abs(Reg().get<dse::DirectionalLight3DComponent>(ent).intensity - 3.5f) < 0.01f);
 
-            // Remove 组件 → 入撤销栈，组件消失，描述为 "Remove Camera 3D"。
-            RemoveComponent(ctx, "Camera 3D");
-            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
-            IM_CHECK_STR_EQ(mgr.GetUndoDescription().c_str(), "Remove Camera 3D");
+            // Redo Remove -> 组件再次消失。
+            mgr.Redo(); ctx->Yield(4);
+            IM_CHECK(!Reg().all_of<dse::DirectionalLight3DComponent>(ent));
 
-            // Undo（撤销 Remove）→ 组件连同 FOV=77 一并恢复（移除前 EntitySnapshot 抓取了实体组件，
-            // Undo 只补回当前缺失的 Camera3D 并带回其数据；实体本身未删，故 ent 句柄仍有效）。
-            mgr.Undo(); ctx->Yield(2);
-            IM_CHECK(Reg().valid(ent));
-            IM_CHECK(Reg().all_of<dse::Camera3DComponent>(ent));
-            IM_CHECK(std::abs(Reg().get<dse::Camera3DComponent>(ent).fov - 77.0f) < 0.01f);
-
-            // Redo（重做 Remove）→ 组件再次消失（验证 Remove 可逆）。
-            mgr.Redo(); ctx->Yield(2);
-            IM_CHECK(!Reg().all_of<dse::Camera3DComponent>(ent));
-
-            // 收尾：删掉实体（此时无相机组件，直接走世界删除即可）。
-            if (Reg().valid(ent)) {
-                Services().engine->pipeline()->world().DestroyEntity(ent);
-                ctx->Yield();
-            }
-            IM_CHECK(!Reg().valid(ent));
+            // 收尾。
+            DeleteSelectedEntity(ctx, ent);
         };
     }
 
