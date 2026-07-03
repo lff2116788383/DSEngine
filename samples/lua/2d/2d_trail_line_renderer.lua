@@ -8,7 +8,7 @@ function M.Setup(config)
     dse.ecs.add_transform(cam, 0, 0, 0, 1, 1, 1)
     dse.ecs.add_camera(cam, config.camera_ortho_size or 7.0)
 
-    local tex = dse.assets.load_texture("data/textures/white.png")
+    local tex = (dse.assets and dse.assets.load_texture) and dse.assets.load_texture("data/textures/white.png") or 0
 
     -- Trail renderer: moving object that leaves a trail
     local mover = dse.ecs.create_entity()

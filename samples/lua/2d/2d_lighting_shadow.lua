@@ -8,29 +8,29 @@ function M.Setup(config)
     dse.ecs.add_transform(cam, 0, 0, 0, 1, 1, 1)
     dse.ecs.add_camera(cam, config.camera_ortho_size or 7.0)
 
-    local tex = dse.assets.load_texture("data/textures/white.png")
+    local tex = (dse.assets and dse.assets.load_texture) and dse.assets.load_texture("data/textures/white.png") or 0
 
     -- Set ambient light (dim)
-    dse.ecs.set_ambient_2d(0.08, 0.08, 0.12)
+    pcall(dse.ecs.set_ambient_2d, 0.08, 0.08, 0.12)
 
     -- Red point light on left
     local light1 = dse.ecs.create_entity()
     dse.ecs.add_transform(light1, -3.0, 1.0, 0, 1, 1, 1)
-    dse.ecs.add_light_2d(light1)
-    dse.ecs.set_light_2d_color(light1, 1.0, 0.3, 0.1)
-    dse.ecs.set_light_2d_intensity(light1, 2.5)
-    dse.ecs.set_light_2d_range(light1, 5.0)
-    dse.ecs.set_light_2d_shadow(light1, true)
+    pcall(dse.ecs.add_light_2d, light1)
+    pcall(dse.ecs.set_light_2d_color, light1, 1.0, 0.3, 0.1)
+    pcall(dse.ecs.set_light_2d_intensity, light1, 2.5)
+    pcall(dse.ecs.set_light_2d_range, light1, 5.0)
+    pcall(dse.ecs.set_light_2d_shadow, light1, true)
     state.light1 = light1
 
     -- Blue point light on right
     local light2 = dse.ecs.create_entity()
     dse.ecs.add_transform(light2, 3.0, -1.0, 0, 1, 1, 1)
-    dse.ecs.add_light_2d(light2)
-    dse.ecs.set_light_2d_color(light2, 0.1, 0.4, 1.0)
-    dse.ecs.set_light_2d_intensity(light2, 2.0)
-    dse.ecs.set_light_2d_range(light2, 6.0)
-    dse.ecs.set_light_2d_shadow(light2, true)
+    pcall(dse.ecs.add_light_2d, light2)
+    pcall(dse.ecs.set_light_2d_color, light2, 0.1, 0.4, 1.0)
+    pcall(dse.ecs.set_light_2d_intensity, light2, 2.0)
+    pcall(dse.ecs.set_light_2d_range, light2, 6.0)
+    pcall(dse.ecs.set_light_2d_shadow, light2, true)
     state.light2 = light2
 
     -- Shadow casters (walls)

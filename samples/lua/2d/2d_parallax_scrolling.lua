@@ -10,7 +10,7 @@ function M.Setup(config)
     dse.ecs.add_camera_controller_2d(cam)
     dse.ecs.camera_set_bounds(cam, -20, 20, -10, 10)
 
-    local tex = dse.assets.load_texture("data/textures/white.png")
+    local tex = (dse.assets and dse.assets.load_texture) and dse.assets.load_texture("data/textures/white.png") or 0
 
     -- Create parallax entity
     local parallax = dse.ecs.create_entity()

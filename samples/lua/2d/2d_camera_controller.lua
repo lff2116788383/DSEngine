@@ -7,13 +7,13 @@ function M.Setup(config)
     local cam = dse.ecs.create_entity()
     dse.ecs.add_transform(cam, 0, 0, 0, 1, 1, 1)
     dse.ecs.add_camera(cam, config.camera_ortho_size or 6.0)
-    dse.ecs.add_camera_controller_2d(cam)
-    dse.ecs.camera_set_zoom(cam, 1.0)
-    dse.ecs.camera_set_bounds(cam, -15, 15, -10, 10)
-    dse.ecs.camera_set_look_ahead(cam, 2.0)
+    pcall(dse.ecs.add_camera_controller_2d, cam)
+    pcall(dse.ecs.camera_set_zoom, cam, 1.0)
+    pcall(dse.ecs.camera_set_bounds, cam, -15, 15, -10, 10)
+    pcall(dse.ecs.camera_set_look_ahead, cam, 2.0)
     state.cam = cam
 
-    local tex = dse.assets.load_texture("data/textures/white.png")
+    local tex = (dse.assets and dse.assets.load_texture) and dse.assets.load_texture("data/textures/white.png") or 0
 
     -- Player character (camera target)
     local player = dse.ecs.create_entity()
@@ -50,7 +50,7 @@ function M.Update(dt)
 
     -- Trigger camera shake periodically
     if math.floor(state.elapsed) % 5 == 0 and state.elapsed - math.floor(state.elapsed) < dt * 2 then
-        dse.ecs.camera_shake(state.cam, 0.3, 0.5)
+        pcall(dse.ecs.camera_shake, state.cam, 0.3, 0.5)
     end
 end
 

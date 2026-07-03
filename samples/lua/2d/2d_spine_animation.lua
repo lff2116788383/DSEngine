@@ -8,7 +8,7 @@ function M.Setup(config)
     dse.ecs.add_transform(cam, 0, 0, 0, 1, 1, 1)
     dse.ecs.add_camera(cam, config.camera_ortho_size or 6.0)
 
-    local tex = dse.assets.load_texture("data/textures/white.png")
+    local tex = (dse.assets and dse.assets.load_texture) and dse.assets.load_texture("data/textures/white.png") or 0
 
     -- Spine character (if spine data available)
     local spine_entity = dse.ecs.create_entity()
