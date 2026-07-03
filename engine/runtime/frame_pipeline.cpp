@@ -1354,6 +1354,8 @@ void FramePipeline::SetSceneViewMode(int mode) {
 
 unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection) {
     if (!initialized_ || !runtime_context_.rhi_device) return 0;
+    // 渲染线程激活时主线程不得直接执行 pass（GL context 归渲染线程所有）
+    if (render_thread_active_.load()) return 0;
 
     // ä¿å­˜å½“å‰ç¼–è¾‘å™¨ç›¸æœºçŠ¶æ€
     const bool saved_use = render_pass_context_.use_editor_camera;

@@ -53,15 +53,17 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    float near_p = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_p  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
-    float fov_y  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
-    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-    // Camera-Relative: cam_pos ä¸º vec3(0)ï¼ˆç›¸æœºåœ¨åŽŸç‚¹ï¼‰
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    float near_p = active_cam.near_clip;
+    float far_p  = active_cam.far_clip;
+    float fov_y  = active_cam.fov_y;
+    float aspect = active_cam.aspect;
+    // Camera-Relative: cam_pos is vec3(0) (camera at origin)
     glm::vec3 cam_pos   = glm::vec3(0.0f);
-    glm::vec3 cam_right = snap.camera_3d.right;
-    glm::vec3 cam_up    = snap.camera_3d.up;
-    glm::vec3 cam_fwd   = snap.camera_3d.forward;
+    glm::vec3 cam_right = active_cam.right;
+    glm::vec3 cam_up    = active_cam.up;
+    glm::vec3 cam_fwd   = active_cam.forward;
     const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
 
     glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};
@@ -144,14 +146,16 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    float near_p = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_p  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
-    float fov_y  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
-    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    float near_p = active_cam.near_clip;
+    float far_p  = active_cam.far_clip;
+    float fov_y  = active_cam.fov_y;
+    float aspect = active_cam.aspect;
     glm::vec3 cam_pos   = glm::vec3(0.0f); // Camera-Relative: cam at origin
-    glm::vec3 cam_right = snap.camera_3d.right;
-    glm::vec3 cam_up    = snap.camera_3d.up;
-    glm::vec3 cam_fwd   = snap.camera_3d.forward;
+    glm::vec3 cam_right = active_cam.right;
+    glm::vec3 cam_up    = active_cam.up;
+    glm::vec3 cam_fwd   = active_cam.forward;
     const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
 
     // Pre-scale right/up by tan_fov for ray reconstruction in shader
@@ -288,21 +292,16 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
     // Camera-Relative: cam_pos åœ¨ç€è‰²å™¨ä¸­åº”ä¸º vec3(0)ï¼ˆç›¸æœºåœ¨åŽŸç‚¹ï¼‰
-    glm::vec3 cam_pos = glm::vec3(0.0f);
-    float cam_fov  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
-    float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
-    glm::vec3 cam_fwd = snap.camera_3d.forward;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    if (!active_cam.valid) return;
+    glm::vec3 cam_pos = glm::vec3(0.0f);  // Camera-Relative: cam at origin
+    float cam_fov  = active_cam.fov_y;
+    float cam_near = active_cam.near_clip;
+    float cam_far  = active_cam.far_clip;
+    glm::vec3 cam_fwd = active_cam.forward;
 
-    if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
-        glm::mat4 inv_view = glm::inverse(ctx_.editor_view);
-        cam_fwd = -glm::normalize(glm::vec3(inv_view[2]));
-    } else if (!snap.camera_3d.valid) {
-        return;
-    }
-
-    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+    float aspect = active_cam.aspect;
     float tan_fov_y = std::tan(glm::radians(cam_fov) * 0.5f);
 
     glm::vec3 sun_dir(0.0f, -1.0f, 0.0f);
@@ -371,11 +370,12 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
     if (snap.decal_count == 0) return;
 
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    glm::mat4 view_mat = snap.camera_3d.view;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    glm::mat4 view_mat = active_cam.view;
     glm::mat4 proj_mat(1.0f);
-    if (snap.camera_3d.valid) {
-        float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
-        proj_mat = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov), aspect, snap.camera_3d.near_clip, snap.camera_3d.far_clip);
+    if (active_cam.valid) {
+        proj_mat = clip_correction * active_cam.proj;
     }
     const glm::mat4 inv_vp = glm::inverse(proj_mat * view_mat);
 
@@ -542,14 +542,11 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     // Get current camera VP matrix for AABB projection
     glm::mat4 view_projection(1.0f);
     {
-        const auto& snap = *ctx_.snapshot;
-        if (snap.camera_3d.valid) {
+        const ActiveCamera active_cam = GetActiveCamera(ctx_,
+            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+        if (active_cam.valid) {
             const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
-            glm::mat4 projection = clip_correction * glm::perspective(
-                glm::radians(snap.camera_3d.fov),
-                static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
-            view_projection = projection * snap.camera_3d.view;
+            view_projection = (clip_correction * active_cam.proj) * active_cam.view;
 
             // å•æº cull ç€è‰²å™¨ç»Ÿä¸€å‡è®¾ ndc.zâˆˆ[0,1]ã€‚GL/WebGL2 çš„ GetProjectionCorrection
             // åœ¨ Z è¡Œä¸ºæ’ç­‰ï¼ˆndc.zâˆˆ[-1,1]ï¼‰ï¼Œæ•…ç»™ä¸Šä¼ çŸ©é˜µè¡¥ä¸€æ¬¡ z'=0.5z+0.5 æŠ˜å ï¼Œä½¿å››åŽç«¯
@@ -794,14 +791,11 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
     glm::mat4 view_projection(1.0f);
     glm::vec4 frustum_planes[6] = {};
     {
-        const auto& snap = *ctx_.snapshot;
-        if (snap.camera_3d.valid) {
+        const ActiveCamera active_cam = GetActiveCamera(ctx_,
+            static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+        if (active_cam.valid) {
             const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
-            glm::mat4 projection = clip_correction * glm::perspective(
-                glm::radians(snap.camera_3d.fov),
-                static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())),
-                snap.camera_3d.near_clip, snap.camera_3d.far_clip);
-            view_projection = projection * snap.camera_3d.view;
+            view_projection = (clip_correction * active_cam.proj) * active_cam.view;
 
             // Extract frustum planes from VP matrix (Gribb/Hartmann method)
             const glm::mat4& m = view_projection;
@@ -874,10 +868,12 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     // Camera-Relative: shadow_center è½¬æ¢åˆ°ç›¸æœºç›¸å¯¹ç©ºé—´
     glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-    const float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    const float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
-    const float tan_half_fov = std::tan(glm::radians(snap.camera_3d.valid ? snap.camera_3d.fov * 0.5f : 30.0f));
-    const glm::mat4 inv_view = snap.camera_3d.valid ? glm::inverse(snap.camera_3d.view) : glm::mat4(1.0f);
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1)));
+    const float cam_near = active_cam.valid ? active_cam.near_clip : 0.1f;
+    const float aspect = active_cam.aspect;
+    const float tan_half_fov = std::tan(glm::radians(active_cam.fov_y * 0.5f));
+    const glm::mat4 inv_view = active_cam.valid ? glm::inverse(active_cam.view) : glm::mat4(1.0f);
     const float ortho_size = ComputeCascadeFit(
         inv_view, snap.directional_light.direction, cam_near,
         snap.directional_light.cascade_splits[0], aspect, tan_half_fov).size;
@@ -1027,20 +1023,16 @@ void WeatherPass::Execute(CommandBuffer& cmd_buffer) {
     if (depth_tex == 0) return;
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    glm::vec3 cam_pos(0.0f);
-    float cam_fov  = snap.camera_3d.valid ? snap.camera_3d.fov       : 60.0f;
-    float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
-    glm::vec3 cam_fwd = snap.camera_3d.forward;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    if (!active_cam.valid) return;
+    glm::vec3 cam_pos(0.0f);  // Camera-Relative: cam at origin
+    float cam_fov  = active_cam.fov_y;
+    float cam_near = active_cam.near_clip;
+    float cam_far  = active_cam.far_clip;
+    glm::vec3 cam_fwd = active_cam.forward;
 
-    if (ctx_.editor_mode && ctx_.use_editor_camera) {
-        cam_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
-        cam_fwd = -glm::normalize(glm::vec3(glm::inverse(ctx_.editor_view)[2]));
-    } else if (!snap.camera_3d.valid) {
-        return;
-    }
-
-    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height()));
+    float aspect = active_cam.aspect;
     float tan_fov_y = std::tan(glm::radians(cam_fov) * 0.5f);
     float current_time = Time::TimeSinceStartup();
 

@@ -89,19 +89,27 @@ void PreZPass::Setup(RenderGraph& graph) {
 void PreZPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.prez, glm::vec4(0.0f), true});
     const auto& snap = *ctx_.snapshot;
-    if (snap.camera_3d.valid) {
+    const bool use_editor_cam = ctx_.editor_mode && ctx_.use_editor_camera;
+    if (use_editor_cam || snap.camera_3d.valid) {
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
+        // Editor camera override: PreZ depth must match the camera used by ForwardScenePass
+        // (editor branch applies no TAA jitter, mirroring the scene pass editor branch).
+        glm::mat4 view = use_editor_cam
+            ? ctx_.editor_view * glm::translate(glm::mat4(1.0f), ctx_.camera_offset)
+            : snap.camera_3d.view;
+        glm::mat4 projection = use_editor_cam
+            ? clip_correction * ctx_.editor_projection
+            : clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 snap.camera_3d.near_clip, snap.camera_3d.far_clip);
 
         // TAA jitter å¿…é¡»ä¸Ž ForwardScenePass ä¸€è‡´ï¼Œå¦åˆ™ PreZ æ·±åº¦ä¸Žä¸» pass ä¸åŒ¹é…å¯¼è‡´é—ªçƒ
-        if (ctx_.taa_active) {
+        if (ctx_.taa_active && !use_editor_cam) {
             projection[2][0] += ctx_.taa_jitter.x * 2.0f;
             projection[2][1] += ctx_.taa_jitter.y * 2.0f;
         }
 
-        FrameContext frame{snap.camera_3d.view, projection};
+        FrameContext frame{view, projection};
         cmd_buffer.BindPipeline(ctx_.pipeline_states.prez);
 
         // GPU-driven PreZ: eligible å®žä½“ depth-only indirect draw
@@ -110,7 +118,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             && ctx_.gpu_indirect_draw_count > 0;
         if (use_gpu_indirect) {
             auto* rhi = ctx_.rhi_device;
-            rhi->SetupGPUDrivenShadowShader(snap.camera_3d.view, projection);
+            rhi->SetupGPUDrivenShadowShader(view, projection);
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
             rhi->MultiDrawIndexedIndirect(ctx_.gpu_draw_cmd_ssbo.raw(),
@@ -124,7 +132,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         }
         RenderScenePassContext pass_ctx;
         pass_ctx.world = ctx_.world;
-        pass_ctx.view = &snap.camera_3d.view;
+        pass_ctx.view = &view;
         pass_ctx.projection = &projection;
         pass_ctx.camera_offset = ctx_.camera_offset;
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::PreZ, cmd_buffer, pass_ctx);
@@ -168,13 +176,17 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     constexpr float kAtlasHeight = 2048.0f;
 
     // çº§è”åˆ†è£‚è·ç¦»ï¼šPSSM ä¸Žç»„ä»¶æ‰‹åŠ¨ cascade_splits æŒ‰ lambda æ··åˆ
-    const float cam_near = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    const float cam_far  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    // Cascade fit follows the camera actually rendering the scene RT
+    // (editor camera override when active, otherwise the game camera).
+    const float screen_aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, screen_aspect);
+    const float cam_near = active_cam.valid ? active_cam.near_clip : 0.1f;
+    const float cam_far  = active_cam.valid ? active_cam.far_clip  : 1000.0f;
     const float lambda   = glm::clamp(dl.cascade_split_lambda, 0.0f, 1.0f);
     const float ratio    = cam_far / std::max(cam_near, 0.001f);
-    const float aspect   = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
-    const float tan_half_fov = std::tan(glm::radians(snap.camera_3d.valid ? snap.camera_3d.fov * 0.5f : 30.0f));
-    const glm::mat4 inv_view = snap.camera_3d.valid ? glm::inverse(snap.camera_3d.view) : glm::mat4(1.0f);
+    const float aspect   = active_cam.aspect;
+    const float tan_half_fov = std::tan(glm::radians(active_cam.fov_y * 0.5f));
+    const glm::mat4 inv_view = active_cam.valid ? glm::inverse(active_cam.view) : glm::mat4(1.0f);
 
     for (int i = 0; i < CSM_CASCADES; ++i) {
         const float p = static_cast<float>(i + 1) / static_cast<float>(CSM_CASCADES);
@@ -199,7 +211,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
             // é€çº§è”ä»¥å…¶è§†é”¥åˆ‡ç‰‡è´¨å¿ƒä¸ºå¯¹ç„¦ç‚¹ï¼ˆæ ‡å‡† CSMï¼‰ï¼Œè¿‘çº§è”ç›’ä¸å†è¢«è¿œç„¦ç‚¹æ¼æŽ‰ã€‚
             // é€€åŒ–åœºæ™¯ï¼ˆæ— æœ‰æ•ˆç›¸æœºåˆ‡ç‰‡ï¼‰å›žé€€åˆ°å…¨å±€ shadow_centerã€‚
             const glm::vec3 cascade_center =
-                (snap.camera_3d.valid) ? fit.center : shadow_center;
+                active_cam.valid ? fit.center : shadow_center;
             auto cam = ComputeDirectionalLightCamera(
                 cascade_center, dl.direction, size, clip_correction, static_cast<float>(kShadowRes[i]));
 
@@ -458,8 +470,11 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         frame.view = gpu_view; frame.projection = gpu_proj;
 
         if (snap.skybox.valid) {
+            const glm::mat4 skybox_view = snap.skybox.has_transform
+                ? gpu_view * glm::mat4_cast(glm::conjugate(snap.skybox.rotation))
+                : gpu_view;
             skybox_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, snap.skybox.cubemap_handle,
-                                  gpu_view, gpu_proj);
+                                  skybox_view, gpu_proj);
         }
     } else if (snap.camera_3d.valid) {
         render_3d = true;
