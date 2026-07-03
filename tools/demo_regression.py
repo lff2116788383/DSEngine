@@ -170,13 +170,13 @@ def run_demo(
     env["DSE_SCREENSHOT_FRAME"] = str(screenshot_frame)
     env["DSE_SCREENSHOT_PATH"] = str(screenshot_path)
     env["DSE_AUTO_BATTLE"] = "1"
-    env["DSE_SCREENSHOT_TARGET"] = "main"
+    env["DSE_SCREENSHOT_TARGET"] = "swapchain" if backend == "vulkan" else "main"
 
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [str(exe)]
     # standalone exe (dsengine_game_*) 需要 --script 参数
-    if "Game" in exe.name or "standalone" in exe.name:
+    if "game" in exe.name.lower() or "standalone" in exe.name.lower():
         cmd.append("--script=samples/lua/main.lua")
 
     try:
