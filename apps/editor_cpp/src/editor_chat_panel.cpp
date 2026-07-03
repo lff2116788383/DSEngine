@@ -264,7 +264,7 @@ void ChatPanel::StartBridge() {
         }
     });
 
-    EditorLog(LogLevel::Info, "[ChatPanel] AI bridge started.");
+    EditorLogCat(LogLevel::Info, "ChatPanel", "AI bridge started.");
 }
 
 void ChatPanel::StopBridge() {

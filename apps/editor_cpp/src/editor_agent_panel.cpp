@@ -343,7 +343,7 @@ void AgentPanel::StartBridge() {
         }
     });
 
-    EditorLog(LogLevel::Info, "[AgentPanel] Agent bridge started.");
+    EditorLogCat(LogLevel::Info, "AgentPanel", "Agent bridge started.");
 }
 
 void AgentPanel::StopBridge() {

@@ -1,16 +1,14 @@
 /**
  * @file debug.h
- * @brief 调试与日志系统，提供日志记录、断言和基础的调试工具
+ * @brief Production-grade logging system with categories, level filtering, file rotation,
+ *        crash-safe flush, and callback mechanism for editor integration.
  */
-
-//
-// Created by captainchen on 2021/8/23.
-//
 
 #ifndef UNTITLED_DEBUG_H
 #define UNTITLED_DEBUG_H
 
 #include <cstring>
+#include <functional>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -20,15 +18,31 @@ namespace dse::debug {
 
 enum class LogLevel {
     Trace = 0,
+    Debug,
     Info,
     Warn,
     Error,
+    Fatal,
     Off
 };
 
+/// Callback signature: (level, category, message, timestamp)
+using LogCallback = std::function<void(LogLevel, const char*, const std::string&, const std::string&)>;
+
 DSE_EXPORT void LogMessage(LogLevel level, const std::string& message);
+DSE_EXPORT void LogMessageCat(LogLevel level, const char* category, const std::string& message);
 DSE_EXPORT void SetLogLevel(LogLevel level);
 DSE_EXPORT LogLevel GetLogLevel();
+
+/// Register a callback to receive all log messages (used by editor console).
+/// Only one callback is supported; setting a new one replaces the old.
+DSE_EXPORT void SetLogCallback(LogCallback cb);
+
+/// Force flush the log file (call on crash / shutdown).
+DSE_EXPORT void FlushLogFile();
+
+/// Current log file path (for export / diagnostics).
+DSE_EXPORT std::string GetLogFilePath();
 
 inline void AppendFormatted(std::ostringstream& oss, const char* format) {
     if (format) {
@@ -62,34 +76,35 @@ std::string Format(const char* format, Args&&... args) {
 
 } // namespace dse::debug
 
-#define DEBUG_LOG_TRACE(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Trace, dse::debug::Format(__VA_ARGS__)); } } while(0)
-#define DEBUG_LOG_INFO(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Info, dse::debug::Format(__VA_ARGS__)); } } while(0)
-#define DEBUG_LOG_WARN(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Warn, dse::debug::Format(__VA_ARGS__)); } } while(0)
-#define DEBUG_LOG_ERROR(...) do { if(Debug::CanLog()) { dse::debug::LogMessage(dse::debug::LogLevel::Error, dse::debug::Format(__VA_ARGS__)); } } while(0)
+// Legacy macros (category defaults to "General")
+#define DEBUG_LOG_TRACE(...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Trace, "General", dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DEBUG_LOG_INFO(...)  do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Info,  "General", dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DEBUG_LOG_WARN(...)  do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Warn,  "General", dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DEBUG_LOG_ERROR(...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Error, "General", dse::debug::Format(__VA_ARGS__)); } } while(0)
+
+// New category-aware macros
+#define DSE_LOG_TRACE(cat, ...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Trace, cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DSE_LOG_DEBUG(cat, ...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Debug, cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DSE_LOG_INFO(cat, ...)  do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Info,  cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DSE_LOG_WARN(cat, ...)  do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Warn,  cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DSE_LOG_ERROR(cat, ...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Error, cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
+#define DSE_LOG_FATAL(cat, ...) do { if(Debug::CanLog()) { dse::debug::LogMessageCat(dse::debug::LogLevel::Fatal, cat, dse::debug::Format(__VA_ARGS__)); } } while(0)
 
 #define __CHECK_GL_ERROR__ { \
         auto gl_error_code=glGetError();\
         if(gl_error_code!=GL_NO_ERROR){\
-            DEBUG_LOG_ERROR("gl_error_code: {}",gl_error_code);\
+            DSE_LOG_ERROR("Render", "gl_error_code: {}",gl_error_code);\
         }\
     }
 
 /**
  * @class Debug
- * @brief 调试类，提供日志系统的初始化和资源释放管理
+ * @brief Static debug/logging lifecycle manager.
  */
 class DSE_EXPORT Debug {
 public:
-    /**
-     * @brief 初始化日志系统，配置控制台和文件多路输出
-     */
     static void Init();
-
     static bool CanLog();
-
-    /**
-     * @brief 关闭并释放日志系统资源
-     */
     static void ShutDown();
 
 public:
