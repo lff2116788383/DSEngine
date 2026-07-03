@@ -126,6 +126,14 @@ private:
     bool show_blueprint_ = false;
     bool show_csharp_panel_ = false;
 
+    // Core panel visibility (re-open via Window menu)
+    bool show_hierarchy_ = true;
+    bool show_inspector_ = true;
+    bool show_console_ = true;
+    bool show_scene_ = true;
+    bool show_game_ = true;
+    bool show_sequencer_ = true;
+
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;
     dse::profiler::MemoryProfiler memory_profiler_;

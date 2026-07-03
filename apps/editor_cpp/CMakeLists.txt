@@ -33,6 +33,7 @@ add_executable(dse_editor_cpp WIN32
     ${CMAKE_SOURCE_DIR}/depends/imgui/imgui_widgets.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp
+    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_dx11.cpp>
     ${CMAKE_SOURCE_DIR}/third_party/imguizmo/ImGuizmo.cpp
 )
 

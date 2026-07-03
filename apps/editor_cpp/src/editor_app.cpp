@@ -21,6 +21,9 @@
 #include "imgui.h"
 #include "backends/imgui_impl_glfw.h"
 #include "backends/imgui_impl_opengl3.h"
+#ifdef _WIN32
+#include "backends/imgui_impl_dx11.h"
+#endif
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
 
@@ -418,6 +421,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
+    // RHI-aware ImGui backend initialization
+    // Currently uses OpenGL3 backend regardless of RHI (editor compositor is GL-based).
+    // TODO: Add D3D11/Vulkan ImGui backend when switching RHI away from OpenGL.
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
@@ -1114,18 +1120,34 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     ctx.command_bus = command_bus_.get();
 
     dse::editor::BeginEditorShell();
-    dse::editor::PanelVisibility panel_vis{
-        &show_localization_preview_, &show_profiler_, &show_animation_,
-        &show_tile_palette_, &show_terrain_editor_, &show_vegetation_brush_,
-        &show_lua_console_,
-        &show_undo_history_,
-        &show_asset_browser_, &show_animation_timeline_, &show_navmesh_,
-        &show_shader_graph_, &show_git_, &show_multi_viewport_,
-        &show_anim_state_machine_,
-        &show_lua_debugger_,
-        &show_streaming_debug_, &show_curve_editor_, &show_visual_script_,
-        &show_anim_retarget_, &show_csharp_panel_
-    };
+    dse::editor::PanelVisibility panel_vis{};
+    panel_vis.hierarchy = &show_hierarchy_;
+    panel_vis.inspector = &show_inspector_;
+    panel_vis.console = &show_console_;
+    panel_vis.scene = &show_scene_;
+    panel_vis.game = &show_game_;
+    panel_vis.sequencer = &show_sequencer_;
+    panel_vis.localization_preview = &show_localization_preview_;
+    panel_vis.profiler = &show_profiler_;
+    panel_vis.animation = &show_animation_;
+    panel_vis.tile_palette = &show_tile_palette_;
+    panel_vis.terrain_editor = &show_terrain_editor_;
+    panel_vis.vegetation_brush = &show_vegetation_brush_;
+    panel_vis.lua_console = &show_lua_console_;
+    panel_vis.undo_history = &show_undo_history_;
+    panel_vis.asset_browser = &show_asset_browser_;
+    panel_vis.animation_timeline = &show_animation_timeline_;
+    panel_vis.navmesh = &show_navmesh_;
+    panel_vis.shader_graph = &show_shader_graph_;
+    panel_vis.git = &show_git_;
+    panel_vis.multi_viewport = &show_multi_viewport_;
+    panel_vis.anim_state_machine = &show_anim_state_machine_;
+    panel_vis.lua_debugger = &show_lua_debugger_;
+    panel_vis.streaming_debug = &show_streaming_debug_;
+    panel_vis.curve_editor = &show_curve_editor_;
+    panel_vis.visual_script = &show_visual_script_;
+    panel_vis.anim_retarget = &show_anim_retarget_;
+    panel_vis.csharp_panel = &show_csharp_panel_;
     dse::editor::DrawEditorMainMenu(ctx, &show_preferences_, &show_plugins_panel_, &show_agent_panel_, &panel_vis);
 
     if (!is_play) {
@@ -1136,12 +1158,12 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawEditorToolbar(ctx);
 
-    dse::editor::DrawHierarchyPanel(ctx);
+    if (show_hierarchy_) dse::editor::DrawHierarchyPanel(ctx);
 
-    dse::editor::DrawInspectorPanel(ctx);
+    if (show_inspector_) dse::editor::DrawInspectorPanel(ctx);
 
     dse::editor::DrawProjectPanel();
-    dse::editor::DrawConsolePanel();
+    if (show_console_) dse::editor::DrawConsolePanel();
 
     if (show_localization_preview_) {
         dse::editor::DrawLocalizationPreviewPanel(ctx,
@@ -1251,10 +1273,7 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     }
 
     // Cinematic Sequencer (multi-track timeline editor)
-    {
-        static bool show_sequencer = true;
-        if (show_sequencer) dse::editor::DrawSequencerPanel(ctx);
-    }
+    if (show_sequencer_) dse::editor::DrawSequencerPanel(ctx);
 
     // Terrain Sculpt Preview (real-time brush visualization)
     if (show_terrain_editor_) {
@@ -1300,9 +1319,9 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::End();
     }
 
-    dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
+    if (show_scene_) dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
                                         engine_instance_->pipeline());
-    dse::editor::DrawGameViewportPanel(game_texture);
+    if (show_game_) dse::editor::DrawGameViewportPanel(game_texture);
 
     dse::editor::AutoSaveManager::Get().Tick(registry);
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);

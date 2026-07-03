@@ -417,7 +417,23 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ─── Window ──────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Window"))) {
-        // Core panels (always present as dock windows)
+        // Core panels — closable, re-open from here
+        ImGui::TextDisabled("Core");
+        if (panels) {
+            if (panels->hierarchy)
+                ImGui::MenuItem(MDI_ICON_FILE_TREE "  Hierarchy", nullptr, panels->hierarchy);
+            if (panels->inspector)
+                ImGui::MenuItem(MDI_ICON_INFORMATION "  Inspector", nullptr, panels->inspector);
+            if (panels->console)
+                ImGui::MenuItem(MDI_ICON_CONSOLE "  Console", nullptr, panels->console);
+            if (panels->scene)
+                ImGui::MenuItem(MDI_ICON_EYE "  Scene", nullptr, panels->scene);
+            if (panels->game)
+                ImGui::MenuItem(MDI_ICON_GAMEPAD "  Game", nullptr, panels->game);
+            if (panels->sequencer)
+                ImGui::MenuItem(MDI_ICON_MOVIE_OPEN "  Sequencer", nullptr, panels->sequencer);
+        }
+        ImGui::Separator();
         ImGui::TextDisabled("Panels");
         if (panels) {
             if (panels->profiler)

@@ -70,6 +70,7 @@ public:
     // --- 渲染目标 ---
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     void DeleteRenderTarget(unsigned int render_target_handle) override;
+    RhiBackend GetBackend() const override { return RhiBackend::WebGPU; }
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;
     std::vector<unsigned char> ReadRenderTargetColorRgba8(unsigned int render_target_handle) const override;

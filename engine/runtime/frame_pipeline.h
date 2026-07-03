@@ -19,6 +19,7 @@
 
 // Value-type / public-interface types that must be fully defined here:
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/rhi_types.h"
 #include "engine/render/render_graph.h"
 #include "engine/render/passes/render_pass_context.h"
 #include "engine/runtime/runtime_frame_ops.h"
@@ -270,6 +271,7 @@ public:
      * @brief 获取渲染管线中场景纹理的句柄 (用于编辑器集成)
      * @return 纹理 ID
      */
+    RhiBackend GetRhiBackend() const;
     unsigned int GetSceneTextureId() const;
 
     /**

@@ -6,6 +6,14 @@
 namespace dse::editor {
 
 struct PanelVisibility {
+    // Core panels
+    bool* hierarchy = nullptr;
+    bool* inspector = nullptr;
+    bool* console = nullptr;
+    bool* scene = nullptr;
+    bool* game = nullptr;
+    bool* sequencer = nullptr;
+    // Optional panels
     bool* localization_preview = nullptr;
     bool* profiler = nullptr;
     bool* animation = nullptr;

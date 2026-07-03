@@ -2324,11 +2324,18 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
     const bool read_only = IsInspectorStructuralReadOnly();
     ImGui::Separator();
     ImGui::Spacing();
-    ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2 - 60);
+
+    const float pad = ImGui::GetStyle().FramePadding.x * 2.0f + 8.0f;
+    const float add_w = ImGui::CalcTextSize("Add Component").x + pad;
+    const float rem_w = ImGui::CalcTextSize("Remove Component").x + pad;
+    const float sp = ImGui::GetStyle().ItemSpacing.x;
+    const float total_w = add_w + sp + rem_w;
+    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - total_w) * 0.5f);
+
     if (read_only) {
         ImGui::BeginDisabled(true);
     }
-    if (ImGui::Button("Add Component", ImVec2(120, 30))) {
+    if (ImGui::Button("Add Component", ImVec2(add_w, 30))) {
         ImGui::OpenPopup("AddComponentPopup");
     }
     if (read_only) {
@@ -2359,20 +2366,31 @@ void InspectorRegistry::DrawAddComponentMenu(EditorContext& context) {
 void InspectorRegistry::DrawRemoveComponentMenu(EditorContext& context) {
     if (IsInspectorStructuralReadOnly()) return;
 
+    bool any_removable = false;
+    for (const auto& entry : GetEntries()) {
+        if (!entry.remove) continue;
+        if (entry.has && entry.has(context.registry, context.selected_entity)) {
+            any_removable = true;
+            break;
+        }
+    }
+
+    const float pad = ImGui::GetStyle().FramePadding.x * 2.0f + 8.0f;
+    const float rem_w = ImGui::CalcTextSize("Remove Component").x + pad;
     ImGui::SameLine();
-    if (ImGui::Button("Remove Component", ImVec2(120, 30))) {
+    if (!any_removable) ImGui::BeginDisabled(true);
+    if (ImGui::Button("Remove Component", ImVec2(rem_w, 30))) {
         ImGui::OpenPopup("RemoveComponentPopup");
     }
+    if (!any_removable) ImGui::EndDisabled();
 
     if (!ImGui::BeginPopup("RemoveComponentPopup")) return;
 
-    bool any_removable = false;
     std::string last_category;
     for (const auto& entry : GetEntries()) {
         if (!entry.remove) continue;
         if (!entry.has || !entry.has(context.registry, context.selected_entity)) continue;
 
-        any_removable = true;
         if (!last_category.empty() && entry.category != last_category) {
             ImGui::Separator();
         }

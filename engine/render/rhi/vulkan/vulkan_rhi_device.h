@@ -53,6 +53,7 @@ public:
     uint32_t CurrentFrameSlot() const override;
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override;
     void DeleteRenderTarget(unsigned int render_target_handle) override;
+    RhiBackend GetBackend() const override { return RhiBackend::Vulkan; }
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle) const override;
     unsigned int GetRenderTargetColorTexture(unsigned int render_target_handle, int index) const override;
     unsigned int GetRenderTargetDepthTexture(unsigned int render_target_handle) const override;

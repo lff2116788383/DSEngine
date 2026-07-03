@@ -1249,6 +1249,12 @@ int FramePipeline::LastSpriteCount() const {
     return last_sprite_count_;
 }
 
+RhiBackend FramePipeline::GetRhiBackend() const {
+    if (runtime_context_.rhi_device)
+        return runtime_context_.rhi_device->GetBackend();
+    return RhiBackend::OpenGL;
+}
+
 unsigned int FramePipeline::GetSceneTextureId() const {
     if (!runtime_context_.rhi_device || render_resources_.scene_render_target == 0) return 0;
     return runtime_context_.rhi_device->GetRenderTargetColorTexture(render_resources_.scene_render_target);

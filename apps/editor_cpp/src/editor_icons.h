@@ -134,4 +134,6 @@
 #define MDI_ICON_REDO                   "\xef\x80\x9e" // U+F01E fa-rotate-right
 #define MDI_ICON_COMMENT_TEXT_OUTLINE   "\xef\x81\xb5" // U+F075 fa-comment
 #define MDI_ICON_GROUP                  "\xef\x89\x87" // U+F247 fa-object-group
+#define MDI_ICON_FILE_TREE          "\xef\x82\xae" // U+F0AE fa-tasks (tree-like icon)
+#define MDI_ICON_GAMEPAD            "\xef\x84\x9b" // U+F11B fa-gamepad
 #define MDI_ICON_FILE_DOCUMENT_OUTLINE  "\xef\x85\x9b" // U+F15B fa-file
