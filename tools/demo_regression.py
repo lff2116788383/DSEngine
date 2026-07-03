@@ -108,6 +108,66 @@ ALL_DEMOS = [
     "3d_postprocess_effects",
     # AI / 行为
     "3d_steering_behavior",
+
+    # ── P0: DSSL NPR ──
+    "dssl_material_demo",
+    "demo_toon",
+    "demo_npr_light",
+
+    # ── P0: 2D System ──
+    "2d_sprite_basic",
+    "2d_sprite_sheet_animation",
+    "2d_atlas_batch",
+    "2d_parallax_scrolling",
+    "2d_lighting_shadow",
+    "2d_normal_map",
+    "2d_tilemap_basic",
+    "2d_physics_colliders",
+    "2d_physics_joints",
+    "2d_physics_raycast",
+    "2d_camera_controller",
+    "2d_trail_line_renderer",
+    "2d_spine_animation",
+    "2d_audio_spatial",
+    "2d_complete_showcase",
+
+    # ── P1: 3C System ──
+    "3d_character_movement",
+    "3d_spring_arm_camera",
+    "3d_player_controller",
+
+    # ── P1: Open World ──
+    "3d_world_partition",
+    "3d_hlod",
+    "3d_virtual_texture",
+
+    # ── P1: Environment ──
+    "3d_volumetric_cloud",
+    "3d_ocean",
+    "3d_day_night_cycle",
+
+    # ── P1: AI ──
+    "3d_behavior_tree",
+    "3d_goap_planner",
+    "3d_eqs_query",
+
+    # ── P2: Advanced Rendering ──
+    "3d_meshlet",
+    "3d_impostor",
+    "3d_lightmap",
+    "3d_vsm",
+
+    # ── P2: Vegetation ──
+    "3d_foliage_system",
+    "3d_tree_rendering",
+
+    # ── P2: Other ──
+    "3d_cutscene_playback",
+    "3d_dyn_obstacle",
+    "3d_video_playback",
+
+    # ── P2: Comprehensive ──
+    "3d_open_world_complete",
 ]
 
 # ---------------------------------------------------------------------------
@@ -175,9 +235,14 @@ def run_demo(
     screenshot_path.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [str(exe)]
-    # standalone exe (dsengine_game_*) 需要 --script 参数
+    # standalone exe (dsengine_game_*) needs --script
     if "game" in exe.name.lower() or "standalone" in exe.name.lower():
-        cmd.append("--script=samples/lua/main.lua")
+        # DSSL demos use standalone script mode (global Awake/Update)
+        dssl_demos = {"dssl_material_demo", "demo_toon", "demo_npr_light"}
+        if demo in dssl_demos:
+            cmd.append(f"--script=samples/lua/dssl/{demo}.lua")
+        else:
+            cmd.append("--script=samples/lua/main.lua")
 
     try:
         proc = subprocess.run(

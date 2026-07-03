@@ -42,7 +42,39 @@ local function resolve_demo(entry)
         return mod, cfg
     end
 
-    -- 2) 3d_ 前缀
+    -- 2) 2d_ prefix
+    if entry:sub(1, 3) == "2d_" then
+        local module_path = "2d." .. entry
+        local ok, mod = pcall(require, module_path)
+        if ok and type(mod) == "table" then
+            local cfg
+            if mod._meta and mod._meta.config then
+                cfg = mod._meta.config
+            else
+                cfg = Config["demo_" .. entry] or { camera_ortho_size = 7.0 }
+            end
+            return mod, cfg
+        end
+        print("[main] require('" .. module_path .. "') failed: " .. tostring(mod))
+    end
+
+    -- 3) dssl_ / demo_ prefix (DSSL shader demos)
+    if entry:sub(1, 5) == "dssl_" or entry:sub(1, 5) == "demo_" then
+        local module_path = "dssl." .. entry
+        local ok, mod = pcall(require, module_path)
+        if ok and type(mod) == "table" then
+            local cfg
+            if mod._meta and mod._meta.config then
+                cfg = mod._meta.config
+            else
+                cfg = Config["demo_" .. entry] or Config.basic_3d or {}
+            end
+            return mod, cfg
+        end
+        print("[main] require('" .. module_path .. "') failed: " .. tostring(mod))
+    end
+
+    -- 4) 3d_ prefix
     if entry:sub(1, 3) == "3d_" then
         local suffix = entry:sub(4)
         local module_path
