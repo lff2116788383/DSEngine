@@ -146,7 +146,23 @@ void FramePipeline::PrepareRenderFrame() {
         rs_->light_buffer_.CollectLightsFromView(rs_->scene_view_, early_camera_offset);
 
         // èŽ·å–ä¸»ç›¸æœºå‚æ•°æž„å»º cluster
-        if (cam_entity != entt::null) {
+        // 编辑器相机激活时 cluster 必须用编辑器相机的 view/proj 构建，
+        // 否则 fragment 的 tile/z 与 grid 不匹配，点光/聚光丢失或错位。
+        if (render_pass_context_.editor_mode && render_pass_context_.use_editor_camera) {
+            const int sw = Screen::width();
+            const int sh = Screen::height();
+            // Camera-Relative: 光源已减去 camera_offset，editor view 需配套调整
+            const glm::mat4 view_mat = render_pass_context_.editor_view *
+                glm::translate(glm::mat4(1.0f), early_camera_offset);
+            const glm::mat4& proj = render_pass_context_.editor_projection;
+            float near_p = 0.1f, far_p = 1000.0f;
+            if (proj[2][3] != 0.0f) {  // glm::perspective 深度约定
+                if (proj[2][2] - 1.0f != 0.0f) near_p = proj[3][2] / (proj[2][2] - 1.0f);
+                if (proj[2][2] + 1.0f != 0.0f) far_p  = proj[3][2] / (proj[2][2] + 1.0f);
+            }
+            rs_->cluster_grid_.Build(view_mat, proj, near_p, far_p, sw, sh,
+                                rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
+        } else if (cam_entity != entt::null) {
             auto& cam = cam_view_3d.get<dse::Camera3DComponent>(cam_entity);
             const int sw = Screen::width();
             const int sh = Screen::height();
@@ -163,6 +179,14 @@ void FramePipeline::PrepareRenderFrame() {
             }
             rs_->cluster_grid_.Build(view_mat, proj, cam.near_clip, cam.far_clip, sw, sh,
                                 rs_->light_buffer_.point_lights(), rs_->light_buffer_.spot_lights());
+        } else {
+            // 无有效相机：用空光源列表重建，避免 SSBO 残留上一帧数据
+            static const std::vector<dse::render::GPUPointLight> kNoPointLights;
+            static const std::vector<dse::render::GPUSpotLight> kNoSpotLights;
+            rs_->cluster_grid_.Build(glm::mat4(1.0f),
+                glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 1000.0f),
+                0.1f, 1000.0f, Screen::width(), Screen::height(),
+                kNoPointLights, kNoSpotLights);
         }
     }
 

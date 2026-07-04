@@ -56,8 +56,13 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
         gpu_driven_policy_ == GpuDrivenPolicy::WithModules ||
         gpu_driven_policy_ == GpuDrivenPolicy::Force;
     const bool gpu_scene_provider_available = modules_.empty() || allow_external_modules;
+    // GPU-Driven PBR shader 仅支持方向光+环境光；存在点光/聚光时回退 CPU 路径，
+    // 保证 Clustered Forward+ 局部光照正确（Force 策略除外）。
+    const bool local_lights_present = !rs_->light_buffer_.point_lights().empty()
+        || !rs_->light_buffer_.spot_lights().empty();
     const bool can_prepare_gpu_scene = render_resources_.gpu_driven_supported
-        && gpu_driven_requested_ && gpu_scene_provider_available;
+        && gpu_driven_requested_ && gpu_scene_provider_available
+        && (!local_lights_present || gpu_driven_policy_ == GpuDrivenPolicy::Force);
     if (can_prepare_gpu_scene && runtime_context_.world && !render_thread_active_.load()) {
         const int prepared = modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
         render_pass_context_.gpu_driven_scene_prepared = prepared > 0;
@@ -286,6 +291,13 @@ void FramePipeline::BuildRenderSceneQueues() {
     if (!runtime_context_.world) return;
 
     World* world = runtime_context_.world;
+
+    // 编辑器模式：Edit 状态下不运行 Update 图（Gameplay3DModule::OnUpdate 不执行，
+    // 无人调用 MarkBatchDirty），mesh 批次缓存会永久停留在启动时的空结果，
+    // 导致编辑时创建/修改的实体不渲染。此处每帧标脏以强制重建。
+    if (runtime_context_.editor_mode) {
+        modules_impl_->MarkMeshBatchesDirty();
+    }
 
     // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内
     modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_);

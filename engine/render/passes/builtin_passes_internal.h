@@ -6,6 +6,7 @@
 #define DSE_BUILTIN_PASSES_INTERNAL_H
 
 #include "engine/render/render_snapshot.h"
+#include "engine/render/passes/render_pass_context.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
@@ -15,6 +16,59 @@ namespace dse::render::pass_internal {
 
 inline glm::vec3 FindShadowCenter(const RenderThinSnapshot& snapshot) {
     return snapshot.camera_3d.shadow_center;
+}
+
+/// Camera parameters for the camera the scene RT is actually rendered with
+/// (editor camera override when active, otherwise the game camera snapshot).
+/// view is camera-relative (consistent with camera-offset-shifted geometry);
+/// proj carries NO backend clip correction.
+struct ActiveCamera {
+    bool valid = false;
+    glm::mat4 view{1.0f};
+    glm::mat4 proj{1.0f};
+    float near_clip = 0.1f;
+    float far_clip = 1000.0f;
+    float fov_y = 60.0f;   // degrees
+    float aspect = 1.0f;
+    glm::vec3 forward{0.0f, 0.0f, -1.0f};
+    glm::vec3 right{1.0f, 0.0f, 0.0f};
+    glm::vec3 up{0.0f, 1.0f, 0.0f};
+};
+
+inline ActiveCamera GetActiveCamera(const RenderPassContext& ctx, float fallback_aspect) {
+    ActiveCamera cam;
+    cam.aspect = fallback_aspect;
+    const auto& snap = *ctx.snapshot;
+    if (ctx.editor_mode && ctx.use_editor_camera) {
+        cam.valid = true;
+        cam.view = ctx.editor_view * glm::translate(glm::mat4(1.0f), ctx.camera_offset);
+        cam.proj = ctx.editor_projection;
+        const glm::mat4& p = ctx.editor_projection;
+        if (p[2][3] != 0.0f) {  // perspective, GL depth convention (glm::perspective)
+            const float p22 = p[2][2];
+            const float p32 = p[3][2];
+            if (p22 - 1.0f != 0.0f) cam.near_clip = p32 / (p22 - 1.0f);
+            if (p22 + 1.0f != 0.0f) cam.far_clip  = p32 / (p22 + 1.0f);
+            if (p[1][1] != 0.0f) {
+                cam.fov_y = glm::degrees(2.0f * std::atan(1.0f / p[1][1]));
+                if (p[0][0] != 0.0f) cam.aspect = p[1][1] / p[0][0];
+            }
+        }
+        cam.right   = glm::vec3(cam.view[0][0], cam.view[1][0], cam.view[2][0]);
+        cam.up      = glm::vec3(cam.view[0][1], cam.view[1][1], cam.view[2][1]);
+        cam.forward = -glm::vec3(cam.view[0][2], cam.view[1][2], cam.view[2][2]);
+    } else if (snap.camera_3d.valid) {
+        cam.valid = true;
+        cam.view = snap.camera_3d.view;
+        cam.near_clip = snap.camera_3d.near_clip;
+        cam.far_clip = snap.camera_3d.far_clip;
+        cam.fov_y = snap.camera_3d.fov;
+        cam.proj = glm::perspective(glm::radians(cam.fov_y), cam.aspect, cam.near_clip, cam.far_clip);
+        cam.forward = snap.camera_3d.forward;
+        cam.right = snap.camera_3d.right;
+        cam.up = snap.camera_3d.up;
+    }
+    return cam;
 }
 
 struct DirectionalLightCamera {

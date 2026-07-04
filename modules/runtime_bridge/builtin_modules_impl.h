@@ -45,6 +45,7 @@ public:
     void ShutdownMeshSystem() override;
     void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) override;
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) override;
+    void MarkMeshBatchesDirty() override;
     int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) override;
     void ResetGPUSceneState() override;
     const std::vector<dse::gameplay3d::HiZAABB>& CachedAABBs() const override;

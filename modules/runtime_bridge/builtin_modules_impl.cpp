@@ -72,6 +72,14 @@ void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScen
 #endif
 }
 
+void BuiltinModulesImpl::MarkMeshBatchesDirty() {
+#ifdef DSE_ENABLE_3D
+    gameplay3d_module_.mesh_render_system().MarkBatchDirty();
+#else
+    mesh_render_system_.MarkBatchDirty();
+#endif
+}
+
 int BuiltinModulesImpl::PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) {
 #ifdef DSE_ENABLE_3D
     return gameplay3d_module_.mesh_render_system().PrepareGPUScene(world, ctx);

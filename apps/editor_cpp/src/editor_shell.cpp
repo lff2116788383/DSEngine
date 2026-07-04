@@ -171,14 +171,41 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             if (settings.recent_files.empty()) {
                 ImGui::TextDisabled("(empty)");
             } else {
+                std::string scene_to_open;
+                std::string scene_to_remove;
                 for (const auto& recent : settings.recent_files) {
                     std::filesystem::path p(recent);
+                    ImGui::PushID(recent.c_str());
                     if (ImGui::MenuItem(p.filename().string().c_str())) {
-                        tab_mgr.OpenScene(ctx.registry, recent);
-                        ctx.selected_entity = entt::null;
+                        scene_to_open = recent;
                     }
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", recent.c_str());
+                        ImGui::SetTooltip("%s\n(Right-click to remove from list)", recent.c_str());
+                    if (ImGui::BeginPopupContextItem("##recent_scene_ctx")) {
+                        if (ImGui::MenuItem(MDI_ICON_DELETE "  Remove from list")) {
+                            scene_to_remove = recent;
+                        }
+                        ImGui::EndPopup();
+                    }
+                    ImGui::PopID();
+                }
+                if (!scene_to_open.empty()) {
+                    tab_mgr.OpenScene(ctx.registry, scene_to_open);
+                    ctx.selected_entity = entt::null;
+                    EditorSettings s = LoadEditorSettings();
+                    AddRecentFile(s, scene_to_open);
+                    SaveEditorSettings(s);
+                }
+                if (!scene_to_remove.empty()) {
+                    EditorSettings s = LoadEditorSettings();
+                    RemoveRecentFile(s, scene_to_remove);
+                    SaveEditorSettings(s);
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Clear Recent Scenes")) {
+                    EditorSettings s = LoadEditorSettings();
+                    s.recent_files.clear();
+                    SaveEditorSettings(s);
                 }
             }
             ImGui::EndMenu();
@@ -233,19 +260,38 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             if (settings.recent_projects.empty()) {
                 ImGui::TextDisabled("(empty)");
             } else {
+                std::string proj_to_open;
+                std::string proj_to_remove;
                 for (const auto& recent : settings.recent_projects) {
                     std::filesystem::path root(recent);
-                    std::filesystem::path proj_path = root / "project.dseproj";
+                    ImGui::PushID(recent.c_str());
                     if (ImGui::MenuItem(root.filename().string().c_str())) {
-                        if (proj_mgr.OpenProject(proj_path)) {
-                            EditorSettings s = LoadEditorSettings();
-                            s.last_project_path = recent;
-                            AddRecentProject(s, recent);
-                            SaveEditorSettings(s);
-                        }
+                        proj_to_open = recent;
                     }
                     if (ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", recent.c_str());
+                        ImGui::SetTooltip("%s\n(Right-click to remove from list)", recent.c_str());
+                    if (ImGui::BeginPopupContextItem("##recent_proj_ctx")) {
+                        if (ImGui::MenuItem(MDI_ICON_DELETE "  Remove from list")) {
+                            proj_to_remove = recent;
+                        }
+                        ImGui::EndPopup();
+                    }
+                    ImGui::PopID();
+                }
+                if (!proj_to_open.empty()) {
+                    std::filesystem::path proj_path =
+                        std::filesystem::path(proj_to_open) / "project.dseproj";
+                    if (proj_mgr.OpenProject(proj_path)) {
+                        EditorSettings s = LoadEditorSettings();
+                        s.last_project_path = proj_to_open;
+                        AddRecentProject(s, proj_to_open);
+                        SaveEditorSettings(s);
+                    }
+                }
+                if (!proj_to_remove.empty()) {
+                    EditorSettings s = LoadEditorSettings();
+                    RemoveRecentProject(s, proj_to_remove);
+                    SaveEditorSettings(s);
                 }
                 ImGui::Separator();
                 if (ImGui::MenuItem("Clear Recent Projects")) {

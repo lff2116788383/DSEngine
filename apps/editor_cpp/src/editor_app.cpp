@@ -668,6 +668,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_chat                 = &show_agent_panel_;
         ui_services.show_blueprint            = &show_blueprint_;
         ui_services.show_vegetation_brush     = &show_vegetation_brush_;
+        ui_services.show_sequencer            = &show_sequencer_;
         dse::editor::uitest::Init(
             ImGui::GetCurrentContext(),
             ui_services,
@@ -731,7 +732,11 @@ void EditorApp::Run() {
                 editor_cam.GetViewMatrix(),
                 editor_cam.GetProjectionMatrix(aspect));
             // 同步编辑器场景背景色（light / dark 主题）
-            if (dse::editor::GetCurrentThemeIndex() == 1) {
+            // 渲染验证测试模式下使用纯黑背景，保证 NonBlackRatio / Brightness 断言有效
+            static const bool render_tests_enabled = std::getenv("DSE_RENDER_TESTS_ENABLED") != nullptr;
+            if (render_tests_enabled) {
+                engine_instance_->pipeline()->SetEditorBgColor(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+            } else if (dse::editor::GetCurrentThemeIndex() == 1) {
                 engine_instance_->pipeline()->SetEditorBgColor(glm::vec4(0.78f, 0.78f, 0.82f, 1.0f));
             } else {
                 engine_instance_->pipeline()->SetEditorBgColor(glm::vec4(0.17f, 0.17f, 0.21f, 1.0f));

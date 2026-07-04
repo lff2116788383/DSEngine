@@ -5,6 +5,7 @@
  */
 
 #include "engine/render/passes/builtin_passes.h"
+#include "engine/render/passes/builtin_passes_internal.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/gpu_scene_types.h"
 #include "engine/render/gi/ddgi_system.h"
@@ -30,6 +31,9 @@
 
 namespace dse {
 namespace render {
+
+using namespace dse::render::pass_internal;
+
 void BloomPass::Setup(RenderGraph& graph) {
     auto scene_color   = graph.DeclareResource("scene_color");
     auto bloom_extract = graph.DeclareResource("bloom_extract");
@@ -343,8 +347,9 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
+    float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
+    float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
     post_process_renderer_.BeginFrame();
 
@@ -401,8 +406,9 @@ void ContactShadowPass::Execute(CommandBuffer& cmd_buffer) {
         light_dir = glm::normalize(snap.directional_light.direction);
     }
 
-    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
+    float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
+    float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
     cmd_buffer.BeginRenderPass({ctx_.render_targets.contact_shadow, glm::vec4(1.0f), true});
     post_process_renderer_.BeginFrame();
@@ -625,8 +631,9 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (main_color_tex == 0 || depth_tex == 0) return;
 
-    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
+    float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
+    float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
     // Pass 1: DOF â†’ dof RT
     post_process_renderer_.BeginFrame();
@@ -671,14 +678,12 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    const auto& snap = *ctx_.snapshot;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
     glm::mat4 current_vp = glm::mat4(1.0f);
-    if (snap.camera_3d.valid) {
+    if (active_cam.valid) {
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        glm::mat4 projection = clip_correction * glm::perspective(glm::radians(snap.camera_3d.fov),
-            static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
-            snap.camera_3d.near_clip, snap.camera_3d.far_clip);
-        current_vp = projection * snap.camera_3d.view;
+        current_vp = (clip_correction * active_cam.proj) * active_cam.view;
     }
 
     if (!has_prev_vp_) {
@@ -785,8 +790,9 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (scene_color_tex == 0 || depth_tex == 0) return;
 
-    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 10000.0f;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
+    float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
+    float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
     // Pass 1: æ¸²æŸ“ SSR åˆ°åŠåˆ†è¾¨çŽ‡ ssr RT
     post_process_renderer_.BeginFrame();
@@ -839,8 +845,9 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    float near_plane = snap.camera_3d.valid ? snap.camera_3d.near_clip : 0.1f;
-    float far_plane  = snap.camera_3d.valid ? snap.camera_3d.far_clip  : 1000.0f;
+    const ActiveCamera active_cam = GetActiveCamera(ctx_, 1.0f);
+    float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
+    float far_plane  = active_cam.valid ? active_cam.far_clip  : 1000.0f;
 
     // Pass 1: è¾¹ç¼˜æ£€æµ‹ â†’ outline RT
     cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
@@ -890,11 +897,13 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int depth_tex = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.prez);
     if (depth_tex == 0) return;
 
-    glm::vec3 cam_fwd = snap.camera_3d.forward;
-    glm::vec3 cam_right = snap.camera_3d.right;
-    glm::vec3 cam_up = snap.camera_3d.up;
-    float fov_y = snap.camera_3d.valid ? snap.camera_3d.fov : 60.0f;
-    float aspect = static_cast<float>(Screen::width()) / static_cast<float>(Screen::height());
+    const ActiveCamera active_cam = GetActiveCamera(ctx_,
+        static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
+    glm::vec3 cam_fwd = active_cam.forward;
+    glm::vec3 cam_right = active_cam.right;
+    glm::vec3 cam_up = active_cam.up;
+    float fov_y = active_cam.fov_y;
+    float aspect = active_cam.aspect;
     const float tan_fov_y = std::tan(glm::radians(fov_y) * 0.5f);
 
     glm::vec3 sun_dir{0.0f, -1.0f, 0.0f};

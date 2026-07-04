@@ -28,6 +28,9 @@
 #include "editor_multi_viewport.h"
 #include "editor_icons.h"
 #include "editor_locale.h"
+#include "editor_gpu.h"
+#include "engine/render/rhi/rhi_device.h"
+#include "engine/render/rhi/rhi_types.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_3d_physics.h"
@@ -583,6 +586,11 @@ static int s_mvp_tex_w = 0, s_mvp_tex_h = 0;
 
 static unsigned int CopySceneTextureForViewport(int index, unsigned int src_tex) {
     if (src_tex == 0 || index < 0 || index >= 4) return src_tex;
+    // 裸 GL 拷贝仅在 OpenGL 后端有效；其他后端直接复用源纹理（各子视口共享同一画面）
+    {
+        auto* rhi = dse::editor::EditorRhi();
+        if (rhi && rhi->GetBackend() != RhiBackend::OpenGL) return src_tex;
+    }
     // 查询源纹理尺寸
     int tw = 0, th = 0;
     glBindTexture(GL_TEXTURE_2D, src_tex);
