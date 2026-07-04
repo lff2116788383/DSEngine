@@ -18,16 +18,20 @@
 #include "../editor_icons.h"
 #include "../editor_selection.h"
 #include "../editor_scene_camera.h"
+#include "../editor_toolbar.h"     // EnterPlayMode / ExitPlayMode / IsEditorInPlayMode
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_3d_animation.h"   // Animator3DComponent (skinned knight test)
+#include "engine/assets/asset_manager.h"          // AssetManager::LoadTextureAsync   // Animator3DComponent (skinned knight test)
 
 #include <filesystem>
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 namespace dse::editor::uitest {
 
@@ -802,14 +806,12 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         HideOptionalPanels();
         ctx->Yield(4);
 
-        // KF 骑士资产（绝对路径；NativeFileSystem 对绝对路径直通，不受 uitest 工作目录影响）。
         const std::string kf =
             "c:\\Users\\Administrator\\Desktop\\Engine\\DSEngine\\examples\\KF_Framework\\cooked\\";
         const std::string mesh_path = kf + "paladin_prop_j_nordstrom.dmesh";
         const std::string skel_path = kf + "paladin_prop_j_nordstrom.dskel";
         const std::string anim_path = kf + "Sword And Shield Idle.danim";
 
-        // 干净的空实体（含 TransformComponent），挂上蒙皮 mesh + 骨架 + idle 动画。
         auto knight = NewEmptyEntity(ctx);
         IM_CHECK(knight != entt::null);
 
@@ -818,24 +820,39 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         mr.mesh_path = mesh_path;
         mr.temp_vertices.clear();
         mr.temp_indices.clear();
-        mr.dmesh_vertex_stride = 24;      // v2 skinned dmesh
-        mr.local_bounds_valid = false;    // 强制按新 mesh 重算本地包围盒
+        mr.dmesh_vertex_stride = 24;
+        mr.local_bounds_valid = false;
         mr.meshlet_mesh_id = 0;
-        mr.shader_variant = "MESH_HALFLAMBERT";  // KF 骑士所用蒙皮半兰伯特
-        mr.color = glm::vec4(0.82f, 0.82f, 0.88f, 1.0f);
+        mr.shader_variant = "MESH_HALFLAMBERT";
+        mr.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
         mr.is_static = false;
         mr.visible = true;
+
+        // Async texture loading (GPU upload happens on main thread via PumpMainThreadCallbacks)
+        const std::string kf_tex =
+            "c:\\Users\\Administrator\\Desktop\\Engine\\DSEngine\\examples\\KF_Framework\\assets\\textures\\";
+        if (auto* am = Services().engine->asset_manager()) {
+            entt::registry* rp = &reg; entt::entity kn = knight;
+            am->LoadTextureAsync(kf_tex + "Paladin_diffuse.png",
+                [rp,kn](std::shared_ptr<TextureAsset> t){
+                    if (t && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn))
+                        rp->get<dse::MeshRendererComponent>(kn).albedo_texture_handle = t->GetHandle(); });
+            am->LoadTextureAsync(kf_tex + "Paladin_normal.png",
+                [rp,kn](std::shared_ptr<TextureAsset> t){
+                    if (t && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn))
+                        rp->get<dse::MeshRendererComponent>(kn).normal_texture_handle = t->GetHandle(); });
+        }
 
         auto& anim = reg.emplace<dse::Animator3DComponent>(knight);
         anim.enabled = true;
         anim.dskel_path = skel_path;
         anim.danim_path = anim_path;
+        anim.speed = 1.0f;
+        anim.loop = true;
 
         auto light = NewPrimitive(ctx, "Directional Light");
-        // 给足帧数：加载 dmesh/dskel/danim + （若编辑器驱动动画）求值骨骼调色板。
         ctx->Yield(80);
 
-        // 诊断：mesh 是否加载、包围盒、是否走蒙皮路径（final_bone_matrices 非空）。
         DumpMeshDiag("knight");
         {
             const size_t fbm = reg.all_of<dse::Animator3DComponent>(knight)
@@ -847,55 +864,74 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
                 (int)mr.local_bounds_valid,
                 mr.local_bounds_min.x, mr.local_bounds_min.y, mr.local_bounds_min.z,
                 mr.local_bounds_max.x, mr.local_bounds_max.y, mr.local_bounds_max.z, fbm);
+            fprintf(stderr, "[KNIGHT] albedo_handle=%u normal_handle=%u\n",
+                mr.albedo_texture_handle, mr.normal_texture_handle);
             fflush(stderr);
         }
 
-        // 依据加载后的本地包围盒对准相机（实体在原点、scale=1 → 世界=本地）。
-        SelectionManager::Get().Clear();
+        const glm::vec3 kn_center = (mr.local_bounds_min + mr.local_bounds_max) * 0.5f;
+        const glm::vec3 kn_half   = (mr.local_bounds_max - mr.local_bounds_min) * 0.5f;
+        float kn_radius = glm::length(kn_half);
+        if (!(kn_radius > 0.001f)) kn_radius = 100.0f;
+
+        // Camera3DComponent for Play mode (editor camera disabled in Play)
+        entt::entity kn_cam = NewEmptyEntity(ctx);
         {
-            const glm::vec3 center = (mr.local_bounds_min + mr.local_bounds_max) * 0.5f;
-            const glm::vec3 half   = (mr.local_bounds_max - mr.local_bounds_min) * 0.5f;
-            float radius = glm::length(half);
-            if (!(radius > 0.001f)) radius = 100.0f;
+            glm::vec3 cam_pos = kn_center + glm::vec3(0.0f, kn_half.y * 0.15f, kn_radius * 2.6f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, kn_center, glm::vec3(0, 1, 0)));
+            auto& ctf = reg.get<TransformComponent>(kn_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = reg.emplace<dse::Camera3DComponent>(kn_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 45.0f; c3d.near_clip = 1.0f; c3d.far_clip = kn_radius * 20.0f + 1000.0f;
+        }
+        SelectionManager::Get().Clear();
+
+        auto FrameKnight = [&]() {
             auto& cam = GetEditorCamera();
-            cam.focal_point = center;
-            cam.distance = radius * 2.6f;
+            cam.focal_point = kn_center;
+            cam.distance = kn_radius * 2.6f;
             cam.yaw = 0.4f;
             cam.pitch = 0.12f;
-        }
+        };
+        SelectionManager::Get().Clear();
+        FrameKnight();
         ctx->Yield(20);
 
         ctx->WindowFocus("//Scene");
         ctx->Yield(20);
-        // 采集 #1：静态路径（final_bone_matrices 为空 → item.skinned=false，走普通 DrawShaded）。
-        // 验证“蒙皮模型资产导入并渲染”本身成立（骑士绑定姿势可见）。
         auto px_bind = CaptureAndLoad("render_skinned_knight");
         SKIP_IF_NO_CAPTURE(px_bind);
         IM_CHECK(px_bind.NonBlackRatio() > 0.02f);
 
-        // 采集 #2：显式走蒙皮渲染路径。填入骨骼调色板（identity = 正确的绑定姿势蒙皮矩阵，
-        // 因 final = global_bind * inv_bind_global = I）→ mesh_render_system 置 item.skinned=true。
-        // 当前 GL 上下文无 SSBO（日志已见 "forward skinned shaded 需要 SSBO 支持"），
-        // 引擎的 skinning_bake_for_web_ 会 CPU 烘焙蒙皮后经 ForwardShaded 绘制。
-        // 若该回退失效（如实例化那样静默不渲染），此处将变黑 → 断言失败暴露 bug。
+        // Play mode: AnimatorSystem drives idle animation
+        dse::editor::EnterPlayMode(reg);
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(120);
+
+        FrameKnight();
+        SelectionManager::Get().Clear();
         {
-            auto& a = reg.get<dse::Animator3DComponent>(knight);
-            a.final_bone_matrices.assign(100, glm::mat4(1.0f));  // 100 = MAX_BONES bind pose
-            a.bone_palette_key = 0xC0FFEEull;                    // 非零，触发调色板去重逻辑
-        }
-        ctx->Yield(40);  // 让批次重建为 skinned + 执行 CPU 蒙皮烘焙
-        {
-            const size_t fbm = reg.get<dse::Animator3DComponent>(knight).final_bone_matrices.size();
-            fprintf(stderr, "[KNIGHT] skinned-pass final_bones=%zu\n", fbm);
+            const size_t fbm = reg.all_of<dse::Animator3DComponent>(knight)
+                ? reg.get<dse::Animator3DComponent>(knight).final_bone_matrices.size() : 0;
+            const float ct = reg.all_of<dse::Animator3DComponent>(knight)
+                ? reg.get<dse::Animator3DComponent>(knight).current_time : -1.0f;
+            fprintf(stderr, "[KNIGHT] play-pass final_bones=%zu current_time=%.3f\n", fbm, ct);
             fflush(stderr);
         }
         ctx->WindowFocus("//Scene");
         ctx->Yield(20);
-        auto px_skin = CaptureAndLoad("render_skinned_knight_skinned");
-        SKIP_IF_NO_CAPTURE(px_skin);
-        IM_CHECK(px_skin.NonBlackRatio() > 0.02f);  // 蒙皮路径必须仍可见（无 SSBO 静默黑屏）
+        auto px_anim = CaptureAndLoad("render_skinned_knight_anim");
+        SKIP_IF_NO_CAPTURE(px_anim);
+        IM_CHECK(px_anim.NonBlackRatio() > 0.02f);
 
-        DestroyEntities({knight, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(reg, sel, Services().engine);
+        ctx->Yield(3);
+        if (reg.valid(knight)) DestroyEntities({knight});
+        if (reg.valid(light))  DestroyEntities({light});
+        if (reg.valid(kn_cam)) DestroyEntities({kn_cam});
         ctx->Yield(2);
     };
 }
