@@ -823,8 +823,39 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         HideOptionalPanels();
         ctx->Yield(4);
 
+        // Load textures early (before complex entity creation) so Play mode pump is clean
+        unsigned int kn_albedo_handle = 0, kn_normal_handle = 0;
+        {
+            const std::string tex_dir = "c:/Users/Administrator/Desktop/Engine/DSEngine/examples/KF_Framework/assets/textures/";
+            if (auto* am = Services().engine->asset_manager()) {
+                am->LoadTextureAsync(tex_dir + "Paladin_diffuse.png",
+                    [&kn_albedo_handle](std::shared_ptr<TextureAsset> t){ if (t) kn_albedo_handle = t->GetHandle(); });
+                am->LoadTextureAsync(tex_dir + "Paladin_normal.png",
+                    [&kn_normal_handle](std::shared_ptr<TextureAsset> t){ if (t) kn_normal_handle = t->GetHandle(); });
+            }
+            ctx->Yield(200);
+            // Pump via Play mode (needs GL context for CreateTexture2D)
+            auto& reg0 = Reg();
+            entt::entity pump_cam = NewEmptyEntity(ctx);
+            auto& pc_tf = reg0.get<TransformComponent>(pump_cam);
+            pc_tf.position = glm::vec3(0.0f, 0.0f, 5.0f);
+            auto& pc_c3d = reg0.emplace<dse::Camera3DComponent>(pump_cam);
+            pc_c3d.enabled = true; pc_c3d.priority = 1000;
+            pc_c3d.fov = 45.0f; pc_c3d.near_clip = 0.1f; pc_c3d.far_clip = 100.0f;
+            dse::editor::EnterPlayMode(reg0);
+            ctx->Yield(80);
+            entt::entity sel0 = entt::null;
+            dse::editor::ExitPlayMode(reg0, sel0, Services().engine);
+            ctx->Yield(5);
+            DestroyEntities({pump_cam});
+            ctx->Yield(2);
+            fprintf(stderr, "[KNIGHT-EARLY] albedo=%u normal=%u\n", kn_albedo_handle, kn_normal_handle);
+            fflush(stderr);
+        }
+
+
         const std::string kf =
-            "c:\\Users\\Administrator\\Desktop\\Engine\\DSEngine\\examples\\KF_Framework\\cooked\\";
+            "c:/Users/Administrator/Desktop/Engine/DSEngine/examples/KF_Framework/cooked/";
         const std::string mesh_path = kf + "paladin_prop_j_nordstrom.dmesh";
         const std::string skel_path = kf + "paladin_prop_j_nordstrom.dskel";
         const std::string anim_path = kf + "Sword And Shield Idle.danim";
@@ -844,21 +875,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         mr.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
         mr.is_static = false;
         mr.visible = true;
+        mr.albedo_texture_handle = kn_albedo_handle;
+        mr.normal_texture_handle = kn_normal_handle;
 
-        // Async texture loading (GPU upload happens on main thread via PumpMainThreadCallbacks)
-        const std::string kf_tex =
-            "c:\\Users\\Administrator\\Desktop\\Engine\\DSEngine\\examples\\KF_Framework\\assets\\textures\\";
-        if (auto* am = Services().engine->asset_manager()) {
-            entt::registry* rp = &reg; entt::entity kn = knight;
-            am->LoadTextureAsync(kf_tex + "Paladin_diffuse.png",
-                [rp,kn](std::shared_ptr<TextureAsset> t){
-                    if (t && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn))
-                        rp->get<dse::MeshRendererComponent>(kn).albedo_texture_handle = t->GetHandle(); });
-            am->LoadTextureAsync(kf_tex + "Paladin_normal.png",
-                [rp,kn](std::shared_ptr<TextureAsset> t){
-                    if (t && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn))
-                        rp->get<dse::MeshRendererComponent>(kn).normal_texture_handle = t->GetHandle(); });
-        }
 
         auto& anim = reg.emplace<dse::Animator3DComponent>(knight);
         anim.enabled = true;
@@ -868,7 +887,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         anim.loop = true;
 
         auto light = NewPrimitive(ctx, "Directional Light");
-        ctx->Yield(80);
+        ctx->Yield(200);
 
         DumpMeshDiag("knight");
         {
@@ -881,8 +900,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
                 (int)mr.local_bounds_valid,
                 mr.local_bounds_min.x, mr.local_bounds_min.y, mr.local_bounds_min.z,
                 mr.local_bounds_max.x, mr.local_bounds_max.y, mr.local_bounds_max.z, fbm);
-            fprintf(stderr, "[KNIGHT] albedo_handle=%u normal_handle=%u\n",
-                mr.albedo_texture_handle, mr.normal_texture_handle);
+        fprintf(stderr, "[KNIGHT] albedo_handle=%u normal_handle=%u\n", kn_albedo_handle, kn_normal_handle);
             fflush(stderr);
         }
 
@@ -903,6 +921,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
             c3d.enabled = true; c3d.priority = 1000;
             c3d.fov = 45.0f; c3d.near_clip = 1.0f; c3d.far_clip = kn_radius * 20.0f + 1000.0f;
         }
+
         SelectionManager::Get().Clear();
 
         auto FrameKnight = [&]() {
@@ -993,19 +1012,41 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         auto& mr = Mr(cube);
-        mr.shader_variant = "MESH_HALFLAMBERT";
-        const std::string kf_tex = "examples/KF_Framework/assets/textures/";
+        mr.color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        const std::string tex_path = "c:/Users/Administrator/Desktop/Engine/DSEngine/data/textures/skybox000.jpg";
         if (auto* am = Services().engine->asset_manager()) {
             entt::registry* rp = &Reg(); entt::entity kn = cube;
-            am->LoadTextureAsync(kf_tex + "Paladin_diffuse.png",
+            am->LoadTextureAsync(tex_path,
                 [rp,kn](std::shared_ptr<TextureAsset> t){
-                    if (t && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn))
-                        rp->get<dse::MeshRendererComponent>(kn).albedo_texture_handle = t->GetHandle(); });
+                    if (t && t->GetHandle() != 0 && rp->valid(kn) && rp->all_of<dse::MeshRendererComponent>(kn)) {
+                        fprintf(stderr, "[render_texture_albedo] albedo_handle=%u\n", t->GetHandle());
+                    } else {
+                        fprintf(stderr, "[render_texture_albedo] FAILED: t=%p handle=%u\n",
+                                t.get(), t ? t->GetHandle() : 0);
+                    }
+                });
         }
         auto light = NewPrimitive(ctx, "Directional Light");
-        ctx->Yield(120);
+        ctx->Yield(150);
+        // Enter Play mode briefly to pump texture callbacks (GL context needed for CreateTexture2D)
+        {
+            auto& reg = Reg();
+            entt::entity tmp_cam = NewEmptyEntity(ctx);
+            auto& ctf = reg.get<TransformComponent>(tmp_cam);
+            ctf.position = glm::vec3(0.0f, 1.0f, 5.0f);
+            auto& c3d = reg.emplace<dse::Camera3DComponent>(tmp_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 45.0f; c3d.near_clip = 0.1f; c3d.far_clip = 1000.0f;
+            dse::editor::EnterPlayMode(Reg());
+            ctx->Yield(60);
+            entt::entity sel_tmp = entt::null;
+            dse::editor::ExitPlayMode(Reg(), sel_tmp, Services().engine);
+            ctx->Yield(10);
+            DestroyEntities({tmp_cam});
+            ctx->Yield(5);
+        }
         PreCapture(ctx);
-        ctx->Yield(20);
+        ctx->Yield(30);
         auto px = CaptureAndLoad("render_texture_albedo");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1453,8 +1494,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         Mr(sphere).metallic = 1.0f;
         Mr(sphere).roughness = 0.1f;
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.5f);
         ctx->Yield(30);
+        PreCapture(ctx, 0.5f);
+        ctx->Yield(15);
         auto px = CaptureAndLoad("render_reflection_probe");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1682,6 +1724,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
             dl.shadow_strength = 0.8f;
         }
         { auto& cam = GetEditorCamera(); cam.focal_point = glm::vec3(0, 1, 5); cam.distance = 30.0f; cam.yaw = 0.3f; cam.pitch = 0.25f; }
+        ctx->Yield(30);
+        PreCapture(ctx);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_shadow_csm");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
