@@ -229,6 +229,8 @@ bool DrawProjectHub() {
         if (settings.recent_projects.empty()) {
             ImGui::TextDisabled("  No recent projects");
         } else {
+            std::string hub_to_open;
+            std::string hub_to_remove;
             for (size_t i = 0; i < settings.recent_projects.size(); ++i) {
                 const auto& proj_path = settings.recent_projects[i];
                 std::filesystem::path root(proj_path);
@@ -237,23 +239,18 @@ bool DrawProjectHub() {
 
                 ImGui::PushID(static_cast<int>(i));
 
-                // Hover highlight
+                // Row selectable (allow the delete button to overlap on the right)
                 ImVec2 sel_pos = ImGui::GetCursorScreenPos();
-                if (ImGui::Selectable("##proj", false, 0, ImVec2(inner_w, 48))) {
-                    std::filesystem::path dseproj = root / "project.dseproj";
-                    if (mgr.OpenProject(dseproj)) {
-                        EditorSettings s = LoadEditorSettings();
-                        s.last_project_path = proj_path;
-                        AddRecentProject(s, proj_path);
-                        SaveEditorSettings(s);
-                    }
+                if (ImGui::Selectable("##proj", false, ImGuiSelectableFlags_AllowOverlap,
+                                      ImVec2(inner_w, 48))) {
+                    hub_to_open = proj_path;
                 }
-                bool hovered = ImGui::IsItemHovered();
 
                 ImVec2 item_min = ImGui::GetItemRectMin();
                 ImVec2 item_max = ImGui::GetItemRectMax();
+                bool row_hovered = ImGui::IsMouseHoveringRect(item_min, item_max);
 
-                if (hovered) {
+                if (row_hovered) {
                     bg_dl->AddRectFilled(item_min, item_max, IM_COL32(45, 50, 70, 200), 4.0f);
                 }
 
@@ -269,7 +266,35 @@ bool DrawProjectHub() {
                 bg_dl->AddText(ImVec2(item_min.x + 34, item_min.y + 26),
                                IM_COL32(100, 100, 110, 255), subtitle.c_str());
 
+                // Remove (✕) button, shown while hovering the row
+                if (row_hovered) {
+                    const float btn = 26.0f;
+                    ImGui::SetCursorScreenPos(ImVec2(item_max.x - btn - 10.0f,
+                                                     item_min.y + (48.0f - btn) * 0.5f));
+                    if (ImGui::Button(MDI_ICON_DELETE "##remove_recent", ImVec2(btn, btn))) {
+                        hub_to_remove = proj_path;
+                    }
+                    if (ImGui::IsItemHovered())
+                        ImGui::SetTooltip("Remove from recent list");
+                }
+
                 ImGui::PopID();
+            }
+
+            // Apply deferred actions (delete takes precedence over open)
+            if (!hub_to_remove.empty()) {
+                EditorSettings s = LoadEditorSettings();
+                RemoveRecentProject(s, hub_to_remove);
+                SaveEditorSettings(s);
+            } else if (!hub_to_open.empty()) {
+                std::filesystem::path dseproj =
+                    std::filesystem::path(hub_to_open) / "project.dseproj";
+                if (mgr.OpenProject(dseproj)) {
+                    EditorSettings s = LoadEditorSettings();
+                    s.last_project_path = hub_to_open;
+                    AddRecentProject(s, hub_to_open);
+                    SaveEditorSettings(s);
+                }
             }
         }
     }

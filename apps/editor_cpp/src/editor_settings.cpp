@@ -233,4 +233,18 @@ void AddRecentProject(EditorSettings& settings, const std::string& path) {
     }
 }
 
+void RemoveRecentFile(EditorSettings& settings, const std::string& path) {
+    auto it = std::find(settings.recent_files.begin(), settings.recent_files.end(), path);
+    if (it != settings.recent_files.end()) {
+        settings.recent_files.erase(it);
+    }
+}
+
+void RemoveRecentProject(EditorSettings& settings, const std::string& path) {
+    auto it = std::find(settings.recent_projects.begin(), settings.recent_projects.end(), path);
+    if (it != settings.recent_projects.end()) {
+        settings.recent_projects.erase(it);
+    }
+}
+
 } // namespace dse::editor

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file ui_tests_render_validation.cpp
  * @brief Viewport render validation tests (pixel assertions + screenshot capture for Devin visual verification).
  *
@@ -17,6 +17,7 @@
 #include "render_capture_helper.h"
 #include "../editor_icons.h"
 #include "../editor_selection.h"
+#include "../editor_scene_camera.h"
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -31,7 +32,50 @@ namespace dse::editor::uitest {
 
 namespace {
 
+
+/// Pre-capture preparation: clear selection wireframe and focus camera on scene center
+void PreCapture(ImGuiTestContext* ctx, float focus_y = 0.5f) {
+    SelectionManager::Get().Clear();
+    FocusEditorCamera(GetEditorCamera(), glm::vec3(0.0f, focus_y, 0.0f));
+    ctx->Yield(15);
+}
+
+/// Extended pre-capture for scenes whose objects span depth or sit off-origin:
+/// clears selection and aims the camera at an explicit focal point with a custom
+/// distance/orientation so all objects stay well framed (FocusEditorCamera fixes
+/// distance to 5, which is too close for depth-spanning rows).
+void PreCaptureFramed(ImGuiTestContext* ctx, const glm::vec3& focus, float distance,
+                      float yaw = 0.0f, float pitch = 0.35f) {
+    SelectionManager::Get().Clear();
+    auto& cam = GetEditorCamera();
+    cam.focal_point = focus;
+    cam.distance = distance;
+    cam.yaw = yaw;
+    cam.pitch = pitch;
+    ctx->Yield(15);
+}
 entt::registry& Reg() { return Services().engine->pipeline()->world().registry(); }
+
+// DIAG: dump all mesh entities' transform/render state to stderr (test log).
+void DumpMeshDiag(const char* tag) {
+    auto& reg = Reg();
+    auto view = reg.view<TransformComponent, dse::MeshRendererComponent>();
+    int n = 0;
+    for (auto e : view) {
+        auto& tf = view.get<TransformComponent>(e);
+        auto& mr = view.get<dse::MeshRendererComponent>(e);
+        glm::vec3 wp = glm::vec3(tf.local_to_world[3]);
+        fprintf(stderr,
+            "[MESHDIAG %s] e=%u pos=(%.2f,%.2f,%.2f) l2w=(%.2f,%.2f,%.2f) scl=(%.2f,%.2f,%.2f) dirty=%d vis=%d stat=%d verts=%zu path='%s' variant='%s' meshlet=%u\n",
+            tag, (unsigned)e, tf.position.x, tf.position.y, tf.position.z,
+            wp.x, wp.y, wp.z, tf.scale.x, tf.scale.y, tf.scale.z,
+            (int)tf.dirty, (int)mr.visible, (int)mr.is_static, mr.temp_vertices.size(),
+            mr.mesh_path.c_str(), mr.shader_variant.c_str(), mr.meshlet_mesh_id);
+        ++n;
+    }
+    fprintf(stderr, "[MESHDIAG %s] total_mesh_entities=%d\n", tag, n);
+    fflush(stderr);
+}
 
 // 经 Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
 // （CreateEntity3DCube 等会填充 procedural 几何数据；裸 Mesh Renderer 组件
@@ -145,6 +189,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_cube_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -164,6 +209,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_sphere_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -183,6 +229,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_plane_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -203,6 +250,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_cylinder_default");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -227,6 +275,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_multi_objects");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.10f);
@@ -249,6 +298,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_dirlight_white");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.AverageBrightness() > 0.02f);
@@ -273,6 +323,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_pointlight_red");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
@@ -297,6 +348,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_spotlight_cone");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -314,6 +366,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_no_light_ambient");
         SKIP_IF_NO_CAPTURE(px);
         // Without explicit light, should be very dark (ambient only)
@@ -346,6 +399,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_multi_lights");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -368,6 +422,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_light_intensity");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.AverageBrightness() > 0.01f);
@@ -391,6 +446,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_material_red");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -410,6 +466,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_material_blue");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -434,6 +491,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_texture_checker");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -454,6 +512,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_material_metallic");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -477,6 +536,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_material_transparent");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -502,6 +562,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_shadow_ground");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -524,6 +585,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx, 1.0f);  // stacked cubes reach y=1.5; raise focal point
         auto px = CaptureAndLoad("render_shadow_self");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -545,6 +607,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_bloom_effect");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -576,6 +639,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        // Cubes span z=0..-14; aim at mid-depth from farther back with a 3/4 angle
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 0.5f, -6.0f), 16.0f, 0.5f, 0.4f);
         auto px = CaptureAndLoad("render_fog_distance");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
@@ -601,6 +666,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_ao_corners");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.03f);
@@ -630,6 +696,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        // Cubes recede z=0..-8; 3/4 view from farther back shows perspective falloff
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 0.5f, -4.0f), 12.0f, 0.55f, 0.4f);
         auto px = CaptureAndLoad("render_camera_perspective");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -652,6 +720,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        // Two side-by-side cubes; slight 3/4 angle + pull-back frames both with margin
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 0.5f, 0.0f), 7.0f, 0.4f, 0.35f);
         auto px = CaptureAndLoad("render_camera_orthographic");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.05f);
@@ -671,6 +741,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_camera_closeup");
         SKIP_IF_NO_CAPTURE(px);
         // Close-up should fill most of the viewport
@@ -691,6 +762,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
+        PreCapture(ctx);
         auto px = CaptureAndLoad("render_camera_far");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);

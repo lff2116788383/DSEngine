@@ -55,4 +55,10 @@ void AddRecentFile(EditorSettings& settings, const std::string& path);
 /// Add a project to the recent projects list (deduplicates and trims)
 void AddRecentProject(EditorSettings& settings, const std::string& path);
 
+/// Remove a single file from the recent files list (no-op if not present)
+void RemoveRecentFile(EditorSettings& settings, const std::string& path);
+
+/// Remove a single project from the recent projects list (no-op if not present)
+void RemoveRecentProject(EditorSettings& settings, const std::string& path);
+
 } // namespace dse::editor

@@ -420,8 +420,17 @@ void MeshRenderer::DrawBatch(CommandBuffer& cmd, RhiDevice& device,
         } else if (is_instanced) {
             std::vector<MeshVertex> mverts(vtx_count);
             for (size_t i = 0; i < vtx_count; ++i) mverts[i] = BatchToMeshVertex(vtx_data[i]);
-            DrawInstancedShaded(cmd, device, mverts, indices16, vis_models, view, proj, camera_pos,
-                                material, light, point_lights, gi, spot_lights);
+            // 后端未提供实例化 shaded 内建着色器时（如当前上下文缺少 SSBO 支持，
+            // DrawInstancedShaded 会因 program==0 直接 return），逐实例回退到非实例
+            // DrawShaded，避免整批合批 mesh 静默不渲染。
+            if (device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded) == 0) {
+                for (const auto& mdl : vis_models)
+                    DrawShaded(cmd, device, mverts, indices16, mdl, view, proj, camera_pos,
+                               material, light, point_lights, gi, spot_lights);
+            } else {
+                DrawInstancedShaded(cmd, device, mverts, indices16, vis_models, view, proj, camera_pos,
+                                    material, light, point_lights, gi, spot_lights);
+            }
         } else if (single_skinned) {
             std::vector<SkinnedMeshVertex> sverts(vtx_count);
             for (size_t i = 0; i < vtx_count; ++i) sverts[i] = BatchToSkinnedVertex(vtx_data[i]);
