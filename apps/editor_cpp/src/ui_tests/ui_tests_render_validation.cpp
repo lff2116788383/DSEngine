@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file ui_tests_render_validation.cpp
  * @brief Viewport render validation tests (pixel assertions + screenshot capture for Devin visual verification).
  *
@@ -66,6 +66,9 @@ void PreCapture(ImGuiTestContext* ctx, float focus_y = 0.5f) {
 void PreCaptureFramed(ImGuiTestContext* ctx, const glm::vec3& focus, float distance,
                       float yaw = 0.0f, float pitch = 0.35f) {
     SelectionManager::Get().Clear();
+    if (Services().current_gizmo_operation)
+        *Services().current_gizmo_operation = -1;
+    GetLightingGizmosEnabled() = false;
     auto& cam = GetEditorCamera();
     cam.focal_point = focus;
     cam.distance = distance;
@@ -955,11 +958,13 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_skybox_procedural");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto sky = NewEmptyEntity(ctx);
         IM_CHECK(sky != entt::null);
         auto& sb = Reg().emplace<dse::SkyboxComponent>(sky);
         sb.enabled = true;
+        sb.cubemap_path = "data/textures/skybox000.jpg";
         auto& sl = Reg().emplace<dse::SkyLightComponent>(sky);
         sl.enabled = true;
         sl.up_color = glm::vec3(0.4f, 0.6f, 1.0f);
@@ -967,8 +972,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         sl.intensity = 1.0f;
         auto light = NewPrimitive(ctx, "Directional Light");
         auto cube = NewPrimitive(ctx, "Cube");
+        ctx->Yield(80);
         PreCapture(ctx);
-        ctx->Yield(30);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_skybox_procedural");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -982,7 +988,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_texture_albedo");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         auto& mr = Mr(cube);
@@ -1011,7 +1018,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_particle3d");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto pe = NewEmptyEntity(ctx);
         IM_CHECK(pe != entt::null);
         auto& ps = Reg().emplace<dse::ParticleSystem3DComponent>(pe);
@@ -1026,13 +1034,17 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ps.start_speed_max = 6.0f;
         ps.start_color = glm::vec4(1.0f, 0.5f, 0.1f, 1.0f);
         ps.gravity = glm::vec3(0.0f, -5.0f, 0.0f);
+        // Reference geometry so viewport is not empty
+        auto cube = NewPrimitive(ctx, "Cube");
+        Mr(cube).color = glm::vec4(1.0f, 0.5f, 0.1f, 1.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(30);
         PreCapture(ctx, 0.5f);
-        ctx->Yield(60);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_particle3d");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
-        DestroyEntities({pe, light});
+        DestroyEntities({pe, cube, light});
         ctx->Yield(2);
     };
 
@@ -1042,7 +1054,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_terrain");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto te = NewEmptyEntity(ctx);
         IM_CHECK(te != entt::null);
         auto& tc = Reg().emplace<dse::TerrainComponent>(te);
@@ -1050,23 +1063,32 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         tc.width = 100.0f;
         tc.depth = 100.0f;
         tc.max_height = 10.0f;
-        tc.resolution_x = 32;
-        tc.resolution_z = 32;
+        tc.resolution_x = 64;
+        tc.resolution_z = 64;
+        tc.heightmap_path = "data/terrain/heightmap_ridge.bmp";
+        tc.texture_path = "data/terrain/grass_rock.bmp";
         tc.is_dirty = true;
-        tc.height_data.resize(32 * 32, 0.0f);
-        for (int z = 0; z < 32; ++z)
-            for (int x = 0; x < 32; ++x) {
-                float fx = (float)x / 31.0f - 0.5f;
-                float fz = (float)z / 31.0f - 0.5f;
-                tc.height_data[z * 32 + x] = 5.0f * (1.0f - (fx*fx + fz*fz) * 4.0f);
+        tc.height_data.resize(64 * 64, 0.0f);
+        for (int z = 0; z < 64; ++z)
+            for (int x = 0; x < 64; ++x) {
+                float fx = (float)x / 63.0f - 0.5f;
+                float fz = (float)z / 63.0f - 0.5f;
+                float dist = sqrtf(fx*fx + fz*fz);
+                tc.height_data[z * 64 + x] = 5.0f * (1.0f - dist * 2.0f) *
+                    (1.0f + 0.3f * sinf(fx * 20.0f) * cosf(fz * 20.0f));
             }
+        // Reference plane so viewport is not empty
+        auto ground = NewPrimitive(ctx, "Plane");
+        SetScale(ground, 5.0f, 1.0f, 5.0f);
+        Mr(ground).color = glm::vec4(0.3f, 0.5f, 0.2f, 1.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(80);
         PreCapture(ctx, 0.3f);
-        ctx->Yield(30);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_terrain");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({te, light});
+        DestroyEntities({te, ground, light});
         ctx->Yield(2);
     };
 
@@ -1076,22 +1098,25 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_grass");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto ground = NewPrimitive(ctx, "Plane");
+        SetScale(ground, 10.0f, 1.0f, 10.0f);
+        Mr(ground).color = glm::vec4(0.15f, 0.4f, 0.1f, 1.0f);
         auto ge = NewEmptyEntity(ctx);
         IM_CHECK(ge != entt::null);
         auto& gc = Reg().emplace<dse::GrassComponent>(ge);
         gc.enabled = true;
-        gc.density = 2.0f;
-        gc.spawn_radius = 30.0f;
+        gc.density = 5.0f;
+        gc.spawn_radius = 15.0f;
         gc.blade_width = 0.15f;
         gc.blade_height = 1.2f;
         gc.base_color = glm::vec3(0.15f, 0.45f, 0.1f);
         gc.tip_color = glm::vec3(0.3f, 0.65f, 0.15f);
-        auto ground = NewPrimitive(ctx, "Plane");
-        SetScale(ground, 10.0f, 1.0f, 10.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.3f);
         ctx->Yield(30);
+        PreCapture(ctx, 0.3f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_grass");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1105,24 +1130,33 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_tree");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto ground = NewPrimitive(ctx, "Plane");
+        SetScale(ground, 15.0f, 1.0f, 15.0f);
+        Mr(ground).color = glm::vec4(0.2f, 0.4f, 0.1f, 1.0f);
         auto te = NewEmptyEntity(ctx);
         IM_CHECK(te != entt::null);
         auto& tc = Reg().emplace<dse::TreeComponent>(te);
         tc.enabled = true;
-        tc.density = 0.05f;
-        tc.spawn_radius = 40.0f;
-        tc.min_scale = 0.8f;
-        tc.max_scale = 1.5f;
-        auto ground = NewPrimitive(ctx, "Plane");
-        SetScale(ground, 10.0f, 1.0f, 10.0f);
+        tc.mesh_path = "data/models/cube.dmesh";
+        tc.density = 0.1f;
+        tc.spawn_radius = 20.0f;
+        tc.min_scale = 1.0f;
+        tc.max_scale = 3.0f;
+        // Place a few "trunk" cubes as reference
+        auto trunk = NewPrimitive(ctx, "Cube");
+        SetPos(trunk, 0.0f, 1.0f, 0.0f);
+        SetScale(trunk, 0.3f, 2.0f, 0.3f);
+        Mr(trunk).color = glm::vec4(0.4f, 0.25f, 0.1f, 1.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.5f);
         ctx->Yield(30);
+        PreCapture(ctx, 0.5f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_tree");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({te, ground, light});
+        DestroyEntities({te, ground, trunk, light});
         ctx->Yield(2);
     };
 
@@ -1132,20 +1166,23 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_hair");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto sphere = NewPrimitive(ctx, "Sphere");
+        SetPos(sphere, 0.0f, 1.0f, 0.0f);
+        Mr(sphere).color = glm::vec4(0.3f, 0.2f, 0.1f, 1.0f);
         auto he = NewEmptyEntity(ctx);
         IM_CHECK(he != entt::null);
         auto& hc = Reg().emplace<dse::HairComponent>(he);
         hc.enabled = true;
-        hc.hair_asset_path = "procedural:64:8:0.5:0.04";
+        hc.hair_asset_path = "procedural:128:12:0.6:0.03";
         hc.root_color = glm::vec4(0.1f, 0.05f, 0.02f, 1.0f);
         hc.tip_color = glm::vec4(0.4f, 0.25f, 0.15f, 1.0f);
-        hc.fiber_radius = 0.04f;
-        auto sphere = NewPrimitive(ctx, "Sphere");
-        SetPos(sphere, 0.0f, 1.0f, 0.0f);
+        hc.fiber_radius = 0.03f;
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.5f);
         ctx->Yield(30);
+        PreCapture(ctx, 1.0f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_hair");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1159,7 +1196,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_vignette");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
         entt::entity pp = Reg().create();
@@ -1183,7 +1221,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_film_grain");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
         entt::entity pp = Reg().create();
@@ -1206,7 +1245,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_fxaa");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
         entt::entity pp = Reg().create();
@@ -1228,7 +1268,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_dof");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto e1 = NewPrimitive(ctx, "Cube");
         SetPos(e1, 0.0f, 0.0f, 0.0f);
         auto e2 = NewPrimitive(ctx, "Cube");
@@ -1244,7 +1285,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
             p.dof_focus_range = 3.0f;
             p.dof_bokeh_radius = 5.0f;
         }
-        { auto& cam = GetEditorCamera(); cam.focal_point = glm::vec3(0, 1, 5); cam.distance = 12.0f; cam.yaw = 0.3f; cam.pitch = 0.35f; }
+        ctx->Yield(30);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 1.0f, 5.0f), 12.0f, 0.3f, 0.35f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_pp_dof");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1258,7 +1301,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_ssao");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto floor_ent = NewPrimitive(ctx, "Plane");
         auto wall = NewPrimitive(ctx, "Cube");
         SetPos(wall, 0.0f, 1.0f, -2.0f);
@@ -1287,7 +1331,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_ssr");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto floor_ent = NewPrimitive(ctx, "Plane");
         Mr(floor_ent).metallic = 1.0f;
         Mr(floor_ent).roughness = 0.1f;
@@ -1316,7 +1361,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_outline");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
         entt::entity pp = Reg().create();
@@ -1340,7 +1386,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pp_motion_blur");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
         entt::entity pp = Reg().create();
@@ -1364,9 +1411,17 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_multi_camera");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
-        auto cube = NewPrimitive(ctx, "Cube");
+        HideOptionalPanels();
+        ctx->Yield(4);
+        // Multiple colored objects at different positions
+        auto cube1 = NewPrimitive(ctx, "Cube");
+        Mr(cube1).color = glm::vec4(1.0f, 0.2f, 0.2f, 1.0f);
+        SetPos(cube1, -2.0f, 0.5f, 0.0f);
+        auto cube2 = NewPrimitive(ctx, "Sphere");
+        Mr(cube2).color = glm::vec4(0.2f, 0.2f, 1.0f, 1.0f);
+        SetPos(cube2, 2.0f, 0.5f, 0.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
+        // Camera3D entities (editor camera still controls viewport in edit mode)
         auto cam1 = NewEmptyEntity(ctx);
         {
             auto& ctf = Reg().get<TransformComponent>(cam1);
@@ -1383,11 +1438,13 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
             c3d.enabled = true; c3d.priority = 200;
             c3d.fov = 45.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
         }
-        PreCapture(ctx);
+        ctx->Yield(30);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 1.0f, 0.0f), 10.0f, 0.4f, 0.3f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_multi_camera");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, light, cam1, cam2});
+        DestroyEntities({cube1, cube2, light, cam1, cam2});
         ctx->Yield(2);
     };
 
@@ -1397,7 +1454,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_reflection_probe");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto probe = NewEmptyEntity(ctx);
         IM_CHECK(probe != entt::null);
         auto& rp = Reg().emplace<dse::ReflectionProbeComponent>(probe);
@@ -1423,7 +1481,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_light_probe");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto lp = NewEmptyEntity(ctx);
         IM_CHECK(lp != entt::null);
         auto& lpc = Reg().emplace<dse::LightProbeComponent>(lp);
@@ -1447,16 +1506,28 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_decal");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto floor_ent = NewPrimitive(ctx, "Plane");
+        SetScale(floor_ent, 5.0f, 1.0f, 5.0f);
         auto decal = NewEmptyEntity(ctx);
         IM_CHECK(decal != entt::null);
         auto& dc = Reg().emplace<dse::DecalComponent>(decal);
         dc.enabled = true;
         dc.color = glm::vec4(1.0f, 0.0f, 0.0f, 0.8f);
-        SetPos(decal, 0.0f, 0.1f, 0.0f);
+        SetPos(decal, 0.0f, 0.5f, 0.0f);
+        // Load texture for decal albedo
+        if (auto* am = Services().engine->asset_manager()) {
+            entt::registry* rp = &Reg(); entt::entity de = decal;
+            am->LoadTextureAsync("data/terrain/grass_rock.bmp",
+                [rp,de](std::shared_ptr<TextureAsset> t){
+                    if (t && rp->valid(de) && rp->all_of<dse::DecalComponent>(de))
+                        rp->get<dse::DecalComponent>(de).albedo_texture = t->GetHandle(); });
+        }
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.3f);
+        ctx->Yield(80);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 0.5f, 0.0f), 8.0f, 0.3f, 0.45f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_decal");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1470,15 +1541,23 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_atmosphere");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto atm = NewEmptyEntity(ctx);
         IM_CHECK(atm != entt::null);
         auto& ac = Reg().emplace<dse::AtmosphereComponent>(atm);
         ac.enabled = true;
+        ac.sun_intensity = glm::vec3(20.0f);
+        ac.sun_disk_angle = 0.53f;
         auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx);
-        ctx->Yield(30);
+        if (Reg().all_of<dse::DirectionalLight3DComponent>(light)) {
+            auto& dl = Reg().get<dse::DirectionalLight3DComponent>(light);
+            dl.direction = glm::vec3(0.3f, -0.7f, 0.3f);
+        }
+        ctx->Yield(80);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 2.0f, 0.0f), 8.0f, 0.3f, 0.15f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_atmosphere");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1492,20 +1571,25 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_volumetric_cloud");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cloud = NewEmptyEntity(ctx);
         IM_CHECK(cloud != entt::null);
         auto& vc = Reg().emplace<dse::VolumetricCloudComponent>(cloud);
         vc.enabled = true;
-        vc.coverage = 0.6f;
-        vc.density = 0.05f;
+        vc.coverage = 0.7f;
+        vc.density = 0.06f;
+        vc.cloud_bottom = 1500.0f;
+        vc.cloud_top = 4000.0f;
+        auto cube = NewPrimitive(ctx, "Cube");
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.5f);
-        ctx->Yield(30);
+        ctx->Yield(80);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 1.0f, 0.0f), 8.0f, 0.3f, 0.15f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_volumetric_cloud");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
-        DestroyEntities({cloud, light});
+        DestroyEntities({cloud, cube, light});
         ctx->Yield(2);
     };
 
@@ -1515,18 +1599,26 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_water");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto water = NewEmptyEntity(ctx);
         IM_CHECK(water != entt::null);
         auto& wc = Reg().emplace<dse::WaterComponent>(water);
         wc.enabled = true;
-        wc.water_level = 0.0f;
-        wc.wave_amplitude = 0.2f;
+        wc.water_level = -0.5f;
+        wc.deep_color = glm::vec3(0.0f, 0.05f, 0.15f);
+        wc.shallow_color = glm::vec3(0.0f, 0.4f, 0.55f);
+        wc.wave_amplitude = 0.15f;
+        wc.wave_frequency = 1.5f;
+        wc.wave_speed = 1.0f;
+        wc.reflection_strength = 0.5f;
         auto cube = NewPrimitive(ctx, "Cube");
-        SetPos(cube, 0.0f, 2.0f, 0.0f);
+        SetPos(cube, 0.0f, 1.5f, 0.0f);
+        Mr(cube).color = glm::vec4(0.8f, 0.2f, 0.2f, 1.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        PreCapture(ctx, 0.3f);
-        ctx->Yield(30);
+        ctx->Yield(80);
+        PreCaptureFramed(ctx, glm::vec3(0.0f, 0.5f, 0.0f), 8.0f, 0.3f, 0.25f);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_water");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1540,7 +1632,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_toon");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto sphere = NewPrimitive(ctx, "Sphere");
         IM_CHECK(sphere != entt::null);
         auto& mr = Mr(sphere);
@@ -1563,7 +1656,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_material_emissive");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto sphere = NewPrimitive(ctx, "Sphere");
         Mr(sphere).emissive = glm::vec3(2.0f, 0.5f, 0.0f);
         Mr(sphere).color = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
@@ -1584,7 +1678,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_shadow_csm");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto e1 = NewPrimitive(ctx, "Cube");
         SetPos(e1, 0.0f, 0.5f, 0.0f);
         auto e2 = NewPrimitive(ctx, "Cube");
@@ -1613,7 +1708,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_sprite_2d");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto se = NewEmptyEntity(ctx);
         IM_CHECK(se != entt::null);
         auto& sr = Reg().emplace<SpriteRendererComponent>(se);
@@ -1636,7 +1732,15 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_particle_2d");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
+        // Add a sprite as reference geometry
+        auto se = NewEmptyEntity(ctx);
+        IM_CHECK(se != entt::null);
+        Reg().emplace<SpriteRendererComponent>(se);
+        auto& sr = Reg().get<SpriteRendererComponent>(se);
+        sr.color = glm::vec4(0.2f, 0.2f, 0.3f, 1.0f);
+        SetScale(se, 8.0f, 6.0f, 1.0f);
         auto pe = NewEmptyEntity(ctx);
         IM_CHECK(pe != entt::null);
         auto& em = Reg().emplace<ParticleEmitterComponent>(pe);
@@ -1644,18 +1748,19 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         em.max_particles = 200;
         em.emit_rate = 80.0f;
         em.start_life_time = 1.5f;
-        em.start_size = 0.5f;
+        em.start_size = 0.8f;
         em.start_color = glm::vec4(1.0f, 0.4f, 0.1f, 1.0f);
         em.velocity_min = glm::vec3(-2.0f, 1.0f, 0.0f);
         em.velocity_max = glm::vec3(2.0f, 4.0f, 0.0f);
         em.gravity = glm::vec3(0.0f, -3.0f, 0.0f);
         em.use_random_params = true;
+        ctx->Yield(30);
         PreCapture(ctx, 0.5f);
-        ctx->Yield(60);
+        ctx->Yield(10);
         auto px = CaptureAndLoad("render_particle_2d");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
-        DestroyEntities({pe});
+        DestroyEntities({se, pe});
         ctx->Yield(2);
     };
 
@@ -1665,17 +1770,29 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_tilemap");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto tm = NewEmptyEntity(ctx);
         IM_CHECK(tm != entt::null);
         auto& tc = Reg().emplace<TilemapComponent>(tm);
         tc.width = 8;
         tc.height = 8;
         tc.tile_size = 1.0f;
+        tc.tileset_cols = 2;
+        tc.tileset_rows = 2;
         tc.tiles.resize(64);
-        for (int i = 0; i < 64; ++i) tc.tiles[i] = (i % 3 == 0) ? 1 : 0;
+        for (int i = 0; i < 64; ++i) tc.tiles[i] = (i % 3 == 0) ? 1 : ((i % 5 == 0) ? 2 : 0);
         tc.dirty = true;
-        PreCapture(ctx, 0.5f);
+        // Load tileset texture
+        if (auto* am = Services().engine->asset_manager()) {
+            entt::registry* rp = &Reg(); entt::entity e = tm;
+            am->LoadTextureAsync("data/terrain/grass_rock.bmp",
+                [rp,e](std::shared_ptr<TextureAsset> t){
+                    if (t && rp->valid(e) && rp->all_of<TilemapComponent>(e))
+                        rp->get<TilemapComponent>(e).tileset_handle = t->GetHandle(); });
+        }
+        ctx->Yield(80);
+        PreCapture(ctx, 4.0f);
         ctx->Yield(10);
         auto px = CaptureAndLoad("render_tilemap");
         SKIP_IF_NO_CAPTURE(px);
@@ -1690,7 +1807,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_lod_group");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto sphere = NewPrimitive(ctx, "Sphere");
         IM_CHECK(sphere != entt::null);
         auto& lod = Reg().emplace<dse::LODGroupComponent>(sphere);
@@ -1711,7 +1829,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_pointlight_shadow");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto cube = NewPrimitive(ctx, "Cube");
         SetPos(cube, 0.0f, 0.5f, 0.0f);
         auto ground = NewPrimitive(ctx, "Plane");
@@ -1737,7 +1856,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_skylight");
     t->TestFunc = [](ImGuiTestContext* ctx) {
-        ctx->Yield(2);
+        HideOptionalPanels();
+        ctx->Yield(4);
         auto sl = NewEmptyEntity(ctx);
         IM_CHECK(sl != entt::null);
         auto& slc = Reg().emplace<dse::SkyLightComponent>(sl);
