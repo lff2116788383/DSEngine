@@ -18,7 +18,8 @@
 #include "../editor_icons.h"
 #include "../editor_selection.h"
 #include "../editor_scene_camera.h"
-#include "../editor_toolbar.h"     // EnterPlayMode / ExitPlayMode / IsEditorInPlayMode
+#include "../editor_toolbar.h"
+#include "../editor_lighting_gizmos.h"     // EnterPlayMode / ExitPlayMode / IsEditorInPlayMode
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -42,9 +43,18 @@ namespace dse::editor::uitest {
 namespace {
 
 
-/// Pre-capture preparation: clear selection wireframe and focus camera on scene center
+/// Pre-capture preparation: clear selection wireframe, hide gizmos, focus camera
 void PreCapture(ImGuiTestContext* ctx, float focus_y = 0.5f) {
     SelectionManager::Get().Clear();
+    // Suppress transform gizmo (-1 = Hand tool, no gizmo drawn)
+    int saved_gizmo_op = -1;
+    if (Services().current_gizmo_operation) {
+        saved_gizmo_op = *Services().current_gizmo_operation;
+        *Services().current_gizmo_operation = -1;
+    }
+    // Suppress lighting debug gizmos (light probe spheres, light icons)
+    bool saved_light_giz = GetLightingGizmosEnabled();
+    GetLightingGizmosEnabled() = false;
     FocusEditorCamera(GetEditorCamera(), glm::vec3(0.0f, focus_y, 0.0f));
     ctx->Yield(15);
 }
