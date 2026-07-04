@@ -297,7 +297,8 @@ bool EditorApp::Init(int argc, char* argv[]) {
         return false;
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // SSBO（粒子 / GPU-driven 等）需要 GL 4.3+；优先请求 4.3 核心，创建失败再回退 3.3。
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     if (headless) {
@@ -312,6 +313,14 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
+    if (!window_) {
+        // 回退：驱动/上下文不支持 4.3 时降级到 3.3（此时 SSBO 特性不可用）。
+        std::cerr << "[Editor] GL 4.3 context creation failed; retrying with 3.3." << std::endl;
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
+    }
     if (!window_) {
         std::cerr << "Failed to create GLFW window in Editor." << std::endl;
         splash_.Finish();
