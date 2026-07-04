@@ -1927,26 +1927,49 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(8.0f, 1.0f, 8.0f);
+        SetPos(floor, 0.0f, -1.0f, 0.0f);
+        UsePBR(floor);
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
-        auto light = NewPrimitive(ctx, "Directional Light");
-        // Add DayNightCycleComponent
+        // DayNightCycle drives the scene directional light's colour + direction.
+        // Sunset time -> warm, low-angle light instead of the neutral default.
         auto dnc_ent = NewEmptyEntity(ctx);
         auto& dnc = Reg().emplace<dse::DayNightCycleComponent>(dnc_ent);
         dnc.enabled = true;
-        dnc.time_of_day = 7.0f;
+        dnc.time_of_day = 18.5f;
         dnc.latitude = 30.0f;
         dnc.longitude = 120.0f;
         dnc.auto_advance = false;
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        auto dn_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(4.0f, 2.5f, 6.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(dn_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(dn_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 50.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(40);
+        ctx->WindowFocus("//Game");
+        ctx->Yield(10);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_daynight_cycle");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, light, dnc_ent});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({cube, floor, light, dnc_ent, dn_cam});
         ctx->Yield(2);
     };
 
@@ -1988,26 +2011,61 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
-        auto sphere = NewPrimitive(ctx, "Sphere");
-        IM_CHECK(sphere != entt::null);
-        UsePBR(sphere);
-        // Snow cover on sphere
-        auto& snow = Reg().emplace<dse::SnowCoverComponent>(sphere);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(10.0f, 1.0f, 10.0f);
+        SetPos(floor, 0.0f, -1.0f, 0.0f);
+        UsePBR(floor);
+        // Left sphere: plain PBR (snow-free) as a contrast reference.
+        auto bare = NewPrimitive(ctx, "Sphere");
+        UsePBR(bare);
+        SetPos(bare, -1.5f, 0.0f, 0.0f);
+        // Right sphere: accumulates snow on upward-facing surfaces.
+        auto snowy = NewPrimitive(ctx, "Sphere");
+        IM_CHECK(snowy != entt::null);
+        UsePBR(snowy);
+        SetPos(snowy, 1.5f, 0.0f, 0.0f);
+        auto& snow = Reg().emplace<dse::SnowCoverComponent>(snowy);
         snow.enabled = true;
         snow.coverage = 1.0f;
         snow.target_coverage = 1.0f;
-        snow.snow_albedo = glm::vec3(0.92f, 0.93f, 0.96f);
-        snow.snow_roughness = 0.75f;
-        snow.normal_threshold = 0.3f;
-        auto light = NewPrimitive(ctx, "Directional Light");
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        snow.snow_albedo = glm::vec3(0.95f, 0.96f, 1.0f);
+        snow.snow_roughness = 0.8f;
+        snow.normal_threshold = 0.2f;
+        // A Snow-type weather source keeps coverage from melting away and
+        // (with SSBO particles) spawns visible falling snowflakes in play mode.
+        auto weather_ent = NewEmptyEntity(ctx);
+        auto& weather = Reg().emplace<dse::WeatherComponent>(weather_ent);
+        weather.enabled = true;
+        weather.type = dse::WeatherType::Snow;
+        weather.intensity = 1.0f;
+        weather.spawn_height = 8.0f;
+        auto sn_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(0.0f, 2.2f, 6.5f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(sn_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(sn_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 55.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(50);
+        ctx->WindowFocus("//Game");
+        ctx->Yield(10);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_snow_cover");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({sphere, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({bare, snowy, floor, light, weather_ent, sn_cam});
         ctx->Yield(2);
     };
 
@@ -2156,12 +2214,13 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
+        // Attach a fracture component (runtime Voronoi source). Note: the
+        // in-editor primitive cube carries no retained CPU mesh, so a live
+        // shatter can't spawn fragments here; this validates the component +
+        // render path only.
         auto& frac = Reg().emplace<dse::FractureComponent>(cube);
         frac.source = dse::FractureSource::RuntimeVoronoi;
-        frac.trigger_mode = dse::FractureTriggerMode::ImpactForce;
-        frac.runtime_fragment_count = 8;
-        frac.break_force = 1000.0f;
-        frac.fragment_lifetime = 5.0f;
+        frac.runtime_fragment_count = 16;
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
