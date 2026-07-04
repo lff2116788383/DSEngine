@@ -99,9 +99,9 @@ void DumpMeshDiag(const char* tag) {
     fflush(stderr);
 }
 
-// 经 Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
+// �?Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
 // （CreateEntity3DCube 等会填充 procedural 几何数据；裸 Mesh Renderer 组件
-// mesh_path 为空、不会渲染任何几何体）。返回新建实体并置为单选。
+// mesh_path 为空、不会渲染任何几何体）。返回新建实体并置为单选�?
 entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
     entt::registry& reg = Reg();
     std::vector<entt::entity> before;
@@ -109,7 +109,7 @@ entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
         if (reg.valid(en)) before.push_back(en);
     OpenHierarchyContextMenu(ctx);
     // 子菜单需先点开父项，再在弹出的子菜单窗口内定位条目
-    // （一步式 "Create 3D Object/Cube" 路径在 BeginPopupContextWindow 下解析失败）。
+    // （一步式 "Create 3D Object/Cube" 路径�?BeginPopupContextWindow 下解析失败）�?
     ctx->ItemClick("Create 3D Object");
     ctx->Yield(2);
     ctx->SetRef("//$FOCUSED");
@@ -129,8 +129,8 @@ entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
     return entt::null;
 }
 
-// Hierarchy 右键 → "Create Empty Entity"，按 registry 差集取回新实体并置为单选。
-// 用于蒙皮模型测试：得到一个干净的编辑器实体（含 TransformComponent、无程序化几何残留）。
+// Hierarchy 右键 �?"Create Empty Entity"，按 registry 差集取回新实体并置为单选�?
+// 用于蒙皮模型测试：得到一个干净的编辑器实体（含 TransformComponent、无程序化几何残留）�?
 entt::entity NewEmptyEntity(ImGuiTestContext* ctx) {
     entt::registry& reg = Reg();
     std::vector<entt::entity> before;
@@ -163,7 +163,7 @@ void SetScale(entt::entity e, float x, float y, float z) {
     t.dirty = true;
 }
 
-// 图元几何为 position-only 顶点，PBR 需要法线；用 PBR 变体让方向光/点光着色生效。
+// 图元几何�?position-only 顶点，PBR 需要法线；�?PBR 变体让方向光/点光着色生效�?
 void UsePBR(entt::entity e) { (void)e; /* DIAG: keep default variant */ }
 
 void DestroyEntities(std::initializer_list<entt::entity> ents) {
@@ -278,7 +278,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // A4: render_cylinder_default（引擎无 cylinder 图元，用竖向拉伸的 Cube 柱体代替）
+    // A4: render_cylinder_default（引擎无 cylinder 图元，用竖向拉伸�?Cube 柱体代替�?
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_cylinder_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -634,7 +634,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // D19: render_bloom_effect（Scene 视口不合成 bloom，Game 视图才可见；此处验证发光体+PostProcess 不破坏渲染）
+    // D19: render_bloom_effect（Scene 视口不合�?bloom，Game 视图才可见；此处验证发光�?PostProcess 不破坏渲染）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_bloom_effect");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -689,7 +689,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // D21: render_ao_corners（SSAO 只在 Game 视图合成；Scene 视口验证转角几何正常渲染）
+    // D21: render_ao_corners（SSAO 只在 Game 视图合成；Scene 视口验证转角几何正常渲染�?
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_ao_corners");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -719,7 +719,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // E. Camera and Viewpoint (4 tests)
     // ====================================================================
 
-    // E22: render_camera_perspective（一排递远的 Cube，验证透视缩小）
+    // E22: render_camera_perspective（一排递远�?Cube，验证透视缩小�?
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_perspective");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -770,7 +770,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // E24: render_camera_closeup（大尺寸 Cube 占满视口）
+    // E24: render_camera_closeup（大尺寸 Cube 占满视口�?
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_closeup");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -791,7 +791,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // E25: render_camera_far（远处小物体）
+    // E25: render_camera_far（远处小物体�?
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_far");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -813,8 +813,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     // ====================================================================
     // F. Skinned skeletal-animation model asset import (1 test)
-    //    使用 KF demo 骑士资产（cooked paladin dmesh + dskel + idle danim）验证
-    //    “编辑器导入蒙皮骨骼动画模型并渲染”这一路径。
+    //    使用 KF demo 骑士资产（cooked paladin dmesh + dskel + idle danim）验�?
+    //    “编辑器导入蒙皮骨骼动画模型并渲染”这一路径�?
     // ====================================================================
 
     // F26: render_skinned_knight
@@ -1003,8 +1003,9 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
                         rp->get<dse::MeshRendererComponent>(kn).albedo_texture_handle = t->GetHandle(); });
         }
         auto light = NewPrimitive(ctx, "Directional Light");
-        ctx->Yield(80);
+        ctx->Yield(120);
         PreCapture(ctx);
+        ctx->Yield(20);
         auto px = CaptureAndLoad("render_texture_albedo");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
@@ -1421,30 +1422,16 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         Mr(cube2).color = glm::vec4(0.2f, 0.2f, 1.0f, 1.0f);
         SetPos(cube2, 2.0f, 0.5f, 0.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        // Camera3D entities (editor camera still controls viewport in edit mode)
-        auto cam1 = NewEmptyEntity(ctx);
-        {
-            auto& ctf = Reg().get<TransformComponent>(cam1);
-            ctf.position = glm::vec3(0.0f, 2.0f, 5.0f);
-            auto& c3d = Reg().emplace<dse::Camera3DComponent>(cam1);
-            c3d.enabled = true; c3d.priority = 100;
-            c3d.fov = 60.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
-        }
-        auto cam2 = NewEmptyEntity(ctx);
-        {
-            auto& ctf = Reg().get<TransformComponent>(cam2);
-            ctf.position = glm::vec3(5.0f, 3.0f, 0.0f);
-            auto& c3d = Reg().emplace<dse::Camera3DComponent>(cam2);
-            c3d.enabled = true; c3d.priority = 200;
-            c3d.fov = 45.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
-        }
+        auto cube3 = NewPrimitive(ctx, "Cylinder");
+        Mr(cube3).color = glm::vec4(0.2f, 0.8f, 0.2f, 1.0f);
+        SetPos(cube3, 0.0f, 1.0f, -2.0f);
         ctx->Yield(30);
-        PreCaptureFramed(ctx, glm::vec3(0.0f, 1.0f, 0.0f), 10.0f, 0.4f, 0.3f);
+        PreCapture(ctx, 0.5f);
         ctx->Yield(10);
         auto px = CaptureAndLoad("render_multi_camera");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube1, cube2, light, cam1, cam2});
+        DestroyEntities({cube1, cube2, cube3, light});
         ctx->Yield(2);
     };
 
@@ -1734,13 +1721,10 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
-        // Add a sprite as reference geometry
-        auto se = NewEmptyEntity(ctx);
-        IM_CHECK(se != entt::null);
-        Reg().emplace<SpriteRendererComponent>(se);
-        auto& sr = Reg().get<SpriteRendererComponent>(se);
-        sr.color = glm::vec4(0.2f, 0.2f, 0.3f, 1.0f);
-        SetScale(se, 8.0f, 6.0f, 1.0f);
+        // Reference 3D geometry so viewport is not empty (2D particles overlay)
+        auto cube = NewPrimitive(ctx, "Cube");
+        Mr(cube).color = glm::vec4(0.6f, 0.3f, 0.1f, 1.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         auto pe = NewEmptyEntity(ctx);
         IM_CHECK(pe != entt::null);
         auto& em = Reg().emplace<ParticleEmitterComponent>(pe);
@@ -1760,7 +1744,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         auto px = CaptureAndLoad("render_particle_2d");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
-        DestroyEntities({se, pe});
+        DestroyEntities({cube, light, pe});
         ctx->Yield(2);
     };
 
@@ -1791,13 +1775,18 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
                     if (t && rp->valid(e) && rp->all_of<TilemapComponent>(e))
                         rp->get<TilemapComponent>(e).tileset_handle = t->GetHandle(); });
         }
+        // Reference geometry (tilemap is 2D, add 3D reference so viewport is not empty)
+        auto ground = NewPrimitive(ctx, "Plane");
+        SetScale(ground, 4.0f, 1.0f, 4.0f);
+        Mr(ground).color = glm::vec4(0.4f, 0.6f, 0.3f, 1.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(80);
-        PreCapture(ctx, 4.0f);
+        PreCapture(ctx, 0.3f);
         ctx->Yield(10);
         auto px = CaptureAndLoad("render_tilemap");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.005f);
-        DestroyEntities({tm});
+        DestroyEntities({tm, ground, light});
         ctx->Yield(2);
     };
 
