@@ -218,6 +218,10 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     if (!enabled || std::string(enabled) != "1") {
         return;
     }
+    // Play-mode simulation tests (fluid SPH, weather, cloth) run heavy per-frame
+    // work; the default 60s per-test watchdog aborts them mid-simulation.
+    ImGuiTestEngine_GetIO(engine).ConfigWatchdogWarning = 240.0f;
+    ImGuiTestEngine_GetIO(engine).ConfigWatchdogKillTest = 300.0f;
     ImGuiTest* t = nullptr;
 
     // ====================================================================
@@ -2012,30 +2016,53 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
-        auto cube = NewPrimitive(ctx, "Cube");
-        IM_CHECK(cube != entt::null);
-        Mr(cube).color = glm::vec4(0.2f, 0.5f, 0.9f, 1.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        // Fluid emitter
+        // Ground plane so falling fluid has a floor to splash on
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(10.0f, 1.0f, 10.0f);
+        UsePBR(floor);
+        // Fluid emitter above origin; particles emit + fall + splash in Play mode
         auto fluid_ent = NewEmptyEntity(ctx);
         Tf(fluid_ent).position = glm::vec3(0.0f, 3.0f, 0.0f);
         auto& fluid = Reg().emplace<dse::FluidEmitterComponent>(fluid_ent);
         fluid.enabled = true;
         fluid.shape = dse::FluidEmitterShape::Sphere;
-        fluid.sphere_radius = 0.3f;
-        fluid.emission_rate = 200.0f;
+        fluid.sphere_radius = 0.2f;
+        fluid.emission_rate = 120.0f;
         fluid.particle_lifetime = 2.0f;
-        fluid.particle_radius = 0.08f;
-        fluid.color = glm::vec4(0.2f, 0.5f, 0.9f, 0.8f);
-        fluid.emit_speed = 1.5f;
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        fluid.particle_radius = 0.05f;
+        fluid.color = glm::vec4(0.2f, 0.5f, 0.9f, 0.6f);
+        fluid.emit_speed = 1.0f;
+        fluid.emit_direction = glm::vec3(0.0f, -1.0f, 0.0f);
+        fluid.floor_y = 0.0f;
+        // Play mode disables the editor camera; add a game camera to view the spray.
+        auto fx_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(4.5f, 3.0f, 7.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(fx_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(fx_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 50.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(80);
+        SelectionManager::Get().Clear();
+        ctx->WindowFocus("//Game");
+        ctx->Yield(12);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_fluid");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, fluid_ent, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({fluid_ent, floor, fx_cam, light});
         ctx->Yield(2);
     };
 
@@ -2044,28 +2071,52 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(12.0f, 1.0f, 12.0f);
+        UsePBR(floor);
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
-        auto light = NewPrimitive(ctx, "Directional Light");
-        // Weather: rain
+        // Weather rain: spawns around origin (no active game camera) in Play mode
         auto weather_ent = NewEmptyEntity(ctx);
         auto& w = Reg().emplace<dse::WeatherComponent>(weather_ent);
         w.enabled = true;
         w.type = dse::WeatherType::Rain;
-        w.intensity = 0.8f;
-        w.spawn_radius = 15.0f;
+        w.intensity = 1.0f;
+        w.spawn_radius = 12.0f;
         w.spawn_height = 12.0f;
-        w.max_particles = 1000;
-        w.rain_color = glm::vec4(0.65f, 0.75f, 0.85f, 0.55f);
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        w.max_particles = 1500;
+        w.rain_color = glm::vec4(0.72f, 0.82f, 0.92f, 0.75f);
+        // Play mode disables the editor camera; add a game camera. Rain spawns
+        // around the active camera, so it fills this view.
+        auto fx_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(0.0f, 2.5f, 9.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 1.5f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(fx_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(fx_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 55.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(80);
+        SelectionManager::Get().Clear();
+        ctx->WindowFocus("//Game");
+        ctx->Yield(12);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_weather_rain");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, weather_ent, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({cube, floor, fx_cam, weather_ent, light});
         ctx->Yield(2);
     };
 
