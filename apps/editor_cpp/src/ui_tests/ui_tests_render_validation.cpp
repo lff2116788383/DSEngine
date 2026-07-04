@@ -37,6 +37,9 @@
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/components_3d_snow.h"
+#include "engine/ecs/components_3d_fluid.h"
+#include "engine/ecs/components_3d_weather.h"
 
 namespace dse::editor::uitest {
 
@@ -1905,6 +1908,160 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
         DestroyEntities({sl, sphere});
+        ctx->Yield(2);
+    };
+
+
+    // ===== BLIND SPOT TESTS: Day/Night, GI Probe, Snow, Fluid, Weather =====
+
+    // render_daynight_cycle
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_daynight_cycle");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        // Add DayNightCycleComponent
+        auto dnc_ent = NewEmptyEntity(ctx);
+        auto& dnc = Reg().emplace<dse::DayNightCycleComponent>(dnc_ent);
+        dnc.enabled = true;
+        dnc.time_of_day = 7.0f;
+        dnc.latitude = 30.0f;
+        dnc.longitude = 120.0f;
+        dnc.auto_advance = false;
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_daynight_cycle");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, light, dnc_ent});
+        ctx->Yield(2);
+    };
+
+    // render_gi_probe
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_gi_probe");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto plane = NewPrimitive(ctx, "Plane");
+        SetPos(plane, 0.0f, -1.0f, 0.0f);
+        SetScale(plane, 10.0f, 1.0f, 10.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        // GI Probe Volume
+        auto gi_ent = NewEmptyEntity(ctx);
+        auto& gi = Reg().emplace<dse::GIProbeVolumeComponent>(gi_ent);
+        gi.enabled = true;
+        gi.origin = glm::vec3(-5.0f);
+        gi.extent = glm::vec3(10.0f);
+        gi.resolution_x = 4;
+        gi.resolution_y = 4;
+        gi.resolution_z = 4;
+        gi.gi_intensity = 1.5f;
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_gi_probe");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, plane, light, gi_ent});
+        ctx->Yield(2);
+    };
+
+    // render_snow_cover
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_snow_cover");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto sphere = NewPrimitive(ctx, "Sphere");
+        IM_CHECK(sphere != entt::null);
+        UsePBR(sphere);
+        // Snow cover on sphere
+        auto& snow = Reg().emplace<dse::SnowCoverComponent>(sphere);
+        snow.enabled = true;
+        snow.coverage = 1.0f;
+        snow.target_coverage = 1.0f;
+        snow.snow_albedo = glm::vec3(0.92f, 0.93f, 0.96f);
+        snow.snow_roughness = 0.75f;
+        snow.normal_threshold = 0.3f;
+        auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_snow_cover");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({sphere, light});
+        ctx->Yield(2);
+    };
+
+    // render_fluid
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_fluid");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        Mr(cube).color = glm::vec4(0.2f, 0.5f, 0.9f, 1.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        // Fluid emitter
+        auto fluid_ent = NewEmptyEntity(ctx);
+        Tf(fluid_ent).position = glm::vec3(0.0f, 3.0f, 0.0f);
+        auto& fluid = Reg().emplace<dse::FluidEmitterComponent>(fluid_ent);
+        fluid.enabled = true;
+        fluid.shape = dse::FluidEmitterShape::Sphere;
+        fluid.sphere_radius = 0.3f;
+        fluid.emission_rate = 200.0f;
+        fluid.particle_lifetime = 2.0f;
+        fluid.particle_radius = 0.08f;
+        fluid.color = glm::vec4(0.2f, 0.5f, 0.9f, 0.8f);
+        fluid.emit_speed = 1.5f;
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_fluid");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, fluid_ent, light});
+        ctx->Yield(2);
+    };
+
+    // render_weather_rain
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_weather_rain");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        // Weather: rain
+        auto weather_ent = NewEmptyEntity(ctx);
+        auto& w = Reg().emplace<dse::WeatherComponent>(weather_ent);
+        w.enabled = true;
+        w.type = dse::WeatherType::Rain;
+        w.intensity = 0.8f;
+        w.spawn_radius = 15.0f;
+        w.spawn_height = 12.0f;
+        w.max_particles = 1000;
+        w.rain_color = glm::vec4(0.65f, 0.75f, 0.85f, 0.55f);
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_weather_rain");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, weather_ent, light});
         ctx->Yield(2);
     };
 
