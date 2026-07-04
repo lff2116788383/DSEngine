@@ -1422,7 +1422,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         Mr(cube2).color = glm::vec4(0.2f, 0.2f, 1.0f, 1.0f);
         SetPos(cube2, 2.0f, 0.5f, 0.0f);
         auto light = NewPrimitive(ctx, "Directional Light");
-        auto cube3 = NewPrimitive(ctx, "Cylinder");
+        auto cube3 = NewPrimitive(ctx, "Cube");
         Mr(cube3).color = glm::vec4(0.2f, 0.8f, 0.2f, 1.0f);
         SetPos(cube3, 0.0f, 1.0f, -2.0f);
         ctx->Yield(30);
