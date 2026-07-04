@@ -2074,6 +2074,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
         auto plane = NewPrimitive(ctx, "Plane");
         IM_CHECK(plane != entt::null);
         UsePBR(plane);
@@ -2084,7 +2085,6 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         cloth.damping = 0.02f;
         cloth.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
         cloth.wind = glm::vec3(2.0f, 0.0f, 0.0f);
-        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
@@ -2101,6 +2101,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
@@ -2110,7 +2111,6 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         frac.runtime_fragment_count = 8;
         frac.break_force = 1000.0f;
         frac.fragment_lifetime = 5.0f;
-        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
@@ -2127,6 +2127,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
@@ -2137,7 +2138,6 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         imp.frames_y = 3;
         imp.transition_distance = 100.0f;
         imp.impostor_size = 1.0f;
-        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);
@@ -2154,12 +2154,12 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
+        auto light = NewPrimitive(ctx, "Directional Light");
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
         auto& morph = Reg().emplace<dse::MorphTargetComponent>(cube);
         morph.enabled = true;
-        auto light = NewPrimitive(ctx, "Directional Light");
         ctx->Yield(4);
         ctx->WindowFocus("//Scene");
         ctx->Yield(30);

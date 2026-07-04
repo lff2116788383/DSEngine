@@ -17,6 +17,8 @@ public class Win32Capture {
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left, Top, Right, Bottom; }
 }
@@ -49,13 +51,34 @@ switch ($Mode) {
         }
     }
     "window" {
-        $proc = Get-Process | Where-Object { $_.MainWindowTitle -like "*$WindowTitle*" } | Select-Object -First 1
+        # Prefer process-name match (avoid other windows titled *DSEngine*, e.g. IDEs)
+        $proc = Get-Process | Where-Object { $_.ProcessName -like "dsengine-editor*" -and $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+        if (-not $proc) {
+            $proc = Get-Process | Where-Object { $_.MainWindowTitle -like "*$WindowTitle*" } | Select-Object -First 1
+        }
         if ($proc) {
-            $rect = New-Object Win32Capture+RECT
+            # PrintWindow(PW_RENDERFULLCONTENT) grabs window content even when occluded
+            $rect = New-Object "Win32Capture+RECT"
             [Win32Capture]::GetWindowRect($proc.MainWindowHandle, [ref]$rect) | Out-Null
             $w = $rect.Right - $rect.Left
             $h = $rect.Bottom - $rect.Top
-            Capture-Region $rect.Left $rect.Top $w $h $OutputPath
+            $bmp = New-Object System.Drawing.Bitmap($w, $h)
+            $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+            $hdc = $gfx.GetHdc()
+            $ok = [Win32Capture]::PrintWindow($proc.MainWindowHandle, $hdc, 2)  # PW_RENDERFULLCONTENT
+            $gfx.ReleaseHdc($hdc)
+            $gfx.Dispose()
+            $dir = [System.IO.Path]::GetDirectoryName($OutputPath)
+            if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+            if ($ok) {
+                $bmp.Save($OutputPath, [System.Drawing.Imaging.ImageFormat]::Png)
+                $bmp.Dispose()
+                Write-Host "OK: $OutputPath ($w x $h)"
+            } else {
+                $bmp.Dispose()
+                # Fall back to screen copy if PrintWindow fails
+                Capture-Region $rect.Left $rect.Top $w $h $OutputPath
+            }
         } else {
             Write-Error "Window not found: $WindowTitle"
             exit 1
