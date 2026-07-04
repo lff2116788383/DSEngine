@@ -22,6 +22,7 @@
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/ecs/world.h"
+#include "engine/ecs/components_3d_animation.h"   // Animator3DComponent (skinned knight test)
 
 #include <filesystem>
 #include <cstdlib>
@@ -97,6 +98,25 @@ entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
         std::string wildcard = std::string("**/") + item;
         ctx->ItemClick(wildcard.c_str());
     }
+    ctx->Yield(2);
+    for (auto en : reg.storage<entt::entity>()) {
+        if (!reg.valid(en)) continue;
+        bool seen = false;
+        for (auto b : before) if (b == en) { seen = true; break; }
+        if (!seen) { SelectionManager::Get().SetSingle(en); return en; }
+    }
+    return entt::null;
+}
+
+// Hierarchy 右键 → "Create Empty Entity"，按 registry 差集取回新实体并置为单选。
+// 用于蒙皮模型测试：得到一个干净的编辑器实体（含 TransformComponent、无程序化几何残留）。
+entt::entity NewEmptyEntity(ImGuiTestContext* ctx) {
+    entt::registry& reg = Reg();
+    std::vector<entt::entity> before;
+    for (auto en : reg.storage<entt::entity>())
+        if (reg.valid(en)) before.push_back(en);
+    OpenHierarchyContextMenu(ctx);
+    ctx->ItemClick("Create Empty Entity");
     ctx->Yield(2);
     for (auto en : reg.storage<entt::entity>()) {
         if (!reg.valid(en)) continue;
@@ -767,6 +787,115 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.01f);
         DestroyEntities({ent, light});
+        ctx->Yield(2);
+    };
+
+    // ====================================================================
+    // F. Skinned skeletal-animation model asset import (1 test)
+    //    使用 KF demo 骑士资产（cooked paladin dmesh + dskel + idle danim）验证
+    //    “编辑器导入蒙皮骨骼动画模型并渲染”这一路径。
+    // ====================================================================
+
+    // F26: render_skinned_knight
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_skinned_knight");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+
+        // KF 骑士资产（绝对路径；NativeFileSystem 对绝对路径直通，不受 uitest 工作目录影响）。
+        const std::string kf =
+            "c:\\Users\\Administrator\\Desktop\\Engine\\DSEngine\\examples\\KF_Framework\\cooked\\";
+        const std::string mesh_path = kf + "paladin_prop_j_nordstrom.dmesh";
+        const std::string skel_path = kf + "paladin_prop_j_nordstrom.dskel";
+        const std::string anim_path = kf + "Sword And Shield Idle.danim";
+
+        // 干净的空实体（含 TransformComponent），挂上蒙皮 mesh + 骨架 + idle 动画。
+        auto knight = NewEmptyEntity(ctx);
+        IM_CHECK(knight != entt::null);
+
+        entt::registry& reg = Reg();
+        auto& mr = reg.get_or_emplace<dse::MeshRendererComponent>(knight);
+        mr.mesh_path = mesh_path;
+        mr.temp_vertices.clear();
+        mr.temp_indices.clear();
+        mr.dmesh_vertex_stride = 24;      // v2 skinned dmesh
+        mr.local_bounds_valid = false;    // 强制按新 mesh 重算本地包围盒
+        mr.meshlet_mesh_id = 0;
+        mr.shader_variant = "MESH_HALFLAMBERT";  // KF 骑士所用蒙皮半兰伯特
+        mr.color = glm::vec4(0.82f, 0.82f, 0.88f, 1.0f);
+        mr.is_static = false;
+        mr.visible = true;
+
+        auto& anim = reg.emplace<dse::Animator3DComponent>(knight);
+        anim.enabled = true;
+        anim.dskel_path = skel_path;
+        anim.danim_path = anim_path;
+
+        auto light = NewPrimitive(ctx, "Directional Light");
+        // 给足帧数：加载 dmesh/dskel/danim + （若编辑器驱动动画）求值骨骼调色板。
+        ctx->Yield(80);
+
+        // 诊断：mesh 是否加载、包围盒、是否走蒙皮路径（final_bone_matrices 非空）。
+        DumpMeshDiag("knight");
+        {
+            const size_t fbm = reg.all_of<dse::Animator3DComponent>(knight)
+                ? reg.get<dse::Animator3DComponent>(knight).final_bone_matrices.size() : 0;
+            fprintf(stderr,
+                "[KNIGHT] verts=%zu idx=%zu stride=%d bounds_valid=%d "
+                "bmin=(%.2f,%.2f,%.2f) bmax=(%.2f,%.2f,%.2f) final_bones=%zu\n",
+                mr.temp_vertices.size(), mr.temp_indices.size(), mr.dmesh_vertex_stride,
+                (int)mr.local_bounds_valid,
+                mr.local_bounds_min.x, mr.local_bounds_min.y, mr.local_bounds_min.z,
+                mr.local_bounds_max.x, mr.local_bounds_max.y, mr.local_bounds_max.z, fbm);
+            fflush(stderr);
+        }
+
+        // 依据加载后的本地包围盒对准相机（实体在原点、scale=1 → 世界=本地）。
+        SelectionManager::Get().Clear();
+        {
+            const glm::vec3 center = (mr.local_bounds_min + mr.local_bounds_max) * 0.5f;
+            const glm::vec3 half   = (mr.local_bounds_max - mr.local_bounds_min) * 0.5f;
+            float radius = glm::length(half);
+            if (!(radius > 0.001f)) radius = 100.0f;
+            auto& cam = GetEditorCamera();
+            cam.focal_point = center;
+            cam.distance = radius * 2.6f;
+            cam.yaw = 0.4f;
+            cam.pitch = 0.12f;
+        }
+        ctx->Yield(20);
+
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(20);
+        // 采集 #1：静态路径（final_bone_matrices 为空 → item.skinned=false，走普通 DrawShaded）。
+        // 验证“蒙皮模型资产导入并渲染”本身成立（骑士绑定姿势可见）。
+        auto px_bind = CaptureAndLoad("render_skinned_knight");
+        SKIP_IF_NO_CAPTURE(px_bind);
+        IM_CHECK(px_bind.NonBlackRatio() > 0.02f);
+
+        // 采集 #2：显式走蒙皮渲染路径。填入骨骼调色板（identity = 正确的绑定姿势蒙皮矩阵，
+        // 因 final = global_bind * inv_bind_global = I）→ mesh_render_system 置 item.skinned=true。
+        // 当前 GL 上下文无 SSBO（日志已见 "forward skinned shaded 需要 SSBO 支持"），
+        // 引擎的 skinning_bake_for_web_ 会 CPU 烘焙蒙皮后经 ForwardShaded 绘制。
+        // 若该回退失效（如实例化那样静默不渲染），此处将变黑 → 断言失败暴露 bug。
+        {
+            auto& a = reg.get<dse::Animator3DComponent>(knight);
+            a.final_bone_matrices.assign(100, glm::mat4(1.0f));  // 100 = MAX_BONES bind pose
+            a.bone_palette_key = 0xC0FFEEull;                    // 非零，触发调色板去重逻辑
+        }
+        ctx->Yield(40);  // 让批次重建为 skinned + 执行 CPU 蒙皮烘焙
+        {
+            const size_t fbm = reg.get<dse::Animator3DComponent>(knight).final_bone_matrices.size();
+            fprintf(stderr, "[KNIGHT] skinned-pass final_bones=%zu\n", fbm);
+            fflush(stderr);
+        }
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(20);
+        auto px_skin = CaptureAndLoad("render_skinned_knight_skinned");
+        SKIP_IF_NO_CAPTURE(px_skin);
+        IM_CHECK(px_skin.NonBlackRatio() > 0.02f);  // 蒙皮路径必须仍可见（无 SSBO 静默黑屏）
+
+        DestroyEntities({knight, light});
         ctx->Yield(2);
     };
 }
