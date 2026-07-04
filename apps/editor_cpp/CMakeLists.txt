@@ -132,6 +132,24 @@ else()
     find_package(ZLIB QUIET)
     if(ZLIB_FOUND)
         target_link_libraries(dse_editor_cpp PRIVATE ZLIB::ZLIB)
+    else()
+        # No zlib target (e.g. DSE_ENABLE_ASSIMP=OFF, the default) and no system
+        # zlib: compile the bundled zlib sources directly so minizip can link.
+        set(DSE_ZLIB_DIR ${CMAKE_SOURCE_DIR}/depends/assimp/contrib/zlib)
+        if(NOT EXISTS ${CMAKE_BINARY_DIR}/depends/assimp/contrib/zlib/zconf.h)
+            configure_file(${DSE_ZLIB_DIR}/zconf.h.in
+                           ${CMAKE_BINARY_DIR}/depends/assimp/contrib/zlib/zconf.h @ONLY)
+        endif()
+        target_sources(dse_editor_cpp PRIVATE
+            ${DSE_ZLIB_DIR}/adler32.c ${DSE_ZLIB_DIR}/compress.c
+            ${DSE_ZLIB_DIR}/crc32.c   ${DSE_ZLIB_DIR}/deflate.c
+            ${DSE_ZLIB_DIR}/gzclose.c ${DSE_ZLIB_DIR}/gzlib.c
+            ${DSE_ZLIB_DIR}/gzread.c  ${DSE_ZLIB_DIR}/gzwrite.c
+            ${DSE_ZLIB_DIR}/infback.c ${DSE_ZLIB_DIR}/inffast.c
+            ${DSE_ZLIB_DIR}/inflate.c ${DSE_ZLIB_DIR}/inftrees.c
+            ${DSE_ZLIB_DIR}/trees.c   ${DSE_ZLIB_DIR}/uncompr.c
+            ${DSE_ZLIB_DIR}/zutil.c
+        )
     endif()
 endif()
 
