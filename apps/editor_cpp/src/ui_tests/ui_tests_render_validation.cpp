@@ -40,6 +40,10 @@
 #include "engine/ecs/components_3d_snow.h"
 #include "engine/ecs/components_3d_fluid.h"
 #include "engine/ecs/components_3d_weather.h"
+#include "engine/ecs/components_3d_cloth.h"
+#include "engine/ecs/components_3d_fracture.h"
+#include "engine/ecs/components_3d_impostor.h"
+#include "engine/ecs/components_3d_render.h"
 
 namespace dse::editor::uitest {
 
@@ -2062,6 +2066,108 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
         DestroyEntities({cube, weather_ent, light});
+        ctx->Yield(2);
+    };
+
+    // render_cloth
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_cloth");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto plane = NewPrimitive(ctx, "Plane");
+        IM_CHECK(plane != entt::null);
+        UsePBR(plane);
+        auto& cloth = Reg().emplace<dse::ClothComponent>(plane);
+        cloth.enabled = true;
+        cloth.solver_iterations = 8;
+        cloth.stiffness = 0.8f;
+        cloth.damping = 0.02f;
+        cloth.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
+        cloth.wind = glm::vec3(2.0f, 0.0f, 0.0f);
+        auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_cloth");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({plane, light});
+        ctx->Yield(2);
+    };
+
+    // render_fracture
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_fracture");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto& frac = Reg().emplace<dse::FractureComponent>(cube);
+        frac.source = dse::FractureSource::RuntimeVoronoi;
+        frac.trigger_mode = dse::FractureTriggerMode::ImpactForce;
+        frac.runtime_fragment_count = 8;
+        frac.break_force = 1000.0f;
+        frac.fragment_lifetime = 5.0f;
+        auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_fracture");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, light});
+        ctx->Yield(2);
+    };
+
+    // render_impostor
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_impostor");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto& imp = Reg().emplace<dse::ImpostorComponent>(cube);
+        imp.enabled = true;
+        imp.frame_mode = dse::ImpostorFrameMode::HemiOctahedron;
+        imp.frames_x = 12;
+        imp.frames_y = 3;
+        imp.transition_distance = 100.0f;
+        imp.impostor_size = 1.0f;
+        auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_impostor");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, light});
+        ctx->Yield(2);
+    };
+
+    // render_morph_target
+    t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_morph_target");
+    t->TestFunc = [](ImGuiTestContext* ctx) {
+        HideOptionalPanels();
+        ctx->Yield(4);
+        auto cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(cube != entt::null);
+        UsePBR(cube);
+        auto& morph = Reg().emplace<dse::MorphTargetComponent>(cube);
+        morph.enabled = true;
+        auto light = NewPrimitive(ctx, "Directional Light");
+        ctx->Yield(4);
+        ctx->WindowFocus("//Scene");
+        ctx->Yield(30);
+        PreCapture(ctx);
+        auto px = CaptureAndLoad("render_morph_target");
+        SKIP_IF_NO_CAPTURE(px);
+        IM_CHECK(px.NonBlackRatio() > 0.02f);
+        DestroyEntities({cube, light});
         ctx->Yield(2);
     };
 
