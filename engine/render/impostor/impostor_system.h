@@ -17,6 +17,7 @@
 #include "engine/ecs/components_3d_impostor.h"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class World;
@@ -63,6 +64,12 @@ private:
 
     // 每帧收集的绘制批次（按 atlas 纹理分组）
     std::vector<ImpostorBatchItem> batches_;
+
+    // 尚未烘焙 atlas 的 impostor 实体：Update 在模拟线程收集，RenderOpaque 在
+    // GL 线程执行烘焙（GL 上下文仅在渲染阶段有效）。bake_attempted_ 记录已尝试过
+    // 的实体，避免缺几何数据时每帧重复烘焙。
+    std::unordered_set<uint32_t> pending_bake_;
+    std::unordered_set<uint32_t> bake_attempted_;
 
     // 渲染上下文（帧级别）
     RhiDevice* device_ = nullptr;

@@ -10,6 +10,10 @@
 #include "engine/ecs/components_3d_render.h"
 #include "engine/render/render_scene.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/render/impostor/impostor_baker.h"
+
+#include <cstdint>
+#include <vector>
 
 #include <entt/entt.hpp>
 #include <glm/gtc/constants.hpp>
@@ -29,6 +33,74 @@ float GetBoundsRadius(const MeshRendererComponent* mesh_comp) {
     return glm::length(extent) * 0.5f;
 }
 
+/// 从实体的 CPU 网格几何（temp_vertices/normals/uvs + 索引）烘焙一张 impostor
+/// atlas，并把结果纹理句柄写回 ImpostorComponent。必须在持有 GL 上下文的
+/// 渲染阶段调用。成功返回 true。
+bool BakeAtlasForEntity(entt::registry& registry, entt::entity entity, RhiDevice& device) {
+    if (!registry.valid(entity) || !registry.all_of<ImpostorComponent, MeshRendererComponent>(entity)) {
+        return false;
+    }
+    auto& impostor = registry.get<ImpostorComponent>(entity);
+    auto& mr = registry.get<MeshRendererComponent>(entity);
+
+    const size_t pos_floats = mr.temp_vertices.size();
+    const size_t vcount = pos_floats / 3;
+    if (vcount < 3 || mr.temp_indices.empty()) return false;
+
+    const size_t nrm = mr.temp_normals.size();
+    const size_t uvn = mr.temp_uvs.size();
+
+    // ImmediateDraw 使用 glDrawArrays（非索引），故展开索引为线性顶点流。
+    // 交错布局 stride=12 floats：pos(0-2) color(3-6) uv(7-8) normal(9-11)。
+    const size_t draw_verts = mr.temp_indices.size();
+    std::vector<float> inter(draw_verts * 12, 0.0f);
+    for (size_t k = 0; k < draw_verts; ++k) {
+        const uint32_t vi = mr.temp_indices[k];
+        if (static_cast<size_t>(vi) * 3 + 2 >= pos_floats) continue;
+        float* d = &inter[k * 12];
+        d[0] = mr.temp_vertices[vi * 3 + 0];
+        d[1] = mr.temp_vertices[vi * 3 + 1];
+        d[2] = mr.temp_vertices[vi * 3 + 2];
+        d[3] = d[4] = d[5] = d[6] = 1.0f;
+        if (static_cast<size_t>(vi) * 2 + 1 < uvn) {
+            d[7] = mr.temp_uvs[vi * 2 + 0];
+            d[8] = mr.temp_uvs[vi * 2 + 1];
+        }
+        if (static_cast<size_t>(vi) * 3 + 2 < nrm) {
+            d[9]  = mr.temp_normals[vi * 3 + 0];
+            d[10] = mr.temp_normals[vi * 3 + 1];
+            d[11] = mr.temp_normals[vi * 3 + 2];
+        }
+    }
+
+    const glm::vec3 bmin = mr.local_bounds_valid ? mr.local_bounds_min : glm::vec3(-1.0f);
+    const glm::vec3 bmax = mr.local_bounds_valid ? mr.local_bounds_max : glm::vec3(1.0f);
+
+    ImpostorBakeConfig cfg;
+    cfg.frames_x = impostor.frames_x > 0 ? impostor.frames_x : 8;
+    cfg.frames_y = impostor.frames_y > 0 ? impostor.frames_y : 3;
+    cfg.frame_resolution = 128;
+    cfg.bake_normals = false;
+    cfg.hemi_only = (impostor.frame_mode != ImpostorFrameMode::FullOctahedron);
+
+    ImpostorBaker baker;
+    ImpostorBakeResult res = baker.Bake(device, inter.data(), static_cast<int>(draw_verts), 12,
+                                        nullptr, 0, bmin, bmax, cfg);
+    if (!res.success || res.albedo_rgba.empty() || res.atlas_width <= 0 || res.atlas_height <= 0) {
+        return false;
+    }
+
+    const unsigned int tex = device.CreateTexture2D(res.atlas_width, res.atlas_height,
+                                                    res.albedo_rgba.data(), true);
+    if (tex == 0) return false;
+
+    impostor.atlas_texture_handle_ = tex;
+    impostor.normal_texture_handle_ = 0;
+    impostor.atlas_loaded_ = true;
+    impostor.cached_bounds_radius_ = glm::length(bmax - bmin) * 0.5f;
+    return true;
+}
+
 }  // namespace
 
 void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice& device) {
@@ -43,7 +115,14 @@ void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice
     for (auto entity : view) {
         auto& impostor = view.get<ImpostorComponent>(entity);
         if (!impostor.enabled) continue;
-        if (!impostor.atlas_loaded_ || impostor.atlas_texture_handle_ == 0) continue;
+        if (!impostor.atlas_loaded_ || impostor.atlas_texture_handle_ == 0) {
+            // 暂无 atlas：排队到 RenderOpaque（GL 线程）烘焙，下一帧再绘制。
+            const uint32_t eid = static_cast<uint32_t>(entity);
+            if (bake_attempted_.find(eid) == bake_attempted_.end()) {
+                pending_bake_.insert(eid);
+            }
+            continue;
+        }
 
         // auto_from_lod_group: 从 LODGroupComponent 自动获取切换距离
         float transition_dist = impostor.transition_distance;
@@ -126,6 +205,17 @@ void ImpostorSystem::Update(World& world, const glm::vec3& camera_pos, RhiDevice
 }
 
 void ImpostorSystem::RenderOpaque(CommandBuffer& cmd, const RenderScenePassContext& ctx) {
+    // 先处理待烘焙实体：此处持有 GL 上下文，可安全调用设备的 FBO/纹理接口。
+    // 必须在下方 batches_.empty() 提前返回之前执行（首帧 batches_ 为空）。
+    if (device_ && ctx.world && !pending_bake_.empty()) {
+        auto& registry = ctx.world->registry();
+        for (uint32_t eid : pending_bake_) {
+            bake_attempted_.insert(eid);
+            BakeAtlasForEntity(registry, static_cast<entt::entity>(eid), *device_);
+        }
+        pending_bake_.clear();
+    }
+
     if (batches_.empty() || !device_) return;
     // 使用 Pass 传入的帧级别 view/projection，覆盖可能过时的缓存值
     glm::mat4 view = ctx.view ? *ctx.view : view_;
@@ -153,6 +243,8 @@ void ImpostorSystem::SetRenderContext(RhiDevice* device,
 
 void ImpostorSystem::Shutdown(RhiDevice& device) {
     renderer_.Shutdown(device);
+    pending_bake_.clear();
+    bake_attempted_.clear();
 }
 
 void ImpostorSystem::ComputeFrameIndex(const glm::vec3& view_dir,

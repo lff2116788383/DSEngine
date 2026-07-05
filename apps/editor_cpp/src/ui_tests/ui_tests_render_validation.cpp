@@ -1978,31 +1978,73 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
         ctx->Yield(4);
-        auto cube = NewPrimitive(ctx, "Cube");
-        IM_CHECK(cube != entt::null);
-        UsePBR(cube);
-        auto plane = NewPrimitive(ctx, "Plane");
-        SetPos(plane, 0.0f, -1.0f, 0.0f);
-        SetScale(plane, 10.0f, 1.0f, 10.0f);
+
+        // Cornell box: red left wall, green right wall, white floor/ceiling/back,
+        // opening toward the camera. A tall white block inside catches color bleed.
+        auto wall = [&](float px, float py, float pz, float sx, float sy, float sz,
+                        glm::vec4 col) {
+            auto e = NewPrimitive(ctx, "Cube");
+            UsePBR(e);
+            SetPos(e, px, py, pz);
+            SetScale(e, sx, sy, sz);
+            Mr(e).color = col;
+            return e;
+        };
+        glm::vec4 white(0.85f, 0.85f, 0.85f, 1.0f);
+        auto floor_e = wall(0.0f,  0.0f,  0.0f, 4.0f, 0.1f, 4.0f, white);
+        auto ceil_e  = wall(0.0f,  4.0f,  0.0f, 4.0f, 0.1f, 4.0f, white);
+        auto back_e  = wall(0.0f,  2.0f, -2.0f, 4.0f, 4.0f, 0.1f, white);
+        auto left_e  = wall(-2.0f, 2.0f,  0.0f, 0.1f, 4.0f, 4.0f, glm::vec4(0.90f, 0.05f, 0.05f, 1.0f));
+        auto right_e = wall(2.0f,  2.0f,  0.0f, 0.1f, 4.0f, 4.0f, glm::vec4(0.05f, 0.90f, 0.05f, 1.0f));
+        auto block_e = wall(0.0f,  1.0f, -0.3f, 1.1f, 2.0f, 1.1f, white);
+
         auto light = NewPrimitive(ctx, "Directional Light");
-        // GI Probe Volume
+        if (auto* dl = Reg().try_get<dse::DirectionalLight3DComponent>(light)) {
+            dl->direction = glm::normalize(glm::vec3(0.12f, -1.0f, -0.18f));
+            dl->intensity = 2.6f;
+            dl->ambient_intensity = 0.06f;  // low ambient so GI bounce dominates
+        }
+
+        // DDGI probe volume covering the box interior.
         auto gi_ent = NewEmptyEntity(ctx);
         auto& gi = Reg().emplace<dse::GIProbeVolumeComponent>(gi_ent);
         gi.enabled = true;
-        gi.origin = glm::vec3(-5.0f);
-        gi.extent = glm::vec3(10.0f);
-        gi.resolution_x = 4;
-        gi.resolution_y = 4;
-        gi.resolution_z = 4;
-        gi.gi_intensity = 1.5f;
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        gi.origin = glm::vec3(-2.2f, 0.0f, -2.2f);
+        gi.extent = glm::vec3(4.4f, 4.2f, 4.4f);
+        gi.resolution_x = 8;
+        gi.resolution_y = 8;
+        gi.resolution_z = 8;
+        gi.rays_per_probe = 256;
+        gi.hysteresis = 0.55f;    // faster temporal convergence for the capture
+        gi.gi_intensity = 4.0f;
+        gi.normal_bias = 0.2f;
+
+        auto gi_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(0.0f, 2.0f, 7.2f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 2.0f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(gi_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(gi_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 55.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(6);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(90);   // let DDGI converge across many frames
+        ctx->WindowFocus("//Game");
+        ctx->Yield(8);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_gi_probe");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, plane, light, gi_ent});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({floor_e, ceil_e, back_e, left_e, right_e, block_e, light, gi_ent, gi_cam});
         ctx->Yield(2);
     };
 
@@ -2337,11 +2379,22 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         Tf(floor).scale = glm::vec3(6.0f, 1.0f, 6.0f);
         SetPos(floor, 0.0f, 0.0f, 0.0f);
         UsePBR(floor);
+        // Give the floor a static Jolt body so exploded shards land and pile on
+        // it instead of falling straight through and out of the camera view.
+        {
+            auto& floor_rb = Reg().emplace<dse::RigidBody3DComponent>(floor);
+            floor_rb.type = dse::RigidBody3DType::Static;
+            floor_rb.use_gravity = false;
+            auto& floor_box = Reg().emplace<dse::BoxCollider3DComponent>(floor);
+            floor_box.size = glm::vec3(6.0f, 1.0f, 6.0f);
+            floor_box.center = glm::vec3(0.0f, -0.5f, 0.0f);
+            floor_box.friction = 0.8f;
+        }
         auto& frac = Reg().emplace<dse::FractureComponent>(cube);
         frac.source = dse::FractureSource::RuntimeVoronoi;
         frac.trigger_mode = dse::FractureTriggerMode::ImpactForce;
         frac.runtime_fragment_count = 24;
-        frac.explosion_force = 1.3f;
+        frac.explosion_force = 3.0f;
         frac.fragment_lifetime = 30.0f;
         frac.fragment_fade_duration = 5.0f;
         frac.impact_point = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -2389,24 +2442,105 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         HideOptionalPanels();
         ctx->Yield(4);
         auto light = NewPrimitive(ctx, "Directional Light");
-        auto cube = NewPrimitive(ctx, "Cube");
-        IM_CHECK(cube != entt::null);
-        UsePBR(cube);
-        auto& imp = Reg().emplace<dse::ImpostorComponent>(cube);
+
+        // Left: a normal cube rendered as real geometry (near-LOD reference).
+        auto real_cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(real_cube != entt::null);
+        UsePBR(real_cube);
+        SetPos(real_cube, -1.7f, 1.0f, 0.0f);
+
+        // Right: a cube that switches to a baked impostor billboard. Build explicit
+        // CPU geometry (positions + normals + uvs) so ImpostorSystem can bake an
+        // atlas from it, then hide the real mesh so only the billboard shows.
+        auto imp_cube = NewPrimitive(ctx, "Cube");
+        IM_CHECK(imp_cube != entt::null);
+        UsePBR(imp_cube);
+        SetPos(imp_cube, 1.7f, 1.0f, 0.0f);
+        {
+            auto& mr = Mr(imp_cube);
+            mr.temp_vertices.clear();
+            mr.temp_indices.clear();
+            mr.temp_normals.clear();
+            mr.temp_uvs.clear();
+            mr.temp_tangents.clear();
+            const int kN = 4;
+            const float hh = 0.5f;
+            auto addFace = [&](glm::vec3 origin, glm::vec3 du, glm::vec3 dv, glm::vec3 nrm) {
+                uint32_t base = static_cast<uint32_t>(mr.temp_vertices.size() / 3);
+                for (int bb = 0; bb <= kN; ++bb)
+                    for (int aa = 0; aa <= kN; ++aa) {
+                        glm::vec3 p = origin + du * (static_cast<float>(aa) / kN)
+                                             + dv * (static_cast<float>(bb) / kN);
+                        mr.temp_vertices.push_back(p.x);
+                        mr.temp_vertices.push_back(p.y);
+                        mr.temp_vertices.push_back(p.z);
+                        mr.temp_normals.push_back(nrm.x);
+                        mr.temp_normals.push_back(nrm.y);
+                        mr.temp_normals.push_back(nrm.z);
+                        mr.temp_uvs.push_back(static_cast<float>(aa) / kN);
+                        mr.temp_uvs.push_back(static_cast<float>(bb) / kN);
+                    }
+                for (int bb = 0; bb < kN; ++bb)
+                    for (int aa = 0; aa < kN; ++aa) {
+                        uint32_t i0 = base + static_cast<uint32_t>(bb * (kN + 1) + aa);
+                        uint32_t i1 = i0 + 1;
+                        uint32_t i2 = i0 + static_cast<uint32_t>(kN + 1);
+                        uint32_t i3 = i2 + 1;
+                        mr.temp_indices.push_back(i0); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i1);
+                        mr.temp_indices.push_back(i1); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i3);
+                    }
+            };
+            glm::vec3 dx(2 * hh, 0, 0), dy(0, 2 * hh, 0), dz(0, 0, 2 * hh);
+            addFace(glm::vec3(-hh, -hh,  hh), dx, dy, glm::vec3(0, 0, 1));
+            addFace(glm::vec3( hh, -hh, -hh), -dx, dy, glm::vec3(0, 0, -1));
+            addFace(glm::vec3(-hh, -hh, -hh), dz, dy, glm::vec3(-1, 0, 0));
+            addFace(glm::vec3( hh, -hh,  hh), -dz, dy, glm::vec3(1, 0, 0));
+            addFace(glm::vec3(-hh,  hh, -hh), dx, dz, glm::vec3(0, 1, 0));
+            addFace(glm::vec3(-hh, -hh,  hh), dx, -dz, glm::vec3(0, -1, 0));
+            mr.local_bounds_min = glm::vec3(-hh);
+            mr.local_bounds_max = glm::vec3( hh);
+            mr.local_bounds_valid = true;
+            mr.visible = false;  // suppress geometry so only the billboard renders
+        }
+        auto& imp = Reg().emplace<dse::ImpostorComponent>(imp_cube);
         imp.enabled = true;
+        imp.auto_from_lod_group = false;
         imp.frame_mode = dse::ImpostorFrameMode::HemiOctahedron;
-        imp.frames_x = 12;
+        imp.frames_x = 8;
         imp.frames_y = 3;
-        imp.transition_distance = 100.0f;
-        imp.impostor_size = 1.0f;
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        imp.transition_distance = 0.5f;   // force billboard even at close range
+        imp.fade_range = 0.1f;
+        imp.cull_distance = 1000.0f;
+        imp.impostor_size = 1.25f;
+        imp.normal_strength = 1.0f;
+
+        auto imp_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(0.0f, 1.6f, 6.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(imp_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(imp_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 55.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(6);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        // First frames: ImpostorSystem queues then bakes the atlas; billboard draws after.
+        ctx->Yield(20);
+        ctx->WindowFocus("//Game");
+        ctx->Yield(8);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_impostor");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({real_cube, imp_cube, light, imp_cam});
         ctx->Yield(2);
     };
 

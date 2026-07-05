@@ -48,6 +48,37 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
     unsigned int bake_rt = device.CreateRenderTarget(rt_desc);
     if (bake_rt == 0) return result;
 
+    // Dedicated bake program: the builtin ForwardPbr shader does not expose the
+    // u_mvp_row* uniforms this baker feeds, so with it the mesh is never
+    // transformed and every atlas frame comes out empty. A minimal
+    // position+normal program guarantees a correctly transformed, shaded
+    // silhouette per frame.
+    static const char* kBakeVert =
+        "#version 430 core\n"
+        "layout(location=0) in vec3 a_pos;\n"
+        "layout(location=3) in vec3 a_normal;\n"
+        "uniform vec4 u_mvp_row0; uniform vec4 u_mvp_row1;\n"
+        "uniform vec4 u_mvp_row2; uniform vec4 u_mvp_row3;\n"
+        "out vec3 v_normal;\n"
+        "void main(){\n"
+        "    mat4 mvp = mat4(u_mvp_row0, u_mvp_row1, u_mvp_row2, u_mvp_row3);\n"
+        "    v_normal = a_normal;\n"
+        "    gl_Position = mvp * vec4(a_pos, 1.0);\n"
+        "}\n";
+    static const char* kBakeFrag =
+        "#version 430 core\n"
+        "in vec3 v_normal;\n"
+        "out vec4 frag;\n"
+        "void main(){\n"
+        "    vec3 n = v_normal;\n"
+        "    float len = length(n);\n"
+        "    vec3 L = normalize(vec3(0.35, 0.8, 0.45));\n"
+        "    float d = (len < 0.0001) ? 0.6 : (abs(dot(n / len, L)) * 0.7 + 0.3);\n"
+        "    frag = vec4(vec3(0.82, 0.79, 0.72) * d, 1.0);\n"
+        "}\n";
+    unsigned int bake_program = device.CreateShaderProgram(kBakeVert, kBakeFrag);
+    if (bake_program == 0) { device.DeleteRenderTarget(bake_rt); return result; }
+
     for (int fy = 0; fy < config.frames_y; ++fy) {
         for (int fx = 0; fx < config.frames_x; ++fx) {
             glm::mat4 view_mat = ComputeViewForFrame(fx, fy, config.frames_x, config.frames_y,
@@ -70,10 +101,7 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
             draw_desc.blend = false;
             draw_desc.viewport = glm::ivec4(0, 0, res, res);
 
-            // 简化路径：使用设备内建 ForwardPbr 程序绘制白色 mesh
-            unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbr);
-            if (program == 0) continue;
-            draw_desc.shader_program = program;
+            draw_desc.shader_program = bake_program;
 
             // 设置 MVP uniform（投影到像素空间）
             glm::mat4 mvp = proj_mat * view_mat;
@@ -119,6 +147,7 @@ ImpostorBakeResult ImpostorBaker::Bake(RhiDevice& device,
         }
     }
 
+    device.DeleteShaderProgram(bake_program);
     device.DeleteRenderTarget(bake_rt);
     result.success = true;
     return result;

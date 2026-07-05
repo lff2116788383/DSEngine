@@ -6,6 +6,7 @@
 #include "engine/assets/asset_manager.h"
 #include "engine/base/debug.h"
 #include "engine/physics/physics3d/i_physics3d_system.h"
+#include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <fstream>
 #include <sstream>
@@ -72,6 +73,135 @@ float ParseFloat(const std::string& s) {
     }
     if (cleaned.empty()) return 1.0f;
     return std::stof(cleaned);
+}
+
+/// A closed convex mesh for a single Voronoi cell.
+struct CellMesh {
+    std::vector<float> positions; // stride 3, centered at centroid
+    std::vector<uint32_t> indices;
+    glm::vec3 centroid{0.0f};
+    float volume = 0.0f;
+};
+
+/// Half-space: interior satisfies dot(n, p) <= d (n points outward).
+struct HalfSpace {
+    glm::vec3 n;
+    float d;
+};
+
+/// Build a solid convex mesh for one Voronoi cell: the source AABB clipped by
+/// the bisecting planes between this seed and every other seed. The result is a
+/// closed convex polyhedron (guaranteed renderable), centered at its centroid.
+bool BuildVoronoiCell(const glm::vec3& bbox_min, const glm::vec3& bbox_max,
+                      const std::vector<glm::vec3>& seeds, uint32_t self,
+                      CellMesh& out) {
+    std::vector<HalfSpace> planes;
+    planes.push_back({glm::vec3( 1, 0, 0),  bbox_max.x});
+    planes.push_back({glm::vec3(-1, 0, 0), -bbox_min.x});
+    planes.push_back({glm::vec3( 0, 1, 0),  bbox_max.y});
+    planes.push_back({glm::vec3( 0,-1, 0), -bbox_min.y});
+    planes.push_back({glm::vec3( 0, 0, 1),  bbox_max.z});
+    planes.push_back({glm::vec3( 0, 0,-1), -bbox_min.z});
+
+    const glm::vec3 si = seeds[self];
+    for (uint32_t j = 0; j < seeds.size(); ++j) {
+        if (j == self) continue;
+        glm::vec3 dir = seeds[j] - si;
+        float len = glm::length(dir);
+        if (len < 1e-6f) continue;
+        glm::vec3 n = dir / len;
+        glm::vec3 m = 0.5f * (si + seeds[j]);
+        planes.push_back({n, glm::dot(n, m)});
+    }
+
+    // Enumerate cell vertices = intersections of plane triples that satisfy all half-spaces.
+    const int P = static_cast<int>(planes.size());
+    std::vector<glm::vec3> raw;
+    const float feasible_eps = 1e-4f;
+    for (int a = 0; a < P; ++a) {
+        for (int b = a + 1; b < P; ++b) {
+            for (int c = b + 1; c < P; ++c) {
+                glm::mat3 A = glm::transpose(glm::mat3(planes[a].n, planes[b].n, planes[c].n));
+                float det = glm::determinant(A);
+                if (std::abs(det) < 1e-6f) continue;
+                glm::vec3 rhs(planes[a].d, planes[b].d, planes[c].d);
+                glm::vec3 p = glm::inverse(A) * rhs;
+                bool inside = true;
+                for (int k = 0; k < P; ++k) {
+                    if (glm::dot(planes[k].n, p) > planes[k].d + feasible_eps) { inside = false; break; }
+                }
+                if (inside) raw.push_back(p);
+            }
+        }
+    }
+    if (raw.size() < 4) return false;
+
+    // Deduplicate near-coincident vertices.
+    std::vector<glm::vec3> verts;
+    for (const auto& v : raw) {
+        bool dup = false;
+        for (const auto& u : verts) { if (glm::distance(u, v) < 1e-4f) { dup = true; break; } }
+        if (!dup) verts.push_back(v);
+    }
+    if (verts.size() < 4) return false;
+
+    glm::vec3 centroid(0.0f);
+    for (const auto& v : verts) centroid += v;
+    centroid /= static_cast<float>(verts.size());
+
+    // Build faces: for each bounding plane, gather its vertices, order them
+    // around the face centroid, and triangulate as a fan with outward winding.
+    std::vector<uint32_t> indices;
+    for (int k = 0; k < P; ++k) {
+        std::vector<int> on;
+        for (int vi = 0; vi < static_cast<int>(verts.size()); ++vi) {
+            if (std::abs(glm::dot(planes[k].n, verts[vi]) - planes[k].d) < 1e-3f) on.push_back(vi);
+        }
+        if (on.size() < 3) continue;
+
+        glm::vec3 fc(0.0f);
+        for (int vi : on) fc += verts[vi];
+        fc /= static_cast<float>(on.size());
+
+        glm::vec3 nrm = planes[k].n;
+        glm::vec3 t = glm::normalize(std::abs(nrm.x) < 0.9f ? glm::cross(nrm, glm::vec3(1, 0, 0))
+                                                            : glm::cross(nrm, glm::vec3(0, 1, 0)));
+        glm::vec3 bt = glm::cross(nrm, t);
+        std::sort(on.begin(), on.end(), [&](int i1, int i2) {
+            glm::vec3 d1 = verts[i1] - fc, d2 = verts[i2] - fc;
+            return std::atan2(glm::dot(d1, bt), glm::dot(d1, t)) <
+                   std::atan2(glm::dot(d2, bt), glm::dot(d2, t));
+        });
+
+        for (size_t f = 1; f + 1 < on.size(); ++f) {
+            uint32_t i0 = static_cast<uint32_t>(on[0]);
+            uint32_t i1 = static_cast<uint32_t>(on[f]);
+            uint32_t i2 = static_cast<uint32_t>(on[f + 1]);
+            glm::vec3 fn = glm::cross(verts[i1] - verts[i0], verts[i2] - verts[i0]);
+            if (glm::dot(fn, nrm) < 0.0f) std::swap(i1, i2);
+            indices.push_back(i0); indices.push_back(i1); indices.push_back(i2);
+        }
+    }
+    if (indices.empty()) return false;
+
+    float vol = 0.0f;
+    for (size_t f = 0; f + 2 < indices.size(); f += 3) {
+        glm::vec3 a = verts[indices[f]]     - centroid;
+        glm::vec3 b = verts[indices[f + 1]] - centroid;
+        glm::vec3 c = verts[indices[f + 2]] - centroid;
+        vol += std::abs(glm::dot(a, glm::cross(b, c))) / 6.0f;
+    }
+
+    out.positions.resize(verts.size() * 3);
+    for (size_t vi = 0; vi < verts.size(); ++vi) {
+        out.positions[vi * 3 + 0] = verts[vi].x - centroid.x;
+        out.positions[vi * 3 + 1] = verts[vi].y - centroid.y;
+        out.positions[vi * 3 + 2] = verts[vi].z - centroid.z;
+    }
+    out.indices = std::move(indices);
+    out.centroid = centroid;
+    out.volume = (vol > 1e-6f) ? vol : 1e-6f;
+    return true;
 }
 
 } // namespace
@@ -347,119 +477,34 @@ std::shared_ptr<FractureAsset> FractureSystem::ComputeRuntimeVoronoi(
         seeds[s] = pt;
     }
 
-    // 将每个顶点分配到最近的种子 → 碎片标签
-    std::vector<uint32_t> vertex_labels(vcount, 0);
-    for (size_t i = 0; i < vcount; ++i) {
-        float best_dist = std::numeric_limits<float>::max();
-        for (uint32_t s = 0; s < fragment_count; ++s) {
-            float d = glm::distance(positions[i], seeds[s]);
-            if (d < best_dist) {
-                best_dist = d;
-                vertex_labels[i] = s;
-            }
-        }
-    }
-
-    // 按碎片标签分组三角形，构建碎片
+    // 为每个种子构建裁剪后的 Voronoi 凸胞腔：源 AABB 被相邻种子的中垂面切割，
+    // 每个碎片都是闭合实心凸多面体 → 必然可渲染（不再依赖源三角形是否跨越 cell 边界）。
     auto asset = std::make_shared<FractureAsset>();
     asset->source_mesh = mr.mesh_path;
 
     for (uint32_t frag_id = 0; frag_id < fragment_count; ++frag_id) {
-        // 找出属于该碎片的顶点
-        std::vector<bool> vert_mask(vcount, false);
-        for (size_t i = 0; i < vcount; ++i) {
-            if (vertex_labels[i] == frag_id) {
-                vert_mask[i] = true;
-            }
+        CellMesh cell;
+        if (!BuildVoronoiCell(bbox_min, bbox_max, seeds, frag_id, cell)) {
+            continue;
         }
 
-        // 找出三个顶点都属于该碎片的三角形
-        std::vector<uint32_t> frag_tri_indices;
-        for (size_t t = 0; t + 2 < mr.temp_indices.size(); t += 3) {
-            uint32_t i0 = mr.temp_indices[t + 0];
-            uint32_t i1 = mr.temp_indices[t + 1];
-            uint32_t i2 = mr.temp_indices[t + 2];
-            if (i0 < vcount && i1 < vcount && i2 < vcount &&
-                vert_mask[i0] && vert_mask[i1] && vert_mask[i2]) {
-                frag_tri_indices.push_back(mr.temp_indices[t + 0]);
-                frag_tri_indices.push_back(mr.temp_indices[t + 1]);
-                frag_tri_indices.push_back(mr.temp_indices[t + 2]);
-            }
-        }
-
-        if (frag_tri_indices.empty()) continue;
-
-        // 收集实际用到的顶点，计算质心
-        std::unordered_map<uint32_t, uint32_t> old_to_new;
-        std::vector<uint32_t> used_verts;
-        for (auto idx : frag_tri_indices) {
-            if (old_to_new.find(idx) == old_to_new.end()) {
-                old_to_new[idx] = static_cast<uint32_t>(used_verts.size());
-                used_verts.push_back(idx);
-            }
-        }
-
-        // 计算碎片质心
-        glm::vec3 centroid(0.0f);
-        for (auto vi : used_verts) {
-            centroid += positions[vi];
-        }
-        centroid /= static_cast<float>(used_verts.size());
-
-        // 计算碎片 AABB 体积
-        glm::vec3 frag_min(std::numeric_limits<float>::max());
-        glm::vec3 frag_max(std::numeric_limits<float>::lowest());
-        for (auto vi : used_verts) {
-            frag_min = glm::min(frag_min, positions[vi]);
-            frag_max = glm::max(frag_max, positions[vi]);
-        }
-        glm::vec3 frag_size = frag_max - frag_min;
-        float volume = frag_size.x * frag_size.y * frag_size.z;
-        if (volume < 1e-6f) volume = 1e-6f;
-
-        // 构建碎片 mesh 数据（质心居中）—— 存入 MeshRendererComponent 的 temp_vertices/temp_indices
-        // 这里不写 .dmesh 文件，而是直接缓存在内存中
-        std::vector<float> frag_vertices;
-        frag_vertices.resize(used_verts.size() * stride);
-        for (size_t vi_idx = 0; vi_idx < used_verts.size(); ++vi_idx) {
-            size_t src_vi = used_verts[vi_idx];
-            // 复制全部顶点属性
-            for (size_t j = 0; j < stride; ++j) {
-                frag_vertices[vi_idx * stride + j] = mr.temp_vertices[src_vi * stride + j];
-            }
-            // 位置相对质心居中
-            frag_vertices[vi_idx * stride + 0] -= centroid.x;
-            frag_vertices[vi_idx * stride + 1] -= centroid.y;
-            frag_vertices[vi_idx * stride + 2] -= centroid.z;
-        }
-
-        std::vector<uint32_t> frag_remapped_indices;
-        frag_remapped_indices.reserve(frag_tri_indices.size());
-        for (auto idx : frag_tri_indices) {
-            frag_remapped_indices.push_back(old_to_new[idx]);
-        }
-
-        // 用唯一键缓存碎片数据
-        // 仅当源 mesh 是 dmesh 格式（stride>=20）时才加 .dmesh 后缀，
-        // 否则让 MeshRenderSystem 走非 dmesh 路径（自动计算法线/UV）
+        // 缓存键（非真实文件）；stride=3 positions，让 MeshRenderSystem 自动算法线/UV。
         std::string cache_key = "__runtime_voronoi_" +
             std::to_string(static_cast<uint32_t>(entity)) + "_frag_" +
-            std::to_string(frag_id) + (is_dmesh ? ".dmesh" : "");
+            std::to_string(frag_id);
 
         FragmentDescriptor desc;
         desc.mesh_path = cache_key;
-        desc.local_offset = centroid;
-        desc.volume = volume;
-
-        // 将碎片顶点数据存入缓存 map，供 SpawnFragments 使用
-        desc.runtime_vertices = std::move(frag_vertices);
-        desc.runtime_indices = std::move(frag_remapped_indices);
-        desc.runtime_vertex_stride = static_cast<int>(stride);
+        desc.local_offset = cell.centroid;
+        desc.volume = cell.volume;
+        desc.runtime_vertices = std::move(cell.positions);
+        desc.runtime_indices = std::move(cell.indices);
+        desc.runtime_vertex_stride = 3;
 
         asset->fragments.push_back(std::move(desc));
     }
 
-    DEBUG_LOG_INFO("[FractureSystem] 实时 Voronoi 切分实体 {} → {} 个碎片",
+    DEBUG_LOG_INFO("[FractureSystem] 实时 Voronoi 切分实体 {} → {} 个可渲染碎片",
                    static_cast<uint32_t>(entity), asset->fragments.size());
     return asset;
 }
