@@ -2184,24 +2184,98 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         HideOptionalPanels();
         ctx->Yield(4);
         auto light = NewPrimitive(ctx, "Directional Light");
+        // Ground plane for context (cloth pools onto Y=0 fallback plane).
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(12.0f, 1.0f, 12.0f);
+        SetPos(floor, 0.0f, 0.0f, 0.0f);
+        UsePBR(floor);
+        // Sphere obstacle the cloth will drape over.
+        auto ball = NewPrimitive(ctx, "Sphere");
+        IM_CHECK(ball != entt::null);
+        UsePBR(ball);
+        Tf(ball).scale = glm::vec3(2.6f, 2.6f, 2.6f);   // visible radius ~1.3
+        SetPos(ball, 0.0f, 1.3f, 0.0f);
         auto plane = NewPrimitive(ctx, "Plane");
         IM_CHECK(plane != entt::null);
         UsePBR(plane);
+        // Replace the 4-vert procedural plane with a subdivided NxN grid so
+        // the cloth solver has interior particles that can actually drape.
+        const int kN = 28;
+        {
+            auto& mr = Mr(plane);
+            mr.temp_vertices.clear();
+            mr.temp_indices.clear();
+            mr.temp_normals.clear();
+            mr.temp_uvs.clear();
+            mr.temp_tangents.clear();
+            for (int z = 0; z < kN; ++z)
+                for (int x = 0; x < kN; ++x) {
+                    float fx = static_cast<float>(x) / (kN - 1) - 0.5f;
+                    float fz = static_cast<float>(z) / (kN - 1) - 0.5f;
+                    mr.temp_vertices.push_back(fx);
+                    mr.temp_vertices.push_back(0.0f);
+                    mr.temp_vertices.push_back(fz);
+                }
+            for (int z = 0; z < kN - 1; ++z)
+                for (int x = 0; x < kN - 1; ++x) {
+                    uint32_t i0 = static_cast<uint32_t>(z * kN + x);
+                    uint32_t i1 = i0 + 1;
+                    uint32_t i2 = i0 + kN;
+                    uint32_t i3 = i2 + 1;
+                    mr.temp_indices.push_back(i0); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i1);
+                    mr.temp_indices.push_back(i1); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i3);
+                }
+            // Generous local bounds so the draped sheet is never frustum-culled.
+            mr.local_bounds_min = glm::vec3(-1.0f, -2.5f, -1.0f);
+            mr.local_bounds_max = glm::vec3( 1.0f,  1.0f,  1.0f);
+            mr.local_bounds_valid = true;
+            mr.material_double_sided = true;
+        }
+        // Start the flat sheet above the ball, then let gravity drape it over.
+        Tf(plane).position = glm::vec3(0.0f, 3.4f, 0.0f);
+        Tf(plane).scale = glm::vec3(4.5f, 1.0f, 4.5f);
         auto& cloth = Reg().emplace<dse::ClothComponent>(plane);
         cloth.enabled = true;
-        cloth.solver_iterations = 8;
-        cloth.stiffness = 0.8f;
-        cloth.damping = 0.02f;
+        cloth.solver_iterations = 24;
+        cloth.stiffness = 0.9f;
+        cloth.bend_stiffness = 0.08f;
+        cloth.damping = 0.04f;
+        cloth.friction = 0.5f;
         cloth.gravity = glm::vec3(0.0f, -9.81f, 0.0f);
-        cloth.wind = glm::vec3(2.0f, 0.0f, 0.0f);
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        cloth.wind = glm::vec3(0.4f, 0.0f, 0.4f);
+        cloth.wind_turbulence = 0.5f;
+        cloth.collision_radius = 0.04f;
+        // Drape over the sphere obstacle (collider follows the ball transform).
+        dse::ClothSphereCollider ballcol;
+        ballcol.entity_id = static_cast<uint32_t>(ball);
+        ballcol.radius = 0.5f;   // * ball scale (2.6) => world radius ~1.3
+        cloth.sphere_colliders.push_back(ballcol);
+        auto cl_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(4.8f, 4.4f, 6.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 1.1f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(cl_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(cl_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 55.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        ctx->Yield(140);
+        ctx->WindowFocus("//Game");
+        ctx->Yield(10);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_cloth");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({plane, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        DestroyEntities({plane, ball, floor, light, cl_cam});
         ctx->Yield(2);
     };
 

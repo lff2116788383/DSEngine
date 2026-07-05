@@ -1012,6 +1012,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         // GPU Instancing: 有 mesh_path + opaque → 检查合批（静态物体走 StaticBatch）
         // Skinned mesh 也可合批（bone SSBO + per-instance bone_offset）
         const bool can_instance = !item.morph_enabled
+            && !world.registry().all_of<ClothComponent>(entity)
             && !mesh_renderer.is_static
             && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
             && !mesh_renderer.mesh_path.empty()
@@ -1990,6 +1991,10 @@ bool MeshRenderSystem::IsGPUDrivenEligible(World& world, entt::entity entity,
         const auto& a = world.registry().get<Animator3DComponent>(entity);
         if (a.enabled && !a.final_bone_matrices.empty()) return false;
     }
+    // Cloth deforms its mesh on the CPU in place every frame; the GPU-driven
+    // mega-buffer caches geometry by mesh_path and never re-uploads, so route
+    // cloth through the CPU forward path (which rebuilds from temp_vertices).
+    if (world.registry().all_of<ClothComponent>(entity)) return false;
     return true;
 }
 
