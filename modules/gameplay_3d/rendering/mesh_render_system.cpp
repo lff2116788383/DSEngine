@@ -1013,6 +1013,8 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         // Skinned mesh 也可合批（bone SSBO + per-instance bone_offset）
         const bool can_instance = !item.morph_enabled
             && !world.registry().all_of<ClothComponent>(entity)
+            && !world.registry().all_of<MorphTargetComponent>(entity)
+            && !world.registry().all_of<FragmentTagComponent>(entity)
             && !mesh_renderer.is_static
             && item.blend_mode == static_cast<unsigned int>(MaterialBlendMode::Opaque)
             && !mesh_renderer.mesh_path.empty()
@@ -1170,6 +1172,27 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
                     mesh_renderer.temp_vertices[i * stride + 1],
                     mesh_renderer.temp_vertices[i * stride + 2]
                 );
+            }
+            // Morph targets (blend shapes): blend weighted per-vertex position
+            // deltas into the CPU positions so normals recompute from the deformed
+            // shape below. Base geometry stays in temp_vertices; morph entities are
+            // excluded from the GPU-driven mega-buffer and instancing so this runs
+            // every frame.
+            if (world.registry().all_of<MorphTargetComponent>(entity)) {
+                const auto& morph_target = world.registry().get<MorphTargetComponent>(entity);
+                if (morph_target.enabled) {
+                    const size_t morph_targets_n =
+                        std::min(morph_target.targets.size(), morph_target.weights.size());
+                    for (size_t mt_i = 0; mt_i < morph_targets_n; ++mt_i) {
+                        const float mw = morph_target.weights[mt_i];
+                        if (mw == 0.0f) continue;
+                        const auto& mdeltas = morph_target.targets[mt_i].deltas;
+                        const size_t mn = std::min(mdeltas.size(), static_cast<size_t>(vertex_count));
+                        for (size_t vi = 0; vi < mn; ++vi) {
+                            local_positions[vi] += mw * mdeltas[vi].delta_position;
+                        }
+                    }
+                }
             }
             glm::vec3 world_min(std::numeric_limits<float>::max());
             glm::vec3 world_max(std::numeric_limits<float>::lowest());
@@ -1995,6 +2018,18 @@ bool MeshRenderSystem::IsGPUDrivenEligible(World& world, entt::entity entity,
     // mega-buffer caches geometry by mesh_path and never re-uploads, so route
     // cloth through the CPU forward path (which rebuilds from temp_vertices).
     if (world.registry().all_of<ClothComponent>(entity)) return false;
+    // Morph targets deform their mesh on the CPU each frame; like cloth, route
+    // them through the CPU forward path so the deformation is re-uploaded.
+    if (world.registry().all_of<MorphTargetComponent>(entity)) {
+        const auto& mt = world.registry().get<MorphTargetComponent>(entity);
+        if (mt.enabled && !mt.targets.empty()) return false;
+    }
+    // Runtime fracture fragments are transient dynamic meshes generated on the
+    // fly with no backing file asset; their geometry lives only in
+    // temp_vertices and they move every frame under physics. The GPU-driven
+    // mega-buffer can't build geometry from these fake cache-key paths, so
+    // route fragments through the CPU forward path.
+    if (world.registry().all_of<FragmentTagComponent>(entity)) return false;
     return true;
 }
 

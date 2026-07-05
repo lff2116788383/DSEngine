@@ -2288,21 +2288,98 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
-        // Attach a fracture component (runtime Voronoi source). Note: the
-        // in-editor primitive cube carries no retained CPU mesh, so a live
-        // shatter can't spawn fragments here; this validates the component +
-        // render path only.
+        // Replace the primitive cube with a densely subdivided solid box so the
+        // runtime Voronoi fracture has enough vertices to split into many shards.
+        {
+            auto& mr = Mr(cube);
+            mr.temp_vertices.clear();
+            mr.temp_indices.clear();
+            mr.temp_normals.clear();
+            mr.temp_uvs.clear();
+            mr.temp_tangents.clear();
+            const int kN = 6;      // subdivisions per face edge
+            const float hh = 0.5f; // half extent
+            auto addFace = [&](glm::vec3 origin, glm::vec3 du, glm::vec3 dv) {
+                uint32_t base = static_cast<uint32_t>(mr.temp_vertices.size() / 3);
+                for (int bb = 0; bb <= kN; ++bb)
+                    for (int aa = 0; aa <= kN; ++aa) {
+                        glm::vec3 p = origin
+                            + du * (static_cast<float>(aa) / kN)
+                            + dv * (static_cast<float>(bb) / kN);
+                        mr.temp_vertices.push_back(p.x);
+                        mr.temp_vertices.push_back(p.y);
+                        mr.temp_vertices.push_back(p.z);
+                    }
+                for (int bb = 0; bb < kN; ++bb)
+                    for (int aa = 0; aa < kN; ++aa) {
+                        uint32_t i0 = base + static_cast<uint32_t>(bb * (kN + 1) + aa);
+                        uint32_t i1 = i0 + 1;
+                        uint32_t i2 = i0 + static_cast<uint32_t>(kN + 1);
+                        uint32_t i3 = i2 + 1;
+                        mr.temp_indices.push_back(i0); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i1);
+                        mr.temp_indices.push_back(i1); mr.temp_indices.push_back(i2); mr.temp_indices.push_back(i3);
+                    }
+            };
+            glm::vec3 dx(2 * hh, 0, 0), dy(0, 2 * hh, 0), dz(0, 0, 2 * hh);
+            addFace(glm::vec3(-hh, -hh,  hh), dx, dy);
+            addFace(glm::vec3( hh, -hh, -hh), -dx, dy);
+            addFace(glm::vec3(-hh, -hh, -hh), dz, dy);
+            addFace(glm::vec3( hh, -hh,  hh), -dz, dy);
+            addFace(glm::vec3(-hh,  hh, -hh), dx, dz);
+            addFace(glm::vec3(-hh, -hh,  hh), dx, -dz);
+            mr.local_bounds_min = glm::vec3(-1.0f);
+            mr.local_bounds_max = glm::vec3( 1.0f);
+            mr.local_bounds_valid = true;
+            mr.material_double_sided = true;
+        }
+        SetPos(cube, 0.0f, 1.4f, 0.0f);
+        auto floor = NewPrimitive(ctx, "Plane");
+        Tf(floor).scale = glm::vec3(6.0f, 1.0f, 6.0f);
+        SetPos(floor, 0.0f, 0.0f, 0.0f);
+        UsePBR(floor);
         auto& frac = Reg().emplace<dse::FractureComponent>(cube);
         frac.source = dse::FractureSource::RuntimeVoronoi;
-        frac.runtime_fragment_count = 16;
-        ctx->Yield(4);
-        ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        frac.trigger_mode = dse::FractureTriggerMode::ImpactForce;
+        frac.runtime_fragment_count = 24;
+        frac.explosion_force = 1.3f;
+        frac.fragment_lifetime = 30.0f;
+        frac.fragment_fade_duration = 5.0f;
+        frac.impact_point = glm::vec3(0.0f, 0.0f, 0.0f);
+        frac.impact_direction = glm::vec3(0.0f, 1.0f, 0.0f);
+        auto fr_cam = NewEmptyEntity(ctx);
+        {
+            glm::vec3 cam_pos(5.5f, 4.5f, 7.0f);
+            glm::mat4 world = glm::inverse(glm::lookAt(cam_pos, glm::vec3(0.0f, 1.1f, 0.0f), glm::vec3(0, 1, 0)));
+            auto& ctf = Reg().get<TransformComponent>(fr_cam);
+            ctf.position = cam_pos;
+            ctf.rotation = glm::quat_cast(world);
+            auto& c3d = Reg().emplace<dse::Camera3DComponent>(fr_cam);
+            c3d.enabled = true; c3d.priority = 1000;
+            c3d.fov = 50.0f; c3d.near_clip = 0.1f; c3d.far_clip = 500.0f;
+        }
+        SelectionManager::Get().Clear();
+        ctx->Yield(10);
+        dse::editor::EnterPlayMode(Reg());
+        IM_CHECK(dse::editor::IsEditorInPlayMode());
+        // Trigger the shatter, then let fragments fly apart and fall to the floor.
+        Reg().get<dse::FractureComponent>(cube).fracture_requested = true;
+        ctx->Yield(35);
+        ctx->WindowFocus("//Game");
+        ctx->Yield(10);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_fracture");
         SKIP_IF_NO_CAPTURE(px);
         IM_CHECK(px.NonBlackRatio() > 0.02f);
-        DestroyEntities({cube, light});
+        entt::entity sel = entt::null;
+        dse::editor::ExitPlayMode(Reg(), sel, Services().engine);
+        ctx->Yield(3);
+        // Remove any spawned fragments so they don't leak into later tests.
+        {
+            std::vector<entt::entity> frags;
+            for (auto fe : Reg().view<dse::FragmentTagComponent>()) frags.push_back(fe);
+            for (auto fe : frags) if (Reg().valid(fe)) Reg().destroy(fe);
+        }
+        DestroyEntities({cube, floor, light, fr_cam});
         ctx->Yield(2);
     };
 
@@ -2342,11 +2419,37 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         auto cube = NewPrimitive(ctx, "Cube");
         IM_CHECK(cube != entt::null);
         UsePBR(cube);
+        // Build one morph target that deforms the cube: widen X, lift the top
+        // face. At weight 1 the cube becomes a tall wide wedge - a clearly
+        // non-uniform shape change, not just a scaled cube.
+        auto& mr = Mr(cube);
+        const size_t vcount = mr.temp_vertices.size() / 3;
         auto& morph = Reg().emplace<dse::MorphTargetComponent>(cube);
         morph.enabled = true;
-        ctx->Yield(4);
+        morph.vertex_count = static_cast<int>(vcount);
+        dse::MorphTargetData tgt;
+        tgt.name = "deform";
+        tgt.deltas.resize(vcount);
+        for (size_t i = 0; i < vcount; ++i) {
+            float bx = mr.temp_vertices[i * 3 + 0];
+            float by = mr.temp_vertices[i * 3 + 1];
+            float bz = mr.temp_vertices[i * 3 + 2];
+            dse::MorphTargetDelta d{};
+            d.delta_position = glm::vec3(bx * 1.4f, (by > 0.0f ? 1.6f : 0.0f), bz * 0.2f);
+            d.delta_normal = glm::vec3(0.0f);
+            tgt.deltas[i] = d;
+        }
+        morph.targets.push_back(std::move(tgt));
+        morph.weights.push_back(0.0f);
+        // Drive the weight each frame so the deformation is genuinely animated,
+        // then settle at full weight for the capture.
+        for (int f = 0; f < 40; ++f) {
+            morph.weights[0] = static_cast<float>(f % 20) / 19.0f;
+            ctx->Yield(1);
+        }
+        morph.weights[0] = 1.0f;
         ctx->WindowFocus("//Scene");
-        ctx->Yield(30);
+        ctx->Yield(20);
         PreCapture(ctx);
         auto px = CaptureAndLoad("render_morph_target");
         SKIP_IF_NO_CAPTURE(px);
