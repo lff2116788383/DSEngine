@@ -14,6 +14,7 @@
 #include "editor_control_server.h"
 #include "editor_plugin_manager.h"
 #include "editor_agent_panel.h"
+#include "editor_panel_registry.h"  // PanelVisibilityState
 
 struct GLFWwindow;
 
@@ -80,11 +81,9 @@ private:
 
     // Plugin Manager
     PluginManager plugin_manager_;
-    bool show_plugins_ = false;
 
     // AI Agent Panel (unified, replaces old ChatPanel)
     AgentPanel agent_panel_;
-    bool show_agent_panel_ = false;
 
     // Automation / test
     dse::editor::test::EditorTestConfig test_config_{};
@@ -102,40 +101,11 @@ private:
     bool collider_is_trigger_ = false;
     char localization_preview_key_[128] = "editor.preview.status";
     char localization_preview_fallback_[128] = "Language: {lang}";
-    bool show_plugins_panel_ = false;
-    bool show_preferences_ = false;
 
-    // Optional panels (hidden by default, toggle via Window menu)
-    bool show_localization_preview_ = false;
-    bool show_profiler_ = false;
-    bool show_animation_ = false;
-    bool show_tile_palette_ = false;
-    bool show_terrain_editor_ = false;
-    bool show_vegetation_brush_ = false;
-    bool show_lua_console_ = false;
-    bool show_undo_history_ = false;
-    bool show_asset_browser_ = false;
-    bool show_animation_timeline_ = false;
-    bool show_navmesh_ = false;
-    bool show_shader_graph_ = false;
-    bool show_git_ = false;
-    bool show_multi_viewport_ = false;
-    bool show_anim_state_machine_ = false;
-    bool show_lua_debugger_ = false;
-    bool show_streaming_debug_ = false;
-    bool show_curve_editor_ = false;
-    bool show_visual_script_ = false;
-    bool show_anim_retarget_ = false;
-    bool show_blueprint_ = false;
-    bool show_csharp_panel_ = false;
-
-    // Core panel visibility (re-open via Window menu)
-    bool show_hierarchy_ = true;
-    bool show_inspector_ = true;
-    bool show_console_ = true;
-    bool show_scene_ = true;
-    bool show_game_ = true;
-    bool show_sequencer_ = true;
+    // ── Panel visibility (consolidated) ──
+    // Replaces former 28 individual bool show_* members.
+    // Core panels default visible; optional panels default hidden.
+    PanelVisibilityState panels_;
 
     // Profiler 实例（每帧通过 EditorContext 传递引用）
     dse::profiler::CPUProfiler cpu_profiler_;

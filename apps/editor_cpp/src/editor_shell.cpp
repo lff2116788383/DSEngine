@@ -129,7 +129,7 @@ void EndEditorShell() {
     ImGui::End();
 }
 
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_plugins, bool* show_chat, const PanelVisibility* panels) {
+void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
     if (!ImGui::BeginMenuBar()) {
         return;
     }
@@ -370,8 +370,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             ctx.selected_entity = entt::null;
         }
         ImGui::Separator();
-        if (show_preferences && ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
-            *show_preferences = true;
+        if (ImGui::MenuItem(MDI_ICON_COG "  Preferences...")) {
+            panels.preferences = true;
         }
         ImGui::EndMenu();
     }
@@ -465,72 +465,44 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     if (ImGui::BeginMenu(T("Window"))) {
         // Core panels — closable, re-open from here
         ImGui::TextDisabled("Core");
-        if (panels) {
-            if (panels->hierarchy)
-                ImGui::MenuItem(MDI_ICON_FILE_TREE "  Hierarchy", nullptr, panels->hierarchy);
-            if (panels->inspector)
-                ImGui::MenuItem(MDI_ICON_INFORMATION "  Inspector", nullptr, panels->inspector);
-            if (panels->console)
-                ImGui::MenuItem(MDI_ICON_CONSOLE "  Console", nullptr, panels->console);
-            if (panels->scene)
-                ImGui::MenuItem(MDI_ICON_EYE "  Scene", nullptr, panels->scene);
-            if (panels->game)
-                ImGui::MenuItem(MDI_ICON_GAMEPAD "  Game", nullptr, panels->game);
-            if (panels->sequencer)
-                ImGui::MenuItem(MDI_ICON_MOVIE_OPEN "  Sequencer", nullptr, panels->sequencer);
-        }
+        ImGui::MenuItem(MDI_ICON_FILE_TREE "  Hierarchy", nullptr, &panels.hierarchy);
+        ImGui::MenuItem(MDI_ICON_INFORMATION "  Inspector", nullptr, &panels.inspector);
+        ImGui::MenuItem(MDI_ICON_CONSOLE "  Console", nullptr, &panels.console);
+        ImGui::MenuItem(MDI_ICON_EYE "  Scene", nullptr, &panels.scene);
+        ImGui::MenuItem(MDI_ICON_GAMEPAD "  Game", nullptr, &panels.game);
+        ImGui::MenuItem(MDI_ICON_MOVIE_OPEN "  Sequencer", nullptr, &panels.sequencer);
+
         ImGui::Separator();
         ImGui::TextDisabled("Panels");
-        if (panels) {
-            if (panels->profiler)
-                ImGui::MenuItem(MDI_ICON_COG "  Profiler", nullptr, panels->profiler);
-            if (panels->animation)
-                ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation", nullptr, panels->animation);
-            if (panels->tile_palette)
-                ImGui::MenuItem(T("Tile Palette"), nullptr, panels->tile_palette);
-            if (panels->terrain_editor)
-                ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, panels->terrain_editor);
-            if (panels->vegetation_brush)
-                ImGui::MenuItem(MDI_ICON_TERRAIN "  Vegetation Brush", nullptr, panels->vegetation_brush);
-            if (panels->lua_console)
-                ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, panels->lua_console);
-            if (panels->localization_preview)
-                ImGui::MenuItem(T("Localization Preview"), nullptr, panels->localization_preview);
-            if (panels->undo_history)
-                ImGui::MenuItem(T("Undo History"), nullptr, panels->undo_history);
+        ImGui::MenuItem(MDI_ICON_COG "  Profiler", nullptr, &panels.profiler);
+        ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation", nullptr, &panels.animation);
+        ImGui::MenuItem(T("Tile Palette"), nullptr, &panels.tile_palette);
+        ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, &panels.terrain_editor);
+        ImGui::MenuItem(MDI_ICON_TERRAIN "  Vegetation Brush", nullptr, &panels.vegetation_brush);
+        ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, &panels.lua_console);
+        ImGui::MenuItem(T("Localization Preview"), nullptr, &panels.localization_preview);
+        ImGui::MenuItem(T("Undo History"), nullptr, &panels.undo_history);
 
-            ImGui::Separator();
-            ImGui::TextDisabled("Advanced");
-            if (panels->asset_browser)
-                ImGui::MenuItem(MDI_ICON_FOLDER "  Asset Browser", nullptr, panels->asset_browser);
-            if (panels->animation_timeline)
-                ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation Timeline", nullptr, panels->animation_timeline);
-            if (panels->navmesh)
-                ImGui::MenuItem(MDI_ICON_MAP_MARKER_PATH "  NavMesh", nullptr, panels->navmesh);
-            if (panels->shader_graph)
-                ImGui::MenuItem(MDI_ICON_PALETTE "  Shader Graph", nullptr, panels->shader_graph);
-            if (panels->git)
-                ImGui::MenuItem(MDI_ICON_SOURCE_BRANCH "  Git", nullptr, panels->git);
-            if (panels->multi_viewport)
-                ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, panels->multi_viewport);
-            if (panels->anim_state_machine)
-                ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, panels->anim_state_machine);
-            if (panels->lua_debugger)
-                ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, panels->lua_debugger);
-            if (panels->streaming_debug)
-                ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, panels->streaming_debug);
-            if (panels->curve_editor)
-                ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, panels->curve_editor);
-            if (panels->visual_script)
-                ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, panels->visual_script);
-            if (panels->anim_retarget)
-                ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim Retarget", nullptr, panels->anim_retarget);
-            if (panels->csharp_panel)
-                ImGui::MenuItem(MDI_ICON_CODE "  C# Scripts", nullptr, panels->csharp_panel);
-        }
         ImGui::Separator();
-        if (show_plugins && ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
-            *show_plugins = true;
+        ImGui::TextDisabled("Advanced");
+        ImGui::MenuItem(MDI_ICON_FOLDER "  Asset Browser", nullptr, &panels.asset_browser);
+        ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation Timeline", nullptr, &panels.animation_timeline);
+        ImGui::MenuItem(MDI_ICON_MAP_MARKER_PATH "  NavMesh", nullptr, &panels.navmesh);
+        ImGui::MenuItem(MDI_ICON_PALETTE "  Shader Graph", nullptr, &panels.shader_graph);
+        ImGui::MenuItem(MDI_ICON_SOURCE_BRANCH "  Git", nullptr, &panels.git);
+        ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, &panels.multi_viewport);
+        ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, &panels.anim_state_machine);
+        ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, &panels.lua_debugger);
+        ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, &panels.streaming_debug);
+        ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, &panels.curve_editor);
+        ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, &panels.visual_script);
+        ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim Retarget", nullptr, &panels.anim_retarget);
+        ImGui::MenuItem(MDI_ICON_CODE "  C# Scripts", nullptr, &panels.csharp_panel);
+        ImGui::MenuItem(MDI_ICON_SITEMAP "  Blueprint", nullptr, &panels.blueprint);
+
+        ImGui::Separator();
+        if (ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
+            panels.plugins = true;
         }
         ImGui::Separator();
         DrawLayoutMenu();
@@ -542,8 +514,8 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ─── AI ────────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("AI"))) {
-        if (show_chat && ImGui::MenuItem(T("AI Chat Panel"))) {
-            *show_chat = true;
+        if (ImGui::MenuItem(T("AI Chat Panel"))) {
+            panels.ai_agent = true;
         }
         ImGui::Separator();
         if (ImGui::MenuItem(T("AI Configuration..."))) {

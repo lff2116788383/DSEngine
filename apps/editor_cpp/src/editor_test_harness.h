@@ -38,7 +38,7 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]);
 /**
  * @brief 检查是否有任何测试/自动化参数被传入
  * @param config 解析后的配置
- * @return 如果有 headless/replay/verify 参数则返回 true
+ * @return 如果有 headless/automation-api/ui-tests 参数则返回 true
  */
 bool HasTestArgs(const EditorTestConfig& config);
 

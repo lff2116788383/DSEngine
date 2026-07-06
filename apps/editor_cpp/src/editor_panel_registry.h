@@ -4,6 +4,46 @@
 
 namespace dse::editor {
 
+/// Consolidated panel visibility state.
+/// Replaces the former 28 individual `bool show_*` members in EditorApp.
+/// All fields are default-initialized: Core panels are visible, others hidden.
+struct PanelVisibilityState {
+    // ── Core panels (default visible) ──
+    bool hierarchy          = true;
+    bool inspector          = true;
+    bool console            = true;
+    bool scene              = true;
+    bool game               = true;
+    bool sequencer          = true;
+
+    // ── Optional panels (default hidden) ──
+    bool preferences        = false;
+    bool profiler           = false;
+    bool localization_preview = false;
+    bool undo_history       = false;
+    bool streaming_debug    = false;
+    bool lua_debugger       = false;
+    bool animation          = false;
+    bool tile_palette       = false;
+    bool terrain_editor     = false;
+    bool vegetation_brush   = false;
+    bool lua_console        = false;
+    bool asset_browser      = false;
+    bool animation_timeline = false;
+    bool navmesh            = false;
+    bool shader_graph       = false;
+    bool git                = false;
+    bool multi_viewport     = false;
+    bool anim_state_machine = false;
+    bool curve_editor       = false;
+    bool visual_script      = false;
+    bool anim_retarget      = false;
+    bool blueprint          = false;
+    bool csharp_panel       = false;
+    bool plugins            = false;
+    bool ai_agent           = false;
+};
+
 /// Describes a single editor panel for data-driven registration.
 struct PanelEntry {
     std::string id;            // Unique key, e.g. "hierarchy"

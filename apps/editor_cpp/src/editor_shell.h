@@ -2,44 +2,13 @@
 
 #include <string>
 #include "editor_context.h"
+#include "editor_panel_registry.h"  // PanelVisibilityState
 
 namespace dse::editor {
 
-struct PanelVisibility {
-    // Core panels
-    bool* hierarchy = nullptr;
-    bool* inspector = nullptr;
-    bool* console = nullptr;
-    bool* scene = nullptr;
-    bool* game = nullptr;
-    bool* sequencer = nullptr;
-    // Optional panels
-    bool* localization_preview = nullptr;
-    bool* profiler = nullptr;
-    bool* animation = nullptr;
-    bool* tile_palette = nullptr;
-    bool* terrain_editor = nullptr;
-    bool* vegetation_brush = nullptr;
-    bool* lua_console = nullptr;
-    bool* undo_history = nullptr;
-    bool* asset_browser = nullptr;
-    bool* animation_timeline = nullptr;
-    bool* navmesh = nullptr;
-    bool* shader_graph = nullptr;
-    bool* git = nullptr;
-    bool* multi_viewport = nullptr;
-    bool* anim_state_machine = nullptr;
-    bool* lua_debugger = nullptr;
-    bool* streaming_debug = nullptr;
-    bool* curve_editor = nullptr;
-    bool* visual_script = nullptr;
-    bool* anim_retarget = nullptr;
-    bool* csharp_panel = nullptr;
-};
-
 void BeginEditorShell();
 void EndEditorShell();
-void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences = nullptr, bool* show_plugins = nullptr, bool* show_chat = nullptr, const PanelVisibility* panels = nullptr);
+void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels);
 
 /// Draw the scene tab bar (call after BeginEditorShell + DrawEditorMainMenu)
 void DrawSceneTabBar(EditorContext& ctx);

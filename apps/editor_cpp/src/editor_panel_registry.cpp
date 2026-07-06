@@ -8,6 +8,13 @@ PanelRegistry& PanelRegistry::Get() {
 }
 
 void PanelRegistry::Register(PanelEntry entry) {
+    // Deduplicate by id: update existing entry instead of appending a duplicate.
+    for (auto& p : panels_) {
+        if (p.id == entry.id) {
+            p = std::move(entry);
+            return;
+        }
+    }
     panels_.push_back(std::move(entry));
 }
 
