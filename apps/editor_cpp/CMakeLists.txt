@@ -26,6 +26,11 @@ file(GLOB_RECURSE editor_srcs CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
+# Exclude ui_tests/ sources when not building with Test Engine
+if(NOT DSE_EDITOR_UI_TESTS)
+    list(FILTER editor_srcs EXCLUDE REGEX "ui_tests/")
+endif()
+
 add_executable(dse_editor_cpp WIN32
     ${editor_srcs}
     # Windows 应用程序图标资源

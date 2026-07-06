@@ -67,7 +67,7 @@ private:
     bool deferred_window_show_ = false;  // splash 期间窗口隐藏，首帧后需 Show
 
     // Engine
-    dse::runtime::EngineInstance* engine_instance_ = nullptr;
+    std::unique_ptr<dse::runtime::EngineInstance> engine_instance_;
 
     // Control Server (WebSocket JSON-RPC)
     std::unique_ptr<ControlServer> control_server_;
