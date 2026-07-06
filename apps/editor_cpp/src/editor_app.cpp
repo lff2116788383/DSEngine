@@ -23,6 +23,7 @@
 
 #include "imgui.h"
 #include "editor_imgui_backend.h"
+#include "editor_panel_registry.h"
 #include "editor_imgui_backend_gl.h"
 #ifdef _WIN32
 #endif
@@ -1154,6 +1155,40 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     ctx.asset_database    = &dse::editor::AssetDatabase::Get();
     ctx.selection_manager = &dse::editor::SelectionManager::Get();
     ctx.undo_manager      = &dse::editor::GetUndoRedoManager();
+
+    // T14: Data-driven panel registration
+    auto& panel_reg = dse::editor::PanelRegistry::Get();
+    panel_reg.Register({"hierarchy",          "Hierarchy",            "Core",  &show_hierarchy_,          true});
+    panel_reg.Register({"inspector",          "Inspector",            "Core",  &show_inspector_,          true});
+    panel_reg.Register({"console",            "Console",              "Core",  &show_console_,            true});
+    panel_reg.Register({"scene",              "Scene",                "Core",  &show_scene_,              true});
+    panel_reg.Register({"game",               "Game",                 "Core",  &show_game_,               true});
+    panel_reg.Register({"sequencer",          "Sequencer",            "Core",  &show_sequencer_,          true});
+    panel_reg.Register({"preferences",        "Preferences",          "Core",  &show_preferences_,        false});
+    panel_reg.Register({"profiler",           "Profiler",             "Debug", &show_profiler_,           false});
+    panel_reg.Register({"localization",       "Localization Preview", "Debug", &show_localization_preview_,false});
+    panel_reg.Register({"undo_history",       "Undo History",         "Debug", &show_undo_history_,       false});
+    panel_reg.Register({"streaming_debug",    "Streaming Debug",      "Debug", &show_streaming_debug_,    false});
+    panel_reg.Register({"lua_debugger",       "Lua Debugger",         "Debug", &show_lua_debugger_,       false});
+    panel_reg.Register({"animation",          "Animation",            "Tool",  &show_animation_,          false});
+    panel_reg.Register({"tile_palette",       "Tile Palette",         "Tool",  &show_tile_palette_,       false});
+    panel_reg.Register({"terrain_editor",     "Terrain Editor",       "Tool",  &show_terrain_editor_,     false});
+    panel_reg.Register({"vegetation_brush",   "Vegetation Brush",     "Tool",  &show_vegetation_brush_,   false});
+    panel_reg.Register({"lua_console",        "Lua Console",          "Tool",  &show_lua_console_,        false});
+    panel_reg.Register({"asset_browser",      "Asset Browser",        "Tool",  &show_asset_browser_,      false});
+    panel_reg.Register({"animation_timeline", "Animation Timeline",   "Tool",  &show_animation_timeline_, false});
+    panel_reg.Register({"navmesh",            "NavMesh",              "Tool",  &show_navmesh_,            false});
+    panel_reg.Register({"shader_graph",       "Shader Graph",         "Tool",  &show_shader_graph_,       false});
+    panel_reg.Register({"git",                "Git",                  "Tool",  &show_git_,                false});
+    panel_reg.Register({"multi_viewport",     "Multi Viewport",       "Tool",  &show_multi_viewport_,     false});
+    panel_reg.Register({"anim_state_machine", "Anim State Machine",   "Tool",  &show_anim_state_machine_, false});
+    panel_reg.Register({"curve_editor",       "Curve Editor",         "Tool",  &show_curve_editor_,       false});
+    panel_reg.Register({"visual_script",      "Visual Script",        "Tool",  &show_visual_script_,      false});
+    panel_reg.Register({"anim_retarget",      "Anim Retarget",        "Tool",  &show_anim_retarget_,      false});
+    panel_reg.Register({"blueprint",          "Blueprint",            "Tool",  &show_blueprint_,          false});
+    panel_reg.Register({"csharp",             "C# Scripts",           "Tool",  &show_csharp_panel_,       false});
+    panel_reg.Register({"plugins",            "Plugins",              "Plugin",&show_plugins_panel_,      false});
+    panel_reg.Register({"ai_agent",           "AI Agent",             "Plugin",&show_agent_panel_,        false});
 
     dse::editor::BeginEditorShell();
     dse::editor::PanelVisibility panel_vis{};
