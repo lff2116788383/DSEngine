@@ -143,10 +143,7 @@ void DeleteSelectedEntity(EditorContext& context) {
     context.selected_entity = entt::null;
 }
 
-UndoRedoManager& GetUndoRedoManager() {
-    static UndoRedoManager instance(200);
-    return instance;
-}
+// GetUndoRedoManager() moved to editor_undo.cpp
 
 // ─── Clipboard (Copy/Cut/Paste) ────────────────────────────────────────────
 static std::unique_ptr<entt::registry> s_clipboard_registry;

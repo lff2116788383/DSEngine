@@ -11,6 +11,7 @@
 #include <memory>
 #include <functional>
 #include <deque>
+#include "imgui.h"
 
 namespace dse {
 namespace editor {
@@ -290,6 +291,32 @@ private:
     std::vector<std::unique_ptr<ICommand>> redo_stack_;
     int max_history_;
 };
+
+/// Global undo/redo manager singleton
+UndoRedoManager& GetUndoRedoManager();
+
+// Undo-aware ImGui property helpers
+// Call after an ImGui widget. Caches old value on activation,
+// creates PropertyChangeCommand on deactivation.
+template<typename T>
+inline void UndoOnDeactivation(const char* description,
+                               T& cached_old,
+                               const T& current_value,
+                               std::function<void(const T&)> setter) {
+    if (ImGui::IsItemActivated()) {
+        cached_old = current_value;
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        if (!(cached_old == current_value)) {
+            T old_copy = cached_old;
+            T new_copy = current_value;
+            GetUndoRedoManager().Execute(
+                std::make_unique<PropertyChangeCommand<T>>(
+                    description, old_copy, new_copy, setter),
+                false);
+        }
+    }
+}
 
 } // namespace editor
 } // namespace dse

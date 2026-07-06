@@ -1,7 +1,7 @@
 #include "editor_reflected_inspector.h"
 
 #include "editor_context.h"
-#include "editor_shortcuts.h"   // GetUndoRedoManager
+#include "editor_undo.h"        // GetUndoRedoManager
 #include "editor_undo.h"        // LambdaCommand
 
 #include "engine/reflect/reflect.h"
