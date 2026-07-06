@@ -6,12 +6,15 @@
 #include <map>
 #include <array>
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 
 #if defined(_WIN32)
 #include <Windows.h>
+#include <crtdbg.h>
+#include <cstdlib>
 #endif
 
 #define GLFW_INCLUDE_NONE
@@ -270,6 +273,15 @@ bool EditorApp::Init(int argc, char* argv[]) {
 
 #if defined(_WIN32)
     if (headless) {
+        // 无头/CI 模式：抑制 CRT 断言对话框和 WER 崩溃对话框，
+        // 改为直接输出到 stderr 并 abort，避免进程卡死在等待用户点击的弹窗上。
+        _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+        _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+
         AllocConsole();
         freopen("CONOUT$", "w", stdout);
         freopen("CONOUT$", "w", stderr);
@@ -699,6 +711,7 @@ void EditorApp::Run() {
     ImGuiIO& io = ImGui::GetIO();
     int frame_counter = 0;
     bool screenshot_taken = false;
+    [[maybe_unused]] auto run_start_time = std::chrono::steady_clock::now();
 
     dse::editor::AutoSaveManager::Get().CheckRecovery();
 
@@ -886,12 +899,21 @@ void EditorApp::Run() {
                 break;
             }
             // 看门狗：测试卡死时兜底退出，避免无头 CI 永久挂起。
-            if (frame_counter > 20000) {
-                std::cerr << "[Editor][ui-tests] Watchdog tripped at frame "
-                          << frame_counter << " — aborting as failure." << std::endl;
-                exit_code_ = 1;
-                dse::editor::uitest::Stop();
-                break;
+            // 帧数看门狗 + 时间看门狗（取先触发者）：帧数受帧率影响不确定，
+            // 加时间上限以保证无论帧率多低都不会无限等待。
+            {
+                constexpr int kWatchdogMaxFrames = 20000;
+                constexpr int kWatchdogMaxSeconds = 300;
+                auto elapsed = std::chrono::steady_clock::now() - run_start_time;
+                int elapsed_sec = (int)std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+                if (frame_counter > kWatchdogMaxFrames || elapsed_sec > kWatchdogMaxSeconds) {
+                    std::cerr << "[Editor][ui-tests] Watchdog tripped (frame="
+                              << frame_counter << ", elapsed=" << elapsed_sec
+                              << "s) — aborting as failure." << std::endl;
+                    exit_code_ = 1;
+                    dse::editor::uitest::Stop();
+                    break;
+                }
             }
         }
 #endif
