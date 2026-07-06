@@ -15,3 +15,8 @@ void SetEditorLocale(const std::string& locale);
 const std::string& GetEditorLocale();
 
 } // namespace dse::editor
+
+/// Convenience macro for translatable strings.
+/// Wraps T() but enables future static analysis / string extraction.
+#define DSE_TR(en_key) ::dse::editor::T(en_key)
+

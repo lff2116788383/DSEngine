@@ -106,6 +106,39 @@ static const char* kZhCN[][2] = {
     {"Rotate",    "\xe6\x97\x8b\xe8\xbd\xac"},
     {"Scale",     "\xe7\xbc\xa9\xe6\x94\xbe"},
     {"Hand",      "\xe6\x89\x8b\xe5\x9e\x8b"},
+    {"Clear Recent Scenes", "æ¸é¤æè¿åºæ¯"},
+    {"Cube", "ç«æ¹ä½"},
+    {"Sphere", "çä½"},
+    {"Plane", "å¹³é¢"},
+    {"Sprite", "ç²¾çµ"},
+    {"Directional Light", "å¹³è¡å"},
+    {"Point Light", "ç¹åæº"},
+    {"Spot Light", "èåç¯"},
+    {"Physics Box", "ç©çæ¹å"},
+    {"Physics Sphere", "ç©ççä½"},
+    {"Audio Source", "é³æº"},
+    {"Audio Listener", "é³é¢çå¬å¨"},
+    {"Focus Selected", "èç¦éä¸­"},
+    {"Deselect All", "åæ¶å¨é"},
+    {"Gizmo: Translate", "åæ è½´: ç§»å¨"},
+    {"Gizmo: Rotate", "åæ è½´: æè½¬"},
+    {"Gizmo: Scale", "åæ è½´: ç¼©æ¾"},
+    {"Local Space", "æ¬å°åæ "},
+    {"World Space", "ä¸çåæ "},
+    {"Tile Palette", "ç·ç è°è²æ¿"},
+    {"Localization Preview", "æ¬å°åé¢è§"},
+    {"AI", "AI"},
+    {"AI Chat Panel", "AI å¯¹è¯é¢æ¿"},
+    {"AI Configuration...", "AI éç½®..."},
+    {"About DSEngine", "å³äº DSEngine"},
+    {"Report Issue", "æ¥åé®é¢"},
+    {"Hand (H)", "æåå·¥å· (H)"},
+    {"Translate (W)", "ç§»å¨å·¥å· (W)"},
+    {"Rotate (E)", "æè½¬å·¥å· (E)"},
+    {"Scale (R)", "ç¼©æ¾å·¥å· (R)"},
+    {"Multi-select: Translate only", "å¤é: ä»ç§»å¨"},
+    {"External Script Editor", "å¤é¨èæ¬ç¼è¾å¨"},
+    // --- end T12 additions ---
     {nullptr, nullptr}
 };
 // clang-format on

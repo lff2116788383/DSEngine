@@ -202,7 +202,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                     SaveEditorSettings(s);
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Clear Recent Scenes")) {
+                if (ImGui::MenuItem(T("Clear Recent Scenes"))) {
                     EditorSettings s = LoadEditorSettings();
                     s.recent_files.clear();
                     SaveEditorSettings(s);
@@ -305,7 +305,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::MenuItem(MDI_ICON_CONTENT_SAVE "  Save Project", nullptr, false, has_project)) {
             proj_mgr.SaveProject();
         }
-        if (ImGui::MenuItem("Close Project", nullptr, false, has_project)) {
+        if (ImGui::MenuItem(T("Close Project"), nullptr, false, has_project)) {
             proj_mgr.CloseProject();
             EditorSettings settings = LoadEditorSettings();
             settings.last_project_path.clear();
@@ -316,11 +316,11 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::MenuItem(MDI_ICON_EXPORT "  Build Game...", nullptr, false, editable && has_project)) {
             OpenBuildGameDialog();
         }
-        if (ImGui::MenuItem("Import Asset...", nullptr, false, editable)) {
+        if (ImGui::MenuItem(T("Import Asset..."), nullptr, false, editable)) {
             OpenAssetImporter();
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Exit", "Alt+F4")) {
+        if (ImGui::MenuItem(T("Exit"), "Alt+F4")) {
             // 有未保存改动时先弹确认，避免直接退出丢数据。
             if (tab_mgr.IsAnyTabDirty()) open_exit_confirm = true;
             else RequestExit();
@@ -383,29 +383,29 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         }
         ImGui::Separator();
         if (ImGui::BeginMenu(MDI_ICON_CUBE_OUTLINE "  3D Object", editable)) {
-            if (ImGui::MenuItem("Cube"))     CreateEntity3DCube(ctx);
-            if (ImGui::MenuItem("Sphere"))   CreateEntity3DSphere(ctx);
-            if (ImGui::MenuItem("Plane"))    CreateEntity3DPlane(ctx);
+            if (ImGui::MenuItem(T("Cube")))     CreateEntity3DCube(ctx);
+            if (ImGui::MenuItem(T("Sphere")))   CreateEntity3DSphere(ctx);
+            if (ImGui::MenuItem(T("Plane")))    CreateEntity3DPlane(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_IMAGE "  2D Object", editable)) {
-            if (ImGui::MenuItem("Sprite"))   CreateEntity2DSprite(ctx);
+            if (ImGui::MenuItem(T("Sprite")))   CreateEntity2DSprite(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_LIGHTBULB "  Light", editable)) {
-            if (ImGui::MenuItem("Directional Light")) CreateEntity3DDirectionalLight(ctx);
-            if (ImGui::MenuItem("Point Light"))       CreateEntity3DPointLight(ctx);
-            if (ImGui::MenuItem("Spot Light"))        CreateEntity3DSpotLight(ctx);
+            if (ImGui::MenuItem(T("Directional Light"))) CreateEntity3DDirectionalLight(ctx);
+            if (ImGui::MenuItem(T("Point Light")))       CreateEntity3DPointLight(ctx);
+            if (ImGui::MenuItem(T("Spot Light")))        CreateEntity3DSpotLight(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_CUBE_OUTLINE "  Physics", editable)) {
-            if (ImGui::MenuItem("Physics Box"))    CreateEntity3DPhysicsBox(ctx);
-            if (ImGui::MenuItem("Physics Sphere")) CreateEntity3DPhysicsSphere(ctx);
+            if (ImGui::MenuItem(T("Physics Box")))    CreateEntity3DPhysicsBox(ctx);
+            if (ImGui::MenuItem(T("Physics Sphere"))) CreateEntity3DPhysicsSphere(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_VOLUME_HIGH "  Audio", editable)) {
-            if (ImGui::MenuItem("Audio Source"))   CreateEntity3DAudioSource(ctx);
-            if (ImGui::MenuItem("Audio Listener")) CreateEntity3DAudioListener(ctx);
+            if (ImGui::MenuItem(T("Audio Source")))   CreateEntity3DAudioSource(ctx);
+            if (ImGui::MenuItem(T("Audio Listener"))) CreateEntity3DAudioListener(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::MenuItem(MDI_ICON_CAMERA "  Camera", nullptr, false, editable)) {
@@ -452,12 +452,12 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
                 SetSnapScale(snap_s);
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("Gizmo: Translate", "W")) ctx.current_gizmo_operation = 0;
-        if (ImGui::MenuItem("Gizmo: Rotate",    "E")) ctx.current_gizmo_operation = 1;
-        if (ImGui::MenuItem("Gizmo: Scale",     "R")) ctx.current_gizmo_operation = 2;
+        if (ImGui::MenuItem(T("Gizmo: Translate"), "W")) ctx.current_gizmo_operation = 0;
+        if (ImGui::MenuItem(T("Gizmo: Rotate"),    "E")) ctx.current_gizmo_operation = 1;
+        if (ImGui::MenuItem(T("Gizmo: Scale"),     "R")) ctx.current_gizmo_operation = 2;
         ImGui::Separator();
-        if (ImGui::MenuItem("Local Space", nullptr, ctx.current_gizmo_mode == 0)) ctx.current_gizmo_mode = 0;
-        if (ImGui::MenuItem("World Space", nullptr, ctx.current_gizmo_mode == 1)) ctx.current_gizmo_mode = 1;
+        if (ImGui::MenuItem(T("Local Space"), nullptr, ctx.current_gizmo_mode == 0)) ctx.current_gizmo_mode = 0;
+        if (ImGui::MenuItem(T("World Space"), nullptr, ctx.current_gizmo_mode == 1)) ctx.current_gizmo_mode = 1;
         ImGui::EndMenu();
     }
 
@@ -487,7 +487,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             if (panels->animation)
                 ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation", nullptr, panels->animation);
             if (panels->tile_palette)
-                ImGui::MenuItem("Tile Palette", nullptr, panels->tile_palette);
+                ImGui::MenuItem(T("Tile Palette"), nullptr, panels->tile_palette);
             if (panels->terrain_editor)
                 ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, panels->terrain_editor);
             if (panels->vegetation_brush)
@@ -495,9 +495,9 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
             if (panels->lua_console)
                 ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, panels->lua_console);
             if (panels->localization_preview)
-                ImGui::MenuItem("Localization Preview", nullptr, panels->localization_preview);
+                ImGui::MenuItem(T("Localization Preview"), nullptr, panels->localization_preview);
             if (panels->undo_history)
-                ImGui::MenuItem("Undo History", nullptr, panels->undo_history);
+                ImGui::MenuItem(T("Undo History"), nullptr, panels->undo_history);
 
             ImGui::Separator();
             ImGui::TextDisabled("Advanced");
@@ -541,12 +541,12 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
     }
 
     // ─── AI ────────────────────────────────────────────────────────────────────
-    if (ImGui::BeginMenu("AI")) {
-        if (show_chat && ImGui::MenuItem("AI Chat Panel")) {
+    if (ImGui::BeginMenu(T("AI"))) {
+        if (show_chat && ImGui::MenuItem(T("AI Chat Panel"))) {
             *show_chat = true;
         }
         ImGui::Separator();
-        if (ImGui::MenuItem("AI Configuration...")) {
+        if (ImGui::MenuItem(T("AI Configuration..."))) {
             ai_config.ShowConfigWindow(true);
         }
         ImGui::EndMenu();
@@ -554,7 +554,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
 
     // ─── Help ────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Help"))) {
-        if (ImGui::MenuItem("About DSEngine")) {
+        if (ImGui::MenuItem(T("About DSEngine"))) {
             open_about_popup = true;
         }
         ImGui::Separator();
@@ -562,7 +562,7 @@ void DrawEditorMainMenu(EditorContext& ctx, bool* show_preferences, bool* show_p
         if (ImGui::MenuItem(MDI_ICON_MAGNIFY "  Documentation")) {
             ShellExecuteA(nullptr, "open", "https://github.com/lff2116788383/DSEngine", nullptr, nullptr, SW_SHOWNORMAL);
         }
-        if (ImGui::MenuItem("Report Issue")) {
+        if (ImGui::MenuItem(T("Report Issue"))) {
             ShellExecuteA(nullptr, "open", "https://github.com/lff2116788383/DSEngine/issues", nullptr, nullptr, SW_SHOWNORMAL);
         }
 #endif
