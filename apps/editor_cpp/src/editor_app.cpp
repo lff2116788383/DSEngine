@@ -22,10 +22,9 @@
 #include <glad/gl.h>
 
 #include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_opengl3.h"
+#include "editor_imgui_backend.h"
+#include "editor_imgui_backend_gl.h"
 #ifdef _WIN32
-#include "backends/imgui_impl_dx11.h"
 #endif
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
@@ -445,8 +444,9 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // RHI-aware ImGui backend initialization
     // Currently uses OpenGL3 backend regardless of RHI (editor compositor is GL-based).
     // TODO: Add D3D11/Vulkan ImGui backend when switching RHI away from OpenGL.
-    ImGui_ImplGlfw_InitForOpenGL(window_, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    // T13: Backend abstraction - create and init ImGui backend
+    imgui_backend_ = std::make_unique<dse::editor::ImGuiBackendGL>();
+    imgui_backend_->Init(window_);
 
     splash_.SetStatus("正在初始化渲染引擎…");
 
@@ -827,8 +827,7 @@ void EditorApp::Run() {
         // ImGui frame
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiFrame");
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
+            imgui_backend_->NewFrame();
             ImGui::NewFrame();
             ImGuizmo::BeginFrame();
         }
@@ -871,7 +870,7 @@ void EditorApp::Run() {
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiRender");
             ImGui::Render();
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            imgui_backend_->RenderDrawData(ImGui::GetDrawData());
         }
 
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -1047,8 +1046,10 @@ void EditorApp::Shutdown() {
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::DestroyPlatformWindows();
     }
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
+    if (imgui_backend_) {
+        imgui_backend_->Shutdown();
+        imgui_backend_.reset();
+    }
 
 #ifdef DSE_EDITOR_UI_TESTS
     // 测试引擎须在 DestroyContext 之前 Stop（解绑协程），之后 Destroy（落 ini 等）。

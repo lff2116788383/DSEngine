@@ -28,6 +28,8 @@ namespace dse::editor {
 
 /// 编辑器应用类：管理窗口、ImGui、引擎实例、主循环生命周期。
 /// 替代原 main.cpp 中的大量 static 全局状态。
+class ImGuiBackend;  // forward decl (T13)
+
 class EditorApp {
 public:
     EditorApp();   // out-of-line：command_bus_ 持有不完整类型 unique_ptr
@@ -60,6 +62,7 @@ private:
 
     // Window
     GLFWwindow* window_ = nullptr;
+    std::unique_ptr<ImGuiBackend> imgui_backend_ = nullptr;
 
     // 启动 splash（原生窗口，logo + 加载状态 + 淡入淡出）
     dse::platform::SplashScreen splash_;
