@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file terrain_system_test.cpp
  * @brief TerrainSystem + TerrainComponent 无 GPU 单元测试
  *
@@ -161,6 +161,7 @@ public:
     }
 
     // --- 接口要求的其余纯虚函数桩 ---
+    RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return 0; }

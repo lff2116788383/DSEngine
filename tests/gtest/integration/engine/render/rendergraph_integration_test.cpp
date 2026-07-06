@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file rendergraph_integration_test.cpp
  * @brief RenderGraph 集成测试
  *
@@ -323,6 +323,7 @@ public:
     // bloom mip 链走 CommandBuffer 级 compute 原语（Option A）：返回非 0 句柄启用 compute
     // 路径（downsample=99 / upsample=88），供 BloomPass 测试区分两种调度。
     unsigned int GetBloomComputeShader(bool upsample) const override { return upsample ? 88u : 99u; }
+    RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
     unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }

@@ -1,4 +1,4 @@
-#include <gtest/gtest.h>
+﻿#include <gtest/gtest.h>
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
@@ -51,6 +51,7 @@ public:
     int submit_count = 0;
     int end_frame_count = 0;
 
+    RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override { ++begin_frame_count; }
     unsigned int CreateRenderTarget(const RenderTargetDesc&) override { return 0; }

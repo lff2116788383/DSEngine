@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file asset_manager_test.cpp
  * @brief AssetManager 缓存机制单元测试
  *
@@ -35,6 +35,7 @@ public:
         deleted_textures.push_back(texture_handle);
     }
 
+    RhiBackend GetBackend() const override { return RhiBackend::OpenGL; }
     void Shutdown() override {}
     void BeginFrame() override {}
     unsigned int CreateRenderTarget(const RenderTargetDesc& desc) override { (void)desc; return 0; }
