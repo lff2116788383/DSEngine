@@ -19,6 +19,7 @@
 #include "engine/ecs/transform.h"
 
 #include "editor_shared_components.h"
+#include <iostream>
 
 namespace {
 void WriteVec2(rapidjson::Value& parent,
@@ -1994,6 +1995,7 @@ const std::vector<ComponentJsonIOEntry>& GetComponentJsonIORegistry() {
 } // namespace (json io)
 
 void SaveScene(entt::registry& registry, const std::string& filepath) {
+    try {
 
     rapidjson::Document doc;
     doc.SetArray();
@@ -2022,9 +2024,18 @@ void SaveScene(entt::registry& registry, const std::string& filepath) {
     }
     SaveSceneBinary(registry, filepath + ".bin");
 
+
+    } catch (const std::exception& e) {
+        std::cerr << "[SaveScene] Exception: " << e.what() << std::endl;
+        return;
+    } catch (...) {
+        std::cerr << "[SaveScene] Unknown exception" << std::endl;
+        return;
+    }
 }
 
 void LoadScene(entt::registry& registry, const std::string& filepath) {
+    try {
 
     const std::string bin_path = filepath + ".bin";
     if (SceneBinaryIsValid(filepath, bin_path) && LoadSceneBinary(registry, bin_path)) return;
@@ -2049,9 +2060,18 @@ void LoadScene(entt::registry& registry, const std::string& filepath) {
         }
     }
     SaveSceneBinary(registry, bin_path);
+
+    } catch (const std::exception& e) {
+        std::cerr << "[LoadScene] Exception: " << e.what() << std::endl;
+        return;
+    } catch (...) {
+        std::cerr << "[LoadScene] Unknown exception" << std::endl;
+        return;
+    }
 }
 
 void LoadSceneAdditive(entt::registry& dst, const std::string& filepath, entt::entity parent) {
+    try {
     entt::registry temp;
     LoadScene(temp, filepath);
 
@@ -2063,6 +2083,14 @@ void LoadSceneAdditive(entt::registry& dst, const std::string& filepath, entt::e
             dst.emplace<ParentComponent>(ne, parent);
 
         CopyRegisteredComponents(dst, ne, temp, e, true);
+    }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[LoadSceneAdditive] Exception: " << e.what() << std::endl;
+        return;
+    } catch (...) {
+        std::cerr << "[LoadSceneAdditive] Unknown exception" << std::endl;
+        return;
     }
 }
 

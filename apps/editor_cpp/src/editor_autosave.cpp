@@ -19,6 +19,7 @@
 
 #if defined(_WIN32)
 #include <ShlObj.h>
+#include <iostream>
 #endif
 
 namespace dse::editor {
@@ -143,6 +144,7 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
 }
 
 void AutoSaveManager::Tick(entt::registry& registry) {
+    try {
     EditorSettings settings = LoadEditorSettings();
     auto& tab_mgr = SceneTabManager::Get();
     double now = ImGui::GetTime();
@@ -196,6 +198,14 @@ void AutoSaveManager::Tick(entt::registry& registry) {
     last_save_time_str_ = buf;
 
     EditorLog(LogLevel::Info, "Auto-saved scene: " + path);
+
+    } catch (const std::exception& e) {
+        std::cerr << "[AutoSave::Tick] Exception: " << e.what() << std::endl;
+        return;
+    } catch (...) {
+        std::cerr << "[AutoSave::Tick] Unknown exception" << std::endl;
+        return;
+    }
 }
 
 void AutoSaveManager::OnManualSave() {

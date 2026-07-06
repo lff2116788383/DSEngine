@@ -21,6 +21,7 @@
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/prettywriter.h>
+#include <iostream>
 
 namespace dse::editor::bp {
 
@@ -1090,6 +1091,7 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
 // ─── Serialization ─────────────────────────────────────────────────────────
 
 bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
+    try {
     rapidjson::Document doc;
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
@@ -1193,9 +1195,18 @@ bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
     if (!ofs.is_open()) return false;
     ofs << buffer.GetString();
     return true;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[SaveBlueprintAsset] Exception: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "[SaveBlueprintAsset] Unknown exception" << std::endl;
+        return false;
+    }
 }
 
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
+    try {
     std::ifstream ifs(path);
     if (!ifs.is_open()) return false;
     std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
@@ -1301,6 +1312,14 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
     }
 
     return true;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[LoadBlueprintAsset] Exception: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "[LoadBlueprintAsset] Unknown exception" << std::endl;
+        return false;
+    }
 }
 
 }  // namespace dse::editor::bp

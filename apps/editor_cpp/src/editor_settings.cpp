@@ -11,6 +11,7 @@
 
 #if defined(_WIN32)
 #include <Windows.h>
+#include <iostream>
 #endif
 
 namespace dse::editor {
@@ -45,6 +46,7 @@ std::filesystem::path GetSettingsFilePath() {
 } // namespace
 
 EditorSettings LoadEditorSettings() {
+    try {
     EditorSettings settings;
     const auto file_path = GetSettingsFilePath();
 
@@ -139,9 +141,18 @@ EditorSettings LoadEditorSettings() {
     if (doc.HasMember("cam_pitch") && doc["cam_pitch"].IsNumber()) settings.cam_pitch = doc["cam_pitch"].GetFloat();
 
     return settings;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[LoadEditorSettings] Exception: " << e.what() << std::endl;
+        return EditorSettings{};
+    } catch (...) {
+        std::cerr << "[LoadEditorSettings] Unknown exception" << std::endl;
+        return EditorSettings{};
+    }
 }
 
 void SaveEditorSettings(const EditorSettings& settings) {
+    try {
     const auto file_path = GetSettingsFilePath();
 
     rapidjson::Document doc;
@@ -199,6 +210,14 @@ void SaveEditorSettings(const EditorSettings& settings) {
     std::ofstream ofs(file_path, std::ios::trunc);
     if (ofs.is_open()) {
         ofs << buffer.GetString();
+    }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[SaveEditorSettings] Exception: " << e.what() << std::endl;
+        return;
+    } catch (...) {
+        std::cerr << "[SaveEditorSettings] Unknown exception" << std::endl;
+        return;
     }
 }
 

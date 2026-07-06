@@ -18,6 +18,7 @@
 #include <Windows.h>
 #include <commdlg.h>
 #include <shlobj.h>
+#include <iostream>
 #endif
 
 namespace dse::editor {
@@ -117,6 +118,7 @@ void ProjectManager::ReleaseLock() {
 // ============================================================
 
 bool ProjectManager::LoadDescriptor(const std::filesystem::path& dseproj_path) {
+    try {
     std::ifstream ifs(dseproj_path);
     if (!ifs.is_open()) {
         return false;
@@ -171,9 +173,18 @@ bool ProjectManager::LoadDescriptor(const std::filesystem::path& dseproj_path) {
 
     descriptor_ = std::move(desc);
     return true;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[ProjectManager::LoadDescriptor] Exception: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "[ProjectManager::LoadDescriptor] Unknown exception" << std::endl;
+        return false;
+    }
 }
 
 bool ProjectManager::SaveDescriptor(const std::filesystem::path& dseproj_path) {
+    try {
     rapidjson::Document doc;
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
@@ -211,6 +222,14 @@ bool ProjectManager::SaveDescriptor(const std::filesystem::path& dseproj_path) {
     }
     ofs << buffer.GetString();
     return true;
+
+    } catch (const std::exception& e) {
+        std::cerr << "[ProjectManager::SaveDescriptor] Exception: " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "[ProjectManager::SaveDescriptor] Unknown exception" << std::endl;
+        return false;
+    }
 }
 
 // ============================================================
