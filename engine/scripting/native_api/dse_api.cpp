@@ -14,6 +14,8 @@
 #include "engine/assets/asset_manager.h"
 #include "engine/input/input.h"
 #include "engine/base/time.h"
+#include "engine/platform/screen.h"
+#include "engine/ecs/floating_origin_system.h"
 
 #include <glm/glm.hpp>
 #include <algorithm>
@@ -29,6 +31,13 @@ struct NativeApiContext {
     float (*get_fps_fn)(void)          = nullptr;
     void  (*set_fps_fn)(float)         = nullptr;
     int   (*get_draw_calls_fn)(void)   = nullptr;
+    // Extended context (via dse_native_api_init_ext)
+    int   (*get_max_batch_sprites_fn)(void)      = nullptr;
+    int   (*get_sprite_count_fn)(void)           = nullptr;
+    int   (*get_gpu_driven_active_fn)(void)      = nullptr;
+    int   (*get_gpu_indirect_draw_count_fn)(void) = nullptr;
+    int   (*get_gpu_total_instances_fn)(void)    = nullptr;
+    void* floating_origin = nullptr;
 };
 
 static NativeApiContext g_ctx;
@@ -287,4 +296,212 @@ extern "C" float dse_app_get_target_fps(void) {
 
 extern "C" int dse_metrics_get_draw_calls(void) {
     return g_ctx.get_draw_calls_fn ? g_ctx.get_draw_calls_fn() : 0;
+}
+
+// ============================================================
+// Extended Context Setup
+// ============================================================
+
+extern "C" void dse_native_api_init_ext(
+    int   (*get_max_batch_sprites_fn)(void),
+    int   (*get_sprite_count_fn)(void),
+    int   (*get_gpu_driven_active_fn)(void),
+    int   (*get_gpu_indirect_draw_count_fn)(void),
+    int   (*get_gpu_total_instances_fn)(void),
+    void* floating_origin)
+{
+    g_ctx.get_max_batch_sprites_fn       = get_max_batch_sprites_fn;
+    g_ctx.get_sprite_count_fn           = get_sprite_count_fn;
+    g_ctx.get_gpu_driven_active_fn      = get_gpu_driven_active_fn;
+    g_ctx.get_gpu_indirect_draw_count_fn = get_gpu_indirect_draw_count_fn;
+    g_ctx.get_gpu_total_instances_fn    = get_gpu_total_instances_fn;
+    g_ctx.floating_origin               = floating_origin;
+}
+
+extern "C" void* dse_get_floating_origin_ptr(void) { return g_ctx.floating_origin; }
+
+// ============================================================
+// Input 扩展
+// ============================================================
+
+extern "C" float dse_input_get_screen_width(void) {
+    return static_cast<float>(Screen::width());
+}
+
+extern "C" float dse_input_get_screen_height(void) {
+    return static_cast<float>(Screen::height());
+}
+
+extern "C" int dse_input_get_gamepad_button(int gamepad_id, int button) {
+    return Input::GetGamepadButton(gamepad_id, button) ? 1 : 0;
+}
+
+extern "C" int dse_input_get_gamepad_button_down(int gamepad_id, int button) {
+    return Input::GetGamepadButtonDown(gamepad_id, button) ? 1 : 0;
+}
+
+extern "C" int dse_input_get_gamepad_button_up(int gamepad_id, int button) {
+    return Input::GetGamepadButtonUp(gamepad_id, button) ? 1 : 0;
+}
+
+extern "C" int dse_input_is_gamepad_connected(int gamepad_id) {
+    return Input::IsGamepadConnected(gamepad_id) ? 1 : 0;
+}
+
+extern "C" void dse_input_set_gamepad_dead_zone(float zone) {
+    Input::SetGamepadDeadZone(zone);
+}
+
+extern "C" float dse_input_get_gamepad_dead_zone(void) {
+    return Input::GetGamepadDeadZone();
+}
+
+extern "C" float dse_input_get_mouse_scroll_dx(void) {
+    return 0.0f;  // GLFW only reports vertical scroll
+}
+
+extern "C" float dse_input_get_mouse_scroll_dy(void) {
+    return Input::mouseScroll();
+}
+
+extern "C" int dse_input_get_mouse_middle(void) {
+    return Input::GetMouseButton(2) ? 1 : 0;
+}
+
+extern "C" int dse_input_get_mouse_middle_down(void) {
+    return Input::GetMouseButtonDown(2) ? 1 : 0;
+}
+
+extern "C" int dse_input_get_mouse_left_double_click(void) {
+    return Input::GetDoubleClick(0) ? 1 : 0;
+}
+
+extern "C" int dse_input_get_mouse_left_long_press(float duration) {
+    return Input::GetLongPress(0, duration) ? 1 : 0;
+}
+
+extern "C" float dse_input_get_mouse_swipe_dx(void) {
+    return Input::GetSwipeDelta().x;
+}
+
+extern "C" float dse_input_get_mouse_swipe_dy(void) {
+    return Input::GetSwipeDelta().y;
+}
+
+extern "C" int dse_input_get_device_shake(void) {
+    return Input::IsDeviceShaking() ? 1 : 0;
+}
+
+extern "C" int dse_input_get_touch_count(void) {
+    return 0;  // Desktop: no touch
+}
+
+extern "C" int dse_input_get_touch(int index, float* out_x, float* out_y, int* out_phase) {
+    if (out_x) *out_x = 0.0f;
+    if (out_y) *out_y = 0.0f;
+    if (out_phase) *out_phase = 0;
+    return 0;  // Desktop: no touch
+}
+
+// ============================================================
+// App / Time 扩展
+// ============================================================
+
+extern "C" float dse_app_get_time_since_startup(void) {
+    return Time::TimeSinceStartup();
+}
+
+extern "C" void dse_app_set_time_scale(float scale) {
+    Time::set_time_scale(scale);
+}
+
+extern "C" float dse_app_get_time_scale(void) {
+    return Time::time_scale();
+}
+
+extern "C" float dse_app_get_fps(void) {
+    float dt = Time::delta_time();
+    return (dt > 0.0f) ? (1.0f / dt) : 0.0f;
+}
+
+extern "C" float dse_app_get_frame_time_ms(void) {
+    return Time::delta_time() * 1000.0f;
+}
+
+// ============================================================
+// Metrics 扩展
+// ============================================================
+
+extern "C" int dse_metrics_get_max_batch_sprites(void) {
+    return g_ctx.get_max_batch_sprites_fn ? g_ctx.get_max_batch_sprites_fn() : 0;
+}
+
+extern "C" int dse_metrics_get_sprite_count(void) {
+    return g_ctx.get_sprite_count_fn ? g_ctx.get_sprite_count_fn() : 0;
+}
+
+extern "C" int dse_metrics_get_gpu_driven_active(void) {
+    return g_ctx.get_gpu_driven_active_fn ? g_ctx.get_gpu_driven_active_fn() : 0;
+}
+
+extern "C" int dse_metrics_get_gpu_indirect_draw_count(void) {
+    return g_ctx.get_gpu_indirect_draw_count_fn ? g_ctx.get_gpu_indirect_draw_count_fn() : 0;
+}
+
+extern "C" int dse_metrics_get_gpu_total_instances(void) {
+    return g_ctx.get_gpu_total_instances_fn ? g_ctx.get_gpu_total_instances_fn() : 0;
+}
+
+extern "C" float dse_metrics_get_fps(void) {
+    float dt = Time::delta_time();
+    return (dt > 0.0f) ? (1.0f / dt) : 0.0f;
+}
+
+extern "C" float dse_metrics_get_frame_time_ms(void) {
+    return Time::delta_time() * 1000.0f;
+}
+
+// ============================================================
+// Floating Origin
+// ============================================================
+
+static dse::FloatingOriginSystem* GetFO() {
+    return static_cast<dse::FloatingOriginSystem*>(g_ctx.floating_origin);
+}
+
+extern "C" void dse_origin_get_accumulated(float* out_x, float* out_y, float* out_z) {
+    auto* fo = GetFO();
+    if (!fo) { if (out_x) *out_x = 0; if (out_y) *out_y = 0; if (out_z) *out_z = 0; return; }
+    const auto& acc = fo->accumulated_origin();
+    if (out_x) *out_x = static_cast<float>(acc.x);
+    if (out_y) *out_y = static_cast<float>(acc.y);
+    if (out_z) *out_z = static_cast<float>(acc.z);
+}
+
+extern "C" void dse_origin_to_absolute(float lx, float ly, float lz, float* out_x, float* out_y, float* out_z) {
+    auto* fo = GetFO();
+    if (!fo) { if (out_x) *out_x = lx; if (out_y) *out_y = ly; if (out_z) *out_z = lz; return; }
+    glm::dvec3 abs = fo->ToAbsolute(glm::vec3(lx, ly, lz));
+    if (out_x) *out_x = static_cast<float>(abs.x);
+    if (out_y) *out_y = static_cast<float>(abs.y);
+    if (out_z) *out_z = static_cast<float>(abs.z);
+}
+
+extern "C" void dse_origin_to_local(float ax, float ay, float az, float* out_x, float* out_y, float* out_z) {
+    auto* fo = GetFO();
+    if (!fo) { if (out_x) *out_x = ax; if (out_y) *out_y = ay; if (out_z) *out_z = az; return; }
+    glm::vec3 loc = fo->ToLocal(glm::dvec3(ax, ay, az));
+    if (out_x) *out_x = loc.x;
+    if (out_y) *out_y = loc.y;
+    if (out_z) *out_z = loc.z;
+}
+
+extern "C" void dse_origin_set_rebase_threshold(float threshold) {
+    auto* fo = GetFO();
+    if (fo) fo->set_rebase_threshold(threshold);
+}
+
+extern "C" float dse_origin_get_rebase_threshold(void) {
+    auto* fo = GetFO();
+    return fo ? fo->rebase_threshold() : 5000.0f;
 }

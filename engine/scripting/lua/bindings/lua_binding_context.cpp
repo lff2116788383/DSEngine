@@ -31,6 +31,14 @@ void ConfigureBindingContext(const LuaApiContext& context) {
         []() -> float { return g_binding_context.get_target_fps ? g_binding_context.get_target_fps() : 60.0f; },
         [](float f) { if (g_binding_context.set_target_fps) g_binding_context.set_target_fps(f); },
         []() -> int { return g_binding_context.get_draw_calls ? g_binding_context.get_draw_calls() : 0; });
+
+    dse_native_api_init_ext(
+        []() -> int { return g_binding_context.get_max_batch_sprites ? g_binding_context.get_max_batch_sprites() : 0; },
+        []() -> int { return g_binding_context.get_sprite_count ? g_binding_context.get_sprite_count() : 0; },
+        []() -> int { return g_binding_context.get_gpu_driven_active ? g_binding_context.get_gpu_driven_active() : 0; },
+        []() -> int { return g_binding_context.get_gpu_indirect_draw_count ? g_binding_context.get_gpu_indirect_draw_count() : 0; },
+        []() -> int { return g_binding_context.get_gpu_total_instances ? g_binding_context.get_gpu_total_instances() : 0; },
+        context.floating_origin);
 }
 
 void RegisterContextBindings(lua_State* L) {

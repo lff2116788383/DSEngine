@@ -17,7 +17,8 @@ EXISTING = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "N
 OUT = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "NativeManual.gen.cs")
 
 SKIP = {"dse_native_api_init", "dse_get_world_ptr", "dse_get_asset_manager_ptr",
-        "dse_get_audio_system_ptr"}
+        "dse_get_audio_system_ptr", "dse_native_api_init_ext",
+        "dse_get_floating_origin_ptr"}
 
 RET_MAP = {"void": "void", "int": "int", "float": "float", "uint32_t": "uint"}
 
@@ -25,6 +26,7 @@ RET_MAP = {"void": "void", "int": "int", "float": "float", "uint32_t": "uint"}
 ARRAY_OUT_NAMES = {
     "out_xyz", "out_vel", "out_origin", "out_dir", "out_point", "out_normal",
     "out_velocity", "out", "buf", "out_hit_xyz", "out_entities",
+    "out_uv", "out_positions", "out_rgba", "out_accel", "out_buf", "out_types",
 }
 
 
@@ -99,26 +101,66 @@ def parse_args(args: str):
 
 # 公开门面分组：前缀 -> (类名, 需剥离的前缀)
 GROUPS = [
+    # --- Core / App / Input ---
     ("input_", "Input"),
     ("app_", "App"),
     ("assets_", "Assets"),
     ("metrics_", "Metrics"),
     ("render_", "Render"),
+    ("origin_", "FloatingOrigin"),
+
+    # --- Physics3D ---
     ("physics3d_", "Physics3D"),
     ("rigidbody3d_", "RigidBody3D"),
     ("collision_", "Collision"),
     ("collider_", "Collider"),
     ("joint3d_", "Joint3D"),
     ("character_controller3d_", "CharacterController3D"),
-    ("terrain_heightmap_", "Terrain"),
-    ("terrain_", "Terrain"),
-    ("box_collider3d_", "BoxCollider3D"),
-    ("sphere_collider3d_", "SphereCollider3D"),
-    ("capsule_collider3d_", "CapsuleCollider3D"),
+
+    # --- Physics2D ---
+    ("physics2d_", "Physics2D"),
+
+    # --- 2D Systems ---
+    ("parallax_", "Parallax"),
+    ("light2d_", "Light2D"),
+    ("normal_map_2d_", "Light2D"),
+    ("sprite_sheet_", "SpriteSheet"),
+    ("atlas_", "Atlas"),
+    ("camera_controller_2d_", "Camera2D"),
+    ("camera_2d_", "Camera2D"),
+    ("trail_", "TrailRenderer"),
+    ("line_renderer_", "LineRenderer"),
+    ("audio_spatial_2d_", "AudioSpatial2D"),
+    ("audio_listener_2d_", "AudioListener2D"),
+
+    # --- Particles3D ---
+    ("particle_system_3d_", "Particles3D"),
+    ("particle_emitter_", "Particles3D"),
+    ("particle_", "Particles3D"),
+
+    # --- Rendering (extended) ---
+    ("rendering_", "Rendering"),
+    ("free_camera_", "FreeCamera"),
+    ("camera_", "Camera"),
+    ("sprite_", "Sprite"),
     ("mesh_collider3d_", "MeshCollider3D"),
+    ("mesh_", "Mesh"),
+    ("steering_", "Steering"),
+    ("lod_", "Lod"),
+    ("hair_", "Hair"),
+    ("decal_", "Decal"),
+    ("post_process_", "PostProcess"),
+
+    # --- Animation ---
     ("anim2d_", "Anim2D"),
     ("anim3d_", "Anim3D"),
     ("animlayer_", "AnimLayer"),
+
+    # --- Gameplay3D ---
+    ("character_", "Character3D"),
+    ("gameplay_", "Gameplay3D"),
+
+    # --- IK / Physics FX ---
     ("ik_", "Ik"),
     ("foot_ik_", "FootIk"),
     ("bone_attach_", "BoneAttachment"),
@@ -131,6 +173,8 @@ GROUPS = [
     ("vehicle_", "Vehicle"),
     ("rope_", "Rope"),
     ("buoyancy_", "Buoyancy"),
+
+    # --- Environment ---
     ("weather_", "Weather"),
     ("snow_cover_", "Snow"),
     ("snow_", "Snow"),
@@ -138,14 +182,61 @@ GROUPS = [
     ("day_night_", "DayNight"),
     ("volumetric_cloud_", "Cloud"),
     ("cloud_", "Cloud"),
+
+    # --- Audio ---
     ("audio_source_", "AudioSource"),
     ("audio_listener_", "AudioListener"),
     ("audio_", "Audio"),
+
+    # --- Navigation ---
     ("nav_agent_", "NavAgent"),
     ("nav_", "Nav"),
+
+    # --- Terrain ---
+    ("terrain_heightmap_", "Terrain"),
+    ("terrain_", "Terrain"),
+
+    # --- Misc existing ---
+    ("box_collider3d_", "BoxCollider3D"),
+    ("sphere_collider3d_", "SphereCollider3D"),
+    ("capsule_collider3d_", "CapsuleCollider3D"),
     ("l10n_", "Localization"),
     ("scene_", "Scene"),
     ("ui_", "Ui"),
+
+    # --- Open World ---
+    ("wp_", "WorldPartition"),
+    ("hlod_", "Hlod"),
+    ("vt_", "VirtualTexture"),
+    ("clipmap_", "Clipmap"),
+    ("sdf_", "Sdf"),
+    ("ai_lod_", "AiLod"),
+    ("gpu_particle_", "GpuParticle"),
+    ("wsp_", "WorldStatePersistence"),
+    ("procedural_", "Procedural"),
+
+    # --- Streaming ---
+    ("streaming_", "Streaming"),
+
+    # --- HTTP ---
+    ("http_", "Http"),
+
+    # --- Video ---
+    ("video_", "Video"),
+
+    # --- DSSL ---
+    ("dssl_", "Dssl"),
+
+    # --- Meshlet ---
+    ("meshlet_", "Meshlet"),
+
+    # --- World Systems ---
+    ("spline_", "Spline"),
+    ("ocean_", "Ocean"),
+    ("editor_", "Editor"),
+    ("vsm_", "Vsm"),
+    ("eqs_", "Eqs"),
+    ("dist_", "Distribution"),
 ]
 
 FACADE_OUT = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "ApiManual.gen.cs")
