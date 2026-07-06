@@ -1,41 +1,31 @@
+/**
+ * @file lua_binding_spine.cpp
+ * @brief Lua Spine 绑定 — C ABI 薄包装
+ */
+
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
-#include "engine/scripting/lua/bindings/lua_binding_context.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/sprite.h"
+#include "engine/scripting/native_api/dse_api.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
 
 namespace dse::runtime::lua_binding {
 
+// dse.spine.add_renderer(entity, skel_path, atlas_path)
 int L_SpineAddRenderer(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    
-    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* skel_path = luaL_checkstring(L, 2);
     const char* atlas_path = luaL_checkstring(L, 3);
-    
-    auto& spine = world->registry().emplace_or_replace<SpineRendererComponent>(e);
-    spine.skeleton_data_path = skel_path;
-    spine.atlas_path = atlas_path;
+    dse_spine_add_renderer(e, skel_path, atlas_path);
     return 0;
 }
 
+// dse.spine.set_animation(entity, anim_name, loop)
 int L_SpineSetAnimation(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    
-    Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* anim_name = luaL_checkstring(L, 2);
-    bool loop = lua_toboolean(L, 3);
-    
-    if (world->registry().valid(e) && world->registry().all_of<SpineRendererComponent>(e)) {
-        auto& spine = world->registry().get<SpineRendererComponent>(e);
-        spine.current_animation = anim_name;
-        spine.loop = loop;
-        spine.dirty_animation = true;
-    }
+    int loop = lua_toboolean(L, 3) ? 1 : 0;
+    dse_spine_set_animation(e, anim_name, loop);
     return 0;
 }
 

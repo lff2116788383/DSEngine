@@ -1,16 +1,14 @@
 /**
  * @file lua_binding_ecs_physics2d.cpp
  * @brief ECS Lua 绑定 — 2D 物理（RigidBody2D、BoxCollider2D、Raycast、碰撞事件）+ Tilemap
+ *
+ * 薄包装：仅做 Lua 参数读取与结果入栈，所有逻辑委托 C ABI（dse_api_physics2d.cpp）。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/physics_2d.h"
-#include "engine/ecs/tilemap.h"
-#include "engine/core/service_locator.h"
-#include "engine/physics/physics2d/physics2d_system.h"
-#include <box2d/box2d.h>
+#include "engine/scripting/native_api/dse_api.h"
+#include <vector>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -18,348 +16,193 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
-void MarkRigidBodySyncDirty(World& world, Entity e) {
-    if (auto* rb = helper::TryGetComponent<RigidBody2DComponent>(world, e)) {
-        rb->sync_dirty_ = true;
-    }
-}
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
 
 int L_EcsAddRigidBody(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     int type = helper::OptInt(L, 2, 2);
     float gravity_scale = helper::OptFloat(L, 3, 1.0f);
     int fixed_rotation = helper::OptInt(L, 4, 0);
-    auto& rb = world->registry().emplace_or_replace<RigidBody2DComponent>(e);
-    if (type <= 0) {
-        rb.type = RigidBody2DType::Static;
-    } else if (type == 1) {
-        rb.type = RigidBody2DType::Kinematic;
-    } else {
-        rb.type = RigidBody2DType::Dynamic;
-    }
-    rb.gravity_scale = gravity_scale;
-    rb.fixed_rotation = fixed_rotation != 0;
-    rb.sync_dirty_ = true;
+    dse_physics2d_add_rigidbody(e, type, gravity_scale, fixed_rotation);
+    return 0;
+}
+
+int L_EcsSetRigidBodyVelocity(lua_State* L) {
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    float vx = helper::CheckFloat(L, 2);
+    float vy = helper::CheckFloat(L, 3);
+    dse_physics2d_set_rigidbody_velocity(e, vx, vy);
     return 0;
 }
 
 int L_EcsAddBoxCollider(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     float w = helper::CheckFloat(L, 2);
     float h = helper::CheckFloat(L, 3);
     float density = helper::OptFloat(L, 4, 1.0f);
     float friction = helper::OptFloat(L, 5, 0.3f);
     float restitution = helper::OptFloat(L, 6, 0.0f);
-    auto& collider = world->registry().emplace_or_replace<BoxCollider2DComponent>(e);
-    collider.size = glm::vec2(w, h);
-    collider.density = density;
-    collider.friction = friction;
-    collider.restitution = restitution;
-    MarkRigidBodySyncDirty(*world, e);
+    dse_physics2d_add_box_collider(e, w, h, density, friction, restitution);
     return 0;
 }
 
 int L_EcsSetBoxColliderTrigger(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    bool is_trigger = helper::CheckBool(L, 2);
-    auto* collider = helper::TryGetComponent<BoxCollider2DComponent>(*world, e);
-    if (!collider) return 0;
-    collider->is_trigger = is_trigger;
-    if (collider->runtime_fixture != nullptr) {
-        collider->runtime_fixture->SetSensor(is_trigger);
-    }
-    MarkRigidBodySyncDirty(*world, e);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
+    dse_physics2d_set_box_collider_trigger(e, is_trigger);
     return 0;
-}
-
-int L_EcsSetRigidBodyVelocity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float vx = helper::CheckFloat(L, 2);
-    float vy = helper::CheckFloat(L, 3);
-    auto* rb = helper::TryGetComponent<RigidBody2DComponent>(*world, e);
-    if (!rb) return 0;
-    rb->velocity = glm::vec2(vx, vy);
-    if (rb->runtime_body != nullptr) {
-        rb->runtime_body->SetLinearVelocity(b2Vec2{vx, vy});
-        rb->runtime_body->SetAwake(true);
-    }
-    return 0;
-}
-
-int L_EcsRaycast2D(lua_State* L) {
-    auto* physics = dse::core::ServiceLocator::Instance().Get<Physics2DSystem>();
-    if (physics == nullptr) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    glm::vec2 start(helper::CheckFloat(L, 1), helper::CheckFloat(L, 2));
-    glm::vec2 end(helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
-
-    Entity hit_entity = entt::null;
-    glm::vec2 hit_point(0.0f);
-    glm::vec2 hit_normal(0.0f);
-    if (!physics->Raycast(start, end, hit_entity, hit_point, hit_normal)) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    lua_pushboolean(L, 1);
-    helper::PushEntity(L, hit_entity);
-    helper::PushFloat(L, hit_point.x);
-    helper::PushFloat(L, hit_point.y);
-    helper::PushFloat(L, hit_normal.x);
-    helper::PushFloat(L, hit_normal.y);
-    return 6;
-}
-
-int L_EcsPollCollisionEvent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-    Entity e = helper::CheckEntity(L, 1);
-    auto* rb = helper::TryGetComponent<RigidBody2DComponent>(*world, e);
-    if (!rb) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    if (rb->pending_contact_events.empty()) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-
-    const Physics2DContactEvent event = rb->pending_contact_events.front();
-    rb->pending_contact_events.pop_front();
-    lua_pushboolean(L, 1);
-    helper::PushEntity(L, event.other);
-    helper::PushBool(L, event.is_trigger);
-    helper::PushBool(L, event.is_enter);
-    return 4;
 }
 
 int L_EcsAddCircleCollider(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     float radius = helper::CheckFloat(L, 2);
     float density = helper::OptFloat(L, 3, 1.0f);
     float friction = helper::OptFloat(L, 4, 0.3f);
     float restitution = helper::OptFloat(L, 5, 0.0f);
-    auto& collider = world->registry().emplace_or_replace<CircleCollider2DComponent>(e);
-    collider.radius = radius;
-    collider.density = density;
-    collider.friction = friction;
-    collider.restitution = restitution;
-    MarkRigidBodySyncDirty(*world, e);
+    dse_physics2d_add_circle_collider(e, radius, density, friction, restitution);
     return 0;
 }
 
 int L_EcsSetCircleColliderTrigger(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    bool is_trigger = helper::CheckBool(L, 2);
-    auto* collider = helper::TryGetComponent<CircleCollider2DComponent>(*world, e);
-    if (!collider) return 0;
-    collider->is_trigger = is_trigger;
-    if (collider->runtime_fixture != nullptr) {
-        collider->runtime_fixture->SetSensor(is_trigger);
-    }
-    MarkRigidBodySyncDirty(*world, e);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
+    dse_physics2d_set_circle_collider_trigger(e, is_trigger);
     return 0;
 }
 
-// ============================================================
-// PolygonCollider2DComponent 绑定
-// ============================================================
-
 int L_EcsAddPolygonCollider(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    // arg2: Lua table of vertices {{x1,y1},{x2,y2},...}
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     luaL_checktype(L, 2, LUA_TTABLE);
     int n = static_cast<int>(lua_rawlen(L, 2));
+    std::vector<float> verts(n * 2);
+    for (int i = 0; i < n; ++i) {
+        lua_rawgeti(L, 2, i + 1);
+        lua_rawgeti(L, -1, 1); verts[i * 2]     = static_cast<float>(lua_tonumber(L, -1)); lua_pop(L, 1);
+        lua_rawgeti(L, -1, 2); verts[i * 2 + 1] = static_cast<float>(lua_tonumber(L, -1)); lua_pop(L, 1);
+        lua_pop(L, 1);
+    }
     float density = helper::OptFloat(L, 3, 1.0f);
     float friction = helper::OptFloat(L, 4, 0.3f);
     float restitution = helper::OptFloat(L, 5, 0.0f);
-
-    auto& pc = world->registry().emplace_or_replace<PolygonCollider2DComponent>(e);
-    pc.vertices.clear();
-    pc.vertices.reserve(n);
-    for (int i = 1; i <= n; ++i) {
-        lua_rawgeti(L, 2, i);
-        lua_rawgeti(L, -1, 1);
-        float vx = static_cast<float>(lua_tonumber(L, -1));
-        lua_pop(L, 1);
-        lua_rawgeti(L, -1, 2);
-        float vy = static_cast<float>(lua_tonumber(L, -1));
-        lua_pop(L, 1);
-        lua_pop(L, 1); // pop sub-table
-        pc.vertices.push_back(glm::vec2(vx, vy));
-    }
-    pc.density = density;
-    pc.friction = friction;
-    pc.restitution = restitution;
-    MarkRigidBodySyncDirty(*world, e);
+    dse_physics2d_add_polygon_collider(e, verts.data(), n, density, friction, restitution);
     return 0;
 }
 
 int L_EcsSetPolygonColliderTrigger(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    bool is_trigger = helper::CheckBool(L, 2);
-    auto* collider = helper::TryGetComponent<PolygonCollider2DComponent>(*world, e);
-    if (!collider) return 0;
-    collider->is_trigger = is_trigger;
-    if (collider->runtime_fixture != nullptr) {
-        collider->runtime_fixture->SetSensor(is_trigger);
-    }
-    MarkRigidBodySyncDirty(*world, e);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
+    dse_physics2d_set_polygon_collider_trigger(e, is_trigger);
     return 0;
 }
 
-// ============================================================
-// Joint2DComponent 绑定
-// ============================================================
-
-/// add_joint_2d(entity, type_int, entity_a, entity_b,
-///              anchor_ax, anchor_ay, anchor_bx, anchor_by,
-///              collide_connected)
-/// type: 0=Revolute, 1=Distance, 2=Prismatic, 3=Weld
 int L_EcsAddJoint2D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     int type_int = helper::CheckInt(L, 2);
-    Entity entity_a = helper::CheckEntity(L, 3);
-    Entity entity_b = helper::CheckEntity(L, 4);
+    uint32_t ea = EID(helper::CheckEntity(L, 3));
+    uint32_t eb = EID(helper::CheckEntity(L, 4));
     float ax = helper::OptFloat(L, 5, 0.0f);
     float ay = helper::OptFloat(L, 6, 0.0f);
     float bx = helper::OptFloat(L, 7, 0.0f);
     float by = helper::OptFloat(L, 8, 0.0f);
-    bool collide = helper::OptBool(L, 9, false);
-
-    auto& jc = world->registry().emplace_or_replace<Joint2DComponent>(e);
-    jc.runtime_joint = nullptr;
-    switch (type_int) {
-        case 0: jc.type = Joint2DType::Revolute; break;
-        case 1: jc.type = Joint2DType::Distance; break;
-        case 2: jc.type = Joint2DType::Prismatic; break;
-        case 3: jc.type = Joint2DType::Weld; break;
-        default: jc.type = Joint2DType::Revolute; break;
-    }
-    jc.entity_a = entity_a;
-    jc.entity_b = entity_b;
-    jc.anchor_a = glm::vec2(ax, ay);
-    jc.anchor_b = glm::vec2(bx, by);
-    jc.collide_connected = collide;
+    int collide = helper::OptBool(L, 9, false) ? 1 : 0;
+    dse_physics2d_add_joint(e, type_int, ea, eb, ax, ay, bx, by, collide);
     return 0;
 }
 
-/// set_joint_2d_revolute(entity, enable_limit, lower_deg, upper_deg,
-///                       enable_motor, motor_speed_deg, max_torque)
 int L_EcsSetJoint2DRevolute(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
-    if (!jc) return 0;
-    jc->enable_limit     = helper::OptBool(L, 2, false);
-    jc->lower_angle      = helper::OptFloat(L, 3, 0.0f);
-    jc->upper_angle      = helper::OptFloat(L, 4, 0.0f);
-    jc->enable_motor     = helper::OptBool(L, 5, false);
-    jc->motor_speed      = helper::OptFloat(L, 6, 0.0f);
-    jc->max_motor_torque = helper::OptFloat(L, 7, 0.0f);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    int enable_limit = helper::OptBool(L, 2, false) ? 1 : 0;
+    float lower = helper::OptFloat(L, 3, 0.0f);
+    float upper = helper::OptFloat(L, 4, 0.0f);
+    int enable_motor = helper::OptBool(L, 5, false) ? 1 : 0;
+    float speed = helper::OptFloat(L, 6, 0.0f);
+    float torque = helper::OptFloat(L, 7, 0.0f);
+    dse_physics2d_set_joint_revolute(e, enable_limit, lower, upper, enable_motor, speed, torque);
     return 0;
 }
 
-/// set_joint_2d_distance(entity, min_len, max_len, stiffness, damping)
 int L_EcsSetJoint2DDistance(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
-    if (!jc) return 0;
-    jc->min_length = helper::OptFloat(L, 2, 0.0f);
-    jc->max_length = helper::OptFloat(L, 3, 1.0f);
-    jc->stiffness  = helper::OptFloat(L, 4, 0.0f);
-    jc->damping    = helper::OptFloat(L, 5, 0.0f);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    float min_len = helper::OptFloat(L, 2, 0.0f);
+    float max_len = helper::OptFloat(L, 3, 1.0f);
+    float stiffness = helper::OptFloat(L, 4, 0.0f);
+    float damping = helper::OptFloat(L, 5, 0.0f);
+    dse_physics2d_set_joint_distance(e, min_len, max_len, stiffness, damping);
     return 0;
 }
 
-/// set_joint_2d_prismatic(entity, axis_x, axis_y,
-///                        enable_limit, lower, upper,
-///                        enable_motor, motor_speed, max_force)
 int L_EcsSetJoint2DPrismatic(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    auto* jc = helper::TryGetComponent<Joint2DComponent>(*world, e);
-    if (!jc) return 0;
-    jc->prismatic_axis        = glm::vec2(helper::OptFloat(L, 2, 1.0f), helper::OptFloat(L, 3, 0.0f));
-    jc->enable_limit          = helper::OptBool(L, 4, false);
-    jc->lower_translation     = helper::OptFloat(L, 5, 0.0f);
-    jc->upper_translation     = helper::OptFloat(L, 6, 0.0f);
-    jc->enable_motor          = helper::OptBool(L, 7, false);
-    jc->prismatic_motor_speed = helper::OptFloat(L, 8, 0.0f);
-    jc->max_motor_force       = helper::OptFloat(L, 9, 0.0f);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    float axis_x = helper::OptFloat(L, 2, 1.0f);
+    float axis_y = helper::OptFloat(L, 3, 0.0f);
+    int enable_limit = helper::OptBool(L, 4, false) ? 1 : 0;
+    float lower = helper::OptFloat(L, 5, 0.0f);
+    float upper = helper::OptFloat(L, 6, 0.0f);
+    int enable_motor = helper::OptBool(L, 7, false) ? 1 : 0;
+    float speed = helper::OptFloat(L, 8, 0.0f);
+    float max_force = helper::OptFloat(L, 9, 0.0f);
+    dse_physics2d_set_joint_prismatic(e, axis_x, axis_y, enable_limit, lower, upper, enable_motor, speed, max_force);
     return 0;
 }
 
-/// destroy_joint_2d(entity) — 销毁关节
 int L_EcsDestroyJoint2D(lua_State* L) {
-    auto* physics = dse::core::ServiceLocator::Instance().Get<Physics2DSystem>();
-    if (!physics) return 0;
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    physics->DestroyJoint(*world, e);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    dse_physics2d_destroy_joint(e);
     return 0;
+}
+
+int L_EcsRaycast2D(lua_State* L) {
+    float sx = helper::CheckFloat(L, 1);
+    float sy = helper::CheckFloat(L, 2);
+    float ex = helper::CheckFloat(L, 3);
+    float ey = helper::CheckFloat(L, 4);
+    uint32_t hit_entity = 0;
+    float point[2] = {0, 0};
+    float normal[2] = {0, 0};
+    if (!dse_physics2d_raycast(sx, sy, ex, ey, &hit_entity, point, normal)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, 1);
+    helper::PushEntity(L, static_cast<Entity>(static_cast<entt::id_type>(hit_entity)));
+    helper::PushFloat(L, point[0]);
+    helper::PushFloat(L, point[1]);
+    helper::PushFloat(L, normal[0]);
+    helper::PushFloat(L, normal[1]);
+    return 6;
+}
+
+int L_EcsPollCollisionEvent(lua_State* L) {
+    uint32_t e = EID(helper::CheckEntity(L, 1));
+    uint32_t other = 0;
+    int is_trigger = 0, is_enter = 0;
+    if (!dse_physics2d_poll_collision_event(e, &other, &is_trigger, &is_enter)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, 1);
+    helper::PushEntity(L, static_cast<Entity>(static_cast<entt::id_type>(other)));
+    helper::PushBool(L, is_trigger != 0);
+    helper::PushBool(L, is_enter != 0);
+    return 4;
 }
 
 int L_EcsAddTilemap(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     int width = helper::CheckInt(L, 2);
     int height = helper::CheckInt(L, 3);
     float tile_size = helper::OptFloat(L, 4, 1.0f);
-    unsigned int tex_handle = static_cast<unsigned int>(helper::OptInt(L, 5, 0));
-    auto& tilemap = world->registry().emplace_or_replace<TilemapComponent>(e);
-    tilemap.width = width;
-    tilemap.height = height;
-    tilemap.tile_size = tile_size;
-    tilemap.tileset_handle = tex_handle;
-    tilemap.tiles.resize(width * height, -1);
+    uint32_t tex_handle = static_cast<uint32_t>(helper::OptInt(L, 5, 0));
+    dse_physics2d_add_tilemap(e, width, height, tile_size, tex_handle);
     return 0;
 }
 
 int L_EcsSetTile(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(helper::CheckEntity(L, 1));
     int x = helper::CheckInt(L, 2);
     int y = helper::CheckInt(L, 3);
     int tile_id = helper::CheckInt(L, 4);
-    auto* tilemap = helper::TryGetComponent<TilemapComponent>(*world, e);
-    if (!tilemap) return 0;
-    if (x >= 0 && x < tilemap->width && y >= 0 && y < tilemap->height) {
-        tilemap->tiles[y * tilemap->width + x] = tile_id;
-        tilemap->dirty = true;
-    }
+    dse_physics2d_set_tile(e, x, y, tile_id);
     return 0;
 }
 

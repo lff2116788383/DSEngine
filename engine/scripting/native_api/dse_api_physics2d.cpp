@@ -173,18 +173,20 @@ extern "C" void dse_physics2d_set_joint_distance(uint32_t e, float min_len, floa
     jc->damping = damping;
 }
 
-extern "C" void dse_physics2d_set_joint_prismatic(uint32_t e, int enable_limit, float lower, float upper,
+extern "C" void dse_physics2d_set_joint_prismatic(uint32_t e, float axis_x, float axis_y,
+                                                  int enable_limit, float lower, float upper,
                                                   int enable_motor, float motor_speed, float max_force) {
     World* world = GW();
     if (!world) return;
     auto* jc = world->registry().try_get<Joint2DComponent>(TE(e));
     if (!jc) return;
+    jc->prismatic_axis = glm::vec2(axis_x, axis_y);
     jc->enable_limit = (enable_limit != 0);
-    jc->lower_angle = lower;
-    jc->upper_angle = upper;
+    jc->lower_translation = lower;
+    jc->upper_translation = upper;
     jc->enable_motor = (enable_motor != 0);
-    jc->motor_speed = motor_speed;
-    jc->max_motor_torque = max_force;
+    jc->prismatic_motor_speed = motor_speed;
+    jc->max_motor_force = max_force;
 }
 
 extern "C" void dse_physics2d_destroy_joint(uint32_t e) {
@@ -232,23 +234,26 @@ extern "C" int dse_physics2d_poll_collision_event(uint32_t e, uint32_t* out_othe
     return 1;
 }
 
-extern "C" void dse_physics2d_add_tilemap(uint32_t e, float origin_x, float origin_y,
-                                         float cell_w, float cell_h, int cols, int rows) {
+extern "C" void dse_physics2d_add_tilemap(uint32_t e, int width, int height,
+                                         float tile_size, uint32_t tex_handle) {
     World* world = GW();
     if (!world) return;
     auto& tm = world->registry().emplace_or_replace<TilemapComponent>(TE(e));
-    tm.origin = glm::vec2(origin_x, origin_y);
-    tm.cell_size = glm::vec2(cell_w, cell_h);
-    tm.cols = cols;
-    tm.rows = rows;
-    tm.tiles.resize(static_cast<size_t>(cols) * rows, 0);
+    tm.width = width;
+    tm.height = height;
+    tm.tile_size = tile_size;
+    tm.tileset_handle = tex_handle;
+    tm.tiles.resize(static_cast<size_t>(width) * height, -1);
+    tm.dirty = true;
 }
 
-extern "C" void dse_physics2d_set_tile(uint32_t e, int col, int row, int filled) {
+extern "C" void dse_physics2d_set_tile(uint32_t e, int x, int y, int tile_id) {
     World* world = GW();
     if (!world) return;
     auto* tm = world->registry().try_get<TilemapComponent>(TE(e));
     if (!tm) return;
-    if (col < 0 || col >= tm->cols || row < 0 || row >= tm->rows) return;
-    tm->tiles[static_cast<size_t>(row) * tm->cols + col] = filled ? 1 : 0;
+    if (x >= 0 && x < tm->width && y >= 0 && y < tm->height) {
+        tm->tiles[static_cast<size_t>(y) * tm->width + x] = tile_id;
+        tm->dirty = true;
+    }
 }

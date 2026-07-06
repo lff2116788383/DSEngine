@@ -20,11 +20,13 @@
 #include "engine/ecs/audio.h"
 #include "engine/ecs/ui.h"
 #include "engine/ecs/ui_serializer.h"
+#include "engine/ecs/sprite.h"
 #include "engine/audio/audio_system.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/localization_manager.h"
 #include "engine/scene/scene.h"
 #include "engine/core/service_locator.h"
+#include "engine/render/font/font_service.h"
 
 #ifdef DSE_ENABLE_NAVMESH
 #include "engine/navigation/nav_mesh_system.h"
@@ -666,4 +668,124 @@ extern "C" int dse_ui_load_from_json(const char* json, uint32_t* out_entities, i
     if (!w || !json) return 0;
     UISerializer serializer;
     return CopyEntities(serializer.LoadFromJson(w->registry(), json), out_entities, cap);
+}
+
+// ============================================================
+// Localization — 补充实现
+// ============================================================
+
+extern "C" int dse_l10n_load_string(const char* json, const char* locale) {
+    auto* l10n = GetL10n();
+    if (!l10n || !json || !locale) return 0;
+    return l10n->LoadLocaleFromString(json, locale) ? 1 : 0;
+}
+
+extern "C" int dse_l10n_get_locales(char* out, int cap) {
+    auto* l10n = GetL10n();
+    if (!l10n || !out || cap <= 0) return 0;
+    auto locales = l10n->GetAvailableLocales();
+    std::string packed;
+    for (size_t i = 0; i < locales.size(); ++i) {
+        if (i > 0) packed += '\0';
+        packed += locales[i];
+    }
+    int n = static_cast<int>(packed.size());
+    if (n > cap - 1) n = cap - 1;
+    std::memcpy(out, packed.data(), static_cast<size_t>(n));
+    out[n] = '\0';
+    return static_cast<int>(locales.size());
+}
+
+// ============================================================
+// Font — 字体服务
+// ============================================================
+
+namespace {
+render::FontService* GetFontService() {
+    return core::ServiceLocator::Instance().Get<render::FontService>();
+}
+}  // namespace
+
+extern "C" int dse_font_load(const char* font_id, const char* ttf_path) {
+    auto* svc = GetFontService();
+    if (!svc || !font_id || !ttf_path) return 0;
+    return svc->LoadFont(font_id, ttf_path) ? 1 : 0;
+}
+
+extern "C" int dse_font_load_cjk(const char* font_id, const char* ttf_path) {
+    auto* svc = GetFontService();
+    if (!svc || !font_id || !ttf_path) return 0;
+    // 常用汉字 (CJK Unified Ideographs 中取前 800 高频字)
+    std::vector<int> cjk_codepoints;
+    cjk_codepoints.reserve(900);
+    for (int cp = 0x4E00; cp <= 0x9FA5 && static_cast<int>(cjk_codepoints.size()) < 800; ++cp) {
+        cjk_codepoints.push_back(cp);
+    }
+    // 常用标点
+    for (int cp = 0x3000; cp <= 0x303F; ++cp) cjk_codepoints.push_back(cp);
+    for (int cp = 0xFF01; cp <= 0xFF5E; ++cp) cjk_codepoints.push_back(cp);
+    // CJK 字形数较多，临时提升图集尺寸为 4096x4096
+    auto& cfg = svc->GetConfig();
+    int old_w = cfg.default_atlas_width;
+    int old_h = cfg.default_atlas_height;
+    cfg.default_atlas_width = 4096;
+    cfg.default_atlas_height = 4096;
+    bool ok = svc->LoadFont(font_id, ttf_path, cjk_codepoints);
+    cfg.default_atlas_width = old_w;
+    cfg.default_atlas_height = old_h;
+    return ok ? 1 : 0;
+}
+
+extern "C" void dse_font_unload(const char* font_id) {
+    auto* svc = GetFontService();
+    if (svc && font_id) svc->UnloadFont(font_id);
+}
+
+extern "C" int dse_font_set_default(const char* font_id) {
+    auto* svc = GetFontService();
+    if (!svc || !font_id) return 0;
+    return svc->SetDefaultFont(font_id) ? 1 : 0;
+}
+
+extern "C" float dse_font_measure(const char* text, const char* font_id, float font_size) {
+    auto* svc = GetFontService();
+    if (!svc || !text) return 0.0f;
+    return svc->MeasureText(text, font_id ? font_id : "", font_size);
+}
+
+extern "C" float dse_font_line_height(const char* font_id, float font_size) {
+    auto* svc = GetFontService();
+    if (!svc) return 0.0f;
+    return svc->GetLineHeight(font_id ? font_id : "", font_size);
+}
+
+extern "C" uint32_t dse_font_get_texture(const char* font_id) {
+    auto* svc = GetFontService();
+    if (!svc) return 0;
+    std::string fid = font_id ? font_id : "";
+    if (fid.empty()) fid = svc->GetDefaultFontId();
+    auto* fi = svc->GetFont(fid);
+    return fi ? fi->gpu_texture_handle : 0;
+}
+
+// ============================================================
+// Spine — 骨骼动画渲染组件
+// ============================================================
+
+extern "C" void dse_spine_add_renderer(uint32_t e, const char* skel_path, const char* atlas_path) {
+    World* w = GW();
+    if (!w || !w->registry().valid(TE(e))) return;
+    auto& spine = w->registry().emplace_or_replace<SpineRendererComponent>(TE(e));
+    spine.skeleton_data_path = skel_path ? skel_path : "";
+    spine.atlas_path = atlas_path ? atlas_path : "";
+}
+
+extern "C" void dse_spine_set_animation(uint32_t e, const char* anim_name, int loop) {
+    World* w = GW();
+    if (!w || !w->registry().valid(TE(e))) return;
+    auto* spine = w->registry().try_get<SpineRendererComponent>(TE(e));
+    if (!spine || !anim_name) return;
+    spine->current_animation = anim_name;
+    spine->loop = (loop != 0);
+    spine->dirty_animation = true;
 }

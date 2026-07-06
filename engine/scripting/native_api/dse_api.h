@@ -905,10 +905,12 @@ DSE_CAPI int  dse_nav_agent_arrived(uint32_t e);
 // 字符串输出走 out 缓冲（null 结尾，按 cap 截断），返回写入长度（不含 null）。
 
 DSE_CAPI int  dse_l10n_load(const char* path, const char* locale);
+DSE_CAPI int  dse_l10n_load_string(const char* json, const char* locale);
 DSE_CAPI void dse_l10n_set_locale(const char* locale);
 DSE_CAPI int  dse_l10n_get_locale(char* out, int cap);
 DSE_CAPI int  dse_l10n_get(const char* key, char* out, int cap);
 DSE_CAPI int  dse_l10n_has_key(const char* key);
+DSE_CAPI int  dse_l10n_get_locales(char* out, int cap);  // null-separated, returns count
 
 // ============================================================
 // Scene / Prefab 序列化
@@ -1099,67 +1101,67 @@ DSE_CAPI void dse_physics2d_set_joint_revolute(uint32_t e, int enable_limit, flo
                                                 int enable_motor, float motor_speed, float max_torque);
 DSE_CAPI void dse_physics2d_set_joint_distance(uint32_t e, float min_len, float max_len,
                                                 float stiffness, float damping);
-DSE_CAPI void dse_physics2d_set_joint_prismatic(uint32_t e, int enable_limit, float lower, float upper,
+DSE_CAPI void dse_physics2d_set_joint_prismatic(uint32_t e, float axis_x, float axis_y,
+                                                 int enable_limit, float lower, float upper,
                                                  int enable_motor, float motor_speed, float max_force);
 DSE_CAPI void dse_physics2d_destroy_joint(uint32_t e);
 DSE_CAPI int  dse_physics2d_raycast(float sx, float sy, float ex, float ey,
                                     uint32_t* out_entity, float* out_point, float* out_normal);
 DSE_CAPI int  dse_physics2d_poll_collision_event(uint32_t e, uint32_t* out_other,
                                                   int* out_is_trigger, int* out_is_enter);
-DSE_CAPI void dse_physics2d_add_tilemap(uint32_t e, float origin_x, float origin_y,
-                                        float cell_w, float cell_h, int cols, int rows);
-DSE_CAPI void dse_physics2d_set_tile(uint32_t e, int col, int row, int filled);
+DSE_CAPI void dse_physics2d_add_tilemap(uint32_t e, int width, int height,
+                                        float tile_size, uint32_t tex_handle);
+DSE_CAPI void dse_physics2d_set_tile(uint32_t e, int x, int y, int tile_id);
 
 // ============================================================
 // 2D Systems（Parallax / Light2D / SpriteSheet / Atlas / Camera2D / Trail / LineRenderer / AudioSpatial2D）
 // ============================================================
 
 DSE_CAPI void  dse_parallax_add(uint32_t e);
-DSE_CAPI int   dse_parallax_add_layer(uint32_t e, float scroll_scale, int auto_scroll, float speed_x, float speed_y);
-DSE_CAPI void  dse_parallax_set_layer_scroll(uint32_t e, int layer, float scroll_scale);
-DSE_CAPI void  dse_parallax_set_layer_auto_scroll(uint32_t e, int layer, float speed_x, float speed_y);
+DSE_CAPI int   dse_parallax_add_layer(uint32_t e, float scroll_x, float scroll_y);
+DSE_CAPI void  dse_parallax_set_layer_scroll(uint32_t e, int layer, float sx, float sy);
+DSE_CAPI void  dse_parallax_set_layer_auto_scroll(uint32_t e, int layer, float sx, float sy);
 DSE_CAPI void  dse_parallax_set_layer_opacity(uint32_t e, int layer, float opacity);
 DSE_CAPI int   dse_parallax_get_layer_count(uint32_t e);
 
-DSE_CAPI void  dse_light2d_add(uint32_t e, int type, float r, float g, float b, float intensity,
-                                float range, int cast_shadow);
+DSE_CAPI void  dse_light2d_add(uint32_t e, int type);
 DSE_CAPI void  dse_light2d_set_color(uint32_t e, float r, float g, float b);
 DSE_CAPI void  dse_light2d_set_intensity(uint32_t e, float intensity);
 DSE_CAPI void  dse_light2d_set_range(uint32_t e, float range);
-DSE_CAPI void  dse_light2d_set_shadow(uint32_t e, int cast_shadow);
-DSE_CAPI void  dse_light2d_set_ambient(float r, float g, float b);
-DSE_CAPI void  dse_normal_map_2d_add(uint32_t e, uint32_t texture_handle);
+DSE_CAPI void  dse_light2d_set_shadow(uint32_t e, int mode);
+DSE_CAPI void  dse_light2d_set_ambient(uint32_t e, float r, float g, float b, float intensity);
+DSE_CAPI void  dse_normal_map_2d_add(uint32_t e, float strength);
 
-DSE_CAPI uint32_t dse_sprite_sheet_load(const char* path, int frame_w, int frame_h);
-DSE_CAPI int   dse_sprite_sheet_frame_count(uint32_t sheet);
-DSE_CAPI void  dse_sprite_sheet_get_frame_uv(uint32_t sheet, int frame, float* out_uv);
+DSE_CAPI int   dse_sprite_sheet_load(const char* path);
+DSE_CAPI int   dse_sprite_sheet_frame_count(int sheet);
+DSE_CAPI void  dse_sprite_sheet_get_frame_uv(int sheet, int frame, float* out_uv);
 
-DSE_CAPI uint32_t dse_atlas_load(const char* path);
-DSE_CAPI int   dse_atlas_entry_count(uint32_t atlas);
-DSE_CAPI void  dse_atlas_get_entry_uv(uint32_t atlas, int index, float* out_uv);
+DSE_CAPI int   dse_atlas_load(const char* path);
+DSE_CAPI int   dse_atlas_entry_count(int atlas);
+DSE_CAPI void  dse_atlas_get_entry_uv(int atlas, const char* name, float* out_uv);
 
-DSE_CAPI void  dse_camera_controller_2d_add(uint32_t e, uint32_t target);
-DSE_CAPI void  dse_camera_2d_shake(float intensity, float duration);
-DSE_CAPI void  dse_camera_2d_set_zoom(float zoom);
-DSE_CAPI void  dse_camera_2d_set_bounds(float min_x, float min_y, float max_x, float max_y);
-DSE_CAPI void  dse_camera_2d_set_look_ahead(float distance, float speed);
+DSE_CAPI void  dse_camera_controller_2d_add(uint32_t e);
+DSE_CAPI void  dse_camera_2d_shake(uint32_t e, float trauma);
+DSE_CAPI void  dse_camera_2d_set_zoom(uint32_t e, float zoom);
+DSE_CAPI void  dse_camera_2d_set_bounds(uint32_t e, float min_x, float min_y, float max_x, float max_y);
+DSE_CAPI void  dse_camera_2d_set_look_ahead(uint32_t e, float lax, float lay);
 
-DSE_CAPI void  dse_trail_renderer_add(uint32_t e, float width, float r, float g, float b, float a);
+DSE_CAPI void  dse_trail_renderer_add(uint32_t e, float lifetime, float start_width, float end_width);
 DSE_CAPI void  dse_trail_set_emitting(uint32_t e, int emitting);
 DSE_CAPI void  dse_trail_set_colors(uint32_t e, float r1, float g1, float b1, float a1,
                                     float r2, float g2, float b2, float a2);
 DSE_CAPI void  dse_trail_clear(uint32_t e);
 
-DSE_CAPI void  dse_line_renderer_add(uint32_t e, float width, float r, float g, float b, float a);
+DSE_CAPI void  dse_line_renderer_add(uint32_t e, float width);
 DSE_CAPI void  dse_line_renderer_set_points(uint32_t e, const float* points, int count);
 DSE_CAPI void  dse_line_renderer_set_width(uint32_t e, float width);
 DSE_CAPI void  dse_line_renderer_set_color(uint32_t e, float r, float g, float b, float a);
 DSE_CAPI void  dse_line_renderer_set_closed(uint32_t e, int closed);
 
-DSE_CAPI void  dse_audio_spatial_2d_add(uint32_t e, uint32_t source_entity, float min_dist, float max_dist);
+DSE_CAPI void  dse_audio_spatial_2d_add(uint32_t e, float min_dist, float max_dist);
 DSE_CAPI void  dse_audio_spatial_2d_set_range(uint32_t e, float min_dist, float max_dist);
-DSE_CAPI void  dse_audio_spatial_2d_set_attenuation(uint32_t e, float rolloff);
-DSE_CAPI void  dse_audio_listener_2d_add(uint32_t e);
+DSE_CAPI void  dse_audio_spatial_2d_set_attenuation(uint32_t e, int model, float rolloff);
+DSE_CAPI void  dse_audio_listener_2d_add(uint32_t e, float global_volume);
 
 // ============================================================
 // Particles 3D
@@ -1281,10 +1283,10 @@ DSE_CAPI int   dse_gameplay_find_interactable(uint32_t e, uint32_t* out_target, 
 // ============================================================
 
 DSE_CAPI int   dse_wp_get_loaded_count(void);
-DSE_CAPI int   dse_wp_force_load(float x, float z, float radius);
-DSE_CAPI int   dse_wp_force_unload(float x, float z, float radius);
-DSE_CAPI void  dse_wp_world_to_cell(float x, float z, int* out_cx, int* out_cz);
-DSE_CAPI void  dse_wp_cell_to_world(int cx, int cz, float* out_x, float* out_z);
+DSE_CAPI int   dse_wp_force_load(int cx, int cz);
+DSE_CAPI int   dse_wp_force_unload(int cx, int cz);
+DSE_CAPI void  dse_wp_world_to_cell(float x, float y, float z, float cell_size, int* out_cx, int* out_cz);
+DSE_CAPI void  dse_wp_cell_to_world(int cx, int cz, float cell_size, float* out_x, float* out_y, float* out_z);
 
 DSE_CAPI int   dse_hlod_get_cluster_count(void);
 DSE_CAPI int   dse_hlod_get_active_proxy_count(void);
@@ -1302,7 +1304,7 @@ DSE_CAPI float dse_sdf_query_distance(float x, float y, float z);
 DSE_CAPI int   dse_sdf_get_cascade_count(void);
 DSE_CAPI int   dse_sdf_rebuild(void);
 
-DSE_CAPI void  dse_ai_lod_register(uint32_t e);
+DSE_CAPI void  dse_ai_lod_register(uint32_t e, float importance);
 DSE_CAPI void  dse_ai_lod_unregister(uint32_t e);
 DSE_CAPI int   dse_ai_lod_should_tick(uint32_t e);
 DSE_CAPI int   dse_ai_lod_get_level(uint32_t e);
@@ -1310,11 +1312,12 @@ DSE_CAPI void  dse_ai_lod_set_force_active(uint32_t e, int force);
 DSE_CAPI int   dse_ai_lod_get_registered_count(void);
 DSE_CAPI void  dse_ai_lod_get_config(float* out_near_dist, float* out_far_dist, int* out_max_level);
 
-DSE_CAPI void  dse_gpu_particle_set_enabled(int enabled);
-DSE_CAPI void  dse_gpu_particle_set_emission_rate(float rate);
-DSE_CAPI void  dse_gpu_particle_set_gravity(float gx, float gy, float gz);
-DSE_CAPI void  dse_gpu_particle_set_wind(float wx, float wy, float wz);
-DSE_CAPI void  dse_gpu_particle_set_color(float r, float g, float b, float a);
+DSE_CAPI void  dse_gpu_particle_set_enabled(uint32_t e, int enabled);
+DSE_CAPI void  dse_gpu_particle_set_emission_rate(uint32_t e, float rate);
+DSE_CAPI void  dse_gpu_particle_set_gravity(uint32_t e, float gx, float gy, float gz);
+DSE_CAPI void  dse_gpu_particle_set_wind(uint32_t e, float wx, float wy, float wz);
+DSE_CAPI void  dse_gpu_particle_set_color(uint32_t e, float r1, float g1, float b1, float a1,
+                                         float r2, float g2, float b2, float a2);
 
 DSE_CAPI int   dse_wsp_save_all(void);
 DSE_CAPI int   dse_wsp_save_cell(int cx, int cz);
@@ -1322,68 +1325,84 @@ DSE_CAPI int   dse_wsp_load_cell(int cx, int cz);
 DSE_CAPI int   dse_wsp_reset_cell(int cx, int cz);
 DSE_CAPI int   dse_wsp_get_dirty_count(void);
 DSE_CAPI int   dse_wsp_get_total_modifications(void);
-DSE_CAPI void  dse_wsp_record_destruction(float x, float y, float z, float radius);
+DSE_CAPI void  dse_wsp_record_destruction(int cx, int cz, uint64_t entity_id);
 
-DSE_CAPI float dse_procedural_perlin2d(float x, float y, float scale);
-DSE_CAPI float dse_procedural_simplex2d(float x, float y, float scale);
-DSE_CAPI float dse_procedural_worley2d(float x, float y, float scale);
-DSE_CAPI float dse_procedural_fbm2d(float x, float y, float scale, int octaves);
-DSE_CAPI void  dse_procedural_random_seed(int seed);
-DSE_CAPI float dse_procedural_random_float(void);
+DSE_CAPI float dse_procedural_perlin2d(float x, float y, uint32_t seed);
+DSE_CAPI float dse_procedural_simplex2d(float x, float y, uint32_t seed);
+DSE_CAPI float dse_procedural_worley2d(float x, float y, uint32_t seed);
+DSE_CAPI float dse_procedural_fbm2d(float x, float y, int octaves, float frequency,
+                                    float lacunarity, float persistence, uint32_t seed);
+DSE_CAPI void  dse_procedural_random_seed(uint64_t seed);
+DSE_CAPI float dse_procedural_random_float(float min_val, float max_val);
 
 // ============================================================
 // Streaming
 // ============================================================
 
-DSE_CAPI uint32_t dse_streaming_create_zone(float x, float y, float z, float radius);
+DSE_CAPI uint32_t dse_streaming_create_zone(const char* name, float x, float y, float z,
+                                       float load_r, float unload_r);
 DSE_CAPI void  dse_streaming_destroy_zone(uint32_t zone);
-DSE_CAPI void  dse_streaming_add_asset(uint32_t zone, const char* path);
-DSE_CAPI void  dse_streaming_add_assets(uint32_t zone, const char* const* paths, int count);
+DSE_CAPI void  dse_streaming_add_asset(uint32_t zone, const char* path, const char* type_str);
+DSE_CAPI void  dse_streaming_add_assets(uint32_t zone, const char* const* paths, int count,
+                                        const char* type_str);
 DSE_CAPI void  dse_streaming_set_zone_center(uint32_t zone, float x, float y, float z);
 DSE_CAPI void  dse_streaming_force_load(uint32_t zone);
 DSE_CAPI void  dse_streaming_force_unload(uint32_t zone);
 DSE_CAPI int   dse_streaming_get_zone_state(uint32_t zone);
 DSE_CAPI float dse_streaming_get_zone_progress(uint32_t zone);
-DSE_CAPI void  dse_streaming_set_budget(int max_loads_per_frame);
+DSE_CAPI void  dse_streaming_set_budget(int max_loads_per_frame, int max_concurrent);
 DSE_CAPI int   dse_streaming_get_active_loads(void);
 DSE_CAPI int   dse_streaming_get_zone_count(void);
 
 // ============================================================
-// HTTP
+// HTTP — 异步完成队列模型
 // ============================================================
 
-DSE_CAPI int dse_http_request(const char* method, const char* url, const char* body,
-                               const char* headers, int* out_status, char* out_body, int body_cap);
-DSE_CAPI int dse_http_get(const char* url, char* out_body, int body_cap);
-DSE_CAPI int dse_http_post(const char* url, const char* body, char* out_body, int body_cap);
-DSE_CAPI void dse_http_update(void);
-DSE_CAPI int dse_http_available(void);
+// 发送请求，返回 request_id（0 = 失败）。headers_json 为 JSON 字符串 {"K":"V",...} 或 NULL。
+DSE_CAPI uint32_t dse_http_send(const char* method, const char* url, const char* body,
+                                const char* headers_json, int timeout_sec, int verify_peer,
+                                const char* ca_file);
+// 轮询已完成的请求 ID，返回数量。每帧调用。
+DSE_CAPI int   dse_http_poll(uint32_t* out_ids, int max_ids);
+// 获取指定请求的响应数据。成功返回 1。
+DSE_CAPI int   dse_http_get_response(uint32_t request_id, int* out_status,
+                                     char* out_body, int body_cap,
+                                     char* out_error, int error_cap);
+// 内部 pump（引擎 Tick 自动调用）
+DSE_CAPI void  dse_http_update(void);
+DSE_CAPI int   dse_http_available(void);
 
 // ============================================================
-// Video
+// Video — 句柄式视频播放器
 // ============================================================
 
-DSE_CAPI uint32_t dse_video_create_player(const char* path);
+DSE_CAPI uint32_t dse_video_create_player(void);
 DSE_CAPI void  dse_video_destroy_player(uint32_t player);
-DSE_CAPI void  dse_video_play(uint32_t player);
+// play: backend: 0=Auto, 1=FFmpeg, 2=PlMpeg
+DSE_CAPI void  dse_video_play(uint32_t player, const char* path, int loop, float playback_rate,
+                             int decode_audio, int prefetch_frames, int backend);
 DSE_CAPI void  dse_video_pause(uint32_t player);
 DSE_CAPI void  dse_video_resume(uint32_t player);
 DSE_CAPI void  dse_video_stop(uint32_t player);
 DSE_CAPI void  dse_video_seek(uint32_t player, float time);
 DSE_CAPI void  dse_video_set_loop(uint32_t player, int loop);
 DSE_CAPI void  dse_video_set_playback_rate(uint32_t player, float rate);
-DSE_CAPI void  dse_video_update(uint32_t player);
-DSE_CAPI int   dse_video_get_state(uint32_t player);
+DSE_CAPI uint32_t dse_video_update(uint32_t player, float delta_time);  // 返回 texture_id
+DSE_CAPI int   dse_video_get_state(uint32_t player);   // 0=Idle,1=Playing,2=Paused,3=Stopped,4=Ended,5=Error
 DSE_CAPI float dse_video_get_time(uint32_t player);
 DSE_CAPI float dse_video_get_duration(uint32_t player);
-DSE_CAPI int   dse_video_get_texture(uint32_t player);
+DSE_CAPI void  dse_video_get_info(uint32_t player, int* out_w, int* out_h, float* out_fps,
+                                 float* out_duration, int* out_total_frames, int* out_has_audio,
+                                 int* out_sample_rate, int* out_channels,
+                                 char* out_codec, int codec_cap);
+DSE_CAPI uint32_t dse_video_get_texture(uint32_t player);
 
 // ============================================================
 // DSSL（DSEngine Shader Language）
 // ============================================================
 
 DSE_CAPI uint32_t dse_dssl_load_material(const char* path);
-DSE_CAPI uint32_t dse_dssl_create_instance(uint32_t material);
+DSE_CAPI uint32_t dse_dssl_create_instance(const char* path);
 DSE_CAPI void  dse_dssl_set_float(uint32_t instance, const char* name, float value);
 DSE_CAPI void  dse_dssl_set_color(uint32_t instance, const char* name, float r, float g, float b, float a);
 DSE_CAPI void  dse_dssl_set_vec3(uint32_t instance, const char* name, float x, float y, float z);
@@ -1394,87 +1413,319 @@ DSE_CAPI float dse_dssl_get_float(uint32_t instance, const char* name);
 DSE_CAPI void  dse_dssl_get_color(uint32_t instance, const char* name, float* out_rgba);
 
 // ============================================================
-// Meshlet
+// Meshlet — Cluster 渲染系统
 // ============================================================
 
-DSE_CAPI uint32_t dse_meshlet_build(uint32_t entity);
+// build: positions = flat xyz triplets (count = pos_count * 3), indices = uint32 array
+DSE_CAPI uint32_t dse_meshlet_build(const float* positions, int pos_count,
+                                    const uint32_t* indices, int idx_count,
+                                    uint32_t max_vertices, uint32_t max_triangles);
 DSE_CAPI int   dse_meshlet_serialize(uint32_t handle, const char* path);
 DSE_CAPI uint32_t dse_meshlet_deserialize(const char* path);
 DSE_CAPI void  dse_meshlet_destroy(uint32_t handle);
-DSE_CAPI void  dse_meshlet_get_info(uint32_t handle, int* out_meshlets, int* out_triangles);
-DSE_CAPI int   dse_meshlet_cull_create(void);
-DSE_CAPI void  dse_meshlet_cull_destroy(int cull_handle);
-DSE_CAPI void  dse_meshlet_cull_register(int cull_handle, uint32_t meshlet_handle);
-DSE_CAPI void  dse_meshlet_cull_unregister(int cull_handle, uint32_t meshlet_handle);
-DSE_CAPI void  dse_meshlet_cull_begin_frame(int cull_handle, float cam_x, float cam_y, float cam_z);
-DSE_CAPI void  dse_meshlet_cull_add_instance(int cull_handle, uint32_t meshlet_handle, const float* matrix);
-DSE_CAPI void  dse_meshlet_cull_prepare(int cull_handle);
-DSE_CAPI int   dse_meshlet_cull_execute_cpu(int cull_handle);
-DSE_CAPI void  dse_meshlet_cull_stats(int cull_handle, int* out_total, int* out_visible);
+DSE_CAPI void  dse_meshlet_get_info(uint32_t handle, int* out_meshlets, int* out_vertices,
+                                    int* out_indices, int* out_meshlet_vertices);
+DSE_CAPI uint32_t dse_meshlet_cull_create(void);
+DSE_CAPI void  dse_meshlet_cull_destroy(uint32_t cull_handle);
+DSE_CAPI uint32_t dse_meshlet_cull_register(uint32_t cull_handle, uint32_t meshlet_handle);
+DSE_CAPI void  dse_meshlet_cull_unregister(uint32_t cull_handle, uint32_t reg_handle);
+DSE_CAPI void  dse_meshlet_cull_begin_frame(uint32_t cull_handle);
+DSE_CAPI void  dse_meshlet_cull_add_instance(uint32_t cull_handle, uint32_t reg_handle,
+                                            const float* matrix16);
+// prepare: vp_matrix = 16 floats, returns instance count
+DSE_CAPI uint32_t dse_meshlet_cull_prepare(uint32_t cull_handle, const float* vp_matrix16,
+                                           float cam_x, float cam_y, float cam_z);
+// execute_cpu: vp_matrix = 16 floats, flags: bit0=frustum, bit1=occlusion, bit2=cone
+DSE_CAPI uint32_t dse_meshlet_cull_execute_cpu(uint32_t cull_handle, const float* vp_matrix16,
+                                                float cam_x, float cam_y, float cam_z,
+                                                uint32_t flags);
+DSE_CAPI void  dse_meshlet_cull_stats(uint32_t cull_handle, int* out_total, int* out_visible,
+                                      int* out_meshes, int* out_instances);
 
 // ============================================================
 // World Systems（Spline / Ocean / Editor / VSM / EQS / Distribution）
 // ============================================================
 
 // Spline
-DSE_CAPI uint32_t dse_spline_create(void);
+DSE_CAPI int   dse_spline_init(void);
+DSE_CAPI void  dse_spline_shutdown(void);
+DSE_CAPI uint32_t dse_spline_create(const char* name);
 DSE_CAPI void  dse_spline_destroy(uint32_t spline);
-DSE_CAPI void  dse_spline_add_point(uint32_t spline, float x, float y, float z);
-DSE_CAPI void  dse_spline_set_point(uint32_t spline, int index, float x, float y, float z);
+DSE_CAPI void  dse_spline_add_point(uint32_t spline, float x, float y, float z, float width);
+DSE_CAPI void  dse_spline_set_point(uint32_t spline, int index, float x, float y, float z, float width);
+DSE_CAPI void  dse_spline_remove_point(uint32_t spline, int index);
 DSE_CAPI int   dse_spline_get_point_count(uint32_t spline);
 DSE_CAPI float dse_spline_get_length(uint32_t spline);
 DSE_CAPI void  dse_spline_evaluate(uint32_t spline, float t, float* out_xyz);
 DSE_CAPI void  dse_spline_evaluate_distance(uint32_t spline, float dist, float* out_xyz);
-DSE_CAPI void  dse_spline_find_nearest(uint32_t spline, float x, float y, float z, float* out_t, float* out_xyz);
-DSE_CAPI int   dse_spline_gen_road(uint32_t spline, float width, int segments);
-DSE_CAPI int   dse_spline_gen_river(uint32_t spline, float width, float depth, int segments);
+DSE_CAPI float dse_spline_find_nearest(uint32_t spline, float x, float y, float z);
+DSE_CAPI int   dse_spline_gen_road(uint32_t spline, float segment_length, int width_segments);
+DSE_CAPI int   dse_spline_gen_river(uint32_t spline, float segment_length, float depth);
 
 // Ocean
-DSE_CAPI void  dse_ocean_update(float dt);
+DSE_CAPI int   dse_ocean_init(int fft_resolution, float tile_size, float wind_speed, float choppiness);
+DSE_CAPI void  dse_ocean_shutdown(void);
+DSE_CAPI void  dse_ocean_update(float time, float cam_x, float cam_y, float cam_z);
 DSE_CAPI float dse_ocean_get_height(float x, float z);
 DSE_CAPI void  dse_ocean_get_normal(float x, float z, float* out_xyz);
 DSE_CAPI float dse_ocean_get_foam(float x, float z);
-DSE_CAPI void  dse_ocean_set_wind(float wx, float wz, float speed);
+DSE_CAPI void  dse_ocean_set_wind(float speed, float dx, float dz);
 DSE_CAPI void  dse_ocean_set_choppiness(float choppiness);
+DSE_CAPI void  dse_ocean_get_stats(int* out_total_tiles, int* out_visible_tiles,
+                                   int* out_fft_res, float* out_max_height);
 DSE_CAPI int   dse_ocean_get_lod_count(void);
 
 // Editor helpers
-DSE_CAPI void  dse_editor_terrain_brush(float x, float z, float radius, float strength, int mode);
-DSE_CAPI void  dse_editor_place_foliage(float x, float z, float radius, int count, uint32_t type);
-DSE_CAPI void  dse_editor_erase_foliage(float x, float z, float radius);
+DSE_CAPI int   dse_editor_init(void);
+DSE_CAPI void  dse_editor_shutdown(void);
+DSE_CAPI int   dse_editor_terrain_brush(int op, float x, float y, float z, float radius,
+                                        float strength, float falloff);
+DSE_CAPI void  dse_editor_brush_preview(float x, float y, float z, float radius,
+                                        float* out_min_x, float* out_min_y,
+                                        float* out_max_x, float* out_max_y);
+DSE_CAPI int   dse_editor_place_foliage(float x, float y, float z, float radius,
+                                        float density, const char* mesh_path);
+DSE_CAPI int   dse_editor_erase_foliage(float x, float y, float z, float radius);
 DSE_CAPI int   dse_editor_get_foliage_count(void);
-DSE_CAPI void  dse_editor_begin_road(uint32_t spline);
-DSE_CAPI void  dse_editor_add_road_point(float x, float y, float z);
-DSE_CAPI void  dse_editor_end_road(void);
-DSE_CAPI void  dse_editor_undo(void);
-DSE_CAPI void  dse_editor_redo(void);
+DSE_CAPI int   dse_editor_begin_road(float width);
+DSE_CAPI void  dse_editor_add_road_point(uint32_t session, float x, float y, float z);
+DSE_CAPI void  dse_editor_end_road(uint32_t session);
+DSE_CAPI void  dse_editor_update_partition_vis(float cam_x, float cam_y, float cam_z, float cell_size);
+DSE_CAPI int   dse_editor_get_cell_count(void);
+DSE_CAPI int   dse_editor_undo(void);
+DSE_CAPI int   dse_editor_redo(void);
 
 // VSM (Virtual Shadow Maps)
-DSE_CAPI void  dse_vsm_register_light(uint32_t e);
-DSE_CAPI void  dse_vsm_unregister_light(uint32_t e);
-DSE_CAPI void  dse_vsm_invalidate(void);
+DSE_CAPI int   dse_vsm_init(uint32_t virtual_resolution, uint32_t page_size,
+                            uint32_t pool_pages, uint32_t clipmap_levels);
+DSE_CAPI void  dse_vsm_shutdown(void);
+DSE_CAPI uint32_t dse_vsm_register_light(uint32_t light_id, int is_directional,
+                                         float dx, float dy, float dz);
+DSE_CAPI void  dse_vsm_unregister_light(uint32_t light_id);
+DSE_CAPI void  dse_vsm_begin_frame(uint32_t frame, float cam_x, float cam_y, float cam_z);
+DSE_CAPI void  dse_vsm_end_frame(void);
+DSE_CAPI void  dse_vsm_invalidate(uint32_t light_id,
+                                  float min_x, float min_y, float min_z,
+                                  float max_x, float max_y, float max_z);
+DSE_CAPI void  dse_vsm_mark_page_rendered(uint32_t vx, uint32_t vy, uint32_t mip, uint32_t light_id);
 DSE_CAPI int   dse_vsm_get_pages_to_render(void);
+DSE_CAPI int   dse_vsm_lookup_page(uint32_t vx, uint32_t vy, uint32_t mip, uint32_t light_id,
+                                   uint32_t* out_px, uint32_t* out_py);
+DSE_CAPI void  dse_vsm_get_stats(int* out_total, int* out_mapped, int* out_dirty,
+                                 int* out_rendered, int* out_cache_hit, int* out_pool_usage);
 DSE_CAPI int   dse_vsm_get_clipmap_levels(void);
 
 // EQS (Environment Query System)
-DSE_CAPI uint32_t dse_eqs_create_template(void);
+DSE_CAPI int   dse_eqs_init(void);
+DSE_CAPI void  dse_eqs_shutdown(void);
+DSE_CAPI uint32_t dse_eqs_create_template(const char* name);
 DSE_CAPI void  dse_eqs_destroy_template(uint32_t tmpl);
-DSE_CAPI void  dse_eqs_set_generator(uint32_t tmpl, int type, float radius, float spacing);
-DSE_CAPI void  dse_eqs_add_scorer(uint32_t tmpl, int type, float weight);
-DSE_CAPI void  dse_eqs_set_max_results(uint32_t tmpl, int max_results);
-DSE_CAPI int   dse_eqs_execute(uint32_t tmpl, float x, float y, float z, float* out_positions, int max_results);
+DSE_CAPI void  dse_eqs_set_generator(uint32_t tmpl, int type, float radius, float spacing, int max_points);
+DSE_CAPI void  dse_eqs_add_scorer(uint32_t tmpl, int type, float weight, int invert, float max_value);
+DSE_CAPI void  dse_eqs_clear_scorers(uint32_t tmpl);
+DSE_CAPI void  dse_eqs_set_combine_mode(uint32_t tmpl, int mode);
+DSE_CAPI void  dse_eqs_set_max_results(uint32_t tmpl, uint32_t max_results);
+// execute: out = {best_x,best_y,best_z,best_score,total_generated,valid_count,query_time_ms}
+DSE_CAPI void  dse_eqs_execute(uint32_t tmpl, float x, float y, float z, float* out_result);
 DSE_CAPI int   dse_eqs_get_template_count(void);
+DSE_CAPI void  dse_eqs_execute_at(uint32_t tmpl, float px, float py, float pz,
+                                  float cx, float cy, float cz, float* out_result);
 
 // Distribution
+DSE_CAPI int   dse_dist_init(float cell_size, int max_downloads, const char* cdn_url);
+DSE_CAPI void  dse_dist_shutdown(void);
 DSE_CAPI int   dse_dist_load_manifest(const char* path);
 DSE_CAPI int   dse_dist_save_manifest(const char* path);
-DSE_CAPI int   dse_dist_package_cell(int cx, int cz, const char* output_path);
-DSE_CAPI int   dse_dist_request_download(int cx, int cz);
-DSE_CAPI int   dse_dist_cancel_download(int cx, int cz);
-DSE_CAPI void  dse_dist_tick(void);
-DSE_CAPI int   dse_dist_is_installed(int cx, int cz);
-DSE_CAPI int   dse_dist_get_disk_usage(void);
-DSE_CAPI int   dse_dist_verify(void);
+DSE_CAPI int   dse_dist_package_cell(int cx, int cz, int lod, const char* const* assets, int count);
+DSE_CAPI void  dse_dist_request_download(const char* package);
+DSE_CAPI void  dse_dist_cancel_download(const char* package);
+DSE_CAPI void  dse_dist_update_priorities(float x, float y, float z);
+DSE_CAPI void  dse_dist_tick(float dt);
+DSE_CAPI int   dse_dist_is_installed(const char* package);
+DSE_CAPI void  dse_dist_get_stats(int* out_total, int* out_installed, int* out_downloading,
+                                  int* out_pending, double* out_downloaded_bytes, double* out_speed_bps);
+DSE_CAPI int   dse_dist_get_missing(float x, float y, float z, float radius,
+                                    char* out_buf, int buf_cap);
+DSE_CAPI int   dse_dist_verify(const char* package);
+DSE_CAPI uint64_t dse_dist_get_disk_usage(void);
+
+// ============================================================
+// Font — 字体服务
+// ============================================================
+
+DSE_CAPI int   dse_font_load(const char* font_id, const char* ttf_path);
+DSE_CAPI int   dse_font_load_cjk(const char* font_id, const char* ttf_path);
+DSE_CAPI void  dse_font_unload(const char* font_id);
+DSE_CAPI int   dse_font_set_default(const char* font_id);
+DSE_CAPI float dse_font_measure(const char* text, const char* font_id, float font_size);
+DSE_CAPI float dse_font_line_height(const char* font_id, float font_size);
+DSE_CAPI uint32_t dse_font_get_texture(const char* font_id);
+
+// ============================================================
+// Spine — 骨骼动画渲染组件
+// ============================================================
+
+DSE_CAPI void  dse_spine_add_renderer(uint32_t e, const char* skel_path, const char* atlas_path);
+DSE_CAPI void  dse_spine_set_animation(uint32_t e, const char* anim_name, int loop);
+
+// ============================================================
+// PostProcess — 组件创建 / LUT 加载
+// ============================================================
+
+DSE_CAPI void  dse_post_process_add(uint32_t e);
+DSE_CAPI void  dse_post_process_set_color_lut(uint32_t e, const char* path, float intensity);
+
+// ============================================================
+// Decal — 组件创建 / 扩展字段设置
+// ============================================================
+
+DSE_CAPI void  dse_decal_add_simple(uint32_t e);
+DSE_CAPI void  dse_decal_set_full(uint32_t e, int enabled, int has_texture, uint32_t texture,
+                                   float r, float g, float b, float a, float angle_fade);
+
+// ============================================================
+// Terrain / Water / Grass / Foliage / Environment — 组件创建与复合操作
+// ============================================================
+
+DSE_CAPI void  dse_terrain_add(uint32_t e, const char* heightmap_path,
+                                float width, float depth, float max_height);
+DSE_CAPI void  dse_terrain_set_params(uint32_t e, int res_x, int res_z,
+                                       int max_lod, float lod_factor, int use_dynamic_lod);
+DSE_CAPI void  dse_terrain_set_height(uint32_t e, int x, int z, float height);
+DSE_CAPI int   dse_terrain_load_heightmap(uint32_t e, const char* path,
+                                           int* out_w, int* out_h, int* out_ch,
+                                           int* out_rx, int* out_rz);
+DSE_CAPI int   dse_terrain_set_texture(uint32_t e, const char* path,
+                                        uint32_t* out_handle, int* out_w, int* out_h);
+DSE_CAPI void  dse_terrain_get_lod(uint32_t e, int* out_lod, int* out_rx, int* out_rz,
+                                    int* out_max_lod, float* out_lod_factor);
+DSE_CAPI float dse_terrain_sample_height(uint32_t e, float wx, float wz);
+DSE_CAPI int   dse_terrain_set_splat_texture(uint32_t e, int layer, const char* path);
+
+DSE_CAPI void  dse_water_add(uint32_t e);
+DSE_CAPI void  dse_water_set(uint32_t e, int enabled, float water_level,
+                              float dr, float dg, float db,
+                              float sr, float sg, float sb,
+                              float max_depth, float transparency,
+                              float wave_amp, float wave_freq, float wave_speed,
+                              float wdir_x, float wdir_y,
+                              float refraction, float reflection, float spec_power,
+                              float caustic_int, float caustic_scale,
+                              float foam_int, float foam_threshold,
+                              float ufog_density, float ufog_r, float ufog_g, float ufog_b);
+DSE_CAPI int   dse_water_get(uint32_t e, int* out_enabled, float* out_water_level,
+                              float* out_deep_rgb, float* out_shallow_rgb,
+                              float* out_max_depth, float* out_transparency,
+                              float* out_wave, float* out_wdir,
+                              float* out_refraction, float* out_reflection, float* out_spec_power);
+
+DSE_CAPI void  dse_grass_add(uint32_t e, float density, float spawn_radius,
+                              float blade_height, float blade_width);
+DSE_CAPI void  dse_grass_set_params(uint32_t e, float density, float spawn_radius,
+                                     float blade_height, float blade_width,
+                                     float blade_height_var, float chunk_size, int seed);
+DSE_CAPI void  dse_grass_set_color(uint32_t e, float br, float bg, float bb,
+                                    float tr, float tg, float tb);
+DSE_CAPI void  dse_grass_set_wind(uint32_t e, float dx, float dy,
+                                   float speed, float strength, float turbulence);
+DSE_CAPI void  dse_grass_set_lod(uint32_t e, float near_dist, float far_dist,
+                                  int cast_shadow, float shadow_dist);
+DSE_CAPI void  dse_grass_set_enabled(uint32_t e, int enabled);
+DSE_CAPI int   dse_grass_get_stats(uint32_t e);
+
+DSE_CAPI void  dse_foliage_add(uint32_t e);
+DSE_CAPI void  dse_foliage_set_wind_strength(uint32_t e, float v);
+DSE_CAPI float dse_foliage_get_wind_strength(uint32_t e);
+DSE_CAPI void  dse_foliage_set_stiffness(uint32_t e, float v);
+DSE_CAPI float dse_foliage_get_stiffness(uint32_t e);
+DSE_CAPI void  dse_foliage_set_enabled(uint32_t e, int v);
+DSE_CAPI int   dse_foliage_get_enabled(uint32_t e);
+
+DSE_CAPI void  dse_tree_add(uint32_t e, const char* mesh_path);
+DSE_CAPI void  dse_terrain_tile_manager_add(uint32_t e);
+DSE_CAPI void  dse_dynamic_obstacle_add(uint32_t e, int shape);
+DSE_CAPI void  dse_navmesh_rebake_add(uint32_t e);
+
+// ============================================================
+// UI — 扩展控件（纯 ECS 组件操作）
+// ============================================================
+
+DSE_CAPI void  dse_ui_add_label(uint32_t e, const char* text, uint32_t font_tex_handle,
+                                 float r, float g, float b, float a,
+                                 float glyph_w, float glyph_h, float spacing,
+                                 int atlas_cols, int atlas_rows, int ascii_start,
+                                 float offset_x, float offset_y);
+DSE_CAPI void  dse_ui_set_label_number(uint32_t e, long long number);
+DSE_CAPI void  dse_ui_set_label_layout(uint32_t e, float max_width, int align,
+                                        int overflow, int max_lines, float line_spacing);
+DSE_CAPI void  dse_ui_add_mask(uint32_t e, float w, float h, float ox, float oy, int block_outside);
+DSE_CAPI void  dse_ui_add_rich_text(uint32_t e, const char* text,
+                                     float r, float g, float b, float a, int shadow, int outline);
+DSE_CAPI void  dse_ui_set_rich_text(uint32_t e, const char* text);
+DSE_CAPI void  dse_ui_set_button_scale(uint32_t e, float hover, float pressed, float lerp_speed);
+DSE_CAPI void  dse_ui_set_uv(uint32_t e, float u, float v, float w, float h);
+DSE_CAPI void  dse_ui_set_nine_slice(uint32_t e, int enabled, float l, float b, float r, float t,
+                                      float sw, float sh);
+DSE_CAPI void  dse_ui_add_anchor(uint32_t e, int anchor_type, float ox, float oy);
+DSE_CAPI void  dse_ui_set_anchor_type(uint32_t e, int anchor_type);
+DSE_CAPI void  dse_ui_set_anchor_offset(uint32_t e, float ox, float oy);
+DSE_CAPI void  dse_ui_add_grid_layout(uint32_t e, int columns, float cw, float ch,
+                                       float sx, float sy);
+DSE_CAPI void  dse_ui_set_grid_layout(uint32_t e, int columns, int rows,
+                                       float cw, float ch, float sx, float sy, int alignment);
+DSE_CAPI void  dse_ui_add_canvas_scaler(uint32_t e, float ref_w, float ref_h, int match);
+DSE_CAPI void  dse_ui_set_canvas_scaler(uint32_t e, float ref_w, float ref_h,
+                                         float scale_factor, int match_wh, float match, int pixel_snap);
+DSE_CAPI void  dse_ui_add_box_layout(uint32_t e, int vertical, float spacing,
+                                      float pad_x, float pad_y, int align_main, int align_cross, int reverse);
+DSE_CAPI void  dse_ui_set_box_layout(uint32_t e, int vertical, float spacing,
+                                      float pad_x, float pad_y, int align_main, int align_cross, int reverse);
+DSE_CAPI void  dse_ui_add_content_size_fitter(uint32_t e, int fit_w, int fit_h,
+                                                float min_w, float min_h, float max_w, float max_h);
+DSE_CAPI void  dse_ui_add_animation(uint32_t e, float duration, int easing,
+                                     int loop, int ping_pong, float delay);
+DSE_CAPI void  dse_ui_animate_position(uint32_t e, float tx, float ty);
+DSE_CAPI void  dse_ui_animate_scale(uint32_t e, float sx, float sy);
+DSE_CAPI void  dse_ui_animate_alpha(uint32_t e, float alpha);
+DSE_CAPI void  dse_ui_animate_color(uint32_t e, float r, float g, float b, float a);
+DSE_CAPI void  dse_ui_stop_animation(uint32_t e);
+DSE_CAPI void  dse_ui_set_text_input_placeholder(uint32_t e, const char* placeholder);
+DSE_CAPI void  dse_ui_add_scroll_view(uint32_t e, float cw, float ch, int horizontal, int vertical);
+DSE_CAPI void  dse_ui_set_scroll_offset(uint32_t e, float x, float y);
+DSE_CAPI void  dse_ui_get_scroll_offset(uint32_t e, float* out_x, float* out_y);
+DSE_CAPI void  dse_ui_set_scroll_content_size(uint32_t e, float w, float h);
+DSE_CAPI void  dse_ui_set_slider_colors(uint32_t e, float tr, float tg, float tb, float ta,
+                                         float fr, float fg, float fb, float fa,
+                                         float hr, float hg, float hb, float ha);
+DSE_CAPI void  dse_ui_set_slider_handle_size(uint32_t e, float size);
+DSE_CAPI void  dse_ui_set_slider_vertical(uint32_t e, int vertical);
+DSE_CAPI void  dse_ui_set_slider_range(uint32_t e, float min_val, float max_val);
+DSE_CAPI void  dse_ui_add_dropdown(uint32_t e, float item_height, int max_visible);
+DSE_CAPI void  dse_ui_dropdown_add_option(uint32_t e, const char* text, const char* value);
+DSE_CAPI void  dse_ui_dropdown_clear_options(uint32_t e);
+DSE_CAPI void  dse_ui_set_dropdown_index(uint32_t e, int index);
+DSE_CAPI int   dse_ui_get_dropdown_index(uint32_t e);
+DSE_CAPI int   dse_ui_get_dropdown_value(uint32_t e, char* out, int cap);
+DSE_CAPI void  dse_ui_set_dropdown_open(uint32_t e, int open);
+DSE_CAPI void  dse_ui_add_filled_image(uint32_t e, float fill_amount, int method, int origin, int clockwise);
+DSE_CAPI void  dse_ui_set_fill_amount(uint32_t e, float amount);
+DSE_CAPI float dse_ui_get_fill_amount(uint32_t e);
+DSE_CAPI void  dse_ui_set_fill_method(uint32_t e, int method, int origin, int clockwise);
+DSE_CAPI void  dse_ui_add_focus_navigable(uint32_t e, int tab_index);
+DSE_CAPI void  dse_ui_set_focus_nav(uint32_t e, uint32_t up, uint32_t down, uint32_t left, uint32_t right);
+DSE_CAPI int   dse_ui_is_focused(uint32_t e);
+DSE_CAPI void  dse_ui_set_focus_tint(uint32_t e, float r, float g, float b, float a);
+DSE_CAPI void  dse_ui_add_event_propagation(uint32_t e, int bubbles_click, int bubbles_hover);
+DSE_CAPI void  dse_ui_stop_propagation(uint32_t e);
+DSE_CAPI void  dse_ui_add_visual_effect(uint32_t e);
+DSE_CAPI void  dse_ui_set_corner_radius(uint32_t e, float radius);
+DSE_CAPI void  dse_ui_set_gradient(uint32_t e, float sr, float sg, float sb, float sa,
+                                    float er, float eg, float eb, float ea, int direction);
+DSE_CAPI void  dse_ui_set_blur(uint32_t e, float radius, float intensity);
+DSE_CAPI void  dse_ui_add_virtual_scroll(uint32_t e, int total_items, float item_height);
+DSE_CAPI void  dse_ui_set_virtual_scroll_count(uint32_t e, int count);
+DSE_CAPI void  dse_ui_get_virtual_scroll_range(uint32_t e, int* out_start, int* out_end);
+DSE_CAPI void  dse_ui_destroy_virtual_scroll(uint32_t e);
 
 #ifdef __cplusplus
 }
