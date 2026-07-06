@@ -188,34 +188,14 @@ extern "C" int dse_physics3d_boxcast(float ox, float oy, float oz,
 // RigidBody3D extras
 // ============================================================
 
-extern "C" void dse_rigidbody3d_sleep(uint32_t e) {
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SleepBody(TE(e));
-    }
-#endif
-}
-
-extern "C" void dse_rigidbody3d_wake(uint32_t e) {
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->WakeBody(TE(e));
-    }
-#endif
-}
-
 extern "C" void dse_rigidbody3d_set_kinematic(uint32_t e, int kinematic) {
     World* world = GW();
     if (!world) return;
     auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
     if (rb) {
+        rb->is_kinematic = (kinematic != 0);
         rb->type = kinematic ? RigidBody3DType::Kinematic : RigidBody3DType::Dynamic;
     }
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetKinematic(TE(e), kinematic != 0);
-    }
-#endif
 }
 
 extern "C" float dse_rigidbody3d_get_mass(uint32_t e) {
@@ -230,18 +210,20 @@ extern "C" void dse_rigidbody3d_set_mass(uint32_t e, float mass) {
     if (!world) return;
     auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
     if (rb) rb->mass = mass;
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetMass(TE(e), mass);
-    }
-#endif
 }
 
 extern "C" void dse_rigidbody3d_add_force_at_position(uint32_t e, float fx, float fy, float fz,
                                                        float px, float py, float pz) {
 #ifdef DSE_HAS_PHYSICS3D
+    World* world = GW();
+    if (!world) return;
     if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->AddForceAtPosition(TE(e), glm::vec3(fx, fy, fz), glm::vec3(px, py, pz));
+        const glm::vec3 force(fx, fy, fz);
+        physics->AddForce(TE(e), force);
+        if (const auto* tf = world->registry().try_get<TransformComponent>(TE(e))) {
+            const glm::vec3 lever = glm::vec3(px, py, pz) - tf->position;
+            physics->AddTorque(TE(e), glm::cross(lever, force));
+        }
     }
 #endif
 }
@@ -250,36 +232,26 @@ extern "C" void dse_rigidbody3d_set_linear_damping(uint32_t e, float damping) {
     World* world = GW();
     if (!world) return;
     auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    if (rb) rb->linear_damping = damping;
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetLinearDamping(TE(e), damping);
-    }
-#endif
+    if (rb) rb->drag = damping;
 }
 
 extern "C" float dse_rigidbody3d_get_linear_damping(uint32_t e) {
     World* world = GW();
     if (!world) return 0.0f;
     const auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    return rb ? rb->linear_damping : 0.0f;
+    return rb ? rb->drag : 0.0f;
 }
 
 extern "C" void dse_rigidbody3d_set_angular_damping(uint32_t e, float damping) {
     World* world = GW();
     if (!world) return;
     auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    if (rb) rb->angular_damping = damping;
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        physics->SetAngularDamping(TE(e), damping);
-    }
-#endif
+    if (rb) rb->angular_drag = damping;
 }
 
 extern "C" float dse_rigidbody3d_get_angular_damping(uint32_t e) {
     World* world = GW();
     if (!world) return 0.0f;
     const auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    return rb ? rb->angular_damping : 0.0f;
+    return rb ? rb->angular_drag : 0.0f;
 }

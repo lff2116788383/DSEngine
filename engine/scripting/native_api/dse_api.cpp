@@ -332,18 +332,6 @@ extern "C" float dse_input_get_screen_height(void) {
     return static_cast<float>(Screen::height());
 }
 
-extern "C" int dse_input_get_gamepad_button(int gamepad_id, int button) {
-    return Input::GetGamepadButton(gamepad_id, button) ? 1 : 0;
-}
-
-extern "C" int dse_input_get_gamepad_button_down(int gamepad_id, int button) {
-    return Input::GetGamepadButtonDown(gamepad_id, button) ? 1 : 0;
-}
-
-extern "C" int dse_input_get_gamepad_button_up(int gamepad_id, int button) {
-    return Input::GetGamepadButtonUp(gamepad_id, button) ? 1 : 0;
-}
-
 extern "C" int dse_input_is_gamepad_connected(int gamepad_id) {
     return Input::IsGamepadConnected(gamepad_id) ? 1 : 0;
 }

@@ -14,6 +14,11 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_particle.h"
+#include "engine/ecs/particle_2d.h"
+#include "engine/ecs/gameplay.h"
+#include "engine/ecs/camera.h"
+#include "engine/ecs/sprite.h"
+#include "engine/ecs/components_3d_ai.h"
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_animation.h"
 #include "engine/ecs/components_3d_character.h"
@@ -63,6 +68,13 @@ namespace {
 inline World* GW() { return static_cast<World*>(dse_get_world_ptr()); }
 inline Entity TE(uint32_t e) { return static_cast<Entity>(static_cast<entt::id_type>(e)); }
 inline AssetManager* GAM() { return static_cast<AssetManager*>(dse_get_asset_manager_ptr()); }
+inline bool Keep(float v) { return std::isnan(v); }
+inline void WriteStr(const std::string& s, char* out, int cap) {
+    if (!out || cap <= 0) return;
+    int n = std::min(static_cast<int>(s.size()), cap - 1);
+    std::memcpy(out, s.data(), static_cast<size_t>(n));
+    out[n] = '\0';
+}
 
 // Handle-based resource registries for modules without ECS components
 std::unordered_map<uint32_t, std::vector<glm::vec3>> g_spline_points;
@@ -86,120 +98,205 @@ float SmoothStep(float t) { return t * t * (3.0f - 2.0f * t); }
 // Particles 3D
 // ============================================================
 
-extern "C" void dse_particle_system_3d_add(uint32_t e) {
+extern "C" void dse_particle_system_3d_add(uint32_t e, int max_particles, float emission_rate) {
     World* world = GW();
     if (!world) return;
-    world->registry().emplace_or_replace<ParticleSystem3DComponent>(TE(e));
+    auto& ps = world->registry().emplace_or_replace<ParticleSystem3DComponent>(TE(e));
+    ps.max_particles = max_particles;
+    ps.emission_rate = emission_rate;
 }
 
-extern "C" void dse_particle_system_3d_set_params(uint32_t e, float duration, float start_speed,
-                                                  float start_size, float start_rotation,
-                                                  int max_particles, float gravity) {
+extern "C" void dse_particle_system_3d_set_params(uint32_t e,
+                                                  float life_min, float life_max,
+                                                  float size_min, float size_max,
+                                                  float speed_min, float speed_max,
+                                                  float r, float g, float b, float a,
+                                                  float gx, float gy, float gz,
+                                                  const char* texture_path) {
     World* world = GW();
     if (!world) return;
     auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
     if (!ps) return;
-    ps->duration = duration;
-    ps->start_speed = start_speed;
-    ps->start_size = start_size;
-    ps->start_rotation = start_rotation;
-    ps->max_particles = max_particles;
-    ps->gravity = gravity;
+    if (!Keep(life_min))  ps->start_life_min  = life_min;
+    if (!Keep(life_max))  ps->start_life_max  = life_max;
+    if (!Keep(size_min))  ps->start_size_min  = size_min;
+    if (!Keep(size_max))  ps->start_size_max  = size_max;
+    if (!Keep(speed_min)) ps->start_speed_min = speed_min;
+    if (!Keep(speed_max)) ps->start_speed_max = speed_max;
+    if (!Keep(r)) ps->start_color.r = r;
+    if (!Keep(g)) ps->start_color.g = g;
+    if (!Keep(b)) ps->start_color.b = b;
+    if (!Keep(a)) ps->start_color.a = a;
+    if (!Keep(gx)) ps->gravity.x = gx;
+    if (!Keep(gy)) ps->gravity.y = gy;
+    if (!Keep(gz)) ps->gravity.z = gz;
+    if (texture_path) ps->texture_path = texture_path;
 }
 
-extern "C" int dse_particle_system_3d_get_state(uint32_t e, int* out_alive, int* out_emitted) {
+extern "C" int dse_particle_system_3d_get_state(uint32_t e, int* out_active, int* out_max_particles,
+                                                float* out_emission_rate,
+                                                float* out_life, float* out_size, float* out_speed,
+                                                float* out_gravity, float* out_color,
+                                                char* out_tex, int tex_cap,
+                                                int* out_enabled, int* out_initialized,
+                                                uint32_t* out_texture_handle) {
     World* world = GW();
     if (!world) return 0;
     const auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
     if (!ps) return 0;
-    if (out_alive) *out_alive = ps->alive_count;
-    if (out_emitted) *out_emitted = ps->emitted_count;
-    return ps->is_playing ? 1 : 0;
+    if (out_active) *out_active = ps->active_particle_count;
+    if (out_max_particles) *out_max_particles = ps->max_particles;
+    if (out_emission_rate) *out_emission_rate = ps->emission_rate;
+    if (out_life)  { out_life[0] = ps->start_life_min;  out_life[1] = ps->start_life_max; }
+    if (out_size)  { out_size[0] = ps->start_size_min;  out_size[1] = ps->start_size_max; }
+    if (out_speed) { out_speed[0] = ps->start_speed_min; out_speed[1] = ps->start_speed_max; }
+    if (out_gravity) { out_gravity[0] = ps->gravity.x; out_gravity[1] = ps->gravity.y; out_gravity[2] = ps->gravity.z; }
+    if (out_color) { out_color[0] = ps->start_color.r; out_color[1] = ps->start_color.g;
+                     out_color[2] = ps->start_color.b; out_color[3] = ps->start_color.a; }
+    WriteStr(ps->texture_path, out_tex, tex_cap);
+    if (out_enabled) *out_enabled = ps->enabled ? 1 : 0;
+    if (out_initialized) *out_initialized = ps->initialized ? 1 : 0;
+    if (out_texture_handle) *out_texture_handle = ps->texture_handle;
+    return 1;
 }
 
-extern "C" void dse_particle_emitter_add(uint32_t e, int shape, float rate, float lifetime, float speed) {
+extern "C" void dse_particle_emitter_add(uint32_t e, uint32_t texture_handle, int max_particles, float emit_rate) {
     World* world = GW();
     if (!world) return;
     auto& em = world->registry().emplace_or_replace<ParticleEmitterComponent>(TE(e));
-    em.shape = static_cast<ParticleEmitterShape>(shape);
-    em.emission_rate = rate;
-    em.particle_lifetime = lifetime;
-    em.emit_speed = speed;
+    em.texture_handle = texture_handle;
+    em.max_particles = max_particles;
+    em.emit_rate = emit_rate;
 }
 
-extern "C" void dse_particle_set_density(uint32_t e, float density) {
+extern "C" void dse_particle_set_density(uint32_t e, float emit_rate_scale) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) ps->density = density;
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (pe) pe->emit_rate_scale = std::max(0.0f, emit_rate_scale);
 }
 
 extern "C" void dse_particle_burst(uint32_t e, int count) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) ps->burst_count += count;
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (pe) pe->pending_burst += std::max(0, count);
 }
 
-extern "C" void dse_particle_set_random(uint32_t e, float pos_rand, float vel_rand, float size_rand, float rot_rand) {
+extern "C" void dse_particle_set_random(uint32_t e,
+                                        float vmin_x, float vmin_y, float vmin_z,
+                                        float vmax_x, float vmax_y, float vmax_z,
+                                        float life_min, float life_max,
+                                        float size_min, float size_max) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (!ps) return;
-    ps->position_random = pos_rand;
-    ps->velocity_random = vel_rand;
-    ps->size_random = size_rand;
-    ps->rotation_random = rot_rand;
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->use_random_params = true;
+    pe->velocity_min = glm::vec3(vmin_x, vmin_y, vmin_z);
+    pe->velocity_max = glm::vec3(vmax_x, vmax_y, vmax_z);
+    if (!Keep(life_min)) pe->life_time_min = life_min;
+    if (!Keep(life_max)) pe->life_time_max = life_max;
+    if (!Keep(size_min)) pe->size_min = size_min;
+    if (!Keep(size_max)) pe->size_max = size_max;
 }
 
-extern "C" void dse_particle_set_size_curve(uint32_t e, float start_size, float end_size) {
+extern "C" void dse_particle_set_size_curve(uint32_t e, int enabled, float start_value, float end_value) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->start_size = start_size; ps->end_size = end_size; }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->size_curve.enabled = (enabled != 0);
+    if (!Keep(start_value)) pe->size_curve.start_value = start_value;
+    if (!Keep(end_value))   pe->size_curve.end_value = end_value;
 }
 
-extern "C" void dse_particle_set_alpha_curve(uint32_t e, float start_alpha, float end_alpha) {
+extern "C" void dse_particle_set_alpha_curve(uint32_t e, int enabled, float start_value, float end_value) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->start_alpha = start_alpha; ps->end_alpha = end_alpha; }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->alpha_curve.enabled = (enabled != 0);
+    if (!Keep(start_value)) pe->alpha_curve.start_value = start_value;
+    if (!Keep(end_value))   pe->alpha_curve.end_value = end_value;
 }
 
-extern "C" void dse_particle_set_speed_curve(uint32_t e, float start_speed, float end_speed) {
+extern "C" void dse_particle_set_speed_curve(uint32_t e, int enabled, float start_value, float end_value) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->start_speed = start_speed; ps->end_speed = end_speed; }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->speed_curve.enabled = (enabled != 0);
+    if (!Keep(start_value)) pe->speed_curve.start_value = start_value;
+    if (!Keep(end_value))   pe->speed_curve.end_value = end_value;
 }
 
 extern "C" void dse_particle_set_gravity(uint32_t e, float gx, float gy, float gz) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) ps->gravity_vec = glm::vec3(gx, gy, gz);
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (pe) pe->gravity = glm::vec3(gx, gy, gz);
 }
 
-extern "C" void dse_particle_set_collision(uint32_t e, int enabled, float bounce) {
+extern "C" void dse_particle_set_collision(uint32_t e, int enabled, int mode, float bounce,
+                                           float friction, float life_loss, float ground_y) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->collision_enabled = (enabled != 0); ps->collision_bounce = bounce; }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->enable_collision = (enabled != 0);
+    if (mode >= 0) pe->collision_mode = static_cast<ParticleCollisionMode>(mode);
+    if (!Keep(bounce))    pe->collision_bounce = bounce;
+    if (!Keep(friction))  pe->collision_friction = friction;
+    if (!Keep(life_loss)) pe->collision_life_loss = life_loss;
+    if (!Keep(ground_y))  pe->ground_y = ground_y;
 }
 
-extern "C" void dse_particle_set_color_curve(uint32_t e, float r1, float g1, float b1,
-                                              float r2, float g2, float b2) {
+extern "C" void dse_particle_set_color_curve(uint32_t e, int enabled,
+                                             float end_r, float end_g, float end_b, float end_a) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->start_color = glm::vec3(r1, g1, b1); ps->end_color = glm::vec3(r2, g2, b2); }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    pe->use_color_curve = (enabled != 0);
+    if (!Keep(end_r)) pe->color_curve_end.r = end_r;
+    if (!Keep(end_g)) pe->color_curve_end.g = end_g;
+    if (!Keep(end_b)) pe->color_curve_end.b = end_b;
+    if (!Keep(end_a)) pe->color_curve_end.a = end_a;
 }
 
-extern "C" void dse_particle_set_rotation(uint32_t e, float start_rot, float end_rot) {
+extern "C" void dse_particle_set_rotation(uint32_t e, float rotation_min, float rotation_max,
+                                          float angular_velocity_min, float angular_velocity_max) {
     World* world = GW();
     if (!world) return;
-    auto* ps = world->registry().try_get<ParticleSystem3DComponent>(TE(e));
-    if (ps) { ps->start_rotation = start_rot; ps->end_rotation = end_rot; }
+    auto* pe = world->registry().try_get<ParticleEmitterComponent>(TE(e));
+    if (!pe) return;
+    if (!Keep(rotation_min)) pe->rotation_min = rotation_min;
+    if (!Keep(rotation_max)) pe->rotation_max = rotation_max;
+    if (!Keep(angular_velocity_min)) pe->angular_velocity_min = angular_velocity_min;
+    if (!Keep(angular_velocity_max)) pe->angular_velocity_max = angular_velocity_max;
+}
+
+extern "C" void dse_gameplay_tuning_add(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<GameplayTuningComponent>(TE(e));
+}
+
+extern "C" void dse_gameplay_tuning_set(uint32_t e, float leaf_min_distance,
+                                        float leaf_move_left, float leaf_move_right,
+                                        float jump_speed_scale, float jump_speed_max,
+                                        float camera_follow_damping) {
+    World* world = GW();
+    if (!world) return;
+    auto* t = world->registry().try_get<GameplayTuningComponent>(TE(e));
+    if (!t) return;
+    if (!Keep(leaf_min_distance)) t->leaf_min_distance = leaf_min_distance;
+    if (!Keep(leaf_move_left))    t->leaf_move_left = leaf_move_left;
+    if (!Keep(leaf_move_right))   t->leaf_move_right = leaf_move_right;
+    if (!Keep(jump_speed_scale))  t->jump_speed_scale = jump_speed_scale;
+    if (!Keep(jump_speed_max))    t->jump_speed_max = jump_speed_max;
+    if (!Keep(camera_follow_damping)) t->camera_follow_damping = camera_follow_damping;
 }
 
 // ============================================================
@@ -216,31 +313,47 @@ extern "C" void dse_rendering_add_skybox(uint32_t e, const char* cubemap_path) {
 extern "C" void dse_rendering_add_gi_probe(uint32_t e) {
     World* world = GW();
     if (!world) return;
-    world->registry().emplace_or_replace<GIProbeComponent>(TE(e));
+    world->registry().emplace_or_replace<GIProbeVolumeComponent>(TE(e));
 }
 
-extern "C" void dse_rendering_set_gi_probe(uint32_t e, float intensity, float range, int resolution) {
+extern "C" void dse_rendering_set_gi_probe(uint32_t e, float gi_intensity, float ox, float oy, float oz,
+                                           float ex, float ey, float ez,
+                                           int res_x, int res_y, int res_z) {
     World* world = GW();
     if (!world) return;
-    auto* gi = world->registry().try_get<GIProbeComponent>(TE(e));
-    if (gi) { gi->intensity = intensity; gi->range = range; gi->resolution = resolution; }
+    auto* gi = world->registry().try_get<GIProbeVolumeComponent>(TE(e));
+    if (!gi) return;
+    if (!Keep(gi_intensity)) gi->gi_intensity = gi_intensity;
+    if (!Keep(ox)) gi->origin.x = ox;
+    if (!Keep(oy)) gi->origin.y = oy;
+    if (!Keep(oz)) gi->origin.z = oz;
+    if (!Keep(ex)) gi->extent.x = ex;
+    if (!Keep(ey)) gi->extent.y = ey;
+    if (!Keep(ez)) gi->extent.z = ez;
+    if (res_x > 0) gi->resolution_x = res_x;
+    if (res_y > 0) gi->resolution_y = res_y;
+    if (res_z > 0) gi->resolution_z = res_z;
+    gi->needs_reinit_ = true;
 }
 
 extern "C" void dse_rendering_set_gi_probe_enabled(uint32_t e, int enabled) {
     World* world = GW();
     if (!world) return;
-    auto* gi = world->registry().try_get<GIProbeComponent>(TE(e));
+    auto* gi = world->registry().try_get<GIProbeVolumeComponent>(TE(e));
     if (gi) gi->enabled = (enabled != 0);
 }
 
-extern "C" void dse_rendering_get_gi_probe(uint32_t e, float* out_intensity, float* out_range, int* out_resolution) {
+extern "C" int dse_rendering_get_gi_probe(uint32_t e, float* out_gi_intensity,
+                                          float* out_origin, float* out_extent, int* out_resolution) {
     World* world = GW();
-    if (!world) return;
-    const auto* gi = world->registry().try_get<GIProbeComponent>(TE(e));
-    if (!gi) return;
-    if (out_intensity) *out_intensity = gi->intensity;
-    if (out_range) *out_range = gi->range;
-    if (out_resolution) *out_resolution = gi->resolution;
+    if (!world) return 0;
+    const auto* gi = world->registry().try_get<GIProbeVolumeComponent>(TE(e));
+    if (!gi) return 0;
+    if (out_gi_intensity) *out_gi_intensity = gi->gi_intensity;
+    if (out_origin) { out_origin[0] = gi->origin.x; out_origin[1] = gi->origin.y; out_origin[2] = gi->origin.z; }
+    if (out_extent) { out_extent[0] = gi->extent.x; out_extent[1] = gi->extent.y; out_extent[2] = gi->extent.z; }
+    if (out_resolution) { out_resolution[0] = gi->resolution_x; out_resolution[1] = gi->resolution_y; out_resolution[2] = gi->resolution_z; }
+    return 1;
 }
 
 extern "C" void dse_rendering_add_light_probe(uint32_t e) {
@@ -249,11 +362,13 @@ extern "C" void dse_rendering_add_light_probe(uint32_t e) {
     world->registry().emplace_or_replace<LightProbeComponent>(TE(e));
 }
 
-extern "C" void dse_rendering_set_light_probe(uint32_t e, float intensity, float range) {
+extern "C" void dse_rendering_set_light_probe(uint32_t e, float influence_radius) {
     World* world = GW();
     if (!world) return;
     auto* lp = world->registry().try_get<LightProbeComponent>(TE(e));
-    if (lp) { lp->intensity = intensity; lp->range = range; }
+    if (!lp) return;
+    if (!Keep(influence_radius)) lp->influence_radius = influence_radius;
+    lp->needs_rebake = true;
 }
 
 extern "C" void dse_rendering_set_light_probe_enabled(uint32_t e, int enabled) {
@@ -269,11 +384,14 @@ extern "C" void dse_rendering_add_reflection_probe(uint32_t e) {
     world->registry().emplace_or_replace<ReflectionProbeComponent>(TE(e));
 }
 
-extern "C" void dse_rendering_set_reflection_probe(uint32_t e, float intensity, float range, int resolution) {
+extern "C" void dse_rendering_set_reflection_probe(uint32_t e, float influence_radius, int resolution) {
     World* world = GW();
     if (!world) return;
     auto* rp = world->registry().try_get<ReflectionProbeComponent>(TE(e));
-    if (rp) { rp->intensity = intensity; rp->range = range; rp->resolution = resolution; }
+    if (!rp) return;
+    if (!Keep(influence_radius)) rp->influence_radius = influence_radius;
+    if (resolution > 0) rp->resolution = resolution;
+    rp->needs_rebake = true;
 }
 
 extern "C" void dse_rendering_set_reflection_probe_enabled(uint32_t e, int enabled) {
@@ -287,58 +405,74 @@ extern "C" void dse_rendering_set_reflection_probe_enabled(uint32_t e, int enabl
 // Rendering Camera 扩展
 // ============================================================
 
-extern "C" void dse_camera_add(uint32_t e) {
+extern "C" void dse_camera_add(uint32_t e, float ortho_size, int priority) {
     World* world = GW();
     if (!world) return;
-    world->registry().emplace_or_replace<CameraComponent>(TE(e));
+    auto& cam = world->registry().emplace_or_replace<CameraComponent>(TE(e));
+    cam.enabled = true;
+    cam.priority = priority;
+    cam.orthographic = true;
+    cam.orthographic_size = ortho_size;
 }
 
 extern "C" void dse_camera_set_priority(uint32_t e, int priority) {
     World* world = GW();
     if (!world) return;
-    auto* cam = world->registry().try_get<CameraComponent>(TE(e));
-    if (cam) cam->priority = priority;
+    if (auto* cam3d = world->registry().try_get<Camera3DComponent>(TE(e))) cam3d->priority = priority;
+    if (auto* cam = world->registry().try_get<CameraComponent>(TE(e))) cam->priority = priority;
 }
 
 extern "C" void dse_camera_set_enabled(uint32_t e, int enabled) {
     World* world = GW();
     if (!world) return;
-    auto* cam = world->registry().try_get<CameraComponent>(TE(e));
-    if (cam) cam->enabled = (enabled != 0);
+    if (auto* cam3d = world->registry().try_get<Camera3DComponent>(TE(e))) cam3d->enabled = (enabled != 0);
+    if (auto* cam = world->registry().try_get<CameraComponent>(TE(e))) cam->enabled = (enabled != 0);
 }
 
-extern "C" void dse_camera_set_follow(uint32_t e, uint32_t target, float lerp) {
+extern "C" void dse_camera_set_follow(uint32_t e, uint32_t target, float damping,
+                                      float dead_zone_x, float dead_zone_y,
+                                      float offset_x, float offset_y) {
     World* world = GW();
-    if (!world) return;
-    auto* cam = world->registry().try_get<CameraComponent>(TE(e));
-    if (cam) { cam->follow_target = TE(target); cam->follow_lerp = lerp; }
+    if (!world || !world->registry().valid(TE(e))) return;
+    auto& follow = world->registry().emplace_or_replace<CameraFollowComponent>(TE(e));
+    follow.target = TE(target);
+    follow.damping = damping;
+    follow.dead_zone = glm::vec2(dead_zone_x, dead_zone_y);
+    follow.offset = glm::vec3(offset_x, offset_y, 0.0f);
+    follow.enabled = true;
 }
 
-extern "C" void dse_free_camera_add(uint32_t e) {
+extern "C" void dse_free_camera_add(uint32_t e, float move_speed, float mouse_sensitivity) {
     World* world = GW();
     if (!world) return;
-    world->registry().emplace_or_replace<FreeCameraControllerComponent>(TE(e));
+    auto& controller = world->registry().emplace_or_replace<FreeCameraControllerComponent>(TE(e));
+    controller.enabled = true;
+    controller.move_speed = move_speed;
+    controller.mouse_sensitivity = mouse_sensitivity;
 }
 
-extern "C" void dse_sprite_add(uint32_t e, uint32_t texture_handle, float w, float h) {
+extern "C" void dse_sprite_add(uint32_t e, float r, float g, float b, float a,
+                               int order_in_layer, uint32_t texture_handle) {
     World* world = GW();
     if (!world) return;
-    auto& sp = world->registry().emplace_or_replace<SpriteComponent>(TE(e));
-    sp.texture_handle = texture_handle;
-    sp.size = glm::vec2(w, h);
+    auto& sprite = world->registry().emplace_or_replace<SpriteRendererComponent>(TE(e));
+    sprite.color = glm::vec4(r, g, b, a);
+    sprite.order_in_layer = order_in_layer;
+    sprite.texture_handle = texture_handle;
+    sprite.visible = true;
 }
 
 extern "C" void dse_sprite_set_uv_scroll(uint32_t e, float sx, float sy) {
     World* world = GW();
     if (!world) return;
-    auto* sp = world->registry().try_get<SpriteComponent>(TE(e));
-    if (sp) sp->uv_scroll = glm::vec2(sx, sy);
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
+    if (sp) sp->uv_scroll_speed = glm::vec2(sx, sy);
 }
 
 extern "C" void dse_sprite_set_uv_offset(uint32_t e, float ox, float oy) {
     World* world = GW();
     if (!world) return;
-    auto* sp = world->registry().try_get<SpriteComponent>(TE(e));
+    auto* sp = world->registry().try_get<SpriteRendererComponent>(TE(e));
     if (sp) sp->uv_offset = glm::vec2(ox, oy);
 }
 
@@ -357,156 +491,223 @@ extern "C" void dse_mesh_set_depth_state(uint32_t e, int depth_test, int depth_w
     World* world = GW();
     if (!world) return;
     auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) { mr->depth_test = (depth_test != 0); mr->depth_write = (depth_write != 0); }
+    if (mr) { mr->depth_test_enabled = (depth_test != 0); mr->depth_write_enabled = (depth_write != 0); }
 }
 
 extern "C" void dse_mesh_set_material_scalar(uint32_t e, const char* param_name, float value) {
     World* world = GW();
     if (!world || !param_name) return;
     auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) mr->material_params[param_name] = value;
+    if (!mr) return;
+    std::string name(param_name);
+    if (name == "metallic") mr->metallic = value;
+    else if (name == "roughness") mr->roughness = value;
+    else if (name == "ao") mr->ao = value;
+    else if (name == "normal_strength") mr->normal_strength = value;
+    else if (name == "material_alpha_cutoff") mr->material_alpha_cutoff = value;
+    else if (name == "sss_strength") mr->sss_strength = value;
+    else if (name == "clear_coat") mr->clear_coat = value;
+    else if (name == "clear_coat_roughness") mr->clear_coat_roughness = value;
+    else if (name == "anisotropy") mr->anisotropy = value;
+    else if (name == "pom_height_scale") mr->pom_height_scale = value;
+    else return;
+    mr->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
 }
 
-extern "C" void dse_mesh_set_texture(uint32_t e, const char* slot, uint32_t texture_handle) {
+extern "C" void dse_mesh_set_texture_handle(uint32_t e, const char* slot, uint32_t texture_handle) {
     World* world = GW();
     if (!world || !slot) return;
     auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) mr->textures[slot] = texture_handle;
+    if (!mr) return;
+    std::string name(slot);
+    if (name == "albedo") mr->albedo_texture_handle = texture_handle;
+    else if (name == "normal") mr->normal_texture_handle = texture_handle;
+    else if (name == "metallic_roughness") mr->metallic_roughness_texture_handle = texture_handle;
+    else if (name == "emissive") mr->emissive_texture_handle = texture_handle;
+    else if (name == "occlusion") mr->occlusion_texture_handle = texture_handle;
 }
 
-extern "C" void dse_mesh_set_emissive(uint32_t e, float r, float g, float b, float intensity) {
+extern "C" void dse_mesh_set_emissive(uint32_t e, float r, float g, float b) {
     World* world = GW();
     if (!world) return;
     auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) { mr->emissive = glm::vec3(r, g, b); mr->emissive_intensity = intensity; }
+    if (!mr) return;
+    mr->emissive = glm::vec3(r, g, b);
+    mr->material_data_source = MeshRendererComponent::MaterialDataSource::ComponentFallback;
 }
 
 // ============================================================
 // Rendering FX（Steering / LOD / Hair / Pick）
 // ============================================================
 
-extern "C" void dse_steering_add(uint32_t e, float max_speed, float max_force, float mass) {
+extern "C" void dse_steering_add(uint32_t e, float max_velocity, float max_force, float mass) {
     World* world = GW();
     if (!world) return;
     auto& st = world->registry().emplace_or_replace<SteeringComponent>(TE(e));
-    st.max_speed = max_speed;
+    st.enabled = true;
+    st.max_velocity = max_velocity;
     st.max_force = max_force;
     st.mass = mass;
 }
 
-extern "C" void dse_steering_set_target(uint32_t e, float x, float y, float z) {
+extern "C" int dse_steering_set_target(uint32_t e, int behavior, float x, float y, float z) {
     World* world = GW();
-    if (!world) return;
+    if (!world) return 0;
     auto* st = world->registry().try_get<SteeringComponent>(TE(e));
-    if (st) st->target = glm::vec3(x, y, z);
+    if (!st) return 0;
+    switch (behavior) {
+        case 0:
+            st->seek_enabled = true; st->flee_enabled = false; st->arrive_enabled = false;
+            st->seek_target = glm::vec3(x, y, z);
+            return 1;
+        case 1:
+            st->seek_enabled = false; st->flee_enabled = true; st->arrive_enabled = false;
+            st->flee_target = glm::vec3(x, y, z);
+            return 1;
+        case 2:
+            st->seek_enabled = false; st->flee_enabled = false; st->arrive_enabled = true;
+            st->arrive_target = glm::vec3(x, y, z);
+            return 1;
+        default:
+            return 0;
+    }
 }
 
-extern "C" int dse_steering_get_state(uint32_t e, float* out_vel, float* out_accel) {
+extern "C" int dse_steering_get_state(uint32_t e, int* out_flags, float* out_velocity,
+                                      float* out_params, float* out_targets) {
     World* world = GW();
     if (!world) return 0;
     const auto* st = world->registry().try_get<SteeringComponent>(TE(e));
     if (!st) return 0;
-    if (out_vel) { out_vel[0] = st->velocity.x; out_vel[1] = st->velocity.y; out_vel[2] = st->velocity.z; }
-    if (out_accel) { out_accel[0] = st->acceleration.x; out_accel[1] = st->acceleration.y; out_accel[2] = st->acceleration.z; }
+    if (out_flags) {
+        out_flags[0] = st->enabled ? 1 : 0;
+        out_flags[1] = st->seek_enabled ? 1 : 0;
+        out_flags[2] = st->flee_enabled ? 1 : 0;
+        out_flags[3] = st->arrive_enabled ? 1 : 0;
+    }
+    if (out_velocity) {
+        out_velocity[0] = st->velocity.x; out_velocity[1] = st->velocity.y; out_velocity[2] = st->velocity.z;
+    }
+    if (out_params) {
+        out_params[0] = st->max_velocity; out_params[1] = st->max_force;
+        out_params[2] = st->mass; out_params[3] = st->arrive_deceleration_radius;
+    }
+    if (out_targets) {
+        out_targets[0] = st->seek_target.x;   out_targets[1] = st->seek_target.y;   out_targets[2] = st->seek_target.z;
+        out_targets[3] = st->flee_target.x;   out_targets[4] = st->flee_target.y;   out_targets[5] = st->flee_target.z;
+        out_targets[6] = st->arrive_target.x; out_targets[7] = st->arrive_target.y; out_targets[8] = st->arrive_target.z;
+    }
     return 1;
 }
 
-extern "C" void dse_lod_add_level(uint32_t e, float distance, const char* mesh_path) {
+extern "C" void dse_lod_add_level(uint32_t e, const char* mesh_path, float screen_size_threshold) {
     World* world = GW();
-    if (!world) return;
-    auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (!mr || !mesh_path) return;
-    mr->lod_distances.push_back(distance);
-    mr->lod_mesh_paths.push_back(mesh_path);
+    if (!world || !mesh_path || !world->registry().valid(TE(e))) return;
+    auto& lod = world->registry().get_or_emplace<LODGroupComponent>(TE(e));
+    LODLevelConfig level;
+    level.mesh_path = mesh_path;
+    level.screen_size_threshold = screen_size_threshold;
+    lod.levels.push_back(std::move(level));
 }
 
 extern "C" void dse_lod_set_scale(uint32_t e, float scale) {
     World* world = GW();
     if (!world) return;
-    auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) mr->lod_scale = scale;
+    auto* lod = world->registry().try_get<LODGroupComponent>(TE(e));
+    if (lod) lod->global_scale = scale;
 }
 
 extern "C" void dse_lod_set_min_screen_size(uint32_t e, float min_size) {
     World* world = GW();
-    if (!world) return;
-    auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) mr->lod_min_screen_size = min_size;
+    if (!world || !world->registry().valid(TE(e))) return;
+    auto& lod = world->registry().get_or_emplace<LODGroupComponent>(TE(e));
+    lod.min_screen_size = min_size;
 }
 
 extern "C" void dse_lod_set_enabled(uint32_t e, int enabled) {
     World* world = GW();
     if (!world) return;
-    auto* mr = world->registry().try_get<MeshRendererComponent>(TE(e));
-    if (mr) mr->lod_enabled = (enabled != 0);
+    auto* lod = world->registry().try_get<LODGroupComponent>(TE(e));
+    if (lod) lod->enabled = (enabled != 0);
 }
 
-extern "C" void dse_hair_add(uint32_t e, int strand_count, int segment_count, float length) {
+extern "C" void dse_hair_add(uint32_t e, const char* asset_path, int num_follow_per_guide) {
     World* world = GW();
     if (!world) return;
     auto& hair = world->registry().emplace_or_replace<HairComponent>(TE(e));
-    hair.strand_count = strand_count;
-    hair.segment_count = segment_count;
-    hair.length = length;
+    hair.enabled = true;
+    if (asset_path) hair.hair_asset_path = asset_path;
+    if (num_follow_per_guide >= 0) hair.num_follow_per_guide = num_follow_per_guide;
 }
 
-extern "C" void dse_hair_set_physics(uint32_t e, float stiffness, float damping, float gravity) {
+extern "C" void dse_hair_set_physics(uint32_t e, float damping, float stiffness_local,
+                                     float stiffness_global, float gravity) {
     World* world = GW();
     if (!world) return;
     auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) { hair->stiffness = stiffness; hair->damping = damping; hair->gravity = gravity; }
+    if (!hair) return;
+    if (!Keep(damping)) hair->damping = damping;
+    if (!Keep(stiffness_local)) hair->stiffness_local = stiffness_local;
+    if (!Keep(stiffness_global)) hair->stiffness_global = stiffness_global;
+    if (!Keep(gravity)) hair->gravity = gravity;
 }
 
-extern "C" void dse_hair_set_render(uint32_t e, float thickness, int enable_shadow) {
+extern "C" void dse_hair_set_render(uint32_t e,
+                                    float root_r, float root_g, float root_b, float root_a,
+                                    float tip_r, float tip_g, float tip_b, float tip_a,
+                                    float fiber_radius, float opacity) {
     World* world = GW();
     if (!world) return;
     auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) { hair->thickness = thickness; hair->cast_shadow = (enable_shadow != 0); }
+    if (!hair) return;
+    if (!Keep(root_r) && !Keep(root_g) && !Keep(root_b) && !Keep(root_a))
+        hair->root_color = glm::vec4(root_r, root_g, root_b, root_a);
+    if (!Keep(tip_r) && !Keep(tip_g) && !Keep(tip_b) && !Keep(tip_a))
+        hair->tip_color = glm::vec4(tip_r, tip_g, tip_b, tip_a);
+    if (!Keep(fiber_radius)) hair->fiber_radius = fiber_radius;
+    if (!Keep(opacity)) hair->opacity = opacity;
 }
 
-extern "C" void dse_hair_set_wind(uint32_t e, float wx, float wy, float wz, float strength) {
+extern "C" void dse_hair_set_wind_full(uint32_t e, float wx, float wy, float wz, float turbulence) {
     World* world = GW();
     if (!world) return;
     auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) { hair->wind_dir = glm::vec3(wx, wy, wz); hair->wind_strength = strength; }
+    if (!hair) return;
+    hair->wind = glm::vec3(wx, wy, wz);
+    if (!Keep(turbulence)) hair->wind_turbulence = turbulence;
 }
 
-extern "C" void dse_hair_set_enabled(uint32_t e, int enabled) {
+extern "C" void dse_hair_set_lod(uint32_t e, float lod0_distance, float lod1_distance,
+                                 float lod2_distance, float cull_distance) {
     World* world = GW();
     if (!world) return;
     auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) hair->enabled = (enabled != 0);
-}
-
-extern "C" void dse_hair_set_lod(uint32_t e, float close_dist, float far_dist, int min_strands) {
-    World* world = GW();
-    if (!world) return;
-    auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) { hair->lod_close_dist = close_dist; hair->lod_far_dist = far_dist; hair->lod_min_strands = min_strands; }
-}
-
-extern "C" int dse_render_pick_entity(float screen_x, float screen_y) {
-    // Stub: requires render system integration
-    return 0;
+    if (!hair) return;
+    if (!Keep(lod0_distance)) hair->lod0_distance = lod0_distance;
+    if (!Keep(lod1_distance)) hair->lod1_distance = lod1_distance;
+    if (!Keep(lod2_distance)) hair->lod2_distance = lod2_distance;
+    if (!Keep(cull_distance)) hair->cull_distance = cull_distance;
 }
 
 // ============================================================
 // Rendering Post 扩展
 // ============================================================
 
-extern "C" void dse_decal_add(uint32_t e, uint32_t texture_handle, float w, float h, float d) {
+extern "C" void dse_decal_add(uint32_t e, uint32_t albedo_texture) {
     World* world = GW();
     if (!world) return;
     auto& decal = world->registry().emplace_or_replace<DecalComponent>(TE(e));
-    decal.texture_handle = texture_handle;
-    decal.size = glm::vec3(w, h, d);
+    decal.enabled = true;
+    decal.albedo_texture = albedo_texture;
 }
 
-extern "C" void dse_decal_set(uint32_t e, float r, float g, float b, float a, float opacity) {
+extern "C" void dse_decal_set(uint32_t e, float r, float g, float b, float a, float angle_fade) {
     World* world = GW();
     if (!world) return;
     auto* decal = world->registry().try_get<DecalComponent>(TE(e));
-    if (decal) { decal->color = glm::vec4(r, g, b, a); decal->opacity = opacity; }
+    if (!decal) return;
+    if (!Keep(r) && !Keep(g) && !Keep(b) && !Keep(a)) decal->color = glm::vec4(r, g, b, a);
+    if (!Keep(angle_fade)) decal->angle_fade = angle_fade;
 }
 
 extern "C" int dse_post_process_get_state(uint32_t e, int* out_enabled, int* out_bloom, int* out_ssao,
@@ -534,13 +735,15 @@ extern "C" void dse_anim3d_set_blend_tree_1d(uint32_t e, const char* const* clip
     if (!world || !clips || !thresholds) return;
     auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
     if (!anim) return;
-    anim->blend_tree_clips.clear();
-    anim->blend_tree_thresholds.clear();
-    anim->blend_tree_speeds.clear();
+    anim->use_anim_tree = true;
+    anim->blend_tree_is_2d = false;
+    anim->blend_nodes.clear();
     for (int i = 0; i < count; ++i) {
-        if (clips[i]) anim->blend_tree_clips.push_back(clips[i]);
-        anim->blend_tree_thresholds.push_back(thresholds[i]);
-        anim->blend_tree_speeds.push_back(speeds ? speeds[i] : 1.0f);
+        AnimBlendNode node;
+        if (clips[i]) node.danim_path = clips[i];
+        node.threshold = thresholds[i];
+        node.speed = speeds ? speeds[i] : 1.0f;
+        anim->blend_nodes.push_back(std::move(node));
     }
 }
 
@@ -548,44 +751,46 @@ extern "C" void dse_anim3d_set_blend_param(uint32_t e, float value) {
     World* world = GW();
     if (!world) return;
     auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
-    if (anim) anim->blend_parameter = value;
+    if (anim) anim->blend_parameter_value = value;
 }
 
 extern "C" float dse_anim3d_get_blend_param(uint32_t e) {
     World* world = GW();
     if (!world) return 0.0f;
     const auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
-    return anim ? anim->blend_parameter : 0.0f;
+    return anim ? anim->blend_parameter_value : 0.0f;
 }
 
 extern "C" void dse_anim3d_set_layer_weight(uint32_t e, int layer, float weight) {
     World* world = GW();
     if (!world) return;
-    auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
-    if (!anim) return;
-    if (layer >= 0 && layer < static_cast<int>(anim->layer_weights.size())) {
-        anim->layer_weights[layer] = weight;
+    auto* layers = world->registry().try_get<AnimLayerComponent>(TE(e));
+    if (!layers) return;
+    if (layer >= 0 && layer < static_cast<int>(layers->layers.size())) {
+        layers->layers[static_cast<size_t>(layer)].weight = weight;
     }
 }
 
 extern "C" float dse_anim3d_get_layer_weight(uint32_t e, int layer) {
     World* world = GW();
     if (!world) return 0.0f;
-    const auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
-    if (!anim || layer < 0 || layer >= static_cast<int>(anim->layer_weights.size())) return 0.0f;
-    return anim->layer_weights[layer];
+    const auto* layers = world->registry().try_get<AnimLayerComponent>(TE(e));
+    if (!layers || layer < 0 || layer >= static_cast<int>(layers->layers.size())) return 0.0f;
+    return layers->layers[static_cast<size_t>(layer)].weight;
 }
 
 extern "C" void dse_anim3d_set_layer_mask(uint32_t e, int layer, const char* const* bones, int count) {
     World* world = GW();
     if (!world || !bones) return;
-    auto* anim = world->registry().try_get<Animator3DComponent>(TE(e));
-    if (!anim) return;
-    if (layer >= 0 && layer < static_cast<int>(anim->layer_masks.size())) {
-        anim->layer_masks[layer].clear();
+    auto* layers = world->registry().try_get<AnimLayerComponent>(TE(e));
+    if (!layers) return;
+    if (layer >= 0 && layer < static_cast<int>(layers->layers.size())) {
+        auto& cfg = layers->layers[static_cast<size_t>(layer)];
+        cfg.bone_mask_include.clear();
         for (int i = 0; i < count; ++i) {
-            if (bones[i]) anim->layer_masks[layer].push_back(bones[i]);
+            if (bones[i]) cfg.bone_mask_include.push_back(bones[i]);
         }
+        cfg.bone_mask_dirty = true;
     }
 }
 
@@ -593,69 +798,13 @@ extern "C" void dse_anim3d_set_layer_mask(uint32_t e, int layer, const char* con
 // Gameplay3D 扩展
 // ============================================================
 
-extern "C" void dse_character_set_slide_params(uint32_t e, float slide_speed, float slide_duration) {
-    World* world = GW();
-    if (!world) return;
-    auto* cm = world->registry().try_get<CharacterMovementConfigComponent>(TE(e));
-    if (cm) { cm->slide_speed = slide_speed; cm->slide_duration = slide_duration; }
-}
-
-extern "C" void dse_character_set_climb_params(uint32_t e, float climb_speed, float check_distance) {
-    World* world = GW();
-    if (!world) return;
-    auto* cm = world->registry().try_get<CharacterMovementConfigComponent>(TE(e));
-    if (cm) { cm->climb_speed = climb_speed; cm->climb_check_distance = check_distance; }
-}
-
-extern "C" void dse_character_set_swim_params(uint32_t e, float swim_speed, float water_level) {
-    World* world = GW();
-    if (!world) return;
-    auto* cm = world->registry().try_get<CharacterMovementConfigComponent>(TE(e));
-    if (cm) { cm->swim_speed = swim_speed; cm->water_level = water_level; }
-}
-
 extern "C" int dse_character_check_ground(uint32_t e, float* out_normal) {
     World* world = GW();
     if (!world) return 0;
-    // Use character controller grounded state
     const auto* cc = world->registry().try_get<CharacterController3DComponent>(TE(e));
     if (!cc) return 0;
     if (out_normal) { out_normal[0] = 0.0f; out_normal[1] = 1.0f; out_normal[2] = 0.0f; }
     return cc->is_grounded ? 1 : 0;
-}
-
-extern "C" void dse_gameplay_set_interaction(uint32_t e, float range, float cooldown) {
-    World* world = GW();
-    if (!world) return;
-    auto* gc = world->registry().try_get<GameplayTuningComponent>(TE(e));
-    if (!gc) {
-        auto& ngc = world->registry().emplace_or_replace<GameplayTuningComponent>(TE(e));
-        ngc.interaction_range = range;
-        ngc.interaction_cooldown = cooldown;
-        return;
-    }
-    gc->interaction_range = range;
-    gc->interaction_cooldown = cooldown;
-}
-
-extern "C" int dse_gameplay_find_interactable(uint32_t e, uint32_t* out_target, float max_range) {
-    World* world = GW();
-    if (!world || !out_target) return 0;
-    const auto* tf = world->registry().try_get<TransformComponent>(TE(e));
-    if (!tf) return 0;
-    // Search for nearby entities with GameplayTuningComponent
-    float best_dist = max_range * max_range;
-    Entity best = entt::null;
-    auto view = world->registry().view<TransformComponent, GameplayTuningComponent>();
-    for (auto other : view) {
-        if (other == TE(e)) continue;
-        const auto& otf = view.get<TransformComponent>(other);
-        float d2 = glm::dot(otf.position - tf->position, otf.position - tf->position);
-        if (d2 < best_dist) { best_dist = d2; best = other; }
-    }
-    if (best == entt::null) return 0;
-    *out_target = static_cast<uint32_t>(static_cast<entt::id_type>(best));
-    return 1;
 }
 
 // ============================================================
@@ -1186,20 +1335,20 @@ extern "C" uint32_t dse_dssl_load_material(const char* path) {
     if (!path) return 0;
     auto* dssl = GetDSSL();
     if (!dssl) return 0;
-    auto& am = dse::core::ServiceLocator::Instance().Get<AssetManager>();
-    std::string full = am.ResolveAssetPath(path);
+    AssetManager* am = GAM();
+    std::string full = am ? am->ResolveAssetPath(path) : std::string();
     if (full.empty()) full = path;
-    auto inst = dssl->LoadFromFile(full, &am);
+    auto inst = dssl->LoadFromFile(full, am);
     return inst ? inst->GetId() : 0;
 }
 extern "C" uint32_t dse_dssl_create_instance(const char* path) {
     if (!path) return 0;
     auto* dssl = GetDSSL();
     if (!dssl) return 0;
-    auto& am = dse::core::ServiceLocator::Instance().Get<AssetManager>();
-    std::string full = am.ResolveAssetPath(path);
+    AssetManager* am = GAM();
+    std::string full = am ? am->ResolveAssetPath(path) : std::string();
     if (full.empty()) full = path;
-    auto inst = dssl->CreateInstance(full, &am);
+    auto inst = dssl->CreateInstance(full, am);
     return inst ? inst->GetId() : 0;
 }
 extern "C" void dse_dssl_set_float(uint32_t instance, const char* name, float value) {
@@ -1221,8 +1370,9 @@ extern "C" void dse_dssl_set_texture(uint32_t instance, const char* name, const 
     auto* dssl = GetDSSL();
     auto inst = dssl ? dssl->GetInstance(instance) : nullptr;
     if (!inst || !path) return;
-    auto& am = dse::core::ServiceLocator::Instance().Get<AssetManager>();
-    auto tex = am.LoadTexture(path);
+    AssetManager* am = GAM();
+    if (!am) return;
+    auto tex = am->LoadTexture(path);
     if (tex) inst->SetTexture(name, tex->GetHandle());
 }
 extern "C" void dse_dssl_set_texture_handle(uint32_t instance, const char* name, uint32_t handle) {
