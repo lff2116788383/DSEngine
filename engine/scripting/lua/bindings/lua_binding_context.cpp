@@ -5,7 +5,6 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/native_api/dse_api.h"
-#include "engine/assets/asset_manager.h"
 #include <stdexcept>
 
 namespace dse::runtime::lua_binding {

@@ -1,6 +1,6 @@
 /**
  * @file lua_binding_cutscene.cpp
- * @brief 过场/导演系统 Lua 绑定
+ * @brief 过场/导演系统 Lua 绑定。薄包装委托至 C ABI。
  *
  * 全局表 `cutscene`:
  *   cutscene.create_player()                      → player_id
@@ -36,11 +36,11 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/cutscene/cutscene_player.h"
-#include "engine/cutscene/cutscene_track.h"
+#include "engine/scripting/native_api/dse_api.h"
 
 #include <unordered_map>
 #include <memory>
+#include <vector>
 
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -49,75 +49,97 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
-using namespace dse::cutscene;
 using namespace helper;
 
-struct LuaCutsceneInstance {
-    CutscenePlayer player;
-    // 存储每个 seq 的 camera track（方便查找）
-    std::unordered_map<std::string, std::shared_ptr<CameraTrack>> camera_tracks;
-    std::unordered_map<std::string, std::shared_ptr<EventTrack>> event_tracks;
-    std::unordered_map<std::string, std::shared_ptr<AudioTrack>> audio_tracks;
-    // property tracks 按 "seq_name:track_name" 索引
-    std::unordered_map<std::string, std::shared_ptr<PropertyTrack>> property_tracks;
-    // Lua 回调引用
-    int finish_callback_ref = LUA_NOREF;
+// 回调上下文：由本层持有，player 销毁时释放对应的 registry ref。
+struct CSCallbackCtx {
     lua_State* L = nullptr;
+    int func_ref = LUA_NOREF;
 };
 
-static std::unordered_map<int, std::unique_ptr<LuaCutsceneInstance>> s_cs_instances;
-static int s_next_cs_id = 1;
+// 按 player_id 记录所有回调上下文，便于 destroy 时统一释放。
+std::unordered_map<int, std::vector<std::unique_ptr<CSCallbackCtx>>> s_cs_callbacks;
+
+CSCallbackCtx* MakeCallbackCtx(lua_State* L, int player_id, int func_index) {
+    lua_pushvalue(L, func_index);
+    auto ctx = std::make_unique<CSCallbackCtx>();
+    ctx->L = L;
+    ctx->func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+    CSCallbackCtx* raw = ctx.get();
+    s_cs_callbacks[player_id].push_back(std::move(ctx));
+    return raw;
+}
+
+void ReleaseCallbacks(int player_id) {
+    auto it = s_cs_callbacks.find(player_id);
+    if (it == s_cs_callbacks.end()) return;
+    for (auto& ctx : it->second) {
+        if (ctx->L && ctx->func_ref != LUA_NOREF) {
+            luaL_unref(ctx->L, LUA_REGISTRYINDEX, ctx->func_ref);
+        }
+    }
+    s_cs_callbacks.erase(it);
+}
+
+extern "C" void CSCameraTrampoline(float px, float py, float pz,
+                                   float lx, float ly, float lz,
+                                   float fov, void* user_data) {
+    auto* ctx = static_cast<CSCallbackCtx*>(user_data);
+    if (!ctx || !ctx->L || ctx->func_ref == LUA_NOREF) return;
+    lua_State* L = ctx->L;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->func_ref);
+    lua_pushnumber(L, px); lua_pushnumber(L, py); lua_pushnumber(L, pz);
+    lua_pushnumber(L, lx); lua_pushnumber(L, ly); lua_pushnumber(L, lz);
+    lua_pushnumber(L, fov);
+    if (lua_pcall(L, 7, 0, 0) != LUA_OK) lua_pop(L, 1);
+}
+
+extern "C" void CSEventTrampoline(const char* event_name, const char* payload, void* user_data) {
+    auto* ctx = static_cast<CSCallbackCtx*>(user_data);
+    if (!ctx || !ctx->L || ctx->func_ref == LUA_NOREF) return;
+    lua_State* L = ctx->L;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->func_ref);
+    lua_pushstring(L, event_name ? event_name : "");
+    lua_pushstring(L, payload ? payload : "");
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) lua_pop(L, 1);
+}
+
+extern "C" void CSFinishTrampoline(const char* seq_name, void* user_data) {
+    auto* ctx = static_cast<CSCallbackCtx*>(user_data);
+    if (!ctx || !ctx->L || ctx->func_ref == LUA_NOREF) return;
+    lua_State* L = ctx->L;
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ctx->func_ref);
+    lua_pushstring(L, seq_name ? seq_name : "");
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) lua_pop(L, 1);
+}
 
 // ============================================================
 // Player management
 // ============================================================
 
 int L_CSCreatePlayer(lua_State* L) {
-    int id = s_next_cs_id++;
-    auto inst = std::make_unique<LuaCutsceneInstance>();
-    inst->L = L;
-    s_cs_instances[id] = std::move(inst);
-    lua_pushinteger(L, id);
+    lua_pushinteger(L, dse_cutscene_create());
     return 1;
 }
 
 int L_CSDestroyPlayer(lua_State* L) {
     int id = CheckInt(L, 1);
-    auto it = s_cs_instances.find(id);
-    if (it != s_cs_instances.end()) {
-        if (it->second->finish_callback_ref != LUA_NOREF) {
-            luaL_unref(L, LUA_REGISTRYINDEX, it->second->finish_callback_ref);
-        }
-        s_cs_instances.erase(it);
-    }
+    dse_cutscene_destroy(id);
+    ReleaseCallbacks(id);
     return 0;
 }
-
-#define GET_CS_INST(id) \
-    auto cs_it = s_cs_instances.find(id); \
-    if (cs_it == s_cs_instances.end()) return 0; \
-    auto& inst = *cs_it->second
 
 // ============================================================
 // Sequence management
 // ============================================================
 
 int L_CSAddSequence(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* name = luaL_checkstring(L, 2);
-    float duration = CheckFloat(L, 3);
-    auto seq = std::make_shared<CutsceneSequence>(name, duration);
-    inst.player.AddSequence(seq);
+    dse_cutscene_add_sequence(CheckInt(L, 1), luaL_checkstring(L, 2), CheckFloat(L, 3));
     return 0;
 }
 
 int L_CSRemoveSequence(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* name = luaL_checkstring(L, 2);
-    inst.player.RemoveSequence(name);
-    inst.camera_tracks.erase(name);
-    inst.event_tracks.erase(name);
-    inst.audio_tracks.erase(name);
+    dse_cutscene_remove_sequence(CheckInt(L, 1), luaL_checkstring(L, 2));
     return 0;
 }
 
@@ -126,96 +148,34 @@ int L_CSRemoveSequence(lua_State* L) {
 // ============================================================
 
 int L_CSAddCameraKeyframe(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* seq_name = luaL_checkstring(L, 2);
-    float time = CheckFloat(L, 3);
-    float px = CheckFloat(L, 4), py = CheckFloat(L, 5), pz = CheckFloat(L, 6);
-    float lx = CheckFloat(L, 7), ly = CheckFloat(L, 8), lz = CheckFloat(L, 9);
-    float fov = OptFloat(L, 10, 60.0f);
-
-    auto seq = inst.player.GetSequence(seq_name);
-    if (!seq) return 0;
-
-    // 获取或创建该 seq 的 camera track
-    auto& cam_track = inst.camera_tracks[seq_name];
-    if (!cam_track) {
-        cam_track = std::make_shared<CameraTrack>("Camera");
-        seq->AddTrack(cam_track);
-    }
-
-    CameraKeyframe kf;
-    kf.time = time;
-    kf.position = glm::vec3(px, py, pz);
-    kf.look_at = glm::vec3(lx, ly, lz);
-    kf.fov = fov;
-    cam_track->AddKeyframe(kf);
+    dse_cutscene_add_camera_keyframe(CheckInt(L, 1), luaL_checkstring(L, 2), CheckFloat(L, 3),
+                                     CheckFloat(L, 4), CheckFloat(L, 5), CheckFloat(L, 6),
+                                     CheckFloat(L, 7), CheckFloat(L, 8), CheckFloat(L, 9),
+                                     OptFloat(L, 10, 60.0f));
     return 0;
 }
 
 int L_CSAddPropertyKeyframe(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* seq_name = luaL_checkstring(L, 2);
-    const char* track_name = luaL_checkstring(L, 3);
-    float time = CheckFloat(L, 4);
-    float value = CheckFloat(L, 5);
     const char* interp_str = luaL_optstring(L, 6, "linear");
-
-    auto seq = inst.player.GetSequence(seq_name);
-    if (!seq) return 0;
-
-    std::string key = std::string(seq_name) + ":" + track_name;
-    auto& prop_track = inst.property_tracks[key];
-    if (!prop_track) {
-        prop_track = std::make_shared<PropertyTrack>(track_name);
-        seq->AddTrack(prop_track);
-    }
-
-    InterpMode interp = InterpMode::Linear;
-    if (interp_str[0] == 's') interp = InterpMode::Step;
-    else if (interp_str[0] == 'c') interp = InterpMode::CubicBezier;
-
-    prop_track->AddKeyframe(time, value, interp);
+    int interp = 0;
+    if (interp_str[0] == 's') interp = 1;
+    else if (interp_str[0] == 'c') interp = 2;
+    dse_cutscene_add_property_keyframe(CheckInt(L, 1), luaL_checkstring(L, 2),
+                                       luaL_checkstring(L, 3), CheckFloat(L, 4),
+                                       CheckFloat(L, 5), interp);
     return 0;
 }
 
 int L_CSAddEvent(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* seq_name = luaL_checkstring(L, 2);
-    float time = CheckFloat(L, 3);
-    const char* event_name = luaL_checkstring(L, 4);
-    const char* payload = luaL_optstring(L, 5, "");
-
-    auto seq = inst.player.GetSequence(seq_name);
-    if (!seq) return 0;
-
-    auto& evt_track = inst.event_tracks[seq_name];
-    if (!evt_track) {
-        evt_track = std::make_shared<EventTrack>("Events");
-        seq->AddTrack(evt_track);
-    }
-
-    evt_track->AddEvent(time, event_name, payload);
+    dse_cutscene_add_event(CheckInt(L, 1), luaL_checkstring(L, 2), CheckFloat(L, 3),
+                           luaL_checkstring(L, 4), luaL_optstring(L, 5, ""));
     return 0;
 }
 
 int L_CSAddAudioCue(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* seq_name = luaL_checkstring(L, 2);
-    float time = CheckFloat(L, 3);
-    const char* path = luaL_checkstring(L, 4);
-    float volume = OptFloat(L, 5, 1.0f);
-    bool loop = OptBool(L, 6, false);
-
-    auto seq = inst.player.GetSequence(seq_name);
-    if (!seq) return 0;
-
-    auto& aud_track = inst.audio_tracks[seq_name];
-    if (!aud_track) {
-        aud_track = std::make_shared<AudioTrack>("Audio");
-        seq->AddTrack(aud_track);
-    }
-
-    aud_track->AddCue(time, path, volume, loop);
+    dse_cutscene_add_audio_cue(CheckInt(L, 1), luaL_checkstring(L, 2), CheckFloat(L, 3),
+                               luaL_checkstring(L, 4), OptFloat(L, 5, 1.0f),
+                               OptBool(L, 6, false) ? 1 : 0);
     return 0;
 }
 
@@ -224,63 +184,51 @@ int L_CSAddAudioCue(lua_State* L) {
 // ============================================================
 
 int L_CSPlay(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    const char* name = luaL_checkstring(L, 2);
-    inst.player.Play(name);
+    dse_cutscene_play(CheckInt(L, 1), luaL_checkstring(L, 2));
     return 0;
 }
 
 int L_CSPause(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    inst.player.Pause();
+    dse_cutscene_pause(CheckInt(L, 1));
     return 0;
 }
 
 int L_CSResume(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    inst.player.Resume();
+    dse_cutscene_resume(CheckInt(L, 1));
     return 0;
 }
 
 int L_CSStop(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    inst.player.Stop();
+    dse_cutscene_stop(CheckInt(L, 1));
     return 0;
 }
 
 int L_CSSeek(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    float time = CheckFloat(L, 2);
-    inst.player.Seek(time);
+    dse_cutscene_seek(CheckInt(L, 1), CheckFloat(L, 2));
     return 0;
 }
 
 int L_CSGetTime(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    lua_pushnumber(L, inst.player.GetCurrentTime());
+    lua_pushnumber(L, dse_cutscene_get_time(CheckInt(L, 1)));
     return 1;
 }
 
 int L_CSGetState(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    switch (inst.player.GetState()) {
-        case PlayState::Playing: lua_pushstring(L, "playing"); break;
-        case PlayState::Paused:  lua_pushstring(L, "paused"); break;
-        default:                 lua_pushstring(L, "stopped"); break;
+    switch (dse_cutscene_get_state(CheckInt(L, 1))) {
+        case 1: lua_pushstring(L, "playing"); break;
+        case 2: lua_pushstring(L, "paused"); break;
+        default: lua_pushstring(L, "stopped"); break;
     }
     return 1;
 }
 
 int L_CSSetPlayRate(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    inst.player.SetPlayRate(CheckFloat(L, 2));
+    dse_cutscene_set_play_rate(CheckInt(L, 1), CheckFloat(L, 2));
     return 0;
 }
 
 int L_CSUpdate(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
-    float dt = CheckFloat(L, 2);
-    inst.player.Update(dt);
+    dse_cutscene_update(CheckInt(L, 1), CheckFloat(L, 2));
     return 0;
 }
 
@@ -289,71 +237,35 @@ int L_CSUpdate(lua_State* L) {
 // ============================================================
 
 int L_CSSetCameraCallback(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
+    int id = CheckInt(L, 1);
     const char* seq_name = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
-    lua_pushvalue(L, 3);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-    auto cam_it = inst.camera_tracks.find(seq_name);
-    if (cam_it != inst.camera_tracks.end() && cam_it->second) {
-        lua_State* LL = L;
-        cam_it->second->SetApplyCallback([LL, ref](const glm::vec3& pos, const glm::vec3& look, float fov) {
-            lua_rawgeti(LL, LUA_REGISTRYINDEX, ref);
-            lua_pushnumber(LL, pos.x); lua_pushnumber(LL, pos.y); lua_pushnumber(LL, pos.z);
-            lua_pushnumber(LL, look.x); lua_pushnumber(LL, look.y); lua_pushnumber(LL, look.z);
-            lua_pushnumber(LL, fov);
-            lua_pcall(LL, 7, 0, 0);
-        });
-    }
+    dse_cutscene_set_camera_callback(id, seq_name, CSCameraTrampoline,
+                                     MakeCallbackCtx(L, id, 3));
     return 0;
 }
 
 int L_CSSetEventCallback(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
+    int id = CheckInt(L, 1);
     const char* seq_name = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
-    lua_pushvalue(L, 3);
-    int ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-    auto evt_it = inst.event_tracks.find(seq_name);
-    if (evt_it != inst.event_tracks.end() && evt_it->second) {
-        lua_State* LL = L;
-        evt_it->second->SetFireCallback([LL, ref](const std::string& name, const std::string& payload) {
-            lua_rawgeti(LL, LUA_REGISTRYINDEX, ref);
-            lua_pushstring(LL, name.c_str());
-            lua_pushstring(LL, payload.c_str());
-            lua_pcall(LL, 2, 0, 0);
-        });
-    }
+    dse_cutscene_set_event_callback(id, seq_name, CSEventTrampoline,
+                                    MakeCallbackCtx(L, id, 3));
     return 0;
 }
 
 int L_CSSetFinishCallback(lua_State* L) {
-    int id = CheckInt(L, 1); GET_CS_INST(id);
+    int id = CheckInt(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
-    lua_pushvalue(L, 2);
-
-    if (inst.finish_callback_ref != LUA_NOREF) {
-        luaL_unref(L, LUA_REGISTRYINDEX, inst.finish_callback_ref);
-    }
-    inst.finish_callback_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-
-    lua_State* LL = L;
-    int ref = inst.finish_callback_ref;
-    inst.player.SetFinishCallback([LL, ref](const std::string& seq_name) {
-        lua_rawgeti(LL, LUA_REGISTRYINDEX, ref);
-        lua_pushstring(LL, seq_name.c_str());
-        lua_pcall(LL, 1, 0, 0);
-    });
+    dse_cutscene_set_finish_callback(id, CSFinishTrampoline, MakeCallbackCtx(L, id, 2));
     return 0;
 }
 
 } // namespace
 
 void ShutdownCutsceneBindings() {
-    s_cs_instances.clear();
-    s_next_cs_id = 1;
+    dse_cutscene_shutdown();
+    s_cs_callbacks.clear();
 }
 
 void RegisterCutsceneBindings(lua_State* L) {

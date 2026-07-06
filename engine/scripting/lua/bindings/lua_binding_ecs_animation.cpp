@@ -9,7 +9,6 @@
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
 #include "engine/scripting/native_api/dse_api.h"
-#include "engine/ecs/world.h"
 #include <cmath>
 #include <cstdint>
 #include <string>

@@ -1,124 +1,82 @@
 /**
  * @file lua_binding_ecs_rendering_fx.cpp
- * @brief Steering / LOD / Hair / Utility Lua 绑定（S1.8 按域拆分自 lua_binding_ecs_rendering.cpp）
+ * @brief Steering / LOD / Hair / Utility Lua 绑定（S1.8 按域拆分自 lua_binding_ecs_rendering.cpp）。薄包装委托至 C ABI。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
 #include "engine/scripting/native_api/dse_api.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/camera.h"
-#include "engine/ecs/sprite.h"
-#include "engine/ecs/transform.h"
-#include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_3d_tree.h"
-#include "engine/ecs/components_3d_terrain_tile.h"
-#include "engine/ecs/components_3d_navmesh.h"
-#include "engine/ecs/components_3d_foliage.h"
-#include "engine/assets/asset_manager.h"
-#include "engine/assets/lut_loader.h"
-#include "engine/render/rhi/rhi_device.h"
-#include "engine/platform/screen.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
 
-#include <glm/gtc/matrix_transform.hpp>
-#include <algorithm>
-#include <limits>
+#include <cmath>
 
+// codegen 逐字段 setter（声明于 dse_api.gen.h，过渡期不与 dse_api.h 同时 include）
+extern "C" void dse_hair_set_enabled(uint32_t e, int v);
 
 namespace dse::runtime::lua_binding {
 namespace {
+
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
 
 // ============================================================
 // Steering
 // ============================================================
 
 int L_EcsAddSteering(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float max_vel = helper::OptFloat(L, 2, 5.0f);
     float max_force = helper::OptFloat(L, 3, 10.0f);
     float mass = helper::OptFloat(L, 4, 1.0f);
-    auto& steering = world->registry().emplace_or_replace<SteeringComponent>(e);
-    steering.enabled = true;
-    steering.max_velocity = max_vel;
-    steering.max_force = max_force;
-    steering.mass = mass;
+    dse_steering_add(EID(e), max_vel, max_force, mass);
     return 0;
 }
 
 int L_EcsSetSteeringTarget(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     Entity e = helper::CheckEntity(L, 1);
     const char* behavior = luaL_checkstring(L, 2);
     float tx = helper::CheckFloat(L, 3);
     float ty = helper::CheckFloat(L, 4);
     float tz = helper::CheckFloat(L, 5);
-    auto* steering = helper::TryGetComponent<SteeringComponent>(*world, e);
-    if (!steering) {
+    int behavior_id = -1;
+    const std::string b = behavior;
+    if (b == "seek") behavior_id = 0;
+    else if (b == "flee") behavior_id = 1;
+    else if (b == "arrive") behavior_id = 2;
+    if (behavior_id < 0) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    std::string b = behavior;
-    if (b == "seek") {
-        steering->seek_enabled = true;
-        steering->flee_enabled = false;
-        steering->arrive_enabled = false;
-        steering->seek_target = glm::vec3(tx, ty, tz);
-        lua_pushboolean(L, 1);
-        return 1;
-    } else if (b == "flee") {
-        steering->seek_enabled = false;
-        steering->flee_enabled = true;
-        steering->arrive_enabled = false;
-        steering->flee_target = glm::vec3(tx, ty, tz);
-        lua_pushboolean(L, 1);
-        return 1;
-    } else if (b == "arrive") {
-        steering->seek_enabled = false;
-        steering->flee_enabled = false;
-        steering->arrive_enabled = true;
-        steering->arrive_target = glm::vec3(tx, ty, tz);
-        lua_pushboolean(L, 1);
-        return 1;
-    }
-    lua_pushboolean(L, 0);
+    lua_pushboolean(L, dse_steering_set_target(EID(e), behavior_id, tx, ty, tz));
     return 1;
 }
 
 int L_EcsGetSteeringState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* steering = helper::TryGetComponentConst<SteeringComponent>(*world, e);
-    if (!steering) {
+    int flags[4] = {0, 0, 0, 0};
+    float velocity[3] = {0.0f, 0.0f, 0.0f};
+    float params[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    float targets[9] = {0.0f};
+    if (!dse_steering_get_state(EID(e), flags, velocity, params, targets)) {
         lua_pushboolean(L, 0);
         return 1;
     }
+    const glm::vec3 vel(velocity[0], velocity[1], velocity[2]);
     lua_pushboolean(L, 1);
-    helper::PushBool(L, steering->enabled);
-    helper::PushBool(L, steering->seek_enabled);
-    helper::PushBool(L, steering->flee_enabled);
-    helper::PushBool(L, steering->arrive_enabled);
-    helper::PushVec3(L, steering->velocity);
-    helper::PushFloat(L, glm::length(steering->velocity));
-    helper::PushFloat(L, steering->max_velocity);
-    helper::PushFloat(L, steering->max_force);
-    helper::PushFloat(L, steering->mass);
-    helper::PushFloat(L, steering->arrive_deceleration_radius);
-    helper::PushVec3(L, steering->seek_target);
-    helper::PushVec3(L, steering->flee_target);
-    helper::PushVec3(L, steering->arrive_target);
+    helper::PushBool(L, flags[0] != 0);
+    helper::PushBool(L, flags[1] != 0);
+    helper::PushBool(L, flags[2] != 0);
+    helper::PushBool(L, flags[3] != 0);
+    helper::PushVec3(L, vel);
+    helper::PushFloat(L, glm::length(vel));
+    helper::PushFloat(L, params[0]);
+    helper::PushFloat(L, params[1]);
+    helper::PushFloat(L, params[2]);
+    helper::PushFloat(L, params[3]);
+    helper::PushVec3(L, glm::vec3(targets[0], targets[1], targets[2]));
+    helper::PushVec3(L, glm::vec3(targets[3], targets[4], targets[5]));
+    helper::PushVec3(L, glm::vec3(targets[6], targets[7], targets[8]));
     return 22;
 }
 
@@ -194,57 +152,33 @@ int L_EcsPickEntity(lua_State* L) {
 
 /// lod.add_level(entity, mesh_path, threshold)
 int L_EcsLodAddLevel(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     const char* mesh_path = luaL_checkstring(L, 2);
     float threshold = static_cast<float>(luaL_checknumber(L, 3));
-    if (!world->registry().all_of<LODGroupComponent>(e)) {
-        world->registry().emplace<LODGroupComponent>(e);
-    }
-    auto& lod = world->registry().get<LODGroupComponent>(e);
-    LODLevelConfig level;
-    level.mesh_path = mesh_path;
-    level.screen_size_threshold = threshold;
-    lod.levels.push_back(std::move(level));
+    dse_lod_add_level(EID(e), mesh_path, threshold);
     return 0;
 }
 
 /// lod.set_scale(entity, scale)
 int L_EcsLodSetScale(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float scale = static_cast<float>(luaL_checknumber(L, 2));
-    auto* lod = helper::TryGetComponent<LODGroupComponent>(*world, e);
-    if (!lod) return 0;
-    lod->global_scale = scale;
+    dse_lod_set_scale(EID(e), scale);
     return 0;
 }
 
 /// lod.set_min_screen_size(entity, min_size)  -- 低于此屏幕占比时隐藏实体（LOD 距离裁剪）
 int L_EcsLodSetMinScreenSize(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     float min_size = static_cast<float>(luaL_checknumber(L, 2));
-    if (!world->registry().all_of<LODGroupComponent>(e)) {
-        world->registry().emplace<LODGroupComponent>(e);
-    }
-    auto& lod = world->registry().get<LODGroupComponent>(e);
-    lod.min_screen_size = min_size;
+    dse_lod_set_min_screen_size(EID(e), min_size);
     return 0;
 }
 
 /// lod.set_enabled(entity, enabled)
 int L_EcsLodSetEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    bool enabled = lua_toboolean(L, 2) != 0;
-    auto* lod = helper::TryGetComponent<LODGroupComponent>(*world, e);
-    if (!lod) return 0;
-    lod->enabled = enabled;
+    dse_lod_set_enabled(EID(e), lua_toboolean(L, 2) != 0 ? 1 : 0);
     return 0;
 }
 
@@ -255,82 +189,70 @@ int L_EcsLodSetEnabled(lua_State* L) {
 
 // add_hair(entity, asset_path [, num_follow_per_guide])
 int L_EcsAddHair(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto& h = world->registry().emplace_or_replace<HairComponent>(e);
-    h.enabled = true;
-    h.hair_asset_path = helper::CheckString(L, 2);
-    if (lua_gettop(L) >= 3) h.num_follow_per_guide = helper::CheckInt(L, 3);
+    const char* asset_path = helper::CheckString(L, 2);
+    const int num_follow = lua_gettop(L) >= 3 ? helper::CheckInt(L, 3) : -1;
+    dse_hair_add(EID(e), asset_path, num_follow);
     return 0;
 }
 
 // set_hair_physics(entity, damping, stiffness_local, stiffness_global, gravity)
 int L_EcsSetHairPhysics(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
-    if (!h) return 0;
-    if (lua_gettop(L) >= 2) h->damping          = helper::CheckFloat(L, 2);
-    if (lua_gettop(L) >= 3) h->stiffness_local  = helper::CheckFloat(L, 3);
-    if (lua_gettop(L) >= 4) h->stiffness_global = helper::CheckFloat(L, 4);
-    if (lua_gettop(L) >= 5) h->gravity          = helper::CheckFloat(L, 5);
+    const float damping          = lua_gettop(L) >= 2 ? helper::CheckFloat(L, 2) : NAN;
+    const float stiffness_local  = lua_gettop(L) >= 3 ? helper::CheckFloat(L, 3) : NAN;
+    const float stiffness_global = lua_gettop(L) >= 4 ? helper::CheckFloat(L, 4) : NAN;
+    const float gravity          = lua_gettop(L) >= 5 ? helper::CheckFloat(L, 5) : NAN;
+    dse_hair_set_physics(EID(e), damping, stiffness_local, stiffness_global, gravity);
     return 0;
 }
 
 // set_hair_render(entity, root_r,g,b,a, tip_r,g,b,a, fiber_radius, opacity)
 int L_EcsSetHairRender(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
-    if (!h) return 0;
-    if (lua_gettop(L) >= 5)
-        h->root_color = glm::vec4(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3),
-                                   helper::CheckFloat(L, 4), helper::CheckFloat(L, 5));
-    if (lua_gettop(L) >= 9)
-        h->tip_color = glm::vec4(helper::CheckFloat(L, 6), helper::CheckFloat(L, 7),
-                                  helper::CheckFloat(L, 8), helper::CheckFloat(L, 9));
-    if (lua_gettop(L) >= 10) h->fiber_radius = helper::CheckFloat(L, 10);
-    if (lua_gettop(L) >= 11) h->opacity      = helper::CheckFloat(L, 11);
+    float root_r = NAN, root_g = NAN, root_b = NAN, root_a = NAN;
+    float tip_r = NAN, tip_g = NAN, tip_b = NAN, tip_a = NAN;
+    if (lua_gettop(L) >= 5) {
+        root_r = helper::CheckFloat(L, 2); root_g = helper::CheckFloat(L, 3);
+        root_b = helper::CheckFloat(L, 4); root_a = helper::CheckFloat(L, 5);
+    }
+    if (lua_gettop(L) >= 9) {
+        tip_r = helper::CheckFloat(L, 6); tip_g = helper::CheckFloat(L, 7);
+        tip_b = helper::CheckFloat(L, 8); tip_a = helper::CheckFloat(L, 9);
+    }
+    const float fiber_radius = lua_gettop(L) >= 10 ? helper::CheckFloat(L, 10) : NAN;
+    const float opacity      = lua_gettop(L) >= 11 ? helper::CheckFloat(L, 11) : NAN;
+    dse_hair_set_render(EID(e), root_r, root_g, root_b, root_a,
+                        tip_r, tip_g, tip_b, tip_a, fiber_radius, opacity);
     return 0;
 }
 
 // set_hair_wind(entity, wx, wy, wz [, turbulence])
 int L_EcsSetHairWind(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
-    if (!h) return 0;
-    h->wind = glm::vec3(helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
-    if (lua_gettop(L) >= 5) h->wind_turbulence = helper::CheckFloat(L, 5);
+    const float wx = helper::CheckFloat(L, 2);
+    const float wy = helper::CheckFloat(L, 3);
+    const float wz = helper::CheckFloat(L, 4);
+    const float turbulence = lua_gettop(L) >= 5 ? helper::CheckFloat(L, 5) : NAN;
+    dse_hair_set_wind_full(EID(e), wx, wy, wz, turbulence);
     return 0;
 }
 
 // set_hair_enabled(entity, bool)
 int L_EcsSetHairEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
-    if (!h) return 0;
-    h->enabled = lua_toboolean(L, 2) != 0;
+    dse_hair_set_enabled(EID(e), lua_toboolean(L, 2) != 0 ? 1 : 0);
     return 0;
 }
 
 // set_hair_lod(entity, lod0, lod1, lod2, cull)
 int L_EcsSetHairLod(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* h = helper::TryGetComponent<HairComponent>(*world, e);
-    if (!h) return 0;
-    if (lua_gettop(L) >= 2) h->lod0_distance = helper::CheckFloat(L, 2);
-    if (lua_gettop(L) >= 3) h->lod1_distance = helper::CheckFloat(L, 3);
-    if (lua_gettop(L) >= 4) h->lod2_distance = helper::CheckFloat(L, 4);
-    if (lua_gettop(L) >= 5) h->cull_distance = helper::CheckFloat(L, 5);
+    const float lod0 = lua_gettop(L) >= 2 ? helper::CheckFloat(L, 2) : NAN;
+    const float lod1 = lua_gettop(L) >= 3 ? helper::CheckFloat(L, 3) : NAN;
+    const float lod2 = lua_gettop(L) >= 4 ? helper::CheckFloat(L, 4) : NAN;
+    const float cull = lua_gettop(L) >= 5 ? helper::CheckFloat(L, 5) : NAN;
+    dse_hair_set_lod(EID(e), lod0, lod1, lod2, cull);
     return 0;
 }
 

@@ -1,220 +1,194 @@
 /**
  * @file lua_binding_core.cpp
- * @brief Lua 脚本绑定与运行时管理，处理 C++ 与 Lua 的交互边界
+ * @brief Lua 脚本绑定与运行时管理，处理 C++ 与 Lua 的交互边界。薄包装委托至 C ABI。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
-#include "engine/assets/asset_manager.h"
-#include "engine/base/debug.h"
-#include "engine/base/time.h"
-#include "engine/input/input.h"
-#include "engine/input/key_code.h"
-#include "engine/platform/screen.h"
-#include "engine/ecs/floating_origin_system.h"
+#include "engine/scripting/native_api/dse_api.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
 
 namespace dse::runtime::lua_binding {
 namespace {
+
+// 与 engine/input/key_code.h 的 MOUSE_BUTTON_* 对应
+constexpr int kMouseButtonLeft = 0;
+constexpr int kMouseButtonRight = 1;
+constexpr int kMouseButtonMiddle = 2;
+
 int L_AssetsLoadTexture(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
-    auto texture = GetAssetManager().LoadTexture(path);
-    lua_pushinteger(L, texture ? static_cast<lua_Integer>(texture->GetHandle()) : 0);
+    lua_pushinteger(L, static_cast<lua_Integer>(dse_assets_load_texture(path)));
     return 1;
 }
 
 int L_AppSetDataRoot(lua_State* L) {
-    const char* data_root = luaL_checkstring(L, 1);
-    auto& asset_manager = GetAssetManager();
-    asset_manager.ConfigureDataRoot(data_root);
-    DEBUG_LOG_INFO("Data root updated from lua: {}", asset_manager.GetDataRoot());
+    dse_assets_set_data_root(luaL_checkstring(L, 1));
     return 0;
 }
 
 int L_AppSetWindowTitle(lua_State* L) {
-    const char* title = luaL_checkstring(L, 1);
-    const auto& setter = GetBindingContext().set_window_title;
-    if (setter) {
-        setter(title);
-    }
+    dse_app_set_window_title(luaL_checkstring(L, 1));
     return 0;
 }
 
 int L_AppGetMouseX(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::mousePosition().x));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_x()));
     return 1;
 }
 
 int L_AppGetMouseY(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::mousePosition().y));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_y()));
     return 1;
 }
 
 int L_AppGetMouseLeft(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButton(MOUSE_BUTTON_LEFT));
+    lua_pushboolean(L, dse_input_get_mouse_button(kMouseButtonLeft));
     return 1;
 }
 
 int L_AppGetMouseLeftDown(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButtonDown(MOUSE_BUTTON_LEFT));
+    lua_pushboolean(L, dse_input_get_mouse_button_down(kMouseButtonLeft));
     return 1;
 }
 
 int L_AppGetMouseLeftUp(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButtonUp(MOUSE_BUTTON_LEFT));
+    lua_pushboolean(L, dse_input_get_mouse_button_up(kMouseButtonLeft));
     return 1;
 }
 
 int L_AppGetMouseRight(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButton(MOUSE_BUTTON_RIGHT));
+    lua_pushboolean(L, dse_input_get_mouse_button(kMouseButtonRight));
     return 1;
 }
 
 int L_AppGetMouseRightDown(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButtonDown(MOUSE_BUTTON_RIGHT));
+    lua_pushboolean(L, dse_input_get_mouse_button_down(kMouseButtonRight));
     return 1;
 }
 
 int L_AppGetMouseRightUp(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButtonUp(MOUSE_BUTTON_RIGHT));
+    lua_pushboolean(L, dse_input_get_mouse_button_up(kMouseButtonRight));
     return 1;
 }
 
 int L_AppGetKey(lua_State* L) {
-    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
-    lua_pushboolean(L, Input::GetKey(key_code));
+    lua_pushboolean(L, dse_input_get_key(static_cast<int>(luaL_checkinteger(L, 1))));
     return 1;
 }
 
 int L_AppGetKeyDown(lua_State* L) {
-    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
-    lua_pushboolean(L, Input::GetKeyDown(key_code));
+    lua_pushboolean(L, dse_input_get_key_down(static_cast<int>(luaL_checkinteger(L, 1))));
     return 1;
 }
 
 int L_AppGetKeyUp(lua_State* L) {
-    const auto key_code = static_cast<unsigned short>(luaL_checkinteger(L, 1));
-    lua_pushboolean(L, Input::GetKeyUp(key_code));
+    lua_pushboolean(L, dse_input_get_key_up(static_cast<int>(luaL_checkinteger(L, 1))));
     return 1;
 }
 
 /**
  * @brief Lua 绑定：获取鼠标左键当前帧是否触发了双击
-
- * @param L Lua 状态机
- * @return 压入一个布尔值，表示是否双击
  * @example if app.get_mouse_left_double_click() then print("double click") end
  */
 int L_AppGetMouseLeftDoubleClick(lua_State* L) {
-    lua_pushboolean(L, Input::GetDoubleClick(MOUSE_BUTTON_LEFT));
+    lua_pushboolean(L, dse_input_get_mouse_left_double_click());
     return 1;
 }
 
 /**
- * @brief Lua 绑定：获取鼠标左键是否长按超过指定时间
- * @param L Lua 状态机，参数 1 可选为长按判定时间（默认 0.5 秒）
- * @return 压入一个布尔值，表示是否处于长按状态
+ * @brief Lua 绑定：获取鼠标左键是否长按超过指定时间（默认 0.5 秒）
  * @example if app.get_mouse_left_long_press(1.0) then print("long press") end
  */
 int L_AppGetMouseLeftLongPress(lua_State* L) {
     float duration = static_cast<float>(luaL_optnumber(L, 1, 0.5));
-    lua_pushboolean(L, Input::GetLongPress(MOUSE_BUTTON_LEFT, duration));
+    lua_pushboolean(L, dse_input_get_mouse_left_long_press(duration));
     return 1;
 }
 
 /**
- * @brief Lua 绑定：获取当前帧滑动/拖拽在 X 轴上的增量
- * @param L Lua 状态机
- * @return 压入一个数字，表示滑动 X 轴增量（像素）
+ * @brief Lua 绑定：获取当前帧滑动/拖拽在 X 轴上的增量（像素）
  * @example local dx = app.get_mouse_swipe_dx()
  */
 int L_AppGetMouseSwipeDeltaX(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::GetSwipeDelta().x));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_swipe_dx()));
     return 1;
 }
 
 /**
- * @brief Lua 绑定：获取当前帧滑动/拖拽在 Y 轴上的增量
- * @param L Lua 状态机
- * @return 压入一个数字，表示滑动 Y 轴增量（像素）
+ * @brief Lua 绑定：获取当前帧滑动/拖拽在 Y 轴上的增量（像素）
  * @example local dy = app.get_mouse_swipe_dy()
  */
 int L_AppGetMouseSwipeDeltaY(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::GetSwipeDelta().y));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_swipe_dy()));
     return 1;
 }
 
 /**
  * @brief Lua 绑定：检测设备是否处于摇晃状态
- * @param L Lua 状态机
- * @return 压入一个布尔值，表示是否在摇晃
  * @example if app.get_device_shake() then print("shake") end
  */
 int L_AppGetShake(lua_State* L) {
-    lua_pushboolean(L, Input::IsDeviceShaking());
+    lua_pushboolean(L, dse_input_get_device_shake());
     return 1;
 }
 
 int L_AppGetTimeSinceStartup(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Time::TimeSinceStartup()));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_app_get_time_since_startup()));
     return 1;
 }
 
 int L_AppGetScreenWidth(lua_State* L) {
-    lua_pushinteger(L, Screen::width());
+    lua_pushinteger(L, static_cast<lua_Integer>(dse_input_get_screen_width()));
     return 1;
 }
 
 int L_AppGetScreenHeight(lua_State* L) {
-    lua_pushinteger(L, Screen::height());
+    lua_pushinteger(L, static_cast<lua_Integer>(dse_input_get_screen_height()));
     return 1;
 }
 
-int L_AppQuit(lua_State* L) {
-    const auto& fn = GetBindingContext().quit_app;
-    if (fn) fn();
+int L_AppQuit(lua_State*) {
+    dse_app_quit();
     return 0;
 }
 
 int L_AppSetTargetFps(lua_State* L) {
-    float fps = static_cast<float>(luaL_checknumber(L, 1));
-    const auto& fn = GetBindingContext().set_target_fps;
-    if (fn) fn(fps);
+    dse_app_set_target_fps(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // app.set_time_scale(s)：全局时间缩放（0=暂停, 1=正常, 0.5=半速, >1=快进），s 钳制为 >=0
 int L_AppSetTimeScale(lua_State* L) {
-    float scale = static_cast<float>(luaL_checknumber(L, 1));
-    Time::set_time_scale(scale);
+    dse_app_set_time_scale(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // app.get_time_scale() -> number：当前全局时间缩放
 int L_AppGetTimeScale(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Time::time_scale()));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_app_get_time_scale()));
     return 1;
 }
 
 int L_AppGetMouseMiddle(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButton(MOUSE_BUTTON_MIDDLE));
+    lua_pushboolean(L, dse_input_get_mouse_middle());
     return 1;
 }
 
 int L_AppGetMouseMiddleDown(lua_State* L) {
-    lua_pushboolean(L, Input::GetMouseButtonDown(MOUSE_BUTTON_MIDDLE));
+    lua_pushboolean(L, dse_input_get_mouse_middle_down());
     return 1;
 }
 
 int L_AppGetMouseScrollDx(lua_State* L) {
-    lua_pushnumber(L, 0.0);  // GLFW only reports vertical scroll
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_scroll_dx()));
     return 1;
 }
 
 int L_AppGetMouseScrollDy(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::mouseScroll()));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_mouse_scroll_dy()));
     return 1;
 }
 
@@ -228,74 +202,66 @@ int L_AppGetGamepadAxis(lua_State* L) {
     } else {
         axis = static_cast<int>(luaL_checkinteger(L, 1));
     }
-    lua_pushnumber(L, static_cast<lua_Number>(Input::GetGamepadAxis(gamepad_id, axis)));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_gamepad_axis(gamepad_id, axis)));
     return 1;
 }
 
 // app.is_gamepad_connected([gamepad_id=0]) -> bool
 int L_AppIsGamepadConnected(lua_State* L) {
     int gamepad_id = static_cast<int>(luaL_optinteger(L, 1, 0));
-    lua_pushboolean(L, Input::IsGamepadConnected(gamepad_id));
+    lua_pushboolean(L, dse_input_is_gamepad_connected(gamepad_id));
     return 1;
 }
 
 // app.set_gamepad_dead_zone(dead_zone)
 int L_AppSetGamepadDeadZone(lua_State* L) {
-    Input::SetGamepadDeadZone(static_cast<float>(luaL_checknumber(L, 1)));
+    dse_input_set_gamepad_dead_zone(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // app.get_gamepad_dead_zone() -> number
 int L_AppGetGamepadDeadZone(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Input::GetGamepadDeadZone()));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_input_get_gamepad_dead_zone()));
     return 1;
 }
 
 int L_MetricsGetFps(lua_State* L) {
-    float dt = Time::delta_time();
-    float fps = (dt > 0.0f) ? (1.0f / dt) : 0.0f;
-    lua_pushnumber(L, static_cast<lua_Number>(fps));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_metrics_get_fps()));
     return 1;
 }
 
 int L_MetricsGetFrameTimeMs(lua_State* L) {
-    lua_pushnumber(L, static_cast<lua_Number>(Time::delta_time() * 1000.0f));
+    lua_pushnumber(L, static_cast<lua_Number>(dse_metrics_get_frame_time_ms()));
     return 1;
 }
 
 int L_MetricsGetDrawCalls(lua_State* L) {
-    const auto& fn = GetBindingContext().get_draw_calls;
-    lua_pushinteger(L, fn ? fn() : 0);
+    lua_pushinteger(L, dse_metrics_get_draw_calls());
     return 1;
 }
 
 int L_MetricsGetMaxBatchSprites(lua_State* L) {
-    const auto& fn = GetBindingContext().get_max_batch_sprites;
-    lua_pushinteger(L, fn ? fn() : 0);
+    lua_pushinteger(L, dse_metrics_get_max_batch_sprites());
     return 1;
 }
 
 int L_MetricsGetSpriteCount(lua_State* L) {
-    const auto& fn = GetBindingContext().get_sprite_count;
-    lua_pushinteger(L, fn ? fn() : 0);
+    lua_pushinteger(L, dse_metrics_get_sprite_count());
     return 1;
 }
 
 int L_MetricsGetGpuDrivenActive(lua_State* L) {
-    const auto& fn = GetBindingContext().get_gpu_driven_active;
-    lua_pushboolean(L, fn ? (fn() != 0) : false);
+    lua_pushboolean(L, dse_metrics_get_gpu_driven_active());
     return 1;
 }
 
 int L_MetricsGetGpuIndirectDrawCount(lua_State* L) {
-    const auto& fn = GetBindingContext().get_gpu_indirect_draw_count;
-    lua_pushinteger(L, fn ? fn() : 0);
+    lua_pushinteger(L, dse_metrics_get_gpu_indirect_draw_count());
     return 1;
 }
 
 int L_MetricsGetGpuTotalInstances(lua_State* L) {
-    const auto& fn = GetBindingContext().get_gpu_total_instances;
-    lua_pushinteger(L, fn ? fn() : 0);
+    lua_pushinteger(L, dse_metrics_get_gpu_total_instances());
     return 1;
 }
 }
@@ -373,66 +339,51 @@ void RegisterMetricsBindings(lua_State* L) {
 
 namespace {
 
-static dse::FloatingOriginSystem* GetFloatingOrigin() {
-    return static_cast<dse::FloatingOriginSystem*>(GetBindingContext().floating_origin);
-}
-
-// origin.get_accumulated() -> x, y, z  (double precision returned as number)
+// origin.get_accumulated() -> x, y, z
 int L_OriginGetAccumulated(lua_State* L) {
-    auto* fo = GetFloatingOrigin();
-    if (!fo) { lua_pushnumber(L, 0); lua_pushnumber(L, 0); lua_pushnumber(L, 0); return 3; }
-    const auto& acc = fo->accumulated_origin();
-    lua_pushnumber(L, static_cast<lua_Number>(acc.x));
-    lua_pushnumber(L, static_cast<lua_Number>(acc.y));
-    lua_pushnumber(L, static_cast<lua_Number>(acc.z));
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    dse_origin_get_accumulated(&x, &y, &z);
+    lua_pushnumber(L, static_cast<lua_Number>(x));
+    lua_pushnumber(L, static_cast<lua_Number>(y));
+    lua_pushnumber(L, static_cast<lua_Number>(z));
     return 3;
 }
 
 // origin.to_absolute(lx, ly, lz) -> ax, ay, az
 int L_OriginToAbsolute(lua_State* L) {
-    auto* fo = GetFloatingOrigin();
     float lx = static_cast<float>(luaL_checknumber(L, 1));
     float ly = static_cast<float>(luaL_checknumber(L, 2));
     float lz = static_cast<float>(luaL_checknumber(L, 3));
-    if (!fo) { lua_pushnumber(L, lx); lua_pushnumber(L, ly); lua_pushnumber(L, lz); return 3; }
-    glm::dvec3 abs = fo->ToAbsolute(glm::vec3(lx, ly, lz));
-    lua_pushnumber(L, static_cast<lua_Number>(abs.x));
-    lua_pushnumber(L, static_cast<lua_Number>(abs.y));
-    lua_pushnumber(L, static_cast<lua_Number>(abs.z));
+    float x = lx, y = ly, z = lz;
+    dse_origin_to_absolute(lx, ly, lz, &x, &y, &z);
+    lua_pushnumber(L, static_cast<lua_Number>(x));
+    lua_pushnumber(L, static_cast<lua_Number>(y));
+    lua_pushnumber(L, static_cast<lua_Number>(z));
     return 3;
 }
 
 // origin.to_local(ax, ay, az) -> lx, ly, lz
 int L_OriginToLocal(lua_State* L) {
-    auto* fo = GetFloatingOrigin();
-    double ax = luaL_checknumber(L, 1);
-    double ay = luaL_checknumber(L, 2);
-    double az = luaL_checknumber(L, 3);
-    if (!fo) {
-        lua_pushnumber(L, static_cast<lua_Number>(ax));
-        lua_pushnumber(L, static_cast<lua_Number>(ay));
-        lua_pushnumber(L, static_cast<lua_Number>(az));
-        return 3;
-    }
-    glm::vec3 local = fo->ToLocal(glm::dvec3(ax, ay, az));
-    lua_pushnumber(L, static_cast<lua_Number>(local.x));
-    lua_pushnumber(L, static_cast<lua_Number>(local.y));
-    lua_pushnumber(L, static_cast<lua_Number>(local.z));
+    float ax = static_cast<float>(luaL_checknumber(L, 1));
+    float ay = static_cast<float>(luaL_checknumber(L, 2));
+    float az = static_cast<float>(luaL_checknumber(L, 3));
+    float x = ax, y = ay, z = az;
+    dse_origin_to_local(ax, ay, az, &x, &y, &z);
+    lua_pushnumber(L, static_cast<lua_Number>(x));
+    lua_pushnumber(L, static_cast<lua_Number>(y));
+    lua_pushnumber(L, static_cast<lua_Number>(z));
     return 3;
 }
 
 // origin.set_rebase_threshold(threshold)
 int L_OriginSetRebaseThreshold(lua_State* L) {
-    auto* fo = GetFloatingOrigin();
-    if (!fo) return 0;
-    fo->set_rebase_threshold(static_cast<float>(luaL_checknumber(L, 1)));
+    dse_origin_set_rebase_threshold(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // origin.get_rebase_threshold() -> threshold
 int L_OriginGetRebaseThreshold(lua_State* L) {
-    auto* fo = GetFloatingOrigin();
-    lua_pushnumber(L, fo ? static_cast<lua_Number>(fo->rebase_threshold()) : 5000.0);
+    lua_pushnumber(L, static_cast<lua_Number>(dse_origin_get_rebase_threshold()));
     return 1;
 }
 

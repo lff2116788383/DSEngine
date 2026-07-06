@@ -1,145 +1,106 @@
 /**
  * @file lua_binding_audio.cpp
- * @brief 音频系统管理，封装底层音频库，提供音效和背景音乐的播放控制
+ * @brief 音频系统管理，封装底层音频库，提供音效和背景音乐的播放控制。薄包装委托至 C ABI。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/assets/asset_manager.h"
-#include "engine/audio/audio_system.h"
-#include "engine/ecs/audio.h"
-#include <algorithm>
+#include "engine/scripting/native_api/dse_api.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
 
 namespace dse::runtime::lua_binding {
 namespace {
+
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
+
 int L_AudioAddSource(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     const char* path = luaL_checkstring(L, 2);
-    bool play_on_awake = lua_toboolean(L, 3);
-    bool loop = lua_toboolean(L, 4);
+    int play_on_awake = lua_toboolean(L, 3);
+    int loop = lua_toboolean(L, 4);
     float volume = static_cast<float>(luaL_optnumber(L, 5, 1.0));
-    auto& audio = world->registry().emplace_or_replace<AudioSourceComponent>(e);
-    audio.clip = GetAssetManager().LoadAudioClip(path);
-    audio.play_on_awake = play_on_awake;
-    audio.loop = loop;
-    audio.volume = volume;
+    dse_audio_source_add(EID(e), path, play_on_awake, loop, volume);
     return 0;
 }
 
 int L_AudioSetPlaying(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    bool playing = lua_toboolean(L, 2);
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        auto& audio = world->registry().get<AudioSourceComponent>(e);
-        audio.is_playing = playing;
-        if (!playing) {
-            audio.restart_requested = false;
-        }
-    }
+    dse_audio_source_set_playing(EID(e), lua_toboolean(L, 2));
     return 0;
 }
 
 int L_AudioRestart(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        auto& audio = world->registry().get<AudioSourceComponent>(e);
-        audio.is_playing = true;
-        audio.restart_requested = true;
-    }
+    dse_audio_source_restart(EID(e));
     return 0;
 }
 
-// 音频组件简单 setter — 使用宏替代手写样板
-DSE_LUA_COMPONENT_SETTER(AudioLoop, AudioSourceComponent, loop, bool, helper::CheckBool(L, 2))
-DSE_LUA_COMPONENT_SETTER(AudioVolume, AudioSourceComponent, volume, float, helper::CheckFloat(L, 2))
-DSE_LUA_COMPONENT_SETTER(AudioPitch, AudioSourceComponent, pitch, float, std::max(0.01f, helper::CheckFloat(L, 2)))
+int L_EcsSetAudioLoop(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_audio_source_set_loop(EID(e), helper::CheckBool(L, 2) ? 1 : 0);
+    return 0;
+}
+
+int L_EcsSetAudioVolume(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_audio_source_set_volume(EID(e), helper::CheckFloat(L, 2));
+    return 0;
+}
+
+int L_EcsSetAudioPitch(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_audio_source_set_pitch(EID(e), helper::CheckFloat(L, 2));
+    return 0;
+}
+
 int L_AudioSet3DMode(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    bool enabled = lua_toboolean(L, 2) != 0;
-    if (world->registry().valid(e)) {
-        auto& audio = world->registry().get_or_emplace<AudioSourceComponent>(e);
-        audio.spatial_enabled = enabled;
-    }
+    dse_audio_source_set_3d_mode(EID(e), lua_toboolean(L, 2) != 0 ? 1 : 0);
     return 0;
 }
 
 int L_AudioAddListener(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    if (world->registry().valid(e)) {
-        auto& listener = world->registry().emplace_or_replace<AudioListenerComponent>(e);
-        listener.enabled = true;
-        listener.listener_index = 0;
-    }
+    dse_audio_listener_add(EID(e), 1);
     return 0;
 }
 
 int L_AudioSet3DDistance(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        return 0;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    float min_distance = std::max(0.01f, static_cast<float>(luaL_optnumber(L, 2, 1.0)));
-    float max_distance = std::max(min_distance, static_cast<float>(luaL_optnumber(L, 3, 20.0)));
-    float rolloff = std::max(0.0f, static_cast<float>(luaL_optnumber(L, 4, 1.0)));
-    if (world->registry().valid(e)) {
-        auto& audio = world->registry().get_or_emplace<AudioSourceComponent>(e);
-        audio.min_distance = min_distance;
-        audio.max_distance = max_distance;
-        audio.rolloff = rolloff;
-    }
+    float min_distance = static_cast<float>(luaL_optnumber(L, 2, 1.0));
+    float max_distance = static_cast<float>(luaL_optnumber(L, 3, 20.0));
+    float rolloff = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    dse_audio_source_set_3d_distance(EID(e), min_distance, max_distance, rolloff);
     return 0;
 }
 
 int L_AudioGetSourceState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
-    if (!world->registry().valid(e) || !world->registry().all_of<AudioSourceComponent>(e)) {
+    int flags[3] = {0, 0, 0};
+    float params[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    long long runtime_handle = 0;
+    long long clip_size = 0;
+    char path[512] = {0};
+    if (!dse_audio_source_get_state(EID(e), flags, params, &runtime_handle, &clip_size,
+                                    path, static_cast<int>(sizeof(path)))) {
         lua_pushboolean(L, 0);
         return 1;
     }
-
-    const auto& audio = world->registry().get<AudioSourceComponent>(e);
     lua_pushboolean(L, 1);
-    lua_pushboolean(L, audio.clip != nullptr);
-    lua_pushboolean(L, audio.is_playing);
-    lua_pushboolean(L, audio.spatial_enabled);
-    lua_pushnumber(L, audio.min_distance);
-    lua_pushnumber(L, audio.max_distance);
-    lua_pushnumber(L, audio.rolloff);
-    lua_pushnumber(L, audio.volume);
-    lua_pushnumber(L, audio.pitch);
-    lua_pushinteger(L, static_cast<lua_Integer>(audio.runtime_handle));
-    lua_pushinteger(L, audio.clip ? static_cast<lua_Integer>(audio.clip->GetData().size()) : 0);
-    lua_pushstring(L, audio.clip ? audio.clip->GetPath().c_str() : "");
+    lua_pushboolean(L, flags[0]);
+    lua_pushboolean(L, flags[1]);
+    lua_pushboolean(L, flags[2]);
+    lua_pushnumber(L, params[0]);
+    lua_pushnumber(L, params[1]);
+    lua_pushnumber(L, params[2]);
+    lua_pushnumber(L, params[3]);
+    lua_pushnumber(L, params[4]);
+    lua_pushinteger(L, static_cast<lua_Integer>(runtime_handle));
+    lua_pushinteger(L, static_cast<lua_Integer>(clip_size));
+    lua_pushstring(L, path);
     return 12;
 }
 
@@ -147,79 +108,52 @@ int L_AudioGetSourceState(lua_State* L) {
 // 混音总线 + DSP 效果链 Lua API
 // ============================================================
 
-static dse::gameplay2d::AudioSystem* GetAudioSys() {
-    const auto& ctx = GetBindingContext();
-    return static_cast<dse::gameplay2d::AudioSystem*>(ctx.audio_system);
-}
-
 int L_BusSetVolume(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
     float vol = static_cast<float>(luaL_checknumber(L, 2));
-    sys->GetBusManager().SetBusVolume(name, vol);
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, dse_audio_bus_set_volume(name, vol));
     return 1;
 }
 
 int L_BusSetMuted(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
-    bool muted = lua_toboolean(L, 2) != 0;
-    sys->GetBusManager().SetBusMuted(name, muted);
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, dse_audio_bus_set_muted(name, lua_toboolean(L, 2) != 0 ? 1 : 0));
     return 1;
 }
 
 int L_BusCreate(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
     const char* parent = luaL_optstring(L, 2, "master");
     float vol = static_cast<float>(luaL_optnumber(L, 3, 1.0));
-    bool ok = sys->GetBusManager().CreateBus(name, parent, vol);
-    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushboolean(L, dse_audio_bus_create(name, parent, vol));
     return 1;
 }
 
 int L_BusRemove(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
-    bool ok = sys->GetBusManager().RemoveBus(name);
-    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushboolean(L, dse_audio_bus_remove(name));
     return 1;
 }
 
 int L_BusAddEffect(lua_State* L) {
-    using dse::gameplay2d::DspEffectType;
-    using dse::gameplay2d::DspEffectParams;
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* bus_name = luaL_checkstring(L, 1);
-    int type_int = static_cast<int>(luaL_checkinteger(L, 2));
-    DspEffectParams p;
-    p.type = static_cast<DspEffectType>(std::clamp(type_int, 0, (int)DspEffectType::Count - 1));
-    p.cutoff_hz = static_cast<float>(luaL_optnumber(L, 3, 1000.0));
-    p.q = static_cast<float>(luaL_optnumber(L, 4, 0.707));
-    p.delay_time_ms = static_cast<float>(luaL_optnumber(L, 5, 250.0));
-    p.feedback = static_cast<float>(luaL_optnumber(L, 6, 0.3));
-    p.wet_mix = static_cast<float>(luaL_optnumber(L, 7, 0.5));
-    p.room_size = static_cast<float>(luaL_optnumber(L, 8, 0.5));
-    p.damping = static_cast<float>(luaL_optnumber(L, 9, 0.5));
-    bool ok = sys->GetBusManager().AddEffect(bus_name, p);
-    lua_pushboolean(L, ok ? 1 : 0);
+    int type = static_cast<int>(luaL_checkinteger(L, 2));
+    float cutoff_hz = static_cast<float>(luaL_optnumber(L, 3, 1000.0));
+    float q = static_cast<float>(luaL_optnumber(L, 4, 0.707));
+    float delay_time_ms = static_cast<float>(luaL_optnumber(L, 5, 250.0));
+    float feedback = static_cast<float>(luaL_optnumber(L, 6, 0.3));
+    float wet_mix = static_cast<float>(luaL_optnumber(L, 7, 0.5));
+    float room_size = static_cast<float>(luaL_optnumber(L, 8, 0.5));
+    float damping = static_cast<float>(luaL_optnumber(L, 9, 0.5));
+    lua_pushboolean(L, dse_audio_bus_add_effect(bus_name, type, cutoff_hz, q, delay_time_ms,
+                                                feedback, wet_mix, room_size, damping));
     return 1;
 }
 
 int L_BusRemoveEffect(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* bus_name = luaL_checkstring(L, 1);
-    size_t index = static_cast<size_t>(luaL_checkinteger(L, 2));
-    bool ok = sys->GetBusManager().RemoveEffect(bus_name, index);
-    lua_pushboolean(L, ok ? 1 : 0);
+    int index = static_cast<int>(luaL_checkinteger(L, 2));
+    lua_pushboolean(L, dse_audio_bus_remove_effect(bus_name, index));
     return 1;
 }
 
@@ -229,165 +163,142 @@ int L_BusRemoveEffect(lua_State* L) {
 
 // audio.play_bgm(filepath, [volume, loop])
 int L_AudioPlayBgm(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* path = luaL_checkstring(L, 1);
     float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
-    bool loop = lua_isnoneornil(L, 3) ? true : (lua_toboolean(L, 3) != 0);
-    bool ok = sys->PlayBgm(path, vol, loop);
-    lua_pushboolean(L, ok ? 1 : 0);
+    int loop = lua_isnoneornil(L, 3) ? 1 : (lua_toboolean(L, 3) != 0 ? 1 : 0);
+    lua_pushboolean(L, dse_audio_play_bgm(path, vol, loop));
     return 1;
 }
 
 // audio.pause_bgm()
-int L_AudioPauseBgm(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->PauseBgm();
+int L_AudioPauseBgm(lua_State*) {
+    dse_audio_pause_bgm();
     return 0;
 }
 
 // audio.resume_bgm()
-int L_AudioResumeBgm(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->ResumeBgm();
+int L_AudioResumeBgm(lua_State*) {
+    dse_audio_resume_bgm();
     return 0;
 }
 
 // audio.stop_bgm()
-int L_AudioStopBgm(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->StopBgm();
+int L_AudioStopBgm(lua_State*) {
+    dse_audio_stop_bgm();
     return 0;
 }
 
 // audio.play_sfx(filepath, [volume, loop])
 int L_AudioPlaySfx(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) return 0;
     const char* path = luaL_checkstring(L, 1);
     float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
-    bool loop = lua_isnoneornil(L, 3) ? false : (lua_toboolean(L, 3) != 0);
-    sys->PlaySfx(path, vol, loop);
+    int loop = lua_isnoneornil(L, 3) ? 0 : (lua_toboolean(L, 3) != 0 ? 1 : 0);
+    dse_audio_play_sfx(path, vol, loop);
     return 0;
 }
 
 // audio.crossfade_bgm(filepath, fade_sec, [volume, loop])
 int L_AudioCrossfadeBgm(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* path = luaL_checkstring(L, 1);
     float fade = static_cast<float>(luaL_checknumber(L, 2));
     float vol = static_cast<float>(luaL_optnumber(L, 3, 1.0));
-    bool loop = lua_isnoneornil(L, 4) ? true : (lua_toboolean(L, 4) != 0);
-    bool ok = sys->CrossfadeBgm(path, fade, vol, loop);
-    lua_pushboolean(L, ok ? 1 : 0);
+    int loop = lua_isnoneornil(L, 4) ? 1 : (lua_toboolean(L, 4) != 0 ? 1 : 0);
+    lua_pushboolean(L, dse_audio_crossfade_bgm(path, fade, vol, loop));
     return 1;
 }
 
 // audio.play_sfx_random(filepath, [volume, pitch_min, pitch_max])
 int L_AudioPlaySfxRandom(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) return 0;
     const char* path = luaL_checkstring(L, 1);
     float vol = static_cast<float>(luaL_optnumber(L, 2, 1.0));
     float pmin = static_cast<float>(luaL_optnumber(L, 3, 0.9));
     float pmax = static_cast<float>(luaL_optnumber(L, 4, 1.1));
-    sys->PlaySfxRandomized(path, vol, pmin, pmax);
+    dse_audio_play_sfx_random(path, vol, pmin, pmax);
     return 0;
 }
 
 // audio.preload(filepath)
 int L_AudioPreload(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* path = luaL_checkstring(L, 1);
-    bool ok = sys->PreloadAudio(path);
-    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushboolean(L, dse_audio_preload(path));
     return 1;
 }
 
 // audio.stop_all_sfx()
-int L_AudioStopAllSfx(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->StopAllSfx();
+int L_AudioStopAllSfx(lua_State*) {
+    dse_audio_stop_all_sfx();
     return 0;
 }
 
 // audio.set_master_volume(volume)
 int L_AudioSetMasterVolume(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->SetMasterVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    dse_audio_set_master_volume(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // audio.set_bgm_volume(volume)
 int L_AudioSetBgmVolume(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->SetBgmVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    dse_audio_set_bgm_volume(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // audio.set_sfx_volume(volume)
 int L_AudioSetSfxVolume(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (sys) sys->SetSfxVolume(static_cast<float>(luaL_checknumber(L, 1)));
+    dse_audio_set_sfx_volume(static_cast<float>(luaL_checknumber(L, 1)));
     return 0;
 }
 
 // audio.set_source_bus(entity, bus_name)
 int L_AudioSetSourceBus(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = LuaEntityFromInteger(luaL_checkinteger(L, 1));
     const char* bus = luaL_checkstring(L, 2);
-    if (world->registry().valid(e) && world->registry().all_of<AudioSourceComponent>(e)) {
-        world->registry().get<AudioSourceComponent>(e).bus_name = bus;
-    }
+    dse_audio_source_set_bus(EID(e), bus);
     return 0;
 }
 
 // audio.snapshot_save(name)
 int L_AudioSnapshotSave(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
-    bool ok = sys->GetBusManager().SaveSnapshot(name);
-    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushboolean(L, dse_audio_snapshot_save(name));
     return 1;
 }
 
 // audio.snapshot_load(name)
 int L_AudioSnapshotLoad(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_pushboolean(L, 0); return 1; }
     const char* name = luaL_checkstring(L, 1);
-    bool ok = sys->GetBusManager().LoadSnapshot(name);
-    lua_pushboolean(L, ok ? 1 : 0);
+    lua_pushboolean(L, dse_audio_snapshot_load(name));
     return 1;
+}
+
+// '\n' 分隔的名称列表转 Lua 数组表
+void PushNameList(lua_State* L, const char* joined, int len) {
+    lua_newtable(L);
+    if (len <= 0) return;
+    int index = 1;
+    int start = 0;
+    for (int i = 0; i <= len; ++i) {
+        if (i == len || joined[i] == '\n') {
+            if (i > start) {
+                lua_pushlstring(L, joined + start, static_cast<size_t>(i - start));
+                lua_rawseti(L, -2, index++);
+            }
+            start = i + 1;
+        }
+    }
 }
 
 // audio.snapshot_list() -> table
 int L_AudioSnapshotList(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_newtable(L); return 1; }
-    auto names = sys->GetBusManager().GetSnapshotNames();
-    lua_createtable(L, static_cast<int>(names.size()), 0);
-    for (size_t i = 0; i < names.size(); ++i) {
-        lua_pushstring(L, names[i].c_str());
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
-    }
+    char buf[4096] = {0};
+    const int len = dse_audio_snapshot_list(buf, static_cast<int>(sizeof(buf)));
+    PushNameList(L, buf, len);
     return 1;
 }
 
 int L_BusGetNames(lua_State* L) {
-    auto* sys = GetAudioSys();
-    if (!sys) { lua_newtable(L); return 1; }
-    auto names = sys->GetBusManager().GetBusNames();
-    lua_createtable(L, static_cast<int>(names.size()), 0);
-    for (size_t i = 0; i < names.size(); ++i) {
-        lua_pushstring(L, names[i].c_str());
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
-    }
+    char buf[4096] = {0};
+    const int len = dse_audio_bus_get_names(buf, static_cast<int>(sizeof(buf)));
+    PushNameList(L, buf, len);
     return 1;
 }
 }

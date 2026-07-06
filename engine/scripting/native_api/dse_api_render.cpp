@@ -18,11 +18,13 @@
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/components_3d_animation.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/platform/screen.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <cmath>
 #include <string>
 
 using Entity = entt::entity;
@@ -210,4 +212,227 @@ extern "C" int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const
     if (out_width)  *out_width  = texture->GetWidth();
     if (out_height) *out_height = texture->GetHeight();
     return 1;
+}
+
+// ============================================================
+// MeshRenderer 过程网格创作 + 材质创作
+// ============================================================
+
+extern "C" void dse_mesh_renderer_add_procedural(uint32_t e, float r, float g, float b, float a,
+                                                 const float* vertices, int vertex_float_count,
+                                                 const int* indices, int index_count) {
+    World* world = GW();
+    if (!world) return;
+    auto& mesh = world->registry().emplace_or_replace<dse::MeshRendererComponent>(TE(e));
+    mesh.mesh_path.clear();
+    mesh.color = glm::vec4(r, g, b, a);
+    mesh.temp_vertices.clear();
+    mesh.temp_indices.clear();
+    mesh.temp_uvs.clear();
+    mesh.temp_normals.clear();
+    mesh.temp_tangents.clear();
+    if (vertices && vertex_float_count > 0) {
+        mesh.temp_vertices.assign(vertices, vertices + vertex_float_count);
+    }
+    const std::size_t vertex_count = mesh.temp_vertices.size() / 3;
+    if (indices && index_count > 0) {
+        mesh.temp_indices.reserve(static_cast<std::size_t>(index_count));
+        for (int i = 0; i < index_count; ++i) {
+            if (indices[i] >= 0 && static_cast<std::size_t>(indices[i]) < vertex_count) {
+                mesh.temp_indices.push_back(static_cast<uint32_t>(indices[i]));
+            }
+        }
+    }
+}
+
+extern "C" void dse_mesh_renderer_set_material_params(uint32_t e, float metallic, float roughness,
+                                                      float ao, float er, float eg, float eb,
+                                                      float normal_strength,
+                                                      int receive_shadow, int double_sided,
+                                                      float cr, float cg, float cb, float ca) {
+    World* world = GW();
+    if (!world) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    if (!std::isnan(metallic)) mesh->metallic = metallic;
+    if (!std::isnan(roughness)) mesh->roughness = roughness;
+    if (!std::isnan(ao)) mesh->ao = ao;
+    if (!std::isnan(er)) mesh->emissive.r = er;
+    if (!std::isnan(eg)) mesh->emissive.g = eg;
+    if (!std::isnan(eb)) mesh->emissive.b = eb;
+    if (!std::isnan(normal_strength)) mesh->normal_strength = normal_strength;
+    if (receive_shadow >= 0) mesh->receive_shadow = (receive_shadow != 0);
+    if (double_sided >= 0) mesh->material_double_sided = (double_sided != 0);
+    if (!std::isnan(cr)) mesh->color.r = cr;
+    if (!std::isnan(cg)) mesh->color.g = cg;
+    if (!std::isnan(cb)) mesh->color.b = cb;
+    if (!std::isnan(ca)) mesh->color.a = ca;
+}
+
+extern "C" void dse_mesh_renderer_set_depth_state(uint32_t e, int depth_test, int depth_write) {
+    World* world = GW();
+    if (!world) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    mesh->depth_test_enabled = (depth_test != 0);
+    if (depth_write >= 0) mesh->depth_write_enabled = (depth_write != 0);
+}
+
+extern "C" void dse_mesh_renderer_set_material_scalar(uint32_t e, const char* name, float value) {
+    World* world = GW();
+    if (!world || !name) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    const std::string n(name);
+    if (n == "metallic") mesh->metallic = value;
+    else if (n == "roughness") mesh->roughness = value;
+    else if (n == "ao") mesh->ao = value;
+    else if (n == "normal_strength") mesh->normal_strength = value;
+    else if (n == "material_alpha_cutoff") mesh->material_alpha_cutoff = value;
+    else if (n == "sss_strength") mesh->sss_strength = value;
+    else if (n == "clear_coat") mesh->clear_coat = value;
+    else if (n == "clear_coat_roughness") mesh->clear_coat_roughness = value;
+    else if (n == "anisotropy") mesh->anisotropy = value;
+    else if (n == "pom_height_scale") mesh->pom_height_scale = value;
+    // 直接 Lua/C# 材质创作应覆盖复制的 .dmat/MaterialInstance 值
+    mesh->material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
+}
+
+extern "C" void dse_mesh_renderer_set_advanced_material(uint32_t e, float clear_coat,
+                                                        float clear_coat_roughness, float anisotropy,
+                                                        float pom_height_scale, float sss_strength,
+                                                        float sss_r, float sss_g, float sss_b) {
+    World* world = GW();
+    if (!world) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    mesh->clear_coat = clear_coat;
+    mesh->clear_coat_roughness = clear_coat_roughness;
+    mesh->anisotropy = anisotropy;
+    mesh->pom_height_scale = pom_height_scale;
+    mesh->sss_strength = sss_strength;
+    mesh->sss_tint = glm::vec3(sss_r, sss_g, sss_b);
+    mesh->material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
+}
+
+namespace {
+
+int SetMeshAttribute(uint32_t e, const float* data, int count, int components_per_vertex,
+                     std::vector<float> dse::MeshRendererComponent::* member,
+                     int* out_attr_count, int* out_vertex_count) {
+    if (out_attr_count) *out_attr_count = 0;
+    if (out_vertex_count) *out_vertex_count = 0;
+    World* world = GW();
+    if (!world) return 0;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return 0;
+    auto& buf = mesh->*member;
+    buf.clear();
+    if (data && count > 0) buf.assign(data, data + count);
+    const std::size_t vertex_count = mesh->temp_vertices.size() / 3;
+    const bool ok = vertex_count > 0 &&
+                    buf.size() == vertex_count * static_cast<std::size_t>(components_per_vertex);
+    if (out_attr_count) *out_attr_count = static_cast<int>(buf.size() / components_per_vertex);
+    if (out_vertex_count) *out_vertex_count = static_cast<int>(vertex_count);
+    return ok ? 1 : 0;
+}
+
+} // namespace
+
+extern "C" int dse_mesh_renderer_set_uvs(uint32_t e, const float* uvs, int count,
+                                         int* out_attr_count, int* out_vertex_count) {
+    return SetMeshAttribute(e, uvs, count, 2, &dse::MeshRendererComponent::temp_uvs,
+                            out_attr_count, out_vertex_count);
+}
+
+extern "C" int dse_mesh_renderer_set_normals(uint32_t e, const float* normals, int count,
+                                             int* out_attr_count, int* out_vertex_count) {
+    return SetMeshAttribute(e, normals, count, 3, &dse::MeshRendererComponent::temp_normals,
+                            out_attr_count, out_vertex_count);
+}
+
+extern "C" int dse_mesh_renderer_set_tangents(uint32_t e, const float* tangents, int count,
+                                              int* out_attr_count, int* out_vertex_count) {
+    return SetMeshAttribute(e, tangents, count, 3, &dse::MeshRendererComponent::temp_tangents,
+                            out_attr_count, out_vertex_count);
+}
+
+extern "C" void dse_mesh_renderer_set_emissive_authoring(uint32_t e, float r, float g, float b) {
+    World* world = GW();
+    if (!world) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    mesh->emissive = glm::vec3(r, g, b);
+    mesh->material_data_source = dse::MeshRendererComponent::MaterialDataSource::ComponentFallback;
+}
+
+// ============================================================
+// Morph 简单权重组件（MorphComponent）
+// ============================================================
+
+extern "C" void dse_morph_simple_add(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    auto& morph = world->registry().emplace_or_replace<dse::MorphComponent>(TE(e));
+    morph.enabled = true;
+}
+
+extern "C" void dse_morph_simple_add_target(uint32_t e, const char* name, float weight) {
+    World* world = GW();
+    if (!world || !name) return;
+    auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (!morph) return;
+    dse::MorphTarget target;
+    target.name = name;
+    target.weight = weight;
+    morph->targets.push_back(std::move(target));
+}
+
+extern "C" void dse_morph_simple_set_weight(uint32_t e, const char* name, float w) {
+    World* world = GW();
+    if (!world || !name) return;
+    auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (!morph) return;
+    for (auto& t : morph->targets) {
+        if (t.name == name) { t.weight = w; break; }
+    }
+}
+
+extern "C" void dse_morph_simple_set_weight_index(uint32_t e, int idx, float w) {
+    World* world = GW();
+    if (!world) return;
+    auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (!morph) return;
+    if (idx >= 0 && idx < static_cast<int>(morph->targets.size())) {
+        morph->targets[idx].weight = w;
+    }
+}
+
+extern "C" float dse_morph_simple_get_weight(uint32_t e, const char* name) {
+    World* world = GW();
+    if (!world || !name) return 0.0f;
+    const auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (!morph) return 0.0f;
+    for (const auto& t : morph->targets) {
+        if (t.name == name) return t.weight;
+    }
+    return 0.0f;
+}
+
+extern "C" float dse_morph_simple_get_weight_index(uint32_t e, int idx) {
+    World* world = GW();
+    if (!world) return 0.0f;
+    const auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (!morph) return 0.0f;
+    if (idx >= 0 && idx < static_cast<int>(morph->targets.size())) {
+        return morph->targets[idx].weight;
+    }
+    return 0.0f;
+}
+
+extern "C" void dse_morph_simple_set_enabled(uint32_t e, int enabled) {
+    World* world = GW();
+    if (!world) return;
+    auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
+    if (morph) morph->enabled = (enabled != 0);
 }

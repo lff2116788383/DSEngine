@@ -208,6 +208,130 @@ extern "C" void dse_audio_listener_add(uint32_t e, int enabled) {
 }
 
 // ============================================================
+// Audio — SFX 随机化 / 混音总线 / 快照 / 源状态
+// ============================================================
+
+extern "C" void dse_audio_play_sfx_random(const char* path, float volume,
+                                          float pitch_min, float pitch_max) {
+    auto* audio = GAS();
+    if (!audio || !path) return;
+    audio->PlaySfxRandomized(path, volume, pitch_min, pitch_max);
+}
+
+extern "C" int dse_audio_bus_set_volume(const char* name, float volume) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    audio->GetBusManager().SetBusVolume(name, volume);
+    return 1;
+}
+
+extern "C" int dse_audio_bus_set_muted(const char* name, int muted) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    audio->GetBusManager().SetBusMuted(name, muted != 0);
+    return 1;
+}
+
+extern "C" int dse_audio_bus_create(const char* name, const char* parent, float volume) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    return audio->GetBusManager().CreateBus(name, parent ? parent : "master", volume) ? 1 : 0;
+}
+
+extern "C" int dse_audio_bus_remove(const char* name) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    return audio->GetBusManager().RemoveBus(name) ? 1 : 0;
+}
+
+extern "C" int dse_audio_bus_add_effect(const char* bus_name, int type, float cutoff_hz, float q,
+                                        float delay_time_ms, float feedback, float wet_mix,
+                                        float room_size, float damping) {
+    using gameplay2d::DspEffectType;
+    using gameplay2d::DspEffectParams;
+    auto* audio = GAS();
+    if (!audio || !bus_name) return 0;
+    DspEffectParams p;
+    p.type = static_cast<DspEffectType>(
+        std::clamp(type, 0, static_cast<int>(DspEffectType::Count) - 1));
+    p.cutoff_hz = cutoff_hz;
+    p.q = q;
+    p.delay_time_ms = delay_time_ms;
+    p.feedback = feedback;
+    p.wet_mix = wet_mix;
+    p.room_size = room_size;
+    p.damping = damping;
+    return audio->GetBusManager().AddEffect(bus_name, p) ? 1 : 0;
+}
+
+extern "C" int dse_audio_bus_remove_effect(const char* bus_name, int index) {
+    auto* audio = GAS();
+    if (!audio || !bus_name || index < 0) return 0;
+    return audio->GetBusManager().RemoveEffect(bus_name, static_cast<size_t>(index)) ? 1 : 0;
+}
+
+extern "C" int dse_audio_bus_get_names(char* out, int cap) {
+    auto* audio = GAS();
+    if (!audio) return CopyStr(std::string(), out, cap);
+    const auto names = audio->GetBusManager().GetBusNames();
+    std::string joined;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) joined += '\n';
+        joined += names[i];
+    }
+    return CopyStr(joined, out, cap);
+}
+
+extern "C" int dse_audio_snapshot_save(const char* name) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    return audio->GetBusManager().SaveSnapshot(name) ? 1 : 0;
+}
+
+extern "C" int dse_audio_snapshot_load(const char* name) {
+    auto* audio = GAS();
+    if (!audio || !name) return 0;
+    return audio->GetBusManager().LoadSnapshot(name) ? 1 : 0;
+}
+
+extern "C" int dse_audio_snapshot_list(char* out, int cap) {
+    auto* audio = GAS();
+    if (!audio) return CopyStr(std::string(), out, cap);
+    const auto names = audio->GetBusManager().GetSnapshotNames();
+    std::string joined;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) joined += '\n';
+        joined += names[i];
+    }
+    return CopyStr(joined, out, cap);
+}
+
+extern "C" int dse_audio_source_get_state(uint32_t e, int* out_flags, float* out_params,
+                                          long long* out_runtime_handle, long long* out_clip_size,
+                                          char* out_path, int path_cap) {
+    const auto* audio = GetComp<AudioSourceComponent>(e);
+    if (!audio) return 0;
+    if (out_flags) {
+        out_flags[0] = audio->clip ? 1 : 0;
+        out_flags[1] = audio->is_playing ? 1 : 0;
+        out_flags[2] = audio->spatial_enabled ? 1 : 0;
+    }
+    if (out_params) {
+        out_params[0] = audio->min_distance;
+        out_params[1] = audio->max_distance;
+        out_params[2] = audio->rolloff;
+        out_params[3] = audio->volume;
+        out_params[4] = audio->pitch;
+    }
+    if (out_runtime_handle) *out_runtime_handle = static_cast<long long>(audio->runtime_handle);
+    if (out_clip_size) {
+        *out_clip_size = audio->clip ? static_cast<long long>(audio->clip->GetData().size()) : 0;
+    }
+    CopyStr(audio->clip ? audio->clip->GetPath() : std::string(), out_path, path_cap);
+    return 1;
+}
+
+// ============================================================
 // Navigation
 // ============================================================
 
@@ -322,6 +446,44 @@ extern "C" int dse_nav_agent_arrived(uint32_t e) {
     return (!agent || agent->arrived) ? 1 : 0;
 }
 
+extern "C" int dse_nav_bake(const float* verts, int nverts, const int* tris, int ntris,
+                            float cell_size, float cell_height,
+                            float agent_height, float agent_radius,
+                            float agent_max_climb, float agent_max_slope) {
+    auto* nav = GetNav();
+    if (!nav || !verts || !tris || nverts <= 0 || ntris <= 0) return 0;
+    navigation::NavMeshBuildConfig cfg{};
+    if (!Keep(cell_size))       cfg.cell_size       = cell_size;
+    if (!Keep(cell_height))     cfg.cell_height     = cell_height;
+    if (!Keep(agent_height))    cfg.agent_height    = agent_height;
+    if (!Keep(agent_radius))    cfg.agent_radius    = agent_radius;
+    if (!Keep(agent_max_climb)) cfg.agent_max_climb = agent_max_climb;
+    if (!Keep(agent_max_slope)) cfg.agent_max_slope = agent_max_slope;
+    return nav->BakeFromTriangles(verts, nverts, tris, ntris, cfg) ? 1 : 0;
+}
+
+extern "C" int dse_nav_agent_get(uint32_t e, float* out_params, int* out_flags) {
+    auto* agent = GetComp<NavMeshAgentComponent>(e);
+    if (!agent) return 0;
+    if (out_params) {
+        out_params[0] = agent->speed;
+        out_params[1] = agent->acceleration;
+        out_params[2] = agent->stopping_dist;
+        out_params[3] = agent->agent_radius;
+        out_params[4] = agent->agent_height;
+        out_params[5] = agent->destination.x;
+        out_params[6] = agent->destination.y;
+        out_params[7] = agent->destination.z;
+    }
+    if (out_flags) {
+        out_flags[0] = agent->has_path ? 1 : 0;
+        out_flags[1] = agent->path_pending ? 1 : 0;
+        out_flags[2] = agent->arrived ? 1 : 0;
+        out_flags[3] = agent->current_waypoint;
+    }
+    return 1;
+}
+
 #else  // !DSE_ENABLE_NAVMESH — 安全空实现
 
 extern "C" int dse_nav_is_ready(void) { return 0; }
@@ -337,6 +499,9 @@ extern "C" void dse_nav_agent_get_destination(uint32_t, float* out_xyz) {
 }
 extern "C" int dse_nav_agent_has_path(uint32_t) { return 0; }
 extern "C" int dse_nav_agent_arrived(uint32_t) { return 1; }
+extern "C" int dse_nav_bake(const float*, int, const int*, int,
+                            float, float, float, float, float, float) { return 0; }
+extern "C" int dse_nav_agent_get(uint32_t, float*, int*) { return 0; }
 
 #endif  // DSE_ENABLE_NAVMESH
 

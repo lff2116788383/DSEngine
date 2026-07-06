@@ -51,6 +51,8 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
         } else if (StartsWith(arg, "--api-port=")) {
             int p = std::atoi(ExtractValue(arg, "--api-port="));
             if (p > 0) config.api_port = p;
+        } else if (StartsWith(arg, "--replay=")) {
+            config.replay_path = ExtractValue(arg, "--replay=");
         } else if (StartsWith(arg, "--verify=")) {
             config.verify_path = ExtractValue(arg, "--verify=");
         } else if (StartsWith(arg, "--scene=")) {
@@ -69,7 +71,7 @@ EditorTestConfig ParseEditorTestArgs(int argc, char* argv[]) {
 }
 
 bool HasTestArgs(const EditorTestConfig& config) {
-    return config.headless || !config.verify_path.empty();
+    return config.headless || !config.replay_path.empty() || !config.verify_path.empty();
 }
 
 } // namespace dse::editor::test

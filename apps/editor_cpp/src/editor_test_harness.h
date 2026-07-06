@@ -16,6 +16,7 @@ namespace dse::editor::test {
  */
 struct EditorTestConfig {
     bool headless = false;              ///< --headless / --automation-mode: 不显示窗口
+    std::string replay_path;            ///< --replay=<path.json>: 回放输入录制文件
     std::string verify_path;            ///< --verify=<path.json>: 期望快照文件
     std::string scene_path;             ///< --scene=<path>: 指定启动场景
     std::string screenshot_path;         ///< --screenshot=<path>: 退出前截图保存路径

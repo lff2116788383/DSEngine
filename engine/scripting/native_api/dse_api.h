@@ -564,6 +564,45 @@ DSE_CAPI int dse_mesh_renderer_set_material_from_dmat(uint32_t e, const char* dm
 DSE_CAPI int dse_mesh_renderer_set_texture(uint32_t e, const char* slot, const char* path,
                                            uint32_t* out_handle, int* out_width, int* out_height);
 
+// MeshRenderer 过程网格创作 + 材质创作（手写 dse_api_render.cpp）。
+// add_procedural：emplace_or_replace 组件并写入过程顶点（xyz 扁平）与索引（越界索引丢弃）。
+// set_material_params：浮点 NaN=保持当前值；receive_shadow/double_sided：-1=保持当前值。
+// set_material_scalar：按名写标量并把材质数据源标记为 ComponentFallback；未知名仅标记。
+// set_advanced_material：写高级材质参数并标记 ComponentFallback。
+// set_uvs/set_normals/set_tangents：写入过程网格属性缓冲；返回属性数量与顶点数是否匹配(0/1)，
+//   填充非空 out_attr_count（属性个数）与 out_vertex_count。
+// set_emissive_authoring：写 emissive 并标记 ComponentFallback。
+DSE_CAPI void dse_mesh_renderer_add_procedural(uint32_t e, float r, float g, float b, float a,
+                                               const float* vertices, int vertex_float_count,
+                                               const int* indices, int index_count);
+DSE_CAPI void dse_mesh_renderer_set_material_params(uint32_t e, float metallic, float roughness,
+                                                    float ao, float er, float eg, float eb,
+                                                    float normal_strength,
+                                                    int receive_shadow, int double_sided,
+                                                    float cr, float cg, float cb, float ca);
+DSE_CAPI void dse_mesh_renderer_set_depth_state(uint32_t e, int depth_test, int depth_write);
+DSE_CAPI void dse_mesh_renderer_set_material_scalar(uint32_t e, const char* name, float value);
+DSE_CAPI void dse_mesh_renderer_set_advanced_material(uint32_t e, float clear_coat,
+                                                      float clear_coat_roughness, float anisotropy,
+                                                      float pom_height_scale, float sss_strength,
+                                                      float sss_r, float sss_g, float sss_b);
+DSE_CAPI int  dse_mesh_renderer_set_uvs(uint32_t e, const float* uvs, int count,
+                                        int* out_attr_count, int* out_vertex_count);
+DSE_CAPI int  dse_mesh_renderer_set_normals(uint32_t e, const float* normals, int count,
+                                            int* out_attr_count, int* out_vertex_count);
+DSE_CAPI int  dse_mesh_renderer_set_tangents(uint32_t e, const float* tangents, int count,
+                                             int* out_attr_count, int* out_vertex_count);
+DSE_CAPI void dse_mesh_renderer_set_emissive_authoring(uint32_t e, float r, float g, float b);
+
+// ---- Morph 简单权重组件（MorphComponent，区别于 MorphTargetComponent 的 dse_morph_*）。 ----
+DSE_CAPI void  dse_morph_simple_add(uint32_t e);
+DSE_CAPI void  dse_morph_simple_add_target(uint32_t e, const char* name, float weight);
+DSE_CAPI void  dse_morph_simple_set_weight(uint32_t e, const char* name, float w);
+DSE_CAPI void  dse_morph_simple_set_weight_index(uint32_t e, int idx, float w);
+DSE_CAPI float dse_morph_simple_get_weight(uint32_t e, const char* name);
+DSE_CAPI float dse_morph_simple_get_weight_index(uint32_t e, int idx);
+DSE_CAPI void  dse_morph_simple_set_enabled(uint32_t e, int enabled);
+
 // 供 L5 手写实现（dse_api_render.cpp）访问内部 AssetManager 指针
 DSE_CAPI void* dse_get_asset_manager_ptr(void);
 
@@ -874,6 +913,29 @@ DSE_CAPI void dse_audio_source_set_bus(uint32_t e, const char* bus_name);
 DSE_CAPI int  dse_audio_source_is_playing(uint32_t e);
 DSE_CAPI void dse_audio_listener_add(uint32_t e, int enabled);
 
+// Audio — SFX 随机化 / 混音总线 / 快照 / 源状态
+DSE_CAPI void dse_audio_play_sfx_random(const char* path, float volume,
+                                        float pitch_min, float pitch_max);
+DSE_CAPI int  dse_audio_bus_set_volume(const char* name, float volume);
+DSE_CAPI int  dse_audio_bus_set_muted(const char* name, int muted);
+DSE_CAPI int  dse_audio_bus_create(const char* name, const char* parent, float volume);
+DSE_CAPI int  dse_audio_bus_remove(const char* name);
+DSE_CAPI int  dse_audio_bus_add_effect(const char* bus_name, int type, float cutoff_hz, float q,
+                                       float delay_time_ms, float feedback, float wet_mix,
+                                       float room_size, float damping);
+DSE_CAPI int  dse_audio_bus_remove_effect(const char* bus_name, int index);
+// 名称以 '\n' 分隔写入 out（null 结尾，按 cap 截断），返回写入长度。
+DSE_CAPI int  dse_audio_bus_get_names(char* out, int cap);
+DSE_CAPI int  dse_audio_snapshot_save(const char* name);
+DSE_CAPI int  dse_audio_snapshot_load(const char* name);
+DSE_CAPI int  dse_audio_snapshot_list(char* out, int cap);
+// 返回 1=组件存在；out_flags[3]=has_clip/is_playing/spatial；
+// out_params[5]=min_distance/max_distance/rolloff/volume/pitch；
+// out_runtime_handle/out_clip_size 可为 NULL；clip 路径写入 out_path。
+DSE_CAPI int  dse_audio_source_get_state(uint32_t e, int* out_flags, float* out_params,
+                                         long long* out_runtime_handle, long long* out_clip_size,
+                                         char* out_path, int path_cap);
+
 // ============================================================
 // Navigation（NavMeshSystem via ServiceLocator + NavMeshAgentComponent）
 // ============================================================
@@ -890,6 +952,11 @@ DSE_CAPI int  dse_nav_raycast(float sx, float sy, float sz,
 DSE_CAPI int  dse_nav_find_path(float sx, float sy, float sz,
                                 float ex, float ey, float ez,
                                 float* out_xyz, int max_points);
+// bake：verts=nverts×3 float，tris=ntris×3 int；config 浮点 NaN=使用默认值。
+DSE_CAPI int  dse_nav_bake(const float* verts, int nverts, const int* tris, int ntris,
+                           float cell_size, float cell_height,
+                           float agent_height, float agent_radius,
+                           float agent_max_climb, float agent_max_slope);
 
 // NavMeshAgent（ECS）。set_agent: 浮点 NaN=保持当前/默认值。
 DSE_CAPI void dse_nav_agent_set(uint32_t e, float speed, float acceleration,
@@ -898,6 +965,9 @@ DSE_CAPI void dse_nav_agent_set_destination(uint32_t e, float x, float y, float 
 DSE_CAPI void dse_nav_agent_get_destination(uint32_t e, float* out_xyz);
 DSE_CAPI int  dse_nav_agent_has_path(uint32_t e);
 DSE_CAPI int  dse_nav_agent_arrived(uint32_t e);
+// get：out_params={speed,acceleration,stopping_dist,radius,height,dest_x,dest_y,dest_z}（float[8]）；
+// out_flags={has_path,path_pending,arrived,current_waypoint}（int[4]）。返回 1=存在组件。
+DSE_CAPI int  dse_nav_agent_get(uint32_t e, float* out_params, int* out_flags);
 
 // ============================================================
 // Localization（LocalizationManager via ServiceLocator）
@@ -924,6 +994,75 @@ DSE_CAPI int      dse_scene_save(const char* path);
 DSE_CAPI int      dse_scene_save_prefab(uint32_t e, const char* path);
 DSE_CAPI uint32_t dse_scene_instantiate_prefab(const char* path, float x, float y, float z,
                                                int use_pos);
+
+// ============================================================
+// SubScene / SceneManager（异步加载 / 卸载 / 查询 / 场景过渡）
+// ============================================================
+// 路径相对 data root（内部拼接）。transition mode：0=instant 1=additive 2=fade。
+// transition state：0=idle 1=fading_out 2=loading 3=fading_in。
+
+DSE_CAPI int   dse_scene_load_sub(const char* path, int* out_entity_count);  // 同步加载
+DSE_CAPI int   dse_scene_load_sub_async(const char* path);
+DSE_CAPI void  dse_scene_unload_sub(const char* path);
+DSE_CAPI void  dse_scene_unload_all_subs(void);
+DSE_CAPI int   dse_scene_is_sub_loaded(const char* path);
+// 已加载子场景完整路径以 '\n' 分隔写入 out，返回条数。
+DSE_CAPI int   dse_scene_get_loaded_subs(char* out, int cap);
+DSE_CAPI int   dse_scene_get_sub_count(void);
+DSE_CAPI int   dse_scene_get_pending_count(void);
+DSE_CAPI void  dse_scene_transition_to(const char* path, int mode, float fade_duration);
+DSE_CAPI int   dse_scene_get_transition_state(void);
+DSE_CAPI float dse_scene_get_fade_progress(void);
+DSE_CAPI int   dse_scene_get_active(char* out, int cap);
+
+// ============================================================
+// UUIDComponent（跨场景稳定引用）
+// ============================================================
+// uuid 均为 16 位十六进制字符串。get：无组件或 uuid==0 返回 0。
+// set：uuid_str=null 时自动生成，最终字符串写入 out。resolve：失败返回 0xFFFFFFFF。
+
+DSE_CAPI int      dse_uuid_get(uint32_t e, char* out, int cap);
+DSE_CAPI int      dse_uuid_set(uint32_t e, const char* uuid_str, char* out, int cap);
+DSE_CAPI uint32_t dse_uuid_resolve(const char* uuid_str);
+
+// ============================================================
+// ECS Core — 通用组件查询 / 层级 / 脚本 / AABB / 时间缩放
+// ============================================================
+// find_*：实体 id 写入 out（最多 cap 个），返回总数；组件名未知返回 -1。
+// has_component：1/0；组件名未知返回 -1。
+// queryable components：组件名以 '\n' 分隔写入 out，返回条数。
+
+DSE_CAPI int  dse_ecs_find_entities_by_mesh_path(const char* mesh_path,
+                                                 uint32_t* out, int cap);
+DSE_CAPI int  dse_ecs_find_entities_with(const char* component, uint32_t* out, int cap);
+DSE_CAPI int  dse_ecs_count_entities_with(const char* component);
+DSE_CAPI int  dse_ecs_has_component(uint32_t e, const char* component);
+DSE_CAPI int  dse_ecs_get_queryable_components(char* out, int cap);
+
+// AABB：out_min_max={min_x,min_y,min_z,max_x,max_y,max_z}（float[6]）。返回 1=有 BoundingBox。
+DSE_CAPI int  dse_ecs_get_world_aabb(uint32_t e, float* out_min_max);
+DSE_CAPI int  dse_ecs_get_local_aabb(uint32_t e, float* out_min_max);
+
+// TimeScaleComponent：get 无组件时返回 1.0。
+DSE_CAPI void  dse_ecs_set_time_scale(uint32_t e, float scale);
+DSE_CAPI float dse_ecs_get_time_scale(uint32_t e);
+
+// Transform（position+scale 初始化，emplace_or_replace）
+DSE_CAPI void dse_ecs_add_transform(uint32_t e, float x, float y, float z,
+                                    float sx, float sy, float sz);
+
+// ParentComponent。get_parent：无父级返回 0xFFFFFFFF。
+DSE_CAPI void     dse_ecs_add_parent(uint32_t e, uint32_t parent);
+DSE_CAPI void     dse_ecs_set_parent(uint32_t e, uint32_t parent);
+DSE_CAPI uint32_t dse_ecs_get_parent(uint32_t e);
+DSE_CAPI void     dse_ecs_clear_parent(uint32_t e);
+
+// ScriptComponent。get_script_path/enabled：无组件返回 -1。
+DSE_CAPI void dse_ecs_add_script(uint32_t e, const char* path);
+DSE_CAPI void dse_ecs_set_script_path(uint32_t e, const char* path);
+DSE_CAPI int  dse_ecs_get_script_path(uint32_t e, char* out, int cap);
+DSE_CAPI void dse_ecs_set_script_enabled(uint32_t e, int enabled);
+DSE_CAPI int  dse_ecs_get_script_enabled(uint32_t e);
 
 // ============================================================
 // UI（核心控件，纯 ECS 组件操作）
@@ -1223,6 +1362,21 @@ DSE_CAPI void  dse_rendering_set_light_probe_enabled(uint32_t e, int enabled);
 DSE_CAPI void  dse_rendering_add_reflection_probe(uint32_t e);
 DSE_CAPI void  dse_rendering_set_reflection_probe(uint32_t e, float influence_radius, int resolution);
 DSE_CAPI void  dse_rendering_set_reflection_probe_enabled(uint32_t e, int enabled);
+
+// 灯光/探针补充（浮点 NaN=保持当前值；int -1=保持当前值）。has/get 系列组件缺失时返回 0。
+DSE_CAPI int   dse_dir_light_has(uint32_t e);
+DSE_CAPI int   dse_point_light_has(uint32_t e);
+DSE_CAPI int   dse_spot_light_has(uint32_t e);
+DSE_CAPI int   dse_sky_light_has(uint32_t e);
+DSE_CAPI int   dse_dir_light_get_shadow_params(uint32_t e, int* out_cast_shadow, float* out_strength,
+                                               float* out_c0, float* out_c1, float* out_c2,
+                                               float* out_lambda);
+DSE_CAPI void  dse_rendering_set_gi_probe_bias(uint32_t e, float normal_bias, float hysteresis);
+DSE_CAPI int   dse_rendering_get_gi_probe_ex(uint32_t e, int* out_enabled, float* out_normal_bias);
+DSE_CAPI void  dse_rendering_set_light_probe_ex(uint32_t e, float influence_radius, int needs_rebake);
+DSE_CAPI void  dse_rendering_set_reflection_probe_ex(uint32_t e, float influence_radius,
+                                                     float box_x, float box_y, float box_z,
+                                                     int resolution);
 
 // ============================================================
 // Rendering Camera 扩展
@@ -1755,6 +1909,169 @@ DSE_CAPI void  dse_ui_add_virtual_scroll(uint32_t e, int total_items, float item
 DSE_CAPI void  dse_ui_set_virtual_scroll_count(uint32_t e, int count);
 DSE_CAPI void  dse_ui_get_virtual_scroll_range(uint32_t e, int* out_start, int* out_end);
 DSE_CAPI void  dse_ui_destroy_virtual_scroll(uint32_t e);
+
+// ============================================================
+// Open World P2-P5（Mesh Streaming / Physics LOD / Terrain Deform / Audio LOD）
+// ============================================================
+// 系统实例由本层管理（单例）。浮点参数 NaN=使用默认值，整型参数 <0=使用默认值。
+
+// Mesh Streaming
+DSE_CAPI void dse_mesh_streaming_init(float hysteresis, int load_budget_per_frame);
+DSE_CAPI uint32_t dse_mesh_streaming_register_mesh(const char* name,
+                                                   float x, float y, float z, float radius);
+DSE_CAPI void dse_mesh_streaming_add_lod(uint32_t mesh_id, uint32_t level, const char* path,
+                                         float distance, uint32_t triangle_count);
+DSE_CAPI void dse_mesh_streaming_tick(float cam_x, float cam_y, float cam_z, float dt);
+DSE_CAPI int  dse_mesh_streaming_get_current_lod(uint32_t mesh_id);
+DSE_CAPI int  dse_mesh_streaming_get_mesh_count(void);
+DSE_CAPI void dse_mesh_streaming_shutdown(void);
+
+// Physics LOD
+DSE_CAPI void dse_physics_lod_init(float full_distance, float reduced_distance,
+                                   float simplified_distance);
+DSE_CAPI void dse_physics_lod_register_body(uint32_t entity_id,
+                                            float x, float y, float z, float radius);
+// evaluate：激活 body 的 entity_id 写入 out_ids（最多 cap 个），返回激活总数。
+// out_ids=null 时仅返回总数。
+DSE_CAPI int  dse_physics_lod_evaluate(float cam_x, float cam_y, float cam_z,
+                                       uint32_t frame, uint32_t* out_ids, int cap);
+// stats：out={full,reduced,simplified,sleeping}（int[4]）。返回 1=系统已初始化。
+DSE_CAPI int  dse_physics_lod_get_stats(int* out_stats);
+DSE_CAPI void dse_physics_lod_wake(uint32_t entity_id);
+DSE_CAPI void dse_physics_lod_sleep(uint32_t entity_id);
+DSE_CAPI void dse_physics_lod_shutdown(void);
+
+// Terrain Deformation
+DSE_CAPI void dse_terrain_deform_init(float max_depth, float max_height);
+DSE_CAPI int  dse_terrain_deform_apply(int type, float x, float y, float z,
+                                       float radius, float strength);
+DSE_CAPI int  dse_terrain_deform_undo(void);
+DSE_CAPI int  dse_terrain_deform_redo(void);
+DSE_CAPI float dse_terrain_deform_sample_height(float x, float z);
+DSE_CAPI void dse_terrain_deform_shutdown(void);
+
+// Audio LOD
+DSE_CAPI void dse_audio_lod_init(float full_distance, int max_active_sources);
+DSE_CAPI uint32_t dse_audio_lod_register_source(const char* path,
+                                                float x, float y, float z,
+                                                float max_distance, float priority);
+DSE_CAPI void dse_audio_lod_tick(float lx, float ly, float lz, float dt);
+// stats：out={full,reduced,virtual,culled}（int[4]）。返回 1=系统已初始化。
+DSE_CAPI int  dse_audio_lod_get_stats(int* out_stats);
+DSE_CAPI int  dse_audio_lod_is_audible(uint32_t source_id);
+DSE_CAPI void dse_audio_lod_shutdown(void);
+
+// 释放所有 P2-P5 大世界系统实例。
+DSE_CAPI void dse_open_world_p2p5_shutdown(void);
+
+// ============================================================
+// Cutscene — 过场/导演系统（实例句柄由本层管理）
+// ============================================================
+
+// 相机轨道应用回调。
+typedef void (*dse_cutscene_camera_fn)(float px, float py, float pz,
+                                       float lx, float ly, float lz,
+                                       float fov, void* user_data);
+// 事件轨道触发回调。
+typedef void (*dse_cutscene_event_fn)(const char* event_name, const char* payload,
+                                      void* user_data);
+// 序列播放完成回调。
+typedef void (*dse_cutscene_finish_fn)(const char* seq_name, void* user_data);
+
+DSE_CAPI int   dse_cutscene_create(void);
+DSE_CAPI void  dse_cutscene_destroy(int player_id);
+DSE_CAPI void  dse_cutscene_shutdown(void);
+
+DSE_CAPI void  dse_cutscene_add_sequence(int player_id, const char* name, float duration);
+DSE_CAPI void  dse_cutscene_remove_sequence(int player_id, const char* name);
+
+DSE_CAPI void  dse_cutscene_add_camera_keyframe(int player_id, const char* seq_name, float time,
+                                                float px, float py, float pz,
+                                                float lx, float ly, float lz, float fov);
+// interp: 0=Linear 1=Step 2=CubicBezier。
+DSE_CAPI void  dse_cutscene_add_property_keyframe(int player_id, const char* seq_name,
+                                                  const char* track_name, float time,
+                                                  float value, int interp);
+DSE_CAPI void  dse_cutscene_add_event(int player_id, const char* seq_name, float time,
+                                      const char* event_name, const char* payload);
+DSE_CAPI void  dse_cutscene_add_audio_cue(int player_id, const char* seq_name, float time,
+                                          const char* path, float volume, int loop);
+
+DSE_CAPI void  dse_cutscene_play(int player_id, const char* seq_name);
+DSE_CAPI void  dse_cutscene_pause(int player_id);
+DSE_CAPI void  dse_cutscene_resume(int player_id);
+DSE_CAPI void  dse_cutscene_stop(int player_id);
+DSE_CAPI void  dse_cutscene_seek(int player_id, float time);
+DSE_CAPI float dse_cutscene_get_time(int player_id);
+// 返回 0=stopped 1=playing 2=paused。
+DSE_CAPI int   dse_cutscene_get_state(int player_id);
+DSE_CAPI void  dse_cutscene_set_play_rate(int player_id, float rate);
+DSE_CAPI void  dse_cutscene_update(int player_id, float dt);
+
+DSE_CAPI void  dse_cutscene_set_camera_callback(int player_id, const char* seq_name,
+                                                dse_cutscene_camera_fn fn, void* user_data);
+DSE_CAPI void  dse_cutscene_set_event_callback(int player_id, const char* seq_name,
+                                               dse_cutscene_event_fn fn, void* user_data);
+DSE_CAPI void  dse_cutscene_set_finish_callback(int player_id,
+                                                dse_cutscene_finish_fn fn, void* user_data);
+
+// ============================================================
+// AI（行为树 + GOAP 规划器）
+// ============================================================
+
+// 条件回调：返回 0=失败 1=成功。
+typedef int (*dse_ai_condition_fn)(void* user_data);
+// 动作回调：返回 0=failure 1=success 2=running。
+typedef int (*dse_ai_action_fn)(float dt, void* user_data);
+// user_data 释放回调（节点销毁时调用，可为 NULL）。
+typedef void (*dse_ai_destroy_fn)(void* user_data);
+
+DSE_CAPI int   dse_ai_tree_create(const char* name);
+DSE_CAPI void  dse_ai_tree_destroy(int tree_id);
+// 返回 0=failure 1=success 2=running。
+DSE_CAPI int   dse_ai_tree_tick(int tree_id, float dt);
+DSE_CAPI void  dse_ai_tree_reset(int tree_id);
+DSE_CAPI void  dse_ai_shutdown(void);
+
+// 黑板
+DSE_CAPI void  dse_ai_bb_set_bool(int tree_id, const char* key, int v);
+DSE_CAPI void  dse_ai_bb_set_int(int tree_id, const char* key, int v);
+DSE_CAPI void  dse_ai_bb_set_float(int tree_id, const char* key, float v);
+DSE_CAPI void  dse_ai_bb_set_string(int tree_id, const char* key, const char* v);
+DSE_CAPI void  dse_ai_bb_set_vec3(int tree_id, const char* key, float x, float y, float z);
+DSE_CAPI int   dse_ai_bb_get_bool(int tree_id, const char* key);
+DSE_CAPI int   dse_ai_bb_get_int(int tree_id, const char* key);
+DSE_CAPI float dse_ai_bb_get_float(int tree_id, const char* key);
+DSE_CAPI int   dse_ai_bb_get_string(int tree_id, const char* key, char* out, int cap);
+DSE_CAPI int   dse_ai_bb_get_vec3(int tree_id, const char* key, float* out_xyz);
+
+// 树构建（栈式）
+DSE_CAPI void  dse_ai_begin_sequence(int tree_id, const char* name);
+DSE_CAPI void  dse_ai_begin_selector(int tree_id, const char* name);
+// require_one: 0=RequireAll 1=RequireOne。
+DSE_CAPI void  dse_ai_begin_parallel(int tree_id, int require_one, const char* name);
+DSE_CAPI void  dse_ai_end_composite(int tree_id);
+DSE_CAPI void  dse_ai_add_condition(int tree_id, const char* name, dse_ai_condition_fn fn,
+                                    void* user_data, dse_ai_destroy_fn destroy);
+DSE_CAPI void  dse_ai_add_action(int tree_id, const char* name, dse_ai_action_fn fn,
+                                 void* user_data, dse_ai_destroy_fn destroy);
+DSE_CAPI void  dse_ai_add_inverter(int tree_id, const char* name);
+DSE_CAPI void  dse_ai_add_succeeder(int tree_id, const char* name);
+// max_repeats<0 = 无限。
+DSE_CAPI void  dse_ai_add_repeater(int tree_id, const char* name, int max_repeats);
+
+// GOAP
+DSE_CAPI int   dse_ai_goap_create(void);
+DSE_CAPI void  dse_ai_goap_destroy(int planner_id);
+DSE_CAPI void  dse_ai_goap_action_begin(int planner_id, const char* name, float cost);
+DSE_CAPI void  dse_ai_goap_action_precondition(int planner_id, const char* key, int value);
+DSE_CAPI void  dse_ai_goap_action_effect(int planner_id, const char* key, int value);
+DSE_CAPI void  dse_ai_goap_action_commit(int planner_id);
+DSE_CAPI void  dse_ai_goap_state_clear(int planner_id);
+// which: 0=current_state 1=goal。
+DSE_CAPI void  dse_ai_goap_state_set(int planner_id, int which, const char* key, int value);
+// 规划：动作名以 '\n' 分隔写入 out（null 结尾，按 cap 截断）。返回 -1=无解，否则写入长度。
+DSE_CAPI int   dse_ai_goap_plan(int planner_id, char* out, int cap);
 
 #ifdef __cplusplus
 }

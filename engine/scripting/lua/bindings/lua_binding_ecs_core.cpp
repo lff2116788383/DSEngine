@@ -1,32 +1,17 @@
 /**
  * @file lua_binding_ecs_core.cpp
- * @brief ECS Lua 绑定 — 实体创建、场景加载、实体查询、层级、脚本
+ * @brief ECS Lua 绑定 — 实体创建、场景加载、实体查询、层级、脚本。薄包装委托至 C ABI。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/components_3d.h"
-#include "engine/ecs/transform.h"
-#include "engine/ecs/script.h"
-#include "engine/ecs/time_scale_component.h"
-#include "engine/ecs/sprite.h"
-#include "engine/ecs/camera.h"
-#include "engine/ecs/physics_2d.h"
-#include "engine/ecs/gameplay.h"
-#include "engine/ecs/components_3d_foliage.h"
-#include "engine/scene/scene.h"
-#include "engine/scene/sub_scene.h"
-#include "engine/scene/scene_manager.h"
-#include "engine/ecs/uuid_component.h"
-#include "engine/assets/asset_manager.h"
-#include "engine/core/service_locator.h"
+#include "engine/scripting/native_api/dse_api.h"
 
-#include <glm/glm.hpp>
-#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <string>
-#include <unordered_map>
+#include <vector>
+
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -34,74 +19,47 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
-scene::SceneManager* GetSceneManager() {
-    return core::ServiceLocator::Instance().Get<scene::SceneManager>();
+constexpr uint32_t kInvalidEntity = 0xFFFFFFFFu;
+
+uint32_t EID(lua_State* L, int index) {
+    return static_cast<uint32_t>(luaL_checkinteger(L, index));
 }
 
-// 将相对路径解析为基于 data root 的完整路径（与 load_sub_scene 行为一致）
-std::string ResolveScenePath(const char* path) {
-    AssetManager& am = GetAssetManager();
-    std::string resolved = am.GetDataRoot();
-    if (!resolved.empty() && resolved.back() != '/' && resolved.back() != '\\') {
-        resolved += '/';
+// 将 '\n' 分隔的字符串拆分并逐条压入 Lua 数组表（表须已在栈顶）。
+void PushLinesAsArray(lua_State* L, const std::string& joined, int count) {
+    if (count <= 0 || joined.empty()) return;
+    int idx = 1;
+    size_t start = 0;
+    while (start <= joined.size()) {
+        size_t pos = joined.find('\n', start);
+        std::string item = (pos == std::string::npos)
+                               ? joined.substr(start)
+                               : joined.substr(start, pos - start);
+        lua_pushlstring(L, item.data(), item.size());
+        lua_rawseti(L, -2, idx++);
+        if (pos == std::string::npos) break;
+        start = pos + 1;
     }
-    resolved += path;
-    return resolved;
 }
 
 int L_EcsCreateEntity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushinteger(L, 0);
-        return 1;
-    }
-    Entity e = world->CreateEntity();
-    helper::PushEntity(L, e);
+    lua_pushinteger(L, dse_entity_create());
     return 1;
 }
 
 int L_EcsLoadScene(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        lua_pushstring(L, "world_unavailable");
-        return 2;
-    }
-
-    const char* scene_path = luaL_checkstring(L, 1);
-    scene::Scene scene_loader("lua_runtime_scene_loader");
-    scene_loader.BindWorld(world);
-    const bool ok = scene_loader.Deserialize(scene_path);
-    scene_loader.UnbindWorld();
-
+    const bool ok = dse_scene_load(luaL_checkstring(L, 1)) != 0;
     lua_pushboolean(L, ok ? 1 : 0);
-    if (ok) {
-        lua_pushstring(L, "");
-    } else {
-        lua_pushstring(L, "scene_deserialize_failed");
-    }
+    lua_pushstring(L, ok ? "" : "scene_deserialize_failed");
     return 2;
 }
 
 int L_EcsLoadSubScene(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        lua_pushstring(L, "world_unavailable");
-        return 2;
-    }
-    const char* path = luaL_checkstring(L, 1);
-    AssetManager& am = GetAssetManager();
-    std::string resolved = am.GetDataRoot();
-    if (!resolved.empty() && resolved.back() != '/' && resolved.back() != '\\') {
-        resolved += '/';
-    }
-    resolved += path;
-    scene::SubScene sub;
-    const bool ok = sub.Load(*world, am, resolved);
+    int entity_count = 0;
+    const bool ok = dse_scene_load_sub(luaL_checkstring(L, 1), &entity_count) != 0;
     lua_pushboolean(L, ok ? 1 : 0);
     if (ok) {
-        lua_pushinteger(L, static_cast<lua_Integer>(sub.EntityCount()));
+        lua_pushinteger(L, entity_count);
     } else {
         lua_pushstring(L, "sub_scene_load_failed");
     }
@@ -109,50 +67,31 @@ int L_EcsLoadSubScene(lua_State* L) {
 }
 
 int L_EcsDestroyEntity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    if (world->registry().valid(e)) {
-        world->DestroyEntity(e);
-    }
+    dse_entity_destroy(EID(L, 1));
     return 0;
 }
 
 int L_EcsFindEntitiesByMeshPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_newtable(L);
-        return 1;
-    }
-
     const char* mesh_path = luaL_checkstring(L, 1);
     lua_newtable(L);
-    int index = 1;
-    auto view = world->registry().view<MeshRendererComponent>();
-    for (auto entity : view) {
-        const auto& mesh = view.get<MeshRendererComponent>(entity);
-        if (mesh.mesh_path == mesh_path) {
-            helper::PushEntity(L, entity);
-            lua_rawseti(L, -2, index++);
-        }
+    int total = dse_ecs_find_entities_by_mesh_path(mesh_path, nullptr, 0);
+    if (total <= 0) return 1;
+    std::vector<uint32_t> ids(static_cast<size_t>(total));
+    int n = dse_ecs_find_entities_by_mesh_path(mesh_path, ids.data(), total);
+    if (n > total) n = total;
+    for (int i = 0; i < n; ++i) {
+        lua_pushinteger(L, ids[static_cast<size_t>(i)]);
+        lua_rawseti(L, -2, i + 1);
     }
     return 1;
 }
 
 int L_EcsAddTransform(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float x  = helper::CheckFloat(L, 2);
-    float y  = helper::CheckFloat(L, 3);
-    float z  = helper::OptFloat(L, 4, 0.0f);
-    float sx = helper::OptFloat(L, 5, 1.0f);
-    float sy = helper::OptFloat(L, 6, 1.0f);
-    float sz = helper::OptFloat(L, 7, 1.0f);
-    auto& transform = world->registry().emplace_or_replace<TransformComponent>(e);
-    transform.position = glm::vec3(x, y, z);
-    transform.scale    = glm::vec3(sx, sy, sz);
-    transform.dirty    = true;
+    dse_ecs_add_transform(EID(L, 1),
+                          helper::CheckFloat(L, 2), helper::CheckFloat(L, 3),
+                          helper::OptFloat(L, 4, 0.0f),
+                          helper::OptFloat(L, 5, 1.0f), helper::OptFloat(L, 6, 1.0f),
+                          helper::OptFloat(L, 7, 1.0f));
     return 0;
 }
 
@@ -161,46 +100,27 @@ int L_EcsAddTransform(lua_State* L) {
 // ============================================================
 
 int L_EcsAddParent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    Entity parent_e = helper::CheckEntity(L, 2);
-    auto& pc = world->registry().emplace_or_replace<ParentComponent>(e);
-    pc.parent = parent_e;
+    dse_ecs_add_parent(EID(L, 1), EID(L, 2));
     return 0;
 }
 
 int L_EcsSetParent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    Entity parent_e = helper::CheckEntity(L, 2);
-    auto* pc = helper::TryGetComponent<ParentComponent>(*world, e);
-    if (!pc) return 0;
-    pc->parent = parent_e;
+    dse_ecs_set_parent(EID(L, 1), EID(L, 2));
     return 0;
 }
 
 int L_EcsGetParent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* pc = helper::TryGetComponentConst<ParentComponent>(*world, e);
-    if (!pc || pc->parent == entt::null) {
+    uint32_t parent = dse_ecs_get_parent(EID(L, 1));
+    if (parent == kInvalidEntity) {
         lua_pushnil(L);
         return 1;
     }
-    helper::PushEntity(L, pc->parent);
+    lua_pushinteger(L, parent);
     return 1;
 }
 
 int L_EcsClearParent(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    if (world->registry().valid(e) && world->registry().all_of<ParentComponent>(e)) {
-        world->registry().remove<ParentComponent>(e);
-    }
+    dse_ecs_clear_parent(EID(L, 1));
     return 0;
 }
 
@@ -209,55 +129,34 @@ int L_EcsClearParent(lua_State* L) {
 // ============================================================
 
 int L_EcsAddScript(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    const char* script_path = luaL_checkstring(L, 2);
-    auto& sc = world->registry().emplace_or_replace<ScriptComponent>(e);
-    sc.script_path = script_path;
-    sc.enabled = true;
+    dse_ecs_add_script(EID(L, 1), luaL_checkstring(L, 2));
     return 0;
 }
 
 int L_EcsSetScriptPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    const char* path = luaL_checkstring(L, 2);
-    auto* sc = helper::TryGetComponent<ScriptComponent>(*world, e);
-    if (!sc) return 0;
-    sc->script_path = path;
+    dse_ecs_set_script_path(EID(L, 1), luaL_checkstring(L, 2));
     return 0;
 }
 
 int L_EcsGetScriptPath(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* sc = helper::TryGetComponentConst<ScriptComponent>(*world, e);
-    if (!sc) { lua_pushnil(L); return 1; }
-    lua_pushstring(L, sc->script_path.c_str());
+    char buf[512];
+    int n = dse_ecs_get_script_path(EID(L, 1), buf, sizeof(buf));
+    if (n < 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushlstring(L, buf, static_cast<size_t>(n));
     return 1;
 }
 
 int L_EcsSetScriptEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    bool enabled = helper::CheckBool(L, 2);
-    auto* sc = helper::TryGetComponent<ScriptComponent>(*world, e);
-    if (!sc) return 0;
-    sc->enabled = enabled;
+    dse_ecs_set_script_enabled(EID(L, 1), helper::CheckBool(L, 2) ? 1 : 0);
     return 0;
 }
 
 int L_EcsGetScriptEnabled(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushboolean(L, 0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* sc = helper::TryGetComponentConst<ScriptComponent>(*world, e);
-    if (!sc) { lua_pushboolean(L, 0); return 1; }
-    helper::PushBool(L, sc->enabled);
+    int enabled = dse_ecs_get_script_enabled(EID(L, 1));
+    lua_pushboolean(L, enabled == 1 ? 1 : 0);
     return 1;
 }
 
@@ -267,101 +166,76 @@ int L_EcsGetScriptEnabled(lua_State* L) {
 
 // ecs.load_sub_scene_async(path)
 int L_EcsLoadSubSceneAsync(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (!sm) { lua_pushboolean(L, 0); return 1; }
-    const char* path = luaL_checkstring(L, 1);
-    sm->LoadSubSceneAsync(ResolveScenePath(path));
-    lua_pushboolean(L, 1);
+    lua_pushboolean(L, dse_scene_load_sub_async(luaL_checkstring(L, 1)));
     return 1;
 }
 
 // ecs.unload_sub_scene(path)
 int L_EcsUnloadSubScene(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (!sm) return 0;
-    const char* path = luaL_checkstring(L, 1);
-    sm->UnloadSubScene(ResolveScenePath(path));
+    dse_scene_unload_sub(luaL_checkstring(L, 1));
     return 0;
 }
 
 // ecs.unload_all_sub_scenes()
 int L_EcsUnloadAllSubScenes(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (sm) sm->UnloadAll();
+    (void)L;
+    dse_scene_unload_all_subs();
     return 0;
 }
 
 // ecs.is_sub_scene_loaded(path) -> bool
 int L_EcsIsSubSceneLoaded(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (!sm) { lua_pushboolean(L, 0); return 1; }
-    const char* path = luaL_checkstring(L, 1);
-    lua_pushboolean(L, sm->IsSubSceneLoaded(ResolveScenePath(path)) ? 1 : 0);
+    lua_pushboolean(L, dse_scene_is_sub_loaded(luaL_checkstring(L, 1)));
     return 1;
 }
 
 // ecs.get_loaded_sub_scenes() -> table（完整解析后的路径）
 int L_EcsGetLoadedSubScenes(lua_State* L) {
-    auto* sm = GetSceneManager();
     lua_newtable(L);
-    if (!sm) return 1;
-    auto paths = sm->GetLoadedSubScenes();
-    for (size_t i = 0; i < paths.size(); ++i) {
-        lua_pushstring(L, paths[i].c_str());
-        lua_rawseti(L, -2, static_cast<int>(i + 1));
-    }
+    std::vector<char> buf(16384);
+    int count = dse_scene_get_loaded_subs(buf.data(), static_cast<int>(buf.size()));
+    PushLinesAsArray(L, std::string(buf.data()), count);
     return 1;
 }
 
 // ecs.get_sub_scene_count() -> int
 int L_EcsGetSubSceneCount(lua_State* L) {
-    auto* sm = GetSceneManager();
-    lua_pushinteger(L, sm ? static_cast<lua_Integer>(sm->LoadedCount()) : 0);
+    lua_pushinteger(L, dse_scene_get_sub_count());
     return 1;
 }
 
 // ecs.get_pending_scene_count() -> int
 int L_EcsGetPendingSceneCount(lua_State* L) {
-    auto* sm = GetSceneManager();
-    lua_pushinteger(L, sm ? static_cast<lua_Integer>(sm->PendingCount()) : 0);
+    lua_pushinteger(L, dse_scene_get_pending_count());
     return 1;
 }
 
 // ecs.transition_to(path, [mode="fade"], [fade_duration=0.5])
 //   mode: "instant" | "additive" | "fade"，或整数 0/1/2
 int L_EcsTransitionTo(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (!sm) return 0;
     const char* path = luaL_checkstring(L, 1);
-    scene::TransitionMode mode = scene::TransitionMode::Fade;
+    int mode = 2;  // fade
     if (lua_isnumber(L, 2)) {
         int m = static_cast<int>(lua_tointeger(L, 2));
-        if (m == 0) mode = scene::TransitionMode::Instant;
-        else if (m == 1) mode = scene::TransitionMode::Additive;
-        else mode = scene::TransitionMode::Fade;
+        mode = (m == 0 || m == 1) ? m : 2;
     } else if (lua_isstring(L, 2)) {
         const char* s = lua_tostring(L, 2);
-        if (std::strcmp(s, "instant") == 0) mode = scene::TransitionMode::Instant;
-        else if (std::strcmp(s, "additive") == 0) mode = scene::TransitionMode::Additive;
-        else mode = scene::TransitionMode::Fade;
+        if (std::strcmp(s, "instant") == 0) mode = 0;
+        else if (std::strcmp(s, "additive") == 0) mode = 1;
     }
     float fade = static_cast<float>(luaL_optnumber(L, 3, 0.5));
-    sm->TransitionTo(ResolveScenePath(path), mode, fade);
+    dse_scene_transition_to(path, mode, fade);
     return 0;
 }
 
 // ecs.get_transition_state() -> string ("idle"|"fading_out"|"loading"|"fading_in")
 int L_EcsGetTransitionState(lua_State* L) {
-    auto* sm = GetSceneManager();
     const char* s = "idle";
-    if (sm) {
-        switch (sm->GetTransitionState()) {
-            case scene::TransitionState::FadingOut: s = "fading_out"; break;
-            case scene::TransitionState::Loading:   s = "loading";    break;
-            case scene::TransitionState::FadingIn:  s = "fading_in";  break;
-            case scene::TransitionState::Idle:
-            default:                                s = "idle";       break;
-        }
+    switch (dse_scene_get_transition_state()) {
+        case 1: s = "fading_out"; break;
+        case 2: s = "loading"; break;
+        case 3: s = "fading_in"; break;
+        default: s = "idle"; break;
     }
     lua_pushstring(L, s);
     return 1;
@@ -369,15 +243,15 @@ int L_EcsGetTransitionState(lua_State* L) {
 
 // ecs.get_fade_progress() -> number [0,1]
 int L_EcsGetFadeProgress(lua_State* L) {
-    auto* sm = GetSceneManager();
-    lua_pushnumber(L, sm ? static_cast<lua_Number>(sm->GetFadeProgress()) : 0.0);
+    lua_pushnumber(L, dse_scene_get_fade_progress());
     return 1;
 }
 
 // ecs.get_active_scene() -> string
 int L_EcsGetActiveScene(lua_State* L) {
-    auto* sm = GetSceneManager();
-    lua_pushstring(L, sm ? sm->GetActiveScenePath().c_str() : "");
+    char buf[1024];
+    int n = dse_scene_get_active(buf, sizeof(buf));
+    lua_pushlstring(L, buf, static_cast<size_t>(n < 0 ? 0 : n));
     return 1;
 }
 
@@ -387,47 +261,48 @@ int L_EcsGetActiveScene(lua_State* L) {
 
 // ecs.get_uuid(e) -> string|nil（16 位十六进制）
 int L_EcsGetUuid(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* uc = helper::TryGetComponentConst<UUIDComponent>(*world, e);
-    if (!uc || uc->uuid == 0) { lua_pushnil(L); return 1; }
-    lua_pushstring(L, uc->ToString().c_str());
+    char buf[64];
+    if (!dse_uuid_get(EID(L, 1), buf, sizeof(buf))) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushstring(L, buf);
     return 1;
 }
 
 // ecs.set_uuid(e, [uuid_str]) -> string
 //   省略 uuid_str 时自动生成；返回最终的 UUID 十六进制字符串
 int L_EcsSetUuid(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    uint64_t uuid;
-    if (lua_isstring(L, 2)) {
-        uuid = UUIDComponent::FromString(lua_tostring(L, 2));
-    } else {
-        uuid = UUIDComponent::Generate();
+    const char* uuid_str = lua_isstring(L, 2) ? lua_tostring(L, 2) : nullptr;
+    char buf[64];
+    if (!dse_uuid_set(EID(L, 1), uuid_str, buf, sizeof(buf))) {
+        lua_pushnil(L);
+        return 1;
     }
-    auto& uc = world->registry().emplace_or_replace<UUIDComponent>(e);
-    uc.uuid = uuid;
-    lua_pushstring(L, uc.ToString().c_str());
+    lua_pushstring(L, buf);
     return 1;
 }
 
 // ecs.resolve_uuid(uuid_str) -> entity|nil
 //   仅能解析经由 SceneManager 加载的子场景中带 UUIDComponent 的实体
 int L_EcsResolveUuid(lua_State* L) {
-    auto* sm = GetSceneManager();
-    if (!sm) { lua_pushnil(L); return 1; }
-    uint64_t uuid = 0;
+    const char* uuid_str;
+    char numbuf[32];
     if (lua_isstring(L, 1)) {
-        uuid = UUIDComponent::FromString(lua_tostring(L, 1));
+        uuid_str = lua_tostring(L, 1);
     } else {
-        uuid = static_cast<uint64_t>(luaL_checkinteger(L, 1));
+        // 整数形式转为十六进制字符串
+        lua_Integer v = luaL_checkinteger(L, 1);
+        std::snprintf(numbuf, sizeof(numbuf), "%016llx",
+                      static_cast<unsigned long long>(v));
+        uuid_str = numbuf;
     }
-    Entity e = sm->ResolveReference(uuid);
-    if (e == entt::null) { lua_pushnil(L); return 1; }
-    helper::PushEntity(L, e);
+    uint32_t e = dse_uuid_resolve(uuid_str);
+    if (e == kInvalidEntity) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, e);
     return 1;
 }
 
@@ -435,176 +310,55 @@ int L_EcsResolveUuid(lua_State* L) {
 // 通用 ECS 组件查询（按组件名字符串）
 // ============================================================
 
-template <typename T>
-void CollectComponentView(World* w, lua_State* L, int& idx) {
-    auto view = w->registry().view<T>();
-    for (auto e : view) {
-        helper::PushEntity(L, e);
-        lua_rawseti(L, -2, idx++);
-    }
-}
-
-template <typename T>
-size_t CountComponentView(World* w) {
-    return w->registry().view<T>().size();
-}
-
-template <typename T>
-bool HasComponentT(World* w, Entity e) {
-    return w->registry().all_of<T>(e);
-}
-
-struct ComponentOps {
-    void (*collect)(World*, lua_State*, int&);
-    size_t (*count)(World*);
-    bool (*has)(World*, Entity);
-};
-
-template <typename T>
-ComponentOps MakeOps() {
-    return ComponentOps{ &CollectComponentView<T>, &CountComponentView<T>, &HasComponentT<T> };
-}
-
-const std::unordered_map<std::string, ComponentOps>& ComponentOpsTable() {
-    static const std::unordered_map<std::string, ComponentOps> table = {
-        // 核心
-        {"transform",               MakeOps<TransformComponent>()},
-        {"parent",                  MakeOps<ParentComponent>()},
-        {"script",                  MakeOps<ScriptComponent>()},
-        {"uuid",                    MakeOps<UUIDComponent>()},
-        {"gameplay_tuning",         MakeOps<GameplayTuningComponent>()},
-        // 2D 渲染 / 物理
-        {"sprite_renderer",         MakeOps<SpriteRendererComponent>()},
-        {"spine_renderer",          MakeOps<SpineRendererComponent>()},
-        {"material_instance",       MakeOps<MaterialInstanceComponent>()},
-        {"camera",                  MakeOps<CameraComponent>()},
-        {"camera_follow",           MakeOps<CameraFollowComponent>()},
-        {"rigidbody_2d",            MakeOps<RigidBody2DComponent>()},
-        {"box_collider_2d",         MakeOps<BoxCollider2DComponent>()},
-        {"circle_collider_2d",      MakeOps<CircleCollider2DComponent>()},
-        // 3D 渲染
-        {"mesh_renderer",           MakeOps<dse::MeshRendererComponent>()},
-        {"lod_group",               MakeOps<dse::LODGroupComponent>()},
-        {"camera_3d",               MakeOps<dse::Camera3DComponent>()},
-        {"free_camera_controller",  MakeOps<dse::FreeCameraControllerComponent>()},
-        {"post_process",            MakeOps<dse::PostProcessComponent>()},
-        {"decal",                   MakeOps<dse::DecalComponent>()},
-        {"directional_light",       MakeOps<dse::DirectionalLight3DComponent>()},
-        {"point_light",             MakeOps<dse::PointLightComponent>()},
-        {"spot_light",              MakeOps<dse::SpotLightComponent>()},
-        {"sky_light",               MakeOps<dse::SkyLightComponent>()},
-        {"skybox",                  MakeOps<dse::SkyboxComponent>()},
-        {"water",                   MakeOps<dse::WaterComponent>()},
-        {"grass",                   MakeOps<dse::GrassComponent>()},
-        {"hair",                    MakeOps<dse::HairComponent>()},
-        {"light_probe",             MakeOps<dse::LightProbeComponent>()},
-        {"reflection_probe",        MakeOps<dse::ReflectionProbeComponent>()},
-        {"gi_probe_volume",         MakeOps<dse::GIProbeVolumeComponent>()},
-        {"morph_target",            MakeOps<dse::MorphTargetComponent>()},
-        {"sub_scene",               MakeOps<dse::SubSceneComponent>()},
-        // 地形 / 植被
-        {"terrain",                 MakeOps<dse::TerrainComponent>()},
-        {"terrain_tile_manager",    MakeOps<dse::TerrainTileManagerComponent>()},
-        {"tree",                    MakeOps<dse::TreeComponent>()},
-        {"foliage",                 MakeOps<dse::FoliageComponent>()},
-        // 3D 物理
-        {"rigidbody_3d",            MakeOps<dse::RigidBody3DComponent>()},
-        {"box_collider_3d",         MakeOps<dse::BoxCollider3DComponent>()},
-        {"sphere_collider_3d",      MakeOps<dse::SphereCollider3DComponent>()},
-        {"capsule_collider_3d",     MakeOps<dse::CapsuleCollider3DComponent>()},
-        {"mesh_collider_3d",        MakeOps<dse::MeshCollider3DComponent>()},
-        {"joint_3d",                MakeOps<dse::Joint3DComponent>()},
-        {"character_controller_3d", MakeOps<dse::CharacterController3DComponent>()},
-        {"terrain_heightmap",       MakeOps<dse::TerrainHeightmapComponent>()},
-        // Ragdoll/Vehicle/Buoyancy 仅在 3D 物理后端（PhysX/Jolt）启用时定义（见
-        // engine/ecs/components_3d_physics.h），无物理构建（如 Web MVP）下不绑定。
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
-        {"ragdoll",                 MakeOps<dse::RagdollComponent>()},
-#endif
-        {"soft_body",               MakeOps<dse::SoftBodyComponent>()},
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
-        {"vehicle",                 MakeOps<dse::VehicleComponent>()},
-#endif
-        {"rope",                    MakeOps<dse::RopeComponent>()},
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
-        {"buoyancy",                MakeOps<dse::BuoyancyComponent>()},
-#endif
-        {"cloth",                   MakeOps<dse::ClothComponent>()},
-        {"fluid_emitter",           MakeOps<dse::FluidEmitterComponent>()},
-        // 动画
-        {"animator_3d",             MakeOps<dse::Animator3DComponent>()},
-        {"anim_layer",              MakeOps<dse::AnimLayerComponent>()},
-        {"ik_chain_3d",             MakeOps<dse::IKChain3DComponent>()},
-        {"foot_ik",                 MakeOps<dse::FootIK3DComponent>()},
-        {"bone_attachment",         MakeOps<dse::BoneAttachmentComponent>()},
-        // 粒子 / 天空 / 天气
-        {"particle_system_3d",      MakeOps<dse::ParticleSystem3DComponent>()},
-        {"atmosphere",              MakeOps<dse::AtmosphereComponent>()},
-        {"volumetric_cloud",        MakeOps<dse::VolumetricCloudComponent>()},
-        {"day_night_cycle",         MakeOps<dse::DayNightCycleComponent>()},
-        {"weather",                 MakeOps<dse::WeatherComponent>()},
-        {"snow_cover",              MakeOps<dse::SnowCoverComponent>()},
-        {"fracture",                MakeOps<dse::FractureComponent>()},
-        // 导航
-        {"dynamic_obstacle",        MakeOps<dse::DynamicObstacleComponent>()},
-        {"navmesh_auto_rebake",     MakeOps<dse::NavMeshAutoRebakeComponent>()},
-    };
-    return table;
-}
-
 // ecs.find_entities_with(component_name) -> table（持有该组件的全部实体）
 //   component_name 见文档 §5.1 支持列表；未知名抛出 Lua 错误。
 int L_EcsFindEntitiesWith(lua_State* L) {
-    World* world = GetWorld();
     const char* name = luaL_checkstring(L, 1);
-    const auto& table = ComponentOpsTable();
-    auto it = table.find(name);
-    if (it == table.end()) {
+    int total = dse_ecs_find_entities_with(name, nullptr, 0);
+    if (total < 0) {
         return luaL_error(L, "find_entities_with: unknown component '%s'", name);
     }
     lua_newtable(L);
-    if (!world) return 1;
-    int idx = 1;
-    it->second.collect(world, L, idx);
+    if (total == 0) return 1;
+    std::vector<uint32_t> ids(static_cast<size_t>(total));
+    int n = dse_ecs_find_entities_with(name, ids.data(), total);
+    if (n > total) n = total;
+    for (int i = 0; i < n; ++i) {
+        lua_pushinteger(L, ids[static_cast<size_t>(i)]);
+        lua_rawseti(L, -2, i + 1);
+    }
     return 1;
 }
 
 // ecs.count_entities_with(component_name) -> int
 int L_EcsCountEntitiesWith(lua_State* L) {
-    World* world = GetWorld();
     const char* name = luaL_checkstring(L, 1);
-    const auto& table = ComponentOpsTable();
-    auto it = table.find(name);
-    if (it == table.end()) {
+    int count = dse_ecs_count_entities_with(name);
+    if (count < 0) {
         return luaL_error(L, "count_entities_with: unknown component '%s'", name);
     }
-    lua_pushinteger(L, world ? static_cast<lua_Integer>(it->second.count(world)) : 0);
+    lua_pushinteger(L, count);
     return 1;
 }
 
 // ecs.has_component(entity, component_name) -> bool
 int L_EcsHasComponent(lua_State* L) {
-    World* world = GetWorld();
-    Entity e = helper::CheckEntity(L, 1);
+    uint32_t e = EID(L, 1);
     const char* name = luaL_checkstring(L, 2);
-    const auto& table = ComponentOpsTable();
-    auto it = table.find(name);
-    if (it == table.end()) {
+    int has = dse_ecs_has_component(e, name);
+    if (has < 0) {
         return luaL_error(L, "has_component: unknown component '%s'", name);
     }
-    lua_pushboolean(L, (world && it->second.has(world, e)) ? 1 : 0);
+    lua_pushboolean(L, has);
     return 1;
 }
 
 // ecs.get_queryable_components() -> table（全部支持查询的组件名）
 int L_EcsGetQueryableComponents(lua_State* L) {
-    const auto& table = ComponentOpsTable();
     lua_newtable(L);
-    int idx = 1;
-    for (const auto& kv : table) {
-        lua_pushstring(L, kv.first.c_str());
-        lua_rawseti(L, -2, idx++);
-    }
+    std::vector<char> buf(8192);
+    int count = dse_ecs_get_queryable_components(buf.data(), static_cast<int>(buf.size()));
+    PushLinesAsArray(L, std::string(buf.data()), count);
     return 1;
 }
 
@@ -615,17 +369,7 @@ int L_EcsGetQueryableComponents(lua_State* L) {
 // ecs.save_scene(path) -> bool, string
 //   把当前 World 完整序列化到 path（路径按字面使用，不做 data root 拼接）。
 int L_EcsSaveScene(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        lua_pushstring(L, "world_unavailable");
-        return 2;
-    }
-    const char* path = luaL_checkstring(L, 1);
-    scene::Scene saver("lua_runtime_scene_saver");
-    saver.BindWorld(world);
-    const bool ok = saver.Serialize(path);
-    saver.UnbindWorld();
+    const bool ok = dse_scene_save(luaL_checkstring(L, 1)) != 0;
     lua_pushboolean(L, ok ? 1 : 0);
     lua_pushstring(L, ok ? "" : "scene_serialize_failed");
     return 2;
@@ -633,33 +377,28 @@ int L_EcsSaveScene(lua_State* L) {
 
 // ecs.save_prefab(entity, path) -> bool
 int L_EcsSavePrefab(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushboolean(L, 0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const char* path = luaL_checkstring(L, 2);
-    lua_pushboolean(L, scene::SaveEntityAsPrefab(*world, e, path) ? 1 : 0);
+    lua_pushboolean(L, dse_scene_save_prefab(EID(L, 1), luaL_checkstring(L, 2)));
     return 1;
 }
 
 // ecs.instantiate_prefab(path, [x, y, z]) -> entity|nil
 //   省略坐标时使用预制体内置 Transform。
 int L_EcsInstantiatePrefab(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
     const char* path = luaL_checkstring(L, 1);
-    Entity e;
+    uint32_t e;
     if (lua_isnumber(L, 2) && lua_isnumber(L, 3) && lua_isnumber(L, 4)) {
-        scene::PrefabInstantiateOptions opts;
-        opts.override_position = true;
-        opts.position = glm::vec3(static_cast<float>(lua_tonumber(L, 2)),
-                                  static_cast<float>(lua_tonumber(L, 3)),
-                                  static_cast<float>(lua_tonumber(L, 4)));
-        e = scene::InstantiatePrefab(*world, path, opts);
+        e = dse_scene_instantiate_prefab(path,
+                                         static_cast<float>(lua_tonumber(L, 2)),
+                                         static_cast<float>(lua_tonumber(L, 3)),
+                                         static_cast<float>(lua_tonumber(L, 4)), 1);
     } else {
-        e = scene::InstantiatePrefab(*world, path);
+        e = dse_scene_instantiate_prefab(path, 0.0f, 0.0f, 0.0f, 0);
     }
-    if (e == entt::null) { lua_pushnil(L); return 1; }
-    helper::PushEntity(L, e);
+    if (!dse_entity_valid(e)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, e);
     return 1;
 }
 
@@ -668,61 +407,28 @@ int L_EcsInstantiatePrefab(lua_State* L) {
 // ============================================================
 
 // ecs.get_world_aabb(e) -> min_x,min_y,min_z, max_x,max_y,max_z | nil
-//   返回实体的世界空间轴对齐包围盒（AABB）。BoundingBoxComponent 存的是
-//   模型空间包围盒（由渲染/剔除系统从 mesh 顶点计算），此处用实体的
-//   local_to_world 变换到世界空间，算法与 SpatialScene::ComputeWorldAABB 一致。
-//   无 BoundingBoxComponent 时返回 nil；无 TransformComponent 时按单位变换
-//   （世界==模型）返回。该组件由渲染/剔除系统更新，脚本读到的是上一帧结果。
+//   返回实体的世界空间轴对齐包围盒（AABB）。无 BoundingBoxComponent 时返回 nil；
+//   无 TransformComponent 时按单位变换（世界==模型）返回。
+//   该组件由渲染/剔除系统更新，脚本读到的是上一帧结果。
 int L_EcsGetWorldAabb(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* bbox = helper::TryGetComponentConst<dse::BoundingBoxComponent>(*world, e);
-    if (!bbox) { lua_pushnil(L); return 1; }
-
-    glm::vec3 wmin;
-    glm::vec3 wmax;
-    const auto* tc = helper::TryGetComponentConst<TransformComponent>(*world, e);
-    if (tc) {
-        // 中心经矩阵变换；半长用矩阵各列绝对值缩放（保守 OBB->AABB 包覆）。
-        const glm::vec3 center = glm::vec3(tc->local_to_world * glm::vec4(bbox->center(), 1.0f));
-        const glm::vec3 ext = bbox->extents();
-        const glm::mat3 m(tc->local_to_world);
-        const glm::vec3 world_ext(
-            std::abs(m[0][0]) * ext.x + std::abs(m[1][0]) * ext.y + std::abs(m[2][0]) * ext.z,
-            std::abs(m[0][1]) * ext.x + std::abs(m[1][1]) * ext.y + std::abs(m[2][1]) * ext.z,
-            std::abs(m[0][2]) * ext.x + std::abs(m[1][2]) * ext.y + std::abs(m[2][2]) * ext.z);
-        wmin = center - world_ext;
-        wmax = center + world_ext;
-    } else {
-        wmin = bbox->min_extents;
-        wmax = bbox->max_extents;
+    float mm[6] = {0};
+    if (!dse_ecs_get_world_aabb(EID(L, 1), mm)) {
+        lua_pushnil(L);
+        return 1;
     }
-
-    lua_pushnumber(L, static_cast<lua_Number>(wmin.x));
-    lua_pushnumber(L, static_cast<lua_Number>(wmin.y));
-    lua_pushnumber(L, static_cast<lua_Number>(wmin.z));
-    lua_pushnumber(L, static_cast<lua_Number>(wmax.x));
-    lua_pushnumber(L, static_cast<lua_Number>(wmax.y));
-    lua_pushnumber(L, static_cast<lua_Number>(wmax.z));
+    for (int i = 0; i < 6; ++i) lua_pushnumber(L, mm[i]);
     return 6;
 }
 
 // ecs.get_local_aabb(e) -> min_x,min_y,min_z, max_x,max_y,max_z | nil
 //   返回 BoundingBoxComponent 原始的模型空间 AABB（不施加 Transform）。
-//   无 BoundingBoxComponent 时返回 nil。
 int L_EcsGetLocalAabb(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnil(L); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* bbox = helper::TryGetComponentConst<dse::BoundingBoxComponent>(*world, e);
-    if (!bbox) { lua_pushnil(L); return 1; }
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.x));
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.y));
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->min_extents.z));
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.x));
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.y));
-    lua_pushnumber(L, static_cast<lua_Number>(bbox->max_extents.z));
+    float mm[6] = {0};
+    if (!dse_ecs_get_local_aabb(EID(L, 1), mm)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    for (int i = 0; i < 6; ++i) lua_pushnumber(L, mm[i]);
     return 6;
 }
 
@@ -733,22 +439,13 @@ int L_EcsGetLocalAabb(lua_State* L) {
 // ecs.set_time_scale(e, s)：设置实体局部时间缩放（无组件则自动添加），s 钳制为 >=0。
 //   实体最终生效缩放 = 全局 time-scale × 局部 scale（对标 Unreal CustomTimeDilation）。
 int L_EcsSetTimeScale(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
-    Entity e = helper::CheckEntity(L, 1);
-    float scale = helper::CheckFloat(L, 2);
-    if (scale < 0.0f) scale = 0.0f;
-    world->registry().emplace_or_replace<dse::TimeScaleComponent>(e, scale);
+    dse_ecs_set_time_scale(EID(L, 1), helper::CheckFloat(L, 2));
     return 0;
 }
 
 // ecs.get_time_scale(e) -> number：实体局部时间缩放；无 TimeScaleComponent 时返回 1.0。
 int L_EcsGetTimeScale(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) { lua_pushnumber(L, 1.0); return 1; }
-    Entity e = helper::CheckEntity(L, 1);
-    const auto* ts = helper::TryGetComponentConst<dse::TimeScaleComponent>(*world, e);
-    lua_pushnumber(L, ts ? static_cast<lua_Number>(ts->scale) : 1.0);
+    lua_pushnumber(L, dse_ecs_get_time_scale(EID(L, 1)));
     return 1;
 }
 

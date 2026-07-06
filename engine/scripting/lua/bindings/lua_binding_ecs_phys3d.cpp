@@ -8,11 +8,6 @@
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/transform.h"
-#include "engine/ecs/components_3d_physics.h"
-#include "engine/core/service_locator.h"
-#include "engine/physics/physics3d/i_physics3d_system.h"
 #include "engine/scripting/native_api/dse_api.h"
 extern "C" {
 #include "depends/lua/lauxlib.h"
@@ -21,6 +16,7 @@ extern "C" {
 #include <algorithm>
 #include <cmath>
 #include <cfloat>
+#include <vector>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -263,56 +259,50 @@ int L_EcsTerrainGetHeight(lua_State* L) {
 
 /// physics_3d_get_collision_events() -> table of {type, entity_a, entity_b, px, py, pz, nx, ny, nz, impulse}
 int L_Physics3DGetCollisionEvents(lua_State* L) {
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        const auto& events = physics->GetCollisionEvents();
-        lua_newtable(L);
-        for (size_t i = 0; i < events.size(); ++i) {
-            const auto& e = events[i];
-            lua_newtable(L);
-            lua_pushinteger(L, static_cast<int>(e.type));
-            lua_setfield(L, -2, "type");
-            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.entity_a)));
-            lua_setfield(L, -2, "entity_a");
-            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.entity_b)));
-            lua_setfield(L, -2, "entity_b");
-            lua_pushnumber(L, e.contact_point.x); lua_setfield(L, -2, "px");
-            lua_pushnumber(L, e.contact_point.y); lua_setfield(L, -2, "py");
-            lua_pushnumber(L, e.contact_point.z); lua_setfield(L, -2, "pz");
-            lua_pushnumber(L, e.contact_normal.x); lua_setfield(L, -2, "nx");
-            lua_pushnumber(L, e.contact_normal.y); lua_setfield(L, -2, "ny");
-            lua_pushnumber(L, e.contact_normal.z); lua_setfield(L, -2, "nz");
-            lua_pushnumber(L, e.impulse); lua_setfield(L, -2, "impulse");
-            lua_rawseti(L, -2, static_cast<int>(i + 1));
-        }
-        return 1;
-    }
-#endif
+    int total = dse_physics3d_get_collision_count();
     lua_newtable(L);
+    if (total <= 0) return 1;
+    std::vector<float> buf(static_cast<size_t>(total) * 11);
+    int count = dse_physics3d_get_collision_events(buf.data(), total);
+    for (int i = 0; i < count; ++i) {
+        const float* p = buf.data() + i * 11;
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(p[0]));
+        lua_setfield(L, -2, "type");
+        lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(p[1])));
+        lua_setfield(L, -2, "entity_a");
+        lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(p[2])));
+        lua_setfield(L, -2, "entity_b");
+        lua_pushnumber(L, p[3]); lua_setfield(L, -2, "px");
+        lua_pushnumber(L, p[4]); lua_setfield(L, -2, "py");
+        lua_pushnumber(L, p[5]); lua_setfield(L, -2, "pz");
+        lua_pushnumber(L, p[6]); lua_setfield(L, -2, "nx");
+        lua_pushnumber(L, p[7]); lua_setfield(L, -2, "ny");
+        lua_pushnumber(L, p[8]); lua_setfield(L, -2, "nz");
+        lua_pushnumber(L, p[9]); lua_setfield(L, -2, "impulse");
+        lua_rawseti(L, -2, i + 1);
+    }
     return 1;
 }
 
 /// physics_3d_get_trigger_events() -> table of {type, trigger_entity, other_entity}
 int L_Physics3DGetTriggerEvents(lua_State* L) {
-#ifdef DSE_HAS_PHYSICS3D
-    if (auto* physics = dse::core::ServiceLocator::Instance().Get<dse::physics3d::IPhysics3DSystem>()) {
-        const auto& events = physics->GetTriggerEvents();
-        lua_newtable(L);
-        for (size_t i = 0; i < events.size(); ++i) {
-            const auto& e = events[i];
-            lua_newtable(L);
-            lua_pushinteger(L, static_cast<int>(e.type));
-            lua_setfield(L, -2, "type");
-            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.trigger_entity)));
-            lua_setfield(L, -2, "trigger_entity");
-            lua_pushinteger(L, static_cast<lua_Integer>(static_cast<uint32_t>(e.other_entity)));
-            lua_setfield(L, -2, "other_entity");
-            lua_rawseti(L, -2, static_cast<int>(i + 1));
-        }
-        return 1;
-    }
-#endif
+    int total = dse_physics3d_get_trigger_count();
     lua_newtable(L);
+    if (total <= 0) return 1;
+    std::vector<uint32_t> entities(static_cast<size_t>(total) * 2);
+    std::vector<int> types(static_cast<size_t>(total));
+    int count = dse_physics3d_get_trigger_events(entities.data(), types.data(), total);
+    for (int i = 0; i < count; ++i) {
+        lua_newtable(L);
+        lua_pushinteger(L, types[i]);
+        lua_setfield(L, -2, "type");
+        lua_pushinteger(L, static_cast<lua_Integer>(entities[i * 2]));
+        lua_setfield(L, -2, "trigger_entity");
+        lua_pushinteger(L, static_cast<lua_Integer>(entities[i * 2 + 1]));
+        lua_setfield(L, -2, "other_entity");
+        lua_rawseti(L, -2, i + 1);
+    }
     return 1;
 }
 

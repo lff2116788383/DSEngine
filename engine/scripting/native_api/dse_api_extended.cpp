@@ -401,6 +401,84 @@ extern "C" void dse_rendering_set_reflection_probe_enabled(uint32_t e, int enabl
     if (rp) rp->enabled = (enabled != 0);
 }
 
+extern "C" int dse_dir_light_has(uint32_t e) {
+    World* world = GW();
+    return (world && world->registry().try_get<DirectionalLight3DComponent>(TE(e))) ? 1 : 0;
+}
+
+extern "C" int dse_point_light_has(uint32_t e) {
+    World* world = GW();
+    return (world && world->registry().try_get<PointLightComponent>(TE(e))) ? 1 : 0;
+}
+
+extern "C" int dse_spot_light_has(uint32_t e) {
+    World* world = GW();
+    return (world && world->registry().try_get<SpotLightComponent>(TE(e))) ? 1 : 0;
+}
+
+extern "C" int dse_sky_light_has(uint32_t e) {
+    World* world = GW();
+    return (world && world->registry().try_get<SkyLightComponent>(TE(e))) ? 1 : 0;
+}
+
+extern "C" int dse_dir_light_get_shadow_params(uint32_t e, int* out_cast_shadow, float* out_strength,
+                                               float* out_c0, float* out_c1, float* out_c2,
+                                               float* out_lambda) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* light = world->registry().try_get<DirectionalLight3DComponent>(TE(e));
+    if (!light) return 0;
+    if (out_cast_shadow) *out_cast_shadow = light->cast_shadow ? 1 : 0;
+    if (out_strength) *out_strength = light->shadow_strength;
+    if (out_c0) *out_c0 = light->cascade_splits[0];
+    if (out_c1) *out_c1 = light->cascade_splits[1];
+    if (out_c2) *out_c2 = light->cascade_splits[2];
+    if (out_lambda) *out_lambda = light->cascade_split_lambda;
+    return 1;
+}
+
+extern "C" void dse_rendering_set_gi_probe_bias(uint32_t e, float normal_bias, float hysteresis) {
+    World* world = GW();
+    if (!world) return;
+    auto* gi = world->registry().try_get<GIProbeVolumeComponent>(TE(e));
+    if (!gi) return;
+    if (!Keep(normal_bias)) gi->normal_bias = normal_bias;
+    if (!Keep(hysteresis)) gi->hysteresis = hysteresis;
+}
+
+extern "C" int dse_rendering_get_gi_probe_ex(uint32_t e, int* out_enabled, float* out_normal_bias) {
+    World* world = GW();
+    if (!world) return 0;
+    const auto* gi = world->registry().try_get<GIProbeVolumeComponent>(TE(e));
+    if (!gi) return 0;
+    if (out_enabled) *out_enabled = gi->enabled ? 1 : 0;
+    if (out_normal_bias) *out_normal_bias = gi->normal_bias;
+    return 1;
+}
+
+extern "C" void dse_rendering_set_light_probe_ex(uint32_t e, float influence_radius, int needs_rebake) {
+    World* world = GW();
+    if (!world) return;
+    auto* lp = world->registry().try_get<LightProbeComponent>(TE(e));
+    if (!lp) return;
+    if (!Keep(influence_radius)) lp->influence_radius = influence_radius;
+    if (needs_rebake >= 0) lp->needs_rebake = (needs_rebake != 0);
+}
+
+extern "C" void dse_rendering_set_reflection_probe_ex(uint32_t e, float influence_radius,
+                                                      float box_x, float box_y, float box_z,
+                                                      int resolution) {
+    World* world = GW();
+    if (!world) return;
+    auto* rp = world->registry().try_get<ReflectionProbeComponent>(TE(e));
+    if (!rp) return;
+    if (!Keep(influence_radius)) rp->influence_radius = influence_radius;
+    if (!Keep(box_x)) rp->box_size_x = box_x;
+    if (!Keep(box_y)) rp->box_size_y = box_y;
+    if (!Keep(box_z)) rp->box_size_z = box_z;
+    if (resolution > 0) rp->resolution = resolution;
+}
+
 // ============================================================
 // Rendering Camera 扩展
 // ============================================================
@@ -675,6 +753,13 @@ extern "C" void dse_hair_set_wind_full(uint32_t e, float wx, float wy, float wz,
     if (!hair) return;
     hair->wind = glm::vec3(wx, wy, wz);
     if (!Keep(turbulence)) hair->wind_turbulence = turbulence;
+}
+
+extern "C" void dse_hair_set_enabled(uint32_t e, int v) {
+    World* world = GW();
+    if (!world) return;
+    auto* hair = world->registry().try_get<HairComponent>(TE(e));
+    if (hair) hair->enabled = (v != 0);
 }
 
 extern "C" void dse_hair_set_lod(uint32_t e, float lod0_distance, float lod1_distance,

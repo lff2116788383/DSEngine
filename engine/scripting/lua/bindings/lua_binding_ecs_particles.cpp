@@ -1,13 +1,13 @@
 /**
  * @file lua_binding_ecs_particles.cpp
- * @brief ECS Lua 绑定 — 粒子系统（2D/3D）+ GameplayTuning 调参
+ * @brief ECS Lua 绑定 — 粒子系统（2D/3D）+ GameplayTuning 调参。薄包装委托至 C ABI（dse_particle*）。
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_helper.h"
-#include "engine/ecs/world.h"
-#include "engine/ecs/components_3d.h"
-#include "engine/ecs/components_3d_particle.h"
+#include "engine/scripting/native_api/dse_api.h"
+#include <cmath>
+#include <algorithm>
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
@@ -15,76 +15,70 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+inline uint32_t EID(Entity e) { return static_cast<uint32_t>(static_cast<entt::id_type>(e)); }
+
+/// 可选浮点参数：缺省时返回 NaN（C ABI 哨兵 = 保持当前值）。
+inline float OptNan(lua_State* L, int i) {
+    return lua_isnoneornil(L, i) ? NAN : helper::CheckFloat(L, i);
+}
+
 // ============================================================
 // 3D 粒子系统
 // ============================================================
 
 int L_EcsAddParticleSystem3D(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int max_particles = helper::OptInt(L, 2, 1000);
     float emission_rate = helper::OptFloat(L, 3, 100.0f);
-
-    auto& ps = world->registry().emplace_or_replace<ParticleSystem3DComponent>(e);
-    ps.max_particles = max_particles;
-    ps.emission_rate = emission_rate;
+    dse_particle_system_3d_add(EID(e), max_particles, emission_rate);
     return 0;
 }
 
 int L_EcsSetParticleSystem3DParams(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* ps = helper::TryGetComponent<ParticleSystem3DComponent>(*world, e);
-    if (!ps) return 0;
-    ps->start_life_min = helper::OptFloat(L, 2, ps->start_life_min);
-    ps->start_life_max = helper::OptFloat(L, 3, ps->start_life_max);
-    ps->start_size_min = helper::OptFloat(L, 4, ps->start_size_min);
-    ps->start_size_max = helper::OptFloat(L, 5, ps->start_size_max);
-    ps->start_speed_min = helper::OptFloat(L, 6, ps->start_speed_min);
-    ps->start_speed_max = helper::OptFloat(L, 7, ps->start_speed_max);
-    ps->start_color = glm::vec4(
-        helper::OptFloat(L, 8, ps->start_color.r),
-        helper::OptFloat(L, 9, ps->start_color.g),
-        helper::OptFloat(L, 10, ps->start_color.b),
-        helper::OptFloat(L, 11, ps->start_color.a));
-    ps->gravity = glm::vec3(
-        helper::OptFloat(L, 12, ps->gravity.x),
-        helper::OptFloat(L, 13, ps->gravity.y),
-        helper::OptFloat(L, 14, ps->gravity.z));
-    ps->texture_path = luaL_optstring(L, 15, ps->texture_path.c_str());
+    const char* tex = (lua_gettop(L) >= 15 && lua_isstring(L, 15)) ? lua_tostring(L, 15) : nullptr;
+    dse_particle_system_3d_set_params(EID(e),
+        OptNan(L, 2), OptNan(L, 3),
+        OptNan(L, 4), OptNan(L, 5),
+        OptNan(L, 6), OptNan(L, 7),
+        OptNan(L, 8), OptNan(L, 9), OptNan(L, 10), OptNan(L, 11),
+        OptNan(L, 12), OptNan(L, 13), OptNan(L, 14),
+        tex);
     return 0;
 }
 
 int L_EcsGetParticleSystem3DState(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
     Entity e = helper::CheckEntity(L, 1);
-    const auto* ps = helper::TryGetComponentConst<ParticleSystem3DComponent>(*world, e);
-    if (!ps) {
+    int active = 0, max_particles = 0, enabled = 0, initialized = 0;
+    float emission_rate = 0.0f;
+    float life[2] = {0.0f, 0.0f}, size[2] = {0.0f, 0.0f}, speed[2] = {0.0f, 0.0f};
+    float gravity[3] = {0.0f, 0.0f, 0.0f}, color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    char tex[512] = {0};
+    uint32_t texture_handle = 0;
+    int found = dse_particle_system_3d_get_state(EID(e), &active, &max_particles,
+                                                 &emission_rate, life, size, speed,
+                                                 gravity, color, tex, static_cast<int>(sizeof(tex)),
+                                                 &enabled, &initialized, &texture_handle);
+    if (!found) {
         lua_pushboolean(L, 0);
         return 1;
     }
     lua_pushboolean(L, 1);
-    helper::PushInt(L, static_cast<int>(ps->active_particle_count));
-    helper::PushInt(L, ps->max_particles);
-    helper::PushFloat(L, ps->emission_rate);
-    helper::PushFloat(L, ps->start_life_min);
-    helper::PushFloat(L, ps->start_life_max);
-    helper::PushFloat(L, ps->start_size_min);
-    helper::PushFloat(L, ps->start_size_max);
-    helper::PushFloat(L, ps->start_speed_min);
-    helper::PushFloat(L, ps->start_speed_max);
-    helper::PushVec3(L, ps->gravity);
-    helper::PushVec4(L, ps->start_color);
-    lua_pushstring(L, ps->texture_path.c_str());
-    helper::PushBool(L, ps->enabled);
-    helper::PushBool(L, ps->initialized);
-    helper::PushInt(L, static_cast<int>(ps->texture_handle));
+    helper::PushInt(L, active);
+    helper::PushInt(L, max_particles);
+    helper::PushFloat(L, emission_rate);
+    helper::PushFloat(L, life[0]);
+    helper::PushFloat(L, life[1]);
+    helper::PushFloat(L, size[0]);
+    helper::PushFloat(L, size[1]);
+    helper::PushFloat(L, speed[0]);
+    helper::PushFloat(L, speed[1]);
+    helper::PushVec3(L, glm::vec3(gravity[0], gravity[1], gravity[2]));
+    helper::PushVec4(L, glm::vec4(color[0], color[1], color[2], color[3]));
+    lua_pushstring(L, tex);
+    helper::PushBool(L, enabled != 0);
+    helper::PushBool(L, initialized != 0);
+    helper::PushInt(L, static_cast<int>(texture_handle));
     return 21;
 }
 
@@ -93,31 +87,25 @@ int L_EcsGetParticleSystem3DState(lua_State* L) {
 // ============================================================
 
 int L_EcsAddParticleEmitter(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    unsigned int texture_handle = static_cast<unsigned int>(helper::OptInt(L, 2, 0));
+    uint32_t texture_handle = static_cast<uint32_t>(helper::OptInt(L, 2, 0));
     int max_particles = helper::OptInt(L, 3, 100);
     float emit_rate = helper::OptFloat(L, 4, 10.0f);
-    auto& emitter = world->registry().emplace_or_replace<ParticleEmitterComponent>(e);
-    emitter.texture_handle = texture_handle;
-    emitter.max_particles = max_particles;
-    emitter.emit_rate = emit_rate;
+    dse_particle_emitter_add(EID(e), texture_handle, max_particles, emit_rate);
     return 0;
 }
 
-// ParticleEmitter 密度缩放 setter — extract 中内嵌 clamp
-DSE_LUA_COMPONENT_SETTER(ParticleDensity, ParticleEmitterComponent, emit_rate_scale, float, std::max(0.0f, helper::CheckFloat(L, 2)))
+int L_EcsSetParticleDensity(lua_State* L) {
+    Entity e = helper::CheckEntity(L, 1);
+    dse_particle_set_density(EID(e), std::max(0.0f, helper::CheckFloat(L, 2)));
+    return 0;
+}
 
 int L_EcsParticleBurst(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
     int burst_count = helper::CheckInt(L, 2);
     if (burst_count < 0) burst_count = 0;
-    auto* emitter = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!emitter) return 0;
-    emitter->pending_burst += burst_count;
+    dse_particle_burst(EID(e), burst_count);
     return 0;
 }
 
@@ -126,142 +114,78 @@ int L_EcsParticleBurst(lua_State* L) {
 // ============================================================
 
 int L_EcsAddGameplayTuning(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    world->registry().emplace_or_replace<GameplayTuningComponent>(e);
+    dse_gameplay_tuning_add(EID(e));
     return 0;
 }
 
 int L_EcsSetGameplayTuning(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* tuning = helper::TryGetComponent<GameplayTuningComponent>(*world, e);
-    if (!tuning) return 0;
-    tuning->leaf_min_distance = helper::OptFloat(L, 2, tuning->leaf_min_distance);
-    tuning->leaf_move_left = helper::OptFloat(L, 3, tuning->leaf_move_left);
-    tuning->leaf_move_right = helper::OptFloat(L, 4, tuning->leaf_move_right);
-    tuning->jump_speed_scale = helper::OptFloat(L, 5, tuning->jump_speed_scale);
-    tuning->jump_speed_max = helper::OptFloat(L, 6, tuning->jump_speed_max);
-    tuning->camera_follow_damping = helper::OptFloat(L, 7, tuning->camera_follow_damping);
+    dse_gameplay_tuning_set(EID(e), OptNan(L, 2), OptNan(L, 3), OptNan(L, 4),
+                            OptNan(L, 5), OptNan(L, 6), OptNan(L, 7));
     return 0;
 }
 
 // set_particle_random(entity, velocity_min_xyz, velocity_max_xyz, life_min, life_max, size_min, size_max)
 int L_EcsSetParticleRandom(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->use_random_params = true;
-    pe->velocity_min = glm::vec3(helper::CheckFloat(L,2), helper::CheckFloat(L,3), helper::CheckFloat(L,4));
-    pe->velocity_max = glm::vec3(helper::CheckFloat(L,5), helper::CheckFloat(L,6), helper::CheckFloat(L,7));
-    pe->life_time_min = helper::OptFloat(L, 8, pe->life_time_min);
-    pe->life_time_max = helper::OptFloat(L, 9, pe->life_time_max);
-    pe->size_min = helper::OptFloat(L, 10, pe->size_min);
-    pe->size_max = helper::OptFloat(L, 11, pe->size_max);
+    dse_particle_set_random(EID(e),
+        helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4),
+        helper::CheckFloat(L, 5), helper::CheckFloat(L, 6), helper::CheckFloat(L, 7),
+        OptNan(L, 8), OptNan(L, 9), OptNan(L, 10), OptNan(L, 11));
     return 0;
 }
 
 // set_particle_size_curve(entity, enabled, start_value, end_value)
 int L_EcsSetParticleSizeCurve(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->size_curve.enabled = helper::CheckBool(L, 2);
-    pe->size_curve.start_value = helper::OptFloat(L, 3, pe->size_curve.start_value);
-    pe->size_curve.end_value = helper::OptFloat(L, 4, pe->size_curve.end_value);
+    dse_particle_set_size_curve(EID(e), helper::CheckBool(L, 2) ? 1 : 0, OptNan(L, 3), OptNan(L, 4));
     return 0;
 }
 
 // set_particle_alpha_curve(entity, enabled, start_value, end_value)
 int L_EcsSetParticleAlphaCurve(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->alpha_curve.enabled = helper::CheckBool(L, 2);
-    pe->alpha_curve.start_value = helper::OptFloat(L, 3, pe->alpha_curve.start_value);
-    pe->alpha_curve.end_value = helper::OptFloat(L, 4, pe->alpha_curve.end_value);
+    dse_particle_set_alpha_curve(EID(e), helper::CheckBool(L, 2) ? 1 : 0, OptNan(L, 3), OptNan(L, 4));
     return 0;
 }
 
 // set_particle_speed_curve(entity, enabled, start_value, end_value)
 int L_EcsSetParticleSpeedCurve(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->speed_curve.enabled = helper::CheckBool(L, 2);
-    pe->speed_curve.start_value = helper::OptFloat(L, 3, pe->speed_curve.start_value);
-    pe->speed_curve.end_value = helper::OptFloat(L, 4, pe->speed_curve.end_value);
+    dse_particle_set_speed_curve(EID(e), helper::CheckBool(L, 2) ? 1 : 0, OptNan(L, 3), OptNan(L, 4));
     return 0;
 }
 
 // set_particle_gravity(entity, gx, gy, gz)
 int L_EcsSetParticleGravity(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->gravity = glm::vec3(
-        helper::CheckFloat(L, 2),
-        helper::CheckFloat(L, 3),
-        helper::CheckFloat(L, 4));
+    dse_particle_set_gravity(EID(e), helper::CheckFloat(L, 2), helper::CheckFloat(L, 3), helper::CheckFloat(L, 4));
     return 0;
 }
 
 // set_particle_collision(entity, enabled, [mode, bounce, friction, life_loss, ground_y])
-// mode: 0=None, 1=GroundPlane, 2=Box2D
+// mode: 0=None, 1=GroundPlane, 2=Box2D；mode<0=保持当前值
 int L_EcsSetParticleCollision(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->enable_collision = helper::CheckBool(L, 2);
-    pe->collision_mode = static_cast<ParticleCollisionMode>(helper::OptInt(L, 3, static_cast<int>(pe->collision_mode)));
-    pe->collision_bounce = helper::OptFloat(L, 4, pe->collision_bounce);
-    pe->collision_friction = helper::OptFloat(L, 5, pe->collision_friction);
-    pe->collision_life_loss = helper::OptFloat(L, 6, pe->collision_life_loss);
-    pe->ground_y = helper::OptFloat(L, 7, pe->ground_y);
+    dse_particle_set_collision(EID(e), helper::CheckBool(L, 2) ? 1 : 0,
+                               helper::OptInt(L, 3, -1),
+                               OptNan(L, 4), OptNan(L, 5), OptNan(L, 6), OptNan(L, 7));
     return 0;
 }
 
 // set_particle_color_curve(entity, enabled, end_r, end_g, end_b, end_a)
 int L_EcsSetParticleColorCurve(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->use_color_curve = helper::CheckBool(L, 2);
-    pe->color_curve_end = glm::vec4(
-        helper::OptFloat(L, 3, pe->color_curve_end.r),
-        helper::OptFloat(L, 4, pe->color_curve_end.g),
-        helper::OptFloat(L, 5, pe->color_curve_end.b),
-        helper::OptFloat(L, 6, pe->color_curve_end.a));
+    dse_particle_set_color_curve(EID(e), helper::CheckBool(L, 2) ? 1 : 0,
+                                 OptNan(L, 3), OptNan(L, 4), OptNan(L, 5), OptNan(L, 6));
     return 0;
 }
 
 // set_particle_rotation(entity, rotation_min, rotation_max, angular_velocity_min, angular_velocity_max)
 int L_EcsSetParticleRotation(lua_State* L) {
-    World* world = GetWorld();
-    if (!world) return 0;
     Entity e = helper::CheckEntity(L, 1);
-    auto* pe = helper::TryGetComponent<ParticleEmitterComponent>(*world, e);
-    if (!pe) return 0;
-    pe->rotation_min = helper::OptFloat(L, 2, pe->rotation_min);
-    pe->rotation_max = helper::OptFloat(L, 3, pe->rotation_max);
-    pe->angular_velocity_min = helper::OptFloat(L, 4, pe->angular_velocity_min);
-    pe->angular_velocity_max = helper::OptFloat(L, 5, pe->angular_velocity_max);
+    dse_particle_set_rotation(EID(e), OptNan(L, 2), OptNan(L, 3), OptNan(L, 4), OptNan(L, 5));
     return 0;
 }
 
