@@ -1,4 +1,10 @@
 #pragma once
+// ============================================================
+// DEPRECATED: Visual Script is superseded by the Blueprint system.
+// Use editor_blueprint.h / editor_blueprint.cpp instead.
+// This module will be removed in a future release.
+// ============================================================
+
 
 #include "editor_context.h"
 #include <string>
@@ -48,6 +54,7 @@ struct VsDebugSession {
 };
 
 /// Draw the Visual Script Debugger panel (breakpoints, call stack, watches, locals)
+[[deprecated("Use Blueprint debugger instead")]]
 void DrawVisualScriptDebugger(EditorContext& ctx);
 
 /// Get the debug session (for integration with visual script editor)

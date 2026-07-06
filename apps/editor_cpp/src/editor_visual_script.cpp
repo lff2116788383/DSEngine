@@ -1,3 +1,8 @@
+// ============================================================
+// DEPRECATED: Visual Script is superseded by the Blueprint system.
+// Use editor_blueprint.h / editor_blueprint.cpp instead.
+// This module will be removed in a future release.
+// ============================================================
 /**
  * @file editor_visual_script.cpp
  * @brief 可视化脚本（蓝图）编辑器 — 节点图编辑 → 生成 Lua 代码

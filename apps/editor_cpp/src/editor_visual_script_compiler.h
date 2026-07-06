@@ -1,4 +1,10 @@
 #pragma once
+// ============================================================
+// DEPRECATED: Visual Script is superseded by the Blueprint system.
+// Use editor_blueprint.h / editor_blueprint.cpp instead.
+// This module will be removed in a future release.
+// ============================================================
+
 
 // 可视化脚本（蓝图）→ Lua 编译器（不依赖 ImGui）。
 //
@@ -50,6 +56,7 @@ struct Graph {
 };
 
 /// 将可视化脚本图编译为 Lua 源码。纯函数，无副作用，可无头测试。
+[[deprecated("Use Blueprint compiler instead")]]
 std::string CompileVisualScript(const Graph& graph);
 
 }  // namespace dse::editor::vs

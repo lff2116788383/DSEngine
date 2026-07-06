@@ -1,3 +1,8 @@
+// ============================================================
+// DEPRECATED: Visual Script is superseded by the Blueprint system.
+// Use editor_blueprint.h / editor_blueprint.cpp instead.
+// This module will be removed in a future release.
+// ============================================================
 #include "editor_visual_script_compiler.h"
 
 #include <cstdio>
