@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_shader_graph.h"
 #include "editor_icons.h"
 #include "editor_console_panel.h"
@@ -1177,7 +1178,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
     {
         ImGui::Text(MDI_ICON_PALETTE " Shader Graph");
         ImGui::SameLine(ImGui::GetWindowWidth() - 280);
-        if (ImGui::Button("Compile")) {
+        if (ImGui::Button(T("Compile"))) {
             std::string glsl = CompileGraphToGLSL(state);
             // 输出到文件
             std::ofstream out("shader_graph_output.frag");
@@ -1186,7 +1187,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             EditorLog(LogLevel::Info, "[ShaderGraph] Compiled GLSL (" + std::to_string(glsl.size()) + " chars) -> shader_graph_output.frag");
         }
         ImGui::SameLine();
-        if (ImGui::Button("Apply to Material")) {
+        if (ImGui::Button(T("Apply to Material"))) {
             std::string glsl = CompileGraphToGLSL(state);
             
             // 创建自定义着色器
@@ -1214,7 +1215,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Save")) {
+        if (ImGui::Button(T("Save"))) {
             std::string save_path;
 #ifdef _WIN32
             char filename[MAX_PATH] = "shader_graph.dsg";
@@ -1240,7 +1241,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Load")) {
+        if (ImGui::Button(T("Load"))) {
             std::string load_path;
 #ifdef _WIN32
             char filename[MAX_PATH] = "";
@@ -1573,7 +1574,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         }
 
         ImGui::Separator();
-        if (ImGui::MenuItem("Delete Selected Node") && state.selected_node >= 0) {
+        if (ImGui::MenuItem(T("Delete Selected Node")) && state.selected_node >= 0) {
             auto& n = state.nodes[state.selected_node];
             state.links.erase(std::remove_if(state.links.begin(), state.links.end(),
                 [&](const Link& l) {
@@ -1584,7 +1585,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             state.nodes.erase(state.nodes.begin() + state.selected_node);
             state.selected_node = -1;
         }
-        if (ImGui::MenuItem("Delete Selected Link") && state.selected_link >= 0) {
+        if (ImGui::MenuItem(T("Delete Selected Link")) && state.selected_link >= 0) {
             state.links.erase(
                 std::remove_if(state.links.begin(), state.links.end(),
                     [&](const Link& l) { return l.id == state.selected_link; }),
@@ -1592,8 +1593,8 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             state.selected_link = -1;
         }
         ImGui::Separator();
-        ImGui::MenuItem("Show Properties", nullptr, &state.show_properties);
-        ImGui::MenuItem("Show GLSL Preview", nullptr, &state.show_preview);
+        ImGui::MenuItem(T("Show Properties"), nullptr, &state.show_properties);
+        ImGui::MenuItem(T("Show GLSL Preview"), nullptr, &state.show_preview);
 
         ImGui::EndPopup();
     }
@@ -1690,7 +1691,7 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
     if (state.show_preview) {
         ImGui::SetNextWindowSize(ImVec2(450, 400), ImGuiCond_FirstUseEver);
         if (ImGui::Begin("GLSL Preview", &state.show_preview)) {
-            if (ImGui::Button("Refresh")) {
+            if (ImGui::Button(T("Refresh"))) {
                 state.preview_glsl = CompileGraphToGLSL(state);
                 state.graph_dirty = false;
             }

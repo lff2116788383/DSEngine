@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_anim_state_machine.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/animation_state_machine.h"
@@ -569,15 +570,15 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
             ImGui::OpenPopup(ctx_id.c_str());
         }
         if (ImGui::BeginPopup(ctx_id.c_str())) {
-            if (ImGui::MenuItem("Set as Default")) {
+            if (ImGui::MenuItem(T("Set as Default"))) {
                 asm_ref.SetDefaultState(sname);
             }
-            if (ImGui::MenuItem("Create Transition")) {
+            if (ImGui::MenuItem(T("Create Transition"))) {
                 es.creating_link = true;
                 es.link_source = sname;
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Delete State")) {
+            if (ImGui::MenuItem(T("Delete State"))) {
                 std::unordered_map<std::string, dse::gameplay3d::AnimState>& del_states = asm_ref.GetStatesMutable();
                 del_states.erase(sname);
                 es.node_positions.erase(sname);
@@ -593,7 +594,7 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
         ImGui::OpenPopup("##CanvasCtx");
     }
     if (ImGui::BeginPopup("##CanvasCtx")) {
-        if (ImGui::MenuItem("Add State")) {
+        if (ImGui::MenuItem(T("Add State"))) {
             static int s_new_state_counter = 0;
             std::string new_name = "NewState_" + std::to_string(s_new_state_counter++);
             dse::gameplay3d::AnimState new_state;
@@ -606,7 +607,7 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
                  mouse.y - canvas_pos.y - es.scroll_offset.y},
                 {160, 60}};
         }
-        if (ImGui::MenuItem("Add Blend Tree State")) {
+        if (ImGui::MenuItem(T("Add Blend Tree State"))) {
             static int s_bt_counter = 0;
             std::string new_name = "BlendTree_" + std::to_string(s_bt_counter++);
             dse::gameplay3d::AnimState new_state;
@@ -620,7 +621,7 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
                  mouse.y - canvas_pos.y - es.scroll_offset.y},
                 {160, 60}};
         }
-        if (ImGui::MenuItem("Auto Layout")) {
+        if (ImGui::MenuItem(T("Auto Layout"))) {
             AutoLayoutStates(states, default_state, es);
         }
         ImGui::EndPopup();

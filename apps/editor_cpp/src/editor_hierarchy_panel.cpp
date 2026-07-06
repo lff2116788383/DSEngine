@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_hierarchy_panel.h"
 #include "editor_entity_snapshot.h"
 
@@ -592,14 +593,14 @@ void DrawHierarchyPanel(EditorContext& context) {
     }
 
     if (ImGui::BeginPopupContextWindow()) {
-        if (ImGui::MenuItem("Create Empty Entity", nullptr, false, !context.read_only)) {
+        if (ImGui::MenuItem(T("Create Empty Entity"), nullptr, false, !context.read_only)) {
             entt::entity created = CreateEntityViaBus(context, "New Entity", {});
             if (created != entt::null) {
                 context.selected_entity = created;
                 EditorLog(LogLevel::Info, "Created entity: New Entity");
             }
         }
-        if (ImGui::MenuItem("Create UI Entity", nullptr, false, !context.read_only)) {
+        if (ImGui::MenuItem(T("Create UI Entity"), nullptr, false, !context.read_only)) {
             entt::entity created = CreateEntityViaBus(context, "New UI Element", {"UIRenderer"});
             if (created != entt::null) {
                 context.selected_entity = created;
@@ -607,22 +608,22 @@ void DrawHierarchyPanel(EditorContext& context) {
             }
         }
         if (ImGui::BeginMenu("Create 3D Object", !context.read_only)) {
-            if (ImGui::MenuItem("Cube", nullptr, false, !context.read_only))  CreateEntity3DCube(context);
-            if (ImGui::MenuItem("Sphere", nullptr, false, !context.read_only)) CreateEntity3DSphere(context);
-            if (ImGui::MenuItem("Plane", nullptr, false, !context.read_only))  CreateEntity3DPlane(context);
+            if (ImGui::MenuItem(T("Cube"), nullptr, false, !context.read_only))  CreateEntity3DCube(context);
+            if (ImGui::MenuItem(T("Sphere"), nullptr, false, !context.read_only)) CreateEntity3DSphere(context);
+            if (ImGui::MenuItem(T("Plane"), nullptr, false, !context.read_only))  CreateEntity3DPlane(context);
             ImGui::Separator();
-            if (ImGui::MenuItem("Camera 3D", nullptr, false, !context.read_only)) CreateEntity3DCamera(context);
-            if (ImGui::MenuItem("Directional Light", nullptr, false, !context.read_only)) CreateEntity3DDirectionalLight(context);
-            if (ImGui::MenuItem("Point Light", nullptr, false, !context.read_only))       CreateEntity3DPointLight(context);
-            if (ImGui::MenuItem("Spot Light", nullptr, false, !context.read_only))        CreateEntity3DSpotLight(context);
+            if (ImGui::MenuItem(T("Camera 3D"), nullptr, false, !context.read_only)) CreateEntity3DCamera(context);
+            if (ImGui::MenuItem(T("Directional Light"), nullptr, false, !context.read_only)) CreateEntity3DDirectionalLight(context);
+            if (ImGui::MenuItem(T("Point Light"), nullptr, false, !context.read_only))       CreateEntity3DPointLight(context);
+            if (ImGui::MenuItem(T("Spot Light"), nullptr, false, !context.read_only))        CreateEntity3DSpotLight(context);
             ImGui::Separator();
-            if (ImGui::MenuItem("Physics Box", nullptr, false, !context.read_only))    CreateEntity3DPhysicsBox(context);
-            if (ImGui::MenuItem("Physics Sphere", nullptr, false, !context.read_only)) CreateEntity3DPhysicsSphere(context);
+            if (ImGui::MenuItem(T("Physics Box"), nullptr, false, !context.read_only))    CreateEntity3DPhysicsBox(context);
+            if (ImGui::MenuItem(T("Physics Sphere"), nullptr, false, !context.read_only)) CreateEntity3DPhysicsSphere(context);
             ImGui::Separator();
-            if (ImGui::MenuItem("Audio Source", nullptr, false, !context.read_only))   CreateEntity3DAudioSource(context);
-            if (ImGui::MenuItem("Audio Listener", nullptr, false, !context.read_only)) CreateEntity3DAudioListener(context);
+            if (ImGui::MenuItem(T("Audio Source"), nullptr, false, !context.read_only))   CreateEntity3DAudioSource(context);
+            if (ImGui::MenuItem(T("Audio Listener"), nullptr, false, !context.read_only)) CreateEntity3DAudioListener(context);
             ImGui::Separator();
-            if (ImGui::MenuItem("Particle System 3D", nullptr, false, !context.read_only)) {
+            if (ImGui::MenuItem(T("Particle System 3D"), nullptr, false, !context.read_only)) {
                 auto new_ent = context.world.CreateEntity();
                 context.registry.emplace<EditorNameComponent>(new_ent, "Particle 3D");
                 context.registry.emplace<TransformComponent>(new_ent);
@@ -631,7 +632,7 @@ void DrawHierarchyPanel(EditorContext& context) {
             }
             ImGui::EndMenu();
         }
-        if (context.selected_entity != entt::null && ImGui::MenuItem("Save as Prefab", nullptr, false, !context.read_only)) {
+        if (context.selected_entity != entt::null && ImGui::MenuItem(T("Save as Prefab"), nullptr, false, !context.read_only)) {
             std::string prefab_name = "Entity";
             if (context.registry.all_of<EditorNameComponent>(context.selected_entity)) {
                 prefab_name = context.registry.get<EditorNameComponent>(context.selected_entity).name;
@@ -645,7 +646,7 @@ void DrawHierarchyPanel(EditorContext& context) {
                 EditorLog(LogLevel::Error, "Failed to save prefab");
             }
         }
-        if (context.selected_entity != entt::null && ImGui::MenuItem("Delete Entity", nullptr, false, !context.read_only)) {
+        if (context.selected_entity != entt::null && ImGui::MenuItem(T("Delete Entity"), nullptr, false, !context.read_only)) {
             entt::entity to_delete = context.selected_entity;
             std::string deleted_name = "Entity";
             if (context.registry.all_of<EditorNameComponent>(to_delete)) {
@@ -655,7 +656,7 @@ void DrawHierarchyPanel(EditorContext& context) {
             context.selected_entity = entt::null;
             EditorLog(LogLevel::Info, "Deleted entity: " + deleted_name);
         }
-        if (context.selected_entity != entt::null && ImGui::MenuItem("Duplicate Entity", nullptr, false, !context.read_only)) {
+        if (context.selected_entity != entt::null && ImGui::MenuItem(T("Duplicate Entity"), nullptr, false, !context.read_only)) {
             entt::entity dup = DuplicateEntityViaBus(context, context.selected_entity);
             if (dup != entt::null) {
                 context.selected_entity = dup;

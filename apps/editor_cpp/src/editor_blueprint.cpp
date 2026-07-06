@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file editor_blueprint.cpp
  * @brief Blueprint editor UI - variable panel, node registry, function graphs, canvas
  */
@@ -744,7 +744,7 @@ void DrawVariablePanel() {
     ImGui::Text(MDI_ICON_VARIABLE "  Variables");
     ImGui::Separator();
 
-    if (ImGui::Button("+ Add Variable")) {
+    if (ImGui::Button(T("+ Add Variable"))) {
         BpVariable var;
         var.name = "NewVar_" + std::to_string(s_state.asset.variables.size());
         var.type = BpVarType::Float;
@@ -763,7 +763,7 @@ void DrawVariablePanel() {
 
         // Right-click context menu
         if (ImGui::BeginPopupContextItem()) {
-            if (ImGui::MenuItem("Delete")) {
+            if (ImGui::MenuItem(T("Delete"))) {
                 s_state.asset.variables.erase(s_state.asset.variables.begin() + i);
                 s_state.dirty = true;
                 ImGui::EndPopup();
@@ -1036,7 +1036,7 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
     }
 
     // Toolbar
-    if (ImGui::Button("Compile")) {
+    if (ImGui::Button(T("Compile"))) {
         s_state.generated_lua = CompileToLua(s_state.asset);
         s_state.compilation_errors.clear();
         if (!s_state.asset.graphs.empty()) {

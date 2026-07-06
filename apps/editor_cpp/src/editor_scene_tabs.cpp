@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_scene_tabs.h"
 
 #include <filesystem>
@@ -284,10 +285,10 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
 
             // Right-click context menu on tab
             if (ImGui::BeginPopupContextItem()) {
-                if (ImGui::MenuItem("Close")) {
+                if (ImGui::MenuItem(T("Close"))) {
                     close_request = i;
                 }
-                if (ImGui::MenuItem("Close Others", nullptr, false, tabs_.size() > 1)) {
+                if (ImGui::MenuItem(T("Close Others"), nullptr, false, tabs_.size() > 1)) {
                     // Close all except this one
                     SnapshotActiveTab(registry);
                     SceneTab keep = std::move(tabs_[i]);
@@ -354,7 +355,7 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
 
         // 未命名场景需 Save As（原生对话框），此处不内联；Save 仅对已有路径的场景生效。
         if (!has_path) ImGui::BeginDisabled();
-        if (ImGui::Button("Save")) {
+        if (ImGui::Button(T("Save"))) {
             if (has_path) {
                 SaveScene(registry, tabs_[pending_close_].file_path);
                 tabs_[pending_close_].dirty = false;
@@ -366,7 +367,7 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
         }
         if (!has_path) ImGui::EndDisabled();
         ImGui::SameLine();
-        if (ImGui::Button("Don't Save")) {
+        if (ImGui::Button(T("Don't Save"))) {
             if (valid) {
                 tabs_[pending_close_].dirty = false;
                 CloseTab(pending_close_, registry);
@@ -376,7 +377,7 @@ bool SceneTabManager::DrawTabBar(entt::registry& registry) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
+        if (ImGui::Button(T("Cancel"))) {
             pending_close_ = -1;  // 放弃关闭，页签与内容保持不变
             ImGui::CloseCurrentPopup();
         }

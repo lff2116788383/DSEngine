@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // DEPRECATED: Visual Script is superseded by the Blueprint system.
 // Use editor_blueprint.h / editor_blueprint.cpp instead.
 // This module will be removed in a future release.
@@ -13,6 +13,7 @@
  *   - 编译结果是可执行的 Lua 脚本
  */
 
+#include "editor_locale.h"
 #include "editor_visual_script.h"
 #include "editor_visual_script_compiler.h"
 #include "editor_context.h"
@@ -433,34 +434,34 @@ void DrawCreateNodeMenu() {
     // 定位到 OpenPopup 时的鼠标处（即右键位置），无需手动重定位。
     if (ImGui::BeginPopup("vs_create_menu")) {
         if (ImGui::BeginMenu("Event")) {
-            if (ImGui::MenuItem("On Init")) { AddEventOnInit(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("On Update")) { AddEventOnUpdate(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("On Init"))) { AddEventOnInit(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("On Update"))) { AddEventOnUpdate(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Math")) {
-            if (ImGui::MenuItem("Add")) { AddMathAdd(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("Multiply")) { AddMathMultiply(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("Sin")) { AddMathSin(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Add"))) { AddMathAdd(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Multiply"))) { AddMathMultiply(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Sin"))) { AddMathSin(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Flow Control")) {
-            if (ImGui::MenuItem("Branch (If/Else)")) { AddFlowBranch(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("For Loop")) { AddFlowForLoop(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Branch (If/Else)"))) { AddFlowBranch(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("For Loop"))) { AddFlowForLoop(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("ECS")) {
-            if (ImGui::MenuItem("Get Position")) { AddEcsGetPosition(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("Set Position")) { AddEcsSetPosition(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("Create Entity")) { AddEcsCreateEntity(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Get Position"))) { AddEcsGetPosition(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Set Position"))) { AddEcsSetPosition(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Create Entity"))) { AddEcsCreateEntity(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Utility")) {
-            if (ImGui::MenuItem("Print")) { AddPrint(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Print"))) { AddPrint(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Variable")) {
-            if (ImGui::MenuItem("Self Entity")) { AddVarGetSelf(); s_state.graph_dirty = true; }
-            if (ImGui::MenuItem("Float Constant")) { AddConstFloat(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Self Entity"))) { AddVarGetSelf(); s_state.graph_dirty = true; }
+            if (ImGui::MenuItem(T("Float Constant"))) { AddConstFloat(); s_state.graph_dirty = true; }
             ImGui::EndMenu();
         }
         ImGui::EndPopup();
@@ -485,7 +486,7 @@ void DrawVisualScriptEditor(EditorContext& /*ctx*/) {
     ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
 
     // Toolbar
-    if (ImGui::Button("Compile to Lua")) {
+    if (ImGui::Button(T("Compile to Lua"))) {
         s_state.generated_lua = CompileVisualScriptToLua();
     }
     ImGui::SameLine();

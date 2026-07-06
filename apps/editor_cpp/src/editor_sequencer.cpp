@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file editor_sequencer.cpp
  * @brief Cinematic Sequencer — multi-track timeline editor (UE-Sequencer level)
  *
@@ -6,6 +6,7 @@
  * Features: drag-to-trim clips, keyframe editing, track grouping, playback preview
  */
 
+#include "editor_locale.h"
 #include "editor_sequencer.h"
 #include "editor_icons.h"
 #include "imgui.h"
@@ -248,31 +249,31 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
 
         // Add track button
         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 100);
-        if (ImGui::Button("+ Track")) {
+        if (ImGui::Button(T("+ Track"))) {
             ImGui::OpenPopup("AddTrackPopup");
         }
         if (ImGui::BeginPopup("AddTrackPopup")) {
-            if (ImGui::MenuItem("Camera Track")) {
+            if (ImGui::MenuItem(T("Camera Track"))) {
                 SequencerTrack t; t.name = "New Camera"; t.type = TrackType::Camera;
                 t.track_color = IM_COL32(180, 80, 80, 255);
                 state.tracks.push_back(t);
             }
-            if (ImGui::MenuItem("Property Track")) {
+            if (ImGui::MenuItem(T("Property Track"))) {
                 SequencerTrack t; t.name = "New Property"; t.type = TrackType::Property;
                 t.track_color = IM_COL32(80, 150, 80, 255);
                 state.tracks.push_back(t);
             }
-            if (ImGui::MenuItem("Event Track")) {
+            if (ImGui::MenuItem(T("Event Track"))) {
                 SequencerTrack t; t.name = "New Events"; t.type = TrackType::Event;
                 t.track_color = IM_COL32(200, 180, 60, 255);
                 state.tracks.push_back(t);
             }
-            if (ImGui::MenuItem("Audio Track")) {
+            if (ImGui::MenuItem(T("Audio Track"))) {
                 SequencerTrack t; t.name = "New Audio"; t.type = TrackType::Audio;
                 t.track_color = IM_COL32(80, 120, 200, 255);
                 state.tracks.push_back(t);
             }
-            if (ImGui::MenuItem("Fade Track")) {
+            if (ImGui::MenuItem(T("Fade Track"))) {
                 SequencerTrack t; t.name = "New Fade"; t.type = TrackType::Fade;
                 t.track_color = IM_COL32(60, 60, 60, 255);
                 state.tracks.push_back(t);
@@ -488,7 +489,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
             ImGui::Checkbox("Muted", &track.muted);
             ImGui::Checkbox("Locked", &track.locked);
             ImGui::Separator();
-            if (ImGui::MenuItem("Add Clip Here")) {
+            if (ImGui::MenuItem(T("Add Clip Here"))) {
                 SequencerClip nc;
                 nc.name = "New Clip";
                 float mx_t = state.view_start + (ImGui::GetMousePos().x - track_area_x) / time_to_px;
@@ -497,14 +498,14 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
                 nc.color = track.track_color;
                 track.clips.push_back(nc);
             }
-            if (ImGui::MenuItem("Add Keyframe Here")) {
+            if (ImGui::MenuItem(T("Add Keyframe Here"))) {
                 float mx_t = state.view_start + (ImGui::GetMousePos().x - track_area_x) / time_to_px;
                 SequencerKeyframe kf;
                 kf.time = SnapTime(std::max(0.0f, mx_t));
                 track.keyframes.push_back(kf);
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Delete Track")) {
+            if (ImGui::MenuItem(T("Delete Track"))) {
                 state.tracks.erase(state.tracks.begin() + state.selected_track);
                 state.selected_track = -1;
             }

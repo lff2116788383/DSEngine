@@ -1,4 +1,4 @@
-#include "editor_shell.h"
+﻿#include "editor_shell.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -295,7 +295,7 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
                     SaveEditorSettings(s);
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem("Clear Recent Projects")) {
+                if (ImGui::MenuItem(T("Clear Recent Projects"))) {
                     EditorSettings s = LoadEditorSettings();
                     s.recent_projects.clear();
                     SaveEditorSettings(s);
@@ -604,7 +604,7 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
         ImGui::Spacing();
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "(c) 2024-2026 DSEngine Contributors");
         ImGui::Separator();
-        if (ImGui::Button("Close", ImVec2(120, 0))) {
+        if (ImGui::Button(T("Close"), ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -619,12 +619,12 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
         ImGui::TextUnformatted("There are scenes with unsaved changes.");
         ImGui::TextUnformatted("Exit anyway? Unsaved changes will be lost.");
         ImGui::Separator();
-        if (ImGui::Button("Exit Anyway", ImVec2(120, 0))) {
+        if (ImGui::Button(T("Exit Anyway"), ImVec2(120, 0))) {
             RequestExit();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+        if (ImGui::Button(T("Cancel"), ImVec2(120, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -650,7 +650,7 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
             ImGui::SetNextItemWidth(300);
             ImGui::InputText("Location", s_new_proj_location, sizeof(s_new_proj_location));
             ImGui::SameLine();
-            if (ImGui::Button("Browse...")) {
+            if (ImGui::Button(T("Browse..."))) {
                 std::string folder = BrowseNewProjectLocationDialog();
                 if (!folder.empty()) {
                     strncpy(s_new_proj_location, folder.c_str(), sizeof(s_new_proj_location) - 1);
@@ -666,7 +666,7 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
 
             bool can_create = (strlen(s_new_proj_name) > 0 && strlen(s_new_proj_location) > 0);
             if (!can_create) ImGui::BeginDisabled();
-            if (ImGui::Button("Create", ImVec2(120, 0))) {
+            if (ImGui::Button(T("Create"), ImVec2(120, 0))) {
                 if (proj_mgr.CreateProject(
                         s_new_proj_location,
                         s_new_proj_name,
@@ -682,7 +682,7 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
             if (!can_create) ImGui::EndDisabled();
 
             ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            if (ImGui::Button(T("Cancel"), ImVec2(120, 0))) {
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();

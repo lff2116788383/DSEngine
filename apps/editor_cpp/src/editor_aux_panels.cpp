@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_aux_panels.h"
 
 #include "engine/ecs/components_2d.h"
@@ -374,7 +375,7 @@ void DrawProjectPanel() {
 
     // Breadcrumb / Back navigation
     if (current_path != base_data_path) {
-        if (ImGui::Button("<- Back")) {
+        if (ImGui::Button(T("<- Back"))) {
             current_path = current_path.parent_path();
         }
         ImGui::SameLine();
@@ -386,21 +387,21 @@ void DrawProjectPanel() {
     // Background context menu (create new assets)
     if (ImGui::BeginPopupContextWindow("ProjectContextMenu")) {
         if (ImGui::BeginMenu("Create")) {
-            if (ImGui::MenuItem("Folder")) {
+            if (ImGui::MenuItem(T("Folder"))) {
                 std::filesystem::create_directory(current_path / "NewFolder");
             }
-            if (ImGui::MenuItem("Lua Script")) {
+            if (ImGui::MenuItem(T("Lua Script"))) {
                 std::ofstream ofs(current_path / "NewScript.lua");
                 if (ofs.is_open()) ofs << "-- New Lua Script\n";
             }
-            if (ImGui::MenuItem("Material")) {
+            if (ImGui::MenuItem(T("Material"))) {
                 std::ofstream ofs(current_path / "NewMaterial.mat");
                 if (ofs.is_open()) ofs << "{\n  \"shader\": \"default\",\n  \"color\": [1,1,1,1]\n}\n";
             }
             ImGui::EndMenu();
         }
 #if defined(_WIN32)
-        if (ImGui::MenuItem("Show in Explorer")) {
+        if (ImGui::MenuItem(T("Show in Explorer"))) {
             ShellExecuteW(nullptr, L"open", current_path.wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
 #endif
@@ -545,19 +546,19 @@ void DrawProjectPanel() {
 
                 // Per-item context menu — explicit ID so PushID(filename) scope is used
                 if (ImGui::BeginPopupContextItem("##ctx")) {
-                    if (ImGui::MenuItem("Rename")) {
+                    if (ImGui::MenuItem(T("Rename"))) {
                         s_rename_target = path;
                         std::strncpy(s_rename_buf, filename.c_str(), sizeof(s_rename_buf) - 1);
                         s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
                     }
-                    if (ImGui::MenuItem("Delete")) {
+                    if (ImGui::MenuItem(T("Delete"))) {
                         try { std::filesystem::remove_all(path); } catch (...) {}
                     }
-                    if (ImGui::MenuItem("Copy Path")) {
+                    if (ImGui::MenuItem(T("Copy Path"))) {
                         ImGui::SetClipboardText(path.string().c_str());
                     }
 #if defined(_WIN32)
-                    if (ImGui::MenuItem("Show in Explorer")) {
+                    if (ImGui::MenuItem(T("Show in Explorer"))) {
                         std::wstring cmd = L"/select,\"" + path.wstring() + L"\"";
                         ShellExecuteW(nullptr, L"open", L"explorer.exe", cmd.c_str(), nullptr, SW_SHOWNORMAL);
                     }
@@ -685,19 +686,19 @@ void DrawProjectPanel() {
 
                 // Per-item context menu body (opened by OpenPopupOnItemClick above on the row).
                 if (ImGui::BeginPopup(row_ctx_id.c_str())) {
-                    if (ImGui::MenuItem("Rename")) {
+                    if (ImGui::MenuItem(T("Rename"))) {
                         s_rename_target = path;
                         std::strncpy(s_rename_buf, filename.c_str(), sizeof(s_rename_buf) - 1);
                         s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
                     }
-                    if (ImGui::MenuItem("Delete")) {
+                    if (ImGui::MenuItem(T("Delete"))) {
                         try { std::filesystem::remove_all(path); } catch (...) {}
                     }
-                    if (ImGui::MenuItem("Copy Path")) {
+                    if (ImGui::MenuItem(T("Copy Path"))) {
                         ImGui::SetClipboardText(path.string().c_str());
                     }
 #if defined(_WIN32)
-                    if (ImGui::MenuItem("Show in Explorer")) {
+                    if (ImGui::MenuItem(T("Show in Explorer"))) {
                         std::wstring cmd = L"/select,\"" + path.wstring() + L"\"";
                         ShellExecuteW(nullptr, L"open", L"explorer.exe", cmd.c_str(), nullptr, SW_SHOWNORMAL);
                     }
@@ -748,7 +749,7 @@ void DrawLocalizationPreviewPanel(EditorContext& ctx,
     if (ctx.selected_entity != entt::null &&
         ctx.registry.valid(ctx.selected_entity) &&
         ctx.registry.all_of<UILabelComponent>(ctx.selected_entity)) {
-        if (ImGui::Button("Apply To Selected UILabel")) {
+        if (ImGui::Button(T("Apply To Selected UILabel"))) {
             auto& label = ctx.registry.get<UILabelComponent>(ctx.selected_entity);
             label.use_localization = true;
             label.localization_key = key_buf;

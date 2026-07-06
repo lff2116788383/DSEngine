@@ -1,3 +1,4 @@
+﻿#include "editor_locale.h"
 #include "editor_layout_manager.h"
 #include "editor_shell.h"
 #include "imgui.h"
@@ -89,7 +90,7 @@ void DrawLayoutMenu() {
         auto presets = GetLayoutPresets();
 
         // Built-in presets
-        if (ImGui::MenuItem("Default")) {
+        if (ImGui::MenuItem(T("Default"))) {
             ResetEditorLayout();
         }
 
@@ -98,10 +99,10 @@ void DrawLayoutMenu() {
             ImGui::TextDisabled("Saved Layouts");
             for (auto& p : presets) {
                 if (ImGui::BeginMenu(p.name.c_str())) {
-                    if (ImGui::MenuItem("Load")) {
+                    if (ImGui::MenuItem(T("Load"))) {
                         LoadLayoutPreset(p.name);
                     }
-                    if (ImGui::MenuItem("Delete")) {
+                    if (ImGui::MenuItem(T("Delete"))) {
                         DeleteLayoutPreset(p.name);
                     }
                     ImGui::EndMenu();
