@@ -21,6 +21,7 @@
 #include "engine/dse_version.h"
 #include "editor_locale.h"
 #include "editor_scene_camera.h"
+#include "editor_scene_view_mode.h"
 #include "engine/ecs/transform.h"
 
 #include <filesystem>
@@ -389,7 +390,12 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_IMAGE "  2D Object", editable)) {
-            if (ImGui::MenuItem(T("Sprite")))   CreateEntity2DSprite(ctx);
+            if (ImGui::MenuItem(T("Sprite")))     CreateEntity2DSprite(ctx);
+            if (ImGui::MenuItem(T("Tilemap")))    CreateEntity2DTilemap(ctx);
+            if (ImGui::MenuItem(T("Particle 2D")))CreateEntity2DParticle(ctx);
+            ImGui::Separator();
+            if (ImGui::MenuItem(T("Physics Box 2D")))    CreateEntity2DPhysicsBox(ctx);
+            if (ImGui::MenuItem(T("Physics Circle 2D"))) CreateEntity2DPhysicsCircle(ctx);
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu(MDI_ICON_LIGHTBULB "  Light", editable)) {
@@ -458,6 +464,37 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
         ImGui::Separator();
         if (ImGui::MenuItem(T("Local Space"), nullptr, ctx.current_gizmo_mode == 0)) ctx.current_gizmo_mode = 0;
         if (ImGui::MenuItem(T("World Space"), nullptr, ctx.current_gizmo_mode == 1)) ctx.current_gizmo_mode = 1;
+        ImGui::Separator();
+        // M4: Scene view mode selection
+        {
+            auto& mode = GetCurrentSceneViewMode();
+            if (ImGui::BeginMenu(T("Scene View Mode"))) {
+                for (int i = 0; i < static_cast<int>(SceneViewMode::Count); ++i) {
+                    auto m = static_cast<SceneViewMode>(i);
+                    if (ImGui::MenuItem(SceneViewModeName(m), nullptr, mode == m))
+                        mode = m;
+                }
+                ImGui::EndMenu();
+            }
+        }
+        ImGui::Separator();
+        // M6: Camera view presets
+        {
+            auto& cam = GetEditorCamera();
+            if (ImGui::MenuItem(T("2D/3D Toggle"), "Numpad 5"))
+                cam.Toggle2DMode();
+            ImGui::Separator();
+            if (ImGui::BeginMenu(T("Camera Presets"))) {
+                using VP = EditorCamera::ViewPreset;
+                if (ImGui::MenuItem(T("Top"),    "Numpad 7")) cam.SetViewPreset(VP::Top);
+                if (ImGui::MenuItem(T("Bottom")))             cam.SetViewPreset(VP::Bottom);
+                if (ImGui::MenuItem(T("Front"),  "Numpad 1")) cam.SetViewPreset(VP::Front);
+                if (ImGui::MenuItem(T("Back")))               cam.SetViewPreset(VP::Back);
+                if (ImGui::MenuItem(T("Left"),   "Numpad 3")) cam.SetViewPreset(VP::Left);
+                if (ImGui::MenuItem(T("Right")))              cam.SetViewPreset(VP::Right);
+                ImGui::EndMenu();
+            }
+        }
         ImGui::EndMenu();
     }
 

@@ -35,5 +35,9 @@ void CreateEntity3DAudioListener(EditorContext& ctx);
 void CreateEntity3DPhysicsBox(EditorContext& ctx);
 void CreateEntity3DPhysicsSphere(EditorContext& ctx);
 void CreateEntity2DSprite(EditorContext& ctx);
+void CreateEntity2DTilemap(EditorContext& ctx);
+void CreateEntity2DParticle(EditorContext& ctx);
+void CreateEntity2DPhysicsBox(EditorContext& ctx);
+void CreateEntity2DPhysicsCircle(EditorContext& ctx);
 
 } // namespace dse::editor

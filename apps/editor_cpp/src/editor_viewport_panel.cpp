@@ -895,6 +895,20 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             }
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Toggle Gizmo Coordinate Space"));
             ImGui::PopStyleColor(2);
+
+            // 2D/3D toggle button
+            ImGui::SameLine();
+            {
+                auto& cam = GetEditorCamera();
+                bool is_2d = cam.is_ortho;
+                if (is_2d) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.5f, 0.8f, 0.9f));
+                else       ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.15f, 0.15f, 0.2f, 0.8f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.95f, 1.0f));
+                if (ImGui::Button(is_2d ? "2D##vp_dim" : "3D##vp_dim", ImVec2(28, 22)))
+                    cam.Toggle2DMode();
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Toggle 2D/3D View Mode"));
+                ImGui::PopStyleColor(2);
+            }
             ImGui::PopStyleVar(2);
         }
 
@@ -1032,7 +1046,7 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             // Collider gizmo is driving; suppress the normal transform gizmo this frame.
         } else if (is_multi) {
             // Multi-select gizmo: compute centroid, translate all selected entities
-            ImGuizmo::SetOrthographic(false);
+            ImGuizmo::SetOrthographic(GetEditorCamera().is_ortho);
             ImGuizmo::SetDrawlist();
             ImGuizmo::SetRect(window_pos.x, window_pos.y, scene_panel_size.x, scene_panel_size.y);
 
@@ -1159,7 +1173,7 @@ void DrawSceneViewportPanel(EditorContext& ctx,
             mg_state.was_using = is_using;
 
         } else if (context.selected_entity != entt::null && context.registry.all_of<TransformComponent>(context.selected_entity)) {
-            ImGuizmo::SetOrthographic(false);
+            ImGuizmo::SetOrthographic(GetEditorCamera().is_ortho);
             ImGuizmo::SetDrawlist();
             ImGuizmo::SetRect(window_pos.x, window_pos.y, scene_panel_size.x, scene_panel_size.y);
 

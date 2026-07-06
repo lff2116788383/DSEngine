@@ -41,7 +41,34 @@ glm::mat4 EditorCamera::GetViewMatrix() const {
 
 glm::mat4 EditorCamera::GetProjectionMatrix(float aspect_ratio) const {
     float safe_aspect = std::max(0.001f, aspect_ratio);
+    if (is_ortho) {
+        float half_h = ortho_size;
+        float half_w = half_h * safe_aspect;
+        return glm::ortho(-half_w, half_w, -half_h, half_h, near_clip, far_clip);
+    }
     return glm::perspective(glm::radians(fov), safe_aspect, near_clip, far_clip);
+}
+
+void EditorCamera::Toggle2DMode() {
+    is_ortho = !is_ortho;
+    if (is_ortho) {
+        pitch = 1.5707963f;
+        yaw = 0.0f;
+        ortho_size = distance * 0.5f;
+    }
+}
+
+void EditorCamera::SetViewPreset(ViewPreset preset) {
+    is_ortho = true;
+    switch (preset) {
+        case ViewPreset::Top:    pitch =  1.5707963f; yaw = 0.0f;        break;
+        case ViewPreset::Bottom: pitch = -1.5707963f; yaw = 0.0f;        break;
+        case ViewPreset::Front:  pitch =  0.0f;       yaw = 0.0f;        break;
+        case ViewPreset::Back:   pitch =  0.0f;       yaw = 3.1415926f;  break;
+        case ViewPreset::Left:   pitch =  0.0f;       yaw = 1.5707963f;  break;
+        case ViewPreset::Right:  pitch =  0.0f;       yaw = -1.5707963f; break;
+    }
+    ortho_size = distance * 0.5f;
 }
 
 EditorCamera& GetEditorCamera() {
@@ -57,8 +84,8 @@ void ProcessEditorCameraInput(EditorCamera& camera) {
         return;
     }
 
-    // Right-click drag → Orbit
-    if (ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
+    // Right-click drag → Orbit (disabled in ortho/2D mode)
+    if (!camera.is_ortho && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
         ImVec2 delta = io.MouseDelta;
         camera.yaw -= delta.x * camera.orbit_speed;
         camera.pitch += delta.y * camera.orbit_speed;
@@ -76,8 +103,8 @@ void ProcessEditorCameraInput(EditorCamera& camera) {
         camera.focal_point += up * delta.y * pan_factor;
     }
 
-    // Alt + Left-click drag → Orbit (Maya-style)
-    if (io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+    // Alt + Left-click drag → Orbit (Maya-style, disabled in ortho/2D mode)
+    if (!camera.is_ortho && io.KeyAlt && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
         ImVec2 delta = io.MouseDelta;
         camera.yaw -= delta.x * camera.orbit_speed;
         camera.pitch += delta.y * camera.orbit_speed;
@@ -89,6 +116,10 @@ void ProcessEditorCameraInput(EditorCamera& camera) {
         float zoom_factor = 1.0f - io.MouseWheel * 0.1f;
         camera.distance *= zoom_factor;
         camera.distance = std::clamp(camera.distance, 0.1f, 500.0f);
+        if (camera.is_ortho) {
+            camera.ortho_size *= zoom_factor;
+            camera.ortho_size = std::clamp(camera.ortho_size, 0.1f, 500.0f);
+        }
     }
 }
 

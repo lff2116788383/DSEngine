@@ -6,6 +6,7 @@
 #include <cmath>
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
+#include "engine/ecs/physics_2d.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_physics.h"
 #include "engine/ecs/components_3d_particle.h"
@@ -464,6 +465,50 @@ void CreateEntity2DSprite(EditorContext& ctx) {
     SelectionManager::Get().SetSingle(ent);
     ctx.selected_entity = ent;
     EditorLog(LogLevel::Info, "Created Sprite entity");
+}
+
+void CreateEntity2DTilemap(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Tilemap");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<TilemapComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Tilemap entity");
+}
+
+void CreateEntity2DParticle(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Particle2D");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<ParticleEmitterComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Particle2D entity");
+}
+
+void CreateEntity2DPhysicsBox(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Physics Box 2D");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<SpriteRendererComponent>(ent);
+    ctx.registry.emplace<RigidBody2DComponent>(ent);
+    ctx.registry.emplace<BoxCollider2DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Physics Box 2D entity");
+}
+
+void CreateEntity2DPhysicsCircle(EditorContext& ctx) {
+    auto ent = ctx.world.CreateEntity();
+    ctx.registry.emplace<EditorNameComponent>(ent, "Physics Circle 2D");
+    ctx.registry.emplace<TransformComponent>(ent);
+    ctx.registry.emplace<SpriteRendererComponent>(ent);
+    ctx.registry.emplace<RigidBody2DComponent>(ent);
+    ctx.registry.emplace<CircleCollider2DComponent>(ent);
+    SelectionManager::Get().SetSingle(ent);
+    ctx.selected_entity = ent;
+    EditorLog(LogLevel::Info, "Created Physics Circle 2D entity");
 }
 
 void ProcessShortcuts(EditorContext& context) {

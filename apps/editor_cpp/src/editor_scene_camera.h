@@ -19,6 +19,16 @@ struct EditorCamera {
     float pan_speed = 0.01f;
     float zoom_speed = 1.2f;
 
+    bool  is_ortho = false;
+    float ortho_size = 10.0f;   // half-height in world units for orthographic
+
+    /// Switch to 2D mode (ortho, top-down) or back to 3D (perspective).
+    void Toggle2DMode();
+
+    /// Named view presets for orthographic views.
+    enum class ViewPreset { Top, Bottom, Front, Back, Left, Right };
+    void SetViewPreset(ViewPreset preset);
+
     glm::vec3 GetPosition() const;
     glm::mat4 GetViewMatrix() const;
     glm::mat4 GetProjectionMatrix(float aspect_ratio) const;
