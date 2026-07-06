@@ -1147,6 +1147,12 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         editor_languages_, editor_language_index_
     };
     ctx.command_bus = command_bus_.get();
+    ctx.project_manager   = &dse::editor::ProjectManager::Get();
+    ctx.scene_tab_manager = &dse::editor::SceneTabManager::Get();
+    ctx.autosave_manager  = &dse::editor::AutoSaveManager::Get();
+    ctx.asset_database    = &dse::editor::AssetDatabase::Get();
+    ctx.selection_manager = &dse::editor::SelectionManager::Get();
+    ctx.undo_manager      = &dse::editor::GetUndoRedoManager();
 
     dse::editor::BeginEditorShell();
     dse::editor::PanelVisibility panel_vis{};

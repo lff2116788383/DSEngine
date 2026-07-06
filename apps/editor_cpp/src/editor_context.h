@@ -18,6 +18,14 @@ namespace dse::editor::core { class CommandBus; }
 
 namespace dse::editor {
 
+// Forward declarations for manager singletons (T11)
+class ProjectManager;
+class SceneTabManager;
+class AutoSaveManager;
+class AssetDatabase;
+class SelectionManager;
+class UndoRedoManager;
+
 /// 编辑器统一上下文：所有面板 / 快捷键 / 工具栏共享的核心状态。
 /// 由 EditorApp 拥有并在每帧开始时更新，各子系统通过 const ref 或 ref 访问。
 struct EditorContext {
@@ -54,6 +62,16 @@ struct EditorContext {
 #ifdef DSE_ENABLE_VIRTUAL_GEOMETRY
     dse::render::vg::VirtualGeometryConfig* vg_config = nullptr;
 #endif
+
+    // Manager pointers (T11: consolidate singletons)
+    // Set after construction; avoids coupling EditorContext init to all managers.
+    ProjectManager*    project_manager    = nullptr;
+    SceneTabManager*   scene_tab_manager  = nullptr;
+    AutoSaveManager*   autosave_manager   = nullptr;
+    AssetDatabase*     asset_database     = nullptr;
+    SelectionManager*  selection_manager   = nullptr;
+    UndoRedoManager*   undo_manager       = nullptr;
 };
+
 
 } // namespace dse::editor
