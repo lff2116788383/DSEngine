@@ -98,6 +98,8 @@ private:
 
 /// 注册所有内建 Tool handler 到 server
 void RegisterBuiltinTools(ControlServer& server);
+void RegisterEntityTools(ControlServer& server, std::vector<std::string>& names);
+void RegisterSceneTools(ControlServer& server, std::vector<std::string>& names);
 
 /// 注入 Gizmo 指针（EditorApp 初始化时调用，供 dsengine_gizmo_set_mode 工具使用）
 void SetGizmoPointers(int* operation, int* mode);
