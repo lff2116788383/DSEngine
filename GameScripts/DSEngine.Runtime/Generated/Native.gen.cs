@@ -107,9 +107,6 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_receive_shadow")]
     internal static partial void dse_mesh_renderer_set_receive_shadow(uint e, int v);
 
-    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_mesh_path", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dse_mesh_renderer_set_mesh_path(uint e, string v);
-
     [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_get_mesh_path")]
     internal static partial int dse_mesh_renderer_get_mesh_path(uint e, [Out] byte[] buf, int bufSize);
 
@@ -2632,26 +2629,14 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_velocity")]
     internal static partial void dse_character_movement_get_velocity(uint e, out float x, out float y, out float z);
 
-    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_velocity")]
-    internal static partial void dse_character_movement_set_velocity(uint e, float x, float y, float z);
-
     [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_is_grounded")]
     internal static partial int dse_character_movement_get_is_grounded(uint e);
-
-    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_is_grounded")]
-    internal static partial void dse_character_movement_set_is_grounded(uint e, int v);
 
     [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_is_jumping")]
     internal static partial int dse_character_movement_get_is_jumping(uint e);
 
-    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_is_jumping")]
-    internal static partial void dse_character_movement_set_is_jumping(uint e, int v);
-
     [LibraryImport(Lib, EntryPoint = "dse_character_movement_get_jump_count")]
     internal static partial int dse_character_movement_get_jump_count(uint e);
-
-    [LibraryImport(Lib, EntryPoint = "dse_character_movement_set_jump_count")]
-    internal static partial void dse_character_movement_set_jump_count(uint e, int v);
 
     // ---- SpringArm3DComponent ----
     [LibraryImport(Lib, EntryPoint = "dse_spring_arm_get_enabled")]

@@ -2754,22 +2754,18 @@ namespace DSEngine.Runtime
                 Native.dse_character_movement_get_velocity(_entity, out float x, out float y, out float z);
                 return new Vector3(x, y, z);
             }
-            set => Native.dse_character_movement_set_velocity(_entity, value.X, value.Y, value.Z);
         }
 
         public bool IsGrounded {
             get => Native.dse_character_movement_get_is_grounded(_entity) != 0;
-            set => Native.dse_character_movement_set_is_grounded(_entity, value ? 1 : 0);
         }
 
         public bool IsJumping {
             get => Native.dse_character_movement_get_is_jumping(_entity) != 0;
-            set => Native.dse_character_movement_set_is_jumping(_entity, value ? 1 : 0);
         }
 
         public int JumpCount {
             get => Native.dse_character_movement_get_jump_count(_entity);
-            set => Native.dse_character_movement_set_jump_count(_entity, value);
         }
 
     }

@@ -10223,5 +10223,633 @@
         }
       ]
     }
+  ],
+  "free_functions": [
+    {
+      "group": "app",
+      "file": "lua_binding_free_app",
+      "functions": [
+        {
+          "c_api": "dse_app_get_fps",
+          "lua_name": "AppGetFps",
+          "params": [],
+          "returns": "float"
+        },
+        {
+          "c_api": "dse_app_get_frame_time_ms",
+          "lua_name": "AppGetFrameTimeMs",
+          "params": [],
+          "returns": "float"
+        }
+      ]
+    },
+    {
+      "group": "ecs_core",
+      "file": "lua_binding_free_ecs_core",
+      "functions": [
+        {
+          "c_api": "dse_entity_valid",
+          "lua_name": "EntityValid",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": "bool"
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_camera",
+      "file": "lua_binding_free_ecs_rendering_camera",
+      "functions": [
+        {
+          "c_api": "dse_camera3d_add",
+          "lua_name": "EcsAddCamera3D",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "fov",
+              "type": "float"
+            },
+            {
+              "name": "near_clip",
+              "type": "float"
+            },
+            {
+              "name": "far_clip",
+              "type": "float"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_light",
+      "file": "lua_binding_free_ecs_rendering_light",
+      "functions": [
+        {
+          "c_api": "dse_dir_light_add",
+          "lua_name": "EcsAddDirLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_dir_light_has",
+          "lua_name": "EcsHasDirLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": "bool"
+        },
+        {
+          "c_api": "dse_dir_light_set_shadow_params",
+          "lua_name": "EcsDirLightSetShadowParams",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "cast_shadow",
+              "type": "int"
+            },
+            {
+              "name": "shadow_strength",
+              "type": "float"
+            },
+            {
+              "name": "c0",
+              "type": "float"
+            },
+            {
+              "name": "c1",
+              "type": "float"
+            },
+            {
+              "name": "c2",
+              "type": "float"
+            },
+            {
+              "name": "lambda",
+              "type": "float"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_point_light_add",
+          "lua_name": "EcsAddPointLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_point_light_has",
+          "lua_name": "EcsHasPointLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": "bool"
+        },
+        {
+          "c_api": "dse_spot_light_add",
+          "lua_name": "EcsAddSpotLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_spot_light_has",
+          "lua_name": "EcsHasSpotLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": "bool"
+        },
+        {
+          "c_api": "dse_sky_light_add",
+          "lua_name": "EcsAddSkyLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_sky_light_has",
+          "lua_name": "EcsHasSkyLight",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ],
+          "returns": "bool"
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_fx",
+      "file": "lua_binding_free_ecs_rendering_fx",
+      "functions": [
+        {
+          "c_api": "dse_rendering_add_gi_probe",
+          "lua_name": "EcsAddGIProbe",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_rendering_add_light_probe",
+          "lua_name": "EcsAddLightProbe",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_rendering_add_reflection_probe",
+          "lua_name": "EcsAddReflectionProbe",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_rendering_set_gi_probe",
+          "lua_name": "EcsSetGIProbe",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "gi_intensity",
+              "type": "float"
+            },
+            {
+              "name": "ox",
+              "type": "float"
+            },
+            {
+              "name": "oy",
+              "type": "float"
+            },
+            {
+              "name": "oz",
+              "type": "float"
+            },
+            {
+              "name": "ex",
+              "type": "float"
+            },
+            {
+              "name": "ey",
+              "type": "float"
+            },
+            {
+              "name": "ez",
+              "type": "float"
+            },
+            {
+              "name": "res_x",
+              "type": "int"
+            },
+            {
+              "name": "res_y",
+              "type": "int"
+            },
+            {
+              "name": "res_z",
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_rendering_set_gi_probe_bias",
+          "lua_name": "EcsSetGIProbeBias",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "normal_bias",
+              "type": "float"
+            },
+            {
+              "name": "hysteresis",
+              "type": "float"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_post",
+      "file": "lua_binding_free_ecs_rendering_post",
+      "functions": [
+        {
+          "c_api": "dse_post_process_add",
+          "lua_name": "EcsAddPostProcess",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "ecs_animation",
+      "file": "lua_binding_free_ecs_animation",
+      "functions": [
+        {
+          "c_api": "dse_morph_simple_get_weight_index",
+          "lua_name": "MorphSimpleGetWeightIndex",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "idx",
+              "type": "int"
+            }
+          ],
+          "returns": "float"
+        },
+        {
+          "c_api": "dse_morph_simple_set_weight_index",
+          "lua_name": "MorphSimpleSetWeightIndex",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "idx",
+              "type": "int"
+            },
+            {
+              "name": "w",
+              "type": "float"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "ecs_phys3d",
+      "file": "lua_binding_free_ecs_phys3d",
+      "functions": [
+        {
+          "c_api": "dse_physics3d_get_collision_count",
+          "lua_name": "Physics3DGetCollisionCount",
+          "params": [],
+          "returns": "int"
+        },
+        {
+          "c_api": "dse_physics3d_get_trigger_count",
+          "lua_name": "Physics3DGetTriggerCount",
+          "params": [],
+          "returns": "int"
+        }
+      ]
+    },
+    {
+      "group": "ecs_gameplay3d",
+      "file": "lua_binding_free_ecs_gameplay3d",
+      "functions": [
+        {
+          "c_api": "dse_steering_set_target",
+          "lua_name": "SteeringSetTarget",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "behavior",
+              "type": "int"
+            },
+            {
+              "name": "x",
+              "type": "float"
+            },
+            {
+              "name": "y",
+              "type": "float"
+            },
+            {
+              "name": "z",
+              "type": "float"
+            }
+          ],
+          "returns": "int"
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_terrain",
+      "file": "lua_binding_free_ecs_rendering_terrain",
+      "functions": [
+        {
+          "c_api": "dse_terrain_set_params",
+          "lua_name": "EcsTerrainSetParams",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "res_x",
+              "type": "int"
+            },
+            {
+              "name": "res_z",
+              "type": "int"
+            },
+            {
+              "name": "max_lod",
+              "type": "int"
+            },
+            {
+              "name": "lod_factor",
+              "type": "float"
+            },
+            {
+              "name": "use_dynamic_lod",
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_api": "dse_water_set",
+          "lua_name": "EcsWaterSet",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "enabled",
+              "type": "int"
+            },
+            {
+              "name": "water_level",
+              "type": "float"
+            },
+            {
+              "name": "dr",
+              "type": "float"
+            },
+            {
+              "name": "dg",
+              "type": "float"
+            },
+            {
+              "name": "db",
+              "type": "float"
+            },
+            {
+              "name": "sr",
+              "type": "float"
+            },
+            {
+              "name": "sg",
+              "type": "float"
+            },
+            {
+              "name": "sb",
+              "type": "float"
+            },
+            {
+              "name": "max_depth",
+              "type": "float"
+            },
+            {
+              "name": "transparency",
+              "type": "float"
+            },
+            {
+              "name": "wave_amp",
+              "type": "float"
+            },
+            {
+              "name": "wave_freq",
+              "type": "float"
+            },
+            {
+              "name": "wave_speed",
+              "type": "float"
+            },
+            {
+              "name": "wdir_x",
+              "type": "float"
+            },
+            {
+              "name": "wdir_y",
+              "type": "float"
+            },
+            {
+              "name": "refraction",
+              "type": "float"
+            },
+            {
+              "name": "reflection",
+              "type": "float"
+            },
+            {
+              "name": "spec_power",
+              "type": "float"
+            },
+            {
+              "name": "caustic_int",
+              "type": "float"
+            },
+            {
+              "name": "caustic_scale",
+              "type": "float"
+            },
+            {
+              "name": "foam_int",
+              "type": "float"
+            },
+            {
+              "name": "foam_threshold",
+              "type": "float"
+            },
+            {
+              "name": "ufog_density",
+              "type": "float"
+            },
+            {
+              "name": "ufog_r",
+              "type": "float"
+            },
+            {
+              "name": "ufog_g",
+              "type": "float"
+            },
+            {
+              "name": "ufog_b",
+              "type": "float"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "group": "open_world",
+      "file": "lua_binding_free_open_world",
+      "functions": [
+        {
+          "c_api": "dse_open_world_p2p5_shutdown",
+          "lua_name": "OpenWorldP2P5Shutdown",
+          "params": []
+        }
+      ]
+    },
+    {
+      "group": "ecs_rendering_mesh",
+      "file": "lua_binding_free_ecs_rendering_mesh",
+      "functions": [
+        {
+          "c_api": "dse_mesh_renderer_set_material_params",
+          "lua_name": "EcsMeshRendererSetMaterialParams",
+          "params": [
+            {
+              "name": "e",
+              "type": "entity"
+            },
+            {
+              "name": "metallic",
+              "type": "float"
+            },
+            {
+              "name": "roughness",
+              "type": "float"
+            },
+            {
+              "name": "ao",
+              "type": "float"
+            },
+            {
+              "name": "er",
+              "type": "float"
+            },
+            {
+              "name": "eg",
+              "type": "float"
+            },
+            {
+              "name": "eb",
+              "type": "float"
+            },
+            {
+              "name": "normal_strength",
+              "type": "float"
+            },
+            {
+              "name": "receive_shadow",
+              "type": "int"
+            },
+            {
+              "name": "double_sided",
+              "type": "int"
+            },
+            {
+              "name": "cr",
+              "type": "float"
+            },
+            {
+              "name": "cg",
+              "type": "float"
+            },
+            {
+              "name": "cb",
+              "type": "float"
+            },
+            {
+              "name": "ca",
+              "type": "float"
+            }
+          ]
+        }
+      ]
+    }
   ]
 }

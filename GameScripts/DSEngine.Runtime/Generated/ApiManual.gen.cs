@@ -590,6 +590,7 @@ public static class Lod {
 
 public static class Mesh {
     public static void RendererAdd(uint e, string meshPath) { Native.dse_mesh_renderer_add(e, meshPath); }
+    public static void RendererSetMeshPath(uint e, string meshPath) { Native.dse_mesh_renderer_set_mesh_path(e, meshPath); }
     public static int RendererSetMaterialFromDmat(uint e, string dmatPath, uint materialIndex) { return Native.dse_mesh_renderer_set_material_from_dmat(e, dmatPath, materialIndex); }
     public static int RendererSetTexture(uint e, string slot, string path, out uint outHandle, out int outWidth, out int outHeight) { return Native.dse_mesh_renderer_set_texture(e, slot, path, out outHandle, out outWidth, out outHeight); }
     public static void RendererAddProcedural(uint e, float r, float g, float b, float a, float[] vertices, int vertexFloatCount, int[] indices, int indexCount) { Native.dse_mesh_renderer_add_procedural(e, r, g, b, a, vertices, vertexFloatCount, indices, indexCount); }

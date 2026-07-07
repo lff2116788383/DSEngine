@@ -45,6 +45,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_add", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_mesh_renderer_add(uint e, string meshPath);
 
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_mesh_path", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_mesh_renderer_set_mesh_path(uint e, string meshPath);
+
     [LibraryImport(Lib, EntryPoint = "dse_dir_light_add")]
     internal static partial void dse_dir_light_add(uint e);
 

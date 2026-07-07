@@ -27,23 +27,29 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial float dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float v);
 
+{% endif %}
 {% elif field.type in ("int", "enum_int") %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
 
+{% endif %}
 {% elif field.type == "bool" %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e);
 
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
 
+{% endif %}
 {% elif field.type == "vec2" %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y);
@@ -57,20 +63,28 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z);
 
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z);
 
+{% endif %}
 {% elif field.type == "vec4" %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z, out float w);
 
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y, float z, float w);
 
+{% endif %}
 {% elif field.type == "string" %}
+{% if field.get("capi_setter") != "manual" %}
+{% if not field.get("readonly", false) %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, string v);
 
+{% endif %}
+{% endif %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial int dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, [Out] byte[] buf, int bufSize);
 
