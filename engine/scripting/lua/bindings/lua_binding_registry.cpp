@@ -100,7 +100,6 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterAllFreeFunctionBindings(L);
 
     // C ABI 差距修补 — 仅保留无法模板化的复杂函数
-    RegisterCabiGapBindings(L);
 }
 
 }

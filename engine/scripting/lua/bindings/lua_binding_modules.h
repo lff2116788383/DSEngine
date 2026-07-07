@@ -157,7 +157,6 @@ void RegisterWorldSystemsBindings(lua_State* L);
 void ShutdownWorldSystemsBindings();
 
 // C ABI 差距修补 — 补齐手写 C ABI 中尚未映射到 Lua 的函数
-void RegisterCabiGapBindings(lua_State* L);
 
 }
 
