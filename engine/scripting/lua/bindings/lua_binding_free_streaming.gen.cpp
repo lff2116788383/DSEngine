@@ -99,6 +99,12 @@ int L_dse_streaming_get_zone_count(lua_State* L) {
 void RegisterStreamingBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "streaming");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "streaming");
+    }
     helper::RegisterBindings(L, {
         {"streamingcreatezone", L_dse_streaming_create_zone},
         {"streamingdestroyzone", L_dse_streaming_destroy_zone},

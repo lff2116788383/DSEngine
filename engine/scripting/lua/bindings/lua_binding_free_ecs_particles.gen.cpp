@@ -173,6 +173,12 @@ int L_dse_particle_set_rotation(lua_State* L) {
 void RegisterEcsParticlesBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_particle_system_3d", L_dse_particle_system_3d_add},
         {"set_particle_system_3d_params", L_dse_particle_system_3d_set_params},

@@ -740,11 +740,41 @@ int L_dse_ui_destroy_virtual_scroll(lua_State* L) {
     return 0;
 }
 
+int L_dse_ui_load_from_file(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    uint32_t _buf[256];
+    int _count = dse_ui_load_from_file(path, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
+int L_dse_ui_load_from_json(lua_State* L) {
+    const char* json_str = luaL_checkstring(L, 1);
+    uint32_t _buf[256];
+    int _count = dse_ui_load_from_json(json_str, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterUiBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ui");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ui");
+    }
     helper::RegisterBindings(L, {
         {"uiaddrenderer", L_dse_ui_add_renderer},
         {"uiaddlabel", L_dse_ui_add_label},
@@ -828,6 +858,8 @@ void RegisterUiBindings(lua_State* L) {
         {"uiaddvirtualscroll", L_dse_ui_add_virtual_scroll},
         {"uisetvirtualscrollcount", L_dse_ui_set_virtual_scroll_count},
         {"uidestroyvirtualscroll", L_dse_ui_destroy_virtual_scroll},
+        {"uiloadfromfile", L_dse_ui_load_from_file},
+        {"uiloadfromjson", L_dse_ui_load_from_json},
     });
     lua_pop(L, 2);
 }

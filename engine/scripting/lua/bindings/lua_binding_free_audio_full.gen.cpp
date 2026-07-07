@@ -243,6 +243,12 @@ int L_dse_audio_snapshot_load(lua_State* L) {
 void RegisterAudioBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "audio");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "audio");
+    }
     helper::RegisterBindings(L, {
         {"audioaddsource", L_dse_audio_source_add},
         {"audiosetplaying", L_dse_audio_source_set_playing},

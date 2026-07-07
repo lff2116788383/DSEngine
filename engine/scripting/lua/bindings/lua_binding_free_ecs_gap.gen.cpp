@@ -188,6 +188,12 @@ int L_dse_rendering_set_reflection_probe(lua_State* L) {
 void RegisterFreeFn_ecs_gap(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"transform_add", L_dse_transform_add},
         {"anim3d_get_blend_param", L_dse_anim3d_get_blend_param},

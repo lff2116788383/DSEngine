@@ -23,6 +23,7 @@
 #include "engine/ecs/transform.h"
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 namespace {
 
@@ -1296,8 +1297,1471 @@ TEST_F(DseApiBindingsTest, TransformAdd_GetSetRoundTrip) {
     dse_entity_destroy(e);
 }
 
+// Phase 5 placeholder removed - will be re-added by script
+
 // ============================================================
-// Phase 5: Extended Coverage -- Codegen Component Fields
+// Phase 5: Extended Coverage -- Verified API Only
 // ============================================================
 
-// --- Decal ---
+// --- Camera3D ---
+TEST_F(DseApiBindingsTest, Camera3D_FovRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_fov(id, 90.0f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_fov(id), 90.0f);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_NearFarClipRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_near_clip(id, 0.01f);
+    dse_camera3d_set_far_clip(id, 5000.0f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_near_clip(id), 0.01f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_far_clip(id), 5000.0f);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_enabled(id, 0);
+    EXPECT_EQ(dse_camera3d_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_PriorityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_priority(id, 5);
+    EXPECT_EQ(dse_camera3d_get_priority(id), 5);
+}
+
+// --- PointLight ---
+TEST_F(DseApiBindingsTest, PointLight_ColorRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_color(id, 1.0f, 0.5f, 0.0f);
+    float r, g, b;
+    dse_point_light_get_color(id, &r, &g, &b);
+    EXPECT_FLOAT_EQ(r, 1.0f);
+    EXPECT_FLOAT_EQ(g, 0.5f);
+    EXPECT_FLOAT_EQ(b, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, PointLight_IntensityRadiusRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_intensity(id, 3.0f);
+    dse_point_light_set_radius(id, 50.0f);
+    EXPECT_FLOAT_EQ(dse_point_light_get_intensity(id), 3.0f);
+    EXPECT_FLOAT_EQ(dse_point_light_get_radius(id), 50.0f);
+}
+
+TEST_F(DseApiBindingsTest, PointLight_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_enabled(id, 0);
+    EXPECT_EQ(dse_point_light_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, PointLight_CastShadowRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_cast_shadow(id, 0);
+    EXPECT_EQ(dse_point_light_get_cast_shadow(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, PointLight_ZeroIntensity) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_intensity(id, 0.0f);
+    EXPECT_FLOAT_EQ(dse_point_light_get_intensity(id), 0.0f);
+}
+
+// --- DirectionalLight3D ---
+TEST_F(DseApiBindingsTest, DirLight_ColorRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_color(id, 1.0f, 0.9f, 0.8f);
+    float r, g, b;
+    dse_dir_light_get_color(id, &r, &g, &b);
+    EXPECT_FLOAT_EQ(r, 1.0f);
+    EXPECT_FLOAT_EQ(g, 0.9f);
+    EXPECT_FLOAT_EQ(b, 0.8f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_IntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_intensity(id, 2.0f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_intensity(id), 2.0f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_enabled(id, 0);
+    EXPECT_EQ(dse_dir_light_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_DirectionRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_direction(id, 0.0f, -1.0f, 0.5f);
+    float dx, dy, dz;
+    dse_dir_light_get_direction(id, &dx, &dy, &dz);
+    EXPECT_FLOAT_EQ(dx, 0.0f);
+    EXPECT_FLOAT_EQ(dy, -1.0f);
+    EXPECT_FLOAT_EQ(dz, 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_AmbientIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_ambient_intensity(id, 0.3f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_ambient_intensity(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_CastShadowRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_cast_shadow(id, 0);
+    EXPECT_EQ(dse_dir_light_get_cast_shadow(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_ShadowStrengthRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_shadow_strength(id, 0.8f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_shadow_strength(id), 0.8f);
+}
+
+// --- MeshRenderer ---
+TEST_F(DseApiBindingsTest, MeshRenderer_VisibleRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_visible(id, 0);
+    EXPECT_EQ(dse_mesh_renderer_get_visible(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_ReceiveShadowRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_receive_shadow(id, 0);
+    EXPECT_EQ(dse_mesh_renderer_get_receive_shadow(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_MetallicRoughnessRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_metallic(id, 0.8f);
+    dse_mesh_renderer_set_roughness(id, 0.3f);
+    EXPECT_FLOAT_EQ(dse_mesh_renderer_get_metallic(id), 0.8f);
+    EXPECT_FLOAT_EQ(dse_mesh_renderer_get_roughness(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_ColorRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_color(id, 1.0f, 0.5f, 0.0f, 0.8f);
+    float r, g, b, a;
+    dse_mesh_renderer_get_color(id, &r, &g, &b, &a);
+    EXPECT_FLOAT_EQ(r, 1.0f);
+    EXPECT_FLOAT_EQ(g, 0.5f);
+    EXPECT_FLOAT_EQ(a, 0.8f);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_EmissiveRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_emissive(id, 0.5f, 0.0f, 1.0f);
+    float r, g, b;
+    dse_mesh_renderer_get_emissive(id, &r, &g, &b);
+    EXPECT_FLOAT_EQ(r, 0.5f);
+    EXPECT_FLOAT_EQ(b, 1.0f);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_ShaderVariantRoundTrip_Ext) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_shader_variant(id, "pbr_standard");
+    char buf[128];
+    int len = dse_mesh_renderer_get_shader_variant(id, buf, sizeof(buf));
+    EXPECT_GT(len, 0);
+    EXPECT_STREQ(buf, "pbr_standard");
+}
+
+// --- PostProcess (many fields) ---
+TEST_F(DseApiBindingsTest, PostProcess_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_enabled(id, 0);
+    EXPECT_EQ(dse_post_process_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_enabled(id, 0);
+    EXPECT_EQ(dse_post_process_get_bloom_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomThresholdRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_threshold(id, 1.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_threshold(id), 1.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_intensity(id, 0.8f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_intensity(id), 0.8f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomKneeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_knee(id, 0.1f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_knee(id), 0.1f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomMipWeightRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_mip_weight(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_mip_weight(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ExposureRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_exposure(id, 1.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_exposure(id), 1.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_GammaRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_gamma(id, 2.2f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_gamma(id), 2.2f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ColorGradingEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_color_grading_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_color_grading_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsaoEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssao_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_ssao_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsaoRadiusBiasRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssao_radius(id, 0.5f);
+    dse_post_process_set_ssao_bias(id, 0.01f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_radius(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_bias(id), 0.01f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsaoSampleCountRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssao_sample_count(id, 32);
+    EXPECT_EQ(dse_post_process_get_ssao_sample_count(id), 32);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsaoPowerIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssao_power(id, 2.0f);
+    dse_post_process_set_ssao_intensity(id, 1.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_power(id), 2.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_intensity(id), 1.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_VignetteEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_vignette_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_vignette_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_VignetteIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_vignette_intensity(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_vignette_intensity(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_VignetteRadiusSoftnessRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_vignette_radius(id, 0.8f);
+    dse_post_process_set_vignette_softness(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_vignette_radius(id), 0.8f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_vignette_softness(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_FilmGrainEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_film_grain_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_film_grain_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_FilmGrainIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_film_grain_intensity(id, 0.3f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_film_grain_intensity(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_FilmGrainTimeScaleRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_film_grain_time_scale(id, 2.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_film_grain_time_scale(id), 2.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_FxaaEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_fxaa_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_fxaa_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_TaaEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_taa_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_taa_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_TaaBlendFactorRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_taa_blend_factor(id, 0.1f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_taa_blend_factor(id), 0.1f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ContactShadowEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_contact_shadow_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_contact_shadow_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ContactShadowStrengthStepsRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_contact_shadow_strength(id, 0.7f);
+    dse_post_process_set_contact_shadow_steps(id, 16);
+    dse_post_process_set_contact_shadow_step_size(id, 0.02f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_contact_shadow_strength(id), 0.7f);
+    EXPECT_EQ(dse_post_process_get_contact_shadow_steps(id), 16);
+    EXPECT_FLOAT_EQ(dse_post_process_get_contact_shadow_step_size(id), 0.02f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_DofEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_dof_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_dof_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_DofFocusDistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_dof_focus_distance(id, 10.0f);
+    dse_post_process_set_dof_focus_range(id, 5.0f);
+    dse_post_process_set_dof_bokeh_radius(id, 3.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_dof_focus_distance(id), 10.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_dof_focus_range(id), 5.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_dof_bokeh_radius(id), 3.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_MotionBlurEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_motion_blur_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_motion_blur_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_MotionBlurIntensitySamplesRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_motion_blur_intensity(id, 0.5f);
+    dse_post_process_set_motion_blur_samples(id, 8);
+    EXPECT_FLOAT_EQ(dse_post_process_get_motion_blur_intensity(id), 0.5f);
+    EXPECT_EQ(dse_post_process_get_motion_blur_samples(id), 8);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsrEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssr_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_ssr_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsrMaxDistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssr_max_distance(id, 100.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssr_max_distance(id), 100.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsrThicknessStepSizeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssr_thickness(id, 0.1f);
+    dse_post_process_set_ssr_step_size(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssr_thickness(id), 0.1f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssr_step_size(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsrMaxStepsRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssr_max_steps(id, 64);
+    EXPECT_EQ(dse_post_process_get_ssr_max_steps(id), 64);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsrFadeDistanceMaxRoughnessRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssr_fade_distance(id, 50.0f);
+    dse_post_process_set_ssr_max_roughness(id, 0.8f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssr_fade_distance(id), 50.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssr_max_roughness(id), 0.8f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_OutlineEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_outline_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_outline_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_AutoExposureEnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_auto_exposure_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_auto_exposure_enabled(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ExposureMinMaxRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_exposure_min(id, 0.1f);
+    dse_post_process_set_exposure_max(id, 10.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_exposure_min(id), 0.1f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_exposure_max(id), 10.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_AdaptationSpeedRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_adaptation_speed_up(id, 3.0f);
+    dse_post_process_set_adaptation_speed_down(id, 1.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_adaptation_speed_up(id), 3.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_adaptation_speed_down(id), 1.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ExposureCompensationRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_exposure_compensation(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_exposure_compensation(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ColorLutIntensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_color_lut_intensity(id, 0.7f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_color_lut_intensity(id), 0.7f);
+}
+
+// --- Tree extended ---
+TEST_F(DseApiBindingsTest, Tree_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_enabled(id, 0);
+    EXPECT_EQ(dse_tree_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Tree_DensityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_density(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_tree_get_density(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_SpawnRadiusRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_spawn_radius(id, 100.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_spawn_radius(id), 100.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_ChunkSizeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_chunk_size(id, 64.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_chunk_size(id), 64.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_ScaleRangeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_min_scale(id, 0.8f);
+    dse_tree_set_max_scale(id, 1.5f);
+    EXPECT_FLOAT_EQ(dse_tree_get_min_scale(id), 0.8f);
+    EXPECT_FLOAT_EQ(dse_tree_get_max_scale(id), 1.5f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_Lod1DistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_lod1_distance(id, 50.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_lod1_distance(id), 50.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_CullDistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_cull_distance(id, 200.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_cull_distance(id), 200.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_WindRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_wind_strength(id, 0.7f);
+    dse_tree_set_wind_speed(id, 1.2f);
+    EXPECT_FLOAT_EQ(dse_tree_get_wind_strength(id), 0.7f);
+    EXPECT_FLOAT_EQ(dse_tree_get_wind_speed(id), 1.2f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_CastShadowRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_cast_shadow(id, 0);
+    EXPECT_EQ(dse_tree_get_cast_shadow(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Tree_ShadowDistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_shadow_distance(id, 150.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_shadow_distance(id), 150.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_SeedRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_seed(id, 42);
+    EXPECT_EQ(dse_tree_get_seed(id), 42);
+}
+
+TEST_F(DseApiBindingsTest, Tree_HeightVariationRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_height_variation(id, 0.3f);
+    EXPECT_FLOAT_EQ(dse_tree_get_height_variation(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_RandomRotationRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_random_rotation(id, 0);
+    EXPECT_EQ(dse_tree_get_random_rotation(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Tree_BillboardDistanceRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_billboard_distance(id, 300.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_billboard_distance(id), 300.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_BillboardTexturePathRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_billboard_texture_path(id, "trees/billboard.png");
+    char buf[128];
+    EXPECT_GT(dse_tree_get_billboard_texture_path(id, buf, sizeof(buf)), 0);
+    EXPECT_STREQ(buf, "trees/billboard.png");
+}
+
+// --- NavMeshAutoRebake extended ---
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_TileSizeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_tile_size(id, 64.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_tile_size(id), 64.0f);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_AgentHeightRadiusRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_agent_height(id, 2.0f);
+    dse_navmesh_rebake_set_agent_radius(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_height(id), 2.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_radius(id), 0.5f);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_CellHeightRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_cell_height(id, 0.2f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_cell_height(id), 0.2f);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_CollectMeshRenderersRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_collect_mesh_renderers(id, 0);
+    EXPECT_EQ(dse_navmesh_rebake_get_collect_mesh_renderers(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_RebakeCooldownRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_rebake_cooldown(id, 5.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_rebake_cooldown(id), 5.0f);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_enabled(id, 0);
+    EXPECT_EQ(dse_navmesh_rebake_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_AgentMaxClimbRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_agent_max_climb(id, 0.5f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_max_climb(id), 0.5f);
+}
+
+// --- DynamicObstacle extended ---
+TEST_F(DseApiBindingsTest, DynamicObstacle_AllFieldsRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DynamicObstacleComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dyn_obstacle_set_box_extents(id, 1.0f, 2.0f, 3.0f);
+    dse_dyn_obstacle_set_cylinder_radius(id, 0.5f);
+    dse_dyn_obstacle_set_cylinder_height(id, 1.5f);
+    float x, y, z;
+    dse_dyn_obstacle_get_box_extents(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(y, 2.0f);
+    EXPECT_FLOAT_EQ(z, 3.0f);
+    EXPECT_FLOAT_EQ(dse_dyn_obstacle_get_cylinder_radius(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_dyn_obstacle_get_cylinder_height(id), 1.5f);
+}
+
+TEST_F(DseApiBindingsTest, DynamicObstacle_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DynamicObstacleComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dyn_obstacle_set_enabled(id, 0);
+    EXPECT_EQ(dse_dyn_obstacle_get_enabled(id), 0);
+}
+
+// --- RigidBody3D extended ---
+TEST_F(DseApiBindingsTest, RigidBody3D_MassRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_mass(id, 10.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_mass(id), 10.0f);
+}
+
+TEST_F(DseApiBindingsTest, RigidBody3D_DragRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_drag(id, 0.5f);
+    dse_rigidbody3d_set_angular_drag(id, 0.3f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_drag(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_angular_drag(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, RigidBody3D_TypeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_type(id, 1);
+    EXPECT_EQ(dse_rigidbody3d_get_type(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, RigidBody3D_GravityRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_use_gravity(id, 0);
+    EXPECT_EQ(dse_rigidbody3d_get_use_gravity(id), 0);
+    dse_rigidbody3d_set_gravity_scale(id, 2.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_gravity_scale(id), 2.0f);
+}
+
+// --- BoxCollider3D extended ---
+TEST_F(DseApiBindingsTest, BoxCollider3D_SizeRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_box_collider3d_set_size(id, 5.0f, 6.0f, 7.0f);
+    float x, y, z;
+    dse_box_collider3d_get_size(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 5.0f);
+    EXPECT_FLOAT_EQ(y, 6.0f);
+    EXPECT_FLOAT_EQ(z, 7.0f);
+}
+
+TEST_F(DseApiBindingsTest, BoxCollider3D_CenterRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_box_collider3d_set_center(id, 1.0f, 2.0f, 3.0f);
+    float x, y, z;
+    dse_box_collider3d_get_center(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(y, 2.0f);
+    EXPECT_FLOAT_EQ(z, 3.0f);
+}
+
+TEST_F(DseApiBindingsTest, BoxCollider3D_TriggerRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_box_collider3d_set_is_trigger(id, 1);
+    EXPECT_EQ(dse_box_collider3d_get_is_trigger(id), 1);
+}
+
+// --- SphereCollider3D ---
+TEST_F(DseApiBindingsTest, SphereCollider3D_RadiusRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::SphereCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_sphere_collider3d_set_radius(id, 2.5f);
+    EXPECT_FLOAT_EQ(dse_sphere_collider3d_get_radius(id), 2.5f);
+}
+
+TEST_F(DseApiBindingsTest, SphereCollider3D_CenterRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::SphereCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_sphere_collider3d_set_center(id, 1.0f, 2.0f, 3.0f);
+    float x, y, z;
+    dse_sphere_collider3d_get_center(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(y, 2.0f);
+    EXPECT_FLOAT_EQ(z, 3.0f);
+}
+
+// --- CapsuleCollider3D ---
+TEST_F(DseApiBindingsTest, CapsuleCollider3D_FieldsRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::CapsuleCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_capsule_collider3d_set_radius(id, 0.4f);
+    dse_capsule_collider3d_set_height(id, 1.8f);
+    EXPECT_FLOAT_EQ(dse_capsule_collider3d_get_radius(id), 0.4f);
+    EXPECT_FLOAT_EQ(dse_capsule_collider3d_get_height(id), 1.8f);
+}
+
+TEST_F(DseApiBindingsTest, CapsuleCollider3D_CenterRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::CapsuleCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_capsule_collider3d_set_center(id, 0.0f, 0.5f, 0.0f);
+    float x, y, z;
+    dse_capsule_collider3d_get_center(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(y, 0.5f);
+}
+
+// --- CharacterCtrl3D ---
+TEST_F(DseApiBindingsTest, CharCtrl3D_RadiusHeightRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::CharacterController3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_character_ctrl3d_set_radius(id, 0.5f);
+    dse_character_ctrl3d_set_height(id, 1.8f);
+    EXPECT_FLOAT_EQ(dse_character_ctrl3d_get_radius(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_character_ctrl3d_get_height(id), 1.8f);
+}
+
+// --- Animator3D ---
+TEST_F(DseApiBindingsTest, Animator3D_EnabledRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Animator3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_animator3d_set_enabled(id, 0);
+    EXPECT_EQ(dse_animator3d_get_enabled(id), 0);
+}
+
+TEST_F(DseApiBindingsTest, Animator3D_SpeedRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Animator3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_animator3d_set_speed(id, 2.0f);
+    EXPECT_FLOAT_EQ(dse_animator3d_get_speed(id), 2.0f);
+}
+
+// --- Transform extended ---
+TEST_F(DseApiBindingsTest, Transform_ScaleRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_scale(id, 2.0f, 3.0f, 4.0f);
+    float x = 0, y = 0, z = 0;
+    dse_transform_get_scale(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 2.0f);
+    EXPECT_FLOAT_EQ(y, 3.0f);
+    EXPECT_FLOAT_EQ(z, 4.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_RotationRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_rotation(id, 0.0f, 90.0f, 0.0f);
+    float x = 0, y = 0, z = 0;
+    dse_transform_get_rotation(id, &x, &y, &z);
+    EXPECT_NEAR(y, 90.0f, 0.1f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_MultipleEntitiesIndependent) {
+    Entity e1 = world_.CreateEntity();
+    Entity e2 = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e1);
+    world_.registry().emplace<TransformComponent>(e2);
+    const uint32_t id1 = EntityId(e1);
+    const uint32_t id2 = EntityId(e2);
+    dse_transform_set_position(id1, 1.0f, 0.0f, 0.0f);
+    dse_transform_set_position(id2, 0.0f, 1.0f, 0.0f);
+    float x1, y1, z1, x2, y2, z2;
+    dse_transform_get_position(id1, &x1, &y1, &z1);
+    dse_transform_get_position(id2, &x2, &y2, &z2);
+    EXPECT_FLOAT_EQ(x1, 1.0f);
+    EXPECT_FLOAT_EQ(y2, 1.0f);
+    EXPECT_FLOAT_EQ(x2, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_SetAndGet_Loop) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    for (int i = 0; i < 10; ++i) {
+        float v = static_cast<float>(i) * 1.5f;
+        dse_transform_set_position(id, v, v + 1.0f, v + 2.0f);
+        float x, y, z;
+        dse_transform_get_position(id, &x, &y, &z);
+        EXPECT_FLOAT_EQ(x, v);
+        EXPECT_FLOAT_EQ(y, v + 1.0f);
+        EXPECT_FLOAT_EQ(z, v + 2.0f);
+    }
+}
+
+TEST_F(DseApiBindingsTest, Transform_ZeroScale) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_scale(id, 0.0f, 0.0f, 0.0f);
+    float x, y, z;
+    dse_transform_get_scale(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_NegativePosition) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, -100.0f, -200.0f, -300.0f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, -100.0f);
+    EXPECT_FLOAT_EQ(y, -200.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_LargeValues) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, 1e6f, 1e6f, 1e6f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1e6f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_DoubleSet_TakesLast) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, 1.0f, 2.0f, 3.0f);
+    dse_transform_set_position(id, 4.0f, 5.0f, 6.0f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 4.0f);
+    EXPECT_FLOAT_EQ(y, 5.0f);
+    EXPECT_FLOAT_EQ(z, 6.0f);
+}
+
+TEST_F(DseApiBindingsTest, MissingEntity_TransformDefaultsToZero) {
+    const uint32_t bad = 0xFFFFFFFEu;
+    float x = 999, y = 999, z = 999;
+    dse_transform_get_position(bad, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.0f);
+    EXPECT_FLOAT_EQ(y, 0.0f);
+    EXPECT_FLOAT_EQ(z, 0.0f);
+}
+
+// --- Entity lifecycle ---
+TEST_F(DseApiBindingsTest, EntityCreate_MultipleUnique) {
+    uint32_t e1 = dse_entity_create();
+    uint32_t e2 = dse_entity_create();
+    uint32_t e3 = dse_entity_create();
+    EXPECT_NE(e1, e2);
+    EXPECT_NE(e2, e3);
+    EXPECT_NE(e1, e3);
+    EXPECT_EQ(dse_entity_valid(e1), 1);
+    EXPECT_EQ(dse_entity_valid(e2), 1);
+    EXPECT_EQ(dse_entity_valid(e3), 1);
+    dse_entity_destroy(e1);
+    dse_entity_destroy(e2);
+    dse_entity_destroy(e3);
+}
+
+TEST_F(DseApiBindingsTest, EntityDestroy_InvalidatesEntity) {
+    uint32_t e = dse_entity_create();
+    EXPECT_EQ(dse_entity_valid(e), 1);
+    dse_entity_destroy(e);
+    EXPECT_EQ(dse_entity_valid(e), 0);
+}
+
+TEST_F(DseApiBindingsTest, EntityValid_NullEntity) {
+    EXPECT_EQ(dse_entity_valid(static_cast<uint32_t>(entt::null)), 0);
+}
+
+// --- Free functions ---
+TEST_F(DseApiBindingsTest, App_GetDeltaTime_NonNegative) {
+    float dt = dse_app_get_delta_time();
+    EXPECT_GE(dt, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, App_GetTime_NonNegative) {
+    float t = dse_app_get_time();
+    EXPECT_GE(t, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, App_GetTargetFps_Positive) {
+    float fps = dse_app_get_target_fps();
+    EXPECT_GE(fps, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, ApiVersion_NonZero) {
+    EXPECT_GT(dse_api_version(), 0u);
+}
+
+TEST_F(DseApiBindingsTest, Audio_SourcePlayingInvalidEntity) {
+    const uint32_t invalid = 0xFFFFFFFEu;
+    EXPECT_EQ(dse_audio_source_is_playing(invalid), 0);
+}
+
+TEST_F(DseApiBindingsTest, UI_InvalidEntityReturnsFalse) {
+    const uint32_t invalid = 0xFFFFFFFEu;
+    EXPECT_EQ(dse_ui_is_hovered(invalid), 0);
+    EXPECT_EQ(dse_ui_is_pressed(invalid), 0);
+}
+
+TEST_F(DseApiBindingsTest, Input_MouseScroll_ReturnsNumber) {
+    float scroll = dse_input_get_mouse_scroll();
+    EXPECT_FALSE(std::isnan(scroll));
+}
+
+TEST_F(DseApiBindingsTest, Input_TouchCount_NonNegative) {
+    int count = dse_input_get_touch_count();
+    EXPECT_GE(count, 0);
+}
+
+// --- Stress tests ---
+TEST_F(DseApiBindingsTest, StressTest_100Entities) {
+    std::vector<uint32_t> entities;
+    for (int i = 0; i < 100; ++i) {
+        uint32_t e = dse_entity_create();
+        entities.push_back(e);
+        dse_transform_add(e, static_cast<float>(i), 0.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+    }
+    for (int i = 0; i < 100; ++i) {
+        float x, y, z;
+        dse_transform_get_position(entities[i], &x, &y, &z);
+        EXPECT_FLOAT_EQ(x, static_cast<float>(i));
+    }
+    for (auto e : entities) dse_entity_destroy(e);
+}
+
+TEST_F(DseApiBindingsTest, StressTest_CreateDestroyLoop) {
+    for (int i = 0; i < 50; ++i) {
+        uint32_t e = dse_entity_create();
+        EXPECT_EQ(dse_entity_valid(e), 1);
+        dse_entity_destroy(e);
+        EXPECT_EQ(dse_entity_valid(e), 0);
+    }
+}
+
+TEST_F(DseApiBindingsTest, StressTest_ManyComponentsSameEntity) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, 1.0f, 2.0f, 3.0f);
+    dse_mesh_renderer_set_visible(id, 1);
+    dse_post_process_set_enabled(id, 1);
+    dse_point_light_set_intensity(id, 5.0f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_EQ(dse_mesh_renderer_get_visible(id), 1);
+    EXPECT_FLOAT_EQ(dse_point_light_get_intensity(id), 5.0f);
+}
+
+TEST_F(DseApiBindingsTest, StressTest_200Entities_TransformOnly) {
+    std::vector<uint32_t> ents;
+    for (int i = 0; i < 200; ++i) {
+        uint32_t e = dse_entity_create();
+        ents.push_back(e);
+        dse_transform_add(e, static_cast<float>(i), 0.0f, 0.0f, 1.0f, 1.0f, 1.0f);
+    }
+    float x, y, z;
+    dse_transform_get_position(ents[199], &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 199.0f);
+    for (auto e : ents) dse_entity_destroy(e);
+}
+
+TEST_F(DseApiBindingsTest, MultipleComponents_TransformAndRigidBody) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, 1.0f, 2.0f, 3.0f);
+    dse_rigidbody3d_set_mass(id, 5.0f);
+    dse_box_collider3d_set_size(id, 2.0f, 2.0f, 2.0f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_mass(id), 5.0f);
+    dse_box_collider3d_get_size(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 2.0f);
+}
+
+// --- PostProcess batch tests ---
+TEST_F(DseApiBindingsTest, PostProcess_BatchToggle) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_enabled(id, 1);
+    dse_post_process_set_ssao_enabled(id, 1);
+    dse_post_process_set_fxaa_enabled(id, 1);
+    dse_post_process_set_taa_enabled(id, 0);
+    dse_post_process_set_dof_enabled(id, 1);
+    dse_post_process_set_ssr_enabled(id, 1);
+    EXPECT_EQ(dse_post_process_get_bloom_enabled(id), 1);
+    EXPECT_EQ(dse_post_process_get_ssao_enabled(id), 1);
+    EXPECT_EQ(dse_post_process_get_fxaa_enabled(id), 1);
+    EXPECT_EQ(dse_post_process_get_taa_enabled(id), 0);
+    EXPECT_EQ(dse_post_process_get_dof_enabled(id), 1);
+    EXPECT_EQ(dse_post_process_get_ssr_enabled(id), 1);
+}
+
+// --- Additional Camera3D tests ---
+TEST_F(DseApiBindingsTest, Camera3D_FovMaxValue) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_fov(id, 170.0f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_fov(id), 170.0f);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_ClipTightRange) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_near_clip(id, 0.001f);
+    dse_camera3d_set_far_clip(id, 1.0f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_near_clip(id), 0.001f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_far_clip(id), 1.0f);
+}
+
+// --- Additional edge cases ---
+TEST_F(DseApiBindingsTest, BoxCollider3D_ZeroSize) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::BoxCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_box_collider3d_set_size(id, 0.0f, 0.0f, 0.0f);
+    float x, y, z;
+    dse_box_collider3d_get_size(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, RigidBody3D_ZeroMass) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_mass(id, 0.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_mass(id), 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Animator3D_ZeroSpeed) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Animator3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_animator3d_set_speed(id, 0.0f);
+    EXPECT_FLOAT_EQ(dse_animator3d_get_speed(id), 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, PointLight_NegativeIntensity) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PointLightComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_point_light_set_intensity(id, -1.0f);
+    EXPECT_FLOAT_EQ(dse_point_light_get_intensity(id), -1.0f);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_ToggleVisibleCycle) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    for (int i = 0; i < 10; ++i) {
+        int v = i % 2;
+        dse_mesh_renderer_set_visible(id, v);
+        EXPECT_EQ(dse_mesh_renderer_get_visible(id), v);
+    }
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_ExtremeBloomValues) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_bloom_intensity(id, 100.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_intensity(id), 100.0f);
+    dse_post_process_set_bloom_intensity(id, 0.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_intensity(id), 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_MultipleEntitiesIndependent) {
+    Entity e1 = world_.CreateEntity();
+    Entity e2 = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e1);
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e2);
+    const uint32_t id1 = EntityId(e1);
+    const uint32_t id2 = EntityId(e2);
+    dse_dir_light_set_intensity(id1, 1.0f);
+    dse_dir_light_set_intensity(id2, 2.0f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_intensity(id1), 1.0f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_intensity(id2), 2.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_PositionWriteZero) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_position(id, 5.0f, 5.0f, 5.0f);
+    dse_transform_set_position(id, 0.0f, 0.0f, 0.0f);
+    float x, y, z;
+    dse_transform_get_position(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 0.0f);
+    EXPECT_FLOAT_EQ(y, 0.0f);
+    EXPECT_FLOAT_EQ(z, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Tree_MultipleFieldsConsistency) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::TreeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_tree_set_density(id, 0.3f);
+    dse_tree_set_spawn_radius(id, 50.0f);
+    dse_tree_set_chunk_size(id, 32.0f);
+    dse_tree_set_seed(id, 123);
+    EXPECT_FLOAT_EQ(dse_tree_get_density(id), 0.3f);
+    EXPECT_FLOAT_EQ(dse_tree_get_spawn_radius(id), 50.0f);
+    EXPECT_FLOAT_EQ(dse_tree_get_chunk_size(id), 32.0f);
+    EXPECT_EQ(dse_tree_get_seed(id), 123);
+}
+
+TEST_F(DseApiBindingsTest, NavMeshAutoRebake_BatchFieldSet) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::NavMeshAutoRebakeComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_navmesh_rebake_set_cell_size(id, 0.3f);
+    dse_navmesh_rebake_set_cell_height(id, 0.2f);
+    dse_navmesh_rebake_set_tile_size(id, 48.0f);
+    dse_navmesh_rebake_set_agent_height(id, 2.0f);
+    dse_navmesh_rebake_set_agent_radius(id, 0.6f);
+    dse_navmesh_rebake_set_agent_max_slope(id, 45.0f);
+    dse_navmesh_rebake_set_agent_max_climb(id, 0.4f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_cell_size(id), 0.3f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_cell_height(id), 0.2f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_tile_size(id), 48.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_height(id), 2.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_radius(id), 0.6f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_max_slope(id), 45.0f);
+    EXPECT_FLOAT_EQ(dse_navmesh_rebake_get_agent_max_climb(id), 0.4f);
+}
+
+TEST_F(DseApiBindingsTest, SphereCollider3D_TriggerRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::SphereCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_sphere_collider3d_set_is_trigger(id, 1);
+    EXPECT_EQ(dse_sphere_collider3d_get_is_trigger(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, CapsuleCollider3D_TriggerRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::CapsuleCollider3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_capsule_collider3d_set_is_trigger(id, 1);
+    EXPECT_EQ(dse_capsule_collider3d_get_is_trigger(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_AllBoolsDefault) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    int bloom = dse_post_process_get_bloom_enabled(id);
+    int ssao = dse_post_process_get_ssao_enabled(id);
+    int fxaa = dse_post_process_get_fxaa_enabled(id);
+    EXPECT_GE(bloom, 0);
+    EXPECT_LE(bloom, 1);
+    EXPECT_GE(ssao, 0);
+    EXPECT_LE(ssao, 1);
+    EXPECT_GE(fxaa, 0);
+    EXPECT_LE(fxaa, 1);
+}
+
+TEST_F(DseApiBindingsTest, RigidBody3D_IsKinematicRoundTrip) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    world_.registry().emplace<dse::RigidBody3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_rigidbody3d_set_is_kinematic(id, 1);
+    EXPECT_EQ(dse_rigidbody3d_get_is_kinematic(id), 1);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_MultipleEntitiesPriority) {
+    Entity e1 = world_.CreateEntity();
+    Entity e2 = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e1);
+    world_.registry().emplace<dse::Camera3DComponent>(e2);
+    const uint32_t id1 = EntityId(e1);
+    const uint32_t id2 = EntityId(e2);
+    dse_camera3d_set_priority(id1, 0);
+    dse_camera3d_set_priority(id2, 10);
+    EXPECT_EQ(dse_camera3d_get_priority(id1), 0);
+    EXPECT_EQ(dse_camera3d_get_priority(id2), 10);
+}
+
+TEST_F(DseApiBindingsTest, Transform_RotationFullCircle) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_rotation(id, 360.0f, 360.0f, 360.0f);
+    float x, y, z;
+    dse_transform_get_rotation(id, &x, &y, &z);
+    EXPECT_GE(x, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_BloomFullPipeline) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_enabled(id, 1);
+    dse_post_process_set_bloom_enabled(id, 1);
+    dse_post_process_set_bloom_threshold(id, 1.0f);
+    dse_post_process_set_bloom_intensity(id, 0.5f);
+    dse_post_process_set_bloom_knee(id, 0.1f);
+    dse_post_process_set_bloom_mip_weight(id, 0.3f);
+    EXPECT_EQ(dse_post_process_get_enabled(id), 1);
+    EXPECT_EQ(dse_post_process_get_bloom_enabled(id), 1);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_threshold(id), 1.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_intensity(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_knee(id), 0.1f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_bloom_mip_weight(id), 0.3f);
+}
+
+TEST_F(DseApiBindingsTest, DirLight_AllFieldsBatch) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::DirectionalLight3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_dir_light_set_enabled(id, 1);
+    dse_dir_light_set_intensity(id, 3.0f);
+    dse_dir_light_set_ambient_intensity(id, 0.2f);
+    dse_dir_light_set_cast_shadow(id, 1);
+    dse_dir_light_set_shadow_strength(id, 0.9f);
+    dse_dir_light_set_color(id, 1.0f, 1.0f, 0.9f);
+    dse_dir_light_set_direction(id, 0.0f, -1.0f, 0.0f);
+    EXPECT_EQ(dse_dir_light_get_enabled(id), 1);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_intensity(id), 3.0f);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_ambient_intensity(id), 0.2f);
+    EXPECT_EQ(dse_dir_light_get_cast_shadow(id), 1);
+    EXPECT_FLOAT_EQ(dse_dir_light_get_shadow_strength(id), 0.9f);
+}
+
+TEST_F(DseApiBindingsTest, MeshRenderer_EmissiveZero) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_mesh_renderer_set_emissive(id, 0.0f, 0.0f, 0.0f);
+    float r, g, b;
+    dse_mesh_renderer_get_emissive(id, &r, &g, &b);
+    EXPECT_FLOAT_EQ(r, 0.0f);
+    EXPECT_FLOAT_EQ(g, 0.0f);
+    EXPECT_FLOAT_EQ(b, 0.0f);
+}
+
+TEST_F(DseApiBindingsTest, Camera3D_FovMinValue) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::Camera3DComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_camera3d_set_fov(id, 1.0f);
+    EXPECT_FLOAT_EQ(dse_camera3d_get_fov(id), 1.0f);
+}
+
+TEST_F(DseApiBindingsTest, EntityCreate_DestroyAndRecreate) {
+    uint32_t e1 = dse_entity_create();
+    dse_entity_destroy(e1);
+    EXPECT_EQ(dse_entity_valid(e1), 0);
+    uint32_t e2 = dse_entity_create();
+    EXPECT_EQ(dse_entity_valid(e2), 1);
+    dse_entity_destroy(e2);
+}
+
+TEST_F(DseApiBindingsTest, PostProcess_SsaoFullPipeline) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<dse::PostProcessComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_post_process_set_ssao_enabled(id, 1);
+    dse_post_process_set_ssao_radius(id, 0.5f);
+    dse_post_process_set_ssao_bias(id, 0.025f);
+    dse_post_process_set_ssao_sample_count(id, 64);
+    dse_post_process_set_ssao_power(id, 2.0f);
+    dse_post_process_set_ssao_intensity(id, 1.0f);
+    EXPECT_EQ(dse_post_process_get_ssao_enabled(id), 1);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_radius(id), 0.5f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_bias(id), 0.025f);
+    EXPECT_EQ(dse_post_process_get_ssao_sample_count(id), 64);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_power(id), 2.0f);
+    EXPECT_FLOAT_EQ(dse_post_process_get_ssao_intensity(id), 1.0f);
+}
+
+TEST_F(DseApiBindingsTest, Transform_ScaleNegative) {
+    Entity e = world_.CreateEntity();
+    world_.registry().emplace<TransformComponent>(e);
+    const uint32_t id = EntityId(e);
+    dse_transform_set_scale(id, -1.0f, -1.0f, -1.0f);
+    float x, y, z;
+    dse_transform_get_scale(id, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, -1.0f);
+    EXPECT_FLOAT_EQ(y, -1.0f);
+    EXPECT_FLOAT_EQ(z, -1.0f);
+}
+

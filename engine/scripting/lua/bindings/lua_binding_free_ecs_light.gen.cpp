@@ -66,6 +66,12 @@ int L_dse_rendering_set_reflection_probe_enabled(lua_State* L) {
 void RegisterEcsRenderingLightBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_skybox", L_dse_rendering_add_skybox},
         {"set_gi_probe_enabled", L_dse_rendering_set_gi_probe_enabled},

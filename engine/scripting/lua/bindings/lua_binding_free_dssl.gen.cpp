@@ -93,6 +93,12 @@ int L_dse_dssl_get_float(lua_State* L) {
 void RegisterDSSLBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "dssl");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "dssl");
+    }
     helper::RegisterBindings(L, {
         {"load_material", L_dse_dssl_load_material},
         {"create_instance", L_dse_dssl_create_instance},

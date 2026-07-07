@@ -188,11 +188,32 @@ int L_dse_audio_lod_shutdown(lua_State* L) {
     return 0;
 }
 
+int L_dse_physics_lod_evaluate(lua_State* L) {
+    float cam_x = static_cast<float>(luaL_checknumber(L, 1));
+    float cam_y = static_cast<float>(luaL_checknumber(L, 2));
+    float cam_z = static_cast<float>(luaL_checknumber(L, 3));
+    uint32_t frame = static_cast<uint32_t>(luaL_checkinteger(L, 4));
+    uint32_t _buf[512];
+    int _count = dse_physics_lod_evaluate(cam_x, cam_y, cam_z, frame, _buf, 512);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterOpenWorldP2P5Bindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"init", L_dse_mesh_streaming_init},
         {"register_mesh", L_dse_mesh_streaming_register_mesh},
@@ -217,6 +238,7 @@ void RegisterOpenWorldP2P5Bindings(lua_State* L) {
         {"tick", L_dse_audio_lod_tick},
         {"is_audible", L_dse_audio_lod_is_audible},
         {"shutdown", L_dse_audio_lod_shutdown},
+        {"physics_lod_evaluate", L_dse_physics_lod_evaluate},
     });
     lua_pop(L, 2);
 }

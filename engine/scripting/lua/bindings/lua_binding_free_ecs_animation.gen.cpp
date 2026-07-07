@@ -370,6 +370,12 @@ int L_dse_morph_get_target_count(lua_State* L) {
 void RegisterEcsAnimationBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_animator", L_dse_anim2d_add},
         {"add_animation_event", L_dse_anim2d_add_event},

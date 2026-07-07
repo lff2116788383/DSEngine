@@ -68,11 +68,37 @@ int L_dse_nav_agent_arrived(lua_State* L) {
     return 1;
 }
 
+int L_dse_nav_find_path(lua_State* L) {
+    float sx = static_cast<float>(luaL_checknumber(L, 1));
+    float sy = static_cast<float>(luaL_checknumber(L, 2));
+    float sz = static_cast<float>(luaL_checknumber(L, 3));
+    float ex = static_cast<float>(luaL_checknumber(L, 4));
+    float ey = static_cast<float>(luaL_checknumber(L, 5));
+    float ez = static_cast<float>(luaL_checknumber(L, 6));
+    float _buf[768];
+    int _count = dse_nav_find_path(sx, sy, sz, ex, ey, ez, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_newtable(L);
+        lua_pushnumber(L, _buf[_i * 3 + 0]); lua_setfield(L, -2, "x");
+        lua_pushnumber(L, _buf[_i * 3 + 1]); lua_setfield(L, -2, "y");
+        lua_pushnumber(L, _buf[_i * 3 + 2]); lua_setfield(L, -2, "z");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterNavigationBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "nav");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "nav");
+    }
     helper::RegisterBindings(L, {
         {"navisready", L_dse_nav_is_ready},
         {"navload", L_dse_nav_load},
@@ -81,6 +107,7 @@ void RegisterNavigationBindings(lua_State* L) {
         {"ecssetnavdestination", L_dse_nav_agent_set_destination},
         {"ecsnavagenthaspath", L_dse_nav_agent_has_path},
         {"ecsnavagentarrived", L_dse_nav_agent_arrived},
+        {"find_path", L_dse_nav_find_path},
     });
     lua_pop(L, 2);
 }

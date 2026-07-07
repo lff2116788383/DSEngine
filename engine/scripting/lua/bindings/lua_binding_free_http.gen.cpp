@@ -25,14 +25,32 @@ int L_dse_http_available(lua_State* L) {
     return 1;
 }
 
+int L_dse_http_poll(lua_State* L) {
+    uint32_t _buf[64];
+    int _count = dse_http_poll(_buf, 64);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterHttpBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "http");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "http");
+    }
     helper::RegisterBindings(L, {
         {"update", L_dse_http_update},
         {"available", L_dse_http_available},
+        {"poll", L_dse_http_poll},
     });
     lua_pop(L, 2);
 }

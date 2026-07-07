@@ -94,7 +94,12 @@ void RegisterPhase1LuaApi(lua_State* L) {
     lua_setglobal(L, "dse");
 
     // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
-    RegisterWorldSystemsBindings(L);
+    RegisterFreeWorldSplineBindings(L);
+    RegisterFreeWorldOceanBindings(L);
+    RegisterFreeWorldEditorBindings(L);
+    RegisterFreeWorldVsmBindings(L);
+    RegisterFreeWorldEqsBindings(L);
+    RegisterFreeWorldDistBindings(L);
 
     // 自由函数 Lua 绑定（codegen 自动生成）
     RegisterAllFreeFunctionBindings(L);

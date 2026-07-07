@@ -152,9 +152,13 @@ void ShutdownVideoBindings();
 void RegisterOpenWorldP2P5Bindings(lua_State* L);
 void ShutdownOpenWorldP2P5Bindings();
 
-// 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
-void RegisterWorldSystemsBindings(lua_State* L);
-void ShutdownWorldSystemsBindings();
+// 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）— codegen 生成
+void RegisterFreeWorldSplineBindings(lua_State* L);
+void RegisterFreeWorldOceanBindings(lua_State* L);
+void RegisterFreeWorldEditorBindings(lua_State* L);
+void RegisterFreeWorldVsmBindings(lua_State* L);
+void RegisterFreeWorldEqsBindings(lua_State* L);
+void RegisterFreeWorldDistBindings(lua_State* L);
 
 // C ABI 差距修补 — 补齐手写 C ABI 中尚未映射到 Lua 的函数
 

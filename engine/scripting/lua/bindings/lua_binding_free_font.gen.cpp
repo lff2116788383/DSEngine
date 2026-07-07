@@ -72,6 +72,12 @@ int L_dse_font_get_texture(lua_State* L) {
 void RegisterFontBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "font");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "font");
+    }
     helper::RegisterBindings(L, {
         {"fontload", L_dse_font_load},
         {"fontloadcjk", L_dse_font_load_cjk},

@@ -208,11 +208,41 @@ int L_dse_ecs_get_time_scale(lua_State* L) {
     return 1;
 }
 
+int L_dse_ecs_find_entities_by_mesh_path(lua_State* L) {
+    const char* mesh_path = luaL_checkstring(L, 1);
+    uint32_t _buf[512];
+    int _count = dse_ecs_find_entities_by_mesh_path(mesh_path, _buf, 512);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
+int L_dse_ecs_find_entities_with(lua_State* L) {
+    const char* component = luaL_checkstring(L, 1);
+    uint32_t _buf[1024];
+    int _count = dse_ecs_find_entities_with(component, _buf, 1024);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsCoreBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"create_entity", L_dse_entity_create},
         {"load_scene", L_dse_scene_load},
@@ -242,6 +272,8 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"save_prefab", L_dse_scene_save_prefab},
         {"set_time_scale", L_dse_ecs_set_time_scale},
         {"get_time_scale", L_dse_ecs_get_time_scale},
+        {"find_entities_by_mesh_path", L_dse_ecs_find_entities_by_mesh_path},
+        {"find_entities_with", L_dse_ecs_find_entities_with},
     });
     lua_pop(L, 2);
 }

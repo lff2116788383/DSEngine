@@ -549,11 +549,32 @@ int L_dse_cloud_set_wind(lua_State* L) {
     return 0;
 }
 
+int L_dse_rope_get_positions(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float _buf[768];
+    int _count = dse_rope_get_positions(e, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_newtable(L);
+        lua_pushnumber(L, _buf[_i * 3 + 0]); lua_setfield(L, -2, "x");
+        lua_pushnumber(L, _buf[_i * 3 + 1]); lua_setfield(L, -2, "y");
+        lua_pushnumber(L, _buf[_i * 3 + 2]); lua_setfield(L, -2, "z");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsGameplay3DBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_fracture", L_dse_fracture_add},
         {"set_fracture_params", L_dse_fracture_set_params},
@@ -617,6 +638,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"add_volumetric_cloud", L_dse_volumetric_cloud_add},
         {"set_cloud_layer", L_dse_cloud_set_layer},
         {"set_cloud_wind", L_dse_cloud_set_wind},
+        {"rope_get_positions", L_dse_rope_get_positions},
     });
     lua_pop(L, 2);
 }

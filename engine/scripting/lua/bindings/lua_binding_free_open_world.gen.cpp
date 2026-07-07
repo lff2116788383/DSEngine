@@ -294,6 +294,12 @@ int L_dse_procedural_random_float(lua_State* L) {
 void RegisterOpenWorldBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"wpgetloadedcount", L_dse_wp_get_loaded_count},
         {"wpforceload", L_dse_wp_force_load},

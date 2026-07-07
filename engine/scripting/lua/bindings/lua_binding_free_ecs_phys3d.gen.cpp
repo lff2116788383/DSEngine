@@ -216,11 +216,86 @@ int L_dse_collider_set_material(lua_State* L) {
     return 0;
 }
 
+int L_dse_physics3d_overlap_sphere(lua_State* L) {
+    float cx = static_cast<float>(luaL_checknumber(L, 1));
+    float cy = static_cast<float>(luaL_checknumber(L, 2));
+    float cz = static_cast<float>(luaL_checknumber(L, 3));
+    float radius = static_cast<float>(luaL_checknumber(L, 4));
+    uint32_t _buf[256];
+    int _count = dse_physics3d_overlap_sphere(cx, cy, cz, radius, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
+int L_dse_physics3d_overlap_box(lua_State* L) {
+    float min_x = static_cast<float>(luaL_checknumber(L, 1));
+    float min_y = static_cast<float>(luaL_checknumber(L, 2));
+    float min_z = static_cast<float>(luaL_checknumber(L, 3));
+    float max_x = static_cast<float>(luaL_checknumber(L, 4));
+    float max_y = static_cast<float>(luaL_checknumber(L, 5));
+    float max_z = static_cast<float>(luaL_checknumber(L, 6));
+    uint32_t _buf[256];
+    int _count = dse_physics3d_overlap_box(min_x, min_y, min_z, max_x, max_y, max_z, _buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
+int L_dse_physics3d_get_collision_events(lua_State* L) {
+    float _buf[2816];
+    int _count = dse_physics3d_get_collision_events(_buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        float* _p = _buf + _i * 11;
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[0])); lua_setfield(L, -2, "type");
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[1])); lua_setfield(L, -2, "entity_a");
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[2])); lua_setfield(L, -2, "entity_b");
+        lua_pushnumber(L, _p[3]); lua_setfield(L, -2, "cx");
+        lua_pushnumber(L, _p[4]); lua_setfield(L, -2, "cy");
+        lua_pushnumber(L, _p[5]); lua_setfield(L, -2, "cz");
+        lua_pushnumber(L, _p[6]); lua_setfield(L, -2, "nx");
+        lua_pushnumber(L, _p[7]); lua_setfield(L, -2, "ny");
+        lua_pushnumber(L, _p[8]); lua_setfield(L, -2, "nz");
+        lua_pushnumber(L, _p[9]); lua_setfield(L, -2, "impulse");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
+int L_dse_physics3d_get_trigger_events(lua_State* L) {
+    uint32_t _ent_buf[512];
+    int _type_buf[256];
+    int _count = dse_physics3d_get_trigger_events(_ent_buf, _type_buf, 256);
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(_ent_buf[_i * 2])); lua_setfield(L, -2, "trigger_entity");
+        lua_pushinteger(L, static_cast<lua_Integer>(_ent_buf[_i * 2 + 1])); lua_setfield(L, -2, "other_entity");
+        lua_pushinteger(L, _type_buf[_i]); lua_setfield(L, -2, "type");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsPhysics3DBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_rigidbody_3d", L_dse_rigidbody3d_add},
         {"add_box_collider_3d", L_dse_box_collider3d_add},
@@ -245,6 +320,10 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"set_collision_layer", L_dse_collision_set_layer},
         {"set_collider_trigger", L_dse_collider_set_trigger},
         {"set_collider_material", L_dse_collider_set_material},
+        {"physics3d_overlap_sphere", L_dse_physics3d_overlap_sphere},
+        {"physics3d_overlap_box", L_dse_physics3d_overlap_box},
+        {"physics3d_get_collision_events", L_dse_physics3d_get_collision_events},
+        {"physics3d_get_trigger_events", L_dse_physics3d_get_trigger_events},
     });
     lua_pop(L, 2);
 }

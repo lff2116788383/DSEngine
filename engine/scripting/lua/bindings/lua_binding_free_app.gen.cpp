@@ -49,6 +49,12 @@ int L_dse_input_get_touch_count(lua_State* L) {
 void RegisterFreeFn_app(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "app");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "app");
+    }
     helper::RegisterBindings(L, {
         {"get_delta_time", L_dse_app_get_delta_time},
         {"get_target_fps", L_dse_app_get_target_fps},

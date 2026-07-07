@@ -285,6 +285,12 @@ int L_dse_audio_listener_2d_add(lua_State* L) {
 void Register2DSystemsBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_parallax", L_dse_parallax_add},
         {"parallax_add_layer", L_dse_parallax_add_layer},

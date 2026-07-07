@@ -32,6 +32,12 @@ int L_dse_audio_source_is_playing(lua_State* L) {
 void RegisterFreeFn_audio(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "audio");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "audio");
+    }
     helper::RegisterBindings(L, {
         {"fade_out_all_sfx", L_dse_audio_fade_out_all_sfx},
         {"source_is_playing", L_dse_audio_source_is_playing},

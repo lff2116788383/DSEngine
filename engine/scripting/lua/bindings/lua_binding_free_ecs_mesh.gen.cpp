@@ -79,6 +79,12 @@ int L_dse_morph_simple_set_enabled(lua_State* L) {
 void RegisterEcsRenderingMeshBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"set_mesh_depth_state", L_dse_mesh_renderer_set_depth_state},
         {"set_mesh_material_scalar", L_dse_mesh_renderer_set_material_scalar},

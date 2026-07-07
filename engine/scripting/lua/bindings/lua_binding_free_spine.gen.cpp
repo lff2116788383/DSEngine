@@ -35,6 +35,12 @@ int L_dse_spine_set_animation(lua_State* L) {
 void RegisterSpineBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"spineaddrenderer", L_dse_spine_add_renderer},
         {"spinesetanimation", L_dse_spine_set_animation},

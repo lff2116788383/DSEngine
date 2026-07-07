@@ -47,6 +47,12 @@ int L_dse_decal_set_full(lua_State* L) {
 void RegisterEcsRenderingPostBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"set_post_process_color_lut", L_dse_post_process_set_color_lut},
         {"add_decal", L_dse_decal_add_simple},

@@ -73,6 +73,12 @@ int L_dse_meshlet_cull_begin_frame(lua_State* L) {
 void RegisterMeshletBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "meshlet");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "meshlet");
+    }
     helper::RegisterBindings(L, {
         {"serialize", L_dse_meshlet_serialize},
         {"deserialize", L_dse_meshlet_deserialize},

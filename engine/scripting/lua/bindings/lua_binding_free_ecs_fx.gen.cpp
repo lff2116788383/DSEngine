@@ -111,6 +111,12 @@ int L_dse_hair_set_lod(lua_State* L) {
 void RegisterEcsRenderingFxBindings(lua_State* L) {
     lua_getglobal(L, "dse");
     lua_getfield(L, -1, "ecs");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "ecs");
+    }
     helper::RegisterBindings(L, {
         {"add_steering", L_dse_steering_add},
         {"lod_add_level", L_dse_lod_add_level},

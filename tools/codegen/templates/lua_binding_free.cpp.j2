@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+{% if group.group.startswith("world_") %}
+#include <vector>
+#include <string>
+#include <cstring>
+{% endif %}
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -28,6 +33,8 @@ int L_{{ func_id }}(lua_State* L) {
     float {{ op.name }}[4] = {0, 0, 0, 0};
 {% elif op.type == "float6" %}
     float {{ op.name }}[6] = {0, 0, 0, 0, 0, 0};
+{% elif op.type == "float_array" %}
+    float {{ op.name }}[{{ op.size }}] = { {{ ", ".join(["0"] * op.size) }} };
 {% elif op.type == "double" %}
     double {{ op.name }} = 0;
 {% elif op.type == "float" %}
@@ -38,8 +45,43 @@ int L_{{ func_id }}(lua_State* L) {
     uint32_t {{ op.name }} = 0;
 {% endif %}
 {% endfor %}
+{# --- Table input: extract fields from a Lua table with defaults --- #}
+{% if fn.table_input is defined and fn.table_input %}
+{% for tf in fn.table_input.fields %}
+{% if tf.type == "int" %}
+    int {{ tf.name }} = {{ tf.default }};
+{% elif tf.type == "uint32" %}
+    uint32_t {{ tf.name }} = {{ tf.default }};
+{% elif tf.type == "float" %}
+    float {{ tf.name }} = {{ tf.default }}f;
+{% elif tf.type == "string" %}
+    const char* {{ tf.name }} = {{ tf.default }};
+{% endif %}
+{% endfor %}
+    if (lua_istable(L, 1)) {
+{% for tf in fn.table_input.fields %}
+        lua_getfield(L, 1, "{{ tf.key }}");
+{% if tf.type == "int" %}
+        if (!lua_isnil(L, -1)) {{ tf.name }} = static_cast<int>(lua_tointeger(L, -1));
+{% elif tf.type == "uint32" %}
+        if (!lua_isnil(L, -1)) {{ tf.name }} = static_cast<uint32_t>(lua_tointeger(L, -1));
+{% elif tf.type == "float" %}
+        if (!lua_isnil(L, -1)) {{ tf.name }} = static_cast<float>(lua_tonumber(L, -1));
+{% elif tf.type == "string" %}
+        if (!lua_isnil(L, -1)) {{ tf.name }} = lua_tostring(L, -1);
+{% endif %}
+        lua_pop(L, 1);
+{% endfor %}
+    }
+{% endif %}
 {# --- Read input params and build call --- #}
 {% set call_args = [] %}
+{# --- Table input args go first --- #}
+{% if fn.table_input is defined and fn.table_input %}
+{% for tf in fn.table_input.fields %}
+{% set _ = call_args.append(tf.name) %}
+{% endfor %}
+{% endif %}
 {% for p in fn.params %}
 {% if p.type == "entity" %}
     uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
@@ -91,15 +133,26 @@ int L_{{ func_id }}(lua_State* L) {
 {% for v in fn.get("validators", []) %}
     {{ v }}
 {% endfor %}
+{# --- String array param (table of strings -> C array) --- #}
+{% if fn.string_array_param is defined and fn.string_array_param %}
+{% set sap = fn.string_array_param %}
+    std::vector<std::string> {{ sap.name }}_storage;
+    std::vector<const char*> {{ sap.name }};
+    if (lua_istable(L, {{ sap.stack_index }})) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, {{ sap.stack_index }}));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, {{ sap.stack_index }}, _i);
+            if (lua_isstring(L, -1)) {{ sap.name }}_storage.emplace_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+        for (const auto& _s : {{ sap.name }}_storage) {{ sap.name }}.push_back(_s.c_str());
+    }
+{% set _ = call_args.append(sap.name ~ ".data()") %}
+{% set _ = call_args.append("static_cast<int>(" ~ sap.name ~ ".size())") %}
+{% endif %}
 {# --- Build output param args --- #}
 {% for op in fn.get("out_params", []) %}
-{% if op.type == "float3" %}
-{% set _ = call_args.append(op.name) %}
-{% elif op.type == "float2" %}
-{% set _ = call_args.append(op.name) %}
-{% elif op.type == "float4" %}
-{% set _ = call_args.append(op.name) %}
-{% elif op.type == "float6" %}
+{% if op.type in ("float3", "float2", "float4", "float6", "float_array") %}
 {% set _ = call_args.append(op.name) %}
 {% elif op.type == "double" %}
 {% set _ = call_args.append("&" + op.name) %}
@@ -107,6 +160,28 @@ int L_{{ func_id }}(lua_State* L) {
 {% set _ = call_args.append("&" + op.name) %}
 {% endif %}
 {% endfor %}
+{# --- Buffer output declaration + args --- #}
+{% if fn.buffer_output is defined and fn.buffer_output %}
+{% set bo = fn.buffer_output %}
+{% if bo.mode == "trigger_dual" %}
+    uint32_t _ent_buf[{{ bo.max_count * 2 }}];
+    int _type_buf[{{ bo.max_count }}];
+{% set _ = call_args.append("_ent_buf") %}
+{% set _ = call_args.append("_type_buf") %}
+{% set _ = call_args.append(bo.max_count | string) %}
+{% else %}
+    {{ bo.elem_type }} _buf[{{ bo.max_count * bo.stride }}];
+{% set _ = call_args.append("_buf") %}
+{% set _ = call_args.append(bo.max_count | string) %}
+{% endif %}
+{% endif %}
+{# --- Null-separated buffer return --- #}
+{% if fn.null_sep_buffer_return is defined and fn.null_sep_buffer_return %}
+{% set nsb = fn.null_sep_buffer_return %}
+    char _buf[{{ nsb.buf_size }}];
+{% set _ = call_args.append("_buf") %}
+{% set _ = call_args.append("sizeof(_buf)") %}
+{% endif %}
 {# --- Call the C function(s) --- #}
 {% if fn.calls is defined and fn.calls %}
 {# Multi-call function #}
@@ -126,10 +201,112 @@ int L_{{ func_id }}(lua_State* L) {
 {% elif ret.type == "string" %}
     const char* _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% endif %}
+{% elif fn.null_sep_buffer_return is defined and fn.null_sep_buffer_return %}
+    int _count = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif fn.buffer_output is defined and fn.buffer_output %}
+    int _count = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% else %}
     {{ fn.c_name }}({{ call_args | join(", ") }});
 {% endif %}
-{# --- Push return values --- #}
+{# ==== Return value handling ==== #}
+{% if fn.table_return is defined and fn.table_return %}
+{# --- Table return: assemble out_params into a Lua table --- #}
+    lua_newtable(L);
+{% for tf in fn.table_return.fields %}
+{% if tf.push == "integer" %}
+    lua_pushinteger(L, {{ tf.source }});
+{% elif tf.push == "integer_cast" %}
+    lua_pushinteger(L, static_cast<lua_Integer>({{ tf.source }}));
+{% elif tf.push == "number" %}
+    lua_pushnumber(L, {{ tf.source }});
+{% elif tf.push == "boolean" %}
+    lua_pushboolean(L, {{ tf.source }});
+{% endif %}
+    lua_setfield(L, -2, "{{ tf.key }}");
+{% endfor %}
+    return 1;
+{% elif fn.conditional_return is defined and fn.conditional_return %}
+{# --- Conditional return: push extra values on success --- #}
+{% set cr = fn.conditional_return %}
+    if (_ret) {
+        lua_pushboolean(L, 1);
+{% for extra in cr.on_true_extra %}
+        lua_pushinteger(L, static_cast<lua_Integer>({{ extra }}));
+{% endfor %}
+        return {{ 1 + cr.on_true_extra | length }};
+    }
+    lua_pushboolean(L, 0);
+    return 1;
+{% elif fn.buffer_output is defined and fn.buffer_output %}
+{# --- Buffer output → Lua table --- #}
+{% set bo = fn.buffer_output %}
+{% if bo.mode == "flat_int" %}
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushinteger(L, static_cast<lua_Integer>(_buf[_i]));
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+{% elif bo.mode == "flat_num" %}
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_pushnumber(L, _buf[_i]);
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+{% elif bo.mode == "vec3" %}
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_newtable(L);
+        lua_pushnumber(L, _buf[_i * 3 + 0]); lua_setfield(L, -2, "x");
+        lua_pushnumber(L, _buf[_i * 3 + 1]); lua_setfield(L, -2, "y");
+        lua_pushnumber(L, _buf[_i * 3 + 2]); lua_setfield(L, -2, "z");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+{% elif bo.mode == "collision_11f" %}
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        float* _p = _buf + _i * 11;
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[0])); lua_setfield(L, -2, "type");
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[1])); lua_setfield(L, -2, "entity_a");
+        lua_pushinteger(L, static_cast<lua_Integer>(_p[2])); lua_setfield(L, -2, "entity_b");
+        lua_pushnumber(L, _p[3]); lua_setfield(L, -2, "cx");
+        lua_pushnumber(L, _p[4]); lua_setfield(L, -2, "cy");
+        lua_pushnumber(L, _p[5]); lua_setfield(L, -2, "cz");
+        lua_pushnumber(L, _p[6]); lua_setfield(L, -2, "nx");
+        lua_pushnumber(L, _p[7]); lua_setfield(L, -2, "ny");
+        lua_pushnumber(L, _p[8]); lua_setfield(L, -2, "nz");
+        lua_pushnumber(L, _p[9]); lua_setfield(L, -2, "impulse");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+{% elif bo.mode == "trigger_dual" %}
+    lua_newtable(L);
+    for (int _i = 0; _i < _count; ++_i) {
+        lua_newtable(L);
+        lua_pushinteger(L, static_cast<lua_Integer>(_ent_buf[_i * 2])); lua_setfield(L, -2, "trigger_entity");
+        lua_pushinteger(L, static_cast<lua_Integer>(_ent_buf[_i * 2 + 1])); lua_setfield(L, -2, "other_entity");
+        lua_pushinteger(L, _type_buf[_i]); lua_setfield(L, -2, "type");
+        lua_rawseti(L, -2, _i + 1);
+    }
+    return 1;
+{% endif %}
+{% elif fn.null_sep_buffer_return is defined and fn.null_sep_buffer_return %}
+{# --- Null-separated buffer → Lua table --- #}
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
+    return 1;
+{% else %}
+{# --- Standard return path --- #}
 {% set ns2 = namespace(ret_count=0) %}
 {% if fn.get("returns", []) %}
 {% set ret = fn.returns[0] %}
@@ -186,6 +363,7 @@ int L_{{ func_id }}(lua_State* L) {
 {% endif %}
 {% endfor %}
     return {{ ns2.ret_count }};
+{% endif %}
 }
 
 {% endfor %}
@@ -196,7 +374,14 @@ void {{ group.register_func }}(lua_State* L) {
     lua_getglobal(L, "{{ group.lua_path[0] }}");
 {% elif group.lua_path | length == 2 %}
     lua_getglobal(L, "{{ group.lua_path[0] }}");
-    lua_getfield(L, -1, "{{ group.lua_path[1] }}");
+{% set sub = group.lua_path[1] %}
+    lua_getfield(L, -1, "{{ sub }}");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, "{{ sub }}");
+    }
 {% endif %}
     helper::RegisterBindings(L, {
 {% for fn in group.functions %}
