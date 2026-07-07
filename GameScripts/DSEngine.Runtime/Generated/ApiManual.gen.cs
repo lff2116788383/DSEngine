@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 namespace DSEngine.Api;
 
 public static class AiLod {
-    public static void Register(uint e) { Native.dse_ai_lod_register(e); }
+    public static void Register(uint e, float importance) { Native.dse_ai_lod_register(e, importance); }
     public static void Unregister(uint e) { Native.dse_ai_lod_unregister(e); }
     public static int ShouldTick(uint e) { return Native.dse_ai_lod_should_tick(e); }
     public static int GetLevel(uint e) { return Native.dse_ai_lod_get_level(e); }
@@ -79,9 +79,9 @@ public static class Assets {
 }
 
 public static class Atlas {
-    public static uint Load(string path) { return Native.dse_atlas_load(path); }
-    public static int EntryCount(uint atlas) { return Native.dse_atlas_entry_count(atlas); }
-    public static void GetEntryUv(uint atlas, int index, [Out] float[] outUv) { Native.dse_atlas_get_entry_uv(atlas, index, outUv); }
+    public static int Load(string path) { return Native.dse_atlas_load(path); }
+    public static int EntryCount(int atlas) { return Native.dse_atlas_entry_count(atlas); }
+    public static void GetEntryUv(int atlas, string name, [Out] float[] outUv) { Native.dse_atlas_get_entry_uv(atlas, name, outUv); }
 }
 
 public static class Atmosphere {
@@ -104,6 +104,23 @@ public static class Audio {
     public static void SetMasterVolume(float volume) { Native.dse_audio_set_master_volume(volume); }
     public static void SetBgmVolume(float volume) { Native.dse_audio_set_bgm_volume(volume); }
     public static void SetSfxVolume(float volume) { Native.dse_audio_set_sfx_volume(volume); }
+    public static void PlaySfxRandom(string path, float volume, float pitchMin, float pitchMax) { Native.dse_audio_play_sfx_random(path, volume, pitchMin, pitchMax); }
+    public static int BusSetVolume(string name, float volume) { return Native.dse_audio_bus_set_volume(name, volume); }
+    public static int BusSetMuted(string name, int muted) { return Native.dse_audio_bus_set_muted(name, muted); }
+    public static int BusCreate(string name, string parent, float volume) { return Native.dse_audio_bus_create(name, parent, volume); }
+    public static int BusRemove(string name) { return Native.dse_audio_bus_remove(name); }
+    public static int BusAddEffect(string busName, int type, float cutoffHz, float q, float delayTimeMs, float feedback, float wetMix, float roomSize, float damping) { return Native.dse_audio_bus_add_effect(busName, type, cutoffHz, q, delayTimeMs, feedback, wetMix, roomSize, damping); }
+    public static int BusRemoveEffect(string busName, int index) { return Native.dse_audio_bus_remove_effect(busName, index); }
+    public static int BusGetNames([Out] byte[] @out, int cap) { return Native.dse_audio_bus_get_names(@out, cap); }
+    public static int SnapshotSave(string name) { return Native.dse_audio_snapshot_save(name); }
+    public static int SnapshotLoad(string name) { return Native.dse_audio_snapshot_load(name); }
+    public static int SnapshotList([Out] byte[] @out, int cap) { return Native.dse_audio_snapshot_list(@out, cap); }
+    public static void LodInit(float fullDistance, int maxActiveSources) { Native.dse_audio_lod_init(fullDistance, maxActiveSources); }
+    public static uint LodRegisterSource(string path, float x, float y, float z, float maxDistance, float priority) { return Native.dse_audio_lod_register_source(path, x, y, z, maxDistance, priority); }
+    public static void LodTick(float lx, float ly, float lz, float dt) { Native.dse_audio_lod_tick(lx, ly, lz, dt); }
+    public static int LodGetStats(out int outStats) { return Native.dse_audio_lod_get_stats(out outStats); }
+    public static int LodIsAudible(uint sourceId) { return Native.dse_audio_lod_is_audible(sourceId); }
+    public static void LodShutdown() { Native.dse_audio_lod_shutdown(); }
 }
 
 public static class AudioListener {
@@ -111,7 +128,7 @@ public static class AudioListener {
 }
 
 public static class AudioListener2D {
-    public static void Add(uint e) { Native.dse_audio_listener_2d_add(e); }
+    public static void Add(uint e, float globalVolume) { Native.dse_audio_listener_2d_add(e, globalVolume); }
 }
 
 public static class AudioSource {
@@ -125,12 +142,13 @@ public static class AudioSource {
     public static void Set3dDistance(uint e, float minDistance, float maxDistance, float rolloff) { Native.dse_audio_source_set_3d_distance(e, minDistance, maxDistance, rolloff); }
     public static void SetBus(uint e, string busName) { Native.dse_audio_source_set_bus(e, busName); }
     public static int IsPlaying(uint e) { return Native.dse_audio_source_is_playing(e); }
+    public static int GetState(uint e, out int outFlags, out float outParams, out long outRuntimeHandle, out long outClipSize, [Out] byte[] outPath, int pathCap) { return Native.dse_audio_source_get_state(e, out outFlags, out outParams, out outRuntimeHandle, out outClipSize, outPath, pathCap); }
 }
 
 public static class AudioSpatial2D {
-    public static void Add(uint e, uint sourceEntity, float minDist, float maxDist) { Native.dse_audio_spatial_2d_add(e, sourceEntity, minDist, maxDist); }
+    public static void Add(uint e, float minDist, float maxDist) { Native.dse_audio_spatial_2d_add(e, minDist, maxDist); }
     public static void SetRange(uint e, float minDist, float maxDist) { Native.dse_audio_spatial_2d_set_range(e, minDist, maxDist); }
-    public static void SetAttenuation(uint e, float rolloff) { Native.dse_audio_spatial_2d_set_attenuation(e, rolloff); }
+    public static void SetAttenuation(uint e, int model, float rolloff) { Native.dse_audio_spatial_2d_set_attenuation(e, model, rolloff); }
 }
 
 public static class BoneAttachment {
@@ -154,18 +172,18 @@ public static class Buoyancy {
 }
 
 public static class Camera {
-    public static void Add(uint e) { Native.dse_camera_add(e); }
+    public static void Add(uint e, float orthoSize, int priority) { Native.dse_camera_add(e, orthoSize, priority); }
     public static void SetPriority(uint e, int priority) { Native.dse_camera_set_priority(e, priority); }
     public static void SetEnabled(uint e, int enabled) { Native.dse_camera_set_enabled(e, enabled); }
-    public static void SetFollow(uint e, uint target, float lerp) { Native.dse_camera_set_follow(e, target, lerp); }
+    public static void SetFollow(uint e, uint target, float damping, float deadZoneX, float deadZoneY, float offsetX, float offsetY) { Native.dse_camera_set_follow(e, target, damping, deadZoneX, deadZoneY, offsetX, offsetY); }
 }
 
 public static class Camera2D {
-    public static void Add(uint e, uint target) { Native.dse_camera_controller_2d_add(e, target); }
-    public static void Shake(float intensity, float duration) { Native.dse_camera_2d_shake(intensity, duration); }
-    public static void SetZoom(float zoom) { Native.dse_camera_2d_set_zoom(zoom); }
-    public static void SetBounds(float minX, float minY, float maxX, float maxY) { Native.dse_camera_2d_set_bounds(minX, minY, maxX, maxY); }
-    public static void SetLookAhead(float distance, float speed) { Native.dse_camera_2d_set_look_ahead(distance, speed); }
+    public static void Add(uint e) { Native.dse_camera_controller_2d_add(e); }
+    public static void Shake(uint e, float trauma) { Native.dse_camera_2d_shake(e, trauma); }
+    public static void SetZoom(uint e, float zoom) { Native.dse_camera_2d_set_zoom(e, zoom); }
+    public static void SetBounds(uint e, float minX, float minY, float maxX, float maxY) { Native.dse_camera_2d_set_bounds(e, minX, minY, maxX, maxY); }
+    public static void SetLookAhead(uint e, float lax, float lay) { Native.dse_camera_2d_set_look_ahead(e, lax, lay); }
 }
 
 public static class CapsuleCollider3D {
@@ -173,9 +191,6 @@ public static class CapsuleCollider3D {
 }
 
 public static class Character3D {
-    public static void SetSlideParams(uint e, float slideSpeed, float slideDuration) { Native.dse_character_set_slide_params(e, slideSpeed, slideDuration); }
-    public static void SetClimbParams(uint e, float climbSpeed, float checkDistance) { Native.dse_character_set_climb_params(e, climbSpeed, checkDistance); }
-    public static void SetSwimParams(uint e, float swimSpeed, float waterLevel) { Native.dse_character_set_swim_params(e, swimSpeed, waterLevel); }
     public static int CheckGround(uint e, [Out] float[] outNormal) { return Native.dse_character_check_ground(e, outNormal); }
 }
 
@@ -224,6 +239,113 @@ public static class Components {
     public static void PointLightAdd(uint e) { Native.dse_point_light_add(e); }
     public static void SpotLightAdd(uint e) { Native.dse_spot_light_add(e); }
     public static void SkyLightAdd(uint e) { Native.dse_sky_light_add(e); }
+    public static int UuidGet(uint e, [Out] byte[] @out, int cap) { return Native.dse_uuid_get(e, @out, cap); }
+    public static int UuidSet(uint e, string uuidStr, [Out] byte[] @out, int cap) { return Native.dse_uuid_set(e, uuidStr, @out, cap); }
+    public static uint UuidResolve(string uuidStr) { return Native.dse_uuid_resolve(uuidStr); }
+    public static int EcsFindEntitiesByMeshPath(string meshPath, [Out] uint[] @out, int cap) { return Native.dse_ecs_find_entities_by_mesh_path(meshPath, @out, cap); }
+    public static int EcsFindEntitiesWith(string component, [Out] uint[] @out, int cap) { return Native.dse_ecs_find_entities_with(component, @out, cap); }
+    public static int EcsCountEntitiesWith(string component) { return Native.dse_ecs_count_entities_with(component); }
+    public static int EcsHasComponent(uint e, string component) { return Native.dse_ecs_has_component(e, component); }
+    public static int EcsGetQueryableComponents([Out] byte[] @out, int cap) { return Native.dse_ecs_get_queryable_components(@out, cap); }
+    public static int EcsGetWorldAabb(uint e, out float outMinMax) { return Native.dse_ecs_get_world_aabb(e, out outMinMax); }
+    public static int EcsGetLocalAabb(uint e, out float outMinMax) { return Native.dse_ecs_get_local_aabb(e, out outMinMax); }
+    public static void EcsSetTimeScale(uint e, float scale) { Native.dse_ecs_set_time_scale(e, scale); }
+    public static float EcsGetTimeScale(uint e) { return Native.dse_ecs_get_time_scale(e); }
+    public static void EcsAddTransform(uint e, float x, float y, float z, float sx, float sy, float sz) { Native.dse_ecs_add_transform(e, x, y, z, sx, sy, sz); }
+    public static void EcsAddParent(uint e, uint parent) { Native.dse_ecs_add_parent(e, parent); }
+    public static void EcsSetParent(uint e, uint parent) { Native.dse_ecs_set_parent(e, parent); }
+    public static uint EcsGetParent(uint e) { return Native.dse_ecs_get_parent(e); }
+    public static void EcsClearParent(uint e) { Native.dse_ecs_clear_parent(e); }
+    public static void EcsAddScript(uint e, string path) { Native.dse_ecs_add_script(e, path); }
+    public static void EcsSetScriptPath(uint e, string path) { Native.dse_ecs_set_script_path(e, path); }
+    public static int EcsGetScriptPath(uint e, [Out] byte[] @out, int cap) { return Native.dse_ecs_get_script_path(e, @out, cap); }
+    public static void EcsSetScriptEnabled(uint e, int enabled) { Native.dse_ecs_set_script_enabled(e, enabled); }
+    public static int EcsGetScriptEnabled(uint e) { return Native.dse_ecs_get_script_enabled(e); }
+    public static int DirLightHas(uint e) { return Native.dse_dir_light_has(e); }
+    public static int PointLightHas(uint e) { return Native.dse_point_light_has(e); }
+    public static int SpotLightHas(uint e) { return Native.dse_spot_light_has(e); }
+    public static int SkyLightHas(uint e) { return Native.dse_sky_light_has(e); }
+    public static int DirLightGetShadowParams(uint e, out int outCastShadow, out float outStrength, out float outC0, out float outC1, out float outC2, out float outLambda) { return Native.dse_dir_light_get_shadow_params(e, out outCastShadow, out outStrength, out outC0, out outC1, out outC2, out outLambda); }
+    public static int FontLoad(string fontId, string ttfPath) { return Native.dse_font_load(fontId, ttfPath); }
+    public static int FontLoadCjk(string fontId, string ttfPath) { return Native.dse_font_load_cjk(fontId, ttfPath); }
+    public static void FontUnload(string fontId) { Native.dse_font_unload(fontId); }
+    public static int FontSetDefault(string fontId) { return Native.dse_font_set_default(fontId); }
+    public static float FontMeasure(string text, string fontId, float fontSize) { return Native.dse_font_measure(text, fontId, fontSize); }
+    public static float FontLineHeight(string fontId, float fontSize) { return Native.dse_font_line_height(fontId, fontSize); }
+    public static uint FontGetTexture(string fontId) { return Native.dse_font_get_texture(fontId); }
+    public static void SpineAddRenderer(uint e, string skelPath, string atlasPath) { Native.dse_spine_add_renderer(e, skelPath, atlasPath); }
+    public static void SpineSetAnimation(uint e, string animName, int loop) { Native.dse_spine_set_animation(e, animName, loop); }
+    public static void WaterAdd(uint e) { Native.dse_water_add(e); }
+    public static void WaterSet(uint e, int enabled, float waterLevel, float dr, float dg, float db, float sr, float sg, float sb, float maxDepth, float transparency, float waveAmp, float waveFreq, float waveSpeed, float wdirX, float wdirY, float refraction, float reflection, float specPower, float causticInt, float causticScale, float foamInt, float foamThreshold, float ufogDensity, float ufogR, float ufogG, float ufogB) { Native.dse_water_set(e, enabled, waterLevel, dr, dg, db, sr, sg, sb, maxDepth, transparency, waveAmp, waveFreq, waveSpeed, wdirX, wdirY, refraction, reflection, specPower, causticInt, causticScale, foamInt, foamThreshold, ufogDensity, ufogR, ufogG, ufogB); }
+    public static int WaterGet(uint e, out int outEnabled, out float outWaterLevel, out float outDeepRgb, out float outShallowRgb, out float outMaxDepth, out float outTransparency, out float outWave, out float outWdir, out float outRefraction, out float outReflection, out float outSpecPower) { return Native.dse_water_get(e, out outEnabled, out outWaterLevel, out outDeepRgb, out outShallowRgb, out outMaxDepth, out outTransparency, out outWave, out outWdir, out outRefraction, out outReflection, out outSpecPower); }
+    public static void GrassAdd(uint e, float density, float spawnRadius, float bladeHeight, float bladeWidth) { Native.dse_grass_add(e, density, spawnRadius, bladeHeight, bladeWidth); }
+    public static void GrassSetParams(uint e, float density, float spawnRadius, float bladeHeight, float bladeWidth, float bladeHeightVar, float chunkSize, int seed) { Native.dse_grass_set_params(e, density, spawnRadius, bladeHeight, bladeWidth, bladeHeightVar, chunkSize, seed); }
+    public static void GrassSetColor(uint e, float br, float bg, float bb, float tr, float tg, float tb) { Native.dse_grass_set_color(e, br, bg, bb, tr, tg, tb); }
+    public static void GrassSetWind(uint e, float dx, float dy, float speed, float strength, float turbulence) { Native.dse_grass_set_wind(e, dx, dy, speed, strength, turbulence); }
+    public static void GrassSetLod(uint e, float nearDist, float farDist, int castShadow, float shadowDist) { Native.dse_grass_set_lod(e, nearDist, farDist, castShadow, shadowDist); }
+    public static void GrassSetEnabled(uint e, int enabled) { Native.dse_grass_set_enabled(e, enabled); }
+    public static int GrassGetStats(uint e) { return Native.dse_grass_get_stats(e); }
+    public static void FoliageAdd(uint e) { Native.dse_foliage_add(e); }
+    public static void TreeAdd(uint e, string meshPath) { Native.dse_tree_add(e, meshPath); }
+    public static void DynamicObstacleAdd(uint e, int shape) { Native.dse_dynamic_obstacle_add(e, shape); }
+    public static void NavmeshRebakeAdd(uint e) { Native.dse_navmesh_rebake_add(e); }
+    public static void PhysicsLodInit(float fullDistance, float reducedDistance, float simplifiedDistance) { Native.dse_physics_lod_init(fullDistance, reducedDistance, simplifiedDistance); }
+    public static void PhysicsLodRegisterBody(uint entityId, float x, float y, float z, float radius) { Native.dse_physics_lod_register_body(entityId, x, y, z, radius); }
+    public static int PhysicsLodEvaluate(float camX, float camY, float camZ, uint frame, out uint outIds, int cap) { return Native.dse_physics_lod_evaluate(camX, camY, camZ, frame, out outIds, cap); }
+    public static int PhysicsLodGetStats(out int outStats) { return Native.dse_physics_lod_get_stats(out outStats); }
+    public static void PhysicsLodWake(uint entityId) { Native.dse_physics_lod_wake(entityId); }
+    public static void PhysicsLodSleep(uint entityId) { Native.dse_physics_lod_sleep(entityId); }
+    public static void PhysicsLodShutdown() { Native.dse_physics_lod_shutdown(); }
+    public static void OpenWorldP2p5Shutdown() { Native.dse_open_world_p2p5_shutdown(); }
+    public static int CutsceneCreate() { return Native.dse_cutscene_create(); }
+    public static void CutsceneDestroy(int playerId) { Native.dse_cutscene_destroy(playerId); }
+    public static void CutsceneShutdown() { Native.dse_cutscene_shutdown(); }
+    public static void CutsceneAddSequence(int playerId, string name, float duration) { Native.dse_cutscene_add_sequence(playerId, name, duration); }
+    public static void CutsceneRemoveSequence(int playerId, string name) { Native.dse_cutscene_remove_sequence(playerId, name); }
+    public static void CutsceneAddCameraKeyframe(int playerId, string seqName, float time, float px, float py, float pz, float lx, float ly, float lz, float fov) { Native.dse_cutscene_add_camera_keyframe(playerId, seqName, time, px, py, pz, lx, ly, lz, fov); }
+    public static void CutsceneAddPropertyKeyframe(int playerId, string seqName, string trackName, float time, float value, int interp) { Native.dse_cutscene_add_property_keyframe(playerId, seqName, trackName, time, value, interp); }
+    public static void CutsceneAddEvent(int playerId, string seqName, float time, string eventName, string payload) { Native.dse_cutscene_add_event(playerId, seqName, time, eventName, payload); }
+    public static void CutsceneAddAudioCue(int playerId, string seqName, float time, string path, float volume, int loop) { Native.dse_cutscene_add_audio_cue(playerId, seqName, time, path, volume, loop); }
+    public static void CutscenePlay(int playerId, string seqName) { Native.dse_cutscene_play(playerId, seqName); }
+    public static void CutscenePause(int playerId) { Native.dse_cutscene_pause(playerId); }
+    public static void CutsceneResume(int playerId) { Native.dse_cutscene_resume(playerId); }
+    public static void CutsceneStop(int playerId) { Native.dse_cutscene_stop(playerId); }
+    public static void CutsceneSeek(int playerId, float time) { Native.dse_cutscene_seek(playerId, time); }
+    public static float CutsceneGetTime(int playerId) { return Native.dse_cutscene_get_time(playerId); }
+    public static int CutsceneGetState(int playerId) { return Native.dse_cutscene_get_state(playerId); }
+    public static void CutsceneSetPlayRate(int playerId, float rate) { Native.dse_cutscene_set_play_rate(playerId, rate); }
+    public static void CutsceneUpdate(int playerId, float dt) { Native.dse_cutscene_update(playerId, dt); }
+    public static int AiTreeCreate(string name) { return Native.dse_ai_tree_create(name); }
+    public static void AiTreeDestroy(int treeId) { Native.dse_ai_tree_destroy(treeId); }
+    public static int AiTreeTick(int treeId, float dt) { return Native.dse_ai_tree_tick(treeId, dt); }
+    public static void AiTreeReset(int treeId) { Native.dse_ai_tree_reset(treeId); }
+    public static void AiShutdown() { Native.dse_ai_shutdown(); }
+    public static void AiBbSetBool(int treeId, string key, int v) { Native.dse_ai_bb_set_bool(treeId, key, v); }
+    public static void AiBbSetInt(int treeId, string key, int v) { Native.dse_ai_bb_set_int(treeId, key, v); }
+    public static void AiBbSetFloat(int treeId, string key, float v) { Native.dse_ai_bb_set_float(treeId, key, v); }
+    public static void AiBbSetString(int treeId, string key, string v) { Native.dse_ai_bb_set_string(treeId, key, v); }
+    public static void AiBbSetVec3(int treeId, string key, float x, float y, float z) { Native.dse_ai_bb_set_vec3(treeId, key, x, y, z); }
+    public static int AiBbGetBool(int treeId, string key) { return Native.dse_ai_bb_get_bool(treeId, key); }
+    public static int AiBbGetInt(int treeId, string key) { return Native.dse_ai_bb_get_int(treeId, key); }
+    public static float AiBbGetFloat(int treeId, string key) { return Native.dse_ai_bb_get_float(treeId, key); }
+    public static int AiBbGetString(int treeId, string key, [Out] byte[] @out, int cap) { return Native.dse_ai_bb_get_string(treeId, key, @out, cap); }
+    public static int AiBbGetVec3(int treeId, string key, [Out] float[] outXyz) { return Native.dse_ai_bb_get_vec3(treeId, key, outXyz); }
+    public static void AiBeginSequence(int treeId, string name) { Native.dse_ai_begin_sequence(treeId, name); }
+    public static void AiBeginSelector(int treeId, string name) { Native.dse_ai_begin_selector(treeId, name); }
+    public static void AiBeginParallel(int treeId, int requireOne, string name) { Native.dse_ai_begin_parallel(treeId, requireOne, name); }
+    public static void AiEndComposite(int treeId) { Native.dse_ai_end_composite(treeId); }
+    public static void AiAddInverter(int treeId, string name) { Native.dse_ai_add_inverter(treeId, name); }
+    public static void AiAddSucceeder(int treeId, string name) { Native.dse_ai_add_succeeder(treeId, name); }
+    public static void AiAddRepeater(int treeId, string name, int maxRepeats) { Native.dse_ai_add_repeater(treeId, name, maxRepeats); }
+    public static int AiGoapCreate() { return Native.dse_ai_goap_create(); }
+    public static void AiGoapDestroy(int plannerId) { Native.dse_ai_goap_destroy(plannerId); }
+    public static void AiGoapActionBegin(int plannerId, string name, float cost) { Native.dse_ai_goap_action_begin(plannerId, name, cost); }
+    public static void AiGoapActionPrecondition(int plannerId, string key, int value) { Native.dse_ai_goap_action_precondition(plannerId, key, value); }
+    public static void AiGoapActionEffect(int plannerId, string key, int value) { Native.dse_ai_goap_action_effect(plannerId, key, value); }
+    public static void AiGoapActionCommit(int plannerId) { Native.dse_ai_goap_action_commit(plannerId); }
+    public static void AiGoapStateClear(int plannerId) { Native.dse_ai_goap_state_clear(plannerId); }
+    public static void AiGoapStateSet(int plannerId, int which, string key, int value) { Native.dse_ai_goap_state_set(plannerId, which, key, value); }
+    public static int AiGoapPlan(int plannerId, [Out] byte[] @out, int cap) { return Native.dse_ai_goap_plan(plannerId, @out, cap); }
 }
 
 public static class DayNight {
@@ -237,25 +359,32 @@ public static class DayNight {
 }
 
 public static class Decal {
-    public static void Add(uint e, uint textureHandle, float w, float h, float d) { Native.dse_decal_add(e, textureHandle, w, h, d); }
-    public static void Set(uint e, float r, float g, float b, float a, float opacity) { Native.dse_decal_set(e, r, g, b, a, opacity); }
+    public static void Add(uint e, uint albedoTexture) { Native.dse_decal_add(e, albedoTexture); }
+    public static void Set(uint e, float r, float g, float b, float a, float angleFade) { Native.dse_decal_set(e, r, g, b, a, angleFade); }
+    public static void AddSimple(uint e) { Native.dse_decal_add_simple(e); }
+    public static void SetFull(uint e, int enabled, int hasTexture, uint texture, float r, float g, float b, float a, float angleFade) { Native.dse_decal_set_full(e, enabled, hasTexture, texture, r, g, b, a, angleFade); }
 }
 
 public static class Distribution {
+    public static int Init(float cellSize, int maxDownloads, string cdnUrl) { return Native.dse_dist_init(cellSize, maxDownloads, cdnUrl); }
+    public static void Shutdown() { Native.dse_dist_shutdown(); }
     public static int LoadManifest(string path) { return Native.dse_dist_load_manifest(path); }
     public static int SaveManifest(string path) { return Native.dse_dist_save_manifest(path); }
-    public static int PackageCell(int cx, int cz, string outputPath) { return Native.dse_dist_package_cell(cx, cz, outputPath); }
-    public static int RequestDownload(int cx, int cz) { return Native.dse_dist_request_download(cx, cz); }
-    public static int CancelDownload(int cx, int cz) { return Native.dse_dist_cancel_download(cx, cz); }
-    public static void Tick() { Native.dse_dist_tick(); }
-    public static int IsInstalled(int cx, int cz) { return Native.dse_dist_is_installed(cx, cz); }
-    public static int GetDiskUsage() { return Native.dse_dist_get_disk_usage(); }
-    public static int Verify() { return Native.dse_dist_verify(); }
+    public static int PackageCell(int cx, int cz, int lod, string[] assets, int count) { return Native.dse_dist_package_cell(cx, cz, lod, assets, count); }
+    public static void RequestDownload(string package) { Native.dse_dist_request_download(package); }
+    public static void CancelDownload(string package) { Native.dse_dist_cancel_download(package); }
+    public static void UpdatePriorities(float x, float y, float z) { Native.dse_dist_update_priorities(x, y, z); }
+    public static void Tick(float dt) { Native.dse_dist_tick(dt); }
+    public static int IsInstalled(string package) { return Native.dse_dist_is_installed(package); }
+    public static void GetStats(out int outTotal, out int outInstalled, out int outDownloading, out int outPending, out double outDownloadedBytes, out double outSpeedBps) { Native.dse_dist_get_stats(out outTotal, out outInstalled, out outDownloading, out outPending, out outDownloadedBytes, out outSpeedBps); }
+    public static int GetMissing(float x, float y, float z, float radius, [Out] byte[] outBuf, int bufCap) { return Native.dse_dist_get_missing(x, y, z, radius, outBuf, bufCap); }
+    public static int Verify(string package) { return Native.dse_dist_verify(package); }
+    public static ulong GetDiskUsage() { return Native.dse_dist_get_disk_usage(); }
 }
 
 public static class Dssl {
     public static uint LoadMaterial(string path) { return Native.dse_dssl_load_material(path); }
-    public static uint CreateInstance(uint material) { return Native.dse_dssl_create_instance(material); }
+    public static uint CreateInstance(string path) { return Native.dse_dssl_create_instance(path); }
     public static void SetFloat(uint instance, string name, float value) { Native.dse_dssl_set_float(instance, name, value); }
     public static void SetColor(uint instance, string name, float r, float g, float b, float a) { Native.dse_dssl_set_color(instance, name, r, g, b, a); }
     public static void SetVec3(uint instance, string name, float x, float y, float z) { Native.dse_dssl_set_vec3(instance, name, x, y, z); }
@@ -267,25 +396,35 @@ public static class Dssl {
 }
 
 public static class Editor {
-    public static void TerrainBrush(float x, float z, float radius, float strength, int mode) { Native.dse_editor_terrain_brush(x, z, radius, strength, mode); }
-    public static void PlaceFoliage(float x, float z, float radius, int count, uint type) { Native.dse_editor_place_foliage(x, z, radius, count, type); }
-    public static void EraseFoliage(float x, float z, float radius) { Native.dse_editor_erase_foliage(x, z, radius); }
+    public static int Init() { return Native.dse_editor_init(); }
+    public static void Shutdown() { Native.dse_editor_shutdown(); }
+    public static int TerrainBrush(int op, float x, float y, float z, float radius, float strength, float falloff) { return Native.dse_editor_terrain_brush(op, x, y, z, radius, strength, falloff); }
+    public static void BrushPreview(float x, float y, float z, float radius, out float outMinX, out float outMinY, out float outMaxX, out float outMaxY) { Native.dse_editor_brush_preview(x, y, z, radius, out outMinX, out outMinY, out outMaxX, out outMaxY); }
+    public static int PlaceFoliage(float x, float y, float z, float radius, float density, string meshPath) { return Native.dse_editor_place_foliage(x, y, z, radius, density, meshPath); }
+    public static int EraseFoliage(float x, float y, float z, float radius) { return Native.dse_editor_erase_foliage(x, y, z, radius); }
     public static int GetFoliageCount() { return Native.dse_editor_get_foliage_count(); }
-    public static void BeginRoad(uint spline) { Native.dse_editor_begin_road(spline); }
-    public static void AddRoadPoint(float x, float y, float z) { Native.dse_editor_add_road_point(x, y, z); }
-    public static void EndRoad() { Native.dse_editor_end_road(); }
-    public static void Undo() { Native.dse_editor_undo(); }
-    public static void Redo() { Native.dse_editor_redo(); }
+    public static int BeginRoad(float width) { return Native.dse_editor_begin_road(width); }
+    public static void AddRoadPoint(uint session, float x, float y, float z) { Native.dse_editor_add_road_point(session, x, y, z); }
+    public static void EndRoad(uint session) { Native.dse_editor_end_road(session); }
+    public static void UpdatePartitionVis(float camX, float camY, float camZ, float cellSize) { Native.dse_editor_update_partition_vis(camX, camY, camZ, cellSize); }
+    public static int GetCellCount() { return Native.dse_editor_get_cell_count(); }
+    public static int Undo() { return Native.dse_editor_undo(); }
+    public static int Redo() { return Native.dse_editor_redo(); }
 }
 
 public static class Eqs {
-    public static uint CreateTemplate() { return Native.dse_eqs_create_template(); }
+    public static int Init() { return Native.dse_eqs_init(); }
+    public static void Shutdown() { Native.dse_eqs_shutdown(); }
+    public static uint CreateTemplate(string name) { return Native.dse_eqs_create_template(name); }
     public static void DestroyTemplate(uint tmpl) { Native.dse_eqs_destroy_template(tmpl); }
-    public static void SetGenerator(uint tmpl, int type, float radius, float spacing) { Native.dse_eqs_set_generator(tmpl, type, radius, spacing); }
-    public static void AddScorer(uint tmpl, int type, float weight) { Native.dse_eqs_add_scorer(tmpl, type, weight); }
-    public static void SetMaxResults(uint tmpl, int maxResults) { Native.dse_eqs_set_max_results(tmpl, maxResults); }
-    public static int Execute(uint tmpl, float x, float y, float z, [Out] float[] outPositions, int maxResults) { return Native.dse_eqs_execute(tmpl, x, y, z, outPositions, maxResults); }
+    public static void SetGenerator(uint tmpl, int type, float radius, float spacing, int maxPoints) { Native.dse_eqs_set_generator(tmpl, type, radius, spacing, maxPoints); }
+    public static void AddScorer(uint tmpl, int type, float weight, int invert, float maxValue) { Native.dse_eqs_add_scorer(tmpl, type, weight, invert, maxValue); }
+    public static void ClearScorers(uint tmpl) { Native.dse_eqs_clear_scorers(tmpl); }
+    public static void SetCombineMode(uint tmpl, int mode) { Native.dse_eqs_set_combine_mode(tmpl, mode); }
+    public static void SetMaxResults(uint tmpl, uint maxResults) { Native.dse_eqs_set_max_results(tmpl, maxResults); }
+    public static void Execute(uint tmpl, float x, float y, float z, out float outResult) { Native.dse_eqs_execute(tmpl, x, y, z, out outResult); }
     public static int GetTemplateCount() { return Native.dse_eqs_get_template_count(); }
+    public static void ExecuteAt(uint tmpl, float px, float py, float pz, float cx, float cy, float cz, out float outResult) { Native.dse_eqs_execute_at(tmpl, px, py, pz, cx, cy, cz, out outResult); }
 }
 
 public static class FloatingOrigin {
@@ -323,27 +462,28 @@ public static class Fracture {
 }
 
 public static class FreeCamera {
-    public static void Add(uint e) { Native.dse_free_camera_add(e); }
+    public static void Add(uint e, float moveSpeed, float mouseSensitivity) { Native.dse_free_camera_add(e, moveSpeed, mouseSensitivity); }
 }
 
 public static class Gameplay3D {
-    public static void SetInteraction(uint e, float range, float cooldown) { Native.dse_gameplay_set_interaction(e, range, cooldown); }
-    public static int FindInteractable(uint e, out uint outTarget, float maxRange) { return Native.dse_gameplay_find_interactable(e, out outTarget, maxRange); }
+    public static void TuningAdd(uint e) { Native.dse_gameplay_tuning_add(e); }
+    public static void TuningSet(uint e, float leafMinDistance, float leafMoveLeft, float leafMoveRight, float jumpSpeedScale, float jumpSpeedMax, float cameraFollowDamping) { Native.dse_gameplay_tuning_set(e, leafMinDistance, leafMoveLeft, leafMoveRight, jumpSpeedScale, jumpSpeedMax, cameraFollowDamping); }
 }
 
 public static class GpuParticle {
-    public static void SetEnabled(int enabled) { Native.dse_gpu_particle_set_enabled(enabled); }
-    public static void SetEmissionRate(float rate) { Native.dse_gpu_particle_set_emission_rate(rate); }
-    public static void SetGravity(float gx, float gy, float gz) { Native.dse_gpu_particle_set_gravity(gx, gy, gz); }
-    public static void SetWind(float wx, float wy, float wz) { Native.dse_gpu_particle_set_wind(wx, wy, wz); }
-    public static void SetColor(float r, float g, float b, float a) { Native.dse_gpu_particle_set_color(r, g, b, a); }
+    public static void SetEnabled(uint e, int enabled) { Native.dse_gpu_particle_set_enabled(e, enabled); }
+    public static void SetEmissionRate(uint e, float rate) { Native.dse_gpu_particle_set_emission_rate(e, rate); }
+    public static void SetGravity(uint e, float gx, float gy, float gz) { Native.dse_gpu_particle_set_gravity(e, gx, gy, gz); }
+    public static void SetWind(uint e, float wx, float wy, float wz) { Native.dse_gpu_particle_set_wind(e, wx, wy, wz); }
+    public static void SetColor(uint e, float r1, float g1, float b1, float a1, float r2, float g2, float b2, float a2) { Native.dse_gpu_particle_set_color(e, r1, g1, b1, a1, r2, g2, b2, a2); }
 }
 
 public static class Hair {
-    public static void Add(uint e, int strandCount, int segmentCount, float length) { Native.dse_hair_add(e, strandCount, segmentCount, length); }
-    public static void SetPhysics(uint e, float stiffness, float damping, float gravity) { Native.dse_hair_set_physics(e, stiffness, damping, gravity); }
-    public static void SetRender(uint e, float thickness, int enableShadow) { Native.dse_hair_set_render(e, thickness, enableShadow); }
-    public static void SetLod(uint e, float closeDist, float farDist, int minStrands) { Native.dse_hair_set_lod(e, closeDist, farDist, minStrands); }
+    public static void Add(uint e, string assetPath, int numFollowPerGuide) { Native.dse_hair_add(e, assetPath, numFollowPerGuide); }
+    public static void SetPhysics(uint e, float damping, float stiffnessLocal, float stiffnessGlobal, float gravity) { Native.dse_hair_set_physics(e, damping, stiffnessLocal, stiffnessGlobal, gravity); }
+    public static void SetRender(uint e, float rootR, float rootG, float rootB, float rootA, float tipR, float tipG, float tipB, float tipA, float fiberRadius, float opacity) { Native.dse_hair_set_render(e, rootR, rootG, rootB, rootA, tipR, tipG, tipB, tipA, fiberRadius, opacity); }
+    public static void SetWindFull(uint e, float wx, float wy, float wz, float turbulence) { Native.dse_hair_set_wind_full(e, wx, wy, wz, turbulence); }
+    public static void SetLod(uint e, float lod0Distance, float lod1Distance, float lod2Distance, float cullDistance) { Native.dse_hair_set_lod(e, lod0Distance, lod1Distance, lod2Distance, cullDistance); }
 }
 
 public static class Hlod {
@@ -352,9 +492,9 @@ public static class Hlod {
 }
 
 public static class Http {
-    public static int Request(string method, string url, string body, string headers, out int outStatus, [Out] byte[] outBody, int bodyCap) { return Native.dse_http_request(method, url, body, headers, out outStatus, outBody, bodyCap); }
-    public static int Get(string url, [Out] byte[] outBody, int bodyCap) { return Native.dse_http_get(url, outBody, bodyCap); }
-    public static int Post(string url, string body, [Out] byte[] outBody, int bodyCap) { return Native.dse_http_post(url, body, outBody, bodyCap); }
+    public static uint Send(string method, string url, string body, string headersJson, int timeoutSec, int verifyPeer, string caFile) { return Native.dse_http_send(method, url, body, headersJson, timeoutSec, verifyPeer, caFile); }
+    public static int Poll(out uint outIds, int maxIds) { return Native.dse_http_poll(out outIds, maxIds); }
+    public static int GetResponse(uint requestId, out int outStatus, [Out] byte[] outBody, int bodyCap, [Out] byte[] outError, int errorCap) { return Native.dse_http_get_response(requestId, out outStatus, outBody, bodyCap, outError, errorCap); }
     public static void Update() { Native.dse_http_update(); }
     public static int Available() { return Native.dse_http_available(); }
 }
@@ -383,9 +523,6 @@ public static class Input {
     public static float GetGamepadAxis(int gamepadId, int axis) { return Native.dse_input_get_gamepad_axis(gamepadId, axis); }
     public static float GetScreenWidth() { return Native.dse_input_get_screen_width(); }
     public static float GetScreenHeight() { return Native.dse_input_get_screen_height(); }
-    public static int GetGamepadButton(int gamepadId, int button) { return Native.dse_input_get_gamepad_button(gamepadId, button); }
-    public static int GetGamepadButtonDown(int gamepadId, int button) { return Native.dse_input_get_gamepad_button_down(gamepadId, button); }
-    public static int GetGamepadButtonUp(int gamepadId, int button) { return Native.dse_input_get_gamepad_button_up(gamepadId, button); }
     public static int IsGamepadConnected(int gamepadId) { return Native.dse_input_is_gamepad_connected(gamepadId); }
     public static void SetGamepadDeadZone(float zone) { Native.dse_input_set_gamepad_dead_zone(zone); }
     public static float GetGamepadDeadZone() { return Native.dse_input_get_gamepad_dead_zone(); }
@@ -411,17 +548,17 @@ public static class Joint3D {
 }
 
 public static class Light2D {
-    public static void Add(uint e, int type, float r, float g, float b, float intensity, float range, int castShadow) { Native.dse_light2d_add(e, type, r, g, b, intensity, range, castShadow); }
+    public static void Add(uint e, int type) { Native.dse_light2d_add(e, type); }
     public static void SetColor(uint e, float r, float g, float b) { Native.dse_light2d_set_color(e, r, g, b); }
     public static void SetIntensity(uint e, float intensity) { Native.dse_light2d_set_intensity(e, intensity); }
     public static void SetRange(uint e, float range) { Native.dse_light2d_set_range(e, range); }
-    public static void SetShadow(uint e, int castShadow) { Native.dse_light2d_set_shadow(e, castShadow); }
-    public static void SetAmbient(float r, float g, float b) { Native.dse_light2d_set_ambient(r, g, b); }
-    public static void Add(uint e, uint textureHandle) { Native.dse_normal_map_2d_add(e, textureHandle); }
+    public static void SetShadow(uint e, int mode) { Native.dse_light2d_set_shadow(e, mode); }
+    public static void SetAmbient(uint e, float r, float g, float b, float intensity) { Native.dse_light2d_set_ambient(e, r, g, b, intensity); }
+    public static void Add(uint e, float strength) { Native.dse_normal_map_2d_add(e, strength); }
 }
 
 public static class LineRenderer {
-    public static void Add(uint e, float width, float r, float g, float b, float a) { Native.dse_line_renderer_add(e, width, r, g, b, a); }
+    public static void Add(uint e, float width) { Native.dse_line_renderer_add(e, width); }
     public static void SetPoints(uint e, float[] points, int count) { Native.dse_line_renderer_set_points(e, points, count); }
     public static void SetWidth(uint e, float width) { Native.dse_line_renderer_set_width(e, width); }
     public static void SetColor(uint e, float r, float g, float b, float a) { Native.dse_line_renderer_set_color(e, r, g, b, a); }
@@ -430,14 +567,16 @@ public static class LineRenderer {
 
 public static class Localization {
     public static int Load(string path, string locale) { return Native.dse_l10n_load(path, locale); }
+    public static int LoadString(string json, string locale) { return Native.dse_l10n_load_string(json, locale); }
     public static void SetLocale(string locale) { Native.dse_l10n_set_locale(locale); }
     public static int GetLocale([Out] byte[] @out, int cap) { return Native.dse_l10n_get_locale(@out, cap); }
     public static int Get(string key, [Out] byte[] @out, int cap) { return Native.dse_l10n_get(key, @out, cap); }
     public static int HasKey(string key) { return Native.dse_l10n_has_key(key); }
+    public static int GetLocales([Out] byte[] @out, int cap) { return Native.dse_l10n_get_locales(@out, cap); }
 }
 
 public static class Lod {
-    public static void AddLevel(uint e, float distance, string meshPath) { Native.dse_lod_add_level(e, distance, meshPath); }
+    public static void AddLevel(uint e, string meshPath, float screenSizeThreshold) { Native.dse_lod_add_level(e, meshPath, screenSizeThreshold); }
     public static void SetScale(uint e, float scale) { Native.dse_lod_set_scale(e, scale); }
     public static void SetMinScreenSize(uint e, float minSize) { Native.dse_lod_set_min_screen_size(e, minSize); }
     public static void SetEnabled(uint e, int enabled) { Native.dse_lod_set_enabled(e, enabled); }
@@ -447,11 +586,27 @@ public static class Mesh {
     public static void RendererAdd(uint e, string meshPath) { Native.dse_mesh_renderer_add(e, meshPath); }
     public static int RendererSetMaterialFromDmat(uint e, string dmatPath, uint materialIndex) { return Native.dse_mesh_renderer_set_material_from_dmat(e, dmatPath, materialIndex); }
     public static int RendererSetTexture(uint e, string slot, string path, out uint outHandle, out int outWidth, out int outHeight) { return Native.dse_mesh_renderer_set_texture(e, slot, path, out outHandle, out outWidth, out outHeight); }
+    public static void RendererAddProcedural(uint e, float r, float g, float b, float a, float[] vertices, int vertexFloatCount, int[] indices, int indexCount) { Native.dse_mesh_renderer_add_procedural(e, r, g, b, a, vertices, vertexFloatCount, indices, indexCount); }
+    public static void RendererSetMaterialParams(uint e, float metallic, float roughness, float ao, float er, float eg, float eb, float normalStrength, int receiveShadow, int doubleSided, float cr, float cg, float cb, float ca) { Native.dse_mesh_renderer_set_material_params(e, metallic, roughness, ao, er, eg, eb, normalStrength, receiveShadow, doubleSided, cr, cg, cb, ca); }
+    public static void RendererSetDepthState(uint e, int depthTest, int depthWrite) { Native.dse_mesh_renderer_set_depth_state(e, depthTest, depthWrite); }
+    public static void RendererSetMaterialScalar(uint e, string name, float value) { Native.dse_mesh_renderer_set_material_scalar(e, name, value); }
+    public static void RendererSetAdvancedMaterial(uint e, float clearCoat, float clearCoatRoughness, float anisotropy, float pomHeightScale, float sssStrength, float sssR, float sssG, float sssB) { Native.dse_mesh_renderer_set_advanced_material(e, clearCoat, clearCoatRoughness, anisotropy, pomHeightScale, sssStrength, sssR, sssG, sssB); }
+    public static int RendererSetUvs(uint e, float[] uvs, int count, out int outAttrCount, out int outVertexCount) { return Native.dse_mesh_renderer_set_uvs(e, uvs, count, out outAttrCount, out outVertexCount); }
+    public static int RendererSetNormals(uint e, float[] normals, int count, out int outAttrCount, out int outVertexCount) { return Native.dse_mesh_renderer_set_normals(e, normals, count, out outAttrCount, out outVertexCount); }
+    public static int RendererSetTangents(uint e, float[] tangents, int count, out int outAttrCount, out int outVertexCount) { return Native.dse_mesh_renderer_set_tangents(e, tangents, count, out outAttrCount, out outVertexCount); }
+    public static void RendererSetEmissiveAuthoring(uint e, float r, float g, float b) { Native.dse_mesh_renderer_set_emissive_authoring(e, r, g, b); }
     public static void SetMaterial(uint e, string materialPath) { Native.dse_mesh_set_material(e, materialPath); }
     public static void SetDepthState(uint e, int depthTest, int depthWrite) { Native.dse_mesh_set_depth_state(e, depthTest, depthWrite); }
     public static void SetMaterialScalar(uint e, string paramName, float value) { Native.dse_mesh_set_material_scalar(e, paramName, value); }
-    public static void SetTexture(uint e, string slot, uint textureHandle) { Native.dse_mesh_set_texture(e, slot, textureHandle); }
-    public static void SetEmissive(uint e, float r, float g, float b, float intensity) { Native.dse_mesh_set_emissive(e, r, g, b, intensity); }
+    public static void SetTextureHandle(uint e, string slot, uint textureHandle) { Native.dse_mesh_set_texture_handle(e, slot, textureHandle); }
+    public static void SetEmissive(uint e, float r, float g, float b) { Native.dse_mesh_set_emissive(e, r, g, b); }
+    public static void StreamingInit(float hysteresis, int loadBudgetPerFrame) { Native.dse_mesh_streaming_init(hysteresis, loadBudgetPerFrame); }
+    public static uint StreamingRegisterMesh(string name, float x, float y, float z, float radius) { return Native.dse_mesh_streaming_register_mesh(name, x, y, z, radius); }
+    public static void StreamingAddLod(uint meshId, uint level, string path, float distance, uint triangleCount) { Native.dse_mesh_streaming_add_lod(meshId, level, path, distance, triangleCount); }
+    public static void StreamingTick(float camX, float camY, float camZ, float dt) { Native.dse_mesh_streaming_tick(camX, camY, camZ, dt); }
+    public static int StreamingGetCurrentLod(uint meshId) { return Native.dse_mesh_streaming_get_current_lod(meshId); }
+    public static int StreamingGetMeshCount() { return Native.dse_mesh_streaming_get_mesh_count(); }
+    public static void StreamingShutdown() { Native.dse_mesh_streaming_shutdown(); }
 }
 
 public static class MeshCollider3D {
@@ -459,20 +614,20 @@ public static class MeshCollider3D {
 }
 
 public static class Meshlet {
-    public static uint Build(uint entity) { return Native.dse_meshlet_build(entity); }
+    public static uint Build(float[] positions, int posCount, uint[] indices, int idxCount, uint maxVertices, uint maxTriangles) { return Native.dse_meshlet_build(positions, posCount, indices, idxCount, maxVertices, maxTriangles); }
     public static int Serialize(uint handle, string path) { return Native.dse_meshlet_serialize(handle, path); }
     public static uint Deserialize(string path) { return Native.dse_meshlet_deserialize(path); }
     public static void Destroy(uint handle) { Native.dse_meshlet_destroy(handle); }
-    public static void GetInfo(uint handle, out int outMeshlets, out int outTriangles) { Native.dse_meshlet_get_info(handle, out outMeshlets, out outTriangles); }
-    public static int CullCreate() { return Native.dse_meshlet_cull_create(); }
-    public static void CullDestroy(int cullHandle) { Native.dse_meshlet_cull_destroy(cullHandle); }
-    public static void CullRegister(int cullHandle, uint meshletHandle) { Native.dse_meshlet_cull_register(cullHandle, meshletHandle); }
-    public static void CullUnregister(int cullHandle, uint meshletHandle) { Native.dse_meshlet_cull_unregister(cullHandle, meshletHandle); }
-    public static void CullBeginFrame(int cullHandle, float camX, float camY, float camZ) { Native.dse_meshlet_cull_begin_frame(cullHandle, camX, camY, camZ); }
-    public static void CullAddInstance(int cullHandle, uint meshletHandle, float[] matrix) { Native.dse_meshlet_cull_add_instance(cullHandle, meshletHandle, matrix); }
-    public static void CullPrepare(int cullHandle) { Native.dse_meshlet_cull_prepare(cullHandle); }
-    public static int CullExecuteCpu(int cullHandle) { return Native.dse_meshlet_cull_execute_cpu(cullHandle); }
-    public static void CullStats(int cullHandle, out int outTotal, out int outVisible) { Native.dse_meshlet_cull_stats(cullHandle, out outTotal, out outVisible); }
+    public static void GetInfo(uint handle, out int outMeshlets, out int outVertices, out int outIndices, out int outMeshletVertices) { Native.dse_meshlet_get_info(handle, out outMeshlets, out outVertices, out outIndices, out outMeshletVertices); }
+    public static uint CullCreate() { return Native.dse_meshlet_cull_create(); }
+    public static void CullDestroy(uint cullHandle) { Native.dse_meshlet_cull_destroy(cullHandle); }
+    public static uint CullRegister(uint cullHandle, uint meshletHandle) { return Native.dse_meshlet_cull_register(cullHandle, meshletHandle); }
+    public static void CullUnregister(uint cullHandle, uint regHandle) { Native.dse_meshlet_cull_unregister(cullHandle, regHandle); }
+    public static void CullBeginFrame(uint cullHandle) { Native.dse_meshlet_cull_begin_frame(cullHandle); }
+    public static void CullAddInstance(uint cullHandle, uint regHandle, float[] matrix16) { Native.dse_meshlet_cull_add_instance(cullHandle, regHandle, matrix16); }
+    public static uint CullPrepare(uint cullHandle, float[] vpMatrix16, float camX, float camY, float camZ) { return Native.dse_meshlet_cull_prepare(cullHandle, vpMatrix16, camX, camY, camZ); }
+    public static uint CullExecuteCpu(uint cullHandle, float[] vpMatrix16, float camX, float camY, float camZ, uint flags) { return Native.dse_meshlet_cull_execute_cpu(cullHandle, vpMatrix16, camX, camY, camZ, flags); }
+    public static void CullStats(uint cullHandle, out int outTotal, out int outVisible, out int outMeshes, out int outInstances) { Native.dse_meshlet_cull_stats(cullHandle, out outTotal, out outVisible, out outMeshes, out outInstances); }
 }
 
 public static class Metrics {
@@ -487,6 +642,13 @@ public static class Metrics {
 }
 
 public static class MorphTarget {
+    public static void SimpleAdd(uint e) { Native.dse_morph_simple_add(e); }
+    public static void SimpleAddTarget(uint e, string name, float weight) { Native.dse_morph_simple_add_target(e, name, weight); }
+    public static void SimpleSetWeight(uint e, string name, float w) { Native.dse_morph_simple_set_weight(e, name, w); }
+    public static void SimpleSetWeightIndex(uint e, int idx, float w) { Native.dse_morph_simple_set_weight_index(e, idx, w); }
+    public static float SimpleGetWeight(uint e, string name) { return Native.dse_morph_simple_get_weight(e, name); }
+    public static float SimpleGetWeightIndex(uint e, int idx) { return Native.dse_morph_simple_get_weight_index(e, idx); }
+    public static void SimpleSetEnabled(uint e, int enabled) { Native.dse_morph_simple_set_enabled(e, enabled); }
     public static void AddComponent(uint e) { Native.dse_morph_add_component(e); }
     public static void AddTarget(uint e, string name, float[] deltas, int floatCount) { Native.dse_morph_add_target(e, name, deltas, floatCount); }
     public static void SetWeight(uint e, string name, float w) { Native.dse_morph_set_weight(e, name, w); }
@@ -502,6 +664,7 @@ public static class Nav {
     public static int FindNearest(float x, float y, float z, [Out] float[] outXyz) { return Native.dse_nav_find_nearest(x, y, z, outXyz); }
     public static int Raycast(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outHitXyz) { return Native.dse_nav_raycast(sx, sy, sz, ex, ey, ez, outHitXyz); }
     public static int FindPath(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outXyz, int maxPoints) { return Native.dse_nav_find_path(sx, sy, sz, ex, ey, ez, outXyz, maxPoints); }
+    public static int Bake(float[] verts, int nverts, int[] tris, int ntris, float cellSize, float cellHeight, float agentHeight, float agentRadius, float agentMaxClimb, float agentMaxSlope) { return Native.dse_nav_bake(verts, nverts, tris, ntris, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, agentMaxSlope); }
 }
 
 public static class NavAgent {
@@ -510,42 +673,46 @@ public static class NavAgent {
     public static void GetDestination(uint e, [Out] float[] outXyz) { Native.dse_nav_agent_get_destination(e, outXyz); }
     public static int HasPath(uint e) { return Native.dse_nav_agent_has_path(e); }
     public static int Arrived(uint e) { return Native.dse_nav_agent_arrived(e); }
+    public static int Get(uint e, out float outParams, out int outFlags) { return Native.dse_nav_agent_get(e, out outParams, out outFlags); }
 }
 
 public static class Ocean {
-    public static void Update(float dt) { Native.dse_ocean_update(dt); }
+    public static int Init(int fftResolution, float tileSize, float windSpeed, float choppiness) { return Native.dse_ocean_init(fftResolution, tileSize, windSpeed, choppiness); }
+    public static void Shutdown() { Native.dse_ocean_shutdown(); }
+    public static void Update(float time, float camX, float camY, float camZ) { Native.dse_ocean_update(time, camX, camY, camZ); }
     public static float GetHeight(float x, float z) { return Native.dse_ocean_get_height(x, z); }
     public static void GetNormal(float x, float z, [Out] float[] outXyz) { Native.dse_ocean_get_normal(x, z, outXyz); }
     public static float GetFoam(float x, float z) { return Native.dse_ocean_get_foam(x, z); }
-    public static void SetWind(float wx, float wz, float speed) { Native.dse_ocean_set_wind(wx, wz, speed); }
+    public static void SetWind(float speed, float dx, float dz) { Native.dse_ocean_set_wind(speed, dx, dz); }
     public static void SetChoppiness(float choppiness) { Native.dse_ocean_set_choppiness(choppiness); }
+    public static void GetStats(out int outTotalTiles, out int outVisibleTiles, out int outFftRes, out float outMaxHeight) { Native.dse_ocean_get_stats(out outTotalTiles, out outVisibleTiles, out outFftRes, out outMaxHeight); }
     public static int GetLodCount() { return Native.dse_ocean_get_lod_count(); }
 }
 
 public static class Parallax {
     public static void Add(uint e) { Native.dse_parallax_add(e); }
-    public static int AddLayer(uint e, float scrollScale, int autoScroll, float speedX, float speedY) { return Native.dse_parallax_add_layer(e, scrollScale, autoScroll, speedX, speedY); }
-    public static void SetLayerScroll(uint e, int layer, float scrollScale) { Native.dse_parallax_set_layer_scroll(e, layer, scrollScale); }
-    public static void SetLayerAutoScroll(uint e, int layer, float speedX, float speedY) { Native.dse_parallax_set_layer_auto_scroll(e, layer, speedX, speedY); }
+    public static int AddLayer(uint e, float scrollX, float scrollY) { return Native.dse_parallax_add_layer(e, scrollX, scrollY); }
+    public static void SetLayerScroll(uint e, int layer, float sx, float sy) { Native.dse_parallax_set_layer_scroll(e, layer, sx, sy); }
+    public static void SetLayerAutoScroll(uint e, int layer, float sx, float sy) { Native.dse_parallax_set_layer_auto_scroll(e, layer, sx, sy); }
     public static void SetLayerOpacity(uint e, int layer, float opacity) { Native.dse_parallax_set_layer_opacity(e, layer, opacity); }
     public static int GetLayerCount(uint e) { return Native.dse_parallax_get_layer_count(e); }
 }
 
 public static class Particles3D {
-    public static void Add(uint e) { Native.dse_particle_system_3d_add(e); }
-    public static void SetParams(uint e, float duration, float startSpeed, float startSize, float startRotation, int maxParticles, float gravity) { Native.dse_particle_system_3d_set_params(e, duration, startSpeed, startSize, startRotation, maxParticles, gravity); }
-    public static int GetState(uint e, out int outAlive, out int outEmitted) { return Native.dse_particle_system_3d_get_state(e, out outAlive, out outEmitted); }
-    public static void Add(uint e, int shape, float rate, float lifetime, float speed) { Native.dse_particle_emitter_add(e, shape, rate, lifetime, speed); }
-    public static void SetDensity(uint e, float density) { Native.dse_particle_set_density(e, density); }
+    public static void Add(uint e, int maxParticles, float emissionRate) { Native.dse_particle_system_3d_add(e, maxParticles, emissionRate); }
+    public static void SetParams(uint e, float lifeMin, float lifeMax, float sizeMin, float sizeMax, float speedMin, float speedMax, float r, float g, float b, float a, float gx, float gy, float gz, string texturePath) { Native.dse_particle_system_3d_set_params(e, lifeMin, lifeMax, sizeMin, sizeMax, speedMin, speedMax, r, g, b, a, gx, gy, gz, texturePath); }
+    public static int GetState(uint e, out int outActive, out int outMaxParticles, out float outEmissionRate, out float outLife, out float outSize, out float outSpeed, out float outGravity, out float outColor, [Out] byte[] outTex, int texCap, out int outEnabled, out int outInitialized, out uint outTextureHandle) { return Native.dse_particle_system_3d_get_state(e, out outActive, out outMaxParticles, out outEmissionRate, out outLife, out outSize, out outSpeed, out outGravity, out outColor, outTex, texCap, out outEnabled, out outInitialized, out outTextureHandle); }
+    public static void Add(uint e, uint textureHandle, int maxParticles, float emitRate) { Native.dse_particle_emitter_add(e, textureHandle, maxParticles, emitRate); }
+    public static void SetDensity(uint e, float emitRateScale) { Native.dse_particle_set_density(e, emitRateScale); }
     public static void Burst(uint e, int count) { Native.dse_particle_burst(e, count); }
-    public static void SetRandom(uint e, float posRand, float velRand, float sizeRand, float rotRand) { Native.dse_particle_set_random(e, posRand, velRand, sizeRand, rotRand); }
-    public static void SetSizeCurve(uint e, float startSize, float endSize) { Native.dse_particle_set_size_curve(e, startSize, endSize); }
-    public static void SetAlphaCurve(uint e, float startAlpha, float endAlpha) { Native.dse_particle_set_alpha_curve(e, startAlpha, endAlpha); }
-    public static void SetSpeedCurve(uint e, float startSpeed, float endSpeed) { Native.dse_particle_set_speed_curve(e, startSpeed, endSpeed); }
+    public static void SetRandom(uint e, float vminX, float vminY, float vminZ, float vmaxX, float vmaxY, float vmaxZ, float lifeMin, float lifeMax, float sizeMin, float sizeMax) { Native.dse_particle_set_random(e, vminX, vminY, vminZ, vmaxX, vmaxY, vmaxZ, lifeMin, lifeMax, sizeMin, sizeMax); }
+    public static void SetSizeCurve(uint e, int enabled, float startValue, float endValue) { Native.dse_particle_set_size_curve(e, enabled, startValue, endValue); }
+    public static void SetAlphaCurve(uint e, int enabled, float startValue, float endValue) { Native.dse_particle_set_alpha_curve(e, enabled, startValue, endValue); }
+    public static void SetSpeedCurve(uint e, int enabled, float startValue, float endValue) { Native.dse_particle_set_speed_curve(e, enabled, startValue, endValue); }
     public static void SetGravity(uint e, float gx, float gy, float gz) { Native.dse_particle_set_gravity(e, gx, gy, gz); }
-    public static void SetCollision(uint e, int enabled, float bounce) { Native.dse_particle_set_collision(e, enabled, bounce); }
-    public static void SetColorCurve(uint e, float r1, float g1, float b1, float r2, float g2, float b2) { Native.dse_particle_set_color_curve(e, r1, g1, b1, r2, g2, b2); }
-    public static void SetRotation(uint e, float startRot, float endRot) { Native.dse_particle_set_rotation(e, startRot, endRot); }
+    public static void SetCollision(uint e, int enabled, int mode, float bounce, float friction, float lifeLoss, float groundY) { Native.dse_particle_set_collision(e, enabled, mode, bounce, friction, lifeLoss, groundY); }
+    public static void SetColorCurve(uint e, int enabled, float endR, float endG, float endB, float endA) { Native.dse_particle_set_color_curve(e, enabled, endR, endG, endB, endA); }
+    public static void SetRotation(uint e, float rotationMin, float rotationMax, float angularVelocityMin, float angularVelocityMax) { Native.dse_particle_set_rotation(e, rotationMin, rotationMax, angularVelocityMin, angularVelocityMax); }
 }
 
 public static class Physics2D {
@@ -560,12 +727,12 @@ public static class Physics2D {
     public static void AddJoint(uint e, int type, uint entityA, uint entityB, float ax, float ay, float bx, float by, int collideConnected) { Native.dse_physics2d_add_joint(e, type, entityA, entityB, ax, ay, bx, by, collideConnected); }
     public static void SetJointRevolute(uint e, int enableLimit, float lowerDeg, float upperDeg, int enableMotor, float motorSpeed, float maxTorque) { Native.dse_physics2d_set_joint_revolute(e, enableLimit, lowerDeg, upperDeg, enableMotor, motorSpeed, maxTorque); }
     public static void SetJointDistance(uint e, float minLen, float maxLen, float stiffness, float damping) { Native.dse_physics2d_set_joint_distance(e, minLen, maxLen, stiffness, damping); }
-    public static void SetJointPrismatic(uint e, int enableLimit, float lower, float upper, int enableMotor, float motorSpeed, float maxForce) { Native.dse_physics2d_set_joint_prismatic(e, enableLimit, lower, upper, enableMotor, motorSpeed, maxForce); }
+    public static void SetJointPrismatic(uint e, float axisX, float axisY, int enableLimit, float lower, float upper, int enableMotor, float motorSpeed, float maxForce) { Native.dse_physics2d_set_joint_prismatic(e, axisX, axisY, enableLimit, lower, upper, enableMotor, motorSpeed, maxForce); }
     public static void DestroyJoint(uint e) { Native.dse_physics2d_destroy_joint(e); }
     public static int Raycast(float sx, float sy, float ex, float ey, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal) { return Native.dse_physics2d_raycast(sx, sy, ex, ey, out outEntity, outPoint, outNormal); }
     public static int PollCollisionEvent(uint e, out uint outOther, out int outIsTrigger, out int outIsEnter) { return Native.dse_physics2d_poll_collision_event(e, out outOther, out outIsTrigger, out outIsEnter); }
-    public static void AddTilemap(uint e, float originX, float originY, float cellW, float cellH, int cols, int rows) { Native.dse_physics2d_add_tilemap(e, originX, originY, cellW, cellH, cols, rows); }
-    public static void SetTile(uint e, int col, int row, int filled) { Native.dse_physics2d_set_tile(e, col, row, filled); }
+    public static void AddTilemap(uint e, int width, int height, float tileSize, uint texHandle) { Native.dse_physics2d_add_tilemap(e, width, height, tileSize, texHandle); }
+    public static void SetTile(uint e, int x, int y, int tileId) { Native.dse_physics2d_set_tile(e, x, y, tileId); }
 }
 
 public static class Physics3D {
@@ -582,15 +749,17 @@ public static class Physics3D {
 
 public static class PostProcess {
     public static int GetState(uint e, out int outEnabled, out int outBloom, out int outSsao, out int outSsr, out int outFxaa, out int outDof) { return Native.dse_post_process_get_state(e, out outEnabled, out outBloom, out outSsao, out outSsr, out outFxaa, out outDof); }
+    public static void Add(uint e) { Native.dse_post_process_add(e); }
+    public static void SetColorLut(uint e, string path, float intensity) { Native.dse_post_process_set_color_lut(e, path, intensity); }
 }
 
 public static class Procedural {
-    public static float Perlin2d(float x, float y, float scale) { return Native.dse_procedural_perlin2d(x, y, scale); }
-    public static float Simplex2d(float x, float y, float scale) { return Native.dse_procedural_simplex2d(x, y, scale); }
-    public static float Worley2d(float x, float y, float scale) { return Native.dse_procedural_worley2d(x, y, scale); }
-    public static float Fbm2d(float x, float y, float scale, int octaves) { return Native.dse_procedural_fbm2d(x, y, scale, octaves); }
-    public static void RandomSeed(int seed) { Native.dse_procedural_random_seed(seed); }
-    public static float RandomFloat() { return Native.dse_procedural_random_float(); }
+    public static float Perlin2d(float x, float y, uint seed) { return Native.dse_procedural_perlin2d(x, y, seed); }
+    public static float Simplex2d(float x, float y, uint seed) { return Native.dse_procedural_simplex2d(x, y, seed); }
+    public static float Worley2d(float x, float y, uint seed) { return Native.dse_procedural_worley2d(x, y, seed); }
+    public static float Fbm2d(float x, float y, int octaves, float frequency, float lacunarity, float persistence, uint seed) { return Native.dse_procedural_fbm2d(x, y, octaves, frequency, lacunarity, persistence, seed); }
+    public static void RandomSeed(ulong seed) { Native.dse_procedural_random_seed(seed); }
+    public static float RandomFloat(float minVal, float maxVal) { return Native.dse_procedural_random_float(minVal, maxVal); }
 }
 
 public static class Ragdoll {
@@ -598,26 +767,30 @@ public static class Ragdoll {
     public static void Activate(uint e) { Native.dse_ragdoll_activate(e); }
     public static void Deactivate(uint e) { Native.dse_ragdoll_deactivate(e); }
     public static int IsActive(uint e) { return Native.dse_ragdoll_is_active(e); }
+    public static void SetCollisionLayerMask(uint e, uint layer, uint mask) { Native.dse_ragdoll_set_collision_layer_mask(e, layer, mask); }
 }
 
 public static class Render {
     public static int WorldToScreen(float wx, float wy, float wz, out float outSx, out float outSy) { return Native.dse_render_world_to_screen(wx, wy, wz, out outSx, out outSy); }
     public static int ScreenToWorldRay(float sx, float sy, [Out] float[] outOrigin, [Out] float[] outDir) { return Native.dse_render_screen_to_world_ray(sx, sy, outOrigin, outDir); }
-    public static int PickEntity(float screenX, float screenY) { return Native.dse_render_pick_entity(screenX, screenY); }
 }
 
 public static class Rendering {
     public static void AddSkybox(uint e, string cubemapPath) { Native.dse_rendering_add_skybox(e, cubemapPath); }
     public static void AddGiProbe(uint e) { Native.dse_rendering_add_gi_probe(e); }
-    public static void SetGiProbe(uint e, float intensity, float range, int resolution) { Native.dse_rendering_set_gi_probe(e, intensity, range, resolution); }
+    public static void SetGiProbe(uint e, float giIntensity, float ox, float oy, float oz, float ex, float ey, float ez, int resX, int resY, int resZ) { Native.dse_rendering_set_gi_probe(e, giIntensity, ox, oy, oz, ex, ey, ez, resX, resY, resZ); }
     public static void SetGiProbeEnabled(uint e, int enabled) { Native.dse_rendering_set_gi_probe_enabled(e, enabled); }
-    public static void GetGiProbe(uint e, out float outIntensity, out float outRange, out int outResolution) { Native.dse_rendering_get_gi_probe(e, out outIntensity, out outRange, out outResolution); }
+    public static int GetGiProbe(uint e, out float outGiIntensity, [Out] float[] outOrigin, out float outExtent, out int outResolution) { return Native.dse_rendering_get_gi_probe(e, out outGiIntensity, outOrigin, out outExtent, out outResolution); }
     public static void AddLightProbe(uint e) { Native.dse_rendering_add_light_probe(e); }
-    public static void SetLightProbe(uint e, float intensity, float range) { Native.dse_rendering_set_light_probe(e, intensity, range); }
+    public static void SetLightProbe(uint e, float influenceRadius) { Native.dse_rendering_set_light_probe(e, influenceRadius); }
     public static void SetLightProbeEnabled(uint e, int enabled) { Native.dse_rendering_set_light_probe_enabled(e, enabled); }
     public static void AddReflectionProbe(uint e) { Native.dse_rendering_add_reflection_probe(e); }
-    public static void SetReflectionProbe(uint e, float intensity, float range, int resolution) { Native.dse_rendering_set_reflection_probe(e, intensity, range, resolution); }
+    public static void SetReflectionProbe(uint e, float influenceRadius, int resolution) { Native.dse_rendering_set_reflection_probe(e, influenceRadius, resolution); }
     public static void SetReflectionProbeEnabled(uint e, int enabled) { Native.dse_rendering_set_reflection_probe_enabled(e, enabled); }
+    public static void SetGiProbeBias(uint e, float normalBias, float hysteresis) { Native.dse_rendering_set_gi_probe_bias(e, normalBias, hysteresis); }
+    public static int GetGiProbeEx(uint e, out int outEnabled, out float outNormalBias) { return Native.dse_rendering_get_gi_probe_ex(e, out outEnabled, out outNormalBias); }
+    public static void SetLightProbeEx(uint e, float influenceRadius, int needsRebake) { Native.dse_rendering_set_light_probe_ex(e, influenceRadius, needsRebake); }
+    public static void SetReflectionProbeEx(uint e, float influenceRadius, float boxX, float boxY, float boxZ, int resolution) { Native.dse_rendering_set_reflection_probe_ex(e, influenceRadius, boxX, boxY, boxZ, resolution); }
 }
 
 public static class RigidBody3D {
@@ -630,8 +803,6 @@ public static class RigidBody3D {
     public static void GetAngularVelocity(uint e, [Out] float[] outVel) { Native.dse_rigidbody3d_get_angular_velocity(e, outVel); }
     public static void SetGravity(uint e, int enabled) { Native.dse_rigidbody3d_set_gravity(e, enabled); }
     public static void Add(uint e, int type, float mass) { Native.dse_rigidbody3d_add(e, type, mass); }
-    public static void Sleep(uint e) { Native.dse_rigidbody3d_sleep(e); }
-    public static void Wake(uint e) { Native.dse_rigidbody3d_wake(e); }
     public static void SetKinematic(uint e, int kinematic) { Native.dse_rigidbody3d_set_kinematic(e, kinematic); }
     public static void AddForceAtPosition(uint e, float fx, float fy, float fz, float px, float py, float pz) { Native.dse_rigidbody3d_add_force_at_position(e, fx, fy, fz, px, py, pz); }
     public static void SetLinearDamping(uint e, float damping) { Native.dse_rigidbody3d_set_linear_damping(e, damping); }
@@ -652,6 +823,18 @@ public static class Scene {
     public static int Save(string path) { return Native.dse_scene_save(path); }
     public static int SavePrefab(uint e, string path) { return Native.dse_scene_save_prefab(e, path); }
     public static uint InstantiatePrefab(string path, float x, float y, float z, int usePos) { return Native.dse_scene_instantiate_prefab(path, x, y, z, usePos); }
+    public static int LoadSub(string path, out int outEntityCount) { return Native.dse_scene_load_sub(path, out outEntityCount); }
+    public static int LoadSubAsync(string path) { return Native.dse_scene_load_sub_async(path); }
+    public static void UnloadSub(string path) { Native.dse_scene_unload_sub(path); }
+    public static void UnloadAllSubs() { Native.dse_scene_unload_all_subs(); }
+    public static int IsSubLoaded(string path) { return Native.dse_scene_is_sub_loaded(path); }
+    public static int GetLoadedSubs([Out] byte[] @out, int cap) { return Native.dse_scene_get_loaded_subs(@out, cap); }
+    public static int GetSubCount() { return Native.dse_scene_get_sub_count(); }
+    public static int GetPendingCount() { return Native.dse_scene_get_pending_count(); }
+    public static void TransitionTo(string path, int mode, float fadeDuration) { Native.dse_scene_transition_to(path, mode, fadeDuration); }
+    public static int GetTransitionState() { return Native.dse_scene_get_transition_state(); }
+    public static float GetFadeProgress() { return Native.dse_scene_get_fade_progress(); }
+    public static int GetActive([Out] byte[] @out, int cap) { return Native.dse_scene_get_active(@out, cap); }
 }
 
 public static class Sdf {
@@ -683,48 +866,51 @@ public static class SphereCollider3D {
 }
 
 public static class Spline {
-    public static uint Create() { return Native.dse_spline_create(); }
+    public static int Init() { return Native.dse_spline_init(); }
+    public static void Shutdown() { Native.dse_spline_shutdown(); }
+    public static uint Create(string name) { return Native.dse_spline_create(name); }
     public static void Destroy(uint spline) { Native.dse_spline_destroy(spline); }
-    public static void AddPoint(uint spline, float x, float y, float z) { Native.dse_spline_add_point(spline, x, y, z); }
-    public static void SetPoint(uint spline, int index, float x, float y, float z) { Native.dse_spline_set_point(spline, index, x, y, z); }
+    public static void AddPoint(uint spline, float x, float y, float z, float width) { Native.dse_spline_add_point(spline, x, y, z, width); }
+    public static void SetPoint(uint spline, int index, float x, float y, float z, float width) { Native.dse_spline_set_point(spline, index, x, y, z, width); }
+    public static void RemovePoint(uint spline, int index) { Native.dse_spline_remove_point(spline, index); }
     public static int GetPointCount(uint spline) { return Native.dse_spline_get_point_count(spline); }
     public static float GetLength(uint spline) { return Native.dse_spline_get_length(spline); }
     public static void Evaluate(uint spline, float t, [Out] float[] outXyz) { Native.dse_spline_evaluate(spline, t, outXyz); }
     public static void EvaluateDistance(uint spline, float dist, [Out] float[] outXyz) { Native.dse_spline_evaluate_distance(spline, dist, outXyz); }
-    public static void FindNearest(uint spline, float x, float y, float z, out float outT, [Out] float[] outXyz) { Native.dse_spline_find_nearest(spline, x, y, z, out outT, outXyz); }
-    public static int GenRoad(uint spline, float width, int segments) { return Native.dse_spline_gen_road(spline, width, segments); }
-    public static int GenRiver(uint spline, float width, float depth, int segments) { return Native.dse_spline_gen_river(spline, width, depth, segments); }
+    public static float FindNearest(uint spline, float x, float y, float z) { return Native.dse_spline_find_nearest(spline, x, y, z); }
+    public static int GenRoad(uint spline, float segmentLength, int widthSegments) { return Native.dse_spline_gen_road(spline, segmentLength, widthSegments); }
+    public static int GenRiver(uint spline, float segmentLength, float depth) { return Native.dse_spline_gen_river(spline, segmentLength, depth); }
 }
 
 public static class Sprite {
-    public static void Add(uint e, uint textureHandle, float w, float h) { Native.dse_sprite_add(e, textureHandle, w, h); }
+    public static void Add(uint e, float r, float g, float b, float a, int orderInLayer, uint textureHandle) { Native.dse_sprite_add(e, r, g, b, a, orderInLayer, textureHandle); }
     public static void SetUvScroll(uint e, float sx, float sy) { Native.dse_sprite_set_uv_scroll(e, sx, sy); }
     public static void SetUvOffset(uint e, float ox, float oy) { Native.dse_sprite_set_uv_offset(e, ox, oy); }
 }
 
 public static class SpriteSheet {
-    public static uint Load(string path, int frameW, int frameH) { return Native.dse_sprite_sheet_load(path, frameW, frameH); }
-    public static int FrameCount(uint sheet) { return Native.dse_sprite_sheet_frame_count(sheet); }
-    public static void GetFrameUv(uint sheet, int frame, [Out] float[] outUv) { Native.dse_sprite_sheet_get_frame_uv(sheet, frame, outUv); }
+    public static int Load(string path) { return Native.dse_sprite_sheet_load(path); }
+    public static int FrameCount(int sheet) { return Native.dse_sprite_sheet_frame_count(sheet); }
+    public static void GetFrameUv(int sheet, int frame, [Out] float[] outUv) { Native.dse_sprite_sheet_get_frame_uv(sheet, frame, outUv); }
 }
 
 public static class Steering {
-    public static void Add(uint e, float maxSpeed, float maxForce, float mass) { Native.dse_steering_add(e, maxSpeed, maxForce, mass); }
-    public static void SetTarget(uint e, float x, float y, float z) { Native.dse_steering_set_target(e, x, y, z); }
-    public static int GetState(uint e, [Out] float[] outVel, [Out] float[] outAccel) { return Native.dse_steering_get_state(e, outVel, outAccel); }
+    public static void Add(uint e, float maxVelocity, float maxForce, float mass) { Native.dse_steering_add(e, maxVelocity, maxForce, mass); }
+    public static int SetTarget(uint e, int behavior, float x, float y, float z) { return Native.dse_steering_set_target(e, behavior, x, y, z); }
+    public static int GetState(uint e, out int outFlags, [Out] float[] outVelocity, out float outParams, out float outTargets) { return Native.dse_steering_get_state(e, out outFlags, outVelocity, out outParams, out outTargets); }
 }
 
 public static class Streaming {
-    public static uint CreateZone(float x, float y, float z, float radius) { return Native.dse_streaming_create_zone(x, y, z, radius); }
+    public static uint CreateZone(string name, float x, float y, float z, float loadR, float unloadR) { return Native.dse_streaming_create_zone(name, x, y, z, loadR, unloadR); }
     public static void DestroyZone(uint zone) { Native.dse_streaming_destroy_zone(zone); }
-    public static void AddAsset(uint zone, string path) { Native.dse_streaming_add_asset(zone, path); }
-    public static void AddAssets(uint zone, string[] paths, int count) { Native.dse_streaming_add_assets(zone, paths, count); }
+    public static void AddAsset(uint zone, string path, string typeStr) { Native.dse_streaming_add_asset(zone, path, typeStr); }
+    public static void AddAssets(uint zone, string[] paths, int count, string typeStr) { Native.dse_streaming_add_assets(zone, paths, count, typeStr); }
     public static void SetZoneCenter(uint zone, float x, float y, float z) { Native.dse_streaming_set_zone_center(zone, x, y, z); }
     public static void ForceLoad(uint zone) { Native.dse_streaming_force_load(zone); }
     public static void ForceUnload(uint zone) { Native.dse_streaming_force_unload(zone); }
     public static int GetZoneState(uint zone) { return Native.dse_streaming_get_zone_state(zone); }
     public static float GetZoneProgress(uint zone) { return Native.dse_streaming_get_zone_progress(zone); }
-    public static void SetBudget(int maxLoadsPerFrame) { Native.dse_streaming_set_budget(maxLoadsPerFrame); }
+    public static void SetBudget(int maxLoadsPerFrame, int maxConcurrent) { Native.dse_streaming_set_budget(maxLoadsPerFrame, maxConcurrent); }
     public static int GetActiveLoads() { return Native.dse_streaming_get_active_loads(); }
     public static int GetZoneCount() { return Native.dse_streaming_get_zone_count(); }
 }
@@ -733,10 +919,25 @@ public static class Terrain {
     public static void Add(uint e, float originX, float originZ, float blockSize, int cols, int rows, float scale, int flipZ) { Native.dse_terrain_heightmap_add(e, originX, originZ, blockSize, cols, rows, scale, flipZ); }
     public static void SetData(uint e, float[] heights, int count) { Native.dse_terrain_heightmap_set_data(e, heights, count); }
     public static int GetHeight(float worldX, float worldZ, out float outY) { return Native.dse_terrain_get_height(worldX, worldZ, out outY); }
+    public static void Add(uint e, string heightmapPath, float width, float depth, float maxHeight) { Native.dse_terrain_add(e, heightmapPath, width, depth, maxHeight); }
+    public static void SetParams(uint e, int resX, int resZ, int maxLod, float lodFactor, int useDynamicLod) { Native.dse_terrain_set_params(e, resX, resZ, maxLod, lodFactor, useDynamicLod); }
+    public static void SetHeight(uint e, int x, int z, float height) { Native.dse_terrain_set_height(e, x, z, height); }
+    public static int LoadHeightmap(uint e, string path, out int outW, out int outH, out int outCh, out int outRx, out int outRz) { return Native.dse_terrain_load_heightmap(e, path, out outW, out outH, out outCh, out outRx, out outRz); }
+    public static int SetTexture(uint e, string path, out uint outHandle, out int outW, out int outH) { return Native.dse_terrain_set_texture(e, path, out outHandle, out outW, out outH); }
+    public static void GetLod(uint e, out int outLod, out int outRx, out int outRz, out int outMaxLod, out float outLodFactor) { Native.dse_terrain_get_lod(e, out outLod, out outRx, out outRz, out outMaxLod, out outLodFactor); }
+    public static float SampleHeight(uint e, float wx, float wz) { return Native.dse_terrain_sample_height(e, wx, wz); }
+    public static int SetSplatTexture(uint e, int layer, string path) { return Native.dse_terrain_set_splat_texture(e, layer, path); }
+    public static void TileManagerAdd(uint e) { Native.dse_terrain_tile_manager_add(e); }
+    public static void DeformInit(float maxDepth, float maxHeight) { Native.dse_terrain_deform_init(maxDepth, maxHeight); }
+    public static int DeformApply(int type, float x, float y, float z, float radius, float strength) { return Native.dse_terrain_deform_apply(type, x, y, z, radius, strength); }
+    public static int DeformUndo() { return Native.dse_terrain_deform_undo(); }
+    public static int DeformRedo() { return Native.dse_terrain_deform_redo(); }
+    public static float DeformSampleHeight(float x, float z) { return Native.dse_terrain_deform_sample_height(x, z); }
+    public static void DeformShutdown() { Native.dse_terrain_deform_shutdown(); }
 }
 
 public static class TrailRenderer {
-    public static void RendererAdd(uint e, float width, float r, float g, float b, float a) { Native.dse_trail_renderer_add(e, width, r, g, b, a); }
+    public static void RendererAdd(uint e, float lifetime, float startWidth, float endWidth) { Native.dse_trail_renderer_add(e, lifetime, startWidth, endWidth); }
     public static void SetEmitting(uint e, int emitting) { Native.dse_trail_set_emitting(e, emitting); }
     public static void SetColors(uint e, float r1, float g1, float b1, float a1, float r2, float g2, float b2, float a2) { Native.dse_trail_set_colors(e, r1, g1, b1, a1, r2, g2, b2, a2); }
     public static void Clear(uint e) { Native.dse_trail_clear(e); }
@@ -774,6 +975,65 @@ public static class Ui {
     public static void SetTextInputFocus(uint e, int focused) { Native.dse_ui_set_text_input_focus(e, focused); }
     public static int LoadFromFile(string path, [Out] uint[] outEntities, int cap) { return Native.dse_ui_load_from_file(path, outEntities, cap); }
     public static int LoadFromJson(string json, [Out] uint[] outEntities, int cap) { return Native.dse_ui_load_from_json(json, outEntities, cap); }
+    public static void AddLabel(uint e, string text, uint fontTexHandle, float r, float g, float b, float a, float glyphW, float glyphH, float spacing, int atlasCols, int atlasRows, int asciiStart, float offsetX, float offsetY) { Native.dse_ui_add_label(e, text, fontTexHandle, r, g, b, a, glyphW, glyphH, spacing, atlasCols, atlasRows, asciiStart, offsetX, offsetY); }
+    public static void SetLabelNumber(uint e, long number) { Native.dse_ui_set_label_number(e, number); }
+    public static void SetLabelLayout(uint e, float maxWidth, int align, int overflow, int maxLines, float lineSpacing) { Native.dse_ui_set_label_layout(e, maxWidth, align, overflow, maxLines, lineSpacing); }
+    public static void AddMask(uint e, float w, float h, float ox, float oy, int blockOutside) { Native.dse_ui_add_mask(e, w, h, ox, oy, blockOutside); }
+    public static void AddRichText(uint e, string text, float r, float g, float b, float a, int shadow, int outline) { Native.dse_ui_add_rich_text(e, text, r, g, b, a, shadow, outline); }
+    public static void SetRichText(uint e, string text) { Native.dse_ui_set_rich_text(e, text); }
+    public static void SetButtonScale(uint e, float hover, float pressed, float lerpSpeed) { Native.dse_ui_set_button_scale(e, hover, pressed, lerpSpeed); }
+    public static void SetUv(uint e, float u, float v, float w, float h) { Native.dse_ui_set_uv(e, u, v, w, h); }
+    public static void SetNineSlice(uint e, int enabled, float l, float b, float r, float t, float sw, float sh) { Native.dse_ui_set_nine_slice(e, enabled, l, b, r, t, sw, sh); }
+    public static void AddAnchor(uint e, int anchorType, float ox, float oy) { Native.dse_ui_add_anchor(e, anchorType, ox, oy); }
+    public static void SetAnchorType(uint e, int anchorType) { Native.dse_ui_set_anchor_type(e, anchorType); }
+    public static void SetAnchorOffset(uint e, float ox, float oy) { Native.dse_ui_set_anchor_offset(e, ox, oy); }
+    public static void AddGridLayout(uint e, int columns, float cw, float ch, float sx, float sy) { Native.dse_ui_add_grid_layout(e, columns, cw, ch, sx, sy); }
+    public static void SetGridLayout(uint e, int columns, int rows, float cw, float ch, float sx, float sy, int alignment) { Native.dse_ui_set_grid_layout(e, columns, rows, cw, ch, sx, sy, alignment); }
+    public static void AddCanvasScaler(uint e, float refW, float refH, int match) { Native.dse_ui_add_canvas_scaler(e, refW, refH, match); }
+    public static void SetCanvasScaler(uint e, float refW, float refH, float scaleFactor, int matchWh, float match, int pixelSnap) { Native.dse_ui_set_canvas_scaler(e, refW, refH, scaleFactor, matchWh, match, pixelSnap); }
+    public static void AddBoxLayout(uint e, int vertical, float spacing, float padX, float padY, int alignMain, int alignCross, int reverse) { Native.dse_ui_add_box_layout(e, vertical, spacing, padX, padY, alignMain, alignCross, reverse); }
+    public static void SetBoxLayout(uint e, int vertical, float spacing, float padX, float padY, int alignMain, int alignCross, int reverse) { Native.dse_ui_set_box_layout(e, vertical, spacing, padX, padY, alignMain, alignCross, reverse); }
+    public static void AddContentSizeFitter(uint e, int fitW, int fitH, float minW, float minH, float maxW, float maxH) { Native.dse_ui_add_content_size_fitter(e, fitW, fitH, minW, minH, maxW, maxH); }
+    public static void AddAnimation(uint e, float duration, int easing, int loop, int pingPong, float delay) { Native.dse_ui_add_animation(e, duration, easing, loop, pingPong, delay); }
+    public static void AnimatePosition(uint e, float tx, float ty) { Native.dse_ui_animate_position(e, tx, ty); }
+    public static void AnimateScale(uint e, float sx, float sy) { Native.dse_ui_animate_scale(e, sx, sy); }
+    public static void AnimateAlpha(uint e, float alpha) { Native.dse_ui_animate_alpha(e, alpha); }
+    public static void AnimateColor(uint e, float r, float g, float b, float a) { Native.dse_ui_animate_color(e, r, g, b, a); }
+    public static void StopAnimation(uint e) { Native.dse_ui_stop_animation(e); }
+    public static void SetTextInputPlaceholder(uint e, string placeholder) { Native.dse_ui_set_text_input_placeholder(e, placeholder); }
+    public static void AddScrollView(uint e, float cw, float ch, int horizontal, int vertical) { Native.dse_ui_add_scroll_view(e, cw, ch, horizontal, vertical); }
+    public static void SetScrollOffset(uint e, float x, float y) { Native.dse_ui_set_scroll_offset(e, x, y); }
+    public static void GetScrollOffset(uint e, out float outX, out float outY) { Native.dse_ui_get_scroll_offset(e, out outX, out outY); }
+    public static void SetScrollContentSize(uint e, float w, float h) { Native.dse_ui_set_scroll_content_size(e, w, h); }
+    public static void SetSliderColors(uint e, float tr, float tg, float tb, float ta, float fr, float fg, float fb, float fa, float hr, float hg, float hb, float ha) { Native.dse_ui_set_slider_colors(e, tr, tg, tb, ta, fr, fg, fb, fa, hr, hg, hb, ha); }
+    public static void SetSliderHandleSize(uint e, float size) { Native.dse_ui_set_slider_handle_size(e, size); }
+    public static void SetSliderVertical(uint e, int vertical) { Native.dse_ui_set_slider_vertical(e, vertical); }
+    public static void SetSliderRange(uint e, float minVal, float maxVal) { Native.dse_ui_set_slider_range(e, minVal, maxVal); }
+    public static void AddDropdown(uint e, float itemHeight, int maxVisible) { Native.dse_ui_add_dropdown(e, itemHeight, maxVisible); }
+    public static void DropdownAddOption(uint e, string text, string value) { Native.dse_ui_dropdown_add_option(e, text, value); }
+    public static void DropdownClearOptions(uint e) { Native.dse_ui_dropdown_clear_options(e); }
+    public static void SetDropdownIndex(uint e, int index) { Native.dse_ui_set_dropdown_index(e, index); }
+    public static int GetDropdownIndex(uint e) { return Native.dse_ui_get_dropdown_index(e); }
+    public static int GetDropdownValue(uint e, [Out] byte[] @out, int cap) { return Native.dse_ui_get_dropdown_value(e, @out, cap); }
+    public static void SetDropdownOpen(uint e, int open) { Native.dse_ui_set_dropdown_open(e, open); }
+    public static void AddFilledImage(uint e, float fillAmount, int method, int origin, int clockwise) { Native.dse_ui_add_filled_image(e, fillAmount, method, origin, clockwise); }
+    public static void SetFillAmount(uint e, float amount) { Native.dse_ui_set_fill_amount(e, amount); }
+    public static float GetFillAmount(uint e) { return Native.dse_ui_get_fill_amount(e); }
+    public static void SetFillMethod(uint e, int method, int origin, int clockwise) { Native.dse_ui_set_fill_method(e, method, origin, clockwise); }
+    public static void AddFocusNavigable(uint e, int tabIndex) { Native.dse_ui_add_focus_navigable(e, tabIndex); }
+    public static void SetFocusNav(uint e, uint up, uint down, uint left, uint right) { Native.dse_ui_set_focus_nav(e, up, down, left, right); }
+    public static int IsFocused(uint e) { return Native.dse_ui_is_focused(e); }
+    public static void SetFocusTint(uint e, float r, float g, float b, float a) { Native.dse_ui_set_focus_tint(e, r, g, b, a); }
+    public static void AddEventPropagation(uint e, int bubblesClick, int bubblesHover) { Native.dse_ui_add_event_propagation(e, bubblesClick, bubblesHover); }
+    public static void StopPropagation(uint e) { Native.dse_ui_stop_propagation(e); }
+    public static void AddVisualEffect(uint e) { Native.dse_ui_add_visual_effect(e); }
+    public static void SetCornerRadius(uint e, float radius) { Native.dse_ui_set_corner_radius(e, radius); }
+    public static void SetGradient(uint e, float sr, float sg, float sb, float sa, float er, float eg, float eb, float ea, int direction) { Native.dse_ui_set_gradient(e, sr, sg, sb, sa, er, eg, eb, ea, direction); }
+    public static void SetBlur(uint e, float radius, float intensity) { Native.dse_ui_set_blur(e, radius, intensity); }
+    public static void AddVirtualScroll(uint e, int totalItems, float itemHeight) { Native.dse_ui_add_virtual_scroll(e, totalItems, itemHeight); }
+    public static void SetVirtualScrollCount(uint e, int count) { Native.dse_ui_set_virtual_scroll_count(e, count); }
+    public static void GetVirtualScrollRange(uint e, out int outStart, out int outEnd) { Native.dse_ui_get_virtual_scroll_range(e, out outStart, out outEnd); }
+    public static void DestroyVirtualScroll(uint e) { Native.dse_ui_destroy_virtual_scroll(e); }
 }
 
 public static class Vehicle {
@@ -785,20 +1045,21 @@ public static class Vehicle {
 }
 
 public static class Video {
-    public static uint CreatePlayer(string path) { return Native.dse_video_create_player(path); }
+    public static uint CreatePlayer() { return Native.dse_video_create_player(); }
     public static void DestroyPlayer(uint player) { Native.dse_video_destroy_player(player); }
-    public static void Play(uint player) { Native.dse_video_play(player); }
+    public static void Play(uint player, string path, int loop, float playbackRate, int decodeAudio, int prefetchFrames, int backend) { Native.dse_video_play(player, path, loop, playbackRate, decodeAudio, prefetchFrames, backend); }
     public static void Pause(uint player) { Native.dse_video_pause(player); }
     public static void Resume(uint player) { Native.dse_video_resume(player); }
     public static void Stop(uint player) { Native.dse_video_stop(player); }
     public static void Seek(uint player, float time) { Native.dse_video_seek(player, time); }
     public static void SetLoop(uint player, int loop) { Native.dse_video_set_loop(player, loop); }
     public static void SetPlaybackRate(uint player, float rate) { Native.dse_video_set_playback_rate(player, rate); }
-    public static void Update(uint player) { Native.dse_video_update(player); }
+    public static uint Update(uint player, float deltaTime) { return Native.dse_video_update(player, deltaTime); }
     public static int GetState(uint player) { return Native.dse_video_get_state(player); }
     public static float GetTime(uint player) { return Native.dse_video_get_time(player); }
     public static float GetDuration(uint player) { return Native.dse_video_get_duration(player); }
-    public static int GetTexture(uint player) { return Native.dse_video_get_texture(player); }
+    public static void GetInfo(uint player, out int outW, out int outH, out float outFps, out float outDuration, out int outTotalFrames, out int outHasAudio, out int outSampleRate, out int outChannels, [Out] byte[] outCodec, int codecCap) { Native.dse_video_get_info(player, out outW, out outH, out outFps, out outDuration, out outTotalFrames, out outHasAudio, out outSampleRate, out outChannels, outCodec, codecCap); }
+    public static uint GetTexture(uint player) { return Native.dse_video_get_texture(player); }
 }
 
 public static class VirtualTexture {
@@ -809,10 +1070,17 @@ public static class VirtualTexture {
 }
 
 public static class Vsm {
-    public static void RegisterLight(uint e) { Native.dse_vsm_register_light(e); }
-    public static void UnregisterLight(uint e) { Native.dse_vsm_unregister_light(e); }
-    public static void Invalidate() { Native.dse_vsm_invalidate(); }
+    public static int Init(uint virtualResolution, uint pageSize, uint poolPages, uint clipmapLevels) { return Native.dse_vsm_init(virtualResolution, pageSize, poolPages, clipmapLevels); }
+    public static void Shutdown() { Native.dse_vsm_shutdown(); }
+    public static uint RegisterLight(uint lightId, int isDirectional, float dx, float dy, float dz) { return Native.dse_vsm_register_light(lightId, isDirectional, dx, dy, dz); }
+    public static void UnregisterLight(uint lightId) { Native.dse_vsm_unregister_light(lightId); }
+    public static void BeginFrame(uint frame, float camX, float camY, float camZ) { Native.dse_vsm_begin_frame(frame, camX, camY, camZ); }
+    public static void EndFrame() { Native.dse_vsm_end_frame(); }
+    public static void Invalidate(uint lightId, float minX, float minY, float minZ, float maxX, float maxY, float maxZ) { Native.dse_vsm_invalidate(lightId, minX, minY, minZ, maxX, maxY, maxZ); }
+    public static void MarkPageRendered(uint vx, uint vy, uint mip, uint lightId) { Native.dse_vsm_mark_page_rendered(vx, vy, mip, lightId); }
     public static int GetPagesToRender() { return Native.dse_vsm_get_pages_to_render(); }
+    public static int LookupPage(uint vx, uint vy, uint mip, uint lightId, out uint outPx, out uint outPy) { return Native.dse_vsm_lookup_page(vx, vy, mip, lightId, out outPx, out outPy); }
+    public static void GetStats(out int outTotal, out int outMapped, out int outDirty, out int outRendered, out int outCacheHit, out int outPoolUsage) { Native.dse_vsm_get_stats(out outTotal, out outMapped, out outDirty, out outRendered, out outCacheHit, out outPoolUsage); }
     public static int GetClipmapLevels() { return Native.dse_vsm_get_clipmap_levels(); }
 }
 
@@ -824,10 +1092,10 @@ public static class Weather {
 
 public static class WorldPartition {
     public static int GetLoadedCount() { return Native.dse_wp_get_loaded_count(); }
-    public static int ForceLoad(float x, float z, float radius) { return Native.dse_wp_force_load(x, z, radius); }
-    public static int ForceUnload(float x, float z, float radius) { return Native.dse_wp_force_unload(x, z, radius); }
-    public static void WorldToCell(float x, float z, out int outCx, out int outCz) { Native.dse_wp_world_to_cell(x, z, out outCx, out outCz); }
-    public static void CellToWorld(int cx, int cz, out float outX, out float outZ) { Native.dse_wp_cell_to_world(cx, cz, out outX, out outZ); }
+    public static int ForceLoad(int cx, int cz) { return Native.dse_wp_force_load(cx, cz); }
+    public static int ForceUnload(int cx, int cz) { return Native.dse_wp_force_unload(cx, cz); }
+    public static void WorldToCell(float x, float y, float z, float cellSize, out int outCx, out int outCz) { Native.dse_wp_world_to_cell(x, y, z, cellSize, out outCx, out outCz); }
+    public static void CellToWorld(int cx, int cz, float cellSize, out float outX, out float outY, out float outZ) { Native.dse_wp_cell_to_world(cx, cz, cellSize, out outX, out outY, out outZ); }
 }
 
 public static class WorldStatePersistence {
@@ -837,6 +1105,6 @@ public static class WorldStatePersistence {
     public static int ResetCell(int cx, int cz) { return Native.dse_wsp_reset_cell(cx, cz); }
     public static int GetDirtyCount() { return Native.dse_wsp_get_dirty_count(); }
     public static int GetTotalModifications() { return Native.dse_wsp_get_total_modifications(); }
-    public static void RecordDestruction(float x, float y, float z, float radius) { Native.dse_wsp_record_destruction(x, y, z, radius); }
+    public static void RecordDestruction(int cx, int cz, ulong entityId) { Native.dse_wsp_record_destruction(cx, cz, entityId); }
 }
 

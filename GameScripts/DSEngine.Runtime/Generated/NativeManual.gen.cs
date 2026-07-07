@@ -140,6 +140,54 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_texture", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_mesh_renderer_set_texture(uint e, string slot, string path, out uint outHandle, out int outWidth, out int outHeight);
 
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_add_procedural")]
+    internal static partial void dse_mesh_renderer_add_procedural(uint e, float r, float g, float b, float a, float[] vertices, int vertexFloatCount, int[] indices, int indexCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_material_params")]
+    internal static partial void dse_mesh_renderer_set_material_params(uint e, float metallic, float roughness, float ao, float er, float eg, float eb, float normalStrength, int receiveShadow, int doubleSided, float cr, float cg, float cb, float ca);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_depth_state")]
+    internal static partial void dse_mesh_renderer_set_depth_state(uint e, int depthTest, int depthWrite);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_material_scalar", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_mesh_renderer_set_material_scalar(uint e, string name, float value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_advanced_material")]
+    internal static partial void dse_mesh_renderer_set_advanced_material(uint e, float clearCoat, float clearCoatRoughness, float anisotropy, float pomHeightScale, float sssStrength, float sssR, float sssG, float sssB);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_uvs")]
+    internal static partial int dse_mesh_renderer_set_uvs(uint e, float[] uvs, int count, out int outAttrCount, out int outVertexCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_normals")]
+    internal static partial int dse_mesh_renderer_set_normals(uint e, float[] normals, int count, out int outAttrCount, out int outVertexCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_tangents")]
+    internal static partial int dse_mesh_renderer_set_tangents(uint e, float[] tangents, int count, out int outAttrCount, out int outVertexCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_emissive_authoring")]
+    internal static partial void dse_mesh_renderer_set_emissive_authoring(uint e, float r, float g, float b);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_add")]
+    internal static partial void dse_morph_simple_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_add_target", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_morph_simple_add_target(uint e, string name, float weight);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_set_weight", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_morph_simple_set_weight(uint e, string name, float w);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_set_weight_index")]
+    internal static partial void dse_morph_simple_set_weight_index(uint e, int idx, float w);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_get_weight", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial float dse_morph_simple_get_weight(uint e, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_get_weight_index")]
+    internal static partial float dse_morph_simple_get_weight_index(uint e, int idx);
+
+    [LibraryImport(Lib, EntryPoint = "dse_morph_simple_set_enabled")]
+    internal static partial void dse_morph_simple_set_enabled(uint e, int enabled);
+
     [LibraryImport(Lib, EntryPoint = "dse_fracture_add")]
     internal static partial void dse_fracture_add(uint e, int source, uint fragmentCount, float breakForce, float health);
 
@@ -199,6 +247,9 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_ragdoll_is_active")]
     internal static partial int dse_ragdoll_is_active(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ragdoll_set_collision_layer_mask")]
+    internal static partial void dse_ragdoll_set_collision_layer_mask(uint e, uint layer, uint mask);
 
     [LibraryImport(Lib, EntryPoint = "dse_softbody_add")]
     internal static partial void dse_softbody_add(uint e, float stiffness, int iterations, float damping, float volumeStiffness);
@@ -611,6 +662,42 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_audio_listener_add")]
     internal static partial void dse_audio_listener_add(uint e, int enabled);
 
+    [LibraryImport(Lib, EntryPoint = "dse_audio_play_sfx_random", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_audio_play_sfx_random(string path, float volume, float pitchMin, float pitchMax);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_set_volume", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_set_volume(string name, float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_set_muted", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_set_muted(string name, int muted);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_create(string name, string parent, float volume);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_remove", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_remove(string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_add_effect", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_add_effect(string busName, int type, float cutoffHz, float q, float delayTimeMs, float feedback, float wetMix, float roomSize, float damping);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_remove_effect", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_bus_remove_effect(string busName, int index);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_bus_get_names")]
+    internal static partial int dse_audio_bus_get_names([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_snapshot_save", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_snapshot_save(string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_snapshot_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_audio_snapshot_load(string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_snapshot_list")]
+    internal static partial int dse_audio_snapshot_list([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_source_get_state")]
+    internal static partial int dse_audio_source_get_state(uint e, out int outFlags, out float outParams, out long outRuntimeHandle, out long outClipSize, [Out] byte[] outPath, int pathCap);
+
     [LibraryImport(Lib, EntryPoint = "dse_nav_is_ready")]
     internal static partial int dse_nav_is_ready();
 
@@ -629,6 +716,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_nav_find_path")]
     internal static partial int dse_nav_find_path(float sx, float sy, float sz, float ex, float ey, float ez, [Out] float[] outXyz, int maxPoints);
 
+    [LibraryImport(Lib, EntryPoint = "dse_nav_bake")]
+    internal static partial int dse_nav_bake(float[] verts, int nverts, int[] tris, int ntris, float cellSize, float cellHeight, float agentHeight, float agentRadius, float agentMaxClimb, float agentMaxSlope);
+
     [LibraryImport(Lib, EntryPoint = "dse_nav_agent_set")]
     internal static partial void dse_nav_agent_set(uint e, float speed, float acceleration, float stoppingDist, float radius, float height);
 
@@ -644,8 +734,14 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_nav_agent_arrived")]
     internal static partial int dse_nav_agent_arrived(uint e);
 
+    [LibraryImport(Lib, EntryPoint = "dse_nav_agent_get")]
+    internal static partial int dse_nav_agent_get(uint e, out float outParams, out int outFlags);
+
     [LibraryImport(Lib, EntryPoint = "dse_l10n_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_l10n_load(string path, string locale);
+
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_load_string", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_l10n_load_string(string json, string locale);
 
     [LibraryImport(Lib, EntryPoint = "dse_l10n_set_locale", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_l10n_set_locale(string locale);
@@ -659,6 +755,9 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_l10n_has_key", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_l10n_has_key(string key);
 
+    [LibraryImport(Lib, EntryPoint = "dse_l10n_get_locales")]
+    internal static partial int dse_l10n_get_locales([Out] byte[] @out, int cap);
+
     [LibraryImport(Lib, EntryPoint = "dse_scene_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_scene_load(string path);
 
@@ -670,6 +769,108 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_scene_instantiate_prefab", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint dse_scene_instantiate_prefab(string path, float x, float y, float z, int usePos);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_load_sub", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_load_sub(string path, out int outEntityCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_load_sub_async", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_load_sub_async(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_unload_sub", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_scene_unload_sub(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_unload_all_subs")]
+    internal static partial void dse_scene_unload_all_subs();
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_is_sub_loaded", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_scene_is_sub_loaded(string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_loaded_subs")]
+    internal static partial int dse_scene_get_loaded_subs([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_sub_count")]
+    internal static partial int dse_scene_get_sub_count();
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_pending_count")]
+    internal static partial int dse_scene_get_pending_count();
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_transition_to", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_scene_transition_to(string path, int mode, float fadeDuration);
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_transition_state")]
+    internal static partial int dse_scene_get_transition_state();
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_fade_progress")]
+    internal static partial float dse_scene_get_fade_progress();
+
+    [LibraryImport(Lib, EntryPoint = "dse_scene_get_active")]
+    internal static partial int dse_scene_get_active([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_uuid_get")]
+    internal static partial int dse_uuid_get(uint e, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_uuid_set", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_uuid_set(uint e, string uuidStr, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_uuid_resolve", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_uuid_resolve(string uuidStr);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_find_entities_by_mesh_path", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ecs_find_entities_by_mesh_path(string meshPath, [Out] uint[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_find_entities_with", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ecs_find_entities_with(string component, [Out] uint[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_count_entities_with", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ecs_count_entities_with(string component);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_has_component", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ecs_has_component(uint e, string component);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_queryable_components")]
+    internal static partial int dse_ecs_get_queryable_components([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_world_aabb")]
+    internal static partial int dse_ecs_get_world_aabb(uint e, out float outMinMax);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_local_aabb")]
+    internal static partial int dse_ecs_get_local_aabb(uint e, out float outMinMax);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_set_time_scale")]
+    internal static partial void dse_ecs_set_time_scale(uint e, float scale);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_time_scale")]
+    internal static partial float dse_ecs_get_time_scale(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_add_transform")]
+    internal static partial void dse_ecs_add_transform(uint e, float x, float y, float z, float sx, float sy, float sz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_add_parent")]
+    internal static partial void dse_ecs_add_parent(uint e, uint parent);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_set_parent")]
+    internal static partial void dse_ecs_set_parent(uint e, uint parent);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_parent")]
+    internal static partial uint dse_ecs_get_parent(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_clear_parent")]
+    internal static partial void dse_ecs_clear_parent(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_add_script", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ecs_add_script(uint e, string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_set_script_path", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ecs_set_script_path(uint e, string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_script_path")]
+    internal static partial int dse_ecs_get_script_path(uint e, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_set_script_enabled")]
+    internal static partial void dse_ecs_set_script_enabled(uint e, int enabled);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ecs_get_script_enabled")]
+    internal static partial int dse_ecs_get_script_enabled(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_ui_add_renderer")]
     internal static partial void dse_ui_add_renderer(uint e, uint textureHandle, float r, float g, float b, float a, int order, float w, float h);
@@ -769,15 +970,6 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_input_get_screen_height")]
     internal static partial float dse_input_get_screen_height();
-
-    [LibraryImport(Lib, EntryPoint = "dse_input_get_gamepad_button")]
-    internal static partial int dse_input_get_gamepad_button(int gamepadId, int button);
-
-    [LibraryImport(Lib, EntryPoint = "dse_input_get_gamepad_button_down")]
-    internal static partial int dse_input_get_gamepad_button_down(int gamepadId, int button);
-
-    [LibraryImport(Lib, EntryPoint = "dse_input_get_gamepad_button_up")]
-    internal static partial int dse_input_get_gamepad_button_up(int gamepadId, int button);
 
     [LibraryImport(Lib, EntryPoint = "dse_input_is_gamepad_connected")]
     internal static partial int dse_input_is_gamepad_connected(int gamepadId);
@@ -890,12 +1082,6 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_physics3d_boxcast")]
     internal static partial int dse_physics3d_boxcast(float ox, float oy, float oz, float dx, float dy, float dz, float hx, float hy, float hz, float maxDist, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal, out float outDistance);
 
-    [LibraryImport(Lib, EntryPoint = "dse_rigidbody3d_sleep")]
-    internal static partial void dse_rigidbody3d_sleep(uint e);
-
-    [LibraryImport(Lib, EntryPoint = "dse_rigidbody3d_wake")]
-    internal static partial void dse_rigidbody3d_wake(uint e);
-
     [LibraryImport(Lib, EntryPoint = "dse_rigidbody3d_set_kinematic")]
     internal static partial void dse_rigidbody3d_set_kinematic(uint e, int kinematic);
 
@@ -948,7 +1134,7 @@ internal static partial class Native {
     internal static partial void dse_physics2d_set_joint_distance(uint e, float minLen, float maxLen, float stiffness, float damping);
 
     [LibraryImport(Lib, EntryPoint = "dse_physics2d_set_joint_prismatic")]
-    internal static partial void dse_physics2d_set_joint_prismatic(uint e, int enableLimit, float lower, float upper, int enableMotor, float motorSpeed, float maxForce);
+    internal static partial void dse_physics2d_set_joint_prismatic(uint e, float axisX, float axisY, int enableLimit, float lower, float upper, int enableMotor, float motorSpeed, float maxForce);
 
     [LibraryImport(Lib, EntryPoint = "dse_physics2d_destroy_joint")]
     internal static partial void dse_physics2d_destroy_joint(uint e);
@@ -960,22 +1146,22 @@ internal static partial class Native {
     internal static partial int dse_physics2d_poll_collision_event(uint e, out uint outOther, out int outIsTrigger, out int outIsEnter);
 
     [LibraryImport(Lib, EntryPoint = "dse_physics2d_add_tilemap")]
-    internal static partial void dse_physics2d_add_tilemap(uint e, float originX, float originY, float cellW, float cellH, int cols, int rows);
+    internal static partial void dse_physics2d_add_tilemap(uint e, int width, int height, float tileSize, uint texHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_physics2d_set_tile")]
-    internal static partial void dse_physics2d_set_tile(uint e, int col, int row, int filled);
+    internal static partial void dse_physics2d_set_tile(uint e, int x, int y, int tileId);
 
     [LibraryImport(Lib, EntryPoint = "dse_parallax_add")]
     internal static partial void dse_parallax_add(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_parallax_add_layer")]
-    internal static partial int dse_parallax_add_layer(uint e, float scrollScale, int autoScroll, float speedX, float speedY);
+    internal static partial int dse_parallax_add_layer(uint e, float scrollX, float scrollY);
 
     [LibraryImport(Lib, EntryPoint = "dse_parallax_set_layer_scroll")]
-    internal static partial void dse_parallax_set_layer_scroll(uint e, int layer, float scrollScale);
+    internal static partial void dse_parallax_set_layer_scroll(uint e, int layer, float sx, float sy);
 
     [LibraryImport(Lib, EntryPoint = "dse_parallax_set_layer_auto_scroll")]
-    internal static partial void dse_parallax_set_layer_auto_scroll(uint e, int layer, float speedX, float speedY);
+    internal static partial void dse_parallax_set_layer_auto_scroll(uint e, int layer, float sx, float sy);
 
     [LibraryImport(Lib, EntryPoint = "dse_parallax_set_layer_opacity")]
     internal static partial void dse_parallax_set_layer_opacity(uint e, int layer, float opacity);
@@ -984,7 +1170,7 @@ internal static partial class Native {
     internal static partial int dse_parallax_get_layer_count(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_light2d_add")]
-    internal static partial void dse_light2d_add(uint e, int type, float r, float g, float b, float intensity, float range, int castShadow);
+    internal static partial void dse_light2d_add(uint e, int type);
 
     [LibraryImport(Lib, EntryPoint = "dse_light2d_set_color")]
     internal static partial void dse_light2d_set_color(uint e, float r, float g, float b);
@@ -996,49 +1182,49 @@ internal static partial class Native {
     internal static partial void dse_light2d_set_range(uint e, float range);
 
     [LibraryImport(Lib, EntryPoint = "dse_light2d_set_shadow")]
-    internal static partial void dse_light2d_set_shadow(uint e, int castShadow);
+    internal static partial void dse_light2d_set_shadow(uint e, int mode);
 
     [LibraryImport(Lib, EntryPoint = "dse_light2d_set_ambient")]
-    internal static partial void dse_light2d_set_ambient(float r, float g, float b);
+    internal static partial void dse_light2d_set_ambient(uint e, float r, float g, float b, float intensity);
 
     [LibraryImport(Lib, EntryPoint = "dse_normal_map_2d_add")]
-    internal static partial void dse_normal_map_2d_add(uint e, uint textureHandle);
+    internal static partial void dse_normal_map_2d_add(uint e, float strength);
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_sheet_load", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial uint dse_sprite_sheet_load(string path, int frameW, int frameH);
+    internal static partial int dse_sprite_sheet_load(string path);
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_sheet_frame_count")]
-    internal static partial int dse_sprite_sheet_frame_count(uint sheet);
+    internal static partial int dse_sprite_sheet_frame_count(int sheet);
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_sheet_get_frame_uv")]
-    internal static partial void dse_sprite_sheet_get_frame_uv(uint sheet, int frame, [Out] float[] outUv);
+    internal static partial void dse_sprite_sheet_get_frame_uv(int sheet, int frame, [Out] float[] outUv);
 
     [LibraryImport(Lib, EntryPoint = "dse_atlas_load", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial uint dse_atlas_load(string path);
+    internal static partial int dse_atlas_load(string path);
 
     [LibraryImport(Lib, EntryPoint = "dse_atlas_entry_count")]
-    internal static partial int dse_atlas_entry_count(uint atlas);
+    internal static partial int dse_atlas_entry_count(int atlas);
 
-    [LibraryImport(Lib, EntryPoint = "dse_atlas_get_entry_uv")]
-    internal static partial void dse_atlas_get_entry_uv(uint atlas, int index, [Out] float[] outUv);
+    [LibraryImport(Lib, EntryPoint = "dse_atlas_get_entry_uv", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_atlas_get_entry_uv(int atlas, string name, [Out] float[] outUv);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_controller_2d_add")]
-    internal static partial void dse_camera_controller_2d_add(uint e, uint target);
+    internal static partial void dse_camera_controller_2d_add(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_2d_shake")]
-    internal static partial void dse_camera_2d_shake(float intensity, float duration);
+    internal static partial void dse_camera_2d_shake(uint e, float trauma);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_2d_set_zoom")]
-    internal static partial void dse_camera_2d_set_zoom(float zoom);
+    internal static partial void dse_camera_2d_set_zoom(uint e, float zoom);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_2d_set_bounds")]
-    internal static partial void dse_camera_2d_set_bounds(float minX, float minY, float maxX, float maxY);
+    internal static partial void dse_camera_2d_set_bounds(uint e, float minX, float minY, float maxX, float maxY);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_2d_set_look_ahead")]
-    internal static partial void dse_camera_2d_set_look_ahead(float distance, float speed);
+    internal static partial void dse_camera_2d_set_look_ahead(uint e, float lax, float lay);
 
     [LibraryImport(Lib, EntryPoint = "dse_trail_renderer_add")]
-    internal static partial void dse_trail_renderer_add(uint e, float width, float r, float g, float b, float a);
+    internal static partial void dse_trail_renderer_add(uint e, float lifetime, float startWidth, float endWidth);
 
     [LibraryImport(Lib, EntryPoint = "dse_trail_set_emitting")]
     internal static partial void dse_trail_set_emitting(uint e, int emitting);
@@ -1050,7 +1236,7 @@ internal static partial class Native {
     internal static partial void dse_trail_clear(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_line_renderer_add")]
-    internal static partial void dse_line_renderer_add(uint e, float width, float r, float g, float b, float a);
+    internal static partial void dse_line_renderer_add(uint e, float width);
 
     [LibraryImport(Lib, EntryPoint = "dse_line_renderer_set_points")]
     internal static partial void dse_line_renderer_set_points(uint e, float[] points, int count);
@@ -1065,58 +1251,64 @@ internal static partial class Native {
     internal static partial void dse_line_renderer_set_closed(uint e, int closed);
 
     [LibraryImport(Lib, EntryPoint = "dse_audio_spatial_2d_add")]
-    internal static partial void dse_audio_spatial_2d_add(uint e, uint sourceEntity, float minDist, float maxDist);
+    internal static partial void dse_audio_spatial_2d_add(uint e, float minDist, float maxDist);
 
     [LibraryImport(Lib, EntryPoint = "dse_audio_spatial_2d_set_range")]
     internal static partial void dse_audio_spatial_2d_set_range(uint e, float minDist, float maxDist);
 
     [LibraryImport(Lib, EntryPoint = "dse_audio_spatial_2d_set_attenuation")]
-    internal static partial void dse_audio_spatial_2d_set_attenuation(uint e, float rolloff);
+    internal static partial void dse_audio_spatial_2d_set_attenuation(uint e, int model, float rolloff);
 
     [LibraryImport(Lib, EntryPoint = "dse_audio_listener_2d_add")]
-    internal static partial void dse_audio_listener_2d_add(uint e);
+    internal static partial void dse_audio_listener_2d_add(uint e, float globalVolume);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_system_3d_add")]
-    internal static partial void dse_particle_system_3d_add(uint e);
+    internal static partial void dse_particle_system_3d_add(uint e, int maxParticles, float emissionRate);
 
-    [LibraryImport(Lib, EntryPoint = "dse_particle_system_3d_set_params")]
-    internal static partial void dse_particle_system_3d_set_params(uint e, float duration, float startSpeed, float startSize, float startRotation, int maxParticles, float gravity);
+    [LibraryImport(Lib, EntryPoint = "dse_particle_system_3d_set_params", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_particle_system_3d_set_params(uint e, float lifeMin, float lifeMax, float sizeMin, float sizeMax, float speedMin, float speedMax, float r, float g, float b, float a, float gx, float gy, float gz, string texturePath);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_system_3d_get_state")]
-    internal static partial int dse_particle_system_3d_get_state(uint e, out int outAlive, out int outEmitted);
+    internal static partial int dse_particle_system_3d_get_state(uint e, out int outActive, out int outMaxParticles, out float outEmissionRate, out float outLife, out float outSize, out float outSpeed, out float outGravity, out float outColor, [Out] byte[] outTex, int texCap, out int outEnabled, out int outInitialized, out uint outTextureHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_emitter_add")]
-    internal static partial void dse_particle_emitter_add(uint e, int shape, float rate, float lifetime, float speed);
+    internal static partial void dse_particle_emitter_add(uint e, uint textureHandle, int maxParticles, float emitRate);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_density")]
-    internal static partial void dse_particle_set_density(uint e, float density);
+    internal static partial void dse_particle_set_density(uint e, float emitRateScale);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_burst")]
     internal static partial void dse_particle_burst(uint e, int count);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_random")]
-    internal static partial void dse_particle_set_random(uint e, float posRand, float velRand, float sizeRand, float rotRand);
+    internal static partial void dse_particle_set_random(uint e, float vminX, float vminY, float vminZ, float vmaxX, float vmaxY, float vmaxZ, float lifeMin, float lifeMax, float sizeMin, float sizeMax);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_size_curve")]
-    internal static partial void dse_particle_set_size_curve(uint e, float startSize, float endSize);
+    internal static partial void dse_particle_set_size_curve(uint e, int enabled, float startValue, float endValue);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_alpha_curve")]
-    internal static partial void dse_particle_set_alpha_curve(uint e, float startAlpha, float endAlpha);
+    internal static partial void dse_particle_set_alpha_curve(uint e, int enabled, float startValue, float endValue);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_speed_curve")]
-    internal static partial void dse_particle_set_speed_curve(uint e, float startSpeed, float endSpeed);
+    internal static partial void dse_particle_set_speed_curve(uint e, int enabled, float startValue, float endValue);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_gravity")]
     internal static partial void dse_particle_set_gravity(uint e, float gx, float gy, float gz);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_collision")]
-    internal static partial void dse_particle_set_collision(uint e, int enabled, float bounce);
+    internal static partial void dse_particle_set_collision(uint e, int enabled, int mode, float bounce, float friction, float lifeLoss, float groundY);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_color_curve")]
-    internal static partial void dse_particle_set_color_curve(uint e, float r1, float g1, float b1, float r2, float g2, float b2);
+    internal static partial void dse_particle_set_color_curve(uint e, int enabled, float endR, float endG, float endB, float endA);
 
     [LibraryImport(Lib, EntryPoint = "dse_particle_set_rotation")]
-    internal static partial void dse_particle_set_rotation(uint e, float startRot, float endRot);
+    internal static partial void dse_particle_set_rotation(uint e, float rotationMin, float rotationMax, float angularVelocityMin, float angularVelocityMax);
+
+    [LibraryImport(Lib, EntryPoint = "dse_gameplay_tuning_add")]
+    internal static partial void dse_gameplay_tuning_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_gameplay_tuning_set")]
+    internal static partial void dse_gameplay_tuning_set(uint e, float leafMinDistance, float leafMoveLeft, float leafMoveRight, float jumpSpeedScale, float jumpSpeedMax, float cameraFollowDamping);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_add_skybox", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_rendering_add_skybox(uint e, string cubemapPath);
@@ -1125,19 +1317,19 @@ internal static partial class Native {
     internal static partial void dse_rendering_add_gi_probe(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_gi_probe")]
-    internal static partial void dse_rendering_set_gi_probe(uint e, float intensity, float range, int resolution);
+    internal static partial void dse_rendering_set_gi_probe(uint e, float giIntensity, float ox, float oy, float oz, float ex, float ey, float ez, int resX, int resY, int resZ);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_gi_probe_enabled")]
     internal static partial void dse_rendering_set_gi_probe_enabled(uint e, int enabled);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_get_gi_probe")]
-    internal static partial void dse_rendering_get_gi_probe(uint e, out float outIntensity, out float outRange, out int outResolution);
+    internal static partial int dse_rendering_get_gi_probe(uint e, out float outGiIntensity, [Out] float[] outOrigin, out float outExtent, out int outResolution);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_add_light_probe")]
     internal static partial void dse_rendering_add_light_probe(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_light_probe")]
-    internal static partial void dse_rendering_set_light_probe(uint e, float intensity, float range);
+    internal static partial void dse_rendering_set_light_probe(uint e, float influenceRadius);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_light_probe_enabled")]
     internal static partial void dse_rendering_set_light_probe_enabled(uint e, int enabled);
@@ -1146,13 +1338,40 @@ internal static partial class Native {
     internal static partial void dse_rendering_add_reflection_probe(uint e);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_reflection_probe")]
-    internal static partial void dse_rendering_set_reflection_probe(uint e, float intensity, float range, int resolution);
+    internal static partial void dse_rendering_set_reflection_probe(uint e, float influenceRadius, int resolution);
 
     [LibraryImport(Lib, EntryPoint = "dse_rendering_set_reflection_probe_enabled")]
     internal static partial void dse_rendering_set_reflection_probe_enabled(uint e, int enabled);
 
+    [LibraryImport(Lib, EntryPoint = "dse_dir_light_has")]
+    internal static partial int dse_dir_light_has(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_point_light_has")]
+    internal static partial int dse_point_light_has(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spot_light_has")]
+    internal static partial int dse_spot_light_has(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_sky_light_has")]
+    internal static partial int dse_sky_light_has(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dir_light_get_shadow_params")]
+    internal static partial int dse_dir_light_get_shadow_params(uint e, out int outCastShadow, out float outStrength, out float outC0, out float outC1, out float outC2, out float outLambda);
+
+    [LibraryImport(Lib, EntryPoint = "dse_rendering_set_gi_probe_bias")]
+    internal static partial void dse_rendering_set_gi_probe_bias(uint e, float normalBias, float hysteresis);
+
+    [LibraryImport(Lib, EntryPoint = "dse_rendering_get_gi_probe_ex")]
+    internal static partial int dse_rendering_get_gi_probe_ex(uint e, out int outEnabled, out float outNormalBias);
+
+    [LibraryImport(Lib, EntryPoint = "dse_rendering_set_light_probe_ex")]
+    internal static partial void dse_rendering_set_light_probe_ex(uint e, float influenceRadius, int needsRebake);
+
+    [LibraryImport(Lib, EntryPoint = "dse_rendering_set_reflection_probe_ex")]
+    internal static partial void dse_rendering_set_reflection_probe_ex(uint e, float influenceRadius, float boxX, float boxY, float boxZ, int resolution);
+
     [LibraryImport(Lib, EntryPoint = "dse_camera_add")]
-    internal static partial void dse_camera_add(uint e);
+    internal static partial void dse_camera_add(uint e, float orthoSize, int priority);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_set_priority")]
     internal static partial void dse_camera_set_priority(uint e, int priority);
@@ -1161,13 +1380,13 @@ internal static partial class Native {
     internal static partial void dse_camera_set_enabled(uint e, int enabled);
 
     [LibraryImport(Lib, EntryPoint = "dse_camera_set_follow")]
-    internal static partial void dse_camera_set_follow(uint e, uint target, float lerp);
+    internal static partial void dse_camera_set_follow(uint e, uint target, float damping, float deadZoneX, float deadZoneY, float offsetX, float offsetY);
 
     [LibraryImport(Lib, EntryPoint = "dse_free_camera_add")]
-    internal static partial void dse_free_camera_add(uint e);
+    internal static partial void dse_free_camera_add(uint e, float moveSpeed, float mouseSensitivity);
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_add")]
-    internal static partial void dse_sprite_add(uint e, uint textureHandle, float w, float h);
+    internal static partial void dse_sprite_add(uint e, float r, float g, float b, float a, int orderInLayer, uint textureHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_sprite_set_uv_scroll")]
     internal static partial void dse_sprite_set_uv_scroll(uint e, float sx, float sy);
@@ -1184,23 +1403,23 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_mesh_set_material_scalar", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_mesh_set_material_scalar(uint e, string paramName, float value);
 
-    [LibraryImport(Lib, EntryPoint = "dse_mesh_set_texture", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dse_mesh_set_texture(uint e, string slot, uint textureHandle);
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_set_texture_handle", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_mesh_set_texture_handle(uint e, string slot, uint textureHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_mesh_set_emissive")]
-    internal static partial void dse_mesh_set_emissive(uint e, float r, float g, float b, float intensity);
+    internal static partial void dse_mesh_set_emissive(uint e, float r, float g, float b);
 
     [LibraryImport(Lib, EntryPoint = "dse_steering_add")]
-    internal static partial void dse_steering_add(uint e, float maxSpeed, float maxForce, float mass);
+    internal static partial void dse_steering_add(uint e, float maxVelocity, float maxForce, float mass);
 
     [LibraryImport(Lib, EntryPoint = "dse_steering_set_target")]
-    internal static partial void dse_steering_set_target(uint e, float x, float y, float z);
+    internal static partial int dse_steering_set_target(uint e, int behavior, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_steering_get_state")]
-    internal static partial int dse_steering_get_state(uint e, [Out] float[] outVel, [Out] float[] outAccel);
+    internal static partial int dse_steering_get_state(uint e, out int outFlags, [Out] float[] outVelocity, out float outParams, out float outTargets);
 
     [LibraryImport(Lib, EntryPoint = "dse_lod_add_level", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dse_lod_add_level(uint e, float distance, string meshPath);
+    internal static partial void dse_lod_add_level(uint e, string meshPath, float screenSizeThreshold);
 
     [LibraryImport(Lib, EntryPoint = "dse_lod_set_scale")]
     internal static partial void dse_lod_set_scale(uint e, float scale);
@@ -1211,26 +1430,26 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_lod_set_enabled")]
     internal static partial void dse_lod_set_enabled(uint e, int enabled);
 
-    [LibraryImport(Lib, EntryPoint = "dse_hair_add")]
-    internal static partial void dse_hair_add(uint e, int strandCount, int segmentCount, float length);
+    [LibraryImport(Lib, EntryPoint = "dse_hair_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_hair_add(uint e, string assetPath, int numFollowPerGuide);
 
     [LibraryImport(Lib, EntryPoint = "dse_hair_set_physics")]
-    internal static partial void dse_hair_set_physics(uint e, float stiffness, float damping, float gravity);
+    internal static partial void dse_hair_set_physics(uint e, float damping, float stiffnessLocal, float stiffnessGlobal, float gravity);
 
     [LibraryImport(Lib, EntryPoint = "dse_hair_set_render")]
-    internal static partial void dse_hair_set_render(uint e, float thickness, int enableShadow);
+    internal static partial void dse_hair_set_render(uint e, float rootR, float rootG, float rootB, float rootA, float tipR, float tipG, float tipB, float tipA, float fiberRadius, float opacity);
+
+    [LibraryImport(Lib, EntryPoint = "dse_hair_set_wind_full")]
+    internal static partial void dse_hair_set_wind_full(uint e, float wx, float wy, float wz, float turbulence);
 
     [LibraryImport(Lib, EntryPoint = "dse_hair_set_lod")]
-    internal static partial void dse_hair_set_lod(uint e, float closeDist, float farDist, int minStrands);
-
-    [LibraryImport(Lib, EntryPoint = "dse_render_pick_entity")]
-    internal static partial int dse_render_pick_entity(float screenX, float screenY);
+    internal static partial void dse_hair_set_lod(uint e, float lod0Distance, float lod1Distance, float lod2Distance, float cullDistance);
 
     [LibraryImport(Lib, EntryPoint = "dse_decal_add")]
-    internal static partial void dse_decal_add(uint e, uint textureHandle, float w, float h, float d);
+    internal static partial void dse_decal_add(uint e, uint albedoTexture);
 
     [LibraryImport(Lib, EntryPoint = "dse_decal_set")]
-    internal static partial void dse_decal_set(uint e, float r, float g, float b, float a, float opacity);
+    internal static partial void dse_decal_set(uint e, float r, float g, float b, float a, float angleFade);
 
     [LibraryImport(Lib, EntryPoint = "dse_post_process_get_state")]
     internal static partial int dse_post_process_get_state(uint e, out int outEnabled, out int outBloom, out int outSsao, out int outSsr, out int outFxaa, out int outDof);
@@ -1253,38 +1472,23 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_anim3d_set_layer_mask", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_anim3d_set_layer_mask(uint e, int layer, string[] bones, int count);
 
-    [LibraryImport(Lib, EntryPoint = "dse_character_set_slide_params")]
-    internal static partial void dse_character_set_slide_params(uint e, float slideSpeed, float slideDuration);
-
-    [LibraryImport(Lib, EntryPoint = "dse_character_set_climb_params")]
-    internal static partial void dse_character_set_climb_params(uint e, float climbSpeed, float checkDistance);
-
-    [LibraryImport(Lib, EntryPoint = "dse_character_set_swim_params")]
-    internal static partial void dse_character_set_swim_params(uint e, float swimSpeed, float waterLevel);
-
     [LibraryImport(Lib, EntryPoint = "dse_character_check_ground")]
     internal static partial int dse_character_check_ground(uint e, [Out] float[] outNormal);
-
-    [LibraryImport(Lib, EntryPoint = "dse_gameplay_set_interaction")]
-    internal static partial void dse_gameplay_set_interaction(uint e, float range, float cooldown);
-
-    [LibraryImport(Lib, EntryPoint = "dse_gameplay_find_interactable")]
-    internal static partial int dse_gameplay_find_interactable(uint e, out uint outTarget, float maxRange);
 
     [LibraryImport(Lib, EntryPoint = "dse_wp_get_loaded_count")]
     internal static partial int dse_wp_get_loaded_count();
 
     [LibraryImport(Lib, EntryPoint = "dse_wp_force_load")]
-    internal static partial int dse_wp_force_load(float x, float z, float radius);
+    internal static partial int dse_wp_force_load(int cx, int cz);
 
     [LibraryImport(Lib, EntryPoint = "dse_wp_force_unload")]
-    internal static partial int dse_wp_force_unload(float x, float z, float radius);
+    internal static partial int dse_wp_force_unload(int cx, int cz);
 
     [LibraryImport(Lib, EntryPoint = "dse_wp_world_to_cell")]
-    internal static partial void dse_wp_world_to_cell(float x, float z, out int outCx, out int outCz);
+    internal static partial void dse_wp_world_to_cell(float x, float y, float z, float cellSize, out int outCx, out int outCz);
 
     [LibraryImport(Lib, EntryPoint = "dse_wp_cell_to_world")]
-    internal static partial void dse_wp_cell_to_world(int cx, int cz, out float outX, out float outZ);
+    internal static partial void dse_wp_cell_to_world(int cx, int cz, float cellSize, out float outX, out float outY, out float outZ);
 
     [LibraryImport(Lib, EntryPoint = "dse_hlod_get_cluster_count")]
     internal static partial int dse_hlod_get_cluster_count();
@@ -1323,7 +1527,7 @@ internal static partial class Native {
     internal static partial int dse_sdf_rebuild();
 
     [LibraryImport(Lib, EntryPoint = "dse_ai_lod_register")]
-    internal static partial void dse_ai_lod_register(uint e);
+    internal static partial void dse_ai_lod_register(uint e, float importance);
 
     [LibraryImport(Lib, EntryPoint = "dse_ai_lod_unregister")]
     internal static partial void dse_ai_lod_unregister(uint e);
@@ -1344,19 +1548,19 @@ internal static partial class Native {
     internal static partial void dse_ai_lod_get_config(out float outNearDist, out float outFarDist, out int outMaxLevel);
 
     [LibraryImport(Lib, EntryPoint = "dse_gpu_particle_set_enabled")]
-    internal static partial void dse_gpu_particle_set_enabled(int enabled);
+    internal static partial void dse_gpu_particle_set_enabled(uint e, int enabled);
 
     [LibraryImport(Lib, EntryPoint = "dse_gpu_particle_set_emission_rate")]
-    internal static partial void dse_gpu_particle_set_emission_rate(float rate);
+    internal static partial void dse_gpu_particle_set_emission_rate(uint e, float rate);
 
     [LibraryImport(Lib, EntryPoint = "dse_gpu_particle_set_gravity")]
-    internal static partial void dse_gpu_particle_set_gravity(float gx, float gy, float gz);
+    internal static partial void dse_gpu_particle_set_gravity(uint e, float gx, float gy, float gz);
 
     [LibraryImport(Lib, EntryPoint = "dse_gpu_particle_set_wind")]
-    internal static partial void dse_gpu_particle_set_wind(float wx, float wy, float wz);
+    internal static partial void dse_gpu_particle_set_wind(uint e, float wx, float wy, float wz);
 
     [LibraryImport(Lib, EntryPoint = "dse_gpu_particle_set_color")]
-    internal static partial void dse_gpu_particle_set_color(float r, float g, float b, float a);
+    internal static partial void dse_gpu_particle_set_color(uint e, float r1, float g1, float b1, float a1, float r2, float g2, float b2, float a2);
 
     [LibraryImport(Lib, EntryPoint = "dse_wsp_save_all")]
     internal static partial int dse_wsp_save_all();
@@ -1377,37 +1581,37 @@ internal static partial class Native {
     internal static partial int dse_wsp_get_total_modifications();
 
     [LibraryImport(Lib, EntryPoint = "dse_wsp_record_destruction")]
-    internal static partial void dse_wsp_record_destruction(float x, float y, float z, float radius);
+    internal static partial void dse_wsp_record_destruction(int cx, int cz, ulong entityId);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_perlin2d")]
-    internal static partial float dse_procedural_perlin2d(float x, float y, float scale);
+    internal static partial float dse_procedural_perlin2d(float x, float y, uint seed);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_simplex2d")]
-    internal static partial float dse_procedural_simplex2d(float x, float y, float scale);
+    internal static partial float dse_procedural_simplex2d(float x, float y, uint seed);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_worley2d")]
-    internal static partial float dse_procedural_worley2d(float x, float y, float scale);
+    internal static partial float dse_procedural_worley2d(float x, float y, uint seed);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_fbm2d")]
-    internal static partial float dse_procedural_fbm2d(float x, float y, float scale, int octaves);
+    internal static partial float dse_procedural_fbm2d(float x, float y, int octaves, float frequency, float lacunarity, float persistence, uint seed);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_random_seed")]
-    internal static partial void dse_procedural_random_seed(int seed);
+    internal static partial void dse_procedural_random_seed(ulong seed);
 
     [LibraryImport(Lib, EntryPoint = "dse_procedural_random_float")]
-    internal static partial float dse_procedural_random_float();
+    internal static partial float dse_procedural_random_float(float minVal, float maxVal);
 
-    [LibraryImport(Lib, EntryPoint = "dse_streaming_create_zone")]
-    internal static partial uint dse_streaming_create_zone(float x, float y, float z, float radius);
+    [LibraryImport(Lib, EntryPoint = "dse_streaming_create_zone", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_streaming_create_zone(string name, float x, float y, float z, float loadR, float unloadR);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_destroy_zone")]
     internal static partial void dse_streaming_destroy_zone(uint zone);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_add_asset", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dse_streaming_add_asset(uint zone, string path);
+    internal static partial void dse_streaming_add_asset(uint zone, string path, string typeStr);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_add_assets", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dse_streaming_add_assets(uint zone, string[] paths, int count);
+    internal static partial void dse_streaming_add_assets(uint zone, string[] paths, int count, string typeStr);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_set_zone_center")]
     internal static partial void dse_streaming_set_zone_center(uint zone, float x, float y, float z);
@@ -1425,7 +1629,7 @@ internal static partial class Native {
     internal static partial float dse_streaming_get_zone_progress(uint zone);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_set_budget")]
-    internal static partial void dse_streaming_set_budget(int maxLoadsPerFrame);
+    internal static partial void dse_streaming_set_budget(int maxLoadsPerFrame, int maxConcurrent);
 
     [LibraryImport(Lib, EntryPoint = "dse_streaming_get_active_loads")]
     internal static partial int dse_streaming_get_active_loads();
@@ -1433,14 +1637,14 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_streaming_get_zone_count")]
     internal static partial int dse_streaming_get_zone_count();
 
-    [LibraryImport(Lib, EntryPoint = "dse_http_request", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int dse_http_request(string method, string url, string body, string headers, out int outStatus, [Out] byte[] outBody, int bodyCap);
+    [LibraryImport(Lib, EntryPoint = "dse_http_send", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_http_send(string method, string url, string body, string headersJson, int timeoutSec, int verifyPeer, string caFile);
 
-    [LibraryImport(Lib, EntryPoint = "dse_http_get", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int dse_http_get(string url, [Out] byte[] outBody, int bodyCap);
+    [LibraryImport(Lib, EntryPoint = "dse_http_poll")]
+    internal static partial int dse_http_poll(out uint outIds, int maxIds);
 
-    [LibraryImport(Lib, EntryPoint = "dse_http_post", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int dse_http_post(string url, string body, [Out] byte[] outBody, int bodyCap);
+    [LibraryImport(Lib, EntryPoint = "dse_http_get_response")]
+    internal static partial int dse_http_get_response(uint requestId, out int outStatus, [Out] byte[] outBody, int bodyCap, [Out] byte[] outError, int errorCap);
 
     [LibraryImport(Lib, EntryPoint = "dse_http_update")]
     internal static partial void dse_http_update();
@@ -1448,14 +1652,14 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_http_available")]
     internal static partial int dse_http_available();
 
-    [LibraryImport(Lib, EntryPoint = "dse_video_create_player", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial uint dse_video_create_player(string path);
+    [LibraryImport(Lib, EntryPoint = "dse_video_create_player")]
+    internal static partial uint dse_video_create_player();
 
     [LibraryImport(Lib, EntryPoint = "dse_video_destroy_player")]
     internal static partial void dse_video_destroy_player(uint player);
 
-    [LibraryImport(Lib, EntryPoint = "dse_video_play")]
-    internal static partial void dse_video_play(uint player);
+    [LibraryImport(Lib, EntryPoint = "dse_video_play", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_video_play(uint player, string path, int loop, float playbackRate, int decodeAudio, int prefetchFrames, int backend);
 
     [LibraryImport(Lib, EntryPoint = "dse_video_pause")]
     internal static partial void dse_video_pause(uint player);
@@ -1476,7 +1680,7 @@ internal static partial class Native {
     internal static partial void dse_video_set_playback_rate(uint player, float rate);
 
     [LibraryImport(Lib, EntryPoint = "dse_video_update")]
-    internal static partial void dse_video_update(uint player);
+    internal static partial uint dse_video_update(uint player, float deltaTime);
 
     [LibraryImport(Lib, EntryPoint = "dse_video_get_state")]
     internal static partial int dse_video_get_state(uint player);
@@ -1487,14 +1691,17 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_video_get_duration")]
     internal static partial float dse_video_get_duration(uint player);
 
+    [LibraryImport(Lib, EntryPoint = "dse_video_get_info")]
+    internal static partial void dse_video_get_info(uint player, out int outW, out int outH, out float outFps, out float outDuration, out int outTotalFrames, out int outHasAudio, out int outSampleRate, out int outChannels, [Out] byte[] outCodec, int codecCap);
+
     [LibraryImport(Lib, EntryPoint = "dse_video_get_texture")]
-    internal static partial int dse_video_get_texture(uint player);
+    internal static partial uint dse_video_get_texture(uint player);
 
     [LibraryImport(Lib, EntryPoint = "dse_dssl_load_material", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial uint dse_dssl_load_material(string path);
 
-    [LibraryImport(Lib, EntryPoint = "dse_dssl_create_instance")]
-    internal static partial uint dse_dssl_create_instance(uint material);
+    [LibraryImport(Lib, EntryPoint = "dse_dssl_create_instance", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_dssl_create_instance(string path);
 
     [LibraryImport(Lib, EntryPoint = "dse_dssl_set_float", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_dssl_set_float(uint instance, string name, float value);
@@ -1521,7 +1728,7 @@ internal static partial class Native {
     internal static partial void dse_dssl_get_color(uint instance, string name, [Out] float[] outRgba);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_build")]
-    internal static partial uint dse_meshlet_build(uint entity);
+    internal static partial uint dse_meshlet_build(float[] positions, int posCount, uint[] indices, int idxCount, uint maxVertices, uint maxTriangles);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_serialize", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_meshlet_serialize(uint handle, string path);
@@ -1533,46 +1740,55 @@ internal static partial class Native {
     internal static partial void dse_meshlet_destroy(uint handle);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_get_info")]
-    internal static partial void dse_meshlet_get_info(uint handle, out int outMeshlets, out int outTriangles);
+    internal static partial void dse_meshlet_get_info(uint handle, out int outMeshlets, out int outVertices, out int outIndices, out int outMeshletVertices);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_create")]
-    internal static partial int dse_meshlet_cull_create();
+    internal static partial uint dse_meshlet_cull_create();
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_destroy")]
-    internal static partial void dse_meshlet_cull_destroy(int cullHandle);
+    internal static partial void dse_meshlet_cull_destroy(uint cullHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_register")]
-    internal static partial void dse_meshlet_cull_register(int cullHandle, uint meshletHandle);
+    internal static partial uint dse_meshlet_cull_register(uint cullHandle, uint meshletHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_unregister")]
-    internal static partial void dse_meshlet_cull_unregister(int cullHandle, uint meshletHandle);
+    internal static partial void dse_meshlet_cull_unregister(uint cullHandle, uint regHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_begin_frame")]
-    internal static partial void dse_meshlet_cull_begin_frame(int cullHandle, float camX, float camY, float camZ);
+    internal static partial void dse_meshlet_cull_begin_frame(uint cullHandle);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_add_instance")]
-    internal static partial void dse_meshlet_cull_add_instance(int cullHandle, uint meshletHandle, float[] matrix);
+    internal static partial void dse_meshlet_cull_add_instance(uint cullHandle, uint regHandle, float[] matrix16);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_prepare")]
-    internal static partial void dse_meshlet_cull_prepare(int cullHandle);
+    internal static partial uint dse_meshlet_cull_prepare(uint cullHandle, float[] vpMatrix16, float camX, float camY, float camZ);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_execute_cpu")]
-    internal static partial int dse_meshlet_cull_execute_cpu(int cullHandle);
+    internal static partial uint dse_meshlet_cull_execute_cpu(uint cullHandle, float[] vpMatrix16, float camX, float camY, float camZ, uint flags);
 
     [LibraryImport(Lib, EntryPoint = "dse_meshlet_cull_stats")]
-    internal static partial void dse_meshlet_cull_stats(int cullHandle, out int outTotal, out int outVisible);
+    internal static partial void dse_meshlet_cull_stats(uint cullHandle, out int outTotal, out int outVisible, out int outMeshes, out int outInstances);
 
-    [LibraryImport(Lib, EntryPoint = "dse_spline_create")]
-    internal static partial uint dse_spline_create();
+    [LibraryImport(Lib, EntryPoint = "dse_spline_init")]
+    internal static partial int dse_spline_init();
+
+    [LibraryImport(Lib, EntryPoint = "dse_spline_shutdown")]
+    internal static partial void dse_spline_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_spline_create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_spline_create(string name);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_destroy")]
     internal static partial void dse_spline_destroy(uint spline);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_add_point")]
-    internal static partial void dse_spline_add_point(uint spline, float x, float y, float z);
+    internal static partial void dse_spline_add_point(uint spline, float x, float y, float z, float width);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_set_point")]
-    internal static partial void dse_spline_set_point(uint spline, int index, float x, float y, float z);
+    internal static partial void dse_spline_set_point(uint spline, int index, float x, float y, float z, float width);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spline_remove_point")]
+    internal static partial void dse_spline_remove_point(uint spline, int index);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_get_point_count")]
     internal static partial int dse_spline_get_point_count(uint spline);
@@ -1587,16 +1803,22 @@ internal static partial class Native {
     internal static partial void dse_spline_evaluate_distance(uint spline, float dist, [Out] float[] outXyz);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_find_nearest")]
-    internal static partial void dse_spline_find_nearest(uint spline, float x, float y, float z, out float outT, [Out] float[] outXyz);
+    internal static partial float dse_spline_find_nearest(uint spline, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_gen_road")]
-    internal static partial int dse_spline_gen_road(uint spline, float width, int segments);
+    internal static partial int dse_spline_gen_road(uint spline, float segmentLength, int widthSegments);
 
     [LibraryImport(Lib, EntryPoint = "dse_spline_gen_river")]
-    internal static partial int dse_spline_gen_river(uint spline, float width, float depth, int segments);
+    internal static partial int dse_spline_gen_river(uint spline, float segmentLength, float depth);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ocean_init")]
+    internal static partial int dse_ocean_init(int fftResolution, float tileSize, float windSpeed, float choppiness);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ocean_shutdown")]
+    internal static partial void dse_ocean_shutdown();
 
     [LibraryImport(Lib, EntryPoint = "dse_ocean_update")]
-    internal static partial void dse_ocean_update(float dt);
+    internal static partial void dse_ocean_update(float time, float camX, float camY, float camZ);
 
     [LibraryImport(Lib, EntryPoint = "dse_ocean_get_height")]
     internal static partial float dse_ocean_get_height(float x, float z);
@@ -1608,76 +1830,136 @@ internal static partial class Native {
     internal static partial float dse_ocean_get_foam(float x, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_ocean_set_wind")]
-    internal static partial void dse_ocean_set_wind(float wx, float wz, float speed);
+    internal static partial void dse_ocean_set_wind(float speed, float dx, float dz);
 
     [LibraryImport(Lib, EntryPoint = "dse_ocean_set_choppiness")]
     internal static partial void dse_ocean_set_choppiness(float choppiness);
 
+    [LibraryImport(Lib, EntryPoint = "dse_ocean_get_stats")]
+    internal static partial void dse_ocean_get_stats(out int outTotalTiles, out int outVisibleTiles, out int outFftRes, out float outMaxHeight);
+
     [LibraryImport(Lib, EntryPoint = "dse_ocean_get_lod_count")]
     internal static partial int dse_ocean_get_lod_count();
 
-    [LibraryImport(Lib, EntryPoint = "dse_editor_terrain_brush")]
-    internal static partial void dse_editor_terrain_brush(float x, float z, float radius, float strength, int mode);
+    [LibraryImport(Lib, EntryPoint = "dse_editor_init")]
+    internal static partial int dse_editor_init();
 
-    [LibraryImport(Lib, EntryPoint = "dse_editor_place_foliage")]
-    internal static partial void dse_editor_place_foliage(float x, float z, float radius, int count, uint type);
+    [LibraryImport(Lib, EntryPoint = "dse_editor_shutdown")]
+    internal static partial void dse_editor_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_editor_terrain_brush")]
+    internal static partial int dse_editor_terrain_brush(int op, float x, float y, float z, float radius, float strength, float falloff);
+
+    [LibraryImport(Lib, EntryPoint = "dse_editor_brush_preview")]
+    internal static partial void dse_editor_brush_preview(float x, float y, float z, float radius, out float outMinX, out float outMinY, out float outMaxX, out float outMaxY);
+
+    [LibraryImport(Lib, EntryPoint = "dse_editor_place_foliage", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_editor_place_foliage(float x, float y, float z, float radius, float density, string meshPath);
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_erase_foliage")]
-    internal static partial void dse_editor_erase_foliage(float x, float z, float radius);
+    internal static partial int dse_editor_erase_foliage(float x, float y, float z, float radius);
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_get_foliage_count")]
     internal static partial int dse_editor_get_foliage_count();
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_begin_road")]
-    internal static partial void dse_editor_begin_road(uint spline);
+    internal static partial int dse_editor_begin_road(float width);
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_add_road_point")]
-    internal static partial void dse_editor_add_road_point(float x, float y, float z);
+    internal static partial void dse_editor_add_road_point(uint session, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_end_road")]
-    internal static partial void dse_editor_end_road();
+    internal static partial void dse_editor_end_road(uint session);
+
+    [LibraryImport(Lib, EntryPoint = "dse_editor_update_partition_vis")]
+    internal static partial void dse_editor_update_partition_vis(float camX, float camY, float camZ, float cellSize);
+
+    [LibraryImport(Lib, EntryPoint = "dse_editor_get_cell_count")]
+    internal static partial int dse_editor_get_cell_count();
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_undo")]
-    internal static partial void dse_editor_undo();
+    internal static partial int dse_editor_undo();
 
     [LibraryImport(Lib, EntryPoint = "dse_editor_redo")]
-    internal static partial void dse_editor_redo();
+    internal static partial int dse_editor_redo();
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_init")]
+    internal static partial int dse_vsm_init(uint virtualResolution, uint pageSize, uint poolPages, uint clipmapLevels);
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_shutdown")]
+    internal static partial void dse_vsm_shutdown();
 
     [LibraryImport(Lib, EntryPoint = "dse_vsm_register_light")]
-    internal static partial void dse_vsm_register_light(uint e);
+    internal static partial uint dse_vsm_register_light(uint lightId, int isDirectional, float dx, float dy, float dz);
 
     [LibraryImport(Lib, EntryPoint = "dse_vsm_unregister_light")]
-    internal static partial void dse_vsm_unregister_light(uint e);
+    internal static partial void dse_vsm_unregister_light(uint lightId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_begin_frame")]
+    internal static partial void dse_vsm_begin_frame(uint frame, float camX, float camY, float camZ);
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_end_frame")]
+    internal static partial void dse_vsm_end_frame();
 
     [LibraryImport(Lib, EntryPoint = "dse_vsm_invalidate")]
-    internal static partial void dse_vsm_invalidate();
+    internal static partial void dse_vsm_invalidate(uint lightId, float minX, float minY, float minZ, float maxX, float maxY, float maxZ);
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_mark_page_rendered")]
+    internal static partial void dse_vsm_mark_page_rendered(uint vx, uint vy, uint mip, uint lightId);
 
     [LibraryImport(Lib, EntryPoint = "dse_vsm_get_pages_to_render")]
     internal static partial int dse_vsm_get_pages_to_render();
 
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_lookup_page")]
+    internal static partial int dse_vsm_lookup_page(uint vx, uint vy, uint mip, uint lightId, out uint outPx, out uint outPy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_vsm_get_stats")]
+    internal static partial void dse_vsm_get_stats(out int outTotal, out int outMapped, out int outDirty, out int outRendered, out int outCacheHit, out int outPoolUsage);
+
     [LibraryImport(Lib, EntryPoint = "dse_vsm_get_clipmap_levels")]
     internal static partial int dse_vsm_get_clipmap_levels();
 
-    [LibraryImport(Lib, EntryPoint = "dse_eqs_create_template")]
-    internal static partial uint dse_eqs_create_template();
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_init")]
+    internal static partial int dse_eqs_init();
+
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_shutdown")]
+    internal static partial void dse_eqs_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_create_template", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_eqs_create_template(string name);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_destroy_template")]
     internal static partial void dse_eqs_destroy_template(uint tmpl);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_set_generator")]
-    internal static partial void dse_eqs_set_generator(uint tmpl, int type, float radius, float spacing);
+    internal static partial void dse_eqs_set_generator(uint tmpl, int type, float radius, float spacing, int maxPoints);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_add_scorer")]
-    internal static partial void dse_eqs_add_scorer(uint tmpl, int type, float weight);
+    internal static partial void dse_eqs_add_scorer(uint tmpl, int type, float weight, int invert, float maxValue);
+
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_clear_scorers")]
+    internal static partial void dse_eqs_clear_scorers(uint tmpl);
+
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_set_combine_mode")]
+    internal static partial void dse_eqs_set_combine_mode(uint tmpl, int mode);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_set_max_results")]
-    internal static partial void dse_eqs_set_max_results(uint tmpl, int maxResults);
+    internal static partial void dse_eqs_set_max_results(uint tmpl, uint maxResults);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_execute")]
-    internal static partial int dse_eqs_execute(uint tmpl, float x, float y, float z, [Out] float[] outPositions, int maxResults);
+    internal static partial void dse_eqs_execute(uint tmpl, float x, float y, float z, out float outResult);
 
     [LibraryImport(Lib, EntryPoint = "dse_eqs_get_template_count")]
     internal static partial int dse_eqs_get_template_count();
+
+    [LibraryImport(Lib, EntryPoint = "dse_eqs_execute_at")]
+    internal static partial void dse_eqs_execute_at(uint tmpl, float px, float py, float pz, float cx, float cy, float cz, out float outResult);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_init", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_dist_init(float cellSize, int maxDownloads, string cdnUrl);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_shutdown")]
+    internal static partial void dse_dist_shutdown();
 
     [LibraryImport(Lib, EntryPoint = "dse_dist_load_manifest", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_dist_load_manifest(string path);
@@ -1686,24 +1968,546 @@ internal static partial class Native {
     internal static partial int dse_dist_save_manifest(string path);
 
     [LibraryImport(Lib, EntryPoint = "dse_dist_package_cell", StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int dse_dist_package_cell(int cx, int cz, string outputPath);
+    internal static partial int dse_dist_package_cell(int cx, int cz, int lod, string[] assets, int count);
 
-    [LibraryImport(Lib, EntryPoint = "dse_dist_request_download")]
-    internal static partial int dse_dist_request_download(int cx, int cz);
+    [LibraryImport(Lib, EntryPoint = "dse_dist_request_download", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_dist_request_download(string package);
 
-    [LibraryImport(Lib, EntryPoint = "dse_dist_cancel_download")]
-    internal static partial int dse_dist_cancel_download(int cx, int cz);
+    [LibraryImport(Lib, EntryPoint = "dse_dist_cancel_download", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_dist_cancel_download(string package);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_update_priorities")]
+    internal static partial void dse_dist_update_priorities(float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_dist_tick")]
-    internal static partial void dse_dist_tick();
+    internal static partial void dse_dist_tick(float dt);
 
-    [LibraryImport(Lib, EntryPoint = "dse_dist_is_installed")]
-    internal static partial int dse_dist_is_installed(int cx, int cz);
+    [LibraryImport(Lib, EntryPoint = "dse_dist_is_installed", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_dist_is_installed(string package);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_get_stats")]
+    internal static partial void dse_dist_get_stats(out int outTotal, out int outInstalled, out int outDownloading, out int outPending, out double outDownloadedBytes, out double outSpeedBps);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_get_missing")]
+    internal static partial int dse_dist_get_missing(float x, float y, float z, float radius, [Out] byte[] outBuf, int bufCap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dist_verify", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_dist_verify(string package);
 
     [LibraryImport(Lib, EntryPoint = "dse_dist_get_disk_usage")]
-    internal static partial int dse_dist_get_disk_usage();
+    internal static partial ulong dse_dist_get_disk_usage();
 
-    [LibraryImport(Lib, EntryPoint = "dse_dist_verify")]
-    internal static partial int dse_dist_verify();
+    [LibraryImport(Lib, EntryPoint = "dse_font_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_font_load(string fontId, string ttfPath);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_load_cjk", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_font_load_cjk(string fontId, string ttfPath);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_unload", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_font_unload(string fontId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_set_default", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_font_set_default(string fontId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_measure", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial float dse_font_measure(string text, string fontId, float fontSize);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_line_height", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial float dse_font_line_height(string fontId, float fontSize);
+
+    [LibraryImport(Lib, EntryPoint = "dse_font_get_texture", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_font_get_texture(string fontId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spine_add_renderer", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_spine_add_renderer(uint e, string skelPath, string atlasPath);
+
+    [LibraryImport(Lib, EntryPoint = "dse_spine_set_animation", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_spine_set_animation(uint e, string animName, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_post_process_add")]
+    internal static partial void dse_post_process_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_post_process_set_color_lut", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_post_process_set_color_lut(uint e, string path, float intensity);
+
+    [LibraryImport(Lib, EntryPoint = "dse_decal_add_simple")]
+    internal static partial void dse_decal_add_simple(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_decal_set_full")]
+    internal static partial void dse_decal_set_full(uint e, int enabled, int hasTexture, uint texture, float r, float g, float b, float a, float angleFade);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_terrain_add(uint e, string heightmapPath, float width, float depth, float maxHeight);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_set_params")]
+    internal static partial void dse_terrain_set_params(uint e, int resX, int resZ, int maxLod, float lodFactor, int useDynamicLod);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_set_height")]
+    internal static partial void dse_terrain_set_height(uint e, int x, int z, float height);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_load_heightmap", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_terrain_load_heightmap(uint e, string path, out int outW, out int outH, out int outCh, out int outRx, out int outRz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_set_texture", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_terrain_set_texture(uint e, string path, out uint outHandle, out int outW, out int outH);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_get_lod")]
+    internal static partial void dse_terrain_get_lod(uint e, out int outLod, out int outRx, out int outRz, out int outMaxLod, out float outLodFactor);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_sample_height")]
+    internal static partial float dse_terrain_sample_height(uint e, float wx, float wz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_set_splat_texture", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_terrain_set_splat_texture(uint e, int layer, string path);
+
+    [LibraryImport(Lib, EntryPoint = "dse_water_add")]
+    internal static partial void dse_water_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_water_set")]
+    internal static partial void dse_water_set(uint e, int enabled, float waterLevel, float dr, float dg, float db, float sr, float sg, float sb, float maxDepth, float transparency, float waveAmp, float waveFreq, float waveSpeed, float wdirX, float wdirY, float refraction, float reflection, float specPower, float causticInt, float causticScale, float foamInt, float foamThreshold, float ufogDensity, float ufogR, float ufogG, float ufogB);
+
+    [LibraryImport(Lib, EntryPoint = "dse_water_get")]
+    internal static partial int dse_water_get(uint e, out int outEnabled, out float outWaterLevel, out float outDeepRgb, out float outShallowRgb, out float outMaxDepth, out float outTransparency, out float outWave, out float outWdir, out float outRefraction, out float outReflection, out float outSpecPower);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_add")]
+    internal static partial void dse_grass_add(uint e, float density, float spawnRadius, float bladeHeight, float bladeWidth);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_set_params")]
+    internal static partial void dse_grass_set_params(uint e, float density, float spawnRadius, float bladeHeight, float bladeWidth, float bladeHeightVar, float chunkSize, int seed);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_set_color")]
+    internal static partial void dse_grass_set_color(uint e, float br, float bg, float bb, float tr, float tg, float tb);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_set_wind")]
+    internal static partial void dse_grass_set_wind(uint e, float dx, float dy, float speed, float strength, float turbulence);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_set_lod")]
+    internal static partial void dse_grass_set_lod(uint e, float nearDist, float farDist, int castShadow, float shadowDist);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_set_enabled")]
+    internal static partial void dse_grass_set_enabled(uint e, int enabled);
+
+    [LibraryImport(Lib, EntryPoint = "dse_grass_get_stats")]
+    internal static partial int dse_grass_get_stats(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_foliage_add")]
+    internal static partial void dse_foliage_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_tree_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_tree_add(uint e, string meshPath);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_tile_manager_add")]
+    internal static partial void dse_terrain_tile_manager_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_dynamic_obstacle_add")]
+    internal static partial void dse_dynamic_obstacle_add(uint e, int shape);
+
+    [LibraryImport(Lib, EntryPoint = "dse_navmesh_rebake_add")]
+    internal static partial void dse_navmesh_rebake_add(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_label", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_add_label(uint e, string text, uint fontTexHandle, float r, float g, float b, float a, float glyphW, float glyphH, float spacing, int atlasCols, int atlasRows, int asciiStart, float offsetX, float offsetY);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_label_number")]
+    internal static partial void dse_ui_set_label_number(uint e, long number);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_label_layout")]
+    internal static partial void dse_ui_set_label_layout(uint e, float maxWidth, int align, int overflow, int maxLines, float lineSpacing);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_mask")]
+    internal static partial void dse_ui_add_mask(uint e, float w, float h, float ox, float oy, int blockOutside);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_rich_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_add_rich_text(uint e, string text, float r, float g, float b, float a, int shadow, int outline);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_rich_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_set_rich_text(uint e, string text);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_button_scale")]
+    internal static partial void dse_ui_set_button_scale(uint e, float hover, float pressed, float lerpSpeed);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_uv")]
+    internal static partial void dse_ui_set_uv(uint e, float u, float v, float w, float h);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_nine_slice")]
+    internal static partial void dse_ui_set_nine_slice(uint e, int enabled, float l, float b, float r, float t, float sw, float sh);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_anchor")]
+    internal static partial void dse_ui_add_anchor(uint e, int anchorType, float ox, float oy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_anchor_type")]
+    internal static partial void dse_ui_set_anchor_type(uint e, int anchorType);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_anchor_offset")]
+    internal static partial void dse_ui_set_anchor_offset(uint e, float ox, float oy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_grid_layout")]
+    internal static partial void dse_ui_add_grid_layout(uint e, int columns, float cw, float ch, float sx, float sy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_grid_layout")]
+    internal static partial void dse_ui_set_grid_layout(uint e, int columns, int rows, float cw, float ch, float sx, float sy, int alignment);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_canvas_scaler")]
+    internal static partial void dse_ui_add_canvas_scaler(uint e, float refW, float refH, int match);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_canvas_scaler")]
+    internal static partial void dse_ui_set_canvas_scaler(uint e, float refW, float refH, float scaleFactor, int matchWh, float match, int pixelSnap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_box_layout")]
+    internal static partial void dse_ui_add_box_layout(uint e, int vertical, float spacing, float padX, float padY, int alignMain, int alignCross, int reverse);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_box_layout")]
+    internal static partial void dse_ui_set_box_layout(uint e, int vertical, float spacing, float padX, float padY, int alignMain, int alignCross, int reverse);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_content_size_fitter")]
+    internal static partial void dse_ui_add_content_size_fitter(uint e, int fitW, int fitH, float minW, float minH, float maxW, float maxH);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_animation")]
+    internal static partial void dse_ui_add_animation(uint e, float duration, int easing, int loop, int pingPong, float delay);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_animate_position")]
+    internal static partial void dse_ui_animate_position(uint e, float tx, float ty);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_animate_scale")]
+    internal static partial void dse_ui_animate_scale(uint e, float sx, float sy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_animate_alpha")]
+    internal static partial void dse_ui_animate_alpha(uint e, float alpha);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_animate_color")]
+    internal static partial void dse_ui_animate_color(uint e, float r, float g, float b, float a);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_stop_animation")]
+    internal static partial void dse_ui_stop_animation(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_text_input_placeholder", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_set_text_input_placeholder(uint e, string placeholder);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_scroll_view")]
+    internal static partial void dse_ui_add_scroll_view(uint e, float cw, float ch, int horizontal, int vertical);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_scroll_offset")]
+    internal static partial void dse_ui_set_scroll_offset(uint e, float x, float y);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_scroll_offset")]
+    internal static partial void dse_ui_get_scroll_offset(uint e, out float outX, out float outY);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_scroll_content_size")]
+    internal static partial void dse_ui_set_scroll_content_size(uint e, float w, float h);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_slider_colors")]
+    internal static partial void dse_ui_set_slider_colors(uint e, float tr, float tg, float tb, float ta, float fr, float fg, float fb, float fa, float hr, float hg, float hb, float ha);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_slider_handle_size")]
+    internal static partial void dse_ui_set_slider_handle_size(uint e, float size);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_slider_vertical")]
+    internal static partial void dse_ui_set_slider_vertical(uint e, int vertical);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_slider_range")]
+    internal static partial void dse_ui_set_slider_range(uint e, float minVal, float maxVal);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_dropdown")]
+    internal static partial void dse_ui_add_dropdown(uint e, float itemHeight, int maxVisible);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_dropdown_add_option", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ui_dropdown_add_option(uint e, string text, string value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_dropdown_clear_options")]
+    internal static partial void dse_ui_dropdown_clear_options(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_dropdown_index")]
+    internal static partial void dse_ui_set_dropdown_index(uint e, int index);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_dropdown_index")]
+    internal static partial int dse_ui_get_dropdown_index(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_dropdown_value")]
+    internal static partial int dse_ui_get_dropdown_value(uint e, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_dropdown_open")]
+    internal static partial void dse_ui_set_dropdown_open(uint e, int open);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_filled_image")]
+    internal static partial void dse_ui_add_filled_image(uint e, float fillAmount, int method, int origin, int clockwise);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_fill_amount")]
+    internal static partial void dse_ui_set_fill_amount(uint e, float amount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_fill_amount")]
+    internal static partial float dse_ui_get_fill_amount(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_fill_method")]
+    internal static partial void dse_ui_set_fill_method(uint e, int method, int origin, int clockwise);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_focus_navigable")]
+    internal static partial void dse_ui_add_focus_navigable(uint e, int tabIndex);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_focus_nav")]
+    internal static partial void dse_ui_set_focus_nav(uint e, uint up, uint down, uint left, uint right);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_is_focused")]
+    internal static partial int dse_ui_is_focused(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_focus_tint")]
+    internal static partial void dse_ui_set_focus_tint(uint e, float r, float g, float b, float a);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_event_propagation")]
+    internal static partial void dse_ui_add_event_propagation(uint e, int bubblesClick, int bubblesHover);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_stop_propagation")]
+    internal static partial void dse_ui_stop_propagation(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_visual_effect")]
+    internal static partial void dse_ui_add_visual_effect(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_corner_radius")]
+    internal static partial void dse_ui_set_corner_radius(uint e, float radius);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_gradient")]
+    internal static partial void dse_ui_set_gradient(uint e, float sr, float sg, float sb, float sa, float er, float eg, float eb, float ea, int direction);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_blur")]
+    internal static partial void dse_ui_set_blur(uint e, float radius, float intensity);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_add_virtual_scroll")]
+    internal static partial void dse_ui_add_virtual_scroll(uint e, int totalItems, float itemHeight);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_set_virtual_scroll_count")]
+    internal static partial void dse_ui_set_virtual_scroll_count(uint e, int count);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_get_virtual_scroll_range")]
+    internal static partial void dse_ui_get_virtual_scroll_range(uint e, out int outStart, out int outEnd);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ui_destroy_virtual_scroll")]
+    internal static partial void dse_ui_destroy_virtual_scroll(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_init")]
+    internal static partial void dse_mesh_streaming_init(float hysteresis, int loadBudgetPerFrame);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_register_mesh", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_mesh_streaming_register_mesh(string name, float x, float y, float z, float radius);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_add_lod", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_mesh_streaming_add_lod(uint meshId, uint level, string path, float distance, uint triangleCount);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_tick")]
+    internal static partial void dse_mesh_streaming_tick(float camX, float camY, float camZ, float dt);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_get_current_lod")]
+    internal static partial int dse_mesh_streaming_get_current_lod(uint meshId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_get_mesh_count")]
+    internal static partial int dse_mesh_streaming_get_mesh_count();
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_streaming_shutdown")]
+    internal static partial void dse_mesh_streaming_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_init")]
+    internal static partial void dse_physics_lod_init(float fullDistance, float reducedDistance, float simplifiedDistance);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_register_body")]
+    internal static partial void dse_physics_lod_register_body(uint entityId, float x, float y, float z, float radius);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_evaluate")]
+    internal static partial int dse_physics_lod_evaluate(float camX, float camY, float camZ, uint frame, out uint outIds, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_get_stats")]
+    internal static partial int dse_physics_lod_get_stats(out int outStats);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_wake")]
+    internal static partial void dse_physics_lod_wake(uint entityId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_sleep")]
+    internal static partial void dse_physics_lod_sleep(uint entityId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_physics_lod_shutdown")]
+    internal static partial void dse_physics_lod_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_init")]
+    internal static partial void dse_terrain_deform_init(float maxDepth, float maxHeight);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_apply")]
+    internal static partial int dse_terrain_deform_apply(int type, float x, float y, float z, float radius, float strength);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_undo")]
+    internal static partial int dse_terrain_deform_undo();
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_redo")]
+    internal static partial int dse_terrain_deform_redo();
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_sample_height")]
+    internal static partial float dse_terrain_deform_sample_height(float x, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_terrain_deform_shutdown")]
+    internal static partial void dse_terrain_deform_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_init")]
+    internal static partial void dse_audio_lod_init(float fullDistance, int maxActiveSources);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_register_source", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint dse_audio_lod_register_source(string path, float x, float y, float z, float maxDistance, float priority);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_tick")]
+    internal static partial void dse_audio_lod_tick(float lx, float ly, float lz, float dt);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_get_stats")]
+    internal static partial int dse_audio_lod_get_stats(out int outStats);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_is_audible")]
+    internal static partial int dse_audio_lod_is_audible(uint sourceId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_audio_lod_shutdown")]
+    internal static partial void dse_audio_lod_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_open_world_p2p5_shutdown")]
+    internal static partial void dse_open_world_p2p5_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_create")]
+    internal static partial int dse_cutscene_create();
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_destroy")]
+    internal static partial void dse_cutscene_destroy(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_shutdown")]
+    internal static partial void dse_cutscene_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_add_sequence", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_add_sequence(int playerId, string name, float duration);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_remove_sequence", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_remove_sequence(int playerId, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_add_camera_keyframe", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_add_camera_keyframe(int playerId, string seqName, float time, float px, float py, float pz, float lx, float ly, float lz, float fov);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_add_property_keyframe", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_add_property_keyframe(int playerId, string seqName, string trackName, float time, float value, int interp);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_add_event", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_add_event(int playerId, string seqName, float time, string eventName, string payload);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_add_audio_cue", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_add_audio_cue(int playerId, string seqName, float time, string path, float volume, int loop);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_play", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_play(int playerId, string seqName);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_pause")]
+    internal static partial void dse_cutscene_pause(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_resume")]
+    internal static partial void dse_cutscene_resume(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_stop")]
+    internal static partial void dse_cutscene_stop(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_seek")]
+    internal static partial void dse_cutscene_seek(int playerId, float time);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_get_time")]
+    internal static partial float dse_cutscene_get_time(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_get_state")]
+    internal static partial int dse_cutscene_get_state(int playerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_set_play_rate")]
+    internal static partial void dse_cutscene_set_play_rate(int playerId, float rate);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_update")]
+    internal static partial void dse_cutscene_update(int playerId, float dt);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_tree_create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ai_tree_create(string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_tree_destroy")]
+    internal static partial void dse_ai_tree_destroy(int treeId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_tree_tick")]
+    internal static partial int dse_ai_tree_tick(int treeId, float dt);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_tree_reset")]
+    internal static partial void dse_ai_tree_reset(int treeId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_shutdown")]
+    internal static partial void dse_ai_shutdown();
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_set_bool", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_bb_set_bool(int treeId, string key, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_set_int", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_bb_set_int(int treeId, string key, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_set_float", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_bb_set_float(int treeId, string key, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_set_string", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_bb_set_string(int treeId, string key, string v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_set_vec3", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_bb_set_vec3(int treeId, string key, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_get_bool", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ai_bb_get_bool(int treeId, string key);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_get_int", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ai_bb_get_int(int treeId, string key);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_get_float", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial float dse_ai_bb_get_float(int treeId, string key);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_get_string", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ai_bb_get_string(int treeId, string key, [Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_bb_get_vec3", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_ai_bb_get_vec3(int treeId, string key, [Out] float[] outXyz);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_begin_sequence", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_begin_sequence(int treeId, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_begin_selector", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_begin_selector(int treeId, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_begin_parallel", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_begin_parallel(int treeId, int requireOne, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_end_composite")]
+    internal static partial void dse_ai_end_composite(int treeId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_add_inverter", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_add_inverter(int treeId, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_add_succeeder", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_add_succeeder(int treeId, string name);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_add_repeater", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_add_repeater(int treeId, string name, int maxRepeats);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_create")]
+    internal static partial int dse_ai_goap_create();
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_destroy")]
+    internal static partial void dse_ai_goap_destroy(int plannerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_action_begin", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_goap_action_begin(int plannerId, string name, float cost);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_action_precondition", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_goap_action_precondition(int plannerId, string key, int value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_action_effect", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_goap_action_effect(int plannerId, string key, int value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_action_commit")]
+    internal static partial void dse_ai_goap_action_commit(int plannerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_state_clear")]
+    internal static partial void dse_ai_goap_state_clear(int plannerId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_state_set", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_goap_state_set(int plannerId, int which, string key, int value);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_goap_plan")]
+    internal static partial int dse_ai_goap_plan(int plannerId, [Out] byte[] @out, int cap);
 
 }

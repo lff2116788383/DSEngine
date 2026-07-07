@@ -20,7 +20,8 @@ SKIP = {"dse_native_api_init", "dse_get_world_ptr", "dse_get_asset_manager_ptr",
         "dse_get_audio_system_ptr", "dse_native_api_init_ext",
         "dse_get_floating_origin_ptr"}
 
-RET_MAP = {"void": "void", "int": "int", "float": "float", "uint32_t": "uint"}
+RET_MAP = {"void": "void", "int": "int", "float": "float", "uint32_t": "uint",
+           "double": "double", "long long": "long", "int64_t": "long", "uint64_t": "ulong"}
 
 # out-pointer params that are arrays (not scalar out) — matched by parameter name
 ARRAY_OUT_NAMES = {
@@ -277,6 +278,9 @@ def main():
     facade = {}  # class -> [method lines]
     for ret, name, args in decls:
         if name in SKIP or name in existing:
+            continue
+        if re.search(r"\b[A-Za-z0-9_]+_fn\b", args):
+            # 回调（函数指针）参数无法直接映射为 LibraryImport，跳过
             continue
         try:
             params = []
