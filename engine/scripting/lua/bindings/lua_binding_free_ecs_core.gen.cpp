@@ -38,9 +38,9 @@ int L_dse_ecs_add_transform(lua_State* L) {
     float x = static_cast<float>(luaL_checknumber(L, 2));
     float y = static_cast<float>(luaL_checknumber(L, 3));
     float z = static_cast<float>(luaL_checknumber(L, 4));
-    float sx = static_cast<float>(luaL_checknumber(L, 5));
-    float sy = static_cast<float>(luaL_checknumber(L, 6));
-    float sz = static_cast<float>(luaL_checknumber(L, 7));
+    float sx = static_cast<float>(luaL_optnumber(L, 5, 1.0));
+    float sy = static_cast<float>(luaL_optnumber(L, 6, 1.0));
+    float sz = static_cast<float>(luaL_optnumber(L, 7, 1.0));
     dse_ecs_add_transform(e, x, y, z, sx, sy, sz);
     return 0;
 }

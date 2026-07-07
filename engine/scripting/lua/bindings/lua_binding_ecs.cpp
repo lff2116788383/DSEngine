@@ -73,7 +73,6 @@ int L_EcsAnim3DSetBlendTree1D(lua_State* L) {
 } // namespace
 
 void RegisterEcsBindings(lua_State* L) {
-    lua_newtable(L);
 
     RegisterEcsCoreBindings(L);
     RegisterEcsRenderingBindings(L);
@@ -84,12 +83,15 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterEcsGameplay3DBindings(L);
     Register2DSystemsBindings(L);
     // Table-to-array functions (ex-cabi_gap, registered directly on ecs table)
+    lua_getglobal(L, "dse");
+    lua_getfield(L, -1, "ecs");
     helper::RegisterBindings(L, {
         {"anim3d_set_layer_mask",    L_EcsAnim3DSetLayerMask},
         {"anim3d_set_blend_tree_1d", L_EcsAnim3DSetBlendTree1D},
     });
+    lua_pop(L, 2);
 
-    // Codegen 生成的组件属性绑定（全量注册�?
+    // Codegen 生成的组件属性绑定（全量注册�?
     RegisterTransformComponentGenBindings(L);
     RegisterCamera3DComponentGenBindings(L);
     RegisterDirectionalLight3DComponentGenBindings(L);
