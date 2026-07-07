@@ -1,5 +1,5 @@
 /**
- * @file lua_binding_free_ui.gen.cpp
+ * @file lua_binding_free_http.gen.cpp
  * @brief auto-generated -- do not edit
  *        source: tools/codegen/function_defs.json
  */
@@ -14,28 +14,25 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
-int L_dse_ui_is_hovered(lua_State* L) {
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int _ret = dse_ui_is_hovered(e);
-    lua_pushinteger(L, _ret);
-    return 1;
+int L_dse_http_update(lua_State* L) {
+    dse_http_update();
+    return 0;
 }
 
-int L_dse_ui_is_pressed(lua_State* L) {
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int _ret = dse_ui_is_pressed(e);
+int L_dse_http_available(lua_State* L) {
+    int _ret = dse_http_available();
     lua_pushinteger(L, _ret);
     return 1;
 }
 
 } // namespace
 
-void RegisterFreeFn_ui(lua_State* L) {
+void RegisterHttpBindings(lua_State* L) {
     lua_getglobal(L, "dse");
-    lua_getfield(L, -1, "ui");
+    lua_getfield(L, -1, "http");
     helper::RegisterBindings(L, {
-        {"is_hovered", L_dse_ui_is_hovered},
-        {"is_pressed", L_dse_ui_is_pressed},
+        {"update", L_dse_http_update},
+        {"available", L_dse_http_available},
     });
     lua_pop(L, 2);
 }

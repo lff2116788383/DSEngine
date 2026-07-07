@@ -1,9 +1,7 @@
 /**
  * @file lua_binding_free_{{ group.group }}.gen.cpp
- * @brief 自动生成 — 勿手动修改
- *        来源：tools/codegen/function_defs.json
- *
- * {{ group.group }} 组自由函数的 Lua 绑定，内部委托调用 dse_api C ABI 层。
+ * @brief auto-generated -- do not edit
+ *        source: tools/codegen/function_defs.json
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
@@ -17,7 +15,8 @@ namespace dse::runtime::lua_binding {
 namespace {
 
 {% for fn in group.functions %}
-int L_{{ fn.c_name }}(lua_State* L) {
+{% set func_id = fn.c_name if fn.c_name is defined and fn.c_name else fn.lua_name %}
+int L_{{ func_id }}(lua_State* L) {
 {% set ns = namespace(stack_idx=1) %}
 {# --- Declare output param locals --- #}
 {% for op in fn.get("out_params", []) %}
@@ -55,10 +54,34 @@ int L_{{ fn.c_name }}(lua_State* L) {
     uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "string" %}
+{% if "default" in p %}
+    const char* {{ p.name }} = luaL_optstring(L, {{ ns.stack_idx }}, {{ p.default }});
+{% else %}
     const char* {{ p.name }} = luaL_checkstring(L, {{ ns.stack_idx }});
+{% endif %}
 {% set _ = call_args.append(p.name) %}
+{% elif p.type == "bool" %}
+{% if "default" in p %}
+    int {{ p.name }} = helper::OptBool(L, {{ ns.stack_idx }}, {{ "true" if p.default else "false" }}) ? 1 : 0;
+{% else %}
+    int {{ p.name }} = helper::CheckBool(L, {{ ns.stack_idx }}) ? 1 : 0;
+{% endif %}
+{% set _ = call_args.append(p.name) %}
+{% elif p.type == "vec2" %}
+    auto {{ p.name }}_v = helper::CheckVec2(L, {{ ns.stack_idx }});
+{% set _ = call_args.append(p.name ~ "_v.x") %}
+{% set _ = call_args.append(p.name ~ "_v.y") %}
+{% elif p.type == "vec3" %}
+    auto {{ p.name }}_v = helper::CheckVec3(L, {{ ns.stack_idx }});
+{% set _ = call_args.append(p.name ~ "_v.x") %}
+{% set _ = call_args.append(p.name ~ "_v.y") %}
+{% set _ = call_args.append(p.name ~ "_v.z") %}
 {% endif %}
 {% set ns.stack_idx = ns.stack_idx + 1 %}
+{% endfor %}
+{# --- Validators --- #}
+{% for v in fn.get("validators", []) %}
+    {{ v }}
 {% endfor %}
 {# --- Build output param args --- #}
 {% for op in fn.get("out_params", []) %}
@@ -68,8 +91,13 @@ int L_{{ fn.c_name }}(lua_State* L) {
 {% set _ = call_args.append("&" + op.name) %}
 {% endif %}
 {% endfor %}
-{# --- Call the C function --- #}
-{% if fn.get("returns", []) %}
+{# --- Call the C function(s) --- #}
+{% if fn.calls is defined and fn.calls %}
+{# Multi-call function #}
+{% for call in fn.calls %}
+    {{ call.c_name }}({{ call.args | join(", ") }});
+{% endfor %}
+{% elif fn.get("returns", []) %}
 {% set ret = fn.returns[0] %}
 {% if ret.type == "float" %}
     float _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
@@ -77,6 +105,10 @@ int L_{{ fn.c_name }}(lua_State* L) {
     int _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% elif ret.type == "uint32" %}
     uint32_t _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif ret.type == "bool" %}
+    int _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif ret.type == "string" %}
+    const char* _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% endif %}
 {% else %}
     {{ fn.c_name }}({{ call_args | join(", ") }});
@@ -91,6 +123,10 @@ int L_{{ fn.c_name }}(lua_State* L) {
     lua_pushinteger(L, _ret);
 {% elif ret.type == "uint32" %}
     lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+{% elif ret.type == "bool" %}
+    lua_pushboolean(L, _ret);
+{% elif ret.type == "string" %}
+    lua_pushstring(L, _ret ? _ret : "");
 {% endif %}
 {% set ns2.ret_count = ns2.ret_count + 1 %}
 {% endif %}
@@ -118,7 +154,7 @@ int L_{{ fn.c_name }}(lua_State* L) {
 {% endfor %}
 } // namespace
 
-void RegisterFreeFn_{{ group.group }}(lua_State* L) {
+void {{ group.register_func }}(lua_State* L) {
 {% if group.lua_path | length == 1 %}
     lua_getglobal(L, "{{ group.lua_path[0] }}");
 {% elif group.lua_path | length == 2 %}
@@ -127,7 +163,8 @@ void RegisterFreeFn_{{ group.group }}(lua_State* L) {
 {% endif %}
     helper::RegisterBindings(L, {
 {% for fn in group.functions %}
-        {"{{ fn.lua_name }}", L_{{ fn.c_name }}},
+{% set func_id = fn.c_name if fn.c_name is defined and fn.c_name else fn.lua_name %}
+        {"{{ fn.lua_name }}", L_{{ func_id }}},
 {% endfor %}
     });
 {% if group.lua_path | length == 1 %}

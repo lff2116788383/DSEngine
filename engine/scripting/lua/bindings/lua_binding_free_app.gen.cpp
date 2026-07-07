@@ -1,9 +1,7 @@
 /**
  * @file lua_binding_free_app.gen.cpp
- * @brief 自动生成 — 勿手动修改
- *        来源：tools/codegen/function_defs.json
- *
- * app 组自由函数的 Lua 绑定，内部委托调用 dse_api C ABI 层。
+ * @brief auto-generated -- do not edit
+ *        source: tools/codegen/function_defs.json
  */
 
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
@@ -46,18 +44,6 @@ int L_dse_input_get_touch_count(lua_State* L) {
     return 1;
 }
 
-int L_dse_input_get_touch(lua_State* L) {
-    float x = 0;
-    float y = 0;
-    int phase = 0;
-    int index = static_cast<int>(luaL_checkinteger(L, 1));
-    dse_input_get_touch(index, &x, &y, &phase);
-    lua_pushnumber(L, x);
-    lua_pushnumber(L, y);
-    lua_pushinteger(L, phase);
-    return 3;
-}
-
 } // namespace
 
 void RegisterFreeFn_app(lua_State* L) {
@@ -69,7 +55,6 @@ void RegisterFreeFn_app(lua_State* L) {
         {"get_time", L_dse_app_get_time},
         {"get_mouse_scroll", L_dse_input_get_mouse_scroll},
         {"get_touch_count", L_dse_input_get_touch_count},
-        {"get_touch", L_dse_input_get_touch},
     });
     lua_pop(L, 2);
 }
