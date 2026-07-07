@@ -7,6 +7,25 @@ using System.Runtime.InteropServices;
 
 namespace DSEngine;
 
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate int DseAiActionFn(float dt, nint userData);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate int DseAiConditionFn(nint userData);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void DseAiDestroyFn(nint userData);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void DseCutsceneCameraFn(float px, float py, float pz, float lx, float ly, float lz, float fov, nint userData);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void DseCutsceneEventFn(nint eventName, nint payload, nint userData);
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void DseCutsceneFinishFn(nint seqName, nint userData);
+
+
 internal static partial class Native {
     /// <summary>编译时 C ABI 版本号（与 dse_api.h 中 DSE_API_VERSION 同步）</summary>
     internal const uint DSE_API_VERSION = 10000u;
@@ -2426,6 +2445,15 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_cutscene_update")]
     internal static partial void dse_cutscene_update(int playerId, float dt);
 
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_set_camera_callback", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_set_camera_callback(int playerId, string seqName, DseCutsceneCameraFn fn, nint userData);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_set_event_callback", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_cutscene_set_event_callback(int playerId, string seqName, DseCutsceneEventFn fn, nint userData);
+
+    [LibraryImport(Lib, EntryPoint = "dse_cutscene_set_finish_callback")]
+    internal static partial void dse_cutscene_set_finish_callback(int playerId, DseCutsceneFinishFn fn, nint userData);
+
     [LibraryImport(Lib, EntryPoint = "dse_ai_tree_create", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_ai_tree_create(string name);
 
@@ -2482,6 +2510,12 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_ai_end_composite")]
     internal static partial void dse_ai_end_composite(int treeId);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_add_condition", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_add_condition(int treeId, string name, DseAiConditionFn fn, nint userData, DseAiDestroyFn destroy);
+
+    [LibraryImport(Lib, EntryPoint = "dse_ai_add_action", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_ai_add_action(int treeId, string name, DseAiActionFn fn, nint userData, DseAiDestroyFn destroy);
 
     [LibraryImport(Lib, EntryPoint = "dse_ai_add_inverter", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_ai_add_inverter(int treeId, string name);

@@ -317,6 +317,20 @@ def main():
         components=wrapper_components,
     )
 
+    # ── Free Function Lua Bindings ──────────────────────────────────────────
+    # 自由函数（非组件字段）的 Lua 绑定 — 由 function_defs.json 驱动。
+    func_defs_path = script_dir / "function_defs.json"
+    if func_defs_path.exists():
+        with open(func_defs_path, encoding="utf-8") as f:
+            func_defs = json.load(f)
+        for group in func_defs.get("function_groups", []):
+            render(
+                "lua_binding_free.cpp.j2",
+                f"engine/scripting/lua/bindings/lua_binding_free_{group['group']}.gen.cpp",
+                group=group,
+            )
+        print(f"[codegen] Free function groups: {len(func_defs.get('function_groups', []))}")
+
     # ── NativeManual.gen.cs / ApiManual.gen.cs ───────────────────────────────
     # 手写 C ABI（dse_api.h）的 C# P/Invoke 声明与公开门面，与 codegen 产物互补。
     if not args.dry_run:

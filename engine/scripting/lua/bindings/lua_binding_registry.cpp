@@ -6,6 +6,7 @@
 #include "engine/scripting/lua/bindings/lua_binding_registry.h"
 #include "engine/scripting/lua/bindings/lua_binding_modules.h"
 #include "engine/scripting/lua/bindings/lua_binding_context.h"
+#include "engine/scripting/lua/bindings/lua_binding_free_functions.gen.h"
 
 namespace dse::runtime::lua_binding {
 
@@ -95,7 +96,10 @@ void RegisterPhase1LuaApi(lua_State* L) {
     // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
     RegisterWorldSystemsBindings(L);
 
-    // C ABI 差距修补 — 补齐手写 C ABI 中尚未映射到 Lua 的函数
+    // 自由函数 Lua 绑定（codegen 自动生成）
+    RegisterAllFreeFunctionBindings(L);
+
+    // C ABI 差距修补 — 仅保留无法模板化的复杂函数
     RegisterCabiGapBindings(L);
 }
 

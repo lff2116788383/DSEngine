@@ -316,6 +316,9 @@ public static class Components {
     public static int CutsceneGetState(int playerId) { return Native.dse_cutscene_get_state(playerId); }
     public static void CutsceneSetPlayRate(int playerId, float rate) { Native.dse_cutscene_set_play_rate(playerId, rate); }
     public static void CutsceneUpdate(int playerId, float dt) { Native.dse_cutscene_update(playerId, dt); }
+    public static void CutsceneSetCameraCallback(int playerId, string seqName, DseCutsceneCameraFn fn, nint userData) { Native.dse_cutscene_set_camera_callback(playerId, seqName, fn, userData); }
+    public static void CutsceneSetEventCallback(int playerId, string seqName, DseCutsceneEventFn fn, nint userData) { Native.dse_cutscene_set_event_callback(playerId, seqName, fn, userData); }
+    public static void CutsceneSetFinishCallback(int playerId, DseCutsceneFinishFn fn, nint userData) { Native.dse_cutscene_set_finish_callback(playerId, fn, userData); }
     public static int AiTreeCreate(string name) { return Native.dse_ai_tree_create(name); }
     public static void AiTreeDestroy(int treeId) { Native.dse_ai_tree_destroy(treeId); }
     public static int AiTreeTick(int treeId, float dt) { return Native.dse_ai_tree_tick(treeId, dt); }
@@ -335,6 +338,8 @@ public static class Components {
     public static void AiBeginSelector(int treeId, string name) { Native.dse_ai_begin_selector(treeId, name); }
     public static void AiBeginParallel(int treeId, int requireOne, string name) { Native.dse_ai_begin_parallel(treeId, requireOne, name); }
     public static void AiEndComposite(int treeId) { Native.dse_ai_end_composite(treeId); }
+    public static void AiAddCondition(int treeId, string name, DseAiConditionFn fn, nint userData, DseAiDestroyFn destroy) { Native.dse_ai_add_condition(treeId, name, fn, userData, destroy); }
+    public static void AiAddAction(int treeId, string name, DseAiActionFn fn, nint userData, DseAiDestroyFn destroy) { Native.dse_ai_add_action(treeId, name, fn, userData, destroy); }
     public static void AiAddInverter(int treeId, string name) { Native.dse_ai_add_inverter(treeId, name); }
     public static void AiAddSucceeder(int treeId, string name) { Native.dse_ai_add_succeeder(treeId, name); }
     public static void AiAddRepeater(int treeId, string name, int maxRepeats) { Native.dse_ai_add_repeater(treeId, name, maxRepeats); }

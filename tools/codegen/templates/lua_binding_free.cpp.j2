@@ -1,0 +1,140 @@
+/**
+ * @file lua_binding_free_{{ group.group }}.gen.cpp
+ * @brief 自动生成 — 勿手动修改
+ *        来源：tools/codegen/function_defs.json
+ *
+ * {{ group.group }} 组自由函数的 Lua 绑定，内部委托调用 dse_api C ABI 层。
+ */
+
+#include "engine/scripting/lua/bindings/lua_binding_modules.h"
+#include "engine/scripting/lua/bindings/lua_binding_helper.h"
+#include "engine/scripting/native_api/dse_api.h"
+extern "C" {
+#include "depends/lua/lauxlib.h"
+}
+
+namespace dse::runtime::lua_binding {
+namespace {
+
+{% for fn in group.functions %}
+int L_{{ fn.c_name }}(lua_State* L) {
+{% set ns = namespace(stack_idx=1) %}
+{# --- Declare output param locals --- #}
+{% for op in fn.get("out_params", []) %}
+{% if op.type == "float3" %}
+    float {{ op.name }}[3] = {0, 0, 0};
+{% elif op.type == "float" %}
+    float {{ op.name }} = 0;
+{% elif op.type == "int" %}
+    int {{ op.name }} = 0;
+{% elif op.type == "uint32" %}
+    uint32_t {{ op.name }} = 0;
+{% endif %}
+{% endfor %}
+{# --- Read input params and build call --- #}
+{% set call_args = [] %}
+{% for p in fn.params %}
+{% if p.type == "entity" %}
+    uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
+{% set _ = call_args.append(p.name) %}
+{% elif p.type == "float" %}
+{% if "default" in p %}
+    float {{ p.name }} = static_cast<float>(luaL_optnumber(L, {{ ns.stack_idx }}, {{ p.default }}));
+{% else %}
+    float {{ p.name }} = static_cast<float>(luaL_checknumber(L, {{ ns.stack_idx }}));
+{% endif %}
+{% set _ = call_args.append(p.name) %}
+{% elif p.type == "int" %}
+{% if "default" in p %}
+    int {{ p.name }} = static_cast<int>(luaL_optinteger(L, {{ ns.stack_idx }}, {{ p.default }}));
+{% else %}
+    int {{ p.name }} = static_cast<int>(luaL_checkinteger(L, {{ ns.stack_idx }}));
+{% endif %}
+{% set _ = call_args.append(p.name) %}
+{% elif p.type == "uint32" %}
+    uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
+{% set _ = call_args.append(p.name) %}
+{% elif p.type == "string" %}
+    const char* {{ p.name }} = luaL_checkstring(L, {{ ns.stack_idx }});
+{% set _ = call_args.append(p.name) %}
+{% endif %}
+{% set ns.stack_idx = ns.stack_idx + 1 %}
+{% endfor %}
+{# --- Build output param args --- #}
+{% for op in fn.get("out_params", []) %}
+{% if op.type == "float3" %}
+{% set _ = call_args.append(op.name) %}
+{% elif op.type in ("float", "int", "uint32") %}
+{% set _ = call_args.append("&" + op.name) %}
+{% endif %}
+{% endfor %}
+{# --- Call the C function --- #}
+{% if fn.get("returns", []) %}
+{% set ret = fn.returns[0] %}
+{% if ret.type == "float" %}
+    float _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif ret.type == "int" %}
+    int _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif ret.type == "uint32" %}
+    uint32_t _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% endif %}
+{% else %}
+    {{ fn.c_name }}({{ call_args | join(", ") }});
+{% endif %}
+{# --- Push return values --- #}
+{% set ns2 = namespace(ret_count=0) %}
+{% if fn.get("returns", []) %}
+{% set ret = fn.returns[0] %}
+{% if ret.type == "float" %}
+    lua_pushnumber(L, _ret);
+{% elif ret.type == "int" %}
+    lua_pushinteger(L, _ret);
+{% elif ret.type == "uint32" %}
+    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+{% endif %}
+{% set ns2.ret_count = ns2.ret_count + 1 %}
+{% endif %}
+{# --- Push output params --- #}
+{% for op in fn.get("out_params", []) %}
+{% if op.type == "float3" %}
+    lua_pushnumber(L, {{ op.name }}[0]);
+    lua_pushnumber(L, {{ op.name }}[1]);
+    lua_pushnumber(L, {{ op.name }}[2]);
+{% set ns2.ret_count = ns2.ret_count + 3 %}
+{% elif op.type == "float" %}
+    lua_pushnumber(L, {{ op.name }});
+{% set ns2.ret_count = ns2.ret_count + 1 %}
+{% elif op.type == "int" %}
+    lua_pushinteger(L, {{ op.name }});
+{% set ns2.ret_count = ns2.ret_count + 1 %}
+{% elif op.type == "uint32" %}
+    lua_pushinteger(L, static_cast<lua_Integer>({{ op.name }}));
+{% set ns2.ret_count = ns2.ret_count + 1 %}
+{% endif %}
+{% endfor %}
+    return {{ ns2.ret_count }};
+}
+
+{% endfor %}
+} // namespace
+
+void RegisterFreeFn_{{ group.group }}(lua_State* L) {
+{% if group.lua_path | length == 1 %}
+    lua_getglobal(L, "{{ group.lua_path[0] }}");
+{% elif group.lua_path | length == 2 %}
+    lua_getglobal(L, "{{ group.lua_path[0] }}");
+    lua_getfield(L, -1, "{{ group.lua_path[1] }}");
+{% endif %}
+    helper::RegisterBindings(L, {
+{% for fn in group.functions %}
+        {"{{ fn.lua_name }}", L_{{ fn.c_name }}},
+{% endfor %}
+    });
+{% if group.lua_path | length == 1 %}
+    lua_pop(L, 1);
+{% elif group.lua_path | length == 2 %}
+    lua_pop(L, 2);
+{% endif %}
+}
+
+} // namespace dse::runtime::lua_binding

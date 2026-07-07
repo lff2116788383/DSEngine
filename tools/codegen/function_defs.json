@@ -1,0 +1,388 @@
+{
+  "function_groups": [
+    {
+      "group": "api_core",
+      "lua_path": ["dse"],
+      "functions": [
+        {
+          "c_name": "dse_api_version",
+          "lua_name": "api_version",
+          "params": [],
+          "returns": [{"type": "int"}]
+        }
+      ]
+    },
+    {
+      "group": "app",
+      "lua_path": ["dse", "app"],
+      "functions": [
+        {
+          "c_name": "dse_app_get_delta_time",
+          "lua_name": "get_delta_time",
+          "params": [],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_app_get_target_fps",
+          "lua_name": "get_target_fps",
+          "params": [],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_app_get_time",
+          "lua_name": "get_time",
+          "params": [],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_input_get_mouse_scroll",
+          "lua_name": "get_mouse_scroll",
+          "params": [],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_input_get_touch_count",
+          "lua_name": "get_touch_count",
+          "params": [],
+          "returns": [{"type": "int"}]
+        },
+        {
+          "c_name": "dse_input_get_touch",
+          "lua_name": "get_touch",
+          "params": [
+            {"name": "index", "type": "int"}
+          ],
+          "out_params": [
+            {"name": "x", "type": "float"},
+            {"name": "y", "type": "float"},
+            {"name": "phase", "type": "int"}
+          ]
+        }
+      ]
+    },
+    {
+      "group": "audio",
+      "lua_path": ["dse", "audio"],
+      "functions": [
+        {
+          "c_name": "dse_audio_fade_out_all_sfx",
+          "lua_name": "fade_out_all_sfx",
+          "params": [
+            {"name": "duration", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_audio_source_is_playing",
+          "lua_name": "source_is_playing",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "int"}]
+        }
+      ]
+    },
+    {
+      "group": "ecs_gap",
+      "lua_path": ["dse", "ecs"],
+      "functions": [
+        {
+          "c_name": "dse_transform_add",
+          "lua_name": "transform_add",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "x", "type": "float"},
+            {"name": "y", "type": "float"},
+            {"name": "z", "type": "float"},
+            {"name": "sx", "type": "float", "default": 1.0},
+            {"name": "sy", "type": "float", "default": 1.0},
+            {"name": "sz", "type": "float", "default": 1.0}
+          ]
+        },
+        {
+          "c_name": "dse_anim3d_get_blend_param",
+          "lua_name": "anim3d_get_blend_param",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_anim3d_set_blend_param",
+          "lua_name": "anim3d_set_blend_param",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "value", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_anim3d_get_layer_weight",
+          "lua_name": "anim3d_get_layer_weight",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "layer", "type": "int"}
+          ],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_anim3d_set_layer_weight",
+          "lua_name": "anim3d_set_layer_weight",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "layer", "type": "int"},
+            {"name": "weight", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_character_check_ground",
+          "lua_name": "character_check_ground",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "out_params": [
+            {"name": "normal", "type": "float3"}
+          ],
+          "returns": [{"type": "int"}]
+        },
+        {
+          "c_name": "dse_decal_add",
+          "lua_name": "decal_add",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "material_id", "type": "uint32"}
+          ]
+        },
+        {
+          "c_name": "dse_decal_set",
+          "lua_name": "decal_set",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "sx", "type": "float"},
+            {"name": "sy", "type": "float"},
+            {"name": "sz", "type": "float"},
+            {"name": "angle", "type": "float"},
+            {"name": "opacity", "type": "float", "default": 0.0}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_add",
+          "lua_name": "mesh_renderer_add",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "mesh_path", "type": "string"}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_set_depth_state",
+          "lua_name": "mesh_set_depth_state",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "depth_test", "type": "int"},
+            {"name": "depth_write", "type": "int"}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_set_emissive",
+          "lua_name": "mesh_set_emissive",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "r", "type": "float"},
+            {"name": "g", "type": "float"},
+            {"name": "b", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_set_material",
+          "lua_name": "mesh_set_material",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "path", "type": "string"}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_set_material_scalar",
+          "lua_name": "mesh_set_material_scalar",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "param_name", "type": "string"},
+            {"name": "value", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_mesh_set_texture_handle",
+          "lua_name": "mesh_set_texture_handle",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "slot_name", "type": "string"},
+            {"name": "handle", "type": "uint32"}
+          ]
+        },
+        {
+          "c_name": "dse_physics3d_boxcast",
+          "lua_name": "physics_3d_boxcast",
+          "params": [
+            {"name": "ox", "type": "float"},
+            {"name": "oy", "type": "float"},
+            {"name": "oz", "type": "float"},
+            {"name": "dx", "type": "float"},
+            {"name": "dy", "type": "float"},
+            {"name": "dz", "type": "float"},
+            {"name": "hx", "type": "float"},
+            {"name": "hy", "type": "float"},
+            {"name": "hz", "type": "float"},
+            {"name": "max_dist", "type": "float"}
+          ],
+          "out_params": [
+            {"name": "hit_entity", "type": "uint32"},
+            {"name": "point", "type": "float3"},
+            {"name": "normal", "type": "float3"},
+            {"name": "dist", "type": "float"}
+          ],
+          "returns": [{"type": "int"}]
+        },
+        {
+          "c_name": "dse_physics3d_spherecast",
+          "lua_name": "physics_3d_spherecast",
+          "params": [
+            {"name": "ox", "type": "float"},
+            {"name": "oy", "type": "float"},
+            {"name": "oz", "type": "float"},
+            {"name": "dx", "type": "float"},
+            {"name": "dy", "type": "float"},
+            {"name": "dz", "type": "float"},
+            {"name": "radius", "type": "float"},
+            {"name": "max_dist", "type": "float"}
+          ],
+          "out_params": [
+            {"name": "hit_entity", "type": "uint32"},
+            {"name": "point", "type": "float3"},
+            {"name": "normal", "type": "float3"},
+            {"name": "dist", "type": "float"}
+          ],
+          "returns": [{"type": "int"}]
+        },
+        {
+          "c_name": "dse_rigidbody3d_set_kinematic",
+          "lua_name": "rigidbody_3d_set_kinematic",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "kinematic", "type": "int"}
+          ]
+        },
+        {
+          "c_name": "dse_rigidbody3d_get_linear_damping",
+          "lua_name": "rigidbody_3d_get_linear_damping",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_rigidbody3d_set_linear_damping",
+          "lua_name": "rigidbody_3d_set_linear_damping",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "value", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_rigidbody3d_get_angular_damping",
+          "lua_name": "rigidbody_3d_get_angular_damping",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "float"}]
+        },
+        {
+          "c_name": "dse_rigidbody3d_set_angular_damping",
+          "lua_name": "rigidbody_3d_set_angular_damping",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "value", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_rigidbody3d_add_force_at_position",
+          "lua_name": "rigidbody_3d_add_force_at_position",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "fx", "type": "float"},
+            {"name": "fy", "type": "float"},
+            {"name": "fz", "type": "float"},
+            {"name": "px", "type": "float"},
+            {"name": "py", "type": "float"},
+            {"name": "pz", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_rendering_set_light_probe",
+          "lua_name": "set_light_probe",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "radius", "type": "float"}
+          ]
+        },
+        {
+          "c_name": "dse_rendering_set_reflection_probe",
+          "lua_name": "set_reflection_probe",
+          "params": [
+            {"name": "entity", "type": "entity"},
+            {"name": "radius", "type": "float"},
+            {"name": "resolution", "type": "int", "default": 128}
+          ]
+        },
+        {
+          "c_name": "dse_post_process_get_state",
+          "lua_name": "post_process_get_state",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "out_params": [
+            {"name": "enabled", "type": "int"},
+            {"name": "bloom", "type": "int"},
+            {"name": "ssao", "type": "int"},
+            {"name": "ssr", "type": "int"},
+            {"name": "fxaa", "type": "int"},
+            {"name": "dof", "type": "int"}
+          ]
+        }
+      ]
+    },
+    {
+      "group": "ui",
+      "lua_path": ["dse", "ui"],
+      "functions": [
+        {
+          "c_name": "dse_ui_is_hovered",
+          "lua_name": "is_hovered",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "int"}]
+        },
+        {
+          "c_name": "dse_ui_is_pressed",
+          "lua_name": "is_pressed",
+          "params": [
+            {"name": "entity", "type": "entity"}
+          ],
+          "returns": [{"type": "int"}]
+        }
+      ]
+    },
+    {
+      "group": "localization",
+      "lua_path": ["dse", "localization"],
+      "functions": [
+        {
+          "c_name": "dse_l10n_load",
+          "lua_name": "load",
+          "params": [
+            {"name": "locale", "type": "string"},
+            {"name": "path", "type": "string"}
+          ],
+          "returns": [{"type": "int"}]
+        }
+      ]
+    }
+  ]
+}
