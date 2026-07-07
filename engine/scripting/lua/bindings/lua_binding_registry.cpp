@@ -18,18 +18,10 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     lua_getglobal(L, "dse");
 
+    // --- ECS (self-managing: gets/creates dse.ecs internally) ---
     RegisterEcsBindings(L);
-    lua_setfield(L, -2, "ecs");
 
-    RegisterAudioBindings(L);
-    lua_setfield(L, -2, "audio");
-
-    RegisterSpineBindings(L);
-    lua_setfield(L, -2, "spine");
-
-    RegisterUiBindings(L);
-    lua_setfield(L, -2, "ui");
-
+    // --- Manual modules (push table, need lua_setfield) ---
     RegisterAssetsBindings(L);
     lua_setfield(L, -2, "assets");
 
@@ -39,29 +31,28 @@ void RegisterPhase1LuaApi(lua_State* L) {
     RegisterMetricsBindings(L);
     lua_setfield(L, -2, "metrics");
 
-    RegisterLocalizationBindings(L);
-    lua_setfield(L, -2, "localization");
-
     RegisterFloatingOriginBindings(L);
     lua_setfield(L, -2, "origin");
-
-    RegisterFontBindings(L);
-    lua_setfield(L, -2, "font");
 
     RegisterSerializeBindings(L);
     lua_setfield(L, -2, "serialize");
 
+    lua_setglobal(L, "dse");
+
+    // --- Codegen modules (self-managing stack via lua_getglobal/lua_pop) ---
+    RegisterAudioBindings(L);
+    RegisterSpineBindings(L);
+    RegisterUiBindings(L);
+    RegisterLocalizationBindings(L);
+    RegisterFontBindings(L);
+
 #ifdef DSE_ENABLE_HTTP
     RegisterHttpBindings(L);
-    lua_setfield(L, -2, "http");
 #endif
 
 #ifdef DSE_NET_ENABLED
     RegisterNetBindings(L);
-    lua_setfield(L, -2, "net");
 #endif
-
-    lua_setglobal(L, "dse");
 
     // DSSL 材质系统 — 独立全局表 "dssl"
     RegisterDSSLBindings(L);
@@ -74,10 +65,8 @@ void RegisterPhase1LuaApi(lua_State* L) {
     // 资源流式加载 — 独立全局表 "streaming"
     RegisterStreamingBindings(L);
 
-    // Open-world systems — 注册到 dse 表下
-    lua_getglobal(L, "dse");
+    // Open-world systems — codegen (self-managing)
     RegisterOpenWorldBindings(L);
-    lua_setglobal(L, "dse");
 
     // AI 行为树 + GOAP 规划器 — 独立全局表 "ai"
     RegisterAIBindings(L);
@@ -88,10 +77,8 @@ void RegisterPhase1LuaApi(lua_State* L) {
     // Meshlet/Cluster 渲染系统 — 独立全局表 "meshlet"
     RegisterMeshletBindings(L);
 
-    // P2-P5 大世界系统 — 注册到 dse 表下
-    lua_getglobal(L, "dse");
+    // P2-P5 大世界系统 — codegen (self-managing)
     RegisterOpenWorldP2P5Bindings(L);
-    lua_setglobal(L, "dse");
 
     // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
     RegisterFreeWorldSplineBindings(L);
@@ -103,8 +90,6 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // 自由函数 Lua 绑定（codegen 自动生成）
     RegisterAllFreeFunctionBindings(L);
-
-    // C ABI 差距修补 — 仅保留无法模板化的复杂函数
 }
 
 }
