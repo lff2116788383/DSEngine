@@ -132,13 +132,12 @@ extern "C" void dse_atmosphere_set_ozone_width(uint32_t e, float v) {
         c->ozone_width = v;
     }
 }
-extern "C" float dse_atmosphere_get_sun_intensity(uint32_t e) {
-    const auto* c = GCC<dse::AtmosphereComponent>(e);
-    return c ? c->sun_intensity : 0.0f;
+extern "C" void dse_atmosphere_get_sun_intensity(uint32_t e, float* x, float* y, float* z) {
+    if (const auto* c = GCC<dse::AtmosphereComponent>(e)) { *x = c->sun_intensity.x; *y = c->sun_intensity.y; *z = c->sun_intensity.z; }
 }
-extern "C" void dse_atmosphere_set_sun_intensity(uint32_t e, float v) {
+extern "C" void dse_atmosphere_set_sun_intensity(uint32_t e, float x, float y, float z) {
     if (auto* c = GC<dse::AtmosphereComponent>(e)) {
-        c->sun_intensity = v;
+        c->sun_intensity = glm::vec3(x, y, z);
     }
 }
 extern "C" float dse_atmosphere_get_sun_disk_angle(uint32_t e) {

@@ -1126,16 +1126,16 @@ internal static partial class Native {
     internal static partial void dse_water_set_water_level(uint e, float v);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_get_deep_color")]
-    internal static partial void dse_water_get_deep_color(uint e, out float x, out float y, out float z, out float w);
+    internal static partial void dse_water_get_deep_color(uint e, out float x, out float y, out float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_set_deep_color")]
-    internal static partial void dse_water_set_deep_color(uint e, float x, float y, float z, float w);
+    internal static partial void dse_water_set_deep_color(uint e, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_get_shallow_color")]
-    internal static partial void dse_water_get_shallow_color(uint e, out float x, out float y, out float z, out float w);
+    internal static partial void dse_water_get_shallow_color(uint e, out float x, out float y, out float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_set_shallow_color")]
-    internal static partial void dse_water_set_shallow_color(uint e, float x, float y, float z, float w);
+    internal static partial void dse_water_set_shallow_color(uint e, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_get_max_depth")]
     internal static partial float dse_water_get_max_depth(uint e);
@@ -1166,12 +1166,6 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_water_set_wave_speed")]
     internal static partial void dse_water_set_wave_speed(uint e, float v);
-
-    [LibraryImport(Lib, EntryPoint = "dse_water_get_wave_direction")]
-    internal static partial void dse_water_get_wave_direction(uint e, out float x, out float y, out float z);
-
-    [LibraryImport(Lib, EntryPoint = "dse_water_set_wave_direction")]
-    internal static partial void dse_water_set_wave_direction(uint e, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_get_refraction_strength")]
     internal static partial float dse_water_get_refraction_strength(uint e);
@@ -1222,10 +1216,10 @@ internal static partial class Native {
     internal static partial void dse_water_set_underwater_fog_density(uint e, float v);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_get_underwater_fog_color")]
-    internal static partial void dse_water_get_underwater_fog_color(uint e, out float x, out float y, out float z, out float w);
+    internal static partial void dse_water_get_underwater_fog_color(uint e, out float x, out float y, out float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_water_set_underwater_fog_color")]
-    internal static partial void dse_water_set_underwater_fog_color(uint e, float x, float y, float z, float w);
+    internal static partial void dse_water_set_underwater_fog_color(uint e, float x, float y, float z);
 
     // ---- LightProbeComponent ----
     [LibraryImport(Lib, EntryPoint = "dse_light_probe_get_enabled")]
@@ -2025,10 +2019,10 @@ internal static partial class Native {
     internal static partial void dse_atmosphere_set_ozone_width(uint e, float v);
 
     [LibraryImport(Lib, EntryPoint = "dse_atmosphere_get_sun_intensity")]
-    internal static partial float dse_atmosphere_get_sun_intensity(uint e);
+    internal static partial void dse_atmosphere_get_sun_intensity(uint e, out float x, out float y, out float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_atmosphere_set_sun_intensity")]
-    internal static partial void dse_atmosphere_set_sun_intensity(uint e, float v);
+    internal static partial void dse_atmosphere_set_sun_intensity(uint e, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_atmosphere_get_sun_disk_angle")]
     internal static partial float dse_atmosphere_get_sun_disk_angle(uint e);
@@ -2096,12 +2090,6 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_volumetric_cloud_set_erosion")]
     internal static partial void dse_volumetric_cloud_set_erosion(uint e, float v);
-
-    [LibraryImport(Lib, EntryPoint = "dse_volumetric_cloud_get_wind_direction")]
-    internal static partial void dse_volumetric_cloud_get_wind_direction(uint e, out float x, out float y, out float z);
-
-    [LibraryImport(Lib, EntryPoint = "dse_volumetric_cloud_set_wind_direction")]
-    internal static partial void dse_volumetric_cloud_set_wind_direction(uint e, float x, float y, float z);
 
     [LibraryImport(Lib, EntryPoint = "dse_volumetric_cloud_get_wind_speed")]
     internal static partial float dse_volumetric_cloud_get_wind_speed(uint e);

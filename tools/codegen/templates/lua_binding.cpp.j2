@@ -55,6 +55,23 @@ int L_Set_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
     return 0;
 }
 {% endif %}
+{% elif field.type == "vec2" %}
+int L_Get_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float x = 0, y = 0;
+    dse_{{ comp.prefix }}_get_{{ field.name }}(e, &x, &y);
+    lua_pushnumber(L, x); lua_pushnumber(L, y);
+    return 2;
+}
+{% if not field.get("readonly", false) %}
+int L_Set_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_{{ comp.prefix }}_set_{{ field.name }}(e,
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)));
+    return 0;
+}
+{% endif %}
 {% elif field.type in ("vec3", "euler_quat") %}
 int L_Get_{{ comp.prefix }}_{{ field.name }}(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));

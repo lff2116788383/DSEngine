@@ -646,7 +646,9 @@ DSE_CAPI void dse_ragdoll_add(uint32_t e, float total_mass, int auto_setup,
 DSE_CAPI void dse_ragdoll_activate(uint32_t e);
 DSE_CAPI void dse_ragdoll_deactivate(uint32_t e);
 DSE_CAPI int  dse_ragdoll_is_active(uint32_t e);
-DSE_CAPI void dse_ragdoll_set_collision_layer(uint32_t e, uint32_t layer, uint32_t mask);
+// ragdoll 逐字段 get/set 由 dse_api_ragdoll.gen.cpp 提供（codegen）
+DSE_CAPI void dse_ragdoll_set_collision_layer(uint32_t e, int v);  // codegen 逐字段
+DSE_CAPI void dse_ragdoll_set_collision_layer_mask(uint32_t e, uint32_t layer, uint32_t mask);
 
 // SoftBody。gravity_scale NaN=保持。
 DSE_CAPI void dse_softbody_add(uint32_t e, float stiffness, int iterations,
@@ -680,7 +682,7 @@ DSE_CAPI void dse_buoyancy_add(uint32_t e, float water_level, float buoyancy_for
                                float water_drag, float angular_drag, float submerge_depth);
 DSE_CAPI void dse_buoyancy_add_sample_point(uint32_t e, float ox, float oy, float oz,
                                             float force_scale);
-DSE_CAPI void dse_buoyancy_set_water_level(uint32_t e, float water_level);
+DSE_CAPI void dse_buoyancy_set_water_level(uint32_t e, float water_level);  // codegen 逐字段
 DSE_CAPI float dse_buoyancy_get_submerge_ratio(uint32_t e);
 DSE_CAPI void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid);
 
@@ -715,7 +717,7 @@ DSE_CAPI void dse_atmosphere_set_params(uint32_t e, float planet_radius,
 DSE_CAPI void dse_atmosphere_set_rayleigh(uint32_t e, float coeff_r, float coeff_g,
                                           float coeff_b, float scale_height);
 DSE_CAPI void dse_atmosphere_set_mie(uint32_t e, float coeff, float scale_height, float g);
-DSE_CAPI void dse_atmosphere_set_sun_intensity(uint32_t e, float r, float g, float b);
+DSE_CAPI void dse_atmosphere_set_sun_intensity(uint32_t e, float x, float y, float z);  // codegen 逐字段 vec3
 
 // DayNightCycle。set_location 中 day_of_year<=0=保持。get_sun_direction 填充 out_xyz(3)。
 DSE_CAPI void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
@@ -723,7 +725,7 @@ DSE_CAPI void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
 DSE_CAPI void dse_day_night_set_time(uint32_t e, float time_of_day);
 DSE_CAPI float dse_day_night_get_time(uint32_t e);
 DSE_CAPI void dse_day_night_set_speed(uint32_t e, float speed);
-DSE_CAPI void dse_day_night_set_auto_advance(uint32_t e, int enabled);
+DSE_CAPI void dse_day_night_set_auto_advance(uint32_t e, int enabled);  // codegen 逐字段
 DSE_CAPI void dse_day_night_set_location(uint32_t e, float latitude, float longitude,
                                          int day_of_year);
 DSE_CAPI float dse_day_night_get_sun_elevation(uint32_t e);
@@ -1205,8 +1207,8 @@ DSE_CAPI int dse_physics3d_boxcast(float ox, float oy, float oz,
                                    uint32_t* out_entity, float* out_point,
                                    float* out_normal, float* out_distance);
 DSE_CAPI void dse_rigidbody3d_set_kinematic(uint32_t e, int kinematic);
-DSE_CAPI float dse_rigidbody3d_get_mass(uint32_t e);
-DSE_CAPI void  dse_rigidbody3d_set_mass(uint32_t e, float mass);
+DSE_CAPI float dse_rigidbody3d_get_mass(uint32_t e);   // codegen 逐字段
+DSE_CAPI void  dse_rigidbody3d_set_mass(uint32_t e, float mass);  // codegen 逐字段
 DSE_CAPI void  dse_rigidbody3d_add_force_at_position(uint32_t e, float fx, float fy, float fz,
                                                      float px, float py, float pz);
 DSE_CAPI void  dse_rigidbody3d_set_linear_damping(uint32_t e, float damping);
@@ -1817,12 +1819,12 @@ DSE_CAPI void  dse_grass_set_enabled(uint32_t e, int enabled);
 DSE_CAPI int   dse_grass_get_stats(uint32_t e);
 
 DSE_CAPI void  dse_foliage_add(uint32_t e);
-DSE_CAPI void  dse_foliage_set_wind_strength(uint32_t e, float v);
-DSE_CAPI float dse_foliage_get_wind_strength(uint32_t e);
-DSE_CAPI void  dse_foliage_set_stiffness(uint32_t e, float v);
-DSE_CAPI float dse_foliage_get_stiffness(uint32_t e);
-DSE_CAPI void  dse_foliage_set_enabled(uint32_t e, int v);
-DSE_CAPI int   dse_foliage_get_enabled(uint32_t e);
+DSE_CAPI void  dse_foliage_set_wind_strength(uint32_t e, float v);   // codegen 逐字段
+DSE_CAPI float dse_foliage_get_wind_strength(uint32_t e);   // codegen 逐字段
+DSE_CAPI void  dse_foliage_set_stiffness(uint32_t e, float v);   // codegen 逐字段
+DSE_CAPI float dse_foliage_get_stiffness(uint32_t e);   // codegen 逐字段
+DSE_CAPI void  dse_foliage_set_enabled(uint32_t e, int v);   // codegen 逐字段
+DSE_CAPI int   dse_foliage_get_enabled(uint32_t e);   // codegen 逐字段
 
 DSE_CAPI void  dse_tree_add(uint32_t e, const char* mesh_path);
 DSE_CAPI void  dse_terrain_tile_manager_add(uint32_t e);
@@ -2076,5 +2078,8 @@ DSE_CAPI int   dse_ai_goap_plan(int planner_id, char* out, int cap);
 #ifdef __cplusplus
 }
 #endif
+
+// Codegen 生成的组件字段 C ABI 声明（dse_api_<prefix>.gen.cpp 实现）
+#include "dse_api.gen.h"
 
 #endif // DSE_API_H

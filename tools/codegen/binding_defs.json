@@ -1763,16 +1763,16 @@
                     "lua_setter": "set_water_water_level"
                 },
                 {
-                    "name": "deep_color",
-                    "type": "vec4",
-                    "color": true,
+"name": "deep_color",
+"type": "vec3",
+"color": true,
                     "lua_getter": "get_water_deep_color",
                     "lua_setter": "set_water_deep_color"
                 },
                 {
-                    "name": "shallow_color",
-                    "type": "vec4",
-                    "color": true,
+"name": "shallow_color",
+"type": "vec3",
+"color": true,
                     "lua_getter": "get_water_shallow_color",
                     "lua_setter": "set_water_shallow_color"
                 },
@@ -1827,9 +1827,9 @@
                     "lua_setter": "set_water_wave_speed"
                 },
                 {
-                    "name": "wave_direction",
-                    "type": "vec3",
-                    "lua_getter": "get_water_wave_direction",
+"name": "wave_direction",
+"type": "vec2",
+"lua_getter": "get_water_wave_direction",
                     "lua_setter": "set_water_wave_direction"
                 },
                 {
@@ -1913,9 +1913,9 @@
                     "lua_setter": "set_water_underwater_fog_density"
                 },
                 {
-                    "name": "underwater_fog_color",
-                    "type": "vec4",
-                    "color": true,
+"name": "underwater_fog_color",
+"type": "vec3",
+"color": true,
                     "lua_getter": "get_water_underwater_fog_color",
                     "lua_setter": "set_water_underwater_fog_color"
                 }
@@ -2253,8 +2253,9 @@
             "fields": [
                 {
                     "name": "type",
-                    "type": "int",
+                    "type": "enum_int",
                     "enum_name": "RigidBody3DType",
+                    "enum_type": "dse::RigidBody3DType",
                     "lua_getter": "get_rigidbody3d_type",
                     "lua_setter": "set_rigidbody3d_type"
                 },
@@ -2638,8 +2639,9 @@
             "fields": [
                 {
                     "name": "type",
-                    "type": "int",
+                    "type": "enum_int",
                     "enum_name": "Joint3DType",
+                    "enum_type": "dse::Joint3DType",
                     "lua_getter": "get_joint3d_type",
                     "lua_setter": "set_joint3d_type"
                 },
@@ -3238,10 +3240,10 @@
                     "lua_setter": "set_atmosphere_ozone_width"
                 },
                 {
-                    "name": "sun_intensity",
-                    "type": "float",
-                    "lua_getter": "get_atmosphere_sun_intensity",
-                    "lua_setter": "set_atmosphere_sun_intensity"
+"name": "sun_intensity",
+"type": "vec3",
+"lua_getter": "get_atmosphere_sun_intensity",
+"lua_setter": "set_atmosphere_sun_intensity"
                 },
                 {
                     "name": "sun_disk_angle",
@@ -3356,9 +3358,9 @@
                     "lua_setter": "set_volumetric_cloud_erosion"
                 },
                 {
-                    "name": "wind_direction",
-                    "type": "vec3",
-                    "lua_getter": "get_volumetric_cloud_wind_direction",
+"name": "wind_direction",
+"type": "vec2",
+"lua_getter": "get_volumetric_cloud_wind_direction",
                     "lua_setter": "set_volumetric_cloud_wind_direction"
                 },
                 {
@@ -4490,9 +4492,9 @@
                     "color": true
                 },
                 {
-                    "name": "wind_direction",
-                    "type": "vec3"
-                },
+"name": "wind_direction",
+"type": "vec2"
+},
                 {
                     "name": "wind_speed",
                     "type": "float",

@@ -37,34 +37,32 @@ int L_Set_water_water_level(lua_State* L) {
 }
 int L_Get_water_deep_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float x = 0, y = 0, z = 0, w = 0;
-    dse_water_get_deep_color(e, &x, &y, &z, &w);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z); lua_pushnumber(L, w);
-    return 4;
+    float x = 0, y = 0, z = 0;
+    dse_water_get_deep_color(e, &x, &y, &z);
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+    return 3;
 }
 int L_Set_water_deep_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_water_set_deep_color(e,
         static_cast<float>(luaL_checknumber(L, 2)),
         static_cast<float>(luaL_checknumber(L, 3)),
-        static_cast<float>(luaL_checknumber(L, 4)),
-        static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+        static_cast<float>(luaL_checknumber(L, 4)));
     return 0;
 }
 int L_Get_water_shallow_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float x = 0, y = 0, z = 0, w = 0;
-    dse_water_get_shallow_color(e, &x, &y, &z, &w);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z); lua_pushnumber(L, w);
-    return 4;
+    float x = 0, y = 0, z = 0;
+    dse_water_get_shallow_color(e, &x, &y, &z);
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+    return 3;
 }
 int L_Set_water_shallow_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_water_set_shallow_color(e,
         static_cast<float>(luaL_checknumber(L, 2)),
         static_cast<float>(luaL_checknumber(L, 3)),
-        static_cast<float>(luaL_checknumber(L, 4)),
-        static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+        static_cast<float>(luaL_checknumber(L, 4)));
     return 0;
 }
 int L_Get_water_max_depth(lua_State* L) {
@@ -119,17 +117,16 @@ int L_Set_water_wave_speed(lua_State* L) {
 }
 int L_Get_water_wave_direction(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float x = 0, y = 0, z = 0;
-    dse_water_get_wave_direction(e, &x, &y, &z);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
-    return 3;
+    float x = 0, y = 0;
+    dse_water_get_wave_direction(e, &x, &y);
+    lua_pushnumber(L, x); lua_pushnumber(L, y);
+    return 2;
 }
 int L_Set_water_wave_direction(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_water_set_wave_direction(e,
         static_cast<float>(luaL_checknumber(L, 2)),
-        static_cast<float>(luaL_checknumber(L, 3)),
-        static_cast<float>(luaL_checknumber(L, 4)));
+        static_cast<float>(luaL_checknumber(L, 3)));
     return 0;
 }
 int L_Get_water_refraction_strength(lua_State* L) {
@@ -214,18 +211,17 @@ int L_Set_water_underwater_fog_density(lua_State* L) {
 }
 int L_Get_water_underwater_fog_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float x = 0, y = 0, z = 0, w = 0;
-    dse_water_get_underwater_fog_color(e, &x, &y, &z, &w);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z); lua_pushnumber(L, w);
-    return 4;
+    float x = 0, y = 0, z = 0;
+    dse_water_get_underwater_fog_color(e, &x, &y, &z);
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+    return 3;
 }
 int L_Set_water_underwater_fog_color(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_water_set_underwater_fog_color(e,
         static_cast<float>(luaL_checknumber(L, 2)),
         static_cast<float>(luaL_checknumber(L, 3)),
-        static_cast<float>(luaL_checknumber(L, 4)),
-        static_cast<float>(luaL_optnumber(L, 5, 1.0)));
+        static_cast<float>(luaL_checknumber(L, 4)));
     return 0;
 }
 

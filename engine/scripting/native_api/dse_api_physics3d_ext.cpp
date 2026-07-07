@@ -198,19 +198,7 @@ extern "C" void dse_rigidbody3d_set_kinematic(uint32_t e, int kinematic) {
     }
 }
 
-extern "C" float dse_rigidbody3d_get_mass(uint32_t e) {
-    World* world = GW();
-    if (!world) return 0.0f;
-    const auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    return rb ? rb->mass : 0.0f;
-}
-
-extern "C" void dse_rigidbody3d_set_mass(uint32_t e, float mass) {
-    World* world = GW();
-    if (!world) return;
-    auto* rb = world->registry().try_get<RigidBody3DComponent>(TE(e));
-    if (rb) rb->mass = mass;
-}
+// dse_rigidbody3d_get_mass / dse_rigidbody3d_set_mass 由 dse_api_rigidbody3d.gen.cpp 提供（codegen 逐字段 setter）
 
 extern "C" void dse_rigidbody3d_add_force_at_position(uint32_t e, float fx, float fy, float fz,
                                                        float px, float py, float pz) {

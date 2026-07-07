@@ -108,12 +108,12 @@ extern "C" void dse_volumetric_cloud_set_erosion(uint32_t e, float v) {
         c->erosion = v;
     }
 }
-extern "C" void dse_volumetric_cloud_get_wind_direction(uint32_t e, float* x, float* y, float* z) {
-    if (const auto* c = GCC<dse::VolumetricCloudComponent>(e)) { *x = c->wind_direction.x; *y = c->wind_direction.y; *z = c->wind_direction.z; }
+extern "C" void dse_volumetric_cloud_get_wind_direction(uint32_t e, float* x, float* y) {
+    if (const auto* c = GCC<dse::VolumetricCloudComponent>(e)) { *x = c->wind_direction.x; *y = c->wind_direction.y; }
 }
-extern "C" void dse_volumetric_cloud_set_wind_direction(uint32_t e, float x, float y, float z) {
+extern "C" void dse_volumetric_cloud_set_wind_direction(uint32_t e, float x, float y) {
     if (auto* c = GC<dse::VolumetricCloudComponent>(e)) {
-        c->wind_direction = glm::vec3(x, y, z);
+        c->wind_direction = glm::vec2(x, y);
     }
 }
 extern "C" float dse_volumetric_cloud_get_wind_speed(uint32_t e) {

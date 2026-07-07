@@ -33,7 +33,7 @@ extern "C" int dse_rigidbody3d_get_type(uint32_t e) {
 }
 extern "C" void dse_rigidbody3d_set_type(uint32_t e, int v) {
     if (auto* c = GC<dse::RigidBody3DComponent>(e)) {
-        c->type = v;
+        c->type = static_cast<dse::RigidBody3DType>(v);
     }
 }
 extern "C" float dse_rigidbody3d_get_mass(uint32_t e) {

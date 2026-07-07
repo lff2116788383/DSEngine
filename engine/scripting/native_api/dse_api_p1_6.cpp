@@ -419,35 +419,7 @@ extern "C" void dse_foliage_add(uint32_t e) {
     fc.enabled = true;
 }
 
-extern "C" void dse_foliage_set_wind_strength(uint32_t e, float v) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    if (fc) fc->wind_strength = v;
-}
-
-extern "C" float dse_foliage_get_wind_strength(uint32_t e) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    return fc ? fc->wind_strength : 0.0f;
-}
-
-extern "C" void dse_foliage_set_stiffness(uint32_t e, float v) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    if (fc) fc->stiffness = v;
-}
-
-extern "C" float dse_foliage_get_stiffness(uint32_t e) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    return fc ? fc->stiffness : 0.0f;
-}
-
-extern "C" void dse_foliage_set_enabled(uint32_t e, int v) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    if (fc) fc->enabled = (v != 0);
-}
-
-extern "C" int dse_foliage_get_enabled(uint32_t e) {
-    auto* fc = GetComp<FoliageComponent>(e);
-    return (fc && fc->enabled) ? 1 : 0;
-}
+// foliage field get/set 由 dse_api_foliage.gen.cpp 提供（codegen 生成）
 
 // ============================================================
 // Tree / TerrainTileManager / DynamicObstacle / NavMeshRebake — add

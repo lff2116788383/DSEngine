@@ -31,7 +31,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterEcsGameplay3DBindings(L);
     Register2DSystemsBindings(L);
 
-    // Codegen 生成的组件属性绑定
+    // Codegen 生成的组件属性绑定（全量注册）
     RegisterTransformComponentGenBindings(L);
     RegisterCamera3DComponentGenBindings(L);
     RegisterDirectionalLight3DComponentGenBindings(L);
@@ -45,6 +45,42 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterNavMeshAutoRebakeComponentGenBindings(L);
     RegisterPostProcessComponentGenBindings(L);
     RegisterAnimator3DComponentGenBindings(L);
+    RegisterDecalComponentGenBindings(L);
+    RegisterSkyboxComponentGenBindings(L);
+    RegisterFreeCameraControllerComponentGenBindings(L);
+    RegisterSubSceneComponentGenBindings(L);
+    RegisterBoundingBoxComponentGenBindings(L);
+    RegisterWaterComponentGenBindings(L);
+    RegisterLightProbeComponentGenBindings(L);
+    RegisterReflectionProbeComponentGenBindings(L);
+    RegisterGIProbeVolumeComponentGenBindings(L);
+    RegisterFoliageComponentGenBindings(L);
+    RegisterAtmosphereComponentGenBindings(L);
+    RegisterVolumetricCloudComponentGenBindings(L);
+    RegisterDayNightCycleComponentGenBindings(L);
+    RegisterHairComponentGenBindings(L);
+    RegisterImpostorComponentGenBindings(L);
+    RegisterStreamingOriginComponentGenBindings(L);
+    RegisterWorldPartitionConfigComponentGenBindings(L);
+    RegisterHLODConfigComponentGenBindings(L);
+    RegisterVirtualTextureComponentGenBindings(L);
+    RegisterLightmapComponentGenBindings(L);
+    RegisterRigidBody3DComponentGenBindings(L);
+    RegisterBoxCollider3DComponentGenBindings(L);
+    RegisterSphereCollider3DComponentGenBindings(L);
+    RegisterCapsuleCollider3DComponentGenBindings(L);
+    RegisterMeshCollider3DComponentGenBindings(L);
+    RegisterCharacterController3DComponentGenBindings(L);
+    RegisterJoint3DComponentGenBindings(L);
+    RegisterRagdollComponentGenBindings(L);
+    RegisterSoftBodyComponentGenBindings(L);
+    RegisterVehicleComponentGenBindings(L);
+    RegisterRopeComponentGenBindings(L);
+    RegisterBuoyancyComponentGenBindings(L);
+    RegisterCharacterMovementStateGenBindings(L);
+    RegisterCharacterMovementConfigGenBindings(L);
+    RegisterSpringArm3DComponentGenBindings(L);
+    RegisterPlayerControllerComponentGenBindings(L);
 }
 
 } // namespace dse::runtime::lua_binding

@@ -425,40 +425,19 @@ list(FILTER engine_cpp EXCLUDE REGEX ".*engine/net/.*\\.cpp$")
 # 目标（唯一 include IXWebSocket 之处），不并入 dse_engine 主目标。
 list(FILTER engine_cpp EXCLUDE REGEX ".*engine/http/.*\\.cpp$")
 
-# 排除 codegen 生成文件（*.gen.cpp）— 生成文件默认作为参考暂存
-# 注意：dse_api_<prefix>.gen.cpp 与手写 dse_api.cpp 同 TU 域，须显式加回（见下）
+# 排除 codegen 生成文件（*.gen.cpp）— 由下方 GLOB 统一加回
 list(FILTER engine_cpp EXCLUDE REGEX ".*\\.gen\\.cpp$")
 
-# 显式加回已完成迁移的 gen 文件（手写版本已删除或已精简，无符号冲突）
-list(APPEND engine_cpp
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_transform.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_camera3d.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_mesh_renderer.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_dir_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_point_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_spot_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_sky_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_tree.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_terrain_tile.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_dyn_obstacle.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_navmesh_rebake.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_post_process.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_animator3d.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_transform.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_camera3d.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dir_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_point_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_mesh_renderer.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_spot_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_sky_light.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_tree.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_terrain_tile.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_dyn_obstacle.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_navmesh_rebake.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_post_process.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_ecs_animator3d.gen.cpp"
-    "${CMAKE_SOURCE_DIR}/engine/reflect/component_reflection.gen.cpp"
+# 自动发现 codegen 生成的源文件（C ABI 实现 + Lua 绑定 + 反射）
+# 新增组件只需在 binding_defs.json 中添加定义，无需手动修改 CMakeLists.txt
+file(GLOB DSE_GEN_CPP CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/engine/scripting/native_api/dse_api_*.gen.cpp"
+    "${CMAKE_SOURCE_DIR}/engine/scripting/lua/bindings/lua_binding_*.gen.cpp"
 )
+list(APPEND engine_cpp ${DSE_GEN_CPP})
+
+# 反射注册（由 codegen 生成，非 scripting 目录下）
+list(APPEND engine_cpp "${CMAKE_SOURCE_DIR}/engine/reflect/component_reflection.gen.cpp")
 
 # Vulkan RHI 后端源文件仅在启用时编译
 if(NOT DSE_ENABLE_VULKAN)
@@ -880,13 +859,6 @@ if(DSE_ENABLE_CSHARP)
         # 回退: CSharpHost 在运行时通过 PATH 搜索 hostfxr
         target_compile_definitions(dse_engine PRIVATE DSE_CSHARP_NO_NETHOST=1)
     endif()
-    # Codegen target: 重新生成 C# P/Invoke 声明 + C ABI 头
-    add_custom_target(dse_codegen
-        COMMAND ${CMAKE_COMMAND} -E env python "${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py"
-                --out "${CMAKE_SOURCE_DIR}"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/tools/codegen"
-        COMMENT "Running DSEngine binding codegen (C ABI + Lua + C#)"
-    )
     # C# 项目构建 (requires dotnet CLI)
     add_custom_target(dse_csharp_build
         COMMAND dotnet build "${CMAKE_SOURCE_DIR}/GameScripts/DSEngine.sln"

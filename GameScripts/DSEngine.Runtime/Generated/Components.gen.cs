@@ -1176,20 +1176,20 @@ namespace DSEngine.Runtime
             set => Native.dse_water_set_water_level(_entity, value);
         }
 
-        public Vector4 DeepColor {
+        public Vector3 DeepColor {
             get {
-                Native.dse_water_get_deep_color(_entity, out float x, out float y, out float z, out float w);
-                return new Vector4(x, y, z, w);
+                Native.dse_water_get_deep_color(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
             }
-            set => Native.dse_water_set_deep_color(_entity, value.X, value.Y, value.Z, value.W);
+            set => Native.dse_water_set_deep_color(_entity, value.X, value.Y, value.Z);
         }
 
-        public Vector4 ShallowColor {
+        public Vector3 ShallowColor {
             get {
-                Native.dse_water_get_shallow_color(_entity, out float x, out float y, out float z, out float w);
-                return new Vector4(x, y, z, w);
+                Native.dse_water_get_shallow_color(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
             }
-            set => Native.dse_water_set_shallow_color(_entity, value.X, value.Y, value.Z, value.W);
+            set => Native.dse_water_set_shallow_color(_entity, value.X, value.Y, value.Z);
         }
 
         public float MaxDepth {
@@ -1217,13 +1217,6 @@ namespace DSEngine.Runtime
             set => Native.dse_water_set_wave_speed(_entity, value);
         }
 
-        public Vector3 WaveDirection {
-            get {
-                Native.dse_water_get_wave_direction(_entity, out float x, out float y, out float z);
-                return new Vector3(x, y, z);
-            }
-            set => Native.dse_water_set_wave_direction(_entity, value.X, value.Y, value.Z);
-        }
 
         public float RefractionStrength {
             get => Native.dse_water_get_refraction_strength(_entity);
@@ -1265,12 +1258,12 @@ namespace DSEngine.Runtime
             set => Native.dse_water_set_underwater_fog_density(_entity, value);
         }
 
-        public Vector4 UnderwaterFogColor {
+        public Vector3 UnderwaterFogColor {
             get {
-                Native.dse_water_get_underwater_fog_color(_entity, out float x, out float y, out float z, out float w);
-                return new Vector4(x, y, z, w);
+                Native.dse_water_get_underwater_fog_color(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
             }
-            set => Native.dse_water_set_underwater_fog_color(_entity, value.X, value.Y, value.Z, value.W);
+            set => Native.dse_water_set_underwater_fog_color(_entity, value.X, value.Y, value.Z);
         }
 
     }
@@ -2121,9 +2114,12 @@ namespace DSEngine.Runtime
             set => Native.dse_atmosphere_set_ozone_width(_entity, value);
         }
 
-        public float SunIntensity {
-            get => Native.dse_atmosphere_get_sun_intensity(_entity);
-            set => Native.dse_atmosphere_set_sun_intensity(_entity, value);
+        public Vector3 SunIntensity {
+            get {
+                Native.dse_atmosphere_get_sun_intensity(_entity, out float x, out float y, out float z);
+                return new Vector3(x, y, z);
+            }
+            set => Native.dse_atmosphere_set_sun_intensity(_entity, value.X, value.Y, value.Z);
         }
 
         public float SunDiskAngle {
@@ -2190,13 +2186,6 @@ namespace DSEngine.Runtime
             set => Native.dse_volumetric_cloud_set_erosion(_entity, value);
         }
 
-        public Vector3 WindDirection {
-            get {
-                Native.dse_volumetric_cloud_get_wind_direction(_entity, out float x, out float y, out float z);
-                return new Vector3(x, y, z);
-            }
-            set => Native.dse_volumetric_cloud_set_wind_direction(_entity, value.X, value.Y, value.Z);
-        }
 
         public float WindSpeed {
             get => Native.dse_volumetric_cloud_get_wind_speed(_entity);

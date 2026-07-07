@@ -107,17 +107,16 @@ int L_Set_volumetric_cloud_erosion(lua_State* L) {
 }
 int L_Get_volumetric_cloud_wind_direction(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float x = 0, y = 0, z = 0;
-    dse_volumetric_cloud_get_wind_direction(e, &x, &y, &z);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
-    return 3;
+    float x = 0, y = 0;
+    dse_volumetric_cloud_get_wind_direction(e, &x, &y);
+    lua_pushnumber(L, x); lua_pushnumber(L, y);
+    return 2;
 }
 int L_Set_volumetric_cloud_wind_direction(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_volumetric_cloud_set_wind_direction(e,
         static_cast<float>(luaL_checknumber(L, 2)),
-        static_cast<float>(luaL_checknumber(L, 3)),
-        static_cast<float>(luaL_checknumber(L, 4)));
+        static_cast<float>(luaL_checknumber(L, 3)));
     return 0;
 }
 int L_Get_volumetric_cloud_wind_speed(lua_State* L) {

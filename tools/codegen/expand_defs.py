@@ -761,9 +761,11 @@ def main():
                 f["lua_setter"] = f"set_{new_comp['prefix']}_{f['name']}"
             if f["type"] == "string":
                 f.setdefault("buffer_size", 256)
-            # Enum fields map to int for scripting
+            # Enum fields map to enum_int for scripting (generates static_cast)
             if f["type"] == "enum":
-                f["type"] = "int"
+                f["type"] = "enum_int"
+                ns = new_comp.get("namespace", "")
+                f["enum_type"] = f"{ns}::{f['enum_name']}" if ns else f["enum_name"]
         defs["components"].append(new_comp)
 
     # 3. Add reflect-only components (no scripting bindings, only reflection)

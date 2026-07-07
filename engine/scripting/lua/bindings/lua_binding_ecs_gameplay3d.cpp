@@ -246,10 +246,10 @@ int L_EcsRagdollIsActive(lua_State* L) {
     return 1;
 }
 
-/// set_ragdoll_collision_layer(entity, layer, mask)
+/// set_ragdoll_collision_layer_mask(entity, layer, mask) — 批量设置
 int L_EcsSetRagdollCollisionLayer(lua_State* L) {
     Entity e = helper::CheckEntity(L, 1);
-    dse_ragdoll_set_collision_layer(EID(e),
+    dse_ragdoll_set_collision_layer_mask(EID(e),
         static_cast<uint32_t>(helper::CheckInt(L, 2)),
         static_cast<uint32_t>(helper::CheckInt(L, 3)));
     return 0;
@@ -753,7 +753,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"ragdoll_activate",          L_EcsRagdollActivate},
         {"ragdoll_deactivate",        L_EcsRagdollDeactivate},
         {"ragdoll_is_active",         L_EcsRagdollIsActive},
-        {"set_ragdoll_collision_layer", L_EcsSetRagdollCollisionLayer},
+        {"set_ragdoll_collision_layer_mask", L_EcsSetRagdollCollisionLayer},
         // 软体（Phase 2）
         {"add_softbody",              L_EcsAddSoftBody},
         {"softbody_set_gravity",      L_EcsSoftBodySetGravity},

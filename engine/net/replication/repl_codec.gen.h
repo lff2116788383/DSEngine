@@ -1867,14 +1867,14 @@ inline bool HasFlag(water_DeltaFlags flags, water_DeltaFlags bit) {
 inline void WriteSnapshot_water(ByteWriter& w, const dse::WaterComponent& c) {
     w.WriteU8(c.enabled ? 1 : 0);
     w.WriteF32(c.water_level);
-    w.WriteF32(c.deep_color.x); w.WriteF32(c.deep_color.y); w.WriteF32(c.deep_color.z); w.WriteF32(c.deep_color.w);
-    w.WriteF32(c.shallow_color.x); w.WriteF32(c.shallow_color.y); w.WriteF32(c.shallow_color.z); w.WriteF32(c.shallow_color.w);
+    w.WriteF32(c.deep_color.x); w.WriteF32(c.deep_color.y); w.WriteF32(c.deep_color.z);
+    w.WriteF32(c.shallow_color.x); w.WriteF32(c.shallow_color.y); w.WriteF32(c.shallow_color.z);
     w.WriteF32(c.max_depth);
     w.WriteF32(c.transparency);
     w.WriteF32(c.wave_amplitude);
     w.WriteF32(c.wave_frequency);
     w.WriteF32(c.wave_speed);
-    w.WriteF32(c.wave_direction.x); w.WriteF32(c.wave_direction.y); w.WriteF32(c.wave_direction.z);
+    w.WriteF32(c.wave_direction.x); w.WriteF32(c.wave_direction.y);
     w.WriteF32(c.refraction_strength);
     w.WriteF32(c.reflection_strength);
     w.WriteF32(c.specular_power);
@@ -1883,21 +1883,21 @@ inline void WriteSnapshot_water(ByteWriter& w, const dse::WaterComponent& c) {
     w.WriteF32(c.foam_intensity);
     w.WriteF32(c.foam_depth_threshold);
     w.WriteF32(c.underwater_fog_density);
-    w.WriteF32(c.underwater_fog_color.x); w.WriteF32(c.underwater_fog_color.y); w.WriteF32(c.underwater_fog_color.z); w.WriteF32(c.underwater_fog_color.w);
+    w.WriteF32(c.underwater_fog_color.x); w.WriteF32(c.underwater_fog_color.y); w.WriteF32(c.underwater_fog_color.z);
 }
 
 /// Full snapshot read.
 inline void ReadSnapshot_water(ByteReader& r, dse::WaterComponent& c) {
     c.enabled = r.ReadU8() != 0;
     c.water_level = r.ReadF32();
-    c.deep_color.x = r.ReadF32(); c.deep_color.y = r.ReadF32(); c.deep_color.z = r.ReadF32(); c.deep_color.w = r.ReadF32();
-    c.shallow_color.x = r.ReadF32(); c.shallow_color.y = r.ReadF32(); c.shallow_color.z = r.ReadF32(); c.shallow_color.w = r.ReadF32();
+    c.deep_color.x = r.ReadF32(); c.deep_color.y = r.ReadF32(); c.deep_color.z = r.ReadF32();
+    c.shallow_color.x = r.ReadF32(); c.shallow_color.y = r.ReadF32(); c.shallow_color.z = r.ReadF32();
     c.max_depth = r.ReadF32();
     c.transparency = r.ReadF32();
     c.wave_amplitude = r.ReadF32();
     c.wave_frequency = r.ReadF32();
     c.wave_speed = r.ReadF32();
-    c.wave_direction.x = r.ReadF32(); c.wave_direction.y = r.ReadF32(); c.wave_direction.z = r.ReadF32();
+    c.wave_direction.x = r.ReadF32(); c.wave_direction.y = r.ReadF32();
     c.refraction_strength = r.ReadF32();
     c.reflection_strength = r.ReadF32();
     c.specular_power = r.ReadF32();
@@ -1906,7 +1906,7 @@ inline void ReadSnapshot_water(ByteReader& r, dse::WaterComponent& c) {
     c.foam_intensity = r.ReadF32();
     c.foam_depth_threshold = r.ReadF32();
     c.underwater_fog_density = r.ReadF32();
-    c.underwater_fog_color.x = r.ReadF32(); c.underwater_fog_color.y = r.ReadF32(); c.underwater_fog_color.z = r.ReadF32(); c.underwater_fog_color.w = r.ReadF32();
+    c.underwater_fog_color.x = r.ReadF32(); c.underwater_fog_color.y = r.ReadF32(); c.underwater_fog_color.z = r.ReadF32();
 }
 
 /// Compute delta between current and baseline.
@@ -1916,14 +1916,14 @@ inline water_DeltaFlags ComputeDelta_water(
     water_DeltaFlags flags = water_DeltaFlags::None;
     if (cur.enabled != base.enabled) flags = flags | water_DeltaFlags::f_enabled;
     if (cur.water_level != base.water_level) flags = flags | water_DeltaFlags::f_water_level;
-    if (cur.deep_color.x != base.deep_color.x || cur.deep_color.y != base.deep_color.y || cur.deep_color.z != base.deep_color.z || cur.deep_color.w != base.deep_color.w) flags = flags | water_DeltaFlags::f_deep_color;
-    if (cur.shallow_color.x != base.shallow_color.x || cur.shallow_color.y != base.shallow_color.y || cur.shallow_color.z != base.shallow_color.z || cur.shallow_color.w != base.shallow_color.w) flags = flags | water_DeltaFlags::f_shallow_color;
+    if (cur.deep_color.x != base.deep_color.x || cur.deep_color.y != base.deep_color.y || cur.deep_color.z != base.deep_color.z) flags = flags | water_DeltaFlags::f_deep_color;
+    if (cur.shallow_color.x != base.shallow_color.x || cur.shallow_color.y != base.shallow_color.y || cur.shallow_color.z != base.shallow_color.z) flags = flags | water_DeltaFlags::f_shallow_color;
     if (cur.max_depth != base.max_depth) flags = flags | water_DeltaFlags::f_max_depth;
     if (cur.transparency != base.transparency) flags = flags | water_DeltaFlags::f_transparency;
     if (cur.wave_amplitude != base.wave_amplitude) flags = flags | water_DeltaFlags::f_wave_amplitude;
     if (cur.wave_frequency != base.wave_frequency) flags = flags | water_DeltaFlags::f_wave_frequency;
     if (cur.wave_speed != base.wave_speed) flags = flags | water_DeltaFlags::f_wave_speed;
-    if (cur.wave_direction.x != base.wave_direction.x || cur.wave_direction.y != base.wave_direction.y || cur.wave_direction.z != base.wave_direction.z) flags = flags | water_DeltaFlags::f_wave_direction;
+    if (cur.wave_direction.x != base.wave_direction.x || cur.wave_direction.y != base.wave_direction.y) flags = flags | water_DeltaFlags::f_wave_direction;
     if (cur.refraction_strength != base.refraction_strength) flags = flags | water_DeltaFlags::f_refraction_strength;
     if (cur.reflection_strength != base.reflection_strength) flags = flags | water_DeltaFlags::f_reflection_strength;
     if (cur.specular_power != base.specular_power) flags = flags | water_DeltaFlags::f_specular_power;
@@ -1932,7 +1932,7 @@ inline water_DeltaFlags ComputeDelta_water(
     if (cur.foam_intensity != base.foam_intensity) flags = flags | water_DeltaFlags::f_foam_intensity;
     if (cur.foam_depth_threshold != base.foam_depth_threshold) flags = flags | water_DeltaFlags::f_foam_depth_threshold;
     if (cur.underwater_fog_density != base.underwater_fog_density) flags = flags | water_DeltaFlags::f_underwater_fog_density;
-    if (cur.underwater_fog_color.x != base.underwater_fog_color.x || cur.underwater_fog_color.y != base.underwater_fog_color.y || cur.underwater_fog_color.z != base.underwater_fog_color.z || cur.underwater_fog_color.w != base.underwater_fog_color.w) flags = flags | water_DeltaFlags::f_underwater_fog_color;
+    if (cur.underwater_fog_color.x != base.underwater_fog_color.x || cur.underwater_fog_color.y != base.underwater_fog_color.y || cur.underwater_fog_color.z != base.underwater_fog_color.z) flags = flags | water_DeltaFlags::f_underwater_fog_color;
     return flags;
 }
 
@@ -1941,14 +1941,14 @@ inline void WriteDelta_water(ByteWriter& w, const dse::WaterComponent& c, water_
     w.WriteU32(static_cast<uint32_t>(flags));
     if (HasFlag(flags, water_DeltaFlags::f_enabled)) { w.WriteU8(c.enabled ? 1 : 0); }
     if (HasFlag(flags, water_DeltaFlags::f_water_level)) { w.WriteF32(c.water_level); }
-    if (HasFlag(flags, water_DeltaFlags::f_deep_color)) { w.WriteF32(c.deep_color.x); w.WriteF32(c.deep_color.y); w.WriteF32(c.deep_color.z); w.WriteF32(c.deep_color.w); }
-    if (HasFlag(flags, water_DeltaFlags::f_shallow_color)) { w.WriteF32(c.shallow_color.x); w.WriteF32(c.shallow_color.y); w.WriteF32(c.shallow_color.z); w.WriteF32(c.shallow_color.w); }
+    if (HasFlag(flags, water_DeltaFlags::f_deep_color)) { w.WriteF32(c.deep_color.x); w.WriteF32(c.deep_color.y); w.WriteF32(c.deep_color.z); }
+    if (HasFlag(flags, water_DeltaFlags::f_shallow_color)) { w.WriteF32(c.shallow_color.x); w.WriteF32(c.shallow_color.y); w.WriteF32(c.shallow_color.z); }
     if (HasFlag(flags, water_DeltaFlags::f_max_depth)) { w.WriteF32(c.max_depth); }
     if (HasFlag(flags, water_DeltaFlags::f_transparency)) { w.WriteF32(c.transparency); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_amplitude)) { w.WriteF32(c.wave_amplitude); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_frequency)) { w.WriteF32(c.wave_frequency); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_speed)) { w.WriteF32(c.wave_speed); }
-    if (HasFlag(flags, water_DeltaFlags::f_wave_direction)) { w.WriteF32(c.wave_direction.x); w.WriteF32(c.wave_direction.y); w.WriteF32(c.wave_direction.z); }
+    if (HasFlag(flags, water_DeltaFlags::f_wave_direction)) { w.WriteF32(c.wave_direction.x); w.WriteF32(c.wave_direction.y); }
     if (HasFlag(flags, water_DeltaFlags::f_refraction_strength)) { w.WriteF32(c.refraction_strength); }
     if (HasFlag(flags, water_DeltaFlags::f_reflection_strength)) { w.WriteF32(c.reflection_strength); }
     if (HasFlag(flags, water_DeltaFlags::f_specular_power)) { w.WriteF32(c.specular_power); }
@@ -1957,7 +1957,7 @@ inline void WriteDelta_water(ByteWriter& w, const dse::WaterComponent& c, water_
     if (HasFlag(flags, water_DeltaFlags::f_foam_intensity)) { w.WriteF32(c.foam_intensity); }
     if (HasFlag(flags, water_DeltaFlags::f_foam_depth_threshold)) { w.WriteF32(c.foam_depth_threshold); }
     if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_density)) { w.WriteF32(c.underwater_fog_density); }
-    if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_color)) { w.WriteF32(c.underwater_fog_color.x); w.WriteF32(c.underwater_fog_color.y); w.WriteF32(c.underwater_fog_color.z); w.WriteF32(c.underwater_fog_color.w); }
+    if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_color)) { w.WriteF32(c.underwater_fog_color.x); w.WriteF32(c.underwater_fog_color.y); w.WriteF32(c.underwater_fog_color.z); }
 }
 
 /// Read delta and apply to component.
@@ -1965,14 +1965,14 @@ inline void ReadDelta_water(ByteReader& r, dse::WaterComponent& c) {
     auto flags = static_cast<water_DeltaFlags>(r.ReadU32());
     if (HasFlag(flags, water_DeltaFlags::f_enabled)) { c.enabled = r.ReadU8() != 0; }
     if (HasFlag(flags, water_DeltaFlags::f_water_level)) { c.water_level = r.ReadF32(); }
-    if (HasFlag(flags, water_DeltaFlags::f_deep_color)) { c.deep_color.x = r.ReadF32(); c.deep_color.y = r.ReadF32(); c.deep_color.z = r.ReadF32(); c.deep_color.w = r.ReadF32(); }
-    if (HasFlag(flags, water_DeltaFlags::f_shallow_color)) { c.shallow_color.x = r.ReadF32(); c.shallow_color.y = r.ReadF32(); c.shallow_color.z = r.ReadF32(); c.shallow_color.w = r.ReadF32(); }
+    if (HasFlag(flags, water_DeltaFlags::f_deep_color)) { c.deep_color.x = r.ReadF32(); c.deep_color.y = r.ReadF32(); c.deep_color.z = r.ReadF32(); }
+    if (HasFlag(flags, water_DeltaFlags::f_shallow_color)) { c.shallow_color.x = r.ReadF32(); c.shallow_color.y = r.ReadF32(); c.shallow_color.z = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_max_depth)) { c.max_depth = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_transparency)) { c.transparency = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_amplitude)) { c.wave_amplitude = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_frequency)) { c.wave_frequency = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_wave_speed)) { c.wave_speed = r.ReadF32(); }
-    if (HasFlag(flags, water_DeltaFlags::f_wave_direction)) { c.wave_direction.x = r.ReadF32(); c.wave_direction.y = r.ReadF32(); c.wave_direction.z = r.ReadF32(); }
+    if (HasFlag(flags, water_DeltaFlags::f_wave_direction)) { c.wave_direction.x = r.ReadF32(); c.wave_direction.y = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_refraction_strength)) { c.refraction_strength = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_reflection_strength)) { c.reflection_strength = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_specular_power)) { c.specular_power = r.ReadF32(); }
@@ -1981,7 +1981,7 @@ inline void ReadDelta_water(ByteReader& r, dse::WaterComponent& c) {
     if (HasFlag(flags, water_DeltaFlags::f_foam_intensity)) { c.foam_intensity = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_foam_depth_threshold)) { c.foam_depth_threshold = r.ReadF32(); }
     if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_density)) { c.underwater_fog_density = r.ReadF32(); }
-    if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_color)) { c.underwater_fog_color.x = r.ReadF32(); c.underwater_fog_color.y = r.ReadF32(); c.underwater_fog_color.z = r.ReadF32(); c.underwater_fog_color.w = r.ReadF32(); }
+    if (HasFlag(flags, water_DeltaFlags::f_underwater_fog_color)) { c.underwater_fog_color.x = r.ReadF32(); c.underwater_fog_color.y = r.ReadF32(); c.underwater_fog_color.z = r.ReadF32(); }
 }
 // ═══════════════════════════════════════════════════════════════════════════════
 // LightProbeComponent (prefix: light_probe)
@@ -2338,16 +2338,15 @@ inline void ReadDelta_foliage(ByteReader& r, dse::FoliageComponent& c) {
 /// Delta flags — one bit per replicable field.
 enum class rigidbody3d_DeltaFlags : uint32_t {
     None = 0,
-    f_type = (1u << 0),
-    f_mass = (1u << 1),
-    f_drag = (1u << 2),
-    f_angular_drag = (1u << 3),
-    f_use_gravity = (1u << 4),
-    f_gravity_scale = (1u << 5),
-    f_is_kinematic = (1u << 6),
-    f_collision_layer = (1u << 7),
-    f_collision_mask = (1u << 8),
-    All = 0x1ffu
+    f_mass = (1u << 0),
+    f_drag = (1u << 1),
+    f_angular_drag = (1u << 2),
+    f_use_gravity = (1u << 3),
+    f_gravity_scale = (1u << 4),
+    f_is_kinematic = (1u << 5),
+    f_collision_layer = (1u << 6),
+    f_collision_mask = (1u << 7),
+    All = 0xffu
 };
 
 inline rigidbody3d_DeltaFlags operator|(rigidbody3d_DeltaFlags a, rigidbody3d_DeltaFlags b) {
@@ -2359,7 +2358,6 @@ inline bool HasFlag(rigidbody3d_DeltaFlags flags, rigidbody3d_DeltaFlags bit) {
 
 /// Full snapshot write.
 inline void WriteSnapshot_rigidbody3d(ByteWriter& w, const dse::RigidBody3DComponent& c) {
-    w.WriteU32(static_cast<uint32_t>(c.type));
     w.WriteF32(c.mass);
     w.WriteF32(c.drag);
     w.WriteF32(c.angular_drag);
@@ -2372,7 +2370,6 @@ inline void WriteSnapshot_rigidbody3d(ByteWriter& w, const dse::RigidBody3DCompo
 
 /// Full snapshot read.
 inline void ReadSnapshot_rigidbody3d(ByteReader& r, dse::RigidBody3DComponent& c) {
-    c.type = static_cast<int>(r.ReadU32());
     c.mass = r.ReadF32();
     c.drag = r.ReadF32();
     c.angular_drag = r.ReadF32();
@@ -2388,7 +2385,6 @@ inline rigidbody3d_DeltaFlags ComputeDelta_rigidbody3d(
         const dse::RigidBody3DComponent& cur,
         const dse::RigidBody3DComponent& base) {
     rigidbody3d_DeltaFlags flags = rigidbody3d_DeltaFlags::None;
-    if (cur.type != base.type) flags = flags | rigidbody3d_DeltaFlags::f_type;
     if (cur.mass != base.mass) flags = flags | rigidbody3d_DeltaFlags::f_mass;
     if (cur.drag != base.drag) flags = flags | rigidbody3d_DeltaFlags::f_drag;
     if (cur.angular_drag != base.angular_drag) flags = flags | rigidbody3d_DeltaFlags::f_angular_drag;
@@ -2403,7 +2399,6 @@ inline rigidbody3d_DeltaFlags ComputeDelta_rigidbody3d(
 /// Write only changed fields (delta).
 inline void WriteDelta_rigidbody3d(ByteWriter& w, const dse::RigidBody3DComponent& c, rigidbody3d_DeltaFlags flags) {
     w.WriteU32(static_cast<uint32_t>(flags));
-    if (HasFlag(flags, rigidbody3d_DeltaFlags::f_type)) { w.WriteU32(static_cast<uint32_t>(c.type)); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_mass)) { w.WriteF32(c.mass); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_drag)) { w.WriteF32(c.drag); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_angular_drag)) { w.WriteF32(c.angular_drag); }
@@ -2417,7 +2412,6 @@ inline void WriteDelta_rigidbody3d(ByteWriter& w, const dse::RigidBody3DComponen
 /// Read delta and apply to component.
 inline void ReadDelta_rigidbody3d(ByteReader& r, dse::RigidBody3DComponent& c) {
     auto flags = static_cast<rigidbody3d_DeltaFlags>(r.ReadU32());
-    if (HasFlag(flags, rigidbody3d_DeltaFlags::f_type)) { c.type = static_cast<int>(r.ReadU32()); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_mass)) { c.mass = r.ReadF32(); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_drag)) { c.drag = r.ReadF32(); }
     if (HasFlag(flags, rigidbody3d_DeltaFlags::f_angular_drag)) { c.angular_drag = r.ReadF32(); }
@@ -2806,21 +2800,20 @@ inline void ReadDelta_character_ctrl3d(ByteReader& r, dse::CharacterController3D
 /// Delta flags — one bit per replicable field.
 enum class joint3d_DeltaFlags : uint32_t {
     None = 0,
-    f_type = (1u << 0),
-    f_connected_entity_id = (1u << 1),
-    f_anchor = (1u << 2),
-    f_connected_anchor = (1u << 3),
-    f_axis = (1u << 4),
-    f_use_limits = (1u << 5),
-    f_lower_limit = (1u << 6),
-    f_upper_limit = (1u << 7),
-    f_min_distance = (1u << 8),
-    f_max_distance = (1u << 9),
-    f_spring_stiffness = (1u << 10),
-    f_spring_damping = (1u << 11),
-    f_break_force = (1u << 12),
-    f_break_torque = (1u << 13),
-    All = 0x3fffu
+    f_connected_entity_id = (1u << 0),
+    f_anchor = (1u << 1),
+    f_connected_anchor = (1u << 2),
+    f_axis = (1u << 3),
+    f_use_limits = (1u << 4),
+    f_lower_limit = (1u << 5),
+    f_upper_limit = (1u << 6),
+    f_min_distance = (1u << 7),
+    f_max_distance = (1u << 8),
+    f_spring_stiffness = (1u << 9),
+    f_spring_damping = (1u << 10),
+    f_break_force = (1u << 11),
+    f_break_torque = (1u << 12),
+    All = 0x1fffu
 };
 
 inline joint3d_DeltaFlags operator|(joint3d_DeltaFlags a, joint3d_DeltaFlags b) {
@@ -2832,7 +2825,6 @@ inline bool HasFlag(joint3d_DeltaFlags flags, joint3d_DeltaFlags bit) {
 
 /// Full snapshot write.
 inline void WriteSnapshot_joint3d(ByteWriter& w, const dse::Joint3DComponent& c) {
-    w.WriteU32(static_cast<uint32_t>(c.type));
     w.WriteU32(static_cast<uint32_t>(c.connected_entity_id));
     w.WriteF32(c.anchor.x); w.WriteF32(c.anchor.y); w.WriteF32(c.anchor.z);
     w.WriteF32(c.connected_anchor.x); w.WriteF32(c.connected_anchor.y); w.WriteF32(c.connected_anchor.z);
@@ -2850,7 +2842,6 @@ inline void WriteSnapshot_joint3d(ByteWriter& w, const dse::Joint3DComponent& c)
 
 /// Full snapshot read.
 inline void ReadSnapshot_joint3d(ByteReader& r, dse::Joint3DComponent& c) {
-    c.type = static_cast<int>(r.ReadU32());
     c.connected_entity_id = static_cast<int>(r.ReadU32());
     c.anchor.x = r.ReadF32(); c.anchor.y = r.ReadF32(); c.anchor.z = r.ReadF32();
     c.connected_anchor.x = r.ReadF32(); c.connected_anchor.y = r.ReadF32(); c.connected_anchor.z = r.ReadF32();
@@ -2871,7 +2862,6 @@ inline joint3d_DeltaFlags ComputeDelta_joint3d(
         const dse::Joint3DComponent& cur,
         const dse::Joint3DComponent& base) {
     joint3d_DeltaFlags flags = joint3d_DeltaFlags::None;
-    if (cur.type != base.type) flags = flags | joint3d_DeltaFlags::f_type;
     if (cur.connected_entity_id != base.connected_entity_id) flags = flags | joint3d_DeltaFlags::f_connected_entity_id;
     if (cur.anchor.x != base.anchor.x || cur.anchor.y != base.anchor.y || cur.anchor.z != base.anchor.z) flags = flags | joint3d_DeltaFlags::f_anchor;
     if (cur.connected_anchor.x != base.connected_anchor.x || cur.connected_anchor.y != base.connected_anchor.y || cur.connected_anchor.z != base.connected_anchor.z) flags = flags | joint3d_DeltaFlags::f_connected_anchor;
@@ -2891,7 +2881,6 @@ inline joint3d_DeltaFlags ComputeDelta_joint3d(
 /// Write only changed fields (delta).
 inline void WriteDelta_joint3d(ByteWriter& w, const dse::Joint3DComponent& c, joint3d_DeltaFlags flags) {
     w.WriteU32(static_cast<uint32_t>(flags));
-    if (HasFlag(flags, joint3d_DeltaFlags::f_type)) { w.WriteU32(static_cast<uint32_t>(c.type)); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_connected_entity_id)) { w.WriteU32(static_cast<uint32_t>(c.connected_entity_id)); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_anchor)) { w.WriteF32(c.anchor.x); w.WriteF32(c.anchor.y); w.WriteF32(c.anchor.z); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_connected_anchor)) { w.WriteF32(c.connected_anchor.x); w.WriteF32(c.connected_anchor.y); w.WriteF32(c.connected_anchor.z); }
@@ -2910,7 +2899,6 @@ inline void WriteDelta_joint3d(ByteWriter& w, const dse::Joint3DComponent& c, jo
 /// Read delta and apply to component.
 inline void ReadDelta_joint3d(ByteReader& r, dse::Joint3DComponent& c) {
     auto flags = static_cast<joint3d_DeltaFlags>(r.ReadU32());
-    if (HasFlag(flags, joint3d_DeltaFlags::f_type)) { c.type = static_cast<int>(r.ReadU32()); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_connected_entity_id)) { c.connected_entity_id = static_cast<int>(r.ReadU32()); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_anchor)) { c.anchor.x = r.ReadF32(); c.anchor.y = r.ReadF32(); c.anchor.z = r.ReadF32(); }
     if (HasFlag(flags, joint3d_DeltaFlags::f_connected_anchor)) { c.connected_anchor.x = r.ReadF32(); c.connected_anchor.y = r.ReadF32(); c.connected_anchor.z = r.ReadF32(); }
@@ -3409,7 +3397,7 @@ inline void WriteSnapshot_atmosphere(ByteWriter& w, const dse::AtmosphereCompone
     w.WriteF32(c.ozone_coeff.x); w.WriteF32(c.ozone_coeff.y); w.WriteF32(c.ozone_coeff.z);
     w.WriteF32(c.ozone_center_h);
     w.WriteF32(c.ozone_width);
-    w.WriteF32(c.sun_intensity);
+    w.WriteF32(c.sun_intensity.x); w.WriteF32(c.sun_intensity.y); w.WriteF32(c.sun_intensity.z);
     w.WriteF32(c.sun_disk_angle);
     w.WriteU8(c.aerial_perspective_enabled ? 1 : 0);
 }
@@ -3428,7 +3416,7 @@ inline void ReadSnapshot_atmosphere(ByteReader& r, dse::AtmosphereComponent& c) 
     c.ozone_coeff.x = r.ReadF32(); c.ozone_coeff.y = r.ReadF32(); c.ozone_coeff.z = r.ReadF32();
     c.ozone_center_h = r.ReadF32();
     c.ozone_width = r.ReadF32();
-    c.sun_intensity = r.ReadF32();
+    c.sun_intensity.x = r.ReadF32(); c.sun_intensity.y = r.ReadF32(); c.sun_intensity.z = r.ReadF32();
     c.sun_disk_angle = r.ReadF32();
     c.aerial_perspective_enabled = r.ReadU8() != 0;
 }
@@ -3450,7 +3438,7 @@ inline atmosphere_DeltaFlags ComputeDelta_atmosphere(
     if (cur.ozone_coeff.x != base.ozone_coeff.x || cur.ozone_coeff.y != base.ozone_coeff.y || cur.ozone_coeff.z != base.ozone_coeff.z) flags = flags | atmosphere_DeltaFlags::f_ozone_coeff;
     if (cur.ozone_center_h != base.ozone_center_h) flags = flags | atmosphere_DeltaFlags::f_ozone_center_h;
     if (cur.ozone_width != base.ozone_width) flags = flags | atmosphere_DeltaFlags::f_ozone_width;
-    if (cur.sun_intensity != base.sun_intensity) flags = flags | atmosphere_DeltaFlags::f_sun_intensity;
+    if (cur.sun_intensity.x != base.sun_intensity.x || cur.sun_intensity.y != base.sun_intensity.y || cur.sun_intensity.z != base.sun_intensity.z) flags = flags | atmosphere_DeltaFlags::f_sun_intensity;
     if (cur.sun_disk_angle != base.sun_disk_angle) flags = flags | atmosphere_DeltaFlags::f_sun_disk_angle;
     if (cur.aerial_perspective_enabled != base.aerial_perspective_enabled) flags = flags | atmosphere_DeltaFlags::f_aerial_perspective_enabled;
     return flags;
@@ -3471,7 +3459,7 @@ inline void WriteDelta_atmosphere(ByteWriter& w, const dse::AtmosphereComponent&
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_coeff)) { w.WriteF32(c.ozone_coeff.x); w.WriteF32(c.ozone_coeff.y); w.WriteF32(c.ozone_coeff.z); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_center_h)) { w.WriteF32(c.ozone_center_h); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_width)) { w.WriteF32(c.ozone_width); }
-    if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_intensity)) { w.WriteF32(c.sun_intensity); }
+    if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_intensity)) { w.WriteF32(c.sun_intensity.x); w.WriteF32(c.sun_intensity.y); w.WriteF32(c.sun_intensity.z); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_disk_angle)) { w.WriteF32(c.sun_disk_angle); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_aerial_perspective_enabled)) { w.WriteU8(c.aerial_perspective_enabled ? 1 : 0); }
 }
@@ -3491,7 +3479,7 @@ inline void ReadDelta_atmosphere(ByteReader& r, dse::AtmosphereComponent& c) {
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_coeff)) { c.ozone_coeff.x = r.ReadF32(); c.ozone_coeff.y = r.ReadF32(); c.ozone_coeff.z = r.ReadF32(); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_center_h)) { c.ozone_center_h = r.ReadF32(); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_ozone_width)) { c.ozone_width = r.ReadF32(); }
-    if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_intensity)) { c.sun_intensity = r.ReadF32(); }
+    if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_intensity)) { c.sun_intensity.x = r.ReadF32(); c.sun_intensity.y = r.ReadF32(); c.sun_intensity.z = r.ReadF32(); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_sun_disk_angle)) { c.sun_disk_angle = r.ReadF32(); }
     if (HasFlag(flags, atmosphere_DeltaFlags::f_aerial_perspective_enabled)) { c.aerial_perspective_enabled = r.ReadU8() != 0; }
 }
@@ -3541,7 +3529,7 @@ inline void WriteSnapshot_volumetric_cloud(ByteWriter& w, const dse::VolumetricC
     w.WriteF32(c.detail_scale);
     w.WriteF32(c.detail_strength);
     w.WriteF32(c.erosion);
-    w.WriteF32(c.wind_direction.x); w.WriteF32(c.wind_direction.y); w.WriteF32(c.wind_direction.z);
+    w.WriteF32(c.wind_direction.x); w.WriteF32(c.wind_direction.y);
     w.WriteF32(c.wind_speed);
     w.WriteF32(c.silver_intensity);
     w.WriteF32(c.silver_spread);
@@ -3563,7 +3551,7 @@ inline void ReadSnapshot_volumetric_cloud(ByteReader& r, dse::VolumetricCloudCom
     c.detail_scale = r.ReadF32();
     c.detail_strength = r.ReadF32();
     c.erosion = r.ReadF32();
-    c.wind_direction.x = r.ReadF32(); c.wind_direction.y = r.ReadF32(); c.wind_direction.z = r.ReadF32();
+    c.wind_direction.x = r.ReadF32(); c.wind_direction.y = r.ReadF32();
     c.wind_speed = r.ReadF32();
     c.silver_intensity = r.ReadF32();
     c.silver_spread = r.ReadF32();
@@ -3588,7 +3576,7 @@ inline volumetric_cloud_DeltaFlags ComputeDelta_volumetric_cloud(
     if (cur.detail_scale != base.detail_scale) flags = flags | volumetric_cloud_DeltaFlags::f_detail_scale;
     if (cur.detail_strength != base.detail_strength) flags = flags | volumetric_cloud_DeltaFlags::f_detail_strength;
     if (cur.erosion != base.erosion) flags = flags | volumetric_cloud_DeltaFlags::f_erosion;
-    if (cur.wind_direction.x != base.wind_direction.x || cur.wind_direction.y != base.wind_direction.y || cur.wind_direction.z != base.wind_direction.z) flags = flags | volumetric_cloud_DeltaFlags::f_wind_direction;
+    if (cur.wind_direction.x != base.wind_direction.x || cur.wind_direction.y != base.wind_direction.y) flags = flags | volumetric_cloud_DeltaFlags::f_wind_direction;
     if (cur.wind_speed != base.wind_speed) flags = flags | volumetric_cloud_DeltaFlags::f_wind_speed;
     if (cur.silver_intensity != base.silver_intensity) flags = flags | volumetric_cloud_DeltaFlags::f_silver_intensity;
     if (cur.silver_spread != base.silver_spread) flags = flags | volumetric_cloud_DeltaFlags::f_silver_spread;
@@ -3612,7 +3600,7 @@ inline void WriteDelta_volumetric_cloud(ByteWriter& w, const dse::VolumetricClou
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_detail_scale)) { w.WriteF32(c.detail_scale); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_detail_strength)) { w.WriteF32(c.detail_strength); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_erosion)) { w.WriteF32(c.erosion); }
-    if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_direction)) { w.WriteF32(c.wind_direction.x); w.WriteF32(c.wind_direction.y); w.WriteF32(c.wind_direction.z); }
+    if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_direction)) { w.WriteF32(c.wind_direction.x); w.WriteF32(c.wind_direction.y); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_speed)) { w.WriteF32(c.wind_speed); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_silver_intensity)) { w.WriteF32(c.silver_intensity); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_silver_spread)) { w.WriteF32(c.silver_spread); }
@@ -3635,7 +3623,7 @@ inline void ReadDelta_volumetric_cloud(ByteReader& r, dse::VolumetricCloudCompon
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_detail_scale)) { c.detail_scale = r.ReadF32(); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_detail_strength)) { c.detail_strength = r.ReadF32(); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_erosion)) { c.erosion = r.ReadF32(); }
-    if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_direction)) { c.wind_direction.x = r.ReadF32(); c.wind_direction.y = r.ReadF32(); c.wind_direction.z = r.ReadF32(); }
+    if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_direction)) { c.wind_direction.x = r.ReadF32(); c.wind_direction.y = r.ReadF32(); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_wind_speed)) { c.wind_speed = r.ReadF32(); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_silver_intensity)) { c.silver_intensity = r.ReadF32(); }
     if (HasFlag(flags, volumetric_cloud_DeltaFlags::f_silver_spread)) { c.silver_spread = r.ReadF32(); }

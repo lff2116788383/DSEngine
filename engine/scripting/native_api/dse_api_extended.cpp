@@ -755,12 +755,7 @@ extern "C" void dse_hair_set_wind_full(uint32_t e, float wx, float wy, float wz,
     if (!Keep(turbulence)) hair->wind_turbulence = turbulence;
 }
 
-extern "C" void dse_hair_set_enabled(uint32_t e, int v) {
-    World* world = GW();
-    if (!world) return;
-    auto* hair = world->registry().try_get<HairComponent>(TE(e));
-    if (hair) hair->enabled = (v != 0);
-}
+// dse_hair_set_enabled 由 dse_api_hair.gen.cpp 提供（codegen 逐字段 setter）
 
 extern "C" void dse_hair_set_lod(uint32_t e, float lod0_distance, float lod1_distance,
                                  float lod2_distance, float cull_distance) {

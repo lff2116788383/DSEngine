@@ -33,7 +33,7 @@ extern "C" int dse_joint3d_get_type(uint32_t e) {
 }
 extern "C" void dse_joint3d_set_type(uint32_t e, int v) {
     if (auto* c = GC<dse::Joint3DComponent>(e)) {
-        c->type = v;
+        c->type = static_cast<dse::Joint3DType>(v);
     }
 }
 extern "C" int dse_joint3d_get_connected_entity_id(uint32_t e) {

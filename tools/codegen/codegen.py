@@ -86,7 +86,7 @@ def write_if_changed(path: Path, content: str, dry_run: bool) -> bool:
 # ── Replication Codec preprocessing ──────────────────────────────────────────
 
 # 可复制的字段类型（字符串不走高频复制路径）
-_REPL_TYPES = {"float", "int", "bool", "vec3", "vec4", "euler_quat"}
+_REPL_TYPES = {"float", "int", "bool", "vec2", "vec3", "vec4", "euler_quat"}
 
 
 def _field_write_code(f: dict) -> str:
@@ -95,6 +95,8 @@ def _field_write_code(f: dict) -> str:
     t = f["type"]
     if t == "float":
         return f"    w.WriteF32(c.{n});"
+    elif t == "vec2":
+        return f"    w.WriteF32(c.{n}.x); w.WriteF32(c.{n}.y);"
     elif t == "int":
         return f"    w.WriteU32(static_cast<uint32_t>(c.{n}));"
     elif t == "bool":
@@ -117,6 +119,8 @@ def _field_read_code(f: dict) -> str:
     t = f["type"]
     if t == "float":
         return f"    c.{n} = r.ReadF32();"
+    elif t == "vec2":
+        return f"    c.{n}.x = r.ReadF32(); c.{n}.y = r.ReadF32();"
     elif t == "int":
         return f"    c.{n} = static_cast<int>(r.ReadU32());"
     elif t == "bool":
@@ -139,6 +143,8 @@ def _field_diff_expr(f: dict) -> str:
     t = f["type"]
     if t in ("float", "int", "bool"):
         return f"cur.{n} != base.{n}"
+    elif t == "vec2":
+        return f"cur.{n}.x != base.{n}.x || cur.{n}.y != base.{n}.y"
     elif t == "vec3":
         return f"cur.{n}.x != base.{n}.x || cur.{n}.y != base.{n}.y || cur.{n}.z != base.{n}.z"
     elif t in ("vec4", "euler_quat"):

@@ -152,12 +152,17 @@ int L_Set_atmosphere_ozone_width(lua_State* L) {
 }
 int L_Get_atmosphere_sun_intensity(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    lua_pushnumber(L, dse_atmosphere_get_sun_intensity(e));
-    return 1;
+    float x = 0, y = 0, z = 0;
+    dse_atmosphere_get_sun_intensity(e, &x, &y, &z);
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+    return 3;
 }
 int L_Set_atmosphere_sun_intensity(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    dse_atmosphere_set_sun_intensity(e, static_cast<float>(luaL_checknumber(L, 2)));
+    dse_atmosphere_set_sun_intensity(e,
+        static_cast<float>(luaL_checknumber(L, 2)),
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)));
     return 0;
 }
 int L_Get_atmosphere_sun_disk_angle(lua_State* L) {

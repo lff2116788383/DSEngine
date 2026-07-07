@@ -253,7 +253,9 @@ extern "C" int dse_ragdoll_is_active(uint32_t e) {
     return (rd && rd->active) ? 1 : 0;
 }
 
-extern "C" void dse_ragdoll_set_collision_layer(uint32_t e, uint32_t layer, uint32_t mask) {
+// dse_ragdoll_set_collision_layer (逐字段) 由 dse_api_ragdoll.gen.cpp 提供（codegen）
+// 此处保留批量 setter，重命名以避免符号冲突
+extern "C" void dse_ragdoll_set_collision_layer_mask(uint32_t e, uint32_t layer, uint32_t mask) {
     World* world = GW();
     if (!world) return;
     auto* rd = world->registry().try_get<RagdollComponent>(TE(e));
@@ -448,12 +450,7 @@ extern "C" void dse_buoyancy_add_sample_point(uint32_t e, float ox, float oy, fl
     b->sample_points.push_back(sp);
 }
 
-extern "C" void dse_buoyancy_set_water_level(uint32_t e, float water_level) {
-    World* world = GW();
-    if (!world) return;
-    auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
-    if (b) b->water_level = water_level;
-}
+// dse_buoyancy_set_water_level 由 dse_api_buoyancy.gen.cpp 提供（codegen 逐字段 setter）
 
 extern "C" float dse_buoyancy_get_submerge_ratio(uint32_t e) {
     World* world = GW();
@@ -630,15 +627,7 @@ extern "C" void dse_atmosphere_set_mie(uint32_t e, float coeff, float scale_heig
     if (!Keep(g))            atm->mie_g = g;
 }
 
-extern "C" void dse_atmosphere_set_sun_intensity(uint32_t e, float r, float g, float b) {
-    World* world = GW();
-    if (!world) return;
-    auto* atm = world->registry().try_get<AtmosphereComponent>(TE(e));
-    if (!atm) return;
-    if (!Keep(r)) atm->sun_intensity.x = r;
-    if (!Keep(g)) atm->sun_intensity.y = g;
-    if (!Keep(b)) atm->sun_intensity.z = b;
-}
+// dse_atmosphere_set_sun_intensity 由 dse_api_atmosphere.gen.cpp 提供（codegen 逐字段 vec3 setter）
 
 // ---- DayNightCycle ----
 extern "C" void dse_day_night_add(uint32_t e, float time_of_day, int auto_advance,
@@ -672,12 +661,7 @@ extern "C" void dse_day_night_set_speed(uint32_t e, float speed) {
     if (dnc) dnc->time_speed = speed;
 }
 
-extern "C" void dse_day_night_set_auto_advance(uint32_t e, int enabled) {
-    World* world = GW();
-    if (!world) return;
-    auto* dnc = world->registry().try_get<DayNightCycleComponent>(TE(e));
-    if (dnc) dnc->auto_advance = (enabled != 0);
-}
+// dse_day_night_set_auto_advance 由 dse_api_day_night.gen.cpp 提供（codegen 逐字段 setter）
 
 extern "C" void dse_day_night_set_location(uint32_t e, float latitude, float longitude,
                                            int day_of_year) {

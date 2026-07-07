@@ -312,43 +312,11 @@ int L_EcsAddDynamicObstacle(lua_State* L) {
     return 0;
 }
 
-// ============================================================
-// Foliage
-// ============================================================
+// Foliage 逐字段 get/set 由 lua_binding_ecs_foliage.gen.cpp 提供（codegen）
 
 int L_EcsAddFoliage(lua_State* L) {
     dse_foliage_add(Ent(L, 1));
     return 0;
-}
-
-int L_EcsSetFoliageWindStrength(lua_State* L) {
-    dse_foliage_set_wind_strength(Ent(L, 1), helper::CheckFloat(L, 2));
-    return 0;
-}
-
-int L_EcsGetFoliageWindStrength(lua_State* L) {
-    lua_pushnumber(L, dse_foliage_get_wind_strength(Ent(L, 1)));
-    return 1;
-}
-
-int L_EcsSetFoliageStiffness(lua_State* L) {
-    dse_foliage_set_stiffness(Ent(L, 1), helper::CheckFloat(L, 2));
-    return 0;
-}
-
-int L_EcsGetFoliageStiffness(lua_State* L) {
-    lua_pushnumber(L, dse_foliage_get_stiffness(Ent(L, 1)));
-    return 1;
-}
-
-int L_EcsSetFoliageEnabled(lua_State* L) {
-    dse_foliage_set_enabled(Ent(L, 1), helper::CheckBool(L, 2) ? 1 : 0);
-    return 0;
-}
-
-int L_EcsGetFoliageEnabled(lua_State* L) {
-    lua_pushboolean(L, dse_foliage_get_enabled(Ent(L, 1)));
-    return 1;
 }
 
 // ============================================================
@@ -387,12 +355,7 @@ void RegisterEcsRenderingTerrainBindings(lua_State* L) {
         {"add_terrain_tile_manager",  L_EcsAddTerrainTileManager},
         {"add_dynamic_obstacle",      L_EcsAddDynamicObstacle},
         {"add_foliage",               L_EcsAddFoliage},
-        {"set_foliage_wind_strength", L_EcsSetFoliageWindStrength},
-        {"get_foliage_wind_strength", L_EcsGetFoliageWindStrength},
-        {"set_foliage_stiffness",     L_EcsSetFoliageStiffness},
-        {"get_foliage_stiffness",     L_EcsGetFoliageStiffness},
-        {"set_foliage_enabled",       L_EcsSetFoliageEnabled},
-        {"get_foliage_enabled",       L_EcsGetFoliageEnabled},
+        // foliage 逐字段 get/set 由 lua_binding_ecs_foliage.gen.cpp 提供
         {"add_navmesh_auto_rebake",   L_EcsAddNavMeshAutoRebake},
     });
 }

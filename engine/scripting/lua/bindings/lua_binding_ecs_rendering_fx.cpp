@@ -272,9 +272,9 @@ void RegisterEcsRenderingFxBindings(lua_State* L) {
         {"add_hair",                  L_EcsAddHair},
         {"set_hair_physics",          L_EcsSetHairPhysics},
         {"set_hair_render",           L_EcsSetHairRender},
-        {"set_hair_wind",             L_EcsSetHairWind},
-        {"set_hair_enabled",          L_EcsSetHairEnabled},
-        {"set_hair_lod",              L_EcsSetHairLod},
+{"set_hair_wind",             L_EcsSetHairWind},
+// set_hair_enabled 由 lua_binding_ecs_hair.gen.cpp 提供（codegen）
+{"set_hair_lod",              L_EcsSetHairLod},
         {"world_to_screen",           L_EcsWorldToScreen},
         {"screen_to_world_ray",       L_EcsScreenToWorldRay},
         {"pick_entity",               L_EcsPickEntity},

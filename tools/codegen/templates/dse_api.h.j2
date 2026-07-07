@@ -3,22 +3,21 @@
  * @brief 自动生成 — 勿手动修改
  *        来源：tools/codegen/binding_defs.json
  *
- * 迁移路径说明：
- *   当前（S1）：手写的 dse_api.h / dse_api.cpp 是权威实现，本文件为 staging。
- *   未来（S2+）：手写文件被废弃后，本文件升级为权威头文件。
- *   在过渡期内，不要同时 #include "dse_api.h" 和 "dse_api.gen.h"。
+ * 由 dse_api.h 在末尾 #include 本文件，为 codegen 生成的组件字段
+ * 提供 C ABI 声明。使用独立 include guard，可安全与 dse_api.h 共存。
  */
 
-#pragma once
+#ifndef DSE_API_GEN_H
+#define DSE_API_GEN_H
 
-// 若 dse_api.h 已被包含（手写版本），直接复用其声明，不产生重复符号。
-#ifndef DSE_API_H
 #include <stdint.h>
 
+#ifndef DSE_CAPI
 #ifdef _WIN32
-#  define DSE_CAPI_GEN __declspec(dllexport)
+#  define DSE_CAPI __declspec(dllexport)
 #else
-#  define DSE_CAPI_GEN __attribute__((visibility("default")))
+#  define DSE_CAPI __attribute__((visibility("default")))
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -29,35 +28,40 @@ extern "C" {
 /* ---- {{ comp.name }} ---- */
 {% for field in comp.fields %}
 {% if field.type == "float" %}
-DSE_CAPI_GEN float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI float dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
 {% if not field.get("readonly", false) %}
-DSE_CAPI_GEN void  dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v);
+DSE_CAPI void  dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float v);
 {% endif %}
 {% elif field.type in ("int", "enum_int") %}
-DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
 {% if not field.get("readonly", false) %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
 {% endif %}
 {% elif field.type == "bool" %}
-DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
+DSE_CAPI int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e);
 {% if not field.get("readonly", false) %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v);
+{% endif %}
+{% elif field.type == "vec2" %}
+DSE_CAPI void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y);
+{% if not field.get("readonly", false) %}
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y);
 {% endif %}
 {% elif field.type in ("vec3", "euler_quat") %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z);
+DSE_CAPI void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z);
 {% if not field.get("readonly", false) %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z);
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z);
 {% endif %}
 {% elif field.type == "vec4" %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w);
+DSE_CAPI void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w);
 {% if not field.get("readonly", false) %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w);
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, float y, float z, float w);
 {% endif %}
 {% elif field.type == "string" %}
 {% if field.get("capi_setter") != "manual" %}
-DSE_CAPI_GEN void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v);
+DSE_CAPI void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, const char* v);
 {% endif %}
-DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, char* buf, int buf_size);
+DSE_CAPI int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, char* buf, int buf_size);
 {% endif %}
 {% endfor %}
 
@@ -66,4 +70,4 @@ DSE_CAPI_GEN int  dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, char* b
 }
 #endif
 
-#endif // DSE_API_H not yet included
+#endif // DSE_API_GEN_H
