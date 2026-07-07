@@ -234,14 +234,17 @@ def main():
         (written if changed else skipped).append(out_rel)
 
     # ── dse_api.gen.h ────────────────────────────────────────────────────────
+    cabi_components = [c for c in components if not c.get("lua_only")]
     render(
         "dse_api.h.j2",
         "engine/scripting/native_api/dse_api.gen.h",
-        components=components,
+        components=cabi_components,
     )
 
     # ── dse_api_<prefix>.gen.cpp (每组件，与 Lua 拆分边界对齐) ────────────────
     for comp in components:
+        if comp.get("lua_only"):
+            continue
         render(
             "dse_api.cpp.j2",
             f"engine/scripting/native_api/dse_api_{comp['prefix']}.gen.cpp",
@@ -259,15 +262,16 @@ def main():
     # ── Native.gen.cs ────────────────────────────────────────────────────────
     # C# 绑定为构建时生成产物，不纳入版本库（见 .gitignore: /GameScripts/）；
     # 通过 `cmake --build <build> --target dse_codegen` 按需生成。
+    csharp_components = [c for c in components if not c.get("lua_only")]
     render(
         "csharp_native.cs.j2",
         "GameScripts/DSEngine.Runtime/Generated/Native.gen.cs",
-        components=components,
+        components=csharp_components,
     )
 
     # ── repl_codec.gen.h ─────────────────────────────────────────────────────
     # 复制层统一编解码 — 由 binding_defs.json 单一数据源驱动，消除双序列化漂移。
-    repl_components = preprocess_repl_components(components)
+    repl_components = preprocess_repl_components([c for c in components if not c.get('lua_only')])
     render(
         "repl_codec.gen.h.j2",
         "engine/net/replication/repl_codec.gen.h",
@@ -278,7 +282,7 @@ def main():
     # 反射注册 — 自动生成所有 Register*() 函数，替代手写 885 行。
     # Include both scripting components AND reflect-only components.
     reflect_only = defs.get("reflect_only_components", [])
-    all_reflect = components + reflect_only
+    all_reflect = [c for c in components if not c.get("lua_only")] + reflect_only
     reflect_components = preprocess_reflect_components(all_reflect)
     seen_includes = []
     for c in reflect_components:
@@ -296,6 +300,7 @@ def main():
     # 统一场景 JSON 序列化分发 — 消除手写 per-component JSON 代码，
     # 所有组件序列化均由 binding_defs.json 驱动。
     scene_codec_components = preprocess_reflect_components(all_reflect)
+    scene_codec_comps = [c for c in components if not c.get('lua_only')]
     scene_codec_includes = []
     for c in scene_codec_components:
         inc = c.get("include", "")

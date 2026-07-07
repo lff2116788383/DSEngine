@@ -173,121 +173,6 @@
             ],
             "reflect_extra_fields": [
                 {
-                    "name": "ao",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "normal_strength",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        4.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "material_alpha_cutoff",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "material_alpha_test",
-                    "type": "bool",
-                    "script": false
-                },
-                {
-                    "name": "material_double_sided",
-                    "type": "bool",
-                    "script": false
-                },
-                {
-                    "name": "sss_strength",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "sss_tint",
-                    "type": "vec4",
-                    "color": true,
-                    "script": false
-                },
-                {
-                    "name": "clear_coat",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "clear_coat_roughness",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "anisotropy",
-                    "type": "float",
-                    "range": [
-                        -1.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "pom_height_scale",
-                    "type": "float",
-                    "range": [
-                        0.0,
-                        1.0
-                    ],
-                    "script": false
-                },
-                {
-                    "name": "depth_test_enabled",
-                    "type": "bool",
-                    "script": false
-                },
-                {
-                    "name": "depth_write_enabled",
-                    "type": "bool",
-                    "script": false
-                },
-                {
-                    "name": "is_static",
-                    "type": "bool",
-                    "script": false
-                },
-                {
-                    "name": "sorting_layer",
-                    "type": "int",
-                    "script": false
-                },
-                {
-                    "name": "order_in_layer",
-                    "type": "int",
-                    "script": false
-                }
-            ],
-            "reflect_extra_fields": [
-                {
                     "name": "material_data_source",
                     "type": "enum",
                     "script": false
@@ -297,8 +182,14 @@
                 {
                     "qualified": "dse::MeshRendererComponent::MaterialDataSource",
                     "entries": [
-                        {"name": "ComponentFallback", "value": "ComponentFallback"},
-                        {"name": "MaterialInstance", "value": "MaterialInstance"}
+                        {
+                            "name": "ComponentFallback",
+                            "value": "ComponentFallback"
+                        },
+                        {
+                            "name": "MaterialInstance",
+                            "value": "MaterialInstance"
+                        }
                     ]
                 }
             ]
@@ -1763,16 +1654,16 @@
                     "lua_setter": "set_water_water_level"
                 },
                 {
-"name": "deep_color",
-"type": "vec3",
-"color": true,
+                    "name": "deep_color",
+                    "type": "vec3",
+                    "color": true,
                     "lua_getter": "get_water_deep_color",
                     "lua_setter": "set_water_deep_color"
                 },
                 {
-"name": "shallow_color",
-"type": "vec3",
-"color": true,
+                    "name": "shallow_color",
+                    "type": "vec3",
+                    "color": true,
                     "lua_getter": "get_water_shallow_color",
                     "lua_setter": "set_water_shallow_color"
                 },
@@ -1827,9 +1718,9 @@
                     "lua_setter": "set_water_wave_speed"
                 },
                 {
-"name": "wave_direction",
-"type": "vec2",
-"lua_getter": "get_water_wave_direction",
+                    "name": "wave_direction",
+                    "type": "vec2",
+                    "lua_getter": "get_water_wave_direction",
                     "lua_setter": "set_water_wave_direction"
                 },
                 {
@@ -1913,9 +1804,9 @@
                     "lua_setter": "set_water_underwater_fog_density"
                 },
                 {
-"name": "underwater_fog_color",
-"type": "vec3",
-"color": true,
+                    "name": "underwater_fog_color",
+                    "type": "vec3",
+                    "color": true,
                     "lua_getter": "get_water_underwater_fog_color",
                     "lua_setter": "set_water_underwater_fog_color"
                 }
@@ -3240,10 +3131,10 @@
                     "lua_setter": "set_atmosphere_ozone_width"
                 },
                 {
-"name": "sun_intensity",
-"type": "vec3",
-"lua_getter": "get_atmosphere_sun_intensity",
-"lua_setter": "set_atmosphere_sun_intensity"
+                    "name": "sun_intensity",
+                    "type": "vec3",
+                    "lua_getter": "get_atmosphere_sun_intensity",
+                    "lua_setter": "set_atmosphere_sun_intensity"
                 },
                 {
                     "name": "sun_disk_angle",
@@ -3358,9 +3249,9 @@
                     "lua_setter": "set_volumetric_cloud_erosion"
                 },
                 {
-"name": "wind_direction",
-"type": "vec2",
-"lua_getter": "get_volumetric_cloud_wind_direction",
+                    "name": "wind_direction",
+                    "type": "vec2",
+                    "lua_getter": "get_volumetric_cloud_wind_direction",
                     "lua_setter": "set_volumetric_cloud_wind_direction"
                 },
                 {
@@ -4015,7 +3906,10 @@
                     "default": "6.0f",
                     "lua_getter": "get_character_movement_cfg_max_walk_speed",
                     "lua_setter": "set_character_movement_cfg_max_walk_speed",
-                    "range": [0.0, 100.0]
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "max_sprint_speed",
@@ -4023,7 +3917,10 @@
                     "default": "10.0f",
                     "lua_getter": "get_character_movement_cfg_max_sprint_speed",
                     "lua_setter": "set_character_movement_cfg_max_sprint_speed",
-                    "range": [0.0, 100.0]
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "max_crouch_speed",
@@ -4031,7 +3928,10 @@
                     "default": "3.0f",
                     "lua_getter": "get_character_movement_cfg_max_crouch_speed",
                     "lua_setter": "set_character_movement_cfg_max_crouch_speed",
-                    "range": [0.0, 50.0]
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
                 },
                 {
                     "name": "ground_acceleration",
@@ -4039,7 +3939,10 @@
                     "default": "20.0f",
                     "lua_getter": "get_character_movement_cfg_ground_acceleration",
                     "lua_setter": "set_character_movement_cfg_ground_acceleration",
-                    "range": [0.0, 200.0]
+                    "range": [
+                        0.0,
+                        200.0
+                    ]
                 },
                 {
                     "name": "ground_deceleration",
@@ -4047,7 +3950,10 @@
                     "default": "12.0f",
                     "lua_getter": "get_character_movement_cfg_ground_deceleration",
                     "lua_setter": "set_character_movement_cfg_ground_deceleration",
-                    "range": [0.0, 200.0]
+                    "range": [
+                        0.0,
+                        200.0
+                    ]
                 },
                 {
                     "name": "ground_friction",
@@ -4055,7 +3961,10 @@
                     "default": "8.0f",
                     "lua_getter": "get_character_movement_cfg_ground_friction",
                     "lua_setter": "set_character_movement_cfg_ground_friction",
-                    "range": [0.0, 50.0]
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
                 },
                 {
                     "name": "gravity",
@@ -4063,7 +3972,10 @@
                     "default": "-19.62f",
                     "lua_getter": "get_character_movement_cfg_gravity",
                     "lua_setter": "set_character_movement_cfg_gravity",
-                    "range": [-100.0, 0.0]
+                    "range": [
+                        -100.0,
+                        0.0
+                    ]
                 },
                 {
                     "name": "jump_velocity",
@@ -4071,7 +3983,10 @@
                     "default": "8.0f",
                     "lua_getter": "get_character_movement_cfg_jump_velocity",
                     "lua_setter": "set_character_movement_cfg_jump_velocity",
-                    "range": [0.0, 50.0]
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
                 },
                 {
                     "name": "max_jump_count",
@@ -4086,7 +4001,10 @@
                     "default": "0.1f",
                     "lua_getter": "get_character_movement_cfg_coyote_time",
                     "lua_setter": "set_character_movement_cfg_coyote_time",
-                    "range": [0.0, 1.0]
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "jump_buffer_time",
@@ -4094,7 +4012,10 @@
                     "default": "0.15f",
                     "lua_getter": "get_character_movement_cfg_jump_buffer_time",
                     "lua_setter": "set_character_movement_cfg_jump_buffer_time",
-                    "range": [0.0, 1.0]
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "air_control",
@@ -4102,7 +4023,10 @@
                     "default": "0.3f",
                     "lua_getter": "get_character_movement_cfg_air_control",
                     "lua_setter": "set_character_movement_cfg_air_control",
-                    "range": [0.0, 1.0]
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 },
                 {
                     "name": "rotation_rate",
@@ -4110,7 +4034,10 @@
                     "default": "720.0f",
                     "lua_getter": "get_character_movement_cfg_rotation_rate",
                     "lua_setter": "set_character_movement_cfg_rotation_rate",
-                    "range": [0.0, 3600.0]
+                    "range": [
+                        0.0,
+                        3600.0
+                    ]
                 },
                 {
                     "name": "publish_events",
@@ -4124,31 +4051,46 @@
                 {
                     "name": "crouch_height",
                     "type": "float",
-                    "range": [0.1, 2.0],
+                    "range": [
+                        0.1,
+                        2.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "stand_height",
                     "type": "float",
-                    "range": [0.1, 3.0],
+                    "range": [
+                        0.1,
+                        3.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "max_fall_speed",
                     "type": "float",
-                    "range": [-100.0, 0.0],
+                    "range": [
+                        -100.0,
+                        0.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "swim_speed",
                     "type": "float",
-                    "range": [0.0, 50.0],
+                    "range": [
+                        0.0,
+                        50.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "fly_speed",
                     "type": "float",
-                    "range": [0.0, 50.0],
+                    "range": [
+                        0.0,
+                        50.0
+                    ],
                     "script": false
                 }
             ]
@@ -4236,7 +4178,10 @@
                     "default": "4.0f",
                     "lua_getter": "get_spring_arm_arm_length",
                     "lua_setter": "set_spring_arm_arm_length",
-                    "range": [0.0, 50.0]
+                    "range": [
+                        0.0,
+                        50.0
+                    ]
                 },
                 {
                     "name": "collision_test",
@@ -4251,7 +4196,10 @@
                     "default": "-20.0f",
                     "lua_getter": "get_spring_arm_pitch",
                     "lua_setter": "set_spring_arm_pitch",
-                    "range": [-90.0, 90.0]
+                    "range": [
+                        -90.0,
+                        90.0
+                    ]
                 },
                 {
                     "name": "yaw",
@@ -4266,7 +4214,10 @@
                     "default": "10.0f",
                     "lua_getter": "get_spring_arm_position_lag_speed",
                     "lua_setter": "set_spring_arm_position_lag_speed",
-                    "range": [0.0, 100.0]
+                    "range": [
+                        0.0,
+                        100.0
+                    ]
                 },
                 {
                     "name": "shake_trauma",
@@ -4274,74 +4225,110 @@
                     "default": "0.0f",
                     "lua_getter": "get_spring_arm_shake_trauma",
                     "lua_setter": "set_spring_arm_shake_trauma",
-                    "range": [0.0, 1.0]
+                    "range": [
+                        0.0,
+                        1.0
+                    ]
                 }
             ],
             "reflect_extra_fields": [
                 {
                     "name": "min_arm_length",
                     "type": "float",
-                    "range": [0.0, 10.0],
+                    "range": [
+                        0.0,
+                        10.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "max_arm_length",
                     "type": "float",
-                    "range": [0.0, 100.0],
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "probe_radius",
                     "type": "float",
-                    "range": [0.0, 2.0],
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "min_pitch",
                     "type": "float",
-                    "range": [-90.0, 0.0],
+                    "range": [
+                        -90.0,
+                        0.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "max_pitch",
                     "type": "float",
-                    "range": [0.0, 90.0],
+                    "range": [
+                        0.0,
+                        90.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "rotation_lag_speed",
                     "type": "float",
-                    "range": [0.0, 100.0],
+                    "range": [
+                        0.0,
+                        100.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "first_person_fov",
                     "type": "float",
-                    "range": [30.0, 120.0],
+                    "range": [
+                        30.0,
+                        120.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "third_person_fov",
                     "type": "float",
-                    "range": [30.0, 120.0],
+                    "range": [
+                        30.0,
+                        120.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "shake_decay_rate",
                     "type": "float",
-                    "range": [0.0, 10.0],
+                    "range": [
+                        0.0,
+                        10.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "shake_max_offset",
                     "type": "float",
-                    "range": [0.0, 2.0],
+                    "range": [
+                        0.0,
+                        2.0
+                    ],
                     "script": false
                 },
                 {
                     "name": "shake_frequency",
                     "type": "float",
-                    "range": [0.0, 50.0],
+                    "range": [
+                        0.0,
+                        50.0
+                    ],
                     "script": false
                 }
             ]
@@ -4366,7 +4353,10 @@
                     "default": "0.15f",
                     "lua_getter": "get_player_controller_mouse_sensitivity",
                     "lua_setter": "set_player_controller_mouse_sensitivity",
-                    "range": [0.01, 5.0]
+                    "range": [
+                        0.01,
+                        5.0
+                    ]
                 },
                 {
                     "name": "gamepad_sensitivity",
@@ -4374,7 +4364,10 @@
                     "default": "2.0f",
                     "lua_getter": "get_player_controller_gamepad_sensitivity",
                     "lua_setter": "set_player_controller_gamepad_sensitivity",
-                    "range": [0.1, 10.0]
+                    "range": [
+                        0.1,
+                        10.0
+                    ]
                 },
                 {
                     "name": "invert_y",
@@ -4389,7 +4382,10 @@
                     "default": "0.15f",
                     "lua_getter": "get_player_controller_stick_dead_zone",
                     "lua_setter": "set_player_controller_stick_dead_zone",
-                    "range": [0.0, 0.5]
+                    "range": [
+                        0.0,
+                        0.5
+                    ]
                 },
                 {
                     "name": "move_response_curve",
@@ -4397,7 +4393,10 @@
                     "default": "1.5f",
                     "lua_getter": "get_player_controller_move_response_curve",
                     "lua_setter": "set_player_controller_move_response_curve",
-                    "range": [0.5, 5.0]
+                    "range": [
+                        0.5,
+                        5.0
+                    ]
                 },
                 {
                     "name": "look_response_curve",
@@ -4405,14 +4404,20 @@
                     "default": "1.0f",
                     "lua_getter": "get_player_controller_look_response_curve",
                     "lua_setter": "set_player_controller_look_response_curve",
-                    "range": [0.5, 5.0]
+                    "range": [
+                        0.5,
+                        5.0
+                    ]
                 }
             ],
             "reflect_extra_fields": [
                 {
                     "name": "stick_outer_dead_zone",
                     "type": "float",
-                    "range": [0.5, 1.0],
+                    "range": [
+                        0.5,
+                        1.0
+                    ],
                     "script": false
                 }
             ]
@@ -4492,9 +4497,9 @@
                     "color": true
                 },
                 {
-"name": "wind_direction",
-"type": "vec2"
-},
+                    "name": "wind_direction",
+                    "type": "vec2"
+                },
                 {
                     "name": "wind_speed",
                     "type": "float",
