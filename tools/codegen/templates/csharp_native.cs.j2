@@ -44,6 +44,15 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, int v);
 
+{% elif field.type == "vec2" %}
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y);
+
+{% if not field.get("readonly", false) %}
+    [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_set_{{ field.name }}")]
+    internal static partial void dse_{{ comp.prefix }}_set_{{ field.name }}(uint e, float x, float y);
+
+{% endif %}
 {% elif field.type in ("vec3", "euler_quat") %}
     [LibraryImport(Lib, EntryPoint = "dse_{{ comp.prefix }}_get_{{ field.name }}")]
     internal static partial void dse_{{ comp.prefix }}_get_{{ field.name }}(uint e, out float x, out float y, out float z);

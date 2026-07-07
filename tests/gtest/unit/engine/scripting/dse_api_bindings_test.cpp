@@ -555,7 +555,7 @@ TEST_F(DseApiBindingsTest, Ragdoll_AddActivateLayerEcs) {
     dse_ragdoll_deactivate(id);
     EXPECT_FALSE(rd.active);
 
-    dse_ragdoll_set_collision_layer(id, 0x0004u, 0x00FFu);
+    dse_ragdoll_set_collision_layer_mask(id, 0x0004u, 0x00FFu);
     EXPECT_EQ(rd.collision_layer, 0x0004u);
     EXPECT_EQ(rd.collision_mask, 0x00FFu);
 }
@@ -1229,4 +1229,69 @@ TEST_F(DseApiBindingsTest, Phys3D_OverlapBox_FindsBoxOverlap) {
 
     int none = dse_physics3d_overlap_box(50.0f, 50.0f, 50.0f, 51.0f, 51.0f, 51.0f, hits, 16);
     EXPECT_EQ(none, 0);
+}
+
+// ============================================================
+// C ABI Version & Smoke Tests
+// ============================================================
+
+// 测试 C ABI 版本号与编译时宏一致
+TEST_F(DseApiBindingsTest, ApiVersion_MatchesCompileTimeMacro) {
+    uint32_t runtime_version = dse_api_version();
+    EXPECT_EQ(runtime_version, DSE_API_VERSION);
+    // v1.0.0 = 10000
+    EXPECT_GE(runtime_version, 10000u);
+}
+
+// 测试 C ABI 实体生命周期
+TEST_F(DseApiBindingsTest, EntityLifecycle_CreateValidDestroy) {
+    uint32_t e = dse_entity_create();
+    // entt::null != 0 — 第一个创建的实体 id 可能为 0（合法）
+    EXPECT_NE(e, static_cast<uint32_t>(entt::null));
+    EXPECT_EQ(dse_entity_valid(e), 1);
+
+    dse_entity_destroy(e);
+    EXPECT_EQ(dse_entity_valid(e), 0);
+
+    // 销毁后再次销毁不应崩溃
+    dse_entity_destroy(e);
+}
+
+// 测试 C ABI 无效实体安全返回默认值
+TEST_F(DseApiBindingsTest, InvalidEntity_GettersReturnDefaults) {
+    const uint32_t invalid = 0xFFFFFFFEu;
+
+    // 各种 getter 在无效实体上应安全返回默认值，不崩溃
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_mass(invalid), 0.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_linear_damping(invalid), 0.0f);
+    EXPECT_FLOAT_EQ(dse_rigidbody3d_get_angular_damping(invalid), 0.0f);
+    EXPECT_FLOAT_EQ(dse_anim3d_get_blend_param(invalid), 0.0f);
+    EXPECT_FLOAT_EQ(dse_anim3d_get_layer_weight(invalid, 0), 0.0f);
+
+    // UI 在无效实体上应返回 0
+    EXPECT_EQ(dse_ui_is_hovered(invalid), 0);
+    EXPECT_EQ(dse_ui_is_pressed(invalid), 0);
+
+    // 音频源在无效实体上应返回 0
+    EXPECT_EQ(dse_audio_source_is_playing(invalid), 0);
+}
+
+// 测试 C ABI Transform 完整往返
+TEST_F(DseApiBindingsTest, TransformAdd_GetSetRoundTrip) {
+    uint32_t e = dse_entity_create();
+    dse_transform_add(e, 1.0f, 2.0f, 3.0f, 0.5f, 0.5f, 0.5f);
+
+    float x = 0, y = 0, z = 0;
+    dse_transform_get_position(e, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 1.0f);
+    EXPECT_FLOAT_EQ(y, 2.0f);
+    EXPECT_FLOAT_EQ(z, 3.0f);
+
+    dse_transform_set_position(e, 10.0f, 20.0f, 30.0f);
+    dse_transform_get_position(e, &x, &y, &z);
+    EXPECT_FLOAT_EQ(x, 10.0f);
+    EXPECT_FLOAT_EQ(y, 20.0f);
+    EXPECT_FLOAT_EQ(z, 30.0f);
+
+    dse_entity_destroy(e);
 }

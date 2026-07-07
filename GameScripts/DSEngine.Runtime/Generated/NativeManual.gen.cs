@@ -8,6 +8,15 @@ using System.Runtime.InteropServices;
 namespace DSEngine;
 
 internal static partial class Native {
+    /// <summary>编译时 C ABI 版本号（与 dse_api.h 中 DSE_API_VERSION 同步）</summary>
+    internal const uint DSE_API_VERSION = 10000u;
+
+    /// <summary>运行时版本检查：DLL 返回值 != DSE_API_VERSION 则 ABI 不兼容</summary>
+    internal static bool IsApiCompatible() => dse_api_version() == DSE_API_VERSION;
+
+    [LibraryImport(Lib, EntryPoint = "dse_api_version")]
+    internal static partial uint dse_api_version();
+
     [LibraryImport(Lib, EntryPoint = "dse_transform_add")]
     internal static partial void dse_transform_add(uint e, float x, float y, float z, float sx, float sy, float sz);
 

@@ -94,6 +94,9 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // 6大世界系统（Spline / Ocean / EditorTools / VSM / EQS / Distribution）
     RegisterWorldSystemsBindings(L);
+
+    // C ABI 差距修补 — 补齐手写 C ABI 中尚未映射到 Lua 的函数
+    RegisterCabiGapBindings(L);
 }
 
 }

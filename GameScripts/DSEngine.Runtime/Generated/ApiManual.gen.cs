@@ -232,6 +232,7 @@ public static class Collision {
 }
 
 public static class Components {
+    public static uint ApiVersion() { return Native.dse_api_version(); }
     public static void TransformAdd(uint e, float x, float y, float z, float sx, float sy, float sz) { Native.dse_transform_add(e, x, y, z, sx, sy, sz); }
     public static void Camera3dAdd(uint e, float fov, float nearClip, float farClip) { Native.dse_camera3d_add(e, fov, nearClip, farClip); }
     public static void DirLightAdd(uint e) { Native.dse_dir_light_add(e); }
