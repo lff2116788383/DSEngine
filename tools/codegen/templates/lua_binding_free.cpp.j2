@@ -22,6 +22,14 @@ int L_{{ func_id }}(lua_State* L) {
 {% for op in fn.get("out_params", []) %}
 {% if op.type == "float3" %}
     float {{ op.name }}[3] = {0, 0, 0};
+{% elif op.type == "float2" %}
+    float {{ op.name }}[2] = {0, 0};
+{% elif op.type == "float4" %}
+    float {{ op.name }}[4] = {0, 0, 0, 0};
+{% elif op.type == "float6" %}
+    float {{ op.name }}[6] = {0, 0, 0, 0, 0, 0};
+{% elif op.type == "double" %}
+    double {{ op.name }} = 0;
 {% elif op.type == "float" %}
     float {{ op.name }} = 0;
 {% elif op.type == "int" %}
@@ -87,6 +95,14 @@ int L_{{ func_id }}(lua_State* L) {
 {% for op in fn.get("out_params", []) %}
 {% if op.type == "float3" %}
 {% set _ = call_args.append(op.name) %}
+{% elif op.type == "float2" %}
+{% set _ = call_args.append(op.name) %}
+{% elif op.type == "float4" %}
+{% set _ = call_args.append(op.name) %}
+{% elif op.type == "float6" %}
+{% set _ = call_args.append(op.name) %}
+{% elif op.type == "double" %}
+{% set _ = call_args.append("&" + op.name) %}
 {% elif op.type in ("float", "int", "uint32") %}
 {% set _ = call_args.append("&" + op.name) %}
 {% endif %}
@@ -137,6 +153,27 @@ int L_{{ func_id }}(lua_State* L) {
     lua_pushnumber(L, {{ op.name }}[1]);
     lua_pushnumber(L, {{ op.name }}[2]);
 {% set ns2.ret_count = ns2.ret_count + 3 %}
+{% elif op.type == "float2" %}
+    lua_pushnumber(L, {{ op.name }}[0]);
+    lua_pushnumber(L, {{ op.name }}[1]);
+{% set ns2.ret_count = ns2.ret_count + 2 %}
+{% elif op.type == "float4" %}
+    lua_pushnumber(L, {{ op.name }}[0]);
+    lua_pushnumber(L, {{ op.name }}[1]);
+    lua_pushnumber(L, {{ op.name }}[2]);
+    lua_pushnumber(L, {{ op.name }}[3]);
+{% set ns2.ret_count = ns2.ret_count + 4 %}
+{% elif op.type == "float6" %}
+    lua_pushnumber(L, {{ op.name }}[0]);
+    lua_pushnumber(L, {{ op.name }}[1]);
+    lua_pushnumber(L, {{ op.name }}[2]);
+    lua_pushnumber(L, {{ op.name }}[3]);
+    lua_pushnumber(L, {{ op.name }}[4]);
+    lua_pushnumber(L, {{ op.name }}[5]);
+{% set ns2.ret_count = ns2.ret_count + 6 %}
+{% elif op.type == "double" %}
+    lua_pushnumber(L, static_cast<lua_Number>({{ op.name }}));
+{% set ns2.ret_count = ns2.ret_count + 1 %}
 {% elif op.type == "float" %}
     lua_pushnumber(L, {{ op.name }});
 {% set ns2.ret_count = ns2.ret_count + 1 %}

@@ -89,7 +89,7 @@ void RegisterEcsBindings(lua_State* L) {
         {"anim3d_set_blend_tree_1d", L_EcsAnim3DSetBlendTree1D},
     });
 
-    // Codegen 生成的组件属性绑定（全量注册）
+    // Codegen 生成的组件属性绑定（全量注册�?
     RegisterTransformComponentGenBindings(L);
     RegisterCamera3DComponentGenBindings(L);
     RegisterDirectionalLight3DComponentGenBindings(L);
@@ -139,6 +139,54 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterCharacterMovementConfigGenBindings(L);
     RegisterSpringArm3DComponentGenBindings(L);
     RegisterPlayerControllerComponentGenBindings(L);
+    RegisterFreeAiGapBindings(L);
+    RegisterFreeAnimationGapBindings(L);
+    RegisterFreeAppGapBindings(L);
+    RegisterFree2dGapBindings(L);
+    RegisterFreeAudioGapBindings(L);
+    RegisterFreeCameraGapBindings(L);
+    RegisterFreePhys3dGapBindings(L);
+    RegisterFreeOpenWorldGapBindings(L);
+    RegisterFreeGameplay3dGapBindings(L);
+    RegisterFreeLightGapBindings(L);
+    RegisterFreeDsslGapBindings(L);
+    RegisterFreeEcsCoreGapBindings(L);
+    RegisterFreeHttpGapBindings(L);
+    RegisterFreeInputGapBindings(L);
+    RegisterFreeMeshGapBindings(L);
+    RegisterFreeMeshletGapBindings(L);
+    RegisterFreeNavigationGapBindings(L);
+    RegisterFreePhysics2dGapBindings(L);
+    RegisterFreePostGapBindings(L);
+    RegisterFreeRenderingGapBindings(L);
+    RegisterFreeSceneGapBindings(L);
+    RegisterFreeFxGapBindings(L);
+    RegisterFreeTerrainGapBindings(L);
+    RegisterFreeUiGapBindings(L);
+    RegisterAudioBindings(L);
+    RegisterDSSLBindings(L);
+    RegisterEcsRenderingCameraBindings(L);
+    RegisterEcsRenderingFxBindings(L);
+    RegisterEcsRenderingLightBindings(L);
+    RegisterEcsRenderingMeshBindings(L);
+    RegisterEcsRenderingPostBindings(L);
+    RegisterEcsRenderingTerrainBindings(L);
+    RegisterFontBindings(L);
+    // RegisterHttpBindings(L); // TODO: declare in modules.h
+    RegisterLocalizationBindings(L);
+    RegisterMeshletBindings(L);
+    RegisterNavigationBindings(L);
+    RegisterOpenWorldBindings(L);
+    RegisterOpenWorldP2P5Bindings(L);
+    RegisterSpineBindings(L);
+    RegisterStreamingBindings(L);
+    RegisterUiBindings(L);
+    RegisterFreeFn_ui(L);
+    RegisterFreeFn_localization(L);
+    RegisterFreeFn_ecs_gap(L);
+    RegisterFreeFn_audio(L);
+    RegisterFreeFn_app(L);
+    RegisterFreeFn_api_core(L);
 }
 
 } // namespace dse::runtime::lua_binding

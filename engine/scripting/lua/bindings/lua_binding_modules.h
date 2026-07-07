@@ -158,6 +158,39 @@ void ShutdownWorldSystemsBindings();
 
 // C ABI 差距修补 — 补齐手写 C ABI 中尚未映射到 Lua 的函数
 
+
+// Gap-fill register functions (codegen)
+void RegisterFree2dGapBindings(lua_State* L);
+void RegisterFreeAiGapBindings(lua_State* L);
+void RegisterFreeAnimationGapBindings(lua_State* L);
+void RegisterFreeAppGapBindings(lua_State* L);
+void RegisterFreeAudioGapBindings(lua_State* L);
+void RegisterFreeCameraGapBindings(lua_State* L);
+void RegisterFreeDsslGapBindings(lua_State* L);
+void RegisterFreeEcsCoreGapBindings(lua_State* L);
+void RegisterFreeFn_api_core(lua_State* L);
+void RegisterFreeFn_app(lua_State* L);
+void RegisterFreeFn_audio(lua_State* L);
+void RegisterFreeFn_ecs_gap(lua_State* L);
+void RegisterFreeFn_localization(lua_State* L);
+void RegisterFreeFn_ui(lua_State* L);
+void RegisterFreeFxGapBindings(lua_State* L);
+void RegisterFreeGameplay3dGapBindings(lua_State* L);
+void RegisterFreeHttpGapBindings(lua_State* L);
+void RegisterFreeInputGapBindings(lua_State* L);
+void RegisterFreeLightGapBindings(lua_State* L);
+void RegisterFreeMeshGapBindings(lua_State* L);
+void RegisterFreeMeshletGapBindings(lua_State* L);
+void RegisterFreeNavigationGapBindings(lua_State* L);
+void RegisterFreeOpenWorldGapBindings(lua_State* L);
+void RegisterFreePhys3dGapBindings(lua_State* L);
+void RegisterFreePhysics2dGapBindings(lua_State* L);
+void RegisterFreePostGapBindings(lua_State* L);
+void RegisterFreeRenderingGapBindings(lua_State* L);
+void RegisterFreeSceneGapBindings(lua_State* L);
+void RegisterFreeTerrainGapBindings(lua_State* L);
+void RegisterFreeUiGapBindings(lua_State* L);
+
 }
 
 #endif
