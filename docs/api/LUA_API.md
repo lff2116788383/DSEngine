@@ -417,6 +417,8 @@ dse.ecs.add_free_camera_controller(cam, 8.0, 0.15)
 | `ecs.set_mesh_tangents(e, tangent_table)` | entity, table | 设置切线数组 |
 | `ecs.set_mesh_emissive(e, r, g, b)` | entity, float, float, float | 设置自发光颜色 |
 | `ecs.set_mesh_advanced_material(e, ...)` | entity, float... | 高级材质设置（Toon/Watercolor 参数） |
+| `dse.mesh_renderer_set_skeleton(e, skeleton_entity)` | entity, uint | 设置换装骨架引用实体（`UINT32_MAX` = 清除引用，使用自身 Animator3D） |
+| `dse.mesh_renderer_get_skeleton(e)` | entity | 返回骨架引用实体 ID（无引用时返回 `UINT32_MAX`） |
 
 **材质标量参数名：** `"metallic"`, `"roughness"`, `"ao"`, `"normal_strength"`, `"material_alpha_cutoff"`
 
@@ -3335,3 +3337,405 @@ dse.ecs.add_audio_listener_2d(listener, 1.0)
 > + `dse.http`（HTTPS REST，含 TLS）取代——LuaSocket 自身不支持 HTTPS。
 > 注：第三方调试器脚本 `script/lua_panda.lua` 仍以 `pcall` 方式尝试 `require("socket.core")`，
 > 失败时自动降级，不影响引擎运行。
+---
+
+## 附录 C：绑定名映射（归一化参考）
+
+> 以下函数在 Lua 绑定中注册为扁平名（无下划线），但在本文档中按模块.函数名格式记录。
+> 此表供 `lua_api_audit.py` 归一化参考，不影响实际调用。
+>
+> **关于 "In doc but NOT bound" 幻影条目（167 条）**：
+> 这些是归一化误报——文档中使用 `module.func_name()` 格式（如 `audio.play_bgm`），
+> 但实际绑定注册为扁平名 `modulefuncname`（如 `audioplaybgm`），二者指向同一函数。
+> 审计脚本的 token 分词无法自动关联这两种命名，因此产生幻影。无需修正。
+
+| 绑定名 | 模块.文档名 |
+|--------|------------|
+| `ailodgetlevel` | （见对应模块章节） |
+| `ailodgetregisteredcount` | （见对应模块章节） |
+| `ailodregister` | （见对应模块章节） |
+| `ailodsetforceactive` | （见对应模块章节） |
+| `ailodshouldtick` | （见对应模块章节） |
+| `ailodunregister` | （见对应模块章节） |
+| `audioaddlistener` | （见对应模块章节） |
+| `audiocrossfadebgm` | （见对应模块章节） |
+| `audiopausebgm` | （见对应模块章节） |
+| `audioplaybgm` | （见对应模块章节） |
+| `audioplaysfx` | （见对应模块章节） |
+| `audioplaysfxrandom` | （见对应模块章节） |
+| `audiopreload` | （见对应模块章节） |
+| `audiorestart` | （见对应模块章节） |
+| `audioresumebgm` | （见对应模块章节） |
+| `audioset3ddistance` | （见对应模块章节） |
+| `audioset3dmode` | （见对应模块章节） |
+| `audiosetbgmvolume` | （见对应模块章节） |
+| `audiosetmastervolume` | （见对应模块章节） |
+| `audiosetsfxvolume` | （见对应模块章节） |
+| `audiosetsourcebus` | （见对应模块章节） |
+| `audiosnapshotload` | （见对应模块章节） |
+| `audiosnapshotsave` | （见对应模块章节） |
+| `audiostopallsfx` | （见对应模块章节） |
+| `audiostopbgm` | （见对应模块章节） |
+| `busaddeffect` | （见对应模块章节） |
+| `buscreate` | （见对应模块章节） |
+| `busremove` | （见对应模块章节） |
+| `busremoveeffect` | （见对应模块章节） |
+| `bussetmuted` | （见对应模块章节） |
+| `bussetvolume` | （见对应模块章节） |
+| `clipmapgetlevelcount` | （见对应模块章节） |
+| `ecsnavagentarrived` | （见对应模块章节） |
+| `ecsnavagenthaspath` | （见对应模块章节） |
+| `ecssetaudioloop` | （见对应模块章节） |
+| `ecssetaudiopitch` | （见对应模块章节） |
+| `ecssetaudiovolume` | （见对应模块章节） |
+| `ecssetnavagent` | （见对应模块章节） |
+| `ecssetnavdestination` | （见对应模块章节） |
+| `fontgettexture` | （见对应模块章节） |
+| `fontlineheight` | （见对应模块章节） |
+| `fontload` | （见对应模块章节） |
+| `fontloadcjk` | （见对应模块章节） |
+| `fontmeasure` | （见对应模块章节） |
+| `fontsetdefault` | （见对应模块章节） |
+| `fontunload` | （见对应模块章节） |
+| `gpuparticlesetcolor` | （见对应模块章节） |
+| `gpuparticlesetenabled` | （见对应模块章节） |
+| `gpuparticlesetgravity` | （见对应模块章节） |
+| `gpuparticlesetrate` | （见对应模块章节） |
+| `gpuparticlesetwind` | （见对应模块章节） |
+| `hlodgetactiveproxycount` | （见对应模块章节） |
+| `hlodgetclustercount` | （见对应模块章节） |
+| `invalidate` | （见对应模块章节） |
+| `navisready` | （见对应模块章节） |
+| `navload` | （见对应模块章节） |
+| `navsave` | （见对应模块章节） |
+| `proceduralfbm2d` | （见对应模块章节） |
+| `proceduralperlin2d` | （见对应模块章节） |
+| `proceduralrandomfloat` | （见对应模块章节） |
+| `proceduralrandomseed` | （见对应模块章节） |
+| `proceduralsimplex2d` | （见对应模块章节） |
+| `proceduralworley2d` | （见对应模块章节） |
+| `sdfgetcascadecount` | （见对应模块章节） |
+| `sdfquerydistance` | （见对应模块章节） |
+| `sdfrebuild` | （见对应模块章节） |
+| `verify` | （见对应模块章节） |
+| `vtgetcachehitrate` | （见对应模块章节） |
+| `vtgetoccupiedpages` | （见对应模块章节） |
+| `vtgetpagetablesize` | （见对应模块章节） |
+| `vtgetphysicalatlassize` | （见对应模块章节） |
+| `wpforceload` | （见对应模块章节） |
+| `wpforceunload` | （见对应模块章节） |
+| `wpgetloadedcount` | （见对应模块章节） |
+| `wspgetdirtycount` | （见对应模块章节） |
+| `wspgettotalmods` | （见对应模块章节） |
+| `wsploadcell` | （见对应模块章节） |
+| `wsprecorddestruction` | （见对应模块章节） |
+| `wspresetcell` | （见对应模块章节） |
+| `wspsaveall` | （见对应模块章节） |
+| `wspsavecell` | （见对应模块章节） |
+
+---
+
+## 附录 D：补充未文档化函数
+
+> 以下函数由 `tools/audit/lua_api_audit.py` 检出尚未收录到主章节，按绑定源文件分组。
+> 参数/返回值从绑定实现（`luaL_check*` / `lua_push*`）推断。
+
+
+### ECS 核心（`lua_binding_ecs.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `anim3d_set_blend_tree_1d` | — | — | `` | 设置anim3d blend tree 1d |
+| `anim3d_set_layer_mask` | — | — | `` | 设置anim3d layer mask |
+
+### 布娃娃（`lua_binding_ecs_ragdoll.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `set_ragdoll_collision_layer_value` | — | — | `` | 设置ragdoll collision layer value |
+
+### 核心 API（`lua_binding_free_api_core.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `api_version` | — | 1值 | `dse_api_version` | 获取 API 版本 |
+| `uuid_get` | int | 1值 | `dse_uuid_get` | 获取uuid |
+| `uuid_set` | int, string | 1值 | `dse_uuid_set` | 设置uuid |
+
+### 应用 / 输入（`lua_binding_free_app.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `get_delta_time` | — | 1值 | `dse_app_get_delta_time` | 获取delta time |
+| `get_mouse_scroll` | — | 1值 | `dse_input_get_mouse_scroll` | 获取mouse scroll |
+| `get_target_fps` | — | 1值 | `dse_app_get_target_fps` | 获取target fps |
+| `get_touch_count` | — | 1值 | `dse_input_get_touch_count` | 获取touch count |
+
+### 音频（`lua_binding_free_audio.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `audio_bus_get_names` | — | 1值 | `dse_audio_bus_get_names` | 获取audio bus names |
+| `audio_snapshot_list` | — | 1值 | `dse_audio_snapshot_list` |  |
+| `audio_source_get_state` | int | 1值 | `dse_audio_source_get_state` | 获取audio source state |
+| `fade_out_all_sfx` | float | — | `dse_audio_fade_out_all_sfx` |  |
+| `source_is_playing` | int | 1值 | `dse_audio_source_is_playing` |  |
+
+### 音频（完整）（`lua_binding_free_audio_full.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `set_spatial` | int, float, float, float | — | `dse_audio_source_set_3d_mode` | 设置spatial |
+
+### ECS 动画（`lua_binding_free_ecs_animation.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `anim2d_pop_event` | int | 1值 | `dse_anim2d_pop_event` | 弹出anim2d event事件 |
+| `anim3d_add_transition` | int, string, string, float, int, float | — | `dse_anim3d_add_transition` | 添加anim3d transition |
+| `anim3d_get_state` | int | 7值 | `dse_anim3d_get_state` | 获取anim3d state |
+| `anim3d_init_fsm` | int | — | `dse_anim3d_init_fsm` | 初始化anim3d fsm |
+| `anim3d_pop_event` | int | 1值 | `dse_anim3d_pop_event` | 弹出anim3d event事件 |
+| `animlayer_set_blend_tree_1d` | int, int | — | `dse_animlayer_set_blend_tree_1d` | 设置animlayer blend tree 1d |
+| `morph_simple_add_target` | int, string, float | — | `dse_morph_simple_add_target` | 添加morph simple target |
+
+### ECS 通用（`lua_binding_free_ecs_gap.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `anim3d_get_blend_param` | int | 1值 | `dse_anim3d_get_blend_param` | 获取anim3d blend param |
+| `anim3d_get_layer_weight` | int, int | 1值 | `dse_anim3d_get_layer_weight` | 获取anim3d layer weight |
+| `anim3d_set_blend_param` | int, float | — | `dse_anim3d_set_blend_param` | 设置anim3d blend param |
+| `anim3d_set_layer_weight` | int, int, float | — | `dse_anim3d_set_layer_weight` | 设置anim3d layer weight |
+| `decal_add` | int, int | — | `dse_decal_add` | 添加decal |
+| `decal_set` | int, float, float, float, float, float | — | `dse_decal_set` | 设置decal |
+| `ecs_get_queryable_components` | — | 1值 | `dse_ecs_get_queryable_components` | 获取ecs queryable components |
+| `ecs_get_script_path` | int | 1值 | `dse_ecs_get_script_path` | 获取ecs script path |
+| `mesh_renderer_add` | int, string | — | `dse_mesh_renderer_add` | 添加mesh renderer |
+| `mesh_set_depth_state` | int, int, int | — | `dse_mesh_set_depth_state` | 设置mesh depth state |
+| `mesh_set_emissive` | int, float, float, float | — | `dse_mesh_set_emissive` | 设置mesh emissive |
+| `mesh_set_material` | int, string | — | `dse_mesh_set_material` | 设置mesh material |
+| `mesh_set_material_scalar` | int, string, float | — | `dse_mesh_set_material_scalar` | 设置mesh material scalar |
+| `mesh_set_texture_handle` | int, string, int | — | `dse_mesh_set_texture_handle` | 设置mesh texture handle |
+| `particle_system_3d_get_state` | int | 4值 | `dse_particle_system_3d_get_state` | 获取particle system 3d state |
+| `rigidbody_3d_add_force_at_position` | int, float, float, float, float, float, float | — | `dse_rigidbody3d_add_force_at_position` | 添加rigidbody 3d force at position |
+| `rigidbody_3d_get_angular_damping` | int | 1值 | `dse_rigidbody3d_get_angular_damping` | 获取rigidbody 3d angular damping |
+| `rigidbody_3d_get_linear_damping` | int | 1值 | `dse_rigidbody3d_get_linear_damping` | 获取rigidbody 3d linear damping |
+| `rigidbody_3d_set_angular_damping` | int, float | — | `dse_rigidbody3d_set_angular_damping` | 设置rigidbody 3d angular damping |
+| `rigidbody_3d_set_kinematic` | int, int | — | `dse_rigidbody3d_set_kinematic` | 设置rigidbody 3d kinematic |
+| `rigidbody_3d_set_linear_damping` | int, float | — | `dse_rigidbody3d_set_linear_damping` | 设置rigidbody 3d linear damping |
+| `transform_add` | int, float, float, float, float, float, float | — | `dse_transform_add` | 添加transform |
+
+### ECS 物理 3D（`lua_binding_free_ecs_phys3d.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `physics3d_get_collision_events` | — | 1值 | `dse_physics3d_get_collision_events` | 获取physics3d collision events |
+| `physics3d_get_trigger_events` | — | 1值 | `dse_physics3d_get_trigger_events` | 获取physics3d trigger events |
+| `physics3d_overlap_box` | float, float, float, float, float, float | 1值 | `dse_physics3d_overlap_box` | 重叠检测 |
+
+### 通用补缺（`lua_binding_free_gap.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `ai_lod_get_config` | — | 3值 | `dse_ai_lod_get_config` | 获取ai lod config |
+| `anim3d_get_root_motion_delta` | int | 4值 | `dse_anim3d_get_root_motion_delta` | 获取anim3d root motion delta |
+| `app_get_fps` | — | 1值 | `dse_app_get_fps` | 获取app fps |
+| `app_get_frame_time_ms` | — | 1值 | `dse_app_get_frame_time_ms` | 获取app frame time ms |
+| `audio_lod_get_stats` | — | 2值 | `dse_audio_lod_get_stats` | 获取audio lod stats |
+| `bone_attach_get_world_pos` | int, string | 4值 | `dse_bone_attach_get_world_pos` | 获取bone attach world pos |
+| `camera3d_add` | int, float, float, float | — | `dse_camera3d_add` | 添加camera3d |
+| `character_check_ground` | int | 4值 | `dse_character_check_ground` |  |
+| `character_controller3d_get_position` | int | 4值 | `dse_character_controller3d_get_position` | 获取character controller3d position |
+| `character_controller3d_move` | int, float, float, float, float, float | 5值 | `dse_character_controller3d_move` |  |
+| `clipmap_get_config` | — | 2值 | `dse_clipmap_get_config` | 获取clipmap config |
+| `clipmap_sample_height` | float, float | 2值 | `dse_clipmap_sample_height` |  |
+| `day_night_get_sun_direction` | int | 3值 | `dse_day_night_get_sun_direction` | 获取day night sun direction |
+| `dir_light_add` | int | — | `dse_dir_light_add` | 添加dir light |
+| `dir_light_get_shadow_params` | int | 7值 | `dse_dir_light_get_shadow_params` | 获取dir light shadow params |
+| `dir_light_has` | int | 1值 | `dse_dir_light_has` | 检查dir light 是否存在 |
+| `dir_light_set_shadow_params` | int, int, float, float, float, float, float | — | `dse_dir_light_set_shadow_params` | 设置dir light shadow params |
+| `dssl_get_color` | int, string | 4值 | `dse_dssl_get_color` | 获取dssl color |
+| `ecs_get_local_aabb` | int | 7值 | `dse_ecs_get_local_aabb` | 获取ecs local aabb |
+| `ecs_get_world_aabb` | int | 7值 | `dse_ecs_get_world_aabb` | 获取ecs world aabb |
+| `entity_valid` | int | 1值 | `dse_entity_valid` | 检查实体是否有效 |
+| `http_send` | string, string, string, string, int, int, string | 1值 | `dse_http_send` |  |
+| `input_get_touch` | int | 4值 | `dse_input_get_touch` | 获取input touch |
+| `mesh_renderer_set_material_from_dmat` | int, string, int | 1值 | `dse_mesh_renderer_set_material_from_dmat` | 设置mesh renderer material from dmat |
+| `mesh_renderer_set_material_params` | int, float, float, float, float, float, float, float, int, int, float, float, float, float | — | `dse_mesh_renderer_set_material_params` | 设置mesh renderer material params |
+| `mesh_renderer_set_texture` | int, string, string | 4值 | `dse_mesh_renderer_set_texture` | 设置mesh renderer texture |
+| `meshlet_cull_stats` | int | 4值 | `dse_meshlet_cull_stats` | 剔除 |
+| `meshlet_get_info` | int | 4值 | `dse_meshlet_get_info` | 获取meshlet info |
+| `morph_simple_get_weight` | int, string | 1值 | `dse_morph_simple_get_weight` | 获取morph simple weight |
+| `morph_simple_get_weight_index` | int, int | 1值 | `dse_morph_simple_get_weight_index` | 获取morph simple weight index |
+| `morph_simple_set_weight` | int, string, float | — | `dse_morph_simple_set_weight` | 设置morph simple weight |
+| `morph_simple_set_weight_index` | int, int, float | — | `dse_morph_simple_set_weight_index` | 设置morph simple weight index |
+| `nav_agent_get` | int | 3值 | `dse_nav_agent_get` | 获取nav agent |
+| `nav_agent_get_destination` | int | 3值 | `dse_nav_agent_get_destination` | 获取nav agent destination |
+| `nav_find_nearest` | float, float, float | 4值 | `dse_nav_find_nearest` |  |
+| `nav_raycast` | float, float, float, float, float, float | 4值 | `dse_nav_raycast` | 射线检测 |
+| `physics2d_poll_collision_event` | int | 4值 | `dse_physics2d_poll_collision_event` |  |
+| `physics2d_raycast` | float, float, float, float | 8值 | `dse_physics2d_raycast` | 射线检测 |
+| `physics3d_boxcast` | float, float, float, float, float, float, float, float, float, float | 9值 | `dse_physics3d_boxcast` | 盒体投射检测 |
+| `physics3d_get_collision_count` | — | 1值 | `dse_physics3d_get_collision_count` | 获取physics3d collision count |
+| `physics3d_get_trigger_count` | — | 1值 | `dse_physics3d_get_trigger_count` | 获取physics3d trigger count |
+| `physics3d_raycast` | float, float, float, float, float, float, float | 9值 | `dse_physics3d_raycast` | 射线检测 |
+| `physics3d_spherecast` | float, float, float, float, float, float, float, float | 9值 | `dse_physics3d_spherecast` | 球体投射检测 |
+| `physics_lod_get_stats` | — | 2值 | `dse_physics_lod_get_stats` | 获取physics lod stats |
+| `point_light_add` | int | — | `dse_point_light_add` | 添加point light |
+| `point_light_has` | int | 1值 | `dse_point_light_has` | 检查point light 是否存在 |
+| `post_process_add` | int | — | `dse_post_process_add` | 添加post process |
+| `post_process_get_state` | int | 7值 | `dse_post_process_get_state` | 获取post process state |
+| `render_screen_to_world_ray` | float, float | 7值 | `dse_render_screen_to_world_ray` |  |
+| `render_world_to_screen` | float, float, float | 3值 | `dse_render_world_to_screen` |  |
+| `rendering_add_gi_probe` | int | — | `dse_rendering_add_gi_probe` | 添加rendering gi probe |
+| `rendering_add_light_probe` | int | — | `dse_rendering_add_light_probe` | 添加rendering light probe |
+| `rendering_add_reflection_probe` | int | — | `dse_rendering_add_reflection_probe` | 添加rendering reflection probe |
+| `rendering_get_gi_probe` | int | 9值 | `dse_rendering_get_gi_probe` | 获取rendering gi probe |
+| `rendering_get_gi_probe_ex` | int | 5值 | `dse_rendering_get_gi_probe_ex` | 获取rendering gi probe ex |
+| `rendering_set_gi_probe` | int, float, float, float, float, float, float, float, int, int, int | — | `dse_rendering_set_gi_probe` | 设置rendering gi probe |
+| `rendering_set_gi_probe_bias` | int, float, float | — | `dse_rendering_set_gi_probe_bias` | 设置rendering gi probe bias |
+| `rigidbody3d_get_angular_velocity` | int | 3值 | `dse_rigidbody3d_get_angular_velocity` | 获取rigidbody3d angular velocity |
+| `rigidbody3d_get_velocity` | int | 3值 | `dse_rigidbody3d_get_velocity` | 获取rigidbody3d velocity |
+| `scene_instantiate_prefab` | string, float, float, float, int | 1值 | `dse_scene_instantiate_prefab` |  |
+| `scene_load_sub` | string | 2值 | `dse_scene_load_sub` | 加载 |
+| `sky_light_add` | int | — | `dse_sky_light_add` | 添加sky light |
+| `sky_light_has` | int | 1值 | `dse_sky_light_has` | 检查sky light 是否存在 |
+| `snow_cover_get` | int | 4值 | `dse_snow_cover_get` | 获取snow cover |
+| `spot_light_add` | int | — | `dse_spot_light_add` | 添加spot light |
+| `spot_light_has` | int | 1值 | `dse_spot_light_has` | 检查spot light 是否存在 |
+| `steering_get_state` | int | 7值 | `dse_steering_get_state` | 获取steering state |
+| `steering_set_target` | int, int, float, float, float | 1值 | `dse_steering_set_target` | 设置steering target |
+| `terrain_get_lod` | int | 5值 | `dse_terrain_get_lod` | 获取terrain lod |
+| `terrain_load_heightmap` | int, string | 6值 | `dse_terrain_load_heightmap` | 加载 |
+| `terrain_set_params` | int, int, int, int, float, int | — | `dse_terrain_set_params` | 设置terrain params |
+| `terrain_set_texture` | int, string | 4值 | `dse_terrain_set_texture` | 设置terrain texture |
+| `ui_get_scroll_offset` | int | 2值 | `dse_ui_get_scroll_offset` | 获取ui scroll offset |
+| `ui_get_virtual_scroll_range` | int | 2值 | `dse_ui_get_virtual_scroll_range` | 获取ui virtual scroll range |
+| `water_get` | int | 22值 | `dse_water_get` | 获取water |
+| `water_set` | int, int, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float | — | `dse_water_set` | 设置water |
+| `wp_cell_to_world` | int, int, float | 3值 | `dse_wp_cell_to_world` |  |
+| `wp_world_to_cell` | float, float, float, float | 2值 | `dse_wp_world_to_cell` |  |
+
+### HTTP（`lua_binding_free_http.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `http_get_response` | int | 1值 | `dse_http_get_response` | 获取http response |
+
+### Meshlet（`lua_binding_free_meshlet.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `meshlet_build` | int, int | — | `dse_meshlet_build` | 构建 |
+| `meshlet_cull_add_instance` | int, int | — | `dse_meshlet_cull_add_instance` | 添加meshlet cull instance |
+| `meshlet_cull_execute_cpu` | int, float, float, float, int | — | `dse_meshlet_cull_execute_cpu` | 剔除 |
+| `meshlet_cull_prepare` | int, float, float, float | — | `dse_meshlet_cull_prepare` | 剔除 |
+
+### 导航（`lua_binding_free_navigation.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `nav_bake` | float, float, float, float, float, float | — | `dse_nav_bake` | 烘焙导航网格 |
+
+### 开放世界（`lua_binding_free_open_world.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `open_world_p2p5_shutdown` | — | — | `dse_open_world_p2p5_shutdown` | 关闭 |
+
+### 开放世界 P2.5（`lua_binding_free_open_world_p2p5.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `physics_lod_evaluate` | float, float, float, int | 1值 | `dse_physics_lod_evaluate` | 求值 |
+
+### 物理 2D（`lua_binding_free_physics2d.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `physics2d_add_polygon_collider` | int, float, float, float | — | `dse_physics2d_add_polygon_collider` | 添加physics2d polygon collider |
+
+### 渲染（`lua_binding_free_rendering.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `mesh_renderer_add_procedural` | int, float, float, float, float | — | `dse_mesh_renderer_add_procedural` | 添加mesh renderer procedural |
+| `mesh_renderer_set_normals` | int | 3值 | `dse_mesh_renderer_set_normals` | 设置mesh renderer normals |
+| `mesh_renderer_set_tangents` | int | 3值 | `dse_mesh_renderer_set_tangents` | 设置mesh renderer tangents |
+| `mesh_renderer_set_uvs` | int | 3值 | `dse_mesh_renderer_set_uvs` | 设置mesh renderer uvs |
+
+### 场景（`lua_binding_free_scene.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `scene_get_active` | — | 1值 | `dse_scene_get_active` | 获取scene active |
+| `scene_get_loaded_subs` | — | 1值 | `dse_scene_get_loaded_subs` | 获取scene loaded subs |
+
+### 流式加载（`lua_binding_free_streaming.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `streaming_add_assets` | int, string | — | `dse_streaming_add_assets` | 添加streaming assets |
+
+### UI（`lua_binding_free_ui.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `is_hovered` | int | 1值 | `dse_ui_is_hovered` |  |
+| `is_pressed` | int | 1值 | `dse_ui_is_pressed` |  |
+| `ui_get_dropdown_value` | int | 1值 | `dse_ui_get_dropdown_value` | 获取ui dropdown value |
+| `ui_get_text_input_text` | int | 1值 | `dse_ui_get_text_input_text` | 获取ui text input text |
+
+### UI（完整）（`lua_binding_free_ui_full.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `add_animation` | int, float, int, int, int, float | — | `dse_ui_add_animation` | 添加animation |
+| `stop_animation` | int | — | `dse_ui_stop_animation` |  |
+
+### 世界系统（`lua_binding_free_world.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `weather_add` | int, int, float | — | `dse_weather_add` | 添加weather |
+
+### 世界分发（`lua_binding_free_world_distribution.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `is_installed` | string | 1值 | `dse_dist_is_installed` |  |
+| `request_download` | string | — | `dse_dist_request_download` |  |
+
+### 世界编辑器（`lua_binding_free_world_editor.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `get_cell_count` | — | 1值 | `dse_editor_get_cell_count` | 获取cell count |
+
+### EQS 环境（`lua_binding_free_world_eqs.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `clear_scorers` | int | — | `dse_eqs_clear_scorers` |  |
+
+### 海洋（`lua_binding_free_world_ocean.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `get_lod_count` | — | 1值 | `dse_ocean_get_lod_count` | 获取lod count |
+
+### 样条（`lua_binding_free_world_spline.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `evaluate_distance` | int, float | 3值 | `dse_spline_evaluate_distance` | 求值 |
+| `gen_river` | int, [float], [float] | 1值 | `dse_spline_gen_river` |  |
+| `gen_road` | int, [float], [int] | 1值 | `dse_spline_gen_road` |  |
+| `set_point` | int, int, float, float, float, [float] | — | `dse_spline_set_point` | 设置point |
+
+### VSM（`lua_binding_free_world_vsm.gen.cpp`）
+
+| 绑定名 | 参数 | 返回 | C-ABI | 说明 |
+|--------|------|------|-------|------|
+| `mark_rendered` | int, int, int, int | — | `dse_vsm_mark_page_rendered` | 标记 |

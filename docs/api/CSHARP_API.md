@@ -327,6 +327,26 @@ mesh.Color = new Vector4(1, 0.8f, 0.6f, 1);
 mesh.Emissive = new Vector3(0.5f, 0, 0);  // 微红自发光
 ```
 
+### 换装骨架引用（Outfit / Skeleton）
+
+服装/换装子实体的 `MeshRenderer` 可通过跨实体骨架引用指向持有 `Animator3DComponent` 的角色骨架根实体。
+传入 `uint.MaxValue` 表示"使用自身 Animator3D"（默认、向后兼容）。
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `Api.Mesh.RendererSetSkeleton(e, skeletonEntity)` | `void` | 设置骨架引用实体（`uint.MaxValue` = 清除引用） |
+| `Api.Mesh.RendererGetSkeleton(e)` | `uint` | 获取骨架引用实体（无引用时返回 `uint.MaxValue`） |
+
+```csharp
+// 服装子实体指向角色骨架根实体
+Api.Mesh.RendererSetSkeleton(outfitEntity, characterEntity);
+
+// 清除引用（使用自身 Animator3D）
+Api.Mesh.RendererSetSkeleton(outfitEntity, uint.MaxValue);
+
+uint skel = Api.Mesh.RendererGetSkeleton(outfitEntity);  // skel == characterEntity
+```
+
 ---
 
 ## 8. Native P/Invoke 层（Codegen 自动生成）
@@ -749,6 +769,7 @@ public class ClientScript : DseScript {
 | `Cloth` / `Rope` / `SoftBody` / `Fluid` / `Buoyancy` / `Ragdoll` / `Fracture` | 5/4/4/6/4/4/5 | 对应前缀 | 布料/绳索/软体/流体/浮力/布娃娃/破碎 |
 | `Weather` / `Snow` / `Atmosphere` / `DayNight` / `Cloud` | 3/8/4/7/3 | 对应前缀 | 天气/积雪/大气/昼夜/体积云 |
 | `Components` | 10 | 其余 `dse_*_add` 等 | Transform/相机/灯光/MeshRenderer 挂载 |
+| `Mesh` | 27 | `dse_mesh_renderer_* / dse_mesh_* / dse_mesh_streaming_*` | 网格渲染器材质/纹理/UV/法线/自发光 + 换装骨架引用 + 流式 LOD |
 | `Audio` | 12 | `dse_audio_*` | BGM/SFX 播放、Crossfade、音量、预加载 |
 | `AudioSource` / `AudioListener` | 10/1 | `dse_audio_source_* / audio_listener_*` | ECS 音源组件（3D 空间音频/总线）与监听器 |
 | `Nav` | 6 | `dse_nav_*` | NavMesh 加载/保存/寻路/最近点/射线 |

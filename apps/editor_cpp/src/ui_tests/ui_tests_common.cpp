@@ -21,6 +21,7 @@
 #include "imgui_te_context.h"
 
 #include "../editor_project.h"  // ProjectManager
+#include "../editor_selection.h"  // SelectionManager (ResetUiState)
 
 #include "engine/runtime/engine_app.h"
 #include "engine/runtime/frame_pipeline.h"
@@ -84,9 +85,24 @@ ImGuiWindow* FindActiveWindow(const char* name_or_substr) {
     return substr_hit;
 }
 
+void ResetUiState(ImGuiTestContext* ctx) {
+    // 防止上一用例残留的 UI 状态泄漏到本用例（根因：用例间 hover/弹窗/ref/多选未复位，
+    // 导致本用例的 MouseMove/ItemClick 命中上个用例的残留控件）。
+    // 顺序：先清多选 → 关弹窗 → 移鼠标到空白处清 hover → 复位 ref → Yield 沉淀。
+    SelectionManager::Get().Clear();
+    ctx->SetRef("");
+    // 按两次 Escape 关闭可能残留的右键菜单/弹窗（按一次可能只关一层）。
+    ctx->KeyPress(ImGuiKey_Escape, 2);
+    ctx->MouseMoveToVoid();
+    ctx->Yield(2);
+}
+
 void OpenHierarchyContextMenu(ImGuiTestContext* ctx) {
+    // 每次打开前先复位 UI 状态：防止上一用例残留的 hover 目标导致 MouseMove("//Hierarchy/Scene")
+    // 命中错误控件（如上一用例的 ##scale_undo/##scale/##x DragFloat），进而使右键菜单无法弹出。
+    ResetUiState(ctx);
     // 在常驻、必定存在的 "Scene" 根节点上右键打开窗口上下文菜单（BeginPopupContextWindow
-    // 不设 NoOpenOverItems，故在节点上右键同样会弹出窗口菜单）。相比“点窗口底部留白”，
+    // 不设 NoOpenOverItems，故在节点上右键同样会弹出窗口菜单）。相比"点窗口底部留白"，
     // 这条在实体数增多、树撑满窗口时仍稳定——空白处会被树节点占满导致点不中。
     // 用绝对引用 "//Hierarchy/Scene"：避免按当前 ref（上一轮可能停在 "//$FOCUSED" 弹窗）解析错误。
     ctx->WindowFocus("//Hierarchy");

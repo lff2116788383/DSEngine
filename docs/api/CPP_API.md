@@ -560,6 +560,25 @@ public:
 | `Execute(cmd)` | 录制渲染命令 |
 | `GetName()` → `const char*` | Pass 名称（调试用） |
 
+### 5.5 C ABI — MeshRenderer 换装骨架引用
+
+**头文件：** `engine/scripting/native_api/dse_api_render.h`
+**实现：** `engine/scripting/native_api/dse_api_render.cpp`
+
+服装/换装子实体的 `MeshRendererComponent` 可通过跨实体骨架引用指向持有 `Animator3DComponent` 的角色骨架根实体。
+传入 `UINT32_MAX` 表示"使用自身 Animator3D"（默认、向后兼容）；getter 无引用时返回 `UINT32_MAX`。
+
+```cpp
+// C ABI（extern "C"）
+void     dse_mesh_renderer_set_skeleton(uint32_t e, uint32_t skeleton_entity);
+uint32_t dse_mesh_renderer_get_skeleton(uint32_t e);
+```
+
+| 函数 | 参数 | 返回值 | 说明 |
+|------|------|--------|------|
+| `dse_mesh_renderer_set_skeleton(e, skeleton_entity)` | entity, uint32 | — | 设置骨架引用实体（`UINT32_MAX` = 清除引用） |
+| `dse_mesh_renderer_get_skeleton(e)` | entity | uint32 | 获取骨架引用实体（无引用/无组件时返回 `UINT32_MAX`） |
+
 ---
 
 ## 6. 输入系统

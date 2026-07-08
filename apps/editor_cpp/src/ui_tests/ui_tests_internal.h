@@ -82,9 +82,14 @@ void DragProjectAssetOntoScene(ImGuiTestContext* ctx, const char* filename, cons
 void ShowFloatingPanel(ImGuiTestContext* ctx, bool* show, const char* window_ref);
 
 /// 取消所有选中（点 Hierarchy 空白处）：清掉 ctx.selected_entity 与 SelectionManager。
-/// 选中态会让视口绘制 ImGuizmo 变换 gizmo，它在视口区域用全局鼠标“截走”左键点击，
+/// 选中态会让视口绘制 ImGuizmo 变换 gizmo，它在视口区域用全局鼠标"截走"左键点击，
 /// 干扰落在视口之上的浮动面板按钮——左键类用例开场应先反选。
 void DeselectAll(ImGuiTestContext* ctx);
+
+/// 每个用例开始前统一复位 UI 状态，防止上一用例残留的 hover/弹窗/ref/多选泄漏到本用例。
+/// 具体操作：清 SelectionManager → 关闭可能残留的弹窗(Esc×2) → 鼠标移到空白处清 hover →
+/// 复位 ref 到根 → Yield 让 UI 沉淀。由 OpenHierarchyContextMenu 在开头调用，覆盖绝大多数用例。
+void ResetUiState(ImGuiTestContext* ctx);
 
 // ─── 各用例文件的注册入口（在各自 .cpp 中实现） ───────────────────────────────
 void RegisterHarnessSanityTests(ImGuiTestEngine* engine);
