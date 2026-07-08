@@ -93,6 +93,22 @@ int L_dse_nav_find_path(lua_State* L) {
     return 1;
 }
 
+int L_dse_nav_bake(lua_State* L) {
+    float verts = static_cast<float>(luaL_checknumber(L, 1));
+    int nverts = static_cast<int>(luaL_checkinteger(L, 2));
+    int tris = static_cast<int>(luaL_checkinteger(L, 3));
+    int ntris = static_cast<int>(luaL_checkinteger(L, 4));
+    float cell_size = static_cast<float>(luaL_checknumber(L, 5));
+    float cell_height = static_cast<float>(luaL_checknumber(L, 6));
+    float agent_height = static_cast<float>(luaL_checknumber(L, 7));
+    float agent_radius = static_cast<float>(luaL_checknumber(L, 8));
+    float agent_max_climb = static_cast<float>(luaL_checknumber(L, 9));
+    float agent_max_slope = static_cast<float>(luaL_checknumber(L, 10));
+    int _ret = dse_nav_bake(verts, nverts, tris, ntris, cell_size, cell_height, agent_height, agent_radius, agent_max_climb, agent_max_slope);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 } // namespace
 
 void RegisterNavigationBindings(lua_State* L) {
@@ -113,6 +129,7 @@ void RegisterNavigationBindings(lua_State* L) {
         {"ecsnavagenthaspath", L_dse_nav_agent_has_path},
         {"ecsnavagentarrived", L_dse_nav_agent_arrived},
         {"find_path", L_dse_nav_find_path},
+        {"nav_bake", L_dse_nav_bake},
     });
     lua_pop(L, 2);
 }

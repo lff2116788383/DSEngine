@@ -99,6 +99,15 @@ int L_dse_streaming_get_zone_count(lua_State* L) {
     return 1;
 }
 
+int L_dse_streaming_add_assets(lua_State* L) {
+    int zone = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* paths = luaL_checkstring(L, 2);
+    int count = static_cast<int>(luaL_checkinteger(L, 3));
+    const char* type_str = luaL_checkstring(L, 4);
+    dse_streaming_add_assets(zone, paths, count, type_str);
+    return 0;
+}
+
 } // namespace
 
 void RegisterStreamingBindings(lua_State* L) {
@@ -121,6 +130,7 @@ void RegisterStreamingBindings(lua_State* L) {
         {"set_budget", L_dse_streaming_set_budget},
         {"get_active_loads", L_dse_streaming_get_active_loads},
         {"get_zone_count", L_dse_streaming_get_zone_count},
+        {"streaming_add_assets", L_dse_streaming_add_assets},
     });
     lua_pop(L, 1);
 }

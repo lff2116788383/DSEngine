@@ -87,6 +87,7 @@ extern "C" void dse_hair_set_gravity(uint32_t e, float v) {
     }
 }
 extern "C" void dse_hair_get_wind(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::HairComponent>(e)) { *x = c->wind.x; *y = c->wind.y; *z = c->wind.z; }
 }
 extern "C" void dse_hair_set_wind(uint32_t e, float x, float y, float z) {
@@ -104,12 +105,14 @@ extern "C" void dse_hair_set_wind_turbulence(uint32_t e, float v) {
     }
 }
 extern "C" void dse_hair_get_root_color(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<dse::HairComponent>(e)) { *x = c->root_color.x; *y = c->root_color.y; *z = c->root_color.z; *w = c->root_color.w; }
 }
 extern "C" void dse_hair_set_root_color(uint32_t e, float x, float y, float z, float w) {
     if (auto* c = GC<dse::HairComponent>(e)) c->root_color = glm::vec4(x, y, z, w);
 }
 extern "C" void dse_hair_get_tip_color(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<dse::HairComponent>(e)) { *x = c->tip_color.x; *y = c->tip_color.y; *z = c->tip_color.z; *w = c->tip_color.w; }
 }
 extern "C" void dse_hair_set_tip_color(uint32_t e, float x, float y, float z, float w) {

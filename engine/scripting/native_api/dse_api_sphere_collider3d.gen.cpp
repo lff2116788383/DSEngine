@@ -37,6 +37,7 @@ extern "C" void dse_sphere_collider3d_set_radius(uint32_t e, float v) {
     }
 }
 extern "C" void dse_sphere_collider3d_get_center(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SphereCollider3DComponent>(e)) { *x = c->center.x; *y = c->center.y; *z = c->center.z; }
 }
 extern "C" void dse_sphere_collider3d_set_center(uint32_t e, float x, float y, float z) {

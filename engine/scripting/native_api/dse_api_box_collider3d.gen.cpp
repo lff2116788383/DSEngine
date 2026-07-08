@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- BoxCollider3DComponent ---- */
 extern "C" void dse_box_collider3d_get_size(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::BoxCollider3DComponent>(e)) { *x = c->size.x; *y = c->size.y; *z = c->size.z; }
 }
 extern "C" void dse_box_collider3d_set_size(uint32_t e, float x, float y, float z) {
@@ -36,6 +37,7 @@ extern "C" void dse_box_collider3d_set_size(uint32_t e, float x, float y, float 
     }
 }
 extern "C" void dse_box_collider3d_get_center(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::BoxCollider3DComponent>(e)) { *x = c->center.x; *y = c->center.y; *z = c->center.z; }
 }
 extern "C" void dse_box_collider3d_set_center(uint32_t e, float x, float y, float z) {

@@ -37,6 +37,7 @@ extern "C" void dse_spring_arm_set_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_spring_arm_get_target_offset(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SpringArm3DComponent>(e)) { *x = c->target_offset.x; *y = c->target_offset.y; *z = c->target_offset.z; }
 }
 extern "C" void dse_spring_arm_set_target_offset(uint32_t e, float x, float y, float z) {

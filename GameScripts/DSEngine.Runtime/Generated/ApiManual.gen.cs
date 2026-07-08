@@ -234,23 +234,6 @@ public static class Collision {
 public static class Components {
     public static uint ApiVersion() { return Native.dse_api_version(); }
     public static void TransformAdd(uint e, float x, float y, float z, float sx, float sy, float sz) { Native.dse_transform_add(e, x, y, z, sx, sy, sz); }
-    public static void Camera3dAdd(uint e, float fov, float nearClip, float farClip) { Native.dse_camera3d_add(e, fov, nearClip, farClip); }
-    public static void DirLightAdd(uint e) { Native.dse_dir_light_add(e); }
-    public static void DirLightSetShadowParams(uint e, int castShadow, float shadowStrength, float c0, float c1, float c2, float lambda) { Native.dse_dir_light_set_shadow_params(e, castShadow, shadowStrength, c0, c1, c2, lambda); }
-    public static void PointLightAdd(uint e) { Native.dse_point_light_add(e); }
-    public static void SpotLightAdd(uint e) { Native.dse_spot_light_add(e); }
-    public static void SkyLightAdd(uint e) { Native.dse_sky_light_add(e); }
-    public static void CompatAnim3dInitFsm(uint e, string defaultState) { Native.dse_compat_anim3d_init_fsm(e, defaultState); }
-    public static void CompatAnim3dAddTransition(uint e, string fromState, string toState, float transitionDuration, int hasExitTime, float exitTime) { Native.dse_compat_anim3d_add_transition(e, fromState, toState, transitionDuration, hasExitTime, exitTime); }
-    public static void CompatWeatherAdd(uint e, string type, float intensity) { Native.dse_compat_weather_add(e, type, intensity); }
-    public static void CompatSetDirectionalLight3d(uint e, int enabled, float dx, float dy, float dz, float r, float g, float b, float intensity, float ambient, float shadowStrength) { Native.dse_compat_set_directional_light_3d(e, enabled, dx, dy, dz, r, g, b, intensity, ambient, shadowStrength); }
-    public static void CompatSetPointLight3d(uint e, float r, float g, float b, float intensity, float radius) { Native.dse_compat_set_point_light_3d(e, r, g, b, intensity, radius); }
-    public static void CompatSetSpotLight3d(uint e, float dx, float dy, float dz, float r, float g, float b, float intensity, float radius, float inner, float outer) { Native.dse_compat_set_spot_light_3d(e, dx, dy, dz, r, g, b, intensity, radius, inner, outer); }
-    public static void CompatWorldToScreen(float wx, float wy, float wz, out float outSx, out float outSy, out int outVisible) { Native.dse_compat_world_to_screen(wx, wy, wz, out outSx, out outSy, out outVisible); }
-    public static int CompatL10nLoad(string locale, string json) { return Native.dse_compat_l10n_load(locale, json); }
-    public static int UuidGet(uint e, [Out] byte[] @out, int cap) { return Native.dse_uuid_get(e, @out, cap); }
-    public static int UuidSet(uint e, string uuidStr, [Out] byte[] @out, int cap) { return Native.dse_uuid_set(e, uuidStr, @out, cap); }
-    public static uint UuidResolve(string uuidStr) { return Native.dse_uuid_resolve(uuidStr); }
     public static int EcsFindEntitiesByMeshPath(string meshPath, [Out] uint[] @out, int cap) { return Native.dse_ecs_find_entities_by_mesh_path(meshPath, @out, cap); }
     public static int EcsFindEntitiesWith(string component, [Out] uint[] @out, int cap) { return Native.dse_ecs_find_entities_with(component, @out, cap); }
     public static int EcsCountEntitiesWith(string component) { return Native.dse_ecs_count_entities_with(component); }
@@ -270,11 +253,6 @@ public static class Components {
     public static int EcsGetScriptPath(uint e, [Out] byte[] @out, int cap) { return Native.dse_ecs_get_script_path(e, @out, cap); }
     public static void EcsSetScriptEnabled(uint e, int enabled) { Native.dse_ecs_set_script_enabled(e, enabled); }
     public static int EcsGetScriptEnabled(uint e) { return Native.dse_ecs_get_script_enabled(e); }
-    public static int DirLightHas(uint e) { return Native.dse_dir_light_has(e); }
-    public static int PointLightHas(uint e) { return Native.dse_point_light_has(e); }
-    public static int SpotLightHas(uint e) { return Native.dse_spot_light_has(e); }
-    public static int SkyLightHas(uint e) { return Native.dse_sky_light_has(e); }
-    public static int DirLightGetShadowParams(uint e, out int outCastShadow, out float outStrength, out float outC0, out float outC1, out float outC2, out float outLambda) { return Native.dse_dir_light_get_shadow_params(e, out outCastShadow, out outStrength, out outC0, out outC1, out outC2, out outLambda); }
     public static int FontLoad(string fontId, string ttfPath) { return Native.dse_font_load(fontId, ttfPath); }
     public static int FontLoadCjk(string fontId, string ttfPath) { return Native.dse_font_load_cjk(fontId, ttfPath); }
     public static void FontUnload(string fontId) { Native.dse_font_unload(fontId); }
@@ -298,14 +276,33 @@ public static class Components {
     public static void TreeAdd(uint e, string meshPath) { Native.dse_tree_add(e, meshPath); }
     public static void DynamicObstacleAdd(uint e, int shape) { Native.dse_dynamic_obstacle_add(e, shape); }
     public static void NavmeshRebakeAdd(uint e) { Native.dse_navmesh_rebake_add(e); }
-    public static void PhysicsLodInit(float fullDistance, float reducedDistance, float simplifiedDistance) { Native.dse_physics_lod_init(fullDistance, reducedDistance, simplifiedDistance); }
-    public static void PhysicsLodRegisterBody(uint entityId, float x, float y, float z, float radius) { Native.dse_physics_lod_register_body(entityId, x, y, z, radius); }
-    public static int PhysicsLodEvaluate(float camX, float camY, float camZ, uint frame, out uint outIds, int cap) { return Native.dse_physics_lod_evaluate(camX, camY, camZ, frame, out outIds, cap); }
-    public static int PhysicsLodGetStats(out int outStats) { return Native.dse_physics_lod_get_stats(out outStats); }
-    public static void PhysicsLodWake(uint entityId) { Native.dse_physics_lod_wake(entityId); }
-    public static void PhysicsLodSleep(uint entityId) { Native.dse_physics_lod_sleep(entityId); }
-    public static void PhysicsLodShutdown() { Native.dse_physics_lod_shutdown(); }
-    public static void OpenWorldP2p5Shutdown() { Native.dse_open_world_p2p5_shutdown(); }
+    public static int AiGoapCreate() { return Native.dse_ai_goap_create(); }
+    public static void AiGoapDestroy(int plannerId) { Native.dse_ai_goap_destroy(plannerId); }
+    public static void AiGoapActionBegin(int plannerId, string name, float cost) { Native.dse_ai_goap_action_begin(plannerId, name, cost); }
+    public static void AiGoapActionPrecondition(int plannerId, string key, int value) { Native.dse_ai_goap_action_precondition(plannerId, key, value); }
+    public static void AiGoapActionEffect(int plannerId, string key, int value) { Native.dse_ai_goap_action_effect(plannerId, key, value); }
+    public static void AiGoapActionCommit(int plannerId) { Native.dse_ai_goap_action_commit(plannerId); }
+    public static void AiGoapStateClear(int plannerId) { Native.dse_ai_goap_state_clear(plannerId); }
+    public static void AiGoapStateSet(int plannerId, int which, string key, int value) { Native.dse_ai_goap_state_set(plannerId, which, key, value); }
+    public static int AiGoapPlan(int plannerId, [Out] byte[] @out, int cap) { return Native.dse_ai_goap_plan(plannerId, @out, cap); }
+    public static void Camera3dAdd(uint e, float fov, float nearClip, float farClip) { Native.dse_camera3d_add(e, fov, nearClip, farClip); }
+    public static void DirLightAdd(uint e) { Native.dse_dir_light_add(e); }
+    public static void DirLightSetShadowParams(uint e, int castShadow, float shadowStrength, float c0, float c1, float c2, float lambda) { Native.dse_dir_light_set_shadow_params(e, castShadow, shadowStrength, c0, c1, c2, lambda); }
+    public static void PointLightAdd(uint e) { Native.dse_point_light_add(e); }
+    public static void SpotLightAdd(uint e) { Native.dse_spot_light_add(e); }
+    public static void SkyLightAdd(uint e) { Native.dse_sky_light_add(e); }
+    public static void CompatAnim3dInitFsm(uint e, string defaultState) { Native.dse_compat_anim3d_init_fsm(e, defaultState); }
+    public static void CompatAnim3dAddTransition(uint e, string fromState, string toState, float transitionDuration, int hasExitTime, float exitTime) { Native.dse_compat_anim3d_add_transition(e, fromState, toState, transitionDuration, hasExitTime, exitTime); }
+    public static void CompatWeatherAdd(uint e, string type, float intensity) { Native.dse_compat_weather_add(e, type, intensity); }
+    public static void CompatSetDirectionalLight3d(uint e, int enabled, float dx, float dy, float dz, float r, float g, float b, float intensity, float ambient, float shadowStrength) { Native.dse_compat_set_directional_light_3d(e, enabled, dx, dy, dz, r, g, b, intensity, ambient, shadowStrength); }
+    public static void CompatSetPointLight3d(uint e, float r, float g, float b, float intensity, float radius) { Native.dse_compat_set_point_light_3d(e, r, g, b, intensity, radius); }
+    public static void CompatSetSpotLight3d(uint e, float dx, float dy, float dz, float r, float g, float b, float intensity, float radius, float inner, float outer) { Native.dse_compat_set_spot_light_3d(e, dx, dy, dz, r, g, b, intensity, radius, inner, outer); }
+    public static void CompatWorldToScreen(float wx, float wy, float wz, out float outSx, out float outSy, out int outVisible) { Native.dse_compat_world_to_screen(wx, wy, wz, out outSx, out outSy, out outVisible); }
+    public static int DirLightHas(uint e) { return Native.dse_dir_light_has(e); }
+    public static int PointLightHas(uint e) { return Native.dse_point_light_has(e); }
+    public static int SpotLightHas(uint e) { return Native.dse_spot_light_has(e); }
+    public static int SkyLightHas(uint e) { return Native.dse_sky_light_has(e); }
+    public static int DirLightGetShadowParams(uint e, out int outCastShadow, out float outStrength, out float outC0, out float outC1, out float outC2, out float outLambda) { return Native.dse_dir_light_get_shadow_params(e, out outCastShadow, out outStrength, out outC0, out outC1, out outC2, out outLambda); }
     public static int CutsceneCreate() { return Native.dse_cutscene_create(); }
     public static void CutsceneDestroy(int playerId) { Native.dse_cutscene_destroy(playerId); }
     public static void CutsceneShutdown() { Native.dse_cutscene_shutdown(); }
@@ -351,15 +348,18 @@ public static class Components {
     public static void AiAddInverter(int treeId, string name) { Native.dse_ai_add_inverter(treeId, name); }
     public static void AiAddSucceeder(int treeId, string name) { Native.dse_ai_add_succeeder(treeId, name); }
     public static void AiAddRepeater(int treeId, string name, int maxRepeats) { Native.dse_ai_add_repeater(treeId, name, maxRepeats); }
-    public static int AiGoapCreate() { return Native.dse_ai_goap_create(); }
-    public static void AiGoapDestroy(int plannerId) { Native.dse_ai_goap_destroy(plannerId); }
-    public static void AiGoapActionBegin(int plannerId, string name, float cost) { Native.dse_ai_goap_action_begin(plannerId, name, cost); }
-    public static void AiGoapActionPrecondition(int plannerId, string key, int value) { Native.dse_ai_goap_action_precondition(plannerId, key, value); }
-    public static void AiGoapActionEffect(int plannerId, string key, int value) { Native.dse_ai_goap_action_effect(plannerId, key, value); }
-    public static void AiGoapActionCommit(int plannerId) { Native.dse_ai_goap_action_commit(plannerId); }
-    public static void AiGoapStateClear(int plannerId) { Native.dse_ai_goap_state_clear(plannerId); }
-    public static void AiGoapStateSet(int plannerId, int which, string key, int value) { Native.dse_ai_goap_state_set(plannerId, which, key, value); }
-    public static int AiGoapPlan(int plannerId, [Out] byte[] @out, int cap) { return Native.dse_ai_goap_plan(plannerId, @out, cap); }
+    public static int CompatL10nLoad(string locale, string json) { return Native.dse_compat_l10n_load(locale, json); }
+    public static int UuidGet(uint e, [Out] byte[] @out, int cap) { return Native.dse_uuid_get(e, @out, cap); }
+    public static int UuidSet(uint e, string uuidStr, [Out] byte[] @out, int cap) { return Native.dse_uuid_set(e, uuidStr, @out, cap); }
+    public static uint UuidResolve(string uuidStr) { return Native.dse_uuid_resolve(uuidStr); }
+    public static void OpenWorldP2p5Shutdown() { Native.dse_open_world_p2p5_shutdown(); }
+    public static void PhysicsLodInit(float fullDistance, float reducedDistance, float simplifiedDistance) { Native.dse_physics_lod_init(fullDistance, reducedDistance, simplifiedDistance); }
+    public static void PhysicsLodRegisterBody(uint entityId, float x, float y, float z, float radius) { Native.dse_physics_lod_register_body(entityId, x, y, z, radius); }
+    public static int PhysicsLodEvaluate(float camX, float camY, float camZ, uint frame, out uint outIds, int cap) { return Native.dse_physics_lod_evaluate(camX, camY, camZ, frame, out outIds, cap); }
+    public static int PhysicsLodGetStats(out int outStats) { return Native.dse_physics_lod_get_stats(out outStats); }
+    public static void PhysicsLodWake(uint entityId) { Native.dse_physics_lod_wake(entityId); }
+    public static void PhysicsLodSleep(uint entityId) { Native.dse_physics_lod_sleep(entityId); }
+    public static void PhysicsLodShutdown() { Native.dse_physics_lod_shutdown(); }
 }
 
 public static class DayNight {
@@ -751,15 +751,15 @@ public static class Physics2D {
 }
 
 public static class Physics3D {
-    public static int Raycast(float ox, float oy, float oz, float dx, float dy, float dz, float maxDist, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal, out float outDistance) { return Native.dse_physics3d_raycast(ox, oy, oz, dx, dy, dz, maxDist, out outEntity, outPoint, outNormal, out outDistance); }
-    public static int OverlapSphere(float cx, float cy, float cz, float radius, [Out] uint[] @out, int cap) { return Native.dse_physics3d_overlap_sphere(cx, cy, cz, radius, @out, cap); }
-    public static int OverlapBox(float minX, float minY, float minZ, float maxX, float maxY, float maxZ, [Out] uint[] @out, int cap) { return Native.dse_physics3d_overlap_box(minX, minY, minZ, maxX, maxY, maxZ, @out, cap); }
     public static int GetCollisionCount() { return Native.dse_physics3d_get_collision_count(); }
     public static int GetCollisionEvents([Out] float[] outBuf, int cap) { return Native.dse_physics3d_get_collision_events(outBuf, cap); }
     public static int GetTriggerCount() { return Native.dse_physics3d_get_trigger_count(); }
     public static int GetTriggerEvents([Out] uint[] outEntities, [Out] int[] outTypes, int cap) { return Native.dse_physics3d_get_trigger_events(outEntities, outTypes, cap); }
     public static int Spherecast(float ox, float oy, float oz, float dx, float dy, float dz, float radius, float maxDist, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal, out float outDistance) { return Native.dse_physics3d_spherecast(ox, oy, oz, dx, dy, dz, radius, maxDist, out outEntity, outPoint, outNormal, out outDistance); }
     public static int Boxcast(float ox, float oy, float oz, float dx, float dy, float dz, float hx, float hy, float hz, float maxDist, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal, out float outDistance) { return Native.dse_physics3d_boxcast(ox, oy, oz, dx, dy, dz, hx, hy, hz, maxDist, out outEntity, outPoint, outNormal, out outDistance); }
+    public static int Raycast(float ox, float oy, float oz, float dx, float dy, float dz, float maxDist, out uint outEntity, [Out] float[] outPoint, [Out] float[] outNormal, out float outDistance) { return Native.dse_physics3d_raycast(ox, oy, oz, dx, dy, dz, maxDist, out outEntity, outPoint, outNormal, out outDistance); }
+    public static int OverlapSphere(float cx, float cy, float cz, float radius, [Out] uint[] @out, int cap) { return Native.dse_physics3d_overlap_sphere(cx, cy, cz, radius, @out, cap); }
+    public static int OverlapBox(float minX, float minY, float minZ, float maxX, float maxY, float maxZ, [Out] uint[] @out, int cap) { return Native.dse_physics3d_overlap_box(minX, minY, minZ, maxX, maxY, maxZ, @out, cap); }
 }
 
 public static class PostProcess {
@@ -809,6 +809,12 @@ public static class Rendering {
 }
 
 public static class RigidBody3D {
+    public static void SetKinematic(uint e, int kinematic) { Native.dse_rigidbody3d_set_kinematic(e, kinematic); }
+    public static void AddForceAtPosition(uint e, float fx, float fy, float fz, float px, float py, float pz) { Native.dse_rigidbody3d_add_force_at_position(e, fx, fy, fz, px, py, pz); }
+    public static void SetLinearDamping(uint e, float damping) { Native.dse_rigidbody3d_set_linear_damping(e, damping); }
+    public static float GetLinearDamping(uint e) { return Native.dse_rigidbody3d_get_linear_damping(e); }
+    public static void SetAngularDamping(uint e, float damping) { Native.dse_rigidbody3d_set_angular_damping(e, damping); }
+    public static float GetAngularDamping(uint e) { return Native.dse_rigidbody3d_get_angular_damping(e); }
     public static void AddForce(uint e, float fx, float fy, float fz) { Native.dse_rigidbody3d_add_force(e, fx, fy, fz); }
     public static void AddImpulse(uint e, float ix, float iy, float iz) { Native.dse_rigidbody3d_add_impulse(e, ix, iy, iz); }
     public static void AddTorque(uint e, float tx, float ty, float tz) { Native.dse_rigidbody3d_add_torque(e, tx, ty, tz); }
@@ -818,12 +824,6 @@ public static class RigidBody3D {
     public static void GetAngularVelocity(uint e, [Out] float[] outVel) { Native.dse_rigidbody3d_get_angular_velocity(e, outVel); }
     public static void SetGravity(uint e, int enabled) { Native.dse_rigidbody3d_set_gravity(e, enabled); }
     public static void Add(uint e, int type, float mass) { Native.dse_rigidbody3d_add(e, type, mass); }
-    public static void SetKinematic(uint e, int kinematic) { Native.dse_rigidbody3d_set_kinematic(e, kinematic); }
-    public static void AddForceAtPosition(uint e, float fx, float fy, float fz, float px, float py, float pz) { Native.dse_rigidbody3d_add_force_at_position(e, fx, fy, fz, px, py, pz); }
-    public static void SetLinearDamping(uint e, float damping) { Native.dse_rigidbody3d_set_linear_damping(e, damping); }
-    public static float GetLinearDamping(uint e) { return Native.dse_rigidbody3d_get_linear_damping(e); }
-    public static void SetAngularDamping(uint e, float damping) { Native.dse_rigidbody3d_set_angular_damping(e, damping); }
-    public static float GetAngularDamping(uint e) { return Native.dse_rigidbody3d_get_angular_damping(e); }
 }
 
 public static class Rope {
@@ -931,9 +931,6 @@ public static class Streaming {
 }
 
 public static class Terrain {
-    public static void Add(uint e, float originX, float originZ, float blockSize, int cols, int rows, float scale, int flipZ) { Native.dse_terrain_heightmap_add(e, originX, originZ, blockSize, cols, rows, scale, flipZ); }
-    public static void SetData(uint e, float[] heights, int count) { Native.dse_terrain_heightmap_set_data(e, heights, count); }
-    public static int GetHeight(float worldX, float worldZ, out float outY) { return Native.dse_terrain_get_height(worldX, worldZ, out outY); }
     public static void Add(uint e, string heightmapPath, float width, float depth, float maxHeight) { Native.dse_terrain_add(e, heightmapPath, width, depth, maxHeight); }
     public static void SetParams(uint e, int resX, int resZ, int maxLod, float lodFactor, int useDynamicLod) { Native.dse_terrain_set_params(e, resX, resZ, maxLod, lodFactor, useDynamicLod); }
     public static void SetHeight(uint e, int x, int z, float height) { Native.dse_terrain_set_height(e, x, z, height); }
@@ -949,6 +946,9 @@ public static class Terrain {
     public static int DeformRedo() { return Native.dse_terrain_deform_redo(); }
     public static float DeformSampleHeight(float x, float z) { return Native.dse_terrain_deform_sample_height(x, z); }
     public static void DeformShutdown() { Native.dse_terrain_deform_shutdown(); }
+    public static void Add(uint e, float originX, float originZ, float blockSize, int cols, int rows, float scale, int flipZ) { Native.dse_terrain_heightmap_add(e, originX, originZ, blockSize, cols, rows, scale, flipZ); }
+    public static void SetData(uint e, float[] heights, int count) { Native.dse_terrain_heightmap_set_data(e, heights, count); }
+    public static int GetHeight(float worldX, float worldZ, out float outY) { return Native.dse_terrain_get_height(worldX, worldZ, out outY); }
 }
 
 public static class TrailRenderer {

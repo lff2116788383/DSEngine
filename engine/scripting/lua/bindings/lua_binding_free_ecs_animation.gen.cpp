@@ -418,6 +418,81 @@ int L_dse_animlayer_set_bone_mask(lua_State* L) {
     return 0;
 }
 
+int L_dse_anim2d_pop_event(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out = luaL_checkstring(L, 2);
+    int cap = static_cast<int>(luaL_checkinteger(L, 3));
+    int _ret = dse_anim2d_pop_event(e, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_anim3d_add_transition(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* from_state = luaL_checkstring(L, 2);
+    const char* to_state = luaL_checkstring(L, 3);
+    float transition_duration = static_cast<float>(luaL_checknumber(L, 4));
+    int has_exit_time = static_cast<int>(luaL_checkinteger(L, 5));
+    float exit_time = static_cast<float>(luaL_checknumber(L, 6));
+    int cond_count = static_cast<int>(luaL_checkinteger(L, 7));
+    const char* cond_names = luaL_checkstring(L, 8);
+    int cond_modes = static_cast<int>(luaL_checkinteger(L, 9));
+    float cond_thresholds = static_cast<float>(luaL_checknumber(L, 10));
+    int cond_ints = static_cast<int>(luaL_checkinteger(L, 11));
+    dse_anim3d_add_transition(e, from_state, to_state, transition_duration, has_exit_time, exit_time, cond_count, cond_names, cond_modes, cond_thresholds, cond_ints);
+    return 0;
+}
+
+int L_dse_anim3d_get_state(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out_state = luaL_checkstring(L, 2);
+    int state_cap = static_cast<int>(luaL_checkinteger(L, 3));
+    float out_norm = static_cast<float>(luaL_checknumber(L, 4));
+    float out_time = static_cast<float>(luaL_checknumber(L, 5));
+    float out_speed = static_cast<float>(luaL_checknumber(L, 6));
+    int out_loop = static_cast<int>(luaL_checkinteger(L, 7));
+    int out_transitioning = static_cast<int>(luaL_checkinteger(L, 8));
+    int out_bone_count = static_cast<int>(luaL_checkinteger(L, 9));
+    int out_has_skel = static_cast<int>(luaL_checkinteger(L, 10));
+    int _ret = dse_anim3d_get_state(e, out_state, state_cap, out_norm, out_time, out_speed, out_loop, out_transitioning, out_bone_count, out_has_skel);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_anim3d_init_fsm(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    dse_anim3d_init_fsm(e);
+    return 0;
+}
+
+int L_dse_anim3d_pop_event(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out = luaL_checkstring(L, 2);
+    int cap = static_cast<int>(luaL_checkinteger(L, 3));
+    int _ret = dse_anim3d_pop_event(e, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_animlayer_set_blend_tree_1d(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    int idx = static_cast<int>(luaL_checkinteger(L, 2));
+    const char* paths = luaL_checkstring(L, 3);
+    float thresholds = static_cast<float>(luaL_checknumber(L, 4));
+    float speeds = static_cast<float>(luaL_checknumber(L, 5));
+    int count = static_cast<int>(luaL_checkinteger(L, 6));
+    dse_animlayer_set_blend_tree_1d(e, idx, paths, thresholds, speeds, count);
+    return 0;
+}
+
+int L_dse_morph_simple_add_target(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* name = luaL_checkstring(L, 2);
+    float weight = static_cast<float>(luaL_checknumber(L, 3));
+    dse_morph_simple_add_target(e, name, weight);
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -476,6 +551,13 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"morph_get_weight", L_dse_morph_get_weight},
         {"morph_get_target_count", L_dse_morph_get_target_count},
         {"set_anim_layer_bone_mask", L_dse_animlayer_set_bone_mask},
+        {"anim2d_pop_event", L_dse_anim2d_pop_event},
+        {"anim3d_add_transition", L_dse_anim3d_add_transition},
+        {"anim3d_get_state", L_dse_anim3d_get_state},
+        {"anim3d_init_fsm", L_dse_anim3d_init_fsm},
+        {"anim3d_pop_event", L_dse_anim3d_pop_event},
+        {"animlayer_set_blend_tree_1d", L_dse_animlayer_set_blend_tree_1d},
+        {"morph_simple_add_target", L_dse_morph_simple_add_target},
     });
     lua_pop(L, 2);
 }

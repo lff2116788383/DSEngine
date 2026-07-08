@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- CharacterMovementState ---- */
 extern "C" void dse_character_movement_get_input_direction(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::CharacterMovementState>(e)) { *x = c->input_direction.x; *y = c->input_direction.y; *z = c->input_direction.z; }
 }
 extern "C" void dse_character_movement_set_input_direction(uint32_t e, float x, float y, float z) {
@@ -63,6 +64,7 @@ extern "C" void dse_character_movement_set_input_crouch(uint32_t e, int v) {
     }
 }
 extern "C" void dse_character_movement_get_velocity(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::CharacterMovementState>(e)) { *x = c->velocity.x; *y = c->velocity.y; *z = c->velocity.z; }
 }
 extern "C" int dse_character_movement_get_is_grounded(uint32_t e) {

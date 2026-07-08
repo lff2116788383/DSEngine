@@ -487,6 +487,7 @@ extern "C" void dse_post_process_set_outline_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_post_process_get_outline_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::PostProcessComponent>(e)) { *x = c->outline_color.x; *y = c->outline_color.y; *z = c->outline_color.z; }
 }
 extern "C" void dse_post_process_set_outline_color(uint32_t e, float x, float y, float z) {
@@ -531,6 +532,7 @@ extern "C" void dse_post_process_set_light_shaft_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_post_process_get_light_shaft_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::PostProcessComponent>(e)) { *x = c->light_shaft_color.x; *y = c->light_shaft_color.y; *z = c->light_shaft_color.z; }
 }
 extern "C" void dse_post_process_set_light_shaft_color(uint32_t e, float x, float y, float z) {
@@ -602,6 +604,7 @@ extern "C" void dse_post_process_set_fog_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_post_process_get_fog_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::PostProcessComponent>(e)) { *x = c->fog_color.x; *y = c->fog_color.y; *z = c->fog_color.z; }
 }
 extern "C" void dse_post_process_set_fog_color(uint32_t e, float x, float y, float z) {

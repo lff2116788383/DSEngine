@@ -25,6 +25,25 @@ int L_dse_api_version(lua_State* L) {
     return 1;
 }
 
+int L_dse_uuid_get(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out = luaL_checkstring(L, 2);
+    int cap = static_cast<int>(luaL_checkinteger(L, 3));
+    int _ret = dse_uuid_get(e, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_uuid_set(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* uuid_str = luaL_checkstring(L, 2);
+    const char* out = luaL_checkstring(L, 3);
+    int cap = static_cast<int>(luaL_checkinteger(L, 4));
+    int _ret = dse_uuid_set(e, uuid_str, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 } // namespace
 
 void RegisterFreeFn_api_core(lua_State* L) {
@@ -37,6 +56,8 @@ void RegisterFreeFn_api_core(lua_State* L) {
     }
     helper::RegisterBindings(L, {
         {"api_version", L_dse_api_version},
+        {"uuid_get", L_dse_uuid_get},
+        {"uuid_set", L_dse_uuid_set},
     });
     lua_pop(L, 1);
 }

@@ -73,6 +73,49 @@ int L_dse_meshlet_cull_begin_frame(lua_State* L) {
     return 0;
 }
 
+int L_dse_meshlet_build(lua_State* L) {
+    float positions = static_cast<float>(luaL_checknumber(L, 1));
+    int pos_count = static_cast<int>(luaL_checkinteger(L, 2));
+    int indices = static_cast<int>(luaL_checkinteger(L, 3));
+    int idx_count = static_cast<int>(luaL_checkinteger(L, 4));
+    int max_vertices = static_cast<int>(luaL_checkinteger(L, 5));
+    int max_triangles = static_cast<int>(luaL_checkinteger(L, 6));
+    uint32_t _ret = dse_meshlet_build(positions, pos_count, indices, idx_count, max_vertices, max_triangles);
+    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+    return 1;
+}
+
+int L_dse_meshlet_cull_add_instance(lua_State* L) {
+    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
+    int reg_handle = static_cast<int>(luaL_checkinteger(L, 2));
+    float matrix16 = static_cast<float>(luaL_checknumber(L, 3));
+    dse_meshlet_cull_add_instance(cull_handle, reg_handle, matrix16);
+    return 0;
+}
+
+int L_dse_meshlet_cull_execute_cpu(lua_State* L) {
+    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
+    float vp_matrix16 = static_cast<float>(luaL_checknumber(L, 2));
+    float cam_x = static_cast<float>(luaL_checknumber(L, 3));
+    float cam_y = static_cast<float>(luaL_checknumber(L, 4));
+    float cam_z = static_cast<float>(luaL_checknumber(L, 5));
+    int flags = static_cast<int>(luaL_checkinteger(L, 6));
+    uint32_t _ret = dse_meshlet_cull_execute_cpu(cull_handle, vp_matrix16, cam_x, cam_y, cam_z, flags);
+    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+    return 1;
+}
+
+int L_dse_meshlet_cull_prepare(lua_State* L) {
+    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
+    float vp_matrix16 = static_cast<float>(luaL_checknumber(L, 2));
+    float cam_x = static_cast<float>(luaL_checknumber(L, 3));
+    float cam_y = static_cast<float>(luaL_checknumber(L, 4));
+    float cam_z = static_cast<float>(luaL_checknumber(L, 5));
+    uint32_t _ret = dse_meshlet_cull_prepare(cull_handle, vp_matrix16, cam_x, cam_y, cam_z);
+    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+    return 1;
+}
+
 } // namespace
 
 void RegisterMeshletBindings(lua_State* L) {
@@ -93,6 +136,10 @@ void RegisterMeshletBindings(lua_State* L) {
         {"cull_register", L_dse_meshlet_cull_register},
         {"cull_unregister", L_dse_meshlet_cull_unregister},
         {"cull_begin_frame", L_dse_meshlet_cull_begin_frame},
+        {"meshlet_build", L_dse_meshlet_build},
+        {"meshlet_cull_add_instance", L_dse_meshlet_cull_add_instance},
+        {"meshlet_cull_execute_cpu", L_dse_meshlet_cull_execute_cpu},
+        {"meshlet_cull_prepare", L_dse_meshlet_cull_prepare},
     });
     lua_pop(L, 2);
 }

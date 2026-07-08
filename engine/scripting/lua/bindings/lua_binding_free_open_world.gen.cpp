@@ -294,6 +294,11 @@ int L_dse_procedural_random_float(lua_State* L) {
     return 1;
 }
 
+int L_dse_open_world_p2p5_shutdown(lua_State* L) {
+    dse_open_world_p2p5_shutdown();
+    return 0;
+}
+
 } // namespace
 
 void RegisterOpenWorldBindings(lua_State* L) {
@@ -343,6 +348,7 @@ void RegisterOpenWorldBindings(lua_State* L) {
         {"proceduralfbm2d", L_dse_procedural_fbm2d},
         {"proceduralrandomseed", L_dse_procedural_random_seed},
         {"proceduralrandomfloat", L_dse_procedural_random_float},
+        {"open_world_p2p5_shutdown", L_dse_open_world_p2p5_shutdown},
     });
     lua_pop(L, 2);
 }

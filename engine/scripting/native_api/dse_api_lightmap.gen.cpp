@@ -51,6 +51,7 @@ extern "C" void dse_lightmap_set_intensity(uint32_t e, float v) {
     }
 }
 extern "C" void dse_lightmap_get_st_offset(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<dse::render::LightmapComponent>(e)) { *x = c->st_offset.x; *y = c->st_offset.y; *z = c->st_offset.z; *w = c->st_offset.w; }
 }
 extern "C" void dse_lightmap_set_st_offset(uint32_t e, float x, float y, float z, float w) {

@@ -105,6 +105,7 @@ extern "C" void dse_impostor_set_impostor_size(uint32_t e, float v) {
     }
 }
 extern "C" void dse_impostor_get_pivot_offset(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::ImpostorComponent>(e)) { *x = c->pivot_offset.x; *y = c->pivot_offset.y; *z = c->pivot_offset.z; }
 }
 extern "C" void dse_impostor_set_pivot_offset(uint32_t e, float x, float y, float z) {

@@ -41,6 +41,18 @@ int L_dse_http_poll(lua_State* L) {
     return 1;
 }
 
+int L_dse_http_get_response(lua_State* L) {
+    int request_id = static_cast<int>(luaL_checkinteger(L, 1));
+    int out_status = static_cast<int>(luaL_checkinteger(L, 2));
+    const char* out_body = luaL_checkstring(L, 3);
+    int body_cap = static_cast<int>(luaL_checkinteger(L, 4));
+    const char* out_error = luaL_checkstring(L, 5);
+    int error_cap = static_cast<int>(luaL_checkinteger(L, 6));
+    int _ret = dse_http_get_response(request_id, out_status, out_body, body_cap, out_error, error_cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 } // namespace
 
 void RegisterHttpBindings(lua_State* L) {
@@ -56,6 +68,7 @@ void RegisterHttpBindings(lua_State* L) {
         {"update", L_dse_http_update},
         {"available", L_dse_http_available},
         {"poll", L_dse_http_poll},
+        {"http_get_response", L_dse_http_get_response},
     });
     lua_pop(L, 2);
 }

@@ -109,6 +109,7 @@ extern "C" void dse_volumetric_cloud_set_erosion(uint32_t e, float v) {
     }
 }
 extern "C" void dse_volumetric_cloud_get_wind_direction(uint32_t e, float* x, float* y) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f;
     if (const auto* c = GCC<dse::VolumetricCloudComponent>(e)) { *x = c->wind_direction.x; *y = c->wind_direction.y; }
 }
 extern "C" void dse_volumetric_cloud_set_wind_direction(uint32_t e, float x, float y) {

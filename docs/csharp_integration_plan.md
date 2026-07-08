@@ -9,7 +9,7 @@
 
 | 层 | 状态 | 文件 |
 |---|---|---|
-| C ABI 头 | ✅ 完整 (847行, ~400+ 导出函数) | `engine/scripting/native_api/dse_api.h` |
+| C ABI 头 | ✅ 完整 (模块化聚合头, ~400+ 导出函数) | `dse_api.h` → `dse_api_core.h` / `dse_api_render.h` / `dse_api_physics.h` / `dse_api_world.h` / `dse_api_services.h` / `dse_api_gameplay.h` |
 | C ABI 实现 | ✅ 编译通过 | `dse_api_*.gen.cpp` (12组件) + 手写 `dse_api.cpp` |
 | Codegen | ✅ 可运行 | `tools/codegen/codegen.py` + Jinja2 模板 |
 | binding_defs.json | ✅ 全量字段 | 12组件, 覆盖 Transform/Camera/Mesh/Light/Physics/PostProcess/Animator |

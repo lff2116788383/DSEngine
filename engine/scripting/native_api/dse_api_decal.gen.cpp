@@ -37,6 +37,7 @@ extern "C" void dse_decal_set_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_decal_get_color(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<dse::DecalComponent>(e)) { *x = c->color.x; *y = c->color.y; *z = c->color.z; *w = c->color.w; }
 }
 extern "C" void dse_decal_set_color(uint32_t e, float x, float y, float z, float w) {

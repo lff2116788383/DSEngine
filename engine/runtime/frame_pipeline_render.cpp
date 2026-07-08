@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * @file frame_pipeline_render.cpp
  * @brief FramePipeline render path â€” RunRenderInternal, BuildRenderGraph, ExecuteRenderGraph.
  */
@@ -63,7 +63,7 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
     const bool can_prepare_gpu_scene = render_resources_.gpu_driven_supported
         && gpu_driven_requested_ && gpu_scene_provider_available
         && (!local_lights_present || gpu_driven_policy_ == GpuDrivenPolicy::Force);
-    if (can_prepare_gpu_scene && runtime_context_.world && !render_thread_active_.load()) {
+    if (can_prepare_gpu_scene && runtime_context_.world && !render_thread_mgr_->IsActive()) {
         const int prepared = modules_impl_->PrepareGPUScene(*runtime_context_.world, render_pass_context_);
         render_pass_context_.gpu_driven_scene_prepared = prepared > 0;
         render_pass_context_.gpu_driven_active_this_frame =
@@ -206,9 +206,8 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
 
 void FramePipeline::CollectRuntimeStats() {
     if (!runtime_context_.world || !runtime_context_.rhi_device) return;
-    stats_accumulator_ += Time::delta_time();
-    if (stats_accumulator_ >= 1.0f) {
-        stats_accumulator_ = 0.0f;
+    stats_.AccumulateStatsTimer(Time::delta_time());
+    if (stats_.StatsWindowElapsed()) {
         const auto& stats = runtime_context_.rhi_device->LastFrameStats();
         size_t entity_count = runtime_context_.world->EntityCount();
         size_t physics_bodies = 0;
@@ -241,9 +240,9 @@ void FramePipeline::CollectRuntimeStats() {
             const int active_particle_count = particle_system.active_particle_count;
             active_particles += static_cast<size_t>(active_particle_count > 0 ? active_particle_count : 0);
         }
-        float avg_update_ms = update_samples_ > 0 ? update_time_accumulator_ms_ / static_cast<float>(update_samples_) : 0.0f;
-        float avg_fixed_ms = fixed_samples_ > 0 ? fixed_time_accumulator_ms_ / static_cast<float>(fixed_samples_) : 0.0f;
-        float avg_render_ms = render_samples_ > 0 ? render_time_accumulator_ms_ / static_cast<float>(render_samples_) : 0.0f;
+        float avg_update_ms = stats_.AvgUpdateMs();
+        float avg_fixed_ms = stats_.AvgFixedMs();
+        float avg_render_ms = stats_.AvgRenderMs();
         auto& asset_manager = RequireAssetManager(runtime_context_.asset_manager);
         std::size_t pending_callbacks = asset_manager.PendingMainThreadCallbacks();
         std::size_t pending_callbacks_hwm = asset_manager.PendingMainThreadCallbacksHighWatermark();
@@ -272,12 +271,7 @@ void FramePipeline::CollectRuntimeStats() {
                        pending_callbacks,
                        pending_callbacks_hwm,
                        callback_budget_per_frame_);
-        update_time_accumulator_ms_ = 0.0f;
-        fixed_time_accumulator_ms_ = 0.0f;
-        render_time_accumulator_ms_ = 0.0f;
-        update_samples_ = 0;
-        fixed_samples_ = 0;
-        render_samples_ = 0;
+        stats_.ResetAccumulators();
     }
 }
 

@@ -26,7 +26,7 @@
 │  ┌────────────────────────────────────────────────────────────────┐ │
 │  │                     业务模块层 (modules/)                      │ │
 │  │  ┌─────────────────────┐  ┌──────────────────────────────┐    │ │
-│  │  │ Gameplay2D Module   │  │ Gameplay3D Module (DLL)      │    │ │
+│  │  │ Gameplay2D Module   │  │ Gameplay3D Module (静态编入) │    │ │
 │  │  │  Sprite / UI / Tile │  │  Mesh/Particle/Animation    │    │ │
 │  │  │  Animation / Spine  │  │  Physics3D/Fluid/Cloth/Rope │    │ │
 │  │  │  Particle / Camera  │  │  Fracture/Softbody/Vehicle  │    │ │

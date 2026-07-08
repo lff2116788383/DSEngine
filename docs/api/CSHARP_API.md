@@ -6,7 +6,7 @@
 > 组件字段访问器由 `tools/codegen/codegen.py` 从 `binding_defs.json` 自动生成至
 > `GameScripts/DSEngine.Runtime/Generated/Native.gen.cs`（45 组件 / 816 访问器）；
 > 组件高级封装类自动生成至 `Generated/Components.gen.cs`。
-> 手写 C ABI（`dse_api.h`，动画 FSM/输入/物理动力学/载具/天气/音频/导航/UI/场景/本地化等 252 函数）由
+> 手写 C ABI（`dse_api.h` 聚合头，按模块拆分为 `dse_api_core.h` / `dse_api_render.h` / `dse_api_physics.h` / `dse_api_world.h` / `dse_api_services.h` / `dse_api_gameplay.h`；动画 FSM/输入/物理动力学/载具/天气/音频/导航/UI/场景/本地化等 252 函数）由
 > `tools/codegen/gen_csharp_manual.py` 生成 `Generated/NativeManual.gen.cs`（P/Invoke）
 > 与 `Generated/ApiManual.gen.cs`（`DSEngine.Api` 公开门面，45 个静态类）。
 > 其余高级封装位于 `Core/`、`Math/`、`Components/`、`Network/` 子目录。

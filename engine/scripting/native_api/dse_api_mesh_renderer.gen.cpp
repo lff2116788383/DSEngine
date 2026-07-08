@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- MeshRendererComponent ---- */
 extern "C" void dse_mesh_renderer_get_color(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<dse::MeshRendererComponent>(e)) { *x = c->color.x; *y = c->color.y; *z = c->color.z; *w = c->color.w; }
 }
 extern "C" void dse_mesh_renderer_set_color(uint32_t e, float x, float y, float z, float w) {
@@ -61,6 +62,7 @@ extern "C" void dse_mesh_renderer_set_roughness(uint32_t e, float v) {
     }
 }
 extern "C" void dse_mesh_renderer_get_emissive(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::MeshRendererComponent>(e)) { *x = c->emissive.x; *y = c->emissive.y; *z = c->emissive.z; }
 }
 extern "C" void dse_mesh_renderer_set_emissive(uint32_t e, float x, float y, float z) {

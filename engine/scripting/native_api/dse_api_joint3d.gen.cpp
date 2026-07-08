@@ -46,6 +46,7 @@ extern "C" void dse_joint3d_set_connected_entity_id(uint32_t e, int v) {
     }
 }
 extern "C" void dse_joint3d_get_anchor(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::Joint3DComponent>(e)) { *x = c->anchor.x; *y = c->anchor.y; *z = c->anchor.z; }
 }
 extern "C" void dse_joint3d_set_anchor(uint32_t e, float x, float y, float z) {
@@ -54,6 +55,7 @@ extern "C" void dse_joint3d_set_anchor(uint32_t e, float x, float y, float z) {
     }
 }
 extern "C" void dse_joint3d_get_connected_anchor(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::Joint3DComponent>(e)) { *x = c->connected_anchor.x; *y = c->connected_anchor.y; *z = c->connected_anchor.z; }
 }
 extern "C" void dse_joint3d_set_connected_anchor(uint32_t e, float x, float y, float z) {
@@ -62,6 +64,7 @@ extern "C" void dse_joint3d_set_connected_anchor(uint32_t e, float x, float y, f
     }
 }
 extern "C" void dse_joint3d_get_axis(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::Joint3DComponent>(e)) { *x = c->axis.x; *y = c->axis.y; *z = c->axis.z; }
 }
 extern "C" void dse_joint3d_set_axis(uint32_t e, float x, float y, float z) {

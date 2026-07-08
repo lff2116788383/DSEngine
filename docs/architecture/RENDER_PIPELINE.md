@@ -868,7 +868,7 @@ CompiledRenderPipeline + RenderQueues
 
 当前方案没有要求绕过 RenderGraph、没有让 Lua 直接操作 RHI，也没有要求立即重写为 Deferred，因此没有新增明显危险技术债。但 DSE 现有渲染架构仍有以下迁移债，需要随 Phase 1-5 逐步消化：
 
-- [ ] `FramePipeline` 仍承担 pass 组装、资源准备、运行时状态同步等多重职责。
+- [x] ~~`FramePipeline` 仍承担 pass 组装、资源准备、运行时状态同步等多重职责。~~ 渲染线程管理已提取为 `RenderThreadManager`，帧统计已提取为 `FrameStatsCollector`；pass 组装与资源准备仍由 `FramePipeline` 承担。
 - [ ] `RenderPassContext` 已膨胀，需要拆分为 `RenderBlackboard`、pipeline settings、frame constants 与 scene refs。
 - [ ] builtin pass 缺少统一 metadata / 参数 schema / backend support 声明。
 - [ ] `PipelineValidator` 尚未实现，Lua/profile 配置错误还不能在执行前完整拦截。

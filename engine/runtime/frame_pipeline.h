@@ -12,10 +12,11 @@
 #include <vector>
 #include <string>
 #include <cstddef>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
+
+// Extracted responsibility classes
+#include "engine/runtime/frame_stats_collector.h"
+
+class RenderThreadManager;  // forward-declared; owned via unique_ptr
 
 // Value-type / public-interface types that must be fully defined here:
 #include "engine/render/rhi/rhi_device.h"
@@ -135,7 +136,7 @@ public:
                                    std::function<void()> present);
 
     /// Phase 2: 查询渲染线程是否已启动
-    bool IsRenderThreadActive() const { return render_thread_active_.load(); }
+    bool IsRenderThreadActive() const;
 
     /// Reset the Physics3D system (release all PhysX actors from play-mode registry).
     /// Call before restoring the edit-mode registry snapshot on Play→Stop transition.
@@ -165,10 +166,10 @@ public:
      * @brief 获取上一帧的 DrawCall 数量
      * @return DrawCall 总数
      */
-    int LastDrawCalls() const;
-    int LastGpuDrivenActive() const;
-    int LastGpuIndirectDrawCount() const;
-    int LastGpuTotalInstances() const;
+    int LastDrawCalls() const { return stats_.LastDrawCalls(); }
+    int LastGpuDrivenActive() const { return stats_.LastGpuDrivenActive(); }
+    int LastGpuIndirectDrawCount() const { return stats_.LastGpuIndirectDrawCount(); }
+    int LastGpuTotalInstances() const { return stats_.LastGpuTotalInstances(); }
 
     /// 将当前帧提交到显示器（DX11/Vulkan 交换链 Present）
     /// 在 Tick() 之后、render 计时之外调用
@@ -190,19 +191,19 @@ public:
      * @brief 获取上一帧中的材质切换次数
      * @return 材质状态切换总数
      */
-    int LastMaterialSwitches() const;
+    int LastMaterialSwitches() const { return stats_.LastMaterialSwitches(); }
 
     /**
      * @brief 获取上一帧中最大的精灵图批处理数量
      * @return 单个批次内包含的最大精灵数
      */
-    int LastMaxBatchSprites() const;
+    int LastMaxBatchSprites() const { return stats_.LastMaxBatchSprites(); }
 
     /**
      * @brief 获取上一帧提交渲染的精灵总数
      * @return 精灵数量
      */
-    int LastSpriteCount() const;
+    int LastSpriteCount() const { return stats_.LastSpriteCount(); }
 
     /**
      * @brief 注入用于修改底层平台窗口标题的回调函数
@@ -348,11 +349,7 @@ private:
     void PrepareGPUSceneAndQueues();     ///< Update 阶段（主线程）：GPU 场景准备 + 渲染队列构建 + web 蒙皮烘焙
     void CollectRuntimeStats();          ///< 主线程：每秒运行时统计日志（读 World，仅同步路径）
     void ExecuteRenderFrame();           ///< Render 阶段（渲染线程或同步）：仅消费快照与已提取数据，不触碰 World
-    void StartRenderThread();            ///< Init 末尾启动渲染线程
-    void StopRenderThread();             ///< Shutdown 时停止渲染线程
-    void RenderThreadFunc();             ///< 渲染线程主循环
-    void WaitForRenderComplete();        ///< 主线程等待上一帧渲染完成
-    void SignalRenderThread();           ///< 主线程唤醒渲染线程开始新帧
+    // Render thread management is delegated to RenderThreadManager
 
     void BuildRenderGraph();
     void ExecuteRenderGraph(CommandBuffer& cmd_buffer);
@@ -368,9 +365,6 @@ private:
     GpuDrivenPolicy gpu_driven_policy_ = GpuDrivenPolicy::Auto;
     bool gpu_driven_requested_ = true;
     bool gpu_driven_diag_ = false;
-    int last_gpu_driven_active_ = 0;
-    int last_gpu_indirect_draw_count_ = 0;
-    int last_gpu_total_instances_ = 0;
 #ifdef DSE_ENABLE_3D
     std::shared_ptr<dse::physics3d::IPhysics3DSystem> physics3d_system_;
 #endif
@@ -390,18 +384,8 @@ private:
     std::vector<LoadedModule> modules_;
     
     bool initialized_ = false;
-    float stats_accumulator_ = 0.0f;
-    int last_draw_calls_ = 0;
-    int last_material_switches_ = 0;
-    int last_max_batch_sprites_ = 0;
-    int last_sprite_count_ = 0;
+    FrameStatsCollector stats_;
     std::size_t callback_budget_per_frame_ = 16;
-    float update_time_accumulator_ms_ = 0.0f;
-    float fixed_time_accumulator_ms_ = 0.0f;
-    float render_time_accumulator_ms_ = 0.0f;
-    int update_samples_ = 0;
-    int fixed_samples_ = 0;
-    int render_samples_ = 0;
     dse::runtime::RenderPipelineResources render_resources_;
 
     /// 渲染 Pass 共享上下文
@@ -423,15 +407,8 @@ private:
     void CaptureThinSnapshot();
     void FlipSnapshotIndex() { snapshot_write_idx_ = 1 - snapshot_write_idx_; }
 
-    /// Phase 2: 渲染线程同步原语
-    std::thread render_thread_;
-    std::mutex render_mutex_;
-    std::condition_variable render_cv_;      ///< 渲染线程等待新帧信号
-    std::condition_variable main_cv_;        ///< 主线程等待渲染完成
-    bool render_frame_pending_ = false;      ///< 有新帧待渲染
-    bool render_frame_done_ = true;          ///< 上一帧渲染已完成
-    bool render_thread_exit_ = false;        ///< 退出信号
-    std::atomic<bool> render_thread_active_{false};  ///< 渲染线程是否已启动
+    /// Phase 2: 渲染线程管理（委托给 RenderThreadManager）
+    std::unique_ptr<RenderThreadManager> render_thread_mgr_;
 
     /// 已注册的渲染 Pass（按注册顺序，DAG 排序由 RenderGraph 决定）
     std::vector<std::unique_ptr<dse::render::IRenderPass>> registered_passes_;

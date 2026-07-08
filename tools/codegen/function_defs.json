@@ -15,6 +15,56 @@
               "type": "uint32"
             }
           ]
+        },
+        {
+          "c_name": "dse_uuid_get",
+          "lua_name": "uuid_get",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_uuid_set",
+          "lua_name": "uuid_set",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "uuid_str",
+              "type": "string"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         }
       ],
       "register_func": "RegisterFreeFn_api_core"
@@ -103,6 +153,83 @@
             {
               "name": "e",
               "type": "uint32"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_audio_bus_get_names",
+          "lua_name": "audio_bus_get_names",
+          "params": [
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_audio_snapshot_list",
+          "lua_name": "audio_snapshot_list",
+          "params": [
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_audio_source_get_state",
+          "lua_name": "audio_source_get_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out_flags",
+              "type": "int"
+            },
+            {
+              "name": "out_params",
+              "type": "float"
+            },
+            {
+              "name": "out_runtime_handle",
+              "type": "int"
+            },
+            {
+              "name": "out_clip_size",
+              "type": "int"
+            },
+            {
+              "name": "out_path",
+              "type": "string"
+            },
+            {
+              "name": "path_cap",
+              "type": "int"
             }
           ],
           "returns": [
@@ -506,6 +633,115 @@
               "type": "int"
             }
           ]
+        },
+        {
+          "c_name": "dse_ecs_get_queryable_components",
+          "lua_name": "ecs_get_queryable_components",
+          "params": [
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_ecs_get_script_path",
+          "lua_name": "ecs_get_script_path",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_particle_system_3d_get_state",
+          "lua_name": "particle_system_3d_get_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out_active",
+              "type": "int"
+            },
+            {
+              "name": "out_max_particles",
+              "type": "int"
+            },
+            {
+              "name": "out_emission_rate",
+              "type": "float"
+            },
+            {
+              "name": "out_life",
+              "type": "float"
+            },
+            {
+              "name": "out_size",
+              "type": "float"
+            },
+            {
+              "name": "out_speed",
+              "type": "float"
+            },
+            {
+              "name": "out_gravity",
+              "type": "float"
+            },
+            {
+              "name": "out_color",
+              "type": "float"
+            },
+            {
+              "name": "out_tex",
+              "type": "string"
+            },
+            {
+              "name": "tex_cap",
+              "type": "int"
+            },
+            {
+              "name": "out_enabled",
+              "type": "int"
+            },
+            {
+              "name": "out_initialized",
+              "type": "int"
+            },
+            {
+              "name": "out_texture_handle",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         }
       ],
       "register_func": "RegisterFreeFn_ecs_gap"
@@ -539,6 +775,52 @@
             {
               "name": "e",
               "type": "uint32"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_ui_get_dropdown_value",
+          "lua_name": "ui_get_dropdown_value",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_ui_get_text_input_text",
+          "lua_name": "ui_get_text_input_text",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
             }
           ],
           "returns": [
@@ -2877,6 +3159,215 @@
             "name": "bones",
             "stack_index": 3
           }
+        },
+        {
+          "c_name": "dse_anim2d_pop_event",
+          "lua_name": "anim2d_pop_event",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_anim3d_add_transition",
+          "lua_name": "anim3d_add_transition",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "from_state",
+              "type": "string"
+            },
+            {
+              "name": "to_state",
+              "type": "string"
+            },
+            {
+              "name": "transition_duration",
+              "type": "float"
+            },
+            {
+              "name": "has_exit_time",
+              "type": "int"
+            },
+            {
+              "name": "exit_time",
+              "type": "float"
+            },
+            {
+              "name": "cond_count",
+              "type": "int"
+            },
+            {
+              "name": "cond_names",
+              "type": "string"
+            },
+            {
+              "name": "cond_modes",
+              "type": "int"
+            },
+            {
+              "name": "cond_thresholds",
+              "type": "float"
+            },
+            {
+              "name": "cond_ints",
+              "type": "int"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_anim3d_get_state",
+          "lua_name": "anim3d_get_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out_state",
+              "type": "string"
+            },
+            {
+              "name": "state_cap",
+              "type": "int"
+            },
+            {
+              "name": "out_norm",
+              "type": "float"
+            },
+            {
+              "name": "out_time",
+              "type": "float"
+            },
+            {
+              "name": "out_speed",
+              "type": "float"
+            },
+            {
+              "name": "out_loop",
+              "type": "int"
+            },
+            {
+              "name": "out_transitioning",
+              "type": "int"
+            },
+            {
+              "name": "out_bone_count",
+              "type": "int"
+            },
+            {
+              "name": "out_has_skel",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_anim3d_init_fsm",
+          "lua_name": "anim3d_init_fsm",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_anim3d_pop_event",
+          "lua_name": "anim3d_pop_event",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_animlayer_set_blend_tree_1d",
+          "lua_name": "animlayer_set_blend_tree_1d",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "idx",
+              "type": "int"
+            },
+            {
+              "name": "paths",
+              "type": "string"
+            },
+            {
+              "name": "thresholds",
+              "type": "float"
+            },
+            {
+              "name": "speeds",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_morph_simple_add_target",
+          "lua_name": "morph_simple_add_target",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "weight",
+              "type": "float"
+            }
+          ],
+          "returns": []
         }
       ]
     },
@@ -8257,6 +8748,41 @@
             "stride": 1,
             "mode": "flat_int"
           }
+        },
+        {
+          "c_name": "dse_http_get_response",
+          "lua_name": "http_get_response",
+          "params": [
+            {
+              "name": "request_id",
+              "type": "int"
+            },
+            {
+              "name": "out_status",
+              "type": "int"
+            },
+            {
+              "name": "out_body",
+              "type": "string"
+            },
+            {
+              "name": "body_cap",
+              "type": "int"
+            },
+            {
+              "name": "out_error",
+              "type": "string"
+            },
+            {
+              "name": "error_cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         }
       ]
     },
@@ -8428,6 +8954,126 @@
               "type": "uint32"
             }
           ]
+        },
+        {
+          "c_name": "dse_meshlet_build",
+          "lua_name": "meshlet_build",
+          "params": [
+            {
+              "name": "positions",
+              "type": "float"
+            },
+            {
+              "name": "pos_count",
+              "type": "int"
+            },
+            {
+              "name": "indices",
+              "type": "int"
+            },
+            {
+              "name": "idx_count",
+              "type": "int"
+            },
+            {
+              "name": "max_vertices",
+              "type": "int"
+            },
+            {
+              "name": "max_triangles",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_meshlet_cull_add_instance",
+          "lua_name": "meshlet_cull_add_instance",
+          "params": [
+            {
+              "name": "cull_handle",
+              "type": "int"
+            },
+            {
+              "name": "reg_handle",
+              "type": "int"
+            },
+            {
+              "name": "matrix16",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_meshlet_cull_execute_cpu",
+          "lua_name": "meshlet_cull_execute_cpu",
+          "params": [
+            {
+              "name": "cull_handle",
+              "type": "int"
+            },
+            {
+              "name": "vp_matrix16",
+              "type": "float"
+            },
+            {
+              "name": "cam_x",
+              "type": "float"
+            },
+            {
+              "name": "cam_y",
+              "type": "float"
+            },
+            {
+              "name": "cam_z",
+              "type": "float"
+            },
+            {
+              "name": "flags",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "uint32"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_meshlet_cull_prepare",
+          "lua_name": "meshlet_cull_prepare",
+          "params": [
+            {
+              "name": "cull_handle",
+              "type": "int"
+            },
+            {
+              "name": "vp_matrix16",
+              "type": "float"
+            },
+            {
+              "name": "cam_x",
+              "type": "float"
+            },
+            {
+              "name": "cam_y",
+              "type": "float"
+            },
+            {
+              "name": "cam_z",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "uint32"
+            }
+          ]
         }
       ]
     },
@@ -8596,6 +9242,57 @@
             "stride": 3,
             "mode": "vec3"
           }
+        },
+        {
+          "c_name": "dse_nav_bake",
+          "lua_name": "nav_bake",
+          "params": [
+            {
+              "name": "verts",
+              "type": "float"
+            },
+            {
+              "name": "nverts",
+              "type": "int"
+            },
+            {
+              "name": "tris",
+              "type": "int"
+            },
+            {
+              "name": "ntris",
+              "type": "int"
+            },
+            {
+              "name": "cell_size",
+              "type": "float"
+            },
+            {
+              "name": "cell_height",
+              "type": "float"
+            },
+            {
+              "name": "agent_height",
+              "type": "float"
+            },
+            {
+              "name": "agent_radius",
+              "type": "float"
+            },
+            {
+              "name": "agent_max_climb",
+              "type": "float"
+            },
+            {
+              "name": "agent_max_slope",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
         }
       ]
     },
@@ -9201,6 +9898,12 @@
               "type": "float"
             }
           ]
+        },
+        {
+          "c_name": "dse_open_world_p2p5_shutdown",
+          "lua_name": "open_world_p2p5_shutdown",
+          "params": [],
+          "returns": []
         }
       ]
     },
@@ -9848,6 +10551,29 @@
               "type": "int"
             }
           ]
+        },
+        {
+          "c_name": "dse_streaming_add_assets",
+          "lua_name": "streaming_add_assets",
+          "params": [
+            {
+              "name": "zone",
+              "type": "int"
+            },
+            {
+              "name": "paths",
+              "type": "string"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "type_str",
+              "type": "string"
+            }
+          ],
+          "returns": []
         }
       ]
     },
@@ -15719,6 +16445,289 @@
           ]
         }
       ]
+    },
+    {
+      "group": "rendering",
+      "lua_path": [
+        "dse",
+        "rendering"
+      ],
+      "functions": [
+        {
+          "c_name": "dse_line_renderer_set_points",
+          "lua_name": "line_renderer_set_points",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "points",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_mesh_renderer_add_procedural",
+          "lua_name": "mesh_renderer_add_procedural",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "a",
+              "type": "float"
+            },
+            {
+              "name": "vertices",
+              "type": "float"
+            },
+            {
+              "name": "vertex_float_count",
+              "type": "int"
+            },
+            {
+              "name": "indices",
+              "type": "int"
+            },
+            {
+              "name": "index_count",
+              "type": "int"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_normals",
+          "lua_name": "mesh_renderer_set_normals",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "normals",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_tangents",
+          "lua_name": "mesh_renderer_set_tangents",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "tangents",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_mesh_renderer_set_uvs",
+          "lua_name": "mesh_renderer_set_uvs",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "uvs",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "out_attr_count",
+              "type": "int"
+            },
+            {
+              "name": "out_vertex_count",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        }
+      ],
+      "register_func": "RegisterFreeFn_rendering"
+    },
+    {
+      "group": "physics2d",
+      "lua_path": [
+        "dse",
+        "physics2d"
+      ],
+      "functions": [
+        {
+          "c_name": "dse_physics2d_add_polygon_collider",
+          "lua_name": "physics2d_add_polygon_collider",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "verts",
+              "type": "float"
+            },
+            {
+              "name": "count",
+              "type": "int"
+            },
+            {
+              "name": "density",
+              "type": "float"
+            },
+            {
+              "name": "friction",
+              "type": "float"
+            },
+            {
+              "name": "restitution",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        }
+      ],
+      "register_func": "RegisterFreeFn_physics2d"
+    },
+    {
+      "group": "scene",
+      "lua_path": [
+        "dse",
+        "scene"
+      ],
+      "functions": [
+        {
+          "c_name": "dse_scene_get_active",
+          "lua_name": "scene_get_active",
+          "params": [
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_scene_get_loaded_subs",
+          "lua_name": "scene_get_loaded_subs",
+          "params": [
+            {
+              "name": "out",
+              "type": "string"
+            },
+            {
+              "name": "cap",
+              "type": "int"
+            }
+          ],
+          "returns": [
+            {
+              "type": "int"
+            }
+          ]
+        }
+      ],
+      "register_func": "RegisterFreeFn_scene"
+    },
+    {
+      "group": "world",
+      "lua_path": [
+        "dse",
+        "world"
+      ],
+      "functions": [
+        {
+          "c_name": "dse_weather_add",
+          "lua_name": "weather_add",
+          "params": [
+            {
+              "name": "e",
+              "type": "int"
+            },
+            {
+              "name": "type",
+              "type": "int"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            }
+          ],
+          "returns": []
+        }
+      ],
+      "register_func": "RegisterFreeFn_world"
     }
   ],
   "free_functions": [

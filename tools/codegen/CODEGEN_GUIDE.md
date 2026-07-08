@@ -13,7 +13,7 @@
 | `tools/codegen/codegen.py` | 生成器入口。 |
 | `engine/scripting/lua/bindings/lua_binding_free_<group>.gen.cpp` | 每组生成的绑定（勿手改）。 |
 | `engine/scripting/lua/bindings/lua_binding_ecs.cpp` | 聚合各组 `RegisterEcs*Bindings`。 |
-| `engine/scripting/native_api/dse_api.h` + `dse_api_*.cpp` | C ABI 声明与实现（含 `dse_compat_*` 薄包装）。 |
+| `engine/scripting/native_api/dse_api.h` + `dse_api_*.h` + `dse_api_*.cpp` | C ABI 声明与实现（含 `dse_compat_*` 薄包装）。`dse_api.h` 为聚合头，按模块拆分为 `dse_api_core.h` / `dse_api_render.h` / `dse_api_physics.h` / `dse_api_world.h` / `dse_api_services.h` / `dse_api_gameplay.h`。 |
 
 运行：
 ```bat

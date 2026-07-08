@@ -33,6 +33,24 @@ int L_dse_ui_is_pressed(lua_State* L) {
     return 1;
 }
 
+int L_dse_ui_get_dropdown_value(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out = luaL_checkstring(L, 2);
+    int cap = static_cast<int>(luaL_checkinteger(L, 3));
+    int _ret = dse_ui_get_dropdown_value(e, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_ui_get_text_input_text(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* out = luaL_checkstring(L, 2);
+    int cap = static_cast<int>(luaL_checkinteger(L, 3));
+    int _ret = dse_ui_get_text_input_text(e, out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 } // namespace
 
 void RegisterFreeFn_ui(lua_State* L) {
@@ -47,6 +65,8 @@ void RegisterFreeFn_ui(lua_State* L) {
     helper::RegisterBindings(L, {
         {"is_hovered", L_dse_ui_is_hovered},
         {"is_pressed", L_dse_ui_is_pressed},
+        {"ui_get_dropdown_value", L_dse_ui_get_dropdown_value},
+        {"ui_get_text_input_text", L_dse_ui_get_text_input_text},
     });
     lua_pop(L, 2);
 }

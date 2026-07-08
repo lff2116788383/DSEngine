@@ -48,6 +48,7 @@ extern "C" void dse_dyn_obstacle_set_shape(uint32_t e, int v) {
     }
 }
 extern "C" void dse_dyn_obstacle_get_box_extents(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::DynamicObstacleComponent>(e)) { *x = c->box_extents.x; *y = c->box_extents.y; *z = c->box_extents.z; }
 }
 extern "C" void dse_dyn_obstacle_set_box_extents(uint32_t e, float x, float y, float z) {

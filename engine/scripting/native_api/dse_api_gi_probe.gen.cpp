@@ -37,6 +37,7 @@ extern "C" void dse_gi_probe_set_enabled(uint32_t e, int v) {
     }
 }
 extern "C" void dse_gi_probe_get_origin(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::GIProbeVolumeComponent>(e)) { *x = c->origin.x; *y = c->origin.y; *z = c->origin.z; }
 }
 extern "C" void dse_gi_probe_set_origin(uint32_t e, float x, float y, float z) {
@@ -45,6 +46,7 @@ extern "C" void dse_gi_probe_set_origin(uint32_t e, float x, float y, float z) {
     }
 }
 extern "C" void dse_gi_probe_get_extent(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::GIProbeVolumeComponent>(e)) { *x = c->extent.x; *y = c->extent.y; *z = c->extent.z; }
 }
 extern "C" void dse_gi_probe_set_extent(uint32_t e, float x, float y, float z) {

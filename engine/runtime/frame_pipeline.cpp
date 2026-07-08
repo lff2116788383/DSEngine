@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * @file frame_pipeline.cpp
  * @brief å¼•æ“Žä¸»å¾ªçŽ¯ä¸Žå¸§æµæ°´çº¿ï¼Œåè°ƒæ›´æ–°ã€ç‰©ç†å’Œæ¸²æŸ“çš„æ‰§è¡Œé¡ºåº
  */
@@ -15,11 +15,24 @@
 
 // Pimpl: RenderState definition + heavy headers
 #include "engine/runtime/frame_pipeline_impl.h"
+#include "engine/runtime/render_thread_manager.h"
 
 FramePipeline::FramePipeline()
     : modules_impl_(CreateBuiltinModules()),
-      rs_(std::make_unique<RenderState>()) {}
+      rs_(std::make_unique<RenderState>()) {
+    render_thread_mgr_ = std::make_unique<RenderThreadManager>(
+        [this]() { ExecuteRenderFrame(); },
+        [this]() { if (runtime_context_.make_render_context_current) runtime_context_.make_render_context_current(); },
+        [this]() { if (runtime_context_.release_render_context) runtime_context_.release_render_context(); },
+        [this]() { if (runtime_context_.make_render_context_current) runtime_context_.make_render_context_current(); },
+        [this]() { if (runtime_context_.release_render_context) runtime_context_.release_render_context(); }
+    );
+}
 FramePipeline::~FramePipeline() = default;
+
+bool FramePipeline::IsRenderThreadActive() const {
+    return render_thread_mgr_ && render_thread_mgr_->IsActive();
+}
 
 dse::profiler::CPUProfiler& FramePipeline::GetCPUProfiler() { return rs_->cpu_profiler_; }
 dse::profiler::RenderProfiler& FramePipeline::GetRenderProfiler() { return rs_->render_profiler_; }
@@ -722,7 +735,7 @@ bool FramePipeline::Init() {
     if (!runtime_context_.editor_mode) {
         if (const char* env = std::getenv("DSE_RENDER_THREAD")) {
             if (env[0] == '1') {
-                StartRenderThread();
+                render_thread_mgr_->Start();
             }
         }
     }
@@ -733,7 +746,7 @@ void FramePipeline::Shutdown() {
     if (!initialized_) {
         return;
     }
-    StopRenderThread();
+    render_thread_mgr_->Stop();
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
@@ -881,12 +894,7 @@ void FramePipeline::Shutdown() {
     asset_manager.StopFileWatcher();
     asset_manager.SetRhiDevice(nullptr);
     render_resources_.Reset();
-    update_time_accumulator_ms_ = 0.0f;
-    fixed_time_accumulator_ms_ = 0.0f;
-    render_time_accumulator_ms_ = 0.0f;
-    update_samples_ = 0;
-    fixed_samples_ = 0;
-    render_samples_ = 0;
+    stats_.ResetAccumulators();
     initialized_ = false;
 }
 
@@ -1083,12 +1091,12 @@ void FramePipeline::Render() {
     if (!initialized_) {
         return;
     }
-    if (render_thread_active_.load()) {
-        WaitForRenderComplete();
+    if (render_thread_mgr_->IsActive()) {
+        render_thread_mgr_->WaitForComplete();
         // æ¸²æŸ“çº¿ç¨‹å·²æ¶ˆè´¹å®Œä¸Šä¸€å¸§å¿«ç…§ï¼ˆå«å…¶å¸§åˆ†é…å™¨ç¼“å†²ï¼‰ï¼Œæ­¤å¤„æŽ¨è¿›+å¤ä½æ‰å®‰å…¨ï¼ˆè§è®¾è®¡æ–‡æ¡£ Â§3.5ï¼‰ã€‚
         dse::core::Memory::Frame().BeginFrame();
         PrepareRenderFrame();
-        SignalRenderThread();
+        render_thread_mgr_->SignalNewFrame();
     } else {
         // å•çº¿ç¨‹ï¼šæœ¬å¸§åŒæ­¥æ¶ˆè´¹ï¼Œå¸§é¦–å¤ä½å³å¯ã€‚
         dse::core::Memory::Frame().BeginFrame();
@@ -1160,8 +1168,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     dse::runtime::RunRuntimeUpdateGraph(*this, frame);
 
     auto update_end = std::chrono::high_resolution_clock::now();
-    update_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(update_end - update_begin).count();
-    update_samples_ += 1;
+    stats_.RecordUpdate(std::chrono::duration<float, std::milli>(update_end - update_begin).count());
 }
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
@@ -1170,8 +1177,7 @@ void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {
     dse::runtime::RunRuntimeFixedUpdateGraph(*this, fixed_delta_time);
     
     auto fixed_end = std::chrono::high_resolution_clock::now();
-    fixed_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(fixed_end - fixed_begin).count();
-    fixed_samples_ += 1;
+    stats_.RecordFixed(std::chrono::duration<float, std::milli>(fixed_end - fixed_begin).count());
 }
 
 
@@ -1216,38 +1222,16 @@ World& FramePipeline::world() {
     return *runtime_context_.world;
 }
 
-int FramePipeline::LastDrawCalls() const {
-    return last_draw_calls_;
-}
-
-int FramePipeline::LastGpuDrivenActive() const {
-    return last_gpu_driven_active_;
-}
-
-int FramePipeline::LastGpuIndirectDrawCount() const {
-    return last_gpu_indirect_draw_count_;
-}
-
-int FramePipeline::LastGpuTotalInstances() const {
-    return last_gpu_total_instances_;
-}
+// LastDrawCalls / LastGpuDrivenActive / LastGpuIndirectDrawCount / LastGpuTotalInstances
+// are now inline in the header, delegating to stats_.
 
 dse::render::RhiDevice::RhiFrameStats FramePipeline::GetRhiFrameStats() const {
     if (!runtime_context_.rhi_device) return {};
     return runtime_context_.rhi_device->GetFrameStats();
 }
 
-int FramePipeline::LastMaterialSwitches() const {
-    return last_material_switches_;
-}
-
-int FramePipeline::LastMaxBatchSprites() const {
-    return last_max_batch_sprites_;
-}
-
-int FramePipeline::LastSpriteCount() const {
-    return last_sprite_count_;
-}
+// LastMaterialSwitches / LastMaxBatchSprites / LastSpriteCount
+// are now inline in the header, delegating to stats_.
 
 RhiBackend FramePipeline::GetRhiBackend() const {
     if (runtime_context_.rhi_device)
@@ -1355,7 +1339,7 @@ void FramePipeline::SetSceneViewMode(int mode) {
 unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const glm::mat4& projection) {
     if (!initialized_ || !runtime_context_.rhi_device) return 0;
     // 渲染线程激活时主线程不得直接执行 pass（GL context 归渲染线程所有）
-    if (render_thread_active_.load()) return 0;
+    if (render_thread_mgr_->IsActive()) return 0;
 
     // ä¿å­˜å½“å‰ç¼–è¾‘å™¨ç›¸æœºçŠ¶æ€
     const bool saved_use = render_pass_context_.use_editor_camera;

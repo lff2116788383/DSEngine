@@ -32,6 +32,35 @@ int L_dse_audio_source_is_playing(lua_State* L) {
     return 1;
 }
 
+int L_dse_audio_bus_get_names(lua_State* L) {
+    const char* out = luaL_checkstring(L, 1);
+    int cap = static_cast<int>(luaL_checkinteger(L, 2));
+    int _ret = dse_audio_bus_get_names(out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_audio_snapshot_list(lua_State* L) {
+    const char* out = luaL_checkstring(L, 1);
+    int cap = static_cast<int>(luaL_checkinteger(L, 2));
+    int _ret = dse_audio_snapshot_list(out, cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
+int L_dse_audio_source_get_state(lua_State* L) {
+    int e = static_cast<int>(luaL_checkinteger(L, 1));
+    int out_flags = static_cast<int>(luaL_checkinteger(L, 2));
+    float out_params = static_cast<float>(luaL_checknumber(L, 3));
+    int out_runtime_handle = static_cast<int>(luaL_checkinteger(L, 4));
+    int out_clip_size = static_cast<int>(luaL_checkinteger(L, 5));
+    const char* out_path = luaL_checkstring(L, 6);
+    int path_cap = static_cast<int>(luaL_checkinteger(L, 7));
+    int _ret = dse_audio_source_get_state(e, out_flags, out_params, out_runtime_handle, out_clip_size, out_path, path_cap);
+    lua_pushinteger(L, _ret);
+    return 1;
+}
+
 } // namespace
 
 void RegisterFreeFn_audio(lua_State* L) {
@@ -46,6 +75,9 @@ void RegisterFreeFn_audio(lua_State* L) {
     helper::RegisterBindings(L, {
         {"fade_out_all_sfx", L_dse_audio_fade_out_all_sfx},
         {"source_is_playing", L_dse_audio_source_is_playing},
+        {"audio_bus_get_names", L_dse_audio_bus_get_names},
+        {"audio_snapshot_list", L_dse_audio_snapshot_list},
+        {"audio_source_get_state", L_dse_audio_source_get_state},
     });
     lua_pop(L, 2);
 }

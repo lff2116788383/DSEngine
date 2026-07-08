@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- SpotLightComponent ---- */
 extern "C" void dse_spot_light_get_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SpotLightComponent>(e)) { *x = c->color.x; *y = c->color.y; *z = c->color.z; }
 }
 extern "C" void dse_spot_light_set_color(uint32_t e, float x, float y, float z) {
@@ -72,6 +73,7 @@ extern "C" void dse_spot_light_set_outer_cone_angle(uint32_t e, float v) {
     }
 }
 extern "C" void dse_spot_light_get_direction(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SpotLightComponent>(e)) { *x = c->direction.x; *y = c->direction.y; *z = c->direction.z; }
 }
 extern "C" void dse_spot_light_set_direction(uint32_t e, float x, float y, float z) {

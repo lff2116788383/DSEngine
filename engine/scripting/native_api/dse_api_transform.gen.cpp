@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- TransformComponent ---- */
 extern "C" void dse_transform_get_position(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<TransformComponent>(e)) { *x = c->position.x; *y = c->position.y; *z = c->position.z; }
 }
 extern "C" void dse_transform_set_position(uint32_t e, float x, float y, float z) {
@@ -37,6 +38,7 @@ extern "C" void dse_transform_set_position(uint32_t e, float x, float y, float z
     }
 }
 extern "C" void dse_transform_get_rotation(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<TransformComponent>(e)) {
         glm::vec3 euler = glm::degrees(glm::eulerAngles(c->rotation));
         *x = euler.x; *y = euler.y; *z = euler.z;
@@ -49,6 +51,7 @@ extern "C" void dse_transform_set_rotation(uint32_t e, float x, float y, float z
     }
 }
 extern "C" void dse_transform_get_scale(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<TransformComponent>(e)) { *x = c->scale.x; *y = c->scale.y; *z = c->scale.z; }
 }
 extern "C" void dse_transform_set_scale(uint32_t e, float x, float y, float z) {

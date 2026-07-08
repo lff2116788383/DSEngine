@@ -1,6 +1,7 @@
 ﻿/**
  * @file frame_pipeline_thread.cpp
- * @brief FramePipeline render thread management â€” Start/Stop/RenderThreadFunc.
+ * @brief FramePipeline render frame execution â€” PrepareRenderFrame + ExecuteRenderFrame.
+ *        Render thread lifecycle is now managed by RenderThreadManager.
  */
 
 #include "engine/runtime/frame_pipeline.h"
@@ -26,93 +27,6 @@
 #include <chrono>
 #include <algorithm>
 #include <iostream>
-
-void FramePipeline::StartRenderThread() {
-    if (render_thread_active_.load()) return;
-
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_thread_exit_ = false;
-        render_frame_pending_ = false;
-        render_frame_done_ = true;
-    }
-
-    // ä¸»çº¿ç¨‹é‡Šæ”¾ GL contextï¼Œç”±æ¸²æŸ“çº¿ç¨‹æŽ¥ç®¡
-    if (runtime_context_.release_render_context) {
-        runtime_context_.release_render_context();
-    }
-
-    render_thread_ = std::thread(&FramePipeline::RenderThreadFunc, this);
-    render_thread_active_.store(true);
-    DEBUG_LOG_INFO("[RenderThread] Started");
-}
-
-void FramePipeline::StopRenderThread() {
-    if (!render_thread_active_.load()) return;
-
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_thread_exit_ = true;
-        render_frame_pending_ = true;  // å”¤é†’çº¿ç¨‹ä½¿å…¶æ£€æŸ¥ exit æ ‡å¿—
-    }
-    render_cv_.notify_one();
-
-    if (render_thread_.joinable()) {
-        render_thread_.join();
-    }
-    render_thread_active_.store(false);
-
-    // ä¸»çº¿ç¨‹é‡æ–°èŽ·å– GL context
-    if (runtime_context_.make_render_context_current) {
-        runtime_context_.make_render_context_current();
-    }
-    DEBUG_LOG_INFO("[RenderThread] Stopped");
-}
-
-void FramePipeline::RenderThreadFunc() {
-    // æ¸²æŸ“çº¿ç¨‹èŽ·å– GL/Vulkan/DX11 context
-    if (runtime_context_.make_render_context_current) {
-        runtime_context_.make_render_context_current();
-    }
-
-    while (true) {
-        // ç­‰å¾…ä¸»çº¿ç¨‹å‘å‡ºæ¸²æŸ“ä¿¡å·
-        {
-            std::unique_lock<std::mutex> lock(render_mutex_);
-            render_cv_.wait(lock, [this] { return render_frame_pending_ || render_thread_exit_; });
-            if (render_thread_exit_) break;
-            render_frame_pending_ = false;
-        }
-
-        ExecuteRenderFrame();
-
-        // é€šçŸ¥ä¸»çº¿ç¨‹æ¸²æŸ“å®Œæˆ
-        {
-            std::lock_guard<std::mutex> lock(render_mutex_);
-            render_frame_done_ = true;
-        }
-        main_cv_.notify_one();
-    }
-
-    // é‡Šæ”¾ context
-    if (runtime_context_.release_render_context) {
-        runtime_context_.release_render_context();
-    }
-}
-
-void FramePipeline::WaitForRenderComplete() {
-    std::unique_lock<std::mutex> lock(render_mutex_);
-    main_cv_.wait(lock, [this] { return render_frame_done_; });
-}
-
-void FramePipeline::SignalRenderThread() {
-    {
-        std::lock_guard<std::mutex> lock(render_mutex_);
-        render_frame_pending_ = true;
-        render_frame_done_ = false;
-    }
-    render_cv_.notify_one();
-}
 
 void FramePipeline::PrepareRenderFrame() {
     glm::vec3 early_camera_offset(0.0f);
@@ -468,11 +382,10 @@ void FramePipeline::ExecuteRenderFrame() {
     }
 
     auto render_end = std::chrono::high_resolution_clock::now();
-    render_time_accumulator_ms_ += std::chrono::duration<float, std::milli>(render_end - render_begin).count();
-    render_samples_ += 1;
+    stats_.RecordRender(std::chrono::duration<float, std::milli>(render_end - render_begin).count());
 
     // Present (SwapBuffers) â€” åœ¨ render è®¡æ—¶ä¹‹å¤–ï¼Œé¿å… Present å»¶è¿Ÿæ±¡æŸ“ avg_render_ms
-    if (render_thread_active_.load() && runtime_context_.present_frame) {
+    if (render_thread_mgr_->IsActive() && runtime_context_.present_frame) {
         runtime_context_.present_frame();
     }
 }

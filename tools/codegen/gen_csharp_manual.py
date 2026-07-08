@@ -12,7 +12,17 @@ import os
 import re
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-HEADER = os.path.join(ROOT, "engine", "scripting", "native_api", "dse_api.h")
+HEADER_DIR = os.path.join(ROOT, "engine", "scripting", "native_api")
+HEADER = os.path.join(HEADER_DIR, "dse_api.h")
+# After modular split, function declarations live in dse_api_<module>.h files.
+# Read all of them to ensure full coverage.
+MODULE_HEADERS = [
+    os.path.join(HEADER_DIR, f) for f in [
+        "dse_api_core.h", "dse_api_render.h", "dse_api_physics.h",
+        "dse_api_world.h", "dse_api_services.h", "dse_api_gameplay.h",
+    ]
+    if os.path.exists(os.path.join(HEADER_DIR, f))
+]
 EXISTING = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "Native.gen.cs")
 OUT = os.path.join(ROOT, "GameScripts", "DSEngine.Runtime", "Generated", "NativeManual.gen.cs")
 
@@ -301,7 +311,10 @@ def pascal(snake: str) -> str:
 def main():
     existing = set(re.findall(r'EntryPoint = "(dse_[a-z0-9_]+)"',
                               open(EXISTING, encoding="utf-8").read()))
+    # Read main header + all module headers (post-split dse_api.h #includes them)
     header_text = open(HEADER, encoding="utf-8").read()
+    for mh in MODULE_HEADERS:
+        header_text += "\n" + open(mh, encoding="utf-8").read()
     api_version = extract_api_version(header_text)
     decls = parse_header(header_text)
 

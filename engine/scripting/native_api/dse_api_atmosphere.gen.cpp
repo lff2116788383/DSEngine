@@ -55,6 +55,7 @@ extern "C" void dse_atmosphere_set_atmosphere_height(uint32_t e, float v) {
     }
 }
 extern "C" void dse_atmosphere_get_rayleigh_coeff(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::AtmosphereComponent>(e)) { *x = c->rayleigh_coeff.x; *y = c->rayleigh_coeff.y; *z = c->rayleigh_coeff.z; }
 }
 extern "C" void dse_atmosphere_set_rayleigh_coeff(uint32_t e, float x, float y, float z) {
@@ -99,6 +100,7 @@ extern "C" void dse_atmosphere_set_mie_g(uint32_t e, float v) {
     }
 }
 extern "C" void dse_atmosphere_get_mie_albedo(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::AtmosphereComponent>(e)) { *x = c->mie_albedo.x; *y = c->mie_albedo.y; *z = c->mie_albedo.z; }
 }
 extern "C" void dse_atmosphere_set_mie_albedo(uint32_t e, float x, float y, float z) {
@@ -107,6 +109,7 @@ extern "C" void dse_atmosphere_set_mie_albedo(uint32_t e, float x, float y, floa
     }
 }
 extern "C" void dse_atmosphere_get_ozone_coeff(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::AtmosphereComponent>(e)) { *x = c->ozone_coeff.x; *y = c->ozone_coeff.y; *z = c->ozone_coeff.z; }
 }
 extern "C" void dse_atmosphere_set_ozone_coeff(uint32_t e, float x, float y, float z) {
@@ -133,6 +136,7 @@ extern "C" void dse_atmosphere_set_ozone_width(uint32_t e, float v) {
     }
 }
 extern "C" void dse_atmosphere_get_sun_intensity(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::AtmosphereComponent>(e)) { *x = c->sun_intensity.x; *y = c->sun_intensity.y; *z = c->sun_intensity.z; }
 }
 extern "C" void dse_atmosphere_set_sun_intensity(uint32_t e, float x, float y, float z) {

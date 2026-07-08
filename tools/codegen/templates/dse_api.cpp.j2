@@ -85,6 +85,7 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, int v) {
 {% endif %}
 {% elif field.type == "vec2" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f;
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; }
 }
 {% if not field.get("readonly", false) %}
@@ -97,6 +98,7 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, 
 {% endif %}
 {% elif field.type == "vec3" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; }
 }
 {% if not field.get("readonly", false) %}
@@ -109,6 +111,7 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, 
 {% endif %}
 {% elif field.type == "euler_quat" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) {
         glm::vec3 euler = glm::degrees(glm::eulerAngles(c->{{ field.name }}));
         *x = euler.x; *y = euler.y; *z = euler.z;
@@ -124,6 +127,7 @@ extern "C" void dse_{{ comp.prefix }}_set_{{ field.name }}(uint32_t e, float x, 
 {% endif %}
 {% elif field.type == "vec4" %}
 extern "C" void dse_{{ comp.prefix }}_get_{{ field.name }}(uint32_t e, float* x, float* y, float* z, float* w) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f; if (w) *w = 0.0f;
     if (const auto* c = GCC<{{ ns }}{{ comp.name }}>(e)) { *x = c->{{ field.name }}.x; *y = c->{{ field.name }}.y; *z = c->{{ field.name }}.z; *w = c->{{ field.name }}.w; }
 }
 {% if not field.get("readonly", false) %}

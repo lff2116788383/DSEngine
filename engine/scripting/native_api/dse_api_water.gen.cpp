@@ -46,6 +46,7 @@ extern "C" void dse_water_set_water_level(uint32_t e, float v) {
     }
 }
 extern "C" void dse_water_get_deep_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::WaterComponent>(e)) { *x = c->deep_color.x; *y = c->deep_color.y; *z = c->deep_color.z; }
 }
 extern "C" void dse_water_set_deep_color(uint32_t e, float x, float y, float z) {
@@ -54,6 +55,7 @@ extern "C" void dse_water_set_deep_color(uint32_t e, float x, float y, float z) 
     }
 }
 extern "C" void dse_water_get_shallow_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::WaterComponent>(e)) { *x = c->shallow_color.x; *y = c->shallow_color.y; *z = c->shallow_color.z; }
 }
 extern "C" void dse_water_set_shallow_color(uint32_t e, float x, float y, float z) {
@@ -107,6 +109,7 @@ extern "C" void dse_water_set_wave_speed(uint32_t e, float v) {
     }
 }
 extern "C" void dse_water_get_wave_direction(uint32_t e, float* x, float* y) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f;
     if (const auto* c = GCC<dse::WaterComponent>(e)) { *x = c->wave_direction.x; *y = c->wave_direction.y; }
 }
 extern "C" void dse_water_set_wave_direction(uint32_t e, float x, float y) {
@@ -187,6 +190,7 @@ extern "C" void dse_water_set_underwater_fog_density(uint32_t e, float v) {
     }
 }
 extern "C" void dse_water_get_underwater_fog_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::WaterComponent>(e)) { *x = c->underwater_fog_color.x; *y = c->underwater_fog_color.y; *z = c->underwater_fog_color.z; }
 }
 extern "C" void dse_water_set_underwater_fog_color(uint32_t e, float x, float y, float z) {

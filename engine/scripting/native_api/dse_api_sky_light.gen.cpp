@@ -28,6 +28,7 @@ template<typename T> const T* GCC(uint32_t e) { return GC<T>(e); }
 
 /* ---- SkyLightComponent ---- */
 extern "C" void dse_sky_light_get_up_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SkyLightComponent>(e)) { *x = c->up_color.x; *y = c->up_color.y; *z = c->up_color.z; }
 }
 extern "C" void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z) {
@@ -36,6 +37,7 @@ extern "C" void dse_sky_light_set_up_color(uint32_t e, float x, float y, float z
     }
 }
 extern "C" void dse_sky_light_get_down_color(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::SkyLightComponent>(e)) { *x = c->down_color.x; *y = c->down_color.y; *z = c->down_color.z; }
 }
 extern "C" void dse_sky_light_set_down_color(uint32_t e, float x, float y, float z) {

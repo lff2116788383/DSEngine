@@ -29,13 +29,15 @@ void SubmitAndEndRuntimeRenderFrame(::FramePipeline& pipeline, std::shared_ptr<C
 
 void FinalizeRuntimeRenderFrame(::FramePipeline& pipeline) {
     const auto& frame_stats = pipeline.runtime_context_.rhi_device->LastFrameStats();
-    pipeline.last_draw_calls_ = static_cast<int>(frame_stats.draw_calls);
-    pipeline.last_material_switches_ = static_cast<int>(frame_stats.material_switches);
-    pipeline.last_max_batch_sprites_ = static_cast<int>(frame_stats.max_batch_sprites);
-    pipeline.last_sprite_count_ = static_cast<int>(frame_stats.sprite_count);
-    pipeline.last_gpu_driven_active_ = pipeline.render_pass_context_.gpu_driven_active_this_frame ? 1 : 0;
-    pipeline.last_gpu_indirect_draw_count_ = pipeline.render_pass_context_.gpu_indirect_draw_count;
-    pipeline.last_gpu_total_instances_ = pipeline.render_pass_context_.gpu_total_instances;
+    pipeline.stats_.SetLastFrameStats(
+        static_cast<int>(frame_stats.draw_calls),
+        static_cast<int>(frame_stats.material_switches),
+        static_cast<int>(frame_stats.max_batch_sprites),
+        static_cast<int>(frame_stats.sprite_count));
+    pipeline.stats_.SetGpuDrivenStats(
+        pipeline.render_pass_context_.gpu_driven_active_this_frame ? 1 : 0,
+        pipeline.render_pass_context_.gpu_indirect_draw_count,
+        pipeline.render_pass_context_.gpu_total_instances);
 }
 
 } // namespace dse::runtime

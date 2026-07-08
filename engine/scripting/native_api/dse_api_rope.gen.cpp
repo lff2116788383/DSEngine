@@ -118,6 +118,7 @@ extern "C" void dse_rope_set_anchor_entity_b(uint32_t e, int v) {
     }
 }
 extern "C" void dse_rope_get_anchor_offset_a(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::RopeComponent>(e)) { *x = c->anchor_offset_a.x; *y = c->anchor_offset_a.y; *z = c->anchor_offset_a.z; }
 }
 extern "C" void dse_rope_set_anchor_offset_a(uint32_t e, float x, float y, float z) {
@@ -126,6 +127,7 @@ extern "C" void dse_rope_set_anchor_offset_a(uint32_t e, float x, float y, float
     }
 }
 extern "C" void dse_rope_get_anchor_offset_b(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::RopeComponent>(e)) { *x = c->anchor_offset_b.x; *y = c->anchor_offset_b.y; *z = c->anchor_offset_b.z; }
 }
 extern "C" void dse_rope_set_anchor_offset_b(uint32_t e, float x, float y, float z) {
@@ -134,6 +136,7 @@ extern "C" void dse_rope_set_anchor_offset_b(uint32_t e, float x, float y, float
     }
 }
 extern "C" void dse_rope_get_start_position(uint32_t e, float* x, float* y, float* z) {
+    if (x) *x = 0.0f; if (y) *y = 0.0f; if (z) *z = 0.0f;
     if (const auto* c = GCC<dse::RopeComponent>(e)) { *x = c->start_position.x; *y = c->start_position.y; *z = c->start_position.z; }
 }
 extern "C" void dse_rope_set_start_position(uint32_t e, float x, float y, float z) {

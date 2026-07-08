@@ -32,7 +32,7 @@
 | ECS | EnTT 内部池 | 不归引擎自管（可接受） |
 | 第三方 | Jolt/PhysX/Box2D/miniaudio/Recast 各自分配；PhysX 已接对齐分配回调 | 分散、无统一视图 |
 | 追踪 | 无（资产字节预算除外） | 泄漏/增长不可见 |
-| 跨模块 | 引擎可编 `DSEngine.dll`；`CMakeLists.txt:404` 注释："Gameplay3D 全部编入 dse_engine，避免跨 DLL EnTT 模板实例化导致的内存损坏" | 跨 CRT 边界 new/delete 是已知崩溃源 |
+| 跨模块 | 引擎可编 `DSEngine.dll`；`cmake/engine_sources.cmake` 注释："Gameplay3D 全部编入 dse_engine，避免跨 DLL EnTT 模板实例化导致的内存损坏" | 跨 CRT 边界 new/delete 是已知崩溃源 |
 
 ---
 
