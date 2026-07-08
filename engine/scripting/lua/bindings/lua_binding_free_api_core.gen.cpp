@@ -27,20 +27,34 @@ int L_dse_api_version(lua_State* L) {
 
 int L_dse_uuid_get(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_uuid_get(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[128];
+    int _count = dse_uuid_get(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_uuid_set(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
     const char* uuid_str = luaL_checkstring(L, 2);
-    const char* out = luaL_checkstring(L, 3);
-    int cap = static_cast<int>(luaL_checkinteger(L, 4));
-    int _ret = dse_uuid_set(e, uuid_str, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[128];
+    int _count = dse_uuid_set(e, uuid_str, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 

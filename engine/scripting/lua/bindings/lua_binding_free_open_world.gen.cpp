@@ -233,10 +233,7 @@ int L_dse_wsp_get_total_modifications(lua_State* L) {
 }
 
 int L_dse_wsp_record_destruction(lua_State* L) {
-    int cx = static_cast<int>(luaL_checkinteger(L, 1));
-    int cz = static_cast<int>(luaL_checkinteger(L, 2));
-    uint32_t entity_id = static_cast<uint32_t>(luaL_checkinteger(L, 3));
-    dse_wsp_record_destruction(cx, cz, entity_id);
+    dse_wsp_record_destruction(static_cast<int>(luaL_checkinteger(L, 1)), static_cast<int>(luaL_checkinteger(L, 2)), static_cast<uint64_t>(luaL_checkinteger(L, 3)));
     return 0;
 }
 
@@ -281,8 +278,7 @@ int L_dse_procedural_fbm2d(lua_State* L) {
 }
 
 int L_dse_procedural_random_seed(lua_State* L) {
-    uint32_t seed = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    dse_procedural_random_seed(seed);
+    dse_procedural_random_seed(static_cast<uint64_t>(luaL_checkinteger(L, 1)));
     return 0;
 }
 

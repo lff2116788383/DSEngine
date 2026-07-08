@@ -748,11 +748,6 @@ DSE_CAPI int   dse_ai_goap_plan(int planner_id, char* out, int cap);
 
 #ifdef __cplusplus
 }
-
-
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif // DSE_API_CORE_H

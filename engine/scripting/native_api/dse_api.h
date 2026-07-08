@@ -42,6 +42,7 @@ extern "C" {
 #include "dse_api_world.h"
 #include "dse_api_services.h"
 #include "dse_api_gameplay.h"
+#include "dse_api.gen.h"
 
 
 #ifdef __cplusplus

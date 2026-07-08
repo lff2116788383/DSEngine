@@ -94,19 +94,10 @@ int L_dse_nav_find_path(lua_State* L) {
 }
 
 int L_dse_nav_bake(lua_State* L) {
-    float verts = static_cast<float>(luaL_checknumber(L, 1));
-    int nverts = static_cast<int>(luaL_checkinteger(L, 2));
-    int tris = static_cast<int>(luaL_checkinteger(L, 3));
-    int ntris = static_cast<int>(luaL_checkinteger(L, 4));
-    float cell_size = static_cast<float>(luaL_checknumber(L, 5));
-    float cell_height = static_cast<float>(luaL_checknumber(L, 6));
-    float agent_height = static_cast<float>(luaL_checknumber(L, 7));
-    float agent_radius = static_cast<float>(luaL_checknumber(L, 8));
-    float agent_max_climb = static_cast<float>(luaL_checknumber(L, 9));
-    float agent_max_slope = static_cast<float>(luaL_checknumber(L, 10));
-    int _ret = dse_nav_bake(verts, nverts, tris, ntris, cell_size, cell_height, agent_height, agent_radius, agent_max_climb, agent_max_slope);
-    lua_pushinteger(L, _ret);
-    return 1;
+    std::vector<float> verts; if (lua_istable(L, 1)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 1)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 1, _i); if (lua_isnumber(L, -1)) verts.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    std::vector<int> tris; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isnumber(L, -1)) tris.push_back(static_cast<int>(lua_tointeger(L, -1))); lua_pop(L, 1); } }
+    dse_nav_bake(verts.data(), static_cast<int>(verts.size()), tris.data(), static_cast<int>(tris.size()), static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)), static_cast<float>(luaL_checknumber(L, 6)), static_cast<float>(luaL_checknumber(L, 7)), static_cast<float>(luaL_checknumber(L, 8)));
+    return 0;
 }
 
 } // namespace

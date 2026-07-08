@@ -93,9 +93,7 @@ int L_dse_ui_set_label_layout(lua_State* L) {
 }
 
 int L_dse_ui_set_label_number(lua_State* L) {
-    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    uint32_t number = static_cast<uint32_t>(luaL_checkinteger(L, 2));
-    dse_ui_set_label_number(e, number);
+    dse_ui_set_label_number(static_cast<uint32_t>(luaL_checkinteger(L, 1)), static_cast<long long>(luaL_checkinteger(L, 2)));
     return 0;
 }
 

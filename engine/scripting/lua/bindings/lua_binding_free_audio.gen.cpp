@@ -33,31 +33,50 @@ int L_dse_audio_source_is_playing(lua_State* L) {
 }
 
 int L_dse_audio_bus_get_names(lua_State* L) {
-    const char* out = luaL_checkstring(L, 1);
-    int cap = static_cast<int>(luaL_checkinteger(L, 2));
-    int _ret = dse_audio_bus_get_names(out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[4096];
+    int _count = dse_audio_bus_get_names(_buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_audio_snapshot_list(lua_State* L) {
-    const char* out = luaL_checkstring(L, 1);
-    int cap = static_cast<int>(luaL_checkinteger(L, 2));
-    int _ret = dse_audio_snapshot_list(out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[4096];
+    int _count = dse_audio_snapshot_list(_buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_audio_source_get_state(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    int out_flags = static_cast<int>(luaL_checkinteger(L, 2));
-    float out_params = static_cast<float>(luaL_checknumber(L, 3));
-    int out_runtime_handle = static_cast<int>(luaL_checkinteger(L, 4));
-    int out_clip_size = static_cast<int>(luaL_checkinteger(L, 5));
-    const char* out_path = luaL_checkstring(L, 6);
-    int path_cap = static_cast<int>(luaL_checkinteger(L, 7));
-    int _ret = dse_audio_source_get_state(e, out_flags, out_params, out_runtime_handle, out_clip_size, out_path, path_cap);
-    lua_pushinteger(L, _ret);
+    int _out_flags = 0;
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    long long _out_runtime_handle = 0;
+    long long _out_clip_size = 0;
+    float _out_params[4] = {0,0,0,0};
+    char _path_buf[256] = {0};
+    dse_audio_source_get_state(e, &_out_flags, _out_params, &_out_runtime_handle, &_out_clip_size, _path_buf, sizeof(_path_buf));
+    lua_newtable(L);
+    lua_pushinteger(L, _out_flags);
+    lua_setfield(L, -2, "flags");
+    lua_pushinteger(L, static_cast<lua_Integer>(_out_runtime_handle));
+    lua_setfield(L, -2, "runtime_handle");
+    lua_pushinteger(L, static_cast<lua_Integer>(_out_clip_size));
+    lua_setfield(L, -2, "clip_size");
     return 1;
 }
 

@@ -189,40 +189,56 @@ int L_dse_rendering_set_reflection_probe(lua_State* L) {
 }
 
 int L_dse_ecs_get_queryable_components(lua_State* L) {
-    const char* out = luaL_checkstring(L, 1);
-    int cap = static_cast<int>(luaL_checkinteger(L, 2));
-    int _ret = dse_ecs_get_queryable_components(out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[4096];
+    int _count = dse_ecs_get_queryable_components(_buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_ecs_get_script_path(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_ecs_get_script_path(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_ecs_get_script_path(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_particle_system_3d_get_state(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    int out_active = static_cast<int>(luaL_checkinteger(L, 2));
-    int out_max_particles = static_cast<int>(luaL_checkinteger(L, 3));
-    float out_emission_rate = static_cast<float>(luaL_checknumber(L, 4));
-    float out_life = static_cast<float>(luaL_checknumber(L, 5));
-    float out_size = static_cast<float>(luaL_checknumber(L, 6));
-    float out_speed = static_cast<float>(luaL_checknumber(L, 7));
-    float out_gravity = static_cast<float>(luaL_checknumber(L, 8));
-    float out_color = static_cast<float>(luaL_checknumber(L, 9));
-    const char* out_tex = luaL_checkstring(L, 10);
-    int tex_cap = static_cast<int>(luaL_checkinteger(L, 11));
-    int out_enabled = static_cast<int>(luaL_checkinteger(L, 12));
-    int out_initialized = static_cast<int>(luaL_checkinteger(L, 13));
-    int out_texture_handle = static_cast<int>(luaL_checkinteger(L, 14));
-    int _ret = dse_particle_system_3d_get_state(e, out_active, out_max_particles, out_emission_rate, out_life, out_size, out_speed, out_gravity, out_color, out_tex, tex_cap, out_enabled, out_initialized, out_texture_handle);
-    lua_pushinteger(L, _ret);
-    return 1;
+    int _out_active = 0;
+    int _out_max_particles = 0;
+    float _out_emission_rate = 0;
+    uint32_t _out_texture_handle = 0;
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float _out_life[2] = {0,0};
+    float _out_size[2] = {0,0};
+    float _out_speed[2] = {0,0};
+    float _out_gravity[3] = {0,0,0};
+    float _out_color[4] = {0,0,0,0};
+    char _out_tex[256] = {0};
+    int _out_enabled = 0;
+    int _out_initialized = 0;
+    dse_particle_system_3d_get_state(e, &_out_active, &_out_max_particles, &_out_emission_rate, _out_life, _out_size, _out_speed, _out_gravity, _out_color, _out_tex, sizeof(_out_tex), &_out_enabled, &_out_initialized, &_out_texture_handle);
+    lua_pushinteger(L, _out_active);
+    lua_pushinteger(L, _out_max_particles);
+    lua_pushnumber(L, _out_emission_rate);
+    lua_pushinteger(L, static_cast<lua_Integer>(_out_texture_handle));
+    return 4;
 }
 
 } // namespace

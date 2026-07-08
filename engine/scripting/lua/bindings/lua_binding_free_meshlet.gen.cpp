@@ -74,46 +74,28 @@ int L_dse_meshlet_cull_begin_frame(lua_State* L) {
 }
 
 int L_dse_meshlet_build(lua_State* L) {
-    float positions = static_cast<float>(luaL_checknumber(L, 1));
-    int pos_count = static_cast<int>(luaL_checkinteger(L, 2));
-    int indices = static_cast<int>(luaL_checkinteger(L, 3));
-    int idx_count = static_cast<int>(luaL_checkinteger(L, 4));
-    int max_vertices = static_cast<int>(luaL_checkinteger(L, 5));
-    int max_triangles = static_cast<int>(luaL_checkinteger(L, 6));
-    uint32_t _ret = dse_meshlet_build(positions, pos_count, indices, idx_count, max_vertices, max_triangles);
-    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
-    return 1;
+    std::vector<float> _positions; if (lua_istable(L, 1)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 1)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 1, _i); if (lua_isnumber(L, -1)) _positions.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    std::vector<uint32_t> _indices; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isnumber(L, -1)) _indices.push_back(static_cast<uint32_t>(lua_tointeger(L, -1))); lua_pop(L, 1); } }
+    dse_meshlet_build(_positions.data(), static_cast<int>(_positions.size()), _indices.data(), static_cast<int>(_indices.size()), static_cast<uint32_t>(luaL_checkinteger(L, 3)), static_cast<uint32_t>(luaL_checkinteger(L, 4)));
+    return 0;
 }
 
 int L_dse_meshlet_cull_add_instance(lua_State* L) {
-    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
-    int reg_handle = static_cast<int>(luaL_checkinteger(L, 2));
-    float matrix16 = static_cast<float>(luaL_checknumber(L, 3));
-    dse_meshlet_cull_add_instance(cull_handle, reg_handle, matrix16);
+    std::vector<float> _matrix; if (lua_istable(L, 3)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 3)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 3, _i); if (lua_isnumber(L, -1)) _matrix.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    dse_meshlet_cull_add_instance(static_cast<uint32_t>(luaL_checkinteger(L, 1)), static_cast<uint32_t>(luaL_checkinteger(L, 2)), _matrix.data());
     return 0;
 }
 
 int L_dse_meshlet_cull_execute_cpu(lua_State* L) {
-    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
-    float vp_matrix16 = static_cast<float>(luaL_checknumber(L, 2));
-    float cam_x = static_cast<float>(luaL_checknumber(L, 3));
-    float cam_y = static_cast<float>(luaL_checknumber(L, 4));
-    float cam_z = static_cast<float>(luaL_checknumber(L, 5));
-    int flags = static_cast<int>(luaL_checkinteger(L, 6));
-    uint32_t _ret = dse_meshlet_cull_execute_cpu(cull_handle, vp_matrix16, cam_x, cam_y, cam_z, flags);
-    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
-    return 1;
+    std::vector<float> _vp; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isnumber(L, -1)) _vp.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    dse_meshlet_cull_execute_cpu(static_cast<uint32_t>(luaL_checkinteger(L, 1)), _vp.data(), static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)), static_cast<uint32_t>(luaL_checkinteger(L, 6)));
+    return 0;
 }
 
 int L_dse_meshlet_cull_prepare(lua_State* L) {
-    int cull_handle = static_cast<int>(luaL_checkinteger(L, 1));
-    float vp_matrix16 = static_cast<float>(luaL_checknumber(L, 2));
-    float cam_x = static_cast<float>(luaL_checknumber(L, 3));
-    float cam_y = static_cast<float>(luaL_checknumber(L, 4));
-    float cam_z = static_cast<float>(luaL_checknumber(L, 5));
-    uint32_t _ret = dse_meshlet_cull_prepare(cull_handle, vp_matrix16, cam_x, cam_y, cam_z);
-    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
-    return 1;
+    std::vector<float> _vp; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isnumber(L, -1)) _vp.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    dse_meshlet_cull_prepare(static_cast<uint32_t>(luaL_checkinteger(L, 1)), _vp.data(), static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)));
+    return 0;
 }
 
 } // namespace

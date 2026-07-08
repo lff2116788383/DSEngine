@@ -20,18 +20,32 @@ namespace dse::runtime::lua_binding {
 namespace {
 
 int L_dse_scene_get_active(lua_State* L) {
-    const char* out = luaL_checkstring(L, 1);
-    int cap = static_cast<int>(luaL_checkinteger(L, 2));
-    int _ret = dse_scene_get_active(out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_scene_get_active(_buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_scene_get_loaded_subs(lua_State* L) {
-    const char* out = luaL_checkstring(L, 1);
-    int cap = static_cast<int>(luaL_checkinteger(L, 2));
-    int _ret = dse_scene_get_loaded_subs(out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[4096];
+    int _count = dse_scene_get_loaded_subs(_buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 

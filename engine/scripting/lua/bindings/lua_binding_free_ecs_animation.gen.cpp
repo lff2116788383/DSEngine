@@ -420,43 +420,48 @@ int L_dse_animlayer_set_bone_mask(lua_State* L) {
 
 int L_dse_anim2d_pop_event(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_anim2d_pop_event(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_anim2d_pop_event(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_anim3d_add_transition(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* from_state = luaL_checkstring(L, 2);
-    const char* to_state = luaL_checkstring(L, 3);
-    float transition_duration = static_cast<float>(luaL_checknumber(L, 4));
-    int has_exit_time = static_cast<int>(luaL_checkinteger(L, 5));
-    float exit_time = static_cast<float>(luaL_checknumber(L, 6));
-    int cond_count = static_cast<int>(luaL_checkinteger(L, 7));
-    const char* cond_names = luaL_checkstring(L, 8);
-    int cond_modes = static_cast<int>(luaL_checkinteger(L, 9));
-    float cond_thresholds = static_cast<float>(luaL_checknumber(L, 10));
-    int cond_ints = static_cast<int>(luaL_checkinteger(L, 11));
-    dse_anim3d_add_transition(e, from_state, to_state, transition_duration, has_exit_time, exit_time, cond_count, cond_names, cond_modes, cond_thresholds, cond_ints);
+    std::vector<std::string> cond_names_storage; std::vector<const char*> cond_names; if (lua_istable(L, 7)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 7)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 7, _i); if (lua_isstring(L, -1)) cond_names_storage.emplace_back(lua_tostring(L, -1)); lua_pop(L, 1); } for (const auto& _s : cond_names_storage) cond_names.push_back(_s.c_str()); }
+    std::vector<int> cond_modes; if (lua_istable(L, 8)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 8)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 8, _i); if (lua_isnumber(L, -1)) cond_modes.push_back(static_cast<int>(lua_tointeger(L, -1))); lua_pop(L, 1); } }
+    std::vector<float> cond_thresholds; if (lua_istable(L, 9)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 9)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 9, _i); if (lua_isnumber(L, -1)) cond_thresholds.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    std::vector<int> cond_ints; if (lua_istable(L, 10)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 10)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 10, _i); if (lua_isnumber(L, -1)) cond_ints.push_back(static_cast<int>(lua_tointeger(L, -1))); lua_pop(L, 1); } }
+    dse_anim3d_add_transition(static_cast<uint32_t>(luaL_checkinteger(L, 1)), luaL_checkstring(L, 2), luaL_checkstring(L, 3), static_cast<float>(luaL_checknumber(L, 4)), static_cast<int>(luaL_checkinteger(L, 5)), static_cast<float>(luaL_checknumber(L, 6)), static_cast<int>(cond_names.size()), cond_names.data(), cond_modes.data(), cond_thresholds.data(), cond_ints.data());
     return 0;
 }
 
 int L_dse_anim3d_get_state(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out_state = luaL_checkstring(L, 2);
-    int state_cap = static_cast<int>(luaL_checkinteger(L, 3));
-    float out_norm = static_cast<float>(luaL_checknumber(L, 4));
-    float out_time = static_cast<float>(luaL_checknumber(L, 5));
-    float out_speed = static_cast<float>(luaL_checknumber(L, 6));
-    int out_loop = static_cast<int>(luaL_checkinteger(L, 7));
-    int out_transitioning = static_cast<int>(luaL_checkinteger(L, 8));
-    int out_bone_count = static_cast<int>(luaL_checkinteger(L, 9));
-    int out_has_skel = static_cast<int>(luaL_checkinteger(L, 10));
-    int _ret = dse_anim3d_get_state(e, out_state, state_cap, out_norm, out_time, out_speed, out_loop, out_transitioning, out_bone_count, out_has_skel);
-    lua_pushinteger(L, _ret);
-    return 1;
+    float _out_norm = 0;
+    float _out_time = 0;
+    float _out_speed = 0;
+    int _out_loop = 0;
+    int _out_transitioning = 0;
+    int _out_bone_count = 0;
+    int _out_has_skel = 0;
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char _out_state[256] = {0};
+    dse_anim3d_get_state(e, _out_state, sizeof(_out_state), &_out_norm, &_out_time, &_out_speed, &_out_loop, &_out_transitioning, &_out_bone_count, &_out_has_skel);
+    lua_pushnumber(L, _out_norm);
+    lua_pushnumber(L, _out_time);
+    lua_pushnumber(L, _out_speed);
+    lua_pushinteger(L, _out_loop);
+    lua_pushinteger(L, _out_transitioning);
+    lua_pushinteger(L, _out_bone_count);
+    lua_pushinteger(L, _out_has_skel);
+    return 7;
 }
 
 int L_dse_anim3d_init_fsm(lua_State* L) {
@@ -467,21 +472,25 @@ int L_dse_anim3d_init_fsm(lua_State* L) {
 
 int L_dse_anim3d_pop_event(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_anim3d_pop_event(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_anim3d_pop_event(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_animlayer_set_blend_tree_1d(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    int idx = static_cast<int>(luaL_checkinteger(L, 2));
-    const char* paths = luaL_checkstring(L, 3);
-    float thresholds = static_cast<float>(luaL_checknumber(L, 4));
-    float speeds = static_cast<float>(luaL_checknumber(L, 5));
-    int count = static_cast<int>(luaL_checkinteger(L, 6));
-    dse_animlayer_set_blend_tree_1d(e, idx, paths, thresholds, speeds, count);
+    std::vector<std::string> paths_storage; std::vector<const char*> paths; if (lua_istable(L, 3)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 3)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 3, _i); if (lua_isstring(L, -1)) paths_storage.emplace_back(lua_tostring(L, -1)); lua_pop(L, 1); } for (const auto& _s : paths_storage) paths.push_back(_s.c_str()); }
+    std::vector<float> thresholds; if (lua_istable(L, 4)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 4)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 4, _i); if (lua_isnumber(L, -1)) thresholds.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    std::vector<float> speeds; if (lua_istable(L, 5)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 5)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 5, _i); if (lua_isnumber(L, -1)) speeds.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    dse_animlayer_set_blend_tree_1d(static_cast<uint32_t>(luaL_checkinteger(L, 1)), static_cast<int>(luaL_checkinteger(L, 2)), paths.data(), thresholds.data(), speeds.data(), static_cast<int>(paths.size()));
     return 0;
 }
 

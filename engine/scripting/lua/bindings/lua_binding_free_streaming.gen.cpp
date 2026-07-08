@@ -100,11 +100,8 @@ int L_dse_streaming_get_zone_count(lua_State* L) {
 }
 
 int L_dse_streaming_add_assets(lua_State* L) {
-    int zone = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* paths = luaL_checkstring(L, 2);
-    int count = static_cast<int>(luaL_checkinteger(L, 3));
-    const char* type_str = luaL_checkstring(L, 4);
-    dse_streaming_add_assets(zone, paths, count, type_str);
+    std::vector<std::string> _assets_storage; std::vector<const char*> _assets; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isstring(L, -1)) _assets_storage.emplace_back(lua_tostring(L, -1)); lua_pop(L, 1); } for (const auto& _s : _assets_storage) _assets.push_back(_s.c_str()); }
+    dse_streaming_add_assets(static_cast<uint32_t>(luaL_checkinteger(L, 1)), _assets.data(), static_cast<int>(_assets.size()), luaL_checkstring(L, 3));
     return 0;
 }
 

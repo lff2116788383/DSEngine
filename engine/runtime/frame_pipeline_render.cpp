@@ -1,10 +1,11 @@
-﻿﻿/**
+﻿/**
  * @file frame_pipeline_render.cpp
  * @brief FramePipeline render path â€” RunRenderInternal, BuildRenderGraph, ExecuteRenderGraph.
  */
 
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/frame_pipeline_impl.h"
+#include "engine/runtime/render_thread_manager.h"
 #include "engine/runtime/i_builtin_modules.h"
 #include "engine/core/module.h"
 #include "engine/core/event_bus.h"

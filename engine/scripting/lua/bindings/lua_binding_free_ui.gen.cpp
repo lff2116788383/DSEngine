@@ -35,19 +35,33 @@ int L_dse_ui_is_pressed(lua_State* L) {
 
 int L_dse_ui_get_dropdown_value(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_ui_get_dropdown_value(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_ui_get_dropdown_value(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 
 int L_dse_ui_get_text_input_text(lua_State* L) {
     int e = static_cast<int>(luaL_checkinteger(L, 1));
-    const char* out = luaL_checkstring(L, 2);
-    int cap = static_cast<int>(luaL_checkinteger(L, 3));
-    int _ret = dse_ui_get_text_input_text(e, out, cap);
-    lua_pushinteger(L, _ret);
+    char _buf[1024];
+    int _count = dse_ui_get_text_input_text(e, _buf, sizeof(_buf));
+    lua_newtable(L);
+    int _offset = 0;
+    int _idx = 1;
+    for (int _i = 0; _i < _count && _offset < static_cast<int>(sizeof(_buf)); ++_i) {
+        const char* _name = _buf + _offset;
+        lua_pushstring(L, _name);
+        lua_rawseti(L, -2, _idx++);
+        _offset += static_cast<int>(strlen(_name)) + 1;
+    }
     return 1;
 }
 

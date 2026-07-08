@@ -42,14 +42,12 @@ int L_dse_http_poll(lua_State* L) {
 }
 
 int L_dse_http_get_response(lua_State* L) {
-    int request_id = static_cast<int>(luaL_checkinteger(L, 1));
-    int out_status = static_cast<int>(luaL_checkinteger(L, 2));
-    const char* out_body = luaL_checkstring(L, 3);
-    int body_cap = static_cast<int>(luaL_checkinteger(L, 4));
-    const char* out_error = luaL_checkstring(L, 5);
-    int error_cap = static_cast<int>(luaL_checkinteger(L, 6));
-    int _ret = dse_http_get_response(request_id, out_status, out_body, body_cap, out_error, error_cap);
-    lua_pushinteger(L, _ret);
+    int _out_status = 0;
+    uint32_t request_id = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    char _out_body[4096] = {0};
+    char _out_error[256] = {0};
+    dse_http_get_response(request_id, &_out_status, _out_body, sizeof(_out_body), _out_error, sizeof(_out_error));
+    lua_pushinteger(L, _out_status);
     return 1;
 }
 

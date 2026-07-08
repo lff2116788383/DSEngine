@@ -20,13 +20,8 @@ namespace dse::runtime::lua_binding {
 namespace {
 
 int L_dse_physics2d_add_polygon_collider(lua_State* L) {
-    int e = static_cast<int>(luaL_checkinteger(L, 1));
-    float verts = static_cast<float>(luaL_checknumber(L, 2));
-    int count = static_cast<int>(luaL_checkinteger(L, 3));
-    float density = static_cast<float>(luaL_checknumber(L, 4));
-    float friction = static_cast<float>(luaL_checknumber(L, 5));
-    float restitution = static_cast<float>(luaL_checknumber(L, 6));
-    dse_physics2d_add_polygon_collider(e, verts, count, density, friction, restitution);
+    std::vector<float> _verts; if (lua_istable(L, 2)) { lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2)); for (lua_Integer _i = 1; _i <= _n; ++_i) { lua_rawgeti(L, 2, _i); if (lua_isnumber(L, -1)) _verts.push_back(static_cast<float>(lua_tonumber(L, -1))); lua_pop(L, 1); } }
+    dse_physics2d_add_polygon_collider(static_cast<uint32_t>(luaL_checkinteger(L, 1)), _verts.data(), static_cast<int>(_verts.size()), static_cast<float>(luaL_checknumber(L, 3)), static_cast<float>(luaL_checknumber(L, 4)), static_cast<float>(luaL_checknumber(L, 5)));
     return 0;
 }
 

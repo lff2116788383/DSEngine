@@ -6,6 +6,7 @@
 
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/frame_pipeline_impl.h"
+#include "engine/runtime/render_thread_manager.h"
 #include "engine/runtime/i_builtin_modules.h"
 #include "engine/render/passes/builtin_passes.h"
 #include "engine/render/passes/render_pass_interface.h"
