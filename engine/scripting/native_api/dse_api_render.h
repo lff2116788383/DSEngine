@@ -718,6 +718,12 @@ DSE_CAPI int  dse_ik_add_chain(uint32_t e, const char* name, int type,
                                const char* root_bone, const char* tip_bone, float weight);
 DSE_CAPI void dse_ik_set_target(uint32_t e, int idx, float x, float y, float z);
 DSE_CAPI void dse_ik_set_target_entity(uint32_t e, int idx, uint32_t target);
+
+// Outfit/clothing: cross-entity skeleton reference for MeshRendererComponent.
+// skeleton_entity = UINT32_MAX clears the reference (use own Animator3D).
+// Getter returns UINT32_MAX when unset or the component is missing.
+DSE_CAPI void     dse_mesh_renderer_set_skeleton(uint32_t e, uint32_t skeleton_entity);
+DSE_CAPI uint32_t dse_mesh_renderer_get_skeleton(uint32_t e);
 DSE_CAPI void dse_ik_set_weight(uint32_t e, int idx, float w);
 DSE_CAPI void dse_ik_set_pole_vector(uint32_t e, int idx, float x, float y, float z);
 DSE_CAPI void dse_ik_set_iterations(uint32_t e, int idx, int iters);

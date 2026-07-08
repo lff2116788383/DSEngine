@@ -2764,3 +2764,27 @@ TEST_F(DseApiBindingsTest, Transform_ScaleNegative) {
     EXPECT_FLOAT_EQ(z, -1.0f);
 }
 
+
+// dse_mesh_renderer_set/get_skeleton: cross-entity skeleton reference + UINT32_MAX sentinel
+TEST_F(DseApiBindingsTest, MeshRenderer_SkeletonEntityRoundTrip) {
+    Entity part = world_.CreateEntity();
+    Entity root = world_.CreateEntity();
+    world_.registry().emplace<dse::MeshRendererComponent>(part);
+
+    // Default: no reference -> getter returns UINT32_MAX (not 0).
+    EXPECT_EQ(dse_mesh_renderer_get_skeleton(EntityId(part)), UINT32_MAX);
+
+    // Wire the part to the root skeleton.
+    dse_mesh_renderer_set_skeleton(EntityId(part), EntityId(root));
+    EXPECT_EQ(dse_mesh_renderer_get_skeleton(EntityId(part)), EntityId(root));
+    EXPECT_EQ(world_.registry().get<dse::MeshRendererComponent>(part).skeleton_entity, root);
+
+    // Clear with UINT32_MAX -> back to entt::null.
+    dse_mesh_renderer_set_skeleton(EntityId(part), UINT32_MAX);
+    EXPECT_EQ(dse_mesh_renderer_get_skeleton(EntityId(part)), UINT32_MAX);
+    EXPECT_TRUE(world_.registry().get<dse::MeshRendererComponent>(part).skeleton_entity == entt::null);
+
+    // Missing component -> getter returns UINT32_MAX.
+    Entity bare = world_.CreateEntity();
+    EXPECT_EQ(dse_mesh_renderer_get_skeleton(EntityId(bare)), UINT32_MAX);
+}

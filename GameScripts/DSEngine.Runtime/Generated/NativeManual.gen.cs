@@ -1596,6 +1596,12 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_ik_set_target_entity")]
     internal static partial void dse_ik_set_target_entity(uint e, int idx, uint target);
 
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_set_skeleton")]
+    internal static partial void dse_mesh_renderer_set_skeleton(uint e, uint skeletonEntity);
+
+    [LibraryImport(Lib, EntryPoint = "dse_mesh_renderer_get_skeleton")]
+    internal static partial uint dse_mesh_renderer_get_skeleton(uint e);
+
     [LibraryImport(Lib, EntryPoint = "dse_ik_set_weight")]
     internal static partial void dse_ik_set_weight(uint e, int idx, float w);
 

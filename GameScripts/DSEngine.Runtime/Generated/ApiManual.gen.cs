@@ -610,6 +610,8 @@ public static class Mesh {
     public static int RendererSetNormals(uint e, float[] normals, int count, out int outAttrCount, out int outVertexCount) { return Native.dse_mesh_renderer_set_normals(e, normals, count, out outAttrCount, out outVertexCount); }
     public static int RendererSetTangents(uint e, float[] tangents, int count, out int outAttrCount, out int outVertexCount) { return Native.dse_mesh_renderer_set_tangents(e, tangents, count, out outAttrCount, out outVertexCount); }
     public static void RendererSetEmissiveAuthoring(uint e, float r, float g, float b) { Native.dse_mesh_renderer_set_emissive_authoring(e, r, g, b); }
+    public static void RendererSetSkeleton(uint e, uint skeletonEntity) { Native.dse_mesh_renderer_set_skeleton(e, skeletonEntity); }
+    public static uint RendererGetSkeleton(uint e) { return Native.dse_mesh_renderer_get_skeleton(e); }
     public static void SetMaterial(uint e, string materialPath) { Native.dse_mesh_set_material(e, materialPath); }
     public static void SetDepthState(uint e, int depthTest, int depthWrite) { Native.dse_mesh_set_depth_state(e, depthTest, depthWrite); }
     public static void SetMaterialScalar(uint e, string paramName, float value) { Native.dse_mesh_set_material_scalar(e, paramName, value); }

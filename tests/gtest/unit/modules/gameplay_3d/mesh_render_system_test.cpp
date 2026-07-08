@@ -14,6 +14,7 @@
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
+#include "engine/ecs/components_3d_animation.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/opengl/gl_command_buffer.h"
 
@@ -132,4 +133,79 @@ TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash_2) {
     dse::render::FrameContext frame;
     sys.RenderTransparent(world, cmd, frame, 1);
     sys.RenderTransparent(world, cmd, frame, 2);
+}
+
+// ============================================================
+// Outfit/clothing: cross-entity skeleton reference (skeleton_entity)
+// ============================================================
+
+namespace {
+// A MeshRendererComponent that would otherwise qualify for the GPU-driven path
+// (visible, has geometry, valid bounds, fully opaque).
+dse::MeshRendererComponent MakeGpuEligibleMesh() {
+    dse::MeshRendererComponent mr;
+    mr.visible = true;
+    mr.temp_vertices = {0.0f, 0.0f, 0.0f};
+    mr.temp_indices = {0u};
+    mr.local_bounds_valid = true;
+    mr.color = glm::vec4(1.0f);
+    return mr;
+}
+} // namespace
+
+// skeleton_entity defaults to entt::null (use own Animator3D; backward compatible).
+TEST(MeshRendererComponentTest, SkeletonEntityDefaultsToNull) {
+    dse::MeshRendererComponent mr;
+    EXPECT_TRUE(mr.skeleton_entity == entt::null);
+}
+
+// Baseline: a plain static mesh with no skeleton is GPU-driven eligible.
+TEST(MeshRenderSystemGpuDrivenTest, StaticMeshIsEligible) {
+    World world;
+    Entity e = world.CreateEntity();
+    auto mr = MakeGpuEligibleMesh();
+    EXPECT_TRUE(MeshRenderSystem::IsGPUDrivenEligible(world, e, mr));
+}
+
+// Regression guard (review issue #1): a clothing part references the root's
+// active skeleton via skeleton_entity, so it must be rejected from the
+// GPU-driven mega-buffer path -- otherwise it would render unskinned (bind pose).
+TEST(MeshRenderSystemGpuDrivenTest, ClothingReferencingActiveSkeletonIsNotEligible) {
+    World world;
+    Entity root = world.CreateEntity();
+    auto& animator = world.registry().emplace<dse::Animator3DComponent>(root);
+    animator.enabled = true;
+    animator.final_bone_matrices.assign(4, glm::mat4(1.0f));
+
+    Entity part = world.CreateEntity();
+    auto mr = MakeGpuEligibleMesh();
+    mr.skeleton_entity = root;
+
+    EXPECT_FALSE(MeshRenderSystem::IsGPUDrivenEligible(world, part, mr));
+}
+
+// A part self-hosting its own active skeleton must also be rejected (baseline
+// skinned behavior, unchanged by the redirect).
+TEST(MeshRenderSystemGpuDrivenTest, SelfSkinnedMeshIsNotEligible) {
+    World world;
+    Entity e = world.CreateEntity();
+    auto& animator = world.registry().emplace<dse::Animator3DComponent>(e);
+    animator.enabled = true;
+    animator.final_bone_matrices.assign(4, glm::mat4(1.0f));
+
+    auto mr = MakeGpuEligibleMesh();  // skeleton_entity stays null => uses self
+    EXPECT_FALSE(MeshRenderSystem::IsGPUDrivenEligible(world, e, mr));
+}
+
+// If skeleton_entity points at an entity with no active skeleton, the redirect
+// must not spuriously reject the part: it stays GPU-driven eligible.
+TEST(MeshRenderSystemGpuDrivenTest, ClothingWithInactiveSkeletonStaysEligible) {
+    World world;
+    Entity root = world.CreateEntity();  // no Animator3DComponent
+
+    Entity part = world.CreateEntity();
+    auto mr = MakeGpuEligibleMesh();
+    mr.skeleton_entity = root;
+
+    EXPECT_TRUE(MeshRenderSystem::IsGPUDrivenEligible(world, part, mr));
 }

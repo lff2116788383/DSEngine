@@ -12674,6 +12674,36 @@
       ],
       "functions": [
         {
+          "c_name": "dse_mesh_renderer_set_skeleton",
+          "lua_name": "mesh_renderer_set_skeleton",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "skeleton_entity",
+              "type": "uint32"
+            }
+          ],
+          "returns": []
+        },
+        {
+          "c_name": "dse_mesh_renderer_get_skeleton",
+          "lua_name": "mesh_renderer_get_skeleton",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "returns": [
+            {
+              "type": "uint32"
+            }
+          ]
+        },
+        {
           "c_name": "dse_ai_lod_get_config",
           "lua_name": "ai_lod_get_config",
           "params": [],

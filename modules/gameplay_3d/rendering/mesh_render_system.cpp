@@ -43,6 +43,18 @@ AssetManager& RequireAssetManager(AssetManager* asset_manager) {
     throw std::runtime_error("MeshRenderSystem requires an injected AssetManager");
 }
 
+// Resolves which entity supplies the skeleton (Animator3DComponent's
+// final_bone_matrices) for a skinned mesh. Outfit/clothing parts reference
+// their character root via MeshRendererComponent::skeleton_entity; entt::null
+// means "use this entity's own Animator3D" (default, backward compatible).
+entt::entity ResolveSkeletonEntity(World& world, entt::entity self,
+                                   const MeshRendererComponent& mr) {
+    if (mr.skeleton_entity != entt::null && world.registry().valid(mr.skeleton_entity)) {
+        return mr.skeleton_entity;
+    }
+    return self;
+}
+
 struct RawMeshData {
     std::vector<float> vertices;
     std::vector<uint32_t> indices;
@@ -894,8 +906,9 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         
         // VS 骨骼蒙皮：local-space 顶点 + bone matrices SSBO
         uint64_t entity_bone_palette_key = 0;
-        if (world.registry().all_of<Animator3DComponent>(entity)) {
-            const auto& animator = world.registry().get<Animator3DComponent>(entity);
+        const entt::entity skinned_entity = ResolveSkeletonEntity(world, entity, mesh_renderer);
+        if (world.registry().all_of<Animator3DComponent>(skinned_entity)) {
+            const auto& animator = world.registry().get<Animator3DComponent>(skinned_entity);
             if (animator.enabled && !animator.final_bone_matrices.empty()) {
                 item.skinned = true;
                 item.bone_matrices = animator.final_bone_matrices;
@@ -2010,8 +2023,9 @@ bool MeshRenderSystem::IsGPUDrivenEligible(World& world, entt::entity entity,
     if (mr.temp_vertices.empty() || mr.temp_indices.empty()) return false;
     if (!mr.local_bounds_valid) return false;
     if (mr.color.a < 0.999f) return false;
-    if (world.registry().all_of<Animator3DComponent>(entity)) {
-        const auto& a = world.registry().get<Animator3DComponent>(entity);
+    const entt::entity skinned_entity = ResolveSkeletonEntity(world, entity, mr);
+    if (world.registry().all_of<Animator3DComponent>(skinned_entity)) {
+        const auto& a = world.registry().get<Animator3DComponent>(skinned_entity);
         if (a.enabled && !a.final_bone_matrices.empty()) return false;
     }
     // Cloth deforms its mesh on the CPU in place every frame; the GPU-driven

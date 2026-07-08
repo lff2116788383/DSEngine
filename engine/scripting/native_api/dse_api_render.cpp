@@ -25,6 +25,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
+#include <cstdint>
 #include <string>
 
 using Entity = entt::entity;
@@ -435,4 +436,26 @@ extern "C" void dse_morph_simple_set_enabled(uint32_t e, int enabled) {
     if (!world) return;
     auto* morph = world->registry().try_get<dse::MorphComponent>(TE(e));
     if (morph) morph->enabled = (enabled != 0);
+}
+
+// ============================================================
+// Outfit/clothing cross-entity skeleton reference (see dse_api_render.h).
+// Sentinel UINT32_MAX == "no reference" (aligns with dse_ik_set_target_entity).
+// ============================================================
+extern "C" void dse_mesh_renderer_set_skeleton(uint32_t e, uint32_t skeleton_entity) {
+    World* world = GW();
+    if (!world) return;
+    auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh) return;
+    mesh->skeleton_entity = (skeleton_entity == UINT32_MAX)
+                                ? entt::null
+                                : TE(skeleton_entity);
+}
+
+extern "C" uint32_t dse_mesh_renderer_get_skeleton(uint32_t e) {
+    World* world = GW();
+    if (!world) return UINT32_MAX;
+    const auto* mesh = world->registry().try_get<dse::MeshRendererComponent>(TE(e));
+    if (!mesh || mesh->skeleton_entity == entt::null) return UINT32_MAX;
+    return static_cast<uint32_t>(mesh->skeleton_entity);
 }

@@ -19,6 +19,20 @@ extern "C" {
 namespace dse::runtime::lua_binding {
 namespace {
 
+int L_dse_mesh_renderer_set_skeleton(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    uint32_t skeleton_entity = static_cast<uint32_t>(luaL_checkinteger(L, 2));
+    dse_mesh_renderer_set_skeleton(e, skeleton_entity);
+    return 0;
+}
+
+int L_dse_mesh_renderer_get_skeleton(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    uint32_t _ret = dse_mesh_renderer_get_skeleton(e);
+    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+    return 1;
+}
+
 int L_dse_ai_lod_get_config(lua_State* L) {
     float out_near_dist = 0;
     float out_far_dist = 0;
@@ -1023,6 +1037,8 @@ void RegisterFreeGapBindings(lua_State* L) {
         lua_setglobal(L, "dse");
     }
     helper::RegisterBindings(L, {
+        {"mesh_renderer_set_skeleton", L_dse_mesh_renderer_set_skeleton},
+        {"mesh_renderer_get_skeleton", L_dse_mesh_renderer_get_skeleton},
         {"ai_lod_get_config", L_dse_ai_lod_get_config},
         {"anim3d_get_root_motion_delta", L_dse_anim3d_get_root_motion_delta},
         {"bone_attach_get_world_pos", L_dse_bone_attach_get_world_pos},

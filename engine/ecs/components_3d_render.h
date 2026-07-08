@@ -82,6 +82,13 @@ struct MeshRendererComponent {
     uint32_t meshlet_mesh_id = 0;
     /// 材质索引（用于 per-meshlet 材质绑定，引用全局材质表）
     uint32_t material_index = 0;
+
+    /// Cross-entity skeleton reference for outfit/clothing parts: when valid,
+    /// skinning reads bone matrices from this entity's Animator3DComponent
+    /// instead of this entity's own. entt::null = use own Animator3D (default,
+    /// backward compatible). Runtime-only wiring; intentionally NOT serialized
+    /// (mirrors BoneAttachmentComponent::target_entity).
+    entt::entity skeleton_entity{entt::null};
 };
 
 struct LODLevelConfig {
