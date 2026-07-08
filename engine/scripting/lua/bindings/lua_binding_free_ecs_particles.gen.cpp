@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -24,20 +29,20 @@ int L_dse_particle_system_3d_add(lua_State* L) {
 
 int L_dse_particle_system_3d_set_params(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float life_min = static_cast<float>(luaL_checknumber(L, 2));
-    float life_max = static_cast<float>(luaL_checknumber(L, 3));
-    float size_min = static_cast<float>(luaL_checknumber(L, 4));
-    float size_max = static_cast<float>(luaL_checknumber(L, 5));
-    float speed_min = static_cast<float>(luaL_checknumber(L, 6));
-    float speed_max = static_cast<float>(luaL_checknumber(L, 7));
-    float r = static_cast<float>(luaL_checknumber(L, 8));
-    float g = static_cast<float>(luaL_checknumber(L, 9));
-    float b = static_cast<float>(luaL_checknumber(L, 10));
-    float a = static_cast<float>(luaL_checknumber(L, 11));
-    float gx = static_cast<float>(luaL_checknumber(L, 12));
-    float gy = static_cast<float>(luaL_checknumber(L, 13));
-    float gz = static_cast<float>(luaL_checknumber(L, 14));
-    const char* texture_path = luaL_checkstring(L, 15);
+    float life_min = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    float life_max = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    float size_min = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    float size_max = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    float speed_min = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    float speed_max = static_cast<float>(luaL_optnumber(L, 7, 0.0));
+    float r = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    float g = static_cast<float>(luaL_optnumber(L, 9, 0.0));
+    float b = static_cast<float>(luaL_optnumber(L, 10, 0.0));
+    float a = static_cast<float>(luaL_optnumber(L, 11, 0.0));
+    float gx = static_cast<float>(luaL_optnumber(L, 12, 0.0));
+    float gy = static_cast<float>(luaL_optnumber(L, 13, 0.0));
+    float gz = static_cast<float>(luaL_optnumber(L, 14, 0.0));
+    const char* texture_path = luaL_optstring(L, 15, "");
     dse_particle_system_3d_set_params(e, life_min, life_max, size_min, size_max, speed_min, speed_max, r, g, b, a, gx, gy, gz, texture_path);
     return 0;
 }
@@ -73,12 +78,12 @@ int L_dse_gameplay_tuning_add(lua_State* L) {
 
 int L_dse_gameplay_tuning_set(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float leaf_min_distance = static_cast<float>(luaL_checknumber(L, 2));
-    float leaf_move_left = static_cast<float>(luaL_checknumber(L, 3));
-    float leaf_move_right = static_cast<float>(luaL_checknumber(L, 4));
-    float jump_speed_scale = static_cast<float>(luaL_checknumber(L, 5));
-    float jump_speed_max = static_cast<float>(luaL_checknumber(L, 6));
-    float camera_follow_damping = static_cast<float>(luaL_checknumber(L, 7));
+    float leaf_min_distance = static_cast<float>(luaL_optnumber(L, 2, 0.0));
+    float leaf_move_left = static_cast<float>(luaL_optnumber(L, 3, 0.0));
+    float leaf_move_right = static_cast<float>(luaL_optnumber(L, 4, 0.0));
+    float jump_speed_scale = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    float jump_speed_max = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    float camera_follow_damping = static_cast<float>(luaL_optnumber(L, 7, 0.0));
     dse_gameplay_tuning_set(e, leaf_min_distance, leaf_move_left, leaf_move_right, jump_speed_scale, jump_speed_max, camera_follow_damping);
     return 0;
 }

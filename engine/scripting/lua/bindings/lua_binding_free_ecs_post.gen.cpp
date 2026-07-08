@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -42,6 +47,21 @@ int L_dse_decal_set_full(lua_State* L) {
     return 0;
 }
 
+int L_add_post_process(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
+    float bloom_threshold = static_cast<float>(luaL_checknumber(L, 3));
+    float bloom_intensity = static_cast<float>(luaL_checknumber(L, 4));
+    float bloom_knee = static_cast<float>(luaL_checknumber(L, 5));
+    dse_post_process_add(e);
+    dse_post_process_set_enabled(e, enabled);
+    dse_post_process_set_bloom_enabled(e, 1);
+    dse_post_process_set_bloom_threshold(e, bloom_threshold);
+    dse_post_process_set_bloom_intensity(e, bloom_intensity);
+    dse_post_process_set_bloom_knee(e, bloom_knee);
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsRenderingPostBindings(lua_State* L) {
@@ -57,6 +77,7 @@ void RegisterEcsRenderingPostBindings(lua_State* L) {
         {"set_post_process_color_lut", L_dse_post_process_set_color_lut},
         {"add_decal", L_dse_decal_add_simple},
         {"set_decal", L_dse_decal_set_full},
+        {"add_post_process", L_add_post_process},
     });
     lua_pop(L, 2);
 }

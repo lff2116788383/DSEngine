@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -97,28 +102,27 @@ int L_dse_streaming_get_zone_count(lua_State* L) {
 } // namespace
 
 void RegisterStreamingBindings(lua_State* L) {
-    lua_getglobal(L, "dse");
-    lua_getfield(L, -1, "streaming");
+    lua_getglobal(L, "streaming");
     if (lua_isnil(L, -1)) {
         lua_pop(L, 1);
         lua_newtable(L);
         lua_pushvalue(L, -1);
-        lua_setfield(L, -3, "streaming");
+        lua_setglobal(L, "streaming");
     }
     helper::RegisterBindings(L, {
-        {"streamingcreatezone", L_dse_streaming_create_zone},
-        {"streamingdestroyzone", L_dse_streaming_destroy_zone},
-        {"streamingaddasset", L_dse_streaming_add_asset},
-        {"streamingsetzonecenter", L_dse_streaming_set_zone_center},
-        {"streamingforceload", L_dse_streaming_force_load},
-        {"streamingforceunload", L_dse_streaming_force_unload},
-        {"streaminggetzonestate", L_dse_streaming_get_zone_state},
-        {"streaminggetzoneprogress", L_dse_streaming_get_zone_progress},
-        {"streamingsetbudget", L_dse_streaming_set_budget},
-        {"streaminggetactiveloads", L_dse_streaming_get_active_loads},
-        {"streaminggetzonecount", L_dse_streaming_get_zone_count},
+        {"create_zone", L_dse_streaming_create_zone},
+        {"destroy_zone", L_dse_streaming_destroy_zone},
+        {"add_asset", L_dse_streaming_add_asset},
+        {"set_zone_center", L_dse_streaming_set_zone_center},
+        {"force_load", L_dse_streaming_force_load},
+        {"force_unload", L_dse_streaming_force_unload},
+        {"get_zone_state", L_dse_streaming_get_zone_state},
+        {"get_zone_progress", L_dse_streaming_get_zone_progress},
+        {"set_budget", L_dse_streaming_set_budget},
+        {"get_active_loads", L_dse_streaming_get_active_loads},
+        {"get_zone_count", L_dse_streaming_get_zone_count},
     });
-    lua_pop(L, 2);
+    lua_pop(L, 1);
 }
 
 } // namespace dse::runtime::lua_binding

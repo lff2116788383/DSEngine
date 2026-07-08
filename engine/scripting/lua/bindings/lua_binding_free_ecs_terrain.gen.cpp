@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -159,6 +164,41 @@ int L_dse_navmesh_rebake_add(lua_State* L) {
     return 0;
 }
 
+int L_dse_terrain_set_params(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    int res_x = static_cast<int>(luaL_checkinteger(L, 2));
+    int res_z = static_cast<int>(luaL_checkinteger(L, 3));
+    int max_lod = static_cast<int>(luaL_checkinteger(L, 4));
+    float lod_factor = static_cast<float>(luaL_checknumber(L, 5));
+    int use_dynamic_lod = helper::CheckBool(L, 6) ? 1 : 0;
+    dse_terrain_set_params(e, res_x, res_z, max_lod, lod_factor, use_dynamic_lod);
+    return 0;
+}
+
+int L_dse_terrain_heightmap_set_data(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    std::vector<float> heights;
+    if (lua_istable(L, 2)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 2, _i);
+            if (lua_isnumber(L, -1)) heights.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    dse_terrain_heightmap_set_data(e, heights.data(), static_cast<int>(heights.size()));
+    return 0;
+}
+
+int L_dse_terrain_get_height(lua_State* L) {
+    float out_y = 0;
+    float wx = static_cast<float>(luaL_checknumber(L, 1));
+    float wz = static_cast<float>(luaL_checknumber(L, 2));
+    dse_terrain_get_height(wx, wz, &out_y);
+    lua_pushnumber(L, out_y);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsRenderingTerrainBindings(lua_State* L) {
@@ -188,6 +228,9 @@ void RegisterEcsRenderingTerrainBindings(lua_State* L) {
         {"add_dynamic_obstacle", L_dse_dynamic_obstacle_add},
         {"add_foliage", L_dse_foliage_add},
         {"add_navmesh_auto_rebake", L_dse_navmesh_rebake_add},
+        {"set_terrain_params", L_dse_terrain_set_params},
+        {"terrain_heightmap_set_data", L_dse_terrain_heightmap_set_data},
+        {"terrain_get_height", L_dse_terrain_get_height},
     });
     lua_pop(L, 2);
 }

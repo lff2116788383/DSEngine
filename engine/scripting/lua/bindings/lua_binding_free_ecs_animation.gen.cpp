@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -17,6 +22,24 @@ namespace {
 int L_dse_anim2d_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     dse_anim2d_add(e);
+    return 0;
+}
+
+int L_dse_anim2d_add_state(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    const char* name = luaL_checkstring(L, 2);
+    float frame_rate = static_cast<float>(luaL_checknumber(L, 3));
+    int loop = helper::CheckBool(L, 4) ? 1 : 0;
+    std::vector<uint32_t> frame_handles;
+    if (lua_istable(L, 5)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 5));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 5, _i);
+            if (lua_isnumber(L, -1)) frame_handles.push_back(static_cast<uint32_t>(lua_tointeger(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    dse_anim2d_add_state(e, name, frame_rate, loop, frame_handles.data(), static_cast<int>(frame_handles.size()));
     return 0;
 }
 
@@ -47,8 +70,8 @@ int L_dse_anim2d_play_segment(lua_State* L) {
 
 int L_dse_anim3d_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    const char* danim_path = luaL_checkstring(L, 2);
-    const char* dskel_path = luaL_checkstring(L, 3);
+    const char* danim_path = luaL_optstring(L, 2, "");
+    const char* dskel_path = luaL_optstring(L, 3, "");
     dse_anim3d_add(e, danim_path, dskel_path);
     return 0;
 }
@@ -57,14 +80,26 @@ int L_dse_anim3d_set_state(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* state_name = luaL_checkstring(L, 2);
     float speed = static_cast<float>(luaL_checknumber(L, 3));
-    int loop = static_cast<int>(luaL_checkinteger(L, 4));
+    int loop = helper::CheckBool(L, 4) ? 1 : 0;
     dse_anim3d_set_state(e, state_name, speed, loop);
     return 0;
 }
 
-int L_dse_anim3d_init_fsm(lua_State* L) {
+int L_dse_compat_anim3d_init_fsm(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    dse_anim3d_init_fsm(e);
+    const char* default_state = luaL_optstring(L, 2, "");
+    dse_compat_anim3d_init_fsm(e, default_state);
+    return 0;
+}
+
+int L_dse_compat_anim3d_add_transition(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    const char* from_state = luaL_checkstring(L, 2);
+    const char* to_state = luaL_checkstring(L, 3);
+    float transition_duration = static_cast<float>(luaL_checknumber(L, 4));
+    int has_exit_time = helper::CheckBool(L, 5) ? 1 : 0;
+    float exit_time = static_cast<float>(luaL_checknumber(L, 6));
+    dse_compat_anim3d_add_transition(e, from_state, to_state, transition_duration, has_exit_time, exit_time);
     return 0;
 }
 
@@ -72,8 +107,8 @@ int L_dse_anim3d_add_fsm_state(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* state_name = luaL_checkstring(L, 2);
     const char* danim_path = luaL_checkstring(L, 3);
-    int loop = static_cast<int>(luaL_checkinteger(L, 4));
-    float speed = static_cast<float>(luaL_checknumber(L, 5));
+    int loop = helper::OptBool(L, 4, true) ? 1 : 0;
+    float speed = static_cast<float>(luaL_optnumber(L, 5, 1.0));
     dse_anim3d_add_fsm_state(e, state_name, danim_path, loop, speed);
     return 0;
 }
@@ -109,8 +144,8 @@ int L_dse_animlayer_add_component(lua_State* L) {
 int L_dse_animlayer_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* name = luaL_checkstring(L, 2);
-    float weight = static_cast<float>(luaL_checknumber(L, 3));
-    int blend_mode = static_cast<int>(luaL_checkinteger(L, 4));
+    float weight = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    int blend_mode = static_cast<int>(luaL_optinteger(L, 4, 0));
     int _ret = dse_animlayer_add(e, name, weight, blend_mode);
     lua_pushinteger(L, _ret);
     return 1;
@@ -121,7 +156,7 @@ int L_dse_animlayer_set_clip(lua_State* L) {
     int idx = static_cast<int>(luaL_checkinteger(L, 2));
     const char* danim_path = luaL_checkstring(L, 3);
     float speed = static_cast<float>(luaL_checknumber(L, 4));
-    int loop = static_cast<int>(luaL_checkinteger(L, 5));
+    int loop = helper::CheckBool(L, 5) ? 1 : 0;
     dse_animlayer_set_clip(e, idx, danim_path, speed, loop);
     return 0;
 }
@@ -365,6 +400,24 @@ int L_dse_morph_get_target_count(lua_State* L) {
     return 1;
 }
 
+int L_dse_animlayer_set_bone_mask(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    int idx = static_cast<int>(luaL_checkinteger(L, 2));
+    std::vector<std::string> bones_storage;
+    std::vector<const char*> bones;
+    if (lua_istable(L, 3)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 3));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 3, _i);
+            if (lua_isstring(L, -1)) bones_storage.emplace_back(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+        for (const auto& _s : bones_storage) bones.push_back(_s.c_str());
+    }
+    dse_animlayer_set_bone_mask(e, idx, bones.data(), static_cast<int>(bones.size()));
+    return 0;
+}
+
 } // namespace
 
 void RegisterEcsAnimationBindings(lua_State* L) {
@@ -378,12 +431,14 @@ void RegisterEcsAnimationBindings(lua_State* L) {
     }
     helper::RegisterBindings(L, {
         {"add_animator", L_dse_anim2d_add},
+        {"add_animation_state", L_dse_anim2d_add_state},
         {"add_animation_event", L_dse_anim2d_add_event},
         {"play_animation", L_dse_anim2d_play},
         {"play_animation_segment", L_dse_anim2d_play_segment},
         {"add_animator_3d", L_dse_anim3d_add},
         {"set_animator_3d_state", L_dse_anim3d_set_state},
-        {"init_animator_3d_fsm", L_dse_anim3d_init_fsm},
+        {"init_animator_3d_fsm", L_dse_compat_anim3d_init_fsm},
+        {"add_animator_3d_transition", L_dse_compat_anim3d_add_transition},
         {"add_animator_3d_state", L_dse_anim3d_add_fsm_state},
         {"set_animator_3d_param_float", L_dse_anim3d_set_param_float},
         {"set_animator_3d_param_trigger", L_dse_anim3d_set_param_trigger},
@@ -420,6 +475,7 @@ void RegisterEcsAnimationBindings(lua_State* L) {
         {"morph_set_weight_index", L_dse_morph_set_weight_index},
         {"morph_get_weight", L_dse_morph_get_weight},
         {"morph_get_target_count", L_dse_morph_get_target_count},
+        {"set_anim_layer_bone_mask", L_dse_animlayer_set_bone_mask},
     });
     lua_pop(L, 2);
 }

@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -175,6 +180,12 @@ int L_dse_spot_light_has(lua_State* L) {
 
 void RegisterFreeLightGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"dir_light_add", L_dse_dir_light_add},
         {"dir_light_get_shadow_params", L_dse_dir_light_get_shadow_params},

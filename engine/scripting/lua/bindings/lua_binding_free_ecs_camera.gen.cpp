@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -84,6 +89,29 @@ int L_dse_sprite_set_uv_offset(lua_State* L) {
     return 0;
 }
 
+int L_add_camera_3d(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float fov = static_cast<float>(luaL_checknumber(L, 2));
+    int priority = static_cast<int>(luaL_checkinteger(L, 3));
+    dse_camera3d_add(e, fov, 0.1f, 1000.0f);
+    dse_camera3d_set_priority(e, priority);
+    return 0;
+}
+
+int L_dse_compat_world_to_screen(lua_State* L) {
+    float out_sx = 0;
+    float out_sy = 0;
+    int out_visible = 0;
+    float wx = static_cast<float>(luaL_checknumber(L, 1));
+    float wy = static_cast<float>(luaL_checknumber(L, 2));
+    float wz = static_cast<float>(luaL_checknumber(L, 3));
+    dse_compat_world_to_screen(wx, wy, wz, &out_sx, &out_sy, &out_visible);
+    lua_pushnumber(L, out_sx);
+    lua_pushnumber(L, out_sy);
+    lua_pushboolean(L, out_visible);
+    return 3;
+}
+
 } // namespace
 
 void RegisterEcsRenderingCameraBindings(lua_State* L) {
@@ -104,6 +132,8 @@ void RegisterEcsRenderingCameraBindings(lua_State* L) {
         {"add_sprite", L_dse_sprite_add},
         {"set_sprite_uv_scroll", L_dse_sprite_set_uv_scroll},
         {"set_sprite_uv_offset", L_dse_sprite_set_uv_offset},
+        {"add_camera_3d", L_add_camera_3d},
+        {"world_to_screen", L_dse_compat_world_to_screen},
     });
     lua_pop(L, 2);
 }

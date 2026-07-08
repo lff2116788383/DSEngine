@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -73,6 +78,12 @@ int L_dse_morph_simple_set_weight_index(lua_State* L) {
 
 void RegisterFreeAnimationGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"anim3d_get_root_motion_delta", L_dse_anim3d_get_root_motion_delta},
         {"bone_attach_get_world_pos", L_dse_bone_attach_get_world_pos},

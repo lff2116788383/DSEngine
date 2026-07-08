@@ -56,6 +56,17 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
     // DSSL 材质系统 — 独立全局表 "dssl"
     RegisterDSSLBindings(L);
+    // Create standalone "dssl" global alias (backward compat)
+    lua_getglobal(L, "dse");
+    lua_getfield(L, -1, "dssl");
+    lua_setglobal(L, "dssl");
+    // Create standalone "l10n" global alias
+    lua_getglobal(L, "dse");
+    lua_getfield(L, -1, "l10n");
+    lua_setglobal(L, "l10n");
+    lua_pop(L, 1);
+
+    lua_pop(L, 1);
 
 #ifdef DSE_ENABLE_NAVMESH
     // NavMesh 寻路系统 — 独立全局表 "nav" + ecs 扩展

@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -177,6 +182,12 @@ int L_dse_rigidbody3d_get_velocity(lua_State* L) {
 
 void RegisterFreePhys3dGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"character_check_ground", L_dse_character_check_ground},
         {"character_controller3d_get_position", L_dse_character_controller3d_get_position},

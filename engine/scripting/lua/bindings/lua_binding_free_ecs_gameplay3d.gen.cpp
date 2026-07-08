@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -75,7 +80,7 @@ int L_dse_cloth_set_wind(lua_State* L) {
     float wx = static_cast<float>(luaL_checknumber(L, 2));
     float wy = static_cast<float>(luaL_checknumber(L, 3));
     float wz = static_cast<float>(luaL_checknumber(L, 4));
-    float turbulence = static_cast<float>(luaL_checknumber(L, 5));
+    float turbulence = lua_isnoneornil(L, 5) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 5));
     dse_cloth_set_wind(e, wx, wy, wz, turbulence);
     return 0;
 }
@@ -158,7 +163,7 @@ int L_dse_fluid_get_particle_count(lua_State* L) {
 int L_dse_ragdoll_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float total_mass = static_cast<float>(luaL_checknumber(L, 2));
-    int auto_setup = static_cast<int>(luaL_checkinteger(L, 3));
+    int auto_setup = helper::CheckBool(L, 3) ? 1 : 0;
     float joint_stiffness = static_cast<float>(luaL_checknumber(L, 4));
     float joint_damping = static_cast<float>(luaL_checknumber(L, 5));
     dse_ragdoll_add(e, total_mass, auto_setup, joint_stiffness, joint_damping);
@@ -204,8 +209,8 @@ int L_dse_softbody_add(lua_State* L) {
 
 int L_dse_softbody_set_gravity(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int use_gravity = static_cast<int>(luaL_checkinteger(L, 2));
-    float gravity_scale = static_cast<float>(luaL_checknumber(L, 3));
+    int use_gravity = helper::CheckBool(L, 2) ? 1 : 0;
+    float gravity_scale = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
     dse_softbody_set_gravity(e, use_gravity, gravity_scale);
     return 0;
 }
@@ -239,8 +244,8 @@ int L_dse_vehicle_add_wheel(lua_State* L) {
     float py = static_cast<float>(luaL_checknumber(L, 3));
     float pz = static_cast<float>(luaL_checknumber(L, 4));
     float radius = static_cast<float>(luaL_checknumber(L, 5));
-    int is_drive = static_cast<int>(luaL_checkinteger(L, 6));
-    int is_steer = static_cast<int>(luaL_checkinteger(L, 7));
+    int is_drive = helper::CheckBool(L, 6) ? 1 : 0;
+    int is_steer = helper::CheckBool(L, 7) ? 1 : 0;
     float susp_stiffness = static_cast<float>(luaL_checknumber(L, 8));
     float susp_damping = static_cast<float>(luaL_checknumber(L, 9));
     dse_vehicle_add_wheel(e, px, py, pz, radius, is_drive, is_steer, susp_stiffness, susp_damping);
@@ -296,7 +301,7 @@ int L_dse_rope_set_anchors(lua_State* L) {
 
 int L_dse_rope_set_gravity(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int use_gravity = static_cast<int>(luaL_checkinteger(L, 2));
+    int use_gravity = helper::CheckBool(L, 2) ? 1 : 0;
     float gravity_scale = static_cast<float>(luaL_checknumber(L, 3));
     dse_rope_set_gravity(e, use_gravity, gravity_scale);
     return 0;
@@ -339,34 +344,34 @@ int L_dse_buoyancy_get_submerge_ratio(lua_State* L) {
 
 int L_dse_buoyancy_set_use_fluid(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int use_fluid = static_cast<int>(luaL_checkinteger(L, 2));
+    int use_fluid = helper::CheckBool(L, 2) ? 1 : 0;
     dse_buoyancy_set_use_fluid(e, use_fluid);
     return 0;
 }
 
-int L_dse_weather_add(lua_State* L) {
+int L_dse_compat_weather_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int type = static_cast<int>(luaL_checkinteger(L, 2));
+    const char* type = luaL_checkstring(L, 2);
     float intensity = static_cast<float>(luaL_checknumber(L, 3));
-    dse_weather_add(e, type, intensity);
+    dse_compat_weather_add(e, type, intensity);
     return 0;
 }
 
 int L_dse_weather_set(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int type = static_cast<int>(luaL_checkinteger(L, 2));
-    float intensity = static_cast<float>(luaL_checknumber(L, 3));
-    float wind_x = static_cast<float>(luaL_checknumber(L, 4));
-    float wind_z = static_cast<float>(luaL_checknumber(L, 5));
+    int type = lua_isnoneornil(L, 2) ? -1 : static_cast<int>(luaL_checkinteger(L, 2));
+    float intensity = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    float wind_x = lua_isnoneornil(L, 4) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 4));
+    float wind_z = lua_isnoneornil(L, 5) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 5));
     dse_weather_set(e, type, intensity, wind_x, wind_z);
     return 0;
 }
 
 int L_dse_weather_set_spawn(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float radius = static_cast<float>(luaL_checknumber(L, 2));
-    float height = static_cast<float>(luaL_checknumber(L, 3));
-    int max_particles = static_cast<int>(luaL_checkinteger(L, 4));
+    float radius = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float height = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    int max_particles = lua_isnoneornil(L, 4) ? -1 : static_cast<int>(luaL_checkinteger(L, 4));
     dse_weather_set_spawn(e, radius, height, max_particles);
     return 0;
 }
@@ -379,9 +384,9 @@ int L_dse_snow_cover_add(lua_State* L) {
 
 int L_dse_snow_cover_set(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float target_coverage = static_cast<float>(luaL_checknumber(L, 2));
-    float accumulation_rate = static_cast<float>(luaL_checknumber(L, 3));
-    float melt_rate = static_cast<float>(luaL_checknumber(L, 4));
+    float target_coverage = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float accumulation_rate = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    float melt_rate = lua_isnoneornil(L, 4) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 4));
     dse_snow_cover_set(e, target_coverage, accumulation_rate, melt_rate);
     return 0;
 }
@@ -401,7 +406,7 @@ int L_dse_snow_set_appearance(lua_State* L) {
 
 int L_dse_snow_cover_set_enabled(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enabled = static_cast<int>(luaL_checkinteger(L, 2));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
     dse_snow_cover_set_enabled(e, enabled);
     return 0;
 }
@@ -474,7 +479,7 @@ int L_dse_atmosphere_set_sun_intensity(lua_State* L) {
 int L_dse_day_night_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float time_of_day = static_cast<float>(luaL_checknumber(L, 2));
-    int auto_advance = static_cast<int>(luaL_checkinteger(L, 3));
+    int auto_advance = helper::CheckBool(L, 3) ? 1 : 0;
     float time_speed = static_cast<float>(luaL_checknumber(L, 4));
     dse_day_night_add(e, time_of_day, auto_advance, time_speed);
     return 0;
@@ -510,9 +515,9 @@ int L_dse_day_night_set_auto_advance(lua_State* L) {
 
 int L_dse_day_night_set_location(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float latitude = static_cast<float>(luaL_checknumber(L, 2));
-    float longitude = static_cast<float>(luaL_checknumber(L, 3));
-    int day_of_year = static_cast<int>(luaL_checkinteger(L, 4));
+    float latitude = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float longitude = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    int day_of_year = lua_isnoneornil(L, 4) ? -1 : static_cast<int>(luaL_checkinteger(L, 4));
     dse_day_night_set_location(e, latitude, longitude, day_of_year);
     return 0;
 }
@@ -532,19 +537,19 @@ int L_dse_volumetric_cloud_add(lua_State* L) {
 
 int L_dse_cloud_set_layer(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float bottom = static_cast<float>(luaL_checknumber(L, 2));
-    float top = static_cast<float>(luaL_checknumber(L, 3));
-    float coverage = static_cast<float>(luaL_checknumber(L, 4));
-    float density = static_cast<float>(luaL_checknumber(L, 5));
+    float bottom = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float top = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    float coverage = lua_isnoneornil(L, 4) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 4));
+    float density = lua_isnoneornil(L, 5) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 5));
     dse_cloud_set_layer(e, bottom, top, coverage, density);
     return 0;
 }
 
 int L_dse_cloud_set_wind(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    float dir_x = static_cast<float>(luaL_checknumber(L, 2));
-    float dir_y = static_cast<float>(luaL_checknumber(L, 3));
-    float speed = static_cast<float>(luaL_checknumber(L, 4));
+    float dir_x = lua_isnoneornil(L, 2) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 2));
+    float dir_y = lua_isnoneornil(L, 3) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 3));
+    float speed = lua_isnoneornil(L, 4) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, 4));
     dse_cloud_set_wind(e, dir_x, dir_y, speed);
     return 0;
 }
@@ -562,6 +567,21 @@ int L_dse_rope_get_positions(lua_State* L) {
         lua_rawseti(L, -2, _i + 1);
     }
     return 1;
+}
+
+int L_dse_cloth_pin_vertices(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    std::vector<uint32_t> verts;
+    if (lua_istable(L, 2)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 2));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 2, _i);
+            if (lua_isnumber(L, -1)) verts.push_back(static_cast<uint32_t>(lua_tointeger(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    dse_cloth_pin_vertices(e, verts.data(), static_cast<int>(verts.size()));
+    return 0;
 }
 
 } // namespace
@@ -595,7 +615,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"ragdoll_activate", L_dse_ragdoll_activate},
         {"ragdoll_deactivate", L_dse_ragdoll_deactivate},
         {"ragdoll_is_active", L_dse_ragdoll_is_active},
-        {"set_ragdoll_collision_layer_mask", L_dse_ragdoll_set_collision_layer_mask},
+        {"set_ragdoll_collision_layer", L_dse_ragdoll_set_collision_layer_mask},
         {"add_softbody", L_dse_softbody_add},
         {"softbody_set_gravity", L_dse_softbody_set_gravity},
         {"softbody_pin_vertex", L_dse_softbody_pin_vertex},
@@ -613,7 +633,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"buoyancy_set_water_level", L_dse_buoyancy_set_water_level},
         {"buoyancy_get_submerge_ratio", L_dse_buoyancy_get_submerge_ratio},
         {"buoyancy_set_use_fluid", L_dse_buoyancy_set_use_fluid},
-        {"add_weather", L_dse_weather_add},
+        {"add_weather", L_dse_compat_weather_add},
         {"set_weather", L_dse_weather_set},
         {"set_weather_spawn", L_dse_weather_set_spawn},
         {"add_snow_cover", L_dse_snow_cover_add},
@@ -639,6 +659,7 @@ void RegisterEcsGameplay3DBindings(lua_State* L) {
         {"set_cloud_layer", L_dse_cloud_set_layer},
         {"set_cloud_wind", L_dse_cloud_set_wind},
         {"rope_get_positions", L_dse_rope_get_positions},
+        {"cloth_pin_vertices", L_dse_cloth_pin_vertices},
     });
     lua_pop(L, 2);
 }

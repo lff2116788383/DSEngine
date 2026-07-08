@@ -240,6 +240,14 @@ public static class Components {
     public static void PointLightAdd(uint e) { Native.dse_point_light_add(e); }
     public static void SpotLightAdd(uint e) { Native.dse_spot_light_add(e); }
     public static void SkyLightAdd(uint e) { Native.dse_sky_light_add(e); }
+    public static void CompatAnim3dInitFsm(uint e, string defaultState) { Native.dse_compat_anim3d_init_fsm(e, defaultState); }
+    public static void CompatAnim3dAddTransition(uint e, string fromState, string toState, float transitionDuration, int hasExitTime, float exitTime) { Native.dse_compat_anim3d_add_transition(e, fromState, toState, transitionDuration, hasExitTime, exitTime); }
+    public static void CompatWeatherAdd(uint e, string type, float intensity) { Native.dse_compat_weather_add(e, type, intensity); }
+    public static void CompatSetDirectionalLight3d(uint e, int enabled, float dx, float dy, float dz, float r, float g, float b, float intensity, float ambient, float shadowStrength) { Native.dse_compat_set_directional_light_3d(e, enabled, dx, dy, dz, r, g, b, intensity, ambient, shadowStrength); }
+    public static void CompatSetPointLight3d(uint e, float r, float g, float b, float intensity, float radius) { Native.dse_compat_set_point_light_3d(e, r, g, b, intensity, radius); }
+    public static void CompatSetSpotLight3d(uint e, float dx, float dy, float dz, float r, float g, float b, float intensity, float radius, float inner, float outer) { Native.dse_compat_set_spot_light_3d(e, dx, dy, dz, r, g, b, intensity, radius, inner, outer); }
+    public static void CompatWorldToScreen(float wx, float wy, float wz, out float outSx, out float outSy, out int outVisible) { Native.dse_compat_world_to_screen(wx, wy, wz, out outSx, out outSy, out outVisible); }
+    public static int CompatL10nLoad(string locale, string json) { return Native.dse_compat_l10n_load(locale, json); }
     public static int UuidGet(uint e, [Out] byte[] @out, int cap) { return Native.dse_uuid_get(e, @out, cap); }
     public static int UuidSet(uint e, string uuidStr, [Out] byte[] @out, int cap) { return Native.dse_uuid_set(e, uuidStr, @out, cap); }
     public static uint UuidResolve(string uuidStr) { return Native.dse_uuid_resolve(uuidStr); }

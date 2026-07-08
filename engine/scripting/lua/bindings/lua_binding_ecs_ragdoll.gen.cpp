@@ -102,7 +102,7 @@ void RegisterRagdollComponentGenBindings(lua_State* L) {
         {"get_ragdoll_joint_damping", L_Get_ragdoll_joint_damping},
         {"set_ragdoll_joint_damping", L_Set_ragdoll_joint_damping},
         {"get_ragdoll_collision_layer", L_Get_ragdoll_collision_layer},
-        {"set_ragdoll_collision_layer", L_Set_ragdoll_collision_layer},
+        {"set_ragdoll_collision_layer_value", L_Set_ragdoll_collision_layer},
         {"get_ragdoll_collision_mask", L_Get_ragdoll_collision_mask},
         {"set_ragdoll_collision_mask", L_Set_ragdoll_collision_mask},
     });

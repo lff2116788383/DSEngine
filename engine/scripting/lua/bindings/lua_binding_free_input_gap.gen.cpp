@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -31,6 +36,12 @@ int L_dse_input_get_touch(lua_State* L) {
 
 void RegisterFreeInputGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"input_get_touch", L_dse_input_get_touch},
     });

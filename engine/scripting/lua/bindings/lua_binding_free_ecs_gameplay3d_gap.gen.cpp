@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -41,6 +46,12 @@ int L_dse_snow_cover_get(lua_State* L) {
 
 void RegisterFreeGameplay3dGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"day_night_get_sun_direction", L_dse_day_night_get_sun_direction},
         {"snow_cover_get", L_dse_snow_cover_get},

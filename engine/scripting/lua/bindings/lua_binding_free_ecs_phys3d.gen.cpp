@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -94,8 +99,8 @@ int L_dse_character_controller3d_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float radius = static_cast<float>(luaL_checknumber(L, 2));
     float height = static_cast<float>(luaL_checknumber(L, 3));
-    float slope_limit = static_cast<float>(luaL_checknumber(L, 4));
-    float step_offset = static_cast<float>(luaL_checknumber(L, 5));
+    float slope_limit = static_cast<float>(luaL_optnumber(L, 4, 45.0));
+    float step_offset = static_cast<float>(luaL_optnumber(L, 5, 0.3));
     dse_character_controller3d_add(e, radius, height, slope_limit, step_offset);
     return 0;
 }
@@ -123,15 +128,15 @@ int L_dse_terrain_heightmap_add(lua_State* L) {
     int cols = static_cast<int>(luaL_checkinteger(L, 5));
     int rows = static_cast<int>(luaL_checkinteger(L, 6));
     float scale = static_cast<float>(luaL_checknumber(L, 7));
-    int flip_z = static_cast<int>(luaL_checkinteger(L, 8));
+    int flip_z = helper::CheckBool(L, 8) ? 1 : 0;
     dse_terrain_heightmap_add(e, origin_x, origin_z, block_size, cols, rows, scale, flip_z);
     return 0;
 }
 
 int L_dse_mesh_collider3d_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int convex = static_cast<int>(luaL_checkinteger(L, 2));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 3));
+    int convex = helper::CheckBool(L, 2) ? 1 : 0;
+    int is_trigger = helper::OptBool(L, 3, false) ? 1 : 0;
     dse_mesh_collider3d_add(e, convex, is_trigger);
     return 0;
 }
@@ -141,7 +146,7 @@ int L_dse_capsule_collider3d_add(lua_State* L) {
     float radius = static_cast<float>(luaL_checknumber(L, 2));
     float height = static_cast<float>(luaL_checknumber(L, 3));
     int direction = static_cast<int>(luaL_checkinteger(L, 4));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 5));
+    int is_trigger = static_cast<int>(luaL_optinteger(L, 5, 0));
     dse_capsule_collider3d_add(e, radius, height, direction, is_trigger);
     return 0;
 }
@@ -153,11 +158,11 @@ int L_dse_joint3d_add(lua_State* L) {
     float ax = static_cast<float>(luaL_checknumber(L, 4));
     float ay = static_cast<float>(luaL_checknumber(L, 5));
     float az = static_cast<float>(luaL_checknumber(L, 6));
-    float bx = static_cast<float>(luaL_checknumber(L, 7));
-    float by = static_cast<float>(luaL_checknumber(L, 8));
-    float bz = static_cast<float>(luaL_checknumber(L, 9));
-    float break_force = static_cast<float>(luaL_checknumber(L, 10));
-    float break_torque = static_cast<float>(luaL_checknumber(L, 11));
+    float bx = static_cast<float>(luaL_optnumber(L, 7, 0.0));
+    float by = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    float bz = static_cast<float>(luaL_optnumber(L, 9, 0.0));
+    float break_force = static_cast<float>(luaL_optnumber(L, 10, 0.0));
+    float break_torque = static_cast<float>(luaL_optnumber(L, 11, 0.0));
     dse_joint3d_add(e, connected_id, type, ax, ay, az, bx, by, bz, break_force, break_torque);
     return 0;
 }
@@ -203,7 +208,7 @@ int L_dse_collision_set_layer(lua_State* L) {
 
 int L_dse_collider_set_trigger(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 2));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
     dse_collider_set_trigger(e, is_trigger);
     return 0;
 }
@@ -285,6 +290,59 @@ int L_dse_physics3d_get_trigger_events(lua_State* L) {
     return 1;
 }
 
+int L_dse_physics3d_raycast(lua_State* L) {
+    uint32_t out_entity = 0;
+    float out_point[3] = {0, 0, 0};
+    float out_normal[3] = {0, 0, 0};
+    float out_distance = 0;
+    float ox = static_cast<float>(luaL_checknumber(L, 1));
+    float oy = static_cast<float>(luaL_checknumber(L, 2));
+    float oz = static_cast<float>(luaL_checknumber(L, 3));
+    float dx = static_cast<float>(luaL_checknumber(L, 4));
+    float dy = static_cast<float>(luaL_checknumber(L, 5));
+    float dz = static_cast<float>(luaL_checknumber(L, 6));
+    float max_dist = static_cast<float>(luaL_checknumber(L, 7));
+    int _ret = dse_physics3d_raycast(ox, oy, oz, dx, dy, dz, max_dist, &out_entity, out_point, out_normal, &out_distance);
+    lua_pushboolean(L, _ret);
+    lua_pushinteger(L, static_cast<lua_Integer>(out_entity));
+    lua_pushnumber(L, out_point[0]);
+    lua_pushnumber(L, out_point[1]);
+    lua_pushnumber(L, out_point[2]);
+    lua_pushnumber(L, out_normal[0]);
+    lua_pushnumber(L, out_normal[1]);
+    lua_pushnumber(L, out_normal[2]);
+    lua_pushnumber(L, out_distance);
+    return 9;
+}
+
+int L_dse_rigidbody3d_get_velocity(lua_State* L) {
+    float out_vel[3] = {0, 0, 0};
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    dse_rigidbody3d_get_velocity(e, out_vel);
+    lua_pushnumber(L, out_vel[0]);
+    lua_pushnumber(L, out_vel[1]);
+    lua_pushnumber(L, out_vel[2]);
+    return 3;
+}
+
+int L_dse_character_controller3d_move(lua_State* L) {
+    float out_velocity[3] = {0, 0, 0};
+    uint32_t out_flags = 0;
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float dx = static_cast<float>(luaL_checknumber(L, 2));
+    float dy = static_cast<float>(luaL_checknumber(L, 3));
+    float dz = static_cast<float>(luaL_checknumber(L, 4));
+    float min_dist = static_cast<float>(luaL_checknumber(L, 5));
+    float dt = static_cast<float>(luaL_checknumber(L, 6));
+    int _ret = dse_character_controller3d_move(e, dx, dy, dz, min_dist, dt, out_velocity, &out_flags);
+    lua_pushboolean(L, _ret);
+    lua_pushnumber(L, out_velocity[0]);
+    lua_pushnumber(L, out_velocity[1]);
+    lua_pushnumber(L, out_velocity[2]);
+    lua_pushinteger(L, static_cast<lua_Integer>(out_flags));
+    return 5;
+}
+
 } // namespace
 
 void RegisterEcsPhysics3DBindings(lua_State* L) {
@@ -320,10 +378,13 @@ void RegisterEcsPhysics3DBindings(lua_State* L) {
         {"set_collision_layer", L_dse_collision_set_layer},
         {"set_collider_trigger", L_dse_collider_set_trigger},
         {"set_collider_material", L_dse_collider_set_material},
-        {"physics3d_overlap_sphere", L_dse_physics3d_overlap_sphere},
+        {"physics_3d_overlap_sphere", L_dse_physics3d_overlap_sphere},
         {"physics3d_overlap_box", L_dse_physics3d_overlap_box},
         {"physics3d_get_collision_events", L_dse_physics3d_get_collision_events},
         {"physics3d_get_trigger_events", L_dse_physics3d_get_trigger_events},
+        {"physics_3d_raycast", L_dse_physics3d_raycast},
+        {"rigidbody_3d_get_velocity", L_dse_rigidbody3d_get_velocity},
+        {"character_controller_3d_move", L_dse_character_controller3d_move},
     });
     lua_pop(L, 2);
 }

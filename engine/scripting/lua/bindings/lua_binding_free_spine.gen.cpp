@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -34,16 +39,16 @@ int L_dse_spine_set_animation(lua_State* L) {
 
 void RegisterSpineBindings(lua_State* L) {
     lua_getglobal(L, "dse");
-    lua_getfield(L, -1, "ecs");
+    lua_getfield(L, -1, "spine");
     if (lua_isnil(L, -1)) {
         lua_pop(L, 1);
         lua_newtable(L);
         lua_pushvalue(L, -1);
-        lua_setfield(L, -3, "ecs");
+        lua_setfield(L, -3, "spine");
     }
     helper::RegisterBindings(L, {
-        {"spineaddrenderer", L_dse_spine_add_renderer},
-        {"spinesetanimation", L_dse_spine_set_animation},
+        {"add_renderer", L_dse_spine_add_renderer},
+        {"set_animation", L_dse_spine_set_animation},
     });
     lua_pop(L, 2);
 }

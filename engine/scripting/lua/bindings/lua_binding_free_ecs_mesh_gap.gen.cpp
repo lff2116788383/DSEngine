@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -61,6 +66,12 @@ int L_dse_mesh_renderer_set_texture(lua_State* L) {
 
 void RegisterFreeMeshGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"mesh_renderer_set_material_from_dmat", L_dse_mesh_renderer_set_material_from_dmat},
         {"mesh_renderer_set_material_params", L_dse_mesh_renderer_set_material_params},

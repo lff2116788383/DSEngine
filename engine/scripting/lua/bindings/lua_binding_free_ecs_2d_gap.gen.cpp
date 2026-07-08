@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -42,6 +47,12 @@ int L_dse_sprite_sheet_get_frame_uv(lua_State* L) {
 
 void RegisterFree2dGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"atlas_get_entry_uv", L_dse_atlas_get_entry_uv},
         {"sprite_sheet_get_frame_uv", L_dse_sprite_sheet_get_frame_uv},

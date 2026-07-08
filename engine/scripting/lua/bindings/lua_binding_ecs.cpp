@@ -73,6 +73,7 @@ int L_EcsAnim3DSetBlendTree1D(lua_State* L) {
 } // namespace
 
 void RegisterEcsBindings(lua_State* L) {
+    int _top = lua_gettop(L);
 
     RegisterEcsCoreBindings(L);
     RegisterEcsRenderingBindings(L);
@@ -89,7 +90,7 @@ void RegisterEcsBindings(lua_State* L) {
         {"anim3d_set_layer_mask",    L_EcsAnim3DSetLayerMask},
         {"anim3d_set_blend_tree_1d", L_EcsAnim3DSetBlendTree1D},
     });
-    lua_pop(L, 2);
+    lua_remove(L, -2); // remove dse, keep ecs on top for component gen bindings
 
     // Codegen 生成的组件属性绑定（全量注册�?
     RegisterTransformComponentGenBindings(L);
@@ -141,6 +142,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterCharacterMovementConfigGenBindings(L);
     RegisterSpringArm3DComponentGenBindings(L);
     RegisterPlayerControllerComponentGenBindings(L);
+    lua_pop(L, 1); // pop ecs table
     RegisterFreeAiGapBindings(L);
     RegisterFreeAnimationGapBindings(L);
     RegisterFreeAppGapBindings(L);
@@ -189,6 +191,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterFreeFn_audio(L);
     RegisterFreeFn_app(L);
     RegisterFreeFn_api_core(L);
+    lua_settop(L, _top);
 }
 
 } // namespace dse::runtime::lua_binding

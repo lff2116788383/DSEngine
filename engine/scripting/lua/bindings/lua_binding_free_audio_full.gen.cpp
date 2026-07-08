@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -17,8 +22,8 @@ namespace {
 int L_dse_audio_source_add(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     const char* path = luaL_checkstring(L, 2);
-    int play_on_awake = static_cast<int>(luaL_checkinteger(L, 3));
-    int loop = static_cast<int>(luaL_checkinteger(L, 4));
+    int play_on_awake = helper::CheckBool(L, 3) ? 1 : 0;
+    int loop = helper::CheckBool(L, 4) ? 1 : 0;
     float volume = static_cast<float>(luaL_checknumber(L, 5));
     dse_audio_source_add(e, path, play_on_awake, loop, volume);
     return 0;
@@ -26,8 +31,19 @@ int L_dse_audio_source_add(lua_State* L) {
 
 int L_dse_audio_source_set_playing(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int playing = static_cast<int>(luaL_checkinteger(L, 2));
+    int playing = helper::CheckBool(L, 2) ? 1 : 0;
     dse_audio_source_set_playing(e, playing);
+    return 0;
+}
+
+int L_dse_compat_audio_set_spatial(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    int enabled = helper::CheckBool(L, 2) ? 1 : 0;
+    float min_distance = static_cast<float>(luaL_checknumber(L, 3));
+    float max_distance = static_cast<float>(luaL_checknumber(L, 4));
+    float rolloff = static_cast<float>(luaL_checknumber(L, 5));
+    dse_audio_source_set_3d_mode(e, enabled);
+    dse_audio_source_set_3d_distance(e, min_distance, max_distance, rolloff);
     return 0;
 }
 
@@ -250,8 +266,9 @@ void RegisterAudioBindings(lua_State* L) {
         lua_setfield(L, -3, "audio");
     }
     helper::RegisterBindings(L, {
-        {"audioaddsource", L_dse_audio_source_add},
-        {"audiosetplaying", L_dse_audio_source_set_playing},
+        {"add_source", L_dse_audio_source_add},
+        {"set_playing", L_dse_audio_source_set_playing},
+        {"set_spatial", L_dse_compat_audio_set_spatial},
         {"audiorestart", L_dse_audio_source_restart},
         {"ecssetaudioloop", L_dse_audio_source_set_loop},
         {"ecssetaudiovolume", L_dse_audio_source_set_volume},

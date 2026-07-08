@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -53,6 +58,12 @@ int L_dse_entity_valid(lua_State* L) {
 
 void RegisterFreeEcsCoreGapBindings(lua_State* L) {
     lua_getglobal(L, "dse");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "dse");
+    }
     helper::RegisterBindings(L, {
         {"ecs_get_local_aabb", L_dse_ecs_get_local_aabb},
         {"ecs_get_world_aabb", L_dse_ecs_get_world_aabb},

@@ -861,6 +861,34 @@ extern "C" int dse_l10n_get_locales(char* out, int cap) {
     return static_cast<int>(locales.size());
 }
 
+// Lua 绑定薄包装：参数顺序/返回类型适配（Lua 侧 load(locale,json)/get_locale()->string/get(key,fallback)->string）
+extern "C" int dse_compat_l10n_load(const char* locale, const char* json) {
+    return dse_l10n_load_string(json, locale);
+}
+
+extern "C" const char* dse_compat_l10n_get_locale() {
+    static thread_local char buf[128];
+    buf[0] = '\0';
+    dse_l10n_get_locale(buf, static_cast<int>(sizeof(buf)));
+    return buf;
+}
+
+extern "C" const char* dse_compat_l10n_get(const char* key, const char* fallback) {
+    static thread_local char buf[1024];
+    buf[0] = '\0';
+    dse_l10n_get(key, buf, static_cast<int>(sizeof(buf)));
+    if (buf[0] == '\0') return fallback ? fallback : "";
+    return buf;
+}
+
+// Lua 绑定薄包装：get_text_input_text 返回字符串（缓冲区版适配）
+extern "C" const char* dse_compat_ui_get_text_input_text(uint32_t e) {
+    static thread_local char buf[1024];
+    buf[0] = '\0';
+    dse_ui_get_text_input_text(e, buf, static_cast<int>(sizeof(buf)));
+    return buf;
+}
+
 // ============================================================
 // Font — 字体服务
 // ============================================================

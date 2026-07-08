@@ -444,6 +444,27 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_anim3d_add_transition", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_anim3d_add_transition(uint e, string fromState, string toState, float transitionDuration, int hasExitTime, float exitTime, int condCount, string[] condNames, int[] condModes, float[] condThresholds, int[] condInts);
 
+    [LibraryImport(Lib, EntryPoint = "dse_compat_anim3d_init_fsm", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_compat_anim3d_init_fsm(uint e, string defaultState);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_anim3d_add_transition", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_compat_anim3d_add_transition(uint e, string fromState, string toState, float transitionDuration, int hasExitTime, float exitTime);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_weather_add", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dse_compat_weather_add(uint e, string type, float intensity);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_set_directional_light_3d")]
+    internal static partial void dse_compat_set_directional_light_3d(uint e, int enabled, float dx, float dy, float dz, float r, float g, float b, float intensity, float ambient, float shadowStrength);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_set_point_light_3d")]
+    internal static partial void dse_compat_set_point_light_3d(uint e, float r, float g, float b, float intensity, float radius);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_set_spot_light_3d")]
+    internal static partial void dse_compat_set_spot_light_3d(uint e, float dx, float dy, float dz, float r, float g, float b, float intensity, float radius, float inner, float outer);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_world_to_screen")]
+    internal static partial void dse_compat_world_to_screen(float wx, float wy, float wz, out float outSx, out float outSy, out int outVisible);
+
     [LibraryImport(Lib, EntryPoint = "dse_anim3d_set_param_float", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dse_anim3d_set_param_float(uint e, string paramName, float value);
 
@@ -788,6 +809,9 @@ internal static partial class Native {
 
     [LibraryImport(Lib, EntryPoint = "dse_l10n_get_locales")]
     internal static partial int dse_l10n_get_locales([Out] byte[] @out, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "dse_compat_l10n_load", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_compat_l10n_load(string locale, string json);
 
     [LibraryImport(Lib, EntryPoint = "dse_scene_load", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int dse_scene_load(string path);

@@ -26,6 +26,7 @@
 #include <glm/glm.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string>
 
 using Entity = entt::entity;
@@ -723,4 +724,89 @@ extern "C" void dse_cloud_set_wind(uint32_t e, float dir_x, float dir_y, float s
     if (!Keep(dir_x)) vc->wind_direction.x = dir_x;
     if (!Keep(dir_y)) vc->wind_direction.y = dir_y;
     if (!Keep(speed)) vc->wind_speed = speed;
+}
+
+// ============================================================
+// S1.9 3D compat 薄包装：C 签名与 Lua 期望不符 / 需复合 nil-skip 语义时使用。
+// 仅调用既有 C ABI（声明见 dse_api.h），零行为变更。
+// ============================================================
+namespace {
+inline void Normalize3(float& x, float& y, float& z) {
+    float len = std::sqrt(x * x + y * y + z * z);
+    if (len > 1e-6f) { x /= len; y /= len; z /= len; }
+}
+}  // namespace
+
+// add_weather(e, type_string, intensity)：字符串枚举 → int（None=0/Rain=1/Snow=2）。
+extern "C" void dse_compat_weather_add(uint32_t e, const char* type, float intensity) {
+    int t = 0;
+    if (type) {
+        if (std::strcmp(type, "rain") == 0) t = 1;
+        else if (std::strcmp(type, "snow") == 0) t = 2;
+    }
+    dse_weather_add(e, t, intensity);
+}
+
+// set_directional_light_3d(d, enabled, dx,dy,dz, r,g,b, intensity, ambient, shadow_strength)
+// 复合 setter：float 参数 NaN => 保持当前值；方向归一化后写入。
+extern "C" void dse_compat_set_directional_light_3d(uint32_t e, int enabled,
+        float dx, float dy, float dz, float r, float g, float b,
+        float intensity, float ambient, float shadow_strength) {
+    dse_dir_light_set_enabled(e, enabled);
+    float cx, cy, cz; dse_dir_light_get_direction(e, &cx, &cy, &cz);
+    bool anyd = false;
+    if (!std::isnan(dx)) { cx = dx; anyd = true; }
+    if (!std::isnan(dy)) { cy = dy; anyd = true; }
+    if (!std::isnan(dz)) { cz = dz; anyd = true; }
+    if (anyd) { Normalize3(cx, cy, cz); dse_dir_light_set_direction(e, cx, cy, cz); }
+    float rr, gg, bb; dse_dir_light_get_color(e, &rr, &gg, &bb);
+    bool anyc = false;
+    if (!std::isnan(r)) { rr = r; anyc = true; }
+    if (!std::isnan(g)) { gg = g; anyc = true; }
+    if (!std::isnan(b)) { bb = b; anyc = true; }
+    if (anyc) dse_dir_light_set_color(e, rr, gg, bb);
+    if (!std::isnan(intensity))       dse_dir_light_set_intensity(e, intensity);
+    if (!std::isnan(ambient))         dse_dir_light_set_ambient_intensity(e, ambient);
+    if (!std::isnan(shadow_strength)) dse_dir_light_set_shadow_strength(e, shadow_strength);
+}
+
+// set_point_light_3d(p, r,g,b, intensity, radius)：各字段 nil(NaN) => 保持。
+extern "C" void dse_compat_set_point_light_3d(uint32_t e, float r, float g, float b,
+        float intensity, float radius) {
+    float rr, gg, bb; dse_point_light_get_color(e, &rr, &gg, &bb);
+    bool anyc = false;
+    if (!std::isnan(r)) { rr = r; anyc = true; }
+    if (!std::isnan(g)) { gg = g; anyc = true; }
+    if (!std::isnan(b)) { bb = b; anyc = true; }
+    if (anyc) dse_point_light_set_color(e, rr, gg, bb);
+    if (!std::isnan(intensity)) dse_point_light_set_intensity(e, intensity);
+    if (!std::isnan(radius))    dse_point_light_set_radius(e, radius);
+}
+
+// set_spot_light_3d(s, dx,dy,dz, r,g,b, intensity, radius, inner, outer)：nil(NaN) => 保持。
+extern "C" void dse_compat_set_spot_light_3d(uint32_t e, float dx, float dy, float dz,
+        float r, float g, float b, float intensity, float radius, float inner, float outer) {
+    float cx, cy, cz; dse_spot_light_get_direction(e, &cx, &cy, &cz);
+    bool anyd = false;
+    if (!std::isnan(dx)) { cx = dx; anyd = true; }
+    if (!std::isnan(dy)) { cy = dy; anyd = true; }
+    if (!std::isnan(dz)) { cz = dz; anyd = true; }
+    if (anyd) { Normalize3(cx, cy, cz); dse_spot_light_set_direction(e, cx, cy, cz); }
+    float rr, gg, bb; dse_spot_light_get_color(e, &rr, &gg, &bb);
+    bool anyc = false;
+    if (!std::isnan(r)) { rr = r; anyc = true; }
+    if (!std::isnan(g)) { gg = g; anyc = true; }
+    if (!std::isnan(b)) { bb = b; anyc = true; }
+    if (anyc) dse_spot_light_set_color(e, rr, gg, bb);
+    if (!std::isnan(intensity)) dse_spot_light_set_intensity(e, intensity);
+    if (!std::isnan(radius))    dse_spot_light_set_radius(e, radius);
+    if (!std::isnan(inner))     dse_spot_light_set_inner_cone_angle(e, inner);
+    if (!std::isnan(outer))     dse_spot_light_set_outer_cone_angle(e, outer);
+}
+
+// world_to_screen(wx,wy,wz) -> (sx, sy, is_visible)：调整返回顺序（可见性置末位，且为 boolean）。
+extern "C" void dse_compat_world_to_screen(float wx, float wy, float wz,
+        float* out_sx, float* out_sy, int* out_visible) {
+    int vis = dse_render_world_to_screen(wx, wy, wz, out_sx, out_sy);
+    if (out_visible) *out_visible = vis;
 }

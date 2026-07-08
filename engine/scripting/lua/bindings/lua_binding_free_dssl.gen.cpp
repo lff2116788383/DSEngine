@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -17,7 +22,7 @@ namespace {
 int L_dse_dssl_load_material(lua_State* L) {
     const char* path = luaL_checkstring(L, 1);
     uint32_t _ret = dse_dssl_load_material(path);
-    lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+    if (_ret == 0) { lua_pushnil(L); } else { lua_pushinteger(L, static_cast<lua_Integer>(_ret)); }
     return 1;
 }
 

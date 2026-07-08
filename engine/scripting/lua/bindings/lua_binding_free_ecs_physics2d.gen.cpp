@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -17,8 +22,8 @@ namespace {
 int L_dse_physics2d_add_rigidbody(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     int type = static_cast<int>(luaL_checkinteger(L, 2));
-    float gravity_scale = static_cast<float>(luaL_checknumber(L, 3));
-    int fixed_rotation = static_cast<int>(luaL_checkinteger(L, 4));
+    float gravity_scale = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    int fixed_rotation = static_cast<int>(luaL_optinteger(L, 4, 0));
     dse_physics2d_add_rigidbody(e, type, gravity_scale, fixed_rotation);
     return 0;
 }
@@ -35,16 +40,16 @@ int L_dse_physics2d_add_box_collider(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float w = static_cast<float>(luaL_checknumber(L, 2));
     float h = static_cast<float>(luaL_checknumber(L, 3));
-    float density = static_cast<float>(luaL_checknumber(L, 4));
-    float friction = static_cast<float>(luaL_checknumber(L, 5));
-    float restitution = static_cast<float>(luaL_checknumber(L, 6));
+    float density = static_cast<float>(luaL_optnumber(L, 4, 1.0));
+    float friction = static_cast<float>(luaL_optnumber(L, 5, 0.3));
+    float restitution = static_cast<float>(luaL_optnumber(L, 6, 0.0));
     dse_physics2d_add_box_collider(e, w, h, density, friction, restitution);
     return 0;
 }
 
 int L_dse_physics2d_set_box_collider_trigger(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 2));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
     dse_physics2d_set_box_collider_trigger(e, is_trigger);
     return 0;
 }
@@ -52,23 +57,23 @@ int L_dse_physics2d_set_box_collider_trigger(lua_State* L) {
 int L_dse_physics2d_add_circle_collider(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float radius = static_cast<float>(luaL_checknumber(L, 2));
-    float density = static_cast<float>(luaL_checknumber(L, 3));
-    float friction = static_cast<float>(luaL_checknumber(L, 4));
-    float restitution = static_cast<float>(luaL_checknumber(L, 5));
+    float density = static_cast<float>(luaL_optnumber(L, 3, 1.0));
+    float friction = static_cast<float>(luaL_optnumber(L, 4, 0.3));
+    float restitution = static_cast<float>(luaL_optnumber(L, 5, 0.0));
     dse_physics2d_add_circle_collider(e, radius, density, friction, restitution);
     return 0;
 }
 
 int L_dse_physics2d_set_circle_collider_trigger(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 2));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
     dse_physics2d_set_circle_collider_trigger(e, is_trigger);
     return 0;
 }
 
 int L_dse_physics2d_set_polygon_collider_trigger(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int is_trigger = static_cast<int>(luaL_checkinteger(L, 2));
+    int is_trigger = helper::CheckBool(L, 2) ? 1 : 0;
     dse_physics2d_set_polygon_collider_trigger(e, is_trigger);
     return 0;
 }
@@ -78,21 +83,21 @@ int L_dse_physics2d_add_joint(lua_State* L) {
     int type = static_cast<int>(luaL_checkinteger(L, 2));
     uint32_t entity_a = static_cast<uint32_t>(luaL_checkinteger(L, 3));
     uint32_t entity_b = static_cast<uint32_t>(luaL_checkinteger(L, 4));
-    float ax = static_cast<float>(luaL_checknumber(L, 5));
-    float ay = static_cast<float>(luaL_checknumber(L, 6));
-    float bx = static_cast<float>(luaL_checknumber(L, 7));
-    float by = static_cast<float>(luaL_checknumber(L, 8));
-    int collide_connected = static_cast<int>(luaL_checkinteger(L, 9));
+    float ax = static_cast<float>(luaL_optnumber(L, 5, 0.0));
+    float ay = static_cast<float>(luaL_optnumber(L, 6, 0.0));
+    float bx = static_cast<float>(luaL_optnumber(L, 7, 0.0));
+    float by = static_cast<float>(luaL_optnumber(L, 8, 0.0));
+    int collide_connected = helper::OptBool(L, 9, false) ? 1 : 0;
     dse_physics2d_add_joint(e, type, entity_a, entity_b, ax, ay, bx, by, collide_connected);
     return 0;
 }
 
 int L_dse_physics2d_set_joint_revolute(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
-    int enable_limit = static_cast<int>(luaL_checkinteger(L, 2));
+    int enable_limit = helper::CheckBool(L, 2) ? 1 : 0;
     float lower_deg = static_cast<float>(luaL_checknumber(L, 3));
     float upper_deg = static_cast<float>(luaL_checknumber(L, 4));
-    int enable_motor = static_cast<int>(luaL_checkinteger(L, 5));
+    int enable_motor = helper::CheckBool(L, 5) ? 1 : 0;
     float motor_speed = static_cast<float>(luaL_checknumber(L, 6));
     float max_torque = static_cast<float>(luaL_checknumber(L, 7));
     dse_physics2d_set_joint_revolute(e, enable_limit, lower_deg, upper_deg, enable_motor, motor_speed, max_torque);
@@ -113,10 +118,10 @@ int L_dse_physics2d_set_joint_prismatic(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     float axis_x = static_cast<float>(luaL_checknumber(L, 2));
     float axis_y = static_cast<float>(luaL_checknumber(L, 3));
-    int enable_limit = static_cast<int>(luaL_checkinteger(L, 4));
+    int enable_limit = helper::CheckBool(L, 4) ? 1 : 0;
     float lower = static_cast<float>(luaL_checknumber(L, 5));
     float upper = static_cast<float>(luaL_checknumber(L, 6));
-    int enable_motor = static_cast<int>(luaL_checkinteger(L, 7));
+    int enable_motor = helper::CheckBool(L, 7) ? 1 : 0;
     float motor_speed = static_cast<float>(luaL_checknumber(L, 8));
     float max_force = static_cast<float>(luaL_checknumber(L, 9));
     dse_physics2d_set_joint_prismatic(e, axis_x, axis_y, enable_limit, lower, upper, enable_motor, motor_speed, max_force);

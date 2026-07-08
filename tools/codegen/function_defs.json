@@ -558,23 +558,86 @@
       ],
       "functions": [
         {
-          "c_name": "dse_l10n_load",
+          "c_name": "dse_compat_l10n_load",
           "lua_name": "load",
           "params": [
             {
-              "name": "path",
+              "name": "locale",
               "type": "string"
             },
             {
-              "name": "locale",
+              "name": "json",
               "type": "string"
             }
           ],
           "returns": [
             {
-              "type": "int"
+              "type": "bool"
             }
           ]
+        },
+        {
+          "c_name": "dse_l10n_set_locale",
+          "lua_name": "set_locale",
+          "params": [
+            {
+              "name": "locale",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_compat_l10n_get_locale",
+          "lua_name": "get_locale",
+          "params": [],
+          "returns": [
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_compat_l10n_get",
+          "lua_name": "get",
+          "params": [
+            {
+              "name": "key",
+              "type": "string"
+            },
+            {
+              "name": "fallback",
+              "type": "string",
+              "default": "\"\""
+            }
+          ],
+          "returns": [
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_l10n_has_key",
+          "lua_name": "has_key",
+          "params": [
+            {
+              "name": "key",
+              "type": "string"
+            }
+          ],
+          "returns": [
+            {
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_l10n_get_locales",
+          "lua_name": "get_locales",
+          "params": [],
+          "null_sep_buffer_return": {
+            "buf_size": 1024
+          }
         }
       ],
       "register_func": "RegisterFreeFn_localization"
@@ -1193,7 +1256,7 @@
       "functions": [
         {
           "c_name": "dse_audio_source_add",
-          "lua_name": "audioaddsource",
+          "lua_name": "add_source",
           "params": [
             {
               "name": "e",
@@ -1205,11 +1268,11 @@
             },
             {
               "name": "play_on_awake",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "loop",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "volume",
@@ -1219,7 +1282,7 @@
         },
         {
           "c_name": "dse_audio_source_set_playing",
-          "lua_name": "audiosetplaying",
+          "lua_name": "set_playing",
           "params": [
             {
               "name": "e",
@@ -1227,7 +1290,51 @@
             },
             {
               "name": "playing",
-              "type": "int"
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "c_name": "dse_compat_audio_set_spatial",
+          "lua_name": "set_spatial",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "min_distance",
+              "type": "float"
+            },
+            {
+              "name": "max_distance",
+              "type": "float"
+            },
+            {
+              "name": "rolloff",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_audio_source_set_3d_mode",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_audio_source_set_3d_distance",
+              "args": [
+                "e",
+                "min_distance",
+                "max_distance",
+                "rolloff"
+              ]
             }
           ]
         },
@@ -1706,7 +1813,8 @@
           ],
           "returns": [
             {
-              "type": "uint32"
+              "type": "uint32",
+              "nil_if_zero": true
             }
           ]
         },
@@ -1889,6 +1997,32 @@
           ]
         },
         {
+          "c_name": "dse_anim2d_add_state",
+          "lua_name": "add_animation_state",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "frame_rate",
+              "type": "float"
+            },
+            {
+              "name": "loop",
+              "type": "bool"
+            }
+          ],
+          "int_array_param": {
+            "name": "frame_handles",
+            "stack_index": 5
+          }
+        },
+        {
           "c_name": "dse_anim2d_add_event",
           "lua_name": "add_animation_event",
           "params": [
@@ -1956,11 +2090,13 @@
             },
             {
               "name": "danim_path",
-              "type": "string"
+              "type": "string",
+              "default": "\"\""
             },
             {
               "name": "dskel_path",
-              "type": "string"
+              "type": "string",
+              "default": "\"\""
             }
           ]
         },
@@ -1982,17 +2118,52 @@
             },
             {
               "name": "loop",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
-          "c_name": "dse_anim3d_init_fsm",
+          "c_name": "dse_compat_anim3d_init_fsm",
           "lua_name": "init_animator_3d_fsm",
           "params": [
             {
               "name": "e",
               "type": "uint32"
+            },
+            {
+              "name": "default_state",
+              "type": "string",
+              "default": "\"\""
+            }
+          ]
+        },
+        {
+          "c_name": "dse_compat_anim3d_add_transition",
+          "lua_name": "add_animator_3d_transition",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "from_state",
+              "type": "string"
+            },
+            {
+              "name": "to_state",
+              "type": "string"
+            },
+            {
+              "name": "transition_duration",
+              "type": "float"
+            },
+            {
+              "name": "has_exit_time",
+              "type": "bool"
+            },
+            {
+              "name": "exit_time",
+              "type": "float"
             }
           ]
         },
@@ -2014,11 +2185,13 @@
             },
             {
               "name": "loop",
-              "type": "int"
+              "type": "bool",
+              "default": true
             },
             {
               "name": "speed",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             }
           ]
         },
@@ -2092,11 +2265,13 @@
             },
             {
               "name": "weight",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "blend_mode",
-              "type": "int"
+              "type": "int",
+              "default": 0
             }
           ],
           "returns": [
@@ -2127,7 +2302,7 @@
             },
             {
               "name": "loop",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -2684,6 +2859,24 @@
               "type": "int"
             }
           ]
+        },
+        {
+          "lua_name": "set_anim_layer_bone_mask",
+          "c_name": "dse_animlayer_set_bone_mask",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "idx",
+              "type": "int"
+            }
+          ],
+          "string_array_param": {
+            "name": "bones",
+            "stack_index": 3
+          }
         }
       ]
     },
@@ -2752,15 +2945,18 @@
             },
             {
               "name": "sx",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "sy",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "sz",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             }
           ]
         },
@@ -3090,6 +3286,32 @@
           ]
         },
         {
+          "c_name": "dse_ecs_get_world_aabb",
+          "lua_name": "get_world_aabb",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "floatn_or_nil_return": {
+            "count": 6
+          }
+        },
+        {
+          "c_name": "dse_ecs_get_local_aabb",
+          "lua_name": "get_local_aabb",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "floatn_or_nil_return": {
+            "count": 6
+          }
+        },
+        {
           "c_name": "dse_ecs_find_entities_by_mesh_path",
           "lua_name": "find_entities_by_mesh_path",
           "params": [
@@ -3294,7 +3516,8 @@
             },
             {
               "name": "turbulence",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -3501,7 +3724,7 @@
             },
             {
               "name": "auto_setup",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "joint_stiffness",
@@ -3550,7 +3773,7 @@
         },
         {
           "c_name": "dse_ragdoll_set_collision_layer_mask",
-          "lua_name": "set_ragdoll_collision_layer_mask",
+          "lua_name": "set_ragdoll_collision_layer",
           "params": [
             {
               "name": "e",
@@ -3602,11 +3825,12 @@
             },
             {
               "name": "use_gravity",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "gravity_scale",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -3687,11 +3911,11 @@
             },
             {
               "name": "is_drive",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "is_steer",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "susp_stiffness",
@@ -3833,7 +4057,7 @@
             },
             {
               "name": "use_gravity",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "gravity_scale",
@@ -3936,12 +4160,12 @@
             },
             {
               "name": "use_fluid",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
-          "c_name": "dse_weather_add",
+          "c_name": "dse_compat_weather_add",
           "lua_name": "add_weather",
           "params": [
             {
@@ -3950,7 +4174,7 @@
             },
             {
               "name": "type",
-              "type": "int"
+              "type": "string"
             },
             {
               "name": "intensity",
@@ -3968,19 +4192,23 @@
             },
             {
               "name": "type",
-              "type": "int"
+              "type": "int",
+              "keep_on_nil": true
             },
             {
               "name": "intensity",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "wind_x",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "wind_z",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -3994,15 +4222,18 @@
             },
             {
               "name": "radius",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "height",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "max_particles",
-              "type": "int"
+              "type": "int",
+              "keep_on_nil": true
             }
           ]
         },
@@ -4026,15 +4257,18 @@
             },
             {
               "name": "target_coverage",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "accumulation_rate",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "melt_rate",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -4086,7 +4320,7 @@
             },
             {
               "name": "enabled",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -4252,7 +4486,7 @@
             },
             {
               "name": "auto_advance",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "time_speed",
@@ -4327,15 +4561,18 @@
             },
             {
               "name": "latitude",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "longitude",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "day_of_year",
-              "type": "int"
+              "type": "int",
+              "keep_on_nil": true
             }
           ]
         },
@@ -4374,19 +4611,23 @@
             },
             {
               "name": "bottom",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "top",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "coverage",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "density",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -4400,15 +4641,18 @@
             },
             {
               "name": "dir_x",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "dir_y",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             },
             {
               "name": "speed",
-              "type": "float"
+              "type": "float",
+              "keep_on_nil": true
             }
           ]
         },
@@ -4426,6 +4670,20 @@
             "max_count": 256,
             "stride": 3,
             "mode": "vec3"
+          }
+        },
+        {
+          "lua_name": "cloth_pin_vertices",
+          "c_name": "dse_cloth_pin_vertices",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "int_array_param": {
+            "name": "verts",
+            "stack_index": 2
           }
         }
       ]
@@ -4466,59 +4724,73 @@
             },
             {
               "name": "life_min",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "life_max",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "size_min",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "size_max",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "speed_min",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "speed_max",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "r",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "g",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "b",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "a",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "gx",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "gy",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "gz",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "texture_path",
-              "type": "string"
+              "type": "string",
+              "default": "\"\""
             }
           ]
         },
@@ -4592,27 +4864,33 @@
             },
             {
               "name": "leaf_min_distance",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "leaf_move_left",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "leaf_move_right",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "jump_speed_scale",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "jump_speed_max",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "camera_follow_damping",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ]
         },
@@ -5050,11 +5328,13 @@
             },
             {
               "name": "slope_limit",
-              "type": "float"
+              "type": "float",
+              "default": 45.0
             },
             {
               "name": "step_offset",
-              "type": "float"
+              "type": "float",
+              "default": 0.3
             }
           ]
         },
@@ -5126,7 +5406,7 @@
             },
             {
               "name": "flip_z",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -5140,11 +5420,12 @@
             },
             {
               "name": "convex",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "bool",
+              "default": false
             }
           ]
         },
@@ -5170,7 +5451,8 @@
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "int",
+              "default": 0
             }
           ]
         },
@@ -5204,23 +5486,28 @@
             },
             {
               "name": "bx",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "by",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "bz",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "break_force",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "break_torque",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ]
         },
@@ -5321,7 +5608,7 @@
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -5345,7 +5632,7 @@
         },
         {
           "c_name": "dse_physics3d_overlap_sphere",
-          "lua_name": "physics3d_overlap_sphere",
+          "lua_name": "physics_3d_overlap_sphere",
           "params": [
             {
               "name": "cx",
@@ -5428,6 +5715,124 @@
             "stride": 2,
             "mode": "trigger_dual"
           }
+        },
+        {
+          "lua_name": "physics_3d_raycast",
+          "c_name": "dse_physics3d_raycast",
+          "params": [
+            {
+              "name": "ox",
+              "type": "float"
+            },
+            {
+              "name": "oy",
+              "type": "float"
+            },
+            {
+              "name": "oz",
+              "type": "float"
+            },
+            {
+              "name": "dx",
+              "type": "float"
+            },
+            {
+              "name": "dy",
+              "type": "float"
+            },
+            {
+              "name": "dz",
+              "type": "float"
+            },
+            {
+              "name": "max_dist",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "bool"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_entity",
+              "type": "uint32"
+            },
+            {
+              "name": "out_point",
+              "type": "float3"
+            },
+            {
+              "name": "out_normal",
+              "type": "float3"
+            },
+            {
+              "name": "out_distance",
+              "type": "float"
+            }
+          ]
+        },
+        {
+          "lua_name": "rigidbody_3d_get_velocity",
+          "c_name": "dse_rigidbody3d_get_velocity",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_vel",
+              "type": "float3"
+            }
+          ]
+        },
+        {
+          "lua_name": "character_controller_3d_move",
+          "c_name": "dse_character_controller3d_move",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "dx",
+              "type": "float"
+            },
+            {
+              "name": "dy",
+              "type": "float"
+            },
+            {
+              "name": "dz",
+              "type": "float"
+            },
+            {
+              "name": "min_dist",
+              "type": "float"
+            },
+            {
+              "name": "dt",
+              "type": "float"
+            }
+          ],
+          "returns": [
+            {
+              "type": "bool"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_velocity",
+              "type": "float3"
+            },
+            {
+              "name": "out_flags",
+              "type": "uint32"
+            }
+          ]
         }
       ]
     },
@@ -5453,11 +5858,13 @@
             },
             {
               "name": "gravity_scale",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "fixed_rotation",
-              "type": "int"
+              "type": "int",
+              "default": 0
             }
           ]
         },
@@ -5497,15 +5904,18 @@
             },
             {
               "name": "density",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "friction",
-              "type": "float"
+              "type": "float",
+              "default": 0.3
             },
             {
               "name": "restitution",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ]
         },
@@ -5519,7 +5929,7 @@
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -5537,15 +5947,18 @@
             },
             {
               "name": "density",
-              "type": "float"
+              "type": "float",
+              "default": 1.0
             },
             {
               "name": "friction",
-              "type": "float"
+              "type": "float",
+              "default": 0.3
             },
             {
               "name": "restitution",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ]
         },
@@ -5559,7 +5972,7 @@
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -5573,7 +5986,7 @@
             },
             {
               "name": "is_trigger",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -5599,23 +6012,28 @@
             },
             {
               "name": "ax",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "ay",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "bx",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "by",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "collide_connected",
-              "type": "int"
+              "type": "bool",
+              "default": false
             }
           ]
         },
@@ -5629,7 +6047,7 @@
             },
             {
               "name": "enable_limit",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "lower_deg",
@@ -5641,7 +6059,7 @@
             },
             {
               "name": "enable_motor",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "motor_speed",
@@ -5697,7 +6115,7 @@
             },
             {
               "name": "enable_limit",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "lower",
@@ -5709,7 +6127,7 @@
             },
             {
               "name": "enable_motor",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "motor_speed",
@@ -5954,6 +6372,73 @@
             {
               "name": "oy",
               "type": "float"
+            }
+          ]
+        },
+        {
+          "lua_name": "add_camera_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "fov",
+              "type": "float"
+            },
+            {
+              "name": "priority",
+              "type": "int"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_camera3d_add",
+              "args": [
+                "e",
+                "fov",
+                "0.1f",
+                "1000.0f"
+              ]
+            },
+            {
+              "c_name": "dse_camera3d_set_priority",
+              "args": [
+                "e",
+                "priority"
+              ]
+            }
+          ]
+        },
+        {
+          "lua_name": "world_to_screen",
+          "c_name": "dse_compat_world_to_screen",
+          "params": [
+            {
+              "name": "wx",
+              "type": "float"
+            },
+            {
+              "name": "wy",
+              "type": "float"
+            },
+            {
+              "name": "wz",
+              "type": "float"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_sx",
+              "type": "float"
+            },
+            {
+              "name": "out_sy",
+              "type": "float"
+            },
+            {
+              "name": "out_visible",
+              "type": "bool"
             }
           ]
         }
@@ -6308,6 +6793,477 @@
               "type": "int"
             }
           ]
+        },
+        {
+          "lua_name": "add_directional_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "dx",
+              "type": "float"
+            },
+            {
+              "name": "dy",
+              "type": "float"
+            },
+            {
+              "name": "dz",
+              "type": "float"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "ambient",
+              "type": "float"
+            },
+            {
+              "name": "shadow_strength",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_dir_light_add",
+              "args": [
+                "e"
+              ]
+            },
+            {
+              "c_name": "dse_dir_light_set_direction",
+              "args": [
+                "e",
+                "dx",
+                "dy",
+                "dz"
+              ]
+            },
+            {
+              "c_name": "dse_dir_light_set_color",
+              "args": [
+                "e",
+                "r",
+                "g",
+                "b"
+              ]
+            },
+            {
+              "c_name": "dse_dir_light_set_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_dir_light_set_ambient_intensity",
+              "args": [
+                "e",
+                "ambient"
+              ]
+            },
+            {
+              "c_name": "dse_dir_light_set_shadow_strength",
+              "args": [
+                "e",
+                "shadow_strength"
+              ]
+            }
+          ]
+        },
+        {
+          "lua_name": "set_directional_light_3d",
+          "c_name": "dse_compat_set_directional_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "dx",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "dy",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "dz",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "r",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "g",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "b",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "intensity",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "ambient",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "shadow_strength",
+              "type": "float",
+              "keep_on_nil": true
+            }
+          ]
+        },
+        {
+          "lua_name": "set_directional_light_shadow",
+          "c_name": "dse_dir_light_set_shadow_params",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "strength",
+              "type": "float"
+            },
+            {
+              "name": "c0",
+              "type": "float"
+            },
+            {
+              "name": "c1",
+              "type": "float"
+            },
+            {
+              "name": "c2",
+              "type": "float"
+            },
+            {
+              "name": "lambda",
+              "type": "float"
+            }
+          ]
+        },
+        {
+          "lua_name": "add_point_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "radius",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_point_light_add",
+              "args": [
+                "e"
+              ]
+            },
+            {
+              "c_name": "dse_point_light_set_color",
+              "args": [
+                "e",
+                "r",
+                "g",
+                "b"
+              ]
+            },
+            {
+              "c_name": "dse_point_light_set_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_point_light_set_radius",
+              "args": [
+                "e",
+                "radius"
+              ]
+            }
+          ]
+        },
+        {
+          "lua_name": "set_point_light_3d",
+          "c_name": "dse_compat_set_point_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "r",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "g",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "b",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "intensity",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "radius",
+              "type": "float",
+              "keep_on_nil": true
+            }
+          ]
+        },
+        {
+          "lua_name": "set_point_light_shadow",
+          "c_name": "dse_point_light_set_cast_shadow",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "lua_name": "add_spot_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "dx",
+              "type": "float"
+            },
+            {
+              "name": "dy",
+              "type": "float"
+            },
+            {
+              "name": "dz",
+              "type": "float"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            },
+            {
+              "name": "radius",
+              "type": "float"
+            },
+            {
+              "name": "inner",
+              "type": "float"
+            },
+            {
+              "name": "outer",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_spot_light_add",
+              "args": [
+                "e"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_direction",
+              "args": [
+                "e",
+                "dx",
+                "dy",
+                "dz"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_color",
+              "args": [
+                "e",
+                "r",
+                "g",
+                "b"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_radius",
+              "args": [
+                "e",
+                "radius"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_inner_cone_angle",
+              "args": [
+                "e",
+                "inner"
+              ]
+            },
+            {
+              "c_name": "dse_spot_light_set_outer_cone_angle",
+              "args": [
+                "e",
+                "outer"
+              ]
+            }
+          ]
+        },
+        {
+          "lua_name": "set_spot_light_3d",
+          "c_name": "dse_compat_set_spot_light_3d",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "dx",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "dy",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "dz",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "r",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "g",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "b",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "intensity",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "radius",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "inner",
+              "type": "float",
+              "keep_on_nil": true
+            },
+            {
+              "name": "outer",
+              "type": "float",
+              "keep_on_nil": true
+            }
+          ]
+        },
+        {
+          "lua_name": "set_spot_light_shadow",
+          "c_name": "dse_spot_light_set_cast_shadow",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            }
+          ]
         }
       ]
     },
@@ -6329,11 +7285,11 @@
             },
             {
               "name": "depth_test",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "depth_write",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
@@ -6430,7 +7386,7 @@
           ]
         },
         {
-          "c_name": "dse_morph_simple_add_target",
+          "c_name": "dse_morph_add_target",
           "lua_name": "morph_add_target",
           "params": [
             {
@@ -6440,12 +7396,12 @@
             {
               "name": "name",
               "type": "string"
-            },
-            {
-              "name": "weight",
-              "type": "float"
             }
-          ]
+          ],
+          "float_array_param": {
+            "name": "deltas",
+            "stack_index": 3
+          }
         },
         {
           "c_name": "dse_morph_simple_set_enabled",
@@ -6458,6 +7414,112 @@
             {
               "name": "enabled",
               "type": "int"
+            }
+          ]
+        },
+        {
+          "lua_name": "add_mesh_renderer",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "r",
+              "type": "float"
+            },
+            {
+              "name": "g",
+              "type": "float"
+            },
+            {
+              "name": "b",
+              "type": "float"
+            },
+            {
+              "name": "a",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_mesh_renderer_add",
+              "args": [
+                "e",
+                "\"\""
+              ]
+            },
+            {
+              "c_name": "dse_mesh_renderer_set_color",
+              "args": [
+                "e",
+                "r",
+                "g",
+                "b",
+                "a"
+              ]
+            }
+          ]
+        },
+        {
+          "lua_name": "set_mesh_material",
+          "c_name": "dse_mesh_renderer_set_material_params",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "metallic",
+              "type": "float"
+            },
+            {
+              "name": "roughness",
+              "type": "float"
+            },
+            {
+              "name": "ao",
+              "type": "float"
+            },
+            {
+              "name": "er",
+              "type": "float"
+            },
+            {
+              "name": "eg",
+              "type": "float"
+            },
+            {
+              "name": "eb",
+              "type": "float"
+            },
+            {
+              "name": "normal_strength",
+              "type": "float"
+            },
+            {
+              "name": "receive_shadow",
+              "type": "bool"
+            },
+            {
+              "name": "double_sided",
+              "type": "bool"
+            },
+            {
+              "name": "cr",
+              "type": "float"
+            },
+            {
+              "name": "cg",
+              "type": "float"
+            },
+            {
+              "name": "cb",
+              "type": "float"
+            },
+            {
+              "name": "ca",
+              "type": "float"
             }
           ]
         }
@@ -6538,6 +7600,74 @@
             {
               "name": "angle_fade",
               "type": "float"
+            }
+          ]
+        },
+        {
+          "lua_name": "add_post_process",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            },
+            {
+              "name": "bloom_threshold",
+              "type": "float"
+            },
+            {
+              "name": "bloom_intensity",
+              "type": "float"
+            },
+            {
+              "name": "bloom_knee",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_post_process_add",
+              "args": [
+                "e"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_enabled",
+              "args": [
+                "e",
+                "enabled"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_enabled",
+              "args": [
+                "e",
+                "1"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_threshold",
+              "args": [
+                "e",
+                "bloom_threshold"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_intensity",
+              "args": [
+                "e",
+                "bloom_intensity"
+              ]
+            },
+            {
+              "c_name": "dse_post_process_set_bloom_knee",
+              "args": [
+                "e",
+                "bloom_knee"
+              ]
             }
           ]
         }
@@ -6893,6 +8023,70 @@
             {
               "name": "e",
               "type": "uint32"
+            }
+          ]
+        },
+        {
+          "lua_name": "set_terrain_params",
+          "c_name": "dse_terrain_set_params",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "res_x",
+              "type": "int"
+            },
+            {
+              "name": "res_z",
+              "type": "int"
+            },
+            {
+              "name": "max_lod",
+              "type": "int"
+            },
+            {
+              "name": "lod_factor",
+              "type": "float"
+            },
+            {
+              "name": "use_dynamic_lod",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "lua_name": "terrain_heightmap_set_data",
+          "c_name": "dse_terrain_heightmap_set_data",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "float_array_param": {
+            "name": "heights",
+            "stack_index": 2
+          }
+        },
+        {
+          "lua_name": "terrain_get_height",
+          "c_name": "dse_terrain_get_height",
+          "params": [
+            {
+              "name": "wx",
+              "type": "float"
+            },
+            {
+              "name": "wz",
+              "type": "float"
+            }
+          ],
+          "out_params": [
+            {
+              "name": "out_y",
+              "type": "float"
             }
           ]
         }
@@ -8434,13 +9628,13 @@
       "group": "spine",
       "lua_path": [
         "dse",
-        "ecs"
+        "spine"
       ],
       "register_func": "RegisterSpineBindings",
       "functions": [
         {
           "c_name": "dse_spine_add_renderer",
-          "lua_name": "spineaddrenderer",
+          "lua_name": "add_renderer",
           "params": [
             {
               "name": "e",
@@ -8458,7 +9652,7 @@
         },
         {
           "c_name": "dse_spine_set_animation",
-          "lua_name": "spinesetanimation",
+          "lua_name": "set_animation",
           "params": [
             {
               "name": "e",
@@ -8479,14 +9673,13 @@
     {
       "group": "streaming",
       "lua_path": [
-        "dse",
         "streaming"
       ],
       "register_func": "RegisterStreamingBindings",
       "functions": [
         {
           "c_name": "dse_streaming_create_zone",
-          "lua_name": "streamingcreatezone",
+          "lua_name": "create_zone",
           "params": [
             {
               "name": "name",
@@ -8522,7 +9715,7 @@
         },
         {
           "c_name": "dse_streaming_destroy_zone",
-          "lua_name": "streamingdestroyzone",
+          "lua_name": "destroy_zone",
           "params": [
             {
               "name": "zone",
@@ -8532,7 +9725,7 @@
         },
         {
           "c_name": "dse_streaming_add_asset",
-          "lua_name": "streamingaddasset",
+          "lua_name": "add_asset",
           "params": [
             {
               "name": "zone",
@@ -8550,7 +9743,7 @@
         },
         {
           "c_name": "dse_streaming_set_zone_center",
-          "lua_name": "streamingsetzonecenter",
+          "lua_name": "set_zone_center",
           "params": [
             {
               "name": "zone",
@@ -8572,7 +9765,7 @@
         },
         {
           "c_name": "dse_streaming_force_load",
-          "lua_name": "streamingforceload",
+          "lua_name": "force_load",
           "params": [
             {
               "name": "zone",
@@ -8582,7 +9775,7 @@
         },
         {
           "c_name": "dse_streaming_force_unload",
-          "lua_name": "streamingforceunload",
+          "lua_name": "force_unload",
           "params": [
             {
               "name": "zone",
@@ -8592,7 +9785,7 @@
         },
         {
           "c_name": "dse_streaming_get_zone_state",
-          "lua_name": "streaminggetzonestate",
+          "lua_name": "get_zone_state",
           "params": [
             {
               "name": "zone",
@@ -8607,7 +9800,7 @@
         },
         {
           "c_name": "dse_streaming_get_zone_progress",
-          "lua_name": "streaminggetzoneprogress",
+          "lua_name": "get_zone_progress",
           "params": [
             {
               "name": "zone",
@@ -8622,7 +9815,7 @@
         },
         {
           "c_name": "dse_streaming_set_budget",
-          "lua_name": "streamingsetbudget",
+          "lua_name": "set_budget",
           "params": [
             {
               "name": "max_loads_per_frame",
@@ -8638,7 +9831,7 @@
         },
         {
           "c_name": "dse_streaming_get_active_loads",
-          "lua_name": "streaminggetactiveloads",
+          "lua_name": "get_active_loads",
           "params": [],
           "returns": [
             {
@@ -8648,7 +9841,7 @@
         },
         {
           "c_name": "dse_streaming_get_zone_count",
-          "lua_name": "streaminggetzonecount",
+          "lua_name": "get_zone_count",
           "params": [],
           "returns": [
             {
@@ -8668,7 +9861,7 @@
       "functions": [
         {
           "c_name": "dse_ui_add_renderer",
-          "lua_name": "uiaddrenderer",
+          "lua_name": "add_renderer",
           "params": [
             {
               "name": "e",
@@ -8710,7 +9903,7 @@
         },
         {
           "c_name": "dse_ui_add_label",
-          "lua_name": "uiaddlabel",
+          "lua_name": "add_label",
           "params": [
             {
               "name": "e",
@@ -8742,41 +9935,49 @@
             },
             {
               "name": "glyph_w",
-              "type": "float"
+              "type": "float",
+              "default": 8.0
             },
             {
               "name": "glyph_h",
-              "type": "float"
+              "type": "float",
+              "default": 16.0
             },
             {
               "name": "spacing",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "atlas_cols",
-              "type": "int"
+              "type": "int",
+              "default": 16
             },
             {
               "name": "atlas_rows",
-              "type": "int"
+              "type": "int",
+              "default": 16
             },
             {
               "name": "ascii_start",
-              "type": "int"
+              "type": "int",
+              "default": 32
             },
             {
               "name": "offset_x",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             },
             {
               "name": "offset_y",
-              "type": "float"
+              "type": "float",
+              "default": 0.0
             }
           ]
         },
         {
           "c_name": "dse_ui_add_ttf_label",
-          "lua_name": "uiaddttflabel",
+          "lua_name": "add_ttf_label",
           "params": [
             {
               "name": "e",
@@ -8814,7 +10015,7 @@
         },
         {
           "c_name": "dse_ui_set_label_text",
-          "lua_name": "uisetlabeltext",
+          "lua_name": "set_label_text",
           "params": [
             {
               "name": "e",
@@ -8828,7 +10029,7 @@
         },
         {
           "c_name": "dse_ui_set_label_font",
-          "lua_name": "uisetlabelfont",
+          "lua_name": "set_label_font",
           "params": [
             {
               "name": "e",
@@ -8846,7 +10047,7 @@
         },
         {
           "c_name": "dse_ui_set_label_layout",
-          "lua_name": "uisetlabellayout",
+          "lua_name": "set_label_layout",
           "params": [
             {
               "name": "e",
@@ -8876,7 +10077,7 @@
         },
         {
           "c_name": "dse_ui_set_label_number",
-          "lua_name": "uisetlabelnumber",
+          "lua_name": "set_label_number",
           "params": [
             {
               "name": "e",
@@ -8890,7 +10091,7 @@
         },
         {
           "c_name": "dse_ui_add_panel",
-          "lua_name": "uiaddpanel",
+          "lua_name": "add_panel",
           "params": [
             {
               "name": "e",
@@ -8904,7 +10105,7 @@
         },
         {
           "c_name": "dse_ui_add_button",
-          "lua_name": "uiaddbutton",
+          "lua_name": "add_button",
           "params": [
             {
               "name": "e",
@@ -8930,7 +10131,7 @@
         },
         {
           "c_name": "dse_ui_set_button_scale",
-          "lua_name": "uisetbuttonscale",
+          "lua_name": "set_button_scale",
           "params": [
             {
               "name": "e",
@@ -8952,7 +10153,7 @@
         },
         {
           "c_name": "dse_ui_add_mask",
-          "lua_name": "uiaddmask",
+          "lua_name": "add_mask",
           "params": [
             {
               "name": "e",
@@ -8982,7 +10183,7 @@
         },
         {
           "c_name": "dse_ui_add_rich_text",
-          "lua_name": "uiaddrichtext",
+          "lua_name": "add_rich_text",
           "params": [
             {
               "name": "e",
@@ -9020,7 +10221,7 @@
         },
         {
           "c_name": "dse_ui_set_rich_text",
-          "lua_name": "uisetrichtext",
+          "lua_name": "set_rich_text",
           "params": [
             {
               "name": "e",
@@ -9034,7 +10235,7 @@
         },
         {
           "c_name": "dse_ui_add_joystick",
-          "lua_name": "uiaddjoystick",
+          "lua_name": "add_joystick",
           "params": [
             {
               "name": "e",
@@ -9056,7 +10257,7 @@
         },
         {
           "c_name": "dse_ui_get_joystick_x",
-          "lua_name": "uigetjoystickx",
+          "lua_name": "get_joystick_x",
           "params": [
             {
               "name": "e",
@@ -9071,7 +10272,7 @@
         },
         {
           "c_name": "dse_ui_get_joystick_y",
-          "lua_name": "uigetjoysticky",
+          "lua_name": "get_joystick_y",
           "params": [
             {
               "name": "e",
@@ -9086,7 +10287,7 @@
         },
         {
           "c_name": "dse_ui_set_position",
-          "lua_name": "uisetposition",
+          "lua_name": "set_position",
           "params": [
             {
               "name": "e",
@@ -9104,7 +10305,7 @@
         },
         {
           "c_name": "dse_ui_set_size",
-          "lua_name": "uisetsize",
+          "lua_name": "set_size",
           "params": [
             {
               "name": "e",
@@ -9122,7 +10323,7 @@
         },
         {
           "c_name": "dse_ui_set_anchor",
-          "lua_name": "uisetanchor",
+          "lua_name": "set_anchor",
           "params": [
             {
               "name": "e",
@@ -9140,7 +10341,7 @@
         },
         {
           "c_name": "dse_ui_set_color",
-          "lua_name": "uisetcolor",
+          "lua_name": "set_color",
           "params": [
             {
               "name": "e",
@@ -9166,7 +10367,7 @@
         },
         {
           "c_name": "dse_ui_set_visible",
-          "lua_name": "uisetvisible",
+          "lua_name": "set_visible",
           "params": [
             {
               "name": "e",
@@ -9180,7 +10381,7 @@
         },
         {
           "c_name": "dse_ui_set_uv",
-          "lua_name": "uisetuv",
+          "lua_name": "set_uv",
           "params": [
             {
               "name": "e",
@@ -9206,7 +10407,7 @@
         },
         {
           "c_name": "dse_ui_set_nine_slice",
-          "lua_name": "uisetnineslice",
+          "lua_name": "set_nine_slice",
           "params": [
             {
               "name": "e",
@@ -9244,7 +10445,7 @@
         },
         {
           "c_name": "dse_ui_add_anchor",
-          "lua_name": "uiaddanchor",
+          "lua_name": "add_anchor",
           "params": [
             {
               "name": "e",
@@ -9266,7 +10467,7 @@
         },
         {
           "c_name": "dse_ui_set_anchor_type",
-          "lua_name": "uisetanchortype",
+          "lua_name": "set_anchor_type",
           "params": [
             {
               "name": "e",
@@ -9280,7 +10481,7 @@
         },
         {
           "c_name": "dse_ui_set_anchor_offset",
-          "lua_name": "uisetanchoroffset",
+          "lua_name": "set_anchor_offset",
           "params": [
             {
               "name": "e",
@@ -9298,7 +10499,7 @@
         },
         {
           "c_name": "dse_ui_add_grid_layout",
-          "lua_name": "uiaddgridlayout",
+          "lua_name": "add_grid_layout",
           "params": [
             {
               "name": "e",
@@ -9328,7 +10529,7 @@
         },
         {
           "c_name": "dse_ui_set_grid_layout",
-          "lua_name": "uisetgridlayout",
+          "lua_name": "set_grid_layout",
           "params": [
             {
               "name": "e",
@@ -9366,7 +10567,7 @@
         },
         {
           "c_name": "dse_ui_add_canvas_scaler",
-          "lua_name": "uiaddcanvasscaler",
+          "lua_name": "add_canvas_scaler",
           "params": [
             {
               "name": "e",
@@ -9388,7 +10589,7 @@
         },
         {
           "c_name": "dse_ui_set_canvas_scaler",
-          "lua_name": "uisetcanvasscaler",
+          "lua_name": "set_canvas_scaler",
           "params": [
             {
               "name": "e",
@@ -9422,7 +10623,7 @@
         },
         {
           "c_name": "dse_ui_add_box_layout",
-          "lua_name": "uiaddboxlayout",
+          "lua_name": "add_box_layout",
           "params": [
             {
               "name": "e",
@@ -9460,7 +10661,7 @@
         },
         {
           "c_name": "dse_ui_set_box_layout",
-          "lua_name": "uisetboxlayout",
+          "lua_name": "set_box_layout",
           "params": [
             {
               "name": "e",
@@ -9498,7 +10699,7 @@
         },
         {
           "c_name": "dse_ui_add_content_size_fitter",
-          "lua_name": "uiaddcontentsizefitter",
+          "lua_name": "add_content_size_fitter",
           "params": [
             {
               "name": "e",
@@ -9532,7 +10733,7 @@
         },
         {
           "c_name": "dse_ui_add_animation",
-          "lua_name": "uiaddanimation",
+          "lua_name": "add_animation",
           "params": [
             {
               "name": "e",
@@ -9562,7 +10763,7 @@
         },
         {
           "c_name": "dse_ui_animate_position",
-          "lua_name": "uianimateposition",
+          "lua_name": "animate_position",
           "params": [
             {
               "name": "e",
@@ -9580,7 +10781,7 @@
         },
         {
           "c_name": "dse_ui_animate_scale",
-          "lua_name": "uianimatescale",
+          "lua_name": "animate_scale",
           "params": [
             {
               "name": "e",
@@ -9598,7 +10799,7 @@
         },
         {
           "c_name": "dse_ui_animate_alpha",
-          "lua_name": "uianimatealpha",
+          "lua_name": "animate_alpha",
           "params": [
             {
               "name": "e",
@@ -9612,7 +10813,7 @@
         },
         {
           "c_name": "dse_ui_animate_color",
-          "lua_name": "uianimatecolor",
+          "lua_name": "animate_color",
           "params": [
             {
               "name": "e",
@@ -9638,7 +10839,7 @@
         },
         {
           "c_name": "dse_ui_stop_animation",
-          "lua_name": "uistopanimation",
+          "lua_name": "stop_animation",
           "params": [
             {
               "name": "e",
@@ -9648,7 +10849,7 @@
         },
         {
           "c_name": "dse_ui_add_text_input",
-          "lua_name": "uiaddtextinput",
+          "lua_name": "add_text_input",
           "params": [
             {
               "name": "e",
@@ -9664,13 +10865,13 @@
             },
             {
               "name": "is_password",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
           "c_name": "dse_ui_set_text_input_text",
-          "lua_name": "uisettextinputtext",
+          "lua_name": "set_text_input_text",
           "params": [
             {
               "name": "e",
@@ -9683,8 +10884,23 @@
           ]
         },
         {
+          "c_name": "dse_compat_ui_get_text_input_text",
+          "lua_name": "get_text_input_text",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            }
+          ],
+          "returns": [
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
           "c_name": "dse_ui_set_text_input_placeholder",
-          "lua_name": "uisettextinputplaceholder",
+          "lua_name": "set_text_input_placeholder",
           "params": [
             {
               "name": "e",
@@ -9698,7 +10914,7 @@
         },
         {
           "c_name": "dse_ui_set_text_input_focus",
-          "lua_name": "uisettextinputfocus",
+          "lua_name": "set_text_input_focus",
           "params": [
             {
               "name": "e",
@@ -9712,7 +10928,7 @@
         },
         {
           "c_name": "dse_ui_add_scroll_view",
-          "lua_name": "uiaddscrollview",
+          "lua_name": "add_scroll_view",
           "params": [
             {
               "name": "e",
@@ -9728,17 +10944,17 @@
             },
             {
               "name": "horizontal",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "vertical",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
           "c_name": "dse_ui_set_scroll_offset",
-          "lua_name": "uisetscrolloffset",
+          "lua_name": "set_scroll_offset",
           "params": [
             {
               "name": "e",
@@ -9756,7 +10972,7 @@
         },
         {
           "c_name": "dse_ui_set_scroll_content_size",
-          "lua_name": "uisetscrollcontentsize",
+          "lua_name": "set_scroll_content_size",
           "params": [
             {
               "name": "e",
@@ -9774,7 +10990,7 @@
         },
         {
           "c_name": "dse_ui_add_slider",
-          "lua_name": "uiaddslider",
+          "lua_name": "add_slider",
           "params": [
             {
               "name": "e",
@@ -9794,13 +11010,13 @@
             },
             {
               "name": "whole_numbers",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
           "c_name": "dse_ui_set_slider_value",
-          "lua_name": "uisetslidervalue",
+          "lua_name": "set_slider_value",
           "params": [
             {
               "name": "e",
@@ -9814,7 +11030,7 @@
         },
         {
           "c_name": "dse_ui_get_slider_value",
-          "lua_name": "uigetslidervalue",
+          "lua_name": "get_slider_value",
           "params": [
             {
               "name": "e",
@@ -9829,7 +11045,7 @@
         },
         {
           "c_name": "dse_ui_set_slider_colors",
-          "lua_name": "uisetslidercolors",
+          "lua_name": "set_slider_colors",
           "params": [
             {
               "name": "e",
@@ -9887,7 +11103,7 @@
         },
         {
           "c_name": "dse_ui_set_slider_handle_size",
-          "lua_name": "uisetsliderhandlesize",
+          "lua_name": "set_slider_handle_size",
           "params": [
             {
               "name": "e",
@@ -9901,7 +11117,7 @@
         },
         {
           "c_name": "dse_ui_set_slider_vertical",
-          "lua_name": "uisetslidervertical",
+          "lua_name": "set_slider_vertical",
           "params": [
             {
               "name": "e",
@@ -9915,7 +11131,7 @@
         },
         {
           "c_name": "dse_ui_set_slider_range",
-          "lua_name": "uisetsliderrange",
+          "lua_name": "set_slider_range",
           "params": [
             {
               "name": "e",
@@ -9933,7 +11149,7 @@
         },
         {
           "c_name": "dse_ui_add_toggle",
-          "lua_name": "uiaddtoggle",
+          "lua_name": "add_toggle",
           "params": [
             {
               "name": "e",
@@ -9941,7 +11157,7 @@
             },
             {
               "name": "is_on",
-              "type": "int"
+              "type": "bool"
             },
             {
               "name": "group",
@@ -9951,7 +11167,7 @@
         },
         {
           "c_name": "dse_ui_set_toggle",
-          "lua_name": "uisettoggle",
+          "lua_name": "set_toggle",
           "params": [
             {
               "name": "e",
@@ -9959,13 +11175,13 @@
             },
             {
               "name": "is_on",
-              "type": "int"
+              "type": "bool"
             }
           ]
         },
         {
           "c_name": "dse_ui_get_toggle",
-          "lua_name": "uigettoggle",
+          "lua_name": "get_toggle",
           "params": [
             {
               "name": "e",
@@ -9980,7 +11196,7 @@
         },
         {
           "c_name": "dse_ui_add_progress_bar",
-          "lua_name": "uiaddprogressbar",
+          "lua_name": "add_progress_bar",
           "params": [
             {
               "name": "e",
@@ -9998,7 +11214,7 @@
         },
         {
           "c_name": "dse_ui_set_progress",
-          "lua_name": "uisetprogress",
+          "lua_name": "set_progress",
           "params": [
             {
               "name": "e",
@@ -10012,7 +11228,7 @@
         },
         {
           "c_name": "dse_ui_get_progress",
-          "lua_name": "uigetprogress",
+          "lua_name": "get_progress",
           "params": [
             {
               "name": "e",
@@ -10027,7 +11243,7 @@
         },
         {
           "c_name": "dse_ui_add_dropdown",
-          "lua_name": "uiadddropdown",
+          "lua_name": "add_dropdown",
           "params": [
             {
               "name": "e",
@@ -10045,7 +11261,7 @@
         },
         {
           "c_name": "dse_ui_dropdown_add_option",
-          "lua_name": "uidropdownaddoption",
+          "lua_name": "dropdown_add_option",
           "params": [
             {
               "name": "e",
@@ -10063,7 +11279,7 @@
         },
         {
           "c_name": "dse_ui_dropdown_clear_options",
-          "lua_name": "uidropdownclearoptions",
+          "lua_name": "dropdown_clear_options",
           "params": [
             {
               "name": "e",
@@ -10073,7 +11289,7 @@
         },
         {
           "c_name": "dse_ui_set_dropdown_index",
-          "lua_name": "uisetdropdownindex",
+          "lua_name": "set_dropdown_index",
           "params": [
             {
               "name": "e",
@@ -10087,7 +11303,7 @@
         },
         {
           "c_name": "dse_ui_get_dropdown_index",
-          "lua_name": "uigetdropdownindex",
+          "lua_name": "get_dropdown_index",
           "params": [
             {
               "name": "e",
@@ -10102,7 +11318,7 @@
         },
         {
           "c_name": "dse_ui_set_dropdown_open",
-          "lua_name": "uisetdropdownopen",
+          "lua_name": "set_dropdown_open",
           "params": [
             {
               "name": "e",
@@ -10116,7 +11332,7 @@
         },
         {
           "c_name": "dse_ui_add_filled_image",
-          "lua_name": "uiaddfilledimage",
+          "lua_name": "add_filled_image",
           "params": [
             {
               "name": "e",
@@ -10142,7 +11358,7 @@
         },
         {
           "c_name": "dse_ui_set_fill_amount",
-          "lua_name": "uisetfillamount",
+          "lua_name": "set_fill_amount",
           "params": [
             {
               "name": "e",
@@ -10156,7 +11372,7 @@
         },
         {
           "c_name": "dse_ui_get_fill_amount",
-          "lua_name": "uigetfillamount",
+          "lua_name": "get_fill_amount",
           "params": [
             {
               "name": "e",
@@ -10171,7 +11387,7 @@
         },
         {
           "c_name": "dse_ui_set_fill_method",
-          "lua_name": "uisetfillmethod",
+          "lua_name": "set_fill_method",
           "params": [
             {
               "name": "e",
@@ -10193,7 +11409,7 @@
         },
         {
           "c_name": "dse_ui_add_focus_navigable",
-          "lua_name": "uiaddfocusnavigable",
+          "lua_name": "add_focus_navigable",
           "params": [
             {
               "name": "e",
@@ -10207,7 +11423,7 @@
         },
         {
           "c_name": "dse_ui_set_focus_nav",
-          "lua_name": "uisetfocusnav",
+          "lua_name": "set_focus_nav",
           "params": [
             {
               "name": "e",
@@ -10233,7 +11449,7 @@
         },
         {
           "c_name": "dse_ui_is_focused",
-          "lua_name": "uiisfocused",
+          "lua_name": "is_focused",
           "params": [
             {
               "name": "e",
@@ -10248,7 +11464,7 @@
         },
         {
           "c_name": "dse_ui_set_focus_tint",
-          "lua_name": "uisetfocustint",
+          "lua_name": "set_focus_tint",
           "params": [
             {
               "name": "e",
@@ -10274,7 +11490,7 @@
         },
         {
           "c_name": "dse_ui_add_event_propagation",
-          "lua_name": "uiaddeventpropagation",
+          "lua_name": "add_event_propagation",
           "params": [
             {
               "name": "e",
@@ -10292,7 +11508,7 @@
         },
         {
           "c_name": "dse_ui_stop_propagation",
-          "lua_name": "uistoppropagation",
+          "lua_name": "stop_propagation",
           "params": [
             {
               "name": "e",
@@ -10302,7 +11518,7 @@
         },
         {
           "c_name": "dse_ui_add_visual_effect",
-          "lua_name": "uiaddvisualeffect",
+          "lua_name": "add_visual_effect",
           "params": [
             {
               "name": "e",
@@ -10312,7 +11528,7 @@
         },
         {
           "c_name": "dse_ui_set_corner_radius",
-          "lua_name": "uisetcornerradius",
+          "lua_name": "set_corner_radius",
           "params": [
             {
               "name": "e",
@@ -10326,7 +11542,7 @@
         },
         {
           "c_name": "dse_ui_set_gradient",
-          "lua_name": "uisetgradient",
+          "lua_name": "set_gradient",
           "params": [
             {
               "name": "e",
@@ -10372,7 +11588,7 @@
         },
         {
           "c_name": "dse_ui_set_blur",
-          "lua_name": "uisetblur",
+          "lua_name": "set_blur",
           "params": [
             {
               "name": "e",
@@ -10390,7 +11606,7 @@
         },
         {
           "c_name": "dse_ui_add_virtual_scroll",
-          "lua_name": "uiaddvirtualscroll",
+          "lua_name": "add_virtual_scroll",
           "params": [
             {
               "name": "e",
@@ -10408,7 +11624,7 @@
         },
         {
           "c_name": "dse_ui_set_virtual_scroll_count",
-          "lua_name": "uisetvirtualscrollcount",
+          "lua_name": "set_virtual_scroll_count",
           "params": [
             {
               "name": "e",
@@ -10422,7 +11638,7 @@
         },
         {
           "c_name": "dse_ui_destroy_virtual_scroll",
-          "lua_name": "uidestroyvirtualscroll",
+          "lua_name": "destroy_virtual_scroll",
           "params": [
             {
               "name": "e",
@@ -10432,7 +11648,7 @@
         },
         {
           "c_name": "dse_ui_load_from_file",
-          "lua_name": "uiloadfromfile",
+          "lua_name": "load_from_file",
           "params": [
             {
               "name": "path",
@@ -10448,7 +11664,7 @@
         },
         {
           "c_name": "dse_ui_load_from_json",
-          "lua_name": "uiloadfromjson",
+          "lua_name": "load_from_json",
           "params": [
             {
               "name": "json_str",

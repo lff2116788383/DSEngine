@@ -10,11 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
-{% if group.group.startswith("world_") %}
+#include <cmath>
 #include <vector>
 #include <string>
 #include <cstring>
-{% endif %}
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -43,6 +43,8 @@ int L_{{ func_id }}(lua_State* L) {
     int {{ op.name }} = 0;
 {% elif op.type == "uint32" %}
     uint32_t {{ op.name }} = 0;
+{% elif op.type == "bool" %}
+    int {{ op.name }} = 0;
 {% endif %}
 {% endfor %}
 {# --- Table input: extract fields from a Lua table with defaults --- #}
@@ -87,14 +89,18 @@ int L_{{ func_id }}(lua_State* L) {
     uint32_t {{ p.name }} = static_cast<uint32_t>(luaL_checkinteger(L, {{ ns.stack_idx }}));
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "float" %}
-{% if "default" in p %}
+{% if p.keep_on_nil is defined and p.keep_on_nil %}
+    float {{ p.name }} = lua_isnoneornil(L, {{ ns.stack_idx }}) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, {{ ns.stack_idx }}));
+{% elif "default" in p %}
     float {{ p.name }} = static_cast<float>(luaL_optnumber(L, {{ ns.stack_idx }}, {{ p.default }}));
 {% else %}
     float {{ p.name }} = static_cast<float>(luaL_checknumber(L, {{ ns.stack_idx }}));
 {% endif %}
 {% set _ = call_args.append(p.name) %}
 {% elif p.type == "int" %}
-{% if "default" in p %}
+{% if p.keep_on_nil is defined and p.keep_on_nil %}
+    int {{ p.name }} = lua_isnoneornil(L, {{ ns.stack_idx }}) ? -1 : static_cast<int>(luaL_checkinteger(L, {{ ns.stack_idx }}));
+{% elif "default" in p %}
     int {{ p.name }} = static_cast<int>(luaL_optinteger(L, {{ ns.stack_idx }}, {{ p.default }}));
 {% else %}
     int {{ p.name }} = static_cast<int>(luaL_checkinteger(L, {{ ns.stack_idx }}));
@@ -150,13 +156,43 @@ int L_{{ func_id }}(lua_State* L) {
 {% set _ = call_args.append(sap.name ~ ".data()") %}
 {% set _ = call_args.append("static_cast<int>(" ~ sap.name ~ ".size())") %}
 {% endif %}
+{# --- Int array param (table of ints -> uint32_t array) --- #}
+{% if fn.int_array_param is defined and fn.int_array_param %}
+{% set iap = fn.int_array_param %}
+    std::vector<uint32_t> {{ iap.name }};
+    if (lua_istable(L, {{ iap.stack_index }})) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, {{ iap.stack_index }}));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, {{ iap.stack_index }}, _i);
+            if (lua_isnumber(L, -1)) {{ iap.name }}.push_back(static_cast<uint32_t>(lua_tointeger(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+{% set _ = call_args.append(iap.name ~ ".data()") %}
+{% set _ = call_args.append("static_cast<int>(" ~ iap.name ~ ".size())") %}
+{% endif %}
+{# --- Float array param (table of floats -> float vector) --- #}
+{% if fn.float_array_param is defined and fn.float_array_param %}
+{% set fap = fn.float_array_param %}
+    std::vector<float> {{ fap.name }};
+    if (lua_istable(L, {{ fap.stack_index }})) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, {{ fap.stack_index }}));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, {{ fap.stack_index }}, _i);
+            if (lua_isnumber(L, -1)) {{ fap.name }}.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+{% set _ = call_args.append(fap.name ~ ".data()") %}
+{% set _ = call_args.append("static_cast<int>(" ~ fap.name ~ ".size())") %}
+{% endif %}
 {# --- Build output param args --- #}
 {% for op in fn.get("out_params", []) %}
 {% if op.type in ("float3", "float2", "float4", "float6", "float_array") %}
 {% set _ = call_args.append(op.name) %}
 {% elif op.type == "double" %}
 {% set _ = call_args.append("&" + op.name) %}
-{% elif op.type in ("float", "int", "uint32") %}
+{% elif op.type in ("float", "int", "uint32", "bool") %}
 {% set _ = call_args.append("&" + op.name) %}
 {% endif %}
 {% endfor %}
@@ -182,6 +218,11 @@ int L_{{ func_id }}(lua_State* L) {
 {% set _ = call_args.append("_buf") %}
 {% set _ = call_args.append("sizeof(_buf)") %}
 {% endif %}
+{# --- Float-N-or-nil return declaration + arg --- #}
+{% if fn.floatn_or_nil_return is defined and fn.floatn_or_nil_return %}
+    float _fbuf[{{ fn.floatn_or_nil_return.count }}];
+{% set _ = call_args.append("_fbuf") %}
+{% endif %}
 {# --- Call the C function(s) --- #}
 {% if fn.calls is defined and fn.calls %}
 {# Multi-call function #}
@@ -205,6 +246,8 @@ int L_{{ func_id }}(lua_State* L) {
     int _count = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% elif fn.buffer_output is defined and fn.buffer_output %}
     int _count = {{ fn.c_name }}({{ call_args | join(", ") }});
+{% elif fn.floatn_or_nil_return is defined and fn.floatn_or_nil_return %}
+    int _ret = {{ fn.c_name }}({{ call_args | join(", ") }});
 {% else %}
     {{ fn.c_name }}({{ call_args | join(", ") }});
 {% endif %}
@@ -237,6 +280,11 @@ int L_{{ func_id }}(lua_State* L) {
     }
     lua_pushboolean(L, 0);
     return 1;
+{% elif fn.floatn_or_nil_return is defined and fn.floatn_or_nil_return %}
+{# --- Float[N] on success, else nil --- #}
+    if (!_ret) { lua_pushnil(L); return 1; }
+    for (int _i = 0; _i < {{ fn.floatn_or_nil_return.count }}; ++_i) lua_pushnumber(L, _fbuf[_i]);
+    return {{ fn.floatn_or_nil_return.count }};
 {% elif fn.buffer_output is defined and fn.buffer_output %}
 {# --- Buffer output → Lua table --- #}
 {% set bo = fn.buffer_output %}
@@ -313,9 +361,17 @@ int L_{{ func_id }}(lua_State* L) {
 {% if ret.type == "float" %}
     lua_pushnumber(L, _ret);
 {% elif ret.type == "int" %}
+{% if ret.nil_if_zero is defined and ret.nil_if_zero %}
+    if (_ret == 0) { lua_pushnil(L); } else { lua_pushinteger(L, _ret); }
+{% else %}
     lua_pushinteger(L, _ret);
+{% endif %}
 {% elif ret.type == "uint32" %}
+{% if ret.nil_if_zero is defined and ret.nil_if_zero %}
+    if (_ret == 0) { lua_pushnil(L); } else { lua_pushinteger(L, static_cast<lua_Integer>(_ret)); }
+{% else %}
     lua_pushinteger(L, static_cast<lua_Integer>(_ret));
+{% endif %}
 {% elif ret.type == "bool" %}
     lua_pushboolean(L, _ret);
 {% elif ret.type == "string" %}
@@ -360,6 +416,9 @@ int L_{{ func_id }}(lua_State* L) {
 {% elif op.type == "uint32" %}
     lua_pushinteger(L, static_cast<lua_Integer>({{ op.name }}));
 {% set ns2.ret_count = ns2.ret_count + 1 %}
+{% elif op.type == "bool" %}
+    lua_pushboolean(L, {{ op.name }});
+{% set ns2.ret_count = ns2.ret_count + 1 %}
 {% endif %}
 {% endfor %}
     return {{ ns2.ret_count }};
@@ -372,6 +431,12 @@ int L_{{ func_id }}(lua_State* L) {
 void {{ group.register_func }}(lua_State* L) {
 {% if group.lua_path | length == 1 %}
     lua_getglobal(L, "{{ group.lua_path[0] }}");
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setglobal(L, "{{ group.lua_path[0] }}");
+    }
 {% elif group.lua_path | length == 2 %}
     lua_getglobal(L, "{{ group.lua_path[0] }}");
 {% set sub = group.lua_path[1] %}

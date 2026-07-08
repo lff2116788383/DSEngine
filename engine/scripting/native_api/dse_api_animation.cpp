@@ -247,6 +247,25 @@ extern "C" void dse_anim3d_add_transition(uint32_t e, const char* from_state,
     it->second.transitions.push_back(std::move(trans));
 }
 
+// Lua 绑定薄包装：init_fsm 支持可选 default_state
+extern "C" void dse_compat_anim3d_init_fsm(uint32_t e, const char* default_state) {
+    dse_anim3d_init_fsm(e);
+    World* world = GW();
+    if (!world) return;
+    auto* animator = world->registry().try_get<Animator3DComponent>(TE(e));
+    if (animator && animator->state_machine && default_state && default_state[0] != '\0') {
+        animator->state_machine->SetDefaultState(default_state);
+    }
+}
+
+// Lua 绑定薄包装：无条件 transition（条件版通过完整 C ABI 提供）
+extern "C" void dse_compat_anim3d_add_transition(uint32_t e, const char* from_state,
+                                                 const char* to_state, float transition_duration,
+                                                 int has_exit_time, float exit_time) {
+    dse_anim3d_add_transition(e, from_state, to_state, transition_duration,
+                              has_exit_time, exit_time, 0, nullptr, nullptr, nullptr, nullptr);
+}
+
 extern "C" void dse_anim3d_set_param_float(uint32_t e, const char* param_name, float value) {
     World* world = GW();
     if (!world || !param_name) return;

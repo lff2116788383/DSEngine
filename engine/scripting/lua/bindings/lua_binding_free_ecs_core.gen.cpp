@@ -10,6 +10,11 @@
 extern "C" {
 #include "depends/lua/lauxlib.h"
 }
+#include <cmath>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 namespace dse::runtime::lua_binding {
 namespace {
@@ -208,6 +213,24 @@ int L_dse_ecs_get_time_scale(lua_State* L) {
     return 1;
 }
 
+int L_dse_ecs_get_world_aabb(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float _fbuf[6];
+    int _ret = dse_ecs_get_world_aabb(e, _fbuf);
+    if (!_ret) { lua_pushnil(L); return 1; }
+    for (int _i = 0; _i < 6; ++_i) lua_pushnumber(L, _fbuf[_i]);
+    return 6;
+}
+
+int L_dse_ecs_get_local_aabb(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float _fbuf[6];
+    int _ret = dse_ecs_get_local_aabb(e, _fbuf);
+    if (!_ret) { lua_pushnil(L); return 1; }
+    for (int _i = 0; _i < 6; ++_i) lua_pushnumber(L, _fbuf[_i]);
+    return 6;
+}
+
 int L_dse_ecs_find_entities_by_mesh_path(lua_State* L) {
     const char* mesh_path = luaL_checkstring(L, 1);
     uint32_t _buf[512];
@@ -272,6 +295,8 @@ void RegisterEcsCoreBindings(lua_State* L) {
         {"save_prefab", L_dse_scene_save_prefab},
         {"set_time_scale", L_dse_ecs_set_time_scale},
         {"get_time_scale", L_dse_ecs_get_time_scale},
+        {"get_world_aabb", L_dse_ecs_get_world_aabb},
+        {"get_local_aabb", L_dse_ecs_get_local_aabb},
         {"find_entities_by_mesh_path", L_dse_ecs_find_entities_by_mesh_path},
         {"find_entities_with", L_dse_ecs_find_entities_with},
     });

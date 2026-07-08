@@ -785,6 +785,22 @@ DSE_CAPI void dse_anim3d_add_transition(uint32_t e, const char* from_state,
                                         const int* cond_modes,
                                         const float* cond_thresholds,
                                         const int* cond_ints);
+// Lua 绑定薄包装：init_fsm 带可选 default_state；无条件 transition
+DSE_CAPI void dse_compat_anim3d_init_fsm(uint32_t e, const char* default_state);
+DSE_CAPI void dse_compat_anim3d_add_transition(uint32_t e, const char* from_state,
+                                               const char* to_state, float transition_duration,
+                                               int has_exit_time, float exit_time);
+// ---- S1.9 3D compat 薄包装（定义见 dse_api_gameplay3d.cpp） ----
+DSE_CAPI void dse_compat_weather_add(uint32_t e, const char* type, float intensity);
+DSE_CAPI void dse_compat_set_directional_light_3d(uint32_t e, int enabled,
+        float dx, float dy, float dz, float r, float g, float b,
+        float intensity, float ambient, float shadow_strength);
+DSE_CAPI void dse_compat_set_point_light_3d(uint32_t e, float r, float g, float b,
+        float intensity, float radius);
+DSE_CAPI void dse_compat_set_spot_light_3d(uint32_t e, float dx, float dy, float dz,
+        float r, float g, float b, float intensity, float radius, float inner, float outer);
+DSE_CAPI void dse_compat_world_to_screen(float wx, float wy, float wz,
+        float* out_sx, float* out_sy, int* out_visible);
 DSE_CAPI void dse_anim3d_set_param_float(uint32_t e, const char* param_name, float value);
 DSE_CAPI void dse_anim3d_set_param_trigger(uint32_t e, const char* param_name);
 DSE_CAPI void dse_anim3d_set_lock_root_motion(uint32_t e, int lock);
@@ -995,6 +1011,10 @@ DSE_CAPI int  dse_l10n_get_locale(char* out, int cap);
 DSE_CAPI int  dse_l10n_get(const char* key, char* out, int cap);
 DSE_CAPI int  dse_l10n_has_key(const char* key);
 DSE_CAPI int  dse_l10n_get_locales(char* out, int cap);  // null-separated, returns count
+// Lua 绑定薄包装
+DSE_CAPI int         dse_compat_l10n_load(const char* locale, const char* json);
+DSE_CAPI const char* dse_compat_l10n_get_locale(void);
+DSE_CAPI const char* dse_compat_l10n_get(const char* key, const char* fallback);
 
 // ============================================================
 // Scene / Prefab 序列化
@@ -1122,6 +1142,8 @@ DSE_CAPI void  dse_ui_add_text_input(uint32_t e, const char* placeholder,
                                      int max_length, int is_password);
 DSE_CAPI void  dse_ui_set_text_input_text(uint32_t e, const char* text);
 DSE_CAPI int   dse_ui_get_text_input_text(uint32_t e, char* out, int cap);
+// Lua 绑定薄包装：返回字符串
+DSE_CAPI const char* dse_compat_ui_get_text_input_text(uint32_t e);
 DSE_CAPI void  dse_ui_set_text_input_focus(uint32_t e, int focused);
 
 // UI 布局文件加载（UISerializer）。返回创建的实体数（写入 out_entities，最多 cap 个）。
