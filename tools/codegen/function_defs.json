@@ -12668,11 +12668,10 @@
       ]
     },
     {
-      "group": "ai_gap",
+      "group": "gap",
       "lua_path": [
         "dse"
       ],
-      "register_func": "RegisterFreeAiGapBindings",
       "functions": [
         {
           "c_name": "dse_ai_lod_get_config",
@@ -12693,16 +12692,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "ecs_animation_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeAnimationGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_anim3d_get_root_motion_delta",
           "lua_name": "anim3d_get_root_motion_delta",
@@ -12824,16 +12814,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "app_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeAppGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_app_get_fps",
           "lua_name": "app_get_fps",
@@ -12853,16 +12834,7 @@
               "type": "float"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_2d_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFree2dGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_atlas_get_entry_uv",
           "lua_name": "atlas_get_entry_uv",
@@ -12904,16 +12876,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "audio_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeAudioGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_audio_lod_get_stats",
           "lua_name": "audio_lod_get_stats",
@@ -12929,16 +12892,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_camera_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeCameraGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_camera3d_add",
           "lua_name": "camera3d_add",
@@ -12961,16 +12915,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "ecs_phys3d_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreePhys3dGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_character_check_ground",
           "lua_name": "character_check_ground",
@@ -13314,16 +13259,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "open_world_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeOpenWorldGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_clipmap_get_config",
           "lua_name": "clipmap_get_config",
@@ -13430,16 +13366,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "ecs_gameplay3d_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeGameplay3dGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_day_night_get_sun_direction",
           "lua_name": "day_night_get_sun_direction",
@@ -13485,16 +13412,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_light_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeLightGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_dir_light_add",
           "lua_name": "dir_light_add",
@@ -13835,16 +13753,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "dssl_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeDsslGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_dssl_get_color",
           "lua_name": "dssl_get_color",
@@ -13865,16 +13774,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "ecs_core_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeEcsCoreGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_ecs_get_local_aabb",
           "lua_name": "ecs_get_local_aabb",
@@ -13931,16 +13831,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "http_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeHttpGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_http_send",
           "lua_name": "http_send",
@@ -13979,16 +13870,7 @@
               "type": "uint32"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "input_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeInputGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_input_get_touch",
           "lua_name": "input_get_touch",
@@ -14017,16 +13899,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_mesh_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeMeshGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_mesh_renderer_set_material_from_dmat",
           "lua_name": "mesh_renderer_set_material_from_dmat",
@@ -14149,16 +14022,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "meshlet_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeMeshletGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_meshlet_cull_stats",
           "lua_name": "meshlet_cull_stats",
@@ -14216,16 +14080,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "navigation_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeNavigationGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_nav_agent_get",
           "lua_name": "nav_agent_get",
@@ -14337,16 +14192,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_physics2d_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreePhysics2dGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_physics2d_poll_collision_event",
           "lua_name": "physics2d_poll_collision_event",
@@ -14416,16 +14262,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_post_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreePostGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_post_process_add",
           "lua_name": "post_process_add",
@@ -14477,16 +14314,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "rendering_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeRenderingGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_render_screen_to_world_ray",
           "lua_name": "render_screen_to_world_ray",
@@ -14548,16 +14376,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "scene_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeSceneGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_scene_instantiate_prefab",
           "lua_name": "scene_instantiate_prefab",
@@ -14609,16 +14428,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_fx_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeFxGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_steering_get_state",
           "lua_name": "steering_get_state",
@@ -14682,16 +14492,7 @@
               "type": "int"
             }
           ]
-        }
-      ]
-    },
-    {
-      "group": "ecs_terrain_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeTerrainGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_terrain_get_height",
           "lua_name": "terrain_get_height",
@@ -15030,16 +14831,7 @@
             }
           ],
           "returns": []
-        }
-      ]
-    },
-    {
-      "group": "ui_gap",
-      "lua_path": [
-        "dse"
-      ],
-      "register_func": "RegisterFreeUiGapBindings",
-      "functions": [
+        },
         {
           "c_name": "dse_ui_get_scroll_offset",
           "lua_name": "ui_get_scroll_offset",
@@ -15082,7 +14874,8 @@
           ],
           "returns": []
         }
-      ]
+      ],
+      "register_func": "RegisterFreeGapBindings"
     },
     {
       "group": "world_spline",
