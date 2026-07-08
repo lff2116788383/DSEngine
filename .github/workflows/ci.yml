@@ -3,7 +3,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, feature/engine-lib]
   pull_request:
     branches: [master]
   workflow_dispatch:        # 允许手动触发（CI 无额度时按需运行）
