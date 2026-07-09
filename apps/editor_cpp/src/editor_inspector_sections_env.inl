@@ -227,13 +227,59 @@ void DrawHairSection(EditorContext& context) {
                          MakeReflectResolver<dse::HairComponent>(context));
 }
 
+// Custom morph-target (blend shape / 捏脸) panel: the reflected view only
+// exposes `enabled`, so drive the per-target weight list by hand — one slider
+// per blend shape, driving SetWeightByIndex (which marks the component
+// gpu_dirty). Target names/weights persist via scene serialization.
 void DrawMorphTargetSection(EditorContext& context) {
     if (!context.registry.all_of<dse::MorphTargetComponent>(context.selected_entity)) return;
-    dse::reflect::EnsureCoreReflectionRegistered();
-    const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::MorphTargetComponent>();
-    if (!ti) return;
-    DrawReflectedSection(context, MDI_ICON_SHAPE "  Morph Target", *ti,
-                         MakeReflectResolver<dse::MorphTargetComponent>(context));
+    auto& morph = context.registry.get<dse::MorphTargetComponent>(context.selected_entity);
+    if (!ImGui::CollapsingHeader(MDI_ICON_SHAPE "  Morph Target", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    BeginInspectorReadOnlyScope(context);
+
+    ImGui::Columns(2, "morph_hdr_cols", false);
+    ImGui::SetColumnWidth(0, 110.0f);
+    INSPECTOR_PROPERTY("Enabled", ImGui::Checkbox("##morph_enabled", &morph.enabled));
+    ImGui::Columns(1);
+
+    const size_t n = std::min(morph.targets.size(), morph.weights.size());
+    if (n == 0) {
+        ImGui::TextDisabled("No blend shapes.");
+        ImGui::TextDisabled("Import a model with morph targets.");
+        EndInspectorReadOnlyScope(context);
+        return;
+    }
+
+    ImGui::Text("Blend Shapes (%d)", static_cast<int>(n));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset All")) {
+        for (size_t i = 0; i < n; ++i) morph.SetWeightByIndex(static_cast<int>(i), 0.0f);
+    }
+    ImGui::Separator();
+
+    ImGui::Columns(2, "morph_weight_cols", false);
+    ImGui::SetColumnWidth(0, 160.0f);
+    for (size_t i = 0; i < n; ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(morph.targets[i].name.empty()
+                                   ? "(unnamed)"
+                                   : morph.targets[i].name.c_str());
+        ImGui::NextColumn();
+        ImGui::SetNextItemWidth(-1);
+        float w = morph.weights[i];
+        if (ImGui::SliderFloat("##w", &w, 0.0f, 1.0f, "%.3f")) {
+            morph.SetWeightByIndex(static_cast<int>(i), w);
+        }
+        ImGui::NextColumn();
+        ImGui::PopID();
+    }
+    ImGui::Columns(1);
+
+    EndInspectorReadOnlyScope(context);
 }
 
 void DrawImpostorSection(EditorContext& context) {
