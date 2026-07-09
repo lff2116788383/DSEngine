@@ -703,7 +703,6 @@ extern "C" void dse_morph_add_target(uint32_t e, const char* name,
     comp->targets.push_back(std::move(target));
     comp->weights.push_back(0.0f);
     if (comp->vertex_count == 0) comp->vertex_count = vert_count;
-    comp->gpu_dirty = true;
 }
 
 extern "C" void dse_morph_set_weight(uint32_t e, const char* name, float w) {

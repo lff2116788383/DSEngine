@@ -264,7 +264,6 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
         // Restores name+weight (name-only targets); the mesh loader fills in the
         // deltas and preserves these weights by matching target names.
         dse::scene_codec_custom::DeserializeExtra(morph, components["MorphTargetComponent"]);
-        morph.gpu_dirty = true;
         registry.emplace<dse::MorphTargetComponent>(entity, std::move(morph));
     }
 }

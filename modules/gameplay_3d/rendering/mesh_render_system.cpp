@@ -546,7 +546,6 @@ static void LoadMorphTargetsFromDmesh(World& world, entt::entity entity,
         comp.weights.push_back(it != prev_weights.end() ? it->second : 0.0f);
         comp.targets.push_back(std::move(target));
     }
-    comp.gpu_dirty = true;
     reg.emplace_or_replace<MorphTargetComponent>(entity, std::move(comp));
 }
 

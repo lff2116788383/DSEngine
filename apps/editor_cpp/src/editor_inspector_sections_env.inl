@@ -229,8 +229,8 @@ void DrawHairSection(EditorContext& context) {
 
 // Custom morph-target (blend shape / 捏脸) panel: the reflected view only
 // exposes `enabled`, so drive the per-target weight list by hand — one slider
-// per blend shape, driving SetWeightByIndex (which marks the component
-// gpu_dirty). Target names/weights persist via scene serialization.
+// per blend shape, driving SetWeightByIndex. Target names/weights persist via
+// scene serialization.
 void DrawMorphTargetSection(EditorContext& context) {
     if (!context.registry.all_of<dse::MorphTargetComponent>(context.selected_entity)) return;
     auto& morph = context.registry.get<dse::MorphTargetComponent>(context.selected_entity);

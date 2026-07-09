@@ -639,8 +639,8 @@ void OnT44HiZCullMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
 }
 
 // --- B3b-10 形变目标（morph target）真链路自检（常量 / ctx / 回读校验回调）---
-//   引擎 MorphTargetSystem 真实 compute（base 顶点 + Σ weight·delta → normalize 法线 → 写形变顶点）
-//   经手译 WGSL 接入（morph_target_system.cpp::kMorphTargetCompWGSL）。自检布置：4 顶点、2 形变目标，
+//   morph 形变 compute（base 顶点 + Σ weight·delta → normalize 法线 → 写形变顶点）经手译 WGSL
+//   接入（离屏自检内联副本）。自检布置：4 顶点、2 形变目标，
 //   weights=[0.5,1.0]，dispatch 后回读 4×DeformedVertex（每 48B）逐顶点校验 pos==base+Σw·Δpos、
 //   法线归一化、w==1、tangent 透传。证明该消费方着色器 WebGPU 可用。离屏隔离，不翻能力位。
 constexpr uint32_t kMfVtxCount = 4;
@@ -680,7 +680,7 @@ void OnMorphMapped(WGPUBufferMapAsyncStatus status, void* userdata) {
         DEBUG_LOG_ERROR("WebGPU[B3b-10] morph 自检：结果回读映射失败 status={}", static_cast<int>(status));
     }
     if (ok) {
-        DEBUG_LOG_INFO("WebGPU[B3b-10] 形变目标自检 PASS：引擎 MorphTargetSystem 真 compute 逻辑"
+        DEBUG_LOG_INFO("WebGPU[B3b-10] 形变目标自检 PASS：morph 形变 compute 逻辑"
                        "（base + Σ weight·delta → normalize 法线 → 写形变顶点）经手译 WGSL 经"
                        " SetComputeUniformInt + 4×SSBO 跑出形变顶点 == CPU 预期");
     } else {
@@ -3123,15 +3123,15 @@ void WebGpuSelfTestHarness::KickGpuDrivenHiZCullSelfTestReadback() {
     wgpuBufferMapAsync(ctx->rb_out, WGPUMapMode_Read, 0, kT44VisBytes, OnT44HiZCullMapped, ctx);
 }
 
-// B3b-10：形变目标真链路自检。手译引擎 MorphTargetSystem compute（morph_target_system.cpp
-// kMorphTargetCompWGSL，与上方 GLSL 450 逐句对应）：base 顶点 + Σ weight·delta（按目标）→
+// B3b-10：形变目标真链路自检。手译 morph 形变 compute（Σ weight·delta 混形，离屏自检内联
+// WGSL 副本）：base 顶点 + Σ weight·delta（按目标）→
 // normalize 法线 → 写形变顶点。自检布置：4 顶点、2 目标、weights=[0.5,1.0]、delta 目标0 全 (1,0,0)、
 // 目标1 全 (0,2,0)（法线 delta 为 0，输出法线 == normalize(base.nrm)=(0,0,1)）。经引擎真实 compute API 面
 //（命名 uniform 顶点/目标数 + 4×SSBO）跑通，dispatch 后回读形变顶点逐顶点校验 == CPU 预期。
 bool WebGpuSelfTestHarness::RecordMorphSelfTest() {
     if (!dev_->device() || !dev_->frame_encoder() || dev_->cur_pass() || dev_->cur_compute_pass()) return false;
 
-    // 与 morph_target_system.cpp::kMorphTargetCompWGSL 一致（离屏自检内联副本）。
+    // morph 形变 compute（Σ weight·delta）的离屏自检内联 WGSL 副本。
     static const char* kMorphWGSL = R"WGSL(// dse-wgsl
 struct BaseVertex { position : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
 @group(3) @binding(0) var<storage, read_write> base_vertices : array<BaseVertex>;
@@ -3198,7 +3198,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>) {
         return false;
     }
 
-    // 经引擎 MorphTargetSystem 真实绑定面：4×SSBO（slot0..3）+ 命名 uniform（同消费方调用序/名）。
+    // 经 morph 形变真实绑定面：4×SSBO（slot0..3）+ 命名 uniform（同消费方调用序/名）。
     // 用 BindGpuBuffer（消费方 Dispatch 实际所调 API）而非 CmdBindStorageBuffer，验证真消费方绑定通路。
     dev_->ResetDrawState();
     dev_->BindGpuBuffer(BufferHandle{mf_base_}, 0);

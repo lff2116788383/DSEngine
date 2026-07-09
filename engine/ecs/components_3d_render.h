@@ -575,13 +575,6 @@ struct MorphTargetComponent {
     std::vector<float> weights;                ///< current weight for each target [0,1]
     int vertex_count = 0;                      ///< base mesh vertex count
 
-    // GPU runtime state (managed by MorphTargetSystem)
-    render::BufferHandle gpu_base_buffer;      ///< SSBO: base vertex data
-    render::BufferHandle gpu_delta_buffer;     ///< SSBO: all target deltas (interleaved)
-    render::BufferHandle gpu_weight_buffer;    ///< SSBO: weight array
-    render::BufferHandle gpu_output_buffer;    ///< SSBO: deformed vertex output
-    bool gpu_dirty = true;                     ///< needs re-upload
-
     float GetWeight(const std::string& name) const {
         for (size_t i = 0; i < targets.size(); ++i) {
             if (targets[i].name == name) return weights[i];
@@ -593,7 +586,6 @@ struct MorphTargetComponent {
         for (size_t i = 0; i < targets.size(); ++i) {
             if (targets[i].name == name) {
                 weights[i] = w;
-                gpu_dirty = true;
                 return;
             }
         }
@@ -602,7 +594,6 @@ struct MorphTargetComponent {
     void SetWeightByIndex(int index, float w) {
         if (index >= 0 && index < static_cast<int>(weights.size())) {
             weights[index] = w;
-            gpu_dirty = true;
         }
     }
 };
