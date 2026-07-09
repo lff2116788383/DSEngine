@@ -1,4 +1,5 @@
 #include "modules/gameplay_3d/gameplay_3d_module.h"
+#include "modules/gameplay_3d/animation/jiggle_bone_system.h"
 #include "engine/render/render_scene.h"
 #include "engine/core/service_locator.h"
 #include <glm/gtc/matrix_transform.hpp>
@@ -217,6 +218,8 @@ void Gameplay3DModule::OnUpdate(World& world, const dse::FrameUpdateContext& fra
     anim_layer_blend_system_.Update(world, delta_time);
     ik_solver_system_.Update(world, delta_time);
     foot_ik_system_.Update(world, delta_time);
+    // 次级骨骼动力学（乳摇/弹簧骨）：修改局部 pose，须在全局传播（ComputeFinalMatrices）之前
+    JiggleBoneSystem::Update(world, delta_time);
     animator_system_.ComputeFinalMatrices(world);
     BoneAttachmentSystem::Update(world);
     weather_system_.Update(world, delta_time);
@@ -534,3 +537,4 @@ void Gameplay3DModule::OnShutdown(World& world) {
 
 // Gameplay3DModule 已静态编入 dse_engine，FramePipeline 直接持有实例，
 // 不再需要 DLL 工厂函数 CreateModule/DestroyModule。
+

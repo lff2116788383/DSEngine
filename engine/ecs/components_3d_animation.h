@@ -276,6 +276,49 @@ struct BoneAttachmentComponent {
     bool index_dirty = true;
 };
 
+/// 次级骨骼动力学（弹簧骨 / 乳摇）单根配置。
+/// 弹簧末端以骨骼头为旋转支点，在模型空间做 Verlet 积分，
+/// 由 JiggleBoneSystem 在 ComputeFinalMatrices 之前写回局部 pose。
+struct JiggleBoneConfig {
+    std::string bone_name;                                 ///< 目标骨骼名（解析为骨骼索引）
+    float stiffness = 0.08f;                               ///< 回弹刚度 [0,1]，越大越快回到动画姿态
+    float damping = 0.35f;                                 ///< 速度阻尼 [0,1]，越大越快衰减
+    float gravity = 0.0f;                                  ///< 重力加速度大小（模型空间单位/秒^2）
+    glm::vec3 gravity_dir = glm::vec3(0.0f, -1.0f, 0.0f);  ///< 重力方向（模型空间，单位向量）
+    float bone_length = 0.1f;                              ///< 弹簧末端到骨骼头的距离
+    glm::vec3 rest_dir = glm::vec3(0.0f, -1.0f, 0.0f);     ///< 骨骼局部空间的静止指向
+
+    // ── 运行期状态（不序列化）──
+    int bone_index = -1;
+    bool index_dirty = true;
+    bool initialized = false;
+    glm::vec3 prev_tip = glm::vec3(0.0f);   ///< 模型空间上一帧末端位置
+    glm::vec3 cur_tip = glm::vec3(0.0f);    ///< 模型空间当前末端位置
+};
+
+/// 球形碰撞体（防穿模），中心在指定骨骼的局部空间（骨骼名为空则模型根空间）。
+struct JiggleSphereCollider {
+    std::string bone_name;                  ///< 碰撞体附着的骨骼（空 = 模型根空间）
+    glm::vec3 center = glm::vec3(0.0f);     ///< 骨骼局部空间中心
+    float radius = 0.05f;
+
+    // 运行期
+    int bone_index = -1;
+    bool index_dirty = true;
+};
+
+/// 次级骨骼动力学组件（乳摇 / 头发 / 尾巴等弹簧骨）。
+/// 需与 Animator3DComponent 同实体（依赖其 skel_cache 与 pose_buffer）。
+struct JiggleBoneComponent {
+    bool enabled = true;
+    std::vector<JiggleBoneConfig> bones;
+    std::vector<JiggleSphereCollider> colliders;
+    float stiffness_scale = 1.0f;   ///< 全局刚度倍率（快速调参）
+    float damping_scale = 1.0f;     ///< 全局阻尼倍率
+    float gravity_scale = 1.0f;     ///< 全局重力倍率
+};
+
 } // namespace dse
 
 #endif // DSE_COMPONENTS_3D_ANIMATION_H
+
