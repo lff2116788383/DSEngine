@@ -1,6 +1,12 @@
 #version 450
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
+// @DX11_SSBO_SPLIT：DX11 compute 消费方约定 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}
+//   （见 dx11_rhi_device.cpp DispatchCompute：readonly→CSSetShaderResources(16+slot)、
+//   writable→CSSetUnorderedAccessViews(slot)）。缺此标注时 spirv-cross 会把写 SSBO(dst,
+//   binding 1) 映射为 UAV u17(=16+1)，而设备在 u1 绑定 → 写入丢弃、dst 全 0。
+//   无 image/sampler，故不需 @COMPUTE_RESOURCE_REMAP；GL SSBO 直接用 binding 0..5。
+
 // P2: 单次 Dispatch 蒙皮 — 通过 InstanceInfo SSBO 区分各实例
 
 struct SrcVertex {

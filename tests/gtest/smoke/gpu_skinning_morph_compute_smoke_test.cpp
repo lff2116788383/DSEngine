@@ -160,14 +160,11 @@ void CheckBackend(dse::test::BackendResult (*runner)(const dse::test::RenderFn&)
     if (!r.compute_available) {
         GTEST_SKIP() << backend << "：compute 不可用（无驱动/软件后端），跳过";
     }
-    // 输出全 0 = compute 未真正写入 dst：该后端 compute→回读 基础设施尚未打通（与 morph
-    // 上限无关，同一份交叉编译 kernel 在 GL/Vulkan 正确）。D3D11 桌面生产不走 compute 蒙皮
-    // （逐 draw VS 蒙皮），此路径首次被本用例触及，作为「环境暂缓」跳过而非误报通过 —— 待
-    // 统一变形系统 Phase C 将桌面路由入 compute 时再补齐 D3D11 compute uniform/UAV 交付。
-    if (!r.got_output || r.output_all_zero) {
-        GTEST_SKIP() << backend << "：compute→回读 输出全 0/缺失，该后端 compute 基础设施暂未打通"
-                     << "（got_output=" << r.got_output << "）";
-    }
+    // GL/Vulkan/D3D11 三后端 compute→回读 均已打通（D3D11 经 @DX11_SSBO_SPLIT 修复：写 SSBO
+    // 落 UAV u{slot} 而非 t{16+slot}）。因此「无输出 / 全 0」不再作环境暂缓，而是真实回归 →
+    // 硬失败，避免掩盖 compute 未写入 dst 的问题。
+    ASSERT_TRUE(r.got_output) << backend << "：compute→回读 未取得输出（回读管线回归）";
+    ASSERT_FALSE(r.output_all_zero) << backend << "：compute 输出全 0，dst 未被写入（UAV/uniform 交付回归）";
     EXPECT_EQ(r.out_vertex_count, kVerts) << backend;
     // 6-target 与 4-target x 位移应显著不同，确保该用例真正区分「上限是否解除」。
     ASSERT_GT(std::fabs(r.expected_dx_all6 - r.capped_dx_4), 0.1f) << backend << "：诊断量构造无效";
