@@ -62,7 +62,8 @@ void JobSystem::Init() {
     for (int i = 0; i < num_threads; ++i) {
         local_queues_.push_back(std::make_unique<WorkStealingQueue>());
     }
-    worker_stats_.resize(static_cast<size_t>(num_threads));
+    // 末尾额外一个槽位记录"调用者 helping"（主/外部线程在 Wait/ParallelFor 中帮忙执行的任务）
+    worker_stats_.resize(static_cast<size_t>(num_threads) + 1);
 
     workers_.reserve(static_cast<size_t>(num_threads));
     for (int i = 0; i < num_threads; ++i) {
@@ -422,6 +423,8 @@ bool JobSystem::TryExecuteOne(int worker_index) {
     JobEntry* entry = TryPopAny(worker_index);
     if (!entry) return false;
 
+    auto busy_start = std::chrono::high_resolution_clock::now();
+
     // 执行任务
     if (entry->task) {
         entry->task();
@@ -430,6 +433,20 @@ bool JobSystem::TryExecuteOne(int worker_index) {
     }
 
     CompleteJob(entry);
+
+    // 记录 helping 执行统计：真实 worker 记到自身槽位；主/外部线程（index<0）记到末尾 helper 槽位。
+    // 否则在 caller-helping 抢先执行完所有任务时，worker 统计会全为 0。
+    auto busy_end = std::chrono::high_resolution_clock::now();
+    double busy_ms = std::chrono::duration<double, std::milli>(busy_end - busy_start).count();
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        const int n = static_cast<int>(local_queues_.size());
+        const int stat_index = (worker_index >= 0 && worker_index < n) ? worker_index : n;
+        if (stat_index >= 0 && stat_index < static_cast<int>(worker_stats_.size())) {
+            worker_stats_[stat_index].busy_time_ms += busy_ms;
+            worker_stats_[stat_index].jobs_executed++;
+        }
+    }
 
     return true;
 }
@@ -444,6 +461,12 @@ void JobSystem::CompleteJob(JobEntry* entry) {
 
     {
         std::lock_guard<std::mutex> lock(deps_mutex_);
+        // 完成标志必须在 deps_mutex_ 内置位：SubmitWithDependency 在同一锁下
+        // 读取 done 并决定是否登记为 dependent。若在锁外置 done，会出现竞态——
+        // CompleteJob 处理完（空的）dependents 释放锁后、置 done 前，
+        // SubmitWithDependency 读到 done==false 遂登记新 dependent，而该 dependent
+        // 永不会被处理，pending_deps 永久 >0 → Wait 活锁。
+        entry->done.store(true, std::memory_order_release);
         for (JobEntry* dependent : entry->dependents) {
             if (dependent->pending_deps.fetch_sub(1, std::memory_order_acq_rel) == 1) {
                 // 所有依赖满足，需要入队
@@ -459,9 +482,6 @@ void JobSystem::CompleteJob(JobEntry* entry) {
     for (JobEntry* dep : to_enqueue) {
         Enqueue(dep);
     }
-
-    // 设置完成标志
-    entry->done.store(true, std::memory_order_release);
 
     // 释放执行引用（refcount 从 2→1 或从 1→0）
     // handle 引用不会被显式释放，entry 在 Shutdown 时统一释放
