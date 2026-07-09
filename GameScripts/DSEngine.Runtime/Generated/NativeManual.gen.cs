@@ -1668,6 +1668,36 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_morph_get_target_count")]
     internal static partial int dse_morph_get_target_count(uint e);
 
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_add_component")]
+    internal static partial void dse_jiggle_add_component(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_remove_component")]
+    internal static partial void dse_jiggle_remove_component(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_clear_bones")]
+    internal static partial void dse_jiggle_clear_bones(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_bone_count")]
+    internal static partial int dse_jiggle_get_bone_count(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_add_bone", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_jiggle_add_bone(uint e, string boneName, float stiffness, float damping, float gravity, float boneLength);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_bone_params")]
+    internal static partial void dse_jiggle_set_bone_params(uint e, int index, float stiffness, float damping, float gravity, float boneLength);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_bone_gravity_dir")]
+    internal static partial void dse_jiggle_set_bone_gravity_dir(uint e, int index, float x, float y, float z);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_clear_colliders")]
+    internal static partial void dse_jiggle_clear_colliders(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_collider_count")]
+    internal static partial int dse_jiggle_get_collider_count(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_add_collider", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dse_jiggle_add_collider(uint e, string boneName, float cx, float cy, float cz, float radius);
+
     [LibraryImport(Lib, EntryPoint = "dse_particle_system_3d_add")]
     internal static partial void dse_particle_system_3d_add(uint e, int maxParticles, float emissionRate);
 

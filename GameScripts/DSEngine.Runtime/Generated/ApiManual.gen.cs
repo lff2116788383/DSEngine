@@ -298,6 +298,16 @@ public static class Components {
     public static void CompatSetPointLight3d(uint e, float r, float g, float b, float intensity, float radius) { Native.dse_compat_set_point_light_3d(e, r, g, b, intensity, radius); }
     public static void CompatSetSpotLight3d(uint e, float dx, float dy, float dz, float r, float g, float b, float intensity, float radius, float inner, float outer) { Native.dse_compat_set_spot_light_3d(e, dx, dy, dz, r, g, b, intensity, radius, inner, outer); }
     public static void CompatWorldToScreen(float wx, float wy, float wz, out float outSx, out float outSy, out int outVisible) { Native.dse_compat_world_to_screen(wx, wy, wz, out outSx, out outSy, out outVisible); }
+    public static void JiggleAddComponent(uint e) { Native.dse_jiggle_add_component(e); }
+    public static void JiggleRemoveComponent(uint e) { Native.dse_jiggle_remove_component(e); }
+    public static void JiggleClearBones(uint e) { Native.dse_jiggle_clear_bones(e); }
+    public static int JiggleGetBoneCount(uint e) { return Native.dse_jiggle_get_bone_count(e); }
+    public static int JiggleAddBone(uint e, string boneName, float stiffness, float damping, float gravity, float boneLength) { return Native.dse_jiggle_add_bone(e, boneName, stiffness, damping, gravity, boneLength); }
+    public static void JiggleSetBoneParams(uint e, int index, float stiffness, float damping, float gravity, float boneLength) { Native.dse_jiggle_set_bone_params(e, index, stiffness, damping, gravity, boneLength); }
+    public static void JiggleSetBoneGravityDir(uint e, int index, float x, float y, float z) { Native.dse_jiggle_set_bone_gravity_dir(e, index, x, y, z); }
+    public static void JiggleClearColliders(uint e) { Native.dse_jiggle_clear_colliders(e); }
+    public static int JiggleGetColliderCount(uint e) { return Native.dse_jiggle_get_collider_count(e); }
+    public static int JiggleAddCollider(uint e, string boneName, float cx, float cy, float cz, float radius) { return Native.dse_jiggle_add_collider(e, boneName, cx, cy, cz, radius); }
     public static int DirLightHas(uint e) { return Native.dse_dir_light_has(e); }
     public static int PointLightHas(uint e) { return Native.dse_point_light_has(e); }
     public static int SpotLightHas(uint e) { return Native.dse_spot_light_has(e); }
