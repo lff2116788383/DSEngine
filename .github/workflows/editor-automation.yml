@@ -43,12 +43,46 @@ jobs:
       - name: Configure + Build (gtest targets)
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug
+          cmake --preset windows-x64-debug -DDSE_BUILD_EDITOR=OFF
           cmake --build out/build/windows-x64-debug --target dse_gtest_unit_tests dse_gtest_integration_tests dse_gtest_smoke_tests
+
+      # 部署运行时 DLL：
+      #   1) vulkan-1.dll — 引擎从源码构建 Vulkan Loader，但产物在 build 目录而非 bin/；
+      #      GitHub 托管 runner 系统 PATH 无 vulkan-1.dll，测试 exe 启动即失败。
+      #   2) Debug CRT — 项目用 /MDd，需要 vcruntime140d.dll / msvcp140d.dll / ucrtbased.dll，
+      #      这些在 redist\debug_nonredist 下，不在系统 PATH 中。
+      - name: Deploy runtime DLLs for tests (Vulkan loader + Debug CRT)
+        shell: pwsh
+        run: |
+          $buildDir = "out/build/windows-x64-debug"
+          $exes = Get-ChildItem "bin" -Recurse -Filter "dse_gtest_*.exe" -ErrorAction SilentlyContinue
+          $targets = @($exes | ForEach-Object { $_.DirectoryName } | Sort-Object -Unique)
+          if(-not $targets){ $targets = @((Join-Path (Get-Location) "bin")) }
+          New-Item -ItemType Directory -Force -Path $targets | Out-Null
+          $vk = Get-ChildItem $buildDir -Recurse -Filter "vulkan-1*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if(-not $vk){ Write-Error "vulkan-1.dll not found anywhere under $buildDir"; exit 1 }
+          $crt = @()
+          if($env:VCToolsRedistDir){ $crt += Get-ChildItem (Join-Path $env:VCToolsRedistDir "debug_nonredist\x64\Microsoft.VC*.DebugCRT\*.dll") -ErrorAction SilentlyContinue }
+          if($env:UniversalCRTSdkDir -and $env:UCRTVersion){ $u = Join-Path $env:UniversalCRTSdkDir ("bin\" + $env:UCRTVersion + "\x64\ucrt\ucrtbased.dll"); if(Test-Path $u){ $crt += Get-Item $u } }
+          foreach($t in $targets){
+            Copy-Item $vk.FullName (Join-Path $t "vulkan-1.dll") -Force
+            foreach($c in $crt){ Copy-Item $c.FullName $t -Force }
+            Write-Host "Deployed to $t : vulkan-1.dll + $($crt.Count) CRT dll(s)"
+          }
 
       - name: Run ctest (unit/integration/smoke)
         shell: pwsh
-        run: ctest --test-dir out/build/windows-x64-debug --output-on-failure
+        run: ctest --test-dir out/build/windows-x64-debug --output-on-failure --timeout 120 -T Test
+        timeout-minutes: 15
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l0-ctest-results
+          path: out/build/windows-x64-debug/Testing/**/*.xml
+          retention-days: 14
+          if-no-files-found: ignore
 
   # ── L0b：ImGui Test Engine 真实控件级 UI 套件（每次 PR/push，托管 runner，无需 GPU）──
   # 与 L1+ 的「启动编辑器 + 截图」不同：本套件是无头、确定性的控件级用例（--run-ui-tests），
@@ -75,7 +109,7 @@ jobs:
       - name: Configure + Build (editor + ImGui Test Engine)
         shell: pwsh
         run: |
-          cmake --preset windows-x64-debug -DDSE_EDITOR_UI_TESTS=ON
+          cmake --preset windows-x64-debug -DDSE_EDITOR_UI_TESTS=ON -DDSE_ENABLE_VULKAN=OFF
           cmake --build out/build/windows-x64-debug --target dse_editor_cpp
 
       # 部署 Mesa 软件 OpenGL（llvmpipe）：把 x64 下的全部 DLL 拷到 uitest exe 旁，
@@ -96,6 +130,12 @@ jobs:
           if(-not (Test-Path $x64)){ $x64 = $extract }
           Copy-Item (Join-Path $x64 "*.dll") $dest -Force
           Write-Host "Deployed Mesa DLLs to $dest"
+          # Deploy Debug CRT DLLs (editor is built with /MDd, needs vcruntime140d.dll etc.)
+          $crt = @()
+          if($env:VCToolsRedistDir){ $crt += Get-ChildItem (Join-Path $env:VCToolsRedistDir "debug_nonredist\x64\Microsoft.VC*.DebugCRT\*.dll") -ErrorAction SilentlyContinue }
+          if($env:UniversalCRTSdkDir -and $env:UCRTVersion){ $u = Join-Path $env:UniversalCRTSdkDir ("bin\" + $env:UCRTVersion + "\x64\ucrt\ucrtbased.dll"); if(Test-Path $u){ $crt += Get-Item $u } }
+          foreach($c in $crt){ Copy-Item $c.FullName $dest -Force }
+          Write-Host "Deployed $($crt.Count) Debug CRT dll(s) to $dest"
 
       - name: Run UI test suite (headless, llvmpipe)
         shell: pwsh
