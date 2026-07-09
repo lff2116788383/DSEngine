@@ -19,15 +19,17 @@ namespace render {
 
 class RhiDevice;
 
-/// GPU InstanceInfo — 与 shader 中的 InstanceInfo struct 内存布局一致 (std430, 48 bytes)
+/// GPU InstanceInfo — 与 shader 中的 InstanceInfo struct 内存布局一致 (std430, 48 bytes)。
+/// 全 uint 布局：morph 权重不再内联（原 vec4，硬上限 4），改存独立 morph_weights SSBO
+/// (binding 5)，本结构仅记录 morph_weight_offset，从而解除 target 数上限。
 struct alignas(16) InstanceInfoGPU {
     uint32_t vertex_start;
     uint32_t vertex_count;
     uint32_t bone_offset;
     uint32_t morph_target_count;
-    float morph_weights[4];
-    uint32_t morph_delta_offset;  ///< 本实例在 morph_deltas SSBO 中的起始 vec4 索引
-    uint32_t _pad[3];             ///< std430: struct alignment = 16 (from vec4), size = 48
+    uint32_t morph_delta_offset;   ///< 本实例在 morph_deltas SSBO 中的起始 vec4 索引
+    uint32_t morph_weight_offset;  ///< 本实例在 morph_weights SSBO 中的起始 float 索引
+    uint32_t _pad[6];              ///< 补齐至 48 bytes / 16B 对齐
 };
 static_assert(sizeof(InstanceInfoGPU) == 48, "InstanceInfoGPU must match shader layout (48 bytes)");
 
@@ -38,7 +40,7 @@ struct SkinningRequest {
     std::vector<float> src_vertex_data;  ///< 源顶点数据（SrcVertex 布局，owned）
 
     std::vector<glm::mat4> bone_matrices; ///< 本实例的骨骼矩阵（已预乘 model）
-    std::vector<float> morph_weights;     ///< morph target 权重（最多 4 个）
+    std::vector<float> morph_weights;     ///< morph target 权重（数量 = morph_target_count，无上限）
     uint32_t morph_target_count = 0;
     std::vector<float> morph_deltas;      ///< per-vertex morph delta (vec4 per vertex per target)
 
@@ -101,12 +103,14 @@ private:
     BufferHandle bone_buffer_;          ///< 骨骼矩阵 SSBO
     BufferHandle morph_buffer_;         ///< morph delta SSBO (binding 3)
     BufferHandle instance_buffer_;      ///< P2: per-instance info SSBO
+    BufferHandle morph_weight_buffer_;  ///< morph 权重 SSBO (binding 5，解除 4-target 上限)
 
     size_t src_buffer_capacity_ = 0;
     size_t dst_buffer_capacity_ = 0;    ///< 双缓冲共享容量（两个 buffer 大小相同）
     size_t bone_buffer_capacity_ = 0;
     size_t morph_buffer_capacity_ = 0;
     size_t instance_buffer_capacity_ = 0;
+    size_t morph_weight_buffer_capacity_ = 0;
     uint32_t dst_write_idx_ = 0;        ///< 当前帧写入的 dst buffer 索引 (0 or 1)
 
     // 本帧请求（owned）
@@ -114,12 +118,14 @@ private:
     uint32_t total_dst_vertices_ = 0;
     uint32_t total_bone_count_ = 0;
     uint32_t total_morph_vec4s_ = 0;  ///< morph_deltas SSBO 总 vec4 数
+    uint32_t total_morph_weights_ = 0;  ///< morph_weights SSBO 总 float 数
 
     // 打包缓存
     std::vector<glm::mat4> packed_bones_;
     std::vector<uint8_t> packed_src_;
     std::vector<InstanceInfoGPU> packed_instances_;
     std::vector<float> packed_morph_deltas_;  ///< morph delta data (vec4 per entry, 4 floats)
+    std::vector<float> packed_morph_weights_;  ///< 所有实例 morph 权重（拼接，按 morph_weight_offset 定位）
 
     // P4: readback — 上一帧的蒙皮结果
     std::unordered_map<uint32_t, SkinnedOutput> readback_results_;

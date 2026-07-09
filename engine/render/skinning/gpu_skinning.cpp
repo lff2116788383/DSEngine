@@ -29,8 +29,8 @@ struct SrcVertex { pos_bw0 : vec4<f32>, norm_bw1 : vec4<f32>, tan_bw2 : vec4<f32
 struct DstVertex { pos : vec4<f32>, normal : vec4<f32>, tangent : vec4<f32>, };
 struct InstanceInfo {
   vertex_start : u32, vertex_count : u32, bone_offset : u32, morph_target_count : u32,
-  morph_weights : vec4<f32>,
-  morph_delta_offset : u32, pad0 : u32, pad1 : u32, pad2 : u32,
+  morph_delta_offset : u32, morph_weight_offset : u32, pad0 : u32, pad1 : u32,
+  pad2 : u32, pad3 : u32, pad4 : u32, pad5 : u32,
 };
 struct Params { @align(16) total_vertices : i32, @align(16) instance_count : i32, };
 @group(1) @binding(8) var<uniform> params : Params;
@@ -39,6 +39,7 @@ struct Params { @align(16) total_vertices : i32, @align(16) instance_count : i32
 @group(3) @binding(2) var<storage, read_write> bone_matrices : array<mat4x4<f32>>;
 @group(3) @binding(3) var<storage, read_write> morph_deltas : array<vec4<f32>>;
 @group(3) @binding(4) var<storage, read_write> instances : array<InstanceInfo>;
+@group(3) @binding(5) var<storage, read_write> morph_weights : array<f32>;
 fn find_instance(gid : u32, inst_count : u32) -> u32 {
   var lo : u32 = 0u; var hi : u32 = inst_count;
   while (lo < hi) {
@@ -63,12 +64,12 @@ fn cs_main(@builtin(global_invocation_id) gid3 : vec3<u32>) {
   let normal = s.norm_bw1.xyz;
   let tangent = s.tan_bw2.xyz;
   if (inst.morph_target_count > 0u) {
-    let w = array<f32, 4>(inst.morph_weights.x, inst.morph_weights.y,
-                          inst.morph_weights.z, inst.morph_weights.w);
     let mbase = inst.morph_delta_offset;
-    for (var m = 0u; m < inst.morph_target_count && m < 4u; m = m + 1u) {
-      if (abs(w[m]) > 0.001) {
-        pos = pos + morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
+    let wbase = inst.morph_weight_offset;
+    for (var m = 0u; m < inst.morph_target_count; m = m + 1u) {
+      let w = morph_weights[wbase + m];
+      if (abs(w) > 0.001) {
+        pos = pos + morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w;
       }
     }
   }
@@ -113,7 +114,7 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
         kskinning_comp_glsl430,     // GL: 交叉编译 GL430（DsePushCS UBO）
         kskinning_comp_glsl450,     // VK: 逐字 GLSL450 源（保留 push_constant）
         kskinning_comp_hlsl,        // DX11: 交叉编译 HLSL（cbuffer PC）
-        5,   // ssbo_count: src, dst, bones, morph, instances
+        6,   // ssbo_count: src, dst, bones, morph, instances, morph_weights
         0,   // storage_image_count
         0,   // sampler_count
         32,  // push_constant_bytes (16B-aligned: total@0, instance@16)
@@ -159,6 +160,14 @@ bool GPUSkinningSystem::Init(RhiDevice* rhi) {
     morph_buffer_ = rhi_->CreateGpuBuffer(morph_desc, nullptr);
     morph_buffer_capacity_ = morph_desc.size;
 
+    // Morph 权重 buffer（binding 5）：同样 16 bytes 占位，有数据时按需扩容
+    GpuBufferDesc morph_w_desc{};
+    morph_w_desc.size = 16;
+    morph_w_desc.usage = GpuBufferUsage::kStorage;
+    morph_w_desc.is_dynamic = true;
+    morph_weight_buffer_ = rhi_->CreateGpuBuffer(morph_w_desc, nullptr);
+    morph_weight_buffer_capacity_ = morph_w_desc.size;
+
     // P2: Instance info buffer
     GpuBufferDesc inst_desc{};
     inst_desc.size = 64 * sizeof(InstanceInfoGPU);  // 64 instances initially
@@ -185,6 +194,7 @@ void GPUSkinningSystem::Shutdown() {
     if (dst_buffer_[1]) { rhi_->DeleteGpuBuffer(dst_buffer_[1]); dst_buffer_[1] = {}; }
     if (bone_buffer_) { rhi_->DeleteGpuBuffer(bone_buffer_); bone_buffer_ = {}; }
     if (morph_buffer_) { rhi_->DeleteGpuBuffer(morph_buffer_); morph_buffer_ = {}; }
+    if (morph_weight_buffer_) { rhi_->DeleteGpuBuffer(morph_weight_buffer_); morph_weight_buffer_ = {}; }
     if (instance_buffer_) { rhi_->DeleteGpuBuffer(instance_buffer_); instance_buffer_ = {}; }
 
     available_ = false;
@@ -199,6 +209,7 @@ void GPUSkinningSystem::BeginFrame() {
     total_dst_vertices_ = 0;
     total_bone_count_ = 0;
     total_morph_vec4s_ = 0;
+    total_morph_weights_ = 0;
 }
 
 void GPUSkinningSystem::Submit(SkinningRequest request) {
@@ -209,6 +220,7 @@ void GPUSkinningSystem::Submit(SkinningRequest request) {
     total_bone_count_ += static_cast<uint32_t>(request.bone_matrices.size());
     if (request.morph_target_count > 0 && !request.morph_deltas.empty()) {
         total_morph_vec4s_ += request.morph_target_count * request.vertex_count;
+        total_morph_weights_ += request.morph_target_count;
     }
     pending_requests_.push_back(std::move(request));
 }
@@ -266,6 +278,19 @@ void GPUSkinningSystem::EnsureBufferCapacity() {
         morph_buffer_capacity_ = new_cap;
     }
 
+    // Morph 权重 buffer（binding 5）
+    const size_t needed_morph_w = static_cast<size_t>(total_morph_weights_) * sizeof(float);
+    if (needed_morph_w > morph_weight_buffer_capacity_) {
+        if (morph_weight_buffer_) rhi_->DeleteGpuBuffer(morph_weight_buffer_);
+        size_t new_cap = (std::max)(needed_morph_w * 2, static_cast<size_t>(16));
+        GpuBufferDesc desc{};
+        desc.size = new_cap;
+        desc.usage = GpuBufferUsage::kStorage;
+        desc.is_dynamic = true;
+        morph_weight_buffer_ = rhi_->CreateGpuBuffer(desc, nullptr);
+        morph_weight_buffer_capacity_ = new_cap;
+    }
+
     // P2: instance info buffer
     const size_t needed_inst = pending_requests_.size() * sizeof(InstanceInfoGPU);
     if (needed_inst > instance_buffer_capacity_) {
@@ -294,12 +319,14 @@ void GPUSkinningSystem::UploadData() {
     // P4: 记录本帧 entity slot（用于下一帧 readback 解析）
     prev_entity_slots_.clear();
 
-    // 打包 morph deltas (total_morph_vec4s_ 已在 Submit() 中累加)
+    // 打包 morph deltas / weights (total_morph_* 已在 Submit() 中累加)
     packed_morph_deltas_.resize(static_cast<size_t>(total_morph_vec4s_) * 4);
+    packed_morph_weights_.resize(static_cast<size_t>(total_morph_weights_));
 
     uint32_t vertex_offset = 0;
     uint32_t bone_offset = 0;
     uint32_t morph_vec4_offset = 0;
+    uint32_t morph_weight_offset = 0;
 
     for (size_t i = 0; i < pending_requests_.size(); ++i) {
         const auto& req = pending_requests_[i];
@@ -324,16 +351,18 @@ void GPUSkinningSystem::UploadData() {
         info.vertex_start = vertex_offset;
         info.vertex_count = req.vertex_count;
         info.bone_offset = bone_offset;
-        info._pad[0] = info._pad[1] = info._pad[2] = 0;
+        for (int p = 0; p < 6; ++p) info._pad[p] = 0;
 
         // Morph target: 仅当有实际 delta 数据时启用
         const bool has_morph_data = req.morph_target_count > 0 && !req.morph_deltas.empty();
         if (has_morph_data) {
             info.morph_target_count = req.morph_target_count;
             info.morph_delta_offset = morph_vec4_offset;
-            for (int k = 0; k < 4; ++k) {
-                info.morph_weights[k] = (k < static_cast<int>(req.morph_weights.size()))
-                    ? req.morph_weights[k] : 0.0f;
+            info.morph_weight_offset = morph_weight_offset;
+            // 拷贝 morph 权重（每 target 一个 float，无上限）
+            for (uint32_t k = 0; k < req.morph_target_count; ++k) {
+                packed_morph_weights_[morph_weight_offset + k] =
+                    (k < req.morph_weights.size()) ? req.morph_weights[k] : 0.0f;
             }
             // 拷贝 morph delta 数据
             const uint32_t morph_floats = req.morph_target_count * req.vertex_count * 4;
@@ -342,10 +371,11 @@ void GPUSkinningSystem::UploadData() {
             std::memcpy(packed_morph_deltas_.data() + static_cast<size_t>(morph_vec4_offset) * 4,
                        req.morph_deltas.data(), copy_size);
             morph_vec4_offset += req.morph_target_count * req.vertex_count;
+            morph_weight_offset += req.morph_target_count;
         } else {
             info.morph_target_count = 0;
             info.morph_delta_offset = 0;
-            for (int k = 0; k < 4; ++k) info.morph_weights[k] = 0.0f;
+            info.morph_weight_offset = 0;
         }
 
         // P4: 记录 entity → dst offset/count
@@ -364,6 +394,11 @@ void GPUSkinningSystem::UploadData() {
                               static_cast<size_t>(total_morph_vec4s_) * 16,
                               packed_morph_deltas_.data());
     }
+    if (total_morph_weights_ > 0) {
+        rhi_->UpdateGpuBuffer(morph_weight_buffer_, 0,
+                              static_cast<size_t>(total_morph_weights_) * sizeof(float),
+                              packed_morph_weights_.data());
+    }
     rhi_->UpdateGpuBuffer(instance_buffer_, 0,
                           packed_instances_.size() * sizeof(InstanceInfoGPU),
                           packed_instances_.data());
@@ -381,6 +416,7 @@ void GPUSkinningSystem::Dispatch() {
     rhi_->BindGpuBuffer(bone_buffer_, 2, false);                   // binding 2: bone matrices
     rhi_->BindGpuBuffer(morph_buffer_, 3, false);                  // binding 3: morph deltas (占位)
     rhi_->BindGpuBuffer(instance_buffer_, 4, false);               // binding 4: instance info
+    rhi_->BindGpuBuffer(morph_weight_buffer_, 5, false);           // binding 5: morph weights
 
     // 设置 uniform / push_constant: total_vertices, instance_count
     rhi_->SetComputeUniformInt(skinning_shader_, "u_total_vertices",

@@ -16,14 +16,18 @@ struct DstVertex {
     vec4 tangent;       // xyz = skinned tangent,  w = 0.0
 };
 
+// 布局全部改为 uint（不再用 vec4 morph_weights 内联 4 权重），使 GLSL std430 / 手写
+// WGSL / C++ InstanceInfoGPU 三处 48B/16B 对齐逐字节一致；morph 权重改存独立 SSBO
+// (binding 5) 以解除 4-target 硬上限。前 4 个非 morph 字段偏移保持不变，非 morph 实体行为不变。
 struct InstanceInfo {
-    uint vertex_start;       // 本实例在全局 src_vertices 中的起始偏移
-    uint vertex_count;       // 本实例的顶点数
-    uint bone_offset;        // 本实例在 bone_matrices 中的起始索引
-    uint morph_target_count; // morph target 数量 (0-4)
-    vec4 morph_weights;      // 各 morph target 权重
-    uint morph_delta_offset; // 本实例在 morph_deltas 中的起始 vec4 索引
-    uint _pad0; uint _pad1; uint _pad2; // std430 alignment padding
+    uint vertex_start;        // 本实例在全局 src_vertices 中的起始偏移
+    uint vertex_count;        // 本实例的顶点数
+    uint bone_offset;         // 本实例在 bone_matrices 中的起始索引
+    uint morph_target_count;  // morph target 数量（无上限；0 = 无 morph）
+    uint morph_delta_offset;  // 本实例在 morph_deltas 中的起始 vec4 索引
+    uint morph_weight_offset; // 本实例在 morph_weights 中的起始 float 索引
+    uint _pad0; uint _pad1;
+    uint _pad2; uint _pad3; uint _pad4; uint _pad5; // 48 bytes / 16B aligned
 };
 
 layout(std430, binding = 0) readonly buffer SrcBuf  { SrcVertex src_vertices[]; };
@@ -31,6 +35,7 @@ layout(std430, binding = 1) writeonly buffer DstBuf { DstVertex dst_vertices[]; 
 layout(std430, binding = 2) readonly buffer BoneBuf { mat4 bone_matrices[]; };
 layout(std430, binding = 3) readonly buffer MorphBuf { vec4 morph_deltas[]; };
 layout(std430, binding = 4) readonly buffer InstBuf { InstanceInfo instances[]; };
+layout(std430, binding = 5) readonly buffer MorphWBuf { float morph_weights[]; };
 
 // 16B-aligned push block: each scalar member explicitly padded to a 16-byte
 // slot so the layout matches the native staging convention (SetComputeUniformInt
@@ -70,14 +75,14 @@ void main() {
     vec3 normal  = src.norm_bw1.xyz;
     vec3 tangent = src.tan_bw2.xyz;
 
-    // Morph target blending
+    // Morph target blending (无上限：权重从 morph_weights SSBO 按 offset 逐个读取)
     if (inst.morph_target_count > 0u) {
-        float w[4] = float[4](inst.morph_weights.x, inst.morph_weights.y,
-                              inst.morph_weights.z, inst.morph_weights.w);
         uint mbase = inst.morph_delta_offset;
-        for (uint m = 0u; m < inst.morph_target_count && m < 4u; ++m) {
-            if (abs(w[m]) > 0.001) {
-                pos += morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w[m];
+        uint wbase = inst.morph_weight_offset;
+        for (uint m = 0u; m < inst.morph_target_count; ++m) {
+            float w = morph_weights[wbase + m];
+            if (abs(w) > 0.001) {
+                pos += morph_deltas[mbase + m * inst.vertex_count + local_vid].xyz * w;
             }
         }
     }
