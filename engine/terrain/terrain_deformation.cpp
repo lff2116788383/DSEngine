@@ -292,7 +292,11 @@ bool TerrainDeformationSystem::Deserialize(const std::string& path) {
 
     if (magic != 0x4D524644 || version != 1) return false;
 
+    // 防止恶意文件触发超大分配（10000 条记录已远超实际需求）
+    if (count > 10000) return false;
+
     for (uint32_t i = 0; i < count; ++i) {
+        if (!file.good()) return false;
         DeformationOp op;
         file.read(reinterpret_cast<char*>(&op.type), sizeof(op.type));
         file.read(reinterpret_cast<char*>(&op.shape), sizeof(op.shape));
@@ -301,6 +305,7 @@ bool TerrainDeformationSystem::Deserialize(const std::string& path) {
         file.read(reinterpret_cast<char*>(&op.strength), sizeof(float));
         file.read(reinterpret_cast<char*>(&op.target_height), sizeof(float));
         file.read(reinterpret_cast<char*>(&op.falloff), sizeof(float));
+        if (!file.good()) return false;
         ApplyDeformation(op);
     }
 

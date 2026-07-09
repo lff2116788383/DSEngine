@@ -11,6 +11,12 @@
 namespace dse {
 namespace terrain {
 
+/// 安全归一化：零向量返回默认方向 (0,1,0)，避免 NaN 传播
+static inline glm::vec3 SafeNormalize(const glm::vec3& v, const glm::vec3& fallback = glm::vec3(0.0f, 1.0f, 0.0f)) {
+    float len = glm::length(v);
+    return len > 1e-10f ? v / len : fallback;
+}
+
 uint32_t SplineSystem::CreateSpline(const std::string& name) {
     uint32_t id = next_id_++;
     if (id >= id_to_index_.size()) id_to_index_.resize(id + 1, UINT32_MAX);
@@ -158,16 +164,16 @@ SplineSample SplineSystem::EvaluateAtParam(uint32_t spline_id, float t) const {
     glm::vec3 p_prev = CatmullRomInterp(s.points[i0].position, s.points[i1].position,
                                           s.points[i2].position, s.points[i3].position,
                                           std::max(local_t - dt, 0.0f));
-    result.tangent = glm::normalize(p_next - p_prev);
+    result.tangent = SafeNormalize(p_next - p_prev);
 
     // Interpolate width and banking
     result.width = LerpFloat(s.points[i1].width, s.points[i2].width, local_t);
     result.banking = LerpFloat(s.points[i1].banking, s.points[i2].banking, local_t);
 
     // Up and normal
-    glm::vec3 up_interp = glm::normalize(glm::mix(s.points[i1].up, s.points[i2].up, local_t));
-    result.normal = glm::normalize(glm::cross(result.tangent, up_interp));
-    result.up = glm::normalize(glm::cross(result.normal, result.tangent));
+    glm::vec3 up_interp = SafeNormalize(glm::mix(s.points[i1].up, s.points[i2].up, local_t));
+    result.normal = SafeNormalize(glm::cross(result.tangent, up_interp));
+    result.up = SafeNormalize(glm::cross(result.normal, result.tangent));
 
     EnsureLengthCache(s);
     result.distance = 0.0f;

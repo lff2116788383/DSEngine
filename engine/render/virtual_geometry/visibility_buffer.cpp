@@ -17,7 +17,7 @@ namespace vg {
 void VisibilityBuffer::Init(uint32_t width, uint32_t height) {
     width_ = width;
     height_ = height;
-    buffer_.resize(width * height);
+    buffer_.resize(static_cast<size_t>(width) * height);
     Clear();
 }
 
@@ -32,7 +32,7 @@ void VisibilityBuffer::Shutdown() {
 void VisibilityBuffer::Resize(uint32_t width, uint32_t height) {
     width_ = width;
     height_ = height;
-    buffer_.resize(width * height);
+    buffer_.resize(static_cast<size_t>(width) * height);
     Clear();
 }
 

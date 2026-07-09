@@ -192,8 +192,8 @@ bool ConvertKtx2ToDtex(const Ktx2ParseResult& ktx2, std::vector<uint8_t>& out_dt
 
     // Build mip descriptors
     std::vector<DtexMipDesc> mip_descs(header.mip_count);
-    uint32_t data_start = static_cast<uint32_t>(sizeof(DtexHeader) + header.mip_count * sizeof(DtexMipDesc));
-    uint32_t current_offset = data_start;
+    size_t data_start = sizeof(DtexHeader) + static_cast<size_t>(header.mip_count) * sizeof(DtexMipDesc);
+    size_t current_offset = data_start;
 
     int bw = DtexBlockWidth(ktx2.format);
     int bh = DtexBlockHeight(ktx2.format);
@@ -203,16 +203,16 @@ bool ConvertKtx2ToDtex(const Ktx2ParseResult& ktx2, std::vector<uint8_t>& out_dt
         uint32_t mip_h = std::max(1u, ktx2.height >> i);
         mip_descs[i].width = mip_w;
         mip_descs[i].height = mip_h;
-        mip_descs[i].offset = current_offset;
+        mip_descs[i].offset = static_cast<uint32_t>(current_offset);
         mip_descs[i].size = static_cast<uint32_t>(ktx2.level_data[i].size());
-        current_offset += mip_descs[i].size;
+        current_offset += ktx2.level_data[i].size();
     }
 
     // Assemble output
     out_dtex.resize(current_offset);
     std::memcpy(out_dtex.data(), &header, sizeof(DtexHeader));
     std::memcpy(out_dtex.data() + sizeof(DtexHeader), mip_descs.data(),
-                header.mip_count * sizeof(DtexMipDesc));
+                static_cast<size_t>(header.mip_count) * sizeof(DtexMipDesc));
     for (uint32_t i = 0; i < header.mip_count; ++i) {
         std::memcpy(out_dtex.data() + mip_descs[i].offset,
                     ktx2.level_data[i].data(), ktx2.level_data[i].size());

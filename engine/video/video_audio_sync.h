@@ -56,7 +56,7 @@ private:
     std::atomic<double> audio_clock_{0.0};
     std::thread decode_thread_;
 
-    std::mutex ring_mutex_;
+    mutable std::mutex ring_mutex_;
     std::condition_variable ring_not_full_;
     std::condition_variable ring_not_empty_;
     std::vector<FrameEntry> ring_buffer_;
@@ -64,6 +64,9 @@ private:
     int ring_head_ = 0;
     int ring_tail_ = 0;
     int ring_count_ = 0;
+
+    /// 持有最近一次 GetFrameAtTime 返回的像素数据，确保 out_frame.planes 指针有效
+    std::vector<uint8_t> front_frame_data_;
 };
 
 } // namespace video

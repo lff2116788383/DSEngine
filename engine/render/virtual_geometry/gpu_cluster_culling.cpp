@@ -248,8 +248,11 @@ void GPUClusterCulling::PrepareGPUData(const glm::mat4& view_proj,
                 float ws = cluster.radius * glm::length(glm::vec3(inst.model[0]));
                 gpu.sphere = glm::vec4(wc, ws);
 
-                glm::vec3 world_cone = glm::normalize(
-                    glm::mat3(inst.model) * cluster.cone_axis);
+                glm::vec3 cone_transformed = glm::mat3(inst.model) * cluster.cone_axis;
+                float cone_len = glm::length(cone_transformed);
+                glm::vec3 world_cone = cone_len > 1e-10f
+                    ? cone_transformed / cone_len
+                    : glm::vec3(0.0f, 1.0f, 0.0f);
                 gpu.cone = glm::vec4(world_cone, cluster.cone_cutoff);
 
                 gpu.vertex_offset = cluster.vertex_offset;

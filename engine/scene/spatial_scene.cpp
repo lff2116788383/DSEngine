@@ -22,6 +22,11 @@ static std::array<FrustumPlane, 6> ExtractPlanes(const glm::mat4& vp) {
     std::array<FrustumPlane, 6> planes;
     auto extract = [&](int idx, float sx, float sy, float sz, float sw) {
         float len = std::sqrt(sx * sx + sy * sy + sz * sz);
+        if (len < 1e-10f) {
+            planes[idx].normal = glm::vec3(0.0f);
+            planes[idx].distance = 0.0f;
+            return;
+        }
         planes[idx].normal = glm::vec3(sx, sy, sz) / len;
         planes[idx].distance = sw / len;
     };

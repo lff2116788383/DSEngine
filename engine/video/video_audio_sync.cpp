@@ -44,6 +44,7 @@ void VideoAudioSync::Stop() {
     ring_head_ = 0;
     ring_tail_ = 0;
     ring_count_ = 0;
+    front_frame_data_.clear();
     decoder_ = nullptr;
 }
 
@@ -83,6 +84,16 @@ void VideoAudioSync::DecodeThreadFunc() {
             entry.data.resize(data_size);
             if (frame.format == PixelFormat::RGBA8 && frame.planes[0]) {
                 std::memcpy(entry.data.data(), frame.planes[0], data_size);
+            } else if (frame.format == PixelFormat::YUV420P) {
+                // 拷贝 Y/U/V 三个平面到连续缓冲区
+                size_t y_size = static_cast<size_t>(frame.strides[0]) * frame.height;
+                size_t u_size = static_cast<size_t>(frame.strides[1]) * (frame.height / 2);
+                size_t v_size = static_cast<size_t>(frame.strides[2]) * (frame.height / 2);
+                if (frame.planes[0] && y_size + u_size + v_size <= data_size) {
+                    std::memcpy(entry.data.data(), frame.planes[0], y_size);
+                    if (frame.planes[1]) std::memcpy(entry.data.data() + y_size, frame.planes[1], u_size);
+                    if (frame.planes[2]) std::memcpy(entry.data.data() + y_size + u_size, frame.planes[2], v_size);
+                }
             }
 
             entry.frame = frame;
@@ -123,8 +134,24 @@ bool VideoAudioSync::GetFrameAtTime(double target_time, VideoFrame& out_frame) {
         }
     }
 
-    // Return current front frame
-    out_frame = ring_buffer_[static_cast<size_t>(ring_head_)].frame;
+    // Return current front frame — copy pixel data to caller's buffer to avoid UAF
+    // when the ring buffer slot is reused by the decode thread.
+    auto& front_entry = ring_buffer_[static_cast<size_t>(ring_head_)];
+    out_frame = front_entry.frame;
+    // 深拷贝像素数据到调用方自有的缓冲区，避免 ring buffer 槽位被复用后悬空
+    if (!front_entry.data.empty()) {
+        front_frame_data_.swap(front_entry.data);
+        out_frame.planes[0] = front_frame_data_.data();
+        if (out_frame.format == PixelFormat::YUV420P) {
+            size_t y_size = static_cast<size_t>(out_frame.strides[0]) * out_frame.height;
+            size_t u_size = static_cast<size_t>(out_frame.strides[1]) * (out_frame.height / 2);
+            out_frame.planes[1] = front_frame_data_.data() + y_size;
+            out_frame.planes[2] = front_frame_data_.data() + y_size + u_size;
+        } else {
+            out_frame.planes[1] = nullptr;
+            out_frame.planes[2] = nullptr;
+        }
+    }
     ring_head_ = (ring_head_ + 1) % ring_capacity_;
     ring_count_--;
     ring_not_full_.notify_one();
@@ -137,7 +164,7 @@ void VideoAudioSync::UpdateAudioClock(double audio_pts) {
 }
 
 bool VideoAudioSync::HasFrames() const {
-    // Simple check without lock (atomic would be better but ring_count_ changes are small)
+    std::lock_guard<std::mutex> lock(ring_mutex_);
     return ring_count_ > 0;
 }
 

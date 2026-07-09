@@ -47,8 +47,11 @@ public:
 
     /// 量化浮点到 N 位无符号整数（[min, max] 映射到 [0, 2^bits-1]）
     void WriteQuantized(float value, float min_val, float max_val, int bits) {
+        if (bits <= 0 || bits >= 32) return;
+        float range = max_val - min_val;
+        if (range < 1e-10f) { WriteBits(0, bits); return; }
         float clamped = std::clamp(value, min_val, max_val);
-        float normalized = (clamped - min_val) / (max_val - min_val);
+        float normalized = (clamped - min_val) / range;
         uint32_t max_int = (1u << bits) - 1;
         uint32_t quantized = static_cast<uint32_t>(normalized * max_int + 0.5f);
         WriteBits(quantized, bits);
@@ -122,8 +125,10 @@ public:
     }
 
     float ReadQuantized(float min_val, float max_val, int bits) {
+        if (bits <= 0 || bits >= 32) return min_val;
         uint32_t max_int = (1u << bits) - 1;
         uint32_t quantized = ReadBits(bits);
+        if (max_int == 0) return min_val;
         float normalized = static_cast<float>(quantized) / static_cast<float>(max_int);
         return min_val + normalized * (max_val - min_val);
     }
