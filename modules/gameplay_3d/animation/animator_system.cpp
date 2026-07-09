@@ -7,9 +7,10 @@
 #include "engine/ecs/time_scale_component.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/raw_scene_data.h"
+#include "engine/core/service_locator.h"
+#include "engine/core/job_system.h"
 #include <algorithm>
 #include <cstring>
-#include <thread>
 #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
 #   include <immintrin.h>
 #   define DSE_ANIM_USE_SSE 1
@@ -695,34 +696,23 @@ void AnimatorSystem::ComputeFinalMatrices(World& world) {
     }
 
     // Phase 2 (parallel): compute bone matrices for unique entities
+    // 统一走 JobSystem::ParallelFor，消除超订（不再创建裸 std::thread）
     const size_t work_count = unique_work.size();
     constexpr size_t PARALLEL_THRESHOLD = 32;
 
     if (work_count > PARALLEL_THRESHOLD) {
-        const unsigned int thread_count = std::min(
-            static_cast<unsigned int>(std::thread::hardware_concurrency()),
-            static_cast<unsigned int>(work_count));
-        const size_t chunk_size = (work_count + thread_count - 1) / thread_count;
-
-        std::vector<std::thread> threads;
-        threads.reserve(thread_count - 1);
-
-        for (unsigned int t = 1; t < thread_count; ++t) {
-            size_t begin = t * chunk_size;
-            size_t end = std::min(begin + chunk_size, work_count);
-            if (begin >= end) break;
-            threads.emplace_back([&unique_work, begin, end]() {
-                for (size_t i = begin; i < end; ++i) {
+        auto* job_sys = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
+        if (job_sys) {
+            job_sys->ParallelFor(0, work_count, 16,
+                [&unique_work](size_t i) {
                     ComputeEntityBones(*unique_work[i]);
-                }
-            });
+                }, dse::core::JobPriority::High);
+        } else {
+            // JobSystem 不可用时串行回退
+            for (auto* anim : unique_work) {
+                ComputeEntityBones(*anim);
+            }
         }
-        // Main thread handles first chunk
-        size_t main_end = std::min(chunk_size, work_count);
-        for (size_t i = 0; i < main_end; ++i) {
-            ComputeEntityBones(*unique_work[i]);
-        }
-        for (auto& t : threads) t.join();
     } else {
         for (auto* anim : unique_work) {
             ComputeEntityBones(*anim);

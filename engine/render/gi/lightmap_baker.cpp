@@ -14,6 +14,8 @@
  */
 
 #include "engine/render/gi/lightmap_baker.h"
+#include "engine/core/service_locator.h"
+#include "engine/core/job_system.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,7 +23,6 @@
 #include <fstream>
 #include <numeric>
 #include <random>
-#include <thread>
 #include <atomic>
 #include <mutex>
 
@@ -452,26 +453,22 @@ LightmapResult LightmapBaker::Bake(const BakeScene& scene, const LightmapBakeCon
         RasterizeUV(tri);
     }
 
-    // 多线程烘焙
+    // 多线程烘焙（统一走 JobSystem，消除超订）
     std::atomic<uint32_t> progress_counter{0};
     uint32_t valid_count = 0;
     for (auto& t : texel_map) { if (t.valid) valid_count++; }
 
-    uint32_t num_threads = std::max(1u, std::thread::hardware_concurrency());
-    std::vector<std::thread> threads;
-    uint32_t chunk = (total_texels + num_threads - 1) / num_threads;
+    auto* job_sys = dse::core::ServiceLocator::Instance().Get<dse::core::JobSystem>();
+    if (job_sys) {
+        // 使用 JobSystem::ParallelFor，每 texel 独立处理
+        // 线程局部 RNG 保证每线程有独立随机序列
+        thread_local std::mt19937 rng(42);
+        thread_local std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-    for (uint32_t t = 0; t < num_threads; ++t) {
-        uint32_t start = t * chunk;
-        uint32_t end = std::min(start + chunk, total_texels);
-
-        threads.emplace_back([&, start, end, t]() {
-            std::mt19937 rng(42 + t);
-            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-
-            for (uint32_t idx = start; idx < end; ++idx) {
+        job_sys->ParallelFor(0, total_texels, 256,
+            [&, &rng = rng, &dist = dist](size_t idx) {
                 const auto& texel = texel_map[idx];
-                if (!texel.valid) continue;
+                if (!texel.valid) return;
 
                 glm::vec3 total_irradiance(0.0f);
                 float total_ao = 0.0f;
@@ -510,11 +507,55 @@ LightmapResult LightmapBaker::Bake(const BakeScene& scene, const LightmapBakeCon
                 if (progress_cb && (done % 1000 == 0)) {
                     progress_cb(static_cast<float>(done) / static_cast<float>(valid_count));
                 }
-            }
-        });
-    }
+            }, dse::core::JobPriority::Low);
+    } else {
+        // JobSystem 不可用时串行回退
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-    for (auto& th : threads) th.join();
+        for (uint32_t idx = 0; idx < total_texels; ++idx) {
+            const auto& texel = texel_map[idx];
+            if (!texel.valid) continue;
+
+            glm::vec3 total_irradiance(0.0f);
+            float total_ao = 0.0f;
+
+            for (uint32_t s = 0; s < config.samples_per_texel; ++s) {
+                // 直接光
+                glm::vec3 direct = EvaluateDirectLight(scene, bvh,
+                    texel.position, texel.normal, config.bias);
+
+                // 间接光
+                glm::vec3 indirect = TraceIndirect(scene, bvh,
+                    texel.position, texel.normal, config.bounces, config.bias, rng);
+
+                total_irradiance += direct + indirect;
+
+                // AO
+                if (config.bake_ao) {
+                    glm::vec3 ao_dir = LocalToWorld(CosineHemisphere(dist(rng), dist(rng)), texel.normal);
+                    Ray ao_ray;
+                    ao_ray.origin = texel.position + texel.normal * config.bias;
+                    ao_ray.direction = ao_dir;
+                    ao_ray.t_max = config.ao_radius;
+                    if (bvh.Occluded(ao_ray)) {
+                        total_ao += 1.0f;
+                    }
+                }
+            }
+
+            float inv_samples = 1.0f / static_cast<float>(config.samples_per_texel);
+            result.irradiance[idx] = texel.albedo * total_irradiance * inv_samples + scene.ambient;
+            if (config.bake_ao) {
+                result.ao[idx] = 1.0f - total_ao * inv_samples;
+            }
+
+            uint32_t done = progress_counter.fetch_add(1);
+            if (progress_cb && (done % 1000 == 0)) {
+                progress_cb(static_cast<float>(done) / static_cast<float>(valid_count));
+            }
+        }
+    }
 
     // 降噪
     if (config.denoise) {

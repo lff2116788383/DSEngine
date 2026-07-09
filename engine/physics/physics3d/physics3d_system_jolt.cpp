@@ -32,11 +32,27 @@
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 #include <Jolt/Geometry/IndexedTriangle.h>
+
+// Engine includes (after ALL Jolt includes to avoid namespace interference)
+// 注意：不在此 TU 中包含 engine/core/job_system.h —— Jolt 宏会与
+// MSVC 标准库 <queue>（被 job_system.h 间接引入）冲突。
+// BridgeExecute 定义在 jolt_job_bridge.cpp（不含 Jolt 头文件）中。
+#include "engine/physics/physics3d/jolt_job_system_adapter.h"
+#include "engine/core/service_locator.h"
 #include <mutex>
 
 JPH_SUPPRESS_WARNINGS
 
 using namespace JPH;
+
+namespace dse {
+namespace physics3d {
+/// 桥接函数声明 —— 实现在 jolt_job_bridge.cpp（不含 Jolt 头文件）
+void BridgeExecute(void* job_sys_ptr, const std::function<void()>& func);
+/// 从 ServiceLocator 获取引擎 JobSystem 指针 —— 实现在 jolt_job_bridge.cpp
+void* GetEngineJobSystem();
+} // namespace physics3d
+} // namespace dse
 
 namespace dse {
 namespace physics3d {
@@ -228,7 +244,7 @@ public:
 // ---------------------------------------------------------------------------
 struct Physics3DSystem::Impl {
     std::unique_ptr<TempAllocatorImpl> temp_allocator;
-    std::unique_ptr<JobSystemThreadPool> job_system;
+    std::unique_ptr<JPH::JobSystem> job_system;
     std::unique_ptr<PhysicsSystem> physics_system;
     std::unique_ptr<BPLayerInterfaceImpl> bp_layer_interface;
     std::unique_ptr<ObjVsBPLayerFilterImpl> obj_vs_bp_filter;
@@ -285,8 +301,16 @@ bool Physics3DSystem::Init(World& world) {
     impl_ = std::make_unique<Impl>();
     impl_->temp_allocator = std::make_unique<TempAllocatorImpl>(
         static_cast<uint>(config_.temp_allocator_size_mb) * 1024 * 1024);
-    impl_->job_system = std::make_unique<JobSystemThreadPool>(
-        cMaxPhysicsJobs, cMaxPhysicsBarriers, std::max(config_.physics_threads, 1));
+    // 使用适配器将 Jolt 作业转发到引擎统一 JobSystem，消除超订
+    void* engine_js = dse::physics3d::GetEngineJobSystem();
+    if (engine_js) {
+        impl_->job_system = std::make_unique<JoltJobSystemAdapter>(
+            static_cast<void*>(engine_js), &BridgeExecute);
+    } else {
+        // JobSystem 不可用时回退到 Jolt 自带线程池
+        impl_->job_system = std::make_unique<JobSystemThreadPool>(
+            cMaxPhysicsJobs, cMaxPhysicsBarriers, std::max(config_.physics_threads, 1));
+    }
 
     impl_->bp_layer_interface = std::make_unique<BPLayerInterfaceImpl>();
     impl_->obj_vs_bp_filter = std::make_unique<ObjVsBPLayerFilterImpl>();
@@ -314,8 +338,8 @@ bool Physics3DSystem::Init(World& world) {
     destroy_connections_.push_back(
         world.registry().on_destroy<RigidBody3DComponent>().connect<&Physics3DSystem::OnRigidBody3DDestroyed>(this));
 
-    DEBUG_LOG_INFO("Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies={}, threads={})",
-                   config_.max_bodies, config_.physics_threads);
+    DEBUG_LOG_INFO("Physics3DSystem Initialized (Backend: Jolt Physics v5.5.0, max_bodies={}, unified_job_system={})",
+                   config_.max_bodies, engine_js ? "ON" : "OFF");
     return true;
 }
 

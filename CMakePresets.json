@@ -105,6 +105,19 @@
       }
     },
     {
+      "name": "wsl-tsan",
+      "displayName": "WSL ThreadSanitizer",
+      "description": "ThreadSanitizer 构建（Linux/WSL + clang/gcc），用于检测 JobSystem 并发数据竞争",
+      "inherits": "wsl-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_C_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
+      }
+    },
+    {
       "name": "web-base",
       "hidden": true,
       "description": "Web/Emscripten：WebGL2(=GLES3.0) 单线程 2D。需先执行 emsdk 的 emsdk_env 使 $EMSDK 生效；着色器 embed 头由桌面构建预生成(已含 essl300)。",
