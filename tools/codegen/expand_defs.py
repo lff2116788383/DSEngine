@@ -750,6 +750,7 @@ REFLECT_ONLY_COMPONENTS = [
         "name": "MorphTargetComponent",
         "include": "engine/ecs/components_3d_render.h",
         "namespace": "dse",
+        "custom_scene_codec": True,
         "fields": [
             {"name": "enabled", "type": "bool"},
         ]

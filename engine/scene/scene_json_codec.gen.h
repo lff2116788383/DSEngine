@@ -8,6 +8,7 @@
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/reflect_json.h"
 #include "engine/reflect/component_reflection.h"
+#include "engine/scene/scene_json_codec_custom.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/components_3d_tree.h"
@@ -1145,6 +1146,7 @@ inline bool Serialize_MorphTargetComponent(const entt::registry& reg, entt::enti
     if (!ti) return false;
     rapidjson::Value json(rapidjson::kObjectType);
     reflect::SerializeReflected(*ti, &c, json, alloc);
+    dse::scene_codec_custom::SerializeExtra(c, json, alloc);
     components.AddMember("MorphTargetComponent", json, alloc);
     return true;
 }
@@ -1155,6 +1157,7 @@ inline void Deserialize_MorphTargetComponent(entt::registry& reg, entt::entity e
     if (!ti) return;
     auto& c = reg.get_or_emplace<dse::MorphTargetComponent>(e);
     reflect::DeserializeReflected(*ti, &c, json);
+    dse::scene_codec_custom::DeserializeExtra(c, json);
 }
 
 inline bool Serialize_GpuParticleComponent(const entt::registry& reg, entt::entity e,

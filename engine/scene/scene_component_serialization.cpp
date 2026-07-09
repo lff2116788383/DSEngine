@@ -11,9 +11,11 @@
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_3d_impostor.h"
+#include "engine/ecs/components_3d_render.h"
 #include "engine/reflect/component_reflection.h"
 #include "engine/reflect/reflect.h"
 #include "engine/reflect/reflect_json.h"
+#include "engine/scene/scene_json_codec_custom.h"
 
 #include <glm/glm.hpp>
 
@@ -169,6 +171,18 @@ void SerializeExtendedComponents(entt::registry& registry, Entity entity,
             components.AddMember("ImpostorComponent", json, allocator);
         }
     }
+
+    // MorphTargetComponent: reflection only carries `enabled`; the (large) delta
+    // arrays are rebuilt from the mesh asset on load, so persist just the
+    // per-target name+weight via the hand-written custom codec.
+    if (registry.all_of<dse::MorphTargetComponent>(entity)) {
+        const auto& morph = registry.get<dse::MorphTargetComponent>(entity);
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::MorphTargetComponent>();
+        rapidjson::Value json(rapidjson::kObjectType);
+        if (ti) dse::reflect::SerializeReflected(*ti, &morph, json, allocator);
+        dse::scene_codec_custom::SerializeExtra(morph, json, allocator);
+        components.AddMember("MorphTargetComponent", json, allocator);
+    }
 }
 
 void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
@@ -240,6 +254,18 @@ void DeserializeExtendedComponents(entt::registry& registry, Entity entity,
         impostor.atlas_loaded_ = false;
         impostor.cached_bounds_radius_ = 0.0f;
         registry.emplace<dse::ImpostorComponent>(entity, std::move(impostor));
+    }
+
+    if (components.HasMember("MorphTargetComponent") &&
+        components["MorphTargetComponent"].IsObject()) {
+        dse::MorphTargetComponent morph;
+        const dse::reflect::TypeInfo* ti = dse::reflect::Reflection::Find<dse::MorphTargetComponent>();
+        if (ti) dse::reflect::DeserializeReflected(*ti, &morph, components["MorphTargetComponent"]);
+        // Restores name+weight (name-only targets); the mesh loader fills in the
+        // deltas and preserves these weights by matching target names.
+        dse::scene_codec_custom::DeserializeExtra(morph, components["MorphTargetComponent"]);
+        morph.gpu_dirty = true;
+        registry.emplace<dse::MorphTargetComponent>(entity, std::move(morph));
     }
 }
 

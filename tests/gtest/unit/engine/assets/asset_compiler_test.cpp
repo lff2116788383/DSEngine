@@ -462,3 +462,47 @@ TEST(PackAlignmentTest, SkelHeaderTightLayout) {
 TEST(PackAlignmentTest, BoneDescTightLayout) {
     EXPECT_EQ(sizeof(BoneDesc), 132u);  // pack(1): 4 int + 2*64 mat4 = 132
 }
+
+// ── Morph target (blend shape) 导入数据结构 ──────────────────────────────────
+
+TEST(RawMorphTargetTest, DefaultAndCustomValues) {
+    RawMorphTarget mt;
+    EXPECT_TRUE(mt.name.empty());
+    EXPECT_TRUE(mt.position_deltas.empty());
+    EXPECT_TRUE(mt.normal_deltas.empty());
+
+    mt.name = "jawOpen";
+    mt.position_deltas.push_back(glm::vec3(1.0f, 2.0f, 3.0f));
+    mt.normal_deltas.push_back(glm::vec3(0.0f, 1.0f, 0.0f));
+    EXPECT_EQ(mt.name, "jawOpen");
+    ASSERT_EQ(mt.position_deltas.size(), 1u);
+    EXPECT_FLOAT_EQ(mt.position_deltas[0].y, 2.0f);
+    EXPECT_EQ(mt.normal_deltas.size(), 1u);
+}
+
+TEST(RawSubMeshTest, MorphTargets) {
+    RawSubMesh mesh;
+    EXPECT_TRUE(mesh.morph_targets.empty());
+    RawMorphTarget mt;
+    mt.name = "smile";
+    mesh.morph_targets.push_back(mt);
+    EXPECT_EQ(mesh.morph_targets.size(), 1u);
+    EXPECT_EQ(mesh.morph_targets[0].name, "smile");
+}
+
+TEST(MorphSectionHeaderTest, DefaultValues) {
+    MorphSectionHeader h;
+    EXPECT_EQ(h.magic[0], 'D');
+    EXPECT_EQ(h.magic[1], 'S');
+    EXPECT_EQ(h.magic[2], 'M');
+    EXPECT_EQ(h.magic[3], 'T');
+    EXPECT_EQ(h.version, 1u);
+    EXPECT_EQ(h.target_count, 0u);
+    EXPECT_EQ(h.vertex_count, 0u);
+}
+
+// MorphDeltaRecord 必须与运行时 dse::MorphTargetDelta 布局一致(32 字节),
+// 这样 runtime 可以直接 memcpy。
+TEST(PackAlignmentTest, MorphDeltaRecordMatchesRuntimeDelta) {
+    EXPECT_EQ(sizeof(MorphDeltaRecord), 32u);  // vec3 + pad + vec3 + pad
+}

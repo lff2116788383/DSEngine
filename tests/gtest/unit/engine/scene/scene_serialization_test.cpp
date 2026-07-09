@@ -12,6 +12,7 @@
 #include "engine/ecs/components_3d_navmesh.h"
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_tree.h"
+#include "engine/ecs/components_3d_render.h"
 #include <filesystem>
 #include <string>
 #include <cmath>
@@ -75,6 +76,47 @@ TEST(SceneSerializationTest, TransformSerializationRoundTripConsistency) {
         auto& t = view.get<TransformComponent>(e);
         EXPECT_TRUE(NearEqual(t.position, {1.5f, -2.5f, 3.5f}));
         EXPECT_TRUE(NearEqual(t.scale, {2.0f, 3.0f, 4.0f}));
+        ++count;
+    }
+    EXPECT_EQ(count, 1);
+}
+
+// 捏脸: MorphTargetComponent 只持久化 name+weight(deltas 由 mesh 资产重建),
+// 存盘后重开权重应按 target 名称保留。
+TEST(SceneSerializationTest, MorphTargetWeightsRoundTrip) {
+    ScopedFileCleanup cleanup;
+    cleanup.Add(kTestSceneFile);
+
+    {
+        Scene src("morph");
+        auto& w = src.GetWorld();
+        Entity e = w.CreateEntity();
+        w.registry().emplace<TransformComponent>(e);
+        dse::MorphTargetComponent m;
+        m.enabled = true;
+        m.vertex_count = 123;
+        dse::MorphTargetData a; a.name = "smile";
+        dse::MorphTargetData b; b.name = "blink";
+        m.targets = {a, b};
+        m.weights = {0.75f, 0.25f};
+        w.registry().emplace<dse::MorphTargetComponent>(e, std::move(m));
+        ASSERT_TRUE(src.Serialize(kTestSceneFile));
+    }
+
+    Scene dst("dst_morph");
+    ASSERT_TRUE(dst.Deserialize(kTestSceneFile));
+
+    auto view = dst.GetWorld().registry().view<dse::MorphTargetComponent>();
+    int count = 0;
+    for (auto e : view) {
+        auto& m = view.get<dse::MorphTargetComponent>(e);
+        ASSERT_EQ(m.targets.size(), 2u);
+        ASSERT_EQ(m.weights.size(), 2u);
+        EXPECT_EQ(m.targets[0].name, "smile");
+        EXPECT_EQ(m.targets[1].name, "blink");
+        EXPECT_TRUE(NearEqual(m.weights[0], 0.75f));
+        EXPECT_TRUE(NearEqual(m.weights[1], 0.25f));
+        EXPECT_TRUE(m.enabled);
         ++count;
     }
     EXPECT_EQ(count, 1);

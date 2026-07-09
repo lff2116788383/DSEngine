@@ -502,6 +502,54 @@ bool LoadMeshByPath(AssetManager& asset_manager, const std::string& mesh_path, R
     return false;
 }
 
+// Parse the appended 'DSMT' morph section and populate the entity's
+// MorphTargetComponent. Deltas come from the mesh asset; per-entity weights are
+// preserved by target name across reloads (scene deserialization stores only
+// name+weight, not deltas). idx_end points at the MorphSectionHeader.
+static void LoadMorphTargetsFromDmesh(World& world, entt::entity entity,
+                                      const uint8_t* data, uint64_t idx_end,
+                                      const dse::asset::compiler::MorphSectionHeader& msh) {
+    auto& reg = world.registry();
+    // Snapshot any existing name->weight mapping (from a prior populate or from
+    // scene deserialization) so weights survive re-populating the deltas.
+    std::unordered_map<std::string, float> prev_weights;
+    if (reg.all_of<MorphTargetComponent>(entity)) {
+        const auto& old = reg.get<MorphTargetComponent>(entity);
+        for (size_t i = 0; i < old.targets.size() && i < old.weights.size(); ++i) {
+            prev_weights[old.targets[i].name] = old.weights[i];
+        }
+    }
+
+    MorphTargetComponent comp;
+    comp.vertex_count = static_cast<int>(msh.vertex_count);
+    comp.targets.reserve(msh.target_count);
+    comp.weights.reserve(msh.target_count);
+
+    const uint8_t* cursor = data + idx_end + sizeof(dse::asset::compiler::MorphSectionHeader);
+    for (uint32_t t = 0; t < msh.target_count; ++t) {
+        uint32_t name_len = 0;
+        std::memcpy(&name_len, cursor, sizeof(uint32_t));
+        cursor += sizeof(uint32_t);
+        MorphTargetData target;
+        target.name.assign(reinterpret_cast<const char*>(cursor), name_len);
+        cursor += name_len;
+
+        target.deltas.resize(msh.vertex_count);
+        const auto* records = reinterpret_cast<const dse::asset::compiler::MorphDeltaRecord*>(cursor);
+        for (uint32_t v = 0; v < msh.vertex_count; ++v) {
+            target.deltas[v].delta_position = records[v].delta_position;
+            target.deltas[v].delta_normal = records[v].delta_normal;
+        }
+        cursor += static_cast<size_t>(msh.vertex_count) * sizeof(dse::asset::compiler::MorphDeltaRecord);
+
+        auto it = prev_weights.find(target.name);
+        comp.weights.push_back(it != prev_weights.end() ? it->second : 0.0f);
+        comp.targets.push_back(std::move(target));
+    }
+    comp.gpu_dirty = true;
+    reg.emplace_or_replace<MorphTargetComponent>(entity, std::move(comp));
+}
+
 void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::entity entity, MeshRendererComponent& mesh_renderer) {
     if (mesh_renderer.mesh_path.empty()) {
         return;
@@ -563,6 +611,21 @@ void EnsureMeshPathDataLoaded(AssetManager& asset_manager, World& world, entt::e
                                 return;
                             }
                             mesh_renderer.temp_indices.push_back(resolved_index);
+                        }
+                    }
+                    // Optional morph-target (blend shape) section appended after
+                    // the index data, detected by its own 'DSMT' magic. Populate
+                    // a MorphTargetComponent so blend shapes are drivable at runtime.
+                    {
+                        const size_t total = dmesh->GetData().size();
+                        const uint64_t idx_end = header->index_data_offset +
+                            static_cast<uint64_t>(header->index_count) * sizeof(uint32_t);
+                        if (idx_end + sizeof(dse::asset::compiler::MorphSectionHeader) <= total) {
+                            const auto* msh = reinterpret_cast<const dse::asset::compiler::MorphSectionHeader*>(data + idx_end);
+                            if (msh->magic[0] == 'D' && msh->magic[1] == 'S' && msh->magic[2] == 'M' && msh->magic[3] == 'T' &&
+                                msh->target_count > 0 && msh->vertex_count == header->vertex_count) {
+                                LoadMorphTargetsFromDmesh(world, entity, data, idx_end, *msh);
+                            }
                         }
                     }
                     update_bounding_box(mesh_renderer.temp_vertices, mesh_renderer.dmesh_vertex_stride);

@@ -791,6 +791,38 @@ bool FbxImporter::Import(const std::string& file_path, RawSceneData& out_scene) 
             }
         }
 
+        // Blend shapes (morph targets): assimp exposes each target as an
+        // aiAnimMesh whose vertices are absolute morphed positions; convert to
+        // deltas relative to the base mesh so the runtime can accumulate them.
+        raw_mesh.morph_targets.reserve(mesh->mNumAnimMeshes);
+        for (unsigned int am = 0; am < mesh->mNumAnimMeshes; ++am) {
+            const aiAnimMesh* anim_mesh = mesh->mAnimMeshes[am];
+            if (!anim_mesh || anim_mesh->mNumVertices != mesh->mNumVertices) {
+                continue;
+            }
+            RawMorphTarget target;
+            target.name = anim_mesh->mName.length > 0
+                              ? anim_mesh->mName.C_Str()
+                              : ("morph_" + std::to_string(am));
+            target.position_deltas.resize(mesh->mNumVertices, glm::vec3(0.0f));
+            target.normal_deltas.resize(mesh->mNumVertices, glm::vec3(0.0f));
+            if (anim_mesh->HasPositions()) {
+                for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+                    const aiVector3D& mp = anim_mesh->mVertices[v];
+                    const aiVector3D& bp = mesh->mVertices[v];
+                    target.position_deltas[v] = glm::vec3(mp.x - bp.x, mp.y - bp.y, mp.z - bp.z);
+                }
+            }
+            if (anim_mesh->HasNormals() && mesh->HasNormals()) {
+                for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+                    const aiVector3D& mn = anim_mesh->mNormals[v];
+                    const aiVector3D& bn = mesh->mNormals[v];
+                    target.normal_deltas[v] = glm::vec3(mn.x - bn.x, mn.y - bn.y, mn.z - bn.z);
+                }
+            }
+            raw_mesh.morph_targets.push_back(std::move(target));
+        }
+
         out_scene.meshes.push_back(std::move(raw_mesh));
     }
 
@@ -904,6 +936,7 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
     std::vector<RuntimeVertex> all_vertices;
     std::vector<uint32_t> all_indices;
     std::vector<SubMeshDesc> submeshes;
+    std::vector<uint32_t> submesh_base_vertex;
     
     for (const auto& mesh : scene.meshes) {
         SubMeshDesc desc;
@@ -911,6 +944,7 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
         desc.index_count = static_cast<uint32_t>(mesh.indices.size());
         desc.base_vertex = static_cast<uint32_t>(all_vertices.size());
         desc.material_id = mesh.material_index;
+        submesh_base_vertex.push_back(desc.base_vertex);
         
         glm::vec3 bmin(std::numeric_limits<float>::max());
         glm::vec3 bmax(std::numeric_limits<float>::lowest());
@@ -979,7 +1013,51 @@ bool MeshCooker::CookToDmesh(const RawSceneData& scene, const std::string& outpu
         }
     }
     out.write(reinterpret_cast<const char*>(all_indices.data()), all_indices.size() * sizeof(uint32_t));
-    
+
+    // Optional morph-target section (appended; detected by 'DSMT' magic).
+    // Gather blend shapes across submeshes into whole-mesh delta arrays aligned
+    // to the concatenated vertex buffer.
+    uint32_t morph_target_count = 0;
+    for (const auto& mesh : scene.meshes) {
+        morph_target_count = std::max(morph_target_count,
+                                      static_cast<uint32_t>(mesh.morph_targets.size()));
+    }
+    if (morph_target_count > 0 && header.vertex_count > 0) {
+        MorphSectionHeader msh;
+        msh.target_count = morph_target_count;
+        msh.vertex_count = header.vertex_count;
+        out.write(reinterpret_cast<const char*>(&msh), sizeof(MorphSectionHeader));
+
+        std::vector<MorphDeltaRecord> records(header.vertex_count);
+        for (uint32_t t = 0; t < morph_target_count; ++t) {
+            // Name: first submesh that defines this target index wins.
+            std::string name;
+            for (const auto& mesh : scene.meshes) {
+                if (t < mesh.morph_targets.size()) { name = mesh.morph_targets[t].name; break; }
+            }
+            uint32_t name_len = static_cast<uint32_t>(name.size());
+            out.write(reinterpret_cast<const char*>(&name_len), sizeof(uint32_t));
+            if (name_len > 0) out.write(name.data(), name_len);
+
+            std::fill(records.begin(), records.end(), MorphDeltaRecord{});
+            for (size_t s = 0; s < scene.meshes.size(); ++s) {
+                const auto& mesh = scene.meshes[s];
+                if (t >= mesh.morph_targets.size()) continue;
+                const auto& mt = mesh.morph_targets[t];
+                const uint32_t base = submesh_base_vertex[s];
+                const size_t n = std::min(mt.position_deltas.size(),
+                                          static_cast<size_t>(header.vertex_count - base));
+                for (size_t v = 0; v < n; ++v) {
+                    MorphDeltaRecord& r = records[base + v];
+                    r.delta_position = mt.position_deltas[v];
+                    if (v < mt.normal_deltas.size()) r.delta_normal = mt.normal_deltas[v];
+                }
+            }
+            out.write(reinterpret_cast<const char*>(records.data()),
+                      records.size() * sizeof(MorphDeltaRecord));
+        }
+    }
+
     return true;
 }
 

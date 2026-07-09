@@ -28,6 +28,14 @@ inline VertexAttribute operator&(VertexAttribute a, VertexAttribute b) {
     return static_cast<VertexAttribute>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
 }
 
+/// Blend shape / morph target for a submesh. Deltas are relative to the base
+/// vertices (morphed_position - base_position), one entry per submesh vertex.
+struct RawMorphTarget {
+    std::string name;
+    std::vector<glm::vec3> position_deltas;
+    std::vector<glm::vec3> normal_deltas;
+};
+
 struct RawSubMesh {
     std::string name;
     uint32_t material_index = 0;
@@ -41,6 +49,8 @@ struct RawSubMesh {
     std::vector<glm::vec4> joint_weights;
     
     std::vector<uint32_t> indices;
+
+    std::vector<RawMorphTarget> morph_targets;
 };
 
 struct RawBone {
@@ -144,6 +154,27 @@ struct BoneDesc {
     int parent_index;
     glm::mat4 inverse_bind_matrix;
     glm::mat4 local_transform;
+};
+
+// Optional morph-target (blend shape) section, appended to a .dmesh after the
+// index data and detected by its own magic (keeps MeshHeader byte-compatible
+// with v1/v2 files that have no morph data). Deltas are laid out against the
+// concatenated whole-mesh vertex buffer: target t, vertex v lives at index
+// t*vertex_count + v.
+struct MorphSectionHeader {
+    char magic[4] = {'D', 'S', 'M', 'T'};
+    uint32_t version = 1;
+    uint32_t target_count = 0;
+    uint32_t vertex_count = 0;  // == MeshHeader::vertex_count
+};
+
+// One per-vertex delta record; matches dse::MorphTargetDelta layout (32 bytes)
+// so the runtime can memcpy directly into MorphTargetComponent.
+struct MorphDeltaRecord {
+    glm::vec3 delta_position;
+    float _pad0 = 0.0f;
+    glm::vec3 delta_normal;
+    float _pad1 = 0.0f;
 };
 
 #pragma pack(pop)
