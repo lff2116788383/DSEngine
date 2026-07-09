@@ -3,6 +3,10 @@
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/base/debug.h"
 
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
 #include "engine/render/shaders/generated/embed/morph_target_comp.gen.h"
 
 namespace dse {
@@ -81,7 +85,22 @@ void MorphTargetSystem::Shutdown() {
     available_ = false;
 }
 
-void MorphTargetSystem::UploadIfDirty(MorphTargetComponent& comp) {
+namespace {
+// Compute-shader BaseVertex: position, normal, tangent as vec4 (48 bytes).
+struct BaseVertexStd {
+    float position[4];
+    float normal[4];
+    float tangent[4];
+};
+// Compute-shader MorphDelta: delta_pos, delta_normal as vec4 (32 bytes). This
+// matches dse::MorphTargetDelta byte-for-byte, so deltas copy without repack.
+static_assert(sizeof(MorphTargetDelta) == 32,
+              "MorphTargetDelta must match the compute shader MorphDelta layout");
+}  // namespace
+
+void MorphTargetSystem::UploadIfDirty(MorphTargetComponent& comp,
+                                      const float* base_vertices,
+                                      int vertex_stride_floats) {
     if (!available_ || !comp.gpu_dirty) return;
     if (comp.vertex_count <= 0 || comp.targets.empty()) return;
 
@@ -90,6 +109,46 @@ void MorphTargetSystem::UploadIfDirty(MorphTargetComponent& comp) {
 
     if (comp.weights.size() != comp.targets.size()) {
         comp.weights.resize(comp.targets.size(), 0.0f);
+    }
+
+    // Base-vertex SSBO (binding 0): repack the interleaved mesh vertex floats
+    // into the compute shader's BaseVertex layout. Only (re)created when the
+    // caller supplies base data and the buffer does not already exist.
+    if (!comp.gpu_base_buffer && base_vertices && vertex_stride_floats >= 6) {
+        std::vector<BaseVertexStd> base(static_cast<size_t>(vertex_count));
+        const bool has_tangent = vertex_stride_floats >= 10;
+        for (int v = 0; v < vertex_count; ++v) {
+            const float* src = base_vertices + static_cast<size_t>(v) * vertex_stride_floats;
+            BaseVertexStd& dst = base[v];
+            dst.position[0] = src[0]; dst.position[1] = src[1]; dst.position[2] = src[2]; dst.position[3] = 1.0f;
+            dst.normal[0]   = src[3]; dst.normal[1]   = src[4]; dst.normal[2]   = src[5]; dst.normal[3]   = 0.0f;
+            if (has_tangent) {
+                dst.tangent[0] = src[6]; dst.tangent[1] = src[7]; dst.tangent[2] = src[8]; dst.tangent[3] = src[9];
+            } else {
+                dst.tangent[0] = dst.tangent[1] = dst.tangent[2] = dst.tangent[3] = 0.0f;
+            }
+        }
+        GpuBufferDesc desc;
+        desc.size = base.size() * sizeof(BaseVertexStd);
+        desc.usage = GpuBufferUsage::kStorage;
+        comp.gpu_base_buffer = device_->CreateGpuBuffer(desc, base.data());
+    }
+
+    // Delta SSBO (binding 1): all target deltas concatenated as target t, vertex
+    // v at index t*vertex_count + v (matches the shader's delta_idx). deltas are
+    // already MorphTargetDelta (== MorphDelta layout), so copy straight through.
+    if (!comp.gpu_delta_buffer) {
+        std::vector<MorphTargetDelta> deltas(
+            static_cast<size_t>(target_count) * static_cast<size_t>(vertex_count));
+        for (int t = 0; t < target_count; ++t) {
+            const auto& td = comp.targets[t].deltas;
+            const size_t n = std::min(td.size(), static_cast<size_t>(vertex_count));
+            std::copy_n(td.data(), n, deltas.data() + static_cast<size_t>(t) * vertex_count);
+        }
+        GpuBufferDesc desc;
+        desc.size = deltas.size() * sizeof(MorphTargetDelta);
+        desc.usage = GpuBufferUsage::kStorage;
+        comp.gpu_delta_buffer = device_->CreateGpuBuffer(desc, deltas.data());
     }
 
     // Create/upload weight SSBO

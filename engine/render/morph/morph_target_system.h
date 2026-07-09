@@ -30,7 +30,17 @@ public:
 
     /// Upload morph target data to GPU if dirty (base vertices, deltas, weights).
     /// Should be called once per frame before Dispatch.
-    void UploadIfDirty(MorphTargetComponent& comp);
+    ///
+    /// @param base_vertices  Interleaved mesh vertex floats (the mesh's CPU
+    ///        vertex buffer): position at [0..2], normal at [3..5], and, when
+    ///        stride_floats >= 10, tangent at [6..9]. Required to (re)create the
+    ///        base-vertex SSBO; may be null on later calls once the base buffer
+    ///        exists and only weights are dirty.
+    /// @param vertex_stride_floats  Number of floats per vertex in base_vertices
+    ///        (20 for .dmesh v1, 24 for v2). Ignored when base_vertices is null.
+    void UploadIfDirty(MorphTargetComponent& comp,
+                       const float* base_vertices = nullptr,
+                       int vertex_stride_floats = 0);
 
     /// Dispatch the compute shader to evaluate all active morph targets.
     /// After dispatch, comp.gpu_output_buffer contains deformed vertices.
