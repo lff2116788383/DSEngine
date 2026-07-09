@@ -156,7 +156,9 @@ void RegisterEcsBindings(lua_State* L) {
     // RegisterHttpBindings(L); // TODO: declare in modules.h
     RegisterLocalizationBindings(L);
     RegisterMeshletBindings(L);
+#ifdef DSE_ENABLE_NAVMESH
     RegisterNavigationBindings(L);
+#endif
     RegisterOpenWorldBindings(L);
     RegisterOpenWorldP2P5Bindings(L);
     RegisterSpineBindings(L);
