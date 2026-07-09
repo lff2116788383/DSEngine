@@ -7,6 +7,8 @@
 #include "engine/scripting/native_api/dse_api_internal.h"
 #ifdef DSE_ENABLE_HTTP
 #include "engine/http/http_client.h"
+#include <unordered_map>
+#include <cstring>
 #endif
 
 using namespace dse_api_internal;
@@ -19,6 +21,8 @@ struct HttpCompletion {
     dse::http::Response response;
 };
 static std::vector<HttpCompletion> g_http_completed;
+// 已完成响应缓存：poll 只上报一次 id，响应保留至 get_response 消费后再删除。
+static std::unordered_map<uint32_t, dse::http::Response> g_http_responses;
 static uint32_t g_http_next_id = 1;
 
 extern "C" uint32_t dse_http_send(const char* method, const char* url, const char* body,
@@ -58,6 +62,7 @@ extern "C" uint32_t dse_http_send(const char* method, const char* url, const cha
     uint32_t id = g_http_next_id++;
     client->Send(req, [id](const dse::http::Response& resp) {
         g_http_completed.push_back({id, resp});
+        g_http_responses[id] = resp;
     });
     return id;
 }
@@ -74,13 +79,25 @@ extern "C" int dse_http_poll(uint32_t* out_ids, int max_ids) {
 extern "C" int dse_http_get_response(uint32_t request_id, int* out_status,
                                      char* out_body, int body_cap,
                                      char* out_error, int error_cap) {
-    // Response was already consumed by poll; we need to keep a map.
-    // For simplicity, the Lua side should retrieve response during poll.
-    // This is a fallback that searches the completion queue.
-    if (out_status) *out_status = 0;
-    if (out_body && body_cap > 0) out_body[0] = '\0';
-    if (out_error && error_cap > 0) out_error[0] = '\0';
-    return 0;
+    auto it = g_http_responses.find(request_id);
+    if (it == g_http_responses.end()) {
+        if (out_status) *out_status = 0;
+        if (out_body && body_cap > 0) out_body[0] = '\0';
+        if (out_error && error_cap > 0) out_error[0] = '\0';
+        return 0;
+    }
+    const dse::http::Response& resp = it->second;
+    if (out_status) *out_status = resp.status;
+    if (out_body && body_cap > 0) {
+        std::strncpy(out_body, resp.body.c_str(), static_cast<size_t>(body_cap) - 1);
+        out_body[body_cap - 1] = '\0';
+    }
+    if (out_error && error_cap > 0) {
+        std::strncpy(out_error, resp.error.c_str(), static_cast<size_t>(error_cap) - 1);
+        out_error[error_cap - 1] = '\0';
+    }
+    g_http_responses.erase(it);  // 消费后释放，避免缓存无限增长
+    return 1;
 }
 
 extern "C" void dse_http_update(void) {
