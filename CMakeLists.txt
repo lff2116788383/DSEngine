@@ -876,8 +876,19 @@ add_executable(AssetBuilder
     engine/assets/ktx2_parser.cpp
     engine/mesh/mesh_decimator.cpp
     engine/render/gi/lightmap_baker.cpp
+    # lightmap_baker 经 JobSystem 并行烘焙，独立工具需自带其实现及核心依赖
+    engine/core/job_system.cpp
+    engine/base/debug.cpp
+    engine/core/memory/linear_allocator.cpp
+    engine/core/memory/memory.cpp
+    engine/core/memory/allocator.cpp
+    engine/core/memory/system_allocator.cpp
+    engine/core/memory/frame_allocator.cpp
+    engine/core/memory/memory_tracker.cpp
 )
 target_include_directories(AssetBuilder PRIVATE ${CMAKE_SOURCE_DIR} depends/tinygltf depends/glm)
+# 与静态 dse_engine 消费端一致：DSE_EXPORT 展开为空，避免 dllimport 未解析符号
+target_compile_definitions(AssetBuilder PRIVATE DSE_BUILD_STATIC)
 if(DSE_HAS_ASSIMP)
     target_link_libraries(AssetBuilder PRIVATE assimp)
     target_compile_definitions(AssetBuilder PRIVATE DSE_HAS_ASSIMP=1)
