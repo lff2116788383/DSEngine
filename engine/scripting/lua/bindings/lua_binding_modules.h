@@ -123,6 +123,7 @@ void RegisterCharacterMovementStateGenBindings(lua_State* L);
 void RegisterCharacterMovementConfigGenBindings(lua_State* L);
 void RegisterSpringArm3DComponentGenBindings(lua_State* L);
 void RegisterPlayerControllerComponentGenBindings(lua_State* L);
+void RegisterJiggleBoneComponentGenBindings(lua_State* L);
 void RegisterEcsPhysics2DBindings(lua_State* L);
 void RegisterEcsPhysics3DBindings(lua_State* L);
 void RegisterEcsAnimationBindings(lua_State* L);

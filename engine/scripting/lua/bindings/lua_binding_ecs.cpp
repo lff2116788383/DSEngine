@@ -11,6 +11,7 @@ extern "C" {
 #include "depends/lua/lauxlib.h"
 }
 
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -21,6 +22,11 @@ namespace {
 // Table-to-array functions (merged from lua_binding_cabi_gap.cpp)
 inline uint32_t EID(lua_State* L, int i) {
     return static_cast<uint32_t>(luaL_checkinteger(L, i));
+}
+
+// 可选浮点：缺省/nil => NaN（C ABI 约定为“保持当前值/取默认”）。
+inline float OptF(lua_State* L, int i) {
+    return lua_isnoneornil(L, i) ? std::nanf("") : static_cast<float>(luaL_checknumber(L, i));
 }
 
 int L_EcsAnim3DSetLayerMask(lua_State* L) {
@@ -70,6 +76,62 @@ int L_EcsAnim3DSetBlendTree1D(lua_State* L) {
     return 0;
 }
 
+// ---- Jiggle Bone（乳摇）运行期列表操作 ----
+int L_EcsJiggleAddComponent(lua_State* L) { dse_jiggle_add_component(EID(L, 1)); return 0; }
+int L_EcsJiggleRemoveComponent(lua_State* L) { dse_jiggle_remove_component(EID(L, 1)); return 0; }
+int L_EcsJiggleClearBones(lua_State* L) { dse_jiggle_clear_bones(EID(L, 1)); return 0; }
+int L_EcsJiggleClearColliders(lua_State* L) { dse_jiggle_clear_colliders(EID(L, 1)); return 0; }
+
+int L_EcsJiggleGetBoneCount(lua_State* L) {
+    lua_pushinteger(L, dse_jiggle_get_bone_count(EID(L, 1)));
+    return 1;
+}
+int L_EcsJiggleGetColliderCount(lua_State* L) {
+    lua_pushinteger(L, dse_jiggle_get_collider_count(EID(L, 1)));
+    return 1;
+}
+
+// add_bone(e, name [, stiffness, damping, gravity, bone_length]) -> index
+int L_EcsJiggleAddBone(lua_State* L) {
+    uint32_t e = EID(L, 1);
+    const char* name = luaL_checkstring(L, 2);
+    int idx = dse_jiggle_add_bone(e, name, OptF(L, 3), OptF(L, 4), OptF(L, 5), OptF(L, 6));
+    lua_pushinteger(L, idx);
+    return 1;
+}
+
+// set_bone_params(e, index [, stiffness, damping, gravity, bone_length])
+int L_EcsJiggleSetBoneParams(lua_State* L) {
+    uint32_t e = EID(L, 1);
+    int index = helper::CheckInt(L, 2);
+    dse_jiggle_set_bone_params(e, index, OptF(L, 3), OptF(L, 4), OptF(L, 5), OptF(L, 6));
+    return 0;
+}
+
+// set_bone_gravity_dir(e, index, x, y, z)
+int L_EcsJiggleSetBoneGravityDir(lua_State* L) {
+    uint32_t e = EID(L, 1);
+    int index = helper::CheckInt(L, 2);
+    dse_jiggle_set_bone_gravity_dir(e, index,
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_checknumber(L, 5)));
+    return 0;
+}
+
+// add_collider(e, name, cx, cy, cz [, radius]) -> index
+int L_EcsJiggleAddCollider(lua_State* L) {
+    uint32_t e = EID(L, 1);
+    const char* name = lua_isnoneornil(L, 2) ? nullptr : luaL_checkstring(L, 2);
+    int idx = dse_jiggle_add_collider(e, name,
+        static_cast<float>(luaL_checknumber(L, 3)),
+        static_cast<float>(luaL_checknumber(L, 4)),
+        static_cast<float>(luaL_checknumber(L, 5)),
+        OptF(L, 6));
+    lua_pushinteger(L, idx);
+    return 1;
+}
+
 } // namespace
 
 void RegisterEcsBindings(lua_State* L) {
@@ -89,6 +151,16 @@ void RegisterEcsBindings(lua_State* L) {
     helper::RegisterBindings(L, {
         {"anim3d_set_layer_mask",    L_EcsAnim3DSetLayerMask},
         {"anim3d_set_blend_tree_1d", L_EcsAnim3DSetBlendTree1D},
+        {"jiggle_add_component",     L_EcsJiggleAddComponent},
+        {"jiggle_remove_component",  L_EcsJiggleRemoveComponent},
+        {"jiggle_clear_bones",       L_EcsJiggleClearBones},
+        {"jiggle_clear_colliders",   L_EcsJiggleClearColliders},
+        {"jiggle_get_bone_count",    L_EcsJiggleGetBoneCount},
+        {"jiggle_get_collider_count",L_EcsJiggleGetColliderCount},
+        {"jiggle_add_bone",          L_EcsJiggleAddBone},
+        {"jiggle_set_bone_params",   L_EcsJiggleSetBoneParams},
+        {"jiggle_set_bone_gravity_dir", L_EcsJiggleSetBoneGravityDir},
+        {"jiggle_add_collider",      L_EcsJiggleAddCollider},
     });
     lua_remove(L, -2); // remove dse, keep ecs on top for component gen bindings
 
@@ -142,6 +214,7 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterCharacterMovementConfigGenBindings(L);
     RegisterSpringArm3DComponentGenBindings(L);
     RegisterPlayerControllerComponentGenBindings(L);
+    RegisterJiggleBoneComponentGenBindings(L);
     lua_pop(L, 1); // pop ecs table
     RegisterFreeGapBindings(L);
     RegisterAudioBindings(L);

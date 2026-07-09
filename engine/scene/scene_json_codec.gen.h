@@ -23,6 +23,7 @@
 #include "engine/render/virtual_texture/virtual_texture.h"
 #include "engine/render/gi/lightmap_baker.h"
 #include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_animation.h"
 #include "engine/render/particles/gpu_particle_system.h"
 
 #include <rapidjson/document.h>
@@ -1072,6 +1073,27 @@ inline void Deserialize_player_controller(entt::registry& reg, entt::entity e,
     reflect::DeserializeReflected(*ti, &c, json);
 }
 
+inline bool Serialize_jiggle(const entt::registry& reg, entt::entity e,
+                                    rapidjson::Value& components,
+                                    rapidjson::Document::AllocatorType& alloc) {
+    if (!reg.all_of<dse::JiggleBoneComponent>(e)) return false;
+    const auto& c = reg.get<dse::JiggleBoneComponent>(e);
+    const auto* ti = reflect::Reflection::Find<dse::JiggleBoneComponent>();
+    if (!ti) return false;
+    rapidjson::Value json(rapidjson::kObjectType);
+    reflect::SerializeReflected(*ti, &c, json, alloc);
+    components.AddMember("JiggleBoneComponent", json, alloc);
+    return true;
+}
+
+inline void Deserialize_jiggle(entt::registry& reg, entt::entity e,
+                                      const rapidjson::Value& json) {
+    const auto* ti = reflect::Reflection::Find<dse::JiggleBoneComponent>();
+    if (!ti) return;
+    auto& c = reg.get_or_emplace<dse::JiggleBoneComponent>(e);
+    reflect::DeserializeReflected(*ti, &c, json);
+}
+
 inline bool Serialize_GrassComponent(const entt::registry& reg, entt::entity e,
                                     rapidjson::Value& components,
                                     rapidjson::Document::AllocatorType& alloc) {
@@ -1229,6 +1251,7 @@ inline const std::unordered_map<std::string, ComponentCodec>& GetCodecTable() {
         {"CharacterMovementState", {Serialize_character_movement, Deserialize_character_movement}},
         {"SpringArm3DComponent", {Serialize_spring_arm, Deserialize_spring_arm}},
         {"PlayerControllerComponent", {Serialize_player_controller, Deserialize_player_controller}},
+        {"JiggleBoneComponent", {Serialize_jiggle, Deserialize_jiggle}},
         {"GrassComponent", {Serialize_GrassComponent, Deserialize_GrassComponent}},
         {"LODGroupComponent", {Serialize_LODGroupComponent, Deserialize_LODGroupComponent}},
         {"MorphTargetComponent", {Serialize_MorphTargetComponent, Deserialize_MorphTargetComponent}},

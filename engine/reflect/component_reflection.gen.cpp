@@ -20,6 +20,7 @@
 #include "engine/render/virtual_texture/virtual_texture.h"
 #include "engine/render/gi/lightmap_baker.h"
 #include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_animation.h"
 #include "engine/render/particles/gpu_particle_system.h"
 
 namespace dse::reflect {
@@ -765,6 +766,35 @@ void RegisterPlayerController() {
     t.field("stick_outer_dead_zone", &PlayerControllerComponent::stick_outer_dead_zone).range(0.5, 1.0);
 }
 
+void RegisterJiggleBone() {
+    using dse::JiggleBoneComponent;
+    {
+        using dse::JiggleBoneConfig;
+        auto c = DSE_REFLECT_TYPE(JiggleBoneConfig);
+        c.field("bone_name", &JiggleBoneConfig::bone_name);
+        c.field("stiffness", &JiggleBoneConfig::stiffness).range(0.0, 1.0);
+        c.field("damping", &JiggleBoneConfig::damping).range(0.0, 1.0);
+        c.field("gravity", &JiggleBoneConfig::gravity).range(0.0, 100.0);
+        c.field("gravity_dir", &JiggleBoneConfig::gravity_dir);
+        c.field("bone_length", &JiggleBoneConfig::bone_length).range(0.0, 10.0);
+        c.field("rest_dir", &JiggleBoneConfig::rest_dir);
+    }
+    {
+        using dse::JiggleSphereCollider;
+        auto c = DSE_REFLECT_TYPE(JiggleSphereCollider);
+        c.field("bone_name", &JiggleSphereCollider::bone_name);
+        c.field("center", &JiggleSphereCollider::center);
+        c.field("radius", &JiggleSphereCollider::radius).range(0.0, 10.0);
+    }
+    auto t = DSE_REFLECT_TYPE(JiggleBoneComponent);
+    t.field("enabled", &JiggleBoneComponent::enabled);
+    t.field("stiffness_scale", &JiggleBoneComponent::stiffness_scale).range(0.0, 4.0);
+    t.field("damping_scale", &JiggleBoneComponent::damping_scale).range(0.0, 4.0);
+    t.field("gravity_scale", &JiggleBoneComponent::gravity_scale).range(0.0, 4.0);
+    t.field("bones", &JiggleBoneComponent::bones);
+    t.field("colliders", &JiggleBoneComponent::colliders);
+}
+
 void RegisterGrass() {
     using dse::GrassComponent;
     auto t = DSE_REFLECT_TYPE(GrassComponent);
@@ -885,6 +915,7 @@ void EnsureCoreReflectionRegistered() {
     RegisterCharacterMovementState();
     RegisterSpringArm3D();
     RegisterPlayerController();
+    RegisterJiggleBone();
     RegisterGrass();
     RegisterLODGroup();
     RegisterMorphTarget();

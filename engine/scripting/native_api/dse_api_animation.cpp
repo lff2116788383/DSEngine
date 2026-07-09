@@ -735,3 +735,105 @@ extern "C" int dse_morph_get_target_count(uint32_t e) {
     auto* comp = world->registry().try_get<MorphTargetComponent>(TE(e));
     return comp ? static_cast<int>(comp->targets.size()) : 0;
 }
+
+// ============================================================
+// 次级骨骼动力学（乳摇 / 弹簧骨，JiggleBoneComponent）
+// 标量字段 get/set 由 codegen 生成（dse_api_jiggle.gen.cpp）；
+// 以下为运行期列表操作（增删骨骼/碰撞体），反射不生成此类模式，手写。
+// 浮点参数 NaN = 保持当前值。
+// ============================================================
+
+extern "C" void dse_jiggle_add_component(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    world->registry().emplace_or_replace<JiggleBoneComponent>(TE(e));
+}
+
+extern "C" void dse_jiggle_remove_component(uint32_t e) {
+    World* world = GW();
+    if (!world) return;
+    auto& reg = world->registry();
+    if (reg.all_of<JiggleBoneComponent>(TE(e))) reg.remove<JiggleBoneComponent>(TE(e));
+}
+
+extern "C" void dse_jiggle_clear_bones(uint32_t e) {
+    if (auto* c = GW() ? GW()->registry().try_get<JiggleBoneComponent>(TE(e)) : nullptr)
+        c->bones.clear();
+}
+
+extern "C" int dse_jiggle_get_bone_count(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    return c ? static_cast<int>(c->bones.size()) : 0;
+}
+
+// 追加一根弹簧骨；返回其索引，失败返回 -1。NaN 参数取该字段默认值。
+extern "C" int dse_jiggle_add_bone(uint32_t e, const char* bone_name,
+                                   float stiffness, float damping,
+                                   float gravity, float bone_length) {
+    World* world = GW();
+    if (!world || !bone_name) return -1;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    if (!c) return -1;
+    JiggleBoneConfig cfg;
+    cfg.bone_name = bone_name;
+    if (!Keep(stiffness)) cfg.stiffness = stiffness;
+    if (!Keep(damping)) cfg.damping = damping;
+    if (!Keep(gravity)) cfg.gravity = gravity;
+    if (!Keep(bone_length)) cfg.bone_length = bone_length;
+    cfg.index_dirty = true;
+    c->bones.push_back(std::move(cfg));
+    return static_cast<int>(c->bones.size()) - 1;
+}
+
+extern "C" void dse_jiggle_set_bone_params(uint32_t e, int index,
+                                           float stiffness, float damping,
+                                           float gravity, float bone_length) {
+    World* world = GW();
+    if (!world || index < 0) return;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    if (!c || index >= static_cast<int>(c->bones.size())) return;
+    auto& b = c->bones[static_cast<size_t>(index)];
+    if (!Keep(stiffness)) b.stiffness = stiffness;
+    if (!Keep(damping)) b.damping = damping;
+    if (!Keep(gravity)) b.gravity = gravity;
+    if (!Keep(bone_length)) b.bone_length = bone_length;
+}
+
+extern "C" void dse_jiggle_set_bone_gravity_dir(uint32_t e, int index,
+                                                float x, float y, float z) {
+    World* world = GW();
+    if (!world || index < 0) return;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    if (!c || index >= static_cast<int>(c->bones.size())) return;
+    c->bones[static_cast<size_t>(index)].gravity_dir = glm::vec3(x, y, z);
+}
+
+extern "C" void dse_jiggle_clear_colliders(uint32_t e) {
+    if (auto* c = GW() ? GW()->registry().try_get<JiggleBoneComponent>(TE(e)) : nullptr)
+        c->colliders.clear();
+}
+
+extern "C" int dse_jiggle_get_collider_count(uint32_t e) {
+    World* world = GW();
+    if (!world) return 0;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    return c ? static_cast<int>(c->colliders.size()) : 0;
+}
+
+// 追加一个球形碰撞体；返回其索引，失败返回 -1。bone_name 可为 NULL（模型根空间）。
+extern "C" int dse_jiggle_add_collider(uint32_t e, const char* bone_name,
+                                       float cx, float cy, float cz, float radius) {
+    World* world = GW();
+    if (!world) return -1;
+    auto* c = world->registry().try_get<JiggleBoneComponent>(TE(e));
+    if (!c) return -1;
+    JiggleSphereCollider col;
+    col.bone_name = bone_name ? bone_name : "";
+    col.center = glm::vec3(cx, cy, cz);
+    if (!Keep(radius)) col.radius = radius;
+    col.index_dirty = true;
+    c->colliders.push_back(std::move(col));
+    return static_cast<int>(c->colliders.size()) - 1;
+}

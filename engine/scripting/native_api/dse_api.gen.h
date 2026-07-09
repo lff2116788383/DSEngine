@@ -1009,6 +1009,16 @@ DSE_CAPI void  dse_player_controller_set_move_response_curve(uint32_t e, float v
 DSE_CAPI float dse_player_controller_get_look_response_curve(uint32_t e);
 DSE_CAPI void  dse_player_controller_set_look_response_curve(uint32_t e, float v);
 
+/* ---- JiggleBoneComponent ---- */
+DSE_CAPI int  dse_jiggle_get_enabled(uint32_t e);
+DSE_CAPI void dse_jiggle_set_enabled(uint32_t e, int v);
+DSE_CAPI float dse_jiggle_get_stiffness_scale(uint32_t e);
+DSE_CAPI void  dse_jiggle_set_stiffness_scale(uint32_t e, float v);
+DSE_CAPI float dse_jiggle_get_damping_scale(uint32_t e);
+DSE_CAPI void  dse_jiggle_set_damping_scale(uint32_t e, float v);
+DSE_CAPI float dse_jiggle_get_gravity_scale(uint32_t e);
+DSE_CAPI void  dse_jiggle_set_gravity_scale(uint32_t e, float v);
+
 #ifdef __cplusplus
 }
 #endif

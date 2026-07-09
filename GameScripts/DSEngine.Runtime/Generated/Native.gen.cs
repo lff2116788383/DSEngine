@@ -2730,4 +2730,29 @@ internal static partial class Native {
     [LibraryImport(Lib, EntryPoint = "dse_player_controller_set_look_response_curve")]
     internal static partial void dse_player_controller_set_look_response_curve(uint e, float v);
 
+    // ---- JiggleBoneComponent ----
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_enabled")]
+    internal static partial int dse_jiggle_get_enabled(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_enabled")]
+    internal static partial void dse_jiggle_set_enabled(uint e, int v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_stiffness_scale")]
+    internal static partial float dse_jiggle_get_stiffness_scale(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_stiffness_scale")]
+    internal static partial void dse_jiggle_set_stiffness_scale(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_damping_scale")]
+    internal static partial float dse_jiggle_get_damping_scale(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_damping_scale")]
+    internal static partial void dse_jiggle_set_damping_scale(uint e, float v);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_get_gravity_scale")]
+    internal static partial float dse_jiggle_get_gravity_scale(uint e);
+
+    [LibraryImport(Lib, EntryPoint = "dse_jiggle_set_gravity_scale")]
+    internal static partial void dse_jiggle_set_gravity_scale(uint e, float v);
+
 } // class Native

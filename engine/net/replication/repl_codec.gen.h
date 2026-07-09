@@ -55,6 +55,7 @@
 #include "engine/ecs/components_3d_character.h"
 #include "engine/ecs/components_3d_character.h"
 #include "engine/ecs/components_3d_character.h"
+#include "engine/ecs/components_3d_animation.h"
 #include <cstdint>
 
 namespace dse::net::repl {
@@ -4683,6 +4684,72 @@ inline void ReadDelta_player_controller(ByteReader& r, dse::PlayerControllerComp
     if (HasFlag(flags, player_controller_DeltaFlags::f_move_response_curve)) { c.move_response_curve = r.ReadF32(); }
     if (HasFlag(flags, player_controller_DeltaFlags::f_look_response_curve)) { c.look_response_curve = r.ReadF32(); }
 }
+// ═══════════════════════════════════════════════════════════════════════════════
+// JiggleBoneComponent (prefix: jiggle)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Delta flags — one bit per replicable field.
+enum class jiggle_DeltaFlags : uint32_t {
+    None = 0,
+    f_enabled = (1u << 0),
+    f_stiffness_scale = (1u << 1),
+    f_damping_scale = (1u << 2),
+    f_gravity_scale = (1u << 3),
+    All = 0xfu
+};
+
+inline jiggle_DeltaFlags operator|(jiggle_DeltaFlags a, jiggle_DeltaFlags b) {
+    return static_cast<jiggle_DeltaFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
+}
+inline bool HasFlag(jiggle_DeltaFlags flags, jiggle_DeltaFlags bit) {
+    return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
+}
+
+/// Full snapshot write.
+inline void WriteSnapshot_jiggle(ByteWriter& w, const dse::JiggleBoneComponent& c) {
+    w.WriteU8(c.enabled ? 1 : 0);
+    w.WriteF32(c.stiffness_scale);
+    w.WriteF32(c.damping_scale);
+    w.WriteF32(c.gravity_scale);
+}
+
+/// Full snapshot read.
+inline void ReadSnapshot_jiggle(ByteReader& r, dse::JiggleBoneComponent& c) {
+    c.enabled = r.ReadU8() != 0;
+    c.stiffness_scale = r.ReadF32();
+    c.damping_scale = r.ReadF32();
+    c.gravity_scale = r.ReadF32();
+}
+
+/// Compute delta between current and baseline.
+inline jiggle_DeltaFlags ComputeDelta_jiggle(
+        const dse::JiggleBoneComponent& cur,
+        const dse::JiggleBoneComponent& base) {
+    jiggle_DeltaFlags flags = jiggle_DeltaFlags::None;
+    if (cur.enabled != base.enabled) flags = flags | jiggle_DeltaFlags::f_enabled;
+    if (cur.stiffness_scale != base.stiffness_scale) flags = flags | jiggle_DeltaFlags::f_stiffness_scale;
+    if (cur.damping_scale != base.damping_scale) flags = flags | jiggle_DeltaFlags::f_damping_scale;
+    if (cur.gravity_scale != base.gravity_scale) flags = flags | jiggle_DeltaFlags::f_gravity_scale;
+    return flags;
+}
+
+/// Write only changed fields (delta).
+inline void WriteDelta_jiggle(ByteWriter& w, const dse::JiggleBoneComponent& c, jiggle_DeltaFlags flags) {
+    w.WriteU32(static_cast<uint32_t>(flags));
+    if (HasFlag(flags, jiggle_DeltaFlags::f_enabled)) { w.WriteU8(c.enabled ? 1 : 0); }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_stiffness_scale)) { w.WriteF32(c.stiffness_scale); }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_damping_scale)) { w.WriteF32(c.damping_scale); }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_gravity_scale)) { w.WriteF32(c.gravity_scale); }
+}
+
+/// Read delta and apply to component.
+inline void ReadDelta_jiggle(ByteReader& r, dse::JiggleBoneComponent& c) {
+    auto flags = static_cast<jiggle_DeltaFlags>(r.ReadU32());
+    if (HasFlag(flags, jiggle_DeltaFlags::f_enabled)) { c.enabled = r.ReadU8() != 0; }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_stiffness_scale)) { c.stiffness_scale = r.ReadF32(); }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_damping_scale)) { c.damping_scale = r.ReadF32(); }
+    if (HasFlag(flags, jiggle_DeltaFlags::f_gravity_scale)) { c.gravity_scale = r.ReadF32(); }
+}
 
 // ─── Archetype Registry ──────────────────────────────────────────────────────
 
@@ -4736,6 +4803,7 @@ enum class ReplArchetypeId : uint16_t {
     character_movement = 46,
     spring_arm = 47,
     player_controller = 48,
+    jiggle = 49,
     Count
 };
 

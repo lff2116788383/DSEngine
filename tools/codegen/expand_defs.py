@@ -18,6 +18,48 @@ from pathlib import Path
 # Each component has: name, prefix, include, namespace, fields[], enums[], conditional
 NEW_COMPONENTS = [
     {
+        "name": "JiggleBoneComponent",
+        "prefix": "jiggle",
+        "include": "engine/ecs/components_3d_animation.h",
+        "namespace": "dse",
+        # bones/colliders 走反射 nested_types + reflect_extra_fields（custom），
+        # 仅生成反射 + 序列化；运行期增删走手写 C ABI（dse_api_animation.cpp）。
+        "nested_types": [
+            {
+                "name": "JiggleBoneConfig",
+                "qualified": "dse::JiggleBoneConfig",
+                "fields": [
+                    {"name": "bone_name", "type": "string"},
+                    {"name": "stiffness", "type": "float", "range": [0.0, 1.0]},
+                    {"name": "damping", "type": "float", "range": [0.0, 1.0]},
+                    {"name": "gravity", "type": "float", "range": [0.0, 100.0]},
+                    {"name": "gravity_dir", "type": "vec3"},
+                    {"name": "bone_length", "type": "float", "range": [0.0, 10.0]},
+                    {"name": "rest_dir", "type": "vec3"},
+                ],
+            },
+            {
+                "name": "JiggleSphereCollider",
+                "qualified": "dse::JiggleSphereCollider",
+                "fields": [
+                    {"name": "bone_name", "type": "string"},
+                    {"name": "center", "type": "vec3"},
+                    {"name": "radius", "type": "float", "range": [0.0, 10.0]},
+                ],
+            },
+        ],
+        "fields": [
+            {"name": "enabled", "type": "bool", "default": "true"},
+            {"name": "stiffness_scale", "type": "float", "default": "1.0f", "range": [0.0, 4.0]},
+            {"name": "damping_scale", "type": "float", "default": "1.0f", "range": [0.0, 4.0]},
+            {"name": "gravity_scale", "type": "float", "default": "1.0f", "range": [0.0, 4.0]},
+        ],
+        "reflect_extra_fields": [
+            {"name": "bones", "type": "custom", "script": False},
+            {"name": "colliders", "type": "custom", "script": False},
+        ],
+    },
+    {
         "name": "DecalComponent",
         "prefix": "decal",
         "include": "engine/ecs/components_3d_render.h",

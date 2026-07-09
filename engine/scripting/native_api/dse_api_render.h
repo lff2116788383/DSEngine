@@ -762,6 +762,26 @@ DSE_CAPI void  dse_morph_set_weight_index(uint32_t e, int idx, float w);
 DSE_CAPI float dse_morph_get_weight(uint32_t e, const char* name);
 DSE_CAPI int   dse_morph_get_target_count(uint32_t e);
 
+// ---- Jiggle Bone / Spring Bone（乳摇，JiggleBoneComponent）。
+// 标量字段 get/set 见 dse_api.gen.h；以下为运行期列表操作（手写）。
+// 浮点参数 NaN = 保持当前值；add_* 返回索引（失败 -1）。 ----
+DSE_CAPI void dse_jiggle_add_component(uint32_t e);
+DSE_CAPI void dse_jiggle_remove_component(uint32_t e);
+DSE_CAPI void dse_jiggle_clear_bones(uint32_t e);
+DSE_CAPI int  dse_jiggle_get_bone_count(uint32_t e);
+DSE_CAPI int  dse_jiggle_add_bone(uint32_t e, const char* bone_name,
+                                  float stiffness, float damping,
+                                  float gravity, float bone_length);
+DSE_CAPI void dse_jiggle_set_bone_params(uint32_t e, int index,
+                                         float stiffness, float damping,
+                                         float gravity, float bone_length);
+DSE_CAPI void dse_jiggle_set_bone_gravity_dir(uint32_t e, int index,
+                                              float x, float y, float z);
+DSE_CAPI void dse_jiggle_clear_colliders(uint32_t e);
+DSE_CAPI int  dse_jiggle_get_collider_count(uint32_t e);
+DSE_CAPI int  dse_jiggle_add_collider(uint32_t e, const char* bone_name,
+                                      float cx, float cy, float cz, float radius);
+
 // ============================================================
 
 // Particles 3D

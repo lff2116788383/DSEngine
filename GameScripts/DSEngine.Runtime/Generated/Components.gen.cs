@@ -2866,6 +2866,35 @@ namespace DSEngine.Runtime
 
     }
 
+    /// <summary>JiggleBone component wrapper.</summary>
+    public class JiggleBone
+    {
+        private readonly uint _entity;
+
+        internal JiggleBone(uint entity) => _entity = entity;
+
+        public bool Enabled {
+            get => Native.dse_jiggle_get_enabled(_entity) != 0;
+            set => Native.dse_jiggle_set_enabled(_entity, value ? 1 : 0);
+        }
+
+        public float StiffnessScale {
+            get => Native.dse_jiggle_get_stiffness_scale(_entity);
+            set => Native.dse_jiggle_set_stiffness_scale(_entity, value);
+        }
+
+        public float DampingScale {
+            get => Native.dse_jiggle_get_damping_scale(_entity);
+            set => Native.dse_jiggle_set_damping_scale(_entity, value);
+        }
+
+        public float GravityScale {
+            get => Native.dse_jiggle_get_gravity_scale(_entity);
+            set => Native.dse_jiggle_set_gravity_scale(_entity, value);
+        }
+
+    }
+
     /// <summary>Extension methods to get components from Entity.</summary>
     public static class ComponentExtensions
     {
@@ -2918,5 +2947,6 @@ namespace DSEngine.Runtime
         public static CharacterMovementState GetCharacterMovementState(this Entity entity) => new CharacterMovementState(entity.Id);
         public static SpringArm3D GetSpringArm3D(this Entity entity) => new SpringArm3D(entity.Id);
         public static PlayerController GetPlayerController(this Entity entity) => new PlayerController(entity.Id);
+        public static JiggleBone GetJiggleBone(this Entity entity) => new JiggleBone(entity.Id);
     }
 }
