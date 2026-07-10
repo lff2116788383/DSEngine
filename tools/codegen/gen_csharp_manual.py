@@ -323,7 +323,9 @@ def main():
     for fn_type, info in sorted(DELEGATE_MAP.items()):
         ret = info.get("ret", "void")
         delegate_lines.append(f"[UnmanagedFunctionPointer(CallingConvention.Cdecl)]")
-        delegate_lines.append(f"internal delegate {ret} {info['cs_name']}({info['params']});")
+        # public：这些委托类型出现在 public 门面方法（Components.*）的参数里，
+        # 若为 internal 会触发 CS0051（可访问性不一致）。
+        delegate_lines.append(f"public delegate {ret} {info['cs_name']}({info['params']});")
         delegate_lines.append("")
 
     lines = [

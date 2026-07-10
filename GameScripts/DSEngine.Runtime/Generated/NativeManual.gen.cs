@@ -8,22 +8,22 @@ using System.Runtime.InteropServices;
 namespace DSEngine;
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate int DseAiActionFn(float dt, nint userData);
+public delegate int DseAiActionFn(float dt, nint userData);
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate int DseAiConditionFn(nint userData);
+public delegate int DseAiConditionFn(nint userData);
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate void DseAiDestroyFn(nint userData);
+public delegate void DseAiDestroyFn(nint userData);
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate void DseCutsceneCameraFn(float px, float py, float pz, float lx, float ly, float lz, float fov, nint userData);
+public delegate void DseCutsceneCameraFn(float px, float py, float pz, float lx, float ly, float lz, float fov, nint userData);
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate void DseCutsceneEventFn(nint eventName, nint payload, nint userData);
+public delegate void DseCutsceneEventFn(nint eventName, nint payload, nint userData);
 
 [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-internal delegate void DseCutsceneFinishFn(nint seqName, nint userData);
+public delegate void DseCutsceneFinishFn(nint seqName, nint userData);
 
 
 internal static partial class Native {

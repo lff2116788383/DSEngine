@@ -8,10 +8,12 @@
 #include <string>
 #include <cstdint>
 
+#include "engine/core/dse_export.h"
+
 // Forward declarations for hostfxr types (avoid including nethost headers in header)
 typedef void* hostfxr_handle;
 
-class CSharpHost {
+class DSE_EXPORT CSharpHost {
 public:
     CSharpHost() = default;
     ~CSharpHost();

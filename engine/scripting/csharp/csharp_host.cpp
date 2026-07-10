@@ -29,12 +29,9 @@ typedef char char_t;
 #include <coreclr_delegates.h>
 #include <hostfxr.h>
 
-// hostfxr function pointer types
-using hostfxr_initialize_for_runtime_config_fn =
-    int(*)(const char_t* runtime_config_path, const void* parameters, hostfxr_handle* host_context_handle);
-using hostfxr_get_runtime_delegate_fn =
-    int(*)(const hostfxr_handle host_context_handle, int type, void** delegate);
-using hostfxr_close_fn = int(*)(const hostfxr_handle host_context_handle);
+// hostfxr 函数指针类型（hostfxr_initialize_for_runtime_config_fn /
+// hostfxr_get_runtime_delegate_fn / hostfxr_close_fn）由 <hostfxr.h> 提供，
+// 这里不再自行 typedef，否则与官方头声明冲突（C2116）。
 
 // Loaded function pointers
 static hostfxr_initialize_for_runtime_config_fn s_hostfxr_init   = nullptr;

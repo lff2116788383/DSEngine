@@ -6,5 +6,9 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>DSEngine</RootNamespace>
     <AssemblyName>DSEngine.Runtime</AssemblyName>
+    <!-- 原生宿主(CSharpHost)通过 hostfxr_initialize_for_runtime_config 启动 CoreCLR，
+         必须有 DSEngine.Runtime.runtimeconfig.json；EnableDynamicLoading 会生成该文件，
+         并把程序集标记为可被独立 AssemblyLoadContext 动态加载（支持热重载）。 -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
 </Project>

@@ -674,18 +674,34 @@ endif()
 if(DSE_ENABLE_CSHARP)
     target_compile_definitions(dse_engine PRIVATE DSE_CSHARP=1)
     # nethost: 提供 get_hostfxr_path() 用于定位 hostfxr.dll
-    # .NET SDK 安装后 nethost 头文件和库位于 packs/Microsoft.NETCore.App.Host.*/
+    # .NET SDK 安装后 nethost 头文件和库位于
+    #   packs/Microsoft.NETCore.App.Host.win-x64/<版本>/runtimes/win-x64/native/
+    # 注意版本号子目录（如 8.0.28）：find_path/find_library 不会递归进版本目录，
+    # 故先 GLOB 出所有版本目录作为搜索根，再在其 native 子目录里定位。
+    file(GLOB _dse_nethost_dirs
+        "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64/*/runtimes/win-x64/native"
+    )
     find_path(NETHOST_INCLUDE_DIR nethost.h
-        PATHS "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
+        PATHS ${_dse_nethost_dirs}
+              "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
         PATH_SUFFIXES "runtimes/win-x64/native"
     )
+    # 用 import 库 nethost.lib（对应 nethost.dll）。注意：静态库 libnethost.lib 由
+    # 静态 Release CRT 编出，与本工程的 /MDd 动态调试 CRT 不兼容（LNK2038），故不用它。
     find_library(NETHOST_LIBRARY nethost
-        PATHS "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
+        PATHS ${_dse_nethost_dirs}
+              "$ENV{ProgramFiles}/dotnet/packs/Microsoft.NETCore.App.Host.win-x64"
         PATH_SUFFIXES "runtimes/win-x64/native"
     )
     if(NETHOST_INCLUDE_DIR AND NETHOST_LIBRARY)
         target_include_directories(dse_engine PRIVATE ${NETHOST_INCLUDE_DIR})
         target_link_libraries(dse_engine PRIVATE ${NETHOST_LIBRARY})
+        # nethost.lib 是 import 库，运行时需 nethost.dll 在可执行同目录；拷到输出目录，
+        # 否则装载期报 0xC0000135 (STATUS_DLL_NOT_FOUND)。
+        if(EXISTS "${NETHOST_INCLUDE_DIR}/nethost.dll")
+            file(COPY "${NETHOST_INCLUDE_DIR}/nethost.dll"
+                 DESTINATION "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+        endif()
         message(STATUS "C# scripting: .NET 8 hostfxr (nethost found at ${NETHOST_INCLUDE_DIR})")
     else()
         message(STATUS "C# scripting: nethost not found, will search at runtime")
@@ -693,13 +709,45 @@ if(DSE_ENABLE_CSHARP)
         target_compile_definitions(dse_engine PRIVATE DSE_CSHARP_NO_NETHOST=1)
     endif()
     # C# 项目构建 (requires dotnet CLI)
+    # dotnet 可能不在 PATH 上（如用 dotnet-install.ps1 装到 Program Files\dotnet）；
+    # 显式查找可执行，找不到再回退裸 "dotnet"（依赖 PATH）。
+    find_program(DOTNET_EXECUTABLE dotnet
+        PATHS "$ENV{ProgramFiles}/dotnet" "$ENV{ProgramW6432}/dotnet"
+    )
+    if(NOT DOTNET_EXECUTABLE)
+        set(DOTNET_EXECUTABLE dotnet)
+        message(STATUS "C# scripting: dotnet CLI not found in Program Files, relying on PATH")
+    else()
+        message(STATUS "C# scripting: dotnet CLI at ${DOTNET_EXECUTABLE}")
+    endif()
+    # 注意：vcvars64.bat 会设置环境变量 Platform=x64，msbuild 会据此尝试用
+    # "Debug|x64" 求解方案配置，但本 .sln 仅定义 "Any CPU"，导致 MSB4126。
+    # 故显式指定 -p:Platform="Any CPU"。
     add_custom_target(dse_csharp_build
-        COMMAND dotnet build "${CMAKE_SOURCE_DIR}/GameScripts/DSEngine.sln"
+        COMMAND "${DOTNET_EXECUTABLE}" build "${CMAKE_SOURCE_DIR}/GameScripts/DSEngine.sln"
                 -c $<IF:$<CONFIG:Debug>,Debug,Release>
+                "-p:Platform=Any CPU"
                 -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/GameScripts"
         COMMENT "Building C# scripts -> managed/*.dll"
     )
+
+    # C# 运行时端到端无头冒烟：通过 CSharpHost 实际启动 CoreCLR、加载托管程序集、
+    # 驱动一帧回调 + 热重载。依赖 dse_csharp_build 先产出 managed/*.dll + runtimeconfig。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/csharp/csharp_host_smoke.cpp")
+        add_executable(dse_csharp_smoke "${CMAKE_SOURCE_DIR}/tests/csharp/csharp_host_smoke.cpp")
+        target_link_libraries(dse_csharp_smoke PRIVATE dse_engine)
+        target_include_directories(dse_csharp_smoke PRIVATE "${CMAKE_SOURCE_DIR}")
+        target_compile_features(dse_csharp_smoke PRIVATE cxx_std_17)
+        target_compile_definitions(dse_csharp_smoke PRIVATE
+            DSE_CS_MANAGED_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed")
+        add_dependencies(dse_csharp_smoke dse_csharp_build)
+        if(MSVC)
+            set_property(TARGET dse_csharp_smoke PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_csharp_smoke PRIVATE /utf-8)
+        endif()
+    endif()
 endif()
 
 target_include_directories(dse_engine PRIVATE
@@ -1046,6 +1094,15 @@ foreach(_smoke_target
             TIMEOUT 60)
     endif()
 endforeach()
+
+# C# 运行时冒烟（-DDSE_ENABLE_CSHARP=ON 时存在）。首次加载 CoreCLR 略慢，超时给宽些。
+if(TARGET dse_csharp_smoke)
+    add_test(NAME dse_csharp_smoke COMMAND dse_csharp_smoke)
+    set_tests_properties(dse_csharp_smoke PROPERTIES
+        LABELS "smoke;csharp"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 120)
+endif()
 
 if(DSE_BUILD_GTESTS)
     set(DSE_LOCAL_GTEST_DIR "${CMAKE_SOURCE_DIR}/depends/googletest-1.17.0")
