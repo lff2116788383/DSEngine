@@ -677,40 +677,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Initialize Blueprint system (node registry + default event graph)
     dse::editor::bp::InitBlueprintSystem();
 
-    // Register all panels once at startup (not per-frame in DrawEditorUI).
-    {
-        auto& reg = dse::editor::PanelRegistry::Get();
-        reg.Register({"hierarchy",          "Hierarchy",            "Core",  &panels_.hierarchy,          true});
-        reg.Register({"inspector",          "Inspector",            "Core",  &panels_.inspector,          true});
-        reg.Register({"console",            "Console",              "Core",  &panels_.console,            true});
-        reg.Register({"scene",              "Scene",                "Core",  &panels_.scene,              true});
-        reg.Register({"game",               "Game",                 "Core",  &panels_.game,               true});
-        reg.Register({"sequencer",          "Sequencer",            "Core",  &panels_.sequencer,          true});
-        reg.Register({"preferences",        "Preferences",          "Core",  &panels_.preferences,        false});
-        reg.Register({"profiler",           "Profiler",             "Debug", &panels_.profiler,           false});
-        reg.Register({"localization",       "Localization Preview", "Debug", &panels_.localization_preview,false});
-        reg.Register({"undo_history",       "Undo History",         "Debug", &panels_.undo_history,       false});
-        reg.Register({"streaming_debug",    "Streaming Debug",      "Debug", &panels_.streaming_debug,    false});
-        reg.Register({"lua_debugger",       "Lua Debugger",         "Debug", &panels_.lua_debugger,       false});
-        reg.Register({"animation",          "Animation",            "Tool",  &panels_.animation,          false});
-        reg.Register({"tile_palette",       "Tile Palette",         "Tool",  &panels_.tile_palette,       false});
-        reg.Register({"terrain_editor",     "Terrain Editor",       "Tool",  &panels_.terrain_editor,     false});
-        reg.Register({"vegetation_brush",   "Vegetation Brush",     "Tool",  &panels_.vegetation_brush,   false});
-        reg.Register({"lua_console",        "Lua Console",          "Tool",  &panels_.lua_console,        false});
-        reg.Register({"asset_browser",      "Asset Browser",        "Tool",  &panels_.asset_browser,      false});
-        reg.Register({"animation_timeline", "Animation Timeline",   "Tool",  &panels_.animation_timeline, false});
-        reg.Register({"navmesh",            "NavMesh",              "Tool",  &panels_.navmesh,            false});
-        reg.Register({"shader_graph",       "Shader Graph",         "Tool",  &panels_.shader_graph,       false});
-        reg.Register({"git",                "Git",                  "Tool",  &panels_.git,                false});
-        reg.Register({"multi_viewport",     "Multi Viewport",       "Tool",  &panels_.multi_viewport,     false});
-        reg.Register({"anim_state_machine", "Anim State Machine",   "Tool",  &panels_.anim_state_machine, false});
-        reg.Register({"curve_editor",       "Curve Editor",         "Tool",  &panels_.curve_editor,       false});
-        reg.Register({"anim_retarget",      "Anim Retarget",        "Tool",  &panels_.anim_retarget,      false});
-        reg.Register({"blueprint",          "Blueprint",            "Tool",  &panels_.blueprint,          false});
-        reg.Register({"csharp",             "C# Scripts",           "Tool",  &panels_.csharp_panel,       false});
-        reg.Register({"plugins",            "Plugins",              "Plugin",&panels_.plugins,            false});
-        reg.Register({"ai_agent",           "AI Agent",             "Plugin",&panels_.ai_agent,           false});
-    }
+    // Register all panels once at startup (data-driven; not hardcoded per-frame
+    // in DrawEditorUI). New panels register from their own module and are drawn,
+    // menued and persisted automatically — editor_app.cpp needs no per-panel edit.
+    RegisterPanels();
 
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
@@ -1138,6 +1108,218 @@ void EditorApp::Shutdown() {
 
 // ─── DrawEditorUI ───────────────────────────────────────────────────────────
 
+// ─── RegisterPanels ─────────────────────────────────────────────────────────
+// Data-driven panel registration. Each panel is described by metadata + a draw
+// callback; DrawEditorUI dispatches them generically via PanelRegistry::DrawAll.
+// Panels with visible=nullptr are always drawn (host chrome / self-gating) and
+// do not appear in the Window menu. Entries are registered in the same order
+// they were previously drawn to preserve ImGui window / focus ordering.
+void EditorApp::RegisterPanels() {
+    if (panels_registered_) return;
+    panels_registered_ = true;
+
+    auto& reg = dse::editor::PanelRegistry::Get();
+
+    // Best-effort record of the active RHI backend for availability filtering.
+    if (const char* be = std::getenv("DSE_RHI_BACKEND")) reg.SetActiveBackend(be);
+
+    using Ctx = dse::editor::EditorContext;
+    auto add = [&reg](std::string id, std::string name, std::string cat,
+                      bool* vis, bool defv,
+                      std::function<void(Ctx&)> draw, std::string icon = "") {
+        dse::editor::PanelEntry e;
+        e.id = std::move(id);
+        e.display_name = std::move(name);
+        e.category = std::move(cat);
+        e.visible = vis;
+        e.default_visible = defv;
+        e.draw = std::move(draw);
+        e.menu_icon = std::move(icon);
+        reg.Register(std::move(e));
+    };
+
+    // ── Core ──
+    add("hierarchy", "Hierarchy", "Core", &panels_.hierarchy, true,
+        [this](Ctx& ctx){ dse::editor::DrawHierarchyPanel(ctx); }, MDI_ICON_FILE_TREE);
+    add("inspector", "Inspector", "Core", &panels_.inspector, true,
+        [this](Ctx& ctx){ dse::editor::DrawInspectorPanel(ctx); }, MDI_ICON_INFORMATION);
+    add("project", "Project", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::DrawProjectPanel(); });
+    add("console", "Console", "Core", &panels_.console, true,
+        [this](Ctx&){ dse::editor::DrawConsolePanel(); }, MDI_ICON_CONSOLE);
+
+    // ── Debug / Panels ──
+    add("localization", "Localization Preview", "Debug", &panels_.localization_preview, false,
+        [this](Ctx& ctx){
+            dse::editor::DrawLocalizationPreviewPanel(ctx,
+                localization_preview_key_, sizeof(localization_preview_key_),
+                localization_preview_fallback_, sizeof(localization_preview_fallback_));
+        });
+    add("profiler", "Profiler", "Debug", &panels_.profiler, false,
+        [this](Ctx& ctx){ dse::editor::DrawProfilerPanel(ctx); }, MDI_ICON_COG);
+
+    // ── Tools ──
+    add("animation", "Animation", "Tool", &panels_.animation, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimationPanel(ctx); }, MDI_ICON_ANIMATION);
+    add("material", "Material", "Core", nullptr, true,
+        [this](Ctx& ctx){ dse::editor::DrawMaterialPanel(ctx); });
+    add("tile_palette", "Tile Palette", "Tool", &panels_.tile_palette, false,
+        [this](Ctx& ctx){ dse::editor::DrawTilePalettePanel(ctx); });
+    add("terrain_editor", "Terrain Editor", "Tool", &panels_.terrain_editor, false,
+        [this](Ctx& ctx){ dse::editor::DrawTerrainEditorPanel(ctx); }, MDI_ICON_TERRAIN);
+    add("vegetation_brush", "Vegetation Brush", "Tool", &panels_.vegetation_brush, false,
+        [this](Ctx& ctx){ dse::editor::DrawVegetationEditorPanel(ctx); }, MDI_ICON_TERRAIN);
+    add("lua_console", "Lua Console", "Tool", &panels_.lua_console, false,
+        [this](Ctx&){ dse::editor::DrawLuaConsolePanel(); }, MDI_ICON_CODE);
+    add("lua_debugger", "Lua Debugger", "Debug", &panels_.lua_debugger, false,
+        [this](Ctx& ctx){ dse::editor::DrawLuaDebuggerPanel(ctx); }, MDI_ICON_CODE);
+    add("csharp", "C# Scripts", "Tool", &panels_.csharp_panel, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("C# Scripts", &panels_.csharp_panel)) {
+                dse::editor::DrawCSharpPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_CODE);
+
+    // ── Always-on dialogs / config (host chrome, not in Window menu) ──
+    add("build_game", "Build Game", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::DrawBuildGameDialog(); });
+    add("asset_importer", "Asset Importer", "Core", nullptr, true,
+        [this](Ctx& ctx){ dse::editor::DrawAssetImporterDialog(ctx); });
+    add("preferences", "Preferences", "Core", &panels_.preferences, false,
+        [this](Ctx&){ dse::editor::DrawPreferencesPanel(&panels_.preferences); });
+    add("undo_history", "Undo History", "Debug", &panels_.undo_history, false,
+        [this](Ctx&){ dse::editor::DrawUndoHistoryPanel(&panels_.undo_history); });
+    add("ai_config", "AI Configuration", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::AIConfigManager::Instance().DrawConfigWindow(); });
+
+    // ── More tools ──
+    add("asset_browser", "Asset Browser", "Tool", &panels_.asset_browser, false,
+        [this](Ctx&){ dse::editor::DrawAssetBrowserPanel(); }, MDI_ICON_FOLDER);
+    add("animation_timeline", "Animation Timeline", "Tool", &panels_.animation_timeline, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimationTimelinePanel(ctx); }, MDI_ICON_ANIMATION);
+    add("navmesh", "NavMesh", "Tool", &panels_.navmesh, false,
+        [this](Ctx& ctx){ dse::editor::DrawNavMeshPanel(ctx); }, MDI_ICON_MAP_MARKER_PATH);
+    // secondary draw sharing the terrain_editor flag — always dispatched, self-gated
+    add("terrain_tools", "Terrain Tools", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.terrain_editor) dse::editor::DrawTerrainToolsPanel(ctx); });
+    add("shader_graph", "Shader Graph", "Tool", &panels_.shader_graph, false,
+        [this](Ctx& ctx){ dse::editor::DrawShaderGraphPanel(ctx); }, MDI_ICON_PALETTE);
+    add("multi_viewport", "Multi Viewport", "Tool", &panels_.multi_viewport, false,
+        [this](Ctx&){ dse::editor::DrawMultiViewportConfigPanel(); }, MDI_ICON_VIEW_MODULE);
+    add("anim_state_machine", "Anim State Machine", "Tool", &panels_.anim_state_machine, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimStateMachinePanel(ctx); }, MDI_ICON_ANIMATION);
+    add("streaming_debug", "Streaming Debug", "Debug", &panels_.streaming_debug, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Streaming Debug", &panels_.streaming_debug)) {
+                dse::editor::DrawStreamingDebugPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_CLOUD_DOWNLOAD);
+    add("curve_editor", "Curve Editor", "Debug", &panels_.curve_editor, false,
+        [this](Ctx&){
+            ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Curve Editor", &panels_.curve_editor)) {
+                static dse::editor::CurveEditorState s_curve_state;
+                static bool s_curve_init = false;
+                if (!s_curve_init) {
+                    s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
+                    s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
+                    s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
+                    s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
+                    s_curve_init = true;
+                }
+                dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
+            }
+            ImGui::End();
+        }, MDI_ICON_CHART_LINE);
+    add("anim_retarget", "Anim Retarget", "Tool", &panels_.anim_retarget, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Anim Retarget", &panels_.anim_retarget)) {
+                dse::editor::DrawAnimRetargetPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_ANIMATION);
+    add("git", "Git", "Tool", &panels_.git, false,
+        [this](Ctx& ctx){ dse::editor::DrawVersionControlPanel(ctx); }, MDI_ICON_SOURCE_BRANCH);
+    add("blueprint", "Blueprint", "Tool", &panels_.blueprint, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Blueprint Editor", &panels_.blueprint)) {
+                dse::editor::bp::DrawBlueprintEditor(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_SITEMAP);
+    // secondary draw sharing the animation flag
+    add("animation_clip", "Animation Clip", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.animation) dse::editor::DrawAnimationClipEditor(ctx); });
+
+    add("sequencer", "Sequencer", "Core", &panels_.sequencer, true,
+        [this](Ctx& ctx){ dse::editor::DrawSequencerPanel(ctx); }, MDI_ICON_MOVIE_OPEN);
+
+    // secondary draws sharing terrain_editor / streaming_debug flags
+    add("terrain_sculpt", "Terrain Sculpt Preview", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.terrain_editor) dse::editor::DrawTerrainSculptPreview(ctx); });
+    add("world_partition", "World Partition", "Debug", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.streaming_debug) dse::editor::DrawWorldPartitionEditor(ctx); });
+
+    // ── Plugins ──
+    add("plugins", "Plugins", "Plugin", &panels_.plugins, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Plugins", &panels_.plugins)) {
+                dse::editor::DrawPluginManagerPanel(plugin_manager_);
+            }
+            ImGui::End();
+            dse::editor::DrawPluginHotReloadPanel(ctx);
+        }, MDI_ICON_PUZZLE);
+
+    // 2D tools (each manages its own window/visibility internally)
+    add("tools_2d", "2D Tools", "Tool", nullptr, true,
+        [this](Ctx&){
+            dse::editor::tools2d::DrawSpriteSlicerPanel();
+            dse::editor::tools2d::DrawAtlasPackerPanel();
+            dse::editor::tools2d::DrawAnim2DEditorPanel();
+            dse::editor::tools2d::DrawNineSliceEditorPanel();
+            dse::editor::tools2d::DrawCollisionEditor2DPanel();
+            dse::editor::tools2d::DrawParticle2DEditorPanel();
+            dse::editor::tools2d::DrawParallaxEditorPanel();
+            dse::editor::tools2d::DrawLight2DEditorPanel();
+        });
+
+    // Third-party plugin API panels
+    add("plugin_api", "Plugin API Panels", "Plugin", nullptr, true,
+        [this](Ctx& ctx){
+            dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
+            dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
+        });
+
+    add("ai_agent", "AI Agent", "Plugin", &panels_.ai_agent, false,
+        [this](Ctx&){
+            ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("AI Agent", &panels_.ai_agent)) {
+                agent_panel_.Draw(*control_server_, *engine_instance_);
+            }
+            ImGui::End();
+        });
+
+    // Scene / Game viewports (drawn last, as before) — read this frame's textures.
+    add("scene", "Scene", "Core", &panels_.scene, true,
+        [this](Ctx& ctx){
+            dse::editor::DrawSceneViewportPanel(ctx, frame_scene_texture_,
+                BuildActiveCameraMatrices, engine_instance_->pipeline());
+        }, MDI_ICON_EYE);
+    add("game", "Game", "Core", &panels_.game, true,
+        [this](Ctx&){ dse::editor::DrawGameViewportPanel(frame_game_texture_); }, MDI_ICON_GAMEPAD);
+
+    // Let any panel module that self-registered (DSE_EDITOR_PANEL) contribute now.
+    reg.RunDeferredRegistrars();
+    reg.InitAll();
+}
+
 void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_texture) {
     // 无项目打开时显示 Project Hub
     if (!dse::editor::ProjectManager::Get().HasOpenProject()) {
@@ -1229,156 +1411,13 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawEditorToolbar(ctx);
 
-    if (panels_.hierarchy) dse::editor::DrawHierarchyPanel(ctx);
-
-    if (panels_.inspector) dse::editor::DrawInspectorPanel(ctx);
-
-    dse::editor::DrawProjectPanel();
-    if (panels_.console) dse::editor::DrawConsolePanel();
-
-    if (panels_.localization_preview) {
-        dse::editor::DrawLocalizationPreviewPanel(ctx,
-            localization_preview_key_, sizeof(localization_preview_key_),
-            localization_preview_fallback_, sizeof(localization_preview_fallback_));
-    }
-
-    if (panels_.profiler)       dse::editor::DrawProfilerPanel(ctx);
-    if (panels_.animation)      dse::editor::DrawAnimationPanel(ctx);
-    dse::editor::DrawMaterialPanel(ctx);
-    if (panels_.tile_palette)   dse::editor::DrawTilePalettePanel(ctx);
-    if (panels_.terrain_editor) dse::editor::DrawTerrainEditorPanel(ctx);
-    if (panels_.vegetation_brush) dse::editor::DrawVegetationEditorPanel(ctx);
-    if (panels_.lua_console)    dse::editor::DrawLuaConsolePanel();
-    if (panels_.lua_debugger)   dse::editor::DrawLuaDebuggerPanel(ctx);
-    if (panels_.csharp_panel) {
-        ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("C# Scripts", &panels_.csharp_panel)) {
-            dse::editor::DrawCSharpPanel(ctx);
-        }
-        ImGui::End();
-    }
-    dse::editor::DrawBuildGameDialog();
-    dse::editor::DrawAssetImporterDialog(ctx);
-
-    dse::editor::DrawPreferencesPanel(&panels_.preferences);
-    dse::editor::DrawUndoHistoryPanel(&panels_.undo_history);
-    
-    // AI Configuration window
-    dse::editor::AIConfigManager::Instance().DrawConfigWindow();
-
-    // New panels
-    if (panels_.asset_browser)        dse::editor::DrawAssetBrowserPanel();
-    if (panels_.animation_timeline)   dse::editor::DrawAnimationTimelinePanel(ctx);
-    if (panels_.navmesh)              dse::editor::DrawNavMeshPanel(ctx);
-    if (panels_.terrain_editor)       dse::editor::DrawTerrainToolsPanel(ctx);
-    if (panels_.shader_graph)         dse::editor::DrawShaderGraphPanel(ctx);
-    if (panels_.multi_viewport)       dse::editor::DrawMultiViewportConfigPanel();
-    if (panels_.anim_state_machine)   dse::editor::DrawAnimStateMachinePanel(ctx);
-
-    // Streaming Zone debug panel
-    if (panels_.streaming_debug) {
-        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Streaming Debug", &panels_.streaming_debug)) {
-            dse::editor::DrawStreamingDebugPanel(ctx);
-        }
-        ImGui::End();
-    }
-
-    // Curve Editor panel
-    if (panels_.curve_editor) {
-        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Curve Editor", &panels_.curve_editor)) {
-            static dse::editor::CurveEditorState s_curve_state;
-            static bool s_curve_init = false;
-            if (!s_curve_init) {
-                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
-                s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
-                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
-                s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
-                s_curve_init = true;
-            }
-            dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
-        }
-        ImGui::End();
-    }
-
-    // Animation Retargeting panel
-    if (panels_.anim_retarget) {
-        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Anim Retarget", &panels_.anim_retarget)) {
-            dse::editor::DrawAnimRetargetPanel(ctx);
-        }
-        ImGui::End();
-    }
-
-    if (panels_.git) {
-        dse::editor::DrawVersionControlPanel(ctx);
-    }
-
-    // Blueprint Editor (complete blueprint system)
-    if (panels_.blueprint) {
-        ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Blueprint Editor", &panels_.blueprint)) {
-            dse::editor::bp::DrawBlueprintEditor(ctx);
-        }
-        ImGui::End();
-    }
-
-    // Animation Clip Editor (bone pose + curve fine-tuning + additive layers)
-    if (panels_.animation) {
-        dse::editor::DrawAnimationClipEditor(ctx);
-    }
-
-    // Cinematic Sequencer (multi-track timeline editor)
-    if (panels_.sequencer) dse::editor::DrawSequencerPanel(ctx);
-
-    // Terrain Sculpt Preview (real-time brush visualization)
-    if (panels_.terrain_editor) {
-        dse::editor::DrawTerrainSculptPreview(ctx);
-    }
-
-    // World Partition Editor (cell boundary editing tool)
-    if (panels_.streaming_debug) {
-        dse::editor::DrawWorldPartitionEditor(ctx);
-    }
-
-    // Plugin Manager 面板
-    if (panels_.plugins) {
-        ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Plugins", &panels_.plugins)) {
-            dse::editor::DrawPluginManagerPanel(plugin_manager_);
-        }
-        ImGui::End();
-        // Plugin Hot Reload panel (alongside plugin manager)
-        dse::editor::DrawPluginHotReloadPanel(ctx);
-    }
-
-    // 2D Tools panels
-    dse::editor::tools2d::DrawSpriteSlicerPanel();
-    dse::editor::tools2d::DrawAtlasPackerPanel();
-    dse::editor::tools2d::DrawAnim2DEditorPanel();
-    dse::editor::tools2d::DrawNineSliceEditorPanel();
-    dse::editor::tools2d::DrawCollisionEditor2DPanel();
-    dse::editor::tools2d::DrawParticle2DEditorPanel();
-    dse::editor::tools2d::DrawParallaxEditorPanel();
-    dse::editor::tools2d::DrawLight2DEditorPanel();
-
-    // Plugin API: update and draw custom panels
-    dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
-    dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
-
-    // AI Chat 面板
-    if (panels_.ai_agent) {
-        ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("AI Agent", &panels_.ai_agent)) {
-            agent_panel_.Draw(*control_server_, *engine_instance_);
-        }
-        ImGui::End();
-    }
-
-    if (panels_.scene) dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
-                                        engine_instance_->pipeline());
-    if (panels_.game) dse::editor::DrawGameViewportPanel(game_texture);
+    // Publish this frame's viewport textures for the registry-driven scene/game
+    // panel drawers, then dispatch every registered panel generically. All
+    // per-panel wiring lives in RegisterPanels() (or a panel's own module) — the
+    // frame loop no longer names concrete business panels.
+    frame_scene_texture_ = scene_texture;
+    frame_game_texture_  = game_texture;
+    dse::editor::PanelRegistry::Get().DrawAll(ctx);
 
     dse::editor::AutoSaveManager::Get().Tick(registry);
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);

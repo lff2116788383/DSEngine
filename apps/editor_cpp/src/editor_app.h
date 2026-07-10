@@ -102,6 +102,14 @@ private:
     char localization_preview_key_[128] = "editor.preview.status";
     char localization_preview_fallback_[128] = "Language: {lang}";
 
+    // Per-frame viewport textures published to the registry-driven scene/game
+    // panel drawers (set at the top of DrawEditorUI before PanelRegistry::DrawAll).
+    unsigned int frame_scene_texture_ = 0;
+    unsigned int frame_game_texture_ = 0;
+    bool panels_registered_ = false;
+
+    void RegisterPanels();
+
     // ── Panel visibility (consolidated) ──
     // Replaces former 28 individual bool show_* members.
     // Core panels default visible; optional panels default hidden.
