@@ -15,7 +15,8 @@
 
 using namespace dse_api_internal;
 
-// 使用引擎子系统单例
+// 脚本按需创建、生命周期归脚本的世界系统：文件级全局（非单例），仅本 TU 的 C ABI 消费，
+// 由 Lua dse_*_init 创建、dse_*_update 每帧驱动，故不发布到 ServiceLocator。
 
 static std::unique_ptr<dse::terrain::SplineSystem> g_spline_sys;
 static std::unique_ptr<dse::render::OceanSystem> g_ocean_sys;
