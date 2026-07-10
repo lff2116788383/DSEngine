@@ -14,6 +14,11 @@
 #include <unordered_set>
 
 namespace dse::net {
+
+// 前置声明置于 dse::net 作用域（非匿名命名空间），以便下方匿名命名空间里的
+// GnsRegistry 引用的是真正的 dse::net::GnsTransport，而非匿名命名空间内的同名类型。
+class GnsTransport;
+
 namespace {
 
 CloseReason MapCloseState(int eState) {
@@ -33,8 +38,6 @@ Address MapAddr(const SteamNetworkingIPAddr& a) {
 // ── Instance Registry ────────────────────────────────────────────────────────
 // 替代旧的 s_active 全局指针。每个 GnsTransport 实例在 Init 时注册，Shutdown 时移除。
 // 通过连接句柄或监听 socket 反查所属实例，支持多 transport 并存。
-
-class GnsTransport;
 
 struct GnsRegistry {
     std::mutex                                          mtx;

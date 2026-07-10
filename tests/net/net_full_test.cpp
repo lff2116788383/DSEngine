@@ -298,25 +298,42 @@ int main() {
     std::printf("  PASS RPC (C->S)\n");
 
     // 9) AOI 距离裁剪
+    // 注意：属主实体 se 是该连接的 AOI 视点来源（见 ReplicationServer::Tick：视点取
+    // 属主拥有的实体位置）。把 se 移远会同时把视点移远，se 相对自身视点距离恒为 0、
+    // 永远在 AOI 内——属主看不见自己的实体不符合语义。故 AOI 进出须用一个「非属主」
+    // 实体 se2 来验证：视点固定在原点(se)，移动 se2 越过半径即触发 spawn/despawn。
     server.SetAoiPolicy(AoiPolicy::Distance, 50.0f);
-    // 把实体移到很远
-    st.position = glm::vec3(1000.0f, 0.0f, 0.0f);
-    // 需要多次 Tick 让 AOI 生效并 despawn 该实体
-    if (!pump(t, router, &server, true, [&]{ return client.MirrorCount() == 0; }, 5000)) {
+    st.position = glm::vec3(0.0f, 0.0f, 0.0f);   // 属主视点回到原点
+
+    entt::entity se2 = srvReg.create();
+    auto& st2 = srvReg.emplace<TransformComponent>(se2);
+    st2.position = glm::vec3(5.0f, 0.0f, 0.0f);  // 视点附近 → 进入 AOI
+    NetId id2 = server.MarkReplicated(se2);
+    (void)id2;
+
+    // se2 进入 AOI → 客户端镜像数应达到 2（se + se2）
+    if (!pump(t, router, &server, true, [&]{ return client.MirrorCount() >= 2; }, 5000)) {
+        std::printf("  FAIL AOI enter (mirror=%zu)\n", client.MirrorCount());
+        t->Shutdown(); return 9;
+    }
+    // 把 se2 移到很远 → 离开 AOI → 应 despawn（镜像回到 1，属主 se 仍可见）
+    st2.position = glm::vec3(1000.0f, 0.0f, 0.0f);
+    if (!pump(t, router, &server, true, [&]{ return client.MirrorCount() == 1; }, 5000)) {
         std::printf("  FAIL AOI despawn (mirror=%zu)\n", client.MirrorCount());
         t->Shutdown(); return 9;
     }
     std::printf("  PASS AOI distance culling\n");
 
-    // 10) 把实体移回来，应重新 spawn
-    st.position = glm::vec3(0.0f, 0.0f, 0.0f);
-    if (!pump(t, router, &server, true, [&]{ return client.MirrorCount() >= 1; }, 5000)) {
+    // 10) 把 se2 移回来，应重新 spawn（镜像回到 2）
+    st2.position = glm::vec3(5.0f, 0.0f, 0.0f);
+    if (!pump(t, router, &server, true, [&]{ return client.MirrorCount() >= 2; }, 5000)) {
         std::printf("  FAIL AOI re-spawn (mirror=%zu)\n", client.MirrorCount());
         t->Shutdown(); return 10;
     }
     std::printf("  PASS AOI re-enter\n");
 
-    // 11) despawn
+    // 11) despawn：注销两个实体，镜像应清零
+    server.Unreplicate(se2);
     server.Unreplicate(se);
     if (!pump(t, router, &server, false, [&]{ return client.MirrorCount() == 0; }, 3000)) {
         std::printf("  FAIL despawn\n");

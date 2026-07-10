@@ -506,6 +506,21 @@ if(DSE_ENABLE_NET AND DSE_HAS_NET)
     # dse.net 绑定(engine/scripting/.../lua_binding_net.cpp)随 dse_engine 编译，
     # 调用 dse_net C ABI；故把 dse_net 链进 dse_engine（静态库依赖透传给可执行）。
     target_link_libraries(dse_engine PRIVATE dse_net)
+    # dse_net 单独成静态库、且不链接 dse_engine，故不会继承 dse_engine 的 PUBLIC
+    # DSE_BUILD_STATIC。静态配置下须显式给它定义，否则其复制层 TU 里包含 engine/core
+    # 头文件时 DSE_EXPORT 展开为 __declspec(dllimport)，引用 __imp_Memory::* 无法解析。
+    if(NOT DSE_BUILD_SHARED)
+        target_compile_definitions(dse_net PUBLIC DSE_BUILD_STATIC)
+    endif()
+    # cmake/CMakeLists.txt.gns 中创建的 net 测试可执行仅链接了 dse_net；其中触及
+    # 复制层(engine/net/replication)/位级序列化的目标会引用 engine/core 的 Memory
+    # 符号（AllocAligned/Free，定义在 dse_engine）。dse_engine 在此处才定义，故在此
+    # 补链，避免 LNK2019/LNK1120。对不引用这些符号的目标补链亦无害（静态库按需拉取）。
+    foreach(_dse_net_test dse_net_smoke dse_net_capi_smoke dse_repl_smoke dse_net_full_test)
+        if(TARGET ${_dse_net_test})
+            target_link_libraries(${_dse_net_test} PRIVATE dse_engine)
+        endif()
+    endforeach()
     # 无头验证 Lua 绑定 dse.net（裸 lua_State + 本地 UDP 回环），不依赖窗口/RHI。
     if(EXISTS "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")
         add_executable(dse_net_lua_smoke "${CMAKE_SOURCE_DIR}/tests/net/net_lua_smoke.cpp")

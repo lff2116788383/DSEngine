@@ -298,6 +298,9 @@ int L_NetOn(lua_State* L) {
 
 void RegisterNetBindings(lua_State* L) {
     g_net.L = L;
+    // 自管理栈：取全局 dse 表，把本模块建成 dse.net 子表后挂上去（与其它 codegen
+    // 模块一致）。此前只 lua_newtable 却未 setfield，导致该表成为游离栈值、dse.net 缺失。
+    lua_getglobal(L, "dse");
     lua_newtable(L);
     const luaL_Reg funcs[] = {
         {"init",            L_NetInit},
@@ -323,6 +326,9 @@ void RegisterNetBindings(lua_State* L) {
     lua_pushinteger(L, DSE_NET_CLOSE_BY_PEER);   lua_setfield(L, -2, "CLOSE_BY_PEER");
     lua_pushinteger(L, DSE_NET_CLOSE_PROBLEM);   lua_setfield(L, -2, "CLOSE_PROBLEM");
     lua_pushinteger(L, DSE_NET_CLOSE_REJECTED);  lua_setfield(L, -2, "CLOSE_REJECTED");
+
+    lua_setfield(L, -2, "net");  // dse.net = <本模块表>
+    lua_pop(L, 1);               // 弹出 dse
 }
 
 void PumpNet(lua_State* /*L*/) {
