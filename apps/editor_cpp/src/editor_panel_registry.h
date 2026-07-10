@@ -44,6 +44,7 @@ struct PanelVisibilityState {
     bool csharp_panel       = false;
     bool plugins            = false;
     bool ai_agent           = false;
+    bool background_tasks   = false;
 };
 
 /// Describes a single editor panel for data-driven registration.

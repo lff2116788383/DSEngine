@@ -24,6 +24,7 @@
 #include "imgui.h"
 #include "editor_imgui_backend.h"
 #include "editor_panel_registry.h"
+#include "editor_task_service.h"
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
 
@@ -1032,6 +1033,10 @@ void EditorApp::Run() {
 // ─── Shutdown ───────────────────────────────────────────────────────────────
 
 void EditorApp::Shutdown() {
+    // Cancel + join all background workers before tearing down engine/editor
+    // state so no detached thread can touch destroyed objects.
+    dse::editor::BackgroundTaskService::Get().Shutdown();
+
     splash_.Finish();  // 若主循环未走到首帧（异常早退），确保 splash 线程被回收
 
     // Save editor settings
@@ -1297,6 +1302,9 @@ void EditorApp::RegisterPanels() {
             dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
         });
 
+    add("background_tasks", "Background Tasks", "Debug", &panels_.background_tasks, false,
+        [this](Ctx&){ dse::editor::BackgroundTaskService::Get().DrawPanel(&panels_.background_tasks); });
+
     add("ai_agent", "AI Agent", "Plugin", &panels_.ai_agent, false,
         [this](Ctx&){
             ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
@@ -1418,6 +1426,10 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
     frame_scene_texture_ = scene_texture;
     frame_game_texture_  = game_texture;
     dse::editor::PanelRegistry::Get().DrawAll(ctx);
+
+    // Pump background task completions on the UI thread (fires even if the
+    // Background Tasks panel is closed).
+    dse::editor::BackgroundTaskService::Get().Update();
 
     dse::editor::AutoSaveManager::Get().Tick(registry);
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);
