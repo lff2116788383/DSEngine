@@ -59,6 +59,7 @@ enum class BpPinType { Flow, Bool, Int, Float, String, Vec2, Vec3, Vec4, Entity,
 enum class BpPinKind { Input, Output };
 
 const char* BpPinTypeName(BpPinType t);
+BpPinType BpPinTypeFromName(const char* name);
 ImU32 BpPinColor(BpPinType t);
 
 struct BpPin {

@@ -81,17 +81,50 @@ const BpNode* FindPinOwner(const BpFunctionGraph& graph, int pin_id) {
 
 class ByteCodeCompiler {
 public:
-    ByteCodeCompiler(const BpFunctionGraph& graph, const std::vector<BpVariable>& vars)
-        : graph_(graph), vars_(vars) {}
+    ByteCodeCompiler(const BpFunctionGraph& graph, const std::vector<BpVariable>& vars,
+                     const BpNode* entry_node = nullptr, std::string function_name = {},
+                     int num_params = -1)
+        : graph_(graph),
+          vars_(vars),
+          entry_node_(entry_node),
+          function_name_(std::move(function_name)),
+          num_params_(num_params) {}
 
     CompiledFunction Compile() {
         CompiledFunction func;
-        func.name = graph_.name;
-        func.num_params = static_cast<int>(graph_.input_params.size());
+        func.name = function_name_.empty() ? graph_.name : function_name_;
+        func.num_params = num_params_ >= 0 ? num_params_ : static_cast<int>(graph_.input_params.size());
         for (int i = 0; i < func.num_params; ++i) regs_.Alloc();
 
-        for (const auto& node : graph_.nodes) {
-            if (node.category == "Event") CompileFlowFrom(node);
+        if (entry_node_) {
+            int param_index = 0;
+            for (const auto& output : entry_node_->outputs) {
+                if (output.type != BpPinType::Flow && param_index < func.num_params) {
+                    pin_to_reg_[output.id] = param_index++;
+                }
+            }
+            CompileFlowFrom(*entry_node_);
+        } else {
+            const BpNode* function_entry = nullptr;
+            for (const auto& node : graph_.nodes) {
+                if (node.name == "Function Entry") {
+                    function_entry = &node;
+                    break;
+                }
+            }
+            if (function_entry) {
+                int param_index = 0;
+                for (const auto& output : function_entry->outputs) {
+                    if (output.type != BpPinType::Flow && param_index < func.num_params) {
+                        pin_to_reg_[output.id] = param_index++;
+                    }
+                }
+                CompileFlowFrom(*function_entry);
+            } else {
+                for (const auto& node : graph_.nodes) {
+                    if (node.category == "Event" || node.category == "Network") CompileFlowFrom(node);
+                }
+            }
         }
         if (code_.empty()) {
             for (const auto& node : graph_.nodes) {
@@ -110,6 +143,9 @@ public:
 private:
     const BpFunctionGraph& graph_;
     const std::vector<BpVariable>& vars_;
+    const BpNode* entry_node_ = nullptr;
+    std::string function_name_;
+    int num_params_ = -1;
     RegAlloc regs_;
     std::vector<Instruction> code_;
     std::vector<BpValue> constants_;
@@ -243,6 +279,10 @@ private:
             auto it = pin_to_reg_.find(node.outputs[0].id);
             if (it != pin_to_reg_.end()) return it->second;
         }
+        if (node.name == "Delta Time" && function_name_ == "on_update" && num_params_ > 0) {
+            if (!node.outputs.empty()) pin_to_reg_[node.outputs[0].id] = 0;
+            return 0;
+        }
         int result_reg = regs_.Alloc();
 
         if (node.name == "Add") {
@@ -307,39 +347,53 @@ private:
             const BpNode* src_node = FindPinOwner(graph_, src_pin);
             if (src_node) return CompileDataNode(*src_node);
         }
+        BpValue default_value;
+        switch (pin.type) {
+            case BpPinType::Bool:   default_value = BpValue::Bool(pin.default_bool); break;
+            case BpPinType::Int:    default_value = BpValue::Int(pin.default_int); break;
+            case BpPinType::String: default_value = BpValue::String(pin.default_string); break;
+            case BpPinType::Vec3:
+                default_value = BpValue::Vec3(pin.default_vec[0], pin.default_vec[1], pin.default_vec[2]);
+                break;
+            default: default_value = BpValue::Float(pin.default_float); break;
+        }
         int r = regs_.Alloc();
-        Emit(OpCode::LoadConst, (uint8_t)r, (uint8_t)AddConstant(BpValue::Float(pin.default_float)));
+        Emit(OpCode::LoadConst, (uint8_t)r, (uint8_t)AddConstant(default_value));
         return r;
     }
 
     void CompileGenericFlowNode(const BpNode& node) {
-        int fn_idx = BlueprintVM::Get().GetExternIndex(node.name);
-        if (fn_idx >= 0) {
-            int num_data_inputs = 0;
-            int arg_start = regs_.Alloc();
-            for (size_t i = 0; i < node.inputs.size(); ++i) {
-                if (node.inputs[i].type != BpPinType::Flow) {
-                    int r = GetInputReg(node, static_cast<int>(i));
-                    if (num_data_inputs > 0) regs_.Alloc();
-                    Emit(OpCode::Move, (uint8_t)(arg_start + num_data_inputs), (uint8_t)r);
-                    ++num_data_inputs;
-                }
+        int num_data_inputs = 0;
+        int arg_start = regs_.Alloc();
+        for (size_t i = 0; i < node.inputs.size(); ++i) {
+            if (node.inputs[i].type != BpPinType::Flow) {
+                int r = GetInputReg(node, static_cast<int>(i));
+                if (num_data_inputs > 0) regs_.Alloc();
+                Emit(OpCode::Move, (uint8_t)(arg_start + num_data_inputs), (uint8_t)r);
+                ++num_data_inputs;
             }
-            int result_reg = regs_.Alloc();
-            Emit(OpCode::CallExtern, (uint8_t)result_reg, (uint8_t)fn_idx,
-                 (uint8_t)arg_start, (int16_t)num_data_inputs);
-            if (!node.outputs.empty() && node.outputs.back().type != BpPinType::Flow)
-                pin_to_reg_[node.outputs.back().id] = result_reg;
         }
+        int result_reg = regs_.Alloc();
+        int name_const = AddConstant(BpValue::String(node.name));
+        Emit(OpCode::CallExtern, (uint8_t)result_reg, (uint8_t)name_const,
+             (uint8_t)arg_start, (int16_t)num_data_inputs);
+        if (!node.outputs.empty() && node.outputs.back().type != BpPinType::Flow)
+            pin_to_reg_[node.outputs.back().id] = result_reg;
     }
 };
 
-CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph, const std::vector<BpVariable>& vars) {
+CompiledFunction CompileFunctionGraphImpl(const BpFunctionGraph& graph,
+                                          const std::vector<BpVariable>& vars) {
     ByteCodeCompiler compiler(graph, vars);
     return compiler.Compile();
 }
 
 }  // namespace
+
+CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph,
+                                      const std::vector<BpVariable>& variables) {
+    return CompileFunctionGraphImpl(graph, variables);
+}
 
 CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
     CompiledBlueprint result;
@@ -354,8 +408,40 @@ CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
             default:                result.default_variables.push_back(BpValue()); break;
         }
     }
-    for (const auto& graph : asset.graphs)
-        result.functions.push_back(CompileFunctionGraph(graph, asset.variables));
+    for (const auto& graph : asset.graphs) {
+        if (graph.name != "EventGraph") {
+            result.functions.push_back(CompileFunctionGraphImpl(graph, asset.variables));
+            continue;
+        }
+
+        for (const auto& node : graph.nodes) {
+            std::string function_name;
+            int num_params = 0;
+            if (node.name == "On Init") {
+                function_name = "on_init";
+            } else if (node.name == "On Update") {
+                function_name = "on_update";
+                num_params = 1;
+            } else if (node.name == "On Net Connected") {
+                function_name = "on_net_connected";
+                num_params = 1;
+            } else if (node.name == "On Net Disconnected") {
+                function_name = "on_net_disconnected";
+                num_params = 2;
+            } else if (node.name == "On Net Message") {
+                function_name = "on_net_message";
+                num_params = 2;
+            } else if (node.name == "On RPC Received") {
+                function_name = "on_rpc_received";
+                num_params = 3;
+            } else {
+                continue;
+            }
+
+            ByteCodeCompiler compiler(graph, asset.variables, &node, function_name, num_params);
+            result.functions.push_back(compiler.Compile());
+        }
+    }
     return result;
 }
 
@@ -371,6 +457,7 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
         return false;
     }
 
+    asset = BlueprintAsset{};
     asset.file_path = path;
     if (doc.HasMember("name") && doc["name"].IsString()) asset.name = doc["name"].GetString();
     if (doc.HasMember("version") && doc["version"].IsInt()) asset.version = doc["version"].GetInt();
@@ -423,6 +510,12 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
                             if (p.HasMember("default_float") && p["default_float"].IsNumber()) pin.default_float = p["default_float"].GetFloat();
                             if (p.HasMember("default_int") && p["default_int"].IsInt()) pin.default_int = p["default_int"].GetInt();
                             if (p.HasMember("default_bool") && p["default_bool"].IsBool()) pin.default_bool = p["default_bool"].GetBool();
+                            if (p.HasMember("default_string") && p["default_string"].IsString()) pin.default_string = p["default_string"].GetString();
+                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
+                                auto arr = p["default_vec"].GetArray();
+                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
+                                    if (arr[i].IsNumber()) pin.default_vec[i] = arr[i].GetFloat();
+                            }
                             node.inputs.push_back(std::move(pin));
                         }
                     }
@@ -433,6 +526,15 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
                             if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
                             if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
                             if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
+                            if (p.HasMember("default_float") && p["default_float"].IsNumber()) pin.default_float = p["default_float"].GetFloat();
+                            if (p.HasMember("default_int") && p["default_int"].IsInt()) pin.default_int = p["default_int"].GetInt();
+                            if (p.HasMember("default_bool") && p["default_bool"].IsBool()) pin.default_bool = p["default_bool"].GetBool();
+                            if (p.HasMember("default_string") && p["default_string"].IsString()) pin.default_string = p["default_string"].GetString();
+                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
+                                auto arr = p["default_vec"].GetArray();
+                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
+                                    if (arr[i].IsNumber()) pin.default_vec[i] = arr[i].GetFloat();
+                            }
                             node.outputs.push_back(std::move(pin));
                         }
                     }
@@ -449,6 +551,26 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
                     if (l.HasMember("to_pin") && l["to_pin"].IsInt()) link.to_pin = l["to_pin"].GetInt();
                     graph.links.push_back(link);
                 }
+            }
+
+            auto load_params = [](const rapidjson::Value& values, BpPinKind kind,
+                                  std::vector<BpPin>& destination) {
+                if (!values.IsArray()) return;
+                for (auto& p : values.GetArray()) {
+                    if (!p.IsObject()) continue;
+                    BpPin pin;
+                    pin.kind = kind;
+                    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
+                    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
+                    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
+                    destination.push_back(std::move(pin));
+                }
+            };
+            if (g.HasMember("input_params")) {
+                load_params(g["input_params"], BpPinKind::Input, graph.input_params);
+            }
+            if (g.HasMember("output_params")) {
+                load_params(g["output_params"], BpPinKind::Output, graph.output_params);
             }
             asset.graphs.push_back(std::move(graph));
         }

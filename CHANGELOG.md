@@ -13,6 +13,9 @@
 - Windows Runtime/Editor 发布任务现在会预构建并实测 GNS 网络层与 HTTP/TLS，
   同时将 C# 托管程序集纳入可运行产物。
 - 新增编辑器生产真实性门禁，跟踪现存 mock/placeholder 实现并阻止未登记的伪功能进入默认构建。
+- Blueprint 编辑器与运行时现共用引擎侧字节码编译器、opcode 与编译产物类型；
+  `.dbp` 的 pin 类型、默认值和函数参数可完整往返，`EventGraph` 会生成并执行
+  `on_init` / `on_update`，并由无头端到端 smoke 持续验证。
 
 ## [0.1.0-alpha] - 2026-06-15
 

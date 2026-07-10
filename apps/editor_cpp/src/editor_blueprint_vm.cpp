@@ -11,36 +11,6 @@
 
 namespace dse::editor::bp {
 
-// ─── BpValue helpers ───────────────────────────────────────────────────────
-
-float BpValue::AsFloat() const {
-    switch (type) {
-        case Type::Float: return f;
-        case Type::Int:   return static_cast<float>(i);
-        case Type::Bool:  return b ? 1.0f : 0.0f;
-        default: return 0.0f;
-    }
-}
-
-bool BpValue::AsBool() const {
-    switch (type) {
-        case Type::Bool:  return b;
-        case Type::Int:   return i != 0;
-        case Type::Float: return f != 0.0f;
-        case Type::String: return !str.empty();
-        default: return false;
-    }
-}
-
-int BpValue::AsInt() const {
-    switch (type) {
-        case Type::Int:   return i;
-        case Type::Float: return static_cast<int>(f);
-        case Type::Bool:  return b ? 1 : 0;
-        default: return 0;
-    }
-}
-
 // ─── BlueprintVM ───────────────────────────────────────────────────────────
 
 BlueprintVM& BlueprintVM::Get() {
@@ -229,7 +199,11 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
 
             // External C++ call
             case OpCode::CallExtern: {
-                int fn_idx = instr.b;
+                if (instr.b >= constants.size() || constants[instr.b].type != BpValue::Type::String) {
+                    last_error_ = "Blueprint external call has no function name";
+                    return BpValue();
+                }
+                int fn_idx = GetExternIndex(constants[instr.b].str);
                 int arg_start = instr.c;
                 int num_args = instr.extra;
                 if (fn_idx >= 0 && fn_idx < static_cast<int>(extern_functions_.size())) {
@@ -295,10 +269,10 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
             }
 
             case OpCode::Return:
-                return regs[instr.a];
+                return instr.a < regs.size() ? regs[instr.a] : BpValue();
 
             case OpCode::Halt:
-                return regs[0];
+                return regs.empty() ? BpValue() : regs[0];
 
             // ECS placeholders (bridge to engine)
             case OpCode::EcsGetFloat:

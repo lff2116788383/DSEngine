@@ -5,26 +5,16 @@
 
 #include "editor_blueprint_compiler.h"
 
+#include "engine/scripting/blueprint/blueprint_compiler.h"
+
 #include <sstream>
-#include <unordered_map>
-#include <unordered_set>
 #include <algorithm>
 #include <cstdio>
+#include <iterator>
 
 namespace dse::editor::bp {
 
 namespace {
-
-// ─── Register allocator (simple linear scan) ───────────────────────────────
-
-class RegAlloc {
-public:
-    int Alloc() { return next_++; }
-    int AllocN(int n) { int base = next_; next_ += n; return base; }
-    int Count() const { return next_; }
-private:
-    int next_ = 0;
-};
 
 // ─── Helper: find pin connections ──────────────────────────────────────────
 
@@ -58,373 +48,103 @@ const BpPin* FindPin(const BpFunctionGraph& graph, int pin_id) {
     return nullptr;
 }
 
-// ─── ByteCode compiler ─────────────────────────────────────────────────────
+// ─── Runtime compiler adapter ───────────────────────────────────────────────
 
-class ByteCodeCompiler {
-public:
-    ByteCodeCompiler(const BpFunctionGraph& graph, const std::vector<BpVariable>& vars)
-        : graph_(graph), vars_(vars) {}
-
-    CompiledFunction Compile() {
-        CompiledFunction func;
-        func.name = graph_.name;
-        func.num_params = static_cast<int>(graph_.input_params.size());
-
-        // Reserve registers for parameters
-        for (int i = 0; i < func.num_params; ++i) {
-            regs_.Alloc();
-        }
-
-        // Find event nodes and compile flow from them
-        for (const auto& node : graph_.nodes) {
-            if (node.category == "Event") {
-                CompileFlowFrom(node);
-            }
-        }
-
-        // If no event nodes, compile pure data output
-        if (code_.empty()) {
-            for (const auto& node : graph_.nodes) {
-                if (!node.outputs.empty() && node.outputs[0].type != BpPinType::Flow) {
-                    int reg = CompileDataNode(node);
-                    (void)reg;
-                }
-            }
-        }
-
-        // Add halt
-        Emit(OpCode::Halt);
-
-        func.code = std::move(code_);
-        func.constants = std::move(constants_);
-        func.num_registers = regs_.Count();
-        return func;
+::dse::bp::BpVarType ToRuntimeType(BpVarType type) {
+    switch (type) {
+        case BpVarType::Bool: return ::dse::bp::BpVarType::Bool;
+        case BpVarType::Int: return ::dse::bp::BpVarType::Int;
+        case BpVarType::Float: return ::dse::bp::BpVarType::Float;
+        case BpVarType::String: return ::dse::bp::BpVarType::String;
+        case BpVarType::Vec2: return ::dse::bp::BpVarType::Vec2;
+        case BpVarType::Vec3: return ::dse::bp::BpVarType::Vec3;
+        case BpVarType::Vec4: return ::dse::bp::BpVarType::Vec4;
+        case BpVarType::Entity: return ::dse::bp::BpVarType::Entity;
+        case BpVarType::Array: return ::dse::bp::BpVarType::Array;
     }
+    return ::dse::bp::BpVarType::Float;
+}
 
-private:
-    const BpFunctionGraph& graph_;
-    const std::vector<BpVariable>& vars_;
-    RegAlloc regs_;
-    std::vector<Instruction> code_;
-    std::vector<BpValue> constants_;
-    std::unordered_map<int, int> pin_to_reg_; // pin_id → register holding its value
-
-    void Emit(OpCode op, uint8_t a = 0, uint8_t b = 0, uint8_t c = 0, int16_t extra = 0) {
-        code_.push_back({op, a, b, c, extra});
+::dse::bp::BpPinType ToRuntimeType(BpPinType type) {
+    switch (type) {
+        case BpPinType::Flow: return ::dse::bp::BpPinType::Flow;
+        case BpPinType::Bool: return ::dse::bp::BpPinType::Bool;
+        case BpPinType::Int: return ::dse::bp::BpPinType::Int;
+        case BpPinType::Float: return ::dse::bp::BpPinType::Float;
+        case BpPinType::String: return ::dse::bp::BpPinType::String;
+        case BpPinType::Vec2: return ::dse::bp::BpPinType::Vec2;
+        case BpPinType::Vec3: return ::dse::bp::BpPinType::Vec3;
+        case BpPinType::Vec4: return ::dse::bp::BpPinType::Vec4;
+        case BpPinType::Entity: return ::dse::bp::BpPinType::Entity;
+        case BpPinType::Array: return ::dse::bp::BpPinType::Array;
+        case BpPinType::Any: return ::dse::bp::BpPinType::Any;
+        case BpPinType::Wildcard: return ::dse::bp::BpPinType::Wildcard;
     }
+    return ::dse::bp::BpPinType::Any;
+}
 
-    int AddConstant(const BpValue& v) {
-        constants_.push_back(v);
-        return static_cast<int>(constants_.size() - 1);
+::dse::bp::BpPin ToRuntimePin(const BpPin& pin) {
+    ::dse::bp::BpPin runtime_pin;
+    runtime_pin.id = pin.id;
+    runtime_pin.name = pin.name;
+    runtime_pin.type = ToRuntimeType(pin.type);
+    runtime_pin.kind = pin.kind == BpPinKind::Input
+        ? ::dse::bp::BpPinKind::Input
+        : ::dse::bp::BpPinKind::Output;
+    runtime_pin.default_float = pin.default_float;
+    runtime_pin.default_int = pin.default_int;
+    runtime_pin.default_bool = pin.default_bool;
+    runtime_pin.default_string = pin.default_string;
+    std::copy(std::begin(pin.default_vec), std::end(pin.default_vec),
+              std::begin(runtime_pin.default_vec));
+    return runtime_pin;
+}
+
+::dse::bp::BpFunctionGraph ToRuntimeGraph(const BpFunctionGraph& graph) {
+    ::dse::bp::BpFunctionGraph runtime_graph;
+    runtime_graph.name = graph.name;
+    runtime_graph.is_pure = graph.is_pure;
+    runtime_graph.next_id = graph.next_id;
+    for (const auto& pin : graph.input_params) runtime_graph.input_params.push_back(ToRuntimePin(pin));
+    for (const auto& pin : graph.output_params) runtime_graph.output_params.push_back(ToRuntimePin(pin));
+    for (const auto& node : graph.nodes) {
+        ::dse::bp::BpNode runtime_node;
+        runtime_node.id = node.id;
+        runtime_node.name = node.name;
+        runtime_node.category = node.category;
+        runtime_node.comment = node.comment;
+        for (const auto& pin : node.inputs) runtime_node.inputs.push_back(ToRuntimePin(pin));
+        for (const auto& pin : node.outputs) runtime_node.outputs.push_back(ToRuntimePin(pin));
+        runtime_graph.nodes.push_back(std::move(runtime_node));
     }
-
-    int GetVarIndex(const std::string& name) const {
-        for (size_t i = 0; i < vars_.size(); ++i) {
-            if (vars_[i].name == name) return static_cast<int>(i);
-        }
-        return -1;
+    for (const auto& link : graph.links) {
+        runtime_graph.links.push_back({link.id, link.from_pin, link.to_pin});
     }
+    return runtime_graph;
+}
 
-    void CompileFlowFrom(const BpNode& event_node) {
-        // Find the Flow output pin
-        for (const auto& pin : event_node.outputs) {
-            if (pin.type == BpPinType::Flow) {
-                int next_pin = FindLinkedInput(graph_, pin.id);
-                if (next_pin >= 0) {
-                    const BpNode* next_node = FindPinOwner(graph_, next_pin);
-                    if (next_node) CompileFlowNode(*next_node);
-                }
-            }
-        }
+::dse::bp::BlueprintAsset ToRuntimeAsset(const BlueprintAsset& asset) {
+    ::dse::bp::BlueprintAsset runtime_asset;
+    runtime_asset.name = asset.name;
+    runtime_asset.file_path = asset.file_path;
+    runtime_asset.version = asset.version;
+    runtime_asset.description = asset.description;
+    for (const auto& variable : asset.variables) {
+        ::dse::bp::BpVariable runtime_variable;
+        runtime_variable.name = variable.name;
+        runtime_variable.type = ToRuntimeType(variable.type);
+        runtime_variable.default_bool = variable.default_bool;
+        runtime_variable.default_int = variable.default_int;
+        runtime_variable.default_float = variable.default_float;
+        runtime_variable.default_string = variable.default_string;
+        std::copy(std::begin(variable.default_vec), std::end(variable.default_vec),
+                  std::begin(runtime_variable.default_vec));
+        runtime_variable.is_exposed = variable.is_exposed;
+        runtime_asset.variables.push_back(std::move(runtime_variable));
     }
-
-    void CompileFlowNode(const BpNode& node) {
-        // Compile data inputs first
-        for (const auto& pin : node.inputs) {
-            if (pin.type != BpPinType::Flow) {
-                int src_pin = FindLinkedOutput(graph_, pin.id);
-                if (src_pin >= 0) {
-                    const BpNode* src_node = FindPinOwner(graph_, src_pin);
-                    if (src_node) CompileDataNode(*src_node);
-                }
-            }
-        }
-
-        // Generate code for this node
-        if (node.name == "Branch") {
-            CompileBranch(node);
-            return;
-        } else if (node.name == "For Loop") {
-            CompileForLoop(node);
-            return;
-        } else if (node.name == "Print") {
-            int msg_reg = GetInputReg(node, 1);
-            Emit(OpCode::Print, static_cast<uint8_t>(msg_reg));
-        } else if (node.name == "Set Position") {
-            // ECS set via extern call
-            int entity_reg = GetInputReg(node, 1);
-            int pos_reg = GetInputReg(node, 2);
-            Emit(OpCode::EcsSetVec3, static_cast<uint8_t>(entity_reg), 0, static_cast<uint8_t>(pos_reg));
-        } else if (node.name == "Create Entity") {
-            int name_reg = GetInputReg(node, 1);
-            int result_reg = regs_.Alloc();
-            // Store result for data output
-            if (node.outputs.size() > 1) {
-                pin_to_reg_[node.outputs[1].id] = result_reg;
-            }
-            int const_idx = AddConstant(BpValue::Entity(0));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-            (void)name_reg;
-        } else if (node.name == "Set Variable") {
-            // Store to instance variable
-            int val_reg = GetInputReg(node, 1);
-            // Find which variable from node comment or extra data
-            int var_idx = 0; // simplified
-            Emit(OpCode::StoreVar, static_cast<uint8_t>(var_idx), static_cast<uint8_t>(val_reg));
-        } else {
-            // Generic flow node: emit based on code_template
-            CompileGenericFlowNode(node);
-        }
-
-        // Follow flow output
-        for (const auto& pin : node.outputs) {
-            if (pin.type == BpPinType::Flow && pin.name != "False") {
-                int next_pin = FindLinkedInput(graph_, pin.id);
-                if (next_pin >= 0) {
-                    const BpNode* next_node = FindPinOwner(graph_, next_pin);
-                    if (next_node) CompileFlowNode(*next_node);
-                }
-                break; // only follow first flow output (True for Branch handled separately)
-            }
-        }
-    }
-
-    void CompileBranch(const BpNode& node) {
-        int cond_reg = GetInputReg(node, 1); // Condition input
-
-        // JumpIfFalse → else branch
-        size_t jump_else_idx = code_.size();
-        Emit(OpCode::JumpIfFalse, static_cast<uint8_t>(cond_reg), 0, 0, 0); // patch later
-
-        // True branch
-        if (node.outputs.size() >= 1) {
-            int true_pin = FindLinkedInput(graph_, node.outputs[0].id);
-            if (true_pin >= 0) {
-                const BpNode* true_node = FindPinOwner(graph_, true_pin);
-                if (true_node) CompileFlowNode(*true_node);
-            }
-        }
-
-        // Jump over else
-        size_t jump_end_idx = code_.size();
-        Emit(OpCode::Jump, 0, 0, 0, 0); // patch later
-
-        // Patch jump_else
-        code_[jump_else_idx].extra = static_cast<int16_t>(code_.size() - jump_else_idx - 1);
-
-        // False branch
-        if (node.outputs.size() >= 2) {
-            int false_pin = FindLinkedInput(graph_, node.outputs[1].id);
-            if (false_pin >= 0) {
-                const BpNode* false_node = FindPinOwner(graph_, false_pin);
-                if (false_node) CompileFlowNode(*false_node);
-            }
-        }
-
-        // Patch jump_end
-        code_[jump_end_idx].extra = static_cast<int16_t>(code_.size() - jump_end_idx - 1);
-    }
-
-    void CompileForLoop(const BpNode& node) {
-        int start_reg = GetInputReg(node, 1);
-        int end_reg = GetInputReg(node, 2);
-        int idx_reg = regs_.Alloc();
-
-        // Store index output pin
-        if (node.outputs.size() >= 2) {
-            pin_to_reg_[node.outputs[1].id] = idx_reg;
-        }
-
-        // idx = start
-        Emit(OpCode::Move, static_cast<uint8_t>(idx_reg), static_cast<uint8_t>(start_reg));
-
-        // Loop condition check
-        size_t loop_start = code_.size();
-        int cmp_reg = regs_.Alloc();
-        Emit(OpCode::CmpLe, static_cast<uint8_t>(cmp_reg),
-             static_cast<uint8_t>(idx_reg), static_cast<uint8_t>(end_reg));
-        size_t jump_exit_idx = code_.size();
-        Emit(OpCode::JumpIfFalse, static_cast<uint8_t>(cmp_reg), 0, 0, 0);
-
-        // Body
-        if (node.outputs.size() >= 1) {
-            int body_pin = FindLinkedInput(graph_, node.outputs[0].id);
-            if (body_pin >= 0) {
-                const BpNode* body_node = FindPinOwner(graph_, body_pin);
-                if (body_node) CompileFlowNode(*body_node);
-            }
-        }
-
-        // idx = idx + 1
-        int one_const = AddConstant(BpValue::Float(1.0f));
-        int one_reg = regs_.Alloc();
-        Emit(OpCode::LoadConst, static_cast<uint8_t>(one_reg), static_cast<uint8_t>(one_const));
-        Emit(OpCode::Add, static_cast<uint8_t>(idx_reg),
-             static_cast<uint8_t>(idx_reg), static_cast<uint8_t>(one_reg));
-
-        // Jump back to loop start
-        int jump_back = static_cast<int>(loop_start) - static_cast<int>(code_.size()) - 1;
-        Emit(OpCode::Jump, 0, 0, 0, static_cast<int16_t>(jump_back));
-
-        // Patch exit jump
-        code_[jump_exit_idx].extra = static_cast<int16_t>(code_.size() - jump_exit_idx - 1);
-
-        // Done output
-        if (node.outputs.size() >= 3) {
-            int done_pin = FindLinkedInput(graph_, node.outputs[2].id);
-            if (done_pin >= 0) {
-                const BpNode* done_node = FindPinOwner(graph_, done_pin);
-                if (done_node) CompileFlowNode(*done_node);
-            }
-        }
-    }
-
-    int CompileDataNode(const BpNode& node) {
-        // Check if already compiled
-        if (!node.outputs.empty()) {
-            auto it = pin_to_reg_.find(node.outputs[0].id);
-            if (it != pin_to_reg_.end()) return it->second;
-        }
-
-        int result_reg = regs_.Alloc();
-
-        if (node.name == "Add") {
-            int a_reg = GetInputReg(node, 0);
-            int b_reg = GetInputReg(node, 1);
-            Emit(OpCode::Add, static_cast<uint8_t>(result_reg),
-                 static_cast<uint8_t>(a_reg), static_cast<uint8_t>(b_reg));
-        } else if (node.name == "Subtract") {
-            int a_reg = GetInputReg(node, 0);
-            int b_reg = GetInputReg(node, 1);
-            Emit(OpCode::Sub, static_cast<uint8_t>(result_reg),
-                 static_cast<uint8_t>(a_reg), static_cast<uint8_t>(b_reg));
-        } else if (node.name == "Multiply") {
-            int a_reg = GetInputReg(node, 0);
-            int b_reg = GetInputReg(node, 1);
-            Emit(OpCode::Mul, static_cast<uint8_t>(result_reg),
-                 static_cast<uint8_t>(a_reg), static_cast<uint8_t>(b_reg));
-        } else if (node.name == "Divide") {
-            int a_reg = GetInputReg(node, 0);
-            int b_reg = GetInputReg(node, 1);
-            Emit(OpCode::Div, static_cast<uint8_t>(result_reg),
-                 static_cast<uint8_t>(a_reg), static_cast<uint8_t>(b_reg));
-        } else if (node.name == "Sin") {
-            int x_reg = GetInputReg(node, 0);
-            Emit(OpCode::Sin, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(x_reg));
-        } else if (node.name == "Cos") {
-            int x_reg = GetInputReg(node, 0);
-            Emit(OpCode::Cos, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(x_reg));
-        } else if (node.name == "Sqrt") {
-            int x_reg = GetInputReg(node, 0);
-            Emit(OpCode::Sqrt, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(x_reg));
-        } else if (node.name == "Abs") {
-            int x_reg = GetInputReg(node, 0);
-            Emit(OpCode::Abs, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(x_reg));
-        } else if (node.name == "Negate") {
-            int x_reg = GetInputReg(node, 0);
-            Emit(OpCode::Neg, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(x_reg));
-        } else if (node.name == "Get Position") {
-            int entity_reg = GetInputReg(node, 0);
-            Emit(OpCode::EcsGetVec3, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(entity_reg), 0);
-        } else if (node.name == "Self Entity") {
-            int const_idx = AddConstant(BpValue::Entity(0)); // placeholder: resolved at runtime
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-        } else if (node.name == "Float Constant" || node.name == "Constant Float") {
-            float val = node.outputs.empty() ? 0.0f : node.outputs[0].default_float;
-            int const_idx = AddConstant(BpValue::Float(val));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-        } else if (node.name == "Int Constant" || node.name == "Constant Int") {
-            int val = node.outputs.empty() ? 0 : node.outputs[0].default_int;
-            int const_idx = AddConstant(BpValue::Int(val));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-        } else if (node.name == "Get Variable") {
-            int var_idx = GetVarIndex(node.comment);
-            if (var_idx >= 0) {
-                Emit(OpCode::LoadVar, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(var_idx));
-            }
-        } else if (node.name == "Bool Constant") {
-            int const_idx = AddConstant(BpValue::Bool(node.outputs.empty() ? false : node.outputs[0].default_bool));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-        } else {
-            // Unknown pure node: load zero
-            int const_idx = AddConstant(BpValue::Float(0.0f));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(result_reg), static_cast<uint8_t>(const_idx));
-        }
-
-        // Register output pin
-        if (!node.outputs.empty()) {
-            pin_to_reg_[node.outputs[0].id] = result_reg;
-        }
-        return result_reg;
-    }
-
-    int GetInputReg(const BpNode& node, int input_index) {
-        if (input_index < 0 || input_index >= static_cast<int>(node.inputs.size())) {
-            int r = regs_.Alloc();
-            int ci = AddConstant(BpValue::Float(0.0f));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(r), static_cast<uint8_t>(ci));
-            return r;
-        }
-
-        const BpPin& pin = node.inputs[input_index];
-        if (pin.type == BpPinType::Flow) {
-            int r = regs_.Alloc();
-            int ci = AddConstant(BpValue::Float(0.0f));
-            Emit(OpCode::LoadConst, static_cast<uint8_t>(r), static_cast<uint8_t>(ci));
-            return r;
-        }
-
-        int src_pin = FindLinkedOutput(graph_, pin.id);
-        if (src_pin >= 0) {
-            // Check if already computed
-            auto it = pin_to_reg_.find(src_pin);
-            if (it != pin_to_reg_.end()) return it->second;
-            // Compile source node
-            const BpNode* src_node = FindPinOwner(graph_, src_pin);
-            if (src_node) return CompileDataNode(*src_node);
-        }
-
-        // Use default value
-        int r = regs_.Alloc();
-        int ci = AddConstant(BpValue::Float(pin.default_float));
-        Emit(OpCode::LoadConst, static_cast<uint8_t>(r), static_cast<uint8_t>(ci));
-        return r;
-    }
-
-    void CompileGenericFlowNode(const BpNode& node) {
-        // For nodes with extern function mapping
-        int fn_idx = BlueprintVM::Get().GetExternIndex(node.name);
-        if (fn_idx >= 0) {
-            int num_data_inputs = 0;
-            int arg_start = regs_.Alloc();
-            for (size_t i = 0; i < node.inputs.size(); ++i) {
-                if (node.inputs[i].type != BpPinType::Flow) {
-                    int r = GetInputReg(node, static_cast<int>(i));
-                    if (num_data_inputs > 0) regs_.Alloc();
-                    Emit(OpCode::Move, static_cast<uint8_t>(arg_start + num_data_inputs), static_cast<uint8_t>(r));
-                    ++num_data_inputs;
-                }
-            }
-            int result_reg = regs_.Alloc();
-            Emit(OpCode::CallExtern, static_cast<uint8_t>(result_reg),
-                 static_cast<uint8_t>(fn_idx), static_cast<uint8_t>(arg_start),
-                 static_cast<int16_t>(num_data_inputs));
-            if (!node.outputs.empty() && node.outputs.back().type != BpPinType::Flow) {
-                pin_to_reg_[node.outputs.back().id] = result_reg;
-            }
-        }
-    }
-};
+    for (const auto& graph : asset.graphs) runtime_asset.graphs.push_back(ToRuntimeGraph(graph));
+    return runtime_asset;
+}
 
 // ─── Lua compiler ──────────────────────────────────────────────────────────
 
@@ -735,27 +455,7 @@ private:
 // ─── Public API ────────────────────────────────────────────────────────────
 
 CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
-    CompiledBlueprint result;
-    result.version = asset.version;
-
-    // Default variable values
-    for (const auto& var : asset.variables) {
-        switch (var.type) {
-            case BpVarType::Bool:   result.default_variables.push_back(BpValue::Bool(var.default_bool)); break;
-            case BpVarType::Int:    result.default_variables.push_back(BpValue::Int(var.default_int)); break;
-            case BpVarType::Float:  result.default_variables.push_back(BpValue::Float(var.default_float)); break;
-            case BpVarType::String: result.default_variables.push_back(BpValue::String(var.default_string)); break;
-            case BpVarType::Vec3:   result.default_variables.push_back(BpValue::Vec3(var.default_vec[0], var.default_vec[1], var.default_vec[2])); break;
-            default:                result.default_variables.push_back(BpValue()); break;
-        }
-    }
-
-    // Compile each graph
-    for (const auto& graph : asset.graphs) {
-        result.functions.push_back(CompileFunctionGraph(graph, asset.variables));
-    }
-
-    return result;
+    return ::dse::bp::CompileToByteCode(ToRuntimeAsset(asset));
 }
 
 std::string CompileToLua(const BlueprintAsset& asset) {
@@ -765,8 +465,10 @@ std::string CompileToLua(const BlueprintAsset& asset) {
 
 CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph,
                                       const std::vector<BpVariable>& variables) {
-    ByteCodeCompiler compiler(graph, variables);
-    return compiler.Compile();
+    BlueprintAsset asset;
+    asset.variables = variables;
+    return ::dse::bp::CompileFunctionGraph(
+        ToRuntimeGraph(graph), ToRuntimeAsset(asset).variables);
 }
 
 ValidationResult ValidateGraph(const BpFunctionGraph& graph) {

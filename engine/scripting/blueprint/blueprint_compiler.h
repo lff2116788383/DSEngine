@@ -41,6 +41,8 @@ struct BpPin {
     BpPinType type = BpPinType::Any;
     BpPinKind kind = BpPinKind::Input;
     float default_float = 0.0f;
+    float default_vec[4] = {0, 0, 0, 0};
+    std::string default_string;
     int   default_int = 0;
     bool  default_bool = false;
 };
@@ -65,6 +67,7 @@ struct BpFunctionGraph {
     std::vector<BpNode> nodes;
     std::vector<BpLink> links;
     std::vector<BpPin> input_params;
+    std::vector<BpPin> output_params;
     bool is_pure = false;
     int next_id = 1;
 };
@@ -83,8 +86,10 @@ struct BlueprintAsset {
 /// 解析 .dbp（JSON）到内存图资源。失败返回 false。
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path);
 
-/// 将图资源编译为字节码。CompileGenericFlowNode 依赖已注册的 extern，
-/// 故调用前应确保 BlueprintVM::Get() 已注册所需 extern 函数。
+/// 将图资源编译为字节码。外部函数按名称编码并在 VM 执行时解析。
 CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset);
+
+CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph,
+                                      const std::vector<BpVariable>& variables);
 
 }  // namespace dse::bp

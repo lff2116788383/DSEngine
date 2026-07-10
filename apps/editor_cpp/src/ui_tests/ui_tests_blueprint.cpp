@@ -551,6 +551,7 @@ void RegisterBlueprintTests(ImGuiTestEngine* e) {
             IM_CHECK(loaded.graphs.size() == 1);
             IM_CHECK(loaded.graphs[0].nodes.size() == 1);
             IM_CHECK(loaded.graphs[0].nodes[0].name == "On Init");
+            IM_CHECK(loaded.graphs[0].nodes[0].outputs[0].type == BpPinType::Flow);
             IM_CHECK(loaded.implemented_interfaces.size() == 1);
             IM_CHECK(loaded.implemented_interfaces[0] == "IDamageable");
 
@@ -603,19 +604,19 @@ void RegisterBlueprintTests(ImGuiTestEngine* e) {
                 return BpValue::Float(args[0].AsFloat() * 2.0f);
             });
 
-            int fn_idx = BlueprintVM::Get().GetExternIndex("test_double");
-            IM_CHECK(fn_idx >= 0);
+            IM_CHECK(BlueprintVM::Get().GetExternIndex("test_double") >= 0);
 
             CompiledFunction func;
             func.name = "test_extern";
             func.num_registers = 4;
             func.num_params = 0;
             func.constants.push_back(BpValue::Float(7.0f));
+            func.constants.push_back(BpValue::String("test_double"));
 
             // LoadConst R[1] = 7.0
             func.code.push_back({OpCode::LoadConst, 1, 0, 0, 0});
-            // CallExtern R[0] = extern[fn_idx](R[1..1])
-            func.code.push_back({OpCode::CallExtern, 0, static_cast<uint8_t>(fn_idx), 1, 1});
+            // CallExtern R[0] = extern["test_double"](R[1..1])
+            func.code.push_back({OpCode::CallExtern, 0, 1, 1, 1});
             // Return R[0]
             func.code.push_back({OpCode::Return, 0, 0, 0, 0});
 
