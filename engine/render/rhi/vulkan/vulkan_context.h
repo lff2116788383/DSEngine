@@ -193,6 +193,10 @@ private:
     std::vector<VkFence> in_flight_fences_;
     uint32_t current_frame_ = 0;
     uint32_t current_image_index_ = 0;
+    // 延迟呈现（编辑器模式）下，BeginFrame 可能在没有配对 PresentFrame 的情况下被多次调用。
+    // 该标志保证一次 present 周期内只 acquire 一次交换链图像并只在 present 时 reset/submit fence，
+    // 避免出现 fence 被 reset 后无提交、下一次 acquire 在 vkWaitForFences 永久阻塞的死锁。
+    bool image_acquired_ = false;
 
     /// Pipeline Cache — 跨启动复用管线编译结果
     VkPipelineCache pipeline_cache_ = VK_NULL_HANDLE;

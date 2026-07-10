@@ -318,6 +318,11 @@ bool EngineInstance::Init() {
 
     // 如果未启用编辑器模式，则初始化系统环境
     const auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    // P0-4.4：请求的后端无法识别或未编译时，明确报错并终止初始化，禁止静默回退到 OpenGL。
+    if (rhi_backend == RhiBackend::Invalid) {
+        DEBUG_LOG_ERROR("请求的 RHI 后端不可用（请检查 DSE_RHI_BACKEND：opengl/d3d11/vulkan），拒绝初始化");
+        return false;
+    }
     // WebGPU(Web)：画布只能持有单一上下文，GL context 会占用 #canvas 使 getContext('webgpu')
     // 失败，故 WebGPU 后端同 D3D11/Vulkan 一样不创建 GL context（不影响 A 阶段 WebGL2 回退）。
     const bool needs_gl_context = (rhi_backend != RhiBackend::D3D11 &&
@@ -380,8 +385,16 @@ bool EngineInstance::Init() {
         }
     } else {
         // 编辑器模式：外部窗口已由编辑器创建
-        platform_->AttachExternal(nullptr);  // 无特定窗口，仅用于 LoadGLFunctions
-        platform_->LoadGLFunctions();
+        if (!platform_->AttachExternal(config_.external_window)) {
+            return false;
+        }
+        if (needs_gl_context) {
+            if (!platform_->LoadGLFunctions()) {
+                return false;
+            }
+        } else {
+            pipeline_->SetNativeWindowHandle(platform_->GetNativeWindowHandle());
+        }
 
         Screen::set_width_height(config_.window_width, config_.window_height);
     }

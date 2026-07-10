@@ -31,6 +31,7 @@ std::string RhiBackendToString(RhiBackend backend) {
         case RhiBackend::Vulkan: return "Vulkan";
         case RhiBackend::D3D11:  return "D3D11";
         case RhiBackend::WebGPU: return "WebGPU";
+        case RhiBackend::Invalid: return "Invalid";
         default: return "Unknown";
     }
 }
@@ -52,7 +53,9 @@ RhiBackend ResolveRhiBackendFromEnv() {
         if (value == "webgpu" || value == "wgpu") {
             return RhiBackend::WebGPU;
         }
-        DEBUG_LOG_WARN("DSE_RHI_BACKEND 环境值 '{}' 无法识别，回退到 OpenGL", env);
+        // 显式设置了无法识别的后端名：明确报错，返回 Invalid，禁止静默回退到 OpenGL。
+        DEBUG_LOG_ERROR("DSE_RHI_BACKEND 环境值 '{}' 无法识别（可选：opengl/gl、vulkan/vk、d3d11/dx11、webgpu/wgpu）", env);
+        return RhiBackend::Invalid;
     }
     return RhiBackend::Default;
 }
@@ -103,28 +106,25 @@ RhiBackend ValidateRhiBackend(RhiBackend requested) {
 #ifdef DSE_ENABLE_VULKAN
             return RhiBackend::Vulkan;
 #else
-            DEBUG_LOG_WARN("Vulkan 后端未编译 (DSE_ENABLE_VULKAN=OFF)，回退到 D3D11/OpenGL");
-#ifdef DSE_ENABLE_D3D11
-            return RhiBackend::D3D11;
-#else
-            return RhiBackend::OpenGL;
-#endif
+            // 显式请求 Vulkan 但未编译：明确报错，返回 Invalid，禁止静默回退。
+            DEBUG_LOG_ERROR("请求的 Vulkan 后端未编译进本版本 (DSE_ENABLE_VULKAN=OFF)");
+            return RhiBackend::Invalid;
 #endif
 
         case RhiBackend::D3D11:
 #ifdef DSE_ENABLE_D3D11
             return RhiBackend::D3D11;
 #else
-            DEBUG_LOG_WARN("D3D11 后端未编译 (DSE_ENABLE_D3D11=OFF)，回退到 OpenGL");
-            return RhiBackend::OpenGL;
+            DEBUG_LOG_ERROR("请求的 D3D11 后端未编译进本版本 (DSE_ENABLE_D3D11=OFF)");
+            return RhiBackend::Invalid;
 #endif
 
         case RhiBackend::WebGPU:
 #ifdef DSE_ENABLE_WEBGPU
             return RhiBackend::WebGPU;
 #else
-            DEBUG_LOG_WARN("WebGPU 后端未编译 (DSE_ENABLE_WEBGPU=OFF)，回退到 OpenGL");
-            return RhiBackend::OpenGL;
+            DEBUG_LOG_ERROR("请求的 WebGPU 后端未编译进本版本 (DSE_ENABLE_WEBGPU=OFF)");
+            return RhiBackend::Invalid;
 #endif
 
         default:

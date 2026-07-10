@@ -24,9 +24,6 @@
 #include "imgui.h"
 #include "editor_imgui_backend.h"
 #include "editor_panel_registry.h"
-#include "editor_imgui_backend_gl.h"
-#ifdef _WIN32
-#endif
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
 
@@ -35,6 +32,7 @@
 #endif
 
 #include "engine/runtime/engine_app.h"
+#include "engine/render/rhi/rhi_factory.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
@@ -272,7 +270,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
     dse::editor::AddEditorBreadcrumb("editor: init start");
 
 #if defined(_WIN32)
-    if (headless) {
+    const bool preserve_headless_stdio =
+        std::getenv("DSE_HEADLESS_STDIO") &&
+        std::string(std::getenv("DSE_HEADLESS_STDIO")) == "1";
+    if (headless && !preserve_headless_stdio) {
         // 无头/CI 模式：抑制 CRT 断言对话框和 WER 崩溃对话框，
         // 改为直接输出到 stderr 并 abort，避免进程卡死在等待用户点击的弹窗上。
         _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
@@ -310,10 +311,28 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     // SSBO（粒子 / GPU-driven 等）需要 GL 4.3+；优先请求 4.3 核心，创建失败再回退 3.3。
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    if (headless) {
+    const auto editor_rhi_backend =
+        dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    // P0-4.4：请求的后端无法识别或未编译时，明确报错并拒绝启动，禁止静默回退到 OpenGL。
+    if (editor_rhi_backend == RhiBackend::Invalid) {
+        std::cerr << "[Editor] Requested RHI backend is unavailable "
+                     "(check DSE_RHI_BACKEND: opengl/d3d11/vulkan). Refusing to start." << std::endl;
+        splash_.Finish();
+        glfwTerminate();
+        return false;
+    }
+    const bool uses_opengl = editor_rhi_backend == RhiBackend::OpenGL;
+    if (uses_opengl) {
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    } else {
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    }
+    const bool headless_window_visible =
+        std::getenv("DSE_HEADLESS_VISIBLE") &&
+        std::string(std::getenv("DSE_HEADLESS_VISIBLE")) == "1";
+    if (headless && !headless_window_visible) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     } else {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
@@ -325,7 +344,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
-    if (!window_) {
+    if (!window_ && uses_opengl) {
         // 回退：驱动/上下文不支持 4.3 时降级到 3.3（此时 SSBO 特性不可用）。
         std::cerr << "[Editor] GL 4.3 context creation failed; retrying with 3.3." << std::endl;
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -354,8 +373,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
         }
     }
 
-    glfwMakeContextCurrent(window_);
-    glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
+    if (uses_opengl) {
+        glfwMakeContextCurrent(window_);
+        glfwSwapInterval(0);
+    }
 
     // Drag & Drop: accept file drops from OS — dispatch to panels via OsDropEvent
     glfwSetDropCallback(window_, [](GLFWwindow* win, int count, const char** paths) {
@@ -369,7 +390,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         dse::editor::PushOsDropEvent(file_paths, static_cast<float>(mx), static_cast<float>(my));
     });
 
-    if (!gladLoadGL(glfwGetProcAddress)) {
+    if (uses_opengl && !gladLoadGL(glfwGetProcAddress)) {
         std::cerr << "Failed to initialize OpenGL (gladLoadGL) in Editor." << std::endl;
         splash_.Finish();
         glfwDestroyWindow(window_);
@@ -442,13 +463,6 @@ bool EditorApp::Init(int argc, char* argv[]) {
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
-    // RHI-aware ImGui backend initialization
-    // Currently uses OpenGL3 backend regardless of RHI (editor compositor is GL-based).
-    // TODO: Add D3D11/Vulkan ImGui backend when switching RHI away from OpenGL.
-    // T13: Backend abstraction - create and init ImGui backend
-    imgui_backend_ = std::make_unique<dse::editor::ImGuiBackendGL>();
-    imgui_backend_->Init(window_);
-
     splash_.SetStatus("正在初始化渲染引擎…");
 
     // Initialize DSEngine
@@ -460,6 +474,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     engine_config.window_title = "DSEngine Editor";
     engine_config.business_mode = BusinessMode::Lua;
     engine_config.enable_editor = true;
+    engine_config.external_window = window_;
     // Editor mode: no Lua startup script needed; engine will skip bootstrap gracefully.
 
     if (std::getenv("DSE_DATA_ROOT") == nullptr) {
@@ -483,6 +498,14 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // 把引擎 RHI 设备注入编辑器 GPU 接入层：编辑器自建的零散 GPU 资源（资产缩略图等）
     // 经此走引擎 RHI 抽象，不再直接调用 OpenGL。
     dse::editor::SetEditorRhiDevice(engine_instance_->pipeline()->GetRhiDevice());
+    imgui_backend_ = dse::editor::CreateImGuiBackend(engine_instance_->pipeline()->GetRhiDevice());
+    if (!imgui_backend_ ||
+        !imgui_backend_->Init(window_, engine_instance_->pipeline()->GetRhiDevice())) {
+        std::cerr << "Failed to initialize ImGui backend for selected RHI." << std::endl;
+        Shutdown();
+        return false;
+    }
+    dse::editor::SetEditorImGuiBackend(imgui_backend_.get());
 
     // 引擎 Init 内部以 app_name "DSEngine" 重新安装并重置了面包屑；此处重申编辑器身份，
     // 之后再补充编辑器专属面包屑/元数据，确保崩溃报告标记为编辑器进程且带编辑器上下文。
@@ -758,7 +781,6 @@ void EditorApp::Run() {
         dse::editor::AddEditorBreadcrumb("editor: previous session crash report found");
     }
     dse::editor::AddEditorBreadcrumb("editor: entering main loop");
-
     while (!glfwWindowShouldClose(window_) && !dse::editor::IsExitRequested() && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
@@ -894,15 +916,14 @@ void EditorApp::Run() {
         // Rendering
         int display_w, display_h;
         glfwGetFramebufferSize(window_, &display_w, &display_h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, display_w, display_h);
-        // 根据主题设置 GL 清屏色，避免 light 模式下面板缝隙处显示黑色
-        if (dse::editor::GetCurrentThemeIndex() == 1) {
-            glClearColor(0.94f, 0.94f, 0.96f, 1.0f);  // 浅色主题
-        } else {
-            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);  // 深色主题
-        }
-        glClear(GL_COLOR_BUFFER_BIT);
+        const bool light_theme = dse::editor::GetCurrentThemeIndex() == 1;
+        float clear_color[4] = {
+            light_theme ? 0.94f : 0.05f,
+            light_theme ? 0.94f : 0.05f,
+            light_theme ? 0.96f : 0.05f,
+            1.0f
+        };
+        imgui_backend_->PrepareFrame(display_w, display_h, clear_color);
 
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiRender");
@@ -911,13 +932,20 @@ void EditorApp::Run() {
         }
 
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-            GLFWwindow* backup_current_context = glfwGetCurrentContext();
+            GLFWwindow* backup_current_context =
+                imgui_backend_->UsesOpenGLContext() ? glfwGetCurrentContext() : nullptr;
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(backup_current_context);
+            if (imgui_backend_->UsesOpenGLContext()) {
+                glfwMakeContextCurrent(backup_current_context);
+            }
         }
 
-        glfwSwapBuffers(window_);
+        if (imgui_backend_->UsesOpenGLContext()) {
+            glfwSwapBuffers(window_);
+        } else {
+            engine_instance_->pipeline()->GetRhiDevice()->PresentFrame();
+        }
 
 #ifdef DSE_EDITOR_UI_TESTS
         if (test_config_.run_ui_tests) {
@@ -1073,19 +1101,21 @@ void EditorApp::Shutdown() {
         control_server_.reset();
     }
 
-    if (engine_instance_) {
-        engine_instance_->asset_manager()->StopFileWatcher();
-        engine_instance_->Shutdown();
-        engine_instance_.reset();
-    }
-
     ImGuiIO& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::DestroyPlatformWindows();
     }
     if (imgui_backend_) {
         imgui_backend_->Shutdown();
+        dse::editor::SetEditorImGuiBackend(nullptr);
         imgui_backend_.reset();
+    }
+
+    if (engine_instance_) {
+        engine_instance_->asset_manager()->StopFileWatcher();
+        engine_instance_->Shutdown();
+        engine_instance_.reset();
+        dse::editor::SetEditorRhiDevice(nullptr);
     }
 
 #ifdef DSE_EDITOR_UI_TESTS

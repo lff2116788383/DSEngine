@@ -14,12 +14,15 @@
 namespace dse::render { class RhiDevice; }
 
 namespace dse::editor {
+class ImGuiBackend;
 
 /// 注入引擎 RHI 设备（生命周期由引擎持有；编辑器仅借用，关闭时置空）。
 void SetEditorRhiDevice(dse::render::RhiDevice* device);
+void SetEditorImGuiBackend(ImGuiBackend* backend);
 
 /// 当前编辑器使用的 RHI 设备，未注入时为 nullptr。
 dse::render::RhiDevice* EditorRhi();
+std::uint64_t EditorImGuiTextureId(unsigned int handle);
 
 /// 经 RHI 创建一张 RGBA8 2D 纹理；linear=线性过滤，clamp=边缘钳制（否则平铺）。
 /// 返回纹理句柄（OpenGL 后端即 GL 纹理 id）；设备未就绪返回 0。

@@ -1,5 +1,6 @@
 #include "editor_gpu.h"
 
+#include "editor_imgui_backend.h"
 #include "engine/render/rhi/rhi_device.h"
 #include "engine/render/rhi/rhi_types.h"
 
@@ -7,11 +8,19 @@ namespace dse::editor {
 
 namespace {
 dse::render::RhiDevice* g_rhi = nullptr;
+ImGuiBackend* g_imgui_backend = nullptr;
 }  // namespace
 
 void SetEditorRhiDevice(dse::render::RhiDevice* device) { g_rhi = device; }
+void SetEditorImGuiBackend(ImGuiBackend* backend) { g_imgui_backend = backend; }
 
 dse::render::RhiDevice* EditorRhi() { return g_rhi; }
+
+std::uint64_t EditorImGuiTextureId(unsigned int handle) {
+    return g_imgui_backend
+        ? static_cast<std::uint64_t>(g_imgui_backend->GetTextureId(handle))
+        : 0;
+}
 
 unsigned int EditorCreateTexture2D(int width, int height, const uint8_t* rgba8,
                                    bool linear, bool clamp) {
@@ -24,7 +33,9 @@ unsigned int EditorCreateTexture2D(int width, int height, const uint8_t* rgba8,
 }
 
 void EditorDeleteTexture(unsigned int handle) {
-    if (g_rhi && handle != 0) g_rhi->DeleteTexture(handle);
+    if (handle == 0) return;
+    if (g_imgui_backend) g_imgui_backend->ReleaseTexture(handle);
+    if (g_rhi) g_rhi->DeleteTexture(handle);
 }
 
 }  // namespace dse::editor

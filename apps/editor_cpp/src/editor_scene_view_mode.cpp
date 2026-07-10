@@ -1,6 +1,6 @@
 #include "editor_scene_view_mode.h"
+#include "editor_gpu.h"
 #include "imgui.h"
-#include <glad/gl.h>
 
 namespace dse::editor {
 
@@ -64,7 +64,7 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
 
         case SceneViewMode::Normals:
             if (gbuffer_normal_texture != 0) {
-                ImGui::Image((ImTextureID)(intptr_t)gbuffer_normal_texture, panel_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)EditorImGuiTextureId(gbuffer_normal_texture), panel_size, ImVec2(0, 1), ImVec2(1, 0));
             } else {
                 dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
                     IM_COL32(128, 128, 255, 255), "Normals (requires GBuffer)");
@@ -73,7 +73,7 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
 
         case SceneViewMode::Depth:
             if (depth_texture != 0) {
-                ImGui::Image((ImTextureID)(intptr_t)depth_texture, panel_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)EditorImGuiTextureId(depth_texture), panel_size, ImVec2(0, 1), ImVec2(1, 0));
             } else {
                 dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
                     IM_COL32(200, 200, 200, 255), "Depth (requires depth texture)");
@@ -82,7 +82,7 @@ void DrawSceneViewModeOverlay(unsigned int scene_texture,
 
         case SceneViewMode::AO:
             if (ssao_texture != 0) {
-                ImGui::Image((ImTextureID)(intptr_t)ssao_texture, panel_size, ImVec2(0, 1), ImVec2(1, 0));
+                ImGui::Image((ImTextureID)EditorImGuiTextureId(ssao_texture), panel_size, ImVec2(0, 1), ImVec2(1, 0));
             } else {
                 dl->AddText(ImVec2(win_pos.x + 8, win_pos.y + 8),
                     IM_COL32(200, 200, 200, 255), "AO (requires SSAO pass)");

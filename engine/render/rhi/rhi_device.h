@@ -393,6 +393,8 @@ public:
     /// 默认空实现（OpenGL 由 GLFW SwapBuffers 处理）
     virtual void PresentFrame() {}
 
+    virtual void SetPresentationDeferred(bool deferred) { (void)deferred; }
+
     /// 引擎同时在飞的帧数（CPU 可领先 GPU 的帧数）。Vulkan 双缓冲（MAX_FRAMES_IN_FLIGHT=2），
     /// GL/DX11 立即模式（1）。供高层渲染器的「每在飞帧缓冲」helper（PerInFlightBuffer）据此
     /// N 缓冲每帧覆写的动态资源，规避「帧提交前覆写仍被 GPU 读取的缓冲」竞争
