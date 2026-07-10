@@ -1,0 +1,92 @@
+#version 450
+layout(local_size_x = 64) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 particle_emit_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：DX11 写 SSBO→UAV u{slot}：
+//   particles_out(写)→u1、counters(写)→u2
+//   （匹配 BindGpuBuffer(write_buf,1,true)/(counter,2,true)）。
+// 无 image/sampler，故不需 @COMPUTE_RESOURCE_REMAP。
+//
+// 资源（CreateComputeShaderEx: ssbo=3, img=0, smp=0, push=96）：
+//   binding 1 = ParticlesOut (read_write)
+//   binding 2 = Counters     (read_write, atomic)
+
+struct Particle {
+    vec4 pos_life;
+    vec4 vel_maxlife;
+};
+
+layout(set = 0, binding = 1, std430) buffer ParticlesOut { Particle particles_out[]; };
+layout(set = 0, binding = 2, std430) buffer Counters {
+    uint alive_count;
+    uint dead_count;
+    uint dead_indices[];
+};
+
+// 16B 对齐 push 块：消费方调用序 SetComputeUniformVec4×3 + Int×3 →
+//   u_emitter_pos@0、u_life_speed@16、u_emit_dir@32、u_emit_count@48、u_shape@64、u_seed@80
+//   （每次 SetComputeUniform* 对齐到 16B 边界，见 *RhiDevice::GetOrCreateUniformOffset）。
+layout(push_constant) uniform PC {
+    vec4 u_emitter_pos;   // offset 0   xyz=world pos, w=shape_radius
+    vec4 u_life_speed;    // offset 16  x=life_min, y=life_max, z=speed_min, w=speed_max
+    vec4 u_emit_dir;      // offset 32  xyz=cone direction, w=cone_angle_cos
+    int  u_emit_count;    // offset 48  本帧发射数
+    int  _pad0; int _pad1; int _pad2;
+    int  u_shape;         // offset 64  EmitterShape enum
+    int  _pad3; int _pad4; int _pad5;
+    int  u_seed;          // offset 80  随机种子
+    int  _pad6; int _pad7; int _pad8;
+} pc; // 96 B
+
+float hash(uint n) {
+    n = (n << 13u) ^ n;
+    n = n * (n * n * 15731u + 789221u) + 1376312589u;
+    return float(n & 0x7fffffffu) / float(0x7fffffff);
+}
+
+vec3 randomDirection(uint seed) {
+    float u = hash(seed);
+    float v = hash(seed + 1u);
+    float theta = u * 6.2831853;
+    float phi = acos(2.0 * v - 1.0);
+    return vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_emit_count) return;
+
+    // 从死亡列表取一个空位
+    uint dead_idx = atomicAdd(dead_count, 0xFFFFFFFFu); // decrement
+    if (dead_idx == 0u || dead_idx > 0x7FFFFFFFu) return; // 无空位
+    dead_idx -= 1u;
+    uint slot = dead_indices[dead_idx];
+
+    uint s = uint(pc.u_seed) + idx * 7u;
+    float life = mix(pc.u_life_speed.x, pc.u_life_speed.y, hash(s));
+    float speed = mix(pc.u_life_speed.z, pc.u_life_speed.w, hash(s + 3u));
+
+    vec3 pos = pc.u_emitter_pos.xyz;
+    vec3 dir = randomDirection(s + 5u);
+
+    // 形状
+    if (pc.u_shape == 1) { // Sphere
+        pos += dir * pc.u_emitter_pos.w * hash(s + 10u);
+    } else if (pc.u_shape == 2) { // Cone
+        float cos_angle = pc.u_emit_dir.w;
+        dir = mix(pc.u_emit_dir.xyz, dir, 1.0 - cos_angle);
+        dir = normalize(dir);
+    } else if (pc.u_shape == 3) { // Ring
+        float angle = hash(s + 20u) * 6.2831853;
+        pos += vec3(cos(angle), 0.0, sin(angle)) * pc.u_emitter_pos.w;
+    }
+
+    Particle p;
+    p.pos_life = vec4(pos, life);
+    p.vel_maxlife = vec4(dir * speed, life);
+    particles_out[slot] = p;
+
+    atomicAdd(alive_count, 1u);
+}

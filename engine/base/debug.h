@@ -9,6 +9,7 @@
 
 #include <cstring>
 #include <functional>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -50,21 +51,66 @@ inline void AppendFormatted(std::ostringstream& oss, const char* format) {
     }
 }
 
+/// 将单个值按 std::format 风格的子集 spec 写出。支持形如 `[0][width][.prec][type]`，
+/// type ∈ {x,X 十六进制；f/F 定点小数；其余按默认}。spec 为空时等价于 `{}` 直接输出。
+template <typename T>
+void AppendValueWithSpec(std::ostringstream& oss, const char* spec, std::size_t spec_len, T&& value) {
+    if (spec_len == 0) {
+        oss << std::forward<T>(value);
+        return;
+    }
+    std::ostringstream vs;
+    std::size_t i = 0;
+    bool zero_fill = false;
+    if (i < spec_len && spec[i] == '0') { zero_fill = true; ++i; }
+    int width = 0; bool has_width = false;
+    while (i < spec_len && spec[i] >= '0' && spec[i] <= '9') { has_width = true; width = width * 10 + (spec[i] - '0'); ++i; }
+    int prec = -1;
+    if (i < spec_len && spec[i] == '.') {
+        ++i; prec = 0;
+        while (i < spec_len && spec[i] >= '0' && spec[i] <= '9') { prec = prec * 10 + (spec[i] - '0'); ++i; }
+    }
+    char type = (i < spec_len) ? spec[i] : '\0';
+    if (type == 'x') { vs << std::hex << std::nouppercase; }
+    else if (type == 'X') { vs << std::hex << std::uppercase; }
+    else if (type == 'f' || type == 'F') { vs << std::fixed; if (prec >= 0) vs << std::setprecision(prec); }
+    if (zero_fill) { vs << std::setfill('0'); }
+    if (has_width) { vs << std::setw(width); }
+    vs << std::forward<T>(value);
+    oss << vs.str();
+}
+
 template <typename T, typename... Rest>
 void AppendFormatted(std::ostringstream& oss, const char* format, T&& value, Rest&&... rest) {
     if (!format) {
         return;
     }
 
-    const char* placeholder = std::strstr(format, "{}");
-    if (!placeholder) {
-        oss << format;
-        return;
+    // 仅将 `{}` 与 `{:spec}` 识别为占位符；其它 `{` 视为字面量，避免误吞日志中形如
+    // `settings{gpu_driven=...}` 的字面花括号。
+    for (const char* p = format; *p; ++p) {
+        if (p[0] != '{') {
+            continue;
+        }
+        if (p[1] == '}') {
+            oss.write(format, static_cast<std::streamsize>(p - format));
+            AppendValueWithSpec(oss, nullptr, 0, std::forward<T>(value));
+            AppendFormatted(oss, p + 2, std::forward<Rest>(rest)...);
+            return;
+        }
+        if (p[1] == ':') {
+            const char* close = std::strchr(p + 2, '}');
+            if (close) {
+                oss.write(format, static_cast<std::streamsize>(p - format));
+                AppendValueWithSpec(oss, p + 2, static_cast<std::size_t>(close - (p + 2)), std::forward<T>(value));
+                AppendFormatted(oss, close + 1, std::forward<Rest>(rest)...);
+                return;
+            }
+        }
     }
 
-    oss.write(format, static_cast<std::streamsize>(placeholder - format));
-    oss << std::forward<T>(value);
-    AppendFormatted(oss, placeholder + 2, std::forward<Rest>(rest)...);
+    // 没有占位符可消费：原样输出（多余实参被忽略）。
+    oss << format;
 }
 
 template <typename... Args>

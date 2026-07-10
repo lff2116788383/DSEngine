@@ -5,194 +5,21 @@
 
 #include "engine/render/particles/gpu_particle_system.h"
 #include "engine/render/rhi/rhi_device.h"
+#include "engine/base/debug.h"
+
+// 单一来源（option 2-strengthened）：两个 compute shader 的 GL430 / GLSL450 / HLSL 变体
+// 均由 engine/render/shaders/src/particle_update.comp、particle_emit.comp 离线交叉编译生成，
+// 分别嵌入以下头文件；三后端（OpenGL / Vulkan / D3D11）共用同一份语义。
+//
+// 粒子 SSBO 布局（每粒子 32 bytes = 8 floats）:
+//   float4 pos_life   (xyz=position, w=remaining_life)
+//   float4 vel_maxlife (xyz=velocity, w=max_life)
+// 渲染时 color/size 由 life_ratio 插值计算。
+#include "engine/render/shaders/generated/embed/particle_update_comp.gen.h"
+#include "engine/render/shaders/generated/embed/particle_emit_comp.gen.h"
 
 namespace dse {
 namespace render {
-
-namespace {
-
-// ─── Compute Shader 源码（GLSL 430） ─────────────────────────────────────
-
-// 粒子 SSBO 布局（每粒子 48 bytes = 12 floats）:
-//   vec3 position (12B) + float life (4B)
-//   vec3 velocity (12B) + float max_life (4B)
-//   vec4 color (16B) -- not stored, computed from life ratio in render
-//   float size (4B) + 3 padding (12B) -- total 64B per particle for alignment
-
-// 简化：每粒子 32 bytes (8 floats):
-//   float4 pos_life   (xyz=position, w=remaining_life)
-//   float4 vel_maxlife (xyz=velocity, w=max_life)
-// 渲染时 color/size 由 life_ratio 插值计算
-
-const char* kParticleUpdateCS = R"(
-#version 430 core
-layout(local_size_x = 256) in;
-
-struct Particle {
-    vec4 pos_life;      // xyz=position, w=remaining_life (<0 = dead)
-    vec4 vel_maxlife;   // xyz=velocity, w=max_life
-};
-
-layout(std430, binding = 0) buffer ParticlesIn  { Particle particles_in[]; };
-layout(std430, binding = 1) buffer ParticlesOut { Particle particles_out[]; };
-layout(std430, binding = 2) buffer Counters {
-    uint alive_count;     // 输出：存活粒子数
-    uint dead_count;      // 输出：死亡粒子数
-    uint dead_indices[1]; // 死亡粒子索引列表（动态大小，跟在 dead_count 后）
-};
-
-layout(std140, binding = 3) uniform SimParams {
-    vec4 u_gravity_dt;       // xyz=gravity, w=delta_time
-    vec4 u_wind_turbulence;  // xyz=wind, w=turbulence_strength
-    vec4 u_collision;        // x=enabled, y=plane_y, z=bounce, w=friction
-    vec4 u_vortex;           // x=strength, yzw=axis(0,1,0)
-    uint u_max_particles;
-    uint u_pad0;
-    uint u_pad1;
-    uint u_pad2;
-};
-
-// 简单伪随机
-float hash(float n) { return fract(sin(n) * 43758.5453123); }
-
-void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= u_max_particles) return;
-
-    Particle p = particles_in[idx];
-    float dt = u_gravity_dt.w;
-
-    if (p.pos_life.w > 0.0) {
-        // 存活粒子：积分
-        vec3 pos = p.pos_life.xyz;
-        vec3 vel = p.vel_maxlife.xyz;
-        float life = p.pos_life.w;
-
-        // 力场
-        vel += u_gravity_dt.xyz * dt;
-        vel += u_wind_turbulence.xyz * dt;
-
-        // 涡旋力
-        if (u_vortex.x > 0.0) {
-            vec3 to_axis = vec3(-pos.z, 0.0, pos.x); // 绕 Y 轴
-            vel += normalize(to_axis + vec3(0.001)) * u_vortex.x * dt;
-        }
-
-        // 湍流（简易噪声）
-        if (u_wind_turbulence.w > 0.0) {
-            float n = hash(float(idx) + life * 17.3);
-            vel += vec3(n - 0.5, hash(n * 7.1) - 0.5, hash(n * 13.7) - 0.5)
-                   * u_wind_turbulence.w * dt;
-        }
-
-        pos += vel * dt;
-        life -= dt;
-
-        // 碰撞检测（Y 平面）
-        if (u_collision.x > 0.5 && pos.y < u_collision.y) {
-            pos.y = u_collision.y;
-            vel.y = -vel.y * u_collision.z; // bounce
-            vel.xz *= u_collision.w;        // friction
-        }
-
-        p.pos_life = vec4(pos, life);
-        p.vel_maxlife.xyz = vel;
-
-        if (life > 0.0) {
-            atomicAdd(alive_count, 1u);
-        } else {
-            uint di = atomicAdd(dead_count, 1u);
-            dead_indices[di] = idx;
-        }
-    } else {
-        // 已死亡粒子：写入死亡列表
-        uint di = atomicAdd(dead_count, 1u);
-        dead_indices[di] = idx;
-    }
-
-    particles_out[idx] = p;
-}
-)";
-
-const char* kParticleEmitCS = R"(
-#version 430 core
-layout(local_size_x = 64) in;
-
-struct Particle {
-    vec4 pos_life;
-    vec4 vel_maxlife;
-};
-
-layout(std430, binding = 1) buffer ParticlesOut { Particle particles_out[]; };
-layout(std430, binding = 2) buffer Counters {
-    uint alive_count;
-    uint dead_count;
-    uint dead_indices[1];
-};
-
-layout(std140, binding = 4) uniform EmitParams {
-    vec4 u_emitter_pos;       // xyz=world pos, w=shape_radius
-    vec4 u_life_speed;        // x=life_min, y=life_max, z=speed_min, w=speed_max
-    vec4 u_emit_dir;          // xyz=cone direction, w=cone_angle_cos
-    uint u_emit_count;        // 本帧发射数
-    uint u_shape;             // EmitterShape enum
-    uint u_seed;              // 随机种子
-    uint u_pad;
-};
-
-float hash(uint n) {
-    n = (n << 13u) ^ n;
-    n = n * (n * n * 15731u + 789221u) + 1376312589u;
-    return float(n & 0x7fffffffu) / float(0x7fffffff);
-}
-
-vec3 randomDirection(uint seed) {
-    float u = hash(seed);
-    float v = hash(seed + 1u);
-    float theta = u * 6.2831853;
-    float phi = acos(2.0 * v - 1.0);
-    return vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
-}
-
-void main() {
-    uint idx = gl_GlobalInvocationID.x;
-    if (idx >= u_emit_count) return;
-
-    // 从死亡列表取一个空位
-    uint dead_idx = atomicAdd(dead_count, 0xFFFFFFFF); // decrement
-    if (dead_idx == 0u || dead_idx > 0x7FFFFFFFu) return; // 无空位
-    dead_idx -= 1u;
-    uint slot = dead_indices[dead_idx];
-
-    uint s = u_seed + idx * 7u;
-    float life = mix(u_life_speed.x, u_life_speed.y, hash(s));
-    float speed = mix(u_life_speed.z, u_life_speed.w, hash(s + 3u));
-
-    vec3 pos = u_emitter_pos.xyz;
-    vec3 dir = randomDirection(s + 5u);
-
-    // 形状
-    if (u_shape == 1u) { // Sphere
-        pos += dir * u_emitter_pos.w * hash(s + 10u);
-    } else if (u_shape == 2u) { // Cone
-        float cos_angle = u_emit_dir.w;
-        dir = mix(u_emit_dir.xyz, dir, 1.0 - cos_angle);
-        dir = normalize(dir);
-    } else if (u_shape == 3u) { // Ring
-        float angle = hash(s + 20u) * 6.2831853;
-        pos += vec3(cos(angle), 0.0, sin(angle)) * u_emitter_pos.w;
-    }
-
-    Particle p;
-    p.pos_life = vec4(pos, life);
-    p.vel_maxlife = vec4(dir * speed, life);
-    particles_out[slot] = p;
-
-    atomicAdd(alive_count, 1u);
-}
-)";
-
-} // anonymous namespace
 
 // ─── GpuParticleManager 实现 ─────────────────────────────────────────────
 
@@ -200,10 +27,25 @@ bool GpuParticleManager::Init(RhiDevice* rhi) {
     if (!rhi || inited_) return inited_;
     if (!rhi->SupportsCompute()) return false;
 
-    update_shader_ = rhi->CreateComputeShader(std::string(kParticleUpdateCS));
-    emit_shader_ = rhi->CreateComputeShader(std::string(kParticleEmitCS));
+    using namespace generated_shaders;
+
+    // Update pass：SSBO binding 0=ParticlesIn(readonly)/1=ParticlesOut(rw)/2=Counters(rw)，
+    //   push=80B（u_gravity_dt/u_wind_turbulence/u_collision/u_vortex 各 vec4 + u_max_particles int）。
+    update_shader_ = rhi->CreateComputeShaderEx(
+        kparticle_update_comp_glsl430, kparticle_update_comp_glsl450, kparticle_update_comp_hlsl,
+        3, 0, 0, 80);
+    // Emit pass：SSBO binding 1=ParticlesOut(rw)/2=Counters(rw)（binding 0 保留占位以对齐 VK 布局），
+    //   push=96B（u_emitter_pos/u_life_speed/u_emit_dir 各 vec4 + u_emit_count/u_shape/u_seed int）。
+    emit_shader_ = rhi->CreateComputeShaderEx(
+        kparticle_emit_comp_glsl430, kparticle_emit_comp_glsl450, kparticle_emit_comp_hlsl,
+        3, 0, 0, 96);
 
     inited_ = (update_shader_ != 0 && emit_shader_ != 0);
+    if (!inited_) {
+        DEBUG_LOG_ERROR("[GpuParticleManager] Compute shader creation failed "
+                        "(update={}, emit={}) — GPU particles disabled on this backend",
+                        update_shader_, emit_shader_);
+    }
     return inited_;
 }
 
