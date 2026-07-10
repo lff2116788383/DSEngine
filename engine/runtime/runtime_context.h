@@ -12,7 +12,8 @@ class AssetManager;
 
 enum class BusinessMode {
     Lua = 0,
-    Cpp = 1
+    Cpp = 1,
+    CSharp = 2
 };
 
 namespace dse::runtime {
@@ -24,6 +25,9 @@ struct RuntimeContext {
     std::function<void(const std::string&)> window_title_setter;
     BusinessMode business_mode = BusinessMode::Lua;
     bool editor_mode = false;
+    /// C# 托管程序集目录（含 DSEngine.Runtime.dll / DSEngine.Game.dll /
+    /// runtimeconfig.json）。business_mode == CSharp 时使用；空则回退 "managed"。
+    std::string csharp_managed_dir;
     /// 平台原生窗口句柄（Win32 HWND），D3D11/Vulkan 后端初始化时需要
     void* native_window_handle = nullptr;
     /// 音频系统指针（避免头文件依赖，实际为 dse::gameplay2d::AudioSystem*）

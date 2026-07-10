@@ -4,7 +4,38 @@
 #include "engine/base/debug.h"
 #include "engine/scripting/cpp/cpp_business_runtime.h"
 
+#ifdef DSE_ENABLE_CSHARP
+#include "engine/scripting/csharp/csharp_host.h"
+#endif
+
 namespace dse::runtime {
+
+#ifdef DSE_ENABLE_CSHARP
+namespace {
+// 业务运行时持有的单例 C# 宿主（CoreCLR）。托管侧自行枚举脚本实例，
+// 引擎每帧统一驱动 Start/Update 生命周期。
+CSharpHost& CSharpBusinessHost() {
+    static CSharpHost s_host;
+    return s_host;
+}
+
+bool BootstrapCSharpBusiness(const RuntimeContext& context) {
+    const std::string dir = context.csharp_managed_dir.empty() ? std::string("managed")
+                                                               : context.csharp_managed_dir;
+    const std::string config  = dir + "/DSEngine.Runtime.runtimeconfig.json";
+    const std::string runtime = dir + "/DSEngine.Runtime.dll";
+    const std::string game    = dir + "/DSEngine.Game.dll";
+
+    auto& host = CSharpBusinessHost();
+    if (!host.initialize(config, runtime, game)) {
+        DEBUG_LOG_ERROR("BusinessMode::CSharp bootstrap failed (managed dir=%s)", dir.c_str());
+        return false;
+    }
+    host.invoke_start();
+    return true;
+}
+} // namespace
+#endif
 
 bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBindings& stats_bindings) {
     if (context.business_mode == BusinessMode::Lua) {
@@ -32,6 +63,15 @@ bool BootstrapBusinessRuntime(RuntimeContext& context, const RuntimeStatsBinding
 #endif
     }
 
+    if (context.business_mode == BusinessMode::CSharp) {
+#ifdef DSE_ENABLE_CSHARP
+        return BootstrapCSharpBusiness(context);
+#else
+        DEBUG_LOG_ERROR("BusinessMode::CSharp requested but DSE_ENABLE_CSHARP is OFF");
+        return false;
+#endif
+    }
+
     if (context.world == nullptr || context.asset_manager == nullptr) {
         return false;
     }
@@ -43,6 +83,13 @@ void TickBusinessRuntime(RuntimeContext& context, float delta_time) {
 #ifdef DSE_ENABLE_LUA
         PumpLuaScriptHotReloads();
         TickLuaRuntime(delta_time);
+#endif
+        return;
+    }
+
+    if (context.business_mode == BusinessMode::CSharp) {
+#ifdef DSE_ENABLE_CSHARP
+        CSharpBusinessHost().invoke_update(delta_time);
 #endif
         return;
     }
@@ -60,6 +107,14 @@ void ShutdownBusinessRuntime(const RuntimeContext& context) {
 #endif
         return;
     }
+
+    if (context.business_mode == BusinessMode::CSharp) {
+#ifdef DSE_ENABLE_CSHARP
+        CSharpBusinessHost().shutdown();
+#endif
+        return;
+    }
+
     ShutdownCppBusiness();
 }
 

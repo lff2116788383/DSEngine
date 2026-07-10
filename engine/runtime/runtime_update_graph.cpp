@@ -7,6 +7,7 @@
 #include "engine/core/event_bus.h"
 #include "engine/platform/screen.h"
 #include "engine/input/input.h"
+#include "engine/ecs/blueprint_system.h"
 
 #ifdef DSE_ENABLE_3D
   #include "engine/physics/physics3d/i_physics3d_system.h"
@@ -31,6 +32,9 @@ void RunRuntimeUpdateGraph(::FramePipeline& pipeline, const dse::FrameUpdateCont
     if (pipeline.builtin_gameplay3d_enabled_) {
         pipeline.modules_impl_->UpdateGameplay3D(world, frame);
     }
+
+    // 蓝图运行时 Tick：驱动挂载 BlueprintComponent 的实体执行 .dbp 字节码
+    dse::BlueprintSystem::Update(frame.time.scaled_dt);
 }
 
 void RunRuntimeFixedUpdateGraph(::FramePipeline& pipeline, float fixed_delta_time) {

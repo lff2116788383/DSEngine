@@ -226,7 +226,6 @@ void RegisterEcsBindings(lua_State* L) {
     RegisterEcsRenderingPostBindings(L);
     RegisterEcsRenderingTerrainBindings(L);
     RegisterFontBindings(L);
-    // RegisterHttpBindings(L); // TODO: declare in modules.h
     RegisterLocalizationBindings(L);
     RegisterMeshletBindings(L);
 #ifdef DSE_ENABLE_NAVMESH

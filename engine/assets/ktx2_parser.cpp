@@ -148,7 +148,10 @@ Ktx2ParseResult ParseKtx2(const std::vector<uint8_t>& file_data) {
     result.level_data.resize(header.level_count);
     for (uint32_t i = 0; i < header.level_count; ++i) {
         const auto& lvl = levels[i];
-        if (lvl.byte_offset + lvl.byte_length > file_data.size()) {
+        // 溢出安全：byte_offset/byte_length 为 uint64，直接相加可能回绕从而绕过校验，
+        // 改为「偏移不超文件、长度不超剩余容量」的等价判断（与 PakReader 一致）。
+        if (lvl.byte_offset > file_data.size() ||
+            lvl.byte_length > file_data.size() - lvl.byte_offset) {
             result.error = "Level " + std::to_string(i) + " data out of bounds";
             return result;
         }

@@ -180,3 +180,97 @@ DSEngine 是一个 ECS 内核 + 多后端 RHI + 分层模块 的 C++ 游戏引�
 - **守护测试**：新增 `tests/gtest/smoke/impostor_system_smoke_test.cpp`（Impostor 烘焙→出批次→RenderOpaque→Shutdown 全生命周期，无 GL 环境自动 SKIP，与其余 GL 冒烟一致）。Meshlet/VirtualTexture/GlobalSDF 经核实已有单测覆盖。
 
 *说明：架构梳理部分为现状记录；本次另含上述实际代码改动（均已在 feature/engine-lib 提交）。*
+
+---
+
+## 九、RHI 后端分级 + 特性差异矩阵
+
+四后端均为真实实现（非桩），统一实现纯虚 `CommandBuffer` + `RhiDevice`。但维护面 = 4×，新特性主要往体量更大的 Vulkan/WebGPU 堆，GL/D3D11 易在新特性上悄悄落后。故 v1 明确分级：
+
+| 分级 | 后端 | 定位 | 特性同步保证 |
+|:-----|:-----|:-----|:-------------|
+| **一线（Tier-1）** | **Vulkan** · **D3D11** | 桌面出货主力（Win/Linux 桌面 + Android 走 Vulkan） | 新渲染特性以此二者为准，必须验证 |
+| **兼容（Tier-2）** | **OpenGL** | 回退默认（`RhiBackend::Default`），无 Vulkan/DX 时兜底 | 保证可运行；高级 GPU-driven 特性可缺省降级 |
+| **实验（Tier-3）** | **WebGPU** | Web/Emscripten 专用（Dawn/WebGPU），桌面原生无 Dawn 集成 | 尽力对齐，缺失特性以「优雅降级」为原则 |
+
+### 特性差异矩阵（Pass / 能力 × 后端）
+
+> ✅=完整支持　🟡=支持但受限/降级　❌=不支持（自动跳过或回退）。以「能否在该后端跑通该 Pass/能力」为准。
+
+| 特性 / Pass | Vulkan(一线) | D3D11(一线) | OpenGL(兼容) | WebGPU(实验) |
+|:------------|:-----------:|:-----------:|:-----------:|:-----------:|
+| PreZ / Forward / GBuffer / Deferred | ✅ | ✅ | ✅ | ✅ |
+| CSM / Spot / Point Shadow | ✅ | ✅ | ✅ | 🟡（点光阴影受限） |
+| Clustered Forward+（256 光源） | ✅ | ✅ | ✅ | ✅ |
+| 后处理链（TAA/Bloom/SSAO/DOF/MotionBlur/SSR/AutoExposure） | ✅ | ✅ | ✅ | 🟡（部分 compute 后处理降级） |
+| DDGI / LightProbe / ReflectionProbe | ✅ | ✅ | ✅ | 🟡 |
+| GPU Skinning（compute） | ✅ | ✅ | ✅ | 🟡（依赖 WebGPU compute） |
+| Meshlet cull + Indirect Draw（GPU-driven） | ✅ | ✅ | 🟡（GL 间接绘制受限） | 🟡 |
+| Hi-Z Culling / GPU Scene | ✅ | ✅ | 🟡 | 🟡 |
+| GPU 粒子（compute + indirect） | ✅ | ✅ | 🟡 | 🟡（WebGL2 无 compute 时走 CPU 粒子） |
+| GlobalSDF / VirtualTexture | ✅ | ✅ | 🟡 | 🟡 |
+| 模板测试（stencil） | 🟡（`PipelineStateDesc` 暂无模板字段，需扩展） | 🟡 | 🟡 | 🟡 |
+| CommandBuffer 原生录制 / 多线程 | ❌（被降级为立即转发，见 §4.3） | ❌ | ❌ | ❌ |
+
+**结论**：Vulkan/D3D11 为特性基准；OpenGL 保证基础管线 + 后处理跑通，GPU-driven 高级路径按能力降级；WebGPU 以 Web MVP 为目标，compute 相关特性视浏览器/Dawn 能力降级。模板测试为四后端共同缺口（RHI 接口层面待扩展，非单后端问题），已在 §5.1 记为非阻塞。
+
+---
+
+## 十、平台支持分级 + Jolt 物理后端功能覆盖
+
+### 10.1 平台分级
+
+| 分级 | 平台 | 图形后端 | 说明 |
+|:-----|:-----|:---------|:-----|
+| **正式支持** | Windows | D3D11 / Vulkan / OpenGL | 主力开发+出货平台 |
+| **正式支持** | Linux | Vulkan / OpenGL | 桌面 GLFW |
+| **正式支持** | Android | Vulkan / OpenGL ES | Native Activity |
+| **实验** | Web (Emscripten) | WebGL2 / WebGPU | MVP，2D-first；`DSE_ENABLE_APPLE_PLATFORM` 无关 |
+| **实验** | iOS | Metal（经 RHI） | `DSE_ENABLE_APPLE_PLATFORM=OFF` |
+| **实验** | HarmonyOS | GLES / Vulkan | `DSE_ENABLE_HARMONY_PLATFORM=OFF` |
+
+### 10.2 Jolt 后端对 Ragdoll / Vehicle / Buoyancy / Fracture 的覆盖（经代码核验）
+
+PhysX 默认 OFF，Jolt 为出货后端。逐系统核实四个"疑似依赖 PhysX 专有能力"的系统在 Jolt 下的可用性：
+
+| 系统 | 文件 | Jolt 下状态 | 实现方式 | 与 PhysX 的差异 |
+|:-----|:-----|:-----------|:---------|:----------------|
+| **Ragdoll** | `modules/gameplay_3d/ragdoll/ragdoll_system.cpp` | ✅ 完整 | `#elif defined(DSE_ENABLE_JOLT)` 分支：为每根骨骼创建 ECS 实体 + `RigidBody3DComponent` + `CapsuleCollider3DComponent`，父子间用 `Joint3DComponent`（**Spring** 类型）连接；`Activate` 经 `physics3d_->AddImpulse` 施加冲量 | PhysX 用可配置 **D6 关节**（角度限制更精细）；Jolt 走通用 **Spring 关节**（刚度/阻尼），关节保真度略低但功能完整 |
+| **Vehicle** | `modules/gameplay_3d/vehicle/vehicle_system.cpp` | ✅ 完整 | 后端无关：经 `IPhysics3DSystem` 的 `Raycast`（射线悬挂）+ `AddForce`/`AddTorque` 驱动 | 无差异（不触碰任何 PhysX 专有接口） |
+| **Buoyancy** | `modules/gameplay_3d/buoyancy/buoyancy_system.cpp` | ✅ 完整 | 后端无关：`GetVelocity`/`GetAngularVelocity` + `AddForce`/`AddTorque`（浮力+阻力） | 无差异 |
+| **Fracture** | `modules/gameplay_3d/destruction/fracture_system.cpp` | ✅ 完整 | 后端无关：`physics3d_->RemoveActor` 移除源体 + 生成碎块实体 | 无差异 |
+
+**结论**：四系统在 Jolt 下**全部可用**。唯一功能差异是 **Ragdoll 关节类型**（Jolt=Spring / PhysX=D6）——非"缺失"，而是关节约束精细度的取舍。`IPhysics3DSystem::GetPxPhysics()/GetPxScene()/GetPxCooking()` 为 PhysX 专用，Jolt 后端返回 nullptr，仅 Ragdoll 的 PhysX 分支使用，不影响 Jolt 路径。审计报告"Jolt 后端可能不完整"一项经核实**不成立**。
+
+---
+
+## 十一、C# / Blueprint 运行时接入 + 反序列化加固（本次）
+
+### 11.1 C# 业务运行时接入（`BusinessMode::CSharp`）
+
+此前 `CSharpHost`（.NET 8 CoreCLR/hostfxr）完整实现但仅编辑器面板/冒烟引用，未接帧循环。本次补完：
+
+- `runtime_context.h`：`BusinessMode` 新增 `CSharp = 2`；`RuntimeContext` 新增 `csharp_managed_dir`（托管程序集目录，空则回退 `"managed"`）。
+- `business_runtime_bridge.cpp`：Bootstrap/Tick/Shutdown 三处新增 `CSharp` 分发（`DSE_ENABLE_CSHARP` 保护）——业务运行时持有单例 `CSharpHost`，Bootstrap 时 `initialize + invoke_start`，每帧 `invoke_update`，退出 `shutdown`。托管侧自行枚举脚本实例（与 Lua/C++ 双轨对齐，经统一分发）。
+
+### 11.2 Blueprint 运行时 Tick（`engine/scripting/blueprint/` + `blueprint_system.cpp`）
+
+此前蓝图仅编辑器侧完整（VM/编译器在 `apps/editor_cpp`，命名空间 `dse::editor::bp`，耦合 ImGui），运行时 `blueprint_system.cpp` 不存在、`BlueprintSystem::Update` 从不被调用。本次在引擎侧新建**无 ImGui 依赖**的自包含蓝图运行时模块：
+
+- `blueprint_vm.h/.cpp`：寄存器式字节码 VM（指令集与编辑器对齐），ECS 读写经 `IBlueprintEcsBridge` 抽象；含指令数上限防死循环。
+- `blueprint_compiler.h/.cpp`：`.dbp`(JSON, rapidjson) 加载 + 图→字节码编译（按节点名生成，逻辑与编辑器 `ByteCodeCompiler` 对齐）；运行时加载器额外解析引脚 `type`（比编辑器加载器更完整地识别 Flow 引脚）。
+- `engine/ecs/blueprint_system.cpp`：实现 `BlueprintSystem::Init/Update/HotReload`。编译缓存按 `.dbp` 路径共享，每实体变量状态独立（按 entity id）；LOD `tick_interval` 分频；`WorldEcsBridge` 把 Get/Set Position 落到 `TransformComponent.position`（字段 0）。
+- 已在 `runtime_update_graph.cpp::RunRuntimeUpdateGraph` 注册 `BlueprintSystem::Update(scaled_dt)`，帧循环真正驱动。
+
+> 说明：编辑器侧 `dse::editor::bp` 保持不变；引擎侧为独立无 ImGui 副本，二者共享 `.dbp` 资源格式为契约（刻意的编辑期/运行期解耦，避免运行时链接 ImGui）。
+
+### 11.3 反序列化边界加固
+
+- `pak_reader.cpp`（.dpak）：经核实**已充分加固**（文件尺寸探测 → TOC 偏移校验 → 由文件容量反推 `entry_count` 上限 → 每条数据块 `offset+size` 溢出安全区间校验 → `ReadFile` 再校验）。审计报告此项已被先前提交解决。
+- `dtex.cpp`（.dtex）：经核实边界完整（header/desc 表/每 mip `offset+size` 均有界，64 位下无溢出）。
+- **`ktx2_parser.cpp`（.ktx2）：发现并修复真实越界漏洞**——`Ktx2LevelIndex::byte_offset/byte_length` 为 `uint64_t`，原校验 `byte_offset + byte_length > file_size` 可整数回绕从而被绕过，导致对畸形 KTX2 的越界 `memcpy`。改为溢出安全的 `offset > size || length > size - offset`（与 PakReader 一致）。
+- `.bun`（AES-128-CTR）：MountBundle 将解码委托第三方 `bundle` 库，引擎侧仅拷贝 `std::string`（有界），无自研二进制解析越界面。
+
+### 11.4 P1 清理
+
+- 删除 `lua_binding_ecs.cpp` 中误导性的 `// RegisterHttpBindings(L); // TODO` 陈旧注释——HTTP 绑定实际已在 `lua_binding_registry.cpp` 注册（审计报告"HTTP 未注册"一项不成立）。
