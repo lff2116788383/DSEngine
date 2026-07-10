@@ -36,7 +36,6 @@ struct PanelVisibilityState {
     bool multi_viewport     = false;
     bool anim_state_machine = false;
     bool curve_editor       = false;
-    bool visual_script      = false;
     bool anim_retarget      = false;
     bool blueprint          = false;
     bool csharp_panel       = false;

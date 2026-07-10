@@ -115,8 +115,6 @@
 #include "editor_streaming_panel.h"
 #include "editor_terrain_tools.h"
 #include "editor_curve_editor.h"
-#include "editor_visual_script.h"
-#include "editor_visual_script_debugger.h"
 #include "editor_anim_retarget.h"
 #include "editor_animation_clip.h"
 #include "editor_sequencer.h"
@@ -707,7 +705,6 @@ bool EditorApp::Init(int argc, char* argv[]) {
         reg.Register({"multi_viewport",     "Multi Viewport",       "Tool",  &panels_.multi_viewport,     false});
         reg.Register({"anim_state_machine", "Anim State Machine",   "Tool",  &panels_.anim_state_machine, false});
         reg.Register({"curve_editor",       "Curve Editor",         "Tool",  &panels_.curve_editor,       false});
-        reg.Register({"visual_script",      "Visual Script",        "Tool",  &panels_.visual_script,      false});
         reg.Register({"anim_retarget",      "Anim Retarget",        "Tool",  &panels_.anim_retarget,      false});
         reg.Register({"blueprint",          "Blueprint",            "Tool",  &panels_.blueprint,          false});
         reg.Register({"csharp",             "C# Scripts",           "Tool",  &panels_.csharp_panel,       false});
@@ -741,7 +738,6 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_lua_debugger         = &panels_.lua_debugger;
         ui_services.show_streaming_debug      = &panels_.streaming_debug;
         ui_services.show_curve_editor         = &panels_.curve_editor;
-        ui_services.show_visual_script        = &panels_.visual_script;
         ui_services.show_anim_retarget        = &panels_.anim_retarget;
         ui_services.show_preferences          = &panels_.preferences;
         ui_services.show_plugins              = &panels_.plugins;
@@ -1306,15 +1302,6 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
         ImGui::End();
     }
 
-    // Visual Script editor panel
-    if (panels_.visual_script) {
-        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Visual Script", &panels_.visual_script)) {
-            dse::editor::DrawVisualScriptEditor(ctx);
-        }
-        ImGui::End();
-    }
-
     // Animation Retargeting panel
     if (panels_.anim_retarget) {
         ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
@@ -1326,11 +1313,6 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     if (panels_.git) {
         dse::editor::DrawVersionControlPanel(ctx);
-    }
-
-    // Visual Script Debugger (shown alongside Visual Script editor)
-    if (panels_.visual_script) {
-        dse::editor::DrawVisualScriptDebugger(ctx);
     }
 
     // Blueprint Editor (complete blueprint system)

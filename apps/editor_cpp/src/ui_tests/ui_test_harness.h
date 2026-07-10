@@ -58,7 +58,6 @@ struct UiTestServices {
     bool* show_lua_debugger = nullptr;
     bool* show_streaming_debug = nullptr;
     bool* show_curve_editor = nullptr;
-    bool* show_visual_script = nullptr;
     bool* show_anim_retarget = nullptr;
     bool* show_preferences = nullptr;
     bool* show_plugins = nullptr;

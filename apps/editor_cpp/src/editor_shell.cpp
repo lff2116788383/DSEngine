@@ -532,7 +532,6 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
         ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, &panels.lua_debugger);
         ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, &panels.streaming_debug);
         ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, &panels.curve_editor);
-        ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, &panels.visual_script);
         ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim Retarget", nullptr, &panels.anim_retarget);
         ImGui::MenuItem(MDI_ICON_CODE "  C# Scripts", nullptr, &panels.csharp_panel);
         ImGui::MenuItem(MDI_ICON_SITEMAP "  Blueprint", nullptr, &panels.blueprint);
