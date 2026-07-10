@@ -13,6 +13,7 @@
 #include "engine/assets/bundle_packer.h"
 #include "engine/runtime/app_manifest.h"
 #include "engine/base/debug.h"
+#include "engine/project/web_build.h"
 
 #include <cstdio>
 #include <string>
@@ -58,6 +59,7 @@ struct BuildState {
     std::atomic<bool> building{false};
     std::atomic<bool> build_done{false};
     std::atomic<bool> build_success{false};
+    std::atomic<bool> cancel_requested{false};  // Web/长任务的取消标志
     std::mutex log_mutex;
     std::vector<std::string> build_log;
     std::thread build_thread;
@@ -152,6 +154,20 @@ std::filesystem::path FindAndroidExportScript() {
     for (int i = 0; i < 8 && !dir.empty(); ++i) {
         fs::path candidate = dir / "scripts" / "export_android_apk.ps1";
         if (fs::exists(candidate, ec)) return candidate;
+        fs::path parent = dir.parent_path();
+        if (parent == dir) break;
+        dir = parent;
+    }
+    return {};
+}
+
+// 从编辑器工作目录向上查找含 CMakePresets.json 的仓库根（Web 构建需要）。
+std::filesystem::path FindRepoRoot() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path dir = fs::current_path(ec);
+    for (int i = 0; i < 8 && !dir.empty(); ++i) {
+        if (fs::exists(dir / "CMakePresets.json", ec)) return dir;
         fs::path parent = dir.parent_path();
         if (parent == dir) break;
         dir = parent;
@@ -318,7 +334,8 @@ void DoBuild(BuildState& state) {
         return;
     }
 
-    // Web platform: use publish workflow (minizip + optional upload)
+    // Web platform: run the REAL emscripten build (shared with the CLI via
+    // dse::project::RunWebBuild), collect artifacts, then zip for publish.
     if (state.platform == BuildPlatform::Web) {
         AppendLog(state, "=== Web Build Started ===");
 
@@ -332,23 +349,52 @@ void DoBuild(BuildState& state) {
         }
         state.last_output_dir = out_dir.string();
 
-        // TODO: Call Emscripten build here (emcc/emmake)
-        // For now, if the output dir already has index.html (pre-built), just zip it.
-        if (!fs::exists(out_dir / "index.html", ec)) {
-            AppendLog(state, "ERROR: Web build output not found. Run Emscripten build first.");
-            AppendLog(state, "  Expected index.html in: " + out_dir.string());
+        // 1) Toolchain check — give actionable guidance instead of a silent failure.
+        dse::project::EmscriptenStatus em = dse::project::DetectEmscripten();
+        if (!em.available) {
+            AppendLog(state, "ERROR: " + em.detail);
+            AppendLog(state, "  " + em.install_hint);
             FinishBuild(state, false);
             return;
         }
+        AppendLog(state, em.detail);
 
-        AppendLog(state, "Web build output found, compressing...");
+        // 2) Locate the repository root (needs CMakePresets.json for the web presets).
+        fs::path repo = FindRepoRoot();
+        if (repo.empty()) {
+            AppendLog(state, "ERROR: 未找到 CMakePresets.json；请从引擎仓库检出目录运行编辑器。");
+            FinishBuild(state, false);
+            return;
+        }
+        AppendLog(state, "Repo root: " + repo.string());
+
+        // 3) Configure + build + collect artifacts into out_dir (same code path as CLI).
+        dse::project::WebBuildOptions wopts;
+        wopts.source_dir = repo.string();
+        wopts.debug = (state.config == BuildConfig::Debug);
+        wopts.collect_artifacts = true;
+        wopts.dist_dir = out_dir.string();
+        wopts.cancel = &state.cancel_requested;
+        wopts.on_line = [&state](const std::string& line, bool /*is_err*/) {
+            AppendLog(state, line);
+        };
+        dse::project::WebBuildResult wres = dse::project::RunWebBuild(wopts);
+        if (!wres.ok) {
+            AppendLog(state, wres.canceled ? "Web build canceled." : ("ERROR: " + wres.error));
+            FinishBuild(state, false);
+            return;
+        }
+        AppendLog(state, "Collected " + std::to_string(wres.artifacts.size()) +
+                             " web artifact(s) -> " + wres.artifact_dir);
+
+        // 4) Zip the collected distribution for offline export / upload.
+        WriteGameManifest(state, out_dir);
         std::string zip_path = ZipDirectory(out_dir.string());
         if (zip_path.empty()) {
             AppendLog(state, "ERROR: Failed to compress Web build output");
             FinishBuild(state, false);
             return;
         }
-
         state.publish_state.local_zip_path = zip_path;
         state.publish_state.publish_success = true;
         state.publish_state.publish_done = true;
@@ -787,6 +833,7 @@ void DrawBuildGameDialog() {
             state.building = true;
             state.build_done = false;
             state.build_success = false;
+            state.cancel_requested = false;
             state.build_log.clear();
             state.launch_after_build = launch;
             if (state.build_thread.joinable()) state.build_thread.join();
@@ -838,6 +885,10 @@ void DrawBuildGameDialog() {
             const char* spinners[] = {"|" , "/", "-", "\\"};
             int idx = static_cast<int>(state.spinner_angle / 6.2832f * 4.0f) % 4;
             ImGui::TextColored(ImVec4(1, 1, 0, 1), "%s  Building...", spinners[idx]);
+            ImGui::SameLine();
+            ImGui::BeginDisabled(state.cancel_requested.load());
+            if (ImGui::SmallButton("Cancel")) state.cancel_requested = true;
+            ImGui::EndDisabled();
         }
 
         // Auto-launch after successful build

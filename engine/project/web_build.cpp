@@ -1,6 +1,9 @@
 /**
  * @file web_build.cpp
- * @brief ResolveWebPreset / PlanWebBuild / RunWebBuild 实现 — 见 web_build.h。
+ * @brief ResolveWebPreset / PlanWebBuild / DetectEmscripten / RunWebBuild 实现 — 见 web_build.h。
+ *
+ * P1-3：外部命令改由统一的 dse::platform::RunProcess 执行（参数数组、流式输出、退出码、
+ * cancel），不再用 std::system 拼接 shell 串、也不再 chdir 进程全局目录。
  */
 
 #include "engine/project/web_build.h"
@@ -8,6 +11,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <system_error>
+
+#include "engine/platform/process.h"
+#include "engine/project/web_dist.h"
 
 namespace fs = std::filesystem;
 
@@ -33,6 +39,26 @@ WebBuildPlan PlanWebBuild(const WebBuildOptions& opts) {
     return plan;
 }
 
+EmscriptenStatus DetectEmscripten() {
+    EmscriptenStatus st;
+    const char* emsdk = std::getenv("EMSDK");
+    st.install_hint =
+        "安装并激活 Emscripten：git clone https://github.com/emscripten-core/emsdk，"
+        "然后 `emsdk install latest && emsdk activate latest`，"
+        "并在当前会话 source 其 emsdk_env 脚本（设置 EMSDK 环境变量）后重试。";
+    if (emsdk == nullptr || emsdk[0] == '\0') {
+        st.available = false;
+        st.detail = "未设置环境变量 EMSDK";
+        return st;
+    }
+    // EMSDK 已设置即视为就绪；其目录/工具链文件是否有效交由 cmake 预设判定
+    // （保持与既有 CLI 行为一致，便于单测在不安装 emsdk 的情况下覆盖后续逻辑）。
+    st.emsdk = emsdk;
+    st.available = true;
+    st.detail = "EMSDK=" + st.emsdk;
+    return st;
+}
+
 WebBuildResult RunWebBuild(const WebBuildOptions& opts) {
     WebBuildResult result;
     const WebBuildPlan plan = PlanWebBuild(opts);
@@ -40,14 +66,16 @@ WebBuildResult RunWebBuild(const WebBuildOptions& opts) {
     result.configure_command = plan.configure_command;
     result.build_command = plan.build_command;
 
+    auto log = [&](const std::string& line, bool err) {
+        if (opts.on_line) opts.on_line(line, err);
+    };
+
     // web 预设的工具链文件以 $env{EMSDK} 展开；缺失时 cmake 会判定预设被禁用，
     // 提前给出可操作的提示比让 cmake 报「preset disabled」更友好。
-    const char* emsdk = std::getenv("EMSDK");
-    if (emsdk == nullptr || emsdk[0] == '\0') {
-        result.error =
-            "未设置环境变量 EMSDK；请先安装并激活 Emscripten "
-            "(emsdk install latest && emsdk activate latest)，"
-            "或在当前会话 source 其 emsdk_env 脚本后重试";
+    EmscriptenStatus em = DetectEmscripten();
+    if (!em.available) {
+        result.error = em.detail + "；" + em.install_hint;
+        log(result.error, true);
         return result;
     }
 
@@ -66,39 +94,66 @@ WebBuildResult RunWebBuild(const WebBuildOptions& opts) {
         return result;
     }
 
-    // cmake --preset / --build --preset 需在含 CMakePresets.json 的目录运行；
-    // 切到 source_dir 执行后再恢复，避免对命令做平台相关的路径转义。
-    const fs::path prev_cwd = fs::current_path(ec);
-    fs::current_path(source, ec);
-    if (ec) {
-        result.error = "无法进入仓库根目录: " + ec.message();
-        return result;
-    }
-
-    auto restore = [&]() {
-        std::error_code rec;
-        fs::current_path(prev_cwd, rec);
+    // cmake --preset / --build --preset 需在含 CMakePresets.json 的目录运行。
+    // 通过 RunProcess 的 working_dir 指定，避免修改进程全局 cwd（线程安全）。
+    auto run_cmake = [&](const std::vector<std::string>& args, int& exit_out) -> bool {
+        dse::platform::ProcessOptions po;
+        po.executable = "cmake";
+        po.args = args;
+        po.working_dir = source;
+        po.merge_stderr = false;
+        auto sink = [&](std::string_view l, bool is_err) { log(std::string(l), is_err); };
+        dse::platform::ProcessResult pr = dse::platform::RunProcess(
+            po, sink, std::chrono::milliseconds::zero(), opts.cancel);
+        if (pr.canceled) {
+            result.canceled = true;
+            result.error = "构建已取消";
+            return false;
+        }
+        if (!pr.launched) {
+            result.error = pr.error.empty() ? "无法启动 cmake（是否在 PATH 中？）" : pr.error;
+            return false;
+        }
+        exit_out = pr.exit_code;
+        return pr.exit_code == 0;
     };
 
     if (opts.run_configure) {
-        result.configure_exit = std::system(plan.configure_command.c_str());
-        if (result.configure_exit != 0) {
-            result.error = "cmake 配置失败 (" + plan.configure_command + ")";
-            restore();
+        log("$ " + plan.configure_command, false);
+        if (!run_cmake({"--preset", plan.preset}, result.configure_exit)) {
+            if (result.error.empty())
+                result.error = "cmake 配置失败 (" + plan.configure_command + ")";
             return result;
         }
     }
 
     if (opts.run_build) {
-        result.build_exit = std::system(plan.build_command.c_str());
-        if (result.build_exit != 0) {
-            result.error = "cmake 编译失败 (" + plan.build_command + ")";
-            restore();
+        log("$ " + plan.build_command, false);
+        if (!run_cmake({"--build", "--preset", plan.preset}, result.build_exit)) {
+            if (result.error.empty())
+                result.error = "cmake 编译失败 (" + plan.build_command + ")";
             return result;
         }
     }
 
-    restore();
+    if (opts.collect_artifacts) {
+        const std::string in_dir = opts.bin_dir.empty()
+            ? (source / "bin").string() : opts.bin_dir;
+        const std::string out_dir = opts.dist_dir.empty()
+            ? (source / "dist" / "web").string() : opts.dist_dir;
+        log("收集 Web 产物: " + in_dir + " -> " + out_dir, false);
+        WebDistResult dist = CollectWebDistribution(in_dir, out_dir);
+        if (!dist.ok) {
+            result.error = "收集 Web 产物失败: " + dist.error;
+            log(result.error, true);
+            return result;
+        }
+        result.artifact_dir = out_dir;
+        result.artifacts = dist.files;
+        result.artifact_bytes = dist.total_bytes;
+        for (const auto& f : dist.files) log("  + " + f, false);
+    }
+
     result.ok = true;
     return result;
 }
