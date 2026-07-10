@@ -462,13 +462,16 @@ void AssetDistribution::UpdatePriorities(const glm::vec3& player_pos) {
 void AssetDistribution::Tick(float dt) {
     if (!initialized_) return;
 
-    // 驱动 HttpClient 回调执行（完成的下载在回调里更新 package 状态）
+    // 驱动 HttpClient 回调执行（完成的下载在回调里更新 package 状态）。
+    // 仅当真正注册了 HttpClient 时才视为「HTTP 下载生效」：编译进 HTTP 但未注册客户端
+    // （如无头/离线运行、单元测试）时，仍回退到模拟下载，避免包永久停在 Downloading。
     bool http_active = false;
 #ifdef DSE_ENABLE_HTTP
     if (dse::http::HttpClient::Available()) {
-        if (auto* hc = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>())
+        if (auto* hc = dse::core::ServiceLocator::Instance().Get<dse::http::HttpClient>()) {
             hc->Poll();
-        http_active = true;
+            http_active = true;
+        }
     }
 #endif
 

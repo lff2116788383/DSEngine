@@ -10,11 +10,16 @@ option(DSE_EDITOR_UI_TESTS "Build editor with embedded Dear ImGui Test Engine (-
 option(DSE_PUBLISH_ENABLED "Enable online publish feature (requires libcurl)" OFF)
 
 # ─── IXWebSocket (WebSocket server for Control Server / MCP) ────────────────
-set(USE_TLS OFF CACHE BOOL "" FORCE)
-set(USE_ZLIB OFF CACHE BOOL "" FORCE)
-set(BUILD_DEMO OFF CACHE BOOL "" FORCE)
-set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(${CMAKE_SOURCE_DIR}/depends/IXWebSocket ${CMAKE_CURRENT_BINARY_DIR}/IXWebSocket)
+# 当 DSE_ENABLE_HTTP=ON 时，cmake/CMakeLists.txt.http 已提前 add_subdirectory 了
+# 同一个 IXWebSocket（带 TLS=OpenSSL）。这里仅在尚未定义 ixwebsocket 目标时才自行加入，
+# 避免重复 add_library(ixwebsocket) 冲突（HTTP + 编辑器同时启用时）。
+if(NOT TARGET ixwebsocket)
+    set(USE_TLS OFF CACHE BOOL "" FORCE)
+    set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+    set(BUILD_DEMO OFF CACHE BOOL "" FORCE)
+    set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/depends/IXWebSocket ${CMAKE_CURRENT_BINARY_DIR}/IXWebSocket)
+endif()
 
 set(DSE_GLAD_SOURCE ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps/glad_gl.c)
 if(NOT EXISTS ${DSE_GLAD_SOURCE})

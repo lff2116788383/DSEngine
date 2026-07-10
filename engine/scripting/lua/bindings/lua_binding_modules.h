@@ -52,8 +52,9 @@ void RegisterFloatingOriginBindings(lua_State* L);
 void RegisterFontBindings(lua_State* L);
 void RegisterSerializeBindings(lua_State* L);  // dse.serialize 自描述二进制序列化（编解码 Lua 值/表）
 #ifdef DSE_ENABLE_HTTP
-void RegisterHttpBindings(lua_State* L);   // dse.http 异步 HTTP(S) 客户端
-void PumpHttp(lua_State* L);               // 触发已完成 HTTP 回调（引擎 Tick 调用）
+void RegisterHttpBindings(lua_State* L);        // dse.http 低层 C ABI 绑定（codegen 生成）
+void RegisterHttpRequestBinding(lua_State* L);  // dse.http.request{...on_done} 高层回调式请求（手写）
+void PumpHttp(lua_State* L);                     // 触发已完成 HTTP 回调（引擎 Tick 调用）
 #endif
 #ifdef DSE_NET_ENABLED
 void RegisterNetBindings(lua_State* L);    // dse.net 游戏网络传输 (GameNetworkingSockets)

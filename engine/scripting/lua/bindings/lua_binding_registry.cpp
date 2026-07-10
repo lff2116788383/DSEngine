@@ -48,6 +48,7 @@ void RegisterPhase1LuaApi(lua_State* L) {
 
 #ifdef DSE_ENABLE_HTTP
     RegisterHttpBindings(L);
+    RegisterHttpRequestBinding(L);
 #endif
 
 #ifdef DSE_NET_ENABLED
