@@ -92,7 +92,10 @@ foreach ($cfg in $Configs) {
             "-DDSE_BUILD_SHARED=ON",
             "-DDSE_BUILD_GTESTS=OFF",
             "-DDSE_BUILD_EDITOR=OFF",
-            "-DDSE_BUILD_LAUNCHER=OFF"
+            "-DDSE_BUILD_LAUNCHER=OFF",
+            "-DDSE_ENABLE_NET=OFF",
+            "-DDSE_ENABLE_HTTP=OFF",
+            "-DDSE_ENABLE_CSHARP=OFF"
         ) + (Get-ProfileArgs $profile)
         & cmake @cmakeArgs *> $null
         if ($LASTEXITCODE -ne 0) { throw "CMake configure failed (exit $LASTEXITCODE)" }

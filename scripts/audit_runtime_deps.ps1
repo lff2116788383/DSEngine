@@ -43,7 +43,8 @@ $requiredRuntime = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
 $violations = @()
 $warnings   = @()
 
-$binaries = Get-ChildItem -LiteralPath $Dir -Recurse -File -Include *.dll, *.exe -ErrorAction SilentlyContinue
+$binaries = Get-ChildItem -LiteralPath $Dir -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in @(".dll", ".exe") }
 $names    = $binaries | ForEach-Object { $_.Name }
 $namesLc  = $names | ForEach-Object { $_.ToLower() }
 

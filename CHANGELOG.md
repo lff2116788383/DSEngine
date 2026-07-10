@@ -4,6 +4,16 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本 SemVer 2.0.0](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- Windows Release 工作流新增独立编辑器产物，包含编辑器、资源构建器、CLI、游戏运行时、
+  C# 托管程序集、插件与运行所需资源，并执行净包内容校验。
+- Windows Runtime/Editor 发布任务现在会预构建并实测 GNS 网络层与 HTTP/TLS，
+  同时将 C# 托管程序集纳入可运行产物。
+- 新增编辑器生产真实性门禁，跟踪现存 mock/placeholder 实现并阻止未登记的伪功能进入默认构建。
+
 ## [0.1.0-alpha] - 2026-06-15
 
 首个对外 SDK 测试版（alpha）。引擎以**共享库（DLL）**形式打包，下游项目可通过

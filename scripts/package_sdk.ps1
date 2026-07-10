@@ -85,7 +85,10 @@ if (-not $SkipBuild) {
         "-DDSE_BUILD_SHARED=ON",
         "-DDSE_BUILD_GTESTS=OFF",
         "-DDSE_BUILD_EDITOR=OFF",
-        "-DDSE_BUILD_LAUNCHER=OFF"
+        "-DDSE_BUILD_LAUNCHER=OFF",
+        "-DDSE_ENABLE_NET=OFF",
+        "-DDSE_ENABLE_HTTP=OFF",
+        "-DDSE_ENABLE_CSHARP=OFF"
     )
 
     if ($EnableVulkan) {

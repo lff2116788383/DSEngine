@@ -214,14 +214,14 @@ if ($WithNet) {
     } else { Write-OK "复用已预构建的 protobuf：$ProtobufDir" }
 
     # 5.4 配置 + 构建 dse_net_smoke（DSE_ENABLE_NET=ON）
-    if (-not (Test-Path (Join-Path $NetBuildDir "CMakeCache.txt"))) {
-        Write-Step "配置 CMake (NET=ON, $Generator $Arch)"
-        & $CMake -S $SourceDir -B $NetBuildDir -G $Generator -A $Arch `
-            "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
-            "-DDSE_ENABLE_NET=ON" "-DDSE_NET_SODIUM_DIR=$SodiumDir" "-DDSE_NET_PROTOBUF_DIR=$ProtobufDir" `
-            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
-        if ($LASTEXITCODE -ne 0) { Die "网络层 CMake 配置失败。" }
-    } else { Write-OK "复用已有网络构建目录：$NetBuildDir" }
+    Write-Step "配置 CMake (NET=ON, $Generator $Arch)"
+    & $CMake -S $SourceDir -B $NetBuildDir -G $Generator -A $Arch `
+        "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
+        "-DDSE_ENABLE_VULKAN=OFF" "-DDSE_ENABLE_CSHARP=OFF" `
+        "-DDSE_ENABLE_NET=ON" "-DDSE_ENABLE_HTTP=OFF" `
+        "-DDSE_NET_SODIUM_DIR=$SodiumDir" "-DDSE_NET_PROTOBUF_DIR=$ProtobufDir" `
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+    if ($LASTEXITCODE -ne 0) { Die "网络层 CMake 配置失败。" }
 
     Write-Step "构建 dse_net_smoke ($Config)"
     & $CMake --build $NetBuildDir --config $Config --target dse_net_smoke -- /m
@@ -281,14 +281,13 @@ if ($WithHttp) {
     if ($LASTEXITCODE -ne 0) { Die "OpenSSL 预构建失败。" }
 
     # 6.2 配置 + 构建（DSE_ENABLE_HTTP=ON）
-    if (-not (Test-Path (Join-Path $HttpBuildDir "CMakeCache.txt"))) {
-        Write-Step "配置 CMake (HTTP=ON, $Generator $Arch)"
-        & $CMake -S $SourceDir -B $HttpBuildDir -G $Generator -A $Arch `
-            "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
-            "-DDSE_ENABLE_HTTP=ON" "-DDSE_HTTP_OPENSSL_DIR=$OpenSSLDir" `
-            "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
-        if ($LASTEXITCODE -ne 0) { Die "HTTP 层 CMake 配置失败。" }
-    } else { Write-OK "复用已有 HTTP 构建目录：$HttpBuildDir" }
+    Write-Step "配置 CMake (HTTP=ON, $Generator $Arch)"
+    & $CMake -S $SourceDir -B $HttpBuildDir -G $Generator -A $Arch `
+        "-DDSE_BUILD_EDITOR=OFF" "-DDSE_BUILD_LAUNCHER=OFF" "-DDSE_ENABLE_3D=OFF" `
+        "-DDSE_ENABLE_VULKAN=OFF" "-DDSE_ENABLE_CSHARP=OFF" `
+        "-DDSE_ENABLE_NET=OFF" "-DDSE_ENABLE_HTTP=ON" "-DDSE_HTTP_OPENSSL_DIR=$OpenSSLDir" `
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+    if ($LASTEXITCODE -ne 0) { Die "HTTP 层 CMake 配置失败。" }
 
     foreach ($t in @("dse_http_smoke","dse_http_lua_smoke")) {
         Write-Step "构建 $t ($Config)"
