@@ -222,10 +222,11 @@ struct TerrainHeightmapComponent {
     }
 };
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Ragdoll 布娃娃（Phase 2 — Task 1）
 // ============================================================
+// 注：组件为纯数据结构，始终定义（与 SoftBody/Rope 等一致），使反射/绑定/Web 构建
+// 在无物理后端时仍可编译；驱动它的 RagdollSystem 才由物理后端开关门控。
 
 /// 布娃娃单骨骼配置
 struct RagdollBoneSetup {
@@ -266,8 +267,6 @@ struct RagdollComponent {
     bool initialized = false;
 };
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
-
 // ============================================================
 // SoftBody 软体模拟（Phase 2 — Task 2）
 // ============================================================
@@ -302,7 +301,6 @@ struct SoftBodyComponent {
     bool mesh_dirty = false;         ///< 需要回写 mesh 顶点
 };
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Vehicle 车辆物理（Phase 2 — Task 3）
 // ============================================================
@@ -349,8 +347,6 @@ struct VehicleComponent {
     bool initialized = false;
 };
 
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
-
 // ============================================================
 // Rope 绳索/链条（Phase 2 — Task 4）
 // ============================================================
@@ -379,7 +375,6 @@ struct RopeComponent {
     bool initialized = false;
 };
 
-#if defined(DSE_ENABLE_PHYSX) || defined(DSE_ENABLE_JOLT)
 // ============================================================
 // Buoyancy 浮力模拟（Phase 2 — Task 5）
 // ============================================================
@@ -405,8 +400,6 @@ struct BuoyancyComponent {
     // 运行时
     float submerge_ratio = 0.0f;       ///< 当前淹没比例 [0,1]
 };
-
-#endif // DSE_ENABLE_PHYSX || DSE_ENABLE_JOLT
 
 } // namespace dse
 

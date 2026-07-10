@@ -40,6 +40,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     depth_only_pixel_smoke_test.cpp
     indirect_mesh_pixel_smoke_test.cpp
     physics3d_smoke_test.cpp
+    impostor_system_smoke_test.cpp
 )
 
 target_include_directories(${DSE_GTEST_SMOKE_TARGET}

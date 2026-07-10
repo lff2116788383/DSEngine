@@ -81,6 +81,9 @@ const dse::render::RenderThinSnapshot& FramePipeline::read_snapshot() const { re
 #include <cstring>
 
 #ifdef DSE_ENABLE_3D
+// 接口定义头始终包含：physics3d_system_ 成员与其 Shutdown/FlushEvents 等调用
+// 需要 IPhysics3DSystem 的完整类型，即便未编入任何物理后端(如 Web 3D 构建)。
+#include "engine/physics/physics3d/i_physics3d_system.h"
 #if defined(DSE_ENABLE_JOLT)
 #include "engine/physics/physics3d/physics3d_system_jolt.h"
 #elif defined(DSE_ENABLE_PHYSX)

@@ -129,6 +129,10 @@ if(NOT _HAS_ANY_PHYSICS3D)
     list(FILTER engine_cpp EXCLUDE REGEX ".*/buoyancy/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/ragdoll/.*\\.cpp$")
     list(FILTER engine_cpp EXCLUDE REGEX ".*/fracture/.*\\.cpp$")
+    # PhysicsLODSystem 是纯距离 LOD 逻辑(sleep/wake 调度)，不依赖任何物理后端(无 Jolt/PhysX 头/类型)，
+    # 且被 open-world C ABI(dse_api_open_world_p2p5.cpp)无条件引用；故无物理后端时仍需编入，
+    # 否则 Web/无物理构建链接缺失 PhysicsLODSystem 符号。
+    list(APPEND engine_cpp "${CMAKE_SOURCE_DIR}/engine/physics/physics3d/physics_lod.cpp")
 endif()
 
 # NavMesh 禁用时排除 navigation 源文件

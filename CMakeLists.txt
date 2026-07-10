@@ -62,7 +62,9 @@ option(DSE_WEB_ENABLE_THREADS "Enable Emscripten pthreads (SharedArrayBuffer + w
 # 关闭 Assimp 时 glTF 导入（tinygltf）不受影响，仅 FBX/OBJ 等 Assimp 格式不可用。
 # 编辑器构建默认开启 Assimp 以支持 FBX/OBJ/Blender 等格式导入；
 # 纯运行时/SDK 构建可 -DDSE_ENABLE_ASSIMP=OFF 缩小包体。
-option(DSE_ENABLE_SPINE "Enable Spine runtime path (2D skeletal animation)" OFF)
+# v1 必备功能：默认开启（Spine/Net/HTTP/C#）。Web/Emscripten 交叉构建里由下方 if(EMSCRIPTEN)
+# 按平台能力强制关闭不适用者（Net/HTTP/C# 无对应 Web 后端）。
+option(DSE_ENABLE_SPINE "Enable Spine runtime path (2D skeletal animation)" ON)
 option(DSE_ENABLE_ASSIMP "Build with Assimp model importer (FBX/OBJ/...); off keeps glTF-only and shrinks the package" ON)
 if(ANDROID)
     option(DSE_ENABLE_VULKAN "Enable Vulkan RHI backend" OFF)
@@ -84,11 +86,11 @@ option(DSE_BUILD_GTESTS "Build GoogleTest based test targets" ON)
 option(DSE_ENABLE_PROFILER "Include EasyProfiler instrumentation" OFF)
 option(DSE_ENABLE_LUA "Enable Lua scripting runtime" ON)
 option(DSE_ENABLE_NAVMESH "Enable NavMesh/pathfinding (Recast/Detour)" ON)
-option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" OFF)
-option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" OFF)
+option(DSE_ENABLE_NET "Enable networking layer (GameNetworkingSockets backend)" ON)
+option(DSE_ENABLE_HTTP "Enable async HTTP(S) client (IXWebSocket + OpenSSL)" ON)
 option(DSE_ENABLE_PCH "Enable precompiled headers for faster compilation" ON)
 option(DSE_ENABLE_UNITY_BUILD "Enable CMake unity (jumbo) build for faster compilation" OFF)
-option(DSE_ENABLE_CSHARP "Enable C# scripting via .NET 8 CoreCLR (hostfxr)" OFF)
+option(DSE_ENABLE_CSHARP "Enable C# scripting via .NET 8 CoreCLR (hostfxr)" ON)
 option(DSE_ENABLE_VIRTUAL_GEOMETRY "Enable experimental virtual geometry (Nanite-style) pipeline" OFF)
 # Apple 平台后端（macOS/iOS via MoltenVK）：实验性，默认 OFF。
 # macOS: GLFW + MoltenVK（复用桌面 Vulkan RHI）
@@ -115,8 +117,12 @@ if(ANDROID)
     set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
+    # v1 桌面/Web 必备功能在移动端无对应后端（.NET8/GNS/OpenSSL），强制关闭以免破坏交叉构建。
+    set(DSE_ENABLE_NET OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_CSHARP OFF CACHE BOOL "" FORCE)
     add_definitions(-D __ANDROID__)
-    message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest disabled")
+    message(STATUS "Android NDK build: PhysX/D3D11/EasyProfiler/GTest/Net/HTTP/C# disabled")
 endif()
 
 # --- iOS (Apple) 交叉编译默认值 ---
@@ -127,7 +133,10 @@ if(DSE_ENABLE_APPLE_PLATFORM AND IOS)
     set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
-    message(STATUS "iOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest disabled")
+    set(DSE_ENABLE_NET OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_CSHARP OFF CACHE BOOL "" FORCE)
+    message(STATUS "iOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest/Net/HTTP/C# disabled")
 endif()
 
 # --- OHOS (HarmonyOS) 交叉编译默认值 ---
@@ -138,7 +147,10 @@ if(DSE_ENABLE_HARMONY_PLATFORM AND OHOS)
     set(DSE_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_LAUNCHER OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_GTESTS OFF CACHE BOOL "" FORCE)
-    message(STATUS "OHOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest disabled")
+    set(DSE_ENABLE_NET OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_HTTP OFF CACHE BOOL "" FORCE)
+    set(DSE_ENABLE_CSHARP OFF CACHE BOOL "" FORCE)
+    message(STATUS "OHOS build: PhysX/D3D11/EasyProfiler/Editor/Launcher/GTest/Net/HTTP/C# disabled")
 endif()
 
 # --- Emscripten (Web/WASM) 交叉编译默认值 ---
@@ -160,6 +172,8 @@ if(EMSCRIPTEN)
     set(DSE_ENABLE_NAVMESH OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_NET     OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_HTTP    OFF CACHE BOOL "" FORCE)
+    # C# 依赖 .NET 8 CoreCLR/hostfxr，Web/wasm 无对应运行时，强制关闭。
+    set(DSE_ENABLE_CSHARP  OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_PROFILER OFF CACHE BOOL "" FORCE)
     set(DSE_ENABLE_PCH     OFF CACHE BOOL "" FORCE)
     set(DSE_BUILD_EDITOR   OFF CACHE BOOL "" FORCE)

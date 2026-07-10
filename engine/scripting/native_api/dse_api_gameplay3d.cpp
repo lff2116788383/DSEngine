@@ -217,9 +217,9 @@ extern "C" uint32_t dse_fluid_get_particle_count(uint32_t e) {
     return fluid ? fluid->active_count : 0u;
 }
 
-#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
 // Ragdoll — 布娃娃（仅设置组件标志，实际激活由 RagdollSystem 处理）
+// 纯 ECS 组件访问器，无条件编译（与 SoftBody/Rope 一致）；物理驱动由被门控的系统负责。
 // ============================================================
 
 extern "C" void dse_ragdoll_add(uint32_t e, float total_mass, int auto_setup,
@@ -264,7 +264,6 @@ extern "C" void dse_ragdoll_set_collision_layer_mask(uint32_t e, uint32_t layer,
     rd->collision_layer = static_cast<uint16_t>(layer);
     rd->collision_mask = static_cast<uint16_t>(mask);
 }
-#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // SoftBody — 软体（无条件编译）
@@ -307,9 +306,8 @@ extern "C" uint32_t dse_softbody_get_particle_count(uint32_t e) {
     return sb ? static_cast<uint32_t>(sb->positions.size()) : 0u;
 }
 
-#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
-// Vehicle — 车辆（raycast 车辆）
+// Vehicle — 车辆（raycast 车辆）— 纯组件访问器，无条件编译
 // ============================================================
 
 extern "C" void dse_vehicle_add(uint32_t e, float max_engine_force, float max_brake_force,
@@ -363,7 +361,6 @@ extern "C" uint32_t dse_vehicle_get_wheel_count(uint32_t e) {
     const auto* v = world->registry().try_get<VehicleComponent>(TE(e));
     return v ? static_cast<uint32_t>(v->wheels.size()) : 0u;
 }
-#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // Rope — 绳索/链条（无条件编译）
@@ -422,9 +419,8 @@ extern "C" void dse_rope_set_gravity(uint32_t e, int use_gravity, float gravity_
     if (!Keep(gravity_scale)) rope->gravity_scale = gravity_scale;
 }
 
-#ifdef DSE_HAS_PHYSICS3D
 // ============================================================
-// Buoyancy — 浮力
+// Buoyancy — 浮力 — 纯组件访问器，无条件编译
 // ============================================================
 
 extern "C" void dse_buoyancy_add(uint32_t e, float water_level, float buoyancy_force,
@@ -466,7 +462,6 @@ extern "C" void dse_buoyancy_set_use_fluid(uint32_t e, int use_fluid) {
     auto* b = world->registry().try_get<BuoyancyComponent>(TE(e));
     if (b) b->use_fluid_system = (use_fluid != 0);
 }
-#endif // DSE_HAS_PHYSICS3D
 
 // ============================================================
 // Batch 3 — 环境子系统（无物理依赖）

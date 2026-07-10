@@ -3,6 +3,12 @@
  * @brief pl_mpeg MPEG-1 解码器实现
  */
 
+// pl_mpeg.h 的声明区使用 size_t/FILE 但不自带这些头，需先行包含
+// (MSVC 隐式可用，Emscripten/libc++ 下必须显式)。
+#include <cstddef>
+#include <cstdio>
+#include <cstdlib>
+
 #define PL_MPEG_IMPLEMENTATION
 #include "depends/pl_mpeg/pl_mpeg.h"
 
