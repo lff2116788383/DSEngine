@@ -14,6 +14,7 @@
 #include "engine/assets/bundle_packer.h"
 #include "engine/runtime/app_manifest.h"
 #include "engine/base/debug.h"
+#include "engine/platform/process.h"
 #include "engine/project/web_build.h"
 
 #include <cstdio>
@@ -176,28 +177,32 @@ std::filesystem::path FindRepoRoot() {
     return {};
 }
 
-// 执行外部命令并把 stdout/stderr 逐行转入构建日志；返回退出码是否为 0。
-bool RunLoggedCommand(BuildState& state, const std::string& cmd) {
-#if defined(_WIN32)
-    FILE* pipe = _popen((cmd + " 2>&1").c_str(), "r");
-#else
-    FILE* pipe = popen((cmd + " 2>&1").c_str(), "r");
-#endif
-    if (!pipe) {
-        AppendLog(state, "ERROR: Failed to start command");
+// 通过统一进程服务执行外部命令（参数数组，非 shell 字符串，无控制台窗口），
+// stdout/stderr 逐行转入构建日志，并把 cancel_requested 作为进程树终止信号。
+// 返回退出码是否为 0。
+bool RunLoggedCommand(BuildState& state, const std::filesystem::path& exe,
+                      const std::vector<std::string>& args) {
+    dse::platform::ProcessOptions opts;
+    opts.executable = exe.string();
+    opts.args = args;
+    opts.merge_stderr = true;
+    dse::platform::ProcessResult r = dse::platform::RunProcess(
+        opts,
+        [&state](std::string_view line, bool /*is_stderr*/) {
+            if (!line.empty()) AppendLog(state, std::string(line));
+        },
+        std::chrono::milliseconds::zero(),
+        &state.cancel_requested);
+    if (!r.launched) {
+        AppendLog(state, "ERROR: Failed to start command: " +
+                         (r.error.empty() ? exe.string() : r.error));
         return false;
     }
-    char line[2048];
-    while (fgets(line, sizeof(line), pipe)) {
-        std::string s(line);
-        while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
-        if (!s.empty()) AppendLog(state, s);
+    if (r.canceled) {
+        AppendLog(state, "Build canceled.");
+        return false;
     }
-#if defined(_WIN32)
-    return _pclose(pipe) == 0;
-#else
-    return pclose(pipe) == 0;
-#endif
+    return r.exit_code == 0;
 }
 
 void FinishBuild(BuildState& state, bool success) {
@@ -299,21 +304,23 @@ void DoBuildAndroid(BuildState& state) {
 
     // 2) 调用导出脚本：交叉编译 + APK 打包签名（日志逐行回显）
     fs::path out_apk = out_dir / (std::string(state.game_title) + ".apk");
-    std::string cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File \"" + script.string() + "\"";
-    cmd += " -GameTitle \"" + std::string(state.game_title) + "\"";
-    cmd += " -PackageId \"" + std::string(state.android_package_id) + "\"";
-    cmd += " -OutApk \"" + out_apk.string() + "\"";
-    cmd += " -AssetsDir \"" + assets_stage.string() + "\"";
-    cmd += " -ApiLevel " + std::to_string(state.android_api_level);
-    cmd += " -Config " + std::string(state.config == BuildConfig::Release ? "Release" : "Debug");
+    std::vector<std::string> args = {
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script.string(),
+        "-GameTitle", std::string(state.game_title),
+        "-PackageId", std::string(state.android_package_id),
+        "-OutApk", out_apk.string(),
+        "-AssetsDir", assets_stage.string(),
+        "-ApiLevel", std::to_string(state.android_api_level),
+        "-Config", std::string(state.config == BuildConfig::Release ? "Release" : "Debug"),
+    };
     if (state.android_keystore[0] != '\0') {
-        cmd += " -Keystore \"" + std::string(state.android_keystore) + "\"";
-        cmd += " -KeystorePass \"" + std::string(state.android_keystore_pass) + "\"";
-        cmd += " -KeyAlias \"" + std::string(state.android_key_alias) + "\"";
+        args.push_back("-Keystore");     args.push_back(std::string(state.android_keystore));
+        args.push_back("-KeystorePass"); args.push_back(std::string(state.android_keystore_pass));
+        args.push_back("-KeyAlias");     args.push_back(std::string(state.android_key_alias));
     }
 
     AppendLog(state, "Running export script (first run cross-compiles the engine; this can take a while)...");
-    const bool ok = RunLoggedCommand(state, cmd);
+    const bool ok = RunLoggedCommand(state, "powershell", args);
     fs::remove_all(assets_stage, ec);
 
     if (!ok) {
@@ -839,7 +846,6 @@ void DrawBuildGameDialog() {
             state.launch_after_build = launch;
             if (state.build_thread.joinable()) state.build_thread.join();
             state.build_thread = std::thread([&state]() { DoBuild(state); });
-            state.build_thread.detach();
         };
 
         if (!busy) {
@@ -926,6 +932,13 @@ DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
     e.category = "Core";
     e.default_visible = true;
     e.draw = [](dse::editor::EditorContext&) { DrawBuildGameDialog(); };
+    // Own the build worker's lifetime: cancel and join on editor shutdown so no
+    // background thread outlives the build state it references.
+    e.shutdown = []() {
+        auto& state = dse::editor::GetState();
+        state.cancel_requested = true;
+        if (state.build_thread.joinable()) state.build_thread.join();
+    };
     reg.Register(std::move(e));
 });
 

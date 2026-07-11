@@ -34,6 +34,7 @@
 #include "engine/runtime/frame_pipeline.h"
 #include "engine/runtime/engine_app.h"
 #include "engine/ecs/components_3d_physics.h"
+#include "engine/platform/process.h"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -1473,9 +1474,14 @@ void DrawSceneViewportPanel(EditorContext& ctx,
                                 s_async_import.current_file = std::filesystem::path(job.source_path).filename().string();
                             }
 
-                            std::string cmd = "\"" + job.builder_path + "\" \"" + job.source_path
-                                            + "\" --out-dir \"" + job.output_dir + "\"";
-                            int ret = std::system(cmd.c_str());
+                            dse::platform::ProcessOptions opts;
+                            opts.executable = job.builder_path;
+                            opts.args = { job.source_path, "--out-dir", job.output_dir };
+                            opts.merge_stderr = true;
+                            std::string builder_output;
+                            dse::platform::ProcessResult pr =
+                                dse::platform::RunProcessCapture(opts, builder_output);
+                            int ret = pr.Succeeded() ? 0 : (pr.launched ? pr.exit_code : -1);
 
                             AsyncImportResult result;
                             result.position_offset_x = job.position_offset_x;

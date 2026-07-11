@@ -14,6 +14,7 @@
 #include "editor_file_dialog.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/assets/compiler/importer.h"
+#include "engine/platform/process.h"
 #include "engine/runtime/engine_app.h"
 
 #ifdef _WIN32
@@ -225,39 +226,24 @@ fs::path FindAssetBuilder() {
     return fs::path("AssetBuilder");
 }
 
-// 运行 AssetBuilder 命令行；返回 true 表示退出码为 0。out_err 填充失败描述。
-bool RunAssetBuilder(const std::string& cmd, std::string& out_err) {
-#ifdef _WIN32
-    STARTUPINFOA si{};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi{};
-    std::vector<char> cmd_buf(cmd.begin(), cmd.end());
-    cmd_buf.push_back('\0');
-    BOOL ok = CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (!ok) {
-        out_err = "Failed to launch AssetBuilder: " + cmd;
+// 通过统一进程服务运行 AssetBuilder（参数数组，非 shell 字符串，无控制台窗口）。
+// 返回 true 表示退出码为 0；out_err 填充失败描述。
+bool RunAssetBuilder(const fs::path& exe, const std::vector<std::string>& args, std::string& out_err) {
+    dse::platform::ProcessOptions opts;
+    opts.executable = exe.string();
+    opts.args = args;
+    opts.merge_stderr = true;
+    std::string output;
+    dse::platform::ProcessResult r = dse::platform::RunProcessCapture(opts, output);
+    if (!r.launched) {
+        out_err = r.error.empty() ? ("Failed to launch AssetBuilder: " + exe.string()) : r.error;
         return false;
     }
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exit_code = 1;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    if (exit_code != 0) {
-        out_err = "AssetBuilder failed (exit code " + std::to_string(exit_code) + ")";
+    if (r.exit_code != 0) {
+        out_err = "AssetBuilder failed (exit code " + std::to_string(r.exit_code) + ")";
         return false;
     }
     return true;
-#else
-    int ret = std::system(cmd.c_str());
-    if (ret != 0) {
-        out_err = "AssetBuilder failed (exit code " + std::to_string(ret) + ")";
-        return false;
-    }
-    return true;
-#endif
 }
 
 // ─── Import Logic ──────────────────────────────────────────────────────────
@@ -267,51 +253,27 @@ void DoImportMesh(ImportState& state, const std::string& project_asset_dir) {
     fs::create_directories(out_dir);
 
     fs::path asset_builder = FindAssetBuilder();
-    std::string cmd = "\"" + asset_builder.string() + "\" "
-                    + "\"" + std::string(state.source_path) + "\" "
-                    + "--out-dir \"" + out_dir.string() + "\"";
-    if (!state.anim_compress) cmd += " --no-anim-compress";
-    if (!state.anim_reduce)   cmd += " --no-anim-reduce";
+    std::vector<std::string> args;
+    args.push_back(std::string(state.source_path));
+    args.push_back("--out-dir");
+    args.push_back(out_dir.string());
+    if (!state.anim_compress) args.push_back("--no-anim-compress");
+    if (!state.anim_reduce)   args.push_back("--no-anim-reduce");
     if (state.mesh_decimate) {
-        cmd += " --decimate " + std::to_string(state.mesh_decimate_ratio);
+        args.push_back("--decimate");
+        args.push_back(std::to_string(state.mesh_decimate_ratio));
     }
     if (state.mesh_lod_levels > 0) {
-        cmd += " --lod-levels " + std::to_string(state.mesh_lod_levels);
+        args.push_back("--lod-levels");
+        args.push_back(std::to_string(state.mesh_lod_levels));
     }
 
-#ifdef _WIN32
-    STARTUPINFOA si{};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi{};
-    std::vector<char> cmd_buf(cmd.begin(), cmd.end());
-    cmd_buf.push_back('\0');
-    BOOL ok = CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
-    if (!ok) {
+    std::string mesh_err;
+    if (!RunAssetBuilder(asset_builder, args, mesh_err)) {
         state.import_success = false;
-        state.import_message = "Failed to launch AssetBuilder: " + cmd;
+        state.import_message = mesh_err;
         return;
     }
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD exit_code = 1;
-    GetExitCodeProcess(pi.hProcess, &exit_code);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-
-    if (exit_code != 0) {
-        state.import_success = false;
-        state.import_message = "AssetBuilder failed (exit code " + std::to_string(exit_code) + ")";
-        return;
-    }
-#else
-    int ret = std::system(cmd.c_str());
-    if (ret != 0) {
-        state.import_success = false;
-        state.import_message = "AssetBuilder failed (exit code " + std::to_string(ret) + ")";
-        return;
-    }
-#endif
 
     // Collect produced files
     std::string base_name = src.stem().string();
@@ -343,15 +305,17 @@ void DoImportTexture(ImportState& state, const std::string& project_asset_dir) {
         fs::path asset_builder = FindAssetBuilder();
         int fmt_idx = state.compress_format;
         if (fmt_idx < 0 || fmt_idx >= static_cast<int>(IM_ARRAYSIZE(kCompressFormatArgs))) fmt_idx = 1;
-        std::string cmd = "\"" + asset_builder.string() + "\" --texture "
-                        + "\"" + std::string(state.source_path) + "\" "
-                        + "\"" + dest.string() + "\" "
-                        + "--format " + kCompressFormatArgs[fmt_idx];
-        if (!state.generate_mipmaps) cmd += " --no-mips";
-        if (state.compress_high_quality) cmd += " --hq";
+        std::vector<std::string> args;
+        args.push_back("--texture");
+        args.push_back(std::string(state.source_path));
+        args.push_back(dest.string());
+        args.push_back("--format");
+        args.push_back(kCompressFormatArgs[fmt_idx]);
+        if (!state.generate_mipmaps) args.push_back("--no-mips");
+        if (state.compress_high_quality) args.push_back("--hq");
 
         std::string err;
-        if (!RunAssetBuilder(cmd, err) || !fs::exists(dest)) {
+        if (!RunAssetBuilder(asset_builder, args, err) || !fs::exists(dest)) {
             state.import_success = false;
             state.import_message = err.empty() ? "Texture compression produced no output." : err;
             return;
