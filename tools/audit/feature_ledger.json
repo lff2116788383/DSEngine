@@ -123,7 +123,7 @@
       "id": "release-contract",
       "stage": 0,
       "status": "in_progress",
-      "summary": "Machine-readable ownership and acceptance ledger for every registered editor panel, interactive editor source, and known production-debt marker.",
+      "summary": "Machine-readable ownership and acceptance ledger for every registered editor panel, interactive editor source, and known production-debt marker; ownership is resolved to stable per-action identifiers, and declared editor asset extensions and runtime-consumer registrations are auto-discovered from the repository's own registries.",
       "editor": {
         "panelIds": [],
         "actionSources": []
@@ -132,13 +132,16 @@
       "assetFormats": [],
       "requiredPlatforms": [],
       "tests": [
-        "tools/audit/verify_feature_ledger.py"
+        "tools/audit/verify_feature_ledger.py",
+        "tools/audit/test_verify_feature_ledger.py"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
         "tools/audit/feature_ledger.json",
-        "tools/audit/editor_production_debt.json"
+        "tools/audit/editor_production_debt.json",
+        "apps/editor_cpp/src/editor_asset_db_core.cpp",
+        "cmake/engine_sources.cmake"
       ],
       "acceptance": {
         "editorRoundTrip": "not_applicable",
@@ -151,8 +154,6 @@
         "productionReady": false
       },
       "blockers": [
-        "Interactive action ownership is enforced at source-file granularity; stable per-action IDs are not yet available.",
-        "Asset formats and runtime consumers are declared but not yet auto-discovered from registries.",
         "The final release Go/No-Go gate exists, but cannot pass until all later stages and production debt are closed."
       ]
     },

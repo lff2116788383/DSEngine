@@ -1177,6 +1177,12 @@ if(Python3_FOUND)
     )
     set_tests_properties(dse_feature_ledger PROPERTIES LABELS "audit;editor")
 
+    add_test(
+        NAME dse_feature_ledger_negative
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/audit/test_verify_feature_ledger.py
+    )
+    set_tests_properties(dse_feature_ledger_negative PROPERTIES LABELS "audit;editor")
+
     add_custom_target(dse_codegen
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py
                 --defs  ${CMAKE_SOURCE_DIR}/tools/codegen/binding_defs.json
