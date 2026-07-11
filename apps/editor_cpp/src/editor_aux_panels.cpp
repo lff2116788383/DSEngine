@@ -469,7 +469,7 @@ void DrawProjectPanel() {
                         tex_id = LoadThumbnailTexture(path);
                     }
                     if (tex_id != 0) {
-                        ImGui::Image((ImTextureID)(intptr_t)tex_id, ImVec2(thumb_w, thumb_h));
+                        ImGui::Image((ImTextureID)EditorImGuiTextureId(tex_id), ImVec2(thumb_w, thumb_h));
                     } else {
                         ImU32 bg_color = IM_COL32(80, 60, 80, 180);
                         ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + thumb_w, p.y + thumb_h), bg_color, 4.0f);

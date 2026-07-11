@@ -32,7 +32,8 @@ enum class RhiBackend : unsigned int {
     Vulkan = 1,
     D3D11  = 2,
     WebGPU = 3,       ///< 阶段 B：Web/Emscripten WebGPU(Dawn) 后端，桌面级 parity
-    Default = OpenGL  ///< 默认使用 OpenGL 后端
+    Default = OpenGL, ///< 默认使用 OpenGL 后端
+    Invalid = 0xFFFFFFFFu ///< 显式请求了无法识别或未编译的后端；调用方须报错并终止，禁止静默回退
 };
 
 /// 着色器阶段（push constant 等按阶段路由的原语使用，位掩码可组合）

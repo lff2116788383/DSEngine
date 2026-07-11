@@ -49,6 +49,7 @@ add_executable(dse_editor_cpp WIN32
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_glfw.cpp
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_opengl3.cpp
     $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_dx11.cpp>
+    $<$<BOOL:${DSE_ENABLE_VULKAN}>:${CMAKE_SOURCE_DIR}/depends/imgui/backends/imgui_impl_vulkan.cpp>
     ${CMAKE_SOURCE_DIR}/third_party/imguizmo/ImGuizmo.cpp
 )
 
@@ -67,6 +68,7 @@ target_include_directories(dse_editor_cpp PRIVATE
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/include
     ${CMAKE_SOURCE_DIR}/depends/glfw-3.3-3.4/deps
     ${CMAKE_SOURCE_DIR}/depends/glad/include
+    $<$<BOOL:${DSE_ENABLE_VULKAN}>:${CMAKE_SOURCE_DIR}/depends/Vulkan-Headers/include>
     ${CMAKE_SOURCE_DIR}/depends/imgui
     ${CMAKE_SOURCE_DIR}/depends/imgui/backends
     ${CMAKE_SOURCE_DIR}/third_party/imguizmo

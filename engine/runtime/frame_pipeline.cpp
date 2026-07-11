@@ -291,7 +291,13 @@ bool FramePipeline::Init() {
         t0 = now;
     };
     auto rhi_backend = dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    // P0-4.4：请求的后端无法识别或未编译时，明确报错并终止初始化，禁止静默回退到 OpenGL。
+    if (rhi_backend == RhiBackend::Invalid) {
+        DEBUG_LOG_ERROR("请求的 RHI 后端不可用（请检查 DSE_RHI_BACKEND：opengl/d3d11/vulkan），FramePipeline 拒绝初始化");
+        return false;
+    }
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
+    runtime_context_.rhi_device->SetPresentationDeferred(runtime_context_.editor_mode);
     DEBUG_LOG_INFO("FramePipeline RHI åŽç«¯: {}", dse::render::RhiBackendToString(rhi_backend));
 
     // D3D11 / Vulkan åŽç«¯éœ€è¦ç”¨å¹³å°çª—å£å¥æŸ„å®Œæˆè®¾å¤‡åˆå§‹åŒ–
@@ -313,6 +319,9 @@ bool FramePipeline::Init() {
         if (!init_ok) {
             DEBUG_LOG_ERROR("FramePipeline init failed: [{}] InitDevice returned false",
                 dse::render::RhiBackendToString(rhi_backend));
+            if (runtime_context_.editor_mode) {
+                return false;
+            }
             // è‡ªåŠ¨å›žé€€åˆ° OpenGL
             if (rhi_backend != RhiBackend::OpenGL) {
                 DEBUG_LOG_WARN("FramePipeline: {} åŽç«¯åˆå§‹åŒ–å¤±è´¥ï¼Œè‡ªåŠ¨å›žé€€åˆ° OpenGL",

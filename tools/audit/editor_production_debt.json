@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "EDITOR-CSHARP-FAKE-BUILD",
+      "feature": "C# editor integration",
+      "path": "apps/editor_cpp/src/editor_csharp_panel.cpp",
+      "needle": "// NOTE: In production this would spawn dotnet build asynchronously."
+    },
+    {
+      "id": "EDITOR-CSHARP-FAKE-SUCCESS",
+      "feature": "C# editor integration",
+      "path": "apps/editor_cpp/src/editor_csharp_panel.cpp",
+      "needle": "// For now we mark as success — actual build integration is in CSharpHost."
+    },
+    {
+      "id": "EDITOR-CSHARP-FAKE-RELOAD",
+      "feature": "C# editor integration",
+      "path": "apps/editor_cpp/src/editor_csharp_panel.cpp",
+      "needle": "// Trigger CSharpHost::Reload() — placeholder"
+    },
+    {
+      "id": "EDITOR-PLUGIN-DEMO-DATA",
+      "feature": "Plugin hot reload",
+      "path": "apps/editor_cpp/src/editor_plugin_hot_reload.cpp",
+      "needle": "// Demo plugins"
+    },
+    {
+      "id": "EDITOR-PLUGIN-SIMULATED-RELOAD",
+      "feature": "Plugin hot reload",
+      "path": "apps/editor_cpp/src/editor_plugin_hot_reload.cpp",
+      "needle": "// Simulate the reload process"
+    },
+    {
+      "id": "EDITOR-PLUGIN-SIMULATED-BUILD",
+      "feature": "Plugin hot reload",
+      "path": "apps/editor_cpp/src/editor_plugin_hot_reload.cpp",
+      "needle": "s_state.build_progress += dt * 0.8f; // simulate ~1.2s build"
+    },
+    {
+      "id": "EDITOR-BLUEPRINT-SIMULATED-DEBUG",
+      "feature": "Blueprint debugger",
+      "path": "apps/editor_cpp/src/editor_blueprint_extras.cpp",
+      "needle": "// Compile and simulate execution"
+    },
+    {
+      "id": "EDITOR-SPRITE-SLICER-PLACEHOLDER-PREVIEW",
+      "feature": "Sprite slicer",
+      "path": "apps/editor_cpp/src/editor_2d_tools.cpp",
+      "needle": "// Draw texture background placeholder"
+    },
+    {
+      "id": "EDITOR-SHADER-GRAPH-PLACEHOLDER-NODE",
+      "feature": "Shader Graph",
+      "path": "apps/editor_cpp/src/editor_shader_graph.cpp",
+      "needle": "o << \"    vec4 \" << var << \" = vec4(1.0);\\n\"; // placeholder"
+    }
+  ]
+}

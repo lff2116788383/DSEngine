@@ -75,6 +75,23 @@ const char* BpPinTypeName(BpPinType t) {
     return "?";
 }
 
+BpPinType BpPinTypeFromName(const char* name) {
+    if (!name) return BpPinType::Any;
+    const std::string value = name;
+    if (value == "Flow") return BpPinType::Flow;
+    if (value == "Bool") return BpPinType::Bool;
+    if (value == "Int") return BpPinType::Int;
+    if (value == "Float") return BpPinType::Float;
+    if (value == "String") return BpPinType::String;
+    if (value == "Vec2") return BpPinType::Vec2;
+    if (value == "Vec3") return BpPinType::Vec3;
+    if (value == "Vec4") return BpPinType::Vec4;
+    if (value == "Entity") return BpPinType::Entity;
+    if (value == "Array") return BpPinType::Array;
+    if (value == "Wildcard") return BpPinType::Wildcard;
+    return BpPinType::Any;
+}
+
 ImU32 BpPinColor(BpPinType t) {
     switch (t) {
         case BpPinType::Flow:     return IM_COL32(220, 220, 220, 255);
@@ -1099,6 +1116,7 @@ bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
     doc.AddMember("name", rapidjson::Value(asset.name.c_str(), alloc), alloc);
     doc.AddMember("version", asset.version, alloc);
     doc.AddMember("description", rapidjson::Value(asset.description.c_str(), alloc), alloc);
+    doc.AddMember("author", rapidjson::Value(asset.author.c_str(), alloc), alloc);
 
     // Variables
     rapidjson::Value vars_arr(rapidjson::kArrayType);
@@ -1126,6 +1144,26 @@ bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
         g.AddMember("next_id", graph.next_id, alloc);
         g.AddMember("is_pure", graph.is_pure, alloc);
 
+        rapidjson::Value input_params(rapidjson::kArrayType);
+        for (const auto& p : graph.input_params) {
+            rapidjson::Value pin(rapidjson::kObjectType);
+            pin.AddMember("id", p.id, alloc);
+            pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
+            pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
+            input_params.PushBack(pin, alloc);
+        }
+        g.AddMember("input_params", input_params, alloc);
+
+        rapidjson::Value output_params(rapidjson::kArrayType);
+        for (const auto& p : graph.output_params) {
+            rapidjson::Value pin(rapidjson::kObjectType);
+            pin.AddMember("id", p.id, alloc);
+            pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
+            pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
+            output_params.PushBack(pin, alloc);
+        }
+        g.AddMember("output_params", output_params, alloc);
+
         // Nodes
         rapidjson::Value nodes_arr(rapidjson::kArrayType);
         for (const auto& node : graph.nodes) {
@@ -1147,6 +1185,10 @@ bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
                 pin.AddMember("default_float", p.default_float, alloc);
                 pin.AddMember("default_int", p.default_int, alloc);
                 pin.AddMember("default_bool", p.default_bool, alloc);
+                pin.AddMember("default_string", rapidjson::Value(p.default_string, alloc), alloc);
+                rapidjson::Value vec(rapidjson::kArrayType);
+                for (float component : p.default_vec) vec.PushBack(component, alloc);
+                pin.AddMember("default_vec", vec, alloc);
                 ins.PushBack(pin, alloc);
             }
             n.AddMember("inputs", ins, alloc);
@@ -1157,6 +1199,13 @@ bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
                 pin.AddMember("id", p.id, alloc);
                 pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
                 pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
+                pin.AddMember("default_float", p.default_float, alloc);
+                pin.AddMember("default_int", p.default_int, alloc);
+                pin.AddMember("default_bool", p.default_bool, alloc);
+                pin.AddMember("default_string", rapidjson::Value(p.default_string, alloc), alloc);
+                rapidjson::Value vec(rapidjson::kArrayType);
+                for (float component : p.default_vec) vec.PushBack(component, alloc);
+                pin.AddMember("default_vec", vec, alloc);
                 outs.PushBack(pin, alloc);
             }
             n.AddMember("outputs", outs, alloc);
@@ -1215,10 +1264,12 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
     rapidjson::Document doc;
     if (doc.Parse(content.c_str()).HasParseError() || !doc.IsObject()) return false;
 
+    asset = BlueprintAsset{};
     asset.file_path = path;
     if (doc.HasMember("name")) asset.name = doc["name"].GetString();
     if (doc.HasMember("version")) asset.version = doc["version"].GetInt();
     if (doc.HasMember("description")) asset.description = doc["description"].GetString();
+    if (doc.HasMember("author")) asset.author = doc["author"].GetString();
 
     // Variables
     if (doc.HasMember("variables") && doc["variables"].IsArray()) {
@@ -1248,6 +1299,26 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
             if (g.HasMember("next_id")) graph.next_id = g["next_id"].GetInt();
             if (g.HasMember("is_pure")) graph.is_pure = g["is_pure"].GetBool();
 
+            auto load_params = [](const rapidjson::Value& values, BpPinKind kind,
+                                  std::vector<BpPin>& destination) {
+                if (!values.IsArray()) return;
+                for (auto& p : values.GetArray()) {
+                    if (!p.IsObject()) continue;
+                    BpPin pin;
+                    pin.kind = kind;
+                    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
+                    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
+                    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
+                    destination.push_back(std::move(pin));
+                }
+            };
+            if (g.HasMember("input_params")) {
+                load_params(g["input_params"], BpPinKind::Input, graph.input_params);
+            }
+            if (g.HasMember("output_params")) {
+                load_params(g["output_params"], BpPinKind::Output, graph.output_params);
+            }
+
             if (g.HasMember("nodes") && g["nodes"].IsArray()) {
                 for (auto& n : g["nodes"].GetArray()) {
                     BpNode node;
@@ -1270,9 +1341,18 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
                             BpPin pin;
                             if (p.HasMember("id")) pin.id = p["id"].GetInt();
                             if (p.HasMember("name")) pin.name = p["name"].GetString();
+                            if (p.HasMember("type")) pin.type = BpPinTypeFromName(p["type"].GetString());
                             if (p.HasMember("default_float")) pin.default_float = p["default_float"].GetFloat();
                             if (p.HasMember("default_int")) pin.default_int = p["default_int"].GetInt();
                             if (p.HasMember("default_bool")) pin.default_bool = p["default_bool"].GetBool();
+                            if (p.HasMember("default_string")) {
+                                snprintf(pin.default_string, sizeof(pin.default_string), "%s", p["default_string"].GetString());
+                            }
+                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
+                                auto arr = p["default_vec"].GetArray();
+                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
+                                    pin.default_vec[i] = arr[i].GetFloat();
+                            }
                             pin.kind = BpPinKind::Input;
                             node.inputs.push_back(pin);
                         }
@@ -1282,6 +1362,18 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
                             BpPin pin;
                             if (p.HasMember("id")) pin.id = p["id"].GetInt();
                             if (p.HasMember("name")) pin.name = p["name"].GetString();
+                            if (p.HasMember("type")) pin.type = BpPinTypeFromName(p["type"].GetString());
+                            if (p.HasMember("default_float")) pin.default_float = p["default_float"].GetFloat();
+                            if (p.HasMember("default_int")) pin.default_int = p["default_int"].GetInt();
+                            if (p.HasMember("default_bool")) pin.default_bool = p["default_bool"].GetBool();
+                            if (p.HasMember("default_string")) {
+                                snprintf(pin.default_string, sizeof(pin.default_string), "%s", p["default_string"].GetString());
+                            }
+                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
+                                auto arr = p["default_vec"].GetArray();
+                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
+                                    pin.default_vec[i] = arr[i].GetFloat();
+                            }
                             pin.kind = BpPinKind::Output;
                             node.outputs.push_back(pin);
                         }

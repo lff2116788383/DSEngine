@@ -258,7 +258,11 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
             }
 
             case OpCode::CallExtern: {
-                int fn_idx = instr.b;
+                if (instr.b >= constants.size() || constants[instr.b].type != BpValue::Type::String) {
+                    last_error_ = "Blueprint external call has no function name";
+                    return BpValue();
+                }
+                int fn_idx = GetExternIndex(constants[instr.b].str);
                 int arg_start = instr.c;
                 int num_args = instr.extra;
                 if (fn_idx >= 0 && fn_idx < static_cast<int>(extern_functions_.size())) {

@@ -29,7 +29,6 @@
 | 面板 | 文件 | 行数 | 功能 | 佐证 |
 |------|------|------|------|------|
 | Shader Graph | `editor_shader_graph.cpp` | 1248 | 节点式着色器图 + 贝塞尔连线 + 编译为 DSSL | `Compile`，7 例 `ShaderGraphCompileTest` |
-| Visual Script | `editor_visual_script.cpp` | 756 | 节点式可视脚本 → Lua 代码生成 | `Compile` / `DrawNode`（控制流见 §四） |
 | Anim State Machine | `editor_anim_state_machine.cpp` | 637 | 动画状态机图 + 过渡箭头 + 状态 Inspector | `DrawAnimStateMachinePanel` |
 | Tilemap | `editor_tilemap_panel.cpp` | 567 | 2D 瓦片笔刷/填充/橡皮 | — |
 | AI Chat Panel | `editor_chat_panel.cpp` | 892 | 编辑器内建 AI 对话 + @提及解析 + 历史持久化 | 接入 `editor_app.cpp:1022-1025` |
@@ -166,7 +165,7 @@
 | **Inspector 注册表** | Component → DrawFunc 映射表，29 个组件注册 | ✅ 完整 |
 | **插件系统** | Python 进程外插件 + ControlServer 接口 | ✅ 完整 |
 | **Shader Graph** | 节点式着色器图 → 编译为 DSSL（7 例编译测试） | ✅ 完整 |
-| **Visual Script** | 节点式可视脚本 → Lua：事件入口生成函数体、Branch→if/else、For Loop→数值 for、纯数据节点内联表达式、Flow 数据输出绑定局部变量（`editor_visual_script_compiler.{h,cpp}`，6 例测试） | ✅ 完整 |
+| **Blueprint** | 节点式可视脚本（旧 Visual Script 已于 P0-5 退场，统一到 Blueprint 单编译器）→ bytecode/Lua | ✅ 完整 |
 | **动画状态机** | 状态机图 + 过渡条件 + 状态 Inspector | ✅ 完整 |
 | **Animation Retargeting** | 导入源/目标模型（gltf/fbx）→ 按骨骼名自动映射（精确/归一化/人形同义词）+ 手动覆盖 → 烘焙以目标骨架命名的 `.danim`（`editor_anim_retarget_core.{h,cpp}` 纯核心 + `editor_anim_retarget.cpp` 面板，9 例测试） | ✅ 完整 |
 | **碰撞体可视化编辑** | Scene 视口 `ColEdit` 开关：对选中实体的 Box3D/Sphere3D/Box2D/Circle2D 用 ImGuizmo 直接拖拽 size/radius 与 center/offset（`editor_collider_edit.{h,cpp}` 纯核心 + `_gizmo.cpp` 视口交互，7 例测试） | ✅ 完整 |
@@ -205,7 +204,6 @@
 | ~~Inspector 膨胀~~ | ✅ 已修 | InspectorRegistry 注册表，29 个组件统一注册 |
 | **部分走 RHI** | 🟡 中 | 主场景渲染早已经由引擎 RHI（`pipeline()->GetSceneTextureId()`）；编辑器自建 GPU 资源中**资产缩略图已迁移到 RHI**（`editor_gpu.{h,cpp}` 接入层 → `RhiDevice::CreateTexture2D/DeleteTexture`）。剩余直接 GL：视口拾取（自定义 shader+FBO+readback）、多视口 blit、ImGui 后缓冲清屏（详 §五·编辑器走 RHI） |
 | **Multi-viewport 默认关闭** | 🟡 中 | 已有配置面板与开关，默认关（CRT heap 稳定性顾虑） |
-| **Visual Script 控制流未接** | 🟡 中 | `editor_visual_script.cpp:374-381` 事件/分支 `{body}`/`{true_body}`/`{false_body}` 仅生成占位注释，数据流正常 |
 | **文件对话框仅 Windows** | 🟢 低 | `editor_file_dialog.cpp:101-106` 非 Windows 为空桩（与引擎 Windows-first 一致） |
 
 ### 改进建议
@@ -393,4 +391,4 @@ virtual void BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt) { (void)
 
 ### 结论
 
-**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已相当完整（7 个 Phase 全部交付）：main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成；AI Control Server 现有 **32 个内建 Tool**；Shader Graph / 动画状态机 / NavMesh / AI Chat Panel / Lua Debugger 均已落地（原文档列为“缺失/进行中”的项本次已核实为已实现）。余下的打磨项：编辑器走 RHI、Visual Script 控制流生成、碰撞体可视化拖撞、Multi-viewport 默认开启。
+**C++ ImGui 方案对 DSEngine 当前阶段是最优选择。** Godot/Hazel/Flax 等同体量引擎均采用类似方案。编辑器功能覆盖已相当完整（7 个 Phase 全部交付）：main.cpp 拆分、Inspector 注册式、EditorContext 统一、全局变量消除均已完成；AI Control Server 现有 **32 个内建 Tool**；Shader Graph / 动画状态机 / NavMesh / AI Chat Panel / Lua Debugger 均已落地（原文档列为“缺失/进行中”的项本次已核实为已实现）。余下的打磨项：编辑器走 RHI、碰撞体可视化拖撞、Multi-viewport 默认开启。（Visual Script 已于 P0-5 彻底退场，统一到 Blueprint。）

@@ -86,6 +86,8 @@ public:
     std::shared_ptr<CommandBuffer> CreateCommandBuffer() override;
     void Submit(std::shared_ptr<CommandBuffer> cmd_buffer) override;
     void EndFrame() override;
+    void PresentFrame() override;
+    void SetPresentationDeferred(bool deferred) override { presentation_deferred_ = deferred; }
     const RenderStats& LastFrameStats() const override;
 
     // --- 即时绘制 / RT blit 原语（编辑器架构 §5.A / §5.B）---
@@ -309,6 +311,7 @@ private:
     std::unordered_map<unsigned int, unsigned int> pending_compute_samplers_; ///< unit → tex handle
 
     bool initialized_ = false;
+    bool presentation_deferred_ = false;
     bool swapchain_needs_recreate_ = false;
     bool swapchain_recreated_this_frame_ = false;
 

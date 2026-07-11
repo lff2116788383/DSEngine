@@ -1,0 +1,101 @@
+#version 450
+layout(local_size_x = 256) in;
+
+// 单一来源（option 2-strengthened）：GL430 / HLSL / GLSL450 由本文件离线生成，
+// 嵌入 particle_update_comp.gen.h；WGSL 集中手写单份保留在消费方。
+//
+// @DX11_SSBO_SPLIT：DX11 读 SSBO→SRV t{16+slot}、写 SSBO→UAV u{slot}：
+//   particles_in(读)→t16、particles_out(写)→u1、counters(写)→u2
+//   （匹配 BindGpuBuffer(read_buf,0,false)/(write_buf,1,true)/(counter,2,true)）。
+// 无 image/sampler，故不需 @COMPUTE_RESOURCE_REMAP。
+//
+// 资源（CreateComputeShaderEx: ssbo=3, img=0, smp=0, push=80）：
+//   binding 0 = ParticlesIn  (readonly)
+//   binding 1 = ParticlesOut (read_write)
+//   binding 2 = Counters     (read_write, atomic)
+
+struct Particle {
+    vec4 pos_life;      // xyz=position, w=remaining_life (<0 = dead)
+    vec4 vel_maxlife;   // xyz=velocity, w=max_life
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer ParticlesIn  { Particle particles_in[]; };
+layout(set = 0, binding = 1, std430) buffer ParticlesOut { Particle particles_out[]; };
+layout(set = 0, binding = 2, std430) buffer Counters {
+    uint alive_count;
+    uint dead_count;
+    uint dead_indices[];
+};
+
+// 16B 对齐 push 块：消费方调用序 SetComputeUniformVec4×4 + Int →
+//   u_gravity_dt@0、u_wind_turbulence@16、u_collision@32、u_vortex@48、u_max_particles@64
+//   （每次 SetComputeUniform* 对齐到 16B 边界，见 *RhiDevice::GetOrCreateUniformOffset）。
+layout(push_constant) uniform PC {
+    vec4 u_gravity_dt;       // offset 0   xyz=gravity, w=delta_time
+    vec4 u_wind_turbulence;  // offset 16  xyz=wind, w=turbulence_strength
+    vec4 u_collision;        // offset 32  x=enabled, y=plane_y, z=bounce, w=friction
+    vec4 u_vortex;           // offset 48  x=strength, yzw=axis(0,1,0)
+    int  u_max_particles;    // offset 64
+    int  _pad0; int _pad1; int _pad2;
+} pc; // 80 B
+
+// 简单伪随机
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (int(idx) >= pc.u_max_particles) return;
+
+    Particle p = particles_in[idx];
+    float dt = pc.u_gravity_dt.w;
+
+    if (p.pos_life.w > 0.0) {
+        // 存活粒子：积分
+        vec3 pos = p.pos_life.xyz;
+        vec3 vel = p.vel_maxlife.xyz;
+        float life = p.pos_life.w;
+
+        // 力场
+        vel += pc.u_gravity_dt.xyz * dt;
+        vel += pc.u_wind_turbulence.xyz * dt;
+
+        // 涡旋力
+        if (pc.u_vortex.x > 0.0) {
+            vec3 to_axis = vec3(-pos.z, 0.0, pos.x); // 绕 Y 轴
+            vel += normalize(to_axis + vec3(0.001)) * pc.u_vortex.x * dt;
+        }
+
+        // 湍流（简易噪声）
+        if (pc.u_wind_turbulence.w > 0.0) {
+            float n = hash(float(idx) + life * 17.3);
+            vel += vec3(n - 0.5, hash(n * 7.1) - 0.5, hash(n * 13.7) - 0.5)
+                   * pc.u_wind_turbulence.w * dt;
+        }
+
+        pos += vel * dt;
+        life -= dt;
+
+        // 碰撞检测（Y 平面）
+        if (pc.u_collision.x > 0.5 && pos.y < pc.u_collision.y) {
+            pos.y = pc.u_collision.y;
+            vel.y = -vel.y * pc.u_collision.z; // bounce
+            vel.xz *= pc.u_collision.w;        // friction
+        }
+
+        p.pos_life = vec4(pos, life);
+        p.vel_maxlife.xyz = vel;
+
+        if (life > 0.0) {
+            atomicAdd(alive_count, 1u);
+        } else {
+            uint di = atomicAdd(dead_count, 1u);
+            dead_indices[di] = idx;
+        }
+    } else {
+        // 已死亡粒子：写入死亡列表
+        uint di = atomicAdd(dead_count, 1u);
+        dead_indices[di] = idx;
+    }
+
+    particles_out[idx] = p;
+}

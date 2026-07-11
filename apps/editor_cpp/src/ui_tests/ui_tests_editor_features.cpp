@@ -23,7 +23,6 @@
 #include "imgui_te_engine.h"
 #include "imgui_te_context.h"
 
-#include "../editor_visual_script_debugger.h"
 #include "../editor_animation_clip.h"
 #include "../editor_sequencer.h"
 #include "../editor_terrain_sculpt_preview.h"
@@ -34,57 +33,6 @@
 namespace dse::editor::uitest {
 
 void RegisterEditorFeatureTests(ImGuiTestEngine* e) {
-    // ── Visual Script Debugger: toggle breakpoint, debug controls ──────────
-    {
-        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-features", "vs_debugger_breakpoint_toggle");
-        t->TestFunc = [](ImGuiTestContext* ctx) {
-            // Open VS panel (debugger shown alongside)
-            *Services().show_visual_script = true;
-            ctx->Yield(4);
-
-            ImGuiWindow* w = FindActiveWindow("Visual Script Debugger");
-            IM_CHECK(w != nullptr);
-
-            // Verify debugger state is accessible
-            int bp_count_before = static_cast<int>(GetVsDebuggerState().breakpoints.size());
-
-            // Toggle a breakpoint via helper
-            VsToggleBreakpoint(1);
-            ctx->Yield(2);
-            IM_CHECK(static_cast<int>(GetVsDebuggerState().breakpoints.size()) == bp_count_before + 1);
-
-            // Toggle again to remove
-            VsToggleBreakpoint(1);
-            ctx->Yield(2);
-            IM_CHECK(static_cast<int>(GetVsDebuggerState().breakpoints.size()) == bp_count_before);
-
-            HideOptionalPanels();
-            ctx->Yield(2);
-        };
-    }
-
-    // ── Visual Script Debugger: start/stop debug session ──────────────────
-    {
-        ImGuiTest* t = IM_REGISTER_TEST(e, "dse-features", "vs_debugger_start_stop");
-        t->TestFunc = [](ImGuiTestContext* ctx) {
-            *Services().show_visual_script = true;
-            ctx->Yield(4);
-
-            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Idle);
-
-            VsDebugStart();
-            ctx->Yield(2);
-            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Running);
-
-            VsDebugStop();
-            ctx->Yield(2);
-            IM_CHECK(GetVsDebuggerState().debug_state == VsDebugState::Idle);
-
-            HideOptionalPanels();
-            ctx->Yield(2);
-        };
-    }
-
     // ── Animation Clip Editor: playback controls ──────────────────────────
     {
         ImGuiTest* t = IM_REGISTER_TEST(e, "dse-features", "animation_clip_playback");

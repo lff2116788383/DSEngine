@@ -636,7 +636,7 @@ static void DrawSubViewport(ImDrawList* dl, ImVec2 origin, ImVec2 size,
                             unsigned int texture_id, const char* label, bool is_active) {
     if (texture_id != 0) {
         ImGui::SetCursorScreenPos(origin);
-        ImGui::Image((ImTextureID)(intptr_t)texture_id, size, ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image((ImTextureID)EditorImGuiTextureId(texture_id), size, ImVec2(0, 1), ImVec2(1, 0));
     } else {
         dl->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(30, 30, 30, 255));
     }
@@ -857,7 +857,7 @@ void DrawSceneViewportPanel(EditorContext& ctx,
     }
 
     if (scene_texture_id != 0) {
-        ImGui::Image((ImTextureID)(intptr_t)scene_texture_id, scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image((ImTextureID)EditorImGuiTextureId(scene_texture_id), scene_panel_size, ImVec2(0, 1), ImVec2(1, 0));
 
         // Overlay gizmo toolbar (top-left of viewport)
         {
@@ -1660,7 +1660,7 @@ void DrawGameViewportPanel(unsigned int texture_id) {
     ImGui::Begin("Game");
     ImVec2 game_panel_size = ImGui::GetContentRegionAvail();
     if (texture_id != 0) {
-        ImGui::Image((ImTextureID)(intptr_t)texture_id, game_panel_size, ImVec2(0, 1), ImVec2(1, 0));
+        ImGui::Image((ImTextureID)EditorImGuiTextureId(texture_id), game_panel_size, ImVec2(0, 1), ImVec2(1, 0));
     } else {
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         ImVec2 p_min = ImGui::GetCursorScreenPos();

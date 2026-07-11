@@ -119,8 +119,14 @@ void VulkanRhiDevice::EndFrame() {
     if (!initialized_) return;
 
     draw_executor_.EndFrame();
+    if (presentation_deferred_) return;
+    PresentFrame();
+}
 
     // æäº¤æœ¬å¸§æ‰€æœ‰å½•åˆ¶çš„å‘½ä»¤ç¼“å†² + present
+void VulkanRhiDevice::PresentFrame() {
+    if (!initialized_) return;
+
     VkResult present_result = VK_SUCCESS;
     // ä¿å­˜æœ¬å¸§å‘½ä»¤ç¼“å†²åˆ—è¡¨ï¼Œç”¨äºŽæäº¤åŽå½’è¿˜åˆ°æ± 
     std::vector<VkCommandBuffer> frame_cmd_buffers = std::move(pending_command_buffers_);
@@ -370,4 +376,3 @@ void VulkanRhiDevice::OnWindowResized(int width, int height) {
 
 } // namespace render
 } // namespace dse
-

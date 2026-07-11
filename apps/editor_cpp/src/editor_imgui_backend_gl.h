@@ -6,9 +6,12 @@ namespace dse::editor {
 /// OpenGL3 + GLFW ImGui backend.
 class ImGuiBackendGL final : public ImGuiBackend {
 public:
-    void Init(GLFWwindow* window) override;
+    bool Init(GLFWwindow* window, dse::render::RhiDevice* device) override;
     void NewFrame() override;
+    void PrepareFrame(int width, int height, const float clear_color[4]) override;
     void RenderDrawData(ImDrawData* draw_data) override;
+    ImTextureID GetTextureId(unsigned int texture_handle) override;
+    bool UsesOpenGLContext() const override { return true; }
     void Shutdown() override;
 };
 

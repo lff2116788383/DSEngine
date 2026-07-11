@@ -31,6 +31,8 @@ struct EngineRunConfig {
     std::string window_title = "DSEngine Phase 2";
     BusinessMode business_mode = BusinessMode::Lua;
     bool enable_editor = false;
+    /// Editor-owned GLFW window passed to the platform/RHI bridge.
+    void* external_window = nullptr;
     std::string startup_lua_script_path;
     /// 加密/明文 .bun 资源包路径；非空时 Init 会挂载到 AssetManager 的 VFS。
     std::string asset_bundle_path;

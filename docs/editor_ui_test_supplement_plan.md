@@ -50,7 +50,7 @@ Tested panels: Hierarchy, Inspector, Project, Console, Material, Scene, Game, To
 Profiler, Animation, Tile Palette, Terrain Brush, Lua Console, Localization Preview,
 Undo History, Asset Browser, Animation Timeline, NavMesh, Shader Graph, Version Control,
 Multi-Viewport, Anim State Machine, Lua Debugger, Streaming Debug, Curve Editor,
-Visual Script, Anim Retarget, Preferences, Plugins, AI Agent, VS Debugger,
+Anim Retarget, Preferences, Plugins, AI Agent,
 Animation Clip Editor, Sequencer, Terrain Sculpt Preview, World Partition Editor,
 Plugin Hot Reload, Version Control.
 
@@ -74,7 +74,6 @@ Plugin Hot Reload, Version Control.
 | NavMesh | 316 | `"NavMesh"` |
 | Version Control | 559 | `"Version Control"` |
 | Lua Debugger | 303 | `"Lua Debugger"` |
-| Visual Script Debugger | 346 | `"Visual Script"` |
 | World Partition Editor | 403 | `"World Partition Editor"` |
 | Multi-Viewport | 173 | `"Multi-Viewport"` |
 | Streaming Debug | 149 | `"Streaming Debug"` |
@@ -193,13 +192,6 @@ Plugin Hot Reload, Version Control.
 |:--------|:------------|
 | `dse-panel-deep/lua_debugger_open` | Focus Lua Debugger and verify UI regions |
 | `dse-panel-deep/lua_debugger_breakpoint_list` | Verify breakpoint list area exists |
-
-#### Visual Script (2 tests)
-
-| Test ID | Description |
-|:--------|:------------|
-| `dse-panel-deep/visual_script_node_palette` | Open node palette sidebar |
-| `dse-panel-deep/visual_script_canvas_exists` | Verify canvas drawing area |
 
 #### World Partition (2 tests)
 

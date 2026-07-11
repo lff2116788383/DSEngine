@@ -3,6 +3,7 @@
 #include "editor_icons.h"
 #include "editor_project.h"
 #include "editor_external_editor.h"
+#include "editor_gpu.h"
 
 #include "engine/assets/asset_manager.h"
 #include "engine/core/service_locator.h"
@@ -176,7 +177,7 @@ void DrawGridItem(ImDrawList* dl, const AssetInfo& asset, float size) {
         // Render actual texture thumbnail
         float pad = 4.0f;
         ImVec2 uv0(0, 0), uv1(1, 1);
-        dl->AddImage((ImTextureID)(intptr_t)(thumb_id),
+        dl->AddImage((ImTextureID)EditorImGuiTextureId(thumb_id),
                      ImVec2(cursor.x + pad, cursor.y + pad),
                      ImVec2(cursor.x + size - pad, cursor.y + size - pad),
                      uv0, uv1);

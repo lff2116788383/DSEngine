@@ -24,12 +24,12 @@ int main() {
         dse::samples::cpp_demo::Tick,
         dse::samples::cpp_demo::Shutdown
     });
-    return dse::runtime::RunEngine({
-        800,
-        600,
-        dse::samples::cpp_demo::config::kWindowTitle,
-        BusinessMode::Cpp,
-        false,
-        ""
-    });
+    dse::runtime::EngineRunConfig config;
+    config.window_width = 800;
+    config.window_height = 600;
+    config.window_title = dse::samples::cpp_demo::config::kWindowTitle;
+    config.business_mode = BusinessMode::Cpp;
+    config.enable_editor = false;
+    config.startup_lua_script_path.clear();
+    return dse::runtime::RunEngine(config);
 }

@@ -566,6 +566,18 @@ if(DSE_ENABLE_LUA AND EXISTS "${CMAKE_SOURCE_DIR}/tests/serialize/serialize_smok
         target_compile_options(dse_serialize_smoke PRIVATE /utf-8)
     endif()
 endif()
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/blueprint/blueprint_smoke.cpp")
+    add_executable(dse_blueprint_smoke "${CMAKE_SOURCE_DIR}/tests/blueprint/blueprint_smoke.cpp")
+    target_link_libraries(dse_blueprint_smoke PRIVATE dse_engine)
+    target_include_directories(dse_blueprint_smoke PRIVATE "${CMAKE_SOURCE_DIR}")
+    target_compile_features(dse_blueprint_smoke PRIVATE cxx_std_17)
+    if(MSVC)
+        set_property(TARGET dse_blueprint_smoke PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+        target_compile_options(dse_blueprint_smoke PRIVATE /utf-8)
+    endif()
+endif()
 # --- D3D11 RHI 后端 ---
 if(DSE_ENABLE_D3D11 AND WIN32)
     add_definitions(-D DSE_ENABLE_D3D11)
@@ -1093,6 +1105,14 @@ enable_testing()
 # 这些是独立可执行（127.0.0.1 回环，退出码 0=通过），仅在对应模块启用时存在
 # （-DDSE_ENABLE_HTTP=ON / -DDSE_ENABLE_NET=ON）。注册进 ctest 后，opt-in 构建
 # 可在默认 ctest 运行中自动自检；不影响未启用这两个模块的默认构建/CI。
+if(TARGET dse_blueprint_smoke)
+    add_test(NAME dse_blueprint_smoke COMMAND dse_blueprint_smoke)
+    set_tests_properties(dse_blueprint_smoke PROPERTIES
+        LABELS "smoke;blueprint"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 30)
+endif()
+
 foreach(_smoke_target
         dse_http_smoke
         dse_http_lua_smoke

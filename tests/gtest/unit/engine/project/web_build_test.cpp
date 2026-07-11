@@ -113,4 +113,50 @@ TEST_F(WebBuildRunTest, SucceedsWithoutInvokingCMakeWhenStepsDisabled) {
     EXPECT_EQ(res.build_exit, 0);
 }
 
+// DetectEmscripten：未设置 → 不可用且给出可操作指引；设置 → 可用。
+TEST_F(WebBuildRunTest, DetectEmscriptenReflectsEnv) {
+    SetEnvVar("EMSDK", "");
+    auto st_off = dse::project::DetectEmscripten();
+    EXPECT_FALSE(st_off.available);
+    EXPECT_FALSE(st_off.install_hint.empty());
+
+    SetEnvVar("EMSDK", (root_ / "fake_emsdk").string().c_str());
+    auto st_on = dse::project::DetectEmscripten();
+    EXPECT_TRUE(st_on.available);
+    EXPECT_EQ(st_on.emsdk, (root_ / "fake_emsdk").string());
+}
+
+// 关闭配置/编译但开启产物收集：从 bin_dir 收集 index.* 到 dist_dir（不触发 cmake）。
+TEST_F(WebBuildRunTest, CollectsArtifactsFromBinDir) {
+    SetEnvVar("EMSDK", (root_ / "fake_emsdk").string().c_str());
+    std::ofstream(root_ / "CMakePresets.json") << "{}";
+
+    fs::path bin = root_ / "bin";
+    fs::create_directories(bin);
+    std::ofstream(bin / "index.html") << "<html></html>";
+    std::ofstream(bin / "index.js") << "// js";
+    std::ofstream(bin / "index.wasm") << "\0\0";
+
+    fs::path dist = root_ / "dist" / "web";
+    dse::project::WebBuildOptions opts;
+    opts.source_dir = root_.string();
+    opts.run_configure = false;
+    opts.run_build = false;
+    opts.collect_artifacts = true;
+    opts.bin_dir = bin.string();
+    opts.dist_dir = dist.string();
+
+    int lines = 0;
+    opts.on_line = [&lines](const std::string&, bool) { ++lines; };
+
+    auto res = dse::project::RunWebBuild(opts);
+    ASSERT_TRUE(res.ok) << res.error;
+    EXPECT_EQ(res.artifact_dir, dist.string());
+    EXPECT_GE(res.artifacts.size(), 3u);
+    EXPECT_TRUE(fs::exists(dist / "index.html"));
+    EXPECT_TRUE(fs::exists(dist / "index.js"));
+    EXPECT_TRUE(fs::exists(dist / "index.wasm"));
+    EXPECT_GT(lines, 0);  // 收集过程有流式日志
+}
+
 } // namespace

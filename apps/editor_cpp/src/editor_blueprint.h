@@ -53,12 +53,13 @@ struct BpVariable {
     bool is_exposed = false; // exposed to Inspector on entity
 };
 
-// ─── Pin / Node / Link (enhanced from visual_script) ────────────────────────
+// ─── Pin / Node / Link ──────────────────────────────────────────────────────
 
 enum class BpPinType { Flow, Bool, Int, Float, String, Vec2, Vec3, Vec4, Entity, Array, Any, Wildcard };
 enum class BpPinKind { Input, Output };
 
 const char* BpPinTypeName(BpPinType t);
+BpPinType BpPinTypeFromName(const char* name);
 ImU32 BpPinColor(BpPinType t);
 
 struct BpPin {

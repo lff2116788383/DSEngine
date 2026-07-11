@@ -37,12 +37,12 @@ int main(int argc, char** argv) {
         } catch (...) {
         }
     }
-    return dse::runtime::RunEngine({
-        window_width,
-        window_height,
-        "DSEngine Lua Demo",
-        BusinessMode::Lua,
-        false,
-        startup_script
-    });
+    dse::runtime::EngineRunConfig config;
+    config.window_width = window_width;
+    config.window_height = window_height;
+    config.window_title = "DSEngine Lua Demo";
+    config.business_mode = BusinessMode::Lua;
+    config.enable_editor = false;
+    config.startup_lua_script_path = startup_script;
+    return dse::runtime::RunEngine(config);
 }

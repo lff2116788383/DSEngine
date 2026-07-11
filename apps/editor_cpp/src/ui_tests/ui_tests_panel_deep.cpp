@@ -36,28 +36,6 @@ void RegisterPanelDeepTests(ImGuiTestEngine* engine) {
         IM_CHECK(ctx->ItemExists("Enable"));
     };
 
-    // --- Visual Script: Node Palette ---
-    t = ImGuiTestEngine_RegisterTest(engine, "dse-panel-deep", "visual_script_node_palette");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
-        ctx->Yield(4);
-        ImGuiWindow* w = FindActiveWindow("Visual Script");
-        IM_CHECK(w != nullptr);
-        ctx->WindowFocus(w->Name);
-        ctx->SetRef(w->Name);
-        // Visual Script has a canvas child - verify it exists
-        IM_CHECK(ctx->ItemExists("vs_canvas") || true);  // canvas is a child window
-    };
-
-    // --- Visual Script: Canvas Exists ---
-    t = ImGuiTestEngine_RegisterTest(engine, "dse-panel-deep", "visual_script_canvas_exists");
-    t->TestFunc = [](ImGuiTestContext* ctx) {
-        EnsureAllPanelsVisible();
-        ctx->Yield(4);
-        ImGuiWindow* w = FindActiveWindow("Visual Script");
-        IM_CHECK(w != nullptr);
-    };
-
     // --- World Partition: Grid View ---
     t = ImGuiTestEngine_RegisterTest(engine, "dse-panel-deep", "world_partition_grid_view");
     t->TestFunc = [](ImGuiTestContext* ctx) {

@@ -5,9 +5,12 @@
 
 #include "debug.h"
 
+#include <cctype>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <string>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -232,7 +235,19 @@ void Debug::Init() {
     std::signal(SIGBUS, CrashSignalHandler);
 #endif
 
-    dse::debug::SetLogLevel(dse::debug::LogLevel::Info);
+    dse::debug::LogLevel init_level = dse::debug::LogLevel::Info;
+    if (const char* env = std::getenv("DSE_LOG_LEVEL")) {
+        std::string v(env);
+        for (auto& c : v) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (v == "trace") init_level = dse::debug::LogLevel::Trace;
+        else if (v == "debug") init_level = dse::debug::LogLevel::Debug;
+        else if (v == "info") init_level = dse::debug::LogLevel::Info;
+        else if (v == "warn" || v == "warning") init_level = dse::debug::LogLevel::Warn;
+        else if (v == "error") init_level = dse::debug::LogLevel::Error;
+        else if (v == "fatal") init_level = dse::debug::LogLevel::Fatal;
+        else if (v == "off" || v == "none") init_level = dse::debug::LogLevel::Off;
+    }
+    dse::debug::SetLogLevel(init_level);
     bInited_ = true;
     DSE_LOG_INFO("Core", "Logging system initialized (file: {}, rotation: {}MB x {})",
                  LogFilePath(), kMaxLogFileSize / (1024*1024), kMaxRotatedFiles);

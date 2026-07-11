@@ -246,6 +246,8 @@ ComPtr<ID3DBlob> DX11ShaderManager::CompileShader(const std::string& source,
             DEBUG_LOG_ERROR("[D3D11] Shader compile error: {}",
                            static_cast<const char*>(error_blob->GetBufferPointer()));
         }
+        DEBUG_LOG_ERROR("[D3D11] Failed shader was entry='{}' target='{}' (first 96 chars): {}",
+                        entry_point, target, source.substr(0, 96));
         return nullptr;
     }
 

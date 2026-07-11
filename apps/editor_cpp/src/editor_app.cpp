@@ -24,9 +24,7 @@
 #include "imgui.h"
 #include "editor_imgui_backend.h"
 #include "editor_panel_registry.h"
-#include "editor_imgui_backend_gl.h"
-#ifdef _WIN32
-#endif
+#include "editor_task_service.h"
 #include "imgui_internal.h"
 #include "ImGuizmo.h"
 
@@ -35,6 +33,7 @@
 #endif
 
 #include "engine/runtime/engine_app.h"
+#include "engine/render/rhi/rhi_factory.h"
 #include "engine/assets/asset_manager.h"
 #include "engine/ecs/world.h"
 #include "engine/ecs/components_2d.h"
@@ -117,8 +116,6 @@
 #include "editor_streaming_panel.h"
 #include "editor_terrain_tools.h"
 #include "editor_curve_editor.h"
-#include "editor_visual_script.h"
-#include "editor_visual_script_debugger.h"
 #include "editor_anim_retarget.h"
 #include "editor_animation_clip.h"
 #include "editor_sequencer.h"
@@ -272,7 +269,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
     dse::editor::AddEditorBreadcrumb("editor: init start");
 
 #if defined(_WIN32)
-    if (headless) {
+    const bool preserve_headless_stdio =
+        std::getenv("DSE_HEADLESS_STDIO") &&
+        std::string(std::getenv("DSE_HEADLESS_STDIO")) == "1";
+    if (headless && !preserve_headless_stdio) {
         // 无头/CI 模式：抑制 CRT 断言对话框和 WER 崩溃对话框，
         // 改为直接输出到 stderr 并 abort，避免进程卡死在等待用户点击的弹窗上。
         _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
@@ -310,10 +310,28 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     // SSBO（粒子 / GPU-driven 等）需要 GL 4.3+；优先请求 4.3 核心，创建失败再回退 3.3。
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    if (headless) {
+    const auto editor_rhi_backend =
+        dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+    // P0-4.4：请求的后端无法识别或未编译时，明确报错并拒绝启动，禁止静默回退到 OpenGL。
+    if (editor_rhi_backend == RhiBackend::Invalid) {
+        std::cerr << "[Editor] Requested RHI backend is unavailable "
+                     "(check DSE_RHI_BACKEND: opengl/d3d11/vulkan). Refusing to start." << std::endl;
+        splash_.Finish();
+        glfwTerminate();
+        return false;
+    }
+    const bool uses_opengl = editor_rhi_backend == RhiBackend::OpenGL;
+    if (uses_opengl) {
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    } else {
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    }
+    const bool headless_window_visible =
+        std::getenv("DSE_HEADLESS_VISIBLE") &&
+        std::string(std::getenv("DSE_HEADLESS_VISIBLE")) == "1";
+    if (headless && !headless_window_visible) {
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     } else {
         glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
@@ -325,7 +343,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     }
 
     window_ = glfwCreateWindow(1280, 720, "DSEngine Editor", NULL, NULL);
-    if (!window_) {
+    if (!window_ && uses_opengl) {
         // 回退：驱动/上下文不支持 4.3 时降级到 3.3（此时 SSBO 特性不可用）。
         std::cerr << "[Editor] GL 4.3 context creation failed; retrying with 3.3." << std::endl;
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -354,8 +372,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
         }
     }
 
-    glfwMakeContextCurrent(window_);
-    glfwSwapInterval(0); // Editor: no VSync cap, let GPU run freely
+    if (uses_opengl) {
+        glfwMakeContextCurrent(window_);
+        glfwSwapInterval(0);
+    }
 
     // Drag & Drop: accept file drops from OS — dispatch to panels via OsDropEvent
     glfwSetDropCallback(window_, [](GLFWwindow* win, int count, const char** paths) {
@@ -369,7 +389,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
         dse::editor::PushOsDropEvent(file_paths, static_cast<float>(mx), static_cast<float>(my));
     });
 
-    if (!gladLoadGL(glfwGetProcAddress)) {
+    if (uses_opengl && !gladLoadGL(glfwGetProcAddress)) {
         std::cerr << "Failed to initialize OpenGL (gladLoadGL) in Editor." << std::endl;
         splash_.Finish();
         glfwDestroyWindow(window_);
@@ -442,13 +462,6 @@ bool EditorApp::Init(int argc, char* argv[]) {
         style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
 
-    // RHI-aware ImGui backend initialization
-    // Currently uses OpenGL3 backend regardless of RHI (editor compositor is GL-based).
-    // TODO: Add D3D11/Vulkan ImGui backend when switching RHI away from OpenGL.
-    // T13: Backend abstraction - create and init ImGui backend
-    imgui_backend_ = std::make_unique<dse::editor::ImGuiBackendGL>();
-    imgui_backend_->Init(window_);
-
     splash_.SetStatus("正在初始化渲染引擎…");
 
     // Initialize DSEngine
@@ -460,6 +473,7 @@ bool EditorApp::Init(int argc, char* argv[]) {
     engine_config.window_title = "DSEngine Editor";
     engine_config.business_mode = BusinessMode::Lua;
     engine_config.enable_editor = true;
+    engine_config.external_window = window_;
     // Editor mode: no Lua startup script needed; engine will skip bootstrap gracefully.
 
     if (std::getenv("DSE_DATA_ROOT") == nullptr) {
@@ -483,6 +497,14 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // 把引擎 RHI 设备注入编辑器 GPU 接入层：编辑器自建的零散 GPU 资源（资产缩略图等）
     // 经此走引擎 RHI 抽象，不再直接调用 OpenGL。
     dse::editor::SetEditorRhiDevice(engine_instance_->pipeline()->GetRhiDevice());
+    imgui_backend_ = dse::editor::CreateImGuiBackend(engine_instance_->pipeline()->GetRhiDevice());
+    if (!imgui_backend_ ||
+        !imgui_backend_->Init(window_, engine_instance_->pipeline()->GetRhiDevice())) {
+        std::cerr << "Failed to initialize ImGui backend for selected RHI." << std::endl;
+        Shutdown();
+        return false;
+    }
+    dse::editor::SetEditorImGuiBackend(imgui_backend_.get());
 
     // 引擎 Init 内部以 app_name "DSEngine" 重新安装并重置了面包屑；此处重申编辑器身份，
     // 之后再补充编辑器专属面包屑/元数据，确保崩溃报告标记为编辑器进程且带编辑器上下文。
@@ -656,41 +678,10 @@ bool EditorApp::Init(int argc, char* argv[]) {
     // Initialize Blueprint system (node registry + default event graph)
     dse::editor::bp::InitBlueprintSystem();
 
-    // Register all panels once at startup (not per-frame in DrawEditorUI).
-    {
-        auto& reg = dse::editor::PanelRegistry::Get();
-        reg.Register({"hierarchy",          "Hierarchy",            "Core",  &panels_.hierarchy,          true});
-        reg.Register({"inspector",          "Inspector",            "Core",  &panels_.inspector,          true});
-        reg.Register({"console",            "Console",              "Core",  &panels_.console,            true});
-        reg.Register({"scene",              "Scene",                "Core",  &panels_.scene,              true});
-        reg.Register({"game",               "Game",                 "Core",  &panels_.game,               true});
-        reg.Register({"sequencer",          "Sequencer",            "Core",  &panels_.sequencer,          true});
-        reg.Register({"preferences",        "Preferences",          "Core",  &panels_.preferences,        false});
-        reg.Register({"profiler",           "Profiler",             "Debug", &panels_.profiler,           false});
-        reg.Register({"localization",       "Localization Preview", "Debug", &panels_.localization_preview,false});
-        reg.Register({"undo_history",       "Undo History",         "Debug", &panels_.undo_history,       false});
-        reg.Register({"streaming_debug",    "Streaming Debug",      "Debug", &panels_.streaming_debug,    false});
-        reg.Register({"lua_debugger",       "Lua Debugger",         "Debug", &panels_.lua_debugger,       false});
-        reg.Register({"animation",          "Animation",            "Tool",  &panels_.animation,          false});
-        reg.Register({"tile_palette",       "Tile Palette",         "Tool",  &panels_.tile_palette,       false});
-        reg.Register({"terrain_editor",     "Terrain Editor",       "Tool",  &panels_.terrain_editor,     false});
-        reg.Register({"vegetation_brush",   "Vegetation Brush",     "Tool",  &panels_.vegetation_brush,   false});
-        reg.Register({"lua_console",        "Lua Console",          "Tool",  &panels_.lua_console,        false});
-        reg.Register({"asset_browser",      "Asset Browser",        "Tool",  &panels_.asset_browser,      false});
-        reg.Register({"animation_timeline", "Animation Timeline",   "Tool",  &panels_.animation_timeline, false});
-        reg.Register({"navmesh",            "NavMesh",              "Tool",  &panels_.navmesh,            false});
-        reg.Register({"shader_graph",       "Shader Graph",         "Tool",  &panels_.shader_graph,       false});
-        reg.Register({"git",                "Git",                  "Tool",  &panels_.git,                false});
-        reg.Register({"multi_viewport",     "Multi Viewport",       "Tool",  &panels_.multi_viewport,     false});
-        reg.Register({"anim_state_machine", "Anim State Machine",   "Tool",  &panels_.anim_state_machine, false});
-        reg.Register({"curve_editor",       "Curve Editor",         "Tool",  &panels_.curve_editor,       false});
-        reg.Register({"visual_script",      "Visual Script",        "Tool",  &panels_.visual_script,      false});
-        reg.Register({"anim_retarget",      "Anim Retarget",        "Tool",  &panels_.anim_retarget,      false});
-        reg.Register({"blueprint",          "Blueprint",            "Tool",  &panels_.blueprint,          false});
-        reg.Register({"csharp",             "C# Scripts",           "Tool",  &panels_.csharp_panel,       false});
-        reg.Register({"plugins",            "Plugins",              "Plugin",&panels_.plugins,            false});
-        reg.Register({"ai_agent",           "AI Agent",             "Plugin",&panels_.ai_agent,           false});
-    }
+    // Register all panels once at startup (data-driven; not hardcoded per-frame
+    // in DrawEditorUI). New panels register from their own module and are drawn,
+    // menued and persisted automatically — editor_app.cpp needs no per-panel edit.
+    RegisterPanels();
 
     std::cout << "Engine initialized successfully. Entering main loop..." << std::endl;
 
@@ -718,7 +709,6 @@ bool EditorApp::Init(int argc, char* argv[]) {
         ui_services.show_lua_debugger         = &panels_.lua_debugger;
         ui_services.show_streaming_debug      = &panels_.streaming_debug;
         ui_services.show_curve_editor         = &panels_.curve_editor;
-        ui_services.show_visual_script        = &panels_.visual_script;
         ui_services.show_anim_retarget        = &panels_.anim_retarget;
         ui_services.show_preferences          = &panels_.preferences;
         ui_services.show_plugins              = &panels_.plugins;
@@ -758,7 +748,6 @@ void EditorApp::Run() {
         dse::editor::AddEditorBreadcrumb("editor: previous session crash report found");
     }
     dse::editor::AddEditorBreadcrumb("editor: entering main loop");
-
     while (!glfwWindowShouldClose(window_) && !dse::editor::IsExitRequested() && frames_remaining_ != 0) {
         if (frames_remaining_ > 0) --frames_remaining_;
         ++frame_counter;
@@ -894,15 +883,14 @@ void EditorApp::Run() {
         // Rendering
         int display_w, display_h;
         glfwGetFramebufferSize(window_, &display_w, &display_h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glViewport(0, 0, display_w, display_h);
-        // 根据主题设置 GL 清屏色，避免 light 模式下面板缝隙处显示黑色
-        if (dse::editor::GetCurrentThemeIndex() == 1) {
-            glClearColor(0.94f, 0.94f, 0.96f, 1.0f);  // 浅色主题
-        } else {
-            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);  // 深色主题
-        }
-        glClear(GL_COLOR_BUFFER_BIT);
+        const bool light_theme = dse::editor::GetCurrentThemeIndex() == 1;
+        float clear_color[4] = {
+            light_theme ? 0.94f : 0.05f,
+            light_theme ? 0.94f : 0.05f,
+            light_theme ? 0.96f : 0.05f,
+            1.0f
+        };
+        imgui_backend_->PrepareFrame(display_w, display_h, clear_color);
 
         {
             dse::profiler::ScopedCPUProfile scope(cpu_profiler_, "ImGuiRender");
@@ -911,13 +899,20 @@ void EditorApp::Run() {
         }
 
         if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-            GLFWwindow* backup_current_context = glfwGetCurrentContext();
+            GLFWwindow* backup_current_context =
+                imgui_backend_->UsesOpenGLContext() ? glfwGetCurrentContext() : nullptr;
             ImGui::UpdatePlatformWindows();
             ImGui::RenderPlatformWindowsDefault();
-            glfwMakeContextCurrent(backup_current_context);
+            if (imgui_backend_->UsesOpenGLContext()) {
+                glfwMakeContextCurrent(backup_current_context);
+            }
         }
 
-        glfwSwapBuffers(window_);
+        if (imgui_backend_->UsesOpenGLContext()) {
+            glfwSwapBuffers(window_);
+        } else {
+            engine_instance_->pipeline()->GetRhiDevice()->PresentFrame();
+        }
 
 #ifdef DSE_EDITOR_UI_TESTS
         if (test_config_.run_ui_tests) {
@@ -1038,6 +1033,10 @@ void EditorApp::Run() {
 // ─── Shutdown ───────────────────────────────────────────────────────────────
 
 void EditorApp::Shutdown() {
+    // Cancel + join all background workers before tearing down engine/editor
+    // state so no detached thread can touch destroyed objects.
+    dse::editor::BackgroundTaskService::Get().Shutdown();
+
     splash_.Finish();  // 若主循环未走到首帧（异常早退），确保 splash 线程被回收
 
     // Save editor settings
@@ -1073,19 +1072,21 @@ void EditorApp::Shutdown() {
         control_server_.reset();
     }
 
-    if (engine_instance_) {
-        engine_instance_->asset_manager()->StopFileWatcher();
-        engine_instance_->Shutdown();
-        engine_instance_.reset();
-    }
-
     ImGuiIO& io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::DestroyPlatformWindows();
     }
     if (imgui_backend_) {
         imgui_backend_->Shutdown();
+        dse::editor::SetEditorImGuiBackend(nullptr);
         imgui_backend_.reset();
+    }
+
+    if (engine_instance_) {
+        engine_instance_->asset_manager()->StopFileWatcher();
+        engine_instance_->Shutdown();
+        engine_instance_.reset();
+        dse::editor::SetEditorRhiDevice(nullptr);
     }
 
 #ifdef DSE_EDITOR_UI_TESTS
@@ -1111,6 +1112,221 @@ void EditorApp::Shutdown() {
 }
 
 // ─── DrawEditorUI ───────────────────────────────────────────────────────────
+
+// ─── RegisterPanels ─────────────────────────────────────────────────────────
+// Data-driven panel registration. Each panel is described by metadata + a draw
+// callback; DrawEditorUI dispatches them generically via PanelRegistry::DrawAll.
+// Panels with visible=nullptr are always drawn (host chrome / self-gating) and
+// do not appear in the Window menu. Entries are registered in the same order
+// they were previously drawn to preserve ImGui window / focus ordering.
+void EditorApp::RegisterPanels() {
+    if (panels_registered_) return;
+    panels_registered_ = true;
+
+    auto& reg = dse::editor::PanelRegistry::Get();
+
+    // Best-effort record of the active RHI backend for availability filtering.
+    if (const char* be = std::getenv("DSE_RHI_BACKEND")) reg.SetActiveBackend(be);
+
+    using Ctx = dse::editor::EditorContext;
+    auto add = [&reg](std::string id, std::string name, std::string cat,
+                      bool* vis, bool defv,
+                      std::function<void(Ctx&)> draw, std::string icon = "") {
+        dse::editor::PanelEntry e;
+        e.id = std::move(id);
+        e.display_name = std::move(name);
+        e.category = std::move(cat);
+        e.visible = vis;
+        e.default_visible = defv;
+        e.draw = std::move(draw);
+        e.menu_icon = std::move(icon);
+        reg.Register(std::move(e));
+    };
+
+    // ── Core ──
+    add("hierarchy", "Hierarchy", "Core", &panels_.hierarchy, true,
+        [this](Ctx& ctx){ dse::editor::DrawHierarchyPanel(ctx); }, MDI_ICON_FILE_TREE);
+    add("inspector", "Inspector", "Core", &panels_.inspector, true,
+        [this](Ctx& ctx){ dse::editor::DrawInspectorPanel(ctx); }, MDI_ICON_INFORMATION);
+    add("project", "Project", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::DrawProjectPanel(); });
+    add("console", "Console", "Core", &panels_.console, true,
+        [this](Ctx&){ dse::editor::DrawConsolePanel(); }, MDI_ICON_CONSOLE);
+
+    // ── Debug / Panels ──
+    add("localization", "Localization Preview", "Debug", &panels_.localization_preview, false,
+        [this](Ctx& ctx){
+            dse::editor::DrawLocalizationPreviewPanel(ctx,
+                localization_preview_key_, sizeof(localization_preview_key_),
+                localization_preview_fallback_, sizeof(localization_preview_fallback_));
+        });
+    add("profiler", "Profiler", "Debug", &panels_.profiler, false,
+        [this](Ctx& ctx){ dse::editor::DrawProfilerPanel(ctx); }, MDI_ICON_COG);
+
+    // ── Tools ──
+    add("animation", "Animation", "Tool", &panels_.animation, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimationPanel(ctx); }, MDI_ICON_ANIMATION);
+    add("material", "Material", "Core", nullptr, true,
+        [this](Ctx& ctx){ dse::editor::DrawMaterialPanel(ctx); });
+    add("tile_palette", "Tile Palette", "Tool", &panels_.tile_palette, false,
+        [this](Ctx& ctx){ dse::editor::DrawTilePalettePanel(ctx); });
+    add("terrain_editor", "Terrain Editor", "Tool", &panels_.terrain_editor, false,
+        [this](Ctx& ctx){ dse::editor::DrawTerrainEditorPanel(ctx); }, MDI_ICON_TERRAIN);
+    add("vegetation_brush", "Vegetation Brush", "Tool", &panels_.vegetation_brush, false,
+        [this](Ctx& ctx){ dse::editor::DrawVegetationEditorPanel(ctx); }, MDI_ICON_TERRAIN);
+    add("lua_console", "Lua Console", "Tool", &panels_.lua_console, false,
+        [this](Ctx&){ dse::editor::DrawLuaConsolePanel(); }, MDI_ICON_CODE);
+    add("lua_debugger", "Lua Debugger", "Debug", &panels_.lua_debugger, false,
+        [this](Ctx& ctx){ dse::editor::DrawLuaDebuggerPanel(ctx); }, MDI_ICON_CODE);
+    add("csharp", "C# Scripts", "Tool", &panels_.csharp_panel, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("C# Scripts", &panels_.csharp_panel)) {
+                dse::editor::DrawCSharpPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_CODE);
+
+    // ── Always-on dialogs / config (host chrome, not in Window menu) ──
+    add("build_game", "Build Game", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::DrawBuildGameDialog(); });
+    add("asset_importer", "Asset Importer", "Core", nullptr, true,
+        [this](Ctx& ctx){ dse::editor::DrawAssetImporterDialog(ctx); });
+    add("preferences", "Preferences", "Core", &panels_.preferences, false,
+        [this](Ctx&){ dse::editor::DrawPreferencesPanel(&panels_.preferences); });
+    add("undo_history", "Undo History", "Debug", &panels_.undo_history, false,
+        [this](Ctx&){ dse::editor::DrawUndoHistoryPanel(&panels_.undo_history); });
+    add("ai_config", "AI Configuration", "Core", nullptr, true,
+        [this](Ctx&){ dse::editor::AIConfigManager::Instance().DrawConfigWindow(); });
+
+    // ── More tools ──
+    add("asset_browser", "Asset Browser", "Tool", &panels_.asset_browser, false,
+        [this](Ctx&){ dse::editor::DrawAssetBrowserPanel(); }, MDI_ICON_FOLDER);
+    add("animation_timeline", "Animation Timeline", "Tool", &panels_.animation_timeline, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimationTimelinePanel(ctx); }, MDI_ICON_ANIMATION);
+    add("navmesh", "NavMesh", "Tool", &panels_.navmesh, false,
+        [this](Ctx& ctx){ dse::editor::DrawNavMeshPanel(ctx); }, MDI_ICON_MAP_MARKER_PATH);
+    // secondary draw sharing the terrain_editor flag — always dispatched, self-gated
+    add("terrain_tools", "Terrain Tools", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.terrain_editor) dse::editor::DrawTerrainToolsPanel(ctx); });
+    add("shader_graph", "Shader Graph", "Tool", &panels_.shader_graph, false,
+        [this](Ctx& ctx){ dse::editor::DrawShaderGraphPanel(ctx); }, MDI_ICON_PALETTE);
+    add("multi_viewport", "Multi Viewport", "Tool", &panels_.multi_viewport, false,
+        [this](Ctx&){ dse::editor::DrawMultiViewportConfigPanel(); }, MDI_ICON_VIEW_MODULE);
+    add("anim_state_machine", "Anim State Machine", "Tool", &panels_.anim_state_machine, false,
+        [this](Ctx& ctx){ dse::editor::DrawAnimStateMachinePanel(ctx); }, MDI_ICON_ANIMATION);
+    add("streaming_debug", "Streaming Debug", "Debug", &panels_.streaming_debug, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Streaming Debug", &panels_.streaming_debug)) {
+                dse::editor::DrawStreamingDebugPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_CLOUD_DOWNLOAD);
+    add("curve_editor", "Curve Editor", "Debug", &panels_.curve_editor, false,
+        [this](Ctx&){
+            ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Curve Editor", &panels_.curve_editor)) {
+                static dse::editor::CurveEditorState s_curve_state;
+                static bool s_curve_init = false;
+                if (!s_curve_init) {
+                    s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
+                    s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
+                    s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
+                    s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
+                    s_curve_init = true;
+                }
+                dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
+            }
+            ImGui::End();
+        }, MDI_ICON_CHART_LINE);
+    add("anim_retarget", "Anim Retarget", "Tool", &panels_.anim_retarget, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Anim Retarget", &panels_.anim_retarget)) {
+                dse::editor::DrawAnimRetargetPanel(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_ANIMATION);
+    add("git", "Git", "Tool", &panels_.git, false,
+        [this](Ctx& ctx){ dse::editor::DrawVersionControlPanel(ctx); }, MDI_ICON_SOURCE_BRANCH);
+    add("blueprint", "Blueprint", "Tool", &panels_.blueprint, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Blueprint Editor", &panels_.blueprint)) {
+                dse::editor::bp::DrawBlueprintEditor(ctx);
+            }
+            ImGui::End();
+        }, MDI_ICON_SITEMAP);
+    // secondary draw sharing the animation flag
+    add("animation_clip", "Animation Clip", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.animation) dse::editor::DrawAnimationClipEditor(ctx); });
+
+    add("sequencer", "Sequencer", "Core", &panels_.sequencer, true,
+        [this](Ctx& ctx){ dse::editor::DrawSequencerPanel(ctx); }, MDI_ICON_MOVIE_OPEN);
+
+    // secondary draws sharing terrain_editor / streaming_debug flags
+    add("terrain_sculpt", "Terrain Sculpt Preview", "Tool", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.terrain_editor) dse::editor::DrawTerrainSculptPreview(ctx); });
+    add("world_partition", "World Partition", "Debug", nullptr, false,
+        [this](Ctx& ctx){ if (panels_.streaming_debug) dse::editor::DrawWorldPartitionEditor(ctx); });
+
+    // ── Plugins ──
+    add("plugins", "Plugins", "Plugin", &panels_.plugins, false,
+        [this](Ctx& ctx){
+            ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("Plugins", &panels_.plugins)) {
+                dse::editor::DrawPluginManagerPanel(plugin_manager_);
+            }
+            ImGui::End();
+            dse::editor::DrawPluginHotReloadPanel(ctx);
+        }, MDI_ICON_PUZZLE);
+
+    // 2D tools (each manages its own window/visibility internally)
+    add("tools_2d", "2D Tools", "Tool", nullptr, true,
+        [this](Ctx&){
+            dse::editor::tools2d::DrawSpriteSlicerPanel();
+            dse::editor::tools2d::DrawAtlasPackerPanel();
+            dse::editor::tools2d::DrawAnim2DEditorPanel();
+            dse::editor::tools2d::DrawNineSliceEditorPanel();
+            dse::editor::tools2d::DrawCollisionEditor2DPanel();
+            dse::editor::tools2d::DrawParticle2DEditorPanel();
+            dse::editor::tools2d::DrawParallaxEditorPanel();
+            dse::editor::tools2d::DrawLight2DEditorPanel();
+        });
+
+    // Third-party plugin API panels
+    add("plugin_api", "Plugin API Panels", "Plugin", nullptr, true,
+        [this](Ctx& ctx){
+            dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
+            dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
+        });
+
+    add("background_tasks", "Background Tasks", "Debug", &panels_.background_tasks, false,
+        [this](Ctx&){ dse::editor::BackgroundTaskService::Get().DrawPanel(&panels_.background_tasks); });
+
+    add("ai_agent", "AI Agent", "Plugin", &panels_.ai_agent, false,
+        [this](Ctx&){
+            ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
+            if (ImGui::Begin("AI Agent", &panels_.ai_agent)) {
+                agent_panel_.Draw(*control_server_, *engine_instance_);
+            }
+            ImGui::End();
+        });
+
+    // Scene / Game viewports (drawn last, as before) — read this frame's textures.
+    add("scene", "Scene", "Core", &panels_.scene, true,
+        [this](Ctx& ctx){
+            dse::editor::DrawSceneViewportPanel(ctx, frame_scene_texture_,
+                BuildActiveCameraMatrices, engine_instance_->pipeline());
+        }, MDI_ICON_EYE);
+    add("game", "Game", "Core", &panels_.game, true,
+        [this](Ctx&){ dse::editor::DrawGameViewportPanel(frame_game_texture_); }, MDI_ICON_GAMEPAD);
+
+    // Let any panel module that self-registered (DSE_EDITOR_PANEL) contribute now.
+    reg.RunDeferredRegistrars();
+    reg.InitAll();
+}
 
 void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_texture) {
     // 无项目打开时显示 Project Hub
@@ -1203,170 +1419,17 @@ void EditorApp::DrawEditorUI(unsigned int scene_texture, unsigned int game_textu
 
     dse::editor::DrawEditorToolbar(ctx);
 
-    if (panels_.hierarchy) dse::editor::DrawHierarchyPanel(ctx);
+    // Publish this frame's viewport textures for the registry-driven scene/game
+    // panel drawers, then dispatch every registered panel generically. All
+    // per-panel wiring lives in RegisterPanels() (or a panel's own module) — the
+    // frame loop no longer names concrete business panels.
+    frame_scene_texture_ = scene_texture;
+    frame_game_texture_  = game_texture;
+    dse::editor::PanelRegistry::Get().DrawAll(ctx);
 
-    if (panels_.inspector) dse::editor::DrawInspectorPanel(ctx);
-
-    dse::editor::DrawProjectPanel();
-    if (panels_.console) dse::editor::DrawConsolePanel();
-
-    if (panels_.localization_preview) {
-        dse::editor::DrawLocalizationPreviewPanel(ctx,
-            localization_preview_key_, sizeof(localization_preview_key_),
-            localization_preview_fallback_, sizeof(localization_preview_fallback_));
-    }
-
-    if (panels_.profiler)       dse::editor::DrawProfilerPanel(ctx);
-    if (panels_.animation)      dse::editor::DrawAnimationPanel(ctx);
-    dse::editor::DrawMaterialPanel(ctx);
-    if (panels_.tile_palette)   dse::editor::DrawTilePalettePanel(ctx);
-    if (panels_.terrain_editor) dse::editor::DrawTerrainEditorPanel(ctx);
-    if (panels_.vegetation_brush) dse::editor::DrawVegetationEditorPanel(ctx);
-    if (panels_.lua_console)    dse::editor::DrawLuaConsolePanel();
-    if (panels_.lua_debugger)   dse::editor::DrawLuaDebuggerPanel(ctx);
-    if (panels_.csharp_panel) {
-        ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("C# Scripts", &panels_.csharp_panel)) {
-            dse::editor::DrawCSharpPanel(ctx);
-        }
-        ImGui::End();
-    }
-    dse::editor::DrawBuildGameDialog();
-    dse::editor::DrawAssetImporterDialog(ctx);
-
-    dse::editor::DrawPreferencesPanel(&panels_.preferences);
-    dse::editor::DrawUndoHistoryPanel(&panels_.undo_history);
-    
-    // AI Configuration window
-    dse::editor::AIConfigManager::Instance().DrawConfigWindow();
-
-    // New panels
-    if (panels_.asset_browser)        dse::editor::DrawAssetBrowserPanel();
-    if (panels_.animation_timeline)   dse::editor::DrawAnimationTimelinePanel(ctx);
-    if (panels_.navmesh)              dse::editor::DrawNavMeshPanel(ctx);
-    if (panels_.terrain_editor)       dse::editor::DrawTerrainToolsPanel(ctx);
-    if (panels_.shader_graph)         dse::editor::DrawShaderGraphPanel(ctx);
-    if (panels_.multi_viewport)       dse::editor::DrawMultiViewportConfigPanel();
-    if (panels_.anim_state_machine)   dse::editor::DrawAnimStateMachinePanel(ctx);
-
-    // Streaming Zone debug panel
-    if (panels_.streaming_debug) {
-        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Streaming Debug", &panels_.streaming_debug)) {
-            dse::editor::DrawStreamingDebugPanel(ctx);
-        }
-        ImGui::End();
-    }
-
-    // Curve Editor panel
-    if (panels_.curve_editor) {
-        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Curve Editor", &panels_.curve_editor)) {
-            static dse::editor::CurveEditorState s_curve_state;
-            static bool s_curve_init = false;
-            if (!s_curve_init) {
-                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
-                s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
-                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
-                s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
-                s_curve_init = true;
-            }
-            dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
-        }
-        ImGui::End();
-    }
-
-    // Visual Script editor panel
-    if (panels_.visual_script) {
-        ImGui::SetNextWindowSize(ImVec2(900, 600), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Visual Script", &panels_.visual_script)) {
-            dse::editor::DrawVisualScriptEditor(ctx);
-        }
-        ImGui::End();
-    }
-
-    // Animation Retargeting panel
-    if (panels_.anim_retarget) {
-        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Anim Retarget", &panels_.anim_retarget)) {
-            dse::editor::DrawAnimRetargetPanel(ctx);
-        }
-        ImGui::End();
-    }
-
-    if (panels_.git) {
-        dse::editor::DrawVersionControlPanel(ctx);
-    }
-
-    // Visual Script Debugger (shown alongside Visual Script editor)
-    if (panels_.visual_script) {
-        dse::editor::DrawVisualScriptDebugger(ctx);
-    }
-
-    // Blueprint Editor (complete blueprint system)
-    if (panels_.blueprint) {
-        ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Blueprint Editor", &panels_.blueprint)) {
-            dse::editor::bp::DrawBlueprintEditor(ctx);
-        }
-        ImGui::End();
-    }
-
-    // Animation Clip Editor (bone pose + curve fine-tuning + additive layers)
-    if (panels_.animation) {
-        dse::editor::DrawAnimationClipEditor(ctx);
-    }
-
-    // Cinematic Sequencer (multi-track timeline editor)
-    if (panels_.sequencer) dse::editor::DrawSequencerPanel(ctx);
-
-    // Terrain Sculpt Preview (real-time brush visualization)
-    if (panels_.terrain_editor) {
-        dse::editor::DrawTerrainSculptPreview(ctx);
-    }
-
-    // World Partition Editor (cell boundary editing tool)
-    if (panels_.streaming_debug) {
-        dse::editor::DrawWorldPartitionEditor(ctx);
-    }
-
-    // Plugin Manager 面板
-    if (panels_.plugins) {
-        ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("Plugins", &panels_.plugins)) {
-            dse::editor::DrawPluginManagerPanel(plugin_manager_);
-        }
-        ImGui::End();
-        // Plugin Hot Reload panel (alongside plugin manager)
-        dse::editor::DrawPluginHotReloadPanel(ctx);
-    }
-
-    // 2D Tools panels
-    dse::editor::tools2d::DrawSpriteSlicerPanel();
-    dse::editor::tools2d::DrawAtlasPackerPanel();
-    dse::editor::tools2d::DrawAnim2DEditorPanel();
-    dse::editor::tools2d::DrawNineSliceEditorPanel();
-    dse::editor::tools2d::DrawCollisionEditor2DPanel();
-    dse::editor::tools2d::DrawParticle2DEditorPanel();
-    dse::editor::tools2d::DrawParallaxEditorPanel();
-    dse::editor::tools2d::DrawLight2DEditorPanel();
-
-    // Plugin API: update and draw custom panels
-    dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
-    dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
-
-    // AI Chat 面板
-    if (panels_.ai_agent) {
-        ImGui::SetNextWindowSize(ImVec2(420, 500), ImGuiCond_FirstUseEver);
-        if (ImGui::Begin("AI Agent", &panels_.ai_agent)) {
-            agent_panel_.Draw(*control_server_, *engine_instance_);
-        }
-        ImGui::End();
-    }
-
-    if (panels_.scene) dse::editor::DrawSceneViewportPanel(ctx, scene_texture, BuildActiveCameraMatrices,
-                                        engine_instance_->pipeline());
-    if (panels_.game) dse::editor::DrawGameViewportPanel(game_texture);
+    // Pump background task completions on the UI thread (fires even if the
+    // Background Tasks panel is closed).
+    dse::editor::BackgroundTaskService::Get().Update();
 
     dse::editor::AutoSaveManager::Get().Tick(registry);
     dse::editor::AutoSaveManager::Get().DrawRecoveryDialog(registry);

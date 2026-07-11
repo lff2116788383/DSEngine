@@ -62,13 +62,11 @@ constexpr PanelEntry kPanels[] = {
     {"lua_debugger",        "Lua Debugger"},
     {"streaming_debug",     "Streaming Debug"},
     {"curve_editor",        "Curve Editor"},
-    {"visual_script",       "Visual Script"},
     {"anim_retarget",       "Anim Retarget"},
     {"preferences",         "Preferences"},
     {"plugins",             "Plugins"},
     {"ai_chat",             "AI Agent"},
     // New editor feature panels (#2-#9)
-    {"vs_debugger",         "Visual Script Debugger"},
     {"animation_clip",      "Animation Clip Editor"},
     {"sequencer",           "Sequencer"},
     {"terrain_sculpt",      "Terrain Sculpt Preview"},

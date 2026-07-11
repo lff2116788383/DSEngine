@@ -500,47 +500,11 @@ void DrawEditorMainMenu(EditorContext& ctx, PanelVisibilityState& panels) {
 
     // ─── Window ──────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu(T("Window"))) {
-        // Core panels — closable, re-open from here
-        ImGui::TextDisabled("Core");
-        ImGui::MenuItem(MDI_ICON_FILE_TREE "  Hierarchy", nullptr, &panels.hierarchy);
-        ImGui::MenuItem(MDI_ICON_INFORMATION "  Inspector", nullptr, &panels.inspector);
-        ImGui::MenuItem(MDI_ICON_CONSOLE "  Console", nullptr, &panels.console);
-        ImGui::MenuItem(MDI_ICON_EYE "  Scene", nullptr, &panels.scene);
-        ImGui::MenuItem(MDI_ICON_GAMEPAD "  Game", nullptr, &panels.game);
-        ImGui::MenuItem(MDI_ICON_MOVIE_OPEN "  Sequencer", nullptr, &panels.sequencer);
+        // Registry-driven: every toggleable panel (Core/Debug/Tool/Plugin) is
+        // enumerated from PanelRegistry, so new panels appear here automatically
+        // without editing this menu.
+        PanelRegistry::Get().DrawWindowMenu();
 
-        ImGui::Separator();
-        ImGui::TextDisabled("Panels");
-        ImGui::MenuItem(MDI_ICON_COG "  Profiler", nullptr, &panels.profiler);
-        ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation", nullptr, &panels.animation);
-        ImGui::MenuItem(T("Tile Palette"), nullptr, &panels.tile_palette);
-        ImGui::MenuItem(MDI_ICON_TERRAIN "  Terrain Editor", nullptr, &panels.terrain_editor);
-        ImGui::MenuItem(MDI_ICON_TERRAIN "  Vegetation Brush", nullptr, &panels.vegetation_brush);
-        ImGui::MenuItem(MDI_ICON_CODE "  Lua Console", nullptr, &panels.lua_console);
-        ImGui::MenuItem(T("Localization Preview"), nullptr, &panels.localization_preview);
-        ImGui::MenuItem(T("Undo History"), nullptr, &panels.undo_history);
-
-        ImGui::Separator();
-        ImGui::TextDisabled("Advanced");
-        ImGui::MenuItem(MDI_ICON_FOLDER "  Asset Browser", nullptr, &panels.asset_browser);
-        ImGui::MenuItem(MDI_ICON_ANIMATION "  Animation Timeline", nullptr, &panels.animation_timeline);
-        ImGui::MenuItem(MDI_ICON_MAP_MARKER_PATH "  NavMesh", nullptr, &panels.navmesh);
-        ImGui::MenuItem(MDI_ICON_PALETTE "  Shader Graph", nullptr, &panels.shader_graph);
-        ImGui::MenuItem(MDI_ICON_SOURCE_BRANCH "  Git", nullptr, &panels.git);
-        ImGui::MenuItem(MDI_ICON_VIEW_MODULE "  Multi-Viewport", nullptr, &panels.multi_viewport);
-        ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim State Machine", nullptr, &panels.anim_state_machine);
-        ImGui::MenuItem(MDI_ICON_CODE "  Lua Debugger", nullptr, &panels.lua_debugger);
-        ImGui::MenuItem(MDI_ICON_CLOUD_DOWNLOAD "  Streaming Debug", nullptr, &panels.streaming_debug);
-        ImGui::MenuItem(MDI_ICON_CHART_LINE "  Curve Editor", nullptr, &panels.curve_editor);
-        ImGui::MenuItem(MDI_ICON_SITEMAP "  Visual Script", nullptr, &panels.visual_script);
-        ImGui::MenuItem(MDI_ICON_ANIMATION "  Anim Retarget", nullptr, &panels.anim_retarget);
-        ImGui::MenuItem(MDI_ICON_CODE "  C# Scripts", nullptr, &panels.csharp_panel);
-        ImGui::MenuItem(MDI_ICON_SITEMAP "  Blueprint", nullptr, &panels.blueprint);
-
-        ImGui::Separator();
-        if (ImGui::MenuItem(MDI_ICON_PUZZLE "  Plugins...")) {
-            panels.plugins = true;
-        }
         ImGui::Separator();
         DrawLayoutMenu();
         if (ImGui::MenuItem(T("Reset Layout"))) {

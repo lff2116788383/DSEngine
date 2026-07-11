@@ -137,6 +137,8 @@ void VulkanContext::Shutdown() {
 
 bool VulkanContext::RecreateSwapchain(int width, int height) {
     vkDeviceWaitIdle(device_);
+    // 旧交换链失效，已 acquire 的 image 作废，下一帧重新 acquire。
+    image_acquired_ = false;
     CleanupSwapchain();
     if (!CreateSwapchain(width, height)) return false;
     DEBUG_LOG_INFO("[Vulkan] Swapchain recreated: {}x{}", width, height);
@@ -144,6 +146,14 @@ bool VulkanContext::RecreateSwapchain(int width, int height) {
 }
 
 VkResult VulkanContext::AcquireNextImage() {
+    // 幂等：一次 present 周期内若已 acquire（例如延迟呈现下 BeginFrame 被重复调用），
+    // 复用已获取的 image index，不重复等待 fence，也不重复 signal image_available 信号量。
+    if (image_acquired_) {
+        return VK_SUCCESS;
+    }
+
+    // 等待该帧槽上一次提交完成（fence 初始为 signaled）。fence 的 reset 延后到 PresentFrame
+    // 提交前进行——保证「reset 必然紧跟 submit」，不会出现 reset 后无提交导致下次等待永久阻塞。
     vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
 
     VkResult result = vkAcquireNextImageKHR(
@@ -156,11 +166,23 @@ VkResult VulkanContext::AcquireNextImage() {
         return result;
     }
 
-    vkResetFences(device_, 1, &in_flight_fences_[current_frame_]);
+    image_acquired_ = true;
     return result;
 }
 
 VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command_buffers) {
+    // 保证已 acquire：submit 会等待 image_available 信号量，若未 acquire 则该信号量永远不被
+    // signal，vkQueueSubmit 的等待将永久阻塞。延迟呈现路径正常会先在 BeginFrame acquire。
+    if (!image_acquired_) {
+        VkResult acquire = AcquireNextImage();
+        if (acquire == VK_ERROR_OUT_OF_DATE_KHR || !image_acquired_) {
+            return acquire;
+        }
+    }
+
+    // fence 在提交前 reset，与本次 submit 严格配对（reset→submit→completion signal）。
+    vkResetFences(device_, 1, &in_flight_fences_[current_frame_]);
+
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -204,6 +226,8 @@ VkResult VulkanContext::PresentFrame(const std::vector<VkCommandBuffer>& command
 
 void VulkanContext::AdvanceFrame() {
     current_frame_ = (current_frame_ + 1) % MAX_FRAMES_IN_FLIGHT;
+    // 本次 present 周期结束，下一帧需要重新 acquire。
+    image_acquired_ = false;
 }
 
 // ============================================================
@@ -441,8 +465,6 @@ int VulkanContext::RateDeviceSuitability(VkPhysicalDevice device) {
     score += static_cast<int>(props.limits.maxImageDimension2D);
 
     // 必须支持几何着色器（用于粒子等）
-    if (!features.geometryShader) return 0;
-
     // 必须有完整的队列族
     QueueFamilyIndices indices = FindQueueFamilies(device);
     if (!indices.IsComplete()) return 0;
@@ -552,17 +574,13 @@ bool VulkanContext::CreateLogicalDevice() {
         queue_create_infos.push_back(queue_info);
     }
 
-    VkPhysicalDeviceFeatures device_features{};
-    device_features.samplerAnisotropy = VK_TRUE;
-    device_features.fillModeNonSolid = VK_TRUE; // wireframe
-    device_features.wideLines = VK_TRUE;
-
-    // GPU-Driven: drawCount > 1 需要 multiDrawIndirect 特性
     VkPhysicalDeviceFeatures supported_features{};
     vkGetPhysicalDeviceFeatures(physical_device_, &supported_features);
-    if (supported_features.multiDrawIndirect) {
-        device_features.multiDrawIndirect = VK_TRUE;
-    }
+    VkPhysicalDeviceFeatures device_features{};
+    device_features.samplerAnisotropy = supported_features.samplerAnisotropy;
+    device_features.fillModeNonSolid = supported_features.fillModeNonSolid;
+    device_features.wideLines = supported_features.wideLines;
+    device_features.multiDrawIndirect = supported_features.multiDrawIndirect;
 
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -978,4 +996,3 @@ void VulkanContext::SavePipelineCache() {
 
 } // namespace render
 } // namespace dse
-

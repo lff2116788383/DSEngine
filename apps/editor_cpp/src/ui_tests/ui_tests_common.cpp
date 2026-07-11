@@ -48,7 +48,7 @@ void EnsureAllPanelsVisible() {
         s.show_undo_history, s.show_asset_browser, s.show_animation_timeline,
         s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
-        s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
+        s.show_curve_editor, s.show_anim_retarget,
         s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
         s.show_vegetation_brush,
     };
@@ -64,7 +64,7 @@ void HideOptionalPanels() {
         s.show_undo_history, s.show_asset_browser, s.show_animation_timeline,
         s.show_navmesh, s.show_shader_graph, s.show_git, s.show_multi_viewport,
         s.show_anim_state_machine, s.show_lua_debugger, s.show_streaming_debug,
-        s.show_curve_editor, s.show_visual_script, s.show_anim_retarget,
+        s.show_curve_editor, s.show_anim_retarget,
         s.show_preferences, s.show_plugins, s.show_chat, s.show_blueprint,
         s.show_sequencer,
     };
