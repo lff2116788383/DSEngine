@@ -4,6 +4,7 @@
  */
 
 #include "engine/scripting/blueprint/blueprint_compiler.h"
+#include "engine/scripting/blueprint/blueprint_serialize.h"
 
 #include <fstream>
 #include <sstream>
@@ -30,23 +31,6 @@ BpVarType BpVarTypeFromName(const char* name) {
     if (s == "Entity") return BpVarType::Entity;
     if (s == "Array")  return BpVarType::Array;
     return BpVarType::Float;
-}
-
-static BpPinType BpPinTypeFromName(const char* name) {
-    if (!name) return BpPinType::Any;
-    std::string s = name;
-    if (s == "Flow")     return BpPinType::Flow;
-    if (s == "Bool")     return BpPinType::Bool;
-    if (s == "Int")      return BpPinType::Int;
-    if (s == "Float")    return BpPinType::Float;
-    if (s == "String")   return BpPinType::String;
-    if (s == "Vec2")     return BpPinType::Vec2;
-    if (s == "Vec3")     return BpPinType::Vec3;
-    if (s == "Vec4")     return BpPinType::Vec4;
-    if (s == "Entity")   return BpPinType::Entity;
-    if (s == "Array")    return BpPinType::Array;
-    if (s == "Wildcard") return BpPinType::Wildcard;
-    return BpPinType::Any;
 }
 
 namespace {
@@ -446,136 +430,8 @@ CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
 }
 
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
-    std::ifstream ifs(path, std::ios::binary);
-    if (!ifs.is_open()) return false;
-    std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    ifs.close();
-
-    rapidjson::Document doc;
-    if (doc.Parse(content.c_str()).HasParseError() || !doc.IsObject()) {
-        DEBUG_LOG_ERROR("[Blueprint] .dbp 解析失败: %s", path.c_str());
-        return false;
-    }
-
-    asset = BlueprintAsset{};
-    asset.file_path = path;
-    if (doc.HasMember("name") && doc["name"].IsString()) asset.name = doc["name"].GetString();
-    if (doc.HasMember("version") && doc["version"].IsInt()) asset.version = doc["version"].GetInt();
-    if (doc.HasMember("description") && doc["description"].IsString()) asset.description = doc["description"].GetString();
-
-    if (doc.HasMember("variables") && doc["variables"].IsArray()) {
-        for (auto& v : doc["variables"].GetArray()) {
-            if (!v.IsObject()) continue;
-            BpVariable var;
-            if (v.HasMember("name") && v["name"].IsString()) var.name = v["name"].GetString();
-            if (v.HasMember("type") && v["type"].IsString()) var.type = BpVarTypeFromName(v["type"].GetString());
-            if (v.HasMember("default_bool") && v["default_bool"].IsBool()) var.default_bool = v["default_bool"].GetBool();
-            if (v.HasMember("default_int") && v["default_int"].IsInt()) var.default_int = v["default_int"].GetInt();
-            if (v.HasMember("default_float") && v["default_float"].IsNumber()) var.default_float = v["default_float"].GetFloat();
-            if (v.HasMember("default_string") && v["default_string"].IsString()) var.default_string = v["default_string"].GetString();
-            if (v.HasMember("default_vec") && v["default_vec"].IsArray()) {
-                auto arr = v["default_vec"].GetArray();
-                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                    if (arr[i].IsNumber()) var.default_vec[i] = arr[i].GetFloat();
-            }
-            if (v.HasMember("is_exposed") && v["is_exposed"].IsBool()) var.is_exposed = v["is_exposed"].GetBool();
-            asset.variables.push_back(std::move(var));
-        }
-    }
-
-    if (doc.HasMember("graphs") && doc["graphs"].IsArray()) {
-        for (auto& g : doc["graphs"].GetArray()) {
-            if (!g.IsObject()) continue;
-            BpFunctionGraph graph;
-            if (g.HasMember("name") && g["name"].IsString()) graph.name = g["name"].GetString();
-            if (g.HasMember("next_id") && g["next_id"].IsInt()) graph.next_id = g["next_id"].GetInt();
-            if (g.HasMember("is_pure") && g["is_pure"].IsBool()) graph.is_pure = g["is_pure"].GetBool();
-
-            if (g.HasMember("nodes") && g["nodes"].IsArray()) {
-                for (auto& n : g["nodes"].GetArray()) {
-                    if (!n.IsObject()) continue;
-                    BpNode node;
-                    if (n.HasMember("id") && n["id"].IsInt()) node.id = n["id"].GetInt();
-                    if (n.HasMember("name") && n["name"].IsString()) node.name = n["name"].GetString();
-                    if (n.HasMember("category") && n["category"].IsString()) node.category = n["category"].GetString();
-                    if (n.HasMember("comment") && n["comment"].IsString()) node.comment = n["comment"].GetString();
-
-                    if (n.HasMember("inputs") && n["inputs"].IsArray()) {
-                        for (auto& p : n["inputs"].GetArray()) {
-                            if (!p.IsObject()) continue;
-                            BpPin pin; pin.kind = BpPinKind::Input;
-                            if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-                            if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-                            if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
-                            if (p.HasMember("default_float") && p["default_float"].IsNumber()) pin.default_float = p["default_float"].GetFloat();
-                            if (p.HasMember("default_int") && p["default_int"].IsInt()) pin.default_int = p["default_int"].GetInt();
-                            if (p.HasMember("default_bool") && p["default_bool"].IsBool()) pin.default_bool = p["default_bool"].GetBool();
-                            if (p.HasMember("default_string") && p["default_string"].IsString()) pin.default_string = p["default_string"].GetString();
-                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
-                                auto arr = p["default_vec"].GetArray();
-                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                                    if (arr[i].IsNumber()) pin.default_vec[i] = arr[i].GetFloat();
-                            }
-                            node.inputs.push_back(std::move(pin));
-                        }
-                    }
-                    if (n.HasMember("outputs") && n["outputs"].IsArray()) {
-                        for (auto& p : n["outputs"].GetArray()) {
-                            if (!p.IsObject()) continue;
-                            BpPin pin; pin.kind = BpPinKind::Output;
-                            if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-                            if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-                            if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
-                            if (p.HasMember("default_float") && p["default_float"].IsNumber()) pin.default_float = p["default_float"].GetFloat();
-                            if (p.HasMember("default_int") && p["default_int"].IsInt()) pin.default_int = p["default_int"].GetInt();
-                            if (p.HasMember("default_bool") && p["default_bool"].IsBool()) pin.default_bool = p["default_bool"].GetBool();
-                            if (p.HasMember("default_string") && p["default_string"].IsString()) pin.default_string = p["default_string"].GetString();
-                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
-                                auto arr = p["default_vec"].GetArray();
-                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                                    if (arr[i].IsNumber()) pin.default_vec[i] = arr[i].GetFloat();
-                            }
-                            node.outputs.push_back(std::move(pin));
-                        }
-                    }
-                    graph.nodes.push_back(std::move(node));
-                }
-            }
-
-            if (g.HasMember("links") && g["links"].IsArray()) {
-                for (auto& l : g["links"].GetArray()) {
-                    if (!l.IsObject()) continue;
-                    BpLink link;
-                    if (l.HasMember("id") && l["id"].IsInt()) link.id = l["id"].GetInt();
-                    if (l.HasMember("from_pin") && l["from_pin"].IsInt()) link.from_pin = l["from_pin"].GetInt();
-                    if (l.HasMember("to_pin") && l["to_pin"].IsInt()) link.to_pin = l["to_pin"].GetInt();
-                    graph.links.push_back(link);
-                }
-            }
-
-            auto load_params = [](const rapidjson::Value& values, BpPinKind kind,
-                                  std::vector<BpPin>& destination) {
-                if (!values.IsArray()) return;
-                for (auto& p : values.GetArray()) {
-                    if (!p.IsObject()) continue;
-                    BpPin pin;
-                    pin.kind = kind;
-                    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-                    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-                    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
-                    destination.push_back(std::move(pin));
-                }
-            };
-            if (g.HasMember("input_params")) {
-                load_params(g["input_params"], BpPinKind::Input, graph.input_params);
-            }
-            if (g.HasMember("output_params")) {
-                load_params(g["output_params"], BpPinKind::Output, graph.output_params);
-            }
-            asset.graphs.push_back(std::move(graph));
-        }
-    }
-    return true;
+    BlueprintDiagnostics diag;
+    return LoadBlueprintAssetChecked(asset, path, diag);
 }
 
 }  // namespace dse::bp
