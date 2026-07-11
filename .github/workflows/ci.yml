@@ -152,6 +152,9 @@ jobs:
         shell: pwsh
         run: ./scripts/verify_editor_production_truth.ps1
 
+      - name: Verify V1 feature ledger
+        run: python tools/audit/verify_feature_ledger.py
+
       # EditorCore 隔离门禁：apps/editor_cpp/core/ 不得引用任何 UI 框架（ImGui/ImGuizmo）。
       # 快速失败，先于编译，守住"逻辑与 UI 隔离"边界（详见 docs：未来可替换 UI 框架）。
       - name: EditorCore UI-isolation gate

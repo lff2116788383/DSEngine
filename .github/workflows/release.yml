@@ -151,6 +151,9 @@ jobs:
         shell: pwsh
         run: ./scripts/verify_editor_production_truth.ps1
 
+      - name: Verify V1 feature ledger
+        run: python tools/audit/verify_feature_ledger.py --release
+
       - name: Install Vulkan SDK
         shell: pwsh
         run: |

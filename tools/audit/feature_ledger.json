@@ -1,0 +1,1036 @@
+{
+  "schemaVersion": 1,
+  "completionStandard": {
+    "editorRoundTrip": "Editor can create, edit, save, close, and reopen the data.",
+    "runtimeConsumption": "Runtime loads and executes the editor-produced artifact.",
+    "explicitDiagnostics": "Failures produce actionable diagnostics and never silently fall back.",
+    "versionedMigration": "Persisted formats have a version, migrations, and round-trip tests.",
+    "platformMatrix": "Required desktop and web rendering backends behave consistently.",
+    "automatedTests": "The operation has automated acceptance coverage.",
+    "cleanMachine": "Packaged artifacts pass an artifact-only clean-machine test.",
+    "productionReady": "Production paths contain no simulation, placeholder, no-op, or fake success."
+  },
+  "requiredPlatforms": {
+    "windows": [
+      "opengl",
+      "d3d11",
+      "vulkan"
+    ],
+    "web": [
+      "webgl2",
+      "webgpu"
+    ]
+  },
+  "stages": [
+    {
+      "number": 0,
+      "id": "P0-0",
+      "name": "Release contract and feature ledger"
+    },
+    {
+      "number": 1,
+      "id": "P0-1",
+      "name": "CI, tests, and editor release foundation"
+    },
+    {
+      "number": 2,
+      "id": "P0-2",
+      "name": "Shared asset contracts"
+    },
+    {
+      "number": 3,
+      "id": "P0-3",
+      "name": "Blueprint single source and runtime loop"
+    },
+    {
+      "number": 4,
+      "id": "P0-4",
+      "name": "Editor OpenGL, D3D11, and Vulkan"
+    },
+    {
+      "number": 5,
+      "id": "P0-5",
+      "name": "Visual Script retirement"
+    },
+    {
+      "number": 6,
+      "id": "P0-6",
+      "name": "PanelRegistry and editor_app decoupling"
+    },
+    {
+      "number": 7,
+      "id": "P1-1",
+      "name": "Shared process and background task services"
+    },
+    {
+      "number": 8,
+      "id": "P1-2",
+      "name": "Real Git integration"
+    },
+    {
+      "number": 9,
+      "id": "P1-3",
+      "name": "Build, publish, and real Web build"
+    },
+    {
+      "number": 10,
+      "id": "P1-4",
+      "name": "Shader Graph"
+    },
+    {
+      "number": 11,
+      "id": "P1-5",
+      "name": "Animation State Machine"
+    },
+    {
+      "number": 12,
+      "id": "P1-6",
+      "name": "Sequencer and Cutscene"
+    },
+    {
+      "number": 13,
+      "id": "P1-7",
+      "name": "C# editor and runtime"
+    },
+    {
+      "number": 14,
+      "id": "P1-8",
+      "name": "2D tools and remaining panels"
+    },
+    {
+      "number": 15,
+      "id": "P2-0",
+      "name": "Cross-platform crash, AutoSave, and recovery"
+    },
+    {
+      "number": 16,
+      "id": "P2-1",
+      "name": "Undo, asset references, migrations, and hot reload"
+    },
+    {
+      "number": 17,
+      "id": "P2-2",
+      "name": "Performance and stability"
+    },
+    {
+      "number": 18,
+      "id": "P2-3",
+      "name": "Full matrix tests, documentation, packaging, and release"
+    }
+  ],
+  "features": [
+    {
+      "id": "release-contract",
+      "stage": 0,
+      "status": "in_progress",
+      "summary": "Machine-readable ownership and acceptance ledger for every registered editor panel, interactive editor source, and known production-debt marker.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": []
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [],
+      "tests": [
+        "tools/audit/verify_feature_ledger.py"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "tools/audit/feature_ledger.json",
+        "tools/audit/editor_production_debt.json"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": true,
+        "platformMatrix": true,
+        "automatedTests": true,
+        "cleanMachine": "not_applicable",
+        "productionReady": false
+      },
+      "blockers": [
+        "Interactive action ownership is enforced at source-file granularity; stable per-action IDs are not yet available.",
+        "Asset formats and runtime consumers are declared but not yet auto-discovered from registries.",
+        "The final release Go/No-Go gate exists, but cannot pass until all later stages and production debt are closed."
+      ]
+    },
+    {
+      "id": "release-foundation",
+      "stage": 1,
+      "status": "in_progress",
+      "summary": "Build, test, package, verify, and publish editor artifacts.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": []
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan"
+      ],
+      "tests": [
+        "scripts/package_editor.ps1",
+        "scripts/verify_editor_package.ps1",
+        "tests/automation/cases/cli/headless_boot.yaml"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": true
+      },
+      "blockers": [
+        "No artifact-only clean-machine editor acceptance job.",
+        "Editor release acceptance does not execute all three Windows RHI backends."
+      ]
+    },
+    {
+      "id": "shared-asset-contracts",
+      "stage": 2,
+      "status": "planned",
+      "summary": "UI-independent DTOs, versioning, migration, diagnostics, and round-trip rules shared by editor and runtime content systems.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": []
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [
+        ".dbp",
+        ".dshadergraph",
+        ".dasm",
+        ".dsequence",
+        ".dcutscene",
+        ".dscriptmeta"
+      ],
+      "requiredPlatforms": [],
+      "tests": [],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_blueprint.h",
+        "apps/editor_cpp/src/editor_shader_graph.h",
+        "apps/editor_cpp/src/editor_sequencer.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": false,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": "not_applicable",
+        "automatedTests": false,
+        "cleanMachine": "not_applicable",
+        "productionReady": false
+      },
+      "blockers": [
+        "No common asset-contract layer covers the planned content formats.",
+        "Migration and unknown-field policies are not defined consistently."
+      ]
+    },
+    {
+      "id": "blueprint",
+      "stage": 3,
+      "status": "in_progress",
+      "summary": "Blueprint editor, versioned asset, compiler, VM, debugger, lifecycle events, and runtime component execution.",
+      "editor": {
+        "panelIds": [
+          "blueprint"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_blueprint.cpp",
+          "apps/editor_cpp/src/editor_blueprint_extras.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/ecs/blueprint_system.cpp",
+        "engine/scripting/blueprint/blueprint_vm.cpp"
+      ],
+      "assetFormats": [
+        ".dbp"
+      ],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/blueprint/blueprint_smoke.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [
+        "EDITOR-BLUEPRINT-SIMULATED-DEBUG"
+      ],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_blueprint_compiler.cpp",
+        "engine/scripting/blueprint/blueprint_compiler.cpp"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": true,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": "not_applicable",
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "The editor DTO is still translated into a separate runtime DTO.",
+        "Debugger contains simulated production behavior.",
+        "Full node registry and lifecycle event acceptance are not covered."
+      ]
+    },
+    {
+      "id": "editor-three-rhi",
+      "stage": 4,
+      "status": "in_progress",
+      "summary": "Editor window, ImGui, viewport, and presentation paths on OpenGL, D3D11, and Vulkan.",
+      "editor": {
+        "panelIds": [
+          "multi_viewport",
+          "scene",
+          "game"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_multi_viewport.cpp",
+          "apps/editor_cpp/src/editor_scene_view_mode.cpp",
+          "apps/editor_cpp/src/editor_viewport_panel.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/render/rhi/rhi_factory.cpp"
+      ],
+      "assetFormats": [],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan"
+      ],
+      "tests": [
+        "scripts/test_editor_rhi_backends.ps1"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_imgui_backend_gl.cpp",
+        "apps/editor_cpp/src/editor_imgui_backend_dx11.cpp",
+        "apps/editor_cpp/src/editor_imgui_backend_vulkan.cpp"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": true
+      },
+      "blockers": [
+        "OpenGL and Vulkan editor smoke cannot currently pass on the Windows validation environment.",
+        "No packaged clean-machine three-backend acceptance."
+      ]
+    },
+    {
+      "id": "visual-script-retirement",
+      "stage": 5,
+      "status": "retired",
+      "summary": "Legacy Visual Script implementation removed after confirming no persisted production asset format existed.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": []
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [],
+      "tests": [],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "docs/migration/visual_script_retirement.md"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": "not_applicable",
+        "versionedMigration": "not_applicable",
+        "platformMatrix": "not_applicable",
+        "automatedTests": "not_applicable",
+        "cleanMachine": "not_applicable",
+        "productionReady": true
+      },
+      "blockers": []
+    },
+    {
+      "id": "editor-shell-and-panel-registry",
+      "stage": 6,
+      "status": "in_progress",
+      "summary": "Panel ownership, lifecycle, availability, menu registration, persistence, and generic dispatch.",
+      "editor": {
+        "panelIds": [
+          "hierarchy",
+          "inspector",
+          "project",
+          "console",
+          "localization",
+          "material",
+          "preferences",
+          "ai_config"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_ai_config.cpp",
+          "apps/editor_cpp/src/editor_console_panel.cpp",
+          "apps/editor_cpp/src/editor_layout_manager.cpp",
+          "apps/editor_cpp/src/editor_panel_registry.cpp",
+          "apps/editor_cpp/src/editor_preferences_panel.cpp",
+          "apps/editor_cpp/src/editor_shell.cpp",
+          "apps/editor_cpp/src/editor_toolbar.cpp"
+        ]
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/integration/editor/editor_core_isolation_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_panel_registry.h",
+        "apps/editor_cpp/src/editor_app.cpp"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": "not_applicable",
+        "automatedTests": false,
+        "cleanMachine": "not_applicable",
+        "productionReady": true
+      },
+      "blockers": [
+        "editor_app.cpp still centrally registers every concrete panel.",
+        "The documented DSE_EDITOR_PANEL macro is not implemented."
+      ]
+    },
+    {
+      "id": "process-and-background-tasks",
+      "stage": 7,
+      "status": "in_progress",
+      "summary": "Argument-safe cross-platform process execution and cancellable editor background tasks.",
+      "editor": {
+        "panelIds": [
+          "background_tasks"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_task_service.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/platform/process.cpp"
+      ],
+      "assetFormats": [],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/unit/engine/process_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "engine/platform/process.h",
+        "apps/editor_cpp/src/editor_task_service.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": "not_applicable",
+        "productionReady": false
+      },
+      "blockers": [
+        "Legacy direct CreateProcess, system, popen, and detached task paths remain outside the shared service."
+      ]
+    },
+    {
+      "id": "git-integration",
+      "stage": 8,
+      "status": "in_progress",
+      "summary": "Repository discovery, status, diff, stage, commit, branches, fetch, pull, push, merge, and conflict actions.",
+      "editor": {
+        "panelIds": [
+          "git"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_version_control.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/vcs/git_client.cpp"
+      ],
+      "assetFormats": [],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/unit/engine/git_client_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "engine/vcs/git_client.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": true
+      },
+      "blockers": [
+        "No editor-driven temporary-remote E2E for fetch, pull, push, and conflict resolution.",
+        "Credential and authentication diagnostics are not accepted on a clean machine."
+      ]
+    },
+    {
+      "id": "build-publish-web",
+      "stage": 9,
+      "status": "in_progress",
+      "summary": "Shared native and Emscripten configure, build, artifact collection, distribution, logging, and cancellation.",
+      "editor": {
+        "panelIds": [
+          "build_game"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_build_game.cpp",
+          "apps/editor_cpp/src/editor_build_game_publish.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/project/web_build.cpp"
+      ],
+      "assetFormats": [
+        ".dsmanifest",
+        ".dpak"
+      ],
+      "requiredPlatforms": [
+        "web/webgl2",
+        "web/webgpu"
+      ],
+      "tests": [
+        "tests/gtest/unit/engine/project/web_build_test.cpp",
+        "tests/gtest/unit/engine/project/web_dist_test.cpp",
+        "tests/automation/cases/api/material_create_import.yaml"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "engine/project/web_build.h",
+        "apps/tools/dse_cli/main.cpp"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": true,
+        "explicitDiagnostics": true,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": true
+      },
+      "blockers": [
+        "CLI and editor do not yet share one complete BuildService for every target.",
+        "No artifact-only browser acceptance for editor-produced WebGL2 and WebGPU output."
+      ]
+    },
+    {
+      "id": "shader-graph",
+      "stage": 10,
+      "status": "planned",
+      "summary": "Versioned shader graph editing, validation, cross-backend compilation, material integration, and runtime loading.",
+      "editor": {
+        "panelIds": [
+          "shader_graph"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_shader_graph.cpp"
+        ]
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [
+        ".dshadergraph"
+      ],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan",
+        "web/webgl2",
+        "web/webgpu"
+      ],
+      "tests": [
+        "tests/gtest/integration/editor/shader_graph_compile_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [
+        "EDITOR-SHADER-GRAPH-PLACEHOLDER-NODE"
+      ],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_shader_graph.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": false,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Graph schema is editor-local and contains placeholder behavior.",
+        "Generated shader and material assets are not consumed consistently across all backends."
+      ]
+    },
+    {
+      "id": "animation-state-machine",
+      "stage": 11,
+      "status": "planned",
+      "summary": "Persistent state machine and blend tree editing connected to runtime animator evaluation.",
+      "editor": {
+        "panelIds": [
+          "anim_state_machine"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_anim_state_machine.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "modules/gameplay_3d/animation/animation_state_machine.cpp",
+        "modules/gameplay_3d/animation/animator_system.cpp"
+      ],
+      "assetFormats": [
+        ".dasm"
+      ],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "modules/gameplay_3d/animation/animation_state_machine.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": true,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": "not_applicable",
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Editor mutates an in-memory component model without a versioned asset round trip.",
+        "Scene reload does not preserve the authored state machine."
+      ]
+    },
+    {
+      "id": "sequencer-and-cutscene",
+      "stage": 12,
+      "status": "planned",
+      "summary": "Persistent timeline, tracks, bindings, preview, cutscene runtime playback, and packaging.",
+      "editor": {
+        "panelIds": [
+          "sequencer"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_sequencer.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/cutscene/cutscene_player.cpp"
+      ],
+      "assetFormats": [
+        ".dsequence",
+        ".dcutscene"
+      ],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/unit/engine/cutscene/cutscene_test.cpp",
+        "tests/gtest/unit/engine/cutscene/cutscene_deep_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "engine/cutscene/cutscene_player.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": true,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": "not_applicable",
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Editor initializes demo timeline data instead of a versioned project asset.",
+        "Editor bindings are not connected to packaged runtime cutscene assets."
+      ]
+    },
+    {
+      "id": "csharp",
+      "stage": 13,
+      "status": "planned",
+      "summary": "C# project generation, build, diagnostics, component binding, lifecycle, hot reload, persistence, and packaging.",
+      "editor": {
+        "panelIds": [
+          "csharp"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_csharp_panel.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/scripting/csharp/csharp_host.cpp",
+        "engine/runtime/business_runtime_bridge.cpp"
+      ],
+      "assetFormats": [
+        ".cs",
+        ".dscriptmeta"
+      ],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan"
+      ],
+      "tests": [
+        "tests/csharp/csharp_host_smoke.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [
+        "EDITOR-CSHARP-FAKE-BUILD",
+        "EDITOR-CSHARP-FAKE-SUCCESS",
+        "EDITOR-CSHARP-FAKE-RELOAD"
+      ],
+      "evidencePaths": [
+        "GameScripts/DSEngine.Runtime/Core/ScriptRegistry.cs"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": true,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Editor build and reload paths contain fake success and placeholder behavior.",
+        "Managed scripts are not persistently bound per entity with complete lifecycle coverage."
+      ]
+    },
+    {
+      "id": "content-tools-and-panels",
+      "stage": 14,
+      "status": "planned",
+      "summary": "All visible 2D, animation, terrain, navigation, asset, scripting, plugin, and auxiliary tools.",
+      "editor": {
+        "panelIds": [
+          "animation",
+          "tile_palette",
+          "terrain_editor",
+          "vegetation_brush",
+          "lua_console",
+          "lua_debugger",
+          "asset_importer",
+          "asset_browser",
+          "animation_timeline",
+          "navmesh",
+          "terrain_tools",
+          "streaming_debug",
+          "curve_editor",
+          "anim_retarget",
+          "animation_clip",
+          "terrain_sculpt",
+          "world_partition",
+          "plugins",
+          "tools_2d",
+          "plugin_api",
+          "ai_agent"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_2d_tools.cpp",
+          "apps/editor_cpp/src/editor_agent_panel.cpp",
+          "apps/editor_cpp/src/editor_anim_retarget.cpp",
+          "apps/editor_cpp/src/editor_animation_clip.cpp",
+          "apps/editor_cpp/src/editor_animation_timeline.cpp",
+          "apps/editor_cpp/src/editor_asset_browser.cpp",
+          "apps/editor_cpp/src/editor_asset_importer.cpp",
+          "apps/editor_cpp/src/editor_audio_panel.cpp",
+          "apps/editor_cpp/src/editor_aux_panels.cpp",
+          "apps/editor_cpp/src/editor_curve_editor.cpp",
+          "apps/editor_cpp/src/editor_hierarchy_panel.cpp",
+          "apps/editor_cpp/src/editor_inspector_panel.cpp",
+          "apps/editor_cpp/src/editor_lua_console.cpp",
+          "apps/editor_cpp/src/editor_lua_debugger.cpp",
+          "apps/editor_cpp/src/editor_material_panel.cpp",
+          "apps/editor_cpp/src/editor_navmesh_panel.cpp",
+          "apps/editor_cpp/src/editor_particle_panel.cpp",
+          "apps/editor_cpp/src/editor_plugin_api.cpp",
+          "apps/editor_cpp/src/editor_plugin_manager.cpp",
+          "apps/editor_cpp/src/editor_prefab_override.cpp",
+          "apps/editor_cpp/src/editor_project_hub.cpp",
+          "apps/editor_cpp/src/editor_reflected_inspector.cpp",
+          "apps/editor_cpp/src/editor_scene_tabs.cpp",
+          "apps/editor_cpp/src/editor_terrain_panel.cpp",
+          "apps/editor_cpp/src/editor_terrain_sculpt_preview.cpp",
+          "apps/editor_cpp/src/editor_terrain_tools.cpp",
+          "apps/editor_cpp/src/editor_tilemap_panel.cpp",
+          "apps/editor_cpp/src/editor_vegetation_panel.cpp",
+          "apps/editor_cpp/src/editor_world_partition_editor.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "modules/gameplay_2d",
+        "modules/gameplay_3d"
+      ],
+      "assetFormats": [
+        ".dsprite",
+        ".datlas",
+        ".d9slice",
+        ".dparticle2d",
+        ".dparallax",
+        ".dlight2d",
+        ".danim",
+        ".dmat"
+      ],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan"
+      ],
+      "tests": [],
+      "cleanMachineTests": [],
+      "productionDebtIds": [
+        "EDITOR-PLUGIN-DEMO-DATA",
+        "EDITOR-PLUGIN-SIMULATED-RELOAD",
+        "EDITOR-PLUGIN-SIMULATED-BUILD",
+        "EDITOR-SPRITE-SLICER-PLACEHOLDER-PREVIEW"
+      ],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_asset_db.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": false,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Visible tools still contain demo, simulated, or placeholder behavior.",
+        "Most editor-local formats lack shared versioned runtime contracts and migrations.",
+        "There is no golden-project acceptance suite covering every visible operation."
+      ]
+    },
+    {
+      "id": "crash-autosave-recovery",
+      "stage": 15,
+      "status": "in_progress",
+      "summary": "Crash capture, breadcrumbs, atomic multi-document autosave, recovery selection, and cross-platform safety.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_autosave.cpp"
+        ]
+      },
+      "runtimeConsumers": [
+        "engine/diagnostics/crash_handler.cpp"
+      ],
+      "assetFormats": [
+        ".autosave.dscene"
+      ],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/gtest/integration/editor/editor_autosave_test.cpp",
+        "tests/gtest/integration/editor/editor_crash_test.cpp",
+        "tests/gtest/unit/engine/diagnostics/crash_handler_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_crash.cpp"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": true,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Autosave is not an atomic multi-scene or multi-asset transaction.",
+        "POSIX signal handling performs operations that are not async-signal-safe.",
+        "Recovery does not present and validate every recoverable document."
+      ]
+    },
+    {
+      "id": "undo-assets-migration-hot-reload",
+      "stage": 16,
+      "status": "planned",
+      "summary": "Unified undo transactions, GUID references, dependency updates, format migration, and safe hot reload across every content system.",
+      "editor": {
+        "panelIds": [
+          "undo_history"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_plugin_hot_reload.cpp",
+          "apps/editor_cpp/src/editor_undo_panel.cpp"
+        ]
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [
+        ".meta"
+      ],
+      "requiredPlatforms": [],
+      "tests": [
+        "tests/automation/cases/api/undo_redo.yaml",
+        "tests/automation/cases/api/undo_redo_deep_chain.yaml",
+        "tests/gtest/integration/editor/editor_asset_db_test.cpp"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "apps/editor_cpp/src/editor_asset_db.cpp",
+        "apps/editor_cpp/core/editor_command.h"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": false,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": "not_applicable",
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "New content asset types are not all indexed and referenced by GUID.",
+        "Undo and dependency repair do not cover every editor mutation.",
+        "Hot reload is not real for all supported script and plugin types."
+      ]
+    },
+    {
+      "id": "performance-and-stability",
+      "stage": 17,
+      "status": "planned",
+      "summary": "Long-running editor and runtime stability, leak checks, performance budgets, repeated reload, and Play/Stop acceptance.",
+      "editor": {
+        "panelIds": [
+          "profiler"
+        ],
+        "actionSources": [
+          "apps/editor_cpp/src/editor_profiler_panel.cpp"
+        ]
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan"
+      ],
+      "tests": [
+        "tests/automation/cases/soak/resident_edit_session.yaml",
+        "tests/automation/suites/editor-stability.yaml"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        "engine/profiler"
+      ],
+      "acceptance": {
+        "editorRoundTrip": "not_applicable",
+        "runtimeConsumption": "not_applicable",
+        "explicitDiagnostics": true,
+        "versionedMigration": "not_applicable",
+        "platformMatrix": false,
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Stability suites are not a required release gate.",
+        "No accepted three-RHI leak and repeated hot-reload budget."
+      ]
+    },
+    {
+      "id": "final-release-matrix",
+      "stage": 18,
+      "status": "planned",
+      "summary": "Artifact-only full platform matrix, golden projects, documentation, manifests, packaging, and Go/No-Go release.",
+      "editor": {
+        "panelIds": [],
+        "actionSources": []
+      },
+      "runtimeConsumers": [],
+      "assetFormats": [],
+      "requiredPlatforms": [
+        "windows/opengl",
+        "windows/d3d11",
+        "windows/vulkan",
+        "web/webgl2",
+        "web/webgpu"
+      ],
+      "tests": [
+        "tests/automation/suites/editor-regression.yaml",
+        "tests/automation/suites/editor-nightly.yaml"
+      ],
+      "cleanMachineTests": [],
+      "productionDebtIds": [],
+      "evidencePaths": [
+        ".github/workflows/release.yml",
+        "docs/CLEAN_ROOM_TEST.md"
+      ],
+      "acceptance": {
+        "editorRoundTrip": false,
+        "runtimeConsumption": false,
+        "explicitDiagnostics": false,
+        "versionedMigration": false,
+        "platformMatrix": false,
+        "automatedTests": false,
+        "cleanMachine": false,
+        "productionReady": false
+      },
+      "blockers": [
+        "Golden projects do not cover every content system.",
+        "Release does not validate the full matrix from downloaded artifacts on clean machines.",
+        "Go/No-Go cannot pass while production-debt entries remain."
+      ]
+    }
+  ]
+}

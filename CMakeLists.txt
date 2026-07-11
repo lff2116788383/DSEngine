@@ -1171,6 +1171,12 @@ endif()
 # 用法: cmake --build build_vs2022 --target dse_codegen
 find_package(Python3 QUIET COMPONENTS Interpreter)
 if(Python3_FOUND)
+    add_test(
+        NAME dse_feature_ledger
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/audit/verify_feature_ledger.py
+    )
+    set_tests_properties(dse_feature_ledger PROPERTIES LABELS "audit;editor")
+
     add_custom_target(dse_codegen
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/codegen/codegen.py
                 --defs  ${CMAKE_SOURCE_DIR}/tools/codegen/binding_defs.json
