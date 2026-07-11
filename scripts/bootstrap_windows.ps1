@@ -51,7 +51,7 @@ if (-not $SkipInstall) {
     if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
         Die "未找到 Chocolatey。请先安装：https://chocolatey.org/install"
     }
-    choco install -y cmake ninja
+    choco install -y cmake ninja dotnet-8.0-sdk
     if ($LASTEXITCODE -ne 0) { Die "安装 cmake/ninja 失败。" }
     choco install -y visualstudio2022buildtools visualstudio2022-workload-vctools
     if ($LASTEXITCODE -ne 0) { Die "安装 VS2022 C++ Build Tools 失败。" }

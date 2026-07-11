@@ -81,7 +81,7 @@ if ($found) {
     $tarball = Join-Path $WorkDir "$srcName.tar.gz"
     $urls = @(
         "https://www.openssl.org/source/old/1.1.1/$srcName.tar.gz",
-        "https://github.com/openssl/openssl/releases/download/OpenSSL_$($Version)/$srcName.tar.gz"
+        "https://github.com/openssl/openssl/releases/download/OpenSSL_$($Version -replace '\.', '_')/$srcName.tar.gz"
     )
     $got = $false
     foreach ($u in $urls) {
