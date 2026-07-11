@@ -1,4 +1,5 @@
 #include "editor_material_panel.h"
+#include "editor_panel_registry.h"
 
 #include "engine/ecs/components_3d.h"
 #include "imgui.h"
@@ -383,5 +384,15 @@ void DrawMaterialPanel(EditorContext& ctx) {
 
     ImGui::End();
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "material";
+    e.display_name = "Material";
+    e.category = "Core";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawMaterialPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

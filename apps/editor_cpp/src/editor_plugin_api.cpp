@@ -1,4 +1,5 @@
 #include "editor_plugin_api.h"
+#include "editor_panel_registry.h"
 #include "editor_context.h"
 #include "editor_console_panel.h"
 #include "imgui.h"
@@ -384,5 +385,18 @@ void DrawPluginBrowserPanel() {
         }
     }
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "plugin_api";
+    e.display_name = "Plugin API Panels";
+    e.category = "Plugin";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
+        EditorPluginManager::Instance().DrawAllPanels(ctx);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

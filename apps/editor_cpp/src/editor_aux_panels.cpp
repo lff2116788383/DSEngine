@@ -1,5 +1,6 @@
 ﻿#include "editor_locale.h"
 #include "editor_aux_panels.h"
+#include "editor_panel_registry.h"
 
 #include "engine/ecs/components_2d.h"
 #include "engine/ecs/components_3d.h"
@@ -1072,5 +1073,15 @@ void DrawAnimationPanel(EditorContext& ctx) {
 void DrawTilePalettePanel(EditorContext& ctx) {
     DrawTilemapEditorPanel(ctx.registry, ctx.selected_entity);
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "project";
+    e.display_name = "Project";
+    e.category = "Core";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext&) { DrawProjectPanel(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

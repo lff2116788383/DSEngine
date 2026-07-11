@@ -1,4 +1,5 @@
 #include "editor_ai_config.h"
+#include "editor_panel_registry.h"
 #include <imgui.h>
 #include <fstream>
 #include <sstream>
@@ -307,5 +308,15 @@ void AIConfigManager::DrawConfigWindow() {
     }
     ImGui::End();
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "ai_config";
+    e.display_name = "AI Configuration";
+    e.category = "Core";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext&) { AIConfigManager::Instance().DrawConfigWindow(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

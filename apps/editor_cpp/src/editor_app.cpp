@@ -1148,8 +1148,6 @@ void EditorApp::RegisterPanels() {
         [this](Ctx& ctx){ dse::editor::DrawHierarchyPanel(ctx); }, MDI_ICON_FILE_TREE);
     add("inspector", "Inspector", "Core", &panels_.inspector, true,
         [this](Ctx& ctx){ dse::editor::DrawInspectorPanel(ctx); }, MDI_ICON_INFORMATION);
-    add("project", "Project", "Core", nullptr, true,
-        [this](Ctx&){ dse::editor::DrawProjectPanel(); });
     add("console", "Console", "Core", &panels_.console, true,
         [this](Ctx&){ dse::editor::DrawConsolePanel(); }, MDI_ICON_CONSOLE);
 
@@ -1166,8 +1164,6 @@ void EditorApp::RegisterPanels() {
     // ── Tools ──
     add("animation", "Animation", "Tool", &panels_.animation, false,
         [this](Ctx& ctx){ dse::editor::DrawAnimationPanel(ctx); }, MDI_ICON_ANIMATION);
-    add("material", "Material", "Core", nullptr, true,
-        [this](Ctx& ctx){ dse::editor::DrawMaterialPanel(ctx); });
     add("tile_palette", "Tile Palette", "Tool", &panels_.tile_palette, false,
         [this](Ctx& ctx){ dse::editor::DrawTilePalettePanel(ctx); });
     add("terrain_editor", "Terrain Editor", "Tool", &panels_.terrain_editor, false,
@@ -1188,16 +1184,10 @@ void EditorApp::RegisterPanels() {
         }, MDI_ICON_CODE);
 
     // ── Always-on dialogs / config (host chrome, not in Window menu) ──
-    add("build_game", "Build Game", "Core", nullptr, true,
-        [this](Ctx&){ dse::editor::DrawBuildGameDialog(); });
-    add("asset_importer", "Asset Importer", "Core", nullptr, true,
-        [this](Ctx& ctx){ dse::editor::DrawAssetImporterDialog(ctx); });
     add("preferences", "Preferences", "Core", &panels_.preferences, false,
         [this](Ctx&){ dse::editor::DrawPreferencesPanel(&panels_.preferences); });
     add("undo_history", "Undo History", "Debug", &panels_.undo_history, false,
         [this](Ctx&){ dse::editor::DrawUndoHistoryPanel(&panels_.undo_history); });
-    add("ai_config", "AI Configuration", "Core", nullptr, true,
-        [this](Ctx&){ dse::editor::AIConfigManager::Instance().DrawConfigWindow(); });
 
     // ── More tools ──
     add("asset_browser", "Asset Browser", "Tool", &panels_.asset_browser, false,
@@ -1282,26 +1272,6 @@ void EditorApp::RegisterPanels() {
             dse::editor::DrawPluginHotReloadPanel(ctx);
         }, MDI_ICON_PUZZLE);
 
-    // 2D tools (each manages its own window/visibility internally)
-    add("tools_2d", "2D Tools", "Tool", nullptr, true,
-        [this](Ctx&){
-            dse::editor::tools2d::DrawSpriteSlicerPanel();
-            dse::editor::tools2d::DrawAtlasPackerPanel();
-            dse::editor::tools2d::DrawAnim2DEditorPanel();
-            dse::editor::tools2d::DrawNineSliceEditorPanel();
-            dse::editor::tools2d::DrawCollisionEditor2DPanel();
-            dse::editor::tools2d::DrawParticle2DEditorPanel();
-            dse::editor::tools2d::DrawParallaxEditorPanel();
-            dse::editor::tools2d::DrawLight2DEditorPanel();
-        });
-
-    // Third-party plugin API panels
-    add("plugin_api", "Plugin API Panels", "Plugin", nullptr, true,
-        [this](Ctx& ctx){
-            dse::editor::EditorPluginManager::Instance().UpdateAll(ctx, ImGui::GetIO().DeltaTime);
-            dse::editor::EditorPluginManager::Instance().DrawAllPanels(ctx);
-        });
-
     add("background_tasks", "Background Tasks", "Debug", &panels_.background_tasks, false,
         [this](Ctx&){ dse::editor::BackgroundTaskService::Get().DrawPanel(&panels_.background_tasks); });
 
@@ -1314,6 +1284,11 @@ void EditorApp::RegisterPanels() {
             ImGui::End();
         });
 
+    // Panels that self-registered via DSE_EDITOR_PANEL (project, material,
+    // build_game, asset_importer, ai_config, tools_2d, plugin_api) contribute
+    // here — before the viewports so scene/game remain the last-drawn windows.
+    reg.RunDeferredRegistrars();
+
     // Scene / Game viewports (drawn last, as before) — read this frame's textures.
     add("scene", "Scene", "Core", &panels_.scene, true,
         [this](Ctx& ctx){
@@ -1323,8 +1298,6 @@ void EditorApp::RegisterPanels() {
     add("game", "Game", "Core", &panels_.game, true,
         [this](Ctx&){ dse::editor::DrawGameViewportPanel(frame_game_texture_); }, MDI_ICON_GAMEPAD);
 
-    // Let any panel module that self-registered (DSE_EDITOR_PANEL) contribute now.
-    reg.RunDeferredRegistrars();
     reg.InitAll();
 }
 

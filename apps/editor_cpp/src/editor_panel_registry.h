@@ -130,4 +130,17 @@ private:
     bool inited_ = false;
 };
 
+/// Self-registration helper. A panel module places
+///   DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg){ reg.Register(...); });
+/// at file scope; the registrar is queued at static-init time and run by the
+/// editor via RunDeferredRegistrars(), so editor_app.cpp never names the panel.
+#define DSE_EDITOR_PANEL_CONCAT_(a, b) a##b
+#define DSE_EDITOR_PANEL_CONCAT(a, b) DSE_EDITOR_PANEL_CONCAT_(a, b)
+#define DSE_EDITOR_PANEL(registrar)                                        \
+    namespace {                                                            \
+    const bool DSE_EDITOR_PANEL_CONCAT(dse_editor_panel_reg_, __LINE__) =  \
+        (::dse::editor::PanelRegistry::AddDeferredRegistrar(registrar),     \
+         true);                                                            \
+    }
+
 } // namespace dse::editor

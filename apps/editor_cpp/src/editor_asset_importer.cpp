@@ -1,4 +1,5 @@
 #include "editor_asset_importer.h"
+#include "editor_panel_registry.h"
 
 #include <string>
 #include <vector>
@@ -633,5 +634,15 @@ void DrawAssetImporterDialog(EditorContext& ctx) {
 
     ImGui::End();
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "asset_importer";
+    e.display_name = "Asset Importer";
+    e.category = "Core";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawAssetImporterDialog(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

@@ -5,6 +5,7 @@
  */
 
 #include "editor_2d_tools.h"
+#include "editor_panel_registry.h"
 #include "editor_icons.h"
 
 #include "imgui.h"
@@ -1268,5 +1269,24 @@ void DrawLight2DEditorPanel() {
 
     ImGui::End();
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "tools_2d";
+    e.display_name = "2D Tools";
+    e.category = "Tool";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext&) {
+        DrawSpriteSlicerPanel();
+        DrawAtlasPackerPanel();
+        DrawAnim2DEditorPanel();
+        DrawNineSliceEditorPanel();
+        DrawCollisionEditor2DPanel();
+        DrawParticle2DEditorPanel();
+        DrawParallaxEditorPanel();
+        DrawLight2DEditorPanel();
+    };
+    reg.Register(std::move(e));
+});
 
 }  // namespace dse::editor::tools2d

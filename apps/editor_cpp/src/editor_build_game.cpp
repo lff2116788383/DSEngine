@@ -1,4 +1,5 @@
 #include "editor_build_game.h"
+#include "editor_panel_registry.h"
 
 #include "imgui.h"
 #include "editor_icons.h"
@@ -917,5 +918,15 @@ void DrawBuildGameDialog() {
         ImGui::EndPopup();
     }
 }
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "build_game";
+    e.display_name = "Build Game";
+    e.category = "Core";
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext&) { DrawBuildGameDialog(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor
