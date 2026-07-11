@@ -136,7 +136,7 @@ void MigrateAsset(BlueprintAsset& asset, int source_version, BlueprintDiagnostic
 
 const std::set<std::string>& KnownTopLevelKeys() {
     static const std::set<std::string> keys = {
-        "name", "version", "description", "variables", "graphs"};
+        "name", "version", "description", "author", "variables", "graphs", "interfaces"};
     return keys;
 }
 
@@ -165,6 +165,7 @@ std::string SerializeBlueprintAsset(const BlueprintAsset& asset) {
     w.Key("name");        w.String(asset.name.c_str());
     w.Key("version");     w.Int(kBlueprintSchemaVersion);
     w.Key("description"); w.String(asset.description.c_str());
+    w.Key("author");      w.String(asset.author.c_str());
 
     w.Key("variables");
     w.StartArray();
@@ -200,6 +201,8 @@ std::string SerializeBlueprintAsset(const BlueprintAsset& asset) {
             w.Key("id");       w.Int(n.id);
             w.Key("name");     w.String(n.name.c_str());
             w.Key("category"); w.String(n.category.c_str());
+            w.Key("pos_x");    w.Double(static_cast<double>(n.pos_x));
+            w.Key("pos_y");    w.Double(static_cast<double>(n.pos_y));
             w.Key("comment");  w.String(n.comment.c_str());
             w.Key("inputs");
             w.StartArray();
@@ -235,6 +238,11 @@ std::string SerializeBlueprintAsset(const BlueprintAsset& asset) {
 
         w.EndObject();
     }
+    w.EndArray();
+
+    w.Key("interfaces");
+    w.StartArray();
+    for (const auto& iface : asset.implemented_interfaces) w.String(iface.c_str());
     w.EndArray();
 
     w.EndObject();
@@ -286,6 +294,8 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
     if (has_version) asset.version = source_version;
     if (doc.HasMember("description") && doc["description"].IsString())
         asset.description = doc["description"].GetString();
+    if (doc.HasMember("author") && doc["author"].IsString())
+        asset.author = doc["author"].GetString();
 
     if (doc.HasMember("variables") && doc["variables"].IsArray()) {
         for (auto& v : doc["variables"].GetArray()) {
@@ -322,6 +332,8 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
                     if (n.HasMember("id") && n["id"].IsInt()) node.id = n["id"].GetInt();
                     if (n.HasMember("name") && n["name"].IsString()) node.name = n["name"].GetString();
                     if (n.HasMember("category") && n["category"].IsString()) node.category = n["category"].GetString();
+                    if (n.HasMember("pos_x") && n["pos_x"].IsNumber()) node.pos_x = n["pos_x"].GetFloat();
+                    if (n.HasMember("pos_y") && n["pos_y"].IsNumber()) node.pos_y = n["pos_y"].GetFloat();
                     if (n.HasMember("comment") && n["comment"].IsString()) node.comment = n["comment"].GetString();
                     if (n.HasMember("inputs") && n["inputs"].IsArray()) {
                         for (auto& p : n["inputs"].GetArray()) {
@@ -371,6 +383,12 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
             if (g.HasMember("output_params")) load_params(g["output_params"], BpPinKind::Output, graph.output_params);
 
             asset.graphs.push_back(std::move(graph));
+        }
+    }
+
+    if (doc.HasMember("interfaces") && doc["interfaces"].IsArray()) {
+        for (auto& i : doc["interfaces"].GetArray()) {
+            if (i.IsString()) asset.implemented_interfaces.push_back(i.GetString());
         }
     }
 

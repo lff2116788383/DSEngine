@@ -16,6 +16,8 @@ BlueprintAsset MakeSampleAsset() {
     BlueprintAsset a;
     a.name = "SampleBP";
     a.description = "round-trip 测试蓝图";  // 含非 ASCII，验证 UTF-8 保真
+    a.author = "Mark";
+    a.implemented_interfaces = {"IDamageable", "IInteractable"};
 
     BpVariable var;
     var.name = "speed";
@@ -40,6 +42,8 @@ BlueprintAsset MakeSampleAsset() {
     n.name = "On Update";
     n.category = "Event";
     n.comment = "tick";
+    n.pos_x = 128.0f;
+    n.pos_y = -64.0f;
     BpPin out;
     out.id = 11;
     out.name = "Then";
@@ -68,6 +72,8 @@ BlueprintAsset MakeSampleAsset() {
 void ExpectAssetEq(const BlueprintAsset& a, const BlueprintAsset& b) {
     EXPECT_EQ(a.name, b.name);
     EXPECT_EQ(a.description, b.description);
+    EXPECT_EQ(a.author, b.author);
+    EXPECT_EQ(a.implemented_interfaces, b.implemented_interfaces);
     ASSERT_EQ(a.variables.size(), b.variables.size());
     for (size_t i = 0; i < a.variables.size(); ++i) {
         EXPECT_EQ(a.variables[i].name, b.variables[i].name);
@@ -90,6 +96,8 @@ void ExpectAssetEq(const BlueprintAsset& a, const BlueprintAsset& b) {
             EXPECT_EQ(ga.nodes[j].name, gb.nodes[j].name);
             EXPECT_EQ(ga.nodes[j].category, gb.nodes[j].category);
             EXPECT_EQ(ga.nodes[j].comment, gb.nodes[j].comment);
+            EXPECT_FLOAT_EQ(ga.nodes[j].pos_x, gb.nodes[j].pos_x);
+            EXPECT_FLOAT_EQ(ga.nodes[j].pos_y, gb.nodes[j].pos_y);
             ASSERT_EQ(ga.nodes[j].inputs.size(), gb.nodes[j].inputs.size());
             ASSERT_EQ(ga.nodes[j].outputs.size(), gb.nodes[j].outputs.size());
         }

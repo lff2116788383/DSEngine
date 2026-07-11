@@ -54,6 +54,10 @@ struct BpNode {
     std::string comment;
     std::vector<BpPin> inputs;
     std::vector<BpPin> outputs;
+    // 编辑器画布坐标（授权/可视元数据，运行时不使用，但作为共享 .dbp 契约的一部分
+    // 参与序列化以支持编辑器单源往返）。
+    float pos_x = 0.0f;
+    float pos_y = 0.0f;
 };
 
 struct BpLink {
@@ -79,6 +83,9 @@ struct BlueprintAsset {
     std::vector<BpVariable> variables;
     std::vector<BpFunctionGraph> graphs;
     std::string description;
+    // 授权元数据（共享 .dbp 契约的一部分，运行时不使用）。
+    std::string author;
+    std::vector<std::string> implemented_interfaces;
 };
 
 // ─── 公共 API ───────────────────────────────────────────────────────────────

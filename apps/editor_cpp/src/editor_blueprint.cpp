@@ -6,6 +6,7 @@
 #include "editor_blueprint.h"
 #include "editor_blueprint_vm.h"
 #include "editor_blueprint_compiler.h"
+#include "engine/scripting/blueprint/blueprint_serialize.h"
 #include "editor_icons.h"
 #include "editor_locale.h"
 #include "imgui.h"
@@ -1107,311 +1108,161 @@ void DrawBlueprintEditor(EditorContext& /*ctx*/) {
 
 // ─── Serialization ─────────────────────────────────────────────────────────
 
+namespace {
+
+// editor::bp <-> dse::bp 转换：编辑器 DTO 是共享运行时契约的"超集"，仅多出画布
+// 坐标/颜色/Lua 模板等授权可视信息。.dbp 序列化统一走引擎侧共享层
+// (blueprint_serialize)，编辑器不再自带 JSON 解析/写出逻辑（单一数据源）。
+
+dse::bp::BpPin ToSharedPin(const BpPin& p) {
+    dse::bp::BpPin s;
+    s.id = p.id;
+    s.name = p.name;
+    s.type = static_cast<dse::bp::BpPinType>(static_cast<int>(p.type));
+    s.kind = static_cast<dse::bp::BpPinKind>(static_cast<int>(p.kind));
+    s.default_float = p.default_float;
+    for (int i = 0; i < 4; ++i) s.default_vec[i] = p.default_vec[i];
+    s.default_string = p.default_string;
+    s.default_bool = p.default_bool;
+    s.default_int = p.default_int;
+    return s;
+}
+
+BpPin FromSharedPin(const dse::bp::BpPin& s) {
+    BpPin p;
+    p.id = s.id;
+    p.name = s.name;
+    p.type = static_cast<BpPinType>(static_cast<int>(s.type));
+    p.kind = static_cast<BpPinKind>(static_cast<int>(s.kind));
+    p.default_float = s.default_float;
+    for (int i = 0; i < 4; ++i) p.default_vec[i] = s.default_vec[i];
+    snprintf(p.default_string, sizeof(p.default_string), "%s", s.default_string.c_str());
+    p.default_bool = s.default_bool;
+    p.default_int = s.default_int;
+    return p;
+}
+
+dse::bp::BlueprintAsset ToShared(const BlueprintAsset& a) {
+    dse::bp::BlueprintAsset s;
+    s.name = a.name;
+    s.file_path = a.file_path;
+    s.version = a.version;
+    s.description = a.description;
+    s.author = a.author;
+    s.implemented_interfaces = a.implemented_interfaces;
+    for (const auto& v : a.variables) {
+        dse::bp::BpVariable sv;
+        sv.name = v.name;
+        sv.type = static_cast<dse::bp::BpVarType>(static_cast<int>(v.type));
+        sv.default_bool = v.default_bool;
+        sv.default_int = v.default_int;
+        sv.default_float = v.default_float;
+        sv.default_string = v.default_string;
+        for (int i = 0; i < 4; ++i) sv.default_vec[i] = v.default_vec[i];
+        sv.is_exposed = v.is_exposed;
+        s.variables.push_back(std::move(sv));
+    }
+    for (const auto& g : a.graphs) {
+        dse::bp::BpFunctionGraph sg;
+        sg.name = g.name;
+        sg.is_pure = g.is_pure;
+        sg.next_id = g.next_id;
+        for (const auto& n : g.nodes) {
+            dse::bp::BpNode sn;
+            sn.id = n.id;
+            sn.name = n.name;
+            sn.category = n.category;
+            sn.comment = n.comment;
+            sn.pos_x = n.position.x;
+            sn.pos_y = n.position.y;
+            for (const auto& p : n.inputs) sn.inputs.push_back(ToSharedPin(p));
+            for (const auto& p : n.outputs) sn.outputs.push_back(ToSharedPin(p));
+            sg.nodes.push_back(std::move(sn));
+        }
+        for (const auto& l : g.links) {
+            dse::bp::BpLink sl;
+            sl.id = l.id;
+            sl.from_pin = l.from_pin;
+            sl.to_pin = l.to_pin;
+            sg.links.push_back(sl);
+        }
+        for (const auto& p : g.input_params) sg.input_params.push_back(ToSharedPin(p));
+        for (const auto& p : g.output_params) sg.output_params.push_back(ToSharedPin(p));
+        s.graphs.push_back(std::move(sg));
+    }
+    return s;
+}
+
+BlueprintAsset FromShared(const dse::bp::BlueprintAsset& s) {
+    BlueprintAsset a;
+    a.name = s.name;
+    a.file_path = s.file_path;
+    a.version = s.version;
+    a.description = s.description;
+    a.author = s.author;
+    a.implemented_interfaces = s.implemented_interfaces;
+    for (const auto& v : s.variables) {
+        BpVariable av;
+        av.name = v.name;
+        av.type = static_cast<BpVarType>(static_cast<int>(v.type));
+        av.default_bool = v.default_bool;
+        av.default_int = v.default_int;
+        av.default_float = v.default_float;
+        snprintf(av.default_string, sizeof(av.default_string), "%s", v.default_string.c_str());
+        for (int i = 0; i < 4; ++i) av.default_vec[i] = v.default_vec[i];
+        av.is_exposed = v.is_exposed;
+        a.variables.push_back(std::move(av));
+    }
+    for (const auto& g : s.graphs) {
+        BpFunctionGraph ag;
+        ag.name = g.name;
+        ag.is_pure = g.is_pure;
+        ag.next_id = g.next_id;
+        for (const auto& n : g.nodes) {
+            BpNode an;
+            an.id = n.id;
+            an.name = n.name;
+            an.category = n.category;
+            an.comment = n.comment;
+            an.position = ImVec2(n.pos_x, n.pos_y);
+            // 从节点注册表恢复仅编辑器的渲染信息（颜色/Lua 模板），不入 .dbp。
+            const NodeTemplate* tmpl = NodeRegistry::Get().Find(an.name);
+            if (tmpl) {
+                an.header_color = tmpl->header_color;
+                an.code_template = tmpl->code_template;
+            }
+            for (const auto& p : n.inputs) an.inputs.push_back(FromSharedPin(p));
+            for (const auto& p : n.outputs) an.outputs.push_back(FromSharedPin(p));
+            ag.nodes.push_back(std::move(an));
+        }
+        for (const auto& l : g.links) {
+            BpLink al;
+            al.id = l.id;
+            al.from_pin = l.from_pin;
+            al.to_pin = l.to_pin;
+            ag.links.push_back(al);
+        }
+        for (const auto& p : g.input_params) ag.input_params.push_back(FromSharedPin(p));
+        for (const auto& p : g.output_params) ag.output_params.push_back(FromSharedPin(p));
+        a.graphs.push_back(std::move(ag));
+    }
+    return a;
+}
+
+}  // namespace
+
 bool SaveBlueprintAsset(const BlueprintAsset& asset, const std::string& path) {
-    try {
-    rapidjson::Document doc;
-    doc.SetObject();
-    auto& alloc = doc.GetAllocator();
-
-    doc.AddMember("name", rapidjson::Value(asset.name.c_str(), alloc), alloc);
-    doc.AddMember("version", asset.version, alloc);
-    doc.AddMember("description", rapidjson::Value(asset.description.c_str(), alloc), alloc);
-    doc.AddMember("author", rapidjson::Value(asset.author.c_str(), alloc), alloc);
-
-    // Variables
-    rapidjson::Value vars_arr(rapidjson::kArrayType);
-    for (const auto& var : asset.variables) {
-        rapidjson::Value v(rapidjson::kObjectType);
-        v.AddMember("name", rapidjson::Value(var.name.c_str(), alloc), alloc);
-        v.AddMember("type", rapidjson::Value(BpVarTypeName(var.type), alloc), alloc);
-        v.AddMember("default_bool", var.default_bool, alloc);
-        v.AddMember("default_int", var.default_int, alloc);
-        v.AddMember("default_float", var.default_float, alloc);
-        v.AddMember("default_string", rapidjson::Value(var.default_string, alloc), alloc);
-        rapidjson::Value vec_arr(rapidjson::kArrayType);
-        for (int i = 0; i < 4; ++i) vec_arr.PushBack(var.default_vec[i], alloc);
-        v.AddMember("default_vec", vec_arr, alloc);
-        v.AddMember("is_exposed", var.is_exposed, alloc);
-        vars_arr.PushBack(v, alloc);
-    }
-    doc.AddMember("variables", vars_arr, alloc);
-
-    // Graphs
-    rapidjson::Value graphs_arr(rapidjson::kArrayType);
-    for (const auto& graph : asset.graphs) {
-        rapidjson::Value g(rapidjson::kObjectType);
-        g.AddMember("name", rapidjson::Value(graph.name.c_str(), alloc), alloc);
-        g.AddMember("next_id", graph.next_id, alloc);
-        g.AddMember("is_pure", graph.is_pure, alloc);
-
-        rapidjson::Value input_params(rapidjson::kArrayType);
-        for (const auto& p : graph.input_params) {
-            rapidjson::Value pin(rapidjson::kObjectType);
-            pin.AddMember("id", p.id, alloc);
-            pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
-            pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
-            input_params.PushBack(pin, alloc);
-        }
-        g.AddMember("input_params", input_params, alloc);
-
-        rapidjson::Value output_params(rapidjson::kArrayType);
-        for (const auto& p : graph.output_params) {
-            rapidjson::Value pin(rapidjson::kObjectType);
-            pin.AddMember("id", p.id, alloc);
-            pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
-            pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
-            output_params.PushBack(pin, alloc);
-        }
-        g.AddMember("output_params", output_params, alloc);
-
-        // Nodes
-        rapidjson::Value nodes_arr(rapidjson::kArrayType);
-        for (const auto& node : graph.nodes) {
-            rapidjson::Value n(rapidjson::kObjectType);
-            n.AddMember("id", node.id, alloc);
-            n.AddMember("name", rapidjson::Value(node.name.c_str(), alloc), alloc);
-            n.AddMember("category", rapidjson::Value(node.category.c_str(), alloc), alloc);
-            n.AddMember("pos_x", node.position.x, alloc);
-            n.AddMember("pos_y", node.position.y, alloc);
-            n.AddMember("comment", rapidjson::Value(node.comment.c_str(), alloc), alloc);
-
-            // Pins
-            rapidjson::Value ins(rapidjson::kArrayType);
-            for (const auto& p : node.inputs) {
-                rapidjson::Value pin(rapidjson::kObjectType);
-                pin.AddMember("id", p.id, alloc);
-                pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
-                pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
-                pin.AddMember("default_float", p.default_float, alloc);
-                pin.AddMember("default_int", p.default_int, alloc);
-                pin.AddMember("default_bool", p.default_bool, alloc);
-                pin.AddMember("default_string", rapidjson::Value(p.default_string, alloc), alloc);
-                rapidjson::Value vec(rapidjson::kArrayType);
-                for (float component : p.default_vec) vec.PushBack(component, alloc);
-                pin.AddMember("default_vec", vec, alloc);
-                ins.PushBack(pin, alloc);
-            }
-            n.AddMember("inputs", ins, alloc);
-
-            rapidjson::Value outs(rapidjson::kArrayType);
-            for (const auto& p : node.outputs) {
-                rapidjson::Value pin(rapidjson::kObjectType);
-                pin.AddMember("id", p.id, alloc);
-                pin.AddMember("name", rapidjson::Value(p.name.c_str(), alloc), alloc);
-                pin.AddMember("type", rapidjson::Value(BpPinTypeName(p.type), alloc), alloc);
-                pin.AddMember("default_float", p.default_float, alloc);
-                pin.AddMember("default_int", p.default_int, alloc);
-                pin.AddMember("default_bool", p.default_bool, alloc);
-                pin.AddMember("default_string", rapidjson::Value(p.default_string, alloc), alloc);
-                rapidjson::Value vec(rapidjson::kArrayType);
-                for (float component : p.default_vec) vec.PushBack(component, alloc);
-                pin.AddMember("default_vec", vec, alloc);
-                outs.PushBack(pin, alloc);
-            }
-            n.AddMember("outputs", outs, alloc);
-            nodes_arr.PushBack(n, alloc);
-        }
-        g.AddMember("nodes", nodes_arr, alloc);
-
-        // Links
-        rapidjson::Value links_arr(rapidjson::kArrayType);
-        for (const auto& link : graph.links) {
-            rapidjson::Value l(rapidjson::kObjectType);
-            l.AddMember("id", link.id, alloc);
-            l.AddMember("from_pin", link.from_pin, alloc);
-            l.AddMember("to_pin", link.to_pin, alloc);
-            links_arr.PushBack(l, alloc);
-        }
-        g.AddMember("links", links_arr, alloc);
-
-        graphs_arr.PushBack(g, alloc);
-    }
-    doc.AddMember("graphs", graphs_arr, alloc);
-
-    // Interfaces
-    rapidjson::Value ifaces(rapidjson::kArrayType);
-    for (const auto& iface : asset.implemented_interfaces) {
-        ifaces.PushBack(rapidjson::Value(iface.c_str(), alloc), alloc);
-    }
-    doc.AddMember("interfaces", ifaces, alloc);
-
-    // Write
-    rapidjson::StringBuffer buffer;
-    rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
-    doc.Accept(writer);
-
-    std::ofstream ofs(path, std::ios::trunc);
-    if (!ofs.is_open()) return false;
-    ofs << buffer.GetString();
-    return true;
-
-    } catch (const std::exception& e) {
-        std::cerr << "[SaveBlueprintAsset] Exception: " << e.what() << std::endl;
-        return false;
-    } catch (...) {
-        std::cerr << "[SaveBlueprintAsset] Unknown exception" << std::endl;
-        return false;
-    }
+    dse::bp::BlueprintDiagnostics diag;
+    return dse::bp::SaveBlueprintAsset(ToShared(asset), path, diag);
 }
 
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
-    try {
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) return false;
-    std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    ifs.close();
-
-    rapidjson::Document doc;
-    if (doc.Parse(content.c_str()).HasParseError() || !doc.IsObject()) return false;
-
-    asset = BlueprintAsset{};
+    dse::bp::BlueprintAsset shared;
+    dse::bp::BlueprintDiagnostics diag;
+    if (!dse::bp::LoadBlueprintAssetChecked(shared, path, diag)) return false;
+    asset = FromShared(shared);
     asset.file_path = path;
-    if (doc.HasMember("name")) asset.name = doc["name"].GetString();
-    if (doc.HasMember("version")) asset.version = doc["version"].GetInt();
-    if (doc.HasMember("description")) asset.description = doc["description"].GetString();
-    if (doc.HasMember("author")) asset.author = doc["author"].GetString();
-
-    // Variables
-    if (doc.HasMember("variables") && doc["variables"].IsArray()) {
-        for (auto& v : doc["variables"].GetArray()) {
-            BpVariable var;
-            if (v.HasMember("name")) var.name = v["name"].GetString();
-            if (v.HasMember("type")) var.type = BpVarTypeFromName(v["type"].GetString());
-            if (v.HasMember("default_bool")) var.default_bool = v["default_bool"].GetBool();
-            if (v.HasMember("default_int")) var.default_int = v["default_int"].GetInt();
-            if (v.HasMember("default_float")) var.default_float = v["default_float"].GetFloat();
-            if (v.HasMember("default_string")) snprintf(var.default_string, sizeof(var.default_string), "%s", v["default_string"].GetString());
-            if (v.HasMember("default_vec") && v["default_vec"].IsArray()) {
-                auto arr = v["default_vec"].GetArray();
-                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                    var.default_vec[i] = arr[i].GetFloat();
-            }
-            if (v.HasMember("is_exposed")) var.is_exposed = v["is_exposed"].GetBool();
-            asset.variables.push_back(var);
-        }
-    }
-
-    // Graphs
-    if (doc.HasMember("graphs") && doc["graphs"].IsArray()) {
-        for (auto& g : doc["graphs"].GetArray()) {
-            BpFunctionGraph graph;
-            if (g.HasMember("name")) graph.name = g["name"].GetString();
-            if (g.HasMember("next_id")) graph.next_id = g["next_id"].GetInt();
-            if (g.HasMember("is_pure")) graph.is_pure = g["is_pure"].GetBool();
-
-            auto load_params = [](const rapidjson::Value& values, BpPinKind kind,
-                                  std::vector<BpPin>& destination) {
-                if (!values.IsArray()) return;
-                for (auto& p : values.GetArray()) {
-                    if (!p.IsObject()) continue;
-                    BpPin pin;
-                    pin.kind = kind;
-                    if (p.HasMember("id") && p["id"].IsInt()) pin.id = p["id"].GetInt();
-                    if (p.HasMember("name") && p["name"].IsString()) pin.name = p["name"].GetString();
-                    if (p.HasMember("type") && p["type"].IsString()) pin.type = BpPinTypeFromName(p["type"].GetString());
-                    destination.push_back(std::move(pin));
-                }
-            };
-            if (g.HasMember("input_params")) {
-                load_params(g["input_params"], BpPinKind::Input, graph.input_params);
-            }
-            if (g.HasMember("output_params")) {
-                load_params(g["output_params"], BpPinKind::Output, graph.output_params);
-            }
-
-            if (g.HasMember("nodes") && g["nodes"].IsArray()) {
-                for (auto& n : g["nodes"].GetArray()) {
-                    BpNode node;
-                    if (n.HasMember("id")) node.id = n["id"].GetInt();
-                    if (n.HasMember("name")) node.name = n["name"].GetString();
-                    if (n.HasMember("category")) node.category = n["category"].GetString();
-                    if (n.HasMember("pos_x")) node.position.x = n["pos_x"].GetFloat();
-                    if (n.HasMember("pos_y")) node.position.y = n["pos_y"].GetFloat();
-                    if (n.HasMember("comment")) node.comment = n["comment"].GetString();
-
-                    // Restore header color from registry
-                    const NodeTemplate* tmpl = NodeRegistry::Get().Find(node.name);
-                    if (tmpl) {
-                        node.header_color = tmpl->header_color;
-                        node.code_template = tmpl->code_template;
-                    }
-
-                    if (n.HasMember("inputs") && n["inputs"].IsArray()) {
-                        for (auto& p : n["inputs"].GetArray()) {
-                            BpPin pin;
-                            if (p.HasMember("id")) pin.id = p["id"].GetInt();
-                            if (p.HasMember("name")) pin.name = p["name"].GetString();
-                            if (p.HasMember("type")) pin.type = BpPinTypeFromName(p["type"].GetString());
-                            if (p.HasMember("default_float")) pin.default_float = p["default_float"].GetFloat();
-                            if (p.HasMember("default_int")) pin.default_int = p["default_int"].GetInt();
-                            if (p.HasMember("default_bool")) pin.default_bool = p["default_bool"].GetBool();
-                            if (p.HasMember("default_string")) {
-                                snprintf(pin.default_string, sizeof(pin.default_string), "%s", p["default_string"].GetString());
-                            }
-                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
-                                auto arr = p["default_vec"].GetArray();
-                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                                    pin.default_vec[i] = arr[i].GetFloat();
-                            }
-                            pin.kind = BpPinKind::Input;
-                            node.inputs.push_back(pin);
-                        }
-                    }
-                    if (n.HasMember("outputs") && n["outputs"].IsArray()) {
-                        for (auto& p : n["outputs"].GetArray()) {
-                            BpPin pin;
-                            if (p.HasMember("id")) pin.id = p["id"].GetInt();
-                            if (p.HasMember("name")) pin.name = p["name"].GetString();
-                            if (p.HasMember("type")) pin.type = BpPinTypeFromName(p["type"].GetString());
-                            if (p.HasMember("default_float")) pin.default_float = p["default_float"].GetFloat();
-                            if (p.HasMember("default_int")) pin.default_int = p["default_int"].GetInt();
-                            if (p.HasMember("default_bool")) pin.default_bool = p["default_bool"].GetBool();
-                            if (p.HasMember("default_string")) {
-                                snprintf(pin.default_string, sizeof(pin.default_string), "%s", p["default_string"].GetString());
-                            }
-                            if (p.HasMember("default_vec") && p["default_vec"].IsArray()) {
-                                auto arr = p["default_vec"].GetArray();
-                                for (int i = 0; i < 4 && i < static_cast<int>(arr.Size()); ++i)
-                                    pin.default_vec[i] = arr[i].GetFloat();
-                            }
-                            pin.kind = BpPinKind::Output;
-                            node.outputs.push_back(pin);
-                        }
-                    }
-                    graph.nodes.push_back(std::move(node));
-                }
-            }
-
-            if (g.HasMember("links") && g["links"].IsArray()) {
-                for (auto& l : g["links"].GetArray()) {
-                    BpLink link;
-                    if (l.HasMember("id")) link.id = l["id"].GetInt();
-                    if (l.HasMember("from_pin")) link.from_pin = l["from_pin"].GetInt();
-                    if (l.HasMember("to_pin")) link.to_pin = l["to_pin"].GetInt();
-                    graph.links.push_back(link);
-                }
-            }
-
-            asset.graphs.push_back(std::move(graph));
-        }
-    }
-
-    // Interfaces
-    if (doc.HasMember("interfaces") && doc["interfaces"].IsArray()) {
-        for (auto& i : doc["interfaces"].GetArray()) {
-            asset.implemented_interfaces.push_back(i.GetString());
-        }
-    }
-
     return true;
-
-    } catch (const std::exception& e) {
-        std::cerr << "[LoadBlueprintAsset] Exception: " << e.what() << std::endl;
-        return false;
-    } catch (...) {
-        std::cerr << "[LoadBlueprintAsset] Unknown exception" << std::endl;
-        return false;
-    }
 }
 
 }  // namespace dse::editor::bp
