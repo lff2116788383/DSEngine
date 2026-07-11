@@ -117,9 +117,11 @@ public:
                 }
             }
         }
+        current_node_id_ = -1;
         Emit(OpCode::Halt);
         func.code = std::move(code_);
         func.constants = std::move(constants_);
+        func.source_nodes = std::move(source_nodes_);
         func.num_registers = regs_.Count();
         return func;
     }
@@ -133,10 +135,24 @@ private:
     RegAlloc regs_;
     std::vector<Instruction> code_;
     std::vector<BpValue> constants_;
+    std::vector<int> source_nodes_;
     std::unordered_map<int, int> pin_to_reg_;
+    int current_node_id_ = -1;
+
+    // RAII: attribute all instructions emitted within its scope to `node_id`,
+    // restoring the previous attribution on exit (handles nested data nodes).
+    struct NodeScope {
+        ByteCodeCompiler* c;
+        int prev;
+        NodeScope(ByteCodeCompiler* comp, int node_id) : c(comp), prev(comp->current_node_id_) {
+            c->current_node_id_ = node_id;
+        }
+        ~NodeScope() { c->current_node_id_ = prev; }
+    };
 
     void Emit(OpCode op, uint8_t a = 0, uint8_t b = 0, uint8_t c = 0, int16_t extra = 0) {
         code_.push_back({op, a, b, c, extra});
+        source_nodes_.push_back(current_node_id_);
     }
     int AddConstant(const BpValue& v) {
         constants_.push_back(v);
@@ -160,6 +176,7 @@ private:
     }
 
     void CompileFlowNode(const BpNode& node) {
+        NodeScope ns(this, node.id);
         for (const auto& pin : node.inputs) {
             if (pin.type != BpPinType::Flow) {
                 int src_pin = FindLinkedOutput(graph_, pin.id);
@@ -263,6 +280,7 @@ private:
             auto it = pin_to_reg_.find(node.outputs[0].id);
             if (it != pin_to_reg_.end()) return it->second;
         }
+        NodeScope ns(this, node.id);
         if (node.name == "Delta Time" && function_name_ == "on_update" && num_params_ > 0) {
             if (!node.outputs.empty()) pin_to_reg_[node.outputs[0].id] = 0;
             return 0;

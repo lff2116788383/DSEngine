@@ -40,6 +40,16 @@ struct VmContext {
     float delta_time = 0.0f;
 };
 
+// Resumable single-instruction execution state, used by the editor debugger to
+// step through the same bytecode the VM runs (no separate "simulation" path).
+struct StepState {
+    const CompiledFunction* func = nullptr;
+    std::vector<BpValue> regs;
+    int pc = 0;
+    bool finished = false;
+    BpValue result;
+};
+
 class BlueprintVM {
 public:
     static BlueprintVM& Get();
@@ -51,6 +61,15 @@ public:
     /// Execute a compiled function on a blueprint instance
     BpValue Execute(const CompiledFunction& func, VmContext& ctx,
                     const std::vector<BpValue>& args = {});
+
+    /// Prepare a resumable execution paused before the first instruction.
+    void BeginStep(StepState& state, const CompiledFunction& func, VmContext& ctx,
+                   const std::vector<BpValue>& args = {});
+    /// Execute exactly one bytecode instruction (Call is stepped over).
+    /// Returns the source node id of the next instruction, or -1 when finished.
+    int StepOnce(StepState& state, VmContext& ctx);
+    /// Source graph node id mapped to the instruction at the current pc (-1 if none).
+    int CurrentNode(const StepState& state) const;
 
     /// Execute on_init for an instance
     void RunInit(BlueprintInstance& instance, uint32_t entity_id);
@@ -64,6 +83,12 @@ public:
     const std::string& GetLastError() const { return last_error_; }
 
 private:
+    enum class StepResult { Continue, Returned };
+    // Execute the single instruction at `pc` (advancing it); shared by Execute
+    // and StepOnce so both run identical bytecode semantics.
+    StepResult RunOne(const CompiledFunction& func, VmContext& ctx,
+                      std::vector<BpValue>& regs, int& pc, BpValue& out_return);
+
     std::vector<std::pair<std::string, ExternFn>> extern_functions_;
     std::unordered_map<std::string, int> extern_index_;
     int instruction_count_ = 0;

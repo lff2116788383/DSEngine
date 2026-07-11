@@ -33,35 +33,30 @@ int BlueprintVM::GetExternIndex(const std::string& name) const {
     return (it != extern_index_.end()) ? it->second : -1;
 }
 
-BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
-                              const std::vector<BpValue>& args) {
-    instruction_count_ = 0;
-    last_error_.clear();
-
-    std::vector<BpValue> regs(func.num_registers);
-
-    // Load arguments into first N registers
+namespace {
+// Load call arguments / on_update delta_time into the entry registers.
+void LoadEntryRegisters(const CompiledFunction& func, VmContext& ctx,
+                        std::vector<BpValue>& regs, const std::vector<BpValue>& args) {
     for (size_t i = 0; i < args.size() && i < static_cast<size_t>(func.num_params); ++i) {
         regs[i] = args[i];
     }
-
-    // Load delta_time into a known register if this is on_update
     if (func.name == "on_update" && func.num_params >= 1) {
         regs[0] = BpValue::Float(ctx.delta_time);
     }
+}
+}  // namespace
 
+BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmContext& ctx,
+                                            std::vector<BpValue>& regs, int& pc,
+                                            BpValue& out_return) {
     const auto& code = func.code;
     const auto& constants = func.constants;
-    int pc = 0;
-    const int code_size = static_cast<int>(code.size());
-    constexpr int MAX_INSTRUCTIONS = 100000; // infinite loop protection
 
-    while (pc < code_size && instruction_count_ < MAX_INSTRUCTIONS) {
-        const Instruction& instr = code[pc];
-        ++instruction_count_;
-        ++pc;
+    const Instruction& instr = code[pc];
+    ++instruction_count_;
+    ++pc;
 
-        switch (instr.op) {
+    switch (instr.op) {
             case OpCode::Nop: break;
 
             case OpCode::LoadConst:
@@ -201,7 +196,8 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
             case OpCode::CallExtern: {
                 if (instr.b >= constants.size() || constants[instr.b].type != BpValue::Type::String) {
                     last_error_ = "Blueprint external call has no function name";
-                    return BpValue();
+                    out_return = BpValue();
+                    return StepResult::Returned;
                 }
                 int fn_idx = GetExternIndex(constants[instr.b].str);
                 int arg_start = instr.c;
@@ -269,10 +265,12 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
             }
 
             case OpCode::Return:
-                return instr.a < regs.size() ? regs[instr.a] : BpValue();
+                out_return = instr.a < regs.size() ? regs[instr.a] : BpValue();
+                return StepResult::Returned;
 
             case OpCode::Halt:
-                return regs.empty() ? BpValue() : regs[0];
+                out_return = regs.empty() ? BpValue() : regs[0];
+                return StepResult::Returned;
 
             // ECS placeholders (bridge to engine)
             case OpCode::EcsGetFloat:
@@ -283,7 +281,26 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
                 break;
 
             default: break;
-        }
+    }
+
+    return StepResult::Continue;
+}
+
+BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
+                              const std::vector<BpValue>& args) {
+    instruction_count_ = 0;
+    last_error_.clear();
+
+    std::vector<BpValue> regs(func.num_registers);
+    LoadEntryRegisters(func, ctx, regs, args);
+
+    int pc = 0;
+    const int code_size = static_cast<int>(func.code.size());
+    constexpr int MAX_INSTRUCTIONS = 100000; // infinite loop protection
+
+    while (pc < code_size && instruction_count_ < MAX_INSTRUCTIONS) {
+        BpValue ret;
+        if (RunOne(func, ctx, regs, pc, ret) == StepResult::Returned) return ret;
     }
 
     if (instruction_count_ >= MAX_INSTRUCTIONS) {
@@ -291,6 +308,48 @@ BpValue BlueprintVM::Execute(const CompiledFunction& func, VmContext& ctx,
     }
 
     return regs.empty() ? BpValue() : regs[0];
+}
+
+void BlueprintVM::BeginStep(StepState& state, const CompiledFunction& func, VmContext& ctx,
+                            const std::vector<BpValue>& args) {
+    instruction_count_ = 0;
+    last_error_.clear();
+
+    state.func = &func;
+    state.pc = 0;
+    state.finished = false;
+    state.result = BpValue();
+    state.regs.assign(func.num_registers, BpValue());
+    LoadEntryRegisters(func, ctx, state.regs, args);
+}
+
+int BlueprintVM::CurrentNode(const StepState& state) const {
+    if (!state.func) return -1;
+    if (state.pc >= 0 && state.pc < static_cast<int>(state.func->source_nodes.size()))
+        return state.func->source_nodes[state.pc];
+    return -1;
+}
+
+int BlueprintVM::StepOnce(StepState& state, VmContext& ctx) {
+    constexpr int MAX_INSTRUCTIONS = 100000;
+    if (!state.func || state.finished) return -1;
+
+    if (state.pc >= static_cast<int>(state.func->code.size()) ||
+        instruction_count_ >= MAX_INSTRUCTIONS) {
+        if (instruction_count_ >= MAX_INSTRUCTIONS)
+            last_error_ = "Blueprint execution exceeded instruction limit (possible infinite loop)";
+        state.finished = true;
+        state.result = state.regs.empty() ? BpValue() : state.regs[0];
+        return -1;
+    }
+
+    BpValue ret;
+    if (RunOne(*state.func, ctx, state.regs, state.pc, ret) == StepResult::Returned) {
+        state.finished = true;
+        state.result = ret;
+        return -1;
+    }
+    return CurrentNode(state);
 }
 
 void BlueprintVM::RunInit(BlueprintInstance& instance, uint32_t entity_id) {

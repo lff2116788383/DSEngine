@@ -56,6 +56,10 @@ struct CompiledFunction {
     std::vector<BpValue> constants;
     int num_registers = 0;
     int num_params = 0;
+    // Parallel to `code`: source graph node id each instruction was emitted for
+    // (-1 = compiler-synthesized). Consumed by the editor step debugger to map
+    // program counter → node for highlighting and node-level breakpoints.
+    std::vector<int> source_nodes;
 };
 
 struct CompiledBlueprint {

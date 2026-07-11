@@ -49,6 +49,168 @@ void BpDebugState::Reset() {
     execution_log.clear();
 }
 
+// ─── Real (non-simulated) step-debug session ────────────────────────────────
+//
+// Start compiles the blueprint to the same VM bytecode the runtime executes and
+// pauses before the first instruction. Step/Continue drive the actual VM one
+// instruction at a time via BlueprintVM::StepOnce; the highlighted node and
+// watch values are read straight from live VM state, and breakpoints are honored
+// through the compiler-emitted pc→node map.
+
+namespace {
+
+struct BpDebugSession {
+    CompiledBlueprint compiled;
+    BlueprintInstance instance;
+    VmContext ctx;
+    StepState step;
+    bool valid = false;
+};
+
+BpDebugSession& DebugSession() {
+    static BpDebugSession s;
+    return s;
+}
+
+const CompiledFunction* PickEntryFunction(const CompiledBlueprint& bp) {
+    for (const auto& f : bp.functions) if (f.name == "on_update") return &f;
+    for (const auto& f : bp.functions) if (f.name == "on_init") return &f;
+    return bp.functions.empty() ? nullptr : &bp.functions[0];
+}
+
+void PushLog(BpDebugState& dbg, std::string line) {
+    dbg.execution_log.push_back(std::move(line));
+    int overflow = static_cast<int>(dbg.execution_log.size()) - dbg.max_log_lines;
+    if (overflow > 0)
+        dbg.execution_log.erase(dbg.execution_log.begin(),
+                                dbg.execution_log.begin() + overflow);
+}
+
+void RefreshWatch(BpDebugState& dbg, const BlueprintInstance& inst,
+                  const BlueprintAsset& asset) {
+    dbg.watch_values.clear();
+    for (size_t i = 0; i < inst.variables.size() && i < asset.variables.size(); ++i) {
+        const auto& v = inst.variables[i];
+        std::string val;
+        switch (v.type) {
+            case BpValue::Type::Float:  val = std::to_string(v.f); break;
+            case BpValue::Type::Int:    val = std::to_string(v.i); break;
+            case BpValue::Type::Bool:   val = v.b ? "true" : "false"; break;
+            case BpValue::Type::String: val = v.str; break;
+            default:                    val = "<nil>"; break;
+        }
+        dbg.watch_values.emplace_back(asset.variables[i].name, val);
+    }
+}
+
+void StartDebugSession() {
+    auto& state = GetBlueprintEditorState();
+    auto& dbg = state.debug;
+    auto& S = DebugSession();
+    S = BpDebugSession{};
+    dbg.Reset();
+
+    if (state.asset.graphs.empty()) {
+        dbg.active = true;
+        PushLog(dbg, "[Debug] No graphs to execute");
+        return;
+    }
+
+    S.compiled = CompileToByteCode(state.asset);
+    const CompiledFunction* entry = PickEntryFunction(S.compiled);
+    if (!entry) {
+        dbg.active = true;
+        PushLog(dbg, "[Debug] Compilation produced no executable function");
+        return;
+    }
+
+    S.instance.blueprint = &S.compiled;
+    S.instance.variables = S.compiled.default_variables;
+    S.instance.initialized = true;
+    S.ctx.instance = &S.instance;
+    S.ctx.entity_id = 0;
+    S.ctx.delta_time = 0.016f;
+
+    std::vector<BpValue> args;
+    if (entry->name == "on_update") args.push_back(BpValue::Float(S.ctx.delta_time));
+    BlueprintVM::Get().BeginStep(S.step, *entry, S.ctx, args);
+    S.valid = true;
+
+    dbg.active = true;
+    dbg.paused = true;
+    dbg.current_instruction = 0;
+    dbg.current_node_id = BlueprintVM::Get().CurrentNode(S.step);
+    PushLog(dbg, "[Debug] Session started (" + entry->name + "), paused at entry");
+    RefreshWatch(dbg, S.instance, state.asset);
+}
+
+void StepDebugSession() {
+    auto& state = GetBlueprintEditorState();
+    auto& dbg = state.debug;
+    auto& S = DebugSession();
+    if (!dbg.active || !S.valid) return;
+    dbg.paused = true;
+    if (S.step.finished) { PushLog(dbg, "[Debug] Execution already finished"); return; }
+
+    int node = BlueprintVM::Get().StepOnce(S.step, S.ctx);
+    ++dbg.current_instruction;
+    if (S.step.finished) {
+        dbg.current_node_id = -1;
+        PushLog(dbg, "[Debug] Execution finished after " +
+                     std::to_string(dbg.current_instruction) + " instructions");
+    } else {
+        dbg.current_node_id = node;
+        PushLog(dbg, "[Debug] Step -> pc=" + std::to_string(S.step.pc) +
+                     " node=" + std::to_string(node));
+    }
+    RefreshWatch(dbg, S.instance, state.asset);
+    if (BlueprintVM::Get().HasError())
+        PushLog(dbg, "[Error] " + BlueprintVM::Get().GetLastError());
+}
+
+void ContinueDebugSession() {
+    auto& state = GetBlueprintEditorState();
+    auto& dbg = state.debug;
+    auto& S = DebugSession();
+    if (!dbg.active || !S.valid) return;
+    if (S.step.finished) { PushLog(dbg, "[Debug] Execution already finished"); return; }
+
+    dbg.paused = false;
+    constexpr int kGuard = 200000;
+    int guard = 0;
+    bool hit_breakpoint = false;
+    while (!S.step.finished && guard++ < kGuard) {
+        int node = BlueprintVM::Get().StepOnce(S.step, S.ctx);
+        ++dbg.current_instruction;
+        if (S.step.finished) break;
+        if (node >= 0 && dbg.HasBreakpoint(node)) {
+            dbg.current_node_id = node;
+            dbg.paused = true;
+            hit_breakpoint = true;
+            PushLog(dbg, "[Debug] Breakpoint hit at node " + std::to_string(node));
+            break;
+        }
+    }
+    if (S.step.finished) {
+        dbg.current_node_id = -1;
+        PushLog(dbg, "[Debug] Execution finished after " +
+                     std::to_string(dbg.current_instruction) + " instructions");
+    } else if (!hit_breakpoint) {
+        PushLog(dbg, "[Debug] Paused (instruction budget reached)");
+        dbg.paused = true;
+    }
+    RefreshWatch(dbg, S.instance, state.asset);
+    if (BlueprintVM::Get().HasError())
+        PushLog(dbg, "[Error] " + BlueprintVM::Get().GetLastError());
+}
+
+void StopDebugSession() {
+    DebugSession() = BpDebugSession{};
+    GetBlueprintEditorState().debug.Reset();
+}
+
+}  // namespace
+
 void DrawBlueprintDebugPanel() {
     auto& state = GetBlueprintEditorState();
     auto& dbg = state.debug;
@@ -60,69 +222,24 @@ void DrawBlueprintDebugPanel() {
     // Control buttons
     if (!dbg.active) {
         if (ImGui::Button(MDI_ICON_PLAY " Start")) {
-            dbg.active = true;
-            dbg.paused = false;
-            dbg.current_node_id = -1;
-            dbg.execution_log.clear();
-            dbg.execution_log.push_back("[Debug] Session started");
-
-            // Compile and simulate execution
-            if (!state.asset.graphs.empty()) {
-                auto compiled = CompileToByteCode(state.asset);
-                if (!compiled.functions.empty()) {
-                    BlueprintInstance instance;
-                    instance.blueprint = &compiled;
-                    instance.variables = compiled.default_variables;
-                    instance.initialized = true;
-
-                    VmContext ctx;
-                    ctx.instance = &instance;
-                    ctx.entity_id = 0;
-                    ctx.delta_time = 0.016f;
-
-                    BlueprintVM::Get().Execute(compiled.functions[0], ctx);
-                    int ic = BlueprintVM::Get().GetInstructionCount();
-                    dbg.execution_log.push_back("[Debug] Executed " + std::to_string(ic) + " instructions");
-
-                    // Populate watch values from instance variables
-                    dbg.watch_values.clear();
-                    for (size_t i = 0; i < instance.variables.size() && i < state.asset.variables.size(); ++i) {
-                        const auto& v = instance.variables[i];
-                        std::string val;
-                        switch (v.type) {
-                            case BpValue::Type::Float: val = std::to_string(v.f); break;
-                            case BpValue::Type::Int:   val = std::to_string(v.i); break;
-                            case BpValue::Type::Bool:  val = v.b ? "true" : "false"; break;
-                            case BpValue::Type::String: val = v.str; break;
-                            default: val = "<nil>"; break;
-                        }
-                        dbg.watch_values.emplace_back(state.asset.variables[i].name, val);
-                    }
-
-                    if (BlueprintVM::Get().HasError()) {
-                        dbg.execution_log.push_back("[Error] " + BlueprintVM::Get().GetLastError());
-                    }
-                }
-            }
+            StartDebugSession();
         }
     } else {
         if (ImGui::Button(MDI_ICON_STOP " Stop")) {
-            dbg.Reset();
+            StopDebugSession();
         }
         ImGui::SameLine();
         if (dbg.paused) {
             if (ImGui::Button(MDI_ICON_PLAY " Continue")) {
-                dbg.paused = false;
-                dbg.execution_log.push_back("[Debug] Continued");
+                ContinueDebugSession();
             }
             ImGui::SameLine();
             if (ImGui::Button(MDI_ICON_SKIP_NEXT " Step")) {
-                dbg.execution_log.push_back("[Debug] Step");
+                StepDebugSession();
             }
         } else {
             if (ImGui::Button(MDI_ICON_PAUSE " Pause")) {
                 dbg.paused = true;
-                dbg.execution_log.push_back("[Debug] Paused");
             }
         }
         ImGui::SameLine();
@@ -162,22 +279,11 @@ void DrawBlueprintDebugPanel() {
     ImGui::EndChild();
 }
 
-void BpDebugStep() {
-    auto& dbg = GetBlueprintEditorState().debug;
-    if (dbg.active) {
-        dbg.paused = true;
-        dbg.current_instruction++;
-    }
-}
+void BpDebugStep() { StepDebugSession(); }
 
-void BpDebugContinue() {
-    auto& dbg = GetBlueprintEditorState().debug;
-    dbg.paused = false;
-}
+void BpDebugContinue() { ContinueDebugSession(); }
 
-void BpDebugStop() {
-    GetBlueprintEditorState().debug.Reset();
-}
+void BpDebugStop() { StopDebugSession(); }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #2 — Blueprint Undo/Redo (snapshot-based)
