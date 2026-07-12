@@ -6,14 +6,20 @@
 #include "editor_csharp_panel.h"
 #include "editor_inspector_registry.h"
 #include "editor_icons.h"
+#include "editor_task_service.h"
+#include "editor_console_panel.h"
 
 #include "engine/ecs/script.h"
+#include "engine/platform/process.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 
 namespace dse::editor {
@@ -35,6 +41,87 @@ enum class CSharpBuildStatus {
 static CSharpBuildStatus s_build_status = CSharpBuildStatus::Idle;
 static std::string s_build_output;
 static bool s_csharp_host_active = false;
+
+// 从编辑器工作目录向上查找仓库内的 GameScripts/DSEngine.sln。
+std::filesystem::path FindGameScriptsSolution() {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    fs::path dir = fs::current_path(ec);
+    for (int i = 0; i < 8 && !dir.empty(); ++i) {
+        fs::path candidate = dir / "GameScripts" / "DSEngine.sln";
+        if (fs::exists(candidate, ec)) return candidate;
+        fs::path parent = dir.parent_path();
+        if (parent == dir) break;
+        dir = parent;
+    }
+    return {};
+}
+
+// 通过统一进程服务 + 后台任务服务真实执行 `dotnet build`，退出码决定成功/失败。
+// 实时输出进入 Background Tasks 面板；完成回调在 UI 线程更新状态与摘要。
+void StartCSharpBuild(const std::string& config, const std::string& label,
+                      const std::string& success_msg) {
+    std::filesystem::path sln = FindGameScriptsSolution();
+    if (sln.empty()) {
+        s_build_status = CSharpBuildStatus::Failed;
+        s_build_output = "Cannot locate GameScripts/DSEngine.sln under the working directory";
+        EditorLog(LogLevel::Error, "[CSharp] " + s_build_output);
+        return;
+    }
+    s_build_status = CSharpBuildStatus::Building;
+    s_build_output = label + " running... (see Background Tasks)";
+
+    std::string sln_str = sln.string();
+    std::string cfg = config;
+    auto exit_code = std::make_shared<std::atomic<int>>(-1);
+    auto launched = std::make_shared<std::atomic<bool>>(false);
+    auto launch_err = std::make_shared<std::string>();
+
+    BackgroundTaskService::Get().Submit(
+        label,
+        [sln_str, cfg, exit_code, launched, launch_err](TaskContext& ctx) -> bool {
+            ctx.SetProgress(-1.0f, "dotnet build");
+            dse::platform::ProcessOptions opts;
+            opts.executable = "dotnet";
+            opts.args = {"build", sln_str, "-c", cfg, "--nologo"};
+            opts.merge_stderr = true;
+            const std::atomic<bool>& cancel = ctx.CancelFlag();
+            dse::platform::ProcessResult r = dse::platform::RunProcess(
+                opts,
+                [&ctx](std::string_view line, bool is_err) {
+                    if (!line.empty()) ctx.Log(std::string(line), is_err);
+                },
+                std::chrono::milliseconds::zero(),
+                &cancel);
+            launched->store(r.launched);
+            exit_code->store(r.exit_code);
+            if (!r.launched) {
+                *launch_err = r.error.empty() ? "dotnet not found on PATH" : r.error;
+                ctx.Fail(*launch_err);
+                return false;
+            }
+            if (r.canceled) return false;
+            if (r.exit_code != 0) {
+                ctx.Fail("dotnet build exited with code " + std::to_string(r.exit_code));
+                return false;
+            }
+            return true;
+        },
+        [label, success_msg, exit_code, launched, launch_err](bool success) {
+            s_build_status = success ? CSharpBuildStatus::Success : CSharpBuildStatus::Failed;
+            if (success) {
+                s_build_output = success_msg;
+                EditorLog(LogLevel::Info, "[CSharp] " + label + ": " + success_msg);
+            } else if (!launched->load()) {
+                s_build_output = label + " failed: " + *launch_err;
+                EditorLog(LogLevel::Error, "[CSharp] " + s_build_output);
+            } else {
+                s_build_output = label + " failed (dotnet exit code " +
+                                 std::to_string(exit_code->load()) + "); see Background Tasks log";
+                EditorLog(LogLevel::Error, "[CSharp] " + s_build_output);
+            }
+        });
+}
 
 } // namespace
 
@@ -127,26 +214,28 @@ void DrawCSharpPanel(EditorContext& ctx) {
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Build button
+    // Build button — real `dotnet build` of the GameScripts solution.
     bool is_building = (s_build_status == CSharpBuildStatus::Building);
     if (is_building) ImGui::BeginDisabled();
     if (ImGui::Button(MDI_ICON_COG "  Build C# Scripts", ImVec2(-1, 0))) {
-        s_build_status = CSharpBuildStatus::Building;
-        s_build_output.clear();
-        // NOTE: In production this would spawn dotnet build asynchronously.
-        // For now we mark as success — actual build integration is in CSharpHost.
-        s_build_status = CSharpBuildStatus::Success;
-        s_build_output = "Build succeeded (0 errors, 0 warnings)";
+        StartCSharpBuild("Debug", "C# Build",
+                         "Build succeeded (managed assemblies up to date)");
     }
     if (is_building) ImGui::EndDisabled();
 
     ImGui::Spacing();
 
-    // Hot Reload button
+    // Hot Reload button — rebuild the managed assembly through the same real
+    // dotnet path. A live in-process swap needs an active runtime host, which
+    // the editor process does not embed; the rebuilt assembly is picked up on
+    // the next Play. Status reflects the real dotnet result (no fake success).
+    if (is_building) ImGui::BeginDisabled();
     if (ImGui::Button(MDI_ICON_ROTATE_3D_VARIANT "  Hot Reload", ImVec2(-1, 0))) {
-        // Trigger CSharpHost::Reload() — placeholder
-        s_build_output = "Reload triggered (AssemblyLoadContext swap)";
+        StartCSharpBuild("Debug", "C# Hot Reload",
+                         "Rebuilt managed assembly; applies on next Play "
+                         "(editor has no live runtime host for in-process swap)");
     }
+    if (is_building) ImGui::EndDisabled();
 
     ImGui::Spacing();
 
