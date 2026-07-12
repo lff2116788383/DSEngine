@@ -7,15 +7,28 @@
 #include "editor_2d_tools.h"
 #include "editor_panel_registry.h"
 #include "editor_icons.h"
+#include "editor_gpu.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "stb/stb_image.h"
+
+#include <rapidjson/document.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <vector>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace dse::editor::tools2d {
 
@@ -79,6 +92,66 @@ void SliceAuto(SpriteSheetAsset& sheet, float alpha_threshold) {
     }
 }
 
+void SliceAutoPixels(SpriteSheetAsset& sheet, const unsigned char* rgba,
+                     int width, int height, float alpha_threshold) {
+    sheet.frames.clear();
+    if (!rgba || width <= 0 || height <= 0) return;
+    sheet.texture_width = width;
+    sheet.texture_height = height;
+
+    const float clamped = std::max(0.0f, std::min(1.0f, alpha_threshold));
+    const uint8_t thr = static_cast<uint8_t>(clamped * 255.0f);
+    auto opaque = [&](int x, int y) -> bool {
+        return rgba[(static_cast<size_t>(y) * width + x) * 4 + 3] > thr;
+    };
+
+    // 4-connected flood fill; one bounding box per connected opaque region.
+    std::vector<uint8_t> visited(static_cast<size_t>(width) * height, 0);
+    std::vector<int> stack;
+    struct Box { int minx, miny, maxx, maxy; };
+    std::vector<Box> boxes;
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            size_t seed = static_cast<size_t>(y) * width + x;
+            if (visited[seed] || !opaque(x, y)) continue;
+            Box b{ x, y, x, y };
+            stack.clear();
+            stack.push_back(static_cast<int>(seed));
+            visited[seed] = 1;
+            while (!stack.empty()) {
+                int cur = stack.back();
+                stack.pop_back();
+                int cx = cur % width, cy = cur / width;
+                b.minx = std::min(b.minx, cx); b.maxx = std::max(b.maxx, cx);
+                b.miny = std::min(b.miny, cy); b.maxy = std::max(b.maxy, cy);
+                const int nx[4] = { cx - 1, cx + 1, cx, cx };
+                const int ny[4] = { cy, cy, cy - 1, cy + 1 };
+                for (int k = 0; k < 4; ++k) {
+                    int ax = nx[k], ay = ny[k];
+                    if (ax < 0 || ay < 0 || ax >= width || ay >= height) continue;
+                    size_t aidx = static_cast<size_t>(ay) * width + ax;
+                    if (visited[aidx] || !opaque(ax, ay)) continue;
+                    visited[aidx] = 1;
+                    stack.push_back(static_cast<int>(aidx));
+                }
+            }
+            boxes.push_back(b);
+        }
+    }
+
+    int i = 0;
+    for (const auto& b : boxes) {
+        SpriteFrame f;
+        f.x = b.minx;
+        f.y = b.miny;
+        f.w = b.maxx - b.minx + 1;
+        f.h = b.maxy - b.miny + 1;
+        f.name = sheet.name + "_auto_" + std::to_string(i++);
+        f.pivot = {0.5f, 0.5f};
+        sheet.frames.push_back(f);
+    }
+}
+
 bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
@@ -102,11 +175,70 @@ bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path) {
 }
 
 bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path) {
-    std::ifstream f(path);
+    std::ifstream f(path, std::ios::binary);
     if (!f.is_open()) return false;
-    // Simplified JSON parsing for .dsprite format
-    sheet.frames.clear();
-    sheet.source_texture_path = path;
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string json = ss.str();
+
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError() || !doc.IsObject()) return false;
+
+    SpriteSheetAsset loaded;
+    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
+    if (doc.HasMember("texture") && doc["texture"].IsString()) loaded.source_texture_path = doc["texture"].GetString();
+    if (doc.HasMember("width") && doc["width"].IsInt()) loaded.texture_width = doc["width"].GetInt();
+    if (doc.HasMember("height") && doc["height"].IsInt()) loaded.texture_height = doc["height"].GetInt();
+    if (doc.HasMember("frames") && doc["frames"].IsArray()) {
+        for (const auto& fr : doc["frames"].GetArray()) {
+            if (!fr.IsObject()) continue;
+            SpriteFrame sf;
+            if (fr.HasMember("name") && fr["name"].IsString()) sf.name = fr["name"].GetString();
+            if (fr.HasMember("x") && fr["x"].IsInt()) sf.x = fr["x"].GetInt();
+            if (fr.HasMember("y") && fr["y"].IsInt()) sf.y = fr["y"].GetInt();
+            if (fr.HasMember("w") && fr["w"].IsInt()) sf.w = fr["w"].GetInt();
+            if (fr.HasMember("h") && fr["h"].IsInt()) sf.h = fr["h"].GetInt();
+            if (fr.HasMember("pivot_x") && fr["pivot_x"].IsNumber()) sf.pivot.x = fr["pivot_x"].GetFloat();
+            if (fr.HasMember("pivot_y") && fr["pivot_y"].IsNumber()) sf.pivot.y = fr["pivot_y"].GetFloat();
+            loaded.frames.push_back(sf);
+        }
+    }
+    sheet = std::move(loaded);
+    return true;
+}
+
+// Load a real source image (via stb_image) into the slicer state: RGBA8 pixels
+// for auto-slicing plus a GPU preview texture. Returns false if decoding fails.
+static bool LoadSlicerTexture(SpriteSlicerState& st, const std::string& path) {
+    int w = 0, h = 0, ch = 0;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 4);
+    if (!data || w <= 0 || h <= 0) {
+        if (data) stbi_image_free(data);
+        return false;
+    }
+    st.pixels.assign(data, data + static_cast<size_t>(w) * h * 4);
+    stbi_image_free(data);
+
+    st.current_sheet.source_texture_path = path;
+    st.current_sheet.texture_width = w;
+    st.current_sheet.texture_height = h;
+    st.current_sheet.frames.clear();
+    st.selected_frame = -1;
+    if (st.current_sheet.name.empty()) {
+        size_t slash = path.find_last_of("/\\");
+        std::string base = (slash == std::string::npos) ? path : path.substr(slash + 1);
+        size_t dot = base.find_last_of('.');
+        if (dot != std::string::npos) base = base.substr(0, dot);
+        st.current_sheet.name = base;
+    }
+
+    if (st.preview_texture != 0) {
+        dse::editor::EditorDeleteTexture(st.preview_texture);
+        st.preview_texture = 0;
+    }
+    st.preview_texture = dse::editor::EditorCreateTexture2D(w, h, st.pixels.data(),
+                                                            /*linear=*/true, /*clamp=*/true);
     return true;
 }
 
@@ -117,6 +249,21 @@ void DrawSpriteSlicerPanel() {
     ImGui::Begin(MDI_ICON_GRID " Sprite Slicer", &st.open);
 
     // Toolbar
+    if (ImGui::Button(MDI_ICON_FOLDER_OPEN "  Open Texture...")) {
+#ifdef _WIN32
+        char filename[MAX_PATH] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.tga)\0*.png;*.jpg;*.jpeg;*.bmp;*.tga\0All Files\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+        if (GetOpenFileNameA(&ofn)) {
+            LoadSlicerTexture(st, filename);
+        }
+#endif
+    }
+    ImGui::SameLine();
     ImGui::Text("Texture: %s (%dx%d)", st.current_sheet.source_texture_path.c_str(),
                 st.current_sheet.texture_width, st.current_sheet.texture_height);
     ImGui::Separator();
@@ -150,7 +297,13 @@ void DrawSpriteSlicerPanel() {
         if (st.mode == SliceMode::Grid) {
             SliceGrid(st.current_sheet, st.cell_width, st.cell_height, st.padding, st.offset_x, st.offset_y);
         } else if (st.mode == SliceMode::Auto) {
-            SliceAuto(st.current_sheet, st.alpha_threshold);
+            if (!st.pixels.empty()) {
+                SliceAutoPixels(st.current_sheet, st.pixels.data(),
+                                st.current_sheet.texture_width,
+                                st.current_sheet.texture_height, st.alpha_threshold);
+            } else {
+                SliceAuto(st.current_sheet, st.alpha_threshold);
+            }
         }
         st.preview_dirty = false;
     }
@@ -182,22 +335,52 @@ void DrawSpriteSlicerPanel() {
     ImVec2 canvas_size = ImGui::GetContentRegionAvail();
     ImDrawList* dl = ImGui::GetWindowDrawList();
 
-    // Draw texture background placeholder
-    dl->AddRectFilled(canvas_pos,
-        ImVec2(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y),
-        IM_COL32(40, 40, 40, 255));
+    const int tw = st.current_sheet.texture_width;
+    const int th = st.current_sheet.texture_height;
+    float scale = 1.0f;
+    ImVec2 img_size(0.0f, 0.0f);
+    if (tw > 0 && th > 0) {
+        scale = std::min(canvas_size.x / (float)tw, canvas_size.y / (float)th) * st.zoom;
+        if (scale <= 0.0f) scale = 1.0f;
+        img_size = ImVec2(tw * scale, th * scale);
+    }
 
-    // Draw frame rects overlaid
-    if (st.current_sheet.texture_width > 0 && st.current_sheet.texture_height > 0) {
-        float sx = canvas_size.x / (float)st.current_sheet.texture_width * st.zoom;
-        float sy = canvas_size.y / (float)st.current_sheet.texture_height * st.zoom;
-        float scale = std::min(sx, sy);
+    if (st.preview_texture != 0 && tw > 0 && th > 0) {
+        // Real source texture (checkerboard behind it shows through transparency).
+        for (float y = 0; y < img_size.y; y += 16.0f) {
+            for (float x = 0; x < img_size.x; x += 16.0f) {
+                bool alt = ((int)(x / 16.0f) % 2) == ((int)(y / 16.0f) % 2);
+                dl->AddRectFilled(
+                    ImVec2(canvas_pos.x + x, canvas_pos.y + y),
+                    ImVec2(canvas_pos.x + std::min(x + 16.0f, img_size.x),
+                           canvas_pos.y + std::min(y + 16.0f, img_size.y)),
+                    alt ? IM_COL32(60, 60, 60, 255) : IM_COL32(48, 48, 48, 255));
+            }
+        }
+        dl->AddImage((ImTextureID)dse::editor::EditorImGuiTextureId(st.preview_texture),
+                     canvas_pos,
+                     ImVec2(canvas_pos.x + img_size.x, canvas_pos.y + img_size.y));
+    } else {
+        // No texture loaded: honest empty checkerboard, not a fake image.
+        for (float y = 0; y < canvas_size.y; y += 16.0f) {
+            for (float x = 0; x < canvas_size.x; x += 16.0f) {
+                bool alt = ((int)(x / 16.0f) % 2) == ((int)(y / 16.0f) % 2);
+                dl->AddRectFilled(
+                    ImVec2(canvas_pos.x + x, canvas_pos.y + y),
+                    ImVec2(canvas_pos.x + std::min(x + 16.0f, canvas_size.x),
+                           canvas_pos.y + std::min(y + 16.0f, canvas_size.y)),
+                    alt ? IM_COL32(45, 45, 45, 255) : IM_COL32(35, 35, 35, 255));
+            }
+        }
+    }
 
+    // Slice rects overlaid in the same texture->canvas space.
+    if (tw > 0 && th > 0) {
         for (int i = 0; i < static_cast<int>(st.current_sheet.frames.size()); ++i) {
             auto& fr = st.current_sheet.frames[i];
             ImVec2 p0(canvas_pos.x + fr.x * scale, canvas_pos.y + fr.y * scale);
             ImVec2 p1(p0.x + fr.w * scale, p0.y + fr.h * scale);
-            ImU32 col = (i == st.selected_frame) ? IM_COL32(50, 200, 255, 200) : IM_COL32(0, 255, 100, 120);
+            ImU32 col = (i == st.selected_frame) ? IM_COL32(50, 200, 255, 220) : IM_COL32(0, 255, 100, 140);
             dl->AddRect(p0, p1, col, 0.0f, 0, (i == st.selected_frame) ? 2.0f : 1.0f);
         }
     }

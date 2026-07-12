@@ -51,12 +51,20 @@ struct SpriteSlicerState {
     float zoom = 1.0f;
     ImVec2 scroll_offset = {0, 0};
     bool preview_dirty = true;
+
+    // Real source-texture data (loaded via stb_image), not persisted in .dsprite.
+    std::vector<unsigned char> pixels;   // RGBA8, row-major, texture_width*texture_height*4
+    unsigned int preview_texture = 0;    // GPU handle for the preview image (0 = none)
 };
 
 SpriteSlicerState& GetSpriteSlicerState();
 void DrawSpriteSlicerPanel();
 void SliceGrid(SpriteSheetAsset& sheet, int cell_w, int cell_h, int pad, int ox, int oy);
 void SliceAuto(SpriteSheetAsset& sheet, float alpha_threshold);
+// Alpha-based auto slicing over real RGBA8 pixel data: labels connected regions
+// of pixels with alpha above the threshold and emits one frame per bounding box.
+void SliceAutoPixels(SpriteSheetAsset& sheet, const unsigned char* rgba,
+                     int width, int height, float alpha_threshold);
 bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path);
 bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path);
 
