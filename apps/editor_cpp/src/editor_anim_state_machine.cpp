@@ -1,7 +1,9 @@
 ﻿#include "editor_locale.h"
 #include "editor_anim_state_machine.h"
+#include "editor_console_panel.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/animation_state_machine.h"
+#include "engine/ecs/animation_state_machine_serialize.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -10,6 +12,16 @@
 #include <unordered_map>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <memory>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace dse::editor {
 
@@ -263,6 +275,63 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
     }
 
     dse::gameplay3d::AnimationStateMachine& asm_ref = *asm_ptr;
+
+    // ── .dasm 资产工具栏：显式版本化磁盘往返（场景内嵌之外的独立资产） ──
+    if (ImGui::Button(T("Save .dasm"))) {
+        std::string save_path;
+#ifdef _WIN32
+        char filename[MAX_PATH] = "state_machine.dasm";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = "Anim State Machine (*.dasm)\0*.dasm\0All Files\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.lpstrDefExt = "dasm";
+        ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+        if (GetSaveFileNameA(&ofn)) save_path = filename;
+#else
+        save_path = "state_machine.dasm";
+#endif
+        if (!save_path.empty()) {
+            dse::gameplay3d::AsmDiagnostics diag;
+            if (dse::gameplay3d::SaveStateMachineToFile(asm_ref, save_path, diag)) {
+                EditorLog(LogLevel::Info, "[ASM] Saved to " + save_path);
+            } else {
+                EditorLog(LogLevel::Error, "[ASM] Save failed: " + (diag.errors.empty() ? std::string("unknown") : diag.errors.front()));
+            }
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(T("Load .dasm"))) {
+        std::string load_path;
+#ifdef _WIN32
+        char filename[MAX_PATH] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = "Anim State Machine (*.dasm)\0*.dasm\0All Files\0*.*\0";
+        ofn.lpstrFile = filename;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+        if (GetOpenFileNameA(&ofn)) load_path = filename;
+#else
+        load_path = "state_machine.dasm";
+#endif
+        if (!load_path.empty()) {
+            auto loaded = std::make_shared<dse::gameplay3d::AnimationStateMachine>();
+            dse::gameplay3d::AsmDiagnostics diag;
+            if (dse::gameplay3d::LoadStateMachineFromFile(*loaded, load_path, diag)) {
+                animator.state_machine = loaded;
+                asm_ptr = animator.state_machine.get();
+                GetASMState().needs_auto_layout = true;
+                EditorLog(LogLevel::Info, "[ASM] Loaded from " + load_path);
+            } else {
+                EditorLog(LogLevel::Error, "[ASM] Load failed: " + (diag.errors.empty() ? std::string("unknown") : diag.errors.front()));
+            }
+        }
+    }
+    ImGui::Separator();
+    // 载入会替换 animator.state_machine：本帧仍用已绑定的 asm_ref 绘制旧机，下一帧重入后重新绑定新机。
+
     const std::unordered_map<std::string, dse::gameplay3d::AnimState>& states = asm_ref.GetStates();
     const std::unordered_map<std::string, dse::gameplay3d::AnimParameter>& params = asm_ref.GetParameters();
     const std::string& default_state = asm_ref.GetDefaultState();

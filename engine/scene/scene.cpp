@@ -12,6 +12,7 @@
 #include "engine/ecs/sprite.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/ecs/animation_state_machine_serialize.h"
 #include "engine/base/debug.h"
 #include <fstream>
 #include <sstream>
@@ -233,6 +234,11 @@ bool Scene::Serialize(const std::string& filepath) {
                 blend_nodes.PushBack(node_json, allocator);
             }
             animator_json.AddMember("blend_nodes", blend_nodes, allocator);
+            if (animator.state_machine) {
+                rapidjson::Value sm_json(rapidjson::kObjectType);
+                dse::gameplay3d::WriteStateMachineJson(*animator.state_machine, sm_json, allocator);
+                animator_json.AddMember("state_machine", sm_json, allocator);
+            }
             components.AddMember("Animator3DComponent", animator_json, allocator);
         }
 
@@ -559,6 +565,13 @@ bool Scene::Deserialize(const std::string& filepath) {
                         node.threshold = node_json["threshold"].GetFloat();
                     }
                     animator.blend_nodes.push_back(std::move(node));
+                }
+            }
+            if (animator_json.HasMember("state_machine") && animator_json["state_machine"].IsObject()) {
+                auto sm = std::make_shared<dse::gameplay3d::AnimationStateMachine>();
+                dse::gameplay3d::AsmDiagnostics sm_diag;
+                if (dse::gameplay3d::ReadStateMachineJson(animator_json["state_machine"], *sm, sm_diag)) {
+                    animator.state_machine = std::move(sm);
                 }
             }
             world.registry().emplace<dse::Animator3DComponent>(entity, std::move(animator));
