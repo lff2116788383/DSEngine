@@ -4,8 +4,11 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdio>
+#include <string>
 #include "engine/cutscene/cutscene_player.h"
 #include "engine/cutscene/cutscene_track.h"
+#include "engine/cutscene/cutscene_serialize.h"
 
 using namespace dse::cutscene;
 
@@ -330,4 +333,166 @@ TEST_F(CutscenePlayerTest, RemoveSequence) {
 TEST_F(CutscenePlayerTest, NonexistentSequence) {
     player.Play("nonexistent");
     EXPECT_EQ(player.GetState(), PlayState::Stopped);
+}
+
+// ============================================================
+// .dcutscene 序列化契约
+// ============================================================
+
+namespace {
+
+std::shared_ptr<CutsceneSequence> MakeSampleSequence() {
+    auto seq = std::make_shared<CutsceneSequence>("Intro", 8.5f);
+
+    auto cam = std::make_shared<CameraTrack>("MainCam");
+    CameraKeyframe ck;
+    ck.time = 0.0f;
+    ck.position = glm::vec3(1.0f, 2.0f, 3.0f);
+    ck.look_at = glm::vec3(0.0f, 0.0f, -1.0f);
+    ck.fov = 75.0f;
+    ck.interp = InterpMode::CubicBezier;
+    cam->AddKeyframe(ck);
+    seq->AddTrack(cam);
+
+    auto prop = std::make_shared<PropertyTrack>("Intensity");
+    prop->AddKeyframe(0.0f, 0.0f, InterpMode::Linear);
+    prop->AddKeyframe(4.0f, 1.0f, InterpMode::Step);
+    seq->AddTrack(prop);
+
+    auto evt = std::make_shared<EventTrack>("Events");
+    evt->AddEvent(3.0f, "PlayFX", "explosion");
+    seq->AddTrack(evt);
+
+    auto audio = std::make_shared<AudioTrack>("BGM");
+    audio->AddCue(0.0f, "bgm/theme.wav", 0.8f, true);
+    seq->AddTrack(audio);
+
+    auto video = std::make_shared<VideoTrack>("Cinematic");
+    VideoCue vc;
+    vc.time = 1.0f;
+    vc.video_path = "vid/intro.mp4";
+    vc.fullscreen = false;
+    vc.opacity = 0.5f;
+    vc.fade_in = 0.25f;
+    vc.fade_out = 0.75f;
+    video->AddCue(vc);
+    seq->AddTrack(video);
+
+    return seq;
+}
+
+const CutsceneTrack* FindTrack(const CutsceneSequence& seq, const std::string& name) {
+    for (const auto& t : seq.GetTracks()) {
+        if (t && t->GetName() == name) return t.get();
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+TEST(CutsceneSerializeTest, RoundTrip) {
+    auto src = MakeSampleSequence();
+    std::string text = SerializeSequence(*src);
+    ASSERT_FALSE(text.empty());
+
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence(text, diag);
+    ASSERT_NE(dst, nullptr);
+    EXPECT_TRUE(diag.ok);
+    EXPECT_EQ(diag.source_version, kCutsceneSchemaVersion);
+
+    EXPECT_EQ(dst->GetName(), "Intro");
+    EXPECT_FLOAT_EQ(dst->GetDuration(), 8.5f);
+    ASSERT_EQ(dst->GetTracks().size(), src->GetTracks().size());
+
+    const auto* cam = static_cast<const CameraTrack*>(FindTrack(*dst, "MainCam"));
+    ASSERT_NE(cam, nullptr);
+    ASSERT_EQ(cam->GetKeyframes().size(), 1u);
+    EXPECT_FLOAT_EQ(cam->GetKeyframes()[0].fov, 75.0f);
+    EXPECT_EQ(cam->GetKeyframes()[0].interp, InterpMode::CubicBezier);
+    EXPECT_FLOAT_EQ(cam->GetKeyframes()[0].position.z, 3.0f);
+
+    const auto* prop = static_cast<const PropertyTrack*>(FindTrack(*dst, "Intensity"));
+    ASSERT_NE(prop, nullptr);
+    ASSERT_EQ(prop->GetKeyframes().size(), 2u);
+    EXPECT_EQ(prop->GetKeyframes()[1].interp, InterpMode::Step);
+    EXPECT_FLOAT_EQ(prop->GetKeyframes()[1].value, 1.0f);
+
+    const auto* evt = static_cast<const EventTrack*>(FindTrack(*dst, "Events"));
+    ASSERT_NE(evt, nullptr);
+    ASSERT_EQ(evt->GetEvents().size(), 1u);
+    EXPECT_EQ(evt->GetEvents()[0].event_name, "PlayFX");
+    EXPECT_EQ(evt->GetEvents()[0].payload, "explosion");
+
+    const auto* audio = static_cast<const AudioTrack*>(FindTrack(*dst, "BGM"));
+    ASSERT_NE(audio, nullptr);
+    ASSERT_EQ(audio->GetCues().size(), 1u);
+    EXPECT_EQ(audio->GetCues()[0].audio_path, "bgm/theme.wav");
+    EXPECT_TRUE(audio->GetCues()[0].loop);
+
+    const auto* video = static_cast<const VideoTrack*>(FindTrack(*dst, "Cinematic"));
+    ASSERT_NE(video, nullptr);
+    ASSERT_EQ(video->GetCues().size(), 1u);
+    EXPECT_EQ(video->GetCues()[0].video_path, "vid/intro.mp4");
+    EXPECT_FALSE(video->GetCues()[0].fullscreen);
+    EXPECT_FLOAT_EQ(video->GetCues()[0].fade_out, 0.75f);
+}
+
+TEST(CutsceneSerializeTest, FileRoundTrip) {
+    auto src = MakeSampleSequence();
+    std::string path = std::string(::testing::TempDir()) + "dse_cutscene_roundtrip.dcutscene";
+
+    CutsceneDiagnostics save_diag;
+    ASSERT_TRUE(SaveSequenceToFile(*src, path, save_diag));
+
+    CutsceneDiagnostics load_diag;
+    auto dst = LoadSequenceFromFile(path, load_diag);
+    ASSERT_NE(dst, nullptr);
+    EXPECT_EQ(dst->GetTracks().size(), src->GetTracks().size());
+    std::remove(path.c_str());
+}
+
+TEST(CutsceneSerializeTest, ForwardCompatibleVersion) {
+    std::string json =
+        "{\"version\":999,\"sequence\":{\"name\":\"A\",\"duration\":2.0,\"tracks\":[]}}";
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence(json, diag);
+    ASSERT_NE(dst, nullptr);
+    EXPECT_EQ(diag.source_version, 999);
+    EXPECT_FALSE(diag.warnings.empty());
+    EXPECT_EQ(dst->GetName(), "A");
+}
+
+TEST(CutsceneSerializeTest, LegacyNoVersionMigration) {
+    std::string json = "{\"name\":\"A\",\"duration\":2.0,\"tracks\":[]}";
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence(json, diag);
+    ASSERT_NE(dst, nullptr);
+    EXPECT_EQ(diag.source_version, 0);
+    EXPECT_TRUE(diag.migrated);
+}
+
+TEST(CutsceneSerializeTest, UnknownTrackTypeWarns) {
+    std::string json =
+        "{\"version\":1,\"sequence\":{\"name\":\"A\",\"duration\":1.0,"
+        "\"tracks\":[{\"name\":\"X\",\"type\":\"Bogus\"}]}}";
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence(json, diag);
+    ASSERT_NE(dst, nullptr);
+    EXPECT_TRUE(dst->GetTracks().empty());
+    EXPECT_FALSE(diag.warnings.empty());
+}
+
+TEST(CutsceneSerializeTest, CorruptedJsonFails) {
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence("{not valid", diag);
+    EXPECT_EQ(dst, nullptr);
+    EXPECT_FALSE(diag.errors.empty());
+}
+
+TEST(CutsceneSerializeTest, NonObjectRootFails) {
+    CutsceneDiagnostics diag;
+    auto dst = DeserializeSequence("[1,2,3]", diag);
+    EXPECT_EQ(dst, nullptr);
+    EXPECT_FALSE(diag.errors.empty());
 }

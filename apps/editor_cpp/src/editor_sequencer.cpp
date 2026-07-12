@@ -9,6 +9,10 @@
 #include "editor_locale.h"
 #include "editor_sequencer.h"
 #include "editor_icons.h"
+#include "editor_console_panel.h"
+#include "engine/cutscene/cutscene_player.h"
+#include "engine/cutscene/cutscene_track.h"
+#include "engine/cutscene/cutscene_serialize.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -17,6 +21,20 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <memory>
+
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace dse::editor {
 
@@ -213,6 +231,190 @@ float SnapTime(float t) {
     return std::round(t / frame) * frame;
 }
 
+// ─── Versioned .dsequence project persistence ────────────────────────────
+
+constexpr int kSequencerSchemaVersion = 1;
+
+const char* TrackTypeName(TrackType type) {
+    switch (type) {
+        case TrackType::Camera:   return "Camera";
+        case TrackType::Property: return "Property";
+        case TrackType::Event:    return "Event";
+        case TrackType::Audio:    return "Audio";
+        case TrackType::Video:    return "Video";
+        case TrackType::Fade:     return "Fade";
+        case TrackType::Group:    return "Group";
+    }
+    return "Property";
+}
+
+TrackType TrackTypeFromName(const std::string& name) {
+    if (name == "Camera")   return TrackType::Camera;
+    if (name == "Event")    return TrackType::Event;
+    if (name == "Audio")    return TrackType::Audio;
+    if (name == "Video")    return TrackType::Video;
+    if (name == "Fade")     return TrackType::Fade;
+    if (name == "Group")    return TrackType::Group;
+    return TrackType::Property;
+}
+
+std::string SerializeProject(const SequencerState& state) {
+    rapidjson::Document doc;
+    doc.SetObject();
+    auto& a = doc.GetAllocator();
+    doc.AddMember("version", kSequencerSchemaVersion, a);
+    doc.AddMember("duration", state.duration, a);
+    doc.AddMember("frame_rate", state.frame_rate, a);
+
+    rapidjson::Value tracks(rapidjson::kArrayType);
+    for (const auto& tr : state.tracks) {
+        rapidjson::Value tj(rapidjson::kObjectType);
+        tj.AddMember("name", rapidjson::Value(tr.name.c_str(), a), a);
+        tj.AddMember("type", rapidjson::Value(TrackTypeName(tr.type), a), a);
+        tj.AddMember("muted", tr.muted, a);
+        tj.AddMember("locked", tr.locked, a);
+        tj.AddMember("target_entity", rapidjson::Value(tr.target_entity.c_str(), a), a);
+        tj.AddMember("property_path", rapidjson::Value(tr.property_path.c_str(), a), a);
+
+        rapidjson::Value clips(rapidjson::kArrayType);
+        for (const auto& c : tr.clips) {
+            rapidjson::Value cj(rapidjson::kObjectType);
+            cj.AddMember("name", rapidjson::Value(c.name.c_str(), a), a);
+            cj.AddMember("start_time", c.start_time, a);
+            cj.AddMember("end_time", c.end_time, a);
+            cj.AddMember("asset_path", rapidjson::Value(c.asset_path.c_str(), a), a);
+            cj.AddMember("volume", c.volume, a);
+            clips.PushBack(cj, a);
+        }
+        tj.AddMember("clips", clips, a);
+
+        rapidjson::Value kfs(rapidjson::kArrayType);
+        for (const auto& k : tr.keyframes) {
+            rapidjson::Value kj(rapidjson::kObjectType);
+            kj.AddMember("time", k.time, a);
+            kj.AddMember("value", k.value, a);
+            kj.AddMember("in_tangent", k.in_tangent, a);
+            kj.AddMember("out_tangent", k.out_tangent, a);
+            kfs.PushBack(kj, a);
+        }
+        tj.AddMember("keyframes", kfs, a);
+        tracks.PushBack(tj, a);
+    }
+    doc.AddMember("tracks", tracks, a);
+
+    rapidjson::StringBuffer buf;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+    doc.Accept(writer);
+    return std::string(buf.GetString(), buf.GetSize());
+}
+
+bool DeserializeProject(const std::string& json, SequencerState& state, std::string& err) {
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) { err = "JSON parse error"; return false; }
+    if (!doc.IsObject()) { err = "root is not an object"; return false; }
+
+    SequencerState loaded;
+    loaded.initialized = true;
+    if (doc.HasMember("duration") && doc["duration"].IsNumber())
+        loaded.duration = doc["duration"].GetFloat();
+    if (doc.HasMember("frame_rate") && doc["frame_rate"].IsNumber())
+        loaded.frame_rate = doc["frame_rate"].GetFloat();
+    loaded.view_end = loaded.duration;
+
+    if (doc.HasMember("tracks") && doc["tracks"].IsArray()) {
+        for (const auto& tj : doc["tracks"].GetArray()) {
+            if (!tj.IsObject()) continue;
+            SequencerTrack tr;
+            if (tj.HasMember("name") && tj["name"].IsString()) tr.name = tj["name"].GetString();
+            if (tj.HasMember("type") && tj["type"].IsString()) tr.type = TrackTypeFromName(tj["type"].GetString());
+            if (tj.HasMember("muted") && tj["muted"].IsBool()) tr.muted = tj["muted"].GetBool();
+            if (tj.HasMember("locked") && tj["locked"].IsBool()) tr.locked = tj["locked"].GetBool();
+            if (tj.HasMember("target_entity") && tj["target_entity"].IsString()) tr.target_entity = tj["target_entity"].GetString();
+            if (tj.HasMember("property_path") && tj["property_path"].IsString()) tr.property_path = tj["property_path"].GetString();
+
+            if (tj.HasMember("clips") && tj["clips"].IsArray()) {
+                for (const auto& cj : tj["clips"].GetArray()) {
+                    if (!cj.IsObject()) continue;
+                    SequencerClip c;
+                    if (cj.HasMember("name") && cj["name"].IsString()) c.name = cj["name"].GetString();
+                    if (cj.HasMember("start_time") && cj["start_time"].IsNumber()) c.start_time = cj["start_time"].GetFloat();
+                    if (cj.HasMember("end_time") && cj["end_time"].IsNumber()) c.end_time = cj["end_time"].GetFloat();
+                    if (cj.HasMember("asset_path") && cj["asset_path"].IsString()) c.asset_path = cj["asset_path"].GetString();
+                    if (cj.HasMember("volume") && cj["volume"].IsNumber()) c.volume = cj["volume"].GetFloat();
+                    tr.clips.push_back(c);
+                }
+            }
+            if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
+                for (const auto& kj : tj["keyframes"].GetArray()) {
+                    if (!kj.IsObject()) continue;
+                    SequencerKeyframe k;
+                    if (kj.HasMember("time") && kj["time"].IsNumber()) k.time = kj["time"].GetFloat();
+                    if (kj.HasMember("value") && kj["value"].IsNumber()) k.value = kj["value"].GetFloat();
+                    if (kj.HasMember("in_tangent") && kj["in_tangent"].IsNumber()) k.in_tangent = kj["in_tangent"].GetFloat();
+                    if (kj.HasMember("out_tangent") && kj["out_tangent"].IsNumber()) k.out_tangent = kj["out_tangent"].GetFloat();
+                    tr.keyframes.push_back(k);
+                }
+            }
+            loaded.tracks.push_back(std::move(tr));
+        }
+    }
+    state = std::move(loaded);
+    return true;
+}
+
+// 将编辑器项目烘焙为运行时 CutsceneSequence（打包消费的 .dcutscene）。
+// 映射是真实但有取舍：编辑器 Property 关键帧 -> PropertyTrack；Event/Audio/Video 片段
+// -> 对应运行时 cue/event；Camera 片段无位姿关键帧（此简化编辑器未编辑相机变换），
+// 生成空 CameraTrack；Fade/Group 无运行时对应，跳过。
+std::shared_ptr<cutscene::CutsceneSequence> BakeToRuntime(const SequencerState& state,
+                                                          const std::string& seq_name) {
+    auto seq = std::make_shared<cutscene::CutsceneSequence>(seq_name, state.duration);
+    for (const auto& tr : state.tracks) {
+        switch (tr.type) {
+            case TrackType::Camera: {
+                seq->AddTrack(std::make_shared<cutscene::CameraTrack>(tr.name));
+                break;
+            }
+            case TrackType::Property: {
+                auto pt = std::make_shared<cutscene::PropertyTrack>(tr.name);
+                for (const auto& k : tr.keyframes) pt->AddKeyframe(k.time, k.value);
+                seq->AddTrack(pt);
+                break;
+            }
+            case TrackType::Event: {
+                auto et = std::make_shared<cutscene::EventTrack>(tr.name);
+                for (const auto& c : tr.clips) et->AddEvent(c.start_time, c.name, c.asset_path);
+                seq->AddTrack(et);
+                break;
+            }
+            case TrackType::Audio: {
+                auto at = std::make_shared<cutscene::AudioTrack>(tr.name);
+                for (const auto& c : tr.clips) {
+                    at->AddCue(c.start_time, c.asset_path.empty() ? c.name : c.asset_path, c.volume, false);
+                }
+                seq->AddTrack(at);
+                break;
+            }
+            case TrackType::Video: {
+                auto vt = std::make_shared<cutscene::VideoTrack>(tr.name);
+                for (const auto& c : tr.clips) {
+                    cutscene::VideoCue cue;
+                    cue.time = c.start_time;
+                    cue.video_path = c.asset_path.empty() ? c.name : c.asset_path;
+                    vt->AddCue(cue);
+                }
+                seq->AddTrack(vt);
+                break;
+            }
+            case TrackType::Fade:
+            case TrackType::Group:
+                break;  // no runtime cutscene equivalent
+        }
+    }
+    return seq;
+}
+
 } // anonymous namespace
 
 void DrawSequencerPanel(EditorContext& /*ctx*/) {
@@ -246,6 +448,95 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
         ImGui::DragFloat("FPS", &state.frame_rate, 1.0f, 12.0f, 120.0f, "%.0f");
         ImGui::SameLine();
         ImGui::TextDisabled("| %.2f / %.2f s", state.current_time, state.duration);
+
+        // ─── Project asset persistence (.dsequence) + runtime bake (.dcutscene) ───
+        ImGui::SameLine();
+        if (ImGui::Button(T("Save"))) {
+            std::string save_path;
+#ifdef _WIN32
+            char filename[MAX_PATH] = "sequence.dsequence";
+            OPENFILENAMEA ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = "Sequence Project (*.dsequence)\0*.dsequence\0All Files\0*.*\0";
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.lpstrDefExt = "dsequence";
+            ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+            if (GetSaveFileNameA(&ofn)) save_path = filename;
+#else
+            save_path = "sequence.dsequence";
+#endif
+            if (!save_path.empty()) {
+                std::string json = SerializeProject(state);
+                std::ofstream out(save_path, std::ios::binary);
+                if (out.is_open()) {
+                    out.write(json.data(), static_cast<std::streamsize>(json.size()));
+                    EditorLog(LogLevel::Info, "[Sequencer] Saved project to " + save_path);
+                } else {
+                    EditorLog(LogLevel::Error, "[Sequencer] Cannot write " + save_path);
+                }
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(T("Load"))) {
+            std::string load_path;
+#ifdef _WIN32
+            char filename[MAX_PATH] = "";
+            OPENFILENAMEA ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = "Sequence Project (*.dsequence)\0*.dsequence\0All Files\0*.*\0";
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+            if (GetOpenFileNameA(&ofn)) load_path = filename;
+#else
+            load_path = "sequence.dsequence";
+#endif
+            if (!load_path.empty()) {
+                std::ifstream in(load_path, std::ios::binary);
+                if (in.is_open()) {
+                    std::stringstream ss; ss << in.rdbuf();
+                    std::string err;
+                    if (DeserializeProject(ss.str(), state, err)) {
+                        state.selected_track = -1;
+                        state.selected_clip = -1;
+                        EditorLog(LogLevel::Info, "[Sequencer] Loaded project from " + load_path);
+                    } else {
+                        EditorLog(LogLevel::Error, "[Sequencer] Load failed: " + err);
+                    }
+                } else {
+                    EditorLog(LogLevel::Error, "[Sequencer] Cannot read " + load_path);
+                }
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(T("Bake .dcutscene"))) {
+            std::string bake_path;
+#ifdef _WIN32
+            char filename[MAX_PATH] = "sequence.dcutscene";
+            OPENFILENAMEA ofn = {};
+            ofn.lStructSize = sizeof(ofn);
+            ofn.lpstrFilter = "Runtime Cutscene (*.dcutscene)\0*.dcutscene\0All Files\0*.*\0";
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.lpstrDefExt = "dcutscene";
+            ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+            if (GetSaveFileNameA(&ofn)) bake_path = filename;
+#else
+            bake_path = "sequence.dcutscene";
+#endif
+            if (!bake_path.empty()) {
+                auto seq = BakeToRuntime(state, "Sequence");
+                cutscene::CutsceneDiagnostics diag;
+                if (cutscene::SaveSequenceToFile(*seq, bake_path, diag)) {
+                    EditorLog(LogLevel::Info, "[Sequencer] Baked runtime cutscene to " + bake_path +
+                              " (" + std::to_string(seq->GetTracks().size()) + " tracks)");
+                } else {
+                    EditorLog(LogLevel::Error, "[Sequencer] Bake failed: " +
+                              (diag.errors.empty() ? std::string("unknown") : diag.errors.front()));
+                }
+            }
+        }
 
         // Add track button
         ImGui::SameLine(ImGui::GetContentRegionAvail().x - 100);
