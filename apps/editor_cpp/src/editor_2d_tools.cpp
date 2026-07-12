@@ -407,63 +407,65 @@ static AtlasPackerState s_atlas_state;
 AtlasPackerState& GetAtlasPackerState() { return s_atlas_state; }
 int AtlasEntryCount() { return static_cast<int>(s_atlas_state.current_atlas.entries.size()); }
 
-// Simple shelf-based bin packing
+// Shelf-based bin packing over the real pixel dimensions of each input image.
+// Image sizes are read from the file headers (stbi_info, no full decode). Images
+// that cannot be read are skipped rather than assigned a fabricated size.
 bool PackAtlas(AtlasAsset& atlas, const std::vector<std::string>& input_paths) {
     atlas.entries.clear();
     if (input_paths.empty()) return false;
 
-    // Simulated packing: assign 64x64 per entry in a grid
-    int entry_size = 64;
-    int padding = atlas.padding;
-    int cols = atlas.max_size / (entry_size + padding);
-    if (cols <= 0) cols = 1;
+    const int padding = std::max(0, atlas.padding);
+    const int max_size = std::max(64, atlas.max_size);
 
-    int x = padding, y = padding;
-    int row_height = 0;
-
-    for (size_t i = 0; i < input_paths.size(); ++i) {
-        AtlasEntry entry;
-        entry.source_path = input_paths[i];
-        entry.name = input_paths[i];
-        // Extract filename from path
-        size_t slash = entry.name.find_last_of("/\\");
-        if (slash != std::string::npos) entry.name = entry.name.substr(slash + 1);
-        size_t dot = entry.name.find_last_of('.');
-        if (dot != std::string::npos) entry.name = entry.name.substr(0, dot);
-
-        entry.w = entry_size;
-        entry.h = entry_size;
-
-        if (x + entry_size + padding > atlas.max_size) {
-            x = padding;
-            y += row_height + padding;
-            row_height = 0;
-        }
-
-        entry.x = x;
-        entry.y = y;
-        row_height = std::max(row_height, entry_size);
-        x += entry_size + padding;
-
-        atlas.entries.push_back(entry);
+    struct Item { std::string path, name; int w, h; };
+    std::vector<Item> items;
+    items.reserve(input_paths.size());
+    for (const auto& p : input_paths) {
+        int w = 0, h = 0, comp = 0;
+        if (!stbi_info(p.c_str(), &w, &h, &comp) || w <= 0 || h <= 0) continue;
+        std::string name = p;
+        size_t slash = name.find_last_of("/\\");
+        if (slash != std::string::npos) name = name.substr(slash + 1);
+        size_t dot = name.find_last_of('.');
+        if (dot != std::string::npos) name = name.substr(0, dot);
+        items.push_back({p, name, w, h});
     }
+    if (items.empty()) return false;
 
-    // Calculate final atlas dimensions
-    int max_x = 0, max_y = 0;
-    for (auto& e : atlas.entries) {
-        max_x = std::max(max_x, e.x + e.w + padding);
-        max_y = std::max(max_y, e.y + e.h + padding);
+    // Tallest first so shelves stay tight.
+    std::sort(items.begin(), items.end(),
+              [](const Item& a, const Item& b) { return a.h > b.h; });
+
+    int x = padding, y = padding, shelf_h = 0, used_w = 0, used_h = 0;
+    for (const auto& it : items) {
+        if (x + it.w + padding > max_size) {  // start a new shelf
+            x = padding;
+            y += shelf_h + padding;
+            shelf_h = 0;
+        }
+        AtlasEntry e;
+        e.source_path = it.path;
+        e.name = it.name;
+        e.w = it.w;
+        e.h = it.h;
+        e.x = x;
+        e.y = y;
+        atlas.entries.push_back(e);
+        x += it.w + padding;
+        shelf_h = std::max(shelf_h, it.h);
+        used_w = std::max(used_w, e.x + e.w + padding);
+        used_h = std::max(used_h, e.y + e.h + padding);
     }
 
     if (atlas.power_of_two) {
         auto next_pot = [](int v) -> int {
             int p = 1; while (p < v) p <<= 1; return p;
         };
-        atlas.width = next_pot(max_x);
-        atlas.height = next_pot(max_y);
+        atlas.width = next_pot(used_w);
+        atlas.height = next_pot(used_h);
     } else {
-        atlas.width = max_x;
-        atlas.height = max_y;
+        atlas.width = used_w;
+        atlas.height = used_h;
     }
 
     return true;
@@ -504,9 +506,30 @@ void DrawAtlasPackerPanel() {
 
     ImGui::Text("Input Sprites: %d", static_cast<int>(st.input_paths.size()));
     if (ImGui::Button("Add Sprite...")) {
-        // Placeholder: in practice, open file dialog
-        st.input_paths.push_back("sprite_" + std::to_string(st.input_paths.size()) + ".png");
-        st.pack_dirty = true;
+#ifdef _WIN32
+        char buf[8192] = "";
+        OPENFILENAMEA ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = "Images (*.png;*.jpg;*.jpeg;*.bmp;*.tga)\0*.png;*.jpg;*.jpeg;*.bmp;*.tga\0All Files\0*.*\0";
+        ofn.lpstrFile = buf;
+        ofn.nMaxFile = sizeof(buf);
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR | OFN_ALLOWMULTISELECT | OFN_EXPLORER;
+        if (GetOpenFileNameA(&ofn)) {
+            const char* p = buf;
+            std::string dir = p;
+            p += dir.size() + 1;
+            if (*p == '\0') {
+                st.input_paths.push_back(dir);  // single file: dir holds the full path
+            } else {
+                while (*p) {
+                    std::string file = p;
+                    p += file.size() + 1;
+                    st.input_paths.push_back(dir + "\\" + file);
+                }
+            }
+            st.pack_dirty = true;
+        }
+#endif
     }
     ImGui::SameLine();
     if (ImGui::Button("Clear All")) {
