@@ -398,6 +398,9 @@ struct MeshDrawItem {
     unsigned int metallic_roughness_map_handle = 0;
     unsigned int emissive_map_handle = 0;
     unsigned int occlusion_map_handle = 0;
+    // Shader Graph 自定义命名程序（RHI 着色器句柄）。非 0 时逐 draw 用它替换内建 ForwardShaded
+    // （仅 OpenGL：AssetManager::LoadShader 只有 GL 后端能从 GLSL 源码编出有效句柄，其余后端返回 0 → 回退内建）。
+    unsigned int custom_shader_program = 0;
     unsigned int blend_mode = 0;
     glm::mat4 model = glm::mat4(1.0f);
     glm::vec4 color = glm::vec4(1.0f);

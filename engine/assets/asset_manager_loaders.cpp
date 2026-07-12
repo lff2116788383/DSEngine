@@ -551,6 +551,14 @@ std::shared_ptr<ShaderAsset> AssetManager::LoadShader(const std::string& name, c
     return shader;
 }
 
+unsigned int AssetManager::GetShaderHandle(const std::string& name) const {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    auto it = shaders_.find(name);
+    if (it == shaders_.end()) return 0u;
+    if (auto shared = it->second.lock()) return shared->GetHandle();
+    return 0u;
+}
+
 std::shared_ptr<AudioClipAsset> AssetManager::LoadAudioClip(const std::string& path) {
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);

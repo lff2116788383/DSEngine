@@ -128,6 +128,7 @@ inline ShadedMaterial BatchToShadedMaterial(const MeshDrawItem& it) {
     m.receive_shadow = it.receive_shadow;
     m.shadow_strength = it.shadow_strength;
     m.foliage = it.foliage;
+    m.custom_program = it.custom_shader_program;
     return m;
 }
 

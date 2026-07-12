@@ -965,6 +965,19 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         } else if (resolved_shader_variant == "MESH_WATERCOLOR") {
             item.shading_mode = 5;  // Watercolor stylization
         }
+
+        // Shader Graph 自定义命名程序：非内建 variant 名 → AssetManager 已加载的自定义 GL 程序句柄。
+        // 命中则逐 draw 用该程序替换内建 ForwardShaded（见 MeshRenderer::DrawShaded）；未命中
+        //（未加载 / 非 GL 后端 GLSL 编译失败返回 0）保持 0 → 回退内建，行为不变。
+        if (resolved_shader_variant != "MESH_UNLIT" &&
+            resolved_shader_variant != "MESH_PBR" &&
+            resolved_shader_variant != "MESH_HALFLAMBERT" &&
+            resolved_shader_variant != "MESH_HALFLAMBERT_STATIC" &&
+            resolved_shader_variant != "MESH_TOON" &&
+            resolved_shader_variant != "MESH_WATERCOLOR" &&
+            resolved_shader_variant.find("TRANSPARENT") == std::string::npos) {
+            item.custom_shader_program = asset_manager.GetShaderHandle(resolved_shader_variant);
+        }
         
         // VS 骨骼蒙皮：local-space 顶点 + bone matrices SSBO
         uint64_t entity_bone_palette_key = 0;
@@ -1087,6 +1100,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         // GPU Instancing: 有 mesh_path + opaque → 检查合批（静态物体走 StaticBatch）
         // Skinned mesh 也可合批（bone SSBO + per-instance bone_offset）
         const bool can_instance = !item.morph_enabled
+            && item.custom_shader_program == 0  // 自定义 Shader Graph 程序不合批（实例化走内建程序）
             && !world.registry().all_of<ClothComponent>(entity)
             && !world.registry().all_of<MorphTargetComponent>(entity)
             && !world.registry().all_of<FragmentTagComponent>(entity)

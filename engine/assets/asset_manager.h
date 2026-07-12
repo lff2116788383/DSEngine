@@ -378,6 +378,12 @@ public:
      */
     std::shared_ptr<ShaderAsset> LoadShader(const std::string& name, const std::string& vert_src, const std::string& frag_src);
     /**
+     * @brief 按名字查询已加载的自定义着色器 RHI 句柄
+     * @param name 着色器名（LoadShader 时给定；Shader Graph 用作 MeshRendererComponent::shader_variant）
+     * @return RHI 着色器程序句柄；未加载 / 已释放返回 0
+     */
+    unsigned int GetShaderHandle(const std::string& name) const;
+    /**
      * @brief 执行 LoadAudioClip 操作
      * @param path 参数说明
      * @return std::shared_ptr<AudioClipAsset> 返回值说明

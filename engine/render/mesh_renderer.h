@@ -149,6 +149,10 @@ struct ShadedMaterial {
     // 从 device 全局渲染状态取 foliage_wind/foliage_push 喂入 forward_shaded_instanced.vert 施风；
     // 默认关 → 喂零 wind，VS 整段跳过，不回归既有非植被实例化调用。
     bool foliage = false;               ///< 顶点风弯曲（tree/grass）
+
+    // Shader Graph 自定义命名程序（RHI 句柄）。非 0 时 DrawShaded 用它替换内建 ForwardShaded 程序。
+    // 仅 OpenGL 有效（GLSL 源码只有 GL 后端能编译）；其余后端此值恒为 0 → 走内建。
+    unsigned int custom_program = 0;
 };
 
 /// 单方向光。

@@ -23,7 +23,11 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                               const std::vector<ShadedSpotLight>& spot_lights) {
     if (vertices.empty() || indices.empty()) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+    // Shader Graph 自定义命名程序（仅 GL 有效）优先；否则用内建 ForwardShaded。
+    // 逐 draw 绑定的 PerFrame UBO / 贴图槽与内建路径共用，自定义程序按同一约定取数据。
+    unsigned int program = material.custom_program != 0
+        ? material.custom_program
+        : device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
     if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›é«˜çº§ shading å†…å»ºç€è‰²å™¨
 
     EnsureResources(device);
@@ -247,7 +251,10 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
                                       const std::vector<ShadedSpotLight>& spot_lights) {
     if (index_count == 0 || !mesh.vertex_buffer || !mesh.index_buffer) return;
 
-    unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
+    // Shader Graph 自定义命名程序（仅 GL 有效）优先；否则用内建 ForwardShaded。
+    unsigned int program = material.custom_program != 0
+        ? material.custom_program
+        : device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
     if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›é«˜çº§ shading å†…å»ºç€è‰²å™¨
 
     EnsureResources(device);
