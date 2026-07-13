@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -155,5 +157,17 @@ void DrawLuaConsolePanel() {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "lua_console";
+    e.display_name = "Lua Console";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_CODE;
+    e.order = 100;
+    e.draw = [](dse::editor::EditorContext&) { DrawLuaConsolePanel(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

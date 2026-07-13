@@ -16,6 +16,9 @@
 #include <string>
 #include <vector>
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 
 namespace {
@@ -277,5 +280,25 @@ void DrawAnimRetargetPanel(EditorContext& /*ctx*/) {
         ImGui::TextWrapped("%s", s.bake_status.c_str());
     }
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "anim_retarget";
+    e.display_name = "Anim Retarget";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_ANIMATION;
+    e.order = 240;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("anim_retarget");
+        bool* open = self ? self->visible : nullptr;
+        ImGui::SetNextWindowSize(ImVec2(720, 560), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Anim Retarget", open)) {
+            DrawAnimRetargetPanel(ctx);
+        }
+        ImGui::End();
+    };
+    reg.Register(std::move(e));
+});
 
 }  // namespace dse::editor

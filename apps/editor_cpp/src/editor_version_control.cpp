@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -431,5 +433,17 @@ VersionControlTestState& GetVersionControlState() {
     s_test_state.active_tab = static_cast<VcTab>(g.active_tab);
     return s_test_state;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "git";
+    e.display_name = "Git";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_SOURCE_BRANCH;
+    e.order = 250;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawVersionControlPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

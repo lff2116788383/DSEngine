@@ -32,6 +32,8 @@
 #include <unordered_set>
 #include <filesystem>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -679,5 +681,18 @@ void BeginHierarchyRename(entt::entity entity, const std::string& current_name) 
     std::strncpy(s_rename_buf, current_name.c_str(), sizeof(s_rename_buf) - 1);
     s_rename_buf[sizeof(s_rename_buf) - 1] = '\0';
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "hierarchy";
+    e.display_name = "Hierarchy";
+    e.category = "Core";
+    e.menu_icon = MDI_ICON_FILE_TREE;
+    e.order = 10;
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawHierarchyPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

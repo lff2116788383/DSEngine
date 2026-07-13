@@ -43,6 +43,8 @@
 #include "editor_entity_snapshot.h"   // EntitySnapshot（单实体组件抓取/补回）
 #include "editor_csharp_panel.h"
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -1192,5 +1194,18 @@ void DrawInspectorPanel(EditorContext& context) {
     }
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "inspector";
+    e.display_name = "Inspector";
+    e.category = "Core";
+    e.menu_icon = MDI_ICON_INFORMATION;
+    e.order = 20;
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawInspectorPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

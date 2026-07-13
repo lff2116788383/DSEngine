@@ -22,6 +22,8 @@
 #include <memory>
 #include <string>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -302,5 +304,25 @@ void DrawCSharpPanel(EditorContext& ctx) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "No C# scripts attached");
     }
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "csharp";
+    e.display_name = "C# Scripts";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_CODE;
+    e.order = 120;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("csharp");
+        bool* open = self ? self->visible : nullptr;
+        ImGui::SetNextWindowSize(ImVec2(400, 450), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("C# Scripts", open)) {
+            DrawCSharpPanel(ctx);
+        }
+        ImGui::End();
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

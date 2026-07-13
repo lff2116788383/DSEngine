@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -421,5 +423,19 @@ TerrainSculptTestState& GetTerrainSculptState() {
             s_test_state.heightmap[z * TerrainPreviewState::kGridSize + x] = s_state.heightmap[z][x];
     return s_test_state;
 }
+
+// P0-6 self-registration: secondary draw sharing terrain_editor visibility.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "terrain_sculpt";
+    e.display_name = "Terrain Sculpt Preview";
+    e.category = "Tool";
+    e.order = 182;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* owner = dse::editor::PanelRegistry::Get().Find("terrain_editor");
+        if (owner && owner->visible && *owner->visible) DrawTerrainSculptPreview(ctx);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

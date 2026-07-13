@@ -15,6 +15,8 @@
 #include <cmath>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -399,5 +401,19 @@ WorldPartitionTestState& GetWorldPartitionState() {
     s_test_state.overlay_mode = static_cast<WpOverlayMode>(static_cast<int>(s_state.overlay));
     return s_test_state;
 }
+
+// P0-6 self-registration: secondary draw sharing streaming_debug visibility.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "world_partition";
+    e.display_name = "World Partition";
+    e.category = "Debug";
+    e.order = 221;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* owner = dse::editor::PanelRegistry::Get().Find("streaming_debug");
+        if (owner && owner->visible && *owner->visible) DrawWorldPartitionEditor(ctx);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

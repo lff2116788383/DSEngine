@@ -36,6 +36,8 @@
 #include <commdlg.h>
 #endif
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -837,5 +839,18 @@ void SequencerStop() {
     s_state.playing = false;
     s_state.current_time = 0.0f;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "sequencer";
+    e.display_name = "Sequencer";
+    e.category = "Core";
+    e.menu_icon = MDI_ICON_MOVIE_OPEN;
+    e.order = 280;
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawSequencerPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

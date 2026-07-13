@@ -14,6 +14,9 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 
 namespace {
@@ -145,5 +148,25 @@ void DrawStreamingDebugPanel(EditorContext& /*ctx*/) {
     ImGui::Separator();
     ImGui::TextDisabled("Tip: Use ForceLoadZone(id) / ForceUnloadZone(id) from Lua console to test.");
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "streaming_debug";
+    e.display_name = "Streaming Debug";
+    e.category = "Debug";
+    e.menu_icon = MDI_ICON_CLOUD_DOWNLOAD;
+    e.order = 220;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("streaming_debug");
+        bool* open = self ? self->visible : nullptr;
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Streaming Debug", open)) {
+            DrawStreamingDebugPanel(ctx);
+        }
+        ImGui::End();
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

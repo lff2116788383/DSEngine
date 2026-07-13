@@ -6,6 +6,8 @@
 #include "editor_icons.h"
 #include "editor_locale.h"
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -278,5 +280,19 @@ void DrawPreferencesPanel(bool* p_open) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "preferences";
+    e.display_name = "Preferences";
+    e.category = "Core";
+    e.order = 130;
+    e.draw = [](dse::editor::EditorContext&) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("preferences");
+        DrawPreferencesPanel(self ? self->visible : nullptr);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

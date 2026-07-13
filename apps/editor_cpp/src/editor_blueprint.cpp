@@ -24,6 +24,8 @@
 #include <rapidjson/prettywriter.h>
 #include <iostream>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor::bp {
 
 // ─── BpVarType helpers ─────────────────────────────────────────────────────
@@ -1264,5 +1266,25 @@ bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
     asset.file_path = path;
     return true;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "blueprint";
+    e.display_name = "Blueprint";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_SITEMAP;
+    e.order = 260;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("blueprint");
+        bool* open = self ? self->visible : nullptr;
+        ImGui::SetNextWindowSize(ImVec2(1100, 700), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Blueprint Editor", open)) {
+            dse::editor::bp::DrawBlueprintEditor(ctx);
+        }
+        ImGui::End();
+    };
+    reg.Register(std::move(e));
+});
 
 }  // namespace dse::editor::bp

@@ -1074,6 +1074,40 @@ void DrawTilePalettePanel(EditorContext& ctx) {
     DrawTilemapEditorPanel(ctx.registry, ctx.selected_entity);
 }
 
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "console";
+    e.display_name = "Console";
+    e.category = "Core";
+    e.menu_icon = MDI_ICON_CONSOLE;
+    e.order = 30;
+    e.default_visible = true;
+    e.draw = [](dse::editor::EditorContext&) { DrawConsolePanel(); };
+    reg.Register(std::move(e));
+});
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "animation";
+    e.display_name = "Animation";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_ANIMATION;
+    e.order = 60;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawAnimationPanel(ctx); };
+    reg.Register(std::move(e));
+});
+
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "tile_palette";
+    e.display_name = "Tile Palette";
+    e.category = "Tool";
+    e.order = 70;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawTilePalettePanel(ctx); };
+    reg.Register(std::move(e));
+});
+
 DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
     dse::editor::PanelEntry e;
     e.id = "project";

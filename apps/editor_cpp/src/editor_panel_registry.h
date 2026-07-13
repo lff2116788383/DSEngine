@@ -70,6 +70,13 @@ struct PanelEntry {
     std::string required_backend; // "", "opengl", "d3d11", "vulkan" — empty = any RHI
     std::string menu_icon;         // Optional MDI icon glyph prefix for the Window menu
     std::string test_id;           // Automation/test identifier (defaults to id if empty)
+
+    // Deterministic draw / menu ordering. Because panels self-register at
+    // static-init time (across translation units, in unspecified order), the
+    // registry sorts by this key in Finalize() so behaviour is stable
+    // regardless of link order. Lower draws first. Default keeps unspecified
+    // panels grouped after the explicitly-ordered ones but before viewports.
+    int order = 500;
 };
 
 /// Central registry for all editor panels.
@@ -89,6 +96,11 @@ public:
 
     /// Run (and clear) all deferred registrars queued by AddDeferredRegistrar.
     void RunDeferredRegistrars();
+
+    /// Stable-sort panels by their `order` key. Call once after all
+    /// registration (deferred + central) so draw / menu order is deterministic
+    /// regardless of static-init link order.
+    void Finalize();
 
     /// Get all registered panels (read-only).
     const std::vector<PanelEntry>& GetAll() const { return panels_; }

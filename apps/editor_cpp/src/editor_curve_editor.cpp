@@ -11,6 +11,9 @@
 #include <cmath>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 
 // NOTE: EditorCurve::Evaluate / EditorCurve::SortKeys / MakeDefaultCurve are
@@ -280,5 +283,34 @@ bool DrawCurveEditor(const char* label, CurveEditorState& state, const ImVec2& s
     ImGui::PopID();
     return modified;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "curve_editor";
+    e.display_name = "Curve Editor";
+    e.category = "Debug";
+    e.menu_icon = MDI_ICON_CHART_LINE;
+    e.order = 230;
+    e.draw = [](dse::editor::EditorContext&) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("curve_editor");
+        bool* open = self ? self->visible : nullptr;
+        ImGui::SetNextWindowSize(ImVec2(600, 350), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Curve Editor", open)) {
+            static dse::editor::CurveEditorState s_curve_state;
+            static bool s_curve_init = false;
+            if (!s_curve_init) {
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Alpha", 0.0f, 1.0f));
+                s_curve_state.curves.back().color = IM_COL32(100, 200, 255, 255);
+                s_curve_state.curves.push_back(dse::editor::MakeDefaultCurve("Scale", 1.0f, 0.0f));
+                s_curve_state.curves.back().color = IM_COL32(255, 150, 80, 255);
+                s_curve_init = true;
+            }
+            dse::editor::DrawCurveEditor("##main_curve", s_curve_state, ImVec2(0, 0));
+        }
+        ImGui::End();
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

@@ -32,6 +32,8 @@
 #include <commdlg.h>
 #endif
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -1798,5 +1800,17 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "shader_graph";
+    e.display_name = "Shader Graph";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_PALETTE;
+    e.order = 190;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawShaderGraphPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

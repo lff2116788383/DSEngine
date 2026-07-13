@@ -3,6 +3,8 @@
 #include "editor_undo.h"
 #include "imgui.h"
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 void DrawUndoHistoryPanel(bool* p_open) {
@@ -55,5 +57,19 @@ void DrawUndoHistoryPanel(bool* p_open) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "undo_history";
+    e.display_name = "Undo History";
+    e.category = "Debug";
+    e.order = 140;
+    e.draw = [](dse::editor::EditorContext&) {
+        auto* self = dse::editor::PanelRegistry::Get().Find("undo_history");
+        DrawUndoHistoryPanel(self ? self->visible : nullptr);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

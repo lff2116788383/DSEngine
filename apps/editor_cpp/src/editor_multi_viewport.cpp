@@ -10,6 +10,8 @@
 #include <cstring>
 #include <algorithm>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 MultiViewportState& GetMultiViewportState() {
@@ -169,5 +171,17 @@ void DrawMultiViewportConfigPanel() {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "multi_viewport";
+    e.display_name = "Multi Viewport";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_VIEW_MODULE;
+    e.order = 200;
+    e.draw = [](dse::editor::EditorContext&) { DrawMultiViewportConfigPanel(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

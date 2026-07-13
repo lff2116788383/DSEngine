@@ -15,6 +15,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 TerrainEditorState& GetTerrainEditorState() {
@@ -425,5 +427,17 @@ bool HandleTerrainViewportSculpt(entt::registry& registry,
     }
     return true;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "terrain_editor";
+    e.display_name = "Terrain Editor";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_TERRAIN;
+    e.order = 80;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawTerrainEditorPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

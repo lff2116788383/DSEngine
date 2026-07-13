@@ -16,6 +16,8 @@
 #include <filesystem>
 #include <unordered_map>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 std::string& GetPendingAssetOpenPath() {
@@ -420,5 +422,17 @@ void DrawAssetBrowserPanel() {
     ImGui::EndChild();
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "asset_browser";
+    e.display_name = "Asset Browser";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_FOLDER;
+    e.order = 150;
+    e.draw = [](dse::editor::EditorContext&) { DrawAssetBrowserPanel(); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

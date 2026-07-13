@@ -8,6 +8,9 @@
 
 #include "imgui.h"
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 namespace {
 
@@ -293,5 +296,17 @@ void DrawProfilerPanel(EditorContext& context) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "profiler";
+    e.display_name = "Profiler";
+    e.category = "Debug";
+    e.menu_icon = MDI_ICON_COG;
+    e.order = 50;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawProfilerPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

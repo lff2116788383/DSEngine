@@ -16,6 +16,8 @@
 #include <cmath>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -482,5 +484,17 @@ void  TimelineSelectForTest(int track, int keyframe) {
     s.selected_keyframe = keyframe;
 }
 #endif
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "animation_timeline";
+    e.display_name = "Animation Timeline";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_ANIMATION;
+    e.order = 160;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawAnimationTimelinePanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

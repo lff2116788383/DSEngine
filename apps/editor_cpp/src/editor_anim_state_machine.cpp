@@ -23,6 +23,9 @@
 #include <commdlg.h>
 #endif
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 
 namespace {
@@ -703,5 +706,17 @@ void DrawAnimStateMachinePanel(EditorContext& ctx) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "anim_state_machine";
+    e.display_name = "Anim State Machine";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_ANIMATION;
+    e.order = 210;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawAnimStateMachinePanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

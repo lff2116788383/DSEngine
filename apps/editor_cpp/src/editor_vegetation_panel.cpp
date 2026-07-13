@@ -16,6 +16,9 @@
 #include <cmath>
 #include <string>
 
+#include "editor_panel_registry.h"
+#include "editor_icons.h"
+
 namespace dse::editor {
 
 VegetationEditorState& GetVegetationEditorState() {
@@ -309,5 +312,17 @@ bool HandleVegetationViewportPaint(entt::registry& registry,
                          delta_time);
     return true;
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "vegetation_brush";
+    e.display_name = "Vegetation Brush";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_TERRAIN;
+    e.order = 90;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawVegetationEditorPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 }  // namespace dse::editor

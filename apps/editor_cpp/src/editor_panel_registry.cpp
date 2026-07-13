@@ -1,5 +1,6 @@
 #include "editor_panel_registry.h"
 
+#include <algorithm>
 #include <mutex>
 
 #include "imgui.h"
@@ -43,6 +44,13 @@ void PanelRegistry::RunDeferredRegistrars() {
         if (fn) fn(*this);
     }
     DeferredRegistrars().clear();
+}
+
+void PanelRegistry::Finalize() {
+    std::stable_sort(panels_.begin(), panels_.end(),
+                     [](const PanelEntry& a, const PanelEntry& b) {
+                         return a.order < b.order;
+                     });
 }
 
 PanelEntry* PanelRegistry::Find(const std::string& id) {

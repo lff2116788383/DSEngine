@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -553,5 +555,19 @@ void AnimClipStop() {
     s_state.playing = false;
     s_state.current_time = 0.0f;
 }
+
+// P0-6 self-registration: secondary draw sharing animation visibility.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "animation_clip";
+    e.display_name = "Animation Clip";
+    e.category = "Tool";
+    e.order = 61;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* owner = dse::editor::PanelRegistry::Get().Find("animation");
+        if (owner && owner->visible && *owner->visible) DrawAnimationClipEditor(ctx);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

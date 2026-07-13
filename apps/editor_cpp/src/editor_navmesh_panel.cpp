@@ -18,6 +18,8 @@
 #include <cstdio>
 #include <algorithm>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -312,5 +314,17 @@ void DrawNavMeshOverlay(EditorContext& ctx,
         }
     }
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "navmesh";
+    e.display_name = "NavMesh";
+    e.category = "Tool";
+    e.menu_icon = MDI_ICON_MAP_MARKER_PATH;
+    e.order = 170;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawNavMeshPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

@@ -19,6 +19,8 @@
 #include <string>
 #include <cmath>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -311,5 +313,19 @@ void DrawTerrainToolsOverlay(EditorContext& ctx,
     // This requires integration with the editor's viewport hit-testing
     // (raycast from mouse → terrain intersection → set brush_params.center).
 }
+
+// P0-6 self-registration: secondary draw sharing terrain_editor visibility.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "terrain_tools";
+    e.display_name = "Terrain Tools";
+    e.category = "Tool";
+    e.order = 181;
+    e.draw = [](dse::editor::EditorContext& ctx) {
+        auto* owner = dse::editor::PanelRegistry::Get().Find("terrain_editor");
+        if (owner && owner->visible && *owner->visible) DrawTerrainToolsPanel(ctx);
+    };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor

@@ -15,6 +15,8 @@
 #include <sstream>
 #include <unordered_map>
 
+#include "editor_panel_registry.h"
+
 namespace dse::editor {
 
 namespace {
@@ -299,5 +301,17 @@ void DrawLuaDebuggerPanel(EditorContext& ctx) {
 
     ImGui::End();
 }
+
+// P0-6 self-registration: data-driven; editor_app binds visibility by id.
+DSE_EDITOR_PANEL([](dse::editor::PanelRegistry& reg) {
+    dse::editor::PanelEntry e;
+    e.id = "lua_debugger";
+    e.display_name = "Lua Debugger";
+    e.category = "Debug";
+    e.menu_icon = MDI_ICON_CODE;
+    e.order = 110;
+    e.draw = [](dse::editor::EditorContext& ctx) { DrawLuaDebuggerPanel(ctx); };
+    reg.Register(std::move(e));
+});
 
 } // namespace dse::editor
