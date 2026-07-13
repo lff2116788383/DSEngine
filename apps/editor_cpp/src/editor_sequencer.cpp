@@ -4,10 +4,15 @@
  *
  * Supports track types: Camera, Actor/Property, Event, Audio, Video, Fade
  * Features: drag-to-trim clips, keyframe editing, track grouping, playback preview
+ *
+ * Data model + serialization logic live in editor_sequencer_core.{h,cpp}
+ * (no ImGui dependency, testable headlessly). This file holds only the
+ * ImGui drawing / interaction code.
  */
 
 #include "editor_locale.h"
 #include "editor_sequencer.h"
+#include "editor_sequencer_core.h"
 #include "editor_icons.h"
 #include "editor_console_panel.h"
 #include "engine/cutscene/cutscene_player.h"
@@ -16,18 +21,12 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
-#include <vector>
-#include <string>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
-#include <memory>
-
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
+#include <string>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -42,187 +41,24 @@ namespace dse::editor {
 
 namespace {
 
-// ─── Data model ─────────────────────────────────────────────────────────
-
-enum class TrackType { Camera, Property, Event, Audio, Video, Fade, Group };
-
-struct SequencerKeyframe {
-    float time = 0.0f;
-    float value = 0.0f;
-    float in_tangent = 0.0f;
-    float out_tangent = 0.0f;
-};
-
-struct SequencerClip {
-    std::string name;
-    float start_time = 0.0f;
-    float end_time = 1.0f;
-    ImU32 color = IM_COL32(80, 130, 200, 255);
-    bool selected = false;
-    // For audio/video clips
-    std::string asset_path;
-    float volume = 1.0f;
-};
-
-struct SequencerTrack {
-    std::string name;
-    TrackType type = TrackType::Property;
-    bool expanded = true;
-    bool locked = false;
-    bool muted = false;
-    bool visible = true;
-    float height = 28.0f;
-    std::vector<SequencerClip> clips;
-    std::vector<SequencerKeyframe> keyframes;
-    ImU32 track_color = IM_COL32(60, 60, 80, 255);
-    int group_index = -1; // parent group track index (-1 = top level)
-    // Property binding
-    std::string target_entity;
-    std::string property_path;
-};
-
-struct SequencerState {
-    std::vector<SequencerTrack> tracks;
-    float duration = 10.0f;
-    float current_time = 0.0f;
-    bool playing = false;
-    float playback_speed = 1.0f;
-    bool loop = false;
-    // View
-    float view_start = 0.0f;
-    float view_end = 10.0f;
-    float track_header_width = 200.0f;
-    int selected_track = -1;
-    int selected_clip = -1;
-    // Interaction
-    bool dragging_playhead = false;
-    bool dragging_clip = false;
-    int drag_clip_track = -1;
-    int drag_clip_index = -1;
-    float drag_offset = 0.0f;
-    // Snapping
-    bool snap_enabled = true;
-    float snap_interval = 0.5f;
-    float frame_rate = 30.0f;
-    bool initialized = false;
-};
-
 static SequencerState s_state;
 
-void InitDemoSequencer() {
+/// One-time init: replaces the old InitDemoSequencer().
+/// On first call, gives an *empty* timeline (no demo data).
+void EnsureInitialized() {
     if (s_state.initialized) return;
-    s_state.initialized = true;
-
-    // Camera track
-    SequencerTrack cam;
-    cam.name = "Main Camera";
-    cam.type = TrackType::Camera;
-    cam.track_color = IM_COL32(180, 80, 80, 255);
-    SequencerClip cam_clip;
-    cam_clip.name = "Dolly Shot";
-    cam_clip.start_time = 0.0f;
-    cam_clip.end_time = 4.0f;
-    cam_clip.color = IM_COL32(200, 100, 100, 200);
-    cam.clips.push_back(cam_clip);
-    cam_clip.name = "Pan Right";
-    cam_clip.start_time = 4.5f;
-    cam_clip.end_time = 7.0f;
-    cam.clips.push_back(cam_clip);
-    s_state.tracks.push_back(cam);
-
-    // Actor property tracks
-    SequencerTrack actor;
-    actor.name = "Hero - Transform";
-    actor.type = TrackType::Property;
-    actor.target_entity = "Hero";
-    actor.property_path = "Transform.Position";
-    actor.track_color = IM_COL32(80, 150, 80, 255);
-    SequencerClip move;
-    move.name = "Walk Forward";
-    move.start_time = 0.5f;
-    move.end_time = 5.0f;
-    move.color = IM_COL32(100, 200, 100, 200);
-    actor.clips.push_back(move);
-    actor.keyframes.push_back({0.5f, 0.0f, 0, 0.5f});
-    actor.keyframes.push_back({2.5f, 5.0f, 0.5f, 0.5f});
-    actor.keyframes.push_back({5.0f, 10.0f, 0.5f, 0});
-    s_state.tracks.push_back(actor);
-
-    // Event track
-    SequencerTrack events;
-    events.name = "Events";
-    events.type = TrackType::Event;
-    events.track_color = IM_COL32(200, 180, 60, 255);
-    SequencerClip evt1;
-    evt1.name = "PlayFX: Explosion";
-    evt1.start_time = 3.0f;
-    evt1.end_time = 3.1f;
-    evt1.color = IM_COL32(255, 200, 50, 200);
-    events.clips.push_back(evt1);
-    SequencerClip evt2;
-    evt2.name = "Trigger: Door Open";
-    evt2.start_time = 6.0f;
-    evt2.end_time = 6.1f;
-    evt2.color = IM_COL32(255, 200, 50, 200);
-    events.clips.push_back(evt2);
-    s_state.tracks.push_back(events);
-
-    // Audio track
-    SequencerTrack audio;
-    audio.name = "BGM";
-    audio.type = TrackType::Audio;
-    audio.track_color = IM_COL32(80, 120, 200, 255);
-    SequencerClip bgm;
-    bgm.name = "epic_theme.wav";
-    bgm.start_time = 0.0f;
-    bgm.end_time = 10.0f;
-    bgm.color = IM_COL32(80, 140, 220, 200);
-    bgm.volume = 0.8f;
-    audio.clips.push_back(bgm);
-    s_state.tracks.push_back(audio);
-
-    // Audio SFX track
-    SequencerTrack sfx;
-    sfx.name = "SFX";
-    sfx.type = TrackType::Audio;
-    sfx.track_color = IM_COL32(100, 100, 180, 255);
-    SequencerClip sfx1;
-    sfx1.name = "explosion.wav";
-    sfx1.start_time = 3.0f;
-    sfx1.end_time = 4.5f;
-    sfx1.color = IM_COL32(120, 120, 200, 200);
-    sfx.clips.push_back(sfx1);
-    s_state.tracks.push_back(sfx);
-
-    // Fade track
-    SequencerTrack fade;
-    fade.name = "Fade";
-    fade.type = TrackType::Fade;
-    fade.track_color = IM_COL32(60, 60, 60, 255);
-    SequencerClip fade_in;
-    fade_in.name = "Fade In";
-    fade_in.start_time = 0.0f;
-    fade_in.end_time = 1.0f;
-    fade_in.color = IM_COL32(40, 40, 40, 200);
-    fade.clips.push_back(fade_in);
-    SequencerClip fade_out;
-    fade_out.name = "Fade Out";
-    fade_out.start_time = 9.0f;
-    fade_out.end_time = 10.0f;
-    fade_out.color = IM_COL32(40, 40, 40, 200);
-    fade.clips.push_back(fade_out);
-    s_state.tracks.push_back(fade);
+    s_state = MakeEmptySequencerState();
 }
 
-const char* TrackTypeIcon(TrackType type) {
+const char* TrackTypeIcon(SeqTrackType type) {
     switch (type) {
-        case TrackType::Camera: return MDI_ICON_VIDEO;
-        case TrackType::Property: return MDI_ICON_CUBE_OUTLINE;
-        case TrackType::Event: return MDI_ICON_FLASH;
-        case TrackType::Audio: return MDI_ICON_VOLUME_HIGH;
-        case TrackType::Video: return MDI_ICON_MOVIE;
-        case TrackType::Fade: return MDI_ICON_GRADIENT_HORIZONTAL;
-        case TrackType::Group: return MDI_ICON_FOLDER;
+        case SeqTrackType::Camera: return MDI_ICON_VIDEO;
+        case SeqTrackType::Property: return MDI_ICON_CUBE_OUTLINE;
+        case SeqTrackType::Event: return MDI_ICON_FLASH;
+        case SeqTrackType::Audio: return MDI_ICON_VOLUME_HIGH;
+        case SeqTrackType::Video: return MDI_ICON_MOVIE;
+        case SeqTrackType::Fade: return MDI_ICON_GRADIENT_HORIZONTAL;
+        case SeqTrackType::Group: return MDI_ICON_FOLDER;
         default: return MDI_ICON_HELP;
     }
 }
@@ -233,194 +69,10 @@ float SnapTime(float t) {
     return std::round(t / frame) * frame;
 }
 
-// ─── Versioned .dsequence project persistence ────────────────────────────
-
-constexpr int kSequencerSchemaVersion = 1;
-
-const char* TrackTypeName(TrackType type) {
-    switch (type) {
-        case TrackType::Camera:   return "Camera";
-        case TrackType::Property: return "Property";
-        case TrackType::Event:    return "Event";
-        case TrackType::Audio:    return "Audio";
-        case TrackType::Video:    return "Video";
-        case TrackType::Fade:     return "Fade";
-        case TrackType::Group:    return "Group";
-    }
-    return "Property";
-}
-
-TrackType TrackTypeFromName(const std::string& name) {
-    if (name == "Camera")   return TrackType::Camera;
-    if (name == "Event")    return TrackType::Event;
-    if (name == "Audio")    return TrackType::Audio;
-    if (name == "Video")    return TrackType::Video;
-    if (name == "Fade")     return TrackType::Fade;
-    if (name == "Group")    return TrackType::Group;
-    return TrackType::Property;
-}
-
-std::string SerializeProject(const SequencerState& state) {
-    rapidjson::Document doc;
-    doc.SetObject();
-    auto& a = doc.GetAllocator();
-    doc.AddMember("version", kSequencerSchemaVersion, a);
-    doc.AddMember("duration", state.duration, a);
-    doc.AddMember("frame_rate", state.frame_rate, a);
-
-    rapidjson::Value tracks(rapidjson::kArrayType);
-    for (const auto& tr : state.tracks) {
-        rapidjson::Value tj(rapidjson::kObjectType);
-        tj.AddMember("name", rapidjson::Value(tr.name.c_str(), a), a);
-        tj.AddMember("type", rapidjson::Value(TrackTypeName(tr.type), a), a);
-        tj.AddMember("muted", tr.muted, a);
-        tj.AddMember("locked", tr.locked, a);
-        tj.AddMember("target_entity", rapidjson::Value(tr.target_entity.c_str(), a), a);
-        tj.AddMember("property_path", rapidjson::Value(tr.property_path.c_str(), a), a);
-
-        rapidjson::Value clips(rapidjson::kArrayType);
-        for (const auto& c : tr.clips) {
-            rapidjson::Value cj(rapidjson::kObjectType);
-            cj.AddMember("name", rapidjson::Value(c.name.c_str(), a), a);
-            cj.AddMember("start_time", c.start_time, a);
-            cj.AddMember("end_time", c.end_time, a);
-            cj.AddMember("asset_path", rapidjson::Value(c.asset_path.c_str(), a), a);
-            cj.AddMember("volume", c.volume, a);
-            clips.PushBack(cj, a);
-        }
-        tj.AddMember("clips", clips, a);
-
-        rapidjson::Value kfs(rapidjson::kArrayType);
-        for (const auto& k : tr.keyframes) {
-            rapidjson::Value kj(rapidjson::kObjectType);
-            kj.AddMember("time", k.time, a);
-            kj.AddMember("value", k.value, a);
-            kj.AddMember("in_tangent", k.in_tangent, a);
-            kj.AddMember("out_tangent", k.out_tangent, a);
-            kfs.PushBack(kj, a);
-        }
-        tj.AddMember("keyframes", kfs, a);
-        tracks.PushBack(tj, a);
-    }
-    doc.AddMember("tracks", tracks, a);
-
-    rapidjson::StringBuffer buf;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
-    doc.Accept(writer);
-    return std::string(buf.GetString(), buf.GetSize());
-}
-
-bool DeserializeProject(const std::string& json, SequencerState& state, std::string& err) {
-    rapidjson::Document doc;
-    doc.Parse(json.c_str());
-    if (doc.HasParseError()) { err = "JSON parse error"; return false; }
-    if (!doc.IsObject()) { err = "root is not an object"; return false; }
-
-    SequencerState loaded;
-    loaded.initialized = true;
-    if (doc.HasMember("duration") && doc["duration"].IsNumber())
-        loaded.duration = doc["duration"].GetFloat();
-    if (doc.HasMember("frame_rate") && doc["frame_rate"].IsNumber())
-        loaded.frame_rate = doc["frame_rate"].GetFloat();
-    loaded.view_end = loaded.duration;
-
-    if (doc.HasMember("tracks") && doc["tracks"].IsArray()) {
-        for (const auto& tj : doc["tracks"].GetArray()) {
-            if (!tj.IsObject()) continue;
-            SequencerTrack tr;
-            if (tj.HasMember("name") && tj["name"].IsString()) tr.name = tj["name"].GetString();
-            if (tj.HasMember("type") && tj["type"].IsString()) tr.type = TrackTypeFromName(tj["type"].GetString());
-            if (tj.HasMember("muted") && tj["muted"].IsBool()) tr.muted = tj["muted"].GetBool();
-            if (tj.HasMember("locked") && tj["locked"].IsBool()) tr.locked = tj["locked"].GetBool();
-            if (tj.HasMember("target_entity") && tj["target_entity"].IsString()) tr.target_entity = tj["target_entity"].GetString();
-            if (tj.HasMember("property_path") && tj["property_path"].IsString()) tr.property_path = tj["property_path"].GetString();
-
-            if (tj.HasMember("clips") && tj["clips"].IsArray()) {
-                for (const auto& cj : tj["clips"].GetArray()) {
-                    if (!cj.IsObject()) continue;
-                    SequencerClip c;
-                    if (cj.HasMember("name") && cj["name"].IsString()) c.name = cj["name"].GetString();
-                    if (cj.HasMember("start_time") && cj["start_time"].IsNumber()) c.start_time = cj["start_time"].GetFloat();
-                    if (cj.HasMember("end_time") && cj["end_time"].IsNumber()) c.end_time = cj["end_time"].GetFloat();
-                    if (cj.HasMember("asset_path") && cj["asset_path"].IsString()) c.asset_path = cj["asset_path"].GetString();
-                    if (cj.HasMember("volume") && cj["volume"].IsNumber()) c.volume = cj["volume"].GetFloat();
-                    tr.clips.push_back(c);
-                }
-            }
-            if (tj.HasMember("keyframes") && tj["keyframes"].IsArray()) {
-                for (const auto& kj : tj["keyframes"].GetArray()) {
-                    if (!kj.IsObject()) continue;
-                    SequencerKeyframe k;
-                    if (kj.HasMember("time") && kj["time"].IsNumber()) k.time = kj["time"].GetFloat();
-                    if (kj.HasMember("value") && kj["value"].IsNumber()) k.value = kj["value"].GetFloat();
-                    if (kj.HasMember("in_tangent") && kj["in_tangent"].IsNumber()) k.in_tangent = kj["in_tangent"].GetFloat();
-                    if (kj.HasMember("out_tangent") && kj["out_tangent"].IsNumber()) k.out_tangent = kj["out_tangent"].GetFloat();
-                    tr.keyframes.push_back(k);
-                }
-            }
-            loaded.tracks.push_back(std::move(tr));
-        }
-    }
-    state = std::move(loaded);
-    return true;
-}
-
-// 将编辑器项目烘焙为运行时 CutsceneSequence（打包消费的 .dcutscene）。
-// 映射是真实但有取舍：编辑器 Property 关键帧 -> PropertyTrack；Event/Audio/Video 片段
-// -> 对应运行时 cue/event；Camera 片段无位姿关键帧（此简化编辑器未编辑相机变换），
-// 生成空 CameraTrack；Fade/Group 无运行时对应，跳过。
-std::shared_ptr<cutscene::CutsceneSequence> BakeToRuntime(const SequencerState& state,
-                                                          const std::string& seq_name) {
-    auto seq = std::make_shared<cutscene::CutsceneSequence>(seq_name, state.duration);
-    for (const auto& tr : state.tracks) {
-        switch (tr.type) {
-            case TrackType::Camera: {
-                seq->AddTrack(std::make_shared<cutscene::CameraTrack>(tr.name));
-                break;
-            }
-            case TrackType::Property: {
-                auto pt = std::make_shared<cutscene::PropertyTrack>(tr.name);
-                for (const auto& k : tr.keyframes) pt->AddKeyframe(k.time, k.value);
-                seq->AddTrack(pt);
-                break;
-            }
-            case TrackType::Event: {
-                auto et = std::make_shared<cutscene::EventTrack>(tr.name);
-                for (const auto& c : tr.clips) et->AddEvent(c.start_time, c.name, c.asset_path);
-                seq->AddTrack(et);
-                break;
-            }
-            case TrackType::Audio: {
-                auto at = std::make_shared<cutscene::AudioTrack>(tr.name);
-                for (const auto& c : tr.clips) {
-                    at->AddCue(c.start_time, c.asset_path.empty() ? c.name : c.asset_path, c.volume, false);
-                }
-                seq->AddTrack(at);
-                break;
-            }
-            case TrackType::Video: {
-                auto vt = std::make_shared<cutscene::VideoTrack>(tr.name);
-                for (const auto& c : tr.clips) {
-                    cutscene::VideoCue cue;
-                    cue.time = c.start_time;
-                    cue.video_path = c.asset_path.empty() ? c.name : c.asset_path;
-                    vt->AddCue(cue);
-                }
-                seq->AddTrack(vt);
-                break;
-            }
-            case TrackType::Fade:
-            case TrackType::Group:
-                break;  // no runtime cutscene equivalent
-        }
-    }
-    return seq;
-}
-
 } // anonymous namespace
 
 void DrawSequencerPanel(EditorContext& /*ctx*/) {
-    InitDemoSequencer();
+    EnsureInitialized();
     auto& state = s_state;
 
     ImGui::Begin(MDI_ICON_MOVIE_OPEN "  Sequencer");
@@ -469,7 +121,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
             save_path = "sequence.dsequence";
 #endif
             if (!save_path.empty()) {
-                std::string json = SerializeProject(state);
+                std::string json = SerializeSequencerProject(state);
                 std::ofstream out(save_path, std::ios::binary);
                 if (out.is_open()) {
                     out.write(json.data(), static_cast<std::streamsize>(json.size()));
@@ -499,7 +151,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
                 if (in.is_open()) {
                     std::stringstream ss; ss << in.rdbuf();
                     std::string err;
-                    if (DeserializeProject(ss.str(), state, err)) {
+                    if (DeserializeSequencerProject(ss.str(), state, err)) {
                         state.selected_track = -1;
                         state.selected_clip = -1;
                         EditorLog(LogLevel::Info, "[Sequencer] Loaded project from " + load_path);
@@ -528,7 +180,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
             bake_path = "sequence.dcutscene";
 #endif
             if (!bake_path.empty()) {
-                auto seq = BakeToRuntime(state, "Sequence");
+                auto seq = BakeToRuntimeSequence(state, "Sequence");
                 cutscene::CutsceneDiagnostics diag;
                 if (cutscene::SaveSequenceToFile(*seq, bake_path, diag)) {
                     EditorLog(LogLevel::Info, "[Sequencer] Baked runtime cutscene to " + bake_path +
@@ -547,27 +199,27 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
         }
         if (ImGui::BeginPopup("AddTrackPopup")) {
             if (ImGui::MenuItem(T("Camera Track"))) {
-                SequencerTrack t; t.name = "New Camera"; t.type = TrackType::Camera;
+                SequencerTrack t; t.name = "New Camera"; t.type = SeqTrackType::Camera;
                 t.track_color = IM_COL32(180, 80, 80, 255);
                 state.tracks.push_back(t);
             }
             if (ImGui::MenuItem(T("Property Track"))) {
-                SequencerTrack t; t.name = "New Property"; t.type = TrackType::Property;
+                SequencerTrack t; t.name = "New Property"; t.type = SeqTrackType::Property;
                 t.track_color = IM_COL32(80, 150, 80, 255);
                 state.tracks.push_back(t);
             }
             if (ImGui::MenuItem(T("Event Track"))) {
-                SequencerTrack t; t.name = "New Events"; t.type = TrackType::Event;
+                SequencerTrack t; t.name = "New Events"; t.type = SeqTrackType::Event;
                 t.track_color = IM_COL32(200, 180, 60, 255);
                 state.tracks.push_back(t);
             }
             if (ImGui::MenuItem(T("Audio Track"))) {
-                SequencerTrack t; t.name = "New Audio"; t.type = TrackType::Audio;
+                SequencerTrack t; t.name = "New Audio"; t.type = SeqTrackType::Audio;
                 t.track_color = IM_COL32(80, 120, 200, 255);
                 state.tracks.push_back(t);
             }
             if (ImGui::MenuItem(T("Fade Track"))) {
-                SequencerTrack t; t.name = "New Fade"; t.type = TrackType::Fade;
+                SequencerTrack t; t.name = "New Fade"; t.type = SeqTrackType::Fade;
                 t.track_color = IM_COL32(60, 60, 60, 255);
                 state.tracks.push_back(t);
             }
@@ -813,7 +465,7 @@ void DrawSequencerPanel(EditorContext& /*ctx*/) {
 static SequencerTestState s_test_state;
 
 SequencerTestState& GetSequencerState() {
-    InitDemoSequencer();
+    EnsureInitialized();
     s_test_state.tracks.clear();
     for (auto& t : s_state.tracks) {
         SeqTestTrack tt;
@@ -827,7 +479,7 @@ SequencerTestState& GetSequencerState() {
 }
 
 void SequencerPlay() {
-    InitDemoSequencer();
+    EnsureInitialized();
     s_state.playing = true;
 }
 
