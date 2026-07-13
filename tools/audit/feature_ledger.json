@@ -436,7 +436,10 @@
         ]
       },
       "runtimeConsumers": [
-        "engine/platform/process.cpp"
+        "engine/platform/process.cpp",
+        "apps/editor_cpp/src/editor_agent_panel.cpp",
+        "apps/editor_cpp/src/editor_plugin_manager.cpp",
+        "apps/editor_cpp/src/editor_external_editor.cpp"
       ],
       "assetFormats": [],
       "requiredPlatforms": [],
@@ -460,8 +463,9 @@
         "productionReady": false
       },
       "blockers": [
-        "All synchronous shell-outs now go through the shared RunProcess (Git, Web/C# build, and the dse_cli dist packaging path: powershell/zip/tar/iscc + shell-free PATH lookup).",
-        "Three editor spawns remain outside the shared service because they need patterns the synchronous RunProcess does not model: editor_agent_panel (long-lived child with bidirectional stdin/stdout streaming), editor_plugin_manager (long-lived managed child kept for later kill), and editor_external_editor (detached GUI-editor launch). Closing these requires an async managed-process API (start->handle->kill + optional pipes)."
+        "All synchronous shell-outs go through the shared RunProcess (Git, Web/C# build, and the dse_cli dist packaging path: powershell/zip/tar/iscc + shell-free PATH lookup).",
+        "The shared engine/platform/process.{h,cpp} now also provides an async managed-process API (ManagedProcess: start->Running/WriteStdin/ReadStdout/TryGetExitCode/Wait/Kill/Pid, move-only with destructor tree-cleanup; Windows job-object + inherited-pipe + CREATE_NO_WINDOW, POSIX process-group + non-blocking pipes) plus a LaunchDetached() helper. All three remaining editor spawns were migrated onto it with explicit argument arrays (no shell string concat): editor_agent_panel (bidirectional stdin/stdout bridge, provider config passed as child env), editor_plugin_manager (managed child kept for later Kill()/PollStatus), and editor_external_editor (detached GUI-editor launch with a quote-aware arg tokenizer). Covered by 6 new ManagedProcess unit tests (stdout capture, bidirectional stdin/stdout, Kill, destructor cleanup, start-failure, detached error).",
+        "Cancellable long-running editor background-task acceptance and real agent-bridge/plugin end-to-end runs still require a live editor session and are not part of the headless gate."
       ]
     },
     {

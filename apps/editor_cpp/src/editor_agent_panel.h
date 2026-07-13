@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "editor_agent_protocol.h"
+#include "engine/platform/process.h"
 
 namespace dse::runtime {
 class EngineInstance;
@@ -134,15 +135,9 @@ private:
     std::mutex output_mutex_;
     std::deque<std::string> pending_output_;
 
-#ifdef _WIN32
-    void* proc_handle_ = nullptr;
-    void* stdin_write_ = nullptr;
-    void* stdout_read_ = nullptr;
-#else
-    int stdin_fd_ = -1;
-    int stdout_fd_ = -1;
-    pid_t bridge_pid_ = 0;
-#endif
+    // Long-lived agent_bridge child managed by the shared, shell-free process
+    // service (bidirectional stdin/stdout pipes; move-only handle).
+    platform::ManagedProcess bridge_proc_;
 };
 
 } // namespace dse::editor

@@ -5,12 +5,7 @@
 #include <filesystem>
 #include <memory>
 
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
+#include "engine/platform/process.h"
 
 namespace dse::editor {
 
@@ -42,12 +37,9 @@ struct PluginInstance {
     bool enabled = false;
     std::string last_error;
 
-#ifdef _WIN32
-    HANDLE process_handle = nullptr;
-    DWORD process_id = 0;
-#else
-    pid_t process_id = 0;
-#endif
+    /// Managed child process (shared, shell-free launcher; move-only).
+    platform::ManagedProcess process;
+    long process_id = 0;  ///< Native PID for display (0 when not running).
 };
 
 // ─── PluginManager ──────────────────────────────────────────────────────────

@@ -8,14 +8,7 @@
 #include <rapidjson/document.h>
 #include <imgui.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#include <tlhelp32.h>
-#else
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
+#include "engine/platform/process.h"
 
 namespace dse::editor {
 
@@ -108,50 +101,25 @@ bool PluginManager::StartPlugin(size_t index) {
         return false;
     }
 
-    std::string cmd_line;
+    // Launch via the shared managed-process service (explicit arg array, no shell
+    // string concatenation). The handle is kept for later PollStatus()/StopPlugin().
+    platform::ManagedProcessOptions opts;
     if (runtime_cmd.empty()) {
-        cmd_line = entry_path.string();
+        opts.process.executable = entry_path.string();
     } else {
-        cmd_line = runtime_cmd + " \"" + entry_path.string() + "\"";
+        opts.process.executable = runtime_cmd;
+        opts.process.args = {entry_path.string()};
     }
+    opts.process.working_dir = plugin.directory;
+    opts.no_window = true;
 
-#ifdef _WIN32
-    STARTUPINFOA si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi = {};
-
-    std::string working_dir = plugin.directory.string();
-    if (!CreateProcessA(nullptr, const_cast<char*>(cmd_line.c_str()),
-                        nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
-                        nullptr, working_dir.c_str(), &si, &pi)) {
-        plugin.last_error = "CreateProcess failed (error " + std::to_string(GetLastError()) + ")";
+    std::string err;
+    if (!plugin.process.Start(opts, &err)) {
+        plugin.last_error = err;
         plugin.state = PluginState::Error;
         return false;
     }
-
-    CloseHandle(pi.hThread);
-    plugin.process_handle = pi.hProcess;
-    plugin.process_id = pi.dwProcessId;
-#else
-    pid_t pid = fork();
-    if (pid == 0) {
-        // 子进程
-        chdir(plugin.directory.string().c_str());
-        if (runtime_cmd.empty()) {
-            execl(entry_path.string().c_str(), entry_path.filename().string().c_str(), nullptr);
-        } else {
-            execlp(runtime_cmd.c_str(), runtime_cmd.c_str(), entry_path.string().c_str(), nullptr);
-        }
-        _exit(1);
-    } else if (pid < 0) {
-        plugin.last_error = "fork() failed";
-        plugin.state = PluginState::Error;
-        return false;
-    }
-    plugin.process_id = pid;
-#endif
+    plugin.process_id = plugin.process.Pid();
 
     plugin.state = PluginState::Running;
     plugin.enabled = true;
@@ -172,20 +140,7 @@ void PluginManager::StopPlugin(size_t index) {
         return;
     }
 
-#ifdef _WIN32
-    if (plugin.process_handle) {
-        TerminateProcess(plugin.process_handle, 0);
-        WaitForSingleObject(plugin.process_handle, 2000);
-        CloseHandle(plugin.process_handle);
-        plugin.process_handle = nullptr;
-    }
-#else
-    if (plugin.process_id > 0) {
-        kill(plugin.process_id, SIGTERM);
-        int status;
-        waitpid(plugin.process_id, &status, WNOHANG);
-    }
-#endif
+    plugin.process.Kill();
 
     plugin.state = PluginState::Stopped;
     plugin.enabled = false;
@@ -206,34 +161,16 @@ void PluginManager::PollStatus() {
     for (auto& plugin : plugins_) {
         if (plugin.state != PluginState::Running) continue;
 
-#ifdef _WIN32
-        if (plugin.process_handle) {
-            DWORD exit_code = 0;
-            if (GetExitCodeProcess(plugin.process_handle, &exit_code)) {
-                if (exit_code != STILL_ACTIVE) {
-                    CloseHandle(plugin.process_handle);
-                    plugin.process_handle = nullptr;
-                    plugin.state = PluginState::Stopped;
-                    plugin.enabled = false;
-                    if (exit_code != 0) {
-                        plugin.state = PluginState::Error;
-                        plugin.last_error = "Exited with code " + std::to_string(exit_code);
-                    }
-                }
-            }
-        }
-#else
-        int status;
-        pid_t result = waitpid(plugin.process_id, &status, WNOHANG);
-        if (result > 0) {
+        int exit_code = 0;
+        if (plugin.process.TryGetExitCode(exit_code)) {
             plugin.state = PluginState::Stopped;
             plugin.enabled = false;
-            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+            plugin.process_id = 0;
+            if (exit_code != 0) {
                 plugin.state = PluginState::Error;
-                plugin.last_error = "Exited with code " + std::to_string(WEXITSTATUS(status));
+                plugin.last_error = "Exited with code " + std::to_string(exit_code);
             }
         }
-#endif
     }
 }
 

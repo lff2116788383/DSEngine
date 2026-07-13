@@ -9,12 +9,30 @@
 #include <algorithm>
 #include <cstdio>
 #include <string>
+#include <vector>
 
-#if defined(_WIN32)
-#include <Windows.h>
-#endif
+#include "engine/platform/process.h"
 
 namespace dse::editor {
+
+namespace {
+// Split a settings argument string into an argv, honoring double-quoted spans so
+// entries like  --goto "C:/a b/x.lua:10"  become a single argument.
+std::vector<std::string> SplitArgs(const std::string& s) {
+    std::vector<std::string> out;
+    std::string cur;
+    bool in_quotes = false;
+    bool have = false;
+    for (char c : s) {
+        if (c == '"') { in_quotes = !in_quotes; have = true; }
+        else if ((c == ' ' || c == '\t') && !in_quotes) {
+            if (have) { out.push_back(cur); cur.clear(); have = false; }
+        } else { cur.push_back(c); have = true; }
+    }
+    if (have) out.push_back(cur);
+    return out;
+}
+}  // namespace
 
 bool IsScriptExtension(const std::string& ext) {
     // Script/text file types that should open in external editor
@@ -62,35 +80,31 @@ bool OpenInExternalEditor(const std::string& file_path, int line) {
         }
     }
 
-#if defined(_WIN32)
-    // Convert to wide strings for ShellExecuteW
-    auto toWide = [](const std::string& s) -> std::wstring {
-        if (s.empty()) return {};
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
-        if (wlen <= 0) return {};
-        std::wstring ws(wlen - 1, L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, ws.data(), wlen);
-        return ws;
-    };
+    // Launch the configured editor as a detached GUI process via the shared,
+    // shell-free process service (no std::system / ShellExecute string concat).
+    platform::ProcessOptions opts;
+    opts.executable = settings.external_editor_path;
+    opts.args = SplitArgs(args);
 
-    std::wstring wide_exe = toWide(settings.external_editor_path);
-    std::wstring wide_args = toWide(args);
-
-    HINSTANCE hr = ShellExecuteW(nullptr, L"open", wide_exe.c_str(),
-        wide_args.c_str(), nullptr, SW_HIDE);
-    if (reinterpret_cast<intptr_t>(hr) > 32) {
+    std::string err;
+    if (platform::LaunchDetached(opts, &err)) {
         return true;
     }
 
-    // Fallback: open file with system default application
-    std::wstring wide_file = toWide(file_path);
-    ShellExecuteW(nullptr, L"open", wide_file.c_str(), nullptr, nullptr, SW_SHOW);
-    return true;
+    // Fallback: open the file with the OS default handler.
+    platform::ProcessOptions fallback;
+#if defined(_WIN32)
+    // "cmd /c start" resolves the default application for the file type.
+    fallback.executable = "cmd";
+    fallback.args = {"/c", "start", "", file_path};
+#elif defined(__APPLE__)
+    fallback.executable = "open";
+    fallback.args = {file_path};
 #else
-    // Linux/Mac: use system() as fallback
-    std::string cmd = settings.external_editor_path + " " + args + " &";
-    return system(cmd.c_str()) == 0;
+    fallback.executable = "xdg-open";
+    fallback.args = {file_path};
 #endif
+    return platform::LaunchDetached(fallback, nullptr);
 }
 
 } // namespace dse::editor

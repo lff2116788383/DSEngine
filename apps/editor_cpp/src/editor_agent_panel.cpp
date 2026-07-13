@@ -17,15 +17,7 @@
 #include <rapidjson/stringbuffer.h>
 
 #include "engine/runtime/engine_app.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#endif
+#include "engine/platform/process.h"
 
 namespace dse::editor {
 
@@ -92,13 +84,7 @@ void AgentPanel::ClearHistory() {
     checkpoint_path_.clear();
 
     if (bridge_running_) {
-        std::string line = BuildAgentClearHistory();
-#ifdef _WIN32
-        DWORD written;
-        WriteFile(stdin_write_, line.c_str(), static_cast<DWORD>(line.size()), &written, nullptr);
-#else
-        write(stdin_fd_, line.c_str(), line.size());
-#endif
+        bridge_proc_.WriteStdin(BuildAgentClearHistory());
     }
 }
 
@@ -171,140 +157,73 @@ void AgentPanel::StartBridge() {
         return;
     }
 
-    // Apply AIConfigManager settings as environment variables
+    // Collect AIConfigManager settings to pass as the child's environment. These
+    // are handed only to the bridge child (not leaked into the editor's own env).
+    std::vector<std::pair<std::string, std::string>> child_env;
     {
         auto& cfg = AIConfigManager::Instance().GetConfig();
         if (!cfg.providers.empty()) {
             const auto& p = cfg.providers[
                 std::clamp(cfg.current_provider_index, 0, (int)cfg.providers.size() - 1)];
-#ifdef _WIN32
-            if (!p.api_key.empty())
-                SetEnvironmentVariableA("OPENAI_API_KEY", p.api_key.c_str());
-            if (!p.base_url.empty())
-                SetEnvironmentVariableA("OPENAI_BASE_URL", p.base_url.c_str());
-            if (!p.model.empty())
-                SetEnvironmentVariableA("OPENAI_MODEL", p.model.c_str());
-            if (!p.proxy_url.empty())
-                SetEnvironmentVariableA("HTTP_PROXY", p.proxy_url.c_str());
-            SetEnvironmentVariableA("OPENAI_TEMPERATURE",
-                std::to_string(p.temperature).c_str());
-            SetEnvironmentVariableA("OPENAI_MAX_TOKENS",
-                std::to_string(p.max_tokens).c_str());
-            SetEnvironmentVariableA("OPENAI_TIMEOUT_MS",
-                std::to_string(p.timeout_ms).c_str());
-            if (!p.image_model.empty())
-                SetEnvironmentVariableA("OPENAI_IMAGE_MODEL", p.image_model.c_str());
-#else
-            if (!p.api_key.empty())
-                setenv("OPENAI_API_KEY", p.api_key.c_str(), 1);
-            if (!p.base_url.empty())
-                setenv("OPENAI_BASE_URL", p.base_url.c_str(), 1);
-            if (!p.model.empty())
-                setenv("OPENAI_MODEL", p.model.c_str(), 1);
-            if (!p.proxy_url.empty())
-                setenv("HTTP_PROXY", p.proxy_url.c_str(), 1);
-            setenv("OPENAI_TEMPERATURE",
-                std::to_string(p.temperature).c_str(), 1);
-            setenv("OPENAI_MAX_TOKENS",
-                std::to_string(p.max_tokens).c_str(), 1);
-            setenv("OPENAI_TIMEOUT_MS",
-                std::to_string(p.timeout_ms).c_str(), 1);
-            if (!p.image_model.empty())
-                setenv("OPENAI_IMAGE_MODEL", p.image_model.c_str(), 1);
-#endif
+            if (!p.api_key.empty())   child_env.emplace_back("OPENAI_API_KEY", p.api_key);
+            if (!p.base_url.empty())  child_env.emplace_back("OPENAI_BASE_URL", p.base_url);
+            if (!p.model.empty())     child_env.emplace_back("OPENAI_MODEL", p.model);
+            if (!p.proxy_url.empty()) child_env.emplace_back("HTTP_PROXY", p.proxy_url);
+            child_env.emplace_back("OPENAI_TEMPERATURE", std::to_string(p.temperature));
+            child_env.emplace_back("OPENAI_MAX_TOKENS", std::to_string(p.max_tokens));
+            child_env.emplace_back("OPENAI_TIMEOUT_MS", std::to_string(p.timeout_ms));
+            if (!p.image_model.empty()) child_env.emplace_back("OPENAI_IMAGE_MODEL", p.image_model);
         }
         if (!cfg.default_agent.empty())
             current_agent_id_ = cfg.default_agent;
     }
 
+    // Launch agent_bridge via the shared managed-process service with
+    // bidirectional stdin/stdout pipes (no shell string concat; provider env is
+    // passed to the child on top of the inherited parent environment).
+    platform::ManagedProcessOptions opts;
+    opts.process.env = std::move(child_env);
 #ifdef _WIN32
-    SECURITY_ATTRIBUTES sa{};
-    sa.nLength = sizeof(sa);
-    sa.bInheritHandle = TRUE;
+    opts.process.executable = "python";
+#else
+    opts.process.executable = "python3";
+#endif
+    opts.process.args = {bridge_path_};
+    opts.process.working_dir = std::filesystem::path(bridge_path_).parent_path();
+    opts.pipe_stdin = true;
+    opts.pipe_stdout = true;
+    opts.no_window = true;
 
-    HANDLE stdin_read = nullptr, stdin_write = nullptr;
-    HANDLE stdout_read = nullptr, stdout_write = nullptr;
-
-    CreatePipe(&stdin_read, &stdin_write, &sa, 0);
-    SetHandleInformation(stdin_write, HANDLE_FLAG_INHERIT, 0);
-
-    CreatePipe(&stdout_read, &stdout_write, &sa, 0);
-    SetHandleInformation(stdout_read, HANDLE_FLAG_INHERIT, 0);
-
-    STARTUPINFOA si{};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.hStdInput = stdin_read;
-    si.hStdOutput = stdout_write;
-    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-    si.wShowWindow = SW_HIDE;
-
-    PROCESS_INFORMATION pi{};
-    std::string cmd = "python \"" + bridge_path_ + "\"";
-    std::string work_dir = std::filesystem::path(bridge_path_).parent_path().string();
-
-    if (!CreateProcessA(nullptr, const_cast<char*>(cmd.c_str()),
-                        nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
-                        nullptr, work_dir.c_str(), &si, &pi)) {
+    std::string start_err;
+    if (!bridge_proc_.Start(opts, &start_err)) {
         messages_.push_back({MessageRole::System,
-            "Error: Failed to start agent_bridge.py (error " +
-            std::to_string(GetLastError()) + ")"});
-        CloseHandle(stdin_read);
-        CloseHandle(stdin_write);
-        CloseHandle(stdout_read);
-        CloseHandle(stdout_write);
+            "Error: Failed to start agent_bridge.py (" + start_err + ")"});
         return;
     }
-
-    CloseHandle(pi.hThread);
-    CloseHandle(stdin_read);
-    CloseHandle(stdout_write);
-
-    proc_handle_ = pi.hProcess;
-    stdin_write_ = stdin_write;
-    stdout_read_ = stdout_read;
-#else
-    int in_pipe[2], out_pipe[2];
-    pipe(in_pipe);
-    pipe(out_pipe);
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        close(in_pipe[1]);
-        close(out_pipe[0]);
-        dup2(in_pipe[0], STDIN_FILENO);
-        dup2(out_pipe[1], STDOUT_FILENO);
-        close(in_pipe[0]);
-        close(out_pipe[1]);
-
-        std::string dir = std::filesystem::path(bridge_path_).parent_path().string();
-        chdir(dir.c_str());
-        execlp("python3", "python3", bridge_path_.c_str(), nullptr);
-        execlp("python", "python", bridge_path_.c_str(), nullptr);
-        _exit(1);
-    }
-
-    close(in_pipe[0]);
-    close(out_pipe[1]);
-
-    stdin_fd_ = in_pipe[1];
-    stdout_fd_ = out_pipe[0];
-    bridge_pid_ = pid;
-
-    fcntl(stdout_fd_, F_SETFL, fcntl(stdout_fd_, F_GETFL) | O_NONBLOCK);
-#endif
 
     bridge_running_ = true;
     bridge_crashed_ = false;
 
     reader_thread_ = std::thread([this]() {
         std::string line_buf;
-        char ch;
+        std::string chunk;
         while (bridge_running_) {
-#ifdef _WIN32
-            DWORD bytes_read = 0;
-            BOOL ok = ReadFile(stdout_read_, &ch, 1, &bytes_read, nullptr);
-            if (!ok || bytes_read == 0) {
+            chunk.clear();
+            bool open = bridge_proc_.ReadStdout(chunk);
+            if (!chunk.empty()) {
+                for (char ch : chunk) {
+                    if (ch == '\n') {
+                        if (!line_buf.empty()) {
+                            std::lock_guard<std::mutex> lock(output_mutex_);
+                            pending_output_.push_back(std::move(line_buf));
+                            line_buf.clear();
+                        }
+                    } else {
+                        line_buf += ch;
+                    }
+                }
+            }
+            if (!open) {
                 if (bridge_running_) {
                     bridge_crashed_ = true;
                     std::lock_guard<std::mutex> lock(output_mutex_);
@@ -314,31 +233,8 @@ void AgentPanel::StartBridge() {
                 bridge_running_ = false;
                 break;
             }
-#else
-            ssize_t n = read(stdout_fd_, &ch, 1);
-            if (n <= 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    continue;
-                }
-                if (bridge_running_) {
-                    bridge_crashed_ = true;
-                    std::lock_guard<std::mutex> lock(output_mutex_);
-                    pending_output_.push_back(
-                        R"({"type":"status","message":"[Agent Bridge] Process exited unexpectedly."})");
-                }
-                bridge_running_ = false;
-                break;
-            }
-#endif
-            if (ch == '\n') {
-                if (!line_buf.empty()) {
-                    std::lock_guard<std::mutex> lock(output_mutex_);
-                    pending_output_.push_back(std::move(line_buf));
-                    line_buf.clear();
-                }
-            } else {
-                line_buf += ch;
+            if (chunk.empty()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
         }
     });
@@ -347,33 +243,14 @@ void AgentPanel::StartBridge() {
 }
 
 void AgentPanel::StopBridge() {
-    const bool was_running = bridge_running_;
     bridge_running_ = false;
-
-    if (was_running) {
-#ifdef _WIN32
-        if (proc_handle_) {
-            TerminateProcess(proc_handle_, 0);
-            WaitForSingleObject(proc_handle_, 2000);
-            CloseHandle(proc_handle_);
-            proc_handle_ = nullptr;
-        }
-        if (stdin_write_) { CloseHandle(stdin_write_); stdin_write_ = nullptr; }
-        if (stdout_read_) { CloseHandle(stdout_read_); stdout_read_ = nullptr; }
-#else
-        if (bridge_pid_ > 0) {
-            kill(bridge_pid_, SIGTERM);
-            waitpid(bridge_pid_, nullptr, 0);
-            bridge_pid_ = 0;
-        }
-        if (stdin_fd_ >= 0) { close(stdin_fd_); stdin_fd_ = -1; }
-        if (stdout_fd_ >= 0) { close(stdout_fd_); stdout_fd_ = -1; }
-#endif
-    }
 
     if (reader_thread_.joinable()) {
         reader_thread_.join();
     }
+
+    // Kill the tree (idempotent) and close pipes via the managed handle.
+    bridge_proc_.Kill();
 }
 
 // ─── Send message to bridge ─────────────────────────────────────────────────
@@ -384,12 +261,7 @@ void AgentPanel::SendToBridge(const std::string& json_line) {
         if (!bridge_running_) return;
     }
 
-#ifdef _WIN32
-    DWORD written;
-    WriteFile(stdin_write_, json_line.c_str(), static_cast<DWORD>(json_line.size()), &written, nullptr);
-#else
-    write(stdin_fd_, json_line.c_str(), json_line.size());
-#endif
+    bridge_proc_.WriteStdin(json_line);
 }
 
 void AgentPanel::CancelGeneration() {
