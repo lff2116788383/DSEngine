@@ -312,9 +312,7 @@ std::shared_ptr<CutsceneSequence> DeserializeSequence(const std::string& json,
     diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
                               ? doc["version"].GetInt()
                               : 0;
-    if (diag.source_version > kCutsceneSchemaVersion) {
-        diag.warnings.push_back("asset version newer than supported; reading best-effort");
-    }
+    dse::assets::NoteForwardCompat(diag.source_version, kCutsceneSchemaVersion, ".dcutscene", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("sequence") && doc["sequence"].IsObject()) {

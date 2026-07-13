@@ -282,13 +282,7 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
     bool has_version = doc.HasMember("version") && doc["version"].IsInt();
     if (has_version) source_version = doc["version"].GetInt();
     diag.source_version = source_version;
-    if (source_version > kBlueprintSchemaVersion) {
-        std::ostringstream os;
-        os << "file schema version " << source_version
-           << " is newer than supported " << kBlueprintSchemaVersion
-           << "; loading leniently (forward-compat)";
-        diag.warnings.push_back(os.str());
-    }
+    dse::assets::NoteForwardCompat(source_version, kBlueprintSchemaVersion, ".dbp", diag);
 
     if (doc.HasMember("name") && doc["name"].IsString()) asset.name = doc["name"].GetString();
     if (has_version) asset.version = source_version;

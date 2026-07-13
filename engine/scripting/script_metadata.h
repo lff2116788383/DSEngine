@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/core/asset_diagnostics.h"
 #include "engine/core/dse_export.h"
 
 namespace dse {
@@ -56,13 +57,8 @@ struct ScriptMetadata {
     std::vector<ScriptFieldMeta> fields;
 };
 
-struct ScriptMetaDiagnostics {
-    bool ok = false;
-    int source_version = 0;
-    bool migrated = false;
-    std::vector<std::string> errors;
-    std::vector<std::string> warnings;
-};
+/// 收敛到共享资产诊断 DTO（形状与其他内容格式一致）。
+using ScriptMetaDiagnostics = dse::assets::AssetDiagnostics;
 
 DSE_EXPORT const char* ScriptFieldTypeName(ScriptFieldType type);
 DSE_EXPORT ScriptFieldType ScriptFieldTypeFromName(const char* name);

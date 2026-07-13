@@ -15,6 +15,7 @@
 #include <rapidjson/document.h>
 
 #include "engine/cutscene/cutscene_player.h"
+#include "engine/core/asset_diagnostics.h"
 #include "engine/core/dse_export.h"
 
 namespace dse {
@@ -22,13 +23,8 @@ namespace cutscene {
 
 constexpr int kCutsceneSchemaVersion = 1;
 
-struct CutsceneDiagnostics {
-    bool ok = false;
-    int source_version = 0;
-    bool migrated = false;
-    std::vector<std::string> errors;
-    std::vector<std::string> warnings;
-};
+/// 收敛到共享资产诊断 DTO（形状与其他内容格式一致）。
+using CutsceneDiagnostics = dse::assets::AssetDiagnostics;
 
 DSE_EXPORT const char* InterpModeName(InterpMode mode);
 DSE_EXPORT InterpMode InterpModeFromName(const char* name);

@@ -217,10 +217,14 @@
         ".dscriptmeta"
       ],
       "requiredPlatforms": [],
-      "tests": [],
+      "tests": [
+        "tests/gtest/unit/engine/core/asset_diagnostics_test.cpp"
+      ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
+        "engine/core/asset_diagnostics.h",
+        "engine/core/asset_diagnostics.cpp",
         "apps/editor_cpp/src/editor_blueprint.h",
         "apps/editor_cpp/src/editor_shader_graph.h",
         "apps/editor_cpp/src/editor_sequencer.h"
@@ -228,15 +232,15 @@
       "acceptance": {
         "editorRoundTrip": false,
         "runtimeConsumption": false,
-        "explicitDiagnostics": false,
-        "versionedMigration": false,
+        "explicitDiagnostics": true,
+        "versionedMigration": true,
         "platformMatrix": "not_applicable",
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": "not_applicable",
         "productionReady": false
       },
       "blockers": [
-        "All six content formats (.dbp/.dasm/.dsequence/.dcutscene/.dshadergraph/.dscriptmeta) now have versioned contracts, but they are not yet unified behind a single shared DTO layer."
+        "All six content formats (.dbp/.dasm/.dsequence/.dcutscene/.dshadergraph/.dscriptmeta) now share the single dse::assets::AssetDiagnostics DTO and the common NoteForwardCompat() version policy (engine/core/asset_diagnostics.{h,cpp}), while each format still owns its own kXxxSchemaVersion. Remaining: unify each format's field-level read/write onto a shared reader helper (currently only diagnostics + forward-compat are shared)."
       ]
     },
     {

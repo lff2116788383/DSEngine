@@ -248,9 +248,7 @@ bool DeserializeShaderGraph(const std::string& json, ShaderGraphAsset& out,
     diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
                               ? doc["version"].GetInt()
                               : 0;
-    if (diag.source_version > kShaderGraphSchemaVersion) {
-        diag.warnings.push_back("asset version newer than supported; reading best-effort");
-    }
+    dse::assets::NoteForwardCompat(diag.source_version, kShaderGraphSchemaVersion, ".dshadergraph", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("graph") && doc["graph"].IsObject()) {

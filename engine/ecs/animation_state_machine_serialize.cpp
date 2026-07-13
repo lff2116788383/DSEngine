@@ -273,12 +273,7 @@ bool DeserializeStateMachine(AnimationStateMachine& sm, const std::string& json,
     }
 
     diag.source_version = (doc.HasMember("version") && doc["version"].IsInt()) ? doc["version"].GetInt() : 0;
-    if (diag.source_version > kAnimStateMachineSchemaVersion) {
-        std::ostringstream os;
-        os << "file version " << diag.source_version << " is newer than supported "
-           << kAnimStateMachineSchemaVersion << "; unknown fields ignored";
-        diag.warnings.push_back(os.str());
-    }
+    dse::assets::NoteForwardCompat(diag.source_version, kAnimStateMachineSchemaVersion, ".dasm", diag);
 
     // 版本 0（legacy，无 version 字段）视为直接内嵌状态机对象，无 state_machine 包裹。
     const rapidjson::Value* body = nullptr;

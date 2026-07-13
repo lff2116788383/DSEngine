@@ -171,9 +171,7 @@ bool DeserializeScriptMetadata(const std::string& json, ScriptMetadata& out,
     diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
                               ? doc["version"].GetInt()
                               : 0;
-    if (diag.source_version > kScriptMetaSchemaVersion) {
-        diag.warnings.push_back("asset version newer than supported; reading best-effort");
-    }
+    dse::assets::NoteForwardCompat(diag.source_version, kScriptMetaSchemaVersion, ".dscriptmeta", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("script") && doc["script"].IsObject()) {

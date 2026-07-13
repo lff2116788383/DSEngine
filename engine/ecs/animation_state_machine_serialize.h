@@ -17,6 +17,7 @@
 
 #include <rapidjson/document.h>
 
+#include "engine/core/asset_diagnostics.h"
 #include "engine/ecs/animation_state_machine.h"
 
 namespace dse {
@@ -25,14 +26,8 @@ namespace gameplay3d {
 /// 当前 .dasm schema 版本。缺失 version 字段的旧文件视为版本 0（legacy）。
 constexpr int kAnimStateMachineSchemaVersion = 1;
 
-/// 读/写 .dasm 的结构化诊断结果。不以静默回退掩盖问题。
-struct AsmDiagnostics {
-    bool ok = false;                    ///< 整体是否成功
-    int source_version = 0;             ///< 文件中声明（或推断）的版本
-    bool migrated = false;              ///< 是否发生了版本迁移
-    std::vector<std::string> errors;    ///< 致命错误（导致失败）
-    std::vector<std::string> warnings;  ///< 非致命（未知字段/前向版本）
-};
+/// 读/写 .dasm 的结构化诊断结果（收敛到共享 DTO）。不以静默回退掩盖问题。
+using AsmDiagnostics = dse::assets::AssetDiagnostics;
 
 /// 枚举 <-> 名称（读写共用，保证对称）。
 const char* AnimParamTypeName(AnimParamType type);
