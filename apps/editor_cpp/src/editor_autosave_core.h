@@ -10,7 +10,9 @@
 //
 // 实际文件系统读写、单例状态、ImGui 对话框留在 editor_autosave.cpp。
 
+#include <functional>
 #include <string>
+#include <system_error>
 
 namespace dse::editor {
 
@@ -40,5 +42,16 @@ AutoSaveDecision DecideAutoSave(bool in_play_mode,
                                double last_save_time,
                                double now,
                                double interval_sec);
+
+/// 原子写用的临时兄弟路径："<final_path>.tmp"。
+std::string MakeAtomicTempPath(const std::string& final_path);
+
+/// 原子地产出 final_path：先由 write_to(tmp) 写到同目录临时文件，成功后
+/// rename 覆盖 final_path。任一步失败都会删除临时文件并保持 final_path 不变，
+/// 因此写到一半崩溃不会损坏已有的自动保存文件。
+/// write_to 成功须返回 true（抛异常视为失败）。仅当 rename 成功时返回 true。
+bool AtomicWriteFile(const std::string& final_path,
+                     const std::function<bool(const std::string& tmp_path)>& write_to,
+                     std::error_code& ec);
 
 }  // namespace dse::editor

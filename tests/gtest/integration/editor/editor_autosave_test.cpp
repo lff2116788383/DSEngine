@@ -10,11 +10,43 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <system_error>
 
 #include "editor_autosave_core.h"
 
 using namespace dse::editor;
+
+namespace {
+
+std::string ReadAll(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+}
+
+// 每个用例独立的临时工作目录，析构时清理。
+struct TempDir {
+    std::filesystem::path dir;
+    TempDir() {
+        dir = std::filesystem::temp_directory_path() /
+              ("dse_autosave_test_" +
+               std::to_string(reinterpret_cast<uintptr_t>(this)));
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+    }
+    ~TempDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(dir, ec);
+    }
+    std::string file(const std::string& name) const {
+        return (dir / name).string();
+    }
+};
+
+}  // namespace
 
 // ── SanitizeSceneName ────────────────────────────────────────────────────────
 
@@ -110,4 +142,111 @@ TEST(AutoSaveCore, DecideAppliesIntervalClamp) {
     // 距上次 11s >= 钳后的 10s → 保存
     EXPECT_EQ(DecideAutoSave(false, true, true, 100.0, 111.0, /*interval*/1.0),
               AutoSaveDecision::Save);
+}
+
+// ── AtomicWriteFile ──────────────────────────────────────────────────────────
+
+TEST(AutoSaveCore, AtomicTempPathIsSibling) {
+    EXPECT_EQ(MakeAtomicTempPath("/a/b/scene.dscene"), "/a/b/scene.dscene.tmp");
+}
+
+TEST(AutoSaveCore, AtomicWriteCreatesFileAndLeavesNoTemp) {
+    TempDir tmp;
+    std::string target = tmp.file("Level.autosave.dscene");
+
+    std::error_code ec;
+    bool ok = AtomicWriteFile(
+        target,
+        [](const std::string& p) {
+            std::ofstream(p, std::ios::binary) << "hello-scene";
+            return true;
+        },
+        ec);
+
+    EXPECT_TRUE(ok);
+    EXPECT_FALSE(ec);
+    EXPECT_TRUE(std::filesystem::exists(target));
+    EXPECT_EQ(ReadAll(target), "hello-scene");
+    // rename 成功后临时兄弟文件不应残留。
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(target)));
+}
+
+TEST(AutoSaveCore, AtomicWriteReplacesExistingContent) {
+    TempDir tmp;
+    std::string target = tmp.file("Level.autosave.dscene");
+    std::ofstream(target, std::ios::binary) << "OLD-GOOD-CONTENT";
+
+    std::error_code ec;
+    bool ok = AtomicWriteFile(
+        target,
+        [](const std::string& p) {
+            std::ofstream(p, std::ios::binary) << "NEW";
+            return true;
+        },
+        ec);
+
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ReadAll(target), "NEW");
+}
+
+TEST(AutoSaveCore, AtomicWriteFailurePreservesExistingFile) {
+    TempDir tmp;
+    std::string target = tmp.file("Level.autosave.dscene");
+    std::ofstream(target, std::ios::binary) << "OLD-GOOD-CONTENT";
+
+    std::error_code ec;
+    bool ok = AtomicWriteFile(
+        target,
+        [](const std::string& p) {
+            // 模拟写到一半失败：产出临时文件后报告失败。
+            std::ofstream(p, std::ios::binary) << "HALF-WRITTEN-GARBAGE";
+            return false;
+        },
+        ec);
+
+    EXPECT_FALSE(ok);
+    EXPECT_TRUE(ec);
+    // 已有文件必须原样保留，不能被截断/覆盖。
+    EXPECT_EQ(ReadAll(target), "OLD-GOOD-CONTENT");
+    // 失败路径必须清掉临时文件。
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(target)));
+}
+
+TEST(AutoSaveCore, AtomicWriteThrowIsTreatedAsFailure) {
+    TempDir tmp;
+    std::string target = tmp.file("Level.autosave.dscene");
+    std::ofstream(target, std::ios::binary) << "OLD-GOOD-CONTENT";
+
+    std::error_code ec;
+    bool ok = AtomicWriteFile(
+        target,
+        [](const std::string& p) -> bool {
+            std::ofstream(p, std::ios::binary) << "PARTIAL";
+            throw std::runtime_error("save blew up");
+        },
+        ec);
+
+    EXPECT_FALSE(ok);
+    EXPECT_EQ(ReadAll(target), "OLD-GOOD-CONTENT");
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(target)));
+}
+
+TEST(AutoSaveCore, AtomicWriteClearsStaleTempFromPriorAbort) {
+    TempDir tmp;
+    std::string target = tmp.file("Level.autosave.dscene");
+    // 上次中断遗留的陈旧临时文件。
+    std::ofstream(MakeAtomicTempPath(target), std::ios::binary) << "STALE";
+
+    std::error_code ec;
+    bool ok = AtomicWriteFile(
+        target,
+        [](const std::string& p) {
+            std::ofstream(p, std::ios::binary) << "FRESH";
+            return true;
+        },
+        ec);
+
+    EXPECT_TRUE(ok);
+    EXPECT_EQ(ReadAll(target), "FRESH");
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(target)));
 }

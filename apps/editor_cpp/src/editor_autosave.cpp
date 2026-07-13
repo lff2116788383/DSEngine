@@ -174,10 +174,19 @@ void AutoSaveManager::Tick(entt::registry& registry) {
         last_save_time_ = now;
         return;
     }
-    try {
-        SaveScene(registry, path);
-    } catch (const std::exception& e) {
-        EditorLog(LogLevel::Error, std::string("Auto-save failed: ") + e.what());
+    // 原子写：先写到 <path>.tmp，成功后 rename 覆盖。写到一半崩溃只会留下临时
+    // 文件，已有的自动保存文件保持完整，恢复时不会读到截断/损坏的场景。
+    std::error_code write_ec;
+    bool wrote = AtomicWriteFile(
+        path,
+        [&](const std::string& tmp) {
+            SaveScene(registry, tmp);
+            return true;
+        },
+        write_ec);
+    if (!wrote) {
+        EditorLog(LogLevel::Error,
+                  "Auto-save failed (atomic write): " + write_ec.message());
         last_save_time_ = now;
         return;
     }

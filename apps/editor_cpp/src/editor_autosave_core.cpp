@@ -41,4 +41,39 @@ AutoSaveDecision DecideAutoSave(bool in_play_mode,
     return AutoSaveDecision::Save;
 }
 
+std::string MakeAtomicTempPath(const std::string& final_path) {
+    return final_path + ".tmp";
+}
+
+bool AtomicWriteFile(const std::string& final_path,
+                     const std::function<bool(const std::string&)>& write_to,
+                     std::error_code& ec) {
+    ec.clear();
+    const std::string tmp = MakeAtomicTempPath(final_path);
+
+    // 清掉上次中断留下的陈旧临时文件，避免误当作有效内容。
+    std::error_code cleanup_ec;
+    std::filesystem::remove(tmp, cleanup_ec);
+
+    bool ok = false;
+    try {
+        ok = write_to ? write_to(tmp) : false;
+    } catch (...) {
+        ok = false;
+    }
+    if (!ok) {
+        std::filesystem::remove(tmp, cleanup_ec);
+        ec = std::make_error_code(std::errc::io_error);
+        return false;
+    }
+
+    // rename 覆盖：同卷下为原子替换（MSVC 走 ReplaceIfExists，POSIX 走 rename(2)）。
+    std::filesystem::rename(tmp, final_path, ec);
+    if (ec) {
+        std::filesystem::remove(tmp, cleanup_ec);
+        return false;
+    }
+    return true;
+}
+
 }  // namespace dse::editor
