@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include <entt/entt.hpp>
 
 namespace dse::editor {
@@ -40,7 +41,9 @@ private:
     std::string GetAutoSaveDir() const;
 
     bool recovery_pending_ = false;
-    std::string recovery_path_;
+    std::string recovery_path_;                 ///< Currently-selected recovery file.
+    std::vector<std::string> recovery_files_;   ///< Every recoverable document found.
+    size_t recovery_index_ = 0;                 ///< Index into recovery_files_.
 
     double last_save_time_ = 0.0;
     std::string last_save_time_str_;

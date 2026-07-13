@@ -14,6 +14,7 @@
 #include <fstream>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include "editor_autosave_core.h"
 
@@ -249,4 +250,70 @@ TEST(AutoSaveCore, AtomicWriteClearsStaleTempFromPriorAbort) {
     EXPECT_TRUE(ok);
     EXPECT_EQ(ReadAll(target), "FRESH");
     EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(target)));
+}
+
+// ── AtomicWriteAll（多文档事务）────────────────────────────────────────────
+
+TEST(AutoSaveCore, AtomicWriteAllCommitsEveryDocument) {
+    TempDir tmp;
+    std::string a = tmp.file("A.autosave.dscene");
+    std::string b = tmp.file("B.autosave.dscene");
+    std::string c = tmp.file("C.autosave.dscene");
+
+    std::vector<AutoSaveItem> items = {
+        {a, [](const std::string& p) { std::ofstream(p, std::ios::binary) << "AAA"; return true; }},
+        {b, [](const std::string& p) { std::ofstream(p, std::ios::binary) << "BBB"; return true; }},
+        {c, [](const std::string& p) { std::ofstream(p, std::ios::binary) << "CCC"; return true; }},
+    };
+
+    std::error_code ec;
+    EXPECT_TRUE(AtomicWriteAll(items, ec));
+    EXPECT_EQ(ReadAll(a), "AAA");
+    EXPECT_EQ(ReadAll(b), "BBB");
+    EXPECT_EQ(ReadAll(c), "CCC");
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(a)));
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(b)));
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(c)));
+}
+
+TEST(AutoSaveCore, AtomicWriteAllRollsBackOnAnyFailure) {
+    TempDir tmp;
+    std::string a = tmp.file("A.autosave.dscene");
+    std::string b = tmp.file("B.autosave.dscene");
+    // b 已有完整旧内容，事务失败后必须原样保留、不被提交覆盖。
+    std::ofstream(b, std::ios::binary) << "OLD-B";
+
+    std::vector<AutoSaveItem> items = {
+        {a, [](const std::string& p) { std::ofstream(p, std::ios::binary) << "AAA"; return true; }},
+        {b, [](const std::string&) { return false; }},  // 第二项写入失败
+    };
+
+    std::error_code ec;
+    EXPECT_FALSE(AtomicWriteAll(items, ec));
+    // 全有或全无：没有任何最终文件被改动，也不残留临时文件。
+    EXPECT_FALSE(std::filesystem::exists(a));
+    EXPECT_EQ(ReadAll(b), "OLD-B");
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(a)));
+    EXPECT_FALSE(std::filesystem::exists(MakeAtomicTempPath(b)));
+}
+
+// ── CollectRecoveryFiles（枚举全部可恢复文档）──────────────────────────────
+
+TEST(AutoSaveCore, CollectRecoveryFilesFindsAllSorted) {
+    TempDir tmp;
+    std::ofstream(tmp.file("A.autosave.dscene"), std::ios::binary) << "a";
+    std::ofstream(tmp.file("B.autosave.dscene"), std::ios::binary) << "b";
+    std::ofstream(tmp.file("regular.dscene"), std::ios::binary) << "x";  // 非恢复文件
+    std::ofstream(tmp.file("notes.txt"), std::ios::binary) << "y";
+
+    auto files = CollectRecoveryFiles(tmp.dir.string());
+    ASSERT_EQ(files.size(), 2u);
+    EXPECT_NE(files[0].find("A.autosave.dscene"), std::string::npos);
+    EXPECT_NE(files[1].find("B.autosave.dscene"), std::string::npos);
+}
+
+TEST(AutoSaveCore, CollectRecoveryFilesMissingDirIsEmpty) {
+    auto files = CollectRecoveryFiles(
+        (std::filesystem::temp_directory_path() / "dse_no_such_dir_zzz").string());
+    EXPECT_TRUE(files.empty());
 }

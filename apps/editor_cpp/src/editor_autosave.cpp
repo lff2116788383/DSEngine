@@ -58,24 +58,19 @@ std::string AutoSaveManager::GetAutoSavePath() const {
 bool AutoSaveManager::CheckRecovery() {
     recovery_pending_ = false;
     recovery_path_.clear();
+    recovery_files_.clear();
+    recovery_index_ = 0;
 
-    std::string autosave_dir = GetAutoSaveDir();
-    // 用 error_code 变体：自动保存目录不可访问/迭代中被删除时降级为「无可恢复」，
-    // 不让文件系统异常在编辑器启动期抛出导致崩溃。
-    std::error_code ec;
-    if (!std::filesystem::exists(autosave_dir, ec) || ec) return false;
+    // 枚举「所有」可恢复文档（不是只取第一个），以便逐个呈现/恢复/丢弃。
+    recovery_files_ = CollectRecoveryFiles(GetAutoSaveDir());
+    if (recovery_files_.empty()) return false;
 
-    for (std::filesystem::directory_iterator it(autosave_dir, ec), end; it != end; it.increment(ec)) {
-        if (ec) break;
-        const auto& entry = *it;
-        if (IsAutoSaveRecoveryFile(entry.path().string())) {
-            recovery_path_ = entry.path().string();
-            recovery_pending_ = true;
-            EditorLog(LogLevel::Warning, "Auto-save recovery file found: " + recovery_path_);
-            return true;
-        }
-    }
-    return false;
+    recovery_path_ = recovery_files_.front();
+    recovery_pending_ = true;
+    EditorLog(LogLevel::Warning,
+              "Auto-save recovery: " + std::to_string(recovery_files_.size()) +
+                  " recoverable document(s) found; first: " + recovery_path_);
+    return true;
 }
 
 bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
@@ -87,10 +82,25 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(480, 0));
 
+    // 处理完当前项后推进到下一个可恢复文档；列表清空时结束恢复流程。
+    auto advance = [this]() {
+        ++recovery_index_;
+        if (recovery_index_ < recovery_files_.size()) {
+            recovery_path_ = recovery_files_[recovery_index_];
+        } else {
+            recovery_pending_ = false;
+        }
+        ImGui::CloseCurrentPopup();
+    };
+
     if (ImGui::BeginPopupModal("AutoSave Recovery", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped(
-            "Detected an auto-save file from a previous session. "
+            "Detected auto-save file(s) from a previous session. "
             "This may indicate the editor exited unexpectedly.");
+        if (recovery_files_.size() > 1) {
+            ImGui::Text("Document %zu of %zu",
+                        recovery_index_ + 1, recovery_files_.size());
+        }
         ImGui::Spacing();
 
         // Show file info（best-effort：取文件时间失败不应让对话框抛异常）
@@ -127,16 +137,14 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
                 EditorLog(LogLevel::Error,
                     std::string("Auto-save recovery failed (corrupt file?): ") + e.what());
             }
-            recovery_pending_ = false;
-            ImGui::CloseCurrentPopup();
+            advance();
         }
         ImGui::SameLine();
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
             std::error_code ec;
             std::filesystem::remove(recovery_path_, ec);
-            EditorLog(LogLevel::Info, "Discarded auto-save file");
-            recovery_pending_ = false;
-            ImGui::CloseCurrentPopup();
+            EditorLog(LogLevel::Info, "Discarded auto-save file: " + recovery_path_);
+            advance();
         }
         ImGui::EndPopup();
     }

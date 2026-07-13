@@ -898,9 +898,9 @@
         "productionReady": false
       },
       "blockers": [
-        "Autosave is not an atomic multi-scene or multi-asset transaction.",
+        "Autosave now has a shared all-or-nothing multi-document transaction primitive (editor_autosave_core AtomicWriteAll: stage every document to a sibling .tmp, then commit renames only if all writes succeeded; any write failure rolls back and leaves every final file untouched, so no partial/truncated content is ever committed). Wiring the editor to snapshot and autosave every open scene tab through it (multi-registry) still requires per-tab registry accessors and is not yet done.",
         "POSIX signal handler is now async-signal-safe (sigaction + write + _exit + backtrace_symbols_fd); verified to compile on Windows.",
-        "Recovery does not present and validate every recoverable document."
+        "Recovery now enumerates every recoverable document (CollectRecoveryFiles) and the recovery dialog steps through and recovers/discards each one (document N of M); per-document schema validation before load and live multi-tab recovery acceptance still pending."
       ]
     },
     {

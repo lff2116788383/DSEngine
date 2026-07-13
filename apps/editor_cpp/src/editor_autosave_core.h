@@ -13,6 +13,8 @@
 #include <functional>
 #include <string>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace dse::editor {
 
@@ -53,5 +55,23 @@ std::string MakeAtomicTempPath(const std::string& final_path);
 bool AtomicWriteFile(const std::string& final_path,
                      const std::function<bool(const std::string& tmp_path)>& write_to,
                      std::error_code& ec);
+
+/// 多文档自动保存的一次写入项：目标路径 + 写临时文件的回调。
+struct AutoSaveItem {
+    std::string final_path;
+    std::function<bool(const std::string& tmp_path)> write_to;
+};
+
+/// 原子地产出一批 final_path（多场景/多资产事务）：分两阶段提交——先把每一项
+/// 都写到各自的同目录临时文件（<path>.tmp），只有在「全部」写入都成功后，才逐个
+/// rename 覆盖到最终路径。任一项写入失败则删除所有临时文件、不改动任何最终文件，
+/// 因此绝不会提交半截/损坏的内容（全有或全无的写入阶段）。
+/// 说明：跨文件的 rename 阶段本身无法做到完全原子回滚，但由于所有内容在任何
+/// rename 之前都已完整落盘校验，提交阶段不会写出被截断的文档。
+bool AtomicWriteAll(const std::vector<AutoSaveItem>& items, std::error_code& ec);
+
+/// 枚举目录下「所有」可恢复的自动保存文件（不是只取第一个），按路径排序返回。
+/// 目录不存在/迭代出错时降级为空列表，不抛异常。
+std::vector<std::string> CollectRecoveryFiles(const std::string& dir);
 
 }  // namespace dse::editor
