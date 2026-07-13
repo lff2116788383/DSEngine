@@ -201,7 +201,7 @@
     {
       "id": "shared-asset-contracts",
       "stage": 2,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "UI-independent DTOs, versioning, migration, diagnostics, and round-trip rules shared by editor and runtime content systems.",
       "editor": {
         "panelIds": [],
@@ -236,8 +236,7 @@
         "productionReady": false
       },
       "blockers": [
-        "No common asset-contract layer covers the planned content formats.",
-        "Migration and unknown-field policies are not defined consistently."
+        "All six content formats (.dbp/.dasm/.dsequence/.dcutscene/.dshadergraph/.dscriptmeta) now have versioned contracts, but they are not yet unified behind a single shared DTO layer."
       ]
     },
     {
@@ -282,9 +281,8 @@
         "productionReady": false
       },
       "blockers": [
-        "The editor DTO is still translated into a separate runtime DTO.",
-        "Debugger contains simulated production behavior.",
-        "Full node registry and lifecycle event acceptance are not covered."
+        "Compiler now covers arithmetic/comparison/logical/Vec3/array nodes with unknown data nodes routed through CallExtern (no silent 0.0f fallback), and bytecode validation exists; full node-registry parity and lifecycle-event acceptance are still not covered.",
+        "No end-to-end editor->save->reopen->compile->runtime->execute acceptance, and hot-reload state migration is unimplemented."
       ]
     },
     {
@@ -417,8 +415,7 @@
         "productionReady": true
       },
       "blockers": [
-        "editor_app.cpp still centrally registers every concrete panel.",
-        "The documented DSE_EDITOR_PANEL macro is not implemented."
+        "editor_core_isolation integration acceptance is not yet a required gate."
       ]
     },
     {
@@ -557,7 +554,7 @@
     {
       "id": "shader-graph",
       "stage": 10,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "Versioned shader graph editing, validation, cross-backend compilation, material integration, and runtime loading.",
       "editor": {
         "panelIds": [
@@ -597,14 +594,14 @@
         "productionReady": false
       },
       "blockers": [
-        "Graph schema is editor-local and contains placeholder behavior.",
-        "Generated shader and material assets are not consumed consistently across all backends."
+        "Shared versioned .dshadergraph schema and backend-agnostic codegen exist for GLSL (OpenGL) and HLSL (D3D11); Vulkan/SPIR-V and Web profiles are not yet generated.",
+        "Editor GLSL path is not yet unified onto the shared codegen, and there is no preview or screenshot-golden acceptance."
       ]
     },
     {
       "id": "animation-state-machine",
       "stage": 11,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "Persistent state machine and blend tree editing connected to runtime animator evaluation.",
       "editor": {
         "panelIds": [
@@ -641,14 +638,14 @@
         "productionReady": false
       },
       "blockers": [
-        "Editor mutates an in-memory component model without a versioned asset round trip.",
-        "Scene reload does not preserve the authored state machine."
+        "Versioned .dasm serialization, scene round-trip, and shared runtime transition selection/trigger consumption exist with unit and integration tests.",
+        "No full end-to-end acceptance with a real .danim asset and GPU skinned pose, and editor-preview vs runtime frame-equivalence is unverified."
       ]
     },
     {
       "id": "sequencer-and-cutscene",
       "stage": 12,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "Persistent timeline, tracks, bindings, preview, cutscene runtime playback, and packaging.",
       "editor": {
         "panelIds": [
@@ -686,14 +683,14 @@
         "productionReady": false
       },
       "blockers": [
-        "Editor initializes demo timeline data instead of a versioned project asset.",
+        "Runtime playback (play/pause/resume/stop/seek/play-rate, loop, and reverse clamp/finish semantics) is covered by unit tests; the editor still initializes demo timeline data instead of loading a versioned .dsequence project asset.",
         "Editor bindings are not connected to packaged runtime cutscene assets."
       ]
     },
     {
       "id": "csharp",
       "stage": 13,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "C# project generation, build, diagnostics, component binding, lifecycle, hot reload, persistence, and packaging.",
       "editor": {
         "panelIds": [
@@ -735,8 +732,8 @@
         "productionReady": false
       },
       "blockers": [
-        "Editor build and reload paths contain fake success and placeholder behavior.",
-        "Managed scripts are not persistently bound per entity with complete lifecycle coverage."
+        "Real dotnet build runs via the shared process service, hot reload uses a collectible AssemblyLoadContext for real unload/reload/rediscovery, and CSharpScriptComponent scene+prefab persistence is tested.",
+        "No real hostfxr/CoreCLR end-to-end that runs an actual game assembly (Play-mode init, ALC unload reclamation, clean-machine SDK run)."
       ]
     },
     {
