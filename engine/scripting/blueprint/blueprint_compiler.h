@@ -99,4 +99,16 @@ CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset);
 CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph,
                                       const std::vector<BpVariable>& variables);
 
+/// 当前字节码格式版本。CompileToByteCode 写入 CompiledBlueprint::version 的补充
+/// 校验；VM 在执行前应拒绝更高的字节码版本。
+constexpr int kBytecodeVersion = 1;
+
+/// 静态校验单个编译函数：确保每条指令引用的寄存器/常量索引在界内，且相对跳转
+/// 目标落在 [0, code.size()] 内。失败时填充 error 并返回 false。
+/// 与 VM 的运行时越界保护互补，作为编译期安全网。
+bool ValidateCompiledFunction(const CompiledFunction& fn, std::string& error);
+
+/// 校验整个编译蓝图（版本 + 每个函数）。失败时填充 error。
+bool ValidateCompiledBlueprint(const CompiledBlueprint& bp, std::string& error);
+
 }  // namespace dse::bp

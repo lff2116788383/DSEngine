@@ -285,6 +285,21 @@ private:
             if (!node.outputs.empty()) pin_to_reg_[node.outputs[0].id] = 0;
             return 0;
         }
+
+        // Break Vec3 produces up to three scalar outputs; map each output pin to
+        // its own register via a VecComponent extract from the single Vec3 input.
+        if (node.name == "Break Vec3") {
+            int vec_reg = GetInputReg(node, 0);
+            int first = -1;
+            for (size_t i = 0; i < node.outputs.size() && i < 3; ++i) {
+                int comp_reg = regs_.Alloc();
+                Emit(OpCode::VecComponent, (uint8_t)comp_reg, (uint8_t)vec_reg, (uint8_t)i);
+                pin_to_reg_[node.outputs[i].id] = comp_reg;
+                if (i == 0) first = comp_reg;
+            }
+            return first >= 0 ? first : regs_.Alloc();
+        }
+
         int result_reg = regs_.Alloc();
 
         if (node.name == "Add") {
@@ -305,6 +320,71 @@ private:
             Emit(OpCode::Abs, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0));
         } else if (node.name == "Negate") {
             Emit(OpCode::Neg, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0));
+        } else if (node.name == "Modulo") {
+            Emit(OpCode::Mod, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Power") {
+            Emit(OpCode::Pow, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Atan2") {
+            Emit(OpCode::Atan2, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Min") {
+            Emit(OpCode::Min, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Max") {
+            Emit(OpCode::Max, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Clamp") {
+            int val = GetInputReg(node, 0), lo = GetInputReg(node, 1), hi = GetInputReg(node, 2);
+            Emit(OpCode::Clamp, (uint8_t)result_reg, (uint8_t)val, (uint8_t)lo, (int16_t)hi);
+        } else if (node.name == "Lerp") {
+            // result = A + (B - A) * Alpha, composed from scalar opcodes.
+            int a = GetInputReg(node, 0), b = GetInputReg(node, 1), t = GetInputReg(node, 2);
+            int diff = regs_.Alloc();
+            Emit(OpCode::Sub, (uint8_t)diff, (uint8_t)b, (uint8_t)a);
+            int scaled = regs_.Alloc();
+            Emit(OpCode::Mul, (uint8_t)scaled, (uint8_t)diff, (uint8_t)t);
+            Emit(OpCode::Add, (uint8_t)result_reg, (uint8_t)a, (uint8_t)scaled);
+        } else if (node.name == "Equal") {
+            Emit(OpCode::CmpEq, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Not Equal") {
+            Emit(OpCode::CmpEq, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+            Emit(OpCode::Not, (uint8_t)result_reg, (uint8_t)result_reg);
+        } else if (node.name == "Less Than") {
+            Emit(OpCode::CmpLt, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Greater Than") {
+            // A > B  ==  B < A
+            int a = GetInputReg(node, 0), b = GetInputReg(node, 1);
+            Emit(OpCode::CmpLt, (uint8_t)result_reg, (uint8_t)b, (uint8_t)a);
+        } else if (node.name == "And") {
+            Emit(OpCode::And, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Or") {
+            Emit(OpCode::Or, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Not") {
+            Emit(OpCode::Not, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0));
+        } else if (node.name == "Make Vec3") {
+            int x = GetInputReg(node, 0), y = GetInputReg(node, 1), z = GetInputReg(node, 2);
+            Emit(OpCode::MakeVec3, (uint8_t)result_reg, (uint8_t)x, (uint8_t)y, (int16_t)z);
+        } else if (node.name == "Vec3 Add") {
+            Emit(OpCode::Vec3Add, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Vec3 Scale") {
+            Emit(OpCode::Vec3Scale, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Vec3 Dot") {
+            Emit(OpCode::Vec3Dot, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Vec3 Normalize") {
+            Emit(OpCode::Vec3Normalize, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0));
+        } else if (node.name == "Vec3 Length") {
+            int v = GetInputReg(node, 0);
+            int dot = regs_.Alloc();
+            Emit(OpCode::Vec3Dot, (uint8_t)dot, (uint8_t)v, (uint8_t)v);
+            Emit(OpCode::Sqrt, (uint8_t)result_reg, (uint8_t)dot);
+        } else if (node.name == "Vec3 Distance") {
+            int a = GetInputReg(node, 0), b = GetInputReg(node, 1);
+            int diff = regs_.Alloc();
+            Emit(OpCode::Vec3Sub, (uint8_t)diff, (uint8_t)a, (uint8_t)b);
+            int dot = regs_.Alloc();
+            Emit(OpCode::Vec3Dot, (uint8_t)dot, (uint8_t)diff, (uint8_t)diff);
+            Emit(OpCode::Sqrt, (uint8_t)result_reg, (uint8_t)dot);
+        } else if (node.name == "Array Get") {
+            Emit(OpCode::ArrayGet, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), (uint8_t)GetInputReg(node, 1));
+        } else if (node.name == "Array Length") {
+            Emit(OpCode::ArrayLen, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0));
         } else if (node.name == "Get Position") {
             Emit(OpCode::EcsGetVec3, (uint8_t)result_reg, (uint8_t)GetInputReg(node, 0), 0);
         } else if (node.name == "Self Entity") {
@@ -316,18 +396,41 @@ private:
         } else if (node.name == "Int Constant" || node.name == "Constant Int") {
             int val = node.outputs.empty() ? 0 : node.outputs[0].default_int;
             Emit(OpCode::LoadConst, (uint8_t)result_reg, (uint8_t)AddConstant(BpValue::Int(val)));
-        } else if (node.name == "Get Variable") {
-            int var_idx = GetVarIndex(node.comment);
-            if (var_idx >= 0) Emit(OpCode::LoadVar, (uint8_t)result_reg, (uint8_t)var_idx);
         } else if (node.name == "Bool Constant") {
             bool val = node.outputs.empty() ? false : node.outputs[0].default_bool;
             Emit(OpCode::LoadConst, (uint8_t)result_reg, (uint8_t)AddConstant(BpValue::Bool(val)));
+        } else if (node.name == "String Constant") {
+            std::string val = node.outputs.empty() ? std::string() : node.outputs[0].default_string;
+            Emit(OpCode::LoadConst, (uint8_t)result_reg, (uint8_t)AddConstant(BpValue::String(val)));
+        } else if (node.name == "Get Variable") {
+            int var_idx = GetVarIndex(node.comment);
+            if (var_idx >= 0) Emit(OpCode::LoadVar, (uint8_t)result_reg, (uint8_t)var_idx);
         } else {
-            Emit(OpCode::LoadConst, (uint8_t)result_reg, (uint8_t)AddConstant(BpValue::Float(0.0f)));
+            // Unrecognised data node: route to a named external function instead of
+            // silently loading 0.0f. Hosts register the implementation by node name;
+            // an unresolved call leaves the result Nil rather than a deceptive value.
+            EmitExternDataCall(node, result_reg);
         }
 
         if (!node.outputs.empty()) pin_to_reg_[node.outputs[0].id] = result_reg;
         return result_reg;
+    }
+
+    // Emit a CallExtern for a pure-data node whose result register is already
+    // allocated. Arguments are materialised into a contiguous register block.
+    void EmitExternDataCall(const BpNode& node, int result_reg) {
+        std::vector<int> in_regs;
+        for (size_t i = 0; i < node.inputs.size(); ++i)
+            if (node.inputs[i].type != BpPinType::Flow)
+                in_regs.push_back(GetInputReg(node, static_cast<int>(i)));
+        int arg_start = regs_.Alloc();
+        for (size_t i = 0; i < in_regs.size(); ++i) {
+            if (i > 0) regs_.Alloc();
+            Emit(OpCode::Move, (uint8_t)(arg_start + i), (uint8_t)in_regs[i]);
+        }
+        int name_const = AddConstant(BpValue::String(node.name));
+        Emit(OpCode::CallExtern, (uint8_t)result_reg, (uint8_t)name_const,
+             (uint8_t)arg_start, (int16_t)in_regs.size());
     }
 
     int GetInputReg(const BpNode& node, int input_index) {
@@ -400,6 +503,7 @@ CompiledFunction CompileFunctionGraph(const BpFunctionGraph& graph,
 CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
     CompiledBlueprint result;
     result.version = asset.version;
+    result.bytecode_version = kBytecodeVersion;
     for (const auto& var : asset.variables) {
         switch (var.type) {
             case BpVarType::Bool:   result.default_variables.push_back(BpValue::Bool(var.default_bool)); break;
@@ -450,6 +554,118 @@ CompiledBlueprint CompileToByteCode(const BlueprintAsset& asset) {
 bool LoadBlueprintAsset(BlueprintAsset& asset, const std::string& path) {
     BlueprintDiagnostics diag;
     return LoadBlueprintAssetChecked(asset, path, diag);
+}
+
+bool ValidateCompiledFunction(const CompiledFunction& fn, std::string& error) {
+    const int nregs  = fn.num_registers;
+    const int nconst = static_cast<int>(fn.constants.size());
+    const int ncode  = static_cast<int>(fn.code.size());
+    auto reg_ok = [&](int r) { return r >= 0 && r < nregs; };
+
+    for (int pc = 0; pc < ncode; ++pc) {
+        const Instruction& in = fn.code[pc];
+        auto fail = [&](const char* what) {
+            error = fn.name + ": instruction " + std::to_string(pc) + ": " + what;
+            return false;
+        };
+        auto need = [&](bool cond, const char* what) { return cond ? true : fail(what); };
+
+        switch (in.op) {
+            case OpCode::Nop:
+            case OpCode::Halt:
+                break;
+
+            case OpCode::LoadConst:
+                if (!need(reg_ok(in.a), "LoadConst dst register out of range")) return false;
+                if (!need(in.b < nconst, "LoadConst constant index out of range")) return false;
+                break;
+            case OpCode::LoadVar:
+                if (!need(reg_ok(in.a), "LoadVar dst register out of range")) return false;
+                break;
+            case OpCode::StoreVar:
+                if (!need(reg_ok(in.b), "StoreVar src register out of range")) return false;
+                break;
+
+            // unary: a = f(b)
+            case OpCode::Move: case OpCode::Neg: case OpCode::Not:
+            case OpCode::Sin: case OpCode::Cos: case OpCode::Sqrt: case OpCode::Abs:
+            case OpCode::Vec3Normalize: case OpCode::ArrayLen:
+            case OpCode::VecComponent:
+                if (!need(reg_ok(in.a) && reg_ok(in.b), "unary register operand out of range")) return false;
+                break;
+
+            // binary: a = f(b, c)
+            case OpCode::Add: case OpCode::Sub: case OpCode::Mul: case OpCode::Div:
+            case OpCode::Mod: case OpCode::Pow: case OpCode::Atan2:
+            case OpCode::Min: case OpCode::Max:
+            case OpCode::CmpEq: case OpCode::CmpLt: case OpCode::CmpLe:
+            case OpCode::And: case OpCode::Or:
+            case OpCode::Vec3Add: case OpCode::Vec3Sub: case OpCode::Vec3Scale:
+            case OpCode::Vec3Dot: case OpCode::Concat:
+            case OpCode::ArrayGet: case OpCode::ArraySet: case OpCode::ArrayPush:
+                if (!need(reg_ok(in.a) && reg_ok(in.b) && reg_ok(in.c),
+                          "binary register operand out of range")) return false;
+                break;
+
+            // ternary with extra register: a = f(b, c, extra)
+            case OpCode::Clamp: case OpCode::MakeVec3:
+                if (!need(reg_ok(in.a) && reg_ok(in.b) && reg_ok(in.c) && reg_ok(in.extra),
+                          "register operand out of range")) return false;
+                break;
+
+            case OpCode::EcsGetFloat: case OpCode::EcsGetVec3:
+                if (!need(reg_ok(in.a) && reg_ok(in.b), "ECS get register out of range")) return false;
+                break;
+            case OpCode::EcsSetFloat: case OpCode::EcsSetVec3:
+                if (!need(reg_ok(in.a) && reg_ok(in.c), "ECS set register out of range")) return false;
+                break;
+
+            case OpCode::Print: case OpCode::Return:
+                if (!need(reg_ok(in.a), "register operand out of range")) return false;
+                break;
+
+            case OpCode::Jump:
+            case OpCode::JumpIfFalse:
+            case OpCode::JumpIfTrue: {
+                if (in.op != OpCode::Jump && !need(reg_ok(in.a), "jump condition register out of range"))
+                    return false;
+                int target = pc + 1 + in.extra;  // VM advances pc before applying extra
+                if (!need(target >= 0 && target <= ncode, "jump target out of range")) return false;
+                break;
+            }
+
+            case OpCode::CallExtern: {
+                if (!need(reg_ok(in.a), "CallExtern dst register out of range")) return false;
+                if (!need(in.b < nconst && fn.constants[in.b].type == BpValue::Type::String,
+                          "CallExtern name constant invalid")) return false;
+                if (!need(in.extra >= 0 && reg_ok(in.c) &&
+                          (in.extra == 0 || reg_ok(in.c + in.extra - 1)),
+                          "CallExtern argument register range out of range")) return false;
+                break;
+            }
+            case OpCode::Call: {
+                if (!need(in.b >= 0 && reg_ok(in.c) && (in.b == 0 || reg_ok(in.c + in.b - 1)),
+                          "Call argument register range out of range")) return false;
+                break;
+            }
+
+            default:
+                break;
+        }
+    }
+    return true;
+}
+
+bool ValidateCompiledBlueprint(const CompiledBlueprint& bp, std::string& error) {
+    if (bp.bytecode_version > kBytecodeVersion) {
+        error = "compiled blueprint bytecode version " + std::to_string(bp.bytecode_version) +
+                " is newer than supported version " + std::to_string(kBytecodeVersion);
+        return false;
+    }
+    for (const auto& fn : bp.functions) {
+        if (!ValidateCompiledFunction(fn, error)) return false;
+    }
+    return true;
 }
 
 }  // namespace dse::bp

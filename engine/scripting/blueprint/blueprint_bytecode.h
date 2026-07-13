@@ -31,6 +31,8 @@ enum class OpCode : uint8_t {
     Cos,
     Sqrt,
     Abs,
+    Pow,
+    Atan2,
     Min,
     Max,
     Clamp,
@@ -39,6 +41,8 @@ enum class OpCode : uint8_t {
     Vec3Scale,
     Vec3Dot,
     Vec3Normalize,
+    MakeVec3,      // a = vec3(b, c, extra) — b/c/extra hold scalar registers
+    VecComponent,  // a = b.component[c]  (c: 0=x, 1=y, 2=z)
     EcsGetFloat,
     EcsSetFloat,
     EcsGetVec3,

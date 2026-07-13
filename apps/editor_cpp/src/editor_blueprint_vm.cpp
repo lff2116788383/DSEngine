@@ -51,6 +51,18 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
                                             BpValue& out_return) {
     const auto& code = func.code;
     const auto& constants = func.constants;
+    const int code_size = static_cast<int>(code.size());
+
+    // Bounds-checked register accessor (mirrors the engine VM): out-of-range
+    // indices resolve to a scratch slot and flag last_error_ instead of reading
+    // or writing past the register file.
+    BpValue oob_scratch;
+    auto R = [&](int idx) -> BpValue& {
+        if (idx >= 0 && idx < static_cast<int>(regs.size())) return regs[idx];
+        last_error_ = "Blueprint register index out of range";
+        oob_scratch = BpValue();
+        return oob_scratch;
+    };
 
     const Instruction& instr = code[pc];
     ++instruction_count_;
@@ -60,67 +72,67 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
             case OpCode::Nop: break;
 
             case OpCode::LoadConst:
-                if (instr.b < constants.size()) regs[instr.a] = constants[instr.b];
+                if (instr.b < constants.size()) R(instr.a) = constants[instr.b];
                 break;
 
             case OpCode::LoadVar:
                 if (ctx.instance && instr.b < ctx.instance->variables.size())
-                    regs[instr.a] = ctx.instance->variables[instr.b];
+                    R(instr.a) = ctx.instance->variables[instr.b];
                 break;
 
             case OpCode::StoreVar:
                 if (ctx.instance && instr.a < ctx.instance->variables.size())
-                    ctx.instance->variables[instr.a] = regs[instr.b];
+                    ctx.instance->variables[instr.a] = R(instr.b);
                 break;
 
             case OpCode::Move:
-                regs[instr.a] = regs[instr.b];
+                R(instr.a) = R(instr.b);
                 break;
 
             // Arithmetic
             case OpCode::Add:
-                regs[instr.a] = BpValue::Float(regs[instr.b].AsFloat() + regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Float(R(instr.b).AsFloat() + R(instr.c).AsFloat());
                 break;
             case OpCode::Sub:
-                regs[instr.a] = BpValue::Float(regs[instr.b].AsFloat() - regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Float(R(instr.b).AsFloat() - R(instr.c).AsFloat());
                 break;
             case OpCode::Mul:
-                regs[instr.a] = BpValue::Float(regs[instr.b].AsFloat() * regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Float(R(instr.b).AsFloat() * R(instr.c).AsFloat());
                 break;
             case OpCode::Div: {
-                float divisor = regs[instr.c].AsFloat();
-                regs[instr.a] = BpValue::Float(divisor != 0.0f ? regs[instr.b].AsFloat() / divisor : 0.0f);
+                float divisor = R(instr.c).AsFloat();
+                R(instr.a) = BpValue::Float(divisor != 0.0f ? R(instr.b).AsFloat() / divisor : 0.0f);
                 break;
             }
             case OpCode::Neg:
-                regs[instr.a] = BpValue::Float(-regs[instr.b].AsFloat());
+                R(instr.a) = BpValue::Float(-R(instr.b).AsFloat());
                 break;
             case OpCode::Mod: {
-                float d = regs[instr.c].AsFloat();
-                regs[instr.a] = BpValue::Float(d != 0.0f ? std::fmod(regs[instr.b].AsFloat(), d) : 0.0f);
+                float d = R(instr.c).AsFloat();
+                R(instr.a) = BpValue::Float(d != 0.0f ? std::fmod(R(instr.b).AsFloat(), d) : 0.0f);
                 break;
             }
 
             // Comparison
             case OpCode::CmpEq:
-                regs[instr.a] = BpValue::Bool(regs[instr.b].AsFloat() == regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Bool(R(instr.b).AsFloat() == R(instr.c).AsFloat());
                 break;
             case OpCode::CmpLt:
-                regs[instr.a] = BpValue::Bool(regs[instr.b].AsFloat() < regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Bool(R(instr.b).AsFloat() < R(instr.c).AsFloat());
                 break;
             case OpCode::CmpLe:
-                regs[instr.a] = BpValue::Bool(regs[instr.b].AsFloat() <= regs[instr.c].AsFloat());
+                R(instr.a) = BpValue::Bool(R(instr.b).AsFloat() <= R(instr.c).AsFloat());
                 break;
 
             // Logic
             case OpCode::And:
-                regs[instr.a] = BpValue::Bool(regs[instr.b].AsBool() && regs[instr.c].AsBool());
+                R(instr.a) = BpValue::Bool(R(instr.b).AsBool() && R(instr.c).AsBool());
                 break;
             case OpCode::Or:
-                regs[instr.a] = BpValue::Bool(regs[instr.b].AsBool() || regs[instr.c].AsBool());
+                R(instr.a) = BpValue::Bool(R(instr.b).AsBool() || R(instr.c).AsBool());
                 break;
             case OpCode::Not:
-                regs[instr.a] = BpValue::Bool(!regs[instr.b].AsBool());
+                R(instr.a) = BpValue::Bool(!R(instr.b).AsBool());
                 break;
 
             // Flow control
@@ -128,67 +140,84 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
                 pc += instr.extra;
                 break;
             case OpCode::JumpIfFalse:
-                if (!regs[instr.a].AsBool()) pc += instr.extra;
+                if (!R(instr.a).AsBool()) pc += instr.extra;
                 break;
             case OpCode::JumpIfTrue:
-                if (regs[instr.a].AsBool()) pc += instr.extra;
+                if (R(instr.a).AsBool()) pc += instr.extra;
                 break;
 
             // Math builtins
             case OpCode::Sin:
-                regs[instr.a] = BpValue::Float(std::sin(regs[instr.b].AsFloat()));
+                R(instr.a) = BpValue::Float(std::sin(R(instr.b).AsFloat()));
                 break;
             case OpCode::Cos:
-                regs[instr.a] = BpValue::Float(std::cos(regs[instr.b].AsFloat()));
+                R(instr.a) = BpValue::Float(std::cos(R(instr.b).AsFloat()));
                 break;
             case OpCode::Sqrt:
-                regs[instr.a] = BpValue::Float(std::sqrt(std::abs(regs[instr.b].AsFloat())));
+                R(instr.a) = BpValue::Float(std::sqrt(std::abs(R(instr.b).AsFloat())));
                 break;
             case OpCode::Abs:
-                regs[instr.a] = BpValue::Float(std::abs(regs[instr.b].AsFloat()));
+                R(instr.a) = BpValue::Float(std::abs(R(instr.b).AsFloat()));
+                break;
+            case OpCode::Pow:
+                R(instr.a) = BpValue::Float(std::pow(R(instr.b).AsFloat(), R(instr.c).AsFloat()));
+                break;
+            case OpCode::Atan2:
+                R(instr.a) = BpValue::Float(std::atan2(R(instr.b).AsFloat(), R(instr.c).AsFloat()));
                 break;
             case OpCode::Min:
-                regs[instr.a] = BpValue::Float(std::min(regs[instr.b].AsFloat(), regs[instr.c].AsFloat()));
+                R(instr.a) = BpValue::Float(std::min(R(instr.b).AsFloat(), R(instr.c).AsFloat()));
                 break;
             case OpCode::Max:
-                regs[instr.a] = BpValue::Float(std::max(regs[instr.b].AsFloat(), regs[instr.c].AsFloat()));
+                R(instr.a) = BpValue::Float(std::max(R(instr.b).AsFloat(), R(instr.c).AsFloat()));
                 break;
             case OpCode::Clamp: {
-                float val = regs[instr.b].AsFloat();
-                float lo = regs[instr.c].AsFloat();
-                float hi = (instr.extra >= 0 && instr.extra < static_cast<int>(regs.size()))
-                    ? regs[instr.extra].AsFloat() : 1.0f;
-                regs[instr.a] = BpValue::Float(std::clamp(val, lo, hi));
+                float val = R(instr.b).AsFloat();
+                float lo = R(instr.c).AsFloat();
+                float hi = R(instr.extra).AsFloat();
+                R(instr.a) = BpValue::Float(std::clamp(val, lo, hi));
                 break;
             }
 
-            // Vec3 ops
-            case OpCode::Vec3Add:
-                for (int k = 0; k < 3; ++k)
-                    regs[instr.a + k] = BpValue::Float(regs[instr.b + k].AsFloat() + regs[instr.c + k].AsFloat());
+            // Vec3 ops operate on single registers holding Type::Vec3 values.
+            case OpCode::Vec3Add: {
+                float x[3], y[3];
+                R(instr.b).AsVec3(x); R(instr.c).AsVec3(y);
+                R(instr.a) = BpValue::Vec3(x[0]+y[0], x[1]+y[1], x[2]+y[2]);
                 break;
-            case OpCode::Vec3Sub:
-                for (int k = 0; k < 3; ++k)
-                    regs[instr.a + k] = BpValue::Float(regs[instr.b + k].AsFloat() - regs[instr.c + k].AsFloat());
+            }
+            case OpCode::Vec3Sub: {
+                float x[3], y[3];
+                R(instr.b).AsVec3(x); R(instr.c).AsVec3(y);
+                R(instr.a) = BpValue::Vec3(x[0]-y[0], x[1]-y[1], x[2]-y[2]);
                 break;
-            case OpCode::Vec3Scale:
-                for (int k = 0; k < 3; ++k)
-                    regs[instr.a + k] = BpValue::Float(regs[instr.b + k].AsFloat() * regs[instr.c].AsFloat());
+            }
+            case OpCode::Vec3Scale: {
+                float x[3]; R(instr.b).AsVec3(x);
+                float s = R(instr.c).AsFloat();
+                R(instr.a) = BpValue::Vec3(x[0]*s, x[1]*s, x[2]*s);
                 break;
+            }
             case OpCode::Vec3Dot: {
-                float dot = 0.0f;
-                for (int k = 0; k < 3; ++k)
-                    dot += regs[instr.b + k].AsFloat() * regs[instr.c + k].AsFloat();
-                regs[instr.a] = BpValue::Float(dot);
+                float x[3], y[3];
+                R(instr.b).AsVec3(x); R(instr.c).AsVec3(y);
+                R(instr.a) = BpValue::Float(x[0]*y[0] + x[1]*y[1] + x[2]*y[2]);
                 break;
             }
             case OpCode::Vec3Normalize: {
-                float x = regs[instr.b].AsFloat(), y = regs[instr.b+1].AsFloat(), z = regs[instr.b+2].AsFloat();
-                float len = std::sqrt(x*x + y*y + z*z);
-                if (len > 1e-8f) { x/=len; y/=len; z/=len; }
-                regs[instr.a] = BpValue::Float(x);
-                regs[instr.a+1] = BpValue::Float(y);
-                regs[instr.a+2] = BpValue::Float(z);
+                float x[3]; R(instr.b).AsVec3(x);
+                float len = std::sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2]);
+                if (len > 1e-8f) { x[0]/=len; x[1]/=len; x[2]/=len; }
+                R(instr.a) = BpValue::Vec3(x[0], x[1], x[2]);
+                break;
+            }
+            case OpCode::MakeVec3:
+                R(instr.a) = BpValue::Vec3(R(instr.b).AsFloat(), R(instr.c).AsFloat(), R(instr.extra).AsFloat());
+                break;
+            case OpCode::VecComponent: {
+                float x[3]; R(instr.b).AsVec3(x);
+                int k = (instr.c >= 0 && instr.c < 3) ? instr.c : 0;
+                R(instr.a) = BpValue::Float(x[k]);
                 break;
             }
 
@@ -205,25 +234,26 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
                 if (fn_idx >= 0 && fn_idx < static_cast<int>(extern_functions_.size())) {
                     std::vector<BpValue> fn_args;
                     for (int i = 0; i < num_args; ++i)
-                        fn_args.push_back(regs[arg_start + i]);
-                    regs[instr.a] = extern_functions_[fn_idx].second(fn_args);
+                        fn_args.push_back(R(arg_start + i));
+                    R(instr.a) = extern_functions_[fn_idx].second(fn_args);
                 }
                 break;
             }
 
             // String
             case OpCode::Concat:
-                regs[instr.a] = BpValue::String(regs[instr.b].str + regs[instr.c].str);
+                R(instr.a) = BpValue::String(R(instr.b).str + R(instr.c).str);
                 break;
 
             // Print
             case OpCode::Print: {
-                const auto& v = regs[instr.a];
+                const auto& v = R(instr.a);
                 switch (v.type) {
                     case BpValue::Type::Float: printf("[BP] %f\n", v.f); break;
                     case BpValue::Type::Int:   printf("[BP] %d\n", v.i); break;
                     case BpValue::Type::Bool:  printf("[BP] %s\n", v.b ? "true" : "false"); break;
                     case BpValue::Type::String:printf("[BP] %s\n", v.str.c_str()); break;
+                    case BpValue::Type::Vec3:  printf("[BP] (%f, %f, %f)\n", v.v[0], v.v[1], v.v[2]); break;
                     default: printf("[BP] <value>\n"); break;
                 }
                 break;
@@ -231,22 +261,24 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
 
             // Array
             case OpCode::ArrayGet: {
-                int idx = regs[instr.c].AsInt();
-                if (idx >= 0 && idx < static_cast<int>(regs[instr.b].arr.size()))
-                    regs[instr.a] = regs[instr.b].arr[idx];
+                int idx = R(instr.c).AsInt();
+                const auto& arr = R(instr.b).arr;
+                if (idx >= 0 && idx < static_cast<int>(arr.size()))
+                    R(instr.a) = arr[idx];
                 break;
             }
             case OpCode::ArraySet: {
-                int idx = regs[instr.b].AsInt();
-                if (idx >= 0 && idx < static_cast<int>(regs[instr.a].arr.size()))
-                    regs[instr.a].arr[idx] = regs[instr.c];
+                int idx = R(instr.b).AsInt();
+                auto& arr = R(instr.a).arr;
+                if (idx >= 0 && idx < static_cast<int>(arr.size()))
+                    arr[idx] = R(instr.c);
                 break;
             }
             case OpCode::ArrayLen:
-                regs[instr.a] = BpValue::Int(static_cast<int>(regs[instr.b].arr.size()));
+                R(instr.a) = BpValue::Int(static_cast<int>(R(instr.b).arr.size()));
                 break;
             case OpCode::ArrayPush:
-                regs[instr.a].arr.push_back(regs[instr.b]);
+                R(instr.a).arr.push_back(R(instr.b));
                 break;
 
             // Call user function
@@ -258,8 +290,8 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
                     fn_idx >= 0 && fn_idx < static_cast<int>(ctx.instance->blueprint->functions.size())) {
                     std::vector<BpValue> fn_args;
                     for (int i = 0; i < num_args; ++i)
-                        fn_args.push_back(regs[arg_start + i]);
-                    regs[arg_start] = Execute(ctx.instance->blueprint->functions[fn_idx], ctx, fn_args);
+                        fn_args.push_back(R(arg_start + i));
+                    R(arg_start) = Execute(ctx.instance->blueprint->functions[fn_idx], ctx, fn_args);
                 }
                 break;
             }
@@ -272,15 +304,28 @@ BlueprintVM::StepResult BlueprintVM::RunOne(const CompiledFunction& func, VmCont
                 out_return = regs.empty() ? BpValue() : regs[0];
                 return StepResult::Returned;
 
-            // ECS placeholders (bridge to engine)
+            // ECS bridge is engine-side; the editor preview VM has no live world,
+            // so reads yield neutral typed values and writes are no-ops. Kept
+            // type-consistent so downstream Vec3/float nodes step correctly.
             case OpCode::EcsGetFloat:
-            case OpCode::EcsSetFloat:
+                R(instr.a) = BpValue::Float(0.0f);
+                break;
             case OpCode::EcsGetVec3:
+                R(instr.a) = BpValue::Vec3(0.0f, 0.0f, 0.0f);
+                break;
+            case OpCode::EcsSetFloat:
             case OpCode::EcsSetVec3:
-                // These would bridge to actual ECS through registered extern functions
                 break;
 
             default: break;
+    }
+
+    // Reject relative jumps landing outside the code range (pc == code_size is a
+    // clean halt handled by the Execute/StepOnce loop guards).
+    if (pc < 0 || pc > code_size) {
+        last_error_ = "Blueprint jump target out of range";
+        out_return = regs.empty() ? BpValue() : regs[0];
+        return StepResult::Returned;
     }
 
     return StepResult::Continue;

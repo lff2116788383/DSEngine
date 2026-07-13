@@ -46,6 +46,9 @@ struct BpValue {
     float AsFloat() const;
     bool AsBool() const;
     int AsInt() const;
+    /// Fill out[0..2] with vec components. Vec3 values pass through; any other
+    /// type yields {0,0,0} (never reads uninitialised union members).
+    void AsVec3(float out[3]) const;
 };
 
 // ─── Compiled forms ─────────────────────────────────────────────────────────
@@ -65,7 +68,8 @@ struct CompiledFunction {
 struct CompiledBlueprint {
     std::vector<CompiledFunction> functions; // on_init / on_update / user funcs
     std::vector<BpValue> default_variables;
-    int version = 1;
+    int version = 1;            // source .dbp schema version
+    int bytecode_version = 1;   // emitter/opcode format version (see kBytecodeVersion)
 };
 
 struct BlueprintInstance {
