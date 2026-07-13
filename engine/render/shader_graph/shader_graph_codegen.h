@@ -66,5 +66,18 @@ struct ShaderSpirvResult {
 /// 若构建未链接 glslang，返回 available=false（不产错，由调用方决定是否走离线工具）。
 DSE_EXPORT ShaderSpirvResult GenerateSpirv(const ShaderGraphAsset& graph);
 
+/// DXBC 编译结果。available=false 表示本次构建未启用 D3D11/d3dcompiler（仅 Windows）。
+struct ShaderDxbcResult {
+    bool available = false;                 ///< 构建是否含 d3dcompiler（DSE_ENABLE_D3D11 + Windows）
+    bool ok = false;                        ///< 顶点 + 片元均成功编译为 DXBC
+    std::vector<uint8_t> vertex_dxbc;       ///< 顶点 DXBC 字节码（vs_5_0）
+    std::vector<uint8_t> fragment_dxbc;     ///< 片元 DXBC 字节码（ps_5_0）
+    std::vector<std::string> errors;        ///< 图非法或 D3DCompile 错误
+};
+
+/// 将节点图经 HLSL SM5 用 d3dcompiler 编译为真实 DXBC（VSMain vs_5_0 + PSMain ps_5_0）。
+/// D3DCompile 不依赖 GPU，可无头运行；未启用 D3D11/非 Windows 时返回 available=false。
+DSE_EXPORT ShaderDxbcResult GenerateDxbc(const ShaderGraphAsset& graph);
+
 }  // namespace shadergraph
 }  // namespace dse

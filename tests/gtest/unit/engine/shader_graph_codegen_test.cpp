@@ -318,6 +318,35 @@ TEST(ShaderGraphCodegen, InvalidGraphProducesNoSpirv) {
     EXPECT_TRUE(r.fragment_spirv.empty());
 }
 
+// The HLSL SM5 emitted by the shared codegen must be *real* DXBC — compiled
+// through d3dcompiler (no GPU needed). When the build enables D3D11 on Windows
+// this compiles VSMain/PSMain and asserts a valid DXBC container ("DXBC" fourcc);
+// otherwise it documents the gap.
+TEST(ShaderGraphCodegen, HlslCompilesToRealDxbc) {
+    ShaderDxbcResult r = GenerateDxbc(MakeGraph());
+    if (!r.available) {
+        GTEST_SKIP() << "built without D3D11/d3dcompiler; DXBC path not compiled in";
+    }
+    ASSERT_TRUE(r.ok) << (r.errors.empty() ? "" : r.errors[0]);
+    ASSERT_GE(r.vertex_dxbc.size(), 4u);
+    ASSERT_GE(r.fragment_dxbc.size(), 4u);
+    // DXBC container magic (first 4 bytes).
+    EXPECT_EQ(std::string(r.vertex_dxbc.begin(), r.vertex_dxbc.begin() + 4), "DXBC");
+    EXPECT_EQ(std::string(r.fragment_dxbc.begin(), r.fragment_dxbc.begin() + 4), "DXBC");
+}
+
+TEST(ShaderGraphCodegen, InvalidGraphProducesNoDxbc) {
+    ShaderGraphAsset g = MakeGraph();
+    g.links.push_back({71, 999, 31});  // dangling from_pin
+    ShaderDxbcResult r = GenerateDxbc(g);
+    if (!r.available) {
+        GTEST_SKIP() << "built without D3D11/d3dcompiler";
+    }
+    EXPECT_FALSE(r.ok);
+    EXPECT_TRUE(r.vertex_dxbc.empty());
+    EXPECT_TRUE(r.fragment_dxbc.empty());
+}
+
 TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL), "GLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::HLSL), "HLSL");

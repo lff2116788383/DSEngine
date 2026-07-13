@@ -19,6 +19,13 @@
 #include <glslang/SPIRV/GlslangToSpv.h>
 #endif
 
+#if defined(DSE_ENABLE_D3D11) && defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <d3dcompiler.h>
+#endif
+
 namespace dse {
 namespace shadergraph {
 namespace {
@@ -750,6 +757,63 @@ ShaderSpirvResult GenerateSpirv(const ShaderGraphAsset& /*graph*/) {
     return res;
 }
 #endif  // DSE_HAS_GLSLANG
+
+#if defined(DSE_ENABLE_D3D11) && defined(_WIN32)
+namespace {
+
+// 用 d3dcompiler 把一段 HLSL SM5 源码编译为 DXBC 字节码。失败时填充 error 并返回 false。
+bool CompileHlslToDxbc(const std::string& source, const char* entry, const char* target,
+                       std::vector<uint8_t>& out, std::string& error) {
+    ID3DBlob* code = nullptr;
+    ID3DBlob* errors = nullptr;
+    HRESULT hr = D3DCompile(source.data(), source.size(), nullptr, nullptr, nullptr,
+                            entry, target, D3DCOMPILE_OPTIMIZATION_LEVEL1, 0, &code, &errors);
+    if (errors) {
+        error.assign(static_cast<const char*>(errors->GetBufferPointer()),
+                     errors->GetBufferSize());
+        errors->Release();
+    }
+    if (FAILED(hr) || !code) {
+        if (code) code->Release();
+        if (error.empty()) error = "D3DCompile failed";
+        return false;
+    }
+    const uint8_t* p = static_cast<const uint8_t*>(code->GetBufferPointer());
+    out.assign(p, p + code->GetBufferSize());
+    code->Release();
+    return true;
+}
+
+}  // namespace
+
+ShaderDxbcResult GenerateDxbc(const ShaderGraphAsset& graph) {
+    ShaderDxbcResult res;
+    res.available = true;
+
+    ShaderCodegenResult src = GenerateShader(graph, ShaderTarget::HLSL);
+    if (!src.ok) {
+        res.errors = src.errors;
+        return res;
+    }
+
+    std::string verr;
+    if (!CompileHlslToDxbc(src.vertex, "VSMain", "vs_5_0", res.vertex_dxbc, verr)) {
+        res.errors.push_back("vertex: " + verr);
+    }
+    std::string ferr;
+    if (!CompileHlslToDxbc(src.fragment, "PSMain", "ps_5_0", res.fragment_dxbc, ferr)) {
+        res.errors.push_back("fragment: " + ferr);
+    }
+    res.ok = res.errors.empty() && !res.vertex_dxbc.empty() && !res.fragment_dxbc.empty();
+    return res;
+}
+#else
+ShaderDxbcResult GenerateDxbc(const ShaderGraphAsset& /*graph*/) {
+    ShaderDxbcResult res;
+    res.available = false;
+    return res;
+}
+#endif  // DSE_ENABLE_D3D11 && _WIN32
 
 }  // namespace shadergraph
 }  // namespace dse

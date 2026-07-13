@@ -684,6 +684,33 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             }
         }
         ImGui::SameLine();
+        // Export DXBC：经引擎 d3dcompiler 把 HLSL SM5 编译为真实 DXBC 字节码（无需 GPU）。
+        // 仅 Windows + D3D11 构建可用；否则如实提示（不产伪二进制）。
+        if (ImGui::Button(T("Export DXBC"))) {
+            auto write_bin = [](const char* filename, const std::vector<uint8_t>& bytes) {
+                std::ofstream out(filename, std::ios::binary);
+                if (out.is_open())
+                    out.write(reinterpret_cast<const char*>(bytes.data()),
+                              static_cast<std::streamsize>(bytes.size()));
+            };
+            auto dxbc = shadergraph::GenerateDxbc(ToAsset(state));
+            if (!dxbc.available) {
+                EditorLog(LogLevel::Warning,
+                          "[ShaderGraph] DXBC export unavailable: build without D3D11/d3dcompiler");
+            } else if (dxbc.ok) {
+                write_bin("shader_graph_output.vs.dxbc", dxbc.vertex_dxbc);
+                write_bin("shader_graph_output.ps.dxbc", dxbc.fragment_dxbc);
+                EditorLog(LogLevel::Info,
+                          "[ShaderGraph] Exported DXBC (vs " +
+                          std::to_string(dxbc.vertex_dxbc.size()) + "B + ps " +
+                          std::to_string(dxbc.fragment_dxbc.size()) +
+                          "B) -> shader_graph_output.{vs,ps}.dxbc");
+            } else {
+                for (const auto& e : dxbc.errors)
+                    EditorLog(LogLevel::Error, std::string("[ShaderGraph] DXBC export failed: ") + e);
+            }
+        }
+        ImGui::SameLine();
         if (ImGui::Button(T("Apply to Material"))) {
             // 生成配套顶点着色器 + 片元着色器（GLSL），两段一起送入 AssetManager 编译链接为可用程序。
             // 仅 OpenGL 后端能从 GLSL 源码编出有效句柄；其余后端返回 nullptr（材质保持原样，不假成功）。
