@@ -135,5 +135,23 @@ bool AnimationStateMachine::EvaluateTransition(const AnimTransition& transition,
     return true;
 }
 
+int AnimationStateMachine::SelectTransition(const AnimState& state, float normalized_time) const {
+    for (size_t i = 0; i < state.transitions.size(); ++i) {
+        if (EvaluateTransition(state.transitions[i], normalized_time)) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+void AnimationStateMachine::ConsumeTransitionTriggers(const AnimTransition& transition) {
+    for (const auto& cond : transition.conditions) {
+        auto it = parameters_.find(cond.parameter_name);
+        if (it != parameters_.end() && it->second.type == AnimParamType::Trigger) {
+            it->second.is_triggered = false;
+        }
+    }
+}
+
 } // namespace gameplay3d
 } // namespace dse

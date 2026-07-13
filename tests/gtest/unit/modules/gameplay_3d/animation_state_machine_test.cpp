@@ -132,6 +132,82 @@ TEST_F(AnimStateMachineTest, Transition_WithoutWithTime) {
 }
 
 // ============================================================
+// SelectTransition / ConsumeTransitionTriggers（运行时选择逻辑）
+// ============================================================
+
+// 声明顺序即优先级：首个满足的过渡胜出。
+TEST_F(AnimStateMachineTest, SelectTransition_PicksFirstMatchByDeclarationOrder) {
+    sm.AddParameter("speed", AnimParamType::Float, 5.0f);
+
+    AnimState idle;
+    idle.name = "Idle";
+
+    AnimTransition to_walk;  // 条件不满足
+    to_walk.target_state = "Walk";
+    to_walk.has_exit_time = false;
+    AnimTransitionCondition c_walk;
+    c_walk.parameter_name = "speed";
+    c_walk.mode = AnimConditionMode::Less;
+    c_walk.threshold = 1.0f;
+    to_walk.conditions.push_back(c_walk);
+
+    AnimTransition to_run_a;  // 满足
+    to_run_a.target_state = "RunA";
+    to_run_a.has_exit_time = false;
+    AnimTransitionCondition c_run;
+    c_run.parameter_name = "speed";
+    c_run.mode = AnimConditionMode::Greater;
+    c_run.threshold = 1.0f;
+    to_run_a.conditions.push_back(c_run);
+
+    AnimTransition to_run_b = to_run_a;  // 同样满足，但声明在后
+    to_run_b.target_state = "RunB";
+
+    idle.transitions = {to_walk, to_run_a, to_run_b};
+
+    int idx = sm.SelectTransition(idle, 1.0f);
+    ASSERT_EQ(idx, 1);
+    EXPECT_EQ(idle.transitions[idx].target_state, "RunA");
+}
+
+TEST_F(AnimStateMachineTest, SelectTransition_ReturnsMinusOneWhenNoneApply) {
+    AnimState s;
+    s.name = "S";
+    AnimTransition t;
+    t.target_state = "Other";
+    t.has_exit_time = true;
+    t.exit_time = 0.9f;  // exit-time 未到
+    s.transitions = {t};
+
+    EXPECT_EQ(sm.SelectTransition(s, 0.5f), -1);
+    EXPECT_EQ(sm.SelectTransition(s, 0.95f), 0);
+}
+
+// Trigger 被消费后必须复位，保证只触发一次。
+TEST_F(AnimStateMachineTest, ConsumeTransitionTriggers_ResetsTriggerOnce) {
+    sm.AddTrigger("jump");
+    sm.SetTrigger("jump");
+
+    AnimState s;
+    s.name = "Ground";
+    AnimTransition t;
+    t.target_state = "Air";
+    t.has_exit_time = false;
+    AnimTransitionCondition c;
+    c.parameter_name = "jump";
+    c.mode = AnimConditionMode::If;
+    t.conditions.push_back(c);
+    s.transitions = {t};
+
+    int idx = sm.SelectTransition(s, 0.0f);
+    ASSERT_EQ(idx, 0);
+    sm.ConsumeTransitionTriggers(s.transitions[idx]);
+
+    // 消费后同一 trigger 不应再次命中过渡。
+    EXPECT_EQ(sm.SelectTransition(s, 0.0f), -1);
+}
+
+// ============================================================
 // .dasm 序列化契约
 // ============================================================
 

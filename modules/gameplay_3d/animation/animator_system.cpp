@@ -397,22 +397,15 @@ void AnimatorSystem::EvaluateBaseAnim(World& world, float global_scaled_dt) {
 
                 // 1. Evaluate transitions
                 if (!animator.is_transitioning) {
-                    for (const auto& trans : current_state.transitions) {
-                        if (fsm.EvaluateTransition(trans, animator.normalized_time)) {
-                            animator.is_transitioning = true;
-                            animator.next_state_name = trans.target_state;
-                            animator.transition_duration = trans.transition_duration;
-                            animator.transition_progress = 0.0f;
-                            animator.next_state_time = 0.0f;
-
-                            for (const auto& cond : trans.conditions) {
-                                auto param_it = fsm.GetParameters().find(cond.parameter_name);
-                                if (param_it != fsm.GetParameters().end() && param_it->second.type == AnimParamType::Trigger) {
-                                    fsm.ResetTrigger(cond.parameter_name);
-                                }
-                            }
-                            break;
-                        }
+                    int idx = fsm.SelectTransition(current_state, animator.normalized_time);
+                    if (idx >= 0) {
+                        const auto& trans = current_state.transitions[idx];
+                        animator.is_transitioning = true;
+                        animator.next_state_name = trans.target_state;
+                        animator.transition_duration = trans.transition_duration;
+                        animator.transition_progress = 0.0f;
+                        animator.next_state_time = 0.0f;
+                        fsm.ConsumeTransitionTriggers(trans);
                     }
                 }
 

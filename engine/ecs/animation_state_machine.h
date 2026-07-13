@@ -116,6 +116,15 @@ public:
     // Helper to evaluate if a transition's conditions are met
     bool EvaluateTransition(const AnimTransition& transition, float normalized_time) const;
 
+    // Selects the first transition (in declaration order = priority) out of the given
+    // state whose exit-time and conditions are satisfied. Returns its index into
+    // state.transitions, or -1 if none apply. Does not mutate parameters.
+    int SelectTransition(const AnimState& state, float normalized_time) const;
+
+    // Resets any Trigger parameters referenced by the transition's conditions.
+    // Called once a transition is taken so a trigger fires exactly once.
+    void ConsumeTransitionTriggers(const AnimTransition& transition);
+
 private:
     std::unordered_map<std::string, AnimState> states_;
     std::string default_state_;
