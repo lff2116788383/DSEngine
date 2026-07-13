@@ -22,6 +22,7 @@
 #include "engine/project/web_build.h"
 #include "engine/assets/bundle_packer.h"
 #include "engine/runtime/app_manifest.h"
+#include "engine/platform/process.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -30,6 +31,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <rapidjson/document.h>
@@ -106,13 +108,47 @@ bool MatchOption(const std::string& arg, const std::string& prefix, std::string&
 }
 
 // 在 PATH 中是否能找到某个可执行程序（用于探测可选打包工具）。
+// 纯文件系统查找，不经过 shell（避免 where/command -v 的 std::system 调用）。
 bool ToolInPath(const std::string& tool) {
+    const char* path_env = std::getenv("PATH");
+    if (!path_env) return false;
 #if defined(_WIN32)
-    const std::string cmd = "where " + tool + " >NUL 2>NUL";
+    const char sep = ';';
+    static const char* exts[] = {"", ".exe", ".bat", ".cmd", ".com"};
 #else
-    const std::string cmd = "command -v " + tool + " >/dev/null 2>&1";
+    const char sep = ':';
+    static const char* exts[] = {""};
 #endif
-    return std::system(cmd.c_str()) == 0;
+    const std::string paths = path_env;
+    std::error_code ec;
+    size_t start = 0;
+    while (start <= paths.size()) {
+        size_t end = paths.find(sep, start);
+        if (end == std::string::npos) end = paths.size();
+        const std::string dir = paths.substr(start, end - start);
+        start = end + 1;
+        if (dir.empty()) continue;
+        for (const char* ext : exts) {
+            const fs::path cand = fs::path(dir) / (tool + ext);
+            if (fs::is_regular_file(cand, ec)) return true;
+        }
+    }
+    return false;
+}
+
+// 通过共享进程服务运行外部打包工具（显式参数数组，不做 shell 字符串拼接）。
+// 返回退出码；无法启动时返回 -1。stdout/stderr 原样透传到控制台。
+int RunTool(const std::string& exe, const std::vector<std::string>& args,
+            const fs::path& working_dir = {}) {
+    dse::platform::ProcessOptions opts;
+    opts.executable = exe;
+    opts.args = args;
+    opts.working_dir = working_dir;
+    const auto result = dse::platform::RunProcess(
+        opts, [](std::string_view line, bool is_stderr) {
+            (is_stderr ? std::cerr : std::cout) << line << "\n";
+        });
+    return result.launched ? result.exit_code : -1;
 }
 
 std::string ReadEntryScript(const fs::path& dseproj, const std::string& fallback) {
@@ -708,21 +744,19 @@ int CmdDistDesktop(const std::string& target, const std::vector<std::string>& ar
     int rc = 1;
     if (target == "win") {
         if (ToolInPath("powershell")) {
-            const std::string cmd =
-                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Compress-Archive -Path '" +
-                (abs_in / "*").string() + "' -DestinationPath '" + abs_out.string() + "' -Force\"";
-            rc = std::system(cmd.c_str());
+            rc = RunTool("powershell",
+                         {"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                          "Compress-Archive -Path '" + (abs_in / "*").string() +
+                              "' -DestinationPath '" + abs_out.string() + "' -Force"});
         } else if (ToolInPath("zip")) {
-            const std::string cmd = "cd \"" + abs_in.string() + "\" && zip -r -q \"" + abs_out.string() + "\" .";
-            rc = std::system(cmd.c_str());
+            rc = RunTool("zip", {"-r", "-q", abs_out.string(), "."}, abs_in);
         } else {
             std::cerr << "错误: 未找到 powershell 或 zip, 无法生成 .zip。\n";
             return 1;
         }
     } else {  // linux
         if (ToolInPath("tar")) {
-            const std::string cmd = "tar -czf \"" + abs_out.string() + "\" -C \"" + abs_in.string() + "\" .";
-            rc = std::system(cmd.c_str());
+            rc = RunTool("tar", {"-czf", abs_out.string(), "-C", abs_in.string(), "."});
         } else {
             std::cerr << "错误: 未找到 tar, 无法生成 .tar.gz。\n";
             return 1;
@@ -759,8 +793,7 @@ int CmdDistDesktop(const std::string& target, const std::vector<std::string>& ar
               << "[Icons]\n"
               << "Name: \"{group}\\" << game << "\"; Filename: \"{app}\\" << exe_name << "\"\n";
             s.close();
-            const std::string cmd = "iscc \"" + iss.string() + "\"";
-            if (std::system(cmd.c_str()) == 0) {
+            if (RunTool("iscc", {iss.string()}) == 0) {
                 std::cout << "已生成 Inno Setup 安装器 -> " << (out_parent / (game + "-setup.exe")).string() << "\n";
             } else {
                 std::cerr << "警告: iscc 执行失败, 跳过安装器 (zip 已生成)。\n";
