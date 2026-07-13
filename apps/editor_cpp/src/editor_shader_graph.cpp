@@ -9,6 +9,7 @@
 #include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/render/shader_graph/shader_graph_asset.h"
+#include "engine/render/shader_graph/shader_graph_codegen.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -1155,6 +1156,23 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             if (out.is_open()) { out << glsl; out.close(); }
             // 也输出到控制台日志
             EditorLog(LogLevel::Info, "[ShaderGraph] Compiled GLSL (" + std::to_string(glsl.size()) + " chars) -> shader_graph_output.frag");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(T("Export HLSL"))) {
+            // 通过引擎共享 codegen 从同一份节点图产出 HLSL（D3D11）源码。纯导出、不改材质。
+            auto res = shadergraph::GenerateShader(ToAsset(state), shadergraph::ShaderTarget::HLSL);
+            if (res.ok) {
+                std::ofstream vout("shader_graph_output.hlsl");
+                if (vout.is_open()) { vout << res.vertex << "\n" << res.fragment; vout.close(); }
+                EditorLog(LogLevel::Info, "[ShaderGraph] Exported HLSL (vs " +
+                          std::to_string(res.vertex.size()) + " + ps " +
+                          std::to_string(res.fragment.size()) + " chars) -> shader_graph_output.hlsl");
+                for (const auto& w : res.warnings)
+                    EditorLog(LogLevel::Warning, "[ShaderGraph] " + w);
+            } else {
+                for (const auto& e : res.errors)
+                    EditorLog(LogLevel::Error, "[ShaderGraph] HLSL export failed: " + e);
+            }
         }
         ImGui::SameLine();
         if (ImGui::Button(T("Apply to Material"))) {
