@@ -86,8 +86,9 @@ local function setup_cube()
     }
     dse.ecs.add_mesh_renderer(cube, 0.30, 0.62, 1.0, 1.0, v, idx)
     dse.ecs.set_mesh_shader_variant(cube, "MESH_LIT")
-    -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
-    dse.ecs.set_mesh_material(cube, 0.05, 0.38, 1.0, 0.02, 0.02, 0.06, 1.0, true)
+    -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow,
+    -- double_sided, base_color(r,g,b,a)
+    dse.ecs.set_mesh_material(cube, 0.05, 0.38, 1.0, 0.02, 0.02, 0.06, 1.0, true, false, 0.30, 0.62, 1.0, 1.0)
 end
 
 -- A large flat quad under the cube for depth/parallax context.
@@ -99,7 +100,7 @@ local function setup_ground()
     local idx = { 0, 2, 1, 0, 3, 2 }
     dse.ecs.add_mesh_renderer(ground, 0.16, 0.17, 0.20, 1.0, v, idx)
     dse.ecs.set_mesh_shader_variant(ground, "MESH_LIT")
-    dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, true)
+    dse.ecs.set_mesh_material(ground, 0.0, 0.9, 1.0, 0.0, 0.0, 0.0, 1.0, true, false, 0.16, 0.17, 0.20, 1.0)
 end
 
 -- A visible GPU-compute-skinned mesh (B-1 "skinning visible activation").
@@ -116,8 +117,9 @@ local function setup_skinned()
     dse.ecs.add_mesh_renderer(skinned, 1.0, 0.52, 0.16, 1.0)
     dse.ecs.set_mesh_path(skinned, SKIN_MESH)
     dse.ecs.set_mesh_shader_variant(skinned, "MESH_LIT")
-    -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow
-    dse.ecs.set_mesh_material(skinned, 0.05, 0.45, 1.0, 0.04, 0.02, 0.0, 1.0, true)
+    -- metallic, roughness, ao, emissive(r,g,b), normal_strength, receive_shadow,
+    -- double_sided, base_color(r,g,b,a)
+    dse.ecs.set_mesh_material(skinned, 0.05, 0.45, 1.0, 0.04, 0.02, 0.0, 1.0, true, false, 1.0, 0.52, 0.16, 1.0)
     dse.ecs.add_animator_3d(skinned, SKIN_DANIM, SKIN_DSKEL)
     if dse.ecs.init_animator_3d_fsm then dse.ecs.init_animator_3d_fsm(skinned) end
     if dse.ecs.add_animator_3d_state then
