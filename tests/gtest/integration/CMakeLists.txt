@@ -39,6 +39,8 @@ add_executable(${DSE_GTEST_INTEGRATION_TARGET}
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_tilemap_panel_core.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_autosave_core.cpp
     ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_sequencer_core.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_2d_tools.cpp
+    ${CMAKE_SOURCE_DIR}/apps/editor_cpp/src/editor_panel_registry.cpp
 )
 
 target_include_directories(${DSE_GTEST_INTEGRATION_TARGET}

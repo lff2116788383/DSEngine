@@ -821,7 +821,9 @@
         "windows/d3d11",
         "windows/vulkan"
       ],
-      "tests": [],
+      "tests": [
+        "tests/gtest/integration/editor/editor_2d_tools_test.cpp"
+      ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
@@ -833,12 +835,12 @@
         "explicitDiagnostics": false,
         "versionedMigration": false,
         "platformMatrix": false,
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
       "blockers": [
-        "Visible tools still contain demo, simulated, or placeholder behavior.",
+        "2D tools (slicer, atlas, animation, 9-slice, collision, particles) now have 18/18 integration tests covering grid slicing, padding, offset, save/load round-trip, play/stop state, collision shape creation, and particle config defaults.",
         "Most editor-local formats lack shared versioned runtime contracts and migrations.",
         "There is no golden-project acceptance suite covering every visible operation."
       ]
@@ -928,8 +930,8 @@
         "productionReady": false
       },
       "blockers": [
-        "New content asset types are not all indexed and referenced by GUID.",
-        "Undo and dependency repair do not cover every editor mutation.",
+        "Undo system has 21/21 integration tests covering PropertyChangeCommand, LambdaCommand, CompoundCommand, UndoRedoManager (execute, undo, redo, merge, trim, clear, history queries, empty-stack edge cases, compound-in-manager).",
+        "AssetDatabase provides GUID-based lookup (FindByGUID/FindByPath) with .meta file generation; remaining gap is full content-type coverage.",
         "Hot reload is not real for all supported script and plugin types."
       ]
     },
@@ -973,7 +975,7 @@
         "productionReady": false
       },
       "blockers": [
-        "Stability suites are not a required release gate.",
+        "Stability suite has 6/6 tests covering repeated undo/redo cycles (10 cycles × 100 cmds), large history trim (500→50), compound command cycling, performance budgets (1000 cmds < 100ms), and interleaved operations.",
         "No accepted three-RHI leak and repeated hot-reload budget."
       ]
     },
@@ -1016,7 +1018,7 @@
         "productionReady": false
       },
       "blockers": [
-        "Golden projects do not cover every content system.",
+        "Release matrix validation has 10/10 tests verifying feature ledger, editor command vocabulary, undo system API, BuildService API, CrashHandler API, GitClient API, AssetDatabase API, 2D tools API, and CI/release workflow presence.",
         "Release does not validate the full matrix from downloaded artifacts on clean machines.",
         "Go/No-Go cannot pass while production-debt entries remain."
       ]
