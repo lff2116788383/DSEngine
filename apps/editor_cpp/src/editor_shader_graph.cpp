@@ -657,6 +657,33 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         if (ImGui::Button(T("Export WebGPU")))
             export_shader(shadergraph::ShaderTarget::WGSL, "shader_graph_output.wgsl");
         ImGui::SameLine();
+        // Export SPIR-V：经引擎 glslang 把 Vulkan GLSL 450 编译为真实 SPIR-V 二进制。
+        // 仅当构建链接了 glslang 时可用；否则如实提示（不产伪二进制）。
+        if (ImGui::Button(T("Export SPIR-V"))) {
+            auto write_spv = [](const char* filename, const std::vector<uint32_t>& words) {
+                std::ofstream out(filename, std::ios::binary);
+                if (out.is_open())
+                    out.write(reinterpret_cast<const char*>(words.data()),
+                              static_cast<std::streamsize>(words.size() * sizeof(uint32_t)));
+            };
+            auto spv = shadergraph::GenerateSpirv(ToAsset(state));
+            if (!spv.available) {
+                EditorLog(LogLevel::Warning,
+                          "[ShaderGraph] SPIR-V export unavailable: build without glslang (DSE_HAS_GLSLANG)");
+            } else if (spv.ok) {
+                write_spv("shader_graph_output.vert.spv", spv.vertex_spirv);
+                write_spv("shader_graph_output.frag.spv", spv.fragment_spirv);
+                EditorLog(LogLevel::Info,
+                          "[ShaderGraph] Exported SPIR-V (vs " +
+                          std::to_string(spv.vertex_spirv.size() * 4) + "B + fs " +
+                          std::to_string(spv.fragment_spirv.size() * 4) +
+                          "B) -> shader_graph_output.{vert,frag}.spv");
+            } else {
+                for (const auto& e : spv.errors)
+                    EditorLog(LogLevel::Error, std::string("[ShaderGraph] SPIR-V export failed: ") + e);
+            }
+        }
+        ImGui::SameLine();
         if (ImGui::Button(T("Apply to Material"))) {
             // 生成配套顶点着色器 + 片元着色器（GLSL），两段一起送入 AssetManager 编译链接为可用程序。
             // 仅 OpenGL 后端能从 GLSL 源码编出有效句柄；其余后端返回 nullptr（材质保持原样，不假成功）。

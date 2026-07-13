@@ -11,6 +11,14 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef DSE_HAS_GLSLANG
+#include <mutex>
+
+#include <glslang/Public/ResourceLimits.h>
+#include <glslang/Public/ShaderLang.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
+#endif
+
 namespace dse {
 namespace shadergraph {
 namespace {
@@ -670,6 +678,78 @@ ShaderCodegenResult GenerateShader(const ShaderGraphAsset& graph, ShaderTarget t
     res.ok = true;
     return res;
 }
+
+#ifdef DSE_HAS_GLSLANG
+namespace {
+
+// glslang 进程级初始化只做一次（线程安全）。
+void EnsureGlslangInit() {
+    static std::once_flag once;
+    std::call_once(once, [] { glslang::InitializeProcess(); });
+}
+
+// 用 glslang 把一段 Vulkan GLSL 450 源码编译为 SPIR-V。失败时填充 error 并返回 false。
+bool CompileVulkanGlslToSpirv(const std::string& source, EShLanguage stage,
+                              std::vector<uint32_t>& out, std::string& error) {
+    EnsureGlslangInit();
+
+    const char* src = source.c_str();
+    glslang::TShader shader(stage);
+    shader.setStrings(&src, 1);
+    shader.setEnvInput(glslang::EShSourceGlsl, stage, glslang::EShClientVulkan, 100);
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
+
+    const TBuiltInResource* resources = GetDefaultResources();
+    if (!shader.parse(resources, 100, false, EShMsgDefault)) {
+        error = shader.getInfoLog();
+        return false;
+    }
+
+    glslang::TProgram program;
+    program.addShader(&shader);
+    if (!program.link(EShMsgDefault)) {
+        error = program.getInfoLog();
+        return false;
+    }
+
+    glslang::SpvOptions spv_options;
+    spv_options.generateDebugInfo = false;
+    spv_options.disableOptimizer = false;
+    glslang::GlslangToSpv(*program.getIntermediate(stage), out, &spv_options);
+    return !out.empty();
+}
+
+}  // namespace
+
+ShaderSpirvResult GenerateSpirv(const ShaderGraphAsset& graph) {
+    ShaderSpirvResult res;
+    res.available = true;
+
+    ShaderCodegenResult src = GenerateShader(graph, ShaderTarget::GLSL_VULKAN);
+    if (!src.ok) {
+        res.errors = src.errors;
+        return res;
+    }
+
+    std::string verr;
+    if (!CompileVulkanGlslToSpirv(src.vertex, EShLangVertex, res.vertex_spirv, verr)) {
+        res.errors.push_back("vertex: " + verr);
+    }
+    std::string ferr;
+    if (!CompileVulkanGlslToSpirv(src.fragment, EShLangFragment, res.fragment_spirv, ferr)) {
+        res.errors.push_back("fragment: " + ferr);
+    }
+    res.ok = res.errors.empty() && !res.vertex_spirv.empty() && !res.fragment_spirv.empty();
+    return res;
+}
+#else
+ShaderSpirvResult GenerateSpirv(const ShaderGraphAsset& /*graph*/) {
+    ShaderSpirvResult res;
+    res.available = false;
+    return res;
+}
+#endif  // DSE_HAS_GLSLANG
 
 }  // namespace shadergraph
 }  // namespace dse

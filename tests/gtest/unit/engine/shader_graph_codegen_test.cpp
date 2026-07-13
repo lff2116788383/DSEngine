@@ -288,6 +288,36 @@ TEST(ShaderGraphCodegen, WgslDivergentNodesWarnAndDegrade) {
     EXPECT_TRUE(gl.warnings.empty());
 }
 
+// The Vulkan GLSL 450 emitted by the shared codegen must be *real* SPIR-V —
+// i.e. actually compile through glslang, not merely match strings. When the
+// build links glslang (DSE_HAS_GLSLANG) this compiles vertex+fragment and
+// asserts valid SPIR-V (magic word 0x07230203); otherwise it documents the gap.
+TEST(ShaderGraphCodegen, VulkanGlslCompilesToRealSpirv) {
+    ShaderSpirvResult r = GenerateSpirv(MakeGraph());
+    if (!r.available) {
+        GTEST_SKIP() << "built without glslang (DSE_HAS_GLSLANG); SPIR-V path not compiled in";
+    }
+    ASSERT_TRUE(r.ok) << (r.errors.empty() ? "" : r.errors[0]);
+    ASSERT_FALSE(r.vertex_spirv.empty());
+    ASSERT_FALSE(r.fragment_spirv.empty());
+    // SPIR-V module magic number (first word).
+    EXPECT_EQ(r.vertex_spirv[0], 0x07230203u);
+    EXPECT_EQ(r.fragment_spirv[0], 0x07230203u);
+}
+
+// A structurally invalid graph must not yield SPIR-V.
+TEST(ShaderGraphCodegen, InvalidGraphProducesNoSpirv) {
+    ShaderGraphAsset g = MakeGraph();
+    g.links.push_back({70, 999, 31});  // dangling from_pin
+    ShaderSpirvResult r = GenerateSpirv(g);
+    if (!r.available) {
+        GTEST_SKIP() << "built without glslang";
+    }
+    EXPECT_FALSE(r.ok);
+    EXPECT_TRUE(r.vertex_spirv.empty());
+    EXPECT_TRUE(r.fragment_spirv.empty());
+}
+
 TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL), "GLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::HLSL), "HLSL");

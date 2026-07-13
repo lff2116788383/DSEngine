@@ -14,12 +14,14 @@
  * 类型名与内建函数差异（vec3/float3、mix/lerp、texture()/Sample() 等）。
  * 无法在目标后端表达的节点会记录 warning 并退化为安全默认值（不静默产错）。
  *
- * 该模块只做源码生成，不做编译/链接；SPIR-V/DXBC 由各后端离线或运行时编译器
+ * 该模块以源码生成为主。当构建链接了 glslang（DSE_HAS_GLSLANG）时，GenerateSpirv()
+ * 还能把 Vulkan GLSL 450 输出编译为真实 SPIR-V；DXBC 仍由离线 dse_shader_compiler
  * 在此源码之上完成。
  */
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -50,6 +52,19 @@ DSE_EXPORT const char* ShaderTargetName(ShaderTarget target);
 /// 生成顶点 + 片元着色器源码。图非法时 ok=false 并填充 errors。
 DSE_EXPORT ShaderCodegenResult GenerateShader(const ShaderGraphAsset& graph,
                                               ShaderTarget target);
+
+/// SPIR-V 编译结果。available=false 表示本次构建未链接 glslang（DSE_HAS_GLSLANG 未定义）。
+struct ShaderSpirvResult {
+    bool available = false;                 ///< 构建是否含 glslang
+    bool ok = false;                        ///< 顶点 + 片元均成功编译为 SPIR-V
+    std::vector<uint32_t> vertex_spirv;     ///< 顶点 SPIR-V 字（words）
+    std::vector<uint32_t> fragment_spirv;   ///< 片元 SPIR-V 字（words）
+    std::vector<std::string> errors;        ///< 图非法或 glslang 编译错误
+};
+
+/// 将节点图经 Vulkan GLSL 450 用 glslang 编译为真实 SPIR-V（顶点 + 片元）。
+/// 若构建未链接 glslang，返回 available=false（不产错，由调用方决定是否走离线工具）。
+DSE_EXPORT ShaderSpirvResult GenerateSpirv(const ShaderGraphAsset& graph);
 
 }  // namespace shadergraph
 }  // namespace dse
