@@ -1195,17 +1195,17 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         if (ImGui::Button(T("Save"))) {
             std::string save_path;
 #ifdef _WIN32
-            char filename[MAX_PATH] = "shader_graph.dsg";
+            char filename[MAX_PATH] = "shader_graph.dshadergraph";
             OPENFILENAMEA ofn = {};
             ofn.lStructSize = sizeof(ofn);
-            ofn.lpstrFilter = "Shader Graph (*.dsg)\0*.dsg\0All Files\0*.*\0";
+            ofn.lpstrFilter = "Shader Graph (*.dshadergraph)\0*.dshadergraph\0All Files\0*.*\0";
             ofn.lpstrFile = filename;
             ofn.nMaxFile = MAX_PATH;
-            ofn.lpstrDefExt = "dsg";
+            ofn.lpstrDefExt = "dshadergraph";
             ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
             if (GetSaveFileNameA(&ofn)) save_path = filename;
 #else
-            save_path = "shader_graph.dsg";
+            save_path = "shader_graph.dshadergraph";
 #endif
             if (!save_path.empty()) {
                 shadergraph::ShaderGraphDiagnostics diag;
@@ -1225,13 +1225,13 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             char filename[MAX_PATH] = "";
             OPENFILENAMEA ofn = {};
             ofn.lStructSize = sizeof(ofn);
-            ofn.lpstrFilter = "Shader Graph (*.dsg)\0*.dsg\0All Files\0*.*\0";
+            ofn.lpstrFilter = "Shader Graph (*.dshadergraph)\0*.dshadergraph\0Legacy Shader Graph (*.dsg)\0*.dsg\0All Files\0*.*\0";
             ofn.lpstrFile = filename;
             ofn.nMaxFile = MAX_PATH;
             ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
             if (GetOpenFileNameA(&ofn)) load_path = filename;
 #else
-            load_path = "shader_graph.dsg";
+            load_path = "shader_graph.dshadergraph";
 #endif
             if (!load_path.empty()) {
                 shadergraph::ShaderGraphAsset asset;
