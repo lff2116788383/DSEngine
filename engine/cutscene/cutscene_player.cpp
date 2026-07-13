@@ -5,6 +5,7 @@
 
 #include "engine/cutscene/cutscene_player.h"
 #include <algorithm>
+#include <cmath>
 
 namespace dse {
 namespace cutscene {
@@ -110,27 +111,52 @@ void CutscenePlayer::Update(float dt) {
 
     if (state_ != PlayState::Playing) return;
 
-    current_time_ += dt * play_rate_;
-
     auto seq = GetSequence(current_seq_name_);
     if (!seq) {
         Stop();
         return;
     }
 
-    // 评估轨道
-    seq->Evaluate(current_time_);
+    const float duration = seq->GetDuration();
+    current_time_ += dt * play_rate_;
 
-    // 检查是否播完
-    if (current_time_ >= seq->GetDuration()) {
+    // 前向播完（速率非负、越过时长）
+    if (play_rate_ >= 0.0f && current_time_ >= duration) {
+        if (loop_ && duration > 0.0f) {
+            current_time_ = std::fmod(current_time_, duration);
+            seq->Reset();              // 重置轨道，使事件在新一轮可再次触发
+            seq->Evaluate(current_time_);
+            return;
+        }
+        current_time_ = duration;      // 夹取到末端
+        seq->Evaluate(current_time_);
         std::string finished_name = current_seq_name_;
         Stop();
-        if (finish_callback_) {
-            finish_callback_(finished_name);
-        }
-        // 播完后继续检查触发器
+        if (finish_callback_) finish_callback_(finished_name);
         CheckTriggers();
+        return;
     }
+
+    // 倒放播完（速率为负、回退到起点）
+    if (play_rate_ < 0.0f && current_time_ <= 0.0f) {
+        if (loop_ && duration > 0.0f) {
+            current_time_ = duration + std::fmod(current_time_, duration);
+            if (current_time_ >= duration) current_time_ = 0.0f;
+            seq->Reset();
+            seq->Evaluate(current_time_);
+            return;
+        }
+        current_time_ = 0.0f;          // 夹取到起点
+        seq->Evaluate(current_time_);
+        std::string finished_name = current_seq_name_;
+        Stop();
+        if (finish_callback_) finish_callback_(finished_name);
+        CheckTriggers();
+        return;
+    }
+
+    // 正常评估
+    seq->Evaluate(current_time_);
 }
 
 } // namespace cutscene

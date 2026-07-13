@@ -108,9 +108,13 @@ public:
     /// 获取当前正在播放的 Sequence 名称
     const std::string& GetCurrentSequenceName() const { return current_seq_name_; }
 
-    /// 设置播放速率
+    /// 设置播放速率（可为负，负值倒放）
     void SetPlayRate(float rate) { play_rate_ = rate; }
     float GetPlayRate() const { return play_rate_; }
+
+    /// 设置/获取循环播放。开启后到达时长（或倒放到起点）时环绕而非停止。
+    void SetLoop(bool loop) { loop_ = loop; }
+    bool GetLoop() const { return loop_; }
 
     /// 设置完成回调
     void SetFinishCallback(CutsceneFinishCallback cb) { finish_callback_ = std::move(cb); }
@@ -132,6 +136,7 @@ private:
     std::string current_seq_name_;
     float current_time_ = 0.0f;
     float play_rate_ = 1.0f;
+    bool loop_ = false;
     PlayState state_ = PlayState::Stopped;
     CutsceneFinishCallback finish_callback_;
 };

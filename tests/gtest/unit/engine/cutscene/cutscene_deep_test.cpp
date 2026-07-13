@@ -273,6 +273,60 @@ TEST_F(CutscenePlayerDeepTest, MultipleTriggers) {
     EXPECT_EQ(player.GetCurrentSequenceName(), "A");
 }
 
+TEST_F(CutscenePlayerDeepTest, LoopWrapsInsteadOfStopping) {
+    player.SetLoop(true);
+    player.Play("A");                 // dur = 3.0
+    player.Update(3.5f);              // 越过时长 → 环绕到 fmod(3.5,3)=0.5
+    EXPECT_EQ(player.GetState(), PlayState::Playing);
+    EXPECT_NEAR(player.GetCurrentTime(), 0.5f, 1e-4f);
+    EXPECT_TRUE(finished.empty());    // 循环不触发完成回调
+}
+
+TEST_F(CutscenePlayerDeepTest, ReverseClampsAtZeroAndFinishes) {
+    player.Play("A");                 // dur = 3.0
+    player.Seek(2.0f);
+    player.SetPlayRate(-1.0f);
+    player.Update(3.0f);              // 2.0 - 3.0 = -1.0 → 夹取到 0，完成
+    EXPECT_EQ(player.GetState(), PlayState::Stopped);
+    EXPECT_FLOAT_EQ(player.GetCurrentTime(), 0.0f);
+    ASSERT_EQ(finished.size(), 1u);
+    EXPECT_EQ(finished[0], "A");
+}
+
+TEST_F(CutscenePlayerDeepTest, ReverseLoopWrapsToEnd) {
+    player.SetLoop(true);
+    player.Play("A");                 // dur = 3.0
+    player.Seek(0.5f);
+    player.SetPlayRate(-1.0f);
+    player.Update(1.0f);              // 0.5 - 1.0 = -0.5 → 3.0 + (-0.5) = 2.5
+    EXPECT_EQ(player.GetState(), PlayState::Playing);
+    EXPECT_NEAR(player.GetCurrentTime(), 2.5f, 1e-4f);
+    EXPECT_TRUE(finished.empty());
+}
+
+TEST(CutscenePlayerLoopEventTest, EventRefiresAcrossLoopBoundary) {
+    CutscenePlayer player;
+    std::vector<std::string> fired;
+
+    auto seq = std::make_shared<CutsceneSequence>("loop_seq", 2.0f);
+    auto evt = std::make_shared<EventTrack>("Events");
+    evt->AddEvent(1.0f, "beat");
+    evt->SetFireCallback([&fired](const std::string& name, const std::string&) {
+        fired.push_back(name);
+    });
+    seq->AddTrack(evt);
+    player.AddSequence(seq);
+
+    player.SetLoop(true);
+    player.Play("loop_seq");
+    player.Update(1.5f);   // 越过 t=1 → 触发一次
+    ASSERT_EQ(fired.size(), 1u);
+    player.Update(1.0f);   // 2.5 → 环绕到 0.5，轨道 Reset，事件重新装填
+    player.Update(1.0f);   // 1.5 → 再次越过 t=1 → 第二次触发
+    EXPECT_EQ(fired.size(), 2u);
+    EXPECT_EQ(player.GetState(), PlayState::Playing);
+}
+
 TEST_F(CutscenePlayerDeepTest, ClearTriggers) {
     bool t = false;
     CutsceneTrigger trigger;
