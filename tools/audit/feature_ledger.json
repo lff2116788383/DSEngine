@@ -266,19 +266,21 @@
       ],
       "requiredPlatforms": [],
       "tests": [
-        "tests/blueprint/blueprint_smoke.cpp"
+        "tests/blueprint/blueprint_smoke.cpp",
+        "tests/gtest/unit/engine/blueprint_lifecycle_e2e_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_blueprint_compiler.cpp",
-        "engine/scripting/blueprint/blueprint_compiler.cpp"
+        "engine/scripting/blueprint/blueprint_compiler.cpp",
+        "engine/scripting/blueprint/blueprint_serialize.cpp"
       ],
       "acceptance": {
-        "editorRoundTrip": false,
+        "editorRoundTrip": true,
         "runtimeConsumption": true,
-        "explicitDiagnostics": false,
-        "versionedMigration": false,
+        "explicitDiagnostics": true,
+        "versionedMigration": true,
         "platformMatrix": "not_applicable",
         "automatedTests": true,
         "cleanMachine": false,
@@ -286,7 +288,7 @@
       },
       "blockers": [
         "Compiler now covers arithmetic/comparison/logical/Vec3/array nodes with unknown data nodes routed through CallExtern (no silent 0.0f fallback), and bytecode validation exists; full node-registry parity and lifecycle-event acceptance are still not covered.",
-        "No end-to-end editor->save->reopen->compile->runtime->execute acceptance, and hot-reload state migration is unimplemented."
+        "Headless end-to-end acceptance now covers author->save(.dbp on disk)->reopen->compile->validate->VM execute via the shared serialize/compile/VM path (blueprint_lifecycle_e2e_test.cpp), asserting the authored logic produces the expected runtime value after a full disk round-trip. Live in-editor session E2E and hot-reload state migration are still not covered."
       ]
     },
     {
