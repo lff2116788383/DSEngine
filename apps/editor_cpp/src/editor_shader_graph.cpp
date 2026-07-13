@@ -8,6 +8,7 @@
 #include "engine/core/service_locator.h"
 #include "engine/base/debug.h"
 #include "engine/ecs/components_3d.h"
+#include "engine/render/shader_graph/shader_graph_asset.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -478,174 +479,101 @@ std::vector<NodeTemplate>& GetTemplates() {
     return templates;
 }
 
-// ─── JSON 序列化辅助 ─────────────────────────────────────────────────────────
+// ─── 与共享 .dshadergraph 资产契约(engine/render/shader_graph)的互转 ──────────
+// 编辑器本地 PinType 与 shadergraph::PinType 的枚举顺序一致，逐项映射保证稳定。
 
-std::string EscapeJson(const std::string& s) {
-    std::string out;
-    for (char c : s) {
-        if (c == '"') out += "\\\"";
-        else if (c == '\\') out += "\\\\";
-        else out += c;
-    }
-    return out;
-}
-
-std::string PinTypeToStr(PinType t) {
+shadergraph::PinType ToAssetPinType(PinType t) {
     switch (t) {
-        case PinType::Float: return "Float";
-        case PinType::Vec2: return "Vec2";
-        case PinType::Vec3: return "Vec3";
-        case PinType::Vec4: return "Vec4";
-        case PinType::Color: return "Color";
-        case PinType::Texture2D: return "Texture2D";
-        case PinType::Sampler: return "Sampler";
+        case PinType::Float:     return shadergraph::PinType::Float;
+        case PinType::Vec2:      return shadergraph::PinType::Vec2;
+        case PinType::Vec3:      return shadergraph::PinType::Vec3;
+        case PinType::Vec4:      return shadergraph::PinType::Vec4;
+        case PinType::Color:     return shadergraph::PinType::Color;
+        case PinType::Texture2D: return shadergraph::PinType::Texture2D;
+        case PinType::Sampler:   return shadergraph::PinType::Sampler;
     }
-    return "Float";
+    return shadergraph::PinType::Float;
 }
 
-PinType StrToPinType(const std::string& s) {
-    if (s == "Vec2") return PinType::Vec2;
-    if (s == "Vec3") return PinType::Vec3;
-    if (s == "Vec4") return PinType::Vec4;
-    if (s == "Color") return PinType::Color;
-    if (s == "Texture2D") return PinType::Texture2D;
-    if (s == "Sampler") return PinType::Sampler;
+PinType FromAssetPinType(shadergraph::PinType t) {
+    switch (t) {
+        case shadergraph::PinType::Float:     return PinType::Float;
+        case shadergraph::PinType::Vec2:      return PinType::Vec2;
+        case shadergraph::PinType::Vec3:      return PinType::Vec3;
+        case shadergraph::PinType::Vec4:      return PinType::Vec4;
+        case shadergraph::PinType::Color:     return PinType::Color;
+        case shadergraph::PinType::Texture2D: return PinType::Texture2D;
+        case shadergraph::PinType::Sampler:   return PinType::Sampler;
+    }
     return PinType::Float;
 }
 
-std::string SerializePinJson(const Pin& p) {
-    std::ostringstream o;
-    o << "{\"id\":" << p.id
-      << ",\"name\":\"" << EscapeJson(p.name) << "\""
-      << ",\"type\":\"" << PinTypeToStr(p.type) << "\""
-      << ",\"kind\":" << (p.kind == PinKind::Input ? 0 : 1)
-      << ",\"default\":[" << p.default_value[0] << "," << p.default_value[1]
-      << "," << p.default_value[2] << "," << p.default_value[3] << "]}";
-    return o.str();
+shadergraph::PinDesc ToAssetPin(const Pin& p) {
+    shadergraph::PinDesc d;
+    d.id = p.id;
+    d.name = p.name;
+    d.type = ToAssetPinType(p.type);
+    d.kind = p.kind == PinKind::Input ? shadergraph::PinKind::Input
+                                      : shadergraph::PinKind::Output;
+    for (int i = 0; i < 4; ++i) d.default_value[i] = p.default_value[i];
+    return d;
 }
 
-std::string SerializeGraphJson(const ShaderGraphState& s) {
-    std::ostringstream o;
-    o << "{\n  \"next_id\":" << s.next_id << ",\n  \"nodes\":[\n";
-    for (size_t ni = 0; ni < s.nodes.size(); ++ni) {
-        auto& n = s.nodes[ni];
-        o << "    {\"id\":" << n.id
-          << ",\"name\":\"" << EscapeJson(n.name) << "\""
-          << ",\"category\":\"" << EscapeJson(n.category) << "\""
-          << ",\"pos\":[" << n.position.x << "," << n.position.y << "]"
-          << ",\"color\":" << n.header_color
-          << ",\"inputs\":[";
-        for (size_t i = 0; i < n.inputs.size(); ++i) {
-            if (i) o << ",";
-            o << SerializePinJson(n.inputs[i]);
-        }
-        o << "],\"outputs\":[";
-        for (size_t i = 0; i < n.outputs.size(); ++i) {
-            if (i) o << ",";
-            o << SerializePinJson(n.outputs[i]);
-        }
-        o << "]}";
-        if (ni + 1 < s.nodes.size()) o << ",";
-        o << "\n";
-    }
-    o << "  ],\n  \"links\":[\n";
-    for (size_t li = 0; li < s.links.size(); ++li) {
-        auto& l = s.links[li];
-        o << "    {\"id\":" << l.id << ",\"from\":" << l.from_pin << ",\"to\":" << l.to_pin << "}";
-        if (li + 1 < s.links.size()) o << ",";
-        o << "\n";
-    }
-    o << "  ]\n}\n";
-    return o.str();
-}
-
-// 极简 JSON 值提取器 (足够处理我们生成的格式)
-std::string JsonValue(const std::string& json, const std::string& key) {
-    std::string search = "\"" + key + "\":";
-    auto pos = json.find(search);
-    if (pos == std::string::npos) return "";
-    pos += search.size();
-    while (pos < json.size() && json[pos] == ' ') ++pos;
-    if (pos >= json.size()) return "";
-    if (json[pos] == '"') {
-        size_t end = json.find('"', pos + 1);
-        return json.substr(pos + 1, end - pos - 1);
-    }
-    if (json[pos] == '[') {
-        int depth = 0;
-        size_t start = pos;
-        for (size_t i = pos; i < json.size(); ++i) {
-            if (json[i] == '[') ++depth;
-            else if (json[i] == ']') { --depth; if (depth == 0) return json.substr(start, i - start + 1); }
-        }
-    }
-    size_t end = json.find_first_of(",}]\n", pos);
-    return json.substr(pos, end - pos);
-}
-
-std::vector<std::string> JsonArray(const std::string& arr) {
-    std::vector<std::string> result;
-    if (arr.size() < 2) return result;
-    // arr starts with '[' and ends with ']'
-    int depth = 0;
-    size_t start = 0;
-    for (size_t i = 1; i < arr.size() - 1; ++i) {
-        if (arr[i] == '{' || arr[i] == '[') { if (depth == 0) start = i; ++depth; }
-        else if (arr[i] == '}' || arr[i] == ']') {
-            --depth;
-            if (depth == 0) result.push_back(arr.substr(start, i - start + 1));
-        }
-    }
-    return result;
-}
-
-Pin ParsePinJson(const std::string& json) {
+Pin FromAssetPin(const shadergraph::PinDesc& d) {
     Pin p;
-    p.id = std::atoi(JsonValue(json, "id").c_str());
-    p.name = JsonValue(json, "name");
-    p.type = StrToPinType(JsonValue(json, "type"));
-    p.kind = (std::atoi(JsonValue(json, "kind").c_str()) == 0) ? PinKind::Input : PinKind::Output;
-    auto def_arr = JsonValue(json, "default");
-    if (!def_arr.empty()) {
-        sscanf(def_arr.c_str(), "[%f,%f,%f,%f]", &p.default_value[0], &p.default_value[1],
-               &p.default_value[2], &p.default_value[3]);
-    }
+    p.id = d.id;
+    p.name = d.name;
+    p.type = FromAssetPinType(d.type);
+    p.kind = d.kind == shadergraph::PinKind::Input ? PinKind::Input : PinKind::Output;
+    for (int i = 0; i < 4; ++i) p.default_value[i] = d.default_value[i];
     return p;
 }
 
-bool DeserializeGraph(const std::string& json, ShaderGraphState& s) {
+shadergraph::ShaderGraphAsset ToAsset(const ShaderGraphState& s) {
+    shadergraph::ShaderGraphAsset a;
+    a.next_id = s.next_id;
+    for (const auto& n : s.nodes) {
+        shadergraph::NodeDesc nd;
+        nd.id = n.id;
+        nd.name = n.name;
+        nd.category = n.category;
+        nd.pos[0] = n.position.x;
+        nd.pos[1] = n.position.y;
+        nd.header_color = static_cast<uint32_t>(n.header_color);
+        for (const auto& p : n.inputs) nd.inputs.push_back(ToAssetPin(p));
+        for (const auto& p : n.outputs) nd.outputs.push_back(ToAssetPin(p));
+        a.nodes.push_back(std::move(nd));
+    }
+    for (const auto& l : s.links) {
+        a.links.push_back({l.id, l.from_pin, l.to_pin});
+    }
+    return a;
+}
+
+void FromAsset(const shadergraph::ShaderGraphAsset& a, ShaderGraphState& s) {
     s.nodes.clear();
     s.links.clear();
-    s.next_id = std::atoi(JsonValue(json, "next_id").c_str());
-    if (s.next_id < 100) s.next_id = 100;
+    s.next_id = a.next_id < 100 ? 100 : a.next_id;
     s.initialized = true;
-
-    auto nodes_arr = JsonValue(json, "nodes");
-    for (auto& nj : JsonArray(nodes_arr)) {
+    for (const auto& nd : a.nodes) {
         Node n;
-        n.id = std::atoi(JsonValue(nj, "id").c_str());
-        n.name = JsonValue(nj, "name");
-        n.category = JsonValue(nj, "category");
-        auto pos_str = JsonValue(nj, "pos");
-        sscanf(pos_str.c_str(), "[%f,%f]", &n.position.x, &n.position.y);
+        n.id = nd.id;
+        n.name = nd.name;
+        n.category = nd.category;
+        n.position = ImVec2(nd.pos[0], nd.pos[1]);
         n.size = ImVec2(180, 0);
-        n.header_color = static_cast<ImU32>(std::stoul(JsonValue(nj, "color")));
-        auto inputs_str = JsonValue(nj, "inputs");
-        for (auto& pj : JsonArray(inputs_str)) n.inputs.push_back(ParsePinJson(pj));
-        auto outputs_str = JsonValue(nj, "outputs");
-        for (auto& pj : JsonArray(outputs_str)) n.outputs.push_back(ParsePinJson(pj));
+        n.header_color = static_cast<ImU32>(nd.header_color);
+        for (const auto& p : nd.inputs) n.inputs.push_back(FromAssetPin(p));
+        for (const auto& p : nd.outputs) n.outputs.push_back(FromAssetPin(p));
         s.nodes.push_back(std::move(n));
     }
-
-    auto links_arr = JsonValue(json, "links");
-    for (auto& lj : JsonArray(links_arr)) {
-        Link l;
-        l.id = std::atoi(JsonValue(lj, "id").c_str());
-        l.from_pin = std::atoi(JsonValue(lj, "from").c_str());
-        l.to_pin = std::atoi(JsonValue(lj, "to").c_str());
-        s.links.push_back(l);
+    for (const auto& l : a.links) {
+        Link lnk;
+        lnk.id = l.id;
+        lnk.from_pin = l.from_pin;
+        lnk.to_pin = l.to_pin;
+        s.links.push_back(lnk);
     }
-    return true;
 }
 
 // ─── Compile: 节点图 → GLSL fragment shader ──────────────────────────────────
@@ -1278,12 +1206,13 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             save_path = "shader_graph.dsg";
 #endif
             if (!save_path.empty()) {
-                std::string json = SerializeGraphJson(state);
-                std::ofstream out(save_path);
-                if (out.is_open()) {
-                    out << json;
-                    out.close();
-                    EditorLog(LogLevel::Info, "[ShaderGraph] Saved to " + save_path + " (" + std::to_string(json.size()) + " bytes)");
+                shadergraph::ShaderGraphDiagnostics diag;
+                if (shadergraph::SaveShaderGraphToFile(ToAsset(state), save_path, diag)) {
+                    EditorLog(LogLevel::Info, "[ShaderGraph] Saved to " + save_path +
+                              " (schema v" + std::to_string(shadergraph::kShaderGraphSchemaVersion) + ")");
+                } else {
+                    std::string msg = diag.errors.empty() ? "unknown error" : diag.errors.front();
+                    EditorLog(LogLevel::Error, "[ShaderGraph] Save failed: " + msg);
                 }
             }
         }
@@ -1303,14 +1232,17 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             load_path = "shader_graph.dsg";
 #endif
             if (!load_path.empty()) {
-                std::ifstream in(load_path);
-                if (in.is_open()) {
-                    std::string json((std::istreambuf_iterator<char>(in)),
-                                      std::istreambuf_iterator<char>());
-                    in.close();
-                    if (DeserializeGraph(json, state)) {
-                        EditorLog(LogLevel::Info, "[ShaderGraph] Loaded from " + load_path + " (" + std::to_string(state.nodes.size()) + " nodes, " + std::to_string(state.links.size()) + " links)");
+                shadergraph::ShaderGraphAsset asset;
+                shadergraph::ShaderGraphDiagnostics diag;
+                if (shadergraph::LoadShaderGraphFromFile(load_path, asset, diag)) {
+                    FromAsset(asset, state);
+                    if (diag.migrated) {
+                        EditorLog(LogLevel::Warning, "[ShaderGraph] Migrated legacy (unversioned) graph from " + load_path);
                     }
+                    EditorLog(LogLevel::Info, "[ShaderGraph] Loaded from " + load_path + " (" + std::to_string(state.nodes.size()) + " nodes, " + std::to_string(state.links.size()) + " links)");
+                } else {
+                    std::string msg = diag.errors.empty() ? "unknown error" : diag.errors.front();
+                    EditorLog(LogLevel::Error, "[ShaderGraph] Load failed: " + msg);
                 }
             }
         }
