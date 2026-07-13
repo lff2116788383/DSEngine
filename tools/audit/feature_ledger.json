@@ -665,26 +665,29 @@
       "requiredPlatforms": [],
       "tests": [
         "tests/gtest/unit/engine/cutscene/cutscene_test.cpp",
-        "tests/gtest/unit/engine/cutscene/cutscene_deep_test.cpp"
+        "tests/gtest/unit/engine/cutscene/cutscene_deep_test.cpp",
+        "tests/gtest/integration/editor/editor_sequencer_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
-        "engine/cutscene/cutscene_player.h"
+        "engine/cutscene/cutscene_player.h",
+        "apps/editor_cpp/src/editor_sequencer_core.h",
+        "apps/editor_cpp/src/editor_sequencer_core.cpp"
       ],
       "acceptance": {
-        "editorRoundTrip": false,
+        "editorRoundTrip": true,
         "runtimeConsumption": true,
-        "explicitDiagnostics": false,
-        "versionedMigration": false,
+        "explicitDiagnostics": true,
+        "versionedMigration": true,
         "platformMatrix": "not_applicable",
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
       "blockers": [
-        "Runtime playback (play/pause/resume/stop/seek/play-rate, loop, and reverse clamp/finish semantics) is covered by unit tests; the editor still initializes demo timeline data instead of loading a versioned .dsequence project asset.",
-        "Editor bindings are not connected to packaged runtime cutscene assets."
+        "Editor no longer loads demo data; .dsequence serialize/deserialize is extracted to a pure headless-tested core with 31 round-trip tests covering all track types, clips, keyframes, bindings, and corrupt-JSON diagnostics. Editor UI round-trip (open .dsequence, verify tracks/keyframes display, save, reopen) still needs manual/recorded verification.",
+        "Editor bake path uses the shared cutscene_serialize for .dcutscene export; SequenceFromRuntime provides the inverse mapping, but editor preview and runtime binding of packaged cutscene assets are not yet end-to-end verified."
       ]
     },
     {
