@@ -13,6 +13,7 @@
 #include "engine/ecs/components_3d_terrain_tile.h"
 #include "engine/ecs/components_3d_tree.h"
 #include "engine/ecs/components_3d_render.h"
+#include "engine/ecs/script.h"
 #include <filesystem>
 #include <string>
 #include <cmath>
@@ -315,6 +316,67 @@ TEST(SceneSerializationTest, PrefabSaveAndRestoreParentChildHierarchy) {
         ++child_count;
     }
     EXPECT_EQ(child_count, 1);
+}
+
+// ============================================================
+// 4b. C# 脚本组件持久化（scene + prefab）
+// ============================================================
+
+// C# 脚本组件：class_name + enabled 应存盘往返；is_bound 为运行时状态不持久化。
+TEST(SceneSerializationTest, CSharpScriptComponentSceneRoundTrip) {
+    ScopedFileCleanup cleanup;
+    cleanup.Add(kTestSceneFile);
+
+    {
+        Scene src("csharp_scene");
+        auto& w = src.GetWorld();
+        Entity e = w.CreateEntity();
+        w.registry().emplace<TransformComponent>(e);
+        CSharpScriptComponent cs;
+        cs.class_name = "PlayerController";
+        cs.enabled = false;
+        cs.is_bound = true;            // 运行时状态，不应被写盘
+        w.registry().emplace<CSharpScriptComponent>(e, cs);
+        ASSERT_TRUE(src.Serialize(kTestSceneFile));
+    }
+
+    Scene dst("csharp_loaded");
+    ASSERT_TRUE(dst.Deserialize(kTestSceneFile));
+
+    auto view = dst.GetWorld().registry().view<CSharpScriptComponent>();
+    int count = 0;
+    for (auto e : view) {
+        const auto& cs = view.get<CSharpScriptComponent>(e);
+        EXPECT_EQ(cs.class_name, "PlayerController");
+        EXPECT_FALSE(cs.enabled);
+        EXPECT_FALSE(cs.is_bound);  // 加载后回到未绑定默认值
+        ++count;
+    }
+    EXPECT_EQ(count, 1);
+}
+
+// C# 脚本组件应随实体一起存入 prefab 并在实例化时恢复。
+TEST(SceneSerializationTest, CSharpScriptComponentPrefabRoundTrip) {
+    ScopedFileCleanup cleanup;
+    cleanup.Add(kTestPrefabFile);
+
+    World world;
+    Entity root = world.CreateEntity();
+    world.registry().emplace<TransformComponent>(root);
+    CSharpScriptComponent cs;
+    cs.class_name = "EnemyAI";
+    cs.enabled = true;
+    world.registry().emplace<CSharpScriptComponent>(root, cs);
+    ASSERT_TRUE(SaveEntityAsPrefab(world, root, kTestPrefabFile));
+
+    World target;
+    Entity inst = InstantiatePrefab(target, kTestPrefabFile);
+    ASSERT_TRUE(inst != entt::null);
+    ASSERT_TRUE(target.registry().all_of<CSharpScriptComponent>(inst));
+    const auto& loaded = target.registry().get<CSharpScriptComponent>(inst);
+    EXPECT_EQ(loaded.class_name, "EnemyAI");
+    EXPECT_TRUE(loaded.enabled);
+    EXPECT_FALSE(loaded.is_bound);
 }
 
 // ============================================================
