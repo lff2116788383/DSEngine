@@ -599,8 +599,8 @@
         "productionReady": false
       },
       "blockers": [
-        "Backend-agnostic codegen now emits four source profiles from the shared .dshadergraph schema: GLSL 430 (OpenGL), HLSL SM5 (D3D11), GLSL 450 (Vulkan, explicit layout/binding + UBO-wrapped uniforms), and GLSL ES 3.00 (WebGL2); SPIR-V binary and WebGPU/WGSL text are still not generated.",
-        "Editor exposes Export HLSL/Vulkan/WebGL2 via the shared codegen, but the editor's live GLSL preview path is not yet unified onto it, and there is no preview or screenshot-golden acceptance."
+        "Backend-agnostic codegen now emits five source profiles from the shared .dshadergraph schema via one node traversal: GLSL 430 (OpenGL), HLSL SM5 (D3D11), GLSL 450 (Vulkan, explicit layout/binding + UBO-wrapped uniforms), GLSL ES 3.00 (WebGL2), and WGSL (WebGPU, @group/@binding resources + struct I/O + textureSample). Nodes needing WGSL-specific lowering (Normal Map multi-component swizzle assignment, Rotate UV comma-declaration, Noise Voronoi C-style loop) warn + emit a safe default instead of invalid WGSL. Still not generated: SPIR-V binary and DXBC; the emitted source is contract-tested at the string level but not run through a WGSL/GLSL/HLSL compiler headlessly.",
+        "Editor exposes Export HLSL/Vulkan/WebGL2/WebGPU via the shared codegen, but the editor's live GLSL preview path is not yet unified onto it, and there is no preview or screenshot-golden acceptance."
       ]
     },
     {

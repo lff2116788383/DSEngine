@@ -231,9 +231,67 @@ TEST(ShaderGraphCodegen, WebGl2TargetProducesEsGlsl) {
     EXPECT_TRUE(Contains(r.vertex, "layout(std140) uniform PerFrame"));
 }
 
+TEST(ShaderGraphCodegen, WgslTargetProducesWgslSource) {
+    ShaderCodegenResult r = GenerateShader(MakeGraph(), ShaderTarget::WGSL);
+    ASSERT_TRUE(r.ok);
+    EXPECT_TRUE(r.errors.empty());
+    EXPECT_TRUE(r.warnings.empty());
+
+    // WGSL: struct I/O with @location attributes, @group/@binding resources,
+    // textureSample(tex, tex_sampler, uv), var-form declarations, returns FragColor.
+    EXPECT_TRUE(Contains(r.fragment, "@group(0) @binding(0) var<uniform> uni : PerDraw;"));
+    EXPECT_TRUE(Contains(r.fragment, "u_time : f32,"));
+    EXPECT_TRUE(Contains(r.fragment, "@group(0) @binding(1) var u_tex0 : texture_2d<f32>;"));
+    EXPECT_TRUE(Contains(r.fragment, "@group(0) @binding(2) var u_tex0_sampler : sampler;"));
+    EXPECT_TRUE(Contains(r.fragment, "@fragment"));
+    EXPECT_TRUE(Contains(r.fragment, "fn main(fs : FSIn) -> @location(0) vec4<f32>"));
+    EXPECT_TRUE(Contains(r.fragment, "textureSample(u_tex0, u_tex0_sampler, v_uv)"));
+    EXPECT_TRUE(Contains(r.fragment, "var u_time = uni.u_time;"));
+    EXPECT_TRUE(Contains(r.fragment, "return FragColor;"));
+    // WGSL has no mod() intrinsic: checkerboard must be expanded, not call mod(/fmod(.
+    EXPECT_FALSE(Contains(r.fragment, "mod("));
+    EXPECT_FALSE(Contains(r.fragment, "fmod("));
+    // No GLSL/HLSL-isms leaked in.
+    EXPECT_FALSE(Contains(r.fragment, "#version"));
+    EXPECT_FALSE(Contains(r.fragment, "gl_FragCoord"));
+    EXPECT_FALSE(Contains(r.fragment, "SamplerState"));
+
+    EXPECT_TRUE(Contains(r.vertex, "@vertex"));
+    EXPECT_TRUE(Contains(r.vertex, "@group(0) @binding(0) var<uniform> frame : PerFrame;"));
+    EXPECT_TRUE(Contains(r.vertex, "o.pos = frame.vp * vec4<f32>(vin.a_pos, 1.0);"));
+}
+
+// Nodes needing WGSL-specific lowering (multi-component swizzle assign / C-style
+// loops) must warn + emit a safe default rather than emit invalid WGSL.
+TEST(ShaderGraphCodegen, WgslDivergentNodesWarnAndDegrade) {
+    ShaderGraphAsset g;
+    g.next_id = 200;
+    NodeDesc vor;
+    vor.id = 1;
+    vor.name = "Noise Voronoi";
+    vor.inputs.push_back(MakePin(2, "UV", PinType::Vec2, PinKind::Input));
+    vor.inputs.push_back(MakePin(3, "Scale", PinType::Float, PinKind::Input));
+    vor.inputs[1].default_value[0] = 5.0f;
+    vor.outputs.push_back(MakePin(4, "Dist", PinType::Float, PinKind::Output));
+    g.nodes = {vor};
+
+    ShaderCodegenResult r = GenerateShader(g, ShaderTarget::WGSL);
+    ASSERT_TRUE(r.ok);
+    ASSERT_FALSE(r.warnings.empty());
+    EXPECT_TRUE(Contains(r.warnings[0], "Noise Voronoi"));
+    // Degraded path stays valid WGSL: no C-style for-loop / int cast leaked in.
+    EXPECT_FALSE(Contains(r.fragment, "for (int"));
+    EXPECT_FALSE(Contains(r.fragment, "float("));
+
+    // The same graph is fully supported (no warning) on GLSL.
+    ShaderCodegenResult gl = GenerateShader(g, ShaderTarget::GLSL);
+    EXPECT_TRUE(gl.warnings.empty());
+}
+
 TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL), "GLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::HLSL), "HLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_VULKAN), "GLSL-Vulkan");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_ES), "GLSL-ES");
+    EXPECT_STREQ(ShaderTargetName(ShaderTarget::WGSL), "WebGPU-WGSL");
 }

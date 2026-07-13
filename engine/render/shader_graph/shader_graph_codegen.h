@@ -3,11 +3,12 @@
  * @brief 后端无关的着色器图代码生成：ShaderGraphAsset → 着色器源码
  *
  * 在共享 .dshadergraph 资产契约（shader_graph_asset.h）之上，把节点图编译为
- * 具体后端的着色器源码。目前支持四个目标：
+ * 具体后端的着色器源码。目前支持五个目标：
  *   - GLSL（#version 430，OpenGL；与引擎内建 GL 着色器一致）
  *   - HLSL（Shader Model 5.0，Direct3D 11）
  *   - GLSL_VULKAN（#version 450，Vulkan；显式 layout(location/binding)、UBO 化 u_time）
  *   - GLSL_ES（#version 300 es，WebGL2；precision 限定符、name-matched varying）
+ *   - WGSL（WebGPU；@group/@binding 资源、struct I/O、textureSample）
  *
  * 生成过程与后端无关：同一份节点遍历/拓扑排序逻辑，通过 ShaderLang 抽象出
  * 类型名与内建函数差异（vec3/float3、mix/lerp、texture()/Sample() 等）。
@@ -33,6 +34,7 @@ enum class ShaderTarget {
     HLSL,         ///< Direct3D 11, Shader Model 5.0
     GLSL_VULKAN,  ///< Vulkan, #version 450 (explicit layout locations/bindings)
     GLSL_ES,      ///< WebGL2, #version 300 es (precision-qualified)
+    WGSL,         ///< WebGPU, WGSL text (@group/@binding, struct I/O)
 };
 
 struct ShaderCodegenResult {

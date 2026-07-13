@@ -1184,6 +1184,9 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
         if (ImGui::Button(T("Export WebGL2")))
             export_shader(shadergraph::ShaderTarget::GLSL_ES, "shader_graph_output.webgl2.glsl");
         ImGui::SameLine();
+        if (ImGui::Button(T("Export WebGPU")))
+            export_shader(shadergraph::ShaderTarget::WGSL, "shader_graph_output.wgsl");
+        ImGui::SameLine();
         if (ImGui::Button(T("Apply to Material"))) {
             // 生成配套顶点着色器 + 片元着色器（GLSL），两段一起送入 AssetManager 编译链接为可用程序。
             // 仅 OpenGL 后端能从 GLSL 源码编出有效句柄；其余后端返回 nullptr（材质保持原样，不假成功）。
