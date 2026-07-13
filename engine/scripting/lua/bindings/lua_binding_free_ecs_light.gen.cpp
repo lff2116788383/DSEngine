@@ -86,6 +86,22 @@ int L_add_directional_light_3d(lua_State* L) {
     return 0;
 }
 
+int L_add_sky_light(lua_State* L) {
+    uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    float up_r = static_cast<float>(luaL_checknumber(L, 2));
+    float up_g = static_cast<float>(luaL_checknumber(L, 3));
+    float up_b = static_cast<float>(luaL_checknumber(L, 4));
+    float down_r = static_cast<float>(luaL_checknumber(L, 5));
+    float down_g = static_cast<float>(luaL_checknumber(L, 6));
+    float down_b = static_cast<float>(luaL_checknumber(L, 7));
+    float intensity = static_cast<float>(luaL_checknumber(L, 8));
+    dse_sky_light_add(e);
+    dse_sky_light_set_up_color(e, up_r, up_g, up_b);
+    dse_sky_light_set_down_color(e, down_r, down_g, down_b);
+    dse_sky_light_set_intensity(e, intensity);
+    return 0;
+}
+
 int L_dse_compat_set_directional_light_3d(lua_State* L) {
     uint32_t e = static_cast<uint32_t>(luaL_checkinteger(L, 1));
     int enabled = helper::CheckBool(L, 2) ? 1 : 0;
@@ -210,6 +226,7 @@ void RegisterEcsRenderingLightBindings(lua_State* L) {
         {"set_reflection_probe", L_dse_rendering_set_reflection_probe_ex},
         {"set_reflection_probe_enabled", L_dse_rendering_set_reflection_probe_enabled},
         {"add_directional_light_3d", L_add_directional_light_3d},
+        {"add_sky_light", L_add_sky_light},
         {"set_directional_light_3d", L_dse_compat_set_directional_light_3d},
         {"set_directional_light_shadow", L_dse_dir_light_set_shadow_params},
         {"add_point_light_3d", L_add_point_light_3d},

@@ -18,6 +18,7 @@
 #else
 #  include <cerrno>
 #  include <csignal>
+#  include <fcntl.h>
 #  include <poll.h>
 #  include <spawn.h>
 #  include <sys/wait.h>

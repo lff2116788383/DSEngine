@@ -7544,6 +7544,77 @@
           "returns": []
         },
         {
+          "lua_name": "add_sky_light",
+          "params": [
+            {
+              "name": "e",
+              "type": "uint32"
+            },
+            {
+              "name": "up_r",
+              "type": "float"
+            },
+            {
+              "name": "up_g",
+              "type": "float"
+            },
+            {
+              "name": "up_b",
+              "type": "float"
+            },
+            {
+              "name": "down_r",
+              "type": "float"
+            },
+            {
+              "name": "down_g",
+              "type": "float"
+            },
+            {
+              "name": "down_b",
+              "type": "float"
+            },
+            {
+              "name": "intensity",
+              "type": "float"
+            }
+          ],
+          "calls": [
+            {
+              "c_name": "dse_sky_light_add",
+              "args": [
+                "e"
+              ]
+            },
+            {
+              "c_name": "dse_sky_light_set_up_color",
+              "args": [
+                "e",
+                "up_r",
+                "up_g",
+                "up_b"
+              ]
+            },
+            {
+              "c_name": "dse_sky_light_set_down_color",
+              "args": [
+                "e",
+                "down_r",
+                "down_g",
+                "down_b"
+              ]
+            },
+            {
+              "c_name": "dse_sky_light_set_intensity",
+              "args": [
+                "e",
+                "intensity"
+              ]
+            }
+          ],
+          "returns": []
+        },
+        {
           "lua_name": "set_directional_light_3d",
           "c_name": "dse_compat_set_directional_light_3d",
           "params": [
