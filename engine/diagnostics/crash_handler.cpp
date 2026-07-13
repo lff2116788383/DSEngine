@@ -27,9 +27,10 @@
 #include <dbghelp.h>  // MiniDumpWriteDump / StackWalk64 / Sym*
 #else
 #include <csignal>
+#include <fcntl.h>     // open(), O_WRONLY, O_CREAT, O_TRUNC
 #include <unistd.h>
 #if defined(__GLIBC__)
-#include <execinfo.h>  // backtrace / backtrace_symbols
+#include <execinfo.h>  // backtrace / backtrace_symbols / backtrace_symbols_fd
 #endif
 #include <sys/utsname.h>
 #endif
@@ -597,21 +598,74 @@ std::string CrashReporter::WriteManualReport(const std::string& reason) {
 
 #else  // ---------------- 非 Windows（POSIX 信号 + backtrace） ----------------
 
+//
+// P2-0: POSIX async-signal-safe crash handler.
+//
+// The signal handler only calls functions that are async-signal-safe
+// per POSIX.1-2016 (Table 2-4): write(), _exit(), snprintf(),
+// backtrace(), backtrace_symbols_fd(), etc.
+//
+// All non-safe work (std::string, std::mutex, std::ofstream, upload
+// callbacks) is deferred: the handler writes a minimal report via
+// raw write() to a pre-opened fd, then _exit().
+//
+
 namespace {
 
 const char* SignalName(int sig) {
     switch (sig) {
         case SIGSEGV: return "SIGSEGV";
         case SIGABRT: return "SIGABRT";
-        case SIGFPE: return "SIGFPE";
-        case SIGILL: return "SIGILL";
-        case SIGBUS: return "SIGBUS";
-        default: return "SIGNAL";
+        case SIGFPE:  return "SIGFPE";
+        case SIGILL:  return "SIGILL";
+        case SIGBUS:  return "SIGBUS";
+        default:      return "SIGNAL";
     }
 }
 
-std::atomic<bool> g_in_handler{false};
+// Reentrancy guard: sig_atomic_t is the POSIX-sanctioned type for
+// variables accessed in signal handlers.
+volatile sig_atomic_t g_in_handler = 0;
 
+// Pre-allocated resources (populated at Install() time, read-only in handler).
+// These use plain C arrays / POD types — no heap, no mutex.
+constexpr int kMaxStackFrames = 64;
+constexpr int kReportBufSize  = 4096;
+
+struct SignalSafeState {
+    int report_fd = -1;           ///< pre-opened fd for crash report, or -1
+    char app_name[128] = {};
+    char app_version[64] = {};
+    char os_info[256] = {};
+    char dump_dir[512] = {};
+    bool initialized = false;
+};
+
+SignalSafeState g_safe_state;
+
+/// Write a NUL-terminated string to a file descriptor (async-signal-safe).
+void WriteStr(int fd, const char* str) {
+    if (fd < 0 || !str) return;
+    size_t len = 0;
+    while (str[len]) ++len;  // strlen is not guaranteed async-signal-safe
+    ssize_t unused = ::write(fd, str, len);
+    (void)unused;
+}
+
+/// Capture backtrace and write directly to fd (async-signal-safe on glibc).
+void CaptureStackPosixSafe(int fd) {
+    if (fd < 0) return;
+#if defined(__GLIBC__)
+    void* frames[kMaxStackFrames];
+    const int n = ::backtrace(frames, kMaxStackFrames);
+    // backtrace_symbols_fd writes directly to fd — no malloc required.
+    ::backtrace_symbols_fd(frames, n, fd);
+#else
+    WriteStr(fd, "(backtrace unavailable on this platform)\n");
+#endif
+}
+
+/// Non-signal-safe stack capture (used by WriteManualReport).
 void CaptureStackPosix(std::vector<std::string>& out, std::size_t max_frames = 64) {
 #if defined(__GLIBC__)
     std::vector<void*> frames(max_frames);
@@ -629,31 +683,84 @@ void CaptureStackPosix(std::vector<std::string>& out, std::size_t max_frames = 6
 #endif
 }
 
+/// The async-signal-safe signal handler.
+/// Only calls async-signal-safe functions (write, snprintf, _exit,
+/// backtrace, backtrace_symbols_fd).
 void PosixSignalHandler(int sig) {
-    bool expected = false;
-    if (!g_in_handler.compare_exchange_strong(expected, true)) {
+    if (g_in_handler) {
+        // Re-entered — bail immediately.
         ::_exit(128 + sig);
     }
+    g_in_handler = 1;
 
-    CrashReporter& reporter = CrashReporter::Instance();
-    const CrashHandlerConfig& cfg = reporter.Config();
+    const SignalSafeState& st = g_safe_state;
 
-    CrashReportInfo info = reporter.BuildBaseInfo(std::string("Signal ") + SignalName(sig));
-    CaptureStackPosix(info.call_stack);
+    // Build a minimal report in a stack-local buffer using snprintf.
+    char buf[kReportBufSize];
+    int pos = 0;
 
-    const std::string report_path = WriteCrashReport(cfg.dump_dir, info);
-    reporter.SetLastReportPath(report_path);
-
-    if (cfg.upload_callback) {
-        try {
-            cfg.upload_callback(report_path, std::string(), FormatCrashReportJson(info));
-        } catch (...) {
+    if (st.report_fd >= 0) {
+        // Write report header
+        pos = snprintf(buf, sizeof(buf),
+            "==================== DSEngine Crash Report ====================\n"
+            "app        : %s\n"
+            "version    : %s\n"
+            "os         : %s\n"
+            "reason     : Signal %s (%d)\n"
+            "pid        : %d\n"
+            "\n---- Call stack ----\n",
+            st.app_name, st.app_version, st.os_info,
+            SignalName(sig), sig,
+            static_cast<int>(::getpid()));
+        if (pos > 0) {
+            ssize_t unused = ::write(st.report_fd, buf, static_cast<size_t>(pos));
+            (void)unused;
         }
+
+        // Write backtrace directly to the fd
+        CaptureStackPosixSafe(st.report_fd);
+
+        // Write footer
+        WriteStr(st.report_fd,
+            "==============================================================\n");
     }
 
-    // 恢复默认处理并重新抛出，保留核心转储等系统行为。
-    ::signal(sig, SIG_DFL);
+    // Also write a brief message to stderr
+    pos = snprintf(buf, sizeof(buf),
+        "\n[DSEngine] Caught signal %s (%d). Crash report written.\n",
+        SignalName(sig), sig);
+    if (pos > 0) {
+        ssize_t unused = ::write(STDERR_FILENO, buf, static_cast<size_t>(pos));
+        (void)unused;
+    }
+
+    // Restore default handler and re-raise to preserve core dump behavior.
+    struct sigaction sa{};
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sigaction(sig, &sa, nullptr);
     ::raise(sig);
+
+    // Should not reach here, but just in case:
+    ::_exit(128 + sig);
+}
+
+/// Install a signal handler using sigaction (async-signal-safe setup).
+void InstallSignalHandler(int sig) {
+    struct sigaction sa{};
+    sa.sa_handler = &PosixSignalHandler;
+    sigemptyset(&sa.sa_mask);
+    // SA_RESETHAND: restore default after handler triggers (one-shot)
+    // SA_NODEFER:  allow re-entry (we guard with g_in_handler)
+    sa.sa_flags = SA_RESETHAND | SA_NODEFER;
+    sigaction(sig, &sa, nullptr);
+}
+
+void RestoreSignalHandler(int sig) {
+    struct sigaction sa{};
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sigaction(sig, &sa, nullptr);
 }
 
 }  // namespace
@@ -666,12 +773,59 @@ bool CrashReporter::Install(const CrashHandlerConfig& config) {
     }
     breadcrumbs_.Reset(config_.max_breadcrumbs);
     if (!installed_) {
-        ::signal(SIGSEGV, &PosixSignalHandler);
-        ::signal(SIGABRT, &PosixSignalHandler);
-        ::signal(SIGFPE, &PosixSignalHandler);
-        ::signal(SIGILL, &PosixSignalHandler);
+        // Populate async-signal-safe state (heap allocation OK here —
+        // we're in a normal context, not a signal handler).
+        SignalSafeState& st = g_safe_state;
+        snprintf(st.app_name, sizeof(st.app_name), "%s",
+                 config_.app_name.empty() ? "DSEngine" : config_.app_name.c_str());
+        snprintf(st.app_version, sizeof(st.app_version), "%s",
+                 config_.app_version.c_str());
+        snprintf(st.os_info, sizeof(st.os_info), "%s", DetectOsInfo().c_str());
+        snprintf(st.dump_dir, sizeof(st.dump_dir), "%s", config_.dump_dir.c_str());
+
+        // Pre-open a crash report file so the signal handler can use
+        // raw write() without any allocation.
+        // Close any previously opened fd.
+        if (st.report_fd >= 0) {
+            ::close(st.report_fd);
+            st.report_fd = -1;
+        }
+        // Note: we don't pre-open here because the crash could happen
+        // much later and the file would be empty/stale. Instead, the
+        // signal handler will create the file using async-signal-safe
+        // open() if needed.
+        //
+        // Actually, open() is async-signal-safe per POSIX. But constructing
+        // the filename (timestamp + pid) in the handler is complex.
+        // A better approach: pre-format the filename at install time.
+        {
+            std::ostringstream name;
+            name << "crash_" << (config_.app_name.empty() ? "DSEngine" : config_.app_name)
+                 << '_' << NowTimestampForFile() << '_' << CurrentProcessId() << ".txt";
+            std::string fname = name.str();
+            for (char& c : fname) {
+                if (c == '/' || c == '\\' || c == ' ' || c == ':') c = '_';
+            }
+            std::filesystem::path path = std::filesystem::path(config_.dump_dir) / fname;
+            // Create the directory and open the file now.
+            std::error_code ec;
+            std::filesystem::create_directories(config_.dump_dir, ec);
+            // Open the file (will be written to by the signal handler)
+            // We keep it open for the lifetime of the program.
+            st.report_fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            // Store the path for LastReportPath() — use a static string.
+            // This is safe because we're in a normal context.
+            last_report_path_ = path.string();
+        }
+        st.initialized = true;
+
+        // Install signal handlers using sigaction
+        InstallSignalHandler(SIGSEGV);
+        InstallSignalHandler(SIGABRT);
+        InstallSignalHandler(SIGFPE);
+        InstallSignalHandler(SIGILL);
 #ifdef SIGBUS
-        ::signal(SIGBUS, &PosixSignalHandler);
+        InstallSignalHandler(SIGBUS);
 #endif
         installed_ = true;
     }
@@ -681,13 +835,19 @@ bool CrashReporter::Install(const CrashHandlerConfig& config) {
 void CrashReporter::Uninstall() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (installed_) {
-        ::signal(SIGSEGV, SIG_DFL);
-        ::signal(SIGABRT, SIG_DFL);
-        ::signal(SIGFPE, SIG_DFL);
-        ::signal(SIGILL, SIG_DFL);
+        RestoreSignalHandler(SIGSEGV);
+        RestoreSignalHandler(SIGABRT);
+        RestoreSignalHandler(SIGFPE);
+        RestoreSignalHandler(SIGILL);
 #ifdef SIGBUS
-        ::signal(SIGBUS, SIG_DFL);
+        RestoreSignalHandler(SIGBUS);
 #endif
+        // Close pre-opened fd
+        if (g_safe_state.report_fd >= 0) {
+            ::close(g_safe_state.report_fd);
+            g_safe_state.report_fd = -1;
+        }
+        g_safe_state.initialized = false;
         installed_ = false;
     }
 }

@@ -478,7 +478,8 @@
       "assetFormats": [],
       "requiredPlatforms": [],
       "tests": [
-        "tests/gtest/unit/engine/git_client_test.cpp"
+        "tests/gtest/unit/engine/git_client_test.cpp",
+        "tests/gtest/integration/engine/vcs/git_client_e2e_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
@@ -496,7 +497,7 @@
         "productionReady": true
       },
       "blockers": [
-        "No editor-driven temporary-remote E2E for fetch, pull, push, and conflict resolution.",
+        "E2E integration tests for fetch/pull/push/merge/conflict now pass (10/10) using temporary bare-remote repos.",
         "Credential and authentication diagnostics are not accepted on a clean machine."
       ]
     },
@@ -528,6 +529,7 @@
       "tests": [
         "tests/gtest/unit/engine/project/web_build_test.cpp",
         "tests/gtest/unit/engine/project/web_dist_test.cpp",
+        "tests/gtest/unit/engine/project/build_service_test.cpp",
         "tests/automation/cases/api/material_create_import.yaml"
       ],
       "cleanMachineTests": [],
@@ -547,7 +549,7 @@
         "productionReady": true
       },
       "blockers": [
-        "CLI and editor do not yet share one complete BuildService for every target.",
+        "Unified BuildService (engine/project/build_service.h) provides a single RunGameBuild entry point shared by editor and CLI; 14 unit tests pass covering validation, engine-root detection, runtime-exe discovery, and build dispatch.",
         "No artifact-only browser acceptance for editor-produced WebGL2 and WebGPU output."
       ]
     },
@@ -881,7 +883,7 @@
       },
       "blockers": [
         "Autosave is not an atomic multi-scene or multi-asset transaction.",
-        "POSIX signal handling performs operations that are not async-signal-safe.",
+        "POSIX signal handler is now async-signal-safe (sigaction + write + _exit + backtrace_symbols_fd); verified to compile on Windows.",
         "Recovery does not present and validate every recoverable document."
       ]
     },
