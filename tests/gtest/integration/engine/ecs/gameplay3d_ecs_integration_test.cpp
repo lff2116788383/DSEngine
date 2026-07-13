@@ -127,6 +127,80 @@ TEST_F(Gameplay3dEcsIntegrationTest, Multi3DEntityBatchQuery) {
     EXPECT_EQ(count, 5);
 }
 
+// 测试 玩法3D ECS集成：状态机 trigger → 过渡 → crossfade → 完成 全序列
+// 用共享的 SelectTransition/ConsumeTransitionTriggers（与 AnimatorSystem 同一路径）
+// 逐帧驱动过渡状态，验证运行时端到端序列（无需 clip 资产）。
+TEST_F(Gameplay3dEcsIntegrationTest, StateMachineTriggerCrossfadeSequence) {
+    using namespace dse::gameplay3d;
+    AnimationStateMachine sm;
+
+    AnimState idle;
+    idle.name = "Idle";
+    idle.loop = true;
+
+    AnimTransition to_jump;
+    to_jump.target_state = "Jump";
+    to_jump.has_exit_time = false;
+    to_jump.transition_duration = 0.2f;
+    AnimTransitionCondition c;
+    c.parameter_name = "jump";
+    c.mode = AnimConditionMode::If;
+    to_jump.conditions.push_back(c);
+    idle.transitions.push_back(to_jump);
+
+    AnimState jump;
+    jump.name = "Jump";
+    jump.loop = false;
+
+    sm.AddState(idle);
+    sm.AddState(jump);
+    sm.SetDefaultState("Idle");
+    sm.AddTrigger("jump");
+
+    // 帧循环状态（对应 Animator3DComponent 的过渡字段）
+    std::string current = sm.GetDefaultState();
+    std::string next;
+    bool transitioning = false;
+    float progress = 0.0f;
+    float duration = 0.0f;
+    const float dt = 0.1f;
+
+    // 帧 1：无 trigger，停留 Idle。
+    ASSERT_EQ(sm.SelectTransition(sm.GetStates().at(current), 0.0f), -1);
+    EXPECT_FALSE(transitioning);
+
+    // 设 trigger → 下一帧选中过渡并消费 trigger。
+    sm.SetTrigger("jump");
+    int idx = sm.SelectTransition(sm.GetStates().at(current), 0.0f);
+    ASSERT_EQ(idx, 0);
+    {
+        const auto& tr = sm.GetStates().at(current).transitions[idx];
+        transitioning = true;
+        next = tr.target_state;
+        duration = tr.transition_duration;
+        progress = 0.0f;
+        sm.ConsumeTransitionTriggers(tr);
+    }
+    EXPECT_TRUE(transitioning);
+    EXPECT_EQ(next, "Jump");
+    // trigger 已消费：不应再次命中。
+    EXPECT_EQ(sm.SelectTransition(sm.GetStates().at(current), 0.0f), -1);
+
+    // 逐帧推进 crossfade 直到完成。
+    int guard = 0;
+    while (transitioning && guard++ < 100) {
+        progress += dt / duration;
+        if (progress >= 1.0f) {
+            current = next;
+            transitioning = false;
+        }
+    }
+    EXPECT_FALSE(transitioning);
+    EXPECT_EQ(current, "Jump");
+    // Jump 无出边：稳定停留。
+    EXPECT_EQ(sm.SelectTransition(sm.GetStates().at(current), 1.0f), -1);
+}
+
 // 测试 玩法3D ECS集成：动画状态状态机基
 TEST_F(Gameplay3dEcsIntegrationTest, AnimationStateMachineBase) {
     dse::gameplay3d::AnimationStateMachine sm;
