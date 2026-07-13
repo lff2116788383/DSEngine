@@ -754,8 +754,13 @@ if(DSE_ENABLE_CSHARP)
                 -c $<IF:$<CONFIG:Debug>,Debug,Release>
                 "-p:Platform=Any CPU"
                 -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/"
+        # 构建后由 DSEngine.ScriptMeta 反射游戏程序集，产出共享 .dscriptmeta（纯新增）。
+        COMMAND "${DOTNET_EXECUTABLE}"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/DSEngine.ScriptMeta.dll"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/DSEngine.Game.dll"
+                "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed/scriptmeta"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/GameScripts"
-        COMMENT "Building C# scripts -> managed/*.dll"
+        COMMENT "Building C# scripts -> managed/*.dll (+ .dscriptmeta)"
     )
 
     # C# 运行时端到端无头冒烟：通过 CSharpHost 实际启动 CoreCLR、加载托管程序集、
