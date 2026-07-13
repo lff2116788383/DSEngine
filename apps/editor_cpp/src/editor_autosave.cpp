@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 #include <system_error>
+#include <vector>
 
 #include "imgui.h"
 
@@ -157,10 +158,11 @@ void AutoSaveManager::Tick(entt::registry& registry) {
     auto& tab_mgr = SceneTabManager::Get();
     double now = ImGui::GetTime();
 
+    // 多文档：任一打开的场景页签为脏即触发自动保存（不再只看当前页签）。
     AutoSaveDecision decision = DecideAutoSave(
         IsEditorInPlayMode(),
         settings.auto_save_enabled,
-        tab_mgr.GetActiveTab().dirty,
+        tab_mgr.IsAnyTabDirty(),
         last_save_time_,
         now,
         static_cast<double>(settings.auto_save_interval_sec));
@@ -172,29 +174,41 @@ void AutoSaveManager::Tick(entt::registry& registry) {
     }
 
     // Perform auto-save
-    std::string path = GetAutoSavePath();
+    std::string dir = GetAutoSaveDir();
     // 自动保存失败（磁盘满/只读/路径无效）不应让正常编辑崩溃：失败则记录日志
     // 并推迟到下个间隔再试。
     std::error_code ec;
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    std::filesystem::create_directories(dir, ec);
     if (ec) {
         EditorLog(LogLevel::Error, "Auto-save failed to create dir: " + ec.message());
         last_save_time_ = now;
         return;
     }
-    // 原子写：先写到 <path>.tmp，成功后 rename 覆盖。写到一半崩溃只会留下临时
-    // 文件，已有的自动保存文件保持完整，恢复时不会读到截断/损坏的场景。
-    std::error_code write_ec;
-    bool wrote = AtomicWriteFile(
-        path,
-        [&](const std::string& tmp) {
-            SaveScene(registry, tmp);
+
+    // 把每个脏页签作为一次「全有或全无」的多文档事务写盘：全部先写到各自 .tmp，
+    // 只有都成功才逐个 rename 提交。任一失败则回滚、保留既有自动保存文件不被
+    // 半截内容覆盖，恢复时不会读到截断/损坏的场景。
+    auto dirty_tabs = tab_mgr.CollectDirtyTabsForAutoSave(registry);
+    std::vector<AutoSaveItem> items;
+    items.reserve(dirty_tabs.size());
+    for (const auto& info : dirty_tabs) {
+        std::string path =
+            (std::filesystem::path(dir) / MakeAutoSaveFileName(info.display_name)).string();
+        entt::registry* reg = info.registry;
+        items.push_back({path, [reg](const std::string& tmp) {
+            SaveScene(*reg, tmp);
             return true;
-        },
-        write_ec);
-    if (!wrote) {
+        }});
+    }
+    if (items.empty()) {  // 已无脏页签（例如刚被手动保存），仅重置计时。
+        last_save_time_ = now;
+        return;
+    }
+
+    std::error_code write_ec;
+    if (!AtomicWriteAll(items, write_ec)) {
         EditorLog(LogLevel::Error,
-                  "Auto-save failed (atomic write): " + write_ec.message());
+                  "Auto-save failed (atomic multi-document): " + write_ec.message());
         last_save_time_ = now;
         return;
     }
@@ -214,7 +228,8 @@ void AutoSaveManager::Tick(entt::registry& registry) {
     std::strftime(buf, sizeof(buf), "%H:%M:%S", &tm_buf);
     last_save_time_str_ = buf;
 
-    EditorLog(LogLevel::Info, "Auto-saved scene: " + path);
+    EditorLog(LogLevel::Info,
+              "Auto-saved " + std::to_string(items.size()) + " dirty document(s)");
 
     } catch (const std::exception& e) {
         std::cerr << "[AutoSave::Tick] Exception: " << e.what() << std::endl;

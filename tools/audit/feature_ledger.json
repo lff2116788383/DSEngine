@@ -899,7 +899,7 @@
         "productionReady": false
       },
       "blockers": [
-        "Autosave now has a shared all-or-nothing multi-document transaction primitive (editor_autosave_core AtomicWriteAll: stage every document to a sibling .tmp, then commit renames only if all writes succeeded; any write failure rolls back and leaves every final file untouched, so no partial/truncated content is ever committed). Wiring the editor to snapshot and autosave every open scene tab through it (multi-registry) still requires per-tab registry accessors and is not yet done.",
+        "Autosave now performs an all-or-nothing multi-document transaction across every dirty open scene tab: AutoSaveManager::Tick collects each dirty tab (active tab from the live registry, inactive tabs from their snapshots via SceneTabManager::CollectDirtyTabsForAutoSave) and commits them through editor_autosave_core AtomicWriteAll (stage every document to a sibling .tmp, then commit renames only if all writes succeeded; any write failure rolls back and leaves every final file untouched, so no partial/truncated content is ever committed). Live multi-tab autosave/recovery acceptance still needs a running editor session.",
         "POSIX signal handler is now async-signal-safe (sigaction + write + _exit + backtrace_symbols_fd); verified to compile on Windows.",
         "Recovery now enumerates every recoverable document (CollectRecoveryFiles) and the recovery dialog steps through and recovers/discards each one (document N of M); per-document schema validation before load and live multi-tab recovery acceptance still pending."
       ]

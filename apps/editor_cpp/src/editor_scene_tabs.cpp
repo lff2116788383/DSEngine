@@ -208,6 +208,22 @@ bool SceneTabManager::IsAnyTabDirty() const {
     return false;
 }
 
+std::vector<AutoSaveTabInfo> SceneTabManager::CollectDirtyTabsForAutoSave(
+    entt::registry& active_registry) {
+    std::vector<AutoSaveTabInfo> out;
+    for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {
+        if (!tabs_[i].dirty) continue;
+        if (i == active_index_) {
+            out.push_back({tabs_[i].display_name, &active_registry});
+        } else if (tabs_[i].has_snapshot) {
+            out.push_back({tabs_[i].display_name, &tabs_[i].snapshot});
+        }
+        // A dirty inactive tab without a snapshot cannot happen (tabs are
+        // snapshotted on deactivation); skip it rather than guess.
+    }
+    return out;
+}
+
 int SceneTabManager::FindTabByPath(const std::string& path) const {
     if (path.empty()) return -1;
     for (int i = 0; i < static_cast<int>(tabs_.size()); ++i) {

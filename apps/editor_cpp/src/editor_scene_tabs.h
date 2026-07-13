@@ -15,6 +15,14 @@ struct SceneTab {
     bool has_snapshot = false;    // True after first deactivation
 };
 
+/// A dirty document that autosave should persist. `registry` points at the live
+/// scene for the active tab and at the tab's snapshot for inactive tabs; it is
+/// only valid until the tab list is next mutated (autosave runs synchronously).
+struct AutoSaveTabInfo {
+    std::string display_name;
+    entt::registry* registry = nullptr;
+};
+
 class SceneTabManager {
 public:
     static SceneTabManager& Get();
@@ -58,6 +66,12 @@ public:
     std::string GetActiveDisplayName() const;
     std::string GetActiveFilePath() const;
     bool IsAnyTabDirty() const;
+
+    /// Collect every dirty open document for a multi-document autosave. The active
+    /// tab is sourced from `active_registry`; inactive dirty tabs are sourced from
+    /// their in-memory snapshots. Returned registry pointers are valid until the
+    /// tab list is next mutated (autosave runs synchronously on the UI thread).
+    std::vector<AutoSaveTabInfo> CollectDirtyTabsForAutoSave(entt::registry& active_registry);
 
     /// Find tab by file path (-1 if not found)
     int FindTabByPath(const std::string& path) const;
