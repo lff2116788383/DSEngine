@@ -225,6 +225,7 @@
       "evidencePaths": [
         "engine/core/asset_diagnostics.h",
         "engine/core/asset_diagnostics.cpp",
+        "engine/core/asset_version_envelope.h",
         "apps/editor_cpp/src/editor_blueprint.h",
         "apps/editor_cpp/src/editor_shader_graph.h",
         "apps/editor_cpp/src/editor_sequencer.h"
@@ -240,7 +241,7 @@
         "productionReady": false
       },
       "blockers": [
-        "All six content formats (.dbp/.dasm/.dsequence/.dcutscene/.dshadergraph/.dscriptmeta) now share the single dse::assets::AssetDiagnostics DTO and the common NoteForwardCompat() version policy (engine/core/asset_diagnostics.{h,cpp}), while each format still owns its own kXxxSchemaVersion. Remaining: unify each format's field-level read/write onto a shared reader helper (currently only diagnostics + forward-compat are shared)."
+        "All six content formats (.dbp/.dasm/.dsequence/.dcutscene/.dshadergraph/.dscriptmeta) now share the single dse::assets::AssetDiagnostics DTO, the common NoteForwardCompat() version policy, and a shared field-level {version,...} envelope reader/writer (engine/core/asset_version_envelope.h: ReadVersionEnvelope records source_version + applies forward-compat and returns the parsed version; WriteVersionEnvelope emits the version field). All rapidjson-based serializers were converged onto it (blueprint/asm/cutscene/shadergraph/scriptmeta), each format still owning its own kXxxSchemaVersion and format-specific migration. Remaining: a single unified DTO layer/body schema across formats (each format still hand-rolls its own field-level body read/write) is a larger architectural refactor, not yet done."
       ]
     },
     {

@@ -14,6 +14,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 namespace dse {
 namespace scripting {
 
@@ -144,7 +146,7 @@ std::string SerializeScriptMetadata(const ScriptMetadata& meta) {
     rapidjson::Document doc;
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
-    doc.AddMember("version", kScriptMetaSchemaVersion, alloc);
+    dse::assets::WriteVersionEnvelope(doc, kScriptMetaSchemaVersion, alloc);
     rapidjson::Value body(rapidjson::kObjectType);
     WriteScriptBody(meta, body, alloc);
     doc.AddMember("script", body, alloc);
@@ -168,10 +170,7 @@ bool DeserializeScriptMetadata(const std::string& json, ScriptMetadata& out,
         return false;
     }
 
-    diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
-                              ? doc["version"].GetInt()
-                              : 0;
-    dse::assets::NoteForwardCompat(diag.source_version, kScriptMetaSchemaVersion, ".dscriptmeta", diag);
+    dse::assets::ReadVersionEnvelope(doc, kScriptMetaSchemaVersion, ".dscriptmeta", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("script") && doc["script"].IsObject()) {

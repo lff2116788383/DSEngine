@@ -15,6 +15,7 @@
 #include <rapidjson/prettywriter.h>
 
 #include "engine/base/debug.h"
+#include "engine/core/asset_version_envelope.h"
 
 namespace dse::bp {
 
@@ -277,12 +278,11 @@ bool DeserializeBlueprintAsset(BlueprintAsset& asset, const std::string& json,
         }
     }
 
-    // 版本：缺失视为 legacy(0)。
-    int source_version = 0;
-    bool has_version = doc.HasMember("version") && doc["version"].IsInt();
-    if (has_version) source_version = doc["version"].GetInt();
-    diag.source_version = source_version;
-    dse::assets::NoteForwardCompat(source_version, kBlueprintSchemaVersion, ".dbp", diag);
+    // 版本：缺失视为 legacy(0)。字段级读取与前向兼容策略走共享信封助手；
+    // has_version 仍单独判定，仅当文件显式带 version 时才回填 asset.version。
+    const bool has_version = doc.HasMember("version") && doc["version"].IsInt();
+    const int source_version =
+        dse::assets::ReadVersionEnvelope(doc, kBlueprintSchemaVersion, ".dbp", diag);
 
     if (doc.HasMember("name") && doc["name"].IsString()) asset.name = doc["name"].GetString();
     if (has_version) asset.version = source_version;

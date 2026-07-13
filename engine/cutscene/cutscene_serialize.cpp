@@ -12,6 +12,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 namespace dse {
 namespace cutscene {
 
@@ -285,7 +287,7 @@ std::string SerializeSequence(const CutsceneSequence& seq) {
     rapidjson::Document doc;
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
-    doc.AddMember("version", kCutsceneSchemaVersion, alloc);
+    dse::assets::WriteVersionEnvelope(doc, kCutsceneSchemaVersion, alloc);
     rapidjson::Value body(rapidjson::kObjectType);
     WriteSequenceJson(seq, body, alloc);
     doc.AddMember("sequence", body, alloc);
@@ -309,10 +311,7 @@ std::shared_ptr<CutsceneSequence> DeserializeSequence(const std::string& json,
         return nullptr;
     }
 
-    diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
-                              ? doc["version"].GetInt()
-                              : 0;
-    dse::assets::NoteForwardCompat(diag.source_version, kCutsceneSchemaVersion, ".dcutscene", diag);
+    dse::assets::ReadVersionEnvelope(doc, kCutsceneSchemaVersion, ".dcutscene", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("sequence") && doc["sequence"].IsObject()) {

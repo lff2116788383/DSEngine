@@ -13,6 +13,7 @@
 #include <rapidjson/prettywriter.h>
 
 #include "engine/base/debug.h"
+#include "engine/core/asset_version_envelope.h"
 
 namespace dse {
 namespace gameplay3d {
@@ -246,7 +247,7 @@ std::string SerializeStateMachine(const AnimationStateMachine& sm) {
     rapidjson::Document doc;
     auto& alloc = doc.GetAllocator();
     doc.SetObject();
-    doc.AddMember("version", kAnimStateMachineSchemaVersion, alloc);
+    dse::assets::WriteVersionEnvelope(doc, kAnimStateMachineSchemaVersion, alloc);
     rapidjson::Value body(rapidjson::kObjectType);
     WriteStateMachineJson(sm, body, alloc);
     doc.AddMember("state_machine", body, alloc);
@@ -272,8 +273,7 @@ bool DeserializeStateMachine(AnimationStateMachine& sm, const std::string& json,
         return false;
     }
 
-    diag.source_version = (doc.HasMember("version") && doc["version"].IsInt()) ? doc["version"].GetInt() : 0;
-    dse::assets::NoteForwardCompat(diag.source_version, kAnimStateMachineSchemaVersion, ".dasm", diag);
+    dse::assets::ReadVersionEnvelope(doc, kAnimStateMachineSchemaVersion, ".dasm", diag);
 
     // 版本 0（legacy，无 version 字段）视为直接内嵌状态机对象，无 state_machine 包裹。
     const rapidjson::Value* body = nullptr;

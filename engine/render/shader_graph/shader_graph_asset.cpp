@@ -14,6 +14,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 namespace dse {
 namespace shadergraph {
 
@@ -221,7 +223,7 @@ std::string SerializeShaderGraph(const ShaderGraphAsset& graph) {
     rapidjson::Document doc;
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
-    doc.AddMember("version", kShaderGraphSchemaVersion, alloc);
+    dse::assets::WriteVersionEnvelope(doc, kShaderGraphSchemaVersion, alloc);
     rapidjson::Value body(rapidjson::kObjectType);
     WriteGraphBody(graph, body, alloc);
     doc.AddMember("graph", body, alloc);
@@ -245,10 +247,7 @@ bool DeserializeShaderGraph(const std::string& json, ShaderGraphAsset& out,
         return false;
     }
 
-    diag.source_version = (doc.HasMember("version") && doc["version"].IsInt())
-                              ? doc["version"].GetInt()
-                              : 0;
-    dse::assets::NoteForwardCompat(diag.source_version, kShaderGraphSchemaVersion, ".dshadergraph", diag);
+    dse::assets::ReadVersionEnvelope(doc, kShaderGraphSchemaVersion, ".dshadergraph", diag);
 
     const rapidjson::Value* body = nullptr;
     if (doc.HasMember("graph") && doc["graph"].IsObject()) {
