@@ -266,9 +266,7 @@
         "tests/blueprint/blueprint_smoke.cpp"
       ],
       "cleanMachineTests": [],
-      "productionDebtIds": [
-        "EDITOR-BLUEPRINT-SIMULATED-DEBUG"
-      ],
+      "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_blueprint_compiler.cpp",
         "engine/scripting/blueprint/blueprint_compiler.cpp"
@@ -584,9 +582,7 @@
         "tests/gtest/integration/editor/shader_graph_compile_test.cpp"
       ],
       "cleanMachineTests": [],
-      "productionDebtIds": [
-        "EDITOR-SHADER-GRAPH-PLACEHOLDER-NODE"
-      ],
+      "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_shader_graph.h"
       ],
@@ -724,11 +720,7 @@
         "tests/csharp/csharp_host_smoke.cpp"
       ],
       "cleanMachineTests": [],
-      "productionDebtIds": [
-        "EDITOR-CSHARP-FAKE-BUILD",
-        "EDITOR-CSHARP-FAKE-SUCCESS",
-        "EDITOR-CSHARP-FAKE-RELOAD"
-      ],
+      "productionDebtIds": [],
       "evidencePaths": [
         "GameScripts/DSEngine.Runtime/Core/ScriptRegistry.cs"
       ],
@@ -829,12 +821,7 @@
       ],
       "tests": [],
       "cleanMachineTests": [],
-      "productionDebtIds": [
-        "EDITOR-PLUGIN-DEMO-DATA",
-        "EDITOR-PLUGIN-SIMULATED-RELOAD",
-        "EDITOR-PLUGIN-SIMULATED-BUILD",
-        "EDITOR-SPRITE-SLICER-PLACEHOLDER-PREVIEW"
-      ],
+      "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_asset_db.h"
       ],

@@ -33,6 +33,10 @@ ACTION_PATTERN = re.compile(
     r"Input[A-Za-z]*|Drag[A-Za-z]*|Slider[A-Za-z]*|Combo)\s*\("
 )
 PANEL_PATTERN = re.compile(r'\badd\(\s*"([^"]+)"')
+# Panels that self-register via DSE_EDITOR_PANEL(...) set their id inside the
+# registrar lambda as `e.id = "..."`; capture those blocks across all sources.
+SELF_REGISTER_BLOCK = re.compile(r"DSE_EDITOR_PANEL\(.*?\n\}\);", re.DOTALL)
+SELF_REGISTER_ID = re.compile(r'\.id\s*=\s*"([^"]+)"')
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -60,7 +64,21 @@ def collect_registered_panels(errors: list[str]) -> set[str]:
     except OSError as exc:
         fail(errors, f"cannot read {app_path.relative_to(ROOT)}: {exc}")
         return set()
-    return set(PANEL_PATTERN.findall(source))
+    panels = set(PANEL_PATTERN.findall(source))
+
+    # Panels registered from other modules via the DSE_EDITOR_PANEL macro never
+    # appear in editor_app.cpp's add(...) calls, so scan every editor source for
+    # the id assigned inside each self-registrar block.
+    try:
+        for path in EDITOR_SOURCE.rglob("*.cpp"):
+            module_source = path.read_text(encoding="utf-8", errors="replace")
+            if "DSE_EDITOR_PANEL(" not in module_source:
+                continue
+            for block in SELF_REGISTER_BLOCK.findall(module_source):
+                panels.update(SELF_REGISTER_ID.findall(block))
+    except OSError as exc:
+        fail(errors, f"cannot scan self-registered editor panels: {exc}")
+    return panels
 
 
 def collect_action_sources(errors: list[str]) -> set[str]:
