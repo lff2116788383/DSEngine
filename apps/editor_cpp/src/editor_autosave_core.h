@@ -74,4 +74,18 @@ bool AtomicWriteAll(const std::vector<AutoSaveItem>& items, std::error_code& ec)
 /// 目录不存在/迭代出错时降级为空列表，不抛异常。
 std::vector<std::string> CollectRecoveryFiles(const std::string& dir);
 
+/// 恢复候选的逐文档校验结果。
+struct RecoveryValidation {
+    bool loadable = false;              ///< JSON 解析成功且含 entities 数组（LoadScene 的前置条件）
+    int material_schema_version = -1;   ///< 读到的 material_schema_version（无/非整数则 -1）
+    int entity_count = 0;               ///< entities 数组长度（仅 loadable 时有意义）
+    std::string message;                ///< 面向用户的诊断（可直接展示）
+};
+
+/// 在真正 LoadScene 之前，对恢复候选做纯结构校验：解析 JSON、要求根为对象且含
+/// entities 数组（与 scene 反序列化的硬前置条件一致），并顺带读出
+/// material_schema_version。用于在恢复对话框里提前拦截半截/损坏的自动保存文件，
+/// 而不是让加载路径抛异常。纯函数，不触碰文件系统，可无头测试。
+RecoveryValidation ValidateRecoveryScene(const std::string& json_text);
+
 }  // namespace dse::editor

@@ -4,7 +4,9 @@
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <sstream>
 #include <system_error>
 #include <vector>
@@ -122,10 +124,28 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
             ImGui::Text("File: %s", std::filesystem::path(recovery_path_).filename().string().c_str());
             ImGui::Text("Last modified: %s", time_str);
         }
+
+        // 加载前逐文档校验：拦下半截/损坏（非法 JSON、缺 entities 数组）的恢复
+        // 候选，避免让 LoadScene 抛异常，并给出可读诊断。
+        RecoveryValidation validation;
+        {
+            std::ifstream in(recovery_path_, std::ios::binary);
+            std::string content((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+            validation = ValidateRecoveryScene(content);
+        }
+        if (validation.loadable) {
+            ImGui::Text("Contents: %s", validation.message.c_str());
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                               "Cannot recover: %s", validation.message.c_str());
+        }
+
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
 
+        if (!validation.loadable) ImGui::BeginDisabled();
         if (ImGui::Button("Recover", ImVec2(120, 0))) {
             // 恢复文件可能因上次崩溃写到一半而损坏：加载失败时记录日志并保持
             // 编辑器存活，不让损坏场景把编辑器一起带崩。
@@ -140,6 +160,7 @@ bool AutoSaveManager::DrawRecoveryDialog(entt::registry& registry) {
             }
             advance();
         }
+        if (!validation.loadable) ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Discard", ImVec2(120, 0))) {
             std::error_code ec;

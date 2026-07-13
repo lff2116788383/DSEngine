@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <filesystem>
 
+#include <rapidjson/document.h>
+
 namespace dse::editor {
 
 std::string SanitizeSceneName(std::string scene_name) {
@@ -135,6 +137,40 @@ std::vector<std::string> CollectRecoveryFiles(const std::string& dir) {
     }
     std::sort(out.begin(), out.end());
     return out;
+}
+
+RecoveryValidation ValidateRecoveryScene(const std::string& json_text) {
+    RecoveryValidation v;
+
+    rapidjson::Document doc;
+    doc.Parse(json_text.c_str());
+    if (doc.HasParseError()) {
+        v.message = "Not valid JSON (auto-save likely truncated/corrupt)";
+        return v;
+    }
+    if (!doc.IsObject()) {
+        v.message = "Unexpected content (root is not a scene object)";
+        return v;
+    }
+
+    if (doc.HasMember("material_schema_version") &&
+        doc["material_schema_version"].IsInt()) {
+        v.material_schema_version = doc["material_schema_version"].GetInt();
+    }
+
+    // 与 scene 反序列化一致的硬前置：必须有 entities 数组，否则 LoadScene 会拒绝。
+    if (!doc.HasMember("entities") || !doc["entities"].IsArray()) {
+        v.message = "Missing 'entities' array (not a loadable scene)";
+        return v;
+    }
+
+    v.loadable = true;
+    v.entity_count = static_cast<int>(doc["entities"].Size());
+    v.message = std::to_string(v.entity_count) + " entities";
+    if (v.material_schema_version >= 0)
+        v.message += ", material schema v" +
+                     std::to_string(v.material_schema_version);
+    return v;
 }
 
 }  // namespace dse::editor

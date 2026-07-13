@@ -317,3 +317,37 @@ TEST(AutoSaveCore, CollectRecoveryFilesMissingDirIsEmpty) {
         (std::filesystem::temp_directory_path() / "dse_no_such_dir_zzz").string());
     EXPECT_TRUE(files.empty());
 }
+
+// ── ValidateRecoveryScene（加载前逐文档结构校验）───────────────────────────
+
+TEST(AutoSaveCore, ValidateRecoveryAcceptsWellFormedScene) {
+    auto v = ValidateRecoveryScene(
+        R"({"material_schema_version":2,"entities":[{"id":1},{"id":2}]})");
+    EXPECT_TRUE(v.loadable);
+    EXPECT_EQ(v.entity_count, 2);
+    EXPECT_EQ(v.material_schema_version, 2);
+}
+
+TEST(AutoSaveCore, ValidateRecoveryAcceptsEmptyEntitiesArray) {
+    auto v = ValidateRecoveryScene(R"({"entities":[]})");
+    EXPECT_TRUE(v.loadable);
+    EXPECT_EQ(v.entity_count, 0);
+    EXPECT_EQ(v.material_schema_version, -1);  // 无版本字段 → -1
+}
+
+TEST(AutoSaveCore, ValidateRecoveryRejectsTruncatedJson) {
+    // 上次崩溃写到一半的典型形态：JSON 被截断。
+    auto v = ValidateRecoveryScene(R"({"entities":[{"id":1)");
+    EXPECT_FALSE(v.loadable);
+    EXPECT_FALSE(v.message.empty());
+}
+
+TEST(AutoSaveCore, ValidateRecoveryRejectsMissingEntities) {
+    auto v = ValidateRecoveryScene(R"({"material_schema_version":2})");
+    EXPECT_FALSE(v.loadable);
+}
+
+TEST(AutoSaveCore, ValidateRecoveryRejectsNonObjectRoot) {
+    EXPECT_FALSE(ValidateRecoveryScene("[]").loadable);
+    EXPECT_FALSE(ValidateRecoveryScene("").loadable);
+}
