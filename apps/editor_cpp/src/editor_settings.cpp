@@ -123,6 +123,9 @@ EditorSettings LoadEditorSettings() {
     if (doc.HasMember("editor_ui_locale") && doc["editor_ui_locale"].IsString()) {
         settings.editor_ui_locale = doc["editor_ui_locale"].GetString();
     }
+    if (doc.HasMember("rhi_backend") && doc["rhi_backend"].IsString()) {
+        settings.rhi_backend = doc["rhi_backend"].GetString();
+    }
 
     // External Script Editor
     if (doc.HasMember("external_editor_path") && doc["external_editor_path"].IsString()) {
@@ -190,6 +193,7 @@ void SaveEditorSettings(const EditorSettings& settings) {
     doc.AddMember("auto_save_enabled", settings.auto_save_enabled, alloc);
     doc.AddMember("auto_save_interval_sec", settings.auto_save_interval_sec, alloc);
     doc.AddMember("editor_ui_locale", rapidjson::Value(settings.editor_ui_locale.c_str(), alloc), alloc);
+    doc.AddMember("rhi_backend", rapidjson::Value(settings.rhi_backend.c_str(), alloc), alloc);
 
     // External Script Editor
     doc.AddMember("external_editor_path", rapidjson::Value(settings.external_editor_path.c_str(), alloc), alloc);

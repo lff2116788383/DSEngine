@@ -1,5 +1,7 @@
 #include "editor_preferences_panel.h"
 
+#include <cstdlib>
+
 #include "imgui.h"
 #include "editor_settings.h"
 #include "editor_theme.h"
@@ -143,6 +145,36 @@ void DrawPreferencesPanel(bool* p_open) {
         if (s_show_grid) {
             if (ImGui::DragFloat(T("Grid Size"), &s_grid_size, 0.1f, 0.1f, 100.0f, "%.1f")) changed = true;
             if (ImGui::DragInt(T("Grid Lines"), &s_grid_lines, 1, 5, 200)) changed = true;
+        }
+    }
+
+    }
+    {
+        char hdr_rhi[64]; snprintf(hdr_rhi, sizeof(hdr_rhi), MDI_ICON_COG "  %s", T("Rendering"));
+    if (ImGui::CollapsingHeader(hdr_rhi, ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextUnformatted(T("Graphics Backend"));
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", T("Takes effect after restart"));
+
+        // 0=Auto(Default), 1=OpenGL, 2=Direct3D 11, 3=Vulkan
+        static const char* kBackendKeys[] = { "", "opengl", "d3d11", "vulkan" };
+        static int s_backend_idx = -1;
+        if (s_backend_idx < 0) {
+            const std::string cur = LoadEditorSettings().rhi_backend;
+            s_backend_idx = 0;
+            for (int i = 1; i < 4; ++i) {
+                if (cur == kBackendKeys[i]) { s_backend_idx = i; break; }
+            }
+        }
+        const char* backends[] = { T("Auto (Default)"), "OpenGL", "Direct3D 11", "Vulkan" };
+        if (ImGui::Combo("##RhiBackend", &s_backend_idx, backends, 4)) {
+            EditorSettings rs = LoadEditorSettings();
+            rs.rhi_backend = kBackendKeys[s_backend_idx];
+            SaveEditorSettings(rs);
+        }
+        if (const char* env = std::getenv("DSE_RHI_BACKEND")) {
+            ImGui::TextDisabled("%s: DSE_RHI_BACKEND=%s", T("Overridden by environment"), env);
         }
     }
 

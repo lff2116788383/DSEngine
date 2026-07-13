@@ -32,6 +32,10 @@ struct EditorSettings {
     // Editor UI locale: "en" or "zh-CN" (takes effect after restart)
     std::string editor_ui_locale = "en";
 
+    // Preferred RHI backend: "" (auto/default), "opengl", "d3d11", or "vulkan".
+    // The DSE_RHI_BACKEND env var, when set, overrides this. Takes effect after restart.
+    std::string rhi_backend = "";
+
     // External Script Editor
     std::string external_editor_path = "code";  // default: VS Code ("code" on PATH)
     std::string external_editor_args = "--goto \"{file}:{line}\""; // {file} and {line} are replaced

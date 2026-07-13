@@ -309,9 +309,22 @@ bool EditorApp::Init(int argc, char* argv[]) {
         return false;
     }
 
+    // 后端选择优先级：环境变量 DSE_RHI_BACKEND > Preferences 持久化设置 > Default。
+    // env 显式设定时保留原有解析路径（含 Invalid 语义）；否则读取编辑器设置。
+    auto resolve_requested_backend = []() -> RhiBackend {
+        if (std::getenv("DSE_RHI_BACKEND")) {
+            return dse::render::ResolveRhiBackendFromEnv();
+        }
+        const std::string pref = dse::editor::LoadEditorSettings().rhi_backend;
+        if (pref == "opengl") return RhiBackend::OpenGL;
+        if (pref == "d3d11") return RhiBackend::D3D11;
+        if (pref == "vulkan") return RhiBackend::Vulkan;
+        return RhiBackend::Default;
+    };
+
     // SSBO（粒子 / GPU-driven 等）需要 GL 4.3+；优先请求 4.3 核心，创建失败再回退 3.3。
     const auto editor_rhi_backend =
-        dse::render::ValidateRhiBackend(dse::render::ResolveRhiBackendFromEnv());
+        dse::render::ValidateRhiBackend(resolve_requested_backend());
     // P0-4.4：请求的后端无法识别或未编译时，明确报错并拒绝启动，禁止静默回退到 OpenGL。
     if (editor_rhi_backend == RhiBackend::Invalid) {
         std::cerr << "[Editor] Requested RHI backend is unavailable "
@@ -1126,7 +1139,13 @@ void EditorApp::RegisterPanels() {
     auto& reg = dse::editor::PanelRegistry::Get();
 
     // Best-effort record of the active RHI backend for availability filtering.
-    if (const char* be = std::getenv("DSE_RHI_BACKEND")) reg.SetActiveBackend(be);
+    // env 优先，否则回退到 Preferences 持久化设置（与启动时的后端解析一致）。
+    if (const char* be = std::getenv("DSE_RHI_BACKEND")) {
+        reg.SetActiveBackend(be);
+    } else {
+        const std::string pref = dse::editor::LoadEditorSettings().rhi_backend;
+        if (!pref.empty()) reg.SetActiveBackend(pref);
+    }
 
     using Ctx = dse::editor::EditorContext;
     auto add = [&reg](std::string id, std::string name, std::string cat,
