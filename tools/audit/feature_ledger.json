@@ -456,7 +456,8 @@
         "productionReady": false
       },
       "blockers": [
-        "Legacy direct CreateProcess, system, popen, and detached task paths remain outside the shared service."
+        "All synchronous shell-outs now go through the shared RunProcess (Git, Web/C# build, and the dse_cli dist packaging path: powershell/zip/tar/iscc + shell-free PATH lookup).",
+        "Three editor spawns remain outside the shared service because they need patterns the synchronous RunProcess does not model: editor_agent_panel (long-lived child with bidirectional stdin/stdout streaming), editor_plugin_manager (long-lived managed child kept for later kill), and editor_external_editor (detached GUI-editor launch). Closing these requires an async managed-process API (start->handle->kill + optional pipes)."
       ]
     },
     {
