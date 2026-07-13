@@ -188,7 +188,52 @@ TEST(ShaderGraphCodegen, ScreenPositionWarnsOnHlsl) {
     EXPECT_FALSE(Contains(hl.fragment, "gl_FragCoord"));
 }
 
+TEST(ShaderGraphCodegen, VulkanTargetProducesVulkanGlsl) {
+    ShaderCodegenResult r = GenerateShader(MakeGraph(), ShaderTarget::GLSL_VULKAN);
+    ASSERT_TRUE(r.ok);
+    EXPECT_TRUE(r.errors.empty());
+    EXPECT_TRUE(r.warnings.empty());
+
+    // Vulkan GLSL: #version 450, explicit varying/output locations, UBO-wrapped u_time,
+    // explicit sampler binding (binding 0 reserved for the PerDraw UBO).
+    EXPECT_TRUE(Contains(r.fragment, "#version 450"));
+    EXPECT_TRUE(Contains(r.fragment, "layout(location = 0) in vec2 v_uv"));
+    EXPECT_TRUE(Contains(r.fragment, "layout(location = 5) in vec4 v_color"));
+    EXPECT_TRUE(Contains(r.fragment, "layout(location = 0) out vec4 FragColor"));
+    EXPECT_TRUE(Contains(r.fragment, "uniform PerDraw { float u_time; }"));
+    EXPECT_TRUE(Contains(r.fragment, "layout(binding = 1) uniform sampler2D u_tex0"));
+    EXPECT_TRUE(Contains(r.fragment, "texture(u_tex0, v_uv)"));
+    // u_time must not leak as a free uniform on Vulkan.
+    EXPECT_FALSE(Contains(r.fragment, "uniform float u_time"));
+
+    EXPECT_TRUE(Contains(r.vertex, "#version 450"));
+    EXPECT_TRUE(Contains(r.vertex, "layout(location = 0) out vec2 v_uv"));
+}
+
+TEST(ShaderGraphCodegen, WebGl2TargetProducesEsGlsl) {
+    ShaderCodegenResult r = GenerateShader(MakeGraph(), ShaderTarget::GLSL_ES);
+    ASSERT_TRUE(r.ok);
+    EXPECT_TRUE(r.errors.empty());
+    EXPECT_TRUE(r.warnings.empty());
+
+    // WebGL2 == GLSL ES 3.00: version pragma + precision, name-matched varyings
+    // (no explicit varying locations), free uniforms are legal.
+    EXPECT_TRUE(Contains(r.fragment, "#version 300 es"));
+    EXPECT_TRUE(Contains(r.fragment, "precision highp float;"));
+    EXPECT_TRUE(Contains(r.fragment, "uniform float u_time;"));
+    EXPECT_TRUE(Contains(r.fragment, "uniform sampler2D u_tex0;"));
+    EXPECT_TRUE(Contains(r.fragment, "texture(u_tex0, v_uv)"));
+    EXPECT_FALSE(Contains(r.fragment, "layout(location = 0) in vec2 v_uv"));
+
+    EXPECT_TRUE(Contains(r.vertex, "#version 300 es"));
+    EXPECT_TRUE(Contains(r.vertex, "precision highp float;"));
+    // ES 3.00 has no binding layout qualifier on uniform blocks.
+    EXPECT_TRUE(Contains(r.vertex, "layout(std140) uniform PerFrame"));
+}
+
 TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL), "GLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::HLSL), "HLSL");
+    EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_VULKAN), "GLSL-Vulkan");
+    EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_ES), "GLSL-ES");
 }

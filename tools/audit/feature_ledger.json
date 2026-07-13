@@ -578,12 +578,14 @@
         "web/webgpu"
       ],
       "tests": [
-        "tests/gtest/integration/editor/shader_graph_compile_test.cpp"
+        "tests/gtest/integration/editor/shader_graph_compile_test.cpp",
+        "tests/gtest/unit/engine/shader_graph_codegen_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
-        "apps/editor_cpp/src/editor_shader_graph.h"
+        "apps/editor_cpp/src/editor_shader_graph.h",
+        "engine/render/shader_graph/shader_graph_codegen.h"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -596,8 +598,8 @@
         "productionReady": false
       },
       "blockers": [
-        "Shared versioned .dshadergraph schema and backend-agnostic codegen exist for GLSL (OpenGL) and HLSL (D3D11); Vulkan/SPIR-V and Web profiles are not yet generated.",
-        "Editor GLSL path is not yet unified onto the shared codegen, and there is no preview or screenshot-golden acceptance."
+        "Backend-agnostic codegen now emits four source profiles from the shared .dshadergraph schema: GLSL 430 (OpenGL), HLSL SM5 (D3D11), GLSL 450 (Vulkan, explicit layout/binding + UBO-wrapped uniforms), and GLSL ES 3.00 (WebGL2); SPIR-V binary and WebGPU/WGSL text are still not generated.",
+        "Editor exposes Export HLSL/Vulkan/WebGL2 via the shared codegen, but the editor's live GLSL preview path is not yet unified onto it, and there is no preview or screenshot-golden acceptance."
       ]
     },
     {

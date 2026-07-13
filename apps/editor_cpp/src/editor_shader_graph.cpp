@@ -1157,23 +1157,32 @@ void DrawShaderGraphPanel(EditorContext& ctx) {
             // 也输出到控制台日志
             EditorLog(LogLevel::Info, "[ShaderGraph] Compiled GLSL (" + std::to_string(glsl.size()) + " chars) -> shader_graph_output.frag");
         }
-        ImGui::SameLine();
-        if (ImGui::Button(T("Export HLSL"))) {
-            // 通过引擎共享 codegen 从同一份节点图产出 HLSL（D3D11）源码。纯导出、不改材质。
-            auto res = shadergraph::GenerateShader(ToAsset(state), shadergraph::ShaderTarget::HLSL);
+        // 通过引擎共享 codegen 从同一份节点图产出各后端源码。纯导出、不改材质。
+        auto export_shader = [&](shadergraph::ShaderTarget target, const char* filename) {
+            const char* lang = shadergraph::ShaderTargetName(target);
+            auto res = shadergraph::GenerateShader(ToAsset(state), target);
             if (res.ok) {
-                std::ofstream vout("shader_graph_output.hlsl");
+                std::ofstream vout(filename);
                 if (vout.is_open()) { vout << res.vertex << "\n" << res.fragment; vout.close(); }
-                EditorLog(LogLevel::Info, "[ShaderGraph] Exported HLSL (vs " +
-                          std::to_string(res.vertex.size()) + " + ps " +
-                          std::to_string(res.fragment.size()) + " chars) -> shader_graph_output.hlsl");
+                EditorLog(LogLevel::Info, std::string("[ShaderGraph] Exported ") + lang + " (vs " +
+                          std::to_string(res.vertex.size()) + " + fs " +
+                          std::to_string(res.fragment.size()) + " chars) -> " + filename);
                 for (const auto& w : res.warnings)
                     EditorLog(LogLevel::Warning, "[ShaderGraph] " + w);
             } else {
                 for (const auto& e : res.errors)
-                    EditorLog(LogLevel::Error, "[ShaderGraph] HLSL export failed: " + e);
+                    EditorLog(LogLevel::Error, std::string("[ShaderGraph] ") + lang + " export failed: " + e);
             }
-        }
+        };
+        ImGui::SameLine();
+        if (ImGui::Button(T("Export HLSL")))
+            export_shader(shadergraph::ShaderTarget::HLSL, "shader_graph_output.hlsl");
+        ImGui::SameLine();
+        if (ImGui::Button(T("Export Vulkan")))
+            export_shader(shadergraph::ShaderTarget::GLSL_VULKAN, "shader_graph_output.vk.glsl");
+        ImGui::SameLine();
+        if (ImGui::Button(T("Export WebGL2")))
+            export_shader(shadergraph::ShaderTarget::GLSL_ES, "shader_graph_output.webgl2.glsl");
         ImGui::SameLine();
         if (ImGui::Button(T("Apply to Material"))) {
             // 生成配套顶点着色器 + 片元着色器（GLSL），两段一起送入 AssetManager 编译链接为可用程序。
