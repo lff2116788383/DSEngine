@@ -445,6 +445,70 @@ ShaderCodegenResult GenerateShader(const ShaderGraphAsset& graph, ShaderTarget t
             o << "    float " << v << " = " << Fn(target, "fract") << "(sin(dot(" << p << "np, "
               << VecT(target, 2) << "(12.9898, 78.233))) * 43758.5453);\n";
             set_out(0, v);
+        } else if (name == "Noise Voronoi") {
+            std::string uv = in_expr(n, 0, "v_uv"), scale = in_expr(n, 1, in_default(n, 1));
+            std::string v = p + "dist";
+            o << "    " << VecT(target, 2) << " " << p << "vp = " << uv << " * " << scale << ";\n";
+            o << "    " << VecT(target, 2) << " " << p << "vi = floor(" << p << "vp);\n";
+            o << "    " << VecT(target, 2) << " " << p << "vf = " << Fn(target, "fract") << "(" << p << "vp);\n";
+            o << "    float " << v << " = 1.0;\n";
+            o << "    for (int " << p << "y = -1; " << p << "y <= 1; ++" << p << "y)\n";
+            o << "    for (int " << p << "x = -1; " << p << "x <= 1; ++" << p << "x) {\n";
+            o << "        " << VecT(target, 2) << " " << p << "nb = " << VecT(target, 2) << "(float(" << p << "x), float(" << p << "y));\n";
+            o << "        " << VecT(target, 2) << " " << p << "pt = " << p << "nb + " << Fn(target, "fract")
+              << "(sin(dot(" << p << "vi + " << p << "nb, " << VecT(target, 2) << "(127.1, 311.7))) * 43758.5453) - " << p << "vf;\n";
+            o << "        " << v << " = min(" << v << ", dot(" << p << "pt, " << p << "pt));\n";
+            o << "    }\n";
+            o << "    " << v << " = sqrt(" << v << ");\n";
+            set_out(0, v);
+        } else if (name == "Remap") {
+            std::string in_e = in_expr(n, 0, "0.0");
+            std::string imn = in_expr(n, 1, in_default(n, 1)), imx = in_expr(n, 2, in_default(n, 2));
+            std::string omn = in_expr(n, 3, in_default(n, 3)), omx = in_expr(n, 4, in_default(n, 4));
+            std::string v = p + "out";
+            o << "    float " << v << " = " << omn << " + (" << in_e << " - " << imn << ") / ("
+              << imx << " - " << imn << ") * (" << omx << " - " << omn << ");\n";
+            set_out(0, v);
+        } else if (name == "Rim Light") {
+            std::string power = in_expr(n, 0, in_default(n, 0));
+            std::string v = p + "out";
+            o << "    float " << p << "ndv = 1.0 - max(dot(normalize(v_normal), normalize(-v_world_pos)), 0.0);\n";
+            o << "    " << VecT(target, 3) << " " << v << " = " << VecT(target, 3) << "(pow(" << p << "ndv, " << power << "));\n";
+            set_out(0, v);
+        } else if (name == "Dissolve") {
+            std::string noise = in_expr(n, 0, "0.5");
+            std::string thresh = in_expr(n, 1, in_default(n, 1));
+            std::string edge_w = in_expr(n, 2, in_default(n, 2));
+            std::string alpha = p + "alpha", edge = p + "edge";
+            o << "    float " << alpha << " = step(" << thresh << ", " << noise << ");\n";
+            o << "    float " << edge << " = smoothstep(" << thresh << " - " << edge_w << ", " << thresh << ", " << noise << ") - " << alpha << ";\n";
+            set_out(0, alpha);
+            set_out(1, edge);
+        } else if (name == "Triplanar") {
+            std::string v = p + "out";
+            o << "    " << VecT(target, 3) << " " << p << "bl = pow(abs(normalize(v_normal)), " << VecT(target, 3) << "(1.0));\n";
+            o << "    " << p << "bl /= (" << p << "bl.x + " << p << "bl.y + " << p << "bl.z);\n";
+            o << "    " << VecT(target, 4) << " " << v << " = " << VecT(target, 4) << "(" << p << "bl.x + " << p << "bl.y + " << p << "bl.z);\n";
+            set_out(0, v);
+        } else if (name == "Parallax Mapping") {
+            std::string uv = in_expr(n, 0, "v_uv");
+            std::string h = in_expr(n, 1, "0.0");
+            std::string scale = in_expr(n, 2, in_default(n, 2));
+            std::string v = p + "out";
+            std::string tbn = Mat3T(target) + "(v_tangent, v_bitangent, v_normal)";
+            o << "    " << VecT(target, 3) << " " << p << "vts = normalize(" << MulMV(target, tbn, "normalize(-v_world_pos)") << ");\n";
+            o << "    " << VecT(target, 2) << " " << v << " = " << uv << " + " << p << "vts.xy * (" << h << " * " << scale << ");\n";
+            set_out(0, v);
+        } else if (name == "Screen Position") {
+            std::string v = p + "sp";
+            if (hlsl) {
+                res.warnings.push_back("node 'Screen Position' on HLSL lacks a screen-size uniform; "
+                                       "approximating with v_uv");
+                o << "    " << VecT(target, 2) << " " << v << " = v_uv;\n";
+            } else {
+                o << "    vec2 " << v << " = gl_FragCoord.xy / vec2(textureSize(u_tex0, 0));\n";
+            }
+            set_out(0, v);
         } else if (name == "PBR Output") {
             std::string base = in_expr(n, 0, VecT(target, 4) + "(0.8, 0.8, 0.8, 1.0)");
             std::string alpha = in_expr(n, 6, "1.0");

@@ -134,6 +134,60 @@ TEST(ShaderGraphCodegen, InvalidGraphReportsError) {
     EXPECT_FALSE(r.errors.empty());
 }
 
+TEST(ShaderGraphCodegen, ExtendedNodesHaveCodegenOnBothTargets) {
+    ShaderGraphAsset g;
+    g.next_id = 300;
+    NodeDesc vor;
+    vor.id = 1;
+    vor.name = "Noise Voronoi";
+    vor.inputs.push_back(MakePin(2, "UV", PinType::Vec2, PinKind::Input));
+    vor.inputs.push_back(MakePin(3, "Scale", PinType::Float, PinKind::Input));
+    vor.inputs[1].default_value[0] = 5.0f;
+    vor.outputs.push_back(MakePin(4, "Dist", PinType::Float, PinKind::Output));
+
+    NodeDesc rmp;
+    rmp.id = 10;
+    rmp.name = "Remap";
+    for (int i = 0; i < 5; ++i)
+        rmp.inputs.push_back(MakePin(11 + i, "in", PinType::Float, PinKind::Input));
+    rmp.inputs[2].default_value[0] = 1.0f;
+    rmp.inputs[4].default_value[0] = 1.0f;
+    rmp.outputs.push_back(MakePin(20, "Out", PinType::Float, PinKind::Output));
+
+    g.nodes = {vor, rmp};
+
+    ShaderCodegenResult gl = GenerateShader(g, ShaderTarget::GLSL);
+    ASSERT_TRUE(gl.ok);
+    EXPECT_TRUE(gl.warnings.empty());
+    EXPECT_TRUE(Contains(gl.fragment, "fract("));
+
+    ShaderCodegenResult hl = GenerateShader(g, ShaderTarget::HLSL);
+    ASSERT_TRUE(hl.ok);
+    EXPECT_TRUE(hl.warnings.empty());
+    EXPECT_TRUE(Contains(hl.fragment, "frac("));   // remapped intrinsic
+    EXPECT_TRUE(Contains(hl.fragment, "float2"));
+}
+
+TEST(ShaderGraphCodegen, ScreenPositionWarnsOnHlsl) {
+    ShaderGraphAsset g;
+    g.next_id = 100;
+    NodeDesc sp;
+    sp.id = 1;
+    sp.name = "Screen Position";
+    sp.outputs.push_back(MakePin(2, "Out", PinType::Vec2, PinKind::Output));
+    g.nodes = {sp};
+
+    ShaderCodegenResult gl = GenerateShader(g, ShaderTarget::GLSL);
+    EXPECT_TRUE(gl.ok);
+    EXPECT_TRUE(gl.warnings.empty());
+    EXPECT_TRUE(Contains(gl.fragment, "gl_FragCoord"));
+
+    ShaderCodegenResult hl = GenerateShader(g, ShaderTarget::HLSL);
+    EXPECT_TRUE(hl.ok);
+    EXPECT_FALSE(hl.warnings.empty());
+    EXPECT_FALSE(Contains(hl.fragment, "gl_FragCoord"));
+}
+
 TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL), "GLSL");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::HLSL), "HLSL");
