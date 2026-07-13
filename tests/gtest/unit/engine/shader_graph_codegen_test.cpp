@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+
 #include "engine/render/shader_graph/shader_graph_codegen.h"
 
 using namespace dse::shadergraph;
@@ -108,6 +112,21 @@ TEST(ShaderGraphCodegen, HlslTargetProducesHlslSource) {
 
     EXPECT_TRUE(Contains(r.vertex, "VSOut VSMain(VSIn i)"));
     EXPECT_TRUE(Contains(r.vertex, "mul(vp, float4(i.a_pos, 1.0))"));
+}
+
+// WebGL2/ANGLE (and the GLSL ES spec) require the #version directive to be the
+// very first line of the shader — no comment or whitespace may precede it. This
+// regression was found by compiling the generated source in a real WebGL2 context.
+TEST(ShaderGraphCodegen, GlslVersionDirectiveIsFirstLine) {
+    for (ShaderTarget t : {ShaderTarget::GLSL, ShaderTarget::GLSL_VULKAN, ShaderTarget::GLSL_ES}) {
+        ShaderCodegenResult r = GenerateShader(MakeGraph(), t);
+        ASSERT_TRUE(r.ok) << ShaderTargetName(t);
+        for (const std::string* src : {&r.vertex, &r.fragment}) {
+            const std::string first = src->substr(0, src->find('\n'));
+            EXPECT_EQ(first.rfind("#version", 0), 0u)
+                << ShaderTargetName(t) << " first line must be #version, got: " << first;
+        }
+    }
 }
 
 TEST(ShaderGraphCodegen, UnsupportedNodeEmitsWarningNotSilentZero) {
@@ -353,4 +372,26 @@ TEST(ShaderGraphCodegen, TargetNames) {
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_VULKAN), "GLSL-Vulkan");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::GLSL_ES), "GLSL-ES");
     EXPECT_STREQ(ShaderTargetName(ShaderTarget::WGSL), "WebGPU-WGSL");
+}
+
+// Dump the generated WebGL2 (GLSL ES 300) and WGSL sources to disk so they can be
+// fed to a real WebGL2/WebGPU context for compile-level validation. Gated on the
+// DSE_SHADER_DUMP_DIR env var so it is a no-op in normal CI/unit runs.
+TEST(ShaderGraphCodegen, DumpBrowserTargetsWhenRequested) {
+    const char* dir = std::getenv("DSE_SHADER_DUMP_DIR");
+    if (!dir || !*dir) {
+        GTEST_SKIP() << "set DSE_SHADER_DUMP_DIR to emit browser shader sources";
+    }
+    std::filesystem::create_directories(dir);
+    ShaderGraphAsset g = MakeGraph();
+
+    auto dump = [&](ShaderTarget target, const char* stem) {
+        ShaderCodegenResult r = GenerateShader(g, target);
+        ASSERT_TRUE(r.ok) << (r.errors.empty() ? "" : r.errors[0]);
+        const std::filesystem::path base(dir);
+        std::ofstream(base / (std::string(stem) + ".vert")) << r.vertex;
+        std::ofstream(base / (std::string(stem) + ".frag")) << r.fragment;
+    };
+    dump(ShaderTarget::GLSL_ES, "webgl2");
+    dump(ShaderTarget::WGSL, "wgsl");
 }
