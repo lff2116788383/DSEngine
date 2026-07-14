@@ -116,9 +116,13 @@ jobs:
             foreach($c in $crt){ Copy-Item $c.FullName $t -Force }
             Write-Host "Deployed to $t : vulkan-1.dll + $($crt.Count) CRT dll(s)"
           }
-      - name: Run Tests
+      # Hosted runners are GPU-less: exclude the "gpu"-labelled smoke battery
+      # (three-RHI golden/soak, shader-graph preview) which asserts a real GPU
+      # (device.is_software==false) and cannot pass here. It is gated instead by
+      # the self-hosted gpu-smoke job below (ctest -L gpu).
+      - name: Run Tests (exclude GPU-only smoke)
         working-directory: ${{ env.BUILD_DIR }}
-        run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 120 -T Test
+        run: ctest -C ${{ matrix.config }} -LE gpu --output-on-failure --timeout 120 -T Test
         timeout-minutes: 15
 
       # P2-3 release-matrix gate: explicit, GPU-free structural gate (file/API/
@@ -135,6 +139,61 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.label }}
+          path: ${{ env.BUILD_DIR }}/Testing/**/*.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # 真机 GPU smoke 门禁——三 RHI golden/soak、shader-graph 预览等用例显式断言
+  # device.is_software==false（真实 GPU 读回），无法在 GPU-less 托管 runner 上通过，
+  # 故从 build-and-test 的托管 ctest 里以 -LE gpu 排除，改由本 job 在自建带 GPU 的
+  # runner 上以 ctest -L gpu 跑。仅 workflow_dispatch 手动触发，避免无自建 runner 时
+  # 在每次 push/PR 上排队。自建 runner 需打标签 [self-hosted, windows, gpu]。
+  gpu-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, windows, gpu]
+    name: gpu-smoke-self-hosted
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: CMake Configure (GPU backends on)
+        run: |
+          cmake -S . -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 `
+            -DDSE_BUILD_EDITOR=OFF `
+            -DDSE_BUILD_LAUNCHER=OFF `
+            -DDSE_BUILD_GTESTS=ON `
+            -DDSE_ENABLE_SPINE=ON `
+            -DDSE_ENABLE_3D=ON `
+            -DDSE_ENABLE_VULKAN=ON `
+            -DDSE_ENABLE_D3D11=ON `
+            -DDSE_ENABLE_PHYSX=OFF `
+            -DDSE_ENABLE_JOLT=ON `
+            -DDSE_ENABLE_PCH=ON
+
+      - name: Build engine + smoke tests
+        run: |
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_engine --parallel
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_gtest_smoke_tests --parallel
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target dse_copy_assets
+
+      - name: Run GPU smoke gate (real GPU; ctest -L gpu)
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest -C Release -L gpu --output-on-failure --timeout 600 -T Test
+        timeout-minutes: 30
+
+      - name: Upload GPU smoke test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-smoke-results
           path: ${{ env.BUILD_DIR }}/Testing/**/*.xml
           retention-days: 14
           if-no-files-found: ignore

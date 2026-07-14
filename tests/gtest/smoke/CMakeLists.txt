@@ -106,7 +106,12 @@ add_test(
     NAME gtest.engine.smoke
     COMMAND ${DSE_GTEST_SMOKE_TARGET}
 )
+# The smoke suite is a render/pixel battery: three-RHI golden/soak and
+# shader-graph preview explicitly assert device.is_software==false (a real GPU).
+# It therefore cannot pass on GPU-less hosted CI runners; the "gpu" label lets
+# hosted CI exclude it (ctest -LE gpu) while a real-GPU (self-hosted) runner
+# gates it via ctest -L gpu.
 set_tests_properties(gtest.engine.smoke PROPERTIES
-    LABELS "engine;smoke;gtest"
+    LABELS "engine;smoke;gtest;gpu"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
