@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "engine/core/asset_diagnostics.h"
 #include "engine/cutscene/cutscene_player.h"
 #include "engine/cutscene/cutscene_track.h"
 
@@ -123,6 +124,17 @@ std::string SerializeSequencerProject(const SequencerState& state);
 bool DeserializeSequencerProject(const std::string& json,
                                  SequencerState& state,
                                  std::string& err);
+
+/// Diagnostics-carrying overload sharing the engine version envelope.
+///
+/// Reads the {version, ...} envelope via ReadVersionEnvelope, records the source
+/// version, and migrates legacy (pre-v1) projects to the current schema: legacy
+/// clips stored a single `time` point instead of `start_time`/`end_time`, so any
+/// such clip is upgraded (start_time = end_time = time) and diag.migrated is set.
+/// Forward-version files load leniently with a warning (never a silent drop).
+bool DeserializeSequencerProject(const std::string& json,
+                                 SequencerState& state,
+                                 dse::assets::AssetDiagnostics& diag);
 
 // ─── Runtime mapping (via shared cutscene serializer) ────────────────────
 

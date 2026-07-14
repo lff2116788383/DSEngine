@@ -15,6 +15,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include "engine/core/asset_version_envelope.h"
 #include "engine/cutscene/cutscene_serialize.h"
 
 namespace dse::editor {
@@ -50,7 +51,7 @@ std::string SerializeSequencerProject(const SequencerState& state) {
     rapidjson::Document doc;
     doc.SetObject();
     auto& a = doc.GetAllocator();
-    doc.AddMember("version", kSequencerSchemaVersion, a);
+    assets::WriteVersionEnvelope(doc, kSequencerSchemaVersion, a);
     doc.AddMember("duration", state.duration, a);
     doc.AddMember("frame_rate", state.frame_rate, a);
 
@@ -104,11 +105,17 @@ std::string SerializeSequencerProject(const SequencerState& state) {
 
 bool DeserializeSequencerProject(const std::string& json,
                                  SequencerState& state,
-                                 std::string& err) {
+                                 dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
     rapidjson::Document doc;
     doc.Parse(json.c_str());
-    if (doc.HasParseError()) { err = "JSON parse error"; return false; }
-    if (!doc.IsObject()) { err = "root is not an object"; return false; }
+    if (doc.HasParseError()) { diag.errors.push_back("JSON parse error"); return false; }
+    if (!doc.IsObject()) { diag.errors.push_back("root is not an object"); return false; }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kSequencerSchemaVersion, ".dsequence", diag);
+    const bool legacy = version < kSequencerSchemaVersion;
 
     SequencerState loaded;
     loaded.initialized = true;
@@ -141,8 +148,17 @@ bool DeserializeSequencerProject(const std::string& json,
                     if (!cj.IsObject()) continue;
                     SequencerClip c;
                     if (cj.HasMember("name") && cj["name"].IsString()) c.name = cj["name"].GetString();
-                    if (cj.HasMember("start_time") && cj["start_time"].IsNumber()) c.start_time = cj["start_time"].GetFloat();
-                    if (cj.HasMember("end_time") && cj["end_time"].IsNumber()) c.end_time = cj["end_time"].GetFloat();
+                    const bool has_start = cj.HasMember("start_time") && cj["start_time"].IsNumber();
+                    const bool has_end = cj.HasMember("end_time") && cj["end_time"].IsNumber();
+                    if (has_start) c.start_time = cj["start_time"].GetFloat();
+                    if (has_end) c.end_time = cj["end_time"].GetFloat();
+                    // Legacy migration: pre-v1 clips were points with a single
+                    // `time` field instead of a start/end range.
+                    if (!has_start && cj.HasMember("time") && cj["time"].IsNumber()) {
+                        c.start_time = cj["time"].GetFloat();
+                        if (!has_end) c.end_time = c.start_time;
+                        diag.migrated = true;
+                    }
                     if (cj.HasMember("color") && cj["color"].IsUint64()) c.color = static_cast<uint32_t>(cj["color"].GetUint64());
                     if (cj.HasMember("asset_path") && cj["asset_path"].IsString()) c.asset_path = cj["asset_path"].GetString();
                     if (cj.HasMember("volume") && cj["volume"].IsNumber()) c.volume = cj["volume"].GetFloat();
@@ -163,7 +179,24 @@ bool DeserializeSequencerProject(const std::string& json,
             loaded.tracks.push_back(std::move(tr));
         }
     }
+
+    if (legacy && diag.migrated) {
+        diag.warnings.push_back(
+            ".dsequence: migrated legacy point clips to start/end ranges");
+    }
+    diag.ok = true;
     state = std::move(loaded);
+    return true;
+}
+
+bool DeserializeSequencerProject(const std::string& json,
+                                 SequencerState& state,
+                                 std::string& err) {
+    dse::assets::AssetDiagnostics diag;
+    if (!DeserializeSequencerProject(json, state, diag)) {
+        err = diag.errors.empty() ? "deserialize failed" : diag.errors.front();
+        return false;
+    }
     return true;
 }
 

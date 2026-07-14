@@ -760,7 +760,7 @@
     {
       "id": "content-tools-and-panels",
       "stage": 14,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "All visible 2D, animation, terrain, navigation, asset, scripting, plugin, and auxiliary tools.",
       "editor": {
         "panelIds": [
@@ -838,12 +838,14 @@
         "windows/vulkan"
       ],
       "tests": [
-        "tests/gtest/integration/editor/editor_2d_tools_test.cpp"
+        "tests/gtest/integration/editor/editor_2d_tools_test.cpp",
+        "tests/gtest/integration/editor/editor_sequencer_version_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
-        "apps/editor_cpp/src/editor_asset_db.h"
+        "apps/editor_cpp/src/editor_asset_db.h",
+        "apps/editor_cpp/src/editor_sequencer_core.cpp"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -857,7 +859,8 @@
       },
       "blockers": [
         "2D tools (slicer, atlas, animation, 9-slice, collision, particles) now have 18/18 integration tests covering grid slicing, padding, offset, save/load round-trip, play/stop state, collision shape creation, and particle config defaults.",
-        "Most editor-local formats lack shared versioned runtime contracts and migrations.",
+        "The .dsequence sequencer format is now on the shared version envelope + AssetDiagnostics with a real legacy point-clip -> start/end migration; SequencerVersion.* covers edit -> versioned save/load round-trip -> legacy migration -> forward-compat warning -> runtime CutsceneSequence consumption (4/4).",
+        "Remaining editor-local formats still need the shared versioned runtime contract + migration wired in the same way.",
         "There is no golden-project acceptance suite covering every visible operation."
       ]
     },
