@@ -1071,13 +1071,16 @@
       ],
       "tests": [
         "tests/automation/suites/editor-regression.yaml",
-        "tests/automation/suites/editor-nightly.yaml"
+        "tests/automation/suites/editor-nightly.yaml",
+        "tests/gtest/integration/editor/editor_release_matrix_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
         ".github/workflows/release.yml",
-        "docs/CLEAN_ROOM_TEST.md"
+        "docs/CLEAN_ROOM_TEST.md",
+        "docs/RELEASE_GO_NO_GO.md",
+        "scripts/verify_clean_room.ps1"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -1090,9 +1093,10 @@
         "productionReady": false
       },
       "blockers": [
-        "Release matrix validation has 10/10 tests verifying feature ledger, editor command vocabulary, undo system API, BuildService API, CrashHandler API, GitClient API, AssetDatabase API, 2D tools API, and CI/release workflow presence.",
-        "Release does not validate the full matrix from downloaded artifacts on clean machines.",
-        "Go/No-Go cannot pass while production-debt entries remain."
+        "Release matrix validation has 10/10 automated tests (ReleaseMatrixTest.*) verifying feature ledger, editor command vocabulary, undo system API, BuildService API, CrashHandler API, GitClient API, AssetDatabase API, 2D tools API, and CI/release workflow presence; validated on real RTX 3070 dev machine.",
+        "Partial release-pipeline evidence gathered on the preconfigured RTX 3070 developer machine (NOT a clean machine, see docs/RELEASE_GO_NO_GO.md): dse build -> dse dist --target=win produced a 5.36 MB win-x64 zip (rc=0), and the extracted artifact booted on the real GPU (OpenGL backend, GPU-driven rendering/physics/navmesh/grass compute all initialized), loaded its Lua entry script, ran DSE_MAX_FRAMES=8 and exited cleanly (rc=0).",
+        "OPEN clean-machine gate: full platform matrix (windows/opengl+d3d11+vulkan, web/webgl2, web/webgpu) must be validated from downloaded artifacts on a genuinely clean machine (no VS / no VC++ Redist / no VULKAN_SDK) via scripts/verify_clean_room.ps1; the current evidence is from a configured dev machine and cannot substitute.",
+        "Go/No-Go cannot pass while production-debt entries remain and while any feature stays in_progress (verify_feature_ledger.py --release still fails)."
       ]
     }
   ]
