@@ -168,8 +168,11 @@ void MakeTwoQuads(std::vector<MeshVertex>& verts, std::vector<uint16_t>& indices
     add_quad(0.1f, 0.9f, glm::vec3(-1.0f, 0.0f, 0.0f));
 }
 
-// 单轮：整建 RT + MeshRenderer → 渲染 → 回读 → 整销。iter 用来轻微扰动光照，模拟场景切换。
-RenderTargetReadback RenderOnce(RhiDevice& device, int iter) {
+// 单轮：整建 RT → 渲染 → 回读 → 销毁 RT。iter 用来轻微扰动光照，模拟场景切换。
+// MeshRenderer/PSO 属引擎生命周期资源（RHI 无 PSO 删除接口，设计上创建一次长期复用），
+// 故由调用方持有、跨迭代复用；本轮仅 churn 场景侧 GPU 资源（RT、每绘制动态缓冲、回读）——
+// 与真实 Play/Stop/切场景一致（销毁重建的是场景资源，而非 RHI 管线缓存）。
+RenderTargetReadback RenderOnce(RhiDevice& device, MeshRenderer& renderer, int iter) {
     RenderTargetDesc rt_desc;
     rt_desc.width = kRtSize;
     rt_desc.height = kRtSize;
@@ -210,7 +213,6 @@ RenderTargetReadback RenderOnce(RhiDevice& device, int iter) {
     const glm::mat4 proj = device.GetProjectionCorrection();
     const glm::vec3 cam_pos(0.0f, 0.0f, 1.0f);
 
-    MeshRenderer renderer;
     device.BeginFrame();
     auto cmd = device.CreateCommandBuffer();
     if (cmd) {
@@ -226,7 +228,6 @@ RenderTargetReadback RenderOnce(RhiDevice& device, int iter) {
     device.EndFrame();
 
     RenderTargetReadback rb = device.ReadRenderTargetColorRgba8WithSize(rt);
-    renderer.Shutdown(device);
     device.DeleteRenderTarget(rt);
     return rb;
 }
@@ -237,14 +238,16 @@ RenderTargetReadback SoakFn(RhiDevice& device) {
     const int iters = SoakIters();
     g_soak.iterations = iters;
 
+    MeshRenderer renderer;  // 引擎生命周期资源：创建一次，跨迭代复用（PSO 不随每轮重建）。
     RenderTargetReadback last;
     for (int i = 0; i < kWarmup + iters; ++i) {
-        last = RenderOnce(device, i);
-        if (last.pixels.empty()) return {};  // ForwardShaded 不可用 → 让 CheckSoak 跳过
+        last = RenderOnce(device, renderer, i);
+        if (last.pixels.empty()) { renderer.Shutdown(device); return {}; }  // ForwardShaded 不可用 → 让 CheckSoak 跳过
         if (i == kWarmup - 1) g_soak.baseline = Sample();
     }
     g_soak.final_ = Sample();
     g_soak.rendered_ok = !last.pixels.empty();
+    renderer.Shutdown(device);
     return last;
 }
 

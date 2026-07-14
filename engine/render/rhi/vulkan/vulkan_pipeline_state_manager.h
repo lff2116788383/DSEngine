@@ -98,6 +98,12 @@ public:
     };
     VkRenderPass GetOrCreateRenderPass(const RenderPassKey& key);
 
+    /// 销毁并移除所有以指定 VkRenderPass 为键的缓存 VkPipeline。
+    /// 渲染目标销毁时其 VkRenderPass 随之销毁；pipeline 复合缓存以 render_pass 为键，
+    /// 若不同步清理会随「反复建/销 RT」线性堆积（VkPipeline 显存泄漏）并残留悬垂引用。
+    /// 需由调用方保证此时 render_pass 不再被在飞命令缓冲引用（与销毁 RenderPass 同一安全域）。
+    void EvictPipelinesForRenderPass(VkRenderPass render_pass);
+
     /// 设置活跃管线状态（追踪当前绑定）
     void set_active_pipeline_state(unsigned int handle) { active_pipeline_state_ = handle; }
     unsigned int active_pipeline_state() const { return active_pipeline_state_; }

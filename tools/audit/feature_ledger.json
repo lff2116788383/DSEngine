@@ -1026,7 +1026,8 @@
         "tests/automation/cases/soak/resident_edit_session.yaml",
         "tests/automation/suites/editor-stability.yaml",
         "tests/gtest/integration/editor/editor_stability_test.cpp",
-        "tests/gtest/integration/engine/ecs/cpu_leak_budget_test.cpp"
+        "tests/gtest/integration/engine/ecs/cpu_leak_budget_test.cpp",
+        "tests/gtest/smoke/three_rhi_soak_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
@@ -1038,7 +1039,7 @@
         "runtimeConsumption": "not_applicable",
         "explicitDiagnostics": true,
         "versionedMigration": "not_applicable",
-        "platformMatrix": false,
+        "platformMatrix": true,
         "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
@@ -1046,7 +1047,8 @@
       "blockers": [
         "Stability suite has 6/6 tests covering repeated undo/redo cycles (10 cycles × 100 cmds), large history trim (500→50), compound command cycling, performance budgets (1000 cmds < 100ms), and interleaved operations.",
         "CPU-side leak + throughput budget now has headless automated coverage (CpuLeakBudget.*): repeated ECS entity/component create-destroy churn returns exactly to baseline and 100k create+destroy stays within a wall-clock budget.",
-        "Remaining before productionReady: three-RHI GPU/VRAM/handle leak + repeated hot-reload + scene/backend-switch soak must run on the real-GPU machine (platformMatrix/cleanMachine)."
+        "Three-RHI GPU soak (ThreeRhiSoak.OpenGL/D3D11/Vulkan) validated on real NVIDIA RTX 3070 Laptop GPU (software=0, DXGI hardware adapter): 250 iterations of render-target create/destroy + shaded render + framebuffer readback per backend hold local VRAM flat (delta 0.0 MiB), OS handles stable (delta 0-2), and working set within budget (<5 MiB); thresholds handle<=16, vram<24MiB, ws<48MiB. Two real engine leaks were fixed to reach this: (1) D3D11 offscreen deferred-destruction not reclaimed without Present -> added ID3D11DeviceContext::Flush in EndFrame; (2) Vulkan pipeline cache keyed by per-render-target VkRenderPass grew unbounded under render-target churn and left dangling references -> evict pipelines for a render pass when its render target is destroyed. Soak models engine-lifetime renderer/PSO reuse (RHI has no pipeline-state deletion API by design) with per-iteration scene/RT/readback churn, matching real Play/Stop/scene-switch behavior.",
+        "Remaining before productionReady: clean-machine release-matrix acceptance (P0-1/P2-3) must run on a genuinely clean machine; the current soak evidence is from the preconfigured RTX 3070 developer machine, so cleanMachine stays false."
       ]
     },
     {

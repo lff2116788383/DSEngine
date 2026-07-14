@@ -398,6 +398,12 @@ unsigned int VulkanRhiDevice::CreateRenderTarget(const RenderTargetDesc& desc) {
 }
 
 void VulkanRhiDevice::DeleteRenderTarget(unsigned int render_target_handle) {
+    // RT 的 VkRenderPass 即将随之销毁；先淘汰以其为键的缓存 VkPipeline，
+    // 否则反复建/销 RT 会令 pipeline 缓存线性堆积（显存泄漏）并残留悬垂引用。
+    if (const VulkanRenderTarget* rt = resource_mgr_.GetRenderTarget(render_target_handle)) {
+        state_mgr_.EvictPipelinesForRenderPass(rt->render_pass);
+        state_mgr_.EvictPipelinesForRenderPass(rt->render_pass_load);
+    }
     resource_mgr_.DeleteRenderTarget(render_target_handle);
 }
 

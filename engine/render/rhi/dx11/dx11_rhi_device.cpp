@@ -749,6 +749,14 @@ void DX11RhiDevice::EndFrame() {
     // GPU Timestamp Query: 结束本帧 disjoint 并收集上一帧结果
     gpu_timer_.ResolveGpuTimers();
 
+    // 提交本帧命令并让驱动处理挂起的资源销毁队列。离屏渲染（无 Present）时，
+    // D3D11 immediate context 的延迟销毁只有在 Flush/Present 时才真正回收显存；
+    // 缺少 Flush 会导致反复建/销 RT 的显存随帧线性堆积。窗口路径由 PresentFrame 兜底，
+    // 此处 Flush 在其之前，属冗余无害。
+    if (ID3D11DeviceContext* dc = context_.context()) {
+        dc->Flush();
+    }
+
     // Present 由 PresentFrame() 单独调用，不在 EndFrame 内执行
     // 这使 render 计时不包含 Present 延迟，与 OpenGL 行为一致
 }

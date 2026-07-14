@@ -101,6 +101,28 @@ void VulkanPipelineStateManager::Shutdown() {
                   pipeline_states_.size());
 }
 
+void VulkanPipelineStateManager::EvictPipelinesForRenderPass(VkRenderPass render_pass) {
+    if (render_pass == VK_NULL_HANDLE || !context_) return;
+    auto device = context_->device();
+
+    for (auto it = pipeline_cache_.begin(); it != pipeline_cache_.end();) {
+        if (it->first.render_pass == render_pass) {
+            if (it->second != VK_NULL_HANDLE) vkDestroyPipeline(device, it->second, nullptr);
+            it = pipeline_cache_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    // 清除 pipeline_states_ 中指向该 render pass 的悬垂 VkPipeline 引用（已随缓存销毁）。
+    for (auto& [handle, state] : pipeline_states_) {
+        if (state.render_pass == render_pass) {
+            state.pipeline = VK_NULL_HANDLE;
+            state.render_pass = VK_NULL_HANDLE;
+        }
+    }
+}
+
 // ============================================================================
 // CreatePipelineState
 // ============================================================================
