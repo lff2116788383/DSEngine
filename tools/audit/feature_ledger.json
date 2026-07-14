@@ -605,7 +605,7 @@
         "explicitDiagnostics": false,
         "versionedMigration": false,
         "platformMatrix": false,
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
