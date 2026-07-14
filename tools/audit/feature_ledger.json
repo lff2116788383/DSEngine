@@ -976,7 +976,7 @@
     {
       "id": "performance-and-stability",
       "stage": 17,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "Long-running editor and runtime stability, leak checks, performance budgets, repeated reload, and Play/Stop acceptance.",
       "editor": {
         "panelIds": [
@@ -995,7 +995,9 @@
       ],
       "tests": [
         "tests/automation/cases/soak/resident_edit_session.yaml",
-        "tests/automation/suites/editor-stability.yaml"
+        "tests/automation/suites/editor-stability.yaml",
+        "tests/gtest/integration/editor/editor_stability_test.cpp",
+        "tests/gtest/integration/engine/ecs/cpu_leak_budget_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
@@ -1008,13 +1010,14 @@
         "explicitDiagnostics": true,
         "versionedMigration": "not_applicable",
         "platformMatrix": false,
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
       "blockers": [
         "Stability suite has 6/6 tests covering repeated undo/redo cycles (10 cycles × 100 cmds), large history trim (500→50), compound command cycling, performance budgets (1000 cmds < 100ms), and interleaved operations.",
-        "No accepted three-RHI leak and repeated hot-reload budget."
+        "CPU-side leak + throughput budget now has headless automated coverage (CpuLeakBudget.*): repeated ECS entity/component create-destroy churn returns exactly to baseline and 100k create+destroy stays within a wall-clock budget.",
+        "Remaining before productionReady: three-RHI GPU/VRAM/handle leak + repeated hot-reload + scene/backend-switch soak must run on the real-GPU machine (platformMatrix/cleanMachine)."
       ]
     },
     {
