@@ -28,6 +28,19 @@ TEST(AssetDb, EngineExtensionsMapToType) {
     EXPECT_EQ(AssetTypeFromExtension(".dpak"), AssetType::Pak);
 }
 
+// ── AssetTypeFromExtension：编辑器内容格式（版本信封六格式）───────────────────
+// P2-1: GUID/类型索引必须覆盖全部内容格式，含用共享版本信封的六种编辑器格式，
+// 否则 GetByType / 依赖修正会漏掉这些资产。
+
+TEST(AssetDb, ContentFormatExtensionsMapToType) {
+    EXPECT_EQ(AssetTypeFromExtension(".dbp"), AssetType::Blueprint);
+    EXPECT_EQ(AssetTypeFromExtension(".dasm"), AssetType::StateMachine);
+    EXPECT_EQ(AssetTypeFromExtension(".dsequence"), AssetType::Sequence);
+    EXPECT_EQ(AssetTypeFromExtension(".dcutscene"), AssetType::Cutscene);
+    EXPECT_EQ(AssetTypeFromExtension(".dshadergraph"), AssetType::ShaderGraph);
+    EXPECT_EQ(AssetTypeFromExtension(".dscriptmeta"), AssetType::ScriptMeta);
+}
+
 // ── AssetTypeFromExtension：贴图别名 ─────────────────────────────────────────
 
 TEST(AssetDb, TextureAliasesAllMapToTexture) {
@@ -75,6 +88,12 @@ TEST(AssetDb, TypeToStringCoversAllValues) {
     EXPECT_STREQ(AssetTypeToString(AssetType::Prefab), "Prefab");
     EXPECT_STREQ(AssetTypeToString(AssetType::Script), "Script");
     EXPECT_STREQ(AssetTypeToString(AssetType::Pak), "Pak");
+    EXPECT_STREQ(AssetTypeToString(AssetType::Blueprint), "Blueprint");
+    EXPECT_STREQ(AssetTypeToString(AssetType::StateMachine), "StateMachine");
+    EXPECT_STREQ(AssetTypeToString(AssetType::Sequence), "Sequence");
+    EXPECT_STREQ(AssetTypeToString(AssetType::Cutscene), "Cutscene");
+    EXPECT_STREQ(AssetTypeToString(AssetType::ShaderGraph), "ShaderGraph");
+    EXPECT_STREQ(AssetTypeToString(AssetType::ScriptMeta), "ScriptMeta");
 }
 
 // ── 往返：扩展名 → 类型 → 字符串 一致 ───────────────────────────────────────
@@ -83,5 +102,7 @@ TEST(AssetDb, RoundTripExtensionToTypeToString) {
     EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".dmesh")), "Mesh");
     EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".png")), "Texture");
     EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".wav")), "Audio");
+    EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".dbp")), "Blueprint");
+    EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".dshadergraph")), "ShaderGraph");
     EXPECT_STREQ(AssetTypeToString(AssetTypeFromExtension(".xyz")), "Unknown");
 }

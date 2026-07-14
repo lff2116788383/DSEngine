@@ -21,6 +21,12 @@ enum class AssetType {
     Prefab,     // .dprefab
     Script,     // .lua
     Pak,        // .dpak
+    Blueprint,  // .dbp
+    StateMachine, // .dasm (animation state machine)
+    Sequence,   // .dsequence
+    Cutscene,   // .dcutscene
+    ShaderGraph,// .dshadergraph
+    ScriptMeta, // .dscriptmeta
 };
 
 const char* AssetTypeToString(AssetType type);
