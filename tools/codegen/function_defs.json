@@ -8184,22 +8184,27 @@
               "type": "float"
             }
           ],
+          "float_array_param": {
+            "name": "vertices",
+            "stack_index": 6
+          },
+          "int_array_param": {
+            "name": "indices",
+            "stack_index": 7
+          },
           "calls": [
             {
-              "c_name": "dse_mesh_renderer_add",
-              "args": [
-                "e",
-                "\"\""
-              ]
-            },
-            {
-              "c_name": "dse_mesh_renderer_set_color",
+              "c_name": "dse_mesh_renderer_add_procedural",
               "args": [
                 "e",
                 "r",
                 "g",
                 "b",
-                "a"
+                "a",
+                "vertices.data()",
+                "static_cast<int>(vertices.size())",
+                "reinterpret_cast<const int*>(indices.data())",
+                "static_cast<int>(indices.size())"
               ]
             }
           ],

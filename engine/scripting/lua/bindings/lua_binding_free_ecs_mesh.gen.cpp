@@ -93,8 +93,25 @@ int L_add_mesh_renderer(lua_State* L) {
     float g = static_cast<float>(luaL_checknumber(L, 3));
     float b = static_cast<float>(luaL_checknumber(L, 4));
     float a = static_cast<float>(luaL_checknumber(L, 5));
-    dse_mesh_renderer_add(e, "");
-    dse_mesh_renderer_set_color(e, r, g, b, a);
+    std::vector<uint32_t> indices;
+    if (lua_istable(L, 7)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 7));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 7, _i);
+            if (lua_isnumber(L, -1)) indices.push_back(static_cast<uint32_t>(lua_tointeger(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    std::vector<float> vertices;
+    if (lua_istable(L, 6)) {
+        lua_Integer _n = static_cast<lua_Integer>(lua_rawlen(L, 6));
+        for (lua_Integer _i = 1; _i <= _n; ++_i) {
+            lua_rawgeti(L, 6, _i);
+            if (lua_isnumber(L, -1)) vertices.push_back(static_cast<float>(lua_tonumber(L, -1)));
+            lua_pop(L, 1);
+        }
+    }
+    dse_mesh_renderer_add_procedural(e, r, g, b, a, vertices.data(), static_cast<int>(vertices.size()), reinterpret_cast<const int*>(indices.data()), static_cast<int>(indices.size()));
     return 0;
 }
 
