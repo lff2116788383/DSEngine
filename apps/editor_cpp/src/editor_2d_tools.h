@@ -11,7 +11,14 @@
 #include <glm/glm.hpp>
 #include "imgui.h"
 
+#include "engine/core/asset_diagnostics.h"
+
 namespace dse::editor::tools2d {
+
+/// .dsprite / .datlas 编辑器落盘格式的 schema 版本。v0（无 version 字段）为
+/// 早期扁平帧/条目布局，加载时迁移为 pixel_rect/uv_rect（与运行时资产一致）。
+constexpr int kSpriteSheetSchemaVersion = 1;
+constexpr int kAtlasSchemaVersion = 1;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #1 — Sprite Sheet Slicer
@@ -67,6 +74,9 @@ void SliceAutoPixels(SpriteSheetAsset& sheet, const unsigned char* rgba,
                      int width, int height, float alpha_threshold);
 bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path);
 bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path);
+// Versioned load with structured diagnostics (envelope + legacy flat-frame migration).
+bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path,
+                     dse::assets::AssetDiagnostics& diag);
 
 // Test accessors
 int SpriteSlicerFrameCount();

@@ -10,6 +10,12 @@
 #include <string>
 #include <vector>
 
+#include "engine/core/asset_diagnostics.h"
+
+/// .dsprite 当前 schema 版本。v0（无 version 字段）为编辑器早期扁平帧布局
+/// （x/y/w/h + pivot_x/pivot_y），加载时迁移为 pixel_rect/uv_rect/pivot。
+constexpr int kSpriteSheetSchemaVersion = 1;
+
 /**
  * @struct SpriteFrame
  * @brief 精灵图帧数据 (从 .dsprite 加载)
@@ -38,6 +44,11 @@ struct SpriteSheetAsset {
      * @return 是否成功
      */
     bool LoadFromFile(const std::string& path);
+
+    /**
+     * @brief 从 .dsprite JSON 加载并返回结构化诊断（版本信封 + 旧扁平帧迁移）。
+     */
+    bool LoadFromFile(const std::string& path, dse::assets::AssetDiagnostics& diag);
 
     /**
      * @brief 保存为 .dsprite JSON 文件

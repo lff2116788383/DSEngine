@@ -11,6 +11,12 @@
 #include <unordered_map>
 #include <vector>
 
+#include "engine/core/asset_diagnostics.h"
+
+/// .datlas 当前 schema 版本。v0（无 version 字段）为编辑器早期扁平条目布局
+/// （src/x/y/w/h），加载时迁移为 pixel_rect/uv_rect。
+constexpr int kAtlasSchemaVersion = 1;
+
 /**
  * @struct AtlasEntry
  * @brief Atlas 中单个子纹理的位置信息
@@ -41,6 +47,11 @@ struct AtlasAsset {
      * @return 是否成功
      */
     bool LoadFromFile(const std::string& path);
+
+    /**
+     * @brief 从 .datlas JSON 加载并返回结构化诊断（版本信封 + 旧扁平条目迁移）。
+     */
+    bool LoadFromFile(const std::string& path, dse::assets::AssetDiagnostics& diag);
 
     /**
      * @brief 保存为 .datlas JSON 文件

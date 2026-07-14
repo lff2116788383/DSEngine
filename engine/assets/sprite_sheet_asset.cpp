@@ -10,9 +10,19 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 bool SpriteSheetAsset::LoadFromFile(const std::string& path) {
+    dse::assets::AssetDiagnostics diag;
+    return LoadFromFile(path, diag);
+}
+
+bool SpriteSheetAsset::LoadFromFile(const std::string& path,
+                                    dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
     std::ifstream f(path);
-    if (!f.is_open()) return false;
+    if (!f.is_open()) { diag.errors.push_back("cannot open file"); return false; }
 
     std::stringstream ss;
     ss << f.rdbuf();
@@ -20,7 +30,12 @@ bool SpriteSheetAsset::LoadFromFile(const std::string& path) {
 
     rapidjson::Document doc;
     doc.Parse(content.c_str());
-    if (doc.HasParseError() || !doc.IsObject()) return false;
+    if (doc.HasParseError()) { diag.errors.push_back("JSON parse error"); return false; }
+    if (!doc.IsObject()) { diag.errors.push_back("root is not an object"); return false; }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kSpriteSheetSchemaVersion, ".dsprite", diag);
+    const bool legacy = version < kSpriteSheetSchemaVersion;
 
     if (doc.HasMember("texture") && doc["texture"].IsString())
         texture_path = doc["texture"].GetString();
@@ -48,6 +63,15 @@ bool SpriteSheetAsset::LoadFromFile(const std::string& path) {
                 int pw = pr.HasMember("w") && pr["w"].IsInt() ? pr["w"].GetInt() : 0;
                 int ph = pr.HasMember("h") && pr["h"].IsInt() ? pr["h"].GetInt() : 0;
                 frame.pixel_rect = glm::ivec4(px, py, pw, ph);
+            } else if (jf.HasMember("x") && jf["x"].IsInt() &&
+                       jf.HasMember("y") && jf["y"].IsInt() &&
+                       jf.HasMember("w") && jf["w"].IsInt() &&
+                       jf.HasMember("h") && jf["h"].IsInt()) {
+                // v0 迁移：编辑器早期扁平帧矩形 -> pixel_rect。
+                frame.pixel_rect = glm::ivec4(
+                    jf["x"].GetInt(), jf["y"].GetInt(),
+                    jf["w"].GetInt(), jf["h"].GetInt());
+                diag.migrated = true;
             }
 
             if (jf.HasMember("uv_rect") && jf["uv_rect"].IsObject()) {
@@ -69,11 +93,24 @@ bool SpriteSheetAsset::LoadFromFile(const std::string& path) {
                 auto& pv = jf["pivot"];
                 frame.pivot.x = pv.HasMember("x") && pv["x"].IsNumber() ? pv["x"].GetFloat() : 0.5f;
                 frame.pivot.y = pv.HasMember("y") && pv["y"].IsNumber() ? pv["y"].GetFloat() : 0.5f;
+            } else if (jf.HasMember("pivot_x") || jf.HasMember("pivot_y")) {
+                // v0 迁移：编辑器早期扁平 pivot_x/pivot_y。
+                if (jf.HasMember("pivot_x") && jf["pivot_x"].IsNumber())
+                    frame.pivot.x = jf["pivot_x"].GetFloat();
+                if (jf.HasMember("pivot_y") && jf["pivot_y"].IsNumber())
+                    frame.pivot.y = jf["pivot_y"].GetFloat();
+                diag.migrated = true;
             }
 
             frames.push_back(frame);
         }
     }
+
+    if (legacy && diag.migrated) {
+        diag.warnings.push_back(
+            ".dsprite: migrated legacy flat frame rects to pixel_rect/uv_rect");
+    }
+    diag.ok = true;
     return true;
 }
 
@@ -82,6 +119,7 @@ bool SpriteSheetAsset::SaveToFile(const std::string& path) const {
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
 
+    dse::assets::WriteVersionEnvelope(doc, kSpriteSheetSchemaVersion, alloc);
     doc.AddMember("texture", rapidjson::Value(texture_path.c_str(), alloc), alloc);
     doc.AddMember("width", texture_width, alloc);
     doc.AddMember("height", texture_height, alloc);

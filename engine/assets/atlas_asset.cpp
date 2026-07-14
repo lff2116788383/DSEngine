@@ -10,9 +10,19 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 bool AtlasAsset::LoadFromFile(const std::string& path) {
+    dse::assets::AssetDiagnostics diag;
+    return LoadFromFile(path, diag);
+}
+
+bool AtlasAsset::LoadFromFile(const std::string& path,
+                              dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
     std::ifstream f(path);
-    if (!f.is_open()) return false;
+    if (!f.is_open()) { diag.errors.push_back("cannot open file"); return false; }
 
     std::stringstream ss;
     ss << f.rdbuf();
@@ -20,7 +30,12 @@ bool AtlasAsset::LoadFromFile(const std::string& path) {
 
     rapidjson::Document doc;
     doc.Parse(content.c_str());
-    if (doc.HasParseError() || !doc.IsObject()) return false;
+    if (doc.HasParseError()) { diag.errors.push_back("JSON parse error"); return false; }
+    if (!doc.IsObject()) { diag.errors.push_back("root is not an object"); return false; }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kAtlasSchemaVersion, ".datlas", diag);
+    const bool legacy = version < kAtlasSchemaVersion;
 
     if (doc.HasMember("texture") && doc["texture"].IsString())
         texture_path = doc["texture"].GetString();
@@ -46,6 +61,15 @@ bool AtlasAsset::LoadFromFile(const std::string& path) {
                 int pw = pr.HasMember("w") && pr["w"].IsInt() ? pr["w"].GetInt() : 0;
                 int ph = pr.HasMember("h") && pr["h"].IsInt() ? pr["h"].GetInt() : 0;
                 entry.pixel_rect = glm::ivec4(px, py, pw, ph);
+            } else if (je.HasMember("x") && je["x"].IsInt() &&
+                       je.HasMember("y") && je["y"].IsInt() &&
+                       je.HasMember("w") && je["w"].IsInt() &&
+                       je.HasMember("h") && je["h"].IsInt()) {
+                // v0 迁移：编辑器早期扁平条目矩形 -> pixel_rect。
+                entry.pixel_rect = glm::ivec4(
+                    je["x"].GetInt(), je["y"].GetInt(),
+                    je["w"].GetInt(), je["h"].GetInt());
+                diag.migrated = true;
             }
 
             if (je.HasMember("uv_rect") && je["uv_rect"].IsObject()) {
@@ -80,6 +104,11 @@ bool AtlasAsset::LoadFromFile(const std::string& path) {
     }
 
     RebuildIndex();
+    if (legacy && diag.migrated) {
+        diag.warnings.push_back(
+            ".datlas: migrated legacy flat entry rects to pixel_rect/uv_rect");
+    }
+    diag.ok = true;
     return true;
 }
 
@@ -88,6 +117,7 @@ bool AtlasAsset::SaveToFile(const std::string& path) const {
     doc.SetObject();
     auto& alloc = doc.GetAllocator();
 
+    dse::assets::WriteVersionEnvelope(doc, kAtlasSchemaVersion, alloc);
     doc.AddMember("texture", rapidjson::Value(texture_path.c_str(), alloc), alloc);
     doc.AddMember("width", atlas_width, alloc);
     doc.AddMember("height", atlas_height, alloc);

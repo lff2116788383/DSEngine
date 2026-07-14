@@ -15,6 +15,8 @@
 
 #include <rapidjson/document.h>
 
+#include "engine/core/asset_version_envelope.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -156,7 +158,11 @@ bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
 
+    const float tw = sheet.texture_width > 0 ? static_cast<float>(sheet.texture_width) : 0.0f;
+    const float th = sheet.texture_height > 0 ? static_cast<float>(sheet.texture_height) : 0.0f;
+
     f << "{\n";
+    f << "  \"version\": " << kSpriteSheetSchemaVersion << ",\n";
     f << "  \"name\": \"" << sheet.name << "\",\n";
     f << "  \"texture\": \"" << sheet.source_texture_path << "\",\n";
     f << "  \"width\": " << sheet.texture_width << ",\n";
@@ -164,9 +170,16 @@ bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path) {
     f << "  \"frames\": [\n";
     for (size_t i = 0; i < sheet.frames.size(); ++i) {
         const auto& fr = sheet.frames[i];
-        f << "    { \"name\": \"" << fr.name << "\", \"x\": " << fr.x
-          << ", \"y\": " << fr.y << ", \"w\": " << fr.w << ", \"h\": " << fr.h
-          << ", \"pivot_x\": " << fr.pivot.x << ", \"pivot_y\": " << fr.pivot.y << " }";
+        const float ux = tw > 0.0f ? fr.x / tw : 0.0f;
+        const float uy = th > 0.0f ? fr.y / th : 0.0f;
+        const float uw = tw > 0.0f ? fr.w / tw : 1.0f;
+        const float uh = th > 0.0f ? fr.h / th : 1.0f;
+        f << "    { \"name\": \"" << fr.name << "\", \"index\": " << i
+          << ", \"pixel_rect\": { \"x\": " << fr.x << ", \"y\": " << fr.y
+          << ", \"w\": " << fr.w << ", \"h\": " << fr.h << " }"
+          << ", \"uv_rect\": { \"x\": " << ux << ", \"y\": " << uy
+          << ", \"w\": " << uw << ", \"h\": " << uh << " }"
+          << ", \"pivot\": { \"x\": " << fr.pivot.x << ", \"y\": " << fr.pivot.y << " } }";
         if (i + 1 < sheet.frames.size()) f << ",";
         f << "\n";
     }
@@ -175,15 +188,28 @@ bool SaveSpriteSheet(const SpriteSheetAsset& sheet, const std::string& path) {
 }
 
 bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path) {
+    dse::assets::AssetDiagnostics diag;
+    return LoadSpriteSheet(sheet, path, diag);
+}
+
+bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path,
+                     dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
     std::ifstream f(path, std::ios::binary);
-    if (!f.is_open()) return false;
+    if (!f.is_open()) { diag.errors.push_back("cannot open file"); return false; }
     std::stringstream ss;
     ss << f.rdbuf();
     const std::string json = ss.str();
 
     rapidjson::Document doc;
     doc.Parse(json.c_str());
-    if (doc.HasParseError() || !doc.IsObject()) return false;
+    if (doc.HasParseError()) { diag.errors.push_back("JSON parse error"); return false; }
+    if (!doc.IsObject()) { diag.errors.push_back("root is not an object"); return false; }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kSpriteSheetSchemaVersion, ".dsprite", diag);
+    const bool legacy = version < kSpriteSheetSchemaVersion;
 
     SpriteSheetAsset loaded;
     if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
@@ -195,15 +221,37 @@ bool LoadSpriteSheet(SpriteSheetAsset& sheet, const std::string& path) {
             if (!fr.IsObject()) continue;
             SpriteFrame sf;
             if (fr.HasMember("name") && fr["name"].IsString()) sf.name = fr["name"].GetString();
-            if (fr.HasMember("x") && fr["x"].IsInt()) sf.x = fr["x"].GetInt();
-            if (fr.HasMember("y") && fr["y"].IsInt()) sf.y = fr["y"].GetInt();
-            if (fr.HasMember("w") && fr["w"].IsInt()) sf.w = fr["w"].GetInt();
-            if (fr.HasMember("h") && fr["h"].IsInt()) sf.h = fr["h"].GetInt();
-            if (fr.HasMember("pivot_x") && fr["pivot_x"].IsNumber()) sf.pivot.x = fr["pivot_x"].GetFloat();
-            if (fr.HasMember("pivot_y") && fr["pivot_y"].IsNumber()) sf.pivot.y = fr["pivot_y"].GetFloat();
+            if (fr.HasMember("pixel_rect") && fr["pixel_rect"].IsObject()) {
+                const auto& pr = fr["pixel_rect"];
+                if (pr.HasMember("x") && pr["x"].IsInt()) sf.x = pr["x"].GetInt();
+                if (pr.HasMember("y") && pr["y"].IsInt()) sf.y = pr["y"].GetInt();
+                if (pr.HasMember("w") && pr["w"].IsInt()) sf.w = pr["w"].GetInt();
+                if (pr.HasMember("h") && pr["h"].IsInt()) sf.h = pr["h"].GetInt();
+            } else {
+                // v0 迁移：早期扁平帧矩形 x/y/w/h。
+                if (fr.HasMember("x") && fr["x"].IsInt()) sf.x = fr["x"].GetInt();
+                if (fr.HasMember("y") && fr["y"].IsInt()) sf.y = fr["y"].GetInt();
+                if (fr.HasMember("w") && fr["w"].IsInt()) sf.w = fr["w"].GetInt();
+                if (fr.HasMember("h") && fr["h"].IsInt()) sf.h = fr["h"].GetInt();
+                diag.migrated = true;
+            }
+            if (fr.HasMember("pivot") && fr["pivot"].IsObject()) {
+                const auto& pv = fr["pivot"];
+                if (pv.HasMember("x") && pv["x"].IsNumber()) sf.pivot.x = pv["x"].GetFloat();
+                if (pv.HasMember("y") && pv["y"].IsNumber()) sf.pivot.y = pv["y"].GetFloat();
+            } else {
+                if (fr.HasMember("pivot_x") && fr["pivot_x"].IsNumber()) { sf.pivot.x = fr["pivot_x"].GetFloat(); diag.migrated = true; }
+                if (fr.HasMember("pivot_y") && fr["pivot_y"].IsNumber()) { sf.pivot.y = fr["pivot_y"].GetFloat(); diag.migrated = true; }
+            }
             loaded.frames.push_back(sf);
         }
     }
+
+    if (legacy && diag.migrated) {
+        diag.warnings.push_back(
+            ".dsprite: migrated legacy flat frame rects to pixel_rect");
+    }
+    diag.ok = true;
     sheet = std::move(loaded);
     return true;
 }
@@ -475,16 +523,26 @@ bool SaveAtlas(const AtlasAsset& atlas, const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
 
+    const float aw = atlas.width > 0 ? static_cast<float>(atlas.width) : 0.0f;
+    const float ah = atlas.height > 0 ? static_cast<float>(atlas.height) : 0.0f;
+
     f << "{\n";
+    f << "  \"version\": " << kAtlasSchemaVersion << ",\n";
     f << "  \"name\": \"" << atlas.name << "\",\n";
     f << "  \"width\": " << atlas.width << ",\n";
     f << "  \"height\": " << atlas.height << ",\n";
     f << "  \"entries\": [\n";
     for (size_t i = 0; i < atlas.entries.size(); ++i) {
         const auto& e = atlas.entries[i];
+        const float ux = aw > 0.0f ? e.x / aw : 0.0f;
+        const float uy = ah > 0.0f ? e.y / ah : 0.0f;
+        const float uw = aw > 0.0f ? e.w / aw : 1.0f;
+        const float uh = ah > 0.0f ? e.h / ah : 1.0f;
         f << "    { \"name\": \"" << e.name << "\", \"src\": \"" << e.source_path
-          << "\", \"x\": " << e.x << ", \"y\": " << e.y
-          << ", \"w\": " << e.w << ", \"h\": " << e.h << " }";
+          << "\", \"pixel_rect\": { \"x\": " << e.x << ", \"y\": " << e.y
+          << ", \"w\": " << e.w << ", \"h\": " << e.h << " }"
+          << ", \"uv_rect\": { \"x\": " << ux << ", \"y\": " << uy
+          << ", \"w\": " << uw << ", \"h\": " << uh << " } }";
         if (i + 1 < atlas.entries.size()) f << ",";
         f << "\n";
     }
