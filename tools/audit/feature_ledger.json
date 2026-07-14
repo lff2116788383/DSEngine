@@ -638,12 +638,16 @@
       ],
       "requiredPlatforms": [],
       "tests": [
-        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp"
+        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp",
+        "tests/gtest/smoke/danim_gpu_skinning_frame_consistency_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
-        "modules/gameplay_3d/animation/animation_state_machine.h"
+        "modules/gameplay_3d/animation/animation_state_machine.h",
+        "modules/gameplay_3d/animation/animator_system.cpp",
+        "engine/render/skinning/gpu_skinning.cpp",
+        "engine/render/shaders/src/skinning.comp"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -651,13 +655,14 @@
         "explicitDiagnostics": false,
         "versionedMigration": false,
         "platformMatrix": "not_applicable",
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
       "blockers": [
         "Versioned .dasm serialization, scene round-trip, and shared runtime transition selection/trigger consumption exist with unit and integration tests.",
-        "No full end-to-end acceptance with a real .danim asset and GPU skinned pose, and editor-preview vs runtime frame-equivalence is unverified."
+        "End-to-end GPU skinned-pose frame-consistency is now verified on real GPU hardware (NVIDIA RTX 3070 Laptop): danim_gpu_skinning_frame_consistency_test loads the real two_bone.dskel + two_bone_idle_walk.danim + two_bone.dmesh, drives the actual gameplay3d::AnimatorSystem::Update palette path (keyframe sampling + hierarchy propagation + inverse-bind -> final_bone_matrices), submits the decoded .dmesh vertices (pos/normal/tangent + 4 joint indices + 4 weights, byte-identical to frame_pipeline_render.cpp's runtime submit layout) to the real GPUSkinningSystem compute, reads back GPU positions, and compares them frame-by-frame against an independent CPU LBS reference (bw3 = 1 - bw0 - bw1 - bw2) under a 2e-3 threshold across 6 deterministic animation times. All three hardware backends (OpenGL / D3D11 / Vulkan) pass; liveness is guarded (per-frame palette motion and non-identity skin displacement asserted, GPU output asserted present and non-zero). A backend-dependent GPU readback-latency off-by-one (D3D11 vs GL/Vulkan) was found and fixed in the test harness by settling the readback on a re-dispatched identical real palette (no threshold relaxation).",
+        "Remaining: editor shader-graph/animation live-preview vs runtime frame-equivalence (screenshot golden) is unverified, and clean-machine acceptance is not done."
       ]
     },
     {
