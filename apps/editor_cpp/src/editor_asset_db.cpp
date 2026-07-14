@@ -14,6 +14,7 @@
 
 #include "editor_project.h"
 #include "editor_console_panel.h"
+#include "editor_asset_refs_core.h"
 
 namespace dse::editor {
 
@@ -209,6 +210,21 @@ const AssetInfo* AssetDatabase::FindByPath(const std::string& rel_path) const {
     auto it = by_path_.find(normalized);
     if (it == by_path_.end()) return nullptr;
     return &assets_[it->second];
+}
+
+int AssetDatabase::MoveAsset(const std::string& old_rel_path, const std::string& new_rel_path) {
+    if (!is_valid_) return -1;
+    MoveAssetResult r = MoveAssetWithFixup(asset_root_, old_rel_path, new_rel_path);
+    if (!r.ok) {
+        EditorLog(LogLevel::Error,
+            "AssetDatabase move failed: " + (r.errors.empty() ? std::string("unknown") : r.errors[0]));
+        return -1;
+    }
+    Refresh();
+    EditorLog(LogLevel::Info,
+        "AssetDatabase moved " + old_rel_path + " -> " + new_rel_path +
+        " (" + std::to_string(r.references_rewritten) + " references fixed up)");
+    return r.references_rewritten;
 }
 
 void AssetDatabase::LoadDbCache(const std::filesystem::path& cache_path,

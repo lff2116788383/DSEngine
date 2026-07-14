@@ -65,6 +65,12 @@ public:
     /// Find asset by relative path (forward slashes, no leading slash).
     const AssetInfo* FindByPath(const std::string& rel_path) const;
 
+    /// Rename/move an asset (paths relative to the asset root), preserving its
+    /// GUID (.meta moves with it) and rewriting path references in every JSON
+    /// asset under the project so dependents keep resolving. Re-scans on success.
+    /// Returns the number of references rewritten, or -1 on failure.
+    int MoveAsset(const std::string& old_rel_path, const std::string& new_rel_path);
+
     /// All assets in scan order.
     const std::vector<AssetInfo>& GetAll() const { return assets_; }
 
