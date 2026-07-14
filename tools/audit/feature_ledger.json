@@ -908,7 +908,7 @@
     {
       "id": "undo-assets-migration-hot-reload",
       "stage": 16,
-      "status": "planned",
+      "status": "in_progress",
       "summary": "Unified undo transactions, GUID references, dependency updates, format migration, and safe hot reload across every content system.",
       "editor": {
         "panelIds": [
@@ -919,36 +919,55 @@
           "apps/editor_cpp/src/editor_undo_panel.cpp"
         ]
       },
-      "runtimeConsumers": [],
+      "runtimeConsumers": [
+        "engine/scripting/lua/lua_runtime.cpp"
+      ],
       "assetFormats": [
-        ".meta"
+        ".meta",
+        ".dbp",
+        ".dasm",
+        ".dsequence",
+        ".dcutscene",
+        ".dshadergraph",
+        ".dscriptmeta"
       ],
       "requiredPlatforms": [],
       "tests": [
         "tests/automation/cases/api/undo_redo.yaml",
         "tests/automation/cases/api/undo_redo_deep_chain.yaml",
-        "tests/gtest/integration/editor/editor_asset_db_test.cpp"
+        "tests/gtest/integration/editor/editor_asset_db_test.cpp",
+        "tests/gtest/integration/editor/editor_asset_refs_test.cpp",
+        "tests/gtest/integration/engine/scripting/lua_hot_reload_integration_test.cpp",
+        "tests/gtest/unit/engine/blueprint_serialize_test.cpp",
+        "tests/gtest/unit/engine/cutscene/cutscene_test.cpp",
+        "tests/gtest/unit/engine/shader_graph_asset_test.cpp",
+        "tests/gtest/unit/engine/script_metadata_test.cpp",
+        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_asset_db.cpp",
-        "apps/editor_cpp/core/editor_command.h"
+        "apps/editor_cpp/src/editor_asset_refs_core.cpp",
+        "apps/editor_cpp/core/editor_command.h",
+        "engine/scripting/blueprint/blueprint_serialize.cpp"
       ],
       "acceptance": {
         "editorRoundTrip": false,
-        "runtimeConsumption": false,
-        "explicitDiagnostics": false,
-        "versionedMigration": false,
+        "runtimeConsumption": true,
+        "explicitDiagnostics": true,
+        "versionedMigration": true,
         "platformMatrix": "not_applicable",
-        "automatedTests": false,
+        "automatedTests": true,
         "cleanMachine": false,
         "productionReady": false
       },
       "blockers": [
         "Undo system has 21/21 integration tests covering PropertyChangeCommand, LambdaCommand, CompoundCommand, UndoRedoManager (execute, undo, redo, merge, trim, clear, history queries, empty-stack edge cases, compound-in-manager).",
-        "AssetDatabase provides GUID-based lookup (FindByGUID/FindByPath) with .meta file generation; remaining gap is full content-type coverage.",
-        "Hot reload is not real for all supported script and plugin types."
+        "AssetDatabase now classifies all content types (incl. the six versioned formats) and supports rename/move reference fixup that preserves the GUID (.meta moves with the asset) and rewrites path references across JSON assets; covered by AssetRefs.* + AssetDb.* automated tests.",
+        "Format migration is implemented and tested for all six versioned formats via the shared version envelope + AssetDiagnostics.migrated (legacy v0 -> current with data back-fill, forward-version warnings).",
+        "Lua hot reload is real and tested: editing a mounted script reloads it (PumpLuaScriptHotReloads) with new behavior taking effect and state preserved via OnSerializeState/OnDeserializeState.",
+        "Remaining before productionReady: C# collectible-ALC hot reload requires the real hostfxr runtime (tracked under P1-7); native plugin DLL reload is wired via dse::core::DynamicLibrary in editor_plugin_hot_reload.cpp but still lacks automated coverage; clean-machine verification pending."
       ]
     },
     {
