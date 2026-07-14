@@ -735,12 +735,15 @@
         "windows/vulkan"
       ],
       "tests": [
-        "tests/csharp/csharp_host_smoke.cpp"
+        "tests/csharp/csharp_host_smoke.cpp",
+        "tests/csharp/csharp_host_e2e.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
-        "GameScripts/DSEngine.Runtime/Core/ScriptRegistry.cs"
+        "GameScripts/DSEngine.Runtime/Core/ScriptRegistry.cs",
+        "GameScripts/DSEngine.Runtime/Core/Callbacks.cs",
+        "GameScripts/DSEngine.Runtime/Core/HostProbe.cs"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -754,7 +757,8 @@
       },
       "blockers": [
         "Real dotnet build runs via the shared process service, hot reload uses a collectible AssemblyLoadContext for real unload/reload/rediscovery, and CSharpScriptComponent scene+prefab persistence is tested.",
-        "No real hostfxr/CoreCLR end-to-end that runs an actual game assembly (Play-mode init, ALC unload reclamation, clean-machine SDK run)."
+        "Real hostfxr/CoreCLR end-to-end now runs an actual game assembly on .NET 8: csharp_host_e2e drives Play-mode init + Start/Update/FixedUpdate through the managed runtime (observable via HostProbe counters surfaced by Callbacks.Query), hot-reloads to a recompiled game assembly (PROBE_V2, build tag 1->2 proving new code is active), and asserts the previous collectible ALC is reclaimed after GC (WeakReference liveness == 0). This also clears the P2-1 C# hot-reload item.",
+        "Not yet run on a genuinely clean machine (fresh .NET 8 SDK/runtime install) as part of the release matrix; editor round-trip and versioned-migration for the C# panel remain out of headless scope."
       ]
     },
     {
@@ -973,7 +977,7 @@
         "Format migration is implemented and tested for all six versioned formats via the shared version envelope + AssetDiagnostics.migrated (legacy v0 -> current with data back-fill, forward-version warnings).",
         "Lua hot reload is real and tested: editing a mounted script reloads it (PumpLuaScriptHotReloads) with new behavior taking effect and state preserved via OnSerializeState/OnDeserializeState.",
         "Native plugin DLL reload (dse::core::DynamicLibrary load/unload + on-disk DLL swap + reload picks up new behavior) now has automated coverage via NativePluginReload.* (two built fixture DLLs).",
-        "Remaining before productionReady: C# collectible-ALC hot reload requires the real hostfxr runtime (tracked under P1-7); clean-machine verification pending."
+        "C# collectible-ALC hot reload is now verified end-to-end on the real hostfxr/CoreCLR (.NET 8) runtime under P1-7 (csharp_host_e2e: recompiled-assembly reload with build tag 1->2 and post-GC ALC reclamation via WeakReference). Remaining before productionReady: clean-machine verification pending."
       ]
     },
     {

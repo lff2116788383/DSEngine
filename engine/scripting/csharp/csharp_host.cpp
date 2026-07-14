@@ -111,6 +111,7 @@ bool CSharpHost::get_managed_entry_points(const std::string& runtime_dll_path) {
     #define DSE_METHOD_FIXED  L"FixedUpdate"
     #define DSE_METHOD_RELOAD L"Reload"
     #define DSE_METHOD_SHUTDOWN L"Shutdown"
+    #define DSE_METHOD_QUERY L"Query"
 #else
     #define DSE_TYPE  "DSEngine.Callbacks, DSEngine.Runtime"
     #define DSE_METHOD_INIT  "Initialize"
@@ -119,6 +120,7 @@ bool CSharpHost::get_managed_entry_points(const std::string& runtime_dll_path) {
     #define DSE_METHOD_FIXED  "FixedUpdate"
     #define DSE_METHOD_RELOAD "Reload"
     #define DSE_METHOD_SHUTDOWN "Shutdown"
+    #define DSE_METHOD_QUERY "Query"
 #endif
 
     // UNMANAGEDCALLERSONLY_METHOD is the delegate type for [UnmanagedCallersOnly]
@@ -140,6 +142,9 @@ bool CSharpHost::get_managed_entry_points(const std::string& runtime_dll_path) {
                     UNMANAGEDCALLERSONLY_METHOD, nullptr, (void**)&managed_reload_);
     s_load_assembly(assembly_path, DSE_TYPE, DSE_METHOD_SHUTDOWN,
                     UNMANAGEDCALLERSONLY_METHOD, nullptr, (void**)&managed_shutdown_);
+    // Optional diagnostics entry point; older runtime assemblies may omit it.
+    s_load_assembly(assembly_path, DSE_TYPE, DSE_METHOD_QUERY,
+                    UNMANAGEDCALLERSONLY_METHOD, nullptr, (void**)&managed_query_);
 
     return managed_start_ && managed_update_ && managed_fixed_ && managed_reload_ && managed_shutdown_;
 }
@@ -209,6 +214,7 @@ void CSharpHost::shutdown() {
     managed_fixed_ = nullptr;
     managed_reload_ = nullptr;
     managed_shutdown_ = nullptr;
+    managed_query_ = nullptr;
     std::cout << "[DSE-CS] C# runtime shut down\n";
 }
 
@@ -237,6 +243,11 @@ void CSharpHost::invoke_update(float dt) {
 
 void CSharpHost::invoke_fixed_update(float dt) {
     if (managed_fixed_) managed_fixed_(dt);
+}
+
+long long CSharpHost::query(int key) {
+    if (!managed_query_) return -1;
+    return managed_query_(key);
 }
 
 #endif // DSE_CSHARP

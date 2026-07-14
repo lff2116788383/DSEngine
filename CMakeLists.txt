@@ -779,6 +779,37 @@ if(DSE_ENABLE_CSHARP)
             target_compile_options(dse_csharp_smoke PRIVATE /utf-8)
         endif()
     endif()
+
+    # 热重载 E2E 需要一个"改过代码"的第二份程序集：用 PROBE_V2 常量重编 DSEngine.Game
+    # 到独立目录，运行时热重载切到它，用构建标记(1->2)证明新代码生效。
+    add_custom_target(dse_csharp_build_v2
+        COMMAND "${DOTNET_EXECUTABLE}" build
+                "${CMAKE_SOURCE_DIR}/GameScripts/DSEngine.Game/DSEngine.Game.csproj"
+                -c $<IF:$<CONFIG:Debug>,Debug,Release>
+                "-p:Platform=Any CPU"
+                "-p:DefineConstants=PROBE_V2"
+                -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed_probe_v2/"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/GameScripts"
+        COMMENT "Building C# game variant (PROBE_V2) -> managed_probe_v2/DSEngine.Game.dll"
+    )
+
+    # C# 运行时端到端断言测试：Play 初始化 + Start/Update/FixedUpdate 真跑托管代码，
+    # 热重载切到重编程序集（新代码生效），旧 collectible ALC 经 GC 被回收（WeakReference 归零）。
+    if(EXISTS "${CMAKE_SOURCE_DIR}/tests/csharp/csharp_host_e2e.cpp")
+        add_executable(dse_csharp_e2e "${CMAKE_SOURCE_DIR}/tests/csharp/csharp_host_e2e.cpp")
+        target_link_libraries(dse_csharp_e2e PRIVATE dse_engine)
+        target_include_directories(dse_csharp_e2e PRIVATE "${CMAKE_SOURCE_DIR}")
+        target_compile_features(dse_csharp_e2e PRIVATE cxx_std_17)
+        target_compile_definitions(dse_csharp_e2e PRIVATE
+            DSE_CS_MANAGED_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed"
+            DSE_CS_MANAGED_V2_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/managed_probe_v2")
+        add_dependencies(dse_csharp_e2e dse_csharp_build dse_csharp_build_v2)
+        if(MSVC)
+            set_property(TARGET dse_csharp_e2e PROPERTY
+                MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+            target_compile_options(dse_csharp_e2e PRIVATE /utf-8)
+        endif()
+    endif()
 endif()
 
 target_include_directories(dse_engine PRIVATE
@@ -1141,6 +1172,15 @@ if(TARGET dse_csharp_smoke)
         LABELS "smoke;csharp"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         TIMEOUT 120)
+endif()
+
+# C# 运行时热重载 E2E：Play/Start/Update + collectible ALC 卸载/重载/回收断言。
+if(TARGET dse_csharp_e2e)
+    add_test(NAME dse_csharp_e2e COMMAND dse_csharp_e2e)
+    set_tests_properties(dse_csharp_e2e PROPERTIES
+        LABELS "e2e;csharp"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        TIMEOUT 240)
 endif()
 
 if(DSE_BUILD_GTESTS)

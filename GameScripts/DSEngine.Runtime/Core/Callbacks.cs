@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 
@@ -13,6 +15,22 @@ namespace DSEngine;
 public static class Callbacks {
     private static AssemblyLoadContext? _gameAlc;
     private static Assembly? _gameAssembly;
+
+    // Weak references to game ALCs that have been unloaded. Used by the E2E test
+    // to verify collectible contexts are actually reclaimed after GC.
+    private static readonly List<WeakReference> _unloadedAlcs = new();
+
+    // Record the current game ALC as unloaded (weakly, so it can be collected)
+    // and drop the strong references. Kept in a no-inline helper so the JIT does
+    // not extend the lifetime of the local past the collection point.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void UnloadCurrentGameAlc() {
+        if (_gameAlc == null) return;
+        _gameAlc.Unload();
+        _unloadedAlcs.Add(new WeakReference(_gameAlc));
+        _gameAlc = null;
+        _gameAssembly = null;
+    }
 
     /// <summary>
     /// Initialize the scripting runtime: load game assembly and discover scripts.
@@ -84,9 +102,7 @@ public static class Callbacks {
     public static int Reload(IntPtr gameAssemblyPathPtr, int pathLength) {
         try {
             ScriptRegistry.DestroyAll();
-            _gameAlc?.Unload();
-            _gameAlc = null;
-            _gameAssembly = null;
+            UnloadCurrentGameAlc();
 
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -109,8 +125,42 @@ public static class Callbacks {
     [UnmanagedCallersOnly]
     public static void Shutdown() {
         ScriptRegistry.DestroyAll();
-        _gameAlc?.Unload();
-        _gameAlc = null;
-        _gameAssembly = null;
+        UnloadCurrentGameAlc();
+    }
+
+    /// <summary>
+    /// Diagnostics/test query surfaced to the native host. Returns observable
+    /// runtime state without exposing managed object references. Keys:
+    ///   1 StartCount, 2 UpdateCount, 3 FixedUpdateCount, 4 DestroyCount,
+    ///   5 LastTag, 6 active script count,
+    ///   7 unloaded game ALCs still alive after a forced GC (0 == all reclaimed),
+    ///   8 total unloaded game ALCs tracked.
+    /// </summary>
+    [UnmanagedCallersOnly]
+    public static long Query(int key) {
+        switch (key) {
+            case 1: return HostProbe.StartCount;
+            case 2: return HostProbe.UpdateCount;
+            case 3: return HostProbe.FixedUpdateCount;
+            case 4: return HostProbe.DestroyCount;
+            case 5: return HostProbe.LastTag;
+            case 6: return ScriptRegistry.Count;
+            case 7: return CountAliveUnloadedAlcs();
+            case 8: return _unloadedAlcs.Count;
+            default: return -1;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long CountAliveUnloadedAlcs() {
+        for (int i = 0; i < 10; i++) {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+        long alive = 0;
+        foreach (var wr in _unloadedAlcs) {
+            if (wr.IsAlive) alive++;
+        }
+        return alive;
     }
 }

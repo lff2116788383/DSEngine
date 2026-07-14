@@ -47,6 +47,13 @@ public:
 
     bool is_loaded() const { return host_context_ != nullptr; }
 
+    /// Diagnostics query into the managed runtime (Callbacks.Query). Returns
+    /// observable state without exposing managed objects; -1 if unavailable.
+    /// Keys: 1 StartCount, 2 UpdateCount, 3 FixedUpdateCount, 4 DestroyCount,
+    /// 5 LastTag, 6 active script count, 7 unloaded game ALCs still alive after a
+    /// forced GC (0 == all reclaimed), 8 total unloaded game ALCs tracked.
+    long long query(int key);
+
 private:
     hostfxr_handle host_context_ = nullptr;
 
@@ -55,6 +62,7 @@ private:
     using fn_void         = void(*)();
     using fn_float        = void(*)(float);
     using fn_reload       = int(*)(const char* path, int len);
+    using fn_query        = long long(*)(int key);
 
     fn_initialize managed_initialize_  = nullptr;
     fn_void       managed_start_       = nullptr;
@@ -62,6 +70,7 @@ private:
     fn_float      managed_fixed_       = nullptr;
     fn_reload     managed_reload_      = nullptr;
     fn_void       managed_shutdown_    = nullptr;
+    fn_query      managed_query_        = nullptr;
 
     bool load_hostfxr();
     bool get_managed_entry_points(const std::string& runtime_dll_path);
