@@ -228,7 +228,7 @@ TEST(OpenGLCommandBufferTest, WithoutdeviceWhenClearColorSafety) {
 // 测试 打开GL命令缓冲区：无设备当绑定图形管线安全
 TEST(OpenGLCommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     OpenGLCommandBuffer cmd;
-    cmd.BindPipeline(12345);
+    cmd.BindPipeline(GraphicsPipelineHandle{12345});
 }
 
 // 测试 打开GL命令缓冲区：无设备当延迟阴影映射安全

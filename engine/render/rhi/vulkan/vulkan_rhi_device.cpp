@@ -60,7 +60,7 @@ void VulkanCommandBuffer::DispatchComputePass(const ComputeDispatch& dispatch) {
 
 // --- é€šç”¨ç»˜åˆ¶åŽŸè¯­ (A1) ---
 
-void VulkanCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
+void VulkanCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) {
     if (!device_) return;
     const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;

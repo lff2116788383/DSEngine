@@ -35,7 +35,7 @@ public:
     void BlitToScreen(unsigned int source_rt) override;
 
     // --- 通用绘制原语 (A1) ---
-    void BindPipeline(unsigned int graphics_pipeline_handle) override;
+    void BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) override;
     void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs,
                           VertexInputRate rate = VertexInputRate::PerVertex) override;

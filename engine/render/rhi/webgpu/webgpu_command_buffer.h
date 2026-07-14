@@ -36,7 +36,7 @@ public:
     void BindGlobalSpotShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalSpotShadowMap(index, texture_handle); }
     void BindGlobalPointShadowMap(unsigned int index, unsigned int texture_handle) override { device_->CmdBindGlobalPointShadowMap(index, texture_handle); }
 
-    void BindPipeline(unsigned int graphics_pipeline_handle) override { device_->CmdBindPipeline(graphics_pipeline_handle); }
+    void BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) override { device_->CmdBindPipeline(graphics_pipeline_handle.raw()); }
     void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
                           const std::vector<VertexAttr>& attrs,
                           VertexInputRate rate) override {

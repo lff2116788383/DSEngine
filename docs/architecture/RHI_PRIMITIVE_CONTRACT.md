@@ -44,7 +44,7 @@ enum class VertexAttrFormat : uint8_t { Float = 0, /* 预留: Int, UInt, ... */ 
 // ---- 状态 ----
 // B5-3b：原 SetPipelineState(pso)+BindShaderProgram(prog) 已聚合为单一图形管线对象。
 // 经 RhiDevice::GetGraphicsPipeline(pso, program) 惰性去重缓存为句柄，program==0 = 仅 PSO 状态。
-void BindPipeline(unsigned int graphics_pipeline_handle);        // [B5-3b]  pso 子状态 + program 聚合
+void BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle); // [B5-3b]  pso 子状态 + program 聚合
 
 // ---- 顶点 / 索引输入 ----
 void BindVertexBuffer(uint32_t slot, unsigned int buffer_handle, // [扩展] +slot +rate

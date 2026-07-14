@@ -180,7 +180,7 @@ public:
     void RealClearColor(const glm::vec4& color);
 
     // --- 通用绘制原语 (A1) ---
-    void RealBindPipeline(unsigned int graphics_pipeline_handle);
+    void RealBindPipeline(GraphicsPipelineHandle graphics_pipeline_handle);
     void RealBindVertexBuffer(uint32_t slot, unsigned int buffer_handle, uint32_t stride,
                               const std::vector<VertexAttr>& attrs,
                               VertexInputRate rate = VertexInputRate::PerVertex);

@@ -225,7 +225,7 @@ TEST(DX11CommandBufferTest, WithoutdeviceWhenClearColorSafety) {
 // 测试 DX 11命令缓冲区：无设备当绑定图形管线安全
 TEST(DX11CommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     DX11CommandBuffer cmd;
-    cmd.BindPipeline(12345);
+    cmd.BindPipeline(GraphicsPipelineHandle{12345});
 }
 
 // 测试 DX 11命令缓冲区：无设备当延迟阴影映射安全

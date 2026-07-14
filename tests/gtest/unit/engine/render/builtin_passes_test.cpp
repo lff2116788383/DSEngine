@@ -46,14 +46,14 @@ TEST(RenderPassContextTest, DefaultValuesAllEmpty) {
 // 测试 渲染通道上下文：管线States默认为零
 TEST(RenderPassContextTest, PipelineStatesDefaultIsZero) {
     RenderPassContext ctx;
-    EXPECT_EQ(ctx.pipeline_states.sprite, 0u);
-    EXPECT_EQ(ctx.pipeline_states.mesh, 0u);
-    EXPECT_EQ(ctx.pipeline_states.prez, 0u);
-    EXPECT_EQ(ctx.pipeline_states.shadow, 0u);
-    EXPECT_EQ(ctx.pipeline_states.composite, 0u);
-    EXPECT_EQ(ctx.pipeline_states.decal_blend, 0u);
-    EXPECT_EQ(ctx.pipeline_states.wboit_accum, 0u);
-    EXPECT_EQ(ctx.pipeline_states.wboit_reveal, 0u);
+    EXPECT_EQ(ctx.pipeline_states.sprite.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.mesh.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.prez.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.shadow.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.composite.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.decal_blend.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.wboit_accum.raw(), 0u);
+    EXPECT_EQ(ctx.pipeline_states.wboit_reveal.raw(), 0u);
 }
 
 // 测试 渲染通道上下文：渲染目标默认为零

@@ -22,7 +22,7 @@ class RuntimeRenderShellCommandBuffer : public CommandBuffer {
 public:
     void BeginRenderPass(const RenderPassDesc&) override {}
     void EndRenderPass() override {}
-    void BindPipeline(unsigned int) override {}
+    void BindPipeline(GraphicsPipelineHandle) override {}
     void BindVertexBuffer(uint32_t, unsigned int, uint32_t, const std::vector<VertexAttr>&,
                           VertexInputRate) override {}
     void PushConstants(ShaderStage, uint32_t, const void*, uint32_t) override {}

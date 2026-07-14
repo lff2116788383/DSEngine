@@ -269,7 +269,7 @@ TEST(VulkanCommandBufferTest, WithoutdeviceWhenBeginEndRenderPassSafety) {
 // 测试 Vulkan命令缓冲区：无设备当绑定图形管线安全
 TEST(VulkanCommandBufferTest, WithoutdeviceWhenBindPipelineSafety) {
     VulkanCommandBuffer cmd;
-    cmd.BindPipeline(12345);
+    cmd.BindPipeline(GraphicsPipelineHandle{12345});
 }
 
 // 测试 Vulkan命令缓冲区：无设备当清空颜色安全

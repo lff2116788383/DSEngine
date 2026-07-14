@@ -3985,7 +3985,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dev_->CmdBeginRenderPass(rp);
     if (!dev_->cur_pass()) return false;
     dev_->CmdSetViewport(0, 0, static_cast<int>(kT41RtSize), static_cast<int>(kT41RtSize));
-    const unsigned int pipe = dev_->GetGraphicsPipeline(t41_pso_, t41_program_);
+    const unsigned int pipe = dev_->GetGraphicsPipeline(t41_pso_, t41_program_).raw();
     dev_->CmdBindPipeline(pipe);
     const std::vector<VertexAttr> attrs = {
         VertexAttr{0, 2, 0},  // pos.xy
@@ -4118,7 +4118,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) color : vec3<f32
     dev_->CmdBeginRenderPass(rp);
     if (!dev_->cur_pass()) return false;
     dev_->CmdSetViewport(0, 0, static_cast<int>(kT42RtSize), static_cast<int>(kT42RtSize));
-    const unsigned int pipe = dev_->GetGraphicsPipeline(t42_pso_, t42_program_);
+    const unsigned int pipe = dev_->GetGraphicsPipeline(t42_pso_, t42_program_).raw();
     dev_->CmdBindPipeline(pipe);
     dev_->BindMegaVAO(t42_vao_);  // 被测：据记录的 VBO/IBO 设 BatchVertex 92B 引擎 draw state。
     dev_->CmdDrawIndexed(kT42Quads * 6, 0, 0);
@@ -4418,7 +4418,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT51AtlasDim), static_cast<int>(kT51AtlasDim));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_occ_pso_, t51_occ_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_occ_pso_, t51_occ_program_).raw());
         const std::vector<VertexAttr> occ_attrs = { VertexAttr{0, 3, 0} };  // pos.xyz
         dev_->CmdBindVertexBuffer(0, t51_occ_vbo_, 12, occ_attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t51_occ_ibo_, IndexType::UInt32);
@@ -4440,7 +4440,7 @@ fn SampleShadowPCF(uv : vec2<f32>, ref_depth : f32) -> f32 {
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT51RtSize), static_cast<int>(kT51RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_recv_pso_, t51_recv_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t51_recv_pso_, t51_recv_program_).raw());
         const std::vector<VertexAttr> recv_attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 2, 8} };  // pos.xy + uv
         dev_->CmdBindVertexBuffer(0, t51_recv_vbo_, 16, recv_attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t51_recv_ibo_, IndexType::UInt32);
@@ -4607,7 +4607,7 @@ fn PointShadow(dir : vec3<f32>, cur : f32, radius : f32) -> f32 {
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT56CubeDim), static_cast<int>(kT56CubeDim));
         if (face == 4) {  // +Z 面：附遮挡物
-            dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_occ_pso_, t56_occ_program_));
+            dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_occ_pso_, t56_occ_program_).raw());
             const std::vector<VertexAttr> occ_attrs = { VertexAttr{0, 2, 0}, VertexAttr{1, 1, 8} };  // pos.xy + nd
             dev_->CmdBindVertexBuffer(0, t56_occ_vbo_, 12, occ_attrs, VertexInputRate::PerVertex);
             dev_->CmdBindIndexBuffer(t56_occ_ibo_, IndexType::UInt32);
@@ -4630,7 +4630,7 @@ fn PointShadow(dir : vec3<f32>, cur : f32, radius : f32) -> f32 {
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT56RtSize), static_cast<int>(kT56RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_recv_pso_, t56_recv_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t56_recv_pso_, t56_recv_program_).raw());
         const std::vector<VertexAttr> recv_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
         dev_->CmdBindVertexBuffer(0, t56_recv_vbo_, 8, recv_attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t56_recv_ibo_, IndexType::UInt32);
@@ -4803,7 +4803,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_geom_pso_, t52_geom_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_geom_pso_, t52_geom_program_).raw());
         const std::vector<VertexAttr> geo_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
         dev_->CmdBindVertexBuffer(0, t52_geom_vbo_, 8, geo_attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t52_geom_ibo_, IndexType::UInt32);
@@ -4827,7 +4827,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT52RtSize), static_cast<int>(kT52RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_light_pso_, t52_light_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t52_light_pso_, t52_light_program_).raw());
         const std::vector<VertexAttr> light_attrs = { VertexAttr{0, 2, 0} };  // pos.xy
         dev_->CmdBindVertexBuffer(0, t52_light_vbo_, 8, light_attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t52_light_ibo_, IndexType::UInt32);
@@ -5009,7 +5009,7 @@ fn AcesFilmic(x : vec3<f32>) -> vec3<f32> {
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t53_pso_, program));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t53_pso_, program).raw());
         dev_->CmdBindVertexBuffer(0, t53_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t53_quad_ibo_, IndexType::UInt32);
         return true;
@@ -5254,7 +5254,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, @location(0) uv : vec2<f32>, 
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(dim), static_cast<int>(dim));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t54_pso_, program));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t54_pso_, program).raw());
         dev_->CmdBindVertexBuffer(0, t54_quad_vbo_, 16, attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t54_quad_ibo_, IndexType::UInt32);
         return true;
@@ -5444,7 +5444,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_geom_pso_, t55_geom_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_geom_pso_, t55_geom_program_).raw());
         dev_->CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t55_quad_ibo_, IndexType::UInt32);
         dev_->CmdDrawIndexed(6, 0, 0);
@@ -5466,7 +5466,7 @@ struct VsOut { @builtin(position) pos : vec4<f32>, };
         dev_->CmdBeginRenderPass(rp);
         if (!dev_->cur_pass()) return false;
         dev_->CmdSetViewport(0, 0, static_cast<int>(kT55RtSize), static_cast<int>(kT55RtSize));
-        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_resolve_pso_, t55_resolve_program_));
+        dev_->CmdBindPipeline(dev_->GetGraphicsPipeline(t55_resolve_pso_, t55_resolve_program_).raw());
         dev_->CmdBindVertexBuffer(0, t55_quad_vbo_, 8, attrs, VertexInputRate::PerVertex);
         dev_->CmdBindIndexBuffer(t55_quad_ibo_, IndexType::UInt32);
         dev_->CmdBindTexture(0u, accum_tex,  TextureDim::Tex2D);  // → group2 binding0
@@ -5589,7 +5589,7 @@ void WebGpuSelfTestHarness::RunBringUpSelfTest() {
     if (!dev_->cur_pass()) return;
     dev_->CmdSetViewport(0, 0, dev_->width(), dev_->height());
 
-    const unsigned int pipe = dev_->GetGraphicsPipeline(selftest_pso_, selftest_program_);
+    const unsigned int pipe = dev_->GetGraphicsPipeline(selftest_pso_, selftest_program_).raw();
     dev_->CmdBindPipeline(pipe);
 
     const std::vector<VertexAttr> attrs = {

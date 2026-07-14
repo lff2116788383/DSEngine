@@ -89,7 +89,7 @@ void DX11CommandBuffer::ClearDepth(float depth) {
 
 // --- 通用绘制原语 (A1) ---
 
-void DX11CommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
+void DX11CommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) {
     if (!device_) return;
     const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;

@@ -64,14 +64,14 @@ struct RenderPassContext {
 
     /// 引擎内置系统的访问（通过 FramePipeline 注入）
     struct PipelineState {
-        unsigned int sprite = 0;
-        unsigned int mesh = 0;
-        unsigned int prez = 0;
-        unsigned int shadow = 0;
-        unsigned int composite = 0;
-        unsigned int decal_blend = 0;
-        unsigned int wboit_accum = 0;
-        unsigned int wboit_reveal = 0;
+        GraphicsPipelineHandle sprite;
+        GraphicsPipelineHandle mesh;
+        GraphicsPipelineHandle prez;
+        GraphicsPipelineHandle shadow;
+        GraphicsPipelineHandle composite;
+        GraphicsPipelineHandle decal_blend;
+        GraphicsPipelineHandle wboit_accum;
+        GraphicsPipelineHandle wboit_reveal;
     } pipeline_states;
 
     struct RenderTargets {

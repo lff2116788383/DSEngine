@@ -40,7 +40,7 @@ class MockCommandBuffer : public CommandBuffer {
 public:
     MOCK_METHOD(void, BeginRenderPass, (const RenderPassDesc&), (override));
     MOCK_METHOD(void, EndRenderPass, (), (override));
-    MOCK_METHOD(void, BindPipeline, (unsigned int), (override));
+    MOCK_METHOD(void, BindPipeline, (GraphicsPipelineHandle), (override));
     MOCK_METHOD(void, BindVertexBuffer, (uint32_t, unsigned int, uint32_t, (const std::vector<VertexAttr>&), VertexInputRate), (override));
     MOCK_METHOD(void, PushConstants, (ShaderStage, uint32_t, const void*, uint32_t), (override));
     MOCK_METHOD(void, Draw, (uint32_t, uint32_t), (override));

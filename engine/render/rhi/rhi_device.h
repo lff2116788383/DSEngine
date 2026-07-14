@@ -63,7 +63,7 @@ public:
 
     /// 绑定图形管线对象（B5-3b：聚合 PSO 子状态 + program，取代分离的 SetPipelineState+BindShaderProgram）。
     /// 句柄经 RhiDevice::GetGraphicsPipeline 取得；恒应用 PSO 状态，desc.program!=0 时再绑 program。
-    virtual void BindPipeline(unsigned int graphics_pipeline_handle) = 0;
+    virtual void BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) = 0;
     /// 绑定顶点缓冲到指定 slot + 顶点布局（float 属性）+ 步进频率（per-vertex/per-instance）。
     /// 布局随 VB 一起提供，后端据此建立输入布局。slot 化兑现契约 §3 终态签名：多顶点流
     /// （如 per-instance 实例顶点流走独立 slot + VertexInputRate::PerInstance）。slot=0/PerVertex
@@ -245,18 +245,18 @@ public:
     /// 图形管线对象（B5-3b）：把 PSO 子状态句柄 + 着色器程序句柄聚合为单一管线句柄并惰性缓存（按 (pso,program) 去重）。
     /// program==0 表示「仅 PSO 状态」管线。供 CommandBuffer::BindPipeline 取用，取代分离的 SetPipelineState+BindShaderProgram。
     /// 后端无关：仅登记句柄对，绑定时由各后端 command buffer 经 GetGraphicsPipelineDesc 解出 (pso,program) 分别应用。
-    unsigned int GetGraphicsPipeline(unsigned int pso_state, unsigned int program) {
+    GraphicsPipelineHandle GetGraphicsPipeline(unsigned int pso_state, unsigned int program) {
         const GraphicsPipelineDesc desc{pso_state, program};
         for (size_t i = 0; i < graphics_pipelines_.size(); ++i) {
-            if (graphics_pipelines_[i] == desc) return static_cast<unsigned int>(i + 1);
+            if (graphics_pipelines_[i] == desc) return GraphicsPipelineHandle{static_cast<uint32_t>(i + 1)};
         }
         graphics_pipelines_.push_back(desc);
-        return static_cast<unsigned int>(graphics_pipelines_.size());
+        return GraphicsPipelineHandle{static_cast<uint32_t>(graphics_pipelines_.size())};
     }
     /// 解析图形管线句柄为 (pso,program) 描述符（句柄从 1 起，0/越界返回 nullptr）。
-    const GraphicsPipelineDesc* GetGraphicsPipelineDesc(unsigned int handle) const {
-        if (handle == 0 || handle > graphics_pipelines_.size()) return nullptr;
-        return &graphics_pipelines_[handle - 1];
+    const GraphicsPipelineDesc* GetGraphicsPipelineDesc(GraphicsPipelineHandle handle) const {
+        if (!handle || handle.raw() > graphics_pipelines_.size()) return nullptr;
+        return &graphics_pipelines_[handle.raw() - 1];
     }
 
     // --- 内建资源（供高层渲染器用通用原语绘制，A1）---

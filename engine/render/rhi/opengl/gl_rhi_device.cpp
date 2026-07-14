@@ -182,7 +182,7 @@ void OpenGLCommandBuffer::ClearColor(const glm::vec4& color) {
     device_->RealClearColor(color);
 }
 
-void OpenGLCommandBuffer::BindPipeline(unsigned int graphics_pipeline_handle) {
+void OpenGLCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) {
     if (!device_) return;
     device_->RealBindPipeline(graphics_pipeline_handle);
 }
@@ -1133,7 +1133,7 @@ void OpenGLRhiDevice::RealEndRenderPass() {
 
 // --- 通用绘制原语 (A1) ---
 
-void OpenGLRhiDevice::RealBindPipeline(unsigned int graphics_pipeline_handle) {
+void OpenGLRhiDevice::RealBindPipeline(GraphicsPipelineHandle graphics_pipeline_handle) {
     const auto* desc = GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;
     // 恒应用 PSO 状态 + 拓扑；program!=0 时再绑 program（PSO-only 管线 program==0）。
