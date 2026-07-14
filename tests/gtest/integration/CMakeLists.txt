@@ -125,3 +125,15 @@ set_tests_properties(gtest.engine.integration PROPERTIES
     LABELS "engine;integration;gtest"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+# P2-3 release-matrix gate: a first-class, GPU-free structural gate (file/API/
+# workflow presence) that can be required independently of the heavy/GPU test
+# suites. Runs the ReleaseMatrixTest.* subset of the integration binary.
+add_test(
+    NAME gtest.release_matrix
+    COMMAND ${DSE_GTEST_INTEGRATION_TARGET} --gtest_filter=ReleaseMatrixTest.*
+)
+set_tests_properties(gtest.release_matrix PROPERTIES
+    LABELS "release;gate;gtest"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+)

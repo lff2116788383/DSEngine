@@ -121,6 +121,15 @@ jobs:
         run: ctest -C ${{ matrix.config }} --output-on-failure --timeout 120 -T Test
         timeout-minutes: 15
 
+      # P2-3 release-matrix gate: explicit, GPU-free structural gate (file/API/
+      # workflow presence). Runs on Debug only to avoid redundant re-runs; can be
+      # required as a branch-protection check independent of the full suite.
+      - name: Release-matrix gate (ReleaseMatrixTest.*)
+        if: matrix.config == 'Debug'
+        working-directory: ${{ env.BUILD_DIR }}
+        run: ctest -C ${{ matrix.config }} -R gtest.release_matrix --output-on-failure
+        timeout-minutes: 5
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
