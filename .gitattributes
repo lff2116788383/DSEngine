@@ -1,9 +1,51 @@
-# Shader compiler 自动生成物 —— 强制 CRLF（Windows 开发环境）
-engine/render/shaders/generated/embed/*.gen.h text eol=crlf
-engine/render/shaders/generated/spv/*.spv binary
+# Normalize line endings in the repository (store as LF) and let Git manage
+# working-tree EOL. Source files are UTF-8; keep them consistent across tools.
+* text=auto
 
-# Shell 脚本强制 LF —— 经 WSL 在 /mnt/c 下执行，CRLF 会导致解释器/换行错误
-*.sh text eol=lf
+# Source / text
+*.c      text
+*.cc     text
+*.cpp    text
+*.cxx    text
+*.h      text
+*.hpp    text
+*.hxx    text
+*.inl    text
+*.glsl   text
+*.comp   text
+*.vert   text
+*.frag   text
+*.cmake  text
+*.txt    text
+*.md     text
+*.json   text
+*.yml    text
+*.yaml   text
 
-# 子模块补丁强制 LF —— git apply 针对 LF 源码；若被转成 CRLF 会 "patch does not apply"
-*.patch text eol=lf
+# Binary assets (never touch EOL / never diff as text)
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.bmp    binary
+*.tga    binary
+*.ico    binary
+*.dds    binary
+*.ktx    binary
+*.hdr    binary
+*.exr    binary
+*.ttf    binary
+*.otf    binary
+*.wav    binary
+*.mp3    binary
+*.ogg    binary
+*.fbx    binary
+*.glb    binary
+*.gltf   binary
+*.bin    binary
+*.zip    binary
+*.7z     binary
+*.dll    binary
+*.lib    binary
+*.pdb    binary
+*.exe    binary
