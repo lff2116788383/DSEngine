@@ -28,14 +28,14 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     unsigned int program = material.custom_program != 0
         ? material.custom_program
         : device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // --- CPU ä¾§é¢„å˜æ¢é¡¶ç‚¹åˆ°ä¸–ç•Œç©ºé—´ï¼ˆä¸Ž Draw ä¸€è‡´ï¼‰---
+    // --- CPU 侧预变换顶点到世界空间（与 Draw 一致）---
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     const glm::mat3 model3 = glm::mat3(model);
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
@@ -60,7 +60,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å…… ---
+    // --- UBO 填充 ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -71,7 +71,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     const glm::vec3 to_light = glm::normalize(-light.direction);
     scene.light_dir_and_enabled = glm::vec4(to_light, light.enabled ? 1.0f : 0.0f);
     scene.light_color_and_ambient = glm::vec4(light.color, light.ambient);
-    // CSM æ–¹å‘å…‰é˜´å½±ï¼šä»Ž device å…¨å±€æ¸²æŸ“çŠ¶æ€å–çº§è”çŸ©é˜µ/åˆ†è£‚/atlas åŒºåŸŸï¼ˆä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // CSM 方向光阴影：从 device 全局渲染状态取级联矩阵/分裂/atlas 区域（与执行器 DrawMeshBatch 同源）。
     const auto& grs = device.GetGlobalRenderState();
     scene.light_params = glm::vec4(light.intensity,
                                    material.shadow_strength,
@@ -82,7 +82,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -101,7 +101,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
                                 material.double_sided ? 1.0f : 0.0f,
                                 material.anisotropy, material.pom_height_scale);
     mat.sss = glm::vec4(material.sss_tint, material.sss_strength);
-    // clearcoat.z å¤ç”¨ä¸º wboit_modeï¼ˆB2c-4ï¼‰ï¼šç€è‰²å™¨æ®æ­¤åˆ‡æ¢ accumulation/revealage è¾“å‡ºã€‚
+    // clearcoat.z 复用为 wboit_mode（B2c-4）：着色器据此切换 accumulation/revealage 输出。
     mat.clearcoat = glm::vec4(material.clear_coat, material.clear_coat_roughness,
                               static_cast<float>(material.wboit_mode), 0.0f);
     mat.toon_shadow = glm::vec4(material.toon_shadow_color, material.toon_shadow_threshold);
@@ -112,7 +112,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     ApplyEditorMaterialOverride(device, mat);
     device.UpdateGpuBuffer(per_material_shaded_ubo_, 0, sizeof(mat), &mat);
 
-    // ç‚¹å…‰ UBOï¼ˆclustered â‰¤64ï¼Œè¶…å‡ºæˆªæ–­ï¼‰ã€‚
+    // 点光 UBO（clustered ≤64，超出截断）。
     PointLightsUBO plights{};
     const int pl_count = static_cast<int>(
         (std::min)(point_lights.size(), static_cast<size_t>(kMaxPointLightsUBO)));
@@ -128,7 +128,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     }
     device.UpdateGpuBuffer(per_point_lights_ubo_, 0, sizeof(plights), &plights);
 
-    // åœ°å½¢å‚æ•° UBOï¼ˆsplat 4 å±‚ + ç§¯é›ªï¼›å‡å…³é—­æ—¶è¾“å‡ºä¸Ž B2c-2 ä¸€è‡´ï¼‰ã€‚
+    // 地形参数 UBO（splat 4 层 + 积雪；均关闭时输出与 B2c-2 一致）。
     TerrainParamsUBO terrain{};
     terrain.u_splat_enabled = material.splat_enabled ? 1.0f : 0.0f;
     terrain.u_snow_coverage = material.snow_coverage;
@@ -138,13 +138,13 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     terrain.u_snow_params = glm::vec4(material.snow_albedo, material.snow_roughness);
     device.UpdateGpuBuffer(per_terrain_ubo_, 0, sizeof(terrain), &terrain);
 
-    // LightProbe SH UBOï¼ˆslot=5ï¼‰ã€‚sh_enabled=0 æ—¶ probe_params.x=0 â†’ ç€è‰²å™¨ä¸å– SHã€‚
+    // LightProbe SH UBO（slot=5）。sh_enabled=0 时 probe_params.x=0 → 着色器不取 SH。
     LightProbeDataUBO probe{};
     for (int i = 0; i < 9; ++i) probe.sh_coefficients[i] = gi.sh_coefficients[i];
     probe.probe_params = glm::vec4(gi.sh_enabled ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_light_probe_ubo_, 0, sizeof(probe), &probe);
 
-    // DDGI å‚æ•° UBOï¼ˆslot=6ï¼‰ã€‚ddgi_enabled=0 æˆ–æ—  atlas æ—¶ origin.w=0 â†’ ç€è‰²å™¨ä¸å– DDGIã€‚
+    // DDGI 参数 UBO（slot=6）。ddgi_enabled=0 或无 atlas 时 origin.w=0 → 着色器不取 DDGI。
     const bool ddgi_on = gi.ddgi_enabled && gi.ddgi_irradiance_atlas != 0;
     FwdDDGIParamsUBO ddgi{};
     ddgi.origin = glm::vec4(gi.ddgi_grid_origin, ddgi_on ? 1.0f : 0.0f);
@@ -153,7 +153,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
-    // èšå…‰ç¯ UBOï¼ˆset7.b1/slot=7ï¼ŒFinal-Feat-4ï¼‰ã€‚count=0 æ—¶ç€è‰²å™¨æ— èšå…‰ç¯è´¡çŒ®ã€‚
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
     SpotLightsUBO slights{};
     FillSpotLightsUBO(spot_lights, slights);
     device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
@@ -168,12 +168,12 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    // PSO é€‰æ‹©ï¼šWBOIT é€æ˜Žé€šé“ä¼˜å…ˆï¼ˆaccumulation/revealageï¼‰ï¼Œå¦åˆ™æŒ‰ double-sided é€‰å‰”é™¤çŠ¶æ€ã€‚
+    // PSO 选择：WBOIT 透明通道优先（accumulation/revealage），否则按 double-sided 选剔除状态。
     unsigned int pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0ï¼ˆæ‰©å±•ï¼‰
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0ï¼ˆB2c-2ï¼‰
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0ï¼ˆB2c-3ï¼‰
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0ï¼ˆB2c-5ï¼‰
@@ -184,19 +184,19 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
-    // åœ°å½¢ splat çº¹ç†ï¼ˆslot 5-9ï¼Œflat unit 5-9ï¼‰ã€‚æœªç”¨æ—¶ç»‘ç™½çº¹ç†ä¿è¯ä¸‰åŽç«¯ descriptor æœ‰å®šä¹‰ã€‚
+    // 地形 splat 纹理（slot 5-9，flat unit 5-9）。未用时绑白纹理保证三后端 descriptor 有定义。
     cmd.BindTexture(5u, tex_or_white(material.splat_weight_map), TextureDim::Tex2D);
     cmd.BindTexture(6u, tex_or_white(material.splat_layers[0]), TextureDim::Tex2D);
     cmd.BindTexture(7u, tex_or_white(material.splat_layers[1]), TextureDim::Tex2D);
     cmd.BindTexture(8u, tex_or_white(material.splat_layers[2]), TextureDim::Tex2D);
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
-    // DDGI irradiance atlasï¼ˆslot 10ï¼Œflat unit 10ï¼‰ã€‚æœªå¯ç”¨æ—¶ç»‘ç™½çº¹ç†ä¿è¯ä¸‰åŽç«¯ descriptor æœ‰å®šä¹‰ã€‚
+    // DDGI irradiance atlas（slot 10，flat unit 10）。未启用时绑白纹理保证三后端 descriptor 有定义。
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
-    // CSM shadow atlasï¼ˆslot 11ï¼Œflat unit 11ï¼‰ã€‚æ—  shadow mapï¼ˆgrs.shadow_map[0]==0ï¼‰æˆ– receive_shadow å…³æ—¶
-    // ç»‘ç™½çº¹ç†ï¼šç€è‰²å™¨å†… receive_shadow é—¨æŽ§å·²è¿”å›ž 0ï¼Œç™½çº¹ç†æ·±åº¦=1 ä¹Ÿä¸ä¼šäº§ç”Ÿé˜´å½±ã€‚
+    // CSM shadow atlas（slot 11，flat unit 11）。无 shadow map（grs.shadow_map[0]==0）或 receive_shadow 关时
+    // 绑白纹理：着色器内 receive_shadow 门控已返回 0，白纹理深度=1 也不会产生阴影。
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -214,7 +214,7 @@ BufferHandle MeshRenderer::BuildShadedWorldVertexBuffer(RhiDevice& device,
                                                         const std::vector<MeshVertex>& vertices,
                                                         const glm::mat4& model) {
     if (vertices.empty()) return BufferHandle{};
-    // CPU ä¾§é¢„å˜æ¢åˆ°ä¸–ç•Œç©ºé—´ï¼ˆä¸Ž DrawShaded å®Œå…¨åŒæºï¼šä½ç½® modelã€æ³•çº¿ normal-matrixã€åˆ‡çº¿ model çº¿æ€§éƒ¨åˆ†ï¼‰ã€‚
+    // CPU 侧预变换到世界空间（与 DrawShaded 完全同源：位置 model、法线 normal-matrix、切线 model 线性部分）。
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     const glm::mat3 model3 = glm::mat3(model);
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
@@ -233,7 +233,7 @@ BufferHandle MeshRenderer::BuildShadedWorldVertexBuffer(RhiDevice& device,
     GpuBufferDesc vb_desc;
     vb_desc.size = gpu_verts.size() * sizeof(GpuMeshVertex);
     vb_desc.usage = GpuBufferUsage::kVertex;
-    vb_desc.is_dynamic = false;  // å¸¸é©»é™æ€ç¼“å†²ï¼ˆtiled terrainï¼šä¸Šä¼ ä¸€æ¬¡ï¼Œå¤š tile å­æ®µå¤ç”¨ï¼‰
+    vb_desc.is_dynamic = false;  // 常驻静态缓冲（tiled terrain：上传一次，多 tile 子段复用）
     return device.CreateGpuBuffer(vb_desc, gpu_verts.data());
 }
 
@@ -255,15 +255,15 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     unsigned int program = material.custom_program != 0
         ? material.custom_program
         : device.GetBuiltinProgram(BuiltinProgram::ForwardShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // å¤–éƒ¨å¸¸é©» VB/IBï¼šé¡¶ç‚¹å·²æ˜¯ä¸–ç•Œç©ºé—´ï¼ˆBuildShadedWorldVertexBuffer é¢„å˜æ¢ï¼‰ï¼Œæ•…ä¸åœ¨æ­¤é‡ä¼ /é¢„å˜æ¢ã€‚
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawShaded åŒæºï¼‰---
+    // 外部常驻 VB/IB：顶点已是世界空间（BuildShadedWorldVertexBuffer 预变换），故不在此重传/预变换。
+    // --- UBO 填充（与 DrawShaded 同源）---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -284,7 +284,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -386,8 +386,8 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -396,7 +396,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(17u, grs.point_shadow_map[1] ? grs.point_shadow_map[1] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
-    // å¤–éƒ¨å¸¸é©»ç¼“å†²ï¼šç»‘ caller æŒæœ‰çš„ VB/IBï¼ŒæŒ‰ index_count_override å­æ®µç»˜åˆ¶ã€‚
+    // 外部常驻缓冲：绑 caller 持有的 VB/IB，按 index_count_override 子段绘制。
     cmd.BindVertexBuffer(0u, mesh.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(mesh.index_buffer.raw(), mesh.index_type);
     cmd.DrawIndexed(index_count, first_index, 0);
@@ -412,12 +412,12 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::GBufferMesh);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾› GBuffer-mesh å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供 GBuffer-mesh 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_) return;
 
-    // --- CPU ä¾§é¢„å˜æ¢é¡¶ç‚¹åˆ°ä¸–ç•Œç©ºé—´ï¼ˆä¸Ž DrawShaded åŒæºï¼›gPosition ç›´æŽ¥å–æ­¤ä¸–ç•Œåæ ‡ï¼‰---
+    // --- CPU 侧预变换顶点到世界空间（与 DrawShaded 同源；gPosition 直接取此世界坐标）---
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     const glm::mat3 model3 = glm::mat3(model);
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
@@ -442,14 +442,14 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // PerFrameï¼ˆset0.b0ï¼‰ï¼švp = proj*viewï¼Œgbuffer.frag ä¸è¯»ä½†é¡»ä¿æŒ descriptor layout å…¼å®¹ã€‚
+    // PerFrame（set0.b0）：vp = proj*view，gbuffer.frag 不读但须保持 descriptor layout 兼容。
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
     frame.camera_pos = glm::vec4(0.0f);
     device.UpdateGpuBuffer(per_frame_ubo_, 0, sizeof(frame), &frame);
 
-    // PerSceneï¼ˆset1.b0ï¼‰ï¼šå ä½ï¼Œä»…ä¸ºä¿æŒä¸Ž PBR ç®¡çº¿ descriptor layout ä¸€è‡´ã€‚
+    // PerScene（set1.b0）：占位，仅为保持与 PBR 管线 descriptor layout 一致。
     FwdPerSceneUBO scene{};
     device.UpdateGpuBuffer(per_scene_ubo_, 0, sizeof(scene), &scene);
 
@@ -461,10 +461,10 @@ void MeshRenderer::DrawGBuffer(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    // ä¸é€æ˜Žå‡ ä½• PSOï¼ˆå†™/æµ‹æ·±åº¦ã€èƒŒé¢å‰”é™¤ã€ä¸æ··åˆï¼‰ï¼šMRT å„ attachment å…±ç”¨æ­¤å…³æ··åˆçŠ¶æ€ã€‚
+    // 不透明几何 PSO（写/测深度、背面剔除、不混合）：MRT 各 attachment 共用此关混合状态。
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());  // PerScene @ set1.b0ï¼ˆå ä½ï¼‰
+    cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());  // PerScene @ set1.b0（占位）
     cmd.BindTexture(0u, albedo_tex ? albedo_tex : white_tex_, TextureDim::Tex2D);  // u_texture @ set2.b1
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
@@ -488,14 +488,14 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty() || bone_matrices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardSkinnedShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›è’™çš®é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供蒙皮高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // --- é¡¶ç‚¹æ‰“åŒ…ï¼ˆå±€éƒ¨/ç»‘å®šç©ºé—´ï¼ŒVS æ–½éª¨éª¼æ··åˆ + vpï¼Œä¸åœ¨ CPU é¢„å˜æ¢ï¼‰ ---
+    // --- 顶点打包（局部/绑定空间，VS 施骨骼混合 + vp，不在 CPU 预变换） ---
     std::vector<GpuSkinnedVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const SkinnedMeshVertex& v = vertices[i];
@@ -511,7 +511,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
         g.bw2 = v.bone_weights.z; g.bw3 = v.bone_weights.w;
     }
 
-    // --- éª¨éª¼çŸ©é˜µï¼šå·¦ä¹˜ model å¾—ä¸–ç•Œç©ºé—´ï¼Œå†™å…¥ SSBO ---
+    // --- 骨骼矩阵：左乘 model 得世界空间，写入 SSBO ---
     std::vector<glm::mat4> world_bones(bone_matrices.size());
     for (size_t i = 0; i < bone_matrices.size(); ++i) {
         world_bones[i] = model * bone_matrices[i];
@@ -529,7 +529,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawShaded åŒæž„ï¼‰ ---
+    // --- UBO 填充（与 DrawShaded 同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -550,7 +550,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -616,7 +616,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
-    // èšå…‰ç¯ UBOï¼ˆset7.b1/slot=7ï¼ŒFinal-Feat-4ï¼‰ã€‚count=0 æ—¶ç€è‰²å™¨æ— èšå…‰ç¯è´¡çŒ®ã€‚
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
     SpotLightsUBO slights{};
     FillSpotLightsUBO(spot_lights, slights);
     device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
@@ -633,12 +633,12 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{6u, 4u, 76u},   // bone weights
     };
 
-    // PSO é€‰æ‹©ï¼šä¸Ž DrawShaded ä¸€è‡´ï¼ˆWBOIT é€æ˜Žä¼˜å…ˆï¼Œå¦åˆ™æŒ‰ double-sided é€‰å‰”é™¤ï¼‰ã€‚
+    // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0ï¼ˆæ‰©å±•ï¼‰
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0
@@ -655,8 +655,8 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -666,7 +666,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1ï¼ˆFinal-Feat-4ï¼‰
-    // éª¨éª¼çŸ©é˜µ SSBO\@slot 0ï¼ˆä¸‰åŽç«¯é€šç”¨ï¼šGL binding0 / Vulkan ä½ç½®0(set7) / DX11 t0 ç» @SSBO_LOW_REGISTERSï¼‰ã€‚
+    // 骨骼矩阵 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
@@ -688,14 +688,14 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›å®žä¾‹åŒ–é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供实例化高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // --- é¡¶ç‚¹æ‰“åŒ…ï¼ˆå±€éƒ¨ç©ºé—´ï¼ŒVS æŒ‰å®žä¾‹ model å˜æ¢ï¼Œä¸åœ¨ CPU é¢„å˜æ¢ï¼‰ ---
+    // --- 顶点打包（局部空间，VS 按实例 model 变换，不在 CPU 预变换） ---
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const MeshVertex& v = vertices[i];
@@ -707,7 +707,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
         g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
     }
 
-    // --- æ¯å®žä¾‹ model çŸ©é˜µå†™å…¥ SSBOï¼ˆä¸–ç•Œç©ºé—´ï¼Œ0 åŸºç´¢å¼•ï¼‰ ---
+    // --- 每实例 model 矩阵写入 SSBO（世界空间，0 基索引） ---
     const size_t inst_bytes = instance_models.size() * sizeof(glm::mat4);
     EnsureInstanceCapacity(device, inst_bytes);
     if (!instance_ssbo_) return;
@@ -721,12 +721,12 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawShaded åŒæž„ï¼‰ ---
+    // --- UBO 填充（与 DrawShaded 同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
     frame.camera_pos = glm::vec4(camera_pos, 1.0f);
-    // æ¤è¢«é£Žå¼¯æ›²ï¼ˆB2b-6ï¼Œgrassï¼‰ï¼šmaterial.foliage æ—¶å–‚å…¥ grs é£Žå‚ï¼Œå¦åˆ™ä¿æŒé›¶ â†’ VS æ•´æ®µè·³è¿‡ã€‚
+    // 植被风弯曲（B2b-6，grass）：material.foliage 时喂入 grs 风参，否则保持零 → VS 整段跳过。
     if (material.foliage) {
         const auto& grs_f = device.GetGlobalRenderState();
         frame.foliage_wind = grs_f.foliage_wind;
@@ -748,7 +748,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -814,7 +814,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
-    // èšå…‰ç¯ UBOï¼ˆset7.b1/slot=7ï¼ŒFinal-Feat-4ï¼‰ã€‚count=0 æ—¶ç€è‰²å™¨æ— èšå…‰ç¯è´¡çŒ®ã€‚
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
     SpotLightsUBO slights{};
     FillSpotLightsUBO(spot_lights, slights);
     device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
@@ -829,12 +829,12 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    // PSO é€‰æ‹©ï¼šä¸Ž DrawShaded ä¸€è‡´ï¼ˆWBOIT é€æ˜Žä¼˜å…ˆï¼Œå¦åˆ™æŒ‰ double-sided é€‰å‰”é™¤ï¼‰ã€‚
+    // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0ï¼ˆæ‰©å±•ï¼‰
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0
@@ -851,8 +851,8 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -862,11 +862,11 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1ï¼ˆFinal-Feat-4ï¼‰
-    // æ¯å®žä¾‹ model SSBO\@slot 0ï¼ˆä¸‰åŽç«¯é€šç”¨ï¼šGL binding0 / Vulkan ä½ç½®0(set7) / DX11 t0 ç» @SSBO_LOW_REGISTERSï¼‰ã€‚
+    // 每实例 model SSBO\@slot 0（三后端通用：GL binding0 / Vulkan 位置0(set7) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
-    // å¥‘çº¦ï¼šfirst_instance æ’ 0ï¼ŒDX11 SV_InstanceID ä»Ž 0 èµ·ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ã€‚
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
                              0u, 0, 0u);
@@ -890,14 +890,14 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
         bone_palettes.empty() || instance_palette_idx.size() != instance_models.size()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardSkinnedInstancedShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›è’™çš®Ã—å®žä¾‹åŒ–é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供蒙皮×实例化高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // --- é¡¶ç‚¹æ‰“åŒ…ï¼ˆå±€éƒ¨/ç»‘å®šç©ºé—´ï¼ŒVS æ–½éª¨éª¼æ··åˆ + æ¯å®žä¾‹ model + vpï¼Œä¸åœ¨ CPU é¢„å˜æ¢ï¼‰ ---
+    // --- 顶点打包（局部/绑定空间，VS 施骨骼混合 + 每实例 model + vp，不在 CPU 预变换） ---
     std::vector<GpuSkinnedVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const SkinnedMeshVertex& v = vertices[i];
@@ -913,7 +913,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
         g.bw2 = v.bone_weights.z; g.bw3 = v.bone_weights.w;
     }
 
-    // --- éª¨éª¼è°ƒè‰²æ¿åŽ»é‡å¯†æŽ’ï¼ˆç»‘å®šâ†’å±€éƒ¨ç©ºé—´ï¼Œä¸é¢„ä¹˜ modelï¼‰ï¼Œè®°æ¯ä»½è°ƒè‰²æ¿èµ·å§‹ä¸‹æ ‡ ---
+    // --- 骨骼调色板去重密排（绑定→局部空间，不预乘 model），记每份调色板起始下标 ---
     std::vector<int> palette_base(bone_palettes.size());
     std::vector<glm::mat4> packed_bones;
     for (size_t p = 0; p < bone_palettes.size(); ++p) {
@@ -926,11 +926,11 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     if (!bone_ssbo_) return;
     device.UpdateGpuBuffer(bone_ssbo_, 0, bone_bytes, packed_bones.data());
 
-    // --- æ¯å®žä¾‹ {model, bone_offset}ï¼ˆ80B MeshSkinnedInstï¼‰å†™å…¥å®žä¾‹ SSBOï¼ˆ0 åŸºç´¢å¼•ï¼‰ ---
+    // --- 每实例 {model, bone_offset}（80B MeshSkinnedInst）写入实例 SSBO（0 基索引） ---
     std::vector<MeshSkinnedInstGPU> insts(instance_models.size());
     for (size_t j = 0; j < instance_models.size(); ++j) {
         const int pi = instance_palette_idx[j];
-        if (pi < 0 || pi >= static_cast<int>(palette_base.size())) return;  // è°ƒè‰²æ¿ä¸‹æ ‡è¶Šç•Œï¼Œæ•´æ‰¹æ”¾å¼ƒ
+        if (pi < 0 || pi >= static_cast<int>(palette_base.size())) return;  // 调色板下标越界，整批放弃
         insts[j].model = instance_models[j];
         insts[j].bone_offset = palette_base[pi];
         insts[j].pad0 = insts[j].pad1 = insts[j].pad2 = 0;
@@ -948,7 +948,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawShaded / DrawInstancedShaded åŒæž„ï¼‰ ---
+    // --- UBO 填充（与 DrawShaded / DrawInstancedShaded 同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -1034,7 +1034,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     ddgi.misc = glm::vec4(gi.ddgi_normal_bias, 0.0f, 0.0f, 0.0f);
     device.UpdateGpuBuffer(per_ddgi_ubo_, 0, sizeof(ddgi), &ddgi);
 
-    // èšå…‰ç¯ UBOï¼ˆset7.b1/slot=7ï¼ŒFinal-Feat-4ï¼‰ã€‚count=0 æ—¶ç€è‰²å™¨æ— èšå…‰ç¯è´¡çŒ®ã€‚
+    // 聚光灯 UBO（set7.b1/slot=7，Final-Feat-4）。count=0 时着色器无聚光灯贡献。
     SpotLightsUBO slights{};
     FillSpotLightsUBO(spot_lights, slights);
     device.UpdateGpuBuffer(per_spot_lights_ubo_, 0, sizeof(slights), &slights);
@@ -1051,12 +1051,12 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
         VertexAttr{6u, 4u, 76u},   // bone weights
     };
 
-    // PSO é€‰æ‹©ï¼šä¸Ž DrawShaded ä¸€è‡´ï¼ˆWBOIT é€æ˜Žä¼˜å…ˆï¼Œå¦åˆ™æŒ‰ double-sided é€‰å‰”é™¤ï¼‰ã€‚
+    // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
     unsigned int pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0ï¼ˆæ‰©å±•ï¼‰
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0
@@ -1082,12 +1082,12 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1ï¼ˆFinal-Feat-4ï¼‰
-    // å®žä¾‹ SSBO\@slot0ï¼ˆset8.b0ï¼‰+ éª¨éª¼ SSBO\@slot1ï¼ˆset8.b1ï¼‰ï¼›ä¸‰åŽç«¯ @SSBO_LOW_REGISTERS â†’ DX11 t0/t1ã€GL binding0/1ã€Vulkan rank0/1ã€‚
+    // 实例 SSBO\@slot0（set8.b0）+ 骨骼 SSBO\@slot1（set8.b1）；三后端 @SSBO_LOW_REGISTERS → DX11 t0/t1、GL binding0/1、Vulkan rank0/1。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindStorageBuffer(1u, bone_ssbo_.raw(), 0u, static_cast<uint32_t>(bone_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuSkinnedVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
-    // å¥‘çº¦ï¼šfirst_instance æ’ 0ï¼ŒDX11 SV_InstanceID ä»Ž 0 èµ·ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ã€‚
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
                              0u, 0, 0u);
@@ -1109,14 +1109,14 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardMorphShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾› morph é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供 morph 高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // --- CPU ä¾§é¢„å˜æ¢åŸºé¡¶ç‚¹åˆ°ä¸–ç•Œç©ºé—´ï¼ˆä¸Ž DrawShaded ä¸€è‡´ï¼‰---
+    // --- CPU 侧预变换基顶点到世界空间（与 DrawShaded 一致）---
     const glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     const glm::mat3 model3 = glm::mat3(model);
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
@@ -1133,18 +1133,18 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
         g.tx = wt.x; g.ty = wt.y; g.tz = wt.z;
     }
 
-    // --- morph å¢žé‡ï¼šCPU ä¾§æŒ‰æƒé‡çº¿æ€§åˆå¹¶ä¸ºæ¯é¡¶ç‚¹å•æ¡ä¸–ç•Œç©ºé—´å¢žé‡ï¼Œæ‰“åŒ…æˆ SSBO ---
-    // morph ä¸ºçº¿æ€§æ··åˆ final = base + Î£_t w_tÂ·delta_tï¼Œæ•…æƒé‡åœ¨ CPU å åŠ ï¼ˆä¸Žæœ¬è·¯å¾„æ—¢æœ‰ã€Œé¡¶ç‚¹
-    // CPU é¢„å˜æ¢ã€ä¸€è‡´ï¼Œä¸”è§„é¿ VS ä¾§é¢å¤– UBO åœ¨ä¸‰åŽç«¯ç»‘å®šè¯­ä¹‰ä¸Šçš„åˆ†æ­§ï¼‰ã€‚ä»…æ”¶çº³ deltas ä¸ŽåŸºç½‘æ ¼
-    // ç­‰é•¿çš„æœ‰æ•ˆ targetï¼ˆâ‰¤64ï¼‰ï¼›ä½ç½®å¢žé‡ç”¨ model çº¿æ€§éƒ¨åˆ†ã€æ³•çº¿å¢žé‡ç”¨æ³•çº¿çŸ©é˜µï¼ˆä¸å«å¹³ç§»ï¼‰ã€‚
-    std::vector<GpuMorphDelta> morph_deltas(vertices.size());  // å€¼åˆå§‹åŒ–ä¸º 0
+    // --- morph 增量：CPU 侧按权重线性合并为每顶点单条世界空间增量，打包成 SSBO ---
+    // morph 为线性混合 final = base + Σ_t w_t·delta_t，故权重在 CPU 叠加（与本路径既有「顶点
+    // CPU 预变换」一致，且规避 VS 侧额外 UBO 在三后端绑定语义上的分歧）。仅收纳 deltas 与基网格
+    // 等长的有效 target（≤64）；位置增量用 model 线性部分、法线增量用法线矩阵（不含平移）。
+    std::vector<GpuMorphDelta> morph_deltas(vertices.size());  // 值初始化为 0
     int active_targets = 0;
     for (const MeshMorphTarget& tgt : morph_targets) {
-        if (tgt.position_deltas.size() != vertices.size()) continue;  // è·³è¿‡ä¸åŒ¹é… target
+        if (tgt.position_deltas.size() != vertices.size()) continue;  // 跳过不匹配 target
         if (active_targets >= kMaxFwdMorphTargets) break;
         ++active_targets;
         const float w = tgt.weight;
-        if (w == 0.0f) continue;  // é›¶æƒé‡æ— è´¡çŒ®
+        if (w == 0.0f) continue;  // 零权重无贡献
         const bool has_nrm = tgt.normal_deltas.size() == vertices.size();
         for (size_t i = 0; i < vertices.size(); ++i) {
             const glm::vec3 wdp = model3 * tgt.position_deltas[i];
@@ -1154,7 +1154,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
             d.nx += w * wdn.x; d.ny += w * wdn.y; d.nz += w * wdn.z;
         }
     }
-    if (morph_deltas.empty()) morph_deltas.push_back(GpuMorphDelta{});  // ä¿è¯ SSBO éžç©ºå¯ç»‘å®š
+    if (morph_deltas.empty()) morph_deltas.push_back(GpuMorphDelta{});  // 保证 SSBO 非空可绑定
 
     const size_t morph_bytes = morph_deltas.size() * sizeof(GpuMorphDelta);
     EnsureMorphCapacity(device, morph_bytes);
@@ -1169,7 +1169,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawShaded åŒæž„ï¼‰ ---
+    // --- UBO 填充（与 DrawShaded 同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -1190,7 +1190,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -1274,7 +1274,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
-    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0ï¼ˆæ‰©å±•ï¼‰
+    cmd.BindUniformBuffer(2u, per_material_shaded_ubo_.raw());  // PerMaterial @ set2.b0（扩展）
     cmd.BindUniformBuffer(3u, per_point_lights_ubo_.raw());     // PointLights  @ set3.b0
     cmd.BindUniformBuffer(4u, per_terrain_ubo_.raw());          // TerrainParams@ set4.b0
     cmd.BindUniformBuffer(5u, per_light_probe_ubo_.raw());      // FwdLightProbe@ set5.b0
@@ -1291,8 +1291,8 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -1302,7 +1302,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight    @ set7.b1ï¼ˆFinal-Feat-4ï¼‰
-    // morph åˆå¹¶å¢žé‡ SSBO\@slot 0ï¼ˆä¸‰åŽç«¯é€šç”¨ï¼šGL binding0 / Vulkan SSBO ç¬¬0(set7.b0) / DX11 t0 ç» @SSBO_LOW_REGISTERSï¼‰ã€‚
+    // morph 合并增量 SSBO\@slot 0（三后端通用：GL binding0 / Vulkan SSBO 第0(set7.b0) / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, morph_ssbo_.raw(), 0u, static_cast<uint32_t>(morph_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);

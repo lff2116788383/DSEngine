@@ -35,7 +35,7 @@ void FramePipeline::CaptureThinSnapshot() {
     if (!world) return;
     auto& reg = world->registry();
 
-    // â”€â”€ 1. 3D Cameraï¼ˆpriority + entity id ç¡®å®šå”¯ä¸€ä¸»ç›¸æœºï¼‰â”€â”€
+    // ── 1. 3D Camera（priority + entity id 确定唯一主相机）──
     {
         auto view = reg.view<dse::Camera3DComponent>();
         entt::entity best = entt::null;
@@ -66,7 +66,7 @@ void FramePipeline::CaptureThinSnapshot() {
                 c.forward = tf.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 c.up = tf.rotation * glm::vec3(0.0f, 1.0f, 0.0f);
                 c.right = tf.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-                // Camera-Relative Rendering: view matrix ä»¥åŽŸç‚¹ä¸ºç›¸æœºä½ç½®
+                // Camera-Relative Rendering: view matrix 以原点为相机位置
                 c.view = glm::lookAt(glm::vec3(0.0f), c.forward, c.up);
                 c.shadow_center = c.position + c.forward * 50.0f;
                 snap.camera_offset = c.position;
@@ -74,7 +74,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 2. 2D Camera fallback â”€â”€
+    // ── 2. 2D Camera fallback ──
     {
         auto view = reg.view<CameraComponent>();
         entt::entity best = entt::null;
@@ -100,7 +100,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 3. Skyboxï¼ˆå« lazy load å†™å›žï¼Œä¸»çº¿ç¨‹å®‰å…¨ï¼‰â”€â”€
+    // ── 3. Skybox（含 lazy load 写回，主线程安全）──
     {
         auto view = reg.view<dse::SkyboxComponent>();
         for (auto e : view) {
@@ -123,7 +123,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 3b. Atmosphere Skyï¼ˆç¨‹åºåŒ–å¤§æ°”æ•£å°„å¤©ç©ºï¼Œä¼˜å…ˆäºŽ cubemap skyboxï¼‰â”€â”€
+    // ── 3b. Atmosphere Sky（程序化大气散射天空，优先于 cubemap skybox）──
     {
         auto view = reg.view<dse::AtmosphereComponent>();
         for (auto e : view) {
@@ -151,7 +151,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 4. Directional Light â”€â”€
+    // ── 4. Directional Light ──
     {
         auto view = reg.view<dse::DirectionalLight3DComponent>();
         for (auto e : view) {
@@ -172,7 +172,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // å¤§æ°”å¤©ç©ºéœ€è¦å¤ªé˜³æ–¹å‘ï¼ˆä»Žæ–¹å‘å…‰å–åï¼‰
+    // 大气天空需要太阳方向（从方向光取反）
     if (snap.atmosphere_sky.valid && snap.directional_light.valid) {
         const float dir_len2 = glm::dot(snap.directional_light.direction, snap.directional_light.direction);
         if (dir_len2 > 1e-8f) {
@@ -180,7 +180,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 5. Spot Lightsï¼ˆshadow-casting, max 4ï¼‰â”€â”€
+    // ── 5. Spot Lights（shadow-casting, max 4）──
     {
         auto view = reg.view<TransformComponent, dse::SpotLightComponent>();
         snap.spot_shadow_count = 0;
@@ -202,7 +202,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 6. Point Lightsï¼ˆshadow-casting, max 4ï¼‰â”€â”€
+    // ── 6. Point Lights（shadow-casting, max 4）──
     {
         auto view = reg.view<TransformComponent, dse::PointLightComponent>();
         snap.point_shadow_count = 0;
@@ -218,7 +218,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 7. PostProcessï¼ˆåˆå¹¶ 13 ä¸ª Pass çš„é‡å¤æŸ¥è¯¢ï¼‰â”€â”€
+    // ── 7. PostProcess（合并 13 个 Pass 的重复查询）──
     {
         auto view = reg.view<dse::PostProcessComponent>();
         for (auto e : view) {
@@ -303,7 +303,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 7b. Volumetric Cloud â”€â”€
+    // ── 7b. Volumetric Cloud ──
     {
         auto view = reg.view<dse::VolumetricCloudComponent>();
         for (auto e : view) {
@@ -329,7 +329,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 8. Water surfaces â”€â”€
+    // ── 8. Water surfaces ──
     {
         auto view = reg.view<dse::WaterComponent>();
         snap.water_count = 0;
@@ -360,7 +360,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 9. Decals â”€â”€
+    // ── 9. Decals ──
     {
         auto view = reg.view<TransformComponent, dse::DecalComponent>();
         snap.decal_count = 0;
@@ -380,7 +380,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 9b. Weather â”€â”€
+    // ── 9b. Weather ──
     {
         auto view = reg.view<dse::WeatherComponent>();
         for (auto e : view) {
@@ -400,7 +400,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 10. Light Probe SHï¼ˆè·ç¦»åŠ æƒæ··åˆæœ€è¿‘ä¸¤ä¸ª probeï¼‰â”€â”€
+    // ── 10. Light Probe SH（距离加权混合最近两个 probe）──
     {
         glm::vec3 cam_pos = snap.camera_3d.position;
         auto probe_view = reg.view<TransformComponent, dse::LightProbeComponent>();
@@ -448,7 +448,7 @@ void FramePipeline::CaptureThinSnapshot() {
         }
     }
 
-    // â”€â”€ 11. DDGI Config â”€â”€
+    // ── 11. DDGI Config ──
     {
         auto gi_view = reg.view<dse::GIProbeVolumeComponent>();
         for (auto e : gi_view) {

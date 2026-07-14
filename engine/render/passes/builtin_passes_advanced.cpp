@@ -74,7 +74,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
 
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    // params å¸ƒå±€ï¼ˆ30 ä¸ª floatï¼Œä¸‰åŽç«¯é€šç”¨ï¼‰ï¼š
+    // params 布局（30 个 float，三后端通用）：
     // [0]      depth_tex handle
     // [1-3]    fog_color.rgb
     // [4]      fog_density
@@ -112,7 +112,7 @@ void VolumetricFogPass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, depth_tex));
     cmd_buffer.EndRenderPass();
 
-    // å°†é›¾æ•ˆç»“æžœï¼ˆå·²åŒ…å« scene é¢œè‰²ï¼‰è¦†å†™å›ž scene RT
+    // 将雾效结果（已包含 scene 颜色）覆写回 scene RT
     const unsigned int fog_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.fog);
     if (fog_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -178,7 +178,7 @@ void VolumetricCloudPass::Execute(CommandBuffer& cmd_buffer) {
     const bool use_half_res = vc.half_resolution && (ctx_.render_targets.cloud != 0);
     const unsigned int target_rt = use_half_res ? ctx_.render_targets.cloud : ctx_.render_targets.scene;
 
-    // params å¸ƒå±€ï¼ˆ30 ä¸ª floatï¼Œä¸‰åŽç«¯é€šç”¨ï¼‰ï¼š
+    // params 布局（30 个 float，三后端通用）：
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), use_half_res});
     post_process_renderer_.BeginFrame();
@@ -291,7 +291,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     if (depth_tex == 0) return;
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    // Camera-Relative: cam_pos åœ¨ç€è‰²å™¨ä¸­åº”ä¸º vec3(0)ï¼ˆç›¸æœºåœ¨åŽŸç‚¹ï¼‰
+    // Camera-Relative: cam_pos 在着色器中应为 vec3(0)（相机在原点）
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
         static_cast<float>(Screen::width()) / static_cast<float>(std::max(1, Screen::height())));
     if (!active_cam.valid) return;
@@ -314,7 +314,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BindPipeline(ctx_.pipeline_states.decal_blend);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
 
-    // params å¸ƒå±€ï¼ˆ40 float = 160 bytesï¼‰
+    // params 布局（40 float = 160 bytes）
     std::vector<float> params(39);
 
     for (int wi = 0; wi < snap.water_count; ++wi) {
@@ -339,7 +339,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
         params[24] = cam_near;            params[25] = cam_far;
         params[26] = cam_fwd.x;           params[27] = cam_fwd.y;           params[28] = cam_fwd.z;
         params[29] = tan_fov_y;           params[30] = aspect;
-        // è§†è§‰å¢žå¼ºå‚æ•°
+        // 视觉增强参数
         params[31] = wc.caustic_intensity;    params[32] = wc.caustic_scale;
         params[33] = wc.foam_intensity;       params[34] = wc.foam_depth_threshold;
         params[35] = wc.underwater_fog_density;
@@ -352,7 +352,7 @@ void WaterPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// DecalPass â€” Screen-Space Decal (æ·±åº¦é‡å»º + ç›’ä½“æŠ•å½±)
+// DecalPass — Screen-Space Decal (深度重建 + 盒体投影)
 // ============================================================
 
 void DecalPass::Setup(RenderGraph& graph) {
@@ -417,7 +417,7 @@ void DecalPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// HiZBuildPass â€” ä»Ž PreZ æ·±åº¦æž„å»º Hi-Z Mip Chain (Compute Shader)
+// HiZBuildPass — 从 PreZ 深度构建 Hi-Z Mip Chain (Compute Shader)
 // ============================================================
 
 
@@ -425,7 +425,7 @@ void HiZBuildPass::EnsureShaders() {
     if (shaders_compiled_) return;
     shaders_compiled_ = true;
 
-    // ä½¿ç”¨ FramePipeline ç¼“å­˜çš„ shader å¥æŸ„ï¼Œé¿å…æ¯å¸§é‡å»ºæ³„æ¼
+    // 使用 FramePipeline 缓存的 shader 句柄，避免每帧重建泄漏
     hiz_copy_shader_ = ctx_.hiz_copy_shader;
     hiz_downsample_shader_ = ctx_.hiz_downsample_shader;
 }
@@ -496,14 +496,14 @@ void HiZBuildPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 }
 
 // ============================================================
-// HiZCullPass â€” GPU-driven é®æŒ¡å‰”é™¤ (Compute Shader)
+// HiZCullPass — GPU-driven 遮挡剔除 (Compute Shader)
 // ============================================================
 
 void HiZCullPass::EnsureShader() {
     if (shader_compiled_) return;
     shader_compiled_ = true;
 
-    // ä½¿ç”¨ FramePipeline ç¼“å­˜çš„ shader å¥æŸ„
+    // 使用 FramePipeline 缓存的 shader 句柄
     hiz_cull_shader_ = ctx_.hiz_cull_shader;
 }
 
@@ -532,7 +532,7 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 
     const int mip_count = rhi->GetHiZMipCount(ctx_.render_targets.hiz_texture);
 
-    // Bind SSBOs (DX11 åŒºåˆ† SRV/UAV; GL/VK å¿½ç•¥ writable)
+    // Bind SSBOs (DX11 区分 SRV/UAV; GL/VK 忽略 writable)
     rhi->BindGpuBuffer(ctx_.hiz_aabb_ssbo, 0, false);
     rhi->BindGpuBuffer(ctx_.hiz_visibility_ssbo, 1, true);
 
@@ -548,9 +548,9 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
             const glm::mat4 clip_correction = rhi->GetProjectionCorrection();
             view_projection = (clip_correction * active_cam.proj) * active_cam.view;
 
-            // å•æº cull ç€è‰²å™¨ç»Ÿä¸€å‡è®¾ ndc.zâˆˆ[0,1]ã€‚GL/WebGL2 çš„ GetProjectionCorrection
-            // åœ¨ Z è¡Œä¸ºæ’ç­‰ï¼ˆndc.zâˆˆ[-1,1]ï¼‰ï¼Œæ•…ç»™ä¸Šä¼ çŸ©é˜µè¡¥ä¸€æ¬¡ z'=0.5z+0.5 æŠ˜å ï¼Œä½¿å››åŽç«¯
-            // ndc.z åŒä¸º [0,1]ï¼ˆæ•°å­¦ç­‰ä»·æ—§ GL inline ç€è‰²å™¨é‡Œçš„ *0.5+0.5ï¼›DX11/VK å·² remapï¼Œè·³è¿‡ï¼‰ã€‚
+            // 单源 cull 着色器统一假设 ndc.z∈[0,1]。GL/WebGL2 的 GetProjectionCorrection
+            // 在 Z 行为恒等（ndc.z∈[-1,1]），故给上传矩阵补一次 z'=0.5z+0.5 折叠，使四后端
+            // ndc.z 同为 [0,1]（数学等价旧 GL inline 着色器里的 *0.5+0.5；DX11/VK 已 remap，跳过）。
             if (clip_correction[2][2] == 1.0f && clip_correction[3][2] == 0.0f) {
                 glm::mat4 z_remap(1.0f);
                 z_remap[2][2] = 0.5f;
@@ -574,18 +574,18 @@ void HiZCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 }
 
 // ============================================================
-// GPUCullPass â€” GPU Driven è§†é”¥ + Hi-Z å‰”é™¤ï¼Œç›´æŽ¥å†™ indirect args
+// GPUCullPass — GPU Driven 视锥 + Hi-Z 剔除，直接写 indirect args
 // ============================================================
 
 
-// ---------------- WebGPU WGSL ç‰ˆæœ¬ï¼ˆæ‰‹è¯‘ï¼›å¼•æ“Žæ—  GLSL/SPIR-Vâ†’WGSL å·¥å…·ï¼‰ ----------------
-// ç»‘å®šçº¦å®šï¼ˆä¸Ž WebGPU RHI compute ç»‘å®šé¢ä¸€è‡´ï¼‰ï¼š
-//   group1 b8 = å‘½å uniform å—ï¼ˆSetComputeUniform* æŒ‰è°ƒç”¨åº 16B å¯¹é½ç´¯ç§¯ï¼›å„æˆå‘˜ @align(16)ï¼‰ã€‚
-//   group2    = çº¹ç†/storage imageï¼›é‡‡æ ·çº¹ç† @slotï¼›storage image ä¸Žé‡‡æ ·çº¹ç†åŒæ§½æ—¶æŒªåˆ° slot+8ï¼ˆä»… Hi-Z copyï¼‰ã€‚
-//   group3    = SSBOï¼ˆBindGpuBuffer slot â†’ bindingï¼›compute ç»Ÿä¸€ read_write storageï¼‰ã€‚
-// Hi-Z æ·±åº¦çº¦å®šï¼šWebGPU NDC zâˆˆ[0,1]ï¼ˆæŠ•å½±å« GetProjectionCorrectionï¼‰ï¼Œæ•…å‰”é™¤ test_depth ä¸åš GL çš„
-//   *0.5+0.5 é‡æ˜ å°„ï¼Œç›´æŽ¥ç”¨ nearest_zï¼ˆä¸Žæ·±åº¦ç¼“å†²ä¸€è‡´ï¼‰ã€‚R32Float Hi-Z ä¸º unfilterable-floatï¼Œé‡‡æ ·æ”¹
-//   textureLoadï¼ˆuvâ†’texelï¼‰å–ä»£ textureLodã€‚
+// ---------------- WebGPU WGSL 版本（手译；引擎无 GLSL/SPIR-V→WGSL 工具） ----------------
+// 绑定约定（与 WebGPU RHI compute 绑定面一致）：
+//   group1 b8 = 命名 uniform 块（SetComputeUniform* 按调用序 16B 对齐累积；各成员 @align(16)）。
+//   group2    = 纹理/storage image；采样纹理 @slot；storage image 与采样纹理同槽时挪到 slot+8（仅 Hi-Z copy）。
+//   group3    = SSBO（BindGpuBuffer slot → binding；compute 统一 read_write storage）。
+// Hi-Z 深度约定：WebGPU NDC z∈[0,1]（投影含 GetProjectionCorrection），故剔除 test_depth 不做 GL 的
+//   *0.5+0.5 重映射，直接用 nearest_z（与深度缓冲一致）。R32Float Hi-Z 为 unfilterable-float，采样改
+//   textureLoad（uv→texel）取代 textureLod。
 const char* kHiZCopyShaderSourceWGSL = R"WGSL(// dse-wgsl
 struct PC { u_dst_size : vec2<i32>, };
 @group(1) @binding(8) var<uniform> pc : PC;
@@ -811,8 +811,8 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
                 if (len > 0.0f) frustum_planes[i] /= len;
             }
 
-            // frustum planes å·²ä»ŽæœªæŠ˜å  VP æå–ï¼ˆå‰”é™¤è¯­ä¹‰é›¶æ”¹åŠ¨ï¼‰ã€‚å†å¯¹ä¸Šä¼ çŸ©é˜µè¡¥ GL Z æŠ˜å ï¼š
-            // å•æº cull å‡è®¾ ndc.zâˆˆ[0,1]ï¼ŒGL/WebGL2 çš„ GetProjectionCorrection Z è¡Œæ’ç­‰ â†’ z'=0.5z+0.5ã€‚
+            // frustum planes 已从未折叠 VP 提取（剔除语义零改动）。再对上传矩阵补 GL Z 折叠：
+            // 单源 cull 假设 ndc.z∈[0,1]，GL/WebGL2 的 GetProjectionCorrection Z 行恒等 → z'=0.5z+0.5。
             if (clip_correction[2][2] == 1.0f && clip_correction[3][2] == 0.0f) {
                 glm::mat4 z_remap(1.0f);
                 z_remap[2][2] = 0.5f;
@@ -846,7 +846,7 @@ void GPUCullPass::Execute(CommandBuffer& /*cmd_buffer*/) {
 }
 
 // ============================================================
-// RSMRenderPass â€” ä»Žæ–¹å‘å…‰è§†è§’æ¸²æŸ“åœºæ™¯åˆ° RSM MRT (position/normal/flux)
+// RSMRenderPass — 从方向光视角渲染场景到 RSM MRT (position/normal/flux)
 // ============================================================
 
 void RSMRenderPass::Setup(RenderGraph& graph) {
@@ -865,7 +865,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     const auto& snap = *ctx_.snapshot;
     if (!snap.directional_light.valid) return;
 
-    // Camera-Relative: shadow_center è½¬æ¢åˆ°ç›¸æœºç›¸å¯¹ç©ºé—´
+    // Camera-Relative: shadow_center 转换到相机相对空间
     glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const ActiveCamera active_cam = GetActiveCamera(ctx_,
@@ -900,7 +900,7 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// DDGIUpdatePass â€” ä»Ž RSM VPL æ›´æ–° Irradiance Probe Atlas (Compute Shader)
+// DDGIUpdatePass — 从 RSM VPL 更新 Irradiance Probe Atlas (Compute Shader)
 // ============================================================
 
 void DDGIUpdatePass::Setup(RenderGraph& graph) {
@@ -928,7 +928,7 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
         light_color = glm::vec3(snap.directional_light.color) * snap.directional_light.intensity;
     }
 
-    // é©±åŠ¨ DDGI ç³»ç»Ÿæ›´æ–°æŽ¢é’ˆï¼ˆä¼ å…¥å¤–éƒ¨ç®¡ç†çš„ RSM çº¹ç†å¥æŸ„ï¼‰
+    // 驱动 DDGI 系统更新探针（传入外部管理的 RSM 纹理句柄）
     ctx_.ddgi_system->UpdateProbes(rhi,
                                     ctx_.rsm_targets.position,
                                     ctx_.rsm_targets.normal,
@@ -937,7 +937,7 @@ void DDGIUpdatePass::Execute(CommandBuffer& /*cmd_buffer*/) {
                                     ctx_.rsm_targets.height,
                                     light_dir, light_color);
 
-    // æ›´æ–° context ä¸­çš„ atlas å¥æŸ„ä¾›åŽç»­ Pass é‡‡æ ·
+    // 更新 context 中的 atlas 句柄供后续 Pass 采样
     const auto& res = ctx_.ddgi_system->GetResources();
     ctx_.ddgi_irradiance_atlas = res.irradiance_atlas;
     ctx_.ddgi_visibility_atlas = res.visibility_atlas;

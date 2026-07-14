@@ -27,18 +27,18 @@ void VulkanDrawExecutor::BeginRenderPass(
     VulkanResourceManager& resource_mgr,
     VulkanPipelineStateManager& pipeline_mgr) {
 
-    // æ›´æ–°å¸§ç´¢å¼•å’Œå½“å‰ RT å¥æŸ„
+    // 更新帧索引和当前 RT 句柄
     current_frame_index_ = context_->current_frame() % MAX_FRAMES;
     current_rt_handle_ = render_pass.render_target;
 
-    // ç¡®å®š Framebuffer å’Œ RenderPass
+    // 确定 Framebuffer 和 RenderPass
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     VkRenderPass vk_render_pass = VK_NULL_HANDLE;
     if (render_pass.render_target != 0) {
         const VulkanRenderTarget* rt = resource_mgr.GetRenderTarget(render_pass.render_target);
         if (rt) {
             framebuffer = rt->framebuffer;
-            // æ ¹æ®æ˜¯å¦éœ€è¦æ¸…é™¤é€‰æ‹© render pass å˜ä½“
+            // 根据是否需要清除选择 render pass 变体
             if (!render_pass.clear_color_enabled && rt->render_pass_load != VK_NULL_HANDLE) {
                 vk_render_pass = rt->render_pass_load;
             } else {
@@ -46,7 +46,7 @@ void VulkanDrawExecutor::BeginRenderPass(
             }
         }
     } else {
-        // æ¸²æŸ“åˆ°å±å¹•ï¼šä½¿ç”¨å½“å‰ swapchain framebuffer
+        // 渲染到屏幕：使用当前 swapchain framebuffer
         framebuffer = context_->current_swapchain_framebuffer();
         vk_render_pass = context_->swapchain_render_pass();
 
@@ -61,7 +61,7 @@ void VulkanDrawExecutor::BeginRenderPass(
         return;
     }
     if (vk_render_pass == VK_NULL_HANDLE) {
-        // fallback: ä½¿ç”¨ pipeline_mgr ç¼“å­˜çš„ RenderPass
+        // fallback: 使用 pipeline_mgr 缓存的 RenderPass
         VulkanPipelineStateManager::RenderPassKey rp_key;
         rp_key.has_color = true;
         rp_key.has_depth = true;
@@ -75,10 +75,10 @@ void VulkanDrawExecutor::BeginRenderPass(
         return;
     }
 
-    // è®°å½•å½“å‰æ¿€æ´»çš„ render passï¼Œä¾›åŽç»­ Draw å‡½æ•°åˆ›å»º pipeline æ—¶ä½¿ç”¨
+    // 记录当前激活的 render pass，供后续 Draw 函数创建 pipeline 时使用
     current_render_pass_ = vk_render_pass;
 
-    // ç¡®å®šæ¸²æŸ“åŒºåŸŸå¤§å°å’Œ MSAA é‡‡æ ·æ•°
+    // 确定渲染区域大小和 MSAA 采样数
     VkExtent2D render_extent = context_->swapchain_extent();
     current_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
     if (render_pass.render_target != 0) {
@@ -99,7 +99,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     begin_info.renderArea.offset = {0, 0};
     begin_info.renderArea.extent = render_extent;
 
-    // è®¡ç®—å®žé™… attachment æ•°ï¼ˆå…¼å®¹ MRT GBuffer ä¸Ž MSAA resolveï¼‰
+    // 计算实际 attachment 数（兼容 MRT GBuffer 与 MSAA resolve）
     const bool is_msaa_rt = (current_msaa_samples_ != VK_SAMPLE_COUNT_1_BIT);
     int num_color = 1;
     bool rt_color_present = true;
@@ -109,12 +109,12 @@ void VulkanDrawExecutor::BeginRenderPass(
         if (rt_for_attachments) {
             rt_color_present = rt_for_attachments->has_color;
             rt_depth_present = rt_for_attachments->has_depth;
-            // MSAA è·¯å¾„åªç”¨ 1 ä¸ª color attachmentï¼ˆmsaa_color_textureï¼‰ï¼Œéž MSAA MRT æ‰æœ‰å¤šä¸ª
+            // MSAA 路径只用 1 个 color attachment（msaa_color_texture），非 MSAA MRT 才有多个
             num_color = is_msaa_rt ? 1 : (std::max)(1, rt_for_attachments->color_attachment_count);
             if (!rt_color_present) num_color = 0;
         }
     } else {
-        // swapchainï¼šåªæœ‰ 1 ä¸ª colorï¼Œæ—  depth
+        // swapchain：只有 1 个 color，无 depth
         num_color = 1;
         rt_depth_present = false;
     }
@@ -128,10 +128,10 @@ void VulkanDrawExecutor::BeginRenderPass(
     VkClearValue depth_cv{};
     depth_cv.depthStencil = {1.0f, 0};
 
-    // é¡ºåºå¿…é¡»ä¸¥æ ¼åŒ¹é… CreateRenderTarget ä¸­ attachments çš„ push é¡ºåºï¼š
-    //   [0..num_color-1] color attachments (æˆ– MSAA æ—¶ 1 ä¸ª MSAA color)
-    //   [num_color]      depth (å¦‚æžœæœ‰)
-    //   [num_color+1]    resolve target (ä»… MSAA + has_color)
+    // 顺序必须严格匹配 CreateRenderTarget 中 attachments 的 push 顺序：
+    //   [0..num_color-1] color attachments (或 MSAA 时 1 个 MSAA color)
+    //   [num_color]      depth (如果有)
+    //   [num_color+1]    resolve target (仅 MSAA + has_color)
     for (int i = 0; i < num_color; ++i) clear_values.push_back(color_cv);
     if (rt_depth_present) clear_values.push_back(depth_cv);
     if (rt_color_present && is_msaa_rt) clear_values.push_back(color_cv);
@@ -139,7 +139,7 @@ void VulkanDrawExecutor::BeginRenderPass(
     begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
     begin_info.pClearValues = clear_values.data();
 
-    // äºŒåˆ†æ³•è¯Šæ–­ï¼šè·³è¿‡è¶…é™çš„ render passï¼ˆåœ¨ vkCmdBeginRenderPass ä¹‹å‰æ£€æŸ¥ï¼‰
+    // 二分法诊断：跳过超限的 render pass（在 vkCmdBeginRenderPass 之前检查）
     if (max_render_passes_ >= 0 && render_pass_counter_ >= max_render_passes_) {
         skip_current_pass_ = true;
         DEBUG_LOG_TRACE("[Vulkan] BeginRenderPass: SKIPPED rt={} (pass {} >= max {})",
@@ -152,8 +152,8 @@ void VulkanDrawExecutor::BeginRenderPass(
 
     vkCmdBeginRenderPass(cmd_buf, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
-    // VUID-VkGraphicsPipelineCreateInfo-renderPass-07609: pipeline çš„ colorBlend attachment æ•°
-    // å¿…é¡»ç­‰äºŽ RP subpass çš„ color attachment æ•°ã€‚MRT GBuffer æ—¶ num_color>1ã€‚
+    // VUID-VkGraphicsPipelineCreateInfo-renderPass-07609: pipeline 的 colorBlend attachment 数
+    // 必须等于 RP subpass 的 color attachment 数。MRT GBuffer 时 num_color>1。
     current_color_attachment_count_ = num_color;
     global_state_.current_frame_stats.render_passes += 1;
     const bool vk_depth_only = (!rt_color_present && rt_depth_present);
@@ -168,7 +168,7 @@ void VulkanDrawExecutor::BeginRenderPass(
                    num_color, rt_depth_present,
                    render_pass_counter_ - 1);
 
-    // è®¾ç½®åŠ¨æ€ viewport å’Œ scissorï¼ˆpipeline ä½¿ç”¨ VK_DYNAMIC_STATE_VIEWPORT/SCISSORï¼‰
+    // 设置动态 viewport 和 scissor（pipeline 使用 VK_DYNAMIC_STATE_VIEWPORT/SCISSOR）
     VkViewport vp{};
     vp.x = 0.0f;
     vp.y = 0.0f;
@@ -194,7 +194,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
     DEBUG_LOG_TRACE("[Vulkan] EndRenderPass: rt={}", current_rt_handle_);
     vkCmdEndRenderPass(cmd_buf);
 
-    // å¯¹ offscreen RT çš„é¢œè‰²é™„ä»¶æ’å…¥æ˜¾å¼ image barrierï¼Œç¡®ä¿ layout è½¬æ¢å’Œå†…å­˜å¯è§æ€§
+    // 对 offscreen RT 的颜色附件插入显式 image barrier，确保 layout 转换和内存可见性
     if (current_rt_handle_ != 0 && resource_mgr_) {
         const VulkanRenderTarget* rt = resource_mgr_->GetRenderTarget(current_rt_handle_);
         if (rt && rt->has_color && rt->color_texture.image != VK_NULL_HANDLE) {
@@ -217,7 +217,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                 0, 0, nullptr, 0, nullptr, 1, &img_barrier);
 
-            // MSAA resolve target ä¹Ÿéœ€è¦ barrier
+            // MSAA resolve target 也需要 barrier
             if (rt->is_msaa && rt->msaa_color_texture.image != VK_NULL_HANDLE) {
                 VkImageMemoryBarrier msaa_barrier = img_barrier;
                 msaa_barrier.image = rt->msaa_color_texture.image;
@@ -229,7 +229,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
                     0, 0, nullptr, 0, nullptr, 1, &msaa_barrier);
             }
         }
-        // æ·±åº¦é™„ä»¶ barrier
+        // 深度附件 barrier
         if (rt && rt->has_depth && rt->depth_texture.image != VK_NULL_HANDLE) {
             VkImageMemoryBarrier depth_barrier{};
             depth_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -238,7 +238,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
             depth_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             depth_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             depth_barrier.image = rt->depth_texture.image;
-            // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 å¿…é¡»åŒæ—¶å£°æ˜Ž DEPTH+STENCIL aspect
+            // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 必须同时声明 DEPTH+STENCIL aspect
             const VkFormat dfmt = rt->depth_texture.format;
             const bool has_stencil = (dfmt == VK_FORMAT_D24_UNORM_S8_UINT ||
                                       dfmt == VK_FORMAT_D32_SFLOAT_S8_UINT ||
@@ -258,7 +258,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
                 0, 0, nullptr, 0, nullptr, 1, &depth_barrier);
         }
     } else {
-        // swapchain æˆ–æœªçŸ¥ RTï¼Œä½¿ç”¨å…¨å±€ memory barrier
+        // swapchain 或未知 RT，使用全局 memory barrier
         VkMemoryBarrier mem_barrier{};
         mem_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
         mem_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
@@ -276,7 +276,7 @@ void VulkanDrawExecutor::EndRenderPass(VkCommandBuffer cmd_buf) {
 }
 
 // ============================================================================
-// BlitRenderTargetToSwapchain â€” è¯Šæ–­ï¼šç›´æŽ¥ blit RTâ†’swapchainï¼Œç»•è¿‡ shader
+// BlitRenderTargetToSwapchain — 诊断：直接 blit RT→swapchain，绕过 shader
 // ============================================================================
 
 void VulkanDrawExecutor::BlitRenderTargetToSwapchain(
@@ -366,7 +366,7 @@ void VulkanDrawExecutor::BlitRenderTargetToSwapchain(
 }
 
 // ============================================================================
-// é€šç”¨ç»˜åˆ¶åŽŸè¯­ (A1)
+// 通用绘制原语 (A1)
 // ============================================================================
 
 void VulkanDrawExecutor::PrimBindShaderProgram(unsigned int program_handle) {
@@ -410,7 +410,7 @@ void VulkanDrawExecutor::BindPrimVertexBuffers(VkCommandBuffer cmd_buf) const {
 }
 
 void VulkanDrawExecutor::PrimPushConstants(ShaderStage stage, uint32_t offset, const void* data, uint32_t size) {
-    (void)stage; // Vulkan æŒ‰ç¨‹åºåå°„çš„ push_constant_range.stageFlags æŽ¨é€ï¼Œæ— éœ€é€æ¬¡ stage
+    (void)stage; // Vulkan 按程序反射的 push_constant_range.stageFlags 推送，无需逐次 stage
     if (!data || size == 0) return;
     if (offset + size > kPrimPushMaxBytes) return;
     std::memcpy(prim_push_data_ + offset, data, size);
@@ -428,13 +428,13 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDraw: shader program not available");
         return;
     }
-    // VB å¯ç¼ºçœï¼ˆvertexlessï¼šgl_VertexIndex å– SSBOï¼Œæ¯›å‘é€ strand ç”¨ï¼‰ã€‚
+    // VB 可缺省（vertexless：gl_VertexIndex 取 SSBO，毛发逐 strand 用）。
     const bool has_vbo = HasPrimVbo();
 
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    // é¡¶ç‚¹è¾“å…¥ï¼šç”±å„ slot çš„ BindVertexBufferï¼ˆVertexAttr + rateï¼‰ç¿»è¯‘ä¸º Vulkan é¡¶ç‚¹è¾“å…¥æè¿°
+    // 顶点输入：由各 slot 的 BindVertexBuffer（VertexAttr + rate）翻译为 Vulkan 顶点输入描述
     std::vector<VkVertexInputBindingDescription> bindings;
     std::vector<VkVertexInputAttributeDescription> vk_attrs;
     BuildPrimVertexInput(bindings, vk_attrs);
@@ -452,8 +452,8 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
     if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
-        // stageFlags å–ç¨‹åºåå°„çš„ push rangeï¼ˆskybox=VERTEX / PP=FRAGMENTï¼‰ï¼Œ
-        // æŽ¨é€å·²å†™å…¥çš„å­—èŠ‚èŒƒå›´ [0, prim_push_size_)ã€‚
+        // stageFlags 取程序反射的 push range（skybox=VERTEX / PP=FRAGMENT），
+        // 推送已写入的字节范围 [0, prim_push_size_)。
         uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
         vkCmdPushConstants(cmd_buf, program->pipeline_layout,
                            program->reflection.push_constant_range.stageFlags,
@@ -465,7 +465,7 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
     if (prim_cubemap_ != 0) {
         AllocateAndUpdateSkyboxDescriptorSets(cmd_buf, program, prim_cubemap_, resource_mgr);
     } else {
-        // é€šç”¨ UBO/SSBO/çº¹ç†ç»‘å®šï¼ˆæ¯›å‘ï¼šç»„åˆ HairUniforms UBO\@set0.b0 + position/tangent SSBO\@set7.b0/b1ï¼‰ã€‚
+        // 通用 UBO/SSBO/纹理绑定（毛发：组合 HairUniforms UBO\@set0.b0 + position/tangent SSBO\@set7.b0/b1）。
         AllocateAndUpdateGenericDescriptorSets(cmd_buf, program, resource_mgr);
     }
 
@@ -479,7 +479,7 @@ void VulkanDrawExecutor::PrimDraw(VkCommandBuffer cmd_buf, uint32_t vertex_count
 }
 
 // ============================================================================
-// é€šç”¨ç»˜åˆ¶åŽŸè¯­ (B0): ç´¢å¼• / 2D çº¹ç† / UBO / ç´¢å¼•ç»˜åˆ¶
+// 通用绘制原语 (B0): 索引 / 2D 纹理 / UBO / 索引绘制
 // ============================================================================
 
 void VulkanDrawExecutor::PrimBindIndexBuffer(VkBuffer buffer, IndexType type) {
@@ -488,10 +488,10 @@ void VulkanDrawExecutor::PrimBindIndexBuffer(VkBuffer buffer, IndexType type) {
 }
 
 void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_handle, TextureDim dim) {
-    // Vulkan çš„ image view åœ¨çº¹ç†åˆ›å»ºæ—¶å·²æŒ‰ç»´åº¦å®šåž‹ï¼›å¥‘çº¦ slot æš‚å­˜ï¼ŒPrimDrawIndexed æ—¶æ˜ å°„åˆ°å…·ä½“ bindingã€‚
-    // cubemapï¼ˆTexCubeï¼‰èµ°å¤©ç©ºç›’ä¸“ç”¨ descriptor set è·¯å¾„ï¼ˆset0.b0 samplerCubeï¼‰ï¼Œä¸Žé€šç”¨ 2D çº¹ç†ç»‘å®šåˆ†ç¦»ã€‚
+    // Vulkan 的 image view 在纹理创建时已按维度定型；契约 slot 暂存，PrimDrawIndexed 时映射到具体 binding。
+    // cubemap（TexCube）走天空盒专用 descriptor set 路径（set0.b0 samplerCube），与通用 2D 纹理绑定分离。
     if (dim == TextureDim::TexCube) {
-        prim_cubemap_ = texture_handle;  // slot å›ºå®š set0.b0ï¼ˆspike ä»…å• cubemap bindingï¼‰
+        prim_cubemap_ = texture_handle;  // slot 固定 set0.b0（spike 仅单 cubemap binding）
         return;
     }
     prim_textures_[slot] = texture_handle;
@@ -499,13 +499,13 @@ void VulkanDrawExecutor::PrimBindTexture(uint32_t slot, unsigned int texture_han
 
 void VulkanDrawExecutor::PrimBindUniformBuffer(uint32_t slot, unsigned int buffer_handle,
                                                uint32_t /*offset*/, uint32_t /*size*/) {
-    // å¥‘çº¦ slot æš‚å­˜ï¼ˆoffset/size å­åŒºé—´ v1 æš‚ä¸æ”¯æŒï¼Œæ•´å—ç»‘å®šï¼‰ã€‚
+    // 契约 slot 暂存（offset/size 子区间 v1 暂不支持，整块绑定）。
     prim_ubos_[slot] = buffer_handle;
 }
 
 void VulkanDrawExecutor::PrimBindStorageBuffer(uint32_t slot, unsigned int buffer_handle,
                                                uint32_t offset, uint32_t size) {
-    // å¥‘çº¦ slot æš‚å­˜ï¼ŒPrimDrawIndexed* æ—¶æ˜ å°„åˆ°ç¬¬ N ä¸ª STORAGE_BUFFER bindingï¼ˆoffset/size èµ° rangeï¼‰ã€‚
+    // 契约 slot 暂存，PrimDrawIndexed* 时映射到第 N 个 STORAGE_BUFFER binding（offset/size 走 range）。
     prim_ssbos_[slot] = PrimSSBOBinding{buffer_handle, offset, size};
 }
 
@@ -543,13 +543,13 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
     dummy_img_info.imageView = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
     dummy_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    // åå°„ binding æŒ‰ (set,binding) å‡åºï¼šæŠŠå¥‘çº¦ slot é¡ºåºæ˜ å°„åˆ°ç¬¬ N ä¸ªåŒç±» bindingã€‚
+    // 反射 binding 按 (set,binding) 升序：把契约 slot 顺序映射到第 N 个同类 binding。
     std::vector<DescriptorBindingInfo> sorted = program->reflection.bindings;
     std::sort(sorted.begin(), sorted.end(), [](const DescriptorBindingInfo& a, const DescriptorBindingInfo& b) {
         return a.set != b.set ? a.set < b.set : a.binding < b.binding;
     });
 
-    // info æ± åœ¨æ‰€æœ‰å†™å…¥æ”¶é›†å®Œæ¯•åŽå† realloc å®šç¨¿ï¼Œæ•…å…ˆè®° base ç´¢å¼•ã€æœ€åŽä¿®æŒ‡é’ˆã€‚
+    // info 池在所有写入收集完毕后再 realloc 定稿，故先记 base 索引、最后修指针。
     std::vector<VkDescriptorBufferInfo> buf_pool;
     std::vector<VkDescriptorImageInfo> img_pool;
     buf_pool.reserve(sorted.size());
@@ -558,9 +558,9 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
     writes.reserve(sorted.size());
     std::vector<std::tuple<size_t, bool, size_t>> fixups;  // <write_idx, is_image, pool_base>
 
-    uint32_t ubo_slot = 0;   // å¥‘çº¦ BindUniformBuffer slot è®¡æ•°ï¼ˆæŒ‰ binding å‡åºï¼‰
-    uint32_t tex_slot = 0;   // å¥‘çº¦ BindTexture slot è®¡æ•°ï¼ˆæŒ‰ binding å‡åºï¼‰
-    uint32_t ssbo_slot = 0;  // å¥‘çº¦ BindStorageBuffer slot è®¡æ•°ï¼ˆæŒ‰ binding å‡åºï¼‰
+    uint32_t ubo_slot = 0;   // 契约 BindUniformBuffer slot 计数（按 binding 升序）
+    uint32_t tex_slot = 0;   // 契约 BindTexture slot 计数（按 binding 升序）
+    uint32_t ssbo_slot = 0;  // 契约 BindStorageBuffer slot 计数（按 binding 升序）
 
     for (const auto& b : sorted) {
         if (b.set >= set_count) continue;
@@ -618,7 +618,7 @@ void VulkanDrawExecutor::AllocateAndUpdateGenericDescriptorSets(
             writes.push_back(w);
             ++ssbo_slot;
         } else {
-            // å…¶å®ƒç±»åž‹ (storage image / sampled image ç­‰) v1 æš‚ç”¨ dummy ubo å ä½ï¼Œé¿å…æœªåˆå§‹åŒ–æè¿°ç¬¦ã€‚
+            // 其它类型 (storage image / sampled image 等) v1 暂用 dummy ubo 占位，避免未初始化描述符。
             size_t base = buf_pool.size();
             buf_pool.push_back(dummy_ubo_info);
             fixups.push_back({writes.size(), false, base});
@@ -661,7 +661,7 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: shader program not available");
         return;
     }
-    // VB å¯ç¼ºçœï¼ˆvertexlessï¼šgl_VertexIndex å–ç´¢å¼•å€¼â†’SSBOï¼Œæ¯›å‘ç”¨ï¼‰ï¼›IB å¿…é¡»å­˜åœ¨ã€‚
+    // VB 可缺省（vertexless：gl_VertexIndex 取索引值→SSBO，毛发用）；IB 必须存在。
     if (prim_index_buffer_ == VK_NULL_HANDLE) {
         DEBUG_LOG_WARN("VulkanDrawExecutor::PrimDrawIndexedInstanced: index buffer not bound");
         return;
@@ -688,7 +688,7 @@ void VulkanDrawExecutor::PrimDrawIndexedInstanced(VkCommandBuffer cmd_buf, uint3
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
     if (prim_has_push_ && program->reflection.push_constant_range.size > 0) {
-        // åŽå¤„ç†å‚æ•°èµ°çœŸ push constantï¼ˆstageFlags=FRAGMENTï¼Œå–ç¨‹åºåå°„ rangeï¼‰ã€‚
+        // 后处理参数走真 push constant（stageFlags=FRAGMENT，取程序反射 range）。
         uint32_t pc_size = std::min(prim_push_size_, program->reflection.push_constant_range.size);
         vkCmdPushConstants(cmd_buf, program->pipeline_layout,
                            program->reflection.push_constant_range.stageFlags,
@@ -728,7 +728,7 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
         return;
     }
 
-    // è§£æž indirect VkBufferï¼šå…ˆæŸ¥ indirect mapï¼Œå†é€€å›ž SSBO mapï¼ˆdraw cmd å­˜äºŽå¸¦ INDIRECT_BIT çš„ SSBOï¼‰ã€‚
+    // 解析 indirect VkBuffer：先查 indirect map，再退回 SSBO map（draw cmd 存于带 INDIRECT_BIT 的 SSBO）。
     const VulkanBuffer* arg_buf = resource_mgr.GetIndirectBuffer(indirect_buffer);
     if (!arg_buf || arg_buf->buffer == VK_NULL_HANDLE) {
         arg_buf = resource_mgr.GetSSBO(indirect_buffer);
@@ -761,8 +761,8 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
 
     BindPrimVertexBuffers(cmd_buf);
     vkCmdBindIndexBuffer(cmd_buf, prim_index_buffer_, 0, prim_index_type_);
-    // draw_count=1ï¼šä»Ž byte_offset å¤„è¯»å–ä¸€æ¡ VkDrawIndexedIndirectCommandï¼ˆ5Ã—uint32ï¼Œä¸‰ç«¯å¸ƒå±€ä¸€è‡´ï¼‰ã€‚
-    // å¥‘çº¦ï¼šbase_instance åç§»é¡»ç» SSBO åç§»è¡¨è¾¾ï¼ˆÂ§6ï¼‰ã€‚
+    // draw_count=1：从 byte_offset 处读取一条 VkDrawIndexedIndirectCommand（5×uint32，三端布局一致）。
+    // 契约：base_instance 偏移须经 SSBO 偏移表达（§6）。
     vkCmdDrawIndexedIndirect(cmd_buf, arg_buf->buffer, static_cast<VkDeviceSize>(byte_offset),
                              1, static_cast<uint32_t>(sizeof(DrawElementsIndirectCommand)));
     ClearExtraVertexSlots();
@@ -772,7 +772,7 @@ void VulkanDrawExecutor::PrimDrawIndexedIndirect(VkCommandBuffer cmd_buf, unsign
 }
 
 // ============================================================================
-// æ¸²æŸ“ç»Ÿè®¡
+// 渲染统计
 // ============================================================================
 
 } // namespace render

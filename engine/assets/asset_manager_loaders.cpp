@@ -39,8 +39,8 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
     const std::string logical_path = NormalizeAssetPath(path);
     const std::string resolved_path = ResolveAssetPath(path);
     const std::string base_key = logical_path.empty() ? (resolved_path.empty() ? NormalizePath(path) : NormalizePath(resolved_path)) : logical_path;
-    // é‡‡æ ·æè¿°å¹¶å…¥ç¼“å­˜é”®ï¼šåŒä¸€å›¾ä»¥ä¸åŒ filter/wrap åŠ è½½åº”å¾—åˆ°å„è‡ªçš„ GPU çº¹ç†ã€‚
-    // é»˜è®¤ {Linear, Repeat} ä¸åŠ åŽç¼€ï¼Œä¿æŒæ—§ç¼“å­˜é”®ä¸å˜ï¼ˆå‘åŽå…¼å®¹ï¼‰ã€‚
+    // 采样描述并入缓存键：同一图以不同 filter/wrap 加载应得到各自的 GPU 纹理。
+    // 默认 {Linear, Repeat} 不加后缀，保持旧缓存键不变（向后兼容）。
     const bool default_sampler = (sampler.filter == TextureFilter::Linear && sampler.wrap == TextureWrap::Repeat);
     const std::string cache_key = default_sampler
         ? base_key

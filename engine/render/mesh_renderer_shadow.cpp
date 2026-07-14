@@ -18,12 +18,12 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrDepth);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾› depth-only å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供 depth-only 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_) return;
 
-    // --- CPU ä¾§é¢„å˜æ¢é¡¶ç‚¹åˆ°ä¸–ç•Œç©ºé—´ï¼ˆä»… position å½±å“æ·±åº¦ï¼›normal/tangent å¤ç”¨ä»¥ä¿æŒå¸ƒå±€ä¸€è‡´ï¼‰---
+    // --- CPU 侧预变换顶点到世界空间（仅 position 影响深度；normal/tangent 复用以保持布局一致）---
     const glm::mat3 model3 = glm::mat3(model);
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
@@ -47,7 +47,7 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- ä»… PerFrame UBOï¼ˆshadow.frag ç©ºï¼Œä¸éœ€ scene/material/çº¹ç†ï¼‰---
+    // --- 仅 PerFrame UBO（shadow.frag 空，不需 scene/material/纹理）---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -62,7 +62,7 @@ void MeshRenderer::DrawDepthOnly(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // å†™/æµ‹æ·±åº¦ï¼ˆLessï¼‰ã€èƒŒé¢å‰”é™¤
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
@@ -79,12 +79,12 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedDepth);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›å®žä¾‹åŒ– depth-only å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供实例化 depth-only 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_) return;
 
-    // --- å±€éƒ¨ç©ºé—´é¡¶ç‚¹æ‰“åŒ…ï¼ˆVS æŒ‰å®žä¾‹ model å˜æ¢ï¼Œä¸åœ¨ CPU é¢„å˜æ¢ï¼‰---
+    // --- 局部空间顶点打包（VS 按实例 model 变换，不在 CPU 预变换）---
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const MeshVertex& v = vertices[i];
@@ -109,7 +109,7 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- ä»… PerFrame UBOï¼ˆshadow.frag ç©ºï¼Œä¸éœ€ scene/material/çº¹ç†ï¼‰+ å¯é€‰æ¤è¢«é£Ž ---
+    // --- 仅 PerFrame UBO（shadow.frag 空，不需 scene/material/纹理）+ 可选植被风 ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -126,13 +126,13 @@ void MeshRenderer::DrawDepthOnlyInstanced(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{3u, 3u, 36u}, VertexAttr{4u, 3u, 48u},
     };
 
-    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // å†™/æµ‹æ·±åº¦ï¼ˆLessï¼‰ã€èƒŒé¢å‰”é™¤
+    cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));  // 写/测深度（Less）、背面剔除
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());  // PerFrame @ set0.b0
-    // æ¯å®žä¾‹ model SSBO\@slot 0ï¼ˆä¸Ž DrawInstancedShaded åŒæºï¼‰ã€‚
+    // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
-    // å¥‘çº¦ï¼šfirst_instance æ’ 0ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ã€‚
+    // 契约：first_instance 恒 0，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
                              0u, 0, 0u);
@@ -179,7 +179,7 @@ void MeshRenderer::DrawDepthOnlySharedTemplateInstanced(CommandBuffer& cmd, RhiD
     cmd.BindPipeline(device.GetGraphicsPipeline(pso_, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    // å…±äº«å±€éƒ¨ç©ºé—´æ¨¡æ¿ VB/IBï¼ˆcaller æŒæœ‰ã€å¸¸é©»ï¼‰ï¼ŒæŒ‰å­æ®µå¯¹æ¯å®žä¾‹ç»˜åˆ¶ã€‚
+    // 共享局部空间模板 VB/IB（caller 持有、常驻），按子段对每实例绘制。
     cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),

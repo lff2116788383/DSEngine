@@ -1,6 +1,6 @@
 ﻿/**
  * @file frame_pipeline.cpp
- * @brief å¼•æ“Žä¸»å¾ªçŽ¯ä¸Žå¸§æµæ°´çº¿ï¼Œåè°ƒæ›´æ–°ã€ç‰©ç†å’Œæ¸²æŸ“çš„æ‰§è¡Œé¡ºåº
+ * @brief 引擎主循环与帧流水线，协调更新、物理和渲染的执行顺序
  */
 
 #include "engine/runtime/frame_pipeline.h"
@@ -100,15 +100,15 @@ std::shared_ptr<dse::physics3d::IPhysics3DSystem> CreatePhysics3DSystem() {
 } // anonymous namespace
 #endif // DSE_ENABLE_3D
 
-// å•ä¸€æ¥æºæ¶ˆè´¹ï¼šGL430 / VK GLSL450 / HLSL å‡å–è‡ª *_comp.gen.hï¼ˆsrc/*.comp ç¦»çº¿äº¤å‰ç¼–è¯‘ï¼‰ã€‚
-// WGSL ä»ç”± builtin_passes.cpp æ‰‹å†™å•ä»½ä¿ç•™ï¼ˆä¸‹æ–¹ externï¼‰ã€‚
+// 单一来源消费：GL430 / VK GLSL450 / HLSL 均取自 *_comp.gen.h（src/*.comp 离线交叉编译）。
+// WGSL 仍由 builtin_passes.cpp 手写单份保留（下方 extern）。
 #include "engine/render/shaders/generated/embed/hi_z_copy_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_downsample_comp.gen.h"
 #include "engine/render/shaders/generated/embed/hi_z_cull_comp.gen.h"
 #include "engine/render/shaders/generated/embed/gpu_cull_comp.gen.h"
 
 namespace dse::render {
-    // WebGPU æ‰‹è¯‘ WGSLï¼ˆCreateComputeShaderEx ç¬¬ 8 å‚ï¼›å…¶ä½™åŽç«¯å¿½ç•¥ï¼‰ã€‚
+    // WebGPU 手译 WGSL（CreateComputeShaderEx 第 8 参；其余后端忽略）。
     extern const char* kHiZCopyShaderSourceWGSL;
     extern const char* kHiZDownsampleShaderSourceWGSL;
     extern const char* kHiZCullShaderSourceWGSL;
@@ -150,7 +150,7 @@ ReadbackStats AnalyzeReadback(const RenderTargetReadback& readback) {
 
 void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
     const auto stats = AnalyzeReadback(readback);
-    // è®¡ç®—é»‘è‰²åŒºåŸŸçš„è¾¹ç•ŒçŸ©å½¢
+    // 计算黑色区域的边界矩形
     int black_min_x = readback.width, black_max_x = -1;
     int black_min_y = readback.height, black_max_y = -1;
     int black_count = 0;
@@ -169,7 +169,7 @@ void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
             }
         }
     }
-    // 9 ç‚¹ç½‘æ ¼é‡‡æ ·
+    // 9 点网格采样
     std::string grid;
     const int W = readback.width, H = readback.height;
     struct Pt { int x, y; const char* tag; };
@@ -196,7 +196,7 @@ void LogReadbackStats(const char* label, const RenderTargetReadback& readback) {
 }
 
 void LogDefaultFramebufferStats() {
-    if (!glGetIntegerv) return;  // éž OpenGL åŽç«¯æ—  GL å‡½æ•°
+    if (!glGetIntegerv) return;  // 非 OpenGL 后端无 GL 函数
     const int width = Screen::width();
     const int height = Screen::height();
     if (width <= 0 || height <= 0) {
@@ -298,9 +298,9 @@ bool FramePipeline::Init() {
     }
     runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
     runtime_context_.rhi_device->SetPresentationDeferred(runtime_context_.editor_mode);
-    DEBUG_LOG_INFO("FramePipeline RHI åŽç«¯: {}", dse::render::RhiBackendToString(rhi_backend));
+    DEBUG_LOG_INFO("FramePipeline RHI 后端: {}", dse::render::RhiBackendToString(rhi_backend));
 
-    // D3D11 / Vulkan åŽç«¯éœ€è¦ç”¨å¹³å°çª—å£å¥æŸ„å®Œæˆè®¾å¤‡åˆå§‹åŒ–
+    // D3D11 / Vulkan 后端需要用平台窗口句柄完成设备初始化
     runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
     if (runtime_context_.native_window_handle != nullptr || rhi_backend == RhiBackend::D3D11) {
         const int init_w = Screen::width() > 0 ? Screen::width() : 1280;
@@ -322,19 +322,19 @@ bool FramePipeline::Init() {
             if (runtime_context_.editor_mode) {
                 return false;
             }
-            // è‡ªåŠ¨å›žé€€åˆ° OpenGL
+            // 自动回退到 OpenGL
             if (rhi_backend != RhiBackend::OpenGL) {
-                DEBUG_LOG_WARN("FramePipeline: {} åŽç«¯åˆå§‹åŒ–å¤±è´¥ï¼Œè‡ªåŠ¨å›žé€€åˆ° OpenGL",
+                DEBUG_LOG_WARN("FramePipeline: {} 后端初始化失败，自动回退到 OpenGL",
                     dse::render::RhiBackendToString(rhi_backend));
                 rhi_backend = RhiBackend::OpenGL;
                 runtime_context_.rhi_device = dse::render::CreateRhiDevice(rhi_backend);
                 runtime_context_.rhi_device->SetInitKeepAlive(init_keep_alive_);
-                DEBUG_LOG_INFO("FramePipeline RHI åŽç«¯ (fallback): OpenGL");
+                DEBUG_LOG_INFO("FramePipeline RHI 后端 (fallback): OpenGL");
             } else {
                 return false;
             }
         } else {
-            // ç«‹å³ present ä¸€å¸§é»‘å±ï¼Œæ¶ˆé™¤çª—å£åˆ›å»ºåŽåˆ°é¦–å¸§æ¸²æŸ“å‰çš„ç™½å±
+            // 立即 present 一帧黑屏，消除窗口创建后到首帧渲染前的白屏
             runtime_context_.rhi_device->BeginFrame();
             runtime_context_.rhi_device->EndFrame();
         }
@@ -342,8 +342,8 @@ bool FramePipeline::Init() {
 
     lap("RHI device init");
     KeepAlive();
-    // è¾“å‡ºå®žé™…æ¸²æŸ“è®¾å¤‡ + è½¯æ¸²æ ‡å¿—ï¼ˆæœºå™¨å¯è§£æžï¼‰ï¼Œä¾›æ€§èƒ½åŸºå‡†åŒºåˆ†ç¡¬ä»¶/è½¯æ¸²ï¼Œ
-    // é¿å…æŠŠ WARP/Basic Render Driver/llvmpipe ç­‰è½¯æ¸²æ•°æ®è¯¯å½“ç¡¬ä»¶æ•°æ®ã€‚
+    // 输出实际渲染设备 + 软渲标志（机器可解析），供性能基准区分硬件/软渲，
+    // 避免把 WARP/Basic Render Driver/llvmpipe 等软渲数据误当硬件数据。
     {
         const auto device_info = runtime_context_.rhi_device->GetDeviceInfo();
         DEBUG_LOG_INFO("DSE_RENDER_DEVICE backend={} adapter=\"{}\" software={}",
@@ -416,7 +416,7 @@ bool FramePipeline::Init() {
     }
     InitResolutionDependentRTs();
 
-    // å›ºå®šå°ºå¯¸ RTï¼ˆä¸éšçª—å£ç¼©æ”¾ï¼ŒInit æ—¶åˆ›å»ºä¸€æ¬¡ï¼‰
+    // 固定尺寸 RT（不随窗口缩放，Init 时创建一次）
     if (render_resources_.pp_lum_temp_rt == 0)
         render_resources_.pp_lum_temp_rt = runtime_context_.rhi_device->CreateRenderTarget({64, 64, true, false, false});
     for (int i = 0; i < 2; ++i) {
@@ -424,7 +424,7 @@ bool FramePipeline::Init() {
             render_resources_.pp_lum_adapted_rt[i] = runtime_context_.rhi_device->CreateRenderTarget({1, 1, true, false, false});
     }
 
-    // Hi-Z Occlusion Culling shadersï¼ˆä¸ä¾èµ–åˆ†è¾¨çŽ‡ï¼ŒInit æ—¶åˆ›å»ºä¸€æ¬¡ï¼‰
+    // Hi-Z Occlusion Culling shaders（不依赖分辨率，Init 时创建一次）
     if (render_resources_.hiz_texture != 0 &&
         render_resources_.hiz_copy_shader == 0 &&
         runtime_context_.rhi_device->SupportsCompute()) {
@@ -485,7 +485,7 @@ bool FramePipeline::Init() {
         return diag && diag[0] != '\0' && diag[0] != '0';
     }();
 
-    // GPU Driven Rendering èƒ½åŠ›æ£€æµ‹
+    // GPU Driven Rendering 能力检测
     if (gpu_driven_requested_ &&
         runtime_context_.rhi_device->SupportsCompute() &&
         runtime_context_.rhi_device->SupportsIndirectDraw() &&
@@ -496,7 +496,7 @@ bool FramePipeline::Init() {
             dse::render::generated_shaders::kgpu_cull_comp_hlsl,
             2, 0, 1, 208, dse::render::kGPUCullShaderSourceWGSL);
         render_resources_.gpu_driven_supported = (render_resources_.gpu_cull_shader != 0);
-        // äºŒæ¬¡éªŒè¯ï¼šGPU-driven PBR shader ç¼–è¯‘å¯èƒ½å¤±è´¥ï¼ˆå¦‚ HLSL patch ä¸åŒ¹é…ï¼‰
+        // 二次验证：GPU-driven PBR shader 编译可能失败（如 HLSL patch 不匹配）
         if (render_resources_.gpu_driven_supported &&
             !runtime_context_.rhi_device->HasGPUDrivenPBRShader()) {
             render_resources_.gpu_driven_supported = false;
@@ -663,7 +663,7 @@ bool FramePipeline::Init() {
         }
     }
 
-    // Floating Origin: è®¢é˜… rebase äº‹ä»¶ï¼Œè½¬å‘ç»™ NavMesh / StreamingManager
+    // Floating Origin: 订阅 rebase 事件，转发给 NavMesh / StreamingManager
     {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
         if (event_bus) {
@@ -709,22 +709,22 @@ bool FramePipeline::Init() {
     BuildRenderGraph();
     lap("BuildRenderGraph");
 
-    // Clustered Forward+ å…‰æº SSBO + Cluster ç½‘æ ¼åˆå§‹åŒ–
+    // Clustered Forward+ 光源 SSBO + Cluster 网格初始化
     rs_->light_buffer_.Init(runtime_context_.rhi_device.get());
     rs_->cluster_grid_.Init(runtime_context_.rhi_device.get());
     lap("light buffer + cluster grid");
 
-    // Light Probe SH Bake ç³»ç»Ÿåˆå§‹åŒ–
+    // Light Probe SH Bake 系统初始化
     rs_->light_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("LightProbeSystem");
 
-    // Reflection Probe + IBL ç³»ç»Ÿåˆå§‹åŒ–ï¼ˆç”Ÿæˆ BRDF LUTï¼‰
+    // Reflection Probe + IBL 系统初始化（生成 BRDF LUT）
     rs_->reflection_probe_system_.Init(runtime_context_.rhi_device.get());
     lap("ReflectionProbeSystem");
 
-    // DDGI ç³»ç»Ÿå»¶è¿Ÿåˆå§‹åŒ–ï¼ˆé¦–å¸§æ£€æµ‹ GIProbeVolumeComponent åŽæŒ‰éœ€åˆå§‹åŒ–ï¼‰
+    // DDGI 系统延迟初始化（首帧检测 GIProbeVolumeComponent 后按需初始化）
 
-    // èµ„æºæµå¼åŠ è½½ç®¡ç†å™¨åˆå§‹åŒ–
+    // 资源流式加载管理器初始化
     rs_->streaming_manager_.Init(&asset_manager);
     {
         auto streaming_shared = std::shared_ptr<dse::streaming::StreamingManager>(&rs_->streaming_manager_, [](auto*) {});
@@ -732,7 +732,7 @@ bool FramePipeline::Init() {
     }
     lap("StreamingManager");
 
-    // GPU Compute Skinning åˆå§‹åŒ–ï¼ˆCompute Shader å¯ç”¨æ—¶å¯ç”¨ï¼‰
+    // GPU Compute Skinning 初始化（Compute Shader 可用时启用）
     if (rs_->gpu_skinning_system_.Init(runtime_context_.rhi_device.get())) {
         DEBUG_LOG_INFO("FramePipeline init: GPUSkinningSystem initialized (compute skinning available)");
     }
@@ -743,7 +743,7 @@ bool FramePipeline::Init() {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Init);
     }
 
-    // Phase 2: æ¸²æŸ“çº¿ç¨‹åˆ†ç¦»ï¼ˆDSE_RENDER_THREAD=1 å¯ç”¨ï¼Œç¼–è¾‘å™¨æ¨¡å¼ä¸‹ç¦ç”¨ï¼‰
+    // Phase 2: 渲染线程分离（DSE_RENDER_THREAD=1 启用，编辑器模式下禁用）
     if (!runtime_context_.editor_mode) {
         if (const char* env = std::getenv("DSE_RENDER_THREAD")) {
             if (env[0] == '1') {
@@ -762,7 +762,7 @@ void FramePipeline::Shutdown() {
     if (auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>()) {
         event_bus->Publish<dse::core::SceneLifecycleEvent>(dse::core::SceneLifecyclePhase::Shutdown);
     }
-    // èµ„æºæµå¼åŠ è½½ç®¡ç†å™¨å…³é—­
+    // 资源流式加载管理器关闭
     rs_->streaming_manager_.Shutdown();
     dse::core::ServiceLocator::Instance().Reset<dse::streaming::StreamingManager>();
 
@@ -801,7 +801,7 @@ void FramePipeline::Shutdown() {
         runtime_context_.rhi_device->WaitIdle();
     }
 
-    // Floating Origin: å–æ¶ˆè®¢é˜…
+    // Floating Origin: 取消订阅
     if (rs_->origin_rebase_handle_.valid) {
         auto* event_bus = dse::core::ServiceLocator::Instance().Get<dse::core::EventBus>();
         if (event_bus) event_bus->Unsubscribe(rs_->origin_rebase_handle_);
@@ -833,7 +833,7 @@ void FramePipeline::Shutdown() {
 
     asset_manager.ReleaseGpuResources();
 
-    // Hi-Z: é‡Šæ”¾ GPU èµ„æº
+    // Hi-Z: 释放 GPU 资源
     if (runtime_context_.rhi_device) {
         if (render_resources_.hiz_copy_shader != 0) {
             runtime_context_.rhi_device->DeleteComputeShader(render_resources_.hiz_copy_shader);
@@ -861,7 +861,7 @@ void FramePipeline::Shutdown() {
         }
     }
 
-    // GPU Driven èµ„æºæ¸…ç†
+    // GPU Driven 资源清理
     if (runtime_context_.rhi_device) {
         modules_impl_->CleanupGPUResources(runtime_context_.rhi_device.get());
         if (render_resources_.gpu_draw_cmd_ssbo) {
@@ -1105,12 +1105,12 @@ void FramePipeline::Render() {
     }
     if (render_thread_mgr_->IsActive()) {
         render_thread_mgr_->WaitForComplete();
-        // æ¸²æŸ“çº¿ç¨‹å·²æ¶ˆè´¹å®Œä¸Šä¸€å¸§å¿«ç…§ï¼ˆå«å…¶å¸§åˆ†é…å™¨ç¼“å†²ï¼‰ï¼Œæ­¤å¤„æŽ¨è¿›+å¤ä½æ‰å®‰å…¨ï¼ˆè§è®¾è®¡æ–‡æ¡£ Â§3.5ï¼‰ã€‚
+        // 渲染线程已消费完上一帧快照（含其帧分配器缓冲），此处推进+复位才安全（见设计文档 §3.5）。
         dse::core::Memory::Frame().BeginFrame();
         PrepareRenderFrame();
         render_thread_mgr_->SignalNewFrame();
     } else {
-        // å•çº¿ç¨‹ï¼šæœ¬å¸§åŒæ­¥æ¶ˆè´¹ï¼Œå¸§é¦–å¤ä½å³å¯ã€‚
+        // 单线程：本帧同步消费，帧首复位即可。
         dse::core::Memory::Frame().BeginFrame();
         dse::runtime::RunFrameRender(*this);
     }
@@ -1118,7 +1118,7 @@ void FramePipeline::Render() {
 
 void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     const dse::TimeContext& time = frame.time;
-    // ç¼©æ”¾é€šé“ä¾› gameplay/ä¸šåŠ¡é€»è¾‘ä½¿ç”¨ï¼›çœŸå®žé€šé“ä¾›èµ„æºæµå¼åŠ è½½/åœºæ™¯æµåŠ è½½ä½¿ç”¨ï¼ˆä¸éšæš‚åœå†»ç»“ï¼‰ã€‚
+    // 缩放通道供 gameplay/业务逻辑使用；真实通道供资源流式加载/场景流加载使用（不随暂停冻结）。
     const float delta_time = time.scaled_dt;
     dse::profiler::ScopedCPUProfile _profile_update(rs_->cpu_profiler_, "FramePipeline::Update");
     auto update_begin = std::chrono::high_resolution_clock::now();
@@ -1129,7 +1129,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     }
     asset_manager.PumpHotReloads();
 
-    // èµ„æºæµå¼åŠ è½½ï¼šèŽ·å–æ‘„åƒæœºä½ç½®å¹¶ tick
+    // 资源流式加载：获取摄像机位置并 tick
     if (runtime_context_.world) {
         glm::vec3 streaming_cam_pos(0.0f);
         auto streaming_cam_view = runtime_context_.world->registry().view<TransformComponent, dse::Camera3DComponent>();
@@ -1146,7 +1146,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
         }
     }
 
-    // SceneManager: pump å¼‚æ­¥åŠ è½½å®Œæˆçš„å­åœºæ™¯
+    // SceneManager: pump 异步加载完成的子场景
     if (auto* sm = dse::core::ServiceLocator::Instance().Get<scene::SceneManager>()) {
         sm->Update(time.unscaled_dt);
 
@@ -1164,7 +1164,7 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
         }
     }
 
-    // AssetManager å†…å­˜ â†’ MemoryProfilerï¼ˆæ¯å¸§è¿½è¸ª deltaï¼‰
+    // AssetManager 内存 → MemoryProfiler（每帧追踪 delta）
     if (runtime_context_.asset_manager) {
         std::size_t current = runtime_context_.asset_manager->EstimatedMemoryUsage();
         if (current > last_reported_asset_memory_) {
@@ -1353,17 +1353,17 @@ unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const g
     // 渲染线程激活时主线程不得直接执行 pass（GL context 归渲染线程所有）
     if (render_thread_mgr_->IsActive()) return 0;
 
-    // ä¿å­˜å½“å‰ç¼–è¾‘å™¨ç›¸æœºçŠ¶æ€
+    // 保存当前编辑器相机状态
     const bool saved_use = render_pass_context_.use_editor_camera;
     const glm::mat4 saved_view = render_pass_context_.editor_view;
     const glm::mat4 saved_proj = render_pass_context_.editor_projection;
 
-    // è®¾ç½®ä¸´æ—¶ç›¸æœº
+    // 设置临时相机
     render_pass_context_.use_editor_camera = true;
     render_pass_context_.editor_view = view;
     render_pass_context_.editor_projection = projection;
 
-    // åˆ›å»ºå‘½ä»¤ç¼“å†²ï¼Œæ‰§è¡Œ shadow pass + scene pass
+    // 创建命令缓冲，执行 shadow pass + scene pass
     auto cmd = runtime_context_.rhi_device->CreateCommandBuffer();
     for (auto& pass : registered_passes_) {
         const char* name = pass->GetName();
@@ -1376,7 +1376,7 @@ unsigned int FramePipeline::RenderSceneWithCamera(const glm::mat4& view, const g
     }
     runtime_context_.rhi_device->Submit(cmd);
 
-    // æ¢å¤ç›¸æœº
+    // 恢复相机
     render_pass_context_.use_editor_camera = saved_use;
     render_pass_context_.editor_view = saved_view;
     render_pass_context_.editor_projection = saved_proj;
@@ -1392,7 +1392,7 @@ void FramePipeline::SetAssetManager(AssetManager* asset_manager) {
 }
 
 // ============================================================
-// Phase 1 è–„å¿«ç…§ï¼šä¸€æ¬¡æ€§æå–æ¸²æŸ“çº¿ç¨‹æ‰€éœ€çš„å…¨éƒ¨ ECS æ•°æ®
+// Phase 1 薄快照：一次性提取渲染线程所需的全部 ECS 数据
 // ============================================================
 
 

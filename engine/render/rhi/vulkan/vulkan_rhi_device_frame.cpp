@@ -21,7 +21,7 @@ void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
     const auto* ssbo = resource_mgr_.GetSSBO(handle);
     if (!ssbo || !ssbo->buffer) return;
 
-    // Staging buffer è¯»å›ž
+    // Staging buffer 读回
     VkDevice device = context_.device();
     VkBuffer staging;
     VkDeviceMemory staging_mem;
@@ -67,14 +67,14 @@ void VulkanRhiDevice::ReadSSBO(unsigned int handle, size_t offset, size_t size, 
 }
 
 VertexArrayHandle VulkanRhiDevice::CreateVertexArray() {
-    // Vulkan ä¸éœ€è¦ VAO æ¦‚å¿µï¼Œé¡¶ç‚¹æ ¼å¼åœ¨ VkPipeline åˆ›å»ºæ—¶æŒ‡å®š
-    // è¿”å›žå ä½å¥æŸ„ä»¥å…¼å®¹ RhiDevice æŽ¥å£
+    // Vulkan 不需要 VAO 概念，顶点格式在 VkPipeline 创建时指定
+    // 返回占位句柄以兼容 RhiDevice 接口
     static unsigned int vao_counter = 600000;
     return VertexArrayHandle{vao_counter++};
 }
 
 void VulkanRhiDevice::DeleteVertexArray(VertexArrayHandle handle) {
-    // Vulkan ä¸éœ€è¦ VAO æ¦‚å¿µï¼Œno-op
+    // Vulkan 不需要 VAO 概念，no-op
     (void)handle;
 }
 
@@ -82,11 +82,11 @@ std::shared_ptr<CommandBuffer> VulkanRhiDevice::CreateCommandBuffer() {
     auto cmd = std::make_shared<VulkanCommandBuffer>();
     cmd->SetDevice(this);
 
-    // ä»Žå‘½ä»¤ç¼“å†²æ± èŽ·å–ï¼ˆé¿å…é€å¸§ vkAllocateCommandBuffers å¼€é”€ï¼‰
+    // 从命令缓冲池获取（避免逐帧 vkAllocateCommandBuffers 开销）
     VkCommandBuffer vk_cmd = resource_mgr_.AcquireCommandBuffer();
     cmd->SetVkCommandBuffer(vk_cmd);
 
-    // ç«‹å³å¼€å§‹å½•åˆ¶
+    // 立即开始录制
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -101,7 +101,7 @@ void VulkanRhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
     auto* vk_cmd = dynamic_cast<VulkanCommandBuffer*>(cmd_buffer.get());
     if (!vk_cmd || vk_cmd->GetVkCommandBuffer() == VK_NULL_HANDLE) return;
 
-    // ç»“æŸå‘½ä»¤ç¼“å†²å½•åˆ¶
+    // 结束命令缓冲录制
     DEBUG_LOG_TRACE("[Vulkan] Submit: vkEndCommandBuffer");
     VkResult end_result = vkEndCommandBuffer(vk_cmd->GetVkCommandBuffer());
     if (end_result != VK_SUCCESS) {
@@ -110,7 +110,7 @@ void VulkanRhiDevice::Submit(std::shared_ptr<CommandBuffer> cmd_buffer) {
     }
     DEBUG_LOG_TRACE("[Vulkan] Submit: vkEndCommandBuffer OK");
 
-    // æ”¶é›†æœ¬å¸§æ‰€æœ‰å·²æäº¤çš„å‘½ä»¤ç¼“å†²
+    // 收集本帧所有已提交的命令缓冲
     pending_command_buffers_.push_back(vk_cmd->GetVkCommandBuffer());
     current_frame_stats_.draw_calls++;
 }
@@ -123,12 +123,12 @@ void VulkanRhiDevice::EndFrame() {
     PresentFrame();
 }
 
-    // æäº¤æœ¬å¸§æ‰€æœ‰å½•åˆ¶çš„å‘½ä»¤ç¼“å†² + present
+    // 提交本帧所有录制的命令缓冲 + present
 void VulkanRhiDevice::PresentFrame() {
     if (!initialized_) return;
 
     VkResult present_result = VK_SUCCESS;
-    // ä¿å­˜æœ¬å¸§å‘½ä»¤ç¼“å†²åˆ—è¡¨ï¼Œç”¨äºŽæäº¤åŽå½’è¿˜åˆ°æ± 
+    // 保存本帧命令缓冲列表，用于提交后归还到池
     std::vector<VkCommandBuffer> frame_cmd_buffers = std::move(pending_command_buffers_);
     pending_command_buffers_.clear();
 
@@ -155,7 +155,7 @@ void VulkanRhiDevice::PresentFrame() {
     }
 
     context_.AdvanceFrame();
-    // å½’è¿˜æœ¬å¸§å‘½ä»¤ç¼“å†²åˆ°æ± ï¼ˆAdvanceFrame å·²é€šè¿‡ fence ä¿è¯ GPU å®Œæˆï¼‰
+    // 归还本帧命令缓冲到池（AdvanceFrame 已通过 fence 保证 GPU 完成）
     for (auto& cb : frame_cmd_buffers) {
         resource_mgr_.ReleaseCommandBuffer(cb);
     }
@@ -172,7 +172,7 @@ void VulkanRhiDevice::PresentFrame() {
     last_frame_stats_.particle_count = ex_stats.particle_count;
     last_frame_stats_.max_batch_sprites = ex_stats.max_batch_sprites;
 
-    // GPU Timestamp Query: æ”¶é›†ä¸Šä¸€å¸§ç»“æžœ
+    // GPU Timestamp Query: 收集上一帧结果
     gpu_timer_.ResolveGpuTimers();
 }
 
@@ -243,7 +243,7 @@ void VulkanRhiDevice::BindMegaVAO(VertexArrayHandle vao) {
 }
 
 void VulkanRhiDevice::UnbindVAO() {
-    // Vulkan æ— éœ€æ˜¾å¼è§£ç»‘
+    // Vulkan 无需显式解绑
 }
 
 // ============================================================
@@ -334,7 +334,7 @@ void VulkanRhiDevice::BindGPUDrivenTextures(unsigned int albedo, unsigned int no
                                               unsigned int metallic_roughness,
                                               unsigned int emissive, unsigned int occlusion) {
     if (active_render_cmd_ == VK_NULL_HANDLE) return;
-    // åŒæ­¥ bound_ssbos_ åˆ° draw executorï¼ˆGPU-driven è·¯å¾„ä¸èµ° DrawMeshBatchï¼Œéœ€æ‰‹åŠ¨åŒæ­¥ï¼‰
+    // 同步 bound_ssbos_ 到 draw executor（GPU-driven 路径不走 DrawMeshBatch，需手动同步）
     draw_executor_.SetBoundSSBOs(bound_ssbos_);
     draw_executor_.BindGPUDrivenTextures(active_render_cmd_, albedo, normal,
                                           metallic_roughness, emissive, occlusion,
@@ -352,7 +352,7 @@ void VulkanRhiDevice::UpdateGPUDrivenMaterial(const void* mat_data) {
     draw_executor_.UpdateGPUDrivenMaterial(mat_data);
 }
 
-// --- ç¼–è¾‘å™¨åœºæ™¯è§†å›¾æ¨¡å¼ ---
+// --- 编辑器场景视图模式 ---
 
 void VulkanRhiDevice::SetWireframeMode(bool enable) {
     global_render_state_.wireframe_mode = enable;

@@ -31,15 +31,15 @@
 
 void FramePipeline::PrepareRenderFrame() {
     glm::vec3 early_camera_offset(0.0f);
-    // â”€â”€ ä¸»çº¿ç¨‹ï¼šçº¯ CPU å·¥ä½œ + ECS è¯»å– â”€â”€
+    // ── 主线程：纯 CPU 工作 + ECS 读取 ──
 
-    // ç¡®ä¿æ‰€æœ‰ dirty çš„ TransformComponent åœ¨æ¸²æŸ“å‰æ›´æ–° local_to_world
+    // 确保所有 dirty 的 TransformComponent 在渲染前更新 local_to_world
     if (runtime_context_.world) {
         rs_->transform_system_.Update(*runtime_context_.world);
     }
 
     if (runtime_context_.world) {
-        // Camera-Relative: æå‰èŽ·å–ç›¸æœºä½ç½®ä½œä¸º camera_offset
+        // Camera-Relative: 提前获取相机位置作为 camera_offset
         auto cam_view_3d = runtime_context_.world->registry().view<dse::Camera3DComponent>();
         entt::entity cam_entity = entt::null;
         int cam_priority = std::numeric_limits<int>::min();
@@ -54,13 +54,13 @@ void FramePipeline::PrepareRenderFrame() {
             early_camera_offset = runtime_context_.world->registry().get<TransformComponent>(cam_entity).position;
         }
 
-        // Clustered Forward+: æ”¶é›†å…‰æºï¼ˆCPUï¼‰â€” å…‰æºä½ç½®å‡åŽ» camera_offset
+        // Clustered Forward+: 收集光源（CPU）— 光源位置减去 camera_offset
         dse::render::ExtractRenderSceneView(*runtime_context_.world, rs_->scene_view_);
         render_pass_context_.scene_view = &rs_->scene_view_;
 
         rs_->light_buffer_.CollectLightsFromView(rs_->scene_view_, early_camera_offset);
 
-        // èŽ·å–ä¸»ç›¸æœºå‚æ•°æž„å»º cluster
+        // 获取主相机参数构建 cluster
         // 编辑器相机激活时 cluster 必须用编辑器相机的 view/proj 构建，
         // 否则 fragment 的 tile/z 与 grid 不匹配，点光/聚光丢失或错位。
         if (render_pass_context_.editor_mode && render_pass_context_.use_editor_camera) {
@@ -84,7 +84,7 @@ void FramePipeline::PrepareRenderFrame() {
             glm::mat4 proj = glm::perspective(glm::radians(cam.fov),
                 static_cast<float>(sw) / static_cast<float>(std::max(1, sh)),
                 cam.near_clip, cam.far_clip);
-            // Camera-Relative: å…‰æºå·²å‡åŽ» camera_offsetï¼Œcluster view ä¹Ÿç”¨ camera-at-origin
+            // Camera-Relative: 光源已减去 camera_offset，cluster view 也用 camera-at-origin
             glm::mat4 view_mat = glm::mat4(1.0f);
             if (runtime_context_.world->registry().all_of<TransformComponent>(cam_entity)) {
                 auto& tf = runtime_context_.world->registry().get<TransformComponent>(cam_entity);
@@ -105,7 +105,7 @@ void FramePipeline::PrepareRenderFrame() {
         }
     }
 
-    // TAA: é¢„æ£€æµ‹ ECS ç»„ä»¶
+    // TAA: 预检测 ECS 组件
     render_pass_context_.taa_active = false;
     if (taa_pass_ && render_pass_context_.pipeline_features.taa && runtime_context_.world) {
         auto pp_view = runtime_context_.world->registry().view<dse::PostProcessComponent>();
@@ -122,7 +122,7 @@ void FramePipeline::PrepareRenderFrame() {
 
     render_pass_context_.delta_time = Time::delta_time();
 
-    // å…¨å±€æ¹¿åº¦ï¼šä»Ž ECS WeatherComponent ç›´æŽ¥è¯»å–ï¼ˆé›¨ â†’ wetness = intensityï¼‰
+    // 全局湿度：从 ECS WeatherComponent 直接读取（雨 → wetness = intensity）
     render_pass_context_.global_wetness = 0.0f;
     if (runtime_context_.world) {
         auto wv = runtime_context_.world->registry().view<dse::WeatherComponent>();
@@ -135,7 +135,7 @@ void FramePipeline::PrepareRenderFrame() {
         }
     }
 
-    // æ¤è¢«é£Žå‚æ•°ï¼ˆæ¸²æŸ“çº¿ç¨‹è·¯å¾„ï¼‰
+    // 植被风参数（渲染线程路径）
     {
         float wind_x = 0.0f, wind_z = 0.0f, wind_strength = 0.0f;
         if (runtime_context_.world) {
@@ -157,7 +157,7 @@ void FramePipeline::PrepareRenderFrame() {
         runtime_context_.rhi_device->SetGlobalFoliageWind(
             glm::vec4(Time::TimeSinceStartup(), wind_strength, wind_dir.x, wind_dir.y));
     }
-    // æ¤è¢«æŽ¨åŠ›åœº
+    // 植被推力场
     {
         glm::vec3 push_pos(0.0f);
         if (runtime_context_.world) {
@@ -172,7 +172,7 @@ void FramePipeline::PrepareRenderFrame() {
         runtime_context_.rhi_device->SetGlobalFoliagePush(glm::vec4(push_pos, 2.0f));
     }
 
-    // æ•èŽ·å¿«ç…§ + ç¿»è½¬åŒç¼“å†²
+    // 捕获快照 + 翻转双缓冲
     // Camera-Relative: GPU Driven / 队列构建需要 camera_offset
     render_pass_context_.camera_offset = early_camera_offset;
 
@@ -200,13 +200,13 @@ void FramePipeline::ExecuteRenderFrame() {
             rs_->gpu_skinning_system_.GetOutputBuffer(), 20);  // binding 20 = ComputeSkinBuf
     }
 
-    // GPU ä¸Šä¼ ï¼šå…‰æº SSBO
+    // GPU 上传：光源 SSBO
     rs_->light_buffer_.Upload();
 
-    // GPU ä¸Šä¼ ï¼šcluster SSBO
+    // GPU 上传：cluster SSBO
     rs_->cluster_grid_.Upload();
 
-    // Light Probe SHï¼šä»Žå¿«ç…§ä¸Šä¼ åˆ° RHI å…¨å±€çŠ¶æ€
+    // Light Probe SH：从快照上传到 RHI 全局状态
     const auto& snap = *render_pass_context_.snapshot;
     if (snap.light_probe_sh.valid) {
         runtime_context_.rhi_device->SetGlobalLightProbeSH(
@@ -216,10 +216,10 @@ void FramePipeline::ExecuteRenderFrame() {
         runtime_context_.rhi_device->SetGlobalLightProbeSH(zero_sh, false);
     }
 
-    // å…¨å±€æ¹¿åº¦åŒæ­¥åˆ° RHIï¼ˆæ¸²æŸ“çº¿ç¨‹è·¯å¾„ï¼‰
+    // 全局湿度同步到 RHI（渲染线程路径）
     runtime_context_.rhi_device->SetGlobalWetness(render_pass_context_.global_wetness);
 
-    // DDGI: ä»Žå¿«ç…§é…ç½®åˆå§‹åŒ–/é‡é…ç½® + åŒæ­¥åˆ° RHI å…¨å±€çŠ¶æ€
+    // DDGI: 从快照配置初始化/重配置 + 同步到 RHI 全局状态
     render_pass_context_.ddgi_active = false;
     render_pass_context_.ddgi_system = nullptr;
     if (snap.ddgi_config.enabled && runtime_context_.rhi_device->SupportsCompute()) {
@@ -262,7 +262,7 @@ void FramePipeline::ExecuteRenderFrame() {
             false, 0, glm::vec3(0), glm::vec3(1), glm::ivec3(0), 8, 0.0f, 0.0f);
     }
 
-    // Hi-Z AABB ä¸Šä¼ 
+    // Hi-Z AABB 上传
     if (render_resources_.hiz_aabb_ssbo && render_resources_.hiz_visibility_ssbo) {
         const auto& aabbs = modules_impl_->CachedAABBs();
         const int count = modules_impl_->CachedAABBCount();
@@ -295,15 +295,15 @@ void FramePipeline::ExecuteRenderFrame() {
         }
     }
 
-    // Camera-Relative Rendering: CPU mesh model matrix å‡åŽ» camera_offset
+    // Camera-Relative Rendering: CPU mesh model matrix 减去 camera_offset
     rs_->render_scene_.ApplyCameraOffset(render_pass_context_.camera_offset);
 
-    // â”€â”€ æ‰§è¡Œæ¸²æŸ“å›¾ â”€â”€
+    // ── 执行渲染图 ──
     ExecuteRenderGraph(*cmd_buffer);
 
     dse::runtime::SubmitAndEndRuntimeRenderFrame(*this, std::move(cmd_buffer));
 
-    // GPU Timer â†’ RenderProfiler æ¡¥æŽ¥ï¼ˆæ¸²æŸ“çº¿ç¨‹è·¯å¾„ï¼‰
+    // GPU Timer → RenderProfiler 桥接（渲染线程路径）
     {
         auto gpu_results = runtime_context_.rhi_device->GetAllGpuTimerResults();
         if (!gpu_results.empty()) {
@@ -316,7 +316,7 @@ void FramePipeline::ExecuteRenderFrame() {
         }
     }
 
-    // Hi-Z / GPU Driven: å¼‚æ­¥è¯»å›žï¼ˆåŒç¼“å†² stagingï¼Œå»¶è¿Ÿ 1 å¸§ï¼‰
+    // Hi-Z / GPU Driven: 异步读回（双缓冲 staging，延迟 1 帧）
     if (render_resources_.hiz_visibility_ssbo && render_pass_context_.hiz_object_count > 0
         && render_pass_context_.hiz_culling_enabled) {
         const int count = render_pass_context_.hiz_object_count;
@@ -385,7 +385,7 @@ void FramePipeline::ExecuteRenderFrame() {
     auto render_end = std::chrono::high_resolution_clock::now();
     stats_.RecordRender(std::chrono::duration<float, std::milli>(render_end - render_begin).count());
 
-    // Present (SwapBuffers) â€” åœ¨ render è®¡æ—¶ä¹‹å¤–ï¼Œé¿å… Present å»¶è¿Ÿæ±¡æŸ“ avg_render_ms
+    // Present (SwapBuffers) — 在 render 计时之外，避免 Present 延迟污染 avg_render_ms
     if (render_thread_mgr_->IsActive() && runtime_context_.present_frame) {
         runtime_context_.present_frame();
     }

@@ -78,7 +78,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
 
     VkDevice device = context_->device();
 
-    // 1. å°† dst image è¿‡æ¸¡åˆ° GENERALï¼ˆä»¥æ”¯æŒ Storage å†™å…¥ï¼‰
+    // 1. 将 dst image 过渡到 GENERAL（以支持 Storage 写入）
     VkImageMemoryBarrier to_general{};
     to_general.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     to_general.oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -93,10 +93,10 @@ void VulkanDrawExecutor::DispatchBloomCompute(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &to_general);
 
-    // 2. ç»‘å®š Compute Pipeline
+    // 2. 绑定 Compute Pipeline
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_COMPUTE, cs->pipeline);
 
-    // 3. åˆ†é…å¹¶æ›´æ–° DescriptorSet
+    // 3. 分配并更新 DescriptorSet
     VkDescriptorSet desc_set = resource_mgr_->AllocateDescriptorSet(cs->descriptor_set_layout);
     if (desc_set != VK_NULL_HANDLE) {
         VkDescriptorImageInfo src_info{};
@@ -128,7 +128,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
                                 cs->pipeline_layout, 0, 1, &desc_set, 0, nullptr);
     }
 
-    // 4. Push constants ï¼ˆtexel å¤§å° + upsample æ··åˆæƒé‡ï¼‰
+    // 4. Push constants （texel 大小 + upsample 混合权重）
     struct BloomParams { float src_w, src_h, dst_w, dst_h, blend_weight; };
     const BloomParams bp {
         src_tex->width  > 0 ? 1.0f / static_cast<float>(src_tex->width)  : 1.0f,
@@ -145,7 +145,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
     const uint32_t gy = (static_cast<uint32_t>(dst_rt->height) + 7) / 8;
     vkCmdDispatch(cmd_buf, gx, gy, 1);
 
-    // 6. è¿‡æ¸¡å›ž SHADER_READ_ONLY
+    // 6. 过渡回 SHADER_READ_ONLY
     VkImageMemoryBarrier to_readonly = to_general;
     to_readonly.oldLayout    = VK_IMAGE_LAYOUT_GENERAL;
     to_readonly.newLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -159,7 +159,7 @@ void VulkanDrawExecutor::DispatchBloomCompute(
 }
 
 // ============================================================
-// GPU-Driven PBR æ¸²æŸ“è®¾ç½®
+// GPU-Driven PBR 渲染设置
 // ============================================================
 
 void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
@@ -172,21 +172,21 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
                                             VulkanShaderManager& shader_mgr) {
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
-    // ä¼˜å…ˆä½¿ç”¨ GPU-driven shaderï¼ˆVS ä»Ž SSBO è¯» model, FS ä»Ž Material SSBO è¯»æè´¨ï¼‰
+    // 优先使用 GPU-driven shader（VS 从 SSBO 读 model, FS 从 Material SSBO 读材质）
     unsigned int shader_handle = shader_mgr.gpu_driven_pbr_shader_handle();
     const VulkanShaderProgram* pbr_program = shader_mgr.GetProgram(shader_handle);
     if (!pbr_program) {
-        // å›žé€€åˆ°æ ‡å‡† PBRï¼ˆä¸æ”¯æŒ glslang æ—¶ï¼‰
+        // 回退到标准 PBR（不支持 glslang 时）
         shader_handle = shader_mgr.pbr_shader_handle();
         pbr_program = shader_mgr.GetProgram(shader_handle);
         if (!pbr_program) return;
     }
 
-    // èŽ·å–å½“å‰ render passï¼ˆå¯èƒ½æ˜¯ç¦»å± RT çš„ render passï¼‰
+    // 获取当前 render pass（可能是离屏 RT 的 render pass）
     VkRenderPass active_rp = current_render_pass_ != VK_NULL_HANDLE
         ? current_render_pass_ : context_->swapchain_render_pass();
 
-    // BatchVertex é¡¶ç‚¹æ ¼å¼ï¼ˆä¸Ž DrawMeshBatch ä¸€è‡´ï¼‰
+    // BatchVertex 顶点格式（与 DrawMeshBatch 一致）
     std::vector<VkVertexInputBindingDescription> mesh_bindings = {
         {0, sizeof(BatchVertex), VK_VERTEX_INPUT_RATE_VERTEX},
     };
@@ -211,7 +211,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
     gpu_driven_pipeline_layout_ = pbr_program->pipeline_layout;
 
-    // æ»¡è¶³ pipeline layout ä¸­çš„ push constant range è¦æ±‚ï¼Œé˜²æ­¢ validation warning
+    // 满足 pipeline layout 中的 push constant range 要求，防止 validation warning
     if (pbr_program->reflection.has_push_constant) {
         static const uint8_t kZeroPushConstants[256] = {};
         uint32_t pc_size = std::min(pbr_program->reflection.push_constant_range.size, uint32_t(256));
@@ -376,7 +376,7 @@ void VulkanDrawExecutor::SetupGPUDrivenPBR(VkCommandBuffer cmd_buf,
 }
 
 // ============================================================
-// GPU-Driven Shadow æ¸²æŸ“è®¾ç½®
+// GPU-Driven Shadow 渲染设置
 // ============================================================
 
 void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
@@ -385,7 +385,7 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
                                                 VulkanShaderManager& shader_mgr) {
     if (cmd_buf == VK_NULL_HANDLE || !context_) return;
 
-    // ä¼˜å…ˆä½¿ç”¨ GPU-driven shadow shaderï¼ˆVS ä»Ž SSBO è¯» modelï¼‰
+    // 优先使用 GPU-driven shadow shader（VS 从 SSBO 读 model）
     unsigned int shader_handle = shader_mgr.gpu_driven_shadow_shader_handle();
     const VulkanShaderProgram* shadow_program = shader_mgr.GetProgram(shader_handle);
     if (!shadow_program) {
@@ -422,7 +422,7 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
     cached_gpu_driven_program_ = shadow_program;
     gpu_driven_instance_set_bound_ = false;
 
-    // æ»¡è¶³ pipeline layout ä¸­çš„ push constant range è¦æ±‚ï¼Œé˜²æ­¢ validation warning
+    // 满足 pipeline layout 中的 push constant range 要求，防止 validation warning
     if (shadow_program->reflection.has_push_constant) {
         static const uint8_t kZeroPushConstants[256] = {};
         uint32_t pc_size = std::min(shadow_program->reflection.push_constant_range.size, uint32_t(256));
@@ -463,7 +463,7 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
                                     shadow_program->pipeline_layout, 0, 1, &set0, 0, nullptr);
         }
 
-        // ä¸º sets 1-3 ç»‘å®šå½“å‰å¸§ç©º descriptor setsï¼Œé˜²æ­¢ä¸Žå‰ä¸€ä¸ª pipeline layout ä¸å…¼å®¹å¯¼è‡´ TDR
+        // 为 sets 1-3 绑定当前帧空 descriptor sets，防止与前一个 pipeline layout 不兼容导致 TDR
         for (uint32_t si = 1; si < shadow_program->descriptor_set_layouts.size() && si < 4; ++si) {
             VkDescriptorSet empty_set = resource_mgr_->AllocateDescriptorSet(
                 shadow_program->descriptor_set_layouts[si]);
@@ -477,12 +477,12 @@ void VulkanDrawExecutor::SetupGPUDrivenShadow(VkCommandBuffer cmd_buf,
 }
 
 // ============================================================
-// GPU-Driven: æŒ‰çº¹ç†æ¡¶é‡æ–°ç»‘å®š Set 2
+// GPU-Driven: 按纹理桶重新绑定 Set 2
 // ============================================================
 
 void VulkanDrawExecutor::UpdateGPUDrivenMaterial(const void* mat_data) {
-    // VK GPU-driven FS ä»Ž MaterialSSBO é€ instance è¯»æè´¨ï¼ˆv_material_id ç´¢å¼•ï¼‰ï¼Œ
-    // ä¸å†éœ€è¦ per-bucket UBO æ›´æ–°ã€‚ä¿ç•™æŽ¥å£ä¾› DX11 ä½¿ç”¨ã€‚
+    // VK GPU-driven FS 从 MaterialSSBO 逐 instance 读材质（v_material_id 索引），
+    // 不再需要 per-bucket UBO 更新。保留接口供 DX11 使用。
     (void)mat_data;
 }
 

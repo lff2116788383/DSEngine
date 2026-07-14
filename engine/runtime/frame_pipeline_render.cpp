@@ -88,21 +88,21 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
                        builtin_gameplay3d_enabled_);
     }
 
-    // GPU Compute Skinning: å¸§å¼€å§‹ï¼ˆæ¸…ç©ºä¸Šä¸€å¸§è¯·æ±‚ï¼Œè¯»å›žä¸Šä¸€å¸§ç»“æžœï¼‰
+    // GPU Compute Skinning: 帧开始（清空上一帧请求，读回上一帧结果）
     if (rs_->gpu_skinning_system_.IsAvailable()) {
         rs_->gpu_skinning_system_.BeginFrame();
     }
 
     BuildRenderSceneQueues();
 
-    // ===== B-1ï¼ˆæ–¹æ¡ˆ Bï¼‰ï¼šweb è’™çš®å¯è§æ¿€æ´» â€” GPU compute + å¤ç”¨å¼‚æ­¥å›žè¯» â†’ ä¸–ç•Œçƒ˜ç„™é™æ€ç½‘æ ¼ =====
-    // åœ¨ç¼º ForwardSkinnedShaded å†…å»ºç¨‹åºçš„åŽç«¯ï¼ˆWebGPU æ—  per-draw è’™çš®ï¼›WebGL2/GLES3.0 æ— æ³•ç¼–è¯‘
-    // SSBO è’™çš® VSï¼‰ä¸Šï¼ŒDrawSkinnedShaded ä¸º no-opã€è’™çš®ç½‘æ ¼ä¸å¯è§ã€‚æ­¤å¤„æŠŠè’™çš®é¡¹å–‚ GPU compute
-    // è’™çš®ç³»ç»Ÿï¼ˆWebGPU ä¸Š GPU çœŸåšè’™çš®ï¼‰ï¼Œæ¶ˆè´¹ã€Œä¸Šä¸€å¸§ã€å¼‚æ­¥å›žè¯»ç»“æžœï¼ˆgrass ä¹‹å¤–ç¬¬ 2 ä¸ªçœŸå®žå›žè¯»
-    // æ¶ˆè´¹æ–¹ï¼‰ï¼Œæœªå°±ç»ª/WebGL2 åˆ™ CPU è’™çš®å›žé€€ï¼ˆåŒå…¬å¼ï¼Œç»“æžœä¸€è‡´ï¼‰ï¼Œçƒ˜ç„™ä¸ºå¯¹è±¡ç©ºé—´é¡¶ç‚¹çš„éžè’™çš®é¡¹ï¼Œ
-    // èµ°çŽ°æœ‰ ForwardShaded è·¯å¾„ï¼ˆé›¶ç€è‰²å™¨/ç®¡çº¿æ”¹åŠ¨ï¼‰ã€‚æ¡Œé¢ï¼ˆç¨‹åºå¯ç”¨ï¼‰ä¸è§¦å‘ï¼Œè¡Œä¸ºä¸å˜ã€‚
-    // æ³¨æ„ï¼šmesh_render_system æŠŠè’™çš®é¡¹ï¼ˆitem.skinned=trueï¼‰æ”¾è¿› cpu_meshes.opaque/transparent é˜Ÿåˆ—ï¼Œ
-    // è€Œéžç‹¬ç«‹çš„ skinned é˜Ÿåˆ—ï¼ˆåŽè€…ä»Žæœªè¢«å¡«å……ï¼‰ã€‚æ•…æ­¤å¤„å°±åœ°æ‰«æè¿™ä¸¤ä¸ªé˜Ÿåˆ—é‡Œçš„è’™çš®é¡¹å¤„ç†ã€‚
+    // ===== B-1（方案 B）：web 蒙皮可见激活 — GPU compute + 复用异步回读 → 世界烘焙静态网格 =====
+    // 在缺 ForwardSkinnedShaded 内建程序的后端（WebGPU 无 per-draw 蒙皮；WebGL2/GLES3.0 无法编译
+    // SSBO 蒙皮 VS）上，DrawSkinnedShaded 为 no-op、蒙皮网格不可见。此处把蒙皮项喂 GPU compute
+    // 蒙皮系统（WebGPU 上 GPU 真做蒙皮），消费「上一帧」异步回读结果（grass 之外第 2 个真实回读
+    // 消费方），未就绪/WebGL2 则 CPU 蒙皮回退（同公式，结果一致），烘焙为对象空间顶点的非蒙皮项，
+    // 走现有 ForwardShaded 路径（零着色器/管线改动）。桌面（程序可用）不触发，行为不变。
+    // 注意：mesh_render_system 把蒙皮项（item.skinned=true）放进 cpu_meshes.opaque/transparent 队列，
+    // 而非独立的 skinned 队列（后者从未被填充）。故此处就地扫描这两个队列里的蒙皮项处理。
     if (!skinning_bake_checked_) {
         skinning_bake_for_web_ = (runtime_context_.rhi_device->GetBuiltinProgram(
             BuiltinProgram::ForwardSkinnedShaded) == 0);
@@ -110,8 +110,8 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
     }
     if (skinning_bake_for_web_) {
         const bool gpu_skin = rs_->gpu_skinning_system_.IsAvailable();
-        // CPU è’™çš®å›žé€€ï¼šé€å¥é•œåƒ compute è’™çš®ï¼ˆ4 æƒé‡ï¼Œç¬¬ 4 æƒé‡ = 1 - w0 - w1 - w2ï¼›
-        // æ³•çº¿/åˆ‡çº¿ç”¨ mat3(skin)ï¼‰ï¼Œä¿è¯ä¸Ž GPU å›žè¯»è·¯å¾„æ•°å€¼ä¸€è‡´ â†’ æš–æœº/WebGL2 æ— ç ´å¸§ã€‚
+        // CPU 蒙皮回退：逐句镜像 compute 蒙皮（4 权重，第 4 权重 = 1 - w0 - w1 - w2；
+        // 法线/切线用 mat3(skin)），保证与 GPU 回读路径数值一致 → 暖机/WebGL2 无破帧。
         auto skin_like_compute = [](const BatchVertex& bv,
                                     const std::vector<glm::mat4>& bones,
                                     glm::vec3& out_pos, glm::vec3& out_nrm, glm::vec3& out_tan) {
@@ -132,7 +132,7 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
         };
         auto bake_skinned_in_queue = [&](std::vector<MeshDrawItem>& queue) {
             for (auto& item : queue) {
-                // ä»…å¤„ç†å•å®žä¾‹è’™çš®é¡¹ï¼ˆå®žä¾‹åŒ–è’™çš®çš„ web çƒ˜ç„™æš‚ä¸è¦†ç›–ï¼šæœ¬ demo ç”¨å•å®žä¾‹ï¼‰ã€‚
+                // 仅处理单实例蒙皮项（实例化蒙皮的 web 烘焙暂不覆盖：本 demo 用单实例）。
                 if (!item.skinned || item.bone_matrices.empty()) continue;
                 if (item.instance_transforms.size() > 1) continue;
                 const BatchVertex* src =
@@ -142,7 +142,7 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
                     : static_cast<uint32_t>(item.vertices.size());
                 if (vcount == 0) continue;
 
-                // ç”Ÿäº§è€…ï¼šæœ¬å¸§è¯·æ±‚å–‚ GPU computeï¼ˆWebGPU çœŸè’™çš®ï¼›WebGL2 æ—  compute è·³è¿‡ï¼Œçº¯ CPUï¼‰ã€‚
+                // 生产者：本帧请求喂 GPU compute（WebGPU 真蒙皮；WebGL2 无 compute 跳过，纯 CPU）。
                 if (gpu_skin) {
                     dse::render::SkinningRequest req;
                     req.entity_id = item.entity_id;
@@ -160,7 +160,7 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
                     rs_->gpu_skinning_system_.Submit(std::move(req));
                 }
 
-                // æ¶ˆè´¹ï¼šä¸Šä¸€å¸§ GPU å›žè¯»ï¼ˆä¸–ç•Œç©ºé—´â€”â€”éª¨éª¼çŸ©é˜µå·²é¢„ä¹˜ modelï¼‰ï¼›æœªå°±ç»ª/WebGL2 â†’ CPU è’™çš®å›žé€€ã€‚
+                // 消费：上一帧 GPU 回读（世界空间——骨骼矩阵已预乘 model）；未就绪/WebGL2 → CPU 蒙皮回退。
                 const dse::render::SkinnedOutput* out =
                     gpu_skin ? rs_->gpu_skinning_system_.GetSkinnedOutput(item.entity_id) : nullptr;
                 const bool use_gpu = out && out->vertex_count == vcount;
@@ -180,10 +180,10 @@ void FramePipeline::PrepareGPUSceneAndQueues() {
                     baked[i] = ov;
                 }
 
-                // å°±åœ°è½¬ä¸ºéžè’™çš®é™æ€é¡¹ï¼šè’™çš®çŸ©é˜µæ˜¯ã€Œå¯¹è±¡ç©ºé—´ã€è’™çš®ï¼ˆbind-local â†’ å§¿æ€åŽçš„æ¨¡åž‹ç©ºé—´ï¼‰ï¼Œ
-                // é¡¶ç‚¹ä»åœ¨æ¨¡åž‹ç©ºé—´ â†’ ä¿ç•™åŽŸ model çŸ©é˜µä¸å˜ï¼Œç”± ForwardShaded çš„ CPU ä¸–ç•Œçƒ˜ç„™
-                // ï¼ˆBuildShadedWorldVertexBuffer ä¹˜ model + æ³•çº¿çŸ©é˜µï¼‰æŠŠå§¿æ€åŽçš„æ¨¡åž‹ç©ºé—´é¡¶ç‚¹å˜åˆ°ä¸–ç•Œï¼Œ
-                // ä¸Žæ™®é€šé™æ€ç½‘æ ¼å®Œå…¨ä¸€è‡´ï¼›ä»…æ¸…æŽ‰è’™çš®æ ‡å¿—/éª¨éª¼æ•°æ®ï¼Œé¿å…èµ° DrawSkinnedShadedï¼ˆweb ä¸Š no-opï¼‰ã€‚
+                // 就地转为非蒙皮静态项：蒙皮矩阵是「对象空间」蒙皮（bind-local → 姿态后的模型空间），
+                // 顶点仍在模型空间 → 保留原 model 矩阵不变，由 ForwardShaded 的 CPU 世界烘焙
+                // （BuildShadedWorldVertexBuffer 乘 model + 法线矩阵）把姿态后的模型空间顶点变到世界，
+                // 与普通静态网格完全一致；仅清掉蒙皮标志/骨骼数据，避免走 DrawSkinnedShaded（web 上 no-op）。
                 if (item.indices.empty() && item.shared_index_ptr && item.shared_index_count) {
                     item.indices.assign(item.shared_index_ptr,
                                         item.shared_index_ptr + item.shared_index_count);
@@ -297,8 +297,8 @@ void FramePipeline::BuildRenderSceneQueues() {
     // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内
     modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_);
 
-    // åŠ¨æ€æ¨¡å—çš„æ¸²æŸ“è´¡çŒ®ç»Ÿä¸€é€šè¿‡ RegisterRenderPasses æ³¨å†Œåˆ° RenderGraphï¼Œ
-    // ä¸å†ç»ç”± IModule çš„å›ºå®šé˜¶æ®µå›žè°ƒåŒ…è£…è¿› RenderScene å›žè°ƒæ¡¶ã€‚
+    // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
+    // 不再经由 IModule 的固定阶段回调包装进 RenderScene 回调桶。
     (void)world;
 }
 
@@ -306,7 +306,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_graph_dag_.Reset();
     registered_passes_.clear();
 
-    // ---- å¡«å…… RenderPassContext ----
+    // ---- 填充 RenderPassContext ----
     render_pass_context_.world = runtime_context_.world;
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
@@ -316,8 +316,8 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.cluster_grid = &rs_->cluster_grid_;
     render_pass_context_.editor_mode = runtime_context_.editor_mode;
 
-    // Pass å±‚å›¾å½¢ç®¡çº¿ï¼ˆB5-3bï¼‰ï¼šèšåˆä¸º (pso, program=0) PSO-only ç®¡çº¿å¥æŸ„â€”â€”å…¶åŽç»˜åˆ¶ç» GPU-driven è‡ªç»‘ program
-    // æˆ–è¢«æ¸²æŸ“å™¨è‡ªå¸¦ (pso+program) è¦†ç›–ï¼Œæ•…æ­¤å¤„ä¸çƒ˜ programï¼ŒBindPipeline ä»…åº”ç”¨ PSO çŠ¶æ€ï¼Œä¿ç•™åŽŸ SetPipelineState è¯­ä¹‰ã€‚
+    // Pass 层图形管线（B5-3b）：聚合为 (pso, program=0) PSO-only 管线句柄——其后绘制经 GPU-driven 自绑 program
+    // 或被渲染器自带 (pso+program) 覆盖，故此处不烘 program，BindPipeline 仅应用 PSO 状态，保留原 SetPipelineState 语义。
     auto* rhi = runtime_context_.rhi_device.get();
     render_pass_context_.pipeline_states.sprite    = rhi->GetGraphicsPipeline(render_resources_.sprite_pipeline_state, 0);
     render_pass_context_.pipeline_states.mesh      = rhi->GetGraphicsPipeline(render_resources_.mesh_pipeline_state, 0);
@@ -377,7 +377,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     render_pass_context_.hiz_downsample_shader = render_resources_.hiz_downsample_shader;
     render_pass_context_.hiz_cull_shader = render_resources_.hiz_cull_shader;
 
-    // GPU Driven é˜èˆµâ‚¬?
+    // GPU Driven 鐘舵€?
     render_pass_context_.gpu_driven_enabled = render_resources_.gpu_driven_supported;
     render_pass_context_.gpu_driven_supported = render_resources_.gpu_driven_supported;
     render_pass_context_.gpu_driven_requested = gpu_driven_requested_;
@@ -443,7 +443,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
     };
 
-    // ---- æ¾¹ç‰ˆæ§‘æ¾¶æ ­å„´æˆæ’³åš­ ----
+    // ---- 澹版槑澶栭儴杈撳嚭 ----
     auto main_color  = render_graph_dag_.DeclareResource("main_color");
     auto scene_color = render_graph_dag_.DeclareResource("scene_color");
     auto taa_color   = render_graph_dag_.DeclareResource("taa_color");
@@ -497,7 +497,7 @@ void FramePipeline::BuildRenderGraphInternal() {
         registered_passes_.push_back(std::move(pass));
     }
 
-    // ---- å¦¯â€³æ½¡é”ã„¦â‚¬ä½¹æ•žéå²ƒåšœç€¹æ°«ç®Ÿ Pass ----
+    // ---- 妯″潡鍔ㄦ€佹敞鍐岃嚜瀹氫箟 Pass ----
     for (auto& mod : modules_) {
         if (mod.instance) {
             mod.instance->RegisterRenderPasses(render_graph_dag_, render_pass_context_, registered_passes_);
@@ -507,14 +507,14 @@ void FramePipeline::BuildRenderGraphInternal() {
         modules_impl_->RegisterGameplay3DPasses(render_graph_dag_, render_pass_context_, registered_passes_);
     }
 
-    // ---- éŽµâ‚¬éˆ?Pass é¦?RenderGraph æ¶“å©‚ï¼é„åºç··ç’§?----
+    // ---- 鎵€鏈?Pass 鍦?RenderGraph 涓婂０鏄庝緷璧?----
     for (auto& pass : registered_passes_) {
         pass->Setup(render_graph_dag_);
     }
 
-    // ç¼‚æ ¬ç˜§ DAGé”›å Ÿå«‡éŽµæˆžå¸“æ´?+ éƒçŠµæ•¤ Pass é“æ—ˆæ«Žé”›?
+    // 缂栬瘧 DAG锛堟嫇鎵戞帓搴?+ 鏃犵敤 Pass 鍓旈櫎锛?
     if (!render_graph_dag_.Compile()) {
-        DEBUG_LOG_ERROR("RenderGraph ç¼‚æ ¬ç˜§æ¾¶è¾«è§¦é”›æ°­î—…å¨´å¬ªåŸŒå¯°î†å¹†æ¸šæ¿Šç¦†");
+        DEBUG_LOG_ERROR("RenderGraph 缂栬瘧澶辫触锛氭娴嬪埌寰幆渚濊禆");
     }
 }
 
@@ -523,12 +523,12 @@ void FramePipeline::ExecuteRenderGraph(CommandBuffer& cmd_buffer) {
     dse::runtime::ExecuteFrameRenderGraph(*this, cmd_buffer);
 }
 
-/// æ£°å‹­å„¹ builtin Pass é¦?Execute() æ¶“î… æ•¤é’æ‰®æ®‘éŽµâ‚¬éˆ?ECS ç¼å‹ªæ¬¢å§¹çŠ®â‚¬?
-/// é‚æ¿î–ƒ Pass é‘»ãƒ¤å¨‡é¢ã„¦æŸŠç¼å‹ªæ¬¢ç»«è¯²ç€·é”›å±½ç¹€æ¤¤è¯²æ¹ªå§ã‚…î˜©ç›ãƒ¥åŽ–ç€µç‘°ç°² view ç’‹å†ªæ•¤éŠ†?
-/// Debug å¦¯â€³ç´¡æ¶“?ExecuteRenderGraphInternal æµ¼æ°¬æ¹ªéªžæƒ°î”‘éŽµÑ†î”‘éšåº¢æŸ‡ç‘·â‚¬å§¹çŠ³æšŸé–²å¿”æ¹­æ¾§ç‚ºæš±é”›?
-/// æµ ãƒ¦î—…å¨´å¬®ä»å©•å¿•æ®‘ç¼å‹ªæ¬¢ç»«è¯²ç€·éŠ†?
+/// 棰勭儹 builtin Pass 鍦?Execute() 涓敤鍒扮殑鎵€鏈?ECS 缁勪欢姹犮€?
+/// 鏂板 Pass 鑻ヤ娇鐢ㄦ柊缁勪欢绫诲瀷锛屽繀椤诲湪姝ゅ琛ュ厖瀵瑰簲 view 璋冪敤銆?
+/// Debug 妯″紡涓?ExecuteRenderGraphInternal 浼氬湪骞惰鎵ц鍚庢柇瑷€姹犳暟閲忔湭澧為暱锛?
+/// 浠ユ娴嬮仐婕忕殑缁勪欢绫诲瀷銆?
 static void WarmUpRenderECSPools(entt::registry& reg) {
-    // --- builtin Pass é©å­˜å¸´æµ£è·¨æ•¤ ---
+    // --- builtin Pass 鐩存帴浣跨敤 ---
     (void)reg.view<TransformComponent>();
     (void)reg.view<CameraComponent>();
     (void)reg.view<dse::Camera3DComponent>();
@@ -539,7 +539,7 @@ static void WarmUpRenderECSPools(entt::registry& reg) {
     (void)reg.view<dse::SkyboxComponent>();
     (void)reg.view<dse::DecalComponent, TransformComponent>();
     (void)reg.view<dse::WaterComponent>();
-    // --- æ¨¡å—æ¸²æŸ“ï¼ˆBuildRenderQueues / RenderPassContext é’©å­ï¼‰é—´æŽ¥ä½¿ç”¨ ---
+    // --- 模块渲染（BuildRenderQueues / RenderPassContext 钩子）间接使用 ---
     (void)reg.view<TransformComponent, dse::MeshRendererComponent>();
     (void)reg.view<dse::SkyLightComponent>();
     (void)reg.view<dse::TerrainComponent, TransformComponent>();

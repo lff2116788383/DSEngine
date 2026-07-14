@@ -53,7 +53,7 @@ void AssetManager::TouchLru(const std::string& cache_key, std::size_t estimated_
     entry.last_access = std::chrono::steady_clock::now();
     lru_entries_[cache_key] = entry;
     estimated_memory_usage_ += estimated_bytes;
-    // åŒæ­¥èµ„äº§ä¼°ç®—ç”¨é‡åˆ°ç»Ÿä¸€é¢„ç®—è§†å›¾ï¼ˆè¡Œä¸ºä¸å˜ï¼Œä»…ä¸ŠæŠ¥ï¼‰ã€‚
+    // 同步资产估算用量到统一预算视图（行为不变，仅上报）。
     dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
@@ -73,14 +73,14 @@ void AssetManager::RemoveLru(const std::string& cache_key) {
 void AssetManager::SetMemoryBudget(std::size_t budget_bytes) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     memory_budget_bytes_ = budget_bytes;
-    // å°†èµ„äº§é¢„ç®—çº³å…¥ç»Ÿä¸€è§†å›¾ï¼Œå¹¶ä¸ŠæŠ¥å½“å‰ä¼°ç®—ç”¨é‡ï¼ˆä¸æ”¹å˜ LRU è¡Œä¸ºï¼‰ã€‚
+    // 将资产预算纳入统一视图，并上报当前估算用量（不改变 LRU 行为）。
     dse::core::Memory::SetBudget(dse::core::MemoryTag::Asset, budget_bytes);
     dse::core::Memory::ReportExternalUsage(dse::core::MemoryTag::Asset, estimated_memory_usage_);
 }
 
 std::size_t AssetManager::EstimatedMemoryUsage() const {
-    // cache_mutex_ ä¸æ˜¯ mutableï¼Œä½†æ­¤å¤„ä»…è¯»å–åŽŸå­çº§åˆ«å¯æŽ¥å—çš„ä¼°ç®—å€¼
-    // ä¸ºä¿æŒ const æ­£ç¡®æ€§ï¼Œä½¿ç”¨ const_castï¼ˆå†…éƒ¨å®žçŽ°ç»†èŠ‚ï¼Œä¸å½±å“å¤–éƒ¨è¯­ä¹‰ï¼‰
+    // cache_mutex_ 不是 mutable，但此处仅读取原子级别可接受的估算值
+    // 为保持 const 正确性，使用 const_cast（内部实现细节，不影响外部语义）
     auto& self = const_cast<AssetManager&>(*this);
     std::lock_guard<std::mutex> lock(self.cache_mutex_);
     return estimated_memory_usage_;
@@ -92,7 +92,7 @@ std::size_t AssetManager::EvictLRU() {
         return 0;
     }
 
-    // æ”¶é›†æ‰€æœ‰ LRU æ¡ç›®å¹¶æŒ‰ last_access æŽ’åºï¼ˆæœ€æ—©çš„ä¼˜å…ˆæ·˜æ±°ï¼‰
+    // 收集所有 LRU 条目并按 last_access 排序（最早的优先淘汰）
     std::vector<LruEntry*> entries;
     entries.reserve(lru_entries_.size());
     for (auto& pair : lru_entries_) {
@@ -109,7 +109,7 @@ std::size_t AssetManager::EvictLRU() {
         }
         const std::string& key = entry->cache_key;
 
-        // å°è¯•ä»Žå„ç¼“å­˜è¡¨ä¸­é©±é€ï¼ˆä»…é©±é€å·²æ— å¤–éƒ¨å¼•ç”¨çš„æ¡ç›®ï¼‰
+        // 尝试从各缓存表中驱逐（仅驱逐已无外部引用的条目）
         bool evicted_entry = false;
         auto tex_it = textures_.find(key);
         if (tex_it != textures_.end() && tex_it->second.use_count() <= 1) {
@@ -153,7 +153,7 @@ std::size_t AssetManager::EvictLRU() {
         }
     }
 
-    // æ¸…ç†å·²é©±é€æ¡ç›®çš„ LRU è®°å½•
+    // 清理已驱逐条目的 LRU 记录
     for (auto it = lru_entries_.begin(); it != lru_entries_.end(); ) {
         const std::string& key = it->first;
         bool still_alive = false;
@@ -175,7 +175,7 @@ std::size_t AssetManager::EvictLRU() {
 }
 
 // ============================================================
-// çƒ­é‡è½½ï¼šæ–‡ä»¶ç›‘å¬
+// 热重载：文件监听
 // ============================================================
 
 void AssetManager::StartFileWatcher() {
@@ -184,13 +184,13 @@ void AssetManager::StartFileWatcher() {
     // skip the background hot-reload watcher thread.
     return;
 #endif
-    // å·²åœ¨è¿è¡Œåˆ™å¿½ç•¥ï¼ˆå¹‚ç­‰ï¼‰ã€‚
+    // 已在运行则忽略（幂等）。
     if (file_watcher_running_.load()) {
         return;
     }
-    // ç›‘å¬çº¿ç¨‹å¯èƒ½å·²è‡ªè¡Œé€€å‡ºï¼ˆå¦‚ä¸Šæ¬¡ data root æ‰“å¼€å¤±è´¥ï¼‰å´å°šæœª joinï¼Œæ­¤æ—¶
-    // file_watcher_thread_ ä» joinableã€‚å¯¹ joinable çš„ std::thread åšç§»åŠ¨èµ‹å€¼ä¼š
-    // è§¦å‘ std::terminateï¼Œæ•…å…ˆåœæŽ‰å¹¶ join ä»»ä½•æ®‹ç•™çº¿ç¨‹å†å¯åŠ¨æ–°çº¿ç¨‹ã€‚
+    // 监听线程可能已自行退出（如上次 data root 打开失败）却尚未 join，此时
+    // file_watcher_thread_ 仍 joinable。对 joinable 的 std::thread 做移动赋值会
+    // 触发 std::terminate，故先停掉并 join 任何残留线程再启动新线程。
     if (file_watcher_thread_.joinable()) {
         file_watcher_thread_.join();
     }
@@ -264,12 +264,12 @@ void AssetManager::FileWatcherLoop() {
             continue;
         }
 
-        // æ¯ 200ms æ£€æŸ¥ä¸€æ¬¡æ˜¯å¦éœ€è¦é€€å‡º
+        // 每 200ms 检查一次是否需要退出
         while (file_watcher_running_.load()) {
             DWORD wait_result = WaitForSingleObject(overlapped.hEvent, 200);
-            if (wait_result == WAIT_OBJECT_0) break;   // IO å®Œæˆ
-            if (wait_result == WAIT_TIMEOUT) continue;  // è¶…æ—¶ï¼Œæ£€æŸ¥ running flag
-            break; // å‡ºé”™
+            if (wait_result == WAIT_OBJECT_0) break;   // IO 完成
+            if (wait_result == WAIT_TIMEOUT) continue;  // 超时，检查 running flag
+            break; // 出错
         }
 
         if (!file_watcher_running_.load()) {
@@ -319,8 +319,8 @@ void AssetManager::FileWatcherLoop() {
         return;
     }
 
-    // inotify éžé€’å½’ï¼šéœ€ä¸ºæ ¹ç›®å½•åŠå…¨éƒ¨å­ç›®å½•å„æ³¨å†Œä¸€ä¸ª watchã€‚
-    // wd â†’ ç›®å½•ç»å¯¹è·¯å¾„ï¼Œç”¨äºŽæŠŠäº‹ä»¶åæ‹¼å›žå®Œæ•´è·¯å¾„å¹¶è®¡ç®—ç›¸å¯¹ data_root çš„ç›¸å¯¹è·¯å¾„ã€‚
+    // inotify 非递归：需为根目录及全部子目录各注册一个 watch。
+    // wd → 目录绝对路径，用于把事件名拼回完整路径并计算相对 data_root 的相对路径。
     std::unordered_map<int, std::filesystem::path> wd_to_dir;
     const uint32_t watch_mask = IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE;
 
@@ -347,7 +347,7 @@ void AssetManager::FileWatcherLoop() {
         pollfd pfd{};
         pfd.fd = inotify_fd;
         pfd.events = POLLIN;
-        const int pr = ::poll(&pfd, 1, 200);   // 200ms è¶…æ—¶ï¼Œä¾¿äºŽæ£€æŸ¥é€€å‡ºæ ‡å¿—
+        const int pr = ::poll(&pfd, 1, 200);   // 200ms 超时，便于检查退出标志
         if (pr <= 0 || !(pfd.revents & POLLIN)) continue;
 
         const ssize_t len = ::read(inotify_fd, buffer.data(), buffer.size());
@@ -361,7 +361,7 @@ void AssetManager::FileWatcherLoop() {
                 if (dir_it != wd_to_dir.end()) {
                     const std::filesystem::path full = dir_it->second / std::string(ev->name);
                     if ((ev->mask & IN_ISDIR) && (ev->mask & (IN_CREATE | IN_MOVED_TO))) {
-                        // æ–°å»º/ç§»å…¥ç›®å½•ï¼šé€’å½’è¡¥æŒ‚ watchï¼Œä½¿å…¶å†…æ–‡ä»¶åŽç»­æ”¹åŠ¨å¯è¢«æ•èŽ·ã€‚
+                        // 新建/移入目录：递归补挂 watch，使其内文件后续改动可被捕获。
                         add_tree(full);
                     } else if (ev->mask & (IN_CLOSE_WRITE | IN_MOVED_TO)) {
                         std::error_code ec;
@@ -412,7 +412,7 @@ std::size_t AssetManager::PumpHotReloads() {
 
         bool did_reload = false;
 
-        // çº¹ç†çƒ­é‡è½½
+        // 纹理热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto tex_it = textures_.find(cache_key);
@@ -435,7 +435,7 @@ std::size_t AssetManager::PumpHotReloads() {
             continue;
         }
 
-        // Dmesh çƒ­é‡è½½
+        // Dmesh 热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto it = dmeshes_.find(cache_key);
@@ -454,7 +454,7 @@ std::size_t AssetManager::PumpHotReloads() {
             continue;
         }
 
-        // Danim çƒ­é‡è½½
+        // Danim 热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto it = danims_.find(cache_key);
@@ -473,7 +473,7 @@ std::size_t AssetManager::PumpHotReloads() {
             continue;
         }
 
-        // Dskel çƒ­é‡è½½
+        // Dskel 热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto it = dskels_.find(cache_key);
@@ -492,7 +492,7 @@ std::size_t AssetManager::PumpHotReloads() {
             continue;
         }
 
-        // AudioClip çƒ­é‡è½½
+        // AudioClip 热重载
         {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto it = audio_clips_.find(cache_key);

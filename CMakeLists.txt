@@ -1020,6 +1020,7 @@ if(DSE_HAS_ASSIMP)
 endif()
 if(MSVC)
     set_property(TARGET AssetBuilder PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(AssetBuilder PRIVATE /utf-8)
 endif()
 
 # 工具链：ShaderCompiler (GLSL 450 → SPIR-V / GLSL 330 / HLSL)

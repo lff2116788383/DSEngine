@@ -51,13 +51,13 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
     const auto* prog = shader_mgr_.GetComputeProgram(shader_handle);
     if (!prog || prog->pipeline == VK_NULL_HANDLE) return;
 
-    // ç¡®å®šå½•åˆ¶ç›®æ ‡ cmd buffer
+    // 确定录制目标 cmd buffer
     const bool batched = in_compute_pass_ && compute_cmd_buffer_ != VK_NULL_HANDLE;
     VkCommandBuffer cmd = batched ? compute_cmd_buffer_ : resource_mgr_.BeginSingleTimeCommands();
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, prog->pipeline);
 
-    // ç»‘å®š descriptor setï¼ˆSSBO + storage image + samplerï¼‰
+    // 绑定 descriptor set（SSBO + storage image + sampler）
     if (prog->descriptor_set_layout != VK_NULL_HANDLE) {
         VkDescriptorSet ds = resource_mgr_.AllocateDescriptorSet(prog->descriptor_set_layout);
         if (ds != VK_NULL_HANDLE) {
@@ -67,7 +67,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
             buffer_infos.reserve(bound_ssbos_.size());
             image_infos.reserve(pending_compute_images_.size() + pending_compute_samplers_.size());
 
-            // SSBO ç»‘å®šï¼ˆbinding 0..ssbo_binding_count-1ï¼‰
+            // SSBO 绑定（binding 0..ssbo_binding_count-1）
             for (auto& [binding, ssbo_handle] : bound_ssbos_) {
                 if (binding >= prog->ssbo_binding_count) continue;
                 const auto* ssbo = resource_mgr_.GetSSBO(ssbo_handle);
@@ -87,13 +87,13 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 writes.push_back(w);
             }
 
-            // Storage image ç»‘å®šï¼ˆlayout binding = ssbo_count + user_bindingï¼‰
+            // Storage image 绑定（layout binding = ssbo_count + user_binding）
             uint32_t img_base = prog->ssbo_binding_count;
             uint32_t total_bindings = prog->ssbo_binding_count + prog->storage_image_count + prog->sampler_count;
             for (auto& [binding, img_bind] : pending_compute_images_) {
                 if (img_base + binding >= total_bindings) continue;
                 VkImageView view = VK_NULL_HANDLE;
-                // æ£€æŸ¥ Hi-Z çº¹ç†
+                // 检查 Hi-Z 纹理
                 if (hiz_impl_) {
                     auto hit = hiz_impl_->textures.find(img_bind.texture_handle);
                     if (hit != hiz_impl_->textures.end()) {
@@ -103,7 +103,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                             view = hiz.mip_views[mip];
                     }
                 }
-                // æ™®é€šçº¹ç†
+                // 普通纹理
                 if (view == VK_NULL_HANDLE) {
                     const auto* tex = resource_mgr_.GetTexture(img_bind.texture_handle);
                     if (tex) view = tex->image_view;
@@ -123,13 +123,13 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                 writes.push_back(w);
             }
 
-            // Sampler ç»‘å®šï¼ˆlayout binding = ssbo_count + storage_image_count + user_unitï¼‰
+            // Sampler 绑定（layout binding = ssbo_count + storage_image_count + user_unit）
             uint32_t smp_base = prog->ssbo_binding_count + prog->storage_image_count;
             for (auto& [unit, tex_handle] : pending_compute_samplers_) {
                 if (smp_base + unit >= total_bindings) continue;
                 VkImageView view = VK_NULL_HANDLE;
                 VkSampler sampler = VK_NULL_HANDLE;
-                // æ£€æŸ¥ Hi-Z çº¹ç†ï¼ˆstorage image ä½¿ç”¨åŽä¿æŒ GENERAL layoutï¼‰
+                // 检查 Hi-Z 纹理（storage image 使用后保持 GENERAL layout）
                 bool is_hiz_texture = false;
                 if (hiz_impl_) {
                     auto hit = hiz_impl_->textures.find(tex_handle);
@@ -139,7 +139,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                         is_hiz_texture = true;
                     }
                 }
-                // æ™®é€šçº¹ç†
+                // 普通纹理
                 if (view == VK_NULL_HANDLE) {
                     const auto* tex = resource_mgr_.GetTexture(tex_handle);
                     if (tex && tex->image_view != VK_NULL_HANDLE) {
@@ -147,7 +147,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                         sampler = tex->sampler != VK_NULL_HANDLE ? tex->sampler : resource_mgr_.default_sampler();
                     }
                 }
-                // Render target depth attachmentï¼ˆHi-Z ä½¿ç”¨ PreZ depthï¼‰
+                // Render target depth attachment（Hi-Z 使用 PreZ depth）
                 bool is_depth_attachment = false;
                 if (view == VK_NULL_HANDLE) {
                     VkImageView depth_view = resource_mgr_.GetRenderTargetDepthImageView(tex_handle);
@@ -193,7 +193,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, size,
                            compute_push_constants_.data());
     }
-    // Dispatch åŽæ¸…ç©ºçŠ¶æ€ç¼“å­˜ï¼Œé¿å…è·¨ dispatch ç´¯ç§¯
+    // Dispatch 后清空状态缓存，避免跨 dispatch 累积
     compute_push_constants_.clear();
     compute_uniform_layouts_.clear();
     compute_uniform_next_offset_ = 0;
@@ -203,7 +203,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
     vkCmdDispatch(cmd, groups_x, groups_y, groups_z);
 
     if (!batched) {
-        // å•æ¬¡æ¨¡å¼ï¼šæ’å…¥ barrier + æäº¤
+        // 单次模式：插入 barrier + 提交
         VkMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
         barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
@@ -216,7 +216,7 @@ void VulkanRhiDevice::DispatchCompute(unsigned int shader_handle,
 }
 
 // ============================================================
-// RenderGraph è‡ªåŠ¨å±éšœï¼šç²¾ç¡® VkImageMemoryBarrier
+// RenderGraph 自动屏障：精确 VkImageMemoryBarrier
 // ============================================================
 
 namespace {
@@ -272,12 +272,12 @@ VkBarrierMapping MapResourceState(ResourceState state) {
 } // anonymous namespace
 
 // ============================================================
-// å³æ—¶ç»˜åˆ¶ / RT blit åŽŸè¯­ï¼ˆç¼–è¾‘å™¨æž¶æž„ Â§5.A / Â§5.Bï¼‰
+// 即时绘制 / RT blit 原语（编辑器架构 §5.A / §5.B）
 // ============================================================
 
 namespace {
 
-/// é¡¶ç‚¹å±žæ€§åˆ†é‡æ•° â†’ VkFormatï¼ˆfloat åˆ†é‡ï¼‰ã€‚
+/// 顶点属性分量数 → VkFormat（float 分量）。
 VkFormat ImmAttrVkFormat(int components) {
     switch (components) {
     case 1:  return VK_FORMAT_R32_SFLOAT;
@@ -300,7 +300,7 @@ VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
     VkRenderPass render_pass,
     uint32_t color_attachment_count) {
 
-    // --- å¤åˆé”®ï¼šVS/FS module + render_pass + topology + blend/depth + é¡¶ç‚¹å±žæ€§å¸ƒå±€ ---
+    // --- 复合键：VS/FS module + render_pass + topology + blend/depth + 顶点属性布局 ---
     std::string key;
     AppendBytes(key, &program->vert_module, sizeof(program->vert_module));
     AppendBytes(key, &program->frag_module, sizeof(program->frag_module));
@@ -335,7 +335,7 @@ VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
     stages[1].module = program->frag_module;
     stages[1].pName = "main";
 
-    // --- Vertex Inputï¼šå• bindingï¼Œper-vertex ---
+    // --- Vertex Input：单 binding，per-vertex ---
     VkVertexInputBindingDescription binding{};
     binding.binding = 0;
     binding.stride = static_cast<uint32_t>(desc.stride_bytes);
@@ -371,7 +371,7 @@ VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
     input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly.topology = vk_topo;
 
-    // --- Viewport/Scissor èµ° dynamic stateï¼ˆå®žé™…å€¼åœ¨å½•åˆ¶æ—¶è®¾ç½®ï¼‰---
+    // --- Viewport/Scissor 走 dynamic state（实际值在录制时设置）---
     VkPipelineViewportStateCreateInfo viewport_state{};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state.viewportCount = 1;
@@ -380,7 +380,7 @@ VkPipeline VulkanRhiDevice::GetOrCreateImmediatePipeline(
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = VK_CULL_MODE_NONE;  // å³æ—¶ç»˜åˆ¶ä¸å‰”é™¤ï¼ˆæ‹¾å–/å…¨å± quadï¼‰
+    rasterizer.cullMode = VK_CULL_MODE_NONE;  // 即时绘制不剔除（拾取/全屏 quad）
     rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.lineWidth = 1.0f;
 
@@ -449,7 +449,7 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     EnsureInitialized();
     if (!initialized_ || desc.shader_program == 0) return;
     if (desc.render_target == 0) {
-        // å³æ—¶ç»˜åˆ¶ç›®æ ‡é¡»ä¸ºç¦»å± RTï¼›swapchain ç›´ç»˜èµ°å‘ˆçŽ°å±‚ï¼ˆÂ§5.3ï¼‰ï¼Œæ­¤å¤„ä¸æ”¯æŒã€‚
+        // 即时绘制目标须为离屏 RT；swapchain 直绘走呈现层（§5.3），此处不支持。
         DEBUG_LOG_WARN("[Vulkan] ImmediateDraw: default framebuffer target unsupported");
         return;
     }
@@ -465,14 +465,14 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     VkDevice device = context_.device();
     const uint32_t color_count = static_cast<uint32_t>(rt->color_attachment_count > 0 ? rt->color_attachment_count : 1);
 
-    // clear â†’ loadOp=CLEAR render passï¼›å¦åˆ™ loadOp=LOAD ä¿ç•™æ—¢æœ‰å†…å®¹ã€‚
+    // clear → loadOp=CLEAR render pass；否则 loadOp=LOAD 保留既有内容。
     VkRenderPass render_pass = desc.clear ? rt->render_pass : rt->render_pass_load;
     if (render_pass == VK_NULL_HANDLE) render_pass = rt->render_pass;
 
     VkPipeline pipeline = GetOrCreateImmediatePipeline(desc, program, render_pass, color_count);
     if (pipeline == VK_NULL_HANDLE) return;
 
-    // é¡¶ç‚¹æ•°æ®ä¸Šä¼ åˆ°ä¸´æ—¶ GPU é¡¶ç‚¹ç¼“å†²ï¼ˆåŒæ­¥æäº¤åŽåˆ é™¤ï¼‰ã€‚
+    // 顶点数据上传到临时 GPU 顶点缓冲（同步提交后删除）。
     unsigned int vbo_handle = 0;
     const VulkanBuffer* vbuf = nullptr;
     if (desc.vertices && desc.vertex_bytes > 0) {
@@ -486,8 +486,8 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
 
     VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
 
-    // RT é¢œè‰²å›¾åƒé™æ¯æ€ä¸º SHADER_READ_ONLYï¼ˆä¸Žå›žè¯»çº¦å®šä¸€è‡´ï¼‰â†’ è½¬ COLOR_ATTACHMENT_OPTIMALï¼Œ
-    // åŒ¹é… render pass çš„ initialLayoutã€‚
+    // RT 颜色图像静息态为 SHADER_READ_ONLY（与回读约定一致）→ 转 COLOR_ATTACHMENT_OPTIMAL，
+    // 匹配 render pass 的 initialLayout。
     VkImageMemoryBarrier to_color{};
     to_color.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     to_color.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -518,7 +518,7 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
     }
     vkCmdBeginRenderPass(cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
 
-    // viewportï¼š0,0,0,0 â†’ RT å…¨å°ºå¯¸
+    // viewport：0,0,0,0 → RT 全尺寸
     const bool full_vp = (desc.viewport.z == 0 || desc.viewport.w == 0);
     VkViewport vp{};
     vp.x = full_vp ? 0.0f : static_cast<float>(desc.viewport.x);
@@ -536,7 +536,7 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-    // uniform â†’ push constantï¼šæŒ‰åå°„çš„æˆå‘˜ååç§»æ‰“åŒ…ï¼ˆä¸Ž DX11 cbuffer åå°„å¯¹ä½ï¼‰ã€‚
+    // uniform → push constant：按反射的成员名偏移打包（与 DX11 cbuffer 反射对位）。
     if (program->reflection.has_push_constant && !program->push_constant_member_offsets.empty()) {
         std::vector<uint8_t> pc(program->reflection.push_constant_range.size, 0);
         auto write_uniform = [&](const std::string& name, const void* src, size_t size) {
@@ -562,7 +562,7 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
 
     vkCmdEndRenderPass(cmd);
 
-    // render pass finalLayout=COLOR_ATTACHMENT_OPTIMAL â†’ è½¬å›ž SHADER_READ_ONLYï¼ˆä¾›å›žè¯» / é‡‡æ ·ï¼‰ã€‚
+    // render pass finalLayout=COLOR_ATTACHMENT_OPTIMAL → 转回 SHADER_READ_ONLY（供回读 / 采样）。
     VkImageMemoryBarrier to_read{};
     to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     to_read.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -577,7 +577,7 @@ void VulkanRhiDevice::ImmediateDraw(const ImmediateDrawDesc& desc) {
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          0, 0, nullptr, 0, nullptr, 1, &to_read);
 
-    resource_mgr_.EndSingleTimeCommands(cmd);  // æäº¤ + ç­‰å¾…å®Œæˆ
+    resource_mgr_.EndSingleTimeCommands(cmd);  // 提交 + 等待完成
 
     if (vbo_handle) resource_mgr_.DeleteBuffer(vbo_handle);
 
@@ -601,7 +601,7 @@ void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
 
     VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
 
-    // src/dst é™æ¯æ€å‡ä¸º SHADER_READ_ONLY â†’ TRANSFER_SRC / TRANSFER_DSTã€‚
+    // src/dst 静息态均为 SHADER_READ_ONLY → TRANSFER_SRC / TRANSFER_DST。
     VkImageMemoryBarrier barriers[2]{};
     barriers[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     barriers[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -629,7 +629,7 @@ void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
     region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.dstOffsets[0] = {0, 0, 0};
     region.dstOffsets[1] = {dst->width, dst->height, 1};
-    // ç­‰å°ºå¯¸ä¼˜å…ˆ NEARESTï¼ˆÂ§5.Bï¼‰ï¼›å°ºå¯¸ä¸åŒæ—¶ä»æ­£ç¡®ç¼©æ”¾ã€‚
+    // 等尺寸优先 NEAREST（§5.B）；尺寸不同时仍正确缩放。
     VkFilter filter = (src->width == dst->width && src->height == dst->height)
                           ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
     vkCmdBlitImage(cmd,
@@ -637,7 +637,7 @@ void VulkanRhiDevice::BlitRenderTarget(unsigned int src_rt, unsigned int dst_rt)
         dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1, &region, filter);
 
-    // è½¬å›ž SHADER_READ_ONLYã€‚
+    // 转回 SHADER_READ_ONLY。
     barriers[0].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     barriers[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     barriers[0].srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -660,7 +660,7 @@ void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
     const auto* rt = resource_mgr_.GetRenderTarget(rt_handle);
     if (!rt) return;
 
-    // ç¡®å®šè¦è½¬æ¢çš„ VkImage å’Œ aspect mask
+    // 确定要转换的 VkImage 和 aspect mask
     VkImage image = VK_NULL_HANDLE;
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 
@@ -668,7 +668,7 @@ void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
                                 to == ResourceState::DepthWrite || to == ResourceState::DepthRead);
     if (is_depth_transition && rt->has_depth && rt->depth_texture.image != VK_NULL_HANDLE) {
         image = rt->depth_texture.image;
-        // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 å¿…é¡»åŒæ—¶å£°æ˜Ž DEPTH+STENCIL aspect
+        // VUID-VkImageMemoryBarrier-image-03320: D24S8/D32S8 必须同时声明 DEPTH+STENCIL aspect
         const VkFormat fmt = rt->depth_texture.format;
         const bool has_stencil = (fmt == VK_FORMAT_D24_UNORM_S8_UINT ||
                                   fmt == VK_FORMAT_D32_SFLOAT_S8_UINT ||
@@ -699,7 +699,7 @@ void VulkanRhiDevice::TransitionRenderTarget(unsigned int rt_handle,
     barrier.srcAccessMask = src.access;
     barrier.dstAccessMask = dst.access;
 
-    // ä¼˜å…ˆä½¿ç”¨æ´»è·ƒæ¸²æŸ“å‘½ä»¤ç¼“å†²ï¼›ä¸å¯ç”¨æ—¶èµ° single-time å‘½ä»¤
+    // 优先使用活跃渲染命令缓冲；不可用时走 single-time 命令
     VkCommandBuffer cmd = active_render_cmd_;
     if (cmd != VK_NULL_HANDLE) {
         vkCmdPipelineBarrier(cmd, src.stage, dst.stage,
@@ -754,7 +754,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
         }
     }
 
-    // åˆ›å»º VkImageï¼ˆR32_SFLOATï¼Œå®Œæ•´ mip chainï¼‰
+    // 创建 VkImage（R32_SFLOAT，完整 mip chain）
     VkImageCreateInfo img_ci{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     img_ci.imageType = VK_IMAGE_TYPE_2D;
     img_ci.format = VK_FORMAT_R32_SFLOAT;
@@ -789,7 +789,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
     }
     vkBindImageMemory(device, info.image, info.memory, 0);
 
-    // Layout transition: UNDEFINED â†’ GENERALï¼ˆæ‰€æœ‰ mip çº§åˆ«ï¼‰
+    // Layout transition: UNDEFINED → GENERAL（所有 mip 级别）
     {
         VkCommandBuffer cmd = resource_mgr_.BeginSingleTimeCommands();
         VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
@@ -812,7 +812,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
         resource_mgr_.EndSingleTimeCommands(cmd);
     }
 
-    // å…¨ mip viewï¼ˆç”¨äºŽé‡‡æ ·ï¼‰
+    // 全 mip view（用于采样）
     VkImageViewCreateInfo view_ci{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
     view_ci.image = info.image;
     view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -823,7 +823,7 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
     view_ci.subresourceRange.layerCount = 1;
     vkCreateImageView(device, &view_ci, nullptr, &info.full_view);
 
-    // æ¯ä¸ª mip level ä¸€ä¸ª viewï¼ˆç”¨äºŽ compute storage image å†™å…¥ï¼‰
+    // 每个 mip level 一个 view（用于 compute storage image 写入）
     info.mip_views.resize(mip_count);
     for (int i = 0; i < mip_count; ++i) {
         VkImageViewCreateInfo mip_view_ci = view_ci;
@@ -832,9 +832,9 @@ unsigned int VulkanRhiDevice::CreateHiZTexture(int width, int height) {
         vkCreateImageView(device, &mip_view_ci, nullptr, &info.mip_views[i]);
     }
 
-    // æ³¨å†Œä¸ºçº¹ç†èµ„æºï¼ˆä¾› GetHiZGpuTexture é€šè¿‡ handle è¿”å›žï¼‰
-    // ä½¿ç”¨ resource_mgr_ çš„ compute write texture åˆ›å»ºæ–¹å¼ç®€åŒ–
-    // è¿™é‡Œç›´æŽ¥è¿”å›žä¸€ä¸ªè‡ªç®¡ç† handle
+    // 注册为纹理资源（供 GetHiZGpuTexture 通过 handle 返回）
+    // 使用 resource_mgr_ 的 compute write texture 创建方式简化
+    // 这里直接返回一个自管理 handle
     unsigned int handle = hiz_impl_->next_handle++;
     info.texture_handle = handle;
     hiz_impl_->textures[handle] = std::move(info);
@@ -882,7 +882,7 @@ size_t VulkanRhiDevice::GetOrCreateUniformOffset(unsigned int shader, const char
     if (it != layout.name_to_offset.end()) {
         return it->second;
     }
-    // 16-byte å¯¹é½ï¼ˆVulkan push constant å¸ƒå±€è¦æ±‚ï¼‰
+    // 16-byte 对齐（Vulkan push constant 布局要求）
     size_t offset = (compute_uniform_next_offset_ + 15) & ~size_t(15);
     layout.name_to_offset[name] = offset;
     compute_uniform_next_offset_ = offset + data_size;

@@ -106,9 +106,9 @@ void DumpMeshDiag(const char* tag) {
     fflush(stderr);
 }
 
-// �?Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
+// 经Hierarchy 右键菜单 "Create 3D Object/<item>" 创建真实图元/光源实体
 // （CreateEntity3DCube 等会填充 procedural 几何数据；裸 Mesh Renderer 组件
-// mesh_path 为空、不会渲染任何几何体）。返回新建实体并置为单选�?
+// mesh_path 为空、不会渲染任何几何体）。返回新建实体并置为单选。
 entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
     entt::registry& reg = Reg();
     std::vector<entt::entity> before;
@@ -116,7 +116,7 @@ entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
         if (reg.valid(en)) before.push_back(en);
     OpenHierarchyContextMenu(ctx);
     // 子菜单需先点开父项，再在弹出的子菜单窗口内定位条目
-    // （一步式 "Create 3D Object/Cube" 路径�?BeginPopupContextWindow 下解析失败）�?
+    // （一步式 "Create 3D Object/Cube" 路径在BeginPopupContextWindow 下解析失败）。
     ctx->ItemClick("Create 3D Object");
     ctx->Yield(2);
     ctx->SetRef("//$FOCUSED");
@@ -136,8 +136,8 @@ entt::entity NewPrimitive(ImGuiTestContext* ctx, const char* item) {
     return entt::null;
 }
 
-// Hierarchy 右键 �?"Create Empty Entity"，按 registry 差集取回新实体并置为单选�?
-// 用于蒙皮模型测试：得到一个干净的编辑器实体（含 TransformComponent、无程序化几何残留）�?
+// Hierarchy 右键 →"Create Empty Entity"，按 registry 差集取回新实体并置为单选。
+// 用于蒙皮模型测试：得到一个干净的编辑器实体（含 TransformComponent、无程序化几何残留）。
 entt::entity NewEmptyEntity(ImGuiTestContext* ctx) {
     entt::registry& reg = Reg();
     std::vector<entt::entity> before;
@@ -170,7 +170,7 @@ void SetScale(entt::entity e, float x, float y, float z) {
     t.dirty = true;
 }
 
-// 图元几何�?position-only 顶点，PBR 需要法线；�?PBR 变体让方向光/点光着色生效�?
+// 图元几何为position-only 顶点，PBR 需要法线；用PBR 变体让方向光/点光着色生效。
 void UsePBR(entt::entity e) { (void)e; /* DIAG: keep default variant */ }
 
 void DestroyEntities(std::initializer_list<entt::entity> ents) {
@@ -289,7 +289,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // A4: render_cylinder_default（引擎无 cylinder 图元，用竖向拉伸�?Cube 柱体代替�?
+    // A4: render_cylinder_default（引擎无 cylinder 图元，用竖向拉伸的Cube 柱体代替）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_cylinder_default");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -645,7 +645,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // D19: render_bloom_effect（Scene 视口不合�?bloom，Game 视图才可见；此处验证发光�?PostProcess 不破坏渲染）
+    // D19: render_bloom_effect（Scene 视口不合成bloom，Game 视图才可见；此处验证发光使PostProcess 不破坏渲染）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_bloom_effect");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -700,7 +700,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // D21: render_ao_corners（SSAO 只在 Game 视图合成；Scene 视口验证转角几何正常渲染�?
+    // D21: render_ao_corners（SSAO 只在 Game 视图合成；Scene 视口验证转角几何正常渲染）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_ao_corners");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -730,7 +730,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
     // E. Camera and Viewpoint (4 tests)
     // ====================================================================
 
-    // E22: render_camera_perspective（一排递远�?Cube，验证透视缩小�?
+    // E22: render_camera_perspective（一排递远的Cube，验证透视缩小）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_perspective");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -781,7 +781,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // E24: render_camera_closeup（大尺寸 Cube 占满视口�?
+    // E24: render_camera_closeup（大尺寸 Cube 占满视口）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_closeup");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -802,7 +802,7 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
         ctx->Yield(2);
     };
 
-    // E25: render_camera_far（远处小物体�?
+    // E25: render_camera_far（远处小物体）
     t = ImGuiTestEngine_RegisterTest(engine, "dse-render", "render_camera_far");
     t->TestFunc = [](ImGuiTestContext* ctx) {
         HideOptionalPanels();
@@ -824,8 +824,8 @@ void RegisterRenderValidationTests(ImGuiTestEngine* engine) {
 
     // ====================================================================
     // F. Skinned skeletal-animation model asset import (1 test)
-    //    使用 KF demo 骑士资产（cooked paladin dmesh + dskel + idle danim）验�?
-    //    “编辑器导入蒙皮骨骼动画模型并渲染”这一路径�?
+    //    使用 KF demo 骑士资产（cooked paladin dmesh + dskel + idle danim）验证
+    //    “编辑器导入蒙皮骨骼动画模型并渲染”这一路径。
     // ====================================================================
 
     // F26: render_skinned_knight

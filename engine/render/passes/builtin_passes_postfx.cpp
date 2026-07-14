@@ -79,7 +79,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
     int mip_h = Screen::height() / 2;
     for (size_t i = 0; i < ctx_.render_targets.bloom_mips.size(); ++i) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.bloom_mips[i], glm::vec4(0.0f), false});
-        // compute åŽç«¯ï¼ˆDX11/Vulkanï¼‰èµ° DispatchComputePass å†™ UAVï¼›GL å›žé€€å…¨å± quadã€‚
+        // compute 后端（DX11/Vulkan）走 DispatchComputePass 写 UAV；GL 回退全屏 quad。
         bloom_renderer_.Downsample(cmd_buffer, *ctx_.rhi_device, current_src,
                                    static_cast<float>(mip_w * 2), static_cast<float>(mip_h * 2));
         cmd_buffer.EndRenderPass();
@@ -95,7 +95,7 @@ void BloomPass::Execute(CommandBuffer& cmd_buffer) {
         current_src = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.bloom_mips[i]);
         cmd_buffer.BeginRenderPass({target_rt, glm::vec4(0.0f), false});
         const float mip_texel = 1.0f / static_cast<float>(std::max(mip_w, 1));
-        // compute åŽç«¯ï¼ˆDX11/Vulkanï¼‰èµ° DispatchComputePass ç´¯åŠ è¿› UAVï¼›GL å›žé€€å…¨å± quadï¼ˆalpha æ··åˆï¼‰ã€‚
+        // compute 后端（DX11/Vulkan）走 DispatchComputePass 累加进 UAV；GL 回退全屏 quad（alpha 混合）。
         bloom_renderer_.Upsample(cmd_buffer, *ctx_.rhi_device, current_src,
                                  mip_texel, pp_config.bloom_mip_weight);
         cmd_buffer.EndRenderPass();
@@ -157,22 +157,22 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
     const auto& pp_config = snap.post_process;
     bool pp_enabled = pp_config.valid;
 
-    // èŽ·å– SSAO çº¹ç†ï¼ˆå¦‚æžœå¯ç”¨ï¼‰
+    // 获取 SSAO 纹理（如果启用）
     unsigned int ssao_tex = 0;
     if (ctx_.pipeline_features.ssao && pp_enabled && pp_config.ssao_enabled && ctx_.render_targets.ssao_blur != 0) {
         ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao_blur);
     }
 
-    // èŽ·å– Contact Shadow çº¹ç†ï¼ˆå¦‚æžœå¯ç”¨ï¼‰
+    // 获取 Contact Shadow 纹理（如果启用）
     unsigned int contact_shadow_tex = 0;
     if (ctx_.pipeline_features.contact_shadow && pp_enabled && pp_config.contact_shadow_enabled && ctx_.render_targets.contact_shadow != 0) {
         contact_shadow_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.contact_shadow);
     }
 
-    // èŽ·å– auto exposure çº¹ç†ï¼ˆå¦‚æžœå¯ç”¨ï¼‰
+    // 获取 auto exposure 纹理（如果启用）
     unsigned int ae_tex = 0;
     if (ctx_.pipeline_features.auto_exposure && ctx_.auto_exposure_active) {
-        // ping-pong å·²ç¿»è½¬ï¼Œå½“å‰å¸§ç»“æžœåœ¨ 1 - current_index
+        // ping-pong 已翻转，当前帧结果在 1 - current_index
         const int result_idx = 1 - ctx_.lum_ping_pong_index;
         ae_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.lum_adapted[result_idx]);
     }
@@ -185,10 +185,10 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         lut_intensity = pp_config.color_lut_intensity;
     }
 
-    // bloom_composite æ˜¯åŽ†å² effect nameï¼Œå½“å‰å®žé™…æ‰¿æ‹… final composite èŒè´£ã€‚
-    // å·²è¿åˆ° PostProcessRendererï¼šçº¯ float UBOï¼ˆ16 æ ‡é‡ï¼Œè§ä¸‹æ–¹ PostProcessRequestï¼Œ
-    // å­—æ®µé¡ºåºä¸Ž bloom_composite_ssao_ae.frag çš„ std140 UBO ä¸€è‡´ï¼‰ï¼›å„çº¹ç†ç» .Tex/.Tex3D
-    // å†™å…¥å¯¹åº” bindingï¼ˆbloomBlur@2 / ssao@3 / autoExposure@4 / lut@5(3D) / contactShadow@6ï¼‰ã€‚
+    // bloom_composite 是历史 effect name，当前实际承担 final composite 职责。
+    // 已迁到 PostProcessRenderer：纯 float UBO（16 标量，见下方 PostProcessRequest，
+    // 字段顺序与 bloom_composite_ssao_ae.frag 的 std140 UBO 一致）；各纹理经 .Tex/.Tex3D
+    // 写入对应 binding（bloomBlur@2 / ssao@3 / autoExposure@4 / lut@5(3D) / contactShadow@6）。
     float film_grain_time = 0.0f;
     if (pp_enabled && pp_config.film_grain_enabled && pp_config.film_grain_intensity > 0.0f) {
         film_grain_time = static_cast<float>(std::fmod(Time::TimeSinceStartup() * pp_config.film_grain_time_scale, 4096.0f));
@@ -206,9 +206,9 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
             ? ctx_.pipeline_overrides.bloom_intensity
             : pp_config.bloom_intensity;
         const unsigned int lut_handle = static_cast<unsigned int>(lut_tex);
-        // bloom_composite å·²è¿åˆ° PostProcessRendererï¼šparams çº¯ float UBOï¼ˆ16 æ ‡é‡ï¼Œ
-        // ä¸Ž bloom_composite_ssao_ae.frag å­—æ®µåŒåºï¼‰ï¼›çº¹ç†ä¸€å¾‹ç» .Tex/.Tex3D å†™å…¥ï¼Œ
-        // ä½¿èƒ½æ ‡å¿—æŒ‰çº¹ç†åœ¨å¦æ´¾ç”Ÿï¼ˆæ¸²æŸ“å™¨é¢å¤–çº¹ç†å¾ªçŽ¯é‡ handle==0 å³åœï¼Œæ•…ä»…æŒ‚éžé›¶çº¹ç†ï¼‰ã€‚
+        // bloom_composite 已迁到 PostProcessRenderer：params 纯 float UBO（16 标量，
+        // 与 bloom_composite_ssao_ae.frag 字段同序）；纹理一律经 .Tex/.Tex3D 写入，
+        // 使能标志按纹理在否派生（渲染器额外纹理循环遇 handle==0 即停，故仅挂非零纹理）。
         PostProcessRequest req{"bloom_composite", scene_color_tex, {
             pp_config.exposure,
             bloom_intensity,
@@ -234,10 +234,10 @@ void CompositePass::Execute(CommandBuffer& cmd_buffer) {
         if (contact_shadow_tex != 0) req.Tex(6, contact_shadow_tex);
         post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, req);
     } else {
-        // tonemapping / ssao_apply å·²è¿åˆ° PostProcessRendererï¼šUBO ä¸º 4 æ ‡é‡
+        // tonemapping / ssao_apply 已迁到 PostProcessRenderer：UBO 为 4 标量
         // {manual_exposure, auto_exposure_enabled, lut_enabled, lut_intensity}ï¼›
-        // enable æ ‡å¿—æŒ‰çº¹ç†åœ¨å¦åœ¨è°ƒç”¨ç‚¹æ´¾ç”Ÿï¼ˆæ—§ binder åŽŸç”± FindTex æŽ¨å¯¼ï¼‰ã€‚
-        // å¯é€‰çº¹ç†ä»…åœ¨éžé›¶æ—¶æŒ‚è½½â€”â€”æ¸²æŸ“å™¨çº¹ç†å¾ªçŽ¯é‡ handle==0 å³åœï¼Œé¿å…ä¸­æ–­åŽç»­ç»‘å®šã€‚
+        // enable 标志按纹理在否在调用点派生（旧 binder 原由 FindTex 推导）。
+        // 可选纹理仅在非零时挂载——渲染器纹理循环遇 handle==0 即停，避免中断后续绑定。
         const float ae_enabled  = ae_tex != 0 ? 1.0f : 0.0f;
         const float lut_enabled = static_cast<unsigned int>(lut_tex) != 0 ? 1.0f : 0.0f;
         if (ssao_tex != 0) {
@@ -293,7 +293,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     const int write_idx = ctx_.lum_ping_pong_index;
     const int read_idx  = 1 - write_idx;
 
-    // Pass 1: åœºæ™¯ â†’ 64x64 log luminance (8x8 é‡‡æ ·ç½‘æ ¼)
+    // Pass 1: 场景 → 64x64 log luminance (8x8 采样网格)
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.lum_temp, glm::vec4(0.0f), true});
     post_process_renderer_.BeginFrame();
@@ -315,7 +315,7 @@ void AutoExposurePass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, prev_adapted_tex));
     cmd_buffer.EndRenderPass();
 
-    // ç¿»è½¬ ping-pong
+    // 翻转 ping-pong
     ctx_.lum_ping_pong_index = 1 - ctx_.lum_ping_pong_index;
 }
 
@@ -353,7 +353,7 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
 
     post_process_renderer_.BeginFrame();
 
-    // Pass 1: SSAO è®¡ç®—ï¼ˆåŠåˆ†è¾¨çŽ‡ï¼‰
+    // Pass 1: SSAO 计算（半分辨率）
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao, glm::vec4(1.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao", depth_tex, {
         pp_config.ssao_radius,
@@ -368,7 +368,7 @@ void SSAOPass::Execute(CommandBuffer& cmd_buffer) {
     }});
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: åŒè¾¹æ¨¡ç³Š
+    // Pass 2: 双边模糊
     const unsigned int ssao_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssao);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssao_blur, glm::vec4(1.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"ssao_blur", ssao_tex});
@@ -548,16 +548,16 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int main_color_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.main);
     if (main_color_tex == 0) return;
 
-    // è¯»å– motion vector çº¹ç†ï¼ˆå¦‚æžœå¯ç”¨ï¼‰
+    // 读取 motion vector 纹理（如果可用）
     const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
 
-    // åŽ†å²å¸§è¯»å–æ¥è‡ªä¸Šä¸€å¸§å†™å…¥çš„ RT
+    // 历史帧读取来自上一帧写入的 RT
     const int read_idx = 1 - history_index_;
     const unsigned int history_tex = has_valid_history_
         ? ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[read_idx])
         : 0;
 
-    // TAA resolveï¼šå†™å…¥å½“å‰å¸§çš„ history RTï¼ˆç›´æŽ¥åšè¾“å‡ºï¼ŒçœæŽ‰ copyï¼‰
+    // TAA resolve：写入当前帧的 history RT（直接做输出，省掉 copy）
     const int write_idx = history_index_;
     post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({history_rt_[write_idx], glm::vec4(0.0f), true});
@@ -571,7 +571,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, mv_tex).Tex(5, history_tex));
     cmd_buffer.EndRenderPass();
 
-    // å°† TAA ç»“æžœ copy åˆ° taa RTï¼ˆä¾› Present/FXAA è¯»å–ï¼‰
+    // 将 TAA 结果 copy 到 taa RT（供 Present/FXAA 读取）
     const unsigned int taa_out_tex = ctx_.rhi_device->GetRenderTargetColorTexture(history_rt_[write_idx]);
     if (taa_out_tex != 0 && ctx_.render_targets.taa != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.taa, glm::vec4(0.0f), true});
@@ -579,7 +579,7 @@ void TAAPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.EndRenderPass();
     }
 
-    // ç¿»è½¬ ping-pong ç´¢å¼•
+    // 翻转 ping-pong 索引
     history_index_ = 1 - history_index_;
     has_valid_history_ = true;
 }
@@ -589,7 +589,7 @@ void TAAPass::EnsureHistoryRT(int width, int height) {
         && history_rt_[0] != 0 && history_rt_[1] != 0) {
         return;
     }
-    // åˆ†è¾¨çŽ‡å˜åŒ–æˆ–é¦–æ¬¡åˆ›å»ºï¼ˆæ—§ RT ç”± RhiDevice èµ„æºç®¡ç†å™¨ç»Ÿä¸€å›žæ”¶ï¼‰
+    // 分辨率变化或首次创建（旧 RT 由 RhiDevice 资源管理器统一回收）
     for (int i = 0; i < 2; ++i) {
         RenderTargetDesc desc;
         desc.width = width;
@@ -649,7 +649,7 @@ void DOFPass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, main_color_tex));
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: dof RT â†’ main RTï¼ˆå›žå†™ï¼‰
+    // Pass 2: dof RT → main RT（回写）
     const unsigned int dof_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.dof);
     if (dof_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.main, glm::vec4(0.0f), true});
@@ -689,7 +689,7 @@ void MotionVectorPass::Execute(CommandBuffer& cmd_buffer) {
     if (!has_prev_vp_) {
         prev_vp_ = current_vp;
         has_prev_vp_ = true;
-        // é¦–å¸§è¾“å‡ºé›¶é€Ÿåº¦
+        // 首帧输出零速度
         cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
         cmd_buffer.BeginRenderPass({ctx_.render_targets.motion_vector, glm::vec4(0.0f), true});
         cmd_buffer.EndRenderPass();
@@ -742,7 +742,7 @@ void MotionBlurPass::Execute(CommandBuffer& cmd_buffer) {
     const unsigned int mv_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.motion_vector);
     if (main_color_tex == 0 || mv_tex == 0) return;
 
-    // motion_blur çŽ°åœ¨è¯» motion_vector RT è€Œéžæ·±åº¦ + reproj
+    // motion_blur 现在读 motion_vector RT 而非深度 + reproj
     // params: [0] intensity, [1] samples, [2] screen_w, [3] screen_h, [4] color_tex
     post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.dof, glm::vec4(0.0f), true});
@@ -794,7 +794,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
     float far_plane  = active_cam.valid ? active_cam.far_clip  : 10000.0f;
 
-    // Pass 1: æ¸²æŸ“ SSR åˆ°åŠåˆ†è¾¨çŽ‡ ssr RT
+    // Pass 1: 渲染 SSR 到半分辨率 ssr RT
     post_process_renderer_.BeginFrame();
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ssr, glm::vec4(0.0f), true});
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, PostProcessRequest{"ssr", depth_tex, {
@@ -811,7 +811,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
     }}.Tex(2, scene_color_tex));
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: å°† SSR ç»“æžœå åŠ åˆ° scene RTï¼ˆåˆ©ç”¨ SSR alpha ä½œä¸ºæ··åˆæƒé‡ï¼‰
+    // Pass 2: 将 SSR 结果叠加到 scene RT（利用 SSR alpha 作为混合权重）
     const unsigned int ssr_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.ssr);
     if (ssr_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -821,7 +821,7 @@ void SSRPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// OutlinePass â€” å±å¹•ç©ºé—´è¾¹ç¼˜æ£€æµ‹æè¾¹
+// OutlinePass — 屏幕空间边缘检测描边
 // ============================================================
 
 void OutlinePass::Setup(RenderGraph& graph) {
@@ -849,7 +849,7 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     float near_plane = active_cam.valid ? active_cam.near_clip : 0.1f;
     float far_plane  = active_cam.valid ? active_cam.far_clip  : 1000.0f;
 
-    // Pass 1: è¾¹ç¼˜æ£€æµ‹ â†’ outline RT
+    // Pass 1: 边缘检测 → outline RT
     cmd_buffer.BeginRenderPass({ctx_.render_targets.outline, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
     post_process_renderer_.BeginFrame();
     post_process_renderer_.Draw(cmd_buffer, *ctx_.rhi_device, {"edge_detect", depth_tex, {
@@ -866,7 +866,7 @@ void OutlinePass::Execute(CommandBuffer& cmd_buffer) {
     }});
     cmd_buffer.EndRenderPass();
 
-    // Pass 2: å°†è¾¹ç¼˜ç»“æžœå åŠ åˆ° scene RT
+    // Pass 2: 将边缘结果叠加到 scene RT
     const unsigned int outline_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.outline);
     if (outline_tex != 0) {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
@@ -923,7 +923,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
 
     const unsigned int scene_tex = ctx_.rhi_device->GetRenderTargetColorTexture(ctx_.render_targets.scene);
 
-    // params å¸ƒå±€ï¼ˆ15 floatï¼‰:
+    // params 布局（15 float）:
     // [0-1]  sun_screen_pos.xy (UV space)
     // [2-4]  light_color.rgb
     // [5]    density
@@ -935,8 +935,8 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
     // [11-14] reserved (pad)
     cmd_buffer.BindPipeline(ctx_.pipeline_states.composite);
     cmd_buffer.BeginRenderPass({ctx_.render_targets.scene, glm::vec4(0.0f), false});
-    // å·²è¿åˆ° PostProcessRendererï¼šscreenTexture set=2,b1 / u_depth_tex set=2,b2 /
-    // å‚æ•° std140 set=2,b0ï¼ˆ15 æ ‡é‡ï¼ŒåŽ»é™¤æ—§ vestigial u_depth_handle å­—æ®µï¼‰ã€‚
+    // 已迁到 PostProcessRenderer：screenTexture set=2,b1 / u_depth_tex set=2,b2 /
+    // 参数 std140 set=2,b0（15 标量，去除旧 vestigial u_depth_handle 字段）。
     PostProcessRequest req{"light_shaft", scene_tex, {
         sun_uv_x, sun_uv_y,
         pp->light_shaft_color.r, pp->light_shaft_color.g, pp->light_shaft_color.b,
@@ -954,7 +954,7 @@ void LightShaftPass::Execute(CommandBuffer& cmd_buffer) {
 }
 
 // ============================================================
-// VolumetricFogPass â€” é«˜åº¦æŒ‡æ•°é›¾ + Mie æ•£å°„è¿‘ä¼¼ raymarching
+// VolumetricFogPass — 高度指数雾 + Mie 散射近似 raymarching
 // ============================================================
 
 } // namespace render

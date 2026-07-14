@@ -1,6 +1,6 @@
 ﻿/**
  * @file asset_manager.cpp
- * @brief èµ„äº§ç®¡ç†å™¨ï¼Œè´Ÿè´£åŠ è½½ã€ç¼“å­˜å’Œç”Ÿå‘½å‘¨æœŸç®¡ç†(å¦‚çº¹ç†ã€éŸ³é¢‘ã€é¢„åˆ¶ä½“)
+ * @brief 资产管理器，负责加载、缓存和生命周期管理(如纹理、音频、预制体)
  */
 
 #include "engine/assets/asset_manager.h"
@@ -13,7 +13,7 @@
 #include "engine/base/debug.h"
 #include "engine/core/job_system.h"
 #include "engine/core/event_bus.h"
-#include "engine/core/memory/memory.h"  // ç»Ÿä¸€å†…å­˜é¢„ç®—è§†å›¾ï¼ˆÂ§4.4ï¼‰
+#include "engine/core/memory/memory.h"  // 统一内存预算视图（§4.4）
 #include <utility>
 #include <filesystem>
 #include <algorithm>
@@ -40,7 +40,7 @@ extern "C" {
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
-// â”€â”€â”€ .dmat binary cache helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── .dmat binary cache helpers ──────────────────────────────────────────
 static constexpr uint32_t kDmatBinMagic   = 0x42544D44u; // 'DMTB'
 static constexpr uint32_t kDmatBinVersion = 1u;
 
@@ -204,8 +204,8 @@ AssetManager::AssetManager() = default;
 
 AssetManager::~AssetManager() {
     StopFileWatcher();
-    // åœ¨æˆå‘˜å®¹å™¨æžæž„å‰ä¸»åŠ¨é‡Šæ”¾ï¼Œé¿å…é™æ€ CRT Debug å †åœ¨ DLL å¸è½½/æµ‹è¯•è¿›ç¨‹é€€å‡ºé˜¶æ®µ
-    // å†å¤„ç†è·¨æ¨¡å—åˆ†é…è¿‡çš„ STL èŠ‚ç‚¹æ—¶è§¦å‘ debug_heap é“¾è¡¨æ–­è¨€ã€‚
+    // 在成员容器析构前主动释放，避免静态 CRT Debug 堆在 DLL 卸载/测试进程退出阶段
+    // 再处理跨模块分配过的 STL 节点时触发 debug_heap 链表断言。
     ReleaseGpuResources();
     {
         std::lock_guard<std::mutex> callback_lock(callback_mutex_);
@@ -352,8 +352,8 @@ std::string AssetManager::NormalizeAssetPath(const std::string& path) const {
         if (!data_root.empty()) {
             const std::filesystem::path normalized_data_root = std::filesystem::path(data_root).lexically_normal();
             const std::filesystem::path relative = normalized.lexically_relative(normalized_data_root);
-            // ç”¨ generic_string()ï¼ˆè·¨å¹³å° std::stringï¼Œ'/' åˆ†éš”ï¼‰åš ".." å‰ç¼€åˆ¤æ–­ï¼Œ
-            // é¿å… path::native() åœ¨ Windows è¿”å›ž wstring / POSIX è¿”å›ž string çš„ç±»åž‹å·®å¼‚ã€‚
+            // 用 generic_string()（跨平台 std::string，'/' 分隔）做 ".." 前缀判断，
+            // 避免 path::native() 在 Windows 返回 wstring / POSIX 返回 string 的类型差异。
             const std::string relative_native = relative.generic_string();
             if (!relative.empty() && relative_native.rfind("..", 0) != 0) {
                 std::string logical = relative.generic_string();
@@ -391,7 +391,7 @@ std::string AssetManager::ResolveAssetPath(const std::string& path) const {
 }
 
 bool AssetManager::PackBundle(const std::string& input_dir, const std::string& output_bundle, const std::string& aes_key) {
-    // æ‰“åŒ…é€»è¾‘ç»Ÿä¸€æ”¶æ•›åˆ° dse::assets::PackDirectoryToBundleï¼Œä¸Ž CLI/ç¼–è¾‘å™¨å…±ç”¨ã€‚
+    // 打包逻辑统一收敛到 dse::assets::PackDirectoryToBundle，与 CLI/编辑器共用。
     return dse::assets::PackDirectoryToBundle(input_dir, output_bundle, aes_key);
 }
 
@@ -448,7 +448,7 @@ bool AssetManager::LoadFileToMemory(const std::string& path, std::vector<uint8_t
         }
     }
 
-    // å·²æŒ‚è½½çš„ .dpak ä¼˜å…ˆäºŽæ¾æ•£ç£ç›˜æ–‡ä»¶ï¼ˆç¼–è¾‘å™¨ BuildGame äº§ç‰©åœ¨æ­¤ç”Ÿæ•ˆï¼‰ã€‚
+    // 已挂载的 .dpak 优先于松散磁盘文件（编辑器 BuildGame 产物在此生效）。
     if (HasMountedPak() && ReadFromPak(vfs_key, out_data)) {
         return true;
     }
@@ -544,7 +544,7 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
         if (s.albedo) mat->SetTextureHandle(s.albedo);
     };
 
-    // å°è¯•äºŒè¿›åˆ¶ç¼“å­˜
+    // 尝试二进制缓存
     {
         const int64_t dmat_t = DmatGetMtime(dmat_path);
         const int64_t bin_t  = DmatGetMtime(bin_path);
@@ -580,7 +580,7 @@ std::shared_ptr<MaterialAsset> AssetManager::LoadMaterialInstanceFromDmat(const 
         }
     }
 
-    // å›žé€€åˆ° JSON è§£æž
+    // 回退到 JSON 解析
     std::vector<uint8_t> file_data;
     if (!LoadFileToMemory(dmat_path, file_data)) {
         return nullptr;
@@ -682,9 +682,9 @@ std::shared_ptr<MaterialAsset> AssetManager::GetMaterialInstance(unsigned int ma
         return material;
     }
 
-    // å¤§æ‰¹é‡åˆ›å»ºåœºæ™¯ä¸­è°ƒç”¨æ–¹å¯èƒ½åªç¼“å­˜ IDã€‚ä¸ºä¿æŒ ID æŸ¥è¯¢ç¨³å®šæ€§ï¼Œ
-    // å½“ç®¡ç†å™¨æŒæœ‰è¶³å¤Ÿå¤šçš„æè´¨è®°å½•æ—¶å…è®¸æŒ‰è®°å½•æƒ°æ€§é‡å»ºè½»é‡æè´¨å®žä¾‹ï¼›
-    // å°è§„æ¨¡ä¸´æ—¶å®žä¾‹ä»ä¿æŒå¼±å¼•ç”¨è¯­ä¹‰ï¼Œå¤–éƒ¨é‡Šæ”¾åŽè¿”å›ž nullptrã€‚
+    // 大批量创建场景中调用方可能只缓存 ID。为保持 ID 查询稳定性，
+    // 当管理器持有足够多的材质记录时允许按记录惰性重建轻量材质实例；
+    // 小规模临时实例仍保持弱引用语义，外部释放后返回 nullptr。
     constexpr std::size_t kMaterialRehydrateThreshold = 64;
     if (material_names_.size() < kMaterialRehydrateThreshold) {
         return nullptr;
@@ -836,7 +836,7 @@ std::size_t AssetManager::PendingMainThreadCallbacksHighWatermark() {
 }
 
 // ============================================================
-// å¼‚æ­¥åŠ è½½ï¼šDmesh / Danim / Dskel / AudioClip / Material
+// 异步加载：Dmesh / Danim / Dskel / AudioClip / Material
 // ============================================================
 
 namespace {
@@ -954,7 +954,7 @@ void AssetManager::LoadMaterialAsync(const std::string& dmat_path, std::size_t m
 }
 
 // ============================================================
-// LRU æ·˜æ±°ä¸Žå†…å­˜é¢„ç®—
+// LRU 淘汰与内存预算
 // ============================================================
 
 

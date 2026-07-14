@@ -1,6 +1,6 @@
 ﻿/**
  * @file builtin_passes.cpp
- * @brief å¼•æ“Žå†…ç½®æ¸²æŸ“ Pass å®žçŽ°
+ * @brief 引擎内置渲染 Pass 实现
  *
  * --- Section Index ---
  *   PreZPass                    ~91
@@ -58,7 +58,7 @@ namespace render {
 
 using namespace dse::render::pass_internal;
 
-// è°ƒç”¨æ¨¡å—æ³¨å†Œçš„å¼ºç±»åž‹åœºæ™¯è´¡çŒ®å¯¹è±¡ï¼ˆISceneRendererï¼‰çš„æŒ‡å®šé˜¶æ®µã€‚
+// 调用模块注册的强类型场景贡献对象（ISceneRenderer）的指定阶段。
 void ExecuteSceneRenderers(const RenderScene* scene,
                            SceneRenderStage stage,
                            CommandBuffer& cmd_buffer,
@@ -103,7 +103,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
                                                 static_cast<float>(Screen::width()) / static_cast<float>(Screen::height()),
                                                 snap.camera_3d.near_clip, snap.camera_3d.far_clip);
 
-        // TAA jitter å¿…é¡»ä¸Ž ForwardScenePass ä¸€è‡´ï¼Œå¦åˆ™ PreZ æ·±åº¦ä¸Žä¸» pass ä¸åŒ¹é…å¯¼è‡´é—ªçƒ
+        // TAA jitter 必须与 ForwardScenePass 一致，否则 PreZ 深度与主 pass 不匹配导致闪烁
         if (ctx_.taa_active && !use_editor_cam) {
             projection[2][0] += ctx_.taa_jitter.x * 2.0f;
             projection[2][1] += ctx_.taa_jitter.y * 2.0f;
@@ -112,7 +112,7 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
         FrameContext frame{view, projection};
         cmd_buffer.BindPipeline(ctx_.pipeline_states.prez);
 
-        // GPU-driven PreZ: eligible å®žä½“ depth-only indirect draw
+        // GPU-driven PreZ: eligible 实体 depth-only indirect draw
         const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
             && ctx_.gpu_mega_vao && ctx_.gpu_draw_cmd_ssbo
             && ctx_.gpu_indirect_draw_count > 0;
@@ -158,7 +158,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
     const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
     const glm::mat4 shadow_sample_correction = ctx_.rhi_device->GetShadowSampleCorrection();
-    // Camera-Relative: shadow_center è½¬æ¢åˆ°ç›¸æœºç›¸å¯¹ç©ºé—´
+    // Camera-Relative: shadow_center 转换到相机相对空间
     glm::vec3 shadow_center = FindShadowCenter(snap) - ctx_.camera_offset;
 
     const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
@@ -175,7 +175,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
     constexpr float kAtlasWidth = 4096.0f;
     constexpr float kAtlasHeight = 2048.0f;
 
-    // çº§è”åˆ†è£‚è·ç¦»ï¼šPSSM ä¸Žç»„ä»¶æ‰‹åŠ¨ cascade_splits æŒ‰ lambda æ··åˆ
+    // 级联分裂距离：PSSM 与组件手动 cascade_splits 按 lambda 混合
     // Cascade fit follows the camera actually rendering the scene RT
     // (editor camera override when active, otherwise the game camera).
     const float screen_aspect = static_cast<float>(Screen::width()) / static_cast<float>(std::max(Screen::height(), 1));
@@ -196,7 +196,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cascade_splits[i] = lambda * pssm_split + (1.0f - lambda) * dl.cascade_splits[i];
     }
 
-    // å•æ¬¡ BeginRenderPass ç»‘å®š atlas RTï¼Œå…¨é‡æ¸…é™¤æ·±åº¦
+    // 单次 BeginRenderPass 绑定 atlas RT，全量清除深度
     {
         cmd_buffer.BeginRenderPass({ctx_.render_targets.shadow_atlas, glm::vec4(1.0f), true});
         cmd_buffer.BindPipeline(ctx_.pipeline_states.shadow);
@@ -208,8 +208,8 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 inv_view, dl.direction, prev_split, split_far_plane, aspect, tan_half_fov);
             prev_split = split_far_plane;
             const float size = fit.size;
-            // é€çº§è”ä»¥å…¶è§†é”¥åˆ‡ç‰‡è´¨å¿ƒä¸ºå¯¹ç„¦ç‚¹ï¼ˆæ ‡å‡† CSMï¼‰ï¼Œè¿‘çº§è”ç›’ä¸å†è¢«è¿œç„¦ç‚¹æ¼æŽ‰ã€‚
-            // é€€åŒ–åœºæ™¯ï¼ˆæ— æœ‰æ•ˆç›¸æœºåˆ‡ç‰‡ï¼‰å›žé€€åˆ°å…¨å±€ shadow_centerã€‚
+            // 逐级联以其视锥切片质心为对焦点（标准 CSM），近级联盒不再被远焦点漏掉。
+            // 退化场景（无有效相机切片）回退到全局 shadow_center。
             const glm::vec3 cascade_center =
                 active_cam.valid ? fit.center : shadow_center;
             auto cam = ComputeDirectionalLightCamera(
@@ -221,7 +221,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
 
             cached_light_space_[i] = sample_proj * cam.view;
 
-            // è®¾ç½® viewport åˆ° atlas å†…å¯¹åº”åŒºåŸŸ
+            // 设置 viewport 到 atlas 内对应区域
             cmd_buffer.SetViewport(kAtlasOffsetX[i], kAtlasOffsetY[i], kShadowRes[i], kShadowRes[i]);
             FrameContext frame{cam.view, cam.projection};
 
@@ -255,13 +255,13 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
         cmd_buffer.EndRenderPass();
     }
 
-    // ä½¿ç”¨ç¼“å­˜çš„ light space matrixï¼ˆä¸Ž shadow map å†…å®¹å¯¹åº”çš„çŸ©é˜µï¼‰
+    // 使用缓存的 light space matrix（与 shadow map 内容对应的矩阵）
     for (int i = 0; i < CSM_CASCADES; ++i) {
         ctx_.rhi_device->SetGlobalLightSpaceMatrix(static_cast<unsigned int>(i), cached_light_space_[i]);
         ctx_.rhi_device->SetGlobalCascadeSplit(static_cast<unsigned int>(i), cascade_splits[i]);
     }
 
-    // Atlas region UV: (scale_x, scale_y, offset_x, offset_y) ä¾› PBR shader é‡‡æ ·
+    // Atlas region UV: (scale_x, scale_y, offset_x, offset_y) 供 PBR shader 采样
     for (int i = 0; i < CSM_CASCADES; ++i) {
         float scale_x = static_cast<float>(kShadowRes[i]) / kAtlasWidth;
         float scale_y = static_cast<float>(kShadowRes[i]) / kAtlasHeight;
@@ -271,7 +271,7 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
             glm::vec4(scale_x, scale_y, offset_x, offset_y));
     }
 
-    // ç»‘å®šå•ä¸ª atlas æ·±åº¦çº¹ç†åˆ°æ‰€æœ‰ shadow map slot
+    // 绑定单个 atlas 深度纹理到所有 shadow map slot
     unsigned int atlas_depth = ctx_.rhi_device->GetRenderTargetDepthTexture(ctx_.render_targets.shadow_atlas);
     for (int i = 0; i < CSM_CASCADES; ++i) {
         cmd_buffer.BindGlobalShadowMap(i, atlas_depth);
@@ -306,7 +306,7 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
         if (ctx_.render_targets.spot_shadow[i] == 0) continue;
         const auto& sl = snap.spot_lights[i];
 
-        // Camera-Relative: spot light ä½ç½®è½¬æ¢åˆ°ç›¸æœºç›¸å¯¹ç©ºé—´
+        // Camera-Relative: spot light 位置转换到相机相对空间
         const glm::vec3 sl_pos_relative = sl.position - ctx_.camera_offset;
         const glm::mat4 light_view_mat = glm::lookAt(sl_pos_relative, sl_pos_relative + sl.forward, sl.up);
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(sl.outer_cone_angle * 2.0f), 1.0f, 0.1f, std::max(1.0f, sl.radius));
@@ -368,7 +368,7 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
     for (int shadow_slot = 0; shadow_slot < snap.point_shadow_count; ++shadow_slot) {
         if (ctx_.render_targets.point_shadow[shadow_slot] == 0) continue;
         const auto& pl = snap.point_lights[shadow_slot];
-        // Camera-Relative: point light ä½ç½®è½¬æ¢åˆ°ç›¸æœºç›¸å¯¹ç©ºé—´
+        // Camera-Relative: point light 位置转换到相机相对空间
         const glm::vec3 pl_pos_relative = pl.position - ctx_.camera_offset;
         const glm::mat4 light_proj = clip_correction * glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, std::max(1.0f, pl.radius));
         static const glm::vec3 face_directions[6] = {
@@ -463,7 +463,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     if (ctx_.editor_mode && ctx_.use_editor_camera) {
         render_3d = true;
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        // Camera-Relative: åœºæ™¯å·²å‡åŽ» camera_offsetï¼Œeditor view éœ€é…å¥—è°ƒæ•´
+        // Camera-Relative: 场景已减去 camera_offset，editor view 需配套调整
         gpu_view       = ctx_.editor_view * glm::translate(glm::mat4(1.0f), ctx_.camera_offset);
         gpu_proj       = clip_correction * ctx_.editor_projection;
         gpu_camera_pos = glm::vec3(glm::inverse(ctx_.editor_view)[3]) - ctx_.camera_offset;
@@ -489,7 +489,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         }
 
         gpu_proj = projection;
-        // Camera-Relative: ç›¸æœºåœ¨åŽŸç‚¹
+        // Camera-Relative: 相机在原点
         gpu_camera_pos = glm::vec3(0.0f);
         gpu_view = snap.camera_3d.view;
         frame.view = gpu_view; frame.projection = projection;
@@ -510,13 +510,13 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
     if (render_3d) {
         cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
 
-        // ç¼–è¾‘å™¨åœºæ™¯è§†å›¾æ¨¡å¼ (ä»…åœ¨ editor_mode ä¸‹ç”Ÿæ•ˆ)
+        // 编辑器场景视图模式 (仅在 editor_mode 下生效)
         // 0=Shaded, 1=Wireframe, 2=ShadedWireframe, 3=Unlit, 4=Overdraw
         const int view_mode = ctx_.editor_mode ? ctx_.scene_view_mode : 0;
         if (view_mode == 1) {
             ctx_.rhi_device->SetWireframeMode(true);
         }
-        // ShadedWireframe: ç¬¬ä¸€éæ­£å¸¸ fill æ¸²æŸ“ï¼Œçº¿æ¡†å åŠ åœ¨ mesh æ¸²æŸ“ç»“æŸåŽ
+        // ShadedWireframe: 第一遍正常 fill 渲染，线框叠加在 mesh 渲染结束后
         if (view_mode == 3 || view_mode == 4) {
             ctx_.rhi_device->SetForceUnlit(true);
         }
@@ -524,13 +524,13 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.rhi_device->SetOverdrawMode(true);
         }
 
-        // Clustered Forward+: ç»‘å®šå…‰æº SSBO å’Œ Cluster ç½‘æ ¼ SSBO
+        // Clustered Forward+: 绑定光源 SSBO 和 Cluster 网格 SSBO
         if (ctx_.light_buffer) ctx_.light_buffer->Bind();
         if (ctx_.cluster_grid) ctx_.cluster_grid->Bind();
 
-        // GPU Driven Indirect Drawï¼šmega VAO å°±ç»ªä¸”æœ‰ draw commands æ—¶ä½¿ç”¨
-        // eligible å®žä½“èµ° GPU indirectï¼›non-eligible å®žä½“ç”± OnRenderScene per-item æ¸²æŸ“
-        // Render() ä¸­ IsGPUDrivenEligible è·³è¿‡ eligible å®žä½“ï¼Œä¿è¯æ— åŒé‡ç»˜åˆ¶
+        // GPU Driven Indirect Draw：mega VAO 就绪且有 draw commands 时使用
+        // eligible 实体走 GPU indirect；non-eligible 实体由 OnRenderScene per-item 渲染
+        // Render() 中 IsGPUDrivenEligible 跳过 eligible 实体，保证无双重绘制
         const bool use_gpu_indirect = ctx_.gpu_driven_active_this_frame
             && ctx_.gpu_mega_vao
             && ctx_.gpu_draw_cmd_ssbo
@@ -557,20 +557,20 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
                                           gpu_light_intensity, gpu_ambient,
                                           gpu_shadow_strength);
 
-            // ç»‘å®š instance SSBO ä¾› vertex shader è¯»å– model matrix
+            // 绑定 instance SSBO 供 vertex shader 读取 model matrix
             rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
-            // ç»‘å®š material SSBO ä¾› fragment shader è¯»å– per-instance æè´¨
+            // 绑定 material SSBO 供 fragment shader 读取 per-instance 材质
             if (ctx_.gpu_material_ssbo) {
                 rhi->BindGpuBuffer(ctx_.gpu_material_ssbo, dse::render::gpu_driven::kSSBOBindingMaterials);
             }
             rhi->BindMegaVAO(ctx_.gpu_mega_vao);
 
-            // Phase 5: æŒ‰çº¹ç†æ¡¶ç»˜åˆ¶ â€” æ¯æ¡¶ç»‘å®šçº¹ç†åŽ indirect draw
+            // Phase 5: 按纹理桶绘制 — 每桶绑定纹理后 indirect draw
             if (ctx_.gpu_texture_buckets && ctx_.gpu_texture_bucket_count > 0) {
                 const size_t stride = sizeof(DrawElementsIndirectCommand);
                 for (int bi = 0; bi < ctx_.gpu_texture_bucket_count; ++bi) {
                     const auto& bucket = ctx_.gpu_texture_buckets[bi];
-                    // per-bucket PerMaterial æ›´æ–°ï¼ˆDX11/VK: æ›´æ–° cbuffer/UBO; GL: no-op, ç”¨ MaterialSSBOï¼‰
+                    // per-bucket PerMaterial 更新（DX11/VK: 更新 cbuffer/UBO; GL: no-op, 用 MaterialSSBO）
                     if (ctx_.gpu_materials && bucket.material_id < static_cast<uint32_t>(ctx_.gpu_material_count)) {
                         rhi->UpdateGPUDrivenMaterial(&ctx_.gpu_materials[bucket.material_id]);
                     }
@@ -606,10 +606,10 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
         }
         ExecuteSceneRenderers(ctx_.render_scene, SceneRenderStage::Opaque, cmd_buffer, scene_pass_ctx);
 
-        // ShadedWireframe: æ­£å¸¸æ¸²æŸ“å·²å®Œæˆï¼Œå åŠ ä¸€éçº¿æ¡†
+        // ShadedWireframe: 正常渲染已完成，叠加一遍线框
         if (view_mode == 2) {
             ctx_.rhi_device->SetWireframeMode(true);
-            // GPU Driven è·¯å¾„ï¼šé‡æ–° indirect drawï¼ˆwireframe overlayï¼‰
+            // GPU Driven 路径：重新 indirect draw（wireframe overlay）
             if (use_gpu_indirect) {
                 auto* rhi = ctx_.rhi_device;
                 rhi->BindGpuBuffer(ctx_.gpu_instance_ssbo, dse::render::gpu_driven::kSSBOBindingInstances);
@@ -626,7 +626,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.rhi_device->SetWireframeMode(false);
         }
 
-        // æ¢å¤åœºæ™¯è§†å›¾æ¨¡å¼ä¿®æ”¹çš„ RHI çŠ¶æ€
+        // 恢复场景视图模式修改的 RHI 状态
         if (view_mode == 1) {
             ctx_.rhi_device->SetWireframeMode(false);
         }

@@ -1,13 +1,13 @@
 ﻿/**
  * @file vulkan_draw_executor.cpp
- * @brief Vulkan ç»˜åˆ¶æ‰§è¡Œå™¨å®žçŽ°
+ * @brief Vulkan 绘制执行器实现
  *
- * å®žçŽ°å®Œæ•´çš„ Vulkan å‘½ä»¤ç¼“å†²å½•åˆ¶é€»è¾‘ï¼š
- * - å‡ ä½•ç¼“å†²åŒºåˆå§‹åŒ–ï¼ˆVBO/IBO åˆ›å»ºä¸Žæ•°æ®ä¸Šä¼ ï¼‰
- * - UBO ç¼“å†²åŒºç®¡ç†ï¼ˆPerFrame/PerScene/PerMaterial åŒç¼“å†²ï¼‰
- * - DescriptorSet åˆ†é…/æ›´æ–°/ç»‘å®š
- * - DrawMeshBatchï¼š3D PBR ç½‘æ ¼ç»˜åˆ¶ï¼ˆpush constant + descriptor setï¼‰
- * - DrawParticles3Dï¼š3D ç²’å­ billboard
+ * 实现完整的 Vulkan 命令缓冲录制逻辑：
+ * - 几何缓冲区初始化（VBO/IBO 创建与数据上传）
+ * - UBO 缓冲区管理（PerFrame/PerScene/PerMaterial 双缓冲）
+ * - DescriptorSet 分配/更新/绑定
+ * - DrawMeshBatch：3D PBR 网格绘制（push constant + descriptor set）
+ * - DrawParticles3D：3D 粒子 billboard
  */
 
 #include "engine/render/rhi/vulkan/vulkan_draw_executor.h"
@@ -29,7 +29,7 @@
 namespace dse {
 namespace render {
 
-// å‡ ä½•ç¼“å†²åŒºå®¹é‡å¸¸é‡ï¼ˆä¸Ž GL ç‰ˆæœ¬å¯¹é½ï¼‰
+// 几何缓冲区容量常量（与 GL 版本对齐）
 constexpr size_t MAX_SPRITES = 10000;
 constexpr size_t MAX_SPRITE_VERTICES = MAX_SPRITES * 4;
 constexpr size_t MAX_SPRITE_INDICES = MAX_SPRITES * 6;
@@ -38,12 +38,12 @@ constexpr size_t MAX_MESH_INDICES = 262144;
 static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
 
 // ============================================================================
-// è¾…åŠ©ï¼šåˆ›å»º VkBuffer + VkDeviceMemory
+// 辅助：创建 VkBuffer + VkDeviceMemory
 // ============================================================================
 
 namespace {
 
-/// åˆ›å»º Vulkan ç¼“å†²åŒºï¼ˆhost-visibleï¼Œç”¨äºŽåŠ¨æ€æ›´æ–°ï¼‰
+/// 创建 Vulkan 缓冲区（host-visible，用于动态更新）
 bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
                         VkDeviceSize size, VkBufferUsageFlags usage,
                         VkMemoryPropertyFlags properties,
@@ -61,7 +61,7 @@ bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
     VkMemoryRequirements mem_reqs;
     vkGetBufferMemoryRequirements(device, out_buffer, &mem_reqs);
 
-    // æŸ¥æ‰¾åˆé€‚çš„å†…å­˜ç±»åž‹
+    // 查找合适的内存类型
     VkPhysicalDeviceMemoryProperties mem_props;
     vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
 
@@ -88,13 +88,13 @@ bool CreateVulkanBuffer(VkDevice device, VkPhysicalDevice physical_device,
     return true;
 }
 
-/// æŒä¹…æ˜ å°„ç¼“å­˜ï¼šé¿å…æ¯æ¬¡ WriteToBuffer éƒ½ vkMapMemory/vkUnmapMemory
-/// HOST_VISIBLE + HOST_COHERENT å†…å­˜å¯ä»¥ map ä¸€æ¬¡åŽæ°¸ä¹…ä½¿ç”¨
+/// 持久映射缓存：避免每次 WriteToBuffer 都 vkMapMemory/vkUnmapMemory
+/// HOST_VISIBLE + HOST_COHERENT 内存可以 map 一次后永久使用
 } // anonymous namespace
 
 static std::unordered_map<VkDeviceMemory, void*> g_persistent_map_cache;
 
-/// å°†æ•°æ®å†™å…¥ host-visible ç¼“å†²åŒºï¼ˆä½¿ç”¨æŒä¹…æ˜ å°„ï¼‰
+/// 将数据写入 host-visible 缓冲区（使用持久映射）
 void WriteToBuffer(VkDevice device, VkDeviceMemory memory,
                    VkDeviceSize offset, VkDeviceSize size, const void* data) {
     auto it = g_persistent_map_cache.find(memory);
@@ -102,7 +102,7 @@ void WriteToBuffer(VkDevice device, VkDeviceMemory memory,
         memcpy(static_cast<char*>(it->second) + offset, data, static_cast<size_t>(size));
         return;
     }
-    // é¦–æ¬¡è®¿é—®ï¼šå…¨é‡æ˜ å°„å¹¶ç¼“å­˜æŒ‡é’ˆ
+    // 首次访问：全量映射并缓存指针
     void* mapped = nullptr;
     VkResult r = vkMapMemory(device, memory, 0, VK_WHOLE_SIZE, 0, &mapped);
     if (r != VK_SUCCESS) {
@@ -113,7 +113,7 @@ void WriteToBuffer(VkDevice device, VkDeviceMemory memory,
     memcpy(static_cast<char*>(mapped) + offset, data, static_cast<size_t>(size));
 }
 
-/// é‡Šæ”¾æŒä¹…æ˜ å°„ï¼ˆbuffer é”€æ¯å‰è°ƒç”¨ï¼‰
+/// 释放持久映射（buffer 销毁前调用）
 void UnmapPersistentBuffer(VkDevice device, VkDeviceMemory memory) {
     auto it = g_persistent_map_cache.find(memory);
     if (it != g_persistent_map_cache.end()) {
@@ -124,7 +124,7 @@ void UnmapPersistentBuffer(VkDevice device, VkDeviceMemory memory) {
 
 namespace {
 
-/// åˆ›å»º UBO ç¼“å†²åŒºè¾…åŠ©ï¼ˆUBO ç”¨é€” + host-visible + coherentï¼‰
+/// 创建 UBO 缓冲区辅助（UBO 用途 + host-visible + coherent）
 bool CreateUBOBufferInternal(VkDevice device, VkPhysicalDevice physical_device,
                               VkDeviceSize size,
                               VkBuffer& out_buf, VkDeviceMemory& out_mem) {
@@ -148,8 +148,8 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     auto device = context->device();
     auto physical_device = context->physical_device();
 
-    // --- ç²¾çµæ‰¹å¤„ç† VBO/IBO ---
-    // é¡¶ç‚¹æ ¼å¼ï¼švec2 pos, vec2 texcoord, vec4 color = 8 floats * 4 = 32 bytes
+    // --- 精灵批处理 VBO/IBO ---
+    // 顶点格式：vec2 pos, vec2 texcoord, vec4 color = 8 floats * 4 = 32 bytes
     const VkDeviceSize sprite_vbo_size = MAX_SPRITE_VERTICES * 32;
     const VkDeviceSize sprite_ibo_size = MAX_SPRITE_INDICES * sizeof(uint16_t);
 
@@ -163,7 +163,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                        sprite_ibo_, sprite_ibo_mem_);
 
-    // é¢„å¡«å…… sprite IBOï¼ˆquad ç´¢å¼•ï¼‰
+    // 预填充 sprite IBO（quad 索引）
     {
         std::vector<uint16_t> indices(MAX_SPRITE_INDICES);
         for (size_t i = 0; i < MAX_SPRITES; ++i) {
@@ -185,8 +185,8 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                        vfx_ubo_, vfx_ubo_mem_);
 
-    // --- 3D ç½‘æ ¼ VBO/IBO ---
-    // å¤š pass æ¯å¸§ç´¯ç§¯å†™å…¥ï¼Œéœ€è¦è¶³å¤Ÿå¤§çš„ç¼“å†²åŒº
+    // --- 3D 网格 VBO/IBO ---
+    // 多 pass 每帧累积写入，需要足够大的缓冲区
     const VkDeviceSize mesh_vbo_size = 64 * 1024 * 1024;  // 64 MB
     const VkDeviceSize mesh_ibo_size = 16 * 1024 * 1024;  // 16 MB
     mesh_vbo_capacity_ = mesh_vbo_size;
@@ -202,8 +202,8 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                        mesh_ibo_, mesh_ibo_mem_);
 
-    // --- å¤©ç©ºç›’ VBO ---
-    // 36 é¡¶ç‚¹ * vec3 = 36 * 12 = 432 bytes
+    // --- 天空盒 VBO ---
+    // 36 顶点 * vec3 = 36 * 12 = 432 bytes
     const float skybox_vertices[] = {
         -1.0f,  1.0f, -1.0f,  -1.0f, -1.0f, -1.0f,   1.0f, -1.0f, -1.0f,
          1.0f, -1.0f, -1.0f,   1.0f,  1.0f, -1.0f,  -1.0f,  1.0f, -1.0f,
@@ -225,7 +225,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        skybox_vbo_, skybox_vbo_mem_);
     WriteToBuffer(device, skybox_vbo_mem_, 0, sizeof(skybox_vertices), skybox_vertices);
 
-    // --- åŽå¤„ç†å…¨å±å››è¾¹å½¢ VBO ---
+    // --- 后处理全屏四边形 VBO ---
     const float pp_vertices[] = {
         -1.0f,  1.0f,  0.0f, 1.0f,
         -1.0f, -1.0f,  0.0f, 0.0f,
@@ -241,14 +241,14 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                        pp_vbo_, pp_vbo_mem_);
     WriteToBuffer(device, pp_vbo_mem_, 0, sizeof(pp_vertices), pp_vertices);
 
-    // --- UBO ç¼“å†²åŒºï¼ˆåŒç¼“å†²ï¼Œæ¯ä¸ªç¼“å†²åŒºæ‰©å¤§åˆ°å¤š slotï¼Œé¿å… GPU å»¶è¿Ÿæ‰§è¡Œæ—¶è¦†ç›–ï¼‰ ---
-    // per_frame:  128 batches/frame Ã— 256B = 32KBï¼ˆå« shadow passes + GPU Driven setupï¼‰
-    // per_object: æ¯ä¸ª draw item å  1 slotï¼›é‡å®žä¾‹åŒ–/å¤š shadow pass åœºæ™¯ä¸‹å•å¸§å¯è¾¾æ•°åƒ draw
-    //             ï¼ˆå®žæµ‹ 3d_instancing å³°å€¼ ~2165 slotï¼‰ï¼Œæ•… per_scene/material/terrain å– 4096 slot Ã—256B = 1MBã€‚
-    // lights:     512 slotï¼Œä½†æ¯ slot ä¸º kLightUboSlotAlignment(4352B)ï¼Œå•ç‹¬ä¿ç•™ä»¥å…æµªè´¹æ˜¾å­˜ã€‚
+    // --- UBO 缓冲区（双缓冲，每个缓冲区扩大到多 slot，避免 GPU 延迟执行时覆盖） ---
+    // per_frame:  128 batches/frame × 256B = 32KB（含 shadow passes + GPU Driven setup）
+    // per_object: 每个 draw item 占 1 slot；重实例化/多 shadow pass 场景下单帧可达数千 draw
+    //             （实测 3d_instancing 峰值 ~2165 slot），故 per_scene/material/terrain 取 4096 slot ×256B = 1MB。
+    // lights:     512 slot，但每 slot 为 kLightUboSlotAlignment(4352B)，单独保留以免浪费显存。
     constexpr size_t kPerFrameSlots  = 128;
-    constexpr size_t kPerObjectSlots = 4096;   // per-scene / per-material / terrainï¼ˆæ¯ draw 1 slotï¼‰
-    constexpr size_t kLightSlots     = 512;    // ç‚¹/èšå…‰ç¯ UBOï¼ˆå¤§å¯¹é½ï¼Œå•ç‹¬é™é¢ï¼‰
+    constexpr size_t kPerObjectSlots = 4096;   // per-scene / per-material / terrain（每 draw 1 slot）
+    constexpr size_t kLightSlots     = 512;    // 点/聚光灯 UBO（大对齐，单独限额）
     constexpr size_t kSlotAlign      = kUboSlotAlignment;
     per_frame_ubo_capacity_ = kPerFrameSlots * kSlotAlign;
     per_scene_ubo_capacity_ = kPerObjectSlots * kSlotAlign;
@@ -272,35 +272,35 @@ void VulkanDrawExecutor::InitGeometryBuffers(
     // --- BoneMatrices SSBO / MorphWeights UBO ---
     constexpr size_t kBoneMatricesSize = 64 * 255 * sizeof(glm::mat4); // 64 meshes * 16320 bytes = ~1020KB
     constexpr size_t kMorphWeightsSize = 16; // 4 floats
-    // BoneMatrices ä½¿ç”¨ STORAGE_BUFFERï¼ˆSSBOï¼‰+ UNIFORM_BUFFER åŒç”¨é€”
+    // BoneMatrices 使用 STORAGE_BUFFER（SSBO）+ UNIFORM_BUFFER 双用途
     CreateVulkanBuffer(device, physical_device, kBoneMatricesSize,
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                        bone_matrices_ubo_, bone_matrices_ubo_mem_);
     CreateUBOBufferInternal(device, physical_device, kMorphWeightsSize,
                             morph_weights_ubo_, morph_weights_ubo_mem_);
-    // åˆå§‹åŒ– BoneMatrices ä¸ºå•ä½çŸ©é˜µ
+    // 初始化 BoneMatrices 为单位矩阵
     {
         std::vector<glm::mat4> identity_bones(64 * 255, glm::mat4(1.0f));
         WriteToBuffer(device, bone_matrices_ubo_mem_, 0, kBoneMatricesSize, identity_bones.data());
     }
-    // MorphWeights åˆå§‹åŒ–ä¸º 0
+    // MorphWeights 初始化为 0
     {
         float zero_weights[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         WriteToBuffer(device, morph_weights_ubo_mem_, 0, kMorphWeightsSize, zero_weights);
     }
 
-    // --- LightProbeData UBOï¼ˆåŒç¼“å†²ï¼Œæ¯å¸§ä¸€ä»½ï¼‰ ---
+    // --- LightProbeData UBO（双缓冲，每帧一份） ---
     constexpr size_t kLightProbeSize = sizeof(glm::vec4) * 10; // 9 SH + 1 params = 160B
     for (int i = 0; i < MAX_FRAMES; ++i) {
         CreateUBOBufferInternal(device, physical_device, kLightProbeSize,
                                 light_probe_ubo_[i], light_probe_ubo_mem_[i]);
-        // åˆå§‹åŒ–ä¸ºé›¶ï¼ˆprobe_params.x = 0 = disabledï¼‰
+        // 初始化为零（probe_params.x = 0 = disabled）
         glm::vec4 zero_lp[10] = {};
         WriteToBuffer(device, light_probe_ubo_mem_[i], 0, kLightProbeSize, zero_lp);
     }
 
-    // --- GPU Instancing VBOï¼ˆåˆå§‹ 256 å®žä¾‹ = 16KBï¼‰---
+    // --- GPU Instancing VBO（初始 256 实例 = 16KB）---
     {
         constexpr size_t kInitialInstanceCapacity = 256;
         instance_vbo_capacity_ = kInitialInstanceCapacity * sizeof(glm::mat4);
@@ -310,7 +310,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                            instance_vbo_, instance_vbo_mem_);
     }
 
-    // --- ç™½è‰²çº¹ç† ---
+    // --- 白色纹理 ---
     unsigned char white_pixel[4] = {255, 255, 255, 255};
     white_texture_handle_ = resource_mgr->CreateTexture2D(1, 1, white_pixel, true);
     const unsigned char* white_faces[6] = {
@@ -325,9 +325,9 @@ void VulkanDrawExecutor::InitGeometryBuffers(
         WriteToBuffer(device, dummy_ubo_buffer_mem_, 0, sizeof(zeros), zeros);
     }
 
-    // --- Dummy SSBO å ä½ buffer ---
-    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO descriptor å†™å…¥è¦æ±‚
-    // å¯¹åº” buffer å¿…é¡»æœ‰ VK_BUFFER_USAGE_STORAGE_BUFFER_BITã€‚ä¸èƒ½å¤ç”¨ UBO å ä½ã€‚
+    // --- Dummy SSBO 占位 buffer ---
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO descriptor 写入要求
+    // 对应 buffer 必须有 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT。不能复用 UBO 占位。
     CreateVulkanBuffer(device, physical_device, 64,
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -337,7 +337,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
         WriteToBuffer(device, dummy_ssbo_buffer_mem_, 0, sizeof(zeros), zeros);
     }
 
-    // --- Dummy 3D çº¹ç†ï¼ˆ1x1x1ï¼Œç”¨äºŽ sampler3D å ä½ï¼Œå¦‚åŽå¤„ç† LUTï¼‰---
+    // --- Dummy 3D 纹理（1x1x1，用于 sampler3D 占位，如后处理 LUT）---
     {
         VkImageCreateInfo img_ci{};
         img_ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -367,7 +367,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
             }
             if (vkAllocateMemory(device, &alloc_info, nullptr, &dummy_3d_image_mem_) == VK_SUCCESS) {
                 vkBindImageMemory(device, dummy_3d_image_, dummy_3d_image_mem_, 0);
-                // è½¬æ¢åˆ° SHADER_READ_ONLY_OPTIMAL
+                // 转换到 SHADER_READ_ONLY_OPTIMAL
                 VkCommandBuffer cmd = resource_mgr->BeginSingleTimeCommands();
                 VkImageMemoryBarrier barrier{};
                 barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -382,7 +382,7 @@ void VulkanDrawExecutor::InitGeometryBuffers(
                 vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
                 resource_mgr->EndSingleTimeCommands(cmd);
-                // åˆ›å»º 3D image view
+                // 创建 3D image view
                 VkImageViewCreateInfo view_ci{};
                 view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
                 view_ci.image = dummy_3d_image_;
@@ -465,7 +465,7 @@ void VulkanDrawExecutor::ShutdownGeometryBuffers() {
 }
 
 // ============================================================================
-// UBO æ›´æ–°
+// UBO 更新
 // ============================================================================
 
 void VulkanDrawExecutor::UpdatePerFrameUBO(
@@ -476,7 +476,7 @@ void VulkanDrawExecutor::UpdatePerFrameUBO(
     ubo.vp = projection * view;
     ubo.view = view;
 
-    // ä»Ž view çŸ©é˜µçš„é€†çŸ©é˜µæå–ç›¸æœºä¸–ç•Œä½ç½®ï¼ˆä¸Ž OpenGL ä¸€è‡´ï¼‰
+    // 从 view 矩阵的逆矩阵提取相机世界位置（与 OpenGL 一致）
     glm::mat4 inv_view = glm::inverse(view);
     ubo.camera_pos = glm::vec4(inv_view[3][0], inv_view[3][1], inv_view[3][2], global_state_.global_wetness);
     ubo.foliage_wind = global_state_.foliage_wind;
@@ -525,7 +525,7 @@ void VulkanDrawExecutor::UpdatePointSpotLightUBOs(const MeshDrawItem& item) {
 }
 
 // ============================================================================
-// DescriptorSet åˆ†é…ä¸Žæ›´æ–°
+// DescriptorSet 分配与更新
 // ============================================================================
 
 VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
@@ -547,14 +547,14 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
 
-    // ç¨‹åºè‡³å°‘éœ€è¦ 3 ä¸ª set layoutï¼ˆSet 0=PerFrame, Set 1=PerScene+Lights, Set 2=PerMaterial+Samplersï¼Œ Set 3=ç‚¹å…‰é˜´å½±ï¼‰
+    // 程序至少需要 3 个 set layout（Set 0=PerFrame, Set 1=PerScene+Lights, Set 2=PerMaterial+Samplers， Set 3=点光阴影）
     if (program->descriptor_set_layouts.size() < 3) {
         DEBUG_LOG_WARN("Mesh shader program has insufficient descriptor set layouts ({})",
                        program->descriptor_set_layouts.size());
         return VK_NULL_HANDLE;
     }
 
-    // ä¸ºæ¯ä¸ª set åˆ†é…ä¸€ä¸ª DescriptorSetï¼ˆæœ€å¤š 4 ä¸ªï¼‰
+    // 为每个 set 分配一个 DescriptorSet（最多 4 个）
     VkDescriptorSet sets[4] = {};
     const int set_count = static_cast<int>(program->descriptor_set_layouts.size());
     for (int s = 0; s < set_count; ++s) {
@@ -565,14 +565,14 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         }
     }
 
-    // åå°„æ£€æŸ¥ï¼šä»…å†™å…¥ shader å®žé™…å£°æ˜Žçš„ descriptor bindings
+    // 反射检查：仅写入 shader 实际声明的 descriptor bindings
     auto has_binding = [&](uint32_t set, uint32_t binding, VkDescriptorType type) -> bool {
         for (const auto& b : program->reflection.bindings) {
             if (b.set == set && b.binding == binding && b.type == type) return true;
         }
         return false;
     };
-    // ç±»åž‹æ— å…³ç‰ˆæœ¬ï¼šåªæ£€æŸ¥ set+binding æ˜¯å¦å­˜åœ¨ï¼ˆç”¨äºŽ BoneMatrices/MorphWeights ç­‰å¯èƒ½å­˜åœ¨ç±»åž‹å¾®å·®çš„ç»‘å®šï¼‰
+    // 类型无关版本：只检查 set+binding 是否存在（用于 BoneMatrices/MorphWeights 等可能存在类型微差的绑定）
     auto has_binding_any = [&](uint32_t set, uint32_t binding) -> bool {
         for (const auto& b : program->reflection.bindings) {
             if (b.set == set && b.binding == binding) return true;
@@ -615,7 +615,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
 
-    // --- Set 1 binding 1+: PBR ä¸“ç”¨ SSBO/UBOï¼ˆGBuffer æ¨¡å¼è·³è¿‡ï¼‰---
+    // --- Set 1 binding 1+: PBR 专用 SSBO/UBO（GBuffer 模式跳过）---
     if (!gbuffer_mode) {
 
     // --- Set 1 binding 1: PointLights SSBO ---
@@ -629,7 +629,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             pl_buf.offset = 0;
             pl_buf.range  = pl_ssbo->size;
         } else {
-            // fallback: SSBO å ä½ bufferï¼Œå¿…é¡»æœ‰ STORAGE_BUFFER usage
+            // fallback: SSBO 占位 buffer，必须有 STORAGE_BUFFER usage
             // VUID-VkWriteDescriptorSet-descriptorType-00331
             pl_buf.buffer = dummy_ssbo_buffer_;
             pl_buf.offset = 0;
@@ -729,7 +729,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
 
     // --- Set 1 binding 5: LightProbeData UBO ---
     if (has_binding(1, 5, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)) {
-        // å†™å…¥ SH æ•°æ®åˆ°å½“å‰å¸§çš„ UBO
+        // 写入 SH 数据到当前帧的 UBO
         struct LightProbeGPU {
             glm::vec4 sh[9];
             glm::vec4 params;
@@ -753,11 +753,11 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &lp_write, 0, nullptr);
     }
 
-    } // !gbuffer_mode â€” Set 1 PBR ä¸“ç”¨ç»‘å®šç»“æŸ
+    } // !gbuffer_mode — Set 1 PBR 专用绑定结束
 
-    // --- Set 2: PerMaterial UBO + é‡‡æ ·å™¨ ---
+    // --- Set 2: PerMaterial UBO + 采样器 ---
     if (gbuffer_mode) {
-        // GBuffer æ¨¡å¼åªç»‘å®š albedo çº¹ç†åˆ° binding 1
+        // GBuffer 模式只绑定 albedo 纹理到 binding 1
         unsigned int tex_handle = item.texture_handle;
         if (tex_handle == 0) tex_handle = white_texture_handle_;
         const VulkanTexture* tex = resource_mgr.GetTexture(tex_handle);
@@ -795,7 +795,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             mat_write.pBufferInfo = &mat_buf_info;
         }
 
-        // çº¹ç†é‡‡æ ·å™¨ (binding 1-5)
+        // 纹理采样器 (binding 1-5)
         struct TexBinding {
             unsigned int handle;
             uint32_t binding;
@@ -811,7 +811,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         VkDescriptorImageInfo image_infos[5] = {};
         VkWriteDescriptorSet tex_writes[5] = {};
 
-        int write_count = 1; // mat_write ç®—ç¬¬ 0 ä¸ª
+        int write_count = 1; // mat_write 算第 0 个
         for (int i = 0; i < 5; ++i) {
             if (!has_binding(2, tex_bindings[i].binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) continue;
             unsigned int tex_handle = tex_bindings[i].handle;
@@ -835,7 +835,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             write_count++;
         }
 
-        // ç»‘å®š CSM é˜´å½±è´´å›¾åˆ° binding 6ï¼ˆsampler2DShadowï¼Œä½¿ç”¨æ¯”è¾ƒé‡‡æ ·å™¨ï¼‰
+        // 绑定 CSM 阴影贴图到 binding 6（sampler2DShadow，使用比较采样器）
         VkDescriptorImageInfo shadow_image_infos[3] = {};
         VkWriteDescriptorSet shadow_write{};
         if (has_binding(2, 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
@@ -843,7 +843,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 3; ++i) {
                 unsigned int sm_handle = global_state_.shadow_map[i];
-                // shadow map handle æ˜¯ RT handleï¼Œéœ€ä»Ž RT èŽ·å– depth image view
+                // shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (sm_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(sm_handle) : VK_NULL_HANDLE;
                 if (depth_view != VK_NULL_HANDLE) {
@@ -865,14 +865,14 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             shadow_write.pImageInfo      = shadow_image_infos;
         }
 
-        // ç»‘å®š Spot é˜´å½±è´´å›¾åˆ° binding 7
+        // 绑定 Spot 阴影贴图到 binding 7
         VkDescriptorImageInfo spot_shadow_image_infos[4] = {};
         VkWriteDescriptorSet spot_shadow_write{};
         if (has_binding(2, 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
             const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
             for (int i = 0; i < 4; ++i) {
                 unsigned int ss_handle = global_state_.spot_shadow_map[i];
-                // spot shadow map handle æ˜¯ RT handleï¼Œéœ€ä»Ž RT èŽ·å– depth image view
+                // spot shadow map handle 是 RT handle，需从 RT 获取 depth image view
                 VkImageView depth_view = (ss_handle != 0)
                     ? resource_mgr.GetRenderTargetDepthImageView(ss_handle) : VK_NULL_HANDLE;
                 if (depth_view != VK_NULL_HANDLE) {
@@ -894,7 +894,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             spot_shadow_write.pImageInfo      = spot_shadow_image_infos;
         }
 
-        // BoneMatrices SSBO (binding 8) â€” æ•´ä¸ª buffer ç»‘å®šï¼Œpush constant æŽ§åˆ¶ offset
+        // BoneMatrices SSBO (binding 8) — 整个 buffer 绑定，push constant 控制 offset
         VkDescriptorBufferInfo bone_buf_info{};
         VkWriteDescriptorSet bone_write{};
         if (has_binding_any(2, 8)) {
@@ -1032,7 +1032,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
             ibl_writes[1].pImageInfo = &ibl_infos[1];
         }
 
-        // SkinnedInstBuf SSBO (set=2, binding=10) â€” ç¡¬ä»¶å®žä¾‹åŒ–è·¯å¾„
+        // SkinnedInstBuf SSBO (set=2, binding=10) — 硬件实例化路径
         VkDescriptorBufferInfo inst_ssbo_info{};
         VkWriteDescriptorSet inst_ssbo_write{};
         if (has_binding(2, 10, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)) {
@@ -1073,7 +1073,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, static_cast<uint32_t>(all_writes.size()), all_writes.data(), 0, nullptr);
     } // else (PBR mode Set 2)
 
-    // --- Set 3 binding 0: ç‚¹å…‰æºç«‹æ–¹ä½“é˜´å½±è´´å›¾ (u_point_shadow_maps[4]) ---
+    // --- Set 3 binding 0: 点光源立方体阴影贴图 (u_point_shadow_maps[4]) ---
     if (!gbuffer_mode && set_count >= 4 && sets[3] != VK_NULL_HANDLE
         && has_binding(3, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)) {
         VkDescriptorImageInfo point_shadow_infos[4] = {};
@@ -1106,7 +1106,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateMeshDescriptorSets(
         vkUpdateDescriptorSets(device, 1, &point_shadow_write, 0, nullptr);
     }
 
-    // ç»‘å®šæ‰€æœ‰ DescriptorSet
+    // 绑定所有 DescriptorSet
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             program->pipeline_layout, 0,
                             static_cast<uint32_t>(program->descriptor_set_layouts.size()),
@@ -1124,7 +1124,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     auto device = context_->device();
     uint32_t fi = current_frame_index_;
 
-    // å¤©ç©ºç›’ç€è‰²å™¨ä½¿ç”¨ Set 0 (PerFrame) + Set 2 (skybox sampler)
+    // 天空盒着色器使用 Set 0 (PerFrame) + Set 2 (skybox sampler)
     if (program->descriptor_set_layouts.size() < 2) {
         DEBUG_LOG_WARN("Skybox shader program has insufficient descriptor set layouts");
         return VK_NULL_HANDLE;
@@ -1137,7 +1137,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         if (sets[s] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
     }
 
-    // èŽ·å– dummy èµ„æºç”¨äºŽå¡«å……æœªä½¿ç”¨çš„ç»‘å®š
+    // 获取 dummy 资源用于填充未使用的绑定
     const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
     VkSampler default_samp = resource_mgr.default_sampler();
 
@@ -1146,7 +1146,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     dummy_ubo_info.offset = 0;
     dummy_ubo_info.range = sizeof(VulkanPerFrameUBO);
 
-    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO å ä½ buffer å¿…é¡»æœ‰ STORAGE_BUFFER usage
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer 必须有 STORAGE_BUFFER usage
     VkDescriptorBufferInfo dummy_ssbo_info{};
     dummy_ssbo_info.buffer = dummy_ssbo_buffer_;
     dummy_ssbo_info.offset = 0;
@@ -1157,7 +1157,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     dummy_img_info.imageView = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
     dummy_img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    // ä¿æŒæ‰€æœ‰ image info çš„ç”Ÿå‘½å‘¨æœŸç›´åˆ° vkUpdateDescriptorSets
+    // 保持所有 image info 的生命周期直到 vkUpdateDescriptorSets
     std::vector<VkDescriptorImageInfo> img_pool(20, dummy_img_info);
     std::vector<VkWriteDescriptorSet> writes;
     writes.reserve(24);
@@ -1191,15 +1191,15 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         w.dstBinding = binding;
         w.descriptorCount = count;
         w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        // pImageInfo ç¨åŽé€šè¿‡ base ç´¢å¼•è®¾ç½®ï¼ˆimg_pool å¯èƒ½ reallocï¼‰
+        // pImageInfo 稍后通过 base 索引设置（img_pool 可能 realloc）
         writes.push_back(w);
         return base;
     };
 
-    // è®°å½• <writes_index, img_pool_base> ä»¥ä¾¿åŽç»­ä¿®æ­£æŒ‡é’ˆ
+    // 记录 <writes_index, img_pool_base> 以便后续修正指针
     std::vector<std::pair<size_t, size_t>> img_fixups;
 
-    // åå°„è¾…åŠ©: æ£€æŸ¥ (set, binding) æ˜¯å¦å­˜åœ¨äºŽç€è‰²å™¨ä¸­
+    // 反射辅助: 检查 (set, binding) 是否存在于着色器中
     auto has_binding = [&](uint32_t set_idx, uint32_t bind_idx) -> bool {
         for (const auto& b : program->reflection.bindings)
             if (b.set == set_idx && b.binding == bind_idx) return true;
@@ -1224,7 +1224,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
     if (set_count > 2) {
         if (has_binding(2, 0)) push_ubo(sets[2], 0);
 
-        // binding 1: skybox cubemapï¼ˆå®žé™…çº¹ç†ï¼‰
+        // binding 1: skybox cubemap（实际纹理）
         if (has_binding(2, 1)) {
             const VulkanTexture* cubemap_tex = resource_mgr.GetTexture(cubemap_texture_handle);
             size_t base = img_pool.size();
@@ -1268,7 +1268,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
         img_fixups.push_back({writes.size() - 1, base});
     }
 
-    // ä¿®æ­£æ‰€æœ‰ image æè¿°ç¬¦çš„æŒ‡é’ˆï¼ˆimg_pool ä¸å† reallocï¼‰
+    // 修正所有 image 描述符的指针（img_pool 不再 realloc）
     for (auto& [wi, base] : img_fixups) {
         writes[wi].pImageInfo = &img_pool[base];
     }
@@ -1286,7 +1286,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdateSkyboxDescriptorSets(
 }
 
 // ============================================================================
-// AllocateAllSetsWithDummies â€” åˆ†é…å…¨éƒ¨ descriptor sets å¹¶ç”¨ dummy æ•°æ®å¡«æ»¡
+// AllocateAllSetsWithDummies — 分配全部 descriptor sets 并用 dummy 数据填满
 // ============================================================================
 std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     const VulkanShaderProgram* program,
@@ -1310,7 +1310,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     dummy_ubo.offset = 0;
     dummy_ubo.range  = sizeof(VulkanPerFrameUBO);
 
-    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO å ä½ buffer å¿…é¡»æœ‰ STORAGE_BUFFER usage
+    // VUID-VkWriteDescriptorSet-descriptorType-00331: SSBO 占位 buffer 必须有 STORAGE_BUFFER usage
     VkDescriptorBufferInfo dummy_ssbo{};
     dummy_ssbo.buffer = dummy_ssbo_buffer_;
     dummy_ssbo.offset = 0;
@@ -1321,7 +1321,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     dummy_img.imageView   = white_tex ? white_tex->image_view : VK_NULL_HANDLE;
     dummy_img.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    // é¢„åˆ†é… image info æ± ï¼ˆé¿å…æŒ‡é’ˆæ‚¬ç©ºï¼‰
+    // 预分配 image info 池（避免指针悬空）
     std::vector<VkDescriptorImageInfo> img_pool;
     img_pool.reserve(32);
     std::vector<VkWriteDescriptorSet> writes;
@@ -1361,7 +1361,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
         fixups.push_back({writes.size() - 1, base});
     };
 
-    // åå°„è¾…åŠ©: æ£€æŸ¥ (set, binding) æ˜¯å¦å­˜åœ¨äºŽç€è‰²å™¨ä¸­
+    // 反射辅助: 检查 (set, binding) 是否存在于着色器中
     auto has_binding = [&](uint32_t s, uint32_t b) -> bool {
         for (const auto& rb : program->reflection.bindings)
             if (rb.set == s && rb.binding == b) return true;
@@ -1396,7 +1396,7 @@ std::vector<VkDescriptorSet> VulkanDrawExecutor::AllocateAllSetsWithDummies(
     // Set 3: binding 0 (point_shadow_maps[4])
     if (set_count > 3 && has_binding(3, 0)) push_img(3, 0, 4);
 
-    // ä¿®æ­£ image æŒ‡é’ˆ
+    // 修正 image 指针
     for (auto& [wi, base] : fixups) writes[wi].pImageInfo = &img_pool[base];
 
     if (!writes.empty())
@@ -1417,15 +1417,15 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
     auto device = context_->device();
     const uint32_t set_count = static_cast<uint32_t>(program->descriptor_set_layouts.size());
 
-    // åˆ†é…æ‰€æœ‰ setï¼ˆåŒ…æ‹¬ç©º layout çš„ setï¼‰
+    // 分配所有 set（包括空 layout 的 set）
     std::vector<VkDescriptorSet> sets(set_count, VK_NULL_HANDLE);
     for (uint32_t s = 0; s < set_count; ++s) {
         sets[s] = resource_mgr.AllocateDescriptorSet(program->descriptor_set_layouts[s]);
         if (sets[s] == VK_NULL_HANDLE) return VK_NULL_HANDLE;
     }
 
-    // åŽå¤„ç† shader ä»…ä½¿ç”¨ set 2, binding 1 (screenTexture)
-    // åªå†™å®žé™…å­˜åœ¨çš„ bindingsï¼Œé¿å…å†™å…¥ç©º layout æˆ–ä¸å­˜åœ¨çš„ binding
+    // 后处理 shader 仅使用 set 2, binding 1 (screenTexture)
+    // 只写实际存在的 bindings，避免写入空 layout 或不存在的 binding
     VkDescriptorImageInfo src_img{};
     const VulkanTexture* white_tex = resource_mgr.GetTexture(white_texture_handle_);
     src_img.sampler     = resource_mgr.default_sampler();
@@ -1478,7 +1478,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
         w.pImageInfo      = &src_img;
         writes.push_back(w);
 
-        // extra bindings (bloom, ssao, ae, lut ç­‰) â€” ä»…å†™ shader åå°„ä¸­å­˜åœ¨çš„ binding
+        // extra bindings (bloom, ssao, ae, lut 等) — 仅写 shader 反射中存在的 binding
         for (size_t i = 0; i < extra_bindings.size(); ++i) {
             auto [binding, tex_handle] = extra_bindings[i];
             bool binding_exists = false;
@@ -1488,7 +1488,7 @@ VkDescriptorSet VulkanDrawExecutor::AllocateAndUpdatePostProcessDescriptorSets(
             if (!binding_exists) continue;
             VkDescriptorImageInfo& ei = extra_imgs[i];
             ei.sampler     = resource_mgr.default_sampler();
-            // binding 5 åœ¨åŽå¤„ç† shader ä¸­æ˜¯ sampler3D (u_lut)ï¼Œéœ€è¦ 3D image view
+            // binding 5 在后处理 shader 中是 sampler3D (u_lut)，需要 3D image view
             if (binding == 5 && dummy_3d_image_view_ != VK_NULL_HANDLE) {
                 ei.imageView = dummy_3d_image_view_;
             } else {

@@ -26,26 +26,26 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
         !tmpl.vertex_buffer || !tmpl.index_buffer) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardInstancedShaded);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›å®žä¾‹åŒ–é«˜çº§ shading å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供实例化高级 shading 内建着色器
 
     EnsureResources(device);
     EnsureShadedResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_shaded_ubo_ ||
         !per_point_lights_ubo_ || !per_terrain_ubo_) return;
 
-    // æ¯å®žä¾‹ model çŸ©é˜µå†™å…¥å†…éƒ¨å®žä¾‹ SSBOï¼ˆä¸–ç•Œç©ºé—´ï¼Œ0 åŸºç´¢å¼•ï¼‰ã€‚å…±äº«çš„æ˜¯ã€Œé¡¶ç‚¹æ¨¡æ¿ã€ï¼Œå®žä¾‹çŸ©é˜µä»é€æ¬¡æäº¤ã€‚
+    // 每实例 model 矩阵写入内部实例 SSBO（世界空间，0 基索引）。共享的是「顶点模板」，实例矩阵仍逐次提交。
     const size_t inst_bytes = instance_models.size() * sizeof(glm::mat4);
     EnsureInstanceCapacity(device, inst_bytes);
     if (!instance_ssbo_) return;
     device.UpdateGpuBuffer(instance_ssbo_, 0, inst_bytes, instance_models.data());
 
-    // å…±äº«æ¨¡æ¿ VB/IB ç”± BuildShadedLocalVertexBuffer + caller æä¾›ï¼Œå¸¸é©»ä¸é‡ä¼ ã€‚
-    // --- UBO å¡«å……ï¼ˆä¸Ž DrawInstancedShaded åŒæºï¼‰---
+    // 共享模板 VB/IB 由 BuildShadedLocalVertexBuffer + caller 提供，常驻不重传。
+    // --- UBO 填充（与 DrawInstancedShaded 同源）---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
     frame.camera_pos = glm::vec4(camera_pos, 1.0f);
-    // æ¤è¢«é£Žå¼¯æ›²ï¼ˆB2b-6ï¼Œtreeï¼‰ï¼šmaterial.foliage æ—¶å–‚å…¥ grs é£Žå‚ï¼Œå¦åˆ™ä¿æŒé›¶ â†’ VS æ•´æ®µè·³è¿‡ã€‚
+    // 植被风弯曲（B2b-6，tree）：material.foliage 时喂入 grs 风参，否则保持零 → VS 整段跳过。
     if (material.foliage) {
         const auto& grs_f = device.GetGlobalRenderState();
         frame.foliage_wind = grs_f.foliage_wind;
@@ -67,7 +67,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
         scene.light_space_matrices[i] = grs.light_space_matrix[i];
         scene.shadow_atlas_regions[i] = grs.shadow_atlas_region[i];
     }
-    // Final-Feat-8: èšå…‰ç¯ light-space çŸ©é˜µï¼ˆç‚¹/èšå…‰é˜´å½±æŽ¥æ”¶ï¼Œä¸Žæ‰§è¡Œå™¨ DrawMeshBatch åŒæºï¼‰ã€‚
+    // Final-Feat-8: 聚光灯 light-space 矩阵（点/聚光阴影接收，与执行器 DrawMeshBatch 同源）。
     for (int i = 0; i < 4; ++i)
         scene.spot_light_space_matrices[i] = grs.spot_light_space_matrix[i];
     ApplyEditorSceneOverride(device, scene);
@@ -168,8 +168,8 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     cmd.BindTexture(9u, tex_or_white(material.splat_layers[3]), TextureDim::Tex2D);
     cmd.BindTexture(10u, tex_or_white(gi.ddgi_irradiance_atlas), TextureDim::Tex2D);
     cmd.BindTexture(11u, tex_or_white(grs.shadow_map[0]), TextureDim::Tex2D);
-    // Final-Feat-8: èšå…‰ç¯ 2D é˜´å½±å›¾ï¼ˆflat unit 12-15ï¼‰/ ç‚¹å…‰ cube é˜´å½±ï¼ˆflat unit 16-19ï¼‰ã€‚
-    // æœªç”¨æ§½ä½ç»‘é»˜è®¤ç™½çº¹ç†/ç™½ cubeï¼ˆé‡‡æ ·å¾—æ·±åº¦=1 â†’ ä¸äº§ç”Ÿé˜´å½±ï¼‰ï¼Œä¿è¯ä¸‰åŽç«¯ descriptor ç»´åº¦åŒ¹é…ã€‚
+    // Final-Feat-8: 聚光灯 2D 阴影图（flat unit 12-15）/ 点光 cube 阴影（flat unit 16-19）。
+    // 未用槽位绑默认白纹理/白 cube（采样得深度=1 → 不产生阴影），保证三后端 descriptor 维度匹配。
     cmd.BindTexture(12u, grs.spot_shadow_map[0] ? grs.spot_shadow_map[0] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(13u, grs.spot_shadow_map[1] ? grs.spot_shadow_map[1] : white_tex_, TextureDim::Tex2D);
     cmd.BindTexture(14u, grs.spot_shadow_map[2] ? grs.spot_shadow_map[2] : white_tex_, TextureDim::Tex2D);
@@ -179,12 +179,12 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
     cmd.BindTexture(18u, grs.point_shadow_map[2] ? grs.point_shadow_map[2] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindTexture(19u, grs.point_shadow_map[3] ? grs.point_shadow_map[3] : white_cube_tex_, TextureDim::TexCube);
     cmd.BindUniformBuffer(7u, per_spot_lights_ubo_.raw());      // FwdSpotLight @ set7.b1
-    // æ¯å®žä¾‹ model SSBO\@slot 0ï¼ˆä¸Ž DrawInstancedShaded åŒæºï¼‰ã€‚
+    // 每实例 model SSBO\@slot 0（与 DrawInstancedShaded 同源）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
-    // å…±äº«å±€éƒ¨ç©ºé—´æ¨¡æ¿ VB/IBï¼ˆcaller æŒæœ‰ã€å¸¸é©»ï¼‰ï¼ŒæŒ‰ index_count_override å­æ®µå¯¹æ¯å®žä¾‹ç»˜åˆ¶ã€‚
+    // 共享局部空间模板 VB/IB（caller 持有、常驻），按 index_count_override 子段对每实例绘制。
     cmd.BindVertexBuffer(0u, tmpl.vertex_buffer.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(tmpl.index_buffer.raw(), tmpl.index_type);
-    // å¥‘çº¦ï¼šfirst_instance æ’ 0ï¼ŒDX11 SV_InstanceID ä»Ž 0 èµ·ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ã€‚
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(index_count, static_cast<uint32_t>(instance_models.size()),
                              first_index, 0, 0u);
 }
@@ -202,12 +202,12 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›å®žä¾‹åŒ– forward PBR å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供实例化 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
 
-    // --- é¡¶ç‚¹æ‰“åŒ…ï¼ˆå±€éƒ¨ç©ºé—´ï¼ŒVS æŒ‰å®žä¾‹ model å˜æ¢ï¼Œä¸åœ¨ CPU é¢„å˜æ¢ï¼‰ ---
+    // --- 顶点打包（局部空间，VS 按实例 model 变换，不在 CPU 预变换） ---
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const MeshVertex& v = vertices[i];
@@ -219,7 +219,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
         g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
     }
 
-    // --- æ¯å®žä¾‹ model çŸ©é˜µå†™å…¥ SSBOï¼ˆä¸–ç•Œç©ºé—´ï¼Œ0 åŸºç´¢å¼•ï¼‰ ---
+    // --- 每实例 model 矩阵写入 SSBO（世界空间，0 基索引） ---
     const size_t inst_bytes = instance_models.size() * sizeof(glm::mat4);
     EnsureInstanceCapacity(device, inst_bytes);
     if (!instance_ssbo_) return;
@@ -233,7 +233,7 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- UBO å¡«å……ï¼ˆä¸Žé™æ€è·¯å¾„åŒæž„ï¼‰ ---
+    // --- UBO 填充（与静态路径同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -278,11 +278,11 @@ void MeshRenderer::DrawInstanced(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
-    // æ¯å®žä¾‹ model SSBO\@slot 0ï¼ˆä¸‰åŽç«¯é€šç”¨è¯­ä¹‰ï¼šGL binding0 / Vulkan ä½ç½®0 / DX11 t0 ç» @SSBO_LOW_REGISTERSï¼‰ã€‚
+    // 每实例 model SSBO\@slot 0（三后端通用语义：GL binding0 / Vulkan 位置0 / DX11 t0 经 @SSBO_LOW_REGISTERS）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
-    // å¥‘çº¦ï¼šfirst_instance æ’ 0ï¼ŒDX11 SV_InstanceID ä»Ž 0 èµ·ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ã€‚
+    // 契约：first_instance 恒 0，DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达。
     cmd.DrawIndexedInstanced(static_cast<uint32_t>(indices.size()),
                              static_cast<uint32_t>(instance_models.size()),
                              0u, 0, 0u);
@@ -300,12 +300,12 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     if (vertices.empty() || indices.empty() || instance_models.empty()) return;
 
     unsigned int program = device.GetBuiltinProgram(BuiltinProgram::ForwardPbrInstanced);
-    if (program == 0) return;  // è¯¥åŽç«¯æœªæä¾›å®žä¾‹åŒ– forward PBR å†…å»ºç€è‰²å™¨
+    if (program == 0) return;  // 该后端未提供实例化 forward PBR 内建着色器
 
     EnsureResources(device);
     if (!per_frame_ubo_ || !per_scene_ubo_ || !per_material_ubo_) return;
 
-    // --- é¡¶ç‚¹æ‰“åŒ…ï¼ˆå±€éƒ¨ç©ºé—´ï¼ŒVS æŒ‰å®žä¾‹ model å˜æ¢ï¼Œä¸Ž DrawInstanced åŒæž„ï¼‰ ---
+    // --- 顶点打包（局部空间，VS 按实例 model 变换，与 DrawInstanced 同构） ---
     std::vector<GpuMeshVertex> gpu_verts(vertices.size());
     for (size_t i = 0; i < vertices.size(); ++i) {
         const MeshVertex& v = vertices[i];
@@ -317,7 +317,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
         g.tx = v.tangent.x; g.ty = v.tangent.y; g.tz = v.tangent.z;
     }
 
-    // --- æ¯å®žä¾‹ model çŸ©é˜µå†™å…¥ SSBOï¼ˆä¸–ç•Œç©ºé—´ï¼Œ0 åŸºç´¢å¼•ï¼‰ ---
+    // --- 每实例 model 矩阵写入 SSBO（世界空间，0 基索引） ---
     const size_t inst_bytes = instance_models.size() * sizeof(glm::mat4);
     EnsureInstanceCapacity(device, inst_bytes);
     if (!instance_ssbo_) return;
@@ -331,8 +331,8 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     device.UpdateGpuBuffer(vbo_, 0, vbytes, gpu_verts.data());
     device.UpdateGpuBuffer(ibo_, 0, ibytes, indices.data());
 
-    // --- é—´æŽ¥ç»˜åˆ¶å‘½ä»¤å†™å…¥ indirect bufferï¼ˆCPU ç«¯å¡«ï¼ŒGPU-driven pass äº¦å¯å›žå†™ï¼‰ ---
-    // base_instance æ’ 0ï¼šDX11 SV_InstanceID ä»Ž 0 èµ·ï¼Œåç§»å·²ç”± 0 åŸº SSBO ç´¢å¼•è¡¨è¾¾ï¼ˆÂ§6ï¼‰ã€‚
+    // --- 间接绘制命令写入 indirect buffer（CPU 端填，GPU-driven pass 亦可回写） ---
+    // base_instance 恒 0：DX11 SV_InstanceID 从 0 起，偏移已由 0 基 SSBO 索引表达（§6）。
     EnsureIndirectBuffer(device);
     if (!indirect_buffer_) return;
     DrawElementsIndirectCommand draw_cmd{};
@@ -343,7 +343,7 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     draw_cmd.base_instance = 0u;
     device.UpdateGpuBuffer(indirect_buffer_, 0, sizeof(draw_cmd), &draw_cmd);
 
-    // --- UBO å¡«å……ï¼ˆä¸Žé™æ€/å®žä¾‹åŒ–è·¯å¾„åŒæž„ï¼‰ ---
+    // --- UBO 填充（与静态/实例化路径同构） ---
     FwdPerFrameUBO frame{};
     frame.vp = proj * view;
     frame.view = view;
@@ -388,11 +388,11 @@ void MeshRenderer::DrawIndirect(CommandBuffer& cmd, RhiDevice& device,
     cmd.BindTexture(2u, tex_or_white(material.metallic_roughness_tex), TextureDim::Tex2D);
     cmd.BindTexture(3u, tex_or_white(material.emissive_tex), TextureDim::Tex2D);
     cmd.BindTexture(4u, tex_or_white(material.occlusion_tex), TextureDim::Tex2D);
-    // æ¯å®žä¾‹ model SSBO\@slot 0ï¼ˆä¸Ž DrawInstanced åŒè¯­ä¹‰ï¼‰ã€‚
+    // 每实例 model SSBO\@slot 0（与 DrawInstanced 同语义）。
     cmd.BindStorageBuffer(0u, instance_ssbo_.raw(), 0u, static_cast<uint32_t>(inst_bytes));
     cmd.BindVertexBuffer(0u, vbo_.raw(), static_cast<uint32_t>(sizeof(GpuMeshVertex)), attrs);
     cmd.BindIndexBuffer(ibo_.raw(), IndexType::UInt16);
-    // é—´æŽ¥ç»˜åˆ¶ï¼šç»˜åˆ¶å‚æ•°å–è‡ª indirect buffer åç§» 0 å¤„çš„ DrawElementsIndirectCommandã€‚
+    // 间接绘制：绘制参数取自 indirect buffer 偏移 0 处的 DrawElementsIndirectCommand。
     cmd.DrawIndexedIndirect(indirect_buffer_.raw(), 0u);
 }
 

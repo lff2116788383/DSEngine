@@ -109,8 +109,8 @@ static const char* kZhCN[][2] = {
     {"Clear Recent Scenes", "æ¸é¤æè¿åºæ¯"},
     {"Cube", "ç«æ¹ä½"},
     {"Sphere", "çä½"},
-    {"Plane", "å¹³é¢"},
-    {"Sprite", "ç²¾çµ"},
+    {"Plane", "平面"},
+    {"Sprite", "精灵"},
     {"Directional Light", "å¹³è¡å"},
     {"Point Light", "ç¹åæº"},
     {"Spot Light", "èåç¯"},
@@ -128,7 +128,7 @@ static const char* kZhCN[][2] = {
     {"Tile Palette", "ç·ç è°è²æ¿"},
     {"Localization Preview", "æ¬å°åé¢è§"},
     {"AI", "AI"},
-    {"AI Chat Panel", "AI å¯¹è¯é¢æ¿"},
+    {"AI Chat Panel", "AI 对话面板"},
     {"AI Configuration...", "AI éç½®..."},
     {"About DSEngine", "å³äº DSEngine"},
     {"Report Issue", "æ¥åé®é¢"},
