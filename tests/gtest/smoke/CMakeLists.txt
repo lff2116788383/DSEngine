@@ -33,6 +33,7 @@ add_executable(${DSE_GTEST_SMOKE_TARGET}
     morph_shaded_pixel_smoke_test.cpp
     gpu_skinning_morph_compute_smoke_test.cpp
     danim_gpu_skinning_frame_consistency_test.cpp
+    three_rhi_golden_scene_test.cpp
     terrain_external_pixel_smoke_test.cpp
     tree_shared_template_pixel_smoke_test.cpp
     spine_unlit2d_pixel_smoke_test.cpp

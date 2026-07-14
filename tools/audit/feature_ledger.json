@@ -319,14 +319,18 @@
         "windows/vulkan"
       ],
       "tests": [
-        "scripts/test_editor_rhi_backends.ps1"
+        "scripts/test_editor_rhi_backends.ps1",
+        "tests/gtest/smoke/three_rhi_golden_scene_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
       "evidencePaths": [
         "apps/editor_cpp/src/editor_imgui_backend_gl.cpp",
         "apps/editor_cpp/src/editor_imgui_backend_dx11.cpp",
-        "apps/editor_cpp/src/editor_imgui_backend_vulkan.cpp"
+        "apps/editor_cpp/src/editor_imgui_backend_vulkan.cpp",
+        "tests/golden/p0_4_forward3d_opengl.png",
+        "tests/golden/p0_4_forward3d_d3d11.png",
+        "tests/golden/p0_4_forward3d_vulkan.png"
       ],
       "acceptance": {
         "editorRoundTrip": "not_applicable",
@@ -339,8 +343,13 @@
         "productionReady": true
       },
       "blockers": [
-        "OpenGL and Vulkan editor smoke cannot currently pass on the Windows validation environment.",
+        "Editor ImGui-window presentation matrix (scripts/test_editor_rhi_backends.ps1) is not re-verified as an automated gate; the new golden acceptance is headless offscreen rendering, not the editor window/ImGui swapchain path.",
         "No packaged clean-machine three-backend acceptance."
+      ],
+      "notes": [
+        "Headless three-RHI golden acceptance now exists and passes on real GPU hardware (NVIDIA GeForce RTX 3070 Laptop GPU): three_rhi_golden_scene_test renders one deterministic Forward3D golden scene (two shaded quads, one directional + one point light, fixed material/winding/indices, no time/random inputs) through the real OpenGL, D3D11, and Vulkan backends via MeshRenderer::DrawShaded (BuiltinProgram::ForwardShaded) into a 256x256 offscreen RT, reads back RGBA8, and compares each backend against its own committed backend-specific golden PNG (tests/golden/p0_4_forward3d_{opengl,d3d11,vulkan}.png) using mean-SSIM (>= 0.98) plus mean per-channel abs error (<= 3.0). Goldens were generated on the RTX 3070 (DSE_UPDATE_GOLDEN=1) and committed only after verification.",
+        "The test records each backend's real adapter via RhiDevice::GetDeviceInfo() and hard-fails (EXPECT_FALSE is_software) if a software fallback (WARP/SwiftShader/lavapipe) is used, so software rasterization cannot be laundered into GPU acceptance. Observed adapters: opengl='NVIDIA GeForce RTX 3070 Laptop GPU/PCIe/SSE2', d3d11/vulkan='NVIDIA GeForce RTX 3070 Laptop GPU', all software=0. It also rejects empty/near-clear framebuffers. All 329 smoke tests (incl. these 3) pass on the RTX 3070.",
+        "Remaining for full P0-4 closure: automate the editor-window ImGui presentation matrix across the three backends and run the clean-machine packaged three-backend acceptance (tracked under P0-1/P2-3)."
       ]
     },
     {
