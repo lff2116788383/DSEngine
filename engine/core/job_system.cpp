@@ -110,13 +110,11 @@ void JobSystem::Shutdown() {
     }
     local_queues_.clear();
 
-    // 释放所有 JobEntry 内存
+    // 释放 JobEntry 池内存（block 存储由 unique_ptr 持有，清空即释放）
     {
-        std::lock_guard<std::mutex> lock(live_entries_mutex_);
-        for (JobEntry* entry : live_entries_) {
-            delete entry;
-        }
-        live_entries_.clear();
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        free_list_head_ = nullptr;
+        pool_blocks_.clear();
     }
 
     is_stopping_.store(false, std::memory_order_release);
@@ -136,26 +134,70 @@ void JobSystem::Execute(const std::function<void()>& job) {
 // ============================================================
 
 JobSystem::JobEntry* JobSystem::AcquireEntry() {
-    JobEntry* entry = new JobEntry();
-    // 重置状态（atomics 需要 relaxed store，因为 entry 尚未被其他线程看到）
+    JobEntry* entry = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        if (!free_list_head_) {
+            // freelist 空：分配一整块并串入 freelist（一次分配，摊薄热路径开销）
+            auto block = std::make_unique<JobEntry[]>(kPoolBlockSize);
+            JobEntry* raw = block.get();
+            pool_blocks_.push_back(std::move(block));
+            for (size_t i = 0; i < kPoolBlockSize; ++i) {
+                raw[i].pool_next = free_list_head_;
+                free_list_head_ = &raw[i];
+            }
+        }
+        entry = free_list_head_;
+        free_list_head_ = entry->pool_next;
+    }
+
+    // 重置状态（该 entry 目前只有本线程可见，relaxed 即可；generation 保留自增值）
+    entry->pool_next = nullptr;
     entry->pending_deps.store(0, std::memory_order_relaxed);
     entry->done.store(false, std::memory_order_relaxed);
-    entry->refcount.store(1, std::memory_order_relaxed);
+    entry->refcount.store(0, std::memory_order_relaxed);
     entry->dependents.clear();
     entry->task = nullptr;
     entry->priority = JobPriority::Normal;
-
-    std::lock_guard<std::mutex> lock(live_entries_mutex_);
-    live_entries_.push_back(entry);
     return entry;
 }
 
-void JobSystem::ReleaseEntry(JobEntry* entry) {
-    if (!entry) return;
-    // 清理 task（释放 lambda 捕获），推迟到 Shutdown 统一释放内存
+void JobSystem::RecycleEntry(JobEntry* entry) {
+    // 归零复核与回收必须在同一把 pool_mutex_ 下完成，才能与并发 ResolvePin 的
+    // re-pin 互斥（否则可能"回收后又被 pin"，造成一个条目被两个任务同时使用）。
+    std::lock_guard<std::mutex> lock(pool_mutex_);
+    if (entry->refcount.load(std::memory_order_acquire) != 0) {
+        // 归零后又被 ResolvePin 重新 pin，放弃回收；待该 pin 释放时再判定。
+        return;
+    }
+    // 自增 generation：使任何仍指向本任务的 JobHandle 在 ResolvePin 时失效。
+    entry->generation.fetch_add(1, std::memory_order_release);
+    // 清理 task（释放 lambda 捕获）与 dependents
     entry->task = nullptr;
     entry->dependents.clear();
-    entry->done.store(true, std::memory_order_release);
+
+    entry->pool_next = free_list_head_;
+    free_list_head_ = entry;
+}
+
+void JobSystem::ReleaseRef(JobEntry* entry) {
+    if (!entry) return;
+    if (entry->refcount.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        RecycleEntry(entry);
+    }
+}
+
+JobSystem::JobEntry* JobSystem::ResolvePin(const JobHandle& handle) {
+    JobEntry* entry = handle.entry();
+    if (!entry) return nullptr;
+    std::lock_guard<std::mutex> lock(pool_mutex_);
+    // 代次不匹配 → 任务早已完成并被回收（或复用为其他任务）
+    if (entry->generation.load(std::memory_order_acquire) != handle.generation()) {
+        return nullptr;
+    }
+    // 代次匹配：pin 住（在锁内自增，与 RecycleEntry 的归零复核互斥）
+    entry->refcount.fetch_add(1, std::memory_order_acq_rel);
+    return entry;
 }
 
 // ============================================================
@@ -178,12 +220,13 @@ JobHandle JobSystem::Submit(const std::function<void()>& job,
     JobEntry* entry = AcquireEntry();
     entry->task = job;
     entry->priority = priority;
-    // refcount = 2: 1 for handle, 1 for execution
-    entry->refcount.store(2, std::memory_order_relaxed);
+    // refcount = 1: 执行引用（JobHandle 是弱引用，不计数）
+    entry->refcount.store(1, std::memory_order_relaxed);
+    const uint32_t gen = entry->generation.load(std::memory_order_relaxed);
 
     Enqueue(entry);
 
-    return JobHandle(entry);
+    return JobHandle(entry, gen);
 }
 
 // ============================================================
@@ -207,21 +250,28 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
     JobEntry* entry = AcquireEntry();
     entry->task = job;
     entry->priority = priority;
-    // refcount = 2: 1 for handle, 1 for execution
-    entry->refcount.store(2, std::memory_order_relaxed);
+    // refcount = 1: 执行引用（每登记一个未满足依赖再 AddRef 一次；JobHandle 弱引用不计数）
+    entry->refcount.store(1, std::memory_order_relaxed);
+    const uint32_t gen = entry->generation.load(std::memory_order_relaxed);
 
-    // 在 deps_mutex_ 保护下设置依赖关系
-    // 这确保与 CompleteJob 中的通知操作互斥
+    // 先安全 pin 住所有仍存活的依赖（代次匹配才 pin；已回收/失效的依赖视为已满足）。
+    // pin 期间依赖不会被回收，从而可在 deps_mutex_ 下安全读取其 done 并登记。
+    std::vector<JobEntry*> pinned_deps;
+    pinned_deps.reserve(dependencies.size());
+    for (const auto& dep : dependencies) {
+        if (JobEntry* de = ResolvePin(dep)) {
+            pinned_deps.push_back(de);
+        }
+    }
+
+    // 在 deps_mutex_ 保护下设置依赖关系（与 CompleteJob 的通知操作互斥）
     int unmet = 0;
     {
         std::lock_guard<std::mutex> lock(deps_mutex_);
 
         // 第一遍：计算未满足的依赖数
-        for (const auto& dep : dependencies) {
-            if (!dep.is_valid()) continue;
-            JobEntry* dep_entry = dep.entry();
-            if (!dep_entry) continue;
-            if (dep_entry->done.load(std::memory_order_acquire)) continue;
+        for (JobEntry* de : pinned_deps) {
+            if (de->done.load(std::memory_order_acquire)) continue;
             ++unmet;
         }
 
@@ -229,12 +279,9 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
         entry->pending_deps.store(unmet, std::memory_order_release);
 
         // 第二遍：添加到各依赖的 dependents 列表
-        for (const auto& dep : dependencies) {
-            if (!dep.is_valid()) continue;
-            JobEntry* dep_entry = dep.entry();
-            if (!dep_entry) continue;
-            if (dep_entry->done.load(std::memory_order_acquire)) continue;
-            dep_entry->dependents.push_back(entry);
+        for (JobEntry* de : pinned_deps) {
+            if (de->done.load(std::memory_order_acquire)) continue;
+            de->dependents.push_back(entry);
             // 增加被依赖者对 entry 的引用（CompleteJob 通知时会释放）
             entry->AddRef();
         }
@@ -245,7 +292,12 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
         Enqueue(entry);
     }
 
-    return JobHandle(entry);
+    // 释放对依赖的临时 pin
+    for (JobEntry* de : pinned_deps) {
+        ReleaseRef(de);
+    }
+
+    return JobHandle(entry, gen);
 }
 
 // ============================================================
@@ -253,12 +305,10 @@ JobHandle JobSystem::SubmitWithDependency(const std::function<void()>& job,
 // ============================================================
 
 void JobSystem::Wait(JobHandle handle) {
-    if (!handle.is_valid()) return;
-    JobEntry* entry = handle.entry();
+    // 安全 pin：代次不匹配说明任务早已完成并被回收 → 直接返回。
+    // pin 住可保证等待期间该条目不会被回收/复用。
+    JobEntry* entry = ResolvePin(handle);
     if (!entry) return;
-
-    // 快速路径：已完成
-    if (entry->done.load(std::memory_order_acquire)) return;
 
     // 调用者 helping：在等待期间执行队列中的任务
     int my_index = GetCurrentWorkerIndex();
@@ -269,6 +319,8 @@ void JobSystem::Wait(JobHandle handle) {
             std::this_thread::yield();
         }
     }
+
+    ReleaseRef(entry);
 }
 
 // ============================================================
@@ -303,8 +355,8 @@ void JobSystem::ParallelFor(size_t begin, size_t end, size_t batch_size,
 
         JobEntry* entry = AcquireEntry();
         entry->priority = priority;
-        // refcount = 2: 1 for barrier (local), 1 for execution
-        entry->refcount.store(2, std::memory_order_relaxed);
+        // refcount = 1: 仅执行引用；barrier 由 remaining 原子计数完成，不占用条目引用
+        entry->refcount.store(1, std::memory_order_relaxed);
 
         entry->task = [&func, &remaining, batch_begin, batch_end]() {
             for (size_t i = batch_begin; i < batch_end; ++i) {
@@ -472,7 +524,9 @@ void JobSystem::CompleteJob(JobEntry* entry) {
                 // 所有依赖满足，需要入队
                 to_enqueue.push_back(dependent);
             }
-            // 释放被依赖者对 dependent 的引用
+            // 释放被依赖者对 dependent 的引用（dep-ref）。dependent 的执行引用此刻
+            // 必然仍存在（尚未执行），故此处不会归零、不会触发回收 → 用裸 fetch_sub，
+            // 避免在 deps_mutex_ 下嵌套 pool_mutex_。
             dependent->refcount.fetch_sub(1, std::memory_order_acq_rel);
         }
         entry->dependents.clear();
@@ -483,9 +537,8 @@ void JobSystem::CompleteJob(JobEntry* entry) {
         Enqueue(dep);
     }
 
-    // 释放执行引用（refcount 从 2→1 或从 1→0）
-    // handle 引用不会被显式释放，entry 在 Shutdown 时统一释放
-    entry->refcount.fetch_sub(1, std::memory_order_acq_rel);
+    // 释放执行引用：归零则回收进 freelist（在锁外，避免锁嵌套）。
+    ReleaseRef(entry);
 }
 
 // ============================================================

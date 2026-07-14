@@ -26,6 +26,7 @@
 #include <atomic>
 #include <cstdint>
 #include <chrono>
+#include <memory>
 #include "engine/core/dse_export.h"
 #include <queue>
 #include <unordered_set>
@@ -45,7 +46,7 @@ enum class JobPriority : uint8_t {
 // ── 内部实现详情 ──────────────────────────────────────────
 namespace detail {
 
-/// 内部任务条目（池化，零堆分配热路径）
+/// 内部任务条目（池化：freelist 复用，热路径零堆分配）
 struct JobEntry {
     std::function<void()> task;           ///< 任务函数
     JobPriority priority = JobPriority::Normal; ///< 优先级
@@ -56,11 +57,18 @@ struct JobEntry {
     /// 完成标志：true 表示已执行完毕
     std::atomic<bool> done{false};
 
-    /// 引用计数：handle 持有 + 执行持有 + 依赖引用
-    std::atomic<int> refcount{1};
+    /// 强引用计数：执行持有 + 依赖引用 + 调用方 pin（ResolvePin）。
+    /// 归零时该条目回收进 freelist。注意 JobHandle 是"弱引用"，不计入此计数。
+    std::atomic<int> refcount{0};
+
+    /// 代次：每次回收时自增，使指向旧任务的 JobHandle 失效（避免 ABA 误判）。
+    std::atomic<uint32_t> generation{0};
 
     /// 依赖此任务的后续任务列表（在 deps_mutex_ 下操作）
     std::vector<JobEntry*> dependents;
+
+    /// freelist 链接（在 pool_mutex_ 下操作）
+    JobEntry* pool_next = nullptr;
 
     /// 引用计数管理
     void AddRef() { refcount.fetch_add(1, std::memory_order_relaxed); }
@@ -72,20 +80,26 @@ struct JobEntry {
 class JobHandle {
 public:
     JobHandle() = default;
-    explicit JobHandle(detail::JobEntry* entry) : entry_(entry) {}
+    JobHandle(detail::JobEntry* entry, uint32_t generation)
+        : entry_(entry), generation_(generation) {}
 
     /// 兼容旧接口：返回内部指针的整数表示
     uint64_t id() const { return reinterpret_cast<uint64_t>(entry_); }
     bool is_valid() const { return entry_ != nullptr; }
-    bool operator==(const JobHandle& other) const { return entry_ == other.entry_; }
-    bool operator!=(const JobHandle& other) const { return entry_ != other.entry_; }
+    bool operator==(const JobHandle& other) const {
+        return entry_ == other.entry_ && generation_ == other.generation_;
+    }
+    bool operator!=(const JobHandle& other) const { return !(*this == other); }
     explicit operator bool() const { return is_valid(); }
 
-    /// 内部访问（供 JobSystem 使用）
+    /// 内部访问（供 JobSystem 使用）——裸指针，跨代次可能失效，
+    /// 需要安全解引用时用 JobSystem::ResolvePin。
     detail::JobEntry* entry() const { return entry_; }
+    uint32_t generation() const { return generation_; }
 
 private:
     detail::JobEntry* entry_ = nullptr;
+    uint32_t generation_ = 0;
 };
 
 /// JobHandle 哈希，用于 unordered_map/unordered_set
@@ -251,9 +265,12 @@ private:
     /// 标记线程池是否已成功初始化
     std::atomic<bool> is_initialized_{false};
 
-    /// 所有已分配的 JobEntry（Shutdown 时统一释放）
-    std::vector<JobEntry*> live_entries_;
-    std::mutex live_entries_mutex_;
+    /// JobEntry 池：以块（block）分配，freelist 复用，Shutdown 时统一释放块内存。
+    /// blocks_ 持有底层存储；free_list_head_ 串联可复用条目（经 pool_next）。
+    static constexpr size_t kPoolBlockSize = 256;
+    std::vector<std::unique_ptr<JobEntry[]>> pool_blocks_;
+    JobEntry* free_list_head_ = nullptr;
+    std::mutex pool_mutex_;
 
     /// Worker 统计
     std::vector<WorkerStats> worker_stats_;
@@ -276,11 +293,18 @@ private:
     /// 尝试从指定本地队列窃取任务
     JobEntry* TrySteal(WorkStealingQueue& src);
 
-    /// 分配 JobEntry（new + 注册到 live_entries_）
+    /// 从 freelist 取一个 JobEntry（空则分配新块），字段已重置、refcount=0。
     JobEntry* AcquireEntry();
 
-    /// 清理 JobEntry task（推迟到 Shutdown 统一释放内存）
-    void ReleaseEntry(JobEntry* entry);
+    /// 回收 JobEntry 到 freelist：自增 generation 使旧句柄失效，清理 task/dependents。
+    void RecycleEntry(JobEntry* entry);
+
+    /// 释放一个强引用；归零时回收到 freelist。
+    void ReleaseRef(JobEntry* entry);
+
+    /// 安全解析句柄：代次匹配则 pin（refcount+1）并返回条目，否则返回 nullptr
+    /// （表示任务早已完成并被回收）。成功返回后须以 ReleaseRef 释放。
+    JobEntry* ResolvePin(const JobHandle& handle);
 
     /// 任务完成后处理：通知依赖、设置完成标志
     void CompleteJob(JobEntry* entry);
