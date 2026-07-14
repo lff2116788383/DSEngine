@@ -15,6 +15,7 @@
 #include "engine/procedural/procedural_generator.h"
 
 #include "engine/render/particles/gpu_particle_system.h"
+using namespace dse;
 using namespace dse_api_internal;
 
 

@@ -11,6 +11,7 @@
 #include <cstring>
 #endif
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

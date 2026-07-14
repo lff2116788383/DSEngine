@@ -7,6 +7,7 @@
 #include "engine/scripting/native_api/dse_api_internal.h"
 #include "engine/video/video_player.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

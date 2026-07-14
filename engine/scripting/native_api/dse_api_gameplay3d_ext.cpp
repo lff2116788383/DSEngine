@@ -8,6 +8,7 @@
 #include "engine/ecs/gameplay.h"
 #include "engine/ecs/components_3d_ai.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

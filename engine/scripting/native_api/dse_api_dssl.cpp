@@ -8,6 +8,7 @@
 #include "engine/render/material/dssl_material_loader.h"
 #include "engine/render/material/dssl_material_instance.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

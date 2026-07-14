@@ -8,6 +8,7 @@
 #include "engine/render/meshlet/meshlet_builder.h"
 #include "engine/render/meshlet/meshlet_cull_pass.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

@@ -8,6 +8,7 @@
 #include "engine/ecs/components_3d_particle.h"
 #include "engine/render/particles/gpu_particle_system.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

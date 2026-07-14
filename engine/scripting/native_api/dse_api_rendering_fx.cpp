@@ -8,6 +8,7 @@
 #include "engine/ecs/components_3d_render.h"
 #include "engine/ecs/components_3d_character.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 

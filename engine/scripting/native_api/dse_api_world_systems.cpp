@@ -13,6 +13,7 @@
 #include "engine/assets/asset_distribution.h"
 #include "engine/ecs/components_3d_sky.h"
 
+using namespace dse;
 using namespace dse_api_internal;
 
 // 脚本按需创建、生命周期归脚本的世界系统：文件级全局（非单例），仅本 TU 的 C ABI 消费，

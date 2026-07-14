@@ -20,10 +20,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#include <random>
 
 using Entity = entt::entity;
-using namespace dse;
 
 namespace dse_api_internal {
 
@@ -36,29 +34,6 @@ inline void WriteStr(const std::string& s, char* out, int cap) {
     int n = std::min(static_cast<int>(s.size()), cap - 1);
     std::memcpy(out, s.data(), static_cast<size_t>(n));
     out[n] = '\0';
-}
-
-// Handle-based resource registries for modules without ECS components
-inline std::unordered_map<uint32_t, std::vector<glm::vec3>>& SplinePoints() {
-    static std::unordered_map<uint32_t, std::vector<glm::vec3>> m;
-    return m;
-}
-inline std::unordered_map<uint32_t, int>& SplineNextId() {
-    static std::unordered_map<uint32_t, int> m;
-    return m;
-}
-inline uint32_t& NextHandle() {
-    static uint32_t h = 1;
-    return h;
-}
-
-inline std::mt19937& RNG() {
-    static std::mt19937 rng{std::random_device{}()};
-    return rng;
-}
-inline std::uniform_real_distribution<float>& Uniform01() {
-    static std::uniform_real_distribution<float> d(0.0f, 1.0f);
-    return d;
 }
 
 inline float Hash2D(int x, int y) {
