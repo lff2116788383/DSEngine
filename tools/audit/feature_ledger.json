@@ -860,7 +860,8 @@
       "tests": [
         "tests/gtest/integration/editor/editor_2d_tools_test.cpp",
         "tests/gtest/integration/editor/editor_sequencer_version_test.cpp",
-        "tests/gtest/integration/editor/editor_2d_runtime_consumption_test.cpp"
+        "tests/gtest/integration/editor/editor_2d_runtime_consumption_test.cpp",
+        "tests/gtest/integration/editor/editor_2d_formats_version_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
@@ -868,7 +869,8 @@
         "apps/editor_cpp/src/editor_asset_db.h",
         "apps/editor_cpp/src/editor_sequencer_core.cpp",
         "engine/assets/sprite_sheet_asset.cpp",
-        "engine/assets/atlas_asset.cpp"
+        "engine/assets/atlas_asset.cpp",
+        "apps/editor_cpp/src/editor_2d_tools.cpp"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -884,7 +886,7 @@
         "2D tools (slicer, atlas, animation, 9-slice, collision, particles) now have 18/18 integration tests covering grid slicing, padding, offset, save/load round-trip, play/stop state, collision shape creation, and particle config defaults.",
         "The .dsequence sequencer format is now on the shared version envelope + AssetDiagnostics with a real legacy point-clip -> start/end migration; SequencerVersion.* covers edit -> versioned save/load round-trip -> legacy migration -> forward-compat warning -> runtime CutsceneSequence consumption (4/4).",
         "The .dsprite and .datlas editor-local formats now close the full editor -> versioned file -> runtime-consumer loop: the 2D editor writers stamp the shared version envelope and emit the canonical pixel_rect/uv_rect layout, and the runtime SpriteSheetAsset/AtlasAsset loaders consume that output directly via ReadVersionEnvelope + AssetDiagnostics. A pre-v1 flat-rect file (x/y/w/h [+ pivot_x/pivot_y] / src) is migrated to pixel_rect on load (AssetDiagnostics.migrated) in both the editor and runtime loaders, and forward-version files load leniently with a warning. Covered headlessly by Sprite2DRuntimeConsumption.* and Atlas2DRuntimeConsumption.* (6/6): editor-save->runtime-load canonical, legacy flat migration, forward-version leniency, editor save/load round-trip.",
-        "Remaining editor-local formats without runtime consumers (.d9slice/.dparticle2d/.dparallax/.dlight2d) still need runtime consumers designed before their versioned contract + migration can be closed the same way.",
+        "The remaining editor-local 2D formats (.d9slice/.dparticle2d/.dparallax/.dlight2d) are now on the shared version envelope + AssetDiagnostics: each writer stamps the schema version, each loader resets diagnostics, rejects malformed/non-object input, reads the version envelope, and warns on forward versions. Pre-v1 files migrate (AssetDiagnostics.migrated): .dparallax renames legacy scroll_x/scroll_y layer keys to scroll_factor_x/scroll_factor_y; .dparticle2d and .dlight2d expand the early short field set to the current schema with defaults. The loaded editor data maps losslessly onto the runtime ECS components the 2D systems consume: .dparallax -> ParallaxComponent/ParallaxLayer (ParallaxSystem), .dlight2d -> Light2DComponent + Ambient2DComponent (Light2DSystem), .d9slice -> the UI renderer nine-slice fields (UIRendererComponent). Covered headlessly by NineSliceVersioned.*, Particle2DVersioned.*, ParallaxVersioned.*, and Light2DVersioned.* (14/14): canonical round-trip, legacy migration, forward-version leniency, malformed rejection, and runtime-component consumption.",
         "There is no golden-project acceptance suite covering every visible operation, and GUI/screenshot-level acceptance still needs a real-machine editor session."
       ]
     },

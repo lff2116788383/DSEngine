@@ -19,6 +19,10 @@ namespace dse::editor::tools2d {
 /// 早期扁平帧/条目布局，加载时迁移为 pixel_rect/uv_rect（与运行时资产一致）。
 constexpr int kSpriteSheetSchemaVersion = 1;
 constexpr int kAtlasSchemaVersion = 1;
+constexpr int kNineSliceSchemaVersion = 1;
+constexpr int kParticle2DSchemaVersion = 1;
+constexpr int kParallaxSchemaVersion = 1;
+constexpr int kLight2DSchemaVersion = 1;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // #1 — Sprite Sheet Slicer
@@ -184,6 +188,9 @@ struct NineSliceEditorState {
 NineSliceEditorState& GetNineSliceEditorState();
 void DrawNineSliceEditorPanel();
 bool SaveNineSlice(const NineSliceData& data, const std::string& path);
+// Versioned load with structured diagnostics.
+bool LoadNineSlice(NineSliceData& data, const std::string& path,
+                   dse::assets::AssetDiagnostics& diag);
 
 // Test accessors
 bool NineSliceHasValidBorders();
@@ -293,6 +300,10 @@ struct Particle2DEditorState {
 Particle2DEditorState& GetParticle2DEditorState();
 void DrawParticle2DEditorPanel();
 bool SaveParticle2DConfig(const Particle2DConfig& cfg, const std::string& path);
+// Versioned load with structured diagnostics (pre-v1 files migrate defaults for
+// fields the early save omitted).
+bool LoadParticle2DConfig(Particle2DConfig& cfg, const std::string& path,
+                          dse::assets::AssetDiagnostics& diag);
 
 // Test accessors
 bool Particle2DSimulating();
@@ -333,6 +344,10 @@ ParallaxEditorState& GetParallaxEditorState();
 void DrawParallaxEditorPanel();
 void AddParallaxLayer(const std::string& name);
 bool SaveParallaxConfig(const ParallaxConfig& cfg, const std::string& path);
+// Versioned load with structured diagnostics; migrates legacy scroll_x/scroll_y
+// layer keys to scroll_factor_x/scroll_factor_y.
+bool LoadParallaxConfig(ParallaxConfig& cfg, const std::string& path,
+                        dse::assets::AssetDiagnostics& diag);
 
 // Test accessors
 int ParallaxLayerCount();
@@ -388,6 +403,10 @@ void DrawLight2DEditorPanel();
 void DrawLight2DGizmos(ImDrawList* draw_list, ImVec2 origin, float scale);
 void AddLight2D(Light2DType type);
 bool SaveLight2DScene(const Light2DEditorState& state, const std::string& path);
+// Versioned load with structured diagnostics; pre-v1 files migrate defaults for
+// the spot/shadow fields the early save omitted.
+bool LoadLight2DScene(Light2DEditorState& state, const std::string& path,
+                      dse::assets::AssetDiagnostics& diag);
 
 // Test accessors
 int Light2DCount();

@@ -810,11 +810,53 @@ bool SaveNineSlice(const NineSliceData& data, const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
     f << "{\n";
+    f << "  \"version\": " << kNineSliceSchemaVersion << ",\n";
     f << "  \"texture\": \"" << data.texture_path << "\",\n";
     f << "  \"left\": " << data.left << ", \"right\": " << data.right << ",\n";
     f << "  \"top\": " << data.top << ", \"bottom\": " << data.bottom << ",\n";
     f << "  \"width\": " << data.tex_width << ", \"height\": " << data.tex_height << "\n";
     f << "}\n";
+    return true;
+}
+
+bool LoadNineSlice(NineSliceData& data, const std::string& path,
+                   dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) {
+        diag.errors.push_back("cannot open file");
+        return false;
+    }
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string json = ss.str();
+
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) {
+        diag.errors.push_back("JSON parse error");
+        return false;
+    }
+    if (!doc.IsObject()) {
+        diag.errors.push_back("root is not an object");
+        return false;
+    }
+
+    dse::assets::ReadVersionEnvelope(doc, kNineSliceSchemaVersion, ".d9slice", diag);
+
+    NineSliceData loaded;
+    if (doc.HasMember("texture") && doc["texture"].IsString())
+        loaded.texture_path = doc["texture"].GetString();
+    if (doc.HasMember("left") && doc["left"].IsInt()) loaded.left = doc["left"].GetInt();
+    if (doc.HasMember("right") && doc["right"].IsInt()) loaded.right = doc["right"].GetInt();
+    if (doc.HasMember("top") && doc["top"].IsInt()) loaded.top = doc["top"].GetInt();
+    if (doc.HasMember("bottom") && doc["bottom"].IsInt()) loaded.bottom = doc["bottom"].GetInt();
+    if (doc.HasMember("width") && doc["width"].IsInt()) loaded.tex_width = doc["width"].GetInt();
+    if (doc.HasMember("height") && doc["height"].IsInt()) loaded.tex_height = doc["height"].GetInt();
+
+    diag.ok = true;
+    data = std::move(loaded);
     return true;
 }
 
@@ -1105,21 +1147,133 @@ bool SaveParticle2DConfig(const Particle2DConfig& cfg, const std::string& path) 
     std::ofstream f(path);
     if (!f.is_open()) return false;
     f << "{\n";
+    f << "  \"version\": " << kParticle2DSchemaVersion << ",\n";
     f << "  \"name\": \"" << cfg.name << "\",\n";
     f << "  \"emit_rate\": " << cfg.emit_rate << ",\n";
     f << "  \"max_particles\": " << cfg.max_particles << ",\n";
     f << "  \"emit_shape\": " << static_cast<int>(cfg.emit_shape) << ",\n";
+    f << "  \"emit_radius\": " << cfg.emit_radius << ",\n";
+    f << "  \"emit_rect\": [" << cfg.emit_rect.x << ", " << cfg.emit_rect.y << "],\n";
     f << "  \"lifetime_min\": " << cfg.lifetime_min << ",\n";
     f << "  \"lifetime_max\": " << cfg.lifetime_max << ",\n";
     f << "  \"velocity_min\": [" << cfg.velocity_min.x << ", " << cfg.velocity_min.y << "],\n";
     f << "  \"velocity_max\": [" << cfg.velocity_max.x << ", " << cfg.velocity_max.y << "],\n";
     f << "  \"gravity\": [" << cfg.gravity.x << ", " << cfg.gravity.y << "],\n";
+    f << "  \"angular_velocity_min\": " << cfg.angular_velocity_min << ",\n";
+    f << "  \"angular_velocity_max\": " << cfg.angular_velocity_max << ",\n";
+    f << "  \"damping\": " << cfg.damping << ",\n";
     f << "  \"start_size_min\": " << cfg.start_size_min << ",\n";
     f << "  \"start_size_max\": " << cfg.start_size_max << ",\n";
     f << "  \"end_size\": " << cfg.end_size << ",\n";
+    f << "  \"start_color\": [" << cfg.start_color.x << ", " << cfg.start_color.y << ", "
+      << cfg.start_color.z << ", " << cfg.start_color.w << "],\n";
+    f << "  \"end_color\": [" << cfg.end_color.x << ", " << cfg.end_color.y << ", "
+      << cfg.end_color.z << ", " << cfg.end_color.w << "],\n";
     f << "  \"blend_mode\": " << static_cast<int>(cfg.blend_mode) << ",\n";
-    f << "  \"trail_enabled\": " << (cfg.trail_enabled ? "true" : "false") << "\n";
+    f << "  \"texture\": \"" << cfg.texture_path << "\",\n";
+    f << "  \"trail_enabled\": " << (cfg.trail_enabled ? "true" : "false") << ",\n";
+    f << "  \"trail_length\": " << cfg.trail_length << ",\n";
+    f << "  \"trail_width\": " << cfg.trail_width << "\n";
     f << "}\n";
+    return true;
+}
+
+namespace {
+
+bool ReadVec2(const rapidjson::Value& v, const char* key, glm::vec2& out) {
+    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 2) return false;
+    const auto& a = v[key];
+    if (!a[0].IsNumber() || !a[1].IsNumber()) return false;
+    out.x = a[0].GetFloat();
+    out.y = a[1].GetFloat();
+    return true;
+}
+
+bool ReadVec3(const rapidjson::Value& v, const char* key, glm::vec3& out) {
+    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 3) return false;
+    const auto& a = v[key];
+    if (!a[0].IsNumber() || !a[1].IsNumber() || !a[2].IsNumber()) return false;
+    out.x = a[0].GetFloat();
+    out.y = a[1].GetFloat();
+    out.z = a[2].GetFloat();
+    return true;
+}
+
+bool ReadVec4(const rapidjson::Value& v, const char* key, glm::vec4& out) {
+    if (!v.HasMember(key) || !v[key].IsArray() || v[key].Size() < 4) return false;
+    const auto& a = v[key];
+    for (int i = 0; i < 4; ++i)
+        if (!a[i].IsNumber()) return false;
+    out.x = a[0].GetFloat();
+    out.y = a[1].GetFloat();
+    out.z = a[2].GetFloat();
+    out.w = a[3].GetFloat();
+    return true;
+}
+
+}  // namespace
+
+bool LoadParticle2DConfig(Particle2DConfig& cfg, const std::string& path,
+                          dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) {
+        diag.errors.push_back("cannot open file");
+        return false;
+    }
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string json = ss.str();
+
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) {
+        diag.errors.push_back("JSON parse error");
+        return false;
+    }
+    if (!doc.IsObject()) {
+        diag.errors.push_back("root is not an object");
+        return false;
+    }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kParticle2DSchemaVersion, ".dparticle2d", diag);
+
+    Particle2DConfig loaded;
+    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
+    if (doc.HasMember("emit_rate") && doc["emit_rate"].IsNumber()) loaded.emit_rate = doc["emit_rate"].GetFloat();
+    if (doc.HasMember("max_particles") && doc["max_particles"].IsInt()) loaded.max_particles = doc["max_particles"].GetInt();
+    if (doc.HasMember("emit_shape") && doc["emit_shape"].IsInt()) loaded.emit_shape = static_cast<Particle2DEmitShape>(doc["emit_shape"].GetInt());
+    if (doc.HasMember("emit_radius") && doc["emit_radius"].IsNumber()) loaded.emit_radius = doc["emit_radius"].GetFloat();
+    ReadVec2(doc, "emit_rect", loaded.emit_rect);
+    if (doc.HasMember("lifetime_min") && doc["lifetime_min"].IsNumber()) loaded.lifetime_min = doc["lifetime_min"].GetFloat();
+    if (doc.HasMember("lifetime_max") && doc["lifetime_max"].IsNumber()) loaded.lifetime_max = doc["lifetime_max"].GetFloat();
+    ReadVec2(doc, "velocity_min", loaded.velocity_min);
+    ReadVec2(doc, "velocity_max", loaded.velocity_max);
+    ReadVec2(doc, "gravity", loaded.gravity);
+    if (doc.HasMember("angular_velocity_min") && doc["angular_velocity_min"].IsNumber()) loaded.angular_velocity_min = doc["angular_velocity_min"].GetFloat();
+    if (doc.HasMember("angular_velocity_max") && doc["angular_velocity_max"].IsNumber()) loaded.angular_velocity_max = doc["angular_velocity_max"].GetFloat();
+    if (doc.HasMember("damping") && doc["damping"].IsNumber()) loaded.damping = doc["damping"].GetFloat();
+    if (doc.HasMember("start_size_min") && doc["start_size_min"].IsNumber()) loaded.start_size_min = doc["start_size_min"].GetFloat();
+    if (doc.HasMember("start_size_max") && doc["start_size_max"].IsNumber()) loaded.start_size_max = doc["start_size_max"].GetFloat();
+    if (doc.HasMember("end_size") && doc["end_size"].IsNumber()) loaded.end_size = doc["end_size"].GetFloat();
+    ReadVec4(doc, "start_color", loaded.start_color);
+    ReadVec4(doc, "end_color", loaded.end_color);
+    if (doc.HasMember("blend_mode") && doc["blend_mode"].IsInt()) loaded.blend_mode = static_cast<Particle2DBlendMode>(doc["blend_mode"].GetInt());
+    if (doc.HasMember("texture") && doc["texture"].IsString()) loaded.texture_path = doc["texture"].GetString();
+    if (doc.HasMember("trail_enabled") && doc["trail_enabled"].IsBool()) loaded.trail_enabled = doc["trail_enabled"].GetBool();
+    if (doc.HasMember("trail_length") && doc["trail_length"].IsInt()) loaded.trail_length = doc["trail_length"].GetInt();
+    if (doc.HasMember("trail_width") && doc["trail_width"].IsNumber()) loaded.trail_width = doc["trail_width"].GetFloat();
+
+    if (version < kParticle2DSchemaVersion) {
+        diag.migrated = true;
+        diag.warnings.push_back(
+            ".dparticle2d: pre-v1 config expanded to current schema (defaults applied to new fields)");
+    }
+
+    diag.ok = true;
+    cfg = std::move(loaded);
     return true;
 }
 
@@ -1232,19 +1386,99 @@ bool SaveParallaxConfig(const ParallaxConfig& cfg, const std::string& path) {
     std::ofstream f(path);
     if (!f.is_open()) return false;
     f << "{\n";
+    f << "  \"version\": " << kParallaxSchemaVersion << ",\n";
     f << "  \"name\": \"" << cfg.name << "\",\n";
     f << "  \"base_speed\": " << cfg.base_speed << ",\n";
     f << "  \"layers\": [\n";
     for (size_t i = 0; i < cfg.layers.size(); ++i) {
         const auto& l = cfg.layers[i];
         f << "    { \"name\": \"" << l.name << "\", \"texture\": \"" << l.texture_path
-          << "\", \"scroll_x\": " << l.scroll_factor_x << ", \"scroll_y\": " << l.scroll_factor_y
-          << ", \"offset_y\": " << l.offset_y << ", \"repeat_x\": " << (l.repeat_x ? "true" : "false")
-          << ", \"sort_order\": " << l.sort_order << ", \"opacity\": " << l.opacity << " }";
+          << "\", \"scroll_factor_x\": " << l.scroll_factor_x
+          << ", \"scroll_factor_y\": " << l.scroll_factor_y
+          << ", \"offset_y\": " << l.offset_y
+          << ", \"repeat_x\": " << (l.repeat_x ? "true" : "false")
+          << ", \"repeat_y\": " << (l.repeat_y ? "true" : "false")
+          << ", \"sort_order\": " << l.sort_order << ", \"opacity\": " << l.opacity
+          << ", \"tint\": [" << l.tint.x << ", " << l.tint.y << ", " << l.tint.z << ", " << l.tint.w << "]"
+          << " }";
         if (i + 1 < cfg.layers.size()) f << ",";
         f << "\n";
     }
     f << "  ]\n}\n";
+    return true;
+}
+
+bool LoadParallaxConfig(ParallaxConfig& cfg, const std::string& path,
+                        dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) {
+        diag.errors.push_back("cannot open file");
+        return false;
+    }
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string json = ss.str();
+
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) {
+        diag.errors.push_back("JSON parse error");
+        return false;
+    }
+    if (!doc.IsObject()) {
+        diag.errors.push_back("root is not an object");
+        return false;
+    }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kParallaxSchemaVersion, ".dparallax", diag);
+    bool migrated_keys = false;
+
+    ParallaxConfig loaded;
+    if (doc.HasMember("name") && doc["name"].IsString()) loaded.name = doc["name"].GetString();
+    if (doc.HasMember("base_speed") && doc["base_speed"].IsNumber()) loaded.base_speed = doc["base_speed"].GetFloat();
+
+    if (doc.HasMember("layers") && doc["layers"].IsArray()) {
+        for (const auto& lj : doc["layers"].GetArray()) {
+            if (!lj.IsObject()) continue;
+            ParallaxLayer l;
+            if (lj.HasMember("name") && lj["name"].IsString()) l.name = lj["name"].GetString();
+            if (lj.HasMember("texture") && lj["texture"].IsString()) l.texture_path = lj["texture"].GetString();
+
+            if (lj.HasMember("scroll_factor_x") && lj["scroll_factor_x"].IsNumber()) {
+                l.scroll_factor_x = lj["scroll_factor_x"].GetFloat();
+            } else if (lj.HasMember("scroll_x") && lj["scroll_x"].IsNumber()) {
+                l.scroll_factor_x = lj["scroll_x"].GetFloat();
+                migrated_keys = true;
+            }
+            if (lj.HasMember("scroll_factor_y") && lj["scroll_factor_y"].IsNumber()) {
+                l.scroll_factor_y = lj["scroll_factor_y"].GetFloat();
+            } else if (lj.HasMember("scroll_y") && lj["scroll_y"].IsNumber()) {
+                l.scroll_factor_y = lj["scroll_y"].GetFloat();
+                migrated_keys = true;
+            }
+
+            if (lj.HasMember("offset_y") && lj["offset_y"].IsNumber()) l.offset_y = lj["offset_y"].GetFloat();
+            if (lj.HasMember("repeat_x") && lj["repeat_x"].IsBool()) l.repeat_x = lj["repeat_x"].GetBool();
+            if (lj.HasMember("repeat_y") && lj["repeat_y"].IsBool()) l.repeat_y = lj["repeat_y"].GetBool();
+            if (lj.HasMember("sort_order") && lj["sort_order"].IsInt()) l.sort_order = lj["sort_order"].GetInt();
+            if (lj.HasMember("opacity") && lj["opacity"].IsNumber()) l.opacity = lj["opacity"].GetFloat();
+            ReadVec4(lj, "tint", l.tint);
+
+            loaded.layers.push_back(l);
+        }
+    }
+
+    if (version < kParallaxSchemaVersion && migrated_keys) {
+        diag.migrated = true;
+        diag.warnings.push_back(
+            ".dparallax: migrated legacy scroll_x/scroll_y layer keys to scroll_factor_x/scroll_factor_y");
+    }
+
+    diag.ok = true;
+    cfg = std::move(loaded);
     return true;
 }
 
@@ -1367,6 +1601,7 @@ bool SaveLight2DScene(const Light2DEditorState& state, const std::string& path) 
     std::ofstream f(path);
     if (!f.is_open()) return false;
     f << "{\n";
+    f << "  \"version\": " << kLight2DSchemaVersion << ",\n";
     f << "  \"ambient_color\": [" << state.ambient_color.x << ", " << state.ambient_color.y << ", " << state.ambient_color.z << "],\n";
     f << "  \"ambient_intensity\": " << state.ambient_intensity << ",\n";
     f << "  \"lights\": [\n";
@@ -1377,11 +1612,83 @@ bool SaveLight2DScene(const Light2DEditorState& state, const std::string& path) 
           << ", \"color\": [" << l.color.x << ", " << l.color.y << ", " << l.color.z << "]"
           << ", \"intensity\": " << l.intensity << ", \"range\": " << l.range
           << ", \"falloff\": " << l.falloff
-          << ", \"shadow_mode\": " << static_cast<int>(l.shadow_mode) << " }";
+          << ", \"spot_angle\": " << l.spot_angle
+          << ", \"spot_direction\": " << l.spot_direction
+          << ", \"shadow_mode\": " << static_cast<int>(l.shadow_mode)
+          << ", \"shadow_softness\": " << l.shadow_softness
+          << ", \"shadow_rays\": " << l.shadow_rays
+          << ", \"use_normal_map\": " << (l.use_normal_map ? "true" : "false")
+          << ", \"normal_strength\": " << l.normal_strength << " }";
         if (i + 1 < state.lights.size()) f << ",";
         f << "\n";
     }
     f << "  ]\n}\n";
+    return true;
+}
+
+bool LoadLight2DScene(Light2DEditorState& state, const std::string& path,
+                      dse::assets::AssetDiagnostics& diag) {
+    diag = dse::assets::AssetDiagnostics{};
+
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) {
+        diag.errors.push_back("cannot open file");
+        return false;
+    }
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string json = ss.str();
+
+    rapidjson::Document doc;
+    doc.Parse(json.c_str());
+    if (doc.HasParseError()) {
+        diag.errors.push_back("JSON parse error");
+        return false;
+    }
+    if (!doc.IsObject()) {
+        diag.errors.push_back("root is not an object");
+        return false;
+    }
+
+    const int version = dse::assets::ReadVersionEnvelope(
+        doc, kLight2DSchemaVersion, ".dlight2d", diag);
+
+    Light2DEditorState loaded;
+    ReadVec3(doc, "ambient_color", loaded.ambient_color);
+    if (doc.HasMember("ambient_intensity") && doc["ambient_intensity"].IsNumber())
+        loaded.ambient_intensity = doc["ambient_intensity"].GetFloat();
+
+    if (doc.HasMember("lights") && doc["lights"].IsArray()) {
+        for (const auto& lj : doc["lights"].GetArray()) {
+            if (!lj.IsObject()) continue;
+            Light2DConfig l;
+            if (lj.HasMember("name") && lj["name"].IsString()) l.name = lj["name"].GetString();
+            if (lj.HasMember("type") && lj["type"].IsInt()) l.type = static_cast<Light2DType>(lj["type"].GetInt());
+            ReadVec2(lj, "position", l.position);
+            ReadVec3(lj, "color", l.color);
+            if (lj.HasMember("intensity") && lj["intensity"].IsNumber()) l.intensity = lj["intensity"].GetFloat();
+            if (lj.HasMember("range") && lj["range"].IsNumber()) l.range = lj["range"].GetFloat();
+            if (lj.HasMember("falloff") && lj["falloff"].IsNumber()) l.falloff = lj["falloff"].GetFloat();
+            if (lj.HasMember("spot_angle") && lj["spot_angle"].IsNumber()) l.spot_angle = lj["spot_angle"].GetFloat();
+            if (lj.HasMember("spot_direction") && lj["spot_direction"].IsNumber()) l.spot_direction = lj["spot_direction"].GetFloat();
+            if (lj.HasMember("shadow_mode") && lj["shadow_mode"].IsInt()) l.shadow_mode = static_cast<Light2DShadowMode>(lj["shadow_mode"].GetInt());
+            if (lj.HasMember("shadow_softness") && lj["shadow_softness"].IsNumber()) l.shadow_softness = lj["shadow_softness"].GetFloat();
+            if (lj.HasMember("shadow_rays") && lj["shadow_rays"].IsInt()) l.shadow_rays = lj["shadow_rays"].GetInt();
+            if (lj.HasMember("use_normal_map") && lj["use_normal_map"].IsBool()) l.use_normal_map = lj["use_normal_map"].GetBool();
+            if (lj.HasMember("normal_strength") && lj["normal_strength"].IsNumber()) l.normal_strength = lj["normal_strength"].GetFloat();
+
+            loaded.lights.push_back(l);
+        }
+    }
+
+    if (version < kLight2DSchemaVersion) {
+        diag.migrated = true;
+        diag.warnings.push_back(
+            ".dlight2d: pre-v1 scene expanded to current schema (defaults applied to spot/shadow/normal fields)");
+    }
+
+    diag.ok = true;
+    state = std::move(loaded);
     return true;
 }
 
