@@ -942,7 +942,8 @@
         "tests/gtest/unit/engine/cutscene/cutscene_test.cpp",
         "tests/gtest/unit/engine/shader_graph_asset_test.cpp",
         "tests/gtest/unit/engine/script_metadata_test.cpp",
-        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp"
+        "tests/gtest/unit/modules/gameplay_3d/animation_state_machine_test.cpp",
+        "tests/gtest/integration/engine/core/dynamic_library_reload_test.cpp"
       ],
       "cleanMachineTests": [],
       "productionDebtIds": [],
@@ -950,7 +951,8 @@
         "apps/editor_cpp/src/editor_asset_db.cpp",
         "apps/editor_cpp/src/editor_asset_refs_core.cpp",
         "apps/editor_cpp/core/editor_command.h",
-        "engine/scripting/blueprint/blueprint_serialize.cpp"
+        "engine/scripting/blueprint/blueprint_serialize.cpp",
+        "engine/core/dynamic_library.cpp"
       ],
       "acceptance": {
         "editorRoundTrip": false,
@@ -967,7 +969,8 @@
         "AssetDatabase now classifies all content types (incl. the six versioned formats) and supports rename/move reference fixup that preserves the GUID (.meta moves with the asset) and rewrites path references across JSON assets; covered by AssetRefs.* + AssetDb.* automated tests.",
         "Format migration is implemented and tested for all six versioned formats via the shared version envelope + AssetDiagnostics.migrated (legacy v0 -> current with data back-fill, forward-version warnings).",
         "Lua hot reload is real and tested: editing a mounted script reloads it (PumpLuaScriptHotReloads) with new behavior taking effect and state preserved via OnSerializeState/OnDeserializeState.",
-        "Remaining before productionReady: C# collectible-ALC hot reload requires the real hostfxr runtime (tracked under P1-7); native plugin DLL reload is wired via dse::core::DynamicLibrary in editor_plugin_hot_reload.cpp but still lacks automated coverage; clean-machine verification pending."
+        "Native plugin DLL reload (dse::core::DynamicLibrary load/unload + on-disk DLL swap + reload picks up new behavior) now has automated coverage via NativePluginReload.* (two built fixture DLLs).",
+        "Remaining before productionReady: C# collectible-ALC hot reload requires the real hostfxr runtime (tracked under P1-7); clean-machine verification pending."
       ]
     },
     {

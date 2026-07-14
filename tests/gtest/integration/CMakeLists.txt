@@ -87,6 +87,26 @@ target_compile_definitions(${DSE_GTEST_INTEGRATION_TARGET}
         DSE_EDITOR_CORE_DIR="${CMAKE_SOURCE_DIR}/apps/editor_cpp/core"
 )
 
+# Native plugin hot-reload fixtures: two DLLs whose exported probe() returns a
+# different version, so dynamic_library_reload_test.cpp can prove Load/Unload +
+# on-disk swap + reload picks up the new behavior (the editor plugin hot-reload
+# mechanism). [P2-1]
+set(DSE_TEST_PLUGIN_SRC ${CMAKE_SOURCE_DIR}/tests/fixtures/native_plugin/plugin_probe.c)
+add_library(dse_test_plugin_v1 SHARED ${DSE_TEST_PLUGIN_SRC})
+add_library(dse_test_plugin_v2 SHARED ${DSE_TEST_PLUGIN_SRC})
+target_compile_definitions(dse_test_plugin_v1 PRIVATE DSE_TEST_PLUGIN_VERSION=1)
+target_compile_definitions(dse_test_plugin_v2 PRIVATE DSE_TEST_PLUGIN_VERSION=2)
+set_target_properties(dse_test_plugin_v1 dse_test_plugin_v2 PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin_fixtures"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugin_fixtures"
+)
+add_dependencies(${DSE_GTEST_INTEGRATION_TARGET} dse_test_plugin_v1 dse_test_plugin_v2)
+target_compile_definitions(${DSE_GTEST_INTEGRATION_TARGET}
+    PRIVATE
+        DSE_TEST_PLUGIN_V1_DLL="$<TARGET_FILE:dse_test_plugin_v1>"
+        DSE_TEST_PLUGIN_V2_DLL="$<TARGET_FILE:dse_test_plugin_v2>"
+)
+
 # PhysX 运行时 DLL 复制（仅当 PhysX 已启用且库已找到时）
 if(DSE_ENABLE_PHYSX AND DSE_HAS_PHYSX_LIBS)
     add_custom_command(TARGET ${DSE_GTEST_INTEGRATION_TARGET} POST_BUILD
