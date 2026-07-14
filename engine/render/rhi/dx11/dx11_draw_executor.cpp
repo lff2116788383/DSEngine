@@ -514,9 +514,13 @@ DXGI_FORMAT PrimAttrFormat(uint32_t components) {
 }  // namespace
 
 ID3D11InputLayout* DX11DrawExecutor::ResolvePrimInputLayout(DX11ShaderManager& shader_mgr) const {
-    // 旧单流 + per-vertex：沿用反射推导布局（与历史行为字节一致）。
+    // 旧单流 + per-vertex：优先沿用反射推导布局（与历史行为字节一致）。
+    // 运行时自定义 shader program（CreateShaderProgram）不预建反射布局，
+    // 此时反射布局为空，回落到按 prim_attrs_ 显式组装（否则 IA 无布局、绘制无输出）。
     if (prim_extra_vbs_.empty() && prim_slot0_rate_ == VertexInputRate::PerVertex) {
-        return shader_mgr.GetInputLayout(prim_program_handle_);
+        if (ID3D11InputLayout* reflected = shader_mgr.GetInputLayout(prim_program_handle_)) {
+            return reflected;
+        }
     }
     // 出现 slot>0 或 per-instance：据各 slot 属性 + rate 显式组装多 slot 布局。
     // 反射布局恒落 slot0/per-vertex，无法表达 per-instance，故此处全量自建。

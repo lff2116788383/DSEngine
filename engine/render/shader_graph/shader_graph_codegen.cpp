@@ -161,10 +161,13 @@ std::string VertexHLSL() {
     o << "cbuffer PerFrame : register(b0) {\n";
     o << "    float4x4 vp;\n    float4x4 view;\n    float4 camera_pos;\n";
     o << "    float4 foliage_wind;\n    float4 foliage_push;\n};\n\n";
+    // 顶点输入语义须与引擎 D3D11 prim 输入布局一致：按 location 全用 TEXCOORD<n>
+    // （SPIRV-Cross HLSL 约定，见 dx11_draw_executor PrimBuildInputLayout / 生成着色器反射），
+    // 否则 CreateInputLayout 因语义不匹配失败、绘制无输出。
     o << "struct VSIn {\n";
-    o << "    float3 a_pos : POSITION;\n    float4 a_color : COLOR;\n";
-    o << "    float2 a_uv : TEXCOORD0;\n    float3 a_normal : NORMAL;\n";
-    o << "    float3 a_tangent : TANGENT;\n};\n\n";
+    o << "    float3 a_pos : TEXCOORD0;\n    float4 a_color : TEXCOORD1;\n";
+    o << "    float2 a_uv : TEXCOORD2;\n    float3 a_normal : TEXCOORD3;\n";
+    o << "    float3 a_tangent : TEXCOORD4;\n};\n\n";
     o << "struct VSOut {\n";
     o << "    float4 pos : SV_Position;\n    float2 v_uv : TEXCOORD0;\n";
     o << "    float3 v_normal : NORMAL;\n    float3 v_world_pos : TEXCOORD1;\n";
