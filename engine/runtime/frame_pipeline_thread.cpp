@@ -310,10 +310,13 @@ void FramePipeline::ExecuteRenderFrame() {
         if (!gpu_results.empty()) {
             std::vector<dse::profiler::GpuPassTiming> timings;
             timings.reserve(gpu_results.size());
+            float gpu_frame_ms = 0.0f;
             for (const auto& entry : gpu_results) {
                 timings.push_back({entry.name, entry.ms});
+                if (entry.ms > 0.0f) gpu_frame_ms += entry.ms;
             }
             rs_->render_profiler_.UpdateGpuTimers(timings);
+            if (gpu_frame_ms > 0.0f) stats_.RecordGpuSegment(gpu_frame_ms);
         }
     }
 
@@ -384,7 +387,10 @@ void FramePipeline::ExecuteRenderFrame() {
     }
 
     auto render_end = std::chrono::high_resolution_clock::now();
-    stats_.RecordRender(std::chrono::duration<float, std::milli>(render_end - render_begin).count());
+    const float render_ms =
+        std::chrono::duration<float, std::milli>(render_end - render_begin).count();
+    stats_.RecordRender(render_ms);
+    stats_.RecordExecuteSegment(render_ms);
 
     // Present (SwapBuffers) — 在 render 计时之外，避免 Present 延迟污染 avg_render_ms
     if (render_thread_mgr_->IsActive() && runtime_context_.present_frame) {

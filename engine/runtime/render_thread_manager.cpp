@@ -70,11 +70,16 @@ void RenderThreadManager::SignalNewFrame() {
         frame_pending_ = true;
         frame_done_ = false;
     }
+    frames_signaled_.fetch_add(1, std::memory_order_relaxed);
     render_cv_.notify_one();
 }
 
 void RenderThreadManager::WaitForComplete() {
     std::unique_lock<std::mutex> lock(mutex_);
+    wait_calls_.fetch_add(1, std::memory_order_relaxed);
+    if (!frame_done_) {
+        wait_blocked_.fetch_add(1, std::memory_order_relaxed);
+    }
     main_cv_.wait(lock, [this] { return frame_done_; });
 }
 
@@ -96,6 +101,8 @@ void RenderThreadManager::ThreadFunc() {
         if (render_callback_) {
             render_callback_();
         }
+
+        frames_completed_.fetch_add(1, std::memory_order_relaxed);
 
         // Notify main thread that rendering is complete
         {

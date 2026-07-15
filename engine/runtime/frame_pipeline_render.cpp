@@ -40,7 +40,13 @@ void FramePipeline::RunRenderInternal() {
     dse::profiler::ScopedCPUProfile _profile_render(rs_->cpu_profiler_, "FramePipeline::Render");
 
     // Update phase: all ECS reads -> scene_view / thin snapshot / lights / cluster / render queues
-    PrepareRenderFrame();
+    {
+        auto prep_begin = std::chrono::high_resolution_clock::now();
+        PrepareRenderFrame();
+        auto prep_end = std::chrono::high_resolution_clock::now();
+        stats_.RecordPrepareSegment(
+            std::chrono::duration<float, std::milli>(prep_end - prep_begin).count());
+    }
 
     // Render phase: consumes only the snapshot and pre-extracted data, never touches World
     ExecuteRenderFrame();
@@ -272,6 +278,23 @@ void FramePipeline::CollectRuntimeStats() {
                        pending_callbacks,
                        pending_callbacks_hwm,
                        callback_budget_per_frame_);
+
+        // Segmented pipeline timing (Phase 0 measurement): avg / P50 / P95 / P99 (ms).
+        const auto seg_update  = stats_.UpdateSegment();
+        const auto seg_prepare = stats_.PrepareSegment();
+        const auto seg_wait    = stats_.WaitSegment();
+        const auto seg_execute = stats_.ExecuteSegment();
+        const auto seg_gpu     = stats_.GpuSegment();
+        const auto rt = render_thread_mgr_ ? render_thread_mgr_->GetStats()
+                                           : RenderThreadManager::Stats{};
+        DEBUG_LOG_INFO("Frame segments (ms) [avg/p50/p95/p99]: update={}/{}/{}/{} prepare={}/{}/{}/{} wait={}/{}/{}/{} execute={}/{}/{}/{} gpu={}/{}/{}/{} | render_thread: active={} queue_depth={} signaled={} completed={} wait_calls={} wait_blocked={}",
+                       seg_update.avg_ms, seg_update.p50_ms, seg_update.p95_ms, seg_update.p99_ms,
+                       seg_prepare.avg_ms, seg_prepare.p50_ms, seg_prepare.p95_ms, seg_prepare.p99_ms,
+                       seg_wait.avg_ms, seg_wait.p50_ms, seg_wait.p95_ms, seg_wait.p99_ms,
+                       seg_execute.avg_ms, seg_execute.p50_ms, seg_execute.p95_ms, seg_execute.p99_ms,
+                       seg_gpu.avg_ms, seg_gpu.p50_ms, seg_gpu.p95_ms, seg_gpu.p99_ms,
+                       rt.active, rt.queue_depth, rt.frames_signaled, rt.frames_completed,
+                       rt.wait_calls, rt.wait_blocked);
         stats_.ResetAccumulators();
     }
 }

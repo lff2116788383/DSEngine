@@ -1110,10 +1110,22 @@ void FramePipeline::Render() {
         return;
     }
     if (render_thread_mgr_->IsActive()) {
-        render_thread_mgr_->WaitForComplete();
+        {
+            auto wait_begin = std::chrono::high_resolution_clock::now();
+            render_thread_mgr_->WaitForComplete();
+            auto wait_end = std::chrono::high_resolution_clock::now();
+            stats_.RecordWaitSegment(
+                std::chrono::duration<float, std::milli>(wait_end - wait_begin).count());
+        }
         // 渲染线程已消费完上一帧快照（含其帧分配器缓冲），此处推进+复位才安全（见设计文档 §3.5）。
         dse::core::Memory::Frame().BeginFrame();
-        PrepareRenderFrame();
+        {
+            auto prep_begin = std::chrono::high_resolution_clock::now();
+            PrepareRenderFrame();
+            auto prep_end = std::chrono::high_resolution_clock::now();
+            stats_.RecordPrepareSegment(
+                std::chrono::duration<float, std::milli>(prep_end - prep_begin).count());
+        }
         render_thread_mgr_->SignalNewFrame();
     } else {
         // 单线程：本帧同步消费，帧首复位即可。
@@ -1186,7 +1198,10 @@ void FramePipeline::RunUpdateInternal(const dse::FrameUpdateContext& frame) {
     dse::runtime::RunRuntimeUpdateGraph(*this, frame);
 
     auto update_end = std::chrono::high_resolution_clock::now();
-    stats_.RecordUpdate(std::chrono::duration<float, std::milli>(update_end - update_begin).count());
+    const float update_ms =
+        std::chrono::duration<float, std::milli>(update_end - update_begin).count();
+    stats_.RecordUpdate(update_ms);
+    stats_.RecordUpdateSegment(update_ms);
 }
 
 void FramePipeline::RunFixedUpdateInternal(float fixed_delta_time) {

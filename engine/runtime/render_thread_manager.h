@@ -11,6 +11,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 
 /**
@@ -58,6 +59,27 @@ public:
     /// @return True if the render thread is currently running.
     bool IsActive() const { return active_.load(); }
 
+    /// Snapshot of render-thread pipeline statistics (Phase 0 measurement).
+    struct Stats {
+        bool active = false;
+        uint64_t frames_signaled = 0;   ///< frames handed to the render thread
+        uint64_t frames_completed = 0;  ///< frames the render thread finished
+        uint64_t wait_calls = 0;        ///< WaitForComplete() invocations
+        uint64_t wait_blocked = 0;      ///< of which actually had to block
+        int queue_depth = 0;            ///< frames signaled but not yet completed
+    };
+
+    Stats GetStats() const {
+        Stats s;
+        s.active = active_.load();
+        s.frames_signaled = frames_signaled_.load();
+        s.frames_completed = frames_completed_.load();
+        s.wait_calls = wait_calls_.load();
+        s.wait_blocked = wait_blocked_.load();
+        s.queue_depth = static_cast<int>(s.frames_signaled - s.frames_completed);
+        return s;
+    }
+
 private:
     void ThreadFunc();
 
@@ -75,6 +97,12 @@ private:
     bool frame_done_ = true;
     bool exit_ = false;
     std::atomic<bool> active_{false};
+
+    // Phase 0 pipeline statistics
+    std::atomic<uint64_t> frames_signaled_{0};
+    std::atomic<uint64_t> frames_completed_{0};
+    std::atomic<uint64_t> wait_calls_{0};
+    std::atomic<uint64_t> wait_blocked_{0};
 };
 
 #endif // DSE_RENDER_THREAD_MANAGER_H
