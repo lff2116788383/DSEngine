@@ -70,7 +70,7 @@ private:
     // --- B2 bring-up 自检资源（验证整条录制链路；引擎 WGSL 内容就绪后自动不再触发）---
     bool selftest_init_ = false;
     unsigned int selftest_program_ = 0;
-    unsigned int selftest_pso_ = 0;
+    PipelineHandle selftest_pso_;
     unsigned int selftest_vbo_ = 0;
     unsigned int selftest_tex_ = 0;
     unsigned int selftest_ubo_ = 0;
@@ -297,7 +297,7 @@ private:
     void KickMultiDrawIndirectSelfTestReadback();  ///< 提交后发起异步 map 回读校验
     unsigned int t41_rt_      = 0;          ///< 离屏 RT（引擎 CreateRenderTarget，RGBA16Float + CopySrc）
     unsigned int t41_program_ = 0;          ///< 内建 WGSL 程序（pos.xy@loc0 + color.rgb@loc1）
-    unsigned int t41_pso_     = 0;          ///< PSO（无深度/无剔除/三角列表）
+    PipelineHandle t41_pso_;          ///< PSO（无深度/无剔除/三角列表）
     unsigned int t41_vbo_     = 0;          ///< 4 象限 quad 顶点缓冲（pos.xy + color.rgb，stride 20）
     unsigned int t41_ibo_     = 0;          ///< 4 象限索引缓冲（每象限 6 索引，UInt32）
     unsigned int t41_indirect_ = 0;         ///< 预置 4 条 indirect cmd（instance_count=[1,0,1,0]）
@@ -311,7 +311,7 @@ private:
     void KickMegaVaoSelfTestReadback();    ///< 提交后发起异步 map 回读校验
     unsigned int t42_rt_      = 0;         ///< 离屏 RT（RGBA16Float + CopySrc）
     unsigned int t42_program_ = 0;         ///< BatchVertex 92B 布局 WGSL 程序（pos@loc0 + color@loc1）
-    unsigned int t42_pso_     = 0;         ///< PSO（无深度/无剔除/三角列表）
+    PipelineHandle t42_pso_;         ///< PSO（无深度/无剔除/三角列表）
     VertexArrayHandle t42_vao_{};          ///< 被测 Mega VAO 句柄
     BufferHandle t42_vbo_{};               ///< Mega VBO 句柄
     BufferHandle t42_ibo_{};               ///< Mega IBO 句柄
@@ -361,9 +361,9 @@ private:
     unsigned int t51_shadow_rt_   = 0;       ///< shadow atlas RT（含 Depth32 深度附件，TextureBinding 可采样）
     unsigned int t51_color_rt_    = 0;       ///< 离屏 color RT（RGBA16Float + CopySrc）
     unsigned int t51_occ_program_ = 0;       ///< 遮挡 quad 程序（写深度，pos.xyz@loc0）
-    unsigned int t51_occ_pso_     = 0;       ///< 遮挡 PSO（depth test/write on、cull none）
+    PipelineHandle t51_occ_pso_;       ///< 遮挡 PSO（depth test/write on、cull none）
     unsigned int t51_recv_program_ = 0;      ///< 前向接收程序（采样 atlas，pos.xy@loc0 + uv@loc1）
-    unsigned int t51_recv_pso_    = 0;       ///< 前向 PSO（无深度/无剔除/blend off）
+    PipelineHandle t51_recv_pso_;       ///< 前向 PSO（无深度/无剔除/blend off）
     unsigned int t51_occ_vbo_     = 0;       ///< 遮挡 quad 顶点缓冲（pos.xyz，stride 12）
     unsigned int t51_occ_ibo_     = 0;       ///< 遮挡 quad 索引缓冲（6 索引，UInt32）
     unsigned int t51_recv_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy + uv，stride 16）
@@ -380,9 +380,9 @@ private:
     unsigned int t52_gbuffer_rt_  = 0;       ///< gbuffer RT（3 个 RGBA16Float 颜色附件 albedo/normal/position）
     unsigned int t52_color_rt_    = 0;       ///< 离屏 color RT（RGBA16Float + CopySrc）
     unsigned int t52_geom_program_ = 0;      ///< 几何程序（写 MRT 3 附件，pos.xy@loc0）
-    unsigned int t52_geom_pso_    = 0;       ///< 几何 PSO（无深度/无剔除/blend off）
+    PipelineHandle t52_geom_pso_;       ///< 几何 PSO（无深度/无剔除/blend off）
     unsigned int t52_light_program_ = 0;     ///< 延迟光照程序（textureLoad 3 张 gbuffer，pos.xy@loc0）
-    unsigned int t52_light_pso_   = 0;       ///< 光照 PSO（无深度/无剔除/blend off）
+    PipelineHandle t52_light_pso_;       ///< 光照 PSO（无深度/无剔除/blend off）
     unsigned int t52_geom_vbo_    = 0;       ///< 几何 quad 顶点缓冲（pos.xy，stride 8）
     unsigned int t52_geom_ibo_    = 0;       ///< 几何 quad 索引缓冲（6 索引，UInt32）
     unsigned int t52_light_vbo_   = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
@@ -400,7 +400,7 @@ private:
     unsigned int t53_lum_rt_      = 0;       ///< 平均 log 亮度 RT（1×1 RGBA16Float）
     unsigned int t53_exposure_rt_ = 0;       ///< 自动曝光 RT（1×1 RGBA16Float）
     unsigned int t53_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
-    unsigned int t53_pso_         = 0;       ///< 共享 PSO（无深度/无剔除/blend off）
+    PipelineHandle t53_pso_;       ///< 共享 PSO（无深度/无剔除/blend off）
     unsigned int t53_scene_program_  = 0;    ///< HDR 场景程序（输出常量 (4,2,1)）
     unsigned int t53_reduce_program_ = 0;    ///< 亮度归约程序（textureLoad 整张算平均 log 亮度）
     unsigned int t53_adapt_program_  = 0;    ///< lum_adapt 程序（0.18/avgLum 曝光）
@@ -420,7 +420,7 @@ private:
     unsigned int t54_irr_rt_      = 0;       ///< 辐照度 RT（1×1 RGBA16Float）
     unsigned int t54_pref_rt_     = 0;       ///< 预滤波镜面 RT（1×1 RGBA16Float）
     unsigned int t54_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
-    unsigned int t54_pso_         = 0;       ///< 共享 PSO（无深度/无剔除/blend off）
+    PipelineHandle t54_pso_;       ///< 共享 PSO（无深度/无剔除/blend off）
     unsigned int t54_brdf_program_ = 0;      ///< BRDF LUT 程序（GGX split-sum 积分）
     unsigned int t54_irr_program_  = 0;      ///< 辐照度程序（输出常量辐照度）
     unsigned int t54_pref_program_ = 0;      ///< 预滤波镜面程序（输出常量预滤波色）
@@ -438,8 +438,8 @@ private:
     void KickWBOITSelfTestReadback();        ///< 提交后发起异步 map 回读校验
     unsigned int t55_mrt_rt_      = 0;       ///< accum/reveal MRT（2 个 RGBA16Float 颜色附件）
     unsigned int t55_color_rt_    = 0;       ///< 离屏 color RT（64×64 RGBA16Float + CopySrc）
-    unsigned int t55_geom_pso_    = 0;       ///< 几何 PSO（无深度/无剔除/blend off）
-    unsigned int t55_resolve_pso_ = 0;       ///< resolve PSO（无深度/无剔除/blend off）
+    PipelineHandle t55_geom_pso_;       ///< 几何 PSO（无深度/无剔除/blend off）
+    PipelineHandle t55_resolve_pso_;       ///< resolve PSO（无深度/无剔除/blend off）
     unsigned int t55_geom_program_    = 0;   ///< 几何程序（WBOIT 权重解析累加写 MRT）
     unsigned int t55_resolve_program_ = 0;   ///< resolve 程序（accum/reveal 合成）
     unsigned int t55_quad_vbo_    = 0;       ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）
@@ -458,9 +458,9 @@ private:
     unsigned int t56_cube_rt_      = 0;        ///< 点光 cube 阴影 RT（64×64×6，含 Depth32 cube 深度附件）
     unsigned int t56_color_rt_     = 0;        ///< 离屏 color RT（RGBA16Float + CopySrc）
     unsigned int t56_occ_program_  = 0;        ///< 遮挡 quad 程序（frag_depth=归一化距离，pos.xy@loc0 + nd@loc1）
-    unsigned int t56_occ_pso_      = 0;        ///< 遮挡 PSO（depth test/write on、cull none）
+    PipelineHandle t56_occ_pso_;        ///< 遮挡 PSO（depth test/write on、cull none）
     unsigned int t56_recv_program_ = 0;        ///< 前向接收程序（texture_depth_cube 采样，pos.xy@loc0）
-    unsigned int t56_recv_pso_     = 0;        ///< 前向 PSO（无深度/无剔除/blend off）
+    PipelineHandle t56_recv_pso_;        ///< 前向 PSO（无深度/无剔除/blend off）
     unsigned int t56_occ_vbo_      = 0;        ///< 遮挡 quad 顶点缓冲（pos.xy + nd，stride 12）
     unsigned int t56_occ_ibo_      = 0;        ///< 遮挡 quad 索引缓冲（6 索引，UInt32）
     unsigned int t56_recv_vbo_     = 0;        ///< 全屏 quad 顶点缓冲（pos.xy，stride 8）

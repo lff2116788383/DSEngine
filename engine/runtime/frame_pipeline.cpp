@@ -520,7 +520,7 @@ bool FramePipeline::Init() {
     sprite_desc.depth_write_enabled = false;
     sprite_desc.culling_enabled = false;
     render_resources_.sprite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(sprite_desc);
-    if (render_resources_.sprite_pipeline_state == 0) {
+    if (!render_resources_.sprite_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: sprite pipeline state creation returned 0");
         Shutdown();
         return false;
@@ -533,7 +533,7 @@ bool FramePipeline::Init() {
     mesh_desc.culling_enabled = true;
     mesh_desc.depth_func = CompareFunc::LessEqual; // scene color pass must accept depth equality after PreZ.
     render_resources_.mesh_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(mesh_desc);
-    if (render_resources_.mesh_pipeline_state == 0) {
+    if (!render_resources_.mesh_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: mesh pipeline state creation returned 0");
         Shutdown();
         return false;
@@ -546,7 +546,7 @@ bool FramePipeline::Init() {
     prez_desc.culling_enabled = true;
     // In a real engine we disable color write, but for now we'll just write to a depth-only FBO
     render_resources_.prez_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(prez_desc);
-    if (render_resources_.prez_pipeline_state == 0) {
+    if (!render_resources_.prez_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: prez pipeline state creation returned 0");
         Shutdown();
         return false;
@@ -559,7 +559,7 @@ bool FramePipeline::Init() {
     shadow_desc.culling_enabled = true;
     shadow_desc.cull_face = CullFace::Front; // avoid peter-panning
     render_resources_.shadow_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(shadow_desc);
-    if (render_resources_.shadow_pipeline_state == 0) {
+    if (!render_resources_.shadow_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: shadow pipeline state creation returned 0");
         Shutdown();
         return false;
@@ -573,7 +573,7 @@ bool FramePipeline::Init() {
     composite_desc.depth_write_enabled = false;
     composite_desc.culling_enabled = false;
     render_resources_.composite_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(composite_desc);
-    if (render_resources_.composite_pipeline_state == 0) {
+    if (!render_resources_.composite_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: composite pipeline state creation returned 0");
         Shutdown();
         return false;
@@ -587,7 +587,7 @@ bool FramePipeline::Init() {
     decal_blend_desc.depth_write_enabled = false;
     decal_blend_desc.culling_enabled = false;
     render_resources_.decal_blend_pipeline_state = runtime_context_.rhi_device->CreatePipelineState(decal_blend_desc);
-    if (render_resources_.decal_blend_pipeline_state == 0) {
+    if (!render_resources_.decal_blend_pipeline_state) {
         DEBUG_LOG_ERROR("FramePipeline init failed: decal_blend pipeline state creation returned 0");
         Shutdown();
         return false;

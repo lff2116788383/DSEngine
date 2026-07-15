@@ -1099,10 +1099,10 @@ void OpenGLRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
 
 // --- 管线状态 ---
 
-unsigned int OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
+PipelineHandle OpenGLRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
     unsigned int handle = state_mgr_.CreatePipelineState(desc);
     resource_mgr_.ledger().pipeline_states_created += 1;
-    return handle;
+    return PipelineHandle{handle};
 }
 
 // --- 命令缓冲 ---
@@ -1137,8 +1137,8 @@ void OpenGLRhiDevice::RealBindPipeline(GraphicsPipelineHandle graphics_pipeline_
     const auto* desc = GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;
     // 恒应用 PSO 状态 + 拓扑；program!=0 时再绑 program（PSO-only 管线 program==0）。
-    state_mgr_.ApplyState(desc->pso_state);
-    const PipelineStateDesc* ps = state_mgr_.GetPipelineState(desc->pso_state);
+    state_mgr_.ApplyState(desc->pso_state.raw());
+    const PipelineStateDesc* ps = state_mgr_.GetPipelineState(desc->pso_state.raw());
     draw_executor_.PrimSetTopology(ps ? ps->topology : PrimitiveTopology::TriangleList);
     if (desc->program != 0) draw_executor_.PrimBindShaderProgram(desc->program);
 }

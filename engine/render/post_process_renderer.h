@@ -46,13 +46,13 @@ public:
 
 private:
     void EnsureResources(RhiDevice& device);
-    unsigned int PsoFor(RhiDevice& device, bool blend);
+    PipelineHandle PsoFor(RhiDevice& device, bool blend);
 
     BufferHandle quad_vbo_;   ///< 全屏 quad 顶点（clip-space，pos2+uv2，静态）
     BufferHandle quad_ibo_;   ///< 全屏 quad 索引（0,1,2,0,2,3，静态）
 
-    unsigned int pso_opaque_ = 0;  ///< 关剔除/深度/混合
-    unsigned int pso_blend_  = 0;  ///< 关剔除/深度 + alpha 混合
+    PipelineHandle pso_opaque_;  ///< 关剔除/深度/混合
+    PipelineHandle pso_blend_;   ///< 关剔除/深度 + alpha 混合
     bool init_ = false;
 };
 

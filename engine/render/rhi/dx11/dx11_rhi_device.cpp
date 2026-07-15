@@ -94,8 +94,8 @@ void DX11CommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_ha
     const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;
     // 恒应用 PSO 子状态（深度/光栅/混合）+ 拓扑；program!=0 时再绑 program（PSO-only 管线 program==0）。
-    device_->state_mgr().ApplyPipelineState(desc->pso_state, device_->context().device_context());
-    const auto* ps = device_->state_mgr().GetPipelineState(desc->pso_state);
+    device_->state_mgr().ApplyPipelineState(desc->pso_state.raw(), device_->context().device_context());
+    const auto* ps = device_->state_mgr().GetPipelineState(desc->pso_state.raw());
     device_->draw_executor().PrimSetTopology(ps ? ps->desc.topology : PrimitiveTopology::TriangleList);
     if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
 }
@@ -588,8 +588,8 @@ void DX11RhiDevice::DeleteShaderProgram(unsigned int program_handle) {
     shader_mgr_.DeleteProgram(program_handle);
 }
 
-unsigned int DX11RhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
-    return state_mgr_.CreatePipelineState(desc);
+PipelineHandle DX11RhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
+    return PipelineHandle{state_mgr_.CreatePipelineState(desc)};
 }
 
 unsigned int DX11RhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {

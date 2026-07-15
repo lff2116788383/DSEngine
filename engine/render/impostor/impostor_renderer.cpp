@@ -204,7 +204,7 @@ void ImpostorRenderer::Shutdown(RhiDevice& device) {
     if (white_tex_) device.DeleteTexture(white_tex_);
     quad_vbo_ = quad_ibo_ = per_frame_ubo_ = params_ubo_ = instance_ssbo_ = BufferHandle{};
     white_tex_ = 0;
-    pso_ = 0;
+    pso_ = {};
     instance_ssbo_capacity_ = 0;
     init_ = false;
 }

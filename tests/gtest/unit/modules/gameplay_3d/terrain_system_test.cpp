@@ -173,7 +173,7 @@ public:
     unsigned int CreateTexture3D(int w, int h, int d, const unsigned char* data, bool l) override { (void)w; (void)h; (void)d; (void)data; (void)l; return 0; }
     unsigned int CreateShaderProgram(const std::string& v, const std::string& f) override { (void)v; (void)f; return 0; }
     void DeleteShaderProgram(unsigned int h) override { (void)h; }
-    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return 0; }
+    dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return {}; }
     unsigned int CreateBuffer(size_t s, const void* d, bool dyn, bool idx) override { (void)s; (void)d; (void)dyn; (void)idx; return 0; }
     void UpdateBuffer(unsigned int h, size_t o, size_t s, const void* d, bool idx) override { (void)h; (void)o; (void)s; (void)d; (void)idx; }
     void DeleteBuffer(unsigned int h) override { (void)h; }

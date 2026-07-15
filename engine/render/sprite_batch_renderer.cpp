@@ -150,7 +150,7 @@ void SpriteBatchRenderer::EnsureFxUbos(RhiDevice& device, size_t needed) {
     if (fx_ubos_.size() < needed) fx_ubos_.resize(needed);
 }
 
-unsigned int SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int blend_mode) {
+PipelineHandle SpriteBatchRenderer::PsoForBlend(RhiDevice& device, unsigned int blend_mode) {
     auto make = [&](BlendFactor src, BlendFactor dst) {
         PipelineStateDesc desc;
         desc.blend_enabled = true;
@@ -283,7 +283,7 @@ void SpriteBatchRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
     size_t fx_idx = 0;
     for (const Batch& b : batches) {
         const unsigned int blend = (b.shader_variant == kAdditiveVariantKey) ? 1u : b.blend_mode;
-        const unsigned int pso = PsoForBlend(device, blend);
+        const PipelineHandle pso = PsoForBlend(device, blend);
 
         const int path = path_of(b);
         unsigned int prog = sprite_prog;

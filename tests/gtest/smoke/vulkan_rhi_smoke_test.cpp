@@ -303,8 +303,8 @@ TEST_F(VulkanRhiSmokeTest, PipelineStateCreateAndDestroy) {
     ps_desc.depth_test_enabled = true;
     ps_desc.depth_write_enabled = true;
     ps_desc.culling_enabled = true;
-    unsigned int ps = device_.CreatePipelineState(ps_desc);
-    EXPECT_NE(ps, 0u);
+    auto ps = device_.CreatePipelineState(ps_desc);
+    EXPECT_TRUE(static_cast<bool>(ps));
 }
 
 // 多 RT 创建/销毁无泄漏

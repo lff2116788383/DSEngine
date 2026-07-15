@@ -131,7 +131,7 @@ void ParticleRenderer::Shutdown(RhiDevice& device) {
     if (white_tex_) device.DeleteTexture(white_tex_);
     quad_vbo_ = quad_ibo_ = per_frame_ubo_ = BufferHandle{};
     white_tex_ = 0;
-    pso_ = 0;
+    pso_ = {};
     init_ = false;
 }
 

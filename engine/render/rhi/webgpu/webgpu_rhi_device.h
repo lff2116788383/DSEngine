@@ -90,7 +90,7 @@ public:
     // --- 着色器 / 管线状态 ---
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     void DeleteShaderProgram(unsigned int program_handle) override;
-    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
+    PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override;
 
     // --- 内建资源（手写 WGSL，经通用原语上屏）---
     unsigned int GetBuiltinProgram(BuiltinProgram program) override;

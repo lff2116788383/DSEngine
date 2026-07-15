@@ -45,11 +45,11 @@ public:
 private:
     void EnsureResources(RhiDevice& device, size_t needed_quads);
     void EnsureFxUbos(RhiDevice& device, size_t needed);
-    unsigned int PsoForBlend(RhiDevice& device, unsigned int blend_mode);
+    PipelineHandle PsoForBlend(RhiDevice& device, unsigned int blend_mode);
 
-    unsigned int pso_alpha_ = 0;
-    unsigned int pso_additive_ = 0;
-    unsigned int pso_multiply_ = 0;
+    PipelineHandle pso_alpha_;
+    PipelineHandle pso_additive_;
+    PipelineHandle pso_multiply_;
     unsigned int white_tex_ = 0;
 
     /// 动态顶点缓冲（按需扩容）。每帧覆写 → 每在飞帧缓冲（规避 2 帧在飞下的覆写竞争，D9）。

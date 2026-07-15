@@ -47,7 +47,7 @@ public:
     unsigned int CreateTexture3D(int width, int height, int depth, const unsigned char* rgba8_data, bool linear_filter) override { (void)width; (void)height; (void)depth; (void)rgba8_data; (void)linear_filter; return 0; }
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override { (void)vert_src; (void)frag_src; return 0; }
     void DeleteShaderProgram(unsigned int program_handle) override { (void)program_handle; }
-    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return 0; }
+    dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override { (void)desc; return {}; }
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override { (void)size; (void)data; (void)is_dynamic; (void)is_index; return 0; }
     void UpdateBuffer(unsigned int handle, size_t offset, size_t size, const void* data, bool is_index) override { (void)handle; (void)offset; (void)size; (void)data; (void)is_index; }
     void DeleteBuffer(unsigned int handle) override { (void)handle; }

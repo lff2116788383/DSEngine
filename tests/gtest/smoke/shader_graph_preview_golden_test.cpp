@@ -192,7 +192,7 @@ RenderTargetReadback RenderGraphPreview(RhiDevice& device, const char* backend, 
     pso_desc.depth_test_enabled = false;
     pso_desc.depth_write_enabled = false;
     pso_desc.culling_enabled = false;
-    unsigned int pso = device.CreatePipelineState(pso_desc);
+    auto pso = device.CreatePipelineState(pso_desc);
 
     const std::vector<VertexAttr> attrs = {
         {0, 3, static_cast<uint32_t>(offsetof(MeshVertex, position))},

@@ -51,7 +51,7 @@ private:
     void EnsureResources(RhiDevice& device);
 
     bool init_ = false;
-    unsigned int pso_ = 0;
+    PipelineHandle pso_;
     BufferHandle hair_ubo_;
 };
 

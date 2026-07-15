@@ -240,12 +240,12 @@ public:
     virtual void DeleteTexture(unsigned int texture_handle) = 0;
     virtual unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) = 0;
     virtual void DeleteShaderProgram(unsigned int program_handle) = 0;
-    virtual unsigned int CreatePipelineState(const PipelineStateDesc& desc) = 0;
+    virtual PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) = 0;
 
     /// 图形管线对象（B5-3b）：把 PSO 子状态句柄 + 着色器程序句柄聚合为单一管线句柄并惰性缓存（按 (pso,program) 去重）。
     /// program==0 表示「仅 PSO 状态」管线。供 CommandBuffer::BindPipeline 取用，取代分离的 SetPipelineState+BindShaderProgram。
     /// 后端无关：仅登记句柄对，绑定时由各后端 command buffer 经 GetGraphicsPipelineDesc 解出 (pso,program) 分别应用。
-    GraphicsPipelineHandle GetGraphicsPipeline(unsigned int pso_state, unsigned int program) {
+    GraphicsPipelineHandle GetGraphicsPipeline(PipelineHandle pso_state, unsigned int program) {
         const GraphicsPipelineDesc desc{pso_state, program};
         for (size_t i = 0; i < graphics_pipelines_.size(); ++i) {
             if (graphics_pipelines_[i] == desc) return GraphicsPipelineHandle{static_cast<uint32_t>(i + 1)};

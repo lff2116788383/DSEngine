@@ -198,7 +198,7 @@ struct PipelineStateDesc {
 /// 经 RhiDevice::GetGraphicsPipeline(pso_state, program) 惰性缓存为单一句柄，CommandBuffer::BindPipeline 一次绑定。
 /// program==0 表示「仅 PSO 状态」管线（Pass 层用：GPU-driven 间接绘制自绑 program / 被渲染器覆盖，cmd 不绑 program）。
 struct GraphicsPipelineDesc {
-    unsigned int pso_state = 0;  ///< CreatePipelineState 返回的 PSO 子状态句柄（光栅/混合/深度/拓扑/线框）
+    dse::render::PipelineHandle pso_state;  ///< CreatePipelineState 返回的 PSO 子状态句柄（光栅/混合/深度/拓扑/线框）
     unsigned int program = 0;    ///< 着色器程序句柄（0 = 不绑 program，仅应用 PSO 状态）
 
     bool operator==(const GraphicsPipelineDesc& o) const {

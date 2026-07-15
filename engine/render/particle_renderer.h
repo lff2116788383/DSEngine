@@ -60,7 +60,7 @@ private:
     void EnsureResources(RhiDevice& device);
 
     bool init_ = false;
-    unsigned int pso_ = 0;
+    PipelineHandle pso_;
     unsigned int white_tex_ = 0;
     BufferHandle quad_vbo_;
     BufferHandle quad_ibo_;

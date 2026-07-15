@@ -635,17 +635,17 @@ private:
     /// 据编辑器视图模式（GetGlobalRenderState 的 wireframe_mode/overdraw_mode）与材质属性挑选高级 shading
     /// forward 路径 PSO（阶段4-M2）。优先级：wireframe > overdraw > WBOIT(accum/reveal) > double-sided。
     /// force_unlit 不影响 PSO（仅经 ApplyEditorSceneOverride 关方向光），单独处理。
-    unsigned int SelectShadedPso(RhiDevice& device, const ShadedMaterial& material);
+    PipelineHandle SelectShadedPso(RhiDevice& device, const ShadedMaterial& material);
 
-    unsigned int pso_ = 0;
-    unsigned int pso_no_cull_ = 0;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
-    unsigned int pso_wboit_accum_ = 0;   ///< WBOIT accumulation：加性混合 ONE/ONE，深度测试不写（B2c-4）
-    unsigned int pso_wboit_reveal_ = 0;  ///< WBOIT revealage：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度测试不写（B2c-4）
-    unsigned int pso_wireframe_ = 0;  ///< 编辑器线框视图模式 PSO（line-fill，与 pso_ 同状态但 wireframe=true，阶段4-M2）
-    unsigned int pso_overdraw_ = 0;   ///< 编辑器 overdraw 视图模式 PSO（加性混合 ONE/ONE + 深度测试不写，阶段4-M2）
-    unsigned int pso_unlit2d_alpha_ = 0;     ///< 无光照 2D alpha 混合 PSO（深度测试/写入/剔除全关，B2b-6）
-    unsigned int pso_unlit2d_additive_ = 0;  ///< 无光照 2D additive 混合 PSO（B2b-6）
-    unsigned int pso_unlit2d_multiply_ = 0;  ///< 无光照 2D multiply 混合 PSO（B2b-6）
+    PipelineHandle pso_;
+    PipelineHandle pso_no_cull_;  ///< double-sided 用的不剔除 PSO（DrawShaded 按需懒创建）
+    PipelineHandle pso_wboit_accum_;   ///< WBOIT accumulation：加性混合 ONE/ONE，深度测试不写（B2c-4）
+    PipelineHandle pso_wboit_reveal_;  ///< WBOIT revealage：ZERO/ONE_MINUS_SRC_ALPHA 乘性混合，深度测试不写（B2c-4）
+    PipelineHandle pso_wireframe_;  ///< 编辑器线框视图模式 PSO（line-fill，与 pso_ 同状态但 wireframe=true，阶段4-M2）
+    PipelineHandle pso_overdraw_;   ///< 编辑器 overdraw 视图模式 PSO（加性混合 ONE/ONE + 深度测试不写，阶段4-M2）
+    PipelineHandle pso_unlit2d_alpha_;     ///< 无光照 2D alpha 混合 PSO（深度测试/写入/剔除全关，B2b-6）
+    PipelineHandle pso_unlit2d_additive_;  ///< 无光照 2D additive 混合 PSO（B2b-6）
+    PipelineHandle pso_unlit2d_multiply_;  ///< 无光照 2D multiply 混合 PSO（B2b-6）
     BufferHandle per_material_shaded_ubo_;  ///< 扩展 PerMaterial UBO（160B，ForwardShaded 专用）
     BufferHandle per_point_lights_ubo_;     ///< 点光 UBO（3088B，binding=3，B2c-2；count=0 时退化为纯方向光）
     BufferHandle per_terrain_ubo_;          ///< 地形参数 UBO（48B，slot=4，B2c-3；splat 4 层 + 积雪）

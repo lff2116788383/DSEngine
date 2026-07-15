@@ -1280,7 +1280,7 @@ void WebGPUDrawExecutor::DispatchCompute(unsigned int shader_handle,
 void WebGPUDrawExecutor::CmdBindPipeline(unsigned int graphics_pipeline_handle) {
     const GraphicsPipelineDesc* gp = GetGraphicsPipelineDesc(GraphicsPipelineHandle::from_raw(graphics_pipeline_handle));
     if (!gp) return;
-    cur_pso_handle_ = gp->pso_state;
+    cur_pso_handle_ = gp->pso_state.raw();
     if (gp->program != 0) cur_program_ = gp->program;  // program==0：仅应用 PSO，保留已绑 program
 }
 

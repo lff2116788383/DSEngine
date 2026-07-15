@@ -286,8 +286,8 @@ TEST_F(DX11RhiSmokeTest, AllCorrect) {
     ps_desc.depth_test_enabled = false;
     ps_desc.depth_write_enabled = false;
     ps_desc.culling_enabled = false;
-    unsigned int ps = device_.CreatePipelineState(ps_desc);
-    ASSERT_NE(ps, 0u);
+    auto ps = device_.CreatePipelineState(ps_desc);
+    ASSERT_TRUE(static_cast<bool>(ps));
 
     dse::render::PostProcessRenderer pp_renderer;
     device_.BeginFrame();

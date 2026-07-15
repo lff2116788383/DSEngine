@@ -12,6 +12,8 @@
 
 #include <glm/glm.hpp>
 
+#include "engine/render/rhi/rhi_handle.h"
+
 namespace dse {
 namespace render {
 
@@ -30,7 +32,7 @@ public:
               const glm::mat4& view, const glm::mat4& projection);
 
 private:
-    unsigned int pso_ = 0;
+    PipelineHandle pso_;
     bool pso_init_ = false;
 };
 

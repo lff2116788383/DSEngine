@@ -132,7 +132,7 @@ RenderTargetReadback RenderBindGroupQuad(RhiDevice& device,
     pso_desc.depth_test_enabled = false;
     pso_desc.depth_write_enabled = false;
     pso_desc.culling_enabled = false;
-    unsigned int pso = device.CreatePipelineState(pso_desc);
+    auto pso = device.CreatePipelineState(pso_desc);
 
     if (!ubo_a || !ubo_b || !vbo || !ibo) {
         device.DeleteShaderProgram(program);

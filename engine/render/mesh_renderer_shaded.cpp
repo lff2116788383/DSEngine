@@ -169,7 +169,7 @@ void MeshRenderer::DrawShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：WBOIT 透明通道优先（accumulation/revealage），否则按 double-sided 选剔除状态。
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
@@ -364,7 +364,7 @@ void MeshRenderer::DrawShadedExternal(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());
@@ -634,7 +634,7 @@ void MeshRenderer::DrawSkinnedShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
@@ -830,7 +830,7 @@ void MeshRenderer::DrawInstancedShaded(CommandBuffer& cmd, RhiDevice& device,
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
@@ -1052,7 +1052,7 @@ void MeshRenderer::DrawSkinnedInstancedShaded(CommandBuffer& cmd, RhiDevice& dev
     };
 
     // PSO 选择：与 DrawShaded 一致（WBOIT 透明优先，否则按 double-sided 选剔除）。
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0
@@ -1270,7 +1270,7 @@ void MeshRenderer::DrawMorphShaded(CommandBuffer& cmd, RhiDevice& device,
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());            // PerFrame    @ set0.b0
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());            // PerScene    @ set1.b0

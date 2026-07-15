@@ -62,19 +62,19 @@ struct RenderPipelineResources {
     size_t gpu_mega_ibo_capacity = 0;           // mega IBO 当前容量（字节）
     bool gpu_driven_supported = false;          // 运行时检测结果
 
-    unsigned int sprite_pipeline_state = 0;
-    unsigned int mesh_pipeline_state = 0;
-    unsigned int prez_pipeline_state = 0;
-    unsigned int composite_pipeline_state = 0;
+    dse::render::PipelineHandle sprite_pipeline_state;
+    dse::render::PipelineHandle mesh_pipeline_state;
+    dse::render::PipelineHandle prez_pipeline_state;
+    dse::render::PipelineHandle composite_pipeline_state;
     unsigned int shadow_render_target[CSM_CASCADES] = {0, 0, 0};
     unsigned int shadow_atlas_render_target = 0;  ///< CSM shadow atlas (4096×2048 depth-only)
     unsigned int spot_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int point_shadow_render_target[4] = {0, 0, 0, 0};
     unsigned int rsm_render_target = 0;    // RSM MRT (position+normal+flux, 3 color + depth)
-    unsigned int shadow_pipeline_state = 0;
-    unsigned int decal_blend_pipeline_state = 0;
-    unsigned int wboit_accum_pipeline_state = 0;
-    unsigned int wboit_reveal_pipeline_state = 0;
+    dse::render::PipelineHandle shadow_pipeline_state;
+    dse::render::PipelineHandle decal_blend_pipeline_state;
+    dse::render::PipelineHandle wboit_accum_pipeline_state;
+    dse::render::PipelineHandle wboit_reveal_pipeline_state;
 
     void Reset() {
         main_render_target = 0;
@@ -107,15 +107,15 @@ struct RenderPipelineResources {
         pp_lum_temp_rt = 0;
         pp_lum_adapted_rt[0] = 0;
         pp_lum_adapted_rt[1] = 0;
-        sprite_pipeline_state = 0;
-        mesh_pipeline_state = 0;
-        prez_pipeline_state = 0;
-        composite_pipeline_state = 0;
+        sprite_pipeline_state = {};
+        mesh_pipeline_state = {};
+        prez_pipeline_state = {};
+        composite_pipeline_state = {};
         rsm_render_target = 0;
-        shadow_pipeline_state = 0;
-        decal_blend_pipeline_state = 0;
-        wboit_accum_pipeline_state = 0;
-        wboit_reveal_pipeline_state = 0;
+        shadow_pipeline_state = {};
+        decal_blend_pipeline_state = {};
+        wboit_accum_pipeline_state = {};
+        wboit_reveal_pipeline_state = {};
         hiz_texture = 0;
         hiz_visibility_ssbo = {};
         hiz_aabb_ssbo = {};

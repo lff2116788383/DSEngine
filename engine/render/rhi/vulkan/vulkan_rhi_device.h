@@ -69,7 +69,7 @@ public:
     void DeleteTexture(unsigned int texture_handle) override;
     unsigned int CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) override;
     void DeleteShaderProgram(unsigned int program_handle) override;
-    unsigned int CreatePipelineState(const PipelineStateDesc& desc) override;
+    PipelineHandle CreatePipelineState(const PipelineStateDesc& desc) override;
     unsigned int CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) override;
 
     // --- 内建资源访问器 ---

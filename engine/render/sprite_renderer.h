@@ -45,7 +45,7 @@ public:
 private:
     void EnsureResources(RhiDevice& device);
 
-    unsigned int pso_ = 0;
+    PipelineHandle pso_;
     BufferHandle vbo_;
     BufferHandle ibo_;
     BufferHandle ubo_;

@@ -65,7 +65,7 @@ void VulkanCommandBuffer::BindPipeline(GraphicsPipelineHandle graphics_pipeline_
     const auto* desc = device_->GetGraphicsPipelineDesc(graphics_pipeline_handle);
     if (!desc) return;
     // 设为活动 PSO（绘制时与 program 一起惰性烘进 VkPipeline）；program!=0 时绑 program（PSO-only 管线 program==0）。
-    device_->state_mgr().set_active_pipeline_state(desc->pso_state);
+    device_->state_mgr().set_active_pipeline_state(desc->pso_state.raw());
     if (desc->program != 0) device_->draw_executor().PrimBindShaderProgram(desc->program);
 }
 
@@ -744,8 +744,8 @@ void VulkanRhiDevice::DeleteShaderProgram(unsigned int program_handle) {
     external_shader_programs_.erase(program_handle);
 }
 
-unsigned int VulkanRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
-    return state_mgr_.CreatePipelineState(desc);
+PipelineHandle VulkanRhiDevice::CreatePipelineState(const PipelineStateDesc& desc) {
+    return PipelineHandle{state_mgr_.CreatePipelineState(desc)};
 }
 
 unsigned int VulkanRhiDevice::CreateBuffer(size_t size, const void* data, bool is_dynamic, bool is_index) {

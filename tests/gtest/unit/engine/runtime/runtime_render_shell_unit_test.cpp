@@ -65,7 +65,7 @@ public:
     void DeleteTexture(unsigned int) override {}
     unsigned int CreateShaderProgram(const std::string&, const std::string&) override { return 0; }
     void DeleteShaderProgram(unsigned int) override {}
-    unsigned int CreatePipelineState(const PipelineStateDesc&) override { return 0; }
+    dse::render::PipelineHandle CreatePipelineState(const PipelineStateDesc&) override { return {}; }
     unsigned int CreateBuffer(size_t, const void*, bool, bool) override { return 0; }
     void UpdateBuffer(unsigned int, size_t, size_t, const void*, bool) override {}
     void DeleteBuffer(unsigned int) override {}

@@ -147,7 +147,7 @@ void MeshRenderer::DrawSharedTemplateInstanced(CommandBuffer& cmd, RhiDevice& de
         VertexAttr{4u, 3u, 48u},   // tangent
     };
 
-    unsigned int pso = SelectShadedPso(device, material);
+    PipelineHandle pso = SelectShadedPso(device, material);
     cmd.BindPipeline(device.GetGraphicsPipeline(pso, program));
     cmd.BindUniformBuffer(0u, per_frame_ubo_.raw());
     cmd.BindUniformBuffer(1u, per_scene_ubo_.raw());

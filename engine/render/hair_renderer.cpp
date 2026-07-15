@@ -114,7 +114,7 @@ void HairRenderer::Draw(CommandBuffer& cmd, RhiDevice& device,
 void HairRenderer::Shutdown(RhiDevice& device) {
     if (hair_ubo_) device.DeleteGpuBuffer(hair_ubo_);
     hair_ubo_ = BufferHandle{};
-    pso_ = 0;
+    pso_ = {};
     init_ = false;
 }
 

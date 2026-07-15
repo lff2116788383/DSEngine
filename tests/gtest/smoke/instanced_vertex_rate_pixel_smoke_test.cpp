@@ -156,7 +156,7 @@ RenderTargetReadback RenderInstancedVertexRate(RhiDevice& device,
     pso_desc.depth_test_enabled = false;
     pso_desc.depth_write_enabled = false;
     pso_desc.culling_enabled = false;
-    unsigned int pso = device.CreatePipelineState(pso_desc);
+    auto pso = device.CreatePipelineState(pso_desc);
 
     if (!vbo || !inst_vbo || !ibo) {
         device.DeleteShaderProgram(program);

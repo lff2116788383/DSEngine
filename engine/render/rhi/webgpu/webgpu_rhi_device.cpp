@@ -182,7 +182,7 @@ unsigned int WebGPURhiDevice::CreateTexture3D(int width, int height, int depth, 
 void WebGPURhiDevice::DeleteTexture(unsigned int texture_handle) { res_.DeleteTexture(texture_handle); }
 unsigned int WebGPURhiDevice::CreateShaderProgram(const std::string& vert_src, const std::string& frag_src) { return shader_.CreateShaderProgram(vert_src, frag_src); }
 void WebGPURhiDevice::DeleteShaderProgram(unsigned int program_handle) { shader_.DeleteShaderProgram(program_handle); }
-unsigned int WebGPURhiDevice::CreatePipelineState(const PipelineStateDesc& desc) { return pso_.CreatePipelineState(desc); }
+PipelineHandle WebGPURhiDevice::CreatePipelineState(const PipelineStateDesc& desc) { return PipelineHandle{pso_.CreatePipelineState(desc)}; }
 unsigned int WebGPURhiDevice::GetBuiltinProgram(BuiltinProgram program) { return shader_.GetBuiltinProgram(program); }
 unsigned int WebGPURhiDevice::GetGenPPShaderProgram(const std::string& effect_name) { return shader_.GetGenPPShaderProgram(effect_name); }
 unsigned int WebGPURhiDevice::GetSkyboxCubeVertexBuffer() { return shader_.GetSkyboxCubeVertexBuffer(); }

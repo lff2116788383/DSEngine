@@ -51,7 +51,7 @@ void PostProcessRenderer::EnsureResources(RhiDevice& device) {
     init_ = true;
 }
 
-unsigned int PostProcessRenderer::PsoFor(RhiDevice& device, bool blend) {
+PipelineHandle PostProcessRenderer::PsoFor(RhiDevice& device, bool blend) {
     // 后处理全屏 quad：关背面剔除（否则默认 cull-back 丢整屏）、关深度测试/写入。
     if (blend) {
         if (!pso_blend_) {
@@ -132,7 +132,7 @@ void PostProcessRenderer::Shutdown(RhiDevice& device) {
     if (quad_vbo_) device.DeleteGpuBuffer(quad_vbo_);
     if (quad_ibo_) device.DeleteGpuBuffer(quad_ibo_);
     quad_vbo_ = quad_ibo_ = BufferHandle{};
-    pso_opaque_ = pso_blend_ = 0;
+    pso_opaque_ = pso_blend_ = {};
     init_ = false;
 }
 
