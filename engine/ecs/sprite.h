@@ -12,6 +12,7 @@
 #include <vector>
 #include <entt/entt.hpp>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 class TextureAsset;
 using Entity = entt::entity;
@@ -35,7 +36,7 @@ struct MaterialInstanceComponent {
     std::string name;
     std::string shader_variant = "SPRITE_UNLIT";
     SpriteBlendMode blend_mode = SpriteBlendMode::Alpha;
-    dse::render::TextureHandle texture_handle;
+    dse::render::TextureRef texture_handle;
     glm::vec4 tint = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     glm::vec4 uv_rect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 };
@@ -46,7 +47,7 @@ struct MaterialInstanceComponent {
  */
 struct SpriteRendererComponent {
     std::shared_ptr<TextureAsset> texture;               ///< 持有的纹理资产引用
-    dse::render::TextureHandle texture_handle;           ///< RHI 层的纹理句柄
+    dse::render::TextureRef texture_handle;           ///< RHI 层的纹理句柄
     unsigned int material_instance_id = 0;               ///< 绑定的材质实例 ID
     std::string shader_variant = "SPRITE_UNLIT";         ///< 使用的着色器变体
     SpriteBlendMode blend_mode = SpriteBlendMode::Alpha; ///< 混合模式

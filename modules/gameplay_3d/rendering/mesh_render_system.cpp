@@ -1009,7 +1009,7 @@ void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene&
         }
         
         item.texture_handle = resolved_texture_slots.albedo
-            ? resolved_texture_slots.albedo
+            ? resolved_texture_slots.albedo.handle()
             : (prefer_material_instance
                    ? material_instance->GetTextureHandle()
                    : dse::render::TextureHandle{});

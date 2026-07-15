@@ -91,6 +91,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
             std::lock_guard<std::mutex> lock(cache_mutex_);
             textures_[cache_key] = tex;
             gpu_texture_handles_.insert(handle);
+            dse::render::TextureRefRegistry::Instance().Register(handle.id);
         }
         size_t total = 0;
         for (auto& m : mips) total += m.size;
@@ -130,6 +131,7 @@ std::shared_ptr<TextureAsset> AssetManager::LoadTexture(const std::string& path,
         std::lock_guard<std::mutex> lock(cache_mutex_);
         textures_[cache_key] = tex;
         gpu_texture_handles_.insert(handle);
+        dse::render::TextureRefRegistry::Instance().Register(handle.id);
     }
     TouchLru(cache_key, static_cast<std::size_t>(width) * height * 4u);
     return tex;
@@ -772,6 +774,8 @@ void AssetManager::LoadTextureAsync(const std::string& path, std::function<void(
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 textures_[cache_key] = tex;
+                gpu_texture_handles_.insert(handle);
+                dse::render::TextureRefRegistry::Instance().Register(handle.id);
             }
             if (callback) {
                 callback(tex);

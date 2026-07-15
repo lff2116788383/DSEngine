@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 class TextureAsset;
 
@@ -31,7 +32,7 @@ struct TrailPoint {
 struct TrailRenderer2DComponent {
     std::vector<TrailPoint> points;              ///< 活跃的拖尾点
     std::shared_ptr<TextureAsset> texture;       ///< 拖尾纹理 (沿长度方向 UV 映射)
-    dse::render::TextureHandle texture_handle;
+    dse::render::TextureRef texture_handle;
 
     float lifetime = 0.5f;                       ///< 每个采样点的生命周期 (秒)
     float min_vertex_distance = 0.1f;            ///< 新增采样点的最小距离阈值

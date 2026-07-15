@@ -21,6 +21,7 @@
 #include <glm/glm.hpp>
 #include "engine/core/dse_export.h"
 #include "engine/render/rhi/rhi_types.h"  // TextureSamplerDesc / CompressedTextureFormat
+#include "engine/render/rhi/texture_ref.h"  // TextureRef 引用计数纹理句柄
 namespace dse::render { class RhiDevice; }
 using dse::render::RhiDevice;
 namespace dse::core {
@@ -179,11 +180,11 @@ enum class MaterialBlendMode {
 class DSE_EXPORT MaterialAsset {
 public:
     struct TextureSlots {
-        dse::render::TextureHandle albedo;
-        dse::render::TextureHandle normal;
-        dse::render::TextureHandle metallic_roughness;
-        dse::render::TextureHandle emissive;
-        dse::render::TextureHandle occlusion;
+        dse::render::TextureRef albedo;
+        dse::render::TextureRef normal;
+        dse::render::TextureRef metallic_roughness;
+        dse::render::TextureRef emissive;
+        dse::render::TextureRef occlusion;
     };
 
     struct ScalarOverrides {
@@ -264,7 +265,7 @@ private:
     unsigned int id_ = 0;
     std::string name_;
     std::string shader_variant_ = "SPRITE_UNLIT";
-    dse::render::TextureHandle texture_handle_;
+    dse::render::TextureRef texture_handle_;
     glm::vec4 tint_ = glm::vec4(1.0f);
     glm::vec4 uv_rect_ = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     glm::vec4 base_color_ = glm::vec4(1.0f);
@@ -610,6 +611,10 @@ private:
     std::size_t estimated_memory_usage_ = 0;
     void TouchLru(const std::string& cache_key, std::size_t estimated_bytes);
     void RemoveLru(const std::string& cache_key);
+
+    // 删除 handle 对应的 GPU 纹理并停止跟踪（从 gpu_texture_handles_ 移除 +
+    // 在 TextureRefRegistry 注销）。调用方须持有 cache_mutex_。
+    void DeleteGpuTextureLocked(dse::render::TextureHandle handle);
 
     // --- 热重载 ---
     std::thread file_watcher_thread_;

@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 namespace dse {
 
@@ -51,8 +52,8 @@ struct ImpostorComponent {
     bool auto_from_lod_group = true;
 
     // 运行时（ImpostorSystem 管理，用户不应手动写入）
-    dse::render::TextureHandle atlas_texture_handle_;    ///< 已加载的 atlas GPU 纹理句柄
-    dse::render::TextureHandle normal_texture_handle_;   ///< 已加载的法线 atlas GPU 纹理句柄
+    dse::render::TextureRef atlas_texture_handle_;    ///< 已加载的 atlas GPU 纹理句柄
+    dse::render::TextureRef normal_texture_handle_;   ///< 已加载的法线 atlas GPU 纹理句柄
     bool atlas_loaded_ = false;
     float cached_bounds_radius_ = 0.0f;        ///< 包围球半径缓存（用于 billboard size）
 };

@@ -240,7 +240,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
     AssetManager* asset_mgr = ctx.engine.asset_manager();
 
     // Texture slots with drag-drop support
-    auto DrawTextureSlot = [&](const char* label, dse::render::TextureHandle& texture_handle) {
+    auto DrawTextureSlot = [&](const char* label, dse::render::TextureRef& texture_handle) {
         ImGui::PushID(label);
         ImGui::Text("%s", label);
         ImGui::SameLine(140);
@@ -293,7 +293,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
                             "Material Texture", old_handle, new_handle,
                             [reg, entity, offset](const dse::render::TextureHandle& v) {
                                 if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
-                                    *reinterpret_cast<dse::render::TextureHandle*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                                    *reinterpret_cast<dse::render::TextureRef*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
                             }), false);
                         tab_mgr.MarkDirty();
                     }
@@ -314,7 +314,7 @@ void DrawMaterialPanel(EditorContext& ctx) {
                     "Clear Material Texture", old_handle, dse::render::TextureHandle{},
                     [reg, entity, offset](const dse::render::TextureHandle& v) {
                         if (reg->valid(entity) && reg->all_of<dse::MeshRendererComponent>(entity))
-                            *reinterpret_cast<dse::render::TextureHandle*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
+                            *reinterpret_cast<dse::render::TextureRef*>(reinterpret_cast<char*>(&reg->get<dse::MeshRendererComponent>(entity)) + offset) = v;
                     }), false);
                 tab_mgr.MarkDirty();
             }

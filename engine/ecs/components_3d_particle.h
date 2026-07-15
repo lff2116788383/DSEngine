@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 namespace dse {
 
@@ -42,7 +43,7 @@ struct ParticleSystem3DComponent {
     
     // Rendering
     std::string texture_path;
-    dse::render::TextureHandle texture_handle; // Cached from AssetManager
+    dse::render::TextureRef texture_handle; // Cached from AssetManager
     
     // GPU Resources
     dse::render::BufferHandle instance_vbo;

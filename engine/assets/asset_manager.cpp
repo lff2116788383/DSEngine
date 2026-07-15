@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <fstream>
 #include <cstdint>
+#include <unordered_set>
 #include <rapidjson/document.h>
 #include "bundle/bundle.h"
 #if defined(_WIN32)
@@ -711,13 +712,53 @@ std::vector<unsigned int> AssetManager::ListMaterialInstanceIds() {
     return ids;
 }
 
+void AssetManager::DeleteGpuTextureLocked(dse::render::TextureHandle handle) {
+    if (!handle) return;
+    RhiDevice* device = nullptr;
+    {
+        std::lock_guard<std::mutex> config_lock(config_mutex_);
+        device = rhi_device_;
+    }
+    if (device) {
+        device->DeleteTexture(handle);
+    }
+    gpu_texture_handles_.erase(handle);
+    dse::render::TextureRefRegistry::Instance().Unregister(handle.id);
+}
+
 void AssetManager::UnloadUnused() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     for (auto it = textures_.begin(); it != textures_.end(); ) {
-        if (it->second.use_count() <= 1) {
+        const dse::render::TextureHandle handle =
+            it->second ? it->second->GetHandle() : dse::render::TextureHandle{};
+        // 仅在既无外部 shared_ptr 持有者(use_count<=1)、又无任何存活 TextureRef
+        // (引用计数==0) 时，才真正释放 GPU 纹理，杜绝误删仍被材质/组件引用的纹理。
+        if (it->second.use_count() <= 1 &&
+            dse::render::TextureRefRegistry::Instance().RefCount(handle.id) == 0) {
+            DeleteGpuTextureLocked(handle);
+            RemoveLru(it->first);
             it = textures_.erase(it);
         } else {
             ++it;
+        }
+    }
+    // 清扫热重载遗弃的孤儿 GPU 纹理：已不再被任何缓存条目引用、且引用计数归零者，
+    // 此前只能等到 ReleaseGpuResources 才释放（热重载泄漏），此处安全回收其显存。
+    {
+        std::unordered_set<dse::render::TextureHandle> in_cache;
+        in_cache.reserve(textures_.size());
+        for (const auto& kv : textures_) {
+            if (kv.second) in_cache.insert(kv.second->GetHandle());
+        }
+        std::vector<dse::render::TextureHandle> orphans;
+        for (const dse::render::TextureHandle handle : gpu_texture_handles_) {
+            if (!handle || in_cache.count(handle)) continue;
+            if (dse::render::TextureRefRegistry::Instance().RefCount(handle.id) == 0) {
+                orphans.push_back(handle);
+            }
+        }
+        for (const dse::render::TextureHandle handle : orphans) {
+            DeleteGpuTextureLocked(handle);
         }
     }
     for (auto it = shaders_.begin(); it != shaders_.end(); ) {
@@ -768,6 +809,9 @@ void AssetManager::ReleaseGpuResources() {
     }
 
     if (!device) {
+        for (const dse::render::TextureHandle handle : gpu_texture_handles_) {
+            dse::render::TextureRefRegistry::Instance().Unregister(handle.id);
+        }
         textures_.clear();
         cubemaps_.clear();
         shaders_.clear();
@@ -783,6 +827,7 @@ void AssetManager::ReleaseGpuResources() {
         if (handle) {
             device->DeleteTexture(handle);
         }
+        dse::render::TextureRefRegistry::Instance().Unregister(handle.id);
     }
     gpu_texture_handles_.clear();
     textures_.clear();

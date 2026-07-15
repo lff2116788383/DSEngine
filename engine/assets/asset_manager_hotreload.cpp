@@ -113,8 +113,15 @@ std::size_t AssetManager::EvictLRU() {
         bool evicted_entry = false;
         auto tex_it = textures_.find(key);
         if (tex_it != textures_.end() && tex_it->second.use_count() <= 1) {
-            textures_.erase(tex_it);
-            evicted_entry = true;
+            const dse::render::TextureHandle handle =
+                tex_it->second ? tex_it->second->GetHandle() : dse::render::TextureHandle{};
+            // 仅当无任何存活 TextureRef 引用该句柄时才真正释放 GPU 显存；
+            // 否则只从缓存表移除 CPU 壳，保留 GPU 纹理供仍持引用的消费者使用。
+            if (dse::render::TextureRefRegistry::Instance().RefCount(handle.id) == 0) {
+                DeleteGpuTextureLocked(handle);
+                textures_.erase(tex_it);
+                evicted_entry = true;
+            }
         }
         auto cubemap_it = cubemaps_.find(key);
         if (cubemap_it != cubemaps_.end() && cubemap_it->second.expired()) {
@@ -417,6 +424,13 @@ std::size_t AssetManager::PumpHotReloads() {
             std::lock_guard<std::mutex> lock(cache_mutex_);
             auto tex_it = textures_.find(cache_key);
             if (tex_it != textures_.end()) {
+                const dse::render::TextureHandle old_handle =
+                    tex_it->second ? tex_it->second->GetHandle() : dse::render::TextureHandle{};
+                // 无任何 TextureRef 引用旧句柄时，重载前先释放旧 GPU 纹理，避免泄漏；
+                // 仍被引用则保留旧句柄（消费者仍在使用它，删除会导致黑纹理）。
+                if (dse::render::TextureRefRegistry::Instance().RefCount(old_handle.id) == 0) {
+                    DeleteGpuTextureLocked(old_handle);
+                }
                 textures_.erase(tex_it);
                 RemoveLru(cache_key);
                 did_reload = true;

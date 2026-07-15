@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 namespace dse {
 
@@ -29,7 +30,7 @@ struct SnowCoverComponent {
 
     // ── 雪面纹理 ──
     std::string snow_texture_path;    ///< 雪面细节纹理（可选）
-    dse::render::TextureHandle snow_texture_handle;
+    dse::render::TextureRef snow_texture_handle;
     float snow_tiling = 8.0f;         ///< 雪面纹理 UV 缩放
 
     // ── 雪面高度偏移（顶点位移）──

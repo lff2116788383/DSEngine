@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "engine/render/rhi/rhi_handle.h"
+#include "engine/render/rhi/texture_ref.h"
 
 class TextureAsset;
 
@@ -20,7 +21,7 @@ class TextureAsset;
  */
 struct ParallaxLayer {
     std::shared_ptr<TextureAsset> texture;       ///< 图层纹理
-    dse::render::TextureHandle texture_handle;   ///< RHI 纹理句柄
+    dse::render::TextureRef texture_handle;   ///< RHI 纹理句柄
     std::string name;                            ///< 图层名称
     float scroll_factor_x = 1.0f;               ///< X 轴滚动因子 (0=不动, 1=与相机同步)
     float scroll_factor_y = 1.0f;               ///< Y 轴滚动因子
