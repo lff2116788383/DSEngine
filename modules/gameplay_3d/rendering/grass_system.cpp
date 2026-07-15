@@ -545,18 +545,18 @@ void GrassSystem::Update(World& world, float delta_time) {
 // 渲染
 // ============================================================
 
-void GrassSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+void GrassSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                          const glm::vec3& camera_offset, bool depth_only) {
-    RenderInternal(world, cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
+    RenderInternal(cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
-void GrassSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+void GrassSystem::RenderShadow(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                                const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
+    RenderInternal(cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
-void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
-                                  bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
+void GrassSystem::ExtractFrameRenderData(World& world) {
+    frame_data_ = GrassFrameRenderData{};
     if (blade_vertices_.empty()) return;
 
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
@@ -580,37 +580,35 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
         break;
     }
     if (!has_camera) return;
+    frame_data_.has_camera = true;
 
     glm::mat4 vp = proj_matrix * view_matrix;
     glm::vec4 frustum_planes[6];
     ExtractFrustumPlanes(vp, frustum_planes);
 
-    // 前向 pass 绘制用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正）。
-    const glm::mat4 draw_view = frame.view;
-    const glm::mat4 draw_proj = frame.projection;
-    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
-
-    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
-    glm::vec3 light_color(1.0f);
-    float light_intensity = 1.0f;
-    float ambient_intensity = 0.2f;
-    float shadow_strength_val = 0.35f;
     {
         auto light_view = world.registry().view<DirectionalLight3DComponent>();
         for (auto le : light_view) {
             const auto& light = light_view.get<DirectionalLight3DComponent>(le);
             if (light.enabled) {
-                light_dir = light.direction;
-                light_color = light.color;
-                light_intensity = light.intensity;
-                ambient_intensity = light.ambient_intensity;
-                shadow_strength_val = light.shadow_strength;
+                frame_data_.light_dir = light.direction;
+                frame_data_.light_color = light.color;
+                frame_data_.light_intensity = light.intensity;
+                frame_data_.ambient_intensity = light.ambient_intensity;
+                frame_data_.shadow_strength = light.shadow_strength;
                 break;
             }
         }
     }
 
-    const float current_time = static_cast<float>(std::fmod(accumulated_time_, 10000.0));
+    frame_data_.current_time = static_cast<float>(std::fmod(accumulated_time_, 10000.0));
+
+    auto pack_instance = [](const GrassInstanceLayout& layout, float fade) -> GrassGPUInstance {
+        return GrassGPUInstance{
+            glm::vec4(layout.position, layout.yaw),
+            glm::vec4(layout.width, layout.height, layout.wind_phase, fade)
+        };
+    };
 
     auto grass_view = world.registry().view<GrassComponent, TransformComponent>();
     for (auto entity : grass_view) {
@@ -622,21 +620,19 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
         if (cache_it == entity_caches_.end()) continue;
         const auto& cache = cache_it->second;
 
-        glm::vec2 wind_norm = glm::length(grass.wind_direction) > 1e-6f
-                              ? glm::normalize(grass.wind_direction)
-                              : glm::vec2(1.0f, 0.0f);
+        GrassFrameRenderData::EntityDraw draw;
+        draw.wind_norm = glm::length(grass.wind_direction) > 1e-6f
+                         ? glm::normalize(grass.wind_direction)
+                         : glm::vec2(1.0f, 0.0f);
+        draw.wind_speed = grass.wind_speed;
+        draw.wind_strength = grass.wind_strength;
+        draw.wind_turbulence = grass.wind_turbulence;
+        draw.base_color = grass.base_color;
+        draw.tip_color = grass.tip_color;
+        draw.albedo_texture = grass.albedo_texture;
 
-        // === Phase 1: 收集 GPU 实例 + LOD 分类 + fade ===
-        std::vector<GrassGPUInstance> lod0_gpu, lod1_gpu;
-        lod0_gpu.reserve(static_cast<size_t>(grass.cached_instance_count_));
-        lod1_gpu.reserve(static_cast<size_t>(grass.cached_instance_count_) / 4);
-
-        auto pack_instance = [](const GrassInstanceLayout& layout, float fade) -> GrassGPUInstance {
-            return GrassGPUInstance{
-                glm::vec4(layout.position, layout.yaw),
-                glm::vec4(layout.width, layout.height, layout.wind_phase, fade)
-            };
-        };
+        draw.scene_lod0.reserve(static_cast<size_t>(grass.cached_instance_count_));
+        draw.scene_lod1.reserve(static_cast<size_t>(grass.cached_instance_count_) / 4);
 
         const float fade_range = std::max(grass.fade_range, 0.01f);
         const float near_fade_start = std::max(0.0f, grass.lod_near - fade_range);
@@ -653,34 +649,58 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
             float dz = ccz - camera_pos.z;
             float dist = std::sqrt(dx * dx + dz * dz);
 
-            if (shadow_pass) {
-                if (!grass.cast_shadow || dist > grass.shadow_distance) continue;
+            // 场景 pass 分类（LOD0 + LOD1 + fade）
+            if (dist < near_fade_start) {
                 for (const auto& layout : cd.layouts) {
-                    lod0_gpu.push_back(pack_instance(layout, 1.0f));
+                    draw.scene_lod0.push_back(pack_instance(layout, 1.0f));
                 }
-            } else {
-                if (dist < near_fade_start) {
-                    for (const auto& layout : cd.layouts) {
-                        lod0_gpu.push_back(pack_instance(layout, 1.0f));
-                    }
-                } else if (dist < grass.lod_near) {
-                    float t = (dist - near_fade_start) / fade_range;
-                    for (const auto& layout : cd.layouts) {
-                        lod0_gpu.push_back(pack_instance(layout, 1.0f - t));
-                        lod1_gpu.push_back(pack_instance(layout, t));
-                    }
-                } else if (dist < far_fade_start) {
-                    for (const auto& layout : cd.layouts) {
-                        lod1_gpu.push_back(pack_instance(layout, 1.0f));
-                    }
-                } else if (dist < grass.lod_far) {
-                    float t = (dist - far_fade_start) / fade_range;
-                    for (const auto& layout : cd.layouts) {
-                        lod1_gpu.push_back(pack_instance(layout, 1.0f - t));
-                    }
+            } else if (dist < grass.lod_near) {
+                float t = (dist - near_fade_start) / fade_range;
+                for (const auto& layout : cd.layouts) {
+                    draw.scene_lod0.push_back(pack_instance(layout, 1.0f - t));
+                    draw.scene_lod1.push_back(pack_instance(layout, t));
+                }
+            } else if (dist < far_fade_start) {
+                for (const auto& layout : cd.layouts) {
+                    draw.scene_lod1.push_back(pack_instance(layout, 1.0f));
+                }
+            } else if (dist < grass.lod_far) {
+                float t = (dist - far_fade_start) / fade_range;
+                for (const auto& layout : cd.layouts) {
+                    draw.scene_lod1.push_back(pack_instance(layout, 1.0f - t));
+                }
+            }
+
+            // 阴影 pass 分类（仅 LOD0，受 cast_shadow / shadow_distance 约束）
+            if (grass.cast_shadow && dist <= grass.shadow_distance) {
+                for (const auto& layout : cd.layouts) {
+                    draw.shadow_lod0.push_back(pack_instance(layout, 1.0f));
                 }
             }
         }
+
+        if (draw.scene_lod0.empty() && draw.scene_lod1.empty() && draw.shadow_lod0.empty())
+            continue;
+        frame_data_.entities.push_back(std::move(draw));
+    }
+}
+
+void GrassSystem::RenderInternal(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                                  bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
+    if (blade_vertices_.empty()) return;
+    if (!frame_data_.has_camera) return;
+
+    // 前向 pass 绘制用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正）。
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
+    const float current_time = frame_data_.current_time;
+
+    for (const auto& ent : frame_data_.entities) {
+        // 阶段/阴影 pass 选取预提取的实例列表（ECS 无关）。
+        const std::vector<GrassGPUInstance>& lod0_gpu = shadow_pass ? ent.shadow_lod0 : ent.scene_lod0;
+        const std::vector<GrassGPUInstance> empty_lod1;
+        const std::vector<GrassGPUInstance>& lod1_gpu = shadow_pass ? empty_lod1 : ent.scene_lod1;
 
         // === Phase 2: 计算 model matrix（GPU compute 或 CPU fallback）===
         const size_t lod0_count = lod0_gpu.size();
@@ -701,8 +721,8 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
                 layout.height = inst.wh_phase_fade.y * inst.wh_phase_fade.w;
                 layout.wind_phase = inst.wh_phase_fade.z;
                 all_matrices[out_offset + i] = BuildWindMatrix(
-                    layout, wind_norm, grass.wind_speed,
-                    grass.wind_strength, grass.wind_turbulence, current_time);
+                    layout, ent.wind_norm, ent.wind_speed,
+                    ent.wind_strength, ent.wind_turbulence, current_time);
             }
         };
         auto compute_cpu_all = [&]() {
@@ -727,10 +747,10 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
             rhi_->BindGpuBuffer(input_ssbo_, 0, false);
             rhi_->BindGpuBuffer(output_ssbo_, 1, true);
 
-            rhi_->SetComputeUniformVec2f(wind_compute_shader_, "u_wind_dir", wind_norm.x, wind_norm.y);
-            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_speed", grass.wind_speed);
-            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_strength", grass.wind_strength);
-            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_turbulence", grass.wind_turbulence);
+            rhi_->SetComputeUniformVec2f(wind_compute_shader_, "u_wind_dir", ent.wind_norm.x, ent.wind_norm.y);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_speed", ent.wind_speed);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_strength", ent.wind_strength);
+            rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_wind_turbulence", ent.wind_turbulence);
             rhi_->SetComputeUniformFloat(wind_compute_shader_, "u_time", current_time);
             rhi_->SetComputeUniformInt(wind_compute_shader_, "u_instance_count", static_cast<int>(total_count));
 
@@ -769,7 +789,7 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
             auto verts = src;
             for (auto& v : verts) {
                 float t = v.pos.y;
-                v.color = glm::vec4(glm::mix(grass.base_color, grass.tip_color, t), 1.0f);
+                v.color = glm::vec4(glm::mix(ent.base_color, ent.tip_color, t), 1.0f);
             }
             return verts;
         };
@@ -835,15 +855,15 @@ void GrassSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const 
             material.ao = 1.0f;
             material.double_sided = true;
             material.shading_mode = 0;
-            material.albedo_tex = grass.albedo_texture;
+            material.albedo_tex = ent.albedo_texture;
             material.receive_shadow = true;
-            material.shadow_strength = shadow_strength_val;
+            material.shadow_strength = frame_data_.shadow_strength;
 
             dse::render::DirectionalLight light;
-            light.direction = light_dir;
-            light.color = light_color;
-            light.intensity = light_intensity;
-            light.ambient = ambient_intensity;
+            light.direction = frame_data_.light_dir;
+            light.color = frame_data_.light_color;
+            light.intensity = frame_data_.light_intensity;
+            light.ambient = frame_data_.ambient_intensity;
             light.enabled = true;
 
             mesh_renderer_.DrawInstancedShaded(

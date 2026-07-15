@@ -37,6 +37,31 @@ struct GrassChunkData {
     bool valid = false;
 };
 
+/// Phase 1：主线程（Prepare）从 ECS 提取的每帧渲染数据快照。
+/// 渲染线程 Execute 仅消费此结构，不再访问 World/ECS。
+struct GrassFrameRenderData {
+    struct EntityDraw {
+        std::vector<GrassGPUInstance> scene_lod0;   ///< 场景 pass 近景（视锥剔除 + fade 后）
+        std::vector<GrassGPUInstance> scene_lod1;   ///< 场景 pass 远景 billboard
+        std::vector<GrassGPUInstance> shadow_lod0;  ///< 阴影 pass 近景（cast_shadow + shadow_distance 后）
+        glm::vec2 wind_norm = glm::vec2(1.0f, 0.0f);
+        float wind_speed = 0.0f;
+        float wind_strength = 0.0f;
+        float wind_turbulence = 0.0f;
+        glm::vec3 base_color = glm::vec3(1.0f);
+        glm::vec3 tip_color = glm::vec3(1.0f);
+        dse::render::TextureHandle albedo_texture;
+    };
+    std::vector<EntityDraw> entities;
+    float current_time = 0.0f;
+    glm::vec3 light_dir = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color = glm::vec3(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.2f;
+    float shadow_strength = 0.35f;
+    bool has_camera = false;
+};
+
 /**
  * @class GrassSystem
  * @brief 大型植被渲染系统
@@ -55,13 +80,17 @@ public:
     /// 每帧更新：增量维护 chunk 缓存
     void Update(World& world, float delta_time);
 
+    /// Phase 1：主线程（Prepare）提取每帧渲染数据（相机剔除/LOD/光照），供渲染线程消费。
+    void ExtractFrameRenderData(World& world);
+
     /// 主场景渲染：depth_only=true（PreZ 深度预通道）走 MeshRenderer::DrawDepthOnlyInstanced，false（Opaque 彩色）走 MeshRenderer::DrawInstancedShaded。
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    /// Phase 1：仅消费 ExtractFrameRenderData 提取的快照，不访问 World。
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                 const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
     /// 阴影 pass 渲染（仅近距离 LOD 0）
-    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    void RenderShadow(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                       const glm::vec3& camera_offset = glm::vec3(0.0f));
 
 private:
@@ -92,9 +121,12 @@ private:
 
     /// 内部渲染辅助（场景 pass 和阴影 pass 共用）
     /// depth_only：当前 pass 绑定无彩色深度 RT（PreZ/Shadow）→ MeshRenderer 实例化深度路径；shadow_pass：光源视角阴影 pass。
-    void RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    void RenderInternal(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                         bool depth_only, bool shadow_pass,
                         const glm::vec3& camera_offset = glm::vec3(0.0f));
+
+    /// Phase 1：主线程提取的每帧渲染快照（Prepare 写，Execute 读）。
+    GrassFrameRenderData frame_data_;
 
     RhiDevice* rhi_ = nullptr;
     dse::render::MeshRenderer mesh_renderer_;  ///< 前向 pass 通用网格渲染器（B2b-6 迁移）
