@@ -385,6 +385,34 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
     grass_system_.ExtractFrameRenderData(world);
     terrain_system_.ExtractFrameRenderData(world);
     tree_system_.ExtractFrameRenderData(world, camera_offset);
+    hair_system_.ExtractFrameRenderData(world);
+
+    // 粒子 / 流体：主线程快照 GPU 实例缓冲 + 纹理句柄（渲染线程 Execute 消费）。
+    frame_particle_items_.clear();
+    {
+        auto p_view = world.registry().view<dse::ParticleSystem3DComponent>();
+        for (auto entity : p_view) {
+            const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
+            if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo) {
+                dse::render::ParticleDrawItem item;
+                item.texture_handle = ps.texture_handle;
+                item.particle_count = ps.active_particle_count;
+                item.instance_buffer = ps.instance_vbo;
+                frame_particle_items_.push_back(item);
+            }
+        }
+        auto f_view = world.registry().view<dse::FluidEmitterComponent>();
+        for (auto entity : f_view) {
+            const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
+            if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo) {
+                dse::render::ParticleDrawItem item;
+                item.texture_handle = {};
+                item.particle_count = static_cast<int>(fluid.active_count);
+                item.instance_buffer = fluid.instance_vbo;
+                frame_particle_items_.push_back(item);
+            }
+        }
+    }
     // 各渲染阶段（prez/shadow/opaque）的贡献统一通过 ISceneRenderer 注册，
     // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。
     scene.scene_renderers.push_back(this);
@@ -419,7 +447,6 @@ void Gameplay3DModule::RenderShadow(dse::render::CommandBuffer& cmd,
 void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
                                     const dse::render::RenderScenePassContext& ctx) {
     if (!ctx.world) return;
-    World& callback_world = *ctx.world;
     dse::render::FrameContext frame;
     if (ctx.view) frame.view = *ctx.view;
     if (ctx.projection) frame.projection = *ctx.projection;
@@ -428,40 +455,15 @@ void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
     grass_system_.Render(cmd, frame, ctx.camera_offset, /*depth_only=*/false);
     tree_system_.Render(cmd, frame, ctx.camera_offset, /*depth_only=*/false);
 
-    auto p_view = callback_world.registry().view<dse::ParticleSystem3DComponent>();
-    std::vector<dse::render::ParticleDrawItem> p_items;
-    for (auto entity : p_view) {
-        const auto& ps = p_view.get<dse::ParticleSystem3DComponent>(entity);
-        if (ps.enabled && ps.active_particle_count > 0 && ps.instance_vbo) {
-            dse::render::ParticleDrawItem item;
-            item.texture_handle = ps.texture_handle;
-            item.particle_count = ps.active_particle_count;
-            item.instance_buffer = ps.instance_vbo;
-            p_items.push_back(item);
-        }
-    }
-
-    auto f_view = callback_world.registry().view<dse::FluidEmitterComponent>();
-    for (auto entity : f_view) {
-        const auto& fluid = f_view.get<dse::FluidEmitterComponent>(entity);
-        if (fluid.enabled && fluid.active_count > 0 && fluid.instance_vbo) {
-            dse::render::ParticleDrawItem item;
-            item.texture_handle = {};
-            item.particle_count = static_cast<int>(fluid.active_count);
-            item.instance_buffer = fluid.instance_vbo;
-            p_items.push_back(item);
-        }
-    }
-
     const glm::mat4 view_at_origin = ctx.view ? *ctx.view : glm::mat4(1.0f);
     const glm::mat4 projection = ctx.projection ? *ctx.projection : glm::mat4(1.0f);
     // Camera-Relative: 粒子/毛发数据仍在世界空间，需要用包含 camera_offset 平移的 view
     const glm::mat4 world_to_view = view_at_origin * glm::translate(glm::mat4(1.0f), -ctx.camera_offset);
-    if (!p_items.empty() && rhi_device_ != nullptr) {
+    if (!frame_particle_items_.empty() && rhi_device_ != nullptr) {
         // B3：高层 ParticleRenderer 走通用绘制原语 + BuiltinProgram::Particle3D（取代 DrawParticles3D ABI）。
-        particle_renderer_.DrawParticles(cmd, *rhi_device_, p_items, world_to_view, projection);
+        particle_renderer_.DrawParticles(cmd, *rhi_device_, frame_particle_items_, world_to_view, projection);
     }
-    hair_system_.Render(callback_world, cmd, world_to_view, projection);
+    hair_system_.Render(cmd, world_to_view, projection);
 }
 
 void Gameplay3DModule::OnShutdown(World& world) {

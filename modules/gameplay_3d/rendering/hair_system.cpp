@@ -135,27 +135,32 @@ void HairSystem::Update(::World& world, const glm::vec3& camera_pos, float dt) {
     }
 }
 
-void HairSystem::Render(::World& world, CommandBuffer& cmd_buffer,
+void HairSystem::ExtractFrameRenderData(::World& world) {
+    frame_light_dir_ = glm::vec3(0.0f, -1.0f, 0.0f);
+    frame_light_color_ = glm::vec3(1.0f);
+    frame_light_intensity_ = 1.0f;
+    frame_ambient_intensity_ = 0.2f;
+
+    auto dl_view = world.registry().view<dse::DirectionalLight3DComponent>();
+    for (auto e : dl_view) {
+        auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(e);
+        if (!dl.enabled) continue;
+        frame_light_dir_ = dl.direction;
+        frame_light_color_ = dl.color;
+        frame_light_intensity_ = dl.intensity;
+        frame_ambient_intensity_ = dl.ambient_intensity;
+        break;
+    }
+}
+
+void HairSystem::Render(CommandBuffer& cmd_buffer,
                          const glm::mat4& view, const glm::mat4& projection) {
     if (instances_.empty()) return;
 
-    // 查找方向光
-    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
-    glm::vec3 light_col(1.0f);
-    float light_intensity = 1.0f;
-    float ambient_intensity = 0.2f;
-    {
-        auto dl_view = world.registry().view<dse::DirectionalLight3DComponent>();
-        for (auto e : dl_view) {
-            auto& dl = dl_view.get<dse::DirectionalLight3DComponent>(e);
-            if (!dl.enabled) continue;
-            light_dir = dl.direction;
-            light_col = dl.color;
-            light_intensity = dl.intensity;
-            ambient_intensity = dl.ambient_intensity;
-            break;
-        }
-    }
+    const glm::vec3 light_dir = frame_light_dir_;
+    const glm::vec3 light_col = frame_light_color_;
+    const float light_intensity = frame_light_intensity_;
+    const float ambient_intensity = frame_ambient_intensity_;
 
     std::vector<HairDrawItem> items;
     for (auto& inst : instances_) {

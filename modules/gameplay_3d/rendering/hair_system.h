@@ -44,10 +44,14 @@ public:
     /// @param dt 帧间隔时间
     void Update(::World& world, const glm::vec3& camera_pos, float dt);
 
+    /// Phase 1：主线程（Prepare）提取方向光参数，供渲染线程 Render 消费（不再于 Render 内访问 ECS）。
+    void ExtractFrameRenderData(::World& world);
+
     /// 渲染（将活跃 HairInstance 传递给 CommandBuffer）
     /// @param view       当前相机 view 矩阵
     /// @param projection 当前相机 projection 矩阵（含 clip_correction）
-    void Render(::World& world, CommandBuffer& cmd_buffer,
+    /// Phase 1：仅消费 ExtractFrameRenderData 提取的光照快照 + instances_，不访问 World。
+    void Render(CommandBuffer& cmd_buffer,
                 const glm::mat4& view, const glm::mat4& projection);
 
     /// 获取所有活跃的 HairInstance（供渲染 pass 使用）
@@ -91,6 +95,12 @@ private:
 
     /// 累计时间（用于风场 phase）
     double accumulated_time_ = 0.0;
+
+    /// Phase 1：主线程提取的方向光快照（Prepare 写，Render 读）。
+    glm::vec3 frame_light_dir_ = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 frame_light_color_ = glm::vec3(1.0f);
+    float frame_light_intensity_ = 1.0f;
+    float frame_ambient_intensity_ = 0.2f;
 };
 
 } // namespace gameplay3d

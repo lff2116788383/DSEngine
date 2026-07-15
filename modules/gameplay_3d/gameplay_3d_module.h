@@ -102,6 +102,8 @@ public:
 private:
     RhiDevice* rhi_device_ = nullptr;
     dse::render::ParticleRenderer particle_renderer_;
+    /// Phase 1：主线程（BuildRenderQueues）提取的粒子/流体绘制项，渲染线程 Execute 消费。
+    std::vector<dse::render::ParticleDrawItem> frame_particle_items_;
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     GrassSystem grass_system_;
