@@ -318,7 +318,8 @@ void FramePipeline::BuildRenderSceneQueues() {
     }
 
     // 2D/3D 双路径的选择封装在 IBuiltinModules 实现内
-    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_);
+    modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_,
+                                     render_pass_context_.camera_offset);
 
     // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
     // 不再经由 IModule 的固定阶段回调包装进 RenderScene 回调桶。

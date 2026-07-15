@@ -84,7 +84,8 @@ public:
     void OnUpdate(World& world, const dse::FrameUpdateContext& frame);
     void OnFixedUpdate(World& world, float fixed_delta_time) override;
     void OnShutdown(World& world) override;
-    void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
+    void BuildRenderQueues(World& world, dse::render::RenderScene& scene,
+                           const glm::vec3& camera_offset = glm::vec3(0.0f));
 
     // ISceneRenderer：3D 几何（terrain/grass/tree/particle/hair）的渲染贡献，
     // 由内建 PreZ / Shadow / Forward / RSM Pass 在各自渲染作用域内按阶段调用。

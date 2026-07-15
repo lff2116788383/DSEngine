@@ -61,13 +61,15 @@ void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd, RhiDevic
     mesh_render_system_.Render(world, cmd, frame);
 }
 
-void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) {
+void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled,
+                                           const glm::vec3& camera_offset) {
 #ifdef DSE_ENABLE_3D
     if (gameplay3d_enabled) {
-        gameplay3d_module_.BuildRenderQueues(world, scene);
+        gameplay3d_module_.BuildRenderQueues(world, scene, camera_offset);
     }
 #else
     (void)gameplay3d_enabled;
+    (void)camera_offset;
     mesh_render_system_.BuildRenderQueues(world, scene);
 #endif
 }

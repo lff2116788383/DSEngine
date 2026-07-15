@@ -61,7 +61,8 @@ public:
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;
     virtual void ShutdownMeshSystem() = 0;
     virtual void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) = 0;
-    virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled) = 0;
+    virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled,
+                                   const glm::vec3& camera_offset) = 0;
     /// 标脏 mesh 批次缓存，强制下次 BuildRenderQueues 重建（编辑器模式下无 OnUpdate 驱动时使用）
     virtual void MarkMeshBatchesDirty() = 0;
     virtual int  PrepareGPUScene(World& world, dse::render::RenderPassContext& ctx) = 0;

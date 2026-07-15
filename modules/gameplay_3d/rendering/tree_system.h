@@ -32,6 +32,24 @@ struct TreeChunkData {
     bool valid = false;
 };
 
+/// Phase 1：主线程（Prepare）从 ECS 提取的每帧树木渲染快照。
+/// 渲染线程 Execute（Render）仅消费此结构，不再访问 World/ECS。
+struct TreeFrameRenderData {
+    struct EntityDraw {
+        dse::render::ExternalShadedMesh tmpl;   ///< 共享局部空间模板 GPU 缓冲（借用 mesh_cache_ 的句柄）
+        uint32_t index_count = 0;
+        std::vector<glm::mat4> scene_transforms;   ///< cull_distance 视锥+距离剔除后（不含 camera_offset）
+        std::vector<glm::mat4> shadow_transforms;  ///< shadow_distance 剔除后（不含 camera_offset）
+    };
+    std::vector<EntityDraw> entities;
+    glm::vec3 light_dir = glm::vec3(0.0f, -1.0f, 0.0f);
+    glm::vec3 light_color = glm::vec3(1.0f);
+    float light_intensity = 1.0f;
+    float ambient_intensity = 0.2f;
+    float shadow_strength = 0.35f;
+    bool has_camera = false;
+};
+
 /**
  * @class TreeSystem
  * @brief 树木/大型植被实例化渲染系统
@@ -50,13 +68,17 @@ public:
 
     void Update(World& world, float delta_time);
 
+    /// Phase 1：主线程（Prepare）提取每帧渲染数据（相机剔除/距离/光照/GPU 模板），供渲染线程消费。
+    void ExtractFrameRenderData(World& world, const glm::vec3& camera_offset = glm::vec3(0.0f));
+
     /// 主渲染：depth_only=true 时（PreZ 深度预通道）走 MeshRenderer 实例化深度路径，
     /// false 时（Opaque 彩色通道）走 MeshRenderer 前向路径。
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    /// Phase 1：仅消费 ExtractFrameRenderData 提取的快照，不访问 World。
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                 const glm::vec3& camera_offset = glm::vec3(0.0f),
                 bool depth_only = false);
 
-    void RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    void RenderShadow(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                       const glm::vec3& camera_offset = glm::vec3(0.0f));
 
 private:
@@ -75,9 +97,12 @@ private:
 
     /// depth_only：当前 pass 绑定无彩色的深度 RT（PreZ/Shadow）→ 走 MeshRenderer 实例化深度路径；
     /// shadow_pass：光源视角阴影 pass（用 shadow_distance + 跳 billboard）。
-    void RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+    void RenderInternal(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                         bool depth_only, bool shadow_pass,
                         const glm::vec3& camera_offset);
+
+    /// Phase 1：主线程提取的每帧渲染快照（Prepare 写，Execute 读）。
+    TreeFrameRenderData frame_data_;
 
     /// 从 AssetManager 加载 mesh 并缓存为 BatchVertex + indices
     bool EnsureMeshLoaded(const std::string& mesh_path);

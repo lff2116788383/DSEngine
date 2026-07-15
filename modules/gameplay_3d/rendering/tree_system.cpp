@@ -360,20 +360,20 @@ void TreeSystem::Update(World& world, float /*delta_time*/) {
 // 渲染
 // ============================================================
 
-void TreeSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+void TreeSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                         const glm::vec3& camera_offset, bool depth_only) {
     // Opaque 彩色通道：depth_only=false → MeshRenderer::DrawSharedTemplateInstanced；
     // PreZ 深度预通道：depth_only=true → MeshRenderer::DrawDepthOnlySharedTemplateInstanced。
-    RenderInternal(world, cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
+    RenderInternal(cmd_buffer, frame, depth_only, /*shadow_pass=*/false, camera_offset);
 }
 
-void TreeSystem::RenderShadow(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+void TreeSystem::RenderShadow(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
                               const glm::vec3& camera_offset) {
-    RenderInternal(world, cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
+    RenderInternal(cmd_buffer, frame, /*depth_only=*/true, /*shadow_pass=*/true, camera_offset);
 }
 
-void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
-                                 bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
+void TreeSystem::ExtractFrameRenderData(World& world, const glm::vec3& camera_offset) {
+    frame_data_ = TreeFrameRenderData{};
     if (!rhi_) return;
 
     auto camera_view = world.registry().view<Camera3DComponent, TransformComponent>();
@@ -397,33 +397,23 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const d
         break;
     }
     if (!has_camera) return;
+    frame_data_.has_camera = true;
 
     glm::mat4 vp = proj_matrix * view_matrix;
     glm::vec4 frustum_planes[6];
     ExtractFrustumPlanes(vp, frustum_planes);
 
-    // 前向 pass 绘制使用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正），
-    // 而非上方仅用于视锥剔除的本地相机矩阵。
-    const glm::mat4 draw_view = frame.view;
-    const glm::mat4 draw_proj = frame.projection;
-    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
-
     // 获取方向光参数
-    glm::vec3 light_dir(0.0f, -1.0f, 0.0f);
-    glm::vec3 light_color(1.0f);
-    float light_intensity = 1.0f;
-    float ambient_intensity = 0.2f;
-    float shadow_strength_val = 0.35f;
     {
         auto light_view = world.registry().view<DirectionalLight3DComponent>();
         for (auto le : light_view) {
             const auto& light = light_view.get<DirectionalLight3DComponent>(le);
             if (light.enabled) {
-                light_dir = light.direction;
-                light_color = light.color;
-                light_intensity = light.intensity;
-                ambient_intensity = light.ambient_intensity;
-                shadow_strength_val = light.shadow_strength;
+                frame_data_.light_dir = light.direction;
+                frame_data_.light_color = light.color;
+                frame_data_.light_intensity = light.intensity;
+                frame_data_.ambient_intensity = light.ambient_intensity;
+                frame_data_.shadow_strength = light.shadow_strength;
                 break;
             }
         }
@@ -441,10 +431,15 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const d
         if (cache_it == entity_caches_.end()) continue;
 
         auto& mesh_entry = mesh_cache_[tree.mesh_path];
-        float max_dist = shadow_pass ? tree.shadow_distance : tree.cull_distance;
+        if (!EnsureTemplateBuilt(mesh_entry)) continue;
 
-        std::vector<glm::mat4> transforms;
-        transforms.reserve(static_cast<size_t>(tree.cached_instance_count_));
+        const float scene_dist = tree.cull_distance;
+        const float shadow_dist = tree.shadow_distance;
+
+        TreeFrameRenderData::EntityDraw draw;
+        draw.tmpl = mesh_entry.tmpl;
+        draw.index_count = mesh_entry.index_count;
+        draw.scene_transforms.reserve(static_cast<size_t>(tree.cached_instance_count_));
 
         for (const auto& [key, chunk] : cache_it->second.chunks) {
             if (!chunk.valid || chunk.layouts.empty()) continue;
@@ -457,33 +452,54 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const d
                 float dx = inst.position.x - camera_pos.x;
                 float dz = inst.position.z - camera_pos.z;
                 float dist = std::sqrt(dx * dx + dz * dz);
-                if (dist > max_dist) continue;
+                const bool in_scene = dist <= scene_dist;
+                const bool in_shadow = dist <= shadow_dist;
+                if (!in_scene && !in_shadow) continue;
 
+                // 局部空间模板 + 每实例 model（不含 camera_offset，Execute 时再减去）。
                 glm::mat4 m(1.0f);
-                m = glm::translate(m, inst.position - camera_offset);
+                m = glm::translate(m, inst.position);
                 m = glm::rotate(m, inst.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
                 m = glm::scale(m, glm::vec3(inst.scale));
-                transforms.push_back(m);
+                if (in_scene) draw.scene_transforms.push_back(m);
+                if (in_shadow) draw.shadow_transforms.push_back(m);
             }
         }
 
-        if (transforms.empty()) continue;
+        if (draw.scene_transforms.empty() && draw.shadow_transforms.empty()) continue;
+        frame_data_.entities.push_back(std::move(draw));
+    }
+}
+
+void TreeSystem::RenderInternal(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame,
+                                 bool depth_only, bool shadow_pass, const glm::vec3& camera_offset) {
+    if (!rhi_) return;
+    if (!frame_data_.has_camera) return;
+
+    // 前向 pass 绘制使用 command buffer 的 view/proj（与 DrawMeshBatch 执行器同源，含投影修正）。
+    const glm::mat4 draw_view = frame.view;
+    const glm::mat4 draw_proj = frame.projection;
+    const glm::vec3 draw_cam_pos = glm::vec3(glm::inverse(draw_view)[3]);
+    const glm::vec4 offset4(camera_offset, 0.0f);
+
+    for (const auto& ent : frame_data_.entities) {
+        const std::vector<glm::mat4>& src = shadow_pass ? ent.shadow_transforms : ent.scene_transforms;
+        if (src.empty()) continue;
+
+        // Camera-Relative: 每实例 model 减去 camera_offset（与原实现等价，仅推迟到 Execute）。
+        std::vector<glm::mat4> transforms(src);
+        for (auto& m : transforms) m[3] -= offset4;
 
         if (depth_only) {
-            // 深度 pass（PreZ / Shadow）：迁移到 MeshRenderer::DrawDepthOnlySharedTemplateInstanced
-            //（与彩色前向 pass 同一份共享局部空间模板 + 每实例 model；ForwardInstancedDepth + 植被风，
-            // 风场与剔除变换一致 → 阴影/深度不与彩色错位）。
-            if (!EnsureTemplateBuilt(mesh_entry)) continue;
+            // 深度 pass（PreZ / Shadow）：与彩色前向 pass 同一份共享局部空间模板 + 每实例 model；
+            // ForwardInstancedDepth + 植被风，风场与剔除变换一致 → 阴影/深度不与彩色错位。
             mesh_renderer_.DrawDepthOnlySharedTemplateInstanced(
-                cmd_buffer, *rhi_, mesh_entry.tmpl, mesh_entry.index_count, 0u,
+                cmd_buffer, *rhi_, ent.tmpl, ent.index_count, 0u,
                 transforms, draw_view, draw_proj, /*foliage=*/true);
             continue;
         }
 
-        // 彩色前向 pass（Opaque）：迁移到 MeshRenderer::DrawSharedTemplateInstanced（共享局部空间
-        // 模板 + 每实例 model 矩阵；foliage 顶点风弯曲沿用 device 全局风场）。
-        if (!EnsureTemplateBuilt(mesh_entry)) continue;
-
+        // 彩色前向 pass（Opaque）：共享局部空间模板 + 每实例 model 矩阵；foliage 顶点风弯曲沿用 device 全局风场。
         dse::render::ShadedMaterial material;
         material.albedo = glm::vec3(1.0f);
         material.metallic = 0.0f;
@@ -492,18 +508,18 @@ void TreeSystem::RenderInternal(World& world, CommandBuffer& cmd_buffer, const d
         material.double_sided = false;
         material.shading_mode = 0;
         material.receive_shadow = true;
-        material.shadow_strength = shadow_strength_val;
+        material.shadow_strength = frame_data_.shadow_strength;
         material.foliage = true;
 
         dse::render::DirectionalLight light;
-        light.direction = light_dir;
-        light.color = light_color;
-        light.intensity = light_intensity;
-        light.ambient = ambient_intensity;
+        light.direction = frame_data_.light_dir;
+        light.color = frame_data_.light_color;
+        light.intensity = frame_data_.light_intensity;
+        light.ambient = frame_data_.ambient_intensity;
         light.enabled = true;
 
         mesh_renderer_.DrawSharedTemplateInstanced(
-            cmd_buffer, *rhi_, mesh_entry.tmpl, mesh_entry.index_count, 0u,
+            cmd_buffer, *rhi_, ent.tmpl, ent.index_count, 0u,
             transforms, draw_view, draw_proj, draw_cam_pos, material, light);
     }
 }
