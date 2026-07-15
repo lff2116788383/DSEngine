@@ -67,21 +67,41 @@ void Gameplay2DModule::OnFixedUpdate(World& world, float fixed_delta_time) {
     physics2d_system_.FixedUpdate(world, fixed_delta_time);
 }
 
-void Gameplay2DModule::RenderScene2D(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction) {
-    (void)clip_correction;
-    sprite_render_system_.Render(world, cmd_buffer, frame);
+void Gameplay2DModule::ExtractSceneRenderData2D(World& world) {
+    sprite_render_system_.ExtractFrameRenderData(world);
 #ifdef DSE_ENABLE_SPINE
-    spine_system_.Render(world, cmd_buffer, frame);
+    spine_system_.ExtractFrameRenderData(world);
 #endif
-    particle_system_.Render(world, cmd_buffer, frame);
-    parallax_system_.Render(world, cmd_buffer, frame);
-    trail_system_.Render(world, cmd_buffer, frame);
-    line_renderer_system_.Render(world, cmd_buffer, frame);
-    light_2d_system_.Render(world, cmd_buffer, frame);
+    particle_system_.ExtractFrameRenderData(world);
+    parallax_system_.ExtractFrameRenderData(world);
+    trail_system_.ExtractFrameRenderData(world);
+    line_renderer_system_.ExtractFrameRenderData(world);
+    light_2d_system_.ExtractFrameRenderData(world);
 }
 
-void Gameplay2DModule::RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
-    ui_render_system_.Render(world, cmd_buffer, screen_width, screen_height, clip_correction);
+void Gameplay2DModule::ExtractUIRenderData2D(World& world) {
+    const glm::mat4 clip_correction =
+        rhi_device_ ? rhi_device_->GetProjectionCorrection() : glm::mat4(1.0f);
+    ui_render_system_.ExtractFrameRenderData(world, Screen::width(), Screen::height(), clip_correction);
+}
+
+void Gameplay2DModule::RenderScene2D(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction) {
+    (void)clip_correction;
+    sprite_render_system_.Render(cmd_buffer, frame);
+#ifdef DSE_ENABLE_SPINE
+    spine_system_.Render(cmd_buffer, frame);
+#endif
+    particle_system_.Render(cmd_buffer, frame);
+    parallax_system_.Render(cmd_buffer, frame);
+    trail_system_.Render(cmd_buffer, frame);
+    line_renderer_system_.Render(cmd_buffer, frame);
+}
+
+void Gameplay2DModule::RenderUI2D(CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
+    (void)screen_width;
+    (void)screen_height;
+    (void)clip_correction;
+    ui_render_system_.Render(cmd_buffer);
 }
 
 void Gameplay2DModule::OnShutdown(World& world) {

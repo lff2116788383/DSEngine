@@ -686,11 +686,21 @@ struct InstancingKeyHash {
 
 }
 
-void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+void MeshRenderSystem::AppendCachedQueues(dse::render::RenderScene& scene) const {
+    scene.cpu_meshes.opaque.insert(scene.cpu_meshes.opaque.end(), cached_opaque_items_.begin(), cached_opaque_items_.end());
+    scene.cpu_meshes.transparent.insert(scene.cpu_meshes.transparent.end(), cached_transparent_items_.begin(), cached_transparent_items_.end());
+    if (!static_batch_items_.empty() && !gpu_driven_active_) {
+        scene.cpu_meshes.static_cpu_fallback.insert(scene.cpu_meshes.static_cpu_fallback.end(), static_batch_items_.begin(), static_batch_items_.end());
+    }
+}
+
+void MeshRenderSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    // Phase 1：不再访问 ECS —— 直接消费 BuildRenderQueues（Prepare 主线程）缓存的 batch。
+    // 探针/反射捕获路径按各自 face 相机的 frame 绘制同一批几何。
     dse::render::RenderScene scene;
-    BuildRenderQueues(world, scene);
+    AppendCachedQueues(scene);
     // 阶段4-M4：取代 cmd.DrawMeshBatch，经常驻 MeshRenderer::DrawBatch 分发。
-    // 渲染上下文未注入（如单元测试无设备）时跳过绘制（构建队列的副作用/异常仍保留）。
+    // 渲染上下文未注入（如单元测试无设备）时跳过绘制。
     if (rhi_device_ && mesh_renderer_)
         scene.DrawOpaqueCpu(cmd_buffer, *rhi_device_, *mesh_renderer_, frame);
 }
@@ -698,11 +708,7 @@ void MeshRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse
 void MeshRenderSystem::BuildRenderQueues(World& world, dse::render::RenderScene& scene) {
     // Per-frame cache: 后续 pass 直接复用首次构建的 batch_items
     if (!batch_cache_dirty_) {
-        scene.cpu_meshes.opaque.insert(scene.cpu_meshes.opaque.end(), cached_opaque_items_.begin(), cached_opaque_items_.end());
-        scene.cpu_meshes.transparent.insert(scene.cpu_meshes.transparent.end(), cached_transparent_items_.begin(), cached_transparent_items_.end());
-        if (!static_batch_items_.empty() && !gpu_driven_active_) {
-            scene.cpu_meshes.static_cpu_fallback.insert(scene.cpu_meshes.static_cpu_fallback.end(), static_batch_items_.begin(), static_batch_items_.end());
-        }
+        AppendCachedQueues(scene);
         return;
     }
 

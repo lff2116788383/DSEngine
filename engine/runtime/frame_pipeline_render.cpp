@@ -321,6 +321,9 @@ void FramePipeline::BuildRenderSceneQueues() {
     modules_impl_->BuildRenderQueues(*world, rs_->render_scene_, builtin_gameplay3d_enabled_,
                                      render_pass_context_.camera_offset);
 
+    // Phase 1：2D 场景/UI 绘制数据在主线程 Prepare 提取，渲染线程仅消费快照。
+    modules_impl_->ExtractRenderData2D(*world);
+
     // 动态模块的渲染贡献统一通过 RegisterRenderPasses 注册到 RenderGraph，
     // 不再经由 IModule 的固定阶段回调包装进 RenderScene 回调桶。
     (void)world;
@@ -331,7 +334,7 @@ void FramePipeline::BuildRenderGraphInternal() {
     registered_passes_.clear();
 
     // ---- 填充 RenderPassContext ----
-    render_pass_context_.world = runtime_context_.world;
+    // Phase 1：不再向渲染帧上下文写入 World（Execute 消费主线程提取的快照）。
     render_pass_context_.asset_manager = runtime_context_.asset_manager;
     render_pass_context_.rhi_device = runtime_context_.rhi_device.get();
     render_pass_context_.render_scene = &rs_->render_scene_;
@@ -457,14 +460,14 @@ void FramePipeline::BuildRenderGraphInternal() {
             render_pass_context_.modules.push_back({mod.instance});
         }
     }
-    render_pass_context_.render_2d_scene = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-        modules_impl_->RenderScene2D(world, cmd, frame);
+    render_pass_context_.render_2d_scene = [this](CommandBuffer& cmd, const dse::render::FrameContext& frame) {
+        modules_impl_->RenderScene2D(cmd, frame);
     };
-    render_pass_context_.render_2d_ui = [this](World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
-        modules_impl_->RenderUI2D(world, cmd, w, h, clip);
+    render_pass_context_.render_2d_ui = [this](CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
+        modules_impl_->RenderUI2D(cmd, w, h, clip);
     };
-    render_pass_context_.render_meshes = [this](World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-        modules_impl_->RenderMeshes(world, cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
+    render_pass_context_.render_meshes = [this](CommandBuffer& cmd, const dse::render::FrameContext& frame) {
+        modules_impl_->RenderMeshes(cmd, *render_pass_context_.rhi_device, rs_->cpu_mesh_renderer_, frame);
     };
 
     // ---- 澹版槑澶栭儴杈撳嚭 ----

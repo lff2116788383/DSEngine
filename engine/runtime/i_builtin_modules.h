@@ -53,14 +53,16 @@ public:
     virtual void UpdateGameplay2D(World& world, const dse::FrameUpdateContext& frame) = 0;
     virtual void FixedUpdateGameplay2D(World& world, float dt) = 0;
     virtual void ShutdownGameplay2D(World& world) = 0;
-    virtual void RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) = 0;
-    virtual void RenderUI2D(World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) = 0;
+    // Phase 1：主线程 Prepare 提取 2D 场景/UI 绘制数据；渲染线程 Render* 仅消费快照。
+    virtual void ExtractRenderData2D(World& world) = 0;
+    virtual void RenderScene2D(CommandBuffer& cmd, const dse::render::FrameContext& frame) = 0;
+    virtual void RenderUI2D(CommandBuffer& cmd, int w, int h, const glm::mat4& clip) = 0;
     virtual dse::gameplay2d::AudioSystem& GetAudioSystem() = 0;
 
     // ---- MeshRenderSystem ----
     virtual void InitMeshSystem(AssetManager* asset_mgr) = 0;
     virtual void ShutdownMeshSystem() = 0;
-    virtual void RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) = 0;
+    virtual void RenderMeshes(CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) = 0;
     virtual void BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled,
                                    const glm::vec3& camera_offset) = 0;
     /// 标脏 mesh 批次缓存，强制下次 BuildRenderQueues 重建（编辑器模式下无 OnUpdate 驱动时使用）

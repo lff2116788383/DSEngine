@@ -118,7 +118,7 @@ void UIPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.ui, glm::vec4(0.0f), true});
     if (ctx_.render_2d_ui) {
         const glm::mat4 clip_correction = ctx_.rhi_device->GetProjectionCorrection();
-        ctx_.render_2d_ui(*ctx_.world, cmd_buffer, Screen::width(), Screen::height(), clip_correction);
+        ctx_.render_2d_ui(cmd_buffer, Screen::width(), Screen::height(), clip_correction);
     }
     cmd_buffer.EndRenderPass();
 }

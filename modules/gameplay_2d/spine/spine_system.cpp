@@ -297,7 +297,8 @@ void SpineSystem::Update(entt::registry& registry, float dt) {
     DEBUG_LOG_TRACE("[spine-update] end this={}", static_cast<void*>(this));
 }
 
-void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+void SpineSystem::ExtractFrameRenderData(World& world) {
+    frame_batches_.clear();
     if (!rhi_device_) return;  // 未注入设备则无法走通用原语路径
 
     auto view = world.registry().view<TransformComponent, SpineRendererComponent>();
@@ -305,10 +306,7 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
     // spine 项均为 lighting_enabled=false 的 2D 无光照三角网格：迁出旧 DrawMeshBatch
     // （pbr.frag 无光照分支 = texColor*vColor），改用 MeshRenderer::DrawUnlit2D（Sprite2D = texColor*vColor），
     // 语义一致。顶点 computeWorldVertices 为骨架空间，按 entity transform.local_to_world 在 CPU 侧
-    // 预变换到世界空间（旧路径由 VS 施 model）。按绘制顺序逐 slot 立即绘制，保持 alpha 合成次序。
-    const glm::mat4 vp_view = frame.view;
-    const glm::mat4 vp_proj = frame.projection;
-
+    // 预变换到世界空间（旧路径由 VS 施 model）。按绘制顺序逐 slot 快照，渲染线程按序绘制保持 alpha 合成次序。
     std::vector<dse::render::Unlit2DVertex> verts;
     std::vector<uint16_t> indices;
 
@@ -383,9 +381,24 @@ void SpineSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
             }
 
             // blend_mode=0（alpha），与旧路径 spine 硬编码一致。
-            mesh_renderer_.DrawUnlit2D(cmd_buffer, *rhi_device_, verts, indices,
-                                       vp_view, vp_proj, texture_handle, 0u);
+            SpineDrawBatch batch;
+            batch.verts = verts;
+            batch.indices = indices;
+            batch.texture_handle = texture_handle;
+            batch.blend_mode = 0u;
+            frame_batches_.push_back(std::move(batch));
         }
+    }
+}
+
+void SpineSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (!rhi_device_ || frame_batches_.empty()) return;
+    const glm::mat4 vp_view = frame.view;
+    const glm::mat4 vp_proj = frame.projection;
+    for (const auto& batch : frame_batches_) {
+        if (batch.verts.empty() || batch.indices.empty()) continue;
+        mesh_renderer_.DrawUnlit2D(cmd_buffer, *rhi_device_, batch.verts, batch.indices,
+                                   vp_view, vp_proj, batch.texture_handle, batch.blend_mode);
     }
 }
 

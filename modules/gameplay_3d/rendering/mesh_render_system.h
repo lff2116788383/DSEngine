@@ -35,8 +35,11 @@ public:
      * @param world 实体世界
      * @param cmd_buffer 渲染命令缓冲
      */
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
+    /// Phase 1：渲染线程消费 BuildRenderQueues（Prepare）缓存的 batch，不访问 ECS。
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
     void BuildRenderQueues(World& world, dse::render::RenderScene& scene);
+    /// 将 BuildRenderQueues 缓存的 CPU mesh 队列追加到 scene（不访问 ECS）。
+    void AppendCachedQueues(dse::render::RenderScene& scene) const;
 
     /**
      * @brief 渲染透明物体 (WBOIT)

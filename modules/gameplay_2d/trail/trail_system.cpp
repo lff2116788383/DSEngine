@@ -58,11 +58,10 @@ void TrailSystem::Update(World& world, float delta_time) {
     }
 }
 
-void TrailSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
-    if (!rhi_device_) return;
-
+void TrailSystem::ExtractFrameRenderData(World& world) {
     auto& reg = world.registry();
-    std::vector<SpriteDrawItem> items;
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
 
     auto view = reg.view<TrailRenderer2DComponent>();
     for (auto entity : view) {
@@ -101,7 +100,9 @@ void TrailSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::ren
         }
     }
 
-    if (!items.empty()) {
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items, frame.view, frame.projection);
-    }
+}
+
+void TrailSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (!rhi_device_ || frame_items_.empty()) return;
+    sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_, frame.view, frame.projection);
 }

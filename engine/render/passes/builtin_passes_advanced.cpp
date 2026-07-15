@@ -237,7 +237,6 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_accum, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f), true});
 
     RenderScenePassContext accum_ctx;
-    accum_ctx.world = ctx_.world;
     accum_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawTransparent(cmd_buffer, 1, *ctx_.rhi_device, *ctx_.mesh_renderer, ctx_.frame_camera);
@@ -249,7 +248,6 @@ void WBOITPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BeginRenderPass({ctx_.render_targets.wboit_reveal, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), true});
 
     RenderScenePassContext reveal_ctx;
-    reveal_ctx.world = ctx_.world;
     reveal_ctx.clip_correction = &scene_clip_correction;
     if (ctx_.render_scene) {
         ctx_.render_scene->DrawTransparent(cmd_buffer, 2, *ctx_.rhi_device, *ctx_.mesh_renderer, ctx_.frame_camera);
@@ -886,7 +884,6 @@ void RSMRenderPass::Execute(CommandBuffer& cmd_buffer) {
     cmd_buffer.BindPipeline(ctx_.pipeline_states.mesh);
 
     RenderScenePassContext pass_ctx;
-    pass_ctx.world = ctx_.world;
     pass_ctx.view = &cam.view;
     pass_ctx.projection = &cam.projection;
     pass_ctx.camera_offset = ctx_.camera_offset;

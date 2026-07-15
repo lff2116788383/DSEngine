@@ -31,7 +31,7 @@ using namespace dse::render;
 // 测试 渲染通道上下文：默认值全部空
 TEST(RenderPassContextTest, DefaultValuesAllEmpty) {
     RenderPassContext ctx;
-    EXPECT_EQ(ctx.world, nullptr);
+    EXPECT_EQ(ctx.scene_view, nullptr);
     EXPECT_EQ(ctx.asset_manager, nullptr);
     EXPECT_EQ(ctx.rhi_device, nullptr);
     EXPECT_EQ(ctx.light_buffer, nullptr);

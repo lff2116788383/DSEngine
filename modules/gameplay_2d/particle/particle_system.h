@@ -30,12 +30,14 @@ public:
      */
     void Update(World& world, float delta_time, Physics2DSystem* physics_system = nullptr);
     
+    /// Phase 1：主线程（Prepare）从 ECS 提取存活粒子的绘制项，渲染线程 Render 消费。
+    void ExtractFrameRenderData(World& world);
+
     /**
-     * @brief 收集并提交所有存活粒子的渲染命令到渲染管线
-     * @param world 包含粒子组件的实体世界
+     * @brief 提交已提取的粒子绘制批次（不访问 ECS）
      * @param cmd_buffer 目标渲染命令缓冲
      */
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
 
     /// 注入 RhiDevice（由所属模块在初始化时调用）。新 SpriteBatchRenderer 路径需要。
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
@@ -45,6 +47,7 @@ public:
 private:
     RhiDevice* rhi_device_ = nullptr;
     dse::render::SpriteBatchRenderer sprite_batch_;
+    std::vector<SpriteDrawItem> frame_items_;
 };
 
 #endif

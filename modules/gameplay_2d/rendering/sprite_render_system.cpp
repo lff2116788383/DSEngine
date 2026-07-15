@@ -74,8 +74,9 @@ void Expand9SliceItems(const SpriteDrawItem& base_item,
     }
 }
 
-void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
-    std::vector<SpriteDrawItem> items;
+void SpriteRenderSystem::ExtractFrameRenderData(World& world) {
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
     auto view = world.registry().view<SpriteRendererComponent, TransformComponent>();
     
     for (auto entity : view) {
@@ -119,15 +120,22 @@ void SpriteRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, const d
         }
         return a.order_in_layer < b.order_in_layer;
     });
-    if (rhi_device_ && !items.empty()) {
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items,
+}
+
+void SpriteRenderSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (rhi_device_ && !frame_items_.empty()) {
+        sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_,
                            frame.view, frame.projection);
     }
 }
 
-void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction) {
+void UIRenderSystem::ExtractFrameRenderData(World& world, int screen_width, int screen_height, const glm::mat4& clip_correction) {
     static const unsigned int kSdfVariantKey = static_cast<unsigned int>(std::hash<std::string>{}("TEXT_SDF"));
-    std::vector<SpriteDrawItem> items;
+    frame_screen_width_ = screen_width;
+    frame_screen_height_ = screen_height;
+    frame_clip_correction_ = clip_correction;
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
     auto view = world.registry().view<UIRendererComponent>();
     
     for (auto entity : view) {
@@ -228,12 +236,13 @@ void UIRenderSystem::Render(World& world, CommandBuffer& cmd_buffer, int screen_
         }
         return a.texture_handle < b.texture_handle;
     });
-    
-    // Orthographic projection matching screen pixels, origin at bottom-left
-    glm::mat4 ortho = clip_correction * glm::ortho(0.0f, static_cast<float>(screen_width), 0.0f, static_cast<float>(screen_height), -1.0f, 1.0f);
-    glm::mat4 view_mat = glm::mat4(1.0f);
+}
 
-    if (rhi_device_) {
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items, view_mat, ortho);
-    }
+void UIRenderSystem::Render(CommandBuffer& cmd_buffer) {
+    if (!rhi_device_ || frame_items_.empty()) return;
+    // Orthographic projection matching screen pixels, origin at bottom-left
+    glm::mat4 ortho = frame_clip_correction_ * glm::ortho(0.0f, static_cast<float>(frame_screen_width_), 0.0f,
+                                                          static_cast<float>(frame_screen_height_), -1.0f, 1.0f);
+    glm::mat4 view_mat = glm::mat4(1.0f);
+    sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_, view_mat, ortho);
 }

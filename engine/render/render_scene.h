@@ -52,7 +52,7 @@ struct CpuMeshQueue {
 };
 
 struct RenderScenePassContext {
-    World* world = nullptr;
+    // Phase 1：不可变渲染帧 —— Execute 阶段不再持有/访问 World/ECS。
     const glm::mat4* view = nullptr;
     const glm::mat4* projection = nullptr;
     const glm::mat4* clip_correction = nullptr;

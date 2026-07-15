@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include "modules/gameplay_3d/rendering/mesh_render_system.h"
+#include "engine/render/render_scene.h"
 #include "engine/ecs/components_3d.h"
 #include "engine/ecs/transform.h"
 #include "engine/ecs/components_3d_animation.h"
@@ -122,7 +123,11 @@ TEST(MeshRenderSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     OpenGLCommandBuffer cmd;
     dse::render::FrameContext frame;
-    EXPECT_THROW(sys.Render(world, cmd, frame), std::runtime_error);
+    // Phase 1：ECS 提取移到 BuildRenderQueues（Prepare）；无资产管理器时在此抛出。
+    dse::render::RenderScene scene;
+    EXPECT_THROW(sys.BuildRenderQueues(world, scene), std::runtime_error);
+    // Render（渲染线程）仅消费缓存，不访问 ECS，空场景下安全。
+    sys.Render(cmd, frame);
 }
 
 // 测试 网格渲染系统：空世界不崩溃2

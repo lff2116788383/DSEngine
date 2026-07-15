@@ -131,7 +131,6 @@ void PreZPass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
         }
         RenderScenePassContext pass_ctx;
-        pass_ctx.world = ctx_.world;
         pass_ctx.view = &view;
         pass_ctx.projection = &projection;
         pass_ctx.camera_offset = ctx_.camera_offset;
@@ -243,7 +242,6 @@ void CSMShadowPass::Execute(CommandBuffer& cmd_buffer) {
                     ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
                 }
                 RenderScenePassContext pass_ctx;
-                pass_ctx.world = ctx_.world;
                 pass_ctx.view = &cam.view;
                 pass_ctx.projection = &cam.projection;
                 pass_ctx.camera_offset = ctx_.camera_offset;
@@ -329,7 +327,6 @@ void SpotShadowPass::Execute(CommandBuffer& cmd_buffer) {
             ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
         }
         RenderScenePassContext pass_ctx;
-        pass_ctx.world = ctx_.world;
         pass_ctx.view = &light_view_mat;
         pass_ctx.projection = &light_proj;
         pass_ctx.camera_offset = ctx_.camera_offset;
@@ -409,7 +406,6 @@ void PointShadowPass::Execute(CommandBuffer& cmd_buffer) {
                 ctx_.render_scene->DrawOpaqueCpu(cmd_buffer, *ctx_.rhi_device, *ctx_.mesh_renderer, frame);
             }
             RenderScenePassContext pass_ctx;
-            pass_ctx.world = ctx_.world;
             pass_ctx.view = &light_view_mat;
             pass_ctx.projection = &light_proj;
             pass_ctx.camera_offset = ctx_.camera_offset;
@@ -596,7 +592,6 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
         const glm::mat4 scene_clip_correction = ctx_.rhi_device->GetProjectionCorrection();
         RenderScenePassContext scene_pass_ctx;
-        scene_pass_ctx.world = ctx_.world;
         scene_pass_ctx.view = &gpu_view;
         scene_pass_ctx.projection = &gpu_proj;
         scene_pass_ctx.camera_offset = ctx_.camera_offset;
@@ -641,7 +636,7 @@ void ForwardScenePass::Execute(CommandBuffer& cmd_buffer) {
 
     cmd_buffer.BindPipeline(ctx_.pipeline_states.sprite);
     if (ctx_.render_2d_scene) {
-        ctx_.render_2d_scene(*ctx_.world, cmd_buffer, ctx_.frame_camera);
+        ctx_.render_2d_scene(cmd_buffer, ctx_.frame_camera);
     }
     cmd_buffer.EndRenderPass();
 }

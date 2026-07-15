@@ -13,11 +13,10 @@ void LineRendererSystem::Update(World& /*world*/, float /*delta_time*/) {
     // Line renderer is stateless — nothing to update per-frame
 }
 
-void LineRendererSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
-    if (!rhi_device_) return;
-
+void LineRendererSystem::ExtractFrameRenderData(World& world) {
     auto& reg = world.registry();
-    std::vector<SpriteDrawItem> items;
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
 
     auto view = reg.view<LineRenderer2DComponent, TransformComponent>();
     for (auto entity : view) {
@@ -105,7 +104,9 @@ void LineRendererSystem::Render(World& world, CommandBuffer& cmd_buffer, const d
         }
     }
 
-    if (!items.empty()) {
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items, frame.view, frame.projection);
-    }
+}
+
+void LineRendererSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (!rhi_device_ || frame_items_.empty()) return;
+    sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_, frame.view, frame.projection);
 }

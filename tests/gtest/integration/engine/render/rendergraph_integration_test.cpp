@@ -364,7 +364,6 @@ protected:
 
     void SetUp() override {
         snap.Reset();
-        ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
         ctx.snapshot    = &snap;
         ctx.render_targets.scene =
@@ -439,7 +438,6 @@ protected:
 
     void SetUp() override {
         snap.Reset();
-        ctx.world       = &world;
         ctx.rhi_device  = &rhi_dev;
         ctx.snapshot    = &snap;
         ctx.render_targets.scene = RenderTargetHandle::from_raw(1);

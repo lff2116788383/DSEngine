@@ -37,7 +37,8 @@ TEST(SpriteRenderSystemTest, EmptyWorldDoesNotCrash) {
     World world;
     OpenGLCommandBuffer cmd;
     dse::render::FrameContext frame;
-    sys.Render(world, cmd, frame);
+    sys.ExtractFrameRenderData(world);
+    sys.Render(cmd, frame);
 }
 
 // ============================================================
@@ -55,7 +56,8 @@ TEST(UIRenderSystemTest, EmptyWorldDoesNotCrash) {
     UIRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    sys.Render(world, cmd, 1920, 1080);
+    sys.ExtractFrameRenderData(world, 1920, 1080);
+    sys.Render(cmd);
 }
 
 // 测试 UI渲染系统：零不崩溃
@@ -63,7 +65,8 @@ TEST(UIRenderSystemTest, ZeroDoesNotCrash) {
     UIRenderSystem sys;
     World world;
     OpenGLCommandBuffer cmd;
-    sys.Render(world, cmd, 0, 0);
+    sys.ExtractFrameRenderData(world, 0, 0);
+    sys.Render(cmd);
 }
 
 // ============================================================

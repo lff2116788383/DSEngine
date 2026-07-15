@@ -42,11 +42,10 @@ void ParallaxSystem::Update(World& world, float delta_time) {
     }
 }
 
-void ParallaxSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
-    if (!rhi_device_) return;
-
+void ParallaxSystem::ExtractFrameRenderData(World& world) {
     auto& reg = world.registry();
-    std::vector<SpriteDrawItem> items;
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
 
     auto view = reg.view<ParallaxComponent, TransformComponent>();
     for (auto entity : view) {
@@ -76,10 +75,12 @@ void ParallaxSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::
         }
     }
 
-    if (!items.empty()) {
-        std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
-            return a.sorting_layer < b.sorting_layer;
-        });
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items, frame.view, frame.projection);
-    }
+    std::sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
+        return a.sorting_layer < b.sorting_layer;
+    });
+}
+
+void ParallaxSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (!rhi_device_ || frame_items_.empty()) return;
+    sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_, frame.view, frame.projection);
 }

@@ -14,13 +14,16 @@
 class ParallaxSystem {
 public:
     void Update(World& world, float delta_time);
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
+    /// Phase 1：主线程（Prepare）从 ECS 提取视差层绘制项，渲染线程 Render 消费。
+    void ExtractFrameRenderData(World& world);
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
     void Shutdown() { if (rhi_device_) sprite_batch_.Shutdown(*rhi_device_); }
 
 private:
     RhiDevice* rhi_device_ = nullptr;
     dse::render::SpriteBatchRenderer sprite_batch_;
+    std::vector<SpriteDrawItem> frame_items_;
 };
 
 #endif // DSE_PARALLAX_SYSTEM_H

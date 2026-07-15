@@ -420,11 +420,13 @@ void Gameplay3DModule::BuildRenderQueues(World& world, dse::render::RenderScene&
     scene.scene_renderers.push_back(this);
     // Impostor LOD: 远景 billboard 作为独立 ISceneRenderer 贡献 Opaque 阶段
     scene.scene_renderers.push_back(impostor_system_.AsSceneRenderer());
+
+    frame_extracted_ = true;
 }
 
 void Gameplay3DModule::RenderPreZ(dse::render::CommandBuffer& cmd,
                                   const dse::render::RenderScenePassContext& ctx) {
-    if (!ctx.world) return;
+    if (!frame_extracted_) return;
     dse::render::FrameContext frame;
     if (ctx.view) frame.view = *ctx.view;
     if (ctx.projection) frame.projection = *ctx.projection;
@@ -436,7 +438,7 @@ void Gameplay3DModule::RenderPreZ(dse::render::CommandBuffer& cmd,
 
 void Gameplay3DModule::RenderShadow(dse::render::CommandBuffer& cmd,
                                     const dse::render::RenderScenePassContext& ctx) {
-    if (!ctx.world) return;
+    if (!frame_extracted_) return;
     dse::render::FrameContext frame;
     if (ctx.view) frame.view = *ctx.view;
     if (ctx.projection) frame.projection = *ctx.projection;
@@ -448,7 +450,7 @@ void Gameplay3DModule::RenderShadow(dse::render::CommandBuffer& cmd,
 
 void Gameplay3DModule::RenderOpaque(dse::render::CommandBuffer& cmd,
                                     const dse::render::RenderScenePassContext& ctx) {
-    if (!ctx.world) return;
+    if (!frame_extracted_) return;
     dse::render::FrameContext frame;
     if (ctx.view) frame.view = *ctx.view;
     if (ctx.projection) frame.projection = *ctx.projection;

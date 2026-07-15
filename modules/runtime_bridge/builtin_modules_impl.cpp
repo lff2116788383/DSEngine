@@ -31,12 +31,17 @@ void BuiltinModulesImpl::ShutdownGameplay2D(World& world) {
     gameplay2d_module_.OnShutdown(world);
 }
 
-void BuiltinModulesImpl::RenderScene2D(World& world, CommandBuffer& cmd, const dse::render::FrameContext& frame) {
-    gameplay2d_module_.RenderScene2D(world, cmd, frame);
+void BuiltinModulesImpl::ExtractRenderData2D(World& world) {
+    gameplay2d_module_.ExtractSceneRenderData2D(world);
+    gameplay2d_module_.ExtractUIRenderData2D(world);
 }
 
-void BuiltinModulesImpl::RenderUI2D(World& world, CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
-    gameplay2d_module_.RenderUI2D(world, cmd, w, h, clip);
+void BuiltinModulesImpl::RenderScene2D(CommandBuffer& cmd, const dse::render::FrameContext& frame) {
+    gameplay2d_module_.RenderScene2D(cmd, frame);
+}
+
+void BuiltinModulesImpl::RenderUI2D(CommandBuffer& cmd, int w, int h, const glm::mat4& clip) {
+    gameplay2d_module_.RenderUI2D(cmd, w, h, clip);
 }
 
 dse::gameplay2d::AudioSystem& BuiltinModulesImpl::GetAudioSystem() {
@@ -55,10 +60,11 @@ void BuiltinModulesImpl::ShutdownMeshSystem() {
     mesh_render_system_.SetAssetManager(nullptr);
 }
 
-void BuiltinModulesImpl::RenderMeshes(World& world, CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) {
+void BuiltinModulesImpl::RenderMeshes(CommandBuffer& cmd, RhiDevice& device, MeshRenderer& renderer, const dse::render::FrameContext& frame) {
     // 阶段4-M4：注入设备 + 常驻 MeshRenderer，Render 内部经 DrawBatch 取代旧 cmd.DrawMeshBatch。
+    // Phase 1：Render 消费 BuildRenderQueues 缓存，不访问 ECS。
     mesh_render_system_.SetRenderContext(&device, &renderer);
-    mesh_render_system_.Render(world, cmd, frame);
+    mesh_render_system_.Render(cmd, frame);
 }
 
 void BuiltinModulesImpl::BuildRenderQueues(World& world, dse::render::RenderScene& scene, bool gameplay3d_enabled,

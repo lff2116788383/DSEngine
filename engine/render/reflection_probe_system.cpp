@@ -392,7 +392,7 @@ void ReflectionProbeSystem::BakePendingProbes(World& world, RhiDevice* rhi_devic
 
             face_cmd->BindPipeline(ctx.pipeline_states.mesh);
             if (ctx.render_meshes) {
-                ctx.render_meshes(*ctx.world, *face_cmd, face_frame);
+                ctx.render_meshes(*face_cmd, face_frame);
             }
             face_cmd->EndRenderPass();
 

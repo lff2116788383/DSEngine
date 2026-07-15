@@ -20,12 +20,14 @@
  */
 class SpriteRenderSystem {
 public:
+    /// Phase 1：主线程（Prepare）从 ECS 提取并排序精灵绘制项，渲染线程 Render 消费。
+    void ExtractFrameRenderData(World& world);
+
     /**
-     * @brief 执行精灵图的渲染命令收集
-     * @param world 包含精灵和变换组件的实体世界
+     * @brief 提交已提取的精灵绘制批次（不访问 ECS）
      * @param cmd_buffer 目标渲染命令缓冲
      */
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
+    void Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
 
     /// 注入 RhiDevice（由所属模块在初始化时调用）。新 SpriteBatchRenderer 路径需要。
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
@@ -35,6 +37,7 @@ public:
 private:
     RhiDevice* rhi_device_ = nullptr;
     dse::render::SpriteBatchRenderer sprite_batch_;
+    std::vector<SpriteDrawItem> frame_items_;
 };
 
 /**
@@ -43,14 +46,15 @@ private:
  */
 class UIRenderSystem {
 public:
+    /// Phase 1：主线程（Prepare）从 ECS 提取 UI 绘制项 + 屏幕尺寸/裁剪矩阵，渲染线程 Render 消费。
+    void ExtractFrameRenderData(World& world, int screen_width, int screen_height,
+                                const glm::mat4& clip_correction = glm::mat4(1.0f));
+
     /**
-     * @brief 执行 UI 元素的渲染命令收集
-     * @param world 包含 UI 组件的实体世界
+     * @brief 提交已提取的 UI 绘制批次（不访问 ECS）
      * @param cmd_buffer 目标渲染命令缓冲
-     * @param screen_width 当前屏幕宽度
-     * @param screen_height 当前屏幕高度
      */
-    void Render(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f));
+    void Render(CommandBuffer& cmd_buffer);
 
     /// 注入 RhiDevice（由所属模块在初始化时调用）。新 SpriteBatchRenderer 路径需要。
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
@@ -60,6 +64,10 @@ public:
 private:
     RhiDevice* rhi_device_ = nullptr;
     dse::render::SpriteBatchRenderer sprite_batch_;
+    std::vector<SpriteDrawItem> frame_items_;
+    int frame_screen_width_ = 0;
+    int frame_screen_height_ = 0;
+    glm::mat4 frame_clip_correction_ = glm::mat4(1.0f);
 };
 
 /**

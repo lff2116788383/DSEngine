@@ -82,7 +82,6 @@ RenderTargetReadback RunImpostorLifecycle(RhiDevice& device) {
     world.registry().emplace<ImpostorComponent>(e, imp);
 
     RenderScenePassContext ctx;
-    ctx.world = &world;
     const glm::mat4 view(1.0f);
     const glm::mat4 proj(1.0f);
     ctx.view = &view;

@@ -13,7 +13,8 @@
 class Light2DSystem {
 public:
     void Update(World& world, float delta_time);
-    void Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame);
+    /// Phase 1：主线程（Prepare）提取灯光/环境光数据（当前仅计算、无 GPU 输出）。
+    void ExtractFrameRenderData(World& world);
     void SetRhiDevice(RhiDevice* device) { rhi_device_ = device; }
     void Shutdown();
 

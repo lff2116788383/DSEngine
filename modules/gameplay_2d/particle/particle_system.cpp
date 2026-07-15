@@ -230,9 +230,10 @@ void ParticleSystem::Update(World& world, float delta_time, Physics2DSystem* phy
     }
 }
 
-void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+void ParticleSystem::ExtractFrameRenderData(World& world) {
     auto view = world.registry().view<ParticleEmitterComponent>();
-    std::vector<SpriteDrawItem> items;
+    std::vector<SpriteDrawItem>& items = frame_items_;
+    items.clear();
     
     for (auto entity : view) {
         auto& emitter = view.get<ParticleEmitterComponent>(entity);
@@ -260,8 +261,11 @@ void ParticleSystem::Render(World& world, CommandBuffer& cmd_buffer, const dse::
         }
     }
     
-    if (rhi_device_ && !items.empty()) {
-        sprite_batch_.Draw(cmd_buffer, *rhi_device_, items,
+}
+
+void ParticleSystem::Render(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame) {
+    if (rhi_device_ && !frame_items_.empty()) {
+        sprite_batch_.Draw(cmd_buffer, *rhi_device_, frame_items_,
                            frame.view, frame.projection);
     }
 }

@@ -16,7 +16,7 @@ void Light2DSystem::Update(World& world, float /*delta_time*/) {
     // (Currently positions are read directly from TransformComponent in Render)
 }
 
-void Light2DSystem::Render(World& world, CommandBuffer& /*cmd_buffer*/, const dse::render::FrameContext& /*frame*/) {
+void Light2DSystem::ExtractFrameRenderData(World& world) {
     if (!rhi_device_) return;
 
     auto& reg = world.registry();

@@ -104,6 +104,8 @@ private:
     dse::render::ParticleRenderer particle_renderer_;
     /// Phase 1：主线程（BuildRenderQueues）提取的粒子/流体绘制项，渲染线程 Execute 消费。
     std::vector<dse::render::ParticleDrawItem> frame_particle_items_;
+    /// Phase 1：主线程 BuildRenderQueues 完成后置真，替代旧的 ctx.world 有效性判据。
+    bool frame_extracted_ = false;
     MeshRenderSystem mesh_render_system_;
     TerrainSystem terrain_system_;
     GrassSystem grass_system_;

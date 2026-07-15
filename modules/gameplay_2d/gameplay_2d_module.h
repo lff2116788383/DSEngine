@@ -36,10 +36,16 @@ public:
     void OnFixedUpdate(World& world, float fixed_delta_time) override;
     void OnShutdown(World& world) override;
 
+    // Phase 1：主线程（Prepare）从 ECS 提取全部 2D 场景/UI 绘制数据，
+    // 渲染线程 RenderScene2D/RenderUI2D 仅消费快照、不访问 ECS。
+    // 屏幕尺寸/裁剪矩阵在提取时从 Screen + RhiDevice 采样，供渲染线程使用。
+    void ExtractSceneRenderData2D(World& world);
+    void ExtractUIRenderData2D(World& world);
+
     // 2D 场景/UI 渲染贡献。非 IModule 虚函数 —— 由 FramePipeline 经
     // RenderPassContext 钩子调用，待 Phase 2 迁为独立的 IRenderPass。
-    void RenderScene2D(World& world, CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction = glm::mat4(1.0f));
-    void RenderUI2D(World& world, CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f));
+    void RenderScene2D(CommandBuffer& cmd_buffer, const dse::render::FrameContext& frame, const glm::mat4& clip_correction = glm::mat4(1.0f));
+    void RenderUI2D(CommandBuffer& cmd_buffer, int screen_width, int screen_height, const glm::mat4& clip_correction = glm::mat4(1.0f));
 
     TransformSystem& transform_system() { return transform_system_; }
     CameraSystem& camera_system() { return camera_system_; }
