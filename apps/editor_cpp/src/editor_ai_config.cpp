@@ -23,11 +23,21 @@ std::string ToHex(const std::string& bytes) {
 }
 
 std::string FromHex(const std::string& hex) {
+    // 容错：配置文件可能被手工编辑/损坏，出现非十六进制字符。
+    // 遇到非法 nibble 直接放弃后续解析并返回已解出的部分，绝不抛异常崩溃。
+    auto nibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        return -1;
+    };
     std::string out;
     out.reserve(hex.size() / 2);
     for (size_t i = 0; i + 1 < hex.size(); i += 2) {
-        unsigned char c = (unsigned char)std::stoul(hex.substr(i, 2), nullptr, 16);
-        out.push_back((char)c);
+        int hi = nibble(hex[i]);
+        int lo = nibble(hex[i + 1]);
+        if (hi < 0 || lo < 0) break;
+        out.push_back(static_cast<char>((hi << 4) | lo));
     }
     return out;
 }

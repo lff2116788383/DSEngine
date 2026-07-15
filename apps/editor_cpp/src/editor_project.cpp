@@ -75,8 +75,22 @@ bool ProjectManager::TryAcquireLock(const std::filesystem::path& project_root) {
 
 #if defined(_WIN32)
         // 检查持锁进程是否仍然存活
+        DWORD pid = 0;
+        bool pid_valid = false;
         if (!pid_str.empty()) {
-            DWORD pid = static_cast<DWORD>(std::stoul(pid_str));
+            // 锁文件可能损坏/非数字：解析失败按陈旧锁处理，而不是抛异常崩溃。
+            try {
+                size_t consumed = 0;
+                unsigned long parsed = std::stoul(pid_str, &consumed);
+                if (consumed > 0) {
+                    pid = static_cast<DWORD>(parsed);
+                    pid_valid = true;
+                }
+            } catch (const std::exception&) {
+                pid_valid = false;
+            }
+        }
+        if (pid_valid) {
             HANDLE proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
             if (proc != nullptr) {
                 DWORD exit_code = 0;
